@@ -46,10 +46,10 @@ open FlockSoundness.Discharge
 /-- **C-Flock's zero knowledge at the session loop's own frames**, at every statement the loop serves, at tables that
 admit unrefused coins. -/
 theorem SessionLoopZK : Flock.Guarantees.SessionLoopZK := by
-  intro T hA vs t ht hS hV hD hc hsc hT L₀ src real wk x w hR hServe hL0 hLk hFin hE hEf Θ Vs θ hk Ev
+  intro T hA vs t ht hS hV hD hc hsc hT L₀ src real hreal wk x w hR hServe hL0 hLk hFin hE hEf Θ Vs θ hk Ev
   have h := Claims.ZKServer.Flock.zk_server_lean_ofLoop _root_.Flock.Readable.relation T vs t ht
     (FlockSoundness.CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) ENNReal.ofReal_ne_top hS hV hD hc hsc hT L₀ real wk
-    x w hR hServe (fun ρ _ _ _ hs => Claims.ZKServer.Loop.realTabs_realOf src x w ρ hs) hL0 hLk
+    x w hR hServe (fun ρ _ _ _ hs => hreal ▸ Claims.ZKServer.Loop.realTabs_realOf src x w ρ hs) hL0 hLk
     (Claims.ZKServer.LeanRelease.finalRoundEq_ofLoop T vs L₀ real _ wk x w hA
       (Claims.ZKServer.LeanRelease.frameUnrefused_ofLoop T L₀ real _ wk x w hServe) hFin) hE hEf Vs θ hk Ev
   rwa [ENNReal.toReal_ofReal (FlockSoundness.CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash)] at h

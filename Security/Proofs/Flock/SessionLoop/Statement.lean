@@ -81,7 +81,7 @@ def _root_.Flock.Guarantees.LoopInnerRound0 (T : CoinLayer.TableData)
 /-- **C-Flock's zero knowledge at the session loop's own frames, at the tables `T`.** At the deployed relation, where
 `T`'s session meets the tables' side (`Tables`, `Complete` at the relation, `DummyReg`, `Causal`, `SwCausal` at `vs`,
 `TapeOK`), at every repetition count `0 < t`, every `L₀` (the release's inner rounds), every level-0 source `src` (the
-rep's tables are the loop's own, `Loop.realOf src`) and worker `wk`, at every statement `x` the loop serves
+rep's tables `real` are the loop's own, `Loop.realOf src`) and worker `wk`, at every statement `x` the loop serves
 (`Loop.Serves`) with a witness `w` under the relation, where the loop's obligation (`LoopInnerRound0`) and the
 transport's round trusts hold: the deployed frame's state
 is the loop's but for `stopped` (`ProgChecks`), and against every `V*` of one more round than the verifier, the
@@ -100,8 +100,11 @@ def _root_.Flock.Guarantees.SessionLoopZKAt (T : CoinLayer.TableData) : Prop :=
         ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
       (src : Msg → Flock.Wit →
         (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
-        ℕ → V (Array F128 × ByteArray × Array ByteArray)),
-    let real := Loop.realOf src
+        ℕ → V (Array F128 × ByteArray × Array ByteArray))
+      (real : Msg → Flock.Wit →
+        (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
+        ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)),
+    real = Loop.realOf src →
     ∀ (wk : (LeanRelease.ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit),
     Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w → Loop.Serves x →
     _root_.Flock.Guarantees.LoopInnerRound0 T L₀ real x w →
