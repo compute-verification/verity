@@ -609,8 +609,10 @@ theorem topsPieces_opens {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.W
   rw [Nat.div_add_mod' j rs.size] at hmsg
   rw [hmsg]
   unfold topsPiecesAt at hpp
-  split at hpp
-  · simp at hpp
+  by_cases hE : ((rs.getD (j % rs.size) default).2.1).isEmpty = true
+  · rw [ite_eq_left hE] at hpp
+    simp at hpp
+  rw [ite_eq_right hE] at hpp
   have hlenT := tops_length hlens
   have hflat : ∀ e (he : e < y.tops.length), (y.tops[e]).flatten.length = 128 * y.tops[e].length := by
     intro e he
