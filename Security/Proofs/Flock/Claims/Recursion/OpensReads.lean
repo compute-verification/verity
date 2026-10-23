@@ -745,14 +745,14 @@ theorem fixedRow_c {cs : RecVStar.InnerCommits} {v : String} {k x : ℕ} {sp : O
       obtain ⟨-, rfl⟩ := h
       exact ⟨kk, rfl⟩
 
-/-- **A table with a row the inner transcript fixes labels its instances in order**: `checkPubRows` refuses one whose
-`units.indices` are not `0` to `n - 1`. -/
+/-- **A table reading the reps' `c_k` labels its instances in order**: `checkPubRows` refuses a table with a port of
+the verifier's reads under `rec-c<k>` whose `units.indices` are not `0` to `n - 1`. -/
 theorem checkPubRows_labels {st : Stmt} {own : Array Registered.Port} {cs : RecVStar.InnerCommits}
     {sparse : Option RecSparse.Shape} (h : RecVStar.checkPubRows st (some own) (some cs) sparse = .ok ())
-    {reg : Registered.Port} (hmem : reg ∈ own) (hfix : (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true) :
+    {reg : Registered.Port} (hmem : reg ∈ own) {k : ℕ} (hk : RecVStar.cIndex reg.value = some k) :
     Registered.unitIndices st.pub = .ok (Array.range st.pub.n) := by
   have hreg : reg ∈ own.filter (fun reg => (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome) :=
-    Array.mem_filter.2 ⟨hmem, hfix⟩
+    Array.mem_filter.2 ⟨hmem, fixedRow_isSome hk⟩
   unfold RecVStar.checkPubRows at h
   simp only [Option.getD_some] at h
   obtain ⟨_, -, h⟩ := Registered.except_bind_ok h
@@ -763,7 +763,11 @@ theorem checkPubRows_labels {st : Stmt} {own : Array Registered.Port} {cs : RecV
     · obtain ⟨_, h1, -⟩ := Registered.except_bind_ok h
       exact absurd h1 (Registered.throw_ne_ok _ _)
     · rename_i hne
-      rw [hidx, show idx = Array.range st.pub.n by simpa using hne]
+      have hany : (own.filter fun reg => (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome).any
+          (fun reg => (RecVStar.cIndex reg.value).isSome) = true :=
+        Array.any_eq_true'.2 ⟨reg, hreg, by simp [hk]⟩
+      simp only [hany, Bool.true_and, bne_iff_ne, ne_eq, Decidable.not_not] at hne
+      rw [hidx, hne]
   · rename_i hnone
     cases hz : (own.filter fun reg => (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome)[0]? with
     | some r0 => exact (hnone r0 hz).elim
@@ -963,8 +967,9 @@ theorem heldRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   obtain ⟨reg, hmem, hname, hval, hreads⟩ := checkOwn_mem hco hq
   rw [hown, hcs] at hpr
   rw [hown] at hreg
-  have hfix : (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true := fixedRow_isSome (by rw [hval]; exact hk)
-  have hlab := checkPubRows_labels hpr hmem hfix
+  have hkr : RecVStar.cIndex reg.value = some k := by rw [hval]; exact hk
+  have hfix := fixedRow_isSome hkr
+  have hlab := checkPubRows_labels hpr hmem hkr
   obtain ⟨t, idx, pp, positions, htt, hidx, hpp, -, hall', hrowsv⟩ := rowsAt hpr hreg hmem hfix
   obtain rfl : Array.range p.sts[0].pub.n = idx := Except.ok.inj (hlab.symm.trans hidx)
   have hnp : row.2.2.2 < p.sts[0].pub.n := by
