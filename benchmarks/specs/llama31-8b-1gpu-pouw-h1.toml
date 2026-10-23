@@ -49,4 +49,4 @@ resident_kv_cache_memory_bytes = 8589934592
 block_kv_cache_memory_bytes = 8589934592
 
 [admission]
-max_minutes = 150
+max_minutes = 120
