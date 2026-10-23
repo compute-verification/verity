@@ -95,6 +95,34 @@ def _quantile(xs: list[float], q: float) -> float:
     return s[min(len(s) - 1, int(q * len(s)))]
 
 
+def publisher(timing: dict, log: dict, buckets: int) -> dict:
+    """The publisher's calls (`publisher_timing.json`, on the proxy's clock): wall and thread CPU seconds of each, and
+    per grid the lateness of the ticks whose wait [deadline, deadline + lateness] overlaps a call's [start, end] against
+    the rest's."""
+    calls = [c for c in timing["calls"] if "end" in c]
+    spans = sorted((c["start"], c["end"]) for c in calls)
+    ms = lambda xs: {"n": len(xs), "median_ms": _quantile(xs, 0.5) if xs else None,  # noqa: E731
+                     "p99_ms": _quantile(xs, 0.99) if xs else None, "max_ms": max(xs) if xs else None}
+    out = {"switchinterval_s": timing["switchinterval"], "calls": len(calls),
+           "wall": ms([(c["end"] - c["start"]) * 1000 for c in calls]),
+           "keep_cpu": ms([c["keep_cpu"] * 1000 for c in calls]),
+           "certify_cpu": ms([c["certify_cpu"] * 1000 for c in calls]),
+           "queued": ms([(c["start"] - c["submit"]) * 1000 for c in calls])}
+    for grid, lateness in log["lateness_ms"].items():
+        tau = timing["bucket_ms"][grid] / 1000
+        over, rest, late = [], [], []
+        for k, x in enumerate(lateness):
+            t = timing["start"] * buckets + k
+            a = timing["origin"] + t * tau
+            b = a + max(x, 0.0) / 1000
+            hit = [s for s in spans if s[0] < b and s[1] > a]
+            (over if hit else rest).append(x)
+            if x > 10:
+                late.append([t, t // buckets, t % buckets, x, bool(hit)])
+        out[grid] = {"overlapping": ms(over), "not_overlapping": ms(rest), "past_10ms": late}
+    return out
+
+
 def summary(run: Path) -> dict:
     """Per grid, the honest run's tick lateness (`proxy.json.gz`), and its refused windows (`check.json`)."""
     log = json.loads(gzip.open(run / "proxy.json.gz").read())
@@ -106,6 +134,14 @@ def summary(run: Path) -> dict:
         out[grid] = {"ticks": len(lateness), "median_ms": _quantile(lateness, 0.5), "p99_ms": _quantile(lateness, 0.99),
                      "p999_ms": _quantile(lateness, 0.999), "max_ms": max(lateness),
                      "past_slack": late, "worst": sorted(enumerate(lateness), key=lambda tx: -tx[1])[:8]}
+    for grid, lateness in log["lateness_ms"].items():
+        pos = {"first": [x for t, x in enumerate(lateness) if t % buckets == 0],
+               "last": [x for t, x in enumerate(lateness) if t % buckets == buckets - 1],
+               "other": [x for t, x in enumerate(lateness) if 0 < t % buckets < buckets - 1]}
+        out[grid]["by_position"] = {k: {"n": len(v), "median_ms": _quantile(v, 0.5), "p99_ms": _quantile(v, 0.99),
+                                        "max_ms": max(v)} for k, v in pos.items() if v}
+    if (run / "publisher_timing.json").exists():
+        out["publisher"] = publisher(json.loads((run / "publisher_timing.json").read_text()), log, buckets)
     check = json.loads((run / "check.json").read_text()) if (run / "check.json").exists() else {}
     out["verdict"] = check.get("verdict")
     out["refused_windows"] = {row["window"]: {d: a["raw"] for d, a in row["audit"].items() if a["raw"]}
@@ -134,7 +170,8 @@ def main(argv=None) -> int:
                              "--upstream", f"http://127.0.0.1:{port}", "--requests", str(a.requests),
                              "--in-flight", str(a.in_flight), "--tokens", str(a.tokens),
                              "--delta-buckets", str(a.delta_buckets), "--strategies", "honest",
-                             "--out", str(a.out / "rehearsal")]).returncode
+                             "--out", str(a.out / "rehearsal")],
+                            env=os.environ | {"CERTIFIER_SERVE_TIMING": "1"}).returncode
     finally:
         for h in hogs:
             h.kill()

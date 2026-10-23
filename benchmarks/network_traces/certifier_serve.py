@@ -248,14 +248,29 @@ class CertifyingPublisher(ar.Publisher):
         self.ends = {setup.egress_link: (Direction.EGRESS, parameters_digest(setup.egress_params, setup.sync_set)),
                      setup.ingress_link: (Direction.INGRESS, parameters_digest(setup.ingress_params))}
 
+        self.timing: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
+
+    def __call__(self, record, params) -> None:
+        if self.timing is not None:
+            self.timing.append({"submit": time.monotonic(), "link": record.link, "window": record.window})
+        super().__call__(record, params)
+
     def keep(self, record, params) -> None:
+        if self.timing is not None:
+            row = next(r for r in self.timing if r["link"] == record.link and r["window"] == record.window)
+            row["start"], c0 = time.monotonic(), time.thread_time()
         super().keep(record, params)
+        if self.timing is not None:
+            row["kept"], c1 = time.monotonic(), time.thread_time()
+            row["keep_cpu"] = c1 - c0
         direction, parameters = self.ends[record.link]
         certified = self.issuer.certify(replace(record, link=self.link), direction, params, parameters)
         line = ({"refused": [self.link, direction.value, record.window]} if certified is None
                 else certified_json(certified))
         with open(self.out / "certified.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
+        if self.timing is not None:
+            row["end"], row["certify_cpu"] = time.monotonic(), time.thread_time() - c1
 
 
 # The served plan.
@@ -497,6 +512,11 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
     log |= {"revealed": sorted(proxy.revealed), "issuer_refused": [[l, d.value, w] for l, d, w in issuer.refused],
             "shim_exit": shim.exitcode}
     (out / "serve.json").write_text(json.dumps(log, indent=1))
+    if publish.timing is not None:
+        (out / "publisher_timing.json").write_text(json.dumps(
+            {"origin": origin, "switchinterval": sys.getswitchinterval(),
+             "bucket_ms": {"egress": e.bucket_ms, "ingress": i.bucket_ms}, "start": proxy.start,
+             "links": {"egress": setup.egress_link, "ingress": setup.ingress_link}, "calls": publish.timing}))
     return log
 
 
