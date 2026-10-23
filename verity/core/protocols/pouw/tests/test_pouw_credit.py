@@ -142,6 +142,8 @@ A_LINK_EXPECT = {
     "segments-form": "A segments are not", "entries-form": Cr.ENTRIES_FORM,
     "table-other-round": ", which only round ", "table-past": "and the window has",
     "ids-other-round": "'s input-ids table, which only round ", "ids-past": "is round ",
+    "receipt-other-round": "'s receipt table, its round ", "receipt-past": "rounds' equal blocks with a call",
+    "receipt-calls": "rounds' equal blocks with a call", "receipt-unknown": "or receipt table of the window",
 }
 WEIGHTS_EXPECT = {
     "other-root": Cr.OTHER_WEIGHTS, "other-requests": Cr.OTHER_WEIGHTS, "other-session": Cr.OTHER_WEIGHTS,
@@ -384,6 +386,14 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix):
             got, refused = Cr.registered_file(digest, lay, shape, call, {v: [x] for v, x in roots.items()}, window,
                                               steps)
             assert refused is None
+            assert json.dumps(got) == json.dumps(want), (linears, calls, m, steps, call)
+            rc = h1.HW.table(prog, h1.HW.RECEIPTS, call)
+            receipted = {**roots, rc: hashlib.sha512(rc.encode()).hexdigest()}
+            want = h1.HW.table_reads_file(prog, tp, call, receipted, ports=h1.HW.window_ports(prog), window=window,
+                                          steps=steps)
+            got, refused = Cr.registered_file(digest, lay, shape, call, {v: [x] for v, x in receipted.items()}, window,
+                                              steps)
+            assert refused is None and Cr.RECEIPT_PORT in got["ports"]
             assert json.dumps(got) == json.dumps(want), (linears, calls, m, steps, call)
             got, refused = Cr.registered_file(digest, lay, shape, call, {**{v: [x] for v, x in roots.items()},
                                                                           vals[1]: []}, window, steps)
@@ -788,6 +798,28 @@ def test_a_link_mutation(name):
     for seed in range(5):
         refused = Cr._a_link(**cases.a_link_instance(random.Random(f"{name}/{seed}"), name))
         assert refused[0] == "a-link" and A_LINK_EXPECT[name] in refused[1], (seed, refused)
+
+
+def test_a_calls_receipt_table_in_its_rounds_segments_is_tied_and_an_unknown_segment_is_not():
+    """vllm's served path lists call c's ``receipt@<c>`` among the segments of c's round (the rounds the calls' equal
+    blocks) and registers it: `_a_link` ties it to that round's root as it does a round's A table, and still refuses a
+    round segment of no registered A value, input-ids table or receipt table (``zy@<c>``, ``receipt@0<c>``, a call's
+    receipt table the window doesn't register), and a receipt table when the window's call count isn't given."""
+    tied = 0
+    for seed in range(40):
+        d = cases.a_link_instance(random.Random(f"receipt/{seed}"))
+        receipts = [e["value"] for e in d["entries"] if Cr.receipt_call(e["value"]) is not None]
+        tied += len(receipts)
+        for v in receipts:
+            own = Cr.receipt_call(v) // (d["calls"] // len(d["rounds"]))
+            assert [r for r, x in enumerate(d["rounds"]) if v in x["a"]] == [own], v
+        assert Cr._a_link(**d) is None, seed
+        if receipts:
+            refused = Cr._a_link(d["rounds"], d["entries"])
+            assert refused[0] == "a-link" and "rounds' equal blocks with a call" in refused[1], seed
+        refused = Cr._a_link(**cases.a_link_instance(random.Random(f"receipt-unknown/{seed}"), "receipt-unknown"))
+        assert refused[0] == "a-link" and "which is no registered A value, input-ids table or receipt table" in refused[1]
+    assert tied
 
 
 def test_cover_is_the_fewest_aligned_subtrees():

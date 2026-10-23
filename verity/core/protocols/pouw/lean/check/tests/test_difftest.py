@@ -273,7 +273,7 @@ def period(case: dict) -> dict:
 
 
 def a_link(case: dict) -> dict | None:
-    refused = Cr._a_link(case["rounds"], case["entries"])
+    refused = Cr._a_link(case["rounds"], case["entries"], case["calls"])
     _counted(refused, "a-link")
     return None if refused is None else {"refused": list(refused)}
 
@@ -410,7 +410,10 @@ def test_credit(pass_server):
                  "window arow: the Commit record registers row-table/#/k#",
                  "which only round # commits",
                  "window arow: round #'s request root (requests, the one the window's open root binds) is not",
-                 "window registration: registered value ", "ids@#'s domain is not the one the window's registration"):
+                 "window registration: registered value ", "ids@#'s domain is not the one the window's registration",
+                 "or receipt table of the window", "'s receipt table, its round #'s, which only round # commits",
+                 "a-link a-link: registered receipt table ", "registered-file registration: the window registers ",
+                 "'s template returns no receipt of whole #-bit words"):
         assert any(part in k for k in CREDITED), part
 
 
