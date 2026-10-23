@@ -2,6 +2,10 @@
 registered (`RegisteredInput<w>_v1`, `WorkloadProgram(theta_registered=True)`).
 
     write(program_digest, params, theta, values, window) -> {"record", "digest", "trusted", "provenance", "salts"}
+    record(program_digest, params, theta, entries, window) -> {"record", "digest", "trusted", "provenance"}
+
+`record` takes each θ parameter's entry as `registered_rows.commit` made it, where the values were committed elsewhere (one
+process per rank of a node Program: `predict.node_registration`), and `write` commits `values` here.
 
 * **The record.** One `verity/registration/v2` record, `previous` null, whose `registered` list has one value per parameter
   that holds a θ node, named as the parameter, its rows committed under hiding leaves (`commit.registered_rows`, R7's
@@ -60,26 +64,44 @@ def theta_parameters(params: Sequence[tuple[str, Type]], theta: Sequence[int]) -
     return out
 
 
+def word_bits(t: Type) -> int:
+    """The `word_bits` a θ parameter of type `t` is registered at: its one leaf width, rounded up to whole u16 words."""
+    return 16 * -(-next(iter(t.width_set())) // 16)
+
+
+def record(program_digest: str, params: Sequence[tuple[str, Type]], theta: Sequence[int],
+           entries: Mapping[str, Mapping[str, Any]], window: Mapping[str, Any]) -> dict[str, Any]:
+    """The record of θ's `entries` (θ parameter -> its `registered_rows.commit` entry), its digest, nci-check's trusted input and
+    the instance's `provenance`: refused unless there is one entry per θ parameter, each of its parameter's leaves and width."""
+    nodes = theta_parameters(params, theta)
+    types = dict(params)
+    names = list(dict.fromkeys(n for n, _w in nodes.values()))
+    if set(entries) != set(names):
+        raise ValueError(f"entries for {sorted(set(entries) - set(names))[:4]} are no θ parameter's, and θ parameters "
+                         f"{sorted(set(names) - set(entries))[:4]} have none")
+    for name in names:
+        e, t = entries[name], types[name]
+        if e.get("value") != name or e["leaves"] * e["words"] != t.leaves or e.get("word_bits", 16) != word_bits(t):
+            raise ValueError(f"θ parameter {name!r}: its entry registers {e.get('value')!r}, {e['leaves']} rows of {e['words']} "
+                             f"{e.get('word_bits', 16)}-bit leaves, its type is {t.leaves} of {word_bits(t)}")
+    rec = {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": program_digest, "window": dict(window),
+           "registered": [dict(entries[n]) for n in names], "roots": [], "previous": None}
+    d = REG.digest(rec)
+    return {"record": rec, "digest": d,
+            "trusted": {"log": [rec], "run": d, "params": [[n, t.to_json()] for n, t in params]},
+            "provenance": [{"kind": "registered", "registration": d, "value": nodes[k][0], "root": entries[nodes[k][0]]["root"]}
+                           for k in theta]}
+
+
 def write(program_digest: str, params: Sequence[tuple[str, Type]], theta: Sequence[int],
           values: Callable[[str], np.ndarray], window: Mapping[str, Any]) -> dict[str, Any]:
     """The record, its digest, nci-check's trusted input and the instance's `provenance`, and the prover's salts."""
-    nodes = theta_parameters(params, theta)
     types = dict(params)
-    entries, salts = [], {}
-    for name in dict.fromkeys(n for n, _w in nodes.values()):
+    entries, salts = {}, {}
+    for name in dict.fromkeys(n for n, _w in theta_parameters(params, theta).values()):
         leaves = np.asarray(values(name))
         if leaves.size != types[name].leaves:
             raise ValueError(f"θ parameter {name!r}: {leaves.size} leaves given, its type holds {types[name].leaves}")
-        width = next(iter(types[name].width_set()))
-        c = RR.commit(program_digest, name, leaves, 16 * -(-width // 16))
-        entries.append(c.entry)
-        salts[name] = c.salts
-    rec = {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": program_digest, "window": dict(window),
-           "registered": entries, "roots": [], "previous": None}
-    d = REG.digest(rec)
-    root = {e["value"]: e["root"] for e in entries}
-    return {"record": rec, "digest": d,
-            "trusted": {"log": [rec], "run": d, "params": [[n, t.to_json()] for n, t in params]},
-            "provenance": [{"kind": "registered", "registration": d, "value": nodes[k][0], "root": root[nodes[k][0]]}
-                           for k in theta],
-            "salts": salts}
+        c = RR.commit(program_digest, name, leaves, word_bits(types[name]))
+        entries[name], salts[name] = c.entry, c.salts
+    return record(program_digest, params, theta, entries, window) | {"salts": salts}

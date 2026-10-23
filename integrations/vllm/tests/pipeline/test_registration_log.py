@@ -79,6 +79,20 @@ def test_each_break_is_refused_with_its_code():
     assert REF.check_baseline(inst, out["trusted"]) == {"error": "theta-not-registered"}
 
 
+def test_record_takes_entries_committed_elsewhere_and_refuses_any_that_is_not_its_parameters():
+    _p, inst, out = _case()
+    args = (out["record"]["program"], FN.signature()[0], inst["theta"])
+    entries = {e["value"]: e for e in out["record"]["registered"]}
+    assert RL.record(*args, entries, WINDOW) == {k: v for k, v in out.items() if k != "salts"}
+    for bad, why in [({"w8": entries["w8"]}, r"θ parameters \['sc'\] have none"),
+                     (entries | {"x": entries["w8"]}, r"entries for \['x'\] are no θ parameter's"),
+                     (entries | {"w8": entries["w8"] | {"value": "sc"}}, "'w8': its entry registers 'sc'"),
+                     (entries | {"w8": entries["w8"] | {"leaves": entries["w8"]["leaves"] + 1}}, "'w8': its entry"),
+                     (entries | {"sc": entries["sc"] | {"word_bits": 16}}, "16-bit leaves, its type is 3 of 32")]:
+        with pytest.raises(ValueError, match=why):
+            RL.record(*args, bad, WINDOW)
+
+
 def test_refusals():
     mixed = (("m", Record(("a", Value(8)), ("b", Value(32)))),)
     assert RL.lower(mixed[0][1]) == REF.lower(mixed[0][1]) == [(8, 1), (32, 1)]

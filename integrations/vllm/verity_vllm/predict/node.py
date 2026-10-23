@@ -1,6 +1,7 @@
 """A tensor-parallel node's Program: every rank's forward in one body, each collective reading the ranks' own partials.
 
     build_node_program(phi, wrapper, *, M, pos0 | LP, T) -> NodeResult
+    node_parameters(phi, wrapper, *, M, pos0 | LP, T) -> NodeParameters      its parameters alone, no forward built
 
 A rank's Program (`build.build_program`) takes the other ranks' partials as Inputs, world - 1 `peers_<k>` per collective, so an
 isolation unit over it reads them as novel: 3.1·10¹⁰ bits a GLM-5.3 B1 rank (r20261023-055434-68ce). The node's Program has no
@@ -26,7 +27,7 @@ from verity.ml.circuits.codec import canonical_json, encode_program, program_dig
 from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, Record, Type, Value
 
 from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, decoder, drive, launch_batch
 from .common import Unexpressible, _arr_shape, _Launch, _Peers, _Stochastic
@@ -146,10 +147,31 @@ class _Joined(_Peers):
         return self.lockstep.take(self.rank, own)
 
 
-def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
-                       with_desc: bool = True) -> NodeResult:
-    """The node Program of the Build's `wrapper` for φ's world (φ's own rank is ignored): `build.build_program`'s, joined."""
-    t0 = time.time()
+@dataclass(frozen=True)
+class NodeParameters:
+    """A node Program's parameters (module docstring) and what they are read from: each rank's φ and decoder, its schedule words
+    (0 where its decoder reads none) and their parameter, and its weights record, whose fields are its θ parameters from `weights_at`."""
+    phis: list[Phi]
+    nets: list
+    params: tuple[tuple[str, Type], ...]
+    words: list[int]
+    sched_at: dict[int, int]
+    leaves: list[list[tuple[str, Type]]]
+    weights_at: list[int]
+
+    @property
+    def theta(self) -> tuple[str, ...]:
+        return tuple(name for name, _ in self.params[self.weights_at[0]:])
+
+    def fields(self) -> dict[str, tuple[int, str]]:
+        """θ parameter -> (its rank, the name of the rank's weights record field it is)."""
+        return {self.params[at + i][0]: (r, name) for r, (at, ls) in enumerate(zip(self.weights_at, self.leaves))
+                for i, (name, _) in enumerate(ls)}
+
+
+def node_parameters(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1,
+                    pos0: int = 8) -> NodeParameters:
+    """The parameters of φ's world's node Program of `wrapper` (φ's own rank is ignored), as `build_node_program` takes them."""
     world = int(phi.tp.get("world", 1))
     if world < 2:
         raise Unexpressible(f"a node Program joins a tensor-parallel world's ranks, and φ's world is {world}")
@@ -161,27 +183,37 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
     passes = [n] + [1] * (events - 1)
-    params: list[tuple[str, object]] = [("prompt", Array(n, I32))]
+    params: list[tuple[str, Type]] = [("prompt", Array(n, I32))]
     if kind == "stochastic":
         params.append(("seed", Array(1, I64)))
         if phi.sampling["splits"] == "derived":
             params.append(("splits", Array(events, I32)))
-    n_user = len(params)
     words = [sum(net.schedule_words(r) for r in passes) if hasattr(net, "schedule_words") else 0 for net in nets]
     sched_at = {}
     for r, w in enumerate(words):
         if w:
             sched_at[r] = len(params)
             params.append((f"rank{r}.schedule", Array(w, I32)))
-    inputs = [list(_arr_shape(t)) for _, t in params]
     leaves = [net.leaves() for net in nets]
-    W = []
+    weights_at = []
     for r, ls in enumerate(leaves):
-        base = len(params)
+        weights_at.append(len(params))
         params += [(f"rank{r}.weights[{i}]", t) for i, (_, t) in enumerate(ls)]
-        W.append(Coll(Record(*ls), concat([Affine("p", base + i, 0, t.leaves) for i, (_, t) in enumerate(ls)])))
-    theta = tuple(name for name, _ in params[len(inputs):])
-    params = tuple(params)
+    return NodeParameters(phis, nets, tuple(params), words, sched_at, leaves, weights_at)
+
+
+def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
+                       with_desc: bool = True) -> NodeResult:
+    """The node Program of the Build's `wrapper` for φ's world (φ's own rank is ignored): `build.build_program`'s, joined."""
+    t0 = time.time()
+    P = node_parameters(phi, wrapper, LP=LP, T=T, M=M, pos0=pos0)
+    phis, nets, params, words, sched_at, theta = P.phis, P.nets, P.params, P.words, P.sched_at, P.theta
+    world, kind = len(phis), (phi.sampling or {}).get("kind", "greedy")
+    n = M if wrapper == "step" else int(LP)
+    events = 1 if wrapper == "step" else int(T) + 1
+    inputs = [list(_arr_shape(t)) for _, t in params[:P.weights_at[0]]]
+    W = [Coll(Record(*ls), concat([Affine("p", at + i, 0, t.leaves) for i, (_, t) in enumerate(ls)]))
+         for at, ls in zip(P.weights_at, P.leaves)]
     B = Builder(params, Value(1))
     ids = Coll(params[0][1], Affine("p", 0, 0, n))
     policy = None

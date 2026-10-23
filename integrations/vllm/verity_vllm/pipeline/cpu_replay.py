@@ -191,6 +191,29 @@ def registered_roles(program_dirs: Iterable[str | None], prefix: str = "") -> di
     return {(f[len(prefix):] if prefix and f.startswith(prefix) else f): r for f, r in roles.items()}
 
 
+def opener(bundle: Path, tree: dict[str, Any], ck: Any, *, tp: dict[str, int] | None = None,
+           roles: dict[str, dict[str, Any]] | None = None) -> Callable[[int], tuple[str, np.ndarray | None, str | None, bool]]:
+    """`_open_one` of the tree's tensor i, as `open_weights` opens it: one tensor at a time, the rewrites of ``roles`` made once."""
+    from verity_vllm.check import fp8_ue8m0
+    from verity_vllm.check import weights_of_record as WR
+
+    rw = None
+    if roles and ck is not None:
+        dims = {n: (list(s), WORDS[dt][0]) for n, dt, s, _b in tree["names"] if dt in WORDS}
+        at = {"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}
+        rw = fp8_ue8m0.Rewrites(list(dims), roles, lambda n: WR.compose(n, *dims[n], ck, **at), ck.config)
+    return lambda i: _open_one(bundle, tree, i, ck, tp, rw, roles)
+
+
+def tree_refusal(tree: dict[str, Any], root_of_record: str | None) -> tuple[str, str | None]:
+    """(the root the tree's tensor roots fold to, why the tree is not the committed weights root's tree: None when it is)."""
+    roots = [bytes.fromhex(r) for r in tree["tensor_roots"]]
+    folded = scheme.weights_root(bytes.fromhex(tree["geo_digest"]), scheme.names_digest(tree["names"]), roots).hex()
+    return folded, ("the bundle's weights tree does not fold to its root" if folded != tree["root"] else
+                    f"the bundle's weights root {tree['root'][:16]} is not the committed weights root {str(root_of_record)[:16]}"
+                    if tree["root"] != root_of_record else None)
+
+
 def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None, ck: Any, *, threads: int = 8,
                  tp: dict[str, int] | None = None, roles: dict[str, dict[str, Any]] | None = None) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
     """The registered tensors in the widths the replay reads, each opened against the committed weights root, and the weights check;
@@ -198,21 +221,13 @@ def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None,
     DeepGEMM linears and MLA's absorbed kv_b they name are composed as vLLM rewrites them at load (`fp8_ue8m0.Rewrites`), and the
     fields it makes by more than a copy (DeepSeek-V4's padded attn_sink, layer 0's hc_attn_fn_broadcast) by their rule
     (`derived_weights`), as the weights of record are, since the checkpoint's own words are not the served ones."""
-    from verity_vllm.check import fp8_ue8m0
-    from verity_vllm.check import weights_of_record as WR
-
     t0 = time.perf_counter()
     names = tree["names"]
-    roots = [bytes.fromhex(r) for r in tree["tensor_roots"]]
-    folded = scheme.weights_root(bytes.fromhex(tree["geo_digest"]), scheme.names_digest(names), roots).hex()
+    folded, refused = tree_refusal(tree, root_of_record)
     servable = [i for i, (_n, dt, _s, _b) in enumerate(names) if dt in WORDS]
-    rw = None
-    if roles and ck is not None:
-        dims = {n: (list(s), WORDS[dt][0]) for n, dt, s, _b in names if dt in WORDS}
-        at = {"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}
-        rw = fp8_ue8m0.Rewrites(list(dims), roles, lambda n: WR.compose(n, *dims[n], ck, **at), ck.config)
+    open_one = opener(bundle, tree, ck, tp=tp, roles=roles)
     with ThreadPoolExecutor(max(1, threads)) as pool:
-        opened = list(pool.map(lambda i: (i, *_open_one(bundle, tree, i, ck, tp, rw, roles)), servable))
+        opened = list(pool.map(lambda i: (i, *open_one(i)), servable))
     words: dict[str, np.ndarray] = {}
     mismatched, unopened, by_src = [], [], {"checkpoint": 0, "bundle": 0}
     for i, src, raw, why, read in opened:
@@ -224,10 +239,8 @@ def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None,
             unopened.append({"name": name, "why": why})
         else:
             mismatched.append({"name": name, "source": src, "why": why})
-    why = ("the bundle's weights tree does not fold to its root" if folded != tree["root"] else
-           f"the bundle's weights root {tree['root'][:16]} is not the committed weights root {str(root_of_record)[:16]}" if tree["root"] != root_of_record else
-           "slices that do not open against the committed weights root: " + ", ".join(f"{m['name']} ({m['why']})" for m in mismatched[:4])
-           + (f" (+{len(mismatched) - 4} more)" if len(mismatched) > 4 else "") if mismatched else None)
+    why = refused or ("slices that do not open against the committed weights root: " + ", ".join(f"{m['name']} ({m['why']})" for m in mismatched[:4])
+                      + (f" (+{len(mismatched) - 4} more)" if len(mismatched) > 4 else "") if mismatched else None)
     check = {"equal": why is None, "committed_root": root_of_record, "replay_root": folded, "why": why, "source": "checkpoint",
              "method": "checkpoint tensors opened against the committed weights root (tensor roots under the root of record)",
              "tensors": len(names), "servable": len(servable), "opened": len(words), "opened_by_source": by_src,
