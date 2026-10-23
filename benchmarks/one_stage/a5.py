@@ -62,12 +62,14 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   challenger session, opened on the TP run root, and each rank's draw by the partition file's rule (any law, `stratified:K`
   among them) from its coins after the rank's registration digest (`coins.ChallengerCoins` over `remote.RemoteChallenger`,
   `service.select_draw`), held to Lean's `Select.select` on the bytes it read and to `check_draw`, as `service.Stream.select`
-  holds it. Once the session has ended, the coins' evidence (key, ledger, segment, session) is held to the draw by
+  holds it. Once the session has ended, the coins' evidence (key, ledger, main, pins, segment, session; ``--main`` the verifier's
+  own first-parent history of main, which must hold the commit the host's pins log pins for the session) is held to the draw by
   `coins.coins_reason` (Python's `read_reason`) and the whole run by the Lean verifier of record (`verifier.run`, Lean
   `Run.run`, `coin_source` challenger, its window the TP run root), as `service.Stream.outcome` holds it (a `Stream` takes one
   template, a TP window several); where either refuses, the audit record is a reject. Negatives: the evidence with a tampered
-  opening, with the coin opened before the registration, with a segment that skips a released coin, none, and for another
-  window. Every rank of the step draws from the one session, so `--jobs` covers every rank.
+  opening, with the coin opened before the registration, with a segment that skips a released coin, with the pin off main,
+  with no pins log, none, and for another window. Every rank of the step draws from the one session, so `--jobs` covers every
+  rank.
 """
 from __future__ import annotations
 
@@ -434,8 +436,8 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
             raise SystemExit(f"--challenger draws every rank from the step's one session, which ends once every rank has drawn: "
                              f"audit the {len(ranks)} ranks at once (--jobs {len(ranks)}), or fewer ranks (--ranks)")
         a.window_root = rec["tp_run_root"]
-        manager, a.coins, finisher, sid = AC.start(a.challenger, a.window_root, ranks, out / "challenger", ssh_key=a.gate_key,
-                                                   peer=a.peer, key_record=a.challenger_key)
+        manager, a.coins, finisher, sid = AC.start(a.challenger, a.window_root, ranks, out / "challenger", a.main,
+                                                   ssh_key=a.gate_key, peer=a.peer, key_record=a.challenger_key)
         summary["challenger"] = {"challenger": a.challenger, "session": sid, "rule": a.rule}
     try:
         for r, row in tp_ranks(a, sets, out, world, ranks):
@@ -487,6 +489,8 @@ def main() -> int:
     ap.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
                     "(infra's challenger-key/v1), never the session's key.json")
     ap.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
+    ap.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history, a commit a line "
+                    "(`git rev-list --first-parent origin/main`), never the host's or the prover's")
     a = ap.parse_args()
     if bool(a.bundle) == bool(a.tp_commit):
         ap.error("give either --bundle (a deferred Commit) or --tp-commit (a TP Commit)")
@@ -499,6 +503,9 @@ def main() -> int:
             ap.error("--challenger draws a TP Commit's ranks (--tp-commit)")
         if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
             ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
+        if not a.main:
+            ap.error("--challenger needs --main: the verifier's `git rev-list --first-parent origin/main`, which must hold the "
+                     "session's pin")
         a.rule = json.loads(Path(a.partition).read_text()).get("law")
         if not isinstance(a.rule, str):
             ap.error(f"--challenger draws by the partition file's rule, a law's text (stratified:K, subset:K, ...), not {a.rule!r}")

@@ -5,21 +5,23 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
 * **The session.** ``local``: a development session on this machine, run by the auditor host's own service
   (`benchmarks/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what vy-challenger-1
-  writes, and its key is this run's alone, so its draws show the path, not an auditor's coins. ``gate:USER@HOST``:
-  vy-challenger-1 through infra's gate with the lane's gate key: `reserve` with this machine as its peer, `open` on the TP run
-  root (`served_h1.coins.open_window`), the client on the peer's 127.0.0.1:PORT with the session's secret, and once the
-  session has ended its `status`, `fetch` and `ledger`; the verifier's key is then the deployment's record
-  (`served_h1.coins.key_record`), never the session's key.json. The layout is `SCHEME` with one family `FAMILY` of
-  `COINS_PER_RANK` coins a rank and one more.
+  writes, and its key is this run's alone, so its draws show the path, not an auditor's coins. Its pins log pins main's
+  first-parent commit this tree is built on (`on_main`), as pin.sh pins vy-challenger-1 only to such a commit; its code is this
+  tree's. ``gate:USER@HOST``: vy-challenger-1 through infra's gate with the lane's gate key: `reserve` with this machine as its
+  peer, `open` on the TP run root (`served_h1.coins.open_window`), the client on the peer's 127.0.0.1:PORT with the session's
+  secret, and once the session has ended its `status`, `fetch`, `ledger` and `pins`; the verifier's key is then the
+  deployment's record (`served_h1.coins.key_record`), never the session's key.json. The layout is `SCHEME` with one family
+  `FAMILY` of `COINS_PER_RANK` coins a rank and one more.
 * **The draws** (`Draws`, in a `multiprocessing` manager's process, so every rank's process reads the one client): first one
   coin after the window's root itself, before any registration (`pre`: the negatives' coin opened before the registration),
   then each rank's draw once, after its registration's digest (`ChallengerCoins.commit`, then `service.select_draw` under the
   partition's rule on those coins), which returns the draw, the bytes it read and its segment. Once every rank has drawn or
   won't (`skip`), the client closes the session.
-* **The evidence** (`Local.finish` or `Gate.finish`, on a thread of the run's process once the session closed): the session's out/ and the
-  auditor's ledger, copied to ``out/challenger/``, the key, and `remote.trusted_session`'s check of the files the ledger's end
-  sealed. `evidence` is one draw's `{key, ledger, segment, session}` (`coins.coins_reason`'s, and the Lean run's), and
-  `negatives` its altered copies.
+* **The evidence** (`Local.finish` or `Gate.finish`, on a thread of the run's process once the session closed): the session's out/,
+  the auditor's ledger and the host's pins log, copied to ``out/challenger/``, the key, the verifier's own copy of main's
+  first-parent history (`start`'s ``main``, never the host's or the prover's), `remote.trusted_session`'s check of the files the
+  ledger's end sealed and `challenger.pinned_session`'s of the open's pin. `evidence` is one draw's `{key, ledger, main, pins,
+  segment, session}` (`coins.coins_reason`'s, and the Lean run's), and `negatives` its altered copies.
 """
 from __future__ import annotations
 
@@ -69,6 +71,20 @@ def served_h1():
 
 def families(ranks: int) -> list[list[Any]]:
     return [[FAMILY, COINS_PER_RANK * ranks + 1]]
+
+
+def on_main(main: list[str]) -> str:
+    """The commit of main's first-parent line `main` (newest first) this tree is built on: its merge base with main's tip, when
+    that is on the line; else this tree's HEAD, whose session `pinned_session` then refuses."""
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(TREE), *args], capture_output=True, text=True).stdout.strip()
+    base = git("merge-base", "HEAD", main[0]) if main else ""
+    head = git("rev-parse", "HEAD")
+    return base if base in main else head if len(head) == 40 else "0" * 40
+
+
+def lines(path: Path) -> list[str]:
+    return [x for x in path.read_text().split("\n") if x]
 
 
 class Draws:
@@ -152,17 +168,17 @@ _Manager.register("Draws", Draws)
 
 
 class Local:
-    """A development session on this machine (module docstring), its auditor host's root in scratch `root`."""
+    """A development session on this machine (module docstring), its auditor host's root in scratch `root`, pinned on the
+    verifier's copy of main's first-parent line `main`."""
 
-    def __init__(self, root: Path, by: str = "circuits") -> None:
+    def __init__(self, root: Path, main: list[str], by: str = "circuits") -> None:
         A = _module("a5_auditor", TREE / "benchmarks" / "live_challenger" / "auditor.py")
         self.A, self.by = A, by
         self.host = A.Host(root=root / "var", peers=root / "peers", name=LOCAL_HOST, pins=root / "pins.jsonl")
         (root / "var" / "sessions").mkdir(parents=True)
         (root / "peers").write_text(f"{LOCAL_HOST} research@127.0.0.1\n{LOCAL_PEER} research@127.0.0.1\n")
-        head = subprocess.run(["git", "-C", str(TREE), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-        self.pin = head if len(head) == 40 else "0" * 40
-        self.host.pins.write_text(A.pin_line(self.pin, self.pin, A.utc(datetime.now(timezone.utc))) + "\n")
+        self.pin = on_main(main)
+        self.host.pins.write_text(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(timezone.utc))) + "\n")
         self.params = lms.Params(64, *LOCAL_PARAMS)
         self.signer = A.key_signer(self.host, self.params, workers=1)
         self.thread: threading.Thread | None = None
@@ -206,15 +222,17 @@ class Local:
             time.sleep(0.1)
         return json.loads(address.read_text())["address"], got["secret"], got["commitment"]
 
-    def finish(self, dest: Path) -> tuple[Path, Path, Ch.ChallengerKey]:
-        """Once the session has ended (its end entry in the ledger): its out/ and the ledger copied to `dest`, and its key."""
+    def finish(self, dest: Path) -> tuple[Path, Path, Path, Ch.ChallengerKey]:
+        """Once the session has ended (its end entry in the ledger): its out/, the ledger and the pins log copied to `dest`, and
+        its key."""
         assert self.thread is not None and self.session is not None
         self.thread.join()
         dest.mkdir(parents=True, exist_ok=True)
         shutil.copytree(self.host.sessions / self.session / "out", dest / "session", dirs_exist_ok=True)
         shutil.copyfile(self.host.ledger, dest / "windows.jsonl")
+        shutil.copyfile(self.host.pins, dest / "pins.jsonl")
         key = Ch.ChallengerKey(self.params.W, self.params.H, (self.host.key / "public").read_bytes())
-        return dest / "session", dest / "windows.jsonl", key
+        return dest / "session", dest / "windows.jsonl", dest / "pins.jsonl", key
 
 
 class Gate:
@@ -241,8 +259,9 @@ class Gate:
         session, _ = self.H1.open_window(self.gate, self.session, bytes.fromhex(root), self.ssh)
         return session.address, session.secret.hex(), session.commitment
 
-    def finish(self, dest: Path, minutes: int = MINUTES) -> tuple[Path, Path, Ch.ChallengerKey]:
-        """Once the gate's ledger has the session's end: its fetched directory and the ledger in `dest`, and the key."""
+    def finish(self, dest: Path, minutes: int = MINUTES) -> tuple[Path, Path, Path, Ch.ChallengerKey]:
+        """Once the gate's ledger has the session's end: its fetched directory, the ledger and the host's pins log in `dest`, and
+        the key."""
         assert self.session is not None
         deadline = time.monotonic() + 60 * (minutes + 5)
         while self.H1.gate_call(self.gate, ["status", self.session], self.ssh).get("end") is None:
@@ -253,7 +272,8 @@ class Gate:
         with tarfile.open(fileobj=io.BytesIO(self._raw(f"fetch {self.session}"))) as tar:
             tar.extractall(dest, filter="data")
         (dest / "windows.jsonl").write_bytes(self._raw("ledger"))
-        return self.H1.published(dest / self.session), dest / "windows.jsonl", self.key
+        (dest / "pins.jsonl").write_bytes(self._raw("pins"))
+        return self.H1.published(dest / self.session), dest / "windows.jsonl", dest / "pins.jsonl", self.key
 
 
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
@@ -264,13 +284,24 @@ def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
         return False
 
 
-def start(challenger: str, root: str, ranks: list[int], dest: Path, *, ssh_key: str | None = None, peer: str | None = None,
-          key_record: str | None = None):
+def opened_pin(ledger: list[str], session: str) -> str | None:
+    """The commit the open of `session` in the auditor's ledger `ledger` names as its host's tree (its `pinned`)."""
+    for line in ledger:
+        e = json.loads(line)
+        if e.get("kind") == "open" and e.get("session") == session:
+            return e["body"].get("pinned")
+    return None
+
+
+def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | Path, *, ssh_key: str | None = None,
+          peer: str | None = None, key_record: str | None = None):
     """The step's session on `root` (``local`` or ``gate:USER@HOST``, module docstring) and its draws' manager: (the manager, a
     `Draws` proxy, the thread that finishes the session into `dest` once the client has closed it and publishes the
-    evidence, and the session's id)."""
+    evidence, and the session's id). `main` is the verifier's own copy of main's first-parent history (`remote.main_lines`'s
+    file: ``git rev-list --first-parent origin/main``)."""
+    first_parent = R.main_lines(main)
     if challenger == "local":
-        session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")))
+        session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")), first_parent)
     elif challenger.startswith("gate:") and peer and key_record:
         session = Gate(challenger.removeprefix("gate:"), ssh_key, peer, key_record)
     else:
@@ -283,11 +314,21 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, *, ssh_key: 
     def finish() -> None:
         ended = draws.wait_closed()
         try:
-            directory, ledger, key = session.finish(dest)
+            directory, ledger, pins_log, key = session.finish(dest)
             commitment_, roots = R.trusted_session(directory, [ledger], {"root": root}, key, lms_verify)
-            draws.publish({"key": key.to_json(), "ledger": R.ledger_lines(ledger), "session": R.session_files(directory),
+            led, pins = R.ledger_lines(ledger), lines(pins_log)
+            try:
+                Ch.pinned_session(led, {"root": root}, key, pins, first_parent, lms_verify)
+                pinned = None
+            except Ch.CoinError as e:
+                pinned = str(e)
+            draws.publish({"key": key.to_json(), "ledger": led, "main": first_parent, "pins": pins,
+                           "session": R.session_files(directory),
                            "trusted": {"commitment": commitment_.root.hex(), "released": {k: len(v) for k, v in roots.items()},
-                                       "close": ended, "ledger_sha512": hashlib.sha512(ledger.read_bytes()).hexdigest()}})
+                                       "close": ended, "ledger_sha512": hashlib.sha512(ledger.read_bytes()).hexdigest(),
+                                       "pin": opened_pin(led, session.session), "pins_lines": len(pins),
+                                       "main": {"tip": first_parent[0] if first_parent else None, "commits": len(first_parent)},
+                                       "pinned_session": pinned}})
         except (Ch.CoinError, OSError, ValueError, KeyError) as e:
             draws.publish({"error": f"the challenger's session {session.session} gave no evidence: {e}"})
     finisher = threading.Thread(target=finish, daemon=True)
@@ -296,23 +337,29 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, *, ssh_key: 
 
 
 def evidence(published: dict, segment: dict) -> dict | None:
-    """One draw's coins' evidence, `coins.coins_reason`'s {key, ledger, segment, session}; None when the session gave none."""
+    """One draw's coins' evidence, `coins.coins_reason`'s {key, ledger, main, pins, segment, session}; None when the session
+    gave none."""
     if "error" in published:
         return None
-    return {"key": published["key"], "ledger": published["ledger"], "segment": segment, "session": published["session"]}
+    return {"key": published["key"], "ledger": published["ledger"], "main": published["main"], "pins": published["pins"],
+            "segment": segment, "session": published["session"]}
 
 
 def negatives(ev: dict, pre: dict) -> dict[str, dict | None]:
     """`ev` altered as a prover would alter it: a tampered opening, the coin opened before the registration (`pre`'s, its
     `after` rewritten to the registration's) added in front, a segment that skips a coin released after the registration,
+    the verifier's main without any commit the pins log pins (the session's pin off main's first-parent line), no pins log,
     no evidence at all."""
     s = ev["segment"]
     earlier = [{**o, "after": s["after"]} for o in pre["openings"]]
+    logged = {json.loads(line)["commit"] for line in ev["pins"]}
     return {
         "coins-tampered-opening": {**ev, "segment": {**s, "openings": [{**s["openings"][0], "coin": "00" * 64},
                                                                        *s["openings"][1:]]}},
         "coins-opened-before-the-registration": {**ev, "segment": {**s, "openings": earlier + s["openings"],
                                                                    "start": s["start"] - len(earlier)}},
         "coins-segment-skips-a-released-coin": {**ev, "segment": {**s, "openings": s["openings"][1:], "start": s["start"] + 1}},
+        "coins-pin-off-main": {**ev, "main": [c for c in ev["main"] if c not in logged]},
+        "coins-no-pins-log": {**ev, "pins": None},
         "coins-no-evidence": None,
     }
