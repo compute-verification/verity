@@ -24,3 +24,6 @@ Once GLM53_INT8 serves on eu2 at TP8 with expert parallelism, record decode TPOT
 
 ## 20:15Z, CORRECTION to the 20:05Z note: do NOT use expert parallelism
 `Int8ExpertsMethod` (`engine/int8_vllm.py`) refuses EP today: "experts not all on this rank (no expert parallelism)". Serve eu2 at plain TP8 (no `enable_expert_parallel`). At TP8 the routed experts' w2 and the shared expert's down projection are 6144 x 256 (K = 256), outside H1's domain (K >= 384, 512 | K). Daniel is deciding the fix (card 82c1e288: EP8, widen Pearl-C's small-k cap, or leave w2 uncredited). Tonight, record those calls as outside the domain: give their count and shapes per step, keep them out of the H1 window, and tie-check the rest (attention and dense projections, routed w13 at K = 6144). The TPOT ask is unchanged, at TP8.
+
+## 21:05Z, from the coordinator: move to eu2 now
+Your truncated serve r20261023-203316-7735 is waiting for 300 GB of vy-nebius-2's host memory, and nothing else contends for eu2. Start vy-glm53-eu2 now (deadline file 23:45Z, keep 300 GB of /workspace free) and run the full model there at TP8 with --no-batch-invariant. Its sparse-MLA backends on sm_90 refuse batch invariance too. Cancel the n2 serve once eu2 is serving. If eu2 is refused for capacity, keep the n2 serve and say so.
