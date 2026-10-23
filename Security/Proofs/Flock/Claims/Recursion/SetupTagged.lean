@@ -21,11 +21,11 @@ open Flock
 open Claims (Msg)
 
 /-- SHA-512 as `h`, refusing every input `p` holds of. -/
-def poison (p : ByteArray → Bool) (h : ByteArray → ByteArray) : Hashes V :=
+def poison (p : ByteArray → Bool) (h : ByteArray → ByteArray) : Hashes Flock.V :=
   { Hashes.ofSha512 Sha512.hash with sha512 := fun b => cond (p b) (.error "poison") (.ok (h b)) }
 
 /-- An `OCV` run against `H` whose log `p` holds of nowhere is a run with `poison p (hOf H)`. -/
-def poisonSim (p : ByteArray → Bool) (H : Msg → Msg) : With.Sim Claims.OCV V where
+def poisonSim (p : ByteArray → Bool) (H : Msg → Msg) : With.Sim Claims.OCV Flock.V where
   R x y := (∀ e ∈ (x.run.eval H).2, p (Claims.ofMsg e.1) = false) → y = (x.run.eval H).1
   pure _ _ := rfl
   bind {α β x y f g} hxy hfg hn := by
@@ -94,7 +94,7 @@ theorem setupHiddenWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
         try (simp only [poison, htag, hp, cond_true] at hx; cases hx; done))
     | (split at hs))
 
-theorem mapM_range_ne_ok {α : Type} {n : ℕ} (hn : 0 < n) {f : ℕ → V α} (hf : ∀ a, f 0 ≠ .ok a) {r : Array α}
+theorem mapM_range_ne_ok {α : Type} {n : ℕ} (hn : 0 < n) {f : ℕ → Flock.V α} (hf : ∀ a, f 0 ≠ .ok a) {r : Array α}
     (h : (Array.range n).mapM f = .ok r) : False := by
   obtain ⟨k, rfl⟩ : ∃ k, n = k + 1 := ⟨n - 1, by omega⟩
   rw [Array.mapM_eq_mapM_toList, Array.toList_range, List.range_succ_eq_map, List.mapM_cons] at h
