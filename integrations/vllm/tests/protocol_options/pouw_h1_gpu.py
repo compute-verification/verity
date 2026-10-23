@@ -426,7 +426,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         if name == "commit":
             from verity_vllm.protocol_options import pouw_h1_commit as CT
             com, _src, tap = CT.attach(eng, layers, run_id=f"pouw-h1-commit-{os.getpid()}")
-        served = SV.Served(prover=a.prover_dir, weights_key=wkey, tap=tap) if a.served and name != "solo" else None
+        # in-process coins open no session, so a local window's key is its own (`Served.key`)
+        served = (SV.Served(prover=a.prover_dir, weights_key=wkey, tap=tap, window=None if a.challenger else os.urandom(64))
+                  if a.served and name != "solo" else None)
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
