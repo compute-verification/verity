@@ -326,6 +326,23 @@ def test_the_served_plan_takes_f_from_the_bodys_tokens_and_refuses_a_response_lo
 MERGED_TOKENS = 64
 
 
+def test_a_latency_budget_that_doesnt_fit_a_window_is_cut_to_the_most_that_does():
+    """vLLM's endpoint took up to 1.7 s for 64 tokens four in flight: four times that and half a second is 73 buckets,
+    and four such responses don't fit in a window of 60, so the plan takes the largest D that does, 56. A plan is
+    refused only when twice the slowest and half a second doesn't fit either."""
+    body = cs.request_body("stub", MERGED_TOKENS)
+
+    def probed(slowest):
+        return {"url": "stub", "body": body,
+                "responses": [{"events": MERGED_TOKENS, "first_s": 0.0, "last_s": slowest}]}
+
+    _, plan = cs.served_plan(probed(1.7), 40, in_flight=4)
+    assert plan["served"]["delta_buckets"] == 56 and plan["windows"] == 12
+    assert cs.served_plan(probed(0.6), 40, in_flight=4)[1]["served"]["delta_buckets"] == 29
+    with pytest.raises(cs.DoesntFit, match=r"D of 65 … 125 buckets"):
+        cs.served_plan(probed(3.0), 40, in_flight=4)
+
+
 @pytest.fixture(scope="module")
 def merged(tmp_path_factory):
     """The served plan probed and run four in flight, as the gate's rehearsal runs, against an endpoint that sends
