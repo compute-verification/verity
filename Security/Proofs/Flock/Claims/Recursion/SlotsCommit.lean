@@ -202,11 +202,12 @@ def SlotsCommit (r : XR) (s : ℕ) (c : Circuit) (w : Claims.Flock.Wit) : Prop :
       ∀ n < N, SlotCommits c "top" q n w
 
 /-- **V\*'s hm96 slots output their commit strings at the outer relation** (a code fact about V*'s circuits at
-`Flock.check`): wherever part `s`'s V\* statement, staged at any rounds, is in the outer relation at `w`, every hm96
-slot `layoutBTops` reads at part `s` outputs its commit string (`SlotsCommit`). -/
+`Flock.check`): wherever part `s`'s V\* statement, staged at any rounds as V\* stages it (`StagedPart`, its scope
+check passed), is in the outer relation at `w`, every hm96 slot `layoutBTops` reads at part `s` outputs its commit
+string (`SlotsCommit`). -/
 def HmSlotsCommit {Col T : Type} (DO : Claims.Flock.Deploy Coin Col T) (st : Stage) : Prop :=
   ∀ (x : Msg) (ms : List (Msg × Out)) (s : ℕ) (w : Claims.Flock.Wit) (r : XR) (c : Circuit),
-    Claims.Flock.check DO.parse (staged st x ms s) w = true → readX x = some r →
+    StagedPart st s x (staged st x ms s) → Claims.Flock.check DO.parse (staged st x ms s) w = true → readX x = some r →
       r.w.parts[s]?.bind partCircuit = some c → SlotsCommit r s c w
 
 theorem mem_capsCalls {r : XR} {s : ℕ} {p : Msg × List HmNets.Lin × List HmNets.Lin} (hp : p ∈ capsCalls r s) :
@@ -239,13 +240,17 @@ relation at the part's staged statement; there the slot outputs its commit strin
 theorem readersTrue_layoutBTops {Col T : Type} (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin)))
     (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T) (h : HmSlotsCommit DO b.st) :
     ReadersTrue FlockDeploy.sha512 IV { b with rd := (layoutBTops fin).readers } DO := by
-  intro x as cs ws _ _ hO e he
+  intro x as cs ws _ _ hsp hO e he
   obtain ⟨s, hs, he⟩ := Claims.Recursion.VStar.part_of_mem_calls he
   have hsn : s < nS x := hO.1 ▸ hs
   have hck : Claims.Flock.check DO.parse (staged b.st x (roundsOf as cs) s) ws[s] = true := by
     have h2 := hO.2 s hs
     rwa [stagedAll, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hsn, Option.map_some,
       Option.getD_some] at h2
+  have hst : StagedPart b.st s x (staged b.st x (roundsOf as cs) s) := by
+    have h1 := hsp s hsn
+    rwa [stagedAll, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hsn, Option.map_some,
+      Option.getD_some] at h1
   change e ∈ (layoutBTops fin).calls x s ws[s] at he
   obtain ⟨p, hp, rfl⟩ := List.mem_map.1 he
   cases hr : readX x with
@@ -264,9 +269,9 @@ theorem readersTrue_layoutBTops {Col T : Type} (fin : Msg → List (ℕ × List 
             List.mem_flatMap] at hp
           obtain ⟨hh, hmem, hp⟩ := hp
           have hc' : r.w.parts[s]?.bind partCircuit = some c := by rw [hpt]; exact hc
-          exact hmCalls_true ((h x _ s ws[s] r c hck hr hc').1 hh hmem) p hp
+          exact hmCalls_true ((h x _ s ws[s] r c hst hck hr hc').1 hh hmem) p hp
     · obtain ⟨l, N, c, q, n, hst, hc, hq, hn, hp⟩ := mem_capsCalls hp
-      exact hmCalls_true ((h x _ s ws[s] r c hck hr hc).2 l N hst q hq n hn) p hp
+      exact hmCalls_true ((h x _ s ws[s] r c hst hck hr hc).2 l N hst q hq n hn) p hp
 
 /-! ## `KSLin2` and `BitsLin2` with the slots' commit strings -/
 
