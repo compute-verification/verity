@@ -384,7 +384,6 @@ theorem capRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   have htop := Flock.Readable.array_forM_ok (RecIns.setup_topRows hset) 0 h0'
   have hlnk := Flock.Readable.array_forM_ok (RecIns.setup_checkLink hset) 0 h0'
   have hreg := RecIns.setup_registered hset sts[0] (Array.getElem_mem h0')
-  dsimp only at hcoin htop hlnk
   rw [← e0] at hcoin htop hlnk hreg
   have hcp := capParams_of_check hcoin hn'
   obtain ⟨ho, hres, hsp, hso, hop⟩ := params_cap l N
@@ -569,11 +568,11 @@ theorem partOpensB_layoutBTops (fin : Msg → List (ℕ × List (Msg × List HmN
   have hr : (layoutBTops fin).rounds x = layoutOf.rounds x := rfl
   rw [hr] at hi
   have hst : (layoutBTops fin).pieceAt x i = stepPieces fin x i := rfl
-  rw [hst, stepPieces, if_neg (show ¬(i + 1 = layoutOf.rounds x) by omega)] at hpp
+  rw [hst, stepPieces, ite_eq_right (show ¬(i + 1 = layoutOf.rounds x) by omega)] at hpp
   cases i with
   | zero => simp at hpp
   | succ j =>
-    rw [if_neg (by omega : j + 1 ≠ 0), Nat.add_sub_cancel] at hpp
+    rw [ite_eq_right (by omega : j + 1 ≠ 0), Nat.add_sub_cancel] at hpp
     exact hP x st hx hf xO w hck hc.2 j (by omega) pre p post hpp hps
 
 end RecDeploy
