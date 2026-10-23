@@ -1024,8 +1024,9 @@ def MODEL_FIX : String :=
   "open the period with the gate's --model, which signs the auditor's registration of a checkpoint credit pins " ++
   "(models.json)"
 
-/-- `credit.PINNED_MODELS`: each int8 checkpoint role credit counts the weights of, with its checkpoint's SHA-512, from
-the same `models.json` `credit.py` reads. -/
+/-- `credit.PINNED_MODELS`: each checkpoint role a period's open may name, with its checkpoint's SHA-512, from the same
+`models.json` `credit.py` reads. Credit counts only an int8 role's weights: an open naming another role signs no
+weights' root, so `committedWeights` refuses its period. -/
 def PINNED_MODELS : List (String × String) :=
   match Json.parse (include_str "../models.json") with
   | .ok j => (fields j).filterMap fun (r, e) => (str? (get e "checkpoint_sha512")).map (r, ·)

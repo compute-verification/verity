@@ -26,6 +26,11 @@ N and K must be multiples of 8 (``torch._int_mm``'s shape rule on CUDA), else th
 method ``engine.int8_vllm`` registers.  The pin's ``int8_of`` names its base.  Int8 pins live in
 ``manifests/checkpoints-int8.json`` (`config.SIBLING_MANIFESTS`), which ``config.checkpoint_entries`` reads with ``checkpoints.json``.
 
+A mixture of experts whose experts are stored as 2-D tensors (OLMoE's ``mlp.experts.<e>.{gate,up,down}_proj.weight``) is made too
+(``fp8_checkpoint``'s ``moe``): each expert's projections are linears like any other, served by ``engine.int8_vllm``'s
+``Int8ExpertsMethod``, and the routers, the [num_experts, hidden_size] tensors vLLM builds with no quantization config, are
+copied as they are (bf16).
+
 ``verity-int8-channel127/v2`` is v1 plus the LM head: ``lm_head.weight`` [vocab_size, K] is made by the same row rule (an int8
 ``lm_head.weight`` and an F32 ``lm_head.weight_scale`` [vocab_size, 1]), and ``modules_to_not_convert`` is ``[]``, so vLLM's
 ``ParallelLMHead`` serves the int8 linear too.  The embedding stays as the base has it (a gather, not a product).  A config with
@@ -104,7 +109,7 @@ def _int8_refusal(n: int, k: int) -> str | None:
 
 
 INT8 = F.Recipe(id=RECIPE, weight_dtype="I8", scale_suffix="weight_scale", rows_per_scale=1, scale_shape=lambda n, k: [n, 1],
-                refusal=_int8_refusal, scales=channel_scales, quantize=quantize, quantization=QUANTIZATION, of="int8_of")
+                refusal=_int8_refusal, scales=channel_scales, quantize=quantize, quantization=QUANTIZATION, of="int8_of", moe=True)
 INT8_V2 = replace(INT8, id=RECIPE_V2, lm_head=True)
 
 

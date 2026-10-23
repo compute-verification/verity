@@ -65,6 +65,8 @@ theorem folded_ok (st : Stmt) (alpha beta : F128) (lw rho ts v : Array F128) (h 
   unfold Stmt.folded
   split
   · simp only [Stmt.foldedPartial]
+    rw [FlockSoundness.TmplFold.partialRangesT_eq st alpha lw rho ts.reverse _ #[] #[] _
+      (by simp [FlockSoundness.TmplFold.CacheOk]) (by simp [FlockSoundness.TmplFold.CacheOk])]
     by_cases hck : (rho.size + 6 != st.c.kLog || lw.size != 64) = true
     · exfalso
       simp only [Stmt.fold] at h

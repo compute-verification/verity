@@ -316,6 +316,7 @@ class _Builder:
         self._params = params
         self._param_pidx = [tuple(self._port_index(p.name) for p in pv.port_table) for pv in params]
         self._param_lo = [_disjoint_los(pv.port_table) for pv in params]
+        self._param_hi = [None if los is None else [p.hi for p in pv.port_table] for pv, los in zip(params, self._param_lo)]
 
     def _port_index(self, name: str) -> int:
         k = self._pname.get(name)
@@ -405,13 +406,29 @@ class _Builder:
                     rc.append(pv.id); rp.append(pi)
                     prc.append(pv.id); prp.append(pi)
 
+        param_lo, param_hi = self._param_lo, self._param_hi
+        p_idx = p_lo = p_hi = -1                 # [p_lo, p_hi): the port of parameter p_idx the last one-port progression read
         for operand in args:
             for run in operand:
                 space = run[0]
                 if len(run) == 8 and space in ("N", "P"):                 # a stored progression, resolved without its runs
-                    _, idx, lo, hi, dI, dL, dH, cnt = (int(x) if k else x for k, x in enumerate(run))
-                    if space == "P" and dI == 0 and dL == dH and (dL > 0 or cnt == 1) and \
-                            (len(param_pidx[idx]) == 1 or self._param_lo[idx] is not None):
+                    _, idx, lo, hi, dI, dL, dH, cnt = run
+                    if space == "P" and dI == 0 and dL == dH and (cnt == 1 or dL > 0 and cnt > 1) and param_lo[idx] is not None:
+                        # a weight read is progressions (1.4e8 in a GLM-5.3 rank Program) that each lie inside one field: that port
+                        # alone, mostly the one the progression before it read
+                        end = hi + (cnt - 1) * dL
+                        if idx == p_idx and p_lo <= lo < hi and end <= p_hi:
+                            continue
+                        los = param_lo[idx]
+                        k = bisect.bisect_right(los, lo) - 1
+                        if k >= 0 and lo < hi and end <= param_hi[idx][k]:
+                            p_idx, p_lo, p_hi = idx, los[k], param_hi[idx][k]
+                            pid, pi = params[idx].id, param_pidx[idx][k]
+                            if (pid, pi) not in seen:
+                                seen.add((pid, pi))
+                                rc.append(pid); rp.append(pi)
+                                prc.append(pid); prp.append(pi)
+                            continue
                         param(idx, lo, hi, dL, cnt)
                         continue
                     one = node if space == "N" else param

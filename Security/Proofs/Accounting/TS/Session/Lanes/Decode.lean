@@ -1,4 +1,3 @@
-import Proofs.Accounting.TS.Session.Lanes.Assumptions
 import Proofs.Accounting.TS.Session.Lanes.Layout
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
@@ -7,9 +6,9 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 /-!
 # The leaf's decodes, over its statements' port layout
 
-`Accounting.Assumptions.TS.LeafReads` reads a session's registered rows through a decode per statement (`decL` for a
-lane's, `decC` for the combine's), which it takes as parameters. These are the decodes, from INT-TIE's layout
-(`PouwWindow.Lanes`) and the session's own circuit:
+`Accounting.Guarantees.TS.LeafLanesSound` reads a session's registered rows through a decode per statement (`decL` for
+a lane's, `decC` for the combine's). These are the decodes, from INT-TIE's layout (`PouwWindow.Lanes`) and the
+session's own circuit:
 
 * `portBit s v name k`: bit `k` of the row of the port named `name`, at unit 0, in a layer value `v` (the registered reads
   `openedReg` or `rowsReg` give): `v` at a gate of the key program that carries it and is a wire of unit 0, by the
@@ -28,8 +27,9 @@ A field's place in its port's row is the same in every lane (`lanePorts`' fields
 reads them at lane 0's ports.
 
 `decL_congr` and `decC_congr`: a decode reads only the ports' row bits, so two sessions or layer values that agree on
-them decode alike. What `LeafReads` asks beyond the decodes is of the rows: that the bits each port's row holds at the
-registered reads are the leaf's committed values' encodings (registration), and the known values' content.
+them decode alike. What `Accounting.Assumptions.TS.LeafReads` asks is of the rows: that the bits each data port's row
+holds at the registered reads are the leaf's committed values' encodings (registration); the known values' content is
+flock-verify's to check (`Lanes.KnownRead`).
 -/
 
 namespace Accounting.TS.Lanes
@@ -132,23 +132,5 @@ theorem decC_congr {nw : ℕ} (T : Tile) {s s' : RowsSession} {v v' : ℕ → �
   have e : portBit s v = portBit s' v' := funext fun name => funext fun k => h name k
   unfold decC
   rw [e]
-
-/-- **`LeafReads` at these decodes is a statement of the sessions' port bits**: on every path, at proof `i` of round
-`w`, where the registrants' rows agree and the known rows hold, lane `l`'s committed port bits (`portBit` at `openedReg`) read through
-`decLane` are `laneView` of the leaf, its public inputs, its partials row and `l`, and the combine's through `decComb`
-are the partials rows, the receipt and `ok = 1`. -/
-theorem leafReads_iff {Ω : Type} {S nπ K nw : ℕ} (T : Tile)
-    (sess : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
-    (known : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)
-    (pub : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → LanePub)
-    (parts : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32)
-    (receipt : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32)
-    (leaf : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Leaf K) :
-    Accounting.Assumptions.TS.LeafReads sess known (decL K nw T) (decC nw T) pub parts receipt leaf ↔
-      ∀ x w i, RowsAgree (sess x w i) → (∀ k, KnownHeld (sess x w i k) (known x w i k)) →
-        (∀ l, decLane K nw T (portBit (sess x w i (some l)) (openedReg (sess x w i (some l)))) =
-          laneView (leaf x w i) (pub x w i) (parts x w i l) l) ∧
-        decComb nw T (portBit (sess x w i none) (openedReg (sess x w i none))) = ⟨parts x w i, receipt x w i, true⟩ :=
-  Iff.rfl
 
 end Accounting.TS.Lanes

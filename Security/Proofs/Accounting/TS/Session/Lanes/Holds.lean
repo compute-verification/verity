@@ -1,7 +1,7 @@
 import Proofs.Accounting.TS.Session.Lanes.Range
 
 /-!
-# `LeafReads`' decode half: rows that hold a leaf's encodings decode to it
+# Rows that hold a leaf's encodings decode to it
 
 `decLane` and `decComb` read each field's bits at its port and first bit in the layout (`Lanes.Decode`). Where each
 field's bits hold the encoding of the leaf's word there, and the words are in range, the decodes give the leaf back
@@ -11,12 +11,11 @@ field's bits hold the encoding of the leaf's word there, and the words are in ra
 * `LaneHolds`: lane `l`'s ports' rows hold its A rows (`laneA`) and B rows (`laneB`), the leaf's record, its partials
   row, the public inputs' admit bits, salt, position and roots and its index `l`, each field at its place, and `ok = 1`;
   `CombHolds`: the combine's hold the 32 partials rows, the receipt and `ok = 1`;
-* `decLane_eq`, `decComb_eq`: then the decodes are `laneView` and the combine's view;
-* `leafReads_of_holds`: so `LeafReads` at `decL` and `decC` follows from those at the registered reads (`openedReg`).
-
-What `leafReads_of_holds` still takes is of the rows, not the decodes: that each port's opened row holds the committed
-leaf's and partials' encodings (registration: `ServedRegistered`, `P-opened`, `checkComplete`), that the `admit`, `pub`
-and `ok` rows hold their known content, and that the committed leaf is in range.
+* `LaneDataHolds`, `CombDataHolds`: `LaneHolds`' and `CombHolds`' fields at the registered data ports (the A and B
+  rows, the record and the partials row; the partials rows and the receipt), the part
+  `Accounting.Assumptions.TS.LeafReads` asks of the opened rows; the known fields are flock-verify's known-read check's
+  (`Lanes.KnownRead`, `LaneKnownHolds.laneHolds`);
+* `decLane_eq`, `decComb_eq`: then the decodes are `laneView` and the combine's view.
 -/
 
 namespace Accounting.TS.Lanes
@@ -63,6 +62,27 @@ structure CombHolds (nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) 
     Holds (rd s!"p{x.val}") (fieldBit (combinePorts T) s!"partials[{x.val}]" + 32 * w.val) 32 (parts x w).toNat
   receipt : ∀ w : Fin nw, Holds (rd "receipt") (fieldBit (combinePorts T) "receipt" + 32 * w.val) 32 (receipt w).toNat
   ok : rd "o0" 0 = some true
+
+/-- **Lane `l`'s data ports' rows hold its words**: `LaneHolds`' fields at its registered ports, its A rows' and B
+rows' codes and scales, the leaf's z and y cell by cell and its partials row's words. -/
+structure LaneDataHolds (K nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) (L : Leaf K) (p : Fin nw → BitVec 32)
+    (l : Fin 32) : Prop where
+  a : ∀ (s : Fin 4) (k : Fin K), Holds (rd s!"a{s.val}") (fieldBit (lanePorts T 0) s!"a[{s.val}].codes" + 8 * k.val) 8
+    (encS 8 ((laneA L l s).codes k))
+  aS : ∀ s : Fin 4, Holds (rd s!"a{s.val}") (fieldBit (lanePorts T 0) s!"a[{s.val}].scale") 32 (laneA L l s).scale.toNat
+  b : ∀ (t : Fin 8) (k : Fin K), Holds (rd s!"b{t.val}") (fieldBit (lanePorts T 0) s!"b[{t.val}].codes" + 8 * k.val) 8
+    (encS 8 ((laneB L l t).codes k))
+  bS : ∀ t : Fin 8, Holds (rd s!"b{t.val}") (fieldBit (lanePorts T 0) s!"b[{t.val}].scale") 32 (laneB L l t).scale.toNat
+  z : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.z" + 32 * (i.val * T.c + j.val)) 32 (encS 32 (L.z i j))
+  y : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.y" + 16 * (i.val * T.c + j.val)) 16 (L.y i j).toNat
+  part : ∀ w : Fin nw, Holds (rd "partials") (fieldBit (lanePorts T 0) "partials" + 32 * w.val) 32 (p w).toNat
+
+/-- **The combine's data ports' rows hold its words**: row `x` of the partials at `p<x>`, and the receipt. -/
+structure CombDataHolds (nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) (parts : Fin 32 → Fin nw → BitVec 32)
+    (receipt : Fin nw → BitVec 32) : Prop where
+  p : ∀ (x : Fin 32) (w : Fin nw),
+    Holds (rd s!"p{x.val}") (fieldBit (combinePorts T) s!"partials[{x.val}]" + 32 * w.val) 32 (parts x w).toNat
+  receipt : ∀ w : Fin nw, Holds (rd "receipt") (fieldBit (combinePorts T) "receipt" + 32 * w.val) 32 (receipt w).toNat
 
 /-- An in-range row read at its fields decodes to itself. -/
 theorem row_eq {K : ℕ} {r : Row K} (hr : RowInRange r) {rd : ℕ → Option Bool} {lc ls : ℕ}
@@ -127,24 +147,5 @@ theorem decComb_eq {nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} {
   · funext w
     exact ofNat_bitsN (h.receipt w)
   · simp [h.ok]
-
-/-- **`LeafReads` from the rows**: where every proof's committed leaf is in range and, where its sessions' registrants'
-rows agree and the known rows hold (`KnownHeld`), each lane's opened port bits hold its words (`LaneHolds`) and the combine's hold the partials and the receipt
-(`CombHolds`), `LeafReads` holds at `decL` and `decC`. -/
-theorem leafReads_of_holds {Ω : Type} {S nπ K nw : ℕ} (T : Tile)
-    {sess : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession}
-    {known : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known}
-    {pub : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → LanePub}
-    {parts : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32}
-    {receipt : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32}
-    {leaf : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Leaf K}
-    (hR : ∀ x w i, LeafInRange (leaf x w i))
-    (h : ∀ x w i, RowsAgree (sess x w i) → (∀ k, KnownHeld (sess x w i k) (known x w i k)) →
-      (∀ l, LaneHolds K nw T (portBit (sess x w i (some l)) (openedReg (sess x w i (some l)))) (leaf x w i)
-        (pub x w i) (parts x w i l) l) ∧
-      CombHolds nw T (portBit (sess x w i none) (openedReg (sess x w i none))) (parts x w i) (receipt x w i)) :
-    Accounting.Assumptions.TS.LeafReads sess known (decL K nw T) (decC nw T) pub parts receipt leaf :=
-  (leafReads_iff T sess known pub parts receipt leaf).2 fun x w i hA hK =>
-    ⟨fun l => decLane_eq (hR x w i) ((h x w i hA hK).1 l), decComb_eq (h x w i hA hK).2⟩
 
 end Accounting.TS.Lanes

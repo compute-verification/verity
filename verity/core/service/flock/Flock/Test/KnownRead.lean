@@ -23,7 +23,7 @@ def net (reads : List (List Nat)) (og : Array Group := #[]) : Net :=
   match Sparse.ofRows rows w, Sparse.ofRows (Array.replicate rows.size #[]) w with
   | .ok a, .ok b =>
     let inGroups : Array Group := #[⟨0, 1, Array.replicate 8 16⟩]
-    { (default : Net) with constPos := nIn + reads.length, inWords := 1, a := a, b := b, inGroups := inGroups,
+    { (default : Net) with constPos := nIn + reads.length, inWords := 1, aT := .pure a, bT := .pure b, inGroups := inGroups,
                            outGroups := og }
   | _, _ => default
 
