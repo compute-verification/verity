@@ -271,10 +271,12 @@ head's counts give under the window's declared sync, with no public egress profi
   `served.reference` over the opened heads' counts and the window's declared sync. `network_verdict` takes the served
   profile's windows.
 - **Carry-over: none.** Each window's derivation starts with an empty egress queue, no request frame pending and no
-  earlier hand, and checks that the window ends the same way. So, by induction from the run's first window, whose
-  certifier starts empty (and from a certifier back from maintenance, which carries nothing), on a link whose every
-  window is accepted (`network_verdict`'s AND) each window's egress counts depend on that window's ingress counts and
-  sync alone. It is the smallest sound rule: a window's counts depend on nothing a verifier of that window can't see.
+  earlier hand, and checks that the window ends the same way. By the check alone, an accepted window's egress counts
+  are a function of its own ingress counts and sync. By induction from the run's first window, which starts empty (as
+  a certifier back from maintenance does, carrying nothing), on a link whose every window is accepted
+  (`network_verdict`'s AND) the Program's run ends every window idle too, so each window's counts are the Program's
+  grid under the premises below. It is the smallest sound rule: no state crosses a window's boundary, so no unit needs
+  a carry that another window's unit would have to hold it to.
 - **Request boundaries.** A request is in one window: its F_in frames are released there, and its F response frames
   are handed and released there. A request whose frames, or whose response, would straddle a window's end makes the
   window refuse, and the next one, whose counts carry frames its ingress counts don't derive.

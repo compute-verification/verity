@@ -293,7 +293,8 @@ def test_a_differing_verdict_a_failed_step_a_missing_summary_or_a_late_tick_fail
                      "workload/flip-bit b2 n3: expected ['content'], got []",
                      "workload/flip-bit answers: expected 'equal', got 'differ' ([16, 15] against [16, 16])",
                      "workload/late: no summary.json",
-                     "workload/extra b1 n2: expected {'windows': 5, 'refused': [1]}, got {'windows': 5, 'refused': []}"]
+                     "workload/extra b1 n2: expected {'windows': 5, 'refused': [1], 'counts_refused': [1]}, got "
+                     "{'windows': 5, 'refused': [], 'counts_refused': [1]}"]
     bad = {(run_, b) for run_, r in summary["runs"].items() for b, x in r["blocks"].items() if not x["ok"]}
     assert bad == {("mockdc", "b1"), ("mockdc-salt", "b4"), ("workload/honest", "b3"), ("workload/flip-bit", "b2"),
                    ("workload/extra", "b1")}

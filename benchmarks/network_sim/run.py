@@ -70,7 +70,8 @@ DELTA_BUCKETS = 12
 # refuses a window whose frames aren't the committed outboxes': flip-bit's flipped message where b1 sends it and where
 # the client relays it into b2, and under late each window carrying bytes of a block that, starved, committed no
 # values. N2 is counts only, so it accepts flip-bit's content and refuses the windows whose egress counts aren't the
-# ones b's ingress counts derive: late's held response and extra's one more event, after b1's last response.
+# ones their ingress counts derive, each refused by the served counts' check itself: late's held response and extra's
+# one more event, after b1's last response.
 WORKLOAD = {
     "honest": ([], {}, "equal"),
     "flip-bit": (["--tamper", "b1:flip-bit", "--expect", "refused"],
@@ -165,12 +166,13 @@ def records_verdicts(records: dict) -> dict:
 
 
 def workload_verdicts(block: dict) -> dict:
-    """A block's verdicts in lab_run's `summary.json`: N3's as its violations' codes, N2's as its link-windows and the
-    ones it refuses."""
+    """A block's verdicts in lab_run's `summary.json`: N3's as its violations' codes, N2's as its link-windows, the ones
+    it refuses and the ones its served counts' check alone refuses."""
     n2 = block.get("n2")
     return {"certifier": refused_rows(block["certifier"]["verdicts"]),
             "n3": sorted({v.split()[0] for v in block["n3"]["violations"]}), "n3_v5": block.get("n3_v5"),
-            "n2": None if n2 is None else {"windows": n2["windows"], "refused": n2["refused"]}}
+            "n2": None if n2 is None else {"windows": n2["windows"], "refused": n2["refused"],
+                                           "counts_refused": [w for w, ok in enumerate(n2["served_counts"]) if not ok]}}
 
 
 def tick(block: dict) -> dict:
@@ -238,7 +240,7 @@ def summarize(out: Path, exits: dict[str, int]) -> dict:
         for b, x in s["blocks"].items():
             rows, codes, windows, n2 = refused.get(b, ([], [], [], []))
             want = {"certifier": rows, "n3": codes, "n3_v5": v5(2 * WORKLOAD_WINDOWS, *windows),
-                    "n2": {"windows": WORKLOAD_WINDOWS, "refused": n2}}
+                    "n2": {"windows": WORKLOAD_WINDOWS, "refused": n2, "counts_refused": n2}}
             blocks[b] = block(run, b, x["tamper"] or "-", want, workload_verdicts(x), x)
         got = None if s["answers"] is None else "equal" if s["answers"] == s["reference"] else "differ"
         if got != answers:
