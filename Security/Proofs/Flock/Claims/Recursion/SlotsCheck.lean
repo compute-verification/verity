@@ -301,20 +301,20 @@ theorem mapM_eq_some_map {α β : Type} {f : α → Option β} {g : α → β} :
     rw [List.mapM_cons, h a (by simp), mapM_eq_some_map fun a' ha' => h a' (List.mem_cons_of_mem _ ha')]
     rfl
 
+theorem findIdx_range_eq {N w : ℕ} (hw : w < N) :
+    ((Array.range N).map Int.ofNat).findIdx? (· == (w : Int)) = some w :=
+  Array.findIdx?_eq_some_iff_getElem.2 ⟨by simpa using hw, by simp, fun j hj => by simp; omega⟩
+
 /-- With unit `0`'s input leaves its `N` input words in order, row bit `i` of port `q` has its input column wherever
 its word is one of them. -/
 theorem portCol_eq {c : Flock.Circuit} {N q i : ℕ} (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat)
     (hw : (c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16 < N) :
     portCol c 0 q i = some ((c.unit.inGroups.getD 0 default).col * Flock.WORD +
       16 * ((c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16) + i % 16) := by
-  have hf : ((Array.range N).map Int.ofNat).findIdx?
-      (· == (((c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16 : ℕ) : Int)) =
-      some ((c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16) :=
-    Array.findIdx?_eq_some_iff_getElem.2 ⟨by simpa using hw, by simp, fun j hj => by simp; omega⟩
   unfold portCol
   rw [hl]
   dsimp only
-  rw [hf]
+  rw [findIdx_range_eq hw]
   rfl
 
 /-- **Port `nm`'s row's hidden values at instance `n`**, wherever its words are among unit `0`'s input leaves. -/
@@ -330,9 +330,8 @@ theorem rowHidden_eq {c : Flock.Circuit} {N q : ℕ} {nm : String} (n : ℕ)
   dsimp only
   refine mapM_eq_some_map fun i hi => ?_
   have hi' := List.mem_range.1 hi
-  rw [portCol_eq hl (by omega), Option.map_some,
-    show 16 * ((c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16) + i % 16 =
-      16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + i by omega, Nat.add_assoc]
+  have e : ∀ C S : ℕ, C + 16 * (S + i / 16) + i % 16 = C + 16 * S + i := fun C S => by omega
+  rw [portCol_eq hl (by omega), Option.map_some, e]
 
 /-- **Port `q`'s hm96 slot at instance `n` outputs its commit string**, at a table the verifier sets up whose model
 the witness's one-table share satisfies: its out columns are the model's `b ‖ c` (`bc_bit`), the commit string of the
@@ -355,6 +354,10 @@ theorem slotCommits_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {t
   have hbw : st.c.ports[q].bits = 16 * st.c.ports[q].words := (hv1 _ (Array.getElem_mem_toList hqs)).2.1
   have hq! : st.c.ports[q]! = st.c.ports[q] := getElem!_pos st.c.ports q hqs
   rw [hq!] at hN
+  replace hb : n / st.c.g < 2 ^ (L.model regs).nbl := by
+    show n / st.c.g < 2 ^ (st.m - st.c.kLog)
+    rw [L.m, Nat.add_sub_cancel_left]
+    exact hb
   let o : Fin (2 ^ (L.model regs).nbl) := ⟨n / st.c.g, hb⟩
   have hpfx : rowPfx st.c q = (Flock.HmRow.rowPrefix st.c.ports[q]!.words).data.toList := by
     unfold rowPfx
