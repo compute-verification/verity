@@ -42,6 +42,9 @@ SOURCE = (HERE / "pearl_c_sm90.cu").read_text()
 HASH_SOURCE = (HERE.parent / "pearl_c" / "hash_h3.cuh").read_text() + (SM120_DIR / "hash_fast.cuh").read_text()
 #: hash_decode.cuh's variants the cubin builds (pearl_c_sm90.cu's PD_VARIANT_LIST), each its four kernels
 PD_BUILT = [int(v) for v in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", SOURCE).group(1))]
+#: hash_prefill.cuh's variants the cubin builds (pearl_c_sm90.cu's PL_INSTANCE lines), each its four kernels
+PL_BUILT = [int(v) for v in re.findall(r"^PL_INSTANCE\((\d+)\)", SOURCE, re.M)]
+PL_KINDS = ("leaves", "levels", "seed_a", "seeds")
 H100_MAX_DYN = 232448                    # sm_90's opt-in dynamic shared memory per block (227 KB)
 UUID = "GPU-0123abcd-4567-89ef-0123-456789abcdef"
 H200 = "NVIDIA H200"
@@ -252,6 +255,8 @@ H3_LAUNCHED = {"s512_heads", "s512_row_segs", "s512_tile_segs", "s512_folds", "h
                "s512_tree_small", "s512_seeds"}
 #: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, and each served variant's commitment and tile leaves
 PD_LAUNCHED = {"pd_heads", *(f"pd_{kind}_{v}" for v in RUN.PD_SERVED for kind in ("commit", "tiles"))}
+#: hash_prefill.cuh's launches (run.py's chain "pl", the default past pd)
+PL_LAUNCHED = {f"pl_{kind}_{RUN.PL_VARIANT}" for kind in PL_KINDS}
 
 
 def form_kernels() -> list[str]:
@@ -274,9 +279,10 @@ def own_kernels() -> list[str]:
 
 def kernel_names() -> list[str]:
     """Every kernel in the cubin: pearl_c_sm90.cu's (the grouped calls' too) and those of the hashing it includes
-    (hash_h3.cuh, hash_fast.cuh and hash_decode.cuh's variants)."""
+    (hash_h3.cuh, hash_fast.cuh, hash_decode.cuh's variants and hash_prefill.cuh's)."""
     pd = ["pd_heads"] + [f"pd_{kind}_{v}" for v in PD_BUILT for kind in ("commit", "tree", "tiles", "probe")]
-    return own_kernels() + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd
+    pl = [f"pl_{kind}_{v}" for v in PL_BUILT for kind in PL_KINDS]
+    return own_kernels() + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd + pl
 
 
 def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
@@ -345,6 +351,15 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
                 7: 32, 8: 128 + 192 * 256 * 64, 9: 16, 10: 32, 11: 32, 12: 32 * m}
     if name.startswith("pd_tiles_"):
         return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: 64 * -(-i[0] // 64) * (i[1] // 64)}
+    if name.startswith("pl_leaves_"):
+        return {0: 64 * i[0], 1: 64 * i[0], 2: 32, 3: 128 + 192 * 256 * 64, 4: 104, 5: 64}
+    if name.startswith("pl_levels_"):
+        width, _, levels = i[:3]
+        return {0: 64 * sum(width >> q for q in range(levels + 1)), 1: 64}
+    if name.startswith("pl_seed_a_"):
+        return {0: 64, 1: 104, 2: 32, 3: 32}
+    if name.startswith("pl_seeds_"):
+        return {0: 64 * i[0], 1: 32 * i[0], 2: 32 * i[0], 3: 104}
     if name == "quant_s5":
         return {0: 4 * i[0] * i[1], 1: 4 * i[0], 2: i[0] * i[1]}
     if name == "plainq":
@@ -374,6 +389,7 @@ def threads(name: str, i: list[int]) -> int:
             "s512_heads": lambda: segs,
             "hm_leaves": lambda: i[0], "s512_frame_leaves": lambda: i[1], "s512_pads": lambda: i[1] - i[0],
             "s512_nodes": lambda: i[1], "s512_tree_small": lambda: 1, "quant_s5": lambda: i[0] * i[1] // 16,
+            f"pl_leaves_{RUN.PL_VARIANT}": lambda: i[0], f"pl_seeds_{RUN.PL_VARIANT}": lambda: i[0],
             "widen_bf16": lambda: i[0] * i[1] // 8, "widen_fp8_block": lambda: i[0] * i[1] // 8}.get(name, lambda: 0)()
 
 
@@ -463,7 +479,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
             if timing and ev["name"].startswith("gemm_pearlc"):
                 timed_gemms.add(ev["name"])
     # n = 960's B tree (960 rows) and tile tree (8 x 15 tiles) pad
-    assert seen == set(own_kernels()) | H3_LAUNCHED | {"s512_pads"} | PD_LAUNCHED
+    assert seen == set(own_kernels()) | H3_LAUNCHED | {"s512_pads"} | PD_LAUNCHED | PL_LAUNCHED
     # 1024 x 1024 on 128 x 128 tiles, 1024 x 960 (128 does not divide n) on 128 x 64
     assert timed_gemms == {"gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_n64", "gemm_pearlc_s_n64"}
 
@@ -483,7 +499,9 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
             timed = timed or ev["name"] == "gen_f32"
             if timed:
                 launched.append(ev)
-    assert H3_LAUNCHED - {"s512_heads"} | {"s512_pads"} <= {ev["name"] for ev in launched}   # the tables: once, at the check
+    # the tables: once, at the check; A's commitment past pd: chain "pl"
+    assert H3_LAUNCHED - {"s512_heads", "s512_seeds"} | {"s512_pads"} | PL_LAUNCHED <= {ev["name"] for ev in launched}
+    assert "s512_seeds" not in {ev["name"] for ev in launched}
     assert {ev["i"][0] for ev in launched if ev["name"] == "s512_row_segs"} == {1008, 1024, 40}   # A's real rows, B's
     lines_ea = [ev for ev in launched if ev["name"] == "lines" and ev["i"][4]]
     assert {(ev["i"][2], ev["i"][4]) for ev in lines_ea} == {(1024, 1008), (64, 40)}
@@ -546,6 +564,15 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         if name.startswith("pd_commit_"):
             assert g == [i[0], 1, 1] and i[0] <= RUN.PD_MAX_ROWS and i[1] % 256 == 0 and i[1] <= RUN.PD_MAX_K and i[2] == 0
             assert ev["block"] == 32 * (-(-i[1] // 256 // 32) * 2 + 2) and RUN.PD_PAIR_SMEM <= ev["smem"] <= H100_MAX_DYN
+        if name.startswith("pl_"):
+            half = RUN.PD_PAIR_SMEM // 2
+            shape = {"pl_leaves": (-(-i[0] // RUN.PL_ROWS), 128, half), "pl_seed_a": (1, 64, half),
+                     "pl_seeds": (-(-i[0] // RUN.PL_SEEDS), 64, half),
+                     "pl_levels": (i[0] >> i[2], 128, RUN.PD_PAIR_SMEM)}[name.rsplit("_", 1)[0]]
+            assert (g[0], ev["block"], ev["smem"]) == shape and g[1:] == [1, 1], ev
+            assert name.startswith("pl_seed_a") or 0 < i[0] <= RUN.PL_MAX_ROWS
+            if name.startswith("pl_levels"):
+                assert i[0] & (i[0] - 1) == 0 and 1 <= i[2] <= RUN.PL_LEVELS and i[0] >> i[2] << i[2] == i[0], ev
         if name.startswith("pd_tiles_"):
             tiles = -(-i[0] // 64) * (i[1] // 64)
             if int(name.rsplit("_", 1)[1]) & RUN.PD_GROUP:
