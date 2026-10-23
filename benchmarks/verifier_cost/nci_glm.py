@@ -10,15 +10,19 @@ order, and `--pins` the Build's meta (`rank_workload_digests`), which each must 
 
   registered  each rank's Program as registered, whose root is its inputs and one Call, the request: θ its weights
               (`annotations["theta"]`), then θ empty, one IU (the Call)
-  rank        rank 0's request inlined at the root (`Program`'s lowering of the request: the same computed gates and
-              wires), its weights bound at registration and θ: one IU per session, per engine step, per layer of a step
-              and per Call; and with its weights bound per run and θ empty, which must give the registered verdict
+  rank        rank 0's Program with its weights' input nodes bound at registration (`RegisteredInput<w>_v1`) and
+              nothing else changed: θ the weights, one IU (the request, its peers' partials read as inputs)
   slice       Definitions of rank 0 as Programs (`slice`), their weight parameters registered, one IU per Call and one
               in all: `--policy`, the reference (`nci_reference.check_desc`) and `--policy --unrolled` on the instance
               expanded gate by gate must agree
-  node        the eight ranks' requests inlined into one root, each collective reading the other ranks' partials where
-              it read its `peers_*` inputs (the TP exchange inside the node): one IU per session at (Γ, α) and at its
-              neighbours (α/2, 2α, Γ/2, 2Γ), one per engine step and one per layer of a step
+  node        the eight ranks' requests joined into one Definition called once by a root of input nodes, each collective
+              reading the other ranks' partials where it read its `peers_*` inputs (the TP exchange inside the node),
+              the weights registered and θ: one IU, the node's session, at (Γ, α) and at its neighbours (α/2, 2α, Γ/2, 2Γ)
+
+A finer division of a whole session (per engine step, per layer, per Call) is not checked: `NciCheck.Desc` holds every
+read of a root node as pieces of gates, and on GLM-5.3 a Call's output is mostly one piece per leaf (the 6,144 outputs of
+`Fp8GroupQuantUe8m0_v1{K=6144,G=128}` are 6,192 pieces), about 10^9 pieces per rank. Inside one Call they are resolved
+and dropped, which is why the IUs here are Calls.
 
 DIR/results.json has a row per check: the Program (SHA-512 digest, bytes, root nodes, gates), the division, the verdict
 summarised and the time and peak RSS; DIR/ius/<case>.json each verdict's IUs.
@@ -26,7 +30,6 @@ summarised and the time and peak RSS; DIR/ius/<case>.json each verdict's IUs.
 from __future__ import annotations
 
 import argparse
-import bisect
 import gzip
 import hashlib
 import json
@@ -46,12 +49,13 @@ from run import EXE, _reference, timed
 SCHEMA = "verity/nci-glm/v1"
 DESCRIPTOR = "verity-ir/descriptor/v1"
 #: the demo's policy (README.md): Γ gates per IU, α novel bits per gate
-GAMMA = 2 ** 43
-ALPHA = (1, 2 ** 26)
+GAMMA = 2 ** 44
+ALPHA = (1, 2 ** 25)
 INPUT = re.compile(r"^(Registered)?Input[1-9][0-9]*_v1$")
 #: rank 0's Definitions checked gate by gate: the router, the fused all-reduce and norm, and an FP8 linear layer
 SLICES = ("MoeRouterSigmoidBias_v1{", "AllReduceRmsNormMnnvl_v1{", "DeepGemmFp8Linear_v1{K=6144,N=2624}")
-SLICE_DIVISIONS = ("session", "call")
+#: a slice's divisions: per root node (its body node `k`, or None for an input node), its IU label
+SLICE_DIVISIONS = {"session": lambda k: 0, "call": lambda k: k}
 
 
 def canonical(v) -> str:
@@ -257,32 +261,37 @@ def structure(body: dict) -> tuple[list[int], list[int]]:
     return ends, colls
 
 
-def division(structs: list[tuple[list[int], list[int]]], name: str):
-    """Per body node (rank r, node k), its IU label in division `name`, from each rank's `structure`. A layer of step t
-    runs from after one collective to the next but one (the attention's all-reduce and the MLP's); label 0 is the
-    embedding, up to and with the step's first collective, and the last the head, from the last layer to the token."""
-    first = [[bisect.bisect_right(colls, ends[t - 1]) if t else 0 for t in range(len(ends))] for ends, colls in structs]
-
-    def step(r: int, k: int) -> int:
-        return bisect.bisect_left(structs[r][0], k)
-
-    def layer(r: int, k: int) -> tuple[int, int]:
-        t = step(r, k)
-        q = bisect.bisect_left(structs[r][1], k) - first[r][t]
-        return t, 0 if q == 0 else 1 + (q - 1) // 2
-    return {"session": lambda r, k: 0, "rank": lambda r, k: r, "step": step, "layer": layer,
-            "call": lambda r, k: (r, k)}[name]
+def call_owners(desc: dict) -> list:
+    """A Program whose root is input nodes and Calls: "input" for each input node, one IU per Call."""
+    nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
+    ids: dict[int, int] = {}
+    return ["input" if INPUT.match(desc["callees"][nd["fn"]]) else ids.setdefault(k, len(ids)) for k, nd in enumerate(nodes)]
 
 
-def owners(nodes: list, origin: list, gate, label) -> list:
-    """`NciCheck.Desc`'s owners: "input" for an input node or a node without gates, else its IU, numbered in order."""
-    ids: dict = {}
-    return ["input" if o is None or gate(nd) == 0 else ids.setdefault(label(*o), len(ids)) for nd, o in zip(nodes, origin)]
+def register(desc: dict, inputs: list[int]) -> dict:
+    """`desc` with its root's input nodes `inputs` bound at registration (`RegisteredInput<w>_v1` for `Input<w>_v1`) and
+    nothing else changed."""
+    callees, defs = list(desc["callees"]), dict(desc["definitions"])
+    at = {k: i for i, k in enumerate(callees)}
+    root = defs[desc["root"]]
+    nodes = list(root["body"]["nodes"])
+    for k in inputs:
+        key = callees[nodes[k]["fn"]]
+        if not INPUT.match(key) or key.startswith("Registered"):
+            raise ValueError(f"root node {k} calls {key}, not an input bound per run")
+        reg = "Registered" + key
+        if reg not in at:
+            at[reg] = len(callees)
+            callees.append(reg)
+            defs[reg] = defs[key] | {"id": reg}
+        nodes[k] = nodes[k] | {"fn": at[reg]}
+    defs[desc["root"]] = root | {"body": root["body"] | {"nodes": nodes}}
+    return desc | {"callees": callees, "definitions": defs}
 
 
 def reroot(src: Source, key: str, registered: list[bool]) -> tuple[dict, list]:
     """A Program whose root inlines `key`'s body, as `Program` lowers a function: one input node per parameter, in order,
-    bound at registration where `registered`, then the body's nodes. Per root node, None or (0, body node)."""
+    bound at registration where `registered`, then the body's nodes. Per root node, None or its body node."""
     W = Writer()
     body = src.defs[key]["body"]
     nodes = [W.input_node(t, reg) for (_, t), reg in zip(body["params"], registered)]
@@ -291,28 +300,27 @@ def reroot(src: Source, key: str, registered: list[bool]) -> tuple[dict, list]:
     nodes += [W.node(src, nd, move) for nd in body["nodes"]]
     name = src.defs[key]["id"]
     desc = W.program(f"Root[{name}]_v1", key, nodes, move(body["ret"]), body["ret_type"])
-    return desc, [None] * P + [(0, k) for k in range(len(body["nodes"]))]
+    return desc, [None] * P + list(range(len(body["nodes"])))
 
 
-def join(srcs: list[Source], bodies: list[dict], colls: list[list[int]]) -> tuple[dict, list]:
-    """The ranks' requests inlined into one root: each rank's parameters but its peers' partials as input nodes (weights
-    bound at registration), then its nodes, collective by collective; each collective's first argument, rank r's partial
-    in slot r and `peers_*` inputs in the others, reads every rank's own partial instead; `colls` are each rank's
-    collectives (`structure`). Per root node, None or (rank, body node)."""
+def join(srcs: list[Source], bodies: list[dict], colls: list[list[int]]) -> dict:
+    """The ranks' requests joined into one Definition, `NodeTp<R>_v1`, called once by a root of input nodes: its
+    parameters each rank's but its peers' partials (weights bound at registration), its nodes each rank's, collective by
+    collective; each collective's first argument, rank r's partial in slot r and `peers_*` inputs in the others, reads
+    every rank's own partial instead. `colls` are each rank's collectives (`structure`)."""
     R = len(srcs)
     W = Writer()
+    params: list[tuple[str, list, bool]] = []
     nodes: list = []
-    origin: list = []
     pidx: list[list[int | None]] = []
-    for b in bodies:
+    for r, b in enumerate(bodies):
         m: list[int | None] = []
         for name, t in b["params"]:
             if name.startswith("peers_"):
                 m.append(None)
                 continue
-            nodes.append(W.input_node(t, name.startswith("weights")))
-            origin.append(None)
-            m.append(len(nodes) - 1)
+            params.append((f"r{r}_{name}", t, name.startswith("weights")))
+            m.append(len(params) - 1)
         pidx.append(m)
     nmap = [[-1] * len(b["nodes"]) for b in bodies]
 
@@ -320,7 +328,7 @@ def join(srcs: list[Source], bodies: list[dict], colls: list[list[int]]) -> tupl
         def p(j: int) -> tuple[str, int]:
             if pidx[r][j] is None:
                 raise ValueError(f"rank {r}: {bodies[r]['params'][j][0]} read outside a collective's peer slot")
-            return "n", pidx[r][j]
+            return "p", pidx[r][j]
 
         def n(k: int) -> tuple[str, int]:
             if nmap[r][k] < 0:
@@ -331,7 +339,6 @@ def join(srcs: list[Source], bodies: list[dict], colls: list[list[int]]) -> tupl
 
     def place(r: int, k: int, nd: dict) -> None:
         nodes.append(nd)
-        origin.append((r, k))
         nmap[r][k] = len(nodes) - 1
 
     def slots(r: int, c: int) -> list[list[dict]]:
@@ -374,9 +381,14 @@ def join(srcs: list[Source], bodies: list[dict], colls: list[list[int]]) -> tupl
     t = bodies[0]["ret_type"]
     if t[0] != "Array" or any(canonical(b["ret_type"]) != canonical(t) for b in bodies):
         raise ValueError("the ranks' requests return different types")
-    desc = W.program(f"Root[NodeTp{R}_v1]_v1", f"NodeTp{R}_v1", nodes, {"concat": [move[r](b["ret"]) for r, b in enumerate(bodies)]},
-                     ["Array", R * t[1], t[2]])
-    return desc, origin
+    fn, ret_type = f"NodeTp{R}_v1", ["Array", R * t[1], t[2]]
+    W.defs[fn] = {"bindings": {}, "form": "composite", "id": fn,
+                  "body": {"nodes": nodes, "params": [[name, t] for name, t, _ in params],
+                           "ret": {"concat": [move[r](b["ret"]) for r, b in enumerate(bodies)]}, "ret_type": ret_type}}
+    root = [W.input_node(t, reg) for _, t, reg in params]
+    call = {"args": [{"refs": {"affine": ["n", j, 0, leaves(t)]}, "type": W.type(t)} for j, (_, t, _) in enumerate(params)],
+            "fn": W.callee(fn), "form": "call", "out": W.type(ret_type)}
+    return W.program(f"Root[{fn}]_v1", fn, root + [call], {"affine": ["n", len(root), 0, R * t[1]]}, ret_type)
 
 
 class Runs:
@@ -470,23 +482,18 @@ def points(gamma: int, alpha: tuple[int, int], neighbours: bool) -> list[tuple[s
     return out
 
 
-def check_program(runs: Runs, scratch: Path, name: str, desc: dict, origin: list, divisions: dict, theta_reg: bool,
-                  info: dict, neighbours: tuple[str, ...] = ()) -> None:
-    """Every division of one Program at the policy, and at its neighbours for those named; θ its registered inputs when
-    `theta_reg`, else empty."""
+def check_program(runs: Runs, scratch: Path, name: str, desc: dict, theta: list, info: dict, neighbours: bool) -> None:
+    """A Program whose root is input nodes and one Call, the Call one IU, at the policy and, when `neighbours`, at its
+    neighbours."""
     text, size = described(desc)
     ptext = json.dumps(text)
     del text
-    nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
-    gate = gates_of(desc)
-    theta = [k for k, nd in enumerate(nodes) if desc["callees"][nd["fn"]].startswith("RegisteredInput")] if theta_reg else []
-    for div, label in divisions.items():
-        owner = owners(nodes, origin, gate, label)
-        for tag, g, a in points(runs.args.gamma, runs.args.alpha, div in neighbours):
-            case = f"{name}/{div}{tag}"
-            path = write_instance(scratch / (case.replace("/", "_") + ".json"), ptext, theta, owner, g, a)
-            runs.submit(path, {"case": case, "program": name, "division": div, "gamma": g, "alpha": list(a),
-                               "theta_nodes": len(theta), **size, **info})
+    owner = call_owners(desc)
+    for tag, g, a in points(runs.args.gamma, runs.args.alpha, neighbours):
+        case = f"{name}/session{tag}"
+        path = write_instance(scratch / (case.replace("/", "_") + ".json"), ptext, theta, owner, g, a)
+        runs.submit(path, {"case": case, "program": name, "division": "session", "gamma": g, "alpha": list(a),
+                           "theta_nodes": len(theta), **size, **info})
 
 
 def registered(runs: Runs, scratch: Path, r: int, desc: dict, ann: dict, pin: str, with_theta: bool) -> dict:
@@ -535,8 +542,10 @@ def slices(runs: Runs, scratch: Path, src: Source, body: dict, ref) -> None:
         nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
         gate = gates_of(desc)
         theta = [k for k, nd in enumerate(nodes) if desc["callees"][nd["fn"]].startswith("RegisteredInput")]
-        for div in SLICE_DIVISIONS:
-            inst = {"program": text, "theta": theta, "owner": owners(nodes, origin, gate, division([([], [])], div)),
+        for div, label in SLICE_DIVISIONS.items():
+            ids: dict[int, int] = {}
+            owner = ["input" if k is None or gate(nd) == 0 else ids.setdefault(label(k), len(ids)) for nd, k in zip(nodes, origin)]
+            inst = {"program": text, "theta": theta, "owner": owner,
                     "gamma": runs.args.gamma, "alpha": list(runs.args.alpha)}
             case = f"slice/{prefix.split('{')[0]}/{div}"
             row = {"case": case, "program": f"slice/{key[:120]}", "division": div, "gamma": runs.args.gamma,
@@ -563,6 +572,8 @@ def measure(args) -> int:
         descs: list[dict] = []
         for r, path in enumerate(args.rank):
             desc, ann = load(Path(path))
+            if r == 0:
+                ann0 = ann
             if "registered" in args.case:
                 registered(runs, scratch, r, desc, ann, digests[r], with_theta=r == 0)
             descs.append(desc)
@@ -574,28 +585,22 @@ def measure(args) -> int:
         meta = {"pins": pins, "rank0": {"request": key[:200], "body_nodes": len(body["nodes"]), "steps": len(ends),
                                         "collectives": len(colls), "step_ends": ends}}
         if "rank" in args.case:
-            names = [n for n, _ in body["params"]]
-            desc, origin = reroot(src, key, [n.startswith("weights") for n in names])
-            check_program(runs, scratch, "rank/r0", desc, origin,
-                          {d: division([(ends, colls)], d) for d in ("session", "step", "layer", "call")}, True, {"rank": 0})
-            desc, origin = reroot(src, key, [False] * len(names))
-            check_program(runs, scratch, "rank-run/r0", desc, origin, {"session": division([(ends, colls)], "session")},
-                          False, {"rank": 0})
-            del desc, origin
+            reg = register(descs[0], ann0["theta"])
+            check_program(runs, scratch, "rank/r0", reg, ann0["theta"], {"rank": 0}, neighbours=False)
+            del reg
         if "slice" in args.case:
             slices(runs, scratch, src, body, _reference())
         if "node" in args.case:
             srcs = [Source(d) for d in descs]
             bodies = [request(d)[1] for d in descs]
             t = time.perf_counter()
-            structs = [structure(b) for b in bodies]
-            desc, origin = join(srcs, bodies, [c for _, c in structs])
+            desc = join(srcs, bodies, [structure(b)[1] for b in bodies])
             meta["join_seconds"] = round(time.perf_counter() - t, 1)
             del srcs, bodies, descs
-            check_program(runs, scratch, "node", desc, origin,
-                          {d: division(structs, d) for d in ("session", "step", "layer")}, True, {"ranks": len(args.rank)},
-                          neighbours=("session",))
-            del desc, origin
+            nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
+            theta = [k for k, nd in enumerate(nodes) if desc["callees"][nd["fn"]].startswith("RegisteredInput")]
+            check_program(runs, scratch, "node", desc, theta, {"ranks": len(args.rank)}, neighbours=True)
+            del desc, nodes
         rows = runs.finish(meta | {"gamma": args.gamma, "alpha": list(args.alpha), "seconds": round(time.perf_counter() - t0, 1)})
     bad = [r["case"] for r in rows if r.get("rc") != 0 or ("error" in r and not r["case"].endswith("theta-weights"))]
     keys = ("gates", "ius", "complies", "failure", "computed", "novel", "max_size", "worst_iu")
@@ -604,9 +609,6 @@ def measure(args) -> int:
         d, u = by.get(case, {}), by.get(case + "/unrolled", {})
         if any(d.get(k) != u.get(k) or d.get("reference", {}).get(k) != d.get(k) for k in keys):
             bad.append(case + " (the three checks disagree)")
-    a, b = by.get("registered/r0/theta-empty"), by.get("rank-run/r0/session")
-    if a and b and any(a.get(k) != b.get(k) for k in keys):
-        bad.append("rank-run/r0/session (not the registered Program's verdict)")
     if bad:
         print("failures or disagreements:", ", ".join(bad), file=sys.stderr)
         return 1
