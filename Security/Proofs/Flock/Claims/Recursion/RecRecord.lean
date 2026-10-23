@@ -533,6 +533,8 @@ theorem readsBack_recTr (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Bring
       simp only [Option.map_some, Option.getD_some, coinVals, hc]
       unfold Drawn
       simp [FlockDeploy.Coin.vals]
+      apply Array.toList_inj.mp
+      simp
     · rw [List.getElem?_eq_none (by rw [List.length_take]; omega)]
       simp [Drawn, FlockDeploy.Coin.vals]
 
