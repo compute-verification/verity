@@ -30,9 +30,9 @@ import glm53  # noqa: E402
 
 EXPERTS = 8
 SHAPES = ((4096, 6144), (6144, 2048))
-#: routed rows a local expert, by pattern: a decode step's few (two experts idle) and a prefill chunk's (blocks of 256 and a
-#: partial one, an expert of 2,048)
-COUNTS = {"decode": (3, 0, 17, 1, 40, 8, 0, 5), "prefill": (300, 256, 1000, 64, 17, 512, 2048, 128)}
+#: routed rows a local expert, by pattern: a decode step's few and a prefill chunk's (blocks of 256 and a partial one, an
+#: expert of 2,048).  No expert is idle: a pass calls every weight its epoch commits (`audit.Epoch`), and verify reads these
+COUNTS = {"decode": (3, 1, 17, 1, 40, 8, 2, 5), "prefill": (300, 256, 1000, 64, 17, 512, 2048, 128)}
 
 
 def _same(a: Path, b: Path) -> list[str]:

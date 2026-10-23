@@ -8,11 +8,12 @@
 # Under one lease of at most LEASE_MIN minutes (default 30): run.py's check at the fixture's shape (no diagnostic timing), and
 # only if it passed, each step whose switch is set:
 #   TIMING  N:K ... (default 2624:6144)                glm53_timing.py at those shapes, into $OUT/timing
-#   TILES   N:K ... (default 512:6144 3072:6144 6144:1536)  glm53_passes.py capture --per-shape, into $OUT/tiles
+#   TILES   N:K ... (default 512:6144 3072:6144 6144:1536)  glm53_passes.py capture --shapes N:K, a shape at a time, in scratch
 #   PROFILE 1 (default)                                glm53_profile.py run under nsys (the expert shapes at m 16 and 2,048), into $OUT/profile
 #   GROUPED 1 (default 0; the ship's cubin must have the grouped kernels)  grouped_check.py, its passes in scratch
-# Then, the lease released: the per-shape passes' scalar replay (glm53_passes.py verify without --fast: every drawn tile on the
-# reference chain), the profile's SQLite export and report, and the grouped passes' replay (--fast).  VERITY_BENCH_VENV and
+# Then, the lease released: each shape's passes' scalar replay (glm53_passes.py verify without --fast: every drawn tile on the
+# reference chain; their JSON and manifests into $OUT/tiles/NxK), the profile's SQLite export and report, and the grouped
+# passes' replay (--fast).  VERITY_BENCH_VENV and
 # CUDA as h200.sh.  Every step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
@@ -43,11 +44,10 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-30}" -- bash -c '
     "$PY" "$D/glm53_timing.py" --out "$O/timing" --shapes $TIMING > "$O/timing.log" 2>&1
     echo "timing rc $?" >> "$O/rc.txt"
   fi
-  if [ -n "$TILES" ]; then
-    # shellcheck disable=SC2086
-    "$PY" "$D/glm53_passes.py" capture --out "$O/tiles" --shapes $TILES --per-shape > "$O/tiles.log" 2>&1
-    echo "tiles rc $?" >> "$O/rc.txt"
-  fi
+  for sh in $TILES; do
+    "$PY" "$D/glm53_passes.py" capture --out "$S/tiles/${sh/:/x}" --shapes "$sh" > "$O/tiles-${sh/:/x}.log" 2>&1
+    echo "tiles ${sh/:/x} rc $?" >> "$O/rc.txt"
+  done
   if [ "$PROFILE" = 1 ]; then
     mkdir -p "$O/profile"
     nsys profile -t cuda,nvtx --sample=none --cpuctxsw=none --force-overwrite true -o "$O/profile/prof" "$PY" "$D/glm53_profile.py" run > "$O/profile/run.log" 2>&1
@@ -58,10 +58,17 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-30}" -- bash -c '
     echo "grouped rc $?" >> "$O/rc.txt"
   fi'
 echo "lease rc $?" >> "$O/rc.txt"
-if [ -f "$O/tiles/capture.json" ]; then
-  "$PY" "$D/glm53_passes.py" verify --out "$O/tiles" --jobs "$(nproc)" > "$O/tiles-verify.log" 2>&1
-  echo "tiles verify rc $?" >> "$O/rc.txt"
-fi
+for c in "$S"/tiles/*/capture.json; do
+  [ -f "$c" ] || continue
+  t=$(dirname "$c"); sh=$(basename "$t")
+  "$PY" "$D/glm53_passes.py" verify --out "$t" --jobs "$(nproc)" > "$O/tiles-verify-$sh.log" 2>&1
+  echo "tiles verify $sh rc $?" >> "$O/rc.txt"
+  mkdir -p "$O/tiles/$sh"
+  cp "$t"/*.json "$O/tiles/$sh/"
+  for m in "$t"/*/manifest.json; do
+    p="$O/tiles/$sh/$(basename "$(dirname "$m")")"; mkdir -p "$p" && cp "$m" "$p/"
+  done
+done
 if [ -f "$O/profile/prof.nsys-rep" ]; then
   nsys export -t sqlite --force-overwrite true -o "$S/prof.sqlite" "$O/profile/prof.nsys-rep" > "$O/profile/export.log" 2>&1 &&
     "$PY" "$D/glm53_profile.py" report "$S/prof.sqlite" --out "$O/profile/profile.json" > "$O/profile/report.txt" 2>&1
@@ -77,6 +84,6 @@ done
 cat "$O/rc.txt"
 tail -3 "$O/run.err" 2>/dev/null
 grep -E "slowdown|no stock" "$O/timing.log" 2>/dev/null
-tail -8 "$O/tiles.log" "$O/tiles-verify.log" "$O/grouped.log" 2>/dev/null
+tail -n 8 "$O"/tiles-*.log "$O/grouped.log" 2>/dev/null
 head -60 "$O/profile/report.txt" 2>/dev/null
 ! grep -qv " rc 0$" "$O/rc.txt"

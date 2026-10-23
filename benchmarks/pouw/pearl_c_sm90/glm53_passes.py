@@ -15,12 +15,12 @@ the weights' root (its coin commitment is published as ``coins.json``, where `ve
 - ``control``: decode's calls again, retained, with every commitment write omitted (`e2e.CONTROL_OMITS`), so the transcript is
   whatever the poison left.
 
-``--shapes`` names the weights' (n, k) in place of the in-domain ones.  ``--per-shape`` makes a prefill and a decode pass a
-weight in place of the three (``prefill-NxK``, ``decode-NxK``, no control), so every tile verify draws from a pass is that
-shape's, held to the reference.
+``--shapes`` names the weights' (n, k) in place of the in-domain ones; one shape alone makes every tile verify draws that
+shape's (a pass calls every weight the epoch commits, `audit.Epoch`'s rule).
 
-``verify`` runs `verify_run.verify` on each pass ``capture.json`` lists under ``coins.json``: every pass but control must be
-accepted (replay-verified, development shortcut; the protocol's check is a ZK proof) and control rejected.  Each mode writes its JSON in DIR
+``verify`` runs `verify_run.verify` on each pass ``capture.json`` lists (grouped_check.py's too) under ``coins.json``: every
+pass but control must be accepted (replay-verified, development shortcut; the protocol's check is a ZK proof) and control
+rejected.  Each mode writes its JSON in DIR
 (``capture.json``, ``verify.json``) and exits 0 only when everything it checks holds.
 """
 
@@ -71,17 +71,12 @@ def capture(a) -> int:
     print(f"gate: {'PASS' if log['gate']['passed'] else 'FAIL'}", flush=True)
     xs = {m: {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
           for m in (PREFILL, DECODE)}
-    passes = [("prefill", PREFILL, (), None), ("decode", DECODE, (), None), ("control", DECODE, e2e.CONTROL_OMITS, None)]
-    if a.per_shape:
-        passes = [(f"{p}-{n}x{k}", m, (), w) for w, (n, k) in enumerate(shapes) for p, m in (("prefill", PREFILL), ("decode", DECODE))]
-    for name, m, omit, only in passes:
+    for name, m, omit in (("prefill", PREFILL, ()), ("decode", DECODE, ()), ("control", DECODE, e2e.CONTROL_OMITS)):
         run.begin(retain=str(out / name), run=os.environ.get("RESEARCH_RUN_ID", "glm53-passes"))
         run.omit = frozenset(omit)
         rms = {}
         try:
             for w, W in weights.items():
-                if only is not None and w != only:
-                    continue
                 y = run.gemm(w, xs[m][w], W, None)
                 ref = xs[m][w].float() @ W.float().T
                 rms[w] = float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
@@ -90,7 +85,7 @@ def capture(a) -> int:
         finally:
             run.omit = frozenset()
         print(f"{name}: {log['passes'][name]['tiles']} tiles, root {log['passes'][name]['transcript_root'][:16]}", flush=True)
-    honest = [p for name, p in log["passes"].items() if name != "control"]
+    honest = [log["passes"][p] for p in ("prefill", "decode")]
     log["ok"] = log["gate"]["passed"] and all(max(p["rel_rms"].values()) < BA.ERR for p in honest)
     (out / "capture.json").write_text(json.dumps(log, indent=1) + "\n")
     print(f"capture {'PASS' if log['ok'] else 'FAIL'}", flush=True)
@@ -123,9 +118,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin", help="the build's cubin (default this directory's)")
     p.add_argument("--shapes", nargs="*", help="capture: N:K, a weight each (default every in-domain linear)")
-    p.add_argument("--per-shape", action="store_true",
-                   help="capture: a prefill and a decode pass a weight (prefill-NxK, decode-NxK), so every tile verify draws "
-                        "is that shape's; no control")
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     p.add_argument("--fast", action="store_true", help="verify_run's --fast")
     p.add_argument("--cross-check", type=int, default=64, help="with --fast: every N-th tile on the scalar reference too")
