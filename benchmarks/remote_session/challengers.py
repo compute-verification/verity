@@ -24,7 +24,8 @@ the same commitment, each coin opened after the root the session recorded and in
 root R, each window's openings coin after its last root. Its `reason` is None when they hold. A served or gate
 session's `complete` (the gate's end's, and `Serve`'s read of the same signed log) is whether the challenger released
 every coin it committed to: a session reserves only the families it uses (`coins.families`), so an honest session
-that ran to its end is complete and one cut short is not."""
+that ran to its end is complete and one cut short is not. A gate session's record names the `peer` it reserved for
+(`--challenger-peer`), which `auditor_line.py` holds the ledger's reserve and open to."""
 from __future__ import annotations
 
 import hashlib
@@ -224,8 +225,8 @@ class Gate:
             closed = None
         except Ch.CoinError as e:
             closed = str(e)
-        doc = {"challenger": self.kind, "session": sid, "open": answer, "period": self.period, "closed": closed,
-               "commitment": s.coins.commitment.root.hex(), "key_sha512": self.pin}
+        doc = {"challenger": self.kind, "session": sid, "peer": self.peer, "open": answer, "period": self.period,
+               "closed": closed, "commitment": s.coins.commitment.root.hex(), "key_sha512": self.pin}
         try:
             end = None
             for _ in range(self.polls):
