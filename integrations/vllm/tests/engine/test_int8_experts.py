@@ -165,8 +165,25 @@ def test_zy_rows_hand_the_records_to_observe():
             assert z is None
 
 
+def test_an_unrouted_slot_goes_to_no_expert():
+    """vLLM's id -1 (its profile run routes every slot so): the slot adds nothing, the token's other slots are as routed, and
+    a token with every slot unrouted is zero."""
+    _, (w13, s13, w2, s2) = _layer(12)
+    rng = np.random.default_rng(13)
+    x = _bf16(rng.standard_normal((4, H), dtype=np.float32))
+    tw, ids = _routing(rng, 4, 2)
+    ids[1, 0] = ids[2, 1] = X.UNROUTED
+    ids[3] = X.UNROUTED
+    sites = X.sites("moe", w13, s13, w2, s2)
+    tap = _Tap(sites)
+    got = X.forward(sites, x, tw, ids)
+    want = X.reference(x.float().numpy(), tw.numpy(), ids.numpy(), w13.numpy(), s13.numpy(), w2.numpy(), s2.numpy())
+    assert np.array_equal(_words(got), _words(_bf16(want))) and not got[3].any()
+    assert sum(len(c[2]) for c in tap.calls if c[1] == X.GATE_UP) == 8 - 4 and len(tap.calls) == 2 * EXPERTS
+
+
 @pytest.mark.parametrize("ids, why", [([[0, 0]], "routed to one expert twice"), ([[0, EXPERTS]], "outside the layer's"),
-                                      ([[-1, 1]], "outside the layer's")])
+                                      ([[-2, 1]], "outside the layer's")])
 def test_routing_refuses_what_it_does_not_define(ids, why):
     _, (w13, s13, w2, s2) = _layer(11)
     x = torch.zeros(1, H, dtype=torch.bfloat16)

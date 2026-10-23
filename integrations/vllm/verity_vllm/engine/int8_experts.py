@@ -12,6 +12,8 @@ protocol option wraps as it wraps a dense linear's.  `forward` of x [M, H] bf16 
     y_e      = down(a)                                   [m_e, H], the plain linear
     out[t]   = RN_bf16(sum_j RN32(f32(w[t, j]) * f32(y_{ids[t, j]}[t])), j = 0 .. k - 1 in order, f32 accumulation
 
+A slot of id -1 (`UNROUTED`, vLLM's id for no expert) goes to no expert, its y zero.
+
 Every (expert, projection) is called on every forward, an expert no token routed to on zero rows: an `ExpertGemm` hands a
 zero-row call to ``observe`` too (s8 rows [0, K], scales [0], y [0, N]), so the calls of a step are the same E pairs in the
 same order whatever the routing, the static layout H1 keeps (`protocol_options.pouw_h1`, one call per (step, linear)); its
@@ -31,6 +33,8 @@ from verity_vllm.engine import int8_exact as E
 GATE_UP, DOWN = "gate_up", "down"
 #: an expert's projections in the order they run
 PROJECTIONS = (GATE_UP, DOWN)
+#: the top-k id of a slot routed to no expert (vLLM's, as its expert map has it; its profile run routes every slot so)
+UNROUTED = -1
 
 
 class PlainGemm:
@@ -118,17 +122,20 @@ def sites(prefix: str, w13: torch.Tensor, s13: torch.Tensor, w2: torch.Tensor, s
 
 
 def routes(topk_ids: torch.Tensor, experts: int) -> list[torch.Tensor]:
-    """Each expert's routed positions in the flat [M * k] top-k table, ascending (so its tokens ascend, position // k); a
-    token routed twice to one expert, or to an expert outside [0, experts), is refused."""
+    """Each expert's routed positions in the flat [M * k] top-k table, ascending (so its tokens ascend, position // k).
+    A slot of id `UNROUTED` goes to no expert; a token routed twice to one expert, or to an id outside [-1, experts), is
+    refused."""
     m, k = topk_ids.shape
     flat = topk_ids.reshape(-1).to(torch.int64)
-    if flat.numel() and (int(flat.min()) < 0 or int(flat.max()) >= experts):
+    if flat.numel() and (int(flat.min()) < UNROUTED or int(flat.max()) >= experts):
         raise ValueError(f"a top-k id outside the layer's {experts} experts")
-    if k > 1 and bool((topk_ids.sort(dim=1).values.diff(dim=1) == 0).any()):
-        raise ValueError("a token routed to one expert twice")
+    if k > 1:
+        s = topk_ids.sort(dim=1).values
+        if bool(((s.diff(dim=1) == 0) & (s[:, 1:] != UNROUTED)).any()):
+            raise ValueError("a token routed to one expert twice")
     order = torch.argsort(flat, stable=True)
-    counts = torch.bincount(flat, minlength=experts).tolist()
-    return list(order.split(counts))
+    counts = torch.bincount(flat - UNROUTED, minlength=experts + 1).tolist()
+    return list(order.split(counts))[1:]
 
 
 def silu_and_mul(h: torch.Tensor) -> torch.Tensor:
@@ -185,6 +192,8 @@ def reference(x, topk_weights, topk_ids, w13, s13, w2, s2):
     for t in range(m):
         for j in range(k):
             e = int(topk_ids[t, j])
+            if e == UNROUTED:
+                continue
             h = linear(x[t:t + 1], w13[e], s13[e])
             i = h.shape[1] // 2
             g = h[:, :i].astype(np.float32)
@@ -195,5 +204,5 @@ def reference(x, topk_weights, topk_ids, w13, s13, w2, s2):
     return bf16(out)
 
 
-__all__ = ["DOWN", "ExpertGemm", "ExpertSite", "GATE_UP", "PROJECTIONS", "PlainGemm", "forward", "reference", "routes",
-           "silu_and_mul", "sites"]
+__all__ = ["DOWN", "ExpertGemm", "ExpertSite", "GATE_UP", "PROJECTIONS", "PlainGemm", "UNROUTED", "forward", "reference",
+           "routes", "silu_and_mul", "sites"]

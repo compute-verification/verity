@@ -210,6 +210,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     linears = [n for n, m in model.named_modules() if isinstance(m, LinearBase) and id(m) not in skip]
     methods = moe_methods(model)
     before = {n: qm.calls for n, qm in methods}
+    unrouted = {n: qm.unrouted for n, qm in methods}
     lin_before = E.applied_record(model)
     taps = ExpertTaps(methods[:1] + methods[-1:], a.keep_calls)
     taps.phase = "batched"
@@ -229,6 +230,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         "methods": sorted({r["method"] for r in after.values()}), "arms": sorted({str(r["arm"]) for r in after.values()}),
         "dense_methods": sorted({r["method"] for r in lin.values()}),
         "moe_min_calls": min((qm.calls - before[n] for n, qm in methods), default=0),
+        "unrouted_slots_before_generation": sum(unrouted.values()),
+        "unrouted_slots_during_generation": sum(qm.unrouted - unrouted[n] for n, qm in methods),
         "min_calls_during_generation": min(served.values(), default=0),
         "sites_per_layer": sorted({len(qm.sites) for _, qm in methods})}
     doc["applied"]["ok"] = bool(methods and router_names and len(router_names) == len(methods)
