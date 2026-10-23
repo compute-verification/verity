@@ -21,8 +21,8 @@ registered tables at the rows the verifier reads them.
   `pouw_h1_challenger.program_salt_of` of the window's commitment, position the drawn unit u, roots (root of the call's
   A table, root of ``h1/b/<K>``), admit bit i 1 exactly when slot 32 rb + i is one of the call's served rows.
   The negatives, each proved and checked like the lanes: ``tampered-zy`` (lane 0 given the record with cell 2's z low
-  bit flipped, a cell lane 0 doesn't check, so its ok is still 1, under the honest salt and path: the row opens no
-  root, REJECT) and ``other-call-a`` (lane 0 with the verifier's ``a`` ports at another K-call's A table, its root and
+  bit flipped, a cell lane 0 doesn't check, so its ok is still 1, under the honest salt and path, its public
+  commitment the tampered row's, as the proof's: the row opens no root, REJECT) and ``other-call-a`` (lane 0 with the verifier's ``a`` ports at another K-call's A table, its root and
   domain, the prover opening its own: REJECT).
 * **summarize**: OUT/summary.json from the Lean verdicts; exit 1 unless every check is as expected and every honest
   lane's opened roots are the window's.
@@ -327,7 +327,7 @@ def run_job(job: tuple) -> dict:
     if neg == "tampered-zy":
         row = list(ins[LL.ZY]["row"])
         row[TAMPER_WORD] ^= 1
-        ins[LL.ZY] = {**ins[LL.ZY], "row": row}
+        ins[LL.ZY] = {**{x: v for x, v in ins[LL.ZY].items() if x != "bc"}, "row": row}
     elif neg == "other-call-a":
         other = sw.values["other-a"]
         for s in range(LL.LANE_ROWS):
