@@ -8,7 +8,7 @@ Definition as the row's ``bits`` and the header's ``ir``), with the word templat
 population program is over the templates as named, so the Boolean templates' partition is one under both IRs.  A deferred window
 under the Boolean template commits the word template's u16 rows, and its registration passes `registration.check` against the
 verifier's population program over the Boolean template.  Two templates that compute one word Definition, a template with no rows,
-and one whose word view is not 16-bit words are refused by name."""
+and one with a port that is not whole u16 words are refused by name; a row template of 32- and 16-bit ports is packed."""
 from __future__ import annotations
 
 import gzip
@@ -129,7 +129,8 @@ def test_templates_that_compute_one_word_definition_have_no_rows_or_are_not_u16_
     with pytest.raises(LookupError, match=r"no rows of RoPEHead_v2\{D=128\}"):
         SRW.population(programs, {"templates": ["RoPEHead_v2{D=128}"], "law": LAW}, c["run_root"], r.program_dirs)
     for t in ("Embedding_v1{V=8,H=16}", "Embedding_v2{V=8,H=16}"):
-        with pytest.raises(ValueError, match=r"commit u16 words, and its ports' (words|elements) are \[16, 32\] bits"):
-            SRW.template(t)
+        assert (SRW.template(t).layout, SRW.template(t).packed) == ("row", (32, 16, 16))
+    with pytest.raises(ValueError, match=r"commit u16 words, and its ports' words are \[8, 16, 32\] bits \(a row template's port"):
+        SRW.template("Fp8GroupQuantUe8m0_v1{K=3,G=3}")
     with pytest.raises(LookupError, match="names no registered Definition"):
         SRW.template("NoSuchTemplate_v1")
