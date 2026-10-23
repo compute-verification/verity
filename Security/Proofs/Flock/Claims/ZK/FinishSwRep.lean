@@ -14,6 +14,7 @@ clear values (`valsFw`) is shown to hold all four at table `j`'s rep `r`, at the
 coins (`ligCoin`) and the packed table of the witness's trace (`ligTab`). So the firewall's rep returns, up to
 `eraseZ`, what the cut returns from the switched source.
 
+* `repFwC_piopFw`: where the firewall's rep returned, so did its PIOP.
 * `zcCoins_ligRespE`, `lcCoins_ligRespE`, `rsCoins_ligRespE`: the closed forms' coins at the replies `ligRespE c` are
   the opened coins.
 * **`swSrcE_repCut`**: `repCut_fw` at the switched source. `hmk` is `swSrcE_hmk_frame`. `hpiop`'s rank half is
@@ -23,12 +24,44 @@ coins (`ligCoin`) and the packed table of the witness's trace (`ligTab`). So the
   `piopRoundsZk` bodies from the rep's base and switched `swsE` (`piopFw_at`). `hinner` is `swSrcE_hinner_sv`.
 
 Premises: the firewall's packed table is the witness's (`hg`), a trust in the host's inputs as `LinkIs` is for the link;
-the rep's PIOP is sent before the stop (`ligP0 x j r ≤ n`); the opened coins are admitted; and level 0's clear values are
-`l0Clear` at the coins (`hB`, as `swSrcE_ligHyp_E` takes it).
+the opened coins are admitted; and level 0's clear values are `l0Clear` at the coins (`hB`, as `swSrcE_ligHyp_E` takes
+it). That the rep's base is before the stop comes from the firewall's PIOP having returned (`repFwC_piopFw`, `piopFw_at`'s
+bound), and that no refusal shows by round `n` from the admitted coins (`not_refused_of_admits`).
 -/
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
+
+namespace Flock.Firewall.Finish
+open Flock Transcript
+
+/-- **A returned rep ran its PIOP**: where `repFwC` returned from `l`, so did `piopFw` at its arguments from `l`. -/
+theorem repFwC_piopFw {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {sch : Flock.Schedule} {tPad rep : ℕ}
+    {dom : ByteArray} {g : Array F128} {cm0 : FlockComplete.Commit} {extras : Array Claim}
+    {pads : FlockComplete.PadsZk} {ic : FlockComplete.InnerCommit} {vals : Array F128} {extra lanePad : ℕ → ℕ → F128}
+    {salt : ℕ → ℕ → ByteArray} {t₀ : Transcript} {l : Array Claims.Msg} {p : Zk.ZkProof} {t : Transcript}
+    {l' : Array Claims.Msg}
+    (h : ((repFwC (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch tPad rep dom g cm0 extras pads ic
+      vals extra lanePad salt).run t₀).go l = (.ok (p, t), l')) :
+    ∃ zp lp ss T sws t₃ l₃, ((piopFw (FlockComplete.asksCut coin n) st (Zk.PadLayout.new st.m st.kLog sch.k0) g
+      (fun i => vals[i]! + pads.h[i]!) (FlockComplete.flat cm0.cap) ic.root extras).run t₀).go l =
+        (.ok ((zp, lp, ss, T, sws), t₃), l₃) := by
+  dsimp only [repFwC] at h
+  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := run_bind_ok h
+  try dsimp only at h
+  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := run_bind_ok h
+  try dsimp only at h
+  obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, -⟩ := run_bind_ok h
+  refine ⟨zp, lp, ss, T, sws, t₃, l₃, ?_⟩
+  unfold piopFw
+  rw [FlockComplete.Replay.bind_go h₁]
+  try dsimp only
+  rw [FlockComplete.Replay.bind_go h₂]
+  try dsimp only
+  rw [FlockComplete.Replay.bind_go h₃]
+  rfl
+
+end Flock.Firewall.Finish
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK
@@ -52,8 +85,8 @@ theorem rsCoins_ligRespE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (L n 
   unfold FlockComplete.Replay.Rs.coinsAt
   simp only [coinOf_ligRespE]
 
-/-- **The firewall's rep is the switched source's cut**: at a live statement, a witness, a tape, admitted opened coins
-not refused by round `n`, past rep `r`'s PIOP (`ligP0`), the session's setup, table `j` and its extra claims, and at
+/-- **The firewall's rep is the switched source's cut**: at a live statement, a witness, a tape, admitted opened coins,
+any stop `n`, the session's setup, table `j` and its extra claims, and at
 `pads_frame`'s premises at the firewall's request `q`, where table `j`'s rows hold at its base, level 0's part of the
 firewall's clear values is `l0Clear` at the coins, and the firewall's packed table is the witness's (`hg`): where the
 firewall's rep returns a proof `p` from the log `l` at the rep's base, the cut from the switched source returns the same
@@ -61,8 +94,8 @@ transcript and log and a proof `p'` with `eraseZ p' = eraseZ p`. -/
 theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : R) (tz : FlockComplete.TapeZk)
     (frep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (hAd : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) (n : ℕ)
-    (hnr : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
-    (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2) (hP0 : ligP0 x j r ≤ n)
+    (s : _) (spec : _root_.Flock.SessionSpec)
+    (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
     (extras : Array _root_.Flock.Claim) (he : (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras)
     (A : Fin (jOf x) → Fin 2 → Array _root_.Flock.F128) (B : Fin (jOf x) → Fin 2 → ℕ → _root_.Flock.F128)
     (q : _root_.Flock.Firewall.Finish.RepIn) (hA : A j r = q.vals)
@@ -93,6 +126,7 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
         (priorE c j.val r.val) (Composed.maskWordsOf (stsOf x)[j.val]!)).run t₀).go l = (.ok (p', t), l') ∧
       FlockComplete.eraseZ p' = FlockComplete.eraseZ p := by
   subst hg
+  have hnr : ¬ Refused x c n := not_refused_of_admits hx hAd n
   have hj : j.val < (stsOf x).size := lt_of_jOf j
   have hstj : (stsOf x)[j.val]! = stAt x j := getElem!_pos (stsOf x) j.val hj
   obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hs
@@ -139,10 +173,10 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     unfold FlockComplete.piopRoundsZk
     rw [hesz]
     omega
-  have hP0' := hP0
-  rw [hP] at hP0'
+  -- the firewall's PIOP returned, so it sent all its bodies before the stop
   have hln : l.size ≤ n := by
-    rw [hl]
+    obtain ⟨_, _, _, _, _, _, _, hpf⟩ := _root_.Flock.Firewall.Finish.repFwC_piopFw h
+    obtain ⟨-, hl₃, hn₃⟩ := FlockComplete.piopFw_at hm14 hpf (trsE x w (UE.tapeZk τ))[j.val]!
     omega
   -- the masked values below `zp 64`
   have hmk : ∀ i < (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0).zp 64,
@@ -235,7 +269,7 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
       (zkTab x j).tPad dom (ligTab x w τ j) cm0 extras hesz ic _ _ _ ht₀ hl hsv) h
   -- level 0's opening: the firewall's PIOP ends at `ligP0` and switched `swsE`
   intro zp lp ss T sws t₃ l₃ h₃
-  obtain ⟨hsws, hl₃⟩ := FlockComplete.piopFw_at hm14 h₃ (trsE x w (UE.tapeZk τ))[j.val]!
+  obtain ⟨hsws, hl₃, -⟩ := FlockComplete.piopFw_at hm14 h₃ (trsE x w (UE.tapeZk τ))[j.val]!
   have hl3 : l₃.size = ligP0 x j r := by
     rw [hl₃, hl, hP, hkL, hSm, hSk, hesz]
     omega
