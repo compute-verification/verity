@@ -413,7 +413,8 @@ def test_credit(pass_server):
                  "window registration: registered value ", "ids@#'s domain is not the one the window's registration",
                  "or receipt table of the window", "'s receipt table, its round #'s, which only round # commits",
                  "a-link a-link: registered receipt table ", "registered-file registration: the window registers ",
-                 "'s template returns no receipt of whole #-bit words"):
+                 "'s template returns no receipt of whole #-bit words", "'s seed reads the roots of ",
+                 "its units' ok rows, which are the verifier's own"):
         assert any(part in k for k in CREDITED), part
 
 

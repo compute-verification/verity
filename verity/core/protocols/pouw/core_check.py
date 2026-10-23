@@ -666,6 +666,19 @@ def public_row_salt(context: str, position: int) -> bytes:
     return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // 64))
 
 
+#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word (h1_prove's `OK`, #3124)
+OK_ROW = (1,)
+#: the ok row's hm96 salt tag (h1_prove's, #3124)
+OK_SALT_TAG = b"verity/pouw/h1-prove/ok-row-salt/v0\0"
+
+
+def ok_salt(context: str, position: int) -> bytes:
+    """The ok row's hm96 salt, which anyone derives from the window's context and the unit's position: its content is
+    the one the verifier accepts (`OK_ROW`), so the salt hides nothing. SHAKE-256 of `OK_SALT_TAG` ‖ context ‖ 0 ‖
+    u64be(position), `SALT_BYTES` bytes."""
+    return hashlib.shake_256(OK_SALT_TAG + context.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
+
+
 def public_bc(context: str, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:
     """The b ‖ c of unit `position`'s public row (`public_row`) under `public_row_salt`: the 128 bytes the verifier
     requires at the public row's place in the proof's body."""

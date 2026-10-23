@@ -1,4 +1,5 @@
 import Std.Data.HashMap
+import Flock.Keccak
 import Flock.Program
 import Flock.RegKnown
 import PouwCommit.Frame
@@ -837,6 +838,19 @@ def RECEIPT_PORT : String := "o0"
 /-- `credit.PUB_PORT`: the statement's public row, which reads its call's public table, the verifier's own. -/
 def PUB_PORT : String := "pub"
 
+/-- `credit.OK_PORT`: the statement's output row of its unit's ok, which reads the window's ok rows, the verifier's own. -/
+def OK_PORT : String := "o1"
+/-- `credit.OK_VALUE`: the window Program's output the ok rows are, after its prefix: row u unit u's. -/
+def OK_VALUE : String := "ok"
+/-- `core_check.OK_ROW`: the ok row the verifier accepts, a unit's one output bit, 1, in its one word (h1_prove's, #3124). -/
+def OK_ROW : Array Nat := #[1]
+/-- `core_check.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's, #3124). -/
+def OK_SALT_TAG : ByteArray := "verity/pouw/h1-prove/ok-row-salt/v0".toUTF8.push 0
+
+/-- `core_check.ok_salt`: SHAKE-256 of `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position), `PouwCheck.saltBytes` bytes. -/
+def okSalt (context : String) (position : Nat) : ByteArray :=
+  Flock.Keccak.shake256 ((OK_SALT_TAG ++ context.toUTF8).push 0 ++ PouwCommit.be8 position) PouwCheck.saltBytes
+
 /-- `core_check.public_words`: `PouwCheck.publicRow` as a `row/v2` row of 16-bit leaves, word w its bytes 2w (low) and
 2w + 1. -/
 def publicWords (salt : ByteArray) (position : Nat) (roots : ByteArray × ByteArray) : Array Nat :=
@@ -974,9 +988,16 @@ once a port: the reads file's form. The statement's public row `pub` (`PUB_PORT`
 reads row t of the call's public table `<prefix>pub@<call>`, which the file names at its known content (`known`,
 `Flock.Registered.checkKnownAll`), the window's Program salt `salt` (hex), the position u0 + t and the call's roots,
 root(`a/<K>@<s>`) and root(`b/<K>`) as the window registers them (`publicWords`), each under `publicRowSalt` of `window`
-and its position, at the root of their registration; a root of the two that is no SHA-512 digest is refused. -/
+and its position, at the root of their registration; a root of the two that is no SHA-512 digest is refused. The
+statement's output row `ok` (`OK_PORT`, o1) is the verifier's own too: unit u reads row u of the window's ok rows
+`<prefix>ok` (`OK_VALUE`, one row a unit of the window), named at its known content, the one word 1 (`OK_ROW`) under
+`okSalt` of `window` and u; a window whose entries register those rows themselves is refused. -/
 def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Nat) (roots : Json) (window : String)
     (steps : Nat) (salt : String) : R Json := do
+  let ov := s!"{shape.pre}{OK_VALUE}"
+  if (PouwWindow.field? roots ov).isSome then
+    throw ("registration", s!"the window registers {ov}, its units' ok rows, which are the verifier's own (the one " ++
+      "word 1 under each unit's public ok salt): no entry registers them")
   let num := fun j => (nat? j).getD 0
   let (r, c) := (match get layout "tile" with
     | .arr a => (num (a.getD 0 .null), num (a.getD 1 .null))
@@ -1060,6 +1081,20 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     ("reads", Json.arr ((List.range u0).map (fun _ => Json.null) ++ (List.range size).map Lean.toJson).toArray),
     ("known", Json.mkObj [("rows", Lean.toJson (ks.map (·.1))),
       ("salts", Json.arr (ks.map fun k => Json.str (Flock.hexOf k.2)))])])]
+  let oks : Array (Array Nat × ByteArray) := (Array.range population).map fun u => (OK_ROW, okSalt window u)
+  let od ← (SampledProofs.Registered.domainAt program ov OK_ROW.size population 16 (some window)).mapError fun why =>
+    ("registration", why)
+  let oreg : Flock.Registered.Port :=
+    { name := OK_PORT, value := ov, root := ByteArray.empty, leaves := population, words := some OK_ROW.size,
+      wordBits := 16, domain := od, reads := #[], schema := Flock.HmRow.ROW_SCHEMA_V2 }
+  let opr := Flock.FV3.root od (Flock.Registered.knownLeaves oreg oks) Flock.Sha512.hash
+  out := out ++ [(OK_PORT, Json.mkObj [("value", Json.str ov), ("root", Json.str (Flock.hexOf opr)),
+    ("leaves", Lean.toJson population), ("words", Lean.toJson OK_ROW.size), ("word_bits", Lean.toJson (16 : Nat)),
+    ("domain", Json.str (Flock.hexOf od)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
+    ("reads", Json.arr ((List.range u0).map (fun _ => Json.null) ++
+      (List.range size).map (fun t => Lean.toJson (u0 + t))).toArray),
+    ("known", Json.mkObj [("rows", Lean.toJson (oks.map (·.1))),
+      ("salts", Json.arr (oks.map fun k => Json.str (Flock.hexOf k.2)))])])]
   pure (Json.mkObj [("format", Json.str READS), ("ports", Json.mkObj out)])
 
 def registrationRefuse {α : Type} (why : String) : R α := throw ("registration", why)
@@ -1087,8 +1122,8 @@ refusal (`registration`). Each A value's and input-ids table's domain, and each 
 `domainOf` the window's open root `window`, its session `session` and the descriptor's SHA-512 `program`; each proof
 was verified against
 `program`; every registered port its session opened (its `registered` finding) is of a value the window registers once,
-at that value's registered root, but for its call's public table (`pubCall?`), which no entry registers and
-`credit._verified` holds to the rows `registeredFile` built; and it opened its unit's K's A value: the window's `…/a/<K>` (K the unit's stratum's
+at that value's registered root, but for its call's public table (`pubCall?`) and the window's ok rows
+(`<prefix>ok`, `OK_VALUE`), which no entry registers and `credit._verified` holds to the rows `registeredFile` built; and it opened its unit's K's A value: the window's `…/a/<K>` (K the unit's stratum's
 in `ss`) or its call's round's A table of K `…/a/<K>@<s>` (the call `layout`'s units place it in, `callAt`, s its round
 of `steps`, its calls the rounds' equal blocks), and its K's B
 rows, the window's `<prefix>b/<K>` (`prefix` the descriptor's `PREFIX`). A step of `window`, after `Internal.aLink` has
@@ -1123,7 +1158,7 @@ def Internal.registration (window program prefix_ : String) (entries proofs : Js
     let mut opened := false
     let mut weights := false
     for (port, v, root) in f do
-      if (pubCall? (.str v)).isSome then continue
+      if (pubCall? (.str v)).isSome || v == prefix_ ++ OK_VALUE then continue
       let n := names.count (some v)
       if n != 1 then
         registrationRefuse (s!"drawn unit {u}'s proof opened port {port} against {v}, which the window registers " ++
