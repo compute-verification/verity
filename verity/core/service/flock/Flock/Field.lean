@@ -532,6 +532,80 @@ theorem mulBy_mulTableL (r v : F128) : mulBy (mulTableL r) v = r * v := by
   conv => rhs; rw [bytes_sum v]
   simp only [F128.mul_add]
 
+theorem byteMono_xor (j : Nat) (x y : UInt64) : byteMono j (x ^^^ y) = byteMono j x + byteMono j y := by
+  unfold byteMono
+  split <;> simp only [HAdd.hAdd, Add.add, add, UInt64.shiftLeft_xor, UInt64.xor_zero]
+
+theorem nib_split (k : Nat) : (k % 256).toUInt64 = (k % 16).toUInt64 ^^^ (k / 16 % 16 * 16).toUInt64 := by
+  apply UInt64.toBitVec_inj.mp
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  simp only [UInt64.toBitVec_xor, BitVec.getLsbD_xor, Nat.toUInt64, UInt64.toBitVec_ofNat', BitVec.getLsbD_ofNat,
+    show (256 : Nat) = 2 ^ 8 from rfl, show (16 : Nat) = 2 ^ 4 from rfl, Nat.testBit_mod_two_pow,
+    Nat.testBit_div_two_pow, Nat.testBit_mul_two_pow]
+  by_cases h4 : i < 4
+  · simp (disch := omega) only [decide_eq_true, decide_eq_false, Bool.true_and, Bool.false_and, Bool.xor_false]
+  · by_cases h8 : i < 8
+    · simp (disch := omega) only [decide_eq_true, decide_eq_false, Bool.true_and, Bool.false_and, Bool.false_xor]
+      rw [Nat.sub_add_cancel (by omega)]
+    · simp (disch := omega) only [decide_eq_true, decide_eq_false, Bool.true_and, Bool.false_and, Bool.false_xor]
+
+/-- `byteMono (k / 32) c · r` at `k < 512`, for `c` the nibble `k mod 16` of byte `k / 32`, low (`k mod 32 < 16`) or
+high. -/
+def nibTable (r : F128) : Array F128 :=
+  Array.ofFn (n := 512) fun k =>
+    byteMono (k.val / 32) (if k.val % 32 < 16 then (k.val % 16).toUInt64 else (k.val % 16 * 16).toUInt64) * r
+
+/-- `mulTable` from 512 products: an entry is its byte's two nibbles' entries of `nibTable`, added. -/
+def mulTableFast (r : F128) : Array F128 :=
+  let n := nibTable r
+  Array.ofFn (n := 4096) fun k => n[32 * (k.val / 256) + k.val % 16]! + n[32 * (k.val / 256) + 16 + k.val / 16 % 16]!
+
+theorem nib_get (f : Nat → UInt64 → F128) (k : Nat) (hk : k < 4096) :
+    (Array.ofFn (n := 512) fun i =>
+        f (i.val / 32) (if i.val % 32 < 16 then (i.val % 16).toUInt64 else (i.val % 16 * 16).toUInt64))[32 * (k / 256) + k % 16]! +
+      (Array.ofFn (n := 512) fun i =>
+        f (i.val / 32) (if i.val % 32 < 16 then (i.val % 16).toUInt64 else (i.val % 16 * 16).toUInt64))[32 * (k / 256) + 16 + k / 16 % 16]! =
+      f (k / 256) (k % 16).toUInt64 + f (k / 256) (k / 16 % 16 * 16).toUInt64 := by
+  rw [getElem!_pos _ _ (by rw [Array.size_ofFn]; omega), getElem!_pos _ _ (by rw [Array.size_ofFn]; omega)]
+  simp only [Array.getElem_ofFn]
+  rw [show (32 * (k / 256) + k % 16) / 32 = k / 256 by omega, show (32 * (k / 256) + k % 16) % 32 = k % 16 by omega,
+    show (32 * (k / 256) + 16 + k / 16 % 16) / 32 = k / 256 by omega,
+    show (32 * (k / 256) + 16 + k / 16 % 16) % 32 = 16 + k / 16 % 16 by omega,
+    if_pos (show k % 16 < 16 by omega), if_neg (show ¬ 16 + k / 16 % 16 < 16 by omega),
+    show (32 * (k / 256) + k % 16) % 16 = k % 16 by omega,
+    show (32 * (k / 256) + 16 + k / 16 % 16) % 16 = k / 16 % 16 by omega]
+
+@[csimp] theorem mulTable_eq_fast : @mulTable = @mulTableFast := by
+  funext r
+  apply Array.ext (by simp [mulTable, mulTableFast])
+  intro k h1 _
+  have hk : k < 4096 := by simpa [mulTable] using h1
+  simp only [mulTable, mulTableFast, Array.getElem_ofFn]
+  have h := nib_get (fun j c => byteMono j c * r) k hk
+  simp only [nibTable]
+  rw [h, nib_split, byteMono_xor, F128.add_mul]
+
+/-- `nibTable` with `r` on the left. -/
+def nibTableL (r : F128) : Array F128 :=
+  Array.ofFn (n := 512) fun k =>
+    r * byteMono (k.val / 32) (if k.val % 32 < 16 then (k.val % 16).toUInt64 else (k.val % 16 * 16).toUInt64)
+
+/-- `mulTableL` from 512 products, as `mulTableFast`. -/
+def mulTableLFast (r : F128) : Array F128 :=
+  let n := nibTableL r
+  Array.ofFn (n := 4096) fun k => n[32 * (k.val / 256) + k.val % 16]! + n[32 * (k.val / 256) + 16 + k.val / 16 % 16]!
+
+@[csimp] theorem mulTableL_eq_fast : @mulTableL = @mulTableLFast := by
+  funext r
+  apply Array.ext (by simp [mulTableL, mulTableLFast])
+  intro k h1 _
+  have hk : k < 4096 := by simpa [mulTableL] using h1
+  simp only [mulTableL, mulTableLFast, Array.getElem_ofFn]
+  have h := nib_get (fun j c => r * byteMono j c) k hk
+  simp only [nibTableL]
+  rw [h, nib_split, byteMono_xor, F128.mul_add]
+
 /-- `x^i` for `i < 128`. -/
 def monomial (i : Nat) : F128 :=
   if i < 64 then ⟨(1 : UInt64) <<< i.toUInt64, 0⟩ else ⟨0, (1 : UInt64) <<< (i - 64).toUInt64⟩

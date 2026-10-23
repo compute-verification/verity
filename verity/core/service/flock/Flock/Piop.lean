@@ -11,9 +11,9 @@ open Transcript
 /-- One coordinate of `eqTable`: the table so far for bit 0, then for bit 1 of the new index bit. -/
 def eqStep (t : Array F128) (rj : F128) : Array F128 := t.map (· * (rj + 1)) ++ t.map (· * rj)
 
-/-- `t.map (· * r)`, from `r`'s table (`F128.mulBy_mulTable`) once `t` is twice the table's 4096 products. -/
+/-- `t.map (· * r)`, from `r`'s table (`F128.mulBy_mulTable`) once `t` has four times the 512 products the table costs. -/
 def mulMap (t : Array F128) (r : F128) : Array F128 :=
-  if t.size < 8192 then t.map (· * r) else let tb := F128.mulTable r; t.map (F128.mulBy tb ·)
+  if t.size < 2048 then t.map (· * r) else let tb := F128.mulTable r; t.map (F128.mulBy tb ·)
 
 theorem mulMap_eq (t : Array F128) (r : F128) : mulMap t r = t.map (· * r) := by
   unfold mulMap

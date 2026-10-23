@@ -194,7 +194,7 @@ theorem parMap_eq (f : F128 → F128) (t : Array F128) : parMap f t = t.map f :=
 
 /-- `mulMap` in tasks. -/
 def mulMapPar (t : Array F128) (r : F128) : Array F128 :=
-  if t.size < 8192 then parMap (· * r) t else let tb := F128.mulTable r; parMap (F128.mulBy tb ·) t
+  if t.size < 2048 then parMap (· * r) t else let tb := F128.mulTable r; parMap (F128.mulBy tb ·) t
 
 theorem mulMapPar_eq (t : Array F128) (r : F128) : mulMapPar t r = t.map (· * r) := by
   unfold mulMapPar
