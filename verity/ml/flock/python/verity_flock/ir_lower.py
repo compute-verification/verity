@@ -746,7 +746,7 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
 
     def and_row(Lf: L) -> list:
         # fix(form(Lf)): over no constant-wired value bit, the form's columns are distinct (col is one-to-one) and below const
-        if not wired.isdisjoint(Lf.s):
+        if wired and not wired.isdisjoint(Lf.s):
             return fix(form(Lf))
         s = sorted(map(at, Lf.s))
         if Lf.c & 1:
@@ -961,9 +961,9 @@ def evaluate_layout(lay: Layout, ports: Sequence[Sequence[int]], T: int, flip: t
 
 @dataclass
 class Lowering:
-    """A template instance lowered to identical units: the IR Definition, its :class:`Units`, the unit circuit and its
-    ``flock-ir-unit/v2`` layout. ``evaluate`` runs the laid-out unit rows (what Flock proves) over every unit of every
-    instance and assembles the instances' outputs and cut words."""
+    """A template instance lowered to identical units: the IR Definition, its :class:`Units`, the unit circuit (None once laid
+    out, as `class_statement.unit_lowering` drops it) and its ``flock-ir-unit/v2`` layout. ``evaluate`` runs the laid-out unit
+    rows (what Flock proves) over every unit of every instance and assembles the instances' outputs and cut words."""
 
     name: str
     definition: object
@@ -975,7 +975,8 @@ class Lowering:
     def domain(self) -> str:
         """The operand domain the statement covers (vocab ``domain``): ``total`` when the unit asserts nothing, so every input
         encoding is proven to give the IR's own output, else ``finite-only``."""
-        return "finite-only" if self.circuit.asserts else "total"
+        asserts = self.layout.counts["asserts"] if self.circuit is None else len(self.circuit.asserts)
+        return "finite-only" if asserts else "total"
 
     @property
     def cut(self) -> dict | None:

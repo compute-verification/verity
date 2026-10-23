@@ -1,6 +1,7 @@
 """``ir_lower.layout`` writes the rows the layout it replaced wrote (`_reference`, that code, kept as the oracle): each AND's
 rows straight from its forms' columns, and the parity path for a form over a library read's constant-wired value bit, on
-random circuits with constant forms, assertions, split port groups and inline table reads."""
+random circuits with constant forms, assertions, split port groups and inline table reads, plain and compact
+(`class_statement._UnitCircuit`)."""
 from __future__ import annotations
 
 import random
@@ -8,6 +9,7 @@ import random
 import numpy as np
 import pytest
 
+from verity_flock import class_statement as CS
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
 from verity_flock.fp import ceil_pow2
@@ -128,9 +130,9 @@ def table(monkeypatch):
     return words
 
 
-def _circuit(seed: int, read: bool) -> gf2.Circuit:
+def _circuit(seed: int, read: bool, cls=gf2.Circuit) -> gf2.Circuit:
     rng = random.Random(seed)
-    C = gf2.Circuit()
+    C = cls()
     pool = C.input("in0", 24) + C.input("in1", 9) + C.input("in2", 40)
 
     def form():
@@ -157,17 +159,22 @@ def _rows(rows) -> list[list[int]]:
 
 @pytest.mark.parametrize("seed", range(4))
 @pytest.mark.parametrize("read", ["none", "program", "library"])
-def test_layout_is_the_reference_layout(seed, read, table, monkeypatch):
+@pytest.mark.parametrize("cls", [gf2.Circuit, CS._UnitCircuit], ids=["plain", "unit"])
+def test_layout_is_the_reference_layout(seed, read, cls, table, monkeypatch):
+    """On a plain circuit and on `class_statement.unit_lowering`'s (`_UnitCircuit`, an AND's operand bits a tuple), the
+    reference's rows of the plain circuit."""
     if read == "library":
         monkeypatch.setattr(IL, "_library_table", lambda name: name == TABLE)
-    C = _circuit(seed, read != "none")
+    C, P = _circuit(seed, read != "none", cls), _circuit(seed, read != "none")
     names = (["in0", "in1", "in2"], ["out0", "out1", "out2"])
-    got, want = IL.layout(C, *names, [1], [2]), _reference(C, *names, [1], [2])
+    got, want = IL.layout(C, *names, [1], [2]), _reference(P, *names, [1], [2])
     assert (got.const, got.in_groups, got.out_groups, got.counts) == (want.const, want.in_groups, want.out_groups, want.counts)
     assert _rows(got.rows_a) == _rows(want.rows_a) and _rows(got.rows_b) == _rows(want.rows_b)
     assert IL.netlist(got, "t") == IL.netlist(want, "t")
+    ands = [v for v in P.live() if P.kind[v] == "and"]
+    assert all(isinstance(C.data[v][0].s, tuple if cls is CS._UnitCircuit else frozenset) for v in ands)
     if read == "library":
-        r = IL._Read(C, 0, list(range(8)), 0)
+        r = IL._Read(P, 0, list(range(8)), 0)
         assert r.const_bits == {3: 1, 5: 0}
-        wired = {v for v in range(len(C.kind)) if C.kind[v] == "lookup" and C.data[v][1] in (3, 5)}
-        assert any(wired & C.data[v][0].s or wired & C.data[v][1].s for v in C.live() if C.kind[v] == "and")
+        wired = {v for v in range(len(P.kind)) if P.kind[v] == "lookup" and P.data[v][1] in (3, 5)}
+        assert any(wired & P.data[v][0].s or wired & P.data[v][1].s for v in ands)

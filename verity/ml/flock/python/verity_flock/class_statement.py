@@ -862,7 +862,8 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     parameter (or each of its rows) is in one row, or is one of ``public``: a public input port before the rows, each leaf in
     its own ceil(bits / 16) u16 words, low first (`verity.core.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
     `circuit.compose`'s public input ports read them). Returns the lowering and each output port's words. ``structural``:
-    the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), else `ir_lower`'s."""
+    the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), else `ir_lower`'s, its
+    circuit dropped once laid out (nothing reads it after `ir_lower.layout`)."""
     params, ret = definition.signature()
     types = dict(params)
 
@@ -916,14 +917,25 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     if structural:
         t, _lw, _top = SL.lower(definition, name=name, ports=ports)
         return TmplLowering(name, unit, units, None, _TmplLayout.of(t), t), out_words
-    C = gf2.Circuit()
+    C = _UnitCircuit()
     in_bits = [b for j in range(n_words) for b in C.input(f"in{j}", 16)]
     outs = [b for w in IL.lower(C, definition, [[in_bits[i] for i in lf] for lf in flat_in]) for b in w]
     out_bits = [gf2.ZERO if i is None else outs[i] for i in out_bits]
     for j in range(W):
         C.output(f"out{j}", out_bits[16 * j:16 * (j + 1)])
     lay = IL.layout(C, [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(W)])
-    return IL.Lowering(name, unit, units, C, lay), out_words
+    return IL.Lowering(name, unit, units, None, lay), out_words
+
+
+class _UnitCircuit(gf2.Circuit):
+    """`unit_lowering`'s circuit: an AND keeps its operands' bits as a tuple, all `ir_lower.layout` reads of them (a frozenset of
+    a dozen bits is four times the size: a GLM-5.3 norm unit's operand sets were most of its 51 GiB)."""
+
+    def _new(self, kind, data):
+        if kind == "and":
+            a, b = data
+            data = (gf2.L(tuple(a.s), a.c), gf2.L(tuple(b.s), b.c))
+        return super()._new(kind, data)
 
 
 @dataclass
