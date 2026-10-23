@@ -19,7 +19,9 @@ records, and `readRecord` reads them) ties the format to the deployed writer, no
 record (`rec_live`'s `round`) lists only the rep streams' rounds, each with its tops and level-0 copies in their own
 fields and only its `c_k` under `commits`. Round 0's roots and coins are in its `link` field, and the last round is
 absent. `recTr` lists every inner round, with each whole message as its one commit string. So `recTr` is not yet the
-deployed record, and a premise read at `cmtTr recRead` is about the model's record, not the coin server's.
+deployed record, and a premise read at `cmtTr recRead` is about the model's record, not the coin server's. It holds of
+no staged statement: `RecSetup.commits` holds the staged record to the schedule's rounds, two fewer than `recTr`
+lists (`Flock.Test.RecSchedule`).
 -/
 
 namespace Flock.RecRecord
