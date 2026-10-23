@@ -796,7 +796,4 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
 
 
 def _named(model: Any, layers: list[Any]) -> dict[int, str]:
-    """Each layer's module name; an expert site (`engine.int8_experts.ExpertSite`, no module) its ``prefix.expert.projection``."""
-    from verity_vllm.engine.int8_experts import ExpertSite
-    return {w: name for name, w in _sites(model, layers).items()} | {w: m.name for w, m in enumerate(layers)
-                                                                     if isinstance(m, ExpertSite)}
+    return {w: name for name, w in _sites(model, layers).items()} | PHK.expert_names(layers)

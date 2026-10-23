@@ -43,6 +43,12 @@ def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
     return out
 
 
+def expert_names(layers: list[Any]) -> dict[int, str]:
+    """Each expert site's name (`engine.int8_experts.ExpertSite`, no module of its own): ``prefix.expert.projection``."""
+    from verity_vllm.engine.int8_experts import ExpertSite
+    return {w: m.name for w, m in enumerate(layers) if isinstance(m, ExpertSite)}
+
+
 def observer(run: PH.H1Run, w: int, orig: Any) -> Any:
     """Layer `w`'s ``observe``: the arm's own, then the call recorded with the layer's weight and the z the arm's kernel
     wrote, if it hands one over (`H1Run.record`: ``scaled_mm_zy``'s z/y records, the tensor itself)."""
