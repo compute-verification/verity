@@ -315,7 +315,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     # file and the circuit's link only for a drawn member, after the draw (`stage`)
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
-    members, publics, checks, composed = [], {}, {}, {}
+    members, publics, checks, composed, programs_ok = [], {}, {}, {}, {}
     t_stage = time.time()
     for k, m in enumerate(mine.members):
         chunked = m.template not in sets and SRW.template(m.template).layout in SRW.CHUNKED
@@ -346,12 +346,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         meta = circ.meta
         header = a0.public_header(st_dir, m.n)
         fv = header["frame_v3"]
+        if (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
+            programs_ok[m.template, circ.pin] = a0.template_program_ok(meta, defn)
         ok = {"pin": header.get("circuit_sha512") == made["pin"],
               "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
               "program": meta.get("program_sha512") == part["program"],
               "indices": header["units"]["indices"] == list(range(m.base, m.base + m.n)),
               "classes": header["units"].get("classes") == [made.get("class_sha512")] * m.n,
-              "template_program": a0.template_program_ok(meta, defn),
+              "template_program": programs_ok[m.template, circ.pin],
               "shared_rows": header.get("shared_rows") == ({**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}
                                                            if m.tables else None)}
         for p_name in fv["roots"]:
