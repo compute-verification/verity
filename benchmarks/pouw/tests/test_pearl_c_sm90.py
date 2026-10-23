@@ -244,7 +244,7 @@ def test_widening_fixture_is_the_silicon_model(small_fixture):
 
 # ---- the dry run ---------------------------------------------------------------------------------------------------
 
-KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
+KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(?!__launch_bounds__)(\w+)\('
 #: the -h3 kernels (hash_h3.cuh, hash_fast.cuh) the pipeline launches at every shape; the row digests and tile leaves by
 #: hash_fast.cuh's kernels (run.py's default, PEARLC_SHA=fast).  A tree whose count is not a power of two also launches
 #: s512_pads.
