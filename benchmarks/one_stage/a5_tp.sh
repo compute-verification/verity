@@ -6,9 +6,11 @@
 # root (tp.run_root, verity/tp-run-root/v2); an old record's SHA-256 v1 root is refused before the draw.
 #   GLM-5.3 TP8: A5_TP=DIR holds the TP Commit's record (commit/runs.jsonl, commit/versions.json) and its windows (serving-rows/
 #     rank<r>/), A5_BUILD=DIR each rank's Programs of record (rank<r>/); the workload (integrations/vllm/workloads/$ROW.json) and
-#     the partition file (glm53_silu_mul_v2_tp8.json) are this tree's.
+#     the partition file (A5_PARTITION, default glm53_silu_mul_v2_tp8.json) are this tree's. A5_WINDOWS=bundles: the Commit wrote no
+#     window and deferred its ranks' replay to sealed bundles (A5_TP/commit/replay_bundle_p0_rank<r>, as Commit 38b2), so each
+#     rank's stand-in window is made here first from its bundle (`verity-vllm tp-serving-rows`, up to A5_JOBS ranks at once).
 #   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
-#     rows, its partition's law).
+#     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
 #   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only; A5_JOBS=N
 #   audits up to N ranks at once (a GLM-5.3 rank: its window ~14 min and ~50 GB, then M0's session ~31 GB).
 #   research run --on M --project verity --cwd clone --mem-gb 64 -- bash benchmarks/one_stage/a5_tp.sh
@@ -63,17 +65,37 @@ public() {  # WINDOWS DEST: serving's public files of every rank
   cp $1/tp.json $2/ 2>/dev/null
 }
 
+bundle_windows() {  # COMMIT BUILD PARTITION OUT LOGS: each rank's stand-in window from its sealed bundle
+  local ranks=${A5_RANKS:-$($PY -c "from verity_vllm.pipeline.tp import serving_rows as S; print(','.join(map(str, range(S.record('$1')['world']))))")}
+  mkdir -p $5
+  echo ${ranks//,/ } | tr ' ' '\n' | xargs -P ${A5_JOBS:-1} -I{} sh -c \
+    "$TIME $REPO/.venv/bin/verity-vllm tp-serving-rows $1 --build-root $2 --partition $3 --out $4 --ranks {} > $5/tp-serving-rows-{}.log 2>&1" \
+    || { tail -20 $5/tp-serving-rows-*.log; return 1; }
+  grep -h '^\[tp-serving-rows\]' $5/tp-serving-rows-*.log
+}
+
 rc=0
+PART=${A5_PARTITION:-benchmarks/one_stage/glm53_silu_mul_v2_tp8.json}
 if [ -n "${A5_TP:-}" ]; then
-  public $A5_TP/serving-rows $O/glm/window
-  audit glm $A5_TP/commit ${A5_BUILD:-$A5_TP/build} integrations/vllm/workloads/$ROW.json $A5_TP/serving-rows \
-    benchmarks/one_stage/glm53_silu_mul_v2_tp8.json || rc=1
+  WIN=$A5_TP/serving-rows
+  if [ "${A5_WINDOWS:-served}" = bundles ]; then
+    WIN=$W/serving-rows
+    bundle_windows $A5_TP/commit ${A5_BUILD:-$A5_TP/build} $PART $WIN $O/glm || exit 8
+  fi
+  public $WIN $O/glm/window
+  audit glm $A5_TP/commit ${A5_BUILD:-$A5_TP/build} integrations/vllm/workloads/$ROW.json $WIN $PART || rc=1
 else
   for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a draw of all leaves no negative
     I=${e%%:*}; LAW=${e#*:}; S=$W/served-i$I
-    (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW) > $O/standin-i$I.json 2> $O/standin-i$I.err \
-      || { tail -20 $O/standin-i$I.err; exit 8; }
-    public $S/serving-rows $O/standin-i$I/window && cp -r $S/commit $S/workload.json $S/partition.json $O/standin-i$I/
+    DEFERRED=$([ "${A5_WINDOWS:-served}" = bundles ] && echo --deferred)
+    (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW $DEFERRED) \
+      > $O/standin-i$I.json 2> $O/standin-i$I.err || { tail -20 $O/standin-i$I.err; exit 8; }
+    if [ -n "$DEFERRED" ]; then
+      bundle_windows $S/commit $S/build $S/partition.json $S/serving-rows $O/standin-i$I || exit 8
+    fi
+    # the record's files, never a sealed bundle (its store holds the prover's values)
+    public $S/serving-rows $O/standin-i$I/window && mkdir -p $O/standin-i$I/commit && cp $S/workload.json $S/partition.json $O/standin-i$I/ \
+      && find $S/commit -maxdepth 1 -type f -exec cp {} $O/standin-i$I/commit/ \;
     audit standin-i$I $S/commit $S/build $S/workload.json $S/serving-rows $S/partition.json || rc=1
   done
 fi
