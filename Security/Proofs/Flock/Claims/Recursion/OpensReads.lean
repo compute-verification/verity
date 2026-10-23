@@ -156,7 +156,8 @@ theorem RecIns.setup_pubRows {s : RecIns} {spec : SessionSpec} {sts : Array Stmt
 
 theorem forIn_ok_of {α : Type} {xs : Array α} {f : α → Flock.V Unit}
     {b : α → PUnit → Flock.V (ForInStep PUnit)} {u : PUnit}
-    (hb : ∀ a v r, b a v = .ok r → f a = .ok () ∧ r = .yield PUnit.unit) (h : forIn xs PUnit.unit b = .ok u) : ∀ a ∈ xs, f a = .ok () := by
+    (hb : ∀ a v r, b a v = .ok r → f a = .ok () ∧ r = .yield PUnit.unit) (h : forIn xs PUnit.unit b = .ok u) :
+    ∀ a ∈ xs, f a = .ok () := by
   rcases xs with ⟨l⟩
   simp only [List.forIn_toArray] at h
   intro a ha
