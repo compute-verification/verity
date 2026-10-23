@@ -489,8 +489,8 @@ theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
       split_ifs with hW
       · refine ecr_charge_le (hFCI (2 ^ 256) hW) ?_
         have := Ex_FCI_cost_le H (D.withSetup H) I DO decO Cp x P (2 ^ 256) hW hd
-        push_cast
-        linarith
+        linarith [show ((setupLen D x + 2 * n : ℕ) : ℝ) = setupLen D x + 2 * n by
+          simp only [Nat.cast_add, Nat.cast_mul, Nat.cast_ofNat]]
       · positivity
     calc 4 * (Cp.width (xI D x) : ℝ) *
           (PrFCI H (D.withSetup H) I DO decO Cp P x (2 ^ 256) + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1))
@@ -541,8 +541,8 @@ theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
       · have := Ex_draws_le H (D.withSetup H) I DO decO x P hd
         refine ecr_charge_le (hFdev (2 ^ 256) hk) ?_
         have := Ex_Fdev_cost_le H (D.withSetup H) I DO decO x P (2 ^ 256) hk
-        push_cast
-        linarith
+        linarith [show ((setupLen D x + 2 * n : ℕ) : ℝ) = setupLen D x + 2 * n by
+          simp only [Nat.cast_add, Nat.cast_mul, Nat.cast_ofNat]]
       · positivity
     calc βdev2 D I Cp x * (PrFdev H (D.withSetup H) I DO decO P x (2 ^ 256) + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1))
         ≤ βdev2 D I Cp x * (t * (cBe D x + setupLen D x + 2 * n) / 2 ^ (256 : ℝ) +
