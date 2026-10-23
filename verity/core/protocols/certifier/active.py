@@ -200,6 +200,10 @@ RUN_ID_BYTES = 32
 #: the longest request or answer line `serve_reveals` and `RemoteCertifier` read: a deployed LMS signature is 34,756
 #: bytes, twice that in hex, beside a registration
 REVEAL_LINE_BYTES = 1 << 20
+#: the longest a ticker waits at once. Linux lets an epoll wait end late by 0.1 % of its timeout, 0.5 % in a niced
+#: process, up to 100 ms (`select_estimate_accuracy`), so one wait for an origin 10 s off woke the first tick 48 ms
+#: late at nice 19, past the slack, and faulted window 0. A wait of at most this ends at most 0.5 ms late
+MAX_WAIT_S = 0.1
 
 
 def _reveal_fields(key_id: bytes, run_id: bytes, link: str, window: int, digest: str, what: bytes) -> bytes:
@@ -626,6 +630,15 @@ class LaggedChoices:
         return self.prover.declare(self.prover.envelope if sync is None else sync)
 
 
+async def wait_until(deadline: float, clock: Callable[[], float],
+                     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep) -> None:
+    """Sleep until `clock()` reaches `deadline`, in waits of at most `MAX_WAIT_S`, so that a far deadline is met as
+    closely as a near one."""
+    while deadline - clock() > MAX_WAIT_S:
+        await sleep(MAX_WAIT_S)
+    await sleep(deadline - clock())
+
+
 class VirtualClock:
     """A clock its caller moves, for runs driven event by event (tests, and replays without the host's timer):
     `clock()` reads it, `sleep` waits until `advance` passes the deadline."""
@@ -797,7 +810,7 @@ class Proxy:
         tau = params.bucket_ms / 1000
         for t in range(self.start * params.buckets, self.windows * params.buckets):
             deadline = self.origin + t * tau
-            await self.sleep(deadline - self.clock())
+            await wait_until(deadline, self.clock, self.sleep)
             late = self.clock() - deadline
             lateness.append(late)
             if late > self.slack:

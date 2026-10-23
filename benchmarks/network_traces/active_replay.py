@@ -127,6 +127,7 @@ from verity.core.protocols.certifier.active import (
     fresh_salt,
     request_frame_count,
     request_frames,
+    wait_until,
     worker,
 )
 from verity.core.protocols.certifier.lean_audit import Audit
@@ -694,8 +695,8 @@ class Server:
         self.origin = origin
         for b in range(self.horizon - 1):
             deadline = origin + b * self.tau + self.tau / 2
-            if (delay := deadline - self.clock()) > 0:
-                await self.sleep(delay)
+            if deadline > self.clock():
+                await wait_until(deadline, self.clock, self.sleep)
             self.log["batch_late_ms"].append(round((self.clock() - deadline) * 1000, 3))
             for item in sorted(self.batches.pop(b, []), key=lambda x: x[0]):
                 self._write(item)
@@ -891,13 +892,13 @@ class LiveServer:
             up_writer.close()
 
     async def _hold(self, deadline: float) -> None:
-        if (delay := deadline - self.clock()) <= 0:
+        if deadline <= self.clock():
             return
         self.held[deadline] += 1
         self.open -= 1
         self.notify()
         try:
-            await self.sleep(delay)
+            await wait_until(deadline, self.clock, self.sleep)
         finally:
             self.open += 1
             self.held[deadline] -= 1
@@ -963,8 +964,8 @@ class Peer:
             if not qs:
                 continue
             deadline = origin + t / 1000
-            if (delay := deadline - self.clock()) > 0:
-                await self.sleep(delay)
+            if deadline > self.clock():
+                await wait_until(deadline, self.clock, self.sleep)
             self.log["send_late_ms"].append(round((self.clock() - deadline) * 1000, 3))
             data = b"".join(request_frames(self.request(q), self.B) for q in qs)
             writer.write(data)
