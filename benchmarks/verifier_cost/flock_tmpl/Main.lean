@@ -1,6 +1,6 @@
 import Flock.TmplSplit
 import Flock.NetAt
-import Flock.TmplApart
+import Flock.TmplUnroll
 
 /-!
 `flock-tmpl layout TMPL [MODE…]`: `Tmpl.layoutM`, option (iv) under each `MODE` (`iv`, `iv/strict`, `iv/hybrid`,
@@ -19,8 +19,9 @@ net name, read a line at a time. One `PHASE {json}` line per phase on stdout: mi
 templated statement's read runs, timed whole or a stage at a time (`rows`, `posMap`, `Net.ofRows`, `invOf`, `posOk`,
 `placed`, `Sparse.ofRows`); `flock-tmpl flat CIRCUIT NAME`: `Net.parse` on the circuit file's block of net `NAME`, what
 the flat statement's read runs in its place. `flock-tmpl checks TMPL`: the description checks (`Tmpl.wellFormed`,
-`Tmpl.ordered`, `Tmpl.inputsT`, `Tmpl.apart`) timed one at a time, then the unrolled input-row checks they stand for (`Net.ofRows`' input
-rows and `Net.inputsOk` on `Tmpl.rows`), which must agree.
+`Tmpl.ordered`, `Tmpl.inputsT`, `Tmpl.apart`, `Tmpl.groupsOk`: together `Tmpl.unroll`'s success, `unroll_ok`) timed one at a
+time, then the unrolled input-row checks they stand for (`Net.ofRows`' input rows and `Net.inputsOk` on `Tmpl.rows`), which
+must agree.
 `flock_tmpl.sh` builds it against the checkout's verifier and runs it; it is a measurement and a difftest, not a verifier.
 -/
 
@@ -212,7 +213,7 @@ def main (args : List String) : IO UInt32 := do
     let some t ← readTmpl tp | return 1
     let mut ok := true
     for (name, check) in [("well_formed", Tmpl.Tmpl.wellFormed), ("ordered", Tmpl.Tmpl.ordered),
-        ("inputs_t", Tmpl.Tmpl.inputsT), ("apart", Tmpl.Tmpl.apart)] do
+        ("inputs_t", Tmpl.Tmpl.inputsT), ("apart", Tmpl.Tmpl.apart), ("groups_ok", Tmpl.Tmpl.groupsOk)] do
       let t0 ← IO.monoNanosNow
       let v := check t
       report name t0 [("ok", toJson v)]

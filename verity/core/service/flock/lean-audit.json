@@ -33,6 +33,7 @@
   "Flock.TmplOrder",
   "Flock.TmplRows",
   "Flock.TmplApart",
+  "Flock.TmplUnroll",
   "Flock.Test.TmplRows",
   "Flock.Test.TmplLayout",
   "Flock.Test.TmplFold",

@@ -5,10 +5,12 @@ input padding written by copies of an empty Definition. The forms it refuses, ea
 unrolled rows too: a copy in the input rows of a Definition writing a row that is not a self row, and input port bits
 left without a self row (copies too few, or not side by side). And `Tmpl.apart` against `Tmpl.rows`: the units above
 pass, and the collisions `Tmpl.rows` refuses fail it (a root row meeting a copy's, a row at the constant, two runs of
-copies meeting).
+copies meeting). And `Tmpl.groupsOk`, the port groups' and size's checks of `Tmpl.unroll` (`unroll_ok`): every unit above
+that passes all five description checks unrolls, and the groups `Net.ofRows` refuses fail it (an output group past the
+unit's slot, D11, or not aligned).
 -/
 import Flock.Test.Tmpl
-import Flock.TmplApart
+import Flock.TmplUnroll
 
 namespace Flock.Test.TmplRows
 
@@ -75,5 +77,23 @@ def apart (ls : Array String) : Option Bool := (_root_.Flock.Tmpl.parse ls).toOp
 -- runs of `SELF` at 0 to 2 and 2 to 3, meeting at 2
 #guard apart (lines SELF [] ["CALL 0 3 0 1 0", "CALL 0 2 2 1 0"]) == some false
 #guard refuses (lines SELF [] ["CALL 0 3 0 1 0", "CALL 0 2 2 1 0"])
+
+def described (ls : Array String) : Bool :=
+  match _root_.Flock.Tmpl.parse ls with
+  | .ok t => t.wellFormed && t.apart && t.ordered && t.inputsT && t.groupsOk
+  | .error _ => false
+
+def groupsOk (ls : Array String) : Option Bool :=
+  (_root_.Flock.Tmpl.parse ls).toOption.map _root_.Flock.Tmpl.Tmpl.groupsOk
+
+#guard groupsOk tmplLines == some true
+#guard [tmplLines, lines SELF [] ["CALL 0 3 0 1 0"], lines SELF ["DEF 3 0 0 1", "CALL 0 3 0 1 0"] ["CALL 3 1 0 3 0"],
+  lines SELF ["DEF 1 0 0 0"] ["CALL 0 3 0 1 0", "CALL 3 125 3 1 0"]].all fun ls => described ls && !refuses ls
+-- the output group at word 4 of a 4-word slot (D11)
+#guard groupsOk (tmplLines.set! 0 "flock-ir-tmpl/v2 t 2 1 0 1 1 3 1 4 1 1 2") == some false
+#guard refuses (tmplLines.set! 0 "flock-ir-tmpl/v2 t 2 1 0 1 1 3 1 4 1 1 2")
+-- a two-word output group at word 1, not aligned
+#guard groupsOk (tmplLines.set! 0 "flock-ir-tmpl/v2 t 2 1 0 1 1 3 1 1 2 1 2") == some false
+#guard refuses (tmplLines.set! 0 "flock-ir-tmpl/v2 t 2 1 0 1 1 3 1 1 2 1 2")
 
 end Flock.Test.TmplRows
