@@ -62,6 +62,9 @@ SUPPORT = 8
 #: later calls share one in which each constant argument bit is an input
 FOLD_CAP, FOLD_GATES = 4, 1000
 ZERO, ONE_REF = -1, -2  # a caller "bit" an input is bound to: the caller's zero column, or the unit's constant
+#: a call variable's data is one int, its copy's index above COL_BITS and its column in that copy below (not a tuple of two
+#: ints, which cost a 32 × 32 tile's 15.8M call variables a gigabyte); a copy's labels are 32-bit
+COL_BITS = 32
 
 
 @dataclass
@@ -134,8 +137,8 @@ def _column_order(C: Circuit, v: int) -> tuple:
     if k == "arg":
         return (1, C.data[v], 0, 0)
     if k == "call":
-        blk, x = C.data[v]
-        return (0, C.blocks[blk].pos, 0, x)
+        d = C.data[v]
+        return (0, C.blocks[d >> COL_BITS].pos, 0, d & ((1 << COL_BITS) - 1))
     return (0, v, 1, 0)
 
 
@@ -194,8 +197,11 @@ class _Lowerer:
                 sp = self.specs.get(key) or self._generic(fc, key, pat, len(label_vars))
         sp = sp or self._lower(fc, key, pat, len(label_vars))
         key = sp.key
-        blk = _Block(len(C.kind), key, array("q", label_vars))
+        if sp.cols >> COL_BITS or len(C.kind) >> 31:
+            raise NotImplementedError(f"{fc.id}: a specialization or a body of 2^{COL_BITS} columns or 2^31 variables")
+        blk = _Block(len(C.kind), key, array("i", label_vars))
         C.blocks.append(blk)
+        call_at = (len(C.blocks) - 1) << COL_BITS
         col_var: dict[int, L] = {}
         bits = iter(sp.rets)
         for r in fc.returns:
@@ -218,7 +224,7 @@ class _Lowerer:
                         s = s ^ frozenset((label_vars[x],))
                     else:
                         if x not in col_var:
-                            col_var[x] = C._new("call", (len(C.blocks) - 1, x))
+                            col_var[x] = C._new("call", call_at | x)
                         s = s ^ col_var[x].s
                 out.append(L(s, c))
             wires.setdefault(r, out)
@@ -348,14 +354,15 @@ class _Lowerer:
         sp.cols = n
         K = sp.cols + ins
         kind, data, cblocks = C.kind, C.data, C.blocks
+        mask = (1 << COL_BITS) - 1
 
         def ref(v: int) -> int:
             if v < 0:
                 return 0 if v == ZERO else K
             k = kind[v]
             if k == "call":
-                blk, x = data[v]
-                return cblocks[blk].base + x
+                d = data[v]
+                return cblocks[d >> COL_BITS].base + (d & mask)
             return sp.cols + data[v] if k == "arg" else col[v]
 
         def refs(f: L) -> tuple:
@@ -484,7 +491,7 @@ def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FO
     col_of_call = {}
     for v in range(len(C.kind)):
         if C.kind[v] == "call":
-            col_of_call[v] = base + C.data[v][1]
+            col_of_call[v] = base + (C.data[v] & ((1 << COL_BITS) - 1))
     end = base + sp.cols
     out_word = -(-end // IL.WORD)
     out_words = ceil_pow2(max(1, -(-len(outs) // IL.WORD)))
