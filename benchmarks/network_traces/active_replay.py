@@ -92,6 +92,7 @@ import random
 import re
 import resource
 import signal
+import ssl
 import struct
 import subprocess
 import sys
@@ -761,11 +762,16 @@ class LiveServer:
     writing an event before the endpoint has sent it; an event past the plan waits for the last planned bucket. Under
     the `covert` strategy, `covert.LiveSender` holds each stream's first event until the bucket its symbol names.
     `open` counts the streams whose response hasn't ended and aren't held, and `held` the deadlines of the held ones,
-    for a driver on a virtual clock."""
+    for a driver on a virtual clock. The endpoint is plain HTTP at `params["upstream"]`, or HTTPS with `tls`, under the
+    path `prefix`, sent the bearer key in the environment variable `api_key_env` names, if any."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
         self.clock, self.sleep, self.notify = clock, sleep, notify
         self.upstream = tuple(params["upstream"])
+        self.tls = ssl.create_default_context() if params.get("tls") else None
+        self.path = params.get("prefix", "").encode() + LIVE_PATH
+        key = os.environ[params["api_key_env"]] if params.get("api_key_env") else None
+        self.authorization = b"" if key is None else b"authorization: Bearer %s\r\n" % key.encode()
         self.tau, self.horizon = params["bucket_ms"] / 1000, plan["windows"] * params["buckets"]
         self.writes = plan.get("writes")
         self.held: Counter = Counter()
@@ -812,11 +818,11 @@ class LiveServer:
         self.log["receipt_late_ms"].append(round((received % self.tau) * 1000, 3))
         name = body.pop("user")
         raw = json.dumps(body, separators=(",", ":")).encode()
-        up_reader, up_writer = await asyncio.open_connection(*self.upstream[:2], limit=1 << 22)
+        up_reader, up_writer = await asyncio.open_connection(*self.upstream[:2], limit=1 << 22, ssl=self.tls)
         try:
-            up_writer.write(b"POST " + LIVE_PATH + b" HTTP/1.1\r\nhost: %s:%d\r\ncontent-type: application/json\r\n"
-                            b"content-length: %d\r\nconnection: close\r\n\r\n" % (self.upstream[0].encode(),
-                                                                                    self.upstream[1], len(raw)) + raw)
+            up_writer.write(b"POST " + self.path + b" HTTP/1.1\r\nhost: %s:%d\r\ncontent-type: application/json\r\n"
+                            b"%scontent-length: %d\r\nconnection: close\r\n\r\n" % (
+                                self.upstream[0].encode(), self.upstream[1], self.authorization, len(raw)) + raw)
             up_head = await up_reader.readuntil(b"\r\n\r\n")
             if not up_head.startswith((b"HTTP/1.1 200", b"HTTP/1.0 200")):
                 self.log["failed"].append(up_head.split(b"\r\n")[0].decode(errors="replace"))
@@ -887,7 +893,8 @@ def read_events(path: Path) -> list[tuple[int, str, int, int, bytes]]:
 class Peer:
     """The client outside the boundary: `send` writes each request's link frames at its send time, `read` reads the wire
     to its end, keeping a SHA-256 per window and each bucket's arrival after its tick. For an outage plan it connects
-    once for each run of windows the certifier serves (`phases`)."""
+    once for each run of windows the certifier serves (`phases`). A live plan's request is `record.py`'s for its session
+    (`live_body`), or the plan's `body` for every session (a served plan's, `certifier_serve.served_plan`)."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
         self.clock, self.sleep, self.notify = clock, sleep, notify
@@ -898,7 +905,7 @@ class Peer:
         self.by_time = defaultdict(list)
         for q in plan["requests"]:
             self.by_time[q["send_ms"]].append(q)
-        self.live_model = plan.get("live_model")
+        self.live_model, self.body = plan.get("live_model"), plan.get("body")
         self.outage = plan.get("outage")
         self.instants_sent = self.frames_sent = self.bytes = 0
         self.log = {"send_late_ms": [], "window_sha256": [], "bucket_lag_ms": []}
@@ -935,7 +942,8 @@ class Peer:
         name = q["session"] or f"none-{q['stream']}"
         if self.live_model is None:
             return request_bytes(name, q["frames"], self.B)
-        return live_request_bytes(name, live_body(q["session"], self.live_model), q["frames"], self.B)
+        body = self.body if self.body is not None else live_body(q["session"], self.live_model)
+        return live_request_bytes(name, body, q["frames"], self.B)
 
     async def read(self, reader: asyncio.StreamReader, origin: float) -> None:
         h = hashlib.sha256()
@@ -1283,16 +1291,19 @@ def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, cp
 
 
 def run_virtual(plan: dict, report: dict, out: Path, upstream: tuple[str, int] | None = None,
-                stalls: Sequence[tuple[int, float]] = (), salt: bool = False) -> dict:
+                stalls: Sequence[tuple[int, float]] = (), salt: bool = False, proxy_args: dict | None = None,
+                publish=None, after=None) -> dict:
     """One configuration on an injected clock: the same sockets, proxy, server and peer in one event loop, the clock
     moved to each instant something is due (a tick, a server batch, a send) once everything due before it is done.
     With `upstream`, the server is `LiveServer` in front of an endpoint that answers without the clock moving. A stall
     (`stalls`, test-only) moves the clock past the pause at once, before anything else runs. With `salt`, the proxy's
     salt is on, and `salts.json` holds what `reveal` gives once the run is over. Under an outage plan the first
     proxy's link is closed with its last window, and at the outage window's first instant the proxy back from
-    maintenance takes the peer's second connection."""
+    maintenance takes the peer's second connection. `proxy_args` override the proxy's arguments, `publish` replaces
+    `Publisher`, and `after(proxies, clock)` runs on the loop once the logs are written (a caller's reveal endpoint, say);
+    a proxy with a challenger key takes no in-process `reveal`, so it writes no `salts.json`."""
     out.mkdir(parents=True, exist_ok=True)
-    asyncio.run(_virtual(plan, Setup(report), out, upstream, stalls, salt))
+    asyncio.run(_virtual(plan, Setup(report), out, upstream, stalls, salt, proxy_args or {}, publish, after))
     (out / "processes.json").write_text(json.dumps({"exit": {"server": 0, "proxy": 0, "peer": 0}, "origin": 0.0,
                                                     "clock": "virtual"}))
     return {"server": 0, "proxy": 0, "peer": 0}
@@ -1304,7 +1315,8 @@ def virtual_process(plan: dict, report: dict, out: Path, stalls: Sequence[tuple[
 
 
 async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int] | None = None,
-                   stalls: Sequence[tuple[int, float]] = (), salt: bool = False) -> None:
+                   stalls: Sequence[tuple[int, float]] = (), salt: bool = False, proxy_args: dict | None = None,
+                   publish=None, after=None) -> None:
     e, i = setup.egress_params, setup.ingress_params
     params = wire_params(setup) | ({"upstream": list(upstream)} if upstream else {})
     clock = VirtualClock(-1.0)
@@ -1316,7 +1328,7 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     server = (LiveServer if upstream else Server)(plan, params, clock, clock.sleep, notify)
     peer = Peer(plan, params, clock, clock.sleep, notify)
     listening = await asyncio.start_server(server.handle, "127.0.0.1", 0)
-    publish = Publisher(out, setup, threaded=False)
+    publish = publish or Publisher(out, setup, threaded=False)
     advice = prover_args(plan, setup, background=False)
     syncs = advice.pop("syncs")
     runs = served(plan)
@@ -1325,11 +1337,11 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     async def connect(k: int) -> tuple:
         """The proxy of the k-th run of served windows, the peer's link to it, and the run and the peer's tasks."""
         (start, end), (_, enqueued) = runs[k], phases[k]
+        args = {"salt": fresh_salt if salt else None,
+                "reveal_deadline": reveal_deadline(plan, e.buckets * e.bucket_ms / 1000)} | proxy_args
         proxy = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, syncs, origin=0.0, clock=clock,
                       sleep=clock.sleep, publish=publish, egress_link=setup.egress_link,
-                      ingress_link=setup.ingress_link, salt=fresh_salt if salt else None,
-                      reveal_deadline=reveal_deadline(plan, e.buckets * e.bucket_ms / 1000), **advice,
-                      **phase_args(plan, start, end))
+                      ingress_link=setup.ingress_link, **args, **advice, **phase_args(plan, start, end))
         if stalls and k == 0:
             proxy._changed = Stalls(proxy, stalls, lambda seconds: clock.advance(clock.now + seconds))
         proxies.append(proxy)
@@ -1396,8 +1408,10 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     write_logs(out, proxies, server, peer)
     if stalls:
         (out / "stalls.json").write_text(json.dumps(proxies[0]._changed.done))
-    if salt:
+    if salt and proxies[0].challenger_key is None:
         (out / "salts.json").write_text(json.dumps(revealed(proxies)))
+    if after is not None:
+        await after(proxies, clock)
 
 
 # The audit.
