@@ -50,8 +50,8 @@ launch_env() {  # NAME REGION PROJECT PRESET RATE DATA_GIB DATA_TYPE DATA_DISK
 
 slot_line() {  # PRESET: the train slot's line, as on the live node of that shape
   case $1 in
-    192vcpu-768gb) echo "b 54-191 only=trains mem=560   # one full check (peak ~584G) in the 700G user slice, as cpu-1's b" ;;
-    256vcpu-1024gb) echo "t 4-171 only=trains mem=560   # one full check, as cpu-2's t; research runs at nice 19 on the rest" ;;
+    192vcpu-768gb) echo "b 54-191 only=trains mem=560   # one full check (peak ~584G) in the 700G user slice, as on cpu-1" ;;
+    256vcpu-1024gb) echo "t 4-171 only=trains mem=560   # one full check, as on cpu-2; research runs at nice 19 on the rest" ;;
   esac
 }
 
