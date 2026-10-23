@@ -7,7 +7,9 @@
 # (`pins`, RT4-INT-40). A gate that refuses `pins` serves no log: then no session is pinned, and the line credits
 # zero. It fetches origin/main itself and writes its first-parent history ($OUT/main.txt, `--main`, CMP-74): a pin off
 # that line, or no list when the fetch fails, likewise credits zero. Writes $OUT/auditor_line.json and $OUT/credit.md,
-# each session's four checks and the line.
+# each session's four checks and the line. RUN may instead be a host run's directory as vy-auditor-1 ships it
+# (`vy-verifier-gate fetch`, out/ beside request.json): the sessions' challenger peer is the record's (verifier.json's,
+# else request.json's --challenger-peer), and PEER overrides it.
 #
 #   research run --queue --on vy-nebius-1 --project verity --source . --cwd clone --cpus 4 --mem-gb 16 \
 #     --timeout 30m --store-read --env RUN=DIR --env PERIOD=P --env PIN=SHA512 --env COMMIT=SHA \
@@ -19,6 +21,7 @@ KEY=${GATE_KEY:-$HOME/.ssh/vy-challenger-gate-memory-accounting}
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 cp -a "${RUN:?}/out" "$S/" && chmod -R u+w "$S"
+[ ! -f "$RUN/request.json" ] || cp "$RUN/request.json" "$S/"
 : > "$OUT/fetch.log"
 if [ -f "$RUN/run-files.evicted.json" ]; then
   art=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['artifact'])" \
@@ -51,7 +54,8 @@ else
   echo "main: can't fetch origin/main's first-parent history, so no session is pinned" >> "$OUT/fetch.log"
 fi
 uv run python "$HERE/auditor_line.py" "$S/out" --host-bytes "${HOST_BYTES:-1843153879040}" --pin "${PIN:?}" \
-  --period "${PERIOD:?}" --commit "${COMMIT:?}" --ledger "$OUT/ledger.jsonl" "${PINS[@]}" "${MAIN[@]}" \
+  --period "${PERIOD:?}" --commit "${COMMIT:?}" ${PEER:+--peer "$PEER"} --ledger "$OUT/ledger.jsonl" "${PINS[@]}" \
+  "${MAIN[@]}" \
   --table "$OUT/credit.md" > "$OUT/auditor_line.json" 2> "$OUT/auditor_line.err"
 W=$?
 cat "$OUT/fetch.log" "$OUT/credit.md"
