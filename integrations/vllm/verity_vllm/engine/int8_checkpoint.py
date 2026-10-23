@@ -452,7 +452,7 @@ def main(a: MakeOptions | PinOptions | ReportOptions) -> int:
         if entry is None:
             raise C.UsageError(f"no checkpoints.json entry with role {a.role!r}")
         doc = report(entry, entries, a.hf_home, a.jobs)
-        Path(a.out).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+        Path(a.out).write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True) + "\n")
         print(json.dumps(doc["summary"], indent=1, sort_keys=True))
         return 1 if doc["summary"]["mismatch"] else 0
     return F.run(a, recipe_of(entry) if entry is not None else INT8, "int8-checkpoint")
