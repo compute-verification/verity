@@ -639,6 +639,13 @@ async def wait_until(deadline: float, clock: Callable[[], float],
     await sleep(deadline - clock())
 
 
+async def precise_sleep(delay: float) -> None:
+    """`asyncio.sleep(delay)` in waits of at most `MAX_WAIT_S` against the loop's clock: the proxy's sleep unless its
+    caller injects one. An injected sleep (a `VirtualClock`, the device difftest's harness) gets one wait a tick."""
+    loop = asyncio.get_running_loop()
+    await wait_until(loop.time() + delay, loop.time)
+
+
 class VirtualClock:
     """A clock its caller moves, for runs driven event by event (tests, and replays without the host's timer):
     `clock()` reads it, `sleep` waits until `advance` passes the deadline."""
@@ -718,7 +725,7 @@ class Proxy:
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
                  syncs: Sequence[ClockSync], *, origin: float, slack: float = 0.025,
                  clock: Callable[[], float] = time.monotonic,
-                 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+                 sleep: Callable[[float], Awaitable[None]] = precise_sleep,
                  publish: Callable[[Record, GridParams], None] | None = None,
                  egress_link: str = "responses", ingress_link: str,
                  prover: Prover | None = None, windows: int | None = None, executor: Executor | None = None,
@@ -810,7 +817,7 @@ class Proxy:
         tau = params.bucket_ms / 1000
         for t in range(self.start * params.buckets, self.windows * params.buckets):
             deadline = self.origin + t * tau
-            await wait_until(deadline, self.clock, self.sleep)
+            await self.sleep(deadline - self.clock())
             late = self.clock() - deadline
             lateness.append(late)
             if late > self.slack:

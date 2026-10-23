@@ -1322,12 +1322,13 @@ class SlackClock(VirtualClock):
 def test_a_first_tick_10_s_after_the_proxy_is_up_is_on_time_in_a_niced_process():
     """The proxy is up 10 s before its origin, as `certifier_serve` starts it. One wait for the first tick would end
     50 ms late, past the slack, and fault window 0 on both links (`monitor-unavailable`), as it did on the first
-    rehearsals against vLLM at nice 19; waits of at most `MAX_WAIT_S` keep every tick within the slack."""
+    rehearsals against vLLM at nice 19; waits of at most `MAX_WAIT_S` (`precise_sleep`, the proxy's own sleep) keep
+    every tick within the slack."""
 
     async def run():
         clock = SlackClock(0.0)
         proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=10.0, ingress_link="requests",
-                      clock=clock, sleep=clock.sleep)
+                      clock=clock, sleep=lambda delay: active.wait_until(clock() + delay, clock, clock.sleep))
         running = asyncio.create_task(proxy.run(EmptyReader(), NullWriter()))
         while not running.done():
             await clock.sleep(0)
@@ -1340,6 +1341,8 @@ def test_a_first_tick_10_s_after_the_proxy_is_up_is_on_time_in_a_niced_process()
     assert sorted((r.link, r.window, r.status.reason) for r in proxy.records) == \
         sorted((link, w, None) for link in ("responses", "requests") for w in range(WINDOWS))
     assert max(clock.waits) <= active.MAX_WAIT_S
+    assert Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=10.0,
+                 ingress_link="requests").sleep is active.precise_sleep
 
 
 def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
