@@ -340,6 +340,7 @@ def main (args : List String) : IO UInt32 := do
     let t0 ← IO.monoNanosNow
     let .ok () := HmOut.checkRows c | report "check_rows" t0 [("error", Json.str "refused")]; return 1
     report "check_rows" t0
+    let c := { c with tmpl := some tu }
     report "scope" t0 [("in_groups", toJson c.unit.inGroups.size), ("out_is_unit", toJson (c.outNet == c.unitNet)),
       ("wires", toJson c.wires.size), ("wires_feed", toJson (ProvedScope.wiresFeed c)), ("nets", toJson c.nets.size),
       ("unit_log", toJson c.unit.unitLog), ("ranges", toJson c.ranges.size)]
