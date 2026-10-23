@@ -41,9 +41,10 @@ def _leaf_cost(fn, IL) -> dict:
 def estimate(fn, memo: dict, leaves: dict) -> dict:
     """fn's ANDs, table reads and assertions as the sum of its leaves' (a primitive or a Boolean Definition, each lowered once
     by `_leaf_cost`), each times how often fn holds it; ``unpieced`` the leaves C-Flock has no piece for."""
+    from verity_flock import ir_lower as IL
+
     from verity.ml.circuits.defs import PrimitiveDefinition
     from verity.ml.circuits.program import is_input
-    from verity_flock import ir_lower as IL
 
     if fn.id in memo:
         return memo[fn.id]

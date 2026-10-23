@@ -57,10 +57,11 @@ def main() -> int:
 
     import a0
     import a11_kinds as K
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_flock import class_statement as CS
     from verity_flock import ir_lower as IL
     from verity_vllm.pipeline import serving_rows as SRW
+
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
