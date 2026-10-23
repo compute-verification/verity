@@ -25,6 +25,7 @@ import Flock.RecOpen
 import Flock.RecResiduals
 import Flock.RecSparse
 import Flock.RecOpening
+import Flock.SplitNL
 
 namespace Flock
 
@@ -758,7 +759,7 @@ compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, 
   let text ← match String.fromUTF8? bytes with
     | some s => pure s
     | none => throw "circuit: not UTF-8"
-  let lines0 := (text.splitOn "\n").toArray
+  let lines0 := SplitNL.splitPar text (SplitNL.cutsNear text 1024)
   let lines := if lines0.back? == some "" then lines0.pop else lines0
   let head := (lines.getD 0 "").trimAsciiEnd.toString
   if !head.startsWith (tags.fileFormat ++ " ") then throw s!"circuit: not a {tags.fileFormat} file"
@@ -908,7 +909,8 @@ compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, 
   RecOpening.check c
   return c
 
-/-- `parse` with each net's rows read in tasks (`Net.parsePar`) and the file hashed in a task beside them,
+/-- `parse` with the file's lines split in tasks (`SplitNL.splitPar`), each net's rows read in tasks (`Net.parsePar`) and the
+file hashed in a task beside them,
 `parse_eq_fast`: the firewall's setup runs it (`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`:
 `flock-verify` compiles `parse` too, and runs no task. -/
 def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
@@ -921,7 +923,7 @@ set_option maxHeartbeats 1000000 in
 theorem parse_eq_fast : @parse = @parseFast := by
   funext tags bytes tables tmpl pre
   unfold parse parseFast parseFastFrom
-  simp -zeta only [Net.parsePar_eq, classOf_eq_task, bind_map_left]
+  simp -zeta only [Net.parsePar_eq, classOf_eq_task, bind_map_left, SplitNL.splitPar_eq]
   try rfl
 
 /-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.

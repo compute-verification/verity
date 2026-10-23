@@ -154,4 +154,133 @@ theorem splitOn_nl (s : String) : s.splitOn "\n" = (s.toList.splitOn '\n').map S
   have := aux s s.toList [] [] [] (by simp) (by simp)
   simpa [len] using this
 
+theorem getAux_found (R : List Char) (i q : Nat) (c : Char) (hc : c ≠ default)
+    (h : String.Pos.Raw.utf8GetAux R ⟨i⟩ ⟨q⟩ = c) : ∃ C R', R = C ++ c :: R' ∧ i + len C = q := by
+  induction R generalizing i with
+  | nil => simp [String.Pos.Raw.utf8GetAux] at h; exact absurd h.symm hc
+  | cons d ds ih =>
+    simp only [String.Pos.Raw.utf8GetAux] at h
+    by_cases hiq : (⟨i⟩ : String.Pos.Raw) = ⟨q⟩
+    · rw [if_pos hiq] at h
+      subst h
+      refine ⟨[], ds, rfl, ?_⟩
+      have := congrArg String.Pos.Raw.byteIdx hiq; simp [len] at this ⊢; omega
+    · rw [if_neg hiq] at h
+      obtain ⟨C, R', h1, h2⟩ := ih (i + d.utf8Size) h
+      exact ⟨d :: C, R', by simp [h1], by simp [len] at h2 ⊢; omega⟩
+
+theorem getAux_skip (P R : List Char) (i q : Nat) (hq : i + len P ≤ q) :
+    String.Pos.Raw.utf8GetAux (P ++ R) ⟨i⟩ ⟨q⟩ = String.Pos.Raw.utf8GetAux R ⟨i + len P⟩ ⟨q⟩ := by
+  induction P generalizing i with
+  | nil => simp [len]
+  | cons c cs ih =>
+    have hpos := Char.utf8Size_pos c
+    have hne : (⟨i⟩ : String.Pos.Raw) ≠ ⟨q⟩ := by
+      intro h; have := congrArg String.Pos.Raw.byteIdx h; simp only [len] at hq this; omega
+    simp only [List.cons_append, String.Pos.Raw.utf8GetAux, if_neg hne]
+    have := ih (i + c.utf8Size) (by simp only [len] at hq; omega)
+    show String.Pos.Raw.utf8GetAux (cs ++ R) ⟨i + c.utf8Size⟩ ⟨q⟩ = _
+    rw [this]
+    simp only [len]
+    congr 2; omega
+
+/-- The pieces of `text` between the cuts `qs` (byte positions of its `'\n'`s, the first at or past `a`). -/
+def chunks (text : String) : Nat → List Nat → List String
+  | a, [] => [String.Pos.Raw.extract text ⟨a⟩ ⟨text.utf8ByteSize⟩]
+  | a, q :: qs => String.Pos.Raw.extract text ⟨a⟩ ⟨q⟩ :: chunks text (q + 1) qs
+
+/-- Each cut is a `'\n'` at or past the previous one's next byte. -/
+def cutsOk (text : String) : Nat → List Nat → Bool
+  | _, [] => true
+  | a, q :: qs => a ≤ q && String.Pos.Raw.get text ⟨q⟩ == '\n' && cutsOk text (q + 1) qs
+
+theorem chunks_split (text : String) (qs : List Nat) : ∀ (P R : List Char) (a : Nat),
+    text.toList = P ++ R → len P = a → cutsOk text a qs = true →
+    ((chunks text a qs).map fun c => c.toList.splitOn '\n').flatten = R.splitOn '\n' := by
+  induction qs with
+  | nil =>
+    intro P R a hs ha _
+    simp only [chunks, List.map_cons, List.map_nil, List.flatten_cons, List.flatten_nil, List.append_nil]
+    have he := extract_eq P R [] text (by simpa using hs)
+    rw [show text.utf8ByteSize = len P + len R by rw [size_eq, hs, len_append], ← ha, he]
+    simp
+  | cons q qs ih =>
+    intro P R a hs ha hok
+    simp only [cutsOk, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hok
+    obtain ⟨⟨haq, hg⟩, hrest⟩ := hok
+    have hg' : String.Pos.Raw.utf8GetAux R ⟨len P⟩ ⟨q⟩ = '\n' := by
+      unfold String.Pos.Raw.get at hg
+      rw [hs, show (0 : String.Pos.Raw) = ⟨0⟩ from rfl, getAux_skip P R 0 q (by omega)] at hg
+      simpa using hg
+    obtain ⟨C, R', hR, hq⟩ := getAux_found R (len P) q '\n' (by decide) hg'
+    subst hR
+    simp only [chunks, List.map_cons, List.flatten_cons]
+    have he := extract_eq P C ('\n' :: R') text (by simpa using hs)
+    subst ha hq
+    rw [he, ih (P ++ C ++ ['\n']) R' (len P + len C + 1) (by simpa using hs)
+      (by simp only [len_append, len, show '\n'.utf8Size = 1 by decide]) hrest, List.splitOn_append_cons_self]
+    simp
+
+/-- The byte ranges between the cuts `qs`, from `a` to `n`. -/
+def ranges (n : Nat) : Nat → List Nat → List (Nat × Nat)
+  | a, [] => [(a, n)]
+  | a, q :: qs => (a, q) :: ranges n (q + 1) qs
+
+theorem chunks_eq_ranges (text : String) (qs : List Nat) : ∀ a,
+    chunks text a qs = (ranges text.utf8ByteSize a qs).map fun r => String.Pos.Raw.extract text ⟨r.1⟩ ⟨r.2⟩ := by
+  induction qs with
+  | nil => intro a; rfl
+  | cons q qs ih => intro a; simp [chunks, ranges, ih]
+
+/-- `(text.splitOn "\n").toArray` with the pieces between the cuts `qs` split in tasks (`splitPar_eq`), when `qs` are
+`'\n'`s in order (`cutsOk`). -/
+def splitPar (text : String) (qs : List Nat) : Array String :=
+  if cutsOk text 0 qs then
+    ((ranges text.utf8ByteSize 0 qs).map fun r => Task.spawn fun _ =>
+        ((String.Pos.Raw.extract text ⟨r.1⟩ ⟨r.2⟩).splitOn "\n").toArray).foldl (fun acc t => acc ++ t.get) #[]
+  else (text.splitOn "\n").toArray
+
+theorem foldl_tasks {α : Type} (l : List α) (g : α → Array String) : ∀ acc : Array String,
+    (l.map fun x => Task.spawn fun _ => g x).foldl (fun acc t => acc ++ t.get) acc =
+      acc ++ (l.flatMap fun x => (g x).toList).toArray := by
+  induction l with
+  | nil => intro acc; simp
+  | cons x xs ih =>
+    intro acc; simp only [List.map_cons, List.foldl_cons, List.flatMap_cons, ih]; simp only [Task.spawn, Array.append_assoc]
+    congr 1; apply Array.ext'; simp
+
+theorem splitPar_eq (text : String) (qs : List Nat) : splitPar text qs = (text.splitOn "\n").toArray := by
+  unfold splitPar
+  split
+  · rename_i hok
+    rw [foldl_tasks]
+    have h := chunks_split text qs [] text.toList 0 (by simp) rfl hok
+    rw [chunks_eq_ranges] at h
+    simp only [Array.empty_append, splitOn_nl text]
+    congr 1
+    rw [← h]
+    simp only [List.map_map, List.flatMap, splitOn_nl, List.map_flatten]
+    rfl
+  · rfl
+
+/-- Cuts for `splitPar`: about `pieces` `'\n'` positions in order, the first `'\n'` at or after each multiple of the step.
+Nothing rests on them: `splitPar` checks them (`cutsOk`) and splits the whole text in one piece when they fail. -/
+def cutsNear (text : String) (pieces : Nat) : List Nat := Id.run do
+  let n := text.utf8ByteSize
+  let step := n / (pieces + 1) + 1
+  let mut out : Array Nat := #[]
+  let mut p := step
+  for _ in [0:pieces] do
+    if p ≥ n then break
+    let mut q := p
+    for _ in [0:step] do
+      if q ≥ n || String.Pos.Raw.get text ⟨q⟩ == '\n' then break
+      q := q + 1
+    if q < n && String.Pos.Raw.get text ⟨q⟩ == '\n' then
+      out := out.push q
+      p := max (q + 1) (p + step)
+    else
+      p := p + step
+  return out.toList
+
 end Flock.SplitNL
