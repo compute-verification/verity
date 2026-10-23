@@ -117,6 +117,7 @@ import Proofs.Flock.Claims.ZK.Stop
 import Proofs.Flock.Claims.ZK.LinkFft
 import Proofs.Flock.Claims.ZK.LinkRecheck
 import Proofs.Flock.Claims.ZK.FinishRound
+import Proofs.Flock.Claims.ZK.FrameTaken
 import Proofs.Flock.Claims.ZK.FinishCommit
 import Proofs.Flock.Claims.ZK.FinishLevel0
 import Proofs.Flock.Claims.ZK.FinishPiop
@@ -525,6 +526,11 @@ import Proofs.Flock.Claims.ZK.SessionLean
   `Finish` does not stop either its files encode `fin` of the switched views (`LeanRelease.FinishIs`), so
   `FinalRoundEq` follows (**`LeanRelease.finalRoundEq_of_finishIs`**, a live run's `Finish` not stopping by
   `finStops_of_live`).
+* `FrameTaken`: `FrameAdmits`' first piece, at any `LeanRelease`. On a live history up to the `Finish` whose last
+  coins the frame takes, at every prefix of at least three rounds the transport's coin check passed and the frame of
+  the rep that released the prefix's last round, at its state and configuration, answered its coins without refusal
+  (**`LeanRelease.coins_taken_of_live`**, from `refusesCoins_of_live` at the prefixes, `live_take`). `Hello`'s and the
+  `Commit`'s coins go to the session (`takeAt`), so it says nothing of them.
 * `LinkFft`: the recheck's rows by the additive FFT in the novel basis (`Flock.Firewall.Link.rowsFft`) are
   `encodeRowsZk`'s where the padding fits below `2^cols` and `cols < d ≤ 64` (`Flock.Firewall.Link.rowsFft_eq`), so
   `rows` is `encodeRowsZk` on both of its paths (`rows_eq`).
