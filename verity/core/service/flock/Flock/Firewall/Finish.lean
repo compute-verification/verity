@@ -586,14 +586,14 @@ def innerLiveK (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : Re
     return if (failingOn cons pads.h).isEmpty then some { proof := p, level0 := zl, inner } else none
   return (← prog.run (Transcript.init #[] dom)).1
 
-instance instLawfulEST : LawfulMonad (EST ε σ) := LawfulMonad.mk' (EST ε σ)
+instance instLawfulEST {ε σ : Type} : LawfulMonad (EST ε σ) := LawfulMonad.mk' (EST ε σ)
   (id_map := fun x => by funext s; show EST.bind x (fun a => EST.pure (id a)) s = x s; unfold EST.bind EST.pure; cases x s <;> rfl)
   (pure_bind := fun _ _ => rfl)
   (bind_assoc := fun x f g => by
     funext s; show EST.bind (EST.bind x f) g s = EST.bind x (fun a => EST.bind (f a) g) s
     unfold EST.bind; cases x s <;> rfl)
 
-instance : LawfulMonad (EIO ε) := inferInstanceAs (LawfulMonad (EST ε IO.RealWorld))
+instance {ε : Type} : LawfulMonad (EIO ε) := inferInstanceAs (LawfulMonad (EST ε IO.RealWorld))
 
 /-- `innerLiveK` is `innerLive` with its result kept: the same rounds, the same bytes to the firewall, the same coins. -/
 theorem innerLiveK_discard (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) :
