@@ -337,16 +337,15 @@ What is committed, by whom and when:
   behind the firewall, with the frames.
 - **The record commitment is N2's.** `LinkWindows` (`verity/core/protocols/certifier/service.py`) registers each
   link-window's two certified records under one salted root through the proof service, in a frame-v3-sha512 tree under
-  one-stage's served domain for the run, the link and the window. Leaves 0 and 1 are each direction's head, the
-  certifier's salt for it and certificate, which N2's own unit reads. Leaves 2 and 3 are each direction's head alone (`service.HEADS`), and N3's
-  unit opens leaf 2 + direction. The head holds N2's Merkle root of the window's frames (`certificate.frames_root`) and
+  one-stage's served domain for the run, the link and the window. Leaves 0 and 1 are each direction's head, `salt_c`
+  and certificate, for N2's unit. Leaves 2 and 3 are each direction's head alone (`service.HEADS`), and N3's unit
+  opens leaf 2 + direction. The head holds N2's Merkle root of the window's frames (`certificate.frames_root`) and
   its status. The unit recomputes the root over its N frames, checks that the status is complete, and opens the head:
   two compressions for its digest at the demo's shape and four at the lab's, where T = 60 buckets make the head about
   400 bytes. The leaf of head and certificate would cost about 272, since the certificate's LMS signature is 34,756
   bytes. N2's accepted outcome on the same root says that leaf holds the certified head of the link, direction and
   window. The firewall keeps the records and salts, and the challenger receives the root alone. Here `Certifier` stands
-  in for the certifier and the firewall: a small LMS key signs each head's salted digest, and the salts, the
-  certifier's among them, come from a seed.
+  in for the certifier and firewall: a small LMS key signs each head's salted digest, and every salt is seeded.
 - With NET-18, the ingress certifier also puts its own SALT frame (kind 3 on stream 0xFFFFFFFF; the window and the
   placeholder, 64 zero bytes) ahead of the arrivals in each window's first bucket. It is not a crossing, so it has no
   descriptor. The unit takes the frame's slot as witness and checks the frame against the public payload.
@@ -409,7 +408,7 @@ N3 on every link-window, the price of its design's Selection All, is `workload/n
 `r20261019-171031-6fa8`, at 8450bbaa73). A port-window small enough is traced whole (`n3_unit.size`); a served one, at
 35,000 frames of 4,096 bytes, doesn't fit in memory, so it is composed from the parts its body calls (`composed`). A
 link-window that recorded no frames needs no N3 unit, so it costs only N2's two head checks, 6,458,742 ANDs at T = 600
-(`N2_LINK_WINDOW`), of which 2,666,584 check the certificates' salted digests. As built:
+(`N2_LINK_WINDOW`). As built:
 
 | Run | Link-windows | With frames | Port-windows with a unit | N3 a link-window | N3 in all |
 |---|---|---|---|---|---|
@@ -438,7 +437,7 @@ busy window, so its rows price a window the service refuses (`Window.why`).
 | A day's | 34,499 | 1,031 | 592.2B | 27.5B | 619.7B | 8.92 × 10^14 | 95,946 |
 | A day's | 35,386 | 1,057 | 607.4B | 28.2B | 635.6B | 9.15 × 10^14 | 98,411 |
 
-N2 is 9.30 × 10^9 ANDs a day on one link (N3 ÷ N2 is that run's N3 over today's `N2_LINK_WINDOW`). N3 is linear in the frames: a least-squares line through each ladder (7
+N2 is 9.30 × 10^9 ANDs a day on one link. N3 is linear in the frames: a least-squares line through each ladder (7
 points from 2 frames, to 35,386 egress and 16,384 ingress) gives 9.44M ANDs an egress frame at the lab's depths, 13.8M
 at one window's and 17.2M at a day's, and 14.7M, 21.6M and 26.7M an ingress frame, with the largest residual 3.0%. At
 the lab's depths a busy egress window is 46% row reads, 21.5% the frames root, 16% descriptor reads, 10% segments and
