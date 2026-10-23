@@ -51,7 +51,7 @@ theorem readsSure_readIns {t : Tmpl} {mode : Mode} {lays : Array Lay} (hL : layo
   have hK1 := hpast t.constPos hKc (by omega)
   have hr3 := hpast r hrc hr1
   rw [FlockC3.Reps.ReadWhole.getD_readIns, hiw, hcp, hinc]
-  refine ⟨Nat.lt_min.2 ⟨hy1, by omega⟩, pos.getD r 0, Nat.min_le_of_left_le hr3, hrK, ?_⟩
+  refine ⟨Nat.lt_min.2 ⟨hy1, by omega⟩, pos.getD r 0, (Nat.min_le_left _ _).trans hr3, hrK, ?_⟩
   rw [FlockSoundness.ofRows_row ha hw, FlockSoundness.ofRows_row hb hw, Net.placed_at hpos _ hrc,
     Net.placed_at hpos _ hrc, Array.toList_map, Array.toList_map]
   have hyy : pos.getD y 0 = y := Net.posOk_inputs hpos hy1
