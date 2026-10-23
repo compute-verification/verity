@@ -53,7 +53,9 @@ is absent, so a reset brings drive back in whichever state ci left it. Two drive
 stops its own loop before `drive.sh start` here. Its checkout was cloned over https with `--filter=blob:none`, with
 `notes_sync.CREDENTIAL_HELPER`'s helper for `GH_TOKEN` as its local `credential.helper`; the read-only deploy key can't push.
 `drive.sh start` refuses until a dry-run push of `next` with that token goes through: the token is verity-drive's (App
-5385601, installation 173153984), minted by `gh_app_token.sh` with Contents and Pull requests write on this repository only (INF-133).
+5385601, installation 173153984), minted by `gh_app_token.sh` with Contents and Pull requests write on this repository only (INF-133). The repository's
+rulesets make that App the only pusher of `main` and `next` ("only drive moves main and next", and "main is append-only":
+no force push or deletion), so every other push to them, the lander's included, goes through `drive.sh` here.
 
 The steward holds a lease, so a second copy stands by instead of running. Its `--reap` reads `lane/*` tips from origin with the
 read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until the fetch works again.

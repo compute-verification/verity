@@ -446,7 +446,9 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - **Work toward outcomes.** A lane's night is one or two outcomes, each with a done-condition anyone can check, which its
   lead proposed and Daniel approved.
 - **Push your branch after every commit** (never `main`, never `--force`). A push to a PR in a train being checked waits
-  for that train to end (Checking and merging). Only drive and the lander move `main`.
+  for that train to end (Checking and merging). Only drive moves `main` and `next`: GitHub's rulesets refuse every other
+  pusher (the verity-drive App is their one bypass) and any force push or deletion of `main`, so the lander's pushes go
+  through drive on the control pod (`drive.sh merge`, `drive.sh queue`).
 - **Work in a checkout no other agent uses:** your own VM, or your own `git worktree add` (with its own venv) on a shared
   VM, removed when your task ends. Never check out or switch a branch in a tree another agent uses, and push only to
   branches you created or were handed.
