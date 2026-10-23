@@ -80,8 +80,24 @@ def tokenizer(path: Path):
     return windows.encoder(transformers.AutoTokenizer.from_pretrained(str(path)))
 
 
+def snapshot(model: str) -> Path:
+    """The model's snapshot under HF_HOME; a streamed model's small files are put there first (`stream.ensure`)."""
+    snap = models.snapshot(model, HF_HOME)
+    pin = models.pin(model)
+    if pin is not None:
+        import stream
+        stream.ensure(pin, snap)
+    return snap
+
+
+def check_ctx(model: str, ctx: int) -> None:
+    top = models.get(model).get("max_ctx")
+    if top is not None and ctx > top:
+        raise SystemExit(f"{model} runs at contexts up to {top} (models.py)")
+
+
 def build_windows(model: str, set_name: str, ctx: int, data: Path, calibration: bool):
-    encode, bos = tokenizer(models.snapshot(model, HF_HOME))
+    encode, bos = tokenizer(snapshot(model))
     fam = models.get(model)["tokenizer"]
     texts: dict = {}
     w, rec = windows.build(set_name, ctx, encode, bos, data, texts=texts)
@@ -108,13 +124,14 @@ def cmd_eval(a) -> int:
     seeds = parse_seeds(a.seeds)
     arms = arms_for(a.spec)
     methodology.windows(a.ctx)
+    check_ctx(a.model, a.ctx)
     if a.set not in methodology.EVAL_SETS:
         raise SystemExit(f"--set is one of {methodology.EVAL_SETS}")
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     needs_cal = any(x.needs_calib for x in arms)
     ids, cal, wrec = build_windows(a.model, a.set, a.ctx, Path(a.data), needs_cal)
-    snap = models.snapshot(a.model, HF_HOME)
+    snap = snapshot(a.model)
     gpus = a.gpus or models.get(a.model)["gpus"]
     devs = visible_gpus()
     if len(devs) < gpus:
@@ -230,6 +247,7 @@ def submit_command(a, data: Path) -> list[str]:
 def cmd_submit(a) -> int:
     load_plugins(a.plugin)
     arms_for(a.spec)
+    check_ctx(a.model, a.ctx)
     cmd = submit_command(a, Path(a.data))
     print(shlex.join(cmd))
     if a.dry_run:
@@ -240,7 +258,7 @@ def cmd_submit(a) -> int:
 
 def cmd_windows(a) -> int:
     fam = models.get(a.model)["tokenizer"]
-    encode, bos = tokenizer(Path(a.tokenizer) if a.tokenizer else models.snapshot(a.model, HF_HOME))
+    encode, bos = tokenizer(Path(a.tokenizer) if a.tokenizer else snapshot(a.model))
     lock = windows.lock()
     mine = lock.setdefault(fam, {})
     texts: dict = {}
