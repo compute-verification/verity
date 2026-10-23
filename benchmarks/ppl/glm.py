@@ -117,7 +117,7 @@ class GlmLayer:
         key = kv.new_empty(*kv.shape[:-1], nope + rope)
         key[..., :nope].copy_(k_nope)
         key[..., nope:].copy_(k_rot.expand(-1, k_nope.shape[1], -1, -1))
-        mask = torch.ones(T, T, dtype=torch.bool, device=h.device).tril().view(1, 1, T, T)
+        mask = torch.ones(B, 1, T, T, dtype=torch.bool, device=h.device).tril()
         o = F.scaled_dot_product_attention(query, key, value, attn_mask=mask, dropout_p=0.0, scale=self.scaling,
                                            is_causal=False)
         o = o.transpose(1, 2).contiguous().reshape(B, T, -1).contiguous()
