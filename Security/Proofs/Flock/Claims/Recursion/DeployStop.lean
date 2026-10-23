@@ -179,7 +179,12 @@ theorem halted_of_statement (IV : Claims.Verifier Coin) (ivScope : Claims.Msg �
 
 /-! ## The stop doesn't fire everywhere in scope -/
 
-/-- **Every answer of `ms` is a coin's bytes**, as the compiled verifier sends them. -/
+/-- **Every answer of `ms` is a coin's bytes**, as the compiled verifier sends them.
+
+Assumption record. No claim: it is not an assumption. It restricts the transcripts that
+`Claims.Witness.Recursion.ZKStop_meets_ready` speaks about to those whose answers the compiled verifier could have sent.
+That witness concludes `∀ … ms, … → Coined ms → … halted … = false`, and no theorem takes `Coined` of a given
+transcript as a hypothesis. It scopes a liveness statement and has no soundness content. -/
 def Coined (ms : List (Claims.Msg × Claims.Out)) : Prop := ∀ p ∈ ms, ∃ c : Coin, p.2 = Claims.Out.msg c.bytes
 
 theorem not_uncoinedAt (IV : Claims.Verifier Coin) (x : Claims.Msg) {ms : List (Claims.Msg × Claims.Out)}

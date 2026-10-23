@@ -1501,6 +1501,55 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
+  },
+  "Accounting.Filler.CellProducts": {
+   "owner": "@compute-accounting",
+   "digest": "ed1ea49ad93f31994eec73d6ab2be4f15a83154e2a79c21f6f2c833472e09da3"
+  },
+  "Accounting.TS.Model.FloorKnown": {
+   "owner": "@compute-accounting",
+   "digest": "8b85e4070adec68ec3d4328b59d53909c02eed7179cfea7f2d6d79f45f868c6c"
+  },
+  "FlockSoundness.Audit.Partitioning.CertifiesLeak": {
+   "owner": "@proofs",
+   "digest": "e1952e657e35e728f4488f99aac3507dfab51043842e6359fd04deeaf3dbc85d"
+  },
+  "FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR": {
+   "owner": "@proofs",
+   "digest": "dbbcd7ba90155f3428484b0fe39a4f00fe518cc77b09b6855230e712613b9ce2"
+  },
+  "FlockSoundness.Discharge.Recursion.StackedTopAt": {
+   "owner": "@proofs",
+   "digest": "0a0d08c5d2f7d9044fda87519784c5a1b9af90ce006ee1e819c4b816994c8c71"
+  },
+  "FlockSoundness.Discharge.Recursion.VStarParsesScoped": {
+   "owner": "@proofs",
+   "digest": "0e5b91d141c747fccb6c133f76a400987099cadcd4027c488d11afe0713a1165"
+  },
+  "FlockSoundness.Discharge.ZkLink.LinkCRZC": {
+   "owner": "@proofs",
+   "digest": "53137b003de91081ca7cc4de88ee4dd541309df80380fd581caa72169165a282"
+  },
+  "FlockSoundness.Discharge.ZkLink.RowsCRZC": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.ZkLink.SessCRZ": {
+   "owner": "@proofs",
+   "digest": "6632288d79c2f0850f4647b8d0dc88eccf99768f84bcc3a79803f6e1f3ad3735"
+  },
+  "FlockSoundness.Discharge.ZkReg.OwnReadsHJ": {
+   "owner": "@proofs",
+   "digest": "e9aeedec7fad74902c6d756469f6931815c8b93e9b49fb3395f722b292580164"
+  },
+  "FlockSoundness.StrictCR.Finder.CR": {
+   "owner": "@proofs",
+   "digest": "4234584c8c100c10bc25e561da0e248d6b2c394ea401c2310eac1fcb610131e6"
+  },
+  "RecDeploy.Coined": {
+   "owner": "@proofs"
+  },
+  "RecDeploy.PlainLeavesAdmitted": {
+   "owner": "@proofs"
   }
  },
  "meaning": [

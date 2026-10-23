@@ -62,7 +62,15 @@ def FlockVerifyAccepts (zk : Bool) (I : Inputs) (t : Exec.Transcript) : Prop :=
 
 /-- **`flock-verify verify --registered F` accepted** (`own` F's ports): under `--zk`, `VerifiesZKR` (the registered check
 and the statement check with the verifier's registered reads); without, `Verifies`, as without `--registered`: the
-statement check is the same without `--zk`, and the registered check only refuses more. -/
+statement check is the same without `--zk`, and the registered check only refuses more.
+
+Assumption record. No claim: it is not an assumption. It is the acceptance event, written from the verifier's own Lean
+functions: `AcceptsZKR`'s `setupOf`, `checkRegistered`, `Zk.shapeOk` and `Flock.Zk.verify`, and `ScopeZR`'s statement
+check (or `Verifies`). The guarantees conclude about it, in `flock_verify_sound`'s second conjunct
+(`∀ own t, FlockVerifyAcceptsR zk I own t → …`) and in the probability events, and none takes it as a hypothesis. The
+verifier establishes it by running. That `Main.verifyCmd` prints `ACCEPT` exactly when it holds is read off
+`verifyCmd`'s code and not proved, since `verifyCmd` is `IO`. The same holds for `FlockVerifyAccepts`, which the lock
+records as a definition the statements read. -/
 def FlockVerifyAcceptsR (zk : Bool) (I : Inputs) (own : Array Flock.Registered.Port) (t : Exec.Transcript) : Prop :=
   if zk then VerifiesZKR I own t else Verifies I t
 

@@ -23,7 +23,16 @@ variable {n : ℕ} {Gate : Type}
 
 /-- **The registered reads are the verifier's own at their tables' draws, under hidden outputs, at `J` tables**:
 `OwnReadsH` with each read `(u, q)` at the table `u` is drawn into (`partOf I d u`), whose draw is
-`drawJ I d (partOf I d u)` and whose drawn statement is `HmOut.drawn c pub` at it. -/
+`drawJ I d (partOf I d u)` and whose drawn statement is `HmOut.drawn c pub` at it.
+
+Assumption record. No claim. In `EndToEndRegistered*` and `flock_verify_sound` it is not an assumption. It scopes the
+conclusion's second conjunct, `∀ rd, OwnReadsHJ … → rd.Checked …`, to the reads the verifier owns. As `ZkOuterD.hown`,
+which `PublicAudit` and `Recursive*` take, it is a hypothesis on `rd`, the session's record of its registered reads.
+The hypothesis is that each read names a port of `own`, at the position acceptance checked, in the table its unit is
+drawn into. The positions are the verifier's (`reads_of_acceptsZKR`). What remains is that `rd` is built from `own`'s
+ports, which holds for the served session (`SoundAtBridge.RowsSession.ownReadsHJ_of_served`, from `ServedRegistered`)
+and for C3's (`FlockC3.Compose.ownReads_cover`). It is a fact about how `rd` is built: neither a hash premise nor a
+premise about the prover. -/
 def OwnReadsHJ (I : Inputs) (own : Array Registered.Port) (c : Circuit) (pub : Public) (t : Exec.Transcript)
     (isRead : (Fin n × Fin c.ports.size) ⊕ Gate → Prop) (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port)
     (readAt : (Fin n × Fin c.ports.size) ⊕ Gate → ℕ) : Prop :=
