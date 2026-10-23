@@ -54,7 +54,13 @@ noncomputable def locBits (n K : ℕ) : ℝ := Real.logb 2 (∑ j ∈ range (K +
 /-- **The exfiltration target**: with unit `u` exporting `b u` bits, `audit_exfiltration`'s bound certifies at most `ℓ`
 bits at `δ`. That is, a harm bound `H` of the widths at `δ` and a count `K` with `miss (K + 1) < δ`, with
 `H + locBits n K ≤ ℓ`, so that a uniform message of `m` bits is recovered from an accepted audit with probability at
-most `2^(ℓ − m)` plus `δ` and the audit's error. -/
+most `2^(ℓ − m)` plus `δ` and the audit's error.
+
+Assumption record. No claim: it is not an assumption. It is the exfiltration target, the property of a law that the
+`Partitioning` guarantees compare laws by. They conclude `∀ L, CertifiesLeak L … → …` (the lower bound on draws) and
+`∃ L, CertifiesLeak L … ∧ …` (achievability), and none takes it as a hypothesis. The lock lists it because the Lean
+check reads premises in conclusions. Like `MeetsTarget`, it is a definition the statements read, and its digest pins
+it. -/
 def CertifiesLeak (L : Law n) (b : Fin n → ℕ) (δ ℓ : ℝ) : Prop :=
   ∃ H K : ℕ, IsHarmBound L (fun u => (b u : ℝ)) (ENNReal.ofReal δ) H ∧ L.miss (K + 1) < ENNReal.ofReal δ ∧
     (H : ℝ) + locBits n K ≤ ℓ

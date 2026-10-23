@@ -167,7 +167,15 @@ soundness headline holds (`Claims.Flock.Scope`), and is true (`Claims.Flock.R`).
 concrete inner statement and its witness: #2468's inner session is one, as its run `r20261018-053343-99cf` measured
 (Lean `verify` without `--zk` accepts it, its record holding the full stratified draw), and none is proved here. Only
 an inner statement whose public file holds each instance's own rows can be one: without `--zk` Flock's statement check
-refuses a shared-row public file (`ProvedScope.sharedRowsOk`), which `RecVStar.innerOf` sets up. -/
+refuses a shared-row public file (`ProvedScope.sharedRowsOk`), which `RecVStar.innerOf` sets up.
+
+Assumption record. No claim: a completeness fact, not a security premise. It is a genuine open hypothesis, the
+antecedent of `Claims.Witness.Recursion.ZKStop_meets_ready`'s first conjunct, which says where the recursive
+deployment's stop leaves the honest prover live. No soundness or zero-knowledge guarantee reads it. It assumes that one
+concrete inner statement passes the reader's checks, fits Flock's sizes, and is in scope and true. That is plausible
+because run `r20261018-053343-99cf` measured #2468's inner session to be one. The kernel can't evaluate the checks,
+since `Lean.Json.parse` is `partial`. If it fails, that witness's first conjunct says nothing, and soundness is
+unaffected. -/
 def PlainLeavesAdmitted (rel : Flock.Readable.Parsed → Flock.Readable.Relation) : Prop :=
   ∃ (inner : Msg) (ri : FlockDeploy.Raw) (partition : Option Json) (dims : Flock.RecVStar.Inner)
     (w : Claims.Flock.Wit) (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt),

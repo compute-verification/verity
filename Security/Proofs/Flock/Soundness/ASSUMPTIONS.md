@@ -260,10 +260,11 @@ A6, which no check of the record establishes. At `--zk` the custody is a named `
 
 ## Premises the lock lists by name
 
-The guarantees take these after a `let`. The Lean check reads premises through `let`, and each of these has its record
-in `Security/lean-audit.json`'s `assumptions`. Each is one of the assumptions above at the guarantee's own finders or
-inputs, or an obligation on our code. None adds a hash premise beyond `cr/sha-512` and `ecr/sha-512`. Each docstring
-states its record.
+The Lean check reads premises through `let`, in conclusions and in packed hypotheses, and each of these has its record
+in `Security/lean-audit.json`'s `assumptions`. Each is one of the following: one of the assumptions above at the
+guarantee's own finders or inputs; an obligation on our code; or a definition the conclusion reads, which the check
+lists as a premise because it sits left of an arrow in the conclusion. None adds a hash premise beyond `cr/sha-512` and
+`ecr/sha-512`. Each docstring states its record.
 
 | `Prop` | Claim id | Reduces to | Taken by |
 |---|---|---|---|
@@ -273,6 +274,11 @@ states its record.
 | `StrictCR.Finder.CR` | `cr/sha-512` | `SHA512CRStrict` at the constant cost `q` (`Claims.StrictBirthday`); the budget isn't checked (above) | as `LinkCRZC`, and `qR`'s registered-path finder |
 | `Recursion.StackedTopAt` | `registrant-holds-openings` | `TopOf`, the prover's held tree and salts; its other two conjuncts are the verifier's checks (`stackedTop_of_innerCommits`) | `RecursiveAuditC3` |
 | `Recursion.VStarParsesScoped` | none: an obligation (gap 4) | implied by `VStarParses` (`vstarParsesScoped_of`), a fact about our code | `PublicAudit`, `RecursiveAuditC3` |
+| `ZkReg.OwnReadsHJ` | none | in the conclusion, it scopes `∀ rd, … → rd.Checked`; as `ZkOuterD.hown`, a fact about how `rd` is built from `own` (`ownReadsHJ_of_served`, `ownReads_cover`) | `EndToEndRegistered*` and `flock_verify_sound` (conclusion); `PublicAudit`, `Recursive*` (`hown`) |
+| `FailClosed.FlockVerifyAcceptsR` | none: not an assumption | the acceptance event, from the verifier's own Lean functions (`AcceptsZKR`, `ScopeZR`); `verifyCmd`'s `IO` wrapper is read, as for `FlockVerifyAccepts` | `flock_verify_sound`, `flock_verify_sound_205`, `flock_verify_public_ties` (conclusion) |
+| `Partitioning.CertifiesLeak` | none: not an assumption | the exfiltration target the bounds compare laws by, as `MeetsTarget` | `Partitioning.SecurityProofs.*`, `Witness.*` (conclusion) |
+| `RecDeploy.Coined` | none: not an assumption | scopes a liveness witness to transcripts of coin bytes | `ZKStop_meets_ready` (conclusion) |
+| `RecDeploy.PlainLeavesAdmitted` | none: a completeness fact, open | one inner statement passes the reader's checks and is in scope and true (measured, `r20261018-053343-99cf`; `Json.parse` is `partial`) | `ZKStop_meets_ready` (antecedent of its first conjunct) |
 
 ## Other named assumptions
 
