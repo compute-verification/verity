@@ -504,10 +504,10 @@ theorem ownPorts_held {sv : VStar.Stmt} {q : String × String × Array (Option �
     unfold Flock.RecVStar.ownPorts at hq
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
     rcases hq with rfl | rfl
-    · refine ⟨by decide, fun _ _ rep hr => ?_⟩
+    · refine ⟨by show "h" ∉ ["out"]; decide, fun _ _ rep hr => ?_⟩
       simp at hr
       omega
-    · refine ⟨by decide, fun _ hk => ?_⟩
+    · refine ⟨by show "claim" ∉ ["out"]; decide, fun _ hk => ?_⟩
       rw [cIndex_claim] at hk
       cases hk
   | opening _ _ _ _ _ _ =>
@@ -567,7 +567,7 @@ theorem mem_heldRows {r : XR} {s : ℕ} {sv : VStar.Stmt} {c : Flock.Circuit}
         | none => simp [hj] at hh
         | some j =>
           cases hqi : c.ports.findIdx? (·.name == q.1) with
-          | none => simp [hj, hqi] at hh
+          | none => simp [hqi] at hh
           | some qi =>
             obtain rfl : (j, q.1, qi, rep) = h := by simpa [hj, hqi] using hh
             exact ⟨q, hq, k, hk, hrow, rfl, hqi⟩
@@ -705,14 +705,13 @@ theorem hmSlotsCommit_of_full {st : Stage} (h1 : OneTable st) (hcap : CapFull st
   rw [hr] at hr'
   cases hr'
   have hS' := hS
-  obtain ⟨ms', i, spec, sts, -, hsu, -⟩ := hS'
+  obtain ⟨-, i, spec, sts, -, hsu, -⟩ := hS'
   have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
   have hsz : p.sts.size = 1 := by rw [hp]; exact h1 s x _ i spec sts hS hsu
   have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0
   obtain ⟨L, regs, hz⟩ := Flock.Readable.layout_of_check hck hx ht hpi h0
   have hz1 : (L.model regs).Satisfies (Flock.Readable.zOf 1 w 0 p.sts[0].m) := by
     have e := congrArg (fun J => Flock.Readable.zOf J w 0 p.sts[0].m) hsz
-    simp only at e
     rw [← e]
     exact hz
   obtain ⟨-, hts⟩ := tablesOf_of_parse hx
@@ -744,7 +743,70 @@ theorem hmSlotsCommit_of_full {st : Stage} (h1 : OneTable st) (hcap : CapFull st
     have hfull : N ≤ p.sts[0].n := by
       subst hp
       exact hcap s x _ i spec sts r l N hS hsu hr hsv' h0
-    exact slotCommits_table ht' hd (by omega) hv1 hl L regs hz1 hq (in_block hrows (by decide) hq)
+    exact slotCommits_table ht' hd (by omega) hv1 hl L regs hz1 hq (in_block hrows (by show "top" ∉ ["out"]; decide) hq)
       (div_lt_blocks hg0 (by omega) hnbl)
+
+section Corollaries
+
+open Flock
+open Claims (Msg Out)
+open FlockDeploy (Coin)
+
+/-- **`KSLin2` at the coin server's record, with the slots' commit strings proved** where a staged part sets up one
+table and RecCap's table holds all its instances: `ksLin2_deployed_slots` with `HmSlotsCommit` from
+`hmSlotsCommit_of_full`. `OneTable` and `CapFull` are the two facts no check of the verifier's gives. -/
+theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (rest : Msg → List (Msg × Out) → List UInt8)
+    (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
+    (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
+    let bR : Brings := { b with tr := recTr aux nOf rest }
+    let L := layoutBTops (finOpen fin)
+    let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
+      (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
+    let D := recBound _root_.Flock.Readable.relation bR L Bd.IVStar
+    let bL : Brings := { bR with rd := L.readers }
+    (∀ shape ∈ [Claims.Recursion.Form.Dense],
+      ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
+        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          L shape (showsTr recRead) chk s) ∧
+        (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          L shape (showsTr recRead) (cmtTr recRead) s) ∧
+        Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
+    OneTable bR.st → CapFull bR.st →
+    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
+    ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
+    Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
+  intro bR L Bd D bL hP h1 hc hRL hRP
+  exact ksLin2_deployed_slots b aux nOf rest fin wE join final w hP (hmSlotsCommit_of_full h1 hc) hRL hRP
+
+/-- **`BitsLin2` at the coin server's record, with the slots' commit strings proved** under `OneTable` and `CapFull`:
+`bitsLin2_deployed_slots` with `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
+theorem bitsLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (rest : Msg → List (Msg × Out) → List UInt8)
+    (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
+    (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
+    let bR : Brings := { b with tr := recTr aux nOf rest }
+    let L := layoutBTops (finOpen fin)
+    let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
+      (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
+    let D := recBound _root_.Flock.Readable.relation bR L Bd.IVStar
+    let bL : Brings := { bR with rd := L.readers }
+    (∀ shape ∈ [Claims.Recursion.Form.Dense],
+      ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
+        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          L shape (showsTr recRead) chk s) ∧
+        (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          L shape (showsTr recRead) (cmtTr recRead) s) ∧
+        Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
+    OneTable bR.st → CapFull bR.st →
+    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
+    ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
+    Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
+  intro bR L Bd D bL hP h1 hc hRL hRP
+  exact bitsLin2_deployed_slots b aux nOf rest fin wE join final w hP (hmSlotsCommit_of_full h1 hc) hRL hRP
+
+end Corollaries
 
 end RecDeploy
