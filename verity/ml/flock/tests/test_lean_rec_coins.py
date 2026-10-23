@@ -426,7 +426,7 @@ def test_a_v_registered_one_element_off_is_refused_at_its_part(comb, algebra, sh
     changed = [p for p in parts if (p / "registered.json").read_bytes() != (algebra / p.name / "registered.json").read_bytes()]
     assert len(changed) == 1 and len(parts) > 1, changed
     (p,) = changed
-    t = SET / "inner-honest" / "public.json"
+    t = shape.parent / "transcript.json"
     why = _verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t),
                   session=undrawn, rows=rows)["why"]
     assert re.fullmatch(rf"setup: rec-coins: rec-residuals/m\d+-k\d+-c\d+-{p.name}: rep 0: part {p.name[1:]}'s \d+ elements of v: "
@@ -557,7 +557,7 @@ def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape
     (port,) = [k for k, x in reads(a).items() if x == "rec-c0"]
     with (a / "circuit.txt").open() as f:
         unit = f.readline().split()[1]
-    t = SET / "inner-honest" / "public.json"
+    t = shape.parent / "transcript.json"
 
     def flip(r):
         c = bytearray.fromhex(r["commits"][0])
@@ -611,7 +611,7 @@ def _unregistered(src: Path, dst: Path, port: str) -> Path:
 def _part(ex, d: Path, shape: Path, undrawn: Path, shared: Path | None = None, coins: Path | None = None) -> cf.Future:
     """`ex` running a verify of algebra part `d` at the inner transcript, under `undrawn`'s session, at shared rows `shared`."""
     return ex.submit(_verify, d, d / "pub.bin", d / "registered.json", shape, "inner-honest", "--rec-inner-transcript",
-                     str(SET / "inner-honest" / "public.json"), session=undrawn, rows=shared, coins=coins)
+                     str(shape.parent / "transcript.json"), session=undrawn, rows=shared, coins=coins)
 
 
 def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn, rows, tmp_path):
@@ -666,7 +666,7 @@ def test_the_registered_reads_hold_no_message_round_port_the_statement_lacks(alg
     (d / "registered.json").write_text(json.dumps(r))
     show = lambda rd: "[" + ", ".join("null" if x is None else str(x) for x in rd) + "]"
     v = _verify(d, d / "pub.bin", d / "registered.json", shape, "inner-honest", "--rec-inner-transcript",
-                str(SET / "inner-honest" / "public.json"), session=undrawn, rows=rows)
+                str(shape.parent / "transcript.json"), session=undrawn, rows=rows)
     assert v["why"] == (f"setup: {_unit(d)}: the registered reads' port {port} under {value} reading {show([*honest, None])} "
                         f"is not the statement's: the statement's is {port} under {value} reading {show(honest)}"), v["why"]
 
