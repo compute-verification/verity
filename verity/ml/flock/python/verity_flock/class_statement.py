@@ -309,7 +309,7 @@ def link_triples(meta: dict, reads: list[list], indices: Sequence[int], n_out) -
 def links_file(program: Any, query: dict, text: str, indices: Sequence[int]) -> dict:
     """The verifier's own ``--links`` file for the live verifier (``flock-circuit serve``): every link of the statement, derived
     from its own program and query (`link_triples`), bound to the circuit and the partition it checks them for."""
-    meta = json.loads(text.split("\n", 2)[1][5:])
+    meta = FC.meta_of(text)
     tp = PO.TemplatePartition(program, query)
     triples = link_triples(meta, cut_reads(tp, indices), indices, lambda v: len(tp.outputs(v)))
     return {"format": LINKS_FORMAT, "circuit_sha512": FC.digest(text), "partition": meta["partition"]["digest"],
@@ -695,7 +695,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
     n = len(rows)
-    meta = json.loads(text.split("\n", 2)[1][5:])
+    meta = FC.meta_of(text)
     per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
     cap_bits = _CTX.get("max_statement_bits", MAX_STATEMENT_BITS)
     if n * per_instance > cap_bits:                     # a unit whose rows are long pays for their hashing in every instance
@@ -832,7 +832,7 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
     text = FC.compose(low, sub, partition=partition, program=program, leaf_scheme=LEAF_SCHEME)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
-    meta = json.loads(text.split("\n", 2)[1][5:])
+    meta = FC.meta_of(text)
     per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
     cap_bits = _CTX.get("max_statement_bits", MAX_STATEMENT_BITS)
     if n * per_instance > cap_bits:
@@ -1049,8 +1049,7 @@ class UnitStager:
                                seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
                                partition=bind and bind["partition"], program=bind and bind["program"], layout=layout)
         self.bound = bind is not None
-        self._meta = self.text.split("\n", 2)[1][5:]
-        self.meta = json.loads(self._meta)
+        self.meta = FC.meta_of(self.text)
         self.ports = FC._meta_ports(self.meta)
         self.circuit = circuit
         if circuit is not None:
@@ -1131,9 +1130,9 @@ class UnitStager:
                  rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
                  public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
                  digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices],
-                 share_rows=tables is not None, tables=tables, refs=refs, registered=registered)
+                 share_rows=tables is not None, tables=tables, refs=refs, registered=registered, meta=self.meta)
         counts = self.low.layout.counts
-        return {"meta": json.loads(self._meta), "outs": outs, "salts": salts, "ands": counts["ands"],
+        return {"meta": FC.meta_of(self.text), "outs": outs, "salts": salts, "ands": counts["ands"],
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}
 
 

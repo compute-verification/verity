@@ -114,12 +114,39 @@ PARTITION_V1 = "verity/partition/v1"
 BINDING_KEYS = ("partition", "program_sha512", "program_digests")
 
 
+_COMPACT = json.JSONEncoder(sort_keys=True, separators=(",", ":"))
+_HASH_CHUNK = 1 << 24
+#: compose's stand-in for META ``template``, whose lines it serializes on their own: a template's META is most of the file
+_SPLICE = "\0template\0"
+
+
+def meta_of(text: str) -> dict:
+    """The circuit file's META (its second line), parsed without copying the rest of the file."""
+    i = text.index("\n") + 1
+    return json.loads(text[i + 5:text.index("\n", i)])
+
+
+def _sha512(pieces) -> hashlib._Hash:
+    """SHA-512 of the UTF-8 of ``pieces`` concatenated, encoded :data:`_HASH_CHUNK` characters at a time."""
+    h, buf, size = hashlib.sha512(), [], 0
+    for s in pieces:
+        for k in range(0, len(s), _HASH_CHUNK):
+            buf.append(s[k:k + _HASH_CHUNK])
+            size += len(buf[-1])
+            if size >= _HASH_CHUNK:
+                h.update("".join(buf).encode())
+                buf, size = [], 0
+    h.update("".join(buf).encode())
+    return h
+
+
 def class_digest(text: str) -> str:
     """The class of every instance the circuit proves: SHA-512 of the circuit file with META's :data:`BINDING_KEYS` removed
     (META re-serialized compact with sorted keys)."""
-    head, meta_line, rest = text.split("\n", 2)
-    meta = {k: v for k, v in json.loads(meta_line[5:]).items() if k not in BINDING_KEYS}
-    return hashlib.sha512((head + "\nMETA " + json.dumps(meta, sort_keys=True, separators=(",", ":")) + "\n" + rest).encode()).hexdigest()
+    i = text.index("\n") + 1
+    j = text.index("\n", i)
+    meta = {k: v for k, v in json.loads(text[i + 5:j]).items() if k not in BINDING_KEYS}
+    return _sha512([text[:i], "META ", *_COMPACT.iterencode(meta), text[j:]]).hexdigest()
 
 
 def set_statics(input_set) -> dict:
@@ -692,17 +719,21 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "partition": ({"rule": PARTITION_V1, "digest": partition} if partition else
                           {"rule": PARTITION_RULE, "query": cover["query"], "version": cover["version"], "digest": partition_digest(cover)})}
     if template is not None:
-        meta.update(format=TMPL_FORMAT, statement=TMPL_STATEMENT, template=tmpl_text.splitlines(), layout=layout)
+        meta.update(format=TMPL_FORMAT, statement=TMPL_STATEMENT, template=_SPLICE, layout=layout)
     if extra_meta:
         if clash := sorted(set(extra_meta) & set(meta)):
             raise ValueError(f"extra_meta: {clash} are META's own keys")
         meta.update(extra_meta)
-    head = f"{meta['format']} {low.name}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
+    meta_json = [json.dumps(meta, sort_keys=True, separators=(",", ":"))]
+    if template is not None:
+        a, b = meta_json[0].split(json.dumps(_SPLICE))
+        meta_json = [a, json.dumps(tmpl_text.splitlines(), separators=(",", ":")), b]
     texts = [] if template is not None else [("unit", unit)]
     texts += [(SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
               (HM_NET, _expanded(IL.layout(S.hm96_row(), ["cv", "pad", "y"], ["bc"]), HM_NET))]
     texts += [(f"stage{i}", t) for i, t in enumerate(stage_texts)]
-    return head + "".join(f"CIRCUIT {nm} {t.count(chr(10))}\n{t}" for nm, t in texts)
+    return "".join([f"{meta['format']} {low.name}\nMETA ", *meta_json, "\n",
+                    *(s for nm, t in texts for s in (f"CIRCUIT {nm} {t.count(chr(10))}\n", t))])
 
 
 def _expanded(lay: IL.Layout, name: str) -> str:
@@ -760,7 +791,7 @@ def coins(live: list[dict]) -> str | None:
 
 def digest(text: str) -> str:
     """The circuit's pin: SHA-512 of the file (every identity and binding digest of the statement is SHA-512)."""
-    return hashlib.sha512(text.encode()).hexdigest()
+    return _sha512([text]).hexdigest()
 
 
 # --- instance files -----------------------------------------------------------------------------------------------------------
@@ -838,7 +869,7 @@ def write_public_inputs(text: str, words: dict, n: int, path) -> None:
     """The verifier's own ``--public-inputs`` file (PROTOCOL.md §16.10): a header line ``{format, instances, ports}``, its ports
     META's ``public_inputs`` (each with its seed and derivation), then ``words`` (``{port: (n, words)}``, the verifier's own
     recomputation of the population's public words) as the public file holds them."""
-    pins = json.loads(text.split("\n", 2)[1][5:]).get("public_inputs", [])
+    pins = meta_of(text).get("public_inputs", [])
     head = {"format": PUBLIC_INPUTS_FORMAT, "instances": n, "ports": pins}
     Path(path).write_bytes(json.dumps(head, sort_keys=True).encode() + b"\n" + _public_bytes(pins, words, n))
 
@@ -846,7 +877,8 @@ def write_public_inputs(text: str, words: dict, n: int, path) -> None:
 def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
           refs: dict | None = None, salts: dict | None = None, registered: dict | None = None,
-          public_words: dict | None = None, identifier: dict | None = None, digests: tuple[str, str] | None = None) -> dict:
+          public_words: dict | None = None, identifier: dict | None = None, digests: tuple[str, str] | None = None,
+          meta: dict | None = None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set's name, the range, each block's unit indices, the composite
     circuit's sha512, the frame-v3-sha512 statement; never the set's content digest, an unsalted hash of its values), then, for
     the prover only, every instance's rows (its input rows, then its output rows: ports in order, u16 LE) and every row's salt
@@ -882,15 +914,16 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     is RFC 8785 (``verity.ml.circuits.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
     (``--identifier F``).
 
-    ``digests``: ``text``'s (:func:`digest`, :func:`class_digest`), from a caller that writes many statements of one circuit
-    (`class_statement.UnitStager`); else computed here."""
+    ``digests`` and ``meta``: ``text``'s (:func:`digest`, :func:`class_digest`; :func:`meta_of`), from a caller that writes many
+    statements of one circuit (`class_statement.UnitStager`); else computed here."""
     from verity.ml.circuits.codec import jcs_domain_error
 
     if identifier is not None:
         bad = jcs_domain_error(identifier, "identifier") if isinstance(identifier, dict) else "identifier: not a JSON object"
         if bad:
             raise ValueError(f"{bad} (the header's identifier is a JSON object on which canonical JSON is RFC 8785)")
-    meta = json.loads(text.split("\n", 2)[1][5:])
+    if meta is None:
+        meta = meta_of(text)
     sub = input_set.subcircuit
     n = hi - lo
     pins = meta.get("public_inputs", [])

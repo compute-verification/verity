@@ -126,6 +126,25 @@ def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(m
         FC.compose(tm.low, tm.sub, port_bits=[b for _r, _s, b, _ps in args[2]], v2_out_rows=(("o0",),), definition="d", layout=MODE)
 
 
+def test_the_pin_and_class_hash_the_file_a_chunk_at_a_time(monkeypatch):
+    """`circuit.digest` and `circuit.class_digest`, which hash a templated file's META (most of the file) in chunks rather
+    than whole copies, are SHA-512 of the file and of the file with META's binding keys removed and re-serialized, across
+    chunk boundaries anywhere, a non-ASCII section included."""
+    import hashlib
+
+    meta = {"format": FC.TMPL_FORMAT, "template": [f"{i} 1 {i} 1 {i + 1}" for i in range(50)], "partition": {"digest": "p"},
+            "program_sha512": "q", "z": "é"}
+    text = f"{FC.TMPL_FORMAT} u\nMETA {json.dumps(meta)}\nCIRCUIT hm96 1\nÿ 0\n"
+    kept = {k: v for k, v in meta.items() if k not in FC.BINDING_KEYS}
+    want = (hashlib.sha512(text.encode()).hexdigest(),
+            hashlib.sha512((f"{FC.TMPL_FORMAT} u\nMETA {json.dumps(kept, sort_keys=True, separators=(',', ':'))}\n"
+                            "CIRCUIT hm96 1\nÿ 0\n").encode()).hexdigest())
+    assert FC.meta_of(text) == meta
+    for chunk in (1, 7, 64, 1 << 24):
+        monkeypatch.setattr(FC, "_HASH_CHUNK", chunk)
+        assert (FC.digest(text), FC.class_digest(text)) == want
+
+
 @pytest.mark.slow
 def test_a_structural_stager_writes_the_templated_statement_of_struct_lowers_template(tmp_path):
     """`UnitStager`'s ``structural`` on the toy: META ``template`` is `struct_lower`'s template on the stager's ports (the
