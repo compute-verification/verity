@@ -609,7 +609,9 @@ def layout_of(linears: Any, calls: Any, m: int, tile: Any) -> dict[str, Any]:
 
 def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
     """The window's registered tables (`pouw_h1_served`): each committed value's entry, what was refused, and the outcome of
-    `pouw_h1_served.register`, each call's ``--registered`` file written into ``tdir``."""
+    `pouw_h1_served.register` over its trees. It writes no call's ``--registered`` file: the verifier builds the drawn
+    call's from the record (`credit.registered_file`, at the descriptor's cost), and every call's here would cost the
+    window Program's whole partition, evaluated in Python, at the close (8de9: past its timeout)."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
     doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20],
                            "committed": bool(served.registered) and not served.refused,
@@ -617,8 +619,8 @@ def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
                                                                          "refused": list(served.refused)},
                            "layout": layout_of(served.linears, served.calls, served.m, served.tile)}
     try:
-        reg = SV.register(h1, directory=tdir)
-        doc["register"] = {"registered": len(reg.registered), "files": len(reg.files), "first": SV.file_name(0)}
+        reg = SV.register(h1, calls=(), directory=tdir)
+        doc["register"] = {"registered": len(reg.registered), "files": len(reg.files)}
     except ValueError as e:
         doc["register"] = {"refused": str(e)[:2000]}
     print(f"[fill] served committed={doc['committed']} values={len(doc['entries'])} register={json.dumps(doc['register'])[:600]}",
