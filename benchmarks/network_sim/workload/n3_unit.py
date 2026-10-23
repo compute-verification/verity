@@ -1545,8 +1545,9 @@ def sim_declared(S: Statement, hellos: dict[tuple[str, str], int]) -> dict[str, 
 
 
 def lab_framing(lab) -> tuple[bytes, dict[tuple[str, int], int]]:
-    """What the outside host sends on the lab's links besides the messages it relays: each request's length (u32be)
-    and head (`lab.REQUEST`), block by block in session order, and each one's offset by (block, session index)."""
+    """What the outside host sends on the lab's links besides the messages it relays: each request's length (u32be),
+    head (`lab.REQUEST`) and padding (`Lab.request_pad`), block by block in session order, and each one's offset by
+    (block, session index)."""
     from . import lab as L
 
     data, at = b"", {}
@@ -1554,14 +1555,15 @@ def lab_framing(lab) -> tuple[bytes, dict[tuple[str, int], int]]:
         for s in lab.sessions[b]:
             at[b, s.index] = len(data)
             data += LENGTH.pack(lab.request_length(s)) + L.REQUEST.pack(s.index, lab.request_length(s) - L.REQUEST.size)
+            data += bytes(lab.request_pad(s))
     return data, at
 
 
 def lab_declared(S: Statement, lab, block: str, heads: dict[tuple[str, int], int]) -> tuple[list, list]:
     """The block's egress frames (its events in position order, `active.event` of each chunk) and ingress frames (its
     requests in session order, `active.request_frames`) as pieces, from the outboxes: a chunk is a run of its
-    message's, and a request is its length and head from the outside host's framing (at `heads` past
-    `Statement.framing_at`) and then its messages' runs."""
+    message's, a padding event's none, and a request is its length, head and padding from the outside host's framing
+    (at `heads` past `Statement.framing_at`) and then its messages' runs."""
     from . import lab as L
     from . import n3_canonical as C
     from .hardware import OUTSIDE
@@ -1569,11 +1571,14 @@ def lab_declared(S: Statement, lab, block: str, heads: dict[tuple[str, int], int
     B, base = S.phi.frame_bytes, S.outboxes[1]
     egress = []
     for j, m, c in lab.events[block]:
+        if m is None:
+            egress.append(C.event_pieces(block, 0, 0, B))
+            continue
         lo, hi = c * lab.chunk, min((c + 1) * lab.chunk, (m.bits + 7) // 8)
         egress.append(C.event_pieces(m.src, base[m.stream] + lo, hi - lo, B))
     ingress, framing = [], S.framing_at(OUTSIDE)
     for s in lab.sessions[block]:
-        runs = [(OUTSIDE, framing + heads[block, s.index], LENGTH.size + L.REQUEST.size)]
+        runs = [(OUTSIDE, framing + heads[block, s.index], LENGTH.size + L.REQUEST.size + lab.request_pad(s))]
         runs += [(m.src, base[m.stream], (m.bits + 7) // 8) for m in s.inbound]
         ingress += C.data_pieces(runs, B)
     return egress, ingress

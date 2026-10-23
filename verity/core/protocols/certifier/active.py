@@ -160,6 +160,7 @@ from verity.core.protocols.certifier.grid import (
 )
 from verity.core.protocols.certifier.online import Prover, Refused
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, eligible
+from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.service import Registration
 
@@ -511,12 +512,28 @@ class Bucketer:
     With `first`, each window's first tick enqueues the certifier's own frame `first(window)`, if it gives one, ahead of
     that bucket's arrivals. The bucketer follows it by its place in the queue, never by its bytes: `own` maps each slot
     of the row last released that holds one to its window, and one a fault drops is never released. With `start`, it
-    begins at window `start`'s first bucket, its certifier at that window."""
+    begins at window `start`'s first bucket, its certifier at that window.
+
+    With `served` (off by default), a served link's admission rule (`served.Admission`): arrived frames are enqueued
+    only as whole requests of the profile's F_in frames, and only while the window, with the request, still ends idle
+    (`served.admits`: every frame handed and released by its last bucket); the rest wait, in order, for the next window.
+    So each window's egress counts derive from its own ingress counts (`served.derive`), as N2's served counts check.
+    It takes an own frame exactly when the profile counts one (`own`), first in each window's first bucket, which the
+    admission projects with the requests' frames."""
 
     def __init__(self, certifier: Certifier, first: Callable[[int], bytes | None] | None = None,
-                 start: int = 0) -> None:
+                 start: int = 0, *, served: Admission | None = None) -> None:
+        T, r_in = certifier.params.buckets, certifier.params.allocation
+        if served is not None and ((first is not None) != bool(served.profile.own) or not admits(
+                [], served.profile.own + served.profile.request_frames, served.sync(start), served.profile,
+                served.allocation, r_in, T)):
+            raise ValueError("a served link takes an own frame exactly when its profile counts one, and its window "
+                             "holds that frame, one request and its response "
+                             f"(F = {served.profile.response_frames}) under the admission's sync")
         self.certifier = certifier
         self.first = first
+        self.served = served
+        self.counts: list[int] = []  # the window's ingress counts so far, under `served`
         if start:
             certifier.window = start
         self.waiting: deque[tuple[int, bytes]] = deque()
@@ -532,9 +549,21 @@ class Bucketer:
         if self.first is not None and self.t % T == 0 and (frame := self.first(self.t // T)) is not None:
             self._own.append((c.queued, self.t // T))
             c.enqueue(frame)
-        while self.waiting and self.waiting[0][0] <= self.t:
-            c.enqueue(self.waiting.popleft()[1])
+        a = self.served
+        if a is None:
+            while self.waiting and self.waiting[0][0] <= self.t:
+                c.enqueue(self.waiting.popleft()[1])
+        else:
+            n, w = a.profile.request_frames, self.t // T
+            if self.t % T == 0:
+                self.counts = []
+            while len(self.waiting) >= n and self.waiting[n - 1][0] <= self.t and \
+                    admits(self.counts, c.queued + n, a.sync(w), a.profile, a.allocation, c.params.allocation, T):
+                for _ in range(n):
+                    c.enqueue(self.waiting.popleft()[1])
         row = c.tick()
+        if a is not None:
+            self.counts.append(row_count(row))
         if self._own:
             n = row_count(row)
             # a fault empties the queue, and its window enqueues nothing after it
@@ -720,6 +749,10 @@ class Proxy:
       or of another proxy on the same link name, is never taken in another;
     - with `start` and `position`, it is back from maintenance: it serves windows `start` … `windows` − 1, its first
       egress frame the Program's at `position`;
+    - with `served`, a served link's profile (`served.ServedProfile`): its ingress side admits requests by the
+      admission rule (`Bucketer(served=…)`) under each window's declared sync (the slowest of Σ_sync under an online
+      prover, or past `syncs`), so that each window ends idle, which N2's served counts check. With `salt` the profile
+      counts its frame (`own` 1), at a PoUW window of one certifier window, so that frame heads every window;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
@@ -733,11 +766,17 @@ class Proxy:
                  registered: Callable[[Registration], int | None] = served_window, start: int = 0,
                  position: int = 0, reveal_deadline: float | None = None, prover_key: PublicKey | None = None,
                  prover_context: bytes = b"", challenger_key: PublicKey | None = None,
-                 signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes) -> None:
+                 signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes,
+                 served: ServedProfile | None = None) -> None:
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
         if prover is not None and syncs:
             raise ValueError("an online prover declares every window's sync")
+        if served is not None and (egress.buckets, egress.bucket_ms) != (ingress.buckets, ingress.bucket_ms):
+            raise ValueError("a served link's grids share T and τ_b: its anchors are ingress buckets")
+        if served is not None and (served.own != (salt is not None) or salt is not None and pouw_window != 1):
+            raise ValueError("a served link's profile counts the salt frame (own 1) exactly when the salt is on, and "
+                             "then every window has one (a PoUW window of one certifier window)")
         if salt is not None and ingress.frame_bytes < SALT_FRAME_BYTES:
             raise ValueError(f"a salt frame needs ingress frames of at least {SALT_FRAME_BYTES} bytes")
         if not (type(salt_bits) is int and salt_bits > 0 and salt_bits % 8 == 0):
@@ -778,7 +817,11 @@ class Proxy:
         self._salt_out: asyncio.Queue | None = None
         self._salt_task: asyncio.Task | None = None
         self.salts_released = self.salts_delivered = 0
-        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start)
+        slowest = ClockSync(max(sync_set.deltas), min(sync_set.rhos))
+        admission = None if served is None else Admission(
+            served, egress.allocation, lambda w: syncs[w] if prover is None and w < len(syncs) else slowest)
+        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start,
+                                 served=admission)
         self.records: list[Record] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
         self.streams: dict[int, _Stream] = {}

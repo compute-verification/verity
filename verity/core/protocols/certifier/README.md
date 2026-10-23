@@ -13,11 +13,23 @@ A spec-level reference for network accounting's timing channel:
   the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
   is at the profile. Holding the frames, the rest of the egress grid, is N3's, which is a design and the simulator's
   behaviour (`benchmarks/network_sim`), not a protocol: a prototype in the clear, in no proof-service Spec, so the claim
-  stays counts only until N3 is a proof-service unit with Selection `All`. It covers no lab or served link yet: an
-  egress end without an occupancy profile gets no verdict (`ValueError`, failing closed). The network verdict of
-  record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share credit: every window
-  of the egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order
-  window rejects the link;
+  stays counts only until N3 is a proof-service unit with Selection `All`. The network verdict of record is
+  `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share credit: every window of the
+  egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
+  rejects the link;
+- a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
+  occupancy profile: N2's served unit, `NetworkServedLinkWindow`, adds a Boolean Definition,
+  `NetworkServedCounts_v1` (678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1), that holds the egress
+  head's counts to the ones its ingress head's counts derive under the window's declared sync, the advice the audit
+  already charges at log2 #Σ_sync bits a window. Each window starts empty and must end idle, so nothing carries
+  between windows, and a request whose frames or response straddle a window's end refuses the window. The claim is
+  counts only and rests on no premise. That the derived counts are the Program's grid rests on four: FIXLEN (every
+  response F frames), a fixed request size (every request F_in frames, every ingress frame a request's but the
+  certifier's salt frame heading each window, which `own` counts), a
+  request-major canonical order, and one T, τ_b and declared sync for a window's anchors (`PROTOCOL.md`, "A served
+  link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
+  an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
+  closed);
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
@@ -38,13 +50,16 @@ A spec-level reference for network accounting's timing channel:
   to the challenger's `active.RemoteCertifier`, given the run id by the deployment record, which returns the value
   once it verifies for that run. Without the keys they are the in-process calls, for the auditor's side only. A proxy
   back from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame
-  the Program's at position p, and carries nothing from before: a window it was down for has no record.
+  the Program's at position p, and carries nothing from before: a window it was down for has no record. On a served
+  link (`Proxy(served=ServedProfile(…))`, off by default; with the salt, `own` 1 at a PoUW window of one certifier
+  window) its ingress admits whole requests by the admission rule (`served.Admission`).
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
 Definition, and in `active` the proof service's registration and receipt, which `reveal` reads. The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
-From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets.
+From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
+and their evaluator.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
@@ -83,7 +98,8 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 ## Not yet zero-knowledge
 
 Every protocol is to be zero-knowledge, and the network audit isn't yet. Its claim today is counts only: N2 holds each
-window's per-bucket counts to the occupancy profile on every link-window, beside the proved timing bound, while N3, the
+window's per-bucket counts to the occupancy profile on every link-window (on a served link, to the ones its ingress
+counts derive under the declared sync), beside the proved timing bound, while N3, the
 content check, is the design (Daniel's provisional call on ASK-70, 19 Oct). N2 no longer compares the grid in the clear
 (`LinkWindows.verify` runs `check_link(grid=False)`, NET-38). Nothing may call the count check zero-knowledge until
 these are closed:
@@ -94,8 +110,9 @@ these are closed:
     per record and handed to the prover as witness only;
   - the head-check unit proves `R = H(head)` and that `H(salt_c ‖ R)` is the signed digest;
   - the host's LMS check then reads only public fields and that hiding digest.
-- **N2's unit isn't proved yet.** `LinkWindows.verify`, the verifier of record, runs `head_check.reference` on the
-  host over the opening, so it reads the heads. When the unit is proved, its head-check gate must bind
-  `NetworkHeadCheck_v1`'s circuit digest, and the verifier must refuse a proof of any other circuit (NET-43).
+- **N2's unit isn't proved yet.** `LinkWindows.verify`, the verifier of record, runs `head_check.reference` (and on a
+  served link `served.reference`) on the host over the opening, so it reads the heads. When the unit is proved, its
+  head-check gate must bind `NetworkHeadCheck_v1`'s circuit digest (and its served gate `NetworkServedCounts_v1`'s),
+  and the verifier must refuse a proof of any other circuit (NET-43).
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/certifier`.

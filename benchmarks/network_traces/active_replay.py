@@ -149,6 +149,7 @@ from verity.core.protocols.certifier.schedule import (
     handing_buckets,
     run_shaper,
 )
+from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.service import Registration
 
@@ -422,16 +423,27 @@ def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, s
     return out
 
 
-def model_releases(requests: Sequence[dict], params: GridParams, windows: int, egress_bucket_ms: int) -> dict[int, int]:
+def model_releases(requests: Sequence[dict], params: GridParams, windows: int, egress_bucket_ms: int,
+                   admission: Admission | None = None) -> dict[int, int]:
     """Each request's release as the ingress certifier's rule gives it: its frames enqueued at their bucket, in send
-    order, and released r_in per bucket; the egress bucket of its last frame's release."""
+    order, and released r_in per bucket; the egress bucket of its last frame's release. With `admission`, a served
+    link's admission rule (`active.Bucketer(served=…)`): a request is enqueued only while its window, with it, still
+    ends idle (`served.admits`), behind the certifier's own frame where the profile counts one."""
     pending = sorted((q["enqueue"], q["send_ms"], q["stream"], q["frames"]) for q in requests)
-    out, queue, k = {}, [], 0
-    for t in range(windows * params.buckets):
+    out, queue, k, counts, T = {}, [], 0, [], params.buckets
+    for t in range(windows * T):
+        if t % T == 0:
+            counts = []
+            if admission is not None and admission.profile.own:
+                queue.append((None, False))
         while k < len(pending) and pending[k][0] <= t:
             _, _, s, n = pending[k]
+            if admission is not None and not admits(counts, len(queue) + n, admission.sync(t // T), admission.profile,
+                                                    admission.allocation, params.allocation, T):
+                break
             queue += [(s, j == n - 1) for j in range(n)]
             k += 1
+        counts.append(min(len(queue), params.allocation))
         for s, last in queue[: params.allocation]:
             if last:
                 out[s] = t * params.bucket_ms // egress_bucket_ms
@@ -1181,6 +1193,15 @@ def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], con
     asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out), stalls, pause, host, port))
 
 
+def served_args(plan: dict, salt: bool = False) -> dict:
+    """A served link's profile for its proxy (`active.Proxy(served=…)`, which admits requests by the admission rule),
+    from the plan's `served` (none otherwise), counting the salt frame when the salt is on."""
+    if "served" not in plan:
+        return {}
+    s = plan["served"]
+    return {"served": ServedProfile(s["response_frames"], s["request_frames"], plan["windows"], int(salt))}
+
+
 def phase_args(plan: dict, start: int, end: int) -> dict:
     """The arguments of the proxy that serves windows `start` … `end` − 1 of an outage plan (none otherwise)."""
     if "outage" not in plan:
@@ -1212,7 +1233,7 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
             return Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set, syncs, origin=origin,
                          publish=publish, egress_link=setup.egress_link, ingress_link=setup.ingress_link,
                          salt=fresh_salt if salt else None, reveal_deadline=reveal_deadline(plan, window_s),
-                         **advice, **phase_args(plan, start, end))
+                         **advice, **phase_args(plan, start, end), **served_args(plan, salt))
 
         if k == 0:
             listening = await asyncio.start_server(on_link, host, port)
