@@ -2,7 +2,7 @@
 ``a/<K>@<c>`` as its AROW of the call's (round, linear) and each round's input-ids table ``ids@<s>`` as its step's input
 token ids, layer 0's input. Core's credit holds each to the Commit's value of the same rows (`credit._arow`).
 
-* **The Commit** (`attach`): the committer (`commit.committer.native_host.NativeHostCommitter`, with no Build, so not a
+* **The Commit** (`acquire.h1_commit.attach`): the committer (`commit.committer.native_host.NativeHostCommitter`, with no Build, so not a
   Commit of record) with the int8 source (`acquire.sources.int8_source.Int8Source`) at each linear H1 records, at the
   linear's Int8RowQuant_v1 site `site(module)` at every engine step (`Sites`: no Build names its fx node), and the
   embedding's input, which the committer acquires as ``<embed>/in``, the step's input token ids. `CommitTap` wraps the
@@ -253,6 +253,13 @@ def ids_reason(run: Any, tap: CommitTap) -> str | None:
     return None
 
 
+def record_of(run: Any) -> str | None:
+    """With the Commit in ``run``'s engine (its ``served``'s tap), the Commit's record in hex (`CommitTap.hex`)."""
+    if run.served is None or run.served.tap is None:
+        return None
+    return run.served.tap.hex(run.served)
+
+
 def roots1(run: Any) -> dict[str, Any]:
     """The window's ROOTS1 outcome at its close (``details.roots1``): `untied`, then `ids_reason`, and what the tap
     built."""
@@ -262,35 +269,4 @@ def roots1(run: Any) -> dict[str, Any]:
             "steps": {str(s): j for s, j in sorted(tap._steps.items())}}
 
 
-def source(com: Any, model: Any, layers: Sequence[Any]) -> Any:
-    """The int8 source (`Int8Source`) on committer ``com``, at the Int8RowQuant_v1 site of each of ``layers`` (H1's
-    linears, `pouw_h1_hooks.layers`, by their names in ``model``, as `pouw.install` names them) at every engine step."""
-    from verity_vllm.acquire.sources.int8_source import Int8Source
-
-    ids = {id(m) for m in layers}
-    sites = Sites([name for name, m in model.named_modules() if id(m) in ids])
-    if len(sites.modules) != len(ids):
-        raise ValueError(f"{len(ids) - len(sites.modules)} of H1's linears are not named modules of the model")
-    src = Int8Source(com, model, sites, [])
-    src.quant, src._at = sites, _EveryStep(src._at)
-    return src
-
-
-def attach(engine: Any, layers: Sequence[Any], **committer: Any) -> tuple[Any, Any, CommitTap]:
-    """The Commit on ``engine`` (`engine.build.build_engine`'s), installed: a `NativeHostCommitter` (``committer`` its
-    keywords), the int8 source (`source`) and its `CommitTap`. Returns the committer, the source and the tap;
-    ``committer.close()`` and ``tap.untap()`` remove them."""
-    from verity_vllm.commit.committer.native_host import NativeHostCommitter
-
-    com = NativeHostCommitter(engine, **committer)
-    src = source(com, com.model, layers)
-    com.attach_source(src)
-    tap = CommitTap(next((n for n, m in com._modules if com._acquires_input(n, m)), None))
-    if tap.embed is None:
-        raise ValueError("the committer acquires no module's input: no embedding gives the step's token ids")
-    tap.tap(com)
-    com.install()
-    return com, src, tap
-
-
-__all__ = ["CommitTap", "Sites", "UNTIED", "attach", "digest", "ids_reason", "roots1", "site", "source", "untied"]
+__all__ = ["CommitTap", "Sites", "UNTIED", "digest", "ids_reason", "record_of", "roots1", "site", "untied"]

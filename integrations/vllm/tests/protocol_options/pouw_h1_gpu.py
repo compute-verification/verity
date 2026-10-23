@@ -54,7 +54,7 @@ model's rows are registered under that key before the salt, the window refused u
 weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
 
 ``--commit`` (fill, ``--served``, in-process coins) serves the 64's window again with the Commit in the engine
-(`pouw_h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
+(`acquire.h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
 ``<out>/commit/``, each call's A table held to the Commit's AROW and each round over its input ids (``roots1``), and
 records the peak GPU memory and step time of the plain run, the window and the window with the Commit (``commit``).
 
@@ -432,8 +432,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         layers = layers or PHK.layers(eng.model, pouw.linear_types())
         com = tap = None
         if name == "commit":
-            from verity_vllm.protocol_options import pouw_h1_commit as CT
-            com, _src, tap = CT.attach(eng, layers, run_id=f"pouw-h1-commit-{os.getpid()}")
+            from verity_vllm.acquire import h1_commit as HC
+            com, _src, tap = HC.attach(eng, layers, run_id=f"pouw-h1-commit-{os.getpid()}")
         # in-process coins open no session, so a local window's key is its own (`Served.key`)
         served = (SV.Served(prover=a.prover_dir, registry=registry, tap=tap, window=None if a.challenger else os.urandom(64))
                   if a.served and name != "solo" else None)
