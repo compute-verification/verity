@@ -28,19 +28,12 @@ def _at(phi: Phi, rank: int) -> Phi:
     return Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": rank}})
 
 
-def _rank_of(node) -> list[int]:
-    out = [None] * len(node.program.fn.body.nodes)
-    for r, lo, hi in node.spans:
-        out[lo:hi] = [r] * (hi - lo)
-    assert None not in out, "every body node is a rank's"
-    return out
-
-
 def _joined(node, ranks: list, check_leaves: bool) -> None:
     """`node` is `ranks` (each rank's own Program) joined: see the module docstring. `check_leaves`: compare every operand leaf
     (else each rank's nodes' Definitions, in order)."""
     world, body = node.world, node.program.fn.body
-    rank_of = _rank_of(node)
+    rank_of = node.rank_of()
+    assert -1 not in rank_of, "every body node is a rank's"
     names = [n for n, _ in node.program.fn.signature()[0]]
     assert names[0] == "prompt" and not any(n.startswith("peers") for n in names)
     assert set(node.theta) == {n for n in names if ".weights[" in n}

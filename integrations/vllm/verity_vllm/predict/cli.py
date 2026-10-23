@@ -53,6 +53,8 @@ class NodeOptions:
     LP: int | None = option("--LP", type=int, default=None)
     T: int | None = option("--T", type=int, default=None)
     out: str = option("--out")
+    check_ranks: bool = option("--check-ranks", default=False, action="store_true",
+                               help="build each rank's own Program (body only) and hold the node's run of it equal, node for node")
     cmd: str = field(default="node", init=False)
 
 
@@ -72,19 +74,24 @@ def node_main(a: NodeOptions) -> int:
     """`node_descriptor.json.gz` and `node.json`: the summary, θ's parameters and which rank emitted each run of the program
     function's body (`spans`; the root's nodes are its input nodes, one per parameter's lowering, then the body's)."""
     from verity.ml.circuits.codec import canonical_json
-    from .node import build_node_program
+    from .node import build_node_program, check_ranks
     if os.path.exists(os.path.join(a.out, "build_summary.json")) or os.path.basename(os.path.normpath(a.out)).startswith("build_"):
         raise UsageError(f"--out {a.out} looks like a Build row or Build dir: a prediction is never written into one")
     if a.wrapper == "request" and (a.LP is None or a.T is None):
         raise UsageError("--wrapper request needs --LP and --T")
     phi = A.phi_at(a.row, 0, a.config)
-    r = build_node_program(phi, a.wrapper, M=a.M, pos0=a.pos0, LP=a.LP, T=a.T)
+    shape = {"M": a.M, "pos0": a.pos0} if a.wrapper == "step" else {"LP": a.LP, "T": a.T}
+    r = build_node_program(phi, a.wrapper, **shape)
     os.makedirs(a.out, exist_ok=True)
     with gzip.open(os.path.join(a.out, "node_descriptor.json.gz"), "wb") as f:
         f.write(canonical_json(r.desc))
+    doc = {"schema": "verity-predict/node/v1", "row": a.row, "context_digest": phi.digest(), **r.summary(),
+           "theta": list(r.theta), "spans": [list(s) for s in r.spans]}
+    if a.check_ranks:
+        r.desc = None
+        doc["ranks_checked"] = check_ranks(phi, r, **shape)
     with open(os.path.join(a.out, "node.json"), "w") as f:
-        json.dump({"schema": "verity-predict/node/v1", "row": a.row, "context_digest": phi.digest(), **r.summary(),
-                   "theta": list(r.theta), "spans": [list(s) for s in r.spans]}, f, indent=1, sort_keys=True)
+        json.dump(doc, f, indent=1, sort_keys=True)
     print(json.dumps(r.summary()), file=sys.stderr)
     return 0
 
