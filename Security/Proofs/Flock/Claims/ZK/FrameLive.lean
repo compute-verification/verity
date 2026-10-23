@@ -53,7 +53,7 @@ theorem toSrv_check_honest {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) 
   | fixed =>
     exfalso
     unfold kindAt at hkd
-    split_ifs at hkd <;> cases hkd
+    split_ifs at hkd
   | own => rfl
   | recomputed =>
     apply decide_eq_true
@@ -136,7 +136,6 @@ theorem ofLoop_answered_link (T : ZKMal.CoinLayer.TableData)
   show freshOf x [] = _
   unfold freshOf
   rw [hx]
-  all_goals rfl
 
 open Loop in
 /-- **The link is the firewall's link**, not the stop, at a session whose `Finish` is past it. -/
@@ -154,7 +153,6 @@ theorem ofLoop_ownMsg_link (T : ZKMal.CoinLayer.TableData)
   have hr : (ofLoop T L₀ real).refusesCoins x ρ [e0] = false := by
     unfold refusesCoins
     rw [ofLoop_answered_link T L₀ real x ρ e0 hx]
-    all_goals rfl
   unfold ownMsg
   rw [hr, if_neg Bool.false_ne_true]
   exact if_neg (fun he => hl he.symm)

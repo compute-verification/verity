@@ -1007,7 +1007,7 @@ theorem freshOf_ok (x : Msg) (cs : List FlockDeploy.Coin) {s0 : _} {spec : Sessi
   | ok alg =>
   rw [hal] at hm
   simp only at hm
-  refine ⟨c', t, dom, xs, hi, alg, rfl, rfl, ?_⟩
+  refine ⟨c', t, dom, xs, hi, alg, rfl, hal, ?_⟩
   by_cases h0 : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2 = 0
   · rw [if_pos h0] at hm
     cases hm
@@ -1029,11 +1029,10 @@ theorem rounds_pos {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {a
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first
-    | cases h
     | (cases h
        rw [Array.size_set!]
-       rename_i heq _
-       exact (Array.getElem?_eq_some_iff.1 heq).1)
+       exact (Array.getElem?_eq_some_iff.1 (by assumption)).1)
+    | cases h
 
 /-- **A rep's schedule on no coins holds its first round**: the algebraic phase's. -/
 theorem schedSoFar_nil_pos {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray}
@@ -1050,7 +1049,7 @@ theorem schedSoFar_nil_pos {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {d
 /-- An earlier rep's coins leave the frame owing what it owed. -/
 theorem step_prior_owed (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (k : ℕ) (b : ByteArray) :
     (_root_.Flock.Firewall.Frame.step c st (.prior k b)).2.m.owed = st.m.owed := by
-  unfold _root_.Flock.Firewall.Frame.step
+  simp only [_root_.Flock.Firewall.Frame.step]
   split
   · rfl
   · split <;> rfl
@@ -1137,7 +1136,10 @@ theorem progOf_first_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeplo
     · rename_i he
       rw [Array.isEmpty_iff_size_eq_zero.1 he] at hp
       exact absurd (congrArg Prod.fst hp) (step_prior_zero c' _)
-    · rw [List.singleton_append, run_prior_round c' _ _ hp _ _ hc]
+    · have hg : sched'.getD 0 (ByteArray.empty, 0) = sched'.getInternal 0 hj' :=
+        (Array.getElem_eq_getD (h := hj') _).symm
+      rw [hg] at hc
+      rw [List.singleton_append, run_prior_round c' _ _ hp _ _ hc]
       rfl
 
 /-- **The loop's frame state after a rep's first round is the deployed check's** but for `stopped`: as
