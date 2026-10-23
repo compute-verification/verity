@@ -378,7 +378,8 @@ def prepare(a) -> None:
     # the one produced tree the unit's lanes read
     zs = bytes.fromhex(op["ports"]["zy"]["opening"]["salt"])
     seed = hashlib.sha512(b"h1-lanes/partials-salts/v1" + zs).digest()
-    psalts = [hashlib.sha512(seed + i.to_bytes(4, "big")).digest()[:len(zs)] for i in range(len(pa))]
+    psalts = [b"".join(hashlib.sha512(seed + i.to_bytes(4, "big") + j.to_bytes(2, "big")).digest()
+                       for j in range(-(-len(zs) // 64)))[:len(zs)] for i in range(len(pa))]
     tree = PR.commit(ctx.prog, LL.PARTIALS, pa, d, psalts, schema=V2)
     ops = {LL.PARTIALS: PR.rows_of(tree)}
     for p in op["ports"].values():
