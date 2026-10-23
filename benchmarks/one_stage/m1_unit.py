@@ -218,8 +218,9 @@ def slice_call(tp, row: str, rng: np.random.Generator) -> dict:
     """A synthetic row of ``row`` (a descriptor id of a `serving_rows.SLICES` family) on finite operands (bf16 N(0, 1), e4m3 codes
     but NaN, f32 in [0.5, 2), the embedding shard's token inside its shard), each a committed member, read through the split for
     the slice template ``tp`` as a window reads it.  Returns the units' rows by port, their outputs (the row's, as committed),
-    those outputs by the row's twin (`glm53_rows.ROWS`' kernel where the family has one, else the row's word Definition by
-    `evaluate_batch`), and the IR reference of the template's word on every unit's rows, each as u16 words."""
+    those outputs by the row's twin (`glm53_rows.ROWS`' kernel where the family has one, the embedding shard's table row by
+    index, else the row's word Definition by `evaluate_batch`), and the IR reference of the template's word on every unit's
+    rows, each as u16 words."""
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
@@ -240,6 +241,9 @@ def slice_call(tp, row: str, rng: np.random.Generator) -> dict:
     bits = lambda a: a.view(f"<u{a.itemsize}").astype(np.uint64).reshape(1, -1)  # noqa: E731
     if spec_base(row) in GR.ROWS:
         y = np.asarray(GR.ROWS[spec_base(row)][0](S, ops)["0"]).reshape(-1)
+    elif spec_base(row) == "EmbeddingShard_v1":
+        t, VS = int(ops[0][0]) - int(S["START"]), int(S["VS"])
+        y = ops[1].reshape(VS, -1)[t] if 0 <= t < VS else np.zeros(int(S["H"]), np.uint16)
     else:
         y = np.asarray(evaluate_batch(fn, *(bits(o) for o in ops))).reshape(-1)
     y = y.astype(np.uint16 if ret.leaf_widths()[0] == 16 else np.uint32)
