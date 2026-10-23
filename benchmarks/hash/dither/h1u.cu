@@ -18,7 +18,8 @@
 // The K order inside a segment is a bijection both operands share (lane q's 8 bytes 8q..8q+7 are its A/B fragment's
 // k = 4q..4q+3 and 16+4q..16+4q+3), so every product is the segment's; the tail's order is the accumulator columns'.
 // A dead row block (live[ri] == 0, PouwH1Tile_v4's dead tile) writes the zero receipt and derives no noise.
-// Requires K % 512 == 0 (KS % 16: each noise block is 16 segments' bits) and m in {2, 3} (K <= 16384).
+// Requires K % 512 == 0 (KS % 16: each noise block is 16 segments' bits) and m = n_digits(KS) in {2, 3}: m is 2 up to
+// K = 4096 and 3 from K = 4128 to K = 524288 (KS <= 16384); the entries refuse any other m.
 //
 // kh_unit_ws is the same receipts in two launches, for calls too small to fill the GPU one warp a unit:
 //   h1s_noise  one warp an (unit, chunk) item, J blocks a lane: every block of seed_j's stream the unit reads (the rows'
