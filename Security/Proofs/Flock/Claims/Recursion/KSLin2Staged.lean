@@ -9,7 +9,7 @@ import Proofs.Flock.Claims.Recursion.VStarBDeploy
 `RunPairs`. `VstarShowsB` is false at `deployRec` (`vstarShowsB_deployed_rejects`: with `HeldB`, it leaves the compiled
 verifier no accepted run at any statement with a part). What the route reads of it is `StagedB`, the staging at an
 accepted run's pairs, which holds at the coin server's transcript read by a reader wherever that reader reads it back
-at an accepted run (`ReadsBack`, `stagedB_deployRec_part`), and `RunPairs` holds at `decCoin` (`runPairs_deployRec`).
+at an accepted run (`ReadsBackB`, `stagedB_deployRec_part`), and `RunPairs` holds at `decCoin` (`runPairs_deployRec`).
 
 * `ksLin2_route_staged`: `ksLin2_route` with `StagedB` for `VstarShowsB`, no `RunPairs` and, at a layout whose held
   rounds have no pieces (`HeldWhole`), no `ReadersRunPlayed`, as `ksBoundRoute_heldWhole` is `ksBoundRoute_of_bridge`
@@ -18,7 +18,7 @@ at an accepted run (`ReadsBack`, `stagedB_deployRec_part`), and `RunPairs` holds
   reader `untr`: the parts' facts only at the V\* statements staged as V\* stages them (`StagedPart`).
 * `ksLin2_deployed_plain_parts`: at the deployed relation and caps `CpDep`, with `KSFlockLin` at `DE` from
   `plain_KSFlockLin_DE`. What stays is the decoder's canonicity (`CanonicalProofFiles`), the calls half of the plain
-  verifier's last-message binding (`PlainCallsBindOrSlack`), the reader reading the transcript back (`ReadsBack`), at
+  verifier's last-message binding (`PlainCallsBindOrSlack`), the reader reading the transcript back (`ReadsBackB`), at
   the dense form `HeldB`, `PartChecksB`, `PartOpensB` and `DecompB` for some inner check, and the readers'
   `ReadersTrue` (`ReadersLogCollS` is proved at `IVStar`, `readersLogCollS_ivstar`).
 -/
@@ -95,7 +95,7 @@ theorem ksLin2_route_staged (rel relO : _root_.Flock.Readable.Parsed → _root_.
 
 /-- **`KSLin2` at the intended choice with V\*'s staging discharged**: `ksLin2_route_staged` at `ksLin2_deployed`'s
 choice, with the staging at the coin server's transcript read by `untr` at the staged V\* statements (`showsPart`,
-`cmtTr`), where `StagedB` holds wherever `untr` reads it back at an accepted run (`ReadsBack`,
+`cmtTr`), where `StagedB` holds wherever `untr` reads it back at an accepted run (`ReadsBackB`,
 `stagedB_deployRec_part`). What V*'s parts still owe at the dense form is `HeldB`, `PartChecksB`, `PartOpensB` and
 `DecompB`, for some inner check `chk`, the two parts' facts only at staged statements. -/
 theorem ksLin2_deployed_parts (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
@@ -107,7 +107,7 @@ theorem ksLin2_deployed_parts (rel : _root_.Flock.Readable.Parsed → _root_.Flo
       final w
     let D := recBound rel b L Bd.IVStar
     let bL : Brings := { b with rd := L.readers }
-    ReadsBack FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
+    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
     Claims.Recursion.KSFlockLin FlockDeploy.sha512 Bd.DE Cp →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
@@ -143,7 +143,7 @@ theorem ksLin2_deployed_plain_parts (b : Brings) (L : Claims.Recursion.VStarB.La
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
     let D := recBound _root_.Flock.Readable.relation b L Bd.IVStar
     let bL : Brings := { b with rd := L.readers }
-    ReadsBack FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
+    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧

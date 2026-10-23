@@ -3,9 +3,10 @@
 `rec-coins/16-16-8-n64`: m 27, k_log 22, 8 claims, whose two reps' 96 rounds each are `inner-honest`'s), a
 record listing the schedule's 192 rounds is on it, and one listing 194 is refused before any round is read. 194 is
 the inner verifier's `k` at that statement, `2 + rounds` (`FlockDeploy.V`): the link round 0, the reps' rounds and
-the last round. So a record that lists every inner round, as the proofs' transcript model `recTr` writes it, sets up
-no V* statement: `RecSetup.commits` runs `checkSchedule` on the staged transcript, and a premise read at `recTr`
-holds of no staged statement.
+the last round. So a record that lists every inner round, as the proofs' first transcript model did, sets up no V*
+statement: `RecSetup.commits` runs `checkSchedule` on the staged transcript, and a premise read at that model held of
+no staged statement. `RecDeploy.recTr` now lists the rounds the coin server records, the reps' alone, with round 0
+under the record's link.
 -/
 import Flock.RecVStar
 
