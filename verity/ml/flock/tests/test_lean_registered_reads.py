@@ -189,6 +189,24 @@ def test_each_instance_reads_the_position_its_unit_reads_in_the_verifiers_progra
     assert code == 1 and f"reads no row of {VALUE} in unit 4" in out
 
 
+def test_a_unit_past_a_ports_reads_reads_none(staged):
+    """A unit past a port's ``reads`` reads none, as a null there does (`badInstance`'s ``reads[u]?``), so a reads file
+    trimmed of its trailing nulls (`h1window.table_reads_file`'s) verifies as the untrimmed one: the honest statement is
+    accepted alike under reads padded with nulls past the population, and a statement whose last unit's read is null or
+    absent is refused alike."""
+    public = _stage(staged, "honest-trim")
+
+    def verdict(name, edit):
+        code, out = _statement(staged, public, _own(staged, name, edit))
+        return code, [line for line in out.splitlines() if " ms" not in line]
+
+    trimmed = verdict("own-trimmed", lambda ps: None)
+    assert trimmed[0] == 0 and verdict("own-padded", lambda ps: ps["cs"]["reads"].extend([None] * 5)) == trimmed
+    null = verdict("own-last-null", lambda ps: ps["cs"]["reads"].__setitem__(7, None))
+    assert null[0] == 1 and any(f"reads no row of {VALUE} in unit 7" in line for line in null[1]), null
+    assert verdict("own-last-absent", lambda ps: ps["cs"]["reads"].pop()) == null
+
+
 def test_the_ports_are_exactly_the_verifiers(staged):
     public = _stage(staged, "honest-3")
     code, out = _statement(staged, public, _own(staged, "own-root", lambda ps: ps["cs"].__setitem__("root", "00" * 64)))

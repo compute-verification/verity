@@ -423,8 +423,9 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     caller holds it. Every table is a ``row/v2`` value of 16-bit leaves under `registered.domain` of its own name, rows and
     width: an A table is M rows of the parameter's width, a z table one record a unit of the call. ``window``, a served
     window's open root, binds the call's two tables' domains, the window's own rows (PRF-127; `credit.domain_of`), and
-    never the weights', which are held across windows. A unit of another call reads none of them (None), so the file
-    holds a statement to one call's units."""
+    never the weights', which are held across windows. A unit of another call reads none of them (None, and no entry
+    past a port's last read: the verifier reads none at a unit past ``reads``, `Flock.Registered.badInstance`), so the
+    file holds a statement to one call's units."""
     S, sig = program.fn.S(), dict(program.fn.signature()[0])
     k = _k(S)[S.CALLS[call][0]]
     u0, n = call_units(program)[call]
@@ -437,7 +438,10 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     for u in range(u0, u0 + n):
         for key, (value, row) in table_reads(program, tp, u).items():
             if value in shape:
-                reads.setdefault(key, {"value": value, "rows": [None] * tp.population})["rows"][u] = row
+                reads.setdefault(key, {"value": value, "rows": [None] * (u0 + n)})["rows"][u] = row
+    for r in reads.values():
+        while r["rows"][-1] is None:
+            r["rows"].pop()
     prog = prog or P.program_digest(program)
     out = {}
     for key, r in reads.items():
