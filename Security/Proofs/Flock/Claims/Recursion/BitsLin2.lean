@@ -525,7 +525,7 @@ theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
       unfold PrFdev
       split_ifs with hk
       · have := Ex_draws_le H (D.withSetup H) I DO decO x P hd
-        refine ecr_le (hFdev _ hk) ?_
+        refine ecr_le (hFdev (2 ^ 256) hk) ?_
         rw [Ex_charge]
         have := Ex_Fdev_cost_le H (D.withSetup H) I DO decO x P (2 ^ 256) hk
         linarith

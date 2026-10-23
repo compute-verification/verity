@@ -95,9 +95,8 @@ theorem callsLogColl_C_setup {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg
   rcases hL decO x Ω P ω r c ws hg with h | h
   · left
     intro e he
-    have he' : e ∈ (Claims.Recursion.innerRun H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) x r
-        ws).vLog := he
-    rw [innerRun_C] at he'
+    have he' : e ∈ (run H (replay (msgsC Bd b H x r ws)) Bd.IVStar (xIOf x) () fun i => coinSeq r i.val).vLog :=
+      (congrArg (fun t => e ∈ t.vLog) (innerRun_C H Bd decI ivScope b x r ws)).mp he
     apply h
     have hv : (run H (replay (msgsC Bd b H x r ws)) Bd.IVStar (xIOf x) () fun i => coinSeq r i.val).vLog.toFinset =
         (Claims.Recursion.innerRun H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) x r
@@ -160,10 +159,10 @@ theorem forksBindAt_C_pick_setup {Col' T' : Type} [DecidableEq Col] (H : Msg →
       (((deployRecC Bd ivScope b).innerView H x r₀ ws₀).msgs.map Prod.fst).getD j [] =
         if j < Bd.DE.V.k (xIOf x) then (msgsC Bd b H x r₀ ws₀).getD j [] else [] :=
     fun r₀ ws₀ => Bd.run_ivstar_fst H (xIOf x) (msgsC Bd b H x r₀ ws₀) (fun i => coinSeq r₀ i.val) j
-  have hne' : (((deployRecC Bd ivScope b).innerView H x t.2.1 ws).msgs.map Prod.fst).getD j [] ≠
-      (((deployRecC Bd ivScope b).innerView H x (Claims.Recursion.fork j t.2.1 t.2.2.1) ws').msgs.map
-        Prod.fst).getD j [] := hne
-  rw [hv, hv] at hne'
+  have hne' : (if j < Bd.DE.V.k (xIOf x) then (msgsC Bd b H x t.2.1 ws).getD j [] else []) ≠
+      (if j < Bd.DE.V.k (xIOf x) then (msgsC Bd b H x (Claims.Recursion.fork j t.2.1 t.2.2.1) ws').getD j []
+        else []) :=
+    fun h => hne ((hv t.2.1 ws).trans (h.trans (hv (Claims.Recursion.fork j t.2.1 t.2.2.1) ws').symm))
   by_cases hjK : j < Bd.DE.V.k (xIOf x)
   swap
   · exact absurd (by simp [hjK]) hne'
