@@ -606,11 +606,9 @@ def _refused(out: str, res: dict) -> dict:
 
 
 def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir: str | None = None, eos_token_ids: list[int] | None = None,
-          artifact_root: str | None = None, early: dict[str, dict] | None = None, canon: dict | None = None,
-          theta_registered: bool = False) -> dict:
+          artifact_root: str | None = None, early: dict[str, dict] | None = None, canon: dict | None = None, theta_registered: bool = False) -> dict:
     """`artifact_root`: the dir the `vllm-build/v1` tree is rooted at (default: the parent of `out`); the `layout` block's relative paths
-    are taken from it (module docstring).  `early`, `canon`: components `follow_components` already loaded, and their definition set.
-    `theta_registered`: the weights bound at registration (`WorkloadProgram`'s), which moves the workload digest."""
+    are taken from it (module docstring).  `early`, `canon`: components `follow_components` already loaded, and their definition set.  `theta_registered`: the weights bound at registration (`WorkloadProgram`'s), which moves the workload digest."""
     t0 = time.time()
     artifact_root = os.path.abspath(artifact_root) if artifact_root else os.path.dirname(os.path.abspath(out))
     raw = open(workload_path, "rb").read()
@@ -775,8 +773,7 @@ class Options:
                                   help="started beside the derives: load each component as its derive finishes, waiting up to this many seconds")
     follow_done: str | None = option("--follow-done", default=None, help="with --follow: a file whose existence means every derive has ended")
     follow_stop: str | None = option("--follow-stop", default=None, help="with --follow: a file whose existence means the Build failed: compose nothing")
-    theta_registered: bool = option("--theta-registered", default=False, action="store_true",
-                                    help="bind the weights at registration (RegisteredInput), as NCI's baseline reads theta; moves the workload digest")
+    theta_registered: bool = option("--theta-registered", default=False, action="store_true", help="bind the weights at registration (RegisteredInput), as NCI's baseline reads theta; moves the workload digest")
 
 
 def main(a: Options) -> int:
@@ -790,8 +787,7 @@ def main(a: Options) -> int:
                                   stop=a.follow_stop)
         if early is None:
             return 5
-    res = build(a.workload, a.derived, a.out, checkpoint_dir=a.checkpoint_dir, eos_token_ids=eos, artifact_root=a.artifact_root, early=early,
-                canon=canon, theta_registered=a.theta_registered)
+    res = build(a.workload, a.derived, a.out, checkpoint_dir=a.checkpoint_dir, eos_token_ids=eos, artifact_root=a.artifact_root, early=early, canon=canon, theta_registered=a.theta_registered)
     if not res.get("ok"):
         print(json.dumps({k: res[k] for k in ("reason", "message", "missing_derived") if k in res}))
         return 4
