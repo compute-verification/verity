@@ -101,14 +101,15 @@ def portJson (p : Flock.Registered.Port) (full : Bool) : Json :=
 /-- **Statement `k`'s `--registered` file** (`leaf_lanes.registered_file` at `leaf_lanes.reads`): its data ports at the
 verifier's roots and the unit's placement (`want?`), each port `readFull` names (a read of a `fullValue`, by its
 layout value, whatever table it is placed in) marked `read_in_full`, then the known ports `known`, and `complete` where
-it is set. A known port that is also a read is an error. -/
+it is set. A known port that is also a read is an error. It is a `Flock.Registered.FORMAT_V0` file, as
+`leaf_lanes.registered_file` writes it (`registered.READS`): every port reads from unit 0 (`readsFrom := 0`). -/
 def fileOf? (rs : List (String × Flock.Registered.Port)) (place : String → String × Nat) (T : Tile) (k : Option Nat)
     (known : List (String × Json)) (complete : Bool) : Except String Json := do
   let ps ← want? rs place T k
   if let some (nm, _) := known.find? fun (nm, _) => ps.any (·.name == nm) then
     throw s!"port {nm} is both a read and known"
   let full := readFull T k
-  pure <| Json.mkObj ([("format", Json.str Flock.Registered.FORMAT),
+  pure <| Json.mkObj ([("format", Json.str Flock.Registered.FORMAT_V0),
     ("ports", Json.mkObj (ps.map (fun p => (p.name, portJson p (full.contains p.name))) ++ known))] ++
     (if complete then [(Flock.Registered.COMPLETE_KEY, Json.bool true)] else []))
 

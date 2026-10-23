@@ -28104,13 +28104,13 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "PouwWindow.OwnPorts": {
-   "digest": "086858fca100b53045e5a9671f25d53e4e0040636512cfbced70552384604fd7",
+   "digest": "76e83f86e3e3cb40f08a44c08348730c48fe7b82653357910e3240d4865b62d9",
    "definitions": {
     "PouwWindow.Lanes.checkOneRead": "3b95a186e57f3a94840b8155da0a12547b896e7e43cde0b4130c5a3a20f69430",
     "PouwWindow.Lanes.checkOwn": "be30093a4cd40449bb6323c165f52af98b8ce879c6e74ce58854fe25a44ce51d",
     "PouwWindow.Lanes.fullValue": "398b05a09962e48f984185b8cdd8466f934a78cc64e3b4acae746e055807e8f3",
     "PouwWindow.Lanes.holds": "c84d7f11af9647f07fe46506ba83779fecb09a8b8aa6ab654240e1ed0c2cc6c6",
-    "PouwWindow.Lanes.ownOf": "d30a285ccdf370c158aef5ed82ad4c7274f7adeb3b8acfb82fdc2133744bbeed",
+    "PouwWindow.Lanes.ownOf": "f841361bba42077fd80cbcd3dbd3cf8a53cb9dcc69841294455b52d64249de0e",
     "PouwWindow.Lanes.portEq": "ff52097c284a9bc062c0a62560ec0aae6e825d84cf6fa1012ccc0afe1f10da88",
     "PouwWindow.Lanes.portsOf": "27d88f69ce81a5e4ea515b923dd534d05a2538e3b5079b4dc41a427153f6ddd8",
     "PouwWindow.Lanes.readFull": "91d1a6e6e8ff0fe624514df1d0b81b8308653a05bad80270f506b5bd5c072851",
