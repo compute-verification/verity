@@ -426,6 +426,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
 
             def timed(run: Any, call: Any, *rest: Any) -> dict[str, str]:
                 t = time.monotonic()
+                if call.layer == 0:
+                    print(f"[fill] {name} step {call.step} rss_gib={rss_gib()} registered_s(prev)="
+                          f"{round(registered_s.get(call.step - 1, 0.0), 2)} values={len(served.registered)}", flush=True)
                 try:
                     return commit(run, call, *rest)
                 finally:
@@ -437,6 +440,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         t0 = time.monotonic()
         comp = PO.install(eng.model, ctx)
         out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1)}
+        print(f"[fill] {name} installed install_s={out['install_s']} rss_gib={rss_gib()}", flush=True)
         h1 = pouw.h1_run(entry_name)
         layers = layers or PHK.layers(eng.model, pouw.linear_types())
         bad: list[str] = []
