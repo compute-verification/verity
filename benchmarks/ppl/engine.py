@@ -138,7 +138,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
             if not steps:
                 return None
             return lambda x, c: run_chain(steps, MM("linear", HEAD, run, x.float(), head_w, maps=(lambda t: t.float(),),
-                                                    draws=[2 * c]))
+                                                    extra={"weight64": head_w.double}, draws=[2 * c]))
 
         nll = {}
         for k, h in [("bf16/s0", ref)] + list(streams.items()):

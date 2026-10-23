@@ -3,8 +3,8 @@
 on the check window).
 
 The weights are the checkpoint's: each FP8 linear's E4M3 codes times its weight_scale_inv blocks (128 x 128), in FP32
-(`dequant`, the value the int8 recipe `verity-int8-channel127-fp8/v1` requantizes); the bf16 reference rounds that to
-bf16, as HF's FP8 dequantization does. Everything else is cast to bf16 but the router's e_score_correction_bias (FP32,
+(`dequant`); the bf16 reference rounds that to bf16, as HF's FP8 dequantization does. A step reads the same product in
+float64, exactly, as `weight64` (what the int8 recipe `verity-int8-channel127/v3` requantizes: `int8.exact`). Everything else is cast to bf16 but the router's e_score_correction_bias (FP32,
 HF's `_keep_in_fp32_modules_strict`).
 
 Attention is MLA with DSA. At T <= index_topk every query's top-k is every key it may see, so the indexer selects all of
@@ -22,11 +22,12 @@ BLOCK = 128
 FP32_KEEP = ("mlp.gate.e_score_correction_bias",)
 
 
-def dequant(codes: torch.Tensor, s: torch.Tensor) -> torch.Tensor:
-    """E4M3 codes (their bytes, n x k) times their per-(128 x 128)-block scales, in FP32."""
+def dequant(codes: torch.Tensor, s: torch.Tensor, dtype=torch.float32) -> torch.Tensor:
+    """E4M3 codes (their bytes, n x k) times their per-(128 x 128)-block FP32 scales, in `dtype`: FP32 rounds the
+    product once (RN32), float64 holds it exactly (4 + 24 significant bits)."""
     n, k = codes.shape
-    blocks = s.float().repeat_interleave(BLOCK, 0)[:n].repeat_interleave(BLOCK, 1)[:, :k]
-    return codes.view(torch.float8_e4m3fn).float() * blocks
+    blocks = s.to(dtype).repeat_interleave(BLOCK, 0)[:n].repeat_interleave(BLOCK, 1)[:, :k]
+    return codes.view(torch.float8_e4m3fn).to(dtype) * blocks
 
 
 def rms_norm(x: torch.Tensor, w: torch.Tensor, eps: float) -> torch.Tensor:
@@ -66,15 +67,15 @@ class GlmLayer:
 
     # ------------------------------------------------------------ weights
 
-    def weight32(self, name: str) -> torch.Tensor:
-        """A linear's weight in FP32: an expert's gate_up is its gate's rows, then its up's."""
+    def weight32(self, name: str, dtype=torch.float32) -> torch.Tensor:
+        """A linear's weight in FP32 (`dtype` float64: exact): an expert's gate_up is its gate's rows, then its up's."""
         if name.startswith("mlp.experts.") and name.endswith(".gate_up_proj"):
             e = name[:-len(".gate_up_proj")]
-            return torch.cat([self.weight32(f"{e}.gate_proj"), self.weight32(f"{e}.up_proj")])
+            return torch.cat([self.weight32(f"{e}.gate_proj", dtype), self.weight32(f"{e}.up_proj", dtype)])
         w = f"{name}.weight"
         if w in self.codes:
-            return dequant(self.codes[w], self.t[f"{name}.weight_scale_inv"])
-        return self.t[w].float()
+            return dequant(self.codes[w], self.t[f"{name}.weight_scale_inv"], dtype)
+        return self.t[w].to(dtype)
 
     def weight(self, name: str) -> torch.Tensor:
         return self.weight32(name).to(torch.bfloat16)
@@ -85,7 +86,8 @@ class GlmLayer:
         steps = run.steps_for("linear", name) if run is not None else []
         if not steps:
             return F.linear(x, self.weight(name))
-        mm = MM("linear", name, run, x.reshape(-1, x.shape[-1]).float(), name, maps=(self.weight32,))
+        mm = MM("linear", name, run, x.reshape(-1, x.shape[-1]).float(), name, maps=(self.weight32,),
+                extra={"weight64": lambda: self.weight32(name, torch.float64)})
         y = run_chain(steps, mm)
         return y.to(x.dtype).reshape(*x.shape[:-1], y.shape[-1])
 

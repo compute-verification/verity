@@ -265,8 +265,9 @@ scales, in FP32, rounded to bf16) with HF's `GlmMoeDsaDecoderLayer` op for op (M
 experts), checked by `hf_reference`. It runs at 2048 only: DSA's indexer keeps index_topk = 2048 keys per query, so at
 T ≤ 2048 attention is dense causal, and longer windows are refused. Arms reach its linears, every routed expert's
 included, on the rows routed to it; attention stays bf16. `fp8-block` is the checkpoint as vLLM serves it (its own
-E4M3 weights, activations per token and group of 128), and `int8-h1-linears` the int8 W8A8 linears H1 serves, whose
-weight codes are the recipe `verity-int8-channel127-fp8/v1`'s.
+E4M3 weights, activations per token and group of 128), and `int8-channel127-v3` the int8 W8A8 linears H1 serves, as
+recipe `verity-int8-channel127/v3` makes them: each weight's row codes from its exact float64 dequant (`int8.exact`),
+the LM head int8 too, and kv_b_proj bf16.
 
 The engine (`engine.py`, tonight's layer-wise evaluation) reads one layer's weights at a time from the safetensors with
 its own reader. Every stream of every window, the reference, calibration and each (arm, seed), goes through that layer

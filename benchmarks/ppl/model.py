@@ -251,7 +251,8 @@ class Layer:
         steps = run.steps_for("linear", name) if run is not None else []
         if not steps:
             return F.linear(x, w, b)
-        mm = MM("linear", name, run, x.reshape(-1, x.shape[-1]).float(), w, maps=(lambda t: t.float(),))
+        mm = MM("linear", name, run, x.reshape(-1, x.shape[-1]).float(), w, maps=(lambda t: t.float(),),
+                extra={"weight64": w.double})
         y = run_chain(steps, mm)
         if b is not None:
             y = y + b.float()

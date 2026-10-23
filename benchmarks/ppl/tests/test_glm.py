@@ -183,7 +183,7 @@ def test_the_bf16_stream_is_the_model(glm_snap, ids):
 
 
 def test_the_arms_pass_their_gates(glm_snap, ids):
-    arms = ["int8-h1-linears", "fp8-block", "int8-linears"]
+    arms = ["int8-channel127-v3", "fp8-block", "int8-linears"]
     r = evaluate(glm_snap, ids[:4], arms)
     assert passed(r), r["gates"]
     g = r["gates"]
@@ -195,42 +195,72 @@ def test_the_arms_pass_their_gates(glm_snap, ids):
     assert len({r["nll"][f"{a}/s0"].tobytes() for a in arms}) == 3
 
 
-def test_every_linear_reaches_the_arm(glm_snap, ids, monkeypatch):
-    """The int8 arm's steps reach every FP8 linear a token passes: attention's five, the dense MLP's three, the shared
-    expert's three and each routed expert's gate_up and down; the router stays FP32."""
+@pytest.mark.parametrize("arm, kv_b, head", [("int8-linears", True, False), ("int8-channel127-v3", False, True)])
+def test_every_linear_reaches_the_arm(glm_snap, ids, monkeypatch, arm, kv_b, head):
+    """An arm's steps reach every FP8 linear a token passes: attention's five, the dense MLP's three, the shared
+    expert's three and each routed expert's gate_up and down; the router stays FP32. v3's arm leaves kv_b_proj bf16,
+    as v3 stores it, and takes lm_head."""
     seen = set()
     real = glm.GlmLayer.linear
 
     def linear(self, name, x, run, collect=None):
-        if run is not None:
+        if run is not None and run.steps_for("linear", name):
             seen.add((self.li, name.split(".")[0] + "." + ".".join(p for p in name.split(".")[1:] if not p.isdigit())))
         return real(self, name, x, run, collect)
 
     monkeypatch.setattr(glm.GlmLayer, "linear", linear)
-    evaluate(glm_snap, ids[:4], ["int8-h1-linears"])
-    attn = {f"self_attn.{n}" for n in ("q_a_proj", "q_b_proj", "kv_a_proj_with_mqa", "kv_b_proj", "o_proj")}
+    evaluate(glm_snap, ids[:4], [arm])
+    attn = {f"self_attn.{n}" for n in ("q_a_proj", "q_b_proj", "kv_a_proj_with_mqa", "o_proj")} | (
+        {"self_attn.kv_b_proj"} if kv_b else set())
     assert {n for li, n in seen if li == 0} == attn | {"mlp.gate_proj", "mlp.up_proj", "mlp.down_proj"}
     assert {n for li, n in seen if li == 1} == attn | {"mlp.shared_experts.gate_proj", "mlp.shared_experts.up_proj",
                                                        "mlp.shared_experts.down_proj", "mlp.experts.gate_up_proj",
                                                        "mlp.experts.down_proj"}
+    assert any(s.applies(0, "linear", spec.HEAD) for s in spec.load(arm).linear) == head
 
 
-def test_the_int8_codes_are_the_recipe(glm_snap):
-    """The int8 step's weight on a block-FP8 linear is `verity-int8-channel127-fp8/v1`'s: W = RN32(e4m3(q) s) over the
-    128 x 128 blocks, s_row = max(amax_row, 1e-30) / 127 in FP32, q = clip(rint(W / s_row), +-127)."""
+def v3_rows(w: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """`verity-int8-channel127/v3`'s row rule as vLLM's int8_checkpoint writes it, in numpy on the float64 weight."""
+    floor = np.float64(np.float32(1e-30))
+    s = (np.maximum(np.abs(w).max(axis=1), floor) / np.float64(127)).astype(np.float32)
+    return np.clip(np.rint(w / s.astype(np.float64)[:, None]), -127, 127).astype(np.int8), s
+
+
+def test_the_int8_codes_are_the_recipe(glm_snap, ids, monkeypatch):
+    """The int8 arm's weight on a block-FP8 linear is `verity-int8-channel127/v3`'s: W = e4m3(q) s over the 128 x 128
+    blocks, exactly (float64), s_row = RN32(max(amax_row, RN32(1e-30)) / 127), q = clip(rint(W / s_row), +-127); on
+    lm_head the bf16 weight widened, the same rule. The arm's chain quantizes exactly those weights."""
     W = M.Weights(glm_snap)
     p = "model.layers.1.self_attn.kv_a_proj_with_mqa"
-    raw = W.read([p + ".weight", p + ".weight_scale_inv"])
+    raw = W.read([p + ".weight", p + ".weight_scale_inv", "lm_head.weight"])
     codes, s = raw[p + ".weight"], raw[p + ".weight_scale_inv"]
-    w32 = torch.empty(codes.shape, dtype=torch.float32)
+    e4m3 = codes.view(torch.float8_e4m3fn).float().numpy().astype(np.float64)
+    w64 = np.empty(codes.shape)
     for i in range(codes.shape[0]):
         for j in range(codes.shape[1]):
-            w32[i, j] = codes[i, j].view(torch.float8_e4m3fn).float() * s[i // 128, j // 128]
-    assert torch.equal(glm.dequant(codes, s), w32)
-    srow = w32.abs().amax(1).clamp(min=1e-30) / 127
-    want = torch.clamp(torch.round(w32 / srow[:, None]), -127, 127)
-    q, sw = steps.quant_rows(glm.dequant(codes, s), 127)
-    assert torch.equal(q, want) and torch.equal(sw, srow) and q.abs().max() == 127
+            w64[i, j] = e4m3[i, j] * np.float64(s[i // 128, j // 128])
+    exact = glm.dequant(codes, s, torch.float64)
+    assert np.array_equal(exact.numpy(), w64)
+    assert torch.equal(glm.dequant(codes, s), exact.float())
+    for w in (exact, raw["lm_head.weight"].double()):
+        q, sw = steps.exact_rows(w, 127)
+        want_q, want_s = v3_rows(w.numpy())
+        assert np.array_equal(q.numpy(), want_q) and np.array_equal(sw.numpy(), want_s) and q.abs().max() == 127
+    tie = torch.tensor([[127.0, 0.5, 1.5, 2.5]], dtype=torch.float64)
+    assert steps.exact_rows(tie, 127)[0].tolist() == [[127, 0, 2, 2]]
+
+    quantized = []
+    real = steps.exact_rows
+
+    def spy(w, top):
+        quantized.append(w)
+        return real(w, top)
+
+    monkeypatch.setattr(steps, "exact_rows", spy)
+    evaluate(glm_snap, ids[:1], ["int8-channel127-v3"])
+    assert quantized and all(w.dtype == torch.float64 for w in quantized)
+    assert any(w.shape == exact.shape and torch.equal(w, exact) for w in quantized)
+    assert any(torch.equal(w, raw["lm_head.weight"].double()) for w in quantized)
 
 
 def test_g128_is_vllms_group_quant():
@@ -250,6 +280,13 @@ def test_refusals(glm_snap, ids):
         evaluate(glm_snap, np.concatenate([ids[:1], ids[:1]], 1), [])
     with pytest.raises(ValueError, match="attention runs in bf16"):
         evaluate(glm_snap, ids[:1], ["int8-attention"])
+    with pytest.raises(ValueError, match="int8.exact is v3's"):
+        spec.parse({"linear": [{"step": "int8", "exact": True, "gptq": True}]}, "x")
+    rotated = spec.parse({"linear": [{"step": "rotate"}, {"step": "int8", "exact": True}]}, "x")
+    with pytest.raises(ValueError, match="int8.exact reads"):
+        evaluate(glm_snap, ids[:1], [rotated])
+    with pytest.raises(ValueError, match="linears are among"):
+        spec.parse({"linear": [{"step": "int8", "linears": ["mlp.experts.3.down_proj"]}]}, "x")
 
 
 def test_hf_parity(glm_snap, ids):
@@ -302,8 +339,8 @@ def test_a_streamed_model_is_the_local_one(hub, glm_snap, ids):
     assert sorted(pulled) == ["config.json", "model.safetensors.index.json"]
     pulled.clear()
     assert models.pin_of(snap) == pin
-    local = evaluate(glm_snap, ids[:4], ["int8-h1-linears"])
-    streamed = evaluate(snap, ids[:4], ["int8-h1-linears"])
+    local = evaluate(glm_snap, ids[:4], ["int8-channel127-v3"])
+    streamed = evaluate(snap, ids[:4], ["int8-channel127-v3"])
     for k in local["nll"]:
         assert np.array_equal(local["nll"][k], streamed["nll"][k]), k
     assert sorted(pulled) == sorted(n for n in pin["files"] if n.endswith(".safetensors"))
