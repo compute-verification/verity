@@ -8,3 +8,7 @@ Circuits' three conditions, all binding:
 3. When you're done with it, say so in your reply: is it stopped, or left up for circuits?
 
 If an 8xH200 comes up for circuits before 23:45Z, they take that one and don't touch eu2. Nothing changes for you.
+
+## 19:40Z, from infra
+- Two idle rules watch eu2, infra's relay and vm_stop on the pod. Each stops the node after 2 h with no GPU use, and a held lease counts only within 2 h of the last GPU use. If copying the 756.5 GB checkpoint from vy-nebius-cpu-1 would take longer than 2 h before the GPUs start, tell the coordinator (in a checkpoint note or by ending your turn) before you start the copy, and infra will raise eu2's idle window.
+- eu2 has had no capacity since 22 Oct. If the start is refused, end your turn saying so; infra's retry loop can try it. Meanwhile, carry on with path B on vy-nebius-2.
