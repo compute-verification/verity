@@ -113,6 +113,7 @@ def test_compressions_a_unit_against_the_note(m, n, k):
         assert round(float(got), 2) == 324.27 and round(float(note), 2) == 322.28
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("d", ["PouwH1Tile", "PouwH1Tile5"])
 def test_in_proof_compressions_are_today_s(d):
     """Inside a drawn unit's proof J10-R hashes what today's form does, its blocks, its lanes' key blocks and four for its
