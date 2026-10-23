@@ -22,6 +22,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
 from verity.core.protocols.pouw.audit import hm96_salt  # noqa: E402
@@ -37,6 +38,7 @@ from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
 from verity_vllm.engine import int8_ops as OPS  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_registered as NR  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_served as SV  # noqa: E402
 
@@ -175,8 +177,9 @@ def test_each_call_registers_its_tables_as_it_is_recorded():
     assert served.program_digest == digest and served.root == W1.hex() and served.m == T and served.steps == STEPS
     assert served.linears == [("q", 16, 64), ("k", 16, 32), ("o", 32, 32)]
     assert served.calls == [(m, s) for s in range(STEPS) for m in ("q", "k", "o")]
-    assert list(served.registered) == [pre + v for v in ("zy@0", "a/16@0", "zy@1", "b/16", "a/32@0", "zy@2", "b/32",
-                                                         "zy@3", "a/16@1", "zy@4", "a/32@1", "zy@5")]
+    assert list(served.registered) == [pre + v for v in ("zy@0", "a/16@0", "zy@1", "b/16", "pub@0", "pub@1", "a/32@0",
+                                                         "zy@2", "b/32", "pub@2", "zy@3", "a/16@1", "zy@4", "pub@3",
+                                                         "pub@4", "a/32@1", "zy@5", "pub@5")]
     tables = CR.step_tables({"calls": served.calls, "linears": served.linears, "m": served.m}, STEPS)
     assert tables == [(0, 16, [0, 1]), (0, 32, [2]), (1, 16, [3, 4]), (1, 32, [5])]
     for s, k, cs in tables:
@@ -281,16 +284,20 @@ def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_anothe
     reg = SV.register(run)
     for c, (u0, n) in enumerate(HW.call_units(prog)):
         k, f = run.shapes_[run.calls[c].layer][1], reg.files[c]
-        assert set(f["ports"]) == {f"{t}_k{k}_{i}" for t in "ab" for i in range(32)} | {"zy"}
+        assert set(f["ports"]) == {f"{t}_k{k}_{i}" for t in "ab" for i in range(32)} | {"zy", HW.PUB_PORT, HW.OK_PORT}
         assert {(p["row_schema"], p["word_bits"]) for p in f["ports"].values()} == {(SV.V2, 16)}
         assert {f["ports"][f"a_k{k}_0"]["value"], f["ports"]["zy"]["value"], f["ports"][f"b_k{k}_0"]["value"]} == {
             HW.table(prog, "a", c, STEPS), HW.table(prog, "zy", c), SV.PREFIX + f"b/{k}"}
         at = HW.step_of(prog, c, STEPS)[2]
         assert f["ports"][f"a_k{k}_0"]["reads"][u0] == at and at == T * served.step_calls(c).index(c)
         for port, p in f["ports"].items():
+            if port == HW.OK_PORT:
+                continue
             r = served.registered[p["value"]]
             assert (p["root"], p["words"], p["leaves"], p["domain"]) == (
                 r.root.hex(), r.words, r.leaves, r.domain.domain_id.hex())
+            if port == HW.PUB_PORT:
+                continue
             key = port if port == "zy" else f"{port.rsplit('_', 1)[0]}[{port.rsplit('_', 1)[1]}]"
             for u, row in enumerate(p["reads"]):
                 if not u0 <= u < u0 + n:
@@ -315,7 +322,7 @@ def test_a_tile_of_one_row_or_column_maps_its_lone_read_to_port_0(tile, lone):
     other = "b" if lone == "a" else "a"
     for c, (u0, n) in enumerate(HW.call_units(served.program)):
         k = run.shapes_[c][1]
-        assert set(reg.files[c]["ports"]) == {f"{lone}_k{k}_0", "zy"} | {f"{other}_k{k}_{i}" for i in range(32)}
+        assert set(reg.files[c]["ports"]) == {f"{lone}_k{k}_0", "zy", HW.PUB_PORT, HW.OK_PORT} | {f"{other}_k{k}_{i}" for i in range(32)}
         reads = reg.files[c]["ports"][f"{lone}_k{k}_0"]["reads"]
         assert [u for u, r in enumerate(reads) if r is not None] == list(range(u0, u0 + n))
 
@@ -602,6 +609,48 @@ def test_each_calls_receipts_are_its_receipt_table_beside_its_z_table():
             rc.value, rc.root.hex(), rc.leaves, rc.words, rc.domain.domain_id.hex(), SV.V2)
         assert [(u, row) for u, row in enumerate(p["reads"]) if row is not None] == [(u0 + t, t) for t in range(n)]
         assert all(G.verify_read(rc.domain, rc.root, t, rc.bcs[t], rc.path(t), SV.V2) for t in range(n))
+
+
+def test_each_calls_public_table_is_the_one_credit_builds_and_a_row_off_opens_none_of_it():
+    """Each call's ``pub@<c>`` is registered at its step's last call of K, once root(``a/<K>@<s>``) and root(``b/<K>``)
+    exist, and is the public table core's `credit.registered_file` builds from the descriptor, the window's entries, its
+    open root and its Program salt: the same value, root, rows, words and domain, row t `core_check.public_words` of the
+    salt, u0 + t and the call's two roots under `core_check.public_row_salt` of the open root, and the call's
+    ``--registered`` file names it as credit's does, every row opening credit's root. A table with one row off, under the
+    same salts, has another root, which `credit._verified` refuses a session for, and its row opens none of credit's."""
+    run, _ws, _got = _window(W1, receipts=_Receipts())
+    served, pre = run.served, SV.PREFIX
+    assert not served.refused and served.tables()[-2 * len(run.calls):-len(run.calls)] == [
+        pre + f"pub@{c}" for c in range(len(run.calls))]
+    raw = SV.descriptor(served.program)
+    (lay, why), program, shape = CR.layout_of(raw), hashlib.sha512(raw).hexdigest(), CR.shape_of(raw)
+    assert why is None and program == served.program_digest
+    roots = {}
+    for e in served.entries():
+        roots.setdefault(e["value"], []).append(e["root"])
+    files = SV.register(run).files
+    for c, (u0, n) in enumerate(HW.call_units(served.program)):
+        k, last = run.calls[c].k, served.step_calls(c)[-1]
+        r = served.registered[pre + f"pub@{c}"]
+        assert run.tables[last]["registered"][r.value] == r.root.hex()
+        mine, why = CR.registered_file(program, lay, shape, c, roots, served.root, served.steps, run._salt.hex())
+        assert why is None, why
+        pub = mine["ports"][CR.PUB_PORT]
+        assert files[c]["ports"][HW.PUB_PORT] == pub
+        assert (pub["value"], pub["root"], pub["leaves"], pub["words"], pub["domain"]) == (
+            r.value, r.root.hex(), n, r.words, r.domain.domain_id.hex())
+        ab = (served.registered[served.a_table(c)].root, served.registered[pre + f"b/{k}"].root)
+        assert pub["known"]["rows"] == [list(row) for row in r.rows] == [
+            CC.public_words(run._salt, u0 + t, ab) for t in range(n)]
+        assert pub["known"]["salts"] == [s.hex() for s in r.salts] == [
+            CC.public_row_salt(served.root, u0 + t).hex() for t in range(n)]
+        assert all(G.verify_read(r.domain, bytes.fromhex(pub["root"]), t, r.bcs[t], r.path(t), SV.V2) for t in range(n))
+        t = c % n
+        words = np.array(pub["known"]["rows"], np.uint16)
+        words[t, c % words.shape[1]] ^= 1
+        off = NR.commit(program, r.value, words, run._key, 0, True, b"".join(r.salts), window=served.root)
+        assert off.root.hex() != pub["root"] and off.domain.domain_id == r.domain.domain_id
+        assert not G.verify_read(r.domain, bytes.fromhex(pub["root"]), t, off.bcs[t], off.path(t), SV.V2)
 
 
 def test_receipts_off_the_units_receipt_width_are_refused():
