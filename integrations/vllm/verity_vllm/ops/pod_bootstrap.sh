@@ -119,7 +119,7 @@ if fetched:
                                         cache_dir=os.path.join(os.environ["HF_HOME"], "hub"))
     if ent.get("recipe"):          # no hub repo holds a recipe pin: made here from its BF16 pin (engine/fp8_checkpoint.py, int8_checkpoint.py)
         from verity_vllm.engine import fp8_checkpoint as F, int8_checkpoint as I8
-        recipe = {r.id: r for r in (F.FP8, I8.INT8)}[ent["recipe"]["id"]]
+        recipe = {r.id: r for r in (F.FP8, *I8.RECIPES.values())}[ent["recipe"]["id"]]
         base = F.base_entry(ent, entries, recipe)
         if not all((Path(base["local_path"]) / f).exists() for f in base["safetensors_sha256"]):
             print("downloaded", fetch(base), flush=True)
