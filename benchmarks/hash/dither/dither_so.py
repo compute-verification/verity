@@ -126,6 +126,8 @@ MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goe
 GRAPH_ENV = "DITHER_SO_GRAPH"           # "0": a step's units launched call by call (`SoSide.dispatch`), else one graph
 PRIO_ENV = "DITHER_SO_PRIO"             # "1": any -so arm serves as -ovp does, on a stream above the units' (`patch`)
 ZT_ENV = "DITHER_SO_ZT"                 # "1": each piece's z/y tables built in the forward (`SoSide.__init__`)
+# J (noise blocks a lane, each lane's seed midstate shared by its J) at least this; the same blocks into the same words
+NOISE_J_ENV = "DITHER_SO_NOISE_J"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -769,6 +771,7 @@ class SoSide(DA.Side):
         self.dispatched: dict[int, int] = {}
         self.unit_steps = 0
         self.graph = os.environ.get(GRAPH_ENV, "1") != "0"
+        self.noise_j = int(os.environ.get(NOISE_J_ENV) or 0)
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
         self.capture_ms: list[float] = []
@@ -855,8 +858,8 @@ class SoSide(DA.Side):
         return (self.ring_slot[p][w].data_ptr(), win.wt[w].data_ptr(), win.t, n, k,
                 win.plan.seeds.data_ptr() + 8 * 16 * self.seed0[w], self.ring_live[p].data_ptr(),
                 self.stage.data_ptr() + 4 * win.plan.offs[w][0], ws.data_ptr(),
-                auto_j(live * (n // 32), self.nb[w], self.sms), self.zs[0].data_ptr(), self.zs[1].data_ptr(),
-                self.ys.data_ptr(), None, self.ring_scale[p][w].data_ptr(), win.sw[w].data_ptr(),
+                max(self.noise_j, auto_j(live * (n // 32), self.nb[w], self.sms)), self.zs[0].data_ptr(),
+                self.zs[1].data_ptr(), self.ys.data_ptr(), None, self.ring_scale[p][w].data_ptr(), win.sw[w].data_ptr(),
                 self.ring_s1[p].data_ptr(), min(m, win.t))
 
     def _units(self, p: int, m: int) -> int:
@@ -941,6 +944,7 @@ class SoSide(DA.Side):
                 "a_overlap": self.so_ao, "unit_steps": self.unit_steps,
                 "units_dispatch": {"graph": self.graph, "graphs": sorted(self.graphs), "capture_ms": self.capture_ms},
                 "z_tables": {"in_forward": self.zt, "between_steps": self.z_rest.n if self.zt else None},
+                "noise_j_min": self.noise_j,
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
 
