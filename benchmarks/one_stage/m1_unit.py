@@ -4,7 +4,9 @@ statement on the serving rows' ports (an input row per parameter and an output r
 the flat unit never built), and with ``--bin`` and ``--lean`` one round of ``--n`` units staged on finite bf16 values (every
 parameter of a bf16 family; a stand-in for the served values, which only the window reads), proved by M0 under ``--zk``
 (`a0.session`: serve and prove, the verifier's subset draw of all of them) and verified by the Lean verifier of record
-(`a0.lean_verify`).
+(`a0.lean_verify`).  A coordinate template (`serving_rows.COORDS`, the expert-indexed pair GEMMs at N = 1) with ``--call-n N``
+stages instead the ``--units`` of a synthetic Call at N read through the serving rows' split (`split_call`), each held to the
+Call's output word by the numpy twin before and after staging.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v1{N=6144,EPS=...,BLOCK=256}' --out DIR \\
@@ -43,6 +45,65 @@ def bf16_rows(rng: np.random.Generator, n: int, words: int) -> np.ndarray:
     return (f.view(np.uint32) >> 16).astype(np.uint16)
 
 
+def split_call(tp, n_call: int, rng: np.random.Generator) -> dict:
+    """A synthetic Call of a coordinate template's family (`serving_rows.COORDS`) at N = ``n_call``, its operands committed
+    members and registered weights (finite e4m3 codes, positive f32 scales, a routed id in [0, E), a routed weight in (0, 1)),
+    read through the serving rows' split as a window reads it (`serving_rows.members` and `read`).  Returns the units' rows by
+    port, their output words (the Call's, as committed), the Call's output words by the numpy twin
+    (`fp8_moe_rows.moe_expert_fp8_block_row`) and the IR reference of the coordinate on every unit's rows."""
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity_vllm.pipeline import serving_rows as SRW
+    from verity_vllm.program.kernels import fp8_moe_rows as FR
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    S = spec_statics(tp.word)
+    E, K, G, KB, N = int(S["E"]), int(S["K"]), int(S["G"]), int(S["KB"]), n_call
+    NB, KG = -(-N // G), K // G
+    routed = spec_base(tp.word) == "MoeExpertFp8GemmW_v1"
+    codes = lambda n: (lambda c: np.where((c & 0x7F) == 0x7F, c ^ 1, c).astype(np.uint8))(rng.integers(0, 256, n, dtype=np.uint8))  # noqa: E731
+    scales = lambda n, lo, hi: ((2.0 ** rng.integers(lo, hi, n)) * rng.uniform(1, 2, n)).astype(np.float32)  # noqa: E731
+    acts = {"xq": codes(K), "sx": scales(KG, -6, 0), "e": np.array([rng.integers(0, E)], dtype=np.int32),
+            **({"g": rng.uniform(0, 1, 1).astype(np.float32)} if routed else {})}
+    wts = {"w": codes(E * N * K), "ws": scales(E * NB * KG, -12, -6)}
+    e = int(acts["e"][0])
+    y, nonfin = FR.moe_expert_fp8_block_row(acts["xq"], acts["sx"].view(np.uint32), wts["w"].reshape(E, N, K)[e],
+                                            wts["ws"].reshape(E, NB, KG)[e].view(np.uint32), G=G, KB=KB, swap=S["SWAP"] in (True, "true"),
+                                            g=int(acts["g"].view(np.uint32)[0]) if routed else None, dot=FR.TWIN_DOT_OF[S["DOT"]])
+    at = np.cumsum([0, wts["w"].size])
+    names = list(acts)
+
+    class Index:
+        pnames = ["weights"]
+
+        def member_at(self, a, lo, hi):
+            nm = names[a]
+            return {"members": [(nm, acts[nm].size, str(acts[nm].dtype))], "step": 16, "op_path": f"m1.{nm}", "row": 0}, nm, lo, hi, None
+
+        def weight_slice(self, lo, hi):
+            f = int(lo >= at[1])
+            return ("w", "ws")[f], lo - at[f], hi - at[f], None
+
+    class Store:
+        def words(self, rid, step, op, member, lo, hi):
+            return (y if member == "out" else acts[member])[lo:hi], None
+
+    spec = descriptor_id(SRW._bind(tp.word, N=N))
+    r = {"i": 0, "spec": spec, "args": [[["n", k, 0, acts[nm].size]] for k, nm in enumerate(names)]
+         + [[["p", 0, int(at[0]), int(at[1])]], [["p", 0, int(at[1]), int(at[1]) + wts["ws"].size]]]}
+    d = {"statics": {"E": E, "K": K, "N": N, "G": G, "KB": KB}, "op_path": "model.layers.3.mlp.experts", "members": [("out", N, "bf16")],
+         "row": 0, "step": 16}
+    row = ("r0", Index(), r, d)
+    (m,) = SRW.members([tp.id], [[row]], [N])
+    data, entries = SRW.read(m, [row], Store(), lambda f, lo, hi: wts[f][lo:hi])
+    leaves = [np.ascontiguousarray(data["rows"][p], dtype="<u2").view(np.uint8 if b == 8 else np.dtype(f"<u{b // 8}")).reshape(N, -1)
+              .astype(np.uint64) for (p, _w), b in zip(m.rows, tp.packed)]
+    word = SRW._bind(tp.word)
+    ref = np.asarray(evaluate_batch(word, *leaves)).reshape(N).astype(np.uint16)
+    return {"call": spec, "member": m, "rows": data["rows"], "outs": data["outs"][m.outs[0][0]].reshape(N), "twin": y,
+            "nonfinite": int(nonfin.sum()), "reference": ref, "entries": entries, "expert": e}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--spec", required=True)
@@ -53,6 +114,9 @@ def main() -> int:
     ap.add_argument("--n", type=int, default=1)
     ap.add_argument("--port", type=int, default=7611)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--call-n", type=int, default=None, metavar="N",
+                    help="a coordinate template (serving_rows.COORDS): stage units of a synthetic Call at this N, read through the split")
+    ap.add_argument("--units", default=None, help="with --call-n: the coordinates staged (comma-separated), else the first --n")
     a = ap.parse_args()
 
     import a0
@@ -85,14 +149,29 @@ def main() -> int:
         return 0
 
     rng = np.random.default_rng(a.seed)
-    vals = {r: bf16_rows(rng, a.n, b // 16) for r, _s, b, _p in rows}
+    if a.call_n:
+        t = time.time()
+        sc = split_call(SRW.template(a.spec), a.call_n, rng)
+        units = [int(u) for u in a.units.split(",")] if a.units else list(range(a.n))
+        a.n = len(units)
+        say("split", seconds=round(time.time() - t, 1), call=sc["call"], expert=sc["expert"], units=sc["member"].n, entries=sc["entries"],
+            ports=[list(p) for p in sc["member"].rows + sc["member"].outs], staged=units, twin_nonfinite=sc["nonfinite"],
+            outs_are_twin=bool((sc["outs"] == sc["twin"]).all()), reference_is_twin=bool((sc["reference"] == sc["twin"]).all()))
+        if not ((sc["outs"] == sc["twin"]).all() and (sc["reference"] == sc["twin"]).all()):
+            return 1
+        vals = {nm: sc["rows"][f"in{g}"][units] for g, (nm, _s, _b, _p) in enumerate(rows)}
+    else:
+        vals = {r: bf16_rows(rng, a.n, b // 16) for r, _s, b, _p in rows}
     t = time.time()
     with K.no_cyclic_gc():
         got = st.stage(vals, d, os.urandom(32))
     for f in ("inst", "pub"):
         (d / f"{f}.bin").rename(d / f"{f}-{a.n}.bin")
     IL.write_tables(d / "tables")
-    say("staged", seconds=round(time.time() - t, 1), n=a.n, ands=got["ands"])
+    calls = bool((got["outs"]["o0"].reshape(-1) == sc["twin"][units]).all()) if a.call_n else None
+    say("staged", seconds=round(time.time() - t, 1), n=a.n, ands=got["ands"], **({"outs_are_calls": calls} if a.call_n else {}))
+    if calls is False:
+        return 1
 
     t = time.time()
     record, live = a0.session(a.bin, {"dir": d, "pin": st.pin}, a.n, f"subset:{a.n}", a.port, out / "session", zk=True)
