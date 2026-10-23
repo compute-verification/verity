@@ -478,6 +478,21 @@ def mulTable (r : F128) : Array F128 :=
     t[2560 + v.byte 10]! + t[2816 + v.byte 11]! + t[3072 + v.byte 12]! + t[3328 + v.byte 13]! +
     t[3584 + v.byte 14]! + t[3840 + v.byte 15]!
 
+/-- `mulBy` as compiled code computes it (`mulBy_eq_w`): the sum word by word, so no partial sum is an object and
+each entry is read without touching its reference count. -/
+@[inline] def mulByW (t : Array F128) (v : F128) : F128 :=
+  let e0 := t[v.byte 0]!; let e1 := t[256 + v.byte 1]!; let e2 := t[512 + v.byte 2]!; let e3 := t[768 + v.byte 3]!
+  let e4 := t[1024 + v.byte 4]!; let e5 := t[1280 + v.byte 5]!; let e6 := t[1536 + v.byte 6]!
+  let e7 := t[1792 + v.byte 7]!; let e8 := t[2048 + v.byte 8]!; let e9 := t[2304 + v.byte 9]!
+  let e10 := t[2560 + v.byte 10]!; let e11 := t[2816 + v.byte 11]!; let e12 := t[3072 + v.byte 12]!
+  let e13 := t[3328 + v.byte 13]!; let e14 := t[3584 + v.byte 14]!; let e15 := t[3840 + v.byte 15]!
+  ⟨e0.lo ^^^ e1.lo ^^^ e2.lo ^^^ e3.lo ^^^ e4.lo ^^^ e5.lo ^^^ e6.lo ^^^ e7.lo ^^^ e8.lo ^^^ e9.lo ^^^ e10.lo ^^^
+      e11.lo ^^^ e12.lo ^^^ e13.lo ^^^ e14.lo ^^^ e15.lo,
+    e0.hi ^^^ e1.hi ^^^ e2.hi ^^^ e3.hi ^^^ e4.hi ^^^ e5.hi ^^^ e6.hi ^^^ e7.hi ^^^ e8.hi ^^^ e9.hi ^^^ e10.hi ^^^
+      e11.hi ^^^ e12.hi ^^^ e13.hi ^^^ e14.hi ^^^ e15.hi⟩
+
+@[csimp] theorem mulBy_eq_w : @mulBy = @mulByW := rfl
+
 theorem mulTable_get (r v : F128) (j : Nat) (hj : j < 16) :
     (mulTable r)[256 * j + v.byte j]! = byteMono j (byteW v j) * r := by
   have hb := v.byte_lt j
