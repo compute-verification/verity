@@ -10,7 +10,9 @@
 #   4. one loopback --zk session per statement, H1L_PAR at a time, each lane's prover under the firewall (FC_FIREWALL=1:
 #      the Lean session loop, its level-0 draw and Lean finish) unless H1S_FIREWALL=0; the negatives first, without it
 #      (H1S_UNFIREWALLED: what they check is the verifier's refusal)
-#   5. the plan's Lean checks, each with the lane Program, its partition, its public file and registered reads
+#   5. the plan's Lean checks, each with the lane Program, its partition, its public file and registered reads: with
+#      H1L_VERIFY_EACH=1 (the default) each statement's right after its session, holding its session slot, so a refusal shows
+#      after the first lane (the first firewalled lane runs before the negatives); with 0, all after the last session
 #   6. served.py summarize: out/summary.json
 # env: H1L_MEM_GB (the job's --mem-gb)
 #      the window: H1S_CALLS (pouw-h1-calls.json)  H1S_SESSION (the gate's fetched session out/)  H1S_LEDGER (ledger heads,
@@ -23,6 +25,7 @@
 #      circuit, waited for up to H1S_WAIT seconds (14400), then moved into the scratch
 #      H1L_SESSION_GB, H1L_STAGGER (60): admit a firewalled session only with that much free in the cgroup
 #      H1L_K (4096)  H1L_PAR (8: sessions at a time)  H1L_LPAR (8: Lean checks at a time)  H1L_JOBS (8: prepare's stagers)
+#      H1L_VERIFY_EACH (1)
 #      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_UNFIREWALLED ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy")
 #      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/core/service/flock`: the firewall frame built from REV's
 #      Lean, which must speak this tree's prover protocol; the verifier stays this tree's)
@@ -122,6 +125,26 @@ free_gb() {
   [ "$m" -gt $(( MEM_GB << 30 )) ] && m=$(( MEM_GB << 30 ))
   echo $(( (m - c) >> 30 ))
 }
+EACH=${H1L_VERIFY_EACH:-1}
+eval "${VLIMIT/vlimit/lean_vlimit}"
+lean_check() {   # lean_check TAG CAP: the plan's Lean check of TAG, in the foreground
+  local kind tag D pub reg prog part _expect s
+  IFS=$'\t' read -r kind tag D pub reg prog part _expect < <(awk -F'\t' -v t="$1" '$1 == "C" && $2 == t' "$WK/plan.tsv")
+  [ -n "${tag:-}" ] || return 0
+  s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
+  [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; return 0; }
+  env -u FC_FIREWALL -u FC_HOST_WITNESS -u FC_FIREWALL_STATEMENT -u FC_FIREWALL_HELLO_ARGS \
+    $TIME "$OUT/lean/$tag.time" bash -c "$(lean_vlimit "$2") exec $LEAN verify --zk --circuit $D/circuit.txt \
+    --statement verity/flock-circuit --public $pub --partition $part --program $prog --registered $reg --session $s" \
+    > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err"
+}
+order() {   # the plan's statements in session order
+  local u="$UNFW" first=""
+  [ "$EACH" = 1 ] && first=$(awk -F'\t' -v u="$u" '$1 == "S" && !index(u, " " $2 " ") {print $2; exit}' "$WK/plan.tsv")
+  awk -F'\t' -v f="$first" '$1 == "S" && $2 == f' "$WK/plan.tsv"
+  awk -F'\t' -v u="$u" -v f="$first" '$1 == "S" && $2 != f && index(u, " " $2 " ")' "$WK/plan.tsv"
+  awk -F'\t' -v u="$u" -v f="$first" '$1 == "S" && $2 != f && !index(u, " " $2 " ")' "$WK/plan.tsv"
+}
 while IFS=$'\t' read -r kind tag D; do
   [ "$kind" = S ] || continue
   mkdir -p "$OUT/$tag"
@@ -133,11 +156,15 @@ while IFS=$'\t' read -r kind tag D; do
   fi
   log "prove $tag (firewall $fw)"
   ( [ "$fw" = 1 ] || unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
-    session "$D" "$OUT/$tag" && log "proved $tag: $(cat "$OUT/$tag/prove.time")" \
-      || log "prove $tag FAILED: $(tail -2 "$OUT/$tag/prove.err")" ) &
+    if session "$D" "$OUT/$tag"; then
+      log "proved $tag: $(cat "$OUT/$tag/prove.time")"
+      if [ "$EACH" = 1 ]; then
+        lean_check "$tag" $(( STAGE_GB / PAR ))
+        log "lean $tag: $(tail -1 "$OUT/lean/$tag.out" 2>/dev/null | cut -c1-300) $(cat "$OUT/lean/$tag.time" 2>/dev/null)"
+      fi
+    else log "prove $tag FAILED: $(tail -2 "$OUT/$tag/prove.err")"; fi ) &
   [ "$fw" = 1 ] && [ -n "${H1L_SESSION_GB:-}" ] && sleep "${H1L_STAGGER:-60}"
-done < <(awk -F'\t' -v u="$UNFW" '$1 == "S" && index(u, " " $2 " ")' "$WK/plan.tsv"
-         awk -F'\t' -v u="$UNFW" '$1 == "S" && !index(u, " " $2 " ")' "$WK/plan.tsv")
+done < <(order)
 wait
 unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
 eval "$VLIMIT"
@@ -147,6 +174,7 @@ log "proved: $(ls -d "$WK"/st/*/sessions/*/ 2>/dev/null | wc -l) sessions"
 cap=$(( STAGE_GB / LPAR ))
 while IFS=$'\t' read -r kind tag D pub reg prog part _expect; do
   [ "$kind" = C ] || continue
+  [ -e "$OUT/lean/$tag.time" ] && continue
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; continue; }
   while [ "$(jobs -rp | wc -l)" -ge "$LPAR" ]; do wait -n; done
