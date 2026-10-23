@@ -122,7 +122,7 @@ theorem read_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known 
   rw [if_pos hn] at h2
   split at h2
   · cases h2
-  · rw [if_pos hq] at h2
+  · try rw [if_pos hq] at h2
     split at h2
     · cases h2
     · rename_i hf
@@ -157,7 +157,7 @@ theorem out_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known =
   rw [if_pos hn] at h2
   split at h2
   · cases h2
-  · rw [if_neg hq] at h2
+  · try rw [if_neg hq] at h2
     split at h2
     · cases h2
     · rename_i hf
@@ -312,8 +312,8 @@ theorem rowBitRead_of_out (u : Fin s.n) {j j' t : ℕ} {q : Fin s.c.ports.size} 
       Layout.outsOf s.c s.hU s.n :=
     (@Finset.mem_filter _ _ (Classical.decPred _) _ _).2 ⟨Finset.mem_univ _, u, x, rfl, j, j', t, hoc⟩
   refine ⟨_, k.isLt, hrowH, ?_⟩
-  simp only [FlockSoundness.Audit.Partition.io, Finset.mem_filter]
-  exact ⟨FlockSoundness.Audit.Partition.mem_committed_of_output _ hmem, Or.inl hgu⟩
+  unfold FlockSoundness.Audit.Partition.io
+  exact Finset.mem_filter.2 ⟨FlockSoundness.Audit.Partition.mem_committed_of_output _ hmem, Or.inl hgu⟩
 
 /-- **A known input port's bits are read at every unit**, where flock-verify's check accepts the session's circuit at
 its known content. -/
