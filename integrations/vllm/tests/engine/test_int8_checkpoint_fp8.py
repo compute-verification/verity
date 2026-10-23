@@ -6,6 +6,7 @@ can't be read under are refused; `jobs` doesn't change a byte; and a golden vect
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -180,6 +181,43 @@ def test_jobs_leave_v1s_bytes_unchanged(tmp_path):
     a = F.make(base, tmp_path / "a", shards, base_repo="o/m", base_revision="0" * 40, recipe=I.INT8)
     b = F.make(base, tmp_path / "b", shards, base_repo="o/m", base_revision="0" * 40, recipe=I.INT8, jobs=2)
     assert a == b
+
+
+def _local_pull(src: str, dst: str, *flags: str) -> None:
+    """`fp8_checkpoint._pull` on this host (no rsync here): a directory's files but the shards, or one file."""
+    if src.endswith("/"):
+        for p in Path(src).iterdir():
+            if not p.name.endswith(".safetensors"):
+                shutil.copyfile(p, Path(dst) / p.name)
+    else:
+        shutil.copyfile(src, dst)
+
+
+def _pin(base: Path) -> dict:
+    shards = {p.name: F._sha256(p) for p in sorted(base.glob("*.safetensors"))}
+    return {"repo": "org/model", "revision": "0" * 40, "safetensors_sha256": shards, "config_sha256": F._sha256(base / "config.json")}
+
+
+def test_a_base_pulled_shard_by_shard_makes_the_same_bytes(tmp_path, monkeypatch):
+    monkeypatch.setattr(F, "_pull", _local_pull)
+    local = _make(tmp_path, "local")
+    base = tmp_path / "base-local"
+    for jobs in (1, 2):
+        pin = F._make_into(tmp_path / f"snap{jobs}", None, _pin(base), I.INT8_FP8, jobs, str(base))
+        assert {k: v for k, v in pin.items() if k != "local_path"} == local
+        assert sorted(p.name for p in (tmp_path / f"snap{jobs}").iterdir()) == [local["revision"]]   # scratch and tmp are gone
+
+
+def test_a_pulled_shard_or_config_off_the_pin_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(F, "_pull", _local_pull)
+    base = _fp8_base(tmp_path / "base")
+    pin = _pin(base)
+    bad = dict(pin, safetensors_sha256=dict(pin["safetensors_sha256"], **{"model-00002-of-00002.safetensors": "0" * 64}))
+    with pytest.raises(F.UsageError, match="model-00002-of-00002.safetensors: not the pinned bytes"):
+        F._make_into(tmp_path / "a", None, bad, I.INT8_FP8, 2, str(base))
+    with pytest.raises(F.UsageError, match="config.json: not the pinned bytes"):
+        F._make_into(tmp_path / "b", None, dict(pin, config_sha256="0" * 64), I.INT8_FP8, 1, str(base))
+    assert not [p for d in ("a", "b") for p in (tmp_path / d).iterdir() if p.name.startswith(".base")]
 
 
 def test_recipe_of_names_the_fp8_recipe():

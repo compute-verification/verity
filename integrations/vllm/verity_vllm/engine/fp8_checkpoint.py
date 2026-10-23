@@ -51,10 +51,14 @@ linear).  Its linear weights are exactly the base's ``F8_E4M3`` ``.weight`` tens
 ``weight_scale_inv`` tensors are dropped.  Every other tensor (the bf16 router, embedding, LM head, norms) is copied, and the
 config's ``quantization_config`` is replaced in place by the recipe's, keeping the base's ``modules_to_not_convert`` list.
 
-``make(..., jobs=N)`` makes N shards at once in forked processes; the bytes are the same for every N.
+``make(..., jobs=N)`` makes N shards at once in forked processes; the bytes are the same for every N.  ``--base-from HOST:DIR``
+reads a base that is not on this host: its small files are pulled first (the config checked against the pin), and each shard is
+pulled (rsync over ssh) by the worker about to make it, checked against the pin's sha256 before it is read, and deleted once made,
+so a host holds only the made checkpoint and one base shard per job.
 """
 from __future__ import annotations
 
+import contextlib
 import fnmatch
 import hashlib
 import json
@@ -62,8 +66,9 @@ import multiprocessing
 import os
 import shutil
 import struct
+import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -383,21 +388,28 @@ def pin_revision(base_repo: str, base_revision: str, made: dict[str, str], recip
     return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:40]
 
 
-_FORKED: tuple[int, Recipe] | None = None
+Fetch = Callable[[Path], contextlib.AbstractContextManager[Path]]
+_FORKED: tuple[int, Recipe, Fetch] | None = None
+
+
+def _one_shard(src: Path, dst: Path, vocab: int, recipe: Recipe, fetch: Fetch) -> tuple[dict[str, Any], dict[str, str], int, int]:
+    with fetch(src) as path:
+        return make_shard(path, dst, vocab, recipe)
 
 
 def _forked_shard(paths: tuple[Path, Path]) -> tuple[dict[str, Any], dict[str, str], int, int]:
     assert _FORKED is not None
-    return make_shard(*paths, *_FORKED)
+    return _one_shard(*paths, *_FORKED)
 
 
-def _make_shards(pairs: list[tuple[Path, Path]], vocab: int, recipe: Recipe, jobs: int) -> list[tuple[Any, ...]]:
-    """`make_shard` of each (src, dst), in order; `jobs` > 1 forks that many workers (a Recipe holds lambdas: it reaches them by
-    the fork, never by pickling)."""
+def _make_shards(pairs: list[tuple[Path, Path]], vocab: int, recipe: Recipe, jobs: int,
+                 fetch: Fetch = contextlib.nullcontext) -> list[tuple[Any, ...]]:
+    """`make_shard` of each (src, dst), in order, reading `fetch(src)`'s path; `jobs` > 1 forks that many workers (a Recipe holds
+    lambdas: it reaches them by the fork, never by pickling)."""
     global _FORKED
     if jobs <= 1 or len(pairs) <= 1:
-        return [make_shard(s, d, vocab, recipe) for s, d in pairs]
-    _FORKED = (vocab, recipe)
+        return [_one_shard(s, d, vocab, recipe, fetch) for s, d in pairs]
+    _FORKED = (vocab, recipe, fetch)
     try:
         with multiprocessing.get_context("fork").Pool(min(jobs, len(pairs))) as pool:
             return pool.map(_forked_shard, pairs, chunksize=1)
@@ -406,9 +418,9 @@ def _make_shards(pairs: list[tuple[Path, Path]], vocab: int, recipe: Recipe, job
 
 
 def make(base_dir: Path, out_dir: Path, shards: list[str], *, base_repo: str, base_revision: str, recipe: Recipe = FP8,
-         jobs: int = 1) -> dict[str, Any]:
+         jobs: int = 1, fetch: Fetch = contextlib.nullcontext) -> dict[str, Any]:
     """Write the recipe's checkpoint of the base shards `shards` in `base_dir` into `out_dir` (created; must not exist), `jobs`
-    shards at once.  Returns {"revision", "files": {name: {sha256, size, digest_source}}, "config_sha256", "safetensors_sha256"}."""
+    shards at once, each read from `fetch(base_dir / shard)` (by default the file itself).  Returns {"revision", "files": {name: {sha256, size, digest_source}}, "config_sha256", "safetensors_sha256"}."""
     base_dir, out_dir = Path(base_dir), Path(out_dir)
     out_dir.mkdir(parents=True)
     shards = sorted(shards)
@@ -419,7 +431,7 @@ def make(base_dir: Path, out_dir: Path, shards: list[str], *, base_repo: str, ba
     files: dict[str, dict[str, Any]] = {}
     weight_map: dict[str, str] = {}
     n_vocab = total = 0
-    results = _make_shards([(base_dir / fn, out_dir / fn) for fn in shards], vocab, recipe, jobs)
+    results = _make_shards([(base_dir / fn, out_dir / fn) for fn in shards], vocab, recipe, jobs, fetch)
     for fn, (digest, names, v, n) in zip(shards, results):
         files[fn] = dict(digest, digest_source="recipe")
         weight_map.update(names)
@@ -487,13 +499,59 @@ def verified_base(base: dict[str, Any], hf_home: str | None) -> Path:
     return d
 
 
-def _make_into(snapshots: Path, base_dir: Path, base: dict[str, Any], recipe: Recipe = FP8, jobs: int = 1) -> dict[str, Any]:
-    """Make into `snapshots/<revision>` (written beside it, then renamed into place)."""
+def _pull(src: str, dst: str, *flags: str) -> None:
+    subprocess.run(["rsync", "-rL", "-q", *flags, src, dst], check=True)
+
+
+@dataclass(frozen=True)
+class RemoteShards:
+    """`make`'s `fetch` for a base at `src` (`HOST:DIR`): each shard pulled into `scratch`, checked against its pinned sha256
+    before it is read, and deleted once made."""
+
+    src: str
+    scratch: Path
+    sha256: dict[str, str]
+
+    @contextlib.contextmanager
+    def __call__(self, path: Path) -> Iterator[Path]:
+        dst = self.scratch / path.name
+        try:
+            _pull(f"{self.src.rstrip('/')}/{path.name}", str(dst))
+            if _sha256(dst) != self.sha256[path.name]:
+                raise UsageError(f"{self.src}/{path.name}: not the pinned bytes")
+            yield dst
+        finally:
+            dst.unlink(missing_ok=True)
+
+
+def remote_base(base: dict[str, Any], src: str, scratch: Path) -> tuple[Path, RemoteShards]:
+    """The base's files but its shards, pulled from `src` into `scratch/base` (its config checked against the pin), and the
+    `fetch` that pulls each shard."""
+    d = scratch / "base"
+    d.mkdir(parents=True)
+    _pull(f"{src.rstrip('/')}/", f"{d}/", "--exclude=*.safetensors")
+    if base.get("config_sha256") and (not (d / CONFIG).is_file() or _sha256(d / CONFIG) != base["config_sha256"]):
+        raise UsageError(f"{src}/{CONFIG}: not the pinned bytes")
+    return d, RemoteShards(src, scratch, base["safetensors_sha256"])
+
+
+def _make_into(snapshots: Path, base_dir: Path | None, base: dict[str, Any], recipe: Recipe = FP8, jobs: int = 1,
+               base_from: str | None = None) -> dict[str, Any]:
+    """Make into `snapshots/<revision>` (written beside it, then renamed into place), from `base_dir` or, with `base_from`, from
+    the base pulled shard by shard into a scratch directory beside it."""
     snapshots.mkdir(parents=True, exist_ok=True)
-    tmp = snapshots / f".tmp{os.getpid()}"
+    tmp, scratch = snapshots / f".tmp{os.getpid()}", snapshots / f".base{os.getpid()}"
     shutil.rmtree(tmp, ignore_errors=True)
-    pin = make(base_dir, tmp, list(base["safetensors_sha256"]), base_repo=base["repo"], base_revision=base["revision"], recipe=recipe,
-               jobs=jobs)
+    shutil.rmtree(scratch, ignore_errors=True)
+    fetch: Fetch = contextlib.nullcontext
+    try:
+        if base_from:
+            base_dir, fetch = remote_base(base, base_from, scratch)
+        assert base_dir is not None
+        pin = make(base_dir, tmp, list(base["safetensors_sha256"]), base_repo=base["repo"], base_revision=base["revision"],
+                   recipe=recipe, jobs=jobs, fetch=fetch)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
     final = snapshots / pin["revision"]
     shutil.rmtree(final, ignore_errors=True)
     os.replace(tmp, final)
@@ -501,12 +559,12 @@ def _make_into(snapshots: Path, base_dir: Path, base: dict[str, Any], recipe: Re
 
 
 def remake(entry: dict[str, Any], entries: list[dict[str, Any]], hf_home: str | None = None,
-           recipe: Recipe = FP8, jobs: int = 1) -> tuple[dict[str, Any], list[str]]:
+           recipe: Recipe = FP8, jobs: int = 1, base_from: str | None = None) -> tuple[dict[str, Any], list[str]]:
     """Re-make a recipe pin on this host from its BF16 pin (checked first): (the made pin, what differs from `entry`).  The
     snapshot goes to `entry["local_path"]`, or beside the base under `hf_home`."""
     base = base_entry(entry, entries, recipe)
     final = snapshot_dir(hf_home, entry["repo"], entry["revision"]) if hf_home else Path(entry["local_path"])
-    pin = _make_into(final.parent, verified_base(base, hf_home), base, recipe, jobs)
+    pin = _make_into(final.parent, None if base_from else verified_base(base, hf_home), base, recipe, jobs, base_from)
     bad = [fn for fn, d in sorted(entry["files"].items()) if d.get("sha256") and pin["files"].get(fn, {}).get("sha256") != d["sha256"]]
     bad += sorted(set(pin["files"]) - set(entry["files"]))
     if pin["revision"] != entry["revision"]:
@@ -523,6 +581,8 @@ class MakeOptions:
     hf_home: str | None = option("--hf-home", env="HF_HOME", default=None,
                                  help="HF cache holding the base snapshot; the FP8 snapshot goes beside it (default: the pins' local_path)")
     jobs: int = option("--jobs", type=int, default=1, help="shards made at once (the bytes are the same for any value)")
+    base_from: str | None = option("--base-from", default=None,
+                                   help="HOST:DIR of a base snapshot on another host: each shard pulled, checked and deleted once made")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -537,6 +597,8 @@ class PinOptions:
     by: str = option("--by", default="fp8-checkpoint pin", help="resolved_by of the entry")
     at: str = option("--at", help="resolved_at of the entry (UTC, ISO 8601)")
     jobs: int = option("--jobs", type=int, default=1, help="shards made at once (the bytes are the same for any value)")
+    base_from: str | None = option("--base-from", default=None,
+                                   help="HOST:DIR of a base snapshot on another host: each shard pulled, checked and deleted once made")
 
 
 COMMANDS = {"make": MakeOptions, "pin": PinOptions}
@@ -554,7 +616,7 @@ def run(a: Any, recipe: Recipe, command: str) -> int:
         entry = next((c for c in entries if c.get("role") == a.role), None)
         if entry is None:
             raise UsageError(f"no checkpoints.json entry with role {a.role!r}")
-        pin, bad = remake(entry, entries, a.hf_home, recipe, a.jobs)
+        pin, bad = remake(entry, entries, a.hf_home, recipe, a.jobs, a.base_from)
         print(json.dumps({"role": a.role, "local_path": pin["local_path"], "ok": not bad, "mismatch": bad}))
         return 1 if bad else 0
     base = next((c for c in entries if c.get("role") == a.base_role and c.get("safetensors_sha256")), None) \
@@ -563,7 +625,8 @@ def run(a: Any, recipe: Recipe, command: str) -> int:
         raise UsageError(f"no BF16 pin with role or repo {a.base_role!r} and shard sha256s")
     if any(c.get("role") == a.role for c in entries):
         raise UsageError(f"role {a.role!r} is already pinned")
-    pin = _make_into(snapshot_dir(home, a.repo, "_").parent, verified_base(base, a.hf_home), base, recipe, a.jobs)
+    pin = _make_into(snapshot_dir(home, a.repo, "_").parent, None if a.base_from else verified_base(base, a.hf_home), base, recipe,
+                     a.jobs, a.base_from)
     local = snapshot_dir(C.checkpoints_hf_home() or home, a.repo, pin["revision"])
     entry = {"config_sha256": pin["config_sha256"], "downloaded": False, "files": pin["files"], recipe.of: base["repo"], "gated": False,
              "local_path": str(local),

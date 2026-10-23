@@ -91,6 +91,8 @@ class MakeOptions:
     hf_home: str | None = option("--hf-home", env="HF_HOME", default=None,
                                  help="HF cache holding the base snapshot; the int8 snapshot goes beside it (default: the pins' local_path)")
     jobs: int = option("--jobs", type=int, default=1, help="shards made at once (the bytes are the same for any value)")
+    base_from: str | None = option("--base-from", default=None,
+                                   help="HOST:DIR of a base snapshot on another host: each shard pulled, checked and deleted once made")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -107,6 +109,8 @@ class PinOptions:
     at: str = option("--at", help="resolved_at of the entry (UTC, ISO 8601)")
     recipe: str = option("--recipe", default=RECIPE, choices=sorted(RECIPES), help="the int8 recipe (v2 also makes the LM head; -fp8 reads a block-FP8 base)")
     jobs: int = option("--jobs", type=int, default=1, help="shards made at once (the bytes are the same for any value)")
+    base_from: str | None = option("--base-from", default=None,
+                                   help="HOST:DIR of a base snapshot on another host: each shard pulled, checked and deleted once made")
 
 
 COMMANDS = {"make": MakeOptions, "pin": PinOptions}
