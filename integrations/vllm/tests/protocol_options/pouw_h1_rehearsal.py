@@ -215,9 +215,22 @@ def weights(a: argparse.Namespace, out: Path, circuit: str) -> dict[str, Any]:
     ``--gpu-lease``), which registers each K's ``b/<K>`` from the served model under the declared Program and writes
     their root, the period-open's ``--weights-root``. ``ok`` when it did, under the period's circuit."""
     import os
+    import shutil
     from verity_vllm.protocol_options import pouw_h1_prover as PV
-    key = PV.keep_key(Path(a.prover_root) / f"period-{a.period}", os.urandom(32))
     wfile = out / "weights.json"
+    if a.weights_from:
+        # an earlier period's registration of the same model and Program, its key kept for this period: the serve's
+        # install registers the same b/<K> under it, so the root the period-open names is the one it serves under
+        src = Path(a.weights_from)
+        key = PV.keep_key(Path(a.prover_root) / f"period-{a.period}", PV.key_of(src / "key"))
+        out.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src / "weights.json", wfile)
+        w = json.loads(wfile.read_text())
+        doc = {"rc": 0, "key": str(key), "from": str(src), "weights_root": w["weights_root"], "circuit": w["circuit"],
+               "values": [(e["value"], e["leaves"], e["words"]) for e in w["entries"]]}
+        doc["ok"] = doc["circuit"] == circuit
+        return doc
+    key = PV.keep_key(Path(a.prover_root) / f"period-{a.period}", os.urandom(32))
     argv = [sys.executable, "-m", "tests.protocol_options.pouw_h1_gpu", "--workload", "fill", "--out", str(out / "weights"),
             "--weights-key", str(key), "--weights-only", str(wfile), "--at", a.pin_at, "--by", a.pin_by]
     if a.gpu_lease:
@@ -583,6 +596,8 @@ def main(argv: list[str] | None = None) -> int:
                                                      "--out DIR), not built again; default: built into --out/circuits")
     ap.add_argument("--gpu-lease", type=int, metavar="MIN", help="serve under `gpu-lease 1 --wait --max-min MIN` (in a "
                                                                 "research run without --gpus: the GPU held only while it serves)")
+    ap.add_argument("--weights-from", metavar="DIR", help="a directory holding an earlier period's weights.json and its key "
+                    "(same model and Program): reused instead of registering the weights again")
     ap.add_argument("--minutes", type=int, default=300, help="the reserve's minutes, which also bound the session")
     ap.add_argument("--pin-at", default="2026-10-21T00:00:00Z", help="pouw_h1_gpu.py's --at (resolved_at, if a pin is made)")
     ap.add_argument("--pin-by", default="vllm", help="pouw_h1_gpu.py's --by")
