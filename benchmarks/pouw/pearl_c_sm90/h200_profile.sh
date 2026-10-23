@@ -7,7 +7,8 @@
 #
 # Under one lease of at most LEASE_MIN minutes (default 30): run.py's check at the fixture's shape (no diagnostic timing), and
 # only if it passed, each step whose switch is set:
-#   TIMING  N:K ... (default 2624:6144)                glm53_timing.py at those shapes, into $OUT/timing
+#   TIMING  N:K ... (default 2624:6144)                glm53_timing.py at those shapes (TIMING_M: its --m), once under each
+#                                                      of SCHEDULES (default serial), into $OUT/timing-SCHEDULE
 #   TILES   N:K ... (default 512:6144 3072:6144 6144:1536)  glm53_passes.py capture --shapes N:K, a shape at a time, in scratch
 #   PROFILE 1 (default)                                glm53_profile.py run under nsys (the expert shapes at m 16 and 2,048), into $OUT/profile
 #   GROUPED 1 (default 0; the ship's cubin must have the grouped kernels)  grouped_check.py, its passes in scratch
@@ -22,8 +23,9 @@ CUDA=${CUDA:-/usr/local/cuda-13.0}
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
 TIMING=${TIMING-2624:6144} TILES=${TILES-512:6144 3072:6144 6144:1536} PROFILE=${PROFILE:-1} GROUPED=${GROUPED:-0}
+SCHEDULES=${SCHEDULES:-serial} TIMING_M=${TIMING_M:-}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
-export O D PY S TIMING TILES PROFILE GROUPED
+export O D PY S TIMING TILES PROFILE GROUPED SCHEDULES TIMING_M
 : > "$O/rc.txt"
 mkdir -p "$S/ship" && tar -C "$S/ship" -xf "$IN/ship.tar" && (cd "$S/ship" && sha256sum -c --quiet MANIFEST.sha256)
 echo "ship rc $?" >> "$O/rc.txt"
@@ -39,11 +41,12 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-30}" -- bash -c '
   PEARLC_EXPECT_UUID=$GPU_LEASE_UUID SHAPES="" "$PY" "$D/run.py" "$D/check/check.json" > "$O/run.jsonl" 2> "$O/run.err"
   rc=$?; echo "run.py rc $rc" >> "$O/rc.txt"
   [ "$rc" = 0 ] || exit "$rc"
-  if [ -n "$TIMING" ]; then
+  for sc in $SCHEDULES; do
+    [ -n "$TIMING" ] || break
     # shellcheck disable=SC2086
-    "$PY" "$D/glm53_timing.py" --out "$O/timing" --shapes $TIMING > "$O/timing.log" 2>&1
-    echo "timing rc $?" >> "$O/rc.txt"
-  fi
+    "$PY" "$D/glm53_timing.py" --out "$O/timing-$sc" --shapes $TIMING --schedule "$sc" ${TIMING_M:+--m $TIMING_M} > "$O/timing-$sc.log" 2>&1
+    echo "timing $sc rc $?" >> "$O/rc.txt"
+  done
   for sh in $TILES; do
     "$PY" "$D/glm53_passes.py" capture --out "$S/tiles/${sh/:/x}" --shapes "$sh" > "$O/tiles-${sh/:/x}.log" 2>&1
     echo "tiles ${sh/:/x} rc $?" >> "$O/rc.txt"
@@ -83,7 +86,7 @@ for c in "$S"/grouped/*/capture.json; do
 done
 cat "$O/rc.txt"
 tail -3 "$O/run.err" 2>/dev/null
-grep -E "slowdown|no stock" "$O/timing.log" 2>/dev/null
+grep -E "slowdown|no stock" "$O"/timing-*.log 2>/dev/null
 tail -n 8 "$O"/tiles-*.log "$O/grouped.log" 2>/dev/null
 head -60 "$O/profile/report.txt" 2>/dev/null
 ! grep -qv " rc 0$" "$O/rc.txt"
