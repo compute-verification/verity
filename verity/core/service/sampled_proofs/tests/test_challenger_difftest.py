@@ -23,7 +23,8 @@ a draw's coins from one family of a ledger session's challenger, opened after th
 roots, the bytes it read and the session's evidence, then a coin opened after the commitment and skipped, a wrong
 opening, coins opened before the commitment (their `after` rewritten or not), a coin opened and not read, the bytes
 tampered or longer, another commitment, a release log edited, the window of another session the ledger opens (a prover
-picking the window), each malformed form. Each piece answers
+picking the window), a session whose pin is off the verifier's copy of main, no pins log, each malformed form. Each
+piece answers
 ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
 """
 
@@ -1553,6 +1554,7 @@ class Drawn:
             self._step("draw", lambda: self.records["draw"].record(rng.randbytes(64)))
         s.close = s.signed(None)
         self.ledger = Ledger(rng, s)
+        self.pins, self.main = _pinned(rng, self.ledger, "honest")
 
     def _step(self, label: str, f):
         n = len(self.records[label].log)
@@ -1564,8 +1566,8 @@ class Drawn:
         return [r.hex() for r in self.records["draw"].roots]
 
     def evidence(self, segment: dict) -> dict:
-        return {"key": self.s.key.to_json(), "ledger": self.ledger.lines(), "segment": segment,
-                "session": self.s.files()}
+        return {"key": self.s.key.to_json(), "ledger": self.ledger.lines(), "main": self.main, "pins": self.pins,
+                "segment": segment, "session": self.s.files()}
 
     def other_window(self, rng: random.Random) -> str:
         """The root of a window the ledger opens for another session, when it has one, else a window it doesn't open."""
@@ -1663,7 +1665,7 @@ def read_case(rng: random.Random, name: str) -> Any:
 
 
 DRAW_COINS_NAMES = ["honest"] + DRAW_MUTATIONS + ["log-tampered", "other-window", "window-form", "key-form",
-                                                   "coins-form", "request"]
+                                                   "off-main", "no-pins", "coins-form", "request"]
 
 
 def draw_coins_case(rng: random.Random, name: str) -> Any:
@@ -1682,6 +1684,10 @@ def draw_coins_case(rng: random.Random, name: str) -> Any:
             j["window"] = rng.choice(["", "AB" * 64, j["window"][:-2]])
         case "key-form":
             coins["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+        case "off-main":
+            coins["main"] = [c for c in coins["main"] if c != d.ledger.opened["pinned"]]
+        case "no-pins":
+            coins["pins"] = None
         case "coins-form":
             j["coins"] = rng.choice([_body(coins, segment=DROP), {**coins, "window": d.ledger.window}, None,
                                      [coins]])
