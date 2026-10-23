@@ -522,8 +522,8 @@ theorem cap_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st 
     rw [List.flatMap_map, ← hN]
     refine flatMap_range_nodes lk.root _ fun n hn => ?_
     obtain ⟨wh, cc, htop, hb⟩ := hbytes n (hN ▸ hn)
-    show ([] : Msg) ++ Claims.Recursion.VStarB.readForms w (hmCommit c q n) = _
-    rw [List.nil_append, hb, topRow_zero htop]
+    simp only [List.nil_append]
+    rw [hb, topRow_zero htop]
   · cases hseg
 
 /-! ## `PartOpensB` at `layoutBTops`, but the tops rounds' pieces -/
