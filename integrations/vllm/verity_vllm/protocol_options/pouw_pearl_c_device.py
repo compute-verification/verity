@@ -1,7 +1,9 @@
-"""Pearl-C on the RTX PRO 6000 (sm_120) at the linears' ``quant_method.apply``: every call computed and committed on the device
-by GPU 1's kernel pipeline, one epoch per install over every linear weight, one transcript per pass over every call.
+"""Pearl-C on the RTX PRO 6000 (sm_120), or on an H100 or H200 (sm_90a), at the linears' ``quant_method.apply``: every call
+computed and committed on the device by GPU 1's kernel pipeline, one epoch per install over every linear weight, one transcript
+per pass over every call.
 
-The kernel is a directory (setting ``kernel``): the run tree's ``benchmarks/pouw/pearl_c_sm120``, whose ``run.py`` has the
+The kernel is a directory (setting ``kernel``): the run tree's ``benchmarks/pouw/pearl_c_sm120`` (or ``pearl_c_sm90`` for the
+``h100`` record), whose ``run.py`` has the
 `Pipeline` (its kernels in order, each a named step of a phase, over buffers the caller may own) and whose ``fixture.py`` has
 the keys (`keys_of`, `unit_block`).  The cubin is build.sh's (setting ``cubin``, default the directory's
 cubin).  This module owns the buffers and runs the pipeline's steps on torch's current stream, in the
@@ -76,7 +78,7 @@ from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+from verity.core.protocols.pouw.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
 from verity.core.protocols.pouw.serving import (
     SCHEDULES,
     SERIAL,
@@ -120,11 +122,15 @@ from .pouw_pearl_c_screen import (
 
 #: the Pearl-C schemes this device path runs, by name (`verity.core.protocols.pouw.serving.SchemeId`: forming, device record, hashing format);
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
-#: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it).  The format is
+#: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it); ``h100`` (G = 4,
+#: GLM-5.3's FP8 form on the H200, Daniel 22 Oct) runs pearl_c_sm90's kernels.  The format is
 #: -h3, SHA-512 throughout (its seeds, lines, tile leaves and HM96 trees; Daniel's 2026-10-06 ruling), each row's E_A line
 #: from its own seed (the work law capping each credited row too); its tree hash comes from
 #: `verity.core.protocols.pouw.serving.HASH_FORMATS` through the scheme.
-SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED))
+SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED, H100))
+#: each device record's kernels' granularity in (k, n) beyond the scheme's domain: pearl_c_sm120's k a multiple of 1,024 and
+#: n of 128; pearl_c_sm90's k of 256 (its row digests' 1 KiB segments) and n of 64 (its 128 x 64 tiles)
+KERNEL_GRAIN = {SM120.name: (1024, 128), SM120_UNPROMOTED.name: (1024, 128), H100.name: (256, 64)}
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
 ROW_ALIGN = 16
 #: tiles one pass's leaf buffer holds (256 MiB)
@@ -189,11 +195,12 @@ def scheme_of(name: str, **instance: Any) -> C.PearlC:
 
 
 def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
-    """Every linear outside the scheme's domain or the kernels' (k a multiple of 1,024, n of 128), by weight id."""
+    """Every linear outside the scheme's domain or its kernels' (`KERNEL_GRAIN`), by weight id."""
     s, out = scheme_of(name), []
+    gk, gn = KERNEL_GRAIN[s.device.name]
     for w, (n, k) in sorted(shapes.items()):
-        if k % 1024 or n % 128:
-            out.append(f"linear {w}: (n, k) = ({n}, {k}), and the kernels take k a multiple of 1,024 and n of 128")
+        if k % gk or n % gn:
+            out.append(f"linear {w}: (n, k) = ({n}, {k}), and the kernels take k a multiple of {gk:,} and n of {gn}")
             continue
         try:
             s.check(Matmul(0, Shape(ROW_ALIGN, k, n), w))

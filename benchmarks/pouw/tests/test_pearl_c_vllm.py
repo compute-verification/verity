@@ -45,6 +45,7 @@ from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Sh
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.core.protocols.pouw.serving import SchemeId
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
@@ -86,6 +87,8 @@ R = load("pearl_c_sm120_run", KERNEL / "run.py")
 F = load("pearl_c_sm120_fixture", KERNEL / "fixture.py")
 VR = load("pearl_c_vllm_verify_run", KERNEL.parent / "pearl_c_vllm" / "verify_run.py")
 SD = load("pearl_c_vllm_served_debit", KERNEL.parent / "pearl_c_vllm" / "served_debit.py")
+#: the device path's schemes whose device record is a variant of KERNEL's pipeline (pearl_c_sm90 runs h100's)
+KERNEL_SCHEMES = sorted(s for s in PPD.SCHEMES if SchemeId.parse(s).device in R.VARIANT_G)
 
 
 def bf16_words(rng, rows: int, k: int, scale: float = 1.0) -> np.ndarray:
@@ -137,7 +140,7 @@ def test_an_unsure_row_is_decided_exactly():
 
 # ---- the per-call keys --------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
+@pytest.mark.parametrize("scheme", KERNEL_SCHEMES)
 def test_call_keys_are_the_fixtures_keys_of(scheme):
     s = PPD.scheme_of(scheme)
     roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
@@ -627,7 +630,7 @@ class TwinDev(RecordingDev):
             assert self.pd.pd_run(name.encode(), grid, block, ctypes.byref(a)) == 0, name
 
 
-@pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
+@pytest.mark.parametrize("scheme", KERNEL_SCHEMES)
 def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
     """The constants the pipeline reads (the prover's salt key, then `audit.hm96_kernel_constants`) and a run's tree hash are
     the scheme's: hm96-sha512's.  Without the prover's 32-byte key the constants are refused."""
@@ -648,7 +651,7 @@ def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
 
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
-@pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
+@pytest.mark.parametrize("scheme", KERNEL_SCHEMES)
 def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_path):
     """B's roots, each call's A root over its m₁₆ rows (filler zero), and the pass's tile tree over the leaves the calls wrote,
     their kernels run by `simt_twin` and hash_decode.cuh's host build: each is `MerkleTree`'s root in hm96-sha512
@@ -1885,6 +1888,18 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
     assert C.PearlC(forming="v1", hashing="h0").commitment_hash == "sha256"
     with pytest.raises(KeyError, match="this device path runs"):
         PPD.scheme_of("pearl-c-sm120-v1-h0")
+
+
+def test_each_device_records_kernels_refuse_their_own_grain():
+    """pearl_c_sm120's kernels take k a multiple of 1,024 and n of 128, pearl_c_sm90's (h100's) k of 256 and n of 64, inside
+    the scheme's domain: an n = 2,624, k = 1,536 linear (GLM-5.3's at TP 8) runs on sm_90a and not on sm_120, n = 160 on
+    neither, and k = 256 is under both schemes' k_min."""
+    shapes = {0: (2624, 1536), 1: (160, 6144), 2: (7168, 256), 3: (4096, 4096)}
+    sm90 = PPD.refusals("pearl-c-h100-v1-h3", shapes)
+    assert [r.split(":")[0] for r in sm90] == ["linear 1", "linear 2"] and "k a multiple of 256 and n of 64" in sm90[0]
+    sm120 = PPD.refusals(SCHEME, shapes)
+    assert [r.split(":")[0] for r in sm120] == ["linear 0", "linear 1", "linear 2"]
+    assert "k a multiple of 1,024 and n of 128" in sm120[0]
 
 
 # ---- the schedule as data ---------------------------------------------------------------------------------------------
