@@ -1,6 +1,7 @@
 """The templates of the serving rows (`pipeline.serving_rows`, whose module text states their rules): a template read through its
 word link (:func:`template`), and the templates a Program row's Definition holds instances of (:func:`unit_templates`: the row
-itself, a ``CUT`` family's batched members, a ``COORDS`` family's coordinates and a ``COLS`` family's column blocks)."""
+itself, a ``CUT`` family's batched members, a ``COORDS`` family's coordinates, a ``COLS`` family's column blocks and a ``PARTS``
+family's parts)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,8 +15,16 @@ CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
 COORDS = {"MoeExpertFp8Gemm_v1": {}, "MoeExpertFp8GemmW_v1": {}, "FlashInferFp8Linear_v1": {"E": 1, "G": 128}}
 #: the row Definitions elementwise along the last axis of every parameter and of the output, by that axis's static: a row W wide
 #: is W / w units of its Definition at width w (a halving of W), unit j reading and returning columns [jw, jw + w), the ``cols``
-#: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce)
-COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N"}
+#: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce and its residual add)
+COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N"}
+#: the row Definitions whose Calls are split into parts, each a Definition of its own at the row's statics it names: per part, its
+#: family, what it reads in order (``("arg", g)`` the row's argument group g, ``("out", j)`` the row's committed output member j)
+#: and the output members it returns; together they return every output once, and the row computes what they compose to
+#: (tests/program/test_tp_allreduce_parts.py).  A ``COLS`` part is read in column blocks, any other one whole (the ``part``
+#: layout).  `tp_allreduce.AllReduceRmsNormMnnvl`: its all-reduce and residual add (r), then its norm of the committed r.
+PARTS = {"AllReduceRmsNormMnnvl_v1": (("AllReduceResidualMnnvl_v1", (("arg", 0), ("arg", 1)), (1,)),
+                                      ("RmsNormMnnvl_v1", (("out", 1), ("arg", 2)), (0,)))}
+PART_OF = {p[0]: (row, p) for row, ps in PARTS.items() for p in ps}
 #: a member's layout by the family of its template's word; any other template is the row itself
 LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8"}
 #: a row template's element widths whose ports the rows commit as their little-endian bytes
@@ -26,7 +35,7 @@ PACKED = frozenset((8, 16, 32, 64))
 class Template:
     """A partition's template as the rows are read for it: its descriptor id and Definition (the population program's), the id of
     the word Definition it computes (its own for a word Definition), and its member layout (``LAYOUTS``; ``"coord"`` for a
-    ``COORDS`` family at N = 1, ``"cols"`` for a ``COLS`` family; else ``"row"``).
+    ``COORDS`` family at N = 1, ``"cols"`` for a ``COLS`` family, ``"part"`` for any other ``PARTS`` part; else ``"row"``).
     ``packed``: a row or coordinate template with a port that is not 16-bit elements, each port's element bits (its parameters', then its
     return fields'); its ports are committed as their elements' bytes."""
     id: str
@@ -80,7 +89,7 @@ def template(t: str) -> Template:
         view = types
     word = descriptor_id(w)
     layout = ("coord" if spec_base(word) in COORDS and int(spec_statics(word)["N"]) == 1 else "cols" if spec_base(word) in COLS
-              else LAYOUTS.get(spec_base(word), "row"))
+              else "part" if spec_base(word) in PART_OF else LAYOUTS.get(spec_base(word), "row"))
     packed = None
     if widths != {16} and layout != "s8":
         ports = [*view[:-1], *(getattr(view[-1], "fields", None) or (view[-1],))]
@@ -95,15 +104,24 @@ def template(t: str) -> Template:
     return hit
 
 
+def part(word: str, spec: str) -> tuple | None:
+    """The ``PARTS`` entry of template word ``word`` on a row of ``spec`` when ``word``'s family is a part of the row's; else None
+    (the row is ``word``'s own family)."""
+    from verity_vllm.query.program_view import spec_base
+
+    hit = PART_OF.get(spec_base(word))
+    return hit[1] if hit is not None and hit[0] == spec_base(spec) else None
+
+
 _UNITS: dict[str, tuple[tuple[str, int], ...]] = {}
 
 
 def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     """The word Definitions a Program row's Definition (its word view's ``spec``) holds instances of, ``(descriptor id, instances)``:
     the row itself, then, for a ``CUT`` family, each Definition its body batches (a batch's members; Input batches are its
-    parameters), for a ``COORDS`` family of N > 1, its coordinate (its Definition at N = 1, N of them), and for a ``COLS`` family,
-    its Definition at each halving W / k of its width (k of them).  None when the spec does not bind to exactly its own
-    descriptor id."""
+    parameters), for a ``COORDS`` family of N > 1, its coordinate (its Definition at N = 1, N of them), for a ``COLS`` family,
+    its Definition at each halving W / k of its width (k of them), and for a ``PARTS`` family, each part at the row's statics
+    (a ``COLS`` part also at each halving).  None when the spec does not bind to exactly its own descriptor id."""
     hit = _UNITS.get(spec)
     if hit is not None:
         return hit
@@ -120,19 +138,24 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
         n = int(spec_statics(spec).get("N", 1)) if spec_base(spec) in COORDS else 1
         if n > 1 and (c := _bind(spec, N=1)) is not None:
             hit += ((descriptor_id(c), n),)
-        if (axis := COLS.get(spec_base(spec))) is not None:
-            W, k = int(spec_statics(spec)[axis]), 2
-            while W % k == 0:
-                if (c := _bind(spec, **{axis: W // k})) is not None:
-                    hit += ((descriptor_id(c), k),)
-                k *= 2
+        for fam in [spec_base(spec)] + [p[0] for p in PARTS.get(spec_base(spec), ())]:
+            own = fam == spec_base(spec)
+            if not own and (c := _bind(spec, fam)) is not None:
+                hit += ((descriptor_id(c), 1),)
+            if (axis := COLS.get(fam)) is not None:
+                W, k = int(spec_statics(spec)[axis]), 2
+                while W % k == 0:
+                    if (c := _bind(spec, None if own else fam, **{axis: W // k})) is not None:
+                        hit += ((descriptor_id(c), k),)
+                    k *= 2
     _UNITS[spec] = hit
     return hit
 
 
-def _bind(spec: str, **over: Any) -> Any:
+def _bind(spec: str, family: str | None = None, **over: Any) -> Any:
     """The registry's Definition bound at ``spec``'s statics (``over`` replacing some), each ``{"fn": id}`` static (`spec_statics`
-    reads it as the id) the primitive it names; None when it does not bind.  A caller holds the bound descriptor id to ``spec``."""
+    reads it as the id) the primitive it names; with ``family``, that family's Definition at those of the statics it has.  None
+    when it does not bind.  A caller holds the bound descriptor id to ``spec``."""
     from verity.ml.circuits.codec import lookup_primitive
     from verity.ml.circuits.defs import REGISTRY
     from verity_vllm.query.program_view import _registry, spec_base, spec_statics
@@ -144,10 +167,11 @@ def _bind(spec: str, **over: Any) -> Any:
             return v
 
     reg, _errors = _registry()
-    d = reg.defs.get(spec_base(spec))
+    d = reg.defs.get(family or spec_base(spec))
     if d is None or not hasattr(d, "bind"):
         return None
+    statics = {**spec_statics(spec), **over}
     try:
-        return d.bind(**{k: static(v) for k, v in {**spec_statics(spec), **over}.items()})
+        return d.bind(**{k: static(v) for k, v in statics.items() if family is None or k in d.statics})
     except (TypeError, ValueError, KeyError):
         return None

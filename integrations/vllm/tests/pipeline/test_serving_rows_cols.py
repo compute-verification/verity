@@ -22,6 +22,8 @@ from verity_vllm.program.registry import tp_allreduce as TA
 
 TOPK, WORLD, W = 3, 4, 8
 OPS = {"MoeSum_v1": "model.layers.3.mlp.experts", "AllReduceMnnvl_v1": "model.layers.6.mlp"}
+#: the families that are rows of their own (a part's blocks: test_serving_rows_parts.py)
+FAMILIES = [f for f in SRW.COLS if f not in SRW.PART_OF]
 
 
 def defn(family: str, w: int, boolean: bool = False):
@@ -60,7 +62,7 @@ def row(monkeypatch):
     return make
 
 
-@pytest.mark.parametrize("family", list(SRW.COLS))
+@pytest.mark.parametrize("family", FAMILIES)
 def test_a_row_holds_its_definition_at_every_halving_of_its_width(family):
     spec = descriptor_id(defn(family, W))
     assert SRW.unit_templates(spec) == ((spec, 1), *((descriptor_id(defn(family, W // k)), k) for k in (2, 4, 8)))
@@ -70,7 +72,7 @@ def test_a_row_holds_its_definition_at_every_halving_of_its_width(family):
     assert (t.layout, t.word, t.packed) == ("cols", descriptor_id(defn(family, W // 2)), None)
 
 
-@pytest.mark.parametrize("family", list(SRW.COLS))
+@pytest.mark.parametrize("family", FAMILIES)
 @pytest.mark.parametrize("w", [W // 2, W // 4, 1])
 def test_the_column_blocks_cover_the_row_s_outputs_and_compute_them(row, family, w):
     x, X, y, store = row(family)
@@ -86,7 +88,7 @@ def test_the_column_blocks_cover_the_row_s_outputs_and_compute_them(row, family,
     assert evaluate(defn(family, w), data["rows"]["in0"]).tolist() == data["outs"]["out.out"].tolist()
 
 
-@pytest.mark.parametrize("family", list(SRW.COLS))
+@pytest.mark.parametrize("family", FAMILIES)
 def test_at_its_own_width_the_member_is_the_row(row, family, monkeypatch):
     x, X, y, store = row(family)
     T = descriptor_id(defn(family, W))
