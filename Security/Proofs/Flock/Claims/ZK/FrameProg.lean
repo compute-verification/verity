@@ -1159,9 +1159,8 @@ theorem progOf_check_first (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDepl
     obtain ⟨c'', _, _, _, _, _, hph', _, hm'⟩ := freshOf_ok x cs hx hq hm
     rcases hm' with ⟨_, rfl⟩ | ⟨_, st', hp, rfl⟩
     · rfl
-    · have := Sched.step_inner c'' {} (.prior _ _) trivial rfl
-      rw [hp] at this
-      exact this
+    · rw [← show (_root_.Flock.Firewall.Frame.step c'' {} _).2 = st' from congrArg Prod.snd hp]
+      exact Sched.step_inner c'' {} _ (by trivial) rfl
   obtain ⟨fs, fs', k, h1, h1', hn2, hA, hM, hM', hk, h0, hn⟩ := Sched.roundAt_frames (roundsAt_getD hrs hlt)
   rw [h1] at h
   obtain ⟨out', s', w, hc', hu⟩ :=
