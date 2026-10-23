@@ -129,6 +129,7 @@ import Proofs.Flock.Claims.ZK.FinishRep
 import Proofs.Flock.Claims.ZK.FinishRank
 import Proofs.Flock.Claims.ZK.AdmitsOf
 import Proofs.Flock.Claims.ZK.FrameAdmits
+import Proofs.Flock.Claims.ZK.FrameBeta
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishLive
@@ -604,6 +605,11 @@ import Proofs.Flock.Claims.ZK.SessionLean
   **`LeanRelease.tablesAdmitUnrefused_dataE`**) and the frames' trust `LeanRelease.FrameUnrefused` (a live history the
   frame takes shows no fault), so `FinalRoundEq` at `ofLoop` is theirs and `FinishIs`'
   (**`LeanRelease.finalRoundEq_ofLoop`**).
+* `FrameBeta`: `FrameUnrefused`' `β` fault. At a `Live` statement the loop serves, on a live history of `refK x` openings
+  whose last coins the frame takes, each rep's opening at `betaSlot` is its inner proof's round 2 (the rep's round
+  position, `Loop.locate_take_sum` with `Loop.repStartZk_eq`, and its schedule so far complete,
+  `Count.schedSoFar_size`), whose frame takes only one nonzero `β` (`Loop.answer_beta`), so the opened `β` is nonzero
+  (**`LeanRelease.beta_unrefused`**).
 * `FinishStop`: the firewall's stop at a worker's values. At constraints whose forms are rep `r`'s first seven rows on
   the masked values, none fails on the drawn pads exactly where those rows vanish at the clear values at zero pads
   (**`Composed.noFail_iff_rows`**, by `rows_padFree`), so the stop bit reads no pad; and where they vanish for both
