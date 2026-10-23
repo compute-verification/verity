@@ -192,17 +192,28 @@ theorem range_map_getElem! (f : F128 → F128) (t : Array F128) :
 theorem parMap_eq (f : F128 → F128) (t : Array F128) : parMap f t = t.map f := by
   rw [parMap, parGen_eq, range_map_getElem!]
 
-/-- `eqTable` with each step in tasks: bit 1's half by `parMap`, then bit 0's as bit 1's plus the table
+/-- `mulMap` in tasks. -/
+def mulMapPar (t : Array F128) (r : F128) : Array F128 :=
+  if t.size < 8192 then parMap (· * r) t else let tb := F128.mulTable r; parMap (F128.mulBy tb ·) t
+
+theorem mulMapPar_eq (t : Array F128) (r : F128) : mulMapPar t r = t.map (· * r) := by
+  unfold mulMapPar
+  split
+  · exact parMap_eq _ t
+  · rw [parMap_eq]
+    exact Array.map_congr_left fun v _ => F128.mulBy_mulTable r v
+
+/-- `eqTable` with each step in tasks: bit 1's half by `mulMapPar`, then bit 0's as bit 1's plus the table
 (`F128.mul_add_one`), as `eqStepFast` computes it. Not a `@[csimp]` of `eqTable`, which the verifier's compiled path
 reaches (`verifier` in `lean-audit.json`): only the fast paths below call it. -/
 def eqTablePar (r : Array F128) : Array F128 :=
-  r.foldl (fun t rj => let hi := parMap (· * rj) t; parGen (fun i => hi[i]! + t[i]!) t.size ++ hi) #[1]
+  r.foldl (fun t rj => let hi := mulMapPar t rj; parGen (fun i => hi[i]! + t[i]!) t.size ++ hi) #[1]
 
 theorem eqTablePar_eq (r : Array F128) : eqTablePar r = eqTable r := by
   unfold eqTablePar eqTable
   congr
   funext t rj
-  rw [parMap_eq]
+  rw [mulMapPar_eq]
   dsimp only
   rw [parGen_eq, eqStep, ← range_map_getElem! (· * (rj + 1))]
   congr 1

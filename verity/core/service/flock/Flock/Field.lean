@@ -330,6 +330,50 @@ protected theorem mul_one (a : F128) : a * 1 = a := by
 theorem mul_add_one (x r : F128) : x * (r + 1) = x * r + x := by
   rw [F128.mul_add, F128.mul_one]
 
+/-- `clmulGo` is additive in the multiplicand and the accumulator together. -/
+theorem clmulGo_xor_left (a a' : UInt64) : ∀ (n i : Nat) (b l1 h1 l2 h2 : UInt64),
+    clmulGo (a ^^^ a') n i b (l1 ^^^ l2) (h1 ^^^ h2) =
+      ((clmulGo a n i b l1 h1).1 ^^^ (clmulGo a' n i b l2 h2).1, (clmulGo a n i b l1 h1).2 ^^^ (clmulGo a' n i b l2 h2).2)
+  | 0, _, _, _, _, _, _ => rfl
+  | n + 1, i, b, l1, h1, l2, h2 => by
+    simp only [clmulGo]
+    split
+    · rw [← clmulGo_xor_left a a' n (i + 1)]
+      congr 1
+      · rw [UInt64.shiftLeft_xor]; ac_rfl
+      · split
+        · rfl
+        · rw [UInt64.shiftRight_xor]; ac_rfl
+    · rw [← clmulGo_xor_left a a' n (i + 1)]
+
+theorem clmul_xor_left (a a' b : UInt64) :
+    clmul (a ^^^ a') b = ((clmul a b).1 ^^^ (clmul a' b).1, (clmul a b).2 ^^^ (clmul a' b).2) := by
+  unfold clmul
+  rw [← clmulGo_xor_left, show (0 : UInt64) ^^^ 0 = 0 from rfl]
+
+protected theorem add_mul (a b c : F128) : (a + b) * c = a * c + b * c := by
+  show mul ⟨a.lo ^^^ b.lo, a.hi ^^^ b.hi⟩ c = mul a c + mul b c
+  have hm : clmul (a.lo ^^^ b.lo ^^^ (a.hi ^^^ b.hi)) (c.lo ^^^ c.hi) =
+      ((clmul (a.lo ^^^ a.hi) (c.lo ^^^ c.hi)).1 ^^^ (clmul (b.lo ^^^ b.hi) (c.lo ^^^ c.hi)).1,
+        (clmul (a.lo ^^^ a.hi) (c.lo ^^^ c.hi)).2 ^^^ (clmul (b.lo ^^^ b.hi) (c.lo ^^^ c.hi)).2) := by
+    rw [← clmul_xor_left, show a.lo ^^^ b.lo ^^^ (a.hi ^^^ b.hi) = a.lo ^^^ a.hi ^^^ (b.lo ^^^ b.hi) by ac_rfl]
+  simp only [mul, clmul_xor_left a.lo b.lo c.lo, clmul_xor_left a.hi b.hi c.hi, hm]
+  generalize clmul a.lo c.lo = p0 at *
+  generalize clmul b.lo c.lo = q0 at *
+  generalize clmul a.hi c.hi = p2 at *
+  generalize clmul b.hi c.hi = q2 at *
+  generalize clmul (a.lo ^^^ a.hi) (c.lo ^^^ c.hi) = pm at *
+  generalize clmul (b.lo ^^^ b.hi) (c.lo ^^^ c.hi) = qm at *
+  obtain ⟨_, _⟩ := p0
+  obtain ⟨_, _⟩ := q0
+  obtain ⟨_, _⟩ := p2
+  obtain ⟨_, _⟩ := q2
+  obtain ⟨_, _⟩ := pm
+  obtain ⟨_, _⟩ := qm
+  simp only
+  rw [← reduce_xor]
+  congr 1 <;> ac_rfl
+
 theorem bitU64 (x : UInt64) (s : Nat) (hs : s < 64) : ((x >>> s.toUInt64) &&& 1 == 1) = x.toNat.testBit s := by
   have hn : ((x >>> s.toUInt64) &&& 1).toNat = x.toNat / 2 ^ s % 2 := by
     rw [UInt64.toNat_and, UInt64.toNat_shiftRight, Nat.toUInt64, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (by omega),
@@ -362,6 +406,97 @@ theorem testBit_byte (a : F128) {j i : Nat} (hj : j < 16) (hi : i < 8) : (a.byte
   · rw [if_pos h, if_pos (show 8 * j + i < 64 by omega), byteU64 _ _ _ h hi, bitU64 _ _ (by omega)]
   · rw [if_neg h, if_neg (show ¬ 8 * j + i < 64 by omega), byteU64 _ _ _ (by omega) hi, bitU64 _ _ (by omega),
       show 8 * j + i - 64 = 8 * (j - 8) + i by omega]
+
+/-- Byte `j < 8` of `x`, in place. -/
+@[inline] def bslot (x : UInt64) (j : Nat) : UInt64 := ((x >>> (8 * j).toUInt64) &&& 255) <<< (8 * j).toUInt64
+
+theorem getLsbD_bslot (x : UInt64) (j i : Nat) (hj : j < 8) (hi : i < 64) :
+    (bslot x j).toBitVec.getLsbD i = (decide (8 * j ≤ i ∧ i < 8 * j + 8) && x.toBitVec.getLsbD i) := by
+  simp only [bslot, UInt64.toBitVec_shiftLeft, UInt64.toBitVec_and, UInt64.toBitVec_shiftRight, Nat.toUInt64]
+  simp [Nat.mod_eq_of_lt (show 8 * j < 64 by omega)]
+  rw [show (255#64) = BitVec.ofNat 64 (2 ^ 8 - 1) from rfl, BitVec.getLsbD_ofNat, Nat.testBit_two_pow_sub_one]
+  by_cases h1 : i < 8 * j
+  · simp [h1, show ¬ 8 * j ≤ i by omega]
+  · rw [show 8 * j + (i - 8 * j) = i by omega]
+    by_cases h2 : i < 8 * j + 8
+    · simp [h1, h2, hi, show 8 * j ≤ i by omega, show i - 8 * j < 8 by omega, show i - 8 * j < 64 by omega]
+    · simp [h1, h2, show ¬ i - 8 * j < 8 by omega]
+
+/-- A word is the sum of its eight bytes in place. -/
+theorem u64_bytes (x : UInt64) :
+    x = bslot x 0 ^^^ bslot x 1 ^^^ bslot x 2 ^^^ bslot x 3 ^^^ bslot x 4 ^^^ bslot x 5 ^^^ bslot x 6 ^^^ bslot x 7 := by
+  apply UInt64.toBitVec_inj.mp
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  simp only [UInt64.toBitVec_xor, BitVec.getLsbD_xor]
+  rw [getLsbD_bslot x 0 i (by omega) hi, getLsbD_bslot x 1 i (by omega) hi, getLsbD_bslot x 2 i (by omega) hi,
+    getLsbD_bslot x 3 i (by omega) hi, getLsbD_bslot x 4 i (by omega) hi, getLsbD_bslot x 5 i (by omega) hi,
+    getLsbD_bslot x 6 i (by omega) hi, getLsbD_bslot x 7 i (by omega) hi]
+  rcases (by omega : i < 8 ∨ (8 ≤ i ∧ i < 16) ∨ (16 ≤ i ∧ i < 24) ∨ (24 ≤ i ∧ i < 32) ∨ (32 ≤ i ∧ i < 40) ∨
+    (40 ≤ i ∧ i < 48) ∨ (48 ≤ i ∧ i < 56) ∨ (56 ≤ i ∧ i < 64)) with h | h | h | h | h | h | h | h <;>
+  simp (disch := omega) only [decide_eq_true, decide_eq_false, Bool.true_and, Bool.false_and, Bool.xor_false,
+    Bool.false_xor]
+
+/-- Byte `b < 256` at byte `j < 16`. -/
+@[inline] def byteMono (j : Nat) (b : UInt64) : F128 :=
+  if j < 8 then ⟨b <<< (8 * j).toUInt64, 0⟩ else ⟨0, b <<< (8 * (j - 8)).toUInt64⟩
+
+/-- Byte `j` of `v` as a word. -/
+@[inline] def byteW (v : F128) (j : Nat) : UInt64 :=
+  if j < 8 then (v.lo >>> (8 * j).toUInt64) &&& 255 else (v.hi >>> (8 * (j - 8)).toUInt64) &&& 255
+
+theorem byte_eq (v : F128) (j : Nat) : v.byte j = (byteW v j).toNat := by
+  unfold byte byteW; split <;> rfl
+
+theorem byteMono_byteW (v : F128) (j : Nat) :
+    byteMono j (byteW v j) = if j < 8 then ⟨bslot v.lo j, 0⟩ else ⟨0, bslot v.hi (j - 8)⟩ := by
+  unfold byteMono byteW bslot; split <;> rfl
+
+/-- `v` is the sum of its sixteen bytes in place. -/
+theorem bytes_sum (v : F128) : v =
+    byteMono 0 (byteW v 0) + byteMono 1 (byteW v 1) + byteMono 2 (byteW v 2) + byteMono 3 (byteW v 3) +
+    byteMono 4 (byteW v 4) + byteMono 5 (byteW v 5) + byteMono 6 (byteW v 6) + byteMono 7 (byteW v 7) +
+    byteMono 8 (byteW v 8) + byteMono 9 (byteW v 9) + byteMono 10 (byteW v 10) + byteMono 11 (byteW v 11) +
+    byteMono 12 (byteW v 12) + byteMono 13 (byteW v 13) + byteMono 14 (byteW v 14) + byteMono 15 (byteW v 15) := by
+  simp only [byteMono_byteW, Nat.reduceLT, ↓reduceIte, Nat.reduceSub, HAdd.hAdd, Add.add, add]
+  simp only [UInt64.xor_zero, UInt64.zero_xor]
+  rw [← u64_bytes, ← u64_bytes]
+
+/-- `byteMono (k / 256) (k mod 256) · r` at `k < 4096`: `mulBy`'s table of products by `r`. -/
+def mulTable (r : F128) : Array F128 :=
+  Array.ofFn (n := 4096) fun k => byteMono (k.val / 256) (k.val % 256).toUInt64 * r
+
+/-- `v · r` from `r`'s table (`mulBy_mulTable`): one entry a byte of `v`, added. -/
+@[inline] def mulBy (t : Array F128) (v : F128) : F128 :=
+  t[v.byte 0]! + t[256 + v.byte 1]! + t[512 + v.byte 2]! + t[768 + v.byte 3]! + t[1024 + v.byte 4]! +
+    t[1280 + v.byte 5]! + t[1536 + v.byte 6]! + t[1792 + v.byte 7]! + t[2048 + v.byte 8]! + t[2304 + v.byte 9]! +
+    t[2560 + v.byte 10]! + t[2816 + v.byte 11]! + t[3072 + v.byte 12]! + t[3328 + v.byte 13]! +
+    t[3584 + v.byte 14]! + t[3840 + v.byte 15]!
+
+theorem mulTable_get (r v : F128) (j : Nat) (hj : j < 16) :
+    (mulTable r)[256 * j + v.byte j]! = byteMono j (byteW v j) * r := by
+  have hb := v.byte_lt j
+  rw [getElem!_pos (mulTable r) (256 * j + v.byte j) (by simp [mulTable]; omega)]
+  simp only [mulTable, Array.getElem_ofFn]
+  rw [show (256 * j + v.byte j) / 256 = j by omega, show (256 * j + v.byte j) % 256 = v.byte j by omega, byte_eq,
+    show Nat.toUInt64 (byteW v j).toNat = byteW v j from UInt64.toNat_inj.mp (by
+      rw [Nat.toUInt64, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (UInt64.toNat_lt _)])]
+
+theorem mulBy_mulTable (r v : F128) : mulBy (mulTable r) v = v * r := by
+  have h := fun j hj => mulTable_get r v j hj
+  rw [mulBy, show v.byte 0 = 256 * 0 + v.byte 0 by omega, show 256 + v.byte 1 = 256 * 1 + v.byte 1 by omega,
+    show 512 + v.byte 2 = 256 * 2 + v.byte 2 by omega, show 768 + v.byte 3 = 256 * 3 + v.byte 3 by omega,
+    show 1024 + v.byte 4 = 256 * 4 + v.byte 4 by omega, show 1280 + v.byte 5 = 256 * 5 + v.byte 5 by omega,
+    show 1536 + v.byte 6 = 256 * 6 + v.byte 6 by omega, show 1792 + v.byte 7 = 256 * 7 + v.byte 7 by omega,
+    show 2048 + v.byte 8 = 256 * 8 + v.byte 8 by omega, show 2304 + v.byte 9 = 256 * 9 + v.byte 9 by omega,
+    show 2560 + v.byte 10 = 256 * 10 + v.byte 10 by omega, show 2816 + v.byte 11 = 256 * 11 + v.byte 11 by omega,
+    show 3072 + v.byte 12 = 256 * 12 + v.byte 12 by omega, show 3328 + v.byte 13 = 256 * 13 + v.byte 13 by omega,
+    show 3584 + v.byte 14 = 256 * 14 + v.byte 14 by omega, show 3840 + v.byte 15 = 256 * 15 + v.byte 15 by omega]
+  rw [h 0 (by omega), h 1 (by omega), h 2 (by omega), h 3 (by omega), h 4 (by omega), h 5 (by omega), h 6 (by omega),
+    h 7 (by omega), h 8 (by omega), h 9 (by omega), h 10 (by omega), h 11 (by omega), h 12 (by omega),
+    h 13 (by omega), h 14 (by omega), h 15 (by omega)]
+  conv => rhs; rw [bytes_sum v]
+  simp only [F128.add_mul]
 
 /-- `x^i` for `i < 128`. -/
 def monomial (i : Nat) : F128 :=
