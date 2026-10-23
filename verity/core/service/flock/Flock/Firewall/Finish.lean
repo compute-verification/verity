@@ -545,24 +545,43 @@ def openLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Arr
 one of which it must take), then its constraints sent to the firewall as `cons LEN` followed by their `LEN` bytes
 (`consBytes`), then `repFw`'s inner proof (`innerP`) on them, each round sent live (`liveAsks`). Where `repFw` stops on a
 constraint that fails on the pads, this speaks on schedule (`proofFile` then refuses the rep's file, and the session
-stops at its `Finish`). -/
-def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) : LiveM Unit := do
+stops at its `Finish`). Returns `repFw`'s proof where no constraint fails on the pads: `repFw` on `q` with every coin this
+took, which is the proof `proofFile` computes on a `rep` request with those inputs and coins (`Kept`). -/
+def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) : LiveM (Option Zk.ZkProof) := do
   let pads := padsOf q.draws
   let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) pads (saltAt q.draws.salts) : V InnerCommit) : LiveM InnerCommit)
   let hs : Hashes LiveM := Hashes.ofSha512 Sha512.hash
   let commit : Level → Array F128 → (Nat → ByteArray) → LiveM Commit := fun lv g salt => pure (commitFw lv g salt)
   let salt : Nat → Nat → ByteArray := fun l => saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)
-  let prog : TMW LiveM Unit := do
-    let (p, _, cons) ← repCons (liveAsks ch q.coins false) commit t.st t.sch t.tPad rep dom t.g t.cm0 (claimsOf q.xs)
+  let prog : TMW LiveM (Option Zk.ZkProof) := do
+    let (p, zl, cons) ← repCons (liveAsks ch q.coins false) commit t.st t.sch t.tPad rep dom t.g t.cm0 (claimsOf q.xs)
       pads ic q.vals t.extra t.lanePad salt
     let k := (← getThe (Array (Array F128))).size
     if k != q.coins.size then throwThe String s!"finish: the rep's PIOP and opening took {k} of its {q.coins.size} rounds of coins"
     let b := consBytes cons
     ch.write ((s!"cons {b.size}\n").toUTF8 ++ b)
     ch.flush
-    let _ ← innerP (liveAsks ch q.coins true) hs (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) pads ic p.zerocheck.finalC
+    let inner ← innerP (liveAsks ch q.coins true) hs (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) pads ic p.zerocheck.finalC
       cons
-  let _ ← prog.run (Transcript.init #[] dom)
+    return if (failingOn cons pads.h).isEmpty then some { proof := p, level0 := zl, inner } else none
+  let (z, _) ← prog.run (Transcript.init #[] dom)
+  return z
+
+/-- **What a rep's `inner` request leaves for its `rep` request**: table `i`'s rep `r`, its request `q`, every round's
+coins it took, and `repFw`'s proof on them (`innerLive`). -/
+structure Kept where
+  i : Nat
+  r : Nat
+  q : RepIn
+  coins : Array (Array F128)
+  proof : Zk.ZkProof
+
+/-- Whether `k` is `repFw`'s proof on table `i`'s rep `r` at the request `q`: everything of `q` that `proofFile` reads is
+`k`'s, and `q`'s coins are every coin `k`'s rep took. -/
+def Kept.answers (k : Kept) (i r : Nat) (q : RepIn) : Bool :=
+  k.i == i && k.r == r && q.coins == k.coins && q.vals == k.q.vals && q.xs == k.q.xs && q.hiSalts == k.q.hiSalts &&
+    q.draws.h == k.q.draws.h && q.draws.mu == k.q.draws.mu && q.draws.padH == k.q.draws.padH &&
+    q.draws.padMu == k.q.draws.padMu && q.draws.tauSalt == k.q.draws.tauSalt && q.draws.salts == k.q.draws.salts
 
 /-- **A rep's opening request**, every byte little-endian: the extra claims (a count, then each as a count and its words)
 and the algebraic phase's coins (a round count, then each round as a count and its words), as `parseRep` reads them;
@@ -595,7 +614,8 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
 * `inner I R LEN`: rep `R`'s request (`parseRep`) with the coins of its PIOP and opening: its constraints, then its inner
   proof's rounds, live (`innerLive`); answered `ok 0` after the last. Its proof file is then `rep`'s on every round's coins.
 * `rep I R LEN`: rep `R`'s request (`parseRep`) on table `I`, after its salts; the answer is its proof file
-  (`proofFile`).
+  (`proofFile`), encoded from the proof the `inner` request just before it computed where that request's inputs and
+  coins are this one's (`Kept.answers`).
 Anything else, or a request it refuses, is answered `err WHY` and ends it, with exit code `1`. -/
 def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) (setups : Array Setup)
     (level0Of : ByteArray → IO (Option Level0.Level0))
@@ -610,6 +630,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
     ch.flush
   let mut tabs : Array (Option Tab) := Array.replicate setups.size none
   let mut hi : Array (Array (Option (Array ByteArray))) := Array.replicate setups.size #[none, none]
+  let mut kept : Option Kept := none
   repeat
     let line := (← ch.getLine).replace "\n" ""
     if line.isEmpty then break
@@ -626,6 +647,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       | .ok t =>
         tabs := tabs.set! i (some t)
         hi := hi.set! i #[none, none]
+        kept := none
         answer (flat t.cm0.cap)
       | .error e => return (← refuse e)
     | ["salts", i, r, len] =>
@@ -645,7 +667,12 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       let some name := spec.tables[i]? | return (← refuse s!"table {i} of the session's {spec.tables.size}")
       if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
       let some s := (hi[i]!)[r]! | return (← refuse s!"table {i} rep {r} before its salts for levels ≥ 1")
-      match parseRep t s b >>= proofFile t r (spec.domain name r).toUTF8 with
+      let file : V ByteArray := parseRep t s b >>= fun q => match kept with
+        | some k => if k.answers i r q then pure (encZk (shapeZk t.st t.sch (claimsOf q.xs).size) k.proof)
+          else proofFile t r (spec.domain name r).toUTF8 q
+        | none => proofFile t r (spec.domain name r).toUTF8 q
+      kept := none
+      match file with
       | .ok p => answer p
       | .error e => return (← refuse e)
     | ["open", i, r, len] | ["inner", i, r, len] =>
@@ -656,14 +683,20 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
       let some s := (hi[i]!)[r]! | return (← refuse s!"table {i} rep {r} before its salts for levels ≥ 1")
       let dom := (spec.domain name r).toUTF8
-      let run : V (LiveM Unit) := if line.startsWith "open " then
-          (parseOpen b).map fun (xs, coins) => openLive ch t r dom xs s coins
-        else (parseRep t s b).map (innerLive ch t r dom)
+      kept := none
+      let run : V (LiveM (Option Kept)) := if line.startsWith "open " then
+          (parseOpen b).map fun (xs, coins) => do openLive ch t r dom xs s coins; return none
+        else (parseRep t s b).map fun q => do
+          let z ← innerLive ch t r dom q
+          let coins ← get
+          return z.map fun proof => { i, r, q, coins, proof }
       match run with
       | .error e => return (← refuse e)
       | .ok m =>
         match ← (m.run' #[]).run with
-        | .ok () => answer ByteArray.empty
+        | .ok k =>
+          kept := k
+          answer ByteArray.empty
         | .error e => return (← refuse e)
     | _ => return (← refuse s!"a request `{line}`")
   return 0
