@@ -19,8 +19,8 @@ the combine's):
   admit bits, the public inputs, lane `l`'s index and every `ok` word `1`) are not asked: flock-verify's known-content
   and known-read checks, part of `leafLayer`'s acceptance, give them (`Accounting.TS.Lanes.laneKnownHolds_of_check`,
   `combKnownOk_of_check`). Nor are the partials rows: they are proof-layer values, and lane `l`'s `partials` and the
-  combine's `p<l>` read one row of one registered tree (`PouwWindow.Lanes.ownOf`, which the guarantee takes of each
-  session's registered file) in full (the known-read check at `PouwWindow.Lanes.readFull`), so they are one row
+  combine's `p<l>` read one row of one registered tree (`PouwWindow.Lanes.ownOf`, which the leaf verifier's check, part of
+  `leafLayer`'s acceptance, holds each session's registered file to) in full (the known-read check at `PouwWindow.Lanes.readFull`), so they are one row
   (`Accounting.TS.Lanes.partials_bits`), whatever it holds.
 
 That the registrants' rows agree is not a premise: each registrant's opening opens its root at its position, so two
@@ -89,7 +89,7 @@ one row's bytes in all of them by `RowsAgree`, which holds up to an explicit SHA
 the openings the verifiers of record report, with no collision escape; the proof doesn't read it.) Nor does it ask of
 the known ports (admit, pub, `ok`): their rows' bits are their known content by flock-verify's checks. What it does ask
 is of the registered files the verifier hands the 33 sessions, beyond their form (`PouwWindow.Lanes.ownOf`: one tree
-per value in all 33, each port at its layout row, which the guarantee takes): the leaf's A, B and z/y tables and the
+per value in all 33, each port at its layout row, which acceptance checks): the leaf's A, B and z/y tables and the
 receipt are registered at the registration's roots (`ServedRegistered`), so the committed rows at those trees are the
 leaf's and the receipt's encodings. That every port of each circuit is registered is not asked: `leafLayer`'s
 acceptance includes flock-verify's complete check (#3131's `Flock.Registered.checkComplete`). -/
