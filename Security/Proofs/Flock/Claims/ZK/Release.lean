@@ -14,11 +14,13 @@ at the draws on the server's tape (`LeanRelease.draws`):
 * the round's rep's configuration (`LeanRelease.cfg`) is `Cfg.ofDraws` of its draws on the tape, the function
   `flock-firewall frame` starts the rep with: the layout, the pads, the absorbed order, the root it computes and the mask
   slot (`cfg_pads`, `cfg_root`). The frame's steps take it and return only the rep's state (`Masker`), so none changes
-  the pads or the root. Only that state comes from the transport (`LeanRelease.prog`): where the rep's stream is, a
-  function of the statement and the history, never of the tape;
-* each round's release (`LeanRelease.release`) is the frame's step: it takes the coins the stream answered the round
-  before (`Masker.answer`, which stops at a zerocheck outer coin `1`, at level 0's `ρ_0, ρ_1` dependent over F128 and
-  at the inner proof's `β = 0`: `answer_rho_dependent`, `answer_beta_zero`), then the device round (`Frame.round`,
+  the pads or the root. Only that state comes from the transport (`LeanRelease.prog`, `LeanRelease.fresh`): where the
+  rep's stream is, a function of the statement and the history, never of the tape;
+* each round's release (`LeanRelease.release`) is the frame's step: the frame of the rep that released the round before
+  takes the coins the stream answered it (`LeanRelease.takeAt`: none at `Hello` and the link, whose coins are the
+  session's; `Masker.answer`, which stops at a zerocheck outer coin `1`, at level 0's `ρ_0, ρ_1` dependent over F128
+  and at the inner proof's `β = 0`: `answer_rho_dependent`, `answer_beta_zero`), then the device round at its own
+  rep's state, at the rep's first round its start (`Frame.round`,
   which masks every absorbed value under the next pad, inserts the pads' label and root, and stops at a mask slot short
   of full rank), tagged `0` as the session sends a frame round. Every stop the coins decide is the frame's, from the
   coins alone, and where the frame refuses the coins the release is the stop whatever the round
@@ -287,13 +289,18 @@ structure LeanRelease (W R : Type) where
   /-- the bytes rep `i`'s frame reads from the operating system at its start (`IO.getRandomBytes`), on the server's
   tape -/
   draws : R → ℕ → ByteArray
-  /-- the transport: the round's rep's frame state after the rounds of `h` (`Masker`: where its stream is, owing the
-  coins of the last round); a function of the statement and the history, never of the tape. Its `stopped` is not
-  read. -/
+  /-- the transport: the frame state of the rep that released the last round of `h`, after it (`Masker`: where its
+  stream is, owing that round's coins); a function of the statement and the history, never of the tape. Its `stopped`
+  is not read. -/
   prog : Msg → List (Msg × Msg) → Masker
   /-- the transport: the coins the frame takes (`coins N`) after the rounds of `h`, for the stream's last answer (the
   session loop's `Frames.feedOf` of it, `LeanRelease.loop`) -/
   coinsOf : Msg → List (Msg × Msg) → Array _root_.Flock.F128
+  /-- the transport: the frame state of the rep of the round after `h` before that round, where it is the rep's first:
+  no coins of its own, after an earlier rep's algebraic-phase coins (`Frame.step`'s `prior`, rep 1's, as
+  `Frames.roundPlace` hands them), or the frame's refusal of them; a function of the statement and the history, never of
+  the tape -/
+  fresh : Msg → List (Msg × Msg) → Except String Masker
   /-- the device round at honest worker values, given the values the firewall fixes by its own computation, by name -/
   device : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg
   /-- the firewall's transcript after the rounds of `h`, whose own values the device round reads -/
@@ -370,11 +377,26 @@ def opens {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) : List (Msg × M
   | (_, a) :: o :: ops => (coinVerdict (L.helloChk x ρ) a (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk
   | _ => true
 
-/-- **The frame takes the stream's coins** for the last round of `h`, at the round's rep's configuration
-(`Masker.answer`): the rep's state after them, or the frame's refusal of them. -/
+/-- Round `j`'s rep's configuration: `Cfg.ofDraws` of its draws on the tape. -/
+def cfgAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (j : ℕ) : Cfg :=
+  Cfg.ofDraws (L.lay x (L.rep x j)) (L.drawsAt x ρ (L.rep x j)) (L.slot x (L.rep x j))
+
+/-- **Who takes the coins of round `n - 1`**, as the session loop routes them (`Session.relay`): `Hello`'s and the
+`Commit`'s go to the session, not to a frame (`Registry.link`), so round `n` starts at its rep's first-round state
+`fresh`; else the frame of the rep that released round `n - 1`, at its state `prog` and configuration `cP`
+(`Frames.coins`), whose refusal stops the session. Where round `n` is that rep's (`same`), it is checked at the state
+the coins leave, at its configuration `cN`; else it is the first round of its rep, which takes no coins, at `fresh`. -/
+def takeAt (n : ℕ) (same : Bool) (cN cP : Cfg) (prog : Masker) (fresh : Except String Masker)
+    (cs : Array _root_.Flock.F128) : Except String Masker :=
+  if n ≤ 2 then fresh else if same then prog.answer cN cs else prog.answer cP cs >>= fun _ => fresh
+
+/-- **The frame takes the stream's coins** for the last round of `h` (`takeAt`): the state the round after `h` is
+checked at, or the frame's refusal of the coins. -/
 def frameAnswer {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Except String Masker :=
   match h.getLast? with
-  | some _ => (L.prog x h).answer (L.cfg x ρ h) (L.coinsOf x h)
+  | some _ =>
+    takeAt h.length (decide (L.rep x h.length = L.rep x (h.length - 1))) (L.cfg x ρ h) (L.cfgAt x ρ (h.length - 1))
+      (L.prog x h) (L.fresh x h) (L.coinsOf x h)
   | none => pure (L.prog x h)
 
 /-- The transport's stop where its coin check refuses. -/
