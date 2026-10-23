@@ -16,15 +16,16 @@ What it takes of the loop beyond the code is named, each an obligation:
   `tabOfLevel0` at a level 0 `Level0.ofDraws` drew).
 * `LoopInnerRound0`: `L₀`'s round at the inner proof's round 0 is the firewall's own at some 16-byte `final_c'` (Rust's
   firewall sends that round, `check_self`, at the inner proof's label).
-* `TablesAdmitUnrefused`, on the tables `T` alone: where no coin fault shows (`Masked.Refused`), every table admits the
-  coins. `SessionLoopZK` takes it; at the deployed tables it is proved (`LeanRelease.tablesAdmitUnrefused_dataE`), so
-  `SessionLoopZKDeployed` (`SessionLoopZKAt Masked.dataE`) does not.
+* `TablesAdmitUnrefused`, on the tables `T` alone: where, at a `Live` statement, no coin fault shows (`Masked.Refused`),
+  every table admits the coins. `SessionLoopZK` takes it; at the deployed tables it is proved
+  (`LeanRelease.tablesAdmitUnrefused_dataE`), so `SessionLoopZKDeployed` (`SessionLoopZKAt Masked.dataE`) does not.
 
-The transport's other trusts (`LeanRelease.LinkRoundEq`, `FinishIs`, `FrameUnrefused`, `LiveRoundEq`, `FillRoundEq`) and
-the tables' side (`CoinLayer` `Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausal`, `TapeOK`) are the statement's
-premises, with `FinishIs` and `FrameUnrefused` in place of the `FinalRoundEq` `Flock.zk_server_lean_loop` takes
-(`LeanRelease.finalRoundEq_ofLoop`). The proofs are `Flock.SecurityProofs.SessionLoopZK` and `SessionLoopZKDeployed`
-(`Proofs.Flock.SessionLoop`), `Flock.zk_server_lean_ofLoop` at the gap.
+The transport's other trusts (`LeanRelease.LinkRoundEq`, `FinishIs`, `LiveRoundEq`, `FillRoundEq`) and the tables' side
+(`CoinLayer` `Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausal`, `TapeOK`) are the statement's premises, with
+`FinishIs` in place of the `FinalRoundEq` `Flock.zk_server_lean_loop` takes (`LeanRelease.finalRoundEq_ofLoop`, with the
+loop's frames refusing every coin fault, `LeanRelease.frameUnrefused_ofLoop`). The proofs are
+`Flock.SecurityProofs.SessionLoopZK` and `SessionLoopZKDeployed` (`Proofs.Flock.SessionLoop`),
+`Flock.zk_server_lean_ofLoop` at the gap.
 -/
 
 namespace Claims.ZKServer
@@ -102,7 +103,6 @@ def _root_.Flock.Guarantees.SessionLoopZKAt (T : CoinLayer.TableData) : Prop :=
     _root_.Flock.Guarantees.LoopTabsReal T real x w → _root_.Flock.Guarantees.LoopInnerRound0 T L₀ real x w →
     LeanRelease.LinkRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) x w →
     LeanRelease.FinishIs (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH wk x w →
-    LeanRelease.FrameUnrefused Loop.loopNr T (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH wk x w →
     LeanRelease.LiveRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH wk x w →
     LeanRelease.FillRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH wk x w →
     ∀ {Θ : Type} (Vs : VStar Θ) (θ : Θ),

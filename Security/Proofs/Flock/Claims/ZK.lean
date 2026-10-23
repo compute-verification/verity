@@ -134,6 +134,7 @@ import Proofs.Flock.Claims.ZK.FrameOuter
 import Proofs.Flock.Claims.ZK.FrameRanked
 import Proofs.Flock.Claims.ZK.FrameRankFault
 import Proofs.Flock.Claims.ZK.FrameRho
+import Proofs.Flock.Claims.ZK.FrameUnrefused
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishLive
@@ -606,8 +607,8 @@ import Proofs.Flock.Claims.ZK.SessionLean
   fault `Refused` names at its round.
 * `FrameAdmits`: `LeanRelease.FrameAdmits` split at `Refused`, into the tables' obligation
   `Flock.Guarantees.TablesAdmitUnrefused` (no fault shown, every table admits; proved at the deployed tables,
-  **`LeanRelease.tablesAdmitUnrefused_dataE`**) and the frames' trust `LeanRelease.FrameUnrefused` (a live history the
-  frame takes shows no fault), so `FinalRoundEq` at `ofLoop` is theirs and `FinishIs`'
+  **`LeanRelease.tablesAdmitUnrefused_dataE`**) and the frames' side `LeanRelease.FrameUnrefused` (at a `Live`
+  statement, a live history the frame takes shows no fault), so `FinalRoundEq` at `ofLoop` is theirs and `FinishIs`'
   (**`LeanRelease.finalRoundEq_ofLoop`**).
 * `FrameBeta`: `FrameUnrefused`' `β` fault. At a `Live` statement the loop serves, on a live history of `refK x` openings
   whose last coins the frame takes, each rep's opening at `betaSlot` is its inner proof's round 2 (the rep's round
@@ -636,6 +637,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
   `k₀ + 2` and `k₀ + 3` (**`Count.openStep_rho`**, through `SPW`, a step program's answers so far). At the rep's inner
   round 2 its schedule so far is complete (**`Count.schedSoFar_rho`**), and those answers are the opened coins at
   `rhoSlot` and the next, so no rep's pair coins are dependent (**`LeanRelease.rho_unrefused`**).
+* `FrameUnrefused`: the four faults together. Each fault `Refused` shows by `refK x` at a `Live` statement the loop
+  serves is one a rep frame refuses at its round, below `refK x` (`LeanRelease.slots_lt`), so the session loop's own
+  frames refuse every coin fault (**`LeanRelease.frameUnrefused_ofLoop`**), and `SessionLoopZK` takes no
+  `FrameUnrefused`.
 * `FinishStop`: the firewall's stop at a worker's values. At constraints whose forms are rep `r`'s first seven rows on
   the masked values, none fails on the drawn pads exactly where those rows vanish at the clear values at zero pads
   (**`Composed.noFail_iff_rows`**, by `rows_padFree`), so the stop bit reads no pad; and where they vanish for both
