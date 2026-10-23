@@ -6,7 +6,7 @@ proves and hands to the Lean verifier.
 (``circuit.txt``): head ``flock-circuit/tmpl NAME``, META's ``format`` and ``statement`` the templated statement's, its
 ``template`` the template's lines and its ``layout`` the layout mode, and every section but ``CIRCUIT unit``, which the
 verifier reads from the template. The unit's range stays where the flat statement put it, so ``stage`` refuses a layout
-whose committed unit (``flock-verify tmpl-unit``'s ``TMPL`` line, ``--tmpl``) needs a larger slot. It then writes the
+whose committed unit (``flock-tmpl-unit``'s (``tests/lean/TmplUnit.lean``) ``TMPL`` line, ``--tmpl``) needs a larger slot. It then writes the
 prover's ``inst-N.bin`` and the verifier's ``pub-N.bin`` against that text (:func:`verity_flock.circuit.write`).
 
     python verity/ml/flock/tests/tmpl_statement.py template --out DIR
@@ -80,7 +80,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("step", choices=["template", "stage"])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--tmpl", type=Path, help="flock-verify tmpl-unit's TMPL line's JSON (stage)")
+    ap.add_argument("--tmpl", type=Path, help="flock-tmpl-unit's TMPL line's JSON (stage)")
     ap.add_argument("--layout", default="iv")
     a = ap.parse_args(argv)
     r = template(a.out) if a.step == "template" else stage(a.out, json.loads(a.tmpl.read_text()), a.layout)

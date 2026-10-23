@@ -73,7 +73,7 @@ pub const TAGS: Tags = Tags { statement: STATEMENT, sigma: "verity/flock-circuit
 pub const TYPED_TAGS: Tags =
     Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
 /// A templated statement (PRF-133, the Lean `Tags.circuitTmpl`): META `template` and `layout` in place of the unit's rows,
-/// which the prover reads from `flock-verify tmpl-unit`'s file, the unit committed at the layout's positions.
+/// which the prover reads from `flock-tmpl-unit`'s file, the unit committed at the layout's positions.
 pub const TMPL_FORMAT: &str = "flock-circuit/tmpl";
 pub const TMPL_STATEMENT: &str = "verity/flock-circuit/tmpl";
 pub const TMPL_TAGS: Tags =
@@ -693,7 +693,7 @@ impl Composite {
         Self::parse_with(text, tables, None)
     }
 
-    /// [`Composite::parse`], with a templated statement's unit: the rows `flock-verify tmpl-unit` wrote for its META
+    /// [`Composite::parse`], with a templated statement's unit: the rows `flock-tmpl-unit` wrote for its META
     /// `template` and `layout`, at their positions (an `ORDER` line).
     pub fn parse_with(text: &str, tables: Option<&str>, tmpl_unit: Option<&str>) -> Result<Self, String> {
         let sha512: [u8; 64] = Sha512::digest(text.as_bytes()).into();
@@ -756,7 +756,7 @@ impl Composite {
             if !meta["template"].is_array() || !meta["layout"].is_string() {
                 return Err("META: a templated statement's template (its lines) and layout (its mode)".into());
             }
-            let unit = parse_net(tmpl_unit.ok_or("a templated statement: pass its unit's rows (--tmpl-unit F, from flock-verify tmpl-unit)")?)?;
+            let unit = parse_net(tmpl_unit.ok_or("a templated statement: pass its unit's rows (--tmpl-unit F, from flock-tmpl-unit)")?)?;
             if unit.order.is_none() {
                 return Err("the templated unit's rows have no ORDER line (its position map)".into());
             }

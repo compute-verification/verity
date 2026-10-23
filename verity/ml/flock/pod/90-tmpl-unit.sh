@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # A templated statement end to end (PRF-133): RoPE d64 staged as verity/flock-circuit/tmpl (tests/tmpl_statement.py), its
-# unit read at layout LAYOUT by Lean's `flock-verify tmpl-unit` (the rows at Tmpl.posMap, an ORDER line), proved by the CPU
-# flock-circuit (--tmpl-unit) in one loopback session per mode, then Lean's `flock-verify verify` on each. The verifier
+# unit read at layout LAYOUT by Lean's `flock-tmpl-unit` (tests/lean/TmplUnit.lean: the rows at Tmpl.posMap, an ORDER
+# line), proved by the CPU flock-circuit (--tmpl-unit) in one loopback session per mode, then Lean's `flock-verify verify` on each. The verifier
 # refuses the statement once every check has passed, so each verdict's reason must be exactly that refusal. Run from the
 # verity tree (research run --cwd source); CPU only. Outputs under out/: host.txt, template.json, tmpl.txt, stage.json,
 # statement-<mode>.txt, serve-<mode>.log, prove-<mode>.txt and .err, lean-<mode>.log (its VERDICT line), verdicts.json.
@@ -26,16 +26,21 @@ unset CARGO_TARGET_DIR
 trap 'rm -rf $S' EXIT
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$TU_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-}"; } > $O/host.txt 2>&1
 
-# Lean's flock-verify, built once per source, while the prover builds
-LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
-LEAN_BIN=$L/lean-$LSHA/flock-verify
+# Lean's flock-verify, and beside it the prover's flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls the unit and so
+# is no part of the verifier of record), built once per source, while the prover builds
+LSHA=$( (cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum;
+  cat verity/ml/flock/tests/lean/TmplUnit.lean) | sha256sum | cut -c1-16)
+LEAN_BIN=$L/lean-$LSHA/flock-verify; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
-  if [ ! -x $LEAN_BIN ]; then
+  if [ ! -x $LEAN_BIN ] || [ ! -x $UNIT_BIN ]; then
     rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
-      && (cd $L/lean-src && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $L/lean-src/.lake/build/bin/flock-verify $LEAN_BIN
+      && cp verity/ml/flock/tests/lean/TmplUnit.lean $L/lean-src/ \
+      && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $L/lean-src/lakefile.toml \
+      && (cd $L/lean-src && lake build flock-verify flock-tmpl-unit) && mkdir -p $L/lean-$LSHA \
+      && cp $L/lean-src/.lake/build/bin/flock-verify $LEAN_BIN && cp $L/lean-src/.lake/build/bin/flock-tmpl-unit $UNIT_BIN
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!
@@ -62,8 +67,8 @@ export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$
 
 D=$S/stage; N=8; LAYOUT=${LAYOUT:-iv}
 python3 verity/ml/flock/tests/tmpl_statement.py template --out $D > $O/template.json 2> $O/template.err || { tail -20 $O/template.err; exit 1; }
-wait $LP; [ -x $LEAN_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
-$LEAN_BIN tmpl-unit $D/unit.tmpl --layout $LAYOUT --out $D/unit.placed > $O/tmpl.txt 2>&1 || { cat $O/tmpl.txt; exit 1; }
+wait $LP; [ -x $LEAN_BIN ] && [ -x $UNIT_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
+$UNIT_BIN $D/unit.tmpl --layout $LAYOUT --out $D/unit.placed > $O/tmpl.txt 2>&1 || { cat $O/tmpl.txt; exit 1; }
 grep -h '^TMPL ' $O/tmpl.txt | cut -c6- > $D/tmpl.json
 python3 verity/ml/flock/tests/tmpl_statement.py stage --out $D --tmpl $D/tmpl.json --layout $LAYOUT > $O/stage.json 2> $O/stage.err \
   || { tail -20 $O/stage.err; exit 1; }

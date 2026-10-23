@@ -1151,28 +1151,6 @@ def typedExpandCmd (args : List String) : IO UInt32 := do
   IO.println s!"TYPED {line.compress}"
   return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
 
-
-/-- `tmpl-unit TMPL --layout MODE [--out F]`: a `flock-ir-tmpl/v2` template read at layout `MODE` (`Tmpl.modeOf`) as a
-templated statement's META reads it (`TmplUnit.read`). One `TMPL` line: the logical and committed sizes and the slot's log.
-With `--out`, the committed net's `flock-ir-unit/v2` rows, then an `ORDER` line, `Tmpl.posMap`: the prover's unit, committed
-where the verifier folds it. -/
-def tmplUnitCmd (args : List String) : IO UInt32 := do
-  let (some path, some m) := (args.head?, argOf args "--layout")
-    | IO.eprintln "tmpl-unit TMPL --layout MODE [--out F]"; return 2
-  let some mode := Tmpl.modeOf m | IO.eprintln s!"tmpl-unit: {m} is not a layout mode"; return 2
-  let lines := ((← IO.FS.readFile path).splitOn "\n").toArray.filter (· ≠ "")
-  let line ← match Tmpl.parse lines >>= fun t => TmplUnit.read t mode with
-    | .error e => pure (Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)])
-    | .ok tu =>
-      let pos := Tmpl.posMap tu.t tu.lays
-      if let some out := argOf args "--out" then
-        let rows := (List.range tu.net.useful).map (Tmpl.rowLine tu.net)
-        IO.FS.writeFile out ("\n".intercalate (Tmpl.headerLine tu.net :: rows ++ [s!"ORDER {(Lean.toJson pos).compress}"]) ++ "\n")
-      pure (Lean.Json.mkObj [("ok", Lean.Json.bool true), ("name", Lean.Json.str tu.net.name), ("logical", Lean.toJson pos.size),
-        ("useful", Lean.toJson tu.net.useful), ("unit_log", Lean.toJson tu.net.unitLog)])
-  IO.println s!"TMPL {line.compress}"
-  return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
-
 /-- `typed-rows FILE [--tables DIR] --out DIR`: a typed template's rows as the verifier derives them, through
 `deriveChecked` with its tables held (`Typed.rows`), written in the writer's `rows/` formats. -/
 def typedRowsCmd (args : List String) : IO UInt32 := do
@@ -1513,7 +1491,6 @@ def main (args : List String) : IO UInt32 := do
   | ["hash-test", path] => hashTest path
   | "typed-expand" :: rest => typedExpandCmd rest
   | "typed-rows" :: rest => typedRowsCmd rest
-  | "tmpl-unit" :: rest => tmplUnitCmd rest
   | "circuit-type" :: paths => CircuitType.cmd paths
   | "layout" :: paths => Layout.cmd paths
   | _ => IO.eprintln "usage: flock-verify field-test FILE"; return 2
