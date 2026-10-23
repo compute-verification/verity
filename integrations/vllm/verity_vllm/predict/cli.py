@@ -1,6 +1,7 @@
 """`verity-vllm predict`: the ahead-of-time predictor's commands.
 
     verity-vllm predict build --phi phi.json --wrapper step|request [--LP N --T N | --M N --pos0 N] --out DIR
+    verity-vllm predict node --row ROW --config CONFIG_JSON --wrapper step|request [--LP N --T N | --M N --pos0 N] --out DIR
     verity-vllm predict inventory --rows ROWS_ROOT --out inventory.json.gz
     verity-vllm predict score (--inventory inventory.json.gz | --rows ROWS_ROOT) --hf-home HF --out score.json [--md score.md]
     verity-vllm predict compare ROW_DIR --row ROW --config CONFIG_JSON --out comparison.json [--workers N]
@@ -41,6 +42,21 @@ class BuildOptions:
 
 
 @dataclass(frozen=True, kw_only=True)
+class NodeOptions:
+    """Predict a tensor-parallel row's node Program (`node`: its ranks' forwards joined at their collectives) and write its
+    descriptor and summary (never into a Build row)."""
+    row: str = option("--row")
+    config: str = option("--config", help="the pinned checkpoint's config.json")
+    wrapper: str = option("--wrapper", default="request", choices=["step", "request"])
+    M: int = option("--M", type=int, default=1)
+    pos0: int = option("--pos0", type=int, default=8)
+    LP: int | None = option("--LP", type=int, default=None)
+    T: int | None = option("--T", type=int, default=None)
+    out: str = option("--out")
+    cmd: str = field(default="node", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
 class InventoryOptions:
     """The traced facts of every row under a rows root (read-only)."""
     rows: str = option("--rows", help="rows root (<root>/<job>/<row>/build_summary.json)")
@@ -48,8 +64,29 @@ class InventoryOptions:
     cmd: str = field(default="inventory", init=False)
 
 
-COMMANDS = {"build": BuildOptions, "inventory": InventoryOptions, "score": S.Options, "compare": A.CompareOptions, "emit": A.EmitOptions,
-            **PC.COMMANDS}
+COMMANDS = {"build": BuildOptions, "node": NodeOptions, "inventory": InventoryOptions, "score": S.Options, "compare": A.CompareOptions,
+            "emit": A.EmitOptions, **PC.COMMANDS}
+
+
+def node_main(a: NodeOptions) -> int:
+    """`node_descriptor.json.gz` and `node.json`: the summary, θ's parameters and which rank emitted each run of the program
+    function's body (`spans`; the root's nodes are its input nodes, one per parameter's lowering, then the body's)."""
+    from verity.ml.circuits.codec import canonical_json
+    from .node import build_node_program
+    if os.path.exists(os.path.join(a.out, "build_summary.json")) or os.path.basename(os.path.normpath(a.out)).startswith("build_"):
+        raise UsageError(f"--out {a.out} looks like a Build row or Build dir: a prediction is never written into one")
+    if a.wrapper == "request" and (a.LP is None or a.T is None):
+        raise UsageError("--wrapper request needs --LP and --T")
+    phi = A.phi_at(a.row, 0, a.config)
+    r = build_node_program(phi, a.wrapper, M=a.M, pos0=a.pos0, LP=a.LP, T=a.T)
+    os.makedirs(a.out, exist_ok=True)
+    with gzip.open(os.path.join(a.out, "node_descriptor.json.gz"), "wb") as f:
+        f.write(canonical_json(r.desc))
+    with open(os.path.join(a.out, "node.json"), "w") as f:
+        json.dump({"schema": "verity-predict/node/v1", "row": a.row, "context_digest": phi.digest(), **r.summary(),
+                   "theta": list(r.theta), "spans": [list(s) for s in r.spans]}, f, indent=1, sort_keys=True)
+    print(json.dumps(r.summary()), file=sys.stderr)
+    return 0
 
 
 def main(a) -> int:
@@ -59,6 +96,8 @@ def main(a) -> int:
         return A.main(a)
     if isinstance(a, (PC.Options, PC.PinOptions)):
         return PC.main(a)
+    if isinstance(a, NodeOptions):
+        return node_main(a)
     if a.cmd == "inventory":
         S._refuse_inside(a.out, [a.rows])
         inv = INV.inventory(a.rows)

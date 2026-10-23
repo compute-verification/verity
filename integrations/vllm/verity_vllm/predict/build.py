@@ -678,6 +678,23 @@ def launch_batch(phi: Phi, LP: int, T: int) -> list | None:
     return batch
 
 
+def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int | None, T: int | None, policy: _Stochastic | None,
+          batch: list | None) -> list[Coll]:
+    """The wrapper's forwards over `model` -> its samples: a `step`'s M rows at pos0.. and its last row's sample, or a `request`'s
+    prefill of LP rows, then T decodes, each fed the previous sample."""
+    if wrapper == "step":
+        hid = model.forward(rows, pos0)
+        return [model.sample(hid[-1], 0, pos0 + M - 1, policy)]
+    hid = model.forward(rows, 0)
+    toks = [model.sample(hid[-1], 0, int(LP) - 1, policy)]
+    for s in range(int(T)):
+        if batch is not None:
+            model.launch.step = s + 1
+        hid = model.forward([Coll(I32, toks[-1].refs)], int(LP) + s)
+        toks.append(model.sample(hid[-1], s + 1, int(LP) + s, policy))
+    return toks
+
+
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
                   with_desc: bool = True) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
@@ -725,18 +742,10 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                                 f"requests), whose kernel choices the {net.model_class} decoder reads at its own rows")
         model.launch = _Launch(batch)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
+    toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch)
     if wrapper == "step":
-        hid = model.forward(rows, pos0)
-        tok = model.sample(hid[-1], 0, pos0 + M - 1, policy)
-        out = Coll(Array(1, I32), tok.refs)
+        out = Coll(Array(1, I32), toks[0].refs)
     else:
-        hid = model.forward(rows, 0)
-        toks = [model.sample(hid[-1], 0, int(LP) - 1, policy)]
-        for s in range(int(T)):
-            if batch is not None:
-                model.launch.step = s + 1
-            hid = model.forward([Coll(I32, toks[-1].refs)], int(LP) + s)
-            toks.append(model.sample(hid[-1], s + 1, int(LP) + s, policy))
         out = Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     if peers.n != len(peers.inputs) or peers.k != words:
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
