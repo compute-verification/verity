@@ -98,7 +98,10 @@ def test_a_salted_link_counts_the_certifiers_own_frame(tmp_path):
     profile = replace(PROFILE, own=1)
     assert [occupancy(r.grid)[0] for r in salted] == [a[0] + 1 for a in ARRIVALS]
     for w in range(WINDOWS):
-        assert SV.derive(occupancy(salted[w].grid), SYNCS[w], profile, P.allocation) == list(occupancy(egress[w].grid))
+        counts = list(occupancy(egress[w].grid))
+        assert SV.derive(occupancy(salted[w].grid), SYNCS[w], profile, P.allocation) == counts
+        assert SV.derive(occupancy(plain[w].grid), SYNCS[w], profile, P.allocation) != counts
+        assert SV.derive(occupancy(salted[w].grid), SYNCS[w], PROFILE, P.allocation) != counts
     for k, (ingress, prof, want) in enumerate(((salted, profile, True), (plain, profile, False),
                                                (salted, PROFILE, False))):
         (tmp_path / str(k)).mkdir()
