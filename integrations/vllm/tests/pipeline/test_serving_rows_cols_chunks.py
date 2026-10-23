@@ -1,8 +1,8 @@
-"""A window's ``cols`` units in chunks (`pipeline.serving_rows`, ``CHUNKED``): the column blocks of MoeSum and the MNNVL
-all-reduce (``COLS``) are consecutive chunks of at most the partition's ``chunk_cap``, each a member on the bit rows C-Flock's
-`UnitStager` stages (`chunk_rows.unit_rows`: ``in<g>`` per parameter, ``o0``), and the chunks are the template's blocks read
-once, so that the Definition on each chunk's rows, parsed as the stager parses them, is the rows' committed columns, and a
-flipped word is not."""
+"""A window's ``cols`` units in chunks (`pipeline.serving_rows`, ``CHUNKED``): the column blocks of MoeSum, the MNNVL
+all-reduce and the fused norm row's residual part (``COLS``) are consecutive chunks of at most the partition's ``chunk_cap``,
+each a member on the bit rows C-Flock's `UnitStager` stages (`chunk_rows.unit_rows`: ``in<g>`` per parameter, ``o0``), and the
+chunks are the template's blocks read once, so that the Definition on each chunk's rows, parsed as the stager parses them, is
+the rows' committed columns, and a flipped word is not."""
 from __future__ import annotations
 
 import numpy as np
@@ -17,6 +17,7 @@ from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.program.registry import boolean_moe as BMOE
+from verity_vllm.program.registry import boolean_sigma as SG
 from verity_vllm.program.registry import boolean_tp_allreduce as BTA
 from verity_vllm.program.registry import moe as M
 from verity_vllm.program.registry import tp_allreduce as TA
@@ -24,6 +25,7 @@ from verity_vllm.program.registry import tp_allreduce as TA
 TOPK, WORLD, W, w = 3, 4, 8, 2
 NH, CAP = W // w, 3
 OPS = {"MoeSum_v1": "model.layers.{}.mlp.experts", "AllReduceMnnvl_v1": "model.layers.{}.mlp"}
+FAMILIES = list(OPS)
 
 
 def defn(family: str, width: int, boolean: bool = False):
@@ -60,7 +62,7 @@ def rows(monkeypatch):
     return make
 
 
-@pytest.mark.parametrize("family", list(SRW.COLS))
+@pytest.mark.parametrize("family", FAMILIES)
 def test_a_window_s_column_blocks_are_chunks_of_the_stager_s_bit_rows(rows, family):
     rs, _y, _store = rows(family)
     T = tmpl(family)
@@ -77,7 +79,7 @@ def test_a_window_s_column_blocks_are_chunks_of_the_stager_s_bit_rows(rows, fami
         SRW.members([T], [rs], [2 * NH], {})
 
 
-@pytest.mark.parametrize("family", list(SRW.COLS))
+@pytest.mark.parametrize("family", FAMILIES)
 def test_the_chunks_are_the_template_s_blocks_read_once(rows, family):
     rs, y, store = rows(family)
     T = tmpl(family)
@@ -94,14 +96,13 @@ def test_the_chunks_are_the_template_s_blocks_read_once(rows, family):
         SRW.read(ms[1], rs, store, None)
 
 
-@pytest.mark.parametrize("family", list(SRW.COLS))
+@pytest.mark.parametrize("family", FAMILIES)
 def test_a_chunk_on_its_rows_computes_the_row_s_columns_and_a_flipped_word_is_refused(rows, family):
     rs, _y, store = rows(family)
     T = tmpl(family)
     ms = SRW.members([T], [rs], [2 * NH], {T: CAP})
     got = SRW.read_all(ms, [rs], store, None)
-    st = object.__new__(UnitStager)     # reference_check reads only these: the circuit needn't be composed
-    st.definition, st.name, st.public_inputs, st.in_rows = SRW.template(T).fn, "cols-test", {}, CR.unit_rows(SRW.template(T))[0]
+    st = stager(T)
     for g, _entries in got:
         st.reference_check(g["rows"], g["outs"])
     g, _entries = got[1]
@@ -110,3 +111,44 @@ def test_a_chunk_on_its_rows_computes_the_row_s_columns_and_a_flipped_word_is_re
     win = CS.Window(*CS.population_program([(SRW.template(T).fn, 2 * NH)], several=True), {"law": "subset", "k": 2}, "ab" * 32,
                     tuple(ms))
     assert CS.commit(win, [g for g, _e in got], salt_key=bytes(32)).window.population == 2 * NH
+
+
+def test_the_fused_norm_row_s_residual_part_is_chunks_of_its_blocks(monkeypatch):
+    RN, rw = 256, 64
+    statics = {"WORLD": WORLD, "N": RN, "SHOT": 1, "CLUSTER": 1, "EPS": 1e-5, "FMA": False}
+    fused = bind(TA.AllReduceRmsNormMnnvl, **statics)
+    rng = np.random.default_rng(1)
+    xs = [((rng.standard_normal(n) * s).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+          for n, s in ((WORLD * RN, 0.5), (RN, 2.0), (RN, 0.1))]
+    both = np.asarray(evaluate_batch(fused, *(x.astype(np.uint64).reshape(1, -1) for x in xs))).reshape(-1).astype(np.uint16)
+    vals = {"normed": both[:RN], "residual": both[RN:]}
+    r = {"i": 9, "spec": descriptor_id(fused), "args": [[["x", g, 0, x.size]] for g, x in enumerate(xs)]}
+    d = {"statics": statics, "op_path": "model.layers.6.post_attention_layernorm", "members": [("normed", RN, "bf16"),
+         ("residual", RN, "bf16")], "row": 0, "step": 16}
+
+    class Store:
+        def words(self, rid, step, op, member, lo, hi):
+            return vals[member][lo:hi], None
+
+    monkeypatch.setattr(SRW, "_slices", lambda _pi, _s, _w, _rid, _a, g: [xs[g[0][1]]])
+    T, row, nh = descriptor_id(bind(SG.AllReduceResidualMnnvl, WORLD=WORLD, N=rw, SHOT=1)), ("r0", None, r, d), RN // rw
+    ms = SRW.members([T], [[row]], [nh], {T: CAP})
+    assert [(m.n, m.rows, m.outs) for m in ms] == [(n, (("in0", WORLD * rw), ("in1", rw)), (("o0", rw),)) for n in (CAP, nh - CAP)]
+    (whole,) = SRW.members([T], [[row]], [nh])
+    data, entries = SRW.read(whole, [row], Store(), None)
+    got = SRW.read_all(ms, [[row]], Store(), None)
+    for p, _w in whole.rows:
+        assert np.array_equal(np.concatenate([g[0]["rows"][p] for g in got]), data["rows"][p])
+    assert np.concatenate([g[0]["outs"]["o0"] for g in got]).reshape(-1).tolist() == vals["residual"].tolist()
+    assert [g[1] for g in got] == [entries, entries] and entries[0][6] == "residual"
+    st = stager(T)
+    for g, _entries in got:
+        st.reference_check(g["rows"], g["outs"])
+    with pytest.raises(AssertionError, match="outputs are not the IR reference's"):
+        st.reference_check(got[0][0]["rows"], {"o0": got[0][0]["outs"]["o0"] ^ np.uint16(1)})
+
+
+def stager(T: str) -> UnitStager:
+    st = object.__new__(UnitStager)     # reference_check reads only these: the circuit needn't be composed
+    st.definition, st.name, st.public_inputs, st.in_rows = SRW.template(T).fn, "cols-test", {}, CR.unit_rows(SRW.template(T))[0]
+    return st
