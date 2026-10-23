@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.ZK.FrameInner
+import Flock.Firewall.Session
 
 /-!
 # `Flock.zk_server_lean` at the session loop's own frames (Stage B)
@@ -8,18 +9,20 @@ import Proofs.Flock.Claims.ZK.FrameInner
 took as given is `ProgChecks`: that the deployed frame's state is the loop's but for `stopped` (`ofLoop_progChecks`).
 This file states the bound there with `ProgChecks` as a conclusion, its premises the guarantee's own:
 
-* `Loop.sizesOk`: the sizes the loop's frames read, a check on the setup (`FlockDeploy.setupOf`), one pass over the
-  rep streams: each table's link points the session's, nonzero and within `Frames.COIN_MAX` (`SessionSpec.mPts`,
-  `points`); the stream's domain (`SessionSpec.domain`, `Drive`'s domain frame) and the extra claims at the link points
-  (`Drive.extras`: the table's regions at each link point) within a `u64`'s count; and the placeholder's pad row,
-  `Drive.start`'s layout plus `Zk.K_PAD` (`Cfg.ofDraws`'s `rowH`), within a `u64`'s count. At a `Live` statement the
-  first two are theorems (`live_links`, `live_bounds`); the domain is the session record's field, which nothing bounds.
+* `Session.sizesOk` (the code's): the sizes the loop's frames read, a check on the setup, one pass over the rep streams:
+  each table's link points the session's, nonzero and within `Frames.COIN_MAX` (`SessionSpec.mPts`, `points`); the
+  stream's domain (`SessionSpec.domain`, `Drive`'s domain frame) and the extra claims at the link points (`Drive.extras`:
+  the table's regions at each link point) within a `u64`'s count; and the placeholder's pad row, `Drive.start`'s layout
+  plus `Zk.K_PAD` (`Cfg.ofDraws`'s `rowH`), within a `u64`'s count. The loop refuses a session whose setup fails it
+  (`Session.State.sendHello`: no `Hello` leaves).
+* `Loop.Serves`, `Loop.sizesOk_of_serves`: the loop serves `x` where its `Hello` leaves at `x`'s setup
+  (`FlockDeploy.setupOf`), and then the setup passes `sizesOk` (`sizesOk_of_sendHello`).
 * `LeanRelease.ofLoop_progChecks_sizes`: `ofLoop_progChecks` with its size premises (`hS`, `hP`, `hRow`) from that check.
 * **`Flock.zk_server_lean_ofLoop`**: `Flock.zk_server_lean_loop` at `ofLoop`, at `Loop.progOf`, with no `ProgReads`, and
-  `ProgChecks` at `ofLoop`. Beyond `zk_server_lean_loop`'s other premises it reads the check, the tables `real` answers
-  being the session loop's own (`Count.RealTabs`: `Finish`'s `level0` request, `tabOfLevel0` at a level 0
-  `Level0.ofDraws` drew) and `L₀`'s round at the inner proof's round 0 being the firewall's own at some `final_c'`
-  (`hL0`: Rust's firewall sends that round, `check_self`, at the inner proof's label).
+  `ProgChecks` at `ofLoop`, at every `x` the loop serves. Beyond `zk_server_lean_loop`'s other premises it reads the
+  tables `real` answers being the session loop's own (`Count.RealTabs`: `Finish`'s `level0` request, `tabOfLevel0` at a
+  level 0 `Level0.ofDraws` drew) and `L₀`'s round at the inner proof's round 0 being the firewall's own at some
+  `final_c'` (`hL0`: Rust's firewall sends that round, `check_self`, at the inner proof's label).
 -/
 
 namespace Claims.ZKServer
@@ -29,24 +32,40 @@ open _root_.Flock (V F128 Stmt SessionSpec)
 open _root_.Flock.Transcript (header)
 open _root_.Flock.Firewall.Frame (Cfg Masker labelFrame)
 open _root_.Flock.Firewall.Frames (COIN_MAX)
+open _root_.Flock.Firewall.Session (sizesOk)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
-/-- **The sizes the loop's frames read, at the setup `spec`, `sts`**: at each rep stream `k`, its table's link points
-the session's, nonzero and within `COIN_MAX` words at the session's points; its domain, and its table's regions at
-`COIN_MAX` link points, within a `u64`'s count; and `Drive.start`'s layout plus `Zk.K_PAD`, its pad row, within a
-`u64`'s count. -/
-def sizesOk (spec : SessionSpec) (sts : Array Stmt) : Bool :=
-  (List.range spec.repStreams.size).all fun k =>
-    decide (sts[k / 2]!.mPts = spec.mPts ∧ 0 < spec.mPts ∧ spec.points * spec.mPts ≤ COIN_MAX) &&
-      decide ((spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8.size < 2 ^ 64) &&
-      decide (sts[k / 2]!.regions.size * COIN_MAX + 2 < 2 ^ 64) &&
-      match _root_.Flock.Firewall.Drive.start sts[k / 2]! with
-      | .ok (lay, _) => decide (lay.len + _root_.Flock.Zk.K_PAD < 2 ^ 64)
-      | .error _ => true
+/-- **The loop serves `x`**: at `x`'s setup, the session loop's `Hello` leaves (`Session.State.sendHello` from a fresh
+session, at some nonce). Where it does not, the loop refuses the `Hello` and stops the session: a setup whose sizes are
+past its frames' (`Session.sizesOk`) is refused there. -/
+def Serves (x : Msg) : Prop :=
+  ∀ (s0 : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt), FlockDeploy.setupOf true x = some (s0, spec, sts) →
+    ∃ (nonce : ByteArray) (r : _root_.Flock.Firewall.Session.State × ByteArray),
+      ({} : _root_.Flock.Firewall.Session.State).sendHello (.ok (spec, sts)) nonce = .ok r
+
+/-- Where the loop's `Hello` leaves, the setup passes `sizesOk`. -/
+theorem sizesOk_of_sendHello {S : _root_.Flock.Firewall.Session.State} {spec : SessionSpec} {sts : Array Stmt}
+    {nonce : ByteArray} {r : _root_.Flock.Firewall.Session.State × ByteArray}
+    (h : S.sendHello (.ok (spec, sts)) nonce = .ok r) : sizesOk spec sts = true := by
+  unfold _root_.Flock.Firewall.Session.State.sendHello at h
+  cases hs : S.stop with
+  | some why => simp [hs] at h
+  | none =>
+    cases hz : sizesOk spec sts with
+    | true => rfl
+    | false => simp [hs, hz] at h
+
+/-- **Where the loop serves `x`, its setup passes `sizesOk`**. -/
+theorem sizesOk_of_serves {x : Msg} (h : Serves x) :
+    ∀ (s0 : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → sizesOk spec sts = true :=
+  fun s0 spec sts hx =>
+    let ⟨_, _, he⟩ := h s0 spec sts hx
+    sizesOk_of_sendHello he
 
 theorem sizesOk_at {spec : SessionSpec} {sts : Array Stmt} (h : sizesOk spec sts = true) {k : ℕ}
     (hk : k < spec.repStreams.size) :
@@ -85,7 +104,7 @@ namespace LeanRelease
 
 open Loop in
 /-- **`ProgChecks` at the loop's own frames, its sizes checked** (`ofLoop_progChecks`, its premises `hS`, `hP` and
-`hRow` from `Loop.sizesOk` at the setup): from the check, the rep's own tables where `real` answers the loop's (`hR`)
+`hRow` from `Session.sizesOk` at the setup): from the check, the rep's own tables where `real` answers the loop's (`hR`)
 and `L₀`'s round at the inner proof's round 0 the firewall's own at some `final_c'` (`hL0`). -/
 theorem ofLoop_progChecks_sizes (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
@@ -136,8 +155,9 @@ open FlockSoundness.Discharge
 
 /-- **`Flock.zk_server_lean_loop` at the session loop's own frames** (`LeanRelease.ofLoop`): the transport's frame
 state is `Loop.progOf` of the decoded coins, so `ProgReads` is a theorem (`ofLoop_progReads`), and the deployed frame's
-state is that one but for `stopped` (`ProgChecks`, `ofLoop_progChecks_sizes`), a conclusion here. In `ProgReads`'
-place it reads the setup's sizes, checked (`Loop.sizesOk`), the tables `real` answers being the session loop's own
+state is that one but for `stopped` (`ProgChecks`, `ofLoop_progChecks_sizes`), a conclusion here, at every `x` the loop
+serves (`Loop.Serves`: its `Hello` leaves, so the setup's sizes pass `Session.sizesOk`). In `ProgReads`' place it reads
+the tables `real` answers being the session loop's own
 (`hRt`, `Count.RealTabs`: `Finish`'s `level0` request) and `L₀`'s round at the inner proof's round 0 being the
 firewall's own at some `final_c'` (`hL0`: what Rust's firewall sends there, `check_self`). The transport's other trusts
 (`LinkRoundEq`, `FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`) and the tables' side are `zk_server_lean_loop`'s. -/
@@ -155,9 +175,7 @@ theorem Flock.zk_server_lean_ofLoop
       (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
       ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
     (wk : (LeanRelease.ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
-    (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
-    (hSz : ∀ (s0 : _) (spec : SessionSpec) (sts : Array Stmt),
-      FlockDeploy.setupOf true x = some (s0, spec, sts) → Loop.sizesOk spec sts = true)
+    (hR : Flock.R (FlockDeploy.deployZk rel).parse x w) (hServe : Loop.Serves x)
     (hRt : ∀ (ρ : (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand)
       (s0 : _) (spec : SessionSpec) (sts : Array Stmt),
       FlockDeploy.setupOf true x = some (s0, spec, sts) → Count.RealTabs sts (real x w ρ))
@@ -215,7 +233,7 @@ theorem Flock.zk_server_lean_ofLoop
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) (LeanRelease.ofLoop T L₀ real) Loop.progOf
                   Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).swP vs).prover w) Vs θ x).Pr
               CoinOpen.shaH) :=
-  ⟨LeanRelease.ofLoop_progChecks_sizes T L₀ real x w hSz hRt hL0,
+  ⟨LeanRelease.ofLoop_progChecks_sizes T L₀ real x w (Loop.sizesOk_of_serves hServe) hRt hL0,
     Flock.zk_server_lean_loop rel T vs t ht hT1 hδ₁ hS hV hD hc hsc hT (LeanRelease.withFrames T L₀ real)
       (LeanRelease.ofLoop T L₀ real) rfl wk x w hR Loop.progOf (LeanRelease.ofLoop_progReads T L₀ real x)
       hLk hF hE hEf Vs θ hk Ev⟩
