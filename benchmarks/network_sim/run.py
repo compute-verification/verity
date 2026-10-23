@@ -8,17 +8,18 @@ process tree it runs:
 3. the fleet (`up --fleet --blocks 2`, `datacenter.examples.two_sites`): two sites of two blocks joined by a 20 ms WAN
    between their spines, the outside host on the west site, run twice with the strategies swapped between the sites,
    so that each of the first four is played across the WAN once (`DIR/fleet/`, `DIR/fleet-swapped/`);
-4. the lab back in its default four blocks, and the workload's three runs of `python -m workload.lab_run run`: honest,
-   `--tamper b1:flip-bit` and `--tamper b2:late` (`DIR/workload/<run>/`), each at a first-frame latency D of
-   `DELTA_BUCKETS`. They need a Python with torch: `--python`, else this one if it has torch, else one that `uv` builds
-   in a scratch directory, as the workload's recorded run does.
+4. the lab back in its default four blocks, and the workload's four runs of `python -m workload.lab_run run`: honest,
+   `--tamper b1:flip-bit`, `--tamper b2:late` and `--tamper b1:extra` (`DIR/workload/<run>/`), each at a first-frame
+   latency D of `DELTA_BUCKETS`. They need a Python with torch: `--python`, else this one if it has torch, else one
+   that `uv` builds in a scratch directory, as the workload's recorded run does.
 
 Each step's output is printed and kept in `DIR/<step>.txt`. It refuses to start while a process runs in a lab namespace,
 as lab_run does, and however it ends it leaves the lab up in its default shape with nothing running in it.
 
 Then it reads each step's `summary.json` and writes `DIR/summary.json` and the table `DIR/summary.txt`: each block's
 verdicts under the certifier's audit, the second audit (mockdc's datacenter record check, with the account's charge,
-or lab_run's N3) and N3Window_v5 on every recorded window against the canonical frame templates, the median wire lag,
+or lab_run's N3), N3Window_v5 on every recorded window against the canonical frame templates and, on lab_run's served
+links, N2's served verdict on each link-window, the median wire lag,
 the worst proxy tick against its slack, and for each mockdc run its record check on every port of the declaration (a
 fleet's merged ones), and the answers. The verdicts are compared with the expected ones (`expected_block`,
 `expected_records` and `WORKLOAD`), and the exit status is 1 if any differs, a step exited nonzero or a proxy tick ran

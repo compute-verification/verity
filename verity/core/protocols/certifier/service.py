@@ -15,8 +15,9 @@ challenger sees the root, never a certificate or a head.
 one link-window, one proof unit. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
 to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the link-window. The
 network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
-credit: it accepts only when every window of the egress profile is registered in order and its outcome of record
-accepted, so a rejected or late window, one with no outcome, and a gap in the registrations each reject the link. A
+credit: it accepts only when every window of the egress profile (a served link's served profile) is registered in
+order and its outcome of record accepted, so a rejected or late window, one with no outcome, and a gap in the
+registrations each reject the link. A
 run's is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a Python model) builds no
 `LinkWindows` outcomes, so its account doesn't read it, though `Account.sound` is the same AND over its own port
 records.
@@ -71,10 +72,14 @@ the profile. The egress grid is the head's counts filled with the head's frames 
 digest binds both, so the frames are the rest of the grid, and N2 says nothing of them. Until N3 is a proof-service
 unit with Selection `All`, nothing here holds the egress grid to the Program's.
 
-N2 covers no lab or served link yet. A link whose egress end has no profile has no verdict (`ValueError`, failing
-closed): nothing would hold its egress timing. That is every link whose egress counts aren't fixed before the run, since
-they follow its run-time clock syncs or its requests' arrivals (the lab's and served traffic's), until a shaper fixes
-them (a constant row) or a unit holds them to the Program's under the declared syncs.
+**A served link** (`LinkWindows(served=served.ServedProfile(…))`) has egress counts that follow its requests' arrivals
+and the run-time syncs, so no profile fixes them before the run. Its unit is `NetworkServedLinkWindow` v1{EGRESS,
+INGRESS, SERVED}: the checks above, and one gate naming `served.NetworkServedCounts_v1`, which holds the egress head's
+counts to the ones the ingress head's counts derive under the window's declared sync (`served`'s docstring has the
+derivation, its premises and the carry-over). Its public items are `PUBLIC_SERVED`: no egress profile, the served
+sizes, and the window's declared sync, the advice `charge` already counts, which the served counts read. Its verifier
+of record runs `served_check` too. A link whose egress end has neither an occupancy profile nor a served profile has no
+verdict (`ValueError`, failing closed): nothing would hold its egress timing.
 
 `LinkWindows.stand_in` is the in-the-clear verdict, the Program's egress grid compared as it was before the head check,
 and each head's counts the profile's (`declares`). It reads the frames, so it is the tests' oracle, never a verdict:

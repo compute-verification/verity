@@ -17,7 +17,7 @@ outside every block, and `two_sites` joins two leaf-spines by a WAN between thei
 - `workload/`: what runs on the blocks, with its own suite (its modules are listed in `workload/__init__.py`).
   `python -m workload.lab_run run --out DIR`, from this directory in a Python with torch, serves verity_vllm's serving
   Program on the lab, each block in its namespace behind its certifier's proxy and the client on the outside host, then
-  checks the certifiers' audit, N3 and the answers.
+  checks the certifiers' audit, N3, N2's served verdict and the answers.
 - `run.py`: the whole night on the lab host, `verity bench network_sim --out DIR` (below), checked against its expected
   verdicts.
 - `tests/`: the exports' tests, the declarations' values pinned against memory accounting's constants
@@ -101,11 +101,9 @@ salt frame first, and the certifier's audit (`active_replay.audit_salt`) reads e
 revealed salt's width and counts the salt frames in each ingress window and in egress. The salt takes one of the ingress side's frames in each window's first bucket, so a
 request enqueued in that bucket can go out a bucket later.
 
-Run `r20261018-092640-66bf` (`run --salt`), before the salt frame carried the placeholder instead of the salt's
-commitment, gave the table's verdicts on every block, under both audits. On
-every block, each ingress window held one salt frame and egress none, no egress frame held a salt or its commitment,
-the certifier's audit accepted each window's commitment against the revealed salt, and the block's server received
-every salt. The latest tick was 4.3 ms late against the 25 ms slack.
+Run `r20261018-092640-66bf` (`run --salt`, when the salt frame carried the salt's commitment) gave the table's verdicts
+on every block under both audits: each ingress window held one salt frame and egress none, no egress frame held a salt,
+and each block's server received every salt. The night (below) runs it on the placeholder.
 
 ### Maintenance
 
@@ -219,11 +217,15 @@ included. What the WAN adds:
 mockdc's proxy in its certifier's, and the client on `na-ext0`. A block reaches only its certifier, so the client relays
 every message between blocks: it leaves its source as server-sent events of a response and enters its destination in a
 request (`workload/lab.py`), both on the canonical framing (`active.event`, `active.request_frames`).
-Each block is checked four ways: the certifier's audit (`audit.Audit` in `active_replay`'s live mode, on the block's
+Each block is checked five ways: the certifier's audit (`audit.Audit` in `active_replay`'s live mode, on the block's
 event log), N3 over the certifier's records (`workload.lab.check`), N3Window_v5's reference on each link-window
-(`n3_unit.lab_windows`), and the answers against the Program
-evaluated in one process. Every window declares the calibration's envelope, δ = 12 buckets of 100 ms. The run needs a
-Python with torch (below).
+(`n3_unit.lab_windows`), N2's served verdict on each link-window (`lab_run.n2_verdicts`), and the answers against the
+Program evaluated in one process. Every window declares the calibration's envelope, δ = 12 buckets of 100 ms. The run
+needs a Python with torch (below).
+
+Every block's link is served (the certifier's `PROTOCOL.md`, "A served link"): responses padded with empty events to F
+(b0 88, b1 and b2 8, b3 2), requests to F_in frames (b3 2, else 1), and a proxy that admits a request only while its
+window still ends idle. The proxy signs nothing, so a stand-in (`n3_unit.Certifier`) signs N2's heads after the run.
 
 The night `r20261021-083115-dae5`, on vy-nebius-cpu-2 with the lab up in its default shape:
 
@@ -246,7 +248,7 @@ vy-nebius-cpu-2's path, so there it is `python3 benchmarks/network_sim/run.py --
 - the mock datacenter in five blocks, which take the five strategies, once plain and once with the salt;
 - the fleet (`up --fleet --blocks 2`), twice, with the first four strategies swapped between the sites
   (`run.MOCKDC_RUNS`);
-- with the lab back in its default shape, lab_run's honest, `b1:flip-bit` and `b2:late` runs;
+- with the lab back in its default shape, lab_run's honest, `b1:flip-bit`, `b2:late` and `b1:extra` runs;
 - the summary.
 
 lab_run runs in a Python with torch: the one `--python` names, else `run.py`'s own if it has torch, else one built
@@ -257,6 +259,7 @@ it leaves the lab up in its default shape.
 - the certifier's verdicts, and the salt check's;
 - the record check's verdicts, or N3's;
 - N3Window_v5's, as the windows it accepts of those the block recorded;
+- N2's, on lab_run's served links;
 - the account's covert budget;
 - the median lag from a bucket's tick to its bytes reaching the peer;
 - the latest proxy tick against the slack.
@@ -271,10 +274,9 @@ research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --tim
 ~~~
 
 Run `r20261021-083115-dae5` (`out/night`), the first on the canonical framing, exited 0 with "every verdict is the
-expected one" in 8.1 minutes. The certifier and record verdicts are those of `r20261018-112635-7b3b`. v5 accepts
-every window a block recorded but the one the certifier refuses, and on the lab the table's. Each mockdc run's check
-on every port refused exactly what its blocks' own checks refused.
-With the salt, b4's proxy revealed the salts of windows 0 and 2 only. Its record check under the plan was unchanged,
+expected one" in 8.1 minutes. v5 accepts every window a block recorded but the one the certifier refuses, and on the
+lab the table's. Each mockdc run's check on every port refused exactly what its blocks' own checks refused. With the
+salt, b4's proxy revealed the salts of windows 0 and 2 only. Its record check under the plan was unchanged,
 and the certifier's salt check, like its audit, found nothing for window 1. The latest proxy tick was 5.9 ms late
 against the 25 ms slack. `run.py`'s tests render the summary of `r20261018-110501-432f`.
 
@@ -370,9 +372,9 @@ In the simulator a link-window is ok when N2's head checks accept it and N3 is o
 check holds each head's counts to the link's occupancy profile. The egress grid is the head's frames, the leaves of its
 frames root, filled in by those counts (`grid.fill`), and N3's design holds those frames to the committed layout's. So
 once N3 is a proof-service unit with Selection All, the two would hold the grid N2 used to compare in the clear. Until
-then the claim is counts only: timing at the profile. N2 needs the egress end's profile: without one nothing holds the
-egress timing, and `LinkWindows.verify` has no verdict (`ValueError`, failing closed), so N2 covers no lab or served
-link yet. The network verdict of record is `LinkWindows.network_verdict`, the AND over a link's link-windows with no ε
+then the claim is counts only: timing at the profile. N2 needs the egress end's profile, or a served link's profile,
+from which it derives the egress counts (the lab's): with neither, `LinkWindows.verify` has no verdict (`ValueError`).
+The network verdict of record is `LinkWindows.network_verdict`, the AND over a link's link-windows with no ε
 or share credit: every window of the egress profile registered in order with an accepted outcome of record. The
 simulator runs no proof-service stream, so it doesn't call it. `link_checks` records both bits on every link-window of
 the simulator, whose ports each declare φ's counts as their profile.
@@ -412,8 +414,8 @@ link-window that recorded no frames needs no N3 unit, so it costs only N2's two 
 | Simulator, 64-byte frames, 4 buckets a window | 12 | 6 | 10 | 3.4M to 18.1M | 65.4M |
 | Lab run `r20261018-084303-dae6`, 4,096-byte frames | 8 | 8 | 15 | 10.8M to 76.2M | 259.9M |
 
-The simulator's six empty link-windows are its wires'. The lab declares no occupancy profile, so N2 has no verdict on
-its links (above), whatever N3 costs there.
+The simulator's six empty link-windows are its wires'. The lab's links are served: their served counts are 678,795
+ANDs at T = 600 and F = 1,024 (`served.size`), in place of the count checks.
 
 At the shape of llama8b-node1's served rows (`SERVED`, from run `r20261006-035423-2cd5`: T = 600 buckets of 100 ms,
 slots of 4,096 bytes, 1,440 windows a day, busy egress link-windows of 34,499 and 35,386 frames, and 21,372 ingress
@@ -529,9 +531,9 @@ Open items:
   rejected, and N3's frames root would hold the unit's N to those counts' sum. The simulator runs those head checks on
   every link-window, its ports' profiles φ's counts (`link_checks`), but not N2's whole outcome: `Certifier` is an
   honest stand-in, so the certificates' host check would only accept. The lab declares no profile, since its timing
-  is the wall clock's, so N2 has no verdict there. Without a profile the closing check needs a unit: one per port
-  that opens the layout at the position after the port's last recorded frame and shows that the descriptor there is
-  the invalid one.
+  is the wall clock's, but its links are served, and N2's served counts reject a response a frame short or long
+  (`extra`'s run). A link with neither profile needs a unit: one per port that opens the layout at the position after
+  the port's last recorded frame and shows that the descriptor there is the invalid one.
 - **What the size class discloses.** FMT gives the run's widest prefix and suffix, the most segments any frame reads,
   and each unit's outbox depth; G gives the most segments of the port's frames, and v4's R (below) the most runs its
   reads need. A port's occupancy already bounds the

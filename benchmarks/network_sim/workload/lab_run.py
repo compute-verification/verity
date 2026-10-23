@@ -1,6 +1,6 @@
 """Serve a workload on the mock datacenter and check it: each block's server in its network namespace, behind the network
 certifier's proxy on its uplink, and the client on the outside host, with the lab's Program (`lab.Lab`) on every link;
-then the certifier's audit, N3 (`lab.check`) and the answers.
+then the certifier's audit, N3 (`lab.check`), N2's served verdict on each link-window and the answers.
 
     python -m workload.lab_run run --out DIR [--layers 4] [--tamper b1:flip-bit --expect refused] [--local]
 
@@ -35,25 +35,36 @@ per block): the egress allocation, Σ_sync with δ up to D, and the ingress allo
 the largest δ and the smallest ρ declared, so a response is on time whenever it is ready within D buckets of its
 request's release. The run lasts the windows that cover the model's last response with 2D + 20 buckets to spare.
 
+**Served.** Every block's link is a served link (`plan["served"]`, the block's (F, F_in), `lab.Lab.fixlen`): its
+responses are padded to F events with empty ones, and its requests to F_in frames, so its egress counts derive from its
+ingress counts. Its proxy admits a request only while the request's window, with it, still ends idle under the
+envelope (`served.Admission`, `admissions`), and holds it for the next window otherwise. That moves the model's
+releases, so the calibration is repeated on the admitted model until it gives the envelope and allocations it was
+modeled under (`calibrate_run`).
+
 **Checks.** The certifier's audit (`active_replay.audit_configuration` with `audit.Audit`) on each block's raw and committed
 records, in its live mode, whose Program is the block's event log anchored at each request's release as the ingress
 records show it: the timing. N3 over the same raw records (`lab.check`): the content. N3Window_v5 with the canonical
 framing's templates (`n3_canonical.verdicts` on `n3_unit.lab_windows`) on each of them: the content as the proof unit
-checks it, every frame its direction's template on the committed outboxes. And the answers against the Program
-evaluated in one process.
+checks it, every frame its direction's template on the committed outboxes. N2's served verdict on each block's link
+(`n2_verdicts`): each link-window's published records, their heads signed by a stand-in certifier (the lab's proxy
+signs nothing), through the proof service's stream on live coins and N2's verifier of record, so the counts only. And
+the answers against the Program evaluated in one process.
 
 **Tampering** (`--tamper BLOCK:MODE`): `flip-bit` flips the first bit of the block's first outbound message, which N3
-refuses while the certifier, whose timing is honest, accepts; `late` holds the block's first response past every δ of
-Σ_sync, which the certifier refuses (`coverage-never-established`). A block can't write into a frame's fill: the proxy
-frames its events.
+refuses while the certifier, whose timing is honest, and N2, which reads counts only, accept; `late` holds the block's
+first response past every δ of Σ_sync, which the certifier refuses (`coverage-never-established`) and N2 refuses on
+its window; `extra` writes one more empty event after the block's last response, which N3 refuses (`unexplained`) and
+N2 refuses on its window, since its egress counts aren't the ones its ingress counts derive. A block can't write into
+a frame's fill: the proxy frames its events.
 
 **Outputs** in `--out`: `report.json` (the calibration); per block `BLOCK/`, with `plan.json`, the proxy's records and log,
 the block's `server.json`, `server.events.gz` and `result.json`, the client's `peer.json` and the certifier's `audit.json`;
-`outside.json`, `public.json`, `witness.json`, `n3.json`, `n3_v5.json` (v5's verdict on each window), and `summary.json`:
-per block the certifier's verdicts and timing, N3's verdict and v5's, and the answers against the reference. The exit
-status is 0 when every process exited cleanly and the run is what `--expect` says: `accepted` (every block's certifier
-audit accepts, N3 holds, v5 accepts every window and the answers are the reference's) or `refused` (the tampered
-block's certifier audit, N3 or v5 refuses).
+`outside.json`, `public.json`, `witness.json`, `n3.json`, `n3_v5.json` (v5's verdict on each window), `n2.json` (N2's
+served verdict on each block's link) and `summary.json`: per block the certifier's verdicts and timing, N3's verdict,
+v5's and N2's, and the answers against the reference. The exit status is 0 when every process exited cleanly and the
+run is what `--expect` says: `accepted` (every block's certifier audit accepts, N3 holds, v5 and N2 accept every window
+and the answers are the reference's) or `refused` (the tampered block's certifier audit, N3, v5 or N2 refuses).
 """
 from __future__ import annotations
 
