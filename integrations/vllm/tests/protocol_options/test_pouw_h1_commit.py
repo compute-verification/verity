@@ -27,6 +27,7 @@ from verity_vllm.engine import int8_ops  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC  # noqa: E402
+from verity_vllm.acquire import h1_commit as HC  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_commit as CT  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_served as SV  # noqa: E402
 
@@ -135,7 +136,7 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None):
     out (`_Laid`)."""
     _host(tmp_path, monkeypatch, rounds=STEPS)
     model, com, tap = Model(edit), Committer(), CT.CommitTap(EMBED)
-    src = CT.source(com, model, list(model.model.layers))
+    src = HC.source(com, model, list(model.model.layers))
     tap.tap(com)
     src.install()
     served = SV.Served(PH.TILE, _unit(), window=hashlib.sha512(b"w").digest(), tap=tap)
@@ -295,10 +296,10 @@ def test_the_source_takes_every_linears_site_at_every_engine_step():
     """`source` names each of H1's linears by its module's name and taps its Int8RowQuant_v1 site at every engine step, so
     X-03's targets at any step are each site's x_q and s_a; a layer not in the model is refused."""
     model = Model()
-    src = CT.source(Committer(), model, list(model.model.layers))
+    src = HC.source(Committer(), model, list(model.model.layers))
     want = {f"{CT.site(f'model.layers.{w}')}/{p}": 1 for w in range(2) for p in "01"}
     assert src.targets_at(0) == src.targets_at(41) == want
     assert src.quant.get((41, "model.layers.1")) == CT.site("model.layers.1") and src.quant.get((0, "model")) is None
     with pytest.raises(ValueError, match="not named modules"):
-        CT.source(Committer(), model, [Linear(32, 3, Arm())])
+        HC.source(Committer(), model, [Linear(32, 3, Arm())])
     assert CT.Sites(["q"]).get((5, "q")) == "q/row_quant"
