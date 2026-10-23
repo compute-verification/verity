@@ -977,7 +977,27 @@ struct UCall {
   u32 N, K, u0, md;  // md = n_digits(K / 32), 2 or 3
 };
 
-// unit gu of ncalls calls (calls[ncalls].u0 the total), one warp a unit as h1u; live is every call's
+// every unit of ncalls calls in one launch (calls[ncalls].u0 the total), one warp a unit as h1u; live is every call's
+__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1um(const UCall* __restrict__ calls, u32 ncalls, u32 M,
+                                                   const uint8_t* __restrict__ live) {
+  __shared__ WarpSmem smem[WARPS];
+  const u32 wp = threadIdx.x >> 5;
+  const u32 gu = blockIdx.x * WARPS + wp;
+  if (gu >= calls[ncalls].u0) return;
+  u32 lo = 0, hi = ncalls;
+  while (hi - lo > 1) {
+    const u32 mid = (lo + hi) >> 1;
+    if (calls[mid].u0 <= gu) lo = mid;
+    else hi = mid;
+  }
+  const UCall c = calls[lo];
+  if (c.md == 3)
+    h1u_unit<3, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, smem[wp]);
+  else
+    h1u_unit<2, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, smem[wp]);
+}
+
+// h1um's unit gu, for h1um_sm (h1um keeps its own copy: calling this one changes h1um's register allocation)
 __device__ __forceinline__ void h1um_one(const UCall* __restrict__ calls, u32 ncalls, u32 M, const uint8_t* __restrict__ live,
                                          u32 gu, WarpSmem& S) {
   u32 lo = 0, hi = ncalls;
@@ -991,16 +1011,6 @@ __device__ __forceinline__ void h1um_one(const UCall* __restrict__ calls, u32 nc
     h1u_unit<3, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, S);
   else
     h1u_unit<2, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, S);
-}
-
-// every unit of ncalls calls in one launch, a warp's unit its index
-__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1um(const UCall* __restrict__ calls, u32 ncalls, u32 M,
-                                                   const uint8_t* __restrict__ live) {
-  __shared__ WarpSmem smem[WARPS];
-  const u32 wp = threadIdx.x >> 5;
-  const u32 gu = blockIdx.x * WARPS + wp;
-  if (gu >= calls[ncalls].u0) return;
-  h1um_one(calls, ncalls, M, live, gu, smem[wp]);
 }
 
 // h1um on the SMs whose %smid % den < q alone: a CTA on any other SM exits at once, and the warps of the rest take units
