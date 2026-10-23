@@ -3930,6 +3930,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_worker_cut_silent", false, false),
     ("zk_worker_cut_decode", false, false),
     ("zk_worker_cut_tree", false, false),
+    ("zk_worker_wire", false, false),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -4137,6 +4138,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if let Some(mode) = name.strip_prefix("zk_worker_cut_") {
         return worker_cut_case(name, mode, gpu);
+    }
+    if name == "zk_worker_wire" {
+        return worker_wire_case(gpu);
     }
     if name == "lincheck_modes_agree" {
         return lincheck_modes_case(st, inst, gpu);
@@ -4788,10 +4792,50 @@ fn seen(req: &Req) -> Value {
     }
 }
 
+/// `FC_WIRE_TAMPER=MODE`: the prover's frames to the firewall's session loop doctored on the wire in one named way, each of
+/// which the loop drops or refuses (live PROTOCOL.md §10.4): `round-trailing` puts bytes after every `Round`'s count,
+/// `commit-doctored` sends the `Commit` with a `root_F` that is not Σ, a public word and bytes after it, `proof-worker`
+/// sends each `Proof` as one byte of junk, and `unknown` sends a frame of tag 99 before `Finish` (its answer kept in
+/// `refused`).
+struct Wire {
+    inner: TcpTransport,
+    mode: String,
+    refused: Arc<Mutex<Option<String>>>,
+}
+
+impl Transport for Wire {
+    fn call(&mut self, req: Req) -> Result<Resp, String> {
+        let mut b = match (&req, self.mode.as_str()) {
+            (Req::Commit { roots, .. }, "commit-doctored") => {
+                let mut b = Req::Commit { root_f: vec![0xab; 63], roots: roots.clone(), publics: vec![("x".into(), vec![1; 16])] }.encode();
+                b.extend_from_slice(b"trailing");
+                b
+            }
+            (Req::Proof { table, rep, .. }, "proof-worker") => Req::Proof { table: table.clone(), rep: *rep, bytes: vec![0x5a] }.encode(),
+            _ => req.encode(),
+        };
+        if self.mode == "round-trailing" && matches!(req, Req::Round { .. }) {
+            b.extend_from_slice(b"trailing");
+        }
+        if self.mode == "unknown" && matches!(req, Req::Finish) {
+            let r = self.inner.call_raw(&[99, 1, 2, 3]);
+            *self.refused.lock().unwrap_or_else(PoisonError::into_inner) = Some(format!("{r:?}"));
+        }
+        self.inner.call_raw(&b)
+    }
+    fn stats(&self) -> (u64, u64, u64) {
+        self.inner.stats()
+    }
+    fn wait_s(&self) -> f64 {
+        self.inner.wait_s()
+    }
+}
+
 /// The selftest's own process for one firewalled session (`--only zk_worker_session`), its controls from this process's
-/// environment (`FC_FIREWALL`, `FC_FIREWALL_TAMPER`, `FC_FIREWALL_CUT_AT`): the session goes through the Lean session loop as
-/// `prove`'s does ([`session_addr`]), to a verifier of this process's on loopback, and the record is the session's outcome
-/// and every request that reached the verifier, behind the loop ([`seen`]).
+/// environment (`FC_FIREWALL`, `FC_FIREWALL_TAMPER`, `FC_FIREWALL_CUT_AT`, `FC_WIRE_TAMPER`): the session goes through the
+/// Lean session loop as `prove`'s does ([`session_addr`]), to a verifier of this process's on loopback, and the record is the
+/// session's outcome and every request that reached the verifier, behind the loop ([`seen`]; a frame that is not its
+/// request's own encoding as `["noncanonical", …]`, one that does not decode as `["undecodable", LEN]`).
 const WORKER_SESSION: &str = "zk_worker_session";
 
 fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
@@ -4809,10 +4853,14 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
         while let Ok(b) = read_frame(&mut r) {
             let resp = match Req::decode(&b) {
                 Ok(req) => {
-                    at.lock().unwrap_or_else(PoisonError::into_inner).push(seen(&req));
+                    let x = if req.encode() == b { seen(&req) } else { json!(["noncanonical", seen(&req), b.len()]) };
+                    at.lock().unwrap_or_else(PoisonError::into_inner).push(x);
                     s.handle(req)
                 }
-                Err(e) => Resp::Refused(e),
+                Err(e) => {
+                    at.lock().unwrap_or_else(PoisonError::into_inner).push(json!(["undecodable", b.len()]));
+                    Resp::Refused(e)
+                }
             };
             let done = matches!(resp, Resp::Verdict(_));
             if write_frame(&mut w, &resp.encode()).is_err() || done {
@@ -4824,10 +4872,74 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), &verifier, None).unwrap_or_else(|e| refuse(e));
     let plan = Plan { lean_session: frames.is_some(), lean_frames: frames, ..plan };
     let tcp = TcpTransport::connect(&addr).unwrap_or_else(|e| refuse(format!("the firewall's session loop at {addr}: {e}")));
-    let (v, _) = session(st, inst, shared(tcp), &plan, ProverSeed::from_os());
+    let wire = std::env::var("FC_WIRE_TAMPER").unwrap_or_default();
+    let refused = Arc::new(Mutex::new(None));
+    let t = if wire.is_empty() { shared(tcp) } else { shared(Wire { inner: tcp, mode: wire, refused: refused.clone() }) };
+    let (v, _) = session(st, inst, t, &plan, ProverSeed::from_os());
     let seen = std::mem::take(&mut *log.lock().unwrap_or_else(PoisonError::into_inner));
     let device_rounds = v["buckets"].as_array().and_then(|b| b.iter().filter_map(|x| x["firewall_device_rounds"].as_u64()).max());
-    json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "device_rounds": device_rounds, "seen": seen})
+    let refused = refused.lock().unwrap_or_else(PoisonError::into_inner).clone();
+    json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "device_rounds": device_rounds, "seen": seen,
+           "wire_refused": refused})
+}
+
+/// One firewalled CPU session in a process of its own ([`WORKER_SESSION`]), its controls `env` and none other: its record.
+fn worker_subsession(env: &[(&str, String)]) -> Value {
+    let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
+    cmd.arg("selftest").args(if zk_mode() { &["--zk"][..] } else { &[] })
+        .args(["--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
+               "--only", WORKER_SESSION])
+        .env("FC_FIREWALL", "1").env("FC_HOST_WITNESS", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
+        .env_remove("FC_FIREWALL_DEADLINE_S").env_remove("FC_WIRE_TAMPER");
+    cmd.envs(env.iter().map(|(k, v)| (*k, v.as_str())));
+    let out = cmd.output().expect("spawn a firewalled session");
+    let text = String::from_utf8_lossy(&out.stdout);
+    text.lines().find_map(|l| l.strip_prefix("NEG\t")).and_then(|l| serde_json::from_str(l).ok()).unwrap_or_else(|| {
+        let err = String::from_utf8_lossy(&out.stderr);
+        json!({"error": format!("no session record (exit {:?}): {}", out.status.code(), err.lines().rev().take(5).collect::<Vec<_>>().join(" | "))})
+    })
+}
+
+/// `zk_worker_wire` (live PROTOCOL.md §10.4): every frame that reaches the verifier through the firewall's session loop is
+/// the loop's own encoding, whatever bytes the prover put on the wire. Beside an honest firewalled CPU session, one session
+/// per `FC_WIRE_TAMPER` mode, each in a process of its own: bytes after every `Round`, a doctored `Commit` (`root_F` not Σ, a
+/// public word, bytes after it) and the worker's own `Proof`s (junk) are dropped, the session accepted and the verifier's
+/// every request the honest session's, canonical and at its sizes; a frame of an unknown tag is refused, and the verifier
+/// gets the honest session's requests up to its proofs, then nothing.
+fn worker_wire_case(gpu: bool) -> Value {
+    let name = "zk_worker_wire";
+    if gpu {
+        return json!({"case": name, "pass": true, "skipped": "the wire's controls run on the CPU device"});
+    }
+    let lean = flock_live::firewall::lean_frame_exe();
+    if !lean.exists() {
+        return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
+    }
+    let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
+    let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
+    let honest = worker_subsession(&[]);
+    let h = seen(&honest);
+    let honest_ok = honest["accepted"] == true && h.iter().filter(|x| kind(x) == "proof").count() > 0
+        && h.iter().all(|x| kind(x) != "noncanonical" && kind(x) != "undecodable");
+    let before_proofs: Vec<Value> = h.iter().take_while(|x| kind(x) != "proof").cloned().collect();
+    let modes: Vec<Value> = ["round-trailing", "commit-doctored", "proof-worker", "unknown"].iter().map(|&m| {
+        let v = worker_subsession(&[("FC_WIRE_TAMPER", m.to_string())]);
+        let s = seen(&v);
+        let (want, refused) = if m == "unknown" {
+            (&before_proofs, v["wire_refused"].as_str().is_some_and(|r| r.contains("a request the session loop does not serve")))
+        } else {
+            (&h, v["wire_refused"].is_null())
+        };
+        let accepted_ok = if m == "unknown" { v["accepted"] != true } else { v["accepted"] == true };
+        let first_miss = (0..want.len().max(s.len())).find(|&i| want.get(i) != s.get(i));
+        json!({"mode": m, "ok": honest_ok && accepted_ok && refused && first_miss.is_none(), "accepted": v["accepted"],
+               "why": v["why"].as_str().unwrap_or("").chars().take(160).collect::<String>(), "wire_refused": v["wire_refused"],
+               "error": v["error"], "requests": s.len(),
+               "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "wire": s.get(i)}))})
+    }).collect();
+    json!({"case": name, "expect": "each doctored frame dropped (the honest session's requests, accepted) or refused (unknown)",
+           "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
+           "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
 }
 
 /// `zk_worker_cut_MODE` (PROTOCOL.md §10.1): a worker that fails in one way (`FC_FIREWALL_TAMPER=cut-MODE`) at its table's device
@@ -4846,21 +4958,8 @@ fn worker_cut_case(name: &str, mode: &str, gpu: bool) -> Value {
         return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
     }
     let run = |tamper: Option<(usize, &str)>| -> Value {
-        let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
-        cmd.arg("selftest").args(if zk_mode() { &["--zk"][..] } else { &[] })
-            .args(["--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
-                   "--only", WORKER_SESSION])
-            .env("FC_FIREWALL", "1").env("FC_HOST_WITNESS", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
-            .env_remove("FC_FIREWALL_DEADLINE_S");
-        if let Some((k, t)) = tamper {
-            cmd.env("FC_FIREWALL_TAMPER", format!("cut-{t}")).env("FC_FIREWALL_CUT_AT", k.to_string());
-        }
-        let out = cmd.output().expect("spawn a firewalled session");
-        let text = String::from_utf8_lossy(&out.stdout);
-        text.lines().find_map(|l| l.strip_prefix("NEG\t")).and_then(|l| serde_json::from_str(l).ok()).unwrap_or_else(|| {
-            let err = String::from_utf8_lossy(&out.stderr);
-            json!({"error": format!("no session record (exit {:?}): {}", out.status.code(), err.lines().rev().take(5).collect::<Vec<_>>().join(" | "))})
-        })
+        let env = tamper.map(|(k, t)| vec![("FC_FIREWALL_TAMPER", format!("cut-{t}")), ("FC_FIREWALL_CUT_AT", k.to_string())]);
+        worker_subsession(&env.unwrap_or_default())
     };
     let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
     let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
