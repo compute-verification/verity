@@ -136,6 +136,11 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1U_CARVE
 #define H1U_CARVE 0
 #endif
+// H1UM_CAP = c > 0 (an experiment): kh_units_multi's h1um launch carries the least dynamic shared memory (a pad no thread
+// touches) that holds it at c CTAs an SM under the maximum carveout; kh_units_multi_occ reports the pad and the occupancy
+#ifndef H1UM_CAP
+#define H1UM_CAP 0
+#endif
 static_assert(!H1K_AUTO || H1U_KSPLIT == 4, "H1K_AUTO picks between h1k<4> and h1k<2>: build it with H1U_KSPLIT = 4");
 static_assert(!H1K_RONLY || H1U_KSPLIT, "H1K_RONLY is kh_one's K split without z and y: build it with H1U_KSPLIT");
 static_assert(16 % (H1U_PD + H1U_RING) == 0, "a chunk's 16 segments are whole rings of H1U_PD (+ 1 with H1U_RING) sets");
@@ -1998,13 +2003,53 @@ extern "C" int kh_unit(const void* A, const void* B, unsigned M, unsigned N, uns
 // last's u0 the units in all, `units`), every call M rows with the same live row blocks
 extern "C" unsigned kh_ucall_bytes() { return sizeof(UCall); }
 
+// H1UM_CAP's pad in bytes, found once a process (-1 when no pad below the opt-in limit holds h1um at that many CTAs)
+static int h1um_pad() {
+#if H1UM_CAP
+  static const int pad = [] {
+    int dev = 0, optin = 0;
+    cudaFuncAttributes fa{};
+    if (cudaGetDevice(&dev) != cudaSuccess ||
+        cudaDeviceGetAttribute(&optin, cudaDevAttrMaxSharedMemoryPerBlockOptin, dev) != cudaSuccess ||
+        cudaFuncGetAttributes(&fa, (const void*)h1um) != cudaSuccess)
+      return -1;
+    const int most = optin - (int)fa.sharedSizeBytes;
+    if (cudaFuncSetAttribute((const void*)h1um, cudaFuncAttributePreferredSharedMemoryCarveout,
+                             (int)cudaSharedmemCarveoutMaxShared) != cudaSuccess ||
+        cudaFuncSetAttribute((const void*)h1um, cudaFuncAttributeMaxDynamicSharedMemorySize, most) != cudaSuccess)
+      return -1;
+    for (int b = 0; b <= most; b += 128) {
+      int per = 0;
+      if (cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1um, 32 * WARPS, b) != cudaSuccess) return -1;
+      if (per <= H1UM_CAP) return b;
+    }
+    return -1;
+  }();
+  return pad;
+#else
+  return 0;
+#endif
+}
+
+// h1um's CTAs an SM at kh_units_multi's launch (its pad, in bytes, in *pad), or -1
+extern "C" int kh_units_multi_occ(int* pad) {
+  carve<h1um>();
+  const int b = h1um_pad();
+  if (pad) *pad = b;
+  int per = 0;
+  if (b < 0 || cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1um, 32 * WARPS, b) != cudaSuccess) return -1;
+  return per;
+}
+
 extern "C" int kh_units_multi(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
                               void* stream) {
   if (!ncalls || M % 32) return 2;
   if (!units) return 0;
   carve<h1um>();
-  h1um<<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, (cudaStream_t)stream>>>((const UCall*)calls, ncalls, M,
-                                                                            (const uint8_t*)live);
+  const int pad = h1um_pad();
+  if (pad < 0) return 3;
+  h1um<<<(units + WARPS - 1) / WARPS, 32 * WARPS, (size_t)pad, (cudaStream_t)stream>>>((const UCall*)calls, ncalls, M,
+                                                                                     (const uint8_t*)live);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
