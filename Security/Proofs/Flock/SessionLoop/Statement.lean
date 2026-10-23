@@ -111,32 +111,32 @@ def _root_.Flock.Guarantees.SessionLoopZK : Prop :=
             (fun x => (FlockDeploy.deployZk _root_.Flock.Readable.relation).V.k x + 1) wk w) Vs x ω θ).msgs)) ≤
       2 * (Pr (fun c : (leaky1 ((((CoinLayer.session Loop.loopNr T).withStops
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) (LeanRelease.ofLoop T L₀ real) Loop.progOf
-                  Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).refP.withSim fun x _ c =>
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).refP.withSim fun x _ c =>
               ((CoinLayer.session Loop.loopNr T).withStops
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) (LeanRelease.ofLoop T L₀ real) Loop.progOf
-                  Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).coinModel x c).simulatorE t (t * 3 ^ t))
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk _root_.Flock.Readable.relation).V.k x + 1)
             (LeanRelease.ofLoop T L₀ real).toSrv.stop).C x =>
           Ev ((LeanRelease.ofLoop T L₀ real).toSrv.timed x ((leaky1 ((((CoinLayer.session Loop.loopNr T).withStops
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) (LeanRelease.ofLoop T L₀ real) Loop.progOf
-                  Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).refP.withSim fun x _ c =>
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).refP.withSim fun x _ c =>
               ((CoinLayer.session Loop.loopNr T).withStops
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) (LeanRelease.ofLoop T L₀ real) Loop.progOf
-                  Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).coinModel x c).simulatorE t (t * 3 ^ t))
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk _root_.Flock.Readable.relation).V.k x + 1)
             (LeanRelease.ofLoop T L₀ real).toSrv.stop).out CoinOpen.shaH Vs θ x c))) +
           (8 * ((CoinLayer.session Loop.loopNr T).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T)
-              (LeanRelease.ofLoop T L₀ real) Loop.progOf Loop.readCoins)
+              (LeanRelease.ofLoop T L₀ real) Loop.progOf Loop.freshOf Loop.readCoins)
               (LeanRelease.ofLoop T L₀ real).stop).nLeaves x *
               FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash +
             8 * t * ((CoinLayer.session Loop.loopNr T).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T)
-              (LeanRelease.ofLoop T L₀ real) Loop.progOf Loop.readCoins)
+              (LeanRelease.ofLoop T L₀ real) Loop.progOf Loop.freshOf Loop.readCoins)
               (LeanRelease.ofLoop T L₀ real).stop).nLeaves x *
               FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash + 2 * (1 / 3) ^ t) +
           4 * t * 3 ^ t *
             (Fork CoinOpen.shaH ((((CoinLayer.session Loop.loopNr T).withStops
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) (LeanRelease.ofLoop T L₀ real) Loop.progOf
-                  Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).swP vs).prover w) Vs θ x).Pr
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).swP vs).prover w) Vs θ x).Pr
               CoinOpen.shaH)
 
 end Claims.ZKServer

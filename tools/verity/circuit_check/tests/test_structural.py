@@ -221,3 +221,55 @@ def test_the_structural_lowering_is_its_definitions_lowering():
     tm = S.lower(t)[0]
     assert any(c.count > 1 for d in tm.defs for c in d.calls)
     assert _verdict(t, tm)[0] == "syntactic"
+
+
+def test_the_struct_lower_realization_is_held_to_the_reference_from_its_template(monkeypatch):
+    """``c-flock:struct_lower`` (`checks.struct_lowering`, under ``Options.struct_max_gates``): a scan's structural template,
+    evaluated from the template, equals the reference on every correspondence vector; a template whose outputs differ is
+    refused by name on every vector."""
+    from circuit_check import checks as CK
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation.reference import resolve, signature_of
+    from verity.ml.circuits.ops.boolean import gemm as GB
+
+    t = resolve(bind(GB.GemmAccumulatorS8, K=128, DOT=GB.BlackwellS8ImmaDot32))
+    opts = CK.Options(vectors=16, struct_max_gates=1 << 30)
+    F = CK.Findings()
+    _corr, arrays, ref = CK.correspondence(t, opts, F)
+    params, _ = signature_of(t)
+    rec = CK.struct_lowering(t, params, arrays, ref, F)
+    assert (rec["via"], rec["lowered"], rec["ordered"], rec["mismatches"]) == (CK.STRUCT_VIA, True, True, 0)
+    assert rec["compared"] == sum(r is not None for r in ref) > 0 and not F.failures
+    evaluate = TM.evaluate
+    monkeypatch.setattr(TM, "evaluate", lambda *a, **k: ~evaluate(*a, **k))
+    rec = CK.struct_lowering(t, params, arrays, ref, F)
+    assert rec["mismatches"] == rec["compared"]
+    assert [f["code"] for f in F.failures] == ["lowering-mismatch"] and CK.STRUCT_VIA in F.failures[0]["name"]
+
+
+# --- a unit on its row ports -----------------------------------------------------------------------------------------
+
+def test_a_structural_stagers_unit_is_the_flat_unit_on_its_ports_by_construction():
+    """`check_unit`: the unit a structural stager writes (`struct_lower` on `class_statement.unit_ports`' u16 row ports) is
+    the flat unit the flat stager lays out on those ports (`class_statement.unit_circuit`) by construction, with the bound
+    on a wrong verdict recorded. The same template held to rows pairing each x with the next w computes another function
+    and is refused; the Definition's own template, on its leaves, is refused by its ports."""
+    S = pytest.importorskip("verity_flock.struct_lower")
+    from verity_flock import class_statement as CS
+
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops.boolean import gemm as GB
+
+    t = bind(GB.GemmAccumulatorS8, K=64, DOT=GB.BlackwellS8ImmaDot32)
+    rows = [(f"p{r}", [f"x[{r}]", f"wrow[{r}]"]) for r in range(64)]
+    tm = CS.unit_lowering(t, "unit/structural-test", rows, (), True)[0].template
+    r = ST.check_unit(t, rows, tm, name="unit/structural-test")
+    s = r["structural"]
+    assert (s["verdict"], s["unit"], r["failures"]) == ("syntactic", "unit/structural-test", [])
+    assert s["error_bound"]["M"] == 4 * (s["template"]["live_rows"] + s["lowering"]["live_ands"]) + 32 + 1
+    assert s["error_bound"]["log2"] < -400
+    shifted = [(f"p{r}", [f"x[{r}]", f"wrow[{(r + 1) % 64}]"]) for r in range(64)]
+    r = ST.check_unit(t, shifted, tm)
+    assert r["structural"]["verdict"] == "refused" and _codes(r) == ["mismatch"]
+    r = ST.check_unit(t, rows, S.lower(t)[0])
+    assert r["structural"]["verdict"] == "refused" and _codes(r) == ["ports"]

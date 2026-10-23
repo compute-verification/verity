@@ -1240,50 +1240,6 @@ open FlockDeploy (Coin)
 
 /-! ## The staging at `deployRec`, per part -/
 
-/-- **Part `s`'s V\* statement as V\* stages it**: `xO` is `staged st x ms s` at some list of messages, its setup
-decodes, and its read's check passes. -/
-def StagedPart (st : Stage) (s : ℕ) (x xO : Msg) : Prop :=
-  ∃ (ms : List (Msg × Out)) (i : RecIns) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt),
-    xO = staged st x ms s ∧ setupO xO = some (i, spec, sts) ∧ i.base.read.check = .ok ()
-
-section Run
-
-variable (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
-  (r : Fin ((V IV st).k x) → Coin)
-
-/-- **An accepted run stages every part**: session `s` decided (`run_decides`) and did not refuse, so its outer
-statement's setup decoded and its read checked (`nextO_decide`, `actO_decide`, `scope_of_checks`), and that statement
-is part `s`'s V\* statement at the run's inner messages (`ract_sess`, `innerPairs_run`). -/
-theorem stagedPart_run (hacc : (run H P (V IV st) x ω r).out = .acc) {s : ℕ} (hs : s < nS x) :
-    StagedPart st s x (staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s) := by
-  obtain ⟨i, f, hi, ⟨j, xO, as', cs', ins, spec, sts, link, c₁, mids, hr, hO⟩, hn⟩ :=
-    run_decides H IV st x P ω r hacc hs
-  rw [next_sess H hr] at hn
-  have hacc' : ((nextO xO as' cs').eval H).1 = .acc := by
-    rcases nextO_decide_out H hO with ho | ho
-    · exact ho
-    · rw [ho] at hn
-      exact absurd rfl hn
-  obtain ⟨⟨spec', sts', -, -, hc⟩, -⟩ := (nextO_decide H hO).1 hacc'
-  obtain ⟨i', hi', hib⟩ := actO_decide hO
-  obtain ⟨hk, -, -⟩ := ract_sess_locate hr
-  obtain ⟨-, -, hxO⟩ := ract_sess hr
-  have hK := run_acc_length H IV st x P ω r hacc
-  have hlen : (((run H P (V IV st) x ω r).msgs.take (i + 1)).map Prod.fst).length = i + 1 := by
-    simp only [List.length_map, List.length_take]
-    omega
-  rw [hlen] at hk
-  have hip := innerPairs_run H IV st x P ω r hacc (off := i + 1) hk.le (by omega) []
-    (range_map_take (coinSeq r) hk.le)
-  rw [List.append_nil] at hip
-  rw [hip] at hxO
-  subst hxO
-  refine ⟨_, i', spec, sts, rfl, hi', ?_⟩
-  rw [hib]
-  exact scope_of_checks hc
-
-end Run
-
 /-- **Part `s`'s coins shown on `xO`, with `xO` staged**: `showsTr` at `untr` (which reads the transcript only) and
 `StagedPart`. -/
 def showsPart (untr : TrReader) (b : Brings) (s : ℕ) (x xO : Msg) (c : ℕ → Coin) : Prop :=

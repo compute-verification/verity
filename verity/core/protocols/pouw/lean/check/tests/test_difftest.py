@@ -319,7 +319,8 @@ def test_credit(pass_server):
     didn't commit, a window's round log the challenger never received, entries or a drawn unit's proof of another
     registration than the window's or an entry whose root is not its sessions', B rows other than the ones a window's
     open root binds or registered under another domain, name or rows, a window whose B rows (one row's s_w, or every
-    code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root, and every other
+    code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
+    model `models.json` pins (none, malformed, another checkpoint, another role), and every other
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
@@ -384,6 +385,10 @@ def test_credit(pass_server):
                  "window weights: the window's registered weights' root ",
                  "open signed: a B row's codes or s_w differ from the ones the period registered",
                  "'s open signs no weights' root (weights_root, a SHA# digest",
+                 "'s open signs a weights' root but no model (model, {name, checkpoint_sha#})",
+                 "with another checkpoint than the one credit pins for it: open the period with the gate's --model",
+                 "which is no checkpoint role credit pins: open the period with the gate's --model",
+                 "window weights: period ",
                  "window weights: the window is in no period of the auditor's ledger",
                  "window weights: the window's round# request table's root is not",
                  "window weights: the window's registered weights are not the ones its open root binds",

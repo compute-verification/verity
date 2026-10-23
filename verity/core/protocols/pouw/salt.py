@@ -53,7 +53,7 @@ SALT_TAG = b"verity/pouw-salt/v1"
 RECORD_TAG = b"verity/pouw-record/v1"
 #: `prover_id`'s domain tag
 PROVER_TAG = b"verity/pouw-prover/v1"
-#: a weights' root, a SHA-512 `tagged`: an H1 window's `credit.weights_root` (`window_open_root`), an epoch's
+#: a weights' root, a SHA-512 `tagged`: an H1 window's `weights.weights_root` (`window_open_root`), an epoch's
 #: `audit.weights_root` (`pouw_record`)
 WEIGHTS_ROOT_BYTES = 64
 #: a certified window's stream, the SHA-512 digest that names it, and its prover, the 64-byte id it is registered under
@@ -121,7 +121,7 @@ def window_open_root(weights_root: bytes, requests_root: bytes, session: str) ->
     part 64 bytes, the session's id hashed from its ASCII (Lean's `PouwCheck.windowOpenRoot` mirrors it, and
     `test_window_open_root_form` pins it).
 
-    `weights_root` is `credit.weights_root`, the fold of each K's registered ``<PREFIX>b/<K>`` root (the B rows, int8
+    `weights_root` is `weights.weights_root`, the fold of each K's registered ``<PREFIX>b/<K>`` root (the B rows, int8
     codes and s_w, of the window's linears of that K; not `audit.weights_root`, the epoch's commitment to int8 rows
     alone), `requests_root` the root of the window's round-0 request table, committed before its salt, and `session` the
     id the auditor's gate assigned when it reserved the window's challenger session, which the prover can't relabel. The gate opens that session on this root (``open --session S --root R``), its

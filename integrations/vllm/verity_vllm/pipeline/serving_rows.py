@@ -72,7 +72,7 @@ import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P
 from verity.ml.circuits import partition_object as PO
-from verity_vllm.check.replay.index import ProgramIndex
+from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
 
@@ -221,12 +221,14 @@ Row = tuple[str, Any, dict, dict]
 def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope: str | None = None,
                 program_dirs: dict[str, str] | None = None,
                 index: Mapping[str, Any] | None = None,
-                steps: Sequence[int] | None = None) -> tuple[list[list[Row]], list[Any], list[int]]:
+                steps: Sequence[int] | None = None,
+                reuse: Sequence[ProgramIndex] = ()) -> tuple[list[list[Row]], list[Any], list[int]]:
     """Per template, its rows in order (request, its ProgramIndex, the row, its description), restricted to ``scope`` (an op_path
     prefix) and ``steps`` (``[lo, hi)`` of the request's steps); each template's Definition; and its instance count.  Rows are
     matched by the template's word (:func:`template`), so two templates that compute one word Definition are refused.  Fixed by
     the Build's Programs before serving.  ``index``: the ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program
-    (`pipeline.tp.serving_rows`)."""
+    (`pipeline.tp.serving_rows`); ``reuse``: indexes already built, each taken for the Program it was built from with these
+    arguments (`index_of`)."""
     ts = [template(t) for t in tmpls]
     want: dict[str, int] = {}
     for k, t in enumerate(ts):
@@ -235,8 +237,10 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
     out: list[list[Row]] = [[] for _ in tmpls]
     counts = [0] * len(tmpls)
     seen: list[dict | None] = [None] * len(tmpls)
+    pool = list(reuse)
     for rid, inst in programs.items():
-        pi = ProgramIndex(inst, program_dir=(program_dirs or {}).get(str(rid)), **(index or {}))
+        pi = index_of(inst, pool, program_dir=(program_dirs or {}).get(str(rid)), **(index or {}))
+        pool.append(pi)
         for i in sorted(pi.by_i):
             r = pi.by_i[i]
             hits = [(want[w], n) for w, n in unit_templates(r["spec"]) if w in want]
@@ -376,12 +380,13 @@ def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
 
 def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any], run_root: str,
                program_dirs: dict[str, str] | None = None, index: Mapping[str, Any] | None = None,
-               arrivals: Mapping[str, int] | None = None, context: str = "") -> tuple[CS.Window, list[list[Row]]]:
+               arrivals: Mapping[str, int] | None = None, context: str = "",
+               reuse: Sequence[ProgramIndex] = ()) -> tuple[CS.Window, list[list[Row]]]:
     """The verifier's window over the run's Programs (``partition``: the partition file's ``templates``, ``law`` and ``scope``) and
     each template's rows; refused when the file names a ``partition_digest`` that is not the window's, or a ``query`` other than the
     template queries.  ``row_tables: true`` in the file: the ``ScaledMmS8Coordinate`` chunks in the row-table layout
     (`with_row_tables`, its engine steps the requests' ``arrivals`` plus their steps), under ``context`` (hex: the live coin
-    commitment's root serving committed its step roots under)."""
+    commitment's root serving committed its step roots under).  ``reuse``: `member_rows`'."""
     tmpls, law = list(partition["templates"]), law_of(partition["law"])
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
@@ -391,7 +396,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
         raise ValueError(f"partition query {q!r}: the serving rows' window is the template instances' partition "
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")
     scope = partition.get("scope") or {}
-    rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"))
+    rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"), reuse)
     ms = members(tmpls, rows, counts, partition.get("chunk_cap"))
     tables: tuple[CS.RowTable, ...] = ()
     if partition.get("row_tables"):
@@ -418,7 +423,10 @@ def partition_doc(window: CS.Window, partition: Mapping[str, Any]) -> dict[str, 
 def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
          arrivals: dict[str, int] | None = None) -> tuple[dict[str, dict[str, np.ndarray]], list[list[Any]]]:
     """Member ``m``'s words, read from the committed store and the registered weights exactly as the replay reads them, and its
-    index entries."""
+    index entries.  A row's outputs fill the member's output ports in order: one template's call sites may commit its output
+    under different member names (GLM-5.3's routed experts' ``act``, its shared experts' ``out``), and the ports are named
+    from its first row (`members`); each index entry keeps the row's own member names.  A row whose input or output widths
+    are not the member's is refused."""
     layout = template(m.template).layout
     if layout == "gemm":
         return _read_gemm(m, rows, store, weights, arrivals)
@@ -429,23 +437,27 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     for rid, pi, r, d in rows:
         arrive = int((arrivals or {}).get(rid, 0))
         ops = [_operand(pi, store, weights, rid, arrive, g) for g in r["args"]]
-        outs = {}
+        outs = []
         for member, width, _dt in d["members"]:
             w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
             if w is None:
                 raise LookupError(f"row {r['i']} output {member}: {why}")
-            outs[member] = np.asarray(w, dtype=np.uint16)
+            outs.append(np.asarray(w, dtype=np.uint16))
         if layout == "rope":
             nh = int(d["statics"]["NHEADS"])
             cols["x"].append(np.asarray(ops[0], dtype=np.uint16).reshape(nh, D))
             cols["cs"].append(np.broadcast_to(np.asarray(ops[1], dtype=np.uint16).reshape(1, D), (nh, D)))
-            cols["out"].append(next(iter(outs.values())).reshape(nh, D))
+            cols["out"].append(outs[0].reshape(nh, D))
         else:
             nh = 1
+            got = ([len(a) for a in ops], [int(mm[1]) for mm in d["members"]])
+            if got != ([w for _, w in m.rows], [w for _, w in m.outs]):
+                raise ValueError(f"row {r['i']} ({d['op_path']}): inputs {got[0]} and outputs {got[1]} words, not member {m.key}'s "
+                                 f"{list(m.rows)} and {list(m.outs)}")
             for g, a in enumerate(ops):
                 cols[f"in{g}"].append(np.asarray(a, dtype=np.uint16).reshape(1, -1))
-            for member, a in outs.items():
-                cols[f"out.{member}"].append(a.reshape(1, -1))
+            for (port, _w), a in zip(m.outs, outs, strict=True):
+                cols[port].append(a.reshape(1, -1))
         layer = _LAYER.search(d["op_path"])
         entries.append([lo, lo + nh, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"],
                         ",".join(str(mm[0]) for mm in d["members"]), int(d["row"]), int(r["i"])])
@@ -608,13 +620,15 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  arrivals: dict[str, int] | None = None, program_dirs: dict[str, str] | None = None,
                  digests: Mapping[str, str] | None = None, committer: dict[str, Any] | None = None,
                  workers: int | None = None, stand_in: Mapping[str, Any] | None = None, tp: Mapping[str, Any] | None = None,
-                 index: Mapping[str, Any] | None = None, row_tables: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                 index: Mapping[str, Any] | None = None, row_tables: Mapping[str, Any] | None = None,
+                 reuse: Sequence[ProgramIndex] = ()) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
     under (``commitment``: the reader's committer's, vllm-v1 or a TP rank's rows-sha512), the research run ``run``, the row, the
     committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
     with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
-    serving_rows`) gives its run as a string, its world and roots as ``tp`` and its ProgramIndex arguments as ``index``.  A
+    serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
+    loaded its Programs with as ``reuse``.  A
     row-table layout takes the serving loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots":
     {engine step: root}}`` (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values
     and writes only ``out_dir``."""
@@ -623,7 +637,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     pf = json.loads(Path(partition_file).read_text())
     rt = row_tables or {}
     window, rows = population(programs, pf, run_root if isinstance(run_root, str) else bytes(run_root).hex(), dirs, index, arrivals,
-                              rt.get("context", ""))
+                              rt.get("context", ""), reuse)
     ms = window.members
     store = CommittedStore.of_record(bmap, committed, manifest)
     got = read_all(ms, rows, store, weights, arrivals)

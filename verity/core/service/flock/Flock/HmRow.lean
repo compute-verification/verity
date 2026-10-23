@@ -1626,6 +1626,37 @@ theorem parse_eq_fast : @parse = @parseFast := by
   simp -zeta only [HmRow.parse_eq_fast]
   try rfl
 
+/-- META, read off the file's second line alone, between its first two newlines, as `HmRow.parse` reads that line: neither
+the rest of the file's UTF-8 nor its lines are read. -/
+def metaOf (bytes : ByteArray) : V Json := do
+  let some n1 := findByte bytes 10 | throw "circuit: no META line"
+  let n2 := (findByte bytes 10 (n1 + 1)).getD bytes.size
+  let some line := String.fromUTF8? (bytes.extract (n1 + 1) n2) | throw "circuit: not UTF-8"
+  let line := line.trimAsciiEnd.toString
+  if !line.startsWith "META " then throw "circuit: no META line"
+  match Json.parse (line.drop 5).toString with
+  | .ok j => pure j
+  | .error e => throw s!"META: {e}"
+
+/-- A templated file (PRF-133, `Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
+its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid out, passing `Tmpl.unrollOk`; its
+net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit` circuit where a flat file's
+`CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). META is read off its own
+line first (`metaOf`), so the file's lines are split once, by `HmRow.parse`. A file that carries a unit's or a root's rows
+itself is refused: none of the nets `HmRow.parse` read after `pre` is named `unit` or `root`. -/
+def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
+  let mj ← metaOf bytes
+  let ctx := "templated statement META"
+  let lines ← (← J.arr mj "template" ctx).mapM fun x => J.asStr x "template line"
+  let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
+    | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
+  let tu ← TmplUnit.read (← Tmpl.parse lines) mode
+  let c ← HmRow.parse tags bytes tables (pre := #[("unit", tu.net)])
+  if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
+    throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
+  checkRows c
+  return { c with tmpl := some tu }
+
 /-- Row `p` of the padding instance (u16 LE): zero, or an output row's pinned dummy outputs, zero-padded. -/
 def dummyRow (c : Circuit) (p : Nat) : ByteArray := Id.run do
   let words := (c.ports.getD p default).words
