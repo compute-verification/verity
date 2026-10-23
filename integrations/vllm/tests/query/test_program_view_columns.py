@@ -272,3 +272,79 @@ def test_stored_progressions_resolve_to_the_columns_of_their_runs():
         cols.append((list(b.c.read_call), list(b.c.read_port), list(b.c.pread_call), list(b.c.pread_port), list(b.c.read_off)))
     assert any(len(it) == 8 for _i, ops in rows for o in ops for it in C.file_items_from_runs(o))
     assert cols[0] == cols[1]
+
+
+def test_weight_read_progressions_resolve_to_the_columns_and_reads_of_their_runs():
+    """The weight-read shape (each progression inside one field of the weights record, most in the field the one before it read)
+    builds the columns its per-leaf runs build and the reads the reader this replaced gives them, beside progressions that cross
+    fields, sit in a gap between fields, are empty, have one run or none, step backwards or over parameters, on a single-port and
+    an overlapping table."""
+    from verity_vllm.program import compact as C
+    rng = random.Random(11)
+    edges = sorted(rng.sample(range(1, 30_000), 149))
+    gapped = []
+    for k, (lo, hi) in enumerate(zip([0] + edges, edges + [30_000])):
+        hi = max(lo + 1, hi - rng.choice((0, 0, 3)))
+        gapped.append(pv.Port(f"f{k}", lo, hi, hi - lo, 16))
+    over = (pv.Port("a", 0, 100, 100, 16), pv.Port("b", 50, 150, 100, 16))
+    ins = (pv.InputView(-1, "weights", "x", tuple(gapped)), pv.InputView(-2, "prompt", "y", (pv.Port("0", 0, 4, 4, 32),)),
+           pv.InputView(-3, "kv", "z", over))
+
+    def inside(f):                       # one progression inside field f
+        p = gapped[f]
+        w = rng.randint(1, max(1, min(4, p.elems)))
+        st = rng.randint(w, w + 6)
+        lo = rng.randrange(p.lo, p.hi - w + 1)
+        cnt = max(1, min(rng.randint(2, 40), (p.hi - w - lo) // st + 1))
+        return ["P", 0, lo, lo + w, 0, st, st, cnt]
+
+    def spill(f):                        # one inside field f but for one leaf of the field after it (or before it)
+        p = gapped[f]
+        if f + 1 < len(gapped) and (f == 0 or rng.random() < 0.5):
+            lo = max(p.lo, p.hi - rng.randint(1, 6))
+            return ["P", 0, lo, lo + 1, 0, 1, 1, gapped[f + 1].lo + 1 - lo]
+        lo = gapped[f - 1].hi - 1
+        return ["P", 0, lo, lo + 1, 0, 1, 1, rng.randint(p.lo - lo + 1, p.hi - lo)]
+
+    def other():
+        lo = rng.randrange(0, 29_900)
+        return rng.choice([
+            ["P", 0, lo, lo + 2, 0, 40, 40, rng.randint(2, 9)],                  # crosses fields (or a gap)
+            ["P", 0, lo, lo, 0, 3, 3, rng.randint(1, 5)],                        # empty runs
+            ["P", 0, lo, lo + 5, 0, 0, 0, 1], ["P", 0, lo, lo + 5, 0, 7, 7, 0],  # one run; none
+            ["P", 0, lo + 50, lo + 52, 0, -9, -9, 4],                            # backwards
+            ["p", 0, lo, lo + rng.randint(1, 300)], ["p", 1, 0, 4], ["P", 1, 0, 4, 0, 0, 0, 1],
+            ["P", 1, 0, 4, 1, 0, 0, 2],                                          # over parameters 1 and 2
+            ["P", 2, rng.randrange(0, 140), 145, 0, 1, 1, 3], ["p", 2, 40, 60],
+        ])
+
+    gaps = [(a.hi, b.lo) for a, b in zip(gapped, gapped[1:]) if b.lo - a.hi >= 2]
+    assert gaps
+    rows = []
+    for i in range(60):
+        ops = []
+        for _ in range(rng.randint(1, 4)):
+            items, fields = [], [rng.randrange(len(gapped)) for _ in range(rng.randint(1, 3))]
+            for _ in range(rng.randint(1, 60)):
+                r = rng.random()
+                items.append(inside(rng.choice(fields)) if r < 0.6 else spill(rng.choice(fields)) if r < 0.7 else other() if r < 0.95 else
+                             ["P", 0, gaps[0][0], gaps[0][0] + 1, 0, 1, 1, gaps[0][1] - gaps[0][0] - 1])   # inside a gap
+            ops.append(items)
+        rows.append((i, ops))
+    assert sum(1 for _i, ops in rows for o in ops for a, b in zip(o, o[1:]) if a[0] == b[0] == "P" and a[1] == b[1] == 0
+               and any(p.lo <= a[2] and a[3] + (a[7] - 1) * a[5] <= p.hi and p.lo <= b[2] and b[3] + (b[7] - 1) * b[5] <= p.hi
+                       for p in gapped)) > 300
+    spec = f"RMSNormFusedCuda_v2{{N=4,EPS={EPS}}}"
+    cols = []
+    for v2 in (True, False):
+        b = pv._Builder(ins)
+        for i, ops in rows:
+            b.add(i, spec, "call", f"r{i}", pv.definition_ports(spec), [o if v2 else [list(t) for t in C.runs_from_file_items(o)] for o in ops])
+        cols.append((list(b.c.read_call), list(b.c.read_port), list(b.c.pread_call), list(b.c.pread_port), list(b.c.read_off)))
+        if v2:
+            P = b.view((), None, "instances")
+    assert cols[0] == cols[1]
+    for i, ops in rows:
+        want: list[ValueRef] = []
+        _resolve_reads_ref([C.runs_from_file_items(o) for o in ops], [], ins, [], want)
+        assert tuple(P.call(i).reads) == tuple(want), i
