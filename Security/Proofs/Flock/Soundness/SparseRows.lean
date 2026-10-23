@@ -1,4 +1,9 @@
 import Flock.Net
+import Mathlib.Algebra.BigOperators.Group.List.Basic
+import Mathlib.Algebra.Group.Action.Defs
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.NormNum
+import Mathlib.Tactic.Ring
 -- as in `ExecRows`: level3 already realizes the lemmas this file's `simp` calls need (`Std.Legacy.Range.mk.congr_simp`)
 import Proofs.Flock.Level3.LookupRows
 
