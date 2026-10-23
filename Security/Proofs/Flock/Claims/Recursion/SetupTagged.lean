@@ -71,6 +71,8 @@ theorem ite_ok {α : Type} {c : Prop} [Decidable c] {a b : Flock.V α} {v : α} 
     (if c then a else b) = .ok v ↔ c ∧ a = .ok v ∨ ¬ c ∧ b = .ok v := by
   by_cases hc : c <;> simp [hc]
 
+theorem throw_ok {α : Type} {e : String} {v : α} (h : (throw e : Flock.V α) = .ok v) : False := nomatch h
+
 instance : DecidablePred HmTagged := fun m => by unfold HmTagged; infer_instance
 
 /-- Not one of hm96's prefixes at byte 7. -/
@@ -96,11 +98,12 @@ theorem setupHiddenWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
   unfold Stmt.setupHiddenWith at hs
   dsimp only at hs
   repeat' (first
+    | (exact throw_ok hs)
     | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs
        try (cases hx; done)
-       try (simp only [poison, htag, hp, cond_true] at hx; cases hx; done))
+       try (simp only [poison, htag, hp, Bool.cond_true] at hx; cases hx; done))
     | (rw [ite_ok] at hs
-       rcases hs with ⟨-, hs⟩ | ⟨-, hs⟩)
+       rcases hs with ⟨_, hs⟩ | ⟨_, hs⟩)
     | (split at hs))
 
 theorem mapM_range_ne_ok {α : Type} {n : ℕ} (hn : 0 < n) {f : ℕ → Flock.V α} (hf : ∀ a, f 0 ≠ .ok a) {r : Array α}
@@ -125,6 +128,7 @@ theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
   unfold Stmt.setupTablesWith at hs
   dsimp only at hs
   repeat' (first
+    | (exact throw_ok hs)
     | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs
        try (cases hx; done)
        try (simp only [hhid, ↓reduceIte] at hx; refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ hx; exact htag)
@@ -133,7 +137,7 @@ theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
             refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ ha
             exact htag))
     | (rw [ite_ok] at hs
-       rcases hs with ⟨-, hs⟩ | ⟨-, hs⟩)
+       rcases hs with ⟨_, hs⟩ | ⟨_, hs⟩)
     | (split at hs))
 
 /-- **The setup's calls include one that is not `HmTagged`**, wherever it is `.ok` at `H` on hidden outputs at a `σ`
