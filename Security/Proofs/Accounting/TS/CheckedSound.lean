@@ -149,18 +149,18 @@ theorem prob_servedEv (hk : s.kd = s.n)
     exact nonpos_iff_eq_zero.1 ((prob_mono (fun o ho => s.servedEv_false hk hN hS R ω o ho) _ _).trans
       (prob_false _ _).le)) s.τ
 
-/-- **`ServedEv` at `rowsOn P` has probability `0`** under registered served roots, where `P` of the session gives full
-checking and port uniqueness: where `P` holds it is `ServedEv` (`prob_servedEv`), and where it fails `rowsOn P` is
-the committed rows. -/
+/-- **`ServedEv` at `rowsOn P` has probability `0`** where `P` of the session gives full checking, port uniqueness
+and registered served roots: where `P` holds it is `ServedEv` (`prob_servedEv`), and where it fails `rowsOn P` is the
+committed rows. -/
 theorem prob_servedOn (P : RowsSession → Prop)
-    (hN : P s → s.kd = s.n ∧ ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q')
-    (hS : ∀ u, s.ServedRegistered u) :
+    (hN : P s → s.kd = s.n ∧ (∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q') ∧
+      ∀ u, s.ServedRegistered u) :
     prob (fun o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧
       rowsOn P s s.Xv ≠ openedReg s) s.G s.τ = 0 := by
   by_cases hp : P s
   · have e : rowsOn P s s.Xv = rowsReg s s.Xv := if_pos hp
     simp only [e]
-    exact s.prob_servedEv (hN hp).1 (hN hp).2 hS
+    exact s.prob_servedEv (hN hp).1 (hN hp).2.1 (hN hp).2.2
   · have e : rowsOn P s s.Xv = openedReg s := if_neg hp
     exact nonpos_iff_eq_zero.1 ((prob_mono (fun o ho => ho.2.2 e) _ _).trans (prob_false _ _).le)
 
@@ -205,13 +205,13 @@ noncomputable def checkedOnLayer {Ω : Type} {S nπ : ℕ} (sess : Paths Ω S �
   right _ _ := True
 
 /-- **The checked layer is sound at `δ` where `P` holds**, at `CheckedSessionSound`'s hypotheses with full checking,
-port uniqueness and the `ok` port (`PortsOk`) asked only of a session `P` holds of: `SessionSoundAt` at
-`rows := rowsOn P`, which reads the value layer where `P` holds (`CheckedSessionSound`'s argument) and the committed
-rows where it fails, so nothing is asked there (`prob_servedOn`). -/
+port uniqueness, the `ok` port (`PortsOk`) and registered served roots asked only of a session `P` holds of:
+`SessionSoundAt` at `rows := rowsOn P`, which reads the value layer where `P` holds (`CheckedSessionSound`'s argument)
+and the committed rows where it fails, so nothing is asked there (`prob_servedOn`). -/
 theorem checkedOn_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String) (P : RowsSession → Prop) (δ : ℝ)
     (hCR : ∀ x w i, (sess x w i).CR) (hLaw : Accounting.Assumptions.TS.WindowLaw sess out)
-    (hS : ∀ x w i u, (sess x w i).ServedRegistered u) (hP : ∀ s, P s → PortsOk ok s ∧ s.kd = s.n)
+    (hP : ∀ s, P s → PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)
     (hδ : ∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ) :
     (checkedOnLayer sess out ok P).SoundAt δ := by
   have hAcc : Accounting.Assumptions.TS.AcceptedLive (checkedOnLayer sess out ok P) sess out :=
@@ -227,8 +227,8 @@ theorem checkedOn_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths �
     intro w i
     refine (hLaw w i fun s o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧
       rowsOn P s s.Xv ≠ openedReg s).trans (avg_le _ le_rfl fun x => le_of_eq ?_)
-    exact (congrArg ENNReal.toReal (RowsSession.prob_servedOn (sess x w i) P (fun hp => ⟨(hP _ hp).2, (hP _ hp).1.1⟩)
-      (hS x w i))).trans ENNReal.toReal_zero
+    exact (congrArg ENNReal.toReal (RowsSession.prob_servedOn (sess x w i) P
+      (fun hp => ⟨(hP _ hp).2.1, (hP _ hp).1.1, (hP _ hp).2.2⟩))).trans ENNReal.toReal_zero
   simpa only [zero_add] using
     Accounting.SecurityProofs.TS.SessionSoundAt (checkedOnLayer sess out ok P) sess out (rowsOn P) 0 δ hCR hAcc hLaw
       hChk hLink hδ hδ0

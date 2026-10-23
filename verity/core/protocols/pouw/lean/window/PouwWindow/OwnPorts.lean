@@ -16,7 +16,9 @@ statements (`roots v`: its registered root, leaf count, row width, domain and sc
   several statements, which flock-verify holds to one width read in every bit (`Flock.KnownRead.fullRows`);
 * `checkOwn want own`: the leaf verifier's check that a statement's parsed `--registered` file (`own`) holds the ports
   `want` (`ownOf` at the roots it takes from the accepted registration and produced record, `PouwWindow.Lanes.rootsOf?`),
-  each the file's first port of its name (`checkOwn_ok`), which `pouw-leaf-own` runs on every statement's file.
+  each the file's first port of its name (`checkOwn_ok`), which `pouw-leaf-own` runs on every statement's file;
+* `checkOneRead own`: the leaf verifier's check that every port of the file, data or known, has one read
+  (`checkOneRead_ok`), a statement being one unit, which `pouw-leaf-own` runs too.
 -/
 
 namespace PouwWindow.Lanes
@@ -85,5 +87,23 @@ theorem checkOwn_ok {want : List Flock.Registered.Port} {own : Array Flock.Regis
   split at hh
   · next q hq => rw [hq, eq_of_portEq hh]
   · cases hh
+
+/-- **Every port of the registered file has one read** (a leaf's statements are one unit each,
+`leaf_lanes.statements`): each port of the parsed file `own`, data or known, states one position
+(`Flock.Registered.Port.reads`); else the first port that doesn't, named. -/
+def checkOneRead (own : Array Flock.Registered.Port) : Except String Unit :=
+  match own.toList.find? fun p => p.reads.size != 1 with
+  | none => .ok ()
+  | some p => .error s!"registered reads: port {p.name} has {p.reads.size} reads, and a leaf's statement is one unit, read once at each port"
+
+theorem checkOneRead_ok {own : Array Flock.Registered.Port} (h : checkOneRead own = .ok ()) :
+    ∀ p ∈ own, p.reads.size = 1 := by
+  intro p hp
+  have hn : own.toList.find? (fun p => p.reads.size != 1) = none := by
+    unfold checkOneRead at h
+    split at h
+    · assumption
+    · cases h
+  simpa using List.find?_eq_none.1 hn p (Array.mem_toList_iff.2 hp)
 
 end PouwWindow.Lanes

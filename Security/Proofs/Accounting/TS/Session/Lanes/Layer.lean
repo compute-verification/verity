@@ -212,7 +212,8 @@ bit of such an input row, a copy returns each bit of such an output row) and the
 (`PouwWindow.Lanes.checkOwn`, which `pouw-leaf-own` runs: the file holds the ports `want x w i k`, the statement's data
 ports at the accepted registration's and produced record's roots) and of its session's draw
 (`PouwWindow.Lanes.checkFull`, which `pouw-leaf-own` runs on the session's record: the draw is `subset` of every unit of
-a non-empty population, the verifier's draw policy for a leaf's statements),
+a non-empty population, the verifier's draw policy for a leaf's statements) and of its file's reads
+(`PouwWindow.Lanes.checkOneRead`, which `pouw-leaf-own` runs too: every port of the file has one read),
 opens the leaf's values committed before σ_w (`leaf`), and its relation is the unit's served checks (`UnitServed`) at
 the path's public inputs and receipt, or
 two of its sessions' registrants' records clash (`LeafColl`), or a session's known-content tie collides
@@ -232,7 +233,8 @@ noncomputable def leafLayer {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     Flock.KnownRead.check (sess x w i k).c
       (known x w i k ++ Flock.KnownRead.fullRows (sess x w i k).own (full x w i k)) = .ok () ∧
     PouwWindow.Lanes.checkOwn (want x w i k) (sess x w i k).own = .ok () ∧
-    PouwWindow.Lanes.checkFull (out x w i k).2.2.record = .ok ()
+    PouwWindow.Lanes.checkFull (out x w i k).2.2.record = .ok () ∧
+    PouwWindow.Lanes.checkOneRead (sess x w i k).own = .ok ()
   opened := leaf
   rel x w i v := UnitServed dq part (pub x w i) (receipt x w i) v ∨ LeafColl (sess x w i) ∨
     LeafKnownColl (sess x w i) (known x w i)

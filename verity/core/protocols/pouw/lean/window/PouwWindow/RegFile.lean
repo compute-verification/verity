@@ -19,7 +19,8 @@ accepted produced record alone:
 * `fileOf?`: statement `k`'s file (`leaf_lanes.registered_file` at `leaf_lanes.reads`): those ports, each read of a
   `fullValue` (A, B and partials rows) marked `read_in_full`, then the known ports, and `complete`.
 * `leafOwn?`: the leaf verifier's check of a statement's file against the two records (`pouw-leaf-own`): the file parsed
-  as flock-verify parses it (`Flock.Registered.ofJson`) holds `want?`'s ports (`checkOwn`). `leafOwnCmd` runs it on
+  as flock-verify parses it (`Flock.Registered.ofJson`) has one read at each port (`checkOneRead`) and holds `want?`'s
+  ports (`checkOwn`). `leafOwnCmd` runs it on
   files, then holds each of the statement's session records to the full draw (`checkFull`).
 
 `tests/test_reg_file.py` holds `fileOf?` to the Python's file at the Python's entries and roots, and holds `leafOwn?` to
@@ -106,14 +107,16 @@ def fileOf? (rs : List (String × Flock.Registered.Port)) (T : Tile) (k : Option
     (if complete then [(Flock.Registered.COMPLETE_KEY, Json.bool true)] else []))
 
 /-- **The leaf verifier's check of statement `k`'s file `file`** against the accepted registration and produced record:
-the tile's statement exists (`lane?`, `combine?`), and the file, parsed as flock-verify parses it, holds the statement's
-data ports at the records' roots (`checkOwn`). -/
+the tile's statement exists (`lane?`, `combine?`), and the file, parsed as flock-verify parses it, has one read at each
+port (`checkOneRead`) and holds the statement's data ports at the records' roots (`checkOwn`). -/
 def leafOwn? (registration produced file : Json) (T : Tile) (k : Option Nat) (schema : String) : Except String Unit := do
   match k with
   | some l => discard (lane? T l)
   | none => discard (combine? T)
   let rs ← roots? registration produced T.lanes (2 * T.nw) schema
-  checkOwn (← want? rs T k) (← Flock.Registered.ofJson file)
+  let own ← Flock.Registered.ofJson file
+  checkOneRead own
+  checkOwn (← want? rs T k) own
 
 private def readJson (path : String) : IO Json := do
   match Json.parse (← IO.FS.readFile path) with
