@@ -108,6 +108,7 @@ import dither_a as DA
 import dither_fused as DF
 import dither_manifest as MF
 import dither_one as DO
+import h1c as H1CM
 from dither_fused import CM, CO, H1R, Call, unwords, words
 from hb_side import auto_j
 
@@ -136,6 +137,9 @@ FUSED_CTAS_ENV = "DITHER_SO_FUSED_CTAS"  # N > 0: that launch on N CTAs an SM, e
 # "1": under piecewise graphs a piece's A tables launched at the next piece's first call and joined at its end, the last
 # piece's at the last call (`SoSide.call`): the same tables from the same slots, off the piece's end
 ALAG_ENV = "DITHER_SO_ALAG"
+# "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
+# the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
+RDEAD_ENV = "DITHER_SO_RDEAD"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -775,6 +779,11 @@ class SoSide(DA.Side):
         self.tables = [win.r.plan([Call(self.ring_slot[p][w], win.wt[w], win.offs[w], self.ring_aroots[p].data_ptr() + 64 * w,
                                         self.ring_live[p], root_b=win.bset.roots.data_ptr() + 64 * w) for w in range(L)],
                                   seeds=win.plan.seeds, out=win.plan.out) for p in range(D)]
+        self.rdead = os.environ.get(RDEAD_ENV) == "1"
+        if self.rdead:
+            self.r_live, nrb = torch.empty_like(win.live), win.t // 32
+            win.rset = win.c.set([dataclasses.replace(t, xd=H1CM.dead_x([bytes(t.length)] * (t.count // nrb), dev),
+                                                      rlive=self.r_live, rbw=t.count // nrb) for t in win.rset.tabs])
         self.a_off = win.pre["mid"].level_off[0]
         self.dispatched: dict[int, int] = {}
         self.unit_steps = 0
@@ -963,6 +972,8 @@ class SoSide(DA.Side):
         DA.dithera_commit[(triton.cdiv(n, 4096),)](self.stage, win.plan.out, self.ring_S[p], n, BLOCK=4096)
         DA.dithera_fault[(1,)](win.plan.out, self.ring_S[p], self.at, L, 1 << self.shift,
                                BLOCK=triton.next_power_of_2(L))
+        if self.rdead:
+            self.r_live.copy_(self.ring_live[p])
         win.c.build(win.rset, self.ring_stepv[p][0:1])
         self.rroots[p].copy_(win.rset.roots)
         return 0
@@ -1017,7 +1028,7 @@ class SoSide(DA.Side):
                 "noise_j_min": self.noise_j,
                 "units_fused": {"one_launch": self.fused, "units": self.m_units if self.fused else None,
                                 "ctas_an_sm": self.fused_ctas or None},
-                "a_tables_lag_a_piece": self.alag,
+                "a_tables_lag_a_piece": self.alag, "receipt_dead_rows_x_once": self.rdead,
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
 
