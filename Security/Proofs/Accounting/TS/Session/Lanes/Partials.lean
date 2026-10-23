@@ -32,6 +32,9 @@ open FlockSoundness.Discharge.Layout (portRowW)
 def regPort (roots : String → _root_.Flock.Registered.Port) (nm v : String) (row : ℕ) : _root_.Flock.Registered.Port :=
   { roots v with name := nm, value := v, reads := #[some row] }
 
+theorem regWords_regPort (roots : String → _root_.Flock.Registered.Port) (nm v : String) (row : ℕ) :
+    _root_.Flock.KnownRead.regWords (regPort roots nm v row) = _root_.Flock.KnownRead.regWords (roots v) := rfl
+
 theorem mem_ownOf (roots : String → _root_.Flock.Registered.Port) {T : Tile} {k : Option ℕ} {nm v : String} {row : ℕ}
     (h : (nm, v, row) ∈ regReads T k) : regPort roots nm v row ∈ ownOf roots T k :=
   List.mem_map.2 ⟨_, h, rfl⟩
@@ -120,11 +123,15 @@ theorem partials_bits {T : Tile} {roots : String → _root_.Flock.Registered.Por
   have hfC : sC.own.toList.find? (·.name == s!"p{l}") = some (regPort roots s!"p{l}" "partials" l) :=
     hOC _ (mem_ownOf roots (partials_comb T hl))
   have hrL : ("partials", #[(Array.replicate (_root_.Flock.KnownRead.regWords (roots "partials")) 0,
-      ByteArray.empty)]) ∈ kL ++ _root_.Flock.KnownRead.fullRows sL.own (readFull T (some l)) :=
-    Array.mem_append.2 (Or.inr (mem_fullRows (full_of (partials_lane T l)) hfL))
+      ByteArray.empty)]) ∈ kL ++ _root_.Flock.KnownRead.fullRows sL.own (readFull T (some l)) := by
+    have h := mem_fullRows (full_of (partials_lane T l)) hfL
+    rw [regWords_regPort] at h
+    exact Array.mem_append.2 (Or.inr h)
   have hrC : (s!"p{l}", #[(Array.replicate (_root_.Flock.KnownRead.regWords (roots "partials")) 0,
-      ByteArray.empty)]) ∈ kC ++ _root_.Flock.KnownRead.fullRows sC.own (readFull T none) :=
-    Array.mem_append.2 (Or.inr (mem_fullRows (full_of (partials_comb T hl)) hfC))
+      ByteArray.empty)]) ∈ kC ++ _root_.Flock.KnownRead.fullRows sC.own (readFull T none) := by
+    have h := mem_fullRows (full_of (partials_comb T hl)) hfC
+    rw [regWords_regPort] at h
+    exact Array.mem_append.2 (Or.inr h)
   obtain ⟨hNL, hexL⟩ := names_of_check hkL hrL
   obtain ⟨hNC, hexC⟩ := names_of_check hkC hrC
   obtain ⟨qL, hqL⟩ := hexL _ _ hrL

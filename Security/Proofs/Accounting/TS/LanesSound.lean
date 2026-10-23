@@ -88,10 +88,12 @@ theorem readsOwnRow_of {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.W
     reads_of_acceptsZKR s.I s.ht s.hc s.hpub s.hTags (tr := s.wr S R o') hacc hmem hd hD hdp hidx hmD
   rw [hat _ D dp idx hD hdp hidx hmD pos hpos]
   rw [hr] at hpos
-  generalize idx.getD (D.proved.idxOf u.val) 0 = j at hpos
-  cases j with
-  | zero => simp at hpos; omega
-  | succ j => simp at hpos
+  have key : ∀ j : ℕ, (#[some r] : Array (Option ℕ))[j]? = some (some pos) → pos = r := by
+    intro j hj
+    cases j with
+    | zero => simp at hj; omega
+    | succ j => simp at hj
+  exact key _ hpos
 
 /-- **Under the complete check a unit's registered reads are its port rows**: where unit `u`'s registrant reads its
 served roots' rows (`ServedRegistered`) and every port of the circuit is a port of `own`
@@ -379,8 +381,8 @@ theorem Accounting.TS.Lanes.decodes_of_reads {Ω : Type} {S nπ K nw : ℕ}
   refine ⟨(decC nw (servedTile K) (sess x w i none) (openedReg (sess x w i none))).parts, fun l => ?_, ?_⟩
   · have hk := laneKnownHolds_of_check (s := sess x w i (some l)) (servedTile K) (hK (some l))
       (u := ⟨0, hn x w i (some l)⟩) rfl (hS x w i (some l) _) (hc (some l)).1 (hc (some l)).2
-    rw [← hP l]
-    exact decLane_eq hr (hk.laneHolds (hd l).a (hd l).aS (hd l).b (hd l).bS (hd l).z (hd l).y)
+    exact (decLane_eq (nw := nw) hr (hk.laneHolds (hd l).a (hd l).aS (hd l).b (hd l).bS (hd l).z (hd l).y)).trans
+      (congrArg (fun q => laneView (leaf x w i) (pub x w i) q l) (hP l))
   · have ho := combKnownOk_of_check (s := sess x w i none) (hK none) (u := ⟨0, hn x w i none⟩) rfl
       (hS x w i none _) (hc none).1 (hc none).2
     exact decComb_eq (T := servedTile K) (rd := portBit (sess x w i none) (openedReg (sess x w i none)))
