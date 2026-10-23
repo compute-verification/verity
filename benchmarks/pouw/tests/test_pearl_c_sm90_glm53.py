@@ -72,6 +72,35 @@ def test_gamma_is_the_lean_twins():
     assert h.name == G.SCHEME and h.prices.fadd == 32 and G.scheme(Fraction(1979, 67)).prices.fadd == Fraction(1979, 67)
 
 
+def test_the_profile_gives_each_launch_to_the_step_that_launched_it():
+    """glm53_profile's report: a GPU activity is the innermost step's around its launch (the API call's thread and time, not
+    when it ran), one launched outside every call is dropped, the GPU span is the calls' first start to their last end over
+    the calls, the solo call's is its own, and a reference SHA-512 launch is named as a fallback."""
+    spec = importlib.util.spec_from_file_location("pearl_c_sm90_glm53_profile", HERE / "glm53_profile.py")
+    P = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(P)
+    t, label = 7, "6144:2048 m16 hash"
+    ranges = [(t, 0, 100, f"call {label} #0"), (t, 10, 30, "step commit_a"), (t, 40, 60, "step gemm_pearlc"),
+              (t, 70, 90, "host after"), (t, 75, 85, "host screen"),
+              (t, 100, 200, f"call {label} #1"), (t, 110, 130, "step commit_a"), (t, 140, 160, "step hash_leaf"),
+              (t, 300, 400, f"solo {label}"), (t, 310, 320, "step commit_a"), (t, 500, 900, f"pass_end {label}")]
+    acts = [(t, 15, 1000, 3000, "kernel", "pd_commit_851"), (t, 45, 3000, 5000, "kernel", "gemm_pearlc_d"),
+            (t, 80, 5000, 5500, "kernel", "screen"), (t, 72, 5500, 5600, "memcpy", "memcpy"),
+            (t, 105, 6000, 6100, "memcpy", "memcpy"), (t, 115, 7000, 9000, "kernel", "pd_commit_851"),
+            (t, 145, 9000, 10000, "kernel", "s512_tile_leaves"), (t, 250, 20000, 21000, "kernel", "stray"),
+            (t + 1, 15, 21000, 22000, "kernel", "other thread"), (t, 315, 30000, 32000, "kernel", "pd_commit_851")]
+    out = P.report(sorted(ranges), acts)
+    assert set(out) == {label}
+    r, steps = out[label], out[label]["steps"]
+    assert r["calls"] == 2 and r["host_wall_us"] == 0.1 and r["pass_end_host_us"] == 0.4
+    assert {s: round(v["gpu_us"], 9) for s, v in steps.items()} == {
+        "step commit_a": 2.0, "step gemm_pearlc": 2.0, "host screen": 0.5, "host after": 0.1, "host other": 0.05, "step hash_leaf": 1.0}
+    assert steps["step commit_a"]["host_us"] == 0.02 and steps["step commit_a"]["kernels"]["pd_commit_851"]["count"] == 1
+    assert round(steps["host other"]["host_us"], 9) == 0.05 and steps["host screen"]["host_us"] == 0.01
+    assert r["gpu_busy_us"] == 3.85 and r["gpu_span_us_per_call"] == 4.5 and r["solo_gpu_span_us"] == 2.0
+    assert (r["hash_decode"], r["hash_fast"], r["fallbacks"]) == (["pd_commit_851"], [], ["s512_tile_leaves"])
+
+
 def test_h200_session_runs_the_tables_shapes():
     """h200.sh's run.py SHAPES are every in-domain (n, k) (`in_domain`), at decode's 64 and prefill's 8192."""
     sh = (HERE / "h200.sh").read_text()

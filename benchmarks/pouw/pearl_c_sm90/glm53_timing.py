@@ -131,6 +131,28 @@ def timed(f, before=None, after=None) -> float:
     return s.elapsed_time(e) / INNER
 
 
+def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin: str | None = None):
+    """`pouw_pearl_c_device.PearlCDeviceRun` (`scheme` on this directory's kernels, the serial schedule) on synthetic BF16
+    weights, 0.05·N(0, 1), one a shape (weight w is shapes[w]), under an epoch whose salt coin a challenger opened after the
+    weights' root: (run, weights, kernel, the generator, which goes on to make the calls' x)."""
+    import torch
+    from verity.core.protocols.pouw.audit import weights_root
+    from verity.core.protocols.pouw import verifier
+    from verity.core.protocols.pouw.coins import Challenger
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+
+    dev = torch.device("cuda")
+    gen = torch.Generator(device=dev).manual_seed(20261023)
+    weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
+    kernel = PPD.Kernel.load(str(HERE), cubin)
+    salt_key = PPD.new_salt_key(scheme)
+    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
+    ch = Challenger(EPOCH, verifier.coins)
+    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, ch.commitment,
+                              ch.open("salt", weights_root(roots)), salt_key=salt_key)
+    return run, weights, kernel, gen
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--out", required=True)
@@ -141,24 +163,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--m", nargs="*", type=int, help="M (default decode's and prefill's)")
     a = p.parse_args(argv)
     import torch
-    from verity.core.protocols.pouw.audit import weights_root
-    from verity.core.protocols.pouw import verifier
-    from verity.core.protocols.pouw.coins import Challenger
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
     out, dev = Path(a.out), torch.device("cuda")
     out.mkdir(parents=True, exist_ok=True)
     table = glm53.in_domain(a.scheme)
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else sorted(table)
     ms = a.m or [*glm53.DECODE_M, *glm53.PREFILL_M]
-    gen = torch.Generator(device=dev).manual_seed(20261023)
-    weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
-    kernel = PPD.Kernel.load(str(HERE), a.cubin)
-    salt_key = PPD.new_salt_key(a.scheme)
-    roots = PPD.weight_roots(kernel, weights, a.scheme, salt_key=salt_key)
-    ch = Challenger(EPOCH, verifier.coins)
-    run = PPD.PearlCDeviceRun(PPD.scheme_of(a.scheme), f"pouw:{a.scheme}", kernel, weights, roots, ch.commitment,
-                              ch.open("salt", weights_root(roots)), salt_key=salt_key)
+    run, weights, kernel, gen = device_run(shapes, a.scheme, a.cubin)
     head = {"scheme": a.scheme, "epoch": EPOCH, "device": torch.cuda.get_device_name(dev), "cubin_sha256": kernel.cubin_sha256,
             "kernel_source_sha256": kernel.source_sha256, "torch": torch.__version__, "reps": a.reps, "inner": INNER,
             "fadd_readings": {k: str(v) for k, v in glm53.FADD_READINGS.items()}}

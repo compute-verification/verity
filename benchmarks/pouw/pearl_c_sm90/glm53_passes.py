@@ -15,8 +15,12 @@ the weights' root (its coin commitment is published as ``coins.json``, where `ve
 - ``control``: decode's calls again, retained, with every commitment write omitted (`e2e.CONTROL_OMITS`), so the transcript is
   whatever the poison left.
 
-``verify`` runs `verify_run.verify` on each pass under ``coins.json``: prefill and decode must be accepted (replay-verified,
-development shortcut; the protocol's check is a ZK proof) and control rejected.  Each mode writes its JSON in DIR
+``--shapes`` names the weights' (n, k) in place of the in-domain ones.  ``--per-shape`` makes a prefill and a decode pass a
+weight in place of the three (``prefill-NxK``, ``decode-NxK``, no control), so every tile verify draws from a pass is that
+shape's, held to the reference.
+
+``verify`` runs `verify_run.verify` on each pass ``capture.json`` lists under ``coins.json``: every pass but control must be
+accepted (replay-verified, development shortcut; the protocol's check is a ZK proof) and control rejected.  Each mode writes its JSON in DIR
 (``capture.json``, ``verify.json``) and exits 0 only when everything it checks holds.
 """
 
@@ -48,7 +52,7 @@ def capture(a) -> int:
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
     out, dev = Path(a.out), torch.device("cuda")
-    shapes = sorted(glm53.in_domain(a.scheme))
+    shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else sorted(glm53.in_domain(a.scheme))
     gen = torch.Generator(device=dev).manual_seed(20261023)
     weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
     kernel = PPD.Kernel.load(str(HERE), a.cubin)
@@ -67,12 +71,17 @@ def capture(a) -> int:
     print(f"gate: {'PASS' if log['gate']['passed'] else 'FAIL'}", flush=True)
     xs = {m: {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
           for m in (PREFILL, DECODE)}
-    for name, m, omit in (("prefill", PREFILL, ()), ("decode", DECODE, ()), ("control", DECODE, e2e.CONTROL_OMITS)):
+    passes = [("prefill", PREFILL, (), None), ("decode", DECODE, (), None), ("control", DECODE, e2e.CONTROL_OMITS, None)]
+    if a.per_shape:
+        passes = [(f"{p}-{n}x{k}", m, (), w) for w, (n, k) in enumerate(shapes) for p, m in (("prefill", PREFILL), ("decode", DECODE))]
+    for name, m, omit, only in passes:
         run.begin(retain=str(out / name), run=os.environ.get("RESEARCH_RUN_ID", "glm53-passes"))
         run.omit = frozenset(omit)
         rms = {}
         try:
             for w, W in weights.items():
+                if only is not None and w != only:
+                    continue
                 y = run.gemm(w, xs[m][w], W, None)
                 ref = xs[m][w].float() @ W.float().T
                 rms[w] = float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
@@ -81,7 +90,7 @@ def capture(a) -> int:
         finally:
             run.omit = frozenset()
         print(f"{name}: {log['passes'][name]['tiles']} tiles, root {log['passes'][name]['transcript_root'][:16]}", flush=True)
-    honest = [log["passes"][p] for p in ("prefill", "decode")]
+    honest = [p for name, p in log["passes"].items() if name != "control"]
     log["ok"] = log["gate"]["passed"] and all(max(p["rel_rms"].values()) < BA.ERR for p in honest)
     (out / "capture.json").write_text(json.dumps(log, indent=1) + "\n")
     print(f"capture {'PASS' if log['ok'] else 'FAIL'}", flush=True)
@@ -94,13 +103,14 @@ def verify(a) -> int:
 
     out = Path(a.out)
     coins = CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
+    names = list(json.loads((out / "capture.json").read_text())["passes"]) if (out / "capture.json").exists() else PASSES
     res = {}
-    for name in PASSES:
+    for name in names:
         v = VR.verify(out / name / "manifest.json", VR.DRAWS, a.jobs, os.environ.get("RESEARCH_SOURCE_SHA", "unknown"),
                       fast=a.fast, cross_check=a.cross_check if a.fast else 0, coins=coins)
         res[name] = {k: v.get(k) for k in ("accepted", "line", "verdicts", "error")}
         print(f"{name}: {v['line']}", flush=True)
-    res["ok"] = bool(res["prefill"]["accepted"] and res["decode"]["accepted"] and not res["control"]["accepted"])
+    res["ok"] = bool(names) and all(res[x]["accepted"] == (x != "control") for x in names)
     (out / "verify.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"verify {'PASS' if res['ok'] else 'FAIL'}", flush=True)
     return 0 if res["ok"] else 1
@@ -112,6 +122,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", required=True)
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin", help="the build's cubin (default this directory's)")
+    p.add_argument("--shapes", nargs="*", help="capture: N:K, a weight each (default every in-domain linear)")
+    p.add_argument("--per-shape", action="store_true",
+                   help="capture: a prefill and a decode pass a weight (prefill-NxK, decode-NxK), so every tile verify draws "
+                        "is that shape's; no control")
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     p.add_argument("--fast", action="store_true", help="verify_run's --fast")
     p.add_argument("--cross-check", type=int, default=64, help="with --fast: every N-th tile on the scalar reference too")
