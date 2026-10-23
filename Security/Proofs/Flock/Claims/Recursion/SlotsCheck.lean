@@ -126,22 +126,30 @@ theorem starts_find_eq (c : Flock.Circuit) {q x : ℕ} (hq : q < c.ports.size)
   rw [FlockSoundness.Discharge.Layout.starts_get c hq'] at h1' h2'
   exact words_disj (·.words) c.ports.toList hql (by simpa using hq') h1 (by simpa using h2) h1' (by simpa using h2')
 
+theorem getD_map_fst (a : Array (ℕ × ℕ)) (j : ℕ) : (a.map (·.1)).getD j 0 = (a.getD j default).1 := by
+  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_map]
+  cases a[j]? <;> rfl
+
 section copy
 
 variable {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)
   (regs : List (FlockSoundness.Model.Region st.c.kLog (st.m - st.c.kLog)))
   (F : FlockSoundness.Discharge.Aliased.UnitFacts tags st)
 
-/-- **Row bit `i` of port `q` at its input column is its message bit**, in every block of a satisfying witness: with
-unit `0`'s input leaves its `N` input words in order, the column (`portCol`'s, in template instance `g`'s first unit)
-is the leaf reading the port's word `i / 16`, whose copy position (`Aliased.copyAt`) is the row's message bit `i`
-(`Flat.leafSrc`), or a forced-zero row when that lies past the block, where the message bit reads 0 too. -/
 include F in
+/-- **Row bit `i` of port `q` at its input column is its message bit**, in every block of a satisfying witness, and
+that column is in the block: with unit `0`'s input leaves its `N` input words in order, the column (`portCol`'s, in
+template instance `g`'s first unit) is the leaf reading the port's word `i / 16`, whose copy position
+(`Aliased.copyAt`) is the row's message bit `i` (`Flat.leafSrc`), or a forced-zero row when that lies past the block,
+where the message bit reads 0 too. -/
 theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat)
     (hupv : 0 < st.c.upv) (hg : g < st.c.g) (hq : q < st.c.ports.size)
+    (hbw : st.c.ports[q].bits = 16 * st.c.ports[q].words)
     (hN : 16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 + st.c.ports[q].bits ≤ 16 * N)
     (hi : i < st.c.ports[q].bits) {z : FlockSoundness.Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z)
     (o : Fin (2 ^ (L.model regs).nbl)) :
+    st.c.unitRange.slot (g * st.c.upv) + ((st.c.unit.inGroups.getD 0 default).col * Flock.WORD +
+      16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 + i) < 2 ^ st.c.kLog ∧
     FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o (st.c.unitRange.slot (g * st.c.upv) +
       ((st.c.unit.inGroups.getD 0 default).col * Flock.WORD + 16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 +
         i)) =
@@ -165,9 +173,7 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
     exact Array.getElem_mem_toList _)
   have hc1 : (Flock.portCols st.c.unit.inGroups)[x]!.1 =
       (st.c.unit.inGroups.getD 0 default).col * Flock.WORD + 16 * x := by
-    rw [← hcol, ← FlockSoundness.Discharge.HiddenExec.portCols_16_get C.unit_groups.2 hxg,
-      Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_map]
-    cases (Flock.portCols #[st.c.unit.inGroups.getD 0 default])[x]? <;> rfl
+    rw [← hcol, getD_map_fst, FlockSoundness.Discharge.HiddenExec.portCols_16_get C.unit_groups.2 hxg]
   set t := i % 16 with ht
   have ht16 : t < (Flock.portCols st.c.unit.inGroups)[x]!.2 := by rw [hw, h16]; omega
   have hoffe : (st.c.unit.inGroups.getD 0 default).col * Flock.WORD + 16 * start + i =
@@ -177,6 +183,7 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
   have hs₀ : g * st.c.upv < st.c.unitRange.count := by simpa using L.slot_lt hg hupv
   have hoff := L.port_lt hxp ht16
   have hy := L.unit_slot_lt hs₀ (lt_of_lt_of_le hoff (L.fit st.c.unitNet).2)
+  refine ⟨by rw [hoffe]; exact hy, ?_⟩
   rw [hoffe, FlockSoundness.Discharge.Hm.blockBit_of_lt (L.model regs) z o hy,
     FlockSoundness.Discharge.Aliased.copyAt_block L regs F hs₀ hoff ⟨_, hy⟩ rfl hz o]
   have hm : (Flock.portCols st.c.unit.inGroups)[x]!.1 + t ∈ FlockSoundness.portBits st.c.unit.inGroups := by
@@ -195,17 +202,17 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
     rw [FlockSoundness.portOf_eq (FlockSoundness.Discharge.Aliased.portBits_nodup L.unit_built) hxp ht16,
       Nat.add_sub_cancel_left]
     unfold FlockSoundness.Flat.flatSrc FlockSoundness.Flat.leafSrc
-    rw [if_pos hxg, Nat.mul_mod_left, hl]
+    rw [ite_eq_left hxg, Nat.mul_mod_left, hl]
     have hlx : ((Array.range N).map Int.ofNat)[x]! = (x : Int) := by
       rw [getElem!_pos _ x (by simpa using hxN)]
       simp
     dsimp only
     have hb : 16 * (x - start) + t < st.c.ports[q]!.bits := by rw [getElem!_pos st.c.ports q hq]; omega
-    rw [hlx, if_neg (show ¬ ((x : Int) < 0) by omega), Int.toNat_natCast, hfind, hstq, if_pos hb,
+    rw [hlx, ite_eq_right (show ¬ ((x : Int) < 0) by omega), Int.toNat_natCast, hfind, hstq, ite_eq_left hb,
       Nat.mul_div_cancel _ hupv]
     congr 1 <;> omega
   unfold FlockSoundness.Discharge.Aliased.copyAt
-  rw [if_pos hm]
+  rw [ite_eq_left hm]
   by_cases hlt : FlockSoundness.flatSrcAt st.c (g * st.c.upv) ((Flock.portCols st.c.unit.inGroups)[x]!.1 + t) <
       2 ^ st.c.kLog
   · rw [dif_pos hlt, ← FlockSoundness.Discharge.Hm.blockBit_of_lt (L.model regs) z o hlt, hsrc]
