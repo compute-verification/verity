@@ -197,7 +197,8 @@ owner = "infra"
 # --auditor stops one from an older tree); after installing, `sudo systemctl enable --now vy-auditor-only.timer`. The challenger runs
 # through vy-challenger-gate (benchmarks/live_challenger/auditor.py): once installed, `sudo vy-challenger-setup GATE_KEYS --lock`
 # (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, each lane's own key, LANE `-` for a key that reads only; setup.sh), then
-# `git archive COMMIT verity benchmarks/live_challenger | ssh vy-admin@HOST sudo vy-challenger-pin COMMIT`, then `sudo runuser -u
+# `git archive COMMIT verity benchmarks/live_challenger integrations/vllm/manifests/checkpoints-int8.json | ssh vy-admin@HOST sudo
+# vy-challenger-pin COMMIT`, then `sudo runuser -u
 # auditor -- python3 -I /opt/vy-challenger/current/benchmarks/live_challenger/auditor.py keygen` once.
 # Its /etc/vy/peers is its own: it reaches the serving nodes over their public addresses with the auditor's tunnel key.
 
