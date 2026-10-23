@@ -22,8 +22,9 @@ templates, or for one when the file names ``Q_template_instances``) is the one t
 ``partition_digest`` in the file that is not that program's partition is refused, as is any other query (a word partition,
 ``Q_word``, never: with the stratified law it is refused by name, its strata being templates).  ``partition.json`` beside the window
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
-(``model.layers.0.``), ``scope.steps`` (``[lo, hi)``) to those steps of each request.  A ``ScaledMmS8Coordinate`` template's units
-are split into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, ``chunk_cap``, as
+(``model.layers.0.``, or a MoE plane's ``moe/L40``), ``scope.steps`` (``[lo, hi)``) to those steps of each request.  A chunked
+template's units (``CHUNKED``: a ``ScaledMmS8Coordinate`` or a MoE coordinate) are split into consecutive chunks of at most its
+``chunk_cap`` (flock-circuit's spec shape, ``chunk_cap``, as
 ``benchmarks/one_stage/a6.py`` computes it; ``chunk_caps`` writes the entry), each chunk a member with its public file of global
 unit indices; ``row_tables`` puts them in the row-table layout (``with_row_tables``).
 
@@ -35,7 +36,8 @@ does not compute what the row computes is no match).  A Boolean Program's rows a
 row the word Definition its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the
 same rows under either IR, and the members, their rows and every committed word are the same; the population program is over the
 template as the partition names it.  The rows commit u16 words: a template's every port is 16-bit elements in its word view (a
-Boolean element's bit j is bit j of its word, `boolean.elements`), refused otherwise.  Each member's ports, by the family of the
+Boolean element's bit j is bit j of its word, `boolean.elements`), refused otherwise, unless its layout is a chunked one, whose
+bit rows hold any element widths.  Each member's ports, by the family of the
 template's word (``LAYOUTS``):
 
   ``RoPEHead_v1{D=..}``            every head of every ``RoPE_v1`` row: ``x``, ``cs`` -> ``out`` (D words each)
@@ -48,6 +50,10 @@ template's word (``LAYOUTS``):
                                    v2) -> ``o0`` (the bf16 output, a v2 row of its one word); with ``row_tables``, shared
                                    rows (`with_row_tables`): the ``x`` table the chunk's distinct token rows, each a row of its
                                    row table (one per engine step and op_path), and the ``w`` table its own rows
+  ``MoeExpertFp8Coordinate(W)_v1{..}``  every coordinate of the ``MoeExpertFp8Gemm(W)_v1`` rows (one routed pair each), bit rows
+                                   per instance (`unit_rows`): ``x`` (the pair's ``xq``, ``sx``, ``e``, ``g``), ``w`` (the slab
+                                   ``w[:, n, :]`` of every expert, then the block's scale row of expert ``e``, which the row
+                                   gathers and these rows commit) -> ``o0``; the expert stays a value, picked inside the unit
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
                                    committed member (``vu_export._decompose_row``'s port rule)
 
@@ -77,9 +83,12 @@ from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
 
 #: the row Definitions whose Calls are cut into template instances (their bodies batch the template), the rest being the row itself
-CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
+CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1", "MoeExpertFp8Gemm_v1", "MoeExpertFp8GemmW_v1")
 #: a member's layout by the family of its template's word; any other template is the row itself
-LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8"}
+LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8", "MoeExpertFp8Coordinate_v1": "moe",
+           "MoeExpertFp8CoordinateW_v1": "moe"}
+#: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`unit_rows`), in chunks of at most a chunk cap
+CHUNKED = ("s8", "moe")
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
 #: flock-circuit's spec shape (`verity/ml/flock/live/src/circuit.rs`'s `shape_in_range`, `benchmarks/one_stage/a6.py`'s `M_MAX`):
 #: a statement's dense size m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
@@ -161,7 +170,7 @@ def template(t: str) -> Template:
         widths = {x for ty in types for x in ty.width_set()}
     word = descriptor_id(w)
     layout = LAYOUTS.get(spec_base(word), "row")
-    if widths != {16} and layout != "s8":
+    if widths != {16} and layout not in CHUNKED:
         raise ValueError(f"template {t}: the serving rows commit u16 words, and its ports' {'elements' if w is not fn else 'words'} "
                          f"are {sorted(widths)} bits")
     hit = _TEMPLATES[t] = Template(t, fn, word, layout)
@@ -239,20 +248,23 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
         pi = ProgramIndex(inst, program_dir=(program_dirs or {}).get(str(rid)), **(index or {}))
         for i in sorted(pi.by_i):
             r = pi.by_i[i]
-            hits = [(want[w], n) for w, n in unit_templates(r["spec"]) if w in want]
+            hits: dict[int, int] = {}
+            for w, n in unit_templates(r["spec"]):
+                if w in want:
+                    hits[want[w]] = hits.get(want[w], 0) + n
             if not hits:
                 continue
             d = pi.describe(r)
             if d is not None:
-                for k, _n in hits:
+                for k in hits:
                     seen[k] = seen[k] or d
             if d is None or (scope and not d["op_path"].startswith(scope)):
                 continue
             if steps is not None and not int(steps[0]) <= int(d["step"]) < int(steps[1]):
                 continue
             if len(hits) > 1:
-                raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _ in hits]}: one member reads a row")
-            (k, n), = hits
+                raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k in hits]}: one member reads a row")
+            (k, n), = hits.items()
             out[k].append((str(rid), pi, r, d))
             counts[k] += n
     for t, rows, d in zip(tmpls, out, seen, strict=True):
@@ -269,49 +281,70 @@ def s8_words(K: int) -> int:
     return K // 2 + 2
 
 
-def chunk_cap(defn: Any, K: int) -> int:
-    """The most ``ScaledMmS8Coordinate_v1{K}`` instances one flock-circuit statement holds, as ``benchmarks/one_stage/a6.py``'s
-    ``chunk_cap`` computes it: the template staged by C-Flock's ``UnitStager`` with A6's rows, then ``vus_per_block`` blocks of
-    ``2^(M_MAX - k_log)``.  Builds the circuit (tens of seconds): a partition file pins it as ``chunk_cap``."""
+def unit_rows(t: str) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
+    """A chunked template's rows as C-Flock's `UnitStager` stages them, ``(in_rows, out_rows)``: a ``ScaledMmS8Coordinate``'s A6
+    rows, ``x`` (the token's s8 codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2); a MoE coordinate's
+    ``x`` (the pair's ``xq``, ``sx``, ``e`` and, for the w2 launch, ``g``) and ``w`` (``slab``, the coordinate's weight column of
+    every expert, then ``sw``, its weight block's scale row of expert ``e``), both v2; then one v2 output row ``o0``, the bf16
+    word.  The window's members (`members`) and the verifier's circuit (``benchmarks/one_stage/compose_circuit.py --template``)
+    are both laid out by it."""
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity_vllm.query.program_view import spec_statics
+
+    tp = template(t)
+    if tp.layout == "s8":
+        bits = 16 * s8_words(int(spec_statics(t)["K"]))
+        return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
+    if tp.layout == "moe":
+        params, _ret = tp.fn.signature()
+        names, bits = [n for n, _ in params], {n: sum(ty.leaf_widths()) for n, ty in params}
+        lead, tail = names[:names.index("slab")], names[names.index("slab"):]
+        return [("x", V2, sum(bits[n] for n in lead), lead), ("w", V2, sum(bits[n] for n in tail), tail)], [(V2, (0,))]
+    raise ValueError(f"{t}: its layout {tp.layout!r} is not a chunked one {CHUNKED}")
+
+
+def chunk_cap(t: str) -> int:
+    """The most instances of chunked template ``t`` one flock-circuit statement holds, as ``benchmarks/one_stage/a6.py``'s
+    ``chunk_cap`` computes it: the template staged by C-Flock's ``UnitStager`` on its rows (`unit_rows`), then ``vus_per_block``
+    blocks of ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes): a partition file pins it as ``chunk_cap``."""
     import tempfile
 
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_flock.class_statement import UnitStager
 
-    bits = 16 * s8_words(K)
+    in_rows, out_rows = unit_rows(t)
     with tempfile.TemporaryDirectory() as d:
-        st = UnitStager(defn, f"unit/serving-rows-cap-k{K}", [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])],
-                        [(V2, (0,))], circuit=Path(d) / "circuit.txt", bind={"partition": "0" * 128, "program": "0" * 128})
+        st = UnitStager(template(t).fn, "unit/serving-rows-cap", in_rows, out_rows, circuit=Path(d) / "circuit.txt",
+                        bind={"partition": "0" * 128, "program": "0" * 128})
     if M_MAX - st.meta["k_log"] < 3:
-        raise ValueError(f"{K=}: k_log {st.meta['k_log']} leaves no statement inside the spec shape (m <= {M_MAX})")
+        raise ValueError(f"{t}: k_log {st.meta['k_log']} leaves no statement inside the spec shape (m <= {M_MAX})")
     return int(st.meta["vus_per_block"]) << (M_MAX - int(st.meta["k_log"]))
 
 
 def chunk_caps(tmpls: Sequence[str]) -> dict[str, int]:
-    """``chunk_cap`` of each ``ScaledMmS8Coordinate`` template, for a partition file's ``chunk_cap``."""
-    from verity_vllm.query.program_view import spec_statics
-
-    return {t: chunk_cap(template(t).fn, int(spec_statics(t)["K"])) for t in tmpls if template(t).layout == "s8"}
+    """``chunk_cap`` of each chunked template (``CHUNKED``), for a partition file's ``chunk_cap``."""
+    return {t: chunk_cap(t) for t in tmpls if template(t).layout in CHUNKED}
 
 
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None,
             caps: Mapping[str, int] | None = None) -> list[CS.Member]:
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
-    ``ScaledMmS8Coordinate`` template's units are consecutive chunks of at most its ``caps`` entry, one member each."""
+    chunked template's units (``CHUNKED``: N coordinates per row) are consecutive chunks of at most its ``caps`` entry, one member
+    each, on its `unit_rows`."""
     out, base = [], 0
     for k, (t, rs) in enumerate(zip(tmpls, rows, strict=True)):
         _rid, _pi, r, d = rs[0]
         layout = template(t).layout
-        if layout == "s8":
-            n, words, cap = sum(int(x[3]["statics"]["N"]) for x in rs), s8_words(int(d["statics"]["K"])), (caps or {}).get(t)
+        if layout in CHUNKED:
+            n, cap = sum(int(x[3]["statics"]["N"]) for x in rs), (caps or {}).get(t)
             if not isinstance(cap, int) or cap < 1:
-                raise ValueError(f"{t}: no chunk cap; a partition file names each ScaledMmS8Coordinate template's flock-circuit "
-                                 f"chunk cap as chunk_cap (pipeline.serving_rows.chunk_caps)")
+                raise ValueError(f"{t}: no chunk cap; a partition file names each chunked template's flock-circuit chunk cap as "
+                                 f"chunk_cap (pipeline.serving_rows.chunk_caps)")
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
-            out += [CS.Member(t, (("x", words), ("w", words)), (("o0", 1),), min(cap, n - lo), base + lo, name=f"{t}/c{j}",
-                              schemas=(("x", CS.SCHEMA_HM96_SHA512_ROW_SEG), ("w", CS.SCHEMA_HM96_SHA512_ROW_V2),
-                                       ("o0", CS.SCHEMA_HM96_SHA512_ROW_V2)))
+            in_rows, _outs = unit_rows(t)
+            ports = tuple((p, b // 16) for p, _s, b, _ps in in_rows)
+            schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + (("o0", CS.SCHEMA_HM96_SHA512_ROW_V2),)
+            out += [CS.Member(t, ports, (("o0", 1),), min(cap, n - lo), base + lo, name=f"{t}/c{j}", schemas=schemas)
                     for j, lo in enumerate(range(0, n, cap))]
             base += n
             continue
@@ -568,6 +601,63 @@ def _read_s8(ms: Sequence[CS.Member], rows: list[Row], store: Any, weights: Call
     return out
 
 
+_MOE_LAYER = re.compile(r"^moe/L(\d+)$")
+
+
+def _read_moe(ms: Sequence[CS.Member], rows: list[Row], store: Any, weights: Callable,
+              arrivals: dict[str, int] | None) -> list[tuple[dict[str, Any], list[list[Any]]]]:
+    """A MoE coordinate template's chunks: coordinate ``n`` of a ``MoeExpertFp8Gemm(W)_v1`` row (one routed pair's ``xq``, ``sx``,
+    ``e`` and, for the w2 launch, ``g``; its layer's expert stack ``w`` [E][N][K] and block scales ``ws`` [E][NB][K/G]) is ``x`` =
+    the bytes of ``xq``, ``sx``, ``e`` and ``g`` (little-endian), ``w`` = the slab ``w[:, n, :]``'s bytes, then ``sw`` =
+    ``ws[e][n // G]``'s, ``o0`` = ``y[n]``; units go row by row, then coordinate.  ``sw`` is the row's `MoeExpertFp8ScaleRow`
+    gather (NaN words for an ``e`` outside ``[0, E)``), interior to the row: these rows commit it, and no unit of the window
+    proves that gather.  Each chunk's index entries are the rows whose units it holds, each with the row's whole range."""
+    st = rows[0][3]["statics"]
+    E, K, N, G = (int(st[x]) for x in ("E", "K", "N", "G"))
+    KG, NB = K // G, -(-N // G)
+    nb_of = np.arange(N) // G
+    xs, ws, ys, entries, slab_of = [], [], [], [], {}
+    wkey, scales = None, None
+    lo = ms[0].base
+    for rid, pi, r, d in rows:
+        arrive, args = int((arrivals or {}).get(rid, 0)), r["args"]
+        if [int(d["statics"][x]) for x in ("E", "K", "N", "G")] != [E, K, N, G]:
+            raise ValueError(f"row {r['i']}: statics {d['statics']} are not the template's first row's {st}")
+        op = lambda g: _operand(pi, store, weights, rid, arrive, args[g])  # noqa: E731
+        lead = [_as(op(0), 1, K, f"row {r['i']} xq"), _as(op(1), 4, KG, f"row {r['i']} sx")]
+        lead += [_as(op(g), 4, 1, f"row {r['i']} {nm}") for g, nm in zip(range(2, len(args) - 2), ("e", "g"))]
+        key = json.dumps(args[-2:])
+        if key != wkey:
+            if key not in slab_of:
+                W = _as(op(len(args) - 2), 1, E * N * K, f"row {r['i']} w").reshape(E, N, K)
+                slab_of[key] = np.ascontiguousarray(W.transpose(1, 0, 2)).reshape(N, E * K)
+            scales = _as(op(len(args) - 1), 4, E * NB * KG, f"row {r['i']} ws").reshape(E, NB, KG)
+            wkey = key
+        e = int(lead[2][0])
+        e = e - (1 << 32) if e & 0x80000000 else e
+        sw = scales[e] if 0 <= e < E else np.full((NB, KG), 0x7FC00000, np.uint32)
+        xs.append(np.frombuffer(b"".join(a.tobytes() for a in lead), dtype="<u2"))
+        ws.append((slab_of[key], sw.astype("<u4")[nb_of].view(np.uint8).reshape(N, 4 * KG)))
+        (member, width, _dt), = d["members"]
+        y, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
+        if y is None:
+            raise LookupError(f"row {r['i']} output {member}: {why}")
+        ys.append(_as(y, 2, N, f"row {r['i']} y").reshape(N, 1))
+        layer = _MOE_LAYER.match(d["op_path"]) or _LAYER.search(d["op_path"])
+        entries.append([lo, lo + N, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"], str(member),
+                        int(d["row"]), int(r["i"])])
+        lo += N
+    out = []
+    for m in ms:
+        mine = [j for j, e in enumerate(entries) if e[0] < m.base + m.n and e[1] > m.base]
+        cut = [(j, max(entries[j][0], m.base) - entries[j][0], min(entries[j][1], m.base + m.n) - entries[j][0]) for j in mine]
+        got = {"rows": {"x": np.concatenate([np.broadcast_to(xs[j], (b - a, xs[j].size)) for j, a, b in cut]),
+                        "w": np.concatenate([np.concatenate([ws[j][0][a:b], ws[j][1][a:b]], axis=1) for j, a, b in cut]).view("<u2")},
+               "outs": {"o0": np.concatenate([ys[j][a:b] for j, a, b in cut])}}
+        out.append((got, [entries[j] for j in mine]))
+    return out
+
+
 def read_all(ms: Sequence[CS.Member], rows: Sequence[list[Row]], store: Any, weights: Callable,
              arrivals: dict[str, int] | None = None) -> list[tuple[dict[str, Any], list[list[Any]]]]:
     """Every member's words and index entries (`read`), ``rows`` each template's in the window's order; a chunked template is read
@@ -576,8 +666,9 @@ def read_all(ms: Sequence[CS.Member], rows: Sequence[list[Row]], store: Any, wei
     for rs in rows:
         t = ms[at].template
         mine = [m for m in ms[at:] if m.template == t]
-        out += (_read_s8(mine, rs, store, weights, arrivals) if template(t).layout == "s8"
-                else [read(mine[0], rs, store, weights, arrivals)])
+        layout = template(t).layout
+        out += (_read_s8(mine, rs, store, weights, arrivals) if layout == "s8" else _read_moe(mine, rs, store, weights, arrivals)
+                if layout == "moe" else [read(mine[0], rs, store, weights, arrivals)])
         at += len(mine)
     return out
 
