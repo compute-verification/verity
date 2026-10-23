@@ -1,9 +1,10 @@
 """`protocol_options.pouw_h1_served`: an H1 window that mixes K, served under compute accounting's window Program
-(`h1window.program` on vllm's 32 × 32 tile, one template per K), registers each call's tables as it is recorded: its A
-table ``a/<K>@<c>`` (M slot rows, each its codes then its f32 s_a) and its z table ``zy@<c>`` (one z/y record a unit, in
-tile order), and the weights' ``b/<K>`` (each linear's rows once, codes then s_w), as ``hm96-sha512/row/v2`` trees whose
-rows and roots recompute here from the served tensors, under domains bound to the window's open root. Each root is in its
-call's manifest row, so its round's root commits it before the round's coin. A call's statement file
+(`h1window.program` on vllm's 32 × 32 tile, one template per K), registers its tables as its calls are recorded: each
+step's A table of K ``a/<K>@<s>`` (VLLM-77: M slot rows of each of the step's calls of K, call after call, each row its
+codes then its f32 s_a) at the step's last call of K, each call's z table ``zy@<c>`` (one z/y record a unit, in tile
+order), and the weights' ``b/<K>`` (each linear's rows once, codes then s_w), as ``hm96-sha512/row/v2`` trees whose rows
+and roots recompute here from the served tensors, under domains bound to the window's open root. Each root is in the
+manifest row of the call that completes it, so its round's root commits it before the round's coin. A call's statement file
 (`h1window.table_reads_file`) resolves each of its units' ports (`h1window.window_ports`, each K's own; ``a_k<K>`` →
 ``a_k<K>_0`` for a tile of one row, ``b_k<K>`` → ``b_k<K>_0`` for one column) to its own tables and the weights', and no
 other call's unit reads them; a read opened with another row is refused. A weight that changes, blocks that aren't one
@@ -150,31 +151,45 @@ def _records(z, y, m, n, tile=TILE):
     return out
 
 
+def _served_call(got, c, n, k):
+    """Call c's served (a, s_a, z, y), zeros for an empty call."""
+    return got.get(c) or (torch.zeros(0, k, dtype=torch.int8), torch.zeros(0), torch.zeros(0, n), torch.zeros(0, n).bfloat16())
+
+
 def test_each_call_registers_its_tables_as_it_is_recorded():
-    """Every call's A and z tables are the Program's `h1window.table` values, M rows of K/2 + 2 words and one record of
-    3 R C words a unit, under the registered-value domain of the Program's digest bound to the window's open root; their
-    roots recompute from the served tensors (an empty call's from zeros), and each is in its call's manifest row, so its
-    round's root is over it."""
+    """Each step's A table of K is the Program's `h1window.table` value ``a/<K>@<s>``: M rows of K/2 + 2 words for each of
+    the step's calls of K, call after call (`credit.step_tables`), the j-th call's rows from row M·j
+    (`h1window.step_of`), registered at the step's last call of K and in that call's manifest row only. Each call's z
+    table is one record of 3 R C words a unit. Both are under the registered-value domain of the Program's digest bound
+    to the window's open root; their roots recompute from the served tensors (an empty call's from zeros), so the round's
+    root is over them."""
     run, ws, got = _window(W1)
     served, pre = run.served, SV.PREFIX
     prog, digest = served.program, P.program_digest(served.program)
-    assert served.program_digest == digest and served.root == W1.hex() and served.m == T
+    assert served.program_digest == digest and served.root == W1.hex() and served.m == T and served.steps == STEPS
     assert served.linears == [("q", 16, 64), ("k", 16, 32), ("o", 32, 32)]
     assert served.calls == [(m, s) for s in range(STEPS) for m in ("q", "k", "o")]
-    assert list(served.registered) == [pre + "a/16@0", pre + "zy@0", pre + "a/16@1", pre + "zy@1", pre + "b/16",
-                                       pre + "a/32@2", pre + "zy@2", pre + "b/32",
-                                       *(pre + v for c, k in ((3, 16), (4, 16), (5, 32)) for v in (f"a/{k}@{c}", f"zy@{c}"))]
-    for c in run.calls:
-        n, k = run.shapes_[c.layer]
-        a, s_a, z, y = got.get(c.index) or (torch.zeros(0, k, dtype=torch.int8), torch.zeros(0), torch.zeros(0, n),
-                                             torch.zeros(0, n).bfloat16())
-        ra, rz = served.registered[HW.table(prog, "a", c.index)], served.registered[HW.table(prog, "zy", c.index)]
-        assert (ra.leaves, ra.words, rz.leaves, rz.words) == (T, k // 2 + 2, (T // 32) * (n // 32), 3 * 32 * 32)
+    assert list(served.registered) == [pre + v for v in ("zy@0", "a/16@0", "zy@1", "b/16", "a/32@0", "zy@2", "b/32",
+                                                         "zy@3", "a/16@1", "zy@4", "a/32@1", "zy@5")]
+    tables = CR.step_tables({"calls": served.calls, "linears": served.linears, "m": served.m}, STEPS)
+    assert tables == [(0, 16, [0, 1]), (0, 32, [2]), (1, 16, [3, 4]), (1, 32, [5])]
+    for s, k, cs in tables:
+        ra = served.registered[HW.table(prog, "a", cs[0], STEPS)]
+        assert ra.value == pre + f"a/{k}@{s}" and (ra.leaves, ra.words) == (T * len(cs), k // 2 + 2)
         assert ra.domain.domain_id.hex() == G.domain(digest, ra.value, ra.words, ra.leaves, window=W1.hex()).domain_id.hex()
         assert ra.domain.domain_id != G.domain(digest, ra.value, ra.words, ra.leaves).domain_id
-        assert ra.root.hex() == _tree(ra, _a_rows(a, s_a, T, k), run._key, SV.nonce(c.index, "a"))
+        rows = [row for c in cs for row in _a_rows(*_served_call(got, c, 0, k)[:2], T, k)]
+        assert ra.root.hex() == _tree(ra, rows, run._key, SV.nonce(cs[0], "a"))
+        assert [c.index for c in run.calls if ra.value in run.tables[c.index]["registered"]] == [cs[-1]]
+        assert run.tables[cs[-1]]["registered"][ra.value] == ra.root.hex()
+        assert [HW.step_of(prog, c, STEPS) for c in cs] == [(s, len(cs), T * j) for j in range(len(cs))]
+    for c in run.calls:
+        n, k = run.shapes_[c.layer]
+        a, s_a, z, y = _served_call(got, c.index, n, k)
+        rz = served.registered[HW.table(prog, "zy", c.index)]
+        assert (rz.leaves, rz.words) == ((T // 32) * (n // 32), 3 * 32 * 32)
         assert rz.root.hex() == _tree(rz, _records(z, y, T, n), run._key, SV.nonce(c.index, "zy"))
-        assert {ra.value: ra.root.hex(), rz.value: rz.root.hex()}.items() <= run.tables[c.index]["registered"].items()
+        assert {rz.value: rz.root.hex()}.items() <= run.tables[c.index]["registered"].items()
     for r, log in enumerate(run.round_log):
         assert RQ.step_digest(run.salt, r, run._rows([c for c in run.calls if c.step == r])).hex() == log["calls"]
 
@@ -193,16 +208,17 @@ def test_b_is_each_linears_weight_once_a_window(steps):
     assert [c.index for c in run.calls if pre + "b/32" in run.tables[c.index]["registered"]] == [2]
     tp = P.evaluate(served.program, served.query())
     per = tp.population // steps
-    first = [next(v for key, v in HW.table_reads(served.program, tp, u).items() if key.startswith("b_k") and
+    first = [next(v for key, v in HW.table_reads(served.program, tp, u, steps).items() if key.startswith("b_k") and
                   key.endswith("[0]")) for u in range(tp.population)]
     assert all(first[u] == first[u % per] for u in range(tp.population))
 
 
 def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_another_row():
     """Each call's file names its K's ports, ``a_k<K>_0`` .. ``a_k<K>_31``, ``b_k<K>_0`` .. ``b_k<K>_31`` and ``zy``, each in
-    row/v2 with its tree's value, root, rows, width and domain (the window's): the A ports and the record at the call's
-    own tables, B at the weights'. Only the call's units read them, at the rows `h1window.table_reads` gives, and each read
-    opens its tree at its row, while the same path with another row is refused."""
+    row/v2 with its tree's value, root, rows, width and domain (the window's): the A ports at its step's A table of K,
+    the record at the call's z table, B at the weights'. Only the call's units read them, at the rows
+    `h1window.table_reads` gives (its A rows from its call's offset in the step table), and each read opens its tree at
+    its row, while the same path with another row is refused."""
     run, _ws, _got = _window(W1)
     served = run.served
     prog, tp = served.program, P.evaluate(served.program, served.query())
@@ -212,7 +228,9 @@ def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_anothe
         assert set(f["ports"]) == {f"{t}_k{k}_{i}" for t in "ab" for i in range(32)} | {"zy"}
         assert {(p["row_schema"], p["word_bits"]) for p in f["ports"].values()} == {(SV.V2, 16)}
         assert {f["ports"][f"a_k{k}_0"]["value"], f["ports"]["zy"]["value"], f["ports"][f"b_k{k}_0"]["value"]} == {
-            HW.table(prog, "a", c), HW.table(prog, "zy", c), SV.PREFIX + f"b/{k}"}
+            HW.table(prog, "a", c, STEPS), HW.table(prog, "zy", c), SV.PREFIX + f"b/{k}"}
+        at = HW.step_of(prog, c, STEPS)[2]
+        assert f["ports"][f"a_k{k}_0"]["reads"][u0] == at and at == T * served.step_calls(c).index(c)
         for port, p in f["ports"].items():
             r = served.registered[p["value"]]
             assert (p["root"], p["words"], p["leaves"], p["domain"]) == (
@@ -222,7 +240,7 @@ def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_anothe
                 if not u0 <= u < u0 + n:
                     assert row is None
                     continue
-                assert HW.table_reads(prog, tp, u)[key] == (p["value"], row)
+                assert HW.table_reads(prog, tp, u, STEPS)[key] == (p["value"], row)
                 assert G.verify_read(r.domain, r.root, row, r.bcs[row], r.path(row), SV.V2)
                 assert not G.verify_read(r.domain, r.root, row, r.bcs[(row + 1) % r.leaves], r.path(row), SV.V2)
 
@@ -372,7 +390,8 @@ def test_a_replayed_windows_values_are_refused_through_their_window_bound_domain
         assert G.verify_read(r.domain, r.root, 0, r.bcs[0], r.path(0), SV.V2)
         assert not G.verify_read(under_two, r.root, 0, r.bcs[0], r.path(0), SV.V2)
     tp = P.evaluate(two.served.program, two.served.query())
-    f = HW.table_reads_file(two.served.program, tp, 0, one.served.roots(), two.served.ports(), prog=digest, window=W2.hex())
+    f = HW.table_reads_file(two.served.program, tp, 0, one.served.roots(), two.served.ports(), prog=digest, window=W2.hex(),
+                            steps=STEPS)
     assert {p["domain"] for p in f["ports"].values()} == {
         two.served.registered[p["value"]].domain.domain_id.hex() for p in f["ports"].values()}
     assert not {p["domain"] for p in f["ports"].values() if not CR.is_held(p["value"])} & {
@@ -437,13 +456,13 @@ def test_a_window_serving_other_weights_than_the_periods_is_refused(edit):
 
 
 def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
-    """Each round's root lists step r's calls' A tables ``a/<K>@<c>`` whole, as aligned subtrees (`credit.cover`) whose
+    """Each round's root lists step r's A tables ``a/<K>@<r>``, one a K, whole, as aligned subtrees (`credit.cover`) whose
     tree is the table's registered root, and no other round lists them (`credit.round_root`)."""
     run, _ws, _got = _window(W1)
-    served, per = run.served, len(SHAPES)
+    served = run.served
     for r, log in enumerate(run.round_log):
         segs = served.segments(run, r)
-        assert set(segs) == {HW.table(served.program, "a", c) for c in range(r * per, (r + 1) * per)}
+        assert list(segs) == [f"{SV.PREFIX}a/{k}@{r}" for k in KS]
         for v, got in segs.items():
             reg = served.registered[v]
             assert CR.tree_root(reg.domain.domain_id, reg.leaves, {(lv, ix): h for lv, ix, h in got}) == reg.root

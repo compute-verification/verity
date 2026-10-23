@@ -32,8 +32,8 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   listener returns (its roots and receipt root, as hex) is recorded with the call (``bound``). `Call.inputs` is
   `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the table's, and root(B) is the weight's,
   which compute accounting commits. This module commits neither.
-* **The Commit** (ROOTS1, `pouw_h1_commit`, ``served``'s tap): each round's input-ids table ``ids@<s>`` and each call's A
-  table are the Commit's values, its record bound into `calls_root` before the draw root and held to them by core's
+* **The Commit** (ROOTS1, `pouw_h1_commit`, ``served``'s tap): each round's input-ids table ``ids@<s>`` and A table of
+  each K are the Commit's values, its record bound into `calls_root` before the draw root and held to them by core's
   credit (`credit._arow`); a window that fails it credits nothing (`pouw_h1_commit.UNTIED`).
 * **z** is the call's z/y records (`pouw_h1_records`): the int8 arm serves ``verity_int8::scaled_mm_zy`` over T slots (its
   ``zy_rows``), writing the served y and one record a unit, its exact z (`Call.z`'s cells) then y = dq(z). With none,
@@ -300,8 +300,8 @@ class H1Run:
 
     Round s is step s. The engine's admissions and batch order (`admit`, from `admitting`) go to the round of the step about
     to run, and round s closes once step s's last linear is recorded (or at `close`): its root (`pouw_h1_requests.round_row`)
-    over the step's calls, its request table and its slot table, and with ``served`` each of the step's calls' A tables
-    ``a/<K>@<c>`` whole (`pouw_h1_served.Served.segments`), is recorded with
+    over the step's calls, its request table and its slot table, and with ``served`` the step's A table of each K
+    ``a/<K>@<s>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
     `finish` opens ``draw``'s coin (a `LiveRecord` of the same challenger's draw family) after the window's `draw_root`.
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
@@ -309,8 +309,8 @@ class H1Run:
     served call's A rows, scales and z/y records, so a drawn unit opens after the close (DRAWN1); without it their leaves
     open only while the run is held (`open_request`, `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
     `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing. With ``served``
-    (`pouw_h1_served.Served`) each call's A and z/y tables, and the weights' B, are also registered values as the call is
-    recorded, their roots in its tables (``registered``) under its round's root; the commitment carries their entries.
+    (`pouw_h1_served.Served`) each call's z/y table, its step's A table of K, and the weights' B, are also registered values
+    as the calls are recorded, their roots in its tables (``registered``) under its round's root; the commitment carries them.
 
     The Program's ``salt`` is given, or None with ``opener``: then `open_window` opens it once round 0's admissions are in
     (or at the first use of the salt), after its request table, and ``opener`` sets ``rounds`` and ``draw``."""

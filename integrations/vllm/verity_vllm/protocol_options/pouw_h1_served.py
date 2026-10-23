@@ -12,9 +12,10 @@
   A window's own values are its through their domains, which bind its open root (`Served.key`: `salt.window_open_root`
   of the period's weights' root, round 0's request root and the session, or the key the run is given, 64 bytes); round
   0's input-ids table, whose root that request root contains, binds the session instead (`Served.ids_tree`).
-* **The tables** are the ones a unit's rows open at (`h1window.table`, `h1window.table_reads`): call c's A table
-  ``a/<K>@<c>``, its M slot rows, each its K int8 codes then its f32 s_a (`h1zy.ROW`; the served rows, then zero codes of
-  scale 0), and its z table ``zy@<c>``, one record a unit of the call in its tile order (`h1zy.RECORD`: its cells' s32 z,
+* **The tables** are the ones a unit's rows open at (`h1window.table`, `h1window.table_reads`): step s's A table of K
+  ``a/<K>@<s>`` (VLLM-77), the M slot rows of each of step s's calls of K, call after call in call order (`step_calls`;
+  the j-th starts at row M·j), each its K int8 codes then its f32 s_a (`h1zy.ROW`; the served rows, then zero codes of
+  scale 0), and call c's z table ``zy@<c>``, one record a unit of the call in its tile order (`h1zy.RECORD`: its cells' s32 z,
   row-major, then their bf16 y; a slot past the served rows is z = 0 and y = +0, dq(0, +0, s_w) for a finite positive
   s_w); and the weights' ``b/<K>``, K's linears' rows linear after linear, each its K weight codes then its f32 s_w (Σn
   rows every step's units read).
@@ -32,14 +33,15 @@
   `registered.Registered.commit` under the registered-value domain of the Program's digest, the value, its words and rows,
   and for a call's tables the window's open root (`registered.domain`'s ``window``, `Served.root`, #3044), row j's salt
   `audit.hm96_salt` of the run's key at the value's nonce (`nonce`).
-* **When.** `Served.commit` registers call c's two tables as `H1Run` records the call, and puts the period's ``b/<K>`` in
-  the call that completes K's weights (the last of K's linears in step 0). Each root goes into the call's manifest row
-  (``tables.registered``), so its round's root commits it before the round's coin, and round s's root also lists step s's
-  A tables whole (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
+* **When.** `Served.commit` registers call c's z table as `H1Run` records the call, step s's A table of K at its last
+  call of K (salted from its first call's nonce), and puts the period's ``b/<K>`` in the call that completes K's weights
+  (the last of K's linears in step 0). Each root goes into that call's manifest row (``tables.registered``), so its
+  round's root commits it before the round's coin, and round s's root also lists step s's A tables whole
+  (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
   is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
   ``b/<K>`` there, under the run's key.
-* **The Commit** (ROOTS1, VLLM-73): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) the
-  window also registers each round's input-ids table ``ids@<s>`` (`ids_words`: its M slots' token ids, two words each),
+* **The Commit** (ROOTS1, VLLM-73): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) its
+  AROW of each step's calls of K is that step's A table's value (`credit.commit_rows`), and the window also registers each round's input-ids table ``ids@<s>`` (`ids_words`: its M slots' token ids, two words each),
   outside the Program's values (`ids`, in `entries`), and lists it whole under round s's root (`segments`). Round 0's
   is its prompts' tokens in step 0's batch order, registered before the window opens (`open_ids`), its root inside
   round 0's request root and its domain bound to the session (`ids_tree`); each later round's
@@ -102,7 +104,8 @@ DIGEST_TAG = b"verity/pouw/h1/served/v3\0"
 
 
 def nonce(call: int, table: str) -> int:
-    """The salt nonce of call ``call``'s table ``table`` (`h1window.TABLES`)."""
+    """The salt nonce of call ``call``'s table ``table`` (`h1window.TABLES`): a step's A table of K takes its first call of
+    K's ``a`` nonce, which no other table takes."""
     return NONCE + 2 * int(call) + HW.TABLES.index(table)
 
 
@@ -315,6 +318,8 @@ class Served:
     #: each round's input-ids table and its words, with the tap
     ids: dict[int, G.Registered] = field(default_factory=dict)
     _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
+    #: each open step A table's words so far, one block a call recorded, in call order
+    _a: dict[str, list[np.ndarray]] = field(default_factory=dict)
     #: each linear's weight, the tensor and its codes, taken once, and its scales
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
@@ -388,10 +393,27 @@ class Served:
         full[:len(codes)], sc[:len(codes)] = codes, scales
         return row_words(full, sc)
 
+    @property
+    def steps(self) -> int:
+        """The declared Program's steps: its calls, every linear once a step."""
+        return len(self.calls) // max(1, len(self.linears))
+
+    def step_calls(self, c: int) -> list[int]:
+        """Call ``c``'s step's calls of its K, in call order: the calls its step's A table holds, M rows each, the j-th
+        from row M·j (`credit.step_tables`, `h1window.step_of`)."""
+        per, ks = len(self.linears), {name: k for name, k, _n in self.linears}
+        s, k = c // per, ks[self.calls[c][0]]
+        return [d for d in range(s * per, (s + 1) * per) if ks[self.calls[d][0]] == k]
+
+    def a_table(self, c: int) -> str:
+        """Call ``c``'s step's A table of its K, ``<prefix>a/<K>@<s>`` (`h1window.table`)."""
+        return HW.table(self.program, "a", c, self.steps)
+
     def a_tree(self, run: Any, call: Any, words: np.ndarray) -> G.Registered:
-        """The tree of call ``call``'s A table ``a/<K>@<c>`` over ``words`` (`a_words`) as `commit` would register it,
-        under the same domain and salts, unregistered (`pouw_h1_commit.CommitTap.arow`)."""
-        return self._tree(run, HW.table(self.program, "a", call.index), words, nonce(call.index, "a"), self.root)
+        """The tree of call ``call``'s step's A table ``a/<K>@<s>`` over ``words`` (its step's calls of K's `a_words`,
+        call after call) as `commit` would register it, under the same domain and salts, unregistered
+        (`pouw_h1_commit.CommitTap.arow`)."""
+        return self._tree(run, self.a_table(call.index), words, nonce(self.step_calls(call.index)[0], "a"), self.root)
 
     def ids_tree(self, run: Any, s: int, words: np.ndarray) -> G.Registered:
         """The tree of round s's input-ids table ``<PREFIX>ids@<s>`` over ``words`` (`ids_words`), unregistered. Its domain
@@ -455,11 +477,12 @@ class Served:
 
     def commit(self, run: Any, call: Any, a: Any, s_a: Any, weight: Any, weight_scale: Any,
                records: np.ndarray | None) -> dict[str, str]:
-        """Register call ``call``'s A and z tables (its served rows ``a`` [m, K] and scales ``s_a`` [m], and its z/y
-        ``records`` over its T slots, `pouw_h1_records`', split back to z and y and laid out in the Program's tile), and
-        take ``b/<K>`` once K's linears' weights are all held, the period's (refused unless each linear's codes and s_w
-        are its registered rows) or the window's own: ``{value: root}``, what the call's manifest row commits under its
-        round's root. Nothing once the window is refused."""
+        """Register call ``call``'s z table (its z/y ``records`` over its T slots, `pouw_h1_records`', split back to z and
+        y and laid out in the Program's tile), add its A rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
+        step's A table of K, registered whole at the step's last call of K, and take ``b/<K>`` once K's linears' weights
+        are all held, the period's (refused unless each linear's codes and s_w are its registered rows) or the window's
+        own: ``{value: root}``, what the call's manifest row commits under its round's root. Nothing once the window is
+        refused."""
         if self.root is None and not self.refused:
             self.open(run)
         if not self.refused:
@@ -476,12 +499,17 @@ class Served:
         if call.m:
             codes, scales = PH.numpy_of(a).reshape(call.m, call.k), PH.numpy_of(s_a).reshape(-1)
             zv, yv = ZR.split(records, call.rows, call.n)
-        out, a_words = {}, self.a_words(call, codes, scales)
-        for name, words in (("a", a_words), ("zy", record_words(zv, yv, self.m, self.tile))):
-            value = HW.table(self.program, name, call.index)
-            out[value] = self._register(run, value, words, nonce(call.index, name), self.root)
+        out, value, mine = {}, self.a_table(call.index), self.step_calls(call.index)
+        rows = self._a.setdefault(value, [])
+        rows.append(self.a_words(call, codes, scales))
+        whole = None
+        if call.index == mine[-1]:
+            whole = np.concatenate(self._a.pop(value))
+            out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
+        zy = HW.table(self.program, "zy", call.index)
+        out[zy] = self._register(run, zy, record_words(zv, yv, self.m, self.tile), nonce(call.index, "zy"), self.root)
         if self.tap is not None:
-            self.tap.arow(run, self, call, HW.table(self.program, "a", call.index), a_words)
+            self.tap.arow(run, self, call, value, whole)
         b, ks = self.program.fn.bindings["PREFIX"] + f"b/{call.k}", sorted({k for _n, k in run.shapes_})
         mine = [w for w, (_n, k) in enumerate(run.shapes_) if k == call.k]
         if b in self.registered or not all(w in self._weights for w in mine):
@@ -499,15 +527,15 @@ class Served:
         return out
 
     def segments(self, run: Any, r: int) -> dict[str, list[tuple[int, int, bytes]]]:
-        """Round r's A segments (`credit.round_root`): the A table ``a/<K>@<c>`` of each call c of step r, whole, as the
-        aligned subtrees (`credit.cover`, each ``(level, index, root)``) of its registered tree, so round r's root commits
-        it before round r's coin and no other round lists it; and round r's input-ids table alike. Nothing once the
-        window is refused."""
+        """Round r's A segments (`credit.round_root`): step r's A table ``a/<K>@<r>`` of each K its calls have, whole, as
+        the aligned subtrees (`credit.cover`, each ``(level, index, root)``) of its registered tree, so round r's root
+        commits it before round r's coin and no other round lists it; and round r's input-ids table alike. Nothing once
+        the window is refused."""
         if self.refused or self.program is None:
             return {}
         per, out = len(self.linears), {}
-        regs = [self.registered.get(HW.table(self.program, "a", c))
-                for c in range(r * per, min((r + 1) * per, len(self.calls)))]
+        values = dict.fromkeys(self.a_table(c) for c in range(r * per, min((r + 1) * per, len(self.calls))))
+        regs = [self.registered.get(v) for v in values]
         for reg in [*regs, self.ids.get(r)]:
             if reg is not None:
                 out[reg.value] = [(lv, ix, reg.levels[lv][ix]) for lv, ix in CR.cover(0, reg.leaves)]
@@ -527,10 +555,11 @@ class Served:
             self.refused.append(f"{len(missing)} tables the Program reads were never registered: {missing[:4]}")
 
     def tables(self) -> list[str]:
-        """Every value the Program's units open at: each K's ``b/<K>``, then each call's A and z tables."""
+        """Every value the Program's units open at: each K's ``b/<K>``, then each step's A tables, then each call's z
+        table."""
         pre, ks = self.program.fn.bindings["PREFIX"], sorted({k for _name, k, _n in self.linears})
-        return [pre + f"b/{k}" for k in ks] + [HW.table(self.program, t, c) for c in range(len(self.calls))
-                                                for t in HW.TABLES]
+        return ([pre + f"b/{k}" for k in ks] + list(dict.fromkeys(self.a_table(c) for c in range(len(self.calls))))
+                + [HW.table(self.program, "zy", c) for c in range(len(self.calls))])
 
     def values(self) -> dict[str, int]:
         """Each registered value's words a row."""
@@ -587,7 +616,7 @@ def reads_file(run: Any, call: int, ports: Mapping[str, str] | None = None, tp: 
     prog = served.program
     tp = tp if tp is not None else P.evaluate(prog, served.query())
     return HW.table_reads_file(prog, tp, int(call), served.roots(), served.ports() if ports is None else dict(ports),
-                               prog=served.program_digest, window=served.root)
+                               prog=served.program_digest, window=served.root, steps=served.steps)
 
 
 @dataclass(frozen=True)
