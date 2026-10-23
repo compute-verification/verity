@@ -583,6 +583,37 @@ theorem locate_prev : ∀ (rs : List ℕ) (k i : ℕ), k < (ZKMal.CoinLayer.loca
         have := locate_snd_le cs (k + 1) (i - c)
         omega
 
+/-- **A rep round past its stream's first follows the stream's round before it.** -/
+theorem locate_pred : ∀ (rs : List ℕ) (k i j : ℕ), (ZKMal.CoinLayer.locate rs k (i + 1)).2 = j + 1 →
+    ZKMal.CoinLayer.locate rs k i = ((ZKMal.CoinLayer.locate rs k (i + 1)).1, j)
+  | [], _, _, _, h => by
+    simp only [ZKMal.CoinLayer.locate] at h ⊢
+    simp only [Prod.mk.injEq, true_and]
+    omega
+  | c :: cs, k, i, j, h => by
+    by_cases h1 : i + 1 < c
+    · rw [locate_cons_lt h1] at h
+      rw [locate_cons_lt h1, locate_cons_lt (Nat.lt_of_succ_lt h1)]
+      simp only at h
+      simp only [Prod.mk.injEq, true_and]
+      omega
+    · by_cases h0 : i < c
+      · rw [locate_cons_ge h1] at h
+        have := locate_snd_le cs (k + 1) (i + 1 - c)
+        omega
+      · rw [locate_cons_ge h1] at h ⊢
+        rw [locate_cons_ge h0]
+        have e : i + 1 - c = i - c + 1 := by omega
+        rw [e] at h ⊢
+        exact locate_pred cs (k + 1) (i - c) j h
+
+/-- **A rep stream's first round follows another stream's round.** -/
+theorem locate_first (rs : List ℕ) (k i : ℕ)
+    (h : (ZKMal.CoinLayer.locate rs k (i + 1)).1 = (ZKMal.CoinLayer.locate rs k i).1) :
+    (ZKMal.CoinLayer.locate rs k (i + 1)).2 ≠ 0 := by
+  rw [locate_succ rs k i h]
+  exact Nat.succ_ne_zero _
+
 /-- Rep 0's frame state reads no earlier rep's coins. -/
 theorem repState_cr0 {c : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {ns : ℕ → ℕ} {i : ℕ} (hr : rep = 0)
@@ -604,13 +635,11 @@ theorem crAt_push (f : ℕ → Array F128) (s n : ℕ) :
   congr 1
   simp
 
-/-- **The loop's frame state one coin on, within a rep stream**: where the round after the decoded coins `cs ++ [d]` is
-the same rep stream's as the round after `cs`, the state is that rep's after one more of its rounds, on its rounds'
-coins and one more. -/
+/-- **The loop's frame state one coin on**: after the decoded coins `cs ++ [d]`, the state of the rep that released
+the round after `cs`, after one more of its rounds, on its rounds' coins and one more. -/
 theorem progOf_snoc (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {s0 : _}
     {spec : SessionSpec} {sts : Array Stmt} {q : ℕ} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts))
-    (hq : cs.length = q + 1)
-    (hk : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q + 1)).1 = (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1) :
+    (hq : cs.length = q + 1) :
     progOf x (cs ++ [d]) =
       match placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 (wordsAt x cs 0) with
       | .ok (c, t, dom, xs, hi) =>
@@ -624,15 +653,13 @@ theorem progOf_snoc (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin
           (fun j => loopNr x (q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + j + 1))
           ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + 1)
       | .error _ => {} := by
-  have h2 := locate_succ (roundsOf spec sts) 0 q hk
   have hle := locate_snd_le (roundsOf spec sts) 0 q
+  have hl : (cs ++ [d]).length = q + 2 := by rw [List.length_append, List.length_singleton, hq]
   unfold progOf
-  rw [hx, List.length_append, List.length_singleton, hq]
+  rw [hx, hl]
   simp only
-  rw [hk, h2, wordsAt_append x cs [d] (by omega), crAt_push]
-  have hst : q + 1 - ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + 1) =
-      q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 := by omega
-  rw [hst, show q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 +
+  rw [wordsAt_append x cs [d] (by omega), crAt_push]
+  rw [show q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 +
     (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + 1 = q + 1 by omega]
   have hw : ∀ p, p ≤ q → wordsAt x (cs ++ [d]) p = wordsAt x cs p := fun p hp => wordsAt_append x cs [d] (by omega)
   congr 1
@@ -644,10 +671,11 @@ theorem progOf_snoc (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin
     rw [Nat.sub_zero] at hp
     rw [map_range_congr fun j hj => hw _ (by omega)]
 
-/-- **The loop's frame state after the decoded coins `cs`**, where `x` sets up a session and the placeholder is
-`(c, t, dom, xs, hi)`: the located rep's after its released rounds. -/
+/-- **The loop's frame state after the decoded coins `cs`**, where `x` sets up a session, the round after them is a
+rep stream's past its first and the placeholder is `(c, t, dom, xs, hi)`: that rep's after its released rounds. -/
 theorem progOf_at (x : Msg) (cs : List FlockDeploy.Coin) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q : ℕ}
-    (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1) {c : Cfg}
+    (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1) {j : ℕ}
+    (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 = j + 1) {c : Cfg}
     {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)} {hi : Array ByteArray}
     (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 (wordsAt x cs 0) =
       .ok (c, t, dom, xs, hi)) :
@@ -660,9 +688,17 @@ theorem progOf_at (x : Msg) (cs : List FlockDeploy.Coin) {s0 : _} {spec : Sessio
           fun j => wordsAt x cs (q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + j + 1))
         (fun j => loopNr x (q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + j + 1))
         (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 := by
+  have hle := locate_snd_le (roundsOf spec sts) 0 q
+  obtain ⟨q', rfl⟩ : ∃ q', q = q' + 1 := ⟨q - 1, by omega⟩
+  have hp := locate_pred (roundsOf spec sts) 0 q' j hj
+  have hl : cs.length = q' + 2 := hq
+  rw [hj]
   unfold progOf
-  rw [hx, hq]
-  simp only [hph]
+  rw [hx, hl]
+  simp only [hp]
+  rw [hph]
+  dsimp only
+  rw [show q' + 1 - (j + 1) = q' - j by omega]
 
 theorem forall₂_getD {α β : Type} {R : α → β → Prop} {d : α} {d' : β} :
     ∀ {l : List α} {l' : List β}, List.Forall₂ R l l' → ∀ {i : ℕ}, i < l.length → R (l.getD i d) (l'.getD i d')
@@ -732,16 +768,14 @@ theorem repState_inner (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : �
     · rw [List.mem_singleton] at hq; subst hq; exact ⟨rfl, hF j (Nat.le_refl j)⟩
 
 /-- **The loop's frame state one scheduled round on, within a rep stream, is the deployed check's** but for `stopped`:
-where the round after the decoded coins `cs ++ [d]` is the same rep stream's as the round after `cs`, round `j + 1` of
-it, the schedule so far at its own table (`rsched`) and the placeholder's (`sched'`, on the same coins) are of one shape
-(`RoundsAt`) and hold that round, the frame takes the last coins of `cs` at the state `m`, and the deployed frame's
+where the round after the decoded coins `cs` is round `j + 1` of its rep stream, the schedule so far at its own table
+(`rsched`) and the placeholder's (`sched'`, on the same coins) are of one shape (`RoundsAt`) and hold that round, the frame takes the last coins of `cs` at the state `m`, and the deployed frame's
 check at an alike configuration of a device round against the rep's round `j + 1` releases a round, the loop's state
 after `cs ++ [d]` is that check's, but for `stopped`. The state `m` is outside the inner proof, which no scheduled round
 starts (`repState_inner`). -/
 theorem progOf_check_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {s0 : _}
     {spec : SessionSpec} {sts : Array Stmt} {q : ℕ} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts))
     (hq : cs.length = q + 1)
-    (hk : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q + 1)).1 = (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1)
     {c c' : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray}
     (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 (wordsAt x cs 0) =
@@ -756,8 +790,8 @@ theorem progOf_check_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeplo
       .ok (out, s, why)) :
     progOf x (cs ++ [d]) = { s with stopped := (progOf x (cs ++ [d])).stopped } := by
   have hle := locate_snd_le (roundsOf spec sts) 0 q
-  rw [progOf_at x cs hx hq hph, hj] at ha
-  rw [progOf_snoc x cs d hx hq hk, hph]
+  rw [progOf_at x cs hx hq hj hph, hj] at ha
+  rw [progOf_snoc x cs d hx hq, hph]
   dsimp only
   rw [hj]
   obtain ⟨alg, hal⟩ := schedSoFar_ok_rounds hs'
@@ -1176,7 +1210,7 @@ theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
       (progOf x ((((m0, r0) :: h1) ++ [(0 :: out.data.toList, a)]).tail.map fun p => ZKMal.CoinLayer.rd p.2)).stopped }
   rw [hcs']
   rw [hcr, readCoins_eq x cs hq1] at hF
-  exact progOf_check_step x cs (ZKMal.CoinLayer.rd a) hx hq1 hk (by rw [hk1]; exact hph) hc hj hrs
+  exact progOf_check_step x cs (ZKMal.CoinLayer.rd a) hx hq1 (by rw [hk1]; exact hph) hc hj hrs
     (by rw [hk1]; exact hs') hlt hF hv'
 
 open Loop in

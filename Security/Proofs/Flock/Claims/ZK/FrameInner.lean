@@ -1325,7 +1325,6 @@ for `stopped`: as `progOf_check_step`, where the placeholder's schedule so far i
 theorem progOf_own_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {s0 : _}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt} {q : ℕ}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1)
-    (hk : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q + 1)).1 = (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1)
     {c c' : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray}
     (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 (wordsAt x cs 0) =
@@ -1343,8 +1342,8 @@ theorem progOf_own_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.
       (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w ++ header 4 1 1).data.toList) :
     progOf x (cs ++ [d]) = { s with stopped := (progOf x (cs ++ [d])).stopped } := by
   have hle' := locate_snd_le (roundsOf spec sts) 0 q
-  rw [progOf_at x cs hx hq hph, hj] at ha
-  rw [progOf_snoc x cs d hx hq hk, hph]
+  rw [progOf_at x cs hx hq hj hph, hj] at ha
+  rw [progOf_snoc x cs d hx hq, hph]
   dsimp only
   rw [hj]
   obtain ⟨alg, hal⟩ := schedSoFar_ok_rounds hs'
@@ -1517,7 +1516,7 @@ theorem ofLoop_progChecks_own (T : ZKMal.CoinLayer.TableData)
   rw [hcs']
   rw [hcr, readCoins_eq x cs hq1] at hF
   have hsz := roundsAt_size hrs
-  exact progOf_own_step x cs (ZKMal.CoinLayer.rd a) hx hq1 hk (by rw [hk1]; exact hph) hc hz hH hM hrow hj
+  exact progOf_own_step x cs (ZKMal.CoinLayer.rd a) hx hq1 (by rw [hk1]; exact hph) hc hz hH hM hrow hj
     (by rw [hk1]; exact hs') (by rw [← hsz]; exact hle) (fun k' hk' => roundsAt_framed hrs hk') hF hv'
     (fun hS => by
       obtain ⟨w', hw', he⟩ := hL0 (by rw [hsz]; exact hS)
