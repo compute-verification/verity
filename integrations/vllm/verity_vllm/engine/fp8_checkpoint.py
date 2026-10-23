@@ -52,9 +52,10 @@ linear).  Its linear weights are exactly the base's ``F8_E4M3`` ``.weight`` tens
 config's ``quantization_config`` is replaced in place by the recipe's, keeping the base's ``modules_to_not_convert`` list.
 
 ``make(..., jobs=N)`` makes N shards at once in forked processes; the bytes are the same for every N.  ``--base-from HOST:DIR``
-reads a base that is not on this host: its small files are pulled first (the config checked against the pin), and each shard is
-pulled (rsync over ssh) by the worker about to make it, checked against the pin's sha256 before it is read, and deleted once made,
-so a host holds only the made checkpoint and one base shard per job.
+(rsync over ssh) or ``--base-from hub`` (the pin's repo at its revision on the Hugging Face hub) reads a base that is not on this
+host: its other files are pulled first (the config checked against the pin), and each shard is pulled by the worker about to make
+it, checked against the pin's sha256 before it is read, and deleted once made, so a host holds only the made checkpoint and one
+base shard per job.
 """
 from __future__ import annotations
 
@@ -68,6 +69,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import urllib.request
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -499,8 +501,19 @@ def verified_base(base: dict[str, Any], hf_home: str | None) -> Path:
     return d
 
 
+HUB = "https://huggingface.co"
+
+
 def _pull(src: str, dst: str, *flags: str) -> None:
-    subprocess.run(["rsync", "-rL", "-q", *flags, src, dst], check=True)
+    if src.startswith("https://"):
+        subprocess.run(["curl", "-fsSL", "--retry", "8", "--retry-all-errors", "-o", dst, src], check=True)
+    else:
+        subprocess.run(["rsync", "-rL", "-q", *flags, src, dst], check=True)
+
+
+def _hub_files(repo: str, revision: str) -> list[str]:
+    with urllib.request.urlopen(f"{HUB}/api/models/{repo}/tree/{revision}") as r:
+        return sorted(e["path"] for e in json.load(r) if e.get("type") == "file")
 
 
 @dataclass(frozen=True)
@@ -525,11 +538,17 @@ class RemoteShards:
 
 
 def remote_base(base: dict[str, Any], src: str, scratch: Path) -> tuple[Path, RemoteShards]:
-    """The base's files but its shards, pulled from `src` into `scratch/base` (its config checked against the pin), and the
-    `fetch` that pulls each shard."""
+    """The base's files but its shards, pulled from `src` (`HOST:DIR`, or `hub`: the pin's repo at its revision on the hub) into
+    `scratch/base` (its config checked against the pin), and the `fetch` that pulls each shard."""
     d = scratch / "base"
     d.mkdir(parents=True)
-    _pull(f"{src.rstrip('/')}/", f"{d}/", "--exclude=*.safetensors")
+    if src == "hub":
+        src = f"{HUB}/{base['repo']}/resolve/{base['revision']}"
+        for fn in _hub_files(base["repo"], base["revision"]):
+            if not fn.endswith(".safetensors"):
+                _pull(f"{src}/{fn}", str(d / fn))
+    else:
+        _pull(f"{src.rstrip('/')}/", f"{d}/", "--exclude=*.safetensors")
     if base.get("config_sha256") and (not (d / CONFIG).is_file() or _sha256(d / CONFIG) != base["config_sha256"]):
         raise UsageError(f"{src}/{CONFIG}: not the pinned bytes")
     return d, RemoteShards(src, scratch, base["safetensors_sha256"])
@@ -582,7 +601,7 @@ class MakeOptions:
                                  help="HF cache holding the base snapshot; the FP8 snapshot goes beside it (default: the pins' local_path)")
     jobs: int = option("--jobs", type=int, default=1, help="shards made at once (the bytes are the same for any value)")
     base_from: str | None = option("--base-from", default=None,
-                                   help="HOST:DIR of a base snapshot on another host: each shard pulled, checked and deleted once made")
+                                   help="HOST:DIR of the base on another host, or hub: each shard pulled, checked and deleted once made")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -598,7 +617,7 @@ class PinOptions:
     at: str = option("--at", help="resolved_at of the entry (UTC, ISO 8601)")
     jobs: int = option("--jobs", type=int, default=1, help="shards made at once (the bytes are the same for any value)")
     base_from: str | None = option("--base-from", default=None,
-                                   help="HOST:DIR of a base snapshot on another host: each shard pulled, checked and deleted once made")
+                                   help="HOST:DIR of the base on another host, or hub: each shard pulled, checked and deleted once made")
 
 
 COMMANDS = {"make": MakeOptions, "pin": PinOptions}

@@ -208,6 +208,24 @@ def test_a_base_pulled_shard_by_shard_makes_the_same_bytes(tmp_path, monkeypatch
         assert sorted(p.name for p in (tmp_path / f"snap{jobs}").iterdir()) == [local["revision"]]   # scratch and tmp are gone
 
 
+def test_a_base_pulled_from_the_hub_makes_the_same_bytes(tmp_path, monkeypatch):
+    local = _make(tmp_path, "local")
+    base = tmp_path / "base-local"
+    url = f"{F.HUB}/org/model/resolve/{'0' * 40}/"
+    seen = []
+
+    def pull(src: str, dst: str, *flags: str) -> None:
+        assert src.startswith(url) and not flags
+        seen.append(src[len(url):])
+        shutil.copyfile(base / src[len(url):], dst)
+
+    monkeypatch.setattr(F, "_pull", pull)
+    monkeypatch.setattr(F, "_hub_files", lambda repo, rev: sorted(p.name for p in base.iterdir()) if (repo, rev) == ("org/model", "0" * 40) else [])
+    pin = F._make_into(tmp_path / "snap", None, _pin(base), I.INT8_FP8, 1, "hub")
+    assert {k: v for k, v in pin.items() if k != "local_path"} == local
+    assert sorted(seen) == sorted(p.name for p in base.iterdir())
+
+
 def test_a_pulled_shard_or_config_off_the_pin_is_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(F, "_pull", _local_pull)
     base = _fp8_base(tmp_path / "base")
