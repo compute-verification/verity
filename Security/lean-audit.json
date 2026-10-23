@@ -23439,7 +23439,7 @@
    ]
   },
   "Flock.RecCoins": {
-   "digest": "6982e8006571b788999d1980ec2ffd7b6d8d7a3fd3e690d923657f439828747b",
+   "digest": "62fb7180bf958fa7c6358f2ab24066017fc42080bd5bc9497fadde4085396911",
    "definitions": {
     "Flock.RecCoins.C3": "ad22be988630c4ef35240abbc128d3f3b94009c8858477ff6dbfe4a2d71a68cf",
     "Flock.RecCoins.C3.coins": "fb0c0b18cbe96a25e62783a0293d3bcb904854eaddf13076a480f92d1489c427",
@@ -23507,8 +23507,8 @@
     "Flock.RecCoins.ZERO_COMB": "1ab99b1c11b5bce4a88c5012749e8e5851b0067303572010f62066a80c330441",
     "Flock.RecCoins.ZERO_SALT": "8fee70f5c59ed1db56fbc397dd4d1a4088cf751f2e42c52077a9e02a739ff44d",
     "Flock.RecCoins.ZERO_VALUE": "27ee455a72c5f927e3b6a97776ad0dc3a87e42197ab0274008dba695dfe96c9a",
-    "Flock.RecCoins.check": "0fbc13393ce14042f9fb0475107e9eac61d49cc16b440b24e31dc53ace786e10",
-    "Flock.RecCoins.checkCap": "ca23e220257595199d8c6d00d122516428bfa65f21d6a8a028fd53902cc20686",
+    "Flock.RecCoins.check": "09d542fbaf2a87aa499ba2eef769c1bb7136dd70fea3677a6a287bbaa5d9dbb2",
+    "Flock.RecCoins.checkCap": "3ee3f11f56a9b0f5dfc7d4e37d1fe62f2ad1dd325d7d4ac80edc0f69c6074347",
     "Flock.RecCoins.checkInnerRange.match_3": "c8dee98a52dbd5832a513d9665fdcc0d24357f70fb9148a150501d34bff078c6",
     "Flock.RecCoins.checkOpen": "cac39228b775be084b188b5c724a7fa0f225250305ff4b30db208166d17f3208",
     "Flock.RecCoins.checkOpen._sparseCasesOn_3": "70011e7aa1bba40df0340e061e112f65b24eec2ba8bbc9640b24792100243143",
@@ -23967,7 +23967,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "6ba66f2446ae4df71b1c7abeae15973edcc8a4bb80ea44ad4beff12bf832dd2b",
+   "digest": "71d1fae87b2e4f47f26681157af3befed792e03bcb2a6a6fdc8aac2cb8db802a",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -24042,7 +24042,7 @@
     "Flock.RecVStar.checkOwnBindings._sparseCasesOn_3": "b34af140f0b48801762d540c7186d39a2f42a3e25d1179ece5789df6802dbeb0",
     "Flock.RecVStar.checkParsed": "e539d8cc3c3d3fb971603d00836e816a09961e55cf25fe88648ed2330207c9eb",
     "Flock.RecVStar.checkPart": "5c4416d63af56dbaeb089282242bd701d42dab2dfbe4395d83d69c83d71ebae1",
-    "Flock.RecVStar.checkPubRows": "7773199351841982f8f64f395559a2fd44d2b6c622e42742a299b7cbee968db6",
+    "Flock.RecVStar.checkPubRows": "811eadfee32ba65232e45371ba6ebd9afaecb75624b24cb3b0759612c0af07ad",
     "Flock.RecVStar.checkRoundsListed": "0564edc9b5c97e36c07e373a45d17165457bf5dac6ce47dee490fa876e82d8ad",
     "Flock.RecVStar.checkRows": "d7bbf004f2ea230d7ff114671294fb50278b0eac9cddd19a99ba322800865906",
     "Flock.RecVStar.checkShared": "76d2ad3b040389a02e58ac30dff98d0393e040531e3dd298bd25265feef19a9f",
