@@ -738,6 +738,10 @@
    "owner": "@proofs",
    "digest": "ccb0737889852a6df27bfbac4afc86597d213f0c77267a6c81a44e5c1dd7479e"
   },
+  "Claims.Flock.R": {
+   "owner": "@proofs",
+   "digest": "39a998376610568bb4825338378d4b880a8a4bc958af68b35bb563d2f1715826"
+  },
   "Claims.Hm96Hiding": {
    "owner": "@proofs",
    "digest": "6c8f345d2254fc1cff51121b293ab6364de0ff01476d75d7dddc94df14080cd2"
@@ -749,6 +753,39 @@
   "Claims.StrictBirthday": {
    "owner": "@proofs",
    "digest": "113a796cfd6c01393b0be92014ae0e59eb6e5c5010f858f56fa480f5b1249cd8"
+  },
+  "Claims.ZKMal.RefSession.Causal": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.Complete": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.DummyReg": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.SwCausal": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.Tables": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.TapeOK": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.LeanRelease.FillRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.LeanRelease.FinalRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.LeanRelease.LinkRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.LeanRelease.LiveRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.Loop.Serves": {
+   "owner": "@proofs"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -769,6 +806,12 @@
   "Flock.Guarantees.FirewallSends": {
    "owner": "@proofs",
    "digest": "562df1c19fb3ddb0861a89b741ca695aa0276bfceb9fef4fd2a682c6041393cb"
+  },
+  "Flock.Guarantees.LoopInnerRound0": {
+   "owner": "@proofs"
+  },
+  "Flock.Guarantees.LoopTabsReal": {
+   "owner": "@proofs"
   },
   "Flock.Guarantees.SessionsCoined": {
    "owner": "@proofs",
@@ -2060,6 +2103,7 @@
   "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Masked": "the masked guarantees state Flock's claims at its deployed masked records (`deployZk`, `zkDeployed`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
@@ -5247,6 +5291,12 @@
    "signature": ["Flock.SecurityProofs.ServedRowsLinked : Flock.Guarantees.ServedRowsLinked"],
    "assumptions": [],
    "type_hash": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6"
+  },
+  "Flock.SecurityProofs.SessionLoopZK": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SessionLoopZK : Flock.Guarantees.SessionLoopZK"],
+   "assumptions": [],
+   "type_hash": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862"
   },
   "Flock.SecurityProofs.SoundAtBridge": {
    "owner": "@proofs",
@@ -10067,6 +10117,7 @@
    "Flock.SecurityProofs.SoundAtBridge": "frozen (no-function,hash,world-unlisted,scope): A bound on the proof layer's ProofLayer.SoundAt over a window's paths, not a run of a Lean function. It takes EndToEndRegisteredRows' finders' collision bounds at every session (RowsSession.CR: TableCRZ, LinkCRZC, RowsCRZC and the registered reads' cr/sha-512) as hypotheses instead of a collision disjunct tied to the run, live-verifier custody and scope through RowsSession's fields, and compute-accounting's four bridge premises (WindowLaw, AcceptedLive, OpenedPlurAt, RelOfRows), none on the premises list.",
    "Flock.SoundAtBridge.soundAtBridge_nonvacuous": "lemma: SoundAtBridge's witness, as ZkReg.zk_session_soundHJR_nonvacuous is zk_session_soundHJR's; leaves the list under the 5:11 PM ruling",
    "Flock.SecurityProofs.ServedRowsLinked": "frozen (no-function,world-unlisted): A pointwise implication at one accepted outcome of a C-Flock session, not a bound on a run of a Lean function; it takes the service's registration of its served trees as ports of own (RowsSession.ServedRegistered), a premise that isn't on the list.",
+   "Flock.SecurityProofs.SessionLoopZK": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release (ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; it takes the loop's two obligations (Flock.Guarantees.LoopTabsReal, LoopInnerRound0), the transport's round trusts (LeanRelease.LinkRoundEq, FinalRoundEq, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
    "Accounting.SecurityProofs.TS.UnitFixedOfWords": "lemma: ASK-40's option A, UnitFixed (Accounting.Assumptions.TS.UnitFixed) from a fixed word (Definitions.Accounting.TS.Fixed) under ModesRun and CountsFixed, not a Lean function: a good unit that is fixed has fixed words, since every unit steering it is in its late cone (DrawnLayer.Good), and a unit not skipped whole folds its words; its non-vacuity witness is Accounting.SecurityProofs.TS.FixedMeets.unitFixedOfWords_meets. UnitFixed itself stays an assumption, and its readers are unchanged.",
    "Accounting.SecurityProofs.TS.AdditiveFixed": "lemma: ASK-40's option A, additive operands don't decide fixedness, not a Lean function: a computed unit whose multiplicative operands are bound before its coin has its work (its words less what its additive operands add) a function of its multiplicative operands and its noise, and those operands the same on every continuation from its coin, whatever its additive operands are; its non-vacuity witness is Accounting.SecurityProofs.TS.FixedMeets.additiveFixed_meets.",
    "Accounting.SecurityProofs.Compose.SplitRateClosed": "lemma: Accounting.Compose.SplitRate at max(a(1 + K rho w_max)/(rho K (1 - p)), b(1 + K rho w_max)/(rho K (1 - p0))) for whole units lucky at the guess bound p0 in [0, 1) (RT-COMPOSE r2's R2-B3), the folded and the whole branch (RT-COMPOSE's B1); real arithmetic, not a Lean function.",
