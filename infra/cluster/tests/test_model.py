@@ -25,7 +25,7 @@ def test_the_nebius_description_loads():
     n1, n2 = c.nodes["vy-nebius-1"], c.nodes["vy-nebius-2"]
     assert (n1.owner, n2.owner) == ("verity", "pous")
     assert len(n1.cpus) == 184 and len(n2.cpus) == 192 and len(n1.gpus) == len(n2.gpus) == 8
-    assert n2.admission_ends == model.instant("2026-10-22T13:00:00Z")
+    assert n2.admission_ends == model.instant("2026-10-24T13:00:00Z")
     assert c.standing("verity", "vy-nebius-2") == c.standing("pous", "vy-nebius-1") == model.GUEST
     share = c.share("verity", "vy-nebius-2")
     # Daniel's defaults (decision 1): Verity's node-2 share gets GPUs; PoUW overflows onto node 1 off its reserved CPUs

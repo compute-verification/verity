@@ -136,7 +136,12 @@ statement is over the declared circuit; these are the checks that make its `comm
   `y` roots in round `r + 1`'s; both under `ValueChecked`); each drawn unit's rows of them opened under it; in
   `perCall`, and in any form under `ValueChecked`, each call's Commit `y` root equal to its units' `y` root; and each
   call's A table root equal to the Commit's root of its linear's input (ROOTS1, RT4-INT-14), so the A rows a call
-  commits are the linear's input as the Commit commits it. In `zTree` a unit's record (`PouwH1TileZy_v1`'s `zy`, which
+  commits are the linear's input as the Commit commits it. Layer 0's input alike: round `r`'s input-ids table (slot
+  i's input token id, `ids@<r>`) under round `r`'s root before its coin, its root, domain and leaf count the Commit's
+  `input-ids/<r>`, so the token ids the Commit's first layer reads are the ones fixed under that root; round 0's
+  input-ids table also inside round 0's request table, under the window's open root before the salt coin
+  (`credit.requests_root`), its domain binding the window's session in place of that root; the Commit
+  record's digest under the manifest's `calls_root`, before the draw coin (`credit._arow`). In `zTree` a unit's record (`PouwH1TileZy_v1`'s `zy`, which
   its proof reads at a committed table, `--registered`) is among them: its call's record table (h1_prove's `zy@<c>`),
   under round `r`'s root before its coin;
 * the challenger: every round's coin opened by the live challenger, the auditor's device (AGENTS.md, auditor-trusted
@@ -190,7 +195,8 @@ over the unit's records only, and no gate of the unit reads another unit's compu
 statements, accepted over shared committed values, realize the one unit's checks is that linked realization's to
 prove: BRIDGE2's `Accounting.Guarantees.TS.LeafLanesSound`, from `CheckedSessionSound` at each statement, under its
 premises `LeafChecks` (each statement's circuit realizes its Definition at its decoded ports) and `LeafReads` (the
-statements' data ports' openings hold one leaf, one partials record and the receipt; the known ports' are checked).
+statements' data ports' openings hold one leaf and the receipt; the known ports' are checked, and the partials are one
+row of one registered tree each lane and the combine read in full).
 -/
 
 namespace Accounting.Served

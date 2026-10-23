@@ -57,6 +57,11 @@ one engine measures plain, H1 and H1 with its registered tables; each window rec
 its registration's seconds a step (``registered_s``, VLLM-76). The period's declared Program and its digest are
 declared once before any window (`period_program`), as the period's.
 
+``--commit`` (fill, ``--served``, in-process coins) serves the 64's window again with the Commit in the engine
+(`pouw_h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
+``<out>/commit/``, each call's A table held to the Commit's AROW and each round over its input ids (``roots1``), and
+records the peak GPU memory and step time of the plain run, the window and the window with the Commit (``commit``).
+
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
 GPU is held only while it serves: the serving process records what only it sees (`served_measures`), saves the window,
 hands its session's stream to the holder at SOCK and exits (`hand_off`, `pouw_h1_handoff`), and ``--close-from DIR
@@ -258,7 +263,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
-    target = TargetProfile.from_device().with_overrides(int8_exact="all")
+    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "torch": torch.__version__, "device": torch.cuda.get_device_name(0),
                            "scheme": PH.SCHEME}
     with tempfile.TemporaryDirectory() as scratch:
@@ -416,7 +421,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     decl = PH.FILL
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
-    target = TargetProfile.from_device().with_overrides(int8_exact="all")
+    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
     doc: dict[str, Any] = {"schema": SCHEMA + "/fill", "argv": sys.argv, "torch": torch.__version__,
                            "device": torch.cuda.get_device_name(0), "scheme": PH.SCHEME,
                            "public": {"slots": decl.slots, "prompt_lens": list(decl.prompt_lens), "max_tokens": decl.max_tokens,
@@ -455,23 +460,31 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     if period is not None:
         doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {"circuit": period[1]}
         print(f"[fill] period {json.dumps(doc['period'])} rss_gib={rss_gib()}", flush=True)
+    gpu_peak()
     t0 = time.monotonic()
     plain = generate_static(eng.llm, prompts, cap)
     t1 = time.monotonic()
+    plain_gpu = gpu_peak()
     plain_solo = generate_static(eng.llm, prompts[:1], cap)
     t2 = time.monotonic()
     doc["plain"] = {"fill": rate(plain, t1 - t0, served_steps), "solo": rate(plain_solo, t2 - t1, served_steps),
                     "static": static_check(plain + plain_solo, cap), "tokens_digest": tokens_digest(plain),
-                    "solo_is_first_of_fill": plain_solo[0]["token_ids"] == plain[0]["token_ids"]}
+                    "solo_is_first_of_fill": plain_solo[0]["token_ids"] == plain[0]["token_ids"], "gpu": plain_gpu}
     print(f"[fill] plain {json.dumps(doc['plain'])}", flush=True)
     layers = None
 
     def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
         nonlocal layers
         rss0 = rss_gib()
-        served = (SV.Served(prover=a.prover_dir, registry=registry, window=None if a.challenger else os.urandom(64),
+        layers = layers or PHK.layers(eng.model, pouw.linear_types())
+        com = tap = None
+        if name == "commit":
+            from verity_vllm.protocol_options import pouw_h1_commit as CT
+            com, _src, tap = CT.attach(eng, layers, run_id=f"pouw-h1-commit-{os.getpid()}")
+        # in-process coins open no session, so a local window's key is its own (`Served.key`)
+        served = (SV.Served(prover=a.prover_dir, registry=registry, tap=tap, window=None if a.challenger else os.urandom(64),
                             program=period[0], program_digest=period[1])
-                  if a.served and name == "fill" else None)
+                  if a.served and name not in ("solo", "baseline") else None)
         registered_s: dict[int, float] = {}
         if served is not None and not a.handoff:
             commit = served.commit
@@ -496,7 +509,6 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         h1 = pouw.h1_run(entry_name)
         if served is not None:
             out["period_is_runs"] = list(h1.shapes_) == period[2]["shapes"] and dict(h1.modules) == period[2]["modules"]
-        layers = layers or PHK.layers(eng.model, pouw.linear_types())
         bad: list[str] = []
         stamps: dict[int, float] = {}
         serving = [True]
@@ -513,38 +525,67 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
 
         h1.listen(listener)
         try:
+            gpu_peak()
             t0 = time.monotonic()
             got = generate_static(eng.llm, prompts[:len(want)], cap)
             end = time.monotonic()
             serving[0] = False
+            out["gpu"] = gpu_peak()
             out.update(served_measures(got, want, cap, served_steps, t0, end, stamps))
             if served is not None and not a.handoff:
                 out["registered_s"] = [round(registered_s.get(s, 0.0), 3) for s in range(decl.steps)]
                 del served.commit
             print(f"[fill] {name} served step_s={out['step_s']} registered_s={out.get('registered_s')} "
                   f"rss_gib={rss_gib()}", flush=True)
+            if com is not None:
+                rc = com.finalize()
+                out["committer"] = {"run_root": rc.run_root.hex(), "name": com.name, "finalize_s": round(rc.t_finalize_s, 3),
+                                    **{k: rc.extra.get(k) for k in ("values_retained_bytes", "expected_tensors",
+                                                                     "committed_tensors", "errors_n", "errors")}}
+            if a.commit:
+                print(f"[fill] {name} served {json.dumps({k: out.get(k) for k in ('gpu', 'step_s', 'decode_step_s_median', 'serve', 'same_tokens', 'committer')}, default=str)[:3000]}",
+                      flush=True)
             if a.handoff:
                 comp.installed[0].release = None
             else:
                 h1.close()
                 out["close_s"] = round(time.monotonic() - end, 1)
                 closed_measures(h1, out, len(want), lambda w: layers[w].weight, bad)
+                if tap is not None:
+                    out["roots1"] = h1.details["roots1"]
+                    out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
         finally:
             comp.close()
+            if com is not None:
+                com.close()
+                tap.untap()
         if a.handoff:
             out["hook_bad"] = bad[:20]
             return out
-        out = released(name, h1, out, served, tdir, bool(a.challenger), not a.skip_register)
+        out = released(name, h1, out, served, tdir, bool(a.challenger), register=not (a.commit or a.skip_register))
         out["rss_gib"] = {"start": rss0, "end": rss_gib(),
                           "peak": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
         return out
 
     if a.baseline_h1:
         doc["h1_baseline"] = window("baseline", plain, outdir / "baseline")
+    if a.commit:
+        doc["h1_commit"] = window("commit", plain, outdir / "commit")
+        (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     doc["h1"] = window("fill", plain, outdir)
     if a.handoff:
         return hand_off(pouw.h1_run(entry_name), a, doc)
-    if a.challenger:
+    if a.commit:
+        doc["h1_solo"] = {"skipped": "--commit measures the 64's window with and without the Commit"}
+        h, c = doc["h1"], doc["h1_commit"]
+        doc["commit"] = {"step_s": {"plain_mean": doc["plain"]["fill"]["step_s"], "h1_decode_median": h["decode_step_s_median"],
+                                    "h1_commit_decode_median": c["decode_step_s_median"], "h1_mean": h["serve"]["step_s"],
+                                    "h1_commit_mean": c["serve"]["step_s"]},
+                         "gpu": {"plain": doc["plain"]["gpu"], "h1": h["gpu"], "h1_commit": c["gpu"]},
+                         "layout_static": c.get("layout_static"), "same_tokens": c["same_tokens"],
+                         "roots1": c.get("roots1"), "committer": c.get("committer"), "ok": c["ok"]}
+        print(f"[fill] commit {json.dumps(doc['commit'], default=str)[:3000]}", flush=True)
+    elif a.challenger:
         doc["h1_solo"] = {"skipped": "the challenger serves one session, the 64's window"}
     elif a.baseline_h1:
         doc["h1_solo"] = {"skipped": "--baseline-h1 serves the H1 window without Served in its place"}
@@ -606,7 +647,8 @@ def closed_measures(h1: Any, out: dict[str, Any], want: int, weight_of: Any, bad
 
 def released(name: str, h1: Any, out: dict[str, Any], served: Any, tdir: Path, challenger: bool,
              register: bool = True) -> dict[str, Any]:
-    """A fill window's commitment and how its session closed, once released, and its served trees' check."""
+    """A fill window's commitment and how its session closed, once released, and its served trees' check (with
+    ``register``, the first and last calls' ``--registered`` files too)."""
     out["commitment"] = dict(h1.commits)
     out["coin_source"], out["challenger"] = out["commitment"].get("coin_source"), h1.details.get("challenger")
     if challenger:
@@ -675,9 +717,20 @@ def fill_close(a: argparse.Namespace) -> dict[str, Any]:
     return fill_record(doc, outdir)
 
 
+def gpu_peak() -> dict[str, float]:
+    """The device's peak allocated and reserved GiB since the last call (which resets the peak), and its used GiB now."""
+    free, total = torch.cuda.mem_get_info()
+    out = {"max_allocated_gib": round(torch.cuda.max_memory_allocated() / 2**30, 3),
+           "max_reserved_gib": round(torch.cuda.max_memory_reserved() / 2**30, 3),
+           "device_used_gib": round((total - free) / 2**30, 3), "device_total_gib": round(total / 2**30, 3)}
+    torch.cuda.reset_peak_memory_stats()
+    return out
+
+
 def fill_record(doc: dict[str, Any], outdir: Path) -> dict[str, Any]:
     doc["compile"] = "deferred to --compile-from (out/pouw-h1-calls.json and out/solo/pouw-h1-calls.json)"
-    doc["ok"] = bool(doc["plain"]["static"]["ok"] and doc["h1"]["ok"] and doc["engine"]["enforce_eager"] is not False)
+    doc["ok"] = bool(doc["plain"]["static"]["ok"] and doc["h1"]["ok"] and doc["engine"]["enforce_eager"] is not False
+                     and (doc.get("commit") or {}).get("ok", True))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     h = doc["h1"]
     print(f"POUW-H1-FILL {'OK' if doc['ok'] else 'FAIL'} u={h['u']} rows={h['step_rows']} same_tokens={h['same_tokens']} "
@@ -698,8 +751,9 @@ def served_check(h1: Any, served: Any, tdir: Path, register: bool = True) -> dic
     """The window's registered tables (`pouw_h1_served`): each committed value's entry, what was refused, and the outcome of
     `pouw_h1_served.register`, the first and last calls' ``--registered`` files written into ``tdir``: a file holds one
     entry a unit of the window for each of its ports (`h1window.table_reads_file`), so at FILL's 1.5M units each call's is
-    hundreds of MB, and the window's 2304 about a TB. Without ``register`` (``--skip-register``) only the entries: at FILL
-    `register`'s template partition (`partition.evaluate`) encodes the window Program again, past 197 GB and 17 min."""
+    hundreds of MB, and the window's 2304 about a TB. Without ``register`` (``--commit``'s windows, ``--skip-register``)
+    only the entries: at FILL `register`'s template partition (`partition.evaluate`) encodes the window Program again,
+    past 197 GB and 17 min."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
     held = sum(len(r.bcs) * 128 + 64 * sum(map(len, r.levels)) for r in served.registered.values())
     doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20], "held_mib": round(held / 2**20, 1),
@@ -712,7 +766,7 @@ def served_check(h1: Any, served: Any, tdir: Path, register: bool = True) -> dic
           f"held_mib={doc['held_mib']} rss_gib={rss_gib()}", flush=True)
     calls = sorted({0, len(served.calls) - 1}) if served.calls else []
     if not register:
-        doc["register"] = {"skipped": "--skip-register"}
+        doc["register"] = {"skipped": "--commit or --skip-register: no --registered files"}
         return doc
     try:
         reg = SV.register(h1, calls=calls, directory=tdir)
@@ -847,6 +901,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rows", type=int, default=64, help="T, the public rows a call: vLLM's max_num_batched_tokens")
     ap.add_argument("--steps", type=int, default=0, help="S, the public steps of the window (default 2 (max tokens + 2): the "
                                                          "batch and the one alone)")
+    ap.add_argument("--int8-exact", default="all", choices=["linears", "all"],
+                    help="TargetProfile.int8_exact: linears alone for a model with no int8 K scales (a MoE: OLMoE)")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
     ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor host's "
@@ -901,7 +957,13 @@ def main(argv: list[str] | None = None) -> int:
                                                         "on the session's stream --stream-fd, completing --out's record")
     ap.add_argument("--stream-fd", type=int, metavar="FD", help="with --close-from: the session's stream, as the holder "
                                                                 "passed it")
+    ap.add_argument("--commit", action="store_true",
+                    help="fill with --served, in-process coins: after the 64's window, serve it again with the Commit in "
+                         "the engine (pouw_h1_commit, ROOTS1) into <out>/commit/, and record each window's peak GPU memory "
+                         "and step time beside the plain run's and the Commit's tie (no solo window, no --registered files)")
     a = ap.parse_args(argv)
+    if a.commit and not (a.served and a.workload == "fill" and not a.handoff and not a.challenger):
+        ap.error("--commit is the fill workload's, with --served, without --challenger or --handoff")
     if a.close_from:
         if a.stream_fd is None:
             ap.error("--close-from needs --stream-fd (the session's stream the holder took)")

@@ -127,7 +127,7 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
                            run=request.get("run"), row=request.get("row"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer=request.get("committer"), workers=1,   # vLLM's TP workers are daemonic: no process pool under them
                            tp={"world": world, "rank": rank, "tp_run_root": tp["tp_run_root"], "run_root": rc.run_root.hex(), "root_tag": tp["root_tag"]},
-                           index={"attention_paths": p.attn_paths, "tp": p.tp})
+                           index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,))
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
@@ -183,7 +183,7 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
                            weights=weights, manifest=RR.manifest_of_rank(man, rank), run_root=run_of(bytes.fromhex(rec["tp_run_root"]), rank),
                            row=ctx.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": pair, "source": ctx.get("code")}, workers=workers, tp=tp,
-                           index={"attention_paths": p.attn_paths, "tp": p.tp}, stand_in=stand_in(tp, b["manifest_sha256"]))
+                           index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), stand_in=stand_in(tp, b["manifest_sha256"]))
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
@@ -244,7 +244,7 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
     p = RR.load({"programs": {str(rank): str(Path(build_root) / f"rank{rank}")}, "of_record": rec["of_record"], "requests": reqs}, rank, world,
                 definitions=False)
     window, _rows = SRW.population(p.progs, json.loads(Path(partition_file).read_text()), run_of(bytes.fromhex(rec["tp_run_root"]), rank),
-                                   p.dirs, {"attention_paths": p.attn_paths, "tp": p.tp})
+                                   p.dirs, {"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,))
     tp = {"world": world, "rank": rank, "tp_run_root": rec["tp_run_root"], "run_root": rec["roots"][str(rank)], "root_tag": rec["root_tag"]}
     sha = rec["bundles"].get(str(rank))
     held = {"tp": tp, "served_programs": {str(k): str(x) for k, x in sorted(p.digs.items())}, "stand_in": stand_in(tp, sha) if sha else None}

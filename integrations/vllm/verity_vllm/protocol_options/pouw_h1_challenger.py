@@ -465,9 +465,10 @@ def manifest_reason(record: Mapping[str, Any]) -> str | None:
     """Why a window's record (`pouw_h1.CALLS_FILE`) isn't one manifest under its coins: the Program salt from its salt
     coin over its weights' root, each round's root over its parts, each call's A table under its own round's root (step
     s's calls digest over the record's rows of step s, their tables' roots among them: `pouw_h1_requests.tables_reason`),
-    and ``calls_root`` over every row and, with ``served``, the served trees' entries
-    (`pouw_h1_served.digest_of`); None when it is. The coins themselves are `session_reason`'s and
-    `trusted_rounds_reason`'s to check; their credit is `credit_reason`'s."""
+    and ``calls_root`` over every row, with ``served`` the served trees' entries (`pouw_h1_served.digest_of`) and with
+    ``commit`` the Commit's record (`pouw_h1.calls_root`); None when it is. The coins themselves are `session_reason`'s
+    and `trusted_rounds_reason`'s to check; their credit, the Commit's values among it (`credit._arow`), is
+    `credit_reason`'s."""
     from verity_vllm.protocol_options import pouw_h1 as PH
     from verity_vllm.protocol_options import pouw_h1_served as SV
 
@@ -489,8 +490,13 @@ def manifest_reason(record: Mapping[str, Any]) -> str | None:
             served = SV.digest_of(served["entries"], served["refused"])
         except (KeyError, TypeError, ValueError) as e:
             return f"the window's served trees are malformed ({e})"
-    if PH.calls_root(salt, rows, served).hex() != c.get("calls_root"):
-        return "the window's calls_root is not over its record's calls" + (" and its served trees" if served else "")
+    try:
+        root = PH.calls_root(salt, rows, served, c.get("commit"))
+    except ValueError as e:
+        return f"the window's Commit record is malformed ({e})"
+    if root.hex() != c.get("calls_root"):
+        return ("the window's calls_root is not over its record's calls" + (" and its served trees" if served else "")
+                + (" and its Commit record" if c.get("commit") is not None else ""))
     return None
 
 
@@ -592,8 +598,9 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
             files, why = CR.committed_files(lines, audited.period)
         if why is None:
             out["calls"], why = CR.window(key.to_json(), lines, ev["window"], ev["session"], ev["salt"], ev["calls"],
-                                          ev["served"], ev["rounds"], ev["draw"], ev["descriptor"], ev["entries"],
-                                          ev["statements"], files, out["k"], verify, **({} if run is None else {"run": run}))
+                                          ev["served"], ev["commit"], ev["rounds"], ev["draw"], ev["descriptor"],
+                                          ev["entries"], ev["statements"], files, out["k"], verify,
+                                          **({} if run is None else {"run": run}))
         out["window"] = why
     ok = out["manifest"] is None and out["window"] is None
     if ok:
@@ -606,9 +613,10 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
 def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Mapping[str, Any], statements: Any,
                     descriptor: bytes) -> dict[str, Any]:
     """One window's evidence as core's `credit.window` and `credit.period_credit` read it (`credit.WINDOW_KEYS`), from its
-    record (`pouw_h1.CALLS_FILE`: its manifest, salt, round log, draw and registered ``entries``, every call table and
-    the period's ``b/<K>``), its session's ``out/`` `directory`, its drawn calls' `statements` (`statement`: proof
-    files, never verdicts) and `descriptor`, the bytes of the circuit its period committed (`pouw_h1_served.descriptor`).
+    record (`pouw_h1.CALLS_FILE`: its manifest, salt, round log, draw, its served Commit's record ``commit`` and
+    registered ``entries``, every call table and the period's ``b/<K>``), its session's ``out/`` `directory`, its drawn
+    calls' `statements` (`statement`: proof files, never verdicts) and `descriptor`, the bytes of the circuit its period
+    committed (`pouw_h1_served.descriptor`).
     Round 0's ``requests`` in its round log is the request table's root its open root binds (`salt.window_open_root`).
     ValueError on a record whose served trees or salt can't be read."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
@@ -619,7 +627,8 @@ def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Ma
         salt = program_salt_of(c).hex()
     except (CoinError, KeyError, TypeError) as e:
         raise ValueError(f"the window's served trees or salt can't be read ({e})") from e
-    return {"calls": list(record.get("calls") or ()), "descriptor": bytes(descriptor).hex(), "draw": c.get("draw"),
+    return {"calls": list(record.get("calls") or ()), "commit": c.get("commit"), "descriptor": bytes(descriptor).hex(),
+            "draw": c.get("draw"),
             "entries": list((served or {}).get("entries") or ()), "rounds": c.get("rounds"), "salt": salt,
             "served": digest, "session": remote.session_files(directory), "statements": list(statements),
             "window": dict(window)}

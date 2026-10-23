@@ -15,9 +15,10 @@ bits of the port's row, and where the verifier opens that row (`Source`). At the
   position, roots and the index) and its `ok` (`ok<l>`) at values the verifier registers at their known content;
 * the combine's `p<x>` is opened at row `x` of `partials`, its `receipt` at `receipt`'s row, and its `ok` at `ok32`.
 
-What `LeafReads` asks beyond this is of the registrations, not of the layout: that the registrants of `a`, `b`, `zy`,
-`partials` and `receipt` are the leaf's committed values at these rows. The known values' content is flock-verify's
-known-content and known-read checks' (`Lanes.KnownRead`).
+What `LeafReads` asks beyond this is of the registrations, not of the layout: that the registrants of `a`, `b`, `zy`
+and `receipt` are the leaf's committed values at these rows. Lane `l`'s `partials` and the combine's `p<l>` read one
+row of one registered `partials` tree (`PouwWindow.Lanes.ownOf`), so they are one row (`Lanes.Partials`). The known
+values' content is flock-verify's known-content and known-read checks' (`Lanes.KnownRead`).
 -/
 
 namespace Accounting.TS.Lanes

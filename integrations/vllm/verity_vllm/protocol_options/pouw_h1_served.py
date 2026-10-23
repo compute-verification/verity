@@ -10,7 +10,8 @@
   a period, so every window of a period declares one Program, the one its open commits as ``circuit``: the weights'
   registration fixes the weights' root before any window's open root exists, so no window's root can name the Program.
   A window's own values are its through their domains, which bind its open root (`Served.key`: `salt.window_open_root`
-  of the period's weights' root, round 0's request table and the session, or the key the run is given, 64 bytes).
+  of the period's weights' root, round 0's request root and the session, or the key the run is given, 64 bytes); round
+  0's input-ids table, whose root that request root contains, binds the session instead (`Served.ids_tree`).
 * **The tables** are the ones a unit's rows open at (`h1window.table`, `h1window.table_reads`): call c's A table
   ``a/<K>@<c>``, its M slot rows, each its K int8 codes then its f32 s_a (`h1zy.ROW`; the served rows, then zero codes of
   scale 0), and its z table ``zy@<c>``, one record a unit of the call in its tile order (`h1zy.RECORD`: its cells' s32 z,
@@ -38,6 +39,13 @@
   A tables whole (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
   is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
   ``b/<K>`` there, under the run's key.
+* **The Commit** (ROOTS1, VLLM-73): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) the
+  window also registers each round's input-ids table ``ids@<s>`` (`ids_words`: its M slots' token ids, two words each),
+  outside the Program's values (`ids`, in `entries`), and lists it whole under round s's root (`segments`). Round 0's
+  is its prompts' tokens in step 0's batch order, registered before the window opens (`open_ids`), its root inside
+  round 0's request root and its domain bound to the session (`ids_tree`); each later round's
+  is the Commit's ids of its step (`close_round`). The Commit registers the window's own tree as its
+  value of the same rows when its rows are the same (`a_tree`, `ids_tree`, `pouw_h1_commit.CommitTap`).
 * **Refused** (no table from then on, and `trees` raises the reason): a window with no key of 64 bytes, blocks that aren't
   one per linear, a call off the declared Program's order, a served call with no z/y record, a weight that isn't the
   linear's n × K int8 codes and n scales or that changes, an odd K, what `h1window.program` refuses, served weights that
@@ -84,6 +92,13 @@ PREFIX = "h1/"
 NONCE = RQ.REQUESTS_NONCE + (1 << 42)
 #: ``b/<K>``'s nonces, past every call's two tables: the auditor's registration's (`weights.B_NONCE`)
 B_NONCE = Wt.B_NONCE
+#: round s's input-ids table's nonce is IDS_NONCE + s, past every ``b/<K>``'s
+IDS_NONCE = B_NONCE + (1 << 39)
+#: an input-ids slot past the step's rows: no token id is 2^32 - 1
+EMPTY_ID = 0xFFFFFFFF
+#: the session round 0's input-ids table binds under in-process coins, where no gate reserved one (such a window credits
+#: nothing)
+LOCAL_SESSION = "in-process"
 DIGEST_TAG = b"verity/pouw/h1/served/v3\0"
 
 
@@ -103,6 +118,18 @@ def row_words(codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
     b = b.reshape(len(b), -1)
     s = np.ascontiguousarray(np.asarray(scales, "<f4").reshape(len(b))).view(np.uint8).reshape(len(b), 4)
     return np.ascontiguousarray(np.concatenate([b, s], axis=1)).view("<u2").astype(np.uint16)
+
+
+def ids_words(ids: Sequence[int | None], slots: int) -> np.ndarray:
+    """A step's input token ids over `slots` (M) as u16 words ``(slots, 2)``, each id's u32 little-endian, `EMPTY_ID` for
+    None and past them. ValueError on more ids than slots or an id that isn't a u32 below `EMPTY_ID`."""
+    if len(ids) > slots:
+        raise ValueError(f"{len(ids)} input ids, past the Program's {slots} slots")
+    if any(t is not None and not 0 <= int(t) < EMPTY_ID for t in ids):
+        raise ValueError(f"an input id is not a u32 below {EMPTY_ID}")
+    v = np.full(slots, EMPTY_ID, "<u4")
+    v[:len(ids)] = [EMPTY_ID if t is None else int(t) for t in ids]
+    return v.view("<u2").reshape(slots, 2).astype(np.uint16)
 
 
 def record_words(z: np.ndarray, y: np.ndarray, slots: int, tile: tuple[int, int]) -> np.ndarray:
@@ -284,6 +311,11 @@ class Served:
     calls: list[tuple[str, int]] = field(default_factory=list)
     m: int = 0
     refused: list[str] = field(default_factory=list)
+    #: the Commit's tap in the serving engine (`pouw_h1_commit.CommitTap`)
+    tap: Any = None
+    #: each round's input-ids table and its words, with the tap
+    ids: dict[int, G.Registered] = field(default_factory=dict)
+    _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
     #: each linear's weight, the tensor and its codes, taken once, and its scales
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
@@ -344,10 +376,73 @@ class Served:
             self.refused.append("the period's registered weights are under another Program than the window's: register "
                                 "each K's b/<K> under the period's declared Program")
 
+    def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
+              session: str | None = None) -> G.Registered:
+        return NR.commit(self.program_digest, value, words, run._key, first, window=window, session=session)
+
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None) -> str:
-        reg = NR.commit(self.program_digest, value, words, run._key, first, window=window)
-        self.registered[value] = reg
+        reg = self.registered[value] = self._tree(run, value, words, first, window)
         return reg.root.hex()
+
+    def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
+        """Call ``call``'s A table's words over the Program's M slots: its rows' int8 ``codes`` [m, K] and f32 ``scales``
+        [m] (`row_words`), then zero codes of scale 0."""
+        full, sc = np.zeros((self.m, call.k), np.int8), np.zeros(self.m, "<f4")
+        full[:len(codes)], sc[:len(codes)] = codes, scales
+        return row_words(full, sc)
+
+    def a_tree(self, run: Any, call: Any, words: np.ndarray) -> G.Registered:
+        """The tree of call ``call``'s A table ``a/<K>@<c>`` over ``words`` (`a_words`) as `commit` would register it,
+        under the same domain and salts, unregistered (`pouw_h1_commit.CommitTap.arow`)."""
+        return self._tree(run, HW.table(self.program, "a", call.index), words, nonce(call.index, "a"), self.root)
+
+    def ids_tree(self, run: Any, s: int, words: np.ndarray) -> G.Registered:
+        """The tree of round s's input-ids table ``<PREFIX>ids@<s>`` over ``words`` (`ids_words`), unregistered. Its domain
+        binds the window's open root as a call's tables' do, except round 0's: the open root contains its root
+        (`credit.requests_root`), so it binds the window's session (`credit.domain_of`; `LOCAL_SESSION` under
+        in-process coins, which credit nothing)."""
+        value = self.program.fn.bindings["PREFIX"] + f"ids@{s}"
+        if s == 0:
+            return self._tree(run, value, words, IDS_NONCE, None, run.session or LOCAL_SESSION)
+        return self._tree(run, value, words, IDS_NONCE + s, self.root)
+
+    def _register_ids(self, run: Any, s: int, ids: Sequence[int | None]) -> G.Registered:
+        words = self._ids_words[s] = self.id_words(ids)
+        reg = self.ids[s] = self.ids_tree(run, s, words)
+        return reg
+
+    def ids_of(self, s: int) -> np.ndarray | None:
+        return self._ids_words.get(s)
+
+    def id_words(self, ids: Sequence[int | None]) -> np.ndarray:
+        return ids_words(ids, self.m)
+
+    def open_ids(self, run: Any, ids: Sequence[int | None]) -> bytes | None:
+        """With the tap, round 0's input-ids table, registered before the window opens (`pouw_h1.H1Run.open_window`, which
+        puts its root, returned, inside round 0's request root): ``ids``, step 0's prompt tokens in its batch order
+        (`pouw_h1_requests.first_ids`), under the declared Program. None without the tap or once refused."""
+        if self.tap is None or self.refused:
+            return None
+        try:
+            self.declare(run.shapes_, run.modules, run.rows, run.steps)
+            return self._register_ids(run, 0, ids).root
+        except ValueError as e:
+            self.refused.append(f"round 0's input ids: {e}")
+            return None
+
+    def close_round(self, run: Any, r: int) -> None:
+        """With the tap, at round r's close before its root: round r's input-ids table (after round 0, the Commit's ids
+        of its step), and the Commit's value of it (`pouw_h1_commit.CommitTap.input_ids`)."""
+        if self.tap is None or self.refused or self.program is None:
+            return
+        ids = self.tap.ids_at(r)
+        if r:
+            try:
+                self._register_ids(run, r, ids)
+            except ValueError as e:
+                self.refused.append(f"round {r}'s input ids: {e}")
+                return
+        self.tap.input_ids(run, self, r, ids)
 
     def _weight(self, call: Any, weight: Any, scale: Any) -> None:
         held = self._weights.get(call.layer)
@@ -379,16 +474,17 @@ class Served:
             self.refused.append(f"call {call.index}: no z/y record (its arm handed over no scaled_mm_zy records)")
         if self.refused:
             return {}
-        codes, scales = np.zeros((self.m, call.k), np.int8), np.zeros(self.m, "<f4")
+        codes, scales = np.zeros((0, call.k), np.int8), np.zeros(0, "<f4")
         zv, yv = np.zeros((0, call.n), "<i4"), np.zeros((0, call.n), np.int16)
         if call.m:
-            codes[:call.m] = PH.numpy_of(a).reshape(call.m, call.k)
-            scales[:call.m] = PH.numpy_of(s_a).reshape(-1)
+            codes, scales = PH.numpy_of(a).reshape(call.m, call.k), PH.numpy_of(s_a).reshape(-1)
             zv, yv = ZR.split(records, call.rows, call.n)
-        out = {}
-        for name, words in (("a", row_words(codes, scales)), ("zy", record_words(zv, yv, self.m, self.tile))):
+        out, a_words = {}, self.a_words(call, codes, scales)
+        for name, words in (("a", a_words), ("zy", record_words(zv, yv, self.m, self.tile))):
             value = HW.table(self.program, name, call.index)
             out[value] = self._register(run, value, words, nonce(call.index, name), self.root)
+        if self.tap is not None:
+            self.tap.arow(run, self, call, HW.table(self.program, "a", call.index), a_words)
         b, ks = self.program.fn.bindings["PREFIX"] + f"b/{call.k}", sorted({k for _n, k in run.shapes_})
         mine = [w for w, (_n, k) in enumerate(run.shapes_) if k == call.k]
         if b in self.registered or not all(w in self._weights for w in mine):
@@ -408,12 +504,14 @@ class Served:
     def segments(self, run: Any, r: int) -> dict[str, list[tuple[int, int, bytes]]]:
         """Round r's A segments (`credit.round_root`): the A table ``a/<K>@<c>`` of each call c of step r, whole, as the
         aligned subtrees (`credit.cover`, each ``(level, index, root)``) of its registered tree, so round r's root commits
-        it before round r's coin and no other round lists it. Nothing once the window is refused."""
+        it before round r's coin and no other round lists it; and round r's input-ids table alike. Nothing once the
+        window is refused."""
         if self.refused or self.program is None:
             return {}
         per, out = len(self.linears), {}
-        for c in range(r * per, min((r + 1) * per, len(self.calls))):
-            reg = self.registered.get(HW.table(self.program, "a", c))
+        regs = [self.registered.get(HW.table(self.program, "a", c))
+                for c in range(r * per, min((r + 1) * per, len(self.calls)))]
+        for reg in [*regs, self.ids.get(r)]:
             if reg is not None:
                 out[reg.value] = [(lv, ix, reg.levels[lv][ix]) for lv, ix in CR.cover(0, reg.leaves)]
         return out
@@ -450,7 +548,8 @@ class Served:
         return HW.window_ports(self.program)
 
     def entries(self) -> list[dict[str, Any]]:
-        return [r.entry() for r in self.registered.values()]
+        """The Program's registered values' entries, then each round's input-ids table's."""
+        return [r.entry() for r in self.registered.values()] + [self.ids[s].entry() for s in sorted(self.ids)]
 
     def digest(self) -> bytes:
         """SHA-512 over the trees' entries and what was refused, canonical JSON: what `calls_root` binds."""
@@ -526,6 +625,7 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
     return Registration([t.entry() for t in got], served.root, files)
 
 
-__all__ = ["B_NONCE", "FILE", "ModelKey", "NONCE", "PREFIX", "Registration", "Served", "V2", "Weights", "declared",
-           "declared_layout", "descriptor", "digest_of", "file_name", "layout", "model_key", "nonce", "reads_file",
-           "record_words", "register", "register_weights", "row_words", "trees", "weights_of"]
+__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Registration", "Served",
+           "V2", "Weights", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
+           "model_key", "nonce", "reads_file", "record_words", "register", "register_weights", "row_words", "trees",
+           "weights_of"]

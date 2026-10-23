@@ -147,7 +147,7 @@ def commit(program: str, value: str, words: np.ndarray, key: bytes, nonce: int, 
            **binding: Any) -> G.Registered:
     """`registered.Registered.commit(program, value, rows, salts, schema=SCHEMA_V2, **binding)` of ``words`` ``(n, W)``
     u16, ``rows`` their rows and ``salts`` row j's `audit.hm96_salt(key, nonce, j)`. ``binding``: the domain's other
-    arguments (``window``, ``produced``). ``keep_rows``: hold the rows (`Rows`), else none."""
+    arguments (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none."""
     words = np.asarray(words)
     if words.ndim != 2 or not words.shape[0] or not words.shape[1] or words.dtype != np.uint16:
         raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")

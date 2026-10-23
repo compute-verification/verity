@@ -1,5 +1,5 @@
 """`protocol_options.pouw_h1_registered` against core's `registered.Registered.commit` (VLLM-76): over random rows of
-16-bit words, one row to a few dozen, one word to a z/y record's 3072, with and without a window, the salts are
+16-bit words, one row to a few dozen, one word to a z/y record's 3072, under each domain binding, the salts are
 `audit.hm96_salt`'s, and the ``b || c`` strings, levels, entry, paths and statement are core's; a row read opens under
 `registered.verify_read`. A window's rows aren't kept unless asked, and a read of one is refused. A small H1 window served
 through `Served` registers the same entries, roots and manifest rows as with core's `Registered.commit` in its place."""
@@ -31,7 +31,8 @@ def test_salts_are_hm96_salts_across_a_chacha_pass():
 
 
 @pytest.mark.parametrize("n,w,binding", [(1, 1, {}), (2, 2, {"window": WINDOW}), (3, 66, {}), (5, 1026, {"window": WINDOW}),
-                                         (8, 3, {"produced": "ef" * 64}), (33, 3072, {"window": WINDOW}), (64, 10, {})])
+                                         (8, 3, {"produced": "ef" * 64}), (4, 5, {"session": "s-1"}),
+                                         (33, 3072, {"window": WINDOW}), (64, 10, {})])
 def test_a_value_is_what_core_commits(n, w, binding):
     """The same rows under the same salts: core's entry, root, levels, ``b || c`` strings, salts and rows, each row's path,
     a statement's table, and every row's read opens under core's `verify_read`."""
