@@ -138,6 +138,7 @@ __device__ __forceinline__ void noise_block2(const NoiseMid& m, u64 ta, u64 tb, 
   u64 va[8], vb[8];
 #pragma unroll
   for (int q = 0; q < 8; ++q) va[q] = vb[q] = m.mid[q];
+  // schedule word r computed at round r, so only the last 16 of each stream's words are live
   u64 WA[80], WB[80];
 #pragma unroll
   for (int i = 0; i < 16; ++i) {
@@ -145,22 +146,21 @@ __device__ __forceinline__ void noise_block2(const NoiseMid& m, u64 ta, u64 tb, 
     WB[i] = i == 11 ? tb : WA[i];
   }
 #pragma unroll
-  for (int i = 16; i < 80; ++i) {
-    if (!dep(i)) {
-      WA[i] = WB[i] = m.c[i - 16];
-    } else {
-      const u64 x = i < NC ? m.c[i - 16] : 0;
-      u64 xa = x, xb = x;
-      if (dep(i - 2)) { xa += s1(WA[i - 2]); xb += s1(WB[i - 2]); }
-      if (dep(i - 7)) { xa += WA[i - 7]; xb += WB[i - 7]; }
-      if (dep(i - 15)) { xa += s0(WA[i - 15]); xb += s0(WB[i - 15]); }
-      if (dep(i - 16)) { xa += WA[i - 16]; xb += WB[i - 16]; }
-      WA[i] = xa;
-      WB[i] = xb;
-    }
-  }
-#pragma unroll
   for (int r = 11; r < 80; ++r) {
+    if (r >= 16) {
+      if (!dep(r)) {
+        WA[r] = WB[r] = m.c[r - 16];
+      } else {
+        const u64 x = r < NC ? m.c[r - 16] : 0;
+        u64 xa = x, xb = x;
+        if (dep(r - 2)) { xa += s1(WA[r - 2]); xb += s1(WB[r - 2]); }
+        if (dep(r - 7)) { xa += WA[r - 7]; xb += WB[r - 7]; }
+        if (dep(r - 15)) { xa += s0(WA[r - 15]); xb += s0(WB[r - 15]); }
+        if (dep(r - 16)) { xa += WA[r - 16]; xb += WB[r - 16]; }
+        WA[r] = xa;
+        WB[r] = xb;
+      }
+    }
     RNDV(va, r, WA[r]);
     RNDV(vb, r, WB[r]);
   }
