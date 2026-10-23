@@ -61,7 +61,8 @@
 //   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L drawn leaves on gathered operands: their receipts and lane records
 //              (option A's partials, partials.py; at the end of this file)
 //   kh_seeds_j10r(data, call, base, U, seeds, stream), kh_units_multi_j10r(calls, ncalls, units, M, live, mode, stream)
-//              kh_units_multi's receipts under J10-R's call-scale noise (measured only; at the end of this file)
+//              kh_units_multi's receipts under J10-R's call-scale noise (measured only; at the end of this file), with
+//              kh_units_multi_j10r_sm and a served step's seeds from h1r's call table, kh_seeds_j10r_h1r
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
 #include "h1sha.cuh"
 #include <cuda_bf16.h>
@@ -2250,6 +2251,11 @@ extern "C" int kh_lanes(const void* A, const void* B, unsigned L, unsigned K, co
 //   kh_units_multi_j10r(calls, ncalls, units, M, live, mode, stream)   kh_units_multi's receipts under J10-R: calls
 //              ncalls + 1 UCallR (kh_ucallr_bytes() each), each with its row workspace rws of kh_j10r_rows_bytes(M, K)
 //              bytes; mode 0 both launches, 1 the rows alone, 2 the units alone (on rows a mode 0 or 1 call wrote)
+//   kh_units_multi_j10r_sm(calls, ncalls, units, M, live, q, den, next, stream)   both launches, the units' on the SMs
+//              whose id % den < q alone (h1umj_sm, as kh_units_multi_sm's h1um_sm)
+//   kh_seeds_j10r_h1r(calls, ncalls, max_units, salt, step_base, seeds, stream)   a served step's seeds from h1r.cu's call
+//              table (H1Call, kh_h1rcall_bytes() each; h1r_launch's version 0 under J10-R): every live unit u of call c
+//              gets seed_c at the call's first position c.base + *step_base, sigma_R at c.base + *step_base + u
 struct UCallR {
   const int8_t* A;
   const int8_t* B;
@@ -2326,6 +2332,118 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __re
                                                          gu - c.u0, smem[wp]);
 }
 
+// h1umj's unit gu, for h1umj_sm (h1umj keeps its own copy, as h1um does of h1um_one)
+__device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
+                                          const uint8_t* __restrict__ live, u32 gu, WarpSmem& S) {
+  u32 lo = 0, hi = ncalls;
+  while (hi - lo > 1) {
+    const u32 mid = (lo + hi) >> 1;
+    if (calls[mid].u0 <= gu) lo = mid;
+    else hi = mid;
+  }
+  const UCallR c = calls[lo];
+  if (c.md == 3)
+    h1u_unit<3, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
+                                                         gu - c.u0, S);
+  else
+    h1u_unit<2, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
+                                                         gu - c.u0, S);
+}
+
+// h1umj on the SMs whose %smid % den < q alone, its warps taking units from *next in turn (h1um_sm's partition)
+__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
+                                                       const uint8_t* __restrict__ live, u32 q, u32 den,
+                                                       u32* __restrict__ next) {
+  u32 smid;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
+  if (smid % den >= q) return;
+  __shared__ WarpSmem smem[WARPS];
+  const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
+  for (;;) {
+    u32 gu = 0;
+    if (lane == 0) gu = atomicAdd(next, 1u);
+    gu = __shfl_sync(0xffffffffu, gu, 0);
+    if (gu >= total) break;
+    h1umj_one(calls, ncalls, M, live, gu, smem[wp]);
+    __syncwarp();
+  }
+}
+
+// h1r.cu's H1Call, field for field (kh_h1rcall_bytes() against its h1r_call_bytes())
+struct H1RCall {
+  const int8_t* a;
+  const int8_t* b;
+  long long lda, ldb;
+  const u64* roots;
+  const u64* root_b;
+  const uint8_t* live;
+  u64 base;
+  int k, ncb, units;
+  int seed0;
+  long long out0;
+};
+
+// one thread a (live unit, seed) of call blockIdx.y: kind 0 seed_c (seeds.call_seed, tag c0..c2, at the call's first
+// position), kind 1 sigma_R (receipt_seed, r0..r2, at the unit's), each 224 bytes under SHA-512 with the position XORed
+// into every word, into seeds[(seed0 + u) 16 + 8 kind ..]
+__global__ void __launch_bounds__(128) h1jr_seeds(const H1RCall* __restrict__ calls, int ncalls, const u64* __restrict__ salt,
+                                                  const u64* __restrict__ step_base, u64 c0, u64 c1, u64 c2, u64 r0, u64 r1,
+                                                  u64 r2, u64* __restrict__ seeds) {
+  if ((int)blockIdx.y >= ncalls) return;
+  const H1RCall C = calls[blockIdx.y];
+  const int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= 2 * C.units) return;
+  const int u = i >> 1, kind = i & 1;
+  if (!C.live[u / C.ncb]) return;
+  const u64 call = C.base + (step_base ? *step_base : 0ULL);
+  const u64 pos = kind ? call + (u64)u : call;
+  u64 msg[32];
+  msg[0] = pos;
+  msg[1] = (kind ? r0 : c0) ^ pos;
+  msg[2] = (kind ? r1 : c1) ^ pos;
+  msg[3] = (kind ? r2 : c2) ^ pos;
+#pragma unroll
+  for (int j = 0; j < 8; ++j) {
+    msg[4 + j] = salt[j] ^ pos;
+    msg[12 + j] = C.roots[j] ^ pos;
+    msg[20 + j] = C.root_b[j] ^ pos;
+  }
+  msg[28] = 0x8000000000000000ULL;
+  msg[29] = 0;
+  msg[30] = 0;
+  msg[31] = 224 * 8;
+  u64 s[8];
+  sha512_words(msg, 2, s);
+  u64* o = seeds + ((u64)(C.seed0 + u) * 2 + kind) * 8;
+#pragma unroll
+  for (int j = 0; j < 8; ++j) o[j] = s[j];
+}
+
+// a 24-byte tag (the name, zero-padded) as three big-endian words
+static void tag3w(const char* name, u64 out[3]) {
+  unsigned char b[24] = {0};
+  for (int i = 0; i < 24 && name[i]; ++i) b[i] = (unsigned char)name[i];
+  for (int w = 0; w < 3; ++w) {
+    out[w] = 0;
+    for (int i = 0; i < 8; ++i) out[w] = (out[w] << 8) | b[8 * w + i];
+  }
+}
+
+extern "C" unsigned kh_h1rcall_bytes() { return sizeof(H1RCall); }
+
+extern "C" int kh_seeds_j10r_h1r(const void* calls, int ncalls, int max_units, const void* salt, const void* step_base,
+                                 void* seeds, void* stream) {
+  if (ncalls < 1 || ncalls > 65535 || max_units < 0 || !salt || !seeds) return 2;
+  if (!max_units) return 0;
+  u64 ct[3], rt[3];
+  tag3w("verity/pouw/call-seed/v1", ct);
+  tag3w("verity/pouw/receipt/v1", rt);
+  h1jr_seeds<<<dim3((2 * max_units + 127) / 128, ncalls), 128, 0, (cudaStream_t)stream>>>(
+      (const H1RCall*)calls, ncalls, (const u64*)salt, (const u64*)step_base, ct[0], ct[1], ct[2], rt[0], rt[1], rt[2],
+      (u64*)seeds);
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
 extern "C" int kh_seeds_j10r(const void* data, unsigned long long call, unsigned long long base, unsigned U, void* seeds,
                              void* stream) {
   if (!U) return 0;
@@ -2347,5 +2465,23 @@ extern "C" int kh_units_multi_j10r(const void* calls, unsigned ncalls, unsigned 
     carve<h1umj>();
     h1umj<<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M, (const uint8_t*)live);
   }
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
+// kh_units_multi_j10r's two launches, the units' on q / den of the SMs (h1umj_sm; kh_units_multi_sm's grid and counter)
+extern "C" int kh_units_multi_j10r_sm(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
+                                      unsigned q, unsigned den, void* next, void* stream) {
+  if (!ncalls || ncalls > 65535 || M % 32 || !q || q > den || den > 64 || !next) return 2;
+  if (!units) return 0;
+  carve<h1umj_sm>();
+  int dev = 0, sms = 0, per = 0;
+  if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1umj_sm, 32 * WARPS, 0) != cudaSuccess || per < 1)
+    return 3;
+  cudaStream_t s = (cudaStream_t)stream;
+  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
+  if (cudaMemsetAsync(next, 0, sizeof(u32), s) != cudaSuccess) return 3;
+  h1umj_sm<<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M, (const uint8_t*)live,
+                                                                    q, den, (u32*)next);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }

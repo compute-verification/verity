@@ -118,6 +118,18 @@ if [ -n "${H1V3_SHA:-}" ]; then
 else
   export DITHER_H1V3_TREE=$ROOT DITHER_H1V3_SHA=${RESEARCH_SOURCE_SHA:-source}
 fi
+# J10R's Definition (h1tile.j10r_reference) for DITHER_SO_UNITS=j10r's gate (j10r_so.py): J10R_SHA's verity/, as H1V3_SHA's
+# (the archive: j10r-$J10R_SHA.tar.gz)
+if [ -n "${J10R_SHA:-}" ]; then
+  mkdir -p "$S/j10r"
+  if git cat-file -e "$J10R_SHA^{commit}" 2>/dev/null; then
+    git archive "$J10R_SHA" verity | tar -x -C "$S/j10r"
+  elif [ -f "$D/inputs/j10r-$J10R_SHA.tar.gz" ]; then
+    tar -xzf "$D/inputs/j10r-$J10R_SHA.tar.gz" -C "$S/j10r"
+  fi
+  [ -f "$S/j10r/verity/core/protocols/pouw/circuit/h1tile.py" ] || { echo "sbench: J10R_NO_TREE at $J10R_SHA"; exit 14; }
+  export DITHER_J10R_TREE=$S/j10r DITHER_J10R_SHA=$J10R_SHA
+fi
 # ASK-64's measured round trips (percall_rtt.py's percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm
 [ -f "$D/inputs/percall-wait-ns.txt" ] && export DITHER_PERCALL_WAITS=$D/inputs/percall-wait-ns.txt
 cd integrations/vllm

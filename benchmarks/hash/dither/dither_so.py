@@ -38,7 +38,9 @@ sent after coin s came back and after the units were launched (the pipe's clock)
 fault, fault_y and fault_rr (here: round s + D - 1 recorded without step s's receipt roots), two faults of the order
 itself, each refused: "fault_rearly" (step s's units under the salt of coin s - 1, a coin the prover held before round
 s's root: refused on every receipt) and "fault_zlate" (step s's z/y leaves withheld from round s, 0xA5 in their place,
-and committed under round s + 1, after coin s: refused on round s's z-step and y-step leaves).
+and committed under round s + 1, after coin s: refused on round s's z-step and y-step leaves).  $DITHER_SO_UNITS=j10r
+(`UNITS_ENV`; measured only) runs the units under J10-R's call-scale noise, every check here and at the window's end on
+j10r_so's references in h1r v1's place, and the gate step's units held to J10R's Definition.
 
 -ov (`-so<D>-ov`, ring R = 2; `-ov1`, R = 1; `-ovp`, R = 2 with the engine serving on a stream above the trees' and the
 units' priority) moves round s and step s's units off the steps' path, every value committed
@@ -142,6 +144,15 @@ UNITS_SMQ_ENV = "DITHER_SO_UNITS_SMQ"
 # "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
 # the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
 RDEAD_ENV = "DITHER_SO_RDEAD"
+# "j10r": a step's units under J10-R's call-scale noise (j10r_so.LABEL; measured only, an unadopted arm): in h1r_launch's
+# version 0 place every call's seed_c at its first position and each unit's sigma_R at its own (h1u.cu's
+# kh_seeds_j10r_h1r, on the same call table), then each call's row blocks hashed once and its units on them
+# (kh_units_multi_j10r, under $DITHER_SO_UNITS_SMQ kh_units_multi_j10r_sm); needs $DITHER_SO_FUSED=1.  The gate holds it
+# to j10r_so's references (h1r's J10-R version 1 on every capture and the window's end, J10R's Definition on the gate step)
+UNITS_ENV = "DITHER_SO_UNITS"
+UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each call's seed_c stream at call scale"}
+# J10-R's layout rows of a call (h1tile.j10r_blocks' m; j10r_so.M_MODES), open until J10R rules: "slot" (default) or "live"
+J10R_M_ENV = "DITHER_SO_J10R_M"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -836,7 +847,8 @@ class SoSide(DA.Side):
     in_order = True
 
     def unadopted(self) -> tuple[str, ...]:
-        return tuple(x for x, on in (("ab", self.a_once), ("ov", self.ov is not None)) if on)
+        return tuple(x for x, on in (("ab", self.a_once), ("ov", self.ov is not None),
+                                     ("j10r", getattr(self, "j10r", False))) if on)
 
     def __init__(self, win: SoWindow, unit: str, h1u: str, ao: str, pt: bool):
         if unit not in DA.KONE or ao not in AO:
@@ -895,6 +907,30 @@ class SoSide(DA.Side):
                                    and hasattr(self.h, "kh_units_multi_sm")):
             raise ValueError(f"${UNITS_SMQ_ENV}={os.environ[UNITS_SMQ_ENV]}: needs ${FUSED_ENV}=1, 1 <= q <= den <= 64 "
                              "and an h1u build with kh_units_multi_sm")
+        self.units_form = os.environ.get(UNITS_ENV) or "today"
+        self.j10r_m = os.environ.get(J10R_M_ENV) or "slot"
+        self.j10r = self.units_form == "j10r"
+        if self.units_form not in UNITS_FORMS:
+            raise ValueError(f"${UNITS_ENV}={self.units_form}: one of {tuple(UNITS_FORMS)}")
+        if self.j10r:
+            import j10r_so as JS
+            JS.rows(self.j10r_m, win.t, win.t)
+            fns = ("kh_seeds_j10r_h1r", "kh_units_multi_j10r", "kh_ucallr_bytes", "kh_j10r_rows_bytes", "kh_h1rcall_bytes",
+                   *(("kh_units_multi_j10r_sm",) if self.units_smq else ()))
+            missing = [f for f in fns if not hasattr(self.h, f)]
+            if not self.fused or missing or os.environ.get(DA.LANE_REFS_ENV) or not os.environ.get(JS.TREE_ENV):
+                raise ValueError(f"${UNITS_ENV}=j10r: needs ${FUSED_ENV}=1, J10R's tree at ${JS.TREE_ENV} (sbench.sh's "
+                                 f"J10R_SHA={JS.J10R_SHA}), no ${DA.LANE_REFS_ENV} (its lane records are today's form) "
+                                 f"and an h1u build with {', '.join(fns)} (missing: {missing})")
+            self.h.kh_h1rcall_bytes.restype = C.c_uint
+            if int(self.h.kh_h1rcall_bytes()) != int(win.r.lib.h1r_call_bytes()):
+                raise RuntimeError(f"h1u.cu's H1RCall is {int(self.h.kh_h1rcall_bytes())} bytes, h1r.cu's H1Call "
+                                   f"{int(win.r.lib.h1r_call_bytes())}")
+            vp, u32 = C.c_void_p, C.c_uint
+            self.h.kh_seeds_j10r_h1r.argtypes = [vp, C.c_int, C.c_int, vp, vp, vp, vp]
+            self.h.kh_units_multi_j10r.argtypes = [vp, u32, u32, u32, vp, C.c_int, vp]
+            if self.units_smq:
+                self.h.kh_units_multi_j10r_sm.argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, vp]
         if self.fused:
             self.mtab, self.m_units = self._multi_tables()
         if self.units_smq:
@@ -957,21 +993,32 @@ class SoSide(DA.Side):
 
     def _multi_tables(self) -> tuple[list[torch.Tensor], int]:
         """$DITHER_SO_FUSED's kh_units_multi tables, one a ring slot: each call's UCall (its slot's A, its B, seeds and
-        receipts as `so_args`), the K = 14336 calls (three digits, the longest units) first so they start first; and the
-        units in all."""
+        receipts as `so_args`; under J10-R a UCallR, with its row workspace), the K = 14336 calls (three digits, the
+        longest units) first so they start first; and the units in all."""
         win, h = self.win, self.h
         if not hasattr(h, "kh_units_multi"):
             raise RuntimeError(f"${FUSED_ENV}=1: this h1u build has no kh_units_multi")
         vp, u32 = C.c_void_p, C.c_uint
         h.kh_units_multi.argtypes = [vp, u32, u32, u32, vp, vp]
-        h.kh_ucall_bytes.restype = u32
         h.kh_digits.argtypes = [u32]
-        rec = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"), ("N", "<u4"), ("K", "<u4"),
+        rows = [("rws", "<u8")] if self.j10r else []
+        rec = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"), *rows, ("N", "<u4"), ("K", "<u4"),
                         ("u0", "<u4"), ("md", "<u4")])
-        if int(h.kh_ucall_bytes()) != rec.itemsize:
-            raise RuntimeError(f"kh_units_multi's UCall is {int(h.kh_ucall_bytes())} bytes, not {rec.itemsize}")
+        size, what = ((h.kh_ucallr_bytes, "kh_units_multi_j10r's UCallR") if self.j10r
+                      else (h.kh_ucall_bytes, "kh_units_multi's UCall"))
+        size.restype = u32
+        if int(size()) != rec.itemsize:
+            raise RuntimeError(f"{what} is {int(size())} bytes, not {rec.itemsize}")
         md = [int(h.kh_digits(k)) for _, k in win.nk]
         order = sorted(range(win.L), key=lambda w: -md[w])
+        rws = []
+        if self.j10r:
+            # each call's row blocks at T rows (the most a layout takes), one workspace for every ring slot: a step's
+            # units run on the units stream after the step before's
+            h.kh_j10r_rows_bytes.argtypes, h.kh_j10r_rows_bytes.restype = [u32, u32], C.c_ulonglong
+            nbytes = [int(h.kh_j10r_rows_bytes(win.t, k)) for _, k in win.nk]
+            self.j10r_ws = torch.empty(sum(nbytes), dtype=torch.uint8, device=win.dev)
+            rws = [self.j10r_ws.data_ptr() + sum(nbytes[:w]) for w in range(win.L)]
         tabs = []
         for p in range(win.depth):
             t = np.zeros(win.L + 1, dtype=rec)
@@ -980,7 +1027,7 @@ class SoSide(DA.Side):
                 n, k = win.nk[w]
                 t[i] = (self.ring_slot[p][w].data_ptr(), win.wt[w].data_ptr(),
                         win.plan.seeds.data_ptr() + 8 * 16 * self.seed0[w], self.stage.data_ptr() + 4 * win.plan.offs[w][0],
-                        n, k, u0, md[w])
+                        *rws[w:w + 1], n, k, u0, md[w])
                 u0 += (win.t // 32) * (n // 32)
             t[win.L]["u0"] = u0
             tabs.append(torch.from_numpy(t.view(np.uint8).copy()).to(win.dev))
@@ -1006,12 +1053,26 @@ class SoSide(DA.Side):
         replay as one graph (`dispatch`)."""
         win, st, L = self.win, self.side, self.win.L
         tab = self.tables[p]
-        rc = win.r.lib.h1r_launch(tab.table.data_ptr(), L, tab.max_units, tab.ks, self.ring_salt[p].data_ptr(),
-                                  self.ring_base[p].data_ptr(), win.plan.seeds.data_ptr(), self.stage.data_ptr(), 0, 0,
-                                  st.cuda_stream)
+        if self.j10r:
+            rc = self.h.kh_seeds_j10r_h1r(tab.table.data_ptr(), L, tab.max_units, self.ring_salt[p].data_ptr(),
+                                          self.ring_base[p].data_ptr(), win.plan.seeds.data_ptr(), st.cuda_stream)
+        else:
+            rc = win.r.lib.h1r_launch(tab.table.data_ptr(), L, tab.max_units, tab.ks, self.ring_salt[p].data_ptr(),
+                                      self.ring_base[p].data_ptr(), win.plan.seeds.data_ptr(), self.stage.data_ptr(), 0, 0,
+                                      st.cuda_stream)
         if self.noise:
             self.seeded.record(st)
-        if self.fused and self.units_smq:
+        if self.j10r:
+            import j10r_so as JS
+            M = JS.rows(self.j10r_m, win.t, m)
+            if self.units_smq:
+                rc = rc or self.h.kh_units_multi_j10r_sm(self.mtab[p].data_ptr(), L, self.m_units, M,
+                                                         self.ring_live[p].data_ptr(), self.units_smq, self.units_smd,
+                                                         self.unit_next.data_ptr(), st.cuda_stream)
+            else:
+                rc = rc or self.h.kh_units_multi_j10r(self.mtab[p].data_ptr(), L, self.m_units, M,
+                                                      self.ring_live[p].data_ptr(), 0, st.cuda_stream)
+        elif self.fused and self.units_smq:
             rc = rc or self.h.kh_units_multi_sm(self.mtab[p].data_ptr(), L, self.m_units, win.t,
                                                 self.ring_live[p].data_ptr(), self.units_smq, self.units_smd,
                                                 self.unit_next.data_ptr(), st.cuda_stream)
@@ -1085,12 +1146,19 @@ class SoSide(DA.Side):
         self.dispatched[j] = p
         self.unit_steps += 1
 
+    def _j10r_info(self) -> dict:
+        import j10r_so as JS
+        return {"label": JS.LABEL, "rows_mode": self.j10r_m, "rows": JS.M_MODES[self.j10r_m],
+                "slot_rows": self.win.t, "rows_workspace_bytes": self.j10r_ws.numel()}
+
     def info(self) -> dict:
         return {**super().info(), "order": ORDER, "depth": self.win.depth, "a_tables": AO[self.so_ao],
                 "a_overlap": self.so_ao, "unit_steps": self.unit_steps,
                 "units_dispatch": {"graph": self.graph, "graphs": sorted(self.graphs), "capture_ms": self.capture_ms},
                 "units_fused": {"one_launch": self.fused, "units": self.m_units if self.fused else None,
                                 "sm_share": f"{self.units_smq}/{self.units_smd}" if self.units_smq else None},
+                "units_form": {"form": self.units_form, "noise": UNITS_FORMS[self.units_form],
+                               **(self._j10r_info() if self.j10r else {})},
                 "receipt_dead_rows_x_once": self.rdead,
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
@@ -1657,7 +1725,12 @@ def check(win: SoWindow, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3
     order["ok"] = (order["coin_after_its_round_root"] and order["roots_sent_are_captured"]
                    and order["receipts_round_after_coin"])
     r_round = {"s": g["late_s"], "leaves": g["late_leaves"], "root": g["late_root"]}
-    doc = DA.check(win, lib_h1o, which, n_cpu_units, g={**g, "salt": salt}, r_round=r_round)
+    sd = DA.SIDE[0] if DA.SIDE else None
+    if getattr(sd, "j10r", False):
+        import j10r_so as JS
+        doc = JS.check(win, lib_h1o, which, n_cpu_units, {**g, "salt": salt}, r_round, sd.j10r_m)
+    else:
+        doc = DA.check(win, lib_h1o, which, n_cpu_units, g={**g, "salt": salt}, r_round=r_round)
     doc["order"], doc["depth"] = order, win.depth
     rd = doc["round"]
     rest_ok = not (doc["receipts_vs_h1r_bad"] or doc["z_vs_int_mm_bad"] or doc["y_vs_dequant_z_bad"]
@@ -1815,7 +1888,14 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
         if CM.levels(rd, [CM.leaf(rd, key, f"r/{s}/{w}", u, bytes(rrows[u]))[0] for u in range(units)])[-1][0] != rr[s][w]:
             rr_bad.append(w)
     doc["rehashed"] = {"calls": len(rehashed_calls(L, rec["draw"].coin)), "cpu_s": round(time.perf_counter() - t_cpu, 2)}
-    r = H1R(lib_h1o)
+    sd = DA.SIDE[0] if DA.SIDE else None
+    if getattr(sd, "j10r", False):
+        import j10r_so as JS
+        JS.RefH1R.M = JS.rows(sd.j10r_m, t, m)
+        r = JS.RefH1R(lib_h1o)
+        doc["j10r"] = {"label": JS.LABEL, "rows": JS.RefH1R.M, "receipts_reference": "h1r.cu's h1r_launch_j10r (version 1)"}
+    else:
+        r = H1R(lib_h1o)
     live = torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)).to(win.dev)
     roots = [torch.from_numpy(np.concatenate([np.frombuffer(a_rows[w], ">u8"), np.frombuffer(rec["b_roots"][w], ">u8")])
                               .astype("<u8").view("<i8").copy()).to(win.dev) for w in range(L)]
