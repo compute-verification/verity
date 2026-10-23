@@ -418,7 +418,10 @@ def partition_doc(window: CS.Window, partition: Mapping[str, Any]) -> dict[str, 
 def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
          arrivals: dict[str, int] | None = None) -> tuple[dict[str, dict[str, np.ndarray]], list[list[Any]]]:
     """Member ``m``'s words, read from the committed store and the registered weights exactly as the replay reads them, and its
-    index entries."""
+    index entries.  A row's outputs fill the member's output ports in order: one template's call sites may commit its output
+    under different member names (GLM-5.3's routed experts' ``act``, its shared experts' ``out``), and the ports are named
+    from its first row (`members`); each index entry keeps the row's own member names.  A row whose input or output widths
+    are not the member's is refused."""
     layout = template(m.template).layout
     if layout == "gemm":
         return _read_gemm(m, rows, store, weights, arrivals)
@@ -429,23 +432,27 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     for rid, pi, r, d in rows:
         arrive = int((arrivals or {}).get(rid, 0))
         ops = [_operand(pi, store, weights, rid, arrive, g) for g in r["args"]]
-        outs = {}
+        outs = []
         for member, width, _dt in d["members"]:
             w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
             if w is None:
                 raise LookupError(f"row {r['i']} output {member}: {why}")
-            outs[member] = np.asarray(w, dtype=np.uint16)
+            outs.append(np.asarray(w, dtype=np.uint16))
         if layout == "rope":
             nh = int(d["statics"]["NHEADS"])
             cols["x"].append(np.asarray(ops[0], dtype=np.uint16).reshape(nh, D))
             cols["cs"].append(np.broadcast_to(np.asarray(ops[1], dtype=np.uint16).reshape(1, D), (nh, D)))
-            cols["out"].append(next(iter(outs.values())).reshape(nh, D))
+            cols["out"].append(outs[0].reshape(nh, D))
         else:
             nh = 1
+            got = ([len(a) for a in ops], [int(mm[1]) for mm in d["members"]])
+            if got != ([w for _, w in m.rows], [w for _, w in m.outs]):
+                raise ValueError(f"row {r['i']} ({d['op_path']}): inputs {got[0]} and outputs {got[1]} words, not member {m.key}'s "
+                                 f"{list(m.rows)} and {list(m.outs)}")
             for g, a in enumerate(ops):
                 cols[f"in{g}"].append(np.asarray(a, dtype=np.uint16).reshape(1, -1))
-            for member, a in outs.items():
-                cols[f"out.{member}"].append(a.reshape(1, -1))
+            for (port, _w), a in zip(m.outs, outs, strict=True):
+                cols[port].append(a.reshape(1, -1))
         layer = _LAYER.search(d["op_path"])
         entries.append([lo, lo + nh, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"],
                         ",".join(str(mm[0]) for mm in d["members"]), int(d["row"]), int(r["i"])])
