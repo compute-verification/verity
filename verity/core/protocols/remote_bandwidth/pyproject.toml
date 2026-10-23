@@ -16,4 +16,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # Exp2Lut127's table, which test_gate_ranges.py holds to vLLM's (fixtures/exp2_lut127.json)
           "Security/Proofs/Accounting/Gates.lean", "Security/Definitions/Accounting/Gates/Ranges.lean",
           # main's first-parent history, sampled_proofs' fixture, which test_remote_coins.py holds a session's pin to
-          "verity/core/protocols/sampled_proofs/tests/fixtures/main-first-parent.txt"]
+          "verity/core/protocols/sampled_proofs/tests/fixtures/main-first-parent.txt",
+          # core's model pin, whose every role's checkpoint_sha512 test_store.py recomputes with the store's own
+          # canonical JSON, held to the circuits codec's
+          "verity/core/protocols/pouw/lean/check/models.json"]

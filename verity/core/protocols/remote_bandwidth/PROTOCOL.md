@@ -10,7 +10,8 @@ live-coin design and what it would cost.
 
 The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (seeds, plans, receipts and trees),
 `codec.py` (the store's encoding), `memory_map.py` (serving's record of the KV blocks it wrote and freed, the audit's
-input from serving) and `timing.py` (the honest schedule, and where the sketch's bound is read). Every byte format below is pinned by
+input from serving), `store.py` (a registered store bound to a pinned model, §3) and `timing.py` (the honest schedule,
+and where the sketch's bound is read). Every byte format below is pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
 checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8). The verifier's
 definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
@@ -194,6 +195,20 @@ carry `window_ns`.
    and rows sketch-sha512's \(k_s\) (0 under block-sha512). A record cites this digest, each session's coin commitment
    binds it, and each session's chain starts from it, so a session's coins and seeds are bound to its kind, to whether
    it binds \(z\), to the block cut its kernels' sketch vectors follow and to the sketch's rows.
+
+**A store bound to a pinned model** (`store.py`). The payload root is the prover's choice unless the verifier holds it
+to a store it can recompute. Under a binding (`verifier.py --model ROLE`), the verifier reads the model's pin, its files'
+SHA-512s and the SHA-512 of their canonical JSON (`read_pin`), and holds every pinned file to its digest before reading
+any (`check`). It then lays out the store the checkpoint alone fixes: \(E\) arenas of \(A\) blocks, one an engine at
+one GPU, each holding the checkpoint's 2-D BF16 weights in vLLM's module order, each from a block boundary, zeros
+between and after, and then host filler of zeros (`arena`, `Store`). Before step 1 the verifier sends a fresh 32-byte
+salt key, and the prover takes block \(j\)'s 192-byte payload salt as `SHAKE256("verity/store/salt/v0\0" ‖ key ‖
+SHA512("verity/remote-session/payload-salts/v0") ‖ u64be j)` (`store_salt`), so the payload root follows from the pin,
+the store's shape and the key (`expected_root`). A hello is refused before the registry draws when its store is shorter
+than the arenas, its layout isn't the store's regions, or its payload root isn't that root (`Binding.hold`). The
+verifier's record keeps the binding: the model's name and `checkpoint_sha512`, the store's shape, both roots and
+`bound`. A period's circuit is this tree's git hash, so the circuit a period signs commits to this code. The binding has
+no Lean yet (§8).
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
 `codec.DEFAULT` (Daniel, 12 Oct, #1884). The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
@@ -1169,6 +1184,9 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile a receipt under a
   registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and the profile at δ.
   The chain's ordering is a random-oracle argument over a prover of bounded queries, which the statements must say.
+- **The binding's Lean.** The store binding (`store.py`, §3) is Python only. Its pin checks, the arena layout, the
+  expected payload root and `Binding.hold`'s decision have no port in `lean/` (`RemoteAudit`) and no difftest yet, so
+  `bound` rests on this Python until they do.
 
 ## 9. Why the passes are chained
 

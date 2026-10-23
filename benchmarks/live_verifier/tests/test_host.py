@@ -239,7 +239,7 @@ def test_a_bound_runs_command_line_names_its_roles_checkpoint_and_cores_pin_whic
     assert (a.model, a.checkpoint, a.pin, a.engines, a.arena_blocks, a.challenger_pin, a.layout_workers) == (
         ROLE, svc.root / "models" / ROLE, tree / H.MODEL_PINS, 2, 7, KEY, 1)
     pinned = json.loads((tree / H.MODEL_PINS).read_text())[ROLE]["checkpoint_sha512"]
-    assert f"store_layout: {ROLE} pinned ({pinned[:16]}...), " in capsys.readouterr().out
+    assert f"store: {ROLE} pinned ({pinned[:16]}...), " in capsys.readouterr().out
 
 
 def test_a_bound_run_is_refused_before_anything_starts_without_its_roles_checkpoint_or_cores_pin(svc, tree, tmp_path):

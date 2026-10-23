@@ -44,7 +44,7 @@ directory there, when the pinned tree has no `models.json`, or when `--model` co
 `<models>` is `verifier.json`'s `models`, default `/var/lib/vy-verifier/models`. Infra provisions one directory per role:
 every file the role's `models.json` entry pins, at the pinned revision, as a root-held regular file (0644, in a root-held
 0755 directory). Copy the files out of a download, never point at an HF cache's snapshot: its files are symlinks into
-the cache's blobs, which `store_layout.check` refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
+the cache's blobs, which `remote_bandwidth.store.check` refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
 
 ~~~sh
 hf download Qwen/Qwen2.5-32B --revision 1818d35814b8319459f4bd55ed1ac8709630f003 --local-dir /tmp/q

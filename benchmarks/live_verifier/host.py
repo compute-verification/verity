@@ -39,8 +39,8 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   transcripts gzipped in `out/transcripts/` with their `SHA256SUMS`; then `end.json` (exit code, who stopped it, each
   file's SHA-512). One unit runs at a time, a run or a replay, so a replay never takes a live session's cores.
 - **A bound run** (`--model ROLE --arena-blocks A [--engines E]`, ROLE of [A-Z0-9_], E 1..8 and verifier.py's 8 by
-  default, A at most 2^25) binds the registered store to a pinned model (`verifier.py --model`, `store_layout.Binding`),
-  which `auditor_line.py`'s `bound` check needs. The lane names the role and the store's shape, never a path: the gate
+  default, A at most 2^25) binds the registered store to a pinned model (`verifier.py --model`,
+  `remote_bandwidth.store.Binding`), which `auditor_line.py`'s `bound` check needs. The lane names the role and the store's shape, never a path: the gate
   adds `--checkpoint <models>/<ROLE>`, the host's directory of the role's checkpoint, and `--pin` core's pin in the
   pinned tree (`verity/core/protocols/pouw/lean/check/models.json`, `MODEL_PINS`), which the gate's own `--pin` (the
   challenger's key, verifier.py's `--challenger-pin`) is not. It refuses the run, before writing or starting anything,
@@ -48,8 +48,8 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   role's entry pins to its SHA-512 before it listens, and refuses a role the pin lacks. `<models>` is `verifier.json`'s
   `models`, default `/var/lib/vy-verifier/models`. Infra provisions a role's directory: every file the role's entry
   pins, at the pinned revision, as a root-held regular file (0644, in a root-held 0755 directory), copied out of a
-  download, never an HF cache's snapshot, whose files are symlinks into its blobs and which `store_layout.check`
-  refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
+  download, never an HF cache's snapshot, whose files are symlinks into its blobs and which
+  `remote_bandwidth.store.check` refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
 
       hf download Qwen/Qwen2.5-32B --revision 1818d35814b8319459f4bd55ed1ac8709630f003 --local-dir /tmp/q
       install -d -m 0755 -o root -g root /var/lib/vy-verifier/models/QWEN25_32B_BF16
