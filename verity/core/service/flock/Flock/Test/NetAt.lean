@@ -3,7 +3,7 @@
 layout mode its rows are the logical rows moved; and it refuses a map that sends two columns to one position, moves an
 input row, breaks an output group, or places a column past the constant.
 -/
-import Flock.NetAt
+import Flock.TmplAt
 import Flock.Test.Tmpl
 
 namespace Flock.Test.NetAt
@@ -60,5 +60,21 @@ def moved (mode : Tmpl.Mode) : Bool :=
 #guard refuses fun p => p.pop
 -- a computed row may move: the first pair's sum (column 130, read by the output at 256) and free column 200 swapped
 #guard !refuses fun p => (p.set! 130 200).set! 200 130
+
+-- the layout modes by name
+#guard Tmpl.modeOf "iv" == some .lenient && Tmpl.modeOf "iv/strict" == some .strict &&
+  Tmpl.modeOf "iv/hybrid" == some (.hybrid 0) && Tmpl.modeOf "iv/hybrid/4" == some (.hybrid 4)
+#guard Tmpl.modeOf "iv/hybrid/x" == none && Tmpl.modeOf "hybrid/4" == none
+
+-- `TmplUnit.read`'s net (`Tmpl.unitNet`) is `unrollAt`'s at `layoutM`'s layouts, every field and row, and it refuses a
+-- template that is not well-formed
+#guard [Tmpl.Mode.lenient, .strict, .hybrid 4].all fun mode => match logical with
+  | .ok (t, _) => match TmplUnit.read t mode, (do Tmpl.unrollAt t (← Tmpl.layoutM t mode)) with
+    | .ok u, .ok n => decide (u.net = n)
+    | _, _ => false
+  | .error _ => false
+#guard match logical with
+  | .ok (t, _) => (TmplUnit.read { t with root := t.defs.size } .lenient).toOption.isNone
+  | .error _ => false
 
 end Flock.Test.NetAt

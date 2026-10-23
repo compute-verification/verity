@@ -18,6 +18,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `slots`: the claims' partition over the program and query, and that draw's checked proof units in its slots
   (`Slots.select`);
 * `bound`: the exact bounds on wrong units at δ;
+* `hidden_offsets`, `hidden_locate`, `hidden_witness`: the draw over hidden positions (`HiddenDraw`): the honest table's
+  offsets and total, the honest prover's witnesses, and the witness for a named call;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold;
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
 * `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
@@ -54,6 +56,7 @@ import SampledProofs.Hello
 import SampledProofs.ChallengerRecord
 import SampledProofs.ChallengerSession
 import SampledProofs.Produced
+import SampledProofs.HiddenDraw
 
 namespace SampledProofs.Pieces
 
@@ -270,6 +273,56 @@ def bernoulliBound (j : Json) : V Json := do
   if δ.num == 0 || δ.den ≤ δ.num then throw "delta is not in (0, 1)"
   return Json.mkObj [("bound", Lean.toJson (Bound.bernoulliBound population p δ))]
 
+private def hiddenWidth (j : Json) : V Nat := do
+  match nat? (getD j "width") with
+  | some (w + 1) => pure (w + 1)
+  | _ => throw "width is not a positive integer"
+
+private def hiddenNats (j : Json) (what : String) : V (List Nat) := do
+  let .arr xs := j | throw s!"{what} is not a list of natural numbers"
+  xs.toList.mapM fun x => match nat? x with
+    | some n => pure n
+    | none => throw s!"{what} is not a list of natural numbers"
+
+private def hiddenCalls (j : Json) : V (List HiddenDraw.Call) := do
+  let .arr cs := j | throw "calls is not a list"
+  cs.toList.mapM fun c => match c with
+    | .arr #[o, m] => match nat? o, nat? m with
+      | some offset, some rows => pure { offset, rows }
+      | _, _ => throw "a call is not [offset, rows] of natural numbers"
+    | _ => throw "a call is not [offset, rows] of natural numbers"
+
+private def hiddenWitnessJson : Option (Nat × Nat × Nat) → Json
+  | some (c, j, t) => Json.arr #[Lean.toJson c, Lean.toJson j, Lean.toJson t]
+  | none => Json.null
+
+/-- `{"rows", "width"}` to `{"offsets", "total"}` (`HiddenDraw.offsets`, `total`); refused where a row count is not a
+natural number or the width not positive. -/
+def hiddenOffsets (j : Json) : V Json := do
+  if keys? j != some #["rows", "width"] then throw "exactly {rows, width}"
+  let width ← hiddenWidth j
+  let rows ← hiddenNats (getD j "rows") "rows"
+  return Json.mkObj [("offsets", Lean.toJson (HiddenDraw.offsets width rows)),
+    ("total", Lean.toJson (HiddenDraw.total width rows))]
+
+/-- `{"calls", "positions", "width"}` to `{"located": [[c, j, t] or null]}` (`HiddenDraw.locate`), calls a list of
+`[offset, rows]`. -/
+def hiddenLocate (j : Json) : V Json := do
+  if keys? j != some #["calls", "positions", "width"] then throw "exactly {calls, positions, width}"
+  let width ← hiddenWidth j
+  let calls ← hiddenCalls (getD j "calls")
+  let positions ← hiddenNats (getD j "positions") "positions"
+  return Json.mkObj [("located", Json.arr (positions.toArray.map (hiddenWitnessJson <| HiddenDraw.locate width calls ·)))]
+
+/-- `{"call", "calls", "position", "width"}` to `{"witness": [c, j, t] or null}` (`HiddenDraw.witness`). -/
+def hiddenWitness (j : Json) : V Json := do
+  if keys? j != some #["call", "calls", "position", "width"] then throw "exactly {call, calls, position, width}"
+  let width ← hiddenWidth j
+  let calls ← hiddenCalls (getD j "calls")
+  let (some c, some r) := (nat? (getD j "call"), nat? (getD j "position"))
+    | throw "call or position is not a natural number"
+  return Json.mkObj [("witness", hiddenWitnessJson (HiddenDraw.witness width calls c r))]
+
 /-- `{"params", "state", "op"}` to `{"decision", "state"}`: the op's decision on the state the stream's rules hold of it
 (`Stream.run`), and the state after it as the text Python's `canonical_json` writes. -/
 def stream (j : Json) : V Json := do
@@ -427,6 +480,7 @@ def table : List (String × (Json → V Json)) :=
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
    ("bound", bound), ("bernoulli_bound", bernoulliBound),
+   ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
