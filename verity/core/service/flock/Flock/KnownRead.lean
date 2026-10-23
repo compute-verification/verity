@@ -87,11 +87,25 @@ def bitOut (c : Circuit) (cs : List (Nat × Nat)) (q k : Nat) : Bool :=
 def shapeOk (p : Port) (ks : Array (Array Nat × ByteArray)) : Bool :=
   p.v2 && p.segs.isNone && ks.all (·.1.size == p.words)
 
-/-- **Every bit of every known port is read or returned** (PROTOCOL.md §16.10): each port of the circuit that the
-`--registered` file names at known content is a `sha512/row/v2` row without segments of each known row's words, and
-has each bit of its `16 · words`-bit row read by a computed row of the unit at some copy (`bitRead`), at an input row
-(`HmOut.nIn`), or returned by some copy (`bitOut`), at an output row. -/
-def check (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))) : V Unit :=
+/-- The first port whose name an earlier port has. -/
+def dupName (c : Circuit) : Option Nat :=
+  (List.range c.ports.size).find? fun q => (List.range q).any fun q' => c.ports[q']!.name == c.ports[q]!.name
+
+/-- **Each known value names one port of the circuit**: where the `--registered` file names known content, the circuit
+names each of its ports once (`dupName`), and has a port of each name the known content names. -/
+def namesOk (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))) : V Unit :=
+  if known.isEmpty then pure ()
+  else match dupName c with
+    | some q => throw s!"registered reads: the circuit names port {c.ports[q]!.name} twice, so its known content names no one row"
+    | none => known.toList.forM fun (name, _) =>
+        if c.ports.any (·.name == name) then pure ()
+        else throw s!"registered reads: known port {name}: the circuit has no port {name}, so its known content binds nothing"
+
+/-- **Every bit of every known port is read or returned**: each port of the circuit that the `--registered` file names
+at known content is a `sha512/row/v2` row without segments of each known row's words, and has each bit of its
+`16 · words`-bit row read by a computed row of the unit at some copy (`bitRead`), at an input row (`HmOut.nIn`), or
+returned by some copy (`bitOut`), at an output row. -/
+def readsOk (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))) : V Unit :=
   let mask := ProvedScope.portMask c.unit.inGroups (c.unit.inWords * WORD)
   let pc := portCols c.unit.inGroups
   let rd := RecResiduals.readIns c.unit
@@ -116,6 +130,11 @@ def check (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray)
             throw s!"registered reads: known port {name}: no copy of the unit returns bit {k} of its row, so its known content binds nothing there"
           | none => pure ()
       else pure ()
+
+/-- **The known content binds the circuit's rows** (PROTOCOL.md §16.10): each known value names one port of the
+circuit (`namesOk`), and every bit of every known port is read or returned (`readsOk`). -/
+def check (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))) : V Unit :=
+  namesOk c known >>= fun _ => readsOk c known
 
 end KnownRead
 end Flock
