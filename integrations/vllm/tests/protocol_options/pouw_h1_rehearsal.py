@@ -129,11 +129,12 @@ def build_program(d: Path, layers: int = 32) -> dict[str, Any]:
     from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
     from verity_vllm.protocol_options import pouw_h1 as PH
     from verity_vllm.protocol_options import pouw_h1_served as SV
-    from tests.protocol_options.pouw_h1_gpu import layout_of
+    from tests.protocol_options.pouw_h1_gpu import fill_decl, layout_of
     d.mkdir(parents=True, exist_ok=True)
     shapes, modules = declaration(layers)
     t0 = time.monotonic()
-    prog = SV.declared(shapes, modules, PH.FILL.rows, PH.FILL.steps)
+    decl = fill_decl()
+    prog = SV.declared(shapes, modules, decl.rows, decl.steps)
     t1 = time.monotonic()
     desc = encode_program(prog)
     body = canonical_json({k: v for k, v in desc.items() if k != "annotations"})
@@ -167,11 +168,12 @@ def declaration(layers: int = 32) -> tuple[list[tuple[int, int]], dict[int, str]
 def declared_draw_k(layers: int = 32) -> int:
     """The draw K the period's open commits (``--draw-k``, ``draw_k``) for the declared window: the proof service's
     selection, `pouw_h1_challenger.draw_k` over `pouw_h1_served.declared_layout`, which `credit.strata` reads."""
-    from verity_vllm.protocol_options import pouw_h1 as PH
     from verity_vllm.protocol_options import pouw_h1_challenger as PHC
     from verity_vllm.protocol_options import pouw_h1_served as SV
+    from tests.protocol_options.pouw_h1_gpu import fill_decl
     shapes, modules = declaration(layers)
-    return PHC.draw_k(SV.declared_layout(shapes, modules, PH.FILL.rows, PH.FILL.steps))
+    decl = fill_decl()
+    return PHC.draw_k(SV.declared_layout(shapes, modules, decl.rows, decl.steps))
 
 
 def period_open_argv(name: str, cap: int, circuit: str, draw_k: int, model: str | None,
@@ -456,8 +458,8 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
 
 
 def rehearse(a: argparse.Namespace) -> dict[str, Any]:
-    from verity_vllm.protocol_options import pouw_h1 as PH
     from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+    from tests.protocol_options.pouw_h1_gpu import fill_decl
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "period": a.period, "live": a.gate is not None, "served": a.served}
@@ -508,7 +510,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         doc["refused"] = (f"the period's open signs no weights' root: the gate has no registration of {MODEL} under "
                           f"circuit {circuit[:16]}... (vy-admin's model-register)")
         return doc
-    reserved = gate("reserve", "--peer", a.peer, "--scheme", PHC.SCHEME, "--families", PHC.families(PH.FILL.steps),
+    reserved = gate("reserve", "--peer", a.peer, "--scheme", PHC.SCHEME, "--families", PHC.families(fill_decl().steps),
                     "--minutes", str(a.minutes))
     doc["reserved"] = reserved
     if "refused" in reserved:

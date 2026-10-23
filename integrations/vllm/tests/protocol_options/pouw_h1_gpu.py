@@ -361,6 +361,13 @@ def tokens_digest(gen: list[dict[str, Any]]) -> str:
     return hashlib.sha256(json.dumps([g["token_ids"] for g in gen]).encode()).hexdigest()
 
 
+def fill_decl() -> Any:
+    """`pouw_h1.FILL`, or with ``H1_FILL_STEPS`` set a smaller rehearsal's window of that many steps
+    (`pouw_h1_static.fill`); the rehearsal's serving and closing processes inherit it."""
+    from verity_vllm.protocol_options import pouw_h1_static as PS
+    return PS.fill(int(os.environ.get("H1_FILL_STEPS", PS.FILL.steps)))
+
+
 def fill(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm import protocol_options as PO
     from verity_vllm.engine.build import build_engine
@@ -371,7 +378,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.protocol_options import pouw_h1_hooks as PHK
     from verity_vllm.protocol_options import pouw_h1_served as SV
 
-    decl = PH.FILL
+    decl = fill_decl()
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
     target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
@@ -493,7 +500,8 @@ def closed_measures(h1: Any, out: dict[str, Any], want: int, weight_of: Any, bad
     """A fill window's measures once closed (`want` requests served, linear w's weight `weight_of(w)`, the listener's
     complaints `bad`), into `out`, and its ``ok`` before its release."""
     from verity_vllm.protocol_options import pouw_h1 as PH
-    decl, cap = PH.FILL, PH.FILL.max_tokens
+    decl = fill_decl()
+    cap = decl.max_tokens
     rows = h1.step_rows()
     decl_w = decl if want == decl.slots else PH.Static(decl.prompt_lens[:want], cap, decl.rows, decl.steps)
     zs = []

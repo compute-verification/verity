@@ -67,4 +67,10 @@ class Static:
 FILL = Static((1,) * 64, 16, 64, 18)
 
 
-__all__ = ["FILL", "Static", "utilization"]
+def fill(steps: int = FILL.steps) -> Static:
+    """`FILL` over a window of `steps` steps (at least 3): its 64 one-token prompts at cap `steps` - 2, so a smaller
+    rehearsal's window keeps FILL's two empty steps."""
+    return FILL if steps == FILL.steps else Static(FILL.prompt_lens, steps - 2, FILL.rows, steps)
+
+
+__all__ = ["FILL", "Static", "fill", "utilization"]

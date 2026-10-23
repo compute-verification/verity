@@ -200,6 +200,15 @@ def test_fill_declares_every_served_step_full_and_serve_h1_is_119_of_1152():
         PH.Static((1,) * 64, 19, 64, 18)
 
 
+def test_a_smaller_fill_keeps_fills_prompts_rows_and_two_empty_steps():
+    """`pouw_h1_static.fill(S)`, a smaller rehearsal's window: FILL's 64 one-token prompts at cap S - 2 in T = 64, and
+    FILL itself at S = 18."""
+    from verity_vllm.protocol_options import pouw_h1_static as PST
+    assert PST.fill() is PH.FILL and PST.fill(18) is PH.FILL
+    small = PST.fill(4)
+    assert small.schedule() == [64, 64, 0, 0] and small.engine_args() == PH.FILL.engine_args()
+
+
 def _fill_run(rows_per_step):
     """`FILL`'s window over two small linears, step s serving rows_per_step[s] rows."""
     rng = np.random.default_rng(11)
