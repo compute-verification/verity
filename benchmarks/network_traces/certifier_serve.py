@@ -44,24 +44,35 @@ frames. The endpoint serves a group side by side, and the shim writes the group'
 order their requests reached it (`request_major`), so the canonical order is request-major and the egress counts don't
 depend on how the endpoint interleaves them. The plan is calibrated (`calibration.calibrate`) on the model of that
 run: every frame of a response ready D buckets after its request's release. Every window declares the calibration's
-envelope, refused when its δ is below D. Every window ends idle: no request is released in a window's first bucket
-(the salt frame's), and a group whose responses the Program's grid wouldn't release by the window's last bucket goes
-to the next window's second, so each window's egress counts follow from its own requests, as N2's served profile
-(NET-54) requires. The run lasts one idle window past the last request's.
+envelope, refused when its δ is below D. Every window ends idle: a group whose responses wouldn't all be released by
+the window's last bucket goes to the next window, so each window's egress counts follow from its own requests. On the
+planned profile no request is released in a window's first bucket (the salt frame's), and such a group goes to the
+next window's second. The run lasts one idle window past the last request's.
 
-**N2's profile.** N2 (`service.LinkWindows`) gives no verdict on a link whose egress end has no occupancy profile fixed
-before the run. The plan's `occupancy` is the planned one: the Program's egress counts (`schedule.expected_grids`) under
-the declared syncs, on the model's releases and F frames per response, which the rehearsal's own client and the shim's
-padding fix before the run. The ingress end has none (the Program reads requests from outside). A served deployment
-with outside traffic has no such schedule: it needs the served profile (NET-54), whose counts follow from the ingress
-head's. As NET-54 stands (7a7197b880) that profile counts every ingress frame as a request's, the certifier's own salt
-frame too, so it refuses every window of a run with the salt on.
+**N2's profile** (`plan --profile`). N2 (`service.LinkWindows`) gives no verdict on a link whose egress end has neither
+an occupancy profile fixed before the run nor a served profile. The ingress end has no occupancy profile (the Program
+reads requests from outside).
+- `planned` (the default): the plan's `occupancy` is the Program's egress counts (`schedule.expected_grids`) under the
+  declared syncs, on the model's releases and F frames per response, which the rehearsal's own client and the shim's
+  padding fix before the run, and N2 holds each egress head's counts to them.
+- `served`: no egress profile is planned. The plan's `occupancy` is `{"kind": "served", "response_frames": F,
+  "request_frames": F_in, "own": 1}`, F_in the request's frames rounded up to a power of two, and N2 is
+  `LinkWindows(served=ServedProfile(F, F_in, windows, 1))` (`served_profile`): each window's egress counts are the ones
+  its ingress head's derive under the window's declared sync (`served.NetworkServedCounts`), with the salt frame at the
+  head of bucket 0 taken off (own 1). The proxy (`active.Proxy(served=…)`) admits each request by the served admission
+  rule (`served.Admission`), only while its window, with it, still ends idle, and holds the rest for the next window,
+  so a window whose counts follow from its own requests is the proxy's doing, not the client's. A group that doesn't
+  fit goes to the next window's first bucket, which admission takes behind the salt frame. The plan's `model_release`
+  is the admission's (`active_replay.model_releases(admission=…)`), and a D at which admission would hold one of the
+  plan's requests past the window it was sent in doesn't fit. The check reads each window's served counts in the clear
+  too (`served_counts`, the rehearsal's read of the witness, beside the audit's); N2's verdict of record shows only
+  accept or reject.
 
 **Subcommands**, all from the repository root or with `benchmarks/network_traces` on the path:
 
     python certifier_serve.py keys --dir KEYDIR [--height 10]
     python certifier_serve.py plan --upstream URL --out DIR [--model NAME] [--requests 400] [--in-flight 4]
-        [--tokens 64] [--prompt-tokens 128] [--probes 8] [--delta-buckets D]
+        [--tokens 64] [--prompt-tokens 128] [--probes 8] [--delta-buckets D] [--profile planned|served]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
         --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10] [--tamper late|extra]
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
@@ -130,6 +141,7 @@ from verity.core.protocols.certifier.certificate import Certificate, CertifiedRe
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy
 from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.schedule import ClockSync, expected_grids
+from verity.core.protocols.certifier.served import Admission, ServedProfile
 from verity.core.protocols.certifier.service import LinkWindows
 
 HERE = Path(__file__).resolve().parent
@@ -142,6 +154,7 @@ REVEAL_MARGIN_S = 300.0
 PROOF_DEADLINE_S = 600.0
 DELTA = 2.0 ** -40
 STRATEGIES = ("honest", "late", "extra")
+PROFILES = ("planned", "served")
 
 
 # Keys.
@@ -343,11 +356,13 @@ class DoesntFit(ValueError):
 
 
 def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = None,
-                name: str = "served", in_flight: int = 1) -> tuple[dict, dict]:
+                name: str = "served", in_flight: int = 1, profile: str = "planned") -> tuple[dict, dict]:
     """The calibration report and the plan of a served run of `requests` requests of the probed body, sent `in_flight`
-    at a time (the module docstring's "The served plan"), with its planned occupancy profile (`occupancy`, "N2's
-    profile"), at the latency budget `delta_buckets`, or else at the largest of 4 down to 2 times the slowest response
-    plus half a second that fits."""
+    at a time (the module docstring's "The served plan"), with N2's `profile` (`occupancy`, "N2's profile"): the
+    planned egress occupancy, or the served profile, at the latency budget `delta_buckets`, or else at the largest of 4
+    down to 2 times the slowest response plus half a second that fits."""
+    if profile not in PROFILES:
+        raise ValueError(f"N2's profile is one of {PROFILES}, not {profile!r}")
     body = probed["body"]
     F = body["max_tokens"]
     if body.get("min_tokens") != F or not body.get("ignore_eos"):
@@ -359,11 +374,11 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
                          f"{F}, an event a chunk of at least one token and at most {ar.TOKEN_BYTES} bytes of text")
     slowest = max(r["last_s"] for r in probed["responses"])
     if delta_buckets:
-        return _served_plan(probed, requests, delta_buckets, name, in_flight)
+        return _served_plan(probed, requests, delta_buckets, name, in_flight, profile)
     most, least = (math.ceil((k * slowest * 1000 + 500) / BUCKET_MS) for k in (4, 2))
     for D in range(most, least - 1, -1):
         try:
-            return _served_plan(probed, requests, D, name, in_flight)
+            return _served_plan(probed, requests, D, name, in_flight, profile)
         except DoesntFit:
             pass
     raise DoesntFit(f"{in_flight} responses of {F} events don't fit in a window of {WINDOW_BUCKETS} buckets at a "
@@ -371,7 +386,8 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
                     "give one (--delta-buckets), or send fewer in flight")
 
 
-def _served_plan(probed: dict, requests: int, D: int, name: str, in_flight: int) -> tuple[dict, dict]:
+def _served_plan(probed: dict, requests: int, D: int, name: str, in_flight: int,
+                 profile: str = "planned") -> tuple[dict, dict]:
     body, F = probed["body"], probed["body"]["max_tokens"]
     lengths = sorted({r["events"] for r in probed["responses"]})
     slowest = max(r["last_s"] for r in probed["responses"])
@@ -379,14 +395,17 @@ def _served_plan(probed: dict, requests: int, D: int, name: str, in_flight: int)
     groups = [names[j:j + in_flight] for j in range(0, requests, in_flight)]
     frames_in = max(request_frame_count(len(ar.live_request_bytes(s, body, None, FRAME_BYTES)), FRAME_BYTES)
                     for s in names)
+    served = profile == "served"
+    if served:  # the served counts take requests of a power of two of frames
+        frames_in = 1 << (frames_in - 1).bit_length()
     T = WINDOW_BUCKETS
     for span in range(D + 1, T - 1):
         starts, a = [], 2
         for _ in groups:
-            if a % T == 0:
+            if a % T == 0 and not served:
                 a += 1
             elif a % T + span > T - 1:
-                a = (a // T + 1) * T + 1
+                a = (a // T + 1) * T + (0 if served else 1)
             starts.append(a)
             a += D + 1
         if starts[0] >= T:
@@ -408,11 +427,22 @@ def _served_plan(probed: dict, requests: int, D: int, name: str, in_flight: int)
         peer = [{"stream": j + 1, "session": s, "frames": frames_in, "trace_ms": t,
                  "enqueue": math.ceil(t / i.bucket_ms), "send_ms": t} for j, (s, t) in enumerate(zip(names, sends))]
         windows = anchors[-1] // T + 2
-        release = ar.model_releases(peer, i, windows, e.bucket_ms)
-        model = ar.model_frames(sessions, release, windows * T)
-        profile = [list(occupancy(g)) for g in expected_grids(model[0], [envelope] * windows, e)]
-        if all(sum(map(sum, profile[:w + 1])) == F * sum(a // T <= w for a in anchors) for w in range(windows)):
-            break
+        if served:
+            occ = {"kind": "served", "egress": None, "ingress": None, "response_frames": F, "request_frames": frames_in,
+                   "own": 1}
+            admission = Admission(served_profile({"windows": windows, "occupancy": occ}), e.allocation,
+                                  lambda w: envelope)
+            release = ar.model_releases(peer, i, windows, e.bucket_ms, admission)
+            model = ar.model_frames(sessions, release, windows * T)
+            if all(q["stream"] in release and release[q["stream"]] // T == q["enqueue"] // T for q in peer):
+                break
+        else:
+            release = ar.model_releases(peer, i, windows, e.bucket_ms)
+            model = ar.model_frames(sessions, release, windows * T)
+            grids = [list(occupancy(g)) for g in expected_grids(model[0], [envelope] * windows, e)]
+            if all(sum(map(sum, grids[:w + 1])) == F * sum(a // T <= w for a in anchors) for w in range(windows)):
+                occ = {"kind": "planned", "egress": grids, "ingress": None}
+                break
     else:
         raise DoesntFit(f"{in_flight} responses of {F} events, D = {D} buckets after their requests, don't fit in a "
                         f"window of {T} buckets: give a smaller latency budget (--delta-buckets)")
@@ -423,12 +453,21 @@ def _served_plan(probed: dict, requests: int, D: int, name: str, in_flight: int)
             "model_release": {str(k): v for k, v in release.items()}, "model_misses": misses,
             "syncs": [[envelope.delta, str(envelope.rho)]] * windows, "sync_policy": "envelope",
             "model_syncs": [[s.delta, str(s.rho)] for s in chosen], "live_model": body["model"], "body": body,
-            "seed": 0, "occupancy": {"kind": "planned", "egress": profile, "ingress": None}, "request_major": True,
+            "seed": 0, "occupancy": occ, "request_major": True,
             "pad_to": F,
             "served": {"tokens": F, "probe_events": lengths, "delta_buckets": D, "gap_buckets": D + 1,
                        "span_buckets": span, "slowest_s": slowest, "request_frames": frames_in, "in_flight": in_flight,
                        "requests": requests}}
     return report, plan
+
+
+def served_profile(plan: dict) -> ServedProfile | None:
+    """N2's served profile of a plan on the served profile (`occupancy` of kind `served`): F frames a response, F_in a
+    request, the plan's windows and the salt frame heading each (own 1); None on the planned profile."""
+    o = plan.get("occupancy") or {}
+    if o.get("kind") != "served":
+        return None
+    return ServedProfile(o["response_frames"], o["request_frames"], plan["windows"], o["own"])
 
 
 # The certifier.
@@ -493,7 +532,8 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
     proxy = ServedProxy(("127.0.0.1", shim_port), e, i, setup.sync_set,
                         [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]], origin=origin, publish=publish,
                         egress_link=setup.egress_link, ingress_link=setup.ingress_link, salt=fresh_salt,
-                        reveal_deadline=deadline, challenger_key=challenger_key, signer=signer)
+                        reveal_deadline=deadline, challenger_key=challenger_key, signer=signer,
+                        served=served_profile(plan))
     taken, served = loop.create_future(), loop.create_future()
 
     async def on_link(reader, writer) -> None:
@@ -573,10 +613,10 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
     setup = ar.Setup(report)
     windows, key = plan["windows"], read_public(deployment["certifier_key"])
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
-    profile = plan.get("occupancy") or {}
+    profile, served = plan.get("occupancy") or {}, served_profile(plan)
     lw = LinkWindows(deployment["links"]["n2"], setup.egress_params, setup.sync_set, key, deployment["run_id"],
                      bytes.fromhex(deployment["session"]), ingress=setup.ingress_params, proof_deadline=proof_deadline,
-                     occupancy=(profile.get("egress"), profile.get("ingress")))
+                     occupancy=(profile.get("egress"), profile.get("ingress")), served=served)
     remote = RemoteCertifier(*deployment["reveal"], key, challenger, deployment["links"]["ingress"],
                              bytes.fromhex(deployment["run_id"]), timeout=timeout)
     stream = lw.stream(budget=windows, delta=DELTA, challenger="certifier-serve-check", coins=_no_coins, clock=clock)
@@ -603,6 +643,8 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
                 again = "revealed again"
             except RuntimeError as err:
                 again = _refusal(err)
+        if served is not None:
+            row["served_counts"] = lw.served_check(opening, syncs)
         draw = stream.select(registration)
         try:
             outcome = (stream.deliver(draw, [lw.session(opening, draw)])
@@ -640,13 +682,15 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
 def table(result: dict) -> str:
     """The check's verdicts, one line per link-window."""
     lines = [f"verdict {result['verdict']}: network_verdict {result['network_verdict'].get('accepted')}, audit "
-             f"{result['audit_accepted']}, salt {result['salt_accepted']} (window 0 again: {result['salt_again']})"]
+             f"{result['audit_accepted']}, salt {result['salt_accepted']} (window 0 again: {result['salt_again']}), "
+             f"N2 on the {result['profile']} profile"]
     for row in result["rows"]:
         a = row.get("audit", {})
         n2 = row.get("n2")
         n2 = ("accept" if n2["accepted"] else f"reject {n2['codes']}") if isinstance(n2, dict) else n2
+        counts = f" (served counts {row['served_counts']})" if "served_counts" in row else ""
         lines.append(f"  window {row['window']}: audit egress {a.get('egress')} ingress {a.get('ingress')}; "
-                     f"N2 {n2}; salt {row.get('salt')}")
+                     f"N2 {n2}{counts}; salt {row.get('salt')}")
     return "\n".join(lines)
 
 
@@ -701,7 +745,8 @@ def plan_of(args, url: str, clock=time.monotonic) -> tuple[dict, dict, dict]:
     prompt = prompt_tokens(url, model, args.prompt_tokens, args.api_key_env) if args.prompt_tokens else PROMPT
     probed = probe(url, request_body(model, args.tokens, prompt), args.probes, args.api_key_env, clock,
                    in_flight=args.in_flight, warmup=args.in_flight)
-    report, plan = served_plan(probed, args.requests, args.delta_buckets, in_flight=args.in_flight)
+    report, plan = served_plan(probed, args.requests, args.delta_buckets, in_flight=args.in_flight,
+                               profile=args.profile)
     return probed, report, plan
 
 
@@ -741,7 +786,8 @@ def rehearse(args) -> int:
                "served": plan["served"], "windows": plan["windows"], "profile": plan["occupancy"]["kind"],
                "runs": {s: {k: r[k] for k in ("verdict", "network_verdict", "audit_accepted", "salt_accepted",
                                               "salt_again", "exit")}
-                        | {"windows": [{k: row.get(k) for k in ("window", "n2", "salt", "audit")} for row in r["rows"]]}
+                        | {"windows": [{k: row.get(k) for k in ("window", "n2", "served_counts", "salt", "audit")}
+                                       for row in r["rows"]]}
                         for s, r in results.items()}}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     expected = {"honest": "accepted"}
@@ -775,6 +821,9 @@ def main(argv=None) -> int:
         q.add_argument("--probes", type=int, default=8)
         q.add_argument("--delta-buckets", type=int,
                        help="the latency budget D (default: 4 × the slowest + 0.5 s, or the most that fits down to 2 ×)")
+        q.add_argument("--profile", choices=PROFILES, default=PROFILES[0],
+                       help="N2's profile: the planned egress occupancy, or the served profile (NET-54), whose egress "
+                            "counts derive from the ingress head's")
     for q in (p, s, c, r):
         q.add_argument("--out", required=True, type=Path)
     for q in (s, c):

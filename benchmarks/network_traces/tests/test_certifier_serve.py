@@ -118,7 +118,8 @@ def _run(run: Path, plan: dict, report: dict, url: str, upstream: tuple, certifi
 
     publish = cs.CertifyingPublisher(run, setup, Issuer(certifier, SESSION), cs.N2_LINK, threaded=False)
     ar.run_virtual(shim, report, run, upstream, salt=True, publish=publish, after=after,
-                   proxy_args={"challenger_key": challenger.public_key(), "signer": certifier})
+                   proxy_args={"challenger_key": challenger.public_key(), "signer": certifier,
+                               "served": cs.served_profile(plan)})
     out["events"] = json.loads((run / "server.json").read_text())["events"]
     return out
 
@@ -211,7 +212,7 @@ def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_
     traffic is accepted on every link-window."""
     endpoint = _SideBySide(2)
     args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=TOKENS, probes=4, in_flight=4,
-                              requests=REQUESTS, delta_buckets=None)
+                              requests=REQUESTS, delta_buckets=None, profile="planned")
 
     async def go():
         server = await asyncio.start_server(endpoint, "127.0.0.1", 0)
@@ -356,7 +357,7 @@ def merged(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("merged")
     endpoint = _SideBySide(2, merges=lambda request: request % 2 == 1)
     args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS, probes=4,
-                              in_flight=4, requests=REQUESTS, delta_buckets=None)
+                              in_flight=4, requests=REQUESTS, delta_buckets=None, profile="planned")
     challenger = cs.signer(tmp / "keys" / "challenger", 6)
 
     async def go():
@@ -421,3 +422,116 @@ def test_honest_traffic_with_merged_events_is_accepted_on_every_window_and_late_
         check = runs[strategy]["check"]
         assert all(r["salt"] == "revealed" for r in check["rows"]) and check["salt_again"].startswith("refused")
         assert check["salt_accepted"]
+
+
+@pytest.fixture(scope="module")
+def served_profile(tmp_path_factory):
+    """The gate's shape on N2's served profile (`plan --profile served`): four in flight, 64 tokens, every other
+    response's last two tokens in one chunk, at D = 30, so the second group doesn't fit in window 0 and is sent in
+    window 1's first bucket; honest, late and extra, each checked."""
+    tmp = tmp_path_factory.mktemp("served-profile")
+    endpoint = _SideBySide(2, merges=lambda request: request % 2 == 1)
+    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS, probes=4,
+                              in_flight=4, requests=REQUESTS, delta_buckets=30, profile="served")
+    challenger = cs.signer(tmp / "keys" / "challenger", 6)
+
+    async def go():
+        server = await asyncio.start_server(endpoint, "127.0.0.1", 0)
+        upstream = server.sockets[0].getsockname()[:2]
+        url = "http://%s:%d" % upstream
+        probed, report, plan = await asyncio.to_thread(cs.plan_of, args, url, lambda: 0.0)
+        runs = {}
+        for strategy in cs.STRATEGIES:
+            certifier = cs.signer(tmp / "keys" / strategy, 6)
+            try:
+                runs[strategy] = await asyncio.to_thread(_run, tmp / strategy, plan, report, url, upstream, certifier,
+                                                         challenger, strategy)
+            finally:
+                certifier.close()
+        server.close()
+        return report, plan, runs
+
+    try:
+        return (tmp, *asyncio.run(go()))
+    finally:
+        challenger.close()
+
+
+def test_the_served_profile_plans_no_egress_occupancy_and_the_proxy_admits_by_the_served_rule(served_profile):
+    """On the served profile the plan fixes no egress counts: its occupancy is F, F_in and the salt frame, and its
+    model is the proxy's admission rule, under which a group sent in a window's first bucket is released behind the
+    salt frame and a group that wouldn't end its window idle is held for the next window's first bucket."""
+    _, report, plan, runs = served_profile
+    T = cs.WINDOW_BUCKETS
+    assert plan["occupancy"] == {"kind": "served", "egress": None, "ingress": None, "response_frames": MERGED_TOKENS,
+                                 "request_frames": 1, "own": 1}
+    assert cs.served_profile(plan) == cs.ServedProfile(MERGED_TOKENS, 1, plan["windows"], 1)
+    assert [q["enqueue"] for q in plan["requests"]] == [2] * 4 + [T] * 4 and plan["windows"] == 3
+    assert [plan["model_release"][str(q["stream"])] for q in plan["requests"]] == [2, 2, 3, 3, T, T + 1, T + 1, T + 2]
+    assert runs["honest"]["check"]["comparisons"]["releases_off_model"] == 0
+
+    setup = ar.Setup(report)
+    e, i = setup.egress_params, setup.ingress_params
+    admission = cs.Admission(cs.served_profile(plan), e.allocation, lambda w: setup.envelope)
+    late = [q | {"enqueue": T - 10} if q["enqueue"] == T else q for q in plan["requests"]]
+    assert ar.model_releases(late, i, plan["windows"], e.bucket_ms) == {1: 2, 2: 2, 3: 3, 4: 3, 5: 50, 6: 50, 7: 51,
+                                                                        8: 51}
+    assert ar.model_releases(late, i, plan["windows"], e.bucket_ms, admission) == \
+        {int(s): r for s, r in plan["model_release"].items()}
+
+
+def test_honest_is_accepted_on_every_link_window_under_the_served_profile(served_profile):
+    """N2's verdict of record accepts every link-window on the served profile, each window's egress counts the ones its
+    ingress counts derive (`served_counts`), and `network_verdict` accepts the link; the audit and the salt accept."""
+    *_, runs = served_profile
+    check = runs["honest"]["check"]
+    assert check["verdict"] == "accepted", cs.table(check)
+    assert check["profile"] == "served" and check["network_verdict"]["refused"] == []
+    assert all(r["n2"]["accepted"] and r["n2"]["public"] == {"verdict": 1, "deadline": 1} and r["served_counts"]
+               for r in check["rows"])
+    assert all(r["audit"] == {d: {"raw": None, "committed": None} for d in ("egress", "ingress")} for r in check["rows"])
+    assert check["salt"]["accepted"] and check["salt"]["ingress_salt_frames"] == [1, 1, 1]
+    assert check["comparisons"]["wire_is_the_records"] and check["timing"]["server_padded"]["responses"] == 4
+
+
+def test_a_request_in_a_windows_first_bucket_is_released_behind_the_salt_frame_and_its_window_derives(served_profile):
+    """Window 1's group reaches the proxy in that window's first bucket, the salt frame's: the bucketer enqueues the
+    salt frame first and the group behind it, two a bucket, and the served counts take the salt frame off bucket 0, so
+    the window's egress counts derive from its ingress counts and N2 accepts it."""
+    tmp, report, plan, runs = served_profile
+    setup = ar.Setup(report)
+    records = sorted((ar.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(tmp / "honest" / "requests.records")),
+                     key=lambda r: r.window)
+    first = records[1]
+    kinds = [[active.decode_frame(f)[0] for f in row[:active.row_count(row)]] for row in first.grid[:4]]
+    assert kinds == [[active.SALT, active.DATA], [active.DATA, active.DATA], [active.DATA], []]
+    assert setup.ingress_params.allocation == 2
+    assert runs["honest"]["check"]["rows"][1]["served_counts"] and runs["honest"]["check"]["rows"][1]["n2"]["accepted"]
+
+
+def test_late_is_refused_and_extra_is_refused_by_the_served_counts(served_profile):
+    """The late shim's window-0 egress record is not established: the audit refuses it and N2 rejects the window. The
+    extra shim's first response is F + 1 events, on time and logged, so every record is complete and the audit accepts
+    it: only the served counts refuse window 0, whose egress counts are one more than its ingress counts derive."""
+    *_, runs = served_profile
+    late = runs["late"]["check"]
+    assert late["verdict"] == "refused" and 0 in late["network_verdict"]["refused"]
+    assert late["rows"][0]["n2"] == {"accepted": False, "codes": ["reject"], "public": {}}
+    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    assert runs["extra"]["events"] == REQUESTS * MERGED_TOKENS + 1
+    extra = runs["extra"]["check"]
+    assert extra["verdict"] == "refused" and extra["network_verdict"]["refused"] == [0]
+    assert extra["audit_accepted"] and extra["salt_accepted"] and extra["comparisons"]["wire_is_the_records"]
+    assert [r["served_counts"] for r in extra["rows"]] == [False, True, True]
+    assert extra["rows"][0]["n2"] == {"accepted": False, "codes": ["reject"], "public": {}}
+    assert all(r["n2"]["accepted"] for r in extra["rows"][1:])
+
+
+def test_each_salt_is_revealed_once_under_the_served_profile(served_profile):
+    *_, runs = served_profile
+    for strategy in cs.STRATEGIES:
+        check = runs[strategy]["check"]
+        assert [r["salt"] for r in check["rows"]] == ["revealed"] * 3
+        assert check["salt_again"].startswith("refused: the certifier refused window 0's salt")
+        assert runs[strategy]["revealed"] == [0, 1, 2]
+        assert len({r["salt_fingerprint"] for r in check["rows"]}) == 3
