@@ -2,12 +2,13 @@
 this process's own CPUs.
 
     python tick_load.py --out DIR [--hogs-per-cpu 3] [--requests 400] [--in-flight 4] [--tokens 64]
-        [--token-ms 25] [--delta-buckets 52]
+        [--token-ms 25] [--delta-buckets 52] [--profile planned|served] [--strategies honest[,late,extra]]
 
 It starts a stub OpenAI streaming endpoint on loopback (`/v1/models`, `/tokenize`, and `/v1/completions`, each
 completion `max_tokens` chunks `--token-ms` apart, side by side, as vLLM decodes the requests in flight), then
 `--hogs-per-cpu` busy loops per CPU of this process's affinity (the run's cpuset), each pinned to that set with
-`taskset`, then `certifier_serve.py rehearse --strategies honest` against the stub, and stops the hogs. It writes
+`taskset`, then `certifier_serve.py rehearse` against the stub (`--strategies`, honest by default, on N2's
+`--profile`), and stops the hogs. It writes
 `ticks.json` in `--out`: the CPUs and hogs, the rehearsal's exit and verdict, and per grid the ticks and their lateness
 (median, p99, p99.9, max in ms, the ticks past the slack with their window and bucket, and the windows the honest run
 was refused on). The rehearsal's own outputs are under `--out`/rehearsal.
@@ -160,6 +161,8 @@ def main(argv=None) -> int:
     ap.add_argument("--tokens", type=int, default=64)
     ap.add_argument("--token-ms", type=float, default=25.0)
     ap.add_argument("--delta-buckets", type=int, default=52)
+    ap.add_argument("--profile", default="planned", help="N2's profile, planned or served (`certifier_serve.py plan`)")
+    ap.add_argument("--strategies", default="honest", help="the rehearsal's strategies, honest, late, extra")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     cpus = sorted(os.sched_getaffinity(0))
@@ -171,8 +174,8 @@ def main(argv=None) -> int:
         rc = subprocess.run([sys.executable, str(HERE / "certifier_serve.py"), "rehearse",
                              "--upstream", f"http://127.0.0.1:{port}", "--requests", str(a.requests),
                              "--in-flight", str(a.in_flight), "--tokens", str(a.tokens),
-                             "--delta-buckets", str(a.delta_buckets), "--strategies", "honest",
-                             "--out", str(a.out / "rehearsal")],
+                             "--delta-buckets", str(a.delta_buckets), "--profile", a.profile,
+                             "--strategies", a.strategies, "--out", str(a.out / "rehearsal")],
                             env=os.environ | {"CERTIFIER_SERVE_TIMING": "1"}).returncode
     finally:
         for h in hogs:
@@ -180,7 +183,8 @@ def main(argv=None) -> int:
         for h in hogs:
             h.wait()
     doc = {"cpus": cpus, "hogs": len(hogs), "rehearse_exit": rc, "token_ms": a.token_ms, "requests": a.requests,
-           "in_flight": a.in_flight, "delta_buckets": a.delta_buckets}
+           "in_flight": a.in_flight, "delta_buckets": a.delta_buckets, "profile": a.profile,
+           "strategies": a.strategies}
     run = a.out / "rehearsal" / "honest"
     if (run / "proxy.json.gz").exists():
         doc |= summary(run)
