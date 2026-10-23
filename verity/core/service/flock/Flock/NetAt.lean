@@ -62,7 +62,7 @@ def ofRowsAt (name : String) (useful constPos : Nat) (inGroups outGroups : Array
   let b ← Sparse.ofRows (placed pos inv rb) (2 ^ unitLog)
   if og.any (fun g => g.col + g.words > 2 ^ unitLog / WORD) then
     throw s!"{name}: an output group overruns its unit's {2 ^ unitLog / WORD} words (D11)"
-  return { n with useful := size, constPos := size - 1, outGroups := og, a, b, unitLog }
+  return { n with useful := size, constPos := size - 1, outGroups := og, aT := .pure a, bT := .pure b, unitLog }
 
 /-- A net `ofRowsAt` builds is the logical net `ofRows` built, moved: its A and B are the placed rows' at its slot size,
 its size is one past the constant's position, its output groups are at their committed words (inside the slot, D11),
