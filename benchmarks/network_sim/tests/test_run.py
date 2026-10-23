@@ -1,5 +1,5 @@
 """The night's summary and its expected verdicts (`run.py`), on summaries in the shape mockdc and lab_run write them,
-with the recorded night's verdicts and timings (`r20261018-110501-432f`): those are the expected ones, and a differing
+with the recorded night's verdicts and timings (`r20261023-075024-27ea`): those are the expected ones, and a differing
 verdict or answer, a step that exited nonzero, a missing summary or a proxy tick past its slack each fails the night,
 named in `summary.txt`."""
 
@@ -48,18 +48,18 @@ def timing(late: float, lag: float, over: int = 0) -> dict:
 
 # Each block's worst proxy tick and median wire lag, in ms.
 TIMES = {
-    "mockdc": {"b0": (4.172, 5.639), "b1": (4.172, 9.977), "b2": (3.543, 5.551), "b3": (4.132, 9.833),
-               "b4": (3.798, 5.425)},
-    "mockdc-salt": {"b0": (4.359, 5.496), "b1": (3.856, 10.02), "b2": (4.361, 5.454), "b3": (3.439, 9.88),
-                    "b4": (3.815, 5.475)},
-    "fleet": {"east.b0": (3.295, 35.344), "east.b1": (3.439, 35.243), "west.b0": (3.819, 5.561),
-              "west.b1": (3.661, 9.961)},
-    "fleet-swapped": {"east.b0": (3.574, 35.291), "east.b1": (4.025, 35.15), "west.b0": (3.783, 5.533),
-                      "west.b1": (3.805, 9.785)},
-    "honest": {"b0": (4.12, 5.562), "b1": (4.157, 10.011), "b2": (3.561, 5.621), "b3": (3.874, 9.968)},
-    "flip-bit": {"b0": (4.238, 5.469), "b1": (3.597, 9.99), "b2": (3.634, 5.513), "b3": (3.545, 9.918)},
-    "late": {"b0": (3.605, 5.548), "b1": (3.598, 9.998), "b2": (3.424, 5.54), "b3": (4.318, 10.019)},
-    "extra": {"b0": (3.318, 5.512), "b1": (4.204, 9.931), "b2": (3.611, 5.596), "b3": (3.702, 9.902)},
+    "mockdc": {"b0": (4.319, 5.558), "b1": (4.191, 9.94), "b2": (4.297, 5.639), "b3": (4.191, 9.896),
+               "b4": (4.283, 5.516)},
+    "mockdc-salt": {"b0": (3.932, 5.508), "b1": (3.657, 9.994), "b2": (3.636, 5.552), "b3": (4.047, 9.976),
+                    "b4": (3.655, 5.529)},
+    "fleet": {"east.b0": (3.571, 31.101), "east.b1": (3.684, 31.094), "west.b0": (3.572, 5.476),
+              "west.b1": (3.644, 9.742)},
+    "fleet-swapped": {"east.b0": (3.615, 31.191), "east.b1": (3.509, 31.05), "west.b0": (3.385, 5.587),
+                      "west.b1": (3.419, 9.893)},
+    "honest": {"b0": (3.486, 5.664), "b1": (3.369, 10.216), "b2": (3.63, 5.681), "b3": (3.629, 10.201)},
+    "flip-bit": {"b0": (4.294, 5.532), "b1": (4.632, 10.225), "b2": (4.294, 5.621), "b3": (4.293, 10.168)},
+    "late": {"b0": (4.342, 5.584), "b1": (4.382, 10.518), "b2": (4.343, 5.612), "b3": (4.382, 10.319)},
+    "extra": {"b0": (3.869, 5.492), "b1": (3.852, 10.17), "b2": (3.853, 5.638), "b3": (3.968, 10.403)},
 }
 
 
@@ -207,8 +207,8 @@ def test_the_recorded_runs_verdicts_are_the_expected_ones(run, tmp_path, capsys)
     assert run.finish(tmp_path, EXITS) == 0
     summary = json.loads((tmp_path / "summary.json").read_text())
     assert summary["ok"] and summary["mismatches"] == [] and summary["ticks_over_slack"] == 0
-    assert summary["worst_tick"] == {"late_ms": 4.361, "slack_ms": 25.0, "over": 0, "lag_ms": 5.454,
-                                     "at": "mockdc-salt b2"}
+    assert summary["worst_tick"] == {"late_ms": 4.632, "slack_ms": 25.0, "over": 0, "lag_ms": 10.225,
+                                     "at": "workload/flip-bit b1"}
     b4 = summary["runs"]["mockdc"]["blocks"]["b4"]
     assert b4["verdicts"]["charged"] == ["timing", "serviced"] and b4["verdicts"]["unplanned_charged"] == ["timing", "refused"]
     assert b4["account"]["covert_bits"] == 16.0 + HELD and b4["unplanned_account"]["covert_bits"] == 16.0 + 2 * LINE
@@ -226,41 +226,42 @@ def test_the_recorded_runs_verdicts_are_the_expected_ones(run, tmp_path, capsys)
                                 "served", "covert", "budget", "(bits)", "wire", "lag", "worst", "tick"]
     assert len(lines) == 1 + 2 * 6 + 2 * 5 + 4 * 4 + 5 and all(line.endswith(" ok") for line in lines[1:39])
     row = {tuple(line.split()[:2]): " ".join(line.split()) for line in lines[1:39]}
-    assert row["mockdc", "b0"] == "mockdc b0 honest accepted records accepted 6/6 - 24 sound 5.6 ms 4.2/25 ms ok"
+    assert row["mockdc", "b0"] == "mockdc b0 honest accepted records accepted 6/6 - 24 sound 5.6 ms 4.3/25 ms ok"
     assert row["mockdc", "b2"] == ("mockdc b2 late refused responses[0] status:coverage-never-established records "
-                                   "refused out [0, 6000) 5/6 refused responses[0] - 2.4e+12 NOT sound 5.6 ms 3.5/25 ms "
+                                   "refused out [0, 6000) 5/6 refused responses[0] - 2.4e+12 NOT sound 5.6 ms 4.3/25 ms "
                                    "ok")
     assert row["mockdc", "b3"].startswith("mockdc b3 extra refused responses[2] mismatch records refused out "
                                           "[12000, 18000) 5/6 refused responses[2] - 2.4e+12 NOT sound")
     assert row["mockdc", "b4"] == ("mockdc b4 maintenance refused responses[1] no-verdict, requests[1] no-verdict records "
                                    "accepted; unplanned refused out, in [6000, 12000) 4/4 - 2.16e+13 sound; unplanned "
-                                   "4.8e+12 NOT sound 5.4 ms 3.8/25 ms ok")
+                                   "4.8e+12 NOT sound 5.5 ms 4.3/25 ms ok")
     assert row["mockdc", "all"] == ("mockdc all 10 ports records refused b2 out [0, 6000); b3 out [12000, 18000) "
                                     "2.64e+13 NOT sound ok")
     assert row["mockdc-salt", "b1"] == ("mockdc-salt b1 bits accepted; salt accepted records accepted 6/6 - 24 sound "
-                                        "10.0 ms 3.9/25 ms ok")
+                                        "10.0 ms 3.7/25 ms ok")
     assert "no-verdict; salt refused [1] records accepted;" in row["mockdc-salt", "b4"]
     assert row["fleet", "east.b1"] == ("fleet east.b1 late refused responses[0] status:coverage-never-established "
                                        "records refused out [0, 6000) 5/6 refused responses[0] - 2.4e+12 NOT sound "
-                                       "35.2 ms 3.4/25 ms ok")
-    assert row["fleet", "west.b0"] == "fleet west.b0 bits accepted records accepted 6/6 - 24 sound 5.6 ms 3.8/25 ms ok"
+                                       "31.1 ms 3.7/25 ms ok")
+    assert row["fleet", "west.b0"] == "fleet west.b0 bits accepted records accepted 6/6 - 24 sound 5.5 ms 3.6/25 ms ok"
     assert row["fleet", "all"] == ("fleet all 8 ports records refused east.b1 out [0, 6000); west.b1 out "
                                    "[12000, 18000) 4.8e+12 NOT sound ok")
     assert row["fleet-swapped", "all"] == ("fleet-swapped all 8 ports records refused east.b1 out [12000, 18000); "
                                            "west.b1 out [0, 6000) 4.8e+12 NOT sound ok")
     assert row["workload/flip-bit", "b2"] == ("workload/flip-bit b2 - accepted N3 refused (content) 9/10 refused "
-                                              "b2:requests[0] 5/5 5.5 ms 3.6/25 ms ok")
+                                              "b2:requests[0] 5/5 5.6 ms 4.3/25 ms ok")
     assert row["workload/late", "b2"] == ("workload/late b2 late refused responses[0] status:coverage-never-established "
                                           "N3 refused (missing, values) 8/10 refused b2:responses[0], b2:requests[0] "
-                                          "4/5 refused [0] 5.5 ms 3.4/25 ms ok")
+                                          "4/5 refused [0] 5.6 ms 4.3/25 ms ok")
     assert row["workload/extra", "b1"] == ("workload/extra b1 extra accepted N3 refused (unexplained) 10/10 4/5 refused "
-                                           "[1] 9.9 ms 4.2/25 ms ok")
-    assert row["workload/honest", "b3"] == "workload/honest b3 - accepted N3 holds 10/10 5/5 10.0 ms 3.9/25 ms ok"
+                                           "[1] 10.2 ms 3.9/25 ms ok")
+    assert row["workload/honest", "b3"] == "workload/honest b3 - accepted N3 holds 10/10 5/5 10.2 ms 3.6/25 ms ok"
     assert lines[39:] == [
         "",
         "answers: honest [16, 16] equal the reference; flip-bit [16, 16] equal the reference; late none; extra [16, 16] "
         "equal the reference",
-        "worst proxy tick: 4.4 ms late against 25 ms of slack (mockdc-salt b2), 0 ticks past the slack in the night",
+        "worst proxy tick: 4.6 ms late against 25 ms of slack (workload/flip-bit b1), 0 ticks past the slack in the "
+        "night",
         "steps: " + ", ".join(f"{s} 0" for s in EXITS),
         "every verdict is the expected one"]
 

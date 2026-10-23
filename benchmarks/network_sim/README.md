@@ -101,9 +101,9 @@ salt frame first, and the certifier's audit (`active_replay.audit_salt`) reads e
 revealed salt's width and counts the salt frames in each ingress window and in egress. The salt takes one of the ingress side's frames in each window's first bucket, so a
 request enqueued in that bucket can go out a bucket later.
 
-Run `r20261018-092640-66bf` (`run --salt`, when the salt frame carried the salt's commitment) gave the table's verdicts
-on every block under both audits: each ingress window held one salt frame and egress none, no egress frame held a salt,
-and each block's server received every salt. The night (below) runs it on the placeholder.
+Run `r20261018-092640-66bf` (`run --salt`, when the frame carried the salt's commitment) gave the table's verdicts on
+every block under both audits, one salt frame in each ingress window and none in egress, and each server received
+every salt. The night (below) runs it on the placeholder.
 
 ### Maintenance
 
@@ -225,20 +225,21 @@ needs a Python with torch (below).
 
 Every block's link is served (the certifier's `PROTOCOL.md`, "A served link"): responses padded with empty events to F
 (b0 88, b1 and b2 8, b3 2), requests to F_in frames (b3 2, else 1), and a proxy that admits a request only while its
-window still ends idle. The proxy signs nothing, so a stand-in (`n3_unit.Certifier`) signs N2's heads after the run.
+window still ends idle. The proxy signs nothing: a stand-in (`n3_unit.Certifier`) signs N2's heads after the run.
 
-The night `r20261021-083115-dae5`, on vy-nebius-cpu-2 with the lab up in its default shape:
+The night `r20261023-075024-27ea`, on vy-nebius-cpu-2 with the lab up in its default shape:
 
-| Run | Certifier audit | N3 | N3 v5 (8 windows a block) | Answers |
-|---|---|---|---|---|
-| honest | accepts all four blocks | holds | accepts all 32 | equal the reference |
-| `--tamper b1:flip-bit` | accepts all four blocks | refuses b1's responses (`content`) and b2's request, which carried the flipped message | refuses b1's `responses` window 0 and b2's `requests` window 0 | equal the reference: the bit doesn't change the token |
-| `--tamper b2:late` | refuses b2: `responses` window 0, `status:coverage-never-established` | refuses b2 and the blocks it starves (`missing`, `values`) | refuses window 0 of b0's `responses` and of b1's and b2's two links; b3 records nothing | none |
+| Run | Certifier audit | N3 | N3 v5 (10 windows a block) | N2 (5 a block) | Answers |
+|---|---|---|---|---|---|
+| honest | accepts all four blocks | holds | accepts all 40 | accepts all 20 | equal the reference |
+| `--tamper b1:flip-bit` | accepts all four blocks | refuses b1's responses (`content`) and b2's request, which carried the flipped message | refuses b1's `responses` window 0 and b2's `requests` window 0 | accepts all 20 | equal the reference: the bit doesn't change the token |
+| `--tamper b2:late` | refuses b2: `responses` window 0, `status:coverage-never-established` | refuses b2 and the blocks it starves (`missing`, `values`) | refuses window 0 of b0's `responses` and of b1's and b2's two links | refuses b2's window 0 | none |
+| `--tamper b1:extra` | accepts all four blocks | refuses b1 (`unexplained`) | accepts all 40 | refuses b1's window 1 | equal the reference |
 
 Under `late` v5 refuses each window that carried bytes of a block that committed no values, which no committed outbox
-holds. The same run's honest 40-token prompt (`--prompt 40 --steps 2`, `out/long-prompt`) is accepted by all four
-checks, v5 on all 68 windows of each block. Its timings and the earlier runs are in
-note:network-accounting/20261021T0615Z-report-net53-canonical-framing.
+holds. Under `extra` v5 takes the empty event past the Program's (open). `r20261021-083115-dae5`'s honest 40-token
+prompt passed every check then, v5 on all 68 windows a block
+(note:network-accounting/20261021T0615Z-report-net53-canonical-framing).
 
 ## The whole night
 
@@ -273,12 +274,12 @@ research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --tim
   bash -c 'python3 -B benchmarks/network_sim/run.py --out "$OUT"'
 ~~~
 
-Run `r20261021-083115-dae5` (`out/night`), the first on the canonical framing, exited 0 with "every verdict is the
-expected one" in 8.1 minutes. v5 accepts every window a block recorded but the one the certifier refuses, and on the
-lab the table's. Each mockdc run's check on every port refused exactly what its blocks' own checks refused. With the
-salt, b4's proxy revealed the salts of windows 0 and 2 only. Its record check under the plan was unchanged,
-and the certifier's salt check, like its audit, found nothing for window 1. The latest proxy tick was 5.9 ms late
-against the 25 ms slack. `run.py`'s tests render the summary of `r20261018-110501-432f`.
+Run `r20261023-075024-27ea` (`out/night`, at 51da0f4cb5) exited 0 with "every verdict is the expected one" in 10.3
+minutes. v5 accepts every window a block recorded but the one the certifier refuses, and on the lab the table's. Each
+mockdc run's check on every port refused exactly what its blocks' own checks refused. With the salt, b4's proxy
+revealed the salts of windows 0 and 2 only. Its record check was unchanged, and the salt check, like the audit,
+found nothing for window 1. The worst proxy tick was 4.6 ms late, of 25 ms of slack.
+`run.py`'s tests render its summary.
 
 ## N3 in zero knowledge
 
