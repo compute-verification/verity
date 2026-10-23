@@ -462,6 +462,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             if served is not None and not a.handoff:
                 out["registered_s"] = [round(registered_s.get(s, 0.0), 3) for s in range(decl.steps)]
                 del served.commit
+            print(f"[fill] {name} served step_s={out['step_s']} registered_s={out.get('registered_s')} "
+                  f"rss_gib={rss_gib()}", flush=True)
             if a.handoff:
                 comp.installed[0].release = None
             else:
