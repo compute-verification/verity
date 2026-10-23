@@ -1,7 +1,8 @@
 """A structural lowering (PRF-133): each specialized Definition lowered once per pattern of its arguments, its calls,
 batch members and scan iterations kept as calls, written as ``flock-ir-tmpl/v2`` (:mod:`verity_flock.tmpl`) instead of
-:func:`ir_lower.lower`'s one walk over the unrolled gates. An opt-in mode: nothing else calls it, and no existing
-circuit's lowering or digest changes.
+:func:`ir_lower.lower`'s one walk over the unrolled gates. An opt-in mode: only a structural unit stager
+(`class_statement.UnitStager`'s ``structural``, on `unit_lowering`'s ports, :class:`Ports`) and circuit-check's
+``c-flock:struct_lower`` realization call it, and no existing circuit's lowering or digest changes.
 
 A Definition's argument bit is a constant or a linear form over the caller's committed bits, as the unrolled lowering
 carries it. The callee is lowered once per *pattern* of its arguments: which argument positions name one gate (a caller
