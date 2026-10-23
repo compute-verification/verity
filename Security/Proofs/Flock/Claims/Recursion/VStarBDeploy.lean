@@ -25,7 +25,10 @@ record `deployRec IVStar scope {b with rd := L.readers}`. What holds of them the
   layout leave round 0, the link message, neither fixed, held nor assembled, so `HeldB` holds there only at a shape no
   compiled statement parses at.
 
-`PartChecksB`, `PartOpensB` and `DecompB` stay premises of `ksBoundRoute_deployed_parts`.
+`PartChecksB`, `PartOpensB` and `DecompB` stay premises of `ksBoundRoute_deployed_parts`, the first two at
+`showsPart`: the V\* statements staged as V\* stages them (`StagedPart`), whose setup's refusals (`RecIns.setup`) hold.
+The outer parse (`readOfO`) runs none of them, so off `StagedPart` a statement whose public rows disagree with its
+transcript still parses. `StagedB` holds at `showsPart` (`stagedB_deployRec_part`): an accepted run stages every part.
 -/
 
 namespace Claims.Recursion.VStarB
@@ -365,6 +368,29 @@ theorem stagedB_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inn
   obtain ⟨h1, h2⟩ := h x st hst hf Ω P ω r hacc s hs
   exact ⟨h1, fun i hi => h2 i (by show i < L.rounds x; omega)⟩
 
+/-- **`StagedB` at `showsPart`**: `stagedB_deployRec`, with each part's V\* statement on the run staged as V\* stages
+it (`stagedPart_run`). So the parts' premises may be stated at the staged statements alone, where the setup's
+refusals hold. -/
+theorem stagedB_deployRec_part {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
+    (b : Brings) (untr : TrReader) (L : Claims.Recursion.VStarB.LayoutB) (shape : Claims.Recursion.Form → Prop)
+    (hrb : ReadsBack H I.V b shape untr)
+    (hHeld : Claims.Recursion.VStarB.HeldB (deployRec I.V ivScope b) I L shape) :
+    Claims.Recursion.VStarB.StagedB H (deployRec I.V ivScope b) I L shape (showsPart untr b) (cmtTr untr) := by
+  intro x st hst hf Ω P ω r hacc s hs
+  obtain ⟨h1, h2⟩ := stagedB_deployRec H I ivScope b untr L shape hrb hHeld x st hst hf Ω P ω r hacc s hs
+  refine ⟨⟨h1, ?_⟩, h2⟩
+  change (Claims.run H P (V I.V b.st) x ω r).out = .acc at hacc
+  change s < nS x at hs
+  obtain ⟨hnum, -⟩ := run_round H I.V b.st x P ω r hacc hs rfl rfl
+  have hv : (Claims.Recursion.runVstar H (deployRec I.V ivScope b) I P x ω r).getD s [] =
+      staged b.st x ((Claims.run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)) s := by
+    show (vstar b.st x ((Claims.run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x))).getD s [] = _
+    rw [vstar_getD b.st x _ hs]
+    unfold vstarAt
+    rw [ite_eq_left hnum]
+  rw [hv]
+  exact stagedPart_run H I.V b.st x P ω r hacc hs
+
 /-- **`KSBoundRoute` with the staging read off the run**: `KSBoundRoute`'s premises, with `StagedB` (at an accepted
 run) where `KSBoundRoute` has `VstarShowsB` (at every staging, false at the deployment: `vstarShowsB_deployed_rejects`)
 and `RunPairs` dropped (it holds at `decCoin`: `runPairs_deployRec`), give `KSBoundDeployed`. -/
@@ -433,9 +459,10 @@ theorem ksBoundRouteStaged (rel relO : _root_.Flock.Readable.Parsed → _root_.F
   exact ksA_of_nf FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hKSn
 
 /-- **The deployed route with V\*'s staging discharged**: `KSBoundRouteStaged` at the coin server's transcript read by
-`untr` (`showsTr`, `cmtTr`), where `StagedB` holds wherever `untr` reads it back at an accepted run (`ReadsBack`,
-`stagedB_deployRec`). What V*'s parts still owe at each form is `HeldB`, `PartChecksB`, `PartOpensB` and `DecompB`, for
-some inner check `chk`. -/
+`untr`, at the V\* statements staged as V\* stages them (`showsPart`, `cmtTr`), where `StagedB` holds wherever `untr`
+reads it back at an accepted run (`ReadsBack`, `stagedB_deployRec_part`). What V*'s parts still owe at each form is
+`HeldB`, `PartChecksB`, `PartOpensB` and `DecompB`, for some inner check `chk`, the two parts' facts only at staged
+statements, where the setup's refusals hold. -/
 theorem ksBoundRoute_deployed_parts (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (untr : TrReader) :
     ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
@@ -450,10 +477,10 @@ theorem ksBoundRoute_deployed_parts (rel relO : _root_.Flock.Readable.Parsed →
       (∀ shape ∈ [Claims.Recursion.Form.Dense, Claims.Recursion.Form.Holo, Claims.Recursion.Form.Sparse],
         ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape (showsTr untr)
-            chk s) ∧
-          (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape (showsTr untr)
-            (cmtTr untr) s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape
+            (showsPart untr b) chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape
+            (showsPart untr b) (cmtTr untr) s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
       ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
       ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
@@ -463,8 +490,8 @@ theorem ksBoundRoute_deployed_parts (rel relO : _root_.Flock.Readable.Parsed →
   refine ksBoundRouteStaged rel relO b L nextE colsE wE join rowIn final w hP1 hBinds hWC hLB hF ?_ hT hL hRRP
   intro shape hs
   obtain ⟨chk, hHe, hCk, hOp, hDc⟩ := hparts shape hs
-  exact ⟨chk, showsTr untr, cmtTr untr, hHe,
-    fun decI => stagedB_deployRec FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
+  exact ⟨chk, showsPart untr b, cmtTr untr, hHe,
+    fun decI => stagedB_deployRec_part FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
       (FlockDeploy.deployPlain rel).scopeCheck bL untr L shape (fun x st hst _ => hrb x st hst trivial) (hHe decI),
     hCk, hOp, hDc⟩
 
