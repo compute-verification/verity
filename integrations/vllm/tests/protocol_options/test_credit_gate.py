@@ -32,6 +32,7 @@ from verity_vllm.protocol_options import credit_gate as CG  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_commit as CT  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_prover as PV  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_records as ZR  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
@@ -245,12 +246,24 @@ def periodic(tmp_path, monkeypatch):
     return make
 
 
-def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None):
+def _commit(tap, x, ids):
+    """The Commit's acquires at the window's one engine step (`pouw_h1_commit.CommitTap.take`): the step's input ids and
+    linear ``q``'s ``row_quant`` of `x`, as the int8 source takes them at its site."""
+    tap.take("embed/in", torch.tensor(ids), 0)
+    xq, s_a = int8_ops.row_quant(x.reshape(-1, K))
+    tap.take(f"{CT.site('q')}/0", xq, 0)
+    tap.take(f"{CT.site('q')}/1", s_a, 0)
+
+
+def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None, ids=None):
     """One small call (m rows of K, N = `n`) through `arm` with H1 installed (T = `ROWS`), its request admitted with an
     m-token prompt (with none: prompt embeddings, so no entry); the run closed and its y and run returned, the served y
     the plain linear's when `exact`. Its coins are the auditor host's challenger's with `remote` (the `auditor` fixture),
-    else held in this process; with `served` (`pouw_h1_served.Served`) its rows are the window Program's values."""
+    else held in this process; with `served` (`pouw_h1_served.Served`) its rows are the window Program's values and the
+    Commit is in its engine (`_commit`, its input ids `ids`, else the prompt's)."""
     layer = Linear(n, 1, arm)
+    if served is not None:
+        served.tap = CT.CommitTap("embed")
     runner = SimpleNamespace(execute_model=lambda scheduler_output, *a, **kw: None, decode_query_len=1)
     if remote:
         coins = {"challenger": AUDITOR, "session": RESERVED, "gate": lambda session, root: GATE["open"](session, root)}
@@ -267,6 +280,8 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
         runner.execute_model(SimpleNamespace(scheduled_new_reqs=[req], num_scheduled_tokens={"r": m},
                                              total_num_scheduled_tokens=m))
         x = (torch.randn(m, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
+        if served is not None:
+            _commit(served.tap, x, list(range(m)) if ids is None else ids)
         y = layer.quant_method.apply(layer, x)
         run = pouw.h1_run(ENTRY)
         run.close()
@@ -549,8 +564,8 @@ def _verifier(units, reject=(), seen=None, opened=lambda port: True):
 
 def test_a_window_with_no_served_tables_credits_nothing(periodic):
     """PRF-132: the gate-passed call's manifest row carries its credit bit and its z root under calls_root, but a window
-    with no served trees registers no A table and no ``b/<K>`` of its period's weights, so core's credit refuses it at
-    its first step that reads them (`credit.window`'s ``a-link``) and it credits nothing."""
+    with no served trees registers no A table and no ``b/<K>`` of its period's weights and has no Commit in its engine,
+    so core's credit refuses it before the draw (`credit.window`'s ``commit``, ROOTS1) and it credits nothing."""
     auditor = periodic(1, files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64)
     assert auditor.ended() is None
@@ -559,7 +574,7 @@ def test_a_window_with_no_served_tables_credits_nothing(periodic):
     assert "layout" not in rec["commitment"]
     out = _credit(auditor, rec)
     assert out["manifest"] is None and out["k"] == 1, out
-    assert out["window"][0] == "a-link" and "registers no A value" in out["window"][1], out
+    assert out["window"] == ("commit", CR.COMMIT_FORM), out
     assert out["credit"] is None and out["eps"] is None
 
 
@@ -593,6 +608,65 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     ev = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor())
     assert tuple(sorted(ev)) == CR.WINDOW_KEYS and ev["entries"] == entries and ev["statements"] == []
     assert ev["rounds"][0]["requests"] == c["requests_root"]
+    assert run.details["roots1"]["tied"] and run.details["roots1"]["own_trees"] == 0 and ev["commit"] == c["commit"]
+
+
+class EditArm(ZyArm):
+    """`ZyArm` handing ``observe`` (so H1's A table) the codes `edit` makes of the ones it quantized; its served y and
+    records are the real ones."""
+
+    def __init__(self, edit):
+        super().__init__()
+        self.edit = edit
+
+    def observe(self, layer, xq, s_a, y, z=None):
+        pass
+
+    def apply(self, layer, x, bias=None):
+        xq, s_a, y, zy = int8_ops.linear_zy(x.reshape(-1, K), layer.weight, layer.weight_scale, self.zy_rows)
+        self.observe(layer, self.edit(xq.clone()), s_a, y, zy)
+        return y
+
+
+def _one_row(xq):
+    xq[1, 0] = 1 if int(xq[1, 0]) != 1 else 2
+    return xq
+
+
+@pytest.mark.parametrize("arm,ids,want", [
+    (lambda: EditArm(torch.zeros_like), None, "call 0's A table h1/a/64@0 is not the Commit's row-table/0/q"),
+    (lambda: EditArm(_one_row), None, "call 0's A table h1/a/64@0 is not the Commit's row-table/0/q"),
+    (lambda: ZyArm(), [0, 7, 2], "round 0's input-ids table h1/ids@0 is not the Commit's input-ids/0"),
+], ids=["a-all-zero", "one-a-row-off", "ids-off-the-prompt"])
+def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, monkeypatch, arm, ids, want):
+    """ROOTS1 (VLLM-73), by core's credit (`credit._arow`): H1 handed every A code zero (the RT4 A = 0 probe) or one A
+    row off the codes the Commit acquired at the linear's row_quant, or the Commit acquired an input id other than the
+    prompt's (round 0's ids table is the prompt's, fixed before the salt), each with an honest Commit, whose record
+    registers its own tree for those rows. The serving process credits nothing (`pouw_h1_commit.UNTIED`); a prover
+    that skips that check and credits anyway is refused by core at ``arow``, before any proof is read."""
+    auditor = periodic(PHC.draw_k(LAYOUT), files=FILES)
+    own = CT.roots1
+    seen = {}
+
+    def skipped(run):
+        seen.update(own(run))
+        return {**seen, "reason": None}
+    monkeypatch.setattr(CT, "roots1", skipped)
+    _y, run = _serve(arm(), remote=True, n=64, served=_served(), ids=ids)
+    assert auditor.ended() is None
+    assert not seen["tied"] and seen["own_trees"] == 1, seen
+    assert all(v["credit"] for v in run.gated().values())
+    out = _credit(auditor, _record(run))
+    assert out["manifest"] is None and out["window"][0] == "arow" and want in out["window"][1], out
+    assert out["credit"] is None
+
+
+def test_the_serving_process_credits_nothing_in_a_window_off_the_commit(auditor):
+    """The same zero A with the serving process's own check (`pouw_h1_commit.roots1`): its calls' credit bits are
+    false (`UNTIED`), naming the call."""
+    _y, run = _serve(EditArm(torch.zeros_like), remote=True, n=64, served=_served())
+    assert run.details["roots1"]["reason"].startswith("roots1: call 0's A table h1/a/64@0 is not the Commit's")
+    assert {v["reason"] for v in run.gated().values() if not v["credit"]} == {CT.UNTIED}
 
 
 def _other_weights(edit):
@@ -838,8 +912,9 @@ def test_a_credit_bit_changed_after_the_draw_coin_is_refused(periodic):
     assert credited(c, rec["calls"])[0] == "missing"
     assert credited(c, rows) == ("draw", CR.DRAW_ROOT)
     salt = PHC.program_salt_of(c)
-    served = SV.served_digest(c["served"])
-    root = CR.draw_root(CR.calls_root(salt, rows, served), bytes.fromhex(c["draw"]["receipts"]), c["rounds"])
+    served = SV.digest_of(c["served"]["entries"], c["served"]["refused"])
+    root = CR.draw_root(CR.calls_root(salt, rows, served, CT.digest(c["commit"])), bytes.fromhex(c["draw"]["receipts"]),
+                        c["rounds"])
     assert credited({**c, "draw": {**c["draw"], "root": root.hex()}}, rows) == ("draw", CR.CHANGED)
     assert credited(c, [{k: v for k, v in rec["calls"][0].items() if k != CR.CREDIT}]) == ("credit", CR.no_bit(0))
     no_z = [{**rec["calls"][0], "tables": {**rec["calls"][0]["tables"], "z": None}}]

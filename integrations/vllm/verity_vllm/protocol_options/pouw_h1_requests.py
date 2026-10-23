@@ -42,13 +42,12 @@ an `act` value, a run input under the root of the round that admits it, committe
   step s, whole, as the aligned subtrees of its registered tree (`round_row`, `pouw_h1_served.Served.segments`),
   registered as the run records the call. So each call's A rows, the ones its units read, are fixed under its own
   round's root before that round's coin, and no other round lists them.
-* **Input ids** (ROOTS1, `pouw_h1_commit`): with the Commit in the serving engine, round s's root is also over its ids
-  table ``ids@<s>`` (`ids_table`: T hiding leaves, slot i the Commit's input token id of row i of step s, layer 0's
-  input, `EMPTY_ID` past them), so the step's input is fixed under its round's root before its coin, beside the request
-  table whose prompts it is held to (`pouw_h1_commit.ids_reason`).
-* **Not yet.** Core holds neither tie: compute accounting's `credit._arow` (each call's A table the Commit's AROW) and
-  Served.lean's layer-0 tie replace `pouw_h1_commit`'s checks (VLLM-73). The round root has no admit root (H1 has no
-  admit unit yet), no producer hands the run a receipt root yet, and no unit reads the round coins yet.
+  Round s's input-ids table ``ids@<s>`` (ROOTS1, `pouw_h1_commit`) is listed there whole too. Round 0's is built at
+  admission, before step 0's forward, from what precedes the salt: its prompts' tokens in step 0's batch order
+  (`first_ids`), each request's first rows at the first slot its entry names. Its root can't itself precede the salt:
+  its domain binds the window's open root (`credit._registration`), which is over round 0's request table.
+* **Not yet.** The round root has no admit root (H1 has no admit unit yet), no producer hands the run a receipt root
+  yet, and no unit reads the round coins yet.
 """
 from __future__ import annotations
 
@@ -98,18 +97,11 @@ REQUESTS_NONCE = 1 << 61
 SLOTS_NONCE = REQUESTS_NONCE + (1 << 40)
 #: call c's A and z tables' nonces are TABLES_NONCE + 3c + 0 and 2 (`TABLE_NONCES`; 1 was the retired y table's)
 TABLES_NONCE = REQUESTS_NONCE + (1 << 41)
-#: round r's ids table's nonce is IDS_NONCE + r, past the window's registered tables' (`pouw_h1_served.NONCE`)
-IDS_NONCE = REQUESTS_NONCE + (1 << 43)
-#: an ids table's leaf for a slot past the step's input: no token id is 2^32 - 1
-EMPTY_ID = b"\xff\xff\xff\xff"
 #: a call's hiding tables under the run's salt key (`pouw_h1.H1Run`): A's T slot rows and scales, z's records
 #: (`pouw_h1_records`)
 TABLE_TAGS = {"a": "verity/pouw/h1/a-table/v1", "z": "verity/pouw/h1/z-table/v2"}
 TABLE_NONCES = {"a": 0, "z": 2}    # j of each table's hm96 nonces
 ROUND_TAG = "verity/pouw/h1/round/v3"
-#: a round's root over its ids table too
-ROUND_IDS_TAG = "verity/pouw/h1/round/v4"
-IDS_TAG = "verity/pouw/h1/ids/v1"
 STEP_TAG = "verity/pouw/h1/step-calls/v1"
 REQUESTS_TAG = "verity/pouw/h1/requests/v2"
 OPEN_REQUESTS_TAG = "verity/pouw/h1/requests/round-0/v1"
@@ -160,30 +152,21 @@ def request_table(salt: bytes | None, r: int, rows: int, entries: Sequence[Reque
     return hiding_rows(requests_binding(salt, r), r, values, key, REQUESTS_NONCE + r)
 
 
+def first_ids(prompts: Mapping[str, Sequence[int]], order: Sequence[tuple[str, int]]) -> list[int | None]:
+    """Step 0's input token ids in its batch order (`batch_order`): each request's first rows are its first prompt tokens
+    (a window opens on new requests, with no prefix cached), None for a row past its prompt or of a request with none."""
+    out: list[int | None] = []
+    for req_id, rows in order:
+        p = prompts.get(req_id) or ()
+        out += [int(p[i]) if i < len(p) else None for i in range(int(rows))]
+    return out
+
+
 def slot_table(salt: bytes, r: int, rows: int, owners: Sequence[int | None], key: bytes) -> Any:
     """Round r's slot table: `rows` (T) hiding leaves, leaf i naming the request whose row is slot i of step r's A tables
     (`owners`, in the step's batch order), `EMPTY_SLOT` past them."""
     values = [slot_leaf(o) for o in owners[:rows]] + [EMPTY_SLOT] * (rows - min(len(owners), rows))
     return hiding_rows(slots_binding(salt, r), r, values, key, SLOTS_NONCE + r)
-
-
-def ids_binding(salt: bytes, r: int) -> bytes:
-    return tagged(IDS_TAG, salt, r)
-
-
-def id_leaf(token: int | None) -> bytes:
-    if token is not None and not 0 <= int(token) < 0xFFFFFFFF:
-        raise ValueError(f"token id {token} is not a u32 below 2^32 - 1")
-    return EMPTY_ID if token is None else struct.pack("<I", int(token))
-
-
-def ids_table(salt: bytes, r: int, rows: int, ids: Sequence[int], key: bytes) -> Any:
-    """Round r's ids table: `rows` (T) hiding leaves, leaf i the input token id of row i of step r (`ids`, the Commit's,
-    in the step's batch order) as u32 LE, `EMPTY_ID` past them. ValueError on more ids than slots."""
-    if len(ids) > rows:
-        raise ValueError(f"step {r} has {len(ids)} input ids, past its {rows} slots")
-    values = [id_leaf(t) for t in ids] + [EMPTY_ID] * (rows - len(ids))
-    return hiding_rows(ids_binding(salt, r), r, values, key, IDS_NONCE + r)
 
 
 def table_leaves(rows: int, width: int, m: int, *parts: np.ndarray) -> list[bytes]:
@@ -245,26 +228,22 @@ def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[
     return None
 
 
-def round_root(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes, receipts: bytes,
-               ids: bytes | None = None) -> bytes:
+def round_root(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes, receipts: bytes) -> bytes:
     """Round r's root, over step r's calls (`step_digest`, their A and z tables among them), the root of the request
     table of the entries it admits, the root of its slot table and round r - 1's receipts (`receipts_digest`;
-    `NO_RECEIPTS` in round 0), and with the Commit the root of its ids table (`ids_table`)."""
-    if ids is None:
-        return tagged(ROUND_TAG, salt, r, calls, requests, slots, receipts)
-    return tagged(ROUND_IDS_TAG, salt, r, calls, requests, slots, receipts, ids)
+    `NO_RECEIPTS` in round 0)."""
+    return tagged(ROUND_TAG, salt, r, calls, requests, slots, receipts)
 
 
 def round_row(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes, receipts: bytes,
-              segments: Mapping[str, Sequence[tuple[int, int, bytes]]], ids: bytes | None = None) -> dict[str, Any]:
+              segments: Mapping[str, Sequence[tuple[int, int, bytes]]]) -> dict[str, Any]:
     """Round r's row of the log before its coin: its parts, its ``inner`` root (`round_root`) and ``root``, the one the
     challenger receives, over that and each A value's ``a`` segments (`credit.round_root`: ``[level, index, root]``
     subtrees of the round's rows, `pouw_h1_served.Served.segments`)."""
-    inner = round_root(salt, r, calls, requests, slots, receipts, ids)
+    inner = round_root(salt, r, calls, requests, slots, receipts)
     return {"round": r, "root": CR.round_root(r, inner, {v: list(x) for v, x in segments.items()}).hex(),
             "inner": inner.hex(), "a": {v: [[lv, i, h.hex()] for lv, i, h in segments[v]] for v in sorted(segments)},
-            "calls": calls.hex(), "requests": requests.hex(), "slots": slots.hex(), "receipts": receipts.hex(),
-            **({} if ids is None else {"ids": ids.hex()})}
+            "calls": calls.hex(), "requests": requests.hex(), "slots": slots.hex(), "receipts": receipts.hex()}
 
 
 def round_reason(salt: bytes, row: Mapping[str, Any]) -> str | None:
@@ -275,12 +254,10 @@ def round_reason(salt: bytes, row: Mapping[str, Any]) -> str | None:
         calls, requests, slots, receipts, inner, root = (bytes.fromhex(row[k]) for k in (
             "calls", "requests", "slots", "receipts", "inner", "root"))
         segments = {v: [(int(lv), int(i), bytes.fromhex(h)) for lv, i, h in x] for v, x in row["a"].items()}
-        ids = None if row.get("ids") is None else bytes.fromhex(row["ids"])
     except (AttributeError, KeyError, TypeError, ValueError) as e:
         return f"a round of the log is malformed ({e})"
-    if round_root(salt, r, calls, requests, slots, receipts, ids) != inner:
-        return (f"round {r}'s root is not over its calls, its request table, its slot table, the receipts before it"
-                + (" and its ids table" if ids is not None else ""))
+    if round_root(salt, r, calls, requests, slots, receipts) != inner:
+        return f"round {r}'s root is not over its calls, its request table, its slot table and the receipts before it"
     if CR.round_root(r, inner, segments) != root:
         return f"round {r}'s root is not over its inner root and its A segments (`credit.round_root`)"
     return None
@@ -458,10 +435,9 @@ def batch_order(runner: Any, scheduler_output: Any) -> list[tuple[str, int]]:
     return [(str(r), int(tokens[r])) for r in sort(tokens, drafts, runner.decode_query_len)]
 
 
-__all__ = ["ADMISSIONS", "EMPTY_ID", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "IDS_NONCE", "IDS_TAG", "NO_RECEIPTS",
-           "OPEN_REQUESTS_TAG", "PER_ROUND", "REQUESTS_NONCE", "ROUND0", "ROUND_IDS_TAG", "RequestEntry", "RoundOpening",
-           "SLOTS_NONCE", "TABLES_NONCE", "TABLE_NONCES", "TABLE_TAGS", "UNENTERED", "batch_order", "draw_root",
-           "hiding_rows", "id_leaf", "ids_binding", "ids_table", "late_admission", "new_requests",
-           "receipts_digest", "request_reason", "request_table", "requests_binding", "round_reason", "round_root",
+__all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPTS", "OPEN_REQUESTS_TAG", "PER_ROUND",
+           "REQUESTS_NONCE", "ROUND0", "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "TABLE_NONCES",
+           "TABLE_TAGS", "UNENTERED", "batch_order", "draw_root", "first_ids", "hiding_rows", "late_admission",
+           "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding", "round_reason", "round_root",
            "round_row", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
            "sort_batch_req_ids", "step_digest", "table_leaves", "tables_reason"]

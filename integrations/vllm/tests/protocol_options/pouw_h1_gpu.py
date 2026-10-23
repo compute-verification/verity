@@ -459,7 +459,6 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             out.update(served_measures(got, want, cap, served_steps, t0, end, stamps))
             if com is not None:
                 rc = com.finalize()
-                tap.run_root = rc.run_root
                 out["committer"] = {"run_root": rc.run_root.hex(), "name": com.name, "finalize_s": round(rc.t_finalize_s, 3),
                                     **{k: rc.extra.get(k) for k in ("values_retained_bytes", "expected_tensors",
                                                                      "committed_tensors", "errors_n", "errors")}}
@@ -659,7 +658,8 @@ def served_check(h1: Any, served: Any, tdir: Path, register: bool = True) -> dic
     from verity_vllm.protocol_options import pouw_h1_served as SV
     doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20],
                            "committed": bool(served.registered) and not served.refused,
-                           "in_commitment": h1.commits.get("served") == served.document(),
+                           "in_commitment": h1.commits.get("served") == {"entries": served.entries(),
+                                                                         "refused": list(served.refused)},
                            "layout": layout_of(served.linears, served.calls, served.m, served.tile)}
     if not register:
         doc["register"] = {"skipped": "--commit's window registers no files"}

@@ -465,13 +465,11 @@ def manifest_reason(record: Mapping[str, Any]) -> str | None:
     """Why a window's record (`pouw_h1.CALLS_FILE`) isn't one manifest under its coins: the Program salt from its salt
     coin over its weights' root, each round's root over its parts, each call's A table under its own round's root (step
     s's calls digest over the record's rows of step s, their tables' roots among them: `pouw_h1_requests.tables_reason`),
-    and ``calls_root`` over every row and, with ``served``, the served trees' entries and the Commit's record
-    (`pouw_h1_served.served_digest`), and with that record each call's A table the Commit's AROW of its (step, linear)
-    and each round over the Commit's input ids (`pouw_h1_commit.arow_reason`, until core's `credit._arow`); None when it
-    is. The coins themselves are `session_reason`'s and `trusted_rounds_reason`'s to check; their credit is
+    and ``calls_root`` over every row, with ``served`` the served trees' entries (`pouw_h1_served.digest_of`) and with
+    ``commit`` the Commit's record (`pouw_h1.calls_root`); None when it is. The coins themselves are `session_reason`'s
+    and `trusted_rounds_reason`'s to check; their credit, the Commit's values among it (`credit._arow`), is
     `credit_reason`'s."""
     from verity_vllm.protocol_options import pouw_h1 as PH
-    from verity_vllm.protocol_options import pouw_h1_commit as CT
     from verity_vllm.protocol_options import pouw_h1_served as SV
 
     c, rows = record.get("commitment") or {}, list(record.get("calls") or ())
@@ -489,12 +487,17 @@ def manifest_reason(record: Mapping[str, Any]) -> str | None:
     served = c.get("served")
     if served is not None:
         try:
-            served = SV.served_digest(served)
+            served = SV.digest_of(served["entries"], served["refused"])
         except (KeyError, TypeError, ValueError) as e:
             return f"the window's served trees are malformed ({e})"
-    if PH.calls_root(salt, rows, served).hex() != c.get("calls_root"):
-        return "the window's calls_root is not over its record's calls" + (" and its served trees" if served else "")
-    return CT.arow_reason(record)
+    try:
+        root = PH.calls_root(salt, rows, served, c.get("commit"))
+    except ValueError as e:
+        return f"the window's Commit record is malformed ({e})"
+    if root.hex() != c.get("calls_root"):
+        return ("the window's calls_root is not over its record's calls" + (" and its served trees" if served else "")
+                + (" and its Commit record" if c.get("commit") is not None else ""))
+    return None
 
 
 def program_salt_of(c: Mapping[str, Any]) -> bytes:
@@ -611,15 +614,16 @@ def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Ma
                     descriptor: bytes) -> dict[str, Any]:
     """One window's evidence as core's `credit.window` and `credit.period_credit` read it (`credit.WINDOW_KEYS`), from its
     record (`pouw_h1.CALLS_FILE`: its manifest, salt, round log, draw, its served Commit's record ``commit`` and
-    registered ``entries``, every call table and the period's ``b/<K>``), its session's ``out/`` `directory`, its drawn calls' `statements` (`statement`: proof
-    files, never verdicts) and `descriptor`, the bytes of the circuit its period committed (`pouw_h1_served.descriptor`).
+    registered ``entries``, every call table and the period's ``b/<K>``), its session's ``out/`` `directory`, its drawn
+    calls' `statements` (`statement`: proof files, never verdicts) and `descriptor`, the bytes of the circuit its period
+    committed (`pouw_h1_served.descriptor`).
     Round 0's ``requests`` in its round log is the request table's root its open root binds (`salt.window_open_root`).
     ValueError on a record whose served trees or salt can't be read."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
     c = record.get("commitment") or {}
     served = c.get("served")
     try:
-        digest = None if served is None else SV.served_digest(served).hex()
+        digest = None if served is None else SV.digest_of(served["entries"], served["refused"]).hex()
         salt = program_salt_of(c).hex()
     except (CoinError, KeyError, TypeError) as e:
         raise ValueError(f"the window's served trees or salt can't be read ({e})") from e

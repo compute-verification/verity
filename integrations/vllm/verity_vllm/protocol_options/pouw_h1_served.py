@@ -32,10 +32,12 @@
   A tables whole (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
   is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
   ``b/<K>`` there, under the run's key.
-* **The Commit** (ROOTS1, VLLM-73): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) each
-  call's A table is also built from the rows the Commit acquired (`a_words`, `a_tree`), the Commit's AROW of the call,
-  which is H1's own tree when the rows are the same; each round's root is over the Commit's input ids (`ids`); and the
-  served document carries the Commit's record (`document`), whose digest `served_digest` binds.
+* **The Commit** (ROOTS1, VLLM-73): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) the
+  window also registers each round's input-ids table ``ids@<s>`` (`ids_words`: its M slots' token ids, two words each),
+  outside the Program's values (`ids`, in `entries`), and lists it whole under round s's root (`segments`). Round 0's
+  is its prompts' tokens in step 0's batch order, registered before step 0's forward (`open_ids`); each later round's
+  is the Commit's ids of its step (`close_round`). The Commit registers the window's own tree as its
+  value of the same rows when its rows are the same (`a_tree`, `ids_tree`, `pouw_h1_commit.CommitTap`).
 * **Refused** (no table from then on, and `trees` raises the reason): a window with no key of 64 bytes, blocks that aren't
   one per linear, a call off the declared Program's order, a served call with no z/y record, a weight that isn't the
   linear's n × K int8 codes and n scales or that changes, an odd K, what `h1window.program` refuses, and at `close` a
@@ -67,7 +69,6 @@ from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocol_options import pouw_h1 as PH
-from verity_vllm.protocol_options import pouw_h1_commit as CT
 from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
@@ -81,6 +82,10 @@ PREFIX = "h1/"
 NONCE = RQ.REQUESTS_NONCE + (1 << 42)
 #: ``b/<K>``'s nonces, past every call's two tables
 B_NONCE = NONCE + (1 << 40)
+#: round s's input-ids table's nonce is IDS_NONCE + s, past every ``b/<K>``'s
+IDS_NONCE = B_NONCE + (1 << 39)
+#: an input-ids slot past the step's rows: no token id is 2^32 - 1
+EMPTY_ID = 0xFFFFFFFF
 DIGEST_TAG = b"verity/pouw/h1/served/v3\0"
 
 
@@ -100,6 +105,18 @@ def row_words(codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
     b = b.reshape(len(b), -1)
     s = np.ascontiguousarray(np.asarray(scales, "<f4").reshape(len(b))).view(np.uint8).reshape(len(b), 4)
     return np.ascontiguousarray(np.concatenate([b, s], axis=1)).view("<u2").astype(np.uint16)
+
+
+def ids_words(ids: Sequence[int | None], slots: int) -> np.ndarray:
+    """A step's input token ids over `slots` (M) as u16 words ``(slots, 2)``, each id's u32 little-endian, `EMPTY_ID` for
+    None and past them. ValueError on more ids than slots or an id that isn't a u32 below `EMPTY_ID`."""
+    if len(ids) > slots:
+        raise ValueError(f"{len(ids)} input ids, past the Program's {slots} slots")
+    if any(t is not None and not 0 <= int(t) < EMPTY_ID for t in ids):
+        raise ValueError(f"an input id is not a u32 below {EMPTY_ID}")
+    v = np.full(slots, EMPTY_ID, "<u4")
+    v[:len(ids)] = [EMPTY_ID if t is None else int(t) for t in ids]
+    return v.view("<u2").reshape(slots, 2).astype(np.uint16)
 
 
 def record_words(z: np.ndarray, y: np.ndarray, slots: int, tile: tuple[int, int]) -> np.ndarray:
@@ -248,8 +265,11 @@ class Served:
     calls: list[tuple[str, int]] = field(default_factory=list)
     m: int = 0
     refused: list[str] = field(default_factory=list)
-    #: the Commit's tap in the serving engine (`pouw_h1_commit.CommitTap`): each call's AROW and each round's ids
+    #: the Commit's tap in the serving engine (`pouw_h1_commit.CommitTap`)
     tap: Any = None
+    #: each round's input-ids table and its words, with the tap
+    ids: dict[int, G.Registered] = field(default_factory=dict)
+    _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
     #: each linear's weight, the tensor and its codes, taken once, and its scales
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
@@ -317,6 +337,52 @@ class Served:
         under the same domain and salts, unregistered (`pouw_h1_commit.CommitTap.arow`)."""
         return self._tree(run, HW.table(self.program, "a", call.index), words, nonce(call.index, "a"), self.root)
 
+    def ids_tree(self, run: Any, s: int, words: np.ndarray) -> G.Registered:
+        """The tree of round s's input-ids table ``<PREFIX>ids@<s>`` over ``words`` (`ids_words`), unregistered, its domain
+        bound to the window's open root as a call's tables' are."""
+        value = self.program.fn.bindings["PREFIX"] + f"ids@{s}"
+        return self._tree(run, value, words, IDS_NONCE + s, self.root)
+
+    def _register_ids(self, run: Any, s: int, ids: Sequence[int | None]) -> G.Registered:
+        words = self._ids_words[s] = self.id_words(ids)
+        reg = self.ids[s] = self.ids_tree(run, s, words)
+        return reg
+
+    def ids_of(self, s: int) -> np.ndarray | None:
+        return self._ids_words.get(s)
+
+    def id_words(self, ids: Sequence[int | None]) -> np.ndarray:
+        return ids_words(ids, self.m)
+
+    def open_ids(self, run: Any, ids: Sequence[int | None]) -> None:
+        """With the tap, round 0's input-ids table, registered once the window is open and before step 0's forward:
+        ``ids``, step 0's prompt tokens in its batch order (`pouw_h1_requests.first_ids`), what round 0's request table
+        fixed before the salt."""
+        if self.tap is None or self.refused:
+            return
+        if self.root is None:
+            self.open(run)
+        if self.refused:
+            return
+        try:
+            self._register_ids(run, 0, ids)
+        except ValueError as e:
+            self.refused.append(f"round 0's input ids: {e}")
+
+    def close_round(self, run: Any, r: int) -> None:
+        """With the tap, at round r's close before its root: round r's input-ids table (after round 0, the Commit's ids
+        of its step), and the Commit's value of it (`pouw_h1_commit.CommitTap.input_ids`)."""
+        if self.tap is None or self.refused or self.program is None:
+            return
+        ids = self.tap.ids_at(r)
+        if r:
+            try:
+                self._register_ids(run, r, ids)
+            except ValueError as e:
+                self.refused.append(f"round {r}'s input ids: {e}")
+                return
+        self.tap.input_ids(run, self, r, ids)
+
     def _weight(self, call: Any, weight: Any, scale: Any) -> None:
         held = self._weights.get(call.layer)
         if weight is None or (held is not None and held[0] is weight):
@@ -336,7 +402,7 @@ class Served:
         take ``b/<K>`` once K's linears' weights are all held, the period's (refused unless each linear's codes and s_w
         are its registered rows) or the window's own: ``{value: root}``, what the call's manifest row commits under its
         round's root. Nothing once the window is refused."""
-        if self.program is None and not self.refused:
+        if self.root is None and not self.refused:
             self.open(run)
         if not self.refused:
             self._weight(call, weight, weight_scale)
@@ -377,12 +443,14 @@ class Served:
     def segments(self, run: Any, r: int) -> dict[str, list[tuple[int, int, bytes]]]:
         """Round r's A segments (`credit.round_root`): the A table ``a/<K>@<c>`` of each call c of step r, whole, as the
         aligned subtrees (`credit.cover`, each ``(level, index, root)``) of its registered tree, so round r's root commits
-        it before round r's coin and no other round lists it. Nothing once the window is refused."""
+        it before round r's coin and no other round lists it; and round r's input-ids table alike. Nothing once the
+        window is refused."""
         if self.refused or self.program is None:
             return {}
         per, out = len(self.linears), {}
-        for c in range(r * per, min((r + 1) * per, len(self.calls))):
-            reg = self.registered.get(HW.table(self.program, "a", c))
+        regs = [self.registered.get(HW.table(self.program, "a", c))
+                for c in range(r * per, min((r + 1) * per, len(self.calls)))]
+        for reg in [*regs, self.ids.get(r)]:
             if reg is not None:
                 out[reg.value] = [(lv, ix, reg.levels[lv][ix]) for lv, ix in CR.cover(0, reg.leaves)]
         return out
@@ -418,21 +486,13 @@ class Served:
         under its parameter's name, `h1window.row_key`)."""
         return HW.window_ports(self.program)
 
-    def ids(self, run: Any, r: int) -> bytes | None:
-        """Round r's ids table's root with the Commit's tap (`pouw_h1_commit.CommitTap.ids`), else None."""
-        return None if self.tap is None else self.tap.ids(run, r)
-
     def entries(self) -> list[dict[str, Any]]:
-        return [r.entry() for r in self.registered.values()]
-
-    def document(self) -> dict[str, Any]:
-        """The commitment's ``served``: the trees' entries, what was refused and, with the tap, the Commit's record."""
-        return {"entries": self.entries(), "refused": list(self.refused),
-                **({} if self.tap is None else {"commit": self.tap.record()})}
+        """The Program's registered values' entries, then each round's input-ids table's."""
+        return [r.entry() for r in self.registered.values()] + [self.ids[s].entry() for s in sorted(self.ids)]
 
     def digest(self) -> bytes:
-        """What `calls_root` binds: `served_digest` of `document`."""
-        return served_digest(self.document())
+        """SHA-512 over the trees' entries and what was refused, canonical JSON: what `calls_root` binds."""
+        return digest_of(self.entries(), self.refused)
 
     def query(self) -> dict[str, Any]:
         """The window Program's partition query: every tile of each K's template one unit (`h1window.query`)."""
@@ -440,14 +500,8 @@ class Served:
 
 
 def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> bytes:
-    """SHA-512 over the trees' `entries` and `refused`, canonical JSON, as a record carries them."""
+    """`Served.digest` of the trees' `entries` and `refused`, as a record carries them (the commitment's ``served``)."""
     return hashlib.sha512(DIGEST_TAG + canonical_json({"entries": list(entries), "refused": list(refused)})).digest()
-
-
-def served_digest(doc: Mapping[str, Any]) -> bytes:
-    """`Served.digest` of a record's served document (the commitment's ``served``, `Served.document`): its trees'
-    `digest_of`, with its Commit record bound to it (`pouw_h1_commit.bind`). KeyError or TypeError on a malformed one."""
-    return CT.bind(digest_of(doc["entries"], doc["refused"]), doc.get("commit"))
 
 
 def _served(run: Any) -> Served:
@@ -510,6 +564,6 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
     return Registration([t.entry() for t in got], served.root, files)
 
 
-__all__ = ["B_NONCE", "FILE", "NONCE", "PREFIX", "Registration", "Served", "V2", "Weights", "declared",
-           "declared_layout", "descriptor", "digest_of", "file_name", "layout", "nonce", "reads_file", "record_words",
-           "register", "register_weights", "row_words", "served_digest", "trees", "weights_of"]
+__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "NONCE", "PREFIX", "Registration", "Served", "V2", "Weights",
+           "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout", "nonce",
+           "reads_file", "record_words", "register", "register_weights", "row_words", "trees", "weights_of"]

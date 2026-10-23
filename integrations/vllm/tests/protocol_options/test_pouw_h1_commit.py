@@ -1,23 +1,25 @@
 """`protocol_options.pouw_h1_commit` (ROOTS1, VLLM-73): with the Commit in H1's serving engine (the int8 source at each
-linear's Int8RowQuant_v1 site, `pouw_h1_commit.source`, on a committer whose acquires a `CommitTap` sees), each call's
-registered A table ``a/<K>@<c>`` is the Commit's AROW of its (step, linear), one tree, and each round's root is over the
-Commit's input ids of its step, which are its requests' prompt tokens. A window whose served A is all zero codes, or one A
-row off the rows the Commit acquired, each with an honest Commit, is refused by `manifest_reason` and credits nothing
-(`UNTIED`); so is one whose input ids aren't its prompts. Its Commit record is under calls_root, so a record without it or
-with it edited is refused too. These checks stand in for core's `credit._arow` and Served.lean's layer-0 tie until
-they land; the window here is a two-linear stand-in under the auditor host's coins (`test_pouw_h1._host`)."""
+linear's Int8RowQuant_v1 site, `pouw_h1_commit.source`, on a committer whose acquires a `CommitTap` sees), its record
+registers each call's A table ``a/<K>@<c>`` as its AROW of the call's (round, linear) and each round's input-ids table
+``ids@<s>`` as its step's input ids, the window's own trees, and calls_root binds the record. A window whose served A is
+all zero codes, or one A row off the rows the Commit acquired, or whose Commit ids aren't its prompts, each with an
+honest Commit, credits nothing (`UNTIED`); core's credit refuses each at ``arow`` (`test_credit_gate`). The window
+here is a two-linear stand-in under the auditor host's coins (`test_pouw_h1._host`)."""
 from __future__ import annotations
 
 import hashlib
 import json
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
 from torch import nn  # noqa: E402
 
+from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
+from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_vllm import protocol_options as PO  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_ops  # noqa: E402
@@ -143,22 +145,36 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x):
     return json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text()), run, tap
 
 
-def test_each_calls_a_table_is_the_commits_arow_and_each_round_is_over_its_input_ids(tmp_path, monkeypatch):
-    """An honest window: the Commit acquired each linear's x_q and s_a at its site at engine step FIRST + s, and each call's
-    registered A table is that AROW, H1's own tree (no tree of the Commit's own); round s's root is over the Commit's
-    ids of step s, its prompts' tokens; the record passes `manifest_reason` and every served call is credited."""
+def _record_of(record):
+    return json.loads(bytes.fromhex(record["commitment"]["commit"]))
+
+
+def test_each_calls_a_table_is_the_commits_arow_and_each_rounds_ids_its_input_ids(tmp_path, monkeypatch):
+    """An honest window: the Commit acquired each linear's x_q and s_a at its site at engine step FIRST + s, and its
+    record registers each call's A table as `credit.commit_rows` of its round and linear and each round's input-ids table
+    ``ids@<s>`` as `credit.commit_ids`, the window's own trees (none of the Commit's own); round 0's ids are its prompts'
+    tokens in step 0's batch order, each round's table is listed whole under its round's root, the record is under
+    calls_root, and every served call is credited."""
     record, run, tap = _window(tmp_path, monkeypatch)
-    sites = [CT.site(f"model.layers.{w}") for w in range(2)]
-    assert run.details["roots1"] == {"tied": True, "reason": None, "arows": 4, "own_trees": 0, "rounds": 2,
+    assert run.details["roots1"] == {"tied": True, "reason": None, "values": 6, "own_trees": 0,
                                      "steps": {"0": FIRST, "1": FIRST + 1}}
-    assert sorted(tap.round_ids[0]) == [5, 6, 7, 8, 9] and sorted(tap.round_ids[1]) == [1000, 1001]
+    assert run.owners[0] == [1, 1, 0, 0, 0] and tap.round_ids[0] == [8, 9, 5, 6, 7]
+    assert np.array_equal(run.served.ids_of(0), SV.ids_words([8, 9, 5, 6, 7], run.served.m))
+    rec, entries = _record_of(record), {e["value"]: e for e in record["commitment"]["served"]["entries"]}
+    assert rec["format"] == CR.COMMIT_FORMAT and rec["program"] == run.served.program_digest
+    theirs = {e["value"]: e for e in rec["registered"]}
     for c in run.calls:
-        got, a = tap.arows[c.index], HW.table(run.served.program, "a", c.index)
-        assert got["value"] == a and got["root"] == run.tables[c.index]["registered"][a]
-        assert got["root"] == run.served.registered[a].root.hex()
-        assert (got["site"], got["step"], got["rows"]) == (sites[c.layer], FIRST + c.step, c.m)
-    assert [r["ids"] for r in run.round_log] == [tap.ids_roots[r]["root"] for r in range(STEPS)]
-    assert record["commitment"]["served"]["commit"]["arow"] == [tap.arows[c] for c in range(4)]
+        name = CR.commit_rows(c.step, f"model.layers.{c.layer}")
+        a = HW.table(run.served.program, "a", c.index)
+        assert {**theirs[name], "value": a} == entries[a]
+        assert tap.where[name] == {"call": c.index, "step": FIRST + c.step, "site": CT.site(f"model.layers.{c.layer}"),
+                                   "rows": c.m}
+    for s in range(STEPS):
+        v = f"{SV.PREFIX}ids@{s}"
+        assert {**theirs[CR.commit_ids(s)], "value": v} == entries[v]
+        assert v in run.round_log[s]["a"] and all(v not in r["a"] for r in run.round_log if r["round"] != s)
+    assert sorted(theirs) == sorted([CR.commit_rows(s, f"model.layers.{w}") for s in range(STEPS) for w in range(2)]
+                                    + [CR.commit_ids(s) for s in range(STEPS)])
     assert PHC.manifest_reason(record) is None
     assert all(v["credit"] for v in run.gated().values())
 
@@ -174,66 +190,48 @@ def _one_row(i, xq):
 
 
 @pytest.mark.parametrize("edit,own", [(_zero, 4), (_one_row, 1)], ids=["a-all-zero", "one-a-row-off"])
-def test_a_served_a_off_the_commits_arow_is_refused(tmp_path, monkeypatch, edit, own):
+def test_a_served_a_off_the_commits_arow_credits_nothing(tmp_path, monkeypatch, edit, own):
     """H1 handed codes other than the ones the Commit acquired (every A all zero, the RT4 A = 0 probe; or one row of call
-    0), with an honest Commit: those calls' AROWs are trees of the Commit's own at another root, so the window's record
-    is refused (`manifest_reason`, until core's `credit._arow`) and no call is credited (`UNTIED`)."""
+    0), with an honest Commit: the Commit registers those calls' rows as trees of its own at another root, so the
+    serving process credits no call (`UNTIED`), and core's credit refuses the window at ``arow``
+    (`test_credit_gate.test_a_window_whose_tables_are_not_the_commits_is_refused_by_core`)."""
     record, run, tap = _window(tmp_path, monkeypatch, edit)
     why = run.details["roots1"]["reason"]
-    assert why.startswith("roots1: call 0's A table ") and "not the Commit's AROW" in why
+    assert why.startswith("roots1: call 0's A table h1/a/64@0 is not the Commit's row-table/0/model.layers.0 ")
     assert tap.own == own and run.details["roots1"]["own_trees"] == own
-    assert PHC.manifest_reason(record) == why
-    assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
-
-
-def test_input_ids_off_the_prompts_are_refused(tmp_path, monkeypatch):
-    """Step 0's Commit ids with one id that isn't its request's prompt token: the round roots are over the Commit's ids, so
-    the record is one manifest, but the serving process refuses the window (Served.lean's layer-0 tie replaces it)."""
-    record, run, _tap = _window(tmp_path, monkeypatch, ids=lambda s, x: [*x[:3], 99, *x[4:]] if s == 0 else x)
-    assert run.owners[0] == [1, 1, 0, 0, 0]
-    assert run.details["roots1"]["reason"] == ("roots1: step 0's slot 3 has input id 99 in the Commit, and request 0's "
-                                               "prompt token 1 is 6: layer 0's input is not its round's request table")
     assert PHC.manifest_reason(record) is None
     assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
 
 
+def test_input_ids_off_the_prompts_credit_nothing(tmp_path, monkeypatch):
+    """Step 0's Commit ids with one id that isn't its request's prompt token: round 0's input-ids table is the prompts'
+    (built before step 0's forward), so the Commit registers its own tree as input-ids/0 and the serving process credits
+    nothing (`UNTIED`)."""
+    _record, run, tap = _window(tmp_path, monkeypatch, ids=lambda s, x: [*x[:3], 99, *x[4:]] if s == 0 else x)
+    assert run.details["roots1"]["reason"].startswith("roots1: round 0's input-ids table is not the Commit's input-ids/0")
+    assert tap.own == 1
+    assert CT.ids_reason(run, tap) == ("roots1: step 0's slot 3 has input id 99 in the Commit, and request 0's prompt "
+                                       "token 1 is 6: layer 0's input is not its round's request table")
+    assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
+
+
 def test_the_commits_record_is_under_calls_root(tmp_path, monkeypatch):
-    """The Commit's record is bound into the served digest calls_root binds (`bind`): without it, or with an AROW or ids
-    root edited, the record is refused."""
+    """The Commit's record is bound into calls_root (`pouw_h1.calls_root`, core's `credit.calls_root`): without it, or with
+    one value's root edited, the record is refused, and one that isn't a registration v2 record is malformed."""
     record, _run, _tap = _window(tmp_path, monkeypatch)
+    c = record["commitment"]
 
-    def edited(edit):
-        doc = json.loads(json.dumps(record))
-        edit(doc["commitment"]["served"])
-        return PHC.manifest_reason(doc)
-    assert "calls_root is not over" in edited(lambda s: s.pop("commit"))
-    assert "calls_root is not over" in edited(lambda s: s["commit"]["arow"][0].update(root="00" * 64))
-    assert "calls_root is not over" in edited(lambda s: s["commit"]["ids"][1].update(root="00" * 64))
-    served = record["commitment"]["served"]
-    plain = SV.digest_of(served["entries"], served["refused"])
-    assert SV.served_digest(served) == CT.bind(plain, served["commit"]) != plain
-    assert SV.served_digest({k: v for k, v in served.items() if k != "commit"}) == plain
-
-
-def test_a_commit_record_off_its_window_is_refused():
-    """`arow_reason` on records the window's own rows don't match: a refused tap, an AROW missing or of another call, and a
-    round whose ids root isn't the Commit's."""
-    entry = {"value": "p/a/64@0", "root": "aa" * 64, "domain": "dd", "leaves": 32, "words": 34}
-    rows = [{"index": 0, "tables": {"registered": {"p/a/64@0": "aa" * 64, "p/zy@0": "bb" * 64}}}]
-    commit = {"arow": [{**entry, "call": 0, "step": 3, "site": "q/row_quant", "rows": 1}], "ids": [{"round": 0, "root": "cc"}],
-              "refused": []}
-
-    def reason(commit=commit, rows=rows, ids="cc"):
-        return CT.arow_reason({"commitment": {"served": {"entries": [entry], "commit": commit},
-                                              "rounds": [{"round": 0, "ids": ids}]}, "calls": rows})
-    assert reason() is None
-    assert reason(commit={**commit, "refused": ["x"]}).startswith("roots1: the Commit's tap refused")
-    assert reason(commit={**commit, "arow": []}) == "roots1: call 0 has no AROW in the Commit's record"
-    assert reason(rows=rows + [{"index": 1, "tables": {"registered": {}}}]).startswith("roots1: call 1's manifest row")
-    assert reason(commit={**commit, "arow": [{**commit["arow"][0], "words": 33}]}).startswith("roots1: call 0's A table")
-    assert reason(ids="dd").startswith("roots1: round 0's root is not over the Commit's ids")
-    assert reason(ids=None).startswith("roots1: round 0's root")
-    assert CT.arow_reason({"commitment": {"served": {"entries": []}}, "calls": rows}) is None
+    def with_commit(commit):
+        return PHC.manifest_reason({**record, "commitment": {**c, "commit": commit}})
+    rec = _record_of(record)
+    rec["registered"][0] = {**rec["registered"][0], "root": "00" * 64}
+    assert "calls_root is not over" in PHC.manifest_reason({**record, "commitment": {k: v for k, v in c.items()
+                                                                                       if k != "commit"}})
+    assert "and its Commit record" in with_commit(canonical_json(rec).hex())
+    assert with_commit("00").startswith("the window's Commit record is malformed")
+    assert CR.calls_root(PHC.program_salt_of(c), record["calls"],
+                         SV.digest_of(c["served"]["entries"], c["served"]["refused"]),
+                         CT.digest(c["commit"])).hex() == c["calls_root"]
 
 
 def test_the_source_takes_every_linears_site_at_every_engine_step():

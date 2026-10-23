@@ -32,11 +32,13 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   listener returns (its roots and receipt root, as hex) is recorded with the call (``bound``). `Call.inputs` is
   `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the table's, and root(B) is the weight's,
   which compute accounting commits. This module commits neither.
-* **The Commit** (ROOTS1, `pouw_h1_commit`): with the Commit in the serving engine (``served``'s tap), each call's
-  registered A table ``a/<K>@<c>`` is held to the Commit's AROW of its (step, linear), the rows the Commit acquired at
-  the linear's ``Int8RowQuant_v1`` site in H1's table form, and round s's root is over the Commit's input ids of step s
-  (``ids@<s>``), layer 0's input, which are held to the request table's prompts. The Commit's record is under
-  calls_root. A window that fails either tie credits nothing (`pouw_h1_commit.UNTIED`). Core holds neither yet.
+* **The Commit** (ROOTS1, `pouw_h1_commit`): with the Commit in the serving engine (``served``'s tap), the window
+  registers each round's input-ids table ``ids@<s>`` under its round's root (round 0's from its prompts' tokens, before
+  step 0's forward), and the Commit's record (the commitment's ``commit``) registers each call's A table
+  as its AROW of the call's (round, linear) and each round's ids table as its step's input ids, the window's own trees
+  when the rows are the same. `calls_root` binds the record before the draw root; core's credit holds each table to
+  the Commit's value (`credit._arow`), and the serving process credits nothing in a window that fails it or whose
+  prefill ids aren't its prompts (`pouw_h1_commit.UNTIED`).
 * **z** is the call's z/y records (`pouw_h1_records`): the int8 arm serves ``verity_int8::scaled_mm_zy`` over T slots (its
   ``zy_rows``), writing the served y and one record a unit, its exact z (`Call.z`'s cells) then y = dq(z). With none,
   none is committed (with ``retain``, `engine.int8_exact.int_mm` beside, to check). The last ``retain`` calls' Y are kept.
@@ -80,6 +82,7 @@ import numpy as np
 from verity.core.protocols.pouw.audit import commit_rows, weight_binding
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.challenger import CoinError
@@ -490,6 +493,9 @@ class H1Run:
         self.owners[r] = owners
         if r == 0:
             self.open_window()
+            if self.served is not None:
+                prompts = {q: self.requests[i].prompt for q, i in self._ids.items()}
+                self.served.open_ids(self, RQ.first_ids(prompts, order))
         return out
 
     def _close_rounds(self, through: int) -> None:
@@ -509,9 +515,10 @@ class H1Run:
             slots = self._slot_tables[r] = RQ.slot_table(self.salt, r, self.rows, owners, self._key)
             calls = RQ.step_digest(self.salt, r, self._rows([c for c in self.calls if c.step == r]))
             receipts = self.receipts_of(r - 1) if r else RQ.NO_RECEIPTS
+            if self.served is not None:
+                self.served.close_round(self, r)
             row = RQ.round_row(self.salt, r, calls, table.commitment.root, slots.commitment.root, receipts,
-                               self.served.segments(self, r) if self.served is not None else {},
-                               self.served.ids(self, r) if self.served is not None else None)
+                               self.served.segments(self, r) if self.served is not None else {})
             coin = self.rounds.record(bytes.fromhex(row["root"])) if self.rounds is not None else None
             self.round_log.append({**row, "coin": coin.to_json() if coin else None})
 
@@ -713,10 +720,17 @@ class H1Run:
         bits = self.credit_bits()
         return [{**row, CREDIT: bits[row["index"]]} for row in self._rows(self.calls)]
 
+    def commit_record(self) -> str | None:
+        """With the Commit in the engine (``served``'s tap), its record in hex (`pouw_h1_commit.CommitTap.hex`)."""
+        if self.served is None or self.served.tap is None:
+            return None
+        return self.served.tap.hex(self.served)
+
     def calls_root(self) -> bytes:
         """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound), and with
-        ``served`` its registered trees' entries."""
-        return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest())
+        ``served`` its registered trees' entries and the Commit's record (`calls_root`)."""
+        return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest(),
+                          self.commit_record())
 
     def finish(self) -> None:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
@@ -724,10 +738,13 @@ class H1Run:
         self.close()
         if not self.commit or self._unopened is not None:
             return
+        commit = self.commit_record()
+        if commit is not None:
+            self.commits["commit"] = commit
         calls_root = self.calls_root()
         self.commits.update(calls_root=calls_root.hex(), static=self.details["static"])
         if self.served is not None:
-            self.commits["served"] = self.served.document()
+            self.commits["served"] = {"entries": self.served.entries(), "refused": list(self.served.refused)}
         if "draw" not in self.commits:
             receipts = self.receipts_of(self.steps - 1)
             root = RQ.draw_root(calls_root, receipts, self.round_log)
@@ -748,12 +765,12 @@ class H1Run:
                                                     "refused": self.refused, "calls": self.manifest()}) + "\n")
 
 
-def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes | None = None) -> bytes:
-    """`H1Run.calls_root` over the manifest rows `manifest`, and the served trees' digest `served` when the window has them."""
-    h = hashlib.sha512(b"verity/pouw/h1/calls/v2\0" + salt)
-    for row in manifest:
-        h.update(json.dumps(row, sort_keys=True).encode() + b"\n")
-    return h.digest() if served is None else hashlib.sha512(h.digest() + served).digest()
+def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes | None = None,
+               commit: str | None = None) -> bytes:
+    """`H1Run.calls_root` over the manifest rows `manifest`, the served trees' digest `served` when the window has them,
+    and the digest of its Commit record `commit` (hex, `pouw_h1_commit.digest`) when it has one: core's
+    `credit.calls_root`, the one place the record is bound. ValueError on a record `credit.commit_of` refuses."""
+    return CR.calls_root(salt, manifest, served, None if commit is None else CT.digest(commit))
 
 
 def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> list[tuple[bytes, bytes] | None]:
