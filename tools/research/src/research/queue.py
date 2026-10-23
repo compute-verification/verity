@@ -2205,9 +2205,8 @@ def main(argv: list[str]) -> int:
             return 0
         from .merge import off_drive, on_drive
 
-        if a.command in ("sync", "land", "drive") and not (a.dry_run or on_drive()):
-            raise QueueError(off_drive(q.branch if a.command == "sync" else "main",
-                                       "once" if a.command == "drive" else f"queue {a.command}"))
+        if a.command in ("sync", "land") and not (a.dry_run or on_drive()):
+            raise QueueError(off_drive(q.branch if a.command == "sync" else "main", f"queue {a.command}"))
         if a.command == "sync":
             q.sync(dry_run=a.dry_run)
             return 0
