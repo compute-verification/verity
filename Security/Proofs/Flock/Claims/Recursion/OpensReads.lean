@@ -6,6 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
 import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Recursion.LayoutBTops
 
 /-!
 # What a staged part's transcript shows is the record the verifier read in its own format
@@ -985,3 +986,86 @@ theorem heldRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   obtain ⟨kk, hkk⟩ := fixedRow_c hk hfr
   refine ⟨k, rs, kk, cc, hrs, hj, hlt2, hkk, ?_⟩
   rw [hsl, htr, byteArray_toList_eq]
+
+/-! ## A round a part holds whole after the link is the record's -/
+
+theorem layoutBTops_msgAt_succ (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (x : Msg) (s j : ℕ) :
+    (layoutBTops fin).msgAt x s (j + 1) = (streamRound x j).bind fun sr =>
+      if sr.2.1.isEmpty then
+        if sr.2.2.2 then
+          (readX x).bind fun r => (r.w.parts[s]?.bind partCircuit).bind fun c =>
+            ((heldRows r s).find? (·.1 == j)).map fun h => [(([] : Msg), hmCommit c h.2.2.1 h.2.2.2)]
+        else none
+      else none := rfl
+
+theorem commitRounds_lt {rs : Array RecVStar.SchedRound} {kc t : ℕ} (h : (RecVStar.commitRounds rs)[kc]? = some t) :
+    t < rs.size := by
+  have hm := List.mem_of_getElem? h
+  unfold RecVStar.commitRounds at hm
+  exact List.mem_range.1 (List.mem_filter.1 hm).1
+
+/-- `cmtTr recRead` at a staged part is the record's message (`staged_reads`). -/
+theorem cmtTr_record {x xO : Msg} {rc : RecRecord.Record}
+    (h : shownOf recRead x xO = some (rc.msgs.map fun mc => (mc.1, mc.2.toArray))) (n : ℕ) :
+    cmtTr recRead x n xO = (rc.msgs.map Prod.fst).getD n [] := by
+  unfold cmtTr
+  rw [h]
+  simp [Function.comp_def]
+
+/-- **A round a part holds whole after the link is the record's message there**: at a staged part the witness
+checks against, what part `s` holds whole at inner round `j + 1` at `layoutBTops` is its held row's slot, rep `rep`'s
+`k`-th `c_k` (`heldRow_bytes`), at a stream round with no tops, so the coin server's message `rep · R + k' + 1` where
+`k'` is the `k`-th commit round (`cmt_of_rep`), which is round `j + 1` as `cmtTr recRead` reads it (`staged_reads`). -/
+theorem held_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st : Stage} {s : ℕ} {x xO : Msg}
+    {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
+    (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {j : ℕ} {m : Msg}
+    (hm : (layoutBTops fin).held x s w (j + 1) = some m) : m = cmtTr recRead x (j + 1) xO := by
+  obtain ⟨i, sh, cs, tt, tr, record, rc, hi, hsh, hcs, hR, hrd, hshown⟩ := staged_reads hS
+  obtain ⟨lk, rc', want, -, hrd', -, -, -, hw, hrounds, hA0, hA1⟩ := FlockC3.VStarList.checkReads_ok hR
+  rw [hrd] at hrd'
+  cases hrd'
+  rw [cmtTr_record hshown]
+  unfold Claims.Recursion.VStarB.LayoutB.held at hm
+  split at hm
+  · cases hm
+  obtain ⟨segs, hseg, rfl⟩ := Option.map_eq_some_iff.1 hm
+  rw [layoutBTops_msgAt_succ] at hseg
+  obtain ⟨sr, hsr, hseg⟩ := Option.bind_eq_some_iff.1 hseg
+  split at hseg
+  · rename_i hE
+    split at hseg
+    · obtain ⟨r, hr, hseg⟩ := Option.bind_eq_some_iff.1 hseg
+      obtain ⟨c, hpc, hseg⟩ := Option.bind_eq_some_iff.1 hseg
+      obtain ⟨row, hrow, rfl⟩ := Option.map_eq_some_iff.1 hseg
+      have hj : row.1 = j := by simpa using List.find?_some hrow
+      obtain ⟨k, rs, kk, cc, hrs, hmr, hlt2, hkk, hbytes⟩ :=
+        heldRow_bytes hS hck hr hpc hi hcs (List.mem_of_find?_eq_some hrow)
+      obtain ⟨kr, hkr, hjr⟩ := Option.map_eq_some_iff.1 hmr
+      have hkR := commitRounds_lt hkr
+      have hsr' : sr = rs.getD kr default := by
+        unfold streamRound at hsr
+        simp only [hr, hrs, Option.bind_some] at hsr
+        split at hsr
+        · rw [← hj, ← hjr, show (row.2.2.2 * rs.size + kr) % rs.size = kr by
+            rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hkR]] at hsr
+          exact (Option.some.inj hsr).symm
+        · cases hsr
+      have htops : (rs.getD kr default).2.1 = #[] := by
+        rw [← hsr']
+        exact Array.isEmpty_iff.1 hE
+      have hsh' : sh = r.shape := by
+        have hS' := hS
+        obtain ⟨ms, -, -, -, rfl, -, -⟩ := hS'
+        obtain ⟨xr, hxr, hinner, -⟩ := insO_staged hi
+        rw [hr] at hxr
+        cases hxr
+        exact Option.some.inj (hsh.symm.trans hinner)
+      subst hsh'
+      have hA : FlockC3.VStarList.RepAgrees rc lk cs row.2.2.2 := by
+        rcases (by omega : row.2.2.2 = 0 ∨ row.2.2.2 = 1) with h | h <;> rw [h] <;> assumption
+      obtain ⟨-, hmsg⟩ := cmt_of_rep (i := r.shape) hw hrounds hlt2 hA.2 hrs hkr htops hkk
+      rw [← hj, ← hjr, hmsg]
+      simp only [Claims.Recursion.VStarB.readSegs, List.flatMap_cons, List.flatMap_nil, List.nil_append,
+        List.append_nil, hbytes]
+    · cases hseg
+  · cases hseg
