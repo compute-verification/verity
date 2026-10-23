@@ -525,7 +525,11 @@ def start_lean(source: bytes, registry: audit.Registry, exe: Path | None, done) 
     """The Lean verifier's process, with the verifier's secret and `registry` (which it must read back as
     `audit.Registry` writes it), `done` called with each window's check as it ends."""
     lean = lv.Lean(exe or lv.build(), done)
-    read = lean.call({"op": "init", "source": source.hex(), "registry": registry.to_json(), "chunk": CHECK_BATCH})
+    try:
+        read = lean.call({"op": "init", "source": source.hex(), "registry": registry.to_json(), "chunk": CHECK_BATCH})
+    except BaseException:
+        lean.close()
+        raise
     if read["registry"] != registry.to_json():
         lean.close()
         raise ValueError(f"the Lean verifier reads the registry as {read['registry']}, not as audit.Registry does: "
