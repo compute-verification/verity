@@ -20,8 +20,11 @@ cross-check the challenger's: each coin interval on both clocks, their rates, an
 The ledger check: its longest head verified under the pinned key (`ledger_head`, `verify_ledger`, `verify_periods`);
 the period's lane, cap and circuit, and that it closed; each session reserved and opened by the lane for the peer under
 the pin at epoch k, opened at its window root R_k, ended closed with no refused hello, inside the period; σ_0 asked
-after R_k, and each coin released after its root's receipt. A session served by `--challenger serve` (the verifier's
-machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not the auditor's.
+after R_k, and each coin released after its root's receipt. The peer is the verifier machine's name at the challenger
+host, as the run's own record gives it (`peer_of`): vy-nebius-1 for a verifier there, vy-auditor-1 for a host run.
+`--peer` overrides it, and a gate run whose record names none is refused. A session served by `--challenger serve`
+(the verifier's machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not
+the auditor's.
 
 **Credit.** The line of record (`line`) counts a session only when all five hold, each reported per session
 (`credit`), and gives any other session zero credit with the reasons:
@@ -49,7 +52,7 @@ tier, `verifier.paced_line`'s `filler`), which the line doesn't count as weights
 measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
 
     python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG]] [--ledger HEAD ...]
-        [--model-pin FILE] [--ingress B/S ...] [--table FILE]
+        [--peer NAME] [--model-pin FILE] [--ingress B/S ...] [--table FILE]
 """
 from __future__ import annotations
 
@@ -75,7 +78,7 @@ from verity.core.protocols.sampled_proofs import remote  # noqa: E402
 INGRESS = (4.4e9, 54.4e9)
 """The ingress charges a gate run's line is read at: the node's NICs into memory (time-held) and every link into it
 (link-charged), bytes a second."""
-LANE, PEER = "memory-accounting", "vy-nebius-1"
+LANE = "memory-accounting"
 VERIFIER_TREE = "verity/core/protocols/remote_bandwidth"
 LEAN_VERDICTS = ("lean", "both")
 CHECKS = ("credited", "complete", "accepted", "pinned", "bound")
@@ -99,6 +102,26 @@ def verifier_tree(commit: str, repo: Path = HERE.parents[1]) -> str:
         raise SystemExit(f"auditor_line: {repo}'s git has no {VERIFIER_TREE} at commit {commit}: run where git has the "
                          "verifier run's commit (`git fetch origin COMMIT`), or pass --repo")
     return p.stdout.strip()
+
+
+def peer_of(out: Path, v: dict) -> str:
+    """The challenger peer the verifier ran as (`verifier.py --challenger-peer`), from the run's record: each gate
+    session's in `v` (verifier.json's `challenger.peer`, `challengers.Gate.finish`), and a host run's `request.json`
+    beside `out` (its `argv`; its `peer` is the audited node). Refused unless the record names exactly one."""
+    named = {(s.get("challenger") or {}).get("peer") for s in v["sessions"]
+             if (s.get("challenger") or {}).get("challenger") == "gate"}
+    req = out.parent / "request.json"
+    if req.is_file():
+        argv = json.loads(req.read_text()).get("argv") or []
+        if "--challenger-peer" in argv[:-1]:
+            named.add(argv[argv.index("--challenger-peer") + 1])
+    named.discard(None)
+    if len(named) != 1:
+        got = f"challenger peers {', '.join(sorted(named))}" if named else "no challenger peer"
+        raise SystemExit(f"auditor_line: the run's record names {got} (verifier.json's gate sessions, {req}'s "
+                         "--challenger-peer): pass --peer NAME, the verifier machine's name in the challenger host's "
+                         "/etc/vy/peers")
+    return named.pop()
 
 
 def release_log(lines: list[str]) -> dict[str, dict[str, list]]:
@@ -347,11 +370,13 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
 
 
 def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, heads: list[Path] | None,
-            lane: str = LANE, peer: str = PEER, ingress: tuple[float, ...] = INGRESS, desc: bytes | None = None,
-            commit: str | None = None, pins: list[str] | None = None, model: dict | None = None) -> dict:
+            lane: str = LANE, peer: str | None = None, ingress: tuple[float, ...] = INGRESS,
+            desc: bytes | None = None, commit: str | None = None, pins: list[str] | None = None,
+            model: dict | None = None) -> dict:
     """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree), `pins`
-    the challenger host's pins log, its lines (None: the gate served none), and `model` the model the store must be
-    bound to ({name, checkpoint_sha512}, `--model-pin`'s) when the audit's period signs none."""
+    the challenger host's pins log, its lines (None: the gate served none), `model` the model the store must be
+    bound to ({name, checkpoint_sha512}, `--model-pin`'s) when the audit's period signs none, and `peer` the gate
+    sessions' peer (None: the record's, `peer_of`)."""
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
     D = bytes.fromhex(reg["digest"])
@@ -367,6 +392,8 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         if pin is None or period is None or desc is None:
             raise SystemExit("auditor_line: a gate run's line needs --pin, --period and --commit (the verifier run's "
                              "recorded commit, whose verifier the period must have committed)")
+        doc["peer"] = {"name": peer, "from": "--peer"} if peer else {"name": peer_of(out, v), "from": "record"}
+        peer = doc["peer"]["name"]
         heads = [*(heads or []), *sorted(ch_dir.glob("*.ledger.jsonl"))]
         key = next((k for k in (Ch.ChallengerKey.from_json(json.loads(p.read_text()))
                                 for p in sorted(ch_dir.glob("*/out/key.json")))
@@ -519,7 +546,8 @@ def main(argv: list[str] | None = None) -> int:
                          "bound")
     ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
     ap.add_argument("--lane", default=LANE)
-    ap.add_argument("--peer", default=PEER)
+    ap.add_argument("--peer", help="override the gate sessions' challenger peer, which is otherwise the run's record's "
+                    "(`peer_of`: verifier.json's, else a host run's request.json beside OUT)")
     ap.add_argument("--ingress", type=float, nargs="+", default=list(INGRESS), metavar="B/S")
     a = ap.parse_args(argv)
     desc = None if a.commit is None else descriptor(verifier_tree(a.commit, a.repo))
