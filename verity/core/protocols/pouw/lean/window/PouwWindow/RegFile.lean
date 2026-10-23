@@ -49,7 +49,7 @@ def valuePort (value : String) (e : Json) (root schema : String) : Except String
   let wordBits ← if Flock.J.has e "word_bits" then Flock.J.nat e "word_bits" ctx else pure 16
   let domain ← bytes64 (← Flock.J.str e "domain" ctx) s!"{value}'s domain"
   pure { name := value, value, root := ← bytes64 root s!"{value}'s root", leaves, words := some words, wordBits, domain,
-         reads := #[], schema }
+         readsRel := #[], schema }
 
 /-- **The verifier's roots** (`leaf_lanes.verifier_entries`): the partials' port, from the verifier's own entry
 (`lanes` rows of `words` 16-bit words under the registration's digest) at the produced record's root of `partials`, then
@@ -96,13 +96,14 @@ def portJson (p : Flock.Registered.Port) (full : Bool) : Json :=
 
 /-- **Statement `k`'s `--registered` file** (`leaf_lanes.registered_file` at `leaf_lanes.reads`): its data ports at the
 verifier's roots (`want?`), each read of a `fullValue` marked `read_in_full`, then the known ports `known`, and
-`complete` where it is set. A known port that is also a read is an error. -/
+`complete` where it is set. A known port that is also a read is an error. It is a `Flock.Registered.FORMAT_V0` file, as
+`leaf_lanes.registered_file` writes it (`registered.READS`): every port reads from unit 0 (`readsFrom := 0`). -/
 def fileOf? (rs : List (String × Flock.Registered.Port)) (T : Tile) (k : Option Nat) (known : List (String × Json))
     (complete : Bool) : Except String Json := do
   let ps ← want? rs T k
   if let some (nm, _) := known.find? fun (nm, _) => ps.any (·.name == nm) then
     throw s!"port {nm} is both a read and known"
-  pure <| Json.mkObj ([("format", Json.str Flock.Registered.FORMAT),
+  pure <| Json.mkObj ([("format", Json.str Flock.Registered.FORMAT_V0),
     ("ports", Json.mkObj (ps.map (fun p => (p.name, portJson p (fullValue p.value))) ++ known))] ++
     (if complete then [(Flock.Registered.COMPLETE_KEY, Json.bool true)] else []))
 

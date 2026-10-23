@@ -10,7 +10,7 @@ registered value's row (`Source.read`): `leaf_lanes.registered_file` at `leaf_la
 statements (`roots v`: its registered root, leaf count, row width, domain and schema), read at the layout's row:
 
 * `ownOf roots T k`: statement `k`'s data ports (lane `l`'s at `some l`, the combine's at `none`), port `name` reading
-  row `row` of `roots v` (`reads := #[some row]`, the statement's one unit);
+  row `row` of `roots v` (`readsRel := #[some row]` from unit 0, the statement's one unit);
 * `readFull T k`: the ports statement `k` marks `read_in_full` (`Flock.KnownRead.READ_KEY`), its reads of an A row, a B
   row or a partials row (`fullValue`: lane `l`'s `a<s>`, `b<t>` and `partials`, the combine's `p<x>`), each row read by
   several statements, which flock-verify holds to one width read in every bit (`Flock.KnownRead.fullRows`);
@@ -38,7 +38,7 @@ def regReads (T : Tile) (k : Option Nat) : List (String × String × Nat) :=
 /-- **Statement `k`'s registered data ports** (`leaf_lanes.registered_file`'s ports of `reads`): port `name` reads row
 `row` of the value `v`, registered once at `roots v` for all 33 statements. -/
 def ownOf (roots : String → Flock.Registered.Port) (T : Tile) (k : Option Nat) : List Flock.Registered.Port :=
-  (regReads T k).map fun (nm, v, row) => { roots v with name := nm, value := v, reads := #[some row] }
+  (regReads T k).map fun (nm, v, row) => { roots v with name := nm, value := v, readsRel := #[some row], readsFrom := 0 }
 
 /-- **The values a statement reads in full** (`leaf_lanes.FULL`): the A rows, the B rows and the partials, each row
 read by several statements. -/
@@ -52,13 +52,14 @@ def readFull (T : Tile) (k : Option Nat) : Array String :=
 /-- Two registered ports are one: every field equal, a byte string's by its bytes. -/
 def portEq (p q : Flock.Registered.Port) : Bool :=
   p.name == q.name && p.value == q.value && p.root.data == q.root.data && p.leaves == q.leaves && p.words == q.words &&
-    p.wordBits == q.wordBits && p.domain.data == q.domain.data && p.reads == q.reads && p.schema == q.schema
+    p.wordBits == q.wordBits && p.domain.data == q.domain.data && p.readsRel == q.readsRel && p.schema == q.schema &&
+    p.readsFrom == q.readsFrom
 
 theorem eq_of_portEq {p q : Flock.Registered.Port} (h : portEq p q = true) : p = q := by
-  obtain ⟨n, v, ⟨r⟩, l, w, b, ⟨d⟩, rd, s⟩ := p
-  obtain ⟨n', v', ⟨r'⟩, l', w', b', ⟨d'⟩, rd', s'⟩ := q
+  obtain ⟨n, v, ⟨r⟩, l, w, b, ⟨d⟩, rd, s, f⟩ := p
+  obtain ⟨n', v', ⟨r'⟩, l', w', b', ⟨d'⟩, rd', s', f'⟩ := q
   simp only [portEq, Bool.and_eq_true, beq_iff_eq] at h
-  obtain ⟨⟨⟨⟨⟨⟨⟨⟨rfl, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩ := h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨rfl, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩ := h
   rfl
 
 /-- `own` holds the port `p`: its first port of `p`'s name is `p`. -/
