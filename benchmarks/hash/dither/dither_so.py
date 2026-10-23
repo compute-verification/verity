@@ -124,6 +124,7 @@ NO_END = "none: the last D - 1 steps' receipts lie under no round and no draw co
 END_FAULTS = ("fault_tail", "fault_late_receipt")
 MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goes there (its per-call roots to scratch)
 GRAPH_ENV = "DITHER_SO_GRAPH"           # "0": a step's units launched call by call (`SoSide.dispatch`), else one graph
+PRIO_ENV = "DITHER_SO_PRIO"             # "1": any -so arm serves as -ovp does, on a stream above the units' (`patch`)
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -678,7 +679,8 @@ class SoWindow(DO.Window):
                      "coins_back": len(pipe.openings), "rounds_sent": len(sent),
                      # the challenger's log holds these round roots in this order (its published session's record)
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
-                     "window_end": self.end_stats()}
+                     "window_end": self.end_stats(), "serving_stream_priority": torch.cuda.current_stream().priority,
+                     "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None}
         if ov is not None:
             doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,
                                     "units_dispatched": ov.dispatched_upto + 1,
@@ -769,6 +771,8 @@ class SoSide(DA.Side):
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
         self.capture_ms: list[float] = []
+        if CONF.get("serve_prio") and pt and not win.overlap:
+            win.tree_streams = tuple(torch.cuda.Stream(device=dev, priority=-1) for _ in range(2))
         self.ov = Ov(win, self, win.overlap) if win.overlap else None
         self.spill = Spill(win, self, win.spill_mode) if win.window_end and win.spill_mode else None
 
@@ -1419,8 +1423,9 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
           ov: int = 0, serve_prio: bool = False, window_end: bool = False, spill: str | None = "azy") -> None:
     """dither_a's patch with z/y leaves (its op, `dithera::mm`, and the round's y-step and receipt-step leaves), then its
     window this module's (ring depth `depth`; `ov` > 0: -ov with a round ring that deep, and CAPTURES its) and its op's
-    calls this module's Side (before the engine is built).  `serve_prio`: the engine serves on a stream at the A tables'
-    priority, above the trees' and the units' (so the next forward's blocks take the SMs first as theirs retire).
+    calls this module's Side (before the engine is built).  `serve_prio` (or $DITHER_SO_PRIO=1): the engine serves on a
+    stream at the A tables' priority, above the trees' and the units' (so the next forward's blocks take the SMs first as
+    theirs retire); without -ov the admit tables too, since the serving stream waits on them between steps.
     `window_end`: -we, each window ends (`SoWindow.end`), each step's values held until it under `spill` (SPILLS;
     -we "azy", -wea "a")."""
     global CAPTURES
@@ -1430,6 +1435,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
         raise ValueError(f"dither-a-so: unit one of {DA.KONE} (not {unit!r}), A tables one of {tuple(AO)} (not {ao!r}), "
                          f"depth at least 2 (not {depth}), round ring 0 (no -ov) or more (not {ov})")
     DA.patch(t=t, h1c=h1c, h1o=h1o, unit=unit, h1u=h1u, key=key, z="zy", ao="", pt=pt, ls=False)
+    serve_prio = serve_prio or os.environ.get(PRIO_ENV) == "1"
     CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth, ov=ov, serve_prio=serve_prio, window_end=window_end)
     SoWindow.depth, SoWindow.a_once, SoWindow.overlap = depth, ao.startswith("b"), ov
     SoWindow.window_end = window_end
