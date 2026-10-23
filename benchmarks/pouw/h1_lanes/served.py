@@ -459,9 +459,43 @@ def summarize(a) -> int:
     return 0 if ok else 1
 
 
+SHARED = ("k", "unit", "window", "draw_root", "roots", "lane_program", "registration", "produced", "ands")
+
+
+def merge(a) -> int:
+    """The summaries of jobs that each proved a share of one unit's lanes (H1L_LANES), as one: every share read the same
+    window, draw, unit, registration and produced tree, each lane and negative was checked once, every lane accepted and
+    both negatives were refused."""
+    parts = [(p, json.loads(Path(p).read_text())) for p in a.summaries]
+    head, problems, checks, opened = parts[0][1], [], {}, {}
+    for p, s in parts:
+        problems += [f"{p}: {x} differs from {parts[0][0]}'s" for x in SHARED if s[x] != head[x]]
+        for tag, r in s["checks"].items():
+            if tag in checks:
+                problems.append(f"{tag} checked twice ({checks[tag]['from']} and {p})")
+            checks[tag] = {**r, "from": p}
+        for v, rs in s["opened"].items():
+            opened.setdefault(v, set()).update(rs)
+    n = LL.lanes(*RC)
+    lanes = [f"lane{ln}" for ln in range(n)]
+    problems += [f"{t} not checked" for t in lanes + sorted(EXPECT) if t not in checks]
+    problems += [f"{t}: Lean {r['lean']}, expected {r['expect']}" for t, r in checks.items() if not r["as_expected"]]
+    problems += [f"{v} opened at {len(r)} roots" for v, r in opened.items() if len(r) != 1]
+    problems += [f"{p}: its honest lanes' roots aren't the window's" for p, s in parts if not s["roots_ok"]]
+    merged = {"ok": not problems, "problems": problems, "parts": [p for p, _ in parts],
+              **{x: head[x] for x in SHARED}, "opened": {v: sorted(r) for v, r in opened.items()},
+              "accepted": sum(checks[t]["lean"] == "ACCEPT" for t in lanes if t in checks),
+              "refused": {t: checks[t]["why"] for t in EXPECT if t in checks}, "checks": checks}
+    Path(a.out).write_text(json.dumps(merged, indent=1))
+    print(f"{merged['accepted']}/{n} lanes accepted; negatives {merged['refused']}; "
+          f"{'ok' if merged['ok'] else 'NOT ok: ' + '; '.join(problems[:12])}")
+    return 0 if merged["ok"] else 1
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=("extract", "smoke", "prepare", "summarize"))
+    ap.add_argument("cmd", choices=("extract", "smoke", "prepare", "summarize", "merge"))
+    ap.add_argument("summaries", nargs="*")
     ap.add_argument("--seed", type=int, default=20261023)
     ap.add_argument("--calls")
     ap.add_argument("--drawn")
@@ -483,6 +517,8 @@ def main() -> None:
         smoke(a)
     elif a.cmd == "prepare":
         prepare(a)
+    elif a.cmd == "merge":
+        sys.exit(merge(a))
     else:
         sys.exit(summarize(a))
 
