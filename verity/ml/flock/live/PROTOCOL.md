@@ -877,7 +877,9 @@ prover. After the rep's end check the firewall sends the finish the rep's reques
 constraints it replayed (`cons LEN`, which the firewall evaluates on the pads: `constraints_failing_on_pads`) and then
 each round of its inner proof, which leaves through the rep's frame. Then the finish gets the rep's request again with
 every round's coins (`rep J R LEN`: the rep's draws, the values the firewall passed, the extra claims' points and the
-coins) and computes the rep's whole proof file from them and its own salts. That file is the one that leaves; Rust
+coins) and computes the rep's whole proof file from them and its own salts: where that request's inputs and coins are
+the ones the `inner` request took, the file encodes the proof that request computed (`Finish.Kept`), which is the same
+proof. That file is the one that leaves; Rust
 computes no opening, inner proof or proof file of a firewalled rep. A rep that a check failed, or whose frame stopped
 it, leaves no proof file, so the finish never gets its `rep` request. The bucket's `t.lean_finish` is the request's wall
 seconds, and `t.zk_inner` the inner proof's.
