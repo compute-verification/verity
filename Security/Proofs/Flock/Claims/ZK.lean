@@ -105,6 +105,7 @@ import Proofs.Flock.Claims.ZK.FrameLinks
 import Proofs.Flock.Claims.ZK.FrameReal
 import Proofs.Flock.Claims.ZK.FrameRep
 import Proofs.Flock.Claims.ZK.FrameInner
+import Proofs.Flock.Claims.ZK.FrameZK
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -744,6 +745,9 @@ import Proofs.Flock.Claims.ZK.SessionLean
   past the rep's schedule is the deployed check's but for `stopped` (`progOf_own_step`), and `ProgChecks` holds at
   `ofLoop` (`ofLoop_progChecks`) from `hS`, `hR`, `hP` and two named premises: the placeholder's pad row within a
   `u64`'s count (`hRow`) and `L₀`'s round at the inner proof's round 0 the firewall's own (`hL0`).
+* `FrameZK`: **`Flock.zk_server_lean_ofLoop`**, `Flock.zk_server_lean_loop` at `ofLoop` with no `ProgReads`
+  (`ofLoop_progReads`) and `ProgChecks` a conclusion (`ofLoop_progChecks_sizes`): `hS`, `hP` and `hRow` from one check
+  of the setup's sizes (`Loop.sizesOk`), and `hR` (`RealTabs`) and `hL0` its premises.
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
