@@ -157,6 +157,124 @@ def switchVec (g : Array F128) (c : Claim) : Array F128 :=
   let eY := eqTable (c.x.extract 1 c.x.size)
   (Array.range 128).map fun v => sumF eY.size fun y => if (g[y]!).bit v then eY[y]! else 0
 
+namespace Fast
+
+/-- `Link.parRange` specialized at each call (`parRangeS_eq`): each task's loop runs `f` inline, so no entry calls a
+closure or touches the reference count of anything the tasks share. -/
+@[specialize] def parRangeS {α : Type} (f : Nat → α) (a b : Nat) : Array α :=
+  ((Array.range a).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
+    (fun acc t => acc ++ t.get) #[]
+
+theorem parRangeS_eq {α : Type} (f : Nat → α) (a b : Nat) : parRangeS f a b = (Array.range (a * b)).map f :=
+  Link.parRange_eq f a b
+
+/-- `(Array.range n).map f` in tasks of `2^12` entries. -/
+@[specialize] def parGen (f : Nat → F128) (n : Nat) : Array F128 :=
+  let a := n / 4096
+  parRangeS f a 4096 ++ (Array.range (n - a * 4096)).map fun j => f (a * 4096 + j)
+
+theorem parGen_eq (f : Nat → F128) (n : Nat) : parGen f n = (Array.range n).map f := by
+  conv => rhs; rw [← Nat.add_sub_cancel' (Nat.div_mul_le_self n 4096)]
+  rw [Array.range_add, Array.map_append, Array.map_map, parGen, parRangeS_eq]
+  rfl
+
+theorem range_map_getElem! (f : F128 → F128) (t : Array F128) :
+    (Array.range t.size).map (fun i => f t[i]!) = t.map f := by
+  apply Array.ext
+  · simp
+  · intro i h1 _
+    simp only [Array.getElem_map, Array.getElem_range]
+    rw [getElem!_eq t (by simpa using h1)]
+
+/-- `t.map f` in tasks of `2^12` entries. -/
+@[specialize] def parMap (f : F128 → F128) (t : Array F128) : Array F128 := parGen (fun i => f t[i]!) t.size
+
+theorem parMap_eq (f : F128 → F128) (t : Array F128) : parMap f t = t.map f := by
+  rw [parMap, parGen_eq, range_map_getElem!]
+
+/-- `mulMap` in tasks. -/
+def mulMapPar (t : Array F128) (r : F128) : Array F128 :=
+  if t.size < 2048 then parMap (· * r) t else let tb := F128.mulTable r; parMap (F128.mulBy tb ·) t
+
+theorem mulMapPar_eq (t : Array F128) (r : F128) : mulMapPar t r = t.map (· * r) := by
+  unfold mulMapPar
+  split
+  · exact parMap_eq _ t
+  · rw [parMap_eq]
+    exact Array.map_congr_left fun v _ => F128.mulBy_mulTable r v
+
+/-- `eqTable` with each step in tasks: bit 1's half by `mulMapPar`, then bit 0's as bit 1's plus the table
+(`F128.mul_add_one`), as `eqStepFast` computes it. Not a `@[csimp]` of `eqTable`, which the verifier's compiled path
+reaches (`verifier` in `lean-audit.json`): only the fast paths below call it. -/
+def eqTablePar (r : Array F128) : Array F128 :=
+  r.foldl (fun t rj => let hi := mulMapPar t rj; parGen (fun i => hi[i]! + t[i]!) t.size ++ hi) #[1]
+
+theorem eqTablePar_eq (r : Array F128) : eqTablePar r = eqTable r := by
+  unfold eqTablePar eqTable
+  congr
+  funext t rj
+  rw [mulMapPar_eq]
+  dsimp only
+  rw [parGen_eq, eqStep, ← range_map_getElem! (· * (rj + 1))]
+  congr 1
+  apply Array.map_congr_left
+  intro i hi
+  have hi := Array.mem_range.1 hi
+  rw [getElem!_eq _ (by simpa using hi), Array.getElem_map, F128.mul_add_one, getElem!_eq t hi]
+
+/-- `switchVec` as compiled code computes it: byte `j`'s buckets of the table (`byteBuckets`), one task to a byte, then
+`s[8j + i] = Σ_{b < 256, bit_i(b)} buckets_j[b]`. -/
+def switchVecFast (g : Array F128) (c : Claim) : Array F128 :=
+  let eY := eqTablePar (c.x.extract 1 c.x.size)
+  let bs := ((Array.range 16).map fun j => Task.spawn fun _ => byteBuckets g eY j).map Task.get
+  (Array.range 128).map fun v => sumF 256 fun b => if b.testBit (v % 8) then (bs[v / 8]!)[b]! else 0
+
+theorem switchVec_eq_fast (g : Array F128) (c : Claim) : switchVec g c = switchVecFast g c := by
+  unfold switchVec switchVecFast
+  rw [eqTablePar_eq]
+  apply Array.map_congr_left
+  intro v hv
+  have hv := Array.mem_range.1 hv
+  rw [Array.map_map, getElem!_range_map _ (show v / 8 < 16 by omega)]
+  have h := (byteBuckets_go g (eqTable (c.x.extract 1 c.x.size)) (v / 8) (by omega) (show v % 8 < 8 by omega)
+    (eqTable (c.x.extract 1 c.x.size)).size).2
+  rw [show 8 * (v / 8) + v % 8 = v by omega] at h
+  exact h.symm
+
+/-- `basisVals` as compiled code computes it: each claim's `γ_k·Φ_k(eq(z_k, y))` from the byte tables of
+`γ_k·eq(rpp_k, ·)` (`mul_sumF`, `byteTable_sum`), in tasks of `2^12` points. -/
+def basisValsFast (sws : Array Switched) (l : Nat) : Array F128 :=
+  let tabs := sws.map fun sw => (eqTablePar sw.z, byteTable ((eqTable sw.rpp).map (sw.gamma * ·)))
+  let k := min l 12
+  parRangeS (fun y => tabs.foldl (fun acc (ez, tb) =>
+      let v := ez[y]!
+      acc + sumF 16 fun j => tb[256 * j + v.byte j]!) 0) (2 ^ (l - k)) (2 ^ k)
+
+theorem basisVals_eq_fast (sws : Array Switched) (l : Nat) : basisVals sws l = basisValsFast sws l := by
+  unfold basisVals basisValsFast
+  rw [parRangeS_eq, ← Nat.pow_add, Nat.sub_add_cancel (Nat.min_le_left _ _)]
+  apply Array.map_congr_left
+  intro y _
+  simp only [Array.foldl_map, eqTablePar_eq]
+  congr 1
+  funext acc sw
+  rw [← byteTable_sum, mul_sumF]
+  refine congrArg (acc + ·) (sumF_congr fun u _ => ?_)
+  rw [getElem!_map_mul]
+  split
+  · rfl
+  · exact F128.mul_zero _
+
+end Fast
+
+/-- Compiled code runs `switchVecFast` and `basisValsFast`; the kernel and every proof see `switchVec` and `basisVals`.
+`@[csimp]` rewrites only code compiled after it, so it stays above `repOpening`. -/
+@[csimp] theorem switchVec_eq_switchVecFast : @switchVec = @Fast.switchVecFast :=
+  funext fun g => funext fun c => Fast.switchVec_eq_fast g c
+
+@[csimp] theorem basisVals_eq_basisValsFast : @basisVals = @Fast.basisValsFast :=
+  funext fun sws => funext fun l => Fast.basisVals_eq_fast sws l
+
 /-- `c + Σ a_i h_i` at the pads `h`, over `min |a| |h|` terms (`zk_veil::Lin::eval`). -/
 def linAt (l : Zk.Lin) (h : Array F128) : F128 :=
   (Array.range (min l.a.size h.size)).foldl (fun acc i => acc + l.a[i]! * h[i]!) l.c

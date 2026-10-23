@@ -165,8 +165,9 @@ def test_applied_record_reads_every_linear_method():
     LinearMethodBase = type("LinearMethodBase", (), {})
     Int8 = type("Int8PlainLinearMethod", (LinearMethodBase,), {"int8_arm": "plain"})
     Unquantized = type("UnquantizedLinearMethod", (LinearMethodBase,), {})
-    q = Int8()
-    q.calls = 3
+    Experts = type("Int8ExpertsMethod", (type("FusedMoEMethodBase", (), {}),), {"int8_arm": "plain"})
+    q, x = Int8(), Experts()
+    q.calls, x.calls = 3, 2
 
     class Mod:
         def __init__(self, qm=None):
@@ -174,7 +175,9 @@ def test_applied_record_reads_every_linear_method():
 
     class Model:
         def named_modules(self):
-            return iter([("", Mod()), ("a.qkv", Mod(q)), ("a.o", Mod(Unquantized())), ("emb", Mod(object()))])
+            return iter([("", Mod()), ("a.qkv", Mod(q)), ("a.o", Mod(Unquantized())), ("emb", Mod(object())),
+                         ("m.experts.routed_experts", Mod(x))])
 
     assert E.applied_record(Model()) == {"a.qkv": {"method": "Int8PlainLinearMethod", "arm": "plain", "calls": 3},
-                                         "a.o": {"method": "UnquantizedLinearMethod", "arm": None, "calls": None}}
+                                         "a.o": {"method": "UnquantizedLinearMethod", "arm": None, "calls": None},
+                                         "m.experts.routed_experts": {"method": "Int8ExpertsMethod", "arm": "plain", "calls": 2}}

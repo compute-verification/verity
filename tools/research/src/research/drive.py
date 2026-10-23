@@ -1227,6 +1227,12 @@ class Driver:
               + (f", with the locks it regenerated for {', '.join(sorted(locks))}" if locks else ""))
         if v.why.startswith(DEFERRED):
             self._hand_over(drive, m, prs, tip, main, v)
+        for x in members:
+            if (now := self._head(x.pr)) and now != x.head:
+                self.refuse(drive, f"stale:{x.pr}@{x.head}", f"#{x.pr} landed at {x.head[:12]}, the head its train checked, not "
+                                                             f"at {now[:12]}, its head now: a new head doesn't cancel a running "
+                                                             f"train, so {now[:12]} rejoins `{q.branch}` above and lands in a later "
+                                                             "one", self._owner(x))
         from .merge import _sweep_after, caught_up
 
         with authed(q.auth):

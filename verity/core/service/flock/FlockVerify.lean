@@ -323,8 +323,9 @@ SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`R
 form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
 would keep one of them. A port the file names at known content (`Registered.KNOWN_KEY`) is refused unless its root is
 the root of that content (`Registered.checkKnownAll`). Beside the ports, whether the file names every port of the
-statement (`Registered.completeOf`, `Registered.checkComplete`), and the known content (`Registered.knownOf`), whose
-input ports every statement must read in every bit (`KnownRead.check`). -/
+statement (`Registered.completeOf`, `Registered.checkComplete`), and the rows `KnownRead.check` holds every statement
+to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
+the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`). -/
 def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray))))) := do
   let some f := argOf args flag | return .ok none
@@ -343,7 +344,7 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
           let own ← Registered.ofJson j
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
-          return (own, ← Registered.completeOf j, known)
+          return (own, ← Registered.completeOf j, known ++ KnownRead.fullRows own (← KnownRead.readOf j))
         return (r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
@@ -715,8 +716,10 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `programDigest`).
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
-work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
-soundness proof does not cover (`ProvedScope.check`, then its tables' `m`, `ProvedScope.sizesOk`, §16.15) is refused, and
+work draw, whatever flags it holds, or a subset draw without `--zk`), and under `--rec-inner` so is a session of more
+than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`). Every session of a
+statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
+`ProvedScope.sizesOk`, §16.15) is refused, and
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a
 session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), and a session
 over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), all after
@@ -829,6 +832,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
+        RecSetup.oneFull recInner r.2
         if zk then r.2.forM Zk.shapeOk
         r.2.forM (RecCoins.check · registered (RecCoins.Source.atC3 recCoins recInner recCommits)
           (RecSetup.c3 recInner recCommits))
@@ -1150,7 +1154,6 @@ def typedExpandCmd (args : List String) : IO UInt32 := do
         ("sha512", Lean.Json.str (hexOf c.sha)), ("class", Lean.Json.str (hexOf c.classSha))])
   IO.println s!"TYPED {line.compress}"
   return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
-
 
 /-- `typed-rows FILE [--tables DIR] --out DIR`: a typed template's rows as the verifier derives them, through
 `deriveChecked` with its tables held (`Typed.rows`), written in the writer's `rows/` formats. -/

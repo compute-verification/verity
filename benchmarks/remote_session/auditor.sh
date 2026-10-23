@@ -5,7 +5,11 @@
 # PERIOD and PIN are the audit's period and challenger key, COMMIT the verifier run's recorded commit. Through the
 # lane's gate key it reads the ledger (`ledger`), a head beside each session's, and the challenger host's pins log
 # (`pins`, RT4-INT-40). A gate that refuses `pins` serves no log: then no session is pinned, and the line credits
-# zero. Writes $OUT/auditor_line.json and $OUT/credit.md, each session's four checks and the line.
+# zero. It fetches origin/main itself and writes its first-parent history ($OUT/main.txt, `--main`, CMP-74): a pin off
+# that line, or no list when the fetch fails, likewise credits zero. Writes $OUT/auditor_line.json and $OUT/credit.md,
+# each session's four checks and the line. RUN may instead be a host run's directory as vy-auditor-1 ships it
+# (`vy-verifier-gate fetch`, out/ beside request.json): the sessions' challenger peer is the record's (verifier.json's,
+# else request.json's --challenger-peer), and PEER overrides it.
 #
 #   research run --queue --on vy-nebius-1 --project verity --source . --cwd clone --cpus 4 --mem-gb 16 \
 #     --timeout 30m --store-read --env RUN=DIR --env PERIOD=P --env PIN=SHA512 --env COMMIT=SHA \
@@ -17,6 +21,7 @@ KEY=${GATE_KEY:-$HOME/.ssh/vy-challenger-gate-memory-accounting}
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 cp -a "${RUN:?}/out" "$S/" && chmod -R u+w "$S"
+[ ! -f "$RUN/request.json" ] || cp "$RUN/request.json" "$S/"
 : > "$OUT/fetch.log"
 if [ -f "$RUN/run-files.evicted.json" ]; then
   art=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['artifact'])" \
@@ -38,9 +43,20 @@ else
   echo "pins rc $?: the gate serves no pins log ($(head -c 400 "$OUT/pins.jsonl"))" >> "$OUT/fetch.log"
   mv "$OUT/pins.jsonl" "$OUT/pins.refused"
 fi
+MAIN=()
+UNSHALLOW=()
+[ "$(git -C "$HERE" rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
+if git -C "$HERE" fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main >> "$OUT/fetch.log" 2>&1 \
+    && git -C "$HERE" rev-list --first-parent refs/remotes/origin/main > "$OUT/main.txt"; then
+  MAIN=(--main "$OUT/main.txt")
+  echo "main rc 0, $(grep -c . "$OUT/main.txt") first-parent commits" >> "$OUT/fetch.log"
+else
+  echo "main: can't fetch origin/main's first-parent history, so no session is pinned" >> "$OUT/fetch.log"
+fi
 uv run python "$HERE/auditor_line.py" "$S/out" --host-bytes "${HOST_BYTES:-1843153879040}" --pin "${PIN:?}" \
-  --period "${PERIOD:?}" --commit "${COMMIT:?}" --ledger "$OUT/ledger.jsonl" "${PINS[@]}" --table "$OUT/credit.md" \
-  > "$OUT/auditor_line.json" 2> "$OUT/auditor_line.err"
+  --period "${PERIOD:?}" --commit "${COMMIT:?}" ${PEER:+--peer "$PEER"} --ledger "$OUT/ledger.jsonl" "${PINS[@]}" \
+  "${MAIN[@]}" \
+  --table "$OUT/credit.md" > "$OUT/auditor_line.json" 2> "$OUT/auditor_line.err"
 W=$?
 cat "$OUT/fetch.log" "$OUT/credit.md"
 exit $W

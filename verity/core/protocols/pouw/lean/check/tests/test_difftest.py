@@ -419,6 +419,12 @@ def test_credit(pass_server):
 
 
 ROUNDED: Counter[str] = Counter()
+#: the refusals of the session's pin, `rounds`' and `salt`'s alike
+PIN_PARTS = ("which the host's pins log doesn't record as a commit of main's history",
+             "which the host's pins log records but which is not on main's first-parent line",
+             "seals no pins log (pins: {lines, sha#})", "not trusted: no pins log: ",
+             "not trusted: the verifier holds no copy of main's history",
+             "not trusted: the verifier's copy of main's history is malformed")
 
 
 def rounds(case: dict) -> dict | None:
@@ -455,7 +461,7 @@ def test_rounds(pass_server):
                  "under verity/challenger-auditor/v#, which names no prover", "'s end of session s# is malformed: ",
                  "not trusted: the challenger's record is signed at leaf ",
                  "not trusted: the challenger's refused hellos are not the ",
-                 "the challenger's log shows it received"):
+                 "the challenger's log shows it received", *PIN_PARTS):
         assert any(part in k for k in ROUNDED), part
 
 
@@ -490,5 +496,5 @@ def test_salt(pass_server):
                  "not trusted: no auditor's ledger", "not trusted: the challenger record's signature does not verify",
                  "the coin commitment's ", "the salt's a live coin opening is", "the salt's coin was not opened after",
                  "not its pouw/salt coin #", "the salt's coin does not open", "the salt's coin is epoch #",
-                 "the salt's coin opening is malformed"):
+                 "the salt's coin opening is malformed", *PIN_PARTS):
         assert any(_template(part) in k for k in SALTED), part

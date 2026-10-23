@@ -195,7 +195,8 @@ over the unit's records only, and no gate of the unit reads another unit's compu
 statements, accepted over shared committed values, realize the one unit's checks is that linked realization's to
 prove: BRIDGE2's `Accounting.Guarantees.TS.LeafLanesSound`, from `CheckedSessionSound` at each statement, under its
 premises `LeafChecks` (each statement's circuit realizes its Definition at its decoded ports) and `LeafReads` (the
-statements' data ports' openings hold one leaf, one partials record and the receipt; the known ports' are checked).
+statements' data ports' openings hold one leaf and the receipt; the known ports' are checked, and the partials are one
+row of one registered tree each lane and the combine read in full).
 -/
 
 namespace Accounting.Served

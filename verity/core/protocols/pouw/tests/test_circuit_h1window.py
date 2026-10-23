@@ -225,6 +225,7 @@ def test_a_calls_statement_opens_its_units_rows_at_its_tables_and_at_no_other_ca
             assert (e["leaves"], e["words"], e["domain"], e["row_schema"]) == (reg.leaves, reg.words,
                                                                                  dom.domain_id.hex(), G.SCHEMA_V2), port
             assert all(r is None for u, r in enumerate(e["reads"]) if not u0 <= u < u0 + n), port
+            assert len(e["reads"]) == u0 + n < tp.population, "no trailing nulls: a unit past reads reads none"
             for u in range(u0, u0 + n):
                 p = e["reads"][u]
                 assert G.verify_read(dom, reg.root, p, reg.bcs[p], reg.path(p), G.SCHEMA_V2), (port, u)
@@ -280,7 +281,7 @@ def test_a_calls_receipt_table_is_its_statements_output_row_o0_when_registered()
     assert (e["value"], e["leaves"], e["words"], e["root"], e["domain"]) == (
         rc, n, words, reg.root.hex(), reg.domain.domain_id.hex())
     assert e["domain"] == Cr.domain_of(digest, w, e)
-    assert e["reads"] == [u - u0 if u0 <= u < u0 + n else None for u in range(tp.population)]
+    assert e["reads"] == [u - u0 if u0 <= u < u0 + n else None for u in range(u0 + n)] and u0 + n < tp.population
     assert all(G.verify_read(reg.domain, reg.root, t, reg.bcs[t], reg.path(t), G.SCHEMA_V2) for t in range(n))
 
     odd_tile = _test_tile("H1WindowTestOddReceiptTile", sig=lambda S: _tile_sig(S)[:1] + (

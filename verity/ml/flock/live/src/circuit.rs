@@ -72,6 +72,12 @@ pub struct Tags {
 pub const TAGS: Tags = Tags { statement: STATEMENT, sigma: "verity/flock-circuit/sigma", domain: "flock-circuit/fast100x2/rep" };
 pub const TYPED_TAGS: Tags =
     Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
+/// A templated statement (PRF-133, the Lean `Tags.circuitTmpl`): META `template` and `layout` in place of the unit's rows,
+/// which the prover reads from `flock-tmpl-unit`'s file, the unit committed at the layout's positions.
+pub const TMPL_FORMAT: &str = "flock-circuit/tmpl";
+pub const TMPL_STATEMENT: &str = "verity/flock-circuit/tmpl";
+pub const TMPL_TAGS: Tags =
+    Tags { statement: TMPL_STATEMENT, sigma: "verity/flock-circuit/tmpl/sigma", domain: "flock-circuit-tmpl/fast100x2/rep" };
 pub const SCHEME: &str = "frame-v3-sha512/hm96-sha512";
 pub const ROW_SCHEMA: &str = "hm96-sha512/row/v1";
 /// a bit row's leaf (`sha512/row/v2`; `verity.ml.commitments.rowleaf.SCHEMA_HM96_SHA512_ROW_V2`)
@@ -684,18 +690,32 @@ impl Composite {
 
     /// `tables`: the directory of the pinned MUFU tables (`verity_flock.ir_lower.write_tables`), when the circuit has lookups.
     pub fn parse(text: &str, tables: Option<&str>) -> Result<Self, String> {
+        Self::parse_with(text, tables, None)
+    }
+
+    /// [`Composite::parse`], with a templated statement's unit: the rows `flock-tmpl-unit` wrote for its META
+    /// `template` and `layout`, at their positions (an `ORDER` line).
+    pub fn parse_with(text: &str, tables: Option<&str>, tmpl_unit: Option<&str>) -> Result<Self, String> {
         let sha512: [u8; 64] = Sha512::digest(text.as_bytes()).into();
         let mut lines = text.split_inclusive('\n');
         let head = lines.next().ok_or("empty circuit")?.trim_end();
         // a typed statement (`crate::typed`) carries its unit as types; the prover derives its rows
-        let (name, typed) = match (head.strip_prefix("flock-circuit "), head.strip_prefix("flock-circuit/types ")) {
-            (Some(n), _) => (n.to_string(), false),
-            (_, Some(n)) => (n.to_string(), true),
+        let (name, typed, tmpl) = match (head.strip_prefix("flock-circuit "), head.strip_prefix("flock-circuit/types "),
+                                         head.strip_prefix("flock-circuit/tmpl ")) {
+            (Some(n), _, _) => (n.to_string(), false, false),
+            (_, Some(n), _) => (n.to_string(), true, false),
+            (_, _, Some(n)) => (n.to_string(), false, true),
             _ => return Err("not a flock-circuit circuit".into()),
         };
         let meta: Value = serde_json::from_str(lines.next().and_then(|l| l.trim_end().strip_prefix("META ")).ok_or("no META line")?)
             .map_err(|e| format!("META: {e}"))?;
-        let (format, statement) = if typed { (crate::typed::FORMAT, crate::typed::STATEMENT) } else { (FORMAT, STATEMENT) };
+        let (format, statement) = if typed {
+            (crate::typed::FORMAT, crate::typed::STATEMENT)
+        } else if tmpl {
+            (TMPL_FORMAT, TMPL_STATEMENT)
+        } else {
+            (FORMAT, STATEMENT)
+        };
         if meta["format"] != format || meta["statement"] != statement {
             return Err(format!("META: not {statement}"));
         }
@@ -732,6 +752,15 @@ impl Composite {
                 nets.push((d.clone(), match generated.remove(&j) { Some(net) => net, None => parse_net(&inst.layout_text(j))? }));
             }
             instance = Some(inst);
+        } else if tmpl {
+            if !meta["template"].is_array() || !meta["layout"].is_string() {
+                return Err("META: a templated statement's template (its lines) and layout (its mode)".into());
+            }
+            let unit = parse_net(tmpl_unit.ok_or("a templated statement: pass its unit's rows (--tmpl-unit F, from flock-tmpl-unit)")?)?;
+            if unit.order.is_none() {
+                return Err("the templated unit's rows have no ORDER line (its position map)".into());
+            }
+            nets.push(("unit".to_string(), unit));
         }
         let mut lookups_fast: Vec<(usize, LookupNet)> = Vec::new();
         while let Some(l) = lines.next() {
@@ -741,6 +770,9 @@ impl Composite {
             }
             if typed && h[1] == "unit" {
                 return Err("CIRCUIT unit: a typed statement's unit is its types, never rows".into());
+            }
+            if tmpl && h[1] == "unit" {
+                return Err("CIRCUIT unit: a templated statement's unit is its template, never rows".into());
             }
             let n: usize = h[2].parse().map_err(|_| "CIRCUIT sections count")?;
             let body: String = (0..n).map(|_| lines.next().unwrap_or("")).collect();
@@ -1286,14 +1318,19 @@ impl Composite {
         &self.nets[self.unit_net].1
     }
 
-    /// `verity/flock-circuit`, or `verity/flock-circuit/types` for a typed statement
+    /// `verity/flock-circuit`, or `verity/flock-circuit/types` for a typed statement, `verity/flock-circuit/tmpl` for a
+    /// templated one
     pub fn statement(&self) -> &str {
         self.meta["statement"].as_str().unwrap_or(STATEMENT)
     }
 
     /// Its statement's tags.
     pub fn tags(&self) -> &'static Tags {
-        if self.statement() == crate::typed::STATEMENT { &TYPED_TAGS } else { &TAGS }
+        match self.statement() {
+            crate::typed::STATEMENT => &TYPED_TAGS,
+            TMPL_STATEMENT => &TMPL_TAGS,
+            _ => &TAGS,
+        }
     }
 
     pub fn unit_range(&self) -> &Range {
@@ -3177,6 +3214,8 @@ mod tests {
         assert_eq!((TAGS.statement, TAGS.sigma, TAGS.domain), ("verity/flock-circuit", "verity/flock-circuit/sigma", "flock-circuit/fast100x2/rep"));
         assert_eq!((TYPED_TAGS.statement, TYPED_TAGS.sigma, TYPED_TAGS.domain),
                    ("verity/flock-circuit/types", "verity/flock-circuit/types/sigma", "flock-circuit-types/fast100x2/rep"));
+        assert_eq!((TMPL_TAGS.statement, TMPL_TAGS.sigma, TMPL_TAGS.domain),
+                   ("verity/flock-circuit/tmpl", "verity/flock-circuit/tmpl/sigma", "flock-circuit-tmpl/fast100x2/rep"));
     }
 
     #[test]

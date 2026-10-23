@@ -822,7 +822,9 @@ frame stopped table I rep R`). The analysis's release is this loop
 frames take are proved (`loop_coinsRead`), and its link (`LinkRoundEq`) and the frames' state (`ProgReads`: the `prior` coins and the
 rounds Rust hands them) are still assumed. So are the bytes it releases, which the theorem reads only through named
 hypotheses: the worker's passed rounds and the stand-in rounds are the session's (`LiveRoundEq`, `FillRoundEq`), and so
-are the `Finish`'s record and proof files (`FinalRoundEq`, from `FrameAdmits` and `FinishIs`: `finalRoundEq_of_finishIs`).
+are the `Finish`'s record and proof files (`FinishIs`), and the frames refuse every coin fault (`FrameUnrefused`), from
+which with the tables admitting unrefused coins, proved at the deployed tables, `FinalRoundEq` follows
+(`finalRoundEq_ofLoop`).
 None of them is proved about the live path yet, so the ZK server is not yet proved zero-knowledge.
 
 The frame's protocol, which the loop steps on its own requests (`Frame.Req`) and `flock-firewall frame` serves on its

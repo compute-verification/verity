@@ -32,8 +32,8 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   listener returns (its roots and receipt root, as hex) is recorded with the call (``bound``). `Call.inputs` is
   `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the table's, and root(B) is the weight's,
   which compute accounting commits. This module commits neither.
-* **The Commit** (ROOTS1, `pouw_h1_commit`, ``served``'s tap): each round's input-ids table ``ids@<s>`` and each call's A
-  table are the Commit's values, its record bound into `calls_root` before the draw root and held to them by core's
+* **The Commit** (ROOTS1, `pouw_h1_commit`, ``served``'s tap): each round's input-ids table ``ids@<s>`` and A table of
+  each K are the Commit's values, its record bound into `calls_root` before the draw root and held to them by core's
   credit (`credit._arow`); a window that fails it credits nothing (`pouw_h1_commit.UNTIED`).
 * **z** is the call's z/y records (`pouw_h1_records`): the int8 arm serves ``verity_int8::scaled_mm_zy`` over T slots (its
   ``zy_rows``), writing the served y and one record a unit, its exact z (`Call.z`'s cells) then y = dq(z). With none,
@@ -300,8 +300,8 @@ class H1Run:
 
     Round s is step s. The engine's admissions and batch order (`admit`, from `admitting`) go to the round of the step about
     to run, and round s closes once step s's last linear is recorded (or at `close`): its root (`pouw_h1_requests.round_row`)
-    over the step's calls, its request table and its slot table, and with ``served`` each of the step's calls' A tables
-    ``a/<K>@<c>`` whole (`pouw_h1_served.Served.segments`), is recorded with
+    over the step's calls, its request table and its slot table, and with ``served`` the step's A table of each K
+    ``a/<K>@<s>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
     `finish` opens ``draw``'s coin (a `LiveRecord` of the same challenger's draw family) after the window's `draw_root`.
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
@@ -309,8 +309,8 @@ class H1Run:
     served call's A rows, scales and z/y records, so a drawn unit opens after the close (DRAWN1); without it their leaves
     open only while the run is held (`open_request`, `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
     `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing. With ``served``
-    (`pouw_h1_served.Served`) each call's A and z/y tables, and the weights' B, are also registered values as the call is
-    recorded, their roots in its tables (``registered``) under its round's root; the commitment carries their entries.
+    (`pouw_h1_served.Served`) each call's z/y table, its step's A table of K, and the weights' B, are also registered values
+    as the calls are recorded, their roots in its tables (``registered``) under its round's root; the commitment carries them.
 
     The Program's ``salt`` is given, or None with ``opener``: then `open_window` opens it once round 0's admissions are in
     (or at the first use of the salt), after its request table, and ``opener`` sets ``rounds`` and ``draw``."""
@@ -342,8 +342,7 @@ class H1Run:
         self._unopened: str | None = None
         self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
         self.draw, self.admission, self.coin_source = draw, admission, coin_source
-        #: the session the auditor's gate reserved for the window (None for in-process coins), which round 0's input-ids
-        #: table's domain binds (`pouw_h1_served.Served.ids_tree`)
+        #: the gate's reserved session (None for in-process coins), bound by round 0's input-ids table (`Served.ids_tree`)
         self.session = session
         #: the root of round 0's input-ids table, inside round 0's request root (`open_window`)
         self._ids0: bytes | None = None
@@ -373,7 +372,9 @@ class H1Run:
                                         "u_step": self.u_step, "units": self.steps * self.u_step, "calls": 0,
                                         "rounds": self.round_log, "admission": self.admission}
         self.details: dict[str, Any] = {"scheme": SCHEME, "calls": 0, "refused": self.refused,
-                                        "uncovered": "attention (QK^T and P.V in Int8LutAttentionRow_v1) and lm_head",
+                                        "uncovered": "attention (QK^T and P.V in Int8LutAttentionRow_v1), lm_head and "
+                                                     "a MoE layer's router (bf16), and the linears the checkpoint's "
+                                                     "modules_to_not_convert keeps bf16",
                                         "z": "the call's z/y records from verity_int8::scaled_mm_zy, if its arm hands them over"}
 
     def listen(self, fn: Listener) -> None:
@@ -431,9 +432,13 @@ class H1Run:
         if self.prover is not None and m:
             PV.keep_call(self.prover, call.index, av, sv, records)
 
+    def _index(self, s: int, w: int) -> int:
+        """Call (s, w)'s index: the calls before it here (s·L + w in a static window; a rank's, `pouw_h1_ranks`)."""
+        return len(self.calls)
+
     def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None) -> Call:
         n, k = self.shapes_[w]
-        call = Call(len(self.calls), s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0, k, n,
+        call = Call(self._index(s, w), s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0, k, n,
                     s * self.u_step + self.offs[w], self.rows)
         self.calls.append(call)
         if self.commit:
@@ -500,11 +505,8 @@ class H1Run:
             owners += [index] * int(rows)
         self.owners[r] = owners
         if r == 0:
-            ids = None
-            if self.served is not None:
-                prompts = {q: self.requests[i].prompt for q, i in self._ids.items()}
-                ids = self.served.open_ids(self, RQ.first_ids(prompts, order))
-            self.open_window(ids)
+            self.open_window(None if self.served is None else self.served.open_ids(
+                self, RQ.first_ids({q: self.requests[i].prompt for q, i in self._ids.items()}, order)))
         return out
 
     def _close_rounds(self, through: int) -> None:
@@ -732,17 +734,11 @@ class H1Run:
         bits = self.credit_bits()
         return [{**row, CREDIT: bits[row["index"]]} for row in self._rows(self.calls)]
 
-    def commit_record(self) -> str | None:
-        """With the Commit in the engine (``served``'s tap), its record in hex (`pouw_h1_commit.CommitTap.hex`)."""
-        if self.served is None or self.served.tap is None:
-            return None
-        return self.served.tap.hex(self.served)
-
     def calls_root(self) -> bytes:
         """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound), and with
         ``served`` its registered trees' entries and the Commit's record (`calls_root`)."""
         return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest(),
-                          self.commit_record())
+                          CT.record_of(self))
 
     def finish(self) -> None:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
@@ -750,7 +746,7 @@ class H1Run:
         self.close()
         if not self.commit or self._unopened is not None:
             return
-        commit = self.commit_record()
+        commit = CT.record_of(self)
         if commit is not None:
             self.commits["commit"] = commit
         calls_root = self.calls_root()

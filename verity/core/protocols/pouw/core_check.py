@@ -46,9 +46,11 @@ session's signed log shows R alone as what its salt coin followed, and under the
 opened once, after R.
 `rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof service's challenger
 `sampled_proofs.challenger`): it reads the challenger's coins only through the session the auditor's signed ledger
-opens and ends for the window, under the window's pinned key (`challenger.trusted_session_of`), never a commitment the
-prover hands in; under the commitment that session signed, round r's coin opened once, after the r-th round root, and
-the round roots are the ones its signed log shows it received.
+opens and ends for the window, under the window's pinned key, run from a commit the host's pins log records on main's
+first-parent line (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a commitment the prover
+hands in; under the commitment that session signed, round r's coin opened once, after the r-th round root, and the
+round roots are the ones its signed log shows it received.  `salt` reads its session through the same
+`pinned_session`, so a window whose session ran any tree but main's is credited neither.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -1297,13 +1299,14 @@ OTHER_WINDOW = ("the session's open root is not the window's: salt.window_open_r
 NOT_RECEIVED = "the challenger's log does not show the window's open root as the one root its salt coin followed"
 
 
-def salt(key: Any, ledger: Any, window: Any, session: Any, weights_root: Any, requests_root: Any, opening: Any,
-         verify: Ch.Verify) -> tuple[str, str] | None:
+def salt(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any, requests_root: Any,
+         opening: Any, verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `opening` is a live window's salt coin, opened after the window's own open root, every coin and root of
     it read through the challenger's own session as `rounds` reads them, never one the prover hands in: the one session
     the auditor's signed v2 ledger `ledger` opens and ends closed for `window` (``{root}``) under the pinned challenger
-    key `key`, from that session's files `session` (`challenger.audited_session` and `session_named`, its signatures
-    checked with `verify`).  S is the session the ledger's signed reserve entry names (a session opened without one is
+    key `key`, run from a commit the host's pins log `pins` records and the verifier's copy of main's first-parent
+    history `main` holds, from that session's files `session` (`challenger.pinned_session` and `session_named`, its
+    signatures checked with `verify`).  S is the session the ledger's signed reserve entry names (a session opened without one is
     refused) and R the root its signed open entry opened S on; R is `salt.window_open_root` of the window's weights'
     root `weights_root` and its round-0 request table's root `requests_root` (hex, from the window's record) and S; the
     session's signed log shows R, alone, as the root its salt coin followed; and under the commitment the session
@@ -1315,7 +1318,7 @@ def salt(key: Any, ledger: Any, window: Any, session: Any, weights_root: Any, re
     except Ch.CoinError as e:
         return "coin", f"the verifier's challenger key is malformed: {e}"
     try:
-        a = Ch.audited_session(ledger, window, k, verify)
+        a = Ch.pinned_session(ledger, window, k, pins, main, verify)
         c, received = Ch.session_named(a, k, session, verify)
     except Ch.CoinError as e:
         return "coin", f"the challenger's session is not trusted: {e}"
@@ -1342,12 +1345,13 @@ def salt(key: Any, ledger: Any, window: Any, session: Any, weights_root: Any, re
     return None if why is None else ("coin", f"the salt's {why}")
 
 
-def rounds(key: Any, ledger: Any, window: Any, session: Any, roots: Any, openings: Any, verify: Ch.Verify
-           ) -> tuple[str, str] | None:
+def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, roots: Any, openings: Any,
+           verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `openings` are a live window's round coins, read through the challenger's own session and never a
     commitment the prover hands in: the one session the auditor's signed v2 ledger `ledger` (its lines, the head
     `challenger.ledger_head` took) opens and ends closed for `window` (``{root}``) under the window's pinned challenger key
-    `key` (its JSON), from that session's files `session` (``{close, hellos, log, record}``;
+    `key` (its JSON), run from a commit the host's pins log `pins` records and the verifier's copy of main's first-parent
+    history `main` holds, from that session's files `session` (``{close, hellos, log, record}``;
     `challenger.trusted_session_of`, its signatures checked with `verify`).  Under the commitment the challenger signed, round r's coin opened once, after
     `roots[r]`, the r-th round root (hex), every recorded round's coin opened (`window.rounds_reason`), and the roots are
     the round roots the challenger's signed log shows it received, in order; else the refusal (``coin`` or ``rounds``,
@@ -1357,7 +1361,7 @@ def rounds(key: Any, ledger: Any, window: Any, session: Any, roots: Any, opening
     except Ch.CoinError as e:
         return "coin", f"the verifier's challenger key is malformed: {e}"
     try:
-        c, received = Ch.trusted_session_of(ledger, window, k, session, verify)
+        c, received = Ch.trusted_session_of(ledger, window, k, pins, main, session, verify)
     except Ch.CoinError as e:
         return "coin", f"the challenger's session is not trusted: {e}"
     if not (isinstance(roots, list) and all(_str(r) and _DIGEST.fullmatch(r) for r in roots)):

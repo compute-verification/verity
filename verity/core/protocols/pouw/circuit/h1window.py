@@ -481,7 +481,8 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     binds the two tables' domains, the window's own rows (PRF-127; `credit.domain_of`), and never the weights', which are
     held across windows. When ``roots`` holds the call's receipt table, its units' receipts are the statement's output
     row o0 (`RECEIPT_PORT`) at its rows, one a unit, under the z table's domain rule. A unit of another call reads none
-    of them (None), so the file holds a statement to one call's units. With ``salt``, the window's Program salt (hex),
+    of them (None, and no entry past a port's last read: the verifier reads none at a unit past ``reads``,
+    `Flock.Registered.badInstance`), so the file holds a statement to one call's units. With ``salt``, the window's Program salt (hex),
     the statement's public row ``pub`` (`PUB_PORT`) is the call's public table (`PUBS`, `public_table`) at its rows, one
     a unit, at its known content (``known``): the salt, the unit's position and its call's roots, root(a/<K>@<s>) and
     root(b/<K>) as ``roots`` holds them, so a unit seeded under another salt, position or roots opens no row of it; and
@@ -502,9 +503,12 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     for u in range(u0, u0 + n):
         for key, (value, row) in table_reads(program, tp, u, steps).items():
             if value in shape:
-                reads.setdefault(key, {"value": value, "rows": [None] * tp.population})["rows"][u] = row
+                reads.setdefault(key, {"value": value, "rows": [None] * (u0 + n)})["rows"][u] = row
         if rc in shape:
-            reads.setdefault(OUTPUTS[0], {"value": rc, "rows": [None] * tp.population})["rows"][u] = u - u0
+            reads.setdefault(OUTPUTS[0], {"value": rc, "rows": [None] * (u0 + n)})["rows"][u] = u - u0
+    for r in reads.values():
+        while r["rows"][-1] is None:
+            r["rows"].pop()
     prog = prog or P.program_digest(program)
     out = {}
     for key, r in reads.items():

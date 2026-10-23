@@ -1,5 +1,5 @@
 """The SASS gate (`harness/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `fixtures/sass_gate/ftz_probe.cu` and
-`ftz_refused.cu`: builds without flags pass, with every flagged instruction inside a pinned sequence; --use_fast_math, -ftz=true
+`ftz_refused.cu` (sm_120a, and 13.0.1's sm_90a): builds without flags pass, with every flagged instruction inside a pinned sequence; --use_fast_math, -ftz=true
 and the approximate -prec-div=false -prec-sqrt=false fail, as does every kernel of `ftz_refused.cu`; a cubin whose ptxas
 (version, build, arguments) isn't pinned with a numeric run exempts nothing; each sequence breaks under a mutation; a read
 the gate can't tell from a merge passes and is listed; the pins regenerate; the two disassemblies must agree; the fatbin
@@ -144,6 +144,19 @@ def test_a_cubin_from_any_other_ptxas_exempts_nothing(notes, why):
     v = verdict("plain", notes=notes)
     assert v["toolkit"] is None and why in v["unpinned"]
     assert v["covered"] == {} and v["offending_n"] == v["flagged"] == sum(PLAIN_COVERED.values())
+
+
+def test_one_ptxas_build_may_have_an_entry_per_target():
+    """An entry for another target of the same ptxas (13.0.1-sm_90a beside 13.0.1) is found past the one whose arguments
+    don't match, and exempts only with its own numeric run."""
+    p = pins()
+    p["toolkits"]["12.9.1-sm_90a"] = {**p["toolkits"]["12.9.1"], "args": ["-arch sm_90a -m 64", "-arch sm_90a -m 64 -fmad false"]}
+    sm90 = note(args="-arch sm_90a -m 64 -fmad false")
+    assert SG.toolkit_of(sm90, p) == ("12.9.1-sm_90a", None) and SG.toolkit_of(NOTES["plain"], p) == ("12.9.1", None)
+    assert SG.toolkit_of(note(args="-arch sm_100a -m 64"), p) == (None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 "
+                                                                        "with unpinned arguments '-arch sm_100a -m 64'")
+    p["toolkits"]["12.9.1-sm_90a"]["numeric"] = None
+    assert SG.toolkit_of(sm90, p) == (None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 is pinned without a numeric run")
 
 
 def test_ptxas_verbose_flag_is_not_an_argument_that_matters():
@@ -372,6 +385,79 @@ def test_pins_of_another_format_are_refused(tmp_path):
     p.write_text(json.dumps({**SG.load_pins(), "version": "sass-pins/v1"}))
     with pytest.raises(SG.SassGateFailed, match="is 'sass-pins/v1', not sass-pins/v2"):
         SG.load_pins(p)
+
+
+# ---- sm_90a ---------------------------------------------------------------------------------------------------------------
+# `plain90` and `refused90` are 13.0.1's sm_90a builds of the probes (r20261023-101808-80bd, the ptxas of the sm_90a pin
+# attempt r20261023-083327-2d51). The shipped pins have no sm_90a entry until ieee_pin.py's numeric run on an sm_90 card.
+
+
+@pytest.fixture
+def pins90(tmp_path, records) -> dict:
+    """The probe's sm_90a build pinned as ``--pin --toolkit 13.0.1-sm_90a`` writes it, with a test numeric run."""
+    entry = SG.update_pins(records("plain90"), "13.0.1-sm_90a", tmp_path / "pins90.json")
+    return {"version": SG.PINS_VERSION, "toolkits": {"13.0.1-sm_90a": {**entry, "numeric": TEST_RUN}}}
+
+
+def test_an_sm90a_build_without_flags_passes_under_its_own_entry_and_no_other(pins90):
+    """ptxas for sm_90a spells the range checks' and the seeds' adds VIADD or IADD3 R, R, imm, RZ, and moves the constant
+    numerator from a uniform register with IMAD.U32: every sequence is still found, as at sm_120a."""
+    v = verdict("plain90", p=pins90)
+    assert v["toolkit"] == "13.0.1-sm_90a" and v["offending_n"] == 0 and v["merged_reads_n"] == 0
+    assert v["unmatched_calls"] == [] and v["covered"] == PLAIN_COVERED and v["flagged"] == sum(PLAIN_COVERED.values())
+    shipped = verdict("plain90")
+    assert shipped["toolkit"] is None and "with unpinned arguments '-arch sm_90a -m 64'" in shipped["unpinned"]
+    assert shipped["covered"] == {} and shipped["offending_n"] == shipped["flagged"]
+    pins90["toolkits"]["13.0.1-sm_90a"]["numeric"] = None
+    assert verdict("plain90", p=pins90)["offending_n"] == v["flagged"]
+
+
+def test_every_refused_kernel_fails_at_sm90a_too(pins90):
+    v = verdict("refused90", p=pins90)
+    assert v["covered"] == {} and v["offending_n"] == v["flagged"] == 18
+    assert {o["function"] for o in v["offending"]} == {"frsqrt_k", "rsqrtf_k", "expf_k", "fdividef_k", "sqrt_approx_k",
+                                                       "add_ftz_k", "min_ftz_k", "setp_ftz_k", "cvt_ftz_k", "cdiv1_k"}
+
+
+RCP90 = {("rcp_k", "MUFU.RCP R7, R0"), ("rcp_k", "FADD.FTZ R2, -R2, -RZ")}
+SQRT90 = {("sqrt_k", "MUFU.RSQ R5, R0"), ("sqrt_k", "FMUL.FTZ R3, R0, R5"), ("sqrt_k", "FMUL.FTZ R5, R5, 0.5")}
+
+
+@pytest.mark.parametrize("fn,old,new,refused", [
+    ("rcp_k", "VIADD R2, R0, 0x1800000", "VIADD R2, R0, 0x1800001", RCP90),
+    ("rcp_k", "VIADD R2, R0, 0x1800000", "VIADD R2, R3, 0x1800000", RCP90),
+    ("rcp_k", "VIADD R2, R0, 0x1800000", "IADD3 R2, R0, 0x1800000, R3", RCP90),
+    ("sqrt_k", "IADD3 R4, R0, -0xd000000, RZ", "IADD3 R4, R0, -0xc000000, RZ", SQRT90),
+    ("sqrt_k", "IADD3 R4, R0, -0xd000000, RZ", "IADD3 R4, R0, -0xd000000, R7", SQRT90),
+    ("sqrt_k", "IADD3 R4, R0, -0xd000000, RZ", "VIADD R4, R0, -0xd000000", SQRT90),
+    ("udiv_k", "IADD3 R6, R0, 0xffffffe, RZ", "IADD3 R6, R0, 0xfffffff, RZ",
+     {("udiv_k", "MUFU.RCP R0, R0"), ("udiv_k", "F2I.FTZ.U32.TRUNC.NTZ R7, R6")}),
+    ("udiv_k", "IADD3 R6, R0, 0xffffffe, RZ", "IADD3 R6, R0, 0xffffffe, R11",
+     {("udiv_k", "MUFU.RCP R0, R0"), ("udiv_k", "F2I.FTZ.U32.TRUNC.NTZ R7, R6")}),
+    ("srem_k", "VIADD R6, R9, 0xffffffe", "VIADD R6, R9, 0xfffffff",
+     {("srem_k", "MUFU.RCP R9, R9"), ("srem_k", "F2I.FTZ.U32.TRUNC.NTZ R7, R6")}),
+    ("cdiv_k", "UMOV UR6, 0x40400000", "UMOV UR6, 0x40800000", {("cdiv_k", "MUFU.RCP R0, R3")}),
+    ("cdiv_k", "IMAD.U32 R8, RZ, RZ, UR6", "IMAD.U32 R8, R3, RZ, UR6", {("cdiv_k", "MUFU.RCP R0, R3")}),
+    ("cdiv_k", "IMAD.U32 R8, RZ, RZ, UR6", "IMAD.U32 R8, RZ, RZ, UR7", {("cdiv_k", "MUFU.RCP R0, R3")}),
+])
+def test_an_sm90a_sequence_with_another_operand_or_constant_is_not_exempt(pins90, fn, old, new, refused):
+    """A range check, a seed's +2 ulp or a constant numerator's move that isn't exactly what sm_90a's ptxas writes: the
+    wrong constant, another register, a third addend, or a negative immediate VIADD (nvdisasm writes 0xf3000000)."""
+    v = verdict("plain90", text=in_function(listing("plain90"), fn, f"{old} ;", f"{new} ;"), p=pins90)
+    assert offending(v) == refused
+
+
+@pytest.mark.parametrize("f2f,exempt", [("F2F.F32.F64 R2, R10", True), ("F2F.F64.F32 R2, R10", False),
+                                        ("F2F.F64.F64 R2, R10", False)])
+def test_a_conversion_may_write_only_its_destination_types_width(pins90, f2f, exempt):
+    """sm_90a's ptxas schedules an F2F.F32.F64 inside ieee_pin.cu's cdiv_all div.rn fast path (r20261023-083327-2d51), its
+    destination the register before the divisor: an F32 result writes one register, an F64 result two."""
+    v = verdict("plain90", text=after(listing("plain90"), "div_k", "FCHK P0, R0, R3", f2f, 0xb8), p=pins90)
+    if exempt:
+        assert v["offending_n"] == 0
+    else:
+        assert offending(v) == {("div_k", "MUFU.RCP R8, R3")}
+        assert "$b changes between its readers" in v["offending"][0]["why"]
 
 
 # ---- tool notes -----------------------------------------------------------------------------------------------------------
@@ -610,7 +696,8 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
     """Compiles the probe as a cubin and as a shared library with the toolkit the gate finds (CUDA_HOME, POUW_CUDA_BIN or
     /usr/local/cuda) and gates both with the shipped pins; skipped without nvcc, cuobjdump and nvdisasm. It catches what the
     listings can't: a toolkit whose expansions or notes differ, and a real host ELF's fatbin. A build passes only from a
-    toolkit pinned with a numeric run; an sm_90a cubin never does (12.9 writes it no ptxas note, 13.0 unpinned arguments)."""
+    toolkit pinned for its target with a numeric run; an sm_90a cubin from any other fails closed (12.9 writes it no ptxas
+    note, 13.0 unpinned arguments)."""
     try:
         tools = SG.find_tools()
     except SG.SassGateFailed as ex:
@@ -619,8 +706,8 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
     if not nvcc.exists():
         pytest.skip(f"no nvcc beside {tools['cuobjdump']['path']}")
     version = subprocess.run([str(nvcc), "--version"], capture_output=True, text=True, check=True).stdout
-    pinned = arch == "sm_120a" and any(t["version"] in version and t["branch"] in version and t["numeric"]
-                                       for t in SG.load_pins()["toolkits"].values())
+    pinned = any(t["version"] in version and t["branch"] in version and t["numeric"] and f"-arch {arch} -m 64" in t["args"]
+                 for t in SG.load_pins()["toolkits"].values())
     base = [str(nvcc), "-O3", "-std=c++17", "-gencode", f"arch=compute_{arch[3:]},code={arch}", *flags]
     for out, extra in (("probe.cubin", ["-cubin"]), ("libprobe.so", ["-Xcompiler", "-fPIC", "-shared", "--no-compress"])):
         subprocess.run([*base, *extra, "-o", str(tmp_path / out), str(FIX / src)], check=True)
@@ -628,11 +715,11 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
         code = [c for c in rec["cubins"] if c["functions"]]
         assert rec["cross_check"]["agree"] and len(code) == 1, (out, rec["cross_check"], len(code))
         assert (code[0]["toolkit"] is not None) is pinned, (out, code[0]["unpinned"])
-        if arch == "sm_90a":
+        if arch == "sm_90a" and not pinned:
             assert code[0]["unpinned"] == "no ptxas record (.note.nv.tkinfo)" \
                 or "with unpinned arguments '-arch sm_90a -m 64" in code[0]["unpinned"], code[0]["unpinned"]
         assert rec["ok"] is (ok and pinned), (out, rec["offending"][:3])
-        if rec["ok"]:
+        if rec["ok"] and arch == "sm_120a":
             assert rec["covered"] == PLAIN_COVERED, (out, rec["covered"])
         elif pinned:
             fns = {o["function"] for o in rec["offending"]}
