@@ -79,8 +79,11 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   ``row-table``, the tree over its steps' roots, which the Spec declares a tree over roots of row-seg leaves
   (`service.ROOTS`, ``over``). Each chunk's public file is a shared-row file, its header's ``shared_rows`` held to the
   verifier's own layout, and before the draw the tables are held to the chunks' public ``x`` strings, the registered root
-  and the step roots serving recorded before each step's coin (`row_tables.check_row_tables`). No TP window of record has
-  row tables yet (`tp.serving_rows.window_of_record` names no serve-time context); `a5_row_tables.py` is their stand-in.
+  and the step roots serving recorded before each step's coin (`row_tables.check_row_tables`). Lean's verifier of record
+  covers a shared-row public file only where it holds its own registered reads (``--registered``, `Flock.ProvedScope.
+  sharedRowsOk`), which a5 doesn't give it for a chunk's ``x`` table, so it refuses each drawn chunk's session and the
+  outcome is a reject. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
+  context); `a5_row_tables.py` is their stand-in.
 """
 from __future__ import annotations
 

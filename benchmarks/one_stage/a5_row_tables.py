@@ -7,8 +7,10 @@ step on the auditor's challenger's coins, a local session on ``ROOT``: the windo
 Value a tree over roots of row-seg leaves), `row_tables.check_row_tables` against those step roots before the draw, M0's
 `--zk` session of each drawn chunk behind the firewall, the Lean verifier of record, the stream's outcome and the
 negatives. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time context),
-so this window stands in for one. ``--out`` holds the window serving wrote (``window/``, its private files too) and a5's
-records (``rank0/``, ``challenger/``, ``summary.json``).
+so this window stands in for one. Each chunk's public file is a shared-row file, which Lean's verifier of record covers
+only with its own registered reads (`a5`'s module docstring), so the drawn chunks' sessions are refused and the run exits
+1 on a rejected outcome. ``--out`` holds the window serving wrote (``window/``, its private files too) and a5's records
+(``rank0/``, ``challenger/``, ``summary.json``).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5_row_tables.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
