@@ -23,8 +23,8 @@ templates, or for one when the file names ``Q_template_instances``) is the one t
 ``Q_word``, never: with the stratified law it is refused by name, its strata being templates).  ``partition.json`` beside the window
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
 (``model.layers.0.``, or a MoE layer's ``moe/L40``), ``scope.steps`` (``[lo, hi)``) to those steps of each request.  A chunked
-template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES``
-slice or a ``KCHUNKS`` K-chunk) are split
+template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``PARTS``
+part, a ``SLICES`` slice or a ``KCHUNKS`` K-chunk) are split
 into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
 it; ``chunk_caps`` writes the entry), each chunk a member on C-Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
 ``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
@@ -75,7 +75,9 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
   ``AllReduceResidualMnnvl_v1{N=w,..}``, ``RmsNormMnnvl_v1{..}``  the parts of every ``AllReduceRmsNormMnnvl_v1`` row (``PARTS``):
                                    its all-reduce and residual add in column blocks as ``COLS`` (``in0`` the partials, ``in1``
                                    the residual -> ``out.<member>``, the row's r), its norm whole (``in0`` the row's committed r,
-                                   ``in1`` the weight -> ``out.<member>``, the row's normed output); one index entry per row
+                                   ``in1`` the weight -> ``out.<member>``, the row's normed output); one index entry per row;
+                                   chunked (``chunk_cap``), v2 bit rows -> ``o0``, the norm's ``in0`` wired to the row's
+                                   residual part's ``o0``, that part at the row's N (`part_rows`)
   ``Gemm_v2{N=1,..}``, ``BatchedGemm_v1{B=1,N=1,..}``, ..  every slice of the rows of that Definition at any extents along its
                                    axes (``SLICES``): ``in<g>`` per argument group, its element along each axis it carries and
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
@@ -110,6 +112,7 @@ from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import kchunk_rows as KC
+from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, SLICES, Template,  # noqa: F401
@@ -117,7 +120,7 @@ from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, 
 from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
-CHUNKED = ("s8", "coord", "cols", "slice", "kchunk")
+CHUNKED = ("s8", "coord", "cols", "part", "slice", "kchunk")
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
 TEMPLATE_QUERIES = (PO.Q_TEMPLATE_INSTANCE[0], PO.Q_TEMPLATE_INSTANCES[0])
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
@@ -211,7 +214,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
     chunked template's units (``CHUNKED``) are consecutive chunks of at most its ``caps`` entry, one member each, on its
     `chunk_rows.unit_rows`; a window always names the caps (`population`).  With no ``caps`` at all (a tool reading one Call's
-    units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` or ``COLS`` template is one member of word rows."""
+    units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS``, ``COLS`` or ``PARTS`` template is one member of word rows."""
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     out, base = [], 0
@@ -225,6 +228,8 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             n = sum(SL.extent(template(t), x[3]["statics"]) for x in rs)
         elif layout == "kchunk":
             n = sum(KC.units(template(t), x[3]["statics"]) for x in rs)
+        elif layout == "part":
+            n = len(rs)
         elif layout in CHUNKED:
             n = sum(int(x[3]["statics"]["N"]) for x in rs)
         if layout in CHUNKED and (layout in ("s8", "kchunk") or caps is not None):
@@ -337,7 +342,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")
     scope = partition.get("scope") or {}
     rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"), reuse)
-    ms = KC.wire(members(tmpls, rows, counts, partition.get("chunk_cap") or {}), tmpls, rows)
+    ms = PR.wire(KC.wire(members(tmpls, rows, counts, partition.get("chunk_cap") or {}), tmpls, rows), tmpls, rows)
     tables: tuple[CS.RowTable, ...] = ()
     if partition.get("row_tables"):
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
