@@ -5,10 +5,20 @@ import Proofs.Flock.Claims.Recursion.DeployComplete
 /-!
 # The hm96 slots' commit strings at the outer relation
 
-Toward `HmSlotsCommit` from `StagedPart` and `Flock.check`: at a staged part, the outer relation's model is satisfied at
-the witness's table share (`layout_of_check`, `zOf`), and there `Hm.row_bc_flat` gives each held row's `b ‖ c` as the
-commit string of its row and salt, at the model's columns (`bcCol`, `saltCol`, `Typed.msgCol`). This file maps those
-columns onto the witness's hidden values that `SlotCommits` reads (`slotHid`, `rowHidden`).
+`HmSlotsCommit` from `StagedPart` and `Flock.check` (`hmSlotsCommit_of_full`): at a staged part, the outer relation's
+model is satisfied at the witness's table share (`layout_of_check`, `zOf`), and there `Hm.row_bc_flat` gives each slot's
+`b ‖ c` as the commit string of its row and salt, at the model's columns (`bcCol`, `saltCol`, `Typed.msgCol`). This file
+maps those columns onto the witness's hidden values that `SlotCommits` reads (`slotHid`, `rowHidden`): the out and salt
+bits (`bc_bit`, `salt_bit`), and each row bit's input column, which the unit copies from its message bit (`leaf_copy`),
+in either of `setupOne`'s branches (`table_rows`, `slotCommits_table`).
+
+The parse facts come from the verifier's checks at the staged part: one table's circuit is `partCircuit`'s
+(`partCircuit_staged`), in `ProvedScope.scopeOk` (`staged_scope`) and V\*'s parse (`checkParsed_ok`); every port a held
+row or RecCap reads is an input row (`in_block`, `ownPorts_held`), and a held row is rep `0` or `1`.
+
+Two facts no check of the verifier's gives are named, each with the verifier change that would prove it and a witness:
+`OneTable` (`oneTable_of_ready`) and `CapFull` (`capFull_of_undrawn`). `ksLin2_deployed_full` and
+`bitsLin2_deployed_full` take them in place of `HmSlotsCommit`.
 -/
 
 namespace RecDeploy
@@ -743,7 +753,8 @@ theorem hmSlotsCommit_of_full {st : Stage} (h1 : OneTable st) (hcap : CapFull st
     have hfull : N ≤ p.sts[0].n := by
       subst hp
       exact hcap s x _ i spec sts r l N hS hsu hr hsv' h0
-    exact slotCommits_table ht' hd (by omega) hv1 hl L regs hz1 hq (in_block hrows (by show "top" ∉ ["out"]; decide) hq)
+    have htop : "top" ∉ (VStar.Stmt.cap l N).sub.outputs := by show "top" ∉ ["out"]; decide
+    exact slotCommits_table ht' hd (by omega) hv1 hl L regs hz1 hq (in_block hrows htop hq)
       (div_lt_blocks hg0 (by omega) hnbl)
 
 section Corollaries
