@@ -825,8 +825,27 @@ structure Tile where
 /-- `credit.RECEIPT_PORT`: the statement's output row of its units' receipts, which reads its call's receipt table. -/
 def RECEIPT_PORT : String := "o0"
 
+/-- `credit._bits`: a descriptor type's bits, its leaves' widths: `["Value", w]` w, and `leavesOf`'s rule for the rest;
+zero for any other form, or past `fuel` levels. -/
+def bitsOf : Nat → Json → Nat
+  | 0, _ => 0
+  | fuel + 1, .arr a => match a.toList with
+    | [.str "Value", w] => (nat? w).getD 0
+    | [.str "Array", n, t] => match nat? n with
+      | some n => n * bitsOf fuel t
+      | none => 0
+    | [.str "Tuple", .arr fs] => fs.foldl (fun s x => s + bitsOf fuel x) 0
+    | [.str "Record", .arr fs] => fs.foldl (fun s x => match x with
+      | .arr p => (match p.toList with
+        | [_, t] => s + bitsOf fuel t
+        | _ => s)
+      | _ => s) 0
+    | _ => 0
+  | _ + 1, _ => 0
+
 /-- `credit._receipt_words`: the 16-bit words of a template return's `receipt` field (`["Record", [["receipt", t],
-...]]`, its first such field); 0 for another form or a width of no whole words. -/
+...]]`, its first such field), its bits as the statement's output row o0 holds them (`bitsOf`); 0 for another form or
+bits of no whole words. -/
 def receiptWords (ret : Json) : Nat :=
   let fields : List Json := match ret with
     | .arr #[.str "Record", .arr fs] => fs.toList
@@ -835,7 +854,7 @@ def receiptWords (ret : Json) : Nat :=
     | .arr #[.str "receipt", t] => some t
     | _ => none
   let n := match t with
-    | some t => leavesOf TYPE_DEPTH t
+    | some t => bitsOf TYPE_DEPTH t
     | none => 0
   if n % 16 == 0 then n / 16 else 0
 

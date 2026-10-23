@@ -709,12 +709,29 @@ def shape_of(descriptor: bytes) -> dict:
     return {"prefix": vals["PREFIX"], "tiles": tiles}
 
 
+def _bits(t: Any) -> int:
+    """A descriptor type's bits, its leaves' widths (`types.leaf_widths`' sum): ``["Value", w]`` w, and `_leaves`' rule
+    for the rest; zero for any other form."""
+    if not (type(t) is list and t):
+        return 0
+    if t[0] == "Value":
+        return t[1] if len(t) == 2 and _nat(t[1]) else 0
+    if t[0] == "Array" and len(t) == 3 and _nat(t[1]):
+        return t[1] * _bits(t[2])
+    if t[0] == "Tuple" and len(t) == 2 and type(t[1]) is list:
+        return sum(_bits(x) for x in t[1])
+    if t[0] == "Record" and len(t) == 2 and type(t[1]) is list:
+        return sum(_bits(x[1]) for x in t[1] if type(x) is list and len(x) == 2)
+    return 0
+
+
 def _receipt_words(ret: Any) -> int:
-    """The 16-bit words of a template return's ``receipt`` field (``["Record", [["receipt", t], ...]]``); 0 for another
-    form or a width of no whole words."""
+    """The 16-bit words of a template return's ``receipt`` field (``["Record", [["receipt", t], ...]]``, its first), its
+    bits as the statement's output row o0 holds them (`h1window.statement_rows`' rule, `_bits`); 0 for another form or
+    bits of no whole words."""
     fields = ret[1] if type(ret) is list and len(ret) == 2 and ret[0] == "Record" and type(ret[1]) is list else []
     t = next((x[1] for x in fields if type(x) is list and len(x) == 2 and x[0] == RECEIPT_FIELD), None)
-    n = _leaves(t)
+    n = _bits(t)
     return n // 16 if n % 16 == 0 else 0
 
 
