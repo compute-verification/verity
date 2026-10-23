@@ -256,7 +256,7 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
         by_contra hR
         exact hk1 ⟨(hacc k).1, hR⟩
       obtain ⟨-, vals, hv, he⟩ := hR
-      exact ⟨vals, hv.trans (RowsSession.rowsReg_eq_portRead (sess x w i k) (hS x w i k) (hacc k).2.2 vals),
+      exact ⟨vals, hv.trans (RowsSession.rowsReg_eq_portRead (sess x w i k) (hS x w i k) (hacc k).2.2.1 vals),
         fun u => he u (by rw [hk2]; exact Finset.mem_univ u)⟩
     · exact Or.inr (Or.inl hc)
   calc Pouw.RelativeSecurity.prob (fun x => (leafLayer sess out known dq part pub receipt leaf right).Unsound x w i)

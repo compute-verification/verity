@@ -95,7 +95,9 @@ the decodes and of the registered files the verifier hands the 33 sessions:
   and index `l` (distinct `l = 0..31`), and every statement's `ok` row, at the ports the decodes read them from
   (#3131's `SampledProofs.Produced.known`). `LeafLanesSound` fixes it to those rows of the path's public inputs
   (`Accounting.TS.Lanes.knownOf`, `PouwWindow.Lanes.knownRows`), where they fix the decodes' admit, salt, position,
-  roots, index and `ok` fields (`Accounting.TS.Lanes.laneKnownHolds`, `combKnownOk`). That the registrants' rows at
+  roots, index and `ok` fields (`Accounting.TS.Lanes.laneKnownHolds`, `combKnownOk`; their ports, names, rows and bits
+  from flock-verify's known-read check, part of `leafLayer`'s acceptance: `laneKnownHolds_of_check`, `combKnownOk_of_check`).
+  That the registrants' rows at
   those ports are that content is no longer asked: `KnownHeld` is a hypothesis here, and `LeafLanesSound` proves it
   from flock-verify's known-content check (`Flock.Registered.checkKnownAll`) unless the known-content tie collides
   (`LeafKnownColl`). -/

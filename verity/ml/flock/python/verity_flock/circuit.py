@@ -47,7 +47,8 @@ knows every public value of every block.
 
 The composite circuit (``flock-circuit``) is the statement's meaning: a ``META`` line (ports, ranges, each row's constants,
 the wires, the units' leaf and output maps, the pinned dummy values, the leaf-commitment scheme, the program digests, the
-partition digest), then each slot type's ``flock-ir-unit/v2`` circuit. Its SHA-512 (:func:`digest`) is the pin. The verifier derives Δ, the public
+partition digest), then each slot type's ``flock-ir-unit/v2`` circuit; the templated statement (``flock-circuit/tmpl``,
+`compose`'s ``layout``) gives the unit as its ``flock-ir-tmpl/v2`` template in META instead. Its SHA-512 (:func:`digest`) is the pin. The verifier derives Δ, the public
 regions and their values from it and from its own public instance file (no rows, no salts), never from the prover's; the
 instance file's header carries each block's unit indices (the VUs of the partition it proves).
 """
@@ -65,6 +66,9 @@ from . import ir_lower as IL
 
 FORMAT = "flock-circuit"
 STATEMENT = "verity/flock-circuit"
+#: The templated statement (PRF-133, the Lean verifier's ``Tags.circuitTmpl``): `compose`'s ``layout``
+TMPL_FORMAT = "flock-circuit/tmpl"
+TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW_SCHEMA = "hm96-sha512/row/v1"
 INST_FORMAT = "flock-circuit-inputs"
@@ -517,7 +521,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             program: str | None = None, statics: dict | None = None, port_bits: list | None = None,
             public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = (),
             v2_out_rows: tuple = (), links: list | None = None, definition: str | None = None,
-            leaf_scheme: dict | None = None, extra_meta: dict | None = None, tail=None) -> str:
+            leaf_scheme: dict | None = None, extra_meta: dict | None = None, tail=None, layout: str | None = None) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
@@ -545,7 +549,14 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
 
     ``tail`` (a :class:`tail.Tail`): the stages as given, in place of :func:`tail.lower_tail`'s, for a lowering whose split is
     its own (`multi_unit`): a stage of ``count`` slots per VU is a second repeated unit type, wired slot by slot (META
-    ``per_vu``), and returned outputs on a repeated last stage are ``out_net_ports`` of ``[slot, port]``."""
+    ``per_vu``), and returned outputs on a repeated last stage are ``out_net_ports`` of ``[slot, port]``.
+
+    ``layout`` (a layout mode, `tmpl.mode_of`; TMPL1's is ``iv/hybrid/4``): the templated statement
+    (:data:`TMPL_STATEMENT`, PRF-133, the Lean verifier's ``HmOut.parseTmpl``), the same statement with its unit given as
+    the unit's ``flock-ir-tmpl/v2`` template (`tmpl.emit`): META ``template`` its lines and ``layout`` the mode, in place of
+    the ``CIRCUIT unit`` section and the flat META ``template``. The verifier unrolls the template and commits its columns
+    at the layout's positions (`tmpl.layout`), so the unit's range and ``unit_log`` are that net's slot. A unit class's
+    ``definition`` has no templated form."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -596,8 +607,18 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             if len(orows) != 1 or p.bits is not None or p.words != orows[0].words or any(a < lohi[1] and lohi[0] < b for a, b in seen):
                 raise ValueError(f"link {x}: a u16 row of the one output row's words, its leaves disjoint from every other link's")
             seen.append(tuple(lohi))
-    ul = _slot_log(low.layout.useful)
-    if low.layout.useful == 1 << ul:
+    useful, template = low.layout.useful, None
+    if layout is not None:
+        from . import tmpl as TM
+
+        if definition is not None:
+            raise ValueError(f"{low.name}: a unit class (META definition) has no templated statement: META template is its unit's")
+        template, stats = TM.emit(TM.of_layout(low.layout, low.name))
+        if not stats["order"]["ok"]:
+            raise ValueError(f"{low.name}: the unit's template is not in the order Tmpl.parse checks: {stats['order']}")
+        useful = TM.layout(template, layout)[template.root].size
+    ul = _slot_log(useful)
+    if useful == 1 << ul:
         raise ValueError(f"{low.name}: a unit fills its slot; a zero leaf needs a forced-zero row")
     lk = {t: {"table": t, "sha256": IL.TABLES[t], "in_bits": TL.TABLE_BITS[t], "out_bits": TL.VALUE_BITS, "lo_bits": LOOKUP_LO[TL.TABLE_BITS[t]]}
           for t in lookups}
@@ -661,14 +682,16 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "program_sha512": program or program_sha512(sub, statics),
             "partition": ({"rule": PARTITION_V1, "digest": partition} if partition else
                           {"rule": PARTITION_RULE, "query": cover["query"], "version": cover["version"], "digest": partition_digest(cover)})}
+    if template is not None:
+        meta.update(format=TMPL_FORMAT, statement=TMPL_STATEMENT, template=TM.write(template).splitlines(), layout=layout)
     if extra_meta:
         if clash := sorted(set(extra_meta) & set(meta)):
             raise ValueError(f"extra_meta: {clash} are META's own keys")
         meta.update(extra_meta)
-    head = f"{FORMAT} {low.name}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
-    texts = [("unit", unit),
-             (SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
-             (HM_NET, _expanded(IL.layout(S.hm96_row(), ["cv", "pad", "y"], ["bc"]), HM_NET))]
+    head = f"{meta['format']} {low.name}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
+    texts = [] if template is not None else [("unit", unit)]
+    texts += [(SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
+              (HM_NET, _expanded(IL.layout(S.hm96_row(), ["cv", "pad", "y"], ["bc"]), HM_NET))]
     texts += [(f"stage{i}", t) for i, t in enumerate(stage_texts)]
     return head + "".join(f"CIRCUIT {nm} {t.count(chr(10))}\n{t}" for nm, t in texts)
 
