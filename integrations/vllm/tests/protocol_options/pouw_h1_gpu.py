@@ -53,6 +53,13 @@ answers the auditor's registration of M under the period's circuit C and its sal
 model's rows are registered under that key before the salt, the window refused unless they fold to the registration's
 weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
 
+``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
+serving GPU by kernels' producer (``benchmarks/pouw/served_h1/producer.py``, `receipts_producer`): h1u.cu's units kernel of
+the -hbc build SO (``producer_gpu.sh``'s ``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the
+registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first block's linears' calls at step 0 and at the
+window's last step are kept, and their first unit of each row block is held to `h1tile.reference` word for word
+(`receipts_check`: live row blocks at step 0, dead at the last step).
+
 ``--commit`` (fill, ``--served``, in-process coins) serves the 64's window again with the Commit in the engine
 (`pouw_h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
 ``<out>/commit/``, each call's A table held to the Commit's AROW and each round over its input ids (``roots1``), and
@@ -67,8 +74,10 @@ record the same `RECORD`.
 from __future__ import annotations
 
 import argparse
+import functools
 import gzip
 import hashlib
+import importlib.util
 import json
 import os
 import shlex
@@ -444,6 +453,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         comp = PO.install(eng.model, ctx)
         out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1)}
         h1 = pouw.h1_run(entry_name)
+        made = receipts_producer(a.receipts, served, h1, layers, decl.steps) if a.receipts and served is not None else None
         bad: list[str] = []
         stamps: dict[int, float] = {}
         serving = [True]
@@ -481,6 +491,11 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                 h1.close()
                 out["close_s"] = round(time.monotonic() - end, 1)
                 closed_measures(h1, out, len(want), lambda w: layers[w].weight, bad)
+                if made is not None:
+                    t1 = time.monotonic()
+                    out["receipts"] = {**receipts_check(made), "check_s": round(time.monotonic() - t1, 1)}
+                    print(f"[fill] {name} receipts {json.dumps(out['receipts'])}", flush=True)
+                    out["ok"] = bool(out["ok"] and out["receipts"]["ok"])
                 if tap is not None:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
@@ -685,6 +700,42 @@ def served_check(h1: Any, served: Any, tdir: Path, register: bool = True) -> dic
     return doc
 
 
+PRODUCER = Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "served_h1" / "producer.py"
+
+
+@functools.cache
+def producer() -> Any:
+    """Kernels' producer module (`PRODUCER`), loaded by path: it is a benchmark's, outside this package."""
+    spec = importlib.util.spec_from_file_location("served_h1_producer", PRODUCER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) -> Any:
+    """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`producer().Receipts`) for the window
+    `h1`, h1u.cu's units kernel of the -hbc build `so` over each linear's int8 weight in `layers` in place (no second copy
+    on the GPU), keeping the first block's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`."""
+    P = producer()
+    made = P.Receipts(served, h1, P.Units(so), weight=lambda c: layers[c.layer].weight,
+                      keep=lambda c: c.layer < 4 and c.step in (0, steps - 1))
+    served.receipts = made
+    return made
+
+
+def receipts_check(made: Any) -> dict[str, Any]:
+    """The kept calls' receipts (`receipts_producer`) at the first unit of each row block against `h1tile.reference`, word
+    for word (`producer().check`); ``ok`` needs live and dead row blocks both."""
+    rows = []
+    for c, kept in sorted(made.kept.items()):
+        ncb = kept["b"].shape[0] // 32
+        rows += [(c, u, v["live"], v["ok"]) for u, v in producer().check(kept, list(range(0, len(kept["receipts"]), ncb))).items()]
+    live = sum(r[2] for r in rows)
+    return {"calls": sorted(made.kept), "units": len(rows), "live": live, "dead": len(rows) - live,
+            "bad": [[c, u] for c, u, _live, ok in rows if not ok][:20],
+            "ok": bool(rows) and all(r[3] for r in rows) and 0 < live < len(rows)}
+
+
 def _check(h1: Any) -> tuple[dict[str, Any], bool]:
     try:
         out = h1.check()
@@ -864,7 +915,14 @@ def main(argv: list[str] | None = None) -> int:
                     help="fill with --served, in-process coins: after the 64's window, serve it again with the Commit in "
                          "the engine (pouw_h1_commit, ROOTS1) into <out>/commit/, and record each window's peak GPU memory "
                          "and step time beside the plain run's and the Commit's tie (no solo window, no --registered files)")
+    ap.add_argument("--receipts", metavar="SO",
+                    help="fill with --served, without --handoff: each call's receipt@<c> from h1u.cu's units kernel of the "
+                         "-hbc build SO (benchmarks/pouw/served_h1/producer_gpu.sh's h1u_hbc.so) on the serving GPU, the "
+                         "first block's linears' calls at step 0 and the last step held to h1tile.reference")
     a = ap.parse_args(argv)
+    if a.receipts and not (a.served and a.workload == "fill" and not a.handoff):
+        ap.error("--receipts is the fill workload's, with --served, without --handoff (the close stage has no GPU for "
+                 "the units kernel)")
     if a.commit and not (a.served and a.workload == "fill" and not a.handoff and not a.challenger):
         ap.error("--commit is the fill workload's, with --served, without --challenger or --handoff")
     if a.close_from:
