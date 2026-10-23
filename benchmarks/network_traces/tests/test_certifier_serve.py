@@ -4,7 +4,10 @@ shim, and the offline check of what it published, which asks each window's salt 
 with the challenger's key. Honest traffic is accepted on every link-window (N2 on the planned profile, the audit and
 the salt), a shim that holds one session past every sync or writes one event more than the endpoint sent is refused,
 and each window's salt is revealed once. The same holds four in flight against an endpoint that sends some responses'
-last two tokens in one event, as vLLM does: the plan's F is the body's tokens, and the shim pads a short response."""
+last two tokens in one event, as vLLM does: the plan's F is the body's tokens, and the shim pads a short response. On
+N2's served profile (`--profile served`) the plan fixes no egress counts: the proxy admits requests by NET-54's rule,
+a group sent in a window's first bucket goes behind the salt frame, and N2's served counts accept honest traffic on
+every window and refuse the extra event."""
 
 from __future__ import annotations
 
