@@ -47,9 +47,9 @@ peak RSS; `$OUT/ius/` has each verdict's IUs.
 ~~~sh
 research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --to B1 \
   --path 'build/rank*/build_workload/descriptor.json.gz'    # the Build; its meta's rank_workload_digests are the pins
-research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 450 --timeout 6h \
+research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
   --send glm53-b1-pins.json $(for r in 0 1 2 3 4 5 6 7; do echo --send glm53-b1-rank$r.descriptor.json.gz; done) \
-  -- bash benchmarks/verifier_cost/nci_glm.sh [--case registered|rank|slice|node ...]
+  -- bash benchmarks/verifier_cost/nci_glm.sh --jobs 10 [--case registered|rank|slice|node ...]
 ~~~
 
 `flock_read.sh K...` measures C-Flock's Lean verifier (`flock-verify verify --zk`) on #3002's H1 tile unit, step by step:

@@ -2,9 +2,9 @@
 # nci_glm.py on a CPU node: build nci-check, then check GLM-5.3's Programs into $OUT, the instances in a scratch
 # directory. Run from a clone (the build writes .lake), the Build's eight workload descriptors and its meta sent beside it
 # (README.md):
-#   research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 400 \
+#   research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
 #     --send glm53-b1-pins.json $(for r in 0 1 2 3 4 5 6 7; do echo --send glm53-b1-rank$r.descriptor.json.gz; done) \
-#     -- bash benchmarks/verifier_cost/nci_glm.sh [ARGS...]
+#     -- bash benchmarks/verifier_cost/nci_glm.sh --jobs 10 [ARGS...]
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 IN=${RESEARCH_RUN_DIR:?run under research run}/inputs
