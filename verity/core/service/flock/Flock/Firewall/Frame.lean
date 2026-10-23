@@ -27,8 +27,9 @@ its other two rounds only `final_c'` and `τ`'s commitment are the firewall's.
 The frame makes the pass decision on each device round (`check`, `passes`): the firewall hands it the device round with
 the statement's scheduled round in its place, the skeleton's round with every value zero in the algebraic phase and the
 firewall's own opening round in the opening, and the device round passes when it is the scheduled round byte for byte but
-for the values the algebraic phase masks. Rust's checks (`firewall::Checker`, `ShadowLink::check`) run first and can only
-fail a round more: a round they fail reaches the frame as the scheduled round alone (`round N LEN fail`).
+for the values the algebraic phase masks. Rust keeps no round check of its own (live PROTOCOL.md §10.1): what fails a
+rep outside the frame (its worker, the end check on its proof, Rust's masking cross-checks) can only fail a round more,
+the rep's rounds then reaching the frame as no device round, which it fails.
 
 Any other stop comes at `Finish`, never before (§10.1): once a round fails, or `round` refuses one, the rep is `stopped`.
 The scheduled round then leaves in the device's place, and every value of the algebraic phase leaves as its pad alone
@@ -473,9 +474,9 @@ def firstDiff (v r : ByteArray) (free : Array Nat) : Option Nat :=
 /-- **The pass decision** on the device round `v` against the statement's scheduled round `r` in its place (`n` coins), at
 the rep's state `s`: why `v` fails, if it does. `v` passes when it is `r` byte for byte but for the values `r` absorbs in
 the algebraic phase (`roundFree`), which may be any, since each leaves masked: in the algebraic phase `r` is the skeleton's
-round with every value zero, so `v` must have its frames, labels, bytes, kinds, lengths, padding and coin count
-(`firewall::Checker`); in the opening `r` is the firewall's own opening round, which `v` must equal byte for byte
-(`ShadowLink::check`), level 0's masked values included. The frame's refusal of `r` itself, or a stop the coins decide at
+round with every value zero, so `v` must have its frames, labels, bytes, kinds, lengths, padding and coin count; in the
+opening `r` is the firewall's own opening round (`Drive.openStep`), which `v` must equal byte for byte, level 0's masked
+values included. The frame's refusal of `r` itself, or a stop the coins decide at
 it, is an error. -/
 def passes (c : Cfg) (s : Masker) (v r : ByteArray) (n : Nat) : V (Option String) := do
   let (_, _, free) ← roundFree c s r n
