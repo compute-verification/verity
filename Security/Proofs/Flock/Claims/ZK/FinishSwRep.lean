@@ -174,9 +174,14 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     rw [hesz]
     omega
   -- the firewall's PIOP returned, so it sent all its bodies before the stop
-  have hln : l.size ≤ n := by
+  have hP0 : ligP0 x j r ≤ n := by
     obtain ⟨_, _, _, _, _, _, _, hpf⟩ := _root_.Flock.Firewall.Finish.repFwC_piopFw h
     obtain ⟨-, hl₃, hn₃⟩ := FlockComplete.piopFw_at hm14 hpf (trsE x w (UE.tapeZk τ))[j.val]!
+    omega
+  have hP0' := hP0
+  rw [hP] at hP0'
+  have hln : l.size ≤ n := by
+    rw [hl]
     omega
   -- the masked values below `zp 64`
   have hmk : ∀ i < (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0).zp 64,
