@@ -136,6 +136,7 @@ theorem ofLoop_answered_link (T : ZKMal.CoinLayer.TableData)
   show freshOf x [] = _
   unfold freshOf
   rw [hx]
+  rfl
 
 open Loop in
 /-- **The link is the firewall's link**, not the stop, at a session whose `Finish` is past it. -/
