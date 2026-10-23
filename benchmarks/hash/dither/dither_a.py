@@ -367,7 +367,7 @@ class Side:
         self.work = EL.Workspace(dev)
         self.arch = EL.arch(dev.index)
         self.mm_cfg = {tuple(int(v) for v in nk.split(",")): EL.Cfg.parse(c)
-                       for nk, c in (e.split("=") for e in os.environ.get(MM_CFG_ENV, "").split(";") if e)}
+                       for nk, c in (e.split("=") for e in os.environ.get(MM_CFG_ENV, "").split("+") if e)}
         self.stage = torch.empty_like(win.plan.out)
         self.at = torch.tensor([win.plan.offs[w][0] for w in range(win.L)], dtype=torch.int64, device=dev)
         self.shift = int(win.o.h1o_fault_shift())
