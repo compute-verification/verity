@@ -18,7 +18,8 @@ accepted produced record alone:
 * `fileOf?`: statement `k`'s file (`leaf_lanes.registered_file` at `leaf_lanes.reads`): those ports, each read of the
   partials marked `read_in_full`, then the known ports, and `complete`.
 * `leafOwn?`: the leaf verifier's check of a statement's file against the two records (`pouw-leaf-own`): the file parsed
-  as flock-verify parses it (`Flock.Registered.ofJson`) holds `want?`'s ports (`checkOwn`).
+  as flock-verify parses it (`Flock.Registered.ofJson`) holds `want?`'s ports (`checkOwn`). `leafOwnCmd` runs it on
+  files.
 
 `tests/test_reg_file.py` holds `fileOf?` to the Python's file at the Python's entries and roots, and holds `leafOwn?` to
 accept it.
@@ -112,5 +113,32 @@ def leafOwn? (registration produced file : Json) (T : Tile) (k : Option Nat) (sc
   | none => discard (combine? T)
   let rs ← roots? registration produced T.lanes (2 * T.nw) schema
   checkOwn (← want? rs T k) (← Flock.Registered.ofJson file)
+
+private def readJson (path : String) : IO Json := do
+  match Json.parse (← IO.FS.readFile path) with
+  | .ok j => pure j
+  | .error e => throw (IO.userError s!"{path}: {e}")
+
+private def usage (why : String) : IO UInt32 := do
+  IO.eprintln why
+  pure 2
+
+/-- **`pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine)`**: `leafOwn?` on the three files at the
+`R × C` tile of contraction `K`, every value's rows `hm96-sha512/row/v2`. It prints `OWN {"accepted", "why"?}` and
+exits 0 where it accepts, 1 where it refuses and 2 on a usage error. -/
+def leafOwnCmd (args : List String) : IO UInt32 := do
+  let [reg, prod, file, r, c, k, stmt] := args
+    | usage "usage: pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine)"
+  let (some r, some c, some k) := (r.toNat?, c.toNat?, k.toNat?)
+    | usage "R, C and K are natural numbers"
+  let some lane := (if stmt == "combine" then some none else stmt.toNat?.map some : Option (Option Nat))
+    | usage s!"the statement is a lane's index or combine, not {stmt}"
+  match leafOwn? (← readJson reg) (← readJson prod) (← readJson file) ⟨r, c, k⟩ lane Flock.HmRow.ROW_SCHEMA_V2 with
+  | .ok () =>
+    IO.println s!"OWN {(Json.mkObj [("accepted", Json.bool true)]).compress}"
+    return 0
+  | .error e =>
+    IO.println s!"OWN {(Json.mkObj [("accepted", Json.bool false), ("why", Json.str e)]).compress}"
+    return 1
 
 end PouwWindow.Lanes
