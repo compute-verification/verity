@@ -178,7 +178,7 @@ def fp8_base(cfg: dict[str, Any], recipe: F.Recipe) -> Fp8Base:
     return Fp8Base(cfg["vocab_size"], bs[0], cfg.get("kv_lora_rank"), cfg.get("index_head_dim"))
 
 
-def v3_layout(header: dict[str, Any], plan: Fp8Base, recipe: F.Recipe) -> list[tuple[str, str, list[int], str, str]]:
+def fp8_base_layout(header: dict[str, Any], plan: Fp8Base, recipe: F.Recipe) -> list[tuple[str, str, list[int], str, str]]:
     """The made shard's tensors in file order: (name, dtype, shape, kind, source), kind "copy" | "weight" | "scale" | "dequant"."""
     out, scales = [], set()
     G = plan.block
@@ -263,10 +263,10 @@ def _stripes(n: int):
         yield lo, min(lo + F.STRIPE, n)
 
 
-def v3_shard(src: Path, dst: Path, plan: Fp8Base, recipe: F.Recipe) -> tuple[dict[str, Any], dict[str, str], int, int]:
+def fp8_base_shard(src: Path, dst: Path, plan: Fp8Base, recipe: F.Recipe) -> tuple[dict[str, Any], dict[str, str], int, int]:
     """Write v3's shard of `src` to `dst`: (file digest, tensor -> shard name, vocabulary-sized tensors, data bytes)."""
     base, header = F.read_header(src)
-    layout = v3_layout(header, plan, recipe)
+    layout = fp8_base_layout(header, plan, recipe)
     head, offsets = F.encode_header(layout)
     with open(src, "rb") as f:
         rd = _Base(f, base, header, plan)
@@ -292,7 +292,7 @@ def v3_shard(src: Path, dst: Path, plan: Fp8Base, recipe: F.Recipe) -> tuple[dic
     return digest, {name: dst.name for name, *_ in layout}, n_vocab, sum(b - a for a, b in offsets.values())
 
 
-def v3_config(base_config: bytes, recipe: F.Recipe, tensors: dict[str, tuple[str, list[int]]]) -> bytes:
+def fp8_base_config(base_config: bytes, recipe: F.Recipe, tensors: dict[str, tuple[str, list[int]]]) -> bytes:
     cfg = json.loads(base_config)
     fp8_base(cfg, recipe)
     kept = sorted(n[: -len(".weight")] for n, (dt, shape) in tensors.items() if len(shape) == 2 and dt in F._WIDEN and n.endswith(".weight"))
@@ -300,8 +300,8 @@ def v3_config(base_config: bytes, recipe: F.Recipe, tensors: dict[str, tuple[str
     return (json.dumps(cfg, indent=2, ensure_ascii=False) + "\n").encode()
 
 
-INT8_V3 = replace(INT8, id=RECIPE_V3, lm_head=True, scales=exact_scales, quantize=exact_quantize, plan=fp8_base, shard=v3_shard,
-                  config=v3_config)
+INT8_V3 = replace(INT8, id=RECIPE_V3, lm_head=True, scales=exact_scales, quantize=exact_quantize, plan=fp8_base, shard=fp8_base_shard,
+                  config=fp8_base_config)
 RECIPES = {r.id: r for r in (INT8, INT8_V2, INT8_V3)}
 
 
@@ -327,7 +327,7 @@ def report_shard(base_path: Path, made_path: Path, plan: Fp8Base, recipe: F.Reci
     """Per made weight of one shard: its error against the base's exact W (`report`'s fields)."""
     bstart, bheader = F.read_header(base_path)
     mstart, mheader = F.read_header(made_path)
-    layout = v3_layout(bheader, plan, recipe)
+    layout = fp8_base_layout(bheader, plan, recipe)
     out = {}
     with open(base_path, "rb") as bf, open(made_path, "rb") as mf:
         rd, md = _Base(bf, bstart, bheader, plan), _Base(mf, mstart, mheader, plan)
@@ -378,7 +378,7 @@ def summarize(tensors: dict[str, dict[str, Any]]) -> dict[str, Any]:
 
 def report(entry: dict[str, Any], entries: list[dict[str, Any]], hf_home: str | None, jobs: int = 1) -> dict[str, Any]:
     recipe = recipe_of(entry)
-    if recipe.shard is not v3_shard:
+    if recipe.shard is not fp8_base_shard:
         raise C.UsageError(f"{entry.get('role')}: `report` reads a v3 pin (an FP8-block base); this one is {recipe.id}")
     base = F.base_entry(entry, entries, recipe)
     bdir = F.snapshot_dir(hf_home, base["repo"], base["revision"]) if hf_home else Path(base["local_path"])
