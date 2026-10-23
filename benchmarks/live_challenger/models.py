@@ -19,11 +19,13 @@ its own salts, so a period's weights' root is never the prover's choice.
   line to the registry (`Host.models`, append-only, root's seal): ``{model, circuit, prefix, checkpoint: {file:
   SHA-512}, checkpoint_sha512, source, roots: {K: root}, entries, weights_root, key_sha512, pinned, registered_utc}``.
 - **A period-open** with ``--model M`` (or ``--weights-root W``) signs the registry entry's ``weights_root`` and
-  ``model: {name, checkpoint_sha512}`` for its circuit (`resolve`), and refuses a model or a root the registry has no
-  entry of for that circuit: no period's weights' root is the prover's.
+  ``model: {name, checkpoint_sha512}`` for its circuit (`opened`), and refuses a root the registry has no entry of for
+  that circuit: no period's weights' root is the prover's. A model the registry has no entry of under the circuit (a
+  remote memory audit's, whose circuit is its verifier tree and which commits no b/<K>) is signed as ``model`` alone,
+  its digest core's pin (`PINS`), and refused when the pin lacks it.
 - **The openings** are the salt key: a lane's gate key reads it with `model-key --model M --circuit C [--weights-root W]`,
-  W the period's signed root when the model was registered more than once. The weights are public; the key salts only
-  their b/<K> rows (`weights.B_NONCE`).
+  W the period's signed root, required when the model is registered more than once under C. The weights are public; the
+  key salts only their b/<K> rows (`weights.B_NONCE`), never a window's A or z/y.
 """
 from __future__ import annotations
 
@@ -237,9 +239,11 @@ def read(path: Path) -> list[dict]:
         return []
 
 
-def resolve(lines: list[dict], circuit: str, model: str | None, weights_root: str | None) -> dict | None:
+def resolve(lines: list[dict], circuit: str, model: str | None, weights_root: str | None, *,
+            unique: bool = False) -> dict | None:
     """The registry entry a period-open's ``--model`` and ``--weights-root`` name for its circuit (with the model alone,
-    its newest), None when it names neither; Refused when the registry has none, or the two disagree."""
+    its newest; with `unique`, Refused when the model has more than one), None when it names neither; Refused when the
+    registry has none, or the two disagree."""
     if model is None and weights_root is None:
         return None
     mine = [e for e in lines if e["circuit"] == circuit and (model is None or e["model"] == model)
@@ -249,7 +253,27 @@ def resolve(lines: list[dict], circuit: str, model: str | None, weights_root: st
                       + (f" with weights' root {weights_root[:16]}..." if weights_root else "")
                       + ": a period's weights' root is the auditor's registration (vy-admin's model-register), never "
                         "the prover's")
+    if unique and len({e["weights_root"] for e in mine}) > 1:
+        raise Refused(f"{model} is registered {len(mine)} times under circuit {circuit[:16]}...: name the period's signed "
+                      "root with --weights-root")
     return mine[-1]
+
+
+def opened(lines: list[dict], tree: Path, circuit: str, model: str | None, weights_root: str | None) -> dict:
+    """What a period-open signs for its model: a registry entry's ``weights_root`` and ``model: {name,
+    checkpoint_sha512}`` when the registry has one for the circuit (`resolve`); for a model the registry has none of under
+    the circuit (a remote memory audit's, whose circuit is its verifier tree), ``model`` alone, its digest core's pin
+    (`pinned_checkpoint`), with no ``weights_root``; nothing when the open names neither. Refused for a root the registry
+    lacks, or a model neither it nor core's pin has."""
+    if model is None and weights_root is None:
+        return {}
+    try:
+        e = resolve(lines, circuit, model, weights_root)
+    except Refused:
+        if weights_root is not None or model is None:
+            raise
+        return {"model": {"name": model, "checkpoint_sha512": pinned_checkpoint(tree, model)}}
+    return {"weights_root": e["weights_root"], "model": {"name": e["model"], "checkpoint_sha512": e["checkpoint_sha512"]}}
 
 
 def key_path(root: Path, e: dict) -> Path:

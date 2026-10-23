@@ -22,6 +22,7 @@
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
   "Flock.Test.RegKnown",
+  "Flock.Test.KnownRead",
   "Flock.Test.RegRows",
   "Flock.Test.SpillRows",
   "Flock.Test.RecCap",
