@@ -6,14 +6,14 @@ import Proofs.Flock.Claims.ZK.FinishTau
 
 `FinishSwTau.swSrcE_innerSrc_rows` asks that the firewall's constraints at `repCut_fw`'s `hinner` be the worker's
 view's first seven rows (`SwRows`): seven constraints, each of the layout's length, with `rowsSwE`'s coefficients.
-`FinishTau.tauFw` gives the coefficients as whole forms (`ofZk`); the lengths are the replay's and level 0's own.
+`FinishTau.tauFw` gives the coefficients as whole forms (`ofZk`), `FinishTau.tauFw_at_coef` by coefficient with level
+0's lengths; the replay's lengths are its own.
 
 * `Composed.replay_asz`: `Zk.replay`'s three constraints and its `ab` and `c` values have the layout's length.
-* `Masked.lanesAt_asz`: so do `ligeritoConstraints`' two rows, where level 0 is read at a view (`LaneAt`).
-* `Composed.fwCons_asz`: so the firewall's constraints (the replay's, the two ring-switch rows and level 0's) are seven,
-  each of the layout's length.
+* `Composed.fwCons_asz`: so, where level 0's two rows do too, the firewall's constraints (the replay's, the two
+  ring-switch rows and level 0's) are seven, each of the layout's length.
 * **`Masked.swRows_of`**: at those, constraints that are `rowsSwE`'s first seven as whole forms are `SwRows`.
-* `Masked.swRows_lane`: the same, with level 0's lengths read at the switched view's lane.
+* **`Masked.swRows_coef`**: the same by coefficient, level 0's lengths `nE + 4`, the inner layout's.
 * `Finish.piopFw_split`: `hinner`'s PIOP run is the zerocheck, lincheck and ring-switch runs that `tauFw_at` reads.
 -/
 
@@ -117,27 +117,9 @@ open FlockSoundness.Refine (fOf)
 
 namespace Masked
 
-/-- **Level 0's two lane rows have the layout's length**, where level 0 is read at a view (`LaneAt`; `laneRowR`'s
-`Rel2` carries the lengths). -/
-theorem lanesAt_asz {mPts : ℕ} (Tz : ZkSession.TabZK FlockLevel3.GF128 mPts) (st : _root_.Flock.Stmt)
-    (c : Composed.CoinsZK (Composed.RestOf Tz st)) (r : Fin 2) {nE : ℕ} (v : Fin nE → FlockLevel3.GF128) {nC : ℕ}
-    (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' : FlockLevel3.GF256)
-    (hlen : (Composed.layOf Tz st).len = nE + 4) (lg : _root_.Flock.LigeritoProof) (rec : _root_.Flock.Zk.L0Rec)
-    (zl : _root_.Flock.Zk.Level0Msgs) (hL : LaneAt Tz st c r v sh T' lg rec zl)
-    {lgc : Array (String × _root_.Flock.Zk.Lin)}
-    (hlgc : _root_.Flock.Zk.ligeritoConstraints (Composed.layOf Tz st) rec lg zl = .ok lgc) :
-    lgc.size = 2 ∧ ∀ k : Fin 2, (lgc[k.val]!).2.a.size = (Composed.layOf Tz st).len := by
-  obtain ⟨h0, h1⟩ := ZkExec.limbRows_rel
-    (laneRowR Tz st c r v sh T' hlen lg rec zl hL.target hL.ood hL.lane hL.rho hL.oodVal hL.msg hL.e0 hL.e1 hL.tPrime)
-  rw [FlockComplete.Replay.lanes_eq hlgc rfl, hlen]
-  refine ⟨rfl, fun k => ?_⟩
-  fin_cases k
-  · exact h0.1
-  · exact h1.1
-
 /-- **The firewall's constraints as `SwRows`**: where the replay returned (`hm`, `hrp`) and level 0's two rows have the
-layout's length (`lanesAt_asz`), constraints whose first seven rows are `rowsSwE`'s as whole forms (`ofZk`, as
-`tauFw` gives them) are `SwRows`. -/
+layout's length, constraints whose first seven rows are `rowsSwE`'s as whole forms (`ofZk`, as `tauFw` gives them)
+are `SwRows`. -/
 theorem swRows_of (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     {st : _root_.Flock.Setup} (hm : 14 ≤ st.m) {p : _root_.Flock.Proof} {root : ByteArray}
@@ -156,31 +138,26 @@ theorem swRows_of (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.
   obtain ⟨hsz, hasz⟩ := Composed.fwCons_asz hm hrp ss hl
   exact ⟨hsz, hasz, fun k i => congrArg (fun l => ZkSession.Lin.coef l i) (hrow k.val k.isLt)⟩
 
-/-- **The firewall's constraints as `SwRows` where level 0 is read at the switched view**: `swRows_of`, with level 0's
-lengths from `lanesAt_asz` at the worker's view's lane (`LaneAt`), where the table's layout is the inner proof's. -/
-theorem swRows_lane (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
+/-- **The firewall's constraints as `SwRows` by coefficient**: `swRows_of` where the first seven rows are `rowsSwE`'s
+coefficient by coefficient (as `tauFw_at_coef` gives them), level 0's two of `nE + 4`, the inner layout's length. -/
+theorem swRows_coef (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     {st : _root_.Flock.Setup} (hm : 14 ≤ st.m) {p : _root_.Flock.Proof} {root : ByteArray}
     {t t' : _root_.Flock.Transcript} {rp : _root_.Flock.Zk.Replayed}
     (hrp : _root_.Flock.Zk.replay st (innerLayE x j) p root t = .ok (rp, t')) (ss : Array (Array _root_.Flock.F128))
-    {lg : _root_.Flock.LigeritoProof} {rec : _root_.Flock.Zk.L0Rec} {zl : _root_.Flock.Zk.Level0Msgs}
     {lgc : Array (String × _root_.Flock.Zk.Lin)}
-    (hlay : Composed.layOf (zkTab x j).table (stAt x j) = innerLayE x j)
-    (hlen : (Composed.layOf (zkTab x j).table (stAt x j)).len = (tabC PE x j).z.nE + 4)
-    (hL : LaneAt (zkTab x j).table (stAt x j) (czExe PE x c j) r ((swViewE x c w v τ j).pre.2.1 r)
-      (swViewE x c w v τ j).pre.1 ((swViewE x c w v τ j).pre.2.2.2.2.2 r).1 lg rec zl)
-    (hlgc : _root_.Flock.Zk.ligeritoConstraints (innerLayE x j) rec lg zl = .ok lgc)
-    (hrow : ∀ k (hk : k < 7),
+    (hl : lgc.size = 2 ∧ ∀ k : Fin 2, (lgc[k.val]!).2.a.size = (tabC PE x j).z.nE + 4)
+    (hrow : ∀ k (hk : k < 7) (i : Fin ((tabC PE x j).z.nE + 4)),
       (Composed.ofZk ((rp.cons ++ #[("ring switch ab", rp.abValue.addConst
           (_root_.Flock.Zk.claimCheck rp.claims[0]! ss[0]!)), ("ring switch c", rp.cValue.addConst
           (_root_.Flock.Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc)[k]!).2 :
-        ZkSession.Lin FlockLevel3.GF128 ((tabC PE x j).z.nE + 4)) = rowsSwE x c w v τ j r (Fin.castAdd 3 ⟨k, hk⟩)) :
+        ZkSession.Lin FlockLevel3.GF128 ((tabC PE x j).z.nE + 4)).coef i =
+        (rowsSwE x c w v τ j r (Fin.castAdd 3 ⟨k, hk⟩)).coef i) :
     SwRows x c w v τ j r (rp.cons ++ #[("ring switch ab", rp.abValue.addConst
       (_root_.Flock.Zk.claimCheck rp.claims[0]! ss[0]!)), ("ring switch c", rp.cValue.addConst
       (_root_.Flock.Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc) := by
-  obtain ⟨h1, h2⟩ := lanesAt_asz (zkTab x j).table (stAt x j) (czExe PE x c j) r _ _ _ hlen lg rec zl hL
-    (by rw [hlay]; exact hlgc)
-  exact swRows_of x c w v τ j r hm hrp ss ⟨h1, fun k => by rw [h2 k, hlay]⟩ hrow
+  obtain ⟨hsz, hasz⟩ := Composed.fwCons_asz hm hrp ss ⟨hl.1, fun k => (hl.2 k).trans (innerLayE_len x j).symm⟩
+  exact ⟨hsz, hasz, fun k i => hrow k.val k.isLt i⟩
 
 end Masked
 end Claims.ZKMal
