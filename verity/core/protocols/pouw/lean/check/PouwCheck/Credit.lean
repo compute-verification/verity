@@ -629,10 +629,20 @@ def idsStep? (v : Json) : Option Nat :=
   let s := String.ofList (last.toList.drop 4)
   if last.startsWith "ids@" && (s == "0" || canonicalK s) then some s.toNat! else none
 
-/-- `credit.is_tied`: a value the round roots commit, an A value (`isA`) or an input-ids table (`idsStep?`). -/
-def isTied (v : Json) : Bool := isA v || (idsStep? v).isSome
+/-- `credit.receipt_call`: a receipt table's call, a name whose last part is `receipt@<c>` (`<prefix>receipt@<c>`, row t
+call c's t-th unit's receipt, c a canonical decimal). -/
+def receiptCall? (v : Json) : Option Nat :=
+  (str? v).bind fun v =>
+  let last := (v.splitOn "/").getLastD ""
+  let c := String.ofList (last.toList.drop 8)
+  if last.startsWith "receipt@" && (c == "0" || canonicalK c) then some c.toNat! else none
 
-def what (v : String) : String := if isA (.str v) then "A value" else "input-ids table"
+/-- `credit.is_tied`: a value the round roots commit, an A value (`isA`), an input-ids table (`idsStep?`) or a receipt
+table (`receiptCall?`). -/
+def isTied (v : Json) : Bool := isA v || (idsStep? v).isSome || (receiptCall? v).isSome
+
+def what (v : String) : String :=
+  if isA (.str v) then "A value" else if (idsStep? (.str v)).isSome then "input-ids table" else "receipt table"
 
 /-- `credit.is_held`: a value held across windows, the weights' rows (`…/b/<K>`, K a canonical decimal); every other
 value a window registers is its own. -/
@@ -663,9 +673,11 @@ def aLinkRefuse {α : Type} (why : String) : R α := throw ("a-link", why)
 /-- `credit._a_link`: none when every registered A value is the tree over the segments the round log commits, else the
 refusal. Of S rounds, round s's segments of a window's A value `…/a/<K>` of L rows tile its rows `[s·L/S, (s+1)·L/S)`;
 round s's A table of K `…/a/<K>@<s>` is committed whole by round s, whose segments tile all its rows, and no other
-round lists it. Round s's input-ids table `…/ids@<s>` (`idsStep?`) is committed whole by round s alike. A step of
-`window`, which first holds the round roots to the ones the challenger received (`roundsCheck`). -/
-def Internal.aLink (rounds entries : Json) : R Unit := do
+round lists it. Round s's input-ids table `…/ids@<s>` (`idsStep?`) is committed whole by round s alike, and so is
+call c's receipt table `…/receipt@<c>` (`receiptCall?`) by c's round, of the window's `calls` calls (its manifest's
+rows; 0 admits no receipt table) the rounds' equal blocks. A step of `window`, which first holds the round roots to the
+ones the challenger received (`roundsCheck`). -/
+def Internal.aLink (rounds entries : Json) (calls : Nat) : R Unit := do
   let some xs := (match rounds with
       | .arr a => if a.isEmpty then none else some a.toList
       | _ => none) | aLinkRefuse LOG_FORM
@@ -692,8 +704,8 @@ def Internal.aLink (rounds entries : Json) : R Unit := do
   for (p, r) in segs.zipIdx do
     for (v, _) in p do
       unless names.contains v do
-        aLinkRefuse (s!"round {r} lists segments of {v}, which is no registered A value or input-ids table of the " ++
-          "window")
+        aLinkRefuse (s!"round {r} lists segments of {v}, which is no registered A value, input-ids table or receipt " ++
+          "table of the window")
   let steps := xs.length
   for (v, e) in a do
     let (some root, some domain, some count) := (digest? (get e "root"), digest? (get e "domain"), nat? (get e "leaves"))
@@ -702,16 +714,22 @@ def Internal.aLink (rounds entries : Json) : R Unit := do
     unless 1 ≤ count && count ≤ MAX_ROWS do
       aLinkRefuse (s!"registered {what v} {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} " ++
         "(the verifier hashes its pads)")
-    let (per, own) ← (match idsStep? (.str v), (aValue? (.str v)).bind (·.2) with
-      | some s, _ => do
+    let (per, own) ← (match receiptCall? (.str v), idsStep? (.str v), (aValue? (.str v)).bind (·.2) with
+      | some c, _, _ => do
+        unless calls % steps == 0 && c < calls do
+          aLinkRefuse (s!"registered receipt table {v} is call {c}'s, and the window's {calls} calls are not its " ++
+            s!"{steps} rounds' equal blocks with a call {c}")
+        let o := c / (calls / steps)
+        pure (count, some (s!"call {c}'s receipt table, its round {o}'s", o))
+      | none, some s, _ => do
         if s ≥ steps then
           aLinkRefuse s!"registered input-ids table {v} is round {s}'s, and the window has {steps} rounds"
         pure (count, some (s!"round {s}'s input-ids table", s))
-      | none, none => do
+      | none, none, none => do
         if count % steps != 0 then
           aLinkRefuse s!"registered A value {v}'s {count} rows are not the window's {steps} rounds' equal blocks"
         pure (count / steps, none)
-      | none, some s => do
+      | none, none, some s => do
         let s := s.toNat!
         if s ≥ steps then
           aLinkRefuse s!"registered A value {v} is round {s}'s A table, and the window has {steps} rounds"
@@ -794,13 +812,32 @@ def leavesOf : Nat → Json → Nat
     | _ => 0
   | _ + 1, _ => 0
 
-/-- K's template, as a statement over its units reads it: its id and the 16-bit words of its A row, its B row and its
-z/y record. -/
+/-- K's template, as a statement over its units reads it: its id and the 16-bit words of its A row, its B row, its
+z/y record and its receipt (its return's `receipt` field, the statement's output row o0; 0 when it returns none of
+whole 16-bit words). -/
 structure Tile where
   fn : String
   a : Nat
   b : Nat
   zy : Nat
+  receipt : Nat := 0
+
+/-- `credit.RECEIPT_PORT`: the statement's output row of its units' receipts, which reads its call's receipt table. -/
+def RECEIPT_PORT : String := "o0"
+
+/-- `credit._receipt_words`: the 16-bit words of a template return's `receipt` field (`["Record", [["receipt", t],
+...]]`, its first such field); 0 for another form or a width of no whole words. -/
+def receiptWords (ret : Json) : Nat :=
+  let fields : List Json := match ret with
+    | .arr #[.str "Record", .arr fs] => fs.toList
+    | _ => []
+  let t := fields.findSome? fun x => match x with
+    | .arr #[.str "receipt", t] => some t
+    | _ => none
+  let n := match t with
+    | some t => leavesOf TYPE_DEPTH t
+    | none => 0
+  if n % 16 == 0 then n / 16 else 0
 
 /-- `credit.shape_of`: of a descriptor `layoutOf` accepted, its parameters' prefix (`PREFIX`) and each K's `Tile`
 (`TILES`, by ascending K), the widths `h1window.table_reads_file` reads. Its cost is the descriptor's bytes. -/
@@ -822,12 +859,13 @@ def shapeOf (descriptor : ByteArray) : Shape := Id.run do
         | [k, f] => do
           let k ← nat? k
           let fid ← str? (get f "fn")
-          let .arr ps := get (get (get (get d "definitions") fid) "body") "params" | none
+          let body := get (get (get d "definitions") fid) "body"
+          let .arr ps := get body "params" | none
           let ty := fun (i : Nat) => (match ps[i]? with
             | some (.arr q) => q.getD 1 .null
             | _ => .null)
           pure (k, { fn := fid, a := leavesOf TYPE_DEPTH (elem (ty 0)) / 16, b := leavesOf TYPE_DEPTH (elem (ty 1)) / 16,
-                     zy := leavesOf TYPE_DEPTH (ty 2) / 16 })
+                     zy := leavesOf TYPE_DEPTH (ty 2) / 16, receipt := receiptWords (get body "ret_type") })
         | _ => none)
       | _ => none)
     | _ => []
@@ -890,7 +928,9 @@ reads). It is `h1window.table_reads_file`'s, from the descriptor alone: unit u, 
 reads its A row i (port `a_k<K>_<i>`) at row o + R·ti + i of its round s's A table of K `<prefix>a/<K>@<s>` (M rows for
 each of the round's calls of K, o the call's first, `stepRow`), its B row j (`b_k<K>_<j>`) at
 row b0 + C·tj + j of the weights' `<prefix>b/<K>` (b0 the call's linear's first row in it), and its record (`zy`) at row
-t of the call's z table `<prefix>zy@<call>`; every other unit reads none of them. Each value is a row/v2 value of 16-bit
+t of the call's z table `<prefix>zy@<call>`; and, when the window registers the call's receipt table
+`<prefix>receipt@<call>`, the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shapeOf`'s width) at its
+row t, so the receipts the round roots commit are the ones the units return; every other unit reads none of them. Each value is a row/v2 value of 16-bit
 leaves under `SampledProofs.Registered.domainAt` of its name, rows and words, binding the window's open root `window`
 but for the weights' (`isHeld`), at the root `roots` (`{value: [root, ...]}`) gives it. Its cost is the window's units,
 once a port: the reads file's form. -/
@@ -925,8 +965,14 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   let a := s!"{shape.pre}a/{k}@{s}"
   let zy := s!"{shape.pre}zy@{call}"
   let bv := s!"{shape.pre}b/{k}"
+  let rc := s!"{shape.pre}receipt@{call}"
+  let receipted := (PouwWindow.field? roots rc).isSome
+  if receipted && tile.receipt == 0 then
+    throw ("registration", s!"the window registers {rc}, and K = {k}'s template returns no receipt of whole 16-bit " ++
+      "words for its statement's output row o0 to read")
   let shapes : List (String × Nat × Nat) :=
     [(a, m * callsK, tile.a), (zy, size, tile.zy), (bv, (lins.filter (·.2.1 == k)).foldl (fun s x => s + x.2.2) 0, tile.b)]
+    ++ (if receipted then [(rc, size, tile.receipt)] else [])
   let mut root : List (String × String) := []
   for (v, _) in shapes do
     let got : List Json := (match get roots v with
@@ -940,7 +986,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   let ports : List (String × String × (Nat → Nat)) :=
     (List.range r).map (fun i => (s!"a_k{k}_{i}", a, fun t => at_ + r * (t / per) + i)) ++
     (List.range c).map (fun j => (s!"b_k{k}_{j}", bv, fun t => b0 + c * (t % per) + j)) ++
-    [("zy", zy, fun t => t)]
+    [("zy", zy, fun t => t)] ++ (if receipted then [(RECEIPT_PORT, rc, fun t => t)] else [])
   let mut out : List (String × Json) := []
   for (port, v, row) in ports do
     let reads := (List.range population).map fun u =>
@@ -1278,7 +1324,9 @@ def windowLayout (key ledger window session salt calls served commit rounds draw
     | .arr xs => xs
     | _ => #[]
   roundsCheck key ledger window session (.arr (log.map (get · "root"))) (.arr (log.map (get · "coin")))
-  Internal.aLink rounds entries
+  Internal.aLink rounds entries (match calls with
+    | .arr xs => xs.size
+    | _ => 0)
   let some d := (match descriptor with
       | .str s => if isHexBytes s then hex? (.str s) else none
       | _ => none) | layoutRefuse DESCRIPTOR_HEX

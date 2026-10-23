@@ -43,14 +43,15 @@ def _first(c: Coll) -> Coll:
 def _tile_sig(S, row=None, record=None, out=HW.OUTPUTS):
     row, record = (row or Z.ROW)(S.K), (record or Z.RECORD)(S.R, S.C)
     return ((("a", Array(S.R, row)), ("b", Array(S.C, row)), ("zy", record), ("salt", Array(4, BIT)), ("position", V16),
-             ("roots", Array(2, Array(4, V16)))), Record((out[0], Array(S.K // 32, BIT)), (out[1], BIT)))
+             ("roots", Array(2, Array(4, V16)))), Record((out[0], Array(S.K // 2, BIT)), (out[1], BIT)))
 
 
 def _tile_body(B, S, a, b, zy, salt, position, roots, sig=_tile_sig):
     x = B.call(XOR1, B.call(XOR1, _first(a[0]), _first(b[0])), B.call(XOR1, B.call(LOW1, position), B.call(LOW1, roots[0][0])))
-    receipt = coll_concat(Array(S.K // 32, BIT),
+    w = sig(S)[1].fields[0][1].leaves
+    receipt = coll_concat(Array(w, BIT),
                           [B.call(FOLD1, _first(salt), B.call(XOR1, x, Coll(BIT, a[min(1, S.R - 1)].refs.slice(i, i + 1))))
-                           for i in range(S.K // 32)])
+                           for i in range(w)])
     return coll_concat(sig(S)[1], [receipt, B.call(XOR1, x, _first(zy))])
 
 
@@ -120,7 +121,7 @@ def test_a_mixed_k_window_with_shared_b_derives_exactly_each_calls_tiles():
         2 * m, 24, 2 * m, 8, len(want), len(want))
     assert sig["zy"].elem == Z.RECORD(R, C) and sig["a/32"].elem == Z.ROW(32) and sig["b/64"].elem == Z.ROW(64)
     assert [t.n for t in prog.fn.signature()[1].fields] == [4, 2, 2] * 2
-    assert [t.elem.fields[0][1].n for t in prog.fn.signature()[1].fields] == [1, 1, 2] * 2
+    assert [t.elem.fields[0][1].n for t in prog.fn.signature()[1].fields] == [16, 16, 32] * 2
     assert [HW.unit_reads(prog, tp, u) for u in range(tp.population)] == _reads(want)
     steps = [[_b0(HW.unit_reads(prog, tp, u)) for u in range(s * len(want) // 2, (s + 1) * len(want) // 2)] for s in (0, 1)]
     assert steps[0] == steps[1], "every step's units read the linears' one copy of B"
@@ -254,6 +255,39 @@ def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
         assert (e["domain"] == bare["ports"][port]["domain"]) == held, port
         assert {k: v for k, v in e.items() if k != "domain"} == {k: v for k, v in bare["ports"][port].items()
                                                                   if k != "domain"}, port
+
+
+def test_a_calls_receipt_table_is_its_statements_output_row_o0_when_registered():
+    """With call c's receipt table ``receipt@<c>`` among the roots, `table_reads_file` reads its units' receipts there as the
+    statement's output row o0 (`RECEIPT_PORT`), unit u0 + t at row t, one row of the tile's receipt width in 16-bit words
+    under the window-bound domain the served path commits it under, and every read opens that tree; without it the file
+    has no o0, and a tile whose receipt is no whole 16-bit words is refused rather than read at a truncated width."""
+    m = HW.slot(5, TILE)
+    prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
+    tp, digest, rng, w, c = P.evaluate(prog, HW.query(prog)), P.program_digest(prog), random.Random(13), "ab" * 64, 3
+    u0, n = HW.call_units(prog)[c]
+    rc = HW.table(prog, HW.RECEIPTS, c)
+    assert rc == f"receipt@{c}"
+    roots = {HW.table(prog, "a", c, 2): "01" * 64, HW.table(prog, "zy", c): "02" * 64, "b/32": "03" * 64}
+    assert HW.RECEIPT_PORT not in HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), window=w,
+                                                      steps=2)["ports"]
+    words = 32 // 2 // 16
+    reg = G.Registered.commit(digest, rc, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(n)],
+                              schema=G.SCHEMA_V2, window=w)
+    file = HW.table_reads_file(prog, tp, c, {**roots, rc: reg.root.hex()}, ports=HW.window_ports(prog), window=w,
+                               steps=2)["ports"]
+    e = file[HW.RECEIPT_PORT]
+    assert (e["value"], e["leaves"], e["words"], e["root"], e["domain"]) == (
+        rc, n, words, reg.root.hex(), reg.domain.domain_id.hex())
+    assert e["domain"] == Cr.domain_of(digest, w, e)
+    assert e["reads"] == [u - u0 if u0 <= u < u0 + n else None for u in range(tp.population)]
+    assert all(G.verify_read(reg.domain, reg.root, t, reg.bcs[t], reg.path(t), G.SCHEMA_V2) for t in range(n))
+
+    odd_tile = _test_tile("H1WindowTestOddReceiptTile", sig=lambda S: _tile_sig(S)[:1] + (
+        Record((HW.OUTPUTS[0], Array(S.K // 2 + 1, BIT)), (HW.OUTPUTS[1], BIT)),))
+    odd = HW.program(LINEARS, CALLS, m, TILE, unit=lambda k: bind(odd_tile, K=k, R=R, C=C))
+    with pytest.raises(ValueError, match="no receipt of whole 16-bit words"):
+        HW.table_reads_file(odd, P.evaluate(odd, HW.query(odd)), c, {**roots, rc: reg.root.hex()}, steps=2)
 
 
 def test_a_window_at_k_32_and_322_reads_each_row_under_its_own_port():
