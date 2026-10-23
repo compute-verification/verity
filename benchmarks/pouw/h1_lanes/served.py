@@ -374,7 +374,12 @@ def prepare(a) -> None:
                     "call": unit["call"]}, partition=ctx.reg.part, registered=list(win.values()))
     d = R.digest(rec)
     pa = L.partials(leaf, (a_root, b_root))
-    tree = PR.commit(ctx.prog, LL.PARTIALS, pa, d, schema=V2)
+    # the partials' salts come from a private opening salt, so prepares of disjoint lane sets (on several nodes) commit
+    # the one produced tree the unit's lanes read
+    zs = bytes.fromhex(op["ports"]["zy"]["opening"]["salt"])
+    seed = hashlib.sha512(b"h1-lanes/partials-salts/v1" + zs).digest()
+    psalts = [hashlib.sha512(seed + i.to_bytes(4, "big")).digest()[:len(zs)] for i in range(len(pa))]
+    tree = PR.commit(ctx.prog, LL.PARTIALS, pa, d, psalts, schema=V2)
     ops = {LL.PARTIALS: PR.rows_of(tree)}
     for p in op["ports"].values():
         ops.setdefault(p["entry"]["value"], []).append((p["opening"]["position"], p["opening"]["bc"]))
