@@ -525,7 +525,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         if a.handoff:
             out["hook_bad"] = bad[:20]
             return out
-        out = released(name, h1, out, served, tdir, bool(a.challenger))
+        out = released(name, h1, out, served, tdir, bool(a.challenger), not a.skip_register)
         out["rss_gib"] = {"start": rss0, "end": rss_gib(),
                           "peak": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
         return out
@@ -595,14 +595,15 @@ def closed_measures(h1: Any, out: dict[str, Any], want: int, weight_of: Any, bad
                      and out["requests"]["per_round"][0] == want)
 
 
-def released(name: str, h1: Any, out: dict[str, Any], served: Any, tdir: Path, challenger: bool) -> dict[str, Any]:
+def released(name: str, h1: Any, out: dict[str, Any], served: Any, tdir: Path, challenger: bool,
+             register: bool = True) -> dict[str, Any]:
     """A fill window's commitment and how its session closed, once released, and its served trees' check."""
     out["commitment"] = dict(h1.commits)
     out["coin_source"], out["challenger"] = out["commitment"].get("coin_source"), h1.details.get("challenger")
     if challenger:
         out["ok"] = bool(out["ok"] and out["challenger"] == {"closed": True})
     if served is not None:
-        out["served"] = served_check(h1, served, tdir)
+        out["served"] = served_check(h1, served, tdir, register)
         out["ok"] = bool(out["ok"] and out["served"]["committed"])
     print(f"[fill] {name} {json.dumps({k: v for k, v in out.items() if k not in ('commitment', 'z')}, default=str)[:3000]}",
           flush=True)
@@ -684,11 +685,12 @@ def layout_of(linears: Any, calls: Any, m: int, tile: Any) -> dict[str, Any]:
             "calls_sha512": hashlib.sha512(json.dumps([list(c) for c in calls]).encode()).hexdigest()}
 
 
-def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
+def served_check(h1: Any, served: Any, tdir: Path, register: bool = True) -> dict[str, Any]:
     """The window's registered tables (`pouw_h1_served`): each committed value's entry, what was refused, and the outcome of
     `pouw_h1_served.register`, the first and last calls' ``--registered`` files written into ``tdir``: a file holds one
     entry a unit of the window for each of its ports (`h1window.table_reads_file`), so at FILL's 1.5M units each call's is
-    hundreds of MB, and the window's 2304 about a TB."""
+    hundreds of MB, and the window's 2304 about a TB. Without ``register`` (``--skip-register``) only the entries: at FILL
+    `register`'s template partition (`partition.evaluate`) encodes the window Program again, past 197 GB and 17 min."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
     held = sum(len(r.bcs) * 128 + 64 * sum(map(len, r.levels)) for r in served.registered.values())
     doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20], "held_mib": round(held / 2**20, 1),
@@ -700,6 +702,9 @@ def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
     print(f"[fill] served committed={doc['committed']} values={len(doc['entries'])} rows={doc['rows']} "
           f"held_mib={doc['held_mib']} rss_gib={rss_gib()}", flush=True)
     calls = sorted({0, len(served.calls) - 1}) if served.calls else []
+    if not register:
+        doc["register"] = {"skipped": "--skip-register"}
+        return doc
     try:
         reg = SV.register(h1, calls=calls, directory=tdir)
         doc["register"] = {"registered": len(reg.registered), "files": len(reg.files), "calls": calls}
@@ -865,6 +870,8 @@ def main(argv: list[str] | None = None) -> int:
                                                             "credit reads the window's layout from")
     ap.add_argument("--served", action="store_true", help="fill: commit each call's tables and the weights' B as its "
                                                           "Program's registered values (pouw_h1_served.Served) and register them")
+    ap.add_argument("--skip-register", action="store_true", help="fill with --served: record the window's entries but "
+                    "not pouw_h1_served.register's --registered files (at FILL its partition takes hundreds of GB)")
     ap.add_argument("--baseline-h1", action="store_true", help="fill with --served: serve an H1 window without Served "
                                                                "first, in the solo window's place (the step-time baseline)")
     ap.add_argument("--weights-key", metavar="FILE", help="fill with --served: the period's weights key (32 bytes, kept "
