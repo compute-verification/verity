@@ -545,9 +545,29 @@ def openLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Arr
 one of which it must take), then its constraints sent to the firewall as `cons LEN` followed by their `LEN` bytes
 (`consBytes`), then `repFw`'s inner proof (`innerP`) on them, each round sent live (`liveAsks`). Where `repFw` stops on a
 constraint that fails on the pads, this speaks on schedule (`proofFile` then refuses the rep's file, and the session
-stops at its `Finish`). Returns `repFw`'s proof where no constraint fails on the pads: `repFw` on `q` with every coin this
-took, which is the proof `proofFile` computes on a `rep` request with those inputs and coins (`Kept`). -/
-def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) : LiveM (Option Zk.ZkProof) := do
+stops at its `Finish`). -/
+def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) : LiveM Unit := do
+  let pads := padsOf q.draws
+  let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) pads (saltAt q.draws.salts) : V InnerCommit) : LiveM InnerCommit)
+  let hs : Hashes LiveM := Hashes.ofSha512 Sha512.hash
+  let commit : Level → Array F128 → (Nat → ByteArray) → LiveM Commit := fun lv g salt => pure (commitFw lv g salt)
+  let salt : Nat → Nat → ByteArray := fun l => saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)
+  let prog : TMW LiveM Unit := do
+    let (p, _, cons) ← repCons (liveAsks ch q.coins false) commit t.st t.sch t.tPad rep dom t.g t.cm0 (claimsOf q.xs)
+      pads ic q.vals t.extra t.lanePad salt
+    let k := (← getThe (Array (Array F128))).size
+    if k != q.coins.size then throwThe String s!"finish: the rep's PIOP and opening took {k} of its {q.coins.size} rounds of coins"
+    let b := consBytes cons
+    ch.write ((s!"cons {b.size}\n").toUTF8 ++ b)
+    ch.flush
+    let _ ← innerP (liveAsks ch q.coins true) hs (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) pads ic p.zerocheck.finalC
+      cons
+  let _ ← prog.run (Transcript.init #[] dom)
+
+/-- **A rep's inner proof, live, kept**: `innerLive`, returning `repFw`'s proof where no constraint fails on the pads
+(`innerLiveK_discard`): `repFw` on `q` with every coin this took, which is the proof `proofFile` computes on a `rep`
+request with those inputs and coins (`Kept`). -/
+def innerLiveK (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) : LiveM (Option Zk.ZkProof) := do
   let pads := padsOf q.draws
   let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) pads (saltAt q.draws.salts) : V InnerCommit) : LiveM InnerCommit)
   let hs : Hashes LiveM := Hashes.ofSha512 Sha512.hash
@@ -564,11 +584,31 @@ def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : Rep
     let inner ← innerP (liveAsks ch q.coins true) hs (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) pads ic p.zerocheck.finalC
       cons
     return if (failingOn cons pads.h).isEmpty then some { proof := p, level0 := zl, inner } else none
-  let (z, _) ← prog.run (Transcript.init #[] dom)
-  return z
+  return (← prog.run (Transcript.init #[] dom)).1
+
+instance instLawfulEST : LawfulMonad (EST ε σ) := LawfulMonad.mk' (EST ε σ)
+  (id_map := fun x => by funext s; show EST.bind x (fun a => EST.pure (id a)) s = x s; unfold EST.bind EST.pure; cases x s <;> rfl)
+  (pure_bind := fun _ _ => rfl)
+  (bind_assoc := fun x f g => by
+    funext s; show EST.bind (EST.bind x f) g s = EST.bind x (fun a => EST.bind (f a) g) s
+    unfold EST.bind; cases x s <;> rfl)
+
+instance : LawfulMonad (EIO ε) := inferInstanceAs (LawfulMonad (EST ε IO.RealWorld))
+
+/-- `innerLiveK` is `innerLive` with its result kept: the same rounds, the same bytes to the firewall, the same coins. -/
+theorem innerLiveK_discard (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) :
+    (do let _ ← innerLiveK ch t rep dom q) = innerLive ch t rep dom q := by
+  unfold innerLiveK innerLive
+  simp only [StateT.run_bind, map_bind, bind_pure_comp]
+  congr 1; funext ic; congr 1; funext a; congr 1; funext b
+  have h : ∀ {α} (X : TMW LiveM α) s,
+      (fun _ => ()) <$> Prod.fst <$> X.run s = (fun _ => ()) <$> ((fun _ => ()) <$> X).run s := by
+    intros; simp only [StateT.run_map, Functor.map_map]
+  rw [h]; congr 2
+  split <;> simp only [map_bind, Functor.map_map]
 
 /-- **What a rep's `inner` request leaves for its `rep` request**: table `i`'s rep `r`, its request `q`, every round's
-coins it took, and `repFw`'s proof on them (`innerLive`). -/
+coins it took, and `repFw`'s proof on them (`innerLiveK`). -/
 structure Kept where
   i : Nat
   r : Nat
@@ -686,7 +726,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       let run : V (LiveM (Option Kept)) := if line.startsWith "open " then
           (parseOpen b).map fun (xs, coins) => do openLive ch t r dom xs s coins; return none
         else (parseRep t s b).map fun q => do
-          let z ← innerLive ch t r dom q
+          let z ← innerLiveK ch t r dom q
           let coins ← getThe (Array (Array F128))
           return z.map fun proof => ({ i, r, q, coins, proof } : Kept)
       match run with
