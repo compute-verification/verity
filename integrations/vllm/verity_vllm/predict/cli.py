@@ -2,12 +2,14 @@
 
     verity-vllm predict build --phi phi.json --wrapper step|request [--LP N --T N | --M N --pos0 N] --out DIR
     verity-vllm predict node --row ROW --config CONFIG_JSON --wrapper step|request [--LP N --T N | --M N --pos0 N] --out DIR
+    verity-vllm predict node-registration --row ROW --config CONFIG_JSON --program NODE_DESCRIPTOR --commit-out OUT ...
     verity-vllm predict inventory --rows ROWS_ROOT --out inventory.json.gz
     verity-vllm predict score (--inventory inventory.json.gz | --rows ROWS_ROOT) --hf-home HF --out score.json [--md score.md]
     verity-vllm predict compare ROW_DIR --row ROW --config CONFIG_JSON --out comparison.json [--workers N]
     verity-vllm predict emit --row ROW --rank R --config CONFIG_JSON --trace DIR --out DIR --wrapper ...   (`aot`)
     verity-vllm predict compiled --role ROLE --device DEVICE --workload WL --out build.json      (`compiled`: the served Build)
 
+`node-registration` registers a node Program's θ from its TP Commit of record (`node_registration`, NCI's full check).
 `emit` is the one that writes into a Build row: a switched row's AOT Build (`aot`, `row_tp.TpRow.build`) runs it for each derive.
 `score` and `build` refuse an output path inside a rows root they read.
 """
@@ -25,6 +27,7 @@ from verity_vllm.config import UsageError, option
 from . import aot as A
 from . import compiled as PC
 from . import inventory as INV
+from . import node_registration as NR
 from . import score as S
 
 
@@ -66,8 +69,8 @@ class InventoryOptions:
     cmd: str = field(default="inventory", init=False)
 
 
-COMMANDS = {"build": BuildOptions, "node": NodeOptions, "inventory": InventoryOptions, "score": S.Options, "compare": A.CompareOptions,
-            "emit": A.EmitOptions, **PC.COMMANDS}
+COMMANDS = {"build": BuildOptions, "node": NodeOptions, "node-registration": NR.Options, "inventory": InventoryOptions,
+            "score": S.Options, "compare": A.CompareOptions, "emit": A.EmitOptions, **PC.COMMANDS}
 
 
 def node_main(a: NodeOptions) -> int:
@@ -105,6 +108,8 @@ def main(a) -> int:
         return PC.main(a)
     if isinstance(a, NodeOptions):
         return node_main(a)
+    if isinstance(a, NR.Options):
+        return NR.main(a)
     if a.cmd == "inventory":
         S._refuse_inside(a.out, [a.rows])
         inv = INV.inventory(a.rows)
