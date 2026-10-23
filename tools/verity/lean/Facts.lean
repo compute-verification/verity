@@ -435,11 +435,12 @@ def plain (e : Expr) : MetaM Expr := do
     (post := fun e => return if e.isHeadBetaTarget then .visit e.headBeta else .done e)
 
 /-- The assumptions a premise's type mentions: the constants of an assumptions module that are `Prop`s or predicates,
-wherever they stand in it (`A ∧ B`, `A ↔ B`, `¬ A`, `∃ x, A x`, `id A`). -/
-def mentioned (env : Environment) (moduleOf : Name → Option Name) (t : Expr) : Array Name :=
-  t.getUsedConstants.filter fun c =>
-    ((moduleOf c).map (·.components.contains `Assumptions)).getD false &&
-      ((env.find? c).map (·.type.getForallBody matches .sort .zero)).getD false
+wherever they stand in it (`A ∧ B`, `A ↔ B`, `¬ A`, `∃ x, A x`, `id A`), their types unfolded (`A : Pred`). -/
+def mentioned (env : Environment) (moduleOf : Name → Option Name) (t : Expr) : MetaM (Array Name) :=
+  t.getUsedConstants.filterM fun c => do
+    unless ((moduleOf c).map (·.components.contains `Assumptions)).getD false do return false
+    let some ci := env.find? c | return false
+    forallTelescopeReducing ci.type fun _ b => return b.isProp
 
 /-- The assumptions the fields of the structure a binder ranges over mention (`s : {k // A k}`, `g : G` with a field
 `h : A g.k`), at every index of a family (`Fin n → G`), and those of the structures under `meaning` its fields range
@@ -459,7 +460,7 @@ partial def fieldPremises (env : Environment) (meaning : Array Name) (moduleOf :
     forallTelescope ctorType fun fs _ => fs.foldlM (init := #[]) fun out f => do
       let ft ← inferType f
       let inner ← if ← isProp ft then pure #[] else fieldPremises env meaning moduleOf false ft
-      return out ++ mentioned env moduleOf ft ++ inner
+      return out ++ (← mentioned env moduleOf ft) ++ inner
 
 /-- The premises a statement takes (`plain`): the `Prop` hypotheses of each conjunct, each named by its head after
 reducible unfolding (so a `Premises` abbrev names the assumption it stands for) and by the assumptions it mentions, and
@@ -476,8 +477,8 @@ partial def premisesOf (env : Environment) (meaning : Array Name) (moduleOf : Na
       for x in xs do
         let t ← inferType x
         let hs ← if !(← isProp t) then fieldPremises env meaning moduleOf true t
-          else if only then pure (mentioned env moduleOf t)
-          else do pure ((← premiseHead moduleOf 4 t).toArray ++ mentioned env moduleOf t)
+          else if only then mentioned env moduleOf t
+          else do pure ((← premiseHead moduleOf 4 t).toArray ++ (← mentioned env moduleOf t))
         for h in hs do
           ps := ps.push <| Json.mkObj [("binder", toJson (← x.fvarId!.getDecl).userName.toString),
             ("head", toJson h.toString), ("module", toJson ((moduleOf h).map toString))]
