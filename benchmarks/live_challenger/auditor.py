@@ -97,8 +97,8 @@ first coin.
   (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
   (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the
   rehearsal through it into `out/`, stopped at `--minutes`, then the tunnel closed and `end.json` written (its exit, why
-  it ended, the SHA-512 of each file of `out/`, and the verdicts of `out/summary.json`). `status RUN` and `fetch RUN`
-  return it. The rehearsal's keys are made in a scratch directory and removed, and `out/` holds no salt. A rehearsal is
+  it ended, the SHA-512 of each file of `out/`, and from `out/summary.json` each run's verdict, network verdict, audit,
+  salt and what a second reveal of window 0's salt got). `status RUN` and `fetch RUN` return it. The rehearsal's keys are made in a scratch directory and removed, and `out/` holds no salt. A rehearsal is
   no window of the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
   `verify_ledger`'s).
 
@@ -1291,9 +1291,11 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
         summary = {}
     files = {str(p.relative_to(out)): hashlib.sha512(p.read_bytes()).hexdigest()
              for p in sorted(out.rglob("*")) if p.is_file()}
+    runs = {s: {"verdict": r.get("verdict"), "network": (r.get("network_verdict") or {}).get("accepted"),
+                "audit": r.get("audit_accepted"), "salt": r.get("salt_accepted"), "salt_again": r.get("salt_again")}
+            for s, r in summary.get("runs", {}).items()}
     end = {"run": run, "rc": rc, "ended": why or ("the rehearsal ended" if rc == 0 else f"the rehearsal exited {rc}"),
-           "pinned": pinned, "verdicts": {s: r.get("verdict") for s, r in summary.get("runs", {}).items()},
-           "files": files, "ended_utc": utc(now())}
+           "pinned": pinned, "runs": runs, "files": files, "ended_utc": utc(now())}
     (d / "end.json").write_text(json.dumps(end, indent=1, sort_keys=True) + "\n")
     return end
 
@@ -1324,7 +1326,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"seq": e["seq"], "session": e["session"], "rc": e["body"]["rc"]}))
         elif argv[:1] == ["certifier-run"] and len(argv) == 2:
             e = certifier_run(host, argv[1], pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
-            print(json.dumps({k: e[k] for k in ("run", "rc", "ended", "verdicts")}))
+            print(json.dumps({k: e[k] for k in ("run", "rc", "ended", "runs")}))
         elif argv[:1] == ["model-register"] and len(argv) == 5:
             line = model_register(host, argv[1:], pinned=pinned_commit(), now=datetime.now(timezone.utc))
             print(json.dumps(line, sort_keys=True))

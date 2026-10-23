@@ -107,7 +107,9 @@ def rehearsal(source: str):
                                                         f"{url!r}\n{source}"]
 
 
-SUMMARY = ('(out / "summary.json").write_text(json.dumps({"upstream": url, "runs": {"honest": {"verdict": "accepted"}}}))\n'
+HONEST = {"verdict": "accepted", "network_verdict": {"accepted": True, "windows": 3}, "audit_accepted": True,
+          "salt_accepted": True, "salt_again": "refused: already revealed", "exit": {"serve": 0, "client": 0}}
+SUMMARY = (f'(out / "summary.json").write_text(json.dumps({{"upstream": url, "runs": {{"honest": {HONEST!r}}}}}))\n'
            '(out / "honest").mkdir(); (out / "honest" / "check.json").write_text("{}")')
 
 
@@ -127,7 +129,9 @@ def test_a_rehearsal_runs_through_the_tunnel_and_its_end_is_status_and_fetch(hos
                           command=rehearsal(SUMMARY), wait=wait)
     ssh, local = tunnels[0]
     assert ssh == ["-i", "/var/lib/vy-challenger/.ssh/vy-challenger-tunnel", "research@10.0.0.2"] and waited == [30 * 60]
-    assert end["rc"] == 0 and end["ended"] == "the rehearsal ended" and end["verdicts"] == {"honest": "accepted"}
+    assert end["rc"] == 0 and end["ended"] == "the rehearsal ended"
+    assert end["runs"] == {"honest": {"verdict": "accepted", "network": True, "audit": True, "salt": True,
+                                      "salt_again": "refused: already revealed"}}
     assert end["pinned"] == PIN and end["ended_utc"] == "2026-10-23T11:30:00Z"
     out = host.certifier / run / "out"
     assert json.loads((out / "summary.json").read_text())["upstream"] == f"http://127.0.0.1:{local}"
@@ -157,7 +161,7 @@ def test_a_rehearsal_past_its_minutes_is_stopped_and_a_tunnel_that_never_came_up
 
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                           command=rehearsal("import signal; signal.pause()"), wait=past_its_minutes)
-    assert end["rc"] == -signal.SIGTERM and end["ended"] == "stopped at --minutes 30" and end["verdicts"] == {}
+    assert end["rc"] == -signal.SIGTERM and end["ended"] == "stopped at --minutes 30" and end["runs"] == {}
 
     run = started_run(host, "--minutes", "5", token="cd34")
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: False,
