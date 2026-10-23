@@ -12,6 +12,10 @@ statement is in ``Flock/Tmpl.lean``; :func:`unroll` mirrors its ``unroll`` (subs
 over GF(2)). The emitter's output unrolls to its input by construction; ``benchmarks/verifier_cost/flock_tmpl`` holds
 the Lean unroll to it byte for byte.
 
+:func:`layout` mirrors ``Tmpl.layoutM`` (``Flock/TmplLayout.lean``): layout (iv) under a mode (:func:`mode_of`), where
+the verifier commits each of the unrolled unit's columns. The templated statement (`circuit.compose`'s ``layout``) puts
+the unit's range at the slot of the laid-out size, the root's ``Lay.size``.
+
 The unit is held as arrays (each row's A and B as one run of int32 columns), since the H1 tile's flat unit at K = 4096 has
 about 3·10⁹ of them.
 
@@ -22,6 +26,7 @@ reads the circuit file's largest block (or ``NET``), writes its templated form a
 """
 from __future__ import annotations
 
+import bisect
 import json
 import sys
 import time
@@ -127,6 +132,20 @@ def read_flat(path, name: str | None = None) -> tuple[Flat, int]:
         leaves = rest[0].rstrip("\n") if rest and rest[0].startswith("LEAVES ") else None
         assert len(rest) == (leaves is not None), f"{nm}: lines past the rows and LEAVES"
     return _flat(head, chunks, leaves), size
+
+
+def of_layout(lay, name: str) -> Flat:
+    """A laid-out unit (`ir_lower.Layout`) as the unit `ir_lower.netlist` writes of it (no ``LEAVES`` line), read off its
+    rows rather than its text."""
+    head = [FLAT, name, str(lay.useful), str(lay.const)]
+    for groups in (lay.in_groups, lay.out_groups):
+        head.append(str(len(groups)))
+        for col, words, bits in groups:
+            head += [str(col), str(words), str(len(bits)), *map(str, bits)]
+    na = np.fromiter((len(a) for a in lay.rows_a), np.int64, len(lay.rows_a))
+    lens = na + np.fromiter((len(b) for b in lay.rows_b), np.int64, len(lay.rows_b))
+    refs = np.fromiter((c for a, b in zip(lay.rows_a, lay.rows_b) for r in (a, b) for c in r), np.int32, int(lens.sum()))
+    return _flat(head, [(lens, na, refs)], None)
 
 
 def flat_lines(f: Flat) -> list[str]:
@@ -416,6 +435,160 @@ def pack(t: Tmpl) -> Tmpl:
             calls.append(Call(c.e, c.count, c.base, c.stride, tuple(out)))
         defs.append(Def(D.cols, D.ins, D.rows, tuple(calls)))
     return Tmpl(t.name, t.root, t.groups, defs, t.leaves)
+
+
+# --- layout (iv): where the unrolled unit's columns are committed (``Flock.TmplLayout``) -----------------------------------
+
+def mode_of(name: str) -> tuple[str, int]:
+    """``Tmpl.modeOf``: ``iv`` (lenient), ``iv/strict``, ``iv/hybrid`` (``T = 0``) or ``iv/hybrid/T``, as ``(kind, T)``."""
+    if name in ("iv", "iv/strict", "iv/hybrid"):
+        return {"iv": "lenient", "iv/strict": "strict", "iv/hybrid": "hybrid"}[name], 0
+    if name.startswith("iv/hybrid/") and name[10:].isdigit():
+        return "hybrid", int(name[10:])
+    raise ValueError(f"{name!r} is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)")
+
+
+def _next_pow2(n: int) -> int:
+    return 1 if n <= 1 else 1 << (n - 1).bit_length()
+
+
+def _up(x: int, a: int) -> int:
+    return -(-x // a) * a
+
+
+@dataclass(frozen=True)
+class Lay:
+    """``Tmpl.Lay``: a Definition's laid-out size and alignment, its own columns' runs ``(x0, x1, p0)`` (column ``x`` of
+    ``[x0, x1)`` at ``p0 + x − x0``), each call's place ``(nb, cs, ms)`` (copy ``j``'s column at callee position ``p`` at
+    ``nb + j·cs + p·ms``), whether every column is at its own index, and the alignment its copies are placed at."""
+
+    size: int
+    align: int
+    runs: tuple[tuple[int, int, int], ...]
+    places: tuple[tuple[int, int, int], ...]
+    ident: bool
+    palign: int
+
+
+def _out_groups(t: Tmpl) -> list[tuple[int, int]]:
+    """Each output group's first column and its width in columns, from the header's tokens."""
+    g, at, out = t.groups, 1, []
+    for _ in range(int(g[0])):
+        at += 3 + int(g[at + 2])
+    n, at = int(g[at]), at + 1
+    for _ in range(n):
+        out.append((int(g[at]) * WORD, int(g[at + 1]) * WORD))
+        at += 3 + int(g[at + 2])
+    return out
+
+
+def _lay_def(t: Tmpl, lays: list[Lay], kind: str, T: int, paths: list[int], ic: int, d: int) -> Lay:
+    """``Tmpl.layDefM``: Definition ``d`` laid out from its callees' layouts."""
+    D, root = t.defs[d], d == t.root
+    outs = sorted(_out_groups(t)) if root else []
+    pos, x, al, ident = 0, 0, 1, True
+    runs: list[tuple[int, int, int]] = []
+    places: list[tuple[int, int, int]] = []
+    done: set[int] = set()
+
+    def own(x0: int, hi: int) -> None:
+        nonlocal pos
+        for p, w in outs:
+            if x0 <= p <= hi and p not in done:
+                if x0 < p:
+                    runs.append((x0, p, pos))
+                pos = _up(pos + (p - x0), w)
+                x0 = p
+                done.add(p)
+        if x0 < hi:
+            runs.append((x0, hi, pos))
+        pos += hi - x0
+
+    for c in D.calls:
+        Le, E = t.defs[c.e].cols, lays[c.e]
+        if c.base < x:
+            raise ValueError(f"layout: definition {d}: its calls are not in order of their columns")
+        if c.count > 1 and c.stride != Le:
+            raise ValueError(f"layout: definition {d}: a call's copies are not side by side")
+        own(x, c.base)
+        in_rows = root and c.base < ic
+        if in_rows or any(p <= c.base < p + w for p, w in outs):
+            if E.size != Le or (in_rows and not E.ident):
+                raise ValueError(f"layout: definition {d}: a call in the input rows or an output group to a definition laid out apart")
+            places.append((pos, Le, 1))
+            pos += c.count * Le
+        elif c.count == 1:
+            nb = _up(pos, E.palign)
+            al = max(al, E.palign)
+            places.append((nb, Le, 1))
+            pos = nb + E.size
+        else:
+            M = _next_pow2(c.count)
+            nb = _up(pos, M * E.palign)
+            al = max(al, M * E.palign)
+            places.append((nb, 1, M))
+            pos = nb + E.size * M
+        ident = ident and E.ident and places[-1][0] == c.base and (c.count == 1 or places[-1][2] == 1)
+        x = c.base + c.count * Le
+    own(x, D.cols)
+    ident = ident and pos == D.cols and all(a == p for a, _b, p in runs)
+    whole = kind == "strict" or (kind == "hybrid" and paths[d] > 1)
+    palign = max(al, _next_pow2(pos) >> (T if kind == "hybrid" else 0)) if whole else al
+    return Lay(pos, al, tuple(runs), tuple(places), ident, palign)
+
+
+def pos_of(t: Tmpl, lays: list[Lay]):
+    """``Tmpl.posOf``: the root's column ``x`` at its committed position, through the call tree, as a function of ``x``."""
+    bases = [[c.base for c in D.calls] for D in t.defs]
+    starts = [[a for a, _b, _p in L.runs] for L in lays]
+
+    def at(x: int) -> int:
+        d, A, B = t.root, 0, 1
+        for _ in range(len(t.defs) + 1):
+            D, L = t.defs[d], lays[d]
+            i = bisect.bisect_right(bases[d], x)
+            if i and x < D.calls[i - 1].base + D.calls[i - 1].count * t.defs[D.calls[i - 1].e].cols:
+                c = D.calls[i - 1]
+                j, x = divmod(x - c.base, t.defs[c.e].cols)
+                nb, cs, ms = L.places[i - 1]
+                A, B, d = A + B * (nb + j * cs), B * ms, c.e
+                continue
+            r = bisect.bisect_right(starts[d], x)
+            if r and x < L.runs[r - 1][1]:
+                a, _b, p = L.runs[r - 1]
+                return A + B * (p + x - a)
+            break
+        return A + B * x
+
+    return at
+
+
+def layout(t: Tmpl, mode: str) -> list[Lay]:
+    """``Tmpl.layoutM``: every Definition's layout (iv) under ``mode`` (:func:`mode_of`), callees first, refused unless the
+    input rows keep their columns, each output group starts at a multiple of its width with its columns in order, and the
+    constant is the layout's last column. The root's ``size`` is the committed unit's: the constant's position plus one."""
+    kind, T = mode_of(mode)
+    ic, _ = _ports(t)
+    paths = [0] * len(t.defs)
+    paths[t.root] = 1
+    for d in range(len(t.defs) - 1, -1, -1):
+        for c in t.defs[d].calls:
+            paths[c.e] += paths[d]
+    lays: list[Lay] = []
+    for d in range(len(t.defs)):
+        lays.append(_lay_def(t, lays, kind, T, paths, ic, d))
+    R, L = t.defs[t.root], lays[t.root]
+    if not (all(ic <= a or a == p for a, _b, p in L.runs)
+            and all(ic <= c.base or (nb == c.base and lays[c.e].ident) for c, (nb, _cs, _ms) in zip(R.calls, L.places))):
+        raise ValueError("layout: the input rows do not keep their columns")
+    at = pos_of(t, lays)
+    for col, w in _out_groups(t):
+        p = at(col)
+        if p % w or any(at(col + i) != p + i for i in range(w)):
+            raise ValueError(f"layout: output group at word {col // WORD} does not keep its columns at a multiple of its width")
+    if at(R.cols - 1) + 1 != L.size:
+        raise ValueError("layout: the constant is not the layout's last column")
+    return lays
 
 
 # --- the emitter ------------------------------------------------------------------------------------------------------

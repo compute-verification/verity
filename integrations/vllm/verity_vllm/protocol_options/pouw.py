@@ -751,10 +751,12 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     setting ``challenger`` the salt, round and draw coins are the auditor host's, from the one session infra's gate
     reserved for the window (``session``, the gate's reserve answer) and ``gate`` opened on its window-open root (the
     open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the window has
-    finished; without it the coins are this process's and the window credits nothing (`pouw_h1.IN_PROCESS`).
-    ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0 only by default). On an arm that serves z/y records
-    (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each committed layer whose N is whole 32-column units serves
-    through ``scaled_mm_zy`` over T slots, the records its z. The served values are the arm's, untouched."""
+    finished; without it the coins are this process's and the window credits nothing (`pouw_h1.IN_PROCESS`). The
+    window's weights' root is its period's (`pouw_h1_served.Served.weights_root`), else `audit.weights_root`, which
+    registers no ``b/<K>`` and so credits nothing. ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0
+    only by default). On an arm that serves z/y records (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each
+    committed layer whose N is whole 32-column units serves through ``scaled_mm_zy`` over T slots, the records its z. The
+    served values are the arm's, untouched."""
     layers = PHK.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
@@ -763,8 +765,12 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     if settings.rows is None or settings.steps is None:
         raise ValueError(f"{entry}: the static layout needs the pouw settings 'rows' (T) and 'steps' (S)")
     session, rounds, draw, salt, opener = None, settings.rounds, None, None, None
+    shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
+    modules = {w: f"linear {w}" for w in roots} | _named(target.model, layers)
+    wroot = (settings.served and settings.served.weights_root(shapes, modules, settings.rows, settings.steps, layers,
+                                                              target.context.stage != "capture")) or weights_root(roots)
     if settings.challenger is not None:
-        session = PHW.Window(entry, settings.challenger, settings.steps, weights_root(roots), settings.session, settings.gate)
+        session = PHW.Window(entry, settings.challenger, settings.steps, wroot, settings.session, settings.gate)
 
         def opener(requests_root: bytes) -> tuple[bytes, Any, Any, Mapping[str, Any]]:
             epoch_salt, *opened = session.open(requests_root)
@@ -774,25 +780,18 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
         salt = PH.program_salt(Epoch.start(declared, roots, commitment, opening).salt)
         draw = LiveRecord(rounds.challenger, Wd.DRAW) if rounds is not None else None
     source = PH.CHALLENGER if session is not None else "in-process"
-    run = PH.H1Run(entry, salt, {w: f"linear {w}" for w in roots} | _named(target.model, layers),
-                   [tuple(int(d) for d in m.weight.shape) for m in layers], settings.rows, settings.steps,
+    run = PH.H1Run(entry, salt, modules, shapes, settings.rows, settings.steps,
                    retain=settings.retain_steps, transcript_dir=settings.transcript_dir,
                    commit=target.context.stage != "capture", rounds=rounds, draw=draw,
                    admission=settings.admission or RQ.ROUND0, coin_source=source, opener=opener, served=settings.served)
-    run.commits.update(weights_root=weights_root(roots).hex(), coin_source=source)
+    run.commits.update(weights_root=wroot.hex(), coin_source=source)
     if session is None:
         run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
         if rounds is not None:
             run.commits["round_coins"] = rounds.challenger.commitment.to_json()
     _H1_RUNS[entry] = run
     h = target.hooks(entry)
-    if settings.runner is not None:
-        h.wrap(settings.runner, "execute_model", lambda orig: PHK.admitting(run, orig, settings.runner))
-    for w, layer in enumerate(layers):
-        h.wrap(layer.quant_method, "observe", lambda orig, w=w: PHK.observer(run, w, orig))
-        h.wrap(layer.quant_method, "apply", lambda orig, w=w: PHK.traced(run, w, orig))
-        if run.commit and hasattr(type(layer.quant_method), "zy_rows") and layer.weight.shape[0] % PH.TILE[1] == 0:
-            h.patch(layer.quant_method, "zy_rows", settings.rows)
+    PHK.wire(run, h, layers, settings.runner, settings.rows)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=lambda: PHW.finish(run, session))
 
 
