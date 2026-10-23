@@ -863,9 +863,9 @@ useful    U/(α_A·α_B), glue
     transfer. The work sampling design checks it on every credited A row of a drawn tile, over its credited columns,
     after the tile's cap (`clear_work.row_cap`), and `volunteer` gives up a row over it first.
   - `pearl-c-sm120-v1-h3` is registered (the served default, `pouw_pearl_c_device`), and so is `pearl-c-h100-v1-h3`,
-    `PearlC(hashing="h3")` on the H100 record (GLM-5.3's FP8 form on the H200, Daniel 22 Oct). The `test-16-v1-h3` and `decode-32-v1-h3` vectors pin a call end to end, with A's
-    row root and row 0's leaf, digest, seed and E_A line, and a hash of every row digest and seed. h0's verifier refuses
-    an -h3 transcript on its activation openings.
+    `PearlC(hashing="h3")` on the H100 record (GLM-5.3's FP8 form on the H200, Daniel 22 Oct). The `test-16-v1-h3` and
+    `decode-32-v1-h3` vectors pin a call end to end, with A's row root and row 0's leaf, digest, seed and E_A line, and a
+    hash of every row digest and seed. h0's verifier refuses an -h3 transcript on its activation openings.
 - **Row tiles.** m is a multiple of 16, not of 64: the last row tile may be partial, in whole 16 × 16 ticket subtiles.
   Decode's 32 × 64 tile has a leaf over its 64 digests (2 KB), so decode is not padded to 64 rows.
 - **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
