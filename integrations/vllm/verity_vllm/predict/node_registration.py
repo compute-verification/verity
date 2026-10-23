@@ -20,7 +20,7 @@ in the Commit of record:
   Commit's replay opens it), in the field's width and leaf count.
 
 One spawned process per rank (`--workers` at a time) opens and commits its tensors one at a time, so it holds a tensor, not the
-rank's weights (95 GB a GLM-5.3 B1 rank). Under --out: `record.json` (the registration record), `trusted.json` (nci-check's
+rank's weights (95 GB a GLM-5.3 B1 rank), and another reads the descriptor before them. Under --out: `record.json` (the registration record), `trusted.json` (nci-check's
 trusted input), `provenance.json` (the instance's θ provenance) and `registration.json` (digests, per-rank counts and timings).
 Under --salts: each value's row salts, `<value>.salts`, the prover's, which nothing public carries, so --salts is refused inside
 --out. Exit 0 written, 2 refused.
@@ -104,6 +104,15 @@ def theta_nodes(desc: dict[str, Any], params, theta: tuple[str, ...]) -> list[in
     if got != want:
         raise Refused(f"the descriptor's θ is {len(got)} root nodes, the node's weights parameters lower to {len(want)} others")
     return got
+
+
+def descriptor_theta(path: str, params: list[tuple[str, Any]], theta: tuple[str, ...]) -> tuple[str, list[int]]:
+    """The descriptor's Program digest and θ (`theta_nodes`), `params` as `[(name, type JSON)]`."""
+    from verity.ml.circuits import codec
+    from verity.ml.circuits.types import type_from_json
+
+    desc = load_descriptor(path)
+    return codec.program_digest(desc), theta_nodes(desc, [(n, type_from_json(t)) for n, t in params], theta)
 
 
 def commit_of_record(out: Path, pair: int | None) -> tuple[int, dict[str, Any], dict[str, Any]]:
@@ -221,7 +230,6 @@ def each_rank(jobs: list[dict[str, Any]], workers: int) -> Iterator[dict[str, An
 
 
 def register(o: Options) -> dict[str, Any]:
-    from verity.ml.circuits import codec
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.pipeline import registration_log as RL
     from verity_vllm.predict import aot as A
@@ -238,9 +246,12 @@ def register(o: Options) -> dict[str, Any]:
         raise UsageError("--wrapper request needs --LP and --T")
     shape = {"M": o.M, "pos0": o.pos0} if o.wrapper == "step" else {"LP": o.LP, "T": o.T}
     P = node_parameters(A.phi_at(o.row, 0, o.config), o.wrapper, **shape)
-    desc = load_descriptor(o.program)
-    digest, theta = codec.program_digest(desc), theta_nodes(desc, P.params, P.theta)
-    del desc
+    args = (o.program, [(n, t.to_json()) for n, t in P.params], P.theta)
+    if o.workers <= 1:
+        digest, theta = descriptor_theta(*args)
+    else:
+        with multiprocessing.get_context("spawn").Pool(1) as pool:  # B1's decoded descriptor is ~30 GB: never this process's
+            digest, theta = pool.apply(descriptor_theta, args)
     t_desc = time.perf_counter()
     commit_out = Path(o.commit_out)
     pair, c, dd = commit_of_record(commit_out, o.pair)

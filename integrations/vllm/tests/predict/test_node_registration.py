@@ -226,7 +226,7 @@ def test_a_commit_that_is_not_the_nodes_is_refused_by_name(commit, tamper, named
 def test_a_descriptor_that_is_not_the_nodes_is_refused(commit, capsys):
     step = build_node_program(PHI, "step", M=1, pos0=8)
     Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(step.desc)))
-    assert NR.main(commit["o"]) == 2 and "these are not its parameters" in capsys.readouterr().out
+    assert NR.main(NR.Options(**{**commit["o"].__dict__, "workers": 2})) == 2 and "these are not its parameters" in capsys.readouterr().out
     desc = copy.deepcopy(NODE.desc)
     desc["annotations"]["theta"] = desc["annotations"]["theta"][1:]
     Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
