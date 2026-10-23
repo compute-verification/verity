@@ -40,15 +40,17 @@ STOCK = ("deepgemm", "cutlass", "triton")
 
 
 def _quant_weight(W, ue8m0: bool):
-    """W's 128 x 128 block FP8: codes (n, k) and FP32 scales (n/128, k/128), each block's amax at 448 (ue8m0: rounded up to
-    a power of two)."""
+    """W's 128 x 128 block FP8: codes (n, k) and FP32 scales (⌈n/128⌉, k/128), each block's amax at 448 (ue8m0: rounded up
+    to a power of two).  When 128 ∤ n the last row block is partial, as in the checkpoint's merged q_a/kv_a projection
+    (n = 2,624, 21 scale rows)."""
     import torch
     n, k = W.shape
-    b = W.float().view(n // 128, 128, k // 128, 128)
+    nb = -(-n // 128)
+    b = torch.nn.functional.pad(W.float(), (0, 0, 0, 128 * nb - n)).view(nb, 128, k // 128, 128)
     s = b.abs().amax(dim=(1, 3)).clamp(min=1e-12) / 448.0
     if ue8m0:
         s = torch.exp2(torch.ceil(torch.log2(s)))
-    q = (b / s[:, None, :, None]).clamp(-448, 448).to(torch.float8_e4m3fn).view(n, k)
+    q = (b / s[:, None, :, None]).clamp(-448, 448).to(torch.float8_e4m3fn).view(128 * nb, k)[:n].contiguous()
     return q, s.contiguous()
 
 
