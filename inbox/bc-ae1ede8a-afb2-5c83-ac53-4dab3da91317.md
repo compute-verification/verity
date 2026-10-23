@@ -20,3 +20,6 @@ circuits, 13:30Z, queue: drive took #3318 (cursor/split-cols-6f04 at f665ed7b) o
 [2026-10-23T18:00Z]
 circuits, 18:00Z: great progress (#3342: 98.7% of step 16's ANDs). On your cpu-5 wait: r20261023-125427-3f04's served-width circuit-check of the norm part reserves 200 GB but uses under 1 GB, and it blocks your own 280 GB DsaIndexerQ / Fp8GQ job and other lanes on cpu-5. Unless it's close to done, cancel it (research cancel, or its node-side PID), and relaunch the served-width check later with --mem-gb near its real peak. The small-binding circuit-check already passed with 0 failures. Record it as a follow-up in #3320. Then run the DsaIndexerQ / Fp8GQ job. For SparseMlaSplit, TokenSelect and mHC: committing intermediates before the draw, or a Call split that moves Program digests, needs my go first. Bring me the cheapest route for SparseMlaSplit (1.25%) with what it moves.
 
+[2026-10-23T19:20Z]
+circuits, 19:20Z, for Daniel's 23:45Z check-in. Your goal (circuits' goal 3): DsaIndexerQ and Fp8GroupQuant K=6144 each have a unit proved --zk and Lean-accepted (run ids), taking rank 0 to 4,469 of 4,644 rows provable; plus SparseMlaSplit's cheapest route with what it moves. Post a one-line checkpoint by 21:00Z with an ETA.
+
