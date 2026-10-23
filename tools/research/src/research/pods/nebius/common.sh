@@ -13,7 +13,7 @@
 # with `bash -x`.
 
 NEBIUS_REGION=${NEBIUS_REGION:-uk-south2}
-NEBIUS_PROJECT_ID=${NEBIUS_PROJECT_ID-project-e05mvq7kln00dvsa5xj2mg}   # default-project-uk-south2; the service account is editor there only
+NEBIUS_PROJECT_ID=${NEBIUS_PROJECT_ID-project-e05mvq7kln00dvsa5xj2mg}   # default-project-uk-south2; the launcher is editor in uk-south2, us-central1, us-north1 and eu-north1 only
 NEBIUS_PROJECT_NAME=${NEBIUS_PROJECT_NAME:-vy-nebius}                    # only when NEBIUS_PROJECT_ID is set empty
 VM_NAME=${NEBIUS_VM_NAME:-vy-nebius-1}
 PRESET=${NEBIUS_PRESET:-8gpu-192vcpu-1744gb}
@@ -23,6 +23,7 @@ BOOT_GIB=${NEBIUS_BOOT_GIB:-256}
 BOOT_TYPE=network_ssd
 DATA_GIB=${NEBIUS_DATA_GIB:-5022}                  # 54 x 93 GiB (non-replicated disks come in 93 GiB units) = 4.90 TiB
 DATA_TYPE=${NEBIUS_DATA_TYPE:-network_ssd_non_replicated}
+DATA_NAME=${NEBIUS_DATA_DISK:-$VM_NAME-data}       # another VM's kept data disk (detached), to boot on its /workspace as it is
 DATA_DEVICE_ID=data                                # the guest sees /dev/disk/by-id/virtio-data
 SG_NAME=${VM_NAME}-ssh
 SSH_CIDRS=${NEBIUS_SSH_CIDRS:-0.0.0.0/0}           # comma-separated, at most 8; port 22 only either way

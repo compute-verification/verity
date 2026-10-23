@@ -412,6 +412,20 @@ def test_code_running_from_a_tree_without_history_reads_and_fetches_every_branch
     assert out == [str(clone), str(deploy.SRC)]
 
 
+def test_a_staged_node_is_passed_by_unless_named_and_installs_as_any_other(world, capsys):
+    node, repo, manifest = world["node"], world["repo"], world["manifest"]
+    manifest.write_text(manifest.read_text().replace('[nodes.n]\n', '[nodes.n]\nstaged = "created when the quota lands"\n', 1))
+    seen = []
+    run = lambda name, argv, stdin: seen.append(name) or local(name, argv, stdin)
+    assert deploy.main(["drift", "--json", "--no-fetch"], run=run, manifest=manifest, repo=repo) == 0
+    out = capsys.readouterr()
+    assert json.loads(out.out) == {} and not seen and "n is staged (created when the quota lands)" in out.err
+    assert deploy.main(["drift", "--on", "n", "--json", "--no-fetch"], run=run, manifest=manifest, repo=repo) == 1
+    assert json.loads(capsys.readouterr().out)["n"]["entries"] and seen
+    assert deploy.main(["install", "n", "--by", "lane-x", "--no-fetch"], run=local, manifest=manifest, repo=repo) == 0
+    assert "would install" in capsys.readouterr().out and not (node / "bin" / "a.py").exists()
+
+
 def test_an_entry_whose_source_the_ref_lacks_is_absent_and_a_ref_deploys_its_own_manifest(world):
     node, repo, manifest = world["node"], world["repo"], world["manifest"]
     _git(repo, "checkout", "-q", "fix")
