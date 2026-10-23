@@ -994,6 +994,24 @@ def test_a_train_that_lands_a_pr_at_an_older_head_than_its_current_one_tells_its
     assert len([p for p in h.posts if "#1 landed at" in p]) == 1
 
 
+def test_a_running_trains_old_head_whose_mark_is_withdrawn_comes_off_next_at_once(world, monkeypatch):
+    """23 Oct: #3261's 73f5eb82 lost its mark at 14:56Z for failing two lints, but the running trains kept it until the lowest's
+    check failed on it at 16:14Z; all five were then rebuilt."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 2, 1
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    running = h.q.chain()[1].commit
+    new = world.change({"a.txt": "1 fixed\n"}, base=old)
+    world.gh.put(1, new)
+    world.gh.ready.discard((1, old))
+    h.tick()
+    chain = h.q.chain()
+    assert [(m.pr, m.head) for m in chain[:1]] == [(1, new)] and running not in [m.commit for m in chain] and h.cancelled
+
+
 def test_a_new_head_after_its_own_train_failed_rebuilds_without_waiting(world, monkeypatch, tmp_path):
     h = Harness(world, monkeypatch)
     h.d.train_size, h.d.max_running = 1, 2
