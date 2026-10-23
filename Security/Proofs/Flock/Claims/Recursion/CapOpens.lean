@@ -27,6 +27,7 @@ namespace RecDeploy
 
 open Flock
 open Claims (Msg)
+open FlockDeploy (Coin)
 open Lean (Json)
 
 /-! ## RecCap's name -/
@@ -525,5 +526,42 @@ theorem cap_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st 
     show ([] : Msg) ++ Claims.Recursion.VStarB.readForms w (hmCommit c q n) = _
     rw [List.nil_append, hb, topRow_zero htop]
   · cases hseg
+
+/-! ## `PartOpensB` at `layoutBTops`, but the tops rounds' pieces -/
+
+/-- **Every round a staged part holds whole is the record's message there**: round 0 at RecCap's part (`cap_cmt`), a
+later round at its held row's part (`held_cmt`). -/
+theorem heldB_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st : Stage} {s : ℕ} {x xO : Msg}
+    {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
+    (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) (i : ℕ) {m : Msg}
+    (hm : (layoutBTops fin).held x s w i = some m) : m = cmtTr recRead x i xO := by
+  cases i with
+  | zero => exact cap_cmt fin hS hck hm
+  | succ j => exact held_cmt fin hS hck hm
+
+/-- **`PartOpensB` at `layoutBTops` reduces to the tops rounds' pieces**: at `showsPart recRead` every round a part
+holds whole is the record's (`heldB_cmt`), and before the last round only a stream round that commits tops has pieces
+(`stepPieces`, `topsPieces`). So `PartOpensB` holds wherever each such piece of a staged part reads the record's
+message at its offset. -/
+theorem partOpensB_layoutBTops (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (b : Brings)
+    {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop} {s : ℕ}
+    (hP : ∀ (x : Msg) st, D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Claims.Flock.Wit),
+      Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true → StagedPart b.st s x xO →
+      ∀ j, j + 2 < layoutOf.rounds x → ∀ pre p post, topsPieces x j = pre ++ p :: post → p.1 = s →
+        ((cmtTr recRead x (j + 1) xO).drop (pre.map fun q => Claims.Recursion.VStarB.pieceLen q.2).sum).take
+          (Claims.Recursion.VStarB.pieceLen p.2) = Claims.Recursion.VStarB.readSegs w p.2) :
+    Claims.Recursion.VStarB.PartOpensB H D (deployZkRec Flock.Readable.relation) (layoutBTops fin) shape
+      (showsPart recRead b) (cmtTr recRead) s := by
+  intro x st hx hf xO w hck _
+  refine Or.inl fun c hc i hi => ⟨fun m hm => heldB_cmt fin hc.2 hck i hm, fun pre p post hpp hps => ?_⟩
+  have hr : (layoutBTops fin).rounds x = layoutOf.rounds x := rfl
+  rw [hr] at hi
+  have hst : (layoutBTops fin).pieceAt x i = stepPieces fin x i := rfl
+  rw [hst, stepPieces, if_neg (show ¬(i + 1 = layoutOf.rounds x) by omega)] at hpp
+  cases i with
+  | zero => simp at hpp
+  | succ j =>
+    rw [if_neg (by omega : j + 1 ≠ 0), Nat.add_sub_cancel] at hpp
+    exact hP x st hx hf xO w hck hc.2 j (by omega) pre p post hpp hps
 
 end RecDeploy
