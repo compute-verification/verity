@@ -11,12 +11,13 @@ import random
 import resource
 from collections import defaultdict
 from concurrent.futures import Executor, Future
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
 import signers
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import active, online
+from verity.core.protocols.certifier import active, online, served
 from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
 from verity.core.protocols.certifier.active import (
     DATA,
@@ -289,6 +290,52 @@ def test_the_bucketer_enqueues_its_own_frame_first_in_each_window():
         out.append((g.tick()[0], dict(g.own)))
     assert [row for row, _ in out] == [(None,), (None,), (b"x",), (b"y",), (None,), (None,), (b"f",), (b"e",), (None,)]
     assert [own for _, own in out] == [{}, {}, {}, {}, {}, {}, {0: 2}, {}, {}]
+
+
+def test_the_bucketers_admission_admits_whole_requests_while_the_window_ends_idle():
+    """Requests of two frames, each answered by two, under δ = 0, ρ = 1 with one frame a bucket on both ends: a and b
+    complete a request at bucket 1, answered in buckets 1 and 2; c and d would complete one at bucket 3, answered past
+    the window's end, so they wait for window 1, and e and f for window 2. Over random arrivals, with and without the
+    certifier's own frame (the salt's) at each window's head, every window's released frames are that frame and whole
+    requests in arrival order, and every window derives (`served.derive`). A served link takes an own frame exactly
+    when its profile counts one, and its window holds that frame, one request and its response."""
+    P = GridParams(buckets=4, allocation=1, frame_bytes=1)
+    admission = served.Admission(served.ServedProfile(2, 2, 1), 1, lambda w: ClockSync(0, 1))
+    b = Bucketer(Certifier("requests", P), served=admission)
+    for frame, bucket in ((b"a", 0), (b"b", 0), (b"c", 1), (b"d", 2), (b"e", 5), (b"f", 6)):
+        b.arrive(frame, bucket)
+    rows = [b.tick()[0] for _ in range(12)]
+    assert rows == [(b"a",), (b"b",), (None,), (None,), (b"c",), (b"d",), (None,), (None,), (b"e",), (b"f",), (None,),
+                    (None,)]
+    with pytest.raises(ValueError, match="own frame exactly when"):
+        Bucketer(Certifier("requests", P), first=lambda w: b"s", served=admission)
+    with pytest.raises(ValueError, match="own frame exactly when"):
+        Bucketer(Certifier("requests", P), served=served.Admission(served.ServedProfile(2, 2, 1, 1), 1,
+                                                                   lambda w: ClockSync(0, 1)))
+    with pytest.raises(ValueError, match="holds that frame, one request and its response"):
+        Bucketer(Certifier("requests", P), served=served.Admission(served.ServedProfile(4, 2, 1), 1,
+                                                                   lambda w: ClockSync(0, 1)))
+
+    rng = random.Random(54)
+    for _ in range(200):
+        P = GridParams(buckets=rng.randint(3, 8), allocation=rng.randint(1, 3), frame_bytes=1)
+        n, r = rng.choice((1, 2, 4)), rng.randint(1, 3)
+        sync = ClockSync(rng.randint(0, 2), rng.choice((Fraction(1), Fraction(2), Fraction(1, 2))))
+        own = rng.randint(0, 1)
+        admission = served.Admission(served.ServedProfile(rng.randint(1, 3), n, 1, own), r, lambda w: sync)
+        try:
+            b = Bucketer(Certifier("requests", P), (lambda w: b"s") if own else None, served=admission)
+        except ValueError:
+            continue
+        sent = [bytes([k]) for k in range(n * rng.randint(0, 6))]
+        for frame, bucket in zip(sent, sorted(rng.randrange(3 * P.buckets) for _ in sent)):
+            b.arrive(frame, bucket)
+        records = [r for r in (b.tick()[1] for _ in range(20 * P.buckets)) if r is not None]
+        assert [f for r in records for row in r.grid for f in row if f not in (None, b"s")] == sent
+        for rec in records:
+            assert (rec.grid[0][0] == b"s") is bool(own)
+            counts = [row_count(row) for row in rec.grid]
+            assert served.derive(counts, sync, admission.profile, r) is not None
 
 
 def test_a_shaper_and_a_bucketer_back_from_maintenance_publish_the_full_runs_later_windows():
@@ -824,6 +871,25 @@ def test_the_weights_are_recorded_only_before_the_salt_and_given_on_reveals_cond
     with pytest.raises(RuntimeError, match="passed"):
         back.commit_weights(0, roots[0], signed(0, roots[0]))
     back.commit_weights(1, roots[1], signed(1, roots[1]))
+
+
+def test_a_served_proxy_counts_the_salt_frame_exactly_when_the_salt_is_on():
+    """A served link's profile counts the certifier's own frame (`own` 1) exactly when the salt is on, at a PoUW window
+    of one certifier window, so every window's first ingress frame is the salt's: the proxy refuses a profile without
+    it under the salt, one with it and no salt, and a longer PoUW window."""
+    def proxy(own: int, **kwargs) -> Proxy:
+        return Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                     clock=lambda: 0.0, served=served.ServedProfile(2, 1, WINDOWS, own), **kwargs)
+
+    p = proxy(1, salt=lambda w, n: bytes([w + 1]) * n)
+    for w in range(WINDOWS):
+        for t in range(INGRESS.buckets):
+            p.bucketer.tick()
+            assert p.bucketer.own == ({0: w} if t == 0 else {})
+    proxy(0)
+    for own, kwargs in ((0, {"salt": active.fresh_salt}), (1, {}), (1, {"salt": active.fresh_salt, "pouw_window": 3})):
+        with pytest.raises(ValueError, match="counts the salt frame"):
+            proxy(own, **kwargs)
 
 
 def test_reveal_gives_each_salt_once_and_only_until_its_deadline():

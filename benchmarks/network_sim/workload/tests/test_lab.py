@@ -33,8 +33,8 @@ def frames_of(data: bytes) -> list[bytes]:
 def links(lab: L.Lab, payloads: dict[int, bytes], block: str) -> tuple[list[bytes], list[bytes]]:
     """The frames an honest run's certifier releases on the block's egress (its events in position order, each what
     follows its `id:` line) and ingress (its requests in session order)."""
-    egress = [encode_frame(DATA, CANONICAL_STREAM, event_body(lab.event(block, p, payloads[m.stream])), lab.frame_bytes)
-              for p, (_, m, _) in enumerate(lab.events[block])]
+    egress = [encode_frame(DATA, CANONICAL_STREAM, event_body(lab.event(block, p, lab.payload(block, p, payloads))), lab.frame_bytes)
+              for p in range(len(lab.events[block]))]
     ingress = [f for s in lab.sessions[block]
                for f in frames_of(request_frames(lab.request(s, payloads), lab.frame_bytes))]
     return egress, ingress
