@@ -32,10 +32,11 @@
   ``period-open --model M``, which signs that registration's weights' root W. The prover reads the key with its gate key
   (``model-key --model M --circuit C``, `model_key`) and registers the same rows under it (`Served`'s ``registry``), so
   its ``b/<K>`` are the registration's openings, and a window whose served rows fold to a root other than W is refused.
-* **Rows** are ``hm96-sha512/row/v2`` bit rows of 16-bit words (`V2`, `row_words`, `record_words`), committed by
-  `registered.Registered.commit` under the registered-value domain of the Program's digest, the value, its words and rows,
-  and for a call's tables the window's open root (`registered.domain`'s ``window``, `Served.root`, #3044), row j's salt
-  `audit.hm96_salt` of the run's key at the value's nonce (`nonce`).
+* **Rows** are ``hm96-sha512/row/v2`` bit rows of 16-bit words (`V2`, `row_words`, `record_words`), committed as
+  `registered.Registered.commit` commits them, from their NumPy words (`pouw_h1_registered.commit`, VLLM-76), under the
+  registered-value domain of the Program's digest, the value, its words and rows, and for a call's tables the window's
+  open root (`registered.domain`'s ``window``, `Served.root`, #3044), row j's salt `audit.hm96_salt` of the run's key at
+  the value's nonce (`nonce`). A window keeps its trees, not its rows, which the prover rebuilds from its own.
 * **When.** `Served.commit` registers call c's z table as `H1Run` records the call, step s's A table of K at its last
   call of K (salted from its first call's nonce), and puts the period's ``b/<K>`` in the call that completes K's weights
   (the last of K's linears in step 0). Each root goes into that call's manifest row (``tables.registered``), so its
@@ -75,7 +76,6 @@ import numpy as np
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
-from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G, registration as R
 from verity.core.protocols.sampled_proofs.one_stage.served import ServedTree
@@ -84,6 +84,7 @@ from verity.ml.circuits.program import Program
 
 from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_h1_records as ZR
+from verity_vllm.protocol_options import pouw_h1_registered as NR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
 #: the rows' format: the tile's port rows
@@ -244,9 +245,10 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
                      prefix: str = PREFIX) -> Weights:
     """The period's `Weights`: for each K, ascending, ``<prefix>b/<K>`` over K's linears' rows (``shapes`` each linear's
     ``(n, K)``, in the window's order; ``weights`` each linear's int8 codes ``(n, K)`` and f32 s_w ``(n,)``), committed by
-    `registered.Registered.commit` under the declared Program's digest ``circuit`` with no window, row j's salt
-    `audit.hm96_salt` of the period's key ``key`` at ``B_NONCE`` plus K's place. Committed once, before the period's
-    first window's salt. ValueError on an odd K or a weight that isn't its linear's n × K int8 codes and n scales."""
+    `pouw_h1_registered.commit` under the declared Program's digest ``circuit`` with no window, row j's salt
+    `audit.hm96_salt` of the period's key ``key`` at ``B_NONCE`` plus K's place, its rows kept (`Weights.matches`).
+    Committed once, before the period's first window's salt. ValueError on an odd K or a weight that isn't its linear's
+    n × K int8 codes and n scales."""
     ks, reg, at = sorted({int(k) for _n, k in shapes}), {}, {}
     for i, k in enumerate(ks):
         if k % 2:
@@ -261,8 +263,7 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
             rows.append(row_words(codes, scales.astype("<f4").reshape(-1)))
             at[w], lo = (k, lo), lo + n
         words = np.concatenate(rows)
-        reg[k] = G.Registered.commit(circuit, f"{prefix}b/{k}", words.tolist(),
-                                     [hm96_salt(key, B_NONCE + i, j) for j in range(len(words))], schema=V2)
+        reg[k] = NR.commit(circuit, f"{prefix}b/{k}", words, key, B_NONCE + i, keep_rows=True)
     return Weights(circuit, reg, at)
 
 
@@ -307,9 +308,9 @@ class Served:
     ``weights``: the period's registered `Weights`, or ``registry`` the auditor's registration of the served model
     (`ModelKey`, the gate's ``model-key``), whose key registers them from the served model at install (`weights_root`,
     from `pouw._install_h1`) and whose root they must fold to; without either the window registers its own ``b/<K>``.
-    ``program``: the period's declared Program (`declared` under ``prefix``), given or
-    declared at the first call. From the first call: ``root`` (the window's open root its tables' domains bind, hex),
-    ``program_digest``, ``linears``, ``calls`` and ``m`` (the Program's); ``registered`` (each value's
+    ``program``: the period's declared Program (`declared` under ``prefix``), given or declared at the first call, and
+    ``program_digest`` its digest, given with it or computed then. From the first call: ``root`` (the window's open root
+    its tables' domains bind, hex), ``linears``, ``calls`` and ``m`` (the Program's); ``registered`` (each value's
     `registered.Registered`, in registration order) and ``refused`` (why the window has no trees)."""
 
     tile: tuple[int, int] = PH.TILE
@@ -353,13 +354,17 @@ class Served:
         return PS.window_open_root(bytes.fromhex(need[0]), bytes.fromhex(need[1]), need[2])
 
     def declare(self, shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int) -> str:
-        """The period's declared Program (`declared` under ``prefix``), unless given, and its digest. ValueError on an odd
-        K or what `h1window.program` refuses."""
+        """The period's declared Program (`declared` under ``prefix``) and its digest, each unless given (the period's,
+        declared once for all its windows: at FILL the digest alone takes minutes and tens of GB). ValueError on an odd K
+        or what `h1window.program` refuses."""
         if any(k % 2 for _n, k in shapes):
             raise ValueError(f"K {sorted({k for _n, k in shapes})}: a row's codes are whole u16 words")
         if self.program is None:
-            self.program = declared(shapes, modules, rows, steps, self.tile, self.blocks, self.prefix, self.unit)
-        S, self.program_digest = self.program.fn.S(), P.program_digest(self.program)
+            self.program, self.program_digest = declared(shapes, modules, rows, steps, self.tile, self.blocks,
+                                                         self.prefix, self.unit), None
+        if self.program_digest is None:
+            self.program_digest = P.program_digest(self.program)
+        S = self.program.fn.S()
         self.linears, self.calls, self.m = [tuple(x) for x in S.LINEARS], [tuple(x) for x in S.CALLS], int(S.M)
         return self.program_digest
 
@@ -396,9 +401,7 @@ class Served:
 
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
               session: str | None = None) -> G.Registered:
-        return G.Registered.commit(self.program_digest, value, words.tolist(),
-                                   [hm96_salt(run._key, first, j) for j in range(len(words))], schema=V2, window=window,
-                                   session=session)
+        return NR.commit(self.program_digest, value, words, run._key, first, window=window, session=session)
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None) -> str:
         reg = self.registered[value] = self._tree(run, value, words, first, window)
