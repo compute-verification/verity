@@ -156,7 +156,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     """The verifier's sessions and the prover's over one registration, under `verdict`, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
     (by default as the prover's hello says, `Verifier.appends_of`); `then(v)` once they end. With `store` (a
-    `store_layout.Store`) the prover's blocks are that store's, and with `binding` the verifier binds the registration
+    `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `binding` the verifier binds the registration
     to its pinned model."""
     clock = PassClock()
     vconn, pconn = clock.conns()

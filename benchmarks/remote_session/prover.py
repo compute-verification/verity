@@ -75,11 +75,11 @@ trace's step before pass n is recorded as step n − 1, so pass n reads the stor
                                                         serving up to 4 steps past the passes, each slot reused 5 steps
                                                         after its free
     python prover.py ... --cpu 1024 --model-dir DIR --engines 2 --arena-blocks 512
-                                                        the store a model in DIR pins (`store_layout`), which
-                                                        `verifier.py --model` holds the hello to
+                                                        the store a model in DIR pins (`remote_bandwidth.store`),
+                                                        which `verifier.py --model` holds the hello to
 
 The payload's salts are under the key the verifier sends first (`payload-key`), so it can recompute a pinned model's
-payload root (`store_layout`); `--seed-payload-key`, for tests only, keeps the backend's own key, from --seed.
+payload root (`remote_bandwidth.store`); `--seed-payload-key`, for tests only, keeps the backend's own key, from --seed.
 """
 from __future__ import annotations
 
@@ -106,10 +106,10 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, coins, memory_map, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
+from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.core.protocols.remote_bandwidth.store import PAYLOAD_LABEL, store_salt  # noqa: E402,F401
 
-import store_layout  # noqa: E402
 import wire  # noqa: E402
-from store_layout import PAYLOAD_LABEL, store_salt  # noqa: E402,F401
 
 OPENINGS_PART = 128
 """Openings a frame: a window's go out in parts, so a root waits for one part's send, not the window's."""
@@ -459,12 +459,12 @@ class CpuBackend:
     a block freed before its coin arrived (its pass dropped at a boundary) is never put over serving's later write.
     `misread(ticket)` is the pass's blocks whose slot held other bytes than the block when it read.
 
-    With `store` (a `store_layout.Store`) the payloads are that store's, a pinned model's arenas and zero filler, and
+    With `store` (a `remote_bandwidth.store.Store`) the payloads are that store's, a pinned model's arenas and zero filler, and
     the hello carries its layout. The payload salts are the verifier's key's (`set_payload_key`), or random ones drawn
     from `rng` when the prover takes no key (`ProverSide`'s `seed_payload_key`)."""
 
     def __init__(self, blocks: int, rng: random.Random, read_bytes_per_s: float = 1e12,
-                 store: store_layout.Store | None = None) -> None:
+                 store: rstore.Store | None = None) -> None:
         if store is not None and store.blocks != blocks:
             raise ValueError(f"the store is {store.blocks} blocks, not {blocks}")
         self.blocks, self.rng, self.read_bytes_per_s, self.store_layout = blocks, rng, read_bytes_per_s, store
@@ -688,8 +688,8 @@ class ProverSide:
         if hasattr(self.backend, "set_payload_key") and not self.seed_payload_key:
             head, _, _ = self.expect("payload-key")
             key = bytes.fromhex(head["key"])
-            if len(key) != store_layout.KEY_BYTES:
-                raise ValueError(f"the verifier's payload key is {store_layout.KEY_BYTES} bytes, not {len(key)}")
+            if len(key) != rstore.KEY_BYTES:
+                raise ValueError(f"the verifier's payload key is {rstore.KEY_BYTES} bytes, not {len(key)}")
             self.backend.set_payload_key(key)
         root = self.backend.payload_root(self.node)
         layout = self.backend.layout() if hasattr(self.backend, "layout") else None
@@ -1036,7 +1036,7 @@ def main() -> int:
                          "device.py's options")
     ap.add_argument("--codec", default=rcodec.DEFAULT.name, help="the registration's codec, with --cpu")
     ap.add_argument("--model-dir", type=Path, metavar="DIR",
-                    help="with --cpu: the store is the checkpoint in DIR's (`store_layout.Store`): --engines arenas of "
+                    help="with --cpu: the store is the checkpoint in DIR's (`remote_bandwidth.store.Store`): --engines arenas of "
                          "--arena-blocks, then the rest of the BLOCKS zero host filler, as `verifier.py --model` holds "
                          "it")
     ap.add_argument("--engines", type=int, default=1, help="with --model-dir: the store's arenas, an engine's each")
@@ -1064,8 +1064,8 @@ def main() -> int:
     if a.model_dir is not None and not (a.cpu and a.arena_blocks):
         ap.error("--model-dir needs --cpu BLOCKS and --arena-blocks")
     if a.cpu:
-        store = None if a.model_dir is None else store_layout.Store(
-            store_layout.arena_of(a.model_dir), a.engines, a.arena_blocks, a.cpu - a.engines * a.arena_blocks)
+        store = None if a.model_dir is None else rstore.Store(
+            rstore.arena_of(a.model_dir), a.engines, a.arena_blocks, a.cpu - a.engines * a.arena_blocks)
         backend = CpuBackend(a.cpu, random.Random(a.seed), store=store)
     else:
         backend = device.from_arguments(a, log=lambda m: print(m, flush=True))
