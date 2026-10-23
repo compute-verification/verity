@@ -2205,6 +2205,10 @@ def main(argv: list[str]) -> int:
             else:
                 print(_render(entries))
             return 0
+        from .merge import off_drive, on_drive
+
+        if a.command in ("sync", "land") and not (a.dry_run or on_drive()):
+            raise QueueError(off_drive(q.branch if a.command == "sync" else "main", f"queue {a.command}"))
         if a.command == "sync":
             q.sync(dry_run=a.dry_run)
             return 0
@@ -2224,7 +2228,11 @@ def main(argv: list[str]) -> int:
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
         told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
-        q.sync()
+        if on_drive():
+            q.sync()
+        else:
+            print(f"research queue: #{a.pr}'s mark is withdrawn; drive's next tick rebuilds `{q.branch}` without it (only drive "
+                  "pushes it)")
         return told
     except QueueError as e:
         print(f"research queue: {e}", file=sys.stderr)
