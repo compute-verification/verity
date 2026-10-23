@@ -1235,7 +1235,7 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
     window registers (``{value: [root, ...]}``) for each value a statement of that call reads (`h1window.table`'s A
     table of its round and K, its z table and the weights' ``b/<K>``), some other rounds' and K's A tables among them,
     as `credit.registered_file` takes them, and at random (always under the ``receipt-`` mutations) the call's receipt
-    table ``receipt@<call>``, its templates returning a receipt of whole 16-bit words; ``missing`` leaves one of the
+    table ``receipt@<call>``, its templates returning a receipt of whole 16-bit words (bits, of 1-bit leaves or wider); ``missing`` leaves one of the
     call's values out, ``twice`` registers one twice, ``receipt-twice`` registers the receipt table twice and
     ``receipt-width`` gives the templates a receipt of no whole 16-bit words, or none."""
     lay = layout(rng)
@@ -1247,7 +1247,9 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
     vals = [a, f"{prefix}zy@{call}", f"{prefix}b/{k_of[lay['calls'][call][0]]}"]
     receipted = name.startswith("receipt-") or rng.random() < 0.5
     bit = ["Value", 1]
-    receipt = ["Array", 16 * rng.randint(1, 8), bit] if receipted else None
+    w = rng.randint(1, 8)
+    receipt = rng.choice([["Array", 16 * w, bit], ["Array", w, ["Value", 16]], ["Value", 16 * w],
+                          ["Tuple", [["Value", 16], ["Array", 2 * w, ["Value", 8]]]]]) if receipted else None
     if receipted:
         vals.append(f"{prefix}receipt@{call}")
     roots = {v: [_hex(rng)] for v in vals}
@@ -1269,7 +1271,8 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
             roots[vals[-1]].append(_hex(rng))
         case "receipt-width":
             receipt = rng.choice([None, bit, ["Array", 16 * rng.randint(0, 4) + rng.randint(1, 15), bit],
-                                  ["Array", 2, ["Array", 4, bit]]])
+                                  ["Array", 2, ["Array", 4, bit]], ["Array", rng.randint(1, 3), ["Value", 5]],
+                                  ["Value", 16 * rng.randint(0, 4) + rng.randint(1, 15)], ["Array", 3, ["Value", "16"]]])
         case _:
             raise ValueError(name)
     return {"descriptor": descriptor(rng, lay, prefix, receipt), "call": call, "roots": roots, "window": _hex(rng),
