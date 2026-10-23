@@ -33,7 +33,7 @@ theorem allOC_log_congr (H : Msg → Msg) {ι : Type} (f g : ι → OC Bool) :
     · generalize ((f j).eval H).1 = b
       generalize ((g j).eval H).1 = b'
       cases b <;> cases b' <;> rfl
-    · rw [List.dropLast_cons₂] at hr
+    · rw [List.dropLast_cons_cons] at hr
       rw [hr j List.mem_cons_self]
       generalize ((g j).eval H).1 = b
       cases b
@@ -51,7 +51,7 @@ def Bound.StepsLogFree (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
 
 theorem take_succ_getLastD {α : Type} (l : List α) (d : α) {j : ℕ} (hj : j < l.length) :
     (l.take (j + 1)).getLastD d = l.getD j d := by
-  rw [List.take_succ, List.getElem?_eq_getElem hj, Option.toList_some, List.getLastD_concat,
+  rw [List.take_add_one, List.getElem?_eq_getElem hj, Option.toList_some, List.getLastD_concat,
     List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj, Option.getD_some]
 
 /-- **`agrees` logs the same calls at any coins of its length** where `DE`'s steps read no coin in their calls. -/
@@ -150,7 +150,7 @@ theorem act_coin_transfer {x : Msg} {as : List Msg} {cs cs' : List Coin} {c : Co
   · rw [FlockDeploy.KS.act_none hs] at h
     cases h
   · obtain ⟨t, ht⟩ := act_coin_tag h
-    exact FlockComplete.act_coin_any hs ht (List.getLast?_eq_getLast hc')
+    exact FlockComplete.act_coin_any hs ht (List.getLast?_eq_some_getLast hc')
 
 /-- A decision at some coins is one at any nonempty coins, at the same session and last message. -/
 theorem act_decide_transfer {x : Msg} {as : List Msg} {cs cs' : List Coin} {s : FlockDeploy.Ins}
@@ -162,7 +162,7 @@ theorem act_decide_transfer {x : Msg} {as : List Msg} {cs cs' : List Coin} {s : 
   have hf := FlockDeploy.KS.act_decide_final h
   obtain ⟨a₁, rest, crest, rfl, rfl, hlink, -⟩ := FlockDeploy.KS.act_decide_parts h
   obtain ⟨c₁', crest', rfl⟩ := List.exists_cons_of_ne_nil hc'
-  have hl := List.getLast?_eq_getLast (List.cons_ne_nil a₁ rest)
+  have hl := List.getLast?_eq_some_getLast (List.cons_ne_nil a₁ rest)
   rw [hl, Option.bind_some] at hf
   exact ⟨link, c₁', _, FlockComplete.act_final_any hs hl hf hlink⟩
 
@@ -173,7 +173,7 @@ theorem next_log_free (H : Msg → Msg) (x : Msg) (as : List Msg) {cs cs' : List
       (((FlockDeploy.next false x as cs).eval H).1 = .msg (cs.getLastD default).bytes ↔
         ((FlockDeploy.next false x as cs').eval H).1 = .msg (cs'.getLastD default).bytes) := by
   have hlast : ∀ {l : List Coin} (hl : l ≠ []), l.getLastD default = l.getLast hl := fun hl => by
-    rw [List.getLastD_eq_getLast?, List.getLast?_eq_getLast hl, Option.getD_some]
+    rw [List.getLastD_eq_getLast?, List.getLast?_eq_some_getLast hl, Option.getD_some]
   have hdec : ∀ {cs₀ : List Coin} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
       {sts : Array _root_.Flock.Stmt} {link : List ByteArray × List ByteArray} {c₀ : Coin} {mids : List (Msg × Coin)}
       {f : FlockDeploy.Final}, FlockDeploy.act false x as cs₀ = .decide s spec sts link c₀ mids f →
@@ -189,7 +189,7 @@ theorem next_log_free (H : Msg → Msg) (x : Msg) (as : List Msg) {cs cs' : List
       rw [h] at ha
       cases ha
   · have hcs := Claims.Bridge.act_coin ha
-    rw [List.getLast?_eq_getLast hc, Option.some.injEq] at hcs
+    rw [List.getLast?_eq_some_getLast hc, Option.some.injEq] at hcs
     subst hcs
     rw [FlockDeploy.next_coin H ha, FlockDeploy.next_coin H (act_coin_transfer hc' ha), hlast hc, hlast hc']
     exact ⟨rfl, iff_of_true rfl rfl⟩
@@ -214,6 +214,6 @@ theorem stepsLogFree_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flo
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (H : Msg → Msg) :
     (bdDeployed rel (FlockDeploy.V false).next colsE wE join rowIn final w).StepsLogFree H :=
-  stepsLogFree_of_V H _ rfl fun _ => rfl
+  stepsLogFree_of_V H _ rfl (bdDeployed_ans rel _ colsE wE join rowIn final w)
 
 end RecDeploy
