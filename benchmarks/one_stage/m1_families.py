@@ -6,6 +6,8 @@ batched members), whether it is a template the rows commit (`serving_rows.templa
 ``--estimate`` adds each family's C-Flock size to a census: every distinct primitive (or Boolean Definition) of the row's
 Definition lowered once on its own (`ir_lower.lower` on fresh inputs), its ANDs, table reads and assertions times how many
 times the Definition holds it. Constants folded and ANDs shared across leaves are not taken off, so it is an upper bound.
+With it, M0's block for the unit (`block`): the in-circuit hashing of its rows alone bounds it from below, so a family whose
+``rows_log`` passes `K_MAX` is refused whatever its ANDs.
 
     PYTHONPATH=... python benchmarks/one_stage/m1_families.py --commit ROW/commit --build-root ROW/build \\
       --workload integrations/vllm/workloads/ROW.json --rank 0 --steps 16 --out families.json
@@ -73,6 +75,28 @@ def estimate(fn, memo: dict, leaves: dict) -> dict:
     return r
 
 
+def block(fn, ands: int | None) -> dict:
+    """The log2 of M0's block for fn's unit as `m1_unit.py` stages it (a ``row/v2`` bit row per parameter, an output row per
+    returned field), placed by C-Flock's own rule (`circuit._ranges`): its rows' compressions, the hm96 slots, the mask and
+    the unit's slot, its table reads' slots left out, one unit to the block (the stager packs more while the block stays
+    within 2^22). ``rows_log`` takes the unit's slot at its least, a lower bound for any number of ANDs; ``est_log`` sizes
+    it at the estimate's ANDs plus the port bits. The unit fits a block at most `K_MAX`."""
+    from verity_flock import circuit as FC
+
+    params, ret = fn.signature()
+    fields = [f[1] if isinstance(f, tuple) else f for f in ret.fields] if hasattr(ret, "fields") else [ret]
+    bits = [sum(t.leaf_widths()) for _n, t in params] + [16 * -(-sum(f.leaf_widths()) // 16) for f in fields]
+    ports = [FC.Port(f"p{i}", -(-b // 16), b) for i, b in enumerate(bits)]
+    n_sha = FC._row_slots(ports)[0]
+
+    def log(unit_rows: int) -> int:
+        return FC._ranges([("unit", FC.SHA_LOG, n_sha, {"packed": True}), ("unit", FC.HM_LOG, FC._pow2(len(ports)), {}),
+                           ("unit", FC._slot_log(unit_rows), 1, {}), ("mask", FC.MASK_LOG, 1, {})])[1]
+
+    return {"row_bits": sum(bits), "compressions": sum(p.comps for p in ports), "rows_log": log(1),
+            "est_log": None if ands is None else log(ands + sum(bits))}
+
+
 def sizes(census: str, out: str) -> int:
     import math
     import sys
@@ -93,11 +117,13 @@ def sizes(census: str, out: str) -> int:
             if "ands" in e:
                 e["log2_ands"] = round(math.log2(e["ands"]), 2) if e["ands"] else None
                 e["under_2^26"] = e["ands"] < 2**LIMIT_LOG
-                e["under_K_MAX"] = e["ands"] < 2**K_MAX
+                e["block"] = b = block(sp, e["ands"])
+                e["fits_block"] = b["est_log"] <= K_MAX
+                e["refused_block"] = b["rows_log"] > K_MAX
             e["seconds"] = round(time.time() - t, 1)
             f["estimate"] = e
             print(f"M1S {rid} {f['rows']:5d} {spec[:90]:90s} ands={e.get('ands')} log2={e.get('log2_ands')} reads={e.get('reads')} "
-                  f"asserts={e.get('asserts')} unpieced={e.get('unpieced')} {e.get('error', '')}", flush=True)
+                  f"asserts={e.get('asserts')} unpieced={e.get('unpieced')} block={e.get('block')} {e.get('error', '')}", flush=True)
     Path(out).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     return 0
 
