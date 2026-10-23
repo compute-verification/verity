@@ -77,15 +77,20 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   call's A table ``…/a/<K>@<c>`` must have the root, domain and leaf count of the Commit's `commit_rows` value of its
   round and linear, and round s's ``…/ids@<s>`` those of its `commit_ids` value: the Commit registers the window's own
   tables, so one tree is both. So the A rows a call's units read are its linear's input as the Commit commits it, and
-  the input token ids under each round's root are its step's. That the Commit's values are the model's computation is
-  the Commit's draw's, not credit's.
+  the input token ids under each round's root are its step's. Round 0's ``…/ids@0`` is also inside round 0's request
+  table: the round-0 request root the window's open root binds is `requests_root` of the table's root and ids@0's, so
+  the prompt tokens are fixed before the salt coin. Its domain binds the window's session in place of the open root,
+  which contains it (`domain_of`). That the Commit's values are the model's computation is the Commit's draw's, not
+  credit's.
 * **The proofs are the window's registration's** (`_registration`): each drawn unit's proof outcome is the verifier of
   record's verdict for its session (`PROOF_KEYS`): the SHA-512 of the descriptor it verified the session against
   (``program``) and the session's own registered finding (``registered``, flock-verify's: each registered port's value
   and the root its reads were opened against). The entries are the registration's: each A value's domain, and each
   other value's a proof opened, is `domain_of` the committed descriptor's SHA-512 and, for every value but the weights'
-  ``…/b/<K>`` (held across windows, `is_held`), the window's open root (``window.root``, the root the auditor's ledger
-  opens its session for, which a per-window value's domain binds since PRF-127). Each proof was verified against that
+  ``…/b/<K>`` (held across windows, `is_held`) and round 0's input-ids table, the window's open root (``window.root``,
+  the root the auditor's ledger opens its session for, which a per-window value's domain binds since PRF-127); round
+  0's input-ids table, whose root that open root contains, binds the window's session instead. Each proof was
+  verified against that
   descriptor, opened only values the window registers once, each at its registered root, and opened its unit's K's A
   value, the window's ``…/a/<K>`` or its own call's ``…/a/<K>@<call>``. So the A rows `_a_link` ties to the round roots
   are the ones each drawn unit's proof opened, under this window's registration: entries of another window or circuit,
@@ -249,12 +254,26 @@ COMMIT_FORM = ("the window's Commit record is not the bytes in lowercase hex of 
                "canonical JSON whose registered values are a list of objects: the served Commit runs in the window's "
                "engine, and its record is bound under the window's calls_root before the draw coin")
 _IDS = re.compile(r"ids@(0|[1-9][0-9]*)")
+#: round 0's request root (``requests``, the one the window's open root binds): its request table's root with round 0's
+#: input-ids table's root inside (`requests_root`)
+REQUESTS_IDS_TAG = "verity/pouw/h1/requests/ids/v1"
+IDS_OUTSIDE = ("round 0's request root (requests, the one the window's open root binds) is not requests_root of its "
+               "request table's root (request_table) and its input-ids table's root, so round 0's input ids are not "
+               "fixed before the salt: commit round 0's input-ids table inside round 0's request table, under the "
+               "window's open root")
 
 
 def commit_rows(s: int, linear: str) -> str:
     """The Commit's name for the A rows (its AROW) of linear `linear` at the window's round `s`: what it registers as
     that round's call of `linear`'s A table ``<prefix>a/<K>@<c>``."""
     return f"row-table/{s}/{linear}"
+
+
+def requests_root(table: bytes, ids: bytes) -> bytes:
+    """Round 0's request root, the one the window's open root binds (`salt.window_open_root`): `tagged` of
+    `REQUESTS_IDS_TAG`, the root of round 0's request table `table` and the root of its input-ids table ``…/ids@0``
+    `ids`. So the window's open root contains ids@0's root, and its rows are fixed before the salt coin."""
+    return tagged(REQUESTS_IDS_TAG, table, ids)
 
 
 def commit_ids(s: int) -> str:
@@ -846,30 +865,34 @@ def _entry(e: Any) -> bool:
             and type(bits) is int and bits in G.WIDTHS and e.get(G.WIDTH_KEY) != G.WORD_BITS)
 
 
-def domain_of(program: str, window: str, e: dict) -> str:
+def domain_of(program: str, window: str, e: dict, session: str | None = None) -> str:
     """The domain one-stage's registration gives the registered value `e` (an entry `_entry` accepts) of the window whose
     open root is `window`, under the circuit whose descriptor's SHA-512 is `program` (`registered.domain`): the
-    weights' (``…/b/<K>``, `is_held`) are held across windows and bind none; every other value's rows are the window's
-    own, its A rows and its calls' A and z tables (`h1window.table`) among them, and its domain binds the window's open
-    root (PRF-127)."""
-    return G.domain(program, e["value"], e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS),
-                    None if is_held(e["value"]) else window).domain_id.hex()
+    weights' (``…/b/<K>``, `is_held`) are held across windows and bind none; round 0's input-ids table (``…/ids@0``,
+    `ids_step` 0), whose root the window's open root contains (`requests_root`, `_arow`), binds the window's session
+    `session` in that root's place; every other value's rows are the window's own, its A rows and its calls' A and z
+    tables (`h1window.table`) among them, and its domain binds the window's open root (PRF-127)."""
+    v, first = e["value"], ids_step(e["value"]) == 0
+    return G.domain(program, v, e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS),
+                    None if is_held(v) or first else window, session=session if first else None).domain_id.hex()
 
 
 def other_registration(v: str) -> str:
     return (f"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of "
             f"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for a "
-            "value other than the weights' …/b/<K>, the window's open root, the root the auditor's ledger opened its "
-            "session for): the entry is another registration's, another window's or another circuit's")
+            "value other than the weights' …/b/<K> and round 0's …/ids@0, the window's open root, the root the "
+            "auditor's ledger opened its session for, for …/ids@0 that session): the entry is another registration's, "
+            "another window's or another circuit's")
 
 
-def _registration(window: str, program: str, prefix: str, entries: list, ss: list[dict], layout: dict, proofs: list
-                  ) -> tuple[str, str] | None:
+def _registration(window: str, program: str, prefix: str, entries: list, ss: list[dict], layout: dict, proofs: list,
+                  session: str | None = None) -> tuple[str, str] | None:
     """None when the window's registered `entries` are its own registration's and each drawn unit's proof (`proofs`, one
     accepted outcome a unit, as `_proved` holds them) is a session verified against it, else the refusal
     (``registration``, and why). Each A value's and input-ids table's domain, and each other value's a proof opened, is
     `domain_of` the window's
-    open root `window` and the descriptor's SHA-512 `program`; each proof was verified against `program`; every
+    open root `window`, its session `session` and the descriptor's SHA-512 `program`; each proof was verified against
+    `program`; every
     registered port its session opened (its ``registered`` finding) is of a value the window registers once, at that
     value's registered root; and it opened its unit's K's A value: the window's ``…/a/<K>`` (K the unit's stratum `ss`'s)
     or its own call's A table ``…/a/<K>@<call>`` (the call `layout`'s units place it in), and its K's B rows, the
@@ -880,7 +903,7 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
         if not _entry(e):
             return (f"registered value {v}'s entry is not one-stage's {{value, root, leaves, words, domain}} (with "
                     f"word_bits only when it is not 16), its rows and words from 1 to {MAX_ROWS}")
-        return None if e["domain"] == domain_of(program, window, e) else other_registration(v)
+        return None if e["domain"] == domain_of(program, window, e, session) else other_registration(v)
 
     for e in entries:
         if is_tied(e.get("value")):
@@ -938,17 +961,21 @@ def _same(e: dict, c: dict) -> bool:
             and c["leaves"] == e["leaves"])
 
 
-def _arow(steps: int, entries: list, registered: list, layout: dict, prefix: str) -> tuple[str, str] | None:
+def _arow(rounds: list, entries: list, registered: list, layout: dict, prefix: str) -> tuple[str, str] | None:
     """None when each call's A table and each round's input-ids table among the window's registered `entries` is the
     Commit's value of the same rows among its record's `registered` (`commit_of`'s): same root, domain and leaf count;
     else the refusal (``arow``, and why). Call c of the window's `layout` (`strata`'s) is its linear's call at round
-    ``c // (C/S)`` of its `steps` rounds S, and its ``<prefix>a/<K>@<c>`` (K its linear's, `prefix` the descriptor's
-    ``PREFIX``) is the Commit's `commit_rows` of that round and linear; round s's ``<prefix>ids@<s>`` is the Commit's
+    ``c // (C/S)`` of its round log `rounds`' S rounds, and its ``<prefix>a/<K>@<c>`` (K its linear's, `prefix` the
+    descriptor's ``PREFIX``) is the Commit's `commit_rows` of that round and linear; round s's ``<prefix>ids@<s>`` is
+    the Commit's
     `commit_ids` of s. A round calls each linear once, and the Commit registers each of those values once. So the A rows
     a call's units read are its linear's input as the served Commit commits it, and the input token ids under each
-    round's root are its step's (ROOTS1). A step of `window`, after `_a_link` has held each to the segments the round
-    roots commit and the manifest to the layout's calls. Its cost is the calls and the records' entries."""
-    calls = layout["calls"]
+    round's root are its step's (ROOTS1). The window registers no other input-ids table, and round 0's request root
+    (``requests``, the one its open root binds) is `requests_root` of its request table's root (``request_table``) and
+    ``<prefix>ids@0``'s, so round 0's input ids are fixed before the salt coin. A step of `window`, after `_a_link` has
+    held each to the segments the round roots commit, `_period_weights` round 0's request root to the open root, and
+    the manifest to the layout's calls. Its cost is the calls and the records' entries."""
+    steps, calls = len(rounds), layout["calls"]
     if len(calls) % steps:
         return "arow", (f"the window's {len(calls)} calls are not its {steps} rounds' equal blocks, so no call's round, "
                         "and no Commit value of its rows, is fixed")
@@ -982,6 +1009,15 @@ def _arow(steps: int, entries: list, registered: list, layout: dict, prefix: str
             return "arow", (f"{whose} {v} is not the Commit's {name}: their root, domain or leaf count differ, so its "
                             "rows are not the ones the served Commit commits (ROOTS1). The Commit registers the "
                             "window's own table as its value, with no tree of its own")
+    want = {v for v, _name, _whose in pairs}
+    for v in ours:
+        if ids_step(v) is not None and v not in want:
+            return "arow", (f"the window registers input-ids table {v}, which is not {prefix}ids@<s> of any of its "
+                            f"{steps} rounds: it registers each round's input-ids table once, under its descriptor's "
+                            "PREFIX")
+    table, ids = _digest(rounds[0].get("request_table")), _digest(ours[f"{prefix}ids@0"].get("root"))
+    if table is None or ids is None or rounds[0].get("requests") != requests_root(table, ids).hex():
+        return "arow", IDS_OUTSIDE
     return None
 
 
@@ -1079,14 +1115,14 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
     if why is not None:
         return None, why
     program, prefix = hashlib.sha512(bytes.fromhex(descriptor)).hexdigest(), _prefix(bytes.fromhex(descriptor))
-    why = _period_weights(key, ledger, window, rounds, layout, entries, program, prefix, verify)
+    sid, why = _period_weights(key, ledger, window, rounds, layout, entries, program, prefix, verify)
     if why is not None:
         return None, why
     ss, _ = strata(layout)
     if len(calls) != len(layout["calls"]):
         return None, ("manifest", f"the manifest's {len(calls)} rows are not the circuit's {len(layout['calls'])} "
                                   "calls: each call of the window's Program is one manifest row, in order")
-    why = _arow(len(rounds), entries, commit_of(commit)[0][1], layout, prefix)
+    why = _arow(rounds, entries, commit_of(commit)[0][1], layout, prefix)
     if why is not None:
         return None, why
     units, why = _drawn(Ch.LiveOpening.from_json(draw["coin"]).coin, window["root"], draw["root"],
@@ -1097,7 +1133,7 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
     if why is None:
         why = _proved(units, proofs)
     if why is None:
-        why = _registration(window["root"], program, prefix, entries, ss, layout, proofs)
+        why = _registration(window["root"], program, prefix, entries, ss, layout, proofs, sid)
     return (None, why) if why is not None else ((got, layout), None)
 
 
@@ -1126,30 +1162,32 @@ def other_checkpoint(name: str, model: str) -> str:
 
 
 def _period_weights(key: Any, ledger: Any, window: dict, rounds: list, layout: dict, entries: Any, program: str,
-                    prefix: str, verify: Ch.Verify) -> tuple[str, str] | None:
-    """None when the window's registered weights (`_weights`, over round 0's ``requests`` in its round log and the
-    session the auditor's ledger opened for it) fold to the weights' root its period's open signed (`committed_weights`);
-    else the refusal (``weights``, ``layout`` or ``coin``). A step of `window`, after `_credited` trusted the ledger."""
+                    prefix: str, verify: Ch.Verify) -> tuple[str | None, tuple[str, str] | None]:
+    """The session the auditor's ledger opened for the window and None when the window's registered weights
+    (`_weights`, over round 0's ``requests`` in its round log and that session) fold to the weights' root its period's
+    open signed (`committed_weights`); else None and the refusal (``weights``, ``layout`` or ``coin``). A step of
+    `window`, after `_credited` trusted the ledger."""
     try:
         audited = Ch.audited_session(ledger, window, Ch.ChallengerKey.from_json(key), verify)
     except Ch.CoinError as e:
-        return "coin", f"the challenger's session is not trusted: {e}"
+        return None, ("coin", f"the challenger's session is not trusted: {e}")
     if audited.period is None:
-        return "weights", (f"the window is in no period of the auditor's ledger, so no period-open signed the weights' "
-                           f"root it opens ({WEIGHTS_FIELD}): reserve its session inside a period whose open signs it")
+        return None, ("weights", (f"the window is in no period of the auditor's ledger, so no period-open signed the "
+                                  f"weights' root it opens ({WEIGHTS_FIELD}): reserve its session inside a period whose "
+                                  "open signs it"))
     signed, why = committed_weights(ledger, audited.period)
     if why is not None:
-        return why
+        return None, why
     requests = rounds[0].get("requests") if rounds else None
     w, why = _weights(window, layout, entries, requests, audited.session, program, prefix)
     if why is not None:
-        return why
+        return None, why
     if w.hex() != signed:
-        return "weights", (f"the window's registered weights' root {w.hex()[:16]}... is not {signed[:16]}..., the one "
-                           f"period {audited.period}'s open signed: a B row's codes or s_w differ from the ones the "
-                           "period registered before its first window's salt. Open every window of a period on its "
-                           "registered B rows")
-    return None
+        return None, ("weights", (f"the window's registered weights' root {w.hex()[:16]}... is not {signed[:16]}..., "
+                                  f"the one period {audited.period}'s open signed: a B row's codes or s_w differ from "
+                                  "the ones the period registered before its first window's salt. Open every window of "
+                                  "a period on its registered B rows"))
+    return audited.session, None
 
 
 def window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, commit: Any,
@@ -1652,9 +1690,9 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
 
 
 __all__ = ["CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS",
-           "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "ROUND_TAG",
+           "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REQUESTS_IDS_TAG", "ROUND_TAG",
            "SCHEMA", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_weights", "cover",
            "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_tied", "law", "layout_of",
-           "merkle_depth", "partition_of", "period", "period_credit", "registered_file", "round_root", "shape_of",
+           "merkle_depth", "partition_of", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "strata", "tree_root", "window"]
