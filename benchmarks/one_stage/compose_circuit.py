@@ -4,8 +4,9 @@ the statement binds the given partition and program digests. Run in the circuit 
     python compose_circuit.py --input-set DIR --out FILE [--partition H --program H]
     python compose_circuit.py --template ID --out FILE --partition H --program H
 
-``--template``: a serving-rows template whose units are bit rows (`verity_vllm.pipeline.serving_rows.CHUNKED`: a
-``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk), composed by C-Flock's `UnitStager` on the rows the window commits
+``--template``: a serving-rows template whose units are bit rows (`verity_vllm.pipeline.serving_rows.chunked`: a
+``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, or a row
+template the partition's ``chunk_cap`` names), composed by C-Flock's `UnitStager` on the rows the window commits
 (`verity_vllm.pipeline.chunk_rows.unit_rows`), bound to the partition and program; no input set is read.
 """
 from __future__ import annotations
