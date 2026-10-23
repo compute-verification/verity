@@ -995,10 +995,10 @@ cost is the window's units up to the call's last, once a port: the reads file's 
 file names at its known content (`known`, `Flock.Registered.checkKnownAll`), the window's Program salt `salt` (hex), the
 position u0 + t and the call's roots, root(`a/<K>@<s>`) and root(`b/<K>`) as the window registers them (`publicWords`),
 each under `publicRowSalt` of `window` and its position, at the root of their registration; a root of the two that is
-no SHA-512 digest is refused. The statement's output row `ok` (`OK_PORT`,
-o1) is the verifier's own too: unit u reads row u of the window's ok rows `<prefix>ok` (`OK_VALUE`, one row a unit of
-the window), named at its known content, the one word 1 (`OK_ROW`) under `okSalt` of `window` and u; a window whose
-entries register those rows themselves is refused. -/
+no SHA-512 digest is refused. The statement's
+output row `ok` (`OK_PORT`, o1) is the verifier's own too: unit u reads row u of the window's ok rows `<prefix>ok`
+(`OK_VALUE`, one row a unit of the window), named at its known content, the one word 1 (`OK_ROW`) under `okSalt` of
+`window` and u; a window whose entries register those rows themselves is refused. -/
 def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Nat) (roots : Json) (window : String)
     (steps : Nat) (salt : String) : R Json := do
   let ov := s!"{shape.pre}{OK_VALUE}"

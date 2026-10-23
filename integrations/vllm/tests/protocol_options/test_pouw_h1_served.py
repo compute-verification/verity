@@ -290,6 +290,7 @@ def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_anothe
             HW.table(prog, "a", c, STEPS), HW.table(prog, "zy", c), SV.PREFIX + f"b/{k}"}
         at = HW.step_of(prog, c, STEPS)[2]
         assert f["ports"][f"a_k{k}_0"]["reads"][u0] == at and at == T * served.step_calls(c).index(c)
+        assert f["ports"][HW.OK_PORT]["value"] == SV.PREFIX + "ok" and SV.PREFIX + "ok" not in served.registered
         for port, p in f["ports"].items():
             if port == HW.OK_PORT:
                 continue
@@ -615,8 +616,8 @@ def test_each_calls_public_table_is_the_one_credit_builds_and_a_row_off_opens_no
     """Each call's ``pub@<c>`` is registered at its step's last call of K, once root(``a/<K>@<s>``) and root(``b/<K>``)
     exist, and is the public table core's `credit.registered_file` builds from the descriptor, the window's entries, its
     open root and its Program salt: the same value, root, rows, words and domain, row t `core_check.public_words` of the
-    salt, u0 + t and the call's two roots under `core_check.public_row_salt` of the open root, and the call's
-    ``--registered`` file names it as credit's does, every row opening credit's root. A table with one row off, under the
+    salt, u0 + t and the call's two roots under `core_check.public_row_salt` of the open root; and the call's
+    ``--registered`` file is credit's, the verifier-built ok rows (o1) included, every pub row opening credit's root. A table with one row off, under the
     same salts, has another root, which `credit._verified` refuses a session for, and its row opens none of credit's."""
     run, _ws, _got = _window(W1, receipts=_Receipts())
     served, pre = run.served, SV.PREFIX
@@ -636,7 +637,7 @@ def test_each_calls_public_table_is_the_one_credit_builds_and_a_row_off_opens_no
         mine, why = CR.registered_file(program, lay, shape, c, roots, served.root, served.steps, run._salt.hex())
         assert why is None, why
         pub = mine["ports"][CR.PUB_PORT]
-        assert files[c]["ports"][HW.PUB_PORT] == pub
+        assert files[c] == mine and HW.OK_PORT in mine["ports"]
         assert (pub["value"], pub["root"], pub["leaves"], pub["words"], pub["domain"]) == (
             r.value, r.root.hex(), n, r.words, r.domain.domain_id.hex())
         ab = (served.registered[served.a_table(c)].root, served.registered[pre + f"b/{k}"].root)
