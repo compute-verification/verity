@@ -186,16 +186,16 @@ def LaneComputes {K nw : ℕ} (T : Tile)
     (decL K nw T (sess (some l)) (portRead (sess (some l)) vals)).ok =
       Pouw.H1Zy.laneOk chain dqW (laneIn K nw T (portBit (sess (some l)) (portRead (sess (some l)) vals)))
 
-/-- **`LeafChecks` from the circuits computing their Definitions**: at a `K` the lane's tile binds at, with `dq` and
-`part` the Definition's (`dqOf dqW`, `partOf chain`), `LaneComputes` and `CombineComputes` give
-`Accounting.Assumptions.TS.LeafChecks` at the layout's decodes; that each Definition's `ok = 1` is `LaneOk` or
+/-- **`LeafChecks` from the circuits computing their Definitions**: with `dq` and `part` the Definition's (`dqOf dqW`,
+`partOf chain`), `LaneComputes` and `CombineComputes` give `Accounting.Assumptions.TS.LeafChecks` at the layout's
+decodes, whose lane field asks only at a `K` the lane's tile binds at; that each Definition's `ok = 1` is `LaneOk` or
 `CombineOk` is `laneOk_of_def` and `combineOk_of_def`. -/
 theorem leafChecks_of_computes {K nw : ℕ} (T : Tile)
     (chain : LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32)
-    (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (sess : Option (Fin 32) → RowsSession) (hK32 : 32 ∣ K)
-    (hK : K < 2 ^ 17) (hL : LaneComputes T chain dqW sess) (hC : CombineComputes sess (decC nw T)) :
+    (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (sess : Option (Fin 32) → RowsSession)
+    (hL : LaneComputes T chain dqW sess) (hC : CombineComputes sess (decC nw T)) :
     Accounting.Assumptions.TS.LeafChecks (dqOf dqW) (partOf chain) sess (decL K nw T) (decC nw T) :=
   leafChecks_of_combineComputes _ _ sess _ _
-    (fun l vals hv hok => laneOk_of_def T chain dqW _ hK32 hK ((hL l vals hv).symm.trans hok)) hC
+    (fun hK32 hK l vals hv hok => laneOk_of_def T chain dqW _ hK32 hK ((hL l vals hv).symm.trans hok)) hC
 
 end Accounting.TS.Lanes
