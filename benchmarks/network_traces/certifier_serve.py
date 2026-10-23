@@ -296,8 +296,8 @@ class CertifierProcess:
     signer stays up for the reveals), `refused` gives the issuer's refusals and `shutdown` closes the signer."""
 
     def __init__(self, key: Path, out: Path, report: dict, session: bytes, link: str) -> None:
-        self.pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"), initializer=_certifier_start,
-                                        initargs=(key, out, report, session, link))
+        self.pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"),
+                                        initializer=_certifier_start, initargs=(key, out, report, session, link))
         self.key: LmsKey = self.pool.submit(_certifier_call, "public_key").result()
         self.futures: list = []
         self.submits: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
