@@ -126,8 +126,9 @@ done < "$WK/plan.tsv"
 WIRE=ok
 if [ "$FW" = 1 ] && [ "${H1_WIRE:-$([ "$K" = 4096 ] && echo 0 || echo 1)}" = 1 ]; then
   HD=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $3}' "$WK/plan.tsv")
+  HN=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $4}' "$WK/plan.tsv")
   $TIME "$OUT/honest/selftest-zk_worker_wire.time" bash -c "exec $SBIN selftest --zk --instances $HD/inst.bin \
-    --circuit $HD/circuit.txt --only zk_worker_wire" > "$OUT/honest/selftest-zk_worker_wire.out" \
+    --circuit $HD/circuit.txt --draw subset:$HN --only zk_worker_wire" > "$OUT/honest/selftest-zk_worker_wire.out" \
     2> "$OUT/honest/selftest-zk_worker_wire.err"
   grep -q '^NEG.*"pass":true}$' "$OUT/honest/selftest-zk_worker_wire.out" || WIRE=FAIL
   log "wire controls $WIRE: $(grep -E '^NEG' "$OUT/honest/selftest-zk_worker_wire.out" | cut -c1-300)"

@@ -4835,7 +4835,8 @@ impl Transport for Wire {
 /// environment (`FC_FIREWALL`, `FC_FIREWALL_TAMPER`, `FC_FIREWALL_CUT_AT`, `FC_WIRE_TAMPER`): the session goes through the
 /// Lean session loop as `prove`'s does ([`session_addr`]), to a verifier of this process's on loopback, and the record is the
 /// session's outcome and every request that reached the verifier, behind the loop ([`seen`]; a frame that is not its
-/// request's own encoding as `["noncanonical", …]`, one that does not decode as `["undecodable", LEN]`).
+/// request's own encoding as `["noncanonical", …]`, one that does not decode as `["undecodable", LEN]`, and a refusal of the
+/// verifier's after its request as `["refused", WHY]`).
 const WORKER_SESSION: &str = "zk_worker_session";
 
 fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
@@ -4862,6 +4863,9 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
                     Resp::Refused(e)
                 }
             };
+            if let Resp::Refused(why) = &resp {
+                at.lock().unwrap_or_else(PoisonError::into_inner).push(json!(["refused", why.chars().take(400).collect::<String>()]));
+            }
             let done = matches!(resp, Resp::Verdict(_));
             if write_frame(&mut w, &resp.encode()).is_err() || done {
                 break;
@@ -4891,6 +4895,13 @@ fn worker_subsession(env: &[(&str, String)]) -> Value {
                "--only", WORKER_SESSION])
         .env("FC_FIREWALL", "1").env("FC_HOST_WITNESS", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
         .env_remove("FC_FIREWALL_DEADLINE_S").env_remove("FC_WIRE_TAMPER");
+    // the verifier's draw, as this process's server has it ([`serving`])
+    for flag in ["--draw", "--draw-law", "--draw-file"] {
+        let v = arg(flag, "");
+        if !v.is_empty() {
+            cmd.args([flag, &v]);
+        }
+    }
     cmd.envs(env.iter().map(|(k, v)| (*k, v.as_str())));
     let out = cmd.output().expect("spawn a firewalled session");
     let text = String::from_utf8_lossy(&out.stdout);
