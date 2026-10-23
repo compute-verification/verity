@@ -2,7 +2,7 @@
 in-domain linears (`glm53.in_domain`, one TP8 rank, the routed experts sharded or expert-parallel) and decode's and
 prefill's M (`glm53.DECODE_M`, `glm53.PREFILL_M`).  An expert's shape is timed as one dense call, not the grouped launch.
 
-  python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --out DIR [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...] [--schedule S]
+  python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --out DIR [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...] [--schedule S] [--graphs]
 
 Arms, each one linear's call on a BF16 x of M rows:
 
@@ -135,8 +135,10 @@ def timed(f, before=None, after=None, join=None) -> float:
     return s.elapsed_time(e) / INNER
 
 
-def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin: str | None = None, schedule: str = "serial"):
-    """`pouw_pearl_c_device.PearlCDeviceRun` (`scheme` on this directory's kernels, under `schedule`) on synthetic BF16
+def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin: str | None = None, schedule: str = "serial",
+               graphs: bool = False):
+    """`pouw_pearl_c_device.PearlCDeviceRun` (`scheme` on this directory's kernels, under `schedule`, its calls of up to
+    `GRAPH_ROWS` rows replayed as CUDA graphs with `graphs`) on synthetic BF16
     weights, 0.05·N(0, 1), one a shape (weight w is shapes[w]), under an epoch whose salt coin a challenger opened after the
     weights' root: (run, weights, kernel, the generator, which goes on to make the calls' x)."""
     import torch
@@ -153,7 +155,7 @@ def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin:
     roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
     ch = Challenger(EPOCH, verifier.coins)
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, ch.commitment,
-                              ch.open("salt", weights_root(roots)), salt_key=salt_key, schedule=schedule)
+                              ch.open("salt", weights_root(roots)), salt_key=salt_key, schedule=schedule, graphs=graphs)
     return run, weights, kernel, gen
 
 
@@ -166,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--shapes", nargs="*", help="N:K (default every in-domain linear)")
     p.add_argument("--m", nargs="*", type=int, help="M (default decode's and prefill's)")
     p.add_argument("--schedule", default="serial", help="pearlc's schedule (verity.core.protocols.pouw.serving.SCHEDULES)")
+    p.add_argument("--graphs", action="store_true", help="pearlc's calls of up to 256 rows replayed as CUDA graphs (serial only)")
     a = p.parse_args(argv)
     import torch
 
@@ -174,11 +177,11 @@ def main(argv: list[str] | None = None) -> int:
     table = glm53.in_domain(a.scheme)
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else sorted(table)
     ms = a.m or [*glm53.DECODE_M, *glm53.PREFILL_M]
-    run, weights, kernel, gen = device_run(shapes, a.scheme, a.cubin, a.schedule)
+    run, weights, kernel, gen = device_run(shapes, a.scheme, a.cubin, a.schedule, a.graphs)
     side = run.side.stream if run.side is not None and run.side.stream is not None else None
     join = (lambda: torch.cuda.current_stream().wait_stream(side)) if side is not None else None
-    head = {"scheme": a.scheme, "schedule": a.schedule, "epoch": EPOCH, "device": torch.cuda.get_device_name(dev),
-            "cubin_sha256": kernel.cubin_sha256,
+    head = {"scheme": a.scheme, "schedule": a.schedule, "graphs": a.graphs, "epoch": EPOCH,
+            "device": torch.cuda.get_device_name(dev), "cubin_sha256": kernel.cubin_sha256,
             "kernel_source_sha256": kernel.source_sha256, "torch": torch.__version__, "reps": a.reps, "inner": INNER,
             "fadd_readings": {k: str(v) for k, v in glm53.FADD_READINGS.items()}}
     try:
