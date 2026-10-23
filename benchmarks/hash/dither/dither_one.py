@@ -71,6 +71,9 @@ MIX_FORMS = {"mix": ("block2", "split")}
 PEEL_ENV = "DITHER_PEEL"
 # ASK-64's perCall, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
 PERCALL_ENV = "DITHER_PERCALL"
+# "1": `Window.before`'s step inputs (live, admit, step, base, S) copied from pinned host buffers without the host waiting,
+# so a step's forward is launched while another stream's work holds the SMs; the same bytes in the same stream order
+BEFORE_ASYNC_ENV = "DITHER_BEFORE_ASYNC"
 LIB = "dither1"
 REG = DF.REG
 CFG: dict = {}
@@ -206,6 +209,12 @@ class Window:
         self.step_salt = False
         self.step_base = torch.zeros(1, dtype=torch.int64, device=dev)
         self.stepv = torch.zeros(2, dtype=torch.int32, device=dev)
+        self.before_async = os.environ.get(BEFORE_ASYNC_ENV) == "1"
+        if self.before_async:
+            self.h_in = {k: torch.empty_like(x, device="cpu").pin_memory()
+                         for k, x in (("live", self.live), ("admit", self.admit), ("stepv", self.stepv),
+                                      ("step_base", self.step_base), ("S", self.S))}
+            self.in_done = torch.cuda.Event()
         # the engine's own forwards (its profile run, its graph captures) come before any step's `before`, and
         # h1c_a_call3_k traps on node and leaf prefixes h1c_a_step hasn't written
         self._a_step()
@@ -342,11 +351,27 @@ class Window:
             self.caps[name] = {"s": self.s, "m": m, "salt": self.salt_bytes}
         t, s = self.t, self.s
         bits = np.arange(t) < m
-        self.live.copy_(torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
-        self.admit.copy_(torch.frombuffer(bytearray(b"".join(CR.word_rows(CR.words(bits)))), dtype=torch.uint8))
-        self.stepv.copy_(torch.tensor([s, s], dtype=torch.int32))
-        self.step_base.fill_(s * self.u_step)
-        self.S.copy_(torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
+        live = (np.arange(t // 32) * 32 < m).astype(np.uint8)
+        admit = np.frombuffer(b"".join(CR.word_rows(CR.words(bits))), dtype=np.uint8)
+        if self.before_async:
+            # the last step's copies out of these buffers are done before they are rewritten
+            self.in_done.synchronize()
+            h = self.h_in
+            h["live"].numpy()[:] = live
+            h["admit"].numpy()[:] = admit
+            h["stepv"].numpy()[:] = (s, s)
+            h["step_base"].numpy()[0] = s * self.u_step
+            h["S"].numpy()[:] = (0, m, 0, self.flags)
+            for k, x in (("live", self.live), ("admit", self.admit), ("stepv", self.stepv),
+                         ("step_base", self.step_base), ("S", self.S)):
+                x.copy_(h[k], non_blocking=True)
+            self.in_done.record()
+        else:
+            self.live.copy_(torch.from_numpy(live))
+            self.admit.copy_(torch.from_numpy(admit.copy()))
+            self.stepv.copy_(torch.tensor([s, s], dtype=torch.int32))
+            self.step_base.fill_(s * self.u_step)
+            self.S.copy_(torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
         self._a_step()
         if self.cap:
             self.cap_sync()
