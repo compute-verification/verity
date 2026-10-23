@@ -1050,10 +1050,11 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     (publicWords sb (u0 + t) (ra, rb), PouwCheck.publicRowSalt window (u0 + t))
   let d ← (SampledProofs.Registered.domainAt program pv words size 16 (some window)).mapError fun why =>
     ("registration", why)
-  let reg : Flock.Registered.Port := { name := PUB_PORT, value := pv, root := ByteArray.empty, leaves := size,
-    words := some words, wordBits := 16, domain := d, reads := #[], schema := Flock.HmRow.ROW_SCHEMA_V2 }
-  let r := Flock.FV3.root d (Flock.Registered.knownLeaves reg ks) Flock.Sha512.hash
-  out := out ++ [(PUB_PORT, Json.mkObj [("value", Json.str pv), ("root", Json.str (Flock.hexOf r)),
+  let reg : Flock.Registered.Port :=
+    { name := PUB_PORT, value := pv, root := ByteArray.empty, leaves := size, words := some words, wordBits := 16,
+      domain := d, reads := #[], schema := Flock.HmRow.ROW_SCHEMA_V2 }
+  let pr := Flock.FV3.root d (Flock.Registered.knownLeaves reg ks) Flock.Sha512.hash
+  out := out ++ [(PUB_PORT, Json.mkObj [("value", Json.str pv), ("root", Json.str (Flock.hexOf pr)),
     ("leaves", Lean.toJson size), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
     ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
     ("reads", Json.arr ((List.range u0).map (fun _ => Json.null) ++ (List.range size).map Lean.toJson).toArray),
