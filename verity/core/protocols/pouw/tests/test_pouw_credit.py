@@ -46,13 +46,15 @@ CREDIT_EXPECT = {
     "stale-root": ("draw", Cr.DRAW_ROOT), "no-bit": ("credit", "manifest row "), "bit-form": ("credit", "manifest row "),
     "no-z": ("credit", "call "), "index": ("manifest", "manifest row "), "row-form": ("manifest", "manifest row "),
     "calls-form": ("manifest", Cr.CALLS_FORM), "salt-form": ("manifest", Cr.SALT_FORM),
-    "served-form": ("manifest", Cr.SERVED_FORM), "rounds-form": ("rounds", ""), "draw-form": ("draw", Cr.DRAW_FORM),
+    "served-form": ("manifest", Cr.SERVED_FORM), "commit-form": ("commit", Cr.COMMIT_FORM), "rounds-form": ("rounds", ""),
+    "draw-form": ("draw", Cr.DRAW_FORM),
     "no-draw": ("draw", Cr.NO_DRAW), "draw-coin": ("coin", "the draw coin: "),
     "key-form": ("coin", "the verifier's challenger key is malformed"),
     "forged-ledger": ("coin", "the challenger's session is not trusted"),
 }
 NOT_DRAWN = "has a proof outcome and was not drawn"
 UNTIED = "Register the A value whose rows each round's root committed"
+NOT_COMMITS = "is not the Commit's "
 NOT_RECEIVED = "the round roots are not the roots the challenger's log shows it received, in order"
 FEWER = "units are fewer than K = "
 NO_K = "commits no draw K (draw_k"
@@ -100,6 +102,10 @@ WINDOW_EXPECT = {
     "weights-no-period": ("weights", "the window is in no period of the auditor's ledger"),
     "weights-requests": ("weights", Cr.OTHER_WEIGHTS), "weights-no-requests": ("weights", Cr.REQUESTS_FORM),
     "weights-leaves": ("weights", "'s entry is not the registration of K = "),
+    "a-zero": ("arow", NOT_COMMITS + "row-table/"), "a-row-off": ("arow", NOT_COMMITS + "row-table/"),
+    "ids-off": ("arow", NOT_COMMITS + "input-ids/"), "ids-missing": ("arow", "'s input-ids table "),
+    "commit-missing": ("arow", "the Commit record registers "), "commit-twice": ("arow", "the Commit record registers "),
+    "round-twice": ("arow", "twice, so the Commit's row-table/"), "commit-unbound": ("draw", Cr.DRAW_ROOT), "credit-commit-form": ("commit", Cr.COMMIT_FORM),
 }
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
@@ -131,8 +137,9 @@ A_LINK_EXPECT = {
     "unknown": "which is no registered A value", "no-a": Cr.NO_A, "twice": " twice", "entry-form": "has no root, domain",
     "blocks": "rounds' equal blocks", "log-form": Cr.LOG_FORM, "round-form": "inner root is not",
     "segments-form": "A segments are not", "entries-form": Cr.ENTRIES_FORM,
-    "call-other-round": "which only its call's round", "call-past": "and the window has",
+    "call-other-round": ", which only round ", "call-past": "and the window has",
     "call-blocks": "rounds' equal blocks, so the round",
+    "ids-other-round": "'s input-ids table, which only round ", "ids-past": "is round ",
 }
 WEIGHTS_EXPECT = {
     "other-root": Cr.OTHER_WEIGHTS, "other-requests": Cr.OTHER_WEIGHTS, "other-session": Cr.OTHER_WEIGHTS,
@@ -189,7 +196,7 @@ def test_credit_bit_changed_after_draw_is_refused(seed):
     for name in ("withdrawn", "changed"):
         _, (got, refused) = _credited(name, seed)
         assert got is None and refused == ("draw", Cr.CHANGED)
-        assert "Commit every call's credit bit in its manifest row before the draw root" in refused[1]
+        assert "Commit every call's credit bit in its manifest row, and the Commit record, before the draw root" in refused[1]
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -448,10 +455,44 @@ def test_an_honest_window_of_call_tables_credits_its_bits(seed):
     """Main's served form: each call's A table ``…/a/<K>@<c>`` committed whole under its call's round's root and its z
     table ``…/zy@<c>``, both under domains that bind the window's open root, and each drawn unit's proof opening its own
     call's. The window is credited."""
-    d = cases.window_instance(random.Random(f"per-call/{seed}"), "honest", per_call=True)
+    d = cases.window_instance(random.Random(f"per-call/{seed}"), "honest")
     assert any(Cr.a_value(e["value"]) and Cr.a_value(e["value"])[1] is not None for e in d["entries"])
     got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_table_the_served_commit_did_not_commit_refuses(seed):
+    """ROOTS1: a call's A table with every row zero or one row off, or a round's input-ids table with one row off, each
+    tied to the round roots (`_a_link` accepts) and opened by the drawn units' proofs at its root, is not the Commit's
+    value of the same rows, so the window is refused before any proof is read. The honest window's tables are the
+    Commit's, by its names: each call's ``row-table/<round>/<linear>`` and each round's ``input-ids/<round>``."""
+    d = cases.window_instance(random.Random(f"honest/{seed}"))
+    (_digest, reg), _ = Cr.commit_of(d["commit"])
+    lay, steps = Cr.layout_of(bytes.fromhex(d["descriptor"]))[0], len(d["rounds"])
+    names = {e["value"] for e in reg}
+    per = len(lay["calls"]) // steps
+    assert {Cr.commit_rows(c // per, lin) for c, (lin, _b) in enumerate(lay["calls"])} <= names
+    assert {Cr.commit_ids(s) for s in range(steps)} <= names
+    for name in ("a-zero", "a-row-off", "ids-off"):
+        d = cases.window_instance(random.Random(f"{name}/{seed}"), name)
+        assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None, name
+        got, refused = Cr._window_outcomes(*cases.window_args(d))
+        assert got is None and refused[0] == "arow" and "(ROOTS1)" in refused[1], (name, refused)
+
+
+def test_the_commit_record_is_bound_under_calls_root():
+    """The Commit record's digest is its format's tagged SHA-512 of its bytes (`registration.digest`), and `calls_root`
+    binds it after the manifest and the served trees' digest, as vllm's `pouw_h1.calls_root` must, byte for byte."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+    d = cases.window_instance(random.Random("honest/bound"))
+    raw = bytes.fromhex(d["commit"])
+    (digest, _reg), _ = Cr.commit_of(d["commit"])
+    assert digest.hex() == R.digest(json.loads(raw)) and codec.canonical_json(json.loads(raw)) == raw
+    salt, served = bytes.fromhex(d["salt"]), bytes(64)
+    inner = Cr.calls_root(salt, d["calls"], served)
+    assert Cr.calls_root(salt, d["calls"], served, digest) == hashlib.sha512(Cr.COMMIT_TAG + inner + digest).digest()
+    assert Cr.calls_root(salt, d["calls"], None, digest) != Cr.calls_root(salt, d["calls"], served, digest)
 
 
 @pytest.mark.parametrize("seed", SEEDS)

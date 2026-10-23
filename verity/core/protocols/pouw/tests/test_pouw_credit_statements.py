@@ -117,9 +117,9 @@ def prove(d: dict, k: int, to: Path) -> list[dict]:
     return out
 
 
-def window(seed: int, tmp: Path, per_call: bool = True) -> tuple[dict, list[dict]]:
-    d = cases.window_instance(random.Random(f"statements/{seed}"), "honest", per_call=per_call)
-    return d, prove(d, d["k"], tmp) if per_call else []
+def window(seed: int, tmp: Path) -> tuple[dict, list[dict]]:
+    d = cases.window_instance(random.Random(f"statements/{seed}"), "honest")
+    return d, prove(d, d["k"], tmp)
 
 
 def credit(d: dict, statements, files=None):
@@ -235,18 +235,6 @@ def test_a_session_proving_another_calls_unit_is_refused(seed, tmp_path, verifie
                                                 "own call's units")
 
 
-@pytest.mark.parametrize("seed", SEEDS)
-def test_a_window_registering_no_call_tables_has_no_statement_to_verify(seed, tmp_path, verifier):
-    """Credit's statements read main's served form, each call's A table ``…/a/<K>@<c>`` and z table ``…/zy@<c>``: a
-    window that registers only its window-wide A values has nothing a call's statement can be verified against."""
-    d, _ = window(seed, tmp_path, per_call=False)
-    sizes = [size for size, _w in Cr.call_work(_layout(d))]
-    u = _units(d, d["k"])[0]
-    c = next(c for c in range(len(sizes)) if sum(sizes[:c]) <= u < sum(sizes[:c + 1]))
-    got, refused = credit(d, [{"call": c, "circuit": "c", "public": "p", "sessions": ["s"]}])
-    assert got is None and refused[0] == "registration" and "which the window registers not" in refused[1], refused
-
-
 def test_a_verifier_that_cannot_run_leaves_the_window_refused(tmp_path, monkeypatch):
     d, statements = window(0, tmp_path)
 
@@ -260,10 +248,10 @@ def test_a_verifier_that_cannot_run_leaves_the_window_refused(tmp_path, monkeypa
 
 def _period(seed: int, tmp: Path, files: dict | None = "own"):
     rng = random.Random(f"statements-period/{seed}")
-    probe = cases.period_instance(random.Random(f"statements-period/{seed}"), per_call=True)
+    probe = cases.period_instance(random.Random(f"statements-period/{seed}"))
     lay = _layout(probe["windows"][0])
     committed = {} if files is None else {Cr.CIRCUIT_FILES: files_of(lay) if files == "own" else files}
-    d = cases.period_instance(rng, committed_too=committed, per_call=True)
+    d = cases.period_instance(rng, committed_too=committed)
     k, _ = Cr.committed_k(d["ledger"], d["name"])
     windows = []
     for i, w in enumerate(d["windows"]):
