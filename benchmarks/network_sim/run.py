@@ -64,22 +64,28 @@ STARVED = ["missing", "values"]
 # slowest session the lab host has timed, 263 ms).
 DELTA_BUCKETS = 12
 # lab_run's runs: its arguments, the blocks of b0 … b3 that an audit refuses, each as the certifier's refused rows, N3's
-# violation codes and the windows N3Window_v5 refuses (every other block is accepted by all three on each of its
-# `WORKLOAD_WINDOWS`), and the answers. v5 refuses a window whose frames aren't the committed outboxes': flip-bit's
-# flipped message where b1 sends it and where the client relays it into b2, and under late each window carrying bytes
-# of a block that, starved, committed no values.
+# violation codes, the windows N3Window_v5 refuses and the link-windows N2's served counts refuse (every other block is
+# accepted by all four, on each of its `WORKLOAD_WINDOWS` link-windows and v5's two links' worth), and the answers. v5
+# refuses a window whose frames aren't the committed outboxes': flip-bit's flipped message where b1 sends it and where
+# the client relays it into b2, and under late each window carrying bytes of a block that, starved, committed no
+# values. N2 is counts only, so it accepts flip-bit's content and refuses the windows whose egress counts aren't the
+# ones b's ingress counts derive: late's held response and extra's one more event, after b1's last response.
 WORKLOAD = {
     "honest": ([], {}, "equal"),
     "flip-bit": (["--tamper", "b1:flip-bit", "--expect", "refused"],
-                 {"b1": ([], ["content"], ["b1:responses[0]"]), "b2": ([], ["content"], ["b2:requests[0]"])}, "equal"),
+                 {"b1": ([], ["content"], ["b1:responses[0]"], []), "b2": ([], ["content"], ["b2:requests[0]"], [])},
+                 "equal"),
     "late": (["--tamper", "b2:late", "--expect", "refused"],
-             {"b0": ([], STARVED, ["b0:responses[0]"]), "b1": ([], STARVED, ["b1:responses[0]", "b1:requests[0]"]),
+             {"b0": ([], STARVED, ["b0:responses[0]"], []),
+              "b1": ([], STARVED, ["b1:responses[0]", "b1:requests[0]"], []),
               "b2": ([["responses", 0, COVERAGE, COVERAGE]], STARVED,
-                     [f"b2:responses[0] (the record's status is {COVERAGE.removeprefix('status:')})", "b2:requests[0]"]),
-              "b3": ([], STARVED, [])}, None),
+                     [f"b2:responses[0] (the record's status is {COVERAGE.removeprefix('status:')})", "b2:requests[0]"],
+                     [0]),
+              "b3": ([], STARVED, [], [])}, None),
+    "extra": (["--tamper", "b1:extra", "--expect", "refused"], {"b1": ([], ["unexplained"], [], [1])}, "equal"),
 }
 WORKLOAD_BLOCKS = ["b0", "b1", "b2", "b3"]
-WORKLOAD_WINDOWS = 8  # lab_run's four windows at D = 12, on each of a block's two links
+WORKLOAD_WINDOWS = 5  # lab_run's windows at D = 12; N3Window_v5 checks each on both of a block's links
 
 
 def v5(windows: int, *refused: str) -> dict:
@@ -158,9 +164,12 @@ def records_verdicts(records: dict) -> dict:
 
 
 def workload_verdicts(block: dict) -> dict:
-    """A block's verdicts in lab_run's `summary.json`: N3's as its violations' codes."""
+    """A block's verdicts in lab_run's `summary.json`: N3's as its violations' codes, N2's as its link-windows and the
+    ones it refuses."""
+    n2 = block.get("n2")
     return {"certifier": refused_rows(block["certifier"]["verdicts"]),
-            "n3": sorted({v.split()[0] for v in block["n3"]["violations"]}), "n3_v5": block.get("n3_v5")}
+            "n3": sorted({v.split()[0] for v in block["n3"]["violations"]}), "n3_v5": block.get("n3_v5"),
+            "n2": None if n2 is None else {"windows": n2["windows"], "refused": n2["refused"]}}
 
 
 def tick(block: dict) -> dict:
@@ -226,8 +235,9 @@ def summarize(out: Path, exits: dict[str, int]) -> dict:
             mismatches.append(f"{run}: blocks {list(s['blocks'])}, not {WORKLOAD_BLOCKS}")
         blocks = {}
         for b, x in s["blocks"].items():
-            rows, codes, windows = refused.get(b, ([], [], []))
-            want = {"certifier": rows, "n3": codes, "n3_v5": v5(WORKLOAD_WINDOWS, *windows)}
+            rows, codes, windows, n2 = refused.get(b, ([], [], [], []))
+            want = {"certifier": rows, "n3": codes, "n3_v5": v5(2 * WORKLOAD_WINDOWS, *windows),
+                    "n2": {"windows": WORKLOAD_WINDOWS, "refused": n2}}
             blocks[b] = block(run, b, x["tamper"] or "-", want, workload_verdicts(x), x)
         got = None if s["answers"] is None else "equal" if s["answers"] == s["reference"] else "differ"
         if got != answers:
@@ -269,8 +279,14 @@ def render(summary: dict) -> str:
         refused = ", ".join(r.split(" (")[0] for r in v["refused"])
         return f"{v['accepted']}/{v['windows']}" + (f" refused {refused}" if refused else "")
 
-    rows = [("run", "block", "case", "certifier audit", "records / N3", "N3 v5", "covert budget (bits)", "wire lag",
-             "worst tick", "")]
+    def served(v: dict | None) -> str:
+        if v is None:
+            return "-"
+        refused = ", ".join(f"[{w}]" for w in v["refused"])
+        return f"{v['windows'] - len(v['refused'])}/{v['windows']}" + (f" refused {refused}" if refused else "")
+
+    rows = [("run", "block", "case", "certifier audit", "records / N3", "N3 v5", "N2 served", "covert budget (bits)",
+             "wire lag", "worst tick", "")]
     for run, r in summary["runs"].items():
         for b, x in r["blocks"].items():
             v = x["verdicts"]
@@ -282,14 +298,14 @@ def render(summary: dict) -> str:
                     second += f"; unplanned {records(v['unplanned'])}"
                     charge += f"; unplanned {account(x['unplanned_account'])}"
             t = x["tick"]
-            rows.append((run, b, x["case"], certifier(v), second, window_v5(v.get("n3_v5")), charge,
+            rows.append((run, b, x["case"], certifier(v), second, window_v5(v.get("n3_v5")), served(v.get("n2")), charge,
                          "" if t["lag_ms"] is None else f"{t['lag_ms']:.1f} ms",
                          f"{t['late_ms']:.1f}/{t['slack_ms']:g} ms" + (f", {t['over']} over" if t["over"] else ""),
                          "ok" if x["ok"] else "MISMATCH"))
         if (a := r.get("records")) is not None:
             v = a["verdicts"]
             rows.append((run, "all", f"{len(v['ports'])} ports", "", "records " + records(v["refused"], by_block=True),
-                         "", account(a["account"]), "", "", "ok" if a["ok"] else "MISMATCH"))
+                         "", "", account(a["account"]), "", "", "ok" if a["ok"] else "MISMATCH"))
     widths = [max(len(row[k]) for row in rows) for k in range(len(rows[0]))]
     lines = ["  ".join(c.ljust(w) for c, w in zip(row, widths)).rstrip() for row in rows]
     answers = [f"{run.split('/')[1]} " + ("none" if r["answers"] is None else
