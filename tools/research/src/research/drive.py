@@ -1789,11 +1789,50 @@ class Driver:
         ready = {n: e.pr for n, e in entries.items() if e.state == "ready"}
         return ready, set(ready) | {n for n, e in entries.items() if e.state == "refused" and e.why.startswith("ejected at")}
 
+    def _slot_state(self, rid: str) -> dict:
+        """Run ``rid``'s `slot.json` (its `state`, and `took` once a check slot took it), {} when it can't be read."""
+        got = self.fetch(rid, [SLOT_FILE])
+        with contextlib.suppress(OSError, ValueError, AttributeError, TypeError):
+            return json.loads((got[0] / SLOT_FILE).read_text()) if got else {}
+        return {}
+
+    def _trains_waiting(self) -> list[str]:
+        """The train checks of `next` waiting for a check slot: running, none of their twins in a slot, and one of them waiting.
+        The per-PR shadow yields to them (CI-141: 21 Oct its ordinary jobs took vy-nebius-2's two slots while nothing waited, then
+        held them an hour while trains queued behind)."""
+        launched = (self._drive or {}).get("launched", {})
+        live = self._states([r for v in launched.values() for r in v["ids"]])
+        act = {c: [r for r in v["ids"] if (st := live.get(r, ("unknown",))[0]) in ACTIVE and st != "unknown"]
+               for c, v in launched.items()}
+        rids = [r for ids in act.values() for r in ids]
+        slots = dict(zip(rids, _each(self._slot_state, rids)))
+        return [c for c, ids in act.items() if ids and not any(slots[r].get("took") for r in ids)
+                and any(slots[r].get("state") == "waiting" for r in ids)]
+
+    def _per_pr_yield(self, recs: dict, waiting: list[str]) -> None:
+        """Cancel each shadow check holding a check slot while ``waiting`` trains wait for one, and queue its PR again: the
+        shadow measures, the trains land."""
+        for rec in recs.values():
+            if rec["phase"] != "checking" or not rec["checks"] or (c := rec["checks"][-1]).get("ended"):
+                continue
+            self._per_pr_took(rec, c)
+            if not c.get("took"):
+                continue                                    # an ordinary job waits behind every train's priority anyway
+            self.cancel(self.repo, c["ids"], f"drive: per-PR shadow yields #{rec['pr']}'s check slot to the trains waiting "
+                                             f"({' '.join(x[:12] for x in waiting)})")
+            c.update(ended=self.now(), yielded=True)
+            rec["phase"] = "queued"
+            self._say(f"#{rec['pr']}'s check {' '.join(c['ids'])} yields its slot to {len(waiting)} waiting train(s); "
+                      "it is checked again later")
+
     def _per_pr(self, sh: dict) -> str:
         recs, done = sh.setdefault("prs", {}), sh.setdefault("done", [])
         self._per_pr_recs = recs
         ready, kept = self._admitted()
         main = _out(self.repo, "rev-parse", "origin/main")
+        waiting = self._trains_waiting()
+        if waiting:
+            self._per_pr_yield(recs, waiting)
         for key, rec in list(recs.items()):
             n = int(key)
             why = ("landed" if self._ancestor(rec["head"], main) else "closed" if n not in self._prs
@@ -1811,8 +1850,8 @@ class Driver:
         order = sorted((r for r in recs.values() if r["phase"] == "queued"),
                        key=lambda r: (r["marked"] is None, r["marked"] or 0, r["pr"]))
         for rec in order:
-            if self._per_pr_running() >= self.per_pr_shadow:
-                break
+            if waiting or self._per_pr_running() >= self.per_pr_shadow:
+                break                                       # a train waits for a slot: no shadow check takes one
             self._per_pr_check(rec, main)
         for key in [k for k, r in recs.items() if r.pop("new", False) and r["phase"] == "queued" and not r["checks"]]:
             del recs[key]                                   # not sampled this tick: no record until a slot takes it
