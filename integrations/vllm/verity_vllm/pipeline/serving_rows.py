@@ -32,7 +32,8 @@ computes (`verity.ml.circuits.boolean.trace.word_of`, held equal to it by circui
 own word.  A Program row holds instances of a template when the template's word is the row's own Definition (its spec), or when the
 row's Definition is cut into them (``CUT``: its body batches the template's word, read off the bound Definition, so a template that
 does not compute what the row computes is no match), or when the template's word is the row's Definition at N = 1 (``COORDS``: the
-row is split into its N coordinates).  A Boolean Program's rows are its word view (`pipeline.build_instances`: each
+row is split into its N coordinates), or at a halving of its width (``COLS``: the row is split into column blocks).  A Boolean
+Program's rows are its word view (`pipeline.build_instances`: each
 row the word Definition its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the
 same rows under either IR, and the members, their rows and every committed word are the same; the population program is over the
 template as the partition names it.  The rows commit u16 words: a template's every port is 16-bit elements in its word view (a
@@ -56,6 +57,9 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    leading ones whole and the last two ``w[:, n, :]`` and ``ws[:, n // G, :]`` of every expert
                                    (FlashInfer's linear: ``w[n]`` and ``ws[n // 128]``) -> ``out.<member>``, the row's output
                                    word n (`_read_coord`); packed ports, one index entry per row
+  ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``  every block j of w columns of the rows of that Definition W wide, W / w
+                                   a power of two (``COLS``): ``in<g>`` per argument group, each of its rows' columns [jw, jw + w)
+                                   in order -> ``out.<member>``, the row's output columns [jw, jw + w); one index entry per row
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
                                    committed member (``vu_export._decompose_row``'s port rule)
 
@@ -83,7 +87,7 @@ from verity.ml.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
-from verity_vllm.pipeline.serving_templates import (COORDS, CUT, LAYOUTS, PACKED, Template, _bind, template,  # noqa: F401
+from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, Template, _bind, template,  # noqa: F401
                                                     unit_templates)
 
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
@@ -199,6 +203,8 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             caps: Mapping[str, int] | None = None) -> list[CS.Member]:
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
     ``ScaledMmS8Coordinate`` template's units are consecutive chunks of at most its ``caps`` entry, one member each."""
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
     out, base = [], 0
     for k, (t, rs) in enumerate(zip(tmpls, rows, strict=True)):
         _rid, _pi, r, d = rs[0]
@@ -225,11 +231,15 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             rx, rw = sum(g["tokens"] for g in groups), sum(g["columns"] for g in groups)
             m = CS.Member(t, (("x", K), ("w", K)), (("y", 1),), sum(g["tokens"] * g["columns"] for g in groups), base,
                           tables=(("x", rx), ("w", rw)))
-        elif layout == "coord":
+        elif layout in ("coord", "cols"):
             params, ret = template(t).fn.signature()
+            if layout == "coord":
+                n = sum(int(x[3]["statics"]["N"]) for x in rs)
+            else:
+                axis = COLS[spec_base(template(t).word)]
+                n = sum(int(x[3]["statics"][axis]) // int(spec_statics(template(t).word)[axis]) for x in rs)
             m = CS.Member(t, tuple((f"in{g}", sum(ty.leaf_widths()) // 16) for g, (_n, ty) in enumerate(params)),
-                          ((f"out.{d['members'][0][0]}", sum(ret.leaf_widths()) // 16),),
-                          sum(int(x[3]["statics"]["N"]) for x in rs), base)
+                          ((f"out.{d['members'][0][0]}", sum(ret.leaf_widths()) // 16),), n, base)
         else:
             ins = [sum(int(sl[3]) - int(sl[2]) for sl in grp) for grp in r["args"]]
             outs = [int(mm[1]) for mm in d["members"]]
@@ -336,7 +346,10 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     index entries.  A row's outputs fill the member's output ports in order: one template's call sites may commit its output
     under different member names (GLM-5.3's routed experts' ``act``, its shared experts' ``out``), and the ports are named
     from its first row (`members`); each index entry keeps the row's own member names.  A row whose input or output widths
-    are not the member's is refused (a packed template's in u16 words)."""
+    are not the member's is refused (a packed template's in u16 words).  A ``cols`` member's row is ``W / w`` units, each
+    operand and output its rows' columns [jw, jw + w) in order, under one index entry."""
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
     tp = template(m.template)
     layout = tp.layout
     if layout == "gemm":
@@ -366,6 +379,19 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
             cols["x"].append(np.asarray(ops[0], dtype=np.uint16).reshape(nh, D))
             cols["cs"].append(np.broadcast_to(np.asarray(ops[1], dtype=np.uint16).reshape(1, D), (nh, D)))
             cols["out"].append(outs[0].reshape(nh, D))
+        elif layout == "cols":
+            axis = COLS[spec_base(tp.word)]
+            W, w = int(d["statics"][axis]), int(spec_statics(tp.word)[axis])
+            if W % w:
+                raise ValueError(f"row {r['i']} ({d['op_path']}): {axis}={W} is no whole number of member {m.key}'s {axis}={w} columns")
+            nh = W // w
+            got = [len(a) for a in ops + outs]
+            if [g // nh for g in got] != [n for _, n in m.rows + m.outs] or any(g % W for g in got):
+                raise ValueError(f"row {r['i']} ({d['op_path']}): inputs and outputs of {got} words are not {nh} of member {m.key}'s "
+                                 f"{list(m.rows)} and {list(m.outs)} along {axis}")
+            for port, a in zip([p for p, _ in m.rows + m.outs], ops + outs, strict=True):
+                a = np.asarray(a, dtype=np.uint16).reshape(-1, nh, w)
+                cols[port].append(np.ascontiguousarray(a.transpose(1, 0, 2)).reshape(nh, -1))
         else:
             nh = 1
             got = ([len(a) for a in ops], [len(a) for a in outs] if tp.packed else [int(mm[1]) for mm in d["members"]])

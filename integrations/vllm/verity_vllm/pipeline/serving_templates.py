@@ -1,6 +1,6 @@
 """The templates of the serving rows (`pipeline.serving_rows`, whose module text states their rules): a template read through its
 word link (:func:`template`), and the templates a Program row's Definition holds instances of (:func:`unit_templates`: the row
-itself, a ``CUT`` family's batched members and a ``COORDS`` family's coordinates)."""
+itself, a ``CUT`` family's batched members, a ``COORDS`` family's coordinates and a ``COLS`` family's column blocks)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,6 +12,10 @@ CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
 #: (the expert-indexed pair GEMMs, `fp8_moe_experts.pair_rows` at one column; FlashInfer's FP8 linear, `deepgemm`, one output
 #: word with the row's quantisation of its own), the ``coord`` layout; each family's E and G where its statics have none
 COORDS = {"MoeExpertFp8Gemm_v1": {}, "MoeExpertFp8GemmW_v1": {}, "FlashInferFp8Linear_v1": {"E": 1, "G": 128}}
+#: the row Definitions elementwise along the last axis of every parameter and of the output, by that axis's static: a row W wide
+#: is W / w units of its Definition at width w (a halving of W), unit j reading and returning columns [jw, jw + w), the ``cols``
+#: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce)
+COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N"}
 #: a member's layout by the family of its template's word; any other template is the row itself
 LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8"}
 #: a row template's element widths whose ports the rows commit as their little-endian bytes
@@ -21,7 +25,8 @@ PACKED = frozenset((8, 16, 32, 64))
 @dataclass(frozen=True)
 class Template:
     """A partition's template as the rows are read for it: its descriptor id and Definition (the population program's), the id of
-    the word Definition it computes (its own for a word Definition), and its member layout (``LAYOUTS``, else ``"row"``).
+    the word Definition it computes (its own for a word Definition), and its member layout (``LAYOUTS``; ``"coord"`` for a
+    ``COORDS`` family at N = 1, ``"cols"`` for a ``COLS`` family; else ``"row"``).
     ``packed``: a row or coordinate template with a port that is not 16-bit elements, each port's element bits (its parameters', then its
     return fields'); its ports are committed as their elements' bytes."""
     id: str
@@ -74,7 +79,8 @@ def template(t: str) -> Template:
         widths = {x for ty in types for x in ty.width_set()}
         view = types
     word = descriptor_id(w)
-    layout = "coord" if spec_base(word) in COORDS and int(spec_statics(word)["N"]) == 1 else LAYOUTS.get(spec_base(word), "row")
+    layout = ("coord" if spec_base(word) in COORDS and int(spec_statics(word)["N"]) == 1 else "cols" if spec_base(word) in COLS
+              else LAYOUTS.get(spec_base(word), "row"))
     packed = None
     if widths != {16} and layout != "s8":
         ports = [*view[:-1], *(getattr(view[-1], "fields", None) or (view[-1],))]
@@ -95,8 +101,9 @@ _UNITS: dict[str, tuple[tuple[str, int], ...]] = {}
 def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     """The word Definitions a Program row's Definition (its word view's ``spec``) holds instances of, ``(descriptor id, instances)``:
     the row itself, then, for a ``CUT`` family, each Definition its body batches (a batch's members; Input batches are its
-    parameters), and for a ``COORDS`` family of N > 1, its coordinate (its Definition at N = 1, N of them).  None when the spec
-    does not bind to exactly its own descriptor id."""
+    parameters), for a ``COORDS`` family of N > 1, its coordinate (its Definition at N = 1, N of them), and for a ``COLS`` family,
+    its Definition at each halving W / k of its width (k of them).  None when the spec does not bind to exactly its own
+    descriptor id."""
     hit = _UNITS.get(spec)
     if hit is not None:
         return hit
@@ -113,6 +120,12 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
         n = int(spec_statics(spec).get("N", 1)) if spec_base(spec) in COORDS else 1
         if n > 1 and (c := _bind(spec, N=1)) is not None:
             hit += ((descriptor_id(c), n),)
+        if (axis := COLS.get(spec_base(spec))) is not None:
+            W, k = int(spec_statics(spec)[axis]), 2
+            while W % k == 0:
+                if (c := _bind(spec, **{axis: W // k})) is not None:
+                    hit += ((descriptor_id(c), k),)
+                k *= 2
     _UNITS[spec] = hit
     return hit
 
