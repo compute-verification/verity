@@ -94,7 +94,7 @@ def topsListed (i : Inner) (caps : Array VStar.Stmt) : Option String :=
 
 def port (name value : String) (root : UInt8 := 1) (leaves : Nat := 128) (reads : Array (Option Nat) := #[some 0]) :
     Registered.Port :=
-  { name, value, root := ⟨#[root]⟩, leaves, words := some 64, wordBits := 16, domain := ⟨#[7]⟩, reads }
+  { name, value, root := ⟨#[root]⟩, leaves, words := some 64, wordBits := 16, domain := ⟨#[7]⟩, readsRel := reads }
 
 def all : Array (Option Nat) := (Array.range 128).map some
 

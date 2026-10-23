@@ -134,7 +134,7 @@ theorem selRounds_selOf (n₀ : ℕ) (kc : ℕ → ℕ) : VStarFamily.SelRounds 
 `skOf` and U4 do not read are the empty file's). -/
 def mPort (name : String) (k : ℕ) : Registered.Port :=
   { name, value := s!"rec-c{k}", root := ByteArray.empty, leaves := 2, words := none, wordBits := 16,
-    domain := ByteArray.empty, reads := #[some 0, some 1] }
+    domain := ByteArray.empty, readsRel := #[some 0, some 1] }
 
 /-- `m<k>`'s `k`. -/
 def mIndex (nm : String) : Option ℕ := if nm.startsWith "m" then (nm.drop 1).toString.toNat? else none
