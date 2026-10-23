@@ -80,12 +80,49 @@ class Spec:
     index: int = -1
 
 
-@dataclass
+@dataclass(slots=True)
 class _Block:
     pos: int
     key: tuple
     labels: list
     base: int = 0
+
+
+def _live(C: Circuit, seeds) -> set:
+    """``C.live`` from the variables ``seeds`` (a specialization's read labels and returns) rather than outputs."""
+    seen: set = set()
+    stack = list(seeds)
+    kind, data = C.kind, C.data
+    while stack:
+        v = stack.pop()
+        if v in seen:
+            continue
+        seen.add(v)
+        if kind[v] == "and":
+            a, b = data[v]
+            stack.extend(a.s)
+            stack.extend(b.s)
+    return seen
+
+
+def _last_reads(circuit, sc, body) -> list[list[int]]:
+    """Per body node, the gates whose last reader it is: the lowering drops their wires after it, so a Definition whose
+    body is a long unrolled loop holds the words its later nodes still read, not every word it computed."""
+    last: dict[int, int] = {}
+    for k, node in enumerate(body.nodes):
+        if isinstance(node.fn, PrimitiveDefinition) and node.form == "primitive":
+            lo = sc.offset + body.offsets[k]
+            for g in range(lo, lo + node.gates):
+                for o in circuit.gate(g).operands:
+                    last[o] = k
+            continue
+        for m in range(1 if node.form == "call" else node.n):
+            for a in FunctionCall(circuit, sc, k, m).args:
+                last[a] = k
+    out: list[list[int]] = [[] for _ in body.nodes]
+    for g, k in last.items():
+        out[k].append(g)
+    return out
 
 
 def _column_order(C: Circuit, v: int) -> tuple:
@@ -154,6 +191,7 @@ class _Lowerer:
                 key = (fc.fn.id, None, pat)
                 sp = self.specs.get(key) or self._generic(fc, key, pat, len(label_vars))
         sp = sp or self._lower(fc, key, pat, len(label_vars))
+        key = sp.key
         blk = _Block(len(C.kind), key, label_vars)
         C.blocks.append(blk)
         col_var: dict[int, L] = {}
@@ -182,7 +220,7 @@ class _Lowerer:
                         s = s ^ col_var[x].s
                 out.append(L(s, c))
             wires.setdefault(r, out)
-        C.used.extend(L(frozenset((v,)), 0) for v in label_vars if v >= 0)
+        C.used.update(v for v in label_vars if v >= 0)
         C.zero = getattr(C, "zero", False) or ZERO in label_vars
         return key
 
@@ -199,7 +237,7 @@ class _Lowerer:
 
     def _lower(self, fc: FunctionCall, key: tuple, pat: tuple, ins: int) -> Spec:
         C = Circuit()
-        C.used, C.blocks = [], []
+        C.used, C.blocks = set(), []
         fresh = [C._new("arg", i) for i in range(ins)]
         it = iter(pat)
         wires: dict[int, list] = {}
@@ -230,13 +268,18 @@ class _Lowerer:
                     raise KeyError(f"{fc.id}: a parameter leaf has no wire")
             else:
                 body = sc.spec.body
+                keep = set(fc.returns)
+                drop = _last_reads(self.circuit, sc, body)
                 for k, node in enumerate(body.nodes):
                     if isinstance(node.fn, PrimitiveDefinition) and node.form == "primitive":
                         lo = sc.offset + body.offsets[k]
                         IL.lower_gates(C, Region(self.circuit, lo, lo + node.gates), wires)
-                        continue
-                    for m in range(1 if node.form == "call" else node.n):
-                        self.call(C, FunctionCall(self.circuit, sc, k, m), wires)
+                    else:
+                        for m in range(1 if node.form == "call" else node.n):
+                            self.call(C, FunctionCall(self.circuit, sc, k, m), wires)
+                    for g in drop[k]:
+                        if g not in keep:
+                            wires.pop(g, None)
         if C.asserts or C.lookups:
             raise NotImplementedError(f"{fc.id}: assertions and table reads are not laid out by the structural lowering yet")
         rets = []
@@ -248,7 +291,7 @@ class _Lowerer:
                 if len(b.s) > self.support or (self.gather and len(b.s) > 1 and any(C.kind[v] != "arg" for v in b.s)):
                     b = C.commit([b])[0]
                 rets.append(("f", b.c, b.s))
-                C.used.append(L(b.s, 0))
+                C.used.update(b.s)
         sp = self._finish(C, key, ins, rets)
         self.specs[key] = sp
         sp.index = len(self.order)
@@ -277,8 +320,7 @@ class _Lowerer:
     def _finish(self, C: Circuit, key: tuple, ins: int, rets: list) -> Spec:
         """Lay out a lowered specialization: its live ANDs and its copies in creation order, then its rows and its copies'
         runs in template references."""
-        C.output("used", C.used)
-        live = C.live()
+        live = _live(C, C.used)
         sp = Spec(key, ins)
         col: dict[int, int] = {}
         blocks = [b for b in C.blocks if self.specs[b.key].cols]
@@ -389,7 +431,7 @@ def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FO
     args = list(dict.fromkeys(root.args))
     widths = [IL._width(root.circuit.gate(a).prim) for a in args]
     C = Circuit()
-    C.used, C.blocks = [], []
+    C.used, C.blocks = set(), []
     wires = {a: C.input(f"in{a}", w) for a, w in zip(args, widths)}
     top = lw.call(C, root, wires)
     sp = lw.specs[top]
