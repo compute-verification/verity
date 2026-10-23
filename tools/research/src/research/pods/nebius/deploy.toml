@@ -933,25 +933,6 @@ nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-util"]
 owner = "compute-accounting"
 
-[[file]]
-path = "/workspace/pouw/infra/bin/publish_pool.py"
-src = "tools/research/src/research/pods/nebius/publish_pool.py"
-nodes = ["vy-nebius-2"]
-run = ["user-systemd:infra-pool-publish.timer"]
-owner = "infra"
-
-[[file]]
-path = "/home/research/.config/systemd/user/infra-pool-publish.service"
-src = "tools/research/src/research/pods/nebius/infra-pool-publish.service"
-nodes = ["vy-nebius-2"]
-owner = "infra"
-
-[[file]]
-path = "/home/research/.config/systemd/user/infra-pool-publish.timer"
-src = "tools/research/src/research/pods/nebius/infra-pool-publish.timer"
-nodes = ["vy-nebius-2"]
-owner = "infra"
-
 [[file]]  # node 2's runs to node 1's store and R2: the custody n2_commit.sh and n2_build.sh name to `research run`
 path = "/workspace/pouw/infra/bin/n2_custody.sh"
 src = "tools/research/src/research/pods/nebius/n2_custody.sh"
