@@ -980,7 +980,7 @@ theorem heldRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   have hsl := slotPub_table ht' hd (by omega) hv1 L hz1 hq' hnp (div_lt_blocks_two hlt2 hnbl)
   rw [digest_tables htt] at hsl
   rw [hname] at hpp
-  obtain rfl : pp = row.2.2.1 := find_range_findIdx (f := (·.name == q.1)) hpp hqi
+  obtain rfl : pp = row.2.2.1 := find_range_findIdx (f := fun (x : Port) => x.name == q.1) hpp hqi
   obtain ⟨hlt, hrd⟩ := hall' _ hnp
   rw [hreads, range_getD hnp, hrow] at hrd
   obtain ⟨wh, cc, hfr, htr⟩ := hrowsv _ hlt
