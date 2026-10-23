@@ -10,7 +10,8 @@
   a period, so every window of a period declares one Program, the one its open commits as ``circuit``: the weights'
   registration fixes the weights' root before any window's open root exists, so no window's root can name the Program.
   A window's own values are its through their domains, which bind its open root (`Served.key`: `salt.window_open_root`
-  of the period's weights' root, round 0's request table and the session, or the key the run is given, 64 bytes).
+  of the period's weights' root, round 0's request root and the session, or the key the run is given, 64 bytes); round
+  0's input-ids table, whose root that request root contains, binds the session instead (`Served.ids_tree`).
 * **The tables** are the ones a unit's rows open at (`h1window.table`, `h1window.table_reads`): call c's A table
   ``a/<K>@<c>``, its M slot rows, each its K int8 codes then its f32 s_a (`h1zy.ROW`; the served rows, then zero codes of
   scale 0), and its z table ``zy@<c>``, one record a unit of the call in its tile order (`h1zy.RECORD`: its cells' s32 z,
@@ -35,7 +36,8 @@
 * **The Commit** (ROOTS1, VLLM-73): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) the
   window also registers each round's input-ids table ``ids@<s>`` (`ids_words`: its M slots' token ids, two words each),
   outside the Program's values (`ids`, in `entries`), and lists it whole under round s's root (`segments`). Round 0's
-  is its prompts' tokens in step 0's batch order, registered before step 0's forward (`open_ids`); each later round's
+  is its prompts' tokens in step 0's batch order, registered before the window opens (`open_ids`), its root inside
+  round 0's request root and its domain bound to the session (`ids_tree`); each later round's
   is the Commit's ids of its step (`close_round`). The Commit registers the window's own tree as its
   value of the same rows when its rows are the same (`a_tree`, `ids_tree`, `pouw_h1_commit.CommitTap`).
 * **Refused** (no table from then on, and `trees` raises the reason): a window with no key of 64 bytes, blocks that aren't
@@ -86,6 +88,9 @@ B_NONCE = NONCE + (1 << 40)
 IDS_NONCE = B_NONCE + (1 << 39)
 #: an input-ids slot past the step's rows: no token id is 2^32 - 1
 EMPTY_ID = 0xFFFFFFFF
+#: the session round 0's input-ids table binds under in-process coins, where no gate reserved one (such a window credits
+#: nothing)
+LOCAL_SESSION = "in-process"
 DIGEST_TAG = b"verity/pouw/h1/served/v3\0"
 
 
@@ -317,9 +322,11 @@ class Served:
             self.refused.append("the period's registered weights are under another Program than the window's: register "
                                 "each K's b/<K> under the period's declared Program")
 
-    def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None) -> G.Registered:
+    def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
+              session: str | None = None) -> G.Registered:
         return G.Registered.commit(self.program_digest, value, words.tolist(),
-                                   [hm96_salt(run._key, first, j) for j in range(len(words))], schema=V2, window=window)
+                                   [hm96_salt(run._key, first, j) for j in range(len(words))], schema=V2, window=window,
+                                   session=session)
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None) -> str:
         reg = self.registered[value] = self._tree(run, value, words, first, window)
@@ -338,9 +345,13 @@ class Served:
         return self._tree(run, HW.table(self.program, "a", call.index), words, nonce(call.index, "a"), self.root)
 
     def ids_tree(self, run: Any, s: int, words: np.ndarray) -> G.Registered:
-        """The tree of round s's input-ids table ``<PREFIX>ids@<s>`` over ``words`` (`ids_words`), unregistered, its domain
-        bound to the window's open root as a call's tables' are."""
+        """The tree of round s's input-ids table ``<PREFIX>ids@<s>`` over ``words`` (`ids_words`), unregistered. Its domain
+        binds the window's open root as a call's tables' do, except round 0's: the open root contains its root
+        (`credit.requests_root`), so it binds the window's session (`credit.domain_of`; `LOCAL_SESSION` under
+        in-process coins, which credit nothing)."""
         value = self.program.fn.bindings["PREFIX"] + f"ids@{s}"
+        if s == 0:
+            return self._tree(run, value, words, IDS_NONCE, None, run.session or LOCAL_SESSION)
         return self._tree(run, value, words, IDS_NONCE + s, self.root)
 
     def _register_ids(self, run: Any, s: int, ids: Sequence[int | None]) -> G.Registered:
@@ -354,20 +365,18 @@ class Served:
     def id_words(self, ids: Sequence[int | None]) -> np.ndarray:
         return ids_words(ids, self.m)
 
-    def open_ids(self, run: Any, ids: Sequence[int | None]) -> None:
-        """With the tap, round 0's input-ids table, registered once the window is open and before step 0's forward:
-        ``ids``, step 0's prompt tokens in its batch order (`pouw_h1_requests.first_ids`), what round 0's request table
-        fixed before the salt."""
+    def open_ids(self, run: Any, ids: Sequence[int | None]) -> bytes | None:
+        """With the tap, round 0's input-ids table, registered before the window opens (`pouw_h1.H1Run.open_window`, which
+        puts its root, returned, inside round 0's request root): ``ids``, step 0's prompt tokens in its batch order
+        (`pouw_h1_requests.first_ids`), under the declared Program. None without the tap or once refused."""
         if self.tap is None or self.refused:
-            return
-        if self.root is None:
-            self.open(run)
-        if self.refused:
-            return
+            return None
         try:
-            self._register_ids(run, 0, ids)
+            self.declare(run.shapes_, run.modules, run.rows, run.steps)
+            return self._register_ids(run, 0, ids).root
         except ValueError as e:
             self.refused.append(f"round 0's input ids: {e}")
+            return None
 
     def close_round(self, run: Any, r: int) -> None:
         """With the tap, at round r's close before its root: round r's input-ids table (after round 0, the Commit's ids
@@ -564,6 +573,6 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
     return Registration([t.entry() for t in got], served.root, files)
 
 
-__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "NONCE", "PREFIX", "Registration", "Served", "V2", "Weights",
+__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "NONCE", "PREFIX", "Registration", "Served", "V2", "Weights",
            "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout", "nonce",
            "reads_file", "record_words", "register", "register_weights", "row_words", "trees", "weights_of"]

@@ -25,6 +25,7 @@ from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as LC  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import LiveOpening, LiveRecord  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 from verity_vllm import protocol_options as PO  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_ops  # noqa: E402
@@ -609,6 +610,12 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     assert tuple(sorted(ev)) == CR.WINDOW_KEYS and ev["entries"] == entries and ev["statements"] == []
     assert ev["rounds"][0]["requests"] == c["requests_root"]
     assert run.details["roots1"]["tied"] and run.details["roots1"]["own_trees"] == 0 and ev["commit"] == c["commit"]
+    ids0 = next(e for e in entries if e["value"] == "h1/ids@0")
+    r0 = ev["rounds"][0]
+    assert r0["request_table"] == c["request_table"] == run._tables[0].commitment.root.hex()
+    assert r0["requests"] == CR.requests_root(bytes.fromhex(r0["request_table"]), bytes.fromhex(ids0["root"])).hex()
+    assert ids0["domain"] == G.domain(run.served.program_digest, ids0["value"], ids0["words"], ids0["leaves"],
+                                      session=auditor.session_id).domain_id.hex()
 
 
 class EditArm(ZyArm):
@@ -659,6 +666,57 @@ def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, 
     out = _credit(auditor, _record(run))
     assert out["manifest"] is None and out["window"][0] == "arow" and want in out["window"][1], out
     assert out["credit"] is None
+
+
+def _bare_table(monkeypatch):
+    bare = PH.H1Run._requests0
+
+    def outside(self, table):
+        ids, self._ids0 = self._ids0, None
+        try:
+            return bare(self, table)
+        finally:
+            self._ids0 = ids
+    monkeypatch.setattr(PH.H1Run, "_requests0", outside)
+
+
+def _other_session(monkeypatch):
+    tree = SV.Served.ids_tree
+
+    def other(self, run, s, words):
+        sid, run.session = run.session, f"{run.session}-other"
+        try:
+            return tree(self, run, s, words)
+        finally:
+            run.session = sid
+    monkeypatch.setattr(SV.Served, "ids_tree", other)
+
+
+def test_a_window_opened_over_round_0s_bare_request_table_is_refused_by_core(periodic, monkeypatch):
+    """ROOTS1's ids@0: the window opens over `credit.requests_root` of round 0's request table's root and its input-ids
+    table's root, so the prompt tokens are fixed before the salt. One opened over the bare request table's root, its
+    tables otherwise the Commit's, is refused by core at ``arow`` (`credit.IDS_OUTSIDE`)."""
+    auditor = periodic(PHC.draw_k(LAYOUT), files=FILES)
+    _bare_table(monkeypatch)
+    _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
+    assert auditor.ended() is None and not run.served.refused and run.details["roots1"]["tied"]
+    out = _credit(auditor, _record(run))
+    assert out["window"] == ("arow", CR.IDS_OUTSIDE) and out["credit"] is None, out
+
+
+@pytest.mark.parametrize("other", [False, True], ids=["its-session", "another-session"])
+def test_round_0s_input_ids_bind_the_windows_session(periodic, monkeypatch, other):
+    """ROOTS1's ids@0 binds the window's session in place of the open root that contains it: core's registration
+    (`credit._registration`) holds the served window's entries to it, and refuses an ids@0 bound to another session."""
+    auditor = periodic(PHC.draw_k(LAYOUT), files=FILES)
+    if other:
+        _other_session(monkeypatch)
+    _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
+    assert auditor.ended() is None and not run.served.refused
+    c = _record(run)["commitment"]
+    why = CR._registration(c["session"]["root"], run.served.program_digest, "h1/", c["served"]["entries"], [],
+                           CR.layout_of(_descriptor())[0], [], auditor.session_id)
+    assert why == (("registration", CR.other_registration("h1/ids@0")) if other else None), why
 
 
 def test_the_serving_process_credits_nothing_in_a_window_off_the_commit(auditor):

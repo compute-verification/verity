@@ -43,9 +43,10 @@ an `act` value, a run input under the root of the round that admits it, committe
   registered as the run records the call. So each call's A rows, the ones its units read, are fixed under its own
   round's root before that round's coin, and no other round lists them.
   Round s's input-ids table ``ids@<s>`` (ROOTS1, `pouw_h1_commit`) is listed there whole too. Round 0's is built at
-  admission, before step 0's forward, from what precedes the salt: its prompts' tokens in step 0's batch order
-  (`first_ids`), each request's first rows at the first slot its entry names. Its root can't itself precede the salt:
-  its domain binds the window's open root (`credit._registration`), which is over round 0's request table.
+  admission, before the window opens: its prompts' tokens in step 0's batch order (`first_ids`), each request's first
+  rows at the first slot its entry names. Its root is inside round 0's request root (`credit.requests_root` of the
+  request table's root and it; round 0's row keeps the table's as ``request_table``), so the window's open root fixes
+  the prompt tokens before the salt; its domain binds the window's session in place of that root.
 * **Not yet.** The round root has no admit root (H1 has no admit unit yet), no producer hands the run a receipt root
   yet, and no unit reads the round coins yet.
 """
@@ -344,7 +345,9 @@ def request_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment,
     row, why = _round(log, commitment, salt, r)
     if why is not None:
         return f"request {i}: {why}"
-    if not _leaf(requests_binding(salt, r), r, row["requests"], rows, opening):
+    # round 0's request root folds its input-ids table's root into the table's (credit.requests_root, held by credit._arow)
+    table = row.get("request_table", row["requests"]) if r == 0 else row["requests"]
+    if not _leaf(requests_binding(salt, r), r, table, rows, opening):
         return f"request {i}'s entry doesn't open under round {r}'s request table"
     if (first.round, first.position) != (r, entry.slot):
         return f"request {i}'s first slot is slot {entry.slot} of step {r}, and slot {first.position} of step {first.round} " \
