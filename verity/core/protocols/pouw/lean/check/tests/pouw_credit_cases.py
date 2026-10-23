@@ -1088,7 +1088,7 @@ REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-regis
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "credit-branch-pin", "k-form", "k-past-units",
                 "never-received", "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES,
-                *AROW_NAMES, *IDS0_NAMES, "round-twice", "commit-unbound", "credit-commit-form"]
+                *AROW_NAMES, *IDS0_NAMES, "commit-unbound", "credit-commit-form"]
 WINDOW_KEYS = ("key", "ledger", "pins", "main", *Cr.PROVED_KEYS, "k")
 #: `credit.window`'s arguments, in order
 WINDOW_ARGS = ("key", "ledger", "pins", "main", "window", "session", "salt", "calls", "served", "commit", "rounds",

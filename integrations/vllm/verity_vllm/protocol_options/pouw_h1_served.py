@@ -21,7 +21,10 @@
   rows every step's units read). With ``receipts`` (BRIDGE2), call c's receipt table ``receipt@<c>`` too: one row a unit
   of the call in its tile order, the unit's receipt, the statement's output row o0 (`receipt_words`: its nw = 2 (KS + m)
   u32 words, each little-endian, so 2 nw u16 words), registered beside its z table, its domain bound to the open root
-  alike, and listed whole under round s's root (`segments`).
+  alike, and listed whole under round s's root (`segments`). Call c's public table ``pub@<c>`` holds its statement's
+  public row ``pub`` (`h1window.PUBS`): row t unit u0 + t's, `core_check.public_words` of the window's Program salt,
+  u0 + t and (root(``a/<K>@<s>``), root(``b/<K>``)), salted `core_check.public_row_salt` of the open root and u0 + t, so
+  anyone rebuilds it, as credit's `registered_file` and Lean's ``registeredFile`` do; its rows are kept.
 * **The weights are the period's** (`Weights`, VLLM-71): each K's ``b/<K>`` is registered once a period, before its first
   window's salt (`register_weights`), under the period's declared Program, binding no window, its salts fixed for the
   registration. `credit.weights_root` of their roots is the weights' root every window's open root binds and the
@@ -39,7 +42,8 @@
   the value's nonce (`nonce`). A window keeps its trees, not its rows, which the prover rebuilds from its own.
 * **When.** `Served.commit` registers call c's z table as `H1Run` records the call, step s's A table of K at its last
   call of K (salted from its first call's nonce), and puts the period's ``b/<K>`` in the call that completes K's weights
-  (the last of K's linears in step 0). Each root goes into that call's manifest row (``tables.registered``), so its
+  (the last of K's linears in step 0), then, once both roots exist, each of the step's calls of K's ``pub@<c>``
+  (`Served._pubs`). Each root goes into that call's manifest row (``tables.registered``), so its
   round's root commits it before the round's coin, and round s's root also lists step s's A tables whole
   (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
   is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
@@ -73,6 +77,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
+from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
@@ -400,11 +405,13 @@ class Served:
                                 "each K's b/<K> under the period's declared Program")
 
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
-              session: str | None = None) -> G.Registered:
-        return NR.commit(self.program_digest, value, words, run._key, first, window=window, session=session)
+              session: str | None = None, row_salts: bytes | None = None) -> G.Registered:
+        return NR.commit(self.program_digest, value, words, run._key, first, row_salts is not None, row_salts,
+                         window=window, session=session)
 
-    def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None) -> str:
-        reg = self.registered[value] = self._tree(run, value, words, first, window)
+    def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
+                  row_salts: bytes | None = None) -> str:
+        reg = self.registered[value] = self._tree(run, value, words, first, window, row_salts=row_salts)
         return reg.root.hex()
 
     def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
@@ -433,6 +440,10 @@ class Served:
     def receipt_table(self, c: int) -> str:
         """Call ``c``'s receipt table, ``<prefix>receipt@<c>`` (`h1window.table`'s `h1window.RECEIPTS`)."""
         return HW.table(self.program, HW.RECEIPTS, int(c))
+
+    def pub_table(self, c: int) -> str:
+        """Call ``c``'s public table, ``<prefix>pub@<c>`` (`h1window.table`'s `h1window.PUBS`)."""
+        return HW.table(self.program, HW.PUBS, int(c))
 
     def receipt_shape(self, c: int) -> tuple[int, int]:
         """Call ``c``'s receipt table's rows and u16 words a row: one row a unit of the call, its tile unit's ``receipt``
@@ -550,20 +561,47 @@ class Served:
             out[rc] = self._register(run, rc, got, RECEIPT_NONCE + call.index, self.root)
         if self.tap is not None:
             self.tap.arow(run, self, call, value, whole)
-        b, ks = self.program.fn.bindings["PREFIX"] + f"b/{call.k}", sorted({k for _n, k in run.shapes_})
-        mine = [w for w, (_n, k) in enumerate(run.shapes_) if k == call.k]
-        if b in self.registered or not all(w in self._weights for w in mine):
-            return out
+        b = self.program.fn.bindings["PREFIX"] + f"b/{call.k}"
+        if b not in self.registered and not self._take_b(run, call, b, out):
+            return {}
+        if whole is not None and b in self.registered:
+            out.update(self._pubs(run, mine, value, b))
+        return out
+
+    def _take_b(self, run: Any, call: Any, b: str, out: dict[str, str]) -> bool:
+        """Put ``b/<K>`` in ``out`` once K's linears' weights are all held, the period's or the window's own; False when
+        the window is refused for them."""
+        mine, ks = [w for w, (_n, k) in enumerate(run.shapes_) if k == call.k], sorted({k for _n, k in run.shapes_})
+        if not all(w in self._weights for w in mine):
+            return True
         if self.weights is None:
             words = np.concatenate([row_words(self._weights[w][1], self._scales[w]) for w in mine])
             out[b] = self._register(run, b, words, B_NONCE + ks.index(call.k), None)
         elif bad := [w for w in mine if not self.weights.matches(w, self._weights[w][1], self._scales[w])]:
             self.refused.append(f"call {call.index}: linears {bad}' codes or s_w are not their rows of the period's "
                                 f"registered {b}: a window serves the weights its period registered before its salt")
-            return {}
+            return False
         else:
             self.registered[b] = self.weights.registered[call.k]
             out[b] = self.registered[b].root.hex()
+        return True
+
+    def _pubs(self, run: Any, calls: Sequence[int], a: str, b: str) -> dict[str, str]:
+        """Each of ``calls``' (a step's calls of one K) public table ``pub@<c>`` (`pub_table`), registered once its step's
+        A table ``a`` and the weights' ``b`` are: row t unit u0 + t's public row, `core_check.public_words` of the
+        window's Program salt, u0 + t and (root(a), root(b)), salted `core_check.public_row_salt` of the open root and
+        u0 + t, as credit's `registered_file` builds it (`h1window.public_table`); its rows kept, as they are public."""
+        units, out = HW.call_units(self.program), {}
+        x = np.frombuffer(run._salt + bytes(8) + self.registered[a].root + self.registered[b].root, np.uint8)
+        for c in calls:
+            u0, n = units[c]
+            rows = np.tile(x, (n, 1))
+            rows[:, len(run._salt):len(run._salt) + 8] = (
+                np.arange(u0, u0 + n, dtype=">u8").view(np.uint8).reshape(n, 8))
+            words = np.ascontiguousarray(rows.reshape(n, -1, 4)[:, :, ::-1]).reshape(n, -1).view("<u2")
+            salts = b"".join(CC.public_row_salt(self.root, u) for u in range(u0, u0 + n))
+            v = self.pub_table(c)
+            out[v] = self._register(run, v, words, 0, self.root, salts)
         return out
 
     def _receipts(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray | None:
@@ -614,11 +652,12 @@ class Served:
 
     def tables(self) -> list[str]:
         """Every value the Program's units open at: each K's ``b/<K>``, then each step's A tables, then each call's z
-        table; then, with ``receipts``, each call's receipt table, which its units' receipts are."""
-        pre, ks = self.program.fn.bindings["PREFIX"], sorted({k for _name, k, _n in self.linears})
-        return ([pre + f"b/{k}" for k in ks] + list(dict.fromkeys(self.a_table(c) for c in range(len(self.calls))))
-                + [HW.table(self.program, "zy", c) for c in range(len(self.calls))]
-                + ([self.receipt_table(c) for c in range(len(self.calls))] if self.receipts is not None else []))
+        table, then each call's public table; then, with ``receipts``, each call's receipt table, which its units'
+        receipts are."""
+        pre, ks, cs = self.program.fn.bindings["PREFIX"], sorted({k for _name, k, _n in self.linears}), range(len(self.calls))
+        return ([pre + f"b/{k}" for k in ks] + list(dict.fromkeys(self.a_table(c) for c in cs))
+                + [HW.table(self.program, "zy", c) for c in cs] + [self.pub_table(c) for c in cs]
+                + ([self.receipt_table(c) for c in cs] if self.receipts is not None else []))
 
     def values(self) -> dict[str, int]:
         """Each registered value's words a row."""
@@ -671,12 +710,14 @@ def reads_file(run: Any, call: int, ports: Mapping[str, str] | None = None, tp: 
     window's Program (``tp`` its template partition, `partition.evaluate`'s, when the caller holds it) and its trees'
     roots, under the circuit ports ``ports`` (default `Served.ports`), each call table's domain bound to the window's open
     root and the weights' to none, as their trees' are. With ``receipts``, the file reads its units' receipts at the
-    call's receipt table as its output row o0 (`h1window.RECEIPT_PORT`), unit u0 + t at row t."""
+    call's receipt table as its output row o0 (`h1window.RECEIPT_PORT`), unit u0 + t at row t. Its public row
+    (`h1window.PUB_PORT`) is the call's public table at its known content, under the window's Program salt."""
     served = _served(run)
     prog = served.program
     tp = tp if tp is not None else P.evaluate(prog, served.query())
     return HW.table_reads_file(prog, tp, int(call), served.roots(), served.ports() if ports is None else dict(ports),
-                               prog=served.program_digest, window=served.root, steps=served.steps)
+                               prog=served.program_digest, window=served.root, steps=served.steps,
+                               salt=run._salt.hex())
 
 
 @dataclass(frozen=True)
