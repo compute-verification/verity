@@ -887,14 +887,10 @@ def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteAr
   RecOpening.check c
   return c
 
-set_option maxRecDepth 20000 in
--- `rfl` compares the two whole bodies of `parse`, as `With.parseWith_std` does
-set_option maxHeartbeats 1000000 in
 @[csimp] theorem parse_eq_fast : @parse = @parseFast := by
   funext tags bytes tables tmpl pre
-  unfold parse parseFast
-  simp -zeta only [Net.parsePar_eq]
-  try rfl
+  simp only [parseFast, Net.parsePar_eq]
+  rfl
 
 /-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.
 A flat class is the typed file parsed with its unit's net first (`parse`'s `pre`), where the old statement's `CIRCUIT
