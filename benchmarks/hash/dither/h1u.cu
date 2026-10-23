@@ -84,6 +84,11 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1U_SPLIT
 #define H1U_SPLIT 0
 #endif
+// H1U_NB2 = 1: the fused form hashes a chunk's two blocks a lane (its row's and its column's, one stream) as one paired
+// compression (noise_block2), their rounds interleaved; the same blocks
+#ifndef H1U_NB2
+#define H1U_NB2 0
+#endif
 // H1U_KSPLIT = P (2 or 4): the one-stream two-launch call (kh_one, kh_one_peel) runs h1k, a CTA a unit, for calls whose
 // live units number at most H1K_MAXU (decode's qkv, o and down); larger calls keep h1u
 #ifndef H1U_KSPLIT
@@ -651,28 +656,40 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll 1
   for (u32 it = 0; it <= chunks; ++it) {
     const u32 blk = it == 0 ? chunks : it - 1;
+    if constexpr (!WS && !J10 && H1U_NB2) {
+      u64 sa[8], sb[8];
+      noise_block2(S.nm, (u64)lane * rb + blk, 32ull * rb + (u64)lane * cb + blk, sa, sb);
+#pragma unroll
+      for (int j = 0; j < 8; ++j) {
+        S.rowbits[lane][2 * j] = (u32)(sa[j] >> 32);
+        S.rowbits[lane][2 * j + 1] = (u32)sa[j];
+        S.colbits[lane][2 * j] = (u32)(sb[j] >> 32);
+        S.colbits[lane][2 * j + 1] = (u32)sb[j];
+      }
+    } else {
 #pragma unroll 1
-    for (int jb = 0; jb < 2; ++jb) {
-      const u64 t = J10 ? (jb == 0 ? (u64)(32 * ri + lane) * rb + blk : (u64)M * rb + (u64)(32 * cj + lane) * cb + blk)
-                        : (jb == 0 ? (u64)lane * rb + blk : 32ull * rb + (u64)lane * cb + blk);
-      u32* dst = jb == 0 ? S.rowbits[lane] : S.colbits[lane];
-      if (WS) {
-        const uint4* src = reinterpret_cast<const uint4*>((jb == 0 ? wsr : wsu) + 16 * t);
+      for (int jb = 0; jb < 2; ++jb) {
+        const u64 t = J10 ? (jb == 0 ? (u64)(32 * ri + lane) * rb + blk : (u64)M * rb + (u64)(32 * cj + lane) * cb + blk)
+                          : (jb == 0 ? (u64)lane * rb + blk : 32ull * rb + (u64)lane * cb + blk);
+        u32* dst = jb == 0 ? S.rowbits[lane] : S.colbits[lane];
+        if (WS) {
+          const uint4* src = reinterpret_cast<const uint4*>((jb == 0 ? wsr : wsu) + 16 * t);
 #pragma unroll
-        for (int w = 0; w < 4; ++w) {
-          const uint4 v = ld4e<H1U_L2HINT_WS, H1U_EVF>(src + w);
-          dst[4 * w] = v.x;
-          dst[4 * w + 1] = v.y;
-          dst[4 * w + 2] = v.z;
-          dst[4 * w + 3] = v.w;
-        }
-      } else {
-        u64 s[8];
-        noise_block(S.nm, t, s);
+          for (int w = 0; w < 4; ++w) {
+            const uint4 v = ld4e<H1U_L2HINT_WS, H1U_EVF>(src + w);
+            dst[4 * w] = v.x;
+            dst[4 * w + 1] = v.y;
+            dst[4 * w + 2] = v.z;
+            dst[4 * w + 3] = v.w;
+          }
+        } else {
+          u64 s[8];
+          noise_block(S.nm, t, s);
 #pragma unroll
-        for (int j = 0; j < 8; ++j) {
-          dst[2 * j] = (u32)(s[j] >> 32);
-          dst[2 * j + 1] = (u32)s[j];
+          for (int j = 0; j < 8; ++j) {
+            dst[2 * j] = (u32)(s[j] >> 32);
+            dst[2 * j + 1] = (u32)s[j];
+          }
         }
       }
     }
