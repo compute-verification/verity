@@ -268,24 +268,26 @@ def read_reason(commitment: LiveCommitment, segment: Any, after: bytes, read: by
     return None
 
 
-COINS_FORM = ("a draw's coin evidence is {key, ledger, segment, session}: the verifier's challenger key, the auditor's "
-              "ledger, the draw's coins (Segment.to_json) and the challenger session's files")
+COINS_FORM = ("a draw's coin evidence is {key, ledger, main, pins, segment, session}: the verifier's challenger key, the "
+              "auditor's ledger, the verifier's copy of main's first-parent history, the host's pins log, the draw's "
+              "coins (Segment.to_json) and the challenger session's files")
 
 
 def coins_reason(coins: Any, window: str, after: bytes, read: bytes, verify: Verify) -> str | None:
-    """`read_reason` on the evidence of a draw's coins, `{key, ledger, segment, session}`: the commitment and the
-    family's roots are those of the one session the auditor's ledger opens under the verifier's challenger key for the
-    window whose open root is `window` (`trusted_session_of`), the root the verifier reads from the challenger's signed
-    open of the registration's window (`registration.check`'s `window_root`), never the record's or the evidence's. So
-    a prover picks no window: coins another window's session released after the same commitment are refused, and a
-    prover with sessions in several windows gets one draw, not the best of them. `service.Stream.outcome` hands the
-    evidence to the Lean verifier of record, whose run refuses a draw from the challenger without evidence that holds
-    (`Run.run`'s `select`, code `coins`)."""
-    if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "segment", "session"]:
+    """`read_reason` on the evidence of a draw's coins, `{key, ledger, main, pins, segment, session}`: the commitment
+    and the family's roots are those of the one session the auditor's ledger opens under the verifier's challenger key
+    for the window whose open root is `window`, run from a commit the host's pins log `pins` records on the verifier's
+    copy of main's first-parent line `main` (`trusted_session_of`, through `pinned_session`). `window` is the root the
+    verifier reads from the challenger's signed open of the registration's window (`registration.check`'s
+    `window_root`), never the record's or the evidence's. So a prover picks no window: coins another window's session
+    released after the same commitment are refused, and a prover with sessions in several windows gets one draw, not
+    the best of them. `service.Stream.outcome` hands the evidence to the Lean verifier of record, whose run refuses a
+    draw from the challenger without evidence that holds (`Run.run`'s `select`, code `coins`)."""
+    if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "main", "pins", "segment", "session"]:
         return COINS_FORM
     try:
         commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, ChallengerKey.from_json(coins["key"]),
-                                               coins["session"], verify)
+                                               coins["pins"], coins["main"], coins["session"], verify)
     except CoinError as e:
         return str(e)
     segment = coins["segment"]
