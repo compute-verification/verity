@@ -1,7 +1,8 @@
 """Kernels' producer of vllm's `Served.receipts` (`served_h1/producer.py`, BRIDGE2) against `h1tile.reference`, word for
 word: a call's receipts are (units, 2 (KS + m)) u32, unit u of the call row block u // (N / 32) and column block
 u % (N / 32) of its M slot rows (the served codes, then zero rows) and its weight, at position u0 + u, seeded from the
-run's salt and the call's registered roots, root(a/<K>@<s>) and root(b/<K>). A row block past the served rows has v1's
+run's salt and the call's registered roots, root(a/<K>@<s>) and root(b/<K>): the unit's public row as the verifier
+builds it (`credit.public_table`), which the references are seeded from. A row block past the served rows has v1's
 noise-derived receipt, not zero. Through `Served` (slow: the window Program's real tile unit takes half a minute to
 declare) every call's ``receipt@<c>`` is those receipts' words; and on a GPU with h1u.cu's -hbc build named by
 `VERITY_POUW_H1U_SO` the units kernel gives the same words at Llama-3.1-8B's four linear shapes."""
@@ -37,11 +38,11 @@ def _producer():
 PR = _producer()
 
 
-def _ref(a: np.ndarray, b: np.ndarray, base: int, u: int, roots=(RA, RB)) -> list[int]:
-    """`h1tile.reference`'s receipt of unit u of A [M, K] and B [N, K] s8 at position base + u."""
+def _ref(a: np.ndarray, b: np.ndarray, u: int, position: int, roots=(RA, RB), salt=SALT) -> list[int]:
+    """`h1tile.reference`'s receipt of unit u of A [M, K] and B [N, K] s8 at ``position``."""
     i, j = divmod(u, len(b) // 32)
     return HT.reference((a[32 * i:32 * i + 32].view(np.uint8)).tolist(), (b[32 * j:32 * j + 32].view(np.uint8)).tolist(),
-                        SALT, base + u, roots, pairs=[(0, 0)])[1]
+                        salt, position, roots, pairs=[(0, 0)])[1]
 
 
 class _At(PR.Receipts):
@@ -71,9 +72,17 @@ def test_a_calls_receipts_are_h1tile_reference_in_tile_order_at_its_positions():
     a = np.zeros((64, k), np.int8)
     a[:m] = codes
     for u in range(4):
-        assert got[u].tolist() == _ref(a, w, u0, u), f"unit {u}"
+        assert got[u].tolist() == _ref(a, w, u, u0 + u), f"unit {u}"
     assert got[2:].any(), "a dead row block's v1 receipt is its noise's"
-    assert _ref(a, w, u0, 2) != _ref(a, w, u0 + 1, 2), "a unit's receipt is at its position"
+    assert _ref(a, w, 2, u0 + 2) != _ref(a, w, 2, u0 + 3), "a unit's receipt is at its position"
+
+
+def test_a_public_row_gives_back_the_salt_position_and_roots_it_carries():
+    """`public_fields` inverts `core_check.public_words`, the verifier's public row; a row of another width is refused."""
+    from verity.core.protocols.pouw import core_check as CC
+    assert PR.public_fields(CC.public_words(SALT, 2**40 + 7, (RA, RB))) == (SALT, 2**40 + 7, (RA, RB))
+    with pytest.raises(ValueError, match="public row is"):
+        PR.public_fields(CC.public_words(SALT, 7, (RA, RB))[:-1])
 
 
 def test_a_calls_seeds_take_its_registered_roots_and_refuse_before_they_are():
@@ -103,11 +112,18 @@ def test_a_call_past_the_slot_or_unbound_is_refused():
 
 def _window(producer, shapes, modules, blocks, rows: list[int], steps: int, seed: int, records):
     """An H1 window over ``shapes`` whose step s serves rows[s] rows (later steps empty) with each call's receipts from
-    ``producer(served)``: the run, each call's served codes by index, each linear's weight codes."""
+    ``producer(served)``: the run, each call's served codes by index, each linear's weight codes, each call's receipts as
+    the producer returned them, by index (the native commit keeps no rows), and the producer."""
     from verity_vllm.protocol_options import pouw_h1 as PH
     from verity_vllm.protocol_options import pouw_h1_served as SV
     served = SV.Served(blocks=blocks, window=hashlib.sha512(b"window").digest())
-    made = served.receipts = producer(served)
+    made, made_by = producer(served), {}
+
+    def recorded(call, *args):
+        out = made_by[call.index] = made(call, *args)
+        return out
+
+    served.receipts = recorded
     run = PH.H1Run("t", SALT, modules, shapes, 64, steps, key=bytes([seed + 1]) * 32, served=served)
     made.bind(run)
     rng, g = np.random.default_rng(seed), torch.Generator().manual_seed(seed)
@@ -122,12 +138,28 @@ def _window(producer, shapes, modules, blocks, rows: list[int], steps: int, seed
             call = run.record(w, x, s_a, wt, sw, z=records(x, s_a, wt, sw))
             codes[call.index] = x.numpy()
     run.close()
-    return run, codes, [wt.numpy() for wt, _sw in ws]
+    return run, codes, [wt.numpy() for wt, _sw in ws], made_by, made
 
 
-def _held_to_reference(run, codes, weights, units_of):
+def _registered_receipts(run, made_by, c) -> np.ndarray:
+    """Call c's receipt table's words: `receipt_words` of the receipts the producer returned for it, which the registered
+    ``receipt@<c>`` is the native commit of (its root, under its nonce and the window's open root)."""
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity_vllm.protocol_options import pouw_h1_registered as NR
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    served, rc = run.served, run.served.receipt_table(c.index)
+    words, n = SV.receipt_words(made_by[c.index]), HW.call_units(served.program)[c.index][1]
+    assert words.shape == served.receipt_shape(c.index) == (n, 2 * HT.Layout(32, 32, c.k).sets * 2)
+    tree = NR.commit(served.program_digest, rc, words, run._key, SV.RECEIPT_NONCE + c.index, window=served.root)
+    assert tree.root == served.registered[rc].root, f"call {c.index}'s {rc} is not its receipts' words"
+    return words
+
+
+def _held_to_reference(run, codes, weights, made_by, units_of):
     """Every call's ``receipt@<c>`` is `receipt_words` of h1tile's receipts (of ``units_of(call)``) on its padded codes and
-    weight at its Program positions under the registered roots; returns the units checked, live and dead."""
+    weight, each seeded from its unit's public row as the verifier builds it (`credit.public_table`: the run's salt, its
+    Program position and the registered roots); returns the units checked, live and dead."""
+    from verity.core.protocols.pouw import credit as CR
     from verity.core.protocols.pouw.circuit import h1window as HW
     from verity_vllm.protocol_options import pouw_h1_served as SV
     served, pre, seen = run.served, run.served.program.fn.bindings["PREFIX"], {"live": 0, "dead": 0}
@@ -135,12 +167,15 @@ def _held_to_reference(run, codes, weights, units_of):
     for c in run.calls:
         u0, n = HW.call_units(served.program)[c.index]
         roots = (served.registered[served.a_table(c.index)].root, served.registered[pre + f"b/{c.k}"].root)
-        rows = np.asarray(served.registered[pre + f"receipt@{c.index}"].rows, np.uint16)
-        assert rows.shape == served.receipt_shape(c.index) == (n, 2 * HT.Layout(32, 32, c.k).sets * 2)
+        pub = CR.public_table(served.program_digest, HW.table(served.program, HW.PUBS, c.index), run.salt.hex(),
+                              served.root, u0, n, (roots[0].hex(), roots[1].hex()))[0]
+        rows = _registered_receipts(run, made_by, c)
         a = np.zeros((served.m, c.k), np.int8)
         a[:len(codes.get(c.index, ()))] = codes.get(c.index, np.zeros((0, c.k), np.int8))
         for u in units_of(c, n):
-            want = SV.receipt_words(np.array([_ref(a, weights[c.layer], u0, u, roots)], np.uint32))[0]
+            salt, position, rs = PR.public_fields(pub[u])
+            assert (salt, position, rs) == (run.salt, u0 + u, roots), f"call {c.index} unit {u}'s public row"
+            want = SV.receipt_words(np.array([_ref(a, weights[c.layer], u, position, rs, salt)], np.uint32))[0]
             assert np.array_equal(rows[u], want), f"call {c.index} unit {u}"
             seen["live" if 32 * (u // (c.n // 32)) < c.m else "dead"] += 1
     return seen
@@ -149,13 +184,18 @@ def _held_to_reference(run, codes, weights, units_of):
 @pytest.mark.slow
 def test_each_calls_receipt_table_is_h1tile_reference_through_served():
     """Through `Served` with the window Program's real tile unit (`h1window.tile_unit`) and the torch chain: every unit of
-    every call (a step of 20 served rows, its second row block dead, then an empty step), word for word."""
+    every call (a step of 20 served rows, its second row block dead, then an empty step), word for word; and `check` of
+    every kept call, its reference seeded from the verifier's public rows, finds every unit's row the producer's."""
     from verity_vllm.engine import int8_ops as OPS
     shapes, blocks = [(64, 64), (32, 64), (32, 128)], (0, 0, 1)
-    run, codes, ws = _window(lambda s: PR.Receipts(s), shapes, {0: "q", 1: "k", 2: "o"}, blocks, [20], 2, 3,
-                             lambda x, s_a, wt, sw: OPS.scaled_mm_zy(x, s_a, wt, sw, 64)[1])
-    seen = _held_to_reference(run, codes, ws, lambda c, n: range(n))
+    run, codes, ws, made_by, made = _window(lambda s: PR.Receipts(s, keep=lambda c: True), shapes,
+                                            {0: "q", 1: "k", 2: "o"}, blocks, [20], 2, 3,
+                                            lambda x, s_a, wt, sw: OPS.scaled_mm_zy(x, s_a, wt, sw, 64)[1])
+    seen = _held_to_reference(run, codes, ws, made_by, lambda c, n: range(n))
     assert seen == {"live": 4, "dead": 12}
+    got = [v for c in sorted(made.kept) for v in PR.check(made.kept[c], list(range(len(made_by[c])))).values()]
+    assert sorted(made.kept) == [c.index for c in run.calls] and len(got) == 16
+    assert all(v["ok"] and v["pub"] for v in got) and sum(v["live"] for v in got) == 4
 
 
 def _kernel():
@@ -181,8 +221,9 @@ def test_the_units_kernel_is_h1tile_reference_at_llama_8b_shapes_through_served(
     def zeros(x, s_a, wt, sw):
         return torch.zeros(PH.units(x.shape[1], wt.shape[0], 64), E.ZY_BYTES, dtype=torch.uint8)
 
-    run, codes, ws = _window(lambda s: PR.Receipts(s, units=units), LLAMA, {0: "qkv", 1: "o", 2: "gate_up", 3: "down"},
-                             (0, 1, 2, 3), [64, 20], 3, 5, zeros)
+    run, codes, ws, made_by, _made = _window(lambda s: PR.Receipts(s, units=units), LLAMA,
+                                             {0: "qkv", 1: "o", 2: "gate_up", 3: "down"}, (0, 1, 2, 3), [64, 20], 3, 5,
+                                             zeros)
     served, pre = run.served, run.served.program.fn.bindings["PREFIX"]
     assert not served.refused, served.refused
     for c in run.calls:
@@ -191,10 +232,10 @@ def test_the_units_kernel_is_h1tile_reference_at_llama_8b_shapes_through_served(
         a = torch.zeros(served.m, c.k, dtype=torch.int8, device="cuda")
         a[:c.m] = torch.from_numpy(codes.get(c.index, np.zeros((0, c.k), np.int8))).cuda()
         want = SV.receipt_words(RC.call_receipts(RC.Call(a, torch.from_numpy(ws[c.layer]).cuda()), run.salt, u0, *roots))
-        assert np.array_equal(np.asarray(served.registered[pre + f"receipt@{c.index}"].rows, np.uint16), want), c.index
+        assert np.array_equal(_registered_receipts(run, made_by, c), want), c.index
 
     def ends(c, n):
         cb = c.n // 32
         return sorted({u for i in range(n // cb) for u in (i * cb, (i + 1) * cb - 1)})
 
-    assert _held_to_reference(run, codes, ws, ends) == {"live": 24, "dead": 24}
+    assert _held_to_reference(run, codes, ws, made_by, ends) == {"live": 24, "dead": 24}

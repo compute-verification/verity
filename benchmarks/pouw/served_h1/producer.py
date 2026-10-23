@@ -12,7 +12,9 @@ Call c of the window (`pouw_h1.Call`) at contraction K, as the Program's units r
 * its seeds (`seeds.seed`, `seeds.receipt_seed`) take the window Program's salt (`H1Run.salt`) and the call's roots
   (`Receipts.roots`): root(A) its step's A table ``a/<K>@<s>``'s and root(B) ``b/<K>``'s, the Registered row/v2 roots
   `Served` committed (rows under `audit.hm96_salt`, domains `registered.domain`), not served_h1's AROW roots
-  (`commit.py`). `Served` asks for a step's receipts of K at its last call of K, once both are registered;
+  (`commit.py`). `Served` asks for a step's receipts of K at its last call of K, once both are registered. Salt,
+  position and roots are unit u0 + t's public row, row t of the call's ``pub@<c>`` that the verifier builds itself
+  (`credit.public_table`, `Receipts.public`), and `check` seeds its reference from those rows (`public_fields`);
 * the unit is v1's (`h1tile.PouwH1Tile`, `h1window.tile_unit`'s): no admit gating, so a row block past the served rows
   has the receipt its zero codes and its noise give it, not v4's zero receipt.
 
@@ -35,6 +37,8 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import receipts as RC  # noqa: E402
 
+from verity.core.protocols.pouw import core_check as CC  # noqa: E402
+from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
@@ -51,6 +55,17 @@ def seed_record(salt: bytes, root_a: bytes, root_b: bytes) -> np.ndarray:
         if len(v) != 64:
             raise ValueError(f"a unit's seeds take a 64-byte {name}, not {len(v)} bytes")
     return np.concatenate([_be(SD.SEED_TAG), _be(SD.RECEIPT_TAG), _be(salt), _be(root_a), _be(root_b)]).view(np.int64)
+
+
+def public_fields(words: Any) -> tuple[bytes, int, tuple[bytes, bytes]]:
+    """A unit's public row (`core_check.public_words`, a ``row/v2`` row of 16-bit leaves) -> the salt, position and
+    (root(A), root(B)) it carries (`core_check.public_row`), its seeds' inputs. ValueError on a row of another width."""
+    if len(words) * 16 != CC.PUBLIC_ROW_BITS:
+        raise ValueError(f"a public row is {CC.PUBLIC_ROW_BITS // 16} 16-bit words, not {len(words)}")
+    x = b"".join(int(w).to_bytes(2, "little") for w in words)
+    x = b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
+    s = len(x) - 8 - 128
+    return x[:s], int.from_bytes(x[s:s + 8], "big"), (x[s + 8:s + 72], x[s + 72:])
 
 
 def _stream(t: torch.Tensor) -> int:
@@ -145,6 +160,14 @@ class Receipts:
                              "registered yet: a step's receipts of K are asked for at its last call of K")
         return s.registered[names[0]].root, s.registered[names[1]].root
 
+    def public(self, call: Any) -> list[list[int]]:
+        """Call ``call``'s public rows as the verifier builds them (`credit.public_table`, the statement's ``pub`` port):
+        row t unit u0 + t's, the window Program's salt, u0 + t and the call's roots (`roots`)."""
+        s, (u0, n), (ra, rb) = self.served, self.start(call), self.roots(call)
+        rows, _salts, _reg = CR.public_table(s.program_digest, HW.table(s.program, HW.PUBS, call.index), self.run.salt.hex(),
+                                             s.root, u0, n, (ra.hex(), rb.hex()))
+        return rows
+
     def start(self, call: Any) -> tuple[int, int]:
         """Call ``call``'s first unit of the window Program and its units (`h1window.call_units`): its units' positions are
         u0 .. u0 + n - 1."""
@@ -197,21 +220,25 @@ class Receipts:
             out = RC.call_receipts(RC.Call(a, b), salt, u0, ra, rb)
         if self._keep is not None and self._keep(call):
             self.kept[call.index] = {"a": a.cpu(), "b": b.cpu(), "salt": salt, "base": u0, "roots": (ra, rb),
-                                     "receipts": out.copy(), "m": len(codes)}
+                                     "receipts": out.copy(), "m": len(codes), "pub": self.public(call)}
         return out
 
 
 def check(kept: dict[str, Any], units: list[int]) -> dict[str, Any]:
-    """A kept call's (`Receipts.kept`) receipts of ``units`` against `h1tile.reference` on the same operands, salt,
-    positions and roots, word for word: ``{unit: {"live": its row block holds a served row, "ok": bool}}``."""
+    """A kept call's (`Receipts.kept`) receipts of ``units`` against `h1tile.reference` on the same operands, seeded from
+    each unit's public row as the verifier builds it (``pub``, `public_fields`), word for word: ``{unit: {"live": its row
+    block holds a served row, "pub": the row is the producer's salt, position and roots, "ok": bool}}``."""
     ncb, out = kept["b"].shape[0] // RC.C_, {}
     for u in units:
         i, j = divmod(u, ncb)
         a = (kept["a"][RC.R * i:RC.R * (i + 1)].to(torch.int64) & 0xFF).tolist()
         b = (kept["b"][RC.C_ * j:RC.C_ * (j + 1)].to(torch.int64) & 0xFF).tolist()
-        _z, want = HT.reference(a, b, kept["salt"], kept["base"] + u, kept["roots"], pairs=[(0, 0)])
-        out[u] = {"live": RC.R * i < kept["m"], "ok": kept["receipts"][u].tolist() == want}
+        salt, position, roots = public_fields(kept["pub"][u])
+        _z, want = HT.reference(a, b, salt, position, roots, pairs=[(0, 0)])
+        out[u] = {"live": RC.R * i < kept["m"],
+                  "pub": (salt, position, roots) == (kept["salt"], kept["base"] + u, kept["roots"]),
+                  "ok": kept["receipts"][u].tolist() == want}
     return out
 
 
-__all__ = ["Receipts", "Units", "check", "seed_record"]
+__all__ = ["Receipts", "Units", "check", "public_fields", "seed_record"]

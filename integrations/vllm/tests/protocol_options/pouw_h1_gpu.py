@@ -1005,12 +1005,14 @@ def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) ->
 
 
 def receipts_check(made: Any) -> dict[str, Any]:
-    """The kept calls' receipts (`receipts_producer`) at the first unit of each row block against `h1tile.reference`, word
-    for word (`producer().check`); ``ok`` needs live and dead row blocks both."""
+    """The kept calls' receipts (`receipts_producer`) at the first unit of each row block against `h1tile.reference`
+    seeded from the unit's public row as the verifier builds it, word for word (`producer().check`; a unit is bad unless
+    that row is also the producer's salt, position and roots); ``ok`` needs live and dead row blocks both."""
     rows = []
     for c, kept in sorted(made.kept.items()):
         ncb = kept["b"].shape[0] // 32
-        rows += [(c, u, v["live"], v["ok"]) for u, v in producer().check(kept, list(range(0, len(kept["receipts"]), ncb))).items()]
+        rows += [(c, u, v["live"], v["ok"] and v["pub"])
+                 for u, v in producer().check(kept, list(range(0, len(kept["receipts"]), ncb))).items()]
     live = sum(r[2] for r in rows)
     return {"calls": sorted(made.kept), "units": len(rows), "live": live, "dead": len(rows) - live,
             "bad": [[c, u] for c, u, _live, ok in rows if not ok][:20],
