@@ -443,12 +443,13 @@ def table_reads(program: Program, tp: Any, u: int, steps: int) -> dict[str, tupl
 
 def _shapes(program: Program, call: int, steps: int) -> dict[str, tuple[int, int]]:
     """Call ``call``'s tables and the weights' it reads, each ``(rows, words)``, a row's 16-bit words: its step's A table of
-    its K (M rows for each of the step's calls of K), its z table and receipts (one row a unit of the call; 0 words when
-    the unit's receipt is no whole 16-bit words, `credit.shape_of`'s rule) and ``b/<K>``."""
+    its K (M rows for each of the step's calls of K), its z table and receipts (one row a unit of the call, the unit's
+    receipt's bits as `statement_rows` counts a row's; 0 words when they are no whole 16-bit words, `credit.shape_of`'s
+    rule) and ``b/<K>``."""
     S, sig = program.fn.S(), dict(program.fn.signature()[0])
     k, n = _k(S)[S.CALLS[call][0]], call_units(program)[call][1]
     b = f"{S.PREFIX}b/{k}"
-    receipt = dict(dict(S.TILES)[k].signature()[1].fields)[OUTPUTS[0]].leaves
+    receipt = sum(dict(dict(S.TILES)[k].signature()[1].fields)[OUTPUTS[0]].leaf_widths())
     return {table(program, "a", call, steps): (S.M * step_of(program, call, steps)[1], sig[f"{S.PREFIX}a/{k}"].elem.leaves // 16),
             table(program, "zy", call): (n, sig[f"{S.PREFIX}zy"].elem.leaves // 16),
             table(program, RECEIPTS, call): (n, receipt // 16 if receipt % 16 == 0 else 0),
