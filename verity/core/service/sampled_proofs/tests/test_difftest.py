@@ -9,7 +9,8 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 `OwnRandomness` over the given bytes, for the `select` piece the challenger's draw from a Spec's selection rule on
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
 `slots` piece that draw in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
-nodes (`slots`), for `check_public` and `check_verdicts` the proof service's own (`service.check_public`,
+nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
+arbitrary calls tables, for `check_public` and `check_verdicts` the proof service's own (`service.check_public`,
 `service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
 `Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
 programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
@@ -52,8 +53,9 @@ import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
-from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, partition as P, produced as PD,
-                                                            registered as G, registration as R)
+from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
+                                                            partition as P, produced as PD, registered as G,
+                                                            registration as R)
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -869,6 +871,51 @@ def bernoulli_bound(j):
     if not 0 <= p <= 1 or not 0 < delta < 1:
         raise D.Reject("p is not in [0, 1] or delta not in (0, 1)")
     return {"bound": Bernoulli(p).count_bound(j["population"], delta)}
+
+
+def _hidden_width(j) -> int:
+    if not _nat(j["width"]) or j["width"] < 1:
+        raise D.Reject("width is not a positive integer")
+    return j["width"]
+
+
+def _hidden_nats(x, what: str) -> list[int]:
+    if not isinstance(x, list) or not all(_nat(n) for n in x):
+        raise D.Reject(f"{what} is not a list of natural numbers")
+    return x
+
+
+def _hidden_calls(x) -> list[HD.Call]:
+    if not isinstance(x, list) or not all(isinstance(c, list) and len(c) == 2 and all(_nat(n) for n in c) for c in x):
+        raise D.Reject("calls is not a list of [offset, rows] of natural numbers")
+    return [HD.Call(*c) for c in x]
+
+
+def _hidden_witness(w):
+    return None if w is None else list(w)
+
+
+def hidden_offsets(j):
+    j = _json(j)
+    _exactly(j, {"rows", "width"}, "the input")
+    width, rows = _hidden_width(j), _hidden_nats(j["rows"], "rows")
+    return {"offsets": HD.offsets(width, rows), "total": HD.total(width, rows)}
+
+
+def hidden_locate(j):
+    j = _json(j)
+    _exactly(j, {"calls", "positions", "width"}, "the input")
+    width, calls, positions = _hidden_width(j), _hidden_calls(j["calls"]), _hidden_nats(j["positions"], "positions")
+    return {"located": [_hidden_witness(HD.locate(width, calls, r)) for r in positions]}
+
+
+def hidden_witness(j):
+    j = _json(j)
+    _exactly(j, {"call", "calls", "position", "width"}, "the input")
+    width, calls = _hidden_width(j), _hidden_calls(j["calls"])
+    if not _nat(j["call"]) or not _nat(j["position"]):
+        raise D.Reject("call or position is not a natural number")
+    return {"witness": _hidden_witness(HD.witness(width, calls, j["call"], j["position"]))}
 
 
 def _fixed_audit():
@@ -2720,13 +2767,46 @@ def fleet_cases(draw) -> dict:
 
 FLEET = D.Port(PIECES, "fleet", fleet, st.one_of(fleet_cases(), fleet_cases(), JSON), package=PACKAGE)
 
+@st.composite
+def hidden_cases(draw, piece: str):
+    """A width, a calls table, the honest one over drawn rows or any (overlapping, out of order, with gaps), and
+    positions inside and past it; one field malformed or a key changed now and then."""
+    width = draw(st.integers(1, 5)) if not _one_in(draw, 10) else draw(st.sampled_from([0, -1, True, "2", None]))
+    rows = draw(st.lists(st.integers(0, 6), max_size=6))
+    if draw(st.booleans()):
+        calls = [list(c) for c in HD.table(width if _nat(width) and width else 1, rows)]
+    else:
+        calls = draw(st.lists(st.tuples(st.integers(0, 40), st.integers(0, 6)).map(list), max_size=6))
+    end = max([o + m * (width if _nat(width) else 1) for o, m in calls], default=0) + 3
+    case = {"hidden_offsets": {"rows": rows, "width": width},
+            "hidden_locate": {"calls": calls, "positions": draw(st.lists(st.integers(0, end), max_size=8)), "width": width},
+            "hidden_witness": {"call": draw(st.integers(0, len(calls) + 1)), "calls": calls,
+                               "position": draw(st.integers(0, end)), "width": width}}[piece]
+    if _one_in(draw, 10):
+        key = draw(st.sampled_from(sorted(case)))
+        case[key] = (draw(MALFORMED) if not isinstance(case[key], list) or not case[key] or _one_in(draw, 2)
+                     else [*case[key][:-1], draw(st.sampled_from([-1, True, "1", [1], [1, -1], [True, 2], [1, 2, 3]]))])
+    elif _one_in(draw, 30):
+        del case[draw(st.sampled_from(sorted(case)))]
+    elif _one_in(draw, 30):
+        case["extra"] = 1
+    return case
+
+
+HIDDEN_OFFSETS = D.Port(PIECES, "hidden_offsets", hidden_offsets, st.one_of(*[hidden_cases("hidden_offsets")] * 4, JSON),
+                        package=PACKAGE)
+HIDDEN_LOCATE = D.Port(PIECES, "hidden_locate", hidden_locate, st.one_of(*[hidden_cases("hidden_locate")] * 4, JSON),
+                       package=PACKAGE)
+HIDDEN_WITNESS = D.Port(PIECES, "hidden_witness", hidden_witness, st.one_of(*[hidden_cases("hidden_witness")] * 4, JSON),
+                        package=PACKAGE)
+
 pieces = D.server_fixture(DECODE)
 
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
-              (BERNOULLI_BOUND, 500), (VERDICT, 300),
+              (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400)]
 
