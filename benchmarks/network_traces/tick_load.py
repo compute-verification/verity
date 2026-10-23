@@ -101,8 +101,10 @@ def publisher(timing: dict, log: dict, buckets: int) -> dict:
     the rest's."""
     calls = [c for c in timing["calls"] if "end" in c]
     spans = sorted((c["start"], c["end"]) for c in calls)
-    ms = lambda xs: {"n": len(xs), "median_ms": _quantile(xs, 0.5) if xs else None,  # noqa: E731
-                     "p99_ms": _quantile(xs, 0.99) if xs else None, "max_ms": max(xs) if xs else None}
+    def ms(xs: list[float]) -> dict:
+        return {"n": len(xs), "median_ms": _quantile(xs, 0.5) if xs else None,
+                "p99_ms": _quantile(xs, 0.99) if xs else None, "max_ms": max(xs) if xs else None}
+
     out = {"switchinterval_s": timing["switchinterval"], "calls": len(calls),
            "wall": ms([(c["end"] - c["start"]) * 1000 for c in calls]),
            "keep_cpu": ms([c["keep_cpu"] * 1000 for c in calls]),
