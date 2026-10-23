@@ -414,7 +414,10 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     prompts = fill_prompts(tok, decl.slots)
     doc["prompts"] = prompts
     lens = tuple(len(tok.encode(p)) for p in SERVE_H1_PROMPTS)
-    doc["serve_h1"] = {"prompt_lens": list(lens), "u": str(PH.Static(lens, decl.max_tokens, decl.rows, decl.steps).u)}
+    try:
+        doc["serve_h1"] = {"prompt_lens": list(lens), "u": str(PH.Static(lens, decl.max_tokens, decl.rows, decl.steps).u)}
+    except ValueError as e:
+        doc["serve_h1"] = {"prompt_lens": list(lens), "u": None, "why": str(e)}
     cap, served_steps = decl.max_tokens, decl.max_tokens
     gpu_peak()
     t0 = time.monotonic()
