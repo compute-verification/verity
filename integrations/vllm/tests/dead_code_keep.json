@@ -26,6 +26,7 @@
   "verity_vllm.program.registry.quarantine.act.silu_mul_difftest": "properties-admission adapter of SiluMul_v2, loaded by --adapter name",
   "verity_vllm.program.registry.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py",
   "verity_vllm.pipeline.registration_log": "the registration log nci-check's full check reads, held to nci_reference.check_baseline by tests/pipeline/test_registration_log.py ahead of its CLI, which lands with the served weights' value source",
-  "verity_vllm.commit.registered_rows": "R7's rows committed from an array, held to Registered.commit by tests/commit/test_registered_rows.py; registration_log's (kept above)"
+  "verity_vllm.commit.registered_rows": "R7's rows committed from an array, held to Registered.commit by tests/commit/test_registered_rows.py; registration_log's (kept above)",
+  "verity_vllm.acquire.h1_commit": "the Commit's install in H1's serving engine (ROOTS1, VLLM-73), run by the GPU harness tests/protocol_options/pouw_h1_gpu.py --commit and checked by tests/protocol_options/test_pouw_h1_commit.py ahead of a production caller"
  }
 }
