@@ -14,6 +14,10 @@ Its parameters are the prompt (and a stochastic request's seed and splits) once,
 decoder reads them (`rank<r>.schedule`), then each rank's weights, one parameter per field of its weights record
 (`rank<r>.weights[i]`, as a workload Program's `shared.weights[i]` are), bound at registration and marked θ. It returns every
 rank's samples, rank-major: each rank samples from the same gathered logits and feeds its own sample to its next forward.
+
+The body is one Definition (`NodeResult.node_fn`), and the Program's function (`Node`, bound to it) calls it once, so the root is
+the parameters' input nodes and one Call. `NciCheck.Desc` summarizes a Definition once and keeps a root node's reads as pieces of
+gates, so it reads the node through that Call; a root holding the body's ~10⁷ nodes itself would be ~10¹⁰ pieces on GLM-5.3 B1.
 `NodeResult.spans` says which rank emitted each run of the body's nodes.
 """
 from __future__ import annotations
@@ -22,6 +26,7 @@ import hashlib
 import threading
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
@@ -38,15 +43,18 @@ from .phi import Phi
 class NodeResult(BuildResult):
     world: int = 1
     theta: tuple[str, ...] = ()
+    #: the body's Definition, which the root calls once
+    node_fn: Any = None
     #: (rank, first body node, end) of each run of the body's nodes, in body order
     spans: list[tuple[int, int, int]] = field(default_factory=list)
 
     def summary(self) -> dict:
-        return {**super().summary(), "world": self.world, "theta_parameters": len(self.theta), "spans": len(self.spans)}
+        return {**super().summary(), "world": self.world, "theta_parameters": len(self.theta), "node_fn": self.node_fn.id,
+                "body_nodes": len(self.node_fn.body.nodes), "spans": len(self.spans)}
 
     def rank_of(self) -> list[int]:
         """The rank that emitted each body node."""
-        out = [-1] * len(self.program.fn.body.nodes)
+        out = [-1] * len(self.node_fn.body.nodes)
         for r, lo, hi in self.spans:
             out[lo:hi] = [r] * (hi - lo)
         return out
@@ -56,7 +64,7 @@ def check_ranks(phi: Phi, node: NodeResult, **shape) -> list[dict]:
     """Each rank's run of `node`'s body against its own rank Program's body (`build.build_program`, built one rank at a time):
     node for node, the same form and Definition. Raises on the first rank that differs."""
     from .build import build_program
-    rank_of, nodes, out = node.rank_of(), node.program.fn.body.nodes, []
+    rank_of, nodes, out = node.rank_of(), node.node_fn.body.nodes, []
     for r in range(node.world):
         t0 = time.time()
         own = build_program(Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": r}}), node.wrapper, with_desc=False, **shape)
@@ -272,7 +280,11 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
                                conformance="predicted: each rank's forward is its rank Program's (predict.build)", register=False)
     sd = bind(defn, SRC=src_static)
     sd.set_body(body)
-    program = Program(sd, registered=theta, theta=theta)
+    node = CompositeDefinition("Node", 1, ("body",), lambda S: S.body.signature(),
+                               lambda B, S, *args: B.call(S.body, *args, name="node"),
+                               doc="a tensor-parallel node's Program function: its body, the ranks' forwards joined, called once",
+                               conformance="predicted: its body's", register=False)
+    program = Program(bind(node, body=sd), registered=theta, theta=theta)
     timings = {"body_s": round(t_body - t0, 3), "program_s": round(time.time() - t_body, 3)}
     desc = digest = None
     if with_desc:
@@ -281,5 +293,6 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
         digest = program_digest(desc)
         timings["encode_digest_s"] = round(time.time() - t2, 3)
     timings["total_s"] = round(time.time() - t0, 3)
-    return NodeResult(wrapper=wrapper, program=program, digest=digest or "", desc=desc, function=sd.id, n_root_nodes=len(body.nodes),
-                      timings=timings, world=world, theta=theta, spans=list(lockstep.spans))
+    return NodeResult(wrapper=wrapper, program=program, digest=digest or "", desc=desc, function=program.fn.id,
+                      n_root_nodes=len(program.root.body.nodes), timings=timings, world=world, theta=theta, node_fn=sd,
+                      spans=list(lockstep.spans))
