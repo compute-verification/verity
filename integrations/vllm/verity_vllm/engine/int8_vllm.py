@@ -137,7 +137,16 @@ class Int8ExpertsMethod(FusedMoEMethodBase):
         if getattr(layer, "apply_router_weight_on_input", False):
             raise ValueError(f"{self.prefix}: the int8 experts weight each expert's output, not its input")
         self.calls += 1
-        return X.forward(self.sites, x, topk_weights, topk_ids)
+        try:
+            return X.forward(self.sites, x, topk_weights, topk_ids)
+        except ValueError:  # DEBUG VLLM-75: remove
+            ids = topk_ids.reshape(-1).to(torch.int64)
+            print(f"[moe-debug] {self.prefix} call {self.calls}: x {tuple(x.shape)} finite={bool(torch.isfinite(x).all())} "
+                  f"ids {tuple(topk_ids.shape)} {topk_ids.dtype} min={int(ids.min())} max={int(ids.max())} "
+                  f"bad={int(((ids < 0) | (ids >= len(self.sites) // 2)).sum())} uniq_bad={sorted(set(ids[(ids < 0) | (ids >= len(self.sites) // 2)].tolist()))[:8]} "
+                  f"w finite={bool(torch.isfinite(topk_weights).all())} w[:2]={topk_weights[:2].tolist()} ids[:2]={topk_ids[:2].tolist()}",
+                  flush=True)
+            raise
 
 
 class Int8ExactConfig(QuantizationConfig):
