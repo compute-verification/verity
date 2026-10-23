@@ -91,6 +91,8 @@ EOF
   for n in $names; do
     echo "    research deploy install $n --by infra --ref $REF --apply"
     echo "    research pods ssh $n -- 'cd /etc/systemd/system && for t in vy-*.timer; do sudo systemctl enable --now \$t; done'   # install enables none"
+    echo "    research pods ssh vy-nebius-2 -- 'cat ~/.ssh/vy-cluster' | research pods ssh $n -- 'umask 077; cat > ~/.ssh/vy-cluster'   # peers' key, node to node; .pub too"
+    echo "    research pods ssh $n -- 'echo from=\\\"IPS\\\" \$(cat ~/.ssh/vy-cluster.pub) >> ~/.ssh/authorized_keys'   # IPS: each node's egress (curl ifconfig.me)"
     echo "    research run --on $n --project verity --source . --cwd source -- bash tools/verity/check/pod_setup.sh"
   done
   echo
