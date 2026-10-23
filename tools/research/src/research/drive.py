@@ -86,6 +86,11 @@ ERROR_RE = re.compile(r"^ERROR ([^\s:]+\.py)", re.M)
 #: to that package
 LEAN_AUDIT_RE = re.compile(r"^AUDIT \S*?/lean-audit-scratch-[^/\s]+/(\S+?): FAIL", re.M)
 LEAN_ERROR_RE = re.compile(r"^\s*error: (\S+?\.lean):\d+", re.M)
+#: the audit's own failures under its `AUDIT .../PKG: FAIL` line: a file no root imports (relative to PKG), and a module that
+#: imports outside its layer (22-23 Oct: #3215's orphan and #3140's Credit imports named no file drive matched, so it resent
+#: their trains instead of ejecting the one PR)
+LEAN_ORPHAN_RE = re.compile(r"^\s+orphan: (\S+?\.lean) is not imported")
+LEAN_LAYERS_RE = re.compile(r"^\s+layers: ([A-Za-z][\w.]*) imports ")
 #: a run's or a step's exit that a kill gave, not a failure of what it checked: SIGHUP, SIGKILL, SIGTERM as 128+N, or a signal
 KILLED_RC = (129, 137, 143)
 #: what the Lean check says of a process of its own that was killed (`tools/verity/lean/check.py`: the replay, `--fresh`)
@@ -420,14 +425,19 @@ def under(f: str, paths: list[str]) -> bool:
 
 
 def lean_errors(log: str) -> set[str]:
-    """The repository paths of the Lean files lean-audit's ``log`` reports errors in: each `error: FILE.lean:LINE` after an
-    `AUDIT .../PKG: FAIL` line, FILE relative to PKG."""
+    """The repository paths of the Lean files lean-audit's ``log`` reports errors in: each `error: FILE.lean:LINE`, each
+    `orphan: FILE.lean` and the module of each `layers: MODULE imports ...` after an `AUDIT .../PKG: FAIL` line, FILE relative to
+    PKG."""
     out, pkg, failures = set(), None, False
     for line in log.splitlines():
         if m := LEAN_AUDIT_RE.match(line):
             pkg, failures = m[1], False
-        elif pkg and (m := LEAN_ERROR_RE.match(line)):
+        elif pkg and ((m := LEAN_ERROR_RE.match(line)) or (m := LEAN_ORPHAN_RE.match(line))):
             out.add(os.path.normpath(os.path.join(pkg, m[1])))
+        elif pkg and (m := LEAN_LAYERS_RE.match(line)):
+            parts = m[1].split(".")
+            root = os.path.dirname(pkg) if parts[0] == os.path.basename(pkg) else pkg
+            out.add(os.path.normpath(os.path.join(root, *parts) + ".lean"))
         elif pkg and "Some required targets logged failures:" in line:
             failures = True                                 # lake's own list: the step's log keeps it when the errors scroll by
         elif pkg and failures and (m := re.match(r"^\s*- ([A-Za-z][\w.]*)\s*$", line)):
