@@ -41,7 +41,8 @@ machine) has no ledger: its log is read under the key its run wrote (`session_of
   log or no copy of main, no session is pinned or credited;
 - *bound*: the registered store is the model's (`bound_check`, the run's, so every session's): the verifier bound it
   (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose payload root isn't that of the store the
-  pinned checkpoint lays out (`store_layout`), the binding's root is the registration's, and its model, name and
+  pinned checkpoint lays out (`remote_bandwidth.store`, in the tree *credited* names, so the period's circuit commits to
+  the code that decided it), the binding's root is the registration's, and its model, name and
   checkpoint_sha512, is the one the audit's period signs (its open's `model`), or with no period's, `--model-pin`'s.
   With neither, no session is bound.
 
@@ -68,9 +69,9 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
 import challengers as CH  # noqa: E402
-import store_layout  # noqa: E402
 import verifier as V  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, coins  # noqa: E402
+from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
 
@@ -168,7 +169,7 @@ def shares(session: dict, registration: dict, host_bytes: int, ingress: tuple[fl
 
 def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     """Whether the run's registered store is `model`'s ({name, checkpoint_sha512}, from `source`): the verifier's
-    binding (verifier.json's `binding`, `store_layout.Binding.record`) held the hello's payload root to the root of the
+    binding (verifier.json's `binding`, `remote_bandwidth.store.Binding.record`) held the hello's payload root to the root of the
     store the pinned checkpoint lays out under the verifier's payload key, that root is the registration's, and the
     binding's model is `model`."""
     b, root = v.get("binding"), (v.get("registration") or {}).get("payload_root")
@@ -523,7 +524,7 @@ def main(argv: list[str] | None = None) -> int:
                     "(CMP-74)")
     ap.add_argument("--model-pin", type=Path, metavar="FILE",
                     help="the model the store must be bound to when the audit's period signs none: a pin in the "
-                         "auditor's model registry's shape (`store_layout.read_pin`); without either no session is "
+                         "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either no session is "
                          "bound")
     ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
     ap.add_argument("--lane", default=LANE)
@@ -536,8 +537,8 @@ def main(argv: list[str] | None = None) -> int:
     model = None
     if a.model_pin is not None:
         try:
-            p = store_layout.read_pin(a.model_pin)
-        except store_layout.Refused as e:
+            p = rstore.read_pin(a.model_pin)
+        except rstore.Refused as e:
             raise SystemExit(f"auditor_line: {e}") from None
         model = {"name": p["name"], "checkpoint_sha512": p["checkpoint_sha512"]}
     doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane, peer=a.peer,

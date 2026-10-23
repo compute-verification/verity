@@ -50,7 +50,7 @@ CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
 PINS = [pin_line("d" * 40, "e" * 40, "2026-10-20T08:00:00Z"), pin_line(PIN, "f" * 40, "2026-10-21T00:30:00Z")]
 #: the auditor's first-parent list of main, newest first: both pins on it
 MAIN = ["f" * 40, PIN, "e" * 40, "d" * 40]
-#: the model the store is bound to (`store_layout`'s pin)
+#: the model the store is bound to (`remote_bandwidth.store`'s pin)
 MODEL = {"name": "synthetic-bf16", "checkpoint_sha512": "ab" * 64}
 
 
