@@ -50,7 +50,9 @@ batch, so it admits per round; the fill workload admits in round 0 only.
 the trees and `pouw_h1_served.register`'s outcome (`served_check`). With ``--weights-key FILE`` the weights' ``b/<K>`` are
 the period's (`pouw_h1_served.Weights`, registered from the served model under that key before the salt), and
 ``--weights-only OUT`` registers them, writes their root (the period-open's ``--weights-root``) and serves nothing.
-``pouw_h1_rehearsal.py`` runs it all against infra's gate.
+``pouw_h1_rehearsal.py`` runs it all against infra's gate. ``--baseline-h1`` (fill, with ``--served``) serves an H1 window
+without `Served` first, in the solo window's place, so one engine measures plain, H1 and H1 with its registered tables;
+each window records its host RSS, and a served one its registration's seconds a step (``registered_s``, VLLM-76).
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
 GPU is held only while it serves: the serving process records what only it sees (`served_measures`), saves the window,
@@ -62,6 +64,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import resource
 import hashlib
 import json
 import os
@@ -414,7 +417,19 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
 
     def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
         nonlocal layers
+        rss0 = rss_gib()
         served = SV.Served(prover=a.prover_dir, weights_key=wkey) if a.served and name == "fill" else None
+        registered_s: dict[int, float] = {}
+        if served is not None and not a.handoff:
+            commit = served.commit
+
+            def timed(run: Any, call: Any, *rest: Any) -> dict[str, str]:
+                t = time.monotonic()
+                try:
+                    return commit(run, call, *rest)
+                finally:
+                    registered_s[call.step] = registered_s.get(call.step, 0.0) + time.monotonic() - t
+            served.commit = timed
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
@@ -444,6 +459,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             end = time.monotonic()
             serving[0] = False
             out.update(served_measures(got, want, cap, served_steps, t0, end, stamps))
+            if served is not None and not a.handoff:
+                out["registered_s"] = [round(registered_s.get(s, 0.0), 3) for s in range(decl.steps)]
+                del served.commit
             if a.handoff:
                 comp.installed[0].release = None
             else:
@@ -455,19 +473,34 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         if a.handoff:
             out["hook_bad"] = bad[:20]
             return out
-        return released(name, h1, out, served, tdir, bool(a.challenger))
+        out = released(name, h1, out, served, tdir, bool(a.challenger))
+        out["rss_gib"] = {"start": rss0, "end": rss_gib(),
+                          "peak": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
+        return out
 
+    if a.baseline_h1:
+        doc["h1_baseline"] = window("baseline", plain, outdir / "baseline")
     doc["h1"] = window("fill", plain, outdir)
     if a.handoff:
         return hand_off(pouw.h1_run(entry_name), a, doc)
     if a.challenger:
         doc["h1_solo"] = {"skipped": "the challenger serves one session, the 64's window"}
+    elif a.baseline_h1:
+        doc["h1_solo"] = {"skipped": "--baseline-h1 serves the H1 window without Served in its place"}
     else:
         try:
             doc["h1_solo"] = window("solo", plain_solo, outdir / "solo")
         except Exception as e:  # noqa: BLE001
             doc["h1_solo"] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:2000]}
     return fill_record(doc, outdir)
+
+
+def rss_gib() -> float:
+    """This process's resident set now, GiB."""
+    for line in Path("/proc/self/status").read_text().splitlines():
+        if line.startswith("VmRSS:"):
+            return round(int(line.split()[1]) / 2**20, 2)
+    return -1.0
 
 
 def served_measures(got: list[dict[str, Any]], want: list[dict[str, Any]], cap: int, served_steps: int, t0: float, end: float,
@@ -603,7 +636,9 @@ def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
     """The window's registered tables (`pouw_h1_served`): each committed value's entry, what was refused, and the outcome of
     `pouw_h1_served.register`, each call's ``--registered`` file written into ``tdir``."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
-    doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20],
+    held = sum(len(r.bcs) * 128 + 64 * sum(map(len, r.levels)) for r in served.registered.values())
+    doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20], "held_mib": round(held / 2**20, 1),
+                           "rows": sum(r.leaves for r in served.registered.values()),
                            "committed": bool(served.registered) and not served.refused,
                            "in_commitment": h1.commits.get("served") == {"entries": served.entries(),
                                                                          "refused": list(served.refused)},
@@ -773,6 +808,8 @@ def main(argv: list[str] | None = None) -> int:
                                                             "credit reads the window's layout from")
     ap.add_argument("--served", action="store_true", help="fill: commit each call's tables and the weights' B as its "
                                                           "Program's registered values (pouw_h1_served.Served) and register them")
+    ap.add_argument("--baseline-h1", action="store_true", help="fill with --served: serve an H1 window without Served "
+                                                               "first, in the solo window's place (the step-time baseline)")
     ap.add_argument("--weights-key", metavar="FILE", help="fill with --served: the period's weights key (32 bytes, kept "
                                                           "by pouw_h1_prover.keep_key), under which each K's b/<K> is "
                                                           "registered before the window's salt (pouw_h1_served.Weights)")
