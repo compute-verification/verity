@@ -154,9 +154,12 @@ theorem commits_ok (htr : Json.parse tt = .ok tr) (hreg : Json.parse rt = .ok re
       cases hs : RecVStar.checkSchedule ish tr with
       | error e => simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs] at h
       | ok u =>
-        simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs] at h
-        subst h
-        exact ⟨rfl, rfl⟩
+        cases hr : RecSetup.checkReads ish tt tr record cs' with
+        | error e => simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs, hr] at h
+        | ok u' =>
+          simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs, hr] at h
+          subst h
+          exact ⟨rfl, rfl⟩
 
 /-- **A candidate-3 session holds R's registration**, and both files are JSON: `commits` refuses one without it. -/
 theorem held_of_commits {t : Except String String} {r : Except String (Option String)}

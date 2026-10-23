@@ -528,8 +528,9 @@ def recCoinsCmd (args : List String) : IO UInt32 := do
 session's transcript (`RecVStar.innerCommits`), as one `RECTRANSCRIPT` line: each rep's message rounds, and each stream's
 message rounds and its tops' node counts by level; the circuit table's tops and the link points, the record's held to the
 coin server's (`RecVStar.innerLink`); with `--rec-inner`, that the verifier's inner shape covers it
-(`RecVStar.checkCovers`), puts the circuit table's tops at its schedule's (`RecVStar.checkLinkRounds`) and holds the
-record to its schedule (`RecVStar.checkSchedule`), as `verify` checks them; exit 1 when the transcript is refused. -/
+(`RecVStar.checkCovers`), puts the circuit table's tops at its schedule's (`RecVStar.checkLinkRounds`), holds the
+record to its schedule (`RecVStar.checkSchedule`) and reads it in its own format as its JSON readers read it
+(`RecSetup.checkReads`), as `verify` checks them; exit 1 when the transcript is refused. -/
 def recTranscriptOfSession (args : List String) (bound : Except String (Option String × Option RecVStar.StackedShape))
     (inner : Option RecVStar.Inner) : IO (Except String (Option RecVStar.InnerCommits)) := do
   let some dir := argOf args "--rec-inner-session"
@@ -588,9 +589,14 @@ def recTranscriptCmd (args : List String) : IO UInt32 := do
         if let .error e := RecVStar.checkLinkRounds i lk then IO.eprintln e; return 1
     | .ok none => pure ()
     | .error e => IO.eprintln e; return 1
-    if let (some i, some f) := (inner, argOf args "--rec-inner-transcript") then
-      match Lean.Json.parse (← IO.FS.readFile f) with
-      | .ok j => if let .error e := RecVStar.checkSchedule i j then IO.eprintln e; return 1
+    let session := argOf args "--rec-inner-session"
+    if let (some i, some f, some dir) := (inner, argOf args "--rec-inner-transcript", session) then
+      let tt ← IO.FS.readFile f
+      match Lean.Json.parse tt with
+      | .ok j =>
+        if let .error e := RecVStar.checkSchedule i j then IO.eprintln e; return 1
+        if let .error e := RecSetup.checkReads i tt j (← IO.FS.readFile (dir ++ "/session.json")) ic then
+          IO.eprintln e; return 1
       | .error e => IO.eprintln s!"rec inner transcript: not JSON: {e}"; return 1
     let n := fun (xs : Array (Nat × ByteArray)) => Lean.toJson xs.size
     IO.println s!"RECTRANSCRIPT {(Lean.Json.mkObj [("reps", .arr (ic.reps.map n)),
