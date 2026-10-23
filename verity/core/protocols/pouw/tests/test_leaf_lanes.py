@@ -232,3 +232,21 @@ def test_a_statements_partials_ports_and_only_those_are_read_in_full():
         assert full == sorted(p for p, (v, _) in ports.items() if v == LL.PARTIALS), (kind, ln)
         assert full == (["partials"] if kind == LL.LANE else sorted(f"p{x}" for x in range(32)))
         assert all(LL.READ_IN_FULL not in e for p, e in f["ports"].items() if p not in full)
+
+
+def test_the_verifiers_entries_are_the_registrations_and_the_produced_records():
+    """Each registered value's entry and root are the registration's first of its value; the partials' are the
+    verifier's own entry under the registration's digest at the produced record's root, over any registered entry of
+    that name (Lean's `PouwWindow.Lanes.roots?`)."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
+    e = {v: {"value": v, "root": f"{i:02x}" * 64, "leaves": 4, "words": 2, "domain": f"{i + 8:02x}" * 64}
+         for i, v in enumerate((LL.A, LL.B, LL.PARTIALS))}
+    rec = {"format": "verity/registration/v2", "program": "12" * 64,
+           "registered": [e[LL.A], e[LL.B], {**e[LL.A], "root": "ee" * 64}, e[LL.PARTIALS]]}
+    produced = {"produced": [{"value": "x", "root": "aa" * 64}, {"value": LL.PARTIALS, "root": "bb" * 64}]}
+    ent, roots = LL.verifier_entries(rec, produced, 32, 6)
+    assert roots == {LL.A: e[LL.A]["root"], LL.B: e[LL.B]["root"], LL.PARTIALS: "bb" * 64}
+    assert ent[LL.A] is rec["registered"][0] and ent[LL.PARTIALS] == PR.entry("12" * 64, LL.PARTIALS, 32, 6, R.digest(rec))
+    with pytest.raises(ValueError, match="no partials"):
+        LL.verifier_entries(rec, {"produced": [produced["produced"][0]]}, 32, 6)

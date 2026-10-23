@@ -1,5 +1,5 @@
 {
- "roots": ["PouwWindow", "PouwWindow.DifftestMain"],
+ "roots": ["PouwWindow", "PouwWindow.DifftestMain", "PouwWindow.LeafOwnMain"],
  "layers": {
   "PouwWindow.Grid": {
    "imports": [],
