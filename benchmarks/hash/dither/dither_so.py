@@ -91,6 +91,7 @@ $DITHER_MANIFEST_DIR, which `dither_manifest.py check` holds to the challenger's
 from __future__ import annotations
 
 import contextlib
+import ctypes as C
 import dataclasses
 import hashlib
 import os
@@ -107,6 +108,7 @@ import dither_a as DA
 import dither_fused as DF
 import dither_manifest as MF
 import dither_one as DO
+import h1c as H1CM
 from dither_fused import CM, CO, H1R, Call, unwords, words
 from hb_side import auto_j
 
@@ -125,6 +127,12 @@ END_FAULTS = ("fault_tail", "fault_late_receipt")
 MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goes there (its per-call roots to scratch)
 GRAPH_ENV = "DITHER_SO_GRAPH"           # "0": a step's units launched call by call (`SoSide.dispatch`), else one graph
 PRIO_ENV = "DITHER_SO_PRIO"             # "1": any -so arm serves as -ovp does, on a stream above the units' (`patch`)
+# "1": a step's units in one launch over every call (h1u.cu's kh_units_multi: each unit's noise hashed by its own warp,
+# no workspace), in place of each call's noise and units launches; the same receipts
+FUSED_ENV = "DITHER_SO_FUSED"
+# "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
+# the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
+RDEAD_ENV = "DITHER_SO_RDEAD"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -764,10 +772,18 @@ class SoSide(DA.Side):
         self.tables = [win.r.plan([Call(self.ring_slot[p][w], win.wt[w], win.offs[w], self.ring_aroots[p].data_ptr() + 64 * w,
                                         self.ring_live[p], root_b=win.bset.roots.data_ptr() + 64 * w) for w in range(L)],
                                   seeds=win.plan.seeds, out=win.plan.out) for p in range(D)]
+        self.rdead = os.environ.get(RDEAD_ENV) == "1"
+        if self.rdead:
+            self.r_live, nrb = torch.empty_like(win.live), win.t // 32
+            win.rset = win.c.set([dataclasses.replace(t, xd=H1CM.dead_x([bytes(t.length)] * (t.count // nrb), dev),
+                                                      rlive=self.r_live, rbw=t.count // nrb) for t in win.rset.tabs])
         self.a_off = win.pre["mid"].level_off[0]
         self.dispatched: dict[int, int] = {}
         self.unit_steps = 0
         self.graph = os.environ.get(GRAPH_ENV, "1") != "0"
+        self.fused = os.environ.get(FUSED_ENV) == "1"
+        if self.fused:
+            self.mtab, self.m_units = self._multi_tables()
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
         self.capture_ms: list[float] = []
@@ -822,6 +838,37 @@ class SoSide(DA.Side):
         self.ring_base[p].copy_(win.step_base)
         self.ready[p].record()
 
+    def _multi_tables(self) -> tuple[list[torch.Tensor], int]:
+        """$DITHER_SO_FUSED's kh_units_multi tables, one a ring slot: each call's UCall (its slot's A, its B, seeds and
+        receipts as `so_args`), the K = 14336 calls (three digits, the longest units) first so they start first; and the
+        units in all."""
+        win, h = self.win, self.h
+        if not hasattr(h, "kh_units_multi"):
+            raise RuntimeError(f"${FUSED_ENV}=1: this h1u build has no kh_units_multi")
+        vp, u32 = C.c_void_p, C.c_uint
+        h.kh_units_multi.argtypes = [vp, u32, u32, u32, vp, vp]
+        h.kh_ucall_bytes.restype = u32
+        h.kh_digits.argtypes = [u32]
+        rec = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"), ("N", "<u4"), ("K", "<u4"),
+                        ("u0", "<u4"), ("md", "<u4")])
+        if int(h.kh_ucall_bytes()) != rec.itemsize:
+            raise RuntimeError(f"kh_units_multi's UCall is {int(h.kh_ucall_bytes())} bytes, not {rec.itemsize}")
+        md = [int(h.kh_digits(k)) for _, k in win.nk]
+        order = sorted(range(win.L), key=lambda w: -md[w])
+        tabs = []
+        for p in range(win.depth):
+            t = np.zeros(win.L + 1, dtype=rec)
+            u0 = 0
+            for i, w in enumerate(order):
+                n, k = win.nk[w]
+                t[i] = (self.ring_slot[p][w].data_ptr(), win.wt[w].data_ptr(),
+                        win.plan.seeds.data_ptr() + 8 * 16 * self.seed0[w], self.stage.data_ptr() + 4 * win.plan.offs[w][0],
+                        n, k, u0, md[w])
+                u0 += (win.t // 32) * (n // 32)
+            t[win.L]["u0"] = u0
+            tabs.append(torch.from_numpy(t.view(np.uint8).copy()).to(win.dev))
+        return tabs, u0
+
     def so_args(self, w: int, p: int, m: int) -> tuple:
         """kh_one's arguments for call w of the step in ring slot p but its stream (as `one_args`)."""
         win = self.win
@@ -847,7 +894,10 @@ class SoSide(DA.Side):
                                   st.cuda_stream)
         if self.noise:
             self.seeded.record(st)
-        for w in range(L):
+        if self.fused:
+            rc = rc or self.h.kh_units_multi(self.mtab[p].data_ptr(), L, self.m_units, win.t, self.ring_live[p].data_ptr(),
+                                             st.cuda_stream)
+        for w in range(0 if self.fused else L):
             args = self.so_args(w, p, m)
             if self.noise:
                 i = w % NA
@@ -866,6 +916,8 @@ class SoSide(DA.Side):
         DA.dithera_commit[(triton.cdiv(n, 4096),)](self.stage, win.plan.out, self.ring_S[p], n, BLOCK=4096)
         DA.dithera_fault[(1,)](win.plan.out, self.ring_S[p], self.at, L, 1 << self.shift,
                                BLOCK=triton.next_power_of_2(L))
+        if self.rdead:
+            self.r_live.copy_(self.ring_live[p])
         win.c.build(win.rset, self.ring_stepv[p][0:1])
         self.rroots[p].copy_(win.rset.roots)
         return 0
@@ -916,6 +968,8 @@ class SoSide(DA.Side):
         return {**super().info(), "order": ORDER, "depth": self.win.depth, "a_tables": AO[self.so_ao],
                 "a_overlap": self.so_ao, "unit_steps": self.unit_steps,
                 "units_dispatch": {"graph": self.graph, "graphs": sorted(self.graphs), "capture_ms": self.capture_ms},
+                "units_fused": {"one_launch": self.fused, "units": self.m_units if self.fused else None},
+                "receipt_dead_rows_x_once": self.rdead,
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
 

@@ -123,6 +123,54 @@ __device__ __forceinline__ void noise_block(const NoiseMid& m, u64 t, u64 s[8]) 
   for (int q = 0; q < 8; ++q) s[q] = IVC[q] + v[q];
 }
 
+// blocks ta and tb of one stream (noise_block's of each), their two compressions' rounds interleaved: two independent
+// chains for a warp whose few neighbours on its scheduler leave one chain's latency exposed
+#define RNDV(V, r, wv)                                                                                \
+  {                                                                                                   \
+    u64& a = V[(8 - (r)) & 7]; u64& b = V[(9 - (r)) & 7]; u64& c = V[(10 - (r)) & 7];                 \
+    u64& d = V[(11 - (r)) & 7]; u64& e = V[(12 - (r)) & 7]; u64& f = V[(13 - (r)) & 7];               \
+    u64& g = V[(14 - (r)) & 7]; u64& h = V[(15 - (r)) & 7];                                           \
+    const u64 t1 = h + S1(e) + chf(e, f, g) + KC[r] + (wv);                                           \
+    d += t1;                                                                                          \
+    h = t1 + S0(a) + maj(a, b, c);                                                                    \
+  }
+__device__ __forceinline__ void noise_block2(const NoiseMid& m, u64 ta, u64 tb, u64 sa[8], u64 sb[8]) {
+  u64 va[8], vb[8];
+#pragma unroll
+  for (int q = 0; q < 8; ++q) va[q] = vb[q] = m.mid[q];
+  // schedule word r computed at round r, so only the last 16 of each stream's words are live
+  u64 WA[80], WB[80];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) {
+    WA[i] = i == 11 ? ta : i == 12 ? 0x8000000000000000ULL : i == 15 ? 96 * 8 : 0;
+    WB[i] = i == 11 ? tb : WA[i];
+  }
+#pragma unroll
+  for (int r = 11; r < 80; ++r) {
+    if (r >= 16) {
+      if (!dep(r)) {
+        WA[r] = WB[r] = m.c[r - 16];
+      } else {
+        const u64 x = r < NC ? m.c[r - 16] : 0;
+        u64 xa = x, xb = x;
+        if (dep(r - 2)) { xa += s1(WA[r - 2]); xb += s1(WB[r - 2]); }
+        if (dep(r - 7)) { xa += WA[r - 7]; xb += WB[r - 7]; }
+        if (dep(r - 15)) { xa += s0(WA[r - 15]); xb += s0(WB[r - 15]); }
+        if (dep(r - 16)) { xa += WA[r - 16]; xb += WB[r - 16]; }
+        WA[r] = xa;
+        WB[r] = xb;
+      }
+    }
+    RNDV(va, r, WA[r]);
+    RNDV(vb, r, WB[r]);
+  }
+#pragma unroll
+  for (int q = 0; q < 8; ++q) {
+    sa[q] = IVC[q] + va[q];
+    sb[q] = IVC[q] + vb[q];
+  }
+}
+
 // a whole message's digest from its 64-bit words (len16 x 16 of them, padding included), the rolled compression
 __device__ __forceinline__ void sha512_words(const u64* msg, int blocks, u64 s[8]) {
 #pragma unroll
