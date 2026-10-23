@@ -24,6 +24,8 @@ open FlockSoundness.Refine (Frame encs)
 
 namespace Ranked
 
+open Loop
+
 /-- **The rank check held** at the frame's coins and earlier reps' claim points, at the rep's mask slot if it has one. -/
 def RankHeld (c : Cfg) (s : Masker) : Prop :=
   ∀ ms, c.mask = some ms → ∃ P, claimPoints c.lay s.coins = .ok P ∧
@@ -104,7 +106,8 @@ theorem rankHeld_of {c : Cfg} {s s' : Masker} (h : RankHeld c s) (hc : s'.coins 
 
 /-- **A label keeps the frame's phase and rank**, its coins and earlier reps' points. -/
 theorem label_good {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArray} (hg : Good c s)
-    (h : s.label c l = .ok q) : Good c q.1 ∧ q.1.coins = s.coins ∧ q.1.prior = s.prior := by
+    (h : s.label c l = .ok q) :
+    Good c q.1 ∧ q.1.coins = s.coins ∧ q.1.prior = s.prior ∧ (s.done = true → q.1.done = true) := by
   obtain ⟨g1, g2⟩ := hg
   by_cases hP : isLabel l LABEL_PCS = true
   · rw [eq_of_isLabel hP] at h
@@ -114,7 +117,7 @@ theorem label_good {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArr
         rfl
       rw [e] at h
       cases h
-      exact ⟨⟨g1, g2⟩, rfl, rfl⟩
+      exact ⟨⟨g1, g2⟩, rfl, rfl, id⟩
     · obtain ⟨p1, p2, p3, p4⟩ := pcs_other
       by_cases hpos : s.pos = c.nPiop
       · cases hm : c.mask with
@@ -122,7 +125,7 @@ theorem label_good {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArr
           simp [Masker.label, hon, hm, isLabel_self, p1, p2, p3, p4, hpos] at h
           cases h
           exact ⟨⟨fun hd => by simp at hd, fun _ => ⟨fun h' => by simp at h', fun ms hms => by simp [hm] at hms⟩⟩,
-            rfl, rfl⟩
+            rfl, rfl, fun _ => rfl⟩
         | some ms =>
           cases hcp : claimPoints c.lay s.coins with
           | error e =>
@@ -135,7 +138,8 @@ theorem label_good {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArr
             split at h
             · rename_i hr
               cases h
-              refine ⟨⟨fun hd => by simp at hd, fun _ => ⟨fun h' => by simp at h', fun ms' hms' => ?_⟩⟩, rfl, rfl⟩
+              refine ⟨⟨fun hd => by simp at hd, fun _ => ⟨fun h' => by simp at h', fun ms' hms' => ?_⟩⟩, rfl, rfl,
+                fun _ => rfl⟩
               rw [hm] at hms'
               cases hms'
               exact ⟨P, hcp, by rw [Array.size_append]; exact hr⟩
@@ -147,12 +151,12 @@ theorem label_good {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArr
     cases hl0 : s.l0
     · simp [Masker.label, isLabel_self, p1, p2, p3, p4, hl0] at h
       cases h
-      exact ⟨⟨g1, g2⟩, rfl, rfl⟩
+      exact ⟨⟨g1, g2⟩, rfl, rfl, id⟩
     · by_cases hpos : s.pos = c.order.size
       · by_cases hrho : s.rho.size = _root_.Flock.Firewall.Frame.RHO_COINS
         · simp [Masker.label, isLabel_self, p1, p2, p3, p4, hl0, hpos, hrho] at h
           cases h
-          refine ⟨⟨fun hd => absurd (g1 hd).2.1 (by simp [hl0]), fun hd => ⟨fun h' => by simp at h', ?_⟩⟩, rfl, rfl⟩
+          refine ⟨⟨fun hd => absurd (g1 hd).2.1 (by simp [hl0]), fun hd => ⟨fun h' => by simp at h', ?_⟩⟩, rfl, rfl, id⟩
           exact rankHeld_of (g2 hd).2 rfl rfl
         · simp [Masker.label, isLabel_self, p1, p2, p3, p4, hl0, hpos, hrho] at h
           cases h
@@ -174,7 +178,7 @@ theorem label_good {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArr
           split at h
           · cases h
           · cases h
-            refine ⟨⟨fun hd' => by simp at hd', fun _ => ⟨fun h' => by simp at h', ?_⟩⟩, rfl, rfl⟩
+            refine ⟨⟨fun hd' => by simp at hd', fun _ => ⟨fun h' => by simp at h', ?_⟩⟩, rfl, rfl, id⟩
             exact rankHeld_of (g2 hd).2 rfl rfl
         · simp [Masker.label, isLabel_self, p1, p2, p3, p4, hi, hd, hon] at h
           cases h
@@ -184,10 +188,10 @@ theorem label_good {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArr
     cases hd : s.done
     · simp [Masker.label, isLabel_self, p1, p2, p3, p4, hd] at h
       cases h
-      exact ⟨⟨fun _ => ⟨rfl, (g1 hd).2.1, (g1 hd).2.2⟩, fun hd' => by simp at hd'⟩, rfl, rfl⟩
+      exact ⟨⟨fun _ => ⟨rfl, (g1 hd).2.1, (g1 hd).2.2⟩, fun hd' => by simp at hd'⟩, rfl, rfl, id⟩
     · simp [Masker.label, isLabel_self, p1, p2, p3, p4, hd] at h
       cases h
-      exact ⟨⟨g1, g2⟩, rfl, rfl⟩
+      exact ⟨⟨g1, g2⟩, rfl, rfl, fun _ => hd⟩
   by_cases hO : isLabel l _root_.Flock.Zk.LABEL_OPEN = true
   · rw [eq_of_isLabel hO] at h
     obtain ⟨p1, p2, p3, p4⟩ := open_other
@@ -195,24 +199,25 @@ theorem label_good {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArr
     split at h
     · rename_i hc
       cases h
-      exact ⟨⟨fun hd => by simp [hc.1.1] at hd, fun hd => ⟨fun _ => rfl, rankHeld_of (g2 hd).2 rfl rfl⟩⟩, rfl, rfl⟩
+      exact ⟨⟨fun hd => by simp [hc.1.1] at hd, fun hd => ⟨fun _ => rfl, rankHeld_of (g2 hd).2 rfl rfl⟩⟩, rfl, rfl, id⟩
     · cases h
-      exact ⟨⟨g1, g2⟩, rfl, rfl⟩
+      exact ⟨⟨g1, g2⟩, rfl, rfl, id⟩
   simp only [Bool.not_eq_true] at hP hC hI hZ hO
   rw [label_plain c s l ⟨hP, hC, hI, hZ, hO⟩] at h
   cases h
-  exact ⟨⟨g1, g2⟩, rfl, rfl⟩
+  exact ⟨⟨g1, g2⟩, rfl, rfl, id⟩
 
 /-- A state `s'` keeps `s`'s phase and rank: `Good`, at `s`'s coins and earlier reps' points. -/
-def Keep (c : Cfg) (s s' : Masker) : Prop := Good c s' ∧ s'.coins = s.coins ∧ s'.prior = s.prior
+def Keep (c : Cfg) (s s' : Masker) : Prop :=
+  Good c s' ∧ s'.coins = s.coins ∧ s'.prior = s.prior ∧ (s.done = true → s'.done = true)
 
 theorem keep_same {c : Cfg} {s m m' : Masker} (hk : Keep c s m) (h : Same m m') : Keep c s m' :=
-  ⟨good_of_same hk.1 h, h.2.2.2.2.1.trans hk.2.1, h.2.2.2.2.2.trans hk.2.2⟩
+  ⟨good_of_same hk.1 h, h.2.2.2.2.1.trans hk.2.1, h.2.2.2.2.2.trans hk.2.2.1, fun hd => h.1.trans (hk.2.2.2 hd)⟩
 
 theorem keep_label {c : Cfg} {s m : Masker} {l : ByteArray} {q : Masker × ByteArray} (hk : Keep c s m)
     (h : m.label c l = .ok q) : Keep c s q.1 := by
-  obtain ⟨g, hc, hp⟩ := label_good hk.1 h
-  exact ⟨g, hc.trans hk.2.1, hp.trans hk.2.2⟩
+  obtain ⟨g, hc, hp, hd⟩ := label_good hk.1 h
+  exact ⟨g, hc.trans hk.2.1, hp.trans hk.2.2.1, fun h' => hd (hk.2.2.2 h')⟩
 
 theorem absorb_same {c : Cfg} {s : Masker} {v : F128} {q : Masker × F128} (h : s.absorb c v = .ok q) : Same s q.1 := by
   unfold Masker.absorb at h
@@ -274,7 +279,7 @@ theorem roundFree_keep {c : Cfg} {s : Masker} {content : ByteArray} {n : Nat} {q
   obtain ⟨r, hr, h⟩ := bindV_ok h
   have hQ := forIn_inv (fun x : Option (ByteArray × Masker × Array ℕ) × Masker × ByteArray × Array ℕ × ℕ =>
       Keep c s x.2.1 ∧ ∀ v, x.1 = some v → Keep c s v.2.1 ∧ v.2.1.owed = some n ∧ 1 ≤ n) _ ?step _ _ _
-    ⟨⟨hg, rfl, rfl⟩, fun _ hv => by cases hv⟩ hr
+    ⟨⟨hg, rfl, rfl, id⟩, fun _ hv => by cases hv⟩ hr
   · obtain ⟨o, m, out, free, pos⟩ := r
     cases o with
     | none => cases h
@@ -355,6 +360,310 @@ theorem roundFree_keep {c : Cfg} {s : Masker} {content : ByteArray} {n : Nat} {q
       cases hy
       exact ⟨hk, fun _ hv => by cases hv⟩
     · cases hy
+
+theorem good_congr {c : Cfg} {s s' : Masker} (hg : Good c s) (hd : s'.done = s.done) (hon : s'.on = s.on)
+    (hl : s'.l0 = s.l0) (hi : s.done = false → s'.inner = s.inner) (hc : s.done = true → s'.coins = s.coins)
+    (hp : s'.prior = s.prior) : Good c s' := by
+  obtain ⟨g1, g2⟩ := hg
+  refine ⟨fun h' => ?_, fun h' => ?_⟩
+  · rw [hd] at h'
+    obtain ⟨a, b, e⟩ := g1 h'
+    exact ⟨hon ▸ a, hl ▸ b, (hi h').trans e⟩
+  · rw [hd] at h'
+    obtain ⟨a, b⟩ := g2 h'
+    exact ⟨fun h'' => hl ▸ a (hon ▸ h''), rankHeld_of b (hc h') hp⟩
+
+/-- Coins the frame takes at level 0 or in the inner proof keep its phase, coins and earlier reps' points. -/
+theorem answer_proj {c : Cfg} {s s' : Masker} {cs : Array F128} (hx : s.inner.isSome = true ∨ s.l0 = true)
+    (h : s.answer c cs = .ok s') :
+    s'.done = s.done ∧ s'.on = s.on ∧ s'.l0 = s.l0 ∧ s'.coins = s.coins ∧ s'.prior = s.prior := by
+  unfold Masker.answer at h
+  cases ho : s.owed with
+  | none => rw [ho] at h; cases h
+  | some n =>
+    by_cases hc : (cs.size != n) = true
+    · simp only [ho, hc, ↓reduceIte] at h
+      cases h
+    simp only [ho, hc, Bool.false_eq_true, ↓reduceIte] at h
+    cases hi : s.inner with
+    | some k =>
+      simp only [hi] at h
+      obtain ⟨u, -, h⟩ := bindV_ok h
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      split <;> (try split) <;> exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+    | none =>
+      have hl : s.l0 = true := by
+        rcases hx with hx | hx
+        · rw [hi] at hx; cases hx
+        · exact hx
+      simp only [hi, hl, ↓reduceIte] at h
+      by_cases hp : (s.pos != c.order.size) = true
+      · simp only [hp, ↓reduceIte, pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        exact ⟨rfl, rfl, hl.symm, rfl, rfl⟩
+      · simp only [hp, Bool.false_eq_true, ↓reduceIte] at h
+        obtain ⟨r, -, h⟩ := bindV_ok h
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        exact ⟨rfl, rfl, hl.symm, rfl, rfl⟩
+
+/-- **Coins the frame takes keep its phase and rank**: before the opening's label they are the coins so far and the
+round's; past it, the coins so far. -/
+theorem answer_keep {c : Cfg} {s s' : Masker} {cs : Array F128} (hg : Good c s) (h : s.answer c cs = .ok s') :
+    Good c s' ∧ s'.prior = s.prior ∧ s'.done = s.done ∧ (s.done = false → s'.coins = s.coins ++ cs) ∧
+      (s.done = true → s'.coins = s.coins) := by
+  cases hd : s.done
+  · obtain ⟨hon, hl, hi⟩ := hg.1 hd
+    have e := answer_alg c s cs hi hl h
+    have hc : s'.coins = s.coins ++ cs := by rw [e]; simp [hon]
+    have hd' : s'.done = s.done := by rw [e]
+    exact ⟨good_congr hg hd' (by rw [e]) (by rw [e]) (fun _ => by rw [e]) (fun h' => by rw [hd] at h'; cases h')
+      (by rw [e]), by rw [e], hd'.trans hd, fun _ => hc, (fun h' => by cases h')⟩
+  · have fin : s'.done = s.done → s'.on = s.on → s'.l0 = s.l0 → s'.coins = s.coins → s'.prior = s.prior →
+        Good c s' ∧ s'.prior = s.prior ∧ s'.done = true ∧ (true = false → s'.coins = s.coins ++ cs) ∧
+          (true = true → s'.coins = s.coins) := fun a b l d e =>
+      ⟨good_congr hg a b l (fun h' => by rw [hd] at h'; cases h') (fun _ => d) e, e, a.trans hd,
+        (fun h' => by cases h'), fun _ => d⟩
+    cases hi : s.inner with
+    | some k =>
+      obtain ⟨a, b, l, d, e⟩ := answer_proj (Or.inl (by rw [hi]; rfl)) h
+      exact fin a b l d e
+    | none =>
+      cases hl : s.l0
+      · have hon : s.on = false := by
+          cases hon : s.on
+          · rfl
+          · have := (hg.2 hd).1 hon
+            rw [hl] at this
+            cases this
+        have e := answer_alg c s cs hi hl h
+        exact fin (by rw [e]) (by rw [e]) (by rw [e]) (by rw [e]; simp [hon]) (by rw [e])
+      · obtain ⟨a, b, l, d, e⟩ := answer_proj (Or.inr hl) h
+        exact fin a b l d e
+
+theorem round_keep {c : Cfg} {s s' : Masker} {content out : ByteArray} {n : ℕ} (hg : Good c s)
+    (h : _root_.Flock.Firewall.Frame.round c s content n = .ok (out, s')) : Keep c s s' ∧ s'.owed = some n ∧ 1 ≤ n := by
+  unfold _root_.Flock.Firewall.Frame.round at h
+  obtain ⟨⟨o, t, fr⟩, hr, h⟩ := bindV_ok h
+  simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+  obtain ⟨-, rfl⟩ := h
+  exact roundFree_keep hg hr
+
+theorem good_stopped {c : Cfg} {s : Masker} (hg : Good c s) : Good c { s with stopped := true } :=
+  good_of_same hg ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+open _root_.Flock.Firewall.Frame (Reply check) in
+/-- **A round the frame takes or refuses keeps its phase and rank**, where the rep runs on: it owes the round's coins,
+or, refused, none. -/
+theorem step_round {c : Cfg} {st : _root_.Flock.Firewall.Frame.State} {n : ℕ} {r : ByteArray}
+    {pl : _root_.Flock.Firewall.Frame.Place} (hg : Good c st.m) (ho : st.m.owed = none)
+    (he : (_root_.Flock.Firewall.Frame.step c st (.round n r pl)).1.ends = false) :
+    Keep c st.m (_root_.Flock.Firewall.Frame.step c st (.round n r pl)).2.m ∧
+      ((_root_.Flock.Firewall.Frame.step c st (.round n r pl)).2.m.owed = none ∨
+        ((_root_.Flock.Firewall.Frame.step c st (.round n r pl)).2.m.owed = some n ∧ 1 ≤ n)) := by
+  obtain ⟨s, b⟩ := st
+  dsimp only at hg ho he ⊢
+  have hstop : Keep c s { s with stopped := true } := ⟨good_stopped hg, rfl, rfl, id⟩
+  cases pl with
+  | sched r' =>
+    cases hc : check c s r r' n with
+    | error e =>
+      cases hs : e.startsWith _root_.Flock.Firewall.Frame.STOP <;>
+        simp only [_root_.Flock.Firewall.Frame.step, ho, hc, hs, Reply.ends, Bool.false_eq_true, ↓reduceIte,
+          Bool.true_eq_false] at he ⊢
+      exact ⟨hstop, Or.inl trivial⟩
+    | ok q =>
+      obtain ⟨out, s', why⟩ := q
+      simp only [_root_.Flock.Firewall.Frame.step, ho, hc]
+      cases why with
+      | none =>
+        obtain ⟨k, o, p⟩ := round_keep hg (check_none hc)
+        exact ⟨k, Or.inr ⟨o, p⟩⟩
+      | some w =>
+        obtain ⟨k, o, p⟩ := round_keep (good_stopped hg) (check_some hc)
+        exact ⟨k, Or.inr ⟨o, p⟩⟩
+  | fail =>
+    simp only [_root_.Flock.Firewall.Frame.step, ho, bind, Except.bind] at he ⊢
+    generalize hR : _root_.Flock.Firewall.Frame.round c _ r n = R at he ⊢
+    cases R with
+    | error e =>
+      cases hs : e.startsWith _root_.Flock.Firewall.Frame.STOP <;>
+        simp only [hs, Reply.ends, Bool.false_eq_true, ↓reduceIte, Bool.true_eq_false] at he ⊢
+      exact ⟨⟨good_of_same hg ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, id⟩, Or.inl trivial⟩
+    | ok q =>
+      obtain ⟨out, s'⟩ := q
+      simp only [pure, Except.pure]
+      obtain ⟨k, o, p⟩ := round_keep (s := { s with stopped := true, owed := none })
+        (good_of_same hg ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩) hR
+      exact ⟨k, Or.inr ⟨o, p⟩⟩
+  | own =>
+    simp only [_root_.Flock.Firewall.Frame.step, ho, bind, Except.bind] at he ⊢
+    generalize hR : _root_.Flock.Firewall.Frame.round c _ r n = R at he ⊢
+    cases R with
+    | error e =>
+      cases hs : e.startsWith _root_.Flock.Firewall.Frame.STOP <;>
+        simp only [hs, Reply.ends, Bool.false_eq_true, ↓reduceIte, Bool.true_eq_false] at he ⊢
+      exact ⟨⟨good_of_same hg ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, id⟩, Or.inl trivial⟩
+    | ok q =>
+      obtain ⟨out, s'⟩ := q
+      cases hn : s'.inner.isNone
+      · simp only [hn, pure, Except.pure, Bool.false_eq_true, ↓reduceIte]
+        obtain ⟨k, o, p⟩ := round_keep (good_of_same hg ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩) hR
+        exact ⟨k, Or.inr ⟨o, p⟩⟩
+      · simp only [hn, ↓reduceIte, throw, throwThe, MonadExceptOf.throw] at he ⊢
+        split at he
+        · simp [Reply.ends] at he
+        · rename_i hs
+          simp only [hs, Bool.false_eq_true, ↓reduceIte]
+          exact ⟨⟨good_of_same hg ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, id⟩, Or.inl trivial⟩
+
+theorem ends_of_run {c : Cfg} {st : _root_.Flock.Firewall.Frame.State} {q : _root_.Flock.Firewall.Frame.Req}
+    {L : List _root_.Flock.Firewall.Frame.Req} (h : (_root_.Flock.Firewall.Frame.run c st (q :: L)).2 = false) :
+    (_root_.Flock.Firewall.Frame.step c st q).1.ends = false := by
+  cases he : (_root_.Flock.Firewall.Frame.step c st q).1.ends
+  · rfl
+  · exfalso
+    simp only [_root_.Flock.Firewall.Frame.run] at h
+    rcases hs : _root_.Flock.Firewall.Frame.step c st q with ⟨a, st'⟩
+    rw [hs] at he h
+    simp only [he, ↓reduceIte, Bool.true_eq_false] at h
+
+theorem run_cons_of {c : Cfg} {st : _root_.Flock.Firewall.Frame.State} {q : _root_.Flock.Firewall.Frame.Req}
+    {L : List _root_.Flock.Firewall.Frame.Req} (h : (_root_.Flock.Firewall.Frame.step c st q).1.ends = false) :
+    _root_.Flock.Firewall.Frame.run c st (q :: L) =
+      _root_.Flock.Firewall.Frame.run c (_root_.Flock.Firewall.Frame.step c st q).2 L := by
+  simp only [_root_.Flock.Firewall.Frame.run]
+  rcases hs : _root_.Flock.Firewall.Frame.step c st q with ⟨a, st'⟩
+  rw [hs] at h
+  simp only [h, Bool.false_eq_true, ↓reduceIte]
+
+/-! ## Along a rep's requests -/
+
+/-- Rounds `0 … d − 1`'s coins `cs`, flattened. -/
+def flatR (cs : ℕ → Array F128) (d : ℕ) : List F128 := (List.range d).flatMap fun i => (cs i).toList
+
+theorem flatR_succ (cs : ℕ → Array F128) (d : ℕ) : flatR cs (d + 1) = flatR cs d ++ (cs d).toList := by
+  simp [flatR, List.range_succ, List.flatMap_append]
+
+/-- **A rep's requests after its first round**: round `k`'s coins `cs k`, then round `k + 1` (`q`), for `k < J`. -/
+def pairs (cs : ℕ → Array F128) (q : ℕ → _root_.Flock.Firewall.Frame.Req) (J : ℕ) :
+    List _root_.Flock.Firewall.Frame.Req :=
+  (List.range J).flatMap fun k => [.coins (.ok (cs k)), q (k + 1)]
+
+theorem pairs_succ (cs : ℕ → Array F128) (q : ℕ → _root_.Flock.Firewall.Frame.Req) (J : ℕ) :
+    pairs cs q (J + 1) = pairs cs q J ++ [.coins (.ok (cs J)), q (J + 1)] := by
+  simp [pairs, List.range_succ, List.flatMap_append]
+
+theorem pairs_head (cs : ℕ → Array F128) (q : ℕ → _root_.Flock.Firewall.Frame.Req) :
+    ∀ J, 0 < J → ∃ L, pairs cs q J = .coins (.ok (cs 0)) :: L
+  | 0, h => absurd h (Nat.lt_irrefl 0)
+  | J + 1, _ => by
+    rw [pairs_succ]
+    rcases Nat.eq_zero_or_pos J with rfl | hJ
+    · exact ⟨[q 1], by simp [pairs]⟩
+    · obtain ⟨L, hL⟩ := pairs_head cs q J hJ
+      exact ⟨L ++ [.coins (.ok (cs J)), q (J + 1)], by rw [hL]; rfl⟩
+
+/-- **The frame after round `k`**, round `i` squeezing `nn i` and answered `cs i`: its phase and rank (`Good`), the
+earlier reps' points `p`, the coins answered so far each the round's count, the round's coins owed (or none, the round
+refused), and the coins it holds those of the rounds up to the opening's label, all of them before it. -/
+def Inv (c : Cfg) (p : Array (Array F128)) (cs : ℕ → Array F128) (nn : ℕ → ℕ) (k : ℕ) (s : Masker) : Prop :=
+  Good c s ∧ s.prior = p ∧ (∀ i < k, (cs i).size = nn i ∧ 1 ≤ nn i) ∧
+    (s.owed = none ∨ (s.owed = some (nn k) ∧ 1 ≤ nn k)) ∧
+    ∃ d ≤ k, s.coins.toList = flatR cs d ∧ (s.done = false → d = k)
+
+theorem pair_inv {c : Cfg} {p : Array (Array F128)} {cs : ℕ → Array F128} {nn : ℕ → ℕ}
+    {q : ℕ → _root_.Flock.Firewall.Frame.Req} (hq : ∀ k, ∃ r pl, q k = .round (nn k) r pl) {k : ℕ}
+    {S : _root_.Flock.Firewall.Frame.State} (hI : Inv c p cs nn k S.m)
+    (h2 : (_root_.Flock.Firewall.Frame.run c S [.coins (.ok (cs k)), q (k + 1)]).2 = false) :
+    Inv c p cs nn (k + 1) (_root_.Flock.Firewall.Frame.run c S [.coins (.ok (cs k)), q (k + 1)]).1.m := by
+  obtain ⟨hg, hp, hsz, ho, d, hd, hc, hdk⟩ := hI
+  obtain ⟨r, pl, hqk⟩ := hq (k + 1)
+  rw [hqk] at h2 ⊢
+  obtain ⟨s1, ha, he⟩ := run_coins_cons c S (cs k) _ h2
+  rw [he] at h2 ⊢
+  have hn : S.m.owed = some (nn k) ∧ 1 ≤ nn k := by
+    rcases ho with ho | ho
+    · exact absurd ha (answer_owed_none _ ho)
+    · exact ho
+  have hsize := answer_size hn.1 ha
+  obtain ⟨g1, p1, d1, c1, c1'⟩ := answer_keep hg ha
+  have o1 := answer_owed ha
+  have hE := ends_of_run h2
+  rw [run_cons_of hE]
+  simp only [_root_.Flock.Firewall.Frame.run]
+  obtain ⟨hk, ho'⟩ := step_round (st := { S with m := s1 }) g1 o1 hE
+  generalize _root_.Flock.Firewall.Frame.step c { S with m := s1 } (.round (nn (k + 1)) r pl) = R at hk ho' ⊢
+  obtain ⟨gk, ck, pk, dk⟩ := hk
+  refine ⟨gk, pk.trans (p1.trans hp), fun i hi => ?_, ho', ?_⟩
+  · rcases Nat.lt_succ_iff_lt_or_eq.1 hi with hi | rfl
+    · exact hsz i hi
+    · exact ⟨hsize, hn.2⟩
+  · cases hdS : S.m.done
+    · have hd0 := hdk hdS
+      refine ⟨k + 1, le_refl _, ?_, fun _ => rfl⟩
+      rw [ck, c1 hdS, Array.toList_append, hc, hd0, flatR_succ]
+    · refine ⟨d, by omega, ?_, fun h' => ?_⟩
+      · rw [ck, c1' hdS, hc]
+      · have := dk (d1.trans hdS)
+        rw [h'] at this
+        cases this
+
+theorem run_pairs {c : Cfg} {p : Array (Array F128)} {cs : ℕ → Array F128} {nn : ℕ → ℕ}
+    {q : ℕ → _root_.Flock.Firewall.Frame.Req} (hq : ∀ k, ∃ r pl, q k = .round (nn k) r pl)
+    (st : _root_.Flock.Firewall.Frame.State) (hI : Inv c p cs nn 0 st.m) :
+    ∀ J, (_root_.Flock.Firewall.Frame.run c st (pairs cs q J)).2 = false →
+      Inv c p cs nn J (_root_.Flock.Firewall.Frame.run c st (pairs cs q J)).1.m
+  | 0, _ => by simpa [pairs, _root_.Flock.Firewall.Frame.run] using hI
+  | J + 1, h2 => by
+    rw [pairs_succ, run_append] at h2 ⊢
+    cases hb : (_root_.Flock.Firewall.Frame.run c st (pairs cs q J)).2
+    · simp only [hb, Bool.false_eq_true, ↓reduceIte] at h2 ⊢
+      have hI' := run_pairs hq st hI J hb
+      generalize (_root_.Flock.Firewall.Frame.run c st (pairs cs q J)).1 = S at h2 hI' ⊢
+      exact pair_inv hq hI' h2
+    · simp [hb] at h2
+
+/-- **A rep's frame from its start along its requests**: from the earlier reps' points `p`, past the zerocheck's head
+(round `0`, `roundFree_zcHead`) and then each round's coins and the next round, where the rep runs on, the frame keeps
+its phase and rank (`Inv`). -/
+theorem run_head {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (p : Array (Array F128))
+    {digest cap dom : ByteArray} (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
+    {cs : ℕ → Array F128} {nn : ℕ → ℕ} {q : ℕ → _root_.Flock.Firewall.Frame.Req}
+    (hq : ∀ k, ∃ r pl, q k = .round (nn k) r pl) (h6 : nn 0 = 6) {J : ℕ} (hJ : 0 < J)
+    (h2 : (_root_.Flock.Firewall.Frame.run c { m := { prior := p } } (.round 6 (ByteArray.mk (encs [.dom dom,
+      .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap, .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray)
+      (.sched (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap,
+        .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray)) :: pairs cs q J)).2 = false) :
+    Inv c p cs nn J (_root_.Flock.Firewall.Frame.run c { m := { prior := p } } (.round 6 (ByteArray.mk (encs [.dom dom,
+      .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap, .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray)
+      (.sched (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap,
+        .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray)) :: pairs cs q J)).1.m := by
+  rcases Loop.run_sched_cons (st := { m := { prior := p } }) rfl h2 with ⟨out, sx, why, hck, he⟩ | he
+  · rw [he] at h2 ⊢
+    have hsx : sx = { ({ prior := p } : Masker) with on := true, owed := some 6 } ∨
+        sx = { ({ prior := p } : Masker) with stopped := true, on := true, owed := some 6 } := by
+      rcases Loop.check_self hck with ⟨fr, hr⟩ | ⟨fr, hr⟩
+      · obtain ⟨o, fr', hr'⟩ := roundFree_zcHead c { prior := p } digest cap dom hc rfl rfl rfl hdg hcap hdom
+          (Nat.zero_le _)
+        rw [hr'] at hr
+        simp only [Except.ok.injEq, Prod.mk.injEq] at hr
+        exact Or.inl hr.2.1.symm
+      · obtain ⟨o, fr', hr'⟩ := roundFree_zcHead c { ({ prior := p } : Masker) with stopped := true } digest cap
+          dom hc rfl rfl rfl hdg hcap hdom (Nat.zero_le _)
+        rw [hr'] at hr
+        simp only [Except.ok.injEq, Prod.mk.injEq] at hr
+        exact Or.inr hr.2.1.symm
+    refine run_pairs hq _ ?_ J h2
+    rcases hsx with rfl | rfl <;>
+      exact ⟨⟨fun _ => ⟨rfl, rfl, rfl⟩, fun h => by simp at h⟩, rfl, fun i hi => absurd hi (Nat.not_lt_zero _),
+        Or.inr ⟨by rw [h6], by rw [h6]; decide⟩, 0, le_refl _, by simp [flatR], fun _ => rfl⟩
+  · rw [he] at h2
+    obtain ⟨L, hL⟩ := pairs_head cs q J hJ
+    rw [hL] at h2
+    obtain ⟨s1, ha, -⟩ := run_coins_cons c _ _ _ h2
+    exact absurd ha (answer_owed_none _ rfl)
 
 end Ranked
 
