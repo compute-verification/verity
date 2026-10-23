@@ -342,7 +342,7 @@ def main (args : List String) : IO UInt32 := do
       ("wires", toJson c.wires.size), ("wires_feed", toJson (ProvedScope.wiresFeed c)), ("nets", toJson c.nets.size),
       ("unit_log", toJson c.unit.unitLog), ("ranges", toJson c.ranges.size)]
     let t0 ← IO.monoNanosNow
-    let sure := Tmpl.readsSure tu.t
+    let sure := tu.t.readsSure
     report "sure_reads" t0 [("columns", toJson sure.size), ("read", toJson (sure.filter id).size),
       ("dispatched", toJson (KnownRead.sureReads c).isSome)]
     let t0 ← IO.monoNanosNow

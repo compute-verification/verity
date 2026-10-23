@@ -137,7 +137,7 @@ def sureReads (c : Circuit) : Option (Array Bool) :=
   match c.tmpl with
   | some tu =>
     if withPtrEq c.unit tu.net (fun _ => decide (c.unit = tu.net)) (fun h => by simp [h]) then
-      some (Tmpl.readsSure tu.t)
+      some tu.t.readsSure
     else none
   | none => none
 
