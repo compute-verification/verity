@@ -2,7 +2,8 @@
 
 Each rank's run of the node's body is its rank Program's body node for node, every operand leaf the same leaf of the node's
 parameters or of the rank's own nodes, except that a peer Input's leaf is a node of the peer rank: every rank's collective k reads
-one operand, each rank's rows its own. So no peer Input is left, and an isolation unit over the node reads only its prompt besides
+one operand where its rank Program reads its peers, each rank's rows its own (its other operands, a fused norm's residual and
+weight, stay its own). So no peer Input is left, and an isolation unit over the node reads only its prompt besides
 θ (`nci_reference.check_desc`, `NciCheck.Desc`'s reference)."""
 
 from __future__ import annotations
@@ -45,7 +46,9 @@ def _joined(node, ranks: list, check_leaves: bool) -> None:
         rnames = [n for n, _ in rp.program.fn.signature()[0]]
         peer = {i: int(n[len("peers_"):]) for i, n in enumerate(rnames) if n.startswith("peers_")}
         others = [q for q in range(world) if q != r]
-        collectives.append([j for j, n in zip(mine, own) if any(s == "p" and i in peer for a in n.args for s, i, _lo, _hi in _runs(a))])
+        reads = [(j, [x for x, a in enumerate(n.args) if any(s == "p" and i in peer for s, i, _lo, _hi in _runs(a))])
+                 for j, n in zip(mine, own)]
+        collectives.append([(j, xs) for j, xs in reads if xs])
         if not check_leaves:
             continue
         wi = rnames.index("weights")
@@ -67,7 +70,7 @@ def _joined(node, ranks: list, check_leaves: bool) -> None:
                         assert got[0] == "n" and rank_of[got[1]] == q, f"rank {r}'s peer leaf is rank {q}'s node"
     assert len({len(c) for c in collectives}) == 1 and collectives[0]
     for calls in zip(*collectives):
-        operands = [[_runs(a) for a in body.nodes[j].args] for j in calls]
+        operands = [(xs, [_runs(body.nodes[j].args[x]) for x in xs]) for j, xs in calls]
         assert all(o == operands[0] for o in operands), "every rank's collective k reads one operand"
 
 
