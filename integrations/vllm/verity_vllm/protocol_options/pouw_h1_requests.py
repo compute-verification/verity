@@ -37,10 +37,15 @@ an `act` value, a run input under the root of the round that admits it, committe
   root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
   root also commits round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the
   manifest, the last round's receipts and every round's root and coin, so the draw follows every round coin by hash.
-* **Not yet.** The A table is the run's own: ROOTS1 (it equals the Commit's AROW root of the linear's input) is the
-  Commit's and circuits' check, and nothing yet ties it to the window Program's ``a/<K>`` tree (`pouw_h1_served`), which
-  is committed at the close, under the draw's root and after every round coin. The round root has no admit root (H1 has
-  no admit unit yet), no producer hands the run a receipt root yet, and no unit reads the round coins yet.
+* **The A rows under the round roots** (PRF-132, `credit.a_link`): the root round s's coin follows is over the round's
+  ``inner`` root (all of the above, `round_root`) and its ``a`` segments: the A table ``a/<K>@<c>`` of each call c of
+  step s, whole, as the aligned subtrees of its registered tree (`round_row`, `pouw_h1_served.Served.segments`),
+  registered as the run records the call. So each call's A rows, the ones its units read, are fixed under its own
+  round's root before that round's coin, and no other round lists them.
+* **Not yet.** ROOTS1: nothing ties a call's A table to the Commit's AROW root of its linear's input, or layer 0's A
+  rows to the request table's prompt tokens, so the A rows are the prover's own until it lands; only the serving
+  process holds them to both (it holds the call's codes). The round root has no admit root (H1 has no admit unit yet),
+  no producer hands the run a receipt root yet, and no unit reads the round coins yet.
 """
 from __future__ import annotations
 
@@ -53,6 +58,8 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import HM96, HM96_SALT, ROW_SCHEMA, rows_domain
+from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw.credit import CREDIT
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.ml.commitments import Commitment, MerkleTree, Opening, VerificationLimits, verify_opening
@@ -86,8 +93,12 @@ EMPTY_SLOT = bytes(4)
 #: draws its own salt key (`pouw_h1.H1Run`'s ``key``), which nothing persists
 REQUESTS_NONCE = 1 << 61
 SLOTS_NONCE = REQUESTS_NONCE + (1 << 40)
-#: call c's A and z tables' nonces are TABLES_NONCE + 3c + 0 and 2 (`pouw_h1.TABLE_NONCES`; 1 was the retired y table's)
+#: call c's A and z tables' nonces are TABLES_NONCE + 3c + 0 and 2 (`TABLE_NONCES`; 1 was the retired y table's)
 TABLES_NONCE = REQUESTS_NONCE + (1 << 41)
+#: a call's hiding tables under the run's salt key (`pouw_h1.H1Run`): A's T slot rows and scales, z's records
+#: (`pouw_h1_records`)
+TABLE_TAGS = {"a": "verity/pouw/h1/a-table/v1", "z": "verity/pouw/h1/z-table/v2"}
+TABLE_NONCES = {"a": 0, "z": 2}    # j of each table's hm96 nonces
 ROUND_TAG = "verity/pouw/h1/round/v3"
 STEP_TAG = "verity/pouw/h1/step-calls/v1"
 REQUESTS_TAG = "verity/pouw/h1/requests/v2"
@@ -146,6 +157,12 @@ def slot_table(salt: bytes, r: int, rows: int, owners: Sequence[int | None], key
     return hiding_rows(slots_binding(salt, r), r, values, key, SLOTS_NONCE + r)
 
 
+def table_leaves(rows: int, width: int, m: int, *parts: np.ndarray) -> list[bytes]:
+    """A call's table leaves: slot i < m the bytes of row i of each of `parts` in turn, every later slot `width` zero bytes."""
+    out = [b"".join(p[i].tobytes() for p in parts) for i in range(m)]
+    return out + [bytes(width)] * (rows - m)
+
+
 def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes, nonce: int) -> MerkleTree:
     """``audit.commit_rows(binding, owner, values, hash=HM96, salt_key=key, nonce=nonce)``, its leaf salts drawn as one
     keystream: leaf i's (`audit.hm96_salt`) is ChaCha20 blocks 3i..3i + 2 at a 64-bit counter and nonce, which is RFC
@@ -159,8 +176,10 @@ def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes,
 
 def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes:
     """Step s's calls: SHA-512 over their manifest rows (`pouw_h1.H1Run.manifest`), in order, with what each call's listeners
-    bound (root(A) among it, once AROW binds it)."""
-    return tagged(STEP_TAG, salt, s, *(json.dumps(row, sort_keys=True) for row in rows))
+    bound (root(A) among it, once AROW binds it), each without its credit bit (`credit.CREDIT`): the step's last verdict
+    comes after its round closes, and calls_root commits the bits before the draw root."""
+    return tagged(STEP_TAG, salt, s, *(json.dumps({k: v for k, v in row.items() if k != CREDIT}, sort_keys=True)
+                                       for row in rows))
 
 
 def _root64(h: Any) -> bool:
@@ -204,6 +223,34 @@ def round_root(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes,
     return tagged(ROUND_TAG, salt, r, calls, requests, slots, receipts)
 
 
+def round_row(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes, receipts: bytes,
+              segments: Mapping[str, Sequence[tuple[int, int, bytes]]]) -> dict[str, Any]:
+    """Round r's row of the log before its coin: its parts, its ``inner`` root (`round_root`) and ``root``, the one the
+    challenger receives, over that and each A value's ``a`` segments (`credit.round_root`: ``[level, index, root]``
+    subtrees of the round's rows, `pouw_h1_served.Served.segments`)."""
+    inner = round_root(salt, r, calls, requests, slots, receipts)
+    return {"round": r, "root": CR.round_root(r, inner, {v: list(x) for v, x in segments.items()}).hex(),
+            "inner": inner.hex(), "a": {v: [[lv, i, h.hex()] for lv, i, h in segments[v]] for v in sorted(segments)},
+            "calls": calls.hex(), "requests": requests.hex(), "slots": slots.hex(), "receipts": receipts.hex()}
+
+
+def round_reason(salt: bytes, row: Mapping[str, Any]) -> str | None:
+    """Why a round's row (`round_row`) isn't its root over its parts: its inner root over its calls, its request and
+    slot tables and the receipts before it, and its root over that and its A segments; None when it is."""
+    try:
+        r = row["round"]
+        calls, requests, slots, receipts, inner, root = (bytes.fromhex(row[k]) for k in (
+            "calls", "requests", "slots", "receipts", "inner", "root"))
+        segments = {v: [(int(lv), int(i), bytes.fromhex(h)) for lv, i, h in x] for v, x in row["a"].items()}
+    except (AttributeError, KeyError, TypeError, ValueError) as e:
+        return f"a round of the log is malformed ({e})"
+    if round_root(salt, r, calls, requests, slots, receipts) != inner:
+        return f"round {r}'s root is not over its calls, its request table, its slot table and the receipts before it"
+    if CR.round_root(r, inner, segments) != root:
+        return f"round {r}'s root is not over its inner root and its A segments (`credit.round_root`)"
+    return None
+
+
 def receipts_digest(salt: bytes, r: int, roots: Sequence[tuple[int, bytes | None]]) -> bytes:
     """Round r's receipts: each of its calls' (index, receipt root), in call order, an empty root where none was handed
     over; committed under round r + 1's root, or for the last round in `draw_root`."""
@@ -235,9 +282,10 @@ def _round(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment, salt: b
     row = next((x for x in log if x.get("round") == r), None)
     if row is None:
         return None, f"the round log has no round {r}"
-    calls, requests, slots, receipts, root = (bytes.fromhex(row[k]) for k in ("calls", "requests", "slots", "receipts", "root"))
-    if round_root(salt, r, calls, requests, slots, receipts) != root:
-        return None, f"round {r}'s root is not over its calls, its request table, its slot table and the receipts before it"
+    why = round_reason(salt, row)
+    if why is not None:
+        return None, why
+    root = bytes.fromhex(row["root"])
     if row.get("coin") is None:
         return None, f"round {r} has no live coin, so nothing shows its root committed before one"
     try:
@@ -376,8 +424,8 @@ def batch_order(runner: Any, scheduler_output: Any) -> list[tuple[str, int]]:
 
 
 __all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPTS", "OPEN_REQUESTS_TAG", "PER_ROUND",
-           "REQUESTS_NONCE", "ROUND0",
-           "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "UNENTERED", "batch_order", "draw_root", "hiding_rows",
-           "late_admission", "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding",
-           "round_root", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
-           "sort_batch_req_ids", "step_digest", "tables_reason"]
+           "REQUESTS_NONCE", "ROUND0", "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "TABLE_NONCES",
+           "TABLE_TAGS", "UNENTERED", "batch_order", "draw_root", "hiding_rows", "late_admission", "new_requests",
+           "receipts_digest", "request_reason", "request_table", "requests_binding", "round_reason", "round_root",
+           "round_row", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
+           "sort_batch_req_ids", "step_digest", "table_leaves", "tables_reason"]

@@ -92,7 +92,7 @@ def test_a_window_closed_by_another_process_is_the_one_its_session_served(tmp_pa
     record = json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text())
     assert PHC.manifest_reason(record) is None and len(record["commitment"]["rounds"]) == 3
     assert PHC.trusted_rounds_reason(record["commitment"], host.directory, [host.ledger.path], host.window, host.key,
-                                     CH.PINS, CH.MAIN) is None
+                                     pins=[host.ledger.pins_path], main=CH.MAIN) is None
 
 
 def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_refused(tmp_path, monkeypatch):

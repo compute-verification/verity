@@ -13,8 +13,8 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   served rows fill slots 0 .. m - 1 and every other slot is an empty row, zero bytes under scale 0 (`slots`). The window is S
   steps (``steps``) of one call per linear: call (s, w) is at positions s·U + off(w) + u (`layout`: U is a step's units,
   off(w) the units of the linears before w), and steps past the last served one are all empty. Nothing about a call's rows or
-  positions comes from its tokens, batch or EOS. Credit is the served rows of the calls the credit gate passes only; the
-  padded work is shown beside it.
+  positions comes from its tokens, batch or EOS. Gate-passed is the served rows of the calls the credit gate passes only;
+  the padded work is shown beside it.
 * **u** (`H1Run.utilization`, PERIOD-PATH's ``u`` in `benchmarks/pouw/period_cost.py`): the window's served rows over its
   declared rows, Σ_s m_s / (S·T). A `Static` declaration (VLLM-31's ``sampling.ignore_eos``: every request admitted at
   step 0, prefilled there and run to its cap) fixes each step's rows ahead of serving, so its u is public: SERVE-H1's 5
@@ -36,10 +36,12 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   ``zy_rows``), writing the served y and one record a unit, its exact z (`Call.z`'s cells) then y = dq(z). With none,
   none is committed (with ``retain``, `engine.int8_exact.int_mm` beside, to check). The last ``retain`` calls' Y are kept.
 * **The credit gate** (`credit_gate`, compute accounting's credit rule): each served call's ``apply`` runs under a trace
-  (`traced`); the call is credited only if the y it hands back to vLLM was written by the GEMM invocation that wrote its
+  (`traced`); the call gate-passes only if the y it hands back to vLLM was written by the GEMM invocation that wrote its
   z, the only GEMM of the call, and z is its records, which hold together with its scales and served y
   (`pouw_h1_records.reason`, else ``credit: z-records: ...``). An arm serving ``scaled_mm``'s y with z an ``_int_mm``
   beside it is refused (``credit: served-output-not-credited-kernel: ...``), as is a call recorded outside ``apply`` (`UNTRACED`).
+  The verdict is the serving process's own, so it is only the call's credit bit (`H1Run.credit_bits`, ``credit`` in its
+  manifest row under calls_root, before the draw root): credit is the verifier's (core's `credit`, PRF-132).
 * **Requests and rounds** (`pouw_h1_requests`, #2677's `Accounting.Served`): round s is step s. `admitting` hands each
   step's admitted requests and batch order to `H1Run.admit` before its forward, so each request's entry is a hiding leaf
   under the root of the round that admits it, and each served row's slot names its request, before that round's coin; a
@@ -73,6 +75,7 @@ import numpy as np
 from verity.core.protocols.pouw.audit import commit_rows, weight_binding
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw.credit import CREDIT
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.challenger import CoinError
 from verity.ml.circuits import boolean as BL
@@ -83,8 +86,11 @@ from verity.ml.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.ml.circuits.types import Array
 
 from verity_vllm.protocol_options import credit_gate as CG
+from verity_vllm.protocol_options import pouw_h1_prover as PV
 from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
+from verity_vllm.protocol_options.pouw_h1_requests import TABLE_NONCES, TABLE_TAGS, table_leaves
+from verity_vllm.protocol_options.pouw_h1_static import FILL, Static, utilization
 
 SCHEME = H.SCHEME
 TILE = (32, 32)
@@ -93,9 +99,6 @@ I8_BITS, BF16_BITS = 8, 16
 RECORD = "verity-vllm/pouw-h1-calls/v2"
 CALLS_FILE = "pouw-h1-calls.json"
 SALT_TAG = b"verity/pouw/h1/program-salt/v1\0"
-#: a call's hiding tables under the run's salt key (`H1Run`): A's T slot rows and scales, z's records (`pouw_h1_records`)
-TABLE_TAGS = {"a": "verity/pouw/h1/a-table/v1", "z": "verity/pouw/h1/z-table/v2"}
-TABLE_NONCES = {"a": 0, "z": 2}    # j of each table's hm96 nonces (`pouw_h1_requests.TABLES_NONCE`)
 #: the one coin source a credited window's coins come from (`pouw_h1_challenger`)
 CHALLENGER = "challenger"
 #: the credit refusal of every call of a window whose coins the auditor's challenger didn't draw
@@ -219,64 +222,6 @@ def slots(a: Any, s_a: Any, rows: int) -> tuple[Any, Any]:
     return out, sc
 
 
-def utilization(step_rows: Sequence[int], rows: int, steps: int) -> Fraction:
-    """PERIOD-PATH's u: the window's served rows over its declared rows, Σ_s m_s / (S·T)."""
-    if len(step_rows) > steps or any(not 0 <= m <= rows for m in step_rows):
-        raise ValueError(f"{list(step_rows)} is not a window of {steps} steps of at most {rows} rows")
-    return Fraction(sum(step_rows), rows * steps)
-
-
-@dataclass(frozen=True)
-class Static:
-    """A static H1 window's declaration (VLLM-31's ``sampling.ignore_eos``): requests of ``prompt_lens`` tokens, all admitted
-    at step 0 and prefilled there in one step, each running exactly ``max_tokens`` steps (no early stop, no preemption, no host
-    prefix cache), at T ``rows`` a call and S ``steps``. Each step's rows are then a function of the declaration alone
-    (`schedule`), and so is the window's u."""
-
-    prompt_lens: tuple[int, ...]
-    max_tokens: int
-    rows: int
-    steps: int
-
-    def __post_init__(self) -> None:
-        layout([], self.rows)
-        if not self.prompt_lens or min(self.prompt_lens) < 1 or sum(self.prompt_lens) > self.rows:
-            raise ValueError(f"prompts of {list(self.prompt_lens)} tokens don't prefill in one step of {self.rows} rows")
-        if not 1 <= self.max_tokens <= self.steps:
-            raise ValueError(f"a cap of {self.max_tokens} tokens doesn't fit a window of {self.steps} steps")
-
-    @property
-    def slots(self) -> int:
-        return len(self.prompt_lens)
-
-    def schedule(self) -> list[int]:
-        """Each step's rows: the prompts' tokens at step 0, one row a request for its other ``max_tokens`` - 1 steps, then the
-        window's empty steps."""
-        return [sum(self.prompt_lens)] + [self.slots] * (self.max_tokens - 1) + [0] * (self.steps - self.max_tokens)
-
-    @property
-    def u(self) -> Fraction:
-        return utilization(self.schedule(), self.rows, self.steps)
-
-    def engine_args(self) -> dict[str, Any]:
-        """vLLM's scheduler limits for the declaration: every request in flight at once, T tokens a step, no prefix cache."""
-        return {"max_num_seqs": self.slots, "max_num_batched_tokens": self.rows, "enable_chunked_prefill": True,
-                "enable_prefix_caching": False}
-
-    def check(self, realized: Sequence[int]) -> list[str]:
-        """Each step whose served rows aren't the declared ones, by name; empty when the window is the declaration."""
-        want = self.schedule()
-        if len(realized) > len(want):
-            return [f"{len(realized)} served steps past the window's {len(want)}"]
-        got = list(realized) + [0] * (len(want) - len(realized))
-        return [f"step {s}: {m} rows served, {d} declared ({'fewer' if m < d else 'more'}: an early stop, a preemption or an "
-                f"admission off the declaration decided it, not the public schedule)"
-                for s, (m, d) in enumerate(zip(got, want)) if m != d]
-
-
-#: PERIOD-PATH's ask 1: 64 one-token prompts at cap 16, every row of SERVE-H1's 16 served steps filled (u = 16/18)
-FILL = Static((1,) * 64, 16, 64, 18)
-
 
 @dataclass(frozen=True)
 class Call:
@@ -339,12 +284,6 @@ def _words(t: Any, m: int, dtype: str) -> np.ndarray:
     return np.ascontiguousarray(numpy_of(t).reshape(m, -1), dtype=dtype)
 
 
-def table_leaves(rows: int, width: int, m: int, *parts: np.ndarray) -> list[bytes]:
-    """A call's table leaves: slot i < m the bytes of row i of each of `parts` in turn, every later slot `width` zero bytes."""
-    out = [b"".join(p[i].tobytes() for p in parts) for i in range(m)]
-    return out + [bytes(width)] * (rows - m)
-
-
 class H1Run:
     """One install's H1 window on the int8_exact row, in the static form: its calls, rows and positions are a function of the
     public parameters alone, never of a step's tokens, batch or EOS. ``shapes`` are the linears' (n, k) in order, ``rows``
@@ -355,13 +294,15 @@ class H1Run:
     is recorded.
 
     Round s is step s. The engine's admissions and batch order (`admit`, from `admitting`) go to the round of the step about
-    to run, and round s closes once step s's last linear is recorded (or at `close`): its root
-    (`pouw_h1_requests.round_root`) over the step's calls, its request table and its slot table is recorded with
+    to run, and round s closes once step s's last linear is recorded (or at `close`): its root (`pouw_h1_requests.round_row`)
+    over the step's calls, its request table and its slot table, and with ``served`` each of the step's calls' A tables
+    ``a/<K>@<c>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
     `finish` opens ``draw``'s coin (a `LiveRecord` of the same challenger's draw family) after the window's `draw_root`.
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
-    given; nothing persists it or the tables, so their leaves open only while the run is held (`open_request`,
-    `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
+    given. ``prover`` (else ``served``'s) is the prover's private directory (`pouw_h1_prover`): it keeps the key and each
+    served call's A rows, scales and z/y records, so a drawn unit opens after the close (DRAWN1); without it their leaves
+    open only while the run is held (`open_request`, `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
     `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing. With ``served``
     (`pouw_h1_served.Served`) each call's A and z/y tables, and the weights' B, are also registered values as the call is
     recorded, their roots in its tables (``registered``) under its round's root; the commitment carries their entries.
@@ -372,7 +313,8 @@ class H1Run:
     def __init__(self, entry: str, salt: bytes | None, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]],
                  rows: int, steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True,
                  rounds: Any = None, key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
-                 coin_source: str = "in-process", opener: Opener | None = None, served: Any = None) -> None:
+                 coin_source: str = "in-process", opener: Opener | None = None, served: Any = None,
+                 prover: str | None = None) -> None:
         if admission not in RQ.ADMISSIONS:
             raise ValueError(f"{entry}: an admission is one of {RQ.ADMISSIONS}, not {admission!r}")
         if (salt is None) == (opener is None):
@@ -395,6 +337,9 @@ class H1Run:
         self._unopened: str | None = None
         self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
         self.draw, self.admission, self.coin_source = draw, admission, coin_source
+        self.prover = prover if prover is not None else getattr(served, "prover", None)
+        if self.prover is not None and commit:
+            PV.keep_key(self.prover, self._key)
         #: each call's table roots (hex; z None when the run has no exact Y for it) and each call's receipt root
         self.tables: dict[int, dict[str, str | None]] = {}
         self.receipts: dict[int, bytes] = {}
@@ -465,6 +410,8 @@ class H1Run:
         leaves = [bytes(ZR.ZY_BYTES)] * call.units if not m else None if records is None else [r.tobytes() for r in records]
         out["z"] = None if leaves is None else self._table(call, "z", leaves)
         self.tables[call.index] = out
+        if self.prover is not None and m:
+            PV.keep_call(self.prover, call.index, av, sv, records)
 
     def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None) -> Call:
         n, k = self.shapes_[w]
@@ -555,11 +502,10 @@ class H1Run:
             slots = self._slot_tables[r] = RQ.slot_table(self.salt, r, self.rows, owners, self._key)
             calls = RQ.step_digest(self.salt, r, self._rows([c for c in self.calls if c.step == r]))
             receipts = self.receipts_of(r - 1) if r else RQ.NO_RECEIPTS
-            root = RQ.round_root(self.salt, r, calls, table.commitment.root, slots.commitment.root, receipts)
-            coin = self.rounds.record(root) if self.rounds is not None else None
-            self.round_log.append({"round": r, "root": root.hex(), "calls": calls.hex(),
-                                   "requests": table.commitment.root.hex(), "slots": slots.commitment.root.hex(),
-                                   "receipts": receipts.hex(), "coin": coin.to_json() if coin else None})
+            row = RQ.round_row(self.salt, r, calls, table.commitment.root, slots.commitment.root, receipts,
+                               self.served.segments(self, r) if self.served is not None else {})
+            coin = self.rounds.record(bytes.fromhex(row["root"])) if self.rounds is not None else None
+            self.round_log.append({**row, "coin": coin.to_json() if coin else None})
 
     def receipts_of(self, r: int) -> bytes:
         """Round r's receipts (`pouw_h1_requests.receipts_digest`): its calls' receipt roots as handed to `receipt`."""
@@ -669,7 +615,7 @@ class H1Run:
         self.details["static"] = self.static()
         self.details["step_rows"] = self.step_rows()
         self.details["u"] = str(self.utilization())
-        self.details["credit"] = self.credit()
+        self.details["gate"] = self.credit()
 
     def static(self) -> bool:
         """Every (step, linear) call of the window, in order, at its public position, and nothing refused."""
@@ -691,27 +637,37 @@ class H1Run:
             "linear": call.module, "credit": False,
             "reason": f"credit: {CG.UNTRACED[1:-1]}: {call.module} call {call.index} was recorded outside a traced apply"}
 
+    def gated(self) -> dict[int, dict[str, Any]]:
+        """Each served call's verdict: the credit gate's, refused in a window that served a row it can't name an entry for
+        (`request_gaps`) or whose coins aren't the challenger's (`IN_PROCESS`)."""
+        out = {c.index: self.verdict(c) for c in self.calls if c.m}
+        for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coin_source != CHALLENGER)):
+            out = {i: {**v, "credit": False, "reason": why} if on and v["credit"] else v for i, v in out.items()}
+        return out
+
+    def credit_bits(self) -> dict[int, bool]:
+        """Each call's credit bit, its manifest row's `credit.CREDIT` under calls_root (so fixed before the draw root): its
+        `gated` verdict, true only for a served call with a z table."""
+        gated = self.gated()
+        return {c.index: c.index in gated and gated[c.index]["credit"] and (self.tables.get(c.index) or {}).get("z") is not None
+                for c in self.calls}
+
     def credit(self) -> dict[str, Any]:
-        """Credited: the served rows' MACs of the calls the credit gate passes (`credit_gate`), only, and none in a window
-        that served a row it can't name an entry for (`request_gaps`) or whose coins aren't the challenger's (`IN_PROCESS`).
-        The padded work (empty slots and pad columns) is
-        shown beside it, not credited (Daniel, 18 Oct), and so are the refused calls' rows, with each refusal's reason."""
+        """Gate-passed: the served rows' MACs of the calls the serving process's own credit gate passes (`gated`), only. No
+        verifier reads this: a window's credit is its verifier's (`pouw_h1_challenger.credit_reason`, RT4-INT-31). The padded
+        work (empty slots and pad columns) is shown beside it (Daniel, 18 Oct), and so are the refused calls' rows, with each
+        refusal's reason."""
         served = [c for c in self.calls if c.m]
-        gaps = self.request_gaps()
-        verdicts = {c.index: self.verdict(c) for c in served}
-        if gaps:
-            verdicts = {i: v if not v["credit"] else {**v, "credit": False, "reason": RQ.UNENTERED} for i, v in verdicts.items()}
-        if self.coin_source != CHALLENGER:
-            verdicts = {i: v if not v["credit"] else {**v, "credit": False, "reason": IN_PROCESS} for i, v in verdicts.items()}
+        gaps, verdicts = self.request_gaps(), self.gated()
         ok = [c for c in served if verdicts[c.index]["credit"]]
         no = [c for c in served if not verdicts[c.index]["credit"]]
         computed = sum(padded(c.rows, c.n)[0] * padded(c.rows, c.n)[1] * c.k for c in self.calls)
         all_served = sum(c.m * c.n * c.k for c in served)
-        return {"rule": "credit the served rows of calls whose served y is the credited kernel's own output only, and none "
+        return {"rule": "gate-pass the served rows of calls whose served y is the credited kernel's own output only, and none "
                         "in a window that served a row of a request with no entry or whose coins the auditor's challenger "
-                        "didn't draw; padded work and refused calls are shown, not credited", "requests": gaps,
+                        "didn't draw; padded work and refused calls are shown, not gate-passed", "requests": gaps,
                 "coins": self.coin_source,
-                "credited": {"rows": sum(c.m for c in ok), "macs": sum(c.m * c.n * c.k for c in ok)},
+                "gate_passed": {"rows": sum(c.m for c in ok), "macs": sum(c.m * c.n * c.k for c in ok)},
                 "refused": {"calls": len(no), "rows": sum(c.m for c in no), "macs": sum(c.m * c.n * c.k for c in no),
                             "reasons": CG.reasons(verdicts[c.index] for c in no)},
                 "padded": {"rows": sum(c.rows - c.m for c in self.calls), "macs": computed - all_served},
@@ -739,8 +695,10 @@ class H1Run:
                  **({"bound": dict(self.bound[c.index])} if c.index in self.bound else {})} for c in calls]
 
     def manifest(self) -> list[dict[str, Any]]:
-        """Each call's summary, with what its listeners bound."""
-        return self._rows(self.calls)
+        """Each call's summary, with what its listeners bound and its credit bit (`credit_bits`), which the step digests
+        under the round roots leave out (`pouw_h1_requests.step_rows`): a step's last verdict comes after its round closes."""
+        bits = self.credit_bits()
+        return [{**row, CREDIT: bits[row["index"]]} for row in self._rows(self.calls)]
 
     def calls_root(self) -> bytes:
         """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound), and with
