@@ -119,13 +119,24 @@ def _instance(provenance):
             "gamma": NODE.program.gates, "alpha": [4 * 32, computed], "provenance": provenance}, computed
 
 
+def _manifest(d, sha=None):
+    """A checkpoints.json pinning the checkpoint's one shard at `sha` (default: its own)."""
+    sha = sha or hashlib.sha256((d["ck"] / "model.safetensors").read_bytes()).hexdigest()
+    p = d["tmp"] / "checkpoints.json"
+    p.write_text(json.dumps({"checkpoints": [{"repo": "test/tiny", "revision": "0" * 40, "local_path": str(d["ck"]),
+                                              "safetensors_sha256": {"model.safetensors": sha}}]}))
+    return str(p)
+
+
 def test_the_nodes_theta_registers_from_each_ranks_commit_and_passes_the_full_check(commit):
-    """Two spawned rank processes: the log passes `check_baseline`, and each rank's θ parameter i is `registered_rows.commit` of the
-    tensor that rank registered under its field i's name, under the salts written to --salts and nowhere under --out."""
-    o = NR.Options(**{**commit["o"].__dict__, "workers": 2})
+    """Two spawned rank processes, on the pinned checkpoint: the log passes `check_baseline`, and each rank's θ parameter i is
+    `registered_rows.commit` of the tensor that rank registered under its field i's name, under the salts written to --salts and
+    nowhere under --out."""
+    o = NR.Options(**{**commit["o"].__dict__, "workers": 2, "checkpoints_manifest": _manifest(commit)})
     assert NR.main(o) == 0
     log, salts = Path(o.out), Path(o.salts)
     doc, rec, trusted = (json.loads((log / f"{n}.json").read_text()) for n in ("registration", "record", "trusted"))
+    assert doc["checkpoint"]["pinned_shards"] == 1 and doc["checkpoint"]["entry"]["repo"] == "test/tiny"
     provenance = json.loads((log / "provenance.json").read_text())
     inst, computed = _instance(provenance)
     assert REF.check_baseline(inst, trusted) == {"gates": NODE.program.gates, "ius": [[computed, 4 * 32]], "complies": True, "failure": None}
@@ -231,6 +242,11 @@ def test_a_descriptor_that_is_not_the_nodes_is_refused(commit, capsys):
     desc["annotations"]["theta"] = desc["annotations"]["theta"][1:]
     Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
     assert NR.main(commit["o"]) == 2 and "the descriptor's θ is" in capsys.readouterr().out
+
+
+def test_a_checkpoint_its_manifest_does_not_pin_is_refused(commit, capsys):
+    o = NR.Options(**{**commit["o"].__dict__, "checkpoints_manifest": _manifest(commit, "0" * 64)})
+    assert NR.main(o) == 2 and "shards ['model.safetensors'] (1 of 1) are not the ones" in capsys.readouterr().out
 
 
 def test_salts_never_go_under_the_published_out(commit):

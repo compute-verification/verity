@@ -19,9 +19,13 @@ in the Commit of record:
   read from the bundle, and opened against its tensor root under the rank's committed weights root (`cpu_replay.opener`, as the
   Commit's replay opens it), in the field's width and leaf count.
 
+The tensor roots decide each value. With --checkpoints-manifest the checkpoint is also its pinned one, every shard's sha256 the
+manifest's (`checkpoint_index.shard_pin`), else refused; without it no shard is hashed.
+
 One spawned process per rank (`--workers` at a time) opens and commits its tensors one at a time, so it holds a tensor, not the
-rank's weights (95 GB a GLM-5.3 B1 rank), and another reads the descriptor before them. Under --out: `record.json` (the registration record), `trusted.json` (nci-check's
-trusted input), `provenance.json` (the instance's θ provenance) and `registration.json` (digests, per-rank counts and timings).
+rank's weights (95 GB a GLM-5.3 B1 rank), and another reads the descriptor before them. Under --out: `record.json` (the
+registration record), `trusted.json` (nci-check's trusted input), `provenance.json` (the instance's θ provenance) and
+`registration.json` (digests, the checkpoint's pin, per-rank counts and timings).
 Under --salts: each value's row salts, `<value>.salts`, the prover's, which nothing public carries, so --salts is refused inside
 --out. Exit 0 written, 2 refused.
 """
@@ -138,7 +142,7 @@ def trace_fields(d: str) -> list[str]:
     return [w["name"] for w in sorted(rep["provenance"]["weights"], key=lambda w: w["field"])]
 
 
-def rank_job(o: Options, out: Path, pair: int, c: dict[str, Any], dd: dict[str, Any], P: Any, rank: int, pin: dict[str, Any],
+def rank_job(o: Options, out: Path, pair: int, c: dict[str, Any], dd: dict[str, Any], P: Any, rank: int, pin: dict[str, Any] | None,
              digest: str) -> dict[str, Any]:
     """What rank `rank`'s process registers, once its bundle, Build and trace are shown to be the record's (module docstring)."""
     from verity_vllm.pipeline import cpu_replay as CPU
@@ -194,7 +198,7 @@ def register_rank(job: dict[str, Any]) -> dict[str, Any]:
     _folded, why = CPU.tree_refusal(tree, job["root"])
     if why:
         raise Refused(f"rank {r}: {why}")
-    ck = WR.CheckpointIndex(job["checkpoint_dir"], checkpoints_manifest=job["checkpoints_manifest"], pin=job["pin"])
+    ck = WR.CheckpointIndex(job["checkpoint_dir"], checkpoints_manifest=job["checkpoints_manifest"], pin=job["pin"], verify_shards=False)
     open_one = CPU.opener(bundle, tree, ck, tp={"world": int(job["world"]), "rank": r}, roles=job["roles"])
     at = {name: i for i, (name, *_x) in enumerate(tree["names"])}
     entries, by = {}, {"checkpoint": 0, "bundle": 0}
@@ -256,9 +260,16 @@ def register(o: Options) -> dict[str, Any]:
     commit_out = Path(o.commit_out)
     pair, c, dd = commit_of_record(commit_out, o.pair)
     ck = WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision,
-                            workers=o.workers)
+                            verify_shards=bool(o.checkpoints_manifest), workers=o.workers)
+    unpinned = [fn for fn, s in ck.pin["shards"].items() if s["pinned"] is not True]
+    if o.checkpoints_manifest and unpinned:
+        raise Refused(f"{o.checkpoint_dir}: shards {unpinned[:4]} ({len(unpinned)} of {len(ck.shards)}) are not the ones "
+                      f"{o.checkpoints_manifest} pins for {ck.pin['entry']}")
+    pin = ck.pin if o.checkpoints_manifest else None
+    checkpoint = {"dir": o.checkpoint_dir, "manifest": o.checkpoints_manifest, "entry": ck.pin["entry"],
+                  "pinned_shards": len(ck.shards) if pin else 0}
     t_ck = time.perf_counter()
-    jobs = [rank_job(o, commit_out, pair, c, dd, P, r, ck.pin, digest) for r in range(len(P.phis))]
+    jobs = [rank_job(o, commit_out, pair, c, dd, P, r, pin, digest) for r in range(len(P.phis))]
     del ck
     t_jobs = time.perf_counter()
     out.mkdir(parents=True, exist_ok=True)
@@ -276,7 +287,7 @@ def register(o: Options) -> dict[str, Any]:
     doc = {"schema": "verity-vllm/node-registration/v1", "program_digest": digest, "record_digest": reg["digest"], "row": o.row,
            "wrapper": o.wrapper, "shape": shape, "commit_out": str(commit_out), "pair": pair, "window": window,
            "theta_parameters": len(P.theta), "theta_nodes": len(theta), "rows": sum(e["leaves"] for e in entries.values()),
-           "ranks": ranks, "salts": str(salts),
+           "checkpoint": checkpoint, "ranks": ranks, "salts": str(salts),
            "timings": {"descriptor_s": round(t_desc - t0, 3), "checkpoint_index_s": round(t_ck - t_desc, 3),
                        "ranks_checked_s": round(t_jobs - t_ck, 3), "commit_s": round(time.perf_counter() - t_jobs, 3),
                        "total_s": round(time.perf_counter() - t0, 3)}}
