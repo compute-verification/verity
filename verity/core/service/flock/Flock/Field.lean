@@ -195,6 +195,59 @@ def pushBytes (out : ByteArray) (a : F128) : ByteArray := out ++ a.toBytes
 @[inline] def bit (a : F128) (i : Nat) : Bool :=
   if i < 64 then (a.lo >>> i.toUInt64) &&& 1 == 1 else (a.hi >>> (i - 64).toUInt64) &&& 1 == 1
 
+/-- Byte `j < 16`: bits `8j` to `8j + 7`, as a number below `256` (`testBit_byte`). -/
+@[inline] def byte (a : F128) (j : Nat) : Nat :=
+  if j < 8 then ((a.lo >>> (8 * j).toUInt64) &&& 255).toNat else ((a.hi >>> (8 * (j - 8)).toUInt64) &&& 255).toNat
+
+protected theorem add_comm (a b : F128) : a + b = b + a := by
+  show F128.mk (a.lo ^^^ b.lo) (a.hi ^^^ b.hi) = F128.mk (b.lo ^^^ a.lo) (b.hi ^^^ a.hi)
+  rw [UInt64.xor_comm a.lo, UInt64.xor_comm a.hi]
+
+protected theorem add_assoc (a b c : F128) : a + b + c = a + (b + c) := by
+  show F128.mk (a.lo ^^^ b.lo ^^^ c.lo) (a.hi ^^^ b.hi ^^^ c.hi) =
+    F128.mk (a.lo ^^^ (b.lo ^^^ c.lo)) (a.hi ^^^ (b.hi ^^^ c.hi))
+  rw [UInt64.xor_assoc, UInt64.xor_assoc]
+
+protected theorem add_zero (a : F128) : a + 0 = a := by
+  show F128.mk (a.lo ^^^ 0) (a.hi ^^^ 0) = a
+  rw [UInt64.xor_zero, UInt64.xor_zero]
+
+protected theorem zero_add (a : F128) : 0 + a = a := by
+  rw [F128.add_comm, F128.add_zero]
+
+theorem bitU64 (x : UInt64) (s : Nat) (hs : s < 64) : ((x >>> s.toUInt64) &&& 1 == 1) = x.toNat.testBit s := by
+  have hn : ((x >>> s.toUInt64) &&& 1).toNat = x.toNat / 2 ^ s % 2 := by
+    rw [UInt64.toNat_and, UInt64.toNat_shiftRight, Nat.toUInt64, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (by omega),
+      Nat.mod_eq_of_lt (by omega), show (1 : UInt64).toNat = 1 from rfl, Nat.and_one_is_mod,
+      Nat.shiftRight_eq_div_pow]
+  rw [Nat.testBit_eq_decide_div_mod_eq]
+  have h1 : ∀ c : UInt64, (c == 1) = decide (c.toNat = 1) := fun c => by
+    by_cases h : c = 1
+    · subst h; rfl
+    · have : c.toNat ≠ 1 := fun e => h (UInt64.toNat_inj.mp (by rw [e]; rfl))
+      rw [show (c == 1) = false from beq_eq_false_iff_ne.mpr h]
+      simp [this]
+  rw [h1, hn]
+
+theorem byteU64 (x : UInt64) (j i : Nat) (hj : j < 8) (hi : i < 8) :
+    ((x >>> (8 * j).toUInt64) &&& 255).toNat.testBit i = x.toNat.testBit (8 * j + i) := by
+  rw [UInt64.toNat_and, UInt64.toNat_shiftRight, Nat.toUInt64, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (by omega),
+    Nat.mod_eq_of_lt (by omega), Nat.testBit_and, Nat.testBit_shiftRight,
+    show (255 : UInt64).toNat = 2 ^ 8 - 1 from rfl, Nat.testBit_two_pow_sub_one]
+  simp [hi]
+
+theorem byte_lt (a : F128) (j : Nat) : a.byte j < 256 := by
+  unfold byte
+  split <;> (rw [UInt64.toNat_and]; exact Nat.lt_of_le_of_lt Nat.and_le_right (by decide))
+
+/-- Bit `i` of byte `j` is bit `8j + i`. -/
+theorem testBit_byte (a : F128) {j i : Nat} (hj : j < 16) (hi : i < 8) : (a.byte j).testBit i = a.bit (8 * j + i) := by
+  unfold byte bit
+  by_cases h : j < 8
+  · rw [if_pos h, if_pos (show 8 * j + i < 64 by omega), byteU64 _ _ _ h hi, bitU64 _ _ (by omega)]
+  · rw [if_neg h, if_neg (show ¬ 8 * j + i < 64 by omega), byteU64 _ _ _ (by omega) hi, bitU64 _ _ (by omega),
+      show 8 * j + i - 64 = 8 * (j - 8) + i by omega]
+
 /-- `x^i` for `i < 128`. -/
 def monomial (i : Nat) : F128 :=
   if i < 64 then ⟨(1 : UInt64) <<< i.toUInt64, 0⟩ else ⟨0, (1 : UInt64) <<< (i - 64).toUInt64⟩

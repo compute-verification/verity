@@ -128,6 +128,17 @@ def parRange {α : Type} (f : Nat → α) (a b : Nat) : Array α :=
   ((Array.range a).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
     (fun acc t => acc ++ t.get) #[]
 
+/-- **`a` tasks of `b` each are one map** over `a·b`. -/
+theorem parRange_eq {α : Type} (f : Nat → α) (a b : Nat) : parRange f a b = (Array.range (a * b)).map f := by
+  unfold parRange
+  induction a with
+  | zero => simp only [Nat.zero_mul, Array.range_eq_empty_iff.mpr rfl, Array.map_empty, Array.foldl_empty]
+  | succ a ih =>
+    rw [Array.range_succ, Array.map_append, Array.foldl_append, ih, Nat.succ_mul, Array.range_add]
+    simp only [Task.spawn, List.map_toArray, List.map_cons, List.map_nil, List.size_toArray, List.length_cons,
+      List.length_nil, Nat.zero_add, List.foldl_toArray', List.foldl_cons, List.foldl_nil, Array.map_append,
+      Array.map_map, Function.comp_def]
+
 /-- **Layer `h` of a Merkle tree** over the leaves `lf q` (`q < 2^d`): layer `h + 1` holds the nodes `SHA-512(l ‖ r)`
 of layer `h`'s pairs. -/
 def layer (d : Nat) (lf : Nat → ByteArray) : Nat → Array ByteArray

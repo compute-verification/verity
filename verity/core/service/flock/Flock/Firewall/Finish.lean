@@ -157,6 +157,52 @@ def switchVec (g : Array F128) (c : Claim) : Array F128 :=
   let eY := eqTable (c.x.extract 1 c.x.size)
   (Array.range 128).map fun v => sumF eY.size fun y => if (g[y]!).bit v then eY[y]! else 0
 
+namespace Fast
+
+/-- `switchVec` as compiled code computes it: byte `j`'s buckets of the table (`byteBuckets`), one task to a byte, then
+`s[8j + i] = Σ_{b < 256, bit_i(b)} buckets_j[b]`. -/
+def switchVecFast (g : Array F128) (c : Claim) : Array F128 :=
+  let eY := eqTable (c.x.extract 1 c.x.size)
+  let bs := ((Array.range 16).map fun j => Task.spawn fun _ => byteBuckets g eY j).map Task.get
+  (Array.range 128).map fun v => sumF 256 fun b => if b.testBit (v % 8) then (bs[v / 8]!)[b]! else 0
+
+theorem switchVec_eq_fast (g : Array F128) (c : Claim) : switchVec g c = switchVecFast g c := by
+  unfold switchVec switchVecFast
+  apply Array.map_congr_left
+  intro v hv
+  have hv := Array.mem_range.1 hv
+  rw [Array.map_map, getElem!_range_map _ (show v / 8 < 16 by omega)]
+  have h := (byteBuckets_go g (eqTable (c.x.extract 1 c.x.size)) (v / 8) (by omega) (show v % 8 < 8 by omega)
+    (eqTable (c.x.extract 1 c.x.size)).size).2
+  rw [show 8 * (v / 8) + v % 8 = v by omega] at h
+  exact h.symm
+
+/-- `basisVals` as compiled code computes it: each claim's `Φ_k(eq(z_k, y))` from its byte tables (`byteTable_sum`), in
+tasks of `2^12` points. -/
+def basisValsFast (sws : Array Switched) (l : Nat) : Array F128 :=
+  let tabs := sws.map fun sw => (sw.gamma, eqTable sw.z, byteTable (eqTable sw.rpp))
+  let k := min l 12
+  Link.parRange (fun y => tabs.foldl (fun acc (g, ez, tb) =>
+      let v := ez[y]!
+      acc + g * sumF 16 fun j => tb[256 * j + v.byte j]!) 0) (2 ^ (l - k)) (2 ^ k)
+
+theorem basisVals_eq_fast (sws : Array Switched) (l : Nat) : basisVals sws l = basisValsFast sws l := by
+  unfold basisVals basisValsFast
+  rw [Link.parRange_eq, ← Nat.pow_add, Nat.sub_add_cancel (Nat.min_le_left _ _)]
+  apply Array.map_congr_left
+  intro y _
+  simp only [Array.foldl_map, byteTable_sum]
+
+end Fast
+
+/-- Compiled code runs `switchVecFast` and `basisValsFast`; the kernel and every proof see `switchVec` and `basisVals`.
+`@[csimp]` rewrites only code compiled after it, so it stays above `repOpening`. -/
+@[csimp] theorem switchVec_eq_switchVecFast : @switchVec = @Fast.switchVecFast :=
+  funext fun g => funext fun c => Fast.switchVec_eq_fast g c
+
+@[csimp] theorem basisVals_eq_basisValsFast : @basisVals = @Fast.basisValsFast :=
+  funext fun sws => funext fun l => Fast.basisVals_eq_fast sws l
+
 /-- `c + Σ a_i h_i` at the pads `h`, over `min |a| |h|` terms (`zk_veil::Lin::eval`). -/
 def linAt (l : Zk.Lin) (h : Array F128) : F128 :=
   (Array.range (min l.a.size h.size)).foldl (fun acc i => acc + l.a[i]! * h[i]!) l.c
