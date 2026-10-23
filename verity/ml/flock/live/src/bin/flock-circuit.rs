@@ -1912,10 +1912,48 @@ fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, 
         return (Vec::new(), bk);
     }
     let t = Instant::now();
-    let lean = fin.lock().unwrap_or_else(PoisonError::into_inner).rep(req.table, req.rep, &body).unwrap_or_else(|e| panic!("{e}"));
+    let tamper = std::env::var("FC_FINISH_TAMPER").unwrap_or_default();
+    let lean = {
+        let mut f = fin.lock().unwrap_or_else(PoisonError::into_inner);
+        let last = FINISH_SENT.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1 == FINISH_REPS.load(std::sync::atomic::Ordering::SeqCst);
+        let body = if !tamper.is_empty() && last { finish_tampered(&req, &zk.pads, &zk.ic.salts, &zk.lay, &tamper) } else { body };
+        f.rep(req.table, req.rep, &body)
+    };
+    let lean = match lean {
+        Ok(l) => l,
+        Err(e) if !tamper.is_empty() => {
+            *FINISH_REFUSED.lock().unwrap_or_else(PoisonError::into_inner) = Some(e);
+            return (Vec::new(), bk);
+        }
+        Err(e) => panic!("{e}"),
+    };
     req.dump_lean(&lean);
     bk.as_object_mut().expect("buckets").insert("t.lean_finish".into(), json!(t.elapsed().as_secs_f64()));
     (lean, bk)
+}
+
+/// `FC_FINISH_TAMPER=MODE` (the selftest's `zk_worker_finish`): the session's last rep request to the Lean finish in time
+/// (the [`FINISH_REPS`]-th, counted under the finish's lock, so every other rep's requests went before it) doctored in one
+/// named way: `pads-zero` (the pads `h` all zero), `vals-chosen` (the first passed value plus one), `coins` (the first
+/// round's first coin plus one) or `final-c` (`final_c` plus one). The loop's finish refuses each (`Flock.Firewall.Finish.RepIn.differs`, and
+/// for `final_c` the rep's stop on its `zerocheck c_eval` constraint), and the refusal goes to [`FINISH_REFUSED`].
+static FINISH_REPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static FINISH_SENT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static FINISH_REFUSED: Mutex<Option<String>> = Mutex::new(None);
+
+/// The rep request `req` on the draws `pads` and the pads tree's `salts`, doctored per `FC_FINISH_TAMPER`'s `mode`.
+fn finish_tampered(req: &RepReq, pads: &zkv::Pads, salts: &[u8], lay: &Layout, mode: &str) -> Vec<u8> {
+    let mut p = zkv::Pads { h: pads.h.clone(), mu: pads.mu.clone(), pad_h: pads.pad_h.clone(), pad_mu: pads.pad_mu.clone(),
+                            tau_salt: pads.tau_salt.clone() };
+    let (mut vals, mut rounds, one) = (req.vals.clone(), req.rounds.clone(), F128::new(1, 0));
+    match mode {
+        "pads-zero" => p.h.iter_mut().for_each(|h| *h = F128::ZERO),
+        "vals-chosen" => vals[0] = vals[0] + one,
+        "coins" => rounds[0][0] = rounds[0][0] + one,
+        "final-c" => vals[lay.fc()] = vals[lay.fc()] + one,
+        m => panic!("FC_FINISH_TAMPER={m}: pads-zero, vals-chosen, coins or final-c"),
+    }
+    flock_live::firewall::rep_body(&p, salts, &vals, &req.extras, &rounds)
 }
 
 /// The shift of `final_c'` that zeroes the inner proof's batched constraint on the committed pads, from its coins (`ε`, then
@@ -3931,6 +3969,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_worker_cut_decode", false, false),
     ("zk_worker_cut_tree", false, false),
     ("zk_worker_wire", false, false),
+    ("zk_worker_finish", false, false),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -4141,6 +4180,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "zk_worker_wire" {
         return worker_wire_case(gpu);
+    }
+    if name == "zk_worker_finish" {
+        return worker_finish_case(gpu);
     }
     if name == "lincheck_modes_agree" {
         return lincheck_modes_case(st, inst, gpu);
@@ -4873,6 +4915,7 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
         }
     });
     let plan = Plan::default();
+    FINISH_REPS.store(2 * table_names(plan.tables).len(), std::sync::atomic::Ordering::SeqCst);
     let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), &verifier, None).unwrap_or_else(|e| refuse(e));
     let plan = Plan { lean_session: frames.is_some(), lean_frames: frames, ..plan };
     let tcp = TcpTransport::connect(&addr).unwrap_or_else(|e| refuse(format!("the firewall's session loop at {addr}: {e}")));
@@ -4884,7 +4927,7 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let device_rounds = v["buckets"].as_array().and_then(|b| b.iter().filter_map(|x| x["firewall_device_rounds"].as_u64()).max());
     let refused = refused.lock().unwrap_or_else(PoisonError::into_inner).clone();
     json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "device_rounds": device_rounds, "seen": seen,
-           "wire_refused": refused})
+           "wire_refused": refused, "finish_refused": FINISH_REFUSED.lock().unwrap_or_else(PoisonError::into_inner).clone()})
 }
 
 /// One firewalled CPU session in a process of its own ([`WORKER_SESSION`]), its controls `env` and none other: its record.
@@ -4894,7 +4937,7 @@ fn worker_subsession(env: &[(&str, String)]) -> Value {
         .args(["--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
                "--only", WORKER_SESSION])
         .env("FC_FIREWALL", "1").env("FC_HOST_WITNESS", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
-        .env_remove("FC_FIREWALL_DEADLINE_S").env_remove("FC_WIRE_TAMPER");
+        .env_remove("FC_FIREWALL_DEADLINE_S").env_remove("FC_WIRE_TAMPER").env_remove("FC_FINISH_TAMPER");
     // the verifier's draw, as this process's server has it ([`serving`])
     for flag in ["--draw", "--draw-law", "--draw-file"] {
         let v = arg(flag, "");
@@ -4949,6 +4992,43 @@ fn worker_wire_case(gpu: bool) -> Value {
                "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "wire": s.get(i)}))})
     }).collect();
     json!({"case": name, "expect": "each doctored frame dropped (the honest session's requests, accepted) or refused (unknown)",
+           "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
+           "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
+}
+
+/// `zk_worker_finish` (live PROTOCOL.md §10.4): the proof files that leave are the loop's finish's on its own frames' state,
+/// whatever the host's rep requests carry. Beside an honest firewalled CPU session, one session per `FC_FINISH_TAMPER` mode,
+/// each in a process of its own, whose last rep request to the Lean finish carries zero pads, a chosen passed value, a
+/// chosen coin or a chosen `final_c`: the finish refuses it (the request is not the frame's, or its `c_eval` fails on the
+/// frame's pads), no proof leaves, and the verifier gets the honest session's every request but its proofs, `Finish`
+/// included, and does not accept.
+fn worker_finish_case(gpu: bool) -> Value {
+    let name = "zk_worker_finish";
+    if gpu {
+        return json!({"case": name, "pass": true, "skipped": "the finish's controls run on the CPU device"});
+    }
+    let lean = flock_live::firewall::lean_frame_exe();
+    if !lean.exists() {
+        return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
+    }
+    let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
+    let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
+    let honest = worker_subsession(&[]);
+    let h = seen(&honest);
+    let honest_ok = honest["accepted"] == true && h.iter().filter(|x| kind(x) == "proof").count() > 0 && honest["finish_refused"].is_null();
+    let want: Vec<Value> = h.iter().filter(|x| kind(x) != "proof").cloned().collect();
+    let modes: Vec<Value> = [("pads-zero", "its pads are not the frame's draws"), ("vals-chosen", "its passed values are not the ones the frame took"),
+                             ("coins", "its coins are not the ones the stream answered"), ("final-c", "zerocheck c_eval")].iter().map(|&(m, why)| {
+        let v = worker_subsession(&[("FC_FINISH_TAMPER", m.to_string())]);
+        let s: Vec<Value> = seen(&v).into_iter().filter(|x| kind(x) != "refused").collect();
+        let refused = v["finish_refused"].as_str().is_some_and(|r| r.contains(why));
+        let first_miss = (0..want.len().max(s.len())).find(|&i| want.get(i) != s.get(i));
+        json!({"mode": m, "ok": honest_ok && v["accepted"] != true && refused && first_miss.is_none(), "accepted": v["accepted"],
+               "why": v["why"].as_str().unwrap_or("").chars().take(160).collect::<String>(), "finish_refused": v["finish_refused"],
+               "error": v["error"], "requests": s.len(),
+               "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "tampered": s.get(i)}))})
+    }).collect();
+    json!({"case": name, "expect": "each doctored rep request refused by the loop's finish, no proof sent, the honest session's other requests",
            "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
            "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
 }
