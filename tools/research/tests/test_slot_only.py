@@ -205,14 +205,16 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
     gate = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/challenger/" in e.get("src", "")
             and not e["src"].endswith("/11-vy-admin.conf")}
     assert gate == {p: ["vy-challenger-1"] for p in ("/usr/local/sbin/vy-challenger-gate", "/usr/local/sbin/vy-challenger-setup",
-                                                     "/usr/local/sbin/vy-challenger-pin", "/etc/systemd/system/vy-challenger@.service")}
+                                                     "/usr/local/sbin/vy-challenger-pin", "/etc/systemd/system/vy-challenger@.service",
+                                                     "/etc/systemd/system/vy-certifier@.service")}
     verifier = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/verifier/" in e.get("src", "")}
     assert verifier == {p: ["vy-auditor-1"] for p in (
         "/usr/local/sbin/vy-verifier-gate", "/usr/local/sbin/vy-verifier-setup", "/usr/local/sbin/vy-verifier-pin",
         "/usr/local/sbin/vy-verifier-tunnel", "/etc/systemd/system/vy-verifier@.service",
         "/etc/systemd/system/vy-verifier-replay@.service", "/etc/systemd/system/vy-verifier-publish@.service",
         "/etc/ssh/sshd_config.d/12-vy-verifier.conf", "/etc/vy/verifier.json")}
-    assert "User=auditor" in (nebius / "challenger" / "vy-challenger@.service").read_text()
+    for unit in ("vy-challenger@.service", "vy-certifier@.service"):
+        assert "User=auditor" in (nebius / "challenger" / unit).read_text()
     for unit in ("vy-verifier@.service", "vy-verifier-replay@.service", "vy-verifier-publish@.service"):
         assert "User=auditor" in (nebius / "verifier" / unit).read_text()
     for host in hosts:
