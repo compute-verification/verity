@@ -130,6 +130,30 @@ def test_every_window_of_the_served_plan_ends_idle():
     assert [sum(w) for w in plan["occupancy"]["egress"]] == [2 * TOKENS] * 3 + [TOKENS, 0]
 
 
+def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_released_streams(tmp_path):
+    """The proxy stopped for 110 ms as it releases window 0's first request forwards it late, which faults window 0
+    (`delivery-refused`) and drops its second request, so the proxy releases window 1's two as streams 2 and 3, not the
+    plan's 3 and 4: the audit maps each served session to the stream the ingress records released it as, and refuses
+    window 0 alone."""
+    async def go():
+        endpoint = await asyncio.start_server(_endpoint, "127.0.0.1", 0)
+        upstream = endpoint.sockets[0].getsockname()[:2]
+        probed = await asyncio.to_thread(cs.probe, "http://%s:%d" % upstream, cs.request_body("stub", TOKENS), 1,
+                                         clock=lambda: 0.0)
+        report, plan = cs.served_plan(probed, 4, delta_buckets=20)
+        await asyncio.to_thread(ar.run_virtual, plan, report, tmp_path, upstream, stalls=[(1, 0.11)])
+        endpoint.close()
+        return report, plan
+
+    report, plan = asyncio.run(go())
+    records = [ar.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(tmp_path / "requests.records")]
+    assert ar.released_sessions(records) == {"served.0": 1, "served.2": 2, "served.3": 3}
+    audit = ar.audit_configuration(plan, report, tmp_path)
+    faulted = [r for r in audit["rows"] if r["raw"]]
+    assert {(r["direction"], r["window"]) for r in faulted} == {("egress", 0), ("ingress", 0)}
+    assert all(r["raw"] == r["committed"] == "status:delivery-refused" for r in faulted)
+
+
 def test_honest_served_traffic_is_accepted_on_every_link_window(served):
     """N2's verdict of record accepts every link-window on the planned profile, `network_verdict` accepts the link,
     the certifier's audit accepts every record raw and committed, and the shim received every salt the certifier

@@ -1451,13 +1451,36 @@ def percentiles_ms(values: Sequence[float]) -> dict:
     return replay.hist_percentiles(Counter(values)) if values else {}
 
 
+def released_sessions(records: Sequence[Record]) -> dict[str, int]:
+    """Each live request's session (its `user`, `none-k` without one) and the stream the proxy released it as, read
+    from the ingress records as `ingress_releases` cuts them. A fault that drops a window's queue drops its requests,
+    so the streams after it aren't the plan's."""
+    data, split = defaultdict(bytes), Requests()
+    for rec in sorted(records, key=lambda r: r.window):
+        for row in rec.grid:
+            for slot in row[: row_count(row)]:
+                kind, _, payload = decode_frame(slot)
+                if kind == DATA:
+                    stream, chunk, _ = split.feed(payload)
+                    data[stream] += chunk
+    out = {}
+    for stream, raw in data.items():
+        try:
+            user = json.loads(raw.partition(b"\r\n\r\n")[2]).get("user")
+        except ValueError:
+            user = None
+        out[user or f"none-{stream}"] = stream
+    return out
+
+
 def live_program(plan: dict, release: dict[int, int], params: GridParams,
-                 path: Path) -> tuple[list[LogicalFrame], list[int]]:
+                 path: Path, stream_of: dict[str, int] | None = None) -> tuple[list[LogicalFrame], list[int]]:
     """The Program a live server served: the shim's events in position order, each anchored at its stream's release,
     and the ready bucket each was meant for, the one after the bucket it was written in; a frame is what follows the
     event's `id:` line, as the proxy frames it. An event longer than a frame is kept unpadded, as a frame of the wrong
-    size, which the Certifier faults as malformed just as the proxy did."""
-    stream_of = {q["session"] or f"none-{q['stream']}": q["stream"] for q in plan["requests"]}
+    size, which the Certifier faults as malformed just as the proxy did. `stream_of` maps a session to its stream
+    (`released_sessions`), the plan's by default."""
+    stream_of = stream_of or {q["session"] or f"none-{q['stream']}": q["stream"] for q in plan["requests"]}
     events = sorted(read_events(path))
     if [p for p, *_ in events] != list(range(len(events))):
         raise ValueError(f"{path}: the positions aren't 0 … n−1")
@@ -1472,9 +1495,9 @@ def live_program(plan: dict, release: dict[int, int], params: GridParams,
     return frames, [b + 1 for *_, b, _ in events]
 
 
-def live_streams(plan: dict, path: Path) -> list[int]:
+def live_streams(plan: dict, path: Path, stream_of: dict[str, int] | None = None) -> list[int]:
     """The stream of each of `live_program`'s frames, in its order."""
-    stream_of = {q["session"] or f"none-{q['stream']}": q["stream"] for q in plan["requests"]}
+    stream_of = stream_of or {q["session"] or f"none-{q['stream']}": q["stream"] for q in plan["requests"]}
     return [stream_of[name] for _, name, *_ in sorted(read_events(path))]
 
 
@@ -1510,8 +1533,9 @@ def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dic
     if live and "covert" in plan:
         plan = plan | {"covert": plan["covert"] | json.loads((run / "server.json").read_text())["covert"]}
     if live:
-        frames, meant = live_program(plan, release, e, run / "server.events.gz")
-        streams = live_streams(plan, run / "server.events.gz")
+        stream_of = released_sessions(in_records)
+        frames, meant = live_program(plan, release, e, run / "server.events.gz", stream_of)
+        streams = live_streams(plan, run / "server.events.gz", stream_of)
     else:
         frames, meant = program(plan, release, e)
         streams = program_streams(plan, release, e)
