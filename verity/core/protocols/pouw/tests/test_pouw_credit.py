@@ -186,6 +186,20 @@ def test_each_pinned_model_is_its_files_digest():
     assert Cr.MODELS.read_text() == json.dumps(doc, indent=1, sort_keys=True) + "\n"
 
 
+def test_glm53_int8_pins_the_v3_checkpoint():
+    """GLM53_INT8 is vllm's v3 int8 checkpoint of zai-org/GLM-5.3 (`verity-int8-channel127/v3`, snapshot 7065fe60): the
+    146 files its `checkpoints-int8.json` entry lists by size and sha256 (141 shards, their index, the config, the
+    generation config and the tokenizer), each by SHA-512, and its checkpoint_sha512 their canonical JSON's digest."""
+    e = json.loads(Cr.MODELS.read_text())["GLM53_INT8"]
+    assert (e["repo"], e["revision"], e["recipe"]) == (
+        "verity-int8/GLM-5.3-INT8-V3", "7065fe60d0a46749ee796e5b3b8fc0ab75d1ce44", "verity-int8-channel127/v3")
+    shards = {f"model-{i:05d}-of-00141.safetensors" for i in range(1, 142)}
+    assert set(e["files"]) == shards | {"config.json", "generation_config.json", "model.safetensors.index.json",
+                                        "tokenizer.json", "tokenizer_config.json"}
+    assert e["checkpoint_sha512"] == hashlib.sha512(codec.canonical_json(e["files"])).hexdigest()
+    assert Cr.PINNED_MODELS["GLM53_INT8"] == e["checkpoint_sha512"]
+
+
 @pytest.mark.parametrize("seed", SEEDS)
 def test_honest_window_credits_its_bits(seed):
     d, (got, refused) = _credited("honest", seed)
