@@ -65,8 +65,10 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   holds it. Once the session has ended, the coins' evidence (key, ledger, main, pins, segment, session; ``--main`` the verifier's
   own first-parent history of main, which must hold the commit the host's pins log pins for the session) is held to the draw by
   `coins.coins_reason` (Python's `read_reason`) and the whole run by the Lean verifier of record (`verifier.run`, Lean
-  `Run.run`, `coin_source` challenger, its window the TP run root), as `service.Stream.outcome` holds it (a `Stream` takes one
-  template, a TP window several); where either refuses, the audit record is a reject. Negatives: the evidence with a tampered
+  `Run.run`, `coin_source` challenger, its window the TP run root), as `service.Stream.outcome` holds it; where either refuses,
+  the audit record is a reject. These direct calls are not the record path: a `Stream` takes one template and a TP window
+  several, and once `Stream` takes a multi-template TP window, `Stream.outcome` is the one path of record and a5 draws and
+  checks through it. Negatives: the evidence with a tampered
   opening, with the coin opened before the registration, with a segment that skips a released coin, with the pin off main,
   with no pins log, none, and for another window. Every rank of the step draws from the one session, so `--jobs` covers every
   rank.
