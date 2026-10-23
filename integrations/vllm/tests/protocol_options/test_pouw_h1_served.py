@@ -400,6 +400,24 @@ def test_the_periods_weights_are_registered_once_and_every_window_registers_them
         assert run.served.program_digest == period.circuit
 
 
+def test_the_periods_weights_under_the_registrations_key_are_the_auditors_registration():
+    """VLLM-72: the auditor registers a model's b/<K> with core's `weights.weights_roots` (infra's ``model-register``)
+    under its own salt key, and the served path registers the served rows under that key (``model-key``,
+    `register_weights`): the same rows, salts and domains, so each K's root, entry and the weights' root are the
+    registration's."""
+    from verity.core.protocols.pouw import weights as Wt
+    ws = _weights()
+    period = _period(ws)
+    linears = [(n, k) for n, k in SHAPES]
+    rows = [[Wt.row_bytes(w[j].numpy().tobytes(), np.float32(s[j, 0]).tobytes()) for j in range(len(w))] for w, s in ws]
+    roots = Wt.weights_roots(period.circuit, SV.PREFIX, linears, lambda w: rows[w], WKEY)
+    assert SV.B_NONCE == Wt.B_NONCE == RQ.REQUESTS_NONCE + (1 << 42) + (1 << 40)
+    assert {k: r.root for k, r in period.registered.items()} == roots
+    assert period.root() == Wt.weights_root(roots)
+    leaves = {k: sum(n for n, kw in linears if kw == k) for k in roots}
+    assert period.entries() == [Wt.entry(period.circuit, SV.PREFIX, k, leaves[k], roots[k]) for k in sorted(roots)]
+
+
 @pytest.mark.parametrize("edit", ["s_w", "code"])
 def test_a_window_serving_other_weights_than_the_periods_is_refused(edit):
     """VLLM-71: a window serves the weights its period registered before its salt. One row's s_w, or one code, other than

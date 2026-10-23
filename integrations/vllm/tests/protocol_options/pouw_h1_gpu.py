@@ -47,16 +47,18 @@ batch, so it admits per round; the fill workload admits in round 0 only.
 
 ``--served`` (fill) commits each call's A and z/y tables and the weights' B as its window Program's registered values
 (`pouw_h1_served.Served`, the pouw setting ``served``), under the round roots, which the commitment carries, and records
-the trees and `pouw_h1_served.register`'s outcome (`served_check`). With ``--weights-key FILE`` the weights' ``b/<K>`` are
-the period's (`pouw_h1_served.Weights`, registered from the served model under that key before the salt), and
-``--weights-only OUT`` registers them, writes their root (the period-open's ``--weights-root``) and serves nothing.
-``pouw_h1_rehearsal.py`` runs it all against infra's gate.
+the trees and `pouw_h1_served.register`'s outcome (`served_check`). With ``--model M --circuit C`` (and ``--gate``) the
+weights' ``b/<K>`` are the period's (`pouw_h1_served.Weights`, VLLM-72): the gate's ``model-key --model M --circuit C``
+answers the auditor's registration of M under the period's circuit C and its salt key (`model_key_of`), and the served
+model's rows are registered under that key before the salt, the window refused unless they fold to the registration's
+weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
 
 ``--commit`` (fill, ``--served``, in-process coins) serves the 64's window again with the Commit in the engine
 (`pouw_h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
 ``<out>/commit/``, each call's A table held to the Commit's AROW and each round over its input ids (``roots1``), and
 records the peak GPU memory and step time of the plain run, the window and the window with the Commit (``commit``). Its
-B is registered once, at the first window's install under a fresh weights key, and reused by the later windows. Each
+B is registered once, before its first window (under a fresh local key, `local_weights`, unless ``--model`` names the
+auditor's registration), and reused by the later windows. Each
 Commit window is also held to core's ROOTS1 steps over its own evidence (`core_verdict`: `pouw_h1_challenger.manifest_reason`,
 `credit._a_link`, `credit._arow`), which it saves for ``--core-from DIR`` on a CPU node. ``--negatives`` then serves the
 window twice more with an honest Commit, H1 handed all-zero A codes or one A row off (`NEGATIVES`), each to be refused at
@@ -147,7 +149,22 @@ def gate_command(argv: list[str]) -> Any:
             print(f"[gate] session {session}: port {answer['port']} "
                   + (f"listening after {polls} polls" if polls is not None else "not listening after 300 polls"), flush=True)
         return answer
+    gate.argv = argv
     return gate
+
+
+def model_key_of(gate: Any, model: str, circuit: str) -> Any:
+    """The auditor's registration of `model` under the period's `circuit` and its salt key
+    (`pouw_h1_served.ModelKey`), as the gate's ``model-key --model M --circuit C`` answers the lane's gate key; the key
+    is never printed or written here."""
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    p = subprocess.run(gate_argv(gate.argv, ["model-key", "--model", model, "--circuit", circuit]), capture_output=True,
+                       text=True)
+    try:
+        answer = json.loads(p.stdout)
+    except ValueError:
+        answer = {"refused": f"exit {p.returncode}: {p.stderr[-500:]}"}
+    return SV.model_key(answer)
 
 
 def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, session: Any = None, gate: Any = None,
@@ -383,23 +400,13 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     doc["engine"] = {"int8_exact": int8_exact_of(eng.model), "enforce_eager": eng.kwargs.get("enforce_eager"),
                      "effective": eng.effective, "args": decl.engine_args()}
     entry_name = f"pouw:{PH.SCHEME}"
-    wkey = Path(a.weights_key).read_bytes() if a.weights_key else None
-    if wkey is not None and len(wkey) != 32:
-        raise ValueError(f"--weights-key {a.weights_key}: the period's weights key is 32 bytes, not {len(wkey)}")
-    if a.commit and wkey is None:
-        # B registered once at the first window's install, out of its steps' time, and its `Weights` reused after
-        wkey = os.urandom(32)
+    registry = model_key_of(a.gate, a.model, a.circuit) if a.model else None
+    if registry is not None:
+        doc["registry"] = {"model": registry.model, "circuit": registry.circuit, "weights_root": registry.weights_root}
+        print(f"[fill] {registry.model}'s registration {registry.weights_root[:16]}... under circuit "
+              f"{registry.circuit[:16]}...", flush=True)
+    # B registered once, before the first window, and its `Weights` reused by every window after
     shared: list[Any] = [None]
-    if a.weights_only:
-        served = SV.Served(prover=a.prover_dir, weights_key=wkey)
-        ctx = PO.Context(stage="serve", enabled=(entry_name,),
-                         settings=h1_settings(eng, decl.rows, decl.steps, admission="round-0", served=served))
-        PO.install(eng.model, ctx).close()
-        weights = {"weights_root": served.weights.root().hex(), "circuit": served.weights.circuit,
-                   "entries": served.weights.entries()}
-        Path(a.weights_only).write_text(json.dumps(weights, indent=1) + "\n")
-        print(f"[fill] weights {weights['weights_root'][:16]}... under circuit {weights['circuit'][:16]}...", flush=True)
-        return {**doc, "weights": weights, "ok": True}
     try:
         cfg = eng.llm.llm_engine.vllm_config
         doc["engine"]["scheduler"] = {"max_num_seqs": cfg.scheduler_config.max_num_seqs,
@@ -442,7 +449,11 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             from verity_vllm.protocol_options import pouw_h1_commit as CT
             com, _src, tap = CT.attach(eng, layers, run_id=f"pouw-h1-commit-{os.getpid()}")
         # in-process coins open no session, so a local window's key is its own (`Served.key`)
-        served = (SV.Served(prover=a.prover_dir, weights_key=wkey, weights=shared[0], tap=tap,
+        if commit and a.served and registry is None and shared[0] is None:
+            t0 = time.monotonic()
+            shared[0] = local_weights(eng.model, layers, decl.rows, decl.steps)
+            print(f"[fill] B registered under a local key in {time.monotonic() - t0:.0f} s", flush=True)
+        served = (SV.Served(prover=a.prover_dir, registry=registry, weights=shared[0], tap=tap,
                             window=None if a.challenger else os.urandom(64))
                   if a.served and name != "solo" else None)
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
@@ -696,6 +707,17 @@ def declared_of(a: argparse.Namespace) -> Any:
         return PH.FILL
     slots, cap, rows, steps = a.declare
     return PH.Static((1,) * slots, cap, rows, steps)
+
+
+def local_weights(model: Any, layers: list[Any], rows: int, steps: int) -> Any:
+    """The served model's ``b/<K>`` registered once under a fresh local key and the Program install declares
+    (`pouw._install_h1`'s shapes and names), for a window with no auditor's registration (no ``--model``)."""
+    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
+    modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
+    circuit = SV.Served().declare(shapes, modules, rows, steps)
+    return SV.register_weights(circuit, shapes, SV.weights_of(layers), os.urandom(32))
 
 
 #: the windows ``--negatives`` serves with the Commit in the engine, each handing H1 A codes other than the ones the
@@ -1004,12 +1026,11 @@ def main(argv: list[str] | None = None) -> int:
                                                             "credit reads the window's layout from")
     ap.add_argument("--served", action="store_true", help="fill: commit each call's tables and the weights' B as its "
                                                           "Program's registered values (pouw_h1_served.Served) and register them")
-    ap.add_argument("--weights-key", metavar="FILE", help="fill with --served: the period's weights key (32 bytes, kept "
-                                                          "by pouw_h1_prover.keep_key), under which each K's b/<K> is "
-                                                          "registered before the window's salt (pouw_h1_served.Weights)")
-    ap.add_argument("--weights-only", metavar="FILE", help="fill with --weights-key: register the period's weights from "
-                                                           "the served model, write {weights_root, circuit, entries} to "
-                                                           "FILE (the period-open's --weights-root) and serve nothing")
+    ap.add_argument("--model", metavar="ROLE", help="fill with --served and --gate: the served model's int8 checkpoint role "
+                                                    "(LLAMA31_8B_INT8), whose registration under --circuit the gate's "
+                                                    "model-key answers; each K's b/<K> is registered under its key before "
+                                                    "the window's salt (pouw_h1_served.Weights, VLLM-72)")
+    ap.add_argument("--circuit", metavar="SHA512", help="with --model: the period's circuit (its declared Program's digest)")
     ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
                     help="batch: PROMPTS batched and the first alone (--rows, --steps, --max-tokens); fill: pouw_h1.FILL, 64 in "
                          "flight every served step (VLLM-52; its own T, S and cap)")
@@ -1049,8 +1070,8 @@ def main(argv: list[str] | None = None) -> int:
         if a.stream_fd is None:
             ap.error("--close-from needs --stream-fd (the session's stream the holder took)")
         return 0 if fill_close(a)["ok"] else 1
-    if a.weights_only and not (a.weights_key and a.workload == "fill"):
-        ap.error("--weights-only is the fill workload's, with --weights-key")
+    if a.model and not (a.circuit and a.gate and a.served and a.workload == "fill"):
+        ap.error("--model is the fill workload's, with --served, --circuit and --gate (the gate's model-key)")
     if a.handoff and not (a.handoff_state and a.challenger and a.workload == "fill"):
         ap.error("--handoff is the fill workload's, with --challenger and --handoff-state")
     if a.compile_from:

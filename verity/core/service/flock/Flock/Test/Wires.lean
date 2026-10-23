@@ -21,7 +21,8 @@ def net (gs : Array Group) (inWords : Nat) (outs : Array Nat) (rows : Array (Arr
   let rb := (self ++ rows.map (·.2)).push #[k]
   match Sparse.ofRows ra (2 ^ 10), Sparse.ofRows rb (2 ^ 10) with
   | .ok a, .ok b =>
-    { name := "net", useful := k + 1, constPos := k, inGroups := gs, outGroups := #[⟨inWords, 1, outs⟩], inWords, a, b,
+    { name := "net", useful := k + 1, constPos := k, inGroups := gs, outGroups := #[⟨inWords, 1, outs⟩], inWords,
+      aT := .pure a, bT := .pure b,
       unitLog := 10, lookup := if lookup then some default else none }
   | _, _ => default
 
