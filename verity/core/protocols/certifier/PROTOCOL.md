@@ -244,15 +244,18 @@ with the served computation is left to N3.
 ## A served link (`served`)
 
 A served link's egress counts follow its requests' arrivals and the run-time syncs, so nothing fixes them before the
-run and its egress end has no occupancy profile. Declared with `LinkWindows(served=ServedProfile(F, F_in, windows))`,
-N2 derives them inside the unit instead: on such a link it holds the egress head's counts to the ones the ingress
-head's counts give under the window's declared sync, with no public egress profile.
+run and its egress end has no occupancy profile. Declared with
+`LinkWindows(served=ServedProfile(F, F_in, windows, own))`, N2 derives them inside the unit instead: on such a link it
+holds the egress head's counts to the ones the ingress head's counts derive under the window's declared sync, with no
+public egress profile.
 
 - **The unit** is `NetworkServedLinkWindow` v1{EGRESS, INGRESS, SERVED}: `NetworkLinkWindow`'s certificates' check and
   two head checks (neither end with a count check unless its end declares a profile), and one gate (`served.gate`)
-  naming the Boolean Definition `served.NetworkServedCounts_v1{T, FOUT, FIN, R, RIN}` over the two heads' counts, cut
-  from the heads the head checks open (so witness), and the window's sync (δ, p, q), ρ = p/q. Its one output, the ok
-  bit, is 1 when every ingress count is at most R_in, p and q are nonzero, and the egress counts are `served.derive`'s:
+  naming the Boolean Definition `served.NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}` over the two heads' counts,
+  cut from the heads the head checks open (so witness), and the window's sync (δ, p, q), ρ = p/q. OWN is the ingress
+  certifier's own frames at the head of every window's first bucket: 1 with its salt on, else 0. Its one output, the
+  ok bit, is 1 when every ingress count is at most R_in, bucket 0's at least OWN, p and q are nonzero, and the egress
+  counts are `served.derive`'s, of the ingress counts with bucket 0's OWN own frames taken off:
   - each request's anchor is the bucket whose ingress release completes its F_in frames, as the proxy anchors one;
   - each request is answered by F frames, request after request in canonical order, the k-th frame of a response at
     logical index k, handed by `schedule.handing_buckets` under the sync;
@@ -262,9 +265,9 @@ head's counts give under the window's declared sync, with no public egress profi
 
   The circuit is a closed form of `derive` (`served`'s docstring), and `served.reference` is its reference, which the
   tests hold to it. Its size (`served.size`) is 678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1, and
-  688,210 at F_in = 2, R = 16, R_in = 4, beside the head checks' openings (1,876,070 each at T = 600).
+  688,210 at F_in = 2, R = 16, R_in = 4, beside the head checks' openings (1,876,070 each at T = 600); OWN = 1 adds 63.
 - **Public** (`PUBLIC_SERVED`): the items above, with the occupancy profile on ingress only where the placement fixes
-  it and none on egress, the served sizes (F, F_in and the link's windows, fixed before the run), and each window's
+  it and none on egress, the served sizes (F, F_in, OWN and the link's windows, fixed before the run), and each window's
   declared sync as an output of the protocol. That sync is the clock-sync advice the audit already reads and charges
   (log2 #Σ_sync bits a window, 7 at 16 × 8): the served counts read it, and nothing else about the run is declared.
 - **The verifier of record** is `LinkWindows.verify`, which on a served link also runs `served_check`:
@@ -286,13 +289,15 @@ head's counts give under the window's declared sync, with no public egress profi
   window's sync); the rest wait, in order, for the next window. The sync is the window's declared one where the proxy
   holds it before the run, else the slowest of Σ_sync (largest δ, smallest ρ): a later hand only lowers the release
   curve, so a window idle under it is idle under any sync of Σ_sync. A served link's ends share T and τ_b (its anchors
-  are ingress buckets), its ingress takes no frame of the certifier's own, so no salt, and a window must hold one
-  request and its response, or the proxy refuses to start (`ValueError`).
+  are ingress buckets), its ingress takes the certifier's own frame exactly when the profile counts one (OWN 1: the
+  salt on, at a PoUW window of one certifier window, so the salt frame heads every window), and a window must hold
+  that frame, one request and its response, or the proxy refuses to start (`ValueError`).
 - **Premises** of "the derived counts are the Program's grid", which tie the counts to the served computation; N2's
   claim rests on none of them:
   - FIXLEN: every response is F frames, since every request runs to its `max_tokens` and the server writes one token
     a frame (#3051). The lab pads each block's responses to F with empty events.
-  - A fixed request size: every request is F_in frames, a power of two, and every ingress frame is a request's.
+  - A fixed request size: every request is F_in frames, a power of two, and every ingress frame is a request's but
+    the certifier's own salt frame, which heads each window's first bucket when the salt is on (OWN).
   - The Program's canonical order is request-major: each response's frames are consecutive, responses in request
     order. The shaper hands in canonical order, so a server that interleaves responses changes nothing on the wire
     while each frame is ready by its hand.
@@ -303,7 +308,8 @@ What this establishes: on every accepted link-window of a served link, the egres
 ingress head's counts under the declared sync, whatever the frames hold. So the egress timing adds nothing to what
 the ingress counts and the charged advice carry, and under the premises it is the Program's. The ingress counts are
 the record's own, at most r_in a bucket, as on any end without a profile. What it doesn't establish: the frames
-(N3's), the premises, which nothing checks, and a served link's salt.
+(N3's, the salt frame's place among them included: the counts see only that bucket 0 holds OWN frames more), and the
+premises, which nothing checks.
 
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 

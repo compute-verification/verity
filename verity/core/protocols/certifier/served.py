@@ -4,19 +4,22 @@ served proof unit (`service`'s `NetworkServedLinkWindow` v1), which runs on ever
 bit. That unit's Program holds it as one gate (`gate`), and N2's verifier of record runs its `reference`, which the tests
 hold to the circuit.
 
-    NetworkServedCounts_v1{T, FOUT, FIN, R, RIN}
+    NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}
         (ingress: Array<T, Array<4, Byte>>, egress: Array<T, Array<4, Byte>>, sync: Array<3, Array<16>>) -> Value<1>
         Byte = Array<8, Value<1>>
 
 **Statics: the size class, all public.** T is both ends' buckets a window, FOUT = F the frames of every response (FIXLEN),
-FIN the frames of every request (a power of two), R the egress allocation and RIN the ingress allocation.
+FIN the frames of every request (a power of two), R the egress allocation, RIN the ingress allocation and OWN the
+ingress certifier's own frames at the head of every window's first bucket: 1 with its salt frame (a PoUW window of one
+certifier window), else 0.
 
 **Inputs.** `ingress` and `egress` are the two heads' counts as `RecordHead.encode` writes them (u32 big-endian), cut
 from the heads N2's head checks open, so they are witness. `sync` is the window's declared clock sync (δ, p, q), each
 u16 least significant bit first with ρ = p/q: public, the advice the audit already reads and charges (log2 #Σ_sync bits
 a window).
 
-**What 1 means.** Every ingress count is at most RIN, p and q are nonzero, and the egress counts are `derive`'s:
+**What 1 means.** Every ingress count is at most RIN, bucket 0's at least OWN, p and q are nonzero, and the egress
+counts are `derive`'s, of the ingress counts with bucket 0's OWN own frames taken off:
 - the ingress counts complete a request at every FIN-th frame, and each request's anchor is the bucket that releases its
   last frame, as the proxy anchors a stream;
 - each request is answered by F frames, request after request in canonical order, the k-th frame of a response at
@@ -37,9 +40,10 @@ premises below, and they depend on that window's ingress counts and sync alone. 
 request whose response would straddle a window's end makes the window refuse.
 
 **Premises** of "the egress counts are the Program's": every response is F frames (FIXLEN: every request runs to its
-max_tokens, one token a frame), every ingress frame is a request's and every request FIN frames (a fixed request size),
-the canonical order is request-major (each response's frames consecutive, responses in request order), both ends share
-T and τ_b, and one declared sync applies to the window's anchors. N2's claim doesn't rest on them: on an accepted
+max_tokens, one token a frame), every ingress frame is a request's but the certifier's own salt frame at each window's
+head (OWN), every request is FIN frames (a fixed request size), the canonical order is request-major (each response's
+frames consecutive, responses in request order), both ends share T and τ_b, and one declared sync applies to the
+window's anchors. N2's claim doesn't rest on them: on an accepted
 window the egress counts are this function of the ingress counts and the sync, whatever the frames hold.
 
 **The circuit**, a closed form of `derive`. With G = ⌊(F − 1)·q/p⌋ a response's span, request j anchored at b_j
@@ -53,7 +57,7 @@ next-anchor are shifted by T − S with a barrel shifter, and CP is a division b
 
 **Cost** (`size`): 678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1, of which the release check is 794 a
 bucket (476,400), the shift 147,273, the arrivals 48 a bucket and the next anchors 20 a step; 688,210 at F_in = 2,
-R = 16, R_in = 4.
+R = 16, R_in = 4. OWN = 1 adds 63: 678,858 and 688,273.
 """
 from __future__ import annotations
 
@@ -80,19 +84,22 @@ SYNC_MAX = (1 << SYNC_BITS) - 1
 
 @dataclass(frozen=True)
 class ServedProfile:
-    """A served link's public sizes: every response's frames (FIXLEN), every request's frames (a power of two) and the
-    link's windows, which `service.LinkWindows.network_verdict` takes by default."""
+    """A served link's public sizes: every response's frames (FIXLEN), every request's frames (a power of two), the
+    link's windows, which `service.LinkWindows.network_verdict` takes by default, and `own`, the ingress certifier's own
+    frames at the head of every window's first bucket: 1 with its salt on (`active.Proxy(salt=…)`, a PoUW window of
+    one certifier window), else 0."""
 
     response_frames: int
     request_frames: int
     windows: int
+    own: int = 0
 
     def __post_init__(self) -> None:
-        if not all(type(x) is int for x in (self.response_frames, self.request_frames, self.windows)) or \
+        if not all(type(x) is int for x in (self.response_frames, self.request_frames, self.windows, self.own)) or \
                 self.response_frames < 1 or self.windows < 1 or self.request_frames < 1 or \
-                self.request_frames & (self.request_frames - 1):
-            raise ValueError("a served profile has F ≥ 1 frames a response, a power of two of frames a request and one "
-                             f"or more windows, not {self!r}")
+                self.request_frames & (self.request_frames - 1) or self.own not in (0, 1):
+            raise ValueError("a served profile has F ≥ 1 frames a response, a power of two of frames a request, one "
+                             f"or more windows and 0 or 1 own frames a window, not {self!r}")
 
 
 # --- the reference ----------------------------------------------------------------------------------------------------
@@ -111,11 +118,16 @@ def anchors(ingress: Sequence[int], request_frames: int) -> list[int]:
 def derive(ingress: Sequence[int], sync: ClockSync, profile: ServedProfile, allocation: int) -> list[int] | None:
     """The window's egress counts from its ingress counts under the declared sync: each request answered by
     `profile.response_frames` frames, handed by `schedule.handing_buckets` and released by `grid.released` at the egress
-    allocation, from an idle start. None when the window doesn't end idle: a request cut by the window's end, a frame
-    handed after its last bucket, or one still queued then."""
+    allocation, from an idle start. The first `profile.own` frames of bucket 0 are the ingress certifier's own (its
+    salt frame) and answer no request. None when they aren't there, or the window doesn't end idle: a request cut by
+    the window's end, a frame handed after its last bucket, or one still queued then."""
     T, F, FIN = len(ingress), profile.response_frames, profile.request_frames
     if any(type(c) is not int or c < 0 for c in ingress):
         raise ValueError("ingress counts are non-negative ints")
+    if profile.own:
+        if not ingress or ingress[0] < profile.own:
+            return None
+        ingress = [ingress[0] - profile.own, *ingress[1:]]
     total = sum(ingress)
     if total % FIN or total // FIN * F > T * allocation:
         return None
@@ -164,22 +176,22 @@ def sync_words(sync: ClockSync) -> tuple[int, int, int]:
     return words
 
 
-def reference(T: int, F: int, FIN: int, R: int, RIN: int, ingress: Sequence[int], egress: Sequence[int],
+def reference(T: int, F: int, FIN: int, R: int, RIN: int, OWN: int, ingress: Sequence[int], egress: Sequence[int],
               sync: tuple[int, int, int]) -> bool:
     """`NetworkServedCounts_v1`'s output: every ingress count at most RIN, p and q nonzero, and the egress counts
-    `derive`'s."""
+    `derive`'s, with OWN own frames at the head of bucket 0."""
     delta, p, q = sync
     if len(ingress) != T or len(egress) != T or not p or not q or any(c > RIN for c in ingress):
         return False
-    return derive(ingress, ClockSync(delta, Fraction(p, q)), ServedProfile(F, FIN, 1), R) == list(egress)
+    return derive(ingress, ClockSync(delta, Fraction(p, q)), ServedProfile(F, FIN, 1, OWN), R) == list(egress)
 
 
 # --- the circuit ------------------------------------------------------------------------------------------------------
 
 def _check_statics(S) -> None:
     if not all(type(x) is int and x >= 1 for x in (S.T, S.FOUT, S.FIN, S.R, S.RIN)) or S.FIN & (S.FIN - 1) or \
-            S.T > SYNC_MAX:
-        raise ValueError(f"T < 2^{SYNC_BITS}, F, R and RIN are ≥ 1 and FIN a power of two, not {vars(S)}")
+            S.T > SYNC_MAX or S.OWN not in (0, 1):
+        raise ValueError(f"T < 2^{SYNC_BITS}, F, R and RIN are ≥ 1, FIN a power of two and OWN 0 or 1, not {vars(S)}")
 
 
 def _widths(S) -> SimpleNamespace:
@@ -193,7 +205,8 @@ def _widths(S) -> SimpleNamespace:
                            S=max(wa, (S.T * ((1 << we) - 1) + S.R).bit_length()) + 1)
 
 
-STATICS = ("T", "FOUT", "FIN", "R", "RIN")
+STATICS = ("T", "FOUT", "FIN", "R", "RIN", "OWN")
+PART_STATICS = STATICS[:-1]
 
 
 def _u32(e, at: int = 0) -> list:
@@ -274,6 +287,19 @@ def _build_sync(C, S, delta, p, q):
     gm1, none = sub(C, Gc, [ONE], W.T)
     k1 = sub(C, add(C, p, q, width=SYNC_BITS + 1, carry_out=True), [ONE], SYNC_BITS + 2)[0]
     return [u + gm1 + [none] + k1 + [C.AND(or_reduce(C, p), or_reduce(C, q))]]
+
+
+def _sig_own(S):
+    return (("count", Array(4, BYTE)),), Tuple(Array(4, BYTE), BIT)
+
+
+def _build_own(C, S, *count):
+    """Bucket 0's ingress count less the certifier's own frame, and whether the count is 1 … RIN."""
+    W = _widths(S)
+    c = _u32(count)
+    rest, borrow = sub(C, c, [ONE], 32)
+    ok = and_reduce(C, [borrow.inv()] + [b.inv() for b in c[W.IN:]] + [_le_const(C, c[:W.IN], S.RIN)])
+    return [[rest[8 * (3 - k) + b] for b in range(8)] for k in range(4)] + [[ok]]
 
 
 def _sig_arrive(S):
@@ -360,17 +386,19 @@ def _build_end(C, S, released_total, cum):
                        + _same(C, released_total, _mulc(C, cum[W.K:W.K + W.N], S.FOUT, W.S)))]
 
 
-NetworkServedSync = _part("NetworkServedSync", STATICS, _sig_sync, _build_sync,
+NetworkServedSync = _part("NetworkServedSync", PART_STATICS, _sig_sync, _build_sync,
                           "the declared sync's shift u = T − min(δ + G, T), Gc − 1, Gc = 0, p + q − 1 and p, q ≠ 0")
-NetworkServedArrive = _part("NetworkServedArrive", STATICS, _sig_arrive, _build_arrive,
+NetworkServedOwn = _part("NetworkServedOwn", PART_STATICS, _sig_own, _build_own,
+                         "bucket 0's ingress count less the certifier's own frame, and whether it is 1 … RIN")
+NetworkServedArrive = _part("NetworkServedArrive", PART_STATICS, _sig_arrive, _build_arrive,
                             "one ingress bucket: the prefix sum, N_t, whether it anchors a request, count ≤ RIN")
-NetworkServedNext = _part("NetworkServedNext", STATICS, _sig_next, _build_next,
+NetworkServedNext = _part("NetworkServedNext", PART_STATICS, _sig_next, _build_next,
                           "next(z) from next(z + 1): the buckets to the first that anchors a request")
-NetworkServedShift = _part("NetworkServedShift", STATICS, _sig_shift, _build_shift,
+NetworkServedShift = _part("NetworkServedShift", PART_STATICS, _sig_shift, _build_shift,
                            "the (N, next) vector shifted by u = T − S: bucket t reads entry t + u")
-NetworkServedBucket = _part("NetworkServedBucket", STATICS, _sig_bucket, _build_bucket,
+NetworkServedBucket = _part("NetworkServedBucket", PART_STATICS, _sig_bucket, _build_bucket,
                             "one egress bucket: the frames handed by t and the release check on the counts' prefix sum")
-NetworkServedEnd = _part("NetworkServedEnd", STATICS, _sig_end, _build_end,
+NetworkServedEnd = _part("NetworkServedEnd", PART_STATICS, _sig_end, _build_end,
                          "the window ends idle: no request cut, every frame released")
 
 
@@ -383,9 +411,14 @@ def _sig(S):
 def _body(B, S, ingress, egress, sync):
     _check_statics(S)
     T, W, K = S.T, _widths(S), _Consts(B)
-    part = {d.name: bind(d, **{k: getattr(S, k) for k in STATICS})
-            for d in (NetworkServedSync, NetworkServedArrive, NetworkServedNext, NetworkServedShift,
+    part = {d.name: bind(d, **{k: getattr(S, k) for k in PART_STATICS})
+            for d in (NetworkServedSync, NetworkServedOwn, NetworkServedArrive, NetworkServedNext, NetworkServedShift,
                       NetworkServedBucket, NetworkServedEnd)}
+    own = []
+    if S.OWN:
+        counts = _refs(ingress)
+        first = _refs(B.call(part["NetworkServedOwn"], _coll(Array(4, BYTE), counts[:32])))
+        ingress, own = _coll(Array(T, Array(4, BYTE)), first[:32] + counts[32:]), first[32:]
     info = B.call(part["NetworkServedSync"], sync)
     arrivals = _refs(B.scan(part["NetworkServedArrive"], _coll(Array(W.C, BIT), K.bits(0, W.C)), [ingress]))
     cum, ys = arrivals[:W.C], arrivals[W.C:]
@@ -403,25 +436,26 @@ def _body(B, S, ingress, egress, sync):
     buckets = _refs(B.scan(part["NetworkServedBucket"], _coll(Array(W.S, BIT), K.bits(0, W.S)), [shifted, egress],
                            [info, sync]))
     end = B.call(part["NetworkServedEnd"], _coll(Array(W.S, BIT), buckets[:W.S]), _coll(Array(W.C, BIT), cum))
-    bits = oks + buckets[W.S:] + [_refs(info)[-1], _refs(end)[0]]
+    bits = own + oks + buckets[W.S:] + [_refs(info)[-1], _refs(end)[0]]
     return B.call(BL.and_gate(len(bits)), _coll(Array(len(bits), BIT), bits))
 
 
 NetworkServedCounts = CompositeDefinition(
     "NetworkServedCounts", 1, STATICS, _sig, _body, conformance="exact-model-tested",
     doc="1 iff the ingress counts are at most RIN and the egress counts are the shaper's release of FOUT frames a "
-        "request of FIN frames under the declared sync (δ, p/q), from and to an idle window (`served.derive`)")
+        "request of FIN frames under the declared sync (δ, p/q), from and to an idle window, the first OWN frames of "
+        "bucket 0 the certifier's own (`served.derive`)")
 
 
-def unit(T: int, F: int, FIN: int, R: int, RIN: int):
-    return bind(NetworkServedCounts, T=T, FOUT=F, FIN=FIN, R=R, RIN=RIN)
+def unit(T: int, F: int, FIN: int, R: int, RIN: int, OWN: int):
+    return bind(NetworkServedCounts, T=T, FOUT=F, FIN=FIN, R=R, RIN=RIN, OWN=OWN)
 
 
 @lru_cache(maxsize=None)
-def gate(T: int, F: int, FIN: int, R: int, RIN: int) -> PrimitiveDefinition:
+def gate(T: int, F: int, FIN: int, R: int, RIN: int, OWN: int) -> PrimitiveDefinition:
     """`unit(…)` as one gate of N2's served proof unit (`service.LinkWindows.unit`): its signature, under an id that
     names it, as `head_check.gate` holds the head check."""
-    d = unit(T, F, FIN, R, RIN)
+    d = unit(T, F, FIN, R, RIN, OWN)
     params, ret = d.signature()
     return PrimitiveDefinition(f"Gate[{d.id}]", 1, params, ret, _gate_only(d.id), register=False,
                                doc=f"{d.id}, N2's served counts, as one gate: the Definition is registered and "
@@ -440,17 +474,17 @@ def arguments(ingress: Sequence[int], egress: Sequence[int], sync: tuple[int, in
     return [_count_bits(ingress), _count_bits(egress), [(x >> j) & 1 for x in sync for j in range(SYNC_BITS)]]
 
 
-def evaluate(key: tuple[int, int, int, int, int], cases: Sequence[tuple[Sequence[int], Sequence[int],
-                                                                     tuple[int, int, int]]]) -> list[int]:
-    """The unit's output on each case, (ingress, egress, sync) of one size class `key` = (T, F, FIN, R, RIN), in one
-    evaluation."""
+def evaluate(key: tuple[int, int, int, int, int, int], cases: Sequence[tuple[Sequence[int], Sequence[int],
+                                                                          tuple[int, int, int]]]) -> list[int]:
+    """The unit's output on each case, (ingress, egress, sync) of one size class `key` = (T, F, FIN, R, RIN, OWN), in
+    one evaluation."""
     args = [list(rows) for rows in zip(*(arguments(*c) for c in cases))]
     return [int(b) for b in evaluate_bits(unit(*key), *args).reshape(-1).tolist()]
 
 
-def size(T: int, F: int, FIN: int, R: int, RIN: int) -> int:
+def size(T: int, F: int, FIN: int, R: int, RIN: int, OWN: int) -> int:
     """The unit's ANDs."""
-    return ands(unit(T, F, FIN, R, RIN))
+    return ands(unit(T, F, FIN, R, RIN, OWN))
 
 
 __all__ = ["NetworkServedCounts", "SYNC_BITS", "ServedProfile", "anchors", "arguments", "derive", "evaluate", "gate",

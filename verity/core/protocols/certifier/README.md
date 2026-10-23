@@ -17,14 +17,15 @@ A spec-level reference for network accounting's timing channel:
   `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share credit: every window of the
   egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
   rejects the link;
-- a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows))`), whose egress end has no
+- a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
   occupancy profile: N2's served unit, `NetworkServedLinkWindow`, adds a Boolean Definition,
   `NetworkServedCounts_v1` (678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1), that holds the egress
   head's counts to the ones its ingress head's counts derive under the window's declared sync, the advice the audit
   already charges at log2 #Σ_sync bits a window. Each window starts empty and must end idle, so nothing carries
   between windows, and a request whose frames or response straddle a window's end refuses the window. The claim is
   counts only and rests on no premise. That the derived counts are the Program's grid rests on four: FIXLEN (every
-  response F frames), a fixed request size (every request F_in frames, every ingress frame a request's), a
+  response F frames), a fixed request size (every request F_in frames, every ingress frame a request's but the
+  certifier's salt frame heading each window, which `own` counts), a
   request-major canonical order, and one T, τ_b and declared sync for a window's anchors (`PROTOCOL.md`, "A served
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
   an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
@@ -50,8 +51,8 @@ A spec-level reference for network accounting's timing channel:
   once it verifies for that run. Without the keys they are the in-process calls, for the auditor's side only. A proxy
   back from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame
   the Program's at position p, and carries nothing from before: a window it was down for has no record. On a served
-  link (`Proxy(served=ServedProfile(…))`, off by default, not with the salt) its ingress admits whole requests by the
-  admission rule (`served.Admission`).
+  link (`Proxy(served=ServedProfile(…))`, off by default; with the salt, `own` 1 at a PoUW window of one certifier
+  window) its ingress admits whole requests by the admission rule (`served.Admission`).
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's

@@ -1,6 +1,7 @@
 """N2's served profile (`served`): the circuit held to its reference, the derivation held to the Program's grid on an
-idle run, and served link-windows through the proof service: honest traffic accepted in every window, and a late
-block, an extra frame, a dropped frame and a request whose response straddles the window's end each refused."""
+idle run, and served link-windows through the proof service: honest traffic accepted in every window, salted or not,
+and a late block, an extra frame, a dropped frame and a request whose response straddles the window's end each
+refused."""
 
 import random
 from dataclasses import replace
@@ -42,11 +43,12 @@ def egress_records(frames, ready=None, syncs=SYNCS):
     return run_shaper(frames, ready or [f.anchor for f in frames], syncs, Certifier(LINK, P))
 
 
-def ingress_records(arrivals):
+def ingress_records(arrivals, own=0):
+    """The ingress certifier's records, with `own` frames of its own (its salt's) first in each window."""
     certifier, out = Certifier(LINK, P), []
     for counts in arrivals:
-        for n in counts:
-            for _ in range(n):
+        for t, n in enumerate(counts):
+            for _ in range(n + (own if t == 0 else 0)):
                 certifier.enqueue(b"q")
             certifier.tick()
         out.append(certifier.close_window())
@@ -56,11 +58,11 @@ def ingress_records(arrivals):
 class Run:
     """A served link with its certifier's signer and the challenger's stream, on injected coins and clock."""
 
-    def __init__(self, tmp_path) -> None:
+    def __init__(self, tmp_path, profile=PROFILE) -> None:
         self.signer = signers.signer(tmp_path)
         self.issuer = Issuer(self.signer, signers.SESSION)
         self.lw = LinkWindows(LINK, P, SYNC_SET, self.signer.public_key(), "r-served-test", signers.SESSION,
-                              proof_deadline=60.0, served=PROFILE)
+                              proof_deadline=60.0, served=profile)
         self.stream = self.lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test",
                                      coins=lambda n: b"\x07" * n, clock=lambda: 0.0)
         self.previous = None
@@ -85,6 +87,24 @@ def test_honest_served_traffic_is_accepted_in_every_window(tmp_path):
     assert [run.round(w, egress[w], ingress[w]).accepted for w in range(WINDOWS)] == [True] * WINDOWS
     verdict = run.lw.network_verdict(run.stream)
     assert verdict["accepted"] and verdict["windows"] == WINDOWS and verdict["refused"] == []
+
+
+def test_a_salted_link_counts_the_certifiers_own_frame(tmp_path):
+    """With the salt on, every window's first ingress frame is the certifier's own, which answers no request: a
+    profile that counts it (`own` 1) derives each window's counts and accepts, and an unsalted run under it, or a
+    salted run under a profile without it, is refused in every window."""
+    egress = egress_records(frames_of(ARRIVALS))
+    salted, plain = ingress_records(ARRIVALS, own=1), ingress_records(ARRIVALS)
+    profile = replace(PROFILE, own=1)
+    assert [occupancy(r.grid)[0] for r in salted] == [a[0] + 1 for a in ARRIVALS]
+    for w in range(WINDOWS):
+        assert SV.derive(occupancy(salted[w].grid), SYNCS[w], profile, P.allocation) == list(occupancy(egress[w].grid))
+    for k, (ingress, prof, want) in enumerate(((salted, profile, True), (plain, profile, False),
+                                               (salted, PROFILE, False))):
+        (tmp_path / str(k)).mkdir()
+        run = Run(tmp_path / str(k), prof)
+        assert [run.round(w, egress[w], ingress[w]).accepted for w in range(WINDOWS)] == [want] * WINDOWS
+        assert run.lw.network_verdict(run.stream)["accepted"] is want
 
 
 def _tampered(edit):
@@ -133,20 +153,22 @@ def test_a_request_that_straddles_the_windows_end_is_refused_and_a_held_one_acce
         assert run.lw.network_verdict(run.stream)["accepted"] is all(want)
 
 
-def test_behind_the_admission_rule_every_window_derives_the_programs_grid_under_load():
-    """Random dense arrivals, sizes and syncs, several requests a window: behind the admission rule every request is
-    admitted, whole, in a window that still ends idle with it, so each window's derived counts are the Program's grid
-    under its sync (`schedule.expected_grids` of each response anchored where the bucketer released its request), the
-    counts N2's served check accepts."""
-    rng = random.Random(3051)
+@pytest.mark.parametrize("own", [0, 1])
+def test_behind_the_admission_rule_every_window_derives_the_programs_grid_under_load(own):
+    """Random dense arrivals, sizes and syncs, several requests a window, salted or not: behind the admission rule
+    every request is admitted, whole, in a window that still ends idle with it, so each window's derived counts are the
+    Program's grid under its sync (`schedule.expected_grids` of each response anchored where the bucketer released its
+    request), the counts N2's served check accepts."""
+    rng = random.Random(3051 + own)
     syncs = list(SyncSet((0, 1, 2, 3), (Fraction(1), Fraction(2), Fraction(1, 2), Fraction(2, 3))))
     checked = 0
     for _ in range(150):
         request_frames, response_frames, windows = rng.choice((1, 2)), rng.randint(1, 4), 8
-        profile = SV.ServedProfile(response_frames, request_frames, windows)
+        profile = SV.ServedProfile(response_frames, request_frames, windows, own)
         run = [rng.choice(syncs) for _ in range(windows)]
         try:
-            bucketer = Bucketer(Certifier(LINK, P), served=SV.Admission(profile, P.allocation, run.__getitem__))
+            bucketer = Bucketer(Certifier(LINK, P), (lambda w: b"s") if own else None,
+                                served=SV.Admission(profile, P.allocation, run.__getitem__))
         except ValueError:
             continue
         n = request_frames * rng.randint(2, 10)
@@ -154,9 +176,11 @@ def test_behind_the_admission_rule_every_window_derives_the_programs_grid_under_
             bucketer.arrive(b"q", t)
         ingress = [r for r in (bucketer.tick()[1] for _ in range(windows * P.buckets)) if r is not None]
         arrivals = [list(occupancy(r.grid)) for r in ingress]
-        if sum(map(sum, arrivals)) < n:
+        assert all(a[0] >= own for a in arrivals)
+        requests = [[a[0] - own, *a[1:]] for a in arrivals]
+        if sum(map(sum, requests)) < n:
             continue
-        grids = expected_grids(frames_of(arrivals, request_frames, response_frames), run, P)
+        grids = expected_grids(frames_of(requests, request_frames, response_frames), run, P)
         derived = [SV.derive(a, s, profile, P.allocation) for a, s in zip(arrivals, run)]
         assert derived == [list(occupancy(g)) for g in grids]
         checked += 1
@@ -195,24 +219,27 @@ def test_a_window_that_doesnt_end_idle_has_no_derivation():
     assert SV.derive(one, ClockSync(5, Fraction(4)), four, 1) is None
 
 
-KEYS = [(8, 3, 1, 2, 2), (12, 3, 2, 2, 2), (10, 5, 1, 3, 1), (9, 2, 2, 1, 3)]
+KEYS = [(8, 3, 1, 2, 2, 0), (12, 3, 2, 2, 2, 1), (10, 5, 1, 3, 1, 0), (9, 2, 2, 1, 3, 0), (10, 3, 1, 2, 2, 1),
+        (9, 2, 2, 1, 3, 1)]
 EDGE = [(0, 1, 1), (1, 1, 1), (2, 2, 1), (1, 1, 2), (0, 5, 3), (25, 1, 1), (1, 1, 40), (2, 7, 5), (0, 0, 1), (5, 0, 0),
         (65535, 1, 1), (1, 65535, 65535), (0, 3, 65535)]
 
 
 def _cases(key, rng, n):
-    T, F_, FIN_, R, RIN = key
+    T, F_, FIN_, R, RIN, OWN = key
     cases = []
     for _ in range(n):
         sync = rng.choice(EDGE)
         if rng.random() < 0.6:
             ingress = [0] * T
+            ingress[0] = OWN if rng.random() < 0.9 else 1 - OWN
             for _ in range(rng.randint(0, 3)):
                 t = rng.randrange(T)
                 ingress[t] = min(RIN, ingress[t] + FIN_)
         else:
             ingress = [rng.choice([0, 0, 1, FIN_, RIN, RIN + 1]) for _ in range(T)]
-        d = SV.derive(ingress, ClockSync(sync[0], Fraction(sync[1], sync[2])), SV.ServedProfile(F_, FIN_, 1), R) \
+        profile = SV.ServedProfile(F_, FIN_, 1, OWN)
+        d = SV.derive(ingress, ClockSync(sync[0], Fraction(sync[1], sync[2])), profile, R) \
             if sync[1] and sync[2] else None
         if d is not None and rng.random() < 0.8:
             egress = list(d)
@@ -227,8 +254,9 @@ def _cases(key, rng, n):
 
 @pytest.mark.parametrize("key", KEYS)
 def test_the_circuit_is_its_reference(key):
-    """Random windows of each size class, idle and not, with derived counts, counts one off and counts past the
-    allocation, under syncs that include p or q = 0 and δ, p and q at 2^16 − 1."""
+    """Random windows of each size class, salted and not, idle and not, with derived counts, counts one off and counts
+    past the allocation, under syncs that include p or q = 0 and δ, p and q at 2^16 − 1, and windows whose first
+    bucket lacks the own frame or has one more."""
     cases = _cases(key, random.Random(sum(key)), 300)
     want = [int(SV.reference(*key, *c)) for c in cases]
     assert SV.evaluate(key, cases) == want and 0 < sum(want) < len(want)
@@ -238,9 +266,10 @@ def test_the_served_unit_is_n2s_beside_the_served_counts(tmp_path):
     """The served unit holds N2's checks and the served counts as one gate, the spec declares the window's sync and the
     served sizes public, and a served link has no egress occupancy profile and one T and τ_b on both ends."""
     lw = Run(tmp_path).lw
-    assert lw.unit.id == "NetworkServedLinkWindow_v1{EGRESS=(9,8,0),INGRESS=(9,8,0),SERVED=(8,3,1,2,2)}"
+    assert lw.unit.id == "NetworkServedLinkWindow_v1{EGRESS=(9,8,0),INGRESS=(9,8,0),SERVED=(8,3,1,2,2,0)}"
     assert lw.spec.public == PUBLIC_SERVED and {"sync", "served"} <= {p.item for p in lw.spec.public}
     assert lw.spec.digest() != replace(lw, served=SV.ServedProfile(4, 1, WINDOWS)).spec.digest()
+    assert replace(lw, served=replace(PROFILE, own=1)).unit.id.endswith("SERVED=(8,3,1,2,2,1)}")
     with pytest.raises(ValueError, match="no egress occupancy"):
         replace(lw, occupancy=(((0,) * 8,), None))
     with pytest.raises(ValueError, match="share T"):
@@ -249,3 +278,5 @@ def test_the_served_unit_is_n2s_beside_the_served_counts(tmp_path):
         replace(lw, sync_set=SyncSet((1 << 16,), (1,)))
     with pytest.raises(ValueError, match="power of two"):
         SV.ServedProfile(3, 3, 1)
+    with pytest.raises(ValueError, match="0 or 1 own"):
+        SV.ServedProfile(3, 1, 1, 2)

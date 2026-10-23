@@ -202,7 +202,7 @@ _SERVED_UNIT = CompositeDefinition(
 
 def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], served: tuple[int, ...] | None = None):
     """N2's proof unit for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
-    and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN) (`served.unit`)."""
+    and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN, OWN) (`served.unit`)."""
     if served is None:
         return bind(_UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress))
     return bind(_SERVED_UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress), SERVED=tuple(served))
@@ -224,7 +224,8 @@ PUBLIC = (
 PUBLIC_SERVED = tuple(p for p in PUBLIC if p.item != "occupancy") + (
     S.Public("occupancy", "structure", "the ingress end's frames per bucket in each window where the placement fixes "
              "them, fixed before the run; none on egress, whose counts the unit derives"),
-    S.Public("served", "structure", "frames a response (FIXLEN), frames a request and windows, fixed before the run"),
+    S.Public("served", "structure", "frames a response (FIXLEN), frames a request, windows and the certifier's own "
+             "frames a window (its salt's), fixed before the run"),
     S.Public("sync", "output", "the window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
              "`charge` already counts, which the served counts read"),
 )
@@ -332,12 +333,12 @@ class LinkWindows:
             return HC.grid_bytes(self.params, parameters_digest(self.params, self.sync_set))
         return HC.grid_bytes(self.ingress_params, parameters_digest(self.ingress_params))
 
-    def served_key(self) -> tuple[int, int, int, int, int] | None:
-        """The served counts' size class (T, FOUT, FIN, R, RIN) on a served link, else None."""
+    def served_key(self) -> tuple[int, int, int, int, int, int] | None:
+        """The served counts' size class (T, FOUT, FIN, R, RIN, OWN) on a served link, else None."""
         if self.served is None:
             return None
         return (self.params.buckets, self.served.response_frames, self.served.request_frames, self.params.allocation,
-                self.ingress_params.allocation)
+                self.ingress_params.allocation, self.served.own)
 
     @cached_property
     def unit(self):
@@ -366,7 +367,7 @@ class LinkWindows:
                            "ingress": parameters_digest(self.ingress_params).hex()},
             "occupancy": [None if p is None else _sha512([list(row) for row in p]) for p in self.occupancy],
             **({} if self.served is None else {"served": [self.served.response_frames, self.served.request_frames,
-                                                          self.served.windows]})})
+                                                          self.served.windows, self.served.own]})})
         check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
         public = PUBLIC if self.served is None else PUBLIC_SERVED
