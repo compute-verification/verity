@@ -2,17 +2,20 @@ import Proofs.Flock.Claims.ZK.FrameOuter
 import Proofs.Flock.Claims.ZK.FramePoints
 
 /-!
-# The frames refuse a short rank (`FrameUnrefused`'s rank fault)
+# The frame's rank check along a rep's requests (`FrameUnrefused`'s rank fault, at the frame)
 
-At a `Live` statement the loop serves, on a live history of `refK x` openings whose last coins the frame takes, no
-table's rep shows a rank short of full over its mask slot's words (`Masked.Thrown`'s first disjunct, `RankBad`): the
-rep's frame runs the rank check at the opening's label (`Masker.label`), on the algebraic phase's coins as the stream
-answered them, after the earlier rep's claim points.
+A rep's frame runs the rank check at the opening's label (`Masker.label`), on the algebraic phase's coins as the stream
+answered them, after the earlier rep's claim points. Along the loop's requests for a rep:
 
-* `Ranked.Good`, `label_good`, `answer_good`: before the opening's label the frame is in the algebraic phase, outside
-  level 0 and the inner proof; once past it (`done`), it is in a masked phase only at level 0, and the rank check held
-  at its coins and earlier reps' points (`RankHeld`). Every label keeps that, and so does every answer, which before
-  `done` keeps the coins and after it leaves them as they were.
+* `Ranked.Good`: before the opening's label (`done`) the frame is in the algebraic phase, outside level 0 and the inner
+  proof; past it, in a masked phase only at level 0, and the rank check held at its coins and the earlier reps' points
+  (`RankHeld`). Every label keeps that (`label_good`), and so does every round (`roundFree_keep`, `step_round`) and
+  every answer (`answer_keep`), which before the label appends the round's coins and after it keeps the coins.
+* `Ranked.Inv`, `run_head`: from a rep's start past its first round (the zerocheck's head) and then each round's coins
+  and the next (`pairs`), the frame holds rounds `0 … d − 1`'s coins, each answered the round's count, `d` every round
+  answered before the opening's label.
+* **`Ranked.ownReqs_rank`**: so where a rep's requests up to an inner proof's round (`ownReqs`) run on into the inner
+  proof, the rank check held at the rounds' coins, after the earlier rep's claim points (`run_prior_eq`).
 -/
 
 namespace Claims.ZKServer
