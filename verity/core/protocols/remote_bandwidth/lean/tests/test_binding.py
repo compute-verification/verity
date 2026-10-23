@@ -301,12 +301,14 @@ def _write(tmp: Path, digests: list[bytes]) -> Path:
 
 
 def expected_root(tmp: Path):
+    """`store.expected_root` in this process, its subtrees of `2^chunk_log2` leaves (the Lean's on `workers` threads)."""
     def reference(v) -> str:
         digests = _digests(v)
         engines, arena_blocks, host = M.nat(v, "engines"), M.nat(v, "arena_blocks"), M.nat(v, "host_blocks")
-        node, key = M.hex_(v, "node"), M.hex_(v, "key")
+        node, key, chunk_log2 = M.hex_(v, "node"), M.hex_(v, "key"), M.nat(v, "chunk_log2")
+        M.nat(v, "workers")
         s = store.Store(_arena(digests), engines, arena_blocks, host)
-        return store.expected_root(s, node, key, _write(tmp, digests)).hex()
+        return store.expected_root(s, node, key, _write(tmp, digests), 1, chunk_log2).hex()
     return reference
 
 
@@ -320,7 +322,7 @@ def shapes(draw) -> dict:
 
 @st.composite
 def root_inputs(draw) -> dict:
-    v = draw(shapes())
+    v = draw(shapes()) | {"workers": draw(st.integers(0, 4)), "chunk_log2": draw(st.integers(0, 6))}
     f = draw(st.integers(0, 12))
     if f == 1:
         v["engines"] = 0
@@ -340,17 +342,20 @@ def test_expected_root(server, tmp_path) -> None:
     assert stats.outputs > 60, stats
 
 
-@pytest.mark.parametrize("engines, extra, host", [(1, 0, 0), (2, 3, 5), (3, 1, 2)])
-def test_the_expected_root_is_the_payload_trees_over_the_stores_payloads(server, engines, extra, host) -> None:
+@pytest.mark.parametrize("engines, extra, host, workers, chunk_log2",
+                         [(1, 0, 0, 1, 16), (2, 3, 5, 3, 1), (3, 1, 2, 2, 2), (3, 1, 2, 8, 0)])
+def test_the_expected_root_is_the_payload_trees_over_the_stores_payloads(server, engines, extra, host, workers,
+                                                                         chunk_log2) -> None:
     """Independently of `store.expected_root`: `audit.payload_tree` over the store's payloads, block j salted with
-    `store_salt(key, PAYLOAD_LABEL, j)`, is the Lean's root from the weights blocks' digests alone."""
+    `store_salt(key, PAYLOAD_LABEL, j)`, is the Lean's root from the weights blocks' digests alone, whole or as
+    subtrees of `2^chunk_log2` leaves on `workers` threads."""
     weights = [expand(b"weights %d" % u, codec.BLOCK_BYTES) for u in range(3)]
     arena = weights + [bytes(codec.BLOCK_BYTES)] * extra
     payloads = arena * engines + [bytes(codec.BLOCK_BYTES)] * host
     salts = [store.store_salt(KEY, store.PAYLOAD_LABEL, j) for j in range(len(payloads))]
     root = audit.payload_tree(NODE, payloads, salts).commitment.root
     v = {"digests": [codec.digest(w).hex() for w in weights], "engines": engines, "arena_blocks": len(arena),
-         "host_blocks": host, "node": NODE.hex(), "key": KEY.hex()}
+         "host_blocks": host, "node": NODE.hex(), "key": KEY.hex(), "workers": workers, "chunk_log2": chunk_log2}
     lean = D.replay(port("expected_root", lambda _v: root.hex()), v, server)
     assert lean == ("output", D.canonical(root.hex()))
 
