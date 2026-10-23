@@ -19,8 +19,8 @@ at an accepted run (`ReadsBack`, `stagedB_deployRec`), and `RunPairs` holds at `
 * `ksLin2_deployed_plain_parts`: at the deployed relation and caps `CpDep`, with `KSFlockLin` at `DE` from
   `plain_KSFlockLin_DE`. What stays is the decoder's canonicity (`CanonicalProofFiles`), the calls half of the plain
   verifier's last-message binding (`PlainCallsBindOrSlack`), the reader reading the transcript back (`ReadsBack`), at
-  the dense form `HeldB`, `PartChecksB`, `PartOpensB` and `DecompB` for some inner check, and the readers' two facts
-  (`ReadersTrue`, `ReadersLogCollS`).
+  the dense form `HeldB`, `PartChecksB`, `PartOpensB` and `DecompB` for some inner check, and the readers'
+  `ReadersTrue` (`ReadersLogCollS` is proved at `IVStar`, `readersLogCollS_ivstar`).
 -/
 
 namespace RecDeploy
@@ -54,7 +54,7 @@ theorem ksLin2_route_staged (rel relO : _root_.Flock.Readable.Parsed → _root_.
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
       ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
-      ReadersLogCollS FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
+      Bd.StepsLogFree FlockDeploy.sha512 →
       Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt rel b L) Bd (deployZkRec relO) Cp DenseAt := by
   intro nextE colsE wE join rowIn final w Bd D bL hKS hBinds hEC hCF hF hshapes hT hL decI hdI decO hdO x hx Ω _ _ P M
     R
@@ -69,7 +69,8 @@ theorem ksLin2_route_staged (rel relO : _root_.Flock.Readable.Parsed → _root_.
   have hTc := callsTrue FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
   have hA := Claims.Recursion.innerAcceptsCollAt_of_dense (refuses I.V ivScope bL FlockDeploy.sha512) hTc
     (hacc _ (by simp)) hx
-  have hLc := callsLogCollS FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT hL
+  have hLc := callsLogCollS FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
+    (readersLogCollS_ivstar hL bL (deployZkRec relO))
   obtain ⟨-, shows, cmt, hHe, hSt, -, hOp, -⟩ := hshapes _ (List.mem_singleton_self _)
   have hFk := forksBindAt_C_pick_setup FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) L.pick hEC hCF hTc hLc x
     (fun decO Ω P ω r c ws hg => by
@@ -116,15 +117,14 @@ theorem ksLin2_deployed_parts (rel : _root_.Flock.Readable.Parsed → _root_.Flo
           L shape (showsTr untr) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogCollS FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt rel b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) Cp DenseAt := by
-  intro Bd D bL hrb hKS hparts hT hL
+  intro Bd D bL hrb hKS hparts hT
   refine ksLin2_route_staged rel _root_.Flock.Readable.relation b L hHW Cp (FlockDeploy.V false).next
     (FlockDeploy.deployPlainTrim rel).cols wE join rowInDeployed final w hKS
     (binds_deployed rel _ _ wE join final w) (lastBindsEC_deployed_sha512 rel wE join final w hC hK)
     (lastCoinFree_deployed rel _ wE join rowInDeployed final w FlockDeploy.sha512) FlockDeploy.KS.zk_KS_outer
-    ?_ hT hL
+    ?_ hT (stepsLogFree_deployed rel _ wE join rowInDeployed final w FlockDeploy.sha512)
   intro shape hs
   obtain ⟨chk, hHe, hCk, hOp, hDc⟩ := hparts shape hs
   exact ⟨chk, showsTr untr, cmtTr untr, hHe,
@@ -152,7 +152,6 @@ theorem ksLin2_deployed_plain_parts (b : Brings) (L : Claims.Recursion.VStarB.La
           L shape (showsTr untr) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogCollS FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := fun hrb =>
   ksLin2_deployed_parts _root_.Flock.Readable.relation b L hHW FlockDeploy.KS.CpDep wE join final w hC hK untr hrb

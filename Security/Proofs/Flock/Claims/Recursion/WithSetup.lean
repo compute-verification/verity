@@ -3,10 +3,11 @@ import Proofs.Flock.Claims.Recursion.KSLin2
 /-!
 # Route 2C with the inner setup's calls among the recorded ones
 
-An accepted inner run's calls are the outer witnesses' recorded ones and the inner verifier's setup's at the inner
-statement, which no witness need record (`RecDeploy.setupM_not_layoutBTops`). `Deploy.withSetup H D` appends the
-setup's calls, each with `H`'s answer, to the recorded ones; it changes `calls` only, so every other field, and with
-them `E`, `R`, `κ`, `γ` and the run, are `D`'s.
+An accepted inner run's calls are the outer witnesses' recorded ones and the inner verifier's own, at the inner
+statement (its setup's, which no witness need record: `RecDeploy.setupM_not_layoutBTops`) and on the inner messages.
+`Deploy.withSetup H D` appends those calls (`Deploy.innerSetup`, `Deploy.innerCalls`), each with `H`'s answer, to the
+recorded ones; it changes `calls` only, so every other field, and with them `E`, `R`, `κ`, `γ` and the run, are
+`D`'s.
 
 * `callsTrue_withSetup`, `callsNil_withSetup`: the setup's calls are true evaluations, so the recorded ones stay true.
 * `callsLogColl_withSetup`, `innerAcceptsCollAt_withSetup`: a fact at `D` holds at `D.withSetup H`, the more calls
@@ -26,7 +27,8 @@ variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem withSetup_calls (H : Msg → Msg) (D : Deploy Coin) (x : Msg) (ws : List Flock.Wit) :
-    (D.withSetup H).calls x ws = D.calls x ws ++ (D.innerSetup (xI D x)).map fun u => (u, H u) := rfl
+    (D.withSetup H).calls x ws = D.calls x ws ++ (D.innerSetup (xI D x) ++ D.innerCalls H x ws).map fun u => (u, H u) :=
+  rfl
 
 theorem setup_true (H : Msg → Msg) (us : List Msg) : ∀ e ∈ us.map (fun u => (u, H u)), H e.1 = e.2 := by
   intro e he

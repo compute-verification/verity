@@ -321,12 +321,11 @@ theorem ksLin2_deployed_cap (b : Brings) (topsAt : Msg → ℕ → ℕ → Optio
             L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogCollS FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro L Bd D bL hP hRT hRL hRP
-  refine ksLin2_deployed_plain_closed b L wE join final w ?_ hRT hRL hRP
+  intro L Bd D bL hP hRT hRP
+  refine ksLin2_deployed_plain_closed b L wE join final w ?_ hRT hRP
   obtain ⟨decC, hRun, hS⟩ := hP
   refine ⟨decC, hRun, fun shape hsh => ?_⟩
   obtain ⟨hM, hC, hRw, hTp, hF, chk, shows, cmt, hV, hPC, hPO, hD⟩ := hS shape hsh

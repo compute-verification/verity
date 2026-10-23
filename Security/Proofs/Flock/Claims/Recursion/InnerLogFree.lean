@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Recursion.LastBindsEC
 import Proofs.Flock.Claims.Recursion.CallsAgree
 import Proofs.Flock.Claims.Recursion.VStarCross
+import Proofs.Flock.Claims.Recursion.SetupCalls
 
 /-!
 # The inner verifier's calls read no coin
@@ -11,6 +12,10 @@ at both or at neither (`Bound.StepsLogFree`), `IVStar`'s run on replayed message
 (`Bound.run_vLog_free`), each call with `H`'s answer (`Bound.run_vLog_ans`). The deployed plain verifier meets it
 (`RecDeploy.stepsLogFree_of_V`, `RecDeploy.stepsLogFree_deployed`): a coin request answers its own coin at any coins,
 and a decision's calls are its setup's and its verdict's, which read the messages alone (`RecDeploy.next_log_free`).
+
+So the readers' facts `ReadersLogCollS` asks hold at `IVStar` (`RecDeploy.readersLogCollS_ivstar`): the inner
+verifier's calls at the run's coins are its calls at the coins `default` (`RecDeploy.innerCallsOf`), each with `H`'s
+answer, which the record searches beside the recorded ones.
 -/
 
 namespace Claims.Recursion
@@ -215,5 +220,20 @@ theorem stepsLogFree_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flo
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (H : Msg → Msg) :
     (bdDeployed rel (FlockDeploy.V false).next colsE wE join rowIn final w).StepsLogFree H :=
   stepsLogFree_of_V H _ rfl (bdDeployed_ans rel _ colsE wE join rowIn final w)
+
+/-- **`ReadersLogCollS` at `IVStar`** wherever `DE`'s steps read no coin in their calls: the inner verifier's calls at
+the run's coins are its calls at the coins `default` (`Bound.run_vLog_free`), each with `H`'s answer
+(`Bound.run_vLog_ans`), so among the inner verifier's own the record searches (`innerCallsOf`). -/
+theorem readersLogCollS_ivstar {Col T Col' T' : Type} [DecidableEq Col] {H : Msg → Msg} {Bd : Bound Coin Col T}
+    (h : Bd.StepsLogFree H) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T') :
+    ReadersLogCollS H Bd.IVStar b DO := by
+  intro x as cs ws _ _ _ _ _
+  left
+  intro e he
+  have he' : e ∈ (Claims.run H (Claims.replay (b.rd.msgs x ws)) Bd.IVStar (xIOf x) () fun _ => default).vLog := by
+    unfold innerRunAt at he
+    rwa [Bd.run_vLog_free h (xIOf x) (b.rd.msgs x ws) (fun i => cs.getD i.val default) fun _ => default] at he
+  refine List.mem_append_right _ (List.mem_map.2 ⟨e.1, List.mem_append_right _ (List.mem_map.2 ⟨e, he', rfl⟩), ?_⟩)
+  exact Prod.ext rfl (Bd.run_vLog_ans H (xIOf x) (b.rd.msgs x ws) _ e he').symm
 
 end RecDeploy
