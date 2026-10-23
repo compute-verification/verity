@@ -13,6 +13,7 @@
   "Flock.Test.RecOpen",
   "Flock.Test.RecRecord",
   "Flock.Test.RecSchedule",
+  "Flock.Test.RecReads",
   "Flock.Test.RecOpening",
   "Flock.Test.RecOpenLeaves",
   "Flock.Test.RecSparseRows",
