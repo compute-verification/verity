@@ -112,8 +112,8 @@ def layoutBTops (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) : Cl
 /-! ## What the parts record
 
 Every call a part records at `layoutBTops` is an hm96 salt or row call, whose input starts with the salt's tag
-`verity/hm96-sha512/salt/v1` or a row's `verity/sha512-row/v1`, byte 7 `h` or `s` (`calls_layoutBTops_tagged`). The plain
-setup's statement digest, `SHA-512(h)` with `h` starting with the statement's tag (`Stmt.setupHWith`), reads
+`verity/hm96-sha512/salt/v1` or a row's `verity/sha512-row/v1`, byte 7 `h` or `s` (`calls_layoutBTops_tagged`). The
+plain setup's statement digest, `SHA-512(h)` with `h` starting with the statement's tag (`Stmt.setupHWith`), reads
 `verity/flock-circuit` at the inner tags, byte 7 `f`, so no part records it (`calls_layoutBTops_not_stmt`). Every
 deciding step of the plain verifier makes that call first (`next_decide_calls`), so a premise asking the inner run's
 calls to be recorded ones, or a collision among them, fails at every honest accepted run. -/

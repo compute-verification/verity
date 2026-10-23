@@ -1,13 +1,15 @@
 import Proofs.Flock.Claims.Recursion.LayoutBTops
+import Proofs.Flock.Claims.Recursion.VStarCross
 
 /-!
 # The plain setup makes a call no recorded part makes
 
 `calls_layoutBTops_tagged` puts every call `layoutBTops` records at byte 7 `h` or `s` (`HmTagged`, hm96's prefixes).
 The inner statement's setup, wherever it is `.ok` at `H`, makes a call that is neither (`setupM_log_untagged`): its
-session digest `σ = SHA-512(sigmaTag ‖ …)`, whose tag `verity/flock-circuit/sigma` has `f` at byte 7. So a premise asking
-every call of an accepted inner run to be a recorded one, or a collision among them, asks at every accepted run with a
-setup for a collision among the recorded calls (`innerSetupLog_not_layoutBTops`).
+session digest `σ = SHA-512(sigmaTag ‖ …)`, whose tag `verity/flock-circuit/sigma` has `f` at byte 7. So a premise
+asking every call of an accepted inner run to be a recorded one, or a collision among them, asks at every accepted run
+with a setup for a collision among the recorded calls (`setupM_not_layoutBTops`), which `ReadersLogCollS` does not: it
+searches the setup's calls too.
 
 The proof runs the setup on a poisoned oracle (`poison`), SHA-512 refusing every input `p` holds of. Off a run whose
 log `p` holds of nowhere, the poisoned run is the `OC` run (`poisonSim`, one more simulation of `Flock.With.Sim`, at
@@ -44,7 +46,8 @@ theorem poisonSim_hashes (p : ByteArray → Bool) (H : Msg → Msg) :
     (poisonSim p H).Hashes Claims.Hashes.oc (poison p (Claims.hOf H)) where
   sha512 b hn := by
     have hb : p (Claims.ofMsg (Claims.toMsg b)) = false := hn (Claims.toMsg b, H (Claims.toMsg b)) (by
-      show _ ∈ (Claims.OC.eval H (Claims.OC.query (Claims.toMsg b) fun a => Claims.OC.ret (Except.ok (Claims.ofMsg a)))).2
+      show _ ∈ (Claims.OC.eval H
+        (Claims.OC.query (Claims.toMsg b) fun a => Claims.OC.ret (Except.ok (Claims.ofMsg a)))).2
       simp [Claims.OC.eval])
     rw [Claims.ofMsg_toMsg] at hb
     show cond (p b) _ _ = _
@@ -141,7 +144,8 @@ theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
     | (split at hs))
 
 /-- **The setup's calls include one that is not `HmTagged`**, wherever it is `.ok` at `H` on hidden outputs at a `σ`
-tag with `f` at byte 7: off that, its poisoned run is its run (`setupM_poison`) and refuses (`setupTablesWith_poison`). -/
+tag with `f` at byte 7: off that, its poisoned run is its run (`setupM_poison`) and refuses
+(`setupTablesWith_poison`). -/
 theorem setupM_log_untagged (H : Msg → Msg) (r : Readable.Read) (hhid : r.tags.hiddenOutputs = true)
     (hsig : 8 ≤ r.tags.sigmaTag.toUTF8.data.toList.length ∧ r.tags.sigmaTag.toUTF8.data.toList[7]? = some 102)
     {v : SessionSpec × Array Stmt} (hok : FlockDeploy.setupWith (Claims.hOf H) r = .ok v) :
@@ -169,3 +173,19 @@ theorem innerTags_untagged : RecVStar.innerTags.hiddenOutputs = true ∧
     8 ≤ RecVStar.innerTags.sigmaTag.toUTF8.data.toList.length ∧
       RecVStar.innerTags.sigmaTag.toUTF8.data.toList[7]? = some 102 := by
   decide
+
+/-- **`S(x_I)` holds a call no part records**: where the inner statement sets up on hidden outputs at a `σ` tag with
+`f` at byte 7, its setup is `.ok` at SHA-512 (`setupWith_sha512_of`), so one of the inputs `innerSetupIns` lists, the
+ones `ReadersLogCollS` searches beside the recorded calls, is not `HmTagged` (`setupM_log_untagged`). -/
+theorem innerSetupIns_untagged {xI : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
+    (h : FlockDeploy.setupOf false xI = some (s, spec, sts)) (hhid : s.read.tags.hiddenOutputs = true)
+    (hsig : 8 ≤ s.read.tags.sigmaTag.toUTF8.data.toList.length ∧
+      s.read.tags.sigmaTag.toUTF8.data.toList[7]? = some 102) :
+    ∃ u ∈ innerSetupIns xI, ¬ HmTagged u := by
+  obtain ⟨e, he, hn⟩ := setupM_log_untagged FlockDeploy.sha512 s.read hhid hsig (setupWith_sha512_of h)
+  refine ⟨e.1, ?_, hn⟩
+  unfold innerSetupIns
+  rw [h]
+  exact List.mem_map_of_mem he
+
+end RecDeploy

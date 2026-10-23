@@ -14,7 +14,9 @@ proof reads `KSLin2` at `M = 2^256` and `R = 2^257` and bounds its six terms:
   (`Claims.Sampling.calls_le_of_noHash`) over at most `1 + Σ_s m′_s·k_s` reruns (`EO_runs_exp`);
 * `B_I` costs two draws (`Ex_Binner_cost_le`), `FCI` and `Fdev` at most two in expectation (`Ex_FCI_cost_le`, Wald's
   bound on the gated loop over forked draws `Ex_gate_loop_fork_le`; `Ex_Fdev_cost_le`), and `F0I` at most `k_I + 1`
-  (`Ex_F0I_cost_le`), so under `ExpectedCR` each finds a collision with probability at most its cost over `2^256`;
+  (`Ex_F0I_cost_le`), each searching the inner setup's `|S(x_I)|` calls too (`Deploy.withSetup`) and charged them once
+  (`Finder.charge`, `Ex_charge`), so under `ExpectedCR` each finds a collision with probability at most its cost over
+  `2^256`, and `c_Be` becomes `c_S = c_Be + |S(x_I)|` in their terms;
 * `B` costs at most `2t` (`B_cost_le`), so under `StrictBirthday` its term is `t·√γ·2^{-255.5}`
   (`Claims.Sampling.sqrt_birthday`);
 * the tails `1/(M+1)` and `(k_I + 1)/(R+1)` are below the collision terms at `t·c_Be ≥ 1`;

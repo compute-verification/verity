@@ -15,14 +15,17 @@ plain record's numbers).
 **`lamLin2_deployed_ge`**: `λ₂(x) ≥ 100` at every statement `x` whose inner statement is in the plain scope
 (`FlockDeploy.PlainIn`: up to `200` tables, each at an `m` the plain verifier serves and of a planned shape) and each of
 whose `nS x ≤ 2^16` V* parts sets up, at the inner rounds `nums` reads it at, within the masked verifier's served shapes
-(`PartIn`, `ZkIn`'s fields at the recursive setup `setupO`), at inner caps of at most `2^64` positions; the deployed
-caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep` states it at them with no width premise. Each of
+(`PartIn`, `ZkIn`'s fields at the recursive setup `setupO`), at inner caps of at most `2^64` positions and at most
+`2^56` calls in the inner statement's plain setup (`|S(x_I)|`, `innerSetupIns`; 390 at the honest rec-coins
+statement); the deployed caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep` states it at them with no
+width premise. Each of
 `λ₂`'s six terms is at least `103 > 100 + log₂ 6`, from bounds that are exact rational and real inequalities:
 
 * the inner Flock: `κ_I ≤ 200·2^{−202.98}` (`FlockDeploy.κ_plain_le`), `k_I ≤ 2^32`, `m′ = 210`, rounds `≤ 2^20`;
 * each part: `κ_O ≤ 200·2^{−202.98}` (`numsOf_κ_le`, `Flock.Numbers.κ_le_mul` at `Nums`), `k_O ≤ 2^32`, rounds
   `≤ 880002` and `γ_O ≤ 2^68` (`numsOf_γ_le`);
-* so `N_I ≤ 2^40`, `c_Be ≤ 2^57`, `k(x) ≤ 2^37`, `κ ≤ 2^{−137}`, `γ ≤ 2^218` and `β₂ ≤ 2^88` (`lamLin2_core`).
+* so `N_I ≤ 2^40`, `c_Be ≤ 2^57`, `c_S = c_Be + |S(x_I)| ≤ 2^58`,
+  `k(x) ≤ 2^37`, `κ ≤ 2^{−137}`, `γ ≤ 2^218` and `β₂ ≤ 2^88` (`lamLin2_core`).
 
 The bound is crude (`λ₂` there is about 165.8, `κ` binding); it is what the parameters give at every such statement.
 It bounds a number and establishes no security level: `KSLin2` at the deployment's dense statements (`KSLin2On` at
