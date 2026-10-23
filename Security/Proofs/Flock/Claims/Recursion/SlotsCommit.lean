@@ -19,8 +19,9 @@ slot's commit string at the outer relation (`readersTrue_layoutBTops`), and `ksL
 `bitsLin2_deployed_slots` take that in its place.
 
 `HmSlotsCommit` is a fact about the slots' circuits at `Flock.check`, the form `Hm.row_bc_flat` and
-`Hidden.port_commit_rowsP` prove at a satisfied table's columns. `SlotsCheck.lean` proves it where a staged part sets up
-one table and RecCap's table holds all its instances (`hmSlotsCommit_of_full`, `OneTable`, `CapFull`). An honest slot
+`Hidden.port_commit_rowsP` prove at a satisfied table's columns. `SlotsCheck.lean` proves it (`hmSlotsCommit_of_full`):
+a staged part sets up one table holding its whole population, which the verifier's setup refuses otherwise
+(`RecSetup.oneFull`). An honest slot
 commits (`slotCommits_of_hm96`): `SlotCommits` holds wherever the slot's columns carry a satisfying hm96 assignment on
 the row and salt it reads (`Hm.hm96_commit`).
 -/
@@ -278,8 +279,8 @@ theorem readersTrue_layoutBTops {Col T : Type} (fin : Msg → List (ℕ × List 
 
 /-- **`KSLin2` at the coin server's record, with `ReadersTrue` as the slots' commit strings**: `ksLin2_deployed_rec`,
 with `ReadersTrue` from `HmSlotsCommit` (`readersTrue_layoutBTops`). What stays open at the dense form is `PartChecksB`,
-`PartOpensB` and `DecompB`, `HmSlotsCommit` (`ksLin2_deployed_full` trades it for `OneTable` and `CapFull`),
-`ReadersLogColl` and `ReadersRunPlayed`. -/
+`PartOpensB` and `DecompB`, `HmSlotsCommit` (`ksLin2_deployed_full` proves it), `ReadersLogColl` and
+`ReadersRunPlayed`. -/
 theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)

@@ -1714,6 +1714,13 @@ shape: `refused: a recursive session (--rec-part, --rec-bindings or --rec-rows) 
 (--rec-inner F): V*'s checks and its full-draw refusal run under that shape, and the recursion's proof covers no session
 without it` (one line).
 
+Under `--rec-inner`, setup also refuses a session of more than one table, or one whose table holds fewer instances than
+its population (a table drawn short), since V*'s slots are read at the one table's addresses and RecCap reads every
+instance's (`RecSetup.oneFull`): `setup: refused: a V* session of <k> tables: a V* session is one table, the only form
+the recursion's proof covers`, or `setup: <unit>: refused: a table of <n> of its population's <N> instances: a V*
+session's table holds every instance, the only form the recursion's proof covers`. An honest V* session, one table
+drawn in full, passes both.
+
 The soundness package proves `scopeOk` and `scopeOkH` the computable checks (`FailClosed.scopeOk_eq`, `scopeOkH_eq`), and `FailClosed.*`'s headlines
 are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. Under hidden outputs a circuit
 the wires don't feed passes `scopeOkH`, and the headlines at the unit's program (`keyProg`) cover it; one they feed

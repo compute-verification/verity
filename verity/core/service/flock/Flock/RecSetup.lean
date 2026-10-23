@@ -3,7 +3,8 @@ What `verify` and `statement` check of V*'s statements at setup, beside their ow
 verifier holds it (`commits`, from the files `--rec-inner-transcript` and `--rec-inner-registration` and the inner
 circuit's META), candidate 3's check 5 inputs (`c3`), candidate 3's checks before the session's own setup
 (`checkInner`), and the V* checks both run on every statement (`checks`). Both call sites call these, so a statement
-about them is one about what either accepts. `verify` also refuses, last in each verdict, a recursive session without
+about them is one about what either accepts. `verify`'s setup also refuses a V* session that is not one table holding
+its whole population (`oneFull`). `verify` also refuses, last in each verdict, a recursive session without
 the verifier's inner shape, a V* session whose draw is not every unit of its population (`fullDraw`), and a session over
 an inner session whose record holds no draw (`innerDrawn`).
 -/
@@ -132,6 +133,24 @@ def checks (inner : Option RecVStar.Inner) (commits : Option RecVStar.InnerCommi
       "--rec-inner-session), which its V* list and rows are checked against")
   sts.forM (RecVStar.checkStmt inner tags tables · circuitB partition program registered part bindings rows)
   if let (some i, some cs) := (inner, commits) then RecVStar.checkCovers i cs
+
+/-- **A V* session sets up one table holding its whole population**: under the verifier's inner shape (`inner`), the
+setup's statements `sts` must be one table (as an honest V* session's are), whose instances are its population's
+(`RecVStar.population`, which `checkStmt` makes V*'s count): a drawn table short of its population is refused here, at
+setup, as `fullDraw` refuses its draw in the verdict. The recursion's proof covers no other form: V*'s slots are read at
+the one table's addresses, and RecCap reads every instance's. Without an inner shape it passes. -/
+def oneFull (inner : Option RecVStar.Inner) (sts : Array Stmt) : V Unit :=
+  match inner with
+  | none => pure ()
+  | some _ =>
+    if sts.size != 1 then
+      throw (s!"refused: a V* session of {sts.size} tables: a V* session is one table, " ++
+        "the only form the recursion's proof covers")
+    else sts.forM fun st =>
+      if st.n < RecVStar.population st then
+        throw (s!"{st.c.unit.name}: refused: a table of {st.n} of its population's {RecVStar.population st} " ++
+          "instances: a V* session's table holds every instance, the only form the recursion's proof covers")
+      else pure ()
 
 /-- The refusal of a recursive session without the verifier's own inner shape. -/
 def noInner : String :=

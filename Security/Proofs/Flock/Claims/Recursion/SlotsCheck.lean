@@ -14,11 +14,9 @@ in either of `setupOne`'s branches (`table_rows`, `slotCommits_table`).
 
 The parse facts come from the verifier's checks at the staged part: one table's circuit is `partCircuit`'s
 (`partCircuit_staged`), in `ProvedScope.scopeOk` (`staged_scope`) and V\*'s parse (`checkParsed_ok`); every port a held
-row or RecCap reads is an input row (`in_block`, `ownPorts_held`), and a held row is rep `0` or `1`.
-
-Two facts no check of the verifier's gives are named, each with the verifier change that would prove it and a witness:
-`OneTable` (`oneTable_of_ready`) and `CapFull` (`capFull_of_undrawn`). `ksLin2_deployed_full` and
-`bitsLin2_deployed_full` take them in place of `HmSlotsCommit`.
+row or RecCap reads is an input row (`in_block`, `ownPorts_held`), and a held row is rep `0` or `1`. The staged part
+is one table holding its whole population (`oneFull_staged`, `capFull_staged`), which the verifier's setup refuses
+otherwise (`RecSetup.oneFull`). `ksLin2_deployed_full` and `bitsLin2_deployed_full` drop `HmSlotsCommit`.
 -/
 
 namespace RecDeploy
@@ -633,43 +631,54 @@ theorem staged_scope {st : Stage} {s : ℕ} {x xO : Claims.Msg} (h : StagedPart 
   obtain ⟨ss, hss, hs, -, hn, -⟩ := FlockSoundness.Discharge.Recursion.check_ok hck'
   exact ⟨r, ss, sv, hr, hss, hs, hn⟩
 
-/-! ## The two facts no verifier check gives -/
+/-! ## A staged part is one table holding its whole population -/
 
-/-- **A staged part sets up one table** (V\*'s statements' honest form). No check of the verifier's forces it: the
-statement rules allow up to `zkTableCap` tables under zk, and only completeness's `readyO` asks `sts.size == 1`.
-`SlotCommits` reads a slot at its table's own addresses, which are the witness's only at one table (`zOf 1`). The
-verifier change that proves it: `RecIns.setup` (or the staged scope check) refusing a V\* statement with more than one
-table, as `readyO` does. -/
-def OneTable (st : Stage) : Prop :=
-  ∀ (s : ℕ) (x xO : Claims.Msg) (i : RecIns) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt),
-    StagedPart st s x xO → setupO xO = some (i, spec, sts) → sts.size = 1
+/-- A setup that decodes has passed `RecSetup.oneFull` on its tables. -/
+theorem RecIns.setup_oneFull {s : RecIns} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
+    (h : s.setup = .ok (spec, sts)) : Flock.RecSetup.oneFull s.inner sts = .ok () := by
+  unfold RecIns.setup at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  all_goals
+    obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst h2
+    assumption
 
-/-- `OneTable` holds wherever the verifier's ready check holds at each staged part (`setupO_of_readyO`). -/
-theorem oneTable_of_ready {st : Stage} (H : Claims.Msg → Claims.Msg)
-    (h : ∀ s x xO, StagedPart st s x xO → readyO H xO = true) : OneTable st := by
-  intro s x xO i spec sts hS hsu
-  obtain ⟨i', spec', sts', hsu', h1⟩ := setupO_of_readyO (h s x xO hS)
-  rw [hsu] at hsu'
-  cases hsu'
-  exact h1
+/-- Under an inner shape, `RecSetup.oneFull` passes only one table, whose instances are its population's. -/
+theorem oneFull_ok {i : Flock.RecVStar.Inner} {sts : Array Flock.Stmt}
+    (h : Flock.RecSetup.oneFull (some i) sts = .ok ()) :
+    sts.size = 1 ∧ ∀ t (ht : t < sts.size), Flock.RecVStar.population sts[t] ≤ sts[t].n := by
+  unfold Flock.RecSetup.oneFull at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rename_i hs
+    refine ⟨by simpa using hs, fun t ht => ?_⟩
+    have h1 := Flock.Readable.array_forM_ok h t ht
+    split at h1
+    · cases h1
+    · omega
 
-/-- **A staged RecCap part's table holds all its `N` instances.** `checkStmt` makes its population `N`
-(`staged_scope`), but a drawn table proves only its drawn units (`HmRow.drawn`: `n` the draw's size), and RecCap reads
-every instance's slot. The verifier change that proves it: `checkStmt` refusing a `.cap _ N` statement whose table has
-fewer than its population's instances (`st.n < population st`). -/
-def CapFull (st : Stage) : Prop :=
-  ∀ (s : ℕ) (x xO : Claims.Msg) (i : RecIns) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt) (r : XR)
-    (l N : ℕ),
-    StagedPart st s x xO → setupO xO = some (i, spec, sts) → readX x = some r →
-    (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N) →
-      ∀ h0 : 0 < sts.size, N ≤ sts[0].n
+/-- **A staged part sets up one table holding its whole population**: its setup ran `RecSetup.oneFull` under the
+verifier's inner shape, which the staged statement carries (`insO_staged`). -/
+theorem oneFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {spec : Flock.SessionSpec}
+    {sts : Array Flock.Stmt} (h : StagedPart st s x xO) (hsu : setupO xO = some (i, spec, sts)) :
+    sts.size = 1 ∧ ∀ t (ht : t < sts.size), Flock.RecVStar.population sts[t] ≤ sts[t].n := by
+  obtain ⟨ms, -, -, -, rfl, -, -⟩ := h
+  obtain ⟨hins, hset⟩ := setupO_some hsu
+  obtain ⟨r, -, hinner, -⟩ := insO_staged hins
+  have h1 := RecIns.setup_oneFull hset
+  rw [hinner] at h1
+  exact oneFull_ok h1
 
-/-- `CapFull` holds wherever a staged RecCap part's first table carries no draw population (`checkStmt` then makes its
-`n` its population, `N`). -/
-theorem capFull_of_undrawn {st : Stage}
-    (h : ∀ s x xO i spec sts, StagedPart st s x xO → setupO xO = some (i, spec, sts) → ∀ h0 : 0 < sts.size,
-      sts[0].pub.population = none) : CapFull st := by
-  intro s x xO i spec sts r l N hS hsu hr hcap h0
+/-- **A staged RecCap part's table holds all its `N` instances**: `checkStmt` makes its population `N`
+(`staged_scope`), and `RecSetup.oneFull` its instances at least its population's (`oneFull_staged`), so a table drawn
+short, which proves only its drawn units (`HmRow.drawn`), never stages. -/
+theorem capFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {spec : Flock.SessionSpec}
+    {sts : Array Flock.Stmt} {r : XR} {l N : ℕ} (hS : StagedPart st s x xO) (hsu : setupO xO = some (i, spec, sts))
+    (hr : readX x = some r) (hcap : (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N))
+    (h0 : 0 < sts.size) : N ≤ sts[0].n := by
   have hx := parse_of_setupO hsu
   obtain ⟨-, r', ss, sv, hr', hss, hsv, hn⟩ := staged_scope hS hx (t := 0) h0
   rw [hr] at hr'
@@ -677,9 +686,9 @@ theorem capFull_of_undrawn {st : Stage}
   rw [hss] at hcap
   have e : sv = .cap l N := Option.some.inj (hsv.symm.trans hcap)
   subst e
-  have hp : (sts[0].pub.population.map (·.1)).getD sts[0].n = N := hn
-  rw [h s x xO i spec sts hS hsu h0] at hp
-  exact Nat.le_of_eq hp.symm
+  have hle := (oneFull_staged hS hsu).2 0 h0
+  have hp : Flock.RecVStar.population sts[0] = N := hn
+  omega
 
 /-! ## The slots commit at a staged part -/
 
@@ -703,13 +712,12 @@ theorem div_lt_blocks_two {n m g e : ℕ} (hn : n < 2)
   have : (2 : ℕ) ^ 3 = 8 := by norm_num
   omega
 
-/-- **V\*'s hm96 slots output their commit strings at the outer relation**, wherever a staged part sets up one table
-(`OneTable`) and a RecCap part's table holds all its instances (`CapFull`): at `Flock.check` its one table's model is
-satisfied at the witness (`layout_of_check`), the table is `setupOne`'s (`setupTables_setupOne`), in scope
+/-- **V\*'s hm96 slots output their commit strings at the outer relation**: a staged part sets up one table, and a
+RecCap part's table holds all its instances (`oneFull_staged`, `capFull_staged`), so at `Flock.check` its one table's
+model is satisfied at the witness (`layout_of_check`), the table is `setupOne`'s (`setupTables_setupOne`), in scope
 (`staged_scope`) and V\*'s parse (`checkParsed_ok`), and each held row's port and RecCap's `top` is an input row of
 V\*'s (`in_block`, `ownPorts_held`) at a block of the table (`div_lt_blocks`), so `slotCommits_table` applies. -/
-theorem hmSlotsCommit_of_full {st : Stage} (h1 : OneTable st) (hcap : CapFull st) :
-    HmSlotsCommit (deployZkRec Flock.Readable.relation) st := by
+theorem hmSlotsCommit_of_full {st : Stage} : HmSlotsCommit (deployZkRec Flock.Readable.relation) st := by
   intro x ms s w r c hS hck hr hpc
   obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss, hss, hsv⟩, h0, htab⟩ := stagedTables hS
   rw [hr] at hr'
@@ -717,7 +725,7 @@ theorem hmSlotsCommit_of_full {st : Stage} (h1 : OneTable st) (hcap : CapFull st
   have hS' := hS
   obtain ⟨-, i, spec, sts, -, hsu, -⟩ := hS'
   have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
-  have hsz : p.sts.size = 1 := by rw [hp]; exact h1 s x _ i spec sts hS hsu
+  have hsz : p.sts.size = 1 := by rw [hp]; exact (oneFull_staged hS hsu).1
   have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0
   obtain ⟨L, regs, hz⟩ := Flock.Readable.layout_of_check hck hx ht hpi h0
   have hz1 : (L.model regs).Satisfies (Flock.Readable.zOf 1 w 0 p.sts[0].m) := by
@@ -752,7 +760,7 @@ theorem hmSlotsCommit_of_full {st : Stage} (h1 : OneTable st) (hcap : CapFull st
     subst e
     have hfull : N ≤ p.sts[0].n := by
       subst hp
-      exact hcap s x _ i spec sts r l N hS hsu hr hsv' h0
+      exact capFull_staged hS hsu hr hsv' h0
     have htop : "top" ∉ (VStar.Stmt.cap l N).sub.outputs := by show "top" ∉ ["out"]; decide
     exact slotCommits_table ht' hd (by omega) hv1 hl L regs hz1 hq (in_block hrows htop hq)
       (div_lt_blocks hg0 (by omega) hnbl)
@@ -763,9 +771,8 @@ open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`KSLin2` at the coin server's record, with the slots' commit strings proved** where a staged part sets up one
-table and RecCap's table holds all its instances: `ksLin2_deployed_slots` with `HmSlotsCommit` from
-`hmSlotsCommit_of_full`. `OneTable` and `CapFull` are the two facts no check of the verifier's gives. -/
+/-- **`KSLin2` at the coin server's record, with the slots' commit strings proved**: `ksLin2_deployed_slots` with
+`HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
 theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -783,16 +790,15 @@ theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsTr recRead) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
-    OneTable bR.st → CapFull bR.st →
     ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D bL hP h1 hc hRL hRP
-  exact ksLin2_deployed_slots b aux nOf rest fin wE join final w hP (hmSlotsCommit_of_full h1 hc) hRL hRP
+  intro bR L Bd D bL hP hRL hRP
+  exact ksLin2_deployed_slots b aux nOf rest fin wE join final w hP hmSlotsCommit_of_full hRL hRP
 
-/-- **`BitsLin2` at the coin server's record, with the slots' commit strings proved** under `OneTable` and `CapFull`:
-`bitsLin2_deployed_slots` with `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
+/-- **`BitsLin2` at the coin server's record, with the slots' commit strings proved**: `bitsLin2_deployed_slots` with
+`HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
 theorem bitsLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -810,13 +816,12 @@ theorem bitsLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecReco
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsTr recRead) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
-    OneTable bR.st → CapFull bR.st →
     ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D bL hP h1 hc hRL hRP
-  exact bitsLin2_deployed_slots b aux nOf rest fin wE join final w hP (hmSlotsCommit_of_full h1 hc) hRL hRP
+  intro bR L Bd D bL hP hRL hRP
+  exact bitsLin2_deployed_slots b aux nOf rest fin wE join final w hP hmSlotsCommit_of_full hRL hRP
 
 end Corollaries
 
