@@ -110,23 +110,24 @@ def _live(C: Circuit, seeds) -> set:
     return seen
 
 
-def _last_reads(circuit, sc, body) -> list[list[int]]:
-    """Per body node, the gates whose last reader it is: the lowering drops their wires after it, so a Definition whose
-    body is a long unrolled loop holds the words its later nodes still read, not every word it computed."""
-    last: dict[int, int] = {}
+def _last_reads(circuit, sc, body) -> dict[tuple[int, int], list[int]]:
+    """Per body node and member (a batch's or scan's activation), the gates whose last reader it is: the lowering drops
+    their wires after it, so a Definition whose body is a long loop, unrolled or a scan, holds the words its later members
+    still read, not every word it computed."""
+    last: dict[int, tuple[int, int]] = {}
     for k, node in enumerate(body.nodes):
         if isinstance(node.fn, PrimitiveDefinition) and node.form == "primitive":
             lo = sc.offset + body.offsets[k]
             for g in range(lo, lo + node.gates):
                 for o in circuit.gate(g).operands:
-                    last[o] = k
+                    last[o] = (k, 0)
             continue
         for m in range(1 if node.form == "call" else node.n):
             for a in FunctionCall(circuit, sc, k, m).args:
-                last[a] = k
-    out: list[list[int]] = [[] for _ in body.nodes]
-    for g, k in last.items():
-        out[k].append(g)
+                last[a] = (k, m)
+    out: dict[tuple[int, int], list[int]] = {}
+    for g, km in last.items():
+        out.setdefault(km, []).append(g)
     return out
 
 
@@ -283,12 +284,15 @@ class _Lowerer:
                     if isinstance(node.fn, PrimitiveDefinition) and node.form == "primitive":
                         lo = sc.offset + body.offsets[k]
                         IL.lower_gates(C, Region(self.circuit, lo, lo + node.gates), wires)
+                        members = 0
                     else:
-                        for m in range(1 if node.form == "call" else node.n):
+                        members = 1 if node.form == "call" else node.n
+                    for m in range(max(members, 1)):
+                        if members:
                             self.call(C, FunctionCall(self.circuit, sc, k, m), wires)
-                    for g in drop[k]:
-                        if g not in keep:
-                            wires.pop(g, None)
+                        for g in drop.pop((k, m), ()):
+                            if g not in keep:
+                                wires.pop(g, None)
         if C.asserts or C.lookups:
             raise NotImplementedError(f"{fc.id}: assertions and table reads are not laid out by the structural lowering yet")
         rets = []
