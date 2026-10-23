@@ -133,6 +133,9 @@ NOISE_J_ENV = "DITHER_SO_NOISE_J"
 # no workspace), in place of each call's noise and units launches; the same receipts
 FUSED_ENV = "DITHER_SO_FUSED"
 FUSED_CTAS_ENV = "DITHER_SO_FUSED_CTAS"  # N > 0: that launch on N CTAs an SM, each warp looping over its units
+# "1": under piecewise graphs a piece's A tables launched at the next piece's first call and joined at its end, the last
+# piece's at the last call (`SoSide.call`): the same tables from the same slots, off the piece's end
+ALAG_ENV = "DITHER_SO_ALAG"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -781,6 +784,9 @@ class SoSide(DA.Side):
         self.fused_ctas = int(os.environ.get(FUSED_CTAS_ENV) or 0)
         if self.fused:
             self.mtab, self.m_units = self._multi_tables()
+        self.alag = os.environ.get(ALAG_ENV) == "1"
+        self.a_prev: list[int] = []
+        self.a_cur: list[int] = []
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
         self.capture_ms: list[float] = []
@@ -811,35 +817,56 @@ class SoSide(DA.Side):
             with torch.cuda.stream(self.zstream):
                 win.c.build(self.z_parts[w], win.stepv[0:1])
             self.z_used = True
+        last = w == win.L - 1
+        lag = self.alag and not self.a_once and DA._piecewise()
+        rc = 0
+        if lag:
+            if w == 0:
+                self.a_prev, self.a_cur = [], []
+            if self.a_prev:
+                self.fork.record(main)
+                for v in self.a_prev:
+                    rc = rc or self._a_table(v)
+                self.a_prev = []
         xq = torch.empty((M, k), dtype=torch.int8, device=x.device)
         s_a = torch.empty(M, dtype=torch.float32, device=x.device)
         DA.exactlin_quant_rows_dithera[(M,)](x, xq, s_a, win.slot[w], win.scale[w], win.S, k, x.stride(0), xq.stride(0),
                                              BLOCK_K=triton.next_power_of_2(k), num_warps=DA.EL.quant_warps(k),
                                              **DA.EL.OPTS)
-        rc = 0
         if not self.a_once:
-            self.fork.record(main)
-            i = w % NA
-            ast = self.astreams[i]
-            ast.wait_event(self.fork)
-            rc = win.a_call(w, win.slot[w], win.scale[w], ast.cuda_stream)
-            self.a_used.add(i)
+            if lag and not last:
+                self.a_cur.append(w)
+            else:
+                self.fork.record(main)
+                for v in self.a_cur + [w]:
+                    rc = rc or self._a_table(v)
+                self.a_cur = []
         self.gemm(w, xq, s_a, wt, s_w, y)
         self.ycommit(w, y, s_w)
         if rc:
-            raise RuntimeError(f"dither-a-so call {w} (M={M}): its A table's launch returned {rc}")
-        end = w == win.L - 1 or (w % 4 == 0 and DA._piecewise())
+            raise RuntimeError(f"dither-a-so call {w} (M={M}): an A table's launch returned {rc}")
+        end = last or (w % 4 == 0 and DA._piecewise())
         if not self.a_once and self.a_used and end:
             for i in sorted(self.a_used):
                 self.a_join[i].record(self.astreams[i])
                 main.wait_event(self.a_join[i])
             self.a_used.clear()
             self.joins += 1
+        if lag and end and not last:
+            self.a_prev, self.a_cur = self.a_cur, []
         if self.zt and self.z_used and end:
             self.z_join.record(self.zstream)
             main.wait_event(self.z_join)
             self.z_used = False
         self.calls += 1
+
+    def _a_table(self, v: int) -> int:
+        """Call v's A table from its slot on its A stream, after the serving stream's `fork`."""
+        i = v % NA
+        ast = self.astreams[i]
+        ast.wait_event(self.fork)
+        self.a_used.add(i)
+        return self.win.a_call(v, self.win.slot[v], self.win.scale[v], ast.cuda_stream)
 
     def stash(self, s: int) -> None:
         """On the serving stream after step s's forward: its A slots, scales, A roots, live rows, step (with and without
@@ -990,6 +1017,7 @@ class SoSide(DA.Side):
                 "noise_j_min": self.noise_j,
                 "units_fused": {"one_launch": self.fused, "units": self.m_units if self.fused else None,
                                 "ctas_an_sm": self.fused_ctas or None},
+                "a_tables_lag_a_piece": self.alag,
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
 
