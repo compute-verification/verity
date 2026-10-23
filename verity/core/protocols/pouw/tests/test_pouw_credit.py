@@ -11,7 +11,6 @@ import importlib.util
 import json
 import math
 import random
-import struct
 import sys
 from pathlib import Path
 
@@ -22,6 +21,7 @@ import pytest
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
+from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import plan
@@ -96,6 +96,7 @@ WINDOW_EXPECT = {
     "entry-twice": ("weights", "'s weights twice ("),
     "entry-form": ("registration", "entry is not one-stage's {value, root, leaves, words, domain}"),
     "weights-period": ("weights", OTHER_PERIOD_WEIGHTS), "weights-unsigned": ("weights", UNSIGNED),
+    "weights-model": ("weights", Cr.MODEL_FIX),
     "weights-no-period": ("weights", "the window is in no period of the auditor's ledger"),
     "weights-requests": ("weights", Cr.OTHER_WEIGHTS), "weights-no-requests": ("weights", Cr.REQUESTS_FORM),
     "weights-leaves": ("weights", "'s entry is not the registration of K = "),
@@ -117,6 +118,10 @@ PERIOD_EXPECT = {
     "never-received": ("window", "so the period earns nothing: rounds: " + NOT_RECEIVED),
     "proof-other-registration": ("window", "so the period earns nothing: registration: drawn unit "),
     "no-weights": ("weights", UNSIGNED), "weights-form": ("weights", UNSIGNED),
+    "no-model": ("weights", "open signs a weights' root but no model (model, {name, checkpoint_sha512})"),
+    "model-form": ("weights", "open signs a weights' root but no model (model, {name, checkpoint_sha512})"),
+    "other-checkpoint": ("weights", "with another checkpoint than the one credit pins for it: " + Cr.MODEL_FIX),
+    "other-model": ("weights", "which is no checkpoint role credit pins: " + Cr.MODEL_FIX),
     "other-sw": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
     "zero-codes": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
 }
@@ -154,6 +159,20 @@ def test_every_mutation_is_aimed():
     assert set(PERIOD_EXPECT) == set(cases.PERIOD_NAMES)
     assert set(A_LINK_EXPECT) == set(cases.A_LINK_NAMES)
     assert set(WEIGHTS_EXPECT) == set(cases.WEIGHTS_NAMES) - {"layout-form"}
+
+
+def test_each_pinned_model_is_its_files_digest():
+    """`models.json` pins each role's checkpoint as the auditor's registry writes it (`checkpoint_sha512`, the SHA-512 of
+    the canonical JSON of each file's SHA-512), so an open the gate signed from a registration of a pinned checkpoint
+    is the pin credit counts."""
+    doc = json.loads(Cr.MODELS.read_text())
+    assert doc
+    for role, e in doc.items():
+        assert sorted(e) == ["checkpoint_sha512", "files", "recipe", "repo", "revision"], role
+        assert e["files"] and all(Cr._digest(h) is not None for h in e["files"].values()), role
+        assert e["checkpoint_sha512"] == hashlib.sha512(codec.canonical_json(e["files"])).hexdigest(), role
+    assert Cr.PINNED_MODELS == {r: e["checkpoint_sha512"] for r, e in doc.items()}
+    assert Cr.MODELS.read_text() == json.dumps(doc, indent=1, sort_keys=True) + "\n"
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -708,7 +727,7 @@ def test_a_window_registering_the_weights_its_open_root_binds_is_credited_its_ro
         d = cases.weights_instance(random.Random(f"honest/{seed}"))
         w, refused = Cr._weights(*(d[k] for k in cases.WEIGHTS_KEYS))
         held = {e["value"]: bytes.fromhex(e["root"]) for e in d["entries"] if Cr.is_held(e["value"])}
-        assert refused is None and Cr.weights_root({int(v.split("/")[-1]): h for v, h in held.items()}) == w, refused
+        assert refused is None and Wt.weights_root({int(v.split("/")[-1]): h for v, h in held.items()}) == w, refused
         assert {v.removeprefix(d["prefix"]) for v in held} == {f"b/{k}" for _n, k, _r in d["layout"]["linears"]}
 
 
@@ -729,8 +748,8 @@ def _b_rows(rng: random.Random, n: int, k: int) -> list[tuple[list[int], float]]
 
 
 def _b_row(codes: list[int], sw: float) -> list[int]:
-    """A B row's 16-bit words: its K int8 codes then their f32 scale s_w (`h1zy.ROW`)."""
-    return G.bytes_leaves(bytes(c & 0xFF for c in codes) + struct.pack("<f", sw), 16)
+    """A B row's 16-bit words: its K int8 codes then their f32 scale s_w (`h1zy.ROW`), as the registry commits them."""
+    return cases.b_row_words(bytes(c & 0xFF for c in codes), sw)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -780,7 +799,7 @@ def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
     reg = {k: commit(k, b) for k, b in rows.items()}
     assert [r.leaves for r in reg.values()] == [24, 8] and all(r.window is None for r in reg.values())
     requests, session = "ab" * 64, "s-1"
-    w = Cr.weights_root({k: r.root for k, r in reg.items()})
+    w = Wt.weights_root({k: r.root for k, r in reg.items()})
     window = {"root": PS.window_open_root(w, bytes.fromhex(requests), session).hex()}
     entries = [r.entry() for r in reg.values()]
     assert Cr._weights(window, lay, entries, requests, session, digest, "") == (w, None)
@@ -792,7 +811,7 @@ def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
         got = Cr._weights(window, lay, [other.entry(), entries[1]], requests, session, digest, "")
         assert got == (None, ("weights", Cr.OTHER_WEIGHTS)), changed
     for other in (commit(32, rows[32], "cd" * 64), commit(32, rows[32][:-1])):
-        w2 = Cr.weights_root({32: other.root, 64: reg[64].root})
+        w2 = Wt.weights_root({32: other.root, 64: reg[64].root})
         window2 = {"root": PS.window_open_root(w2, bytes.fromhex(requests), session).hex()}
         got = Cr._weights(window2, lay, [other.entry(), entries[1]], requests, session, digest, "")
         assert got == (None, ("weights", Cr.other_weights_entry("b/32", 32, 24))), other.leaves

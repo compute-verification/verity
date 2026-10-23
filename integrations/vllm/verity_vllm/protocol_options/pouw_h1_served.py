@@ -20,8 +20,13 @@
 * **The weights are the period's** (`Weights`, VLLM-71): each K's ``b/<K>`` is registered once a period, before its first
   window's salt (`register_weights`), under the period's declared Program, binding no window, its salts fixed for the
   registration. `credit.weights_root` of their roots is the weights' root every window's open root binds and the
-  period-open signs (``--weights-root``), so a window can't serve other codes or s_w than the period registered: every
-  window registers the same entries, and `Served.commit` refuses a call whose weight isn't its linear's registered rows.
+  period-open signs, so a window can't serve other codes or s_w than the period registered: every window registers the
+  same entries, and `Served.commit` refuses a call whose weight isn't its linear's registered rows.
+* **The salts are the auditor's** (VLLM-72): the auditor registers the served model's ``b/<K>`` from its published
+  checkpoint under its own salt key (infra's ``model-register``, core's `weights.weights_roots`), and a period opens with
+  ``period-open --model M``, which signs that registration's weights' root W. The prover reads the key with its gate key
+  (``model-key --model M --circuit C``, `model_key`) and registers the same rows under it (`Served`'s ``registry``), so
+  its ``b/<K>`` are the registration's openings, and a window whose served rows fold to a root other than W is refused.
 * **Rows** are ``hm96-sha512/row/v2`` bit rows of 16-bit words (`V2`, `row_words`, `record_words`), committed by
   `registered.Registered.commit` under the registered-value domain of the Program's digest, the value, its words and rows,
   and for a call's tables the window's open root (`registered.domain`'s ``window``, `Served.root`, #3044), row j's salt
@@ -34,8 +39,9 @@
   ``b/<K>`` there, under the run's key.
 * **Refused** (no table from then on, and `trees` raises the reason): a window with no key of 64 bytes, blocks that aren't
   one per linear, a call off the declared Program's order, a served call with no z/y record, a weight that isn't the
-  linear's n × K int8 codes and n scales or that changes, an odd K, what `h1window.program` refuses, and at `close` a
-  window that isn't static or a table the Program reads that was never registered.
+  linear's n × K int8 codes and n scales or that changes, an odd K, what `h1window.program` refuses, served weights that
+  aren't the auditor's registration, and at `close` a window that isn't static or a table the Program reads that was
+  never registered.
 * **Statements.** A Lean ``--registered`` port holds one root, so a statement holds one call's units, and its file is
   `reads_file` of that call: `h1window.table_reads_file`, the verifier's own reads from its Program, each call table's
   domain bound to the window's open root and the weights' to none, as their trees were. `register` holds the window's
@@ -55,6 +61,7 @@ import numpy as np
 
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
+from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G, registration as R
@@ -74,8 +81,8 @@ FILE = "pouw-h1-registered-c{call}.json"
 PREFIX = "h1/"
 #: the hm96 salt stream's first nonce of the window's registered tables, past every round's and call's tables
 NONCE = RQ.REQUESTS_NONCE + (1 << 42)
-#: ``b/<K>``'s nonces, past every call's two tables
-B_NONCE = NONCE + (1 << 40)
+#: ``b/<K>``'s nonces, past every call's two tables: the auditor's registration's (`weights.B_NONCE`)
+B_NONCE = Wt.B_NONCE
 DIGEST_TAG = b"verity/pouw/h1/served/v3\0"
 
 
@@ -168,7 +175,7 @@ class Weights:
     period's declared Program (``circuit``, its `program_digest`), binding no window, its salts fixed for the
     registration. ``at`` gives each linear's K and first row in its ``b/<K>``. Every window of the period registers these
     same entries, and `root`, `credit.weights_root` of their roots, is the weights' root every window's open root binds
-    and the period-open signs (``--weights-root``)."""
+    and the period-open signs (``--model``'s registration, `ModelKey`)."""
 
     circuit: str
     registered: dict[int, G.Registered]
@@ -214,15 +221,48 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
     return Weights(circuit, reg, at)
 
 
+@dataclass(frozen=True)
+class ModelKey:
+    """The auditor's registration of the served model under the period's circuit, as the gate's ``model-key --model M
+    --circuit C`` answers a lane's gate key: its role ``model``, ``circuit``, the weights' root ``weights_root`` (hex) that
+    ``period-open --model M`` signs, and ``key``, the 32-byte salt key its ``b/<K>`` rows were committed under."""
+
+    model: str
+    circuit: str
+    weights_root: str
+    key: bytes = field(repr=False)
+
+
+def _hex512(v: Any) -> bool:
+    return type(v) is str and len(v) == 128 and all(c in "0123456789abcdef" for c in v)
+
+
+def model_key(answer: Mapping[str, Any]) -> ModelKey:
+    """The gate's ``model-key`` answer as a `ModelKey`; ValueError on a refusal, or an answer whose key isn't 32 bytes
+    whose SHA-512 is its ``key_sha512``, or whose circuit or weights' root isn't a SHA-512 digest."""
+    if "refused" in answer:
+        raise ValueError(f"model-key: refused: {answer['refused']}")
+    try:
+        key = bytes.fromhex(answer["key"])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("model-key: the answer has no key in hex") from None
+    if len(key) != 32 or hashlib.sha512(key).hexdigest() != answer.get("key_sha512"):
+        raise ValueError("model-key: the key is not 32 bytes whose SHA-512 is the answer's key_sha512")
+    if not (type(answer.get("model")) is str and _hex512(answer.get("circuit")) and _hex512(answer.get("weights_root"))):
+        raise ValueError("model-key: the answer names no model, circuit and weights' root (SHA-512 digests in hex)")
+    return ModelKey(answer["model"], answer["circuit"], answer["weights_root"], key)
+
+
 @dataclass
 class Served:
     """How an `H1Run` commits its calls' tables and its weights as the window Program's registered values. ``tile``: the
     Program's R × C (`pouw_h1.TILE`). ``unit(k)``: the tile unit at contraction k (default `h1window.tile_unit`; a stand-in
     of its parameter shape in tests). ``blocks``: each linear's input block within a step (default each its own;
     ``(0, 0, 0, 1)`` for q, k, v and o). ``window``: the window's key, else the window-open root its commitment names.
-    ``weights``: the period's registered `Weights`, or ``weights_key`` the period's key to register them with from the
-    served model at install (`weights_root`, from `pouw._install_h1`); without either the window
-    registers its own ``b/<K>``. ``program``: the period's declared Program (`declared` under ``prefix``), given or
+    ``weights``: the period's registered `Weights`, or ``registry`` the auditor's registration of the served model
+    (`ModelKey`, the gate's ``model-key``), whose key registers them from the served model at install (`weights_root`,
+    from `pouw._install_h1`) and whose root they must fold to; without either the window registers its own ``b/<K>``.
+    ``program``: the period's declared Program (`declared` under ``prefix``), given or
     declared at the first call. From the first call: ``root`` (the window's open root its tables' domains bind, hex),
     ``program_digest``, ``linears``, ``calls`` and ``m`` (the Program's); ``registered`` (each value's
     `registered.Registered`, in registration order) and ``refused`` (why the window has no trees)."""
@@ -234,7 +274,7 @@ class Served:
     prover: str | None = None
     prefix: str = PREFIX
     weights: Weights | None = None
-    weights_key: bytes | None = None
+    registry: ModelKey | None = None
     program: Program | None = None
     program_digest: str | None = None
     root: str | None = None
@@ -270,13 +310,22 @@ class Served:
 
     def weights_root(self, shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
                      layers: Sequence[Any], register: bool = True) -> bytes | None:
-        """The period's weights' root (`Weights.root`, the period-open's ``--weights-root``): ``weights``', or, with only
-        ``weights_key`` and ``register``, registered now from the served ``layers`` under the declared Program, before any
-        salt (VLLM-71); else None."""
-        if self.weights is None and self.weights_key is not None and register:
+        """The period's weights' root (`Weights.root`, the one ``period-open --model`` signs): ``weights``', or, with only
+        ``registry`` and ``register``, registered now from the served ``layers`` under the declared Program with the
+        registration's key, before any salt (VLLM-71, VLLM-72); else None. With ``registry``, the window is refused
+        unless they are its registration: under its circuit, folding to its weights' root."""
+        if self.weights is None and self.registry is not None and register:
             self.weights = register_weights(self.declare(shapes, modules, rows, steps), shapes, weights_of(layers),
-                                            self.weights_key, self.prefix)
-        return None if self.weights is None else self.weights.root()
+                                            self.registry.key, self.prefix)
+        if self.weights is None:
+            return None
+        reg = self.registry
+        if reg is not None and (self.weights.circuit, self.weights.root().hex()) != (reg.circuit, reg.weights_root):
+            self.refused.append(f"the served b/<K> are not the auditor's registration of {reg.model} (weights' root "
+                                f"{reg.weights_root[:16]}... under circuit {reg.circuit[:16]}...): they fold to "
+                                f"{self.weights.root().hex()[:16]}... under circuit {self.weights.circuit[:16]}..., so "
+                                "the window serves other weights than the period's open signed")
+        return self.weights.root()
 
     def open(self, run: Any) -> None:
         """The window's open root, from its key, and the period's Program, at its first call (after its salt opened)."""
@@ -315,7 +364,7 @@ class Served:
         take ``b/<K>`` once K's linears' weights are all held, the period's (refused unless each linear's codes and s_w
         are its registered rows) or the window's own: ``{value: root}``, what the call's manifest row commits under its
         round's root. Nothing once the window is refused."""
-        if self.program is None and not self.refused:
+        if self.root is None and not self.refused:
             self.open(run)
         if not self.refused:
             self._weight(call, weight, weight_scale)
@@ -473,6 +522,6 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
     return Registration([t.entry() for t in got], served.root, files)
 
 
-__all__ = ["B_NONCE", "FILE", "NONCE", "PREFIX", "Registration", "Served", "V2", "Weights", "declared",
-           "declared_layout", "descriptor", "digest_of", "file_name", "layout", "nonce", "reads_file", "record_words",
-           "register", "register_weights", "row_words", "trees", "weights_of"]
+__all__ = ["B_NONCE", "FILE", "ModelKey", "NONCE", "PREFIX", "Registration", "Served", "V2", "Weights", "declared",
+           "declared_layout", "descriptor", "digest_of", "file_name", "layout", "model_key", "nonce", "reads_file",
+           "record_words", "register", "register_weights", "row_words", "trees", "weights_of"]

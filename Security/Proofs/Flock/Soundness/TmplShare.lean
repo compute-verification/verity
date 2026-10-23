@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.TmplUnit
+import Proofs.Flock.Soundness.TmplUnrollAt
 
 /-!
 # The templated unit's share is the flat slot's (PRF-133, part 3)

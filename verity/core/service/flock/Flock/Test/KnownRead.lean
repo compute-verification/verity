@@ -2,7 +2,8 @@
 `KnownRead.check` on a unit of one input word, eight 16-bit ports: circuit ports `k0` (2 words) and `k1` (1 word),
 copy 0's leaf ports 0–2 their three words, the rest forced zeros, and an output row `o` (1 word). A known input port passes
 where the unit's computed rows read every bit of its row, at some copy, and is refused at the first bit none reads; a
-port the file does not name and a name no port has are not checked. A bit read only at a copy past `upv`, or only
+port the file does not name is not checked. A known name no port has, or a circuit naming a port twice, is refused where
+the file names known content, and not checked where it names none. A bit read only at a copy past `upv`, or only
 through another copy's leaf, is not read. A known output row passes where some copy returns each of its bits at a
 computed column, and is refused at the first bit none does. A known port that is no `sha512/row/v2` row, or whose
 known rows are not its words, is refused.
@@ -22,7 +23,7 @@ def net (reads : List (List Nat)) (og : Array Group := #[]) : Net :=
   match Sparse.ofRows rows w, Sparse.ofRows (Array.replicate rows.size #[]) w with
   | .ok a, .ok b =>
     let inGroups : Array Group := #[⟨0, 1, Array.replicate 8 16⟩]
-    { (default : Net) with constPos := nIn + reads.length, inWords := 1, a := a, b := b, inGroups := inGroups,
+    { (default : Net) with constPos := nIn + reads.length, inWords := 1, aT := .pure a, bT := .pure b, inGroups := inGroups,
                            outGroups := og }
   | _, _ => default
 
@@ -62,9 +63,16 @@ def why (c : Circuit) (names : List String) : String :=
 #guard (KnownRead.check (circ [List.range 32]) (known ["k0"])).toBool
 #guard why (circ [List.range' 1 47]) ["k0"] ==
   "registered reads: known port k0: no computed row of the circuit reads bit 0 of its row, so its known content binds nothing there"
--- no known port, or a name no port has
+-- no known port passes; a name no port has is refused
 #guard (KnownRead.check (circ []) (known [])).toBool
-#guard (KnownRead.check (circ []) (known ["x"])).toBool
+#guard why (circ [List.range 48]) ["k0", "x"] ==
+  "registered reads: known port x: the circuit has no port x, so its known content binds nothing"
+-- a port named twice: refused where the file names known content, of whichever port
+#guard why { circ [List.range 48] with ports := (circ []).ports.push { name := "k0", words := 1, chunks := 1, nb := 1 } }
+    ["k1"] ==
+  "registered reads: the circuit names port k0 twice, so its known content names no one row"
+#guard (KnownRead.check { circ [] with ports := (circ []).ports.push { name := "k0", words := 1, chunks := 1, nb := 1 } }
+  (known [])).toBool
 -- k1's word held only at copy 1's leaves: read where copy 1 is a copy of the unit, not past `upv`
 #guard (KnownRead.check (circ [List.range 48] 2 [#[0, 1, -1, -1, -1, -1, -1, -1], #[-1, -1, 2, -1, -1, -1, -1, -1]])
   (known ["k1"])).toBool

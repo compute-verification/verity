@@ -73,3 +73,25 @@ research queue drive: landed #4 on `main` at cccccccccccc (check r20261019-12000
     launches, landings = qs.parse(pod)
     assert [(l.tip, sorted(l.prs)) for l in launches] == [("bbbbbbbbbbbb", [1, 2, 3])]
     assert [(l.at, l.prs, l.check) for l in landings] == [(utc("2026-10-19T12:04:00"), [1, 2, 3], "r20261019-103100-0002")]
+
+
+def test_rows_read_each_landings_record_and_each_prs_mark_once_and_at_once(tmp_path):
+    """22 Oct: read one at a time, a day of 30 landings and 134 PRs took over 20 min. Each is read once, from `READ_JOBS` threads,
+    however many of its PRs or repeated landings name it."""
+    import threading
+
+    launches, landings = qs.parse(LOG)
+    seen, lock = [], threading.Lock()
+
+    def run_dir(rid):
+        with lock:
+            seen.append(rid)
+        return tmp_path / rid
+
+    def marked(pr):
+        with lock:
+            seen.append(pr)
+        return None
+
+    rows = qs.rows(launches, landings + landings[:1], utc("2026-10-19T00:00:00"), utc("2026-10-19T23:00:00"), marked, run_dir)
+    assert sorted(map(str, seen)) == sorted(["r20261019-103100-0002", "1", "2", "3"]) and len(rows) == 6

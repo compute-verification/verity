@@ -1,4 +1,4 @@
-"""One-stage audit, run A5: a deferred Commit's window, a stand-in, or a TP Commit's windows, one per rank, each `served`. The
+"""One-stage audit, run A5: a deferred Commit's window, a stand-in, or a TP Commit's windows, one per rank, each `served` or a stand-in. The
 registration is over serving rows of the Commit's own values, and the drawn units go to M0's prover and the Lean verifier of record.
 
 A deferred Commit's window is committed after serving from its sealed replay bundle opened against its record and bound to its
@@ -13,13 +13,18 @@ own commitment, made before any draw, is what the audit holds; that those rows a
 the rank's claim, not proved (the profile makes no claim that they are, `pipeline.serving_rows`). A5 takes a TP window as served only
 under a SHA-512 TP run root, as it takes a deferred Commit's: a TP Commit's ranks commit under rows-sha512 and its TP run root is
 SHA-512 (`tp.run_root`, ``verity/tp-run-root/v2``), and an old record's SHA-256 v1 root is refused by name before the draw
-(`source`: `sha512`).
+(`source`: `sha512`). A TP Commit that wrote no window and deferred its ranks' replay to sealed bundles has each rank's window
+from its bundle afterwards (`verity-vllm tp-serving-rows`, `tp.serving_rows.from_bundle`), under the same run and `tp`: a
+`stand-in`, its `of` the rank's rows-sha512 root under the TP run root and the bundle's manifest digest, made after the Commit and
+before the draw (`a5_tp.sh` with `A5_WINDOWS=bundles`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --window DIR \\
-        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--delta 0.5]
+        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+        --firewall flock-firewall --out DIR [--delta 0.5]
       python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --workload F --windows DIR [--ranks 0,1,...] [--jobs N] \\
-        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--delta 0.5]
+        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+        --firewall flock-firewall --out DIR [--delta 0.5]
 
 A deferred Commit's run takes its window in the other form too, `served` (`a5.sh` with `WINDOW=served`): the in-Commit hook's
 (`commit --serving-rows`, `serving_rows.readers`), serving's own commitment, made before any draw. A5 takes it only over a
@@ -44,12 +49,15 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   (`serving_rows.leaf_layer`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`: a
   stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the run root of record and the digest of the bundle's
   manifest it opened, or a served window whose run is the run root of record, a SHA-512 root, naming the commitment that root
-  names, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served` under a SHA-512 TP run root, its run, `tp` and
-  served Programs the record's.
+  names, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose `of` and `link` are
+  `tp.serving_rows.stand_in` over the bundle the record names for the rank, under a SHA-512 TP run root, its run, `tp` and served
+  Programs the record's.
 * **One draw per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `flock-verify draw`; a TP Commit draws each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol), because Lean accepts a subset draw only under `--zk` (verifier
-  PROTOCOL §16.15). Lean `verify --zk` holds each session with `--partition` and `--program` (units derived).
+  PROTOCOL §16.15). Each prover runs behind the firewall's send check (`--firewall`, Lean's `flock-firewall`: `FC_FIREWALL=1`, live
+  PROTOCOL.md §10.4), its `Hello` set up on the statement's partition and program. Lean `verify --zk` holds each session with
+  `--partition` and `--program` (units derived).
 """
 from __future__ import annotations
 
@@ -116,7 +124,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     if law.get("law") != "subset":
         raise SystemExit(f"a5 draws by the subset law; the partition file's is {law}")
     want = CS.expected_ports(mine)
-    summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta,
+    summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta, "firewall": a.firewall,
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
@@ -199,7 +207,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         sdir.mkdir(parents=True, exist_ok=True)
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m.n, "k": len(local), "units": local}, sort_keys=True))
         t = time.time()
-        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + k, sdir, draw_file=sdir / "draw.json", zk=True)
+        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + k, sdir, draw_file=sdir / "draw.json", zk=True,
+                                  env={"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])})
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m.n}, {"law": "subset", "k": len(local)})
@@ -346,6 +355,8 @@ def main() -> int:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
+    ap.add_argument("--firewall", required=True,
+                    help="Lean's flock-firewall: every session's prover runs behind its send check (FC_FIREWALL=1, live PROTOCOL.md §10.4)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
