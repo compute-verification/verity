@@ -772,7 +772,10 @@ class LiveServer:
     the `covert` strategy, `covert.LiveSender` holds each stream's first event until the bucket its symbol names.
     `open` counts the streams whose response hasn't ended and aren't held, and `held` the deadlines of the held ones,
     for a driver on a virtual clock. The endpoint is plain HTTP at `params["upstream"]`, or HTTPS with `tls`, under the
-    path `prefix`, sent the bearer key in the environment variable `api_key_env` names, if any."""
+    path `prefix`, sent the bearer key in the environment variable `api_key_env` names, if any. With
+    `plan["request_major"]` (a served plan's) the endpoint serves streams side by side but the shim writes them in the
+    order it received their requests, each stream's first event only after the stream before it has ended, so the
+    canonical order is request-major however the endpoint interleaves its responses."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
         self.clock, self.sleep, self.notify = clock, sleep, notify
@@ -786,6 +789,8 @@ class LiveServer:
         self.held: Counter = Counter()
         self.windows = plan["windows"]
         self.position, self.origin, self.open = 0, None, 0
+        self.serial, self.tickets, self.turn, self.ended = bool(plan.get("request_major")), 0, 0, set()
+        self.turns: defaultdict = defaultdict(asyncio.Event)
         self.sender = None
         if (c := plan.get("covert")) is not None:
             rule = online.rule(plan["sync_rule"]) if "sync_rule" in plan else None
@@ -812,16 +817,31 @@ class LiveServer:
             writer.close()
             return
         self.open += 1
+        ticket, self.tickets = self.tickets, self.tickets + 1
         try:
-            await self._serve(body, writer)
+            await self._serve(body, writer, ticket)
         except (asyncio.IncompleteReadError, ConnectionError, OSError, ValueError) as e:
             self.log["failed"].append(repr(e)[:200])
         finally:
+            self.ended.add(ticket)
+            while self.turn in self.ended:
+                self.turn += 1
+            self.turns[self.turn].set()
             self.open -= 1
             writer.close()
             self.notify()
 
-    async def _serve(self, body: dict, writer: asyncio.StreamWriter) -> None:
+    async def _await_turn(self, ticket: int) -> None:
+        if not self.serial or ticket <= self.turn:
+            return
+        self.open -= 1
+        self.notify()
+        try:
+            await self.turns[ticket].wait()
+        finally:
+            self.open += 1
+
+    async def _serve(self, body: dict, writer: asyncio.StreamWriter, ticket: int = 0) -> None:
         received = self.clock() - self.origin
         self.log["requests"] += 1
         self.log["receipt_late_ms"].append(round((received % self.tau) * 1000, 3))
@@ -845,6 +865,8 @@ class LiveServer:
                 chunks = _then(chunks, b'data: {"choices":[{"text":" extra"}]}\n\n')
             async for data in chunks:
                 for body in (b for e in cutter.feed(data) for b in canonical_events(e)):
+                    if k == 0:
+                        await self._await_turn(ticket)
                     if planned is not None:
                         hold = max(hold, planned[k] if k < len(planned) else hold)
                         await self._hold(self.origin + hold * self.tau + self.tau / 2)
