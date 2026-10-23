@@ -1500,7 +1500,8 @@ def main() -> int:
                     help="--model's checkpoint on this machine, every file the pin names held to its SHA-512 first")
     ap.add_argument("--pin", type=Path, metavar="FILE",
                     help="--model's pin: a local JSON in the auditor's model registry's shape ({name, checkpoint: "
-                         "{file: SHA-512 hex}, checkpoint_sha512}), or the registry's models.jsonl and its lines "
+                         "{file: SHA-512 hex}, checkpoint_sha512}), the registry's models.jsonl and its lines "
+                         "of ROLE, or core's models.json ({ROLE: {checkpoint_sha512, files, ...}}) and its entry "
                          "of ROLE")
     ap.add_argument("--engines", type=int, default=timing.GPUS,
                     help="--model's store: its arenas, an engine's at one GPU each, in GPU order")

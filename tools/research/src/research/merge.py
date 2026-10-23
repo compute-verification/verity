@@ -472,11 +472,13 @@ def _regenerated_in(run_id: str, audit) -> dict[str, str]:
     return {str(pkg): _under_run(str(p)) for pkg, p in (regen or {}).items()}
 
 
-def fetch_run(rid: str, names: list[str], cwd: Path | None = None) -> tuple[Path, dict] | None:
+def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool = False) -> tuple[Path, dict] | None:
     """(run ``rid``'s local dir, its `research status --json` row) with ``names``, paths under its run dir, fetched from its node
-    (`research status RID --json --also NAME...`, as `drive.evidence` reads a running check), or None when it can't be read."""
+    (`research status RID --json --also NAME...`, as `drive.evidence` reads a running check), or None when it can't be read.
+    ``refresh`` fetches them for a run that has ended too (`--refresh`), which a plain read answers from what is kept here."""
     also = [x for n in names for x in ("--also", n)]
-    r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=cwd, capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *(["--refresh"] if refresh else []), *also],
+                       cwd=cwd, capture_output=True, text=True)
     try:
         row = json.loads(r.stdout)["runs"][0]
         return Path(row["dir"]), row
