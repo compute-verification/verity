@@ -32,8 +32,7 @@ claims is the line this session's own passes, the verifier's own steps and the c
 with every exchange r0 − r faster: what else would move with the challenger nearer (the prover's passes beside the
 openings, the verifier's other work, a later session's pace) is the record's, unreplayed.
 
-    python gate_whatif.py OUT --prover PROVER_JSON --host-bytes B --pin SHA512 --period P --commit SHA [--pins LOG]
-        [--ledger HEAD ...] [--peer NAME] [--model-pin FILE] [--ingress B/S ...] [--rtt-ms MS ...] [--table FILE]
+    python gate_whatif.py OUT --line AUDITOR_LINE_JSON --prover PROVER_JSON [--rtt-ms MS ...] [--table FILE]
 """
 from __future__ import annotations
 
@@ -214,11 +213,11 @@ def identity(rec: Record, at_r0: dict, row: dict) -> dict:
     return {"holds": not any(off.values()) and all(shares.values()), "groups_off": off, "shares_equal": shares}
 
 
-def whatif(out: Path, prover: dict, *, host_bytes: int, rtt_ms: tuple[float, ...] = RTT_MS,
-           ingress: tuple[float, ...] = al.INGRESS, **line) -> dict:
-    """`auditor_line.analyse(out, ...)`'s line of record (`line` its arguments), and each of its accepted paced
-    sessions replayed at its own round trip and at each of `rtt_ms`, with `prover` the prover's record."""
-    doc = al.analyse(out, host_bytes=host_bytes, ingress=ingress, **line)
+def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RTT_MS) -> dict:
+    """The line of record `doc` (`auditor_line.analyse(out, ...)`'s, `auditor_line.py`'s output) with each of its
+    accepted paced sessions replayed at its own round trip and at each of `rtt_ms`, with `prover` the prover's
+    record."""
+    host_bytes, ingress = doc["host_bytes"], tuple(doc["ingress"])
     v = json.loads((out / "verifier.json").read_text())
     reg, tau = v["registration"], v["rtt"]["median_ns"] // 2
     by_k = {p["k"]: p for p in prover["sessions"]}
@@ -285,33 +284,13 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("out", type=Path, help="the verifier's out/ (verifier.json, challenger/)")
+    ap.add_argument("--line", type=Path, required=True, help="auditor_line.py's output over OUT: the line of record, "
+                    "its sessions' credit and the gate sessions' peer")
     ap.add_argument("--prover", type=Path, required=True, help="the prover run's prover.json")
-    ap.add_argument("--host-bytes", type=int, required=True)
-    ap.add_argument("--pin", required=True)
-    ap.add_argument("--period", required=True)
-    ap.add_argument("--commit", required=True, help="the verifier run's recorded commit (auditor_line's --commit)")
-    ap.add_argument("--repo", type=Path, default=HERE.parents[1])
-    ap.add_argument("--ledger", type=Path, action="append")
-    ap.add_argument("--pins", type=Path)
-    ap.add_argument("--model-pin", type=Path, metavar="FILE")
-    ap.add_argument("--lane", default=al.LANE)
-    ap.add_argument("--peer", help="override the gate sessions' challenger peer, otherwise the run's record's "
-                    "(`auditor_line.peer_of`)")
-    ap.add_argument("--ingress", type=float, nargs="+", default=list(al.INGRESS), metavar="B/S")
     ap.add_argument("--rtt-ms", type=float, nargs="+", default=list(RTT_MS), metavar="MS")
     ap.add_argument("--table", type=Path, help="write each session's identity and the what-if line here, as Markdown")
     a = ap.parse_args(argv)
-    model = None
-    if a.model_pin is not None:
-        try:
-            p = al.store_layout.read_pin(a.model_pin)
-        except al.store_layout.Refused as e:
-            raise SystemExit(f"gate_whatif: {e}") from None
-        model = {"name": p["name"], "checkpoint_sha512": p["checkpoint_sha512"]}
-    doc = whatif(a.out, json.loads(a.prover.read_text()), host_bytes=a.host_bytes, rtt_ms=tuple(a.rtt_ms),
-                 ingress=tuple(a.ingress), pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane, peer=a.peer,
-                 desc=al.descriptor(al.verifier_tree(a.commit, a.repo)), commit=a.commit,
-                 pins=None if a.pins is None else [x for x in a.pins.read_text().split("\n") if x], model=model)
+    doc = whatif(a.out, json.loads(a.prover.read_text()), json.loads(a.line.read_text()), rtt_ms=tuple(a.rtt_ms))
     print(json.dumps(doc, indent=1, default=str))
     if a.table is not None:
         a.table.write_text(table(doc))

@@ -17,7 +17,7 @@ import auditor_line as al  # noqa: E402
 import gate_whatif as gw  # noqa: E402
 import verifier  # noqa: E402
 import wire  # noqa: E402
-from test_challengers import MODEL, PINS, host  # noqa: E402,F401
+from test_challengers import PINS, analysed, host  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 
 MS = 1_000_000
@@ -114,9 +114,10 @@ def test_a_host_runs_replay_at_its_own_round_trip_is_its_line_of_record_and_its_
         host, tmp_path, monkeypatch):
     """A gate run of one honest paced session whose verifier ran on the auditor host, in the form gate run 7's record
     has: its verifier.json names no challenger peer, the request.json beside out/ does (--challenger-peer
-    vy-auditor-1), its own `peer` being the audited node. `whatif` reads the peer from that record, the session is of
-    record and credited, and its replay at its own round trip gives back the release log's and the verifier's times
-    to the nanosecond and `auditor_line`'s line of record on both clocks."""
+    vy-auditor-1), its own `peer` being the audited node. The line of record `whatif` reads (`auditor_line`'s, as
+    auditor_line.py writes it) takes the peer from that record, the session is of record and credited, and its replay
+    at its own round trip gives back the release log's and the verifier's times to the nanosecond and that line's
+    shares on both clocks."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run" / "out"
     desc = al.descriptor("ab" * 20)
@@ -128,23 +129,18 @@ def test_a_host_runs_replay_at_its_own_round_trip_is_its_line_of_record_and_its_
                                     then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     rc, closed = host.call(["period-close", "--name", "p-1"])
     assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
-    reg = got["reg"]
-    bare = [{**s, "verdict": "lean", "challenger": {k: x for k, x in s["challenger"].items() if k != "peer"}}
-            for s in sessions]
+    bare = [{**s, "challenger": {k: x for k, x in s["challenger"].items() if k != "peer"}} for s in sessions]
     (out.parent / "request.json").write_text(json.dumps({"peer": "vy-nebius-2", "argv": [
         "/usr/bin/python3", "-I", "verifier.py", "--challenger", "gate", "--challenger-peer", "vy-auditor-1"]}))
-    (out / "verifier.json").write_text(json.dumps({
-        "registration": reg, "rtt": {"median_ns": 0}, "sessions": bare, "binding": {
-            **MODEL, "payload_root": reg["payload_root"], "expected_root": reg["payload_root"], "bound": True}}))
-    doc = gw.whatif(out, {"sessions": proved}, host_bytes=1 << 30, rtt_ms=(0.001,), pin=host.pin, period="p-1",
-                    heads=[host.host.ledger], desc=desc, pins=PINS, model=MODEL)
+    line = analysed(out, host, bare, got["reg"], desc)
+    v = json.loads((out / "verifier.json").read_text())
+    (out / "verifier.json").write_text(json.dumps({**v, "rtt": {"median_ns": 0}}))
+    doc = gw.whatif(out, {"sessions": proved}, json.loads(json.dumps(line)), rtt_ms=(0.001,))
     assert doc["peer"] == {"name": "vy-auditor-1", "from": "record"}
     (s,) = doc["sessions"]
     assert s["of_record"] and s["credited"] and "refused" not in s, s.get("refused")
     assert s["identity"] == {"holds": True, "groups_off": dict.fromkeys(("R", "A", "D", "Ra", "Aa"), 0),
                              "shares_equal": {"auditor": True, "verifier": True}}
-    line = al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
-                      pins=PINS, model=MODEL)
     assert s["own"]["shares_auditor_clock"] == line["sessions"][0]["shares_auditor_clock"]
     assert doc["line_of_record"] == line["line"] and doc["identity_holds"]
     assert doc["whatif_line"][s["T"]]["credited_sessions"] == [0]
