@@ -20,6 +20,17 @@ frames against that template, and nothing else of a frame is free). On egress a 
 B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled (`request_frames`): it ends where its length says, so every
 frame's header is the same. `event_placement` and `request_placement` are those templates' places.
 
+**Ticks.** Each grid's ticker sleeps once a tick, to the tick's boundary (`origin` + t·τ). The tickers that wake
+together then run their ticks in one step of the event loop, in `TICK_ORDER`, ingress first (`_run_due`): each reads the
+clock as its turn comes, which is when it reads its link, and that reading is the tick's lateness. One loop serves both
+grids, the link and every server connection, so whatever runs between a boundary and a tick's turn makes the tick late.
+An egress tick hands the frames read and writes a whole bucket to the link, and ingress ticks run after it at shared
+boundaries read their link past the slack on a loaded host and failed honest windows closed; an ingress tick releases a
+bucket's few request frames, so the egress tick after it is late by little. Two tickers wake together when their
+boundaries meet (both timers expire in one turn of the loop, or one `VirtualClock.advance` passes both); the device
+difftest's harness wakes one ticker a tick event, so there each step runs that tick alone, as `CertifierDevice.step`
+takes one event, and the trace orders a shared boundary's two ticks either way.
+
 **Egress.** The server's bytes on a stream are cut after every `\\n\\n`, the end of a server-sent event, so a frame's
 content is fixed by the bytes and never by how they were read. The event's `id:` field is its position in the
 Program's canonical order on the link, and the frame is what follows that line (`event_body`): neither the position
@@ -102,8 +113,8 @@ membership in Σ_sync, and the bound charges log2 #Σ_sync bits per window whate
 **Faults fail closed** through `Certifier.fault`: the rest of the window is padding, the queue is dropped, and the status
 names the first reason (W6). Since the Program's grid carries a queue into the next window, an egress window that
 closes faulted while its queue would still hold frames faults the next one too, with the same reason. They are:
-- a late tick (`monitor-unavailable`): the ticker woke more than `slack` after its boundary. A bucket it missed is
-  still emitted, as padding, so every window keeps its T rows and no bucket slips into the next;
+- a late tick (`monitor-unavailable`): its turn ("Ticks") came more than `slack` after its boundary. A bucket it missed
+  is still emitted, as padding, so every window keeps its T rows and no bucket slips into the next;
 - a declaration the online prover refuses (`monitor-unavailable`, `online.Refused`): a frame read for the window's
   choice, at tick w·T − lag, is ready no later than its anchor's bucket, which an ingress tick read before its boundary
   makes. The egress window that declares is faulted, and its sync is the choice made once those frames are read;
@@ -204,6 +215,9 @@ REVEAL_LINE_BYTES = 1 << 20
 #: process, up to 100 ms (`select_estimate_accuracy`), so one wait for an origin 10 s off woke the first tick 48 ms
 #: late at nice 19, past the slack, and faulted window 0. A wait of at most this ends at most 0.5 ms late
 MAX_WAIT_S = 0.1
+#: the order in which the ticks due at one instant run (the module docstring's "Ticks"): an ingress tick releases a
+#: bucket's few request frames, an egress tick hands what was read and writes a whole bucket to the link
+TICK_ORDER = ("ingress", "egress")
 
 
 def _reveal_fields(key_id: bytes, run_id: bytes, link: str, window: int, digest: str, what: bytes) -> bytes:
@@ -788,6 +802,7 @@ class Proxy:
         self.link_frames_read = self.requests_released = 0
         self._released: list[_Stream] = []
         self._late: list[_Stream] = []
+        self._due: dict[str, tuple[int, float, Certifier, Callable[[int], None]]] = {}
         self._changed = asyncio.Event()
 
     async def until(self, predicate: Callable[[Proxy], bool]) -> None:
@@ -813,16 +828,28 @@ class Proxy:
     def _bucket_ready(self, now: float) -> int:
         return math.floor((now - self.origin) * 1000 / self.egress.bucket_ms) + 1
 
-    async def _ticks(self, params: GridParams, lateness: list[float], certifier: Certifier):
+    async def _ticks(self, grid: str, params: GridParams, certifier: Certifier, tick: Callable[[int], None]) -> None:
+        """`grid`'s ticker: one `sleep` a tick, to the tick's boundary, then a turn of `_run_due` once every ticker
+        that woke with it has said so."""
         tau = params.bucket_ms / 1000
         for t in range(self.start * params.buckets, self.windows * params.buckets):
             deadline = self.origin + t * tau
             await self.sleep(deadline - self.clock())
-            late = self.clock() - deadline
-            lateness.append(late)
-            if late > self.slack:
-                certifier.fault(Reason.MONITOR_UNAVAILABLE)
-            yield t
+            self._due[grid] = (t, deadline, certifier, tick)
+            await asyncio.sleep(0)
+            self._run_due()
+
+    def _run_due(self) -> None:
+        """Every tick whose ticker has woken, in `TICK_ORDER`, in one step: each reads the clock as its turn comes, when
+        it reads its link, and one read more than `slack` past its boundary faults its grid `monitor-unavailable`."""
+        for grid in TICK_ORDER:
+            if (due := self._due.pop(grid, None)) is not None:
+                t, deadline, certifier, tick = due
+                late = self.clock() - deadline
+                self.lateness[grid].append(late)
+                if late > self.slack:
+                    certifier.fault(Reason.MONITOR_UNAVAILABLE)
+                tick(t)
 
     async def _egress(self, writer: asyncio.StreamWriter) -> None:
         p = self.egress
@@ -831,7 +858,8 @@ class Proxy:
         choices = self.choices
         if choices is not None and self.windows:
             choices.start()
-        async for t in self._ticks(p, self.lateness["egress"], self.shaper.certifier):
+
+        def tick(t: int) -> None:
             backlog = writer.transport.get_write_buffer_size()
             if backlog > bucket_bytes:
                 self.shaper.certifier.fault(Reason.DELIVERY_REFUSED)
@@ -846,6 +874,8 @@ class Proxy:
             if record is not None:
                 self.publish(record, p)
             self._changed.set()
+
+        await self._ticks("egress", p, self.shaper.certifier, tick)
         await writer.drain()
 
     def _check_forwarding(self) -> None:
@@ -872,7 +902,8 @@ class Proxy:
     async def _ingress(self) -> None:
         p = self.ingress
         tau, tau_e = p.bucket_ms / 1000, self.egress.bucket_ms / 1000
-        async for t in self._ticks(p, self.lateness["ingress"], self.bucketer.certifier):
+
+        def tick(t: int) -> None:
             row, record = self.bucketer.tick()
             anchor = t * p.bucket_ms // self.egress.bucket_ms
             own = self.bucketer.own
@@ -894,6 +925,8 @@ class Proxy:
             if record is not None:
                 self.publish(record, p)
             self._changed.set()
+
+        await self._ticks("ingress", p, self.bucketer.certifier, tick)
 
     def _draw_salt(self, window: int) -> bytes | None:
         """At a PoUW window's first certifier window, draw its salt and give the certifier's own frame, the

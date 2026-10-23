@@ -1305,6 +1305,29 @@ def test_a_late_tick_fails_closed_and_does_not_slip():
     assert len(writer.data) == WINDOWS * EGRESS.buckets * EGRESS.allocation * B
 
 
+def test_an_egress_tick_slow_to_write_its_bucket_leaves_the_ingress_tick_at_its_boundary_on_time():
+    """Both grids tick at every boundary, and the link takes twice the slack to take each egress bucket, as a loaded
+    host's loop can between a boundary and a tick's turn. The ingress tick due there runs first (`TICK_ORDER`) and
+    reads its link on time, so every window of both links is accepted; run after the egress tick, as it was, it read
+    its link twice the slack late and failed every ingress window closed."""
+
+    async def run():
+        clock = VirtualClock(0.0)
+        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                      clock=clock, sleep=clock.sleep)
+        running = asyncio.create_task(proxy.run(EmptyReader(), SlowLink(clock, 2 * proxy.slack)))
+        for t in range(WINDOWS * EGRESS.buckets):
+            clock.advance(t * TAU)
+            await proxy.until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
+        await running
+        return proxy
+
+    proxy = asyncio.run(run())
+    assert max(proxy.lateness["ingress"]) == max(proxy.lateness["egress"]) == 0
+    assert sorted((r.link, r.window, r.status.reason) for r in proxy.records) == \
+        sorted((link, w, None) for link in ("responses", "requests") for w in range(WINDOWS))
+
+
 class SlackClock(VirtualClock):
     """A `VirtualClock` whose waits end as late as Linux lets an epoll wait of a niced process end: by 0.5 % of its
     timeout, up to 100 ms (`select_estimate_accuracy`)."""
@@ -1608,3 +1631,15 @@ class NullWriter:
 
     def close(self) -> None:
         pass
+
+
+class SlowLink(NullWriter):
+    """A link that takes `seconds` of the clock to take each write."""
+
+    def __init__(self, clock: VirtualClock, seconds: float) -> None:
+        super().__init__()
+        self.clock, self.seconds = clock, seconds
+
+    def writelines(self, chunks) -> None:
+        super().writelines(chunks)
+        self.clock.advance(self.clock.now + self.seconds)

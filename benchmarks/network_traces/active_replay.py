@@ -1118,8 +1118,9 @@ def prover_args(plan: dict, setup: Setup, background: bool = True) -> dict:
 class Stalls(asyncio.Event):
     """Test-only (`--stall`): the proxy's change event, which pauses the proxy right after an ingress tick has released
     a request and before the proxy writes it upstream, once for each (bucket, seconds): at the first such tick at or
-    after the bucket whose egress tick has already run, so the pause falls between two ticks. `pause(seconds)` stops
-    the proxy; `done` lists each stall with how long the proxy's clock saw it last."""
+    after the bucket, once that boundary's egress tick has run too (`active.TICK_ORDER` runs it after the ingress
+    tick), so the pause falls between two boundaries' ticks. `pause(seconds)` stops the proxy; `done` lists each stall
+    with how long the proxy's clock saw it last."""
 
     def __init__(self, proxy: Proxy, stalls: Sequence[tuple[int, float]], pause) -> None:
         super().__init__()
@@ -1128,16 +1129,16 @@ class Stalls(asyncio.Event):
 
     def set(self) -> None:
         p = self.proxy
-        if self.todo and p.requests_released > self.released:
-            t = len(p.lateness["ingress"]) - 1
-            if t >= self.todo[0][0] and len(p.lateness["egress"]) > t:
+        t = len(p.lateness["ingress"]) - 1
+        if len(p.lateness["egress"]) > t:
+            if self.todo and p.requests_released > self.released and t >= self.todo[0][0]:
                 bucket, seconds = self.todo.pop(0)
                 start = p.clock()
                 self.pause(seconds)
                 self.done.append({"bucket": bucket, "tick": t, "ms": seconds * 1000,
                                   "at_ms": round((start - p.origin) * 1000, 3),
                                   "paused_ms": round((p.clock() - start) * 1000, 3)})
-        self.released = p.requests_released
+            self.released = p.requests_released
         super().set()
 
 
