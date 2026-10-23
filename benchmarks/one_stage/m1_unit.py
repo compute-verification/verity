@@ -223,6 +223,7 @@ def slice_call(tp, row: str, rng: np.random.Generator) -> dict:
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
+    from verity_vllm.pipeline import slice_rows as SL
     from verity_vllm.program.kernels import glm53_rows as GR
     from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -257,7 +258,7 @@ def slice_call(tp, row: str, rng: np.random.Generator) -> dict:
     r = {"i": 0, "spec": row, "args": [[["n", k, 0, o.size]] for k, o in enumerate(ops)]}
     d = {"statics": S, "op_path": "model.layers.3.m1", "members": [("out", y.size, str(y.dtype))], "row": 0, "step": 16}
     one = ("r0", Index(), r, d)
-    n = SRW._extent(tp, S)
+    n = SL.extent(tp, S)
     (m,) = SRW.members([tp.id], [[one]], [n])
     data, entries = SRW.read(m, [one], Store(), None)
     packed = tp.packed or (16,) * (len(params) + 1)
