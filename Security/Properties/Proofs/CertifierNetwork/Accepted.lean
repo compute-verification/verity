@@ -173,7 +173,7 @@ theorem honestTiming_of {c : Config} {tr : List Event} (hT : Ticking c) (hc : Cl
 
 /-- **`DeviceOutputAccepted`.** -/
 theorem deviceOutputAccepted_proof : DeviceOutputAccepted := by
-  intro c tr i next hT he hd hdg hk hsf hc hnf hsd hsa hleft
+  intro c tr i next salts hT he hd hdg hk hsf hsalt hc hnf hsd hsa hleft
   have ht := honestTiming_of hT hc hnf
   replace hsd : (declaredSyncs c tr).size = c.windows := hsd
   obtain ⟨heW, hiW, hof⟩ := closed_records hT hd hc
@@ -186,24 +186,26 @@ theorem deviceOutputAccepted_proof : DeviceOutputAccepted := by
     obtain ⟨-, hkI, -, hIs, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hkey
     rw [hkI]; exact hIs
   have hdi : c.ingressLink ≠ c.egressLink := Ne.symm hd
-  have hprep : ∀ r ∈ published c tr, ∃ pd, parameters (gridOf c r) (syncSetOf c r) = .ok pd ∧ ∃ head dg m,
+  have hprep : ∀ n < (published c tr).length, ∀ r, (published c tr)[n]? = some r →
+      ∃ pd, parameters (gridOf c r) (syncSetOf c r) = .ok pd ∧ ∃ head dg m,
       NetworkCheck.recordHead r.link (directionOf c r) r.window r.grid none (gridOf c r) pd true = .ok head ∧
-      i.prepare r (directionOf c r) (gridOf c r) pd true = .ok (head, dg, m) := by
-    intro r hr
+      i.prepare (salts n) r (directionOf c r) (gridOf c r) pd true = .ok (head, dg, m) := by
+    intro n _ r hrn
+    have hr := List.mem_of_getElem? hrn
     rcases hof r hr with ⟨hl, hs, hp⟩ | ⟨hl, hs, hp⟩
     · have hw := window_lt heW hr hl
       have hgr : gridOf c r = c.egress := by simp [gridOf, hl]
       have hss : syncSetOf c r = some c.syncSet := by simp [syncSetOf, hl]
       rw [hgr, hss]
-      exact ⟨eg, heg, prepare_of hI hsf hs hp (parameters_size heg) (hl ▸ hel) (lt_of_lt_of_le hw hW64) hge.1 hge.2.1
+      exact ⟨eg, heg, prepare_of hI hsf (hsalt n) hs hp (parameters_size heg) (hl ▸ hel) (lt_of_lt_of_le hw hW64) hge.1 hge.2.1
         hge.2.2.1 hge.2.2.2 (hnf r hr)⟩
     · have hw := window_lt hiW hr hl
       have hgr : gridOf c r = c.ingress := by simp [gridOf, hl, hdi]
       have hss : syncSetOf c r = none := by simp [syncSetOf, hl, hdi]
       rw [hgr, hss]
-      exact ⟨ig, hig, prepare_of hI hsf hs hp (parameters_size hig) (hl ▸ hil) (lt_of_lt_of_le hw hW64) hgi.1 hgi.2.1
+      exact ⟨ig, hig, prepare_of hI hsf (hsalt n) hs hp (parameters_size hig) (hl ▸ hil) (lt_of_lt_of_le hw hW64) hgi.1 hgi.2.1
         hgi.2.2.1 hgi.2.2.2 (hnf r hr)⟩
-  obtain ⟨crs, hcrs, hall⟩ := certifyAll_ok hk (published c tr) next hleft hprep
+  obtain ⟨crs, hcrs, hall⟩ := certifyAll_ok hk (published c tr) next salts hleft hprep
   refine ⟨i, crs, hcrs, fun bytes => ?_⟩
   have hws : ∀ w < c.windows, w < (declaredSyncs c tr).size := fun w hw => hsd ▸ hw
   apply Properties.NetworkCertifier.honestAccepted (unitParams c i.key i.session) (commitment crs bytes) (evidence c tr)
@@ -236,8 +238,9 @@ theorem deviceOutputAccepted_proof : DeviceOutputAccepted := by
     obtain ⟨r, cr, hr, hl, hrw, hi, hrec⟩ :=
       recordsOf_one (d := .egress) hall heW hw (fun r h => by simp [directionOf, h]) bytes
     have hdir : directionOf c r = .egress := by simp [directionOf, hl]
-    refine ⟨syncsFn (declaredSyncs c tr) c.windows hsd, fun v => Array.getElem?_eq_getElem _, cr.head,
-      cr.certificate.digest, cr.certificate.signature, ?_, hi.digest, ?_, ?_⟩
+    obtain ⟨dg, hdg, hcd⟩ := hi.digest
+    refine ⟨syncsFn (declaredSyncs c tr) c.windows hsd, fun v => Array.getElem?_eq_getElem _, cr.head, cr.salt, dg,
+      cr.certificate.signature, ?_, hdg, ?_, ?_⟩
     · obtain ⟨pd, hpd, hh⟩ := hi.head
       have hgr : gridOf c r = c.egress := by simp [gridOf, hl]
       have hss : syncSetOf c r = some c.syncSet := by simp [syncSetOf, hl]
@@ -247,10 +250,10 @@ theorem deviceOutputAccepted_proof : DeviceOutputAccepted := by
       exact hh
     · rw [hrec]
       unfold certified Properties.NetworkCertifier.honestRecord
-      rw [hi.keyId, hi.link, hi.dir, hi.window, hl, hrw, hdir]
+      rw [hi.keyId, hi.link, hi.dir, hi.window, hcd, hl, hrw, hdir]
       rfl
     · obtain ⟨m, hm, s, hs, hv⟩ := hi.signs
-      rw [hdir, hl, hrw] at hm
+      rw [hdir, hl, hrw, hcd] at hm
       exact ⟨m, hm, s, hs, hv⟩
   · intro l hl w hw
     simp only [unitParams, List.mem_singleton, List.toList_toArray] at hl
@@ -265,14 +268,14 @@ theorem deviceOutputAccepted_proof : DeviceOutputAccepted := by
     cases hpd
     rw [hgr] at hh
     obtain ⟨-, -, -, hb, ha, hB, hτ, hst, hdl, hpar, -⟩ := recordHead_fields hh
-    refine ⟨cr.head, cr.certificate.digest, cr.certificate.signature, hb, ha, hB, hτ, hpar, hst, hdl, hi.digest,
-      ?_, ?_⟩
+    obtain ⟨dg, hdg, hcd⟩ := hi.digest
+    refine ⟨cr.head, cr.salt, dg, cr.certificate.signature, hb, ha, hB, hτ, hpar, hst, hdl, hdg, ?_, ?_⟩
     · rw [hrec]
       unfold certified Properties.NetworkCertifier.honestRecord
-      rw [hi.keyId, hi.link, hi.dir, hi.window, hl, hrw, hdir]
+      rw [hi.keyId, hi.link, hi.dir, hi.window, hcd, hl, hrw, hdir]
       rfl
     · obtain ⟨m, hm, s, hs, hv⟩ := hi.signs
-      rw [hdir, hl, hrw] at hm
+      rw [hdir, hl, hrw, hcd] at hm
       exact ⟨m, hm, s, hs, hv⟩
 
 end Properties.CertifierNetwork.Proofs

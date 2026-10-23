@@ -3,8 +3,8 @@ import Properties.Proofs.CertifierDevice.Lms
 /-!
 # The issuer, proved: its certificates verify
 
-`Issuer.prepare` fixes the record head (its link, direction and window are the record's), the head's digest and the
-certificate message; `Issuer.finish` signs the message at the reserved leaf. `CertifiedRecord.verify` recomputes the
+`Issuer.prepare` fixes the record head (its link, direction and window are the record's), the head's digest under the
+salt and the certificate message; `Issuer.finish` signs the message at the reserved leaf. `CertifiedRecord.verify` recomputes the
 digest and the message from the certificate's fields, which are the ones signed, decodes the signature (decode∘encode)
 and verifies it under the key's public key (`Lms.verify_signAt`), so it accepts (`verify_cert`).
 -/
@@ -43,34 +43,70 @@ theorem recordHead_fields {link : String} {direction : NetworkCheck.Direction} {
 theorem direction_beq (d : NetworkCheck.Direction) : (d == d) = true := by
   cases d <;> rfl
 
-/-- What `prepare` returns: the record's head, its digest, and the message under the issuer's identifier. -/
-theorem prepare_spec {i : Issuer} {record : Record} {direction : NetworkCheck.Direction} {params : Params}
-    {parameters : ByteArray} {deadline : Bool} {head : NetworkCheck.RecordHead} {digest message : ByteArray}
-    (h : i.prepare record direction params parameters deadline = .ok (head, digest, message)) :
-    head.link = record.link ∧ head.direction = direction ∧ head.window = record.window ∧ head.digest = .ok digest ∧
+theorem except_bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
+    ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error e => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
+theorem except_ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
+
+/-- What `prepare` returns: the record's head, the head's digest under the salt, which is 64 bytes, and the message
+under the issuer's identifier. -/
+theorem prepare_spec {i : Issuer} {salt : ByteArray} {record : Record} {direction : NetworkCheck.Direction}
+    {params : Params} {parameters : ByteArray} {deadline : Bool} {head : NetworkCheck.RecordHead}
+    {digest message : ByteArray}
+    (h : i.prepare salt record direction params parameters deadline = .ok (head, digest, message)) :
+    salt.size = NetworkCheck.saltBytes ∧ head.link = record.link ∧ head.direction = direction ∧
+      head.window = record.window ∧ (∃ R, head.digest = .ok R ∧ digest = NetworkCheck.certificateDigest salt R) ∧
       NetworkCheck.certificateMessage i.key.I i.session record.link direction record.window digest = .ok message := by
   unfold Issuer.prepare at h
-  simp only [bind, Except.bind] at h
-  split at h
-  · cases h
-  · rename_i head' hh
-    split at h
-    · cases h
-    · rename_i digest' hd
-      split at h
-      · cases h
-      · rename_i message' hm
-        simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
-        obtain ⟨rfl, rfl, rfl⟩ := h
-        exact ⟨(recordHead_fields hh).1, (recordHead_fields hh).2.1, (recordHead_fields hh).2.2, hd, hm⟩
+  -- the signed digest stays opaque: unfolding SHA-512 of the tag's bytes overflows the kernel
+  generalize hD : NetworkCheck.certificateDigest salt = D at h
+  by_cases hs : salt.size = NetworkCheck.saltBytes
+  · simp only [hs, ne_eq, not_true_eq_false, ↓reduceIte] at h
+    obtain ⟨head', hh, h⟩ := except_bind_ok h
+    obtain ⟨R, hd, h⟩ := except_bind_ok h
+    obtain ⟨message', hm, h⟩ := except_bind_ok h
+    have h' := Except.ok.inj h
+    simp only [Prod.mk.injEq] at h'
+    obtain ⟨rfl, rfl, rfl⟩ := h'
+    subst hD
+    exact ⟨hs, (recordHead_fields hh).1, (recordHead_fields hh).2.1, (recordHead_fields hh).2.2, ⟨R, hd, rfl⟩, hm⟩
+  · simp only [hs, ne_eq, not_false_eq_true, ↓reduceIte] at h
+    obtain ⟨_, h, -⟩ := except_bind_ok h
+    cases h
+
+/-- The head `prepare` returns is `recordHead` of the record. -/
+theorem prepare_head {i : Issuer} {salt : ByteArray} {record : Record} {direction : NetworkCheck.Direction}
+    {params : Params} {parameters : ByteArray} {deadline : Bool} {head : NetworkCheck.RecordHead}
+    {digest message : ByteArray}
+    (h : i.prepare salt record direction params parameters deadline = .ok (head, digest, message)) :
+    NetworkCheck.recordHead record.link direction record.window record.grid
+      ((Status.reason? record.status).map reasonValue) params parameters deadline = .ok head := by
+  unfold Issuer.prepare at h
+  generalize NetworkCheck.certificateDigest salt = D at h
+  by_cases hs : salt.size = NetworkCheck.saltBytes
+  · simp only [hs, ne_eq, not_true_eq_false, ↓reduceIte] at h
+    obtain ⟨head', hh, h⟩ := except_bind_ok h
+    obtain ⟨_, -, h⟩ := except_bind_ok h
+    obtain ⟨_, -, h⟩ := except_bind_ok h
+    have h' := Except.ok.inj h
+    simp only [Prod.mk.injEq] at h'
+    obtain ⟨rfl, -, -⟩ := h'
+    exact hh
+  · simp only [hs, ne_eq, not_false_eq_true, ↓reduceIte] at h
+    obtain ⟨_, h, -⟩ := except_bind_ok h
+    cases h
 
 /-- The certificate `finish` builds at a leaf below `2^H` from a prepared record verifies under the key's public key. -/
-theorem verify_cert {i : Issuer} (hk : ValidKey i.key) {record : Record} {direction : NetworkCheck.Direction}
-    {params : Params} {parameters : ByteArray} {deadline : Bool} {head : NetworkCheck.RecordHead}
-    {digest message : ByteArray} (hprep : i.prepare record direction params parameters deadline =
-      .ok (head, digest, message)) {q : Nat} (hq : q < 2 ^ i.key.params.H) :
+theorem verify_cert {i : Issuer} (hk : ValidKey i.key) {salt : ByteArray} {record : Record}
+    {direction : NetworkCheck.Direction} {params : Params} {parameters : ByteArray} {deadline : Bool}
+    {head : NetworkCheck.RecordHead} {digest message : ByteArray}
+    (hprep : i.prepare salt record direction params parameters deadline = .ok (head, digest, message)) {q : Nat}
+    (hq : q < 2 ^ i.key.params.H) :
     ∃ sig, Lms.signAt i.key q message = .ok sig ∧
-      CertifiedRecord.verify ⟨head, ⟨i.key.I, record.link, direction, record.window, digest, sig.encode⟩⟩
+      CertifiedRecord.verify ⟨head, salt, ⟨i.key.I, record.link, direction, record.window, digest, sig.encode⟩⟩
         i.key.params i.key.publicKey i.session = true := by
   obtain ⟨N, W, H, toy, I, seed, hp, hkey⟩ := hk
   obtain ⟨-, hH, -, hH30⟩ := make_spec hp
@@ -79,20 +115,20 @@ theorem verify_cert {i : Issuer} (hk : ValidKey i.key) {record : Record} {direct
   obtain ⟨sig, hs, hv, hsq, hy, hpath, hC, hys, hps⟩ := verify_signAt message hp hkey hq
   have : 2 ^ i.key.params.H ≤ 2 ^ 30 := Nat.pow_le_pow_right (by omega) hH30
   have hdec := decode_encode i.key.params sig (by omega) hC hy hpath hys hps
-  obtain ⟨hl, hd, hw, hdig, hm⟩ := prepare_spec hprep
+  obtain ⟨-, hl, hd, hw, ⟨R, hdig, hdg⟩, hm⟩ := prepare_spec hprep
   have hpub : i.key.publicKey.extract 0 16 = i.key.I := ByteArray.extract_append_eq_left (hI ▸ hIs).symm
   refine ⟨sig, hs, ?_⟩
   unfold CertifiedRecord.verify
   dsimp only
   rw [hdig, hm, hdec]
   dsimp only
-  rw [hv, hpub, hl, hd, hw]
-  simp [beq_self, direction_beq, Except.toOption]
+  rw [hv, hpub, hl, hd, hw, ← hdg]
+  simp [beq_self, Except.toOption]
 
-theorem issuerVerifies_valid {i i' : Issuer} {leaf : Except String Nat} {record : Record}
+theorem issuerVerifies_valid {i i' : Issuer} {salt : ByteArray} {leaf : Except String Nat} {record : Record}
     {direction : NetworkCheck.Direction} {params : Params} {parameters : ByteArray} {deadline : Bool}
     {cr : CertifiedRecord} (hk : ValidKey i.key)
-    (h : i.certify leaf record direction params parameters deadline = .ok (i', some cr)) :
+    (h : i.certify salt leaf record direction params parameters deadline = .ok (i', some cr)) :
     cr.verify i.key.params i.key.publicKey i.session = true := by
   unfold Issuer.certify at h
   simp only [bind, Except.bind] at h
@@ -121,7 +157,7 @@ theorem issuerVerifies_valid {i i' : Issuer} {leaf : Except String Nat} {record 
         exact hv
 
 theorem issuerVerifies_proof : IssuerVerifies := by
-  intro N W H toy p I seed k session refused i' leaf record direction params parameters deadline cr hp hk h
+  intro N W H toy p I seed k session refused i' salt leaf record direction params parameters deadline cr hp hk h
   obtain ⟨hpk, -⟩ := Lms.key_spec hk
   have hv : ValidKey k := ⟨N, W, H, toy, I, seed, by rw [hpk]; exact hp, by rw [hpk]; exact hk⟩
   have := issuerVerifies_valid (i := { key := k, session, refused }) hv h
@@ -129,17 +165,18 @@ theorem issuerVerifies_proof : IssuerVerifies := by
   exact this
 
 /-- **The issuer certifies at every leaf** (completeness, not a guarantee): with a key `ValidKey`, given a leaf below
-`2^H` and a record with a head (`Issuer.prepare` succeeds), `Issuer.certify` returns a certificate, which verifies. -/
+`2^H` and a record with a head and a 64-byte salt (`Issuer.prepare` succeeds), `Issuer.certify` returns a certificate,
+which verifies. -/
 def IssuerSigns : Prop :=
-  ∀ (i : Issuer) (q : Nat) (record : Record) (direction : NetworkCheck.Direction) (params : Params)
+  ∀ (i : Issuer) (salt : ByteArray) (q : Nat) (record : Record) (direction : NetworkCheck.Direction) (params : Params)
     (parameters : ByteArray) (deadline : Bool) (prepared : NetworkCheck.RecordHead × ByteArray × ByteArray),
     ValidKey i.key → q < 2 ^ i.key.params.H →
-    i.prepare record direction params parameters deadline = .ok prepared →
-    ∃ cr, i.certify (.ok q) record direction params parameters deadline = .ok (i, some cr) ∧
+    i.prepare salt record direction params parameters deadline = .ok prepared →
+    ∃ cr, i.certify salt (.ok q) record direction params parameters deadline = .ok (i, some cr) ∧
       cr.verify i.key.params i.key.publicKey i.session = true
 
 theorem issuerSigns : IssuerSigns := by
-  intro i q record direction params parameters deadline prepared hk hq hprep
+  intro i salt q record direction params parameters deadline prepared hk hq hprep
   obtain ⟨head, digest, message⟩ := prepared
   obtain ⟨sig, hs, hv⟩ := verify_cert hk hprep hq
   refine ⟨_, ?_, hv⟩

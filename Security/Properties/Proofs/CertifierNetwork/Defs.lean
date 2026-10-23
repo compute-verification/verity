@@ -5,7 +5,7 @@ import Properties.Proofs.CertifierDevice.Issuer
 # The certifier device's own output is accepted by the network certificate check: completeness
 
 `Properties.CertifierDevice` states what the device's `step` does over a trace; `Properties.NetworkCertifier` what the
-check (`NetworkCheck.Check.protocol`, `verity/network-certificate/v3`) accepts. This module joins them: for a run of the
+check (`NetworkCheck.Check.protocol`, `verity/network-certificate/v4`) accepts. This module joins them: for a run of the
 device on one boundary link, the commitment its host assembles from the records the device publishes and the evidence
 the device's own shaper holds (the frames it handed and the syncs it declared) are accepted under the parameters of the
 device's configuration (`DeviceOutputAccepted`, proved as `deviceOutputAccepted` in `Properties.Proofs.CertifierNetwork`).
@@ -19,9 +19,10 @@ egress link's sync against the first's), which one device's run says nothing abo
 
 **The assembly** (`certifyAll`) is the host's, as `CertifierDevice/SmokeMain.lean` runs it and as `benchmarks/
 network_traces/replay.py`'s `certify` does per direction: every record `step` publishes, in order, is certified by
-`Issuer.certify` under its link's direction, grid and `parameters_digest` (with Σ_sync on egress), at the leaf the
-signer's state reserves next (`lms.LeafState.reserve`: leaves `next, next + 1, …`, refused from `2^H` on, a refusal
-leaving no certificate), and the certificates issued, in order, are the commitment's records (`service.encode` of each,
+`Issuer.certify` under its link's direction, grid and `parameters_digest` (with Σ_sync on egress) and the next salt of
+the certifier's coins (`salts 0, salts 1, …`), at the leaf the signer's state reserves next (`lms.LeafState.reserve`:
+leaves `next, next + 1, …`, refused from `2^H` on, a refusal leaving no certificate), and the certificates issued, in
+order, are the commitment's records (`service.encode` of each,
 concatenated; the check reads the records, never the bytes, so the statement holds for every `bytes`). A Python
 `ValueError` is an `Except.error` and aborts the assembly, as it aborts the host. The two record types are one in
 Python (`certificate.CertifiedRecord`); `certified` copies the Lean device's into the check's field by field.
@@ -31,7 +32,7 @@ Python (`certificate.CertifiedRecord`); `certified` copies the Lean device's int
 * the configuration's: `Ticking` (both grids have buckets), `FieldsFit` (what a record encodes fits its field), `Distinct`
   (two links), `Digested` (each grid has a `parameters_digest`: `Flock.canon` is well-founded recursion, which the
   kernel does not evaluate, so this is a fact about the configuration that only running it shows), `ValidKey` of the
-  issuer's key, and `SessionFits` (its session's id is 32 bytes);
+  issuer's key, `SessionFits` (its session's id is 32 bytes) and `SaltsFit` (each salt its coins give is 64 bytes);
 * the run's: `Closed` (both grids ran all their ticks), `NoFault` (every record published is complete), `SyncsDeclared`
   (one sync per window) and `SyncsAdmitted` (each in Σ_sync), and `LeavesLeft` (the signer has a leaf for every
   record). Honest timing (`HonestTiming`: each frame handed at the bucket the Program hands it) follows from `Closed`
@@ -56,14 +57,16 @@ def declaredSyncs (c : Config) (tr : List Event) : Array NetworkCertifier.ClockS
 
 /-! ## The commitment and the evidence -/
 
-/-- **The host's assembly**: each record, in order, certified by `Issuer.certify` at the reserved leaf under its link's
-direction, grid and parameters digest; the certificates issued, in order. -/
-def certifyAll (c : Config) : Issuer → Nat → List Record → Except String (Issuer × List CertifiedRecord)
-  | i, _, [] => pure (i, [])
-  | i, next, r :: rs => do
-    let (i', cr?) ← i.certify (reserve i next) r (directionOf c r) (gridOf c r)
+/-- **The host's assembly**: each record, in order, certified by `Issuer.certify` under the next salt of the certifier's
+coins `salts`, at the reserved leaf, under its link's direction, grid and parameters digest; the certificates issued, in
+order. -/
+def certifyAll (c : Config) : Issuer → Nat → (Nat → ByteArray) → List Record →
+    Except String (Issuer × List CertifiedRecord)
+  | i, _, _, [] => pure (i, [])
+  | i, next, salts, r :: rs => do
+    let (i', cr?) ← i.certify (salts 0) (reserve i next) r (directionOf c r) (gridOf c r)
       (← parameters (gridOf c r) (syncSetOf c r))
-    let (i'', crs) ← certifyAll c i' (advance i next) rs
+    let (i'', crs) ← certifyAll c i' (advance i next) (fun n => salts (n + 1)) rs
     pure (i'', cr?.toList ++ crs)
 
 /-- The commitment of the certificates `crs`, whatever its bytes. -/
@@ -96,6 +99,9 @@ def Digested (c : Config) : Prop :=
 /-- The issuer's certifier session id is 32 bytes (`certificate_message` refuses any other). -/
 def SessionFits (i : Issuer) : Prop := i.session.size = NetworkCheck.sessionBytes
 
+/-- Each salt the certifier's coins give is 64 bytes (`Issuer.certify` refuses any other). -/
+def SaltsFit (salts : Nat → ByteArray) : Prop := ∀ n, (salts n).size = NetworkCheck.saltBytes
+
 /-! ## The run's conditions -/
 
 /-- The run is over: both grids ran all their `W · T` ticks (`State.done`), so every window closed. -/
@@ -125,15 +131,15 @@ def LeavesLeft (i : Issuer) (next : Nat) (c : Config) (tr : List Event) : Prop :
 /-! ## Completeness -/
 
 /-- **The device's output is accepted.** For a configuration whose grids tick and encode, with two links and digested
-grids, and an issuer with a valid key and a 32-byte session id: on a closed run with no fault, one admitted sync
-declared per window, and a leaf for every record, the host's assembly certifies every record the device published, and
-the check accepts that commitment, whatever its bytes, with the evidence the device's shaper holds, under the
-configuration's parameters, the key's public key and the issuer's session. -/
+grids, and an issuer with a valid key, a 32-byte session id and coins that give 64-byte salts: on a closed run with no
+fault, one admitted sync declared per window, and a leaf for every record, the host's assembly certifies every record
+the device published, and the check accepts that commitment, whatever its bytes, with the evidence the device's shaper
+holds, under the configuration's parameters, the key's public key and the issuer's session. -/
 def DeviceOutputAccepted : Prop :=
-  ∀ (c : Config) (tr : List Event) (i : Issuer) (next : Nat),
-    Ticking c → FieldsFit c → Distinct c → Digested c → ValidKey i.key → SessionFits i →
+  ∀ (c : Config) (tr : List Event) (i : Issuer) (next : Nat) (salts : Nat → ByteArray),
+    Ticking c → FieldsFit c → Distinct c → Digested c → ValidKey i.key → SessionFits i → SaltsFit salts →
     Closed c tr → NoFault c tr → SyncsDeclared c tr → SyncsAdmitted c tr → LeavesLeft i next c tr →
-    ∃ i' crs, certifyAll c i next (published c tr) = .ok (i', crs) ∧
+    ∃ i' crs, certifyAll c i next salts (published c tr) = .ok (i', crs) ∧
       ∀ bytes, NetworkCheck.Check.protocol.Accepts (unitParams c i.key i.session)
         (commitment crs bytes) (evidence c tr)
 

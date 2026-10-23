@@ -43,9 +43,9 @@ def reserve (i : Issuer) (next : Nat) : Except String Nat :=
 /-- The next unused leaf after a reservation at `next`. -/
 def advance (i : Issuer) (next : Nat) : Nat := if next < 2 ^ i.key.params.H then next + 1 else next
 
-/-- A certified record as the check reads it: the same head and certificate. -/
+/-- A certified record as the check reads it: the same head, salt and certificate. -/
 def certified (cr : CertifiedRecord) : NetworkCheck.Check.Certified :=
-  ⟨cr.head, ⟨cr.certificate.keyId, cr.certificate.link, cr.certificate.direction, cr.certificate.window,
+  ⟨cr.head, cr.salt, ⟨cr.certificate.keyId, cr.certificate.link, cr.certificate.direction, cr.certificate.window,
     cr.certificate.digest, cr.certificate.signature⟩⟩
 
 /-- The check's parameters of the device's configuration, key and certifier session: its two links, its `W` windows, its

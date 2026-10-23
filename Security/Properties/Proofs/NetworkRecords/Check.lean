@@ -146,12 +146,12 @@ theorem egress_none {p : Params} {c : Records.Commitment} {e : Records.ByteEvide
           link.toLink.frames w) none p.grid eg true >>= RecordHead.digest) with
       | error _ => simp [hrd] at hv
       | ok d =>
-        simp only [hrd] at hv
+        obtain ⟨dg, hcv⟩ := (verifies_cert (certified_names hR)).mp hver
+        simp only [hrd, hcv.1] at hv
         split at hv
         · rename_i heq
-          obtain ⟨dg, hcv⟩ := (verifies_cert (certified_names hR)).mp hver
           obtain ⟨H, hH, hHd⟩ := bind_ok hrd
-          have hd' : d = dg := (ba_beq.mp heq).symm.trans hcv.2.1
+          have hd' : d = dg := (ba_beq.mp heq).symm
           subst hd'
           refine ⟨.certified r', hR, ⟨hst, hdl⟩, hadm, fun syncs hs => ?_⟩
           obtain rfl := declares_unique hd hs
@@ -255,8 +255,8 @@ theorem egress_none_of {p : Params} {c : Records.Commitment} {e : Records.ByteEv
     simp only [Bool.not_true, Bool.false_eq_true, ite_false]
     have hb : (recordHead l .egress w (programGrid p (Properties.NetworkCertifier.declared p.windows link.toLink)
         link.toLink.frames w) none p.grid eg true >>= RecordHead.digest) = .ok dg := by rw [hH]; exact hHd
-    simp only [hb]
-    rw [ite_eq_left (ba_beq.mpr hcv.2.1)]
+    simp only [hb, hcv.1]
+    rw [ite_eq_left (ba_beq.mpr rfl)]
 
 /-- An ingress link-window with its one complete record, a certified one's head of the ingress grid, has no
 violation. -/

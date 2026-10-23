@@ -4,12 +4,12 @@ import Properties.NetworkCertifier
 /-!
 # The records check: what acceptance by its Lean code (`NetworkCheck.Records.protocol`) means
 
-`verity/network-records/v2` is the network audit's verifier of record: `audit.py`'s `Audit` over raw, committed and
+`verity/network-records/v3` is the network audit's verifier of record: `audit.py`'s `Audit` over raw, committed and
 certified records. `AcceptMeans` is what its acceptance establishes about the unit's records, stated over the check's
 inputs (the parameters, the published records, the evidence) and never over its internals: every link-window of the
 unit has exactly one record, complete, and it is the Program's (`ProgramRecords`). `AnswerAcceptMeans` is the same for
 the bytes `Core.Protocol.answer` decodes. The check keeps each payload as its bytes (`Records.ByteEvidence`), and the
-conclusion reads that evidence as `verity/network-certificate/v3` reads the same JSON (`ByteEvidence.toEvidence`, each
+conclusion reads that evidence as `verity/network-certificate/v4` reads the same JSON (`ByteEvidence.toEvidence`, each
 payload its bits, which `RecordsBytes.evidenceOf_toEvidence` proves is `Check.evidenceOf`). `Properties.Proofs.NetworkRecords` proves both, and that the check accepts
 every unit whose records are the Program's (`programRecords_accepted`, completeness).
 
@@ -44,12 +44,15 @@ def Complete : Records.Published → Prop
   | .raw _ _ s _ | .committed _ _ s _ => s = none
   | .certified r => r.head.status = none ∧ r.head.deadline = true
 
-/-- `r`'s certificate is the key's (its identifier `I`), names `(d, l, w)`, signs the head's digest `dg`, and its LMS
-signature verifies under the key over `certificateMessage` of them in the parameters' certifier session. -/
+/-- `r`'s certificate is the key's (its identifier `I`), names `(d, l, w)`, signs the head's digest `dg` under the
+record's salt (`certificateDigest`), and its LMS signature verifies under the key over `certificateMessage` of them in
+the parameters' certifier session. -/
 def CertificateVerifies (p : Params) (d : Direction) (l : String) (w : Nat) (r : Certified) (dg : ByteArray) : Prop :=
-  r.head.digest = .ok dg ∧ r.certificate.digest = dg ∧ r.certificate.keyId = p.key.extract 0 16 ∧
-    r.certificate.link = l ∧ r.certificate.direction = d ∧ r.certificate.window = w ∧
-    ∃ m, certificateMessage (p.key.extract 0 16) p.session l d w dg = .ok m ∧ LmsVerifies p m r.certificate.signature
+  r.head.digest = .ok dg ∧ r.certificate.digest = certificateDigest r.salt dg ∧
+    r.certificate.keyId = p.key.extract 0 16 ∧ r.certificate.link = l ∧ r.certificate.direction = d ∧
+    r.certificate.window = w ∧
+    ∃ m, certificateMessage (p.key.extract 0 16) p.session l d w (certificateDigest r.salt dg) = .ok m ∧
+      LmsVerifies p m r.certificate.signature
 
 /-! ## What a committed record's digest hashes (`commitment.py`) -/
 
@@ -102,7 +105,7 @@ def CommitsTo (p : Params) (l : String) (w : Nat) (dg : String) (P : Records.Raw
             x ≠ y ∧ Flock.Sha256.hash x = Flock.Sha256.hash y
 
 /-- A certified egress record of `(l, w)` certifies `P`: its certificate verifies under the key over the digest `dg` of
-its head, `dg` is the digest of `record_head` of `P` (complete, settled, under the egress parameters digest `eg`), and
+its head under its salt, `dg` is the digest of `record_head` of `P` (complete, settled, under the egress parameters digest `eg`), and
 its head is that head, or two distinct strings the two heads' digests hash have one SHA-512 digest. -/
 def CertifiesProgram (p : Params) (eg : ByteArray) (l : String) (w : Nat) (r : Certified) (P : Records.RawGrid) :
     Prop :=

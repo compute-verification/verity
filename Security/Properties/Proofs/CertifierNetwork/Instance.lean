@@ -5,8 +5,9 @@ import Properties.Proofs.CertifierNetwork.Accepted
 
 Each completeness statement (`Proofs.Lms.LmsSigns`, `Proofs.Lms.LmsCorrect`, `Proofs.Issuer.IssuerSigns`,
 `CertifierNetwork.DeviceOutputAccepted`) has one instance here whose hypotheses all hold: a toy LMS key (`N = 8`,
-`W = 8`, `H = 1`, two leaves) from a 16-byte identifier and an 8-byte seed, a one-bucket record under it, and a one-window configuration with a declared sync whose
-run ticks each grid once and hands nothing. The run's hypotheses are `step` evaluated by the kernel (`decide +kernel`);
+`W = 8`, `H = 1`, two leaves) from a 16-byte identifier and an 8-byte seed, a one-bucket record under it and a 64-byte
+salt, and a one-window configuration with a declared sync whose run ticks each grid once and hands nothing, its every
+salt that one. The run's hypotheses are `step` evaluated by the kernel (`decide +kernel`);
 the key's are `Lms.key`'s acceptance of a 16-byte identifier (`key_ok`), not its tree, which the kernel need not compute.
 
 `Digested` is the one hypothesis left as one: `parameters` reads `Flock.canon`, well-founded recursion the kernel does
@@ -73,13 +74,18 @@ def record : Record := ⟨"responses", 0, #[#[none]], .complete⟩
 
 def digest : ByteArray := ⟨Array.replicate 64 0⟩
 
+/-- A certifier salt of 64 zero bytes. -/
+def salt : ByteArray := ⟨Array.replicate 64 0⟩
+
+theorem salt_size : salt.size = NetworkCheck.saltBytes := by decide +kernel
+
 /-- **`IssuerSigns`'s honest case holds**: the toy key is valid, leaf `0` is below `2^H`, and the one-bucket record has
-a head under a 64-byte parameters digest. -/
+a head under a 64-byte parameters digest and the 64-byte salt. -/
 theorem issuerSigns_instance : ∃ prepared, ValidKey issuer.key ∧ 0 < 2 ^ issuer.key.params.H ∧
-    issuer.prepare record .egress grid digest true = .ok prepared := by
+    issuer.prepare salt record .egress grid digest true = .ok prepared := by
   obtain ⟨head, dg, m, -, hprep⟩ := Properties.CertifierNetwork.Proofs.prepare_of (i := issuer) (r := record)
     (d := .egress) (g := grid) (pd := digest) (by show toyKey.I.size = 16; rw [(key_spec toyKey_eq).2.1]; exact ident_size)
-    (by decide +kernel) (by decide +kernel) (by
+    (by decide +kernel) salt_size (by decide +kernel) (by
       intro row hrow
       have : row = #[none] := by simpa [record] using hrow
       subst this
@@ -117,6 +123,11 @@ theorem syncsAdmitted : SyncsAdmitted config trace := by unfold SyncsAdmitted; d
 
 theorem sessionFits : SessionFits issuer := by unfold SessionFits; decide +kernel
 
+/-- The device's coins give it `salt` for every record. -/
+def salts : Nat → ByteArray := fun _ => salt
+
+theorem saltsFit : SaltsFit salts := fun _ => salt_size
+
 theorem leavesLeft : LeavesLeft issuer 0 config trace := by
   unfold LeavesLeft
   show 0 + (published config trace).length ≤ 2 ^ toyKey.params.H
@@ -125,17 +136,18 @@ theorem leavesLeft : LeavesLeft issuer 0 config trace := by
 
 /-- **`DeviceOutputAccepted`'s honest case holds** on this configuration, issuer and run, `Digested` aside. -/
 theorem deviceOutputAccepted_hypotheses : Ticking config ∧ FieldsFit config ∧ Distinct config ∧
-    ValidKey issuer.key ∧ SessionFits issuer ∧ Closed config trace ∧ NoFault config trace ∧
+    ValidKey issuer.key ∧ SessionFits issuer ∧ SaltsFit salts ∧ Closed config trace ∧ NoFault config trace ∧
     SyncsDeclared config trace ∧ SyncsAdmitted config trace ∧ LeavesLeft issuer 0 config trace :=
-  ⟨ticking, fieldsFit, distinct, toyKey_valid, sessionFits, closed, noFault, syncsDeclared, syncsAdmitted, leavesLeft⟩
+  ⟨ticking, fieldsFit, distinct, toyKey_valid, sessionFits, saltsFit, closed, noFault, syncsDeclared, syncsAdmitted,
+    leavesLeft⟩
 
 /-- So, if its grids have a `parameters_digest`, the check accepts this run's output. -/
 theorem deviceOutputAccepted_instance (hdg : Digested config) :
-    ∃ i' crs, certifyAll config issuer 0 (published config trace) = .ok (i', crs) ∧
+    ∃ i' crs, certifyAll config issuer 0 salts (published config trace) = .ok (i', crs) ∧
       ∀ bytes, NetworkCheck.Check.protocol.Accepts (unitParams config issuer.key issuer.session)
         (commitment crs bytes)
         (evidence config trace) :=
-  Proofs.deviceOutputAccepted_proof config trace issuer 0 ticking fieldsFit distinct hdg toyKey_valid sessionFits
-    closed noFault syncsDeclared syncsAdmitted leavesLeft
+  Proofs.deviceOutputAccepted_proof config trace issuer 0 salts ticking fieldsFit distinct hdg toyKey_valid sessionFits
+    saltsFit closed noFault syncsDeclared syncsAdmitted leavesLeft
 
 end Properties.CertifierNetwork.Instance
