@@ -791,11 +791,10 @@ theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord
           L shape (showsTr recRead) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D bL hP hRL hRP
-  exact ksLin2_deployed_slots b aux nOf rest fin wE join final w hP hmSlotsCommit_of_full hRL hRP
+  intro bR L Bd D bL hP hRL
+  exact ksLin2_deployed_slots b aux nOf rest fin wE join final w hP hmSlotsCommit_of_full hRL
 
 /-- **`BitsLin2` at the coin server's record, with the slots' commit strings proved**: `bitsLin2_deployed_slots` with
 `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
@@ -817,11 +816,10 @@ theorem bitsLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecReco
           L shape (showsTr recRead) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D bL hP hRL hRP
-  exact bitsLin2_deployed_slots b aux nOf rest fin wE join final w hP hmSlotsCommit_of_full hRL hRP
+  intro bR L Bd D bL hP hRL
+  exact bitsLin2_deployed_slots b aux nOf rest fin wE join final w hP hmSlotsCommit_of_full hRL
 
 end Corollaries
 
