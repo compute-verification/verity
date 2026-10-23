@@ -3,9 +3,9 @@
 # restart. A flag given on the command line overrides its key here. ci owns this file; infra runs drive from it on the control pod.
 
 # the machines train.sh launches each train's check on (a machine, or `auto`)
-on = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2"]
+on = ["vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 # the most checks of `next` running at once
-max_running = 6
+max_running = 5
 # PRs per checked train on `next`
 train_size = 15
 # ready marks written before this don't count: drive's cutoff, 12 Oct

@@ -94,7 +94,7 @@ def build (name : String) (table : ByteArray) (n lo bits : Nat) : V Net := do
   let a ← Sparse.ofRows (fix bd.a) (2 ^ unitLog)
   let b ← Sparse.ofRows (fix bd.b) (2 ^ unitLog)
   return { name, useful, constPos := konst, inGroups := #[⟨0, 1, #[n]⟩], outGroups := #[⟨out0 / 128, 1, #[bits]⟩],
-           inWords := 1, a, b, unitLog, lookup := some { table, n, lo, bits, prod0, loTop } }
+           inWords := 1, aT := .pure a, bT := .pure b, unitLog, lookup := some { table, n, lo, bits, prod0, loTop } }
 
 /-- One subset-sum entry: `t[x] = t[x without its lowest set bit] + f(that bit)`. -/
 @[inline] def subsetStep (f : Nat → F128) (t : Array F128) (x : Nat) : Array F128 :=

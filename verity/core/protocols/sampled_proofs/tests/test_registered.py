@@ -592,6 +592,20 @@ def test_the_window_root_and_held_values_are_the_verifiers_never_the_records():
         assert R.check({**recs[1], "registered": entries}, prog, Q, **kw, **win).codes == ("R7-registered",)
 
 
+def test_a_session_bound_domain_binds_the_session_alone():
+    """A value whose root the window's open root contains (PoUW's round-0 input-ids table) binds the window's session in
+    the open root's place: its domain differs from the unbound one, the window-bound one and another session's, and a
+    domain binds at most one of a window, a registration and a session."""
+    prog = P.program_digest(_program())
+    rec = G.Registered.commit(prog, "x", X_ROWS, session="s-1")
+    doms = {G.domain(prog, "x", 2, len(X_ROWS), **kw).domain_id for kw in
+            ({}, {"window": WINDOWS[0]}, {"session": "s-1"}, {"session": "s-2"})}
+    assert len(doms) == 4 and rec.domain.domain_id == G.domain(prog, "x", 2, len(X_ROWS), session="s-1").domain_id
+    for kw in ({"window": WINDOWS[0], "session": "s-1"}, {"produced": "0" * 128, "session": "s-1"}, {"session": ""}):
+        with pytest.raises(ValueError):
+            G.domain(prog, "x", 2, len(X_ROWS), **kw)
+
+
 def _prefixed(prefix: str) -> Program:
     """The program as a window-dependent path wrote it before the window's root was in the domain: every parameter's name
     carries its window's prefix."""
@@ -985,6 +999,47 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     reads = G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64}, domains={"W": dom})["ports"]
     assert {e["domain"] for e in reads.values()} == {dom}
     assert {e["domain"] for e in G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64})["ports"].values()} == {reg.entry()["domain"]}
+
+
+def test_r7_reuses_an_earlier_records_registered_value():
+    """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<c>` as
+    a Commit's AROW, say): its entry takes that entry's domain and root, with no tree of its own, under another name or the
+    same. A record entry of another root is `R7-held`, of another domain `R7-domain` too; a record or value the log
+    doesn't hold, or an earlier entry of other leaves, words or word bits, is `R7-output`; and a malformed `outputs` is
+    refused before the record is read."""
+    prog = _program()
+    reg = _registered(prog)
+    first, ports = _record(prog, reg)
+    dom = "da" * 64
+    theirs = {**reg.entry(), "value": "a/16@0", "root": "cd" * 64, "domain": dom}
+    earlier = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6},
+                       registered=[{**theirs, "root": "ce" * 64}, theirs])
+    entry = {**reg.entry(), "root": "cd" * 64, "domain": dom}
+    rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier),
+                   registered=[entry])
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [earlier]}
+    out = {"W": {"record": R.digest(earlier), "value": "a/16@0"}}
+    assert R.check(rec, prog, Q, **kw, outputs=out).ok
+    assert R.check(rec, prog, Q, **kw).codes == ("R7-domain",)
+    assert R.check({**rec, "registered": [{**entry, "root": "ef" * 64}]}, prog, Q, **kw, outputs=out).codes == ("R7-held",)
+    assert R.check({**rec, "registered": [{**entry, "domain": "db" * 64}]}, prog, Q, **kw,
+                   outputs=out).codes == ("R7-domain",)
+    assert R.check({**rec, "registered": [reg.entry()]}, prog, Q, **kw, outputs=out).codes == ("R7-domain", "R7-held")
+    same = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[{**theirs, "value": "W"}])
+    assert R.check({**rec, "previous": R.digest(same)}, prog, Q, **{**kw, "log": [same]},
+                   outputs={"W": {"record": R.digest(same), "value": "W"}}).ok
+    for e in ({**theirs, "leaves": 4}, {**theirs, "words": 1}, {**theirs, G.WIDTH_KEY: 32}, {**theirs, "domain": 1},
+              {**theirs, "root": None}, {**theirs, "leaves": True}):
+        other = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[e])
+        assert R.check({**rec, "previous": R.digest(other)}, prog, Q, **{**kw, "log": [other]},
+                       outputs={"W": {"record": R.digest(other), "value": "a/16@0"}}).codes[0] == "R7-output", e
+    for bad in ({"record": "ee" * 64, "value": "a/16@0"}, {"record": R.digest(earlier), "value": "nope"},
+                {"record": R.digest(earlier), "value": "W"}, {"record": R.digest(rec), "value": "a/16@0"}):
+        assert R.check(rec, prog, Q, **kw, outputs={"W": bad}).codes[0] == "R7-output", bad
+    for bad in ({"W": {**out["W"], "port": "prev.out"}}, {"W": {**out["W"], "value": 1}}, {"W": {"value": "a/16@0"}},
+                {"W": {**out["W"], "record": "EE" * 64}}):
+        with pytest.raises(ValueError):
+            R.check(rec, prog, Q, **kw, outputs=bad)
 
 
 #: an AROW row table's port (`verity_vllm.commit.serving_rows.RowTable.port`: `row-table/<engine step>/<op_path>`)

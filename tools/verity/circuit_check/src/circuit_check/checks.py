@@ -5,7 +5,9 @@
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
                      kernel (`verity.ml.circuits.evaluation.self_check`), a template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
-                     proof units otherwise); the word Definition a Boolean Definition names
+                     proof units otherwise) and, under ``Options.struct_max_gates``, the structural lowering's template
+                     (``c-flock:struct_lower``, `struct_lowering`, evaluated from the template); the word Definition a
+                     Boolean Definition names
                      (`verity.ml.circuits.boolean.trace.word_of`) must equal the Boolean gates through the word view
                      (``word:<word>``): the Boolean Definition is the definition.  A
                      registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
@@ -70,7 +72,9 @@ class Options:
     ``reference_budget`` gate evaluations on them (never fewer than ``min_vectors``); ``X`` / ``W`` / ``extras`` the word query;
     Definitions over ``partition_max_gates`` gates or ``partition_max_leaves`` parameter leaves are not partitioned, over
     ``lower_max_gates`` IR gates or about ``lower_max_ands`` ANDs (the piece pins' estimate) not lowered whole;
-    ``input_budget`` bounds instances x input leaves, ``lane_budget`` instances x units when a template's units are evaluated."""
+    ``input_budget`` bounds instances x input leaves, ``lane_budget`` instances x units when a template's units are evaluated;
+    a composite of at most ``struct_max_gates`` IR gates is realized by its structural lowering too (`struct_lowering`; 0, the
+    default: none)."""
 
     vectors: int = 64
     min_vectors: int = 4
@@ -86,6 +90,7 @@ class Options:
     input_budget: int = 1 << 22
     lane_budget: int = 1 << 16
     dead_ids: int = 1 << 17
+    struct_max_gates: int = 0
 
 
 @dataclass
@@ -606,6 +611,56 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     return rec
 
 
+STRUCT_VIA = "c-flock:struct_lower"
+
+
+def struct_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> dict:
+    """The whole composite as `verity_flock.struct_lower` lowers it (each specialized Definition once, its calls, batches and
+    scans kept as calls: the ``flock-ir-tmpl/v2`` template a structural unit stager writes), against the reference on the
+    correspondence vectors, evaluated from the template (`tmpl.evaluate`, never unrolled): input column ``i`` of the template
+    is bit ``i`` of the parameters' leaves concatenated, its one output port the return leaves concatenated. The template
+    must be in the order the Lean reader checks (`tmpl.ordered`). Records the unrolled rows (`tmpl.totals`) and the
+    template's own size."""
+    from verity_flock import struct_lower as SL
+    from verity_flock import tmpl as TM
+
+    if isinstance(t, (ScalarReference, PrimitiveDefinition)):
+        return {"via": STRUCT_VIA, "lowered": False, "reason": "a structural lowering lowers a composite's body"}
+    widths = [w for pt in params for w in pt.leaf_widths()]
+    if any(w > 64 for w in widths):
+        return {"via": STRUCT_VIA, "lowered": False, "reason": "a leaf wider than 64 bits"}
+    try:
+        tm, _lw, _top = SL.lower(t, name=t.id)
+    except (KeyError, NotImplementedError) as e:
+        return {"via": STRUCT_VIA, "lowered": False, "reason": str(e)[:200]}
+    tot, order = TM.totals(tm), TM.ordered(tm)
+    rec: dict[str, Any] = {"via": STRUCT_VIA, "lowered": True, "unrolled_rows": tot["rows"],
+                           "template": {"defs": len(tm.defs), "rows": sum(len(d.rows) for d in tm.defs),
+                                        "calls": sum(len(d.calls) for d in tm.defs)}, "ordered": bool(order["ok"])}
+    if not order["ok"]:
+        F.fail("lowering", "template-unordered", t.id, f"[{STRUCT_VIA}]: {order}", via=STRUCT_VIA)
+        return rec
+    rows = [i for i, r in enumerate(ref) if r is not None]
+    rec["compared"] = len(rows)
+    if not rows:
+        return rec
+    fin = (flat(arrays) if arrays else np.zeros((len(ref), 0), np.uint64))[rows]
+    bits = np.concatenate([(fin[:, j:j + 1] >> np.arange(w, dtype=np.uint64)) & np.uint64(1) for j, w in enumerate(widths)]
+                          + [np.zeros((len(rows), 0), np.uint64)], axis=1).astype(np.uint8)
+    out = TM.unslice_lanes(TM.evaluate(tm, TM.slice_lanes(bits)), len(rows))
+    _p, ret = signature_of(t)
+    at = np.cumsum([0, *ret.leaf_widths()])
+    got = [[int.from_bytes(np.packbits(o[a:b], bitorder="little").tobytes(), "little") for a, b in pairwise(at)] for o in out]
+    want = [[int(x) for x in ref[i]] for i in rows]
+    bad = [i for i in range(len(rows)) if got[i] != want[i]]
+    rec["mismatches"] = len(bad)
+    if bad:
+        F.fail("correspondence", "lowering-mismatch", t.id, f"[{STRUCT_VIA}]: {len(bad)} of {len(rows)} vectors", via=STRUCT_VIA,
+               examples=[{"instance": rows[i], "inputs": _short(fin[i].tolist()), "lowered": _short(got[i]),
+                          "reference": _short(want[i])} for i in bad[:_EXAMPLES]])
+    return rec
+
+
 # --- the IR circuit: redundant gates, dead gates, the partition ---------------------------------------------------------------
 
 def redundant_gates(fn: Any, opts: Options, F: Findings, rule: dict, graph: tuple | None = None, within_units: bool = True) -> dict:
@@ -761,6 +816,8 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     else:
         low = {"lowered": False, "reason": "lowered as its template's units"}
     corr["realizations"].append({"via": "c-flock:ir_lower", **low})
+    if kind == "composite" and arrays is not None and t.gates <= opts.struct_max_gates:
+        corr["realizations"].append(struct_lowering(t, params, arrays, ref, F))
     wv = word_view(t, opts, F)
     if wv is not None:
         corr["realizations"].append(wv)
