@@ -18,7 +18,10 @@
   scale 0), and call c's z table ``zy@<c>``, one record a unit of the call in its tile order (`h1zy.RECORD`: its cells' s32 z,
   row-major, then their bf16 y; a slot past the served rows is z = 0 and y = +0, dq(0, +0, s_w) for a finite positive
   s_w); and the weights' ``b/<K>``, K's linears' rows linear after linear, each its K weight codes then its f32 s_w (Σn
-  rows every step's units read).
+  rows every step's units read). With ``receipts`` (BRIDGE2), call c's receipt table ``receipt@<c>`` too: one row a unit
+  of the call in its tile order, the unit's receipt, the statement's output row o0 (`receipt_words`: its nw = 2 (KS + m)
+  u32 words, each little-endian, so 2 nw u16 words), registered beside its z table, its domain bound to the open root
+  alike, and listed whole under round s's root (`segments`).
 * **The weights are the period's** (`Weights`, VLLM-71): each K's ``b/<K>`` is registered once a period, before its first
   window's salt (`register_weights`), under the period's declared Program, binding no window, its salts fixed for the
   registration. `credit.weights_root` of their roots is the weights' root every window's open root binds and the
@@ -95,6 +98,10 @@ NONCE = RQ.REQUESTS_NONCE + (1 << 42)
 B_NONCE = Wt.B_NONCE
 #: round s's input-ids table's nonce is IDS_NONCE + s, past every ``b/<K>``'s
 IDS_NONCE = B_NONCE + (1 << 39)
+#: call c's receipt table's nonce is RECEIPT_NONCE + c, past every round's input-ids table's
+RECEIPT_NONCE = IDS_NONCE + (1 << 38)
+#: a statement's output row of its units' receipts (`h1window.STATEMENT_OUT_ROWS`' o0), in its ``--registered`` file
+RECEIPT_PORT = "o0"
 #: an input-ids slot past the step's rows: no token id is 2^32 - 1
 EMPTY_ID = 0xFFFFFFFF
 #: the session round 0's input-ids table binds under in-process coins, where no gate reserved one (such a window credits
@@ -132,6 +139,16 @@ def ids_words(ids: Sequence[int | None], slots: int) -> np.ndarray:
     v = np.full(slots, EMPTY_ID, "<u4")
     v[:len(ids)] = [EMPTY_ID if t is None else int(t) for t in ids]
     return v.view("<u2").reshape(slots, 2).astype(np.uint16)
+
+
+def receipt_words(receipts: np.ndarray) -> np.ndarray:
+    """A call's receipts, one a unit in its tile order, as their bit rows' u16 words: u32 words ``(units, nw)`` (the
+    tile's ``receipt``, `h1tile`: per set its lanes' XOR of y, then of z, nw = 2 (KS + m)) each little-endian, low half
+    first, so ``(units, 2 nw)``; u16 words ``(units, w)`` as they are."""
+    r = np.asarray(receipts)
+    if r.ndim != 2 or r.dtype not in (np.uint16, np.uint32):
+        raise ValueError(f"a call's receipts are (units, words) u32 or u16 words, not {r.dtype} {r.shape}")
+    return np.ascontiguousarray(r.astype("<u4" if r.dtype == np.uint32 else "<u2")).view("<u2").astype(np.uint16)
 
 
 def record_words(z: np.ndarray, y: np.ndarray, slots: int, tile: tuple[int, int]) -> np.ndarray:
@@ -315,6 +332,9 @@ class Served:
     refused: list[str] = field(default_factory=list)
     #: the Commit's tap in the serving engine (`pouw_h1_commit.CommitTap`)
     tap: Any = None
+    #: each call's receipts, one a unit in its tile order (`receipt_words`' input), from ``(call, codes, s_a, weight
+    #: codes, s_w)``: with it, each call's ``receipt@<c>`` is registered beside its z table (BRIDGE2)
+    receipts: Callable[[Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None
     #: each round's input-ids table and its words, with the tap
     ids: dict[int, G.Registered] = field(default_factory=dict)
     _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
@@ -408,6 +428,18 @@ class Served:
     def a_table(self, c: int) -> str:
         """Call ``c``'s step's A table of its K, ``<prefix>a/<K>@<s>`` (`h1window.table`)."""
         return HW.table(self.program, "a", c, self.steps)
+
+    def receipt_table(self, c: int) -> str:
+        """Call ``c``'s receipt table, ``<prefix>receipt@<c>``."""
+        return self.program.fn.bindings["PREFIX"] + f"receipt@{int(c)}"
+
+    def receipt_shape(self, c: int) -> tuple[int, int]:
+        """Call ``c``'s receipt table's rows and u16 words a row: one row a unit of the call, its tile unit's ``receipt``
+        (the statement's output row o0, `h1window.STATEMENT_OUT_ROWS`), as a ``row/v2`` row of its bits."""
+        S = self.program.fn.S()
+        k = {name: k for name, k, _n in S.LINEARS}[S.CALLS[c][0]]
+        ret = dict(S.TILES)[k].signature()[1]
+        return HW.call_units(self.program)[c][1], sum(dict(ret.fields)["receipt"].leaf_widths()) // 16
 
     def a_tree(self, run: Any, call: Any, words: np.ndarray) -> G.Registered:
         """The tree of call ``call``'s step's A table ``a/<K>@<s>`` over ``words`` (its step's calls of K's `a_words`,
@@ -508,6 +540,12 @@ class Served:
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
         zy = HW.table(self.program, "zy", call.index)
         out[zy] = self._register(run, zy, record_words(zv, yv, self.m, self.tile), nonce(call.index, "zy"), self.root)
+        if self.receipts is not None:
+            got = self._receipts(call, codes, scales)
+            if got is None:
+                return {}
+            rc = self.receipt_table(call.index)
+            out[rc] = self._register(run, rc, got, RECEIPT_NONCE + call.index, self.root)
         if self.tap is not None:
             self.tap.arow(run, self, call, value, whole)
         b, ks = self.program.fn.bindings["PREFIX"] + f"b/{call.k}", sorted({k for _n, k in run.shapes_})
@@ -526,15 +564,33 @@ class Served:
             out[b] = self.registered[b].root.hex()
         return out
 
+    def _receipts(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray | None:
+        """Call ``call``'s receipts' words (`receipts`, `receipt_words`), refused unless one row a unit of its tile
+        unit's receipt width (`receipt_shape`)."""
+        w, s = self._weights.get(call.layer), self._scales.get(call.layer)
+        try:
+            got = receipt_words(self.receipts(call, codes, scales, None if w is None else w[1], s))
+        except ValueError as e:
+            self.refused.append(f"call {call.index}: {e}")
+            return None
+        if got.shape != (want := self.receipt_shape(call.index)):
+            self.refused.append(f"call {call.index}: its receipts are {got.shape[0]} rows of {got.shape[1]} u16 words, not "
+                                f"its {want[0]} units' receipts of {want[1]}")
+            return None
+        return got
+
     def segments(self, run: Any, r: int) -> dict[str, list[tuple[int, int, bytes]]]:
         """Round r's A segments (`credit.round_root`): step r's A table ``a/<K>@<r>`` of each K its calls have, whole, as
         the aligned subtrees (`credit.cover`, each ``(level, index, root)``) of its registered tree, so round r's root
-        commits it before round r's coin and no other round lists it; and round r's input-ids table alike. Nothing once
-        the window is refused."""
+        commits it before round r's coin and no other round lists it; with ``receipts``, each of step r's calls' receipt
+        table alike; and round r's input-ids table. Nothing once the window is refused."""
         if self.refused or self.program is None:
             return {}
         per, out = len(self.linears), {}
-        values = dict.fromkeys(self.a_table(c) for c in range(r * per, min((r + 1) * per, len(self.calls))))
+        mine = range(r * per, min((r + 1) * per, len(self.calls)))
+        values = dict.fromkeys(self.a_table(c) for c in mine)
+        if self.receipts is not None:
+            values.update(dict.fromkeys(self.receipt_table(c) for c in mine))
         regs = [self.registered.get(v) for v in values]
         for reg in [*regs, self.ids.get(r)]:
             if reg is not None:
@@ -556,10 +612,11 @@ class Served:
 
     def tables(self) -> list[str]:
         """Every value the Program's units open at: each K's ``b/<K>``, then each step's A tables, then each call's z
-        table."""
+        table; then, with ``receipts``, each call's receipt table, which its units' receipts are."""
         pre, ks = self.program.fn.bindings["PREFIX"], sorted({k for _name, k, _n in self.linears})
         return ([pre + f"b/{k}" for k in ks] + list(dict.fromkeys(self.a_table(c) for c in range(len(self.calls))))
-                + [HW.table(self.program, "zy", c) for c in range(len(self.calls))])
+                + [HW.table(self.program, "zy", c) for c in range(len(self.calls))]
+                + ([self.receipt_table(c) for c in range(len(self.calls))] if self.receipts is not None else []))
 
     def values(self) -> dict[str, int]:
         """Each registered value's words a row."""
@@ -611,12 +668,22 @@ def reads_file(run: Any, call: int, ports: Mapping[str, str] | None = None, tp: 
     """The verifier's ``--registered`` file of a statement over call ``call``'s units: `h1window.table_reads_file` over the
     window's Program (``tp`` its template partition, `partition.evaluate`'s, when the caller holds it) and its trees'
     roots, under the circuit ports ``ports`` (default `Served.ports`), each call table's domain bound to the window's open
-    root and the weights' to none, as their trees' are."""
+    root and the weights' to none, as their trees' are. With ``receipts``, its output row `RECEIPT_PORT` (each unit's
+    receipt) at the call's receipt table, unit u of the call's t-th tile at row t, under the same domain rule."""
     served = _served(run)
     prog = served.program
     tp = tp if tp is not None else P.evaluate(prog, served.query())
-    return HW.table_reads_file(prog, tp, int(call), served.roots(), served.ports() if ports is None else dict(ports),
-                               prog=served.program_digest, window=served.root, steps=served.steps)
+    doc = HW.table_reads_file(prog, tp, int(call), served.roots(), served.ports() if ports is None else dict(ports),
+                              prog=served.program_digest, window=served.root, steps=served.steps)
+    if served.receipts is not None:
+        value, (u0, n), (leaves, words) = served.receipt_table(call), HW.call_units(prog)[call], served.receipt_shape(call)
+        reads: list[int | None] = [None] * tp.population
+        reads[u0:u0 + n] = range(n)
+        doc["ports"][RECEIPT_PORT] = {
+            "value": value, "root": served.registered[value].root.hex(), "leaves": leaves, "words": words,
+            "word_bits": G.WORD_BITS, "domain": served.registered[value].domain.domain_id.hex(), **G.schema_entry(V2),
+            "reads": reads}
+    return doc
 
 
 @dataclass(frozen=True)
@@ -653,5 +720,5 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
 
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Registration", "Served",
            "V2", "Weights", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
-           "model_key", "nonce", "reads_file", "record_words", "register", "register_weights", "row_words", "trees",
+           "model_key", "nonce", "RECEIPT_NONCE", "RECEIPT_PORT", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
            "weights_of"]

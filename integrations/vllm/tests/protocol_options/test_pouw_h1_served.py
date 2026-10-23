@@ -99,7 +99,7 @@ def _period(ws, shapes=SHAPES):
 
 
 def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=SHAPES, blocks=BLOCKS, steps=STEPS,
-            served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False, ws=None, weights=None):
+            served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False, ws=None, weights=None, receipts=None):
     """A window: its first ``served`` steps serve 5 rows each, q and k on one input x, o on another, every step with the
     same weights ``ws`` (`_weights` of ``seed`` by default; step 1's q on ``changed`` when given), each call's z/y records
     `scaled_mm_zy`'s over its T slots; the later steps are empty. With ``weights`` (`_period`) its ``b/<K>`` are the
@@ -107,7 +107,8 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
     exact product and y its served y."""
     rng = np.random.default_rng(seed)
     run = PH.H1Run("t", SALT, modules, shapes, rows, steps, key=bytes([seed + 1]) * 32,
-                   served=SV.Served(tile, _unit(tile), blocks, window=served_key or key, weights=weights))
+                   served=SV.Served(tile, _unit(tile), blocks, window=served_key or key, weights=weights,
+                                    receipts=receipts))
     ws = _weights(seed, shapes) if ws is None else ws
     got = {}
     for s in range(served):
@@ -468,3 +469,76 @@ def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
             assert CR.tree_root(reg.domain.domain_id, reg.leaves, {(lv, ix): h for lv, ix, h in got}) == reg.root
         assert log["a"] == {v: [[lv, ix, h.hex()] for lv, ix, h in got] for v, got in segs.items()}
         assert CR.round_root(r, bytes.fromhex(log["inner"]), segs).hex() == log["root"]
+
+
+class _Receipts(dict):
+    """A stand-in receipt producer: each unit of the call one receipt of the stand-in's width (one u16 word), drawn from
+    the call's served codes and weight, kept by call so a test recomputes each table from them."""
+
+    def __init__(self, dtype=np.uint16, width=1):
+        super().__init__()
+        self.dtype, self.width = dtype, width
+
+    def __call__(self, call, codes, s_a, w, s_w):
+        seed = hashlib.sha512(b"%d" % call.index + np.asarray(codes).tobytes() + np.asarray(w).tobytes()).digest()
+        got = np.random.default_rng(int.from_bytes(seed[:8], "little")).integers(
+            0, np.iinfo(self.dtype).max, ((T // TILE[0]) * (call.n // TILE[1]), self.width), dtype=self.dtype)
+        self[call.index] = got
+        return got
+
+
+def test_receipt_words_are_each_u32_word_little_endian_low_half_first():
+    got = SV.receipt_words(np.array([[0x11223344, 0xAABBCCDD], [1, 2]], np.uint32))
+    assert got.dtype == np.uint16 and got.tolist() == [[0x3344, 0x1122, 0xCCDD, 0xAABB], [1, 0, 2, 0]]
+    assert SV.receipt_words(np.array([[7, 8]], np.uint16)).tolist() == [[7, 8]]
+    with pytest.raises(ValueError, match="u32 or u16"):
+        SV.receipt_words(np.zeros(3, np.uint32))
+
+
+def test_each_calls_receipts_are_its_receipt_table_beside_its_z_table():
+    """With a receipt producer, each call's ``receipt@<c>`` (BRIDGE2) is registered beside its ``zy@<c>``: one ``row/v2``
+    row a unit of the call in its tile order, the unit's receipt (the stand-in's one u16 word), its root recomputed here
+    from the call's receipts under row j's salt at `RECEIPT_NONCE` + c, its domain the registered-value domain of the
+    Program's digest bound to the window's open root (as ``zy@<c>``'s), and its root in the call's manifest row. Round r
+    lists step r's calls' receipt tables whole under its root, `tables` lists every call's, and each call's
+    ``--registered`` file names it at its output row o0, unit u of its t-th tile at row t."""
+    made = _Receipts()
+    run, _ws, _got = _window(W1, receipts=made)
+    served, pre = run.served, SV.PREFIX
+    prog, digest = served.program, P.program_digest(served.program)
+    assert not served.refused and sorted(made) == list(range(len(run.calls)))
+    names = list(served.registered)
+    for c in run.calls:
+        rc = served.registered[pre + f"receipt@{c.index}"]
+        assert names.index(rc.value) == names.index(pre + f"zy@{c.index}") + 1
+        assert (rc.leaves, rc.words) == (HW.call_units(prog)[c.index][1], 1) == served.receipt_shape(c.index)
+        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._key,
+                                      SV.RECEIPT_NONCE + c.index)
+        assert rc.domain.domain_id == G.domain(digest, rc.value, rc.words, rc.leaves, window=W1.hex()).domain_id
+        assert rc.domain.domain_id != G.domain(digest, rc.value, rc.words, rc.leaves).domain_id
+        assert served.root == W1.hex() and rc.window == served.registered[pre + f"zy@{c.index}"].window == W1.hex()
+        assert run.tables[c.index]["registered"][rc.value] == rc.root.hex()
+    assert served.tables()[-len(run.calls):] == [pre + f"receipt@{c}" for c in range(len(run.calls))]
+    for r, log in enumerate(run.round_log):
+        segs = served.segments(run, r)
+        assert list(segs) == [f"{pre}a/{k}@{r}" for k in KS] + [pre + f"receipt@{c.index}" for c in run.calls if c.step == r]
+        for v, got in segs.items():
+            reg = served.registered[v]
+            assert CR.tree_root(reg.domain.domain_id, reg.leaves, {(lv, ix): h for lv, ix, h in got}) == reg.root
+        assert CR.round_root(r, bytes.fromhex(log["inner"]), segs).hex() == log["root"]
+    reg = SV.register(run)
+    for c, (u0, n) in enumerate(HW.call_units(prog)):
+        p, rc = reg.files[c]["ports"][SV.RECEIPT_PORT], served.registered[pre + f"receipt@{c}"]
+        assert (p["value"], p["root"], p["leaves"], p["words"], p["domain"], p["row_schema"]) == (
+            rc.value, rc.root.hex(), rc.leaves, rc.words, rc.domain.domain_id.hex(), SV.V2)
+        assert [(u, row) for u, row in enumerate(p["reads"]) if row is not None] == [(u0 + t, t) for t in range(n)]
+        assert all(G.verify_read(rc.domain, rc.root, t, rc.bcs[t], rc.path(t), SV.V2) for t in range(n))
+
+
+def test_receipts_off_the_units_receipt_width_are_refused():
+    """Receipts of another width than the tile unit's receipt (u32 words where the stand-in's is one u16 word) register
+    nothing, and `trees` says why."""
+    run, _ws, _got = _window(W1, receipts=_Receipts(np.uint32, 2))
+    assert any("its receipts are 4 rows of 4 u16 words, not its 4 units' receipts of 1" in r for r in run.served.refused)
+    with pytest.raises(ValueError, match="trees were refused"):
+        SV.trees(run)
