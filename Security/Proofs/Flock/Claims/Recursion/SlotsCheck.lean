@@ -136,6 +136,7 @@ variable {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)
 unit `0`'s input leaves its `N` input words in order, the column (`portCol`'s, in template instance `g`'s first unit)
 is the leaf reading the port's word `i / 16`, whose copy position (`Aliased.copyAt`) is the row's message bit `i`
 (`Flat.leafSrc`), or a forced-zero row when that lies past the block, where the message bit reads 0 too. -/
+include F in
 theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat)
     (hupv : 0 < st.c.upv) (hg : g < st.c.g) (hq : q < st.c.ports.size)
     (hN : 16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 + st.c.ports[q].bits ≤ 16 * N)
