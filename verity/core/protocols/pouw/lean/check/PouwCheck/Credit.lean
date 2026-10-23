@@ -1,7 +1,9 @@
 import Std.Data.HashMap
 import Flock.Program
+import Flock.RegKnown
 import PouwCommit.Frame
 import PouwCheck.Json
+import PouwCheck.Opening
 import PouwCheck.Pass
 import PouwCheck.Rounds
 import PouwWindow.Draw
@@ -637,6 +639,14 @@ def receiptCall? (v : Json) : Option Nat :=
   let c := String.ofList (last.toList.drop 8)
   if last.startsWith "receipt@" && (c == "0" || canonicalK c) then some c.toNat! else none
 
+/-- `credit.pub_call`: a public table's call, a name whose last part is `pub@<c>` (`<prefix>pub@<c>`, row t call c's
+t-th unit's public row, which `registeredFile` builds, c a canonical decimal). -/
+def pubCall? (v : Json) : Option Nat :=
+  (str? v).bind fun v =>
+  let last := (v.splitOn "/").getLastD ""
+  let c := String.ofList (last.toList.drop 4)
+  if last.startsWith "pub@" && (c == "0" || canonicalK c) then some c.toNat! else none
+
 /-- `credit.is_tied`: a value the round roots commit, an A value (`isA`), an input-ids table (`idsStep?`) or a receipt
 table (`receiptCall?`). -/
 def isTied (v : Json) : Bool := isA v || (idsStep? v).isSome || (receiptCall? v).isSome
@@ -824,6 +834,14 @@ structure Tile where
 
 /-- `credit.RECEIPT_PORT`: the statement's output row of its units' receipts, which reads its call's receipt table. -/
 def RECEIPT_PORT : String := "o0"
+/-- `credit.PUB_PORT`: the statement's public row, which reads its call's public table, the verifier's own. -/
+def PUB_PORT : String := "pub"
+
+/-- `core_check.public_words`: `PouwCheck.publicRow` as a `row/v2` row of 16-bit leaves, word w its bytes 2w (low) and
+2w + 1. -/
+def publicWords (salt : ByteArray) (position : Nat) (roots : ByteArray × ByteArray) : Array Nat :=
+  let x := PouwCheck.publicRow salt position roots
+  (Array.range (x.size / 2)).map fun i => (x.get! (2 * i)).toNat + 256 * (x.get! (2 * i + 1)).toNat
 
 /-- `credit._bits`: a descriptor type's bits, its leaves' widths: `["Value", w]` w, and `leavesOf`'s rule for the rest;
 zero for any other form, or past `fuel` levels. -/
@@ -953,9 +971,14 @@ row t, so the receipts the round roots commit are the ones the units return; eve
 the file lists no unit past the call's last (`Flock.Registered.badInstance` reads none past `reads`). Each value is a
 row/v2 value of 16-bit leaves under `SampledProofs.Registered.domainAt` of its name, rows and words, binding the
 window's open root `window` but for the weights' (`isHeld`), at the root `roots` (`{value: [root, ...]}`) gives it. Its
-cost is the window's units up to the call's last, once a port: the reads file's form. -/
+cost is the window's units up to the call's last, once a port: the reads file's form. The statement's public row `pub`
+(`PUB_PORT`) is the verifier's own: unit u0 + t reads row t of the call's public table `<prefix>pub@<call>`, which the
+file names at its known content (`known`, `Flock.Registered.checkKnownAll`), the window's Program salt `salt` (hex), the
+position u0 + t and the call's roots, root(`a/<K>@<s>`) and root(`b/<K>`) as the window registers them (`publicWords`),
+each under `publicRowSalt` of `window` and its position, at the root of their registration; a root of the two that is
+no SHA-512 digest is refused. -/
 def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Nat) (roots : Json) (window : String)
-    (steps : Nat) : R Json := do
+    (steps : Nat) (salt : String) : R Json := do
   let num := fun j => (nat? j).getD 0
   let (r, c) := (match get layout "tile" with
     | .arr a => (num (a.getD 0 .null), num (a.getD 1 .null))
@@ -1002,6 +1025,9 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     | [.str x] => root := root ++ [(v, x)]
     | _ => throw ("registration", s!"call {call}'s statement reads {v}, which the window registers " ++
         s!"{if got.isEmpty then "not" else "twice"}: register each of a call's tables and its weights once")
+  let (some ra, some rb) := (digest? (.str ((root.lookup a).getD "")), digest? (.str ((root.lookup bv).getD "")))
+    | throw ("registration", s!"call {call}'s seed reads the roots of {a} and {bv}, which are not both SHA-512 " ++
+        "digests (128 lowercase hex): register each table at its tree's root")
   let ports : List (String × String × (Nat → Nat)) :=
     (List.range r).map (fun i => (s!"a_k{k}_{i}", a, fun t => at_ + r * (t / per) + i)) ++
     (List.range c).map (fun j => (s!"b_k{k}_{j}", bv, fun t => b0 + c * (t % per) + j)) ++
@@ -1018,6 +1044,22 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
       ("leaves", Lean.toJson leaves), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
       ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
       ("reads", Json.arr reads.toArray)])]
+  let pv := s!"{shape.pre}pub@{call}"
+  let words := PouwCheck.PUBLIC_ROW_BITS / 16
+  let sb := (hex? (.str salt)).getD ByteArray.empty
+  let ks : Array (Array Nat × ByteArray) := (Array.range size).map fun t =>
+    (publicWords sb (u0 + t) (ra, rb), PouwCheck.publicRowSalt window (u0 + t))
+  let d ← (SampledProofs.Registered.domainAt program pv words size 16 (some window)).mapError fun why =>
+    ("registration", why)
+  let reg : Flock.Registered.Port := { name := PUB_PORT, value := pv, root := ByteArray.empty, leaves := size,
+    words := some words, wordBits := 16, domain := d, reads := #[], schema := Flock.HmRow.ROW_SCHEMA_V2 }
+  let r := Flock.FV3.root d (Flock.Registered.knownLeaves reg ks) Flock.Sha512.hash
+  out := out ++ [(PUB_PORT, Json.mkObj [("value", Json.str pv), ("root", Json.str (Flock.hexOf r)),
+    ("leaves", Lean.toJson size), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
+    ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
+    ("reads", Json.arr ((List.range u0).map (fun _ => Json.null) ++ (List.range size).map Lean.toJson).toArray),
+    ("known", Json.mkObj [("rows", Lean.toJson (ks.map (·.1))),
+      ("salts", Json.arr (ks.map fun k => Json.str (Flock.hexOf k.2)))])])]
   pure (Json.mkObj [("format", Json.str READS), ("ports", Json.mkObj out)])
 
 def registrationRefuse {α : Type} (why : String) : R α := throw ("registration", why)
@@ -1045,7 +1087,8 @@ refusal (`registration`). Each A value's and input-ids table's domain, and each 
 `domainOf` the window's open root `window`, its session `session` and the descriptor's SHA-512 `program`; each proof
 was verified against
 `program`; every registered port its session opened (its `registered` finding) is of a value the window registers once,
-at that value's registered root; and it opened its unit's K's A value: the window's `…/a/<K>` (K the unit's stratum's
+at that value's registered root, but for its call's public table (`pubCall?`), which no entry registers and
+`credit._verified` holds to the rows `registeredFile` built; and it opened its unit's K's A value: the window's `…/a/<K>` (K the unit's stratum's
 in `ss`) or its call's round's A table of K `…/a/<K>@<s>` (the call `layout`'s units place it in, `callAt`, s its round
 of `steps`, its calls the rounds' equal blocks), and its K's B
 rows, the window's `<prefix>b/<K>` (`prefix` the descriptor's `PREFIX`). A step of `window`, after `Internal.aLink` has
@@ -1080,6 +1123,7 @@ def Internal.registration (window program prefix_ : String) (entries proofs : Js
     let mut opened := false
     let mut weights := false
     for (port, v, root) in f do
+      if (pubCall? (.str v)).isSome then continue
       let n := names.count (some v)
       if n != 1 then
         registrationRefuse (s!"drawn unit {u}'s proof opened port {port} against {v}, which the window registers " ++

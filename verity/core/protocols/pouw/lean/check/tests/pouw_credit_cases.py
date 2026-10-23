@@ -1237,7 +1237,8 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
     as `credit.registered_file` takes them, and at random (always under the ``receipt-`` mutations) the call's receipt
     table ``receipt@<call>``, its templates returning a receipt of whole 16-bit words (bits, of 1-bit leaves or wider); ``missing`` leaves one of the
     call's values out, ``twice`` registers one twice, ``receipt-twice`` registers the receipt table twice and
-    ``receipt-width`` gives the templates a receipt of no whole 16-bit words, or none."""
+    ``receipt-width`` gives the templates a receipt of no whole 16-bit words, or none, and ``pub-roots`` registers the
+    call's A table or ``b/<K>``, whose roots its units' public rows hold, at a root that is no SHA-512 digest."""
     lay = layout(rng)
     prefix = rng.choice(["", f"h1/w-{rng.randrange(100)}/"])
     call = rng.randrange(len(lay["calls"]))
@@ -1269,6 +1270,8 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
             roots[v].append(_hex(rng))
         case "receipt-twice":
             roots[vals[-1]].append(_hex(rng))
+        case "pub-roots":
+            roots[rng.choice(vals[0:3:2])] = [rng.choice(["", _hex(rng)[:-2], _hex(rng).upper(), _hex(rng) + "00"])]
         case "receipt-width":
             receipt = rng.choice([None, bit, ["Array", 16 * rng.randint(0, 4) + rng.randint(1, 15), bit],
                                   ["Array", 2, ["Array", 4, bit]], ["Array", rng.randint(1, 3), ["Value", 5]],
@@ -1276,10 +1279,10 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
         case _:
             raise ValueError(name)
     return {"descriptor": descriptor(rng, lay, prefix, receipt), "call": call, "roots": roots, "window": _hex(rng),
-            "steps": steps}
+            "steps": steps, "salt": _hex(rng)}
 
 
-REGISTERED_FILE_NAMES = ["missing", "twice", "receipt-twice", "receipt-width"]
+REGISTERED_FILE_NAMES = ["missing", "twice", "receipt-twice", "receipt-width", "pub-roots"]
 
 
 def _tree(rng: random.Random, count: int, dom: CommitmentDomain | None = None) -> tuple[str, list[tuple[bytes, ...]]]:

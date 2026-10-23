@@ -652,6 +652,12 @@ def public_row(salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:
     return b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
 
 
+def public_words(salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
+    """`public_row` as a ``row/v2`` row of 16-bit leaves: word w its bits 16 w .. 16 w + 15, low byte first."""
+    x = public_row(salt, position, roots)
+    return [x[i] | x[i + 1] << 8 for i in range(0, len(x), 2)]
+
+
 def public_row_salt(context: str, position: int) -> bytes:
     """The public row's hm96 salt, which anyone derives from the window's context and the unit's position: three SHA-512
     blocks of `PUBLIC_ROW_SALT_DOMAIN` ‖ u64be(len) ‖ context ‖ u64be(position) ‖ u8(i)."""
