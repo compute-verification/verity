@@ -1305,6 +1305,46 @@ def test_a_late_tick_fails_closed_and_does_not_slip():
     assert len(writer.data) == WINDOWS * EGRESS.buckets * EGRESS.allocation * B
 
 
+class SlackClock(VirtualClock):
+    """A `VirtualClock` whose waits end as late as Linux lets an epoll wait of a niced process end: by 0.5 % of its
+    timeout, up to 100 ms (`select_estimate_accuracy`)."""
+
+    def __init__(self, now: float = 0.0) -> None:
+        super().__init__(now)
+        self.waits: list[float] = []
+
+    async def sleep(self, delay: float) -> None:
+        if delay > 0:
+            self.waits.append(delay)
+        await super().sleep(delay + min(delay / 200, 0.1) if delay > 0 else delay)
+
+
+def test_a_first_tick_10_s_after_the_proxy_is_up_is_on_time_in_a_niced_process():
+    """The proxy is up 10 s before its origin, as `certifier_serve` starts it. One wait for the first tick would end
+    50 ms late, past the slack, and fault window 0 on both links (`monitor-unavailable`), as it did on the first
+    rehearsals against vLLM at nice 19; waits of at most `MAX_WAIT_S` (`precise_sleep`, the proxy's own sleep) keep
+    every tick within the slack."""
+
+    async def run():
+        clock = SlackClock(0.0)
+        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=10.0, ingress_link="requests",
+                      clock=clock, sleep=lambda delay: active.wait_until(clock() + delay, clock, clock.sleep))
+        running = asyncio.create_task(proxy.run(EmptyReader(), NullWriter()))
+        while not running.done():
+            await clock.sleep(0)
+            clock.advance(clock.now + 1e-3)
+        await running
+        return proxy, clock
+
+    proxy, clock = asyncio.run(run())
+    assert max(proxy.lateness["egress"] + proxy.lateness["ingress"]) < proxy.slack
+    assert sorted((r.link, r.window, r.status.reason) for r in proxy.records) == \
+        sorted((link, w, None) for link in ("responses", "requests") for w in range(WINDOWS))
+    assert max(clock.waits) <= active.MAX_WAIT_S
+    assert Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=10.0,
+                 ingress_link="requests").sleep is active.precise_sleep
+
+
 def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
     """The ingress ticker wakes 0.3τ before bucket 2's boundary and releases a's request, read in bucket 1 and so
     anchored at 2; the server answers at once, so its event is ready at bucket 2, no later than its anchor. The online

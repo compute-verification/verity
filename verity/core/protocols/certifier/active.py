@@ -200,6 +200,10 @@ RUN_ID_BYTES = 32
 #: the longest request or answer line `serve_reveals` and `RemoteCertifier` read: a deployed LMS signature is 34,756
 #: bytes, twice that in hex, beside a registration
 REVEAL_LINE_BYTES = 1 << 20
+#: the longest a ticker waits at once. Linux lets an epoll wait end late by 0.1 % of its timeout, 0.5 % in a niced
+#: process, up to 100 ms (`select_estimate_accuracy`), so one wait for an origin 10 s off woke the first tick 48 ms
+#: late at nice 19, past the slack, and faulted window 0. A wait of at most this ends at most 0.5 ms late
+MAX_WAIT_S = 0.1
 
 
 def _reveal_fields(key_id: bytes, run_id: bytes, link: str, window: int, digest: str, what: bytes) -> bytes:
@@ -626,6 +630,22 @@ class LaggedChoices:
         return self.prover.declare(self.prover.envelope if sync is None else sync)
 
 
+async def wait_until(deadline: float, clock: Callable[[], float],
+                     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep) -> None:
+    """Sleep until `clock()` reaches `deadline`, in waits of at most `MAX_WAIT_S`, so that a far deadline is met as
+    closely as a near one."""
+    while deadline - clock() > MAX_WAIT_S:
+        await sleep(MAX_WAIT_S)
+    await sleep(deadline - clock())
+
+
+async def precise_sleep(delay: float) -> None:
+    """`asyncio.sleep(delay)` in waits of at most `MAX_WAIT_S` against the loop's clock: the proxy's sleep unless its
+    caller injects one. An injected sleep (a `VirtualClock`, the device difftest's harness) gets one wait a tick."""
+    loop = asyncio.get_running_loop()
+    await wait_until(loop.time() + delay, loop.time)
+
+
 class VirtualClock:
     """A clock its caller moves, for runs driven event by event (tests, and replays without the host's timer):
     `clock()` reads it, `sleep` waits until `advance` passes the deadline."""
@@ -705,7 +725,7 @@ class Proxy:
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
                  syncs: Sequence[ClockSync], *, origin: float, slack: float = 0.025,
                  clock: Callable[[], float] = time.monotonic,
-                 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+                 sleep: Callable[[float], Awaitable[None]] = precise_sleep,
                  publish: Callable[[Record, GridParams], None] | None = None,
                  egress_link: str = "responses", ingress_link: str,
                  prover: Prover | None = None, windows: int | None = None, executor: Executor | None = None,
