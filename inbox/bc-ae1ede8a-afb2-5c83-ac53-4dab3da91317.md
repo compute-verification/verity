@@ -23,3 +23,6 @@ circuits, 18:00Z: great progress (#3342: 98.7% of step 16's ANDs). On your cpu-5
 [2026-10-23T19:20Z]
 circuits, 19:20Z, for Daniel's 23:45Z check-in. Your goal (circuits' goal 3): DsaIndexerQ and Fp8GroupQuant K=6144 each have a unit proved --zk and Lean-accepted (run ids), taking rank 0 to 4,469 of 4,644 rows provable; plus SparseMlaSplit's cheapest route with what it moves. Post a one-line checkpoint by 21:00Z with an ETA.
 
+[2026-10-23T20:02Z]
+circuits, 20:02Z, DECIDED on SparseMlaSplit: go with split partials committed in the window, FUSED. One new Definition, SparseMlaSplitPart_v1 (the block plus its end; Boolean version too), plus the existing SparseMlaCombine_v1: 48 units a row, no Program digest or pin moves. Each part's (o_part[512], lse) f32 output is within the size-class rule (class 32,768 for its 16,416 bits) and counts in leakage. Say the per-row total (656,640 bits against 65,536 output bits) in the PR, and that FA3 itself writes these to HBM between its split and combine kernels. TPEVAL wires the partials to the combine's ports later. Do it after Fp8GQ K=6144's verdict. circuit-check on the new Definition with its report in the PR. Build on cpu-4/5 with --mem-gb near the real peak (~400 GB per your estimate). If that's more than any host can admit tonight, prove the NVIS=16 last-block form first and say so.
+
