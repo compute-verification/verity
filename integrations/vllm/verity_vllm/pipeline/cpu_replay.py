@@ -42,7 +42,7 @@ import re
 import shutil
 import sys
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -234,6 +234,52 @@ def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None,
              "mismatched_n": len(mismatched), "mismatched": mismatched[:16], "unopened_n": len(unopened), "unopened": unopened[:16],
              "shards": getattr(ck, "pin", None), "wall_s": round(time.perf_counter() - t0, 3)}
     return words, check
+
+
+class OnRead(Mapping):
+    """`open_weights`' tensors, each opened on its first read and kept: a reader of a few registered tensors (a rank's serving
+    rows window) opens those alone, not the rank's every shard.  The tree is held to the committed weights root first (it folds to
+    its root, and that root is the root of record, else ``ValueError``); each tensor is held to its tensor root as `open_weights`
+    holds it, and one that does not open is refused by name on its read (``LookupError``, which ``.get`` does not swallow)."""
+
+    def __init__(self, bundle: Path, tree: dict[str, Any], root_of_record: str | None, ck: Any, *, tp: dict[str, int] | None = None,
+                 roles: dict[str, dict[str, Any]] | None = None):
+        from verity_vllm.check import fp8_ue8m0
+        from verity_vllm.check import weights_of_record as WR
+
+        names = tree["names"]
+        folded = scheme.weights_root(bytes.fromhex(tree["geo_digest"]), scheme.names_digest(names),
+                                     [bytes.fromhex(r) for r in tree["tensor_roots"]]).hex()
+        if folded != tree["root"]:
+            raise ValueError("the bundle's weights tree does not fold to its root")
+        if tree["root"] != root_of_record:
+            raise ValueError(f"the bundle's weights root {tree['root'][:16]} is not the committed weights root {str(root_of_record)[:16]}")
+        rw = None
+        if roles and ck is not None:
+            dims = {n: (list(s), WORDS[dt][0]) for n, dt, s, _b in names if dt in WORDS}
+            at = {"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}
+            rw = fp8_ue8m0.Rewrites(list(dims), roles, lambda n: WR.compose(n, *dims[n], ck, **at), ck.config)
+        self._at = {n: i for i, (n, dt, _s, _b) in enumerate(names) if dt in WORDS}
+        self._open = lambda i: _open_one(bundle, tree, i, ck, tp, rw, roles)
+        self._dtype = {n: WORDS[dt][1] for n, dt, _s, _b in names if dt in WORDS}
+        self.words: dict[str, np.ndarray] = {}
+
+    def __contains__(self, name: object) -> bool:
+        return name in self._at
+
+    def __iter__(self):
+        return iter(self._at)
+
+    def __len__(self) -> int:
+        return len(self._at)
+
+    def __getitem__(self, name: str) -> np.ndarray:
+        if name not in self.words:
+            src, raw, why, _read = self._open(self._at[name])
+            if raw is None:
+                raise LookupError(f"registered tensor {name} ({src}) does not open against the committed weights root: {why}")
+            self.words[name] = raw.view(self._dtype[name])
+        return self.words[name]
 
 
 def provider(words: dict[str, np.ndarray], prefix: str, consumed: set[str]) -> Callable[[str, int, int], np.ndarray | None]:

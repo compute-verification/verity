@@ -407,6 +407,34 @@ def test_a_deferred_ranks_stand_in_from_its_bundle_holds_the_served_values_and_p
     assert _values(c["windows"] / "rank0") != _values(c["windows"] / "rank1")
 
 
+def test_the_verifiers_window_and_a_stand_in_index_the_ranks_program_once(deferred_tp, tmp_path, monkeypatch):
+    """`window_of_record` and `from_bundle` each index the rank's Program once: their population takes the index `rank_replay.load`
+    built for every request served by that Program (here both requests, which share the rank's one Program dir), and gives the
+    window, its units and its members that indexing each request's Program again gives."""
+    from verity_vllm.check.replay import index as IX
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    c, built, init = deferred_tp, [], IX.ProgramIndex.__init__
+    requests = len(json.loads(c["workload"].read_text())["requests"])
+
+    def counted(self, inst, **kw):
+        built.append(kw)
+        init(self, inst, **kw)
+
+    def made(d):
+        (mine, held), res = _mine(c, 0), SRT.from_bundle(c["commit"], 0, c["partition"], d, workers=1)
+        return ((mine.run, mine.law, mine.query, mine.members, mine.row_tables, mine.partition_digest, held),
+                {k: res[k] for k in ("run", "population", "partition_digest")},
+                [(d / f).read_bytes() for f in ("partition.json", "index.json", "m0-units.json")], _values(d))
+
+    monkeypatch.setattr(IX.ProgramIndex, "__init__", counted)
+    once = made(tmp_path / "once")
+    assert len(built) == 2
+    monkeypatch.setattr(SRW, "index_of", lambda inst, reuse=(), **kw: IX.ProgramIndex(inst, **kw))
+    assert made(tmp_path / "again") == once and requests == 2 and len(built) == 2 + 2 * (1 + requests)
+    assert once[3] == _values(c["windows"] / "rank0")
+
+
 def _pending(rows, rank, commit_pass):
     rows[1]["commit"]["per_rank"][str(rank)]["commit_pass"] = commit_pass
     return rows
