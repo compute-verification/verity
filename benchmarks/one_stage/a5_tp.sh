@@ -54,7 +54,10 @@ export RAYON_NUM_THREADS=$(nproc)
 MAIN=${A5_MAIN:-}
 if [ -n "${A5_CHALLENGER:-}" ] && [ -z "$MAIN" ]; then
   UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
+  # a run's clone (--cwd clone) has the shipped tree as its origin, which holds main only as its own origin/main (the node's
+  # bare repository's main, fed by the launcher's origin/main)
   git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > $O/fetch-main.log 2>&1 \
+    || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> $O/fetch-main.log 2>&1 \
     && git rev-list --first-parent refs/remotes/origin/main > $O/main.txt || { tail -5 $O/fetch-main.log; exit 4; }
   MAIN=$O/main.txt; echo "main $(head -1 $MAIN), $(grep -c . $MAIN) first-parent commits" | tee -a $O/fetch-main.log
 fi
