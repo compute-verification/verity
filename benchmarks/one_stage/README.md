@@ -73,8 +73,9 @@ negatives.
 - `m1_families.py` and `m1_unit.py`: M1's full-step coverage. `m1_families.py` reads a rank's Programs of record from a
   deferred TP Commit's Build and lists the unit families of the given steps: each Definition the serving rows' partition
   draws from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
-  ANDs, table reads and assertions from its leaves lowered once (an upper bound on the flat count), against 2^26 and
-  `K_MAX`. `m1_unit.py` builds one family's unit through M0's `UnitStager`, flat or `--structural`, and with `--bin`
+  ANDs, table reads and assertions from its leaves lowered once (an upper bound on the flat count), against 2^26, and
+  the log2 of M0's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below).
+  `m1_unit.py` builds one family's unit through M0's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
