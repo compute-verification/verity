@@ -32,7 +32,7 @@ open _root_.Flock.Firewall.Frame (Cfg Masker labelFrame)
 open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
 /-- Obligation (the loop's tables): at every tape `ρ`, the tables `real` answers at `x` and the witness `w` are the
 session loop's own at `x`'s setup (`Count.RealTabs`: `Finish`'s `level0` request, `tabOfLevel0` at a level 0
