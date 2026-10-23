@@ -127,7 +127,7 @@ ZDEAD_ENV = "DITHER_ZDEAD"
 # the gate step's option A partials against SERVE-REG's gated lane (served_h1/lane_refs.py): 1 checks them in the gate
 # (one process: the arm's worker is a daemon); a path saves their records there for `lane_refs.py PATH` after serving
 LANE_REFS_ENV = "DITHER_LANE_REFS"
-# "N,K,MMAX=CFG;..." (exactlin's Cfg text): call (N, K)'s GEMM config in place of exactlin.pick's at the M its CONFIGS
+# "N,K,MMAX=CFG+..." (exactlin's Cfg text): call (N, K)'s GEMM config in place of exactlin.pick's at the M its CONFIGS
 # entry (MMAX, ..) takes.  A split K's int32 partial sums add up to the same z, so z and y are the same bits
 MM_CFG_ENV = "DITHER_MM_CFG"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
