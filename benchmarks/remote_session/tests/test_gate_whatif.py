@@ -91,6 +91,25 @@ def test_a_record_replayed_at_its_own_round_trip_is_itself_and_at_another_is_the
     assert sum(x > 0 for x in near.queue()) == 0
 
 
+def test_a_record_replayed_at_faster_passes_is_the_loops_record_at_them_and_says_what_it_waits_on():
+    """Each pass's own time halved, or every pass 40 ms, at the session's round trip and at 2 ms, is the record the
+    loop leaves with those passes there. At the record's 100 ms exchange the halved passes wait on their coins, and the
+    worst group stays the exchange's; at 2 ms nothing waits on a coin and it is the passes'."""
+    rec, _ = recorded(100 * MS, PASSES)
+    assert gw.passes_of(rec) == PASSES == gw.passes_of(rec, scale=1.0)
+    half = gw.passes_of(rec, scale=0.5)
+    assert half == [p // 2 for p in PASSES] and gw.passes_of(rec, ms=40) == [40 * MS] * len(PASSES)
+    for rtt in (100 * MS, 2 * MS):
+        assert gw.replay(rec, rtt, half) == recorded(rtt, half)[1]
+        assert gw.replay(rec, rtt, [40 * MS] * len(PASSES)) == recorded(rtt, [40 * MS] * len(PASSES))[1]
+    own, far, near = (gw.waits(rec, gw.replay(rec, r, p), r) for r, p in
+                      ((rec.r0, None), (rec.r0, half), (2 * MS, half)))
+    assert own == {"coin": 4, "verifier": 4}
+    assert far["coin"] == len(PASSES) - 1 and near["coin"] == 0
+    l_max = lambda t: max(al.group_l([{"released_ns": x, "arrivals_ns": [y]} for x, y in zip(t["Ra"], t["Aa"])]))
+    assert l_max(gw.replay(rec, rec.r0, half)) > 100 * MS + 55 * MS > l_max(gw.replay(rec, 2 * MS, half))
+
+
 @pytest.mark.parametrize("broken", ["alone", "k3", "short"])
 def test_a_record_of_another_loop_is_refused_by_name(broken):
     """A σ_(g+2) asked on its own, a pace of k = 3 and a prover's record short of its groups are refused, each with

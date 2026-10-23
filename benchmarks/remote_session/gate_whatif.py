@@ -21,8 +21,8 @@ the verifier's clock: root g seen at S_g = A_g − τ − gp_g, coin g arrived a
   verifier's time around it. The session's round trip r0 is the least net_g (or σ_0's fetch, R_1 − R_0 less its P, if
   less). Round trip r takes r0 − r off every exchange and off σ_0's and σ_1's fetches, and keeps each exchange's excess
   over r0 (a queue behind other work, compute, jitter); σ_1 leaves no sooner than its window allows. Window g + 1's
-  boundary leaves its recorded step after D_g. The one wait the replay doesn't move is root 0's on σ_1's fetch, which
-  the loop's record doesn't stamp: it is taken from b_0, σ_1's stamp before it.
+  boundary leaves its recorded step after D_g. Root 0 also waits on σ_1's fetch, which the loop's record doesn't
+  stamp: it is taken as coin 1's arrival at the prover less τ, C_1 − τ, which moves with the fetch.
 - *The challenger.* Its receipt of root g's request and its release of each coin move with the verifier's times, each
   crossing half of r0 − r shorter. The auditor's-clock line reads a release and a later receipt, one crossing each way,
   so the split doesn't move it.
@@ -32,7 +32,15 @@ claims is the line this session's own passes, the verifier's own steps and the c
 with every exchange r0 − r faster: what else would move with the challenger nearer (the prover's passes beside the
 openings, the verifier's other work, a later session's pace) is the record's, unreplayed.
 
-    python gate_whatif.py OUT --line AUDITOR_LINE_JSON --prover PROVER_JSON [--rtt-ms MS ...] [--table FILE]
+A row may also take the passes faster: each pass's own time (S_g − max(C_g, root g − 1 sent)) times F (`--pass-scale`),
+or every pass MS (`--pass-ms`), each coin's trip, root's send and verifier's step kept. Rows are every pass model at the
+session's own round trip and at each r. The replay keeps the session's groups, so a stretch of them spans less time at
+faster passes; at the stated T the verifier would pace more groups into a stretch (`--pace-pass-ms`), which this
+doesn't model. Each row counts the groups whose pass waited on its coin and the roots that waited on the verifier's
+boundary, so it says which side the line is waiting on.
+
+    python gate_whatif.py OUT --line AUDITOR_LINE_JSON --prover PROVER_JSON [--rtt-ms MS ...] [--pass-scale F ...]
+        [--pass-ms MS ...] [--table FILE]
 """
 from __future__ import annotations
 
@@ -154,7 +162,7 @@ def record(s: dict, lines: list[str], auditor: list[dict], prover: dict, tau: in
     S = [a - tau - x for a, x in zip(A, gp)]
     C = [x - p for x, p in zip(S, ph)]
     pure = [S[0] - C[0]] + [S[g] - max(C[g], A[g - 1] - tau) for g in range(1, n)]
-    Q = [max(a, x) for a, x in zip(A, b)]
+    Q = [max(A[0], b[0], C[1] - tau)] + [max(a, x) for a, x in zip(A[1:], b[1:])]
     end = [log[at["challenge", g + 2]][4] if g + 2 < n else log[at["openings", g]][4] for g in range(n)]
     P = [end[g] - log[at["openings", g]][3] for g in range(n)]
     sigma0 = log[at["challenge", 0]]
@@ -165,22 +173,34 @@ def record(s: dict, lines: list[str], auditor: list[dict], prover: dict, tau: in
                   fetch0=R[1] - R[0] - (sigma0[4] - sigma0[3]))
 
 
-def replay(rec: Record, rtt_ns: int) -> dict[str, list[int]]:
-    """The session's times with every exchange `rtt_ns` instead of `rec.r0`: the verifier's series R, A, D and the
-    auditor's Ra, Aa; `rec`'s own at `rtt_ns` = `rec.r0`."""
+def passes_of(rec: Record, scale: float | None = None, ms: float | None = None) -> list[int]:
+    """Each group's pass time under a pass model: its own times `scale`, or `ms` for every pass, or (neither) its
+    own."""
+    if ms is not None:
+        return [round(ms * 1e6)] * rec.n
+    return list(rec.pure) if scale is None else [round(x * scale) for x in rec.pure]
+
+
+def replay(rec: Record, rtt_ns: int, passes: list[int] | None = None) -> dict[str, list[int]]:
+    """The session's times with every exchange `rtt_ns` instead of `rec.r0` and each pass `passes` (its own by
+    default, `passes_of`): the verifier's series R, A, D and the auditor's Ra, Aa; `rec`'s own at `rtt_ns` =
+    `rec.r0`."""
     d = rec.r0 - rtt_ns
     out_h = d // 2
     in_h = d - out_h
     n = rec.n
+    pure = rec.pure if passes is None else passes
     R, A, D, Aa = [0] * n, [0] * n, [0] * n, [0] * n
     R[0] = rec.R[0]
     R[1] = max(R[0] + rec.window, rec.R[1] - d)
     free = None
     for g in range(n):
         c = R[g] + rec.coin[g] - (d if g < 2 else 0)
-        A[g] = (c if free is None else max(c, free)) + rec.pure[g] + rec.gp[g] + rec.tau
+        A[g] = (c if free is None else max(c, free)) + pure[g] + rec.gp[g] + rec.tau
         free = A[g] - rec.tau
         q = max(A[g], R[g + 1] if g + 1 < n else D[g - 1] + rec.step[g - 1])
+        if g == 0:
+            q = max(q, R[1] + rec.coin[1] - d - rec.tau)
         D[g] = q + rec.X[g] - d
         Aa[g] = q + rec.to_aa[g] - out_h
         if g + 2 < n:
@@ -190,16 +210,27 @@ def replay(rec: Record, rtt_ns: int) -> dict[str, list[int]]:
     return {"R": R, "A": A, "D": D, "Ra": Ra, "Aa": Aa}
 
 
+def waits(rec: Record, t: dict[str, list[int]], rtt_ns: int) -> dict[str, int]:
+    """In `replay`'s series `t` at `rtt_ns`, the groups after the first whose pass waited on its coin (it reached the
+    prover after root g − 1 was sent) and the roots that waited for the verifier to send their window's boundary."""
+    d, n, R, A, D = rec.r0 - rtt_ns, rec.n, t["R"], t["A"], t["D"]
+    b = R[1:] + [D[-2] + rec.step[-1]]
+    return {"coin": sum(R[g] + rec.coin[g] - (d if g < 2 else 0) > A[g - 1] - rec.tau for g in range(1, n)),
+            "verifier": sum(a < x for a, x in zip(A, b))}
+
+
 def seen_at(s: dict, released: list[int], arrived: list[int]) -> dict:
     return {**s, "windows_seen": [{**w, "released_ns": released[g], "arrivals_ns": [arrived[g]]}
                                   for g, w in enumerate(s["windows_seen"])]}
 
 
-def row_at(s: dict, reg: dict, rec: Record, rtt_ns: int, host_bytes: int, ingress: tuple[float, ...]) -> dict:
-    t = replay(rec, rtt_ns)
+def row_at(s: dict, reg: dict, rec: Record, rtt_ns: int, host_bytes: int, ingress: tuple[float, ...],
+           passes: list[int] | None = None) -> dict:
+    t = replay(rec, rtt_ns, passes)
     v, a = seen_at(s, t["R"], t["A"]), seen_at(s, t["Ra"], t["Aa"])
     return {"rtt_ms": rtt_ns / 1e6, "series": t, "L_verifier_ms": al.q(al.group_l(v["windows_seen"])),
             "L_auditor_ms": al.q(al.group_l(a["windows_seen"])), "passes_s": (t["A"][-1] - t["R"][0]) / 1e9,
+            "pass_ms": al.q(rec.pure if passes is None else passes), "waits": waits(rec, t, rtt_ns),
             "shares_verifier_clock": al.shares(v, reg, host_bytes, ingress),
             "shares_auditor_clock": al.shares(a, reg, host_bytes, ingress)}
 
@@ -213,10 +244,17 @@ def identity(rec: Record, at_r0: dict, row: dict) -> dict:
     return {"holds": not any(off.values()) and all(shares.values()), "groups_off": off, "shares_equal": shares}
 
 
-def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RTT_MS) -> dict:
+def pass_models(pass_scale: tuple[float, ...], pass_ms: tuple[float, ...]) -> list[dict]:
+    """The pass models a grid takes: {"scale": F} for each of `pass_scale`, then {"ms": MS} for each of `pass_ms`."""
+    return [{"scale": f} for f in pass_scale] + [{"ms": m} for m in pass_ms]
+
+
+def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RTT_MS,
+           pass_scale: tuple[float, ...] = (1.0,), pass_ms: tuple[float, ...] = ()) -> dict:
     """The line of record `doc` (`auditor_line.analyse(out, ...)`'s, `auditor_line.py`'s output) with each of its
-    accepted paced sessions replayed at its own round trip and at each of `rtt_ms`, with `prover` the prover's
-    record."""
+    accepted paced sessions replayed under each pass model (`pass_models`) at its own round trip and at each of
+    `rtt_ms`, with `prover` the prover's record."""
+    grid = [(m, ms) for m in pass_models(pass_scale, pass_ms) for ms in (None, *rtt_ms)]
     host_bytes, ingress = doc["host_bytes"], tuple(doc["ingress"])
     v = json.loads((out / "verifier.json").read_text())
     reg, tau = v["registration"], v["rtt"]["median_ns"] // 2
@@ -244,17 +282,25 @@ def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RT
                    excess_ms=al.q([x - rec.r0 for x in net]), challenger_ms=al.q(rec.P), step_ms=al.q(rec.step),
                    pass_ms=al.q(rec.pure), queued_groups=sum(x > 0 for x in rec.queue()),
                    identity=identity(rec, own, row),
-                   rows=[{k: x for k, x in r.items() if k != "series"} for r in (
-                       row_at(s, reg, rec, round(ms * 1e6), host_bytes, ingress) for ms in rtt_ms)])
+                   rows=[{"pass": m, "own_rtt": ms is None, **{k: x for k, x in r.items() if k != "series"}}
+                         for m, ms, r in ((m, ms, row_at(s, reg, rec, rec.r0 if ms is None else round(ms * 1e6),
+                                                         host_bytes, ingress, passes_of(rec, m.get("scale"),
+                                                                                        m.get("ms"))))
+                                          for m, ms in grid)])
         got["own"] = {k: x for k, x in own.items() if k != "series"}
     doc_line = {}
     for t in sorted({r["T"] for r in rows}):
         ok = [r for r in rows if r["T"] == t and r["credited"] and "rows" in r]
+
+        def worst(i: int, b: float) -> dict:
+            return min(({"k": r["k"], **{f: r["rows"][i]["shares_auditor_clock"][f"{b:.1e}"][f] for f in al.SHARES},
+                         "l_max_ms": r["rows"][i]["shares_auditor_clock"][f"{b:.1e}"]["worst_l_max_ms"],
+                         "waits": r["rows"][i]["waits"]} for r in ok),
+                       key=lambda x: x["time"], default=dict.fromkeys(al.SHARES, 0.0))
+
         doc_line[t] = {"credited_sessions": [r["k"] for r in ok], "rows": [
-            {"rtt_ms": ms, **{f"{b:.1e}": min(({"k": r["k"], **{f: r["rows"][i]["shares_auditor_clock"][f"{b:.1e}"][f]
-                                                               for f in al.SHARES}} for r in ok),
-                                              key=lambda x: x["time"], default=dict.fromkeys(al.SHARES, 0.0))
-                              for b in ingress}} for i, ms in enumerate(rtt_ms)]}
+            {"pass": m, "rtt_ms": "own" if ms is None else ms, **{f"{b:.1e}": worst(i, b) for b in ingress}}
+            for i, (m, ms) in enumerate(grid)]}
     return {"registration": reg["digest"], "peer": doc.get("peer"), "line_of_record": doc["line"],
             "credit": doc["credit"], "cross_check": {r["k"]: r.get("cross_check") for r in doc["sessions"]},
             "sessions": rows, "whatif_line": doc_line,
@@ -273,10 +319,16 @@ def table(doc: dict) -> str:
                    f"{'holds' if r['identity']['holds'] else 'FAILS: ' + json.dumps(r['identity'])} | {own} |")
     out.append("")
     for t, line in doc["whatif_line"].items():
-        out.append(f"what-if line {t} (credited {line['credited_sessions']}), time-held / link-charged weights:")
+        out += ["", f"what-if line {t} (credited {line['credited_sessions']}), time-held / link-charged weights, the "
+                "worst stretch's L_max and the groups that waited on their coin / on the verifier:", "",
+                "| passes | r (ms) | line | L_max (ms) | waits: coin / verifier |", "|---|---|---|---|---|"]
         for x in line["rows"]:
-            out.append(f"- r = {x['rtt_ms']:g} ms: " + " / ".join(
-                f"{v['time']:.4%}" for k, v in x.items() if k != "rtt_ms"))
+            v = [y for k, y in x.items() if k not in ("pass", "rtt_ms")]
+            p = f"{x['pass']['scale']:g}× own" if "scale" in x["pass"] else f"{x['pass']['ms']:g} ms each"
+            r = x["rtt_ms"] if x["rtt_ms"] == "own" else f"{x['rtt_ms']:g}"
+            w = v[0].get("waits") or {}
+            out.append(f"| {p} | {r} | " + " / ".join(f"{y['time']:.4%}" for y in v) +
+                       f" | {v[0].get('l_max_ms', 0):.1f} | {w.get('coin', '-')} / {w.get('verifier', '-')} |")
     return "\n".join(out) + "\n"
 
 
@@ -288,9 +340,13 @@ def main(argv: list[str] | None = None) -> int:
                     "its sessions' credit and the gate sessions' peer")
     ap.add_argument("--prover", type=Path, required=True, help="the prover run's prover.json")
     ap.add_argument("--rtt-ms", type=float, nargs="+", default=list(RTT_MS), metavar="MS")
+    ap.add_argument("--pass-scale", type=float, nargs="+", default=[1.0], metavar="F",
+                    help="replay with each pass's own time times F")
+    ap.add_argument("--pass-ms", type=float, nargs="+", default=[], metavar="MS", help="replay with every pass MS")
     ap.add_argument("--table", type=Path, help="write each session's identity and the what-if line here, as Markdown")
     a = ap.parse_args(argv)
-    doc = whatif(a.out, json.loads(a.prover.read_text()), json.loads(a.line.read_text()), rtt_ms=tuple(a.rtt_ms))
+    doc = whatif(a.out, json.loads(a.prover.read_text()), json.loads(a.line.read_text()), rtt_ms=tuple(a.rtt_ms),
+                 pass_scale=tuple(a.pass_scale), pass_ms=tuple(a.pass_ms))
     print(json.dumps(doc, indent=1, default=str))
     if a.table is not None:
         a.table.write_text(table(doc))
