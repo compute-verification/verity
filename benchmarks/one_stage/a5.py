@@ -133,7 +133,7 @@ def link(src: Path, dst: Path) -> None:
         shutil.copyfile(src, dst)
 
 
-SELECT_COINS = {"step": "select", "codes": ["coins"]}
+SELECT_COINS = ("select", ["coins"])
 CHALLENGER = "a5.py on the auditor's challenger's coins"
 
 
@@ -242,7 +242,9 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
         except (S.Refused, S.Pending, ValueError, AC.Ch.CoinError) as e:
             accepted, side = None, {"refused": refusal(e)}
         py = reason(coins, window)
-        neg[name] = {"refused": py is not None and accepted is False and side == SELECT_COINS, "python": py, "lean": side}
+        at = ((side or {}).get("step"), (side or {}).get("codes"))
+        neg[name] = {"refused": py is not None and accepted is False and at == SELECT_COINS, "accepted": accepted, "python": py,
+                     "lean": side}
     checks = (result or {}).get("checks") or {}
     record = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "coins_reason": why, "outcome": told,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
