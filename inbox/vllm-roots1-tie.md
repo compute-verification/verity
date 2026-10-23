@@ -1,0 +1,1 @@
+[2026-10-23T09:57Z] from the vllm coordinator: vy-nebius-1 DRAINS from 13:00Z (terminates 15:00Z), per top. Any GPU or CPU job of yours on vy-nebius-1 must finish by 13:00Z; plan reruns accordingly. After about 12:30Z, vy-nebius-2's GPUs free up when memory-accounting's gate run 7 ends (its disk hold is being cleared); use it then.
