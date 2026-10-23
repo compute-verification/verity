@@ -26,7 +26,8 @@ must agree. `flock-tmpl checks-at TMPL [--mode MODE]`: the layout's checks (`Tmp
 `Tmpl.identOk`, `Tmpl.outsAt`) and all of `Tmpl.unrollOk`, `Tmpl.unrollAt`'s success, at `layoutM`'s layouts (default
 `iv/hybrid/4`), timed one at a time.
 `flock-tmpl stmt CIRCUIT`: a templated statement's circuit read as `HmOut.parseTmpl` reads it, a stage at a time (META's split, its
-template lines, `Tmpl.parse`, `layoutM`, `unrollOk`, `TmplUnit.read`, `HmRow.parse`, `checkRows`), then what decides
+template lines, `Tmpl.parse`, `layoutM`, `unrollOk`, `TmplUnit.read`, `HmRow.parse`, and `HmRow.parse`'s own reads of the
+file timed apart: its SHA-512, UTF-8 check, line split and META parse; then `checkRows`), then what decides
 which of the scope check's walks run (`ProvedScope.wiresFeed`), the unit's rows built (`Tmpl.unitNet`'s, which the
 verifier never reads), and the walks (`portReadsB`, `outReads`, `wiresAcyclic`) on the unit timed.
 `flock_tmpl.sh` builds it against the checkout's verifier and runs it; it is a measurement and a difftest, not a verifier.
@@ -334,6 +335,17 @@ def main (args : List String) : IO UInt32 := do
     let t0 ← IO.monoNanosNow
     let .ok c := HmRow.parse tags bytes [] (pre := #[("unit", tu.net)]) | report "hmrow_parse" t0 [("error", Json.str "refused")]; return 1
     report "hmrow_parse" t0
+    let t0 ← IO.monoNanosNow
+    report "hmrow_sha" t0 [("digest", toJson (Sha512.hash bytes).size)]
+    let t0 ← IO.monoNanosNow
+    let some text := String.fromUTF8? bytes | report "hmrow_utf8" t0 [("error", Json.str "refused")]; return 1
+    report "hmrow_utf8" t0 [("bytes", toJson text.utf8ByteSize)]
+    let t0 ← IO.monoNanosNow
+    let lines := (text.splitOn "\n").toArray
+    report "hmrow_lines" t0 [("lines", toJson lines.size)]
+    let t0 ← IO.monoNanosNow
+    let mj := Json.parse ((lines.getD 1 "").trimAsciiEnd.toString.drop 5).toString
+    report "hmrow_meta" t0 [("ok", toJson (mj matches .ok _))]
     let t0 ← IO.monoNanosNow
     let .ok () := HmOut.checkRows c | report "check_rows" t0 [("error", Json.str "refused")]; return 1
     report "check_rows" t0
