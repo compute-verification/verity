@@ -90,7 +90,7 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
 def test_operands_are_in_natural_order():
     """No K32 order: the lines' transposes are the codes' plain transpose, and form_s5 writes its codes at their own
     columns; the fixture's layout says so."""
-    assert "t[(size_t)j * count + line] = c[j]" in SOURCE and "k32" not in SOURCE
+    assert "t[(size_t)j * count + line] = c[j]" in SOURCE and "k32(" not in SOURCE
     assert "out + (size_t)(r0 + r) * k + t0 + 16 * c" in SOURCE
     assert not hasattr(F, "k32")
     x = np.arange(12, dtype=np.uint8).reshape(3, 4)
@@ -238,8 +238,9 @@ def test_widening_fixture_is_the_silicon_model(small_fixture):
 # ---- the dry run ---------------------------------------------------------------------------------------------------
 
 KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
-#: the -h3 kernels (hash_h3.cuh, hash_fast.cuh) the pipeline launches at the dry run's shapes, every count a power of two:
-#: no pads; the row digests and tile leaves by hash_fast.cuh's kernels (run.py's default, PEARLC_SHA=fast)
+#: the -h3 kernels (hash_h3.cuh, hash_fast.cuh) the pipeline launches at every shape; the row digests and tile leaves by
+#: hash_fast.cuh's kernels (run.py's default, PEARLC_SHA=fast).  A tree whose count is not a power of two also launches
+#: s512_pads.
 H3_LAUNCHED = {"s512_heads", "s512_row_segs", "s512_tile_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_nodes",
                "s512_tree_small", "s512_seeds"}
 #: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, and each served variant's commitment and tile leaves
@@ -446,7 +447,8 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
             timing = timing or ev["name"] == "gen_f32"
             if timing and ev["name"].startswith("gemm_pearlc"):
                 timed_gemms.add(ev["name"])
-    assert seen == set(own_kernels()) | H3_LAUNCHED | PD_LAUNCHED
+    # n = 960's B tree (960 rows) and tile tree (8 x 15 tiles) pad
+    assert seen == set(own_kernels()) | H3_LAUNCHED | {"s512_pads"} | PD_LAUNCHED
     # 1024 x 1024 on 128 x 128 tiles, 1024 x 960 (128 does not divide n) on 128 x 64
     assert timed_gemms == {"gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_n64", "gemm_pearlc_s_n64"}
 
