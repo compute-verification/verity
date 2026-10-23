@@ -80,6 +80,8 @@ import Proofs.Flock.Soundness.TmplFoldRef
 import Proofs.Flock.Soundness.TmplFoldPos
 import Proofs.Flock.Soundness.TmplFoldLayout
 import Proofs.Flock.Soundness.TmplSplitEq
+import Proofs.Flock.Soundness.TmplUnrollAt
+import Proofs.Flock.Soundness.TmplScope
 import Proofs.Flock.Soundness.ExecCircuit
 import Proofs.Flock.Soundness.ExecCheck
 import Proofs.Flock.Soundness.ExecLookup

@@ -140,41 +140,31 @@ theorem rows_shape {t : Tmpl} {acc : Acc} (hr : t.rows = .ok acc) :
   refine ⟨?_, ?_, hself.2.1, hself.2.2⟩ <;>
   simp only [Array.set!_eq_setIfInBounds, Array.size_setIfInBounds, hs.1, hs.2, hz, Acc.empty, Array.size_replicate]
 
-/-- **A template that passes the description checks unrolls**: `Tmpl.unroll`, the flat net with every check
-`Net.ofRows` runs, succeeds. -/
-theorem unroll_ok {t : Tmpl} (hwf : t.wellFormed = true) (ha : t.apart = true) (ho : t.ordered = true)
-    (hi : t.inputsT = true) (hg : t.groupsOk = true) : ∃ n, unroll t = .ok n := by
-  obtain ⟨acc, hr⟩ := rows_ok hwf ha
-  have hin := rows_inputRows hi hr
-  have hord := rows_order ho hi hr
-  have hok := rows_inputsOk hi hr
-  obtain ⟨hsize, hsizeb, hka, hkb⟩ := rows_shape hr
+theorem wf_cols {t : Tmpl} (hwf : t.wellFormed = true) : t.constPos + 1 = (t.defs.getD t.root default).cols := by
   have hcols : 0 < (t.defs.getD t.root default).cols := by
     unfold Tmpl.wellFormed at hwf
     simp only [Bool.and_eq_true, decide_eq_true_eq] at hwf
     exact hwf.1.2
-  have hk : t.constPos + 1 = (t.defs.getD t.root default).cols := by unfold Tmpl.constPos; omega
+  unfold Tmpl.constPos; omega
+
+theorem groupsOk_inCols {t : Tmpl} (hg : t.groupsOk = true) : t.inCols ≤ t.constPos := by
   unfold Tmpl.groupsOk at hg
-  simp only [Bool.and_eq_true, Bool.not_eq_true', decide_eq_true_eq, Bool.or_eq_false_iff] at hg
-  obtain ⟨⟨⟨⟨hal, hne⟩, hin1, hout1⟩, hic⟩, hd11⟩ := hg
-  -- every column a row reads is at most the constant's
-  have hwidth : ∀ (rows : Array (Array Nat)), rows.size = (t.defs.getD t.root default).cols →
-      (∀ i < rows.size, ∀ c ∈ rows.getD i #[], c ≤ t.constPos) →
-      ∀ r ∈ rows, ∀ c ∈ r, c < 2 ^ max 7 (log2ceil (t.defs.getD t.root default).cols) := by
-    intro rows hs hrows r hr c hc
-    obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hr
-    have := hrows i hi c (by rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi]; exact hc)
-    have h1 := log2ceil_le (t.defs.getD t.root default).cols
-    have h2 : 2 ^ log2ceil (t.defs.getD t.root default).cols ≤ 2 ^ max 7 (log2ceil (t.defs.getD t.root default).cols) :=
-      Nat.pow_le_pow_right (by omega) (Nat.le_max_right _ _)
-    omega
-  have hreads : ∀ i < (t.defs.getD t.root default).cols,
-      (∀ c ∈ acc.ra.getD i #[], c ≤ t.constPos) ∧ ∀ c ∈ acc.rb.getD i #[], c ≤ t.constPos := by
-    intro i hi
-    by_cases h1 : i < t.inCols
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at hg
+  unfold Tmpl.inCols; exact hg.1.2
+
+/-- **Every column an unrolled row reads is at most the constant's.** -/
+theorem rows_reads {t : Tmpl} {acc : Acc} (hwf : t.wellFormed = true) (ho : t.ordered = true) (hi : t.inputsT = true)
+    (hg : t.groupsOk = true) (hr : t.rows = .ok acc) (i : Nat) :
+    (∀ c ∈ acc.ra.getD i #[], c ≤ t.constPos) ∧ ∀ c ∈ acc.rb.getD i #[], c ≤ t.constPos := by
+  have hin := rows_inputRows hi hr
+  have hord := rows_order ho hi hr
+  obtain ⟨hsize, hsizeb, hka, hkb⟩ := rows_shape hr
+  have hk := wf_cols hwf
+  have hic := groupsOk_inCols hg
+  by_cases h0 : i < (t.defs.getD t.root default).cols
+  · by_cases h1 : i < t.inCols
     · rcases hin i h1 with ⟨ea, eb⟩ | ⟨ea, eb⟩
       · rw [ea, eb]
-        have : t.inCols ≤ t.constPos := by unfold Tmpl.inCols; exact hic
         exact ⟨fun c e => by simp at e; omega, fun c e => by simp at e; omega⟩
       · rw [ea, eb]; exact ⟨fun c e => by simp at e, fun c e => by simp at e⟩
     · by_cases h2 : i < t.constPos
@@ -185,8 +175,36 @@ theorem unroll_ok {t : Tmpl} (hwf : t.wellFormed = true) (ha : t.apart = true) (
         subst e
         rw [hka, hkb]
         exact ⟨fun c e => by simp at e; omega, fun c e => by simp at e; omega⟩
-  obtain ⟨sa, hsa⟩ := sparse_ofRows_ok (hwidth acc.ra hsize fun i h => (hreads i (hsize ▸ h)).1)
-  obtain ⟨sb, hsb⟩ := sparse_ofRows_ok (hwidth acc.rb hsizeb fun i h => (hreads i (hsizeb ▸ h)).2)
+  · have ea : acc.ra.getD i #[] = #[] := by
+      rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega)]; rfl
+    have eb : acc.rb.getD i #[] = #[] := by
+      rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega)]; rfl
+    rw [ea, eb]; exact ⟨fun c e => by simp at e, fun c e => by simp at e⟩
+
+/-- **The unrolled rows pass every check `Net.ofRows` runs.** -/
+theorem ofRows_of_rows {t : Tmpl} {acc : Acc} (hwf : t.wellFormed = true) (ho : t.ordered = true)
+    (hi : t.inputsT = true) (hg : t.groupsOk = true) (hr : t.rows = .ok acc) :
+    ∃ n, Net.ofRows t.name (t.defs.getD t.root default).cols t.constPos t.inGroups t.outGroups acc.ra acc.rb = .ok n := by
+  have hin := rows_inputRows hi hr
+  have hord := rows_order ho hi hr
+  have hok := rows_inputsOk hi hr
+  obtain ⟨hsize, hsizeb, hka, hkb⟩ := rows_shape hr
+  have hk := wf_cols hwf
+  have hreads := rows_reads hwf ho hi hg hr
+  unfold Tmpl.groupsOk at hg
+  simp only [Bool.and_eq_true, Bool.not_eq_true', decide_eq_true_eq, Bool.or_eq_false_iff] at hg
+  obtain ⟨⟨⟨⟨hal, hne⟩, hin1, hout1⟩, hic⟩, hd11⟩ := hg
+  have hwidth : ∀ (rows : Array (Array Nat)), (∀ i, ∀ c ∈ rows.getD i #[], c ≤ t.constPos) →
+      ∀ r ∈ rows, ∀ c ∈ r, c < 2 ^ max 7 (log2ceil (t.defs.getD t.root default).cols) := by
+    intro rows hrows r hr c hc
+    obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hr
+    have := hrows i c (by rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi]; exact hc)
+    have h1 := log2ceil_le (t.defs.getD t.root default).cols
+    have h2 : 2 ^ log2ceil (t.defs.getD t.root default).cols ≤ 2 ^ max 7 (log2ceil (t.defs.getD t.root default).cols) :=
+      Nat.pow_le_pow_right (by omega) (Nat.le_max_right _ _)
+    omega
+  obtain ⟨sa, hsa⟩ := sparse_ofRows_ok (hwidth acc.ra fun i => (hreads i).1)
+  obtain ⟨sb, hsb⟩ := sparse_ofRows_ok (hwidth acc.rb fun i => (hreads i).2)
   have hrows : (List.range (((t.inGroups.back?.map fun g => g.col + g.words).getD 0) * WORD)).find? (fun i => !((acc.ra.getD i #[] == #[i] && acc.rb.getD i #[] == #[i]) ||
       ((acc.ra.getD i #[]).isEmpty && (acc.rb.getD i #[]).isEmpty))) = none := by
     rw [List.find?_eq_none]
@@ -200,9 +218,17 @@ theorem unroll_ok {t : Tmpl} (hwf : t.wellFormed = true) (ha : t.apart = true) (
   have hco := checkOrder_ok (name := "flock-ir-unit/v2") hord
   have hkb' : (t.constPos + 1 != (t.defs.getD t.root default).cols) = false := by simp [hk]
   unfold Tmpl.inCols at hco
-  unfold unroll Net.ofRows
-  simp only [hr, bind, Except.bind, pure, Except.pure, hal, hne, hkb', hin1, hout1, hrows, hka, hkb, hco, hok, hsa, hsb,
+  unfold Net.ofRows
+  simp only [bind, Except.bind, pure, Except.pure, hal, hne, hkb', hin1, hout1, hrows, hka, hkb, hco, hok, hsa, hsb,
     hout, Bool.false_eq_true, ↓reduceIte, bne_self_eq_false, Bool.or_self, Nat.not_lt.2 hic, Bool.not_true]
   exact ⟨_, rfl⟩
+
+/-- **A template that passes the description checks unrolls**: `Tmpl.unroll`, the flat net with every check
+`Net.ofRows` runs, succeeds. -/
+theorem unroll_ok {t : Tmpl} (hwf : t.wellFormed = true) (ha : t.apart = true) (ho : t.ordered = true)
+    (hi : t.inputsT = true) (hg : t.groupsOk = true) : ∃ n, unroll t = .ok n := by
+  obtain ⟨acc, hr⟩ := rows_ok hwf ha
+  obtain ⟨n, hn⟩ := ofRows_of_rows hwf ho hi hg hr
+  exact ⟨n, by simp only [unroll, hr, bind, Except.bind]; exact hn⟩
 
 end Flock.TmplUnroll
