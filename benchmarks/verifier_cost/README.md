@@ -64,5 +64,19 @@ seconds, peak RSS and the population (null where the verifier refuses the query)
 an `evidence/v1` record naming the run and its commit; it runs where the store's keys are (a VM), since a node's shell
 has none.
 
-Nothing here is a served Program: `on_bits`'s output is this benchmark's construction, and nothing outside this directory
-reads it.
+`nci_glm.sh ART` runs `nci-check --policy` on a served Build's workload Programs, one per tensor-parallel rank (GLM-5.3 B1
+TP8's is `art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35`), each with θ its own `annotations.theta`
+and one IU per request call: once as built, and once with θ's input nodes calling `RegisteredInput<w>_v1`, nothing else
+changed (`NciCheck` takes θ only from inputs bound at registration). Γ and α are the node's, from the Build's counts: α is
+`--token-bits` (32, a token id's width) per token position over the computed gates of every rank's request calls, so the
+whole node reading its prompt alone is at the limit, and Γ = ⌊K / α⌋ with K = 2·10⁷ bits (`benchmarks/nci/calibrations.json`).
+`results.json` (`verity/nci-glm/v1`) has per rank both verdicts, the non-θ inputs by group (the prompt, the peers'
+collective values) and the node's figure with the peers computed inside it (`joined`, derived and not checked).
+
+~~~sh
+research run --on auto --store-read --cwd clone --cpus 4 --mem-gb 64 --max-min 180 -- \
+  bash benchmarks/verifier_cost/nci_glm.sh art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35
+~~~
+
+Apart from `nci_glm`, nothing here is a served Program: `on_bits`'s output is this benchmark's construction, and nothing
+outside this directory reads it.
