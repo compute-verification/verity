@@ -33,7 +33,8 @@ computes (`verity.ml.circuits.boolean.trace.word_of`, held equal to it by circui
 own word.  A Program row holds instances of a template when the template's word is the row's own Definition (its spec), or when the
 row's Definition is cut into them (``CUT``: its body batches the template's word, read off the bound Definition, so a template that
 does not compute what the row computes is no match), or when the template's word is the row's Definition at N = 1 (``COORDS``: the
-row is split into its N coordinates), or at a halving of its width (``COLS``: the row is split into column blocks).  A Boolean
+row is split into its N coordinates), or at a halving of its width (``COLS``: the row is split into column blocks), or when it
+is a part of the row's Definition (``PARTS``: the row is split into Definitions of its own, one member per part).  A Boolean
 Program's rows are its word view (`pipeline.build_instances`: each
 row the word Definition its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the
 same rows under either IR, and the members, their rows and every committed word are the same; the population program is over the
@@ -62,6 +63,10 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
   ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``  every block j of w columns of the rows of that Definition W wide, W / w
                                    a power of two (``COLS``): ``in<g>`` per argument group, each of its rows' columns [jw, jw + w)
                                    in order -> ``out.<member>``, the row's output columns [jw, jw + w); one index entry per row
+  ``AllReduceResidualMnnvl_v1{N=w,..}``, ``RmsNormMnnvl_v1{..}``  the parts of every ``AllReduceRmsNormMnnvl_v1`` row (``PARTS``):
+                                   its all-reduce and residual add in column blocks as ``COLS`` (``in0`` the partials, ``in1``
+                                   the residual -> ``out.<member>``, the row's r), its norm whole (``in0`` the row's committed r,
+                                   ``in1`` the weight -> ``out.<member>``, the row's normed output); one index entry per row
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
                                    committed member (``vu_export._decompose_row``'s port rule)
 
@@ -91,8 +96,8 @@ from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline.chunk_rows import s8_words
-from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, Template, _bind, template,  # noqa: F401
-                                                    unit_templates)
+from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, Template, _bind,  # noqa: F401
+                                                    part, template, unit_templates)
 
 #: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
 CHUNKED = ("s8", "coord")
@@ -162,11 +167,13 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
                 continue
             if steps is not None and not int(steps[0]) <= int(d["step"]) < int(steps[1]):
                 continue
-            if len(hits) > 1:
-                raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _ in hits]}: one member reads a row")
-            (k, n), = hits
-            out[k].append((str(rid), pi, r, d))
-            counts[k] += n
+            ps = [part(ts[k].word, r["spec"]) for k, _ in hits]
+            if len(hits) > 1 and (None in ps or len({p[0] for p in ps}) < len(ps)):
+                raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _ in hits]}: one member reads a row, "
+                                 f"or one member per part of it (PARTS)")
+            for k, n in hits:
+                out[k].append((str(rid), pi, r, d))
+                counts[k] += n
     for t, rows, d in zip(tmpls, out, seen, strict=True):
         if not rows:
             raise LookupError(f"no rows of {t} in the run's Programs" + (f" under {scope}" if scope else "")
@@ -217,15 +224,19 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             rx, rw = sum(g["tokens"] for g in groups), sum(g["columns"] for g in groups)
             m = CS.Member(t, (("x", K), ("w", K)), (("y", 1),), sum(g["tokens"] * g["columns"] for g in groups), base,
                           tables=(("x", rx), ("w", rw)))
-        elif layout in ("coord", "cols"):
+        elif layout in ("coord", "cols", "part"):
             params, ret = template(t).fn.signature()
             if layout == "coord":
                 n = sum(int(x[3]["statics"]["N"]) for x in rs)
-            else:
+            elif layout == "cols":
                 axis = COLS[spec_base(template(t).word)]
                 n = sum(int(x[3]["statics"][axis]) // int(spec_statics(template(t).word)[axis]) for x in rs)
+            else:
+                n = len(rs)
+            p = part(template(t).word, r["spec"])
             m = CS.Member(t, tuple((f"in{g}", sum(ty.leaf_widths()) // 16) for g, (_n, ty) in enumerate(params)),
-                          ((f"out.{d['members'][0][0]}", sum(ret.leaf_widths()) // 16),), n, base)
+                          tuple((f"out.{d['members'][j][0]}", sum(ty.leaf_widths()) // 16)
+                                for j, ty in zip(p[2] if p else (0,), getattr(ret, "fields", None) or (ret,), strict=True)), n, base)
         else:
             ins = [sum(int(sl[3]) - int(sl[2]) for sl in grp) for grp in r["args"]]
             outs = [int(mm[1]) for mm in d["members"]]
@@ -334,7 +345,8 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     under different member names (GLM-5.3's routed experts' ``act``, its shared experts' ``out``), and the ports are named
     from its first row (`members`); each index entry keeps the row's own member names.  A row whose input or output widths
     are not the member's is refused (a packed template's in u16 words).  A ``cols`` member's row is ``W / w`` units, each
-    operand and output its rows' columns [jw, jw + w) in order, under one index entry."""
+    operand and output its rows' columns [jw, jw + w) in order, under one index entry.  A part of the row (``PARTS``) reads the
+    row's argument groups and committed outputs it names, in its order, and returns, and names in its entry, its outputs."""
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     tp = template(m.template)
@@ -361,6 +373,9 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
                 raise LookupError(f"row {r['i']} output {member}: {why}")
             outs.append(_packed([w], tp.packed[len(r["args"]) + j], f"row {r['i']} output {member}") if tp.packed
                         else np.asarray(w, dtype=np.uint16))
+        mine = list(range(len(outs)))
+        if (p := part(tp.word, r["spec"])) is not None:
+            ops, outs, mine = [(ops if src == "arg" else outs)[g] for src, g in p[1]], [outs[j] for j in p[2]], list(p[2])
         if layout == "rope":
             nh = int(d["statics"]["NHEADS"])
             cols["x"].append(np.asarray(ops[0], dtype=np.uint16).reshape(nh, D))
@@ -381,7 +396,7 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
                 cols[port].append(np.ascontiguousarray(a.transpose(1, 0, 2)).reshape(nh, -1))
         else:
             nh = 1
-            got = ([len(a) for a in ops], [len(a) for a in outs] if tp.packed else [int(mm[1]) for mm in d["members"]])
+            got = ([len(a) for a in ops], [len(a) for a in outs] if tp.packed else [int(d["members"][j][1]) for j in mine])
             if got != ([w for _, w in m.rows], [w for _, w in m.outs]):
                 raise ValueError(f"row {r['i']} ({d['op_path']}): inputs {got[0]} and outputs {got[1]} words, not member {m.key}'s "
                                  f"{list(m.rows)} and {list(m.outs)}")
@@ -391,7 +406,7 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
                 cols[port].append(a.reshape(1, -1))
         layer = _LAYER.search(d["op_path"])
         entries.append([lo, lo + nh, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"],
-                        ",".join(str(mm[0]) for mm in d["members"]), int(d["row"]), int(r["i"])])
+                        ",".join(str(d["members"][j][0]) for j in mine), int(d["row"]), int(r["i"])])
         lo += nh
     data = {"rows": {p: np.concatenate(cols[p]) for p, _ in m.rows}, "outs": {p: np.concatenate(cols[p]) for p, _ in m.outs}}
     return data, entries
