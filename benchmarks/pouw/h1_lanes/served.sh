@@ -21,6 +21,7 @@
 #      with H1S_SKIP=tampered-zy,other-call-a); H1S_EXTRACT_ONLY=FILE: keep the extract's openings there (0600) and stop
 #      or H1S_OPENED_AT=FILE: a node path (a private directory) the openings are copied to while prepare lowers the lane
 #      circuit, waited for up to H1S_WAIT seconds (14400), then moved into the scratch
+#      H1L_SESSION_GB, H1L_STAGGER (60): admit a firewalled session only with that much free in the cgroup
 #      H1L_K (4096)  H1L_PAR (8: sessions at a time)  H1L_LPAR (8: Lean checks at a time)  H1L_JOBS (8: prepare's stagers)
 #      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_UNFIREWALLED ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy")
 #      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/core/service/flock`: the firewall frame built from REV's
@@ -111,15 +112,30 @@ fi
 N=1
 export RAYON_NUM_THREADS=$(( TH / PAR > 0 ? TH / PAR : 1 ))
 UNFW=" ${H1S_UNFIREWALLED:-tampered-zy other-call-a} "
+# H1L_SESSION_GB: a firewalled session starts only while the run's cgroup has that much free, H1L_STAGGER seconds after
+# the last, so H1L_PAR is a cap and memory decides (a session's footprint grows after it starts)
+CG=/sys/fs/cgroup$(awk -F: '$1 == "0" {print $3}' /proc/self/cgroup)
+free_gb() {
+  local m c
+  m=$(cat "$CG/memory.max" 2>/dev/null) c=$(cat "$CG/memory.current" 2>/dev/null || echo 0)
+  case $m in ''|max) m=$(( MEM_GB << 30 )) ;; esac
+  [ "$m" -gt $(( MEM_GB << 30 )) ] && m=$(( MEM_GB << 30 ))
+  echo $(( (m - c) >> 30 ))
+}
 while IFS=$'\t' read -r kind tag D; do
   [ "$kind" = S ] || continue
   mkdir -p "$OUT/$tag"
   while [ "$(jobs -rp | wc -l)" -ge "$PAR" ]; do wait -n; done
   if [[ $UNFW == *" $tag "* ]]; then fw=0; else fw=$FW; fi
+  if [ "$fw" = 1 ] && [ -n "${H1L_SESSION_GB:-}" ]; then
+    while [ "$(jobs -rp | wc -l)" -gt 0 ] && [ "$(free_gb)" -lt "$H1L_SESSION_GB" ]; do sleep 15; done
+    log "$tag: $(free_gb) GB free in the run's cgroup, $(jobs -rp | wc -l) sessions running"
+  fi
   log "prove $tag (firewall $fw)"
   ( [ "$fw" = 1 ] || unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
     session "$D" "$OUT/$tag" && log "proved $tag: $(cat "$OUT/$tag/prove.time")" \
       || log "prove $tag FAILED: $(tail -2 "$OUT/$tag/prove.err")" ) &
+  [ "$fw" = 1 ] && [ -n "${H1L_SESSION_GB:-}" ] && sleep "${H1L_STAGGER:-60}"
 done < <(awk -F'\t' -v u="$UNFW" '$1 == "S" && index(u, " " $2 " ")' "$WK/plan.tsv"
          awk -F'\t' -v u="$UNFW" '$1 == "S" && !index(u, " " $2 " ")' "$WK/plan.tsv")
 wait
