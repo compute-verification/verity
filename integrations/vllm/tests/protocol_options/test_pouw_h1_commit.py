@@ -246,3 +246,22 @@ def test_the_source_takes_every_linears_site_at_every_engine_step():
     with pytest.raises(ValueError, match="not named modules"):
         HC.source(Committer(), model, [Linear(32, 3, Arm())])
     assert CT.Sites(["q"]).get((5, "q")) == "q/row_quant"
+
+
+def test_the_gpu_harness_holds_each_window_to_cores_roots1_steps(tmp_path, monkeypatch):
+    """`pouw_h1_gpu.core_verdict`, the GPU run's check of each Commit window under in-process coins: the honest window's
+    record is one manifest under calls_root, its tables committed by their rounds (`credit._a_link`) and each the
+    Commit's value (`credit._arow`); the all-zero and one-row-off windows, each with an honest Commit, pass the first two
+    and are refused at ``arow``. ``--core-from`` reaches the same verdicts from the saved evidence."""
+    from tests.protocol_options import pouw_h1_gpu as G
+    got = {}
+    for name, edit in (("commit", None), ("commit-a-zero", _zero), ("commit-a-row-off", _one_row)):
+        (tmp_path / name).mkdir()
+        record, run, _tap = _window(tmp_path / name, monkeypatch, edit)
+        got[name] = {"core": G.core_tie(record, run.served.program, tmp_path / "ev" / name),
+                     "roots1": run.details["roots1"]}
+    assert got["commit"]["core"]["tied"] and got["commit"]["core"]["commit_values"] == 6
+    for name in ("commit-a-zero", "commit-a-row-off"):
+        v = G.negative_verdict(got[name])
+        assert v["refused"] and v["arow"][1].startswith("call 0's A table h1/a/64@0 is not the Commit's "), v
+    assert G.core_from(str(tmp_path / "ev"), str(tmp_path / "out"))["ok"]
