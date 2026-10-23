@@ -23,7 +23,8 @@ templates, or for one when the file names ``Q_template_instances``) is the one t
 ``Q_word``, never: with the stratified law it is refused by name, its strata being templates).  ``partition.json`` beside the window
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
 (``model.layers.0.``, or a MoE layer's ``moe/L40``), ``scope.steps`` (``[lo, hi)``) to those steps of each request.  A chunked
-template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate or a ``COLS`` column block) are split
+template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block or a ``SLICES``
+slice) are split
 into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
 it; ``chunk_caps`` writes the entry), each chunk a member on C-Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
 ``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
@@ -34,7 +35,8 @@ own word.  A Program row holds instances of a template when the template's word 
 row's Definition is cut into them (``CUT``: its body batches the template's word, read off the bound Definition, so a template that
 does not compute what the row computes is no match), or when the template's word is the row's Definition at N = 1 (``COORDS``: the
 row is split into its N coordinates), or at a halving of its width (``COLS``: the row is split into column blocks), or when it
-is a part of the row's Definition (``PARTS``: the row is split into Definitions of its own, one member per part).  A Boolean
+is a part of the row's Definition (``PARTS``: the row is split into Definitions of its own, one member per part), or when it
+is the row's Definition at every axis of a batch 1 (``SLICES``: the row is split into its slices along those axes).  A Boolean
 Program's rows are its word view (`pipeline.build_instances`: each
 row the word Definition its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the
 same rows under either IR, and the members, their rows and every committed word are the same; the population program is over the
@@ -68,6 +70,11 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    its all-reduce and residual add in column blocks as ``COLS`` (``in0`` the partials, ``in1``
                                    the residual -> ``out.<member>``, the row's r), its norm whole (``in0`` the row's committed r,
                                    ``in1`` the weight -> ``out.<member>``, the row's normed output); one index entry per row
+  ``Gemm_v2{N=1,..}``, ``BatchedGemm_v1{B=1,N=1,..}``, ..  every slice of the rows of that Definition at any extents along its
+                                   axes (``SLICES``): ``in<g>`` per argument group, its element along each axis it carries and
+                                   whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
+                                   row's output element; packed ports, one index entry per row; chunked (``chunk_cap``), v2
+                                   bit rows (`chunk_rows.unit_rows`) -> ``o0``
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
                                    committed member (``vu_export._decompose_row``'s port rule)
 
@@ -96,13 +103,14 @@ from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.chunk_rows import s8_words
+from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, SLICES, Template,  # noqa: F401
+                                                    _bind, part, template, unit_templates)
 from verity_vllm.program.compact import runs_from_file_items
-from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, Template, _bind,  # noqa: F401
-                                                    part, template, unit_templates)
 
 #: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
-CHUNKED = ("s8", "coord", "cols")
+CHUNKED = ("s8", "coord", "cols", "slice")
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
 TEMPLATE_QUERIES = (PO.Q_TEMPLATE_INSTANCE[0], PO.Q_TEMPLATE_INSTANCES[0])
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
@@ -205,6 +213,8 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
         if layout == "cols":
             axis = COLS[spec_base(template(t).word)]
             n = sum(int(x[3]["statics"][axis]) // int(spec_statics(template(t).word)[axis]) for x in rs)
+        elif layout == "slice":
+            n = sum(SL.extent(template(t), x[3]["statics"]) for x in rs)
         elif layout in CHUNKED:
             n = sum(int(x[3]["statics"]["N"]) for x in rs)
         if layout in CHUNKED and (layout == "s8" or caps is not None):
@@ -231,7 +241,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             rx, rw = sum(g["tokens"] for g in groups), sum(g["columns"] for g in groups)
             m = CS.Member(t, (("x", K), ("w", K)), (("y", 1),), sum(g["tokens"] * g["columns"] for g in groups), base,
                           tables=(("x", rx), ("w", rw)))
-        elif layout in ("coord", "cols", "part"):
+        elif layout in ("coord", "cols", "part", "slice"):
             params, ret = template(t).fn.signature()
             if layout == "part":
                 n = len(rs)
@@ -357,6 +367,8 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
         return _read_gemm(m, rows, store, weights, arrivals)
     if layout == "coord":
         return _read_coord(m, rows, store, weights, arrivals)
+    if layout == "slice":
+        return SL.read(m, rows, store, weights, arrivals, _slices)
     cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
     D = dict(m.rows).get("x", 0)
     entries: list[list[Any]] = []
