@@ -21,10 +21,10 @@ def node (v : Nat) : List UInt8 := List.replicate 128 (UInt8.ofNat v)
 def coin : F128 := ⟨0, 0⟩
 
 /-- The rounds of a session on `inner`'s schedule over the table `circuit`: tops of `node 1`, `c_k` `node 2`. -/
-def rounds : List Round :=
+def rounds : List RecRecord.Round :=
   ((scheduleOf inner "circuit").getD #[]).toList.flatMap fun (s, _, _, rs) => rs.toList.mapIdx fun k w =>
     ({ stream := bs s, k, tops := w.2.1.toList.map (List.replicate · (node 1)), level0 := w.2.2.1,
-      commits := if w.2.2.2 then [node 2] else [], n := w.1, coins := List.replicate w.1 coin } : Round)
+       commits := if w.2.2.2 then [node 2] else [], n := w.1, coins := List.replicate w.1 coin } : RecRecord.Round)
 
 def hello : Hello :=
   { digests := bs "d", flavor := bs "f", m := 2, points := 1, profile := bs "p", reps := 2, rounds := bs "r",
@@ -59,7 +59,7 @@ def why (t : String) : String := match checkReads inner t tr record cs with
 def at_ : String := "rec inner transcript: the coin server's record read in its own format holds "
 
 /-- `r`'s rounds with the `j`-th round of stream `s` holding something under `f`. -/
-def change (r : Record) (s : String) (j : Nat) (f : Round → Round) : Record :=
+def change (r : Record) (s : String) (j : Nat) (f : RecRecord.Round → RecRecord.Round) : Record :=
   let i := ((r.rounds.zipIdx.filter (·.1.stream == bs s)).map (·.2)).getD j 0
   { r with rounds := r.rounds.mapIdx fun j' x => if j' = i then f x else x }
 
