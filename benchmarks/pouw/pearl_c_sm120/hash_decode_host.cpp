@@ -95,6 +95,14 @@ static uint8_t pd_e4m3(float f) {   // __nv_cvt_float_to_fp8(f, __NV_SATFINITE, 
 }
 
 #include "hash_decode.cuh"
+// another file's kernels beside these (pearl_c_sm90/hash_prefill_host.cpp): PD_HOST_EXTRA the file, PD_HOST_EXTRA_INSTANCES
+// their definitions, PD_HOST_EXTRA_KERNELS their KERNELS entries
+#ifdef PD_HOST_EXTRA
+#include PD_HOST_EXTRA
+PD_HOST_EXTRA_INSTANCES
+#else
+#define PD_HOST_EXTRA_KERNELS
+#endif
 
 namespace {
 struct Kernel { const char* name; void (*fn)(const Args); };
@@ -105,7 +113,7 @@ const Kernel KERNELS[] = {
     {"s512_folds", s512_folds},   {"hm_leaves", hm_leaves},   {"s512_frame_leaves", s512_frame_leaves},
     {"s512_pads", s512_pads},     {"s512_nodes", s512_nodes}, {"s512_tree_small", s512_tree_small},
     {"s512_seeds", s512_seeds},   {"s512_tile_segs", s512_tile_segs}, {"s512_tile_leaves", s512_tile_leaves},
-    {"s512_rows", s512_rows},     PD_VARIANT_LIST(PD_KERNELS)};
+    {"s512_rows", s512_rows},     PD_VARIANT_LIST(PD_KERNELS) PD_HOST_EXTRA_KERNELS};
 }  // namespace
 
 extern "C" int pd_run(const char* name, int grid, int block, const Args* a) {
