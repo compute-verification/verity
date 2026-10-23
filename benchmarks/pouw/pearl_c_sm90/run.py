@@ -11,9 +11,9 @@ libcuda.so.1, stdlib only, nothing built on the card).
    (`<buffer>@<step>/<tile>/grid<n>`), at each of the three tiles (bm128: 128 x 128, n64: 128 x 64, bm64: 64 x 64).
    hash_decode.cuh's served launches write every output they own over a poison (0xA5) and must match; the no-write control
    must not.  So do A's commit launches past them under each chain (`check_chains`: "pl", hash_prefill.cuh's, and "h3"),
-   and over CHAIN_WIDE_ROWS rows (two-byte ranks and indices) "pl" must write "h3"'s bytes.  A variant is timed only if all
-   of its buffers match (C~ and U bit-exact against the CPU reference), the plain baselines only if theirs do.  Exit 4 if
-   any check fails.
+   and over each of CHAIN_WIDE_ROWS' rows (two-byte ranks and indices, prefill's M) "pl" must write "h3"'s bytes.  A
+   variant is timed only if all of its buffers match (C~ and U bit-exact against the CPU reference), the plain baselines
+   only if theirs do.  Exit 4 if any check fails.
 2. Diagnostic timing (not the headline: the stock FP8 block GEMM is timed beside the call by its own job), at each of
    SHAPES (default 8192, m = n = k; or MxNxK, m padded to 64 rows): each kernel REPS times after a warm-up, its median, the
    phases (the weight side; the call's commitment of A, forming, GEMM, clean-up and hashing), the call end to end with and
@@ -812,9 +812,10 @@ def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
     return res
 
 
-#: what A's commit phase writes past pd (each chain's steps), and the real rows of the chains' comparison past 256 rows:
-#: ranks and indices of two bytes (A's level 0 from rank 256, level 1 from index 256)
-CHAIN_OUTPUTS, CHAIN_WIDE_ROWS = ("rowdig_a", "tree_a", "seed_a", "line_a", "seeds_a", "lkeys_a"), 600
+#: what A's commit phase writes past pd (each chain's steps), and the real rows of the chains' comparisons past 256 rows:
+#: ranks and indices of two bytes (A's level 0 from rank 256, level 1 from index 256), and prefill's M (glm53.PREFILL_M),
+#: whose trees take pl_levels' widest splits
+CHAIN_OUTPUTS, CHAIN_WIDE_ROWS = ("rowdig_a", "tree_a", "seed_a", "line_a", "seeds_a", "lkeys_a"), (600, 2048, 8192)
 
 
 def run_commit(pipe: Pipeline) -> None:
@@ -826,8 +827,8 @@ def run_commit(pipe: Pipeline) -> None:
 def check_chains(dev: Dev, pipe: Pipeline, want) -> dict:
     """A's commitment past pd under each chain of CHAINS on `pipe`'s buffers (`run_commit`), every output in CHAIN_OUTPUTS
     poisoned first, against the fixture's bytes; the no-write control, the poison with no launch, must fail every output.
-    Then over CHAIN_WIDE_ROWS generated rows of A (its own buffers), "pl"'s bytes against "h3"'s, every output poisoned
-    before each chain."""
+    Then over each of CHAIN_WIDE_ROWS generated rows of A (its own buffers), "pl"'s bytes against "h3"'s, every output
+    poisoned before each chain."""
     res = {}
     for chain in (None, *CHAINS):
         for x in CHAIN_OUTPUTS:
@@ -845,26 +846,28 @@ def check_chains(dev: Dev, pipe: Pipeline, want) -> dict:
                 res[f"{x}@chain/no-write"] = {"ok": not r["ok"], "bytes": r["bytes"]}
             else:
                 res[f"{x}@chain_{chain}"] = r
-    mr, n, k = CHAIN_WIDE_ROWS, pipe.n, pipe.k
-    m = cdiv(mr, BM_D) * BM_D
-    sizes = Pipeline.sizes(m, n, k, mr)
-    bufs = {x: dev.alloc(sizes[x]) for x in (*CHAIN_OUTPUTS, "segdig_a")}
-    xa = dev.put(hashlib.shake_256(b"pearl-c-sm90/chains").digest(4 * mr * k) + bytes(4 * (m - mr) * k))
-    got = {}
-    for chain in CHAINS:
+    n, k = pipe.n, pipe.k
+    for mr in CHAIN_WIDE_ROWS:
+        m = cdiv(mr, BM_D) * BM_D
+        sizes = Pipeline.sizes(m, n, k, mr)
+        bufs = {x: dev.alloc(sizes[x]) for x in (*CHAIN_OUTPUTS, "segdig_a")}
+        xa = dev.put(hashlib.shake_256(b"pearl-c-sm90/chains").digest(4 * mr * k) + bytes(4 * (m - mr) * k))
+        got = {}
+        for chain in CHAINS:
+            for x in CHAIN_OUTPUTS:
+                dev.ck("cuMemsetD8_v2", u64(bufs[x]), POISON, sizes[x])
+            p_ = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, xa, 0, bufs=bufs, m_real=mr, chain=chain)
+            run_commit(p_)
+            dev.sync()
+            p_.free()
+            got[chain] = {x: dev.read(bufs[x], sizes[x]) for x in CHAIN_OUTPUTS}
         for x in CHAIN_OUTPUTS:
-            dev.ck("cuMemsetD8_v2", u64(bufs[x]), POISON, sizes[x])
-        p_ = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, xa, 0, bufs=bufs, m_real=mr, chain=chain)
-        run_commit(p_)
-        dev.sync()
-        p_.free()
-        got[chain] = {x: dev.read(bufs[x], sizes[x]) for x in CHAIN_OUTPUTS}
-    for x in CHAIN_OUTPUTS:
-        pl, h3 = got["pl"][x], got["h3"][x]
-        res[f"{x}@chain_pl/{mr}_rows"] = {"ok": pl == h3 and h3 != bytes([POISON]) * sizes[x], "bytes": sizes[x],
-                                          "words_differing": sum(pl[i:i + 4] != h3[i:i + 4] for i in range(0, sizes[x], 4))}
-    for p_ in (*bufs.values(), xa):
-        dev.free(p_)
+            pl, h3 = got["pl"][x], got["h3"][x]
+            res[f"{x}@chain_pl/{mr}_rows"] = {
+                "ok": pl == h3 and h3 != bytes([POISON]) * sizes[x], "bytes": sizes[x],
+                "words_differing": 0 if pl == h3 else sum(pl[i:i + 4] != h3[i:i + 4] for i in range(0, sizes[x], 4))}
+        for p_ in (*bufs.values(), xa):
+            dev.free(p_)
     return res
 
 
