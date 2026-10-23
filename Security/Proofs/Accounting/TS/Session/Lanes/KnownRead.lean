@@ -259,6 +259,13 @@ theorem unitLog_of_scopeOkH {c : _root_.Flock.Circuit} (h : Layout.scopeOkH c = 
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
   exact h.1.1.2
 
+/-- An output a unit computes is one of its committed wires. -/
+theorem mem_io_of_output {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+    {u : Fin n} {g : Fin C.N} (hg : g ∈ C.outputs) (hu : P.unit g = some u) : g ∈ P.io u := by
+  classical
+  simp only [FlockSoundness.Audit.Partition.io, Finset.mem_filter]
+  exact ⟨P.mem_committed_of_output hg, Or.inl hu⟩
+
 variable {s : RowsSession}
 
 /-- **A returned output's bit is on a wire of every unit**: where copy `j` of the unit returns its output `j'`, bit `t`,
@@ -312,9 +319,7 @@ theorem rowBitRead_of_out (u : Fin s.n) {j j' t : ℕ} {q : Fin s.c.ports.size} 
       Layout.outsOf s.c s.hU s.n :=
     (@Finset.mem_filter _ _ (Classical.decPred _) _ _).2 ⟨Finset.mem_univ _, u, x, rfl, j, j', t, hoc⟩
   refine ⟨_, k.isLt, hrowH, ?_⟩
-  classical
-  simp only [FlockSoundness.Audit.Partition.io, Finset.mem_filter]
-  exact ⟨FlockSoundness.Audit.Partition.mem_committed_of_output _ hmem, Or.inl hgu⟩
+  exact mem_io_of_output _ hmem hgu
 
 /-- **A known input port's bits are read at every unit**, where flock-verify's check accepts the session's circuit at
 its known content. -/
