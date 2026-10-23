@@ -49,7 +49,7 @@ def valuePort (value : String) (e : Json) (root schema : String) : Except String
   let wordBits ← if Flock.J.has e "word_bits" then Flock.J.nat e "word_bits" ctx else pure 16
   let domain ← bytes64 (← Flock.J.str e "domain" ctx) s!"{value}'s domain"
   pure { name := value, value, root := ← bytes64 root s!"{value}'s root", leaves, words := some words, wordBits, domain,
-         reads := #[], schema }
+         readsRel := #[], schema }
 
 /-- **The verifier's roots** (`leaf_lanes.verifier_entries`): the partials' port, from the verifier's own entry
 (`lanes` rows of `words` 16-bit words under the registration's digest) at the produced record's root of `partials`, then
