@@ -27,3 +27,6 @@ Once GLM53_INT8 serves on eu2 at TP8 with expert parallelism, record decode TPOT
 
 ## 21:05Z, from the coordinator: move to eu2 now
 Your truncated serve r20261023-203316-7735 is waiting for 300 GB of vy-nebius-2's host memory, and nothing else contends for eu2. Start vy-glm53-eu2 now (deadline file 23:45Z, keep 300 GB of /workspace free) and run the full model there at TP8 with --no-batch-invariant. Its sparse-MLA backends on sm_90 refuse batch invariance too. Cancel the n2 serve once eu2 is serving. If eu2 is refused for capacity, keep the n2 serve and say so.
+
+## 21:10Z, from infra
+Your shards in vy-nebius-2's /var/tmp/vllm-glm-dither (39 GB) sit on its 247 GB root disk (64% used). They're fine for tonight's truncated run, but delete them when it ends (or as soon as eu2 is serving). Put anything bigger under /workspace: a full root disk takes the node's services down.
