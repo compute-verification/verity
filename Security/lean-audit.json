@@ -738,6 +738,10 @@
    "owner": "@proofs",
    "digest": "ccb0737889852a6df27bfbac4afc86597d213f0c77267a6c81a44e5c1dd7479e"
   },
+  "Claims.Flock.R": {
+   "owner": "@proofs",
+   "digest": "39a998376610568bb4825338378d4b880a8a4bc958af68b35bb563d2f1715826"
+  },
   "Claims.Hm96Hiding": {
    "owner": "@proofs",
    "digest": "6c8f345d2254fc1cff51121b293ab6364de0ff01476d75d7dddc94df14080cd2"
@@ -749,6 +753,39 @@
   "Claims.StrictBirthday": {
    "owner": "@proofs",
    "digest": "113a796cfd6c01393b0be92014ae0e59eb6e5c5010f858f56fa480f5b1249cd8"
+  },
+  "Claims.ZKMal.RefSession.Causal": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.Complete": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.DummyReg": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.SwCausal": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.Tables": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.TapeOK": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.LeanRelease.FillRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.LeanRelease.FinalRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.LeanRelease.LinkRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.LeanRelease.LiveRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.Loop.Serves": {
+   "owner": "@proofs"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -769,6 +806,12 @@
   "Flock.Guarantees.FirewallSends": {
    "owner": "@proofs",
    "digest": "562df1c19fb3ddb0861a89b741ca695aa0276bfceb9fef4fd2a682c6041393cb"
+  },
+  "Flock.Guarantees.LoopInnerRound0": {
+   "owner": "@proofs"
+  },
+  "Flock.Guarantees.LoopTabsReal": {
+   "owner": "@proofs"
   },
   "Flock.Guarantees.SessionsCoined": {
    "owner": "@proofs",
@@ -1456,49 +1499,6 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
-  },
-  "Claims.Flock.R": {
-   "owner": "@proofs",
-   "digest": "39a998376610568bb4825338378d4b880a8a4bc958af68b35bb563d2f1715826"
-  },
-  "Claims.ZKMal.RefSession.Causal": {
-   "owner": "@proofs"
-  },
-  "Claims.ZKMal.RefSession.Complete": {
-   "owner": "@proofs"
-  },
-  "Claims.ZKMal.RefSession.DummyReg": {
-   "owner": "@proofs"
-  },
-  "Claims.ZKMal.RefSession.SwCausal": {
-   "owner": "@proofs"
-  },
-  "Claims.ZKMal.RefSession.Tables": {
-   "owner": "@proofs"
-  },
-  "Claims.ZKMal.RefSession.TapeOK": {
-   "owner": "@proofs"
-  },
-  "Claims.ZKServer.LeanRelease.FillRoundEq": {
-   "owner": "@proofs"
-  },
-  "Claims.ZKServer.LeanRelease.FinalRoundEq": {
-   "owner": "@proofs"
-  },
-  "Claims.ZKServer.LeanRelease.LinkRoundEq": {
-   "owner": "@proofs"
-  },
-  "Claims.ZKServer.LeanRelease.LiveRoundEq": {
-   "owner": "@proofs"
-  },
-  "Claims.ZKServer.Loop.Serves": {
-   "owner": "@proofs"
-  },
-  "Flock.Guarantees.LoopInnerRound0": {
-   "owner": "@proofs"
-  },
-  "Flock.Guarantees.LoopTabsReal": {
-   "owner": "@proofs"
   }
  },
  "meaning": [
