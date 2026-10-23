@@ -1087,6 +1087,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     ("reads", Json.arr ((List.range u0).map (fun _ => Json.null) ++ (List.range size).map Lean.toJson).toArray),
     ("known", Json.mkObj [("rows", Lean.toJson (ks.map (·.1))),
       ("salts", Json.arr (ks.map fun k => Json.str (Flock.hexOf k.2)))])])]
+  let population := sizes.foldl (· + ·) 0
   let oks : Array (Array Nat × ByteArray) := (Array.range population).map fun u => (OK_ROW, okSalt window u)
   let od ← (SampledProofs.Registered.domainAt program ov OK_ROW.size population 16 (some window)).mapError fun why =>
     ("registration", why)
