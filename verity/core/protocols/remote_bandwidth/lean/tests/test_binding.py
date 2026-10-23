@@ -281,7 +281,7 @@ def store_salt(v) -> str:
 
 def test_store_salt(server) -> None:
     inputs = st.fixed_dictionaries({
-        "key": st.binary(max_size=40).map(bytes.hex) | st.just(KEY.hex()),
+        "key": st.binary(max_size=300).map(bytes.hex) | st.just(KEY.hex()),
         "label": st.just(store.PAYLOAD_LABEL.hex()) | st.binary(max_size=8).map(bytes.hex),
         "c": st.integers(0, 2 ** 64 - 1) | st.sampled_from([0, 2 ** 64, -1])})
     stats = D.run(port("store_salt", store_salt, inputs), examples=150, server=server)

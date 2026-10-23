@@ -1,5 +1,5 @@
 import Flock.Canon
-import Flock.Keccak
+import RemoteAudit.Unboxed
 import RemoteAudit.Window
 
 /-!
@@ -45,9 +45,9 @@ open Flock
 def SALT_DOMAIN : ByteArray := tag0 "verity/store/salt/v0"
 def PAYLOAD_LABEL : ByteArray := sha512 "verity/remote-session/payload-salts/v0".toUTF8
 
-/-- `store_salt(key, label, c)`. -/
+/-- `store_salt(key, label, c)`, SHAKE256 with its lanes unboxed (`Unboxed.shake256`): one a block of the store. -/
 def storeSalt (key label : ByteArray) (c : Nat) : ByteArray :=
-  Keccak.shake256 (SALT_DOMAIN ++ key ++ label ++ be 8 c) SALT_BYTES
+  Unboxed.shake256 (SALT_DOMAIN ++ key ++ label ++ be 8 c) SALT_BYTES
 
 private def hex4 (n : Nat) : String :=
   let d := fun (k : Nat) => let x := (n >>> (4 * k)) % 16; if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)
@@ -278,7 +278,7 @@ def payloadLeaf (d : FrameV3.Domain) (engines arenaBlocks N : Nat) (digests key 
     let W := weightsOf digests
     let r := if j < engines * arenaBlocks then j % arenaBlocks else W
     let x := if r < W then digests.extract (64 * r) (64 * r + 64) else ZERO_DIGEST
-    d.leaf j j SCHEMA (hiddenDigest x (storeSalt key PAYLOAD_LABEL j))
+    d.leaf j j SCHEMA (Unboxed.hiddenDigest x (storeSalt key PAYLOAD_LABEL j))
 
 /-- `store._up(dom, level, height, first)`: a level of nodes at `height`, the first of them under leaf `first`,
 climbed to its root. -/
