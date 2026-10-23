@@ -42,7 +42,8 @@ gates, about one per leaf on GLM-5.3, so only a Call's internal reads stay small
 router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in all through `--policy`,
 `--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json` (`verity/nci-glm/v1`) has a row
 per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict summarised, wall seconds and
-peak RSS; `$OUT/ius/` has each verdict's IUs.
+peak RSS; `$OUT/ius/` has each verdict's IUs. A rank's check takes about 21 minutes and 7 GB, the node's (a 2.2 GB
+descriptor) about 2.6 hours and 50 GB, and the whole run about 3 hours (r20261023-064803-3874).
 
 ~~~sh
 research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --to B1 \
