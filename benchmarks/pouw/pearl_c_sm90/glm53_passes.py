@@ -48,7 +48,7 @@ def capture(a) -> int:
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
     out, dev = Path(a.out), torch.device("cuda")
-    shapes = sorted({(r["n"], r["k"]) for r in glm53.table(a.scheme) if not r["refused"]})
+    shapes = sorted(glm53.in_domain(a.scheme))
     gen = torch.Generator(device=dev).manual_seed(20261023)
     weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
     kernel = PPD.Kernel.load(str(HERE), a.cubin)

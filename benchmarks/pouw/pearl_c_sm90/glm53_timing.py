@@ -1,5 +1,6 @@
 """Pearl-C's served call on one H100 or H200 against the card's stock FP8 block GEMMs, interleaved rep by rep, at GLM-5.3's
-in-domain linears (`glm53.linears`, one TP8 rank) and decode's and prefill's M (`glm53.DECODE_M`, `glm53.PREFILL_M`).
+in-domain linears (`glm53.in_domain`, one TP8 rank, the routed experts sharded or expert-parallel) and decode's and
+prefill's M (`glm53.DECODE_M`, `glm53.PREFILL_M`).  An expert's shape is timed as one dense call, not the grouped launch.
 
   python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --out DIR [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...]
 
@@ -145,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
 
     out, dev = Path(a.out), torch.device("cuda")
     out.mkdir(parents=True, exist_ok=True)
-    table = {(r["n"], r["k"]): r for r in glm53.table(a.scheme) if not r["refused"]}
+    table = glm53.in_domain(a.scheme)
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else sorted(table)
     ms = a.m or [*glm53.DECODE_M, *glm53.PREFILL_M]
     gen = torch.Generator(device=dev).manual_seed(20261023)

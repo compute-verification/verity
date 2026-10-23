@@ -47,6 +47,19 @@ def test_domain_refuses_the_short_k_and_narrow_n():
     assert rows["mlp.experts.w13"]["gamma"]["record"] > rows["self_attn.o_proj"]["gamma"]["record"]
 
 
+def test_expert_parallel_brings_the_experts_into_the_domain():
+    """With the routed experts expert-parallel (EP = TP = 8) a rank holds 32 whole experts, w13 (4096, 6144) and w2
+    (6144, 2048), both in the domain; the shared expert stays sharded, its down at k = 256 refused."""
+    rows = {r["name"]: r for r in G.table(ep=True)}
+    assert {x: (rows[x]["n"], rows[x]["k"]) for x in ("mlp.experts.w13", "mlp.experts.w2")} == {
+        "mlp.experts.w13": (4096, 6144), "mlp.experts.w2": (6144, 2048)}
+    assert {x for x, r in rows.items() if r["refused"]} == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj",
+                                                            "mlp.shared_experts.down_proj"}
+    shapes = G.in_domain()
+    assert (4096, 6144) in shapes and shapes[(4096, 6144)]["ep"] and not shapes[(6144, 2048)]["ep"]
+    assert shapes[(6144, 2048)]["name"] == "self_attn.o_proj"
+
+
 def test_gamma_is_the_lean_twins():
     """`Pouw.PearlC.pearlCGammaSm120v1Cast32Rev1_8192`: v1 under rev1 (cap 1/400) at the sm_120 record, 8192³, the honest cast
     at 32 (24 over the credited 8), γ = 173561/22302500."""
@@ -60,8 +73,8 @@ def test_gamma_is_the_lean_twins():
 
 
 def test_h200_session_runs_the_tables_shapes():
-    """h200.sh's run.py SHAPES are every in-domain (n, k), at decode's 64 and prefill's 8192."""
+    """h200.sh's run.py SHAPES are every in-domain (n, k) (`in_domain`), at decode's 64 and prefill's 8192."""
     sh = (HERE / "h200.sh").read_text()
     listed = re.search(r"for nk in ([\dx ]+); do", sh).group(1).split()
-    assert {tuple(map(int, x.split("x"))) for x in listed} == {(r["n"], r["k"]) for r in G.table() if not r["refused"]}
+    assert {tuple(map(int, x.split("x"))) for x in listed} == set(G.in_domain())
     assert 'SHAPES="$SHAPES 64x$nk 8192x$nk"' in sh

@@ -53,9 +53,14 @@ class Linear:
     note: str = ""
 
 
-def linears(c: dict = CONFIG, tp: int = TP) -> list[Linear]:
-    """One rank's linears, in the layer's order."""
+def linears(c: dict = CONFIG, tp: int = TP, ep: bool = False) -> list[Linear]:
+    """One rank's linears, in the layer's order.  With `ep` (vLLM's ``--enable-expert-parallel`` at DP 1, so EP = TP), a rank
+    holds E / tp whole routed experts rather than a 1 / tp slice of each, and the shared expert stays TP-sharded (its MLP is
+    sequence-parallel only at DP > 1).  The capture map's MoE backend (Triton) is the one without expert parallelism; no
+    capture of record says which one vLLM picks under it."""
     nhl = c["NH"] // tp
+    mi, moe = (c["MI"], "fp8-moe-ep") if ep else (c["MI"] // tp, "fp8-moe-triton")
+    per = f"per expert, {c['E'] // tp} of them on the rank" if ep else "per expert, E of them"
     return [
         Linear("self_attn.fused_qkv_a_proj", c["QL"] + c["KVL"] + c["DR"], c["H"], "all", DEEPGEMM, "replicated (q_a, kv_a)"),
         Linear("self_attn.q_b_proj", nhl * (c["DN"] + c["DR"]), c["QL"], "all", DEEPGEMM),
@@ -69,8 +74,8 @@ def linears(c: dict = CONFIG, tp: int = TP) -> list[Linear]:
         Linear("mlp.down_proj", c["H"], c["I"] // tp, "dense", DEEPGEMM),
         Linear("mlp.shared_experts.gate_up_proj", 2 * c["NS"] * c["MI"] // tp, c["H"], "moe", DEEPGEMM),
         Linear("mlp.shared_experts.down_proj", c["H"], c["NS"] * c["MI"] // tp, "moe", DEEPGEMM),
-        Linear("mlp.experts.w13", 2 * c["MI"] // tp, c["H"], "moe", "fp8-moe-triton", "per expert, E of them"),
-        Linear("mlp.experts.w2", c["H"], c["MI"] // tp, "moe", "fp8-moe-triton", "per expert, E of them"),
+        Linear("mlp.experts.w13", 2 * mi, c["H"], "moe", moe, per),
+        Linear("mlp.experts.w2", c["H"], mi, "moe", moe, per),
     ]
 
 
@@ -101,13 +106,13 @@ def gamma(s, n: int, k: int, cast: Fraction = Fraction(0)) -> Fraction:
     return 1 - (1 - rho) ** 2 * Fraction(s.credit_of(sh)) / (s.wref(sh) + cast * sh.m * sh.k)
 
 
-def table(name: str = SCHEME) -> list[dict]:
-    """Every linear with its domain verdict (`pouw_pearl_c_device.refusals`, the kernels' grain with the record's) and, in
-    the domain, γ at each FADD reading."""
+def table(name: str = SCHEME, ep: bool = False) -> list[dict]:
+    """Every linear (`linears`) with its domain verdict (`pouw_pearl_c_device.refusals`, the kernels' grain with the
+    record's) and, in the domain, γ at each FADD reading."""
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
     rows = []
-    for i, lin in enumerate(linears()):
+    for i, lin in enumerate(linears(ep=ep)):
         bad = PPD.refusals(name, {i: (lin.n, lin.k)})
         row = {**asdict(lin), "refused": [b.split(": ", 1)[-1] for b in bad]}
         if not bad:
@@ -116,13 +121,26 @@ def table(name: str = SCHEME) -> list[dict]:
     return rows
 
 
+def in_domain(name: str = SCHEME) -> dict[tuple[int, int], dict]:
+    """Every in-domain (n, k) of `table` with the routed experts sharded and expert-parallel: the row of its first linear,
+    the sharded table's before the expert-parallel one's."""
+    out: dict[tuple[int, int], dict] = {}
+    for ep in (False, True):
+        for r in table(name, ep):
+            if not r["refused"]:
+                out.setdefault((r["n"], r["k"]), {**r, "ep": ep})
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--json", action="store_true")
+    p.add_argument("--ep", action="store_true", help="the routed experts expert-parallel (`linears`)")
     a = p.parse_args(argv)
-    rows = table()
+    rows = table(ep=a.ep)
     if a.json:
-        print(json.dumps({"scheme": SCHEME, "tp": TP, "decode_m": DECODE_M, "prefill_m": PREFILL_M, "linears": rows}, indent=1))
+        print(json.dumps({"scheme": SCHEME, "tp": TP, "ep": a.ep, "decode_m": DECODE_M, "prefill_m": PREFILL_M, "linears": rows},
+                         indent=1))
         return 0
     for r in rows:
         verdict = "refused: " + "; ".join(r["refused"]) if r["refused"] else \
