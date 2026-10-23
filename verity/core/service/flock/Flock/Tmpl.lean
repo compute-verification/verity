@@ -127,6 +127,20 @@ def Tmpl.ordered (t : Tmpl) : Bool :=
       (t.defs.getD d default).fits t.defs && (!F.getD d false || (t.defs.getD d default).ordered F)) &&
     t.rootOrdered F
 
+/-- Definition `d`'s rows at its columns, its calls to earlier Definitions with their copies side by side inside its
+columns and its segments binding their callee's inputs, its columns and calls fewer than `2^64` (`locate` halves
+64 times). -/
+def Def.wellFormed (defs : Array Def) (d : Nat) (df : Def) : Bool :=
+  df.cols < 2 ^ 64 && df.calls.size < 2 ^ 64 && df.rows.toList.all (fun r => r.1 < df.cols) &&
+    df.calls.toList.all fun c => c.def_ < d && c.base + c.count * (defs.getD c.def_ default).cols ≤ df.cols &&
+      c.segs.foldl (fun n s => n + s.reps * s.len) 0 == (defs.getD c.def_ default).ins
+
+/-- **What the template fold's proof reads of a template** (`FlockSoundness.TmplFold.fold_eq_foldRef_wf`), checked on
+the description: every Definition well formed, and the root a Definition with no inputs and a constant. -/
+def Tmpl.wellFormed (t : Tmpl) : Bool :=
+  t.root < t.defs.size && (t.defs.getD t.root default).ins == 0 && 0 < (t.defs.getD t.root default).cols &&
+    (List.range t.defs.size).all fun d => (t.defs.getD d default).wellFormed t.defs d
+
 private def num (h : Array String) (i : Nat) (what : String) : V Nat :=
   match h[i]?.bind String.toNat? with
   | some n => pure n
@@ -212,6 +226,7 @@ def parse (lines : Array String) : V Tmpl := do
   let t : Tmpl := { name, root, inGroups, outGroups, defs, leaves }
   if !t.ordered then
     throw s!"{FORMAT}: a row or a binding reads a later column, input padding, or both its caller's own columns and its inputs"
+  if !t.wellFormed then throw s!"{FORMAT}: a definition has 2^64 columns or calls, or a call the fold's proof does not cover"
   return t
 
 /-- A sorted list with each run of equal columns cut to its length mod 2. -/
@@ -257,6 +272,53 @@ def place (defs : Array Def) (k : Nat) : Nat → Nat → Nat → List Nat → Ac
       write acc (o + r.1) (canon (r.2.1.map (df.ref o inp k))) (canon (r.2.2.map (df.ref o inp k)))) acc
     df.calls.toList.foldlM (fun acc c => (List.range c.count).foldlM (fun acc j =>
       place defs k fuel c.def_ (o + c.base + j * c.stride) (c.bound (df.ref o inp k) j) acc) acc) acc
+
+/-! ## In linear time
+
+`place` reads a copy's inputs from a `List`, so each reference to an input walks it: the H1 tile's unit at K = 448 has
+Definitions of a million inputs. `placeFast` reads them from an `Array` made once per copy (`Def.refA`), folds the rows
+and calls as arrays, and writes the accumulator's arrays in place (`writeFast`). `@[csimp]` compiles it in `place`'s
+place, so the verifier runs it while every theorem reads `place`. -/
+
+/-- `Def.ref` with the inputs in an `Array`. -/
+def Def.refA (df : Def) (o : Nat) (inp : Array Nat) (k x : Nat) : Nat :=
+  if x < df.cols then o + x else if x < df.cols + df.ins then inp.getD (x - df.cols) k else k
+
+theorem Def.refA_toArray (df : Def) (o : Nat) (inp : List Nat) (k : Nat) : df.refA o inp.toArray k = df.ref o inp k := by
+  funext x
+  simp only [Def.refA, Def.ref, Array.getD_eq_getD_getElem?, List.getElem?_toArray, List.getD_eq_getElem?_getD]
+
+/-- `write`, its accumulator taken apart first so that each array is updated in place. -/
+def writeFast : Acc → Nat → Array Nat → Array Nat → V Acc
+  | ⟨ra, rb, set⟩, c, a, b =>
+    if set.getD c true then throw s!"{FORMAT}: column {c} is written twice, or past the unit"
+    else pure ⟨ra.set! c a, rb.set! c b, set.set! c true⟩
+
+theorem writeFast_eq : @writeFast = @write := by
+  funext acc c a b
+  cases acc
+  rfl
+
+/-- `place`, through `Def.refA` and `writeFast`. -/
+def placeFast (defs : Array Def) (k : Nat) : Nat → Nat → Nat → List Nat → Acc → V Acc
+  | 0, _, _, _, _ => throw s!"{FORMAT}: calls nest deeper than the definitions"
+  | fuel + 1, d, o, inp, acc => do
+    let some df := defs[d]? | throw s!"{FORMAT}: no definition {d}"
+    let ia := inp.toArray
+    let g := df.refA o ia k
+    let acc ← df.rows.foldlM (fun acc r => writeFast acc (o + r.1) (canon (r.2.1.map g)) (canon (r.2.2.map g))) acc
+    df.calls.foldlM (fun acc c => (List.range c.count).foldlM (fun acc j =>
+      placeFast defs k fuel c.def_ (o + c.base + j * c.stride) (c.bound g j) acc) acc) acc
+
+theorem placeFast_eq (defs : Array Def) (k : Nat) :
+    ∀ fuel d o inp acc, placeFast defs k fuel d o inp acc = place defs k fuel d o inp acc
+  | 0, _, _, _, _ => rfl
+  | fuel + 1, d, o, inp, acc => by
+    simp only [placeFast, place, Def.refA_toArray, writeFast_eq, ← Array.foldlM_toList, placeFast_eq defs k fuel]
+
+@[csimp] theorem place_eq_placeFast : @place = @placeFast := by
+  funext defs k fuel d o inp acc
+  exact (placeFast_eq defs k fuel d o inp acc).symm
 
 /-- The unit's last column, its constant. -/
 def Tmpl.constPos (t : Tmpl) : Nat := (t.defs.getD t.root default).cols - 1

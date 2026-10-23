@@ -62,7 +62,8 @@ opening that fails (`strat_eval_cons`).
   deployed tables `LinkRoundEq` follows from the transport handing it the tape's tables, `LinkRecheck`; the `Finish`'s
   proof files are the session's Lean finish's, `Flock.Firewall.Finish`), the transport
   requests each opening at the committed schedule's place (`ReqsFollow`, `CoinOpen.Follows`) and hands the frame a rep
-  state and coins read from the coins the openings open (`ReadsCoins`: the state, `ProgReads`, Rust's `LeanFrame`; the
+  state and coins read from the coins the openings open (`ReadsCoins`: the state, `ProgReads`, the session loop's rep
+  frame's, `Flock.Firewall.Frames`; the
   coins, `CoinsRead`), the `Finish` is one past the
   last coin, and the coin check reads the session's `Hello` with the tape's nonce (`HelloParses`). At the session loop
   (`flock-firewall session`, `Claims/ZK/SessionLean.lean`) `HelloIs`, `HelloParses`, `ReqsFollow`, `CoinsRead` and the
@@ -677,10 +678,10 @@ the histories its check passes: after every history past `Hello` of at most `ref
 check passes at the tape `ρ` (`opens`), the frame state of the rep that released the last round is `pc x` of the coins
 the openings open, and the next round's rep's first-round state `fc x` of them. Past the check's refusal the transport
 hands the frame nothing, so the premise says nothing there. A named hypothesis, one of the transport's trusts: the
-frame's state (`prog`, `fresh`) is what Rust's requests to it make it (`LeanFrame`, `firewall.rs`: the earlier rep's
-coins, `prior`, and the device and scheduled rounds `flock-circuit` hands it), which the release takes as given. At the
-session loop's own frames it is a theorem (`ofLoop_progReads`). The coins the frame takes are `CoinsRead`, a theorem at
-the session loop (`LeanRelease.loop_coinsRead`). -/
+frame's state (`prog`, `fresh`) is what the session loop's requests to the rep's frame make it (`Flock.Firewall.Frames`,
+on `Drive.reqs`: the rep's coins and the device and scheduled rounds), which the release takes as given. At the loop's
+own frames it holds by definition (`LeanRelease.ofLoop_progReads`). The coins the frame takes are `CoinsRead`, a
+theorem at the session loop (`LeanRelease.loop_coinsRead`). -/
 def ProgReads (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (pc : Msg → List S.Coin → Masker) (fc : Msg → List S.Coin → Except String Masker) (x : Msg) : Prop :=
   ∀ (ρ : S.refP.Nonce × S.refP.Rand) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)), ops.length ≤ refK x →
@@ -947,7 +948,8 @@ a theorem:
   `Firewall::root` sends, from `LeanRelease.LinkIs` at the deployed tables; `FinalRoundEq`: the session's Lean finish's
   proof files, `Flock.Firewall.Finish`, from `FrameAdmits` and `FinishIs`);
 * the transport hands the frame rep states and coins that are functions `pc`, `fc`, `cc` of the coins the openings
-  open, on the histories its check passes (`LeanRelease.ReadsCoins`: the state, `ProgReads`, is Rust's `LeanFrame`; the coins,
+  open, on the histories its check passes (`LeanRelease.ReadsCoins`: the states, `ProgReads`, are the session loop's
+  rep frames', `Flock.Firewall.Frames`, by definition at `LeanRelease.ofLoop`; the coins,
   `CoinsRead`, the session loop's own, `loop_coinsRead`);
 * the `Finish` is one past the last coin (`L.last`, the transport's schedule).
 From them the release's coin check is the session's (`LeanRelease.checkIs_coinLayer`, from `CoinOpen.coinLayer_verdict`,

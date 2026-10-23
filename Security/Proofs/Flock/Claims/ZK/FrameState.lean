@@ -152,13 +152,13 @@ after `h` at the state `m`, round `h.length` is a frame round and the frame's ch
 the state of the frame of the rep that released it, after the history with that release and the stream's answer `a`,
 is the state the frame's check of a device round `v`, of a stopped rep or not, returned with that release, but for
 `stopped`, which the release does not read. A named hypothesis, one of the transport's trusts beside `ProgReads` and of
-its kind: `prog` is no Lean function but the state Rust's requests leave the compiled frame in (`LeanFrame`,
-`firewall.rs`), and no Lean model covers that IO. The frame's own loop (`Frame.serveWith`) sets its state, at a round
-that leaves, to what `check` returns at `round N LEN REFLEN`, to `round`'s of a stopped rep at `round N LEN fail`
-(`check`'s of a stopped rep, where Rust sends the scheduled round) and to `round`'s at an inner proof's round (`check`'s
-with the round in its own place, `check_self`, where Rust sends the firewall's own round); the Prop adds that Rust's
-requests are those. The frame's own code is `check_l0`, proved; at the session loop's own frames the Prop is a theorem
-(`ofLoop_progChecks`). -/
+its kind: `prog` is the state the session loop's requests leave the rep's frame in (`Flock.Firewall.Frames`, on the
+schedule `Drive.reqs` fixes), which a release takes as given. The frame's step (`Frame.step`) sets its state, at a round
+that leaves, to what `check` returns at the statement's scheduled round (`Place.sched`), to `round`'s of a stopped rep at
+the rep's stop (`Place.fail`: `check`'s of a stopped rep, where the loop sends the scheduled round) and to `round`'s at
+an inner proof's round (`Place.own`: `check`'s with the round in its own place, `check_self`, where the loop sends the
+firewall's own round); the Prop adds that the loop's requests are those. The frame's own code is `check_l0`, proved. At
+the loop's own frames (`LeanRelease.ofLoop`) the Prop is a theorem (`ofLoop_progChecks`). -/
 def ProgChecks {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) : Prop :=
   ∀ (ρ : R) (h : List (Msg × Msg)) (a : Msg) (m : Masker) (out : ByteArray),
     L.answered x ρ h = .ok m → L.kindAt x h.length = .masked →
