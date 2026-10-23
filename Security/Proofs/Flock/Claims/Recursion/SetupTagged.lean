@@ -76,7 +76,7 @@ theorem ite_ok {α : Type} {c : Prop} [Decidable c] {a b : Flock.V α} {v : α} 
 
 theorem throw_ok {α : Type} {e : String} {v : α} (h : (throw e : Flock.V α) = .ok v) : False := nomatch h
 
-instance : DecidablePred HmTagged := fun m => by unfold HmTagged; infer_instance
+instance instDecidablePredMsgHmTagged : DecidablePred HmTagged := fun m => by unfold HmTagged; infer_instance
 
 /-- Not one of hm96's prefixes at byte 7. -/
 def untagged (b : ByteArray) : Bool := decide (¬ HmTagged (Claims.toMsg b))
