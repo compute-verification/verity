@@ -13,6 +13,10 @@ reader is the record's own total reader (`recRead`), that holds at every accepte
 That the deployed coin server writes `recTr`'s bytes is a difftest on the honest fixtures (`test_lean_rec_record.py`:
 `recordW` writes `rec_live.record_bytes`' bytes), not a theorem. What stays open at the dense form is `PartChecksB` and
 `PartOpensB` at `showsTr recRead`/`cmtTr recRead`, `DecompB`, and the readers' three facts.
+
+The reader is not vacuous: `recRead_honest_round` reads an honest one-round run back, and `Flock.Test.RecRecord`'s
+`#guard`s run `readRecord` on the plain session's honest record bytes. Neither witnesses the open premises, which no
+concrete record can until they are proved.
 -/
 
 namespace RecDeploy
@@ -20,6 +24,14 @@ namespace RecDeploy
 open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin)
+
+/-- **The reader at an honest one-round run**: an inner round answered with its coin's bytes, as the compiled verifier
+answers it, is read back to its message and the coin's first `n` values, whatever the record's other fields. -/
+theorem recRead_honest_round (c : Coin) (m : Msg) (a : Flock.RecRecord.Round) (n : ℕ) :
+    recRead [] (recTr (fun _ _ => a) (fun _ _ => n) (fun _ _ => []) [] [(m, .msg c.bytes)]) = some [(m, c.vals n)] := by
+  simp only [recRead, recTr, List.toList_toArray, Flock.RecRecord.readRecord_recordW, Option.map_some,
+    List.mapIdx_cons, List.mapIdx_nil, List.map_cons, List.map_nil]
+  simp [roundOf, flatten_commits, outCoin, coinOf_bytes]
 
 /-- **`KSLin2` at the deployment's dense statements, at the coin server's record**: `ksLin2_deployed_open` at the
 brings whose transcript is `recTr aux nOf rest`, read by `recRead`, with `ReadsBack` from `readsBack_recTr`. What stays
