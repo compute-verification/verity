@@ -142,6 +142,11 @@ COIN_ASYNC_ENV = "DITHER_SO_COIN_ASYNC"
 # taking the next unit in turn, so the rest of the SMs stay whole to the next forward's kernels; the same receipts
 UNITS_SMQ_ENV = "DITHER_SO_UNITS_SMQ"
 UNITS_SMC_ENV = "DITHER_SO_UNITS_SMC"  # c > 0 (with $DITHER_SO_UNITS_SMQ): at most c of that launch's CTAs an SM
+# "1" (with $DITHER_SO_UNITS_SMQ): from the end of a step's `after` to the next `before`, while the serving stream waits
+# on the host, h1um_help takes the in-flight units launches' units not yet taken, on whatever SMs are free
+# (kh_units_help, stopped through a pinned flag); the same receipts
+UNITS_HELP_ENV = "DITHER_SO_UNITS_HELP"
+H1UM_NEXT_WORDS = 2 + 1024              # h1u.cu's: a units launch's take and done counts, then its SMs' CTA counts
 # "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
 # the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
 RDEAD_ENV = "DITHER_SO_RDEAD"
@@ -537,6 +542,8 @@ class SoWindow(DO.Window):
 
     def before(self, m: int) -> None:
         self.t_b0 = time.perf_counter()
+        if not self.overlap and DA.SIDE and DA.SIDE[0].units_help:
+            DA.SIDE[0].help_flag[0] = 0
         if not self.open:
             self._start()
         if not self.overlap and DA.SIDE and DA.SIDE[0].spill is not None:
@@ -704,6 +711,8 @@ class SoWindow(DO.Window):
         self.s += 1
         self.steps += 1
         self._step_end(s)
+        if sd.units_help:
+            sd.help_start()
 
     def _step_end(self, s: int) -> None:
         if s == self.end_at:
@@ -903,10 +912,19 @@ class SoSide(DA.Side):
         self.units_smc = int(os.environ.get(UNITS_SMC_ENV) or 0)
         if self.units_smc and not self.units_smq:
             raise ValueError(f"${UNITS_SMC_ENV}={self.units_smc}: needs ${UNITS_SMQ_ENV}")
+        self.units_help = os.environ.get(UNITS_HELP_ENV) == "1"
+        if self.units_help and not (self.units_smq and hasattr(self.h, "kh_units_help")):
+            raise ValueError(f"${UNITS_HELP_ENV}=1: needs ${UNITS_SMQ_ENV} and an h1u build with kh_units_help")
         if self.units_smq:
             vp, u32 = C.c_void_p, C.c_uint
-            self.h.kh_units_multi_sm.argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, u32, vp]
-            self.unit_next = torch.zeros(1 + 1024, dtype=torch.int32, device=dev)
+            self.h.kh_units_multi_sm.argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, u32, u32, vp]
+            # a slot's take count starts past every unit, so a helper aimed at a launch that hasn't begun takes none
+            self.unit_next = torch.full((D, H1UM_NEXT_WORDS), 1 << 30, dtype=torch.int32, device=dev)
+        if self.units_help:
+            self.h.kh_units_help.argtypes = [vp, u32, u32, vp, vp, vp, u32, vp]
+            self.help_stream = torch.cuda.Stream(device=dev, priority=0)
+            self.help_flag = torch.zeros(1, dtype=torch.int32, pin_memory=True)
+            self.help_epoch = self.help_launches = 0
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
         self.capture_ms: list[float] = []
@@ -960,6 +978,23 @@ class SoSide(DA.Side):
         self.ring_stepv[p].copy_(win.stepv)
         self.ring_base[p].copy_(win.step_base)
         self.ready[p].record()
+
+    def help_start(self) -> None:
+        """$DITHER_SO_UNITS_HELP: h1um_help on the dispatched units launches not yet done, oldest first, until the next
+        `before` clears the flag (each takes only units its launch hasn't, and that launch ends once they're done)."""
+        live = [p for _, p in sorted(self.dispatched.items()) if not self.udone[p].query()][:2]
+        if not live:
+            return
+        self.help_epoch += 1
+        self.help_flag[0] = self.help_epoch
+        win = self.win
+        for p in live:
+            rc = self.h.kh_units_help(self.mtab[p].data_ptr(), win.L, win.t, self.ring_live[p].data_ptr(),
+                                      self.unit_next[p].data_ptr(), self.help_flag.data_ptr(), self.help_epoch,
+                                      self.help_stream.cuda_stream)
+            if rc:
+                raise RuntimeError(f"kh_units_help (ring slot {p}) returned {rc}")
+            self.help_launches += 1
 
     def _multi_tables(self) -> tuple[list[torch.Tensor], int]:
         """$DITHER_SO_FUSED's kh_units_multi tables, one a ring slot: each call's UCall (its slot's A, its B, seeds and
@@ -1020,7 +1055,8 @@ class SoSide(DA.Side):
         if self.fused and self.units_smq:
             rc = rc or self.h.kh_units_multi_sm(self.mtab[p].data_ptr(), L, self.m_units, win.t,
                                                 self.ring_live[p].data_ptr(), self.units_smq, self.units_smd,
-                                                self.unit_next.data_ptr(), self.units_smc, st.cuda_stream)
+                                                self.unit_next[p].data_ptr(), self.units_smc, int(self.units_help),
+                                                st.cuda_stream)
         elif self.fused:
             rc = rc or self.h.kh_units_multi(self.mtab[p].data_ptr(), L, self.m_units, win.t, self.ring_live[p].data_ptr(),
                                              st.cuda_stream)
@@ -1097,7 +1133,8 @@ class SoSide(DA.Side):
                 "units_dispatch": {"graph": self.graph, "graphs": sorted(self.graphs), "capture_ms": self.capture_ms},
                 "units_fused": {"one_launch": self.fused, "units": self.m_units if self.fused else None,
                                 "sm_share": f"{self.units_smq}/{self.units_smd}" if self.units_smq else None,
-                                "ctas_an_sm_at_most": self.units_smc or None},
+                                "ctas_an_sm_at_most": self.units_smc or None,
+                                "help_launches": self.help_launches if self.units_help else None},
                 "receipt_dead_rows_x_once": self.rdead,
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 

@@ -1013,33 +1013,60 @@ __device__ __forceinline__ void h1um_one(const UCall* __restrict__ calls, u32 nc
     h1u_unit<2, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, S);
 }
 
-constexpr u32 H1UM_SMIDS = 1024;  // the %smid values h1um_sm's cap counts (kh_units_multi_sm's next: 1 + this u32s)
+// kh_units_multi_sm's next: [0] the next unit to take, [1] the units done, [2 + smid] the CTAs that stayed on an SM
+constexpr u32 H1UM_SMIDS = 1024;
+constexpr u32 H1UM_NEXT_WORDS = 2 + H1UM_SMIDS;
+
+// a warp's units from next[0] in turn until they run out or (flag non-null) *flag stops being epoch, each counted
+// into next[1] once its receipts are written
+__device__ __forceinline__ void h1um_take(const UCall* __restrict__ calls, u32 ncalls, u32 M, const uint8_t* __restrict__ live,
+                                          u32* __restrict__ next, const volatile u32* flag, u32 epoch, WarpSmem& S) {
+  const u32 lane = threadIdx.x & 31, total = calls[ncalls].u0;
+  for (;;) {
+    u32 gu = 0xffffffffu;
+    if (lane == 0 && (!flag || *flag == epoch)) gu = atomicAdd(next, 1u);
+    gu = __shfl_sync(0xffffffffu, gu, 0);
+    if (gu >= total) break;
+    h1um_one(calls, ncalls, M, live, gu, S);
+    __syncwarp();
+    if (lane == 0) {
+      __threadfence();
+      atomicAdd(next + 1, 1u);
+    }
+  }
+}
 
 // h1um on the SMs whose %smid % den < q alone: a CTA on any other SM exits at once, and the warps of the rest take units
-// from *next in turn (a unit's receipts are its own, whichever warp takes it), so every other SM stays whole to the
-// streams beside it (the next forward's kernels, which a freed h1um slot is too small for)
+// from next[0] in turn (a unit's receipts are its own, whichever warp takes it), so every other SM stays whole to the
+// streams beside it (the next forward's kernels, which a freed h1um slot is too small for).  hw: h1um_help may hold
+// units too, so each CTA waits for next[1] to reach every unit before it exits
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1um_sm(const UCall* __restrict__ calls, u32 ncalls, u32 M,
                                                       const uint8_t* __restrict__ live, u32 q, u32 den,
-                                                      u32* __restrict__ next, u32 cap) {
+                                                      u32* __restrict__ next, u32 cap, u32 hw) {
   u32 smid;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
   if (smid % den >= q) return;
-  if (cap) {  // at most cap CTAs an SM: next[1 + smid] counts the CTAs that stayed on it
+  if (cap) {  // at most cap CTAs an SM
     __shared__ u32 stay;
-    if (threadIdx.x == 0) stay = smid < H1UM_SMIDS && atomicAdd(next + 1 + smid, 1u) < cap;
+    if (threadIdx.x == 0) stay = smid < H1UM_SMIDS && atomicAdd(next + 2 + smid, 1u) < cap;
     __syncthreads();
     if (!stay) return;
   }
   __shared__ WarpSmem smem[WARPS];
-  const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
-  for (;;) {
-    u32 gu = 0;
-    if (lane == 0) gu = atomicAdd(next, 1u);
-    gu = __shfl_sync(0xffffffffu, gu, 0);
-    if (gu >= total) break;
-    h1um_one(calls, ncalls, M, live, gu, smem[wp]);
-    __syncwarp();
+  h1um_take(calls, ncalls, M, live, next, nullptr, 0, smem[threadIdx.x >> 5]);
+  if (hw && threadIdx.x == 0) {
+    const u32 total = calls[ncalls].u0;
+    while (*(volatile u32*)(next + 1) < total) __nanosleep(2000);
+    __threadfence();
   }
+}
+
+// the units h1um_sm hasn't taken yet from next, while *flag (host memory) is epoch, on whatever SMs are free
+__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1um_help(const UCall* __restrict__ calls, u32 ncalls, u32 M,
+                                                        const uint8_t* __restrict__ live, u32* __restrict__ next,
+                                                        const u32* flag, u32 epoch) {
+  __shared__ WarpSmem smem[WARPS];
+  h1um_take(calls, ncalls, M, live, next, flag, epoch, smem[threadIdx.x >> 5]);
 }
 
 #if H1U_KSPLIT
@@ -2016,10 +2043,11 @@ extern "C" int kh_units_multi(const void* calls, unsigned ncalls, unsigned units
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
-// kh_units_multi on q / den of the SMs (h1um_sm, 1 <= q <= den <= 64): next a device u32 the launch zeroes first, and
-// twice the CTAs that fit at once, so the SMs it keeps get theirs whatever else holds the GPU at the launch
+// kh_units_multi on q / den of the SMs (h1um_sm, 1 <= q <= den <= 64): next H1UM_NEXT_WORDS device u32s the launch
+// zeroes first, and twice the CTAs that fit at once, so the SMs it keeps get theirs whatever else holds the GPU at the
+// launch; at most cap CTAs an SM unless cap is 0; hw: kh_units_help may take some of the units (h1um_sm's hw)
 extern "C" int kh_units_multi_sm(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live, unsigned q,
-                                 unsigned den, void* next, unsigned cap, void* stream) {
+                                 unsigned den, void* next, unsigned cap, unsigned hw, void* stream) {
   if (!ncalls || M % 32 || !q || q > den || den > 64 || !next) return 2;
   if (!units) return 0;
   carve<h1um_sm>();
@@ -2028,9 +2056,24 @@ extern "C" int kh_units_multi_sm(const void* calls, unsigned ncalls, unsigned un
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1um_sm, 32 * WARPS, 0) != cudaSuccess || per < 1)
     return 3;
   cudaStream_t s = (cudaStream_t)stream;
-  if (cudaMemsetAsync(next, 0, sizeof(u32) * (cap ? 1 + H1UM_SMIDS : 1), s) != cudaSuccess) return 3;
+  if (cudaMemsetAsync(next, 0, sizeof(u32) * (cap ? H1UM_NEXT_WORDS : 2), s) != cudaSuccess) return 3;
   h1um_sm<<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCall*)calls, ncalls, M, (const uint8_t*)live, q,
-                                                                   den, (u32*)next, cap);
+                                                                   den, (u32*)next, cap, hw);
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
+// h1um_help, one wave of CTAs on stream: the units of the kh_units_multi_sm launch whose next this is that it hasn't
+// taken yet, while *flag (pinned host memory) is epoch; none once they've run out (next's take count past the units)
+extern "C" int kh_units_help(const void* calls, unsigned ncalls, unsigned M, const void* live, void* next, const void* flag,
+                             unsigned epoch, void* stream) {
+  if (!ncalls || M % 32 || !next || !flag) return 2;
+  carve<h1um_help>();
+  int dev = 0, sms = 0, per = 0;
+  if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1um_help, 32 * WARPS, 0) != cudaSuccess || per < 1)
+    return 3;
+  h1um_help<<<(unsigned)per * (unsigned)sms, 32 * WARPS, 0, (cudaStream_t)stream>>>(
+      (const UCall*)calls, ncalls, M, (const uint8_t*)live, (u32*)next, (const u32*)flag, epoch);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
