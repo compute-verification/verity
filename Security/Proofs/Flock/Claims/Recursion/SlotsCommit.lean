@@ -247,7 +247,7 @@ theorem readersTrue_layoutBTops {Col T : Type} (fin : Msg → List (ℕ × List 
     have h2 := hO.2 s hs
     rwa [stagedAll, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hsn, Option.map_some,
       Option.getD_some] at h2
-  have hst : StagedPart b.st s x (staged b.st x (roundsOf as cs) s) := by
+  have hsg : StagedPart b.st s x (staged b.st x (roundsOf as cs) s) := by
     have h1 := hsp s hsn
     rwa [stagedAll, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hsn, Option.map_some,
       Option.getD_some] at h1
@@ -269,9 +269,9 @@ theorem readersTrue_layoutBTops {Col T : Type} (fin : Msg → List (ℕ × List 
             List.mem_flatMap] at hp
           obtain ⟨hh, hmem, hp⟩ := hp
           have hc' : r.w.parts[s]?.bind partCircuit = some c := by rw [hpt]; exact hc
-          exact hmCalls_true ((h x _ s ws[s] r c hst hck hr hc').1 hh hmem) p hp
+          exact hmCalls_true ((h x _ s ws[s] r c hsg hck hr hc').1 hh hmem) p hp
     · obtain ⟨l, N, c, q, n, hst, hc, hq, hn, hp⟩ := mem_capsCalls hp
-      exact hmCalls_true ((h x _ s ws[s] r c hst hck hr hc).2 l N hst q hq n hn) p hp
+      exact hmCalls_true ((h x _ s ws[s] r c hsg hck hr hc).2 l N hst q hq n hn) p hp
 
 /-! ## `KSLin2` and `BitsLin2` with the slots' commit strings -/
 
