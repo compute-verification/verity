@@ -20,6 +20,8 @@ namespace FlockSoundness.TmplFold
 
 open FlockSoundness.SparseRows
 
+export FlockSoundness.SparseRows (except_bind_ok)
+
 theorem size_le_pow_log2ceil (n : ℕ) : n ≤ 2 ^ log2ceil n := by
   unfold log2ceil
   split
