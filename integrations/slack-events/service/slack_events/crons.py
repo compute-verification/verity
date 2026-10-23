@@ -13,7 +13,17 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from .consumer import ASK_CHANNELS, is_line_for
-from .deps import DEAD, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, STALL_RUNG, TOPIC, Deps, error
+from .deps import (
+    DEAD,
+    LAST_DONE,
+    LAST_ENQUEUED,
+    LAST_SUCCESS,
+    OLDEST,
+    STALL_RUNG,
+    TOPIC,
+    Deps,
+    error,
+)
 
 REMIND_S, ESCALATE_S = 15 * 60, 60 * 60
 WINDOW_S = 86400                                                 # how far back a post counts as open
