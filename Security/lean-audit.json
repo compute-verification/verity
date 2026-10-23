@@ -1539,6 +1539,7 @@
   "PouwWindow.Lanes",
   "PouwWindow.KnownRows",
   "PouwWindow.OwnPorts",
+  "PouwWindow.FullDraw",
   "Definitions.Accounting",
   "Models.Accounting.Assumptions",
   "Models.Accounting.Guarantees",
@@ -28738,6 +28739,16 @@
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged"
    ]
   },
+  "PouwWindow.FullDraw": {
+   "digest": "7a6c89099e353f0bbb80b8b9988a88a55884b921cc40abf3ff4759fc944a5f7b",
+   "definitions": {
+    "PouwWindow.Lanes.checkFull": "cbe1fe724d1240ba3b1b6c1d1088c53103945b38cc5ee53cf27c57532521c6d6",
+    "PouwWindow.Lanes.checkFull._sparseCasesOn_1": "c96bb9215c553e996d7b5b634b8c5f44c718fad9199ebce2e7ef431f80b7a84d",
+    "PouwWindow.Lanes.recordDraw": "685db409c6658cbe46f6a2f771ca3fde29fc983695b254482a8f5063fbe5ce9e",
+    "PouwWindow.Lanes.recordDraw._sparseCasesOn_1": "0a239fdcd9afd02b48767284eaa03c1fc2a3e0f574b7aa1f866d1fa352c31c46"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
   "PouwWindow.KnownRows": {
    "digest": "6e09af9ee9d5df9c59cfcc8ba8b24189e064b7939114302165f511b58996b02f",
    "definitions": {
@@ -28937,9 +28948,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Guarantees": {
-   "digest": "4667753662c526d1c056eb23c76945ba10fd6107568e1fc7d43d22ad404b0770",
+   "digest": "ce3cd48bea05cac98d17cbd165e0d72d49913a4b4527e9bd61caefabfdad91f5",
    "definitions": {
-    "Accounting.Guarantees.TS.LeafLanesSound": "99dfa5cd55f4cc250006717eb304408ea0c90489a0f9b2e58785428e24b853f6"
+    "Accounting.Guarantees.TS.LeafLanesSound": "b74684ea3340d963d2c4c14f10499857347c5de6e87da6c91332f285906e0727"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
@@ -28951,7 +28962,7 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Layer": {
-   "digest": "cbcf5b88d229cf403891a5c48b6ac5f85e46b04968ffdd2cb0eac9d392f39bd4",
+   "digest": "a7e0d0a844ea76c0fde568151d0d407eca7856a6214ba7c88c428d239ad73239",
    "definitions": {
     "Accounting.TS.Lanes.CellOk": "158b8dab81bba8cd07bc1fc200152ff9a2d64856cb4a63c4af4c737fda12ceb5",
     "Accounting.TS.Lanes.CombineOk": "31155e11f6af7c7913bb7102f4a6a6b6c2f754e7ab1270e9b615b553d30e7fd9",
@@ -28985,7 +28996,7 @@
     "Accounting.TS.Lanes.colOf": "4fc95a8f39ff64d2cbabaad7ef2aa27a7eb3fba31730f80ca8b9e087c27daa85",
     "Accounting.TS.Lanes.laneA": "f90091cef30bfe153f1affe904dc4cf6c83e394afb90b42d1ce00fbf8f70acab",
     "Accounting.TS.Lanes.laneB": "78ea246554a75626cddf43754006b7be81fe29d16e445cc14e168b3d0f195751",
-    "Accounting.TS.Lanes.leafLayer": "6765bb76bd226e5428d233ce177d0f65ddfa032578b53310d70e2d57d99677ce",
+    "Accounting.TS.Lanes.leafLayer": "6347b3864457f595554aa6c2e8ca7cacbbc5f184bfaef07d472d5b8eda88678e",
     "Accounting.TS.Lanes.portRead": "2951e1c544fb590546a1f5ec7c7c1b429a97af7912a7e2e1971c31243a57093c",
     "Accounting.TS.Lanes.rowOf": "c65381251429b4c6004d6e09e903c7686bc7e9b37a3917c16fcb48db98f83269",
     "Accounting.TS.Lanes.xorAll": "a96359ab1436113e227f53947be6c561c42fe7dba8207ab4d0908ce76934c193"
