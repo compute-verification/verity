@@ -8,11 +8,15 @@
 #     rank<r>/), A5_BUILD=DIR each rank's Programs of record (rank<r>/); the workload (integrations/vllm/workloads/$ROW.json) and
 #     the partition file (A5_PARTITION, default glm53_silu_mul_v2_tp8.json) are this tree's. A5_WINDOWS=bundles: the Commit wrote no
 #     window and deferred its ranks' replay to sealed bundles (A5_TP/commit/replay_bundle_p0_rank<r>, as Commit 38b2), so each
-#     rank's stand-in window is made here first from its bundle (`verity-vllm tp-serving-rows`, up to A5_JOBS ranks at once).
+#     rank's stand-in window is made here first from its bundle (`verity-vllm tp-serving-rows`, up to A5_JOBS ranks at once);
+#     A5_CHECKPOINT=DIR opens the registered tensors the bundles don't carry (a MoE partition's expert stacks) from the checkpoint
+#     of record, without its shard sha256 (each tensor read is held to the committed weights root).
 #   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
 #     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
 #   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only; A5_JOBS=N
-#   audits up to N ranks at once (a GLM-5.3 rank: its window ~14 min and ~50 GB, then M0's session ~31 GB).
+#   audits up to N ranks at once (a GLM-5.3 rank, SiluMul_v2 at step 16: its window ~16 min and ~11.7 GB, its audit ~10 GB;
+#   the MoE w2 coordinates of one layer, glm53_moe_w2_tp8_step16.json: its window ~16.5 min and ~13.3 GB, then ~32 min of
+#   the verifier's window and members, then each drawn member's session ~38.5 min and ~41 GB, bound by the Lean firewall).
 #   research run --on M --project verity --cwd clone --mem-gb 64 -- bash benchmarks/one_stage/a5_tp.sh
 # Kept in $OUT: a5's records and logs, the public files, the sessions (their proofs and records), the binaries' sha256 and the
 # circuits' pins; never a prover's file (inst-*, m*-inst-*, m*-private.bin: the rows and their salts) nor a circuit (its pin is).
@@ -69,7 +73,8 @@ bundle_windows() {  # COMMIT BUILD PARTITION OUT LOGS: each rank's stand-in wind
   local ranks=${A5_RANKS:-$($PY -c "from verity_vllm.pipeline.tp import serving_rows as S; print(','.join(map(str, range(S.record('$1')['world']))))")}
   mkdir -p $5
   echo ${ranks//,/ } | tr ' ' '\n' | xargs -P ${A5_JOBS:-1} -I{} sh -c \
-    "$TIME $REPO/.venv/bin/verity-vllm tp-serving-rows $1 --build-root $2 --partition $3 --out $4 --ranks {} > $5/tp-serving-rows-{}.log 2>&1" \
+    "$TIME $REPO/.venv/bin/verity-vllm tp-serving-rows $1 --build-root $2 --partition $3 --out $4 --ranks {} \
+      ${A5_CHECKPOINT:+--checkpoint-dir $A5_CHECKPOINT --no-verify-shards} > $5/tp-serving-rows-{}.log 2>&1" \
     || { tail -20 $5/tp-serving-rows-*.log; return 1; }
   grep -h '^\[tp-serving-rows\]' $5/tp-serving-rows-*.log
 }
