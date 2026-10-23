@@ -437,7 +437,7 @@ class Served:
         are no whole u16 words, which `h1window.table_reads_file` refuses to read."""
         S = self.program.fn.S()
         k = {name: k for name, k, _n in S.LINEARS}[S.CALLS[c][0]]
-        bits = dict(dict(S.TILES)[k].signature()[1].fields)[HW.OUTPUTS[0]].leaves
+        bits = sum(dict(dict(S.TILES)[k].signature()[1].fields)[HW.OUTPUTS[0]].leaf_widths())
         return HW.call_units(self.program)[c][1], bits // 16 if bits % 16 == 0 else 0
 
     def a_tree(self, run: Any, call: Any, words: np.ndarray) -> G.Registered:

@@ -171,8 +171,8 @@ def _core(record, run):
     round's root (`credit._a_link`), then each the Commit's value of its rows (`credit._arow`)."""
     c = record["commitment"]
     entries, layout = c["served"]["entries"], CR.layout_of(SV.descriptor(run.served.program))[0]
-    return CR._a_link(c["rounds"], entries), CR._arow(c["rounds"], entries, CR.commit_of(c["commit"])[0][1], layout,
-                                                      SV.PREFIX)
+    return (CR._a_link(c["rounds"], entries, len(run.calls)),
+            CR._arow(c["rounds"], entries, CR.commit_of(c["commit"])[0][1], layout, SV.PREFIX))
 
 
 def test_each_steps_a_table_is_the_commits_arow_and_each_rounds_ids_its_input_ids(tmp_path, monkeypatch):
