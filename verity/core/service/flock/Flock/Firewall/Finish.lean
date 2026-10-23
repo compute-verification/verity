@@ -688,7 +688,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
           (parseOpen b).map fun (xs, coins) => do openLive ch t r dom xs s coins; return none
         else (parseRep t s b).map fun q => do
           let z ← innerLive ch t r dom q
-          let coins ← get
+          let coins ← getThe (Array (Array F128))
           return z.map fun proof => { i, r, q, coins, proof }
       match run with
       | .error e => return (← refuse e)
