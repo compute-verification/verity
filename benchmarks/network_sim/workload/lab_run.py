@@ -71,6 +71,7 @@ import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 
 import mockdc  # puts network_traces, datacenter and the repository root on sys.path, for the next three
@@ -80,9 +81,14 @@ import graph
 import records
 from datacenter import Cadence
 from verity.core.protocols.certifier import calibration
-from verity.core.protocols.certifier.active import CANONICAL_STREAM, DATA, PAD, decode_frame, event_data, request_frames
+from verity.core.protocols.certifier.active import CANONICAL_STREAM, DATA, PAD, decode_frame, event_data, \
+    request_frames
+from verity.core.protocols.certifier.active import event as canonical_event
 from verity.core.protocols.certifier.audit import Audit
+from verity.core.protocols.certifier.certificate import Direction, parameters_digest, record_head
 from verity.core.protocols.certifier.schedule import ClockSync
+from verity.core.protocols.certifier.served import ServedProfile, derive
+from verity.core.protocols.certifier.service import LEAVES, LinkWindows
 
 from . import framing as F
 from . import lab as L
@@ -97,7 +103,7 @@ from .run import statement
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
 FABRIC_MS = 10  # the model's delay between a proxy and the client, each way
 PATHS = [*mockdc.PATHS, str(mockdc.ROOT / "integrations" / "vllm")]
-TAMPERS = ("flip-bit", "late")
+TAMPERS = ("flip-bit", "late", "extra")
 
 
 # The plan: the Program timed, the run modeled, the certifier calibrated on the model.
@@ -120,12 +126,13 @@ def time_sessions(ctx: Context, lab: L.Lab) -> dict[str, float]:
     return out
 
 
-def model_run(lab: L.Lab, D: int) -> dict[str, list[tuple[float, int]]]:
+def model_run(lab: L.Lab, D: int, closed: dict[str, int] | None = None) -> dict[str, list[tuple[float, int]]]:
     """Each block's requests in the model, as (send time in ms, the bucket it is released in) per session: the first ones
     half a bucket after the origin, each released in the bucket after it is sent, and its response at the client
     `FABRIC_MS` after bucket release + D + 1 starts. A request goes as soon as its messages are in and the block's
-    previous one has gone."""
-    tau = BUCKET_MS
+    previous one has gone. With `closed`, the buckets at each window's end in which the block's proxy releases no
+    request (its admission hold): one that would be is released at the next window's first bucket."""
+    tau, T = BUCKET_MS, WINDOW_BUCKETS
     ready = {m.stream: 0.0 for m in lab.messages.values() if m.src == OUTSIDE}
     sent: dict[str, list[tuple[float, int]]] = {b: [] for b in lab.blocks}
     moved = True
@@ -137,6 +144,8 @@ def model_run(lab: L.Lab, D: int) -> dict[str, list[tuple[float, int]]]:
                     break
                 t = max([tau / 2, *(ready[m.stream] + 1 for m in s.inbound), *(x for x, _ in sent[b][-1:])])
                 release = math.ceil(t / tau)
+                if closed and release % T >= T - closed[b]:
+                    release += T - release % T
                 sent[b].append((t, release))
                 ready.update({m.stream: (release + D + 1) * tau + FABRIC_MS for m in s.outbound})
                 moved = True
@@ -145,10 +154,16 @@ def model_run(lab: L.Lab, D: int) -> dict[str, list[tuple[float, int]]]:
     return sent
 
 
-def calibrate_run(lab: L.Lab, D: int, name: str) -> tuple[dict, ar.Setup, dict[str, dict]]:
-    """The calibration report on the modeled run, one configuration per block, and each block's plan for the proxy and
-    the audit."""
-    sent = model_run(lab, D)
+def admission_hold(lab: L.Lab, block: str, setup: ar.Setup) -> int:
+    """The block's admission hold Δ = δ + G + ⌈F/r⌉ (`active.Bucketer(hold=…)`) under the envelope every window
+    declares, G = ⌊(F − 1)·q/p⌋ for ρ = p/q: a request anchored before the window's last Δ buckets has its response's
+    F frames handed by δ + G buckets after its anchor and released within ⌈F/r⌉ more, inside its window."""
+    F, rho = lab.fixlen[block][0], setup.envelope.rho
+    return setup.envelope.delta + (F - 1) * rho.denominator // rho.numerator + -(-F // setup.egress_params.allocation)
+
+
+def _calibrate(lab: L.Lab, D: int, name: str, closed: dict[str, int] | None) -> tuple[list, dict, ar.Setup]:
+    sent = model_run(lab, D, closed)
     configs = []
     for b in lab.blocks:
         frames, arrival = [], []
@@ -160,26 +175,57 @@ def calibrate_run(lab: L.Lab, D: int, name: str) -> tuple[dict, ar.Setup, dict[s
                         "ingress": [{"link": L.INGRESS, "arrival_ms": arrival}]})
     report = calibration.calibrate({"bucket_ms": BUCKET_MS, "window_buckets": WINDOW_BUCKETS, "frame_bytes": FRAME_BYTES,
                                     "queue_capacity": QUEUE, "configurations": configs})
-    setup = ar.Setup(report)
-    envelope, sync_set, T = setup.envelope, setup.sync_set, WINDOW_BUCKETS
+    return sent, report, ar.Setup(report)
+
+
+def calibrate_run(lab: L.Lab, D: int, name: str) -> tuple[dict, ar.Setup, dict[str, dict]]:
+    """The calibration report on the modeled run, one configuration per block, and each block's plan for the proxy and
+    the audit. Each block's link is served (`plan["served"]`): its proxy holds requests (`admission_hold`), which moves
+    the model's releases, so the calibration is repeated on the held model until every block's hold is the one its
+    calibration gives. Then each window of the held model must derive (`served.derive` on its anchors under the
+    envelope), or no honest run of the Program is accepted by N2."""
+    T, closed = WINDOW_BUCKETS, None
+    for _ in range(8):
+        sent, report, setup = _calibrate(lab, D, name, closed)
+        holds = {b: admission_hold(lab, b, setup) for b in lab.blocks}
+        shut = {b: holds[b] + (lab.fixlen[b][1] - 1) // setup.ingress_params.allocation for b in lab.blocks}
+        if shut == closed:
+            break
+        closed = shut
+    else:
+        raise ValueError(f"the calibration on the held model doesn't settle: holds {closed}")
+    envelope, sync_set = setup.envelope, setup.sync_set
     if envelope.delta < D:
         raise ValueError(f"the calibration's envelope δ = {envelope.delta} is below the model's D = {D}")
+    if late := {b: n for b, n in closed.items() if n >= T}:
+        raise ValueError(f"blocks {late}: a response of F frames doesn't fit one window of {T} buckets behind the "
+                         f"admission hold (Δ = δ + G + ⌈F/r⌉, F_in − 1 more at r_in)")
     end = max(release + D + 1 + len(lab.events[b]) for b in lab.blocks for _, release in sent[b])
     windows = math.ceil((end + 2 * D + 20) / T)
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
     plans = {}
     for b in lab.blocks:
+        F, FIN = lab.fixlen[b]
         sessions = [[s.name, s.stream, [D] * len(lab.positions(b, s.index))] for s in lab.sessions[b]]
         requests = [{"stream": s.stream, "session": s.name, "frames": lab.request_frames(s), "trace_ms": t,
                      "enqueue": math.ceil(t / setup.ingress_params.bucket_ms), "send_ms": t}
                     for s, (t, _) in zip(lab.sessions[b], sent[b], strict=True)]
-        release = ar.model_releases(requests, setup.ingress_params, windows, setup.egress_params.bucket_ms)
+        release = ar.model_releases(requests, setup.ingress_params, windows, setup.egress_params.bucket_ms,
+                                    hold=holds[b])
+        counts = [[0] * T for _ in range(windows)]
+        for a in release.values():
+            counts[a // T][a % T] += FIN
+        for w, row in enumerate(counts):
+            if derive(row, envelope, ServedProfile(F, FIN, 1), setup.egress_params.allocation) is None:
+                raise ValueError(f"{b}'s modeled window {w} doesn't end idle under the envelope: requests anchored at "
+                                 f"{[t for t, n in enumerate(row) if n]}, responses of {F} frames")
         chosen, _, misses = calibration.choose_syncs([ar.model_frames(sessions, release, windows * T)], sync_set, T)
         chosen = (list(chosen) + [eager] * windows)[:windows]
         plans[b] = {"name": f"{name}/{b}", "windows": windows, "sessions": sessions, "requests": requests,
                     "model_release": {str(k): v for k, v in release.items()}, "model_misses": misses,
                     "syncs": [[envelope.delta, str(envelope.rho)]] * windows, "sync_policy": "envelope",
-                    "model_syncs": [[s.delta, str(s.rho)] for s in chosen], "live_model": name, "seed": 0}
+                    "model_syncs": [[s.delta, str(s.rho)] for s in chosen], "live_model": name, "seed": 0,
+                    "served": {"response_frames": F, "request_frames": FIN, "hold": holds[b]}}
     return report, setup, plans
 
 
@@ -249,7 +295,7 @@ class Server:
         tampered = False
         for s in self.sessions:
             body, writer, received = await self.requests[s.index]
-            at = 0
+            at = self.lab.request_pad(s)
             for m in s.inbound:
                 n = (m.bits + 7) // 8
                 self.values.update(F.decode(m, body[at:at + n]))
@@ -258,15 +304,19 @@ class Server:
             await asyncio.to_thread(self.ctx.model.evaluate, self.values, s.gates)
             self.log["compute_ms"].append(round((time.monotonic() - t0) * 1000, 3))
             payloads = {m.stream: F.encode(m, self.values) for m in s.outbound}
-            if self.tamper and s.outbound and not tampered:
+            if self.tamper in ("flip-bit", "late") and s.outbound and not tampered:
                 tampered = True
                 if self.tamper == "flip-bit":
                     first = payloads[s.outbound[0].stream]
                     payloads[s.outbound[0].stream] = bytes([first[0] ^ 1]) + first[1:]
                 else:
                     await asyncio.sleep(max(0.0, origin + received + self.hold * self.tau - time.monotonic()))
-            for k, p in enumerate(self.lab.positions(self.block, s.index)):
-                event = self.lab.event(self.block, p, payloads[self.lab.events[self.block][p][1].stream])
+            positions = self.lab.positions(self.block, s.index)
+            events = [self.lab.event(self.block, p, self.lab.payload(self.block, p, payloads)) for p in positions]
+            if self.tamper == "extra" and s is self.sessions[-1]:
+                positions = [*positions, len(self.lab.events[self.block])]
+                events.append(b"id: %d\n" % positions[-1] + canonical_event(b""))
+            for k, (p, event) in enumerate(zip(positions, events)):
                 writer.write(event)
                 now = time.monotonic() - origin
                 if k == 0:
@@ -345,7 +395,8 @@ class Client:
             del buffer[:whole]
 
     def _frame(self, block: str, frame: bytes, now: float) -> None:
-        """A link frame: the block's next event, the certifier's shaper handing them in position order."""
+        """A link frame: the block's next event, the certifier's shaper handing them in position order, a padding
+        event carrying no message."""
         kind, stream, body = decode_frame(frame)
         if kind == PAD:
             return
@@ -355,6 +406,8 @@ class Client:
             self.strays.append(f"{block}: frame {p} is no event of the Program")
             return
         _, m, j = self.lab.events[block][p]
+        if m is None:
+            return
         got = self.chunks[m.stream]
         got[j] = chunk
         if len(got) == self.lab.chunks(m) and m.stream not in self.payloads:
@@ -549,6 +602,45 @@ def launch(args, dc, out: Path, config: dict, lab: L.Lab, report: dict, setup: a
     return codes
 
 
+def n2_verdicts(lab: L.Lab, setup: ar.Setup, plans: dict[str, dict], published: dict[str, list], run: str) -> dict:
+    """N2's served verdict on each block's link (`service.LinkWindows` with the served profile of the block's (F, F_in)
+    and the run's windows): each window's two records as the proxy published them, their heads signed under the block's
+    name by a stand-in certifier (`n3_unit.Certifier`: the lab's proxy signs nothing), committed, registered, drawn and
+    delivered on the challenger's live coins, and checked by N2's verifier of record under the window's declared sync;
+    then the link's network verdict, the AND over its windows. A window without both records ends the registrations,
+    so it and every later window are refused. `served_counts` is the served counts' check alone on each window
+    registered. The verdicts are computed after the run, on the host, with no proof to time: the stream's clock is held
+    at 0, so no outcome is late."""
+    windows = plans[lab.blocks[0]]["windows"]
+    signer = U.Certifier.toy(2 * windows * len(lab.blocks), b"lab-n2")
+    ends = ((L.EGRESS, Direction.EGRESS, setup.egress_params, parameters_digest(setup.egress_params, setup.sync_set)),
+            (L.INGRESS, Direction.INGRESS, setup.ingress_params, parameters_digest(setup.ingress_params)))
+    out = {}
+    for b in lab.blocks:
+        lw = LinkWindows(b, setup.egress_params, setup.sync_set, signer.public, run, signer.session,
+                         ingress=setup.ingress_params, served=ServedProfile(*lab.fixlen[b], windows),
+                         proof_deadline=WINDOW_BUCKETS * BUCKET_MS / 1000)
+        stream = lw.stream(budget=windows, delta=2.0 ** -40, challenger=f"{run}/{b}", clock=lambda: 0.0)
+        syncs = [ClockSync(d, Fraction(rho)) for d, rho in plans[b]["syncs"]]
+        records = {(r.link, r.window): r for r in published[b]}
+        previous, counts = None, []
+        for w in range(windows):
+            if any((link, w) not in records for link, *_ in ends):
+                break
+            heads = [record_head(b, d, w, records[link, w].grid, records[link, w].status, g, digest)
+                     for link, d, g, digest in ends]
+            opening = lw.commit(w, *map(signer.certify, heads), U._salts(f"lab-n2/{b}/{w}".encode(), LEAVES))
+            reg = lw.register(stream, lw.registration(opening, previous))
+            previous, draw = reg.digest, stream.select(reg)
+            stream.deliver(draw, [lw.session(opening, draw)])
+            lw.outcome(stream, draw, opening, syncs)
+            counts.append(lw.served_check(opening, syncs))
+        verdict = lw.network_verdict(stream)
+        out[b] = {"accepted": verdict["accepted"], "windows": verdict["windows"], "refused": verdict["refused"],
+                  "served_counts": counts, "profile": list(lab.fixlen[b]), "digest": verdict["digest"]}
+    return out
+
+
 def run(args) -> int:
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -573,7 +665,8 @@ def run(args) -> int:
           f"GPUs): {ctx.model.n} gates, {len(lab.messages)} messages, "
           f"{sum(len(ss) for ss in lab.sessions.values())} sessions, {sum(len(e) for e in lab.events.values())} events; "
           f"slowest session {max(compute.values()) * 1000:.0f} ms, D = {D} buckets; envelope δ = {setup.envelope.delta}, "
-          f"ρ = {setup.envelope.rho}, r = {setup.egress_params.allocation}, r_in = {setup.ingress_params.allocation}",
+          f"ρ = {setup.envelope.rho}, r = {setup.egress_params.allocation}, r_in = {setup.ingress_params.allocation}; "
+          "served (F, F_in, hold Δ): " + ", ".join(f"{b} {tuple(plans[b]['served'].values())}" for b in lab.blocks),
           flush=True)
     codes = launch(args, dc, out, config, lab, report, setup, plans, tamper)
 
@@ -606,20 +699,24 @@ def run(args) -> int:
                                          sync_set=setup.sync_set)
     v5 = C.verdicts(v5_setup, v5_windows)
     (out / "n3_v5.json").write_text(json.dumps(v5, indent=1))
+    n2 = n2_verdicts(lab, setup, plans, published, name)
+    (out / "n2.json").write_text(json.dumps(n2, indent=1))
     for b in lab.blocks:
         mine = [v for v in n3.violations if v.where.split(":")[0] in (b, "")]
         blocks[b]["n3"] = {"accepted": not mine, "violations": [f"{v.code} {v.where}: {v.detail}" for v in mine]}
         blocks[b]["n3_v5"] = C.summary([r for r in v5 if r["port"].split(":")[0] == b])
+        blocks[b]["n2"] = n2[b]
     answers = results[OUTSIDE]["answers"]
     accepted = all(x["certifier"]["accepted"] and x["n3"]["accepted"] and not x["n3_v5"]["refused"]
-                   for x in blocks.values()) and answers == reference
+                   and x["n2"]["accepted"] for x in blocks.values()) and answers == reference
     summary = {"workload": args.workload, "spec": config["spec"], "blocks": blocks, "n3": n3.to_json() | {"violations": None},
                "answers": answers, "reference": reference, "answers_equal": answers == reference, "accepted": accepted,
                "delta_buckets": D, "session_compute_ms": {k: round(v * 1000, 3) for k, v in compute.items()},
                "windows": plans[lab.blocks[0]]["windows"], "exit": codes, "local": args.local,
                "grid": {"bucket_ms": BUCKET_MS, "window_buckets": WINDOW_BUCKETS, "frame_bytes": FRAME_BYTES,
                         "allocation": setup.egress_params.allocation, "ingress_allocation": setup.ingress_params.allocation,
-                        "envelope": [setup.envelope.delta, str(setup.envelope.rho)], "sync_set_size": setup.sync_set.size}}
+                        "envelope": [setup.envelope.delta, str(setup.envelope.rho)], "sync_set_size": setup.sync_set.size},
+               "served": {b: plans[b]["served"] for b in lab.blocks}}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
 
     for b, x in blocks.items():
@@ -630,6 +727,8 @@ def run(args) -> int:
               f"N3 {'holds' if x['n3']['accepted'] else 'REFUSED (' + '; '.join(x['n3']['violations'][:3]) + ')'}; "
               f"N3 v5 {'REFUSED (' + ', '.join(x['n3_v5']['refused']) + ')' if x['n3_v5']['refused'] else 'ACCEPTED'} "
               f"on {x['n3_v5']['accepted']} of {x['n3_v5']['windows']} windows; "
+              f"N2 served {'ACCEPTED' if x['n2']['accepted'] else 'REFUSED (windows ' + str(x['n2']['refused']) + ')'} "
+              f"on {x['n2']['windows']} windows at F = {x['n2']['profile'][0]}, F_in = {x['n2']['profile'][1]}; "
               f"latest tick {max((v for v in late.values() if v is not None), default=0):.1f} ms late against "
               f"{x['slack_ms']:.0f} ms of slack, "
               f"{sum(x['ticks_over_slack'].values())} over")
@@ -642,7 +741,8 @@ def run(args) -> int:
         print(f"a process failed: {codes}", file=sys.stderr)
     if args.expect == "refused":
         t = blocks[tamper[0]] if tamper is not None else None
-        hit = t is not None and not (t["certifier"]["accepted"] and t["n3"]["accepted"] and not t["n3_v5"]["refused"])
+        hit = t is not None and not (t["certifier"]["accepted"] and t["n3"]["accepted"] and not t["n3_v5"]["refused"]
+                                     and t["n2"]["accepted"])
         print(f"run {'REFUSED' if not accepted else 'ACCEPTED'}; the tampered block {'is' if hit else 'is not'} refused")
         return 0 if clean and hit else 1
     print(f"run {'ACCEPTED' if accepted else 'REFUSED'}")
