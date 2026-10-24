@@ -207,8 +207,8 @@ SHA512("verity/remote-session/payload-salts/v0") ‖ u64be j)` (`store_salt`), s
 the store's shape and the key (`expected_root`). A hello is refused before the registry draws when its store is shorter
 than the arenas, its layout isn't the store's regions, or its payload root isn't that root (`Binding.hold`). The
 verifier's record keeps the binding: the model's name and `checkpoint_sha512`, the store's shape, both roots and
-`bound`. A period's circuit is this tree's git hash, so the circuit a period signs commits to this code. The binding has
-no Lean yet (§8).
+`bound`. A period's circuit is this tree's git hash, so the circuit a period signs commits to this code. The binding's
+decision is also Lean (`lean/RemoteAudit/Store.lean`), and reading the files is Python only (§8).
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
 `codec.DEFAULT` (Daniel, 12 Oct, #1884). The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
@@ -1184,9 +1184,16 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile a receipt under a
   registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and the profile at δ.
   The chain's ordering is a random-oracle argument over a prover of bounded queries, which the statements must say.
-- **The binding's Lean.** The store binding (`store.py`, §3) is Python only. Its pin checks, the arena layout, the
-  expected payload root and `Binding.hold`'s decision have no port in `lean/` (`RemoteAudit`) and no difftest yet, so
-  `bound` rests on this Python until they do.
+- **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/RemoteAudit/Store.lean`
+  and held to the Python by a difftest (`lean/tests/test_binding.py`), refusals compared word for word: the pin from
+  its file's bytes (`pinOf`, `modelPin`), `checkpoint_sha512`, the payload salts, the expected payload root from the
+  weights blocks' digests (`expectedRoot`) and `Binding.hold`'s decision (`hold`). Reading the files stays Python only:
+  the pin's bytes, every pinned file's SHA-512 (`check`), the safetensors headers and config.json, the arena's layout
+  from them (`tensors`, `arena`) and the weights blocks' digests (`weight_digests`). The verifier still runs only the
+  Python `Binding`, so `bound` rests on it until the verifier asks the Lean's process too: the pin's bytes and role at
+  startup (`modelPin`), the weights digests, and each hello's decision (`hold`), a disagreement refusing the session as
+  the registry's does. The Lean's root is one thread over the whole tree, where `expected_root` spreads subtrees over
+  worker processes, so a whole node's store needs the Lean's root per subtree first.
 
 ## 9. Why the passes are chained
 
