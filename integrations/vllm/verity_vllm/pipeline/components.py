@@ -12,7 +12,7 @@ import time
 
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import REGISTRY
-from verity_vllm.check.match.batch_decomp import derived_shape
+from verity_vllm.check.match.derived_index import derived_shape
 from verity_vllm.program import workload as W
 from verity_vllm.program.boolean import word_descriptor
 

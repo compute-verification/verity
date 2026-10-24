@@ -9,7 +9,8 @@ import json
 import os
 import re
 
-from verity_vllm.check.match import batch_decomp as BD
+from verity_vllm.check.match import capture_log as CL
+from verity_vllm.check.match import derived_index as DI
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
 from verity_vllm.program import prefix_plan as PP
 
@@ -34,7 +35,7 @@ def sha256_file(p: str) -> str:
 
 def component_shape(d: str) -> tuple[int, ...] | None:
     """(LP, T[, C]) of a component dir: a derive_step dir (`construction_manifest.json`) or a fold record standing in for one."""
-    return BD.derived_shape(d)
+    return DI.derived_shape(d)
 
 
 _VARIANT_RE = re.compile(r"^stoch-t(?P<t>[0-9.]+)-p(?P<p>[0-9.]+)(?:-k(?P<k>[0-9]+))?$")
@@ -375,7 +376,7 @@ def requests_declared(run: MatchRun) -> tuple[dict, list[dict], dict, list[str]]
     bad_conv = [r["request_id"] for r in gp["requests"] if r["request_id"] != request_id_of(r["index"])]
     if bad_conv:
         c.fail(f"global Program request ids are not r<k> at their manifest index (COORD R15 ruling 2): {bad_conv[:6]}")
-    hdr_reqs, param_of, parent_of = BD.request_params(header)
+    hdr_reqs, param_of, parent_of = CL.request_params(header)
     h_ids = [r["request_id"] for r in hdr_reqs]
     dup_h = [k for k, n in collections.Counter(h_ids).items() if n > 1]
     if dup_h:

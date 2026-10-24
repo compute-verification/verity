@@ -32,8 +32,9 @@ import json
 import os
 from collections.abc import Callable
 
-from verity_vllm.check.match import batch_decomp as BD
+from verity_vllm.check.match import dag_form as DAG
 from verity_vllm.check.match import program_compare as C
+from verity_vllm.check.match import projection as PJ
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.check.replay.fork import die_with_parent
 
@@ -105,8 +106,8 @@ def leave() -> None:
 # ------------------------------------------------------------------------------------------------ canon (per Prog, per instance)
 
 class _CanonMemo:
-    """Mixin over compare.Prog (`MemoProg`) and batch_decomp.Projection (`_ProjectionFast`): `canon` computed once per (instance,
-    unfold) and returned as the SAME list object thereafter (no caller mutates it: compare._canon_step_relative, batch_decomp.dag_hashes
+    """Mixin over compare.Prog (`MemoProg`) and projection.Projection (`_ProjectionFast`): `canon` computed once per (instance,
+    unfold) and returned as the SAME list object thereafter (no caller mutates it: compare._canon_step_relative, dag_form.dag_hashes
     / live_cone and global_match iterate only).  A Projection's `_xreq` calls made during the first computation are recorded and
     replayed on every hit, so cross-request read counts are unchanged."""
 
@@ -337,7 +338,7 @@ def dag_multiset(A: C.Prog, B: C.Prog) -> dict:
     """The within-step criterion of record for two Programs loaded in this process: their live-cone DAG multisets (structural Merkle
     ids, one id space per process) are equal.  `program-dag` reads it when a step's order differs (GLM-5.3: the fold emits the
     prefill's indexer logits launch by launch, the Build per query row)."""
-    la, lb = BD.live_cone(A), BD.live_cone(B)
+    la, lb = DAG.live_cone(A), DAG.live_cone(B)
     ma, mb = collections.Counter(_dag_hashes_intern(A, la).values()), collections.Counter(_dag_hashes_intern(B, lb).values())
     return {"equal": ma == mb, "a_live": len(la), "b_live": len(lb), "only_a": sum((ma - mb).values()), "only_b": sum((mb - ma).values())}
 
@@ -348,7 +349,7 @@ def _live_cone_memo(P: C.Prog) -> set[int]:
         stats["live_cone_hit"] += 1
         return hit[1]
     stats["live_cone_miss"] += 1
-    s = BD.live_cone(P)
+    s = DAG.live_cone(P)
     _live_memo[id(P)] = (P, s)
     return s
 
@@ -363,8 +364,8 @@ def _proj_key(oracle: C.Prog, inst_idx, tok_node, weights_node, seed_node, peer_
     return (id(oracle), tuple(inst_idx), tok_node, w, seed_node, peer_node)   # [R17 D90] the request's peers node is part of the view
 
 
-class _ProjectionFast(_CanonMemo, BD.Projection):
-    """batch_decomp.Projection with canon memoised (`_CanonMemo`) that registers itself by its construction arguments.
+class _ProjectionFast(_CanonMemo, PJ.Projection):
+    """projection.Projection with canon memoised (`_CanonMemo`) that registers itself by its construction arguments.
     `Projection.__init__` is deterministic in (oracle, inst_idx, tok_node, weights_node, seed_node, peer_node) -- the label only names the
     object -- so two Projections with the same key are the same view of the fold: X-09 (`decompose`, run first inside GM-01 on the same
     decoded fold + components) and GM-01's G3 build one each per request; `projection()` below hands G3 the X-09 one (relabelled) instead
@@ -531,7 +532,7 @@ def reset_projections() -> None:
 # ------------------------------------------------------------------------------------------------ check() hooks
 
 def projection(loaded: dict, rid: str, oracle: C.Prog, label: str, inst_idx: list[int], tok_node, weights_node, seed_node,
-               peer_node=None) -> BD.Projection:
+               peer_node=None) -> PJ.Projection:
     """The request's Projection of the fold for GM-01's G3, built at most once per process per construction key:
       1. the alternate-criterion run reuses the verdict-of-record run's (per `_loaded`);
       2. the first run reuses X-09's when `decompose` built one with the SAME (fold, instance list, prompt node, weights nodes, seed node)
