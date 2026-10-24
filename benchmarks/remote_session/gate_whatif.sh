@@ -7,9 +7,10 @@
 # PIN are the audit's period and challenger key, COMMIT the verifier run's recorded commit; the gate sessions' peer is
 # the record's (PEER overrides it), RTT_MS the round trips replayed, PASS_SCALE and PASS_MS the pass models (each pass
 # its own time times F, or every pass MS), and BESIDE_ART a beside screen's run (fused.sh's), whose every
-# out/beside-*/beside.json phase is a pass model too (--pass-trace). Writes the line of record as auditor.sh does
-# ($OUT/auditor_line.json, $OUT/credit.md) and the replay ($OUT/gate_whatif.json, $OUT/whatif.md), and exits 1 when a
-# session replayed at its own round trip isn't its record.
+# out/beside-*/beside.json phase is a pass model too (--pass-trace). CREDIT_UNBOUND set credits in the what-if line a
+# session whose one failing check is `bound` (--credit-unbound: a run from before the Lean held the store's root).
+# Writes the line of record as auditor.sh does ($OUT/auditor_line.json, $OUT/credit.md) and the replay
+# ($OUT/gate_whatif.json, $OUT/whatif.md), and exits 1 when a session replayed at its own round trip isn't its record.
 #
 #   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 16 --timeout 30m --store-read \
 #     --env RUN_ART=art:... --env SUB=out/host/vID --env AUDITOR_ART=art:... --env PROVER_ART=art:... \
@@ -55,7 +56,7 @@ uv run python "$HERE/auditor_line.py" "$S/run/${P}out" --host-bytes "${HOST_BYTE
   2> "$OUT/auditor_line.err" || { cat "$OUT/fetch.log" "$OUT/auditor_line.err"; exit 3; }
 uv run python "$HERE/gate_whatif.py" "$S/run/${P}out" --line "$OUT/auditor_line.json" \
   --prover "$S/prover/out/prover.json" ${RTT_MS:+--rtt-ms $RTT_MS} ${PASS_SCALE:+--pass-scale $PASS_SCALE} \
-  ${PASS_MS:+--pass-ms $PASS_MS} "${TRACES[@]}" --table "$OUT/whatif.md" \
+  ${PASS_MS:+--pass-ms $PASS_MS} "${TRACES[@]}" ${CREDIT_UNBOUND:+--credit-unbound} --table "$OUT/whatif.md" \
   > "$OUT/gate_whatif.json" 2> "$OUT/gate_whatif.err"
 W=$?
 cat "$OUT/fetch.log" "$OUT/credit.md" "$OUT/gate_whatif.err" "$OUT/whatif.md"

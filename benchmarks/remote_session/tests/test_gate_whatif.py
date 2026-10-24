@@ -153,7 +153,8 @@ def test_a_host_runs_replay_at_its_own_round_trip_is_its_line_of_record_and_its_
     vy-auditor-1), its own `peer` being the audited node. The line of record `whatif` reads (`auditor_line`'s, as
     auditor_line.py writes it) takes the peer from that record, the session is of record and credited, and its replay
     at its own round trip gives back the release log's and the verifier's times to the nanosecond and that line's
-    shares on both clocks."""
+    shares on both clocks. The same session failing `bound` alone counts in the what-if line only under
+    `credit_unbound`, which names it, and failing another check too it never counts."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run" / "out"
     desc = al.descriptor("ab" * 20)
@@ -180,3 +181,19 @@ def test_a_host_runs_replay_at_its_own_round_trip_is_its_line_of_record_and_its_
     assert s["own"]["shares_auditor_clock"] == line["sessions"][0]["shares_auditor_clock"]
     assert doc["line_of_record"] == line["line"] and doc["identity_holds"]
     assert doc["whatif_line"][s["T"]]["credited_sessions"] == [0]
+    assert doc["whatif_line"][s["T"]]["unbound"] == [] and not s["unbound"]
+
+    def failing(*zero: str) -> dict:
+        (row,) = line["sessions"]
+        return {**line, "sessions": [{**row, "credit": {**row["credit"], "ok": False, "zero": list(zero)}}]}
+
+    def credited(doc: dict, *, credit_unbound: bool) -> dict:
+        return gw.whatif(out, {"sessions": proved}, json.loads(json.dumps(doc)), rtt_ms=(),
+                         credit_unbound=credit_unbound)["whatif_line"][s["T"]]
+
+    unbound = failing("not bound: the binding is store.py's alone")
+    assert credited(unbound, credit_unbound=False)["credited_sessions"] == []
+    assert credited(unbound, credit_unbound=True) | {"rows": None} == {
+        "credited_sessions": [0], "unbound": [0], "rows": None}
+    refused = failing("not bound: the binding is store.py's alone", "not accepted: the Lean refused it (receipt)")
+    assert credited(refused, credit_unbound=True)["credited_sessions"] == []

@@ -268,11 +268,15 @@ def traces_of(paths: list[Path]) -> dict[str, list[float]]:
 
 def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RTT_MS,
            pass_scale: tuple[float, ...] = (1.0,), pass_ms: tuple[float, ...] = (),
-           traces: dict[str, list[float]] | None = None) -> dict:
+           traces: dict[str, list[float]] | None = None, credit_unbound: bool = False) -> dict:
     """The line of record `doc` (`auditor_line.analyse(out, ...)`'s, `auditor_line.py`'s output) with each of its
     accepted paced sessions replayed under each pass model (`pass_models`, `traces` by name) at its own round trip and
-    at each of `rtt_ms`, with `prover` the prover's record."""
+    at each of `rtt_ms`, with `prover` the prover's record. `credit_unbound` credits in the what-if line a session
+    whose one failing check is `bound` (a run from before the Lean held the store's root), each named in `unbound`."""
     traces = traces or {}
+
+    def unbound(c: dict) -> bool:
+        return credit_unbound and not c["ok"] and all(z.startswith("not bound: ") for z in c["zero"])
     grid = [(m, ms) for m in pass_models(pass_scale, pass_ms, tuple(traces)) for ms in (None, *rtt_ms)]
     if "rates" not in doc:
         raise SystemExit("gate_whatif: the line of record was written before its forms' rates (its `ingress`): run "
@@ -285,7 +289,8 @@ def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RT
     for s, row in zip(v["sessions"], doc["sessions"]):
         if "shares_auditor_clock" not in row:
             continue
-        got: dict = {"k": s["k"], "T": row["T"], "credited": row["credit"]["ok"], "of_record": row.get("of_record")}
+        got: dict = {"k": s["k"], "T": row["T"], "credited": row["credit"]["ok"] or unbound(row["credit"]),
+                     "unbound": unbound(row["credit"]), "of_record": row.get("of_record")}
         rows.append(got)
         c = s["challenger"]
         d = out / "challenger" / c["session"] / "out" if c.get("challenger") == "gate" else \
@@ -321,7 +326,8 @@ def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RT
                          "waits": r["rows"][i]["waits"]} for r in ok),
                        key=lambda x: x["time"], default=dict.fromkeys(al.SHARES, 0.0))
 
-        doc_line[t] = {"credited_sessions": [r["k"] for r in ok], "rows": [
+        doc_line[t] = {"credited_sessions": [r["k"] for r in ok], "unbound": [r["k"] for r in ok if r["unbound"]],
+                       "rows": [
             {"pass": m, "rtt_ms": "own" if ms is None else ms, **{form: worst(i, form) for form in al.line.FORMS}}
             for i, (m, ms) in enumerate(grid)]}
     return {"registration": reg["digest"], "peer": doc.get("peer"), "line_of_record": doc["line"],
@@ -342,8 +348,9 @@ def table(doc: dict) -> str:
                    f"{'holds' if r['identity']['holds'] else 'FAILS: ' + json.dumps(r['identity'])} | {own} |")
     out.append("")
     for t, line in doc["whatif_line"].items():
-        out += ["", f"what-if line {t} (credited {line['credited_sessions']}), time-held / link-charged weights, the "
-                "worst stretch's L_max and the groups that waited on their coin / on the verifier:", "",
+        bare = f"; {line['unbound']} credited though not bound" if line.get("unbound") else ""
+        out += ["", f"what-if line {t} (credited {line['credited_sessions']}{bare}), time-held / link-charged weights, "
+                "the worst stretch's L_max and the groups that waited on their coin / on the verifier:", "",
                 "| passes | r (ms) | line | L_max (ms) | waits: coin / verifier |", "|---|---|---|---|---|"]
         for x in line["rows"]:
             v = [y for k, y in x.items() if k not in ("pass", "rtt_ms")]
@@ -370,9 +377,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pass-trace", type=Path, nargs="+", default=[], metavar="BESIDE_JSON",
                     help="replay with each phase's measured passes in each fused_beside.py beside.json (traces_of)")
     ap.add_argument("--table", type=Path, help="write each session's identity and the what-if line here, as Markdown")
+    ap.add_argument("--credit-unbound", action="store_true",
+                    help="credit in the what-if line a session whose one failing check is `bound` (a run from before "
+                    "the Lean held the store's root); the line names them")
     a = ap.parse_args(argv)
     doc = whatif(a.out, json.loads(a.prover.read_text()), json.loads(a.line.read_text()), rtt_ms=tuple(a.rtt_ms),
-                 pass_scale=tuple(a.pass_scale), pass_ms=tuple(a.pass_ms), traces=traces_of(a.pass_trace))
+                 pass_scale=tuple(a.pass_scale), pass_ms=tuple(a.pass_ms), traces=traces_of(a.pass_trace),
+                 credit_unbound=a.credit_unbound)
     print(json.dumps(doc, indent=1, default=str))
     if a.table is not None:
         a.table.write_text(table(doc))
