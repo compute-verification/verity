@@ -372,10 +372,12 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     assert all(s["credit"]["bound"]["ok"] for s in (honest, dropper))
     if defer_openings:
         assert honest["credit"]["ok"] and zero(doc) == {1: ["not accepted"]}
-        assert doc["line"][t]["credited_sessions"] == [0] and doc["line"][t]["4.4e+09"] == {
-            "k": 0, **{x: honest["shares_auditor_clock"]["4.4e+09"][x] for x in al.SHARES}}
+        mine = honest["shares_auditor_clock"][al.line.TIME_HELD]
+        assert doc["line"][t]["credited_sessions"] == [0] and doc["line"][t][al.line.TIME_HELD] == {
+            "k": 0, **{x: mine[x] for x in (*al.SHARES, "exact")}}
+        assert all(float(al.line.number(mine["exact"][x])) == mine[x] for x in al.SHARES)
         assert doc["credit"]["summary"].startswith("the line credits session(s) 0; session(s) 1 earn none")
-        shares, filler = (" / ".join(f"{honest['shares_auditor_clock'][b][x]:.4%}" for b in ("4.4e+09", "5.4e+10"))
+        shares, filler = (" / ".join(f"{honest['shares_auditor_clock'][b][x]:.4%}" for b in al.line.FORMS)
                           for x in ("time", "filler_time"))
         assert (f"| 0 | {t} | yes | yes | yes | yes | yes | credited: weights {shares}, filler {filler} |"
                 in al.table(doc).splitlines())
@@ -385,12 +387,13 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert re.fullmatch(r"its window closed incomplete: the challenger released (\d+ of its \d+ \w+ coins, )?"
                             r"\d+ of its \d+ openings coins; period p-1 closed incomplete \(1 of its 2 windows "
                             r"incomplete\)", dropper["credit"]["complete"]["reason"])
-        assert doc["line"][t]["4.4e+09"] == dict.fromkeys(al.SHARES, 0.0)
+        assert doc["line"][t][al.line.TIME_HELD] == {**dict.fromkeys(al.SHARES, 0.0),
+                                                     "exact": dict.fromkeys(al.SHARES, "0")}
         assert doc["line"][t]["credited_sessions"] == []
         assert doc["credit"]["summary"].startswith("the line credits zero: no session is credited, complete, accepted, "
                                                    "pinned and bound; session 0: not complete: period p-1 closed "
                                                    "incomplete")
-    assert doc["measured"][t]["auditor"]["4.4e+09"]["k"] == 0
+    assert doc["measured"][t]["auditor"][al.line.TIME_HELD]["k"] == 0
     unlogged = line("lean", pins=None)
     assert unlogged["sessions"][0]["credit"]["pinned"]["reason"] == NO_PINS and unlogged["pins"] is None
     assert unlogged["sessions"][0]["credit"]["credited"]["reason"] == NO_PINS
@@ -468,7 +471,8 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
         cells = f"no: {why} | yes | yes | no: {why}"
     assert s["credit"]["zero"] == zero and not s["credit"]["ok"]
     t = s["T"]
-    assert doc["line"][t]["credited_sessions"] == [] and doc["line"][t]["4.4e+09"] == dict.fromkeys(al.SHARES, 0.0)
+    assert doc["line"][t]["credited_sessions"] == [] and doc["line"][t][al.line.LINK_CHARGED] == {
+        **dict.fromkeys(al.SHARES, 0.0), "exact": dict.fromkeys(al.SHARES, "0")}
     assert doc["credit"]["summary"] == ("the line credits zero: no session is credited, complete, accepted, pinned "
                                         f"and bound; session 0: {'; '.join(zero)}")
     assert f"| 0 | {t} | {cells} | yes | zero |" in al.table(doc).splitlines()
