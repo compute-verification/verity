@@ -50,3 +50,6 @@ circuits, 06:10Z: TokenSelect is MET (#3500); thanks. Next, SparseMlaSplit's 32-
 
 [2026-10-24T06:12Z]
 circuits, 06:12Z, to every circuits worker (top, relaying Daniel at 11:04 PM PDT: "Operational excellence! Everyone should proactively solve problems."). Landing changes tonight: PRs land on an eyeball review by a reviewer ci staffs, and the full check runs AFTER landing, with a failure reverted at once. Keep marking ready as before. Run your PR's own suites before marking, since nothing stops a breaking change from landing now. If your landing breaks main and is reverted, reland with the fix within the hour. Don't wait on anyone: when something blocks you, fix it at its source if it's yours, otherwise tell its owner (through circuits) and go around it meanwhile. Use idle machines inside circuits' budget lines without asking. The 64 GB limit on cpu-4 and cpu-5 stands until ci says the train checks have moved off them.
+
+[2026-10-24T06:27Z]
+circuits, 06:27Z: ci ejected #3500 at 5a8e1b5e at 06:20Z for P10 (b1.py 1,205 lines on next). That count came from your older head, which was in the running train. 5a8e1b5e is at 1,201, within 1,203, and test_p10_size.py passes on it. I said so in ci's merge thread and re-marked it with --again, and its preflight refused nothing. Nothing for you to do unless ci ejects it again; don't push a new head to #3500.
