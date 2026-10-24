@@ -1771,6 +1771,55 @@ def test_the_upload_ring_writes_each_slot_as_given_through_its_wraparound():
     assert ring.i == 11 % 4
 
 
+def test_the_key_table_copies_each_calls_keys_from_its_first_upload_and_uploads_past_it():
+    keys = PPD._Keys(F, bytes(range(32)), HM96)
+    copies = []
+
+    def copy(dst, src, n, raw):
+        copies.append(raw)
+        ctypes.memmove(dst, src, n)
+    table = PPD._KeyTable(keys, PPD._Uploads(torch.device("cpu"), slots=4), torch.device("cpu"), copy, slots=2)
+    dst, root = torch.zeros(176, dtype=torch.uint8), bytes(range(64))
+    for w, index, m16, raw in ((0, 0, 16, 5), (0, 0, 16, 5), (1, 3, 32, 5), (0, 0, 16, 6), (2, 1, 16, 5), (1, 3, 32, 5)):
+        dst.fill_(0xA5)
+        table.put(dst, w, root, index, m16, raw, None)
+        assert PPD._bytes(dst[:168]) == PPD.call_keys(F, keys.salt, root, index, m16, HM96)
+    assert copies == [5, 5, 5, 5] and len(table.at) == 2          # stream 6 and the third key uploaded, no copy
+
+
+def test_eager_calls_leave_every_filler_row_zero_as_m_moves_within_a_shape(device_run):
+    make, _, weights, *_ = device_run
+    run = make()
+    for m in (20, 31, 17, 32, 25, 18):
+        x = torch.randn(m, 1024).to(torch.bfloat16)
+        run.gemm(0, x, weights[0], None)
+        sh = run.shapes[(32, 256, 1024)]
+        assert sh.dirty == m and bool((sh.xa[m:] == 0).all()) and torch.equal(sh.xa[:m], x.float())
+    with torch.inference_mode():
+        sh.xa[18:30] = 3.0                                         # a replay's rows, which this host doesn't see
+    run.eager_only = False
+    run.gemm(0, torch.randn(17, 1024).to(torch.bfloat16), weights[0], None)
+    assert bool((sh.xa[17:] == 0).all())
+
+
+def test_each_calls_a_root_lands_in_the_pass_buffer_and_the_second_steps_keys_come_from_the_table(device_run):
+    make, _, weights, roots, salt = device_run
+    run = make()
+    for step in range(2):
+        for i, w in enumerate((0, 1, 0)):
+            sh = run._shape(16, weights[w].shape[0], 1024)
+            tree = sh.b["tree_a"]
+            with torch.inference_mode():                           # A's tree, which the device would write
+                tree.copy_((torch.arange(len(tree)) * 7 + 3 * i + step).to(torch.uint8))
+            run.gemm(w, torch.randn(8, 1024).to(torch.bfloat16), weights[w], None)
+            size = run._pipe(w, sh)[0].size["tree_a"]
+            assert PPD._bytes(run.roots_buf[64 * i:64 * (i + 1)]) == PPD._bytes(tree[size - 64:size])
+            assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(F, salt, roots[w], i, 16, run.tree_hash)
+        run.end_pass()
+        run.key_table.keys = None                                  # the second step hashes nothing
+    assert len(run.key_table.at) == 3
+
+
 def test_the_host_path_commits_what_the_reference_path_commits(device_run, tmp_path):
     """The same calls through native keys and through `call_keys` itself (the pure path): the same keys uploaded for every
     call, the same launches, and the same retained manifest (records, roots, commitment)."""
@@ -1816,6 +1865,43 @@ def edge_rows(k: int = 1024) -> tuple:
         words[r, [p for p in range(k) if p % 8][:count]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
     words[5, 3] = np.float32(200.0).view(np.uint32)
     return words, torch.from_numpy(words.view(np.float32).copy()), *stats(words)
+
+
+def test_the_screen_launches_tritons_compiled_kernel_directly_only_where_triton_would_launch_the_same(monkeypatch):
+    """After Triton's own launch at a specialization, `launch` calls its compiled kernel with the same arguments; another
+    alignment compiles again, and a launch hook (Triton's chains hold none by default) or a CPU tensor takes Triton's path."""
+    from verity_vllm.protocol_options import pouw_pearl_c_screen as PS
+    enter, exit_ = types.SimpleNamespace(calls=[]), types.SimpleNamespace(calls=[])
+    knobs = types.SimpleNamespace(runtime=types.SimpleNamespace(debug=False, add_stages_inspection_hook=None, launch_enter_hook=enter,
+                                                                launch_exit_hook=exit_),
+                                  compilation=types.SimpleNamespace(instrumentation_mode=""))
+    monkeypatch.setitem(sys.modules, "triton", types.SimpleNamespace(knobs=knobs))
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
+    monkeypatch.setattr(torch._C, "_cuda_getCurrentRawStream", lambda device: 77, raising=False)
+    monkeypatch.setattr(PS, "_COMPILED", {})
+    log = []
+
+    class Kernel:
+        pre_run_hooks: ClassVar[list] = []
+
+        def __getitem__(self, grid):
+            def own(*args, BLOCK):
+                log.append(("triton", grid, args[1].data_ptr() % 16, BLOCK))
+                return types.SimpleNamespace(run=lambda *a: log.append(("direct", *a)), function="fn", packed_metadata="meta")
+            return own
+    x, kernel, out = type("OnDevice", (), {"is_cuda": True})(), Kernel(), torch.zeros(64, dtype=torch.uint8)
+    assert out.data_ptr() % 16 == 0
+    for o in (0, 0, 2, 2, 16):
+        PS.launch(kernel, 3, (x, out[o:], 4096, 1.0), 1024)
+    assert [e[0] for e in log] == ["triton", "direct", "triton", "direct", "direct"]
+    assert log[1][:10] == ("direct", 3, 1, 1, 77, "fn", "meta", None, None, None) and log[1][10] is x
+    assert log[1][12:] == (4096, 1.0, 1024) and log[1][11].data_ptr() == out.data_ptr()
+    enter.calls.append(print)
+    PS.launch(kernel, 3, (x, out, 4096, 1.0), 1024)
+    enter.calls.clear()
+    PS.launch(kernel, 3, (out, out, 4096, 1.0), 1024)
+    PS.launch(kernel, 3, (x, out, 4096, 2.0), 1024)
+    assert [e[0] for e in log[5:]] == ["triton", "triton", "triton"]
 
 
 def test_the_fused_screen_decides_the_rows_as_the_torch_screen_and_the_rules(monkeypatch):
@@ -1937,12 +2023,13 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
 def test_each_device_records_kernels_refuse_their_own_grain():
     """pearl_c_sm120's kernels take k a multiple of 1,024 and n of 128, pearl_c_sm90's (h100's) k of 256 and n of 64, inside
     the scheme's domain: an n = 2,624, k = 1,536 linear (GLM-5.3's at TP 8) runs on sm_90a and not on sm_120, n = 160 on
-    neither, and k = 256 is under both schemes' k_min."""
-    shapes = {0: (2624, 1536), 1: (160, 6144), 2: (7168, 256), 3: (4096, 4096)}
+    neither, k = 512 is under both schemes' k_min, and k = 256 is h100's census k and under sm_120's grain."""
+    shapes = {0: (2624, 1536), 1: (160, 6144), 2: (7168, 512), 3: (4096, 4096), 4: (7168, 256)}
     sm90 = PPD.refusals("pearl-c-h100-v1-h3", shapes)
     assert [r.split(":")[0] for r in sm90] == ["linear 1", "linear 2"] and "k a multiple of 256 and n of 64" in sm90[0]
+    assert "1024 <= k" in sm90[1]
     sm120 = PPD.refusals(SCHEME, shapes)
-    assert [r.split(":")[0] for r in sm120] == ["linear 0", "linear 1", "linear 2"]
+    assert [r.split(":")[0] for r in sm120] == ["linear 0", "linear 1", "linear 2", "linear 4"]
     assert "k a multiple of 1,024 and n of 128" in sm120[0]
 
 

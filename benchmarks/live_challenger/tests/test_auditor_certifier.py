@@ -96,7 +96,11 @@ A_SAMPLING_REFUSED = [
     (["--tokens", "32\n"], "--tokens '32\\n': 16 to 64"),
     (["--in", "2"], "unrecognized arguments: --in"),
     (["--delta-buckets", "74"], "unrecognized arguments: --delta-buckets"),
-    (["--tamper", "burst"], "--tamper 'burst'"),
+    (["--tamper", "burst"], "--tamper 'burst': one of ['late', 'extra', 'drop', 'token'], or none for an honest shim"),
+    (["--tamper", "honest"], "--tamper 'honest'"),
+    (["--tamper", "Drop"], "--tamper 'Drop'"),
+    (["--tamper", "drop,token"], "--tamper 'drop,token'"),
+    (["--tamper", ""], "--tamper ''"),
     (["--profile", "both"], "--profile 'both': one of ['planned', 'served']"),
     (["--profile", "Served"], "--profile 'Served'"),
     (["--upstream", "http://10.0.0.2:8011"], "unrecognized arguments: --upstream"),
@@ -175,6 +179,26 @@ def test_a_rehearsal_runs_through_the_tunnel_and_its_end_is_status_and_fetch(hos
     for argv in (["status", "c20261023T110000Z-ffff"], ["fetch", "c20261023T110000Z-ffff"], ["status", "c../../etc"]):
         rc, out = A.gate(argv, host)
         assert rc == 3 and json.loads(out)["refused"]
+
+
+@pytest.mark.parametrize("tamper", ["late", "extra", "drop", "token"])
+def test_each_tampering_shim_is_recorded_rehearsed_alone_and_its_verdict_ends_the_run(host, tmp_path, tamper):
+    """late, extra and drop are runs the rehearsal's check refuses and token one it accepts (only the I/O tie refuses
+    it), each the one strategy of its rehearsal, whose shim `certifier_serve.py` derives from the gate's own plan."""
+    verdict = "accepted" if tamper == "token" else "refused"
+    run = started_run(host, "--tamper", tamper)
+    request = json.loads((host.certifier / run / "request.json").read_text())
+    assert request["tamper"] == tamper
+    assert A.certifier_command(request, tmp_path, "u")[-2:] == ["--strategies", tamper]
+
+    summary = HONEST | {"verdict": verdict, "network_verdict": {"accepted": verdict == "accepted", "windows": 3}}
+    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+                          command=rehearsal(f'(out / "summary.json").write_text(json.dumps({{"upstream": url, '
+                                            f'"runs": {{{tamper!r}: {summary!r}}}}}))'),
+                          wait=lambda proc, seconds: proc.wait())
+    assert end["rc"] == 0 and end["runs"] == {tamper: {"verdict": verdict, "network": verdict == "accepted",
+                                                       "audit": True, "salt": True,
+                                                       "salt_again": "refused: already revealed"}}
 
 
 def test_a_rehearsal_past_its_minutes_is_stopped_and_a_tunnel_that_never_came_up_runs_none(host):
