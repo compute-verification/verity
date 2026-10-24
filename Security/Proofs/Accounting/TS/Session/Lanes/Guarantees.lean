@@ -26,10 +26,11 @@ hypotheses at each session, but port uniqueness and the `ok` port, which that ac
 names, at known content naming `o0`), full checking (`kd = n`) and a unit (`0 < n`), which the draw check gives, and
 registered served roots (`RowsSession.ServedRegistered`), which the reads built from `own` and the one-read check
 give, and two named premises: the
-lanes' circuits compute their Definition, and the combine's circuit its pieces' composition on bits, at their port
-rows, read through the layout's decodes (`Accounting.TS.Lanes.LaneComputes` and `CombineLowers` at `Lanes.decL`,
-`Lanes.decC`; the complete check makes those rows the registered reads). That the combine's pieces' lowerings compose to
-its Definition is proved (`Accounting.TS.Lanes.combineComputes_of_lowers`, `Pouw.H1Zy.combineBits_bitsOf`), and that
+lanes' and the combine's circuits compute their pieces' compositions on bits, at their port rows, read through the
+layout's decodes (`Accounting.TS.Lanes.LaneLowers` and `CombineLowers` at `Lanes.decL`, `Lanes.decC`; the lane's dequant
+and chain words stay at their word views; the complete check makes those rows the registered reads). That the pieces'
+lowerings compose to the Definitions is proved (`Accounting.TS.Lanes.laneComputes_of_lowers`,
+`combineComputes_of_lowers`, `Pouw.H1Zy.laneBits_bv`, `combineBits_bitsOf`), and that
 each Definition's `ok = 1` means the lane's or the combine's check
 (`Accounting.TS.Lanes.leafChecks_of_computes`, which gives `Accounting.Assumptions.TS.LeafChecks`), at a `K`
 the lanes bind at (`32 ∣ K`, `K < 2^17`), which the leaf verifier's tile check, part of the acceptance, gives
@@ -91,10 +92,11 @@ of the sessions' registrants' records, `LeafColl`, or a collision of a session's
 given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses (`RowsSession.CR`, the
 window's law `Accounting.Assumptions.TS.WindowLaw`, and
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta,$$
-`δ ≥ 0`), the 32 lanes' circuits computing
-their Definition and the combine's its pieces' composition on bits, at their port rows through the layout's decodes at
-the served tile (`Accounting.TS.Lanes.LaneComputes` at `servedTile K`, the lanes' chain words `chain` and the dequant's
-word view `dqW`, and `Accounting.TS.Lanes.CombineLowers` at `decC nw (servedTile K)`: `PouwXor32_v2`, `PouwEq32_v2` and
+`δ ≥ 0`), the 33 circuits computing
+their pieces' compositions on bits, at their port rows through the layout's decodes at
+the served tile (`Accounting.TS.Lanes.LaneLowers` at `servedTile K`: the s8 multiply's Baugh–Wooley steps and clamp,
+`PouwZyCell_v2`, `PouwMuxBit_v2`, `PouwMask32_v2` and `PouwEq32_v2` at their lowerings, `Pouw.H1Zy.laneBits`, at the
+lanes' chain words `chain` and the dequant's word view `dqW` on bits; and `Accounting.TS.Lanes.CombineLowers` at `decC nw (servedTile K)`: `PouwXor32_v2`, `PouwEq32_v2` and
 `PouwAndBit_v2` at their lowerings, `Pouw.H1Zy.combineBits`; under the complete check every port the
 decodes read is registered and opens at its registered root), with the unit's served checks at the Definition's own
 dequant and partials (`dqOf dqW`, `partOf chain`), each
@@ -125,7 +127,7 @@ def LeafLanesSound : Prop :=
     (∀ x w i k, (sess x w i k).CR) →
     (∀ k, Accounting.Assumptions.TS.WindowLaw (fun x w i => sess x w i k) (fun x w i => out x w i k)) →
     (∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
-    (∀ x w i, LaneComputes (servedTile K) chain dqW (sess x w i)) →
+    (∀ x w i, LaneLowers (servedTile K) chain dqW (sess x w i)) →
     (∀ x w i, CombineLowers (sess x w i) (decC nw (servedTile K))) →
     (leafLayer sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
       (fun _ _ _ k => PouwWindow.Lanes.readFull (servedTile K) (k.map Fin.val))

@@ -1,6 +1,7 @@
 import Proofs.Pouw.H1Zy.Combine
 import Proofs.Pouw.H1Zy.CombineBits
 import Proofs.Pouw.H1Zy.Lane
+import Proofs.Pouw.H1Zy.LaneBits
 
 /-!
 # H1's drawn-leaf statements: their Definitions on words mean what `LeafChecks` reads
@@ -15,4 +16,7 @@ its word view.
 every lane cell's record z as the exact dot of its rows' codes and its y as the dequant of it, and every partial word as
 the masked chain word (`Pouw.H1Zy.laneOk_spec`). `Proofs.Accounting.TS.Session.Lanes.Lane` reads it as `LeafChecks`'
 lane field.
+
+`LaneBits`: the lane's body on bits computes it on words (`Pouw.H1Zy.laneBits_bv`), each restated piece's lowering its
+word view (the multiply's, `Pouw.H1Zy.immaS8Bits_bv`, from Baugh–Wooley and the clamp).
 -/

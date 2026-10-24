@@ -1,5 +1,6 @@
 import Proofs.Accounting.TS.Session.Lanes.Combine
 import Proofs.Pouw.H1Zy.Lane
+import Proofs.Pouw.H1Zy.LaneBits
 
 /-!
 # A lane's part of `LeafChecks` from its Definition
@@ -22,6 +23,12 @@ What stays of the field is the first two claims, `LaneComputes`: on every wire a
 agrees with, the decoded `ok` is the Definition's on `laneIn`. `leafChecks_of_computes` gives `LeafChecks` from it and
 `CombineComputes`. Still a parameter: `chain`, the lane's chain words, which are to be `h1zy.lane_partial`'s fold (the
 fx1 chain over the noise from σ_J and the keys from σ_R), and `dqW`'s float roundings.
+
+`LaneComputes` is in turn split at the lane's pieces: `LaneLowers` says the circuit computes the body on bits, its pieces
+at their lowerings (`Pouw.H1Zy.laneBits`: the s8 multiply's Baugh–Wooley steps and clamp, `PouwZyCell_v2`,
+`PouwMuxBit_v2`, `PouwMask32_v2`, `PouwEq32_v2`), the dequant and the chain's words at their word views on bits. That
+each restated piece's lowering computes its word view, and so their composition the body on words, is proved
+(`Pouw.H1Zy.laneBits_bv`). The two are equivalent (`laneLowers_iff`).
 -/
 
 namespace Accounting.TS.Lanes
@@ -185,6 +192,35 @@ def LaneComputes {K nw : ℕ} (T : Tile)
     (∀ u, ∀ g ∈ (sess (some l)).P.io u, (sess (some l)).Circ.eval vals g = vals g) →
     (decL K nw T (sess (some l)) (portRead (sess (some l)) vals)).ok =
       Pouw.H1Zy.laneOk chain dqW (laneIn K nw T (portBit (sess (some l)) (portRead (sess (some l)) vals)))
+
+/-- **Each lane's circuit computes its pieces' composition at its port rows**: at lane `l`'s session `sess (some l)`, on
+every wire assignment the key program's evaluation agrees with on every unit's wires, the `ok` word `decL` reads from the
+port rows is `PouwH1LaneZy_v1{PouwH1Tile_v1}`'s body on bits (`Pouw.H1Zy.laneBits`) on the bits of the words `laneIn`
+reads, at the dequant's word view `dqW` and the chain's words `chain` on bits (`Pouw.H1Zy.liftDq`, `liftChain`). What
+it rests on is circuit-check's lowering of `PouwH1LaneZy_v1`, which composes those pieces. -/
+def LaneLowers {K nw : ℕ} (T : Tile)
+    (chain : LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32)
+    (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (sess : Option (Fin 32) → RowsSession) : Prop :=
+  ∀ l (vals : Fin (sess (some l)).Circ.N → Bool),
+    (∀ u, ∀ g ∈ (sess (some l)).P.io u, (sess (some l)).Circ.eval vals g = vals g) →
+    (decL K nw T (sess (some l)) (portRead (sess (some l)) vals)).ok =
+      Pouw.H1Zy.laneBits (Pouw.H1Zy.liftChain chain) (Pouw.H1Zy.liftDq dqW)
+        (laneIn K nw T (portBit (sess (some l)) (portRead (sess (some l)) vals))).bits
+
+/-- **`LaneComputes` is `LaneLowers`**: the pieces' lowerings compose to the body on words (`Pouw.H1Zy.laneBits_bv`). -/
+theorem laneLowers_iff {K nw : ℕ} (T : Tile)
+    (chain : LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32)
+    (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (sess : Option (Fin 32) → RowsSession) :
+    LaneLowers T chain dqW sess ↔ LaneComputes T chain dqW sess := by
+  unfold LaneLowers LaneComputes
+  simp only [Pouw.H1Zy.laneBits_bv]
+
+/-- **`LaneComputes` from `LaneLowers`.** -/
+theorem laneComputes_of_lowers {K nw : ℕ} {T : Tile}
+    {chain : LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32}
+    {dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16} {sess : Option (Fin 32) → RowsSession}
+    (h : LaneLowers T chain dqW sess) : LaneComputes T chain dqW sess :=
+  (laneLowers_iff T chain dqW sess).1 h
 
 /-- **`LeafChecks` from the circuits computing their Definitions**: with `dq` and `part` the Definition's (`dqOf dqW`,
 `partOf chain`), `LaneComputes` and `CombineComputes` give `Accounting.Assumptions.TS.LeafChecks` at the layout's
