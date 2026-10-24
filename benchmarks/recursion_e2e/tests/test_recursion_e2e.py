@@ -320,6 +320,9 @@ def test_a_flipped_coin_is_refused_when_one_statement_refuses_it_and_every_one_h
 
 def test_headline_is_a_whole_session_only_when_every_step_ran(tmp_path: Path) -> None:
     o = job(tmp_path)
+    assert RP.read(o)["headline"]["complete"] is False                     # no vcap: no RecCap, no V* verdict
+    (o / "steps" / "vcap" / "r1" / "out").mkdir(parents=True)
+    (o / "steps" / "vcap" / "r1" / "rc").write_text("0\n")
     doc = RP.read(o)
     assert doc["headline"]["complete"] is True and doc["headline"]["ok"] is False      # every step ran; alg-p0 is refused
     assert "Verdict: one whole recursive session, **not accepted**" in RP.markdown(doc)
@@ -357,7 +360,7 @@ def test_e2e_is_one_pass_with_its_negative(capsys) -> None:
     assert RUN.main(["run", "--dry-run", "--e2e", "--cpu", "--K", "64", "--N", "16", "--node", "vy-nebius-cpu-3"]) == 0
     cmd = capsys.readouterr().out.split()
     assert "--gpu-host" not in cmd and cmd[4] == "vy-nebius-cpu-3"
-    assert "STEPS=build,inner,vstage,oprove,lean,negative" in cmd and "REPEAT=1" in cmd and "GPU=0" in cmd
+    assert "STEPS=build,inner,vstage,vcap,oprove,lean,negative" in cmd and "REPEAT=1" in cmd and "GPU=0" in cmd
     assert "WARM=0" in cmd and "RUNS=1" in cmd and "NEG=challenge,query" in cmd
 
 

@@ -32,7 +32,7 @@ import rec_profile as RP  # noqa: E402
 
 NODE = "vy-nebius-1"
 STEPS = RP.ORDER
-E2E = ("build", "inner", "vstage", "oprove", "lean", "negative")
+E2E = (*RP.E2E_STEPS, "negative")
 KIND = "bench/recursion-e2e/v1"
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 
@@ -234,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--mem-gb", type=int, default=64)
         p.add_argument("--cpus", type=int, default=32)
         p.add_argument("--max-min", type=int, default=0, help="the run's limit (default from the lease model: max_min)")
-        p.add_argument("--e2e", action="store_true", help="one pass: build, inner, vstage, oprove, lean, negative once each, "
+        p.add_argument("--e2e", action="store_true", help="one pass: build, inner, vstage, vcap, oprove, lean, negative once each, "
                        "one session per prove and no warm one")
         p.add_argument("--env", action="append", default=[], metavar="KEY=VALUE",
                        help="passed to job.sh and on to 85 (LEVELS=L0, REPEAT_LEAN=1, TAG=..., KEEP_DATA=1, ...); repeatable")
