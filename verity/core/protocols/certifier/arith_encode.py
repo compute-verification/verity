@@ -85,8 +85,10 @@ decisions since the last arrival, carried across windows (`code_v1._State.run`):
 composition keeps as a 2-bit counter (C = 3). Async's lag bits take one context (C = 1).
 
 **A window's charge** (`ChargeCount_v1{N}`) is the one call the compile unit makes a window, for a window that sends
-only decisions (no hits, resumes, order entries or lag bits: the compile slice's class). Its N slots are the scan's asks
-in order, `en` (the slot asks) and `bit` (its decision), and it counts `code_v1._window`'s segment for them:
+only decisions (no hits, resumes, order entries or lag bits: the compile slice's class). Its N slots are the window's
+decisions in order, `en` (the slot holds one) and `bit` (the decision), and a slot with `en` 0 changes nothing. In the
+replay's units they are the ones the window's load loads (`protocol/charge-chain.md`). It counts
+`code_v1._window`'s segment for them:
 - n_arrived, the enabled slots' count, as the book's Exp-Golomb bin, one general step at the bin's (cum, freq, total)
   read from the public table by a one-hot of the count's bit length, then, once n ≥ 2, its offset in the bin, one more
   step, uniform;
@@ -99,7 +101,9 @@ min(run, 2), which `code_v1` carries across windows, so the next window's call t
 reaches, and the run's first carry, the priors and run 0 (`first_carry`). A later window's carry is a value, which
 `charge_chain` commits from window to window (`ChargeLink_v1{N}`). The count, the bins, the contexts and the
 frequencies are the circuit's. `charge_fields(N)` lays out the public inputs as a row's fields, and `build_charge`
-makes the call inline.
+makes the call inline. After each decision the carried words (the count's state, the counts and run) are committed,
+`sha512.commit`'s copies: a row each in a lowering and no gate in the traced circuit, so no word's linear form carries
+the decisions before it and the build is linear in N.
 
 **ENC-REPLAY's model** (`KTContext_v1`) is the estimate advice v1 used before `code_v1`, kept for the bit-checking
 variant. C contexts each count their 0s and 1s (`replay._KT`, from the registered priors). Context ctx gives f = 2n + 1
@@ -120,7 +124,8 @@ non-restoring division with 32 quotient bits, and the two ends) 1,855, the scali
 decision, counted, is the step and the book's
 model: 2,580 ANDs, and the context counter's few. ChargeCount_v1{N} is about 2,553 a decision (the two, less what
 they share, and the run counter) and about 15,000 a window (n_arrived's two steps, the four zero counts and the
-finish): 19,536 at N = 2, 50,664 at N = 14 and 178,978 at N = 64. ArithEncodeStep_v1{K=18, BIN=1} is 3,244: the
+finish): 19,536 at N = 2, 50,664 at N = 14 and 178,978 at N = 64. A lowering adds the copies, about 175 rows a
+decision (`size`'s ``carry``). ArithEncodeStep_v1{K=18, BIN=1} is 3,244: the
 interval 1,855, the 18 scaling slots 1,188 and the segment check 201. {K=18, BIN=0} is 4,964, and ArithEncodeFinish_v1
 6. KTContext_v1{C=3, NW=24} is 1,202.
 """
@@ -135,6 +140,7 @@ from verity.ml.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array, Tuple
+from verity.ml.commitments.gates import sha512 as SG
 from verity.core.protocols.certifier.head_check import BIT, _part
 
 PREC = 32
@@ -769,6 +775,11 @@ def _build_charge(C, S, *elements):
         C.phase = "run"
         inc = [C.AND(run[0].inv(), run[1].inv()), _or(C, run[0], run[1])]
         run = mux(C, e, [C.AND(x, b.inv()) for x in inc], run)
+        # committed once a decision, or each carried word's form grows with every decision before it; not `C.commit`,
+        # which a gate trace (circuit-check, evaluation) takes as the word itself
+        C.phase = "carry"
+        tally, n0, n1 = [SG.commit(C, x) for x in tally], [SG.commit(C, x) for x in n0], [SG.commit(C, x) for x in n1]
+        run = SG.commit(C, run)
     for zf, zt in zip(f["zfreq"], f["ztotal"]):
         tally = _build_count_step(C, num, *tally, [ONE], [ZERO] * 16, zf, zt)
     fin = _build_count_finish(C, SimpleNamespace(CW=CW), *tally, const_bits((1 << CW) - 1, CW))
@@ -1094,11 +1105,12 @@ def _staged(kind: str, key: tuple) -> dict[str, int]:
 
 def size(kind: str = "step", **st) -> dict[str, int]:
     """ANDs by stage of the step (K, BIN), the finish, the model (C, NW), the counting step (K, BIN, CW), its finish
-    (CW), the book's model (C) or a window's charge (N), traced on a counting circuit."""
+    (CW), the book's model (C) or a window's charge (N), traced on a counting circuit. The charge's ``carry`` is no AND:
+    its copies of the carried words, once a decision, each a row of a lowering and no gate."""
     keys = {"step": ("K", "BIN"), "finish": (), "kt": ("C", "NW"), "count": ("K", "BIN", "CW"),
             "count_finish": ("CW",), "book_kt": ("C",), "charge": ("N",)}[kind]
     out = dict(_staged(kind, tuple(st[k] for k in keys)))
-    out["ands"] = sum(out.values())
+    out["ands"] = sum(v for k, v in out.items() if k != "carry")
     return out
 
 
