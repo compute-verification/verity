@@ -43,7 +43,9 @@ theorem buildNode_spec (fid : String) (k : ℕ) (form : Form) (callee : Defn) (a
     (h : buildNode fid k form callee args axes n nxs = .ok (out, args')) (hscan : form = .scan → 0 < args.size)
     (hdims : ∀ i < args.size, (args[i]!).dims = none) :
     args'.size = args.size ∧ (∀ i < args.size, (args'[i]!).ty = (args[i]!).ty ∧ (args'[i]!).seq = (args[i]!).seq) ∧
-      args.size = callee.params.size ∧ Shape callee form args' out n nxs := by
+      args.size = callee.params.size ∧
+      (∀ i < args'.size, ∀ e L : ℕ, (args'[i]!).dims = some (e, L) → L = 0 → (callee.params[i]!).2.leaves = 0) ∧
+      Shape callee form args' out n nxs := by
   unfold buildNode at h
   rcases form
   all_goals dsimp only at h
@@ -76,7 +78,8 @@ theorem buildNode_spec (fid : String) (k : ℕ) (form : Form) (callee : Defn) (a
             rw [this, getElem!_pos callee.params j (by omega)]) hloop
     simp only [Array.length_toList] at hl
     rcases hl with ⟨-, -, -, hl⟩ | hl
-    · exact ⟨rfl, fun i _ => ⟨rfl, rfl⟩, hsz', rfl, fun i hi => hl i (by omega)⟩
+    · exact ⟨rfl, fun i _ => ⟨rfl, rfl⟩, hsz', fun i hi e L hd _ => (by rw [hdims i hi] at hd; cases hd), rfl,
+        fun i hi => hl i (by omega)⟩
     · exact hl.elim
   case batch =>
     split at h
@@ -168,7 +171,16 @@ theorem buildNode_spec (fid : String) (k : ℕ) (form : Form) (callee : Defn) (a
           · exact absurd hf (by intro h; injection h)) hloop
     simp only [Array.length_toList] at hl
     rcases hl with ⟨-, -, -, -, -, -, hO, hl⟩ | hl
-    · refine ⟨by omega, fun i hi => ⟨(hl i (by omega)).1, (hl i (by omega)).2.1⟩, hsz'.symm, rfl, fun i hi => ?_⟩
+    · refine ⟨by omega, fun i hi => ⟨(hl i (by omega)).1, (hl i (by omega)).2.1⟩, hsz'.symm,
+        fun i hi e L hd hL => ?_, rfl, fun i hi => ?_⟩
+      · obtain ⟨-, -, h3⟩ := hl i (by omega)
+        rcases h3 with ⟨h3, -⟩ | ⟨ax, mt, ln, h4, h5, h6, -⟩
+        · rw [h3] at hd; cases hd
+        · obtain ⟨L', hax, -, hdvd, -⟩ := axis_spec ax _ _ _ h4
+          rw [h6, hax] at hd
+          simp only [Option.some.injEq, Prod.mk.injEq] at hd
+          rw [← h5]
+          exact Nat.eq_zero_of_zero_dvd (by rw [← hL, ← hd.2]; exact hdvd)
       obtain ⟨h1, -, h3⟩ := hl i (by omega)
       rcases h3 with ⟨h3, h4⟩ | ⟨ax, mt, ln, h4, h5, h6, h7⟩
       · exact Or.inl ⟨h3, by rw [h1, h4]⟩
@@ -213,7 +225,7 @@ theorem buildNode_spec (fid : String) (k : ℕ) (form : Form) (callee : Defn) (a
           ∀ j < i + 1, j ≠ 0 → (st.2[j]!).ty = (args[j]!).ty ∧ (st.2[j]!).seq = (args[j]!).seq ∧
             (j ≤ nxs → ∃ ln e, (args[j]!).ty = .array ln e ∧ e = (callee.params[j]!).2 ∧
               (st.2[j]!).dims = some (ln, e.leaves) ∧ ln ∈ st.1) ∧
-            (¬ j ≤ nxs → (args[j]!).ty = (callee.params[j]!).2)) _ _
+            (¬ j ≤ nxs → (args[j]!).ty = (callee.params[j]!).2 ∧ (st.2[j]!).dims = none)) _ _
         (by refine ⟨rfl, rfl, fun j hj hj0 => by omega⟩)
         (by
           rintro i hi ⟨L, O⟩ t hI hf
@@ -226,7 +238,7 @@ theorem buildNode_spec (fid : String) (k : ℕ) (form : Form) (callee : Defn) (a
               (∀ j < i + 1, O'[j]! = O[j]!) → j ≠ 0 → (O'[j]!).ty = (args[j]!).ty ∧ (O'[j]!).seq = (args[j]!).seq ∧
               (j ≤ nxs → ∃ ln e, (args[j]!).ty = .array ln e ∧ e = (callee.params[j]!).2 ∧
                 (O'[j]!).dims = some (ln, e.leaves) ∧ ln ∈ L') ∧
-              (¬ j ≤ nxs → (args[j]!).ty = (callee.params[j]!).2) := by
+              (¬ j ≤ nxs → (args[j]!).ty = (callee.params[j]!).2 ∧ (O'[j]!).dims = none) := by
             intro j hj L' hL' O' hO' hj0
             rw [hO' j hj]
             obtain ⟨h1, h2, h3, h4⟩ := hall j hj hj0
@@ -263,18 +275,29 @@ theorem buildNode_spec (fid : String) (k : ℕ) (form : Form) (callee : Defn) (a
             rcases Nat.lt_succ_iff_lt_or_eq.1 hj with hj | rfl
             · exact hall' j hj _ (fun x hx => hx) _ (hpush _) hj0
             · rw [show i + 1 = O.size by omega, getElem!_push_eq]
-              exact ⟨rfl, rfl, fun h => absurd h hx, fun _ => ty_beq (by simpa using hc)⟩) hloop
+              exact ⟨rfl, rfl, fun h => absurd h hx, fun _ => ⟨ty_beq (by simpa using hc), hdims _ (by omega)⟩⟩)
+          hloop
       simp only [List.length_range', Std.Legacy.Range.size] at hl
       rcases hl with ⟨hO, hO0, hl⟩ | hl
       · have hOs : O.size = args.size := by omega
-        refine ⟨hOs, fun i hi => ?_, hsz'.symm, a, b, by rw [hR], rfl, ty_beq (by simpa using hcarry), ?_, fun i hi hi0 => ?_⟩
+        refine ⟨hOs, fun i hi => ?_, hsz'.symm, fun i hi e L hd hL => ?_, a, b, by rw [hR], rfl,
+          ty_beq (by simpa using hcarry), ?_, fun i hi hi0 => ?_⟩
         · rcases Nat.eq_zero_or_pos i with rfl | hi0
           · rw [hO0]; exact ⟨rfl, rfl⟩
           · obtain ⟨h1, h2, -⟩ := hl i (by omega) (by omega)
             exact ⟨h1, h2⟩
+        · rcases Nat.eq_zero_or_pos i with rfl | hi0
+          · rw [hO0, hdims 0 hpos] at hd; cases hd
+          · obtain ⟨-, -, h3, h4⟩ := hl i (by omega) (by omega)
+            by_cases hx : i ≤ nxs
+            · obtain ⟨ln, e', -, h6, h7, -⟩ := h3 hx
+              rw [h7] at hd
+              simp only [Option.some.injEq, Prod.mk.injEq] at hd
+              rw [← h6, hd.2, hL]
+            · rw [(h4 hx).2] at hd; cases hd
         · rw [hO0]; exact ty_beq (by simpa using hinit)
         · obtain ⟨h1, -, h3, h4⟩ := hl i (by omega) hi0
-          refine ⟨fun hx => ?_, fun hx => by rw [h1]; exact h4 hx⟩
+          refine ⟨fun hx => ?_, fun hx => by rw [h1]; exact (h4 hx).1⟩
           obtain ⟨ln, e, h5, h6, h7, h8⟩ := h3 hx
           have := len_eq L n ln h8 hL1 hL2
           subst this
@@ -289,12 +312,16 @@ def CalleeOk (c : Defn) : Prop :=
   (c.prim = true → c.body = default ∧ c.gates = 1 ∧ c.outLeaves = 1 ∧ ∃ w, c.ret = .value w) ∧
   (c.prim = false → c.body.params = c.params ∧ c.body.ret.count = c.ret.leaves ∧ c.outLeaves = c.ret.leaves)
 
+/-- A node's argument of no leaves to a member (a batch's or scan's) goes to a parameter of `c` of none. -/
+def DimsOk (c : Defn) (nd : Node) : Prop :=
+  ∀ i < nd.args.size, ∀ e L : ℕ, (nd.args[i]!).dims = some (e, L) → L = 0 → (c.params[i]!).2.leaves = 0
+
 /-- What the decoder establishes of a node calling `c`: one argument per parameter, each as many references as its type
-has leaves, a primitive node calling a primitive and a call or scan a composite, and `buildNode`'s `Shape`. -/
+has leaves, a primitive node calling a primitive and a call or scan a composite, `buildNode`'s `Shape`, and `DimsOk`. -/
 def NodeOk (c : Defn) (nd : Node) : Prop :=
   nd.args.size = c.params.size ∧ (∀ i < nd.args.size, (nd.args[i]!).seq.count = (nd.args[i]!).ty.leaves) ∧
   (nd.form = .prim → c.prim = true) ∧ (nd.form = .call ∨ nd.form = .scan → c.prim = false) ∧
-  Shape c nd.form nd.args nd.out nd.n nd.nxs
+  Shape c nd.form nd.args nd.out nd.n nd.nxs ∧ DimsOk c nd
 
 theorem beq_prim_batch : (Form.prim == Form.batch) = false := rfl
 theorem beq_call_batch : (Form.call == Form.batch) = false := rfl
@@ -307,7 +334,7 @@ theorem lt_mul_of (m n E j : ℕ) (hm : m < n) (hj : j < E) : m * E + j < n * E 
   omega
 
 theorem up_ok (c : Defn) (nd : Node) (hc : CalleeOk c) (hn : NodeOk c nd) : Resolve.UpOk nd c := by
-  obtain ⟨hsz, hcnt, hpr, hco, hsh⟩ := hn
+  obtain ⟨hsz, hcnt, hpr, hco, hsh, -⟩ := hn
   intro i hi j hj m hm
   cases hp : c.prim
   · obtain ⟨hbp, hbr, hol⟩ := hc.2 hp
@@ -348,7 +375,7 @@ theorem up_ok (c : Defn) (nd : Node) (hc : CalleeOk c) (hn : NodeOk c nd) : Reso
     exact (Nat.not_lt_zero _ hi).elim
 
 theorem down_ok (c : Defn) (nd : Node) (hc : CalleeOk c) (hn : NodeOk c nd) : Resolve.DownOk nd c := by
-  obtain ⟨hsz, hcnt, hpr, hco, hsh⟩ := hn
+  obtain ⟨hsz, hcnt, hpr, hco, hsh, -⟩ := hn
   intro j hj
   obtain ⟨form, fn, args, out, axes, n, nxs⟩ := nd
   dsimp only at *
@@ -399,7 +426,7 @@ theorem down_ok (c : Defn) (nd : Node) (hc : CalleeOk c) (hn : NodeOk c nd) : Re
         omega
 
 theorem op_ok (c : Defn) (nd : Node) (hn : NodeOk c nd) : Resolve.OpOk nd c := by
-  obtain ⟨hsz, hcnt, hpr, hco, hsh⟩ := hn
+  obtain ⟨hsz, hcnt, hpr, hco, hsh, -⟩ := hn
   intro i hi m hm t ht
   obtain ⟨form, fn, args, out, axes, n, nxs⟩ := nd
   dsimp only at *

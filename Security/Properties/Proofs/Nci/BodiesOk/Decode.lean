@@ -1,4 +1,5 @@
 import Properties.Proofs.Nci.BodiesOk.Node
+import Properties.Proofs.Nci.BodiesOk.Nonneg
 
 /-!
 # The decoder's invariant
@@ -41,10 +42,11 @@ def RefIn (b : Body) (r : Ref) : Prop :=
   (r.p = false → r.i < b.nodes.size ∧ r.j < (b.nodes[r.i]!).out.leaves)
 
 /-- What the decoder establishes of the body of Definition `i`: each node calls an earlier Definition as `NodeOk`
-says, its arguments are sequences of parts, and every reference names a leaf. -/
+says, its arguments are sequences of parts, none naming a negative position, and every reference names a leaf. -/
 def BodyFacts (defs : Array Defn) (i : ℕ) (b : Body) : Prop :=
   (∀ k < b.nodes.size, (b.nodes[k]!).fn < i ∧ NodeOk defs[(b.nodes[k]!).fn]! (b.nodes[k]!) ∧
-    ∀ a < (b.nodes[k]!).args.size, (∃ ps : Array Part, ((b.nodes[k]!).args[a]!).seq = Seq.ofParts ps) ∧
+    ∀ a < (b.nodes[k]!).args.size,
+      (∃ ps : Array Part, ((b.nodes[k]!).args[a]!).seq = Seq.ofParts ps ∧ ∀ q ∈ ps, PartNonneg q) ∧
       ∀ t < ((b.nodes[k]!).args[a]!).seq.count, RefIn b (((b.nodes[k]!).args[a]!).seq.get t)) ∧
   ∀ t < b.ret.count, RefIn b (b.ret.get t)
 

@@ -60,7 +60,7 @@ theorem body_ok (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]!
     by_cases hi : i < ((P.defs[d]!).body.nodes[k]!).args.size
     swap
     · rw [getElem!_neg _ i hi] at ht; exact absurd ht (Nat.not_lt_zero _)
-    obtain ⟨⟨ps, hps⟩, hrefs⟩ := hargs i hi
+    obtain ⟨⟨ps, hps, -⟩, hrefs⟩ := hargs i hi
     obtain ⟨hp1, hp2⟩ := hrefs t ht
     obtain ⟨q, hq, hnm⟩ := names_of _ ps hps t ht
     have hord := (hchk k hk i hi q hq _ hnm).2
