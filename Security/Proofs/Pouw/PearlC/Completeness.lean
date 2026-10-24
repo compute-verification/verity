@@ -3,7 +3,6 @@ import Definitions.Pouw.PearlC.DevicePricesLoop
 import Models.Pouw.Assumptions.PearlC.HonestCap
 import Proofs.Pouw.PearlC.HonestWords
 import Proofs.Pouw.Copy
-import Proofs.Pouw.PearlC.CompletenessMoved
 import Proofs.Pouw.PearlC.GameDefs
 
 /-!

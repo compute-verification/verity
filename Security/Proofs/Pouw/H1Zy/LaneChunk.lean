@@ -1,6 +1,5 @@
 import Proofs.Pouw.H1Zy.LaneChunkDefs
 import Proofs.Pouw.H1Zy.Lane
-import Proofs.Pouw.H1Zy.LaneChunkMoved
 import Proofs.Pouw.H1Zy.LaneDefs
 import Proofs.Pouw.H1Zy.CombineDefs
 

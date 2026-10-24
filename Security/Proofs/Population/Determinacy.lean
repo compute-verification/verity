@@ -1,5 +1,4 @@
 import Proofs.Population.Dataflow
-import Proofs.Population.DataflowDefs
 
 /-!
 # Integrity: robust determinacy from single assignment and acyclicity

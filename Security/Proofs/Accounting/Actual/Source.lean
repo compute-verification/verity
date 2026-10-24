@@ -1,6 +1,5 @@
 import Proofs.Accounting.Actual.SourceDefs
 import Proofs.Accounting.Actual.Physical
-import Proofs.Accounting.Actual.SourceMoved
 
 /-!
 # Ingress by source

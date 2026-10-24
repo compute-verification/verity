@@ -4,9 +4,8 @@ import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Model.BandGraph
-import Proofs.Pous.Model.ColumnGameDefs
-import Proofs.Pous.Model.PebblingDefs
-import Proofs.Pous.Model.BandGraphDefs
+import Proofs.Pous.Model.ColumnGame
+import Proofs.Pous.Model.Pebbling
 
 /-!
 # Band-graph combinatorics (game-independent)

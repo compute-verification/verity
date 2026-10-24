@@ -3,7 +3,7 @@ import Models.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Model.PebblingDefs
+import Proofs.Pous.Model.Pebbling
 import Proofs.Pous.Model.Invertible
 
 /-!

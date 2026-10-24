@@ -1,7 +1,6 @@
 import Proofs.Population.LongValueDefs
 import Proofs.Population.Leakage
-import Proofs.Population.LongValueMoved
-import Proofs.Population.DataflowDefs
+import Proofs.Population.Dataflow
 
 /-!
 # Long values buy nothing

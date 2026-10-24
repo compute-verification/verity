@@ -17,7 +17,7 @@ import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram2
 import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram3
 import Proofs.Pouw.PearlC.PeelFp4Checks.T16nWords
 import Proofs.Pouw.PearlC.Fp4
-import Proofs.Pouw.PearlC.PeelFp4VectorsDefs
+import Proofs.Pouw.PearlC.PeelFp4Vectors
 
 /-!
 # Conformance of `Fp4Dev.peelFp4` to `pearl_c4.py` (staging, nothing pinned)

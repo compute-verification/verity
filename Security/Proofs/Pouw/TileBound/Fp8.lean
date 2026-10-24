@@ -1,7 +1,6 @@
 import Proofs.Pouw.TileBound.Proofs
 import Proofs.Pouw.TileBound.Fp8Defs
-import Proofs.Pouw.TileBound.DefsDefs
-import Proofs.Pouw.TileBound.Fp8DefsDefs
+import Proofs.Pouw.TileBound.Defs
 
 /-!
 # The FP8-tile model: the E4M3 count from the FP4-tile core (proofs)

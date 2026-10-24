@@ -1,5 +1,4 @@
 import Proofs.Pouw.PearlC.W1
-import Proofs.Pouw.PearlC.W1Defs
 
 /-!
 # The γ-gap property over W1's priced sum

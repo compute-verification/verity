@@ -1,7 +1,7 @@
 import Proofs.Population.Exfiltration
 import Proofs.Population.Leakage
-import Proofs.Population.DataflowDefs
-import Proofs.Population.ExfiltrationMoved
+import Proofs.Population.Dataflow
+import Proofs.Population.ExfiltrationDefs
 
 /-!
 # Exfiltration before detection: from the draw and the population to the probability of theft

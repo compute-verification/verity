@@ -3,7 +3,7 @@ import Models.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Model.ColumnGameDefs
+import Proofs.Pous.Model.ColumnGame
 
 /-!
 # The two-directional column game: from a winning holding to a schedule

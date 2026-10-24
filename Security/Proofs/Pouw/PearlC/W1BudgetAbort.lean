@@ -1,6 +1,5 @@
 import Proofs.Pouw.PearlC.W1
-import Proofs.Pouw.PearlC.Sha512Defs
-import Proofs.Pouw.PearlC.W1Defs
+import Proofs.Pouw.PearlC.Sha512
 
 /-!
 # W1 doesn't truncate

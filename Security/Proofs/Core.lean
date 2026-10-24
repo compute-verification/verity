@@ -24,9 +24,7 @@ import Proofs.Core.TC
 import Proofs.Core.Fp32
 import Proofs.Core.BooleanDefs
 import Proofs.Core.Decisive
-import Proofs.Core.BooleanMoved
 import Proofs.Core.CircuitDefs
-import Proofs.Core.DecisiveDefs
 import Proofs.Core.GameDefs
 import Proofs.Core.PrivatePartitionDefs
 import Proofs.Core.TC.Pipeline

@@ -1,7 +1,6 @@
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Proofs.Accounting.Actual.WipePoolDefs
 import Proofs.Core.Game.Prob
-import Proofs.Accounting.Actual.WipePoolMoved
 
 /-!
 # The memory cap's lifetime pool, as lemmas over an abstract run tree

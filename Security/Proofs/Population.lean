@@ -27,15 +27,6 @@ import Proofs.Population.LongValueDefs
 import Proofs.Population.NecessityDefs
 import Proofs.Population.ObliviousDefs
 import Proofs.Population.Partition
-import Proofs.Population.AddressMapDefs
-import Proofs.Population.ChiPoolMoved
-import Proofs.Population.DataflowDefs
-import Proofs.Population.DrawPressureMoved
-import Proofs.Population.ExfiltrationMoved
-import Proofs.Population.LongValueMoved
-import Proofs.Population.NecessityMoved
-import Proofs.Population.ObliviousMoved
-import Proofs.Population.PartitionDefs
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
@@ -101,4 +92,21 @@ uniform `k`-subset of `N` units escapes `b` wrong ones with probability at most 
 commitment, what leaves through the halt is at most `cum + Δ ℓ`, so under the deployed draw it is below
 `(1 + Δ) ℓ + (n/k) ln (1/δ)` with probability at least `1 - δ`, and at most `j (ℓ + n/k) + Δ ℓ` on average through the
 halt the `j`-th detection triggers.
+
+Populations' vocabulary, which no guarantee statement or assumption reads: units over committed value slots with public
+read and write sets (`Dataflow`), unit functions and correctness, what a checker confirms of the dataflow (single
+assignment, acyclicity), cones and egress, and the value-dependent variant a machine trace is (`DynPopulation`). The
+question it serves: which object sampled proofs' guarantee, "at most `m` units are wrong", must be about for each policy
+to follow from it. `Partition`: a circuit's partition as a population over its committed wires, and the orders on its
+units. `LongValueDefs`: slots that hold `Option V`, ⊥ where no opening has the declared width, and the verifier's view
+of a run's openings. `ObliviousDefs`: when a trace's read sets depend on no value (or only on the public inputs), the
+classical notion that constrains only honest runs, address closure, and the padding of a trace into a static population.
+`AddressMap`: a program's read sets without its unit functions, and the static wirings that express it. `NecessityDefs`:
+the IOP's sampling certificate (a transcript before the coins, `k` draws from a distribution fixed before it, an
+always-proved set), amplification, and what each policy's damage is (integrity's damaged egress, control at the public
+widths, a range-restricted dataflow). `ExfiltrationDefs`: the windowed audit as a game, an adaptive prover over
+live-coin windows that halts at the first detection, with the named assumptions `DetectionPressure` and `TrustedModel`,
+the independent draw, and deviations from the honest egress. `DrawPressureDefs`: the deployed draw, `k` of the `n` units
+uniformly without replacement, and the draws that miss a wrong set. `ChiPoolDefs`: the halt `Δ` windows after the first
+caught window's commitment, and what leaves through it (`Strategy.cumLag`, `Strategy.cumUpToLag`).
 -/

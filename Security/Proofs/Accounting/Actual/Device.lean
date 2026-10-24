@@ -1,7 +1,6 @@
 import Proofs.Accounting.Bridge
 import Proofs.Accounting.Actual.Physical
 import Proofs.Accounting.Confidence
-import Proofs.Accounting.BridgeDefs
 import Proofs.Accounting.Physical
 
 /-!

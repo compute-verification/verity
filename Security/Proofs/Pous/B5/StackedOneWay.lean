@@ -14,7 +14,7 @@ import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Pebbling.FischClaims1314
 import Proofs.Pous.B5.ExPostFacto
-import Proofs.Pous.Model.PebblingDefs
+import Proofs.Pous.Model.Pebbling
 import Proofs.Pous.Model.Labelling
 
 /-!

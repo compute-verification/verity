@@ -1,8 +1,7 @@
 import Proofs.Population.Transfer
 import Proofs.Population.AddressMap
-import Proofs.Population.AddressMapDefs
-import Proofs.Population.DataflowDefs
-import Proofs.Population.ObliviousMoved
+import Proofs.Population.Dataflow
+import Proofs.Population.ObliviousDefs
 
 /-!
 # The converse: a corruptible address needs the padding's cones

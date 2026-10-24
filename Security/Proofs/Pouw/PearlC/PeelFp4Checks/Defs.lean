@@ -2,7 +2,6 @@ import Proofs.Pouw.PearlC.PeelFp4Vectors
 import Proofs.Pouw.PearlC.PeelFp4Proofs
 import Proofs.Pouw.PearlC.Fp4
 import Proofs.Pouw.PearlC.Fp4Chain
-import Proofs.Pouw.PearlC.PeelFp4VectorsDefs
 
 /-! # `PeelFp4Checks`' rows, operands, bases and noise lines, which its parts read -/
 

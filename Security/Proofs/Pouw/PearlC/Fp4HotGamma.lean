@@ -1,6 +1,5 @@
 import Proofs.Pouw.PearlC.TileGamma
 import Proofs.Pouw.PearlC.DeviceFp4Hot
-import Proofs.Pouw.PearlC.DeviceFp4HotDefs
 import Proofs.Pouw.PearlC.DeviceFp4Issue
 
 /-!

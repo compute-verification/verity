@@ -1,6 +1,5 @@
 import Proofs.Pouw.NCP.ExtraIdentity
 import Proofs.Pouw.NCP.GameProofs
-import Proofs.Pouw.NCP.ExtraIdentityDefs
 
 /-!
 # The admissible R with an extra checkpoint identity

@@ -5,7 +5,6 @@ import Proofs.Accounting.Actual.Split
 import Proofs.Accounting.Actual.Confidence
 import Mathlib.Tactic.FinCases
 import Proofs.Accounting.Confidence
-import Proofs.Accounting.LocalizationDefs
 
 /-!
 # Localization, proved

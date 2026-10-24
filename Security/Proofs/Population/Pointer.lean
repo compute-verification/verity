@@ -1,6 +1,6 @@
 import Proofs.Population.Egress
 import Mathlib.Tactic.DeriveFintype
-import Proofs.Population.DataflowDefs
+import Proofs.Population.Dataflow
 
 /-!
 # Value-dependent reads: the VM pointer

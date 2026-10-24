@@ -29,7 +29,7 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Data.Nat.Choose.Bounds
 import Mathlib.Data.Fintype.Option
 import Mathlib.Data.Fintype.Sum
-import Proofs.Pous.Model.PebblingDefs
+import Proofs.Pous.Model.Pebbling
 import Proofs.Pous.Model.Labelling
 import Proofs.Pous.Game.Oracle
 import Proofs.Pous.Model.Inc

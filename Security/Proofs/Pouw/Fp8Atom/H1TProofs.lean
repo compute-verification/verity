@@ -5,9 +5,8 @@ import Mathlib.Tactic.Ring
 import Proofs.Pouw.Fp8Atom.H1TPinned
 import Proofs.Pouw.Fp8Atom.H1TChecks
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
-import Proofs.Pouw.Fp8Atom.H1TVecDefs
-import Proofs.Pouw.Fp8Atom.H1TPinnedDefs
-import Proofs.Pouw.Fp8Atom.H1TVectorsDefs
+import Proofs.Pouw.Fp8Atom.H1TVec
+import Proofs.Pouw.Fp8Atom.H1TVectors
 import Proofs.Pouw.Fp8Atom.Fp32
 
 /-!
