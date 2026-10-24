@@ -733,6 +733,75 @@ def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch)
     assert all(e[runner.INDUCTOR_DIR_MARK] == "1" for e in spawned)
 
 
+def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_eager_spec(monkeypatch):
+    """Every protocol row times eager against eager while vLLM serves compiled: `llama31-8b-fp8-1gpu-compiled` times
+    the eager rows' stock FP8 engine against itself at vLLM's serving defaults, eager and compiled, in one spec."""
+
+    from verity_bench.vllm import runner
+
+    spec = resolve_spec("llama31-8b-fp8-1gpu-compiled")
+    assert spec.eager and "serving_defaults" not in spec.preset.engine_settings
+    base, served_eager, compiled = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution) for a in (base, served_eager, compiled)] == [
+        ("stock-fp8", "fp8", None, None),
+        ("stock-fp8@eager", "fp8", None, "eager"),
+        ("stock-fp8@compiled", "fp8", None, "compiled"),
+    ]
+    assert compiled.to_json()["execution"] == "compiled"
+    assert resolve_arms("stock-fp8,stock-fp8@compiled")[1].control == "stock-fp8"
+    for bad in ("stock-fp8@bi-eager", "nope@compiled"):
+        with pytest.raises(ValueError, match="BUILTIN@LABEL"):
+            resolve_arms(f"stock-fp8,{bad}")
+
+    spawned = []
+
+    class Context:
+        def Pipe(self):
+            class End:
+                def recv(self):
+                    return {"ready": {}}
+
+                def close(self):
+                    pass
+            return End(), End()
+
+        def Process(self, target, args):
+            spawned.append(args)
+            return SimpleNamespace(start=lambda: None, join=lambda: None)
+
+    monkeypatch.setenv(runner.INDUCTOR_DIR_MARK, "")
+    monkeypatch.delenv("TORCHINDUCTOR_CACHE_DIR", raising=False)
+    monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: f"/tmp/{prefix}x")
+    factory = runner.ProcessEngineFactory(eager=True)
+    factory.context = Context()
+    preset, _ = served(spec.preset, spec.eager)
+    for arm in (base, served_eager, compiled):
+        factory.create(arm, preset, resident=True)
+    built = [runner.engine_args(p, a.precision, resident=True, eager=e) for _, a, p, _, e in spawned]
+    assert [(b["enforce_eager"], b.get("execution"), "compilation_config" in b) for b in built] == [
+        (True, None, False), (True, "eager", False), (False, "compiled", False)]
+    assert {b["kv_cache_memory_bytes"] for b in built} == {8 << 30}
+    assert {b["max_num_batched_tokens"] for b in built} == {4096}
+    assert runner.os.environ["TORCHINDUCTOR_CACHE_DIR"] == "/tmp/verity_bench_inductor_x"
+
+
+def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
+    source = (SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled.toml").read_text()
+    path = tmp_path / "spec.toml"
+    section = '[arm_settings."stock-fp8@compiled"]\ncontrol = "none"'
+    assert section in source
+    path.write_text(source.replace(section, '[arm_settings."stock-fp8@compiled"]\ncontrol = "stock-fp8@eager"'))
+    spec = load_spec(path)
+    assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[2].control == "stock-fp8@eager"
+    for old, new, why in ((section, '[arm_settings."stock-fp8@compiled"]\nprecision = "bfloat16"', "takes only its control"),
+                          (section, '[arm_settings."stock-fp8@compiled"]\ncontrol = "stock"', "control must be another arm"),
+                          ('[arm_settings."stock-fp8@compiled"]', '[arm_settings."stock-fp8"]', "must name a protocol arm")):
+        assert old in source
+        path.write_text(source.replace(old, new))
+        with pytest.raises(ValueError, match=why):
+            load_spec(path)
+
+
 def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_spec(monkeypatch):
     """BENCH-17: `pouw:pearl-c-sm120-v1-h3` was refused before any engine started (r20261018-193211-a10c): the harness
     gave every protocol arm the preset's FP8 and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint,
@@ -857,6 +926,75 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
     wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
     assert not wrong["passed"] and wrong["provided"]
+
+
+def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_adapter_accepts(monkeypatch):
+    """`pouw:eps1-sm120-h1fx1` serves the int8_exact arm's own y, so its token control is that engine without PoUW
+    (`stock-int8`). Its settings need the built engine's model runner, which `verity_vllm.LLM` validates before building,
+    so the harness gives each run its own window: the runner, S from the run's step bound, and fresh in-process coins,
+    which the adapter's refusals accept; a spec can't supply them, and T is the engine's step budget."""
+
+    from verity.core.protocols.pouw import verifier
+    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    from verity_vllm.protocol_options.interface import Context
+
+    from verity_bench.vllm.arms import H1, h1_window, protocols_config, window_steps
+    from verity_bench.vllm.runner import engine_args
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-h1")
+    control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert (control.id, control.precision, control.control) == ("stock-int8", "int8_exact", None)
+    assert (arm.id, arm.protocols, arm.precision, arm.control) == (H1, (H1,), None, "stock-int8")
+    assert H1 == f"pouw:{PH.SCHEME}"
+    preset, eager = served(spec.preset, spec.eager)
+    args = engine_args(preset, "int8_exact", resident=True, eager=eager)
+    assert (args["quantization"], args["attention_backend"], args["enforce_eager"]) == ("verity_int8", "CUSTOM", True)
+    assert args["max_num_batched_tokens"] == spec.arm_settings[H1].protocols_config["pouw"]["rows"] == 64
+    assert args["max_num_seqs"] == 64 and engine_args(load_spec("llama31-8b-fp8-1gpu").preset, "fp8", resident=True,
+                                                      eager=True)["max_num_seqs"] == 128
+    with pytest.raises(ValueError, match="eagerly only"):
+        engine_args(preset, "int8_exact", resident=True, eager=False)
+
+    b8, b32 = expand_sweep("quick")
+    assert (window_steps(b8, 64), window_steps(b32, 64)) == (130, 294)
+    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
+    runner = SimpleNamespace(execute_model=lambda *a, **k: None, decode_query_len=1)
+    config = protocols_config(arm, {})
+    first, second = (h1_window(config, runner, 294, epoch) for epoch in (0, 1))
+    assert first["pouw"]["runner"] is runner and first["pouw"]["steps"] == 294
+    assert first["pouw"]["coins"] is not config["pouw"]["coins"] and first["pouw"]["coins"] is not second["pouw"]["coins"]
+    assert first["pouw"]["rounds"].challenger.commitment.family("pouw/round") == 294
+    ctx = Context(stage="serve", enabled=arm.protocols, settings=first)
+    assert pouw.refusals(PH.SCHEME, ctx) == ()
+    assert any("'runner'" in r for r in pouw.refusals(PH.SCHEME, Context(stage="serve", enabled=arm.protocols,
+                                                                         settings=config)))
+    with pytest.raises(ValueError, match="harness supplies"):
+        h1_window({"pouw": {"rows": 64, "steps": 10}}, runner, 294, 0)
+
+
+def test_an_h1_window_passes_its_gate_only_static_credited_and_entered():
+    from verity_bench.vllm.runner import h1_gate, h1_summary
+
+    def run(**over):
+        base = dict(verdicts={0: {"credit": True}, 1: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64,
+                    calls=[0, 1], requests=[0], refused_requests=[], coin_source="in-process",
+                    details={"steps_served": 120, "static": True, "u": "1/2"}, request_gaps=lambda: [])
+        return SimpleNamespace(**{**base, **over})
+
+    good = h1_summary(run())
+    assert good["ok"] and good["served_calls"] == good["credit_gate_passed"] == 2 and good["steps_served"] == 120
+    bad = [h1_summary(run(refused=[{"step": 130, "linear": 0, "m": 8}])),
+           h1_summary(run(details={"static": False})),
+           h1_summary(run(verdicts={0: {"credit": False, "reason": "credit: served-output-not-credited-kernel"}})),
+           h1_summary(run(request_gaps=lambda: ["step 3: 1 row of a request with no entry"])),
+           h1_summary(run(details={"static": True, "unopened": "refused"})),
+           h1_summary(run(verdicts={}))]
+    assert not any(b["ok"] for b in bad)
+    assert bad[2]["credit_gate_refusals"] == ["credit: served-output-not-credited-kernel"]
+    assert h1_gate([good, good])["passed"] and not h1_gate([]).get("passed")
+    gate = h1_gate([good, bad[0]])
+    assert not gate["passed"] and gate["provided"] and gate["failed"] == [bad[0]] and "credits nothing" in gate["coins"]
 
 
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():

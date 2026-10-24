@@ -10,8 +10,10 @@ libcuda.so.1, stdlib only, nothing built on the card).
    throughout); the GEMMs, with gemm_pearlc_s (y alone), are re-run on all, 1 and 3 CTAs and compared again
    (`<buffer>@<step>/<tile>/grid<n>`), at each of the three tiles (bm128: 128 x 128, n64: 128 x 64, bm64: 64 x 64).
    hash_decode.cuh's served launches write every output they own over a poison (0xA5) and must match; the no-write control
-   must not.  A variant is timed only if all of its buffers match (C~ and U bit-exact against the CPU reference), the plain
-   baselines only if theirs do.  Exit 4 if any check fails.
+   must not.  So do A's commit launches past them under each chain (`check_chains`: "pl", hash_prefill.cuh's, and "h3"),
+   and over each of CHAIN_WIDE_ROWS' rows (two-byte ranks and indices, prefill's M) "pl" must write "h3"'s bytes.  A
+   variant is timed only if all of its buffers match (C~ and U bit-exact against the CPU reference), the plain baselines
+   only if theirs do.  Exit 4 if any check fails.
 2. Diagnostic timing (not the headline: the stock FP8 block GEMM is timed beside the call by its own job), at each of
    SHAPES (default 8192, m = n = k; or MxNxK, m padded to 64 rows): each kernel REPS times after a warm-up, its median, the
    phases (the weight side; the call's commitment of A, forming, GEMM, clean-up and hashing), the call end to end with and
@@ -23,8 +25,8 @@ libcuda.so.1, stdlib only, nothing built on the card).
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
-  python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="h100", PEARLC_LIBCUDA,
-                                 PEARLC_LIBNVML)
+  python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="h100", PEARLC_CHAIN="pl",
+                                 PEARLC_LIBCUDA, PEARLC_LIBNVML)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -287,6 +289,11 @@ HM96_WEIGHTS, HM96_TRANSCRIPT, S512_SMALL = 1 << 62, 1 << 63, 128
 #: PD_MAX_ROWS rows and k of at most PD_MAX_K (its 192 threads: two warps of pairs a 32 segments, and two more); its paired
 #: compressions take PD_PAIR_SMEM bytes of dynamic shared memory, and PD_GROUP's tiles PD_G a CTA (hash_decode.cuh's)
 PD_SERVED, PD_MAX_ROWS, PD_MAX_K, PD_PAIR_SMEM, PD_G, PD_WHOLE, PD_GROUP = (851, 979), 256, 64 * 256, 2 * 8 * 3080, 4, 64, 128
+#: hash_prefill.cuh's launches past decode's rows (`Pipeline`'s chain "pl"), in the variant pearl_c_sm90.cu builds them
+#: (PL_INSTANCE): pl_leaves, A's level 0 at PL_ROWS rows a CTA; pl_levels, PL_LEVELS levels a launch; pl_seed_a; pl_seeds,
+#: PL_SEEDS rows a CTA.  Ranks and indices below PL_MAX_ROWS; "h3" is hash_h3.cuh's launches (hm_leaves, s512_frame_leaves,
+#: s512_nodes, s512_tree_small, s512_seeds)
+PL_VARIANT, PL_ROWS, PL_LEVELS, PL_SEEDS, PL_MAX_ROWS, CHAINS = 851, 16, 7, 32, 1 << 16, ("pl", "h3")
 
 
 def pd_variant(m_real: int, n: int, k: int) -> int | None:
@@ -299,9 +306,9 @@ def pd_variant(m_real: int, n: int, k: int) -> int | None:
 
 
 def pd_setup(dev) -> None:
-    """Once per module: hash_decode.cuh's label states (pd_heads) and hash_fast.cuh's header tables (s512_heads), and each
+    """Once per module: hash_decode.cuh's label states (pd_heads) and hash_fast.cuh's header tables (s512_heads), each
     served pd_commit's dynamic shared memory (`pd_smem`), with PD_WHOLE all a CTA may take beside its static, so no side
-    lane's CTA shares its SMs."""
+    lane's CTA shares its SMs, and pl_levels' (its two pairs')."""
     if getattr(dev, "pd_smem", None):
         return
     if not getattr(dev, "rs_heads", False):
@@ -315,6 +322,7 @@ def pd_setup(dev) -> None:
         if smem[v] < PD_PAIR_SMEM:
             raise RuntimeError(f"pd_commit_{v} gets {smem[v]} bytes of dynamic shared memory, not its {PD_PAIR_SMEM}")
         dev.ck("cuFuncSetAttribute", fn, MAX_DYN, smem[v])
+    dev.ck("cuFuncSetAttribute", dev.fn(f"pl_levels_{PL_VARIANT}"), MAX_DYN, PD_PAIR_SMEM)
     dev.sync()
     dev.pd_smem = smem
 
@@ -379,10 +387,13 @@ class Pipeline:
     baselines' `plain_job`, `plain`, `adopted_job`, `adopted`.  A caller that gives pd's counter (`pd_count`, 16 zero bytes
     it never writes) gets hash_decode.cuh's launches at decode (`pd`, `pd_variant`'s variant): `commit_a`, pd_commit, does
     every step of `FUSED` (the commit phase, A's pads and E_A's lines) in one launch, and `hash_leaf` is pd_tiles; the bytes
-    are the same.  The chain and the baselines run on 128 x 128 tiles when m and n are multiples of 128, on 128 x 64 when
-    only m is, else on 64 x 64 (`bm` and `bn` force a tile); the 32-column words on 128 x 32 tiles where their rows are a
-    multiple of 128 (A'F_B's only at a 128-row chain tile), else 64 x 32.  Every GEMM takes its operands by the tensor maps
-    in the pipeline's own `tma` (MAPS), each map's box the tile's.  gemm_pearlc stores C~, U and y.
+    are the same.  Past pd, `chain` (default PEARLC_CHAIN, else "pl") picks A's commit launches after its row digests:
+    "pl", hash_prefill.cuh's (`pl_steps`: pl_leaves, pl_levels, pl_seed_a and pl_seeds, at most PL_MAX_ROWS rows; `pl`),
+    or "h3", hash_h3.cuh's (`row_tree`'s, then s512_seeds); the steps' names and bytes are the same.  The chain and the
+    baselines run on 128 x 128 tiles when m and n are multiples of 128, on 128 x 64 when only m is, else on 64 x 64 (`bm`
+    and `bn` force a tile); the 32-column words on 128 x 32 tiles where their rows are a multiple of 128 (A'F_B's only at a
+    128-row chain tile), else 64 x 32.  Every GEMM takes its operands by the tensor maps in the pipeline's own `tma`
+    (MAPS), each map's box the tile's.  gemm_pearlc stores C~, U and y.
 
     The hashing is format -h3, SHA-512 throughout (hash_h3.cuh): `rowdig_<tree>` first, s512_rows' SHA-512 row digest of
     each row (`pearl_c.row_digest`), then the `audit.HM96` trees (hm_leaves over the row digests under the prover's salt
@@ -409,7 +420,8 @@ class Pipeline:
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, weight: int = 0,
-                 sha: str | None = None, bn: int | None = None, widen: tuple[str, int, int] | None = None):
+                 sha: str | None = None, bn: int | None = None, widen: tuple[str, int, int] | None = None,
+                 chain: str | None = None):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
         matmul's, committed and hashed, the rest filler that only the products see."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
@@ -417,6 +429,9 @@ class Pipeline:
         self.sha = sha or os.environ.get("PEARLC_SHA", "fast")
         if self.sha not in ("fast", "ref"):
             raise ValueError(f"sha is 'fast' or 'ref', not {self.sha!r}")
+        self.chain = chain or os.environ.get("PEARLC_CHAIN", "pl")
+        if self.chain not in CHAINS:
+            raise ValueError(f"chain is one of {CHAINS}, not {self.chain!r}")
         self.m_real = m if m_real is None else m_real
         self.g = VARIANT_G[variant]
         self.bm = bm or (BM if m % BM == 0 else BM_D)
@@ -441,7 +456,8 @@ class Pipeline:
         self.b["xa"], self.b["xb"] = xa, xb
         self.size["xa"], self.size["xb"] = m * self.row_bytes, n * self.row_bytes
         self.pd = pd_variant(self.m_real, n, k) if self.sha == "fast" and "pd_count" in self.b else None
-        if self.pd is not None:
+        self.pl = self.pd is None and self.chain == "pl" and self.m_real <= PL_MAX_ROWS
+        if self.pd is not None or self.pl:
             pd_setup(dev)
         if self.sha == "fast" and any(x in self.b for x in SEGDIG) and not getattr(dev, "rs_heads", False):
             dev.launch("s512_heads", cdiv(RS_MAX_SEGS * (RS_MAX_SEGS + 1) // 2 + RS_MAX_SEGS + 1, 128), 128)
@@ -525,6 +541,32 @@ class Pipeline:
         return [(f"rowdig_{tag}", lambda: self.row_digests(b[x], b[f"rowdig_{tag}"], b.get(f"segdig_{tag}", 0), count)),
                 (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block, nonce)),
                 (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
+
+    def pl_steps(self) -> list[tuple[str, object]]:
+        """A's commit steps under chain "pl": its row digests (`row_tree`'s), then hash_prefill.cuh's launches under the h3
+        chain's names: `hash_rows_a` A's level 0 (pl_leaves, its hm96 nonce read from `unit` as hm_leaves'), `tree_a` its
+        levels (`pl_levels`), `seed_a` seed_A with line_a from the root (pl_seed_a), `seeds_a` each real row's seed and line
+        key (pl_seeds)."""
+        d, b, kk, mr, v, half = self.dev, self.b, self.keys, self.m_real, PL_VARIANT, PD_PAIR_SMEM // 2
+        return [self.row_tree("a", "xa", mr, "dom_a")[0],
+                ("hash_rows_a", lambda: d.launch(f"pl_leaves_{v}", cdiv(mr, PL_ROWS), 128, half,
+                                                 p=(b["rowdig_a"], b["tree_a"], kk["salt_key"], kk["hm"], kk["unit"], kk["dom_a"]),
+                                                 i=(mr,))),
+                ("tree_a", self.pl_levels),
+                ("seed_a", lambda: d.launch(f"pl_seed_a_{v}", 1, 64, half, p=(self.root("a"), kk["unit"], b["seed_a"], b["line_a"]))),
+                ("seeds_a", lambda: d.launch(f"pl_seeds_{v}", cdiv(mr, PL_SEEDS), 64, half,
+                                             p=(b["rowdig_a"], b["seeds_a"], b["lkeys_a"], kk["unit"]), i=(mr,)))]
+
+    def pl_levels(self) -> None:
+        """A's levels above level 0 under "pl" (leaves and pads written): pl_levels, PL_LEVELS levels a launch (the last
+        launch the rest), a CTA a node of the launch's top level."""
+        d, base, width, off, level = self.dev, self.b["tree_a"], pow2(self.m_real), 0, 0
+        while width > 1:
+            lv = min(PL_LEVELS, width.bit_length() - 1)
+            d.launch(f"pl_levels_{PL_VARIANT}", width >> lv, 128, PD_PAIR_SMEM, p=(base + NB * off, self.keys["dom_a"]),
+                     i=(width, level, lv))
+            off += sum(width >> q for q in range(lv))
+            width, level = width >> lv, level + lv
 
     def row_digests(self, x: int, out: int, scratch: int, count: int) -> None:
         """The sha512/row-seg/v1 digests of `count` FP32 rows at x into out: s512_rows, or with a scratch buffer
@@ -627,6 +669,19 @@ class Pipeline:
         64 x 32."""
         self.gemm("gemm_words" + ("" if self.words_rows(M, small) == BM else "_d"), a, b, M, WORDS_N, out=(out,))
 
+    def commit_steps(self) -> list[tuple[str, object]]:
+        """The commit phase's steps: pd's `commit_a`, chain "pl"'s (`pl_steps`), or chain "h3"'s (`row_tree`'s, then
+        s512_seeds for seed_A with line_a and for each real row's seed and line key)."""
+        d, b, kk, mr = self.dev, self.b, self.keys, self.m_real
+        if self.pd is not None:
+            return [("commit_a", self.pd_commit)]
+        if self.pl:
+            return self.pl_steps()
+        return self.row_tree("a", "xa", mr, "dom_a") + [
+            ("seed_a", lambda: d.launch("s512_seeds", 1, 128, p=(self.root("a"), b["seed_a"], b["line_a"], kk["unit"]), i=(1, 0, 0))),
+            ("seeds_a", lambda: d.launch("s512_seeds", cdiv(mr, 128), 128, p=(b["rowdig_a"], b["seeds_a"], b["lkeys_a"], kk["unit"]),
+                                         i=(mr, 0, 1)))]
+
     def steps(self) -> list[tuple[str, str, object]]:
         d, b, m, n, k, tile = self.dev, self.b, self.m, self.n, self.k, self.tile
         ct, chain = f"gemm_ct{tile}", self.extra()
@@ -652,7 +707,7 @@ class Pipeline:
                ("bf", lambda: self.words("bt", "faT32", n, "bf")),
                ("g", lambda: self.words("fbT128", "faT32", 128, "g")),
                ("pb", lambda: d.launch("pb", cdiv(n * 32, 256), 256, p=(b["epb_codes"], 0, b["bf"], b["g"], b["pb_t"]), i=(n,)))]
-        mr, kk, tiles = self.m_real, self.keys, self.tiles
+        mr, tiles = self.m_real, self.tiles
         ea = ("lines_ea", lambda: d.launch("lines", cdiv(m, 128), 128, p=(b["line_a"], b["ea_codes"], 0, 0, b["lkeys_a"]),
                                            i=(0, 0, m, NORM_256, mr)))
         pd = self.pd is not None
@@ -664,10 +719,7 @@ class Pipeline:
         widen_b = [("widen_b", lambda: widen(d, self.widen[0], self.widen[1], self.widen[2], b["xb"], n, k))] if self.widen else []
         epoch = widen_b + self.tree_setup("b", n, "dom_b") + self.row_tree("b", "xb", n, "dom_b")
         unit = self.tree_setup("a", mr, "dom_a") * (not pd) + self.tree_setup("t", tiles, "dom_t")
-        commit = [("commit_a", self.pd_commit)] if pd else self.row_tree("a", "xa", mr, "dom_a") + [
-            ("seed_a", lambda: d.launch("s512_seeds", 1, 128, p=(self.root("a"), b["seed_a"], b["line_a"], kk["unit"]), i=(1, 0, 0))),
-            ("seeds_a", lambda: d.launch("s512_seeds", cdiv(mr, 128), 128, p=(b["rowdig_a"], b["seeds_a"], b["lkeys_a"], kk["unit"]),
-                                         i=(mr, 0, 1)))]
+        commit = self.commit_steps()
         hashing = [("hash_leaf", self.pd_tiles if pd else self.tile_leaves),
                    ("tree_leaves_t", lambda: self.tree_leaves("t", b["leaves"], tiles, "dom_t")),
                    ("tree_t", lambda: self.levels("t", tiles))]
@@ -760,6 +812,65 @@ def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
     return res
 
 
+#: what A's commit phase writes past pd (each chain's steps), and the real rows of the chains' comparisons past 256 rows:
+#: ranks and indices of two bytes (A's level 0 from rank 256, level 1 from index 256), and prefill's M (glm53.PREFILL_M),
+#: whose trees take pl_levels' widest splits
+CHAIN_OUTPUTS, CHAIN_WIDE_ROWS = ("rowdig_a", "tree_a", "seed_a", "line_a", "seeds_a", "lkeys_a"), (600, 2048, 8192)
+
+
+def run_commit(pipe: Pipeline) -> None:
+    """A's pads, then the pipeline's commit phase."""
+    for _, f in pipe.tree_setup("a", pipe.m_real, "dom_a") + pipe.commit_steps():
+        f()
+
+
+def check_chains(dev: Dev, pipe: Pipeline, want) -> dict:
+    """A's commitment past pd under each chain of CHAINS on `pipe`'s buffers (`run_commit`), every output in CHAIN_OUTPUTS
+    poisoned first, against the fixture's bytes; the no-write control, the poison with no launch, must fail every output.
+    Then over each of CHAIN_WIDE_ROWS generated rows of A (its own buffers), "pl"'s bytes against "h3"'s, every output
+    poisoned before each chain."""
+    res = {}
+    for chain in (None, *CHAINS):
+        for x in CHAIN_OUTPUTS:
+            dev.ck("cuMemsetD8_v2", u64(pipe.b[x]), POISON, pipe.size[x])
+        if chain is not None:
+            p_ = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b,
+                          m_real=pipe.m_real, weight=pipe.weight, chain=chain)
+            run_commit(p_)
+            dev.sync()
+            p_.free()
+        dev.sync()
+        for x in CHAIN_OUTPUTS:
+            r = compare(dev, pipe, x, want(x))
+            if chain is None:
+                res[f"{x}@chain/no-write"] = {"ok": not r["ok"], "bytes": r["bytes"]}
+            else:
+                res[f"{x}@chain_{chain}"] = r
+    n, k = pipe.n, pipe.k
+    for mr in CHAIN_WIDE_ROWS:
+        m = cdiv(mr, BM_D) * BM_D
+        sizes = Pipeline.sizes(m, n, k, mr)
+        bufs = {x: dev.alloc(sizes[x]) for x in (*CHAIN_OUTPUTS, "segdig_a")}
+        xa = dev.put(hashlib.shake_256(b"pearl-c-sm90/chains").digest(4 * mr * k) + bytes(4 * (m - mr) * k))
+        got = {}
+        for chain in CHAINS:
+            for x in CHAIN_OUTPUTS:
+                dev.ck("cuMemsetD8_v2", u64(bufs[x]), POISON, sizes[x])
+            p_ = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, xa, 0, bufs=bufs, m_real=mr, chain=chain)
+            run_commit(p_)
+            dev.sync()
+            p_.free()
+            got[chain] = {x: dev.read(bufs[x], sizes[x]) for x in CHAIN_OUTPUTS}
+        for x in CHAIN_OUTPUTS:
+            pl, h3 = got["pl"][x], got["h3"][x]
+            res[f"{x}@chain_pl/{mr}_rows"] = {
+                "ok": pl == h3 and h3 != bytes([POISON]) * sizes[x], "bytes": sizes[x],
+                "words_differing": 0 if pl == h3 else sum(pl[i:i + 4] != h3[i:i + 4] for i in range(0, sizes[x], 4))}
+        for p_ in (*bufs.values(), xa):
+            dev.free(p_)
+    return res
+
+
 def check_widen(dev: Dev, man: dict, load) -> dict:
     """Each of WIDEN's kinds on the fixture's stored B (`widen`: its rows, k and files), its output poisoned first, against
     the fixture's FP32 rows."""
@@ -802,6 +913,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             if name == "c":
                 res["c@gemm_ct"] = compare(dev, pipe, name, want(name), alias="c2")
         res.update(check_pd(dev, pipe, want))
+        res.update(check_chains(dev, pipe, want))
         res.update(check_widen(dev, man, load))
         for tag in ("a", "b"):
             for kernel in FORM_ALTS:

@@ -40,9 +40,10 @@ import glm53  # noqa: E402
 WARM, CALLS = 3, 5
 SHAPES = ((4096, 6144), (6144, 2048))
 MS = (16, 2048)
-#: hash_fast.cuh's and hash_decode.cuh's launches, and the reference ones (hash_h3.cuh) they replace
+#: hash_fast.cuh's launches, hash_decode.cuh's and hash_prefill.cuh's (its code form past decode's rows), and the reference
+#: ones (hash_h3.cuh) they replace
 HASH_FAST = ("s512_row_segs", "s512_tile_segs", "s512_folds")
-HASH_DECODE = ("pd_commit_", "pd_tiles_", "pd_tree_")
+HASH_DECODE = ("pd_commit_", "pd_tiles_", "pd_tree_", "pl_")
 FALLBACKS = ("s512_rows", "s512_tile_leaves")
 
 
