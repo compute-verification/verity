@@ -345,8 +345,8 @@ not the record's, so an accepting run gives it at its live outcome whatever draw
 `Claims.Bridge.PlainDraw.AcceptsAtDK`, `Claims.Bridge.PlainDraw.RecordsLiveAtDK`,
 `FlockDeploy.KS.plainVerdictAtK_of_run`), and the acceptance lemmas and decoders below hold at it by their proofs
 (`PlainDrawAccK`, `PlainDrawDecK`: `FlockDeploy.KS.plain_hdecAtK`, `FlockDeploy.KS.plain_hdecHAtK`), the rep's run
-reading no round's digest (`FlockSoundness.Discharge.PlaysCoin.repRun_of_erase`). The acceptance lemmas the plain decoders read hold at a draw value by their
-proofs (`PlainDrawAcc`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyD`,
+reading no round's digest (`FlockSoundness.Discharge.PlaysCoin.repRun_of_erase`). The acceptance lemmas the plain
+decoders read hold at a draw value by their proofs (`PlainDrawAcc`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyD`,
 `FlockSoundness.Discharge.AtDraw.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the draw
 (`PlainDrawDec`: `Claims.Bridge.PlainDraw.decodesTable_wrPD_sc`, `FlockDeploy.KS.plain_hdecAt`,
 `FlockDeploy.KS.plain_hdecHAt`), and the plain table bound at a statement holds from a simulator at that verdict, with
