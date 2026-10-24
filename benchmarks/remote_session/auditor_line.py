@@ -82,7 +82,7 @@ from verity.core.protocols.sampled_proofs import remote  # noqa: E402
 
 INGRESS = (4.4e9, 54.4e9)
 """The ingress charges a gate run's line is read at: the node's NICs into memory (time-held) and every link into it
-(link-charged), bytes a second."""
+(link-charged), bytes a second, each with its routes' bursts (`verifier.ingress_bursts`)."""
 LANE = "memory-accounting"
 VERIFIER_TREE = "verity/core/protocols/remote_bandwidth"
 LEAN_VERDICTS = ("lean", "both")

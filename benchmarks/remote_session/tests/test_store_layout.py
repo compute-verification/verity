@@ -232,7 +232,7 @@ def test_the_paced_line_reports_weights_held_and_filler_held_apart():
 
     def line(wrong: float) -> dict:
         return verifier.paced_line(mem, seen, groups=4, wrong=wrong, blocks=N, rebuild_per_ns=0.0, chip_bytes=0,
-                                   block_bytes=b, node_bytes=10 * N * b)
+                                   block_bytes=b, node_bytes=10 * N * b, burst_bytes=0.0)
 
     whole = line(0.0)
     for form in ("time", "snapshot"):
