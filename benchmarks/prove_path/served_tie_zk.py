@@ -25,9 +25,11 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall a
   not yet a proof row's.
   The received-pieces scan (`n2_zk.public_pieces`, `a8.received`) fails a statement on a ``leaked`` piece, any witness
   piece found in what the verifier received (`classify`), whatever row it is from. The one exemption, ``structured``: a
-  piece of fewer than ``DISTINCT`` byte values (positions, switches, zeros) found only at fields of the proof streams' own
-  format, offsets where every repetition's stream holds small integers and zeros, valued afresh in each, and not in every
-  repetition. A low-entropy piece found in one repetition at an offset where another holds proof data is ``leaked``.
+  piece of fewer than ``DISTINCT`` byte values (positions, switches, zeros) found only at fields of the proof's own
+  format, places where every repetition holds small integers and zeros, valued afresh in each: offsets of the streams
+  (``S.repK.bin``) and of the session transcript's round messages (``streams[K].rounds[r].msg``, the same proof in hex).
+  A low-entropy piece where another repetition holds proof data, at a place every repetition holds the same bytes at, or
+  anywhere else is ``leaked``; a hex match a nibble off a message's bytes is not the piece.
 """
 from __future__ import annotations
 
@@ -342,12 +344,29 @@ def _stream(name: str) -> tuple[str, int] | None:
 
 def _field(streams: list[bytes], at: int, n: int) -> bool:
     """Whether the n bytes at offset `at` are a field of the proof stream's own format, valued afresh in each repetition:
-    two or more repetitions' streams of one length, each holding fewer than ``DISTINCT`` byte values there, not the same
-    ones in all."""
+    two or more repetitions' streams of one length, each holding fewer than ``DISTINCT`` byte values there, no two the
+    same."""
     if len(streams) < 2 or len({len(s) for s in streams}) != 1 or at + n > len(streams[0]):
         return False
     ws = [s[at:at + n] for s in streams]
-    return all(len(set(w)) < DISTINCT for w in ws) and len(set(ws)) > 1
+    return all(len(set(w)) < DISTINCT for w in ws) and len(set(ws)) == len(ws)
+
+
+def _transcript(data: bytes) -> tuple[dict[tuple[int, int], bytes], bytes] | None:
+    """A live session's transcript as its streams' round messages by (repetition, round), and the rest of it re-serialised
+    without them; None if it isn't one."""
+    try:
+        t = json.loads(data)
+        rounds = [(int(re.search(r"rep(\d+)$", s["label"])[1]), r, m)
+                  for s in t["streams"] for r, m in enumerate(s["rounds"])]
+        msgs = {(K, r): bytes.fromhex(m["msg"]) for K, r, m in rounds}
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
+    if len(msgs) != len(rounds):
+        return None
+    for _K, _r, m in rounds:
+        m["msg"] = ""
+    return msgs, json.dumps(t).encode()
 
 
 def _offsets(data: bytes, piece: bytes) -> list[int]:
@@ -360,7 +379,8 @@ def _offsets(data: bytes, piece: bytes) -> list[int]:
 
 def placements(received: dict, blobs: dict[str, bytes], vdir: Path | None) -> dict[str, list[tuple[str, int | None, bool]]]:
     """Where each found piece of fewer than ``DISTINCT`` byte values is in what the verifier received: per file it is
-    found in, each raw offset (None: none, a hex form only) and whether that offset is a `_field` of its stream."""
+    found in (a transcript's round message as ``FILE#repK.rR``), each raw offset (None: none, a hex form only, or in the
+    rest of a transcript) and whether that offset is a `_field` of its stream, or of its round across the repetitions."""
     files, out = received["files"], {}
     data: dict[str, bytes] = {}
 
@@ -378,6 +398,14 @@ def placements(received: dict, blobs: dict[str, bytes], vdir: Path | None) -> di
             if k not in rec.get("found", {}):
                 continue
             s, b = _stream(f), read(f)
+            tr = _transcript(b) if f.endswith("session.json") else None
+            if tr is not None:
+                msgs, rest = tr
+                reps = sorted({K for K, _r in msgs})
+                rows += [(f"{f}#rep{K}.r{r}", at, _field([msgs.get((J, r), b"") for J in reps], at, len(piece)))
+                         for (K, r), m in sorted(msgs.items()) for at in _offsets(m, piece)]
+                rows += [(f, None, False)] * any(x in rest for x in (piece, piece.hex().encode(), piece.hex().upper().encode()))
+                continue
             group = [read(g) for g in files if s and _stream(g) and _stream(g)[0] == s[0]]
             rows += [(f, at, s is not None and _field(group, at, len(piece))) for at in _offsets(b, piece)] or [(f, None, False)]
         out[k] = rows
@@ -387,18 +415,15 @@ def placements(received: dict, blobs: dict[str, bytes], vdir: Path | None) -> di
 def classify(received: dict, blobs: dict[str, bytes], vdir: Path | None = None) -> tuple[list[str], dict[str, int]]:
     """`a8.received`'s found pieces as the ``leaked`` ones, which fail a statement, and the ``structured`` rest with their
     distinct byte values. Every piece is witness, whichever row it is from. A piece is ``structured`` only when it has
-    fewer than ``DISTINCT`` byte values and every place it is found is a `_field` of a repetition's proof stream (read
-    from ``vdir``, what the verifier received), and it isn't found in every repetition of that stream. Anywhere else (another
-    file, a stream offset another repetition holds proof data at, or where ``vdir`` doesn't show it), it is ``leaked``, so
-    a switch or a position leaked into one repetition fails its statement (REDTEAM phase 16, finding 1)."""
-    files, placed = received["files"], placements(received, blobs, vdir)
-    leaked = []
-    for k in received["verifier_found"]:
-        reps = {_stream(f)[0]: [g for g in files if _stream(g) and _stream(g)[0] == _stream(f)[0]]
-                for f, _at, _ok in placed.get(k, []) if _stream(f)}
-        every = any(all(k in files[g].get("found", {}) for g in gs) for gs in reps.values())
-        if k not in placed or not all(ok for _f, _at, ok in placed[k]) or every:
-            leaked.append(k)
+    fewer than ``DISTINCT`` byte values and every place it is found is a `_field` of a repetition's proof stream or of the
+    transcript's round messages (read from ``vdir``, what the verifier received). Anywhere else (another file, the rest of
+    a transcript, a place another repetition holds proof data or the same bytes at, or where ``vdir`` doesn't show it), it
+    is ``leaked``, so a switch or a position leaked into one repetition fails its statement (REDTEAM phase 16, finding 1).
+    Found at fields of two repetitions it is ``structured`` too: a leak the format carries sits at the same place in each,
+    while the fields' values are drawn afresh (the routed tie's proofs hold 20 fields of one byte and zeros a stream,
+    which a one-byte piece meets by chance about once in 13 a repetition)."""
+    placed = placements(received, blobs, vdir)
+    leaked = [k for k in received["verifier_found"] if k not in placed or not all(ok for _f, _at, ok in placed[k])]
     return leaked, {k: len(set(blobs[k])) for k in received["verifier_found"] if k not in leaked}
 
 
