@@ -85,8 +85,7 @@ class Options:
     max_model_len: int = option("--max-model-len", type=int, default=2048)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048)
     chunked_prefill: bool = option("--chunked-prefill", action="boolean_optional", default=True,
-                                   help="--no-chunked-prefill: the scheduler holds a prefill that doesn't fit the step instead of cutting it "
-                                        "(int8_exact attention refuses a later chunk until #3387)")
+                                   help="--no-chunked-prefill: the scheduler holds a prefill that doesn't fit the step instead of cutting it")
     kv_cache_mb: int = option("--kv-cache-mb", type=int, default=0, help="the KV cache's size (0: vLLM's sizing); small preempts")
     prefix_caching: bool = option("--prefix-caching", action="boolean_optional", default=False,
                                   help="serve with vLLM's prefix cache: a request reads the KV blocks of a prefix another computed")
