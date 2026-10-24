@@ -287,17 +287,19 @@ def gate(run, weights: dict, whole: bool = False) -> list[dict]:
     return out
 
 
-def whole_check(run, weights: dict) -> dict:
-    """With ``--whole-step``, a forward's calls (every weight once, m = 32, in weight order) made eagerly twice in one pass,
-    then captured whole in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward) and replayed twice
-    in each of two fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's decode steps
-    replay it: each pass must give the eager pass's A roots, tile root, screen flags and outputs, bit for bit, and each
-    pass's second replay must upload the slots the first one staged (with hashing)."""
+def whole_check(run, weights: dict, m: int | None = None) -> dict:
+    """With ``--whole-step``, a forward's calls (every weight once, `m` rows, default `BATCH`, in weight order) made eagerly
+    twice in one pass, then captured whole in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward)
+    and replayed twice in each of two fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's
+    decode steps replay it: each pass must give the eager pass's A roots, tile root, screen flags and outputs, bit for bit,
+    and each pass's second replay must upload the slots the first one staged (with hashing).  A retained capture's stages
+    are a weight's, sized by the first retained capture's m₁₆, so a run whose vLLM graphs captured them checks at that m."""
     import torch
+    m = BATCH if m is None else m
     dev = next(iter(weights.values())).device
     gen = torch.Generator(device=dev).manual_seed(20261002)
-    xs = {w: torch.randn(BATCH, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
-    rows = 2 * BATCH * len(weights) if run.hashing else 0
+    xs = {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
+    rows = 2 * m * len(weights) if run.hashing else 0
     forward = lambda: [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
     keep = ("transcript_root", "activation_roots", "units", "tiles")
 

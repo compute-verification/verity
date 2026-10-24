@@ -242,6 +242,8 @@ pub(crate) unsafe extern "C" fn link_cb(ctx: *mut c_void, cap: *const u8, cap_le
 }
 
 pub(crate) fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u32>, Vec<u32>) {
+    let nnz: u64 = m.rows.iter().map(|r| r.len() as u64).sum();
+    assert!(nnz <= crate::circuit::GPU_NNZ_MAX, "{nnz} nonzeros: past the device prover's 32-bit offsets");
     let mut col_ptr = vec![0u32; m.num_cols + 1];
     for row in m.rows.iter() {
         for &c in row {
