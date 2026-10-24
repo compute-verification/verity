@@ -837,16 +837,23 @@ shaping delay (hand time minus ready time, over every frame), the capacity per d
 
 Network accounting for arbitrary vLLM usage runs a precommitted AOT compiler. It takes an **advice** string, which
 encodes everything serving made unpredictable, and compiles each engine step's circuit from it. The certifier
-certifies the I/O, and sampled proofs hold the committed values to the compiled circuits and to the certified I/O. The
-advice's length is the content advice `A_c` of the accepted-runs bound, `A_c + W·log2 #Σ_sync + n·log2 D`. v0 is the
-interface the compiler, the encoders and the tie to the certified I/O code against; its schema id is
-`verity/advice/v0`. The module's docstring carries the same layout and charge.
+certifies the I/O, and sampled proofs hold the committed values to the compiled circuits and to the certified I/O. v0 is
+the interface the compiler, the encoders and the tie to the certified I/O code against; its schema id is
+`verity/advice/v0`. The module's docstring carries the same layout and its split by window.
+
+**The charge, and what is committed.** The content advice `A_c` of the accepted-runs bound, `A_c + W·log2 #Σ_sync +
+n·log2 D`, is the advice's length under ENC-CODE's compression, not v0's. v0 is the committed form, as hm96 hiding
+rows, and the form the compiler reads. The red team measured v0 at 10.6 Mbit for a 60 s llama8b-shape window, 3.5 times
+the egress token ids. The advice is private: a compile unit, always proved in zero knowledge, states that the committed
+Programs are compile(advice) under the advice's hiding root, with the compiler's digest registered (PRF-143). The
+advice's root is registered before the live draw, and the compiler refuses every ill-formed advice up to the public cap
+deterministically; v0's validity is that unit's first part (`advice_check`, below).
 
 **Interface.** The `Advice`, `RequestAdvice`, `StepAdvice`, `Row` and `Source` dataclasses are frozen, and construction
 refuses (`MalformedAdvice`) anything that isn't a schedule vLLM could have run. The module's functions are:
 - `encode(advice) -> bytes` and `decode(data) -> Advice`;
 - `total_bits(advice)`;
-- `bits(advice, window, T)` and `bits_by_window(advice, T)`, the charge;
+- `bits(advice, window, T)` and `bits_by_window(advice, T)`, v0's bits by egress window;
 - `outputs(advice)`, the kept samples;
 - `to_json` and `from_json`, a strict JSON form for debugging.
 
@@ -944,37 +951,412 @@ a version other than 0, and every invalid advice. The tests' fixture of two requ
 bytes): a 43-bit header, 22 bits for each request, the steps at 13, 29, 25, 25 and 13, and 3 bits for each of five
 releases.
 
-**The charge** (`bits_by_window`). Each record goes to the earliest egress window it can show in:
+**By window** (`bits_by_window`). v0's own bits, not the charge, split so that each record goes to the earliest
+egress window it can show in:
 - an output's release goes to its own window, bucket // T;
 - a step's bits go to the earliest window of an output at that step or later, and a step that no output follows goes
   to the last window;
 - a request goes to the window of its first step, and the header to step 0's.
 
-So windows 0 … m − 1 are charged every record their frames read, and the charges sum to `total_bits`. An advice with
-no outputs is charged wholly to window 0. The accepted-runs bound for a run's first m windows reads `A_c` as Σ_{w<m}
-`bits(advice, w, T)`.
+So windows 0 … m − 1 hold every record their frames read, and the parts sum to `total_bits`. An advice with no outputs
+is wholly window 0's. A per-window charge over the first m windows covers at least these records. The charge itself
+is ENC-CODE's (above).
 
 **Left to the other workstreams**, which v0 doesn't settle:
 - **Per-window parts.** v0 is one string, and `bits_by_window` divides its records among windows by a rule computed
   from the decoded advice, so the prover can't choose the split. But the header's counts and widths depend on later
-  windows, and the records a window is charged aren't one contiguous, self-delimiting part. A per-window bound that
+  windows, and the records a window holds aren't one contiguous, self-delimiting part. A per-window bound that
   counts each window's part as its own string (the red team's A5 and attack 9, #3489) needs an encoding that sends
   each window's part self-delimited (its step and request counts as `uvar`s, with widths registered or per part). That
-  costs a few bits a window, and it is the encoders' and N2's advice mode's to choose.
+  costs a few bits a window, and it is ENC-CODE's and N2-ADVICE's to choose.
 - **The order within a bucket.** Several requests' frames released in one bucket can go out in any order, a channel of
-  up to log2 n_t! bits a bucket that neither the advice nor the timing term charges. The tie to the certified I/O has
-  to fix a canonical order, for example by id then output index.
+  up to log2 n_t! bits a bucket that neither the advice nor the timing term charges. The tie to the certified I/O
+  (IO-TIE) has to fix a canonical order, for example by id then output index.
 - **One frame per kept output.** Each kept output is to be one egress frame, the HTTP head folded into the first and
   `[DONE]` into the last, and a chunk into which vLLM merged tokens split back per token (the variable-length served
-  link).
-- **The id.** The shim's `user` names the session today; it has to name the request, unique within a session.
+  link, CERT-VARLEN).
+- **The id.** The shim's `user` names the session today; it has to name the request, unique within a session
+  (CERT-VARLEN).
 - **Equal tokens at a source.** The compiler has to hold a source run's tokens equal to the hitting request's, or the
-  hit wires in another prompt's KV.
+  hit wires in another prompt's KV (circuits' COMPILER).
 - **Arrival before admission.** A request's first row has to follow its certified arrival, which the tie to the
   certified ingress checks.
-- **What the advice tells the auditor.** If the compiled circuits are public, the advice reveals lengths, batching
-  and, through `sources`, which requests share a prompt prefix. Whether that is protocol structure or has to be
-  committed is for the red team, and for Daniel through the lead.
+
+## The replay's state chain (`replay_chain`)
+
+Under advice v1 (the next section's end) the compile unit replays the scheduler one step unit per engine step. Each
+unit is ENC-REPLAY's `ReplayStep_v1` (`replay_step`): the committed queue state, the next A certified arrivals and the
+next A decisions go in, and the step's rows and next state come out. The chain hands the state from unit to unit as
+the state rows of one produced value a window (`one_stage.produced`, value `replay-state`, `hm96-sha512/row/v2` bit
+rows), beside a window row (value `replay-window`). Each unit reads its rows at public positions, and no gate hashes a
+row: the Lean verifier checks each read's path.
+
+**The step's cursors are private.** The step reads its arrivals and decisions at the scan's cursors, which move by its
+`taken` and `used`, and where a step stands in the certified arrivals or the window's decisions is the schedule
+itself. A registered read sits at a position the verifier derives, so no unit can read the arrival record at the
+cursor. So:
+- once a window, `ReplayLoad` writes the window row: the certified arrivals not yet taken, then the window's own (K
+  warden slots), as `queue` (at most Q), and the window's decoded decisions as `dec` (at most D), all read at public
+  positions;
+- every step unit reads that one row, and its state row carries the cursors as private heads `qh` and `dh`.
+  `ReplayAdvance` checks the step's A arrivals and A decision bits are the window row's at the heads. It finds them with a
+  log shifter that computes only the A entries it returns: about Q + A·bitlen(Q) muxes an element bit, where moving
+  the whole queue would take Q·bitlen(A).
+
+**The rows** are each field's elements in turn, each least significant bit first, zero-padded to a whole 16-bit word:
+
+    state row    run_valid R×1 | run_id R×IW | run_P R×LW | run_O R×LW | run_out R×LW | run_comp R×LW
+                 | wait_valid W×1 | wait_id W×IW | wait_P W×LW | wait_O W×LW | wait_out W×LW | free 1×BW
+                 | qh 1×QW | dh 1×DW | steps 1×PW
+    window row   q_valid Q×1 | q_id Q×IW | q_P Q×LW | q_O Q×LW | dec D×1 | left 1×DW
+
+- The state row's first twelve fields are ReplayStep_v1's state input and next-state output, bit for bit. They hold
+  the running slots (id, prompt length, certified output length, outputs so far, tokens computed), the waiting slots,
+  and the free block count. A running request holds ⌈computed / B⌉ blocks, so the KV pool needs no count per request.
+  `steps` counts the window's executed steps still to come.
+- The step's `arr_*` are the window row's A arrivals at `qh`, and its `bits` the A decisions at `dh`, zeros past `left`.
+- The widths are LW = bitlen(L), BW = bitlen(NB), QW = bitlen(Q), DW = bitlen(D) and PW = bitlen(P).
+- In every row the valid elements of each group are a prefix and the rest are zero bits, as are the decisions past
+  `left`. `decode` and `decode_window` refuse any other row.
+
+**A window** is the state rows S_0 … S_{P+1}, with P the public cap on its steps, and two window rows: the last
+window's and its own. Unit 0, `ReplayLoad`, reads state rows 0 and 1 and both window rows. Unit u ≥ 1 is step u:
+ReplayStep_v1 on state row u, with `ReplayAdvance` checking the step's arrivals and bits against window row 1 and
+checking state row u + 1. Steps past the window's executed count are idle: the next row is the row, and
+`ReplayAdvance`'s `active` = 0 drops the unit's rows.
+- The load refuses a state row 0 that leaves decisions or steps unread, a queue past Q, more than D decisions or P
+  steps, and decisions with no step. A step refuses arrivals taken past what is left or past A, and decisions read
+  past what is left or past A. The window's last executed step must read its last decision.
+- **The carry.** Window w's state row 0 is window w − 1's last state row, and its window row 0 is window w − 1's window
+  row 1, each under the same salt (`commit_window(carry=…)`), so the verifier checks that their openings b‖c are equal
+  (`check_chain`, `C-carry`).
+- **The start.** The session's first rows are the empty engine (`empty`, with NB − 1 free blocks) and the empty
+  window, under the public salts `empty_salts`, whose openings the verifier computes (`C-first`).
+
+**Cost** (`size`). A step costs `ReplayAdvance`'s ANDs: the two fronts, about (Q + A·QW)·(1 + IW + 2·LW) and
+D + A·DW, and about 2·width for the idle select and the equality. It also costs three reads and one state row. A
+window costs P steps and one `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3
+path of depth ⌈log2(P + 2)⌉, or 1 for a window row.
+
+**On the corpus** (run `r20261024-091809-297f`): TRACE-CORPUS's 15 sync traces of 1000 requests each, from Llama 3.2
+1B (greedy and seeded) and Llama 3.1 8B int8, each in five engine configurations, cut into the certifier's 60 s
+windows. Each trace is replayed with ENC-REPLAY's scheduler, and `load` and `advance` are walked from the empty rows.
+- On all 15 traces, every state row is the replay's, every front's arrivals are the replay's next, and its bits are
+  the replay's asks. Both circuits match their specifications on the sampled units.
+- A step costs 16,569 ANDs (8B light: R = 19, A = 4, Q = 145) to 80,959 (heavy: R = 256, A = 35, Q = 1000). The
+  queue's front is more than half of that at Q = 1000, which those traces reach because their 1000 requests arrive
+  within one window. A load costs 0.1M to 0.8M ANDs, and a window 3.5e7 to 1.9e8.
+- For scale, ReplayStep_v1 itself is 521,358 ANDs at R = 256.
+- Moving the queue and the decisions in every state row, instead of reading them at heads, cost 2.3 to 4 times as much
+  a step (run `r20261024-085627-c66d`).
+
+## Advice v0's validity (`advice_check`)
+
+The compile unit's first part ("The charge, and what is committed", above), that the committed bit string decodes to
+a well-formed v0 advice, is the Boolean Definition
+
+    AdviceCheck_v1{L} (bits: Array<L, Value<1>>, length: Array<LW, Value<1>>) -> Value<1>
+
+with L the public cap in bits, a multiple of 40, and LW = bitlen(L / 8). `bits` is the string in stream order and
+`length` its byte count, least significant bit first; bits past 8·length aren't read. The output is 1 exactly when
+`advice_check.reference` holds: length ≤ L / 8, and `decode` takes the bytes up to three refusals the circuit doesn't
+make yet (`DEFERRED`). It makes every other refusal of `decode`: the grammar (version, minimal `uvar`s, the least
+widths, no truncation, zero padding under a byte, no trailing byte), UTF-8 ids, the lengths ≥ 1, first-row order, every
+request admitted, a first row that doesn't resume and starts at its hit, hits only on admitting rows and their sources
+summing to them, adjacent sources of different requests, own KV only on a resume, sources admitted by their step's end,
+continuity, no row past the known tokens (so at most one past the last output), the derived `kind`, no resume of a
+finished request, no request twice in a step, and exactly `output_len` kept outputs.
+
+**Deferred**, refused by `decode` and not yet by the circuit:
+- **Unique ids.** Exact equality of variable-length strings needs the ids sorted lexicographically (prefix doubling, a
+  sort per doubling of the longest id), or a digest, which would hold only computationally.
+- **A source's KV computed there** (`advice._covered`): whether a run of positions lies in one interval its request
+  had computed by that step, a query over position and time per request.
+- **Release buckets non-decreasing per request.** The k-th release belongs to the k-th kept output in stream order,
+  which only the replay knows: matching them takes a second sort, by position, and up to five releases can end in one
+  block.
+
+**Under advice v1 this isn't what the compile unit proves.** At 8.7 × 10^10 ANDs for a 60 s window's 10.6 Mbit, v0's
+validity is too costly to be the compile unit's proof. ENC-REPLAY replays vLLM's scheduler exactly on every corpus trace
+(#3555). ENC-DERIVED's advice v1 is what the certified record, the replay and the derived fields leave, a residual of a
+few hundred bits a window coded prefix-free, and `v1.decode(bytes, certified record)` gives I1 v0. So the compile unit
+takes v1 and produces v0 by replay, and most of v0's validity holds by construction. The three deferred rules are then:
+- unique ids are certified, by the warden's admission order and the request records;
+- a source's KV is ENC-DERIVED's canonical source rule, checked against the tokens;
+- release order is the warden's fixed schedule.
+
+`AdviceCheck` stays as v0's reference check, and as the fallback for advice that comes without a replay.
+
+**The circuit**, three stages:
+1. `AdviceParse` scans the bits five at a time through a bit-serial parser. Its state is the field being read, its bits
+   left and value so far, the header's counts and widths, the counters of the records left, and the in-stream checks.
+   A row is at least five bits, so each block ends at most one request record or row, which it emits as an event.
+2. Batcher's odd-even merge sort orders the L / 5 events by (request, position), one batch of `AdviceSwap` per layer:
+   the network on the next power of two, less the comparators that reach past the events.
+3. `AdviceReplay` scans the sorted events with one request's state, as `advice._replay` replays it: each request's
+   record, then its rows in stream order.
+
+**Cost** (`size`): ANDs = (L / 5)·(parse + replay) + C(L / 5)·swap + the ends. C(n), the sort's comparators, is about
+n·log2(n)² / 4. A parse block costs 7,000 to 11,300 ANDs, a swap 160 to 250 and a replay step about 1,000, growing with
+log L, the width of the counters and positions:
+
+| L (bits) | ANDs | per bit | parse | sort | replay |
+|---|---|---|---|---|---|
+| 240 | 470,116 | 1,959 | 3.6 × 10^5 | 6.5 × 10^4 | 4.5 × 10^4 |
+| 1,520 | 3.75 × 10^6 | 2,466 | 2.5 × 10^6 | 1.0 × 10^6 | 2.9 × 10^5 |
+| 40,000 | 1.49 × 10^8 | 3,722 | 7.5 × 10^7 | 6.6 × 10^7 | 7.8 × 10^6 |
+| 10^6 | 5.78 × 10^9 | 5,775 | 2.1 × 10^9 | 3.5 × 10^9 | 2.0 × 10^8 |
+| 1.06 × 10^7 | 8.67 × 10^10 | 8,180 | 2.4 × 10^10 | 6.1 × 10^10 | 2.1 × 10^9 |
+
+The last row is the 60 s llama8b-shape window, whose v0 advice the red team measured at 10.6 Mbit: 86,704,366,964
+ANDs, 70% of them the sort, whose 2.4 × 10^8 comparators each carry a 201-bit event. Three levers would cut that,
+each a change to what the Definition states, so none is taken here:
+- a public cap on the rows, so a compaction of the L / 5 slots (n·log2 n switches) feeds a sort of the cap;
+- the sort's permutation as a private input: a permutation network's n·log2 n switches, which carry the event but
+  compare nothing, and an in-order check, in place of the comparators;
+- a public cap on w_len below 63 bits, which narrows the 126 value bits each event carries.
+
+## Advice v1 (`benchmarks/network_e2e/encodings/v1.py`)
+
+v1 is the advice the compile unit takes: I1 v0 sent as only what the certified record, the scheduler replay and the
+derived rules leave. `v1.encode(advice, record, registered) -> bytes` and `v1.decode(bytes, record, registered) -> I1
+v0` with `decode(encode(a)) == a`. `decode` is total: it refuses by name every string that isn't the canonical
+encoding of an advice under the record, and a string past the cap ℓ unread. It stays in the encodings until its circuit
+lands.
+
+**Certified, 0 bits**: the warden's signed records under design v3 (#3540, #3553) and the id I/O they carry (#3552),
+which the compile unit holds as witness.
+- The admission order: the k-th connection to arrive has ordinal k, and the queue's head is admitted at the first
+  bucket s with a free lane (#3553's admission, every cell carrying its ordinal).
+- Each request's ingress bytes, one id request (#3552's `active.id_request_fields`): `user` (I1's `id`), `prompt`
+  (prompt_len and the ids), `max_tokens`, `temperature`, `top_p` and `seed`. Its last-frame mark is a, the bucket of
+  its connection's ingress `END` cell (#3553).
+- Each output's id, the `token_id` of the id event that carries it (#3552's `active.id_event`, tagged by its request's
+  ordinal). These give `output_len`, and through the registered stop ids, `finish`.
+- Each output's release bucket, that of the egress cell carrying its event. Cell i of the connection admitted at s
+  is in bucket s + D + ⌊i/r⌋, a function of s alone (#3553). v1 doesn't read the `fails` record: a failed connection
+  has no advice.
+
+**Replayed, 0 bits**: ENC-REPLAY's replay (#3555) runs vLLM's scheduler under the registered engine, over the requests
+in arrival order, by (a, ordinal). It gives every step's rows (request, start, n), the new and resumed requests, the
+cache hits (its block pool's LRU, eviction included) and the preemptions. It needs one decision per open step: whether
+the next request had arrived.
+
+**Derived, 0 bits**: ENC-DERIVED's walk (#3560) recomputes every start and n and checks them against the replay. It
+gives the batch order (Model Runner V2's stable sort by n), I1's numbering by first row, `kind`, the canonical
+`sources`, and the request records (`prompt_len`, `output_len`, `finish`). Past the cumulative pool bound, the hits and
+resumes the walk would send are the replay's.
+
+**Sent.** Only the decisions are sent, each one symbol of ENC-CODE's arithmetic coder (#3513) at ENC-REPLAY's adaptive
+estimate for its context, plus `num_gpu_blocks` unless the registration pins it. The string is MSB first: Elias-gamma
+of `num_gpu_blocks` unless pinned, then for each window w < W, Elias-gamma(ℓ_w + 1) and an ℓ_w-bit segment holding the
+decisions about the requests whose a falls in w, then zero bits to a byte. W is the record's last bucket // T + 1. A
+window's charge is its frame, with the header charged to window 0 (`bits_by_window`), a function of the string alone.
+
+- *The bound.* The frames make the strings prefix-free for every W, so at most 2^c strings are charged c bits or
+  fewer. That is LEAK-LEAN's `BitsCount` by `bitsCount_of_prefixFree` (#3533). Since `decode` takes only the canonical
+  string, at most that many advices decode at that charge.
+- *v0's per-window parts.* Each window's part is self-delimited, which settles this item of v0's list above.
+- *Measured* (art:a01224669c378e350967084bc4fda1e93259095784132a816deb042a77bafacb, 14 corpus traces of 1,000
+  requests, each round-tripping). The v1 charged, header included, is 49–63 bits on heavy, 207–1,094 on smallkv,
+  2,002–2,082 on chunked, 3,307–3,425 on medium and 4,651–5,569 on light (at most 1,519 in one window). v0 is
+  6.2–7.5 Mbit. These contexts read no release time: the warden's fixed schedule leaves it no engine timing. With
+  today's engine release times as context, v1 is 40–292 bits.
+
+**Composition**, all in one ZK proof under the advice's hiding root:
+1. v1's frames: the committed string is at most ℓ bits, and parses into the header and W segments.
+2. The scan of ENC-REPLAY's `ReplayStep_v1` over the session's steps, from the empty engine, with the certified
+   requests in (a, ordinal) order as its arrivals and the decisions as its residual bits, which are witness. The scan
+   also carries the coder's counts and one ENC-CODE encoder: each decision is encoded at its context as the step reads
+   it, and each window's terminated codeword must equal its segment ("The encoder in the circuit" below). Because
+   `decode` takes only the canonical string, this forward encoding is `decode`. The coder can't run ahead of the scan
+   as a parser, since which request a decision is about, and so which window it is coded in, is the replay's cursor.
+3. ENC-DERIVED's walk over the rows, which gives I1 v0.
+4. ADV-SPEC's `AdviceCheck_v1{L}` (#3547) is the specification of what 1–3 give. The tests hold every advice v1 decodes,
+   from random and bit-flipped strings too, to I1's own `advice.decode`, whose refusals that circuit makes. So it holds
+   wherever 2 and 3 derive their rows rather than take them as witness, and needn't run at v0's length.
+5. `compile_steps(registered, advice, ingress)` (#3504) turns the advice into the Programs, with `ingress` the certified
+   bodies by id.
+
+**The prefix cache in the scan.** `CacheStep_v1` (`cache_step`) is ENC-DERIVED's prefix rules (`Prefixes`) as a Boolean
+Definition: one row's pass over a table of at most N cached units (a unit's U tokens, its parent entry and its owner,
+the lowest-numbered request that computed it), compared on tokens, with no hash in the circuit. Each engine step of the
+scan (item 2) is one `ReplayStep_v1` and the `CacheStep_v1` calls on its rows, which carry the table from call to call
+in `ReplayStep_v1`'s scheduling order:
+- *The calls.* Each running row comes first, from its slot's walk entry `pfx` over the units from its start's: it owns
+  or appends the units it completes. Each candidate (the W waiting slots, then the A arrivals) then gets a lookup from
+  the root (`admit`, nins = 0), which checks the candidate's hit h, the input `ReplayStep_v1` reads with U = B. An
+  admitted candidate gets a second call from the lookup's `pfx`, which owns or appends the units its row completes.
+  So a later candidate's lookup reads an earlier one's units, as vLLM caches a block when it allocates it. The scan
+  skips an empty slot's call: it keeps the table and doesn't read that call's ok. That is R + 2·(W + A) calls a step.
+- *The owner.* A call's r is the row's request id, the arrival ordinal `ReplayStep_v1` carries (RW = IW). FCFS admits
+  new requests in arrival order, so the lowest id is the earliest-admitted request, the one I1 numbers lowest. A hit's
+  canonical sources are its lookup's trail entries' owners in the table at the step's end (`cache_step.sources`), where
+  an owner may have dropped to a lower request later in the step. The walk (item 3) reads them as I1's `sources`.
+- *The derive bit.* Each step's calls take one bit `sent`: 0 while the no-eviction bound holds, when the call refuses
+  any hit but the longest cached prefix. The bound counts the step's own admissions, ⌈(P + O)/B⌉ blocks per admitted
+  request, while the lookups that size those admissions read the bit. So the bit is witness, and the step's end checks
+  it against the count: sent = 0 iff the count through this step is at most NB − 1. The count only grows, so the bit
+  never returns to 0.
+- *The state row.* `replay_chain`'s state row gains one group after its heads, in `CacheStep_v1`'s `_in_fields` order,
+  with EW = bitlen(N):
+
+      cache    c_valid N×1 | c_parent N×EW | c_tok N×(U·TW) | c_owner N×RW | run_pfx R×EW | filled 1×BW | sent 1×1
+
+  `run_pfx` is one more running-slot field, moved with its slot by `ReplayStep_v1`'s compaction and placement. An
+  admitted row's slot takes its second call's `pfx`, and a preempted request drops its own, since it resumes as an
+  admitting row from the root. The empty state's group is all zero bits. While the bound holds, nothing leaves the
+  cache, so N = NB − 1 entries hold every unit computed: 149,212 bits of table a state row at smallkv's
+  (511, 16, 17, 10).
+- *Past the bound* (`sent` = 1), eviction may have shortened a hit, and the call checks only that the hit is a cached
+  prefix: an evicting cache never hits past what a cache that never evicts holds. So the hit is the prover's choice,
+  and v1 must send it, as ENC-DERIVED's residual does (a sparse field of the hits that miss the longest cached prefix).
+  That changes v1's format, which takes the replay's LRU hits there today. On the fixtures, 14 of corpus-smallkv's 46
+  admitting rows past the bound, and 38 of sync-crush's 100, hit less than the longest cached prefix.
+- *Cost* (`cache_step.size`): a call walks ⌈L / U⌉ units at about N·(2·(U·TW + EW) + 2·RW) ANDs each. That is 5,856
+  ANDs at (N, U, TW, RW, L) = (8, 4, 8, 4, 32), and 38.4M at smallkv's (511, 16, 17, 10, 2048): about 1.1G a step at
+  (R, W, A) = (4, 8, 4), where `ReplayStep_v1` is 12,235. The linear table is a slice's size class, and its difftest
+  (`cache_vectors`) runs it over two traces' slices at N = 128, against `Prefixes` over the whole traces. Two levers
+  remain. A static window would let a continuing row's call walk only the units its chunk touches, not all ⌈L / U⌉. And
+  sorting each step's lookups and inserts into the table's order, offline memory checking as `advice_check` sorts its
+  events, costs O(log² E) a unit for E units in all.
+
+**The encoder in the circuit** (`arith_encode`: `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1`,
+`KTContext_v1{C, NW}`, with `reference_step`, `reference_finish` and `reference_kt` their specs). They are held symbol
+for symbol to `code.py`'s encoder (`benchmarks/network_e2e/encodings/arith_vectors.py`). After every symbol, low and
+high are code.py's, and a pending run is open exactly when code.py has pending bits. Each window's finish ends at its
+segment's end, and every changed segment is refused. The streams are v1's decisions on ENC-REPLAY's step traces and on
+all 14 corpus traces, and `code_v1`'s symbols for ENC-DERIVED's still-sent fields (the hits past the pool bound, the
+resumes and async's lag bits) on the 6 corpus traces that send any: 0 mismatches, circuits included
+(art:57999badc194b6f7085c8f445f6965472edf1f750ea67ad323bbdebcaadf3628, with each trace's decisions per replay step).
+- *Per decision.* `KTContext_v1{3, 24}` gives (f0, f1) for the decision's context and adds the decision to that
+  context's counts. `ArithEncodeStep_v1{18, 1}` codes (bit, f0, f1) as code.py does. The counts table starts public, at
+  the registered model's priors (v1's plain contexts have none, so it starts at zero), and KTContext indexes it by the
+  context. The replay gives the context: plain is min(passes, 2), the decisions already asked about the request, which
+  the scan carries as a 2-bit counter. The counts carry across windows; the coder starts each window at `fresh()`.
+- *Where the segment is checked.* The string is the advice's registered hiding rows (#3507,
+  `verity.ml.commitments.advice`): fixed-width bit rows under `hm96-sha512/row/v2` leaves in one `frame-v3-sha512`
+  tree. The compile unit's proof holds the rows privately and proves each row's commit string from the row and its
+  salt; the verifier finishes the tree to the registered advice root natively. Item 1's parse gives each window's
+  segment, ℓ_w bits, as wires of that proof.
+  - Each encoder step reads seg[K], the segment's next K bits at the window's cursor. It checks every bit it consumes
+    in the decoder's order: one per scaling, a resolution's bit or a pending run's complement. It returns n, the bits
+    consumed, and the cursor moves by n.
+  - The window's `ArithEncodeFinish_v1` checks the last two bits, and the cursor must then be at ℓ_w exactly. So every
+    bit of the segment is checked once against the encoder's output, and a segment is accepted only when it is the
+    encoder's whole codeword.
+  - Any refusal clears the coder's `ok`, and the unit fails: a symbol code.py refuses, more than K scalings, or a bit
+    that differs. After the update a symbol's interval keeps at least 2^14 values, so K = 18 never refuses one. On the
+    corpus the most is 6 for a decision and 13 for a field.
+- *One encoder at a time.* Along the replay a decision's window never decreases: the requests are asked about in (a,
+  ordinal) order, and a decision's window is its request's. `arith_vectors.py` checks this on the 14 traces. So when
+  the next decision's window is later than the encoder's, the circuit finishes the encoder's window, checks that each
+  window it skips has ℓ_w = 0, and resets the coder.
+- *One step per decision, not per slot.* On the corpus most open steps ask one decision, and the heaviest ask up to
+  34. Decisions per replay step are 1.06–1.23 on light, medium and chunked, 1.55–1.63 on heavy and 0.14–0.27 on
+  smallkv. Placed in each replay step's A decision slots, the encoder would cost A × 4,446 ANDs a step: 71,136 at A =
+  16, 77% of `ReplayStep_v1{16,64,16}`'s 92,146. One step per decision costs 4,446 a decision, 4.8% of a replay step.
+- *Cost* (`arith_encode.size`, ANDs, pinned in its circuit-check sidecar).
+  - A decision costs 4,446: the step's 3,244 and the model's 1,202. The step's interval is 1,855 (one 33 × 16-bit
+    product and one division to 32 quotient bits), its scalings 1,188 and its check 201.
+  - A window's finish costs 6. `ArithEncodeStep_v1{18, 0}`, for `code_v1`'s general (cum, freq, total) symbols, costs
+    4,964.
+  - At each corpus shape's largest window, against the replay steps taken while that window's decisions are asked:
+
+  | shape (largest window) | decisions | ℓ_w | encoder | replay steps | `ReplayStep_v1{16,64,16}` | encoder / replay |
+  |---|---|---|---|---|---|---|
+  | light (greedy, window 0) | 4,391 | 1,463 | 19.5M | 4,125 | 380M | 5.1% |
+  | medium (greedy) | 4,328 | 3,367 | 19.2M | 3,551 | 327M | 5.9% |
+  | chunked (seeded) | 2,024 | 2,026 | 9.0M | 1,762 | 162M | 5.5% |
+  | smallkv (seeded, window 0) | 1,466 | 904 | 6.5M | 4,215 | 388M | 1.7% |
+  | heavy (greedy) | 1,000 | 19 | 4.4M | 646 | 60M | 7.5% |
+
+**Open.**
+- *The encoder's reader.* The cursor is a data-dependent position in the segment's wires, and it isn't built. Both
+  costs below are estimates.
+  - A shift register over the window's remaining bits costs bitlen(K) = 5 mux levels over ℓ_w bits a decision. That
+    is 32M ANDs on light's largest window, more than the encoder.
+  - An order-preserving expansion puts the segment into the decisions' K slots each, its switches set by the steps'
+    scaling flags. It costs about 2·N·log2 N ANDs at N = 18 · decisions: 2.6M there, 13% of the encoder.
+  - Linking the replay's per-step decision slots to the encoder's list of decisions takes the same kind of reader.
+- *Integer fields.* `code_v1`'s integer fields would need a lookup of (cum, freq, total) in the book's public bin
+  tables, which isn't built. v1 sends none. `code_v1.KT` also halves its counts in place, where v1 scales the estimate
+  as it reads it; `KTContext_v1` is v1's.
+- `ReplayStep_v1` is synchronous FCFS. Async scheduling's lag row is in v1's replay and walk, not yet in the circuit.
+- `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
+  `CacheStep_v1` fixes the hits while the no-eviction bound holds. Past it, the hits are a channel v1 doesn't charge
+  until v1 sends them (above). The evictable counts and the returns stay bounded witness. A reference count per entry
+  in the table would fix both while the bound holds, and past it they need the replay's LRU block pool in the circuit.
+- The corpus records stand in for the warden's: each request's a is the engine's arrival stamp (`replay`'s
+  `ingress="warden"`), and the release buckets are the engine's.
+
+## The compile slice (`compile_slice`)
+
+`CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, Q, D, P, K, SEG}` composes the compile unit's
+pieces (PRF-143's statement, "Advice v1" above) whole for one window of P steps, so the composition is proved end to
+end before the chain splits it into a unit a step. It takes four rows and returns one 16-bit verdict:
+- ``pub``, public: the declared charge c and the step rows' hiding digest SHA-512(salt ‖ rows), which the clear
+  recompile gives;
+- ``adv``, the committed advice: the window's raw decision bits, their count and the executed step count, one row of
+  the advice's hiding registration (#3507);
+- ``cert``, the window's certified arrivals (`replay_chain.arrival_fields`), a row the verifier holds to the certified
+  record's commitment;
+- ``wit``: the state rows S_1 … S_{P+1} and the window row W_1, each step's arrivals and decision bits, the window's
+  codeword (SEG bits) and the digest's salt.
+
+The circuit:
+1. `ReplayLoad` from the session's empty rows to S_1 and W_1, with ``cert``'s arrivals and ``adv``'s decisions.
+2. Per step, `ReplayStep_v1` on S_u's state, and `ReplayAdvance` on the same ``arr``/``bits`` wires. The advance holds
+   them to W_1 at S_u's heads, and S_{u+1} to the step's next state.
+3. The step's asks, in the scan's order: per ask, `KTContext_v1{3, 24}` at the plain context, then
+   `ArithEncodeStep_v1{18, 1}` against the codeword at the code's position. The position is a pruned log shifter
+   (`replay_chain._front`) over the SEG codeword bits: the reader "Advice v1" leaves open, here at the slice's size.
+   The plain context is the asked request's passes, min(passes, 2), carried as a 2-bit counter. It is the queue head's
+   for a step's first ask when nothing was forced, else 0, and it moves as `replay.encode`'s ``passed`` does.
+4. `ArithEncodeFinish_v1`. The position after it is the coded length, held to ≤ c.
+5. The step rows (valid, request, kind, start, n), zero on an idle step, hashed under the salt.
+
+The verdict's bits are ``load``, ``steps``, ``code``, ``charge`` and ``rows`` (`ACCEPT` = 0x1F), so a proof of a refused
+unit says which check refused it. `reference` is `case`, which runs the scan in Python (`replay_step.reference`, the
+chain's `load` and `advance`, the plain contexts and `codeword`, ENC-REPLAY's 32-bit coder).
+
+**Stand-ins**, each a piece not yet ready:
+- *The cache counts.* ENC-DERIVED's hit, evictable and returned-block counts are held at 0. That is true of a slice
+  that hits no prefix and stops or preempts nothing. `CacheStep_v1` isn't wired, and on any other slice the rows
+  differ from the clear recompile's, so ``rows`` refuses.
+- *The counting encoder.* ArithEncodeStep_v1 checks a witness codeword, and the count is the positions it consumed. A
+  symbol's scalings depend only on the interval, so the count is the coded length.
+- *The still-sent fields.* ``adv`` holds only the decisions, the count and the step count.
+- *Sync scheduling.* ReplayStep_v1 models no async step.
+- *The bindings.* ``adv`` and ``cert`` are bound by their rows' b‖c, which the verifier checks natively against the
+  advice registration's leaf (its path to the root) and the certified record's commitment. No gate hashes them.
+
+**The slice** is corpus-smallkv's first seven steps at (R 2, W 1, A 2), with Q 3, D 7, P 7, K 3 and SEG 32
+(`tests/fixtures/compile_slice_smallkv.json`, which `compile_slice_zk.py` checks against the corpus).
+- The steps: user-0 is forced in and prefilled over two steps, then decodes. User-1 is asked five times and passed
+  over, then admitted at the sixth ask, and user-2 is asked once.
+- The decisions are 0, 0, 0, 0, 0, 1, 0, at contexts 0, 1, 2, 2, 2, 2, 0. They code to 8 bits.
+- The unit is 139,327 ANDs: 116,140 for the logic and 23,187 for SHA-512's committed words (circuit-check, pinned in
+  the sidecar). Its rows are 528, 16, 112 and 2,416 bits.
+
+**The negatives.** Each one is the prover's own consistent run, and each is refused by the proved verdict:
+- decision 5 flipped in W_1, with ``adv`` still the registered row: ``load``, ``steps`` and ``rows`` fail (0x0C);
+- the charge one below the coded length: ``charge`` fails (0x17);
+- arrival 1's prompt one token longer in ``cert``: ``rows`` fails (0x0F), and its b‖c isn't the certified record's.
+
+**In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py`, N2-ZK's audit path; run r20261024-110210-eb8f
+on vy-nebius-3, CPU prover): one template of four units, the honest one and the three negatives.
+- The proof: every unit drawn by Lean, proved `prove --zk` behind the Lean firewall and held by Lean `verify --zk`.
+  The audit accepts, complete, with no wrong unit. The verifier opens ``pub`` and the verdict only.
+- The verdicts: the honest unit opens to 0x1F, its ``adv`` b‖c is the advice registration's leaf and its ``cert`` b‖c
+  the certified record's. Each negative opens to its refusal, and the arrival's ``cert`` b‖c is refused too.
+- The scan: no piece of any witness row, row salt or digest salt is in what the verifier received (148 pieces, 161.6
+  MB received). The prover's instance file holds every witness row.
+- The adv row is one word and the cert row seven, below the scan's 16-byte pieces, so only their salts are scanned.
+- The cost: the unit is k_log 22 and one unit a block, so the statement is `--zk`'s smallest shape (m = 25). One
+  window alone (the verifier draws one unit) proves in 27.4 s (36.4 s end to end) and Lean verifies in 15.8 s. Its
+  proof is two repetitions of 873,386 bytes. The four-unit session costs the same, 27.6 s and 15.8 s, because the
+  shape, not the units, sets the cost.
 
 ## The active certifier (`active`)
 
@@ -1339,13 +1721,56 @@ and seven lemmas, and three more proved lemmas:
   - encode, decode and the JSON form round-trip on 50 random schedules from a small vLLM-like scheduler (chunked
     prefill, same-step and multi-run hits, preemption with resumes that hit their own KV, the row past an EOS,
     shuffled batch order), and the simulator's schedules hold every one of those decisions;
-  - the charge per window sums to the total at five values of T, equals the rule recomputed from the documented
-    records, and charges windows 0 … w at least what their outputs read;
+  - the split by window sums to the total at five values of T, equals the rule recomputed from the documented
+    records, and puts in windows 0 … w at least what their outputs read;
   - each of 38 malformed advices is refused, and so are a kind flipped, a start moved and two requests swapped in
     random schedules;
   - decode refuses non-canonical strings (a wider width or length prefix, nonzero padding, a trailing byte,
     truncation, another version, an id that isn't UTF-8), and every single-bit flip and random corruption of an
     encoding is refused or is itself an advice's canonical encoding;
+- **`test_network_certifier_advice_adversarial.py`:** the red team's cases against advice v0, each named for the
+  attack or assumption it pins (A2, A5, attacks 2 and 7):
+  - the encoding is canonical: every accepted mutation is its own advice's encoding, and wider fields, padding,
+    trailing bytes and another version or type are refused;
+  - the split is causal: windows 0 … m − 1 hold every record their frames read, and an empty session its header;
+  - one writer per value read: rows that read unwritten or rewritten positions, hits on KV no request wrote, a resume
+    reading positions its request never computed, own KV off a resume, a second row past a stop or a resume after it,
+    a flipped `kind`, outputs or releases that aren't the steps', and requests out of first-row order or sharing an id
+    are refused;
+  - schedule choices that leave the outputs unchanged are distinct advices, each with its own bits;
+- **`test_network_certifier_advice_check.py`:** advice v0's validity circuit against `decode`:
+  - the circuit computes `reference` on the fixture, its bit flips and truncations, garbage past the length and a
+    length past L / 8 at L = 240, and (slow) on about 3000 strings at L = 1520: the simulated schedules, their flips,
+    byte corruptions, unchecked mutations encoded field by field, wider widths, padding, trailing bytes and random
+    strings;
+  - over the same strings, decode takes ⇒ `reference` takes, `reference` refuses ⇒ decode refuses, and where they
+    differ decode's reason is a `DEFERRED` one; each deferred refusal is one named string the circuit takes;
+  - the pruned sort sorts every 0-1 input up to 12 events, `comparators` counts it, and `size` is the unit's count,
+    pinned at L = 240 and at the 60 s window;
+- **`test_network_certifier_replay_chain.py`:** the replay's state chain:
+  - both rows' layouts are pinned field by field. The state row's state part is ReplayStep_v1's fields and bits, and
+    the front is its `arr_*` and `bits` (once `replay_step` is in the tree). The empty rows and random rows round-trip.
+    `decode` refuses a gap, an empty slot with a bit set, a head past Q or D, steps past P, nonzero padding, a short row
+    and a non-bit, and `decode_window` refuses a gap, an empty slot with a bit set, a decision past `left`, `left` past
+    D, nonzero padding and a short row;
+  - the front's pruned log shifter is a slice, at every shift its bits express;
+  - `ReplayAdvance` and `ReplayLoad` compute `advance` and `load` on random rows, each with its next rows right and
+    one bit wrong, and on each refusal. For `ReplayAdvance` these are the step's ok, an arrival or a decision bit
+    that isn't the window row's at the heads, an arrival left out, arrivals taken past what is left or past A,
+    decisions read past what is left or past A, or left at the window's last step, and the idle step. For
+    `ReplayLoad` they are the last window's decisions or steps left, a queue past Q, steps past P, decisions with no
+    step, a decision past the count, a count past D and a gap in the arrivals;
+  - a two-window session runs through both parts, with every unit's reads opened under the window's roots.
+    `check_chain` accepts it, and refuses a short window, the empty state or window under a fresh salt or another
+    program's, the carried state or window under a fresh salt, and another row of the last window;
+  - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
+- **`test_network_certifier_compile_slice.py`:** the compile slice on corpus-smallkv's first seven steps:
+  - the reference's scan gives the replay's rows and the plain contexts' symbols, and its digest is the clear rows';
+  - the circuit's verdict is the reference's on the honest rows and on each negative: a decision flipped in the window
+    row, the charge one below the coded length, an arrival not the certified one, a wrong digest and a wrong salt.
+    Each is refused by exactly the checks the reference names;
+  - `codeword` is the segment `arith_encode` accepts, and a flipped bit of it is refused;
+  - `size` is the unit's AND count, which circuit-check pins;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
