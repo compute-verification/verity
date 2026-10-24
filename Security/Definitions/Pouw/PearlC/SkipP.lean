@@ -56,8 +56,6 @@ is in `jointFlagsP` of its group `t / G`, at position `t % G`. -/
 def wordFlagsP (G : Nat) (k : ℕ) (a b : Fin k → Code) (t : ℕ) : Bool :=
   (jointFlagsP p ((rowAtoms a b).toChunks G) (t / G)).getD (t % G) false
 
-variable {m n k : Nat} in
-
 /-! ## No promotion (`G = 0`): the lone skips of the pure chain -/
 
 /-- The pure chain (`Accum.pureChain p`) over `atoms` with atom `t` skipped alone: one replay of the other atoms. -/
