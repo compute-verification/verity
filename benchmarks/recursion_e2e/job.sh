@@ -2,10 +2,11 @@
 # The recursion bench's job (README.md): verity/ml/flock/pod/85-rec-reprice.sh's steps in order, as one research run, each
 # invocation under its own RESEARCH_RUN_DIR ($OUT/steps/<step>/r<i>, so every record 85 writes is kept) and /usr/bin/time -v,
 # every CPU step REPEAT times and every GPU step once with its sessions; then the result (run.py result) in
-# $OUT/recursion_e2e.json and $OUT/table.md. Run from the verity tree on vy-nebius-1 as a GPU host job (85 leases a GPU
-# around each prove itself); `verity bench recursion_e2e launch` prints and launches it:
-#   research run --queue --on vy-nebius-1 --gpu-host --project verity --source . --cwd source --mem-gb 64 --cpus 32 \
-#     --max-min 420 -- bash benchmarks/recursion_e2e/job.sh K=4096 N=2
+# $OUT/recursion_e2e.json and $OUT/table.md. Run from the verity tree; `verity bench recursion_e2e run` prints and launches
+# it, a firewalled run (85's CPU prover, GPU=0) as a plain run on a CPU node:
+#   research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --mem-gb 128 --timeout 327m -- \
+#     taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=/workspace/cache/rec-bench
+# and a GPU one as a GPU host job on vy-nebius-1's queue (85 leases a GPU around each prove itself).
 # env: K=4096 N=2 (85's inner statement: N instances of GemmCoordinate_v2{K})
 #      STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative  REPEAT=3 (each CPU step; REPEAT_<STEP>=n one step's)
 #      WARM=1 RUNS=3 (the inner's sessions)  OPROVE_WARM=0 OPROVE_RUNS=1 (each V* statement's sessions)
@@ -36,7 +37,7 @@ PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --own
   --regenerate "bash benchmarks/recursion_e2e/job.sh K=$K N=$N" \
   --why "the recursion bench's builds (and a KEEP_DATA=1 run's data/TAG): a cache, rebuilt by the next run" > "$O/keep.json" 2>&1 \
   || echo "no retention record on $FLOCK_WORK: $(tail -1 "$O/keep.json")" >&2
-# 85 moves HOME where it can't write; the firewall's Lean build below must find the same elan
+# 85 moves HOME where it can't write; its Lean builds (flock-verify, flock-firewall) must find the same elan
 [ -w "$HOME" ] || { export HOME=$FLOCK_WORK/home; mkdir -p "$HOME"; }
 RR=/workspace/jobs/rec-reprice
 [ -z "${CUDA_TK:-}" ] && [ -x $RR/cuda-13.3.1/bin/nvcc ] && export CUDA_TK=$RR/cuda-13.3.1
@@ -66,23 +67,6 @@ step() {
   return $rc
 }
 
-# firewall: flock-firewall from the sources 85's flock-verify is built from ($L/lean-src at this tree's LSHA), for oprove's
-# firewall mode (FC_FIREWALL_LEAN); refuses rather than mixing two trees' Lean
-firewall() {
-  local fw=$L/lean-$LSHA/flock-firewall
-  [ -x $fw ] || (
-    export PATH=$HOME/.elan/bin:$PATH
-    exec 9>$L/lean.lock; flock 9
-    [ -x $fw ] && exit 0
-    src=$(cd $L/lean-src 2>/dev/null && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
-    [ "$src" = "$LSHA" ] || { rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/; }
-    (cd $L/lean-src && lake build flock-firewall) && mkdir -p $L/lean-$LSHA && cp $L/lean-src/.lake/build/bin/flock-firewall $fw
-  ) > "$O/build-firewall.log" 2>&1
-  [ -x $fw ] || { tail -20 "$O/build-firewall.log"; return 1; }
-  export FC_FIREWALL_LEAN=$fw
-  sha256sum $fw >> "$O/params.txt"
-}
-
 result() {
   python3 benchmarks/recursion_e2e/run.py result --dir "$O" --out "$O/recursion_e2e.json" --md "$O/table.md" 2> "$O/result.err" \
     | tee -a "$O/job.log"
@@ -103,18 +87,15 @@ for s in ${STEPS//,/ }; do
     inner) step inner 1 CHECKS=0 INNER_LOOPBACK=1 || rc=1 ;;
     oprove)
       M=$MODES
-      if [[ ,$M, == *,firewall,* ]]; then
-        log "flock-firewall: start"
-        if firewall; then log "flock-firewall: $FC_FIREWALL_LEAN"
-        else log "no flock-firewall: oprove refused (MODES=$M needs it)"; rc=1; continue; fi
-      fi
       if [ "$OPROVE_GPU" = 0 ] && [ "${GPU:-1}" != 0 ]; then
         # 85's CPU prover (bin-…-g0), built beside the GPU one; STAGE_FROM links this run's staged statements into a
         # throwaway TAG, so the build's staging doesn't restage the ones the inner session was proved against
         step build 2 GPU=0 TAG=$TAG-g0 STAGE_FROM=$FLOCK_WORK/data/$TAG || { rc=1; continue; }
         rm -rf "$FLOCK_WORK/data/$TAG-g0"
       fi
-      step oprove 1 MODES=$M REPLAY=0 WARM=${OPROVE_WARM:-0} RUNS=${OPROVE_RUNS:-1} GPU=$OPROVE_GPU || rc=1 ;;
+      # 85 builds flock-firewall (its build step, else oprove's) beside flock-verify, from this tree's Lean sources
+      step oprove 1 MODES=$M REPLAY=0 WARM=${OPROVE_WARM:-0} RUNS=${OPROVE_RUNS:-1} GPU=$OPROVE_GPU || rc=1
+      fw=$L/lean-$LSHA/flock-firewall; [[ ,$M, != *,firewall,* ]] || [ ! -x $fw ] || sha256sum $fw >> "$O/params.txt" ;;
     icheck|vcap|oreplay) for i in $(reps $s); do step $s $i || { rc=1; break; }; done ;;
     vstage) for i in $(reps vstage); do step vstage $i FORGE= || { rc=1; break; }; done ;;
     lean) for i in $(reps lean); do step lean $i INNER_LEAN=1 JOBS=${LEAN_JOBS:-4} NEG_INNER= || rc=1; done ;;

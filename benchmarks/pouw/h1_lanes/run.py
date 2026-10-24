@@ -7,8 +7,12 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
 * **The statements.** All 32 lanes are one circuit (the lane index is a public input) and the combine another. Each
   statement is the one unit of the Program a served window's verifier derives for it from its own copy of the window
   Program (`h1window.leaf_program`, here of a one-call window at K over this leaf's tile), and the Lean verifier derives
-  its unit from its own copy of that Program (``--program``, ``--partition``). Flat, or templated under ``H1_TMPL``
-  (`h1unit.layout`).
+  its unit from its own copy of that Program (``--program``, ``--partition``). Each is flat, or under
+  ``H1_TMPL=structural`` the templated statement of its Definition's structural lowering (`h1unit.layout`,
+  `h1unit.stager`: struct_lower's template at `h1unit.LAYOUT`, the flat circuit never built; its template, ``unit.tmpl``,
+  is what the prover's ``flock-tmpl-unit`` places). The Lean verifier refuses a templated statement once every other
+  check has passed (`TMPL_WHY`), until its proof lands (PRF-133). Such a check is labelled `TEMPLATED`, never ACCEPT, and
+  counts as passing in place of an expected ACCEPT (summary's ``templated``; ``lean_accepts`` counts the real ones).
 * **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
   `h1tile.reference`). STAND-IN: in a served window these are the window's A, z
@@ -65,8 +69,8 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   SHA-512's collision resistance.
 
 ``cost`` counts a lane's and the combine's ANDs at a K (4096, the served one) without staging anything. ``prepare`` writes
-WORK/plan.tsv (``S tag dir`` a session; ``C tag dir pub registered program partition expect registration produced r c k
-descriptor rounds unit statement`` a Lean check and `pouw-leaf-own-window`'s), WORK/plan.json
+WORK/plan.tsv (``S tag dir`` a session; ``C tag dir pub registered program partition expect registration produced
+descriptor rounds unit statement flock-statement`` a Lean check and `pouw-leaf-own-window`'s), WORK/plan.json
 and WORK/prepare.json; ``summarize`` writes OUT/summary.json from the Lean verdicts, and exits 1 unless every check's verdict
 is the expected one, the honest statements' reported roots are the produced record's (`produced.opened`) and their
 opened rows its openings (`produced.shared`).
@@ -132,6 +136,12 @@ HOLDS = {"other-registration-file": "honest"}
 HELD = {"other-registration-file-held": "other-registration-file"}
 #: the combine row ``combine-skips-p5-bit``'s circuit leaves a bit of unread
 LAZY_ROW = 5
+#: the templated statement (`circuit.TMPL_STATEMENT`), and the Lean verifier's verdict on one whose every other check
+#: passed: it refuses the form last, until the templated statement's proof lands (`Tags.templated`, `ProvedScope.refusal`)
+TMPL_STATEMENT = "verity/flock-circuit/tmpl"
+TMPL_WHY = f"refused: {TMPL_STATEMENT}, a templated statement: a statement form the soundness proof does not cover"
+#: the verdict word of a templated check refused only for its form (`TMPL_WHY`): never ACCEPT
+TEMPLATED = "templated: Lean refuses this form until PRF-133"
 
 
 def tile(k: int):
@@ -347,21 +357,28 @@ def known_opening(ctx, w: World, value: str, row: list[int], salt: bytes) -> dic
 
 
 def stager(ctx, kind: str, variant: str | None = None):
-    """``kind``'s stager, or with ``variant`` ``lazy`` the combine over `lazy_combine` (``ctx.lazy``)."""
-    from verity_flock import class_statement as CS
+    """``kind``'s stager, or with ``variant`` ``lazy`` the combine over `lazy_combine` (``ctx.lazy``), in `h1unit.layout`'s
+    form (`h1unit.stager`). A templated one's template and layout mode go beside its circuit (``unit.tmpl``,
+    ``unit.layout``), for the prover's ``flock-tmpl-unit``."""
+    from verity_flock import tmpl as TM
 
     b = ctx.lazy if variant == "lazy" else ctx.lane if kind == LL.LANE else ctx.combine
     circuit = ctx.work / "circuits" / (variant or kind) / "circuit.txt"
     if kind == LL.LANE:
         ab = 16 * (ctx.k // 2 + 2)
-        rows = ([(f"a{s}", V2, ab, [f"a[{s}]"]) for s in range(LL.LANE_ROWS)]
-                + [(f"b{t}", V2, ab, [f"b[{t}]"]) for t in range(LL.LANE_COLS)]
-                + [(LL.ADMIT, V2, RC[0], [LL.ADMIT]), (LL.ZY, V2, 48 * RC[0] * RC[1], [LL.ZY]),
-                   (LL.PARTIALS, V2, 16 * ctx.wp, [LL.PARTIALS]), ("pub", V2, U.PUB_BITS + 16, list(LL.PUBLIC))])
-        return CS.UnitStager(b.defn, "unit/pouw-h1-lane", rows, [(V2, (0,))], circuit=circuit, bind=b.bind, layout=U.layout())
-    rows = ([(f"p{x}", V2, 16 * ctx.wp, [f"{LL.PARTIALS}[{x}]"]) for x in range(LL.lanes(*RC))]
-            + [(LL.RECEIPT, V2, 16 * ctx.wp, [LL.RECEIPT])])
-    return CS.UnitStager(b.defn, "unit/pouw-h1-combine", rows, [(V2, (0,))], circuit=circuit, bind=b.bind, layout=U.layout())
+        name, rows = "unit/pouw-h1-lane", ([(f"a{s}", V2, ab, [f"a[{s}]"]) for s in range(LL.LANE_ROWS)]
+                                           + [(f"b{t}", V2, ab, [f"b[{t}]"]) for t in range(LL.LANE_COLS)]
+                                           + [(LL.ADMIT, V2, RC[0], [LL.ADMIT]), (LL.ZY, V2, 48 * RC[0] * RC[1], [LL.ZY]),
+                                              (LL.PARTIALS, V2, 16 * ctx.wp, [LL.PARTIALS]),
+                                              ("pub", V2, U.PUB_BITS + 16, list(LL.PUBLIC))])
+    else:
+        name, rows = "unit/pouw-h1-combine", ([(f"p{x}", V2, 16 * ctx.wp, [f"{LL.PARTIALS}[{x}]"]) for x in range(LL.lanes(*RC))]
+                                              + [(LL.RECEIPT, V2, 16 * ctx.wp, [LL.RECEIPT])])
+    st = U.stager(b.defn, name, rows, [(V2, (0,))], U.layout(), circuit=circuit, bind=b.bind)
+    if hasattr(st.low, "template"):
+        (circuit.parent / "unit.tmpl").write_text(TM.write(st.low.template))
+        (circuit.parent / "unit.layout").write_text(st.meta["layout"])
+    return st
 
 
 def expected(kind: str, ln: int | None, w: World, ins: dict, index: int | None = None) -> list[int]:
@@ -410,6 +427,9 @@ def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, ind
                    set_name=f"h1-lanes-{tag}", tables=rows, refs={p: [0] for p in rows}, registered=reg)
     (d / "circuit.txt").unlink(missing_ok=True)
     (d / "circuit.txt").symlink_to(st.circuit)
+    if hasattr(st.low, "template"):
+        (d / "unit.placed").unlink(missing_ok=True)
+        (d / "unit.placed").symlink_to(st.circuit.parent / "unit.placed")
     (d / "pin.txt").write_text(st.pin)
     ports = {p.name: p for p in st.ports}
     committed = {p: U.commit_strings(ports[p], rows[p], [o["salt"]])[0] for p, o in ins.items()}
@@ -429,6 +449,7 @@ def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, ind
             "dir": str(d), "pub": str(vd / f"{tag}.pub.bin"),
             "registered": str(vd / f"{tag}.registered.json"), "program": str(vd / f"{variant or kind}.program.json"),
             "partition": str(vd / f"{variant or kind}.partition.json"), "ands": got["ands"], "circuit_sha512": got["circuit_sha512"],
+            "statement": st.meta["statement"],
             "ok": np.asarray(got["outs"]["o0"][0]).tolist(), "want": want,
             "known": {kr[p][0]: [list(op)] for p, (_, op) in vk.items()},
             "binding": {p: committed[p] == mine[p] for p in ins}, "seconds": round(time.time() - t0, 1)}
@@ -572,10 +593,10 @@ def prepare(args) -> None:
     print(f"combine-skips-p5-bit: bit {j} of p{LAZY_ROW} unread, bit {i} read in its place", flush=True)
     ctx.stagers = {kind: stager(ctx, kind) for kind in (LL.LANE, LL.COMBINE)}
     ctx.stagers["lazy"] = stager(ctx, LL.COMBINE, "lazy")
-    for st in ctx.stagers.values():
-        st.pin, st.class_sha512  # noqa: B018
-    print(f"circuits: lane {ctx.stagers[LL.LANE].low.layout.counts['ands']} ANDs, combine "
-          f"{ctx.stagers[LL.COMBINE].low.layout.counts['ands']} ANDs, {time.time() - t0:.0f} s", flush=True)
+    circuits = {kind: {"statement": st.meta["statement"], "layout": st.meta.get("layout"), "pin": st.pin,
+                       "class": st.class_sha512, "ands": st.low.layout.counts["ands"], "bytes": st.circuit.stat().st_size}
+                for kind, st in ctx.stagers.items()}
+    print(f"circuits: {json.dumps(circuits)}, {time.time() - t0:.0f} s", flush=True)
     CTX = ctx
 
     js = jobs(ctx)
@@ -606,7 +627,8 @@ def prepare(args) -> None:
             r = by[tg]
             f.write(f"C\t{tg}\t{r['dir']}\t{r['pub']}\t{r['registered']}\t{r['program']}\t{r['partition']}\t"
                     f"{EXPECT.get(tg, 'ACCEPT')}\t{vd / (r['holds'] + '.registration.json')}\t"
-                    f"{vd / (r['holds'] + '.produced.json')}\t{vd / 'window.json'}\t{vd / 'rounds.json'}\t0\t{r['stmt']}\n")
+                    f"{vd / (r['holds'] + '.produced.json')}\t{vd / 'window.json'}\t{vd / 'rounds.json'}\t0\t{r['stmt']}\t"
+                    f"{r['statement']}\n")
     plan = {"checks": {tg: {**by[tg], "expect": EXPECT.get(tg, "ACCEPT")} for tg in checks}, "honest": honest}
     (work / "plan.json").write_text(json.dumps(plan, indent=1))
     summary = {"k": args.k, "tile": U.tile(), "lanes": LL.lanes(*RC), "words": LL.words(args.k),
@@ -614,7 +636,7 @@ def prepare(args) -> None:
                             for kind, b in (("lane", ctx.lane), ("combine", ctx.combine), ("lazy", ctx.lazy))},
                "place": ctx.place, "registration": A.registration, "draw": A.draw, "produced": A.record, "produced_check": produced_check,
                "forged_partial": ctx.worlds["mixed"].tree.bcs[5].hex(),
-               "ands": {"lane": by["lane0"]["ands"], "combine": by["combine"]["ands"]},
+               "ands": {"lane": by["lane0"]["ands"], "combine": by["combine"]["ands"]}, "circuits": circuits,
                "ok": {tg: by[tg]["ok"] for tg in checks}, "binding": {tg: by[tg]["binding"] for tg in checks},
                "seconds": round(time.time() - t0, 1)}
     (work / "prepare.json").write_text(json.dumps(summary, indent=1))
@@ -652,17 +674,22 @@ def summarize(args) -> int:
         v = _verdict(out / "lean" / f"{tag}.out")
         own = _own(out / "lean" / f"{tag}.own")
         err = out / "lean" / f"{tag}.err"
-        flock = "NONE" if v is None else ("ACCEPT" if v["accepted"] else "REJECT")
-        word = "NONE" if v is None or own is None else ("ACCEPT" if v["accepted"] and own["accepted"] else "REJECT")
+        templated = v is not None and c.get("statement") == TMPL_STATEMENT and not v["accepted"] and v["why"] == TMPL_WHY
+        flock = "NONE" if v is None else "ACCEPT" if v["accepted"] else TEMPLATED if templated else "REJECT"
+        passed = flock in ("ACCEPT", TEMPLATED)
+        word = "NONE" if v is None or own is None else (flock if passed and own["accepted"] else "REJECT")
         why = (v or {}).get("why") or (err.read_text(errors="replace").strip().splitlines()[-1:] if err.exists() else "")
         if own is not None and not own["accepted"]:
             why = own.get("why", "")
-        rows[tag] = {"expect": c["expect"], "lean": word, "as_expected": word == c["expect"] and WHY.get(tag, "") in str(why),
-                     "why": why, "flock_verify": flock, "leaf_own": own, "holds": c["holds"],
+        met = word == c["expect"] or (word == TEMPLATED and c["expect"] == "ACCEPT")
+        rows[tag] = {"expect": c["expect"], "lean": word, "as_expected": met and WHY.get(tag, "") in str(why),
+                     "why": why, "flock_verify": flock, "statement": c.get("statement"), "leaf_own": own, "holds": c["holds"],
                      "ok": c["ok"], "ands": c["ands"], "prove": _time(out / tag / "prove.time"),
                      "lean_time": _time(out / "lean" / f"{tag}.time"), "registered": (v or {}).get("registered")}
-        if tag in plan["honest"] and word == "ACCEPT":
-            verdicts[tag] = {**v, "of_record": True}
+        if tag in plan["honest"] and word in ("ACCEPT", TEMPLATED):
+            # `produced.shared` reads only an accepted verdict's openings; a templated one's are those Lean reported
+            # before refusing the form, held to the produced record here and never reported as accepted
+            verdicts[tag] = {**v, "accepted": True, "of_record": True}
             known.update(c["known"])
             for e in (v.get("registered") or {}).values():
                 if opened.setdefault(e["value"], e["root"]) != e["root"]:
@@ -677,22 +704,27 @@ def summarize(args) -> int:
     forged_codes = list(PR.shared(want, {"lane5": forged})) if forged else ["no lane5 verdict"]
     ok = (all(r["as_expected"] for r in rows.values()) and not opened_codes and not prep["produced_check"]["honest"]
           and len(verdicts) == len(plan["honest"]) and not shared_codes and forged_codes == ["P-shared"])
-    summary = {"ok": ok, "k": prep["k"], "tile": prep["tile"], "ands": prep["ands"], "produced_check": prep["produced_check"],
+    summary = {"ok": ok, "k": prep["k"], "tile": prep["tile"], "ands": prep["ands"], "circuits": prep.get("circuits"),
+               "lean_accepts": sum(r["lean"] == "ACCEPT" for r in rows.values()),
+               "templated": sorted(t for t, r in rows.items() if r["lean"] == TEMPLATED),
+               "produced_check": prep["produced_check"],
                "opened": opened, "opened_codes": opened_codes, "shared_codes": shared_codes,
                "shared_forged_lane5": forged_codes, "checks": rows, "registration": prep["registration"],
                "draw": prep["draw"], "produced": honest_record, "binding": prep["binding"]}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     for tag, r in rows.items():
-        print(f"{tag:26s} {r['lean']:7s} expect {r['expect']:7s} ok={r['ok']} {'ok' if r['as_expected'] else 'MISMATCH'}  "
-              f"{str(r['why'])[:160]}")
+        why = "" if r["lean"] == TEMPLATED else str(r["why"])[:160]
+        print(f"{tag:26s} {r['lean']:7s} expect {r['expect']:7s} ok={r['ok']} {'ok' if r['as_expected'] else 'MISMATCH'}  {why}")
     print(f"opened roots against the produced record: {opened_codes or 'ok'}; opened rows against its openings: "
-          f"{shared_codes or 'ok'}, a forged lane-5 opening: {forged_codes}; ANDs {prep['ands']}; all as expected: {ok}")
+          f"{shared_codes or 'ok'}, a forged lane-5 opening: {forged_codes}; ANDs {prep['ands']}; Lean ACCEPTs "
+          f"{summary['lean_accepts']}, {TEMPLATED}: {len(summary['templated'])}; all as expected: {ok}")
     return 0 if ok else 1
 
 
 def cost(args) -> None:
     """A lane's and the combine's ANDs at K (`--k`, 4096 the served one), each its statement's lowering
-    (`class_statement.unit_lowering`, as `UnitStager` lowers it), and a leaf's: 32 lanes and the combine."""
+    (`class_statement.unit_lowering`, structural under ``H1_TMPL=structural``, as `h1unit.stager` lowers it), and a leaf's: 32
+    lanes and the combine."""
     from verity_flock import class_statement as CS
 
     t = tile(args.k)
@@ -704,7 +736,7 @@ def cost(args) -> None:
     out = {"k": args.k, "tile": U.tile(), "lanes": n, "words": LL.words(args.k)}
     for name, (d, rows) in units.items():
         t0 = time.time()
-        low, _words = CS.unit_lowering(d, f"unit/pouw-h1-{name}", rows, ())
+        low, _words = CS.unit_lowering(d, f"unit/pouw-h1-{name}", rows, (), structural=U.layout() is not None)
         out[name] = {"ands": low.layout.counts["ands"], "seconds": round(time.time() - t0, 1)}
         print(f"{name}: {out[name]}", flush=True)
     out["leaf_ands"] = n * out["lane"]["ands"] + out["combine"]["ands"]

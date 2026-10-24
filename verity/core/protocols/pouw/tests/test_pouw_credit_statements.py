@@ -123,8 +123,8 @@ def window(seed: int, tmp: Path) -> tuple[dict, list[dict]]:
 
 
 def credit(d: dict, statements, files=None):
-    return Cr.window(*(d[k] for k in cases.WINDOW_ARGS[:-2]), statements,
-                     files_of(_layout(d)) if files is None else files, d["k"], rc.lms_verify)
+    return Cr.window(*(d[k] for k in cases.WINDOW_ARGS[:-3]), statements,
+                     files_of(_layout(d)) if files is None else files, d["k"], d["rows"], rc.lms_verify)
 
 
 def _credited(d: dict) -> list[int]:
@@ -319,8 +319,8 @@ def test_a_session_that_opened_another_public_table_root_is_refused(seed, tmp_pa
             "value": pub["value"], "root": "ab" * 64}} if kw["registered"] == reg else f.registered, f.units)
             for f in got or []], why
 
-    got, refused = Cr.window(*(d[x] for x in cases.WINDOW_ARGS[:-2]), statements, files_of(_layout(d)), d["k"],
-                             rc.lms_verify, run=run)
+    got, refused = Cr.window(*(d[x] for x in cases.WINDOW_ARGS[:-3]), statements, files_of(_layout(d)), d["k"],
+                             d["rows"], rc.lms_verify, run=run)
     assert got is None and refused == ("registration", (
         f"call {s['call']}'s session {s['sessions'][0]} opened a public table at another port, value or root than the "
         f"verifier's own {pub['value']} at port {Cr.PUB_PORT}: a unit's public row is the window's salt, its position "
@@ -391,8 +391,8 @@ def test_a_session_that_opened_another_ok_root_is_refused(seed, opened, tmp_path
         return [PF.Finding(f.session, f.accepted, f.why, f.program, found(f) if kw["registered"] == reg else f.registered,
                            f.units) for f in got or []], why
 
-    got, refused = Cr.window(*(d[x] for x in cases.WINDOW_ARGS[:-2]), statements, files_of(_layout(d)), d["k"],
-                             rc.lms_verify, run=run)
+    got, refused = Cr.window(*(d[x] for x in cases.WINDOW_ARGS[:-3]), statements, files_of(_layout(d)), d["k"],
+                             d["rows"], rc.lms_verify, run=run)
     assert got is None and refused == ("registration", (
         f"call {s['call']}'s session {s['sessions'][0]} opened the ok rows at another port, value or root than the "
         f"verifier's own {ok['value']} at port {Cr.OK_PORT}, or not at all: a unit's ok row is the one word 1 under its "

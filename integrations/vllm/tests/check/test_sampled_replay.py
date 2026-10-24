@@ -611,8 +611,13 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
 def test_token_select_first_max_tie_rule():
     logits = np.asarray([0x3F80, 0x4000, 0x4000, 0x3F00], dtype=np.uint16)   # 1.0, 2.0, 2.0, 0.5 -> index 1
     assert RK.token_select_first_max(logits) == 1
-    nan = np.asarray([0x7FC0, 0x3F80], dtype=np.uint16)                         # NaN never wins
-    assert RK.token_select_first_max(nan) == 1
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity_vllm.program.registry import b1
+
+    nan = [[0x7FC0, 0x3F80], [0x3F80, 0x7FC0, 0x4000], [0xFF80, 0x7FC0]]   # NaN never wins a comparison, so a NaN logits[0] is the token
+    assert [RK.token_select_first_max(np.asarray(r, dtype=np.uint16)) for r in nan] == [0, 2, 0]
+    assert [evaluate(bind(b1.TokenSelect, V=len(r)), r)[0] for r in nan] == [0, 2, 0]
 
 
 def test_catch_probability_is_evaluated_over_population_per_stratum(world):

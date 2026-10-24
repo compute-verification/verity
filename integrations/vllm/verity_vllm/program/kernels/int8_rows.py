@@ -3,8 +3,8 @@ the int8 ops are folded into (`observe.fold.patterns.int8`):
 
     Int8RowQuant_v1{K}                (x: bf16[K]) -> (codes s8[K], s f32)                    verity_int8::row_quant
     ScaledMmS8_v1{K,N,DOT}            (x: s8[K], sx: f32, w: s8[N][K], sw: f32[N]) -> bf16[N]   verity_int8::scaled_mm
-    Int8KvQuant_v1{S,D}               (k, v: bf16[S][D], sk: f32) -> (K', V' s8[S][D], s_v, f32(V'_0) f32[D])   kv_quant(_window)
-    Int8LutAttentionRow_v1{D,S,SCALE} (q: bf16[D], K': s8[S][D], sk: f32, V': s8[S][D], s_v, v0: f32[D]) -> bf16[D]   window_rows
+    Int8KvQuant_v1{S,D}               (k, v: bf16[S][D], sk: f32) -> (K', V' s8[S][D], s_v, f32(V'_0) f32[D])   kv_quant(_window)_batch
+    Int8LutAttentionRow_v1{D,S,SCALE} (q: bf16[D], K': s8[S][D], sk: f32, V': s8[S][D], s_v, v0: f32[D]) -> bf16[D]   window_rows_batch
 
 The quantizer: s = RN32(fmaxf(max_k |f32(x_k)|, RN32(1e-30)) / 127) (`Int8RowScale`, an exact max) and each code
 s8(fminf(fmaxf(rint(RN32(x_k / s)), -127), 127) (`Int8QuantElement`: ties to even, the clamp, `cvt.rzi`; fmaxf takes the operand

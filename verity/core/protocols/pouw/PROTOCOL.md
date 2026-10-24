@@ -836,7 +836,8 @@ useful    U/(α_A·α_B), glue
       forming 64 + 4) and `SM120_PRICES` for sm_120 (8, 2, 40 + 1: each step at its cheapest bit-exact form, as measured
       on the card). `wref`, `credit_of`, `job_cost` and the debit read the scheme's record; the registered schemes are the
       H100's, and sm_120's record goes with sm_120's atom.
-    - Its domain is TT_OUT's: 128 ∣ k (whole promotion groups), and on every row of both operands the noise floor ρ·α ≥ 1
+    - Its domain is TT_OUT's: 128 ∣ k (whole promotion groups), 64 ∣ n with n ≥ 64 (`pearlCDomainDev`, the 64-column
+      tile: a 1 × (n mod 64) edge tile's words can be guessed whole, CMP-77), and on every row of both operands the noise floor ρ·α ≥ 1
       (exact product) and liveness on the exact statistic, at most k/64 entries with x² ≥ 64ρ², where
       ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values (`live_row`).
     - It shares v0's seed labels (`pearl-c/v0/seed-*`).

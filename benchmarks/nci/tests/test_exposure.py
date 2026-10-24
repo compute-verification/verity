@@ -56,7 +56,7 @@ def test_the_memory_cap_has_unit_elasticities_once_it_binds():
 def test_at_the_design_eta_is_the_residual():
     p = T.DEFAULTS | X.DESIGN | X.KEYED
     r = T.residual_share(p)
-    assert X.elasticity(p, "host_share", "T1") == pytest.approx(p["host_share"] / r, rel=0.01)
+    assert X.elasticity(p, "host_share", "T1") == pytest.approx(p["host_share"] * (1 - p["eps_w"]) / r, rel=0.01)
     assert X.elasticity(p, "pous_rounds", "T4") == 0
 
 
@@ -84,9 +84,11 @@ def test_thresholds_are_monotone(scenario, key, tier, rising):
 
 
 def test_the_residual_threshold_is_the_closed_form():
-    """At T1, 1/eta < X once r_gpu > 1/X - host_share - clock_share - eps' - nu."""
+    """At T1, 1/eta < X once r_gpu > (1/X - eps_W - eps' - nu) / (1 - eps_W) - host_share - clock_share: eta is
+    r-hat + eps_W (1 - r-hat) + eps' + nu."""
     p = T.DEFAULTS | X.DESIGN | {"lag_s": 0.0}
     th = X.thresholds(p, "residual", "T1")
     for level in (10.0, 2.0):
         (a, _), = th[level]
-        assert a == pytest.approx(1 / level - p["host_share"] - p["clock_share"] - p["eps_agg"] - X.nu(p), rel=1e-3)
+        edge = (1 / level - p["eps_w"] - p["eps_agg"] - X.nu(p)) / (1 - p["eps_w"]) - p["host_share"] - p["clock_share"]
+        assert a == pytest.approx(edge, rel=1e-3)
