@@ -868,11 +868,13 @@ class _Varied:
     the shim reads them interleaved (`writes`: (request, chunk) in write order). For the requests `merges` picks, the
     last two tokens share one chunk and the finish reason comes in a chunk of no tokens, as vLLM v1 merges a
     request's deltas the API server hasn't read yet. Each completion it serves is a row of `served` as serve-openai's
-    `requests.jsonl` keeps it: its HTTP id, the body's `user` (None without one), its prompt and its streamed ids."""
+    `requests.jsonl` keeps it: its HTTP id, the body's `user` (None without one), its prompt and its streamed ids; and
+    of `releases`, its `user` and release order (`release.release_of`)."""
 
     def __init__(self, group: int = 1, merges=lambda request: False) -> None:
         self.group, self.merges, self.arrived, self.bodies, self.writes = group, merges, 0, [], []
         self.served: list[dict] = []
+        self.releases: list[tuple] = []
         self.turns: dict = defaultdict(asyncio.Event)
         self.done: dict = defaultdict(set)
 
@@ -899,6 +901,7 @@ class _Varied:
         assert isinstance(body.get("user", ""), str)
         assert body["temperature"] == 0 and body["top_p"] == 1 and body["stop"] == [] and type(body["seed"]) is int
         self.bodies.append(body)
+        self.releases.append((body.get("user"), release_of(head)))
         me, self.arrived = self.arrived, self.arrived + 1
         g, i = divmod(me, self.group)
         if i == self.group - 1:
@@ -1001,6 +1004,19 @@ def varied(tmp_path_factory):
 
 def _io(run: Path) -> dict:
     return {r["user"]: r for r in json.loads((run / "io.json").read_text())["requests"]}
+
+
+def test_varied_traffic_reaches_the_endpoint_with_n_its_ingress_ordinal_less_one(varied):
+    """On varied traffic, whose proxy opens each server connection with the request's ingress ordinal (`ordinals`),
+    each request reaches the endpoint with N its ordinal in the certified I/O (`io.json`) less one, under the honest
+    run's run id, and the I/O tie accepts with the headers present: they never reach a request frame."""
+    tmp, *_, runs, endpoint = varied
+    run_id = bytes.fromhex(json.loads((tmp / "honest" / "deployment.json").read_text())["run_id"])
+    got = [(user, r[0]) for user, r in endpoint.releases if r is not None and r[1] == run_id]
+    io = _io(tmp / "honest")
+    assert dict(got) == {name: r["stream"] - 1 for name, r in io.items()} and len(got) == len(io) == 16
+    check = runs["honest"]["check"]
+    assert check["verdict"] == "accepted" and check["io"]["accepted"] and check["io"]["requests_are_the_plans"]
 
 
 @pytest.fixture(scope="module", params=[8, 16])
