@@ -132,11 +132,18 @@ private def positive (p : Json) (k : String) : V Nat := do
   if n = 0 then throw s!"{k} is a positive integer"
   pure n
 
+/-- A session's `groups_per_coin` (`Shared`): 1 when its parameters don't name it. -/
+def perCoinOf (j : Json) : V Nat := do
+  let p ← J.get j "params" "input"
+  if J.has p "groups_per_coin" then positive p "groups_per_coin" else pure 1
+
 /-- A session's `{"params", "coins", "append_coins", "not_before_ns"}`. The parameters name whether the prover defers
 an appended block's residency to its encode (`deferred`), which `audit.Params` refuses at a lifetime of one window: a
-block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1; and its pace (`null`, or
-`{"k", "window_ns"}`), which `audit.Params` takes only with at least two windows. -/
-def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArray × Nat) := do
+block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1; its pace (`null`, or
+`{"k", "window_ns"}`), which `audit.Params` takes only with at least two windows; and, if they name it, the windows a
+draw's openings coin covers (`groups_per_coin`, `perCoinOf`), refused above 1 unless `shared`: only `sessionFn` runs
+them (`Shared.run`). The coins are W challenges and ⌈W/g⌉ openings coins. -/
+def sessionOf (j : Json) (shared : Bool := false) : V (Session.Params × Array ByteArray × Array ByteArray × Nat) := do
   let p ← J.get j "params" "input"
   let pace ← match ← J.get p "pace" "params" with
     | .null => pure none
@@ -153,22 +160,29 @@ def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArr
     throw "a session that defers residency has a lifetime of at least 2 windows"
   if pace.isSome && params.windows < 2 then
     throw "a paced session has at least one window and the closing window"
+  let g ← perCoinOf j
+  if g ≠ 1 && !shared then throw "the registry draws a window an openings coin: groups_per_coin is 1"
   let coins ← hexes j "coins"
-  if coins.size ≠ 2 * params.windows || coins.any (·.size ≠ Codec.COIN_BYTES) then throw "2W coins of 32 bytes"
+  if coins.size ≠ params.windows + (params.windows + g - 1) / g || coins.any (·.size ≠ Codec.COIN_BYTES) then
+    throw "W + ⌈W/g⌉ coins of 32 bytes"
   let appendCoins ← hexes j "append_coins"
   if appendCoins.any (·.size ≠ Codec.COIN_BYTES) then throw "append coins are 32 bytes"
   pure (params, coins, appendCoins, ← nat j "not_before_ns")
 
 /-- A session's events through the verifier: `{"registration", "params", "not_before_ns", "coins", "append_coins",
-"events"}` to every event's result, the outcome and the record. -/
+"events"}` to every event's result, the outcome and the record, which names `groups_per_coin` when it isn't 1
+(`Shared.run`, which is `Session.run` at 1). -/
 def sessionFn (j : Json) : V Json := do
   let reg ← registrationOf (← J.get j "registration" "input")
-  let (params, coins, appendCoins, notBeforeNs) ← sessionOf j
+  let (params, coins, appendCoins, notBeforeNs) ← sessionOf j (shared := true)
+  let g ← perCoinOf j
   let events ← (← J.arr j "events" "input").mapM eventOf
-  let (results, s) ← Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events
+  let (results, s) ← Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events
+  let record := match s.summary with
+    | some x => if g == 1 then summaryJ s.digest x else (summaryJ s.digest x).setObjVal! "groups_per_coin" (toJson g)
+    | none => .null
   pure (Json.mkObj [("results", .arr (results.map resultJ)),
-    ("outcome", match s.outcome with | some o => .str o | none => .null),
-    ("record", match s.summary with | some x => summaryJ s.digest x | none => .null)])
+    ("outcome", match s.outcome with | some o => .str o | none => .null), ("record", record)])
 
 def registrationDigestFn (j : Json) : V Json := do pure (hexJ (← registrationOf j).digest)
 
