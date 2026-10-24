@@ -65,6 +65,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import NamedTuple, Sequence
 
 from verity.ml.circuits import boolean as BL
@@ -761,11 +762,15 @@ def _sig_end(S):
     return (("state", Array(STATE, BIT)), ("count", Array(32, BIT)), ("received", Array(32, BIT))), BIT
 
 
+def _build_end(C, S, state, count, received):
+    return [and_reduce(C, [state[130], _eq(C, state[65:97], count), _eq(C, state[97:129], received)])]
+
+
 IoTieRequestEnd = _part(
-    "IoTieRequestEnd", (), _sig_end,
-    lambda C, S, state, count, received: [and_reduce(C, [state[130], _eq(C, state[65:97], count),
-                                                        _eq(C, state[97:129], received)])],
+    "IoTieRequestEnd", (), _sig_end, _build_end,
     "1 iff the scan's state is ok, its requests ended are count and its request frames received")
+# C-Flock's lowering calls a static-free Definition's builder without S, as `block_check._part` builds them
+IoTieRequestEnd.build = lambda C, *e: _build_end(C, SimpleNamespace(), *e)  # type: ignore[attr-defined]
 
 
 def _sig_request(S):
