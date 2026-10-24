@@ -4229,8 +4229,9 @@ theorem batch_den (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q
   rw [child_eq c sc hd hn, callee_eq c hn, show q.base.toNat + t = (q.base + (t : Int) * 1).toNat by omega]
   exact e
 
-/-- **Open: a batch of a composite's piece in its one-run case** (`affineOf`, every member returning one run of its
-gates and the members' runs making one). -/
+/-- **A batch of a composite's piece in its one-run case** (`affineOf`, every member returning one run of its gates and
+the members' runs making one), which `batchAffine` proves wherever the callees' summaries hold `RetOk` and a
+composite's return has as many leaves as its type. -/
 def BatchAffine (c : Desc.Ctx) (sc : Flock.Program.Scope) : Prop :=
   ∀ q k node p, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
     (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 →
