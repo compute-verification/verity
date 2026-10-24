@@ -130,6 +130,10 @@ Arms:
     ARM-ug0      a dither-a-so arm whose units are launched each step, not replayed as a CUDA graph (DITHER_SO_GRAPH=0)
     ARM-zs       a dither-a-so arm whose z tables build on a tree stream beside its A tables (DITHER_SO_ZSIDE=1)
     ARM-mmc      a dither-a arm whose GEMMs take $SBENCH_MM_CFG's configs ($DITHER_MM_CFG, dmmsweep.py's best.json)
+    ARM-mmq      a dither-a-so arm whose GEMMs take the configs tuned at its own SMQ (MM_CFGS at $DITHER_SO_UNITS_SMQ's
+                 Q/D, however its suffixes or SBENCH_ARM_ENV set it), refused at an SMQ MM_CFGS has none for.  J10-R
+                 at 47/64: dither-a-hbc-zy-aomn-pt-so8-wea-rd0-smq47o64-mmq with DITHER_SO_UNITS=j10r and HB_KC_FLAGS
+                 ending -DH1U_JCTA=1 -DH1U_WARPS=4 (sbench.sh's dither-a-hbc build)
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -354,12 +358,36 @@ def mm_cfg() -> None:
     os.environ["DITHER_MM_CFG"] = os.environ["SBENCH_MM_CFG"]
 
 
+# ARM-mmq's $DITHER_MM_CFG by the units' "Q/D" ($DITHER_SO_UNITS_SMQ's): dmmsweep.py --block Q/D's best.json
+# dither_mm_cfg, the m=64 entries the 11/16 sweep's.  The forward's GEMMs run on the SMs the units leave them, so a config
+# holds at the SMQ it was tuned at alone (at 47/64, 11/16's configs cost 1.7 ms a step)
+MM_CFGS = {"47/64": "6144,4096,32=32x32x128:w4:s3:k1+4096,4096,32=32x32x256:w4:s3:k1:t1+28672,4096,32=32x64x128:w4:s2:k1"
+                    "+4096,14336,32=32x32x256:w4:s3:k1+4096,4096,64=32x64x256:w8:s4:k3+4096,14336,64=32x64x512:w8:s3:k3"}
+MMQ = {"on": False}
+
+
+def mm_smq() -> None:
+    MMQ["on"] = True
+
+
+def smq_mm_cfg() -> None:
+    """An ARM-mmq arm's $DITHER_MM_CFG, MM_CFGS' at its SMQ, once its suffixes and SBENCH_ARM_ENV have set that."""
+    if not MMQ["on"]:
+        return
+    q, _, rest = os.environ.get("DITHER_SO_UNITS_SMQ", "").partition("/")
+    smq = f"{q}/{rest.partition('/')[0] or 8}" if q and q != "0" else "every SM"
+    if smq not in MM_CFGS:
+        raise ValueError(f"an ARM-mmq arm has no MM_CFGS entry at its SMQ ({smq}): tune one with dmmsweep.py --block Q/D "
+                         f"at that SMQ and add its best.json's dither_mm_cfg to sbench.MM_CFGS")
+    os.environ["DITHER_MM_CFG"] = MM_CFGS[smq]
+
+
 SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS", "j10r"),
             "-kcb": kc_b, "-zy1": env_of("DITHER_ZY1_KC", "1"), "-cgp": env_of("DITHER_SO_CAPTURE_PRIO", "1"),
             "-mc32": env_of("CUDA_DEVICE_MAX_CONNECTIONS", "32"), "-skip": env_of("DITHER_UNITS_SKIP_DEAD", "1"),
             "-rd0": env_of("DITHER_SO_RDEAD", "0"), "-lag1": env_of("DITHER_SO_ROOT_LAG", "1"),
             "-lag2": env_of("DITHER_SO_ROOT_LAG", "2"), "-ug0": env_of("DITHER_SO_GRAPH", "0"),
-            "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-mmc": mm_cfg}
+            "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-mmc": mm_cfg, "-mmq": mm_smq}
 # -smqQ / -smqQoD / -smqQoDcC: a dither-a-so arm's units on the SMs whose id % D < Q, at most C CTAs on each
 # ($DITHER_SO_UNITS_SMQ=Q/D/C, D 8 and no cap without them; -smq0 every SM, whatever the run's environment says)
 SMQ_SUFFIX = re.compile(r"-smq(\d+)(?:o(\d+))?(?:c(\d+))?$")
@@ -395,6 +423,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     if s:
         suffix_env(s)()
         return build(arm[:-len(s)], scratch, gpu_mem)
+    smq_mm_cfg()
     if arm in DISABLED:
         os.environ["VLLM_DISABLED_KERNELS"] = DISABLED[arm]
     if arm == "stock-cutlass":

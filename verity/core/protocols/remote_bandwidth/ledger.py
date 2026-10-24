@@ -21,8 +21,8 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
 
 The memory line counts registered blocks only.  δ is the horizon's (the record's δ and AuditRO's 2^-slack_log2 a
 pass) plus, under sketch-sha512, `timing.sketch_failure` over the session, plus the draw's rejection (`rejection`):
-the statements' δc and δs, and `LineHeld`'s Σ_t k_t/2^64.  `LineHeld`'s error also carries the windows' PRF
-advantages, which are named (`PRF_CLAIM`) and in no δ here."""
+the statements' δc and δs, and `LineHeld`'s Σ_t k_t/2^64 at the record's `samples`.  `LineHeld`'s error also carries
+the windows' PRF advantages, which are named (`PRF_CLAIM`) and in no δ here."""
 from __future__ import annotations
 
 import math
@@ -32,7 +32,7 @@ from types import MappingProxyType
 
 from verity.core.protocols.profile import IntegrityProfile
 
-from . import audit, receipts, timing
+from . import audit, coins, receipts, timing
 
 SNAPSHOT, TIME_HELD, LINK_CHARGED = "snapshot", "time-held", "link-charged"
 FORMS = (SNAPSHOT, TIME_HELD, LINK_CHARGED)
@@ -301,10 +301,15 @@ def _paced(record: audit.Record) -> str | None:
 
 
 def rejection(record: audit.Record) -> float:
-    """The draw's rejection, `LineHeld`'s Σ_t k_t/2^64: the chance some window's draw rejects a first word, below
-    2^-`REJECTION_LOG2` a draw, over every window's draws (`profile.drawn`, min(k_t, U_t): k_t in a window of more
-    receipts than draws, and U_t, at most k_t, in one that opens all of them).  Exact: the draws are an integer."""
-    return sum(w.profile.drawn["receipt"] for w in record.windows) * 2.0 ** -REJECTION_LOG2
+    """The draw's rejection, `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt draw t requested, k_t the
+    record's `samples` in every draw (the k at which `DrawsOfRecord` holds), one draw a window, or ⌈W/g⌉ draws at
+    `groups_per_coin` g.  Not the receipts drawn (`profile.drawn`, min(k_t, U_t), short of k_t in a draw that opens
+    all its receipts): the statement's error is a constant, and a draw's U_t is the prover's.  Refused for a record
+    that states no `samples`.  Exact: the draws are an integer."""
+    if record.samples is None:
+        raise ValueError("the record states no samples, the receipts every draw requested, at which the memory line's "
+                         "δ charges the draw's rejection (Σ_t k_t/2^64): give the record its session's Params.samples")
+    return coins.openings_coins(len(record.windows), record.groups_per_coin) * record.samples * 2.0 ** -REJECTION_LOG2
 
 
 def delta_parts(record: audit.Record, node: Node) -> dict[str, float]:

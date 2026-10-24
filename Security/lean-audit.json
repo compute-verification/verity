@@ -1294,6 +1294,10 @@
    "owner": "@network-accounting",
    "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be"
   },
+  "NetTiming.Layout.Fits": {
+   "owner": "@network-accounting",
+   "digest": "b5c00d137d48ec2bef002d2c9fa7bb36d831f9c1f44a3af803e835a5b86f8ca3"
+  },
   "NetTiming.OccupancyReadsOwnBlock": {
    "owner": "@network-accounting",
    "digest": "3e0f6592aa67809f7000885433abc0a57646746fa961c9ceb71d982c21bfe373"
@@ -1484,11 +1488,11 @@
   },
   "Pouw.NCP.Assumptions.TTNCP": {
    "owner": "@compute-accounting",
-   "digest": "f57ea45f32f4773a7572663c546adeb5c05461712de223326efd3afb73a813fb"
+   "digest": "4eb0c540b2c1b9612ab68cec531e7b471fcbbb63dc534a4f23587d276c176193"
   },
   "Pouw.NCP.Assumptions.TTNCP_U": {
    "owner": "@compute-accounting",
-   "digest": "8a747ab5b169a0aebbead909c55f11867690c76654bffe5a2a0125164a2a1305"
+   "digest": "8a556256609f886598bfa29ac2ee4d6c58146565483faa43f1b89b6a54497e95"
   },
   "Pouw.NCP.InNoise6": {
    "owner": "@compute-accounting",
@@ -8100,6 +8104,12 @@
    "assumptions": [],
    "type_hash": "1564cbcbef1db36b50e4f1da0cc1c7b6691134430a5d88f497954467812a4ada"
   },
+  "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe"],
+   "assumptions": [],
+   "type_hash": "43967fd407da24e706715b2b9d480f1e32e3241ad802b706264dbc8fb5365ce0"
+  },
   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate": {
    "owner": "@network-accounting",
    "signature": [
@@ -11133,7 +11143,8 @@
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function."
+   "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": "frozen (no-function): It bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts with some faulty set that RAcc allows at delta, not runs of the network check's code, and takes the layout's fit (Layout.Fits) and the counts of the other inputs and of the faulty units' committed bits as premises; SampledAuditAccepted, once proved, carries an accepted sampled audit to RAcc delta, which is the restatement path."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -15321,6 +15332,7 @@
     "Claims.Sampling.scope_meets",
     "Claims.Sampling.universal_meets",
     "Flock.SecurityProofs.SamplingClaimsStated",
+    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.SampledAuditAcceptedStated"
    ]
   },
@@ -16776,6 +16788,7 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
     "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock",
     "NetTiming.SecurityProofs.EncardAccSeqsLeSync",
+    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
@@ -16800,6 +16813,13 @@
     "NetTiming.Guarantees.SampledAuditAcceptedStated": "9009d1c7c22120166c4aa4c882e7e18b18de3dc9633d6988c52ae4436b74a55b"
    },
    "guarantees": ["NetTiming.SecurityProofs.SampledAuditAcceptedStated"]
+  },
+  "Definitions.NetworkCertifier.Guarantees.SampledCharge": {
+   "digest": "a0be196f7b87bf66a51f84cfa94a592d4f6c8a879e5215db79f1279812d2675a",
+   "definitions": {
+    "NetTiming.Guarantees.EncardAccSeqsSampledLe": "6fe6fff3b866eeb9e30182477d22e14ba9679dc097118c4e5181d9cc477079d8"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe"]
   },
   "Definitions.NetworkCertifier.Ingress": {
    "digest": "3c3f9fa4cf192807b611a03f6164a25f5407f9f252110a4c4f827b0107065ffc",
@@ -16860,6 +16880,7 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
     "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock",
     "NetTiming.SecurityProofs.EncardAccSeqsLeSync",
+    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
@@ -16899,7 +16920,17 @@
     "NetTiming.traceVal": "a0ec132a217fc9cd0dd90cf6b0494a435a3dac6a2b70c8f77ac23113a49c2f81",
     "NetTiming.valOver": "e98e961a4e7a5d8dcb2b280a5cdc18ca8c87a546301aa91defbf4300ba44d7f2"
    },
-   "guarantees": ["NetTiming.SecurityProofs.SampledAuditAcceptedStated"]
+   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledAuditAcceptedStated"]
+  },
+  "Definitions.NetworkCertifier.SampledCharge": {
+   "digest": "93be79885ff21ba07783d8034afb5e1d117c9db222c7c84546623ceb5f77ef6e",
+   "definitions": {
+    "NetTiming.AccSeqsSampled": "05b16b5446955562b136a894719673fc47a049985da8f9880d9e4fb4ede3b771",
+    "NetTiming.AcceptedFaulty": "df874e0f19724289c18f7080a173db8d45c039c2575c51212f5aa91a88496323",
+    "NetTiming.faultyBits": "8cbcfcedec4b99e4491bff7587994f46bb7b20e10acb4a4bf584da5d0f299f7f",
+    "NetTiming.faultySets": "32b6dfd30c42f80810aa5181d9d53975b1587fe9ade5d884d45e1f40240e4276"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe"]
   },
   "Definitions.NetworkCertifier.Schedule": {
    "digest": "7a2f8e4d2926bb4eda2b5fa8fff327d0feb7c3d96e804634c51e0925afa72fc2",
@@ -19764,7 +19795,7 @@
    ]
   },
   "Definitions.Pouw.PearlC.Device": {
-   "digest": "d1c027d87916528726810af9379dcae4416feefb7f04828239d02892bf703d4f",
+   "digest": "be195bee1bcff7188ddfde0756b9d553f43612253227a407635ee106ec4bcdb5",
    "definitions": {
     "Pouw.PearlC.PearlCDevice": "49b0746e634512b0ba15501dae4a8e1e7f5a92906eccf6db5291f7ed68f2dfd0",
     "Pouw.PearlC.PearlCDevice.G": "dbfc86330607b7c4760f02bf16a71635ec8b1b7775a76ee3bb4ebfcdf645e58b",
@@ -19788,7 +19819,7 @@
     "Pouw.PearlC.devSm120v1": "e8683e11423332331304d0a3f6ed4662ea00f45d4231727cd607dcd9712e8d34",
     "Pouw.PearlC.devSm120v2": "4f59d45fd7215c5db0568e89746297fc170061906445f41b418d7022ac26153a",
     "Pouw.PearlC.llama31_8bLinears": "33576ad425f7422cc95800869f043984dd86cf55d803af807f76e2b00f4a6ed3",
-    "Pouw.PearlC.pearlCDomainDev": "efca9d83927acd176828923127fb955d5745e704f51b995db882f7e654426508",
+    "Pouw.PearlC.pearlCDomainDev": "30f9d9afd030d0011715c64c3eb31415ae766561630de7ad5b5ceeb3b57cf36b",
     "Pouw.PearlC.pearlCDomainDevAt": "402ff5676e5550b47d1280a8f49978fa59d12520c6d93eceb5d2a4b3eb81c6c9",
     "Pouw.PearlC.pearlCDomainDevNK": "2653a120d87aafb7cd768ecc73e0d63a375fe6e07544f2c8a4c4acd087981bbf",
     "Pouw.PearlC.pearlCDomainDevShapes": "78adc7a7c4a1a04f003481193b6567586db39739f903d0da828e54908278bcfe",
@@ -29042,7 +29073,7 @@
    "guarantees": ["Accounting.SecurityProofs.BandwidthOfAudit"]
   },
   "Models.Accounting.Guarantees.BoundReceipt": {
-   "digest": "8d772a25bc4628d4eb1807365d6509ae367b36baed228035079aa9a683a59fb7",
+   "digest": "68266a4a88f70326ace7a9d30d47dbdce81ad51c33d7be3be9dffc3944902e95",
    "definitions": {
     "Accounting.Guarantees.BoundReceiptLink": "8af8cf34ac0c51cf351be6a8a8cfbb18eac7745e7e5fad766f3d1ad84abd2f2f",
     "Accounting.Guarantees.BoundReceiptLinkInteractive": "228d2b8ff7fab32eea69415e24f5b2be094f7b7b147c8ffd3fd8d21355001c6b",
@@ -29050,7 +29081,7 @@
     "Accounting.Guarantees.Colocation": "92f0649ed2bd185f79d665a2259e51d9a6a2dd6798836b7d55b1d19d4ded04e2",
     "Accounting.Guarantees.TileUnpredictable": "22ad23ed5598959023cdd1241a68982ace543482d1ab8a7cb358a7ab9f147fe1",
     "Accounting.Guarantees.TileUnpredictableMono": "1afa0247bb259025f232bcfa1595ddd30eccf50acf4c92870c3ca47a3f260db9",
-    "Accounting.Guarantees.TileUnpredictableOfNCPU": "9631831a6703ad58d57314d8eef6219f3647cfc12772faeb65b23c607a432927",
+    "Accounting.Guarantees.TileUnpredictableOfNCPU": "d04832b14efbece2bc986a767a5ce3d781d3051af3bcd21e6a618b3fc4f8e079",
     "Accounting.Guarantees.TileUnpredictableOfTT": "91df48861310d961344ba8740e89a033669f8585a967cba17707b99d18f4c25f",
     "Accounting.Guarantees.TileUnpredictablePearlC": "a5a5ae33f1fb918e6c0c037d44ab82dd9820f80465232a1e2ddc42a7cb086482",
     "Accounting.Guarantees.TileUnpredictablePearlCOfTTOut": "ad839c2df0f60442d1a0989db18c0c085ae21f47c9e564c321682299dbbe41f8"
@@ -31038,23 +31069,23 @@
    ]
   },
   "Models.Pouw.Assumptions.NCP.Assumptions": {
-   "digest": "9a12ed69cd26eb69cee7d01f81dd6439d834165f3fb2ef9089fe4a0fddd837af",
+   "digest": "1648a0e4552adfbe6da437464897c0093495e0d86088a6ebfc7c64bef73378bc",
    "definitions": {
-    "Pouw.NCP.Assumptions.TTNCP": "f57ea45f32f4773a7572663c546adeb5c05461712de223326efd3afb73a813fb"
+    "Pouw.NCP.Assumptions.TTNCP": "4eb0c540b2c1b9612ab68cec531e7b471fcbbb63dc534a4f23587d276c176193"
    },
    "guarantees": ["Pouw.NCP.GameProofs.gammaFromTTNCP", "Pouw.SecurityProofs.NCP.TTNCPUIff"]
   },
   "Models.Pouw.Assumptions.NCP.GamePinned": {
-   "digest": "f37d842b3aba67d38a908f78824ef9525a3d420740f81bd3b8e931dc6952e989",
+   "digest": "a4961b2d72c7cd46a2da973499b4c87ecee0027477eb0e657fc65e0f12ae4860",
    "definitions": {
-    "Pouw.NCP.GamePinned.GammaFromTTNCP": "ec090eef3e8dfa435d00d7f88802691ff4b998f6a02295e77a7dcdf52d73f201"
+    "Pouw.NCP.GamePinned.GammaFromTTNCP": "3ecaf0a7c70ee810d01b4f32294f8f46dfd99b00ed6d0c597e673860ed4f0871"
    },
    "guarantees": ["Pouw.NCP.GameProofs.gammaFromTTNCP"]
   },
   "Models.Pouw.Assumptions.NCP.RouteUAssumptions": {
-   "digest": "0011ba99f4f54f4c6cb78a9164747ec481bede3781e469a76cb4e876d7067e59",
+   "digest": "a4a4a796f1670ca7d4f69c36de55ccfa631b0417e421055bb6f2d4e10ec9e49c",
    "definitions": {
-    "Pouw.NCP.Assumptions.TTNCP_U": "8a747ab5b169a0aebbead909c55f11867690c76654bffe5a2a0125164a2a1305"
+    "Pouw.NCP.Assumptions.TTNCP_U": "8a556256609f886598bfa29ac2ee4d6c58146565483faa43f1b89b6a54497e95"
    },
    "guarantees": [
     "Accounting.SecurityProofs.TileUnpredictableOfNCPU",
@@ -31485,14 +31516,14 @@
    ]
   },
   "Models.Pouw.Guarantees.NCP": {
-   "digest": "be54c6a5b3fe0c6c86071e5434478114b71f57d8b5987416ac78dc119f6d4521",
+   "digest": "8f0b5867f75c2a8842ab1fafca36f61750f7ddf1a3aef907a5fde96da838a0c8",
    "definitions": {
     "Pouw.Guarantees.NCP.BiasU8Iff": "151516e1e4ee87903f8f14ac1c567a5e551c88a0c5b90f9319f383faf2e09389",
     "Pouw.Guarantees.NCP.Cancel": "f94583533f0111a6bbcaa3c9623947cab329b9b707c7584f6ecd2e552f8c578b",
     "Pouw.Guarantees.NCP.CheckedUEq": "cec4285cc6c3356b2a23bf86124b656ca750186359021b2c904eac98a699eae1",
     "Pouw.Guarantees.NCP.CheckedUFinal": "3aa0308b31f68bde20e92aef42943c30c7851ea5916141e624e530d7f57e95ad",
-    "Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2": "91381b6af66e1988a22bb78349b9208c3b804a5f92e3f7697d031a4ca1741cfa",
-    "Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1": "bb7b1d69f2982273e5b146c11f7d4a86d11472eaa59e464a98e905e07423fb54",
+    "Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2": "a6c2b6444f74b566c7e25ed307a1eb90a9bf09682769d5253e5c44d3499c0e24",
+    "Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1": "1fc13627931d69c84a08d627d761aa484af35b4bf042e396763397502fe05fd6",
     "Pouw.Guarantees.NCP.IndependentWitness": "fffbf79427e4f9135959ad4e505c32953fa5ab1521cd33c283335fb539adbac3",
     "Pouw.Guarantees.NCP.Int7Int32UPos": "c94618bd014850aecb0a6e4d226b9ce336d0a5a6314a54d659161218a60f196a",
     "Pouw.Guarantees.NCP.MmWUExact": "be476faa1497b2a80f77d2ce48799efd668f4d8412ff27c2027d5a524207014f",
@@ -31501,13 +31532,13 @@
     "Pouw.Guarantees.NCP.RangeU": "50d942f10ccae0732bb8083d486599f94eb606ad593194527048583137746756",
     "Pouw.Guarantees.NCP.ShiftBy24Admissible": "78da322e2c5e07fa873f5e260c69e0c6a2864d48637c5c81a1810079e68696df",
     "Pouw.Guarantees.NCP.Stacked": "02b66d25dc44f44196c5eb4ee1d490ccb41b7e8cece81a47c64f0afb2415fae6",
-    "Pouw.Guarantees.NCP.TTNCPUIff": "2fe0085464b9ad5c66424a9710842259438e14b94dd3ebedec293f200e1f2188",
+    "Pouw.Guarantees.NCP.TTNCPUIff": "367e4d775677d7332775bcbb1b7b4098e3366daa9fac12904e19aa12a9a7d0a7",
     "Pouw.Guarantees.NCP.TTNCPUWitness": "a0c9af8d21778ce0c6de58401518dccc4173d251594cf8e4d37798bfd3a41cf7",
     "Pouw.Guarantees.NCP.WrapFinalOnlyIndU": "cc7a0f435ecd4a059382d982f6063b1245867e20cf96149d61e455fe812f8b9a",
     "Pouw.Guarantees.NCP.WrapU": "a90fc27845cfe2e8e13559319ff9fa97f28a89a14efc4597f588f68bfa5064dc",
     "Pouw.Guarantees.NCP.WrapWordFloorIndU": "ceb18366b36e8a5c047ec418b0288b9514b861c57b85b91d4fc024a3d63f98a4",
     "Pouw.Guarantees.NCP.YUChecked": "b27908d27a7947b8f55b3d7e3c6965afa85a2b6475ee20dd01dee53f1ac3b6a2",
-    "Pouw.NCP.RouteU.GammaFromTTNCP_U": "72c6154e6ece8ab1208142a09ecab8405c1b6ce449aa1fa167691332a5e4e015"
+    "Pouw.NCP.RouteU.GammaFromTTNCP_U": "38f2a04136fc922282c26629e44963f68f17ff0729e099d05607410e0343277d"
    },
    "guarantees": [
     "Pouw.SecurityProofs.NCP.BiasU8Iff",
@@ -31821,7 +31852,7 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "PouwWindow.Lanes": {
-   "digest": "4e5bd17aa23f9f73eabcdc8a14488e0288df1ab19f283348d72ee5f70e90a7b3",
+   "digest": "d0c9431c5675ebcd55fd4b03e457d546c71a5c081c52bf4fb4f6634490048e4d",
    "definitions": {
     "PouwWindow.Lanes.Field": "9da971ff481bbbf6fc77df3f9c1cecdcdd3bf42f8072eff4968da930ddbf2ccc",
     "PouwWindow.Lanes.Field.bit": "17c1af01610f085f560a3a781a0a38dfa9bd38fce7ffab0a12ba1ac4b4a1af64",
@@ -31837,7 +31868,7 @@
     "PouwWindow.Lanes.Source.rec": "17b48fa8bdc61862ce506cf1126b2e65ad821d67374d0ef5beb1db30f8feb2bd",
     "PouwWindow.Lanes.Tile": "adf2b3dd9ba9b942012c32ede4c4811ce95509ae5f14e6a17eeb6f3a6dc79a2b",
     "PouwWindow.Lanes.Tile.c": "a320e35ec972eadc0e3b305b31d788f8b2a1013d934f9aad3eb9e9137e2c9cf1",
-    "PouwWindow.Lanes.Tile.check": "66d9a385ea96724fabf28b2d1f667e8627471ffa89224298782e7cf3199cb72c",
+    "PouwWindow.Lanes.Tile.check": "ad9ea2a257f48a8c3609a9f7648b7a9c076e14e01679f0f21a692bb04e640e00",
     "PouwWindow.Lanes.Tile.colOf": "ea58e20cadfa0d01fb73c286f4ec6208ff36a44cafd0ed10cecac92baf2d6940",
     "PouwWindow.Lanes.Tile.g": "4691766df9034f3ef31e24a73563826d5aeb3a859f933431246ddefe9dd9e965",
     "PouwWindow.Lanes.Tile.k": "5a9f3e3bc15060159c8fccbbdf9e80dc2ea2b7d13f3ffba3045abf47ff99f5ca",
