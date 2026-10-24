@@ -1,9 +1,11 @@
 """served.py's ratios: which arm is which role (by its module and its execution, else the spec's), at most one arm per role, each
 ratio paired by interleaved rep (median, min, max over the pairs), a failed gate marking only the ratios that read its arm, the
-harness's Commit arms read as G2's are, and two runs of one model kept apart in the tables."""
+harness's Commit arms read as G2's are, a run's compiled Commit run time taken with another run's tail (``--tail``), and two runs
+of one model kept apart in the tables."""
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -116,6 +118,30 @@ def test_a_run_without_timed_points_still_reports_why_and_its_hosts_load():
     d["points"] = []
     md = S.report([], {}, {"r-gated": S.run_facts(d)})
     assert "| r-gated | Llama-3.1-8B FP8 | served-commit-rows-4k | 0 |  | served-commit-rows-4k tokens" in md
+
+
+def _timed(d: dict, arm: str, walls: tuple[float, ...], tails: tuple[float, ...]) -> dict:
+    for rep, wall, tail in zip(d["points"][0]["arms"][arm]["reps"], walls, tails):
+        rep.update(wall_s=wall, generated_tokens=100, host_timing={"device_tail_s": tail})
+    return d
+
+
+def test_a_runs_compiled_commit_takes_a_fixed_runs_tail_in_its_run_time_alone():
+    d = _timed(doc(), "served-commit-rows-4k", (500.0, 550.0, 600.0), (70.0, 75.0, 110.0))
+    fixed = _timed(doc(), "served-commit-rows-4k", (9.0, 9.0, 9.0), (30.0, 20.0, 25.0))
+    got = {(m.ratio, m.metric): m for m in S.measures(S.retail(d, fixed), run="r1 (tail r2)")}
+    served = got[("served", "tpot")]
+    assert (served.median, served.lo, served.hi) == (pytest.approx(455 / 400), pytest.approx(1.0), pytest.approx(515 / 400))
+    before = {(m.ratio, m.metric): m for m in S.measures(d, run="r1")}
+    assert {k for k in before if got[k] != replace(before[k], run="r1 (tail r2)")} == {("served", "tpot"), ("compiled-bi", "tpot")}
+    assert d["points"][0]["arms"]["served-commit-rows-4k"]["reps"][0]["metrics"]["time_per_output_token_s"] == 5.0
+
+
+def test_a_tail_for_a_run_that_isnt_rendered_is_refused(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["served.py", "r1", "--tail", "r9=r2"])
+    with pytest.raises(SystemExit):
+        S.main()
+    assert "--tail names runs that aren't rendered: r9" in capsys.readouterr().err
 
 
 def test_two_runs_of_one_model_keep_their_own_rows():

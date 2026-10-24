@@ -24,15 +24,20 @@ latency p50) and run tpot (the run's wall over its generated tokens, prefill inc
 either arm passed (the harness's: an arm's tokens equal its control's, its KV pool equals its control's, it closed clean). No
 RTX PRO 6000 Build of record pins the compiled Commit's kernels, so by curve.py's rules its ratios are mechanism evidence.
 
-    uv run --no-project --with matplotlib python3 benchmarks/g2/served.py RUN... [--runs-dir DIR] [--out DIR]
+    uv run --no-project --with matplotlib python3 benchmarks/g2/served.py RUN... [--tail RUN=FIXED]... [--runs-dir DIR] [--out DIR]
 
 Reads each run's `out/result.json` from DIR/RUN (`research fetch RUN --all`), else from its record in the evidence store.
 Writes OUT/g2-served.md, OUT/g2-served.json (every measure, and each run's facts: timed points, host load, failed gates) and
 OUT/g2-served.png; OUT defaults to $OUT, else ./out.
+
+``--tail RUN=FIXED`` reads RUN's compiled Commit run time with FIXED's tail (`retail`): for a run whose Commit arm did more
+than commit between its last step and the clock stop (`prof_arm.RootsArm` wrote its profiling records there before
+8374522a79), FIXED being a run of the same model whose arm doesn't. Its rows are labeled ``RUN (tail FIXED)``.
 """
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import statistics
@@ -138,6 +143,21 @@ def measures(doc: dict, *, run: str) -> list[Measure]:
                                    lo=min(ratios), hi=max(ratios), pairs=len(ratios), arm_ms=1e3 * statistics.median(xs),
                                    over_ms=1e3 * statistics.median(ys),
                                    gates=gates.get(arms[num], False) and gates.get(arms[den], False), run=run))
+    return out
+
+
+def retail(doc: dict, fixed: dict) -> dict:
+    """``doc`` with each compiled Commit rep's run time per output token over its wall less its own device tail (from its last
+    step's return to the clock stop, where the arm's ``end_run`` runs) plus ``fixed``'s compiled Commit's median tail at the same
+    batch: the serving is the run's own, the tail the fixed arm's. Prefill and decode latency don't read the tail."""
+    arm, fixed_arm = (roles(d["identity"])["commit-compiled"] for d in (doc, fixed))
+    tails = {int(p["point"]["batch"]): statistics.median(r["host_timing"]["device_tail_s"] for r in p["arms"][fixed_arm]["reps"])
+             for p in fixed["points"]}
+    out = copy.deepcopy(doc)
+    for point in out["points"]:
+        tail = tails[int(point["point"]["batch"])]
+        for r in point["arms"][arm]["reps"]:
+            r["metrics"]["time_per_output_token_s"] = (r["wall_s"] - r["host_timing"]["device_tail_s"] + tail) / r["generated_tokens"]
     return out
 
 
@@ -299,15 +319,22 @@ def load(run: str, runs_dir: Path | None, scratch: Path) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("runs", nargs="+")
+    ap.add_argument("--tail", action="append", default=[], metavar="RUN=FIXED",
+                    help="RUN's compiled Commit run time with FIXED's tail (retail)")
     ap.add_argument("--runs-dir", type=Path, help="read DIR/RUN/out/result.json where it exists (research fetch RUN --all)")
     ap.add_argument("--out", type=Path, default=Path(os.environ.get("OUT", "out")))
     a = ap.parse_args()
+    tails = dict(t.split("=", 1) for t in a.tail)
+    if unknown := sorted(set(tails) - set(a.runs)):
+        ap.error(f"--tail names runs that aren't rendered: {', '.join(unknown)}")
     ms: list[Measure] = []
     steps: dict[str, dict[int, tuple[float, float, float]]] = {}
     facts: dict[str, dict] = {}
     with tempfile.TemporaryDirectory(prefix="g2-served-") as tmp:
         for run in a.runs:
             doc = load(run, a.runs_dir, Path(tmp))
+            if run in tails:
+                doc, run = retail(doc, load(tails[run], a.runs_dir, Path(tmp))), f"{run} (tail {tails[run]})"
             ms += measures(doc, run=run)
             facts[run] = run_facts(doc)
             if s := graph_steps(doc):
