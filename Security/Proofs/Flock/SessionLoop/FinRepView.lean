@@ -28,7 +28,7 @@ open Flock
 theorem encZk_view (sh : Shape) (p : Zk.ZkProof) : encZk sh p = FlockSoundness.Discharge.ZkView.encZk sh p := rfl
 
 /-- The firewall's file shape is the session's. -/
-theorem shapeZk_view (st : Setup) (sch : Schedule) (n : ℕ) : shapeZk st sch n = FlockComplete.shapeZk st sch n := rfl
+theorem shapeZk_view (st : Setup) (sch : Flock.Schedule) (n : ℕ) : shapeZk st sch n = FlockComplete.shapeZk st sch n := rfl
 
 end Flock.Firewall.Finish
 
@@ -143,7 +143,7 @@ theorem finRepTab (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
   have e : _root_.Flock.Zk.schedule (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2].m = .ok schs[k / 2] :=
     hall (k / 2) hj' hk'
   rw [getElem!_pos schs (k / 2) hk']
-  rw [← getElem!_pos (FlockDeploy.tabsOf (Masked.stsOf x)) (k / 2) hj', htab, hsch] at e
+  rw [← getElem!_pos (FlockDeploy.tabsOf (Masked.stsOf x)) (k / 2) hj', htab, hts, hsch] at e
   exact (Except.ok.inj e).symm
 
 /-- **The parts give (c.3)**: the run from the views returns a proof equal to the session's up to `eraseZ`
@@ -167,7 +167,6 @@ theorem finRepFwView_of_parts (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _r
     simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map]
   refine ⟨p', tr, l', hv, ?_⟩
   rw [hpp, htab, hsch, hsz, _root_.Flock.Firewall.Finish.encZk_view, _root_.Flock.Firewall.Finish.shapeZk_view]
-  try rfl
 
 /-- **(c) from (c.3)'s parts**, with `FinRepCut` in the masked scope (`finRepCut`). -/
 theorem finRepProofs_of_view (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
