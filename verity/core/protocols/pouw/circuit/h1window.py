@@ -5,7 +5,9 @@ derives the window's units from its own copy of the Program under the `Q_templat
 
 * **The tile** is a parameter: ``tile`` is its R × C, the served path's 32 × 32 (`pouw_h1.TILE`) or h1_prove's 4 × 8
   smoke, and the window binds the tile unit once per K its linears have (`tile_unit`; ``unit`` gives another), so
-  down_proj's calls, at K the intermediate size, instantiate their own template in the same Program.
+  down_proj's calls, at K the intermediate size, instantiate their own template in the same Program. The tile's
+  architecture (`h1_tile`'s ``arch``, sm_120 unless given) is its `h1device` record, which binds its exact accumulator and
+  bounds its K; sm_90's binds the same step, so its Program is sm_120's.
 * **The unit** reads its rows and its z/y record and proves the record (`h1zy`, RT4-INT-33): the H1 tile (`h1_tile`) on the
   rows' codes gives z and the receipt, and the unit returns the receipt and ``ok``, 1 exactly when the record is z and its
   dequant y = RN_bf16(RN32(RN32(RN32(z) s_a) s_w)) at each cell's row scale s_a and column scale s_w, which ride on the
@@ -68,6 +70,7 @@ from verity.ml.circuits.types import Array, Tuple
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.core.protocols.pouw.circuit import h1device as D
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -92,19 +95,23 @@ def roles(ks: Iterable[int]) -> tuple[str, ...]:
     return tuple(r for k in sorted(set(ks)) for r in (f"a/{k}", f"b/{k}")) + SHARED
 
 
-def h1_tile(k: int, tile: tuple[int, int], definition: Any = None) -> Any:
-    """The H1 tile at contraction ``k``: `h1tile.PouwH1Tile` (or ``definition``, its v3) over
-    ``GemmAccumulatorS8_v2{K, sm120}``, R × C ``tile``, every (i, j) pair."""
+def h1_tile(k: int, tile: tuple[int, int], definition: Any = None, arch: str = "sm_120") -> Any:
+    """The H1 tile at contraction ``k`` on architecture ``arch`` (`h1device.DEVICES`): `h1tile.PouwH1Tile` (or ``definition``,
+    its v3) over ``GemmAccumulatorS8_v2{K}`` at the record's s8 binding, R × C ``tile``, every (i, j) pair. Refused
+    (ValueError): an architecture with no record, or a K outside its record's domain."""
+    dev = D.device(arch)
+    if why := dev.refuse(int(k)):
+        raise ValueError(why)
     r, c = tile
-    exact = bind(BG.GemmAccumulatorS8, K=int(k), **BG.GEMM_SM120_S8)
+    exact = bind(BG.GemmAccumulatorS8, K=int(k), **dev.gemm)
     return bind(definition or H.PouwH1Tile, EXACT=exact, R=int(r), C=int(c),
                 PAIRS=tuple((i, j) for i in range(r) for j in range(c)))
 
 
-def tile_unit(k: int, tile: tuple[int, int], definition: Any = None) -> Any:
+def tile_unit(k: int, tile: tuple[int, int], definition: Any = None, arch: str = "sm_120") -> Any:
     """The tile unit at contraction ``k``: `h1zy.PouwH1TileZy` over `h1_tile` (``definition`` its H1 tile, `h1tile.PouwH1Tile`
-    unless given, or its v3), which reads its unit's z/y record and proves it."""
-    return Z.unit(h1_tile(k, tile, definition))
+    unless given, or its v3; ``arch`` its architecture), which reads its unit's z/y record and proves it."""
+    return Z.unit(h1_tile(k, tile, definition, arch))
 
 
 def template_params(k: int) -> tuple[str, ...]:
