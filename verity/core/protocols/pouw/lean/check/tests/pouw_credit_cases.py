@@ -78,7 +78,11 @@ window's session to a logged branch commit off main's first-parent line (``branc
 malformed one, or naming no model credit pins (`MODEL_NAMES`: none, as a bare weights' root, a malformed one, another
 checkpoint, an unpinned role), give one of two or three windows a ``b/<K>`` with one row's s_w changed (``other-sw``)
 or every code zero (``zero-codes``), each registered as the served path registers it (`registered_b`) and that window's
-open root over its own weights' root, and break the forms. Every window of a period shares the weights its open signs;
+open root over its own weights' root, and break the forms. The period's open records the commit it opened under
+(`credit.PERIOD_PIN_FIELD`, MAIN[-1], older than every window's) and a freshness floor (`credit.STALE_FIELD`); one
+window pinned to MAIN[4], the oldest the pins log records, is before the period's open pin when the open records main's
+head (``period-pin``) or past the floor when the open records a floor of one (``pin-floor``), each refused by
+`credit._pin_hygiene` after the per-window pin check. Every window of a period shares the weights its open signs;
 the window of another circuit registers them under its own.
 
 An `a_link` case is a window's registered entries, among them one or two A values (``…/a/<K>``) whose trees are frame-v3
@@ -1138,16 +1142,29 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
             for d, _s in wins:
                 if units_of(d["layout"]) >= past:
                     d["proofs"] = _window_proofs(rng, d, _served_units(d, k=past))
-    events = [("period-open", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, **committed, "pinned": "ab" * 20,
+    # the period's open pin (`credit.committed_pin`): MAIN[-1], older than every window's (PINS pin MAIN[4], [2], [0]),
+    # so honest sessions are at or after it; `period-pin` records main's head instead, newer than the stale window's.
+    period_pin = rc.MAIN[0] if name == "period-pin" else rc.MAIN[-1]
+    # the freshness floor (`credit.committed_floor`): 5 holds every honest session (at most 4 behind head, 5 with the
+    # branch commit prepended in `on_main`); `pin-floor` records 1, which the stale window at MAIN[4] is past.
+    pin_floor = 1 if name == "pin-floor" else 5
+    events = [("period-open", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, **committed,
+                                     Cr.PERIOD_PIN_FIELD: period_pin, Cr.STALE_FIELD: pin_floor,
                                      "key_sha512": hashlib.sha512(pub).hexdigest()})]
     pins = list(rc.PINS)
     branch = rng.randrange(n) if name == "branch-pin" else None
+    # a window pinned to MAIN[4], the oldest the pins log records: `period-pin` makes it older than the period's open
+    # pin, `pin-floor` makes it past the floor; the per-window pin check passes (it is logged and on main), the period
+    # hygiene refuses it (`credit._pin_hygiene`).
+    stale = rng.randrange(n) if name in ("period-pin", "pin-floor") else None
     if branch is not None:
         pins.append(Ch.pin_line(rc.BRANCH, rc.MAIN[0], "2026-10-23T03:05:00Z"))
     for i, ((d, s), end) in enumerate(zip(wins, ends)):
         o = rc._open(rng, d["window"], pub)
         if i == branch:
             o.update(pinned=rc.BRANCH, pins=Ch.pins_seal(pins))
+        if i == stale:
+            o.update(pinned=rc.MAIN[4], pins=Ch.pins_seal(pins))
         events += [("open", s.sid, o), ("end", s.sid, rc._end(s, **end))]
     outcomes = [{"root": d["window"]["root"], "session": s.sid, "complete": end.get("complete", True)}
                 for (d, s), end in zip(wins, ends)]
@@ -1165,7 +1182,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     match name:
         case ("honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit" | "no-k" | "k-form" | "k-past-units"
               | "bad-circuit" | "never-received" | "other-circuit" | "branch-pin" | "no-weights" | "weights-form"
-              | "other-sw" | "zero-codes"):
+              | "other-sw" | "zero-codes" | "period-pin" | "pin-floor"):
             pass
         case _ if name in MODEL_NAMES:
             pass
@@ -1217,7 +1234,7 @@ PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign"
                 "windows-form", "forged-ledger", "key-form", "other-circuit", "no-circuit", "descriptor-form", "no-k",
                 "k-form", "k-past-units", "other-k", "alt-layout", "bad-circuit", "never-received",
                 "proof-other-registration", "branch-pin", "no-weights", "weights-form", *MODEL_NAMES, "other-sw",
-                "zero-codes"]
+                "zero-codes", "period-pin", "pin-floor"]
 PERIOD_KEYS = ("key", "ledger", "pins", "main", "name", "windows")
 
 

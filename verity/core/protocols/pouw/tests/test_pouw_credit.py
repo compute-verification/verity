@@ -138,6 +138,8 @@ PERIOD_EXPECT = {
     "other-model": ("weights", "which is no checkpoint role credit pins: " + Cr.MODEL_FIX),
     "other-sw": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
     "zero-codes": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
+    "period-pin": ("pin", "before the commit its period opened under"),
+    "pin-floor": ("pin", "past the period's freshness floor"),
 }
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
@@ -659,6 +661,22 @@ def test_a_window_whose_session_ran_a_branch_commit_refuses_the_period(seed):
     on_main = {**d, "main": [rc.BRANCH, *d["main"]]}
     got, refused = Cr._period_outcomes(*(on_main[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     assert refused is None and len(got["windows"]) == len(d["windows"])
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_window_before_its_periods_open_pin_or_past_the_floor_refuses(seed):
+    """CMP74-FOLLOW: a period's open records the commit it opened under (`credit.committed_pin`) and a freshness floor
+    (`credit.committed_floor`, a count of checked train heads behind main's head). A window pinned to a commit the pins
+    log records on main's first-parent line, but before the period's open pin (``period-pin``) or past the floor
+    (``pin-floor``), counts toward no period (`credit._pin_hygiene`, after the per-window pin check), so the period earns
+    nothing; the honest period, whose open pin is older than every window and whose floor holds them, earns."""
+    for name, part in (("period-pin", "before the commit its period opened under"),
+                       ("pin-floor", "past the period's freshness floor")):
+        got, refused = _period(name, seed)
+        assert got is None and refused[0] == "pin" and part in refused[1], (name, refused)
+    d = cases.period_instance(random.Random(f"honest/{seed}"))
+    assert Cr.committed_pin(d["ledger"], d["name"]) == rc.MAIN[-1] and Cr.committed_floor(d["ledger"], d["name"]) == 5
+    assert Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)[1] is None
 
 
 def _work(layout: dict) -> int:
