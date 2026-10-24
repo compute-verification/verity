@@ -10,11 +10,18 @@ their records into `$OUT/recursion_e2e.json`:
 | V* staging | `vstage` | the verifier's fold points and comb (`InnerFold.lean`), then V*'s statements (each Ligerito level's `RecOpen`, its `RecCap`, the algebra's `InnerRepCheck` parts) staged and lowered (`verity_flock.rec_vstage`) |
 | outer prove | `oprove` | every V* statement proved with `--zk` on loopback, every unit drawn, and replayed by upstream's verifier |
 | verify | `lean` | each V* session verified by the Lean `flock-verify` built at the checked-out commit: `verify --zk --rec-inner-session --rec-inner-transcript`, against the verifier's own coins and the coin server's record |
-| negative | `lean` | each honest V* session verified again over a copy of the inner session with rep 0's first `--neg` coin flipped (in `session.json` and the coin server's record alike, `rec_inner.py forge`), which Lean must refuse |
+| negative | `lean` | each honest V* session verified again over a copy of the inner session with rep 0's first `--neg` coin flipped (in `session.json` and the coin server's record alike, `rec_inner.py forge`) |
 
 Each stage has its wall time, its peak resident memory (the largest process, `/usr/bin/time -v`) and its proof bytes.
-`headline` holds the totals. The run exits 0 only when every step ran, every honest statement was accepted and every
-negative was refused.
+`headline` holds the totals. The run exits 0 only when every step ran, every honest statement was accepted, and every
+forged coin was refused.
+
+A forged coin moves only the V* statements that read it. A challenge coin moves the algebra's `v`, a query coin moves
+its level's positions, and a statement that reads neither stays valid over the forged session. The recursive verdict
+needs every statement, so a coin counts as refused when Lean refuses at least one statement over its forged inner
+session (exit 1, nothing accepted). `negative.coins` lists, per coin, the statements that refused it and their reasons.
+The lean step's own exit (`lean_verdicts.py`) holds every forged copy to a refusal, so it exits 1 on such a run. The
+runner judges the honest parts and each coin itself.
 
 ## Run it
 
@@ -35,7 +42,7 @@ What `run` takes:
 - `--k K --n N`: the inner statement, `N` instances of `GemmCoordinate_v2{K=K,DOT=HopperBF16WgmmaDot16_v1}` under
   `Q_template_instance` (`verity/ml/flock/pod/rec_reprice.py`). The defaults, 64 and 16, are small enough for a CPU node.
 - `--runs R`: timed sessions per prove, with no warm one.
-- `--neg COIN...`: `challenge` (the default) and/or `query`; `--neg` alone runs no negative.
+- `--neg COIN...`: `challenge` and `query` (the default, both); `--neg` alone runs no negative.
 - `--baseline`: today's `--zk` on the same statement with hm96 leaves, on loopback (`inner.baseline_zk`).
 - `--pcpus P` (default 3/4 of the job's cores, the rest the verifier's), `--jobs J` (Lean verifications at once, default 2).
 

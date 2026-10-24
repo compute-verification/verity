@@ -189,10 +189,24 @@ def summarize(out: Path) -> dict:
               "wall_s_max": max((r["wall_s"] for r in honest.values() if r["wall_s"] is not None), default=None),
               "peak_gb": max((r["peak_gb"] for r in honest.values() if r["peak_gb"] is not None), default=None),
               "accepted": all(r["accepted"] is True for r in honest.values()) if honest else None}
-    neg = {"statements": negative, "coins": inputs.get("neg"),
-           "refused": all(r["accepted"] is not True and r["passes"] is not False for r in negative.values()) if negative else None}
+    # A forged coin moves only the V* statements that read it (a challenge: the algebra's v; a query: its level's
+    # positions), and the recursive verdict needs every statement, so a coin is refused when Lean refuses at least one
+    # statement over its forged inner session (flock-verify's refusal: exit 1, nothing accepted) and runs every one.
+    coins = {}
+    for c in inputs.get("neg") or []:
+        rows = {n[len(f"forged-inner-{c}-"):]: r for n, r in negative.items() if n.startswith(f"forged-inner-{c}-")}
+        refused_by = sorted(n for n, r in rows.items()
+                            if (judged.get(f"forged-inner-{c}-{n}") or {}).get("exit") == 1 and r["accepted"] is not True)
+        coins[c] = {"refused_by": refused_by, "accepted_by": sorted(n for n, r in rows.items() if r["accepted"] is True),
+                    "why": sorted({rows[n]["why"] for n in refused_by})[:4], "every_statement_ran": set(rows) == set(honest),
+                    "refused": bool(refused_by) and set(rows) == set(honest)}
+    neg = {"coins": coins, "statements": negative,
+           "refused": all(c["refused"] for c in coins.values()) if coins else None}
 
-    ok = (all(steps[s]["rc"] == 0 for s in STEPS) and verify["accepted"] is True and outer["accepted"] is True
+    # the lean step's own exit holds every forged copy to a refusal (lean_verdicts.py), which a statement that doesn't read
+    # the forged coin rightly passes; the honest parts and each coin are judged here instead
+    ok = (all(steps[s]["rc"] == 0 for s in STEPS if s != "lean") and steps["lean"]["ran"] and verify["accepted"] is True
+          and (verify["inner_statement"] or {}).get("accepted") is True and outer["accepted"] is True
           and (neg["refused"] is True or not inputs.get("neg")))
     res = {"schema": SCHEMA, "ok": ok, "inputs": inputs,
            "binaries": {"flock_circuit": build.get("binary"), "flock_verify": build.get("lean")},
@@ -203,7 +217,8 @@ def summarize(out: Path) -> dict:
                         "outer_proof_bytes": outer["proof_bytes"], "outer_prover_peak_gb": outer["prover_peak_gb"],
                         "outer_statements": len(ost), "lean_verify_s_sum": verify["wall_s_sum"],
                         "lean_verify_s_max": verify["wall_s_max"], "lean_peak_gb": verify["peak_gb"],
-                        "negative_refused": neg["refused"]}}
+                        "negative_refused": neg["refused"],
+                        "negative_refused_by": {c: v["refused_by"] for c, v in coins.items()}}}
     (out / RESULT).write_text(json.dumps(res, indent=1))
     return res
 
@@ -286,7 +301,7 @@ def run(a) -> int:
     put(out, res)
     print(json.dumps(res["headline"]))
     print(f"recursion_e2e: ok {res['ok']}; {out / RESULT}; {text(out / 'art.txt').strip()}")
-    return 0 if res["ok"] and rc == 0 else 1
+    return 0 if res["ok"] else 1
 
 
 def store(a) -> int:
@@ -314,8 +329,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--k", type=int, default=64, help="GemmCoordinate_v2's contraction (default 64)")
     r.add_argument("--n", type=int, default=16, help="instances of the inner statement, every one a unit (default 16)")
     r.add_argument("--runs", type=int, default=1, help="timed sessions per prove, no warm one (default 1)")
-    r.add_argument("--neg", nargs="*", default=["challenge"], choices=["challenge", "query"],
-                   help="inner coins to flip, one Lean negative each per V* statement (default challenge; none: --neg)")
+    r.add_argument("--neg", nargs="*", default=["challenge", "query"], choices=["challenge", "query"],
+                   help="inner coins to flip, each verified under every V* statement (default both; none: --neg)")
     r.add_argument("--pcpus", type=int, default=0, help="the prover's cores (default 3/4 of the job's), the rest the verifier's")
     r.add_argument("--jobs", type=int, default=2, help="Lean verifications at once (default 2)")
     r.add_argument("--baseline", action="store_true", help="also today's --zk on the same statement with hm96 leaves, on loopback")
