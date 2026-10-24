@@ -58,8 +58,9 @@ def load(run_dir: Path, w: int) -> SimpleNamespace:
 
 def statics_of(x: SimpleNamespace) -> SimpleNamespace:
     """The run's compile-slice statics. A run sealed before the cache's statics served without prefix caching, so its CN,
-    CTW and CU are 0."""
-    return SimpleNamespace(**{"CN": 0, "CTW": 0, "CU": 0, **x.priv["statics"]})
+    CTW and CU are 0; one sealed before the replay's async statics committed its rows without the async group or walk
+    entries, whatever its engine's async_scheduling, so its AS and EW are 0 (`bindings` recomputes the run's root)."""
+    return SimpleNamespace(**{"CN": 0, "CTW": 0, "CU": 0, "AS": 0, "EW": 0, **x.priv["statics"]})
 
 
 def _session(priv: dict) -> list[list[tuple | None]]:
