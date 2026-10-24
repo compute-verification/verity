@@ -1670,7 +1670,11 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 - **The cells' wiring is open to the verifier (owner: network-accounting).** A unit's read is (q, k), connection q's
   cell k of the link-window. The verifier places it at its bucket's row and slot with the warden's wiring
   (`Wiring.place`), which the signed head names by a salted digest, so the reads are the warden's and never the
-  prover's (REDTEAM's phase 8 finding, closed). But the wiring is opened to the verifier, and it and the rows the units
+  prover's (REDTEAM's phase 8 finding, closed). Which cell each unit reads is the Program's: the units' wiring
+  (`Units`, a (q, k) a unit) is fixed with the Program from the schedule, the ordinals and the signed wiring alone,
+  never the cells' bytes, and the port's value names its digest, which Lean's registered reads hold the statement's
+  header to, so a statement made for another units' wiring is refused even at the same rows (REDTEAM's phase 11 pad
+  for a data cell, closed; no gate). But the wiring is opened to the verifier, and it and the rows the units
   read give away each connection's first row and cell count, both the prover's. A permutation argument closes it, with
   no new verifier form. Before the window's coins, the prover registers V′, a value of its own: the link-window's
   N = T·S cells as pairs (k, cell k of V, the warden's value), reordered into unit order, a fixed number of positions
@@ -1734,13 +1738,15 @@ own certificate of that link-window signs its salted record digest, so neither v
 the verifier's read of it: every field but the wiring's digest and the root is the one the schedule and the
 link-window give, and the certificate verifies over the head under the warden's key in the session.
 
-**Ordinals count from 0.** A cell's stream field is its connection's ordinal, and so is the wiring's q: the k-th
-connection to reach the warden is ordinal k, from 0, as IO-TIE's stream and advice v0 count requests. The active
-certifier's `Requests` counts from 1, so its stream s is the warden's ordinal s − 1.
+**Ordinals count from 1.** A cell's stream field is its connection's ordinal, and so is the wiring's q: the k-th
+connection to reach the warden, from 0, is ordinal k + 1, the wire's ingress ordinal, as the active certifier's
+`Requests` streams the k-th request and IO-TIE's map puts advice request i on stream order[i] + 1. Ordinal 0 is no
+connection's: a `REFUSED` cell carries it.
 
 **How a unit reads it.** The verifier's own `--registered` port (`port`, `verity/registered-reads/v1`) names the value
-`<link>/<direction>/<window>`, the root, T leaves of S·B/2 words of 16 bits, the domain, the row format and `reads`,
-the row each unit of the population opens. A unit's read is (q, k), and the verifier places it with the wiring: the
+`<link>/<direction>/<window>/units/<digest>`, the digest of the Program's units' wiring (`Units`), the root, T leaves of
+S·B/2 words of 16 bits, the domain, the row format and `reads`, the row each unit of the population opens. A unit's
+read is its (q, k) in the units' wiring, and the verifier places it with the wiring: the
 row is the cell's bucket, and the cell is at its slot's words. The verifier takes a wiring only when it is the one the
 head names and the schedule's (ordinals and first rows in admission order, r cells a row, at most `lanes` connections
 a row), and refuses a read of a connection the wiring doesn't hold, of a cell past the connection's, or of a cell
@@ -1748,9 +1754,9 @@ another read opens. So no read opens an empty slot, a foreign connection's cell 
 shared-row file whose port's table rows are those rows under the warden's salts, its header's `registered` entry their
 positions and paths (`Cells.statement`). An output port reads them as the sender's unit's output (its table is the
 instances' output rows), an input port as the receiver's input. A port reads one row a unit, so a unit that reads
-cells of k buckets has k registered ports, and reading one cell costs its whole row. Tonight the wiring is opened to
-the verifier, as the units' wiring is: the warden's named gap "The cells' wiring is open to the verifier", which has
-the plan that closes it.
+cells of k buckets has k registered ports, and reading one cell costs its whole row. The statement's header names
+the port's value, so it is made for the Program's units' wiring and no other. Tonight the cells' wiring is opened to
+the verifier: the warden's named gap "The cells' wiring is open to the verifier", which has the plan that closes it.
 
 **How the other readers of the certifier's rows differ:**
 - N2's head checks: the prover commits each record head as one row (`LinkWindows.commit`: one-stage's served domain,

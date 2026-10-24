@@ -54,8 +54,8 @@ A spec-level reference for network accounting's timing channel:
   bucket, padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer,
   beside a salted digest of the window's wiring. The registration is what a proof unit's `--registered` port reads, so
   the sender's unit opens a cell's row as its output and the receiver's as its input, and the verifier places each
-  read, a (connection, cell), with the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows";
-  `benchmarks/network_traces/warden_zk.py`);
+  read, the (connection, cell) the Program's units' wiring pins (`Units`, whose digest the port's value names), with
+  the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
