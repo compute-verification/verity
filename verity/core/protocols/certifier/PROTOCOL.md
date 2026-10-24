@@ -2538,9 +2538,10 @@ own certificate of that link-window signs its salted record digest, so neither v
 the verifier's read of it: every field but the wiring's digest and the root is the one the schedule and the
 link-window give, and the certificate verifies over the head under the warden's key in the session.
 
-**Ordinals count from 0.** A cell's stream field is its connection's ordinal, and so is the wiring's q: the k-th
-connection to reach the warden is ordinal k, from 0, as IO-TIE's stream and advice v0 count requests. The active
-certifier's `Requests` counts from 1, so its stream s is the warden's ordinal s − 1.
+**Ordinals count from 1.** A cell's stream field is its connection's ordinal, and so is the wiring's q: the k-th
+connection to reach the warden, from 0, is ordinal k + 1, the wire's ingress ordinal, as the active certifier's
+`Requests` streams the k-th request and IO-TIE's map puts advice request i on stream order[i] + 1. Ordinal 0 is no
+connection's: a `REFUSED` cell carries it.
 
 **How a unit reads it.** The verifier's own `--registered` port (`port`, `verity/registered-reads/v1`) names the value
 `<link>/<direction>/<window>`, the root, T leaves of S·B/2 words of 16 bits, the domain, the row format and `reads`,
