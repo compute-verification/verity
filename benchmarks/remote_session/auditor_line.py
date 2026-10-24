@@ -554,8 +554,8 @@ def credited_line(rows: list[dict]) -> tuple[dict, dict]:
 
 def table(doc: dict) -> str:
     """`analyse`'s doc as Markdown: each session's five checks (`CHECKS`), with the reason of each that failed, and
-    its credit, weights held then filler held; then the line at each T, time-held / link-charged with the snapshot
-    forms, weights and filler apart."""
+    its credit, weights held then filler held; then the line at each T, time-held (labelled as under Identity, which
+    nothing the verifier checks establishes) / link-charged with the snapshot forms, weights and filler apart."""
     b = line.FORMS
     out = ["| session | T | " + " | ".join(CHECKS) + " | credit |", "|---|---|" + "---|" * len(CHECKS) + "---|"]
     for s in doc["sessions"]:
@@ -568,7 +568,8 @@ def table(doc: dict) -> str:
         out.append(f"| {s['k']} | {s.get('T') or '-'} | " + " | ".join(cells) + f" | {credit} |")
     out.append("")
     for t, row in doc["line"].items():
-        out.append(f"line {t}: credited {row['credited_sessions']}, time-held / link-charged weights "
+        out.append(f"line {t}: credited {row['credited_sessions']}, time-held (under Identity: no block over the "
+                   "boundary links) / link-charged weights "
                    + " / ".join(f"{row[x]['time']:.4%}" for x in b) + ", filler "
                    + " / ".join(f"{row[x]['filler_time']:.4%}" for x in b) + " (snapshot weights "
                    + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
