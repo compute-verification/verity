@@ -11154,7 +11154,7 @@
    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": "frozen (no-function): It bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts with some faulty set that RAcc allows at delta, not runs of the network check's code, and takes the layout's fit (Layout.Fits) and the counts of the other inputs and of the faulty units' committed bits as premises; SampledAuditAccepted, once proved, carries an accepted sampled audit to RAcc delta, which is the restatement path.",
    "Flock.SecurityProofs.RecursiveSoundExec": "frozen (world-unlisted,scope): RecursiveSound at the compiled inner protocol the verifier of record runs (innerAt), with InnerSound proved (the compile lemma in fork form, an inner fork its fourth disjunct) and no A3; beside VBridge, the one listed premise it takes, which candidate 3 does not give in full, it takes the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
-   "Flock.SecurityProofs.RecursiveRanRegisteredExec": "frozen (obligation,world-unlisted,scope): RecursiveRanRegistered at the compiled inner protocol the verifier of record runs (innerAt), with InnerSound proved and no A3; it takes what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the registration's binding at each row (_hbind, an extractor's pair, no hash assumed) and the developer's openings (_hreg); beside VBridge, the one listed premise it takes, it takes the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4."
+   "Flock.SecurityProofs.RecursiveRanRegisteredExec": "frozen (obligation,world-unlisted,scope): RecursiveRanRegistered at the compiled inner protocol the verifier of record runs (innerAt) and the executable's row registration (rowCommit, whose binding is proved), with InnerSound proved and no A3; it takes what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the developer's openings (_hreg); beside VBridge, the one listed premise it takes, it takes the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -33232,6 +33232,13 @@
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
+  "Proofs.Flock.Recursive.Private": {
+   "digest": "fbe78ad16c970e57c1b416a922f38411505349e786da8fbdd478efc59bf09566",
+   "definitions": {
+    "Flock.SecurityProofs.regRowCommit": "4aba8bdedb389fab8c9b97b6efe4a969777eb97095eba6a3e5d26d639c075d11"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveRanRegisteredExec"]
+  },
   "Proofs.Flock.Recursive.Property": {
    "digest": "7a586430fb0ea11ca5e52b2512ca60823664660f05f27d4586223355e6ec65c0",
    "definitions": {
@@ -33405,10 +33412,11 @@
    ]
   },
   "Proofs.Flock.Recursive.SoundExec": {
-   "digest": "6e467f831d28690cced8ca4d3d94da4e3bf1ef2cbd8a61b7cb487d44e4cbe382",
+   "digest": "d1629f08e387969cc74b32280aff526cc997a53f38e283f40a7ed1ffe44ef7ff",
    "definitions": {
-    "Flock.Guarantees.RecursiveRanRegisteredExec": "3a2a7fd7771e9214ac7effbd0ddcbe1542ab9bdd2c6b83c40d16aee16d13c446",
-    "Flock.Guarantees.RecursiveSoundExec": "9431c236dc7b96a42f5d543003a735a0f023e41e0fb2b767790e3fd14363518c"
+    "Flock.Guarantees.RecursiveRanRegisteredExec": "cd23288cad8a1f71f8adf7c0465712ad1ff49c352310ebad1d6d5c0c7254ec98",
+    "Flock.Guarantees.RecursiveSoundExec": "9431c236dc7b96a42f5d543003a735a0f023e41e0fb2b767790e3fd14363518c",
+    "Flock.Guarantees.rowCommit": "588b28d9810d510b02301b6b838a9862a78fb349daaa32a232a7c97d5cd2ca9d"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveRanRegisteredExec", "Flock.SecurityProofs.RecursiveSoundExec"]
   },
