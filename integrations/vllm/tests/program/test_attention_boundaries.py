@@ -51,7 +51,8 @@ def _core(name: str) -> bool:
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
     moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock")
+                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
+                "verity.ml.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 
@@ -75,7 +76,7 @@ def _top_level(mod: str) -> set[str]:
 
 def _violations(mod: str) -> list[str]:
     tree = ast.parse((REGISTRY / f"{mod}.py").read_text(encoding="utf-8"))
-    package = ["verity_vllm", "program", "registry"]
+    package = PKG.split(".")
     out, aliases = [], {}
 
     def take(other: str, names: list[str], line: int) -> None:
@@ -136,5 +137,5 @@ def test_the_checker_catches_a_frontend_import(monkeypatch, tmp_path):
         "from verity_vllm.config import X\n\n\n"
         "def f():\n    from verity_vllm.program.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
     monkeypatch.setattr(sys.modules[__name__], "REGISTRY", tmp_path)
-    assert sorted(v.split(": ", 1)[1] for v in _violations("fa2_check_inf")) == [
-        "imports verity_vllm.config", "imports verity_vllm.program.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"]
+    assert sorted(v.split(": ", 1)[1] for v in _violations("fa2_check_inf")) == sorted([
+        "imports verity_vllm.config", "imports verity_vllm.program.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"])
