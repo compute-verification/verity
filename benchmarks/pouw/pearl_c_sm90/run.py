@@ -9,8 +9,8 @@ libcuda.so.1, stdlib only, nothing built on the card).
    compared byte for byte with the fixture, for the variant `h100` (pearl-c-h100-v1-h3: G = 4, hashing format -h3, SHA-512
    throughout); the GEMMs, with gemm_pearlc_s (y alone), are re-run on all, 1 and 3 CTAs and compared again
    (`<buffer>@<step>/<tile>/grid<n>`), at each of the three tiles (bm128: 128 x 128, n64: 128 x 64, bm64: 64 x 64).
-   hash_decode.cuh's served launches write every output they own over a poison (0xA5) and must match; the no-write control
-   must not.  So do A's commit launches past them under each chain (`check_chains`: "pl", hash_prefill.cuh's, and "h3"),
+   hash_decode.cuh's served launches (whole, split, and the whole's stamp twins: `check_pd`) write every output they own
+   over a poison (0xA5) and must match; the no-write control must not.  So do A's commit launches past them under each chain (`check_chains`: "pl", hash_prefill.cuh's, and "h3"),
    and over each of CHAIN_WIDE_ROWS' rows (two-byte ranks and indices, prefill's M) "pl" must write "h3"'s bytes.  A
    variant is timed only if all of its buffers match (C~ and U bit-exact against the CPU reference), the plain baselines
    only if theirs do.  Exit 4 if any check fails.
@@ -289,6 +289,11 @@ HM96_WEIGHTS, HM96_TRANSCRIPT, S512_SMALL = 1 << 62, 1 << 63, 128
 #: PD_MAX_ROWS rows and k of at most PD_MAX_K (its 192 threads: two warps of pairs a 32 segments, and two more); its paired
 #: compressions take PD_PAIR_SMEM bytes of dynamic shared memory, and PD_GROUP's tiles PD_G a CTA (hash_decode.cuh's)
 PD_SERVED, PD_MAX_ROWS, PD_MAX_K, PD_PAIR_SMEM, PD_G, PD_WHOLE, PD_GROUP = (851, 979), 256, 64 * 256, 2 * 8 * 3080, 4, 64, 128
+#: each served variant's PD_STAMP twin (the same code, its phases' global timer and SM clock into p13, `Pipeline.stamps`),
+#: and the stamps' layout: PD_SLOTS (timer, clock) pairs of u64 a row, a row a pd_commit CTA and the tail's after them
+PD_STAMP, PD_SLOTS = 32, 16
+PD_STAMPED = tuple(v | PD_STAMP for v in PD_SERVED)
+PD_STAMP_BYTES = 16 * PD_SLOTS * (PD_MAX_ROWS + 1)
 #: hash_prefill.cuh's launches past decode's rows (`Pipeline`'s chain "pl"), in the variant pearl_c_sm90.cu builds them
 #: (PL_INSTANCE): pl_leaves, A's level 0 at PL_ROWS rows a CTA; pl_levels, PL_LEVELS levels a launch; pl_seed_a; pl_seeds,
 #: PL_SEEDS rows a CTA.  Ranks and indices below PL_MAX_ROWS; "h3" is hash_h3.cuh's launches (hm_leaves, s512_frame_leaves,
@@ -306,25 +311,26 @@ def pd_variant(m_real: int, n: int, k: int) -> int | None:
 
 
 def pd_setup(dev) -> None:
-    """Once per module: hash_decode.cuh's label states (pd_heads) and hash_fast.cuh's header tables (s512_heads), each
-    served pd_commit's dynamic shared memory (`pd_smem`), with PD_WHOLE all a CTA may take beside its static, so no side
-    lane's CTA shares its SMs, and pl_levels' (its two pairs')."""
+    """Once per module: hash_decode.cuh's label states (pd_heads) and hash_fast.cuh's header tables (s512_heads), the
+    dynamic shared memory of each served pd_commit and pd_tree and of their stamp twins (`pd_smem`, `pd_tree_smem`), with
+    PD_WHOLE all a CTA may take beside its static, so no side lane's CTA shares its SMs, and pl_levels' (its two pairs')."""
     if getattr(dev, "pd_smem", None):
         return
     if not getattr(dev, "rs_heads", False):
         dev.launch("s512_heads", cdiv(RS_MAX_SEGS * (RS_MAX_SEGS + 1) // 2 + RS_MAX_SEGS + 1, 128), 128)
         dev.rs_heads = True
     dev.launch("pd_heads", 1, 32)
-    optin, smem = dev.get("cuDeviceGetAttribute", MAX_SHARED_OPTIN, dev.dev), {}
-    for v in PD_SERVED:
-        fn = dev.fn(f"pd_commit_{v}")
-        smem[v] = optin - dev.get("cuFuncGetAttribute", SHARED_SIZE, fn) if v & PD_WHOLE else PD_PAIR_SMEM
-        if smem[v] < PD_PAIR_SMEM:
-            raise RuntimeError(f"pd_commit_{v} gets {smem[v]} bytes of dynamic shared memory, not its {PD_PAIR_SMEM}")
-        dev.ck("cuFuncSetAttribute", fn, MAX_DYN, smem[v])
+    optin, smem = dev.get("cuDeviceGetAttribute", MAX_SHARED_OPTIN, dev.dev), {"pd_commit": {}, "pd_tree": {}}
+    for v in (*PD_SERVED, *PD_STAMPED):
+        for f in smem:
+            fn = dev.fn(f"{f}_{v}")
+            smem[f][v] = optin - dev.get("cuFuncGetAttribute", SHARED_SIZE, fn) if v & PD_WHOLE else PD_PAIR_SMEM
+            if smem[f][v] < PD_PAIR_SMEM:
+                raise RuntimeError(f"{f}_{v} gets {smem[f][v]} bytes of dynamic shared memory, not its {PD_PAIR_SMEM}")
+            dev.ck("cuFuncSetAttribute", fn, MAX_DYN, smem[f][v])
     dev.ck("cuFuncSetAttribute", dev.fn(f"pl_levels_{PL_VARIANT}"), MAX_DYN, PD_PAIR_SMEM)
     dev.sync()
-    dev.pd_smem = smem
+    dev.pd_smem, dev.pd_tree_smem = smem["pd_commit"], smem["pd_tree"]
 
 
 def nonce_args(nonce: int) -> tuple[int, int]:
@@ -387,7 +393,10 @@ class Pipeline:
     baselines' `plain_job`, `plain`, `adopted_job`, `adopted`.  A caller that gives pd's counter (`pd_count`, 16 zero bytes
     it never writes) gets hash_decode.cuh's launches at decode (`pd`, `pd_variant`'s variant): `commit_a`, pd_commit, does
     every step of `FUSED` (the commit phase, A's pads and E_A's lines) in one launch, and `hash_leaf` is pd_tiles; the bytes
-    are the same.  Past pd, `chain` (default PEARLC_CHAIN, else "pl") picks A's commit launches after its row digests:
+    are the same.  With `split_a` the commitment is two launches of the same bytes: `rows_a`, pd_commit in mode 1 (A's pads,
+    each real row's digest, leaf, seed, line key and E_A line), then `tree_seed_a`, pd_tree (A's tree, seed_A, line_a and the
+    padding rows' E_A lines under it), which only the padding rows' products read after it.  With `stamps` (a device buffer
+    of PD_STAMP_BYTES) pd_commit and pd_tree run as their PD_STAMP twins.  Past pd, `chain` (default PEARLC_CHAIN, else "pl") picks A's commit launches after its row digests:
     "pl", hash_prefill.cuh's (`pl_steps`: pl_leaves, pl_levels, pl_seed_a and pl_seeds, at most PL_MAX_ROWS rows; `pl`),
     or "h3", hash_h3.cuh's (`row_tree`'s, then s512_seeds); the steps' names and bytes are the same.  The chain and the
     baselines run on 128 x 128 tiles when m and n are multiples of 128, on 128 x 64 when only m is, else on 64 x 64 (`bm`
@@ -415,17 +424,21 @@ class Pipeline:
 
     GEMM_SMEM: dict[str, int] = {}
     #: the steps one launch does under pd: `commit_a` (pd_commit) for A's pads, row digests, tree, seed_A, row seeds and E_A's
-    #: lines
-    FUSED = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea")}
+    #: lines; with `split_a`, `rows_a` (pd_commit's mode 1) and `tree_seed_a` (pd_tree) for the same steps (the padding rows'
+    #: E_A lines only with `fillers`)
+    FUSED = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea"),
+             "rows_a": ("pad_a", "rowdig_a", "hash_rows_a", "seeds_a", "lines_ea"), "tree_seed_a": ("tree_a", "seed_a")}
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, weight: int = 0,
                  sha: str | None = None, bn: int | None = None, widen: tuple[str, int, int] | None = None,
-                 chain: str | None = None):
+                 chain: str | None = None, split_a: bool = False, fillers: bool = True):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
-        matmul's, committed and hashed, the rest filler that only the products see."""
+        matmul's, committed and hashed, the rest filler that only the products see.  With `split_a`, `fillers` False leaves
+        the filler rows' E_A lines as the buffer holds them: pd_tree then writes A's levels, seed_A and line_a alone, nothing
+        the forming reads."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
-        self.widen = widen
+        self.widen, self.split_a, self.fillers, self.stamps = widen, split_a, fillers, 0
         self.sha = sha or os.environ.get("PEARLC_SHA", "fast")
         if self.sha not in ("fast", "ref"):
             raise ValueError(f"sha is 'fast' or 'ref', not {self.sha!r}")
@@ -590,13 +603,24 @@ class Pipeline:
                  i=(mr, n))
         d.launch("s512_folds", cdiv(self.tiles, RS_FOLD_NT), RS_FOLD_NT, p=(b["segdig_t"], b["leaves"]), i=(self.tiles, 32, full, last))
 
-    def pd_commit(self) -> None:
+    def pd_commit(self, mode: int = 0) -> None:
         """A's commitment under pd (`FUSED`'s steps), pd_commit in mode 0: a CTA a real row, E_A's lines for all m rows (row
-        i < m_real's under its own line key, the rest under line_a), its counter left zero."""
-        d, b, kk, v, s = self.dev, self.b, self.keys, self.pd, self.k // 256
+        i < m_real's under its own line key, the rest under line_a), its counter left zero.  Mode 1 (`rows_a`) stops after A's
+        level 0 and the rows' lines, and `pd_tree` does the rest."""
+        d, b, kk, v, s = self.dev, self.b, self.keys, self.pd | (PD_STAMP if self.stamps else 0), self.k // 256
         d.launch(f"pd_commit_{v}", self.m_real, 32 * (cdiv(s, 32) * 2 + 2), d.pd_smem[v],
                  p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"],
-                    kk["hm"], b["pd_count"], b["seed_a"], b["line_a"], b["ea_codes"], 0), i=(self.m_real, self.k, 0, self.m))
+                    kk["hm"], b["pd_count"], b["seed_a"], b["line_a"], b["ea_codes"], self.stamps),
+                 i=(self.m_real, self.k, mode, self.m))
+
+    def pd_tree(self) -> None:
+        """`split_a`'s `tree_seed_a`: pd_tree, one CTA, A's levels above level 0, seed_A, line_a, and with `fillers` the
+        padding rows' E_A lines under it (rows m_real..m - 1, where there are any)."""
+        d, b, kk, v = self.dev, self.b, self.keys, self.pd | (PD_STAMP if self.stamps else 0)
+        ea = b["ea_codes"] if self.m_real < self.m and self.fillers else 0
+        d.launch(f"pd_tree_{v}", 1, 128, d.pd_tree_smem[v],
+                 p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0, 0, b["seed_a"], b["line_a"], ea, self.stamps),
+                 i=(self.m_real, 0, 0, self.m))
 
     def pd_tiles(self) -> None:
         """The tile leaves under pd: pd_tiles, a CTA a tile (32 threads), or with PD_GROUP a CTA of PD_G tiles of a row block."""
@@ -670,9 +694,12 @@ class Pipeline:
         self.gemm("gemm_words" + ("" if self.words_rows(M, small) == BM else "_d"), a, b, M, WORDS_N, out=(out,))
 
     def commit_steps(self) -> list[tuple[str, object]]:
-        """The commit phase's steps: pd's `commit_a`, chain "pl"'s (`pl_steps`), or chain "h3"'s (`row_tree`'s, then
-        s512_seeds for seed_A with line_a and for each real row's seed and line key)."""
+        """The commit phase's steps: pd's `commit_a` (with `split_a` its `rows_a` and `tree_seed_a`), chain "pl"'s
+        (`pl_steps`), or chain "h3"'s (`row_tree`'s, then s512_seeds for seed_A with line_a and for each real row's seed and
+        line key)."""
         d, b, kk, mr = self.dev, self.b, self.keys, self.m_real
+        if self.pd is not None and self.split_a:
+            return [("rows_a", lambda: self.pd_commit(1)), ("tree_seed_a", self.pd_tree)]
         if self.pd is not None:
             return [("commit_a", self.pd_commit)]
         if self.pl:
@@ -781,34 +808,47 @@ POISON = 0xA5
 
 def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
     """hash_decode.cuh's served launches on `pipe`'s buffers (its C~ and U computed), each variant of PD_SERVED (`commit_a`,
-    then `hash_leaf`) after every output in PD_OUTPUTS is poisoned, against the fixture's bytes; the counter left zero.  The
-    no-write control, the poison with no launch, must fail every output."""
-    count, res = dev.alloc(16), {}
-    pd = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"],
-                  bufs={**pipe.b, "pd_count": count}, m_real=pipe.m_real, bm=BM_D, weight=pipe.weight)
-    if pd.pd is None:
-        pd.free()
+    then `hash_leaf`; also `split_a`'s `rows_a` and `tree_seed_a` in its place, ``/split``) and each stamp twin of
+    PD_STAMPED (``pd_V``, with stamps), after every output in PD_OUTPUTS is poisoned, against the fixture's bytes; the
+    counter left zero.  The no-write control, the poison with no launch, must fail every output."""
+    count, stamps, res = dev.alloc(16), dev.alloc(PD_STAMP_BYTES), {}
+    make = lambda split: Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"],  # noqa: E731
+                                  bufs={**pipe.b, "pd_count": count}, m_real=pipe.m_real, bm=BM_D, weight=pipe.weight,
+                                  split_a=split)
+    whole = make(False)
+    if whole.pd is None:
+        whole.free()
         dev.free(count)
+        dev.free(stamps)
         return {"pd@domain": {"ok": False, "why": f"{(pipe.m_real, pipe.n, pipe.k)} is outside pd's domain"}}
-    steps = {nm: fn for nm, _, fn in pd.steps()}
-    for v in (None, *PD_SERVED):
+    forms = [(None, None, ())]
+    split = make(True)
+    forms += [(whole, (v, at, ""), ("commit_a", "hash_leaf")) for at in (0, stamps) for v in PD_SERVED]
+    forms += [(split, (v, 0, "/split"), ("rows_a", "tree_seed_a", "hash_leaf")) for v in PD_SERVED]
+    for p_, form, names in forms:
         for x in PD_OUTPUTS:
             dev.ck("cuMemsetD8_v2", u64(pipe.b[x]), POISON, pipe.size[x])
-        if v is not None:
-            pd.pd = v
-            steps["commit_a"]()
-            steps["hash_leaf"]()
+        if p_ is not None:
+            v, p_.stamps, tag = form
+            p_.pd = v
+            steps = {nm: fn for nm, _, fn in p_.steps()}
+            for nm in names:
+                steps[nm]()
+            p_.stamps = 0
         dev.sync()
+        label = None if p_ is None else f"pd_{v | (PD_STAMP if form[1] else 0)}{tag}"
         for x in PD_OUTPUTS:
             r = compare(dev, pipe, x, want(x))
-            if v is None:
+            if label is None:
                 res[f"{x}@pd/no-write"] = {"ok": not r["ok"], "bytes": r["bytes"]}
             else:
-                res[f"{x}@pd_{v}"] = r
-        if v is not None:
-            res[f"pd_count@pd_{v}"] = {"ok": dev.read(count, 16) == bytes(16), "bytes": 16}
-    pd.free()
+                res[f"{x}@{label}"] = r
+        if label is not None:
+            res[f"pd_count@{label}"] = {"ok": dev.read(count, 16) == bytes(16), "bytes": 16}
+    for p_ in {id(f[0]): f[0] for f in forms if f[0] is not None}.values():
+        p_.free()
     dev.free(count)
+    dev.free(stamps)
     return res
 
 

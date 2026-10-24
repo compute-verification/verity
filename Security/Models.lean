@@ -1,3 +1,5 @@
+import Definitions.NetworkCertifier.Assumptions.AdviceString
+import Definitions.NetworkCertifier.Guarantees.AdviceString
 import Definitions.Core.Assumptions
 import Definitions.Core.Guarantees
 import Definitions.Nci.Assumptions
