@@ -41,10 +41,17 @@ pass-through goes back through the node's arguments. Per IU, its reads are those
 taken out, and its novel reads the width of their union (`novelWidth`): copies of one frame that nothing else meets are
 counted as copies times one copy's width.
 
-What is still walked member by member or element by element, so not bounded by the description: a batch member whose
-return has a pass-through, a read with stride other than 1 into a composite's batch output that isn't one run, a strided
-read of a call's or a scan's output, and segments of copies that overlap other reads of the same IU (expanded copy by
-copy). Serve_v1 meets none of them, at word level or on bits.
+Pass-throughs are taken in closed form in the number of members and iterations: whole members of a batch returning what
+its members share are one member's return, repeated (and a stride of whole members one leaf's); those returning a run
+of a mapped argument's row are one piece of rows of the argument; a part of an argument every member or iteration reads
+is one piece of rows (`memberRows`); a scan's final carry, and the carry each iteration reads from the one before, are
+followed back through the step's return (`carry`, `carriesRead`: a run returned in place is the initial carry's, any
+other leaf a chain of positions to where it leaves the carry or to its cycle, `Chain`), never iteration by iteration.
+What has no closed form here is walked one by one up to `WALK` and refused past it (`unwalked`, with what it would have
+walked): the members of a batch whose returns are none of those, strided reads of a call's, scan's or batch's output
+that aren't, a scan's ys read iteration by iteration, and chains longer than `WALK`. Still walked unbounded: the leaves
+of a strided piece taken through a parameter (`throughArg`), and segments of copies that overlap other reads of the
+same IU (expanded copy by copy, `novelWidth`). Serve_v1 meets none of the walks, at word level or on bits.
 
 ## Refusals
 
@@ -53,7 +60,8 @@ In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
 (a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; or a body calling a
 Definition decoded after it, or a Definition not as the decoder gives it, which the decoder never gives: `walkable`), `program` (a reference the layout can't resolve:
-the output of a scan of no iterations), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
+the output of a scan of no iterations), `unwalked` (what `analyze` would walk one by one past `WALK`; its `message` says
+what and how many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
 `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root
 node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `NciCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
