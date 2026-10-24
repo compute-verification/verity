@@ -112,6 +112,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import json
 import math
 import os
@@ -1068,17 +1069,17 @@ class Verifier:
         `Session.next_boundary_ns`: once its group has k − 1 roots (the pass in flight is its last), or for k = 1 once
         the group before has its root (the first group's at once), so the honest prover never waits on a coin; and at
         the latest at max(its coin + (k − 1)·A, the group before's deadline), so its roots are due within about k
-        allowances of its coin.  At one window in flight (`pace["in_flight"]` 1) each boundary leaves once its group
-        has its k roots, at the latest at max(its coin + k·A, that deadline), and the prover waits a round trip on
-        each coin."""
+        allowances of its coin."""
         reg, K = self.registration, None if pace is None else pace["k"]
         W = self.W if pace is None else pace["groups"] * (pace["windows"] + 1)
         samples, window_ns = (self.samples, self.T) if pace is None else (pace["draws"], 1)
-        one = {} if pace is None or pace.get("in_flight", 2) == 2 else {"in_flight": pace["in_flight"]}
         params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred,
-                              pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6), **one))
+                              pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)))
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
+        one = {} if pace is None or pace.get("in_flight", 2) == 2 else {"in_flight": pace["in_flight"]}
+        if one:
+            params = dataclasses.replace(params, pace=dataclasses.replace(params.pace, **one))
         appends = self.appends_of()
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
                                       challenger=lambda e: self.challenger.open(reg.digest, e, W, appends))
