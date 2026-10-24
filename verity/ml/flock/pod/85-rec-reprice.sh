@@ -29,8 +29,9 @@
 #                beside the statements vstage staged, whose sessions stay valid (then oprove LEVELS=cap,cap-L1,..)
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
 #                firewall, default firewall: the Lean firewall's session loop; a forgery's: one, by a prover that sends its
-#                proofs though the witness fails, FC_ZK_SELF_CHECK=skip, its firewall mode run as host), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
-#                firewall's negative controls on that statement
+#                proofs though the witness fails, FC_ZK_SELF_CHECK=skip, its firewall mode run as host), and upstream's
+#                replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the firewall's negative controls on that
+#                statement
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
 #                shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1: also the inner's,
