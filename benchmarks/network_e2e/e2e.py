@@ -125,9 +125,9 @@ CLAIM = {
         "N2's unit isn't proved as the verifier of record (README, 'Not yet zero-knowledge'): the verdict of record is "
         "LinkWindows.verify on the host, which runs head_check.reference over the opening and so reads the heads and "
         "the certifier's salts. The proofs here run beside it, on the roots it registered; they don't replace it.",
-        "NET-43 (README): N2's unit holds its head check as a gate that binds no circuit digest, and the verifier "
-        "refuses no proof of another circuit. Here Lean holds each proof to the program and partition the driver wrote "
-        "(n2_zk's row adapter around the unchanged NetworkHeadCheck_v2).",
+        "The proofs here are of n2_zk's row adapter around the unchanged NetworkHeadCheck_v2, not of N2's registered "
+        "unit, so LinkWindows.proved, which refuses a proof of any Program but the unit's (NET-43), doesn't take them. "
+        "Lean holds each proof to the program and partition the driver wrote.",
         "The certificate's link to its head (README, NET-42): until the unit is proved, the verifier of record checks "
         "each signed digest against its head and the certifier's salt on the host, over the opening "
         "(CertifiedRecord.verify).",

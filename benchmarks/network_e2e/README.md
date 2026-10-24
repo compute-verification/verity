@@ -170,7 +170,8 @@ Zero-knowledge gaps, from `verity/core/protocols/certifier/README.md` ("Not yet 
 
 - N2's verdict of record is still `LinkWindows.verify` on the host, which reads the heads and the certifier's salts. The
   proofs run beside it, on the roots it registered.
-- NET-43: N2's unit binds no circuit digest. Here Lean holds each proof to the program and partition that `n2_zk` wrote.
+- The proofs are of `n2_zk`'s row adapter, not of N2's registered unit, so `LinkWindows.proved` (which refuses a proof
+  of any other Program, NET-43) doesn't take them. Lean holds each proof to the program and partition that `n2_zk` wrote.
 - NET-42: the certificate's link to its head is checked on the host (`CertifiedRecord.verify`).
 
 ## Cost
