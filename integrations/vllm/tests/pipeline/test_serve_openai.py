@@ -93,6 +93,7 @@ def test_command_is_registered():
     opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", "/tmp/x", "--no-commit", "--port", "0"], environ={})
     assert (opts.port, opts.commit, opts.precision, opts.window_steps) == (0, False, "int8_exact", 64)
     assert (opts.protocol, opts.run_id, opts.hf_home) == ("vllm", "local", None)
+    assert so.engine_options(opts)["quantization"] == "verity_int8" and so.engine_options(opts)["attention_backend"] == "CUSTOM"
     env = cli.parse("serve-openai", ["--model", "m", "--revision", "r"], environ={"RESEARCH_RUN_ID": "r1", "HF_HOME": "/h"})
     assert (env.run_id, env.hf_home) == ("r1", "/h")
     with pytest.raises(SystemExit):
@@ -103,7 +104,6 @@ def test_each_int8_precision_registers_its_parts_and_names_its_scope():
     opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--precision", "verity_int8"], environ={})
     assert so.engine_options(opts)["quantization"] == "verity_int8" and "attention_backend" not in so.engine_options(opts)
     assert so.INT8_PARTS == {"int8_exact": (("linears", "attention"), "all"), "verity_int8": (("linears",), "linears")}
-    assert so.engine_options(opts)["quantization"] == "verity_int8" and so.engine_options(opts)["attention_backend"] == "CUSTOM"
 
 
 # ---------------------------------------------------------------------------------------------------------------- stand-ins
