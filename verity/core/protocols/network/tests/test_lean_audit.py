@@ -74,8 +74,8 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
     """On generated units of every kind and change: identical verdict lists, with each egress link checked over a window
     prefix of its own and, when no record is certified, with no key and no ingress parameters (`active_replay.py`'s
     calls); and a `ValueError` where the Lean check refuses the evidence (a frame of other than B bytes). With `grid`
-    False, the same on units whose egress records are all certified, never a `mismatch`, and a `ValueError` from both
-    where a raw or committed record names an egress link."""
+    False, the same on units whose egress records are all certified, with no egress `mismatch` (an ingress one stays),
+    and a `ValueError` from both where a raw or committed record names an egress link."""
     kinds, no_grid = {}, {}
 
     @settings(derandomize=True, database=None, deadline=None, max_examples=600)
@@ -104,7 +104,7 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
                     _run(a, u, recs, e, prefixes, False, grid=False)
             no_grid["refused"] = no_grid.get("refused", 0) + 1
             return
-        for v in _same(lean, u, recs, e, prefixes, grid=False):
+        for v in _same(lean, u, recs, e, prefixes, grid=False)[:sum(prefixes)]:
             no_grid[v.violation or "accept"] = no_grid.get(v.violation or "accept", 0) + 1
 
     same()

@@ -290,6 +290,7 @@ def test_every_verdict_without_the_grid_is_the_audits(verdicts_server):
     assert stats.outputs > 300 and stats.rejects > 300, stats
 
 
+@pytest.mark.slow
 def test_without_the_grid_only_a_grid_mismatch_is_accepted(verdicts_server):
     """Both entries against the audit on the same cases, every kind and change: what `verdicts-no-grid` answers,
     `verdicts` answers too, with the same link-windows in order and the same verdicts, except that each egress `mismatch`
@@ -301,7 +302,8 @@ def test_without_the_grid_only_a_grid_mismatch_is_accepted(verdicts_server):
     seen = Counter()
 
     @settings(derandomize=True, database=None, deadline=None, max_examples=300)
-    @given(st.one_of(record_cases(("certified",)), record_cases(("certified",), ("late", "frames")), record_cases()))
+    @given(st.one_of(record_cases(("certified",)), record_cases(("certified",), ("late", "frames")),
+                     record_cases(("certified",), ("status", "advice-outside", "advice-unit", "duplicate")), record_cases()))
     def both(case):
         full, no_grid = (D.replay(port, case, verdicts_server) for port in (VERDICTS, NO_GRID))
         if no_grid[0] == "reject":
