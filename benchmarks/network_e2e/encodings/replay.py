@@ -1492,7 +1492,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     print("| trace | requests | steps | replay matched | I1 v0 bits | gamma | adaptive | adaptive clocked | adaptive egress "
           "| best bits/request | order bits |\n|---|---|---|---|---|---|---|---|---|---|---|")
     for p in a.traces:
-        name = p.stem if p.is_file() else p.name
+        name = p.stem if p.is_file() else f"{p.resolve().parent.name}/{p.name}"
         tr = read_any(p, egress=a.egress)
         try:
             tb = out[name] = table(tr, bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets, v0=v0)
