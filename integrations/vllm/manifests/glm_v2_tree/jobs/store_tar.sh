@@ -58,7 +58,8 @@ if [ "$MODE" = put ]; then
   }
   export -f put_part evict art_of; export S RB OUT NAME EVICT_FREE_GB
   (cd "$SW" && tar -cf - -T "$S/paths") | SHELL=/bin/bash split -b "${CHUNK:-16G}" -d -a 3 --filter 'put_part' - "$NAME.part."
-  [ "${PIPESTATUS[0]}" = 0 ] && [ "${PIPESTATUS[1]}" = 0 ] || { echo "$NAME: tar or a part's put failed"; exit 5; }
+  ps=("${PIPESTATUS[@]}")
+  [ "${ps[*]}" = "0 0" ] || { echo "$NAME: tar or a part's put failed (${ps[*]})"; exit 5; }
   python3 - "$OUT/$NAME.parts.txt" "$list_art" "$NAME" "$(wc -l <"$OUT/$NAME.sha256")" "$SW" "$S/trees" >"$OUT/$NAME.parts.json" <<'EOF'
 import json, os, sys
 rows = [l.split() for l in open(sys.argv[1]) if l.strip()]
@@ -121,6 +122,7 @@ while read -r art h; do
   [ "$(sha256sum "$f" | cut -c1-64)" = "$h" ] || { echo "$art: sha256 differs" >&2; exit 5; }
   cat "$f"; rm -rf "$d"; evict
 done <"$S/parts" | (cd "$SW" && tar -xf - -T "$S/paths")
-[ "${PIPESTATUS[0]}" = 0 ] && [ "${PIPESTATUS[1]}" = 0 ] || { echo "$NAME: a part's fetch or tar failed"; exit 5; }
+ps=("${PIPESTATUS[@]}")
+[ "${ps[*]}" = "0 0" ] || { echo "$NAME: a part's fetch or tar failed (${ps[*]})"; exit 5; }
 (cd "$SW" && sha256sum --quiet -c -) <"$OUT/got-$NAME.sha256" || { echo "$NAME: extracted files differ from the list"; exit 6; }
 echo "$NAME: every extracted file equals the list ($(wc -l <"$OUT/got-$NAME.sha256") files)"
