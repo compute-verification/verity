@@ -212,6 +212,7 @@ def test_the_exponential_on_special_random_and_in_range_words() -> None:
     _agree(bind(BM.NvExpf), _expf_words(np.random.default_rng(0xE1), 3000))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 def test_the_exponential_on_many_words() -> None:
     """100,000 random words and 100,000 across expf's range (about 30 s)."""
@@ -231,6 +232,7 @@ def test_the_router_probabilities() -> None:
     _agree(bind(BM.MoeRouterProbs, E=8, VPT=4), _logits(np.random.default_rng(0xB1), 100, 8))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("E_, VPT", [(8, 4), (16, 2), (8, 1)])
 def test_the_router_probabilities_on_many_rows(E_, VPT) -> None:
@@ -270,6 +272,7 @@ def test_the_selection_rounds() -> None:
            bind(SELECT_ROUNDS, E=6, TOPK=3))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("E_, TOPK", [(8, 4), (6, 3), (5, 5)])
 def test_the_selection_rounds_on_many_rows(E_, TOPK) -> None:
@@ -329,6 +332,7 @@ def test_the_sigmoid_score_on_special_random_and_in_range_words() -> None:
     _agree2(bind(BM.MoeRouterSigmoidScore), _score_words(np.random.default_rng(0x51), 2000))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 def test_the_sigmoid_score_on_many_words() -> None:
     """100,000 words of each kind (about 60 s)."""
@@ -371,6 +375,7 @@ def test_the_bias_slots(kernel) -> None:
     _agree2(bind(BM.MoeRouterBiasTopK, **st), _selection_scores(np.random.default_rng(0x5B1), 200, 6), bind(BIAS_SLOTS, **st))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
 @pytest.mark.parametrize("E_, TOPK", [(16, 8), (5, 5), (8, 1)])
@@ -395,6 +400,7 @@ def test_the_sigmoid_router(kernel) -> None:
     _agree2(bind(BM.MoeRouterSigmoidBias, E=8, TOPK=2, SCALE=2.5, KERNEL=kernel), _router_rows(8, 300, 0x5C))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
 def test_the_sigmoid_router_at_eight_slots(kernel) -> None:

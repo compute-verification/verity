@@ -341,6 +341,7 @@ def test_the_norms_on_proofs_boolean_mufu_are_b1s_at_smollms_width() -> None:
     _rows(576, 1e-5, 64, 8, cuda_mufu=CUDA_BITS, triton_mufu=TRITON_BITS)
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("N, EPS", SERVED)
 def test_the_norms_are_b1s_at_the_served_widths(N, EPS) -> None:

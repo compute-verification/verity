@@ -230,6 +230,7 @@ def test_every_served_binding_agrees_with_rope_v1(target) -> None:
     _agree(target, list(_random_heads(target, 1024)))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("target", LARGE, ids=lambda t: t.id)
 def test_each_served_head_width_agrees_with_rope_v1_on_16k_heads(target) -> None:
