@@ -167,10 +167,7 @@ class Params:
     appended block's residency to its encode (`deferred`, memory-map/v1's deferred residency), which needs L ≥ 2: a
     block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1, and at L = 1 that is
     before it may be resident.  `pace` paces the session (`Pace`, None for a stated window each): its windows are
-    then groups of at most k passes, the last the closing window.  `groups_per_coin` (g, 1 by default: an openings coin
-    a window) draws the openings of g consecutive windows from one coin, released after the last root of the last of
-    them: windows cg … min((c + 1)g, W) − 1 are draw c, whose `samples` receipts are drawn uniformly over their
-    receipts together (`Session.close`), and the pooled bound reads each draw as one window (`pooled_windows`)."""
+    then groups of at most k passes, the last the closing window."""
 
     blocks: int
     deadline_ns: int
@@ -188,10 +185,13 @@ class Params:
     deferred: bool = False
     pace: Pace | None = None
     groups_per_coin: int = 1
+    """g (1 by default: an openings coin a window) draws the openings of g consecutive windows from one coin, released
+    after the last root of the last of them: windows cg … min((c + 1)g, W) − 1 are draw c, whose `samples` receipts
+    are drawn uniformly over their receipts together (`Session.close`), and the pooled bound reads each draw as one
+    window (`pooled_windows`)."""
 
     def __post_init__(self) -> None:
-        for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime",
-                     "groups_per_coin"):
+        for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"{name} is a positive integer")
         if type(self.deferred) is not bool:
@@ -211,6 +211,8 @@ class Params:
         _bind(self.bind)
         receipts.block_layout(self.layout)
         receipts.sketch_rows(self.receipt, self.rows)
+        if type(self.groups_per_coin) is not int or self.groups_per_coin < 1:
+            raise ValueError("groups_per_coin is a positive integer")
 
     @property
     def coins(self) -> int:
