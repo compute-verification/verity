@@ -1,0 +1,206 @@
+"""`pouw_h1.H1Run`'s call tables hashed on the GPU (VLLM-96): a call's A table and z table, each
+`pouw_h1_requests.hiding_rows` of its leaves, computed by the Commit's row-table kernels (`protocol_options/pouw_cuda/row_table.cu`,
+`commit.row_tables_device`) as a step of one table.
+
+The kernels hash rows of K 8-bit codes then a 4-byte word, so a table's leaf value is that row followed by its 192-byte salt,
+and its root is `hiding_rows`' when the table's layout says so (`layout`): the domain id is ``audit.rows_domain``'s (the
+host's), the step's nonce is ``bytes(4) || u64le nonce`` and the table starts at the step's row 0 in rank order, so row i's salt
+is ChaCha20 blocks 3i .. 3i + 2 at that nonce, ``hiding_rows``' keystream. An A table is the call's T slots of K s8 codes and
+f32 scale; a z table's leaf is a ``ZY_BYTES`` record, its first ``ZY_BYTES - 4`` bytes as the codes and its last 4 as the word
+(`record_rows`). The step's own root, over its one table, is not read.
+
+`device_roots` hashes on the current CUDA stream and returns once the roots are on the host: a call's tables are recorded as the
+call is, as `hiding_rows` records them. `host_roots` runs the same functions on the CPU (`row_table_host.cpp`), the twin the CPU
+tests hold to `hiding_rows` on machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`);
+nvcc is `pouw_device`'s.
+"""
+from __future__ import annotations
+
+import ctypes
+import warnings
+from collections.abc import Sequence
+from functools import cache
+from typing import Any
+
+import numpy as np
+
+from verity_vllm.commit import row_tables_device as RTD
+
+__all__ = ["MODE", "available", "device_lib", "device_roots", "host_roots", "layout", "path", "record_rows"]
+
+#: where `pouw_h1.H1Run` hashes a call's tables: ``"auto"`` (the GPU when the call's tensors are CUDA tensors and the kernels
+#: build for their device, else ``hiding_rows``), ``"gpu"``, ``"host"`` (the kernels' functions on the CPU, the twin) or
+#: ``"python"`` (``hiding_rows``, the reference)
+MODE = "auto"
+MODES = ("auto", "gpu", "host", "python")
+_M32 = 0xFFFFFFFF
+
+
+def layout(domain_id: bytes, key: bytes, nonce: int, n: int, k: int) -> tuple[np.ndarray, RTD.Args]:
+    """The kernels' step of one table of ``n`` rows of ``k`` codes and a 4-byte word under ``domain_id``, salted by ChaCha20
+    under the 32-byte ``key`` at the u64 ``nonce``: its ``Tab`` (14 u64 words, the codes' and words' addresses zero until
+    bound) and its ``Args``."""
+    if n < 1 or k < 2 or k % 2 or 3 * n > 1 << 32 or len(domain_id) != 64 or len(key) != 32 or not 0 <= nonce < 1 << 64:
+        raise ValueError(f"{n} rows of {k} codes under a {len(domain_id)}-byte domain id, a {len(key)}-byte key and nonce "
+                         f"{nonce}: not 1 to 2^32 / 3 rows of an even K >= 2, a 64-byte id, a 32-byte key and a u64 nonce")
+    s = -(-(k + 4) // RTD.SEG_BYTES)
+    tab = np.concatenate([np.asarray([0, 0, k | n << 32, s << 32, 0, RTD._width(n)], np.uint64), RTD._words(domain_id)])
+    args = RTD.Args()
+    args.key[:] = np.frombuffer(key, "<u4").tolist()
+    args.nonce[:] = [0, nonce & _M32, nonce >> 32]
+    args.T = 1
+    return tab, args
+
+
+def _root(words: np.ndarray) -> bytes:
+    return np.asarray(words).view(np.uint64).astype(">u8").tobytes()
+
+
+def record_rows(records: Any) -> tuple[Any, Any]:
+    """A z table's rows as the kernels take them, from its records ``(units, ZY_BYTES)`` uint8 (a tensor or an array): the codes
+    ``(units, ZY_BYTES - 4)`` and the last 4 bytes of each as one 32-bit word."""
+    k = records.shape[1] - 4
+    if hasattr(records, "contiguous"):
+        import torch
+
+        return records[:, :k].contiguous(), records[:, k:].contiguous().view(torch.int32).reshape(-1)
+    return np.ascontiguousarray(records[:, :k]), np.ascontiguousarray(records[:, k:]).view("<u4").reshape(-1)
+
+
+def _host(x: Any) -> np.ndarray:
+    return np.ascontiguousarray(x.detach().cpu().numpy() if hasattr(x, "detach") else np.asarray(x))
+
+
+def host_roots(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> list[bytes]:
+    """Each table's root, ``(domain_id, nonce, codes, words)`` with codes ``(n, K)`` of 8-bit and words ``(n,)`` of 32-bit
+    values, by the kernels' functions on the CPU: the device path's twin."""
+    out = []
+    for did, nonce, c, w in tables:
+        codes, words = _host(c), _host(w)
+        if codes.ndim != 2 or codes.itemsize != 1 or words.itemsize != 4 or words.shape != (codes.shape[0],):
+            raise ValueError(f"codes {codes.shape} of {codes.dtype} and words {words.shape} of {words.dtype} are not (n, K) "
+                             "8-bit and (n,) 32-bit")
+        n, k = codes.shape
+        tab, args = layout(did, key, nonce, n, k)
+        tab[0], tab[1] = codes.ctypes.data, words.ctypes.data
+        roots = np.zeros(16, np.uint64)
+        rc = RTD.host_lib().rt_step_host(tab.reshape(1, -1), np.arange(n, dtype=np.uint32), n * (int(tab[3]) >> 32), n,
+                                         RTD._hm(), RTD._prefixes(), ctypes.byref(args), roots)
+        if rc:
+            raise ValueError(f"rt_step_host refused the table's layout ({rc})")
+        out.append(_root(roots[8:]))
+    return out
+
+
+def nvcc() -> str | None:
+    """`pouw_device`'s nvcc: its configured `TOOLCHAIN`'s, or nvcc on the path."""
+    from verity_vllm.protocol_options import pouw_device
+
+    return pouw_device.nvcc()
+
+
+_vp = ctypes.c_void_p
+
+
+@cache
+def device_lib(arch: str) -> ctypes.CDLL:
+    """`row_table.cu` built with `nvcc` for ``sm_<arch>``: the Commit's build when the nvcc is the same."""
+    tool = nvcc()
+    if tool is None:
+        raise RuntimeError("no nvcc on the path or configured")
+    dll = RTD._build(tool, RTD.DEVICE_SOURCES, (*RTD.NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}"),
+                     "librow_table_cuda.so")
+    dll.rt_midstates.argtypes = [_vp, _vp, _vp]
+    dll.rt_step.argtypes = [_vp, _vp, _vp, ctypes.c_uint64, ctypes.c_uint32, _vp, _vp, ctypes.POINTER(RTD.Args)] + [_vp] * 5
+    dll.rt_midstates.restype = dll.rt_step.restype = ctypes.c_int
+    return dll
+
+
+class _Device:
+    """One CUDA device's build, its copies of the byte tables and midstates, and the identity rank order tables share."""
+
+    def __init__(self, torch: Any, device: Any) -> None:
+        major, minor = torch.cuda.get_device_capability(device)
+        self.lib = device_lib(f"{major}{minor}")
+        self.hm = torch.from_numpy(RTD._hm().view(np.int64)).to(device)
+        pre = torch.from_numpy(RTD._prefixes().view(np.int64)).to(device)
+        self.ms = torch.empty(16, dtype=torch.int64, device=device)
+        rc = self.lib.rt_midstates(torch.cuda.current_stream(device).cuda_stream, pre.data_ptr(), self.ms.data_ptr())
+        if rc:
+            raise RuntimeError(f"rt_midstates: CUDA error {rc}")
+        torch.cuda.current_stream(device).synchronize()
+        self.perm = torch.arange(0, dtype=torch.int32, device=device)
+
+    def ranks(self, torch: Any, n: int) -> Any:
+        if len(self.perm) < n:
+            self.perm = torch.arange(max(n, 2 * len(self.perm)), dtype=torch.int32, device=self.perm.device)
+        return self.perm
+
+
+_DEVICES: dict[int, _Device] = {}
+
+
+def _device(torch: Any, device: Any) -> _Device:
+    if device.index not in _DEVICES:
+        _DEVICES[device.index] = _Device(torch, device)
+    return _DEVICES[device.index]
+
+
+@cache
+def available() -> bool:
+    """Whether this process can hash on the GPU: torch with CUDA, and the kernels built for its current device (a warning
+    says why not when CUDA is there)."""
+    import torch
+
+    if not torch.cuda.is_available():
+        return False
+    try:
+        _device(torch, torch.device("cuda", torch.cuda.current_device()))
+    except Exception as e:  # noqa: BLE001 - nvcc missing or a failed build leaves hiding_rows, said once
+        warnings.warn(f"H1's call tables hash with hiding_rows: the GPU path doesn't build here ({type(e).__name__}: {e})",
+                      RuntimeWarning, stacklevel=2)
+        return False
+    return True
+
+
+def path(*tensors: Any) -> str:
+    """Where a call's tables hash, `MODE`'s choice: ``"gpu"``, ``"host"``, ``"python"``, or for ``"auto"`` the GPU when every
+    tensor given is a CUDA tensor and `available`, else ``"python"``."""
+    if MODE not in MODES:
+        raise ValueError(f"MODE={MODE!r}: one of {', '.join(MODES)}")
+    if MODE != "auto":
+        return MODE
+    return "gpu" if tensors and all(getattr(t, "is_cuda", False) for t in tensors) and available() else "python"
+
+
+def device_roots(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> list[bytes]:
+    """`host_roots` hashed on the current CUDA stream of the tables' device, every codes and words a contiguous CUDA tensor
+    there, returned once the roots are on the host."""
+    import torch
+
+    dev = tables[0][2].device
+    if dev.type != "cuda":
+        raise ValueError(f"device_roots hashes CUDA tensors, not tensors on {dev}")
+    for _did, _nonce, c, w in tables:
+        if c.device != dev or w.device != dev or c.dim() != 2 or c.element_size() != 1 or w.element_size() != 4 \
+                or tuple(w.shape) != (c.shape[0],) or not c.is_contiguous() or not w.is_contiguous():
+            raise ValueError(f"codes {tuple(c.shape)} and words {tuple(w.shape)} are not contiguous (n, K) 8-bit and (n,) "
+                             f"32-bit tensors on {dev}")
+    d, st = _device(torch, dev), torch.cuda.current_stream(dev)
+    laid = [layout(did, key, nonce, int(c.shape[0]), int(c.shape[1])) for did, nonce, c, _w in tables]
+    tabs = np.stack([tab for tab, _args in laid])
+    for i, (_did, _nonce, c, w) in enumerate(tables):
+        tabs[i, 0], tabs[i, 1] = c.data_ptr(), w.data_ptr()
+    meta = torch.from_numpy(tabs.view(np.int64)).pin_memory().to(dev, non_blocking=True)
+    perm = d.ranks(torch, max(int(c.shape[0]) for _did, _nonce, c, _w in tables))
+    out = torch.empty((len(tables), 16), dtype=torch.int64, device=dev)
+    for i, (tab, args) in enumerate(laid):
+        n, s = int(tab[2]) >> 32, int(tab[3]) >> 32
+        dig, leaves, tree, step = (torch.empty(8 * m, dtype=torch.int64, device=dev) for m in (n * s, n, RTD._width(n), 2))
+        rc = d.lib.rt_step(st.cuda_stream, meta[i].data_ptr(), perm.data_ptr(), n * s, n, d.hm.data_ptr(), d.ms.data_ptr(),
+                           ctypes.byref(args), dig.data_ptr(), leaves.data_ptr(), tree.data_ptr(), step.data_ptr(),
+                           out[i].data_ptr())
+        if rc:
+            raise RuntimeError(f"rt_step: CUDA error {rc}")
+    host = out.cpu().numpy()
+    return [_root(host[i, 8:]) for i in range(len(tables))]

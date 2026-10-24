@@ -77,7 +77,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw.audit import commit_rows, weight_binding
+from verity.core.protocols.pouw.audit import HM96, commit_rows, rows_domain, weight_binding
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw import credit as CR
@@ -96,6 +96,7 @@ from verity_vllm.protocol_options import pouw_h1_commit as CT
 from verity_vllm.protocol_options import pouw_h1_prover as PV
 from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
+from verity_vllm.protocol_options import pouw_h1_tables_device as TD
 from verity_vllm.protocol_options.pouw_h1_requests import TABLE_NONCES, TABLE_TAGS, table_leaves
 from verity_vllm.protocol_options.pouw_h1_static import FILL, Static, utilization
 
@@ -416,14 +417,51 @@ class H1Run:
         self.commits["requests_root"], self.commits["request_table"] = requests.hex(), table.hex()
         return requests
 
-    def _table(self, call: Call, name: str, leaves: list[bytes]) -> str:
-        return RQ.hiding_rows(tagged(TABLE_TAGS[name], self.salt, call.index), call.index, leaves, self._key,
-                              RQ.TABLES_NONCE + 3 * call.index + TABLE_NONCES[name]).commitment.root.hex()
+    def _binding(self, call: Call, name: str) -> tuple[bytes, int]:
+        """The call's `name` table's domain binding and salt nonce."""
+        return tagged(TABLE_TAGS[name], self.salt, call.index), RQ.TABLES_NONCE + 3 * call.index + TABLE_NONCES[name]
 
-    def _commit_tables(self, call: Call, a: Any, s_a: Any, records: np.ndarray | None) -> None:
+    def _table(self, call: Call, name: str, leaves: list[bytes]) -> str:
+        binding, nonce = self._binding(call, name)
+        return RQ.hiding_rows(binding, call.index, leaves, self._key, nonce).commitment.root.hex()
+
+    def _kernel_tables(self, call: Call, a: Any, s_a: Any, zy: Any, where: str) -> dict[str, str | None]:
+        """`_commit_tables`' roots by the row-table kernels (`pouw_h1_tables_device`), on ``a``'s device (``"gpu"``) or the
+        CPU (``"host"``): the A table's T rows of K codes and f32 scale, the z table's records split as the kernels take them."""
+        import torch
+
+        m, t, k = call.m, self.rows, call.k
+        dev = a.device if where == "gpu" else torch.device("cpu")
+        codes, scales = torch.zeros((t, k), dtype=torch.int8, device=dev), torch.zeros(t, dtype=torch.float32, device=dev)
+        if m:
+            codes[:m], scales[:m] = torch.as_tensor(a).reshape(m, k), torch.as_tensor(s_a).reshape(m)
+        tables = [("a", codes, scales)]
+        if not m:
+            tables.append(("z", torch.zeros((call.units, ZR.ZY_BYTES - 4), dtype=torch.uint8, device=dev),
+                           torch.zeros(call.units, dtype=torch.int32, device=dev)))
+        elif zy is not None:
+            tables.append(("z", *TD.record_rows(torch.as_tensor(zy).to(dev))))
+        laid = []
+        for name, c, w in tables:
+            binding, nonce = self._binding(call, name)
+            laid.append((rows_domain(binding, call.index, len(c), HM96).domain_id, nonce, c, w))
+        roots = (TD.device_roots if where == "gpu" else TD.host_roots)(laid, self._key)
+        return {"a": roots[0].hex(), "z": roots[1].hex() if len(roots) > 1 else None}
+
+    def _commit_tables(self, call: Call, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
         """The call's A table (`table_leaves`) and its z table, leaf u unit u's z/y record (`pouw_h1_records`; an empty call's
-        all zero), none for a served call whose arm handed over no records."""
+        all zero), none for a served call whose arm handed over no records. Hashed where `pouw_h1_tables_device.path` says
+        (by default on the GPU when the call's tensors, ``zy`` its records, are CUDA tensors), each root `hiding_rows`'."""
         m, t = call.m, self.rows
+        given = [x for x in (a, s_a, zy) if x is not None]
+        kernels = (a is not None and call.k % 2 == 0 and call.units > 0 and (records is None or zy is not None)
+                   and (not m or int(np.prod(s_a.shape)) == m))
+        where = TD.path(*given) if kernels else "python"
+        if where != "python":
+            self.tables[call.index] = self._kernel_tables(call, a, s_a, zy if m and records is not None else None, where)
+            if self.prover is not None and m:
+                PV.keep_call(self.prover, call.index, _words(a, m, "i1"), _words(s_a, m, "<f4"), records)
+            return
         if a is not None and m:
             av, sv = _words(a, m, "i1"), _words(s_a, m, "<f4")
         else:
@@ -442,14 +480,15 @@ class H1Run:
             raise KeyError(f"{self.entry}: no call {index}")
         return self.calls[i]
 
-    def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None) -> Call:
+    def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None,
+              zy: Any = None) -> Call:
         n, k = self.shapes_[w]
         call = Call(s * len(self.shapes_) + w, s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0,
                     k, n, s * self.u_step + self.offs[w], self.rows)
         bisect.insort(self.calls, call, key=lambda c: c.index)
         self._in[s] += 1
         if self.commit:
-            self._commit_tables(call, a, s_a, records)
+            self._commit_tables(call, a, s_a, records, zy)
             if self.served is not None:
                 self.tables[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, records)
         for fn in self.listeners:
@@ -600,10 +639,11 @@ class H1Run:
             return None
         n = self.shapes_[w][0]
         records = ZR.of(z, units(k, n, self.rows)) if n % TILE[1] == 0 else None
+        zy = z if records is not None else None
         if z is None and self.retain:
             from verity_vllm.engine.int8_exact import int_mm
             z = int_mm(a, weight)
-        call = self._call(self.step, w, a, s_a, weight, weight_scale, records)
+        call = self._call(self.step, w, a, s_a, weight, weight_scale, records, zy)
         if self.retain:
             y = ZR.split(records, call.rows, call.n)[0][:m] if records is not None else numpy_of(z)
             self.retained.append((call.index, numpy_of(a), numpy_of(s_a), y))
