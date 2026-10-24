@@ -15,7 +15,7 @@ CUDA=${CUDA:-/usr/local/cuda-13.0}
   || { echo "shabench: NVCC_FAIL"; grep -v "^ptxas info" "$OUT/build.log" | tail -30; exit 11; }
 grep -A2 "chain_k" "$OUT/build.log" | grep -i "registers\|spill" | head -18
 "$CUDA/bin/cuobjdump" -sass "$S/libshabench.so" > "$OUT/sass.txt" 2>/dev/null
-for v in 0 1 2 3 4 5 6 7 8; do
+for v in 0 1 2 3 4 5 6 7 8 9 10 11; do
   awk "/Function : .*chain_kILi${v}E/{f=1;next} /Function :/{f=0} f" "$OUT/sass.txt" | grep -o '/\*[0-9a-f]*\*/ *[A-Z0-9]*' \
     | awk -v v="$v" '{n++; o=$2} o~/^(SHF|LOP3|IADD3|LEA|PRMT|ISETP|SEL|VIADD)$/{alu++} o~/^IMAD/{fma++}
       END {printf "V%s sass %d: alu-pipe %d, imad %d\n", v, n, alu, fma}'
