@@ -96,24 +96,40 @@ def test_a_head_the_prover_changed_fails_its_signed_digest_in_window_0_alone():
     assert sim.tie["source"] == "stand-in" and tuple(sim.tie["ingress"]) != n2.TIE_PINNED
 
 
-def test_a_served_runs_clock_source_is_its_certifiers_log_and_a_sync_it_didnt_run_has_no_view(tmp_path):
-    """`CertifierClocks`, the --e2e link's clock source, reads the syncs the run's certifier logged (``proxy.json.gz``)
-    for its link alone and refuses a run without that log. On the simulated link at T = 8, every window has its view
-    under the logged syncs, and none has one when one window's logged sync isn't the one it declares: each window's
-    floor reads every release's window's sync (`advised._floor_buckets`)."""
+def test_a_served_runs_clock_source_is_its_certifiers_signed_syncs_else_its_log_as_a_stand_in(tmp_path):
+    """`served_clocks`, the --e2e link's clock source: the run's ``clocks.jsonl`` (the certifier's clock certificates,
+    `LinkWindows.clock_certificates`) when it has one, even beside a proxy log; else `CertifierClocks`, the syncs its
+    certifier logged (``proxy.json.gz``) for its link alone, labelled a stand-in; else no source, and the run is
+    refused. On the simulated link at T = 8, whose certifier signed every window's sync, every window has its view
+    under either source. Under the certificates, a window whose sync is wrongly signed (here window 0's, swapped after
+    signing) has no sync, and neither has any window after it. Under the log, a window whose logged sync isn't the one
+    it declares is refused alone."""
     sim, _ = _link(AT.T)
     lw, (link, pairs, _) = sim.lw, sim.members["honest"]
+    egress, ingress = ([list(p[d].head.counts) for p in pairs] for d in (0, 1))
+    signed = tuple(lw.clock_certificates)
+    assert sim.clocks["source"] == "signed" and sim.clocks["as_declared"] and len(signed) == len(pairs)
+    with pytest.raises(SystemExit, match="no clock source"):
+        n2.served_clocks(tmp_path, lw.link)
     with gzip.open(tmp_path / "proxy.json.gz", "wt") as fh:
         json.dump({"syncs": [[s.delta, str(s.rho)] for s in AT.SYNCS]}, fh)
-    clocks = n2.CertifierClocks.of(tmp_path, lw.link)
-    assert list(clocks.syncs(lw.link)) == list(AT.SYNCS) and clocks.syncs("another") == ()
-    assert clocks.label(AT.SYNCS)["as_declared"] and not clocks.label(AT.SYNCS[::-1])["as_declared"]
-    with pytest.raises(SystemExit, match="no clock source"):
-        n2.CertifierClocks.of(tmp_path / "none", lw.link)
-    egress, ingress = ([list(p[d].head.counts) for p in pairs] for d in (0, 1))
-    assert None not in n2.advised_refs(n2.replace(lw, clocks=clocks), link, egress, ingress)
+    logged = n2.replace(lw, clock_certificates=None, **n2.served_clocks(tmp_path, lw.link))
+    assert isinstance(logged.clocks, n2.CertifierClocks) and logged.clocks.syncs("another") == ()
+    label = n2.clocks_label(logged, AT.SYNCS)
+    assert label["source"] == "stand-in" and "proxy.json.gz" in label["by"] and label["as_declared"]
+    assert not n2.clocks_label(logged, AT.SYNCS[::-1])["as_declared"]
+    assert None not in n2.advised_refs(logged, link, egress, ingress)
+    (tmp_path / "clocks.jsonl").write_text("".join(json.dumps(n2.cs.clock_json(c)) + "\n" for c in signed))
+    read = n2.served_clocks(tmp_path, lw.link)
+    assert list(read) == ["clock_certificates"] and read["clock_certificates"] == signed
+    again = n2.replace(lw, clock_certificates=read["clock_certificates"])
+    assert n2.clocks_label(again, AT.SYNCS)["source"] == "signed"
+    assert None not in n2.advised_refs(again, link, egress, ingress)
+    forged = (n2.replace(signed[0], sync=AT.SYNCS[1]), *signed[1:])
+    assert n2.advised_refs(n2.replace(lw, clock_certificates=forged), link, egress, ingress) == [None] * len(pairs)
     off = n2.CertifierClocks(lw.link, (n2.replace(AT.SYNCS[0], delta=AT.SYNCS[0].delta + 1), *AT.SYNCS[1:]))
-    assert n2.advised_refs(n2.replace(lw, clocks=off), link, egress, ingress) == [None] * len(pairs)
+    refs = n2.advised_refs(n2.replace(lw, clock_certificates=None, clocks=off), link, egress, ingress)
+    assert refs[0] is None and None not in refs[1:]
 
 
 def test_joined_advice_numbers_each_windows_requests_after_the_windows_before_and_releases_by_id():
