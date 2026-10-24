@@ -2,7 +2,8 @@
 whose arena is `--weights` blocks (random digests) then zeros to `--arena-blocks`, `--engines` arenas of it, then
 `--host` host blocks, under one payload key, `store.Binding` over it as it stands past what it reads of the files, and
 the Lean verifier of record (`remote-audit-verifier`) bound to it (`verifier.bind_lean`). Each phase is one hello's
-decision, timed as a whole, with each verifier's own time (store.py's `recompute_s`, the Lean's `lean_s`):
+decision, timed as a whole, with each verifier's own time (store.py's `recompute_s`, the Lean's `lean_s`) and CPU
+seconds (store.py's processes, the Lean's threads):
 
 ~~~text
 sequential  #3413's order: `Binding.hold` (its root in `--workers` processes), then the Lean's `hold` (its root on
@@ -31,6 +32,7 @@ import argparse
 import hashlib
 import json
 import os
+import resource
 import sys
 import tempfile
 import time
@@ -56,6 +58,18 @@ PYTHON_SHARE = 0.6
 def pin_data() -> bytes:
     files = {n: hashlib.sha512(n.encode()).hexdigest() for n in ("config.json", "model.safetensors")}
     return json.dumps({"name": ROLE, "checkpoint": files, "checkpoint_sha512": store.checkpoint_sha512(files)}).encode()
+
+
+def lean_cpu(ln: lv.Lean) -> float:
+    """The Lean process's CPU seconds so far, all its threads (`/proc/PID/stat`'s utime and stime)."""
+    fields = Path(f"/proc/{ln.proc.pid}/stat").read_text().rpartition(")")[2].split()
+    return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+
+
+def python_cpu() -> float:
+    """This process's CPU seconds so far and its reaped children's: store.py's worker processes once their pool ends."""
+    me, kids = resource.getrusage(resource.RUSAGE_SELF), resource.getrusage(resource.RUSAGE_CHILDREN)
+    return me.ru_utime + me.ru_stime + kids.ru_utime + kids.ru_stime
 
 
 def binding(weights: int, engines: int, arena_blocks: int, workers: int, digests: Path) -> store.Binding:
@@ -111,7 +125,7 @@ def main() -> int:
         def hello(ln: lv.Lean, bd: dict, bb: store.Binding, root: bytes) -> dict:
             """`verifier.hold_store` of a hello carrying `root`, timed: bound, refused or disagreement, with each
             verifier's time."""
-            load, t = os.getloadavg(), time.monotonic()
+            load, t, c, lc = os.getloadavg(), time.monotonic(), python_cpu(), lean_cpu(ln)
             try:
                 V.hold_store(ln, bd, bb, NODE, blocks, root, key, None)
                 decided = "bound"
@@ -121,11 +135,12 @@ def main() -> int:
                     print(f"binding_bench: {e}", flush=True)
             return {"hello_s": round(time.monotonic() - t, 3), "decided": decided,
                     "python_s": round(bb.state.get("recompute_s", 0.0), 3), "lean_s": round(bb.state["lean_s"], 3),
+                    "python_cpu_s": round(python_cpu() - c, 1), "lean_cpu_s": round(lean_cpu(ln) - lc, 1),
                     "expected_root": bb.state.get("expected_root"), "load_before": load, "load_after": os.getloadavg()}
 
         def sequential(root: bytes) -> dict:
             """#3413's decision of a hello carrying `root`: `Binding.hold`, then the Lean's `hold`, timed."""
-            load, t = os.getloadavg(), time.monotonic()
+            load, t, c, lc = os.getloadavg(), time.monotonic(), python_cpu(), lean_cpu(lean)
             try:
                 regions = b.hold(NODE, blocks, root, key, None)
                 mine = {"regions": [list(r) for r in regions], "expected_root": b.state["expected_root"]}
@@ -137,8 +152,9 @@ def main() -> int:
             t2 = time.monotonic()
             decided = "disagreement" if got != mine else "refused" if "refused" in got else "bound"
             return {"hello_s": round(t2 - t, 3), "decided": decided, "python_s": round(t1 - t, 3),
-                    "lean_s": round(t2 - t1, 3), "expected_root": mine["expected_root"], "load_before": load,
-                    "load_after": os.getloadavg()}
+                    "lean_s": round(t2 - t1, 3), "python_cpu_s": round(python_cpu() - c, 1),
+                    "lean_cpu_s": round(lean_cpu(lean) - lc, 1), "expected_root": mine["expected_root"],
+                    "load_before": load, "load_after": os.getloadavg()}
 
         def split(root: bytes) -> dict:
             """`hello` with store.py's root in `--python-share` of the cores and a second Lean's on the rest."""
