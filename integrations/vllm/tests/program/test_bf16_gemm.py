@@ -161,7 +161,7 @@ def test_every_definition_is_boolean_and_the_boolean_version_of_its_word() -> No
     assert all(BL.is_boolean(t) for t in STEPS)
 
 
-@pytest.mark.parametrize("target", PINNED, ids=[t.id for t in PINNED])
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id.startswith('LlBf16DotprodDot_v2{K=256,') else t for t in PINNED], ids=[t.id for t in PINNED])
 def test_bits_agree_with_the_word(target) -> None:
     """Each Boolean Definition against its word (the reference evaluator) on eight instances of each kind, word for word."""
     rng = np.random.default_rng(1)
@@ -223,6 +223,7 @@ def test_no_body_on_bits_computes_a_value_twice() -> None:
         assert WQ.Graph(t).recomputed == [], t.id
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("FMA", [1, 0])
 def test_dotprod_agrees_with_the_model(FMA: int) -> None:
     """`LlBf16DotprodGemm_v2` against `dotprod_rows` over two tiles of two warps' lanes, over one tile of one warp, and over one

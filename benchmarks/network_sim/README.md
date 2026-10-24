@@ -365,7 +365,7 @@ What the proof service would do per window, in N3's design (the simulator does i
    (`Window.why`).
 2. For every other window it runs the `N3Window_v3` of the window's size class and records the ok bit. N3's design
    gives it Selection All, as N2 has: every port-window of every link-window N2 checks gets its ok bit, so N3 would be
-   a structural check. N2 compares no grid in the clear (`LinkWindows.verify`). A frame past the port's declared
+   a structural check. N2 compares no grid (`LinkWindows.verify`, `LinkWindows.clear`). A frame past the port's declared
    frames meets an invalid descriptor, so it gives not-ok. So does a frame that carries values of a unit that
    committed none, since that unit's outbox holds zeros where they would be.
 
@@ -374,7 +374,7 @@ check holds each head's counts to the link's occupancy profile. The egress grid 
 frames root, filled in by those counts (`grid.fill`), and N3's design holds those frames to the committed layout's. So
 once N3 is a proof-service unit with Selection All, the two would hold the grid N2 used to compare in the clear. Until
 then the claim is counts only: timing at the profile. N2 needs the egress end's profile, or a served link's profile,
-from which it derives the egress counts (the lab's): with neither, `LinkWindows.verify` has no verdict (`ValueError`).
+from which it derives the egress counts (the lab's): with neither, N2 has no verdict (`ValueError`).
 The network verdict of record is `LinkWindows.network_verdict`, the AND over a link's link-windows with no ε
 or share credit: every window of the egress profile registered in order with an accepted outcome of record. The
 simulator runs no proof-service stream, so it doesn't call it. `link_checks` records both bits on every link-window of
@@ -519,10 +519,10 @@ Open items:
   it. One unit per run that derives each descriptor from the opened placement would close this. No claim rests on it
   yet.
 - **hm96 or vllm-v1 (asked of circuits).** The outboxes are hm96 rows, and so are the values they must agree with.
-  Served traffic's values are committed under verity_vllm's vllm-v1 roots (SHA-256, not hiding), whose link to hm96
-  rows is the committer's opening, not a proof (`verity/core/protocols/sampled_proofs/README.md`). N3 on served traffic
-  needs the crossings bound to the commitment the compute proofs read: serving's record in hm96 itself, or a unit that
-  opens the vllm-v1 leaves.
+  Served traffic's values are hm96-sha512 rows by default (rows-sha512). An old record's vllm-v1 roots (SHA-256, not
+  hiding) link to hm96 rows by the committer's opening, not proof (`verity/core/protocols/sampled_proofs/README.md`).
+  N3 needs the crossings bound to the commitment the compute proofs read: serving's record, hm96 by default, or a
+  unit opening vllm-v1's leaves.
 - **Trailing frames.** Here a port that stops short of its declared frames passes. Each window it recorded matches
   its descriptors, and the windows after it record nothing, which passes from public data. In the late run, b2's
   responses are refused only because their record's status says coverage was never established. N2 closes it where

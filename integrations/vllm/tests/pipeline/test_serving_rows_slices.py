@@ -1,7 +1,7 @@
 """The batched rows split into slices (`pipeline.serving_rows`' ``slice`` layout, ``SLICES``): a row of extents a_0, a_1, .. along
 its family's axes is a_0 a_1 .. units of its Definition at every axis 1, unit (i_0, i_1, ..) reading element i_k along axis k of
 each parameter that carries it and the others whole, and returning the row's output element (i_0, i_1, ..): the router GEMM, the
-LM head and cuBLAS's split-K into W's rows, torch.bmm into its members' coordinates, DSA's logits into keys, the vocabulary
+LM head and cuBLAS's split-K (at a bf16 and an f32 output) into W's rows, torch.bmm into its members' coordinates, DSA's logits into keys, the vocabulary
 shard's embedding into columns (every unit reads the token) and the all-gather into its ranks' shards.  The units cover the
 row's outputs with nothing left over (one index entry per row, the units' outputs the row's output in order), each reads its
 own elements of the row's operands (an independent gather by index), and the Definition at every axis 1 on each unit's rows is
@@ -33,6 +33,7 @@ H = HopperBF16WgmmaDot16
 ROWS = {"LlBf16DotprodGemm_v1": (LL.LlBf16DotprodGemmWord, {"N": 3, "K": 64, "BS": 32, "VEC": 2, "FMA": 1}),
         "Gemm_v2": (G.Gemm, {"K": 32, "N": 3, "DOT": H}),
         "CublasSplitKGemm_v1": (CB.CublasSplitKGemmWord, {"K": 128, "N": 3, "SPLIT_K": 2, "DOT": H}),
+        "CublasSplitKGemmF32Out_v1": (CB.CublasSplitKGemmF32OutWord, {"K": 128, "N": 3, "SPLIT_K": 2, "DOT": H}),
         "BatchedGemm_v1": (CB.BatchedGemmWord, {"B": 2, "K": 32, "N": 3, "DOT": H}),
         "DsaMqaLogits_v3": (DSA.DsaMqaLogitsV3, {"N": 3, "H": 8, "D": 32}),
         "EmbeddingShard_v1": (T2.EmbeddingShard, {"VS": 5, "H": 4, "START": 2}),
@@ -131,7 +132,8 @@ def test_the_slices_cover_the_row_s_output_read_their_own_elements_and_compute_t
     assert np.asarray(ref).reshape(n, -1).tolist() == out.tolist()
 
 
-@pytest.mark.parametrize("family", ["LlBf16DotprodGemm_v1", "BatchedGemm_v1", "EmbeddingShard_v1", "DsaMqaLogits_v3"])
+@pytest.mark.parametrize("family", ["LlBf16DotprodGemm_v1", "CublasSplitKGemmF32Out_v1", "BatchedGemm_v1", "EmbeddingShard_v1",
+                                    "DsaMqaLogits_v3"])
 def test_a_window_s_slices_are_chunks_of_the_stager_s_bit_rows_read_once(row, family):
     x, ops, y, store = row(family)
     n, T = math.prod(extents(family)), descriptor_id(defn(family, unit=True))
