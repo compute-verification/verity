@@ -14,6 +14,8 @@ is on theta rebuilt from a alone.
 Reward (dense partial credit): fraction of the 8 cipher letters right in a sampled completion (T = 1), averaged over
 B prompts x G samples. The samples use common random numbers (the same Gumbel noise for every member of an iteration),
 so members differ only through their weights. Pass/fail can't move from 0; this can.
+`--reward tf` instead scores each member by the teacher-forced expected partial credit, the mean over positions of
+p(key letter | right prefix): one forward per member and no sampling noise, the objective FedKSeed and MeZO use.
 
 Arm `grpo` (the control): A3's GRPO (group-relative advantages on the same reward, AdamW, no KL), full fine-tuning
 from the base model with no SFT, under the same wall-clock budget.
@@ -82,6 +84,16 @@ def rollout(model, prompt, T, gen, temp=1.0):
             out = model(input_ids=nxt[:, None], past_key_values=past, use_cache=True, logits_to_keep=1)
             past, logits = out.past_key_values, out.logits[:, -1].float()
     return torch.stack(toks, 1)
+
+
+@torch.no_grad()
+def tf_reward(model, ids, P):
+    """Teacher-forced expected partial credit: per sequence, the mean over the 8 positions of p(key letter | right prefix),
+    and the probability of the whole exact answer. One forward per member; no sampling noise."""
+    T = ids.shape[1] - P
+    logits = model(input_ids=ids, use_cache=False, logits_to_keep=T + 1).logits[:, :-1].float()
+    lp = torch.gather(logits, 2, ids[:, P:, None]).squeeze(-1) - torch.logsumexp(logits, -1)
+    return lp.sum(1).exp(), lp[:, :ns.L].exp().mean(1)
 
 
 def token_reward(task, toks, tgt):
@@ -190,18 +202,25 @@ def run_es(a, tok, task, val, test, out):
         it += 1
         plains = task.plains(a.batch, rng.getrandbits(48))
         rep = [p for p in plains for _ in range(a.group)]
-        prompt = task.prompts(rep)
-        tgt = torch.tensor([task.target_ids(p) for p in rep], device="cuda")
+        if a.reward == "tf":
+            ids = task.batch(rep)
+        else:
+            prompt = task.prompts(rep)
+            tgt = torch.tensor([task.target_ids(p) for p in rep], device="cuda")
         js = rng.sample(range(a.K), P)
         gseed = rng.getrandbits(62)
         R, EX = [], []
         for j in js:
             for s in (a.sigma, -a.sigma):
                 st.load(j, s)
-                gen.manual_seed(gseed)
-                toks = rollout(model, prompt, task.T, gen)
-                ex, frac = token_reward(task, toks, tgt)
-                cnt.gen(len(rep), task.P, task.T)
+                if a.reward == "tf":
+                    ex, frac = tf_reward(model, ids, task.P)
+                    cnt.fwd_tok += ids.numel()
+                else:
+                    gen.manual_seed(gseed)
+                    toks = rollout(model, prompt, task.T, gen)
+                    ex, frac = token_reward(task, toks, tgt)
+                    cnt.gen(len(rep), task.P, task.T)
                 cnt.reward(ex.tolist(), frac.tolist())
                 R.append(frac.mean().item())
                 EX.append(ex.mean().item())
@@ -224,7 +243,7 @@ def run_es(a, tok, task, val, test, out):
             print(json.dumps(rec), flush=True)
             json.dump(log, open(os.path.join(out, "log.json"), "w"))
     train_sec = time.time() - t0
-    res = {"arm": "es", "task": a.task, "order": task.order, "H_bits": task.H, "model": a.model, "K": a.K,
+    res = {"arm": "es", "reward": a.reward, "task": a.task, "order": task.order, "H_bits": task.H, "model": a.model, "K": a.K,
            "S_bits": 32 * a.K, "S_bytes": 4 * a.K, "sigma": a.sigma, "alpha": a.alpha, "pairs": P, "population": 2 * P,
            "batch": a.batch, "group": a.group, "seed": a.seed, "pool_seed": a.pool_seed, "iters": it,
            "train_sec": round(train_sec, 1), "n_params": n_params, "best_it": best["it"], "best_val_exact": best["val_exact"],
@@ -343,6 +362,7 @@ def main():
     ap.add_argument("--sigma", type=float, default=1e-3)
     ap.add_argument("--alpha", type=float, default=5e-4)
     ap.add_argument("--pairs", type=int, default=15)
+    ap.add_argument("--reward", choices=["sample", "tf"], default="sample")
     ap.add_argument("--batch", type=int, default=128)
     ap.add_argument("--group", type=int, default=4)
     ap.add_argument("--lr", type=float, default=1e-5)
