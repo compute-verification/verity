@@ -20,6 +20,7 @@ torch = pytest.importorskip("torch")
 from torch import nn  # noqa: E402
 
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
+from verity.core.protocols.pouw import weights as Wt  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_vllm import protocol_options as PO  # noqa: E402
@@ -69,10 +70,10 @@ class Arm:
 
 
 class Linear(nn.Module):
-    def __init__(self, n, seed, arm):
+    def __init__(self, n, seed, arm, k=K):
         super().__init__()
         g = torch.Generator().manual_seed(seed)
-        self.weight = torch.randint(-127, 128, (n, K), generator=g, dtype=torch.int8)
+        self.weight = torch.randint(-127, 128, (n, k), generator=g, dtype=torch.int8)
         self.weight_scale = (torch.rand(n, 1, generator=g) * 0.01 + 1e-4).float()
         self.quant_method = arm
 
@@ -81,14 +82,14 @@ class Linear(nn.Module):
 
 
 class Model(nn.Module):
-    """Two linears, each on its own arm, ``edit`` theirs (counting their calls together)."""
+    """Two linears of contractions ``ks``, each on its own arm, ``edit`` theirs (counting their calls together)."""
 
-    def __init__(self, edit=None):
+    def __init__(self, edit=None, ks=(K, K)):
         super().__init__()
         calls = [0]
         self.model = nn.Module()
         self.model.embed_tokens = nn.Module()
-        self.model.layers = nn.ModuleList([Linear(64, 1, Arm(edit, calls)), Linear(32, 2, Arm(edit, calls))])
+        self.model.layers = nn.ModuleList([Linear(64, 1, Arm(edit, calls), ks[0]), Linear(32, 2, Arm(edit, calls), ks[1])])
 
 
 #: the MoE layer's experts and intermediate width: gate_up [2I, K], down [K, I], so its downs are the calls of K = I
@@ -157,23 +158,25 @@ def _ids(run, s):
 
 
 class _Laid(dict):
-    """`Served`'s open step tables (``_a``) laid out by ``lay`` when a step's table of K is taken whole: the rows the
-    window registers and hands the tap as its table, the Commit's own rows untouched."""
+    """`Served`'s open step tables (``_a``, each call's block by call) laid out by ``lay`` when a step's table of K is
+    taken whole: the rows the window registers and hands the tap as its table, the Commit's own rows untouched."""
 
     def __init__(self, lay):
         super().__init__()
         self.lay = lay
 
     def pop(self, key, *default):
-        return self.lay(super().pop(key, *default))
+        return dict(enumerate(self.lay([b for _c, b in sorted(super().pop(key, *default).items())])))
 
 
-def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, model=None, lie=None, com=None):
+def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, model=None, lie=None, com=None,
+            order=None):
     """A served two-step window with the Commit in its engine: the record (`pouw_h1.CALLS_FILE`), the run and the tap.
     ``edit`` makes the codes H1 is handed of what the arm quantized; ``ids`` the input ids the Commit acquires at step s
     of the honest ones; ``lay`` the blocks of a step's A table of K (one a call, in call order) as the window lays them
     out (`_Laid`). ``model`` is the two-linear `Model` unless given (`MoEModel`), H1's linears `pouw_h1_hooks.layers`
-    of it; ``lie`` wraps them once H1 is installed (the GPU harness's `edited`)."""
+    of it; ``lie`` wraps them once H1 is installed (the GPU harness's `edited`); ``order`` the model's layers in the
+    order the forward calls them (module order unless given)."""
     _host(tmp_path, monkeypatch, rounds=STEPS)
     model, com, tap = model or Model(edit), com or Committer(), CT.CommitTap(EMBED)
     layers = PHK.layers(model, (Linear,))
@@ -197,8 +200,9 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
             com._cur = SimpleNamespace(step=FIRST + s)
             src.on_step_begin()
             com._acquire(f"{EMBED}/in", torch.tensor(ids(s, _ids(run, s))), com._cur)
-            for layer in model.model.layers:
-                layer((torch.randn(len(run.owners[s]), K, generator=g) * 3).bfloat16())
+            for layer in (model.model.layers if order is None else [model.model.layers[w] for w in order]):
+                k = layer.weight.shape[1] if isinstance(layer, Linear) else K
+                layer((torch.randn(len(run.owners[s]), k, generator=g) * 3).bfloat16())
             com._cur = None
     finally:
         lied.uninstall()
@@ -214,10 +218,11 @@ def _record_of(record):
 
 def _core(record, run):
     """Core credit's two ROOTS1 steps over the window's record: each A table and input-ids table committed whole by its
-    round's root (`credit._a_link`), then each the Commit's value of its rows (`credit._arow`)."""
+    round's root at the layout's rows (`credit._a_link`, `credit.table_rows`), then each the Commit's value of its rows
+    (`credit._arow`)."""
     c = record["commitment"]
     entries, layout = c["served"]["entries"], CR.layout_of(SV.descriptor(run.served.program))[0]
-    return (CR._a_link(c["rounds"], entries, len(run.calls)),
+    return (CR._a_link(c["rounds"], entries, len(run.calls), CR.table_rows(layout, len(c["rounds"]), SV.PREFIX)),
             CR._arow(c["rounds"], entries, CR.commit_of(c["commit"])[0][1], layout, SV.PREFIX))
 
 
@@ -248,6 +253,28 @@ def test_each_steps_a_table_is_the_commits_arow_and_each_rounds_ids_its_input_id
         for t in (a, v):
             assert t in run.round_log[s]["a"] and all(t not in r["a"] for r in run.round_log if r["round"] != s)
     assert sorted(theirs) == sorted([CR.commit_rows(s, K) for s in range(STEPS)] + [CR.commit_ids(s) for s in range(STEPS)])
+    assert PHC.manifest_reason(record) is None and _core(record, run) == (None, None)
+    assert all(v["credit"] for v in run.gated().values())
+
+
+def test_a_chunked_llama_windows_a_tables_are_the_commits_arow(tmp_path, monkeypatch):
+    """SPLITK §3–4: Llama's up_proj at K = 4096 and down_proj at K = 14336 (n = 4 chunk leaves a row). The Commit builds
+    its AROW from `Served.a_words` as the window does, so each step's ``row-table/<s>/k<K>`` is the window's own tree of
+    ``a/<K>@<s>``, M·|calls|·n leaves of `weights.leaf_words` (K) words (n = 1 at K = 4096, its words K/2 + 2 as before),
+    and core's ROOTS1 steps pass: `credit._a_link` at the layout's rows and `credit._arow`."""
+    ks = (4096, 14336)
+    two = Model
+    monkeypatch.setitem(globals(), "Model", lambda edit=None: two(edit, ks))
+    record, run, tap = _window(tmp_path, monkeypatch)
+    assert run.details["roots1"]["tied"] and run.details["roots1"]["own_trees"] == 0 and tap.own == 0
+    theirs = {e["value"]: e for e in _record_of(record)["registered"]}
+    entries = {e["value"]: e for e in record["commitment"]["served"]["entries"]}
+    for s in range(STEPS):
+        for k in ks:
+            n, a = Wt.chunks(k), f"{SV.PREFIX}a/{k}@{s}"
+            assert {**theirs[CR.commit_rows(s, k)], "value": a} == entries[a]
+            assert (entries[a]["leaves"], entries[a]["words"]) == (n * run.served.m, Wt.leaf_words(k))
+    assert [Wt.chunks(k) for k in ks] == [1, 4] and Wt.leaf_words(4096) == 4096 // 2 + 2
     assert PHC.manifest_reason(record) is None and _core(record, run) == (None, None)
     assert all(v["credit"] for v in run.gated().values())
 
@@ -288,23 +315,25 @@ def _offset(blocks):
     return [np.zeros_like(blocks[0]), *blocks]
 
 
-@pytest.mark.parametrize("lay,why", [
-    (_rotated, "round 0's A table of K = 64 h1/a/64@0 is not the Commit's row-table/0/k64"),
-    (_offset, f"round 0's A table of K = 64 h1/a/64@0 has {3 * ROWS} rows, not {2 * ROWS}"),
+@pytest.mark.parametrize("lay,at,why", [
+    (_rotated, "arow", "round 0's A table of K = 64 h1/a/64@0 is not the Commit's row-table/0/k64"),
+    (_offset, "a-link", f"registered A value h1/a/64@0 has {3 * ROWS} rows, not the {2 * ROWS} the window's layout gives it"),
 ], ids=["rotated", "offset"])
-def test_a_step_table_with_a_calls_rows_shifted_by_a_call_is_refused_by_core(tmp_path, monkeypatch, lay, why):
+def test_a_step_table_with_a_calls_rows_shifted_by_a_call_is_refused_by_core(tmp_path, monkeypatch, lay, at, why):
     """VLLM-77: a step's A table of K holds its calls of K's rows call after call, the j-th from row M·j, and a unit reads
     its call's rows at that offset. The window lays step s's table out shifted by a call, every row the served one: call 1's
     rows at row 0 and call 0's at row M (rotated), or each call's a call late behind an empty block (offset), with an
-    honest Commit. Each table is still committed whole by its round (`credit._a_link` passes), but the Commit registers
-    its own rows in call order at another root, so the serving process credits nothing and core's `credit._arow` refuses
-    the window: the rotated table is not the Commit's value, the offset one not M rows a call."""
+    honest Commit, which registers its own rows in call order at another root, so the serving process credits nothing.
+    Core refuses both: the offset table is not the M rows a call the layout gives it, which `credit._a_link` checks
+    before hashing any pad (`credit.table_rows`); the rotated one is committed whole by its round, and `credit._arow`
+    refuses it as not the Commit's value."""
     record, run, tap = _window(tmp_path, monkeypatch, lay=lay)
     assert run.details["roots1"]["reason"].startswith(UNTIED_A) and tap.own == STEPS
     assert PHC.manifest_reason(record) is None
     assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
     a_link, arow = _core(record, run)
-    assert a_link is None and arow[0] == "arow" and arow[1].startswith(why), arow
+    refused = a_link if at == "a-link" else arow
+    assert (at == "a-link" or a_link is None) and refused[0] == at and refused[1].startswith(why), (a_link, arow)
 
 
 def test_input_ids_off_the_prompts_credit_nothing(tmp_path, monkeypatch):
@@ -408,6 +437,43 @@ def test_the_source_takes_every_linears_site_at_every_engine_step():
     assert G.negatives_of(list(model.model.layers)) == G.NEGATIVES
 
 
+class FusedEmbed(nn.Module):
+    """vLLM's DeepseekV32Model at TP1 (GLM-5.3's): its table whole on the rank, it gathers the embedding from its weight
+    (`fused_embed_norm`) and calls the embedding only for ``inputs_embeds``' runner path, never on its own."""
+
+    def __init__(self, replicated=True):
+        super().__init__()
+        self.embed_tokens, self.replicated_embed = nn.Module(), replicated
+
+    def forward(self, input_ids, positions, intermediate_tensors=None, inputs_embeds=None):
+        return positions
+
+
+def test_a_model_that_gathers_its_embedding_fused_gives_the_commit_its_ids_at_its_forward():
+    """r20261024-015257-abac: GLM-5.3 at TP1 never calls its embedding, so the committer's pre-hook on it acquired no
+    step's ids and ROOTS1 refused every round (``the Commit acquired no input ids at engine step 0``). `fused_embed`
+    acquires them at the model's forward under the embedding's name, outside a step and for ``inputs_embeds`` (whose
+    embedding call the committer's own pre-hook takes) nothing, and hooks nothing on a model that calls its embedding."""
+    model, com, tap = nn.Module(), Committer(), CT.CommitTap(EMBED)
+    model.model = FusedEmbed()
+    tap.tap(com)
+    h = HC.fused_embed(com, model, EMBED)
+    try:
+        model.model(torch.tensor([5, 6, 7]), torch.arange(3))
+        com._cur = SimpleNamespace(step=FIRST)
+        model.model(torch.tensor([5, 6, 7]), torch.arange(3))
+        model.model(input_ids=torch.tensor([8]), positions=torch.arange(1), inputs_embeds=torch.zeros(1, 4))
+        model.model(torch.tensor([9]), torch.arange(1), None, torch.zeros(1, 4))
+    finally:
+        h.remove()
+        tap.untap()
+    assert com.got == [(FIRST, f"{EMBED}/in")] and com.errors == []
+    assert tap._ids[FIRST].tolist() == [5, 6, 7]
+    plain = nn.Module()
+    plain.model = FusedEmbed(replicated=False)
+    assert HC.fused_embed(com, plain, EMBED) is None
+
+
 def test_the_gpu_harness_holds_each_window_to_cores_roots1_steps(tmp_path, monkeypatch):
     """`pouw_h1_gpu.core_verdict`, the GPU run's check of each Commit window under in-process coins: the honest window's
     record is one manifest under calls_root, its tables committed by their rounds (`credit._a_link`) and each the
@@ -425,3 +491,28 @@ def test_the_gpu_harness_holds_each_window_to_cores_roots1_steps(tmp_path, monke
         v = G.negative_verdict(got[name])
         assert v["refused"] and v["arow"][1].startswith("round 0's A table of K = 64 h1/a/64@0 is not the Commit's "), v
     assert G.core_from(str(tmp_path / "ev"), str(tmp_path / "out"))["ok"]
+
+
+def test_a_forward_out_of_module_order_ties_and_its_a_zero_is_refused_at_arow(tmp_path, monkeypatch):
+    """A forward that calls linear 1 before linear 0, as GLM-5.3's DSA attention runs fused_qkv_a_proj and q_b_proj before
+    its indexer's wq_b, which module order puts first (r20261023-224227-ea5a, refused on layout): each call sits at its
+    (step, linear) index, each round's root is over its step's calls, and step s maps to the Commit's engine step at its
+    first call, whichever linear that is. The two share K, so step s's A table of K is taken whole at linear 0's call,
+    the last to come, with its rows (and the Commit's) in call order, linear 0's first. Core ties the honest window, and
+    refuses its all-zero A at ``arow``."""
+    from tests.protocol_options import pouw_h1_gpu as G
+    got = {}
+    for name, edit in (("commit", None), ("commit-a-zero", _zero)):
+        (tmp_path / name).mkdir()
+        record, run, tap = _window(tmp_path / name, monkeypatch, edit, order=(1, 0))
+        assert [(c["index"], c["step"], c["layer"]) for c in record["calls"]] == [(0, 0, 0), (1, 0, 1), (2, 1, 0), (3, 1, 1)]
+        assert run.refused == [] and run.static() and run.order_ok
+        got[name] = {"core": G.core_tie(record, run.served.program, tmp_path / "ev" / name),
+                     "roots1": run.details["roots1"]}
+    for s in range(STEPS):
+        assert tap.where[CR.commit_rows(s, K)]["calls"] == [2 * s, 2 * s + 1]
+        assert tap.where[CR.commit_rows(s, K)]["sites"] == [CT.site(f"model.layers.{w}") for w in range(2)]
+    assert got["commit"]["roots1"]["tied"] and got["commit"]["roots1"]["steps"] == {"0": FIRST, "1": FIRST + 1}
+    assert got["commit"]["core"]["tied"] and got["commit"]["core"]["commit_values"] == 4
+    v = G.negative_verdict(got["commit-a-zero"])
+    assert v["refused"] and v["arow"][1].startswith("round 0's A table of K = 64 h1/a/64@0 is not the Commit's "), v

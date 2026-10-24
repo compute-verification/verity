@@ -194,6 +194,11 @@ GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 #: The owner's word that a pull request is ready at one head (`research queue ready`), which the queue's admission of a single PR
 #: asks for; a train member needs none, since the train's own check is the gate (Daniel, Q14, 6 Oct).
 READY = "ready"
+#: A reviewer's verdict on a pull request at one head (`research queue review`): `land` lands it with drive's `land = "review"`
+#: once every member below it has one, `hold` keeps it and everything above it on `next`; the owner's own doesn't count
+#: (Daniel, 24 Oct 06:05Z: PRs land on an eyeball review, and the full check runs after landing).
+REVIEWED = "reviewed"
+REVIEW_VERDICTS = ("land", "hold")
 #: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
 #: as. No merge needs a statement reviewer (Daniel, 8 Oct); the DM of a changed record is the check.
 LEAN_REVIEW = "lean_review"
@@ -348,6 +353,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
        "again; a train member needs none (Q14)"),
+    _k(REVIEWED, GROUP_VERIFICATION, ENUM, "a reviewer's verdict on pr:<n>@<head> (`research queue review`): land, or hold with the "
+       "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner (Daniel, 24 Oct)",
+       REVIEW_VERDICTS),
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
        "needs a statement reviewer (Daniel, 8 Oct)"),

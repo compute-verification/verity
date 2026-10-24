@@ -1209,10 +1209,14 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
   size: `Accounting.Guarantees.Remote.PooledDraw` states it, on a model of the draw (`Accounting.Remote.Draw`, each
   window's openings a uniform subset at its own size from a coin released after its roots), for windows the prover
-  sizes after the earlier windows' openings; that `pooled`'s greedy order reaches the bound's supremum is not in the
-  Lean. What this code supplies is the schedule (each window's challenge released
-  at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile a receipt under a
-  registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and the profile at δ.
+  sizes after the earlier windows' openings. `pooled` is computed in exact rationals in the verifier's Lean
+  (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
+  certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledDraw`
+  reads (the greedy by \(U_t/s_t\) is the fractional knapsack's optimum); the memory line reads that W from the
+  record's windows (`Properties.RemoteAudit.LineCoversSession`). What this code supplies is the schedule (each
+  window's challenge released at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile
+  a receipt under a registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and
+  the profile at δ.
   The chain's ordering is a random-oracle argument over a prover of bounded queries, which the statements must say.
 - **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/RemoteAudit/Store.lean`
   and held to the Python by a difftest (`lean/tests/test_binding.py`), refusals compared word for word: the pin from

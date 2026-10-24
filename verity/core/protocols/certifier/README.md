@@ -36,10 +36,24 @@ A spec-level reference for network accounting's timing channel:
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
-  canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits charged
-  to the earliest egress window that can show each record (`bits`);
+  canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits split by
+  the earliest egress window that can show each record (`bits`). v0 is the committed form; the charge is ENC-CODE's
+  compressed length of the advice;
+- advice v0's validity (`advice_check`): `AdviceCheck_v1{L}`, the compile unit's first part as a Boolean Definition, 1
+  exactly when the committed bits (at most L) decode to a v0 advice, up to the three refusals of `decode` it defers
+  (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`. From
+  `verity` it takes the circuits and their evaluator;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
+- the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
+  direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
+  bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
+  reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
+  `PROTOCOL.md`'s "The active warden" has its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
+- the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a cell,
+  padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer. The
+  registration is what a proof unit's `--registered` port reads, so the sender's unit opens a cell as its output and
+  the receiver's as its input (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a

@@ -37,7 +37,8 @@ def case(request):
     trace = D.load_trace(HERE / "fixtures" / f"{request.param}.json.gz")
     cfg = D.config_of(trace)
     adv, order = D.advice_of(trace)
-    return trace, cfg, adv, order, D.holdings_of(trace), D.residual(adv, cfg, order=order)
+    held = D.holdings_of(trace)
+    return trace, cfg, adv, order, held, D.residual(adv, cfg, held, order=order)
 
 
 def _with_outputs(held, t, ids):
@@ -53,17 +54,17 @@ def _refused(f, want) -> bool:
 
 
 def test_the_residual_rebuilds_v0(case) -> None:
-    _, cfg, adv, _, held, res = case
+    _, cfg, adv, order, held, res = case
     assert D.rebuild(res, cfg, held, ()) == adv
-    shaped = D.residual(adv, cfg, shaped=True)
+    shaped = D.residual(adv, cfg, held, order=order, shaped=True)
     assert shaped.release is None
     assert D.rebuild(shaped, cfg, held, adv.release) == adv
 
 
 def test_the_walk_samples_where_vllm_did(case) -> None:
-    trace, cfg, adv, _, _, res = case
+    trace, cfg, adv, _, held, res = case
     got, k = [], {}
-    for st in D.reconstruct(res, cfg).steps:
+    for st in D.reconstruct(res, cfg, held).steps:
         for r in st.rows:
             got.append(r.start + r.n >= adv.requests[r.request].prompt_len + k.get(r.request, 0))
             k[r.request] = k.get(r.request, 0) + got[-1]
@@ -71,8 +72,8 @@ def test_the_walk_samples_where_vllm_did(case) -> None:
 
 
 def test_rows_in_scheduling_order_need_no_n(case) -> None:
-    _, cfg, _, _, _, res = case
-    assert res.ns == () and D.reconstruct(res, cfg).explicit_n == ()
+    _, cfg, _, _, held, res = case
+    assert res.ns == () and D.reconstruct(res, cfg, held).explicit_n == ()
 
 
 def test_rows_out_of_order_send_n_and_rebuild(case) -> None:
@@ -90,10 +91,10 @@ def test_rows_out_of_order_send_n_and_rebuild(case) -> None:
     assert bound
     shuffled = I1.Advice(adv.requests, tuple(steps), adv.release)
     loose = dataclasses.replace(cfg, row_order="explicit")
-    res = D.residual(shuffled, loose)
-    assert 0 < len(res.ns) == len(D.reconstruct(res, loose).explicit_n) < sum(len(st.rows) for st in steps)
+    res = D.residual(shuffled, loose, held)
+    assert 0 < len(res.ns) == len(D.reconstruct(res, loose, held).explicit_n) < sum(len(st.rows) for st in steps)
     assert D.rebuild(res, loose, held, ()) == shuffled
-    assert _refused(lambda: D.rebuild(D.residual(shuffled, cfg), cfg, held, ()), shuffled)
+    assert _refused(lambda: D.rebuild(D.residual(shuffled, cfg, held), cfg, held, ()), shuffled)
 
 
 def _batch_order(adv, rng):
@@ -114,45 +115,56 @@ def test_rows_in_batch_order_take_vllms_scheduling_order_from_history(case) -> N
     `row_order` "batch", budget-bound steps and the resume included), so a batch order costs no n."""
     _, cfg, adv, _, held, _ = case
     batch = dataclasses.replace(cfg, row_order="batch")
-    assert D.rebuild(D.residual(adv, batch), batch, held, ()) == adv
+    assert D.rebuild(D.residual(adv, batch, held), batch, held, ()) == adv
     for seed in range(3):
         shuffled = _batch_order(adv, random.Random(seed))
         assert shuffled != adv
-        res = D.residual(shuffled, batch)
+        res = D.residual(shuffled, batch, held)
         assert res.ns == () and D.rebuild(res, batch, held, ()) == shuffled
 
 
-def _mid_block(adv, cfg):
+def _tokens(adv, held, order):
+    return D.tokens_of(held, order, [q.prompt_len for q in adv.requests])
+
+
+def _with_row(adv, s, k, row):
+    st = adv.steps[s]
+    return I1.Advice(adv.requests, adv.steps[:s] + (I1.StepAdvice(st.rows[:k] + (row,) + st.rows[k + 1:]),) + adv.steps[s + 1:],
+                     adv.release)
+
+
+def _mid_block(adv, fine, held, order):
     """`adv` with one hit moved half a block on, as a hybrid model's finer hash lets it end inside a block: an admitting
-    row that finishes its prompt in a step the budget doesn't bind, so only its start, n and last source change."""
-    half = cfg.block_size // 2
+    row whose next half block some request computed from the same tokens (a resumed one's own, say), so that only its
+    start, n and sources change and the walk at hit unit `fine.unit` gives it back."""
+    half, tokens = fine.unit, _tokens(adv, held, order)
     for s, st in enumerate(adv.steps):
-        if sum(r.n for r in st.rows) + half > cfg.max_num_batched_tokens:
-            continue
         for k, r in enumerate(st.rows):
-            if not r.cache_hit or r.start + r.n != adv.requests[r.request].prompt_len or r.n <= half + 1:
+            if not r.cache_hit or r.n <= half + 1:
                 continue
             src = r.sources[:-1] + (I1.Source(r.sources[-1].request, r.sources[-1].n + half),)
             row = dataclasses.replace(r, start=r.start + half, n=r.n - half, cache_hit=r.cache_hit + half, sources=src)
-            steps = adv.steps[:s] + (I1.StepAdvice(st.rows[:k] + (row,) + st.rows[k + 1:]),) + adv.steps[s + 1:]
             try:
-                return I1.Advice(adv.requests, steps, adv.release)
-            except I1.MalformedAdvice:
+                moved = D.canonical_sources(_with_row(adv, s, k, row), tokens, fine.unit)
+                D.residual(moved, fine, held, order=order)
+                return moved
+            except ValueError:
                 continue
     raise AssertionError("no hit to move")
 
 
 def test_a_hit_unit_finer_than_a_block_takes_hits_inside_one(case) -> None:
     """vLLM's hit lands on its hash_block_size: the block for one KV cache group, finer in a hybrid model (the tail
-    copied on write). The config's unit is public, so a hit inside a block costs a bit of width, not a refusal."""
-    _, cfg, adv, _, held, res = case
-    fine = dataclasses.replace(cfg, hit_unit=cfg.block_size // 2)
-    halves = D.residual(adv, fine)
-    assert halves.hits == tuple(2 * h for h in res.hits) and D.rebuild(halves, fine, held, ()) == adv
-    moved = _mid_block(adv, cfg)
+    copied on write). The config's unit is public, so a sent hit inside a block costs a bit of width, not a refusal."""
+    _, cfg, adv, order, held, _ = case
+    sent = dataclasses.replace(cfg, num_gpu_blocks=0)
+    fine = dataclasses.replace(sent, hit_unit=cfg.block_size // 2)
+    res, halves = D.residual(adv, sent, held, order=order), D.residual(adv, fine, held, order=order)
+    assert res.hits and halves.hits == tuple(2 * h for h in res.hits) and D.rebuild(halves, fine, held, ()) == adv
+    moved = _mid_block(adv, fine, held, order)
     with pytest.raises(ValueError, match="hit units"):
-        D.residual(moved, cfg)
-    assert D.rebuild(D.residual(moved, fine), fine, held, ()) == moved
+        D.residual(moved, sent, held, order=order)
+    assert D.rebuild(D.residual(moved, fine, held, order=order), fine, held, ()) == moved
 
 
 def test_a_resume_is_sent_and_checked(case) -> None:
@@ -201,14 +213,34 @@ def test_the_tie_refuses_witness_that_disagrees(case) -> None:
 
 
 def test_requests_out_of_ingress_order_send_it(case) -> None:
-    _, cfg, adv, order, held, _ = case
+    """The engine taking requests out of the certified admission order: the steps whose new requests the walk mispredicts
+    are sent, and nothing else."""
+    _, cfg, adv, order, held, res = case
+    assert res.order == ()
     perm = list(range(len(held.requests)))
     random.Random(3).shuffle(perm)
     moved = D.Holdings(tuple(held.requests[perm.index(t)] for t in range(len(perm))),
                        tuple(held.outputs[perm.index(t)] for t in range(len(perm))))
-    res = D.residual(adv, cfg, order=[perm[t] for t in order])
-    assert res.order is not None and D.rebuild(res, cfg, moved, ()) == adv
-    assert _refused(lambda: D.rebuild(dataclasses.replace(res, order=None), cfg, moved, ()), adv)
+    told = D.residual(adv, cfg, moved, order=[perm[t] for t in order])
+    assert told.order and D.rebuild(told, cfg, moved, ()) == adv
+    assert _refused(lambda: D.rebuild(dataclasses.replace(told, order=()), cfg, moved, ()), adv)
+    assert _refused(lambda: D.rebuild(dataclasses.replace(told, order=told.order[1:]), cfg, moved, ()), adv)
+
+
+def test_an_order_the_walk_predicts_or_cant_take_is_refused(case) -> None:
+    """A sent step whose new requests are the walk's prediction (a second string for the same advice), and one naming a
+    request already admitted, are refused."""
+    _, cfg, adv, order, held, res = case
+    seen: set[int] = set()
+    for s, st in enumerate(adv.steps):
+        new = [r.request for r in st.rows if r.request not in seen]
+        seen |= {r.request for r in st.rows}
+        if s and new:
+            break
+    with pytest.raises(ValueError, match="order entry"):
+        D.reconstruct(dataclasses.replace(res, order=((s, tuple(order[i] for i in new)),)), cfg, held)
+    with pytest.raises(ValueError, match="not yet admitted"):
+        D.reconstruct(dataclasses.replace(res, order=((s, (order[0],) + tuple(order[i] for i in new[1:])),)), cfg, held)
 
 
 def test_a_flipped_lag_bit_is_refused(case) -> None:
@@ -216,7 +248,7 @@ def test_a_flipped_lag_bit_is_refused(case) -> None:
     if cfg.scheduler != "async":
         assert res.lag is None
         return
-    walk = D.reconstruct(res, cfg)
+    walk = D.reconstruct(res, cfg, held)
     assert any(res.lag) and not all(res.lag)
     some = [j for lag in (True, False) for j in [j for j, x in enumerate(res.lag) if x == lag][:6]]
     for j, i in ((j, walk.lag_requests[j]) for j in some):
@@ -228,10 +260,102 @@ def test_a_flipped_lag_bit_is_refused(case) -> None:
 
 
 def test_a_residual_with_values_left_over_or_missing_is_refused(case) -> None:
-    _, cfg, _, _, _, res = case
-    for bad in (dict(hits=res.hits + (0,)), dict(hits=res.hits[:-1]), dict(sources=res.sources[:-1]), dict(ns=(4,))):
+    _, cfg, _, _, held, res = case
+    assert res.hits
+    for bad in (dict(hits=res.hits + (0,)), dict(hits=res.hits[:-1]), dict(ns=(4,))):
         with pytest.raises(ValueError):
-            D.reconstruct(dataclasses.replace(res, **bad), cfg)
+            D.reconstruct(dataclasses.replace(res, **bad), cfg, held)
+
+
+def _admitting(adv):
+    """(step, row) of each admitting row: a request's first, or a resumed one."""
+    seen, out = set(), []
+    for s, st in enumerate(adv.steps):
+        for k, r in enumerate(st.rows):
+            if r.request not in seen or r.preempted:
+                out.append((s, k))
+            seen.add(r.request)
+    return out
+
+
+def _derived_hits(adv, cfg, held, order):
+    """The admitting rows whose hit the walk derives, those before the no-eviction bound fails."""
+    res = D.residual(adv, cfg, held, order=order)
+    sent = len(D.reconstruct(res, cfg, held).sent_hits)
+    rows = _admitting(adv)
+    return rows[:len(rows) - sent] if cfg.scheduler == "sync" else []
+
+
+def _evicted(adv, cfg, tokens):
+    """The steps of the admitting rows, in scheduling order, whose hit is shorter than the longest prefix rows before
+    them computed: where vLLM had evicted."""
+    p, seen, samples, out = D.Prefixes(tokens, cfg.unit), set(), {}, []
+    for s, st in enumerate(adv.steps):
+        for r in st.rows:
+            K = adv.requests[r.request].prompt_len + samples.get(r.request, 0)
+            if (r.request not in seen or r.preempted) and r.cache_hit < p.cached(r.request, K):
+                out.append(s)
+            seen.add(r.request)
+            p.add(r.request, r.start, r.start + r.n)
+            samples[r.request] = samples.get(r.request, 0) + (r.start + r.n >= K)
+    return out
+
+
+def test_a_hit_is_the_longest_cached_prefix_while_nothing_can_be_evicted(case) -> None:
+    """While the unshared blocks of every request admitted so far fit the pool, vLLM has evicted nothing, so a hit is
+    the longest prefix rows scheduled before it computed: derived, 0 bits. A shorter one (its start and n moved to match)
+    is refused. The bound is what makes that sound: vLLM does evict here, and every hit eviction shortened is past it."""
+    _, cfg, adv, order, held, res = case
+    if cfg.scheduler != "sync":
+        assert len(res.hits) == len(_admitting(adv))
+        return
+    derived = _derived_hits(adv, cfg, held, order)
+    assert 0 < len(derived) and len(res.hits) == len(_admitting(adv)) - len(derived)
+    evicted = _evicted(adv, cfg, _tokens(adv, held, order))
+    assert evicted and min(evicted) > derived[-1][0]
+    short = 0
+    for s, k in derived:
+        r = adv.steps[s].rows[k]
+        if not r.cache_hit or sum(x.n for x in adv.steps[s].rows) + cfg.unit > cfg.max_num_batched_tokens:
+            continue
+        row = dataclasses.replace(r, start=r.start - cfg.unit, n=r.n + cfg.unit, cache_hit=r.cache_hit - cfg.unit,
+                                  sources=r.sources[:-1] + ((I1.Source(r.sources[-1].request, r.sources[-1].n - cfg.unit),)
+                                                            if r.sources[-1].n > cfg.unit else ()))
+        with pytest.raises(ValueError, match="longest cached"):
+            D.residual(_with_row(adv, s, k, row), cfg, held, order=order)
+        short += 1
+    assert short
+
+
+def _not_earliest(adv, tokens):
+    """`adv` with one hit's first source run named for a later request that also computed KV there by that step from
+    the same tokens (one I1 accepts), or None."""
+    for s, st in enumerate(adv.steps):
+        for k, r in enumerate(st.rows):
+            if not r.cache_hit:
+                continue
+            a, n = r.sources[0].request, r.sources[0].n
+            for b in range(a + 1, len(adv.requests)):
+                if b == r.request or tokens[b][:n] != tokens[r.request][:n]:
+                    continue
+                try:
+                    return _with_row(adv, s, k, dataclasses.replace(r, sources=(I1.Source(b, n),) + r.sources[1:]))
+                except I1.MalformedAdvice:
+                    continue
+    return None
+
+
+def test_a_source_is_the_earliest_admitted_request(case) -> None:
+    """A hit's KV comes from the earliest-admitted request that computed it from the same tokens: canonical, 0 bits, and
+    any other request I1 would accept is refused."""
+    _, cfg, adv, order, held, res = case
+    tokens = _tokens(adv, held, order)
+    assert D.canonical_sources(adv, tokens, cfg.unit) == adv
+    bad = _not_earliest(adv, tokens)
+    assert bad is not None
+    with pytest.raises(ValueError, match="sources"):
+        D.residual(bad, cfg, held, order=order)
+    assert D.rebuild(res, cfg, held, ()) != bad
 
 
 CORPUS = HERE / "fixtures" / "corpus-smallkv"
@@ -259,31 +383,46 @@ def test_a_trace_corpus_trace_rebuilds_from_the_runners_batch_order(tmp_path) ->
     runner does; `server.log` is vLLM's capacity line for those 100 blocks. Decodes first is vLLM's scheduling order here
     (a request mid-prefill is the running list's newest), so the batches are also rotated, last row first where no two
     requests are new: from either order the walk derives every n, budget-bound steps and resumes included, at the bits it
-    costs from vLLM's scheduling order."""
+    costs from vLLM's scheduling order. V2 itself sorts the step by scheduled tokens, stably (`_v2`), which the walk
+    predicts; the fixture's decodes-first batch puts some steps' new requests in arrival order instead, and those steps'
+    order is sent."""
     def rotate(s):
         if s.get("batch") and sum(not r["resumed"] for r in s["new"]) <= 1:
             s["batch"] = s["batch"][-1:] + s["batch"][:-1]
 
-    sched, batch, rotated = _corpus(row_order="scheduling"), _corpus(), _corpus_with(tmp_path, rotate)
+    sched, batch = _corpus(row_order="scheduling"), _corpus()
+    v2, rotated = _corpus_with(tmp_path, _v2), _corpus_with(tmp_path, lambda s: (_v2(s), rotate(s)))
     assert sched["config"]["num_gpu_blocks"] == 100
     budget = sched["config"]["max_num_batched_tokens"]
     assert sum([r["request"] for r in a["rows"]] != [r["request"] for r in b["rows"]] and sum(r["n"] for r in a["rows"]) == budget
                for a, b in zip(sched["steps"], rotated["steps"])) > 10
-    tables = [D.bits_table(t, T=600) for t in (sched, batch, rotated)]
-
-    def unchunked(t):
-        return {f: b for f, b in t["by_field"]["derived"].items() if f != "chunk"}
-
-    assert tables[0]["by_field"]["derived"].get("chunk", 0) == 0
+    tables = [D.bits_table(t, T=600) for t in (sched, v2, rotated, batch)]
     for t in tables:
-        assert t["explicit_n"] == 0 and not t["order_sent"] and t["resumed_rows"] > 0 and t["sources"] > 0
-        assert t["totals"]["v0_bits"] == tables[0]["totals"]["v0_bits"] and unchunked(t) == unchunked(tables[0])
+        assert t["explicit_n"] == 0 and t["resumed_rows"] > 0 and t["sources"] > 0
+        assert 0 < t["hits_derived"] and 0 < t["hits_sent"]
+        assert t["totals"]["v0_bits"] == tables[0]["totals"]["v0_bits"]
+    for t in tables[:3]:
+        assert t["order_sent"] == 0 and t["by_field"] == tables[0]["by_field"]
+    told = tables[3]["by_field"]["derived"]
+    assert 0 < tables[3]["order_sent"] < tables[3]["new_steps"] and told["order"] > 0
+    assert {f: b for f, b in told.items() if f not in ("order", "header")} == \
+        {f: b for f, b in tables[0]["by_field"]["derived"].items() if f != "header"}
 
 
-def test_prefills_by_size_name_the_row_vllm_cut_short(tmp_path) -> None:
+def _v2(s):
+    """Model Runner V2's batch: the step's requests in scheduling order, sorted stably by scheduled tokens."""
+    if s.get("batch"):
+        sched = ([r for r in s["cached"] if not r["resumed"]] + [r for r in s["cached"] + s["new"] if r["resumed"]]
+                 + [r for r in s["new"] if not r["resumed"]])
+        s["batch"] = [r["id"] for r in sorted((r for r in sched if r["id"] in set(s["batch"])),
+                                              key=lambda r: r["num_scheduled_tokens"])]
+
+
+def test_prefills_by_size_take_the_budget_in_arrival_order(tmp_path) -> None:
     """Model Runner V2's batch on the GPU (TRACE-CORPUS's smoke, r20261024-045656-4c66): decodes first, then the prefill
-    rows by size, so a step's new requests leave arrival order and the one vLLM chunked, the last admitted, needn't be
-    last. The residual names it where two or more new rows overrun the budget; any other name is refused."""
+    rows by size, so a step's new requests leave arrival order. vLLM admits them in arrival order, the certified ingress
+    order, so the walk takes them so, only the last arrival is cut short, and their I1 numbers follow from their n, at no
+    cost. A trace whose new requests of a step arrived the other way round is refused."""
     def by_size(s):
         if s.get("batch"):
             rows = {r["id"]: r for r in s["new"] + s["cached"]}
@@ -291,15 +430,22 @@ def test_prefills_by_size_name_the_row_vllm_cut_short(tmp_path) -> None:
 
     trace = _corpus_with(tmp_path, by_size)
     t = D.bits_table(trace, T=600)
-    assert t["explicit_n"] == 0 and t["by_field"]["derived"].get("chunk", 0) > 0
+    assert t["explicit_n"] == 0 and t["order_sent"] == 0 and "order" not in t["by_field"]["derived"]
     cfg, held = D.config_of(trace), D.holdings_of(trace)
     adv, order = D.advice_of(trace)
-    res = D.residual(adv, cfg, order=order)
-    walk = D.reconstruct(res, cfg)
-    for j, (s, m) in enumerate(walk.chunked[:8]):
-        for other in {(res.chunks[j] + 1) % m, m}:
-            bad = dataclasses.replace(res, chunks=res.chunks[:j] + (other,) + res.chunks[j + 1:])
-            assert _refused(lambda: D.rebuild(bad, cfg, held, ()), adv)
+    cut = []
+    for s, st in enumerate(adv.steps):
+        new = [r for r in st.rows if r.request not in {x.request for y in adv.steps[:s] for x in y.rows}]
+        short = [r for r in new if r.start + r.n < adv.requests[r.request].prompt_len]
+        if short and new[-1] is not short[0]:
+            cut.append((s, short[0].request, [r.request for r in new if r is not short[0]]))
+    assert cut
+    s, c, others = cut[0]
+    swap = {order[c]: order[others[0]], order[others[0]]: order[c]}
+    moved = D.Holdings(tuple(held.requests[swap.get(t, t)] for t in range(len(order))),
+                       tuple(held.outputs[swap.get(t, t)] for t in range(len(order))))
+    with pytest.raises(ValueError, match="budget left"):
+        D.residual(adv, cfg, moved, order=[swap.get(t, t) for t in order])
 
 
 def test_a_trace_corpus_trace_off_the_config_is_refused() -> None:
