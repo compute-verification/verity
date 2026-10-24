@@ -31,6 +31,21 @@ def is_sampling_event(spec: str) -> bool:
     return family_of(spec) in SAMPLING_EVENT_FAMILIES
 
 
+#: the token id's width in the circuit: a select's output and an ingress parse's ids are 32-bit words.  vLLM serves and commits int64
+#: ids, each of which must be that word zero-extended.
+TOKEN_ID_BITS = 32
+
+
+def circuit_token_id(served: int) -> int:
+    """The circuit's token id that a served or committed id (vLLM's int64, read signed or unsigned) is: the same number, a 32-bit word
+    zero-extended.  An id with a nonzero high word, negative or 2^32 and up, is no id the circuit outputs: ValueError by name."""
+    v = int(served)
+    if not 0 <= v < 1 << TOKEN_ID_BITS:
+        raise ValueError(f"token id {v} has a nonzero high word: the circuit's id is a {TOKEN_ID_BITS}-bit word, and the served int64 "
+                         f"must be it zero-extended")
+    return v
+
+
 #: the `TargetProfile.sampler_construction` a stochastic select family is bound under (`registry.sampling_vocab.select_for`): a shared-greedy
 #: restatement is `shared-greedy`; a plain select, and the one specialised on a constant split count, which has no shared-greedy form, are
 #: `greedy-check-per-stage` (tests/check/test_fold_sampler_construction.py pins this against the registry)
@@ -65,5 +80,5 @@ def program_sampler_construction(program_dirs) -> str | None:
         raise SystemExit(f"{list(program_dirs)}: {e}") from None
 
 
-__all__ = ["GREEDY_SELECTS", "SAMPLING_EVENT_FAMILIES", "family_of", "is_sampling_event", "CONSTRUCTION_OF", "sampler_construction_of",
-           "program_sampler_construction"]
+__all__ = ["GREEDY_SELECTS", "SAMPLING_EVENT_FAMILIES", "TOKEN_ID_BITS", "circuit_token_id", "family_of", "is_sampling_event",
+           "CONSTRUCTION_OF", "sampler_construction_of", "program_sampler_construction"]
