@@ -4,11 +4,11 @@ coders (`code.py`, `code_v1`), over what v1 actually codes.
 Every stream is `code_v1`'s: a list of windows, each one `code.py` `ArithEncoder` segment with the symbols it took,
 tagged `[1, bit, f0, f1]` for a bit `code_v1.Encoder.bit` coded at its KT estimate and `[0, cum, freq, total]` for an
 integer's symbols, code.py's state after each (low, high, pending, used) and the segment. With it come each bit's (name,
-context, bit) from the book's priors (`kt`), the header (`NB` its width, 0 for none, and `pool`) and each window's charge
-(`charge`). Two sources:
-- `decisions(trace, stops, T=)`: advice v1's windows (`v1.residual`: the replay's decisions and the hits sent past the
-  pool bound) under a book fit to them at v1's registered caps (`v1.TABLE_CAPS`; a skewed book: the difftest is the
-  coder's, not the book's), with v1's header and charges (`v1._string`). It checks that they are `v1.encode`'s string;
+context, bit) from the book's priors (`kt`) and each window's charge (`charge`). Two sources:
+- `decisions(trace, stops, T=)`: advice v1's windows (`v1.residual`: the replay's decisions, the arrival order's
+  deviations and the hits sent past the pool bound) under a book fit to them at v1's registered caps (`v1.TABLE_CAPS`; a
+  skewed book: the difftest is the coder's, not the book's), with v1's charges (`v1._string`). It checks that they are
+  `v1.encode`'s string;
 - `fields(trace)`: ENC-DERIVED's still-sent fields (`derived.residual`: the hits past the pool bound, the resumes, the
   order misses and async's lag bits), each field cut into windows of 64 values, under a book fit to them.
 
@@ -16,7 +16,7 @@ context, bit) from the book's priors (`kt`), the header (`NB` its width, 0 for n
 
 checks `arith_encode`'s references against code.py on every stream (`check`), and with `--circuit` the Definitions too:
 the bit-checking step along each segment, the counting step's tally (each window's count is its segment's length, and
-with the header in window 0 its charge is v1's), and the book's model (`BookKT_v1`) at each bit. `--steps` takes the
+its finish gives v1's charge), and the book's model (`BookKT_v1`) at each bit. `--steps` takes the
 replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows) and the TRACE-CORPUS fixture's
 fields, and `--fixture PATH` writes them as the vectors the certifier's test reads
 (`verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are TRACE-CORPUS traces
@@ -102,7 +102,7 @@ def _bits(b: Sequence[int]) -> str:
 
 
 def _stream(wins: Sequence[Any], book: Any) -> dict[str, Any]:
-    """`code_v1`'s stream for `wins` under `book` (the module's docstring), with no header."""
+    """`code_v1`'s stream for `wins` under `book` (the module's docstring)."""
     with _coded() as (logs, kt):
         enc = CV.encode(wins, book)
     if CV.decode(enc.bits, enc.nbits, book, len(wins)) != list(wins):
@@ -112,7 +112,7 @@ def _stream(wins: Sequence[Any], book: Any) -> dict[str, Any]:
         windows.append({"symbols": lg["symbols"], "states": lg["states"], "segment": _bits(bits[at:at + ln])})
         at += ln
     priors = {name: [list(book.priors.get(CV._key(name, c), (0, 0))) for c in ctxs] for name, ctxs in CV.BITS.items()}
-    return {"priors": priors, "kt": kt, "NB": 0, "pool": 0, "charge": list(enc.lens), "windows": windows}
+    return {"priors": priors, "kt": kt, "charge": list(enc.lens), "windows": windows}
 
 
 def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "batch") -> dict[str, Any]:
@@ -122,12 +122,12 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
     reg = V.Registered(trace.engine, tuple(stops), T=T, row_order=row_order)
     wins = V.residual(adv, rec, reg)
     reg = dataclasses.replace(reg, book=CV.fit_book([wins], V.TABLE_CAPS))
-    blocks = None if reg.pinned else reg.engine.num_gpu_blocks
-    bits, charge = V._string(blocks, wins, reg)
+    bits, charge = V._string(wins, reg)
     if CV.pack(bits)[0] != V.encode(adv, rec, reg, check=False):
         raise AssertionError("the windows aren't v1.encode's")
     s = _stream(wins, reg.book)
-    s.update(NB=0 if blocks is None else reg.max_gpu_blocks.bit_length(), pool=blocks or 0, charge=charge)
+    if s["charge"] != charge:
+        raise AssertionError("the charges aren't v1's")
     return s
 
 
@@ -162,11 +162,6 @@ def general(sym: Sequence[int]) -> list[int]:
     return list(sym[1:])
 
 
-def header(stream: dict, w: int) -> tuple[int, int]:
-    """(NB, pool) of window w's counting finish: the header's in window 0."""
-    return (stream["NB"], stream["pool"]) if w == 0 and stream["NB"] else (0, 0)
-
-
 def _chunks(xs: Sequence, n: int = 4096) -> Iterator[Sequence]:
     for at in range(0, len(xs), n):
         yield xs[at:at + n]
@@ -176,8 +171,8 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
     """The references against code.py on the stream: after each symbol low and high are code.py's, a run is open
     exactly when code.py has pending bits, `used` is code.py's, and the window's finish ends its segment; a sample of
     single-bit flips, a trailing bit and a dropped bit are refused (`check_window`). The counting step's tally after each
-    symbol is code.py's interval and the bits consumed, and each window's counting finish gives v1's charge (the header's
-    in window 0) and refuses one bit less. The book's model gives each bit's estimate, and each decision's context is
+    symbol is code.py's interval and the bits consumed, and each window's counting finish gives v1's charge and refuses
+    one bit less. The book's model gives each bit's estimate, and each decision's context is
     min(run, 2) of the decisions before it. With `circuit`, the Definitions against the references on every step and
     finish (on a flipped lookahead and a disabled step at each symbol too) and every bit's model."""
     AE = _ae()
@@ -186,7 +181,7 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
     n_bits, scal = [], {0: [0], 1: [0]}
     steps: dict[int, list] = {0: [], 1: []}
     counts: dict[int, list] = {0: [], 1: []}
-    fins, cfins = [], {}
+    fins, cfins = [], []
     for w, win in enumerate(stream["windows"]):
         seg = [int(c) for c in win["segment"]]
         st, t, pos = AE.fresh(), AE.Tally(), 0
@@ -213,12 +208,10 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
             cuts.append(seg[:k] + [1 - seg[k]] + seg[k + 1:])
         if any(AE.check_window(K, 0, [general(s) for s in win["symbols"]], c) for c in cuts):
             bad.append(f"window {w}: a flipped or cut segment accepted")
-        nb, pool = header(stream, w)
         c = stream["charge"][w]
-        if AE.reference_count_finish(AE.CW, t, c, nb, pool) != (1, c) or (c and AE.reference_count_finish(
-                AE.CW, t, c - 1, nb, pool)[0]):
+        if AE.reference_count_finish(AE.CW, t, c) != (1, c) or (c and AE.reference_count_finish(AE.CW, t, c - 1)[0]):
             bad.append(f"window {w}: the counted charge isn't v1's {c}")
-        cfins.setdefault(nb, []).extend((t, x, pool) for x in (c, max(c - 1, 0)))
+        cfins.extend((t, x) for x in (c, max(c - 1, 0)))
         n_bits.append(len(seg))
     tables = {name: [tuple(p) for p in ps] for name, ps in stream["priors"].items()}
     freqs = [tuple(s[2:]) for win in stream["windows"] for s in win["symbols"] if s[0]]
@@ -237,8 +230,7 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
         "bit_symbols": len(freqs), "max_symbols": max((len(w["symbols"]) for w in stream["windows"]), default=0),
         "bits": sum(n_bits), "max_bits": max(n_bits, default=0), "max_scalings_bit": max(scal[1]),
         "max_scalings_int": max(scal[0]), "charged": sum(stream["charge"]),
-        "header": AE.gamma_len(stream["pool"]) if stream["NB"] else 0, "reference_mismatches": len(bad),
-        "reference_first": bad[:5], "kt_mismatches": kbad, "context_mismatches": cbad_ctx}
+        "reference_mismatches": len(bad), "reference_first": bad[:5], "kt_mismatches": kbad, "context_mismatches": cbad_ctx}
     if circuit:
         cbad, n_cases = 0, 0
         for BIN in (0, 1):
@@ -260,15 +252,14 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
             n_cases += len(cases) + len(ccases)
         got = AE.evaluate_finishes([(st, tail) for st, tail, _ in fins]) if fins else []
         cbad += sum(g != w_ for g, (_s, _t, w_) in zip(got, fins))
-        for nb, cs in cfins.items():
-            got = AE.evaluate_count_finishes(AE.CW, [(t, c, p) if nb else (t, c) for t, c, p in cs], nb)
-            cbad += sum(g != AE.reference_count_finish(AE.CW, t, c, nb, p) for g, (t, c, p) in zip(got, cs))
+        got = AE.evaluate_count_finishes(AE.CW, cfins) if cfins else []
+        cbad += sum(g != AE.reference_count_finish(AE.CW, t, c) for g, (t, c) in zip(got, cfins))
         for nc, cs in kt_cases.items():
             for chunk in _chunks(cs):
                 for g, c_ in zip(AE.evaluate_book_kt(nc, chunk), chunk):
                     w_ = AE.reference_book_kt(nc, *c_)
                     cbad += (g[0] != 0) if w_[0] == 0 else g != w_
-        out.update(circuit_cases=n_cases + len(fins) + sum(map(len, cfins.values())) + sum(map(len, kt_cases.values())),
+        out.update(circuit_cases=n_cases + len(fins) + len(cfins) + sum(map(len, kt_cases.values())),
                    circuit_mismatches=cbad)
     return out
 

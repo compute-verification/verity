@@ -1,9 +1,9 @@
 """arith_encode: advice v1's arithmetic encoder as Boolean Definitions, held to ENC-CODE's coders (`code.py`, `code_v1`)
 on what v1 actually codes (the fixture's streams, as `benchmarks/network_e2e/encodings/arith_vectors.py --steps` cut
-them: advice v1's windows, the replay's decisions and the hits sent past the pool bound, on ENC-REPLAY's step traces
-with v1's header and charges, and ENC-DERIVED's still-sent fields on the TRACE-CORPUS fixture, each symbol tagged a
-bit or an integer's, with code.py's state after every symbol and its segment), to the references on random runs, and
-refusing every other segment and every symbol code.py refuses."""
+them: advice v1's windows, the replay's decisions, the arrival order's deviations and the hits sent past the pool
+bound, on ENC-REPLAY's step traces with v1's charges, and ENC-DERIVED's still-sent fields on the TRACE-CORPUS
+fixture, each symbol tagged a bit or an integer's, with code.py's state after every symbol and its segment), to the
+references on random runs, and refusing every other segment and every symbol code.py refuses."""
 from __future__ import annotations
 
 import json
@@ -39,10 +39,6 @@ def _general(sym):
         _, b, f0, f1 = sym
         return [f0 if b else 0, f1 if b else f0, f0 + f1]
     return list(sym[1:])
-
-
-def _header(stream, w):
-    return (stream["NB"], stream["pool"]) if w == 0 and stream["NB"] else (0, 0)
 
 
 def _runs(stream):
@@ -310,39 +306,34 @@ def _tallies(stream):
 
 def test_the_count_is_code_pys_segment_length():
     """On every fixture window the counting reference keeps code.py's interval and `used` after each symbol, its count
-    is the segment code.py wrote, and its finish gives v1's charge, the header's Elias-gamma in window 0: accepted at that
-    charge, refused one bit below it."""
-    seen = headers = 0
+    is the segment code.py wrote, and its finish gives v1's charge: accepted at that charge, refused one bit below it."""
+    seen = 0
     for stream in _streams():
         for w, (win, run, st) in enumerate(_tallies(stream)):
             after = [s for _b, s, _sym in run[1:]] + [st]
             for k, (s, (low, high, _pending, used)) in enumerate(zip(after, win["states"], strict=True)):
                 assert (s.ok, s.low, s.high, s.used) == (1, low, high, used), f"{stream['source']} symbol {k}"
             n, c = len(win["segment"]), stream["charge"][w]
-            nb, pool = _header(stream, w)
-            assert st.bits + 2 * st.used == n and c == n + (AE.gamma_len(pool) if nb else 0)
-            assert AE.reference_count_finish(AE.CW, st, c, nb, pool) == (1, c)
+            assert st.bits + 2 * st.used == n == c
+            assert AE.reference_count_finish(AE.CW, st, c) == (1, c)
             if c:
-                assert AE.reference_count_finish(AE.CW, st, c - 1, nb, pool)[0] == 0
-            seen, headers = seen + 1, headers + bool(nb)
-    assert seen >= 16 and headers >= 4
+                assert AE.reference_count_finish(AE.CW, st, c - 1)[0] == 0
+            seen += 1
+    assert seen >= 16
 
 
 def test_the_counting_circuits_are_the_references():
-    """On the fixture's symbols and on random runs, each with its step disabled too, and each window's finish, the
-    header's in window 0, at its charge and one bit below it."""
+    """On the fixture's symbols and on random runs, each with its step disabled too, and each window's finish at its
+    charge and one bit below it."""
     rng = random.Random(2)
-    fixture = {0: [], 1: []}
+    fixture, ends = {0: [], 1: []}, []
     for stream in _streams():
-        heads = []
         for w, (_win, run, st) in enumerate(_tallies(stream)):
             for BIN, s, sym in run:
                 fixture[BIN] += [(s, 1, sym), (s, 0, sym)]
-            nb, pool = _header(stream, w)
             c = stream["charge"][w]
-            (heads if nb else []).extend([(st, c, pool), (st, max(c - 1, 0), pool)])
-        if heads:
-            _same_count_finishes(AE.CW, heads, stream["NB"])
+            ends += [(st, c), (st, max(c - 1, 0))]
+    _same_count_finishes(AE.CW, ends)
     for BIN in (1, 0):
         cases, fins = list(fixture[BIN]), []
         runs = [[_symbol(rng, BIN) for _ in range(rng.randrange(1, 30))] for _ in range(60)]
@@ -383,8 +374,8 @@ def test_counting_refusals():
     used, full = AE.Tally(used=1, bits=13), AE.Tally(used=1, bits=14)
     got = _same_count_finishes(4, [(st, 0), (used, 15), (used, 14), (full, 15)])
     assert got[:2] == [(1, 0), (1, 15)] and [g[0] for g in got[2:]] == [0, 0]
-    # the header: Elias-gamma of the pool (1, 3 and 5 bits for pools 1, 2–3 and 4–7), a pool of 0 refused, and the
-    # header held to c with the segment
+    # NB ≥ 1, a pool header advice v1 no longer sends: Elias-gamma of the pool (1, 3 and 5 bits for pools 1, 2–3 and
+    # 4–7), a pool of 0 refused, and the header held to c with the segment
     got = _same_count_finishes(AE.CW, [(st, 1, 1), (st, 3, 3), (used, 20, 7), (used, 19, 7), (st, 9, 0)], NB=3)
     assert got[:3] == [(1, 1), (1, 3), (1, 20)] and [g[0] for g in got[3:]] == [0, 0]
     assert _same_count_finishes(5, [(AE.Tally(bits=29), 31, 2)], NB=2)[0][0] == 0

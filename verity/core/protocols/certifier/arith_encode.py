@@ -14,26 +14,25 @@ counting the bits it would write, which is what the composition charges, or chec
 Under advice v1 (the certifier PROTOCOL's "Advice v1") each certifier window is one terminated segment of ENC-CODE's
 32-bit Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`, `ArithEncoder`), as `code_v1`
 codes it: the window's counts, then its values (the replay's decisions, each a bit at the registered book's KT estimate
-for its context, and the hits sent past the pool bound, integers). The compile unit runs the encoder forward, since
-which value is read next, and so its window, is the replay's position.
+for its context, and the arrival order's deviations and the hits sent past the pool bound, integers). The compile unit
+runs the encoder forward, since which value is read next, and so its window, is the replay's position.
 
 **The counting variant** is what the PROTOCOL composes. The committed advice is the values themselves, which the
 replay scan reads, and the charge is their coded length: the encoder runs over the same symbols and counts the
 segment bits it would write, and the window's finish refuses unless the count is at most the declared charge c. A
 segment is `shifts + 2` bits, or none when nothing was used (code.py's `ArithEncoder`): each scaling puts one bit in it
 (a resolved bit, or a pending one the next resolution or the finish writes), and the finish two more. So the step adds
-its scalings to `bits`, and the finish adds 2 when `used`, then outputs ok (`ok` and bits ≤ c) and bits. With NB ≥ 1
-the finish also adds the header advice v1 charges to window 0, Elias-gamma of the pool it sends (`pool`, 1 ≤ pool <
-2^NB): 2·bitlen(pool) − 1, from the suffix ORs of pool's bits, a thermometer whose top is bitlen(pool). Within one
-symbol code.py's loop takes p resolutions (E1, E2: low and high agree on their top bit) and then u underflows (E3:
-low's top two bits 01 and high's 10), and never a resolution after an underflow, which leaves low's top bit 0 and
-high's 1. In
-bit positions from the top, p is the first index where low and high differ, and u the run after it where low is 1 and
-high 0. So the step takes n = p + u from a thermometer over the top K + 2 positions (three ANDs a position), refuses
-n > K, and gets the next interval by one shift: low becomes 0 followed by low's low 31 bits shifted up by n, with 0s
-in, and high 1 followed by its shifted up with 1s in, a log shifter of bitlen(K) levels. It has no per-scaling slots,
-which the segment check needs. The count is CW bits (`CW` = 20, a window's charge below 2^20), and a count past it is
-refused.
+its scalings to `bits`, and the finish adds 2 when `used`, then outputs ok (`ok` and bits ≤ c) and bits. Advice v1
+takes NB = 0: its KV pool is registered, not sent. With NB ≥ 1 the finish also adds an Elias-gamma header of `pool`
+(1 ≤ pool < 2^NB), the pool header v1 sent before: 2·bitlen(pool) − 1, from the suffix ORs of pool's bits, a
+thermometer whose top is bitlen(pool). Within one symbol code.py's loop takes p resolutions (E1, E2: low and high agree
+on their top bit) and then u underflows (E3: low's top two bits 01 and high's 10), and never a resolution after an
+underflow, which leaves low's top bit 0 and high's 1. In bit positions from the top, p is the first index where low and
+high differ, and u the run after it where low is 1 and high 0. So the step takes n = p + u from a thermometer over the
+top K + 2 positions (three ANDs a position), refuses n > K, and gets the next interval by one shift: low becomes 0
+followed by low's low 31 bits shifted up by n, with 0s in, and high 1 followed by its shifted up with 1s in, a log
+shifter of bitlen(K) levels. It has no per-scaling slots, which the segment check needs. The count is CW bits (`CW` =
+20, a window's charge below 2^20), and a count past it is refused.
 
 **What the circuit computes, never witness.** A decision's context is the replay's position (under `code_v1`
 min(run, 2), with run the decisions since the last arrival), carried in the circuit. Its (f0, f1) are the model's, from
@@ -100,8 +99,8 @@ where code.py's loop is the one above.
 
 **Cost** (`size`, ANDs): ArithCountStep_v1{K=18, BIN=1, CW=20} is 2,243: the interval (one 33 × 16-bit product, one
 non-restoring division with 32 quotient bits, and the two ends) 1,855, the scalings at once 366 and the count 22.
-{K=18, BIN=0, CW=20} is 3,963. ArithCountFinish_v1{CW=20, NB=0} is 41, and {CW=20, NB=21} (v1's largest pool, 2^20
-blocks) 67. BookKT_v1{C=3} is 337 and {C=1} 210. One decision, counted, is the step and the book's model: 2,580 ANDs,
+{K=18, BIN=0, CW=20} is 3,963. ArithCountFinish_v1{CW=20, NB=0}, advice v1's, is 41, and {CW=20, NB=21} (a pool
+header to 2^20 blocks) 67. BookKT_v1{C=3} is 337 and {C=1} 210. One decision, counted, is the step and the book's model: 2,580 ANDs,
 and the context counter's few. ArithEncodeStep_v1{K=18, BIN=1} is 3,244: the interval 1,855, the 18 scaling slots 1,188
 and the segment check 201. {K=18, BIN=0} is 4,964, and ArithEncodeFinish_v1 6. KTContext_v1{C=3, NW=24} is 1,202.
 """
@@ -290,7 +289,7 @@ def gamma_len(v: int) -> int:
 def reference_count_finish(CW: int, st: Tally, c: int, NB: int = 0, pool: int = 0) -> tuple[int, int]:
     """code.py's `finish` counted: (ok, bits), with bits the window's charge and ok 0 unless it is at most the declared
     charge c. The charge is the segment's length (two more when `used`), and with NB ≥ 1 the header's too, Elias-gamma of
-    the pool 1 ≤ pool < 2^NB it sends (advice v1's window 0)."""
+    the pool 1 ≤ pool < 2^NB (advice v1 takes NB = 0)."""
     total = st.bits + 2 * st.used + (gamma_len(pool) if NB else 0)
     return st.ok & int(total <= c and not total >> CW and (not NB or pool >= 1)), total & ((1 << CW) - 1)
 
