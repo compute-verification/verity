@@ -821,9 +821,8 @@ class SoWindow(DO.Window):
             if i != self.ix(s):
                 raise RuntimeError(f"step {s}'s round went out as round {i}, not {self.ix(s)}")
             t_sent = time.perf_counter()
-            bad = self.ybad_pin.nonzero().flatten().tolist()
-            if bad:
-                sd.y_refused.append({"s": s, "capture": cap, "calls": len(bad)})
+            # a held step's captures read the refused calls now; any other step reads them once its units are out
+            bad = self._y_refused(s, cap) if held else None
         if held:
             leaves = [unwords(pre["round"].leaf(0, k)) for k in range(len(kinds))]
             if cap in self.caps:
@@ -841,7 +840,6 @@ class SoWindow(DO.Window):
                 self.caps[late].update(late_s=s, late_index=i, late_leaves=leaves, late_root=root)
             if prev == "fault_zlate" and prev in self.caps:
                 self.caps[prev].update(next_leaves=leaves)
-        units_wait = self.ev_w[0].elapsed_time(self.ev_w[1]) if waited and lag is None else None
         self.phase("coin_wait")
         ju = s + 1 - d
         t_wait = t_coin = t_disp = time.perf_counter()
@@ -853,6 +851,9 @@ class SoWindow(DO.Window):
                 self.stashed.discard(ju)
                 t_coin = self.dispatch_units(ju)
                 t_disp = time.perf_counter()
+        if lag is None and not held:
+            self._y_refused(s, cap)
+        units_wait = self.ev_w[0].elapsed_time(self.ev_w[1]) if waited and lag is None else None
         # the manifest row's copies queue behind the root read and the units' dispatch, off the step's critical path
         self.put_row(s, pre["mid"], pre["round"])
         t_end = time.perf_counter()
@@ -879,6 +880,13 @@ class SoWindow(DO.Window):
         self.s += 1
         self.steps += 1
         self._step_end(s)
+
+    def _y_refused(self, s: int, cap: str | None) -> list[int]:
+        """Step s's calls whose y root the commit refused, from the pinned copy that rode its root read."""
+        bad = self.ybad_pin.nonzero().flatten().tolist()
+        if bad:
+            DA.SIDE[0].y_refused.append({"s": s, "capture": cap, "calls": len(bad)})
+        return bad
 
     def _step_end(self, s: int) -> None:
         if s == self.end_at:
