@@ -153,9 +153,10 @@ window row and `a_cap` in the warden's slots. The slice takes its chain's shape 
     (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w1.py`), so the check needs a
     witnessed injective map from batch positions to slots, or rows keyed by request.
 - With both (the reference reading the chain's entries by name, and the seal's rows put at the replay's slot for
-  their request; a scratch patch on this tree, run r20261024-204214-d5c9), the slice accepts w1 (0x3F, 21 bits), the four negatives
-  fail as at w212 (late admission 0x2E, `load` and `rows`; charge 0x37; longer prompt 0x2F; dropped row 0x2F), and
-  the circuit is its reference on all five. It is 892,673 ANDs, 40,316 more than sync w212 at the same class, built in
-  35 s at 3.9 GB (8.6 GB with the five evaluations). The test of what the slice must do on w1 is a strict xfail in
-  that test file.
+  their request; a scratch patch on this tree, run r20261024-205551-716a), the slice accepts w1 (0x3F, 21 bits), the
+  four negatives fail as at w212 (late admission 0x2E, `load` and `rows`; charge 0x37; longer prompt 0x2F; dropped
+  row 0x2F), and the circuit is its reference on all five. It is 898,182 ANDs, built in 19 s at 3.0 GB (6.9 GB with
+  the five evaluations): AS = 1 adds 40,316 to sync w212 at the same class on the same tree (857,866 ANDs, run
+  r20261024-205722-af0a). With the reference fixed alone, the honest window fails only ``rows`` (0x2F). The test of
+  what the slice must do on w1 is a strict xfail in that test file.
 - The walk entries (`run_pfx`, `row_pfx`) come only with prefix caching, which 8eb1 doesn't serve.
