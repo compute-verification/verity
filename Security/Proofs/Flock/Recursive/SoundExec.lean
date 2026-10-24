@@ -152,7 +152,7 @@ theorem RecursiveSoundExec : Flock.Guarantees.RecursiveSoundExec := by
   intro nT r T CT _ _ n L Reg Cm S Vs Reg' Reg₂ st zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr
   by_cases hacc : AcceptsStmt st
   swap
-  · refine Or.inr (Or.inr (Or.inr (Or.inr (le_trans ?_ (zero_le _)))))
+  · refine Or.inr (Or.inr (Or.inr (Or.inr (le_trans ?_ (zero_le ..)))))
     exact (prob_mono_outcome _ σ fun o _ h => absurd h.1 hacc).trans (prob_false _ σ).le
   rcases zk_sessions_recursive_fork_inner zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr Refine.H512 _
       (compiledForkSound_execClassAt T CT (classOk_of_accepts hacc)) with h | h | h | h | h
@@ -172,16 +172,17 @@ theorem RecursiveRanRegisteredExec : Flock.Guarantees.RecursiveRanRegisteredExec
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))
   · exact Or.inr (Or.inr (Or.inr (Or.inl hf)))
-  · by_cases hc : ∃ o, Game.Outcome (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
+  · by_cases hc : ∃ o, Game.Outcome
+        (recGame L Reg (Flock.Guarantees.innerAt T CT st) Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
         AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ∃ i, reads o i ∧ row o i ≠ p i ∧ FlockSoundness.Binding.Collides ((com i).ext (op o i) (op₀ i))
     · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hc))))
     · have hmono : prob (fun o => AcceptsStmt st ∧ AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-              ¬ (innerAt T CT st).holds (stmt p o.2.1))
-            (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+              ¬ (Flock.Guarantees.innerAt T CT st).holds (stmt p o.2.1))
+            (recGame L Reg (Flock.Guarantees.innerAt T CT st) Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
           prob (fun o => AcceptsStmt st ∧ AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-              ¬ (innerAt T CT st).holds (x o.1 o.2.1))
-            (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerV (zs R ω t) dg N) σ := by
+              ¬ (Flock.Guarantees.innerAt T CT st).holds (x o.1 o.2.1))
+            (recGame L Reg (Flock.Guarantees.innerAt T CT st) Cm fun R ω t => outerV (zs R ω t) dg N) σ := by
         refine prob_mono_outcome _ σ fun o hro h => ⟨h.1, h.2.1, fun hh => ?_⟩
         have hagree : ∀ i, reads o i → p i = row o i := fun i hi => by
           by_contra hne
