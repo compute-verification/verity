@@ -1235,9 +1235,18 @@ class Driver:
                                                              "one", self._owner(x))
         from .merge import _sweep_after, caught_up
 
+        def after() -> None:
+            with authed(q.auth):
+                caught_up(self.repo, "origin", "check", since=main, log=q.log,
+                          runs={x.commit: v.attempt for x in members} | {tip: v.attempt})
+
+        # the landing's after-steps (spec DM, mirror, post_train, posts, labels) wait for the tick's launches (23 Oct: landing ticks
+        # held the next trains' launches 20-30 min behind them); the sweep stays here, since it closes what the sync must not read
+        if (pending := getattr(self, "_after", None)) is not None:
+            pending.append(after)
+        else:
+            after()
         with authed(q.auth):
-            caught_up(self.repo, "origin", "check", since=main, log=q.log,
-                      runs={x.commit: v.attempt for x in members} | {tip: v.attempt})
             _sweep_after(self.repo, "main", "origin")
         return m
 
@@ -2091,6 +2100,13 @@ class Driver:
     # -- the tick
 
     def tick(self, dry_run: bool = False) -> str:
+        self._after: list[Callable[[], None]] | None = []    # the landings' after-steps, run once the tick's launches are out
+        try:
+            return self._tick(dry_run)
+        finally:
+            self._run_after()
+
+    def _tick(self, dry_run: bool) -> str:
         q = self.q
         self.dry_run, self._seen, self._prs, self._ev, self._relaunched, self._tips, self._pos = dry_run, {}, None, {}, set(), None, {}
         self._land_saw: str | None = None                   # the passed train this tick's land step tried, landed or held
@@ -2256,6 +2272,11 @@ class Driver:
             q.save_state(state)
         q.log(f"research queue drive: {'; '.join(what) or 'nothing queued'}")
         return "; ".join(what) or "idle"
+
+    def _run_after(self) -> None:
+        pending, self._after = self._after, None
+        for step in pending or ():
+            step()
 
     def trains(self, n: int, cold: frozenset[int] = frozenset()) -> list[int]:
         """The members whose commits get a check: every `train_size`-th one and the tip, each train stacked on the one below, so a
