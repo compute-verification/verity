@@ -1,0 +1,39 @@
+schema = "verity-bench/vllm-spec/v0"
+backend = "vllm"
+id = "qwen3-30b-a3b-bf16-rtx-served-arm"
+# G2's served arm (benchmarks/served_commit/served_arm.py) for Qwen3-30B-A3B: the compiled Commit at rows-sha512's 4 KiB rows
+# (G2's served-commit-rows-4k, control stock@compiled) against stock as vLLM serves it (stock@compiled) on one RTX PRO 6000,
+# at G2's width sweep. About 57 GiB of weights per engine: a second engine doesn't fit beside the first, so the arms run in
+# alternating blocks (the harness's two engine-lifetime cycles, the second in reverse order), not resident.
+arms = ["stock@compiled", "served-commit-rows-4k"]
+arm_modules = ["served_commit.served_arm:ROWS_4K"]
+sweep = "width"
+reps = 3
+eager = true
+
+[arm_settings."stock@compiled"]
+control = "none"
+
+[preset]
+id = "qwen3-30b-a3b-bf16-rtx-served-arm"
+model = "Qwen/Qwen3-30B-A3B"
+revision = "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39"
+case = "QWEN3_30B_A3B"
+precision = "bfloat16"
+gpu_id = "rtx-pro-6000"
+gpu_count = 1
+vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+[preset.engine_settings]
+max_model_len = 4096
+# Resident as blocks: the second engine's startup refuses on free memory, which sends the run to blocks.
+resident_gpu_memory_utilization = 0.80
+block_gpu_memory_utilization = 0.80
+resident_kv_cache_memory_bytes = 4294967296
+block_kv_cache_memory_bytes = 4294967296
+# As the RTX Build's row declares: on cc 12.0 vLLM's unquantized MoE selector takes FlashInfer CUTLASS experts ahead of
+# Triton, and they have no Definitions; Triton's fused_moe_kernel experts are bound (acquire.served_moe).
+moe_backend = "triton"
+
+[admission]
+max_minutes = 120
