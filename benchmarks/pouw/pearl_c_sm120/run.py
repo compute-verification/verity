@@ -253,7 +253,7 @@ class Dev:
                            *((v & 0xFFFFFFFF ^ 0x80000000) - 0x80000000 for v in i), *NO_ARGS[len(i):])
         g0, g1, g2 = tuple(grid) + (1,) * (3 - len(grid)) if isinstance(grid, (tuple, list)) else (grid, 1, 1)
         raw = self.stream if stream is None else stream
-        s = self.streams.get(raw)
+        s = raw if isinstance(raw, vp) else self.streams.get(raw)   # a harness's own CUstream object (pouw_decode's lanes)
         if s is None:
             s = self.streams[raw] = vp(raw)
         f = self.fns.get(name) or self.fn(name)

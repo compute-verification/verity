@@ -195,6 +195,8 @@ def test_launch_passes_what_a_fresh_args_would():
             fresh.i[j] = v
         assert got[-1] == (want, bytes(fresh))
     assert set(dev.streams) == {7, 9}
+    dev.launch("k", 1, 32, stream=RUN.vp(0xABC))   # a harness's own CUstream object, as pouw_decode's lanes pass
+    assert got[-1][0][-1] == 0xABC and set(dev.streams) == {7, 9}
     rc[0] = 1
     with pytest.raises(RuntimeError, match="cuLaunchKernel returned CUresult 1"):
         dev.launch("k", 1, 32)
