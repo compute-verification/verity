@@ -183,6 +183,12 @@ theorem forIn_bind_acc {α β γ : Type} {xs : List α} {b : β} {f : α → β 
   rw [FlockComplete.go_bind, e]
   exact hg l' hI
 
+theorem map_range_succ {β : Type} (f : ℕ → β) (k : ℕ) :
+    (Array.range (k + 1)).map f = ((Array.range k).map f).push (f k) := by
+  first
+  | simp [Array.range_succ]
+  | (rw [Array.range_succ, Array.map_append, Array.map_singleton]; rfl)
+
 /-- **(a) to (d) give `FinishIs` at the loop's own `Finish`.** Where the loop's `Finish` does not stop, `x` sets up and
 the loop's files are `(rec, files)`; the session read from the views runs part by part (`finSessionCut_eq`): the
 schedules and level 0's commitments (a), the link and its points (b), each rep stream (c, d), accumulating the streams
@@ -250,11 +256,11 @@ theorem finishIs_of_parts
     rw [FlockComplete.go_bind, hcms']
     dsimp only
     rw [FlockComplete.go_bind, FlockComplete.finAsksCut_link_go,
-      if_neg (show ¬ refK x ≤ (#[] : Array Msg).size by rw [hK]; simp)]
-    dsimp only
+      ite_eq_right_of_eq_false _ _ (eq_false (by rw [hK]; simp))]
+    try dsimp only
     unfold FlockComplete.afterLinkCut
     try simp only [Array.size_empty]
-    dsimp only
+    try dsimp only
     rw [← Array.forIn_toList, FlockDeploy.repStreams_toList]
     refine forIn_bind_acc
       (B := fun k => MProd.mk ((Array.range k).map (streamOf x ((m₀, ρ₀) :: ops) spec (Masked.stsOf x)))
@@ -262,45 +268,46 @@ theorem finishIs_of_parts
       (I := fun k l => l.size = Masked.repBase x k) ?_ (by simp) ?_ ?_
     · intro k hk l hI
       simp only [List.length_map, List.length_range] at hk
-      simp only [List.getElem_map, List.getElem_range]
-      dsimp only
+      have hI' : l.size = Masked.repBase x k := hI
       obtain ⟨extras, hxe⟩ := hext k hk
       obtain ⟨ic, hic⟩ := hpads k hk l
       obtain ⟨p, tr, l', hrep, hfile⟩ := hC ν t κ m₀ ρ₀ ops hctx s0 spec hsx0 schs hschs cms hcms files hp k hk
-        extras hxe ic l hic hI
-      obtain ⟨hrounds, hsz⟩ := hD ν t κ m₀ ρ₀ ops hctx s0 spec hsx0 schs hschs cms hcms k hk extras hxe ic l hic hI
+        extras hxe ic l hic hI'
+      obtain ⟨hrounds, hsz⟩ := hD ν t κ m₀ ρ₀ ops hctx s0 spec hsx0 schs hschs cms hcms k hk extras hxe ic l hic hI'
         p tr l' hrep
       unfold viewPoints at hxe
       unfold padsView at hic
       unfold viewRep at hrep
       refine ⟨l', ?_, hsz⟩
+      simp only [List.getElem_map, List.getElem_range]
+      try dsimp only
       rw [FlockComplete.go_bind, FlockComplete.go_liftV, hxe]
-      dsimp only
+      try dsimp only
       rw [FlockComplete.go_bind, hic]
-      dsimp only
+      try dsimp only
       rw [FlockComplete.go_bind, hrep]
-      dsimp only
-      rw [hrounds, hfile]
-      simp only [Array.range_succ, Array.map_push]
+      try dsimp only
+      rw [hrounds, hfile, map_range_succ, map_range_succ]
       rfl
-    · rw [Masked.repBase_eq hsx0]
+    · show (_ : Array Msg).size = Masked.repBase x 0
+      rw [Masked.repBase_eq hsx0]
       simp [FlockComplete.repStartZk]
     · intro l' _
       simp only [List.length_map, List.length_range]
-      dsimp only
+      try dsimp only
       unfold viewPoints at hpts
-      rw [FlockComplete.go_bind, FlockComplete.PrefixAgree.recordJson_quietZ, hroots, hpts, ← hrs, hP]
-      rw [hrs, hP]
       unfold recordOf at hrc
       rw [hrs] at hrc
-      rw [hrc]
+      rw [FlockComplete.go_bind, FlockComplete.PrefixAgree.recordJson_quietZ, hroots, hpts, hP, hrc]
       rfl
-  change _ = Masked.finExe Masked.PE x (finCoins x ops)
+  have e := Masked.finExe_eq hsx0 (finCoins x ops)
     (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t)
-  rw [Masked.finExe_eq hsx0]
-  change _ = FlockComplete.ZkTables.finMsg x (Masked.runCut x (finCoins x ops) (refK x) spec (finSrc vs x w ν t ops)).1
-  rw [hrun]
-  rfl
+  have e2 : FlockComplete.ZkTables.finMsg x
+      (Masked.runCut x (finCoins x ops) (refK x) spec (finSrc vs x w ν t ops)).1 =
+      FlockDeploy.Final.encode ⟨x, rec, files⟩ := by
+    rw [hrun]
+    rfl
+  exact e2.symm.trans e.symm
 
 end Loop
 
