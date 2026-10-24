@@ -891,8 +891,8 @@ counts are sent as 0, which is `ChargeCount_v1`'s scope. Windows that send nonze
 charged its decisions' charge plus a count code's length for its counts, under any count code whose lengths meet
 Kraft's inequality, as every prefix-free code's do (`SecurityProofs.EncardChargedLeCounted` and the three bounds
 `…V1Counted`): a window's weights are the decisions' times the counts', each summing to at most 1. The code is the
-same in every window and carries nothing across windows, and it is a parameter until ENC-CODE's coding of the counts
-is written and mirrored in Lean. Which slots ask (`en`) is not charged because it is not advice: the
+same in every window and carries nothing across windows, and it is a parameter: a separate code, which is not how
+advice v1 sends counts (`code_v1` codes them inside the arithmetic coder, `ChargeCount_v2`'s window). Which slots ask (`en`) is not charged because it is not advice: the
 compile slice, its charge included, is proved on every advised window and never sampled, so `en` is pinned by that
 slice's scan, and the carry across windows is chained from the book's priors (#3801, `charge_chain.check_chain`). The
 one hypothesis left is that `ChargeCount_v1`'s circuit computes Lean's `window`. circuit-check holds the circuit to the

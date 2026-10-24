@@ -27,6 +27,8 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/AdviceV1.lean  trusted: advice v1's charge, `ChargeCount_v1{N}`'s reference one for one: the
                                counting arithmetic coder (Tally, countStep), the book's KT estimate at min(run, 2),
                                a window's charge (window) and a run's (charges), the streams no window refuses (Streams)
+../../Definitions/NetworkCertifier/AdviceV1Counted.lean  trusted: advice v1's charge with a separate count code
+                               (CountCode, lengths meeting Kraft): a window's charge (windowCounted) and a run's
 ../../Definitions/NetworkCertifier/Guarantees/AdviceV1.lean  trusted: advice v1's charge counts (Kraft), and the leak bound with it
 ../../Models/NetworkCertifier/Guarantees/AdviceV1.lean  trusted: the leak bound through the wire with advice v1's charge
 ../../Definitions/NetworkCertifier/Warden.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
@@ -200,7 +202,8 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   may send nonzero counts, each charged its decisions' charge plus any count code's length (lengths meeting Kraft, as
   every prefix-free code's do): `EncardChargedLeCounted`, `EncardAccSeqsWithinLeConstantRateV1Counted`,
   `EncardDecodableWithinLeCompiledV1Counted`, `EncardDecodableWithinLeCompiledPerWindowV1Counted`. The count code is a
-  parameter until ENC-CODE's coding of the counts is written.
+  parameter, a separate code: advice v1 codes its counts inside the arithmetic coder (`ChargeCount_v2`'s window), which
+  this does not model.
 - **The warden's channel bound** (`NetTiming.SecurityProofs.Warden`): `WardenViewEqClientView`, `EncardWardenViewsLe`,
   `EncardWardenDecodableLe`, under `trusted-nebius-host` (`Verity.Assumptions.TrustedNebiusHost`).
 - **The leak bound under a sampled audit** (`SampledCharge.lean`):

@@ -1,4 +1,5 @@
 import Definitions.NetworkCertifier.AdviceV1
+import Definitions.NetworkCertifier.AdviceV1Counted
 import Models.NetworkCertifier.Guarantees.AdviceString
 
 /-!
@@ -16,8 +17,8 @@ definitions are held to that reference by the charge difftest and `CodeChargesV1
 
 The two `…Counted` bounds take windows that may send nonzero counts, each charged its decisions' charge plus any count
 code's length for its counts (`AdviceV1.windowCounted`, `AdviceV1.CountCode`), with `EncardChargedLeCounted`'s scope:
-the code is the same in every window, carries nothing across windows, and is a parameter until ENC-CODE's coding of
-the counts is written.
+the code is the same in every window, carries nothing across windows, and is a parameter: a separate code, not
+advice v1's coding of the counts, which is inside the arithmetic coder (`ChargeCount_v2`'s window).
 -/
 
 namespace NetTiming.Guarantees

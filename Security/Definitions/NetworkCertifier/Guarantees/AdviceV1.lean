@@ -1,4 +1,5 @@
 import Definitions.NetworkCertifier.AdviceV1
+import Definitions.NetworkCertifier.AdviceV1Counted
 import Definitions.NetworkCertifier.AdviceString
 import Mathlib.Data.Set.Card
 import Mathlib.Algebra.BigOperators.Fin
@@ -31,8 +32,9 @@ by that slice's scan. The carry across windows is chained from the book's priors
 Lean: circuit-check holds the circuit to the Python reference (`arith_encode.py`'s `reference_charge`), and the Lean
 functions are that reference one for one, held to it by the charge difftest (the certifier program's
 `NetworkCertifier.AdviceV1`, proved equal to these by `CodeChargesV1`, against `reference_charge` on 4,000 random
-instances, accepted and refused). For windows with counts, the count code is a parameter as well: no circuit codes the
-counts yet, and ENC-CODE's coding, once written, is to be mirrored and instantiated.
+instances, accepted and refused). For windows with counts, the count code is a parameter as well. It is a separate
+code, which is not how advice v1 sends counts: `code_v1` codes them inside the arithmetic coder (`ChargeCount_v2`'s
+window).
 -/
 
 namespace NetTiming.Guarantees
@@ -69,7 +71,7 @@ meeting Kraft's inequality, as every prefix-free code's do), with windows of `N`
 window's charge is its decisions' charge (`AdviceV1.window`) plus `cc`'s length for its counts (`windowCounted`), so
 the windows may send nonzero counts. The code is the same in every window and carries nothing across windows. That
 the circuit computes the decisions' charge is the hypothesis left, as for `EncardChargedLe` (module doc), and the
-count code is a parameter: no circuit computes one yet. -/
+count code is a parameter, a separate code (not advice v1's coding of counts, which is inside the coder). -/
 def EncardChargedLeCounted : Prop :=
   ∀ {C : Type} (bk : Book) (N W c : ℕ) (cc : CountCode C),
     {a : Fin W → List Bool × C | ∃ ls, chargesCounted bk N cc a = some ls ∧ ls.sum ≤ c}.encard ≤

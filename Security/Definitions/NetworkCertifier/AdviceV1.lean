@@ -1,7 +1,5 @@
 import Mathlib.Data.Nat.Size
 import Mathlib.Data.List.OfFn
-import Mathlib.Basic.Real.Basic
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # Advice v1's charge: the counted coded length of a decision stream under the registered book
@@ -16,11 +14,8 @@ each decision at the book's KT estimate for its context `min(run, 2)`, then the 
 the finish. The window's charge is the scalings the coder takes, one segment bit each, and 2 more at the finish of a
 window that used the coder.
 
-**Scope: decision-only windows, and windows with counts under any count code.** `window` models a window that sends
-decisions only: its four counts are sent as 0 (`zeros`), which is `ChargeCount_v1`'s scope. A window that sends nonzero
-counts is charged by `windowCounted` (the last section): the decisions' charge plus any count code's length for the
-counts, the code a parameter (`CountCode`, lengths meeting Kraft's inequality) until ENC-CODE's coding of the counts is
-written and mirrored here.
+**Scope: decision-only windows.** The windows modelled send decisions only: their four counts are sent as 0 (`zeros`),
+which is `ChargeCount_v1`'s scope. A window that sends a nonzero count is not covered.
 
 **The decision stream.** A window's slots are the scan's asks, and `ChargeCount_v1`'s witness is which slots ask (`en`)
 and their decisions (`bit`). A slot that doesn't ask changes nothing, so the charge is a function of the decisions of the
@@ -191,46 +186,5 @@ def Streams (bk : Book) (N W : ℕ) : Type := {a : Fin W → List Bool // (charg
 /-- **Advice v1's charge** (I1's `bits(advice, w)`): window `w`'s. -/
 def bits (bk : Book) (N : ℕ) {W : ℕ} (a : Streams bk N W) (w : Fin W) : ℕ :=
   ((charges bk N a.1).getD []).getD w 0
-
-/-! ### Windows that send counts
-
-A window that sends counts sends its decision stream and its counts `κ : C` (the four per-window counts, in whatever
-form the coding takes). Its charge is the decisions' charge (`window`, from the carry) plus the count code's length
-for `κ`. The count code is any code whose lengths meet Kraft's inequality (`CountCode`), and every prefix-free code's
-lengths do (`CountCode.ofPrefixFree`, in `Proofs.NetworkCertifier.AdviceV1`). It is the same in every window and
-carries nothing from window to window: the carry is the decisions'. The decisions' part codes the book's `zeros` as
-before; under a book whose `zeros` is empty, it is the decisions' charge without them. -/
-
-/-- **A code for a window's counts**: `len κ`, the bits it charges the counts `κ`, or `none` where it refuses them.
-Its lengths meet Kraft's inequality: over any finite set of counts, the weights `2^(−len κ)` of those it doesn't
-refuse sum to at most 1. -/
-structure CountCode (C : Type) where
-  len : C → Option ℕ
-  kraft : ∀ A : Finset C, ∑ κ ∈ A, ((len κ).map fun l => (2⁻¹ : ℝ) ^ l).getD 0 ≤ 1
-
-variable {C : Type}
-
-/-- **One window's charge with its counts**: of a window of `N` slots whose slots that ask decide `x.1` and which
-sends the counts `x.2`, the decisions' charge (`window`) plus the count code's length for `x.2`, and the next
-window's carry, the decisions'. -/
-def windowCounted (bk : Book) (N : ℕ) (cc : CountCode C) (cy : Carry) (x : List Bool × C) : Option (ℕ × Carry) :=
-  (window bk N cy x.1).bind fun p => (cc.len x.2).map fun l => (p.1 + l, p.2)
-
-/-- **A run's charges with counts**: each window's, the carry passed along. -/
-def sessionCounted (bk : Book) (N : ℕ) (cc : CountCode C) : Carry → List (List Bool × C) → Option (List ℕ)
-  | _, [] => some []
-  | cy, x :: ws => (windowCounted bk N cc cy x).bind fun p => (sessionCounted bk N cc p.2 ws).map fun ls => p.1 :: ls
-
-/-- **The run's charges per window with counts**, from the book's priors and run 0. -/
-def chargesCounted (bk : Book) (N : ℕ) (cc : CountCode C) {W : ℕ} (a : Fin W → List Bool × C) : Option (List ℕ) :=
-  sessionCounted bk N cc ⟨bk.priors, 0⟩ (List.ofFn a)
-
-/-- **The advice with counts**: each of `W` windows' decision stream and counts, no window refused. -/
-def StreamsCounted (bk : Book) (N : ℕ) (cc : CountCode C) (W : ℕ) : Type :=
-  {a : Fin W → List Bool × C // (chargesCounted bk N cc a).isSome}
-
-/-- **The charge with counts** (I1's `bits(advice, w)`): window `w`'s. -/
-def bitsCounted (bk : Book) (N : ℕ) (cc : CountCode C) {W : ℕ} (a : StreamsCounted bk N cc W) (w : Fin W) : ℕ :=
-  ((chargesCounted bk N cc a.1).getD []).getD w 0
 
 end NetTiming.AdviceV1
