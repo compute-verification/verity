@@ -9226,6 +9226,99 @@
    "assumptions": [],
    "type_hash": "af54b25464d2114ccc456297143546c6bbdc761a3fed10e98f5dd01e33ad8142"
   },
+  "Verity.SecurityProofs.AdaEqAmpere": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereStepComplete": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereStepHw": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereStepIff": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereStepSound": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereUnitBf16": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereUnitSound": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.AmpereUnitSoundZero": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.Compose": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.ContainsImplements": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.CorrectOfOpening": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperStepComplete": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperStepHw": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperStepIff": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperStepSound": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperUnitBf16": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperUnitSound": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.HopperUnitSoundZero": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.IsZeroGadget": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.PackSoundComplete": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.PrivateFitsOfLocal": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.PrivateOutBitsLe": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.ProbBatchInduced": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.RangeGadget": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.RefineWrong": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.RegisteredMeets": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.SoundAnd": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.SoundBatch": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.SoundBind": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.SoundInterleave": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.SoundMono": {
+   "owner": "@proofs"
+  },
   "Verity.SecurityProofs.ComposeCone": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.ComposeCone : Verity.Guarantees.ComposeCone"],
@@ -9766,37 +9859,6 @@
    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore": "frozen (no-function): Its function is tileCheck8 or tileCheck4, a model in Security/Definitions/Pouw/PearlC rather than executable code, so it fits only if top rules that a Definitions-level check is a named function; it would then be restated with ComputesWords opened and the step's w >= 24 as a definition.",
    "Pouw.SecurityProofs.Theorem1": "lemma: leaves the list under the 5:11 PM ruling",
    "Pouw.SecurityProofs.WorkWeightedSampling": "lemma: leaves the list under the 5:11 PM ruling",
-   "Verity.Guarantees.AdaEqAmpere": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereStepComplete": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereStepHw": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereStepIff": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereStepSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereUnitBf16": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereUnitSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereUnitSoundZero": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.Compose": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.ContainsImplements": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.CorrectOfOpening": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperStepComplete": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperStepHw": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperStepIff": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperStepSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperUnitBf16": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperUnitSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperUnitSoundZero": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.IsZeroGadget": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.PackSoundComplete": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.PrivateFitsOfLocal": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.PrivateOutBitsLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.ProbBatchInduced": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.RangeGadget": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.RefineWrong": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.RegisteredMeets": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundAnd": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundBatch": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundBind": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundInterleave": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundMono": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "NetTiming.SecurityProofs.CardCountsEqLe": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.CardFree": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.CardLeftPacked": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
