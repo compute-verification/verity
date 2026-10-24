@@ -1,9 +1,10 @@
-"""A stand-in for N2's proof of a link-window, for tests: what C-Flock's prover behind the firewall would deliver, and
-a stand-in for the verifier's own run of C-Flock's Lean verifier (`proofs.verify`), which reads each session's verdict
-from the session file the stand-in prover writes. The proof's output word is the unit's on the prover's opening by
-each gate's reference (`LinkWindows.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't
-claim another. So the tests check everything the verifier of record does around the proof: its run's findings, the
-public row opened to the verifier's own copy, the output row, the certificates and the sync."""
+"""A stand-in for N2's proof of a link-window, and for the ingress tie's of an ingress link-window (`prove_tie`), for
+tests: what C-Flock's prover behind the firewall would deliver, and a stand-in for the verifier's own run of C-Flock's
+Lean verifier (`proofs.verify`), which reads each session's verdict from the session file the stand-in prover writes.
+The proof's output word is the unit's on the prover's opening by each gate's reference (`LinkWindows.outputs`,
+`IngressTie.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't claim another. So the tests
+check everything the verifier of record does around the proof: its run's findings, the public row opened to the
+verifier's own copy, the output row, the certificates and the sync."""
 
 from __future__ import annotations
 
@@ -35,24 +36,44 @@ def prove(lw: SVC.LinkWindows, opening: SVC.Opening, draw: S.Draw, syncs: Sequen
     one session naming `program` (default: the link's registered Program) that the stand-in Lean `accepted`, and the
     circuit file. Where the unit takes no instance, the rows are zero and the output 0. `word` forges the output word,
     `salts` the salts delivered for ``pub`` and ``o0``, and `units` the public file's unit indices."""
-    out.mkdir(parents=True, exist_ok=True)
     root = bytes.fromhex(draw.registration.record["roots"][0]["root"]) if root is None else root
     args = lw.arguments(opening, root, syncs, advice)
     rows = {r: lw.row(args, r) if args is not None else bytes(lw.bits(r) // 8) for r in SVC.ROWS}
     rows["o0"] = SVC.output_row(lw.outputs(opening, root, syncs, advice) if args is not None else 0)
+    return _deliver(lw, rows, draw, out, program=program, accepted=accepted, word=word, salts=salts, units=units)
+
+
+def _deliver(unit: Any, rows: dict[str, bytes], draw: S.Draw, out: Path, *, program: str | None, accepted: bool,
+             word: int | None, salts: dict[str, bytes] | None, units: Sequence[int] | None) -> SVC.Delivered:
+    """The statement's files for `rows` on `unit` (a `LinkWindows` or an `IngressTie`) and what the prover delivers."""
+    out.mkdir(parents=True, exist_ok=True)
     public = out / "public.bin"
     header = {"units": {"indices": list(draw.units if units is None else units)}, "instances": 1}
     public.write_bytes(json.dumps(header).encode() + b"\n"
-                       + b"".join(_bc(rows[p], lw.bits(p), SALTS[p]) for p in SVC.PORTS))
+                       + b"".join(_bc(rows[p], unit.bits(p), SALTS[p]) for p in SVC.PORTS))
     session = out / "session-0"
     session.mkdir(exist_ok=True)
     (session / "session.json").write_text(json.dumps({"accepted": accepted, "units": [0],
-                                                      "program": program or lw.partition["program"]}))
+                                                      "program": program or unit.partition["program"]}))
     circuit = out / "circuit.txt"
-    circuit.write_text(f"stand-in circuit of {lw.proof_unit.id}\n")
+    circuit.write_text(f"stand-in circuit of {unit.unit.id}\n")
     delivered = {"pub": SALTS["pub"], "o0": SALTS["o0"], **(salts or {})}
     output = int.from_bytes(rows["o0"], "little") if word is None else word
     return SVC.Delivered(PF.Proof(circuit, public, (session,)), delivered, output)
+
+
+def prove_tie(tie: Any, cells: Any, draw: S.Draw, view: Any, out: Path, *, program: str | None = None,
+              accepted: bool = True, word: int | None = None, salts: dict[str, bytes] | None = None,
+              units: Sequence[int] | None = None) -> SVC.Delivered:
+    """The delivered proof of the drawn ingress-tie unit (`tie_service.IngressTie`) on the warden's `cells` under the
+    registered root and the prover's `view` (`io_request.RequestView`), as `prove` delivers N2's: its output bit by
+    IoTieRequest's reference (`io_request.reference`), which IO-TIE's tests hold to the circuit. Where the unit takes no
+    instance of `view`, the rows are zero and the output 0."""
+    root = bytes.fromhex(draw.registration.record["roots"][0]["root"])
+    args = None if view is None else tie.arguments(cells, root, view)
+    rows = {r: tie.row(args, r) if args is not None else bytes(tie.bits(r) // 8) for r in SVC.ROWS}
+    rows["o0"] = SVC.output_row(tie.outputs(cells, root, view) if args is not None else 0)
+    return _deliver(tie, rows, draw, out, program=program, accepted=accepted, word=word, salts=salts, units=units)
 
 
 def circuit_sha512(delivered: SVC.Delivered) -> str:

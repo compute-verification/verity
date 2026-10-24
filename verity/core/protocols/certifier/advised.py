@@ -78,10 +78,11 @@ IoTieRequest's verdict for the same advice digest. Without it, a prover who spli
 requests otherwise (a short prompt and a long one swapped) lowers an early request's end, and so the floor, on the
 same certified record: REDTEAM phase 6's case. The certified prompts are witness, so the verifier can't derive the
 tie from them on the host, and a tie the prover states is no tie (REDTEAM phase 7: one stating the swapped split
-reopens phase 6's acausal release). So the tie is only IoTieRequest's verdict, and until IoTieRequest runs in the proof
-service nothing gives the verifier one: every advised link is refused (PROTOCOL.md, fail closed). Neither
-head signs the prompt lengths or the sync a window ran, so the unit itself holds neither to the record: PROTOCOL.md's
-named gap, with its design.
+reopens phase 6's acausal release). So the tie is only IoTieRequest's verdict, which the verifier of record builds from
+the IoTieRequest proofs it verified on its own statements (`tie_service.IngressTie.tie`). No proof of an unpinned size
+class is accepted, and the served size isn't pinned, so there every advised link is refused (PROTOCOL.md, fail
+closed). Neither head signs the prompt lengths or the sync a window ran, so the unit itself holds neither to the
+record: PROTOCOL.md's named gap, with its design.
 
 **Bucket 0** is capped at RIN, which holds the own frame: the ingress certifier releases min(queue, r_in) frames a
 bucket (`grid.Certifier`), its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head whose
@@ -170,10 +171,10 @@ class IoTieVerdict:
     IO-TIE's `IoTieRequest` verdict on each of the link's ingress windows, `accepted[w]`, on the request view the
     verifier computed from the advice whose `digest` is `advice`. An accepted verdict on every window says the link's
     j-th certified request is advice request j and its prompt is v0's `prompt_len` ids long. The verifier of record
-    builds one only from IoTieRequest proofs it verified itself, never from what the prover delivers, and until
-    IoTieRequest runs in the proof service nothing builds one, so every advised link is refused (PROTOCOL.md, fail
-    closed). Construction refuses (`advice.MalformedAdvice`) an `advice` that isn't an advice digest and verdicts that
-    aren't bools."""
+    builds one only from IoTieRequest proofs it verified itself, never from what the prover delivers
+    (`tie_service.IngressTie.tie`), and at a size class with no pinned IoTieRequest digest, the served one among them,
+    every window is refused (PROTOCOL.md, fail closed). Construction refuses (`advice.MalformedAdvice`) an `advice`
+    that isn't an advice digest and verdicts that aren't bools."""
 
     advice: str
     accepted: tuple[bool, ...]

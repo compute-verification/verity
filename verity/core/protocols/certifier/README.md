@@ -90,9 +90,14 @@ A spec-level reference for network accounting's timing channel:
   request's end on the ingress link, which `advised.ends` derives from v0's prompt lengths and the link's public
   framing), and each window's ingress total the advice's. Carry-over between windows is the advice's. With the
   advice fixed the counts are determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An
-  advised link"). The prompt
-  lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict (`advised.IoTieVerdict`), which
-  isn't in the proof service yet, so every advised link is refused (fail closed).
+  advised link"). The prompt lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict
+  (`advised.IoTieVerdict`), which the tie service builds from proofs (below); the served size class isn't pinned, so
+  there every advised link is refused (fail closed);
+- the ingress tie through the proof service (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
+  proved as `NetworkIngressTieWindow` (one gate naming its pinned circuit digest, `io_request.circuit-check.json`, and
+  a zero pad to whole u16 words) on the cells the warden committed and registered, decided by the verifier of record
+  on its own statement from the advice, and `IngressTie.tie`, which builds `advised.IoTieVerdict` from the stream's
+  outcomes of record alone. A size class no sidecar pins has no accepted proof.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's

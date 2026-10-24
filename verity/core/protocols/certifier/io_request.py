@@ -33,7 +33,7 @@ carry-out's bytes left and prompt fields.
 **The statements** (`statements`): window w's `RequestStatement` is the warden's registered root and domain id, w,
 and `request_view` of w, so a link's statements chain (`chained`): window 0's carry-in is the link's start, (0, 0, 0),
 and each carry-out is the next window's carry-in. The verifier computes them from its own advice and holds each
-IoTieRequest proof to its window's; `advised.IoTieVerdict` (N2-ADVICE) is built from those proofs, one verdict a
+IoTieRequest proof to its window's; `advised.IoTieVerdict` is built from those proofs (`tie_service`), one verdict a
 window, under the advice's digest. With the carry-out held, a window's verdict says the cells take its request in
 progress from the carry-in to the carry-out, so a link's verdicts hold every request's prompt_len, spanning windows
 or not, by the chain from window 0 (REDTEAM phase 9 (b): checked alone, a carried prompt-field count accepts any
@@ -66,6 +66,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 from typing import NamedTuple, Sequence
 
@@ -753,6 +754,9 @@ IoTieRequest = CompositeDefinition(
         "ending count requests whose prompt fields are ended's, in order (routed by the switches, `IoTieRoute`), in "
         "received request frames, and leaving the carry-out (left_out, fields_out) (`IoTieRequestEnd`): the ingress "
         "tie of one link-window, every cell opened")
+IoTieRequest.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins (`tie_service.gate`)
+#: the circuit digests circuit-check pins (`head_check.pinned_digest`)
+PINS = Path(__file__).with_name("io_request.circuit-check.json")
 
 
 # --- arguments -------------------------------------------------------------------------------------------------------
@@ -777,6 +781,7 @@ def arguments(shape: Shape, inst: Instance, bits: Sequence[int]) -> list[list[in
 
 
 __all__ = ["BODY_AT", "Carry", "Cut", "END", "FRAME_OUT", "Frame", "Instance", "IoTieRequest", "IoTieRequestEnd",
-           "IoTieRequestFrame", "IoTieRequestOwn", "IoTieRequestStep", "Layout", "RequestStatement", "RequestView",
-           "STATE", "Shape", "arguments", "chained", "cut", "ends", "frame_arguments", "instance", "layout",
-           "own_frame", "parse_frame", "reference", "request_view", "rows", "statements", "switches", "windows_of"]
+           "IoTieRequestFrame", "IoTieRequestOwn", "IoTieRequestStep", "Layout", "PINS", "RequestStatement",
+           "RequestView", "STATE", "Shape", "arguments", "chained", "cut", "ends", "frame_arguments", "instance",
+           "layout", "own_frame", "parse_frame", "reference", "request_view", "rows", "statements", "switches",
+           "windows_of"]
