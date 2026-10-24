@@ -14,8 +14,9 @@ namespace Accounting.Assumptions.TS
 open Accounting.TS Accounting.TS.Checked Accounting.TS.Held Accounting.TS.Tile Flock.SoundAtBridge
 
 /-- `accounting-ts-tile-checks` (a fact of `PouwH1TileZy_v1`'s circuit, to be computed by a check; owner
-@compute-accounting). **A tile session's circuit computes its Definition at its decoded ports**: at the session `s`,
-for every wire assignment `vals` that the key program's evaluation (`Circuit.eval`) agrees with on every wire of unit
+@compute-accounting). **A tile session's circuit computes its Definition at its decoded ports**, at a `K` with
+`32 ∣ K`, `64 ≤ K` and `K < 2^17`, as `LeafChecks` is (the H1 layout's `K`, and below `2^17` every cell's
+`Σ_k a_k b_k` of s8 codes is the circuit's s32 `z`): at the session `s`, for every wire assignment `vals` that the key program's evaluation (`Circuit.eval`) agrees with on every wire of unit
 `u`, and whose `ok` wires of `u` (`OkWire`) each carry the bit of a value that is the `ok` row at its position
 (`OkVal`, the one word `1`), the view `dec` reads from `vals`' registered reads at unit `u` meets `TileOk` at `dq`:
 each of its cells has `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_b]`.
@@ -28,7 +29,7 @@ sets `complete`) refuses a session one of whose circuit's ports is no port of `o
 words (`PouwZyDequant_v2`'s word view). -/
 def TileChecks {R C K : ℕ} (dq : List ℤ → ℤ) (s : RowsSession) (ok : String)
     (dec : (ℕ → ℕ → Option Bool) → ℕ → TileView R C K) : Prop :=
-  ∀ (vals : Fin s.Circ.N → Bool) (u : Fin s.n), (∀ g ∈ s.P.io u, s.Circ.eval vals g = vals g) →
+  32 ∣ K → 64 ≤ K → K < 2 ^ 17 → ∀ (vals : Fin s.Circ.N → Bool) (u : Fin s.n), (∀ g ∈ s.P.io u, s.Circ.eval vals g = vals g) →
     (∀ g, OkWire s ok u g → ∃ w, OkVal s (s.vb.pos g) w ∧ vals g = s.vb.bit w g) →
     TileOk dq (dec (rowsReg s vals) u.val)
 

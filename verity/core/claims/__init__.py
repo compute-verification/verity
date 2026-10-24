@@ -441,7 +441,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(the round's served leaves, committed before σ_w)", "TS served roots linked", "conjectured"),
     Entry("accounting-ts-leaf-checks", "assumption",
           "Each of a leaf's 33 option-A statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1, at their "
-          "tile's K) computes its Definition at its decoded port rows, registered or not: on every wire assignment its "
+          "tile's K, at a K with 32 | K, 64 <= K and K < 2^17) computes its Definition at its decoded port rows, registered or not: on every wire assignment its "
           "circuit's evaluation agrees with, an ok word of 1 means the lane's partials row is the honest one and its "
           "32 cells have z = A·Bᵀ and y = dq(z), or for the combine that the rows' XOR is the receipt. That every port "
           "is registered and opens at its registered root is proved from flock-verify's complete check, not assumed",
@@ -453,7 +453,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "circuit from a declared one or checks one against the other, and circuit-check binds the Definition to its "
           "Boolean lowering, not to the declared circuit", "TS ok realizes", "conjectured"),
     Entry("accounting-ts-tile-checks", "assumption",
-          "A PouwH1TileZy_v1 session's circuit computes its Definition at its decoded registered ports: on any wire "
+          "A PouwH1TileZy_v1 session's circuit, at a K with 32 | K, 64 <= K and K < 2^17, computes its Definition at "
+          "its decoded registered ports: on any wire "
           "assignment the key program's evaluation agrees with at a unit, whose ok wires carry the ok row (the word "
           "1), every cell of the unit's decoded view has z = A·Bᵀ and y = dq(z). It holds of the circuit only if "
           "every input its ok reads is a registered port, which flock-verify's complete check establishes",

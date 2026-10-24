@@ -32,8 +32,9 @@ checked.** `CheckedSessionSound`'s window and premises, at the tile layer `tileL
 (accepted where flock-verify `--zk --registered` accepts, at the registered file's known content `known x w i`;
 opening the committed rows at the registered reads; its relation `TileRel`), and in addition at every session: every
 port of its circuit is a port of `own` (what `Flock.Registered.checkComplete` establishes, `checkComplete_ok`), the
-known content names the port `ok` with rows each the word `1` (`okRow`), and its circuit computes `PouwH1TileZy_v1`'s
-Definition at the decode `dec x w i` (`Accounting.Assumptions.TS.TileChecks`). Then the layer accepts only where
+known content names the port `ok` with rows each the word `1` (`okRow`), and, at a `K` with `32 ∣ K`, `64 ≤ K` and
+`K < 2^17` (the K the premise covers), its circuit computes `PouwH1TileZy_v1`'s Definition at the decode `dec x w i`
+(`Accounting.Assumptions.TS.TileChecks`). Then the layer accepts only where
 flock-verify accepts (`AcceptedLive`), and each proof is accepted with committed rows that fail `TileRel` on the path
 with probability at most `δ`: outside `δ` the rows are one assignment the circuit's evaluation agrees with on every
 drawn unit, at which every drawn unit's decoded cells have `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_b]`, or the
@@ -54,6 +55,7 @@ def TileSessionSound : Prop :=
       ∃ pt ∈ (sess x w i).own, pt.name = ok) →
     (∀ x w i, ∀ p ∈ (sess x w i).c.ports, ∃ r ∈ (sess x w i).own, r.name = p.name) →
     (∀ x w i, ∃ ks, (ok, ks) ∈ known x w i ∧ ∀ r ∈ ks, r.1 = okRow) →
+    32 ∣ K → 64 ≤ K → K < 2 ^ 17 →
     (∀ x w i, Accounting.Assumptions.TS.TileChecks dq (sess x w i) ok (dec x w i)) →
     (∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
     Accounting.Assumptions.TS.AcceptedLive (tileLayer sess out ok known dq dec right) sess out ∧
