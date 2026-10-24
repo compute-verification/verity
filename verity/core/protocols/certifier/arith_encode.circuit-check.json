@@ -1,10 +1,7 @@
 {
  "definitions": {
-  "ArithCountFinish_v1{CW=20,NB=0}": {
+  "ArithCountFinish_v1{CW=20}": {
    "and": 41
-  },
-  "ArithCountFinish_v1{CW=20,NB=21}": {
-   "and": 67
   },
   "ArithCountStep_v1{K=18,BIN=0,CW=20}": {
    "and": 3963

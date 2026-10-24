@@ -2,7 +2,7 @@
 counting the bits it would write, which is what the composition charges, or checking them against a segment.
 
     ArithCountStep_v1{K, BIN, CW}  (tally, en, symbol) -> tally'
-    ArithCountFinish_v1{CW, NB}    (tally, pool[NB], c) -> (ok, bits)
+    ArithCountFinish_v1{CW}        (tally, c) -> (ok, bits)
     tally = (low[32], high[32], used, ok, bits[CW])
     BookKT_v1{C}                   (counts[C], en, ctx, bit) -> (ok, f0, f1, counts')
     ChargeCount_v1{N}              (book, carry, en[N], bit[N]) -> (ok, bits[CW], carry')
@@ -25,16 +25,14 @@ segment bits it would write, and the window's finish refuses unless the count is
 segment is `shifts + 2` bits, or none when nothing was used (code.py's `ArithEncoder`): each scaling puts one bit in it
 (a resolved bit, or a pending one the next resolution or the finish writes), and the finish two more. So the step adds
 its scalings to `bits`, and the finish adds 2 when `used`, then outputs ok (`ok` and bits ≤ c) and bits. Advice v1
-takes NB = 0: its KV pool is registered, not sent. With NB ≥ 1 the finish also adds an Elias-gamma header of `pool`
-(1 ≤ pool < 2^NB), the pool header v1 sent before: 2·bitlen(pool) − 1, from the suffix ORs of pool's bits, a
-thermometer whose top is bitlen(pool). Within one symbol code.py's loop takes p resolutions (E1, E2: low and high agree
-on their top bit) and then u underflows (E3: low's top two bits 01 and high's 10), and never a resolution after an
-underflow, which leaves low's top bit 0 and high's 1. In bit positions from the top, p is the first index where low and
-high differ, and u the run after it where low is 1 and high 0. So the step takes n = p + u from a thermometer over the
-top K + 2 positions (three ANDs a position), refuses n > K, and gets the next interval by one shift: low becomes 0
-followed by low's low 31 bits shifted up by n, with 0s in, and high 1 followed by its shifted up with 1s in, a log
-shifter of bitlen(K) levels. It has no per-scaling slots, which the segment check needs. The count is CW bits (`CW` =
-20, a window's charge below 2^20), and a count past it is refused.
+sends no pool header: its KV pool is registered. Within one symbol code.py's loop takes p resolutions (E1, E2: low and
+high agree on their top bit) and then u underflows (E3: low's top two bits 01 and high's 10), and never a resolution
+after an underflow, which leaves low's top bit 0 and high's 1. In bit positions from the top, p is the first index
+where low and high differ, and u the run after it where low is 1 and high 0. So the step takes n = p + u from a
+thermometer over the top K + 2 positions (three ANDs a position), refuses n > K, and gets the next interval by one
+shift: low becomes 0 followed by low's low 31 bits shifted up by n, with 0s in, and high 1 followed by its shifted up
+with 1s in, a log shifter of bitlen(K) levels. It has no per-scaling slots, which the segment check needs. The count
+is CW bits (`CW` = 20, a window's charge below 2^20), and a count past it is refused.
 
 **What the circuit computes, never witness.** A decision's context is the replay's position (under `code_v1`
 min(run, 2), with run the decisions since the last arrival), carried in the circuit. Its (f0, f1) are the model's, from
@@ -110,15 +108,14 @@ the counts start public, at the registered priors, and pass from model to model,
 replay's (plain: min(passes, 2), C = 3): neither is witness.
 
 **Statics** (public): K, the scalings a symbol may take (18 covers every symbol); BIN, binary (1) or general (0)
-symbols; CW, the count's width; NB, the header's pool width (0: no header); C, the contexts; NW, a count's width in
-ENC-REPLAY's model; and N, a window's slots (1 ≤ N < 2^16; `charge_book` also refuses an N whose top bin the book's
+symbols; CW, the count's width; C, the contexts; NW, a count's width in ENC-REPLAY's model; and N, a window's slots (1 ≤ N < 2^16; `charge_book` also refuses an N whose top bin the book's
 cap cuts short). Fields are little-endian. Both steps are specified on the states a window reaches (low ≤ high),
 where code.py's loop is the one above.
 
 **Cost** (`size`, ANDs): ArithCountStep_v1{K=18, BIN=1, CW=20} is 2,243: the interval (one 33 × 16-bit product, one
 non-restoring division with 32 quotient bits, and the two ends) 1,855, the scalings at once 366 and the count 22.
-{K=18, BIN=0, CW=20} is 3,963. ArithCountFinish_v1{CW=20, NB=0}, advice v1's, is 41, and {CW=20, NB=21} (a pool
-header to 2^20 blocks) 67. BookKT_v1{C=3} is 337 and {C=1} 210. One decision, counted, is the step and the book's
+{K=18, BIN=0, CW=20} is 3,963. ArithCountFinish_v1{CW=20} is 41. BookKT_v1{C=3} is 337 and {C=1} 210. One
+decision, counted, is the step and the book's
 model: 2,580 ANDs, and the context counter's few. ChargeCount_v1{N} is about 2,553 a decision (the two, less what
 they share, and the run counter) and about 15,000 a window (n_arrived's two steps, the four zero counts and the
 finish): 19,536 at N = 2, 50,664 at N = 14 and 178,978 at N = 64. ArithEncodeStep_v1{K=18, BIN=1} is 3,244: the
@@ -302,17 +299,11 @@ def reference_count_step(K: int, BIN: int, CW: int, st: Tally, en: int, sym: Seq
     return Tally(low, high, used, st.ok, st.bits + n)
 
 
-def gamma_len(v: int) -> int:
-    """Elias-gamma's length, 2·bitlen(v) − 1, for v ≥ 1 (1 at v = 0, which the finish refuses)."""
-    return 2 * _bitlen(v) - 1
-
-
-def reference_count_finish(CW: int, st: Tally, c: int, NB: int = 0, pool: int = 0) -> tuple[int, int]:
-    """code.py's `finish` counted: (ok, bits), with bits the window's charge and ok 0 unless it is at most the declared
-    charge c. The charge is the segment's length (two more when `used`), and with NB ≥ 1 the header's too, Elias-gamma of
-    the pool 1 ≤ pool < 2^NB (advice v1 takes NB = 0)."""
-    total = st.bits + 2 * st.used + (gamma_len(pool) if NB else 0)
-    return st.ok & int(total <= c and not total >> CW and (not NB or pool >= 1)), total & ((1 << CW) - 1)
+def reference_count_finish(CW: int, st: Tally, c: int) -> tuple[int, int]:
+    """code.py's `finish` counted: (ok, bits), with bits the window's charge, the segment's length (two more when
+    `used`), and ok 0 unless it is at most the declared charge c."""
+    total = st.bits + 2 * st.used
+    return st.ok & int(total <= c and not total >> CW), total & ((1 << CW) - 1)
 
 
 def count_window(K: int, BIN: int, symbols: Sequence[Sequence[int]], CW: int = CW) -> int | None:
@@ -475,7 +466,7 @@ def _count_out(S) -> list[tuple[str, int, int]]:
 
 
 def _count_fin_in(S) -> list[tuple[str, int, int]]:
-    return _tally(S) + ([("pool", 1, S.NB)] if S.NB else []) + [("c", 1, S.CW)]
+    return _tally(S) + [("c", 1, S.CW)]
 
 
 def _count_fin_out(S) -> list[tuple[str, int, int]]:
@@ -687,32 +678,11 @@ def _build_finish(C, S, *elements):
     return _flat(_FIN_OUT, {"ok": [[ok]], "n": [[ZERO, used]]})
 
 
-def _gamma(C, v):
-    """Elias-gamma's length of v, 1 + 2·m with m = bitlen(v) − 1, and whether v ≥ 1. The suffix ORs t_k (v has a 1 at k
-    or above) are a thermometer, so its top 1 is at the k where t_k ⊕ t_(k+1) is 1, and m's bits are XORs of those."""
-    t = list(v)
-    for k in reversed(range(len(v) - 1)):
-        t[k] = _or(C, v[k], t[k + 1])
-    t.append(ZERO)
-    m = [ZERO] * _bitlen(len(v) - 1)
-    for k in range(1, len(v)):
-        for j in range(len(m)):
-            if (k >> j) & 1:
-                m[j] = m[j] ^ t[k] ^ t[k + 1]
-    return [ONE] + m, t[0]
-
-
 def _build_count_finish(C, S, *elements):
     f = _split(_count_fin_in(S), elements)
     used, ok, bits, c = f["used"][0][0], f["ok"][0][0], f["bits"][0], f["c"][0]
-    tail = [ZERO, used]
-    if S.NB:
-        C.phase = "header"
-        g, some = _gamma(C, f["pool"][0])
-        tail = add(C, g, tail, width=max(len(g), 2) + 1)
-        ok = C.AND(ok, some)
     C.phase = "count"
-    total = add(C, bits, tail, width=S.CW + 1)
+    total = add(C, bits, [ZERO, used], width=S.CW + 1)
     over = _or(C, total[S.CW], sub(C, c, total[:S.CW], S.CW)[1])
     return _flat(_count_fin_out(S), {"ok": [[C.AND(ok, over.inv())]], "bits": [total[:S.CW]]})
 
@@ -795,7 +765,7 @@ def _build_charge(C, S, *elements):
         run = mux(C, e, [C.AND(x, b.inv()) for x in inc], run)
     for zf, zt in zip(f["zfreq"], f["ztotal"]):
         tally = _build_count_step(C, num, *tally, [ONE], [ZERO] * 16, zf, zt)
-    fin = _build_count_finish(C, SimpleNamespace(CW=CW, NB=0), *tally, const_bits((1 << CW) - 1, CW))
+    fin = _build_count_finish(C, SimpleNamespace(CW=CW), *tally, const_bits((1 << CW) - 1, CW))
     C.phase = "count"
     ok = and_reduce(C, oks + [fin[0][0]])
     return _flat(_charge_out(S), {"ok": [[ok]], "bits": [fin[1]], "n0": n0, "n1": n1, "run": [run]})
@@ -868,8 +838,8 @@ def _sig_count(S):
 
 
 def _sig_count_finish(S):
-    if S.CW < 2 or not 0 <= S.NB <= 64 or (2 * S.NB + 1) >> (S.CW - 1):
-        raise ValueError(f"statics {dict(S.__dict__)}: CW ≥ 2, 0 ≤ NB ≤ 64 and 2·NB + 1 < 2^(CW − 1)")
+    if S.CW < 2:
+        raise ValueError(f"statics {dict(S.__dict__)}: CW ≥ 2")
     return tuple((name, Array(n, Array(w, BIT))) for name, n, w in _count_fin_in(S)), _type(_count_fin_out(S))
 
 
@@ -907,9 +877,9 @@ ArithCountStep = _part(
     "window's count (`arith_encode.reference_count_step`)")
 
 ArithCountFinish = _part(
-    "ArithCountFinish", ("CW", "NB"), _sig_count_finish, _build_count_finish,
-    "ENC-CODE's arithmetic encoder's termination added to the window's count, with NB ≥ 1 the Elias-gamma header of the "
-    "pool it sends too, held to the declared charge c (`arith_encode.reference_count_finish`)")
+    "ArithCountFinish", ("CW",), _sig_count_finish, _build_count_finish,
+    "ENC-CODE's arithmetic encoder's termination added to the window's count, held to the declared charge c "
+    "(`arith_encode.reference_count_finish`)")
 
 BookKT = _part(
     "BookKT", ("C",), _sig_book_kt, _build_book_kt,
@@ -940,8 +910,8 @@ def count_unit(K: int = K_MAX, BIN: int = 1, CW: int = CW):
     return bind(ArithCountStep, K=K, BIN=BIN, CW=CW)
 
 
-def count_finish_unit(CW: int = CW, NB: int = 0):
-    return bind(ArithCountFinish, CW=CW, NB=NB)
+def count_finish_unit(CW: int = CW):
+    return bind(ArithCountFinish, CW=CW)
 
 
 def book_kt_unit(C: int = 3):
@@ -1042,12 +1012,11 @@ def evaluate_counts(K: int, BIN: int, CW: int, cases: Sequence[tuple[Tally, int,
     return res
 
 
-def evaluate_count_finishes(CW: int, cases: Sequence[tuple], NB: int = 0) -> list[tuple[int, int]]:
-    """The counting finish at (CW, NB) on each (state, c), or (state, c, pool) when NB ≥ 1, in one evaluation."""
-    S = SimpleNamespace(CW=CW, NB=NB)
-    args = [list(rows) for rows in zip(*(_args(_count_fin_in(S), {**_tally_vals(st), "c": c, "pool": p[0] if p else 0})
-                                         for st, c, *p in cases))]
-    out = evaluate_bits(count_finish_unit(CW, NB), *args)
+def evaluate_count_finishes(CW: int, cases: Sequence[tuple[Tally, int]]) -> list[tuple[int, int]]:
+    """The counting finish at CW on each (state, c), in one evaluation."""
+    S = SimpleNamespace(CW=CW)
+    args = [list(rows) for rows in zip(*(_args(_count_fin_in(S), {**_tally_vals(st), "c": c}) for st, c in cases))]
+    out = evaluate_bits(count_finish_unit(CW), *args)
     return [(f["ok"][0], f["bits"][0]) for f in (_fields(_count_fin_out(S), row)
                                                 for row in out.reshape(len(cases), -1).tolist())]
 
@@ -1106,7 +1075,7 @@ def _staged(kind: str, key: tuple) -> dict[str, int]:
     sig, build, statics = {"step": (_sig_step, _build_step, ("K", "BIN")), "finish": (_sig_finish, _build_finish, ()),
                            "kt": (_sig_kt, _build_kt, ("C", "NW")),
                            "count": (_sig_count, _build_count_step, ("K", "BIN", "CW")),
-                           "count_finish": (_sig_count_finish, _build_count_finish, ("CW", "NB")),
+                           "count_finish": (_sig_count_finish, _build_count_finish, ("CW",)),
                            "book_kt": (_sig_book_kt, _build_book_kt, ("C",)),
                            "charge": (_sig_charge, _build_charge, ("N",))}[kind]
     S = SimpleNamespace(**dict(zip(statics, key)))
@@ -1119,9 +1088,9 @@ def _staged(kind: str, key: tuple) -> dict[str, int]:
 
 def size(kind: str = "step", **st) -> dict[str, int]:
     """ANDs by stage of the step (K, BIN), the finish, the model (C, NW), the counting step (K, BIN, CW), its finish
-    (CW, NB), the book's model (C) or a window's charge (N), traced on a counting circuit."""
+    (CW), the book's model (C) or a window's charge (N), traced on a counting circuit."""
     keys = {"step": ("K", "BIN"), "finish": (), "kt": ("C", "NW"), "count": ("K", "BIN", "CW"),
-            "count_finish": ("CW", "NB"), "book_kt": ("C",), "charge": ("N",)}[kind]
+            "count_finish": ("CW",), "book_kt": ("C",), "charge": ("N",)}[kind]
     out = dict(_staged(kind, tuple(st[k] for k in keys)))
     out["ands"] = sum(out.values())
     return out
@@ -1132,6 +1101,6 @@ __all__ = ["ArithCountFinish", "ArithCountStep", "ArithEncodeFinish", "ArithEnco
            "Tally", "ZERO_COUNTS", "book_kt_unit", "build_charge", "charge_book", "charge_fields", "charge_unit",
            "charge_values", "check_window", "count_finish_unit", "count_unit", "count_window", "evaluate_book_kt",
            "evaluate_charges", "evaluate_count_finishes", "evaluate_counts", "evaluate_finishes", "evaluate_kt",
-           "evaluate_steps", "finish_unit", "fresh", "gamma_len", "kt_unit", "reference_book_kt", "reference_charge",
+           "evaluate_steps", "finish_unit", "fresh", "kt_unit", "reference_book_kt", "reference_charge",
            "reference_count_finish", "reference_count_step", "reference_finish", "reference_kt", "reference_step",
            "scaled", "size", "step_arguments", "step_unit"]

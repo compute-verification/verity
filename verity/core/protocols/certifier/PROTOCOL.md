@@ -1573,7 +1573,7 @@ composition below): what the bound counts is the charge, not the committed lengt
 6. `compile_steps(registered, advice, ingress)` (#3504) turns the advice into the Programs, with `ingress` the certified
    bodies by id.
 
-**The encoder in the circuit** (`arith_encode`: `ArithCountStep_v1{K, BIN, CW}`, `ArithCountFinish_v1{CW, NB}` and
+**The encoder in the circuit** (`arith_encode`: `ArithCountStep_v1{K, BIN, CW}`, `ArithCountFinish_v1{CW}` and
 `BookKT_v1{C}`, with their references as specs; its docstring has the mechanics).
 - *The charge is the coded length.* The scan reads the committed values (item 2). The encoder runs `code_v1`'s code
   forward over them, once a window from `Tally()`, and counts the bits the window's segment would hold: each symbol's
@@ -1583,7 +1583,7 @@ composition below): what the bound counts is the charge, not the committed lengt
 - *A window's run*, in `code_v1._window`'s order: n_arrived = `left`; each decision slot j < D at context min(run, 2),
   its (f0, f1) from `BookKT_v1{3}`, coded by `ArithCountStep_v1{18, 1, 20}`; n_hits = `hleft` and each shortfall;
   n_resumes (0 under v1); n_order and each order entry's position gap and rank step; n_lag (0 under v1); then
-  `ArithCountFinish_v1{20, 0}`, since v1 sends no pool header. Slots past a count run with en = 0. A refusal (a symbol
+  `ArithCountFinish_v1{20}`. Slots past a count run with en = 0. A refusal (a symbol
   code.py refuses, more than K scalings, a count past 2^20, a charge past c_w) fails the unit, and K = 18 never refuses
   a symbol.
 - *The context and the frequencies are the circuit's, never witness.* The context is a 2-bit run counter carried from

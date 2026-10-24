@@ -287,10 +287,10 @@ def _same_counts(K_, BIN, CW, cases):
     return got
 
 
-def _same_count_finishes(CW, cases, NB=0):
-    got = AE.evaluate_count_finishes(CW, cases, NB)
+def _same_count_finishes(CW, cases):
+    got = AE.evaluate_count_finishes(CW, cases)
     for c, g in zip(cases, got):
-        want = AE.reference_count_finish(CW, c[0], c[1], NB, *c[2:])
+        want = AE.reference_count_finish(CW, *c)
         assert (g[0] == 0) if want[0] == 0 else g == want, (c, g, want)
     return got
 
@@ -375,13 +375,8 @@ def test_counting_refusals():
     used, full = AE.Tally(used=1, bits=13), AE.Tally(used=1, bits=14)
     got = _same_count_finishes(4, [(st, 0), (used, 15), (used, 14), (full, 15)])
     assert got[:2] == [(1, 0), (1, 15)] and [g[0] for g in got[2:]] == [0, 0]
-    # NB ≥ 1, a pool header advice v1 no longer sends: Elias-gamma of the pool (1, 3 and 5 bits for pools 1, 2–3 and
-    # 4–7), a pool of 0 refused, and the header held to c with the segment
-    got = _same_count_finishes(AE.CW, [(st, 1, 1), (st, 3, 3), (used, 20, 7), (used, 19, 7), (st, 9, 0)], NB=3)
-    assert got[:3] == [(1, 1), (1, 3), (1, 20)] and [g[0] for g in got[3:]] == [0, 0]
-    assert _same_count_finishes(5, [(AE.Tally(bits=29), 31, 2)], NB=2)[0][0] == 0
     with pytest.raises(ValueError):
-        AE.size("count_finish", CW=4, NB=4)
+        AE.size("count_finish", CW=1)
 
 
 def test_book_kt_refusals():
@@ -550,8 +545,7 @@ def test_size_counts_the_gates():
     assert AE.size("kt", C=3, NW=24)["ands"] == ands(AE.kt_unit(3, 24))
     for BIN in (1, 0):
         assert AE.size("count", K=K, BIN=BIN, CW=AE.CW)["ands"] == ands(AE.count_unit(K, BIN, AE.CW))
-    for NB in (0, 21):
-        assert AE.size("count_finish", CW=AE.CW, NB=NB)["ands"] == ands(AE.count_finish_unit(AE.CW, NB))
+    assert AE.size("count_finish", CW=AE.CW)["ands"] == ands(AE.count_finish_unit(AE.CW))
     for C in (1, 3):
         assert AE.size("book_kt", C=C)["ands"] == ands(AE.book_kt_unit(C))
     assert AE.size("charge", N=2)["ands"] == ands(AE.charge_unit(2))
