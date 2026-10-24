@@ -2236,11 +2236,11 @@ def test_the_lane_graphs_driver_calls_take_raw_handles_and_raise_with_the_driver
         return types.SimpleNamespace(**{name: fn(name) for name in PPH._Driver.SIGS})
 
     lib = cu()
-    D, ev = PPH._Driver(lib), types.SimpleNamespace(cuda_event=77)
-    D.launch(5, 9)
-    D.record(ev, 9)
-    D.wait(9, ev)
-    D.copy_in(1 << 40, 4096, 200, 9)
+    D, ev, stream = PPH._Driver(lib), types.SimpleNamespace(cuda_event=77), 9
+    D.launch(5, stream)
+    D.record(ev, stream)
+    D.wait(stream, ev)
+    D.copy_in(1 << 40, 4096, 200, stream)
     assert got == [("cuGraphLaunch", 5, 9), ("cuEventRecord", 77, 9), ("cuStreamWaitEvent", 9, 77, 0),
                    ("cuMemcpyHtoDAsync_v2", 1 << 40, 4096, 200, 9)]
     assert lib.cuStreamWaitEvent.argtypes == [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint]
