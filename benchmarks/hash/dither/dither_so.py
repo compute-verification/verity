@@ -727,6 +727,10 @@ class SoWindow(DO.Window):
               "coin_late_ms": 1e3 * t_late}
         if units_wait is not None:
             ph["units_wait_ms"] = units_wait
+            ph["units_gpu_ms"] = sd.ev_u[p][0].elapsed_time(sd.ev_u[p][1])
+            q = sd.prev_of.get(p)
+            if q is not None:
+                ph["units_idle_ms"] = sd.ev_u[q][1].elapsed_time(sd.ev_u[p][0])
         self.phases.append({**ph, **self.host_ms()})
         self.round_log.append({"s": s, "m": m, "root": root.hex()[:32]})
         self.s += 1
@@ -909,6 +913,11 @@ class SoSide(DA.Side):
         self.rroots = [torch.zeros(8 * L, dtype=torch.int64, device=dev) for _ in range(D)]
         self.ready = [torch.cuda.Event() for _ in range(D)]
         self.udone = [torch.cuda.Event() for _ in range(D)]
+        # each slot's units on the units stream (start, end), and the slot dispatched before it: the step's
+        # units_gpu_ms and the stream's units_idle_ms before them, read once round j + D - 1 has waited for them
+        self.ev_u = [(torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)) for _ in range(D)]
+        self.prev_of: dict[int, int | None] = {}
+        self.last_p: int | None = None
         self.tables = [win.r.plan([Call(self.ring_slot[p][w], win.wt[w], win.offs[w], self.ring_aroots[p].data_ptr() + 64 * w,
                                         self.ring_live[p], root_b=win.bset.roots.data_ptr() + 64 * w) for w in range(L)],
                                   seeds=win.plan.seeds, out=win.plan.out) for p in range(D)]
@@ -1088,6 +1097,7 @@ class SoSide(DA.Side):
         self.salt_host[p].copy_(torch.from_numpy(words(salt)))
         with torch.cuda.stream(st):
             st.wait_event(self.ready[p])
+            self.ev_u[p][0].record(st)
             self.ring_salt[p].copy_(self.salt_host[p], non_blocking=True)
             if g is not None:
                 for x in (self.stage, win.plan.out, win.plan.seeds, win.rset.level):
@@ -1114,7 +1124,9 @@ class SoSide(DA.Side):
             if g is not None:
                 g["receipts"], g["r_roots"] = win.plan.out.clone(), win.rset.roots.clone()
                 g["units_graph"] = graph
+            self.ev_u[p][1].record(st)
             self.udone[p].record(st)
+        self.prev_of[p], self.last_p = self.last_p, p
         self.dispatched[j] = p
         self.unit_steps += 1
 
