@@ -1137,6 +1137,7 @@ class SoSide(DA.Side):
         self.ring_base = [torch.empty_like(win.step_base) for _ in range(D)]
         self.ring_salt = [torch.empty(8, dtype=torch.int64, device=dev) for _ in range(D)]
         self.salt_host = [torch.empty(8, dtype=torch.int64).pin_memory() for _ in range(D)]
+        self.salt_np = [x.numpy() for x in self.salt_host]
         self.rroots = [torch.zeros(8 * L, dtype=torch.int64, device=dev) for _ in range(D)]
         self.ready = [torch.cuda.Event() for _ in range(D)]
         self.udone = [torch.cuda.Event() for _ in range(D)]
@@ -1447,7 +1448,7 @@ class SoSide(DA.Side):
         and copies stay outside the graph, and `g["units_graph"]` says which way its units ran."""
         win = self.win
         p, st = j % win.depth, self.side
-        self.salt_host[p].copy_(torch.from_numpy(words(salt)))
+        self.salt_np[p][:] = words(salt)
         q = self.queued.pop(j, None)
         if q is not None:
             self.flag_host[q[0]] = q[1]
