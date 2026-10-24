@@ -188,6 +188,10 @@ int launch(const void *w, uint64_t base, const void *x, void *part, void *dump, 
            cudaStream_t s) {
   using S = Shape<NT, MT>;
   if (N % NT || K % S::KT || M > MT || (!DUMP && M < 1)) return -2;
+  // (32, 64)'s tiles are 48 KiB, past the default limit once the static tweak step is beside them.
+  static const cudaError_t opted = cudaFuncSetAttribute(gemm_kernel<NT, MT, DUMP>,
+                                                        cudaFuncAttributeMaxDynamicSharedMemorySize, S::SMEM);
+  if (opted) return -1000 - (int)opted;
   const int steps = K / S::KT, tiles = N / NT;
   if (splits <= 0) splits = pick_splits(tiles, steps, occupancy<NT, MT, DUMP>(), 16);
   const int per = (steps + splits - 1) / splits;
