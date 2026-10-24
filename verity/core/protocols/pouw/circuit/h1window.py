@@ -518,7 +518,7 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
             "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
             "domain": G.domain(prog, r["value"], words, leaves, window=None if r["value"] == b else window).domain_id.hex(),
             **G.schema_entry(G.SCHEMA_V2),
-            "reads": r["rows"], **({G.PARAM_KEY: key} if port != key else {})}
+            "reads": r["rows"], **({G.PARAM_KEY: key} if key in (ports or {}) and port != key else {})}
     if salt is not None:
         if window is None:
             raise ValueError("a call's public rows are committed under salts of the window's open root: give window")

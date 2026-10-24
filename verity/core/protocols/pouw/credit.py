@@ -843,12 +843,15 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     if any(_digest(roots[v][0]) is None for v in (a, b)):
         return None, ("registration", f"call {call}'s seed reads the roots of {a} and {b}, which are not both SHA-512 "
                                       "digests (128 lowercase hex): register each table at its tree's root")
-    ports: list[tuple[str, str, Any]] = (
-        [(f"a_k{k}_{i}", a, lambda t, i=i: at + r * (t // per) + i) for i in range(r)]
-        + [(f"b_k{k}_{j}", b, lambda t, j=j: b0 + c * (t % per) + j) for j in range(c)]
-        + [("zy", zy, lambda t: t)] + ([(RECEIPT_PORT, rc, lambda t: t)] if rc in rows_of else []))
+    def param(name: str, rows: int, i: int) -> dict[str, str]:
+        return {G.PARAM_KEY: name if rows == 1 else f"{name}[{i}]"}
+
+    ports: list[tuple[str, str, Any, dict[str, str]]] = (
+        [(f"a_k{k}_{i}", a, lambda t, i=i: at + r * (t // per) + i, param(f"a_k{k}", r, i)) for i in range(r)]
+        + [(f"b_k{k}_{j}", b, lambda t, j=j: b0 + c * (t % per) + j, param(f"b_k{k}", c, j)) for j in range(c)]
+        + [("zy", zy, lambda t: t, {})] + ([(RECEIPT_PORT, rc, lambda t: t, {})] if rc in rows_of else []))
     out = {}
-    for port, v, row in ports:
+    for port, v, row, named in ports:
         reads: list[int | None] = [None] * (u0 + size)
         for t in range(size):
             reads[u0 + t] = row(t)
@@ -856,7 +859,7 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
         out[port] = {"value": v, "root": roots[v][0], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
                      "domain": G.domain(program, v, words, leaves,
                                         window=None if is_held(v) else window).domain_id.hex(),
-                     **G.schema_entry(G.SCHEMA_V2), "reads": reads}
+                     **G.schema_entry(G.SCHEMA_V2), "reads": reads, **named}
     pv = f"{prefix}pub@{call}"
     rows, salts, reg = public_table(program, pv, salt, window, u0, size, (roots[a][0], roots[b][0]))
     out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": size, "words": len(rows[0]), "word_bits": G.WORD_BITS,
