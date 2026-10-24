@@ -220,7 +220,7 @@ class _Connection:
     done: asyncio.Future
     arrived: int
     admitted: int | None = None
-    pad: bytes = b""  # its PAD cell, made once at admission: a window's grids hold one a connection, not one a slot
+    pad: bytes = b""  # its PAD cell, made once (`_pad`): a window's grids hold one a connection, not one a slot
     server: Any = None
     ingress: bytearray = field(default_factory=bytearray)  # received, not yet released
     held: bytearray = field(default_factory=bytearray)  # released, held for the server until the END's release
@@ -240,6 +240,13 @@ class _Connection:
     bytes_in: int = 0
     bytes_out: int = 0
     tasks: list[asyncio.Task] = field(default_factory=list)
+
+
+def _pad(c: _Connection, cell_bytes: int) -> bytes:
+    """c's PAD cell, made at its first use and kept, however c was admitted."""
+    if not c.pad:
+        c.pad = cell(PAD, c.ordinal, b"", cell_bytes)
+    return c.pad
 
 
 class Warden:
@@ -355,7 +362,8 @@ class Warden:
             self.publish(self.fails.close_window(), self.params.fails_grid)
 
     def _admit(self, c: _Connection, t: int) -> None:
-        c.admitted, c.pad = t, cell(PAD, c.ordinal, b"", self.params.cell_bytes)
+        c.admitted = t
+        _pad(c, self.params.cell_bytes)
         self.active.append(c)
         c.tasks = [asyncio.create_task(self._client(c)), asyncio.create_task(self._server(c))]
 
@@ -417,10 +425,10 @@ class Warden:
         then written whole with the release order, or kept until its connection opens (at most the ingress bound's
         bytes): the release never waits on the server."""
         B, p, r = self.params.cell_bytes, self.params.payload, self.params.slots
-        out, sent = [], []
+        out, sent, pad = [], [], _pad(c, B)
         for _ in range(r):
             if c.ingress_end is not None:
-                out.append(c.pad)
+                out.append(pad)
             elif len(c.ingress) > p or (len(c.ingress) == p and not c.ingress_ended):
                 sent.append(bytes(c.ingress[:p]))
                 del c.ingress[:p]
@@ -431,7 +439,7 @@ class Warden:
                 out.append(cell(END, c.ordinal, sent[-1], B))
                 c.ingress_end = t
             else:
-                out.append(c.pad)
+                out.append(pad)
         c.ingress_cells += len(sent)
         if c.ingress_end is None and t - c.admitted + 1 >= self.params.ingress_buckets:
             c.problem = c.problem or "ingress"
@@ -451,16 +459,16 @@ class Warden:
         problem fails the connection at once; the server's only at an egress slot, so where it fails is one of the
         egress cells. The reason goes to the `fails` record, never into the cell."""
         B, p, r, D = self.params.cell_bytes, self.params.payload, self.params.slots, self.params.delay
-        out = []
+        out, pad = [], _pad(c, B)
         for _ in range(r):
             if c.ended is not None:
-                out.append(c.pad)
+                out.append(pad)
                 continue
             failed = None
             if c.problem is not None:
                 failed = c.problem
             elif t < c.admitted + D:
-                out.append(c.pad)
+                out.append(pad)
                 continue
             else:
                 whole = len(c.egress) > p or (len(c.egress) == p and not c.egress_ended)
