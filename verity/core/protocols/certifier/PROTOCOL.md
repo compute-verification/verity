@@ -342,8 +342,8 @@ What this establishes: on every accepted link-window of a served link, the egres
 ingress head's counts under the declared sync, whatever the frames hold. So the egress timing adds nothing to what
 the ingress counts and the charged advice carry, and under the premises it is the Program's. The ingress counts are
 the record's own, at most r_in a bucket, as on any end without a profile. What it doesn't establish: the frames
-(N3's, the salt frame's place among them included: the counts see only that bucket 0 holds OWN frames more), and the
-premises, which nothing checks.
+(N3's; the salt frame's place among them is the salt audit's, which takes it only first in bucket 0, `check_salts`),
+and the premises, which nothing checks.
 
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
@@ -1139,6 +1139,11 @@ them.
     salt included, is a `salt` violation at w, recorded with the audit's verdicts. No record binds the salt: the
     revealed salt is the certifier's word, under `trusted-nebius-host`. A committed or certified record doesn't show
     its frames, so there a proof opens the salt frame.
+  - **Its place, pinned.** The audit takes the salt frame only as the first frame of w's bucket 0, slot 0, where the
+    proxy releases it ("Into the block only"); anywhere else it is a `salt` violation at w. The served counts
+    (`served.derive`, `NetworkServedCounts_v1`) take bucket 0's first OWN frames for the salt, so the same counts with
+    the salt in a later bucket would derive other request ends and still pass the circuit; the audit's pin is what
+    ties that premise to the record. A proof that opens the salt frame of a committed record opens it at that slot.
   - **What it costs.** The protocol fixes the salt frame's place in the queue and its bytes, so it adds nothing to the
     ingress count `(r_in + 1)^T`. Its release into the block carries the certifier's coins, which no outside party
     chooses and nothing X sends can change, so it costs 0 bits by the argument the trusted text makes for the

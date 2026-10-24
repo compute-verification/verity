@@ -1723,9 +1723,11 @@ def check_salts(audit: Audit, link: str, records: Sequence[Record], windows: int
     """The audit's read of the salt on ingress link `link` for certifier windows 0 … windows − 1, given the salts
     `reveal` gave by PoUW window of `pouw_window` certifier windows: PoUW window p, at its first certifier window
     w = p·`pouw_window`, is accepted if w has exactly one raw record, which holds exactly one salt frame of p, carrying
-    `PLACEHOLDER`, and p's revealed salt has `salt_bits` bits. Anything else, a missing salt included, is a `salt`
-    violation at w. The verdicts join `audit`'s. A committed or certified record doesn't show its frames, so a proof
-    opens the salt frame there."""
+    `PLACEHOLDER`, as the first frame of its bucket 0 (slot 0, where `Bucketer` releases it), and p's revealed salt has
+    `salt_bits` bits. Anything else, a missing or moved salt included, is a `salt` violation at w. The place is pinned
+    because the served counts (`served.derive`) take bucket 0's first `own` frames for the salt: the same counts with
+    the salt in a later bucket would derive other request ends. The verdicts join `audit`'s. A committed or certified
+    record doesn't show its frames, so a proof opens the salt frame there, at bucket 0 slot 0."""
     by_window: dict[int, list[Record]] = defaultdict(list)
     for r in records:
         if not isinstance(r, Record):
@@ -1738,9 +1740,11 @@ def check_salts(audit: Audit, link: str, records: Sequence[Record], windows: int
         found, salt, prefix = by_window.get(w, []), salts.get(p), p.to_bytes(8, "big")
         accepted = False
         if len(found) == 1 and salt is not None and 8 * len(salt) == salt_bits:
-            held = [x for row in found[0].grid for k, s, x in map(decode_frame, row[: row_count(row)])
+            grid = found[0].grid
+            held = [x for row in grid for k, s, x in map(decode_frame, row[: row_count(row)])
                     if k == SALT and s == SALT_STREAM and x[:8] == prefix]
-            accepted = held == [prefix + PLACEHOLDER]
+            first = decode_frame(grid[0][0]) if grid and row_count(grid[0]) else None
+            accepted = held == [prefix + PLACEHOLDER] and first == (SALT, SALT_STREAM, prefix + PLACEHOLDER)
         out.append(Verdict(link, w, None if accepted else "salt"))
     audit.verdicts.extend(out)
     return out
