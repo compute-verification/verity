@@ -3,7 +3,8 @@ import Lean
 /-!
 # The audit's facts, from the package's `.olean` files as data
 
-`lake env lean --run Facts.lean CONFIG` imports the roots named in `CONFIG` (a JSON file `check.py` writes) with
+`lake env FACTS CONFIG`, where `FACTS` is this file compiled (`lean -c`, then `leanc`; `lake env lean --run Facts.lean CONFIG`
+is the same program interpreted), imports the roots named in `CONFIG` (a JSON file `check.py` writes) with
 initializers disabled and no environment extension loaded, so none of the package's code runs: no `initialize`, no
 attribute handler, no delaborator. It writes one JSON document to the path `CONFIG` names. It reports facts and makes no
 judgement; `check.py` holds the policy.

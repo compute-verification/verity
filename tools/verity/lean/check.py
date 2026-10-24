@@ -137,6 +137,7 @@ repository can copy it and use it with policies of its own (`README.md`).
 from __future__ import annotations
 
 import argparse
+import atexit
 import bisect
 import contextlib
 import difflib
@@ -940,6 +941,40 @@ def dependency_scans(pkg: Path, oleans: list[str], policy: dict) -> tuple[list[s
     return fails, read
 
 
+#: where `facts_program` compiles (None: a temporary directory), one that `run` writes in and every package's `run` reads
+PROGRAMS: Path | None = None
+#: {(directory, toolchain, `Facts.lean`'s SHA-256): (the compiled program, its SHA-256)}
+_programs: dict[tuple[str, str, str], tuple[Path, str]] = {}
+_programs_lock = threading.Lock()
+
+
+def facts_program(pkg: Path) -> str:
+    """`Facts.lean` compiled (`lean -c`, then `leanc`) with ``pkg``'s toolchain, once per toolchain and source in a process:
+    interpreted (`lean --run`), its own walks were most of a large package's facts run. The program is checked against the
+    digest it had when compiled before each use. Raises RuntimeError when it does not compile or has changed."""
+    src = TOOL / "Facts.lean"
+    toolchain = (pkg / "lean-toolchain").read_text().strip() if (pkg / "lean-toolchain").is_file() else ""
+    key = (str(PROGRAMS), toolchain, sha256(src))
+    with _programs_lock:
+        if key not in _programs or not _programs[key][0].exists():
+            if PROGRAMS is None:
+                d = Path(tempfile.mkdtemp(prefix="lean-facts-"))
+                atexit.register(shutil.rmtree, d, True)
+            else:
+                d = PROGRAMS / hashlib.sha256("\0".join(key[1:]).encode()).hexdigest()[:16]
+                d.mkdir(parents=True, exist_ok=True)
+            for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / "Facts.c"), str(src)],
+                         ["lake", "env", "leanc", "-O3", "-DNDEBUG", str(d / "Facts.c"), "-o", str(d / "facts")]):
+                rc, text = run(argv, pkg, d / "compile.log")
+                if rc:
+                    raise RuntimeError(f"`{' '.join(argv)}` failed (exit {rc}):\n{text[-3000:]}")
+            _programs[key] = (d / "facts", sha256(d / "facts"))
+        program, digest = _programs[key]
+    if sha256(program) != digest:
+        raise RuntimeError(f"tamper: the compiled `Facts.lean` ({program}) changed after it was compiled")
+    return str(program)
+
+
 def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None) -> dict:
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
     runs): the facts document it writes.  A guarantee whose type is a definition under `meaning`, applied under binders, gets
@@ -957,7 +992,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
                                   "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
-    rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Facts.lean"), str(config)], pkg, work / "facts.log")
+    rc, text = run(["lake", "env", facts_program(pkg), str(config)], pkg, work / "facts.log")
     if rc or not out.exists():
         raise RuntimeError(f"`Facts.lean` failed (exit {rc}; a root that was not built?):\n{text[-3000:]}")
     facts = json.loads(out.read_text())
