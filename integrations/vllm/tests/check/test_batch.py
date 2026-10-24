@@ -82,7 +82,7 @@ def test_negative_a_cross_row_template_reads_another_owners_row():
     fn = bind(CROSS, M=3, H=2)
     found = separable(fn, (Rows(("a", "b", "c")), SHARED), Rows(("a", "b", "c")))
     assert [(c.owner, c.param, c.holder, c.leaves) for c in found] == [("b", "x", "a", ((0, 2),)), ("c", "x", "a", ((0, 2),))]
-    assert "owner 'b'" in str(found[0]) and "held by owner 'a'" in str(found[0])
+    assert "of owner 'b'" in str(found[0]) and "held by owner 'a'" in str(found[0])
 
 
 def test_negative_a_batch_operand_is_read():
@@ -162,5 +162,5 @@ def test_check_and_report_hold_verdicts_to_the_declared_ones():
     assert [v.got for v in vs] == [(True, None), (False, None), (None, False), (None, False)]
     assert [v.ok for v in vs] == [True, True, True, False]
     text = report(vs)
-    assert "| `cross` | **fail**: owner 'b'" in text and text.count("**NO**") == 1
+    assert "| `cross` | **fail**: the outputs of owner 'b'" in text and text.count("**NO**") == 1
     assert vs[1].to_json()["crossings"] and vs[2].to_json()["splits"][0].startswith("at ()")

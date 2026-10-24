@@ -104,7 +104,7 @@ class Crossing:
     def __str__(self) -> str:
         lo, hi = self.leaves[0]
         whose = "a batch-derived value" if self.holder is BATCH else f"owner {self.holder!r}"
-        return (f"owner {self.owner!r}'s outputs read {self.param} leaves {lo}…{hi - 1}"
+        return (f"the outputs of owner {self.owner!r} read {self.param} leaves {lo}…{hi - 1}"
                 f"{f' (+{len(self.leaves) - 1} runs)' if len(self.leaves) > 1 else ''}, held by {whose}"
                 f"{' (an over-approximated cone)' if self.approximate else ''}")
 
