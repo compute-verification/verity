@@ -13,7 +13,7 @@ rounded for display. `--line-by python` computes it in `line.py` alone, a readin
 Group g's coin σ_g left the challenger at its release log's `released_at` for challenge coin g, and window g's last
 root reached it at the first `received_at` of a request naming it by place (`auditor_seen`). Openings coin g's request
 names it (`audit.Session.close` asks for the coin after the window's last root), and a paced window is drawn at its
-k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, σ_(g+2)'s request names the same root too. Both
+k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, σ_(g+2)'s request names the same root too (at one window in flight, σ_(g+1)'s at any k). Both
 times are the challenger's monotonic clock in its release log, whose lines its close signs (`challenger.session_of`),
 and whose close, record and refused hellos the auditor's ledger sealed at the session's end (`remote.trusted_session`).
 So L_g = max(A_g, s_(g+1)) − s_g on the challenger's clock holds group g's reads: they come after its coin, whose seed
@@ -180,12 +180,13 @@ def release_log(lines: list[str]) -> dict[str, dict[str, list]]:
     return fam
 
 
-def auditor_seen(lines: list[str], seen: list[dict]) -> tuple[list[dict], dict]:
+def auditor_seen(lines: list[str], seen: list[dict], in_flight: int = 2) -> tuple[list[dict], dict]:
     """`seen` (a session's `windows_seen`) with each group's coin and last root on the challenger's clock: `released_ns`
     challenge coin g's release, `arrivals_ns` the first receipt of the requests that name the window's last root by
-    their place, openings coin g's and, when it names the same root, σ_(g+2)'s; and which family's came first. Both
-    leave only once that root has come, so a root the prover repeats can't make A_g early, as an earlier request
-    naming the same value (σ_(g+1)'s, or another window's) would."""
+    their place, openings coin g's and, when it names the same root, σ_(g+2)'s (σ_(g+1)'s at one window in flight,
+    `in_flight` 1, `audit.Pace.in_flight`); and which family's came first. Both leave only once that root has come, so
+    a root the prover repeats can't make A_g early, as an earlier request naming the same value (another window's)
+    would."""
     fam = release_log(lines)
     ch, op = fam.get("challenge"), fam.get("openings")
     n = len(seen)
@@ -195,8 +196,9 @@ def auditor_seen(lines: list[str], seen: list[dict]) -> tuple[list[dict], dict]:
     out, by = [], {}
     for g, w in enumerate(seen):
         t, label = op["received"][g], "openings"
-        if g + 2 < len(ch["after"]) and ch["after"][g + 2] == op["after"][g] and ch["received"][g + 2] < t:
-            t, label = ch["received"][g + 2], "challenge"
+        u = g + in_flight
+        if u < len(ch["after"]) and ch["after"][u] == op["after"][g] and ch["received"][u] < t:
+            t, label = ch["received"][u], "challenge"
         by[label] = by.get(label, 0) + 1
         out.append({**w, "released_ns": ch["released"][g], "arrivals_ns": [t] if w["arrivals_ns"] else []})
     return out, {"last_root_first_named_by": by}
@@ -602,7 +604,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         row["T"] = t
         if not s["accepted"]:
             continue
-        seen, row["named"] = auditor_seen(log, s["windows_seen"])
+        seen, row["named"] = auditor_seen(log, s["windows_seen"], s["pace"].get("in_flight", 2))
         a = copy.deepcopy(s)
         a["windows_seen"] = seen
         row["groups"] = len(seen)

@@ -28,14 +28,16 @@ One connection serves one registration and then `--sessions` sessions over it, e
    every pass and held on average), and with `--host-bytes` the same by kind against the node's HBM and host DRAM
    (`node_line`).
 
-With `--paced K:T_MS:DRAWS:WINDOWS` each session is paced (`pace_of`, `audit.Pace(K, T)`): a coin every K passes,
-each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
+With `--paced K:T_MS:DRAWS:WINDOWS[:F]` each session is paced (`pace_of`, `audit.Pace(K, T, F)`): a coin every K
+passes, each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
 `--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
 (`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is drawn at its k-th
 root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
 fixes each group's end there, and `auditor_line.py` reads the line on the challenger's clock from it. A boundary due by
 then leaves right behind the close, so its coin, after the same root, is asked for in the same round trip, second
-(`coins.Coins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.
+(`coins.Coins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.  At F = 1 a group's
+boundary is due at its k-th root, so its coin is asked for first, after that root, and the close second, and the
+prover waits a round trip on each coin.
 
 A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
 hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
@@ -98,7 +100,7 @@ Openings are checked in the clear: zero-knowledge proof units are not in this ha
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
                        [--registry REGISTRY.json] [--verdict lean|both|python] [--lean-exe PATH]
-                       [--paced K:T_MS:DRAWS:WINDOWS ...] [--transcript DIR]
+                       [--paced K:T_MS:DRAWS:WINDOWS[:F] ...] [--transcript DIR]
                        [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
                        [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
                         --challenger-period P --challenger-main FILE [--challenger-minutes M]]
@@ -404,13 +406,20 @@ TIME_HELD = "held over time"
 
 
 def pace_of(spec: str, pass_ms: float) -> dict:
-    """`K:T_MS:DRAWS:WINDOWS` as a session's pacing: groups of K passes, each a `Session` window of its own whose coin
-    is a live coin, WINDOWS credited stretches of T_MS and a closing one after them, `groups` groups a stretch (at
-    `pass_ms` a pass) and `draws` = DRAWS/groups openings a group, so a stretch draws as an unpaced T_MS window would."""
-    k, t_ms, draws_t, windows = (float(x) if i == 1 else int(x) for i, x in enumerate(spec.split(":")))
+    """`K:T_MS:DRAWS:WINDOWS[:F]` as a session's pacing: groups of K passes, each a `Session` window of its own whose
+    coin is a live coin, WINDOWS credited stretches of T_MS and a closing one after them, `groups` groups a stretch (at
+    `pass_ms` a pass) and `draws` = DRAWS/groups openings a group, so a stretch draws as an unpaced T_MS window would;
+    F the windows in flight (`audit.Pace.in_flight`, 2 when absent, named only at 1)."""
+    parts = spec.split(":")
+    if len(parts) not in (4, 5):
+        raise ValueError(f"a pace is K:T_MS:DRAWS:WINDOWS[:F], not {spec!r}")
+    k, t_ms, draws_t, windows = (float(x) if i == 1 else int(x) for i, x in enumerate(parts[:4]))
+    f = int(parts[4]) if len(parts) == 5 else 2
+    if f not in (1, 2):
+        raise ValueError(f"a pace's windows in flight are 1 or 2, not {f}")
     groups = max(1, round(t_ms / (k * pass_ms)))
     return {"k": k, "t_ms": t_ms, "draws_t": draws_t, "windows": windows, "groups": groups,
-            "draws": math.ceil(draws_t / groups), "pass_ms": pass_ms}
+            "draws": math.ceil(draws_t / groups), "pass_ms": pass_ms} | ({"in_flight": 1} if f == 1 else {})
 
 
 def paced_groups(mem: dict, seen: list[dict], *, block_bytes: int) -> list[line.Group]:
@@ -1059,13 +1068,16 @@ class Verifier:
         `Session.next_boundary_ns`: once its group has k − 1 roots (the pass in flight is its last), or for k = 1 once
         the group before has its root (the first group's at once), so the honest prover never waits on a coin; and at
         the latest at max(its coin + (k − 1)·A, the group before's deadline), so its roots are due within about k
-        allowances of its coin."""
+        allowances of its coin.  At one window in flight (`pace["in_flight"]` 1) each boundary leaves once its group
+        has its k roots, at the latest at max(its coin + k·A, that deadline), and the prover waits a round trip on
+        each coin."""
         reg, K = self.registration, None if pace is None else pace["k"]
         W = self.W if pace is None else pace["groups"] * (pace["windows"] + 1)
         samples, window_ns = (self.samples, self.T) if pace is None else (pace["draws"], 1)
+        one = {} if pace is None or pace.get("in_flight", 2) == 2 else {"in_flight": pace["in_flight"]}
         params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred,
-                              pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)))
+                              pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6), **one))
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         appends = self.appends_of()
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
@@ -1074,7 +1086,7 @@ class Verifier:
             self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
         session = Pair(self, books, k, case)
         self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
-                        "commitment": session.commitment.to_json(), "pace": K})
+                        "commitment": session.commitment.to_json(), "pace": K} | one)
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -1554,10 +1566,11 @@ def main() -> int:
     ap.add_argument("--transcript", type=Path, metavar="DIR",
                     help="write each session's difftest case to DIR (`lean_verifier.Transcript`: about 0.6 GB a "
                          "window at 33,273 openings), its path, bytes and sha256 in verifier.json")
-    ap.add_argument("--paced", nargs="+", metavar="K:T_MS:DRAWS:WINDOWS",
+    ap.add_argument("--paced", nargs="+", metavar="K:T_MS:DRAWS:WINDOWS[:F]",
                     help="pace each session's passes, one spec a session (`pace_of`; replaces --sessions, --windows, "
-                         "--window-ms and --samples): groups of K passes under a live coin each (`audit.Pace`), and "
-                         "γ per fixed T_MS")
+                         "--window-ms and --samples): groups of K passes under a live coin each (`audit.Pace`), "
+                         "γ per fixed T_MS, and F windows in flight (2, the default, or 1: each coin after the root "
+                         "before it)")
     ap.add_argument("--pace-pass-ms", type=float, default=17.0,
                     help="the pass the paced sessions' groups a stretch are counted at (0: the calibration's median "
                          "pass interval)")
