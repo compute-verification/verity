@@ -351,26 +351,35 @@ An advised link is a served link under arbitrary traffic: responses of any lengt
 timed as serving chose, carried across windows. Nothing fixes its egress counts before the run and FIXLEN doesn't hold,
 so N2 takes them from the prover's advice and holds the advice to the certified ingress head. The advice is
 `advised.LinkAdvice`: I1's advice (`advice.Advice`, v0, "Advice v0" below: one per certifier session, after serving,
-public in v0 and charged by `advice.bits`) and N2's ingress part, which v0 leaves to N2's advice mode. Declared with
-`LinkWindows(advised=AdvisedProfile(windows, own))`.
+public in v0 and charged by `advice.bits`) and `received[w]`, the request frames the ingress certifier releases in
+window w. Declared with `LinkWindows(advised=AdvisedProfile(windows, request_frames, own))`, whose `request_frames` is
+the link's public framing: entry n − 1 is the ingress frames a request of an n-token prompt takes (CERT-VARLEN's id
+requests, whose frames are a function of the prompt's length alone), for every prompt length the link admits.
 
 - **What N2 reads** (`advised.view`):
   - of I1's advice, fields `advice.bits` charges: each request's `prompt_len` and `output_len` and each step's rows'
     `request`, `start` and `n`, through `advice.outputs`, which numbers the kept outputs (request j's λ-th, in step
     then row order); and `release[k]`, the session-global egress bucket in which output k's frame is released. It
     reads no `id`, `finish`, `kind`, `cache_hit`, `preempted` or `sources` beyond `Advice`'s own validity;
-  - of N2's ingress part: `ingress_end[j]`, the request frames on the ingress link up to and including request j's
-    last (v0 lists requests in order of their first row, not their arrival), and `received[w]`, the request frames
-    the ingress certifier releases in window w. Construction refuses ends that aren't one distinct positive u32 a
-    request, or whose last isn't Σ `received`. `advised.bits` charges the ends ("The charge" below).
-- **The window's view** (`advised.view`), computed by the verifier in the clear from the advice and the declared
-  syncs, is the unit's public input:
+  - `received[w]`, which the unit holds to window w's certified ingress head;
+  - the framing, and each window's declared sync, which must be one of Σ_sync, the set the certified egress head's
+    parameters digest binds (outside it the advice is refused).
+- **The ingress ends are derived** (`advised.ends`), not advised: advice request j is the link's j-th request (IO-TIE's
+  map, which holds advice request r to the ingress certifier's r-th; FCFS admission meets it, since v0's first-row
+  order is then the arrival order), so it ends at request frame `ends[j]` = Σ_{i ≤ j} `request_frames[prompt_len_i −
+  1]`, and the last end must be Σ `received`, the link's certified request frames. A prompt longer than the framing
+  covers, or ends whose last isn't Σ `received`, refuses the advice. No field but v0's says where a request ends, so
+  the ends cost nothing beside `advice.bits`.
+- **The window's view** (`advised.view`), computed by the verifier in the clear from the advice, the framing and the
+  declared syncs, is the unit's public input:
   - `released[t]`, the frames the advice releases in bucket t, at most R (more refuses the advice);
   - `floor[t]`, the request frames the window's ingress must have released by bucket t, less B_w = Σ_{v<w}
     `received[v]`. Output λ of request j released at b is eligible no earlier than j's anchor + δ + ⌊λ/ρ⌋
-    (`schedule.eligible`) under the sync (δ, ρ) of the window that holds b, and is released no earlier than that: so
-    the first `ingress_end[j]` request frames are released by bucket b − δ − ⌊λ/ρ⌋. A frame for which that bucket is
-    before 0, or released in a window with no declared sync, refuses the advice;
+    (`schedule.eligible`) under the sync (δ, ρ) of the window that holds b, and ready no earlier than the bucket after
+    its anchor (the certifier's clock: the request reaches the server at its anchor's tick, and a frame read in
+    bucket t is ready at t + 1), and is released no earlier than either: so the first `ends[j]` request frames are
+    released by bucket b − max(1, δ + ⌊λ/ρ⌋). A frame for which that bucket is before 0, or released in a window
+    with no declared sync, refuses the advice. No declared sync moves the floor past the certifier's clock;
   - `received`, `received[w]`.
 - **The unit** is `NetworkAdvisedLinkWindow` v1{EGRESS, INGRESS, ADVISED}: `NetworkLinkWindow`'s checks, and one gate
   (`advised.gate`) naming `advised.NetworkAdvisedCounts_v1{T, RIN, OWN}` and its circuit digest pinned in
@@ -382,12 +391,12 @@ public in v0 and charged by `advice.bits`) and N2's ingress part, which v0 leave
   reference and their pinned digests without lowering them (`--lower-max-ands 70000` lowers them to 62,986 and
   64,847 with no mismatch); T = 512, R_in = 4, OWN = 1 lowers whole to 55,343 ANDs, which the sidecar pins.
 - **Public** (`PUBLIC_ADVISED`): `PUBLIC_SERVED`'s items but the served sizes, with the advised ones (the link's
-  windows and OWN), each window's declared sync, and the advice as a protocol output (`OUTPUTS_ADVISED`: the verdict,
-  the deadline bit and the advice's digest). The heads' counts stay witness.
+  windows, the framing and OWN), each window's declared sync, and the advice as a protocol output (`OUTPUTS_ADVISED`:
+  the verdict, the deadline bit and the advice's digest). The heads' counts stay witness.
 - **The verifier of record** is `LinkWindows.verify(…, advice=A)`, which on an advised link also runs `advised_check`:
   `advised.reference` over the opened heads' counts and `view(A, w)`. Without a `LinkAdvice`, or on one `view`
   refuses, the window is refused. Each window reports a third public output, `advice`, the SHA-512 of A's canonical
-  encoding (`advice.encode`) and its ingress part (`advised.digest`), so it names the string the compiler reads too.
+  encoding (`advice.encode`) and `received` (`advised.digest`), so it names the string the compiler reads too.
   `network_verdict` takes the advised profile's windows and refuses a window that names another advice than the first
   accepted window's, so every window is checked against one advice.
 - **Carry-over is stated by the advice, not forbidden.** An output sampled in one window may be released in a later
@@ -396,25 +405,27 @@ public in v0 and charged by `advice.bits`) and N2's ingress part, which v0 leave
   0 (B_0 = 0) on a link whose every window is accepted, B_w is the request frames released before window w, and each
   window's floor is the link's.
 - **Soundness: with the advice fixed, the counts are determined.** On an accepted window w the egress counts are
-  `view(A, w).released`, a function of A's `release` alone: the ingress counts, the ingress part and the syncs only
-  accept or refuse and change no count. So on a link whose every window is accepted, all naming one advice, the egress
-  timing of accepted runs carries at most the advised link's advice bits (`advised.bits`, the accepted-runs bound's
-  A_c) beside the log2 #Σ_sync bits a window the sync charge counts, and nothing else is left free: not the frames'
-  timing within the counts, not the ingress timing, not when the server wrote. The advice is held to the ingress head:
-  no frame is released before the ingress certifier released its request's frames, δ + ⌊λ/ρ⌋ earlier, under the
-  declared sync.
-- **The charge** (`advised.bits_by_window`, summing to `advised.total_bits`): v0's (`advice.bits_by_window`), and the
-  ingress part's. The unit holds `received` to the certified ingress head, so it costs nothing. `ingress_end` is the
-  prover's until IO-TIE ties each request's body to its ingress frames, so it is charged bitlen(Σ `received`) bits a
-  request (`advised.ingress_bits`), to the earliest window whose floor reads it: the window of the earliest of its
-  outputs' floor buckets, which may be before its first release's. Deriving the ends from the certified ingress record
-  instead (CERT-VARLEN's client framing marks a request's last frame, which the certifier signs) would charge them
-  nothing, but the floor would then be computed inside the unit from those marks, which are witness.
+  `view(A, w).released`, a function of A's `release` alone: the ingress counts, `received` and the syncs only accept
+  or refuse and change no count. So on a link whose every window is accepted, all naming one advice, the egress
+  timing of accepted runs carries at most `advice.bits` (the accepted-runs bound's A_c) beside the log2 #Σ_sync bits
+  a window the sync charge counts, and nothing else is left free: not the frames' timing within the counts, not the
+  ingress timing, not when the server wrote, and not where a request ends. The advice is held to the ingress head: no
+  frame is released before the ingress certifier released `ends[j]` request frames, max(1, δ + ⌊λ/ρ⌋) buckets
+  earlier, under a sync in Σ_sync. Those are request j's and every earlier request's frames when v0's prompt lengths
+  are the link's requests', in arrival order, which IO-TIE's tie holds, as it holds the rest of v0's schedule to the
+  requests. Without the tie a prover moves the floor only by stating other prompt lengths, which is another advice
+  that `advice.bits` charges whole: the ingress head carries no request's end, so nothing in the unit holds the
+  lengths to the record. A head that carried each bucket's completed requests, signed by the ingress certifier, would.
+- **Bucket 0 is capped at R_in, which holds the own frame.** The ingress certifier releases min(queue, r_in) frames a
+  bucket (`grid.Certifier`) with its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head
+  with a count past its allocation doesn't exist (`certificate.RecordHead`): with R_in request frames arriving in
+  bucket 0 the certified count is R_in, one of them the own frame, and the last request frame goes out in bucket 1.
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);
-  - the releases fall in the link's windows, each of which declares a sync;
-  - `ingress_end` and `received` are the ingress record's;
+  - the releases fall in the link's windows, each of which declares a sync in Σ_sync;
+  - `received` is the ingress record's;
+  - the link's j-th request is advice request j (FCFS admission), an id request of its prompt length;
   - each window's declared sync has a δ and ρ that every frame released in it meets: a small δ, and ρ at least a
     stream's frames a bucket (`schedule.eligible` reads the anchor's window's sync, the view the release's, which the
     verifier sees);

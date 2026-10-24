@@ -31,14 +31,14 @@ A spec-level reference for network accounting's timing channel:
   request-major canonical order, and one T, τ_b and declared sync for a window's anchors (`PROTOCOL.md`, "A served
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
   an honest served link is accepted;
-- an advised link's counts (`advised`, `LinkWindows(advised=AdvisedProfile(windows, own))`), a served link under
-  arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1` (63,031 ANDs at
-  T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice (`LinkAdvice`: I1's
-  `advice.Advice` and N2's ingress part, each request's end on the ingress link and each window's request frames), and
-  the ingress head's counts to the advice: each release eligible under the declared sync after its request's frames,
-  and each window's ingress total the advice's. Carry-over between windows is the advice's. With the advice fixed the
-  counts are determined, so the egress timing carries at most the advice's bits (`advised.bits`: v0's, and each
-  request's ingress end until IO-TIE ties it; `PROTOCOL.md`, "An advised link").
+- an advised link's counts (`advised`, `LinkWindows(advised=AdvisedProfile(windows, request_frames, own))`), a
+  served link under arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1`
+  (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
+  (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
+  each release eligible under a declared sync in Σ_sync, and at least a bucket, after its request's frames, whose end
+  on the ingress link `advised.ends` derives from v0's prompt lengths and the link's public framing, and each window's
+  ingress total the advice's. Carry-over between windows is the advice's. With the advice fixed the counts are
+  determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An advised link").
   An egress end with no profile that is neither served nor advised gets no verdict (`ValueError`, failing closed);
 - the capacity counts;
 - the calibration of honest runs;
