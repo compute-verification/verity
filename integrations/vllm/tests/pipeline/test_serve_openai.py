@@ -337,6 +337,9 @@ def test_commit_record_maps_and_checks_every_request(tmp_path, window_steps):
     assert all(w["passed"] for w in wins)
     assert {e for w in wins for e in w["requests"]} == {r["engine_id"] for r in reqs.values()}
     assert all(w["ids_name"] == "model.embed_tokens/in" for w in wins if not w.get("empty"))
+    trace = records(tmp_path, "step_trace.jsonl")
+    assert [(t["window"], t["step_root"]) for t in trace] == [(w["window"], r) for w in wins for r in w.get("step_roots", [])]
+    assert all(t["rows"] and t["t_end"] is not None for t in trace)
     if window_steps == 2:
         assert len([w for w in wins if not w.get("empty")]) > 1 and any(len(r["windows"]) > 1 for r in reqs.values())
     assert s.windows.summary()["passed"]

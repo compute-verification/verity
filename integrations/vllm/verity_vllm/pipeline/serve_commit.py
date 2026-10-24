@@ -104,10 +104,12 @@ class CommitWindows:
 
     def __init__(self, committer: Any, runner: Any, out: Path, *, run_id: str, window_steps: int,
                  ids_names: Sequence[str] = IDS_NAMES, sampled_name: str = SAMPLED_NAME,
-                 idle_close_steps: int = 1, clock: Callable[[], float] = time.perf_counter) -> None:
+                 idle_close_steps: int = 1, clock: Callable[[], float] = time.perf_counter,
+                 wall: Callable[[], float] = time.time) -> None:
         from verity_vllm.engine.hooks import Hooks
 
-        self.com, self.runner, self.out, self.clock = committer, runner, Path(out), clock
+        self.com, self.runner, self.out, self.clock, self.wall = committer, runner, Path(out), clock, wall
+        self.step_t: dict[int, float] = {}
         self.idle_close_steps = int(idle_close_steps)
         self.open_s = 0.0
         self.run_id, self.window_steps = run_id, int(window_steps)
@@ -153,6 +155,7 @@ class CommitWindows:
         t0 = self.clock()
         self.window += 1
         self.rows = {}
+        self.step_t = {}
         self.com.reset()
         self.com.install()
         self.open_s = self.clock() - t0
@@ -166,6 +169,7 @@ class CommitWindows:
                 if int(me.com._step_index) != before:
                     rows = step_rows(me.runner)
                     me.rows[int(me.com._step_index) - 1] = rows if rows is not None else []
+                    me.step_t[int(me.com._step_index) - 1] = me.wall()
                 return res
             return execute_model
 
@@ -184,8 +188,20 @@ class CommitWindows:
         self.records.append(rec)
         with open(self.out / "windows.jsonl", "a") as fh:
             fh.write(json.dumps(rec) + "\n")
+        self._write_step_trace(rec, rc)
         self._check_finished()
         return rec
+
+    def _write_step_trace(self, rec: dict[str, Any], rc: Any) -> None:
+        """One ``step_trace.jsonl`` line a committed step: its window, its root, when it ended (unix seconds), the request rows
+        it ran, and the committer's own trace of it (tensors, bytes, leaves, layout digest)."""
+        trace = {int(t["step"]): t for t in ((getattr(rc, "extra", None) or {}).get("step_trace") or [])} if rc is not None else {}
+        with open(self.out / "step_trace.jsonl", "a") as fh:
+            for s, root in enumerate(rec.get("step_roots") or []):
+                own = {k: v for k, v in trace.get(s, {}).items() if k not in ("step", "root")}
+                fh.write(json.dumps({"window": rec["window"], "run_id": rec["run_id"], "run_root": rec.get("run_root"), "step": s,
+                                     "step_root": root, "t_end": self.step_t.get(s), "rows": [list(r) for r in self.rows.get(s, [])],
+                                     **own}) + "\n")
 
     def _ids_name(self) -> str | None:
         names = {m.name for metas in self.com._layouts.values() for m in metas}
