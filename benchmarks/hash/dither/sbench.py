@@ -137,6 +137,8 @@ Arms:
     ARM-lag1, ARM-lag2  a dither-a-so arm with DITHER_SO_ROOT_LAG=1 or 2
     ARM-ug0      a dither-a-so arm whose units are launched each step, not replayed as a CUDA graph (DITHER_SO_GRAPH=0)
     ARM-zs       a dither-a-so arm whose z tables build on a tree stream beside its A tables (DITHER_SO_ZSIDE=1)
+    ARM-tail2    a dither-a-so arm without -ov whose mid and round trees build in one launch after the units' wait, the
+                 round's root read from pinned host memory that launch writes (DITHER_SO_TAIL=2, h1c's `Tail`)
     ARM-mmc      a dither-a arm whose GEMMs take $SBENCH_MM_CFG's configs ($DITHER_MM_CFG, dmmsweep.py's best.json)
     ARM-mmq      a dither-a-so arm whose GEMMs take the configs tuned at its own SMQ (MM_CFGS at $DITHER_SO_UNITS_SMQ's
                  Q/D, however its suffixes or SBENCH_ARM_ENV set it), refused at an SMQ MM_CFGS has none for.  J10-R
@@ -399,7 +401,8 @@ SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r"
             "-mc32": env_of("CUDA_DEVICE_MAX_CONNECTIONS", "32"), "-skip": env_of("DITHER_UNITS_SKIP_DEAD", "1"),
             "-rd0": env_of("DITHER_SO_RDEAD", "0"), "-lag1": env_of("DITHER_SO_ROOT_LAG", "1"),
             "-lag2": env_of("DITHER_SO_ROOT_LAG", "2"), "-ug0": env_of("DITHER_SO_GRAPH", "0"),
-            "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-mmc": mm_cfg, "-mmq": mm_smq}
+            "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-tail2": env_of("DITHER_SO_TAIL", "2"), "-mmc": mm_cfg,
+            "-mmq": mm_smq}
 # -smqQ / -smqQoD / -smqQoDcC: a dither-a-so arm's units on the SMs whose id % D < Q, at most C CTAs on each
 # ($DITHER_SO_UNITS_SMQ=Q/D/C, D 8 and no cap without them; -smq0 every SM, whatever the run's environment says)
 SMQ_SUFFIX = re.compile(r"-smq(\d+)(?:o(\d+))?(?:c(\d+))?$")
