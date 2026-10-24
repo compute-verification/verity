@@ -7,11 +7,12 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
 * **The statements.** All 32 lanes are one circuit (the lane index is a public input) and the combine another. Each
   statement is the one unit of the Program a served window's verifier derives for it from its own copy of the window
   Program (`h1window.leaf_program`, here of a one-call window at K over this leaf's tile), and the Lean verifier derives
-  its unit from its own copy of that Program (``--program``, ``--partition``). Each is the templated statement of its
-  Definition's structural lowering (`h1unit.stager`: struct_lower's template at `h1unit.LAYOUT`, the flat circuit never
-  built; its template, ``unit.tmpl``, is what the prover's ``flock-tmpl-unit`` places), or flat under ``H1_TMPL=flat``
-  (`h1unit.layout`). The Lean verifier refuses a templated statement once every other check has passed (`TMPL_WHY`),
-  until the templated statement's proof lands, so there that refusal is each expected ACCEPT (summary's ``held``).
+  its unit from its own copy of that Program (``--program``, ``--partition``). Each is flat, or under
+  ``H1_TMPL=structural`` the templated statement of its Definition's structural lowering (`h1unit.layout`,
+  `h1unit.stager`: struct_lower's template at `h1unit.LAYOUT`, the flat circuit never built; its template, ``unit.tmpl``,
+  is what the prover's ``flock-tmpl-unit`` places). The Lean verifier refuses a templated statement once every other
+  check has passed (`TMPL_WHY`), until its proof lands (PRF-133). Such a check is labelled `TEMPLATED`, never ACCEPT, and
+  counts as passing in place of an expected ACCEPT (summary's ``templated``; ``lean_accepts`` counts the real ones).
 * **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
   `h1tile.reference`). STAND-IN: in a served window these are the window's A, z
@@ -139,6 +140,8 @@ LAZY_ROW = 5
 #: passed: it refuses the form last, until the templated statement's proof lands (`Tags.templated`, `ProvedScope.refusal`)
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 TMPL_WHY = f"refused: {TMPL_STATEMENT}, a templated statement: a statement form the soundness proof does not cover"
+#: the verdict word of a templated check refused only for its form (`TMPL_WHY`): never ACCEPT
+TEMPLATED = "templated: Lean refuses this form until PRF-133"
 
 
 def tile(k: int):
@@ -671,18 +674,21 @@ def summarize(args) -> int:
         v = _verdict(out / "lean" / f"{tag}.out")
         own = _own(out / "lean" / f"{tag}.own")
         err = out / "lean" / f"{tag}.err"
-        # a templated statement's every check passed when its one refusal is the form's (TMPL_WHY): it stands for ACCEPT
-        held = v is not None and c.get("statement") == TMPL_STATEMENT and not v["accepted"] and v["why"] == TMPL_WHY
-        flock = "NONE" if v is None else ("ACCEPT" if v["accepted"] or held else "REJECT")
-        word = "NONE" if v is None or own is None else ("ACCEPT" if flock == "ACCEPT" and own["accepted"] else "REJECT")
+        templated = v is not None and c.get("statement") == TMPL_STATEMENT and not v["accepted"] and v["why"] == TMPL_WHY
+        flock = "NONE" if v is None else "ACCEPT" if v["accepted"] else TEMPLATED if templated else "REJECT"
+        passed = flock in ("ACCEPT", TEMPLATED)
+        word = "NONE" if v is None or own is None else (flock if passed and own["accepted"] else "REJECT")
         why = (v or {}).get("why") or (err.read_text(errors="replace").strip().splitlines()[-1:] if err.exists() else "")
         if own is not None and not own["accepted"]:
             why = own.get("why", "")
-        rows[tag] = {"expect": c["expect"], "lean": word, "as_expected": word == c["expect"] and WHY.get(tag, "") in str(why),
+        met = word == c["expect"] or (word == TEMPLATED and c["expect"] == "ACCEPT")
+        rows[tag] = {"expect": c["expect"], "lean": word, "as_expected": met and WHY.get(tag, "") in str(why),
                      "why": why, "flock_verify": flock, "statement": c.get("statement"), "leaf_own": own, "holds": c["holds"],
                      "ok": c["ok"], "ands": c["ands"], "prove": _time(out / tag / "prove.time"),
                      "lean_time": _time(out / "lean" / f"{tag}.time"), "registered": (v or {}).get("registered")}
-        if tag in plan["honest"] and word == "ACCEPT":
+        if tag in plan["honest"] and word in ("ACCEPT", TEMPLATED):
+            # `produced.shared` reads only an accepted verdict's openings; a templated one's are those Lean reported
+            # before refusing the form, held to the produced record here and never reported as accepted
             verdicts[tag] = {**v, "accepted": True, "of_record": True}
             known.update(c["known"])
             for e in (v.get("registered") or {}).values():
@@ -699,23 +705,25 @@ def summarize(args) -> int:
     ok = (all(r["as_expected"] for r in rows.values()) and not opened_codes and not prep["produced_check"]["honest"]
           and len(verdicts) == len(plan["honest"]) and not shared_codes and forged_codes == ["P-shared"])
     summary = {"ok": ok, "k": prep["k"], "tile": prep["tile"], "ands": prep["ands"], "circuits": prep.get("circuits"),
-               "held": sorted(t for t, r in rows.items() if r["statement"] == TMPL_STATEMENT and r["flock_verify"] == "ACCEPT"),
+               "lean_accepts": sum(r["lean"] == "ACCEPT" for r in rows.values()),
+               "templated": sorted(t for t, r in rows.items() if r["lean"] == TEMPLATED),
                "produced_check": prep["produced_check"],
                "opened": opened, "opened_codes": opened_codes, "shared_codes": shared_codes,
                "shared_forged_lane5": forged_codes, "checks": rows, "registration": prep["registration"],
                "draw": prep["draw"], "produced": honest_record, "binding": prep["binding"]}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     for tag, r in rows.items():
-        print(f"{tag:26s} {r['lean']:7s} expect {r['expect']:7s} ok={r['ok']} {'ok' if r['as_expected'] else 'MISMATCH'}  "
-              f"{str(r['why'])[:160]}")
+        why = "" if r["lean"] == TEMPLATED else str(r["why"])[:160]
+        print(f"{tag:26s} {r['lean']:7s} expect {r['expect']:7s} ok={r['ok']} {'ok' if r['as_expected'] else 'MISMATCH'}  {why}")
     print(f"opened roots against the produced record: {opened_codes or 'ok'}; opened rows against its openings: "
-          f"{shared_codes or 'ok'}, a forged lane-5 opening: {forged_codes}; ANDs {prep['ands']}; all as expected: {ok}")
+          f"{shared_codes or 'ok'}, a forged lane-5 opening: {forged_codes}; ANDs {prep['ands']}; Lean ACCEPTs "
+          f"{summary['lean_accepts']}, {TEMPLATED}: {len(summary['templated'])}; all as expected: {ok}")
     return 0 if ok else 1
 
 
 def cost(args) -> None:
     """A lane's and the combine's ANDs at K (`--k`, 4096 the served one), each its statement's lowering
-    (`class_statement.unit_lowering`, structural unless ``H1_TMPL=flat``, as `h1unit.stager` lowers it), and a leaf's: 32
+    (`class_statement.unit_lowering`, structural under ``H1_TMPL=structural``, as `h1unit.stager` lowers it), and a leaf's: 32
     lanes and the combine."""
     from verity_flock import class_statement as CS
 

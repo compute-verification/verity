@@ -112,25 +112,26 @@ def tile() -> str:
     return t
 
 
-#: the templated statement's layout mode unless ``H1_TMPL`` names another (#3226's struct_lower costs and #3249's
-#: structural verdicts are at it)
+#: the structural statement's layout mode under ``H1_TMPL=structural`` (#3226's struct_lower costs and #3249's structural
+#: verdicts are at it)
 LAYOUT = "iv/hybrid/4"
-#: ``H1_TMPL``'s value for the flat statement
-FLAT = "flat"
+#: ``H1_TMPL``'s values for the flat statement (also unset or empty) and for the structural one at `LAYOUT`
+FLAT, STRUCTURAL = "flat", "structural"
 
 
 def layout() -> str | None:
-    """The statement's form: ``H1_TMPL`` unset or empty, the templated statement at `LAYOUT` (``flock-circuit/tmpl``,
-    `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another layout mode
-    (`verity_flock.tmpl.mode_of`), the templated statement at it; ``flat`` (`FLAT`), None: the flat statement
-    (``flock-circuit``, the unit's netlist in the file). The Lean verifier refuses a templated statement, after every
-    other check, until the templated statement's proof lands (`Tags.templated`), so a run that needs its ACCEPT sets
-    ``H1_TMPL=flat``."""
+    """The statement's form: ``H1_TMPL`` unset, empty or ``flat``, None: the flat statement (``flock-circuit``, the unit's
+    netlist in the file), the one the Lean verifier accepts; ``structural``, the templated statement at `LAYOUT`
+    (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another
+    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The Lean verifier refuses a templated
+    statement, after every other check, until its proof lands (`Tags.templated`, PRF-133), so it stays opt-in."""
     import os
     from verity_flock import tmpl as TM
-    m = os.environ.get("H1_TMPL") or LAYOUT
+    m = os.environ.get("H1_TMPL") or FLAT
     if m == FLAT:
         return None
+    if m == STRUCTURAL:
+        return LAYOUT
     TM.mode_of(m)
     return m
 

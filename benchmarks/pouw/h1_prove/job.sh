@@ -39,9 +39,11 @@
 #      below K = 4096, so a smoke's tiles hold A = 127)
 set -uo pipefail
 # its checks expect the Lean verifier's ACCEPT, which a templated statement never gets until its proof lands
-# (h1unit.layout), so this job stages the flat statement; h1_lanes/job.sh proves the templated one end to end
-export H1_TMPL=${H1_TMPL:-flat}
-[ "$H1_TMPL" = flat ] || { echo "H1_TMPL=$H1_TMPL: this job's checks expect ACCEPT, so it proves only the flat statement (H1_TMPL=flat); h1_lanes/job.sh proves the templated one" >&2; exit 2; }
+# (h1unit.layout), so this job stages only the flat statement; h1_lanes/job.sh proves the structural one end to end
+case "${H1_TMPL:-flat}" in
+  flat) ;;
+  *) echo "H1_TMPL=$H1_TMPL: this job's checks expect ACCEPT, so it proves only the flat statement (H1_TMPL unset or flat); h1_lanes/job.sh proves the structural one" >&2; exit 2 ;;
+esac
 export HZ_CONFIGS=h1 HZ_MEM_GB=${H1_MEM_GB:?} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM=${HZ_WARM:-0}
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 # shellcheck source=../hidden_zk/job.sh

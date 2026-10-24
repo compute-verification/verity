@@ -68,7 +68,7 @@ print(json.dumps({"pin": st.pin, "class": st.class_sha512}))
 @pytest.mark.parametrize("layout", ["", "iv/hybrid/4", "iv/hybrid/4+structural"], ids=["flat", "templated", "structural"])
 def test_fast_staging_composes_the_library_circuit_flat_and_templated(layout, tmp_path):
     """About 20 s: a Boolean unit's `UnitStager` circuit, flat, templated from the flat unit (`circuit.compose`'s
-    ``layout``) and templated from struct_lower (``structural``, the H1 stagers' form unless ``H1_TMPL=flat``), built under
+    ``layout``) and templated from struct_lower (``structural``, the H1 stagers' form under ``H1_TMPL=structural``), built under
     fast_stage's patches and without them, each in its own process: the same file, pin and class. The flat file is the
     one fast_stage streams from its scratch netlist; a templated one has no unit section to stream, and a structural
     one's unit_sha256 is over its template, never a netlist."""

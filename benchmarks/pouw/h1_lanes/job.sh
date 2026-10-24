@@ -5,20 +5,20 @@
 #   research run --on vy-nebius-cpu-1 --pool proofs --project verity --campaign proofs-24h --source . --cwd source \
 #     --mem-gb G --declared-output 'out/*' --env H1L_MEM_GB=G -- bash benchmarks/pouw/h1_lanes/job.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving build, the Lean flock-verify, a venv), PoUW's pouw-leaf-own-window
-#      and, for a templated statement, the prover's flock-tmpl-unit (verity/ml/flock/tests/lean/TmplUnit.lean, which
+#      and, under H1_TMPL=structural, the prover's flock-tmpl-unit (verity/ml/flock/tests/lean/TmplUnit.lean, which
 #      unrolls the unit and so is no part of the verifier of record), built beside flock-verify's sources
 #   2. run.py prepare: the statements' Programs, the leaf's registered values and partials, every statement staged (WORK/plan.tsv),
-#      each circuit the templated statement of its structural lowering unless H1_TMPL=flat (h1unit.layout); then
-#      flock-tmpl-unit places each template's unit rows (circuits/<kind>/unit.placed, the prover's --tmpl-unit)
+#      each circuit flat, or under H1_TMPL=structural the templated statement of its structural lowering (h1unit.layout),
+#      whose unit rows flock-tmpl-unit then places (circuits/<kind>/unit.placed, the prover's --tmpl-unit)
 #   3. one loopback --zk session per statement, H1L_PAR at a time, each drawing its one instance
 #   4. the plan's Lean checks, each with its statement's own Program, partition, public file and registered reads, and
 #      pouw-leaf-own-window's check of those reads, placed from the window's descriptor and round log, against the
 #      registration and produced record the verifier holds, and of each session's draw against the draw policy (every unit)
-#   5. run.py summarize: out/summary.json (a templated statement's expected ACCEPT is the Lean verifier's refusal of the
-#      form after every other check, run.py's TMPL_WHY)
+#   5. run.py summarize: out/summary.json (a templated check refused only for its form after every other check,
+#      run.py's TMPL_WHY, is labelled run.py's TEMPLATED, never ACCEPT)
 # env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (448; h1zy.combine takes K >= 384)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (3: sessions at a time)
-#      H1L_LPAR (8: Lean checks at a time)  H1_TILE (v1 or v3)  H1_TMPL (h1unit.layout's: unset the templated statement at
-#      iv/hybrid/4, flat the flat one)  HZ_CACHE: hidden_zk's
+#      H1L_LPAR (8: Lean checks at a time)  H1_TILE (v1 or v3)  H1_TMPL (h1unit.layout's: unset or flat the flat statement,
+#      structural the templated one at iv/hybrid/4)  HZ_CACHE: hidden_zk's
 set -uo pipefail
 export HZ_CONFIGS=h1-lanes HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -49,11 +49,11 @@ build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit
     && (cd "$D.tmp" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
 TU= TUP=
-if [ "${H1_TMPL:-}" != flat ]; then
+if [ "${H1_TMPL:-flat}" != flat ]; then
   cached tmplunit "$(tree_key verity/core/service/flock verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit > "$W/tu.dir" &
   TUP=$!
 fi
-log "h1-lanes: K=$K tile=${H1_TILE:-v1} form ${H1_TMPL:-iv/hybrid/4} sessions $PAR at a time, Lean $LPAR at a time"
+log "h1-lanes: K=$K tile=${H1_TILE:-v1} form ${H1_TMPL:-flat} sessions $PAR at a time, Lean $LPAR at a time"
 
 $TIME "$OUT/prepare.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $H/run.py prepare --work $WK --k $K --jobs ${H1L_JOBS:-8} \
   --name h1-lanes-${RESEARCH_RUN_ID:-local}" > "$OUT/prepare.out" 2> "$OUT/prepare.err"
@@ -71,7 +71,7 @@ fi
 for t in "$WK"/circuits/*/unit.tmpl; do   # each templated circuit's unit rows at the positions the verifier folds them at
   [ -e "$t" ] || continue
   c=$(basename "$(dirname "$t")")
-  [ -n "$TU" ] || { log "circuit $c is templated, and H1_TMPL=flat built no flock-tmpl-unit"; exit 1; }
+  [ -n "$TU" ] || { log "circuit $c is templated, and H1_TMPL=${H1_TMPL:-} built no flock-tmpl-unit"; exit 1; }
   $TIME "$OUT/tmpl-unit-$c.time" bash -c "$(vlimit "$STAGE_GB") exec $TU $t --layout $(cat "${t%.tmpl}.layout") \
     --out ${t%.tmpl}.placed" > "$OUT/tmpl-unit-$c.txt" 2>&1 || { log "flock-tmpl-unit $c FAILED: $(tail -3 "$OUT/tmpl-unit-$c.txt")"; exit 1; }
   log "tmpl-unit $c: $(grep '^TMPL ' "$OUT/tmpl-unit-$c.txt" | cut -c1-300)"

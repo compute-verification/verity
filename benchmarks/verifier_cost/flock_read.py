@@ -1,5 +1,5 @@
 """flock_read.py K WORK [--circuit-only]: the H1 tile unit's flat statement circuit at contraction K (`h1_prove/h1unit.Shape(K)`,
-#3002's 4×8 tile, staged as `h1_prove/job.sh` stages it, ``H1_TMPL=flat``), and one instance on it (not with
+#3002's 4×8 tile, staged flat as `h1_prove/job.sh` stages it), and one instance on it (not with
 `--circuit-only`, which `flock_tmpl.sh` passes), for `flock_read.sh` to time the Lean verifier's read of.
 
 Writes WORK/circuit.txt, WORK/stmt/{inst.bin,pub.bin} and WORK/build.json (the unit's ANDs, nnz, k_log, the circuit's bytes
