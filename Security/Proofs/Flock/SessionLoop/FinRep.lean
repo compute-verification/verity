@@ -413,7 +413,7 @@ theorem flatMap_size_const {α β : Type} (xs : Array α) (f : α → Array β) 
   | nil => simp
   | cons a L ih => simp only [List.map_cons, List.sum_cons, ih, List.length_cons, Nat.succ_mul]; omega
 
-theorem wordsAt_size (x : Msg) (cs : List FlockDeploy.Coin) (q : ℕ) : (wordsAt x cs q).size ≤ 65536 := by
+theorem wordsAt_size_le (x : Msg) (cs : List FlockDeploy.Coin) (q : ℕ) : (wordsAt x cs q).size ≤ 65536 := by
   unfold wordsAt
   split
   · simp only [FlockDeploy.Coin.vals, Array.size_map, Array.size_range]
@@ -422,7 +422,7 @@ theorem wordsAt_size (x : Msg) (cs : List FlockDeploy.Coin) (q : ℕ) : (wordsAt
 
 /-- **A rep's sizes in the masked scope**: rep stream `k`'s table has `25 ≤ m ≤ 35` and its `--zk` schedule
 (`tables_of_setup`, `Count.tabOfLevel0_sched`), and its request's extra claims, a region's point at each link point, are
-at most `1024 · 65536` (`scope_regions`, `wordsAt_size`). -/
+at most `1024 · 65536` (`scope_regions`, `wordsAt_size_le`). -/
 theorem finRepBounds (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) {s0 spec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {k : ℕ} (hk : k < 2 * spec.tables.size)
     {ρ h tb hi q f} (hR : RepAt L₀.draws src x w ρ h spec k tb hi q f) :
@@ -473,7 +473,7 @@ theorem finRepBounds (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Floc
     exact Nat.div_le_self _ _
   have hx : q.xs.size ≤ 1024 * 65536 := by
     rw [hqx, hex]
-    exact Nat.mul_le_mul hreg (le_trans (hlp _ _) (wordsAt_size _ _ _))
+    exact Nat.mul_le_mul hreg (le_trans (hlp _ _) (wordsAt_size_le _ _ _))
   simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map]
   exact lt_of_le_of_lt (Nat.add_le_add_right hx 2) (by norm_num)
 
