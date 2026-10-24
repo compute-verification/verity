@@ -51,6 +51,7 @@ from verity.ml.circuits.ops.boolean.gf2k import mul
 
 from . import rec_algebra as A
 from . import rec_live as RL
+from .record_text import session_text
 
 HIDDEN = ("unit",)
 UNIT_FORMAT = "flock-ir-unit/v2"
@@ -446,7 +447,7 @@ class Relay:
         self.proxy.write(out)
         d = Path(out) / "prover"
         d.mkdir(parents=True, exist_ok=True)
-        (d / "session.json").write_text(json.dumps(self.prover_record(), indent=1))
+        (d / "session.json").write_text(session_text(self.prover_record()))
         for (t, r), b in self.proxy.proofs.items():
             if t == RL.TABLE:
                 (d / f"{t}.rep{r}.bin").write_bytes(b)
