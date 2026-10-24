@@ -14,7 +14,9 @@
 #                  no period of the lane open, COMMIT on origin/main's first-parent line, vy-auditor-1 pinned at it
 #                  and idle. Nothing is written to a gate.
 #   3. prover      run.sh on PROVER_NODE inside `gpu-lease ENGINES --wait` (32 GB of host memory an engine; not
-#                  preemptible: a gate run stopped midway spends its period), ROLE=prover SERVE=node with PLAN at the
+#                  preemptible: a gate run stopped midway spends its period; timed, GPU_LEASE_TIMED=1, since gpu-lease
+#                  refuses an untimed lease overlapping a window booked in its windows file, the gate run's own
+#                  included), ROLE=prover SERVE=node with PLAN at the
 #                  snapshot core's pin names, gate run 7's engine and node settings, VERIFIER_SSH to vy-auditor-1's
 #                  tunnel account; once leased it waits up to TUNNEL_WAIT_S for the host's verifier to listen.
 #   4. fire        gate.sh fire on GATE_ON: once the prover holds its GPUs, probe again, period-open (circuit of
@@ -185,7 +187,7 @@ PROVER=(--on "$PROVER_NODE" --cwd source --custody-ttl 12h
   --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib 62 --util 0.8"
   --env "NODE_ARGS=--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir $SNAP"
   --env "VERIFIER_SSH=$VERIFIER_SSH" --env TUNNEL_WAIT_S=1800 --env "GPU_LEASE_WHO=memory-accounting-$PERIOD"
-  --env VLLM_NO_USAGE_STATS=1 --env DO_NOT_TRACK=1)
+  --env VLLM_NO_USAGE_STATS=1 --env DO_NOT_TRACK=1 --env GPU_LEASE_TIMED=1)
 LEASE_ARGS=(${LEASE_ON:+--on "$LEASE_ON"} --max-min "$MAXMIN" --mem-gb "$LEASE_MEM_GB")
 if [ -n "$LEASE_BY" ]; then
   by=$(date -u -d "$LEASE_BY" +%s) || { echo "LEASE_BY $LEASE_BY isn't a time"; exit 3; }
