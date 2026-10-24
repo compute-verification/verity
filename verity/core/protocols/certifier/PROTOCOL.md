@@ -1226,7 +1226,7 @@ sealed under an AEAD built from SHA-512 alone.
   - **The premise:** every link between two spatial units is a sealed pair link between two of the auditor's
     certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-host`.
   - **What it changes:** A1's units are then the facility, not each block.
-- **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on vy-nebius-cpu-2: an AMD
+- **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on an AMD
   EPYC Genoa, 256 cores at a load of about 30, with `sha_ni` but no SHA-512 instructions, and OpenSSL 3.0.13).
   Figures are bytes of frames a second on one core, on its CPU seconds. Line rate is 400 Gb/s, 50 GB/s, per uplink in
   each direction; its column is the cores one direction takes at each end.

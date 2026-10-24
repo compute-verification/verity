@@ -37,7 +37,7 @@ and the special-value campaign in `total.py`. -/
 def GemmAmpereStep (step : Nat → List Nat → List Nat → Nat) : Prop :=
   ∀ acc a b, StepInputs AMPERE_BF16_M16N8K16 acc a b → step acc a b = Spec.tcDotTotal AMPERE_BF16_M16N8K16 acc a b
 
-/-- **`trusted-host`**: the auditor-trusted `device` (a network certifier, the active certifier, the memory challenger)
+/-- **`trusted-host`**: the auditor-trusted `device` (a network certifier, the active warden, the memory challenger)
 is the auditor's hardware on a machine its host provider runs and the prover doesn't control; it runs its stated
 `code` on its host, and its host never restores an earlier copy of the state the device keeps there. `run device x`
 is everything the device does on input `x`: what it emits, when it emits it, and how it uses its clock and its keys.
