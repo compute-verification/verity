@@ -624,9 +624,11 @@ def word_maps(base: Tree, renamed: list[tuple[str, str]], lmods: dict[str, str],
 
 
 def worded(text: str, path: str, maps: list, lock: bool = False) -> str:
-    """``text`` with each word map applied as `tools/move/rename.py` applies it (in a lock, not to the records)."""
+    """``text`` with each word map applied as `tools/move/rename.py` applies it: not to a file the map excludes, and in a
+    lock, not to the records."""
     for w in maps:
-        text = w.sub(text, path, _rename().record_spans(text) if lock else [])
+        if not w.excluded(path):
+            text = w.sub(text, path, _rename().record_spans(text) if lock else [])
     return text
 
 
@@ -776,7 +778,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             refuse(e, "edited, not UTF-8 text")
             continue
         same, pins = a == b, name == PINS and posixpath.basename(old) == PINS
-        if not same and not pins:
+        if not same and not pins and old != MOVES:
             a = worded(a, old, maps, lock=k == "lock")
             if a == b:
                 report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": "words"})
