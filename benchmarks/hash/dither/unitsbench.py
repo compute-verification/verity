@@ -415,7 +415,11 @@ def main() -> int:
     ap.add_argument("--profile-multi", action="store_true",
                     help="with --multi: skip the timing and run each gated build's step_multi (and step_multi_j10r) "
                          "once between torch.cuda.profiler.start and stop, for ncu --profile-from-start off")
+    ap.add_argument("--sets", default="multi,j10r,j10rc,j10rd",
+                    help="with --multi: the whole-step sets timed for each gated build (multi, j10r, j10rc, j10rd), each "
+                         "with its own 32 layers of receipts, so a screen of many builds times only the set it compares")
     args = ap.parse_args()
+    sets = set(args.sets.split(","))
     if (args.j10r or args.profile_multi) and not args.multi:
         ap.error("--j10r and --profile-multi run beside step_multi: give --multi too")
     out = Path(args.out)
@@ -569,7 +573,7 @@ def main() -> int:
             arms[(nm, "step")] = step
         keep = []
         for nm in timed:
-            if nm not in multi_ok:
+            if nm not in multi_ok or "multi" not in sets:
                 continue
             outs = [torch.empty_like(calls[name][nm].out) for _ in range(args.layers) for name in ORDER]
             mu = Multi(libs[nm], [(calls[name][nm], calls[name][nm].b if layer % 2 == 0 else bcopy[name],
@@ -578,7 +582,7 @@ def main() -> int:
             keep.append((mu, outs))
             arms[(nm, "step_multi")] = (lambda mu: lambda i: mu.run())(mu)
         for nm in timed:
-            if nm not in j10r_ok:
+            if nm not in j10r_ok or "j10r" not in sets:
                 continue
             outs = [torch.empty_like(calls[name][nm].out) for _ in range(args.layers) for name in ORDER]
             mu = MultiJ10R(libs[nm], [(calls[name][nm], calls[name][nm].b if layer % 2 == 0 else bcopy[name],
@@ -588,7 +592,7 @@ def main() -> int:
             arms[(nm, "step_multi_j10r")] = (lambda mu: lambda i: mu.run())(mu)
             arms[(nm, "step_rows_j10r")] = (lambda mu: lambda i: mu.run(mode=1))(mu)
         for nm in timed:
-            if nm not in j10rc_ok:
+            if nm not in j10rc_ok or "j10rc" not in sets:
                 continue
             outs = [torch.empty_like(calls[name][nm].out) for _ in range(args.layers) for name in ORDER]
             mu = MultiJ10R(libs[nm], [(calls[name][nm], calls[name][nm].b if layer % 2 == 0 else bcopy[name],
@@ -598,7 +602,7 @@ def main() -> int:
             arms[(nm, "step_multi_j10rc")] = (lambda mu: lambda i: mu.run())(mu)
             arms[(nm, "step_blocks_j10rc")] = (lambda mu: lambda i: mu.run(mode=1))(mu)
         for nm in timed:
-            if nm not in j10rd_ok:
+            if nm not in j10rd_ok or "j10rd" not in sets:
                 continue
             outs = [torch.empty_like(calls[name][nm].out) for _ in range(args.layers) for name in ORDER]
             mu = MultiJ10R(libs[nm], [(calls[name][nm], calls[name][nm].b if layer % 2 == 0 else bcopy[name],
