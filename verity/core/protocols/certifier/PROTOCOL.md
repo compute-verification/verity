@@ -1590,6 +1590,8 @@ ANDs a unit), the honest unit and ten negatives, the made-up table refused by ``
 r20261024-162328-03c7); before the cache was wired, eleven units of corpus-smallkv's first seven steps, the six passes
 with the served row and with its own among them (run r20261024-153220-c97c).
 
+The served rows held to their Programs' statics, a registered row a block: [protocol/served-statics.md](protocol/served-statics.md).
+
 ## The active certifier (`active`)
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell

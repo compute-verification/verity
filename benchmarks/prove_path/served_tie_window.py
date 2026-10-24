@@ -39,7 +39,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from verity.core.protocols.certifier import served_rows as SR, served_tie as ST
+from verity.core.protocols.certifier import served_rows as SR, served_statics as SS, served_tie as ST
 
 PORT_NAMES = ("step.input/ids", "step.input/positions")
 RECORD_KEYS = ("schema", "binding", "root", "count", "n_bits")
@@ -106,6 +106,15 @@ def bindings(x: SimpleNamespace, S, St) -> tuple[dict, list[SimpleNamespace], di
         steps.append(SimpleNamespace(N=N, chunks=chunks, ids=ids, positions=pos))
     ok.update(layout=layout, opened=opened)
     return ok, steps, {"embed_equal": embed_equal, "zero_past_N": padded}
+
+
+def statics_held(window: list, steps: list[SimpleNamespace]) -> bool:
+    """Whether the Programs' statics the window's rows describe (`served_statics.program_of`: each step's rows in batch
+    order as (start, n)) are the positions its step's port committed: its N tokens at start … start + n − 1, in turn."""
+    for prog, s in zip(SS.program_of(window), steps):
+        if [start + t for start, n in prog or () for t in range(n)] != s.positions[:s.N]:
+            return False
+    return True
 
 
 def ids_ok(St, window: list, steps: list[SimpleNamespace], seqs: dict[int, list[int]]) -> bool:

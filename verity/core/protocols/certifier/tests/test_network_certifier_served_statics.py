@@ -14,6 +14,8 @@ from types import SimpleNamespace
 import pytest
 
 from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR, served_statics as SS, served_tie as ST
+from verity.core.protocols.sampled_proofs.one_stage import registered as REG
+from verity.ml.commitments import advice as ADV
 
 FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
 COUNT, POS = 1 << SS.FLAGS.index("count"), 1 << SS.FLAGS.index("pos")
@@ -134,6 +136,12 @@ def test_a_block_is_its_leaf_of_the_registration(x):
     port = SR.reads_port(rec, RUN_ROOT, [0, None, 9], reads_from=4)
     assert port["leaves"] == 2 * S.P and port["words"] * 16 == rec["n_bits"] and port["reads"] == [0, None, 9]
     assert port["root"] == rec["root"] and port["row_schema"] == "hm96-sha512/row/v2" and port["reads_from"] == 4
+    dom = ADV.domain(SR.binding(RUN_ROOT), rec["count"])
+    assert dom.domain_id.hex() == port["domain"]
+    for i in (0, 9, 2 * S.P - 1):
+        path = b"".join(reg.open(i).path)
+        assert REG.verify_read(dom, bytes.fromhex(port["root"]), i, served.bc(i), path, port["row_schema"])
+        assert not REG.verify_read(dom, bytes.fromhex(port["root"]), i ^ 1, served.bc(i), path, port["row_schema"])
     with pytest.raises(ValueError, match="another run root"):
         SR.reads_port(rec, bytes(64), [0])
     with pytest.raises(ValueError, match="G dividing P"):

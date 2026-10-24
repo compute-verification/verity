@@ -41,3 +41,14 @@ def test_real_window_cases_on_a_small_window():
     assert run.passed and all(c["circuit_matches"] for c in run.cases.values())
     assert run.cases["id"]["circuit"] == ST.ACCEPT
     assert run.edits == {"prefill": [0, 0, [0, 1, 0, 0, 5]], "decode": [1, 0, [0, 1, 1, 5, 1]], "other_row": [1, 2, 1, 4, 1]}
+
+
+def test_the_programs_statics_are_the_ports_positions():
+    """`statics_held`: the Programs the rows describe are the positions each step's port committed, and a row moved one
+    on, or a step's rows in another order, are not."""
+    St = SimpleNamespace(**ST.statics(SimpleNamespace(R=2, P=7, IW=6, L=4096, T=256)))
+    steps = _steps(St, WINDOW, SEQS)
+    assert STW.statics_held(list(WINDOW), steps)
+    moved = [WINDOW[0], ((0, 1, 1, 6, 1), WINDOW[1][1]), WINDOW[2]]
+    assert not STW.statics_held(moved, steps)
+    assert not STW.statics_held(list(WINDOW), _steps(St, [tuple(reversed(WINDOW[0])), *WINDOW[1:]], SEQS))
