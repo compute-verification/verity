@@ -6,9 +6,9 @@
 #
 # builds `nci-desc-fuzz`, writes the Programs (`gen/`: the hand family, the NCI difftest vectors with EXTRA more seeds of
 # each of their generators, RANDOM random descriptors, CHAIN deep chains, COPIES batches read as segment copies, UNWALK
-# random descriptors past the walk's bound and BIG random descriptors three times the size, from seed SEED, with mutants), checks them,
-# and writes to $OUT `summary.json` (`gen/summarize.py`), `failures.jsonl.gz` (each result where a statement fails, with
-# its Program) and every result, gzipped, per family. With EXTRA negative, no hand family and no vectors: a run beside
+# random descriptors past the walk's bound and BIG random descriptors three times the size, from seed SEED, with
+# mutants), checks them, and writes to $OUT `summary.json` (`gen/summarize.py`), `failures.jsonl.gz` (each result where
+# a statement fails, with its Program) and every result, gzipped, per family. With EXTRA negative, no hand family and no vectors: a run beside
 # one that has them, on other seeds.
 set -euo pipefail
 FUZZ=verity/core/protocols/network/nci/fuzz
