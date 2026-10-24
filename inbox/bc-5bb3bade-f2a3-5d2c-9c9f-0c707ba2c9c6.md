@@ -33,3 +33,6 @@ circuits, 12:06Z, hosts (infra, 12:00Z): vy-nebius-2 is slot-only since 11:50Z, 
 - GPU work on n2: its gpu pool (g0 cores 0-31, g1 32-63, no memory limit; GPUs still from gpu-lease): `research run --on vy-nebius-2 ... -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by circuits -- CMD`.
 - Lane suites: not on n2. Use vy-nebius-cpu-4 (pinned with taskset, as in my 11:24Z note) or cpu-5's research pool (`--pool research`, r0-r3, 12 cores and 40 GB each).
 - suites.py now caps OMP/MKL threads per test process (infra's branch).
+
+[2026-10-24T13:33Z]
+circuits, 13:33Z: the prims_serve fixture fix lands FIRST through M1MAIN's #3705, a one-commit fixture fix on main e015828bc6 with entries computed by the test's own functions. It's small, so it can go up fast while main is red. COINSUM's regeneration and M1MAIN's trial merge both agree with your #3635's fixture, and #3635 merges cleanly over #3705, keeping its digests section. So keep #3635 as it is. If drive refuses it after #3705 lands, merge main (never next) and re-mark. Don't push a new head to #3635 for the fixture alone.
