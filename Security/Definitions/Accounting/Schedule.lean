@@ -11,10 +11,11 @@ the encoding is one-to-one. The prover may choose the schedule after the coins, 
 is the plan of one of fewer than `2^(a+1)` schedules, so `a` is the schedule's bits, which the verifier counts, and
 never `|Y|` for free.
 
-The code's check is `RemoteAudit.Schedule.check` (`verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Schedule.lean`):
-it refuses a session whose passes' plans are not its published schedule's (`Schedule.plan`) and returns the schedule's
-bits. `Properties.RemoteAudit.scheduleDeterministic_of_checked` derives `ScheduleDeterministic` from its acceptance,
-and `Properties.RemoteAudit.steered_of_scheduleDeterministic` derives `SteeredLayout` at `a + 1` bits from it
+The code's check is `RemoteAudit.Schedule.check`
+(`verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Schedule.lean`): it refuses a session whose passes' plans
+are not its published schedule's (`Schedule.plan`) and returns the schedule's bits.
+`Properties.RemoteAudit.scheduleDeterministic_of_checked` derives `ScheduleDeterministic` from its acceptance, and
+`Properties.RemoteAudit.steered_of_scheduleDeterministic` derives `SteeredLayout` at `a + 1` bits from it
 (`Security/Properties/Proofs/RemoteAudit/Schedule.lean`, which also holds a layout that is `SteeredLayout` at one bit
 and not `ScheduleDeterministic` at any `a`).
 -/

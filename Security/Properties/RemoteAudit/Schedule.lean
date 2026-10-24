@@ -14,12 +14,13 @@ holds a session's passes and appends to the schedule the prover publishes, and r
 * `ScheduleFixesLayout`: so the schedule fixes them: two sessions the check accepts on one schedule have the same
   passes and the same appends. A layout that follows a coin at a schedule the verifier counted is refused.
 
-They take no premise. What they leave between the code and the model's layout (`Accounting.ScheduleDeterministic`,
-`Accounting.Assumptions.SteeredLayout`) is one `Prop`, `ScheduleLayoutGap`: that the schedule's encoding is one-to-one
-on well-formed schedules (LEB128 with each list after its length; not yet proved), and that the model's layout of a pass
-is the verifier's position map of the session's appends and the plan the pass sent. Under it the check's acceptance at
+They take no premise. The schedule's bits (`scheduleBits`) are one-to-one on well-formed schedules
+(`ScheduleCode.scheduleBits_injective` in `Properties.Proofs.RemoteAudit.Schedule`: LEB128 is prefix-free, and each
+list comes after its length). What is left between the code and the model's layout (`Accounting.ScheduleDeterministic`,
+`Accounting.Assumptions.SteeredLayout`) is one `Prop`, `ScheduleLayoutGap`: that the model's layout of a pass is the
+verifier's position map of the session's appends and the plan the pass sent. Under it the check's acceptance at
 `b ≤ a` bits gives `ScheduleDeterministic` at `a` and `SteeredLayout` at `a + 1`
-(`scheduleDeterministic_of_checked`, `steered_of_checked` in `Properties.Proofs.RemoteAudit.Schedule`).
+(`scheduleDeterministic_of_checked`, `steered_of_checked`).
 -/
 
 open RemoteAudit
@@ -49,15 +50,12 @@ def ScheduleFixesLayout : Prop :=
 def scheduleBits (sc : Schedule.Schedule) : List Bool :=
   (Schedule.encode sc).flatMap fun b => List.ofFn fun i : Fin 8 => b.toNat.testBit i
 
-/-- **What lies between the schedule check and the model's layout.** Over `blocks` registered blocks: the schedule's
-bits are one-to-one on well-formed schedules, and at each prefix `c` of the session's coins and each codec and append
-coins `y` the model's layout of the pass is `pos c` of the session's appends `appended c y` and the runs `sent c y`
-the pass's plan sent, `pos c` being the verifier's map from the store's block indices to the model's positions. -/
-def ScheduleLayoutGap {Pfx Y : Type} {N T M : ℕ} (blocks : ℕ)
-    (pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M) (appended sent : Pfx → Y → Array (ℕ × ℕ))
-    (layout : Pfx → Y → Fin N ↪ Fin T × Fin M) : Prop :=
-  (∀ sc sc' : Schedule.Schedule, Schedule.malformed sc blocks = none → Schedule.malformed sc' blocks = none →
-      scheduleBits sc = scheduleBits sc' → sc = sc') ∧
-    ∀ c y, layout c y = pos c (appended c y) (sent c y)
+/-- **What lies between the schedule check and the model's layout.** At each prefix `c` of the session's coins and
+each codec and append coins `y`, the model's layout of the pass is `pos c` of the session's appends `appended c y` and
+the runs `sent c y` the pass's plan sent, `pos c` being the verifier's map from the store's block indices to the
+model's positions. -/
+def ScheduleLayoutGap {Pfx Y : Type} {N T M : ℕ} (pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M)
+    (appended sent : Pfx → Y → Array (ℕ × ℕ)) (layout : Pfx → Y → Fin N ↪ Fin T × Fin M) : Prop :=
+  ∀ c y, layout c y = pos c (appended c y) (sent c y)
 
 end Properties.RemoteAudit

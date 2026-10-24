@@ -11,6 +11,12 @@ finding nothing makes the appends the schedule's, entry by entry (`appends_of`),
 each pass at the schedule's step with the schedule's plan there (`passes_of`). Two sessions accepted on one schedule
 then have the same appends and, pass by pass, the same steps and so the same plans (`scheduleFixesLayout`).
 
+The schedule's bits are one-to-one on well-formed schedules (`ScheduleCode.scheduleBits_injective`): bits to bytes
+(eight a byte, `flatMap_byteBits_injective`), bytes to integers (LEB128 is prefix-free, `varint_prefix`), and integers
+to the schedule (each list after its length, a block's tag before its write's step, `numbers_injective`). That reads
+two facts off `malformed` finding nothing (`wf_of_malformed`): a freed block's free comes after its write, so its tag
+`f − w + 1` is at least 2, and the steps increase, so their rises give them back.
+
 From the code to the model, under `ScheduleLayoutGap`: a layout the check accepted at `b ≤ a` bits is the verifier's
 plan of a well-formed schedule of at most `a` bits (`scheduleDeterministic_of_checked`), and a layout that is
 `ScheduleDeterministic` at `a` is `SteeredLayout` at `a + 1`: its summary is the schedule's bits padded to `a + 1` with
@@ -107,6 +113,244 @@ theorem scheduleBits_length (sc : Schedule.Schedule) : (scheduleBits sc).length 
   | nil => rfl
   | cons b l ih => simp only [List.flatMap_cons, List.length_append, List.length_ofFn, ih, List.length_cons]; omega
 
+namespace ScheduleCode
+
+theorem varint_lt {n : Nat} (h : n < 128) : Schedule.varint n = [n.toUInt8] := by
+  rw [Schedule.varint]; simp [h]
+
+theorem varint_ge {n : Nat} (h : ¬ n < 128) :
+    Schedule.varint n = (n % 128 + 128).toUInt8 :: Schedule.varint (n / 128) := by
+  rw [Schedule.varint]; simp [h]
+
+theorem varint_ne_nil (n : Nat) : Schedule.varint n ≠ [] := by
+  by_cases h : n < 128
+  · simp [varint_lt h]
+  · simp [varint_ge h]
+
+theorem toUInt8_toNat {n : Nat} (h : n < 256) : n.toUInt8.toNat = n := by
+  simp [Nat.toUInt8, Nat.mod_eq_of_lt h]
+
+theorem varint_prefix (n m : Nat) (r r' : List UInt8) (h : Schedule.varint n ++ r = Schedule.varint m ++ r') :
+    n = m ∧ r = r' := by
+  by_cases hn : n < 128 <;> by_cases hm : m < 128
+  · rw [varint_lt hn, varint_lt hm] at h
+    simp only [List.singleton_append, List.cons.injEq] at h
+    have := congrArg UInt8.toNat h.1
+    rw [toUInt8_toNat (by omega), toUInt8_toNat (by omega)] at this
+    exact ⟨this, h.2⟩
+  · rw [varint_lt hn, varint_ge hm] at h
+    simp only [List.cons_append, List.cons.injEq] at h
+    have := congrArg UInt8.toNat h.1
+    rw [toUInt8_toNat (by omega), toUInt8_toNat (by omega)] at this
+    omega
+  · rw [varint_ge hn, varint_lt hm] at h
+    simp only [List.cons_append, List.cons.injEq] at h
+    have := congrArg UInt8.toNat h.1
+    rw [toUInt8_toNat (by omega), toUInt8_toNat (by omega)] at this
+    omega
+  · rw [varint_ge hn, varint_ge hm] at h
+    simp only [List.cons_append, List.cons.injEq] at h
+    have e1 := congrArg UInt8.toNat h.1
+    rw [toUInt8_toNat (by omega), toUInt8_toNat (by omega)] at e1
+    obtain ⟨e2, e3⟩ := varint_prefix (n / 128) (m / 128) r r' h.2
+    exact ⟨by omega, e3⟩
+termination_by n
+decreasing_by omega
+
+theorem flatMap_varint_injective :
+    ∀ (xs ys : List Nat), xs.flatMap Schedule.varint = ys.flatMap Schedule.varint → xs = ys
+  | [], [], _ => rfl
+  | [], y :: ys, h => by
+    simp only [List.flatMap_nil, List.flatMap_cons] at h
+    exact absurd (List.append_eq_nil_iff.mp h.symm).1 (varint_ne_nil y)
+  | x :: xs, [], h => by
+    simp only [List.flatMap_nil, List.flatMap_cons] at h
+    exact absurd (List.append_eq_nil_iff.mp h).1 (varint_ne_nil x)
+  | x :: xs, y :: ys, h => by
+    simp only [List.flatMap_cons] at h
+    obtain ⟨rfl, h'⟩ := varint_prefix x y _ _ h
+    rw [flatMap_varint_injective xs ys h']
+
+/-- A code that is prefix-free on the values `P` holds of decodes a list of known length, and the rest after it. -/
+theorem flatMap_prefix {α β : Type} (enc : α → List β) (P : α → Prop)
+    (hp : ∀ x y r r', P x → P y → enc x ++ r = enc y ++ r' → x = y ∧ r = r') :
+    ∀ (xs ys : List α) (r r' : List β), xs.length = ys.length → (∀ x ∈ xs, P x) → (∀ y ∈ ys, P y) →
+      xs.flatMap enc ++ r = ys.flatMap enc ++ r' → xs = ys ∧ r = r'
+  | [], [], _, _, _, _, _, h => ⟨rfl, by simpa using h⟩
+  | [], _ :: _, _, _, hl, _, _, _ => by simp at hl
+  | _ :: _, [], _, _, hl, _, _, _ => by simp at hl
+  | x :: xs, y :: ys, r, r', hl, px, py, h => by
+    simp only [List.flatMap_cons, List.append_assoc] at h
+    obtain ⟨rfl, h'⟩ := hp x y _ _ (px x (by simp)) (py y (by simp)) h
+    obtain ⟨rfl, rfl⟩ := flatMap_prefix enc P hp xs ys r r' (by simpa using hl)
+      (fun x hx => px x (by simp [hx])) (fun y hy => py y (by simp [hy])) h'
+    exact ⟨rfl, rfl⟩
+
+def byteBits (b : UInt8) : List Bool := List.ofFn fun i : Fin 8 => b.toNat.testBit i
+
+theorem byteBits_injective {b b' : UInt8} (h : byteBits b = byteBits b') : b = b' := by
+  apply UInt8.toNat_inj.mp
+  apply Nat.eq_of_testBit_eq
+  intro i
+  by_cases hi : i < 8
+  · have := List.getElem_of_eq h (i := i) (by simp [byteBits, hi])
+    simpa only [byteBits, List.getElem_ofFn] using this
+  · have h1 : b.toNat < 2 ^ i := Nat.lt_of_lt_of_le b.toNat_lt (Nat.pow_le_pow_right (by omega) (by omega))
+    have h2 : b'.toNat < 2 ^ i := Nat.lt_of_lt_of_le b'.toNat_lt (Nat.pow_le_pow_right (by omega) (by omega))
+    rw [Nat.testBit_lt_two_pow h1, Nat.testBit_lt_two_pow h2]
+
+theorem length_flatMap_byteBits (l : List UInt8) : (l.flatMap byteBits).length = 8 * l.length := by
+  induction l with
+  | nil => rfl
+  | cons b l ih =>
+    simp only [List.flatMap_cons, List.length_append, byteBits, List.length_ofFn, ih, List.length_cons]
+    omega
+
+theorem flatMap_byteBits_injective {l l' : List UInt8} (h : l.flatMap byteBits = l'.flatMap byteBits) : l = l' := by
+  have hlen : l.length = l'.length := by
+    have := congrArg List.length h
+    rw [length_flatMap_byteBits, length_flatMap_byteBits] at this
+    omega
+  refine (flatMap_prefix byteBits (fun _ => True) (fun x y r r' _ _ he => ?_) l l' [] [] hlen
+    (fun _ _ => trivial) (fun _ _ => trivial) (by simpa using h)).1
+  have := List.append_inj he (by simp [byteBits])
+  exact ⟨byteBits_injective this.1, this.2⟩
+
+/-- A block a well-formed schedule may hold: freed only after its write. -/
+def BlockOk : Schedule.Block → Prop
+  | some (w, some f) => w < f
+  | _ => True
+
+theorem blockCode_prefix (x y : Schedule.Block) (r r' : List Nat) (hx : BlockOk x) (hy : BlockOk y)
+    (h : Schedule.blockCode x ++ r = Schedule.blockCode y ++ r') : x = y ∧ r = r' := by
+  rcases x with _ | ⟨w, _ | f⟩ <;> rcases y with _ | ⟨w', _ | f'⟩ <;>
+    simp only [Schedule.blockCode, BlockOk, List.cons_append, List.nil_append, List.cons.injEq] at h hx hy
+  · exact ⟨rfl, h.2⟩
+  · omega
+  · omega
+  · omega
+  · exact ⟨by rw [h.2.1], h.2.2⟩
+  · omega
+  · omega
+  · omega
+  · refine ⟨?_, h.2.2⟩
+    have : f = f' := by omega
+    rw [h.2.1, this]
+
+def regCode (x : Nat × Nat × Nat) : List Nat := [x.1, x.2.1, x.2.2]
+
+def appendCode (a : Array Schedule.Block) : List Nat := a.size :: a.toList.flatMap Schedule.blockCode
+
+theorem regCode_prefix (x y : Nat × Nat × Nat) (r r' : List Nat) (_ : True) (_ : True)
+    (h : regCode x ++ r = regCode y ++ r') : x = y ∧ r = r' := by
+  obtain ⟨a, b, c⟩ := x
+  obtain ⟨a', b', c'⟩ := y
+  simp only [regCode, List.cons_append, List.nil_append, List.cons.injEq] at h
+  obtain ⟨rfl, rfl, rfl, rfl⟩ := h
+  exact ⟨rfl, rfl⟩
+
+theorem appendCode_prefix (x y : Array Schedule.Block) (r r' : List Nat) (hx : ∀ b ∈ x.toList, BlockOk b)
+    (hy : ∀ b ∈ y.toList, BlockOk b) (h : appendCode x ++ r = appendCode y ++ r') : x = y ∧ r = r' := by
+  simp only [appendCode, List.cons_append, List.cons.injEq] at h
+  obtain ⟨hs, h⟩ := h
+  obtain ⟨e, rfl⟩ := flatMap_prefix Schedule.blockCode BlockOk blockCode_prefix x.toList y.toList r r'
+    (by simpa using hs) hx hy h
+  exact ⟨Array.toList_inj.mp e, rfl⟩
+
+/-- Each at least the one before it, the first at least `p`. -/
+def Mono : Nat → List Nat → Prop
+  | _, [] => True
+  | p, x :: xs => p ≤ x ∧ Mono x xs
+
+theorem rises_injective : ∀ (l l' : List Nat) (p : Nat), Mono p l → Mono p l' →
+    Schedule.rises l p = Schedule.rises l' p → l = l'
+  | [], [], _, _, _, _ => rfl
+  | [], _ :: _, _, _, _, h => by simp [Schedule.rises] at h
+  | _ :: _, [], _, _, _, h => by simp [Schedule.rises] at h
+  | x :: xs, y :: ys, p, ⟨hx, hm⟩, ⟨hy, hm'⟩, h => by
+    simp only [Schedule.rises, List.cons.injEq] at h
+    have : x = y := by omega
+    subst this
+    rw [rises_injective xs ys x hm hm' h.2]
+
+theorem mono_of_le : ∀ (l : List Nat) (p : Nat), (∀ h : 0 < l.length, p ≤ l[0]) →
+    (∀ k (hk : k + 1 < l.length), l[k] ≤ l[k + 1]) → Mono p l
+  | [], _, _, _ => trivial
+  | x :: xs, p, h0, hs => ⟨h0 (by simp), mono_of_le xs x (fun h => hs 0 (by simpa using h))
+      (fun k hk => hs (k + 1) (by simpa using hk))⟩
+
+theorem wf_of_malformed {sc : Schedule.Schedule} {blocks : Nat} (h : Schedule.malformed sc blocks = none) :
+    (∀ a ∈ sc.appends.toList, ∀ b ∈ a.toList, BlockOk b) ∧ Mono 0 sc.steps.toList := by
+  unfold Schedule.malformed at h
+  dsimp only at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · rename_i hbad
+      split at h
+      · cases h
+      · rename_i hsteps
+        refine ⟨fun a ha b hb => ?_, ?_⟩
+        · obtain ⟨i, hi, rfl⟩ := List.mem_iff_getElem.mp ha
+          obtain ⟨k, hk, rfl⟩ := List.mem_iff_getElem.mp hb
+          rw [List.findSome?_eq_none_iff] at hbad
+          have := hbad i (List.mem_range.mpr (by simpa using hi))
+          simp only [Array.getElem_toList] at hk ⊢
+          rw [getElem!_pos sc.appends i (by simpa using hi)] at this
+          split at this
+          · cases this
+          · rw [List.findSome?_eq_none_iff] at this
+            have := this k (List.mem_range.mpr (by simpa using hk))
+            rw [getElem!_pos _ k (by simpa using hk)] at this
+            revert this
+            rcases sc.appends[i][k] with _ | ⟨w, _ | f⟩ <;> simp [BlockOk]
+            intro hc
+            split at hc
+            · cases hc
+            · split at hc
+              · cases hc
+              · omega
+        · simp only [List.any_eq_true, List.mem_range, Bool.or_eq_true, decide_eq_true_eq, Bool.and_eq_true,
+            not_exists, not_and] at hsteps
+          refine mono_of_le _ 0 (fun _ => Nat.zero_le _) fun k hk => ?_
+          have := hsteps (k + 1) (by simpa using hk)
+          simp only [Array.getElem_toList]
+          rw [getElem!_pos sc.steps (k + 1) (by simpa using hk), Nat.add_sub_cancel,
+            getElem!_pos sc.steps k (by simp at hk; omega)] at this
+          omega
+
+theorem numbers_eq (sc : Schedule.Schedule) : Schedule.numbers sc = sc.registered.size ::
+    (sc.registered.toList.flatMap regCode ++ (sc.appends.size :: (sc.appends.toList.flatMap appendCode ++
+      (sc.steps.size :: Schedule.rises sc.steps.toList 0)))) := by
+  simp only [Schedule.numbers, List.append_assoc, List.cons_append]
+  rfl
+
+theorem numbers_injective {sc sc' : Schedule.Schedule} {blocks : Nat} (hm : Schedule.malformed sc blocks = none)
+    (hm' : Schedule.malformed sc' blocks = none) (h : Schedule.numbers sc = Schedule.numbers sc') : sc = sc' := by
+  obtain ⟨ha, hs⟩ := wf_of_malformed hm
+  obtain ⟨ha', hs'⟩ := wf_of_malformed hm'
+  rw [numbers_eq, numbers_eq, List.cons.injEq] at h
+  obtain ⟨hr, h⟩ := h
+  obtain ⟨hR, h⟩ := flatMap_prefix regCode (fun _ => True) regCode_prefix _ _ _ _ (by simpa using hr)
+    (fun _ _ => trivial) (fun _ _ => trivial) h
+  rw [List.cons.injEq] at h
+  obtain ⟨hn, h⟩ := h
+  obtain ⟨hA, h⟩ := flatMap_prefix appendCode _ appendCode_prefix _ _ _ _ (by simpa using hn) ha ha' h
+  rw [List.cons.injEq] at h
+  have hS := rises_injective _ _ 0 hs hs' h.2
+  cases sc
+  cases sc'
+  simp only [Array.toList_inj] at hR hA hS
+  rw [hR, hA, hS]
+
+/-- **The schedule's bits are one-to-one on well-formed schedules.** -/
+theorem scheduleBits_injective {sc sc' : Schedule.Schedule} {blocks : Nat} (hm : Schedule.malformed sc blocks = none)
+    (hm' : Schedule.malformed sc' blocks = none) (h : scheduleBits sc = scheduleBits sc') : sc = sc' :=
+  numbers_injective hm hm' (flatMap_varint_injective _ _ (flatMap_byteBits_injective h))
+
+end ScheduleCode
+
 /-- A string of at most `a` bits as `a + 1` bits: the string, a one, then zeros. -/
 def pad (a : ℕ) (l : List Bool) : Pous.Bits (a + 1) := fun i =>
   if h : i.val < l.length then l[i.val] else decide (i.val = l.length)
@@ -148,13 +392,13 @@ coins `y` the check accepts some schedule at `b ≤ a` bits for a session whose 
 plan at its own step `idx c`) whose bits are at most `a`. -/
 theorem scheduleDeterministic_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : Pfx → ℕ}
     {pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
-    {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : ScheduleLayoutGap blocks pos appended sent layout)
+    {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : ScheduleLayoutGap pos appended sent layout)
     (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks passes (appended c y) = .ok b ∧ b ≤ a ∧
       (passes[idx c]?).map Prod.snd = some (sent c y)) :
     Accounting.ScheduleDeterministic (S := {sc : Schedule.Schedule // Schedule.malformed sc blocks = none})
       (fun c sc => pos c (Schedule.appendRuns sc.1 blocks) (Schedule.plan sc.1 blocks sc.1.steps[idx c]!))
       (fun sc => scheduleBits sc.1) a layout := by
-  refine ⟨fun s s' h => Subtype.ext (gap.1 s.1 s'.1 s.2 s'.2 h), fun c y => ?_⟩
+  refine ⟨fun s s' h => Subtype.ext (ScheduleCode.scheduleBits_injective s.2 s'.2 h), fun c y => ?_⟩
   obtain ⟨sc, passes, b, h, hb, hsent⟩ := checked c y
   obtain ⟨hm, hsteps, hplan, happ, rfl⟩ := scheduleChecked sc blocks passes (appended c y) b h
   obtain ⟨p, hp, hp2⟩ : ∃ p, passes[idx c]? = some p ∧ p.2 = sent c y := by
@@ -166,14 +410,14 @@ theorem scheduleDeterministic_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a 
     simp only [Array.getElem?_map, hp, Option.map_some] at this
     simp [getElem!_def, ← this]
   refine ⟨⟨sc, hm⟩, Nat.le_trans (Nat.le_of_eq (scheduleBits_length sc)) hb, ?_⟩
-  rw [gap.2 c y, ← hp2, happ, hplan p (Array.mem_of_getElem? hp)]
+  rw [gap c y, ← hp2, happ, hplan p (Array.mem_of_getElem? hp)]
   dsimp only
   rw [hstep]
 
 /-- **The check's acceptance gives `SteeredLayout` at `a + 1` bits, under `ScheduleLayoutGap`.** -/
 theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : Pfx → ℕ}
     {pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
-    {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : ScheduleLayoutGap blocks pos appended sent layout)
+    {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : ScheduleLayoutGap pos appended sent layout)
     (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks passes (appended c y) = .ok b ∧ b ≤ a ∧
       (passes[idx c]?).map Prod.snd = some (sent c y)) :
     ∃ steer : Pfx → Y → Pous.Bits (a + 1), Accounting.Assumptions.SteeredLayout layout steer :=
@@ -203,14 +447,16 @@ theorem coinLayout_not_scheduled (enc : Unit → List Bool) (a : ℕ) :
 /-- A store of 8 registered blocks, block 2 freed at step 1, and two appends: blocks 8–11 written at step 0 (block 9
 freed at step 1), blocks 12–13 written at step 2; passes at steps 0 to 4. -/
 def honest : Schedule.Schedule :=
-  ⟨#[(2, 1, 1)], #[#[some (0, none), some (0, some 1), some (0, none), some (0, none)], #[some (2, none), some (2, none)]],
+  ⟨#[(2, 1, 1)],
+    #[#[some (0, none), some (0, some 1), some (0, none), some (0, none)], #[some (2, none), some (2, none)]],
     #[0, 1, 2, 3, 4]⟩
 
 /-- The session's passes, the third's plan as a coin `keep12` says: `honest`'s at step 3 when it is set, block 12
 dropped when not. -/
 def coinPasses (keep12 : Bool) : Array (ℕ × Array (ℕ × ℕ)) :=
   #[(0, #[(0, 8)]), (1, #[(0, 12)]), (2, #[(0, 2), (3, 6), (10, 2)]),
-    (3, if keep12 then #[(0, 2), (3, 6), (10, 4)] else #[(0, 2), (3, 6), (10, 2), (13, 1)]), (4, #[(0, 2), (3, 6), (10, 4)])]
+    (3, if keep12 then #[(0, 2), (3, 6), (10, 4)] else #[(0, 2), (3, 6), (10, 2), (13, 1)]),
+    (4, #[(0, 2), (3, 6), (10, 4)])]
 
 example : Schedule.check honest 8 (coinPasses false) #[(8, 4), (12, 2)] =
     .error "pass 3's plan is not the schedule's at step 3" := by

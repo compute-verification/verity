@@ -133,8 +133,8 @@ is what the schedule check counts (`Accounting.ScheduleDeterministic`): the veri
 unless every pass's plan is its own plan (`RemoteAudit.Schedule.plan`) of the schedule the prover publishes (when each
 block is written and freed, and each pass's step), and it counts that schedule's bits (`audit.Ledger.steering`). A
 layout that is the verifier's plan of a schedule of at most `a` bits is `SteeredLayout` at `a + 1`
-(`Properties.RemoteAudit.steered_of_checked`, under `Properties.RemoteAudit.ScheduleLayoutGap`: the encoding
-one-to-one, and the model's layout the verifier's positions of the plan the pass sent), and a layout that follows a
+(`Properties.RemoteAudit.steered_of_checked`, under `Properties.RemoteAudit.ScheduleLayoutGap`: the model's layout
+is the verifier's positions of the plan the pass sent), and a layout that follows a
 coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`). The
 schedule holds the run inputs and arrival steps the prover chose after the coins of the blocks the pass holds
 (arrivals, lengths, prefix-cache hits and preemptions, and every run input that moves them), and more: the whole
