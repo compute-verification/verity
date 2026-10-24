@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.ZK.FrameRounds
 import Proofs.Flock.Claims.ZK.FrameOuter
 import Proofs.Flock.Claims.ZK.FramePass
+import Proofs.Flock.SessionLoop.Statement
 
 /-!
 # The values a round carries freely, read back off its bytes
@@ -426,7 +427,6 @@ theorem piopV_all (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flo
       (List.range' 0 lay.nMlv).flatMap fun a => [mk (lay.ml a 0), mk (lay.ml a 1)] := by
     rw [flatMap_range'_congr _ (fun a => [mk (lay.ml a 0), mk (lay.ml a 1)]) 3 (m - 6), hn, List.range_eq_range']
     intro i hi
-    dsimp only
     rw [piopFr, if_neg (show ¬ 3 + i = 0 by omega), if_neg (show ¬ 3 + i = 1 by omega),
       if_neg (show ¬ 3 + i = 2 by omega), if_pos (show 3 + i < 3 + (m - 6) by omega)]
     simp [fvals]
@@ -448,7 +448,6 @@ theorem piopV_all (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flo
       (List.range' 0 lay.nLc).flatMap fun a => [mk (lay.lc a 0), mk (lay.lc a 1)] := by
     rw [flatMap_range'_congr _ (fun a => [mk (lay.lc a 0), mk (lay.lc a 1)]) _ (kLog - 6), hl, List.range_eq_range']
     intro i hi
-    dsimp only
     rw [piopFr, if_neg (show ¬ 5 + (m - 6) + i = 0 by omega), if_neg (show ¬ 5 + (m - 6) + i = 1 by omega),
       if_neg (show ¬ 5 + (m - 6) + i = 2 by omega), if_neg (show ¬ 5 + (m - 6) + i < 3 + (m - 6) by omega),
       if_neg (show ¬ 5 + (m - 6) + i = 3 + (m - 6) by omega), if_neg (show ¬ 5 + (m - 6) + i = 4 + (m - 6) by omega),
@@ -514,8 +513,8 @@ theorem maskedOf_mid (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p]! < c
       have := hs.coins
       simp only at h2
       omega)
-  refine ⟨{ ({ s with pos := s.pos + nAbs fs, owed := some 1 } : Masker) with owed := none,
-      coins := s.coins ++ cs }, ⟨hs.on, hs.inner, hs.l0, rfl, by simp [hs.pos], ?_⟩, ?_⟩
+  refine ⟨{ ({ s with pos := s.pos + nAbs fs, owed := some 1 } : Masker) with
+      owed := none, coins := s.coins ++ cs }, ⟨hs.on, hs.inner, hs.l0, rfl, by simp [hs.pos], ?_⟩, ?_⟩
   · simp only [Array.size_append]
     exact Nat.le_trans hs.coins (Nat.le_add_right _ _)
   · rw [maskedOf_cons_ok rest hr ha, hfr]
@@ -538,7 +537,8 @@ theorem piopFr_frames (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_
   have hs : "flock-lincheck-v0".toUTF8.size < 2 ^ 64 := by decide
   unfold piopFr
   rw [if_neg (show ¬ jj = 0 by omega), if_neg (show ¬ jj = 1 by omega)]
-  split_ifs <;> simp [List.forall_mem_cons, midFrame, plainFrame, hl, hs]
+  split_ifs <;> simp [midFrame, plainFrame]
+  all_goals exact ⟨by simpa using hs, by simpa using hl⟩
 
 /-- **The masked values a rep's frame takes over the PIOP's rounds**: from the rep's start, at rounds whose bytes are the
 PIOP's frames and squeezes (`piopFr`, the zerocheck's binding without the stream's domain) with coin counts `piopN`,
