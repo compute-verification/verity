@@ -24,7 +24,7 @@ FMTS = ("bf16", "fp8t", "nvfp4")
 H = 17.0
 KEEP = 0.9
 SCALE_BITS = 16
-FMT_COLS = ("bv", "bv_gx", "bv_rm", "bx", "bw", "bw_min", "Ff_min", "Ff_med", "Fb_min", "Ffb_min", "rho_2x", "rho_fb")
+FMT_COLS = ("bv", "bv_gx", "bv_rm", "bx", "bw", "bw_min", "Ff_min", "Ff_med", "Fb_min", "Ffb_min")
 
 
 def label(r):
@@ -208,9 +208,11 @@ def main():
         layers[name] = lay
     entries.sort(key=lambda e: (e["fam"], e["model"], e["cond"], e["step"] or 0))
     rng, clf = ranges(entries), cliff(entries)
-    for e in entries:
+    for e in entries:  # compact rows: rho follows from F (and is in the cliff table), retention curves are in the layers file
         for f in FMTS:
             e[f] = [e[f][k] for k in FMT_COLS]
+        e["apx"] = {k: v["min"][:2] + v["mid"][:2] for k, v in e.pop("rho_apx").items()}
+        del e["keep90_rank"], e["N_w_updated"]
     doc = {
         "schema": "tvi-b1/F_beta/v2",
         "units": {"b*": "bits per value: bv per counted value (min(d_in,d_out) per token per map, one per dependency cone), "
@@ -219,9 +221,10 @@ def main():
                   "S_bits": "bits of trainable state (A2, sweep LoRA at 16 bits per factor entry) or A3's skill size"},
         "keys": {"bv_gx": "output given theta's weights on theta''s input", "bv_rm": "per map, cheaper of output and "
                  "input route", "bw_S": "S_bits / N_w_updated", "cheapest": "fp8-cheapest boundary and its fresh "
-                 "residual's effective rank (90%/99% energy)", "keep90_rank": "per probed boundary, [fp8, int4] "
-                 "smallest rank keeping 90% of KL(theta'||theta); null = none up to the largest probed (256, or 512 from code "
-                 "83822f13)"},
+                 "residual's effective rank (90%/99% energy)", "apx": "per coefficient format, [cheapest probed layer, "
+                 "its rank, layer nearest L/2, its rank] keeping 90% of KL(theta'||theta); '>R' = none up to the largest "
+                 "probed rank R (256, or 512 from code 83822f13)", "rho": "rho_2x = (2/3)*2*Ff_min/h, rho_fb = "
+                 "(2/3)*Ffb_min/h, rho_apx = (2/3)*2*(bits*rank+16)/h"},
         "precisions": {"bf16": "bfloat16", "fp8t": "FP8 E4M3, per-tensor scale from theta",
                        "nvfp4": "NVFP4 (E2M1, 16-blocks, E4M3 scales)"},
         "h_bits_per_token": H,
