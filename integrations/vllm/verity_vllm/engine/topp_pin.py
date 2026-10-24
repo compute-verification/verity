@@ -27,7 +27,7 @@ _PIN: hooks.Patch | None = None
 
 
 def _at_registered_splits(original: Any) -> Any:
-    from verity_vllm.program.registry.topp_geometry import registered_splits
+    from verity.ml.definitions.registry.topp_geometry import registered_splits
 
     def _apply_topp_split(logits: Any, k: Any, p: Any, mask_value: float, num_sm: int) -> Any:
         return original(logits, k, p, mask_value, registered_splits(num_sm) * int(logits.shape[0]))

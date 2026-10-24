@@ -17,9 +17,9 @@ from verity.ml.circuits.cut import call_scope
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.layout import resolve
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity_vllm.program.registry import fp8
-from verity_vllm.program.registry import fp8_vocab
-from verity_vllm.query import word as W
+from verity.ml.definitions.registry import fp8
+from verity.ml.definitions.registry import fp8_vocab
+from verity.ml.definitions import word as W
 
 SHAPES = [(256, 256), (384, 128), (128, 512)]
 E4M3_FINITE = [0x00, 0x80, 0x01, 0x81, 0x07, 0x87, 0x08, 0x88, 0x38, 0xB8, 0x7E, 0xFE, 0x77, 0xF7]

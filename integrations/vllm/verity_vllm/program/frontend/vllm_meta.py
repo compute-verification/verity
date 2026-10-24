@@ -446,7 +446,7 @@ def prefix_input(model: nn.Module, C: int) -> torch.Tensor:
 def registered_policy_splits(sampling: dict) -> int | None:
     """The registered split count S of a stochastic policy: `sampling["splits"]` when it is an int equal to
     `topp_geometry.registered_splits` of the policy's geometry's num_SMs (`build.sampler_geometry`); else None."""
-    from verity_vllm.program.registry.topp_geometry import registered_splits
+    from verity.ml.definitions.registry.topp_geometry import registered_splits
     S, g = sampling.get("splits"), sampling.get("geometry") or {}
     if isinstance(S, bool) or not isinstance(S, int) or g.get("num_sms") is None:
         return None

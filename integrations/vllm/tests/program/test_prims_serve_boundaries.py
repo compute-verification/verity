@@ -12,13 +12,13 @@ from pathlib import Path
 
 import pytest
 
-REG = "verity_vllm.program.registry"
+REG = "verity.ml.definitions.registry"
 REGISTRY = Path(importlib.util.find_spec(REG).origin).parent
 FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths", "b1",
           "b1_tp2", "serve3", "spec")
 #: the family's Definition modules that import PoUW's own Definition from core, which no `verity.ml` unit may, so they live in the
 #: integration: name -> module
-INTEGRATION = {"pouw_rows": "verity_vllm.program.registry.pouw_rows"}
+INTEGRATION = {"pouw_rows": "verity_vllm.program.pouw_rows"}
 #: the other families' Definition modules this family reads (each family's own split judges its modules)
 OTHER_FAMILIES = {"dense", "dsa_topk", "fa2_softcap", "fa3_check_inf", "fp8_moe_experts", "marlin_moe", "sampling", "topp_geometry",
                   "topp_word_gates"}
