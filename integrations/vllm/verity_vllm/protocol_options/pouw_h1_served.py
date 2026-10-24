@@ -174,6 +174,17 @@ def record_words(z: np.ndarray, y: np.ndarray, slots: int, tile: tuple[int, int]
     return np.concatenate([np.ascontiguousarray(cells(zf)).view("<u2"), cells(yf)], axis=1).astype(np.uint16)
 
 
+def zy_words(records: np.ndarray, rows: int, n: int, slots: int, tile: tuple[int, int]) -> np.ndarray:
+    """`record_words` of a call's records (`pouw_h1_records`' [units, ZY_BYTES] over ``rows`` slots): where the Program's
+    tile is the records' unit and they cover all ``slots``, the records' own bytes as u16 words, the same words without
+    taking them apart."""
+    if tuple(tile) == ZR.UNIT and rows == slots:
+        r = np.asarray(records)
+        if r.dtype == np.uint8 and r.shape == ((rows // tile[0]) * (n // tile[1]), ZR.ZY_BYTES):
+            return np.ascontiguousarray(r).view("<u2")
+    return record_words(*ZR.split(records, rows, n), slots, tile)
+
+
 def layout(shapes: Sequence[tuple[int, int]], calls: Sequence[tuple[int, int]],
            blocks: Sequence[int] | None = None) -> list[int]:
     """Each call's A block of its K, ``calls`` each call's (step, linear) and ``blocks`` each linear's input block within a
@@ -345,7 +356,9 @@ class Served:
     #: each call's receipts, one a unit in its tile order (`receipt_words`' input), from ``(call, codes, s_a, weight
     #: codes, s_w)``: with it, each call's ``receipt@<c>`` is registered (BRIDGE2) at its step's last call of its K, once
     #: the roots its units' seeds take, its step's ``a/<K>@<s>`` and ``b/<K>``, are registered; one with a ``prepare`` is
-    #: first handed those calls together (`_prepare`)
+    #: first handed those calls together (`_prepare`); one with a ``stage`` is handed each served call and its rows ``a``
+    #: where they are on a CUDA device, before they're read to the host (it copies them and keeps no reference to ``a``,
+    #: which the engine reuses; a ValueError refuses the window)
     receipts: Callable[[Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None
     #: with ``receipts``, each open step A table's calls, their served codes and s_a, until their step's last call of K
     _held: dict[str, list[tuple[Any, np.ndarray, np.ndarray]]] = field(default_factory=dict)
@@ -552,10 +565,19 @@ class Served:
         if self.refused:
             return {}
         codes, scales = np.zeros((0, call.k), np.int8), np.zeros(0, "<f4")
-        zv, yv = np.zeros((0, call.n), "<i4"), np.zeros((0, call.n), np.int16)
+        zy_rows = None
         if call.m:
+            stage = getattr(self.receipts, "stage", None)
+            if stage is not None and getattr(a, "is_cuda", False):
+                try:
+                    stage(call, a)
+                except ValueError as e:
+                    self.refused.append(f"call {call.index}: {e}")
+                    return {}
             codes, scales = PH.numpy_of(a).reshape(call.m, call.k), PH.numpy_of(s_a).reshape(-1)
-            zv, yv = ZR.split(records, call.rows, call.n)
+            zy_rows = zy_words(records, call.rows, call.n, self.m, self.tile)
+        else:
+            zy_rows = record_words(np.zeros((0, call.n), "<i4"), np.zeros((0, call.n), np.int16), self.m, self.tile)
         out, value, mine = {}, self.a_table(call.index), self.step_calls(call.index)
         rows = self._a.setdefault(value, [])
         rows.append(self.a_words(call, codes, scales))
@@ -564,7 +586,7 @@ class Served:
             whole = np.concatenate(self._a.pop(value))
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
         zy = HW.table(self.program, "zy", call.index)
-        out[zy] = self._register(run, zy, record_words(zv, yv, self.m, self.tile), nonce(call.index, "zy"), self.root)
+        out[zy] = self._register(run, zy, zy_rows, nonce(call.index, "zy"), self.root)
         if self.tap is not None:
             self.tap.arow(run, self, call, value, whole)
         b = self.program.fn.bindings["PREFIX"] + f"b/{call.k}"
@@ -610,6 +632,8 @@ class Served:
         window's Program salt, u0 + t and (root(a), root(b)), salted `core_check.public_row_salt` of the open root and
         u0 + t, as credit's `registered_file` builds it (`h1window.public_table`); its rows kept, as they are public."""
         units, out = HW.call_units(self.program), {}
+        ctx = self.root.encode()
+        head = CC.PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx
         x = np.frombuffer(run._salt + bytes(8) + self.registered[a].root + self.registered[b].root, np.uint8)
         for c in calls:
             u0, n = units[c]
@@ -617,7 +641,7 @@ class Served:
             rows[:, len(run._salt):len(run._salt) + 8] = (
                 np.arange(u0, u0 + n, dtype=">u8").view(np.uint8).reshape(n, 8))
             words = np.ascontiguousarray(rows.reshape(n, -1, 4)[:, :, ::-1]).reshape(n, -1).view("<u2")
-            salts = b"".join(CC.public_row_salt(self.root, u) for u in range(u0, u0 + n))
+            salts = NR.public_salts(head, u0, n)
             v = self.pub_table(c)
             out[v] = self._register(run, v, words, 0, self.root, salts)
         return out
