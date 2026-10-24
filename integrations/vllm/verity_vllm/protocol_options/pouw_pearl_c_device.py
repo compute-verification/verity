@@ -580,7 +580,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             sh.j, sh.rot = 0, ()
             y, screened = self._graph_call(w, sh, pipe, raw, tiles, m, index, caller)
             return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias, screened, scattered=self.hashing)
-        aside = "a_tree" in self._side_groups(sh)
+        aside = bool(pipe.lane_cuts[1])                 # A's tree is among the side steps (omits can drop it)
         if self._lane_graphed(sh, side):
             g, screened = self._lanes(w, sh, pipe, steps, side, raw, caller, index, aside, graph=(m, tiles))
             return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, g.y.clone(), lead, bias, screened, scattered=True)

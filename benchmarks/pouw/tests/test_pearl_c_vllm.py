@@ -2053,6 +2053,25 @@ def test_deferred_a_starts_as_tree_right_after_the_per_row_keying_at_every_m16(s
     assert not pipe.split_a and pipe.fillers
 
 
+def test_deferred_a_runs_as_tree_aside_only_where_the_call_keeps_its_step(sm90_run, monkeypatch):
+    """A call runs A's tree on its side lane (and starts it behind the main lane's per-row keying) only where its side steps
+    hold the tree: the e2e control's omits (A's commitment and the tile leaves) leave its side lane no step, so it starts no
+    tree there and its call still runs; omitting the tile leaves alone keeps the tree aside."""
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    make, kernel, weights, _ = sm90_run
+    run = make()
+    seen, lanes = [], run._lanes
+    monkeypatch.setattr(run, "_lanes", lambda *a, **k: seen.append((len(a[4]), a[2].lane_cuts, a[8])) or lanes(*a, **k))
+    for omit in (E2E.CONTROL_OMITS, frozenset({"hash_leaf"}), frozenset()):
+        run.begin()
+        run.omit = omit
+        kernel.dev.log.clear()
+        run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+        assert any(n == "gemm_pearlc_d" for n, *_ in kernel.dev.log)
+    run.omit = frozenset()
+    assert seen == [(0, (0, 0), False), (1, (1, 1), True), (2, (1, 1), True)]
+
+
 class H100TwinDev(TwinDev):
     """`TwinDev` with an H100's 132 SMs and opt-in shared memory, for pearl_c_sm90's pipeline."""
 
