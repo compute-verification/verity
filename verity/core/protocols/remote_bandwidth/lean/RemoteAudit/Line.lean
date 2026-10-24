@@ -202,6 +202,8 @@ structure Seen where
   host : Nat
   deriving Inhabited
 
+deriving instance Inhabited for Session.WindowSummary
+
 /-- `U`, a window's receipts in the record: its passes' lengths summed. -/
 def receipts (w : Session.WindowSummary) : Nat := w.lengths.toList.sum
 
