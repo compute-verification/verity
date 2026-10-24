@@ -30,6 +30,13 @@
 "Properties.Proofs" = "Proofs.Properties"
 "Properties/Proofs" = "Proofs/Properties"
 "Security/Models/" = "Security/Definitions/"
+# The same renames as tests spell them: pathlib chains and a regex.
+'"Models" / "Accounting"' = '"Definitions" / "Accounting"'
+'"Models" / "Flock"' = '"Definitions" / "Flock"'
+'"Models" / "Nci"' = '"Definitions" / "Nci"'
+'"Models" / "Pous"' = '"Definitions" / "Pous"'
+'"Models" / "Pouw"' = '"Definitions" / "Pouw"'
+'Models\.Flock' = 'Definitions\.Flock'
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps and tests, changelogs, the rulings), the frozen
