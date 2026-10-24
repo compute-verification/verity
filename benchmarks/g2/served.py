@@ -1,11 +1,16 @@
-"""G2's served arm: the rows-4k Commit's overhead over stock as vLLM serves it (torch.compile and CUDA graphs), beside the
-batch-invariant eager stock that GLM-5.3's eager-vs-eager points on G2's curve compare against, on one RTX PRO 6000 (sm_120).
+"""G2's served arm: the Commit's overhead (rows-sha512, 4 KiB rows) over stock as vLLM serves it (torch.compile and CUDA
+graphs), beside the batch-invariant eager stock that GLM-5.3's eager-vs-eager points on G2's curve compare against, on one
+RTX PRO 6000 (sm_120).
 
-The runs are the served-arm specs' (`benchmarks/specs/*-rtx-served-arm*.toml`, arms in `served_commit/served_arm.py`). One
-resident run interleaves, rep by rep and on one GPU, batch-invariant eager stock (`stock`, `stock-fp8`: the harness's eager),
-compiled stock (`stock@compiled`: vLLM's serving defaults, #3377's served variant) and the rows-4k Commit, compiled
-(`served-commit-rows-4k`: ServedCompiledSource, the arm prof.sh ran for G2's TP1 points) or eager (`commit-rows-4k-eager`: the
-native collector on the eager engine). A run holds any of these; every ratio below whose two arms it holds is read from it.
+One resident run interleaves, rep by rep and on one GPU, batch-invariant eager stock (`stock`, `stock-fp8`: the harness's
+eager), compiled stock (`stock@compiled`: vLLM's serving defaults, a served variant) and the Commit, compiled or eager. The
+Commit is an arm of COMMIT_MODULES:
+  - the served-arm specs' (`benchmarks/specs/*-rtx-served-arm*.toml`, `served_commit/served_arm.py`): `served-commit-rows-4k`,
+    compiled (ServedCompiledSource, the arm prof.sh ran for G2's TP1 points), and `commit-rows-4k-eager`, the harness's eager
+    `commit` at 4 KiB chunk constants;
+  - the harness's (`verity_bench.vllm.commit_arm`, `llama31-8b-fp8-1gpu-commit-served`): `commit`, eager, and `commit@compiled`.
+An arm's execution is its own (`identity.arms`), else the spec's. A run holds any of these arms, at most one per role; every
+ratio below whose two arms it holds is read from it.
 
 Each ratio is one arm over another in the same run, paired by rep (rep k of every arm ran in the same interleaved round), as the
 median with [min, max] over the pairs:
@@ -46,6 +51,7 @@ TITLES = {"served": "compiled Commit / compiled stock (served)", "eager-served":
           "eager": "eager Commit / bi-eager stock (G2's eager mode)", "compiled-bi": "compiled Commit / bi-eager stock",
           "f": "compiled stock / bi-eager stock (f)"}
 STOCK = ("stock", "stock-fp8")
+COMMIT_MODULES = ("served_commit.served_arm:", "verity_bench.vllm.commit_arm:")
 METRICS = {"prefill": ("ttft", "time_to_first_token_s"), "decode": ("itl_p50", "inter_token_latency_p50_s"),
            "run": ("tpot", "time_per_output_token_s")}
 
@@ -70,15 +76,32 @@ class Measure:
     run: str
 
 
-def role(arm: dict) -> str | None:
-    """An arm's role in RATIOS, from its id and its execution (`identity.arms`): stock (the builtin or one of its served variants,
-    `stock@compiled`) or the rows-4k Commit, compiled or not."""
-    name, compiled = arm["id"], arm.get("execution") == "compiled"
-    if name.split("@")[0] in STOCK:
+def spec_execution(ident: dict) -> str:
+    """The execution of an arm that names none: the spec's, as the harness writes it into the preset (curve.py's rule)."""
+    return "eager" if (ident["preset"].get("engine_settings") or {}).get("enforce_eager") else "compiled"
+
+
+def role(arm: dict, execution: str) -> str | None:
+    """An arm's role in RATIOS: stock (the builtin or one of its served variants, `stock@compiled`) or the Commit (an arm of
+    COMMIT_MODULES), in the arm's own execution, else `execution`."""
+    compiled = (arm.get("execution") or execution) == "compiled"
+    if arm["id"].split("@")[0] in STOCK:
         return "stock-compiled" if compiled else "stock-eager"
-    if "rows-4k" in name:
+    if (arm.get("module_spec") or "").startswith(COMMIT_MODULES):
         return "commit-compiled" if compiled else "commit-eager"
     return None
+
+
+def roles(ident: dict) -> dict[str, str]:
+    """{role: arm id} over a result's arms (`identity`)."""
+    execution, out = spec_execution(ident), {}
+    for arm in ident["arms"]:
+        if (r := role(arm, execution)) is None:
+            continue
+        if r in out:
+            raise ValueError(f"arms {out[r]} and {arm['id']} are both {r}: a ratio reads one arm per role")
+        out[r] = arm["id"]
+    return out
 
 
 def model_label(preset: dict) -> str:
@@ -96,31 +119,31 @@ def gates_by_arm(doc: dict) -> dict[str, bool]:
 def measures(doc: dict, *, run: str) -> list[Measure]:
     """Every ratio RATIOS names whose two arms the doc (a verity-bench result, vllm-overhead/v1) holds, per point and metric."""
     ident = doc["identity"]
-    roles = {r: a["id"] for a in ident["arms"] if (r := role(a))}
+    arms = roles(ident)
     gates = gates_by_arm(doc)
     gpu = gpu_name(None, ident["gpu"]) if ident.get("gpu") else gpu_name(ident["preset"].get("gpu_id"))
     out = []
     for point in doc["points"]:
         batch = int(point["point"]["batch"])
         for name, (num, den) in RATIOS.items():
-            if num not in roles or den not in roles:
+            if num not in arms or den not in arms:
                 continue
-            a, b = point["arms"][roles[num]]["reps"], point["arms"][roles[den]]["reps"]
+            a, b = point["arms"][arms[num]]["reps"], point["arms"][arms[den]]["reps"]
             for phase, (metric, key) in METRICS.items():
                 xs = [ra["metrics"][key] for ra in a]
                 ys = [rb["metrics"][key] for rb in b]
                 ratios = [x / y for x, y in zip(xs, ys)]
                 out.append(Measure(model=model_label(ident["preset"]), gpu=gpu, batch=batch, phase=phase, metric=metric,
-                                   ratio=name, arm=roles[num], over=roles[den], median=statistics.median(ratios),
+                                   ratio=name, arm=arms[num], over=arms[den], median=statistics.median(ratios),
                                    lo=min(ratios), hi=max(ratios), pairs=len(ratios), arm_ms=1e3 * statistics.median(xs),
                                    over_ms=1e3 * statistics.median(ys),
-                                   gates=gates.get(roles[num], False) and gates.get(roles[den], False), run=run))
+                                   gates=gates.get(arms[num], False) and gates.get(arms[den], False), run=run))
     return out
 
 
 def graph_steps(doc: dict) -> dict[int, tuple[float, float, float]]:
     """The compiled Commit's (replayed, eager, all) steps per batch: replayed steps ran its CUDA graphs."""
-    arm = next((a["id"] for a in doc["identity"]["arms"] if role(a) == "commit-compiled"), None)
+    arm = roles(doc["identity"]).get("commit-compiled")
     if arm is None:
         return {}
     out = {}
@@ -132,9 +155,9 @@ def graph_steps(doc: dict) -> dict[int, tuple[float, float, float]]:
 
 
 def run_facts(doc: dict) -> dict:
-    """What a run's table needs besides its ratios: its model, its timed points, the host's 1-minute load average over its timed
-    reps (eager arms launch every kernel from the host, so a loaded host slows them and not the CUDA graphs) and each failed gate
-    (a tokens gate with where its tokens first left its control's)."""
+    """What a run's table needs besides its ratios: its model, its Commit arms, its timed points, the host's 1-minute load average
+    over its timed reps (eager arms launch every kernel from the host, so a loaded host slows them and not the CUDA graphs) and each
+    failed gate (a tokens gate with where its tokens first left its control's)."""
     loads = [r["host"]["loadavg_1m"] for p in doc["points"] for a in p["arms"].values() for r in a["reps"]
              if "loadavg_1m" in (r.get("host") or {})]
     failed = []
@@ -145,7 +168,8 @@ def run_facts(doc: dict) -> dict:
         why = (f", divergent requests {g['divergent_requests']} (first {div.get('request')} at token {div.get('position')})"
                if g.get("divergent_requests") else "")
         failed.append(f"{g['arm']} {g.get('kind')} {g.get('point') or ''} against {g.get('control') or g.get('against')}{why}")
-    return {"model": model_label(doc["identity"]["preset"]), "points": len(doc["points"]),
+    commits = [arm for r, arm in roles(doc["identity"]).items() if r.startswith("commit")]
+    return {"model": model_label(doc["identity"]["preset"]), "commit": commits, "points": len(doc["points"]),
             "load": (min(loads), max(loads)) if loads else None, "failed": failed}
 
 
@@ -166,18 +190,19 @@ def report(ms: list[Measure], steps: dict[str, dict[int, tuple[float, float, flo
     by = {(m.model, m.run, m.batch, m.phase, m.ratio): m for m in ms}
     groups = sorted({(m.model, m.run) for m in ms})
     batches = sorted({m.batch for m in ms})
-    lines = ["# G2's served arm: the rows-4k Commit over stock as served, RTX PRO 6000", "",
+    lines = ["# G2's served arm: the Commit (rows-sha512, 4 KiB rows) over stock as served, RTX PRO 6000", "",
              ("Ratios are arm / reference in the same run, paired by interleaved rep: median [min, max] over the pairs. "
               "Lower is better; 1.000× is no overhead."), "",
              "## Served overhead (compiled Commit / compiled stock)", "",
-             "| model | B | prefill ttft | decode itl_p50 | run tpot | compiled stock itl_p50 ms | run |", "|---|---:|---|---|---|---:|---|"]
+             "| model | B | prefill ttft | decode itl_p50 | run tpot | compiled stock itl_p50 ms | Commit arm | run |",
+             "|---|---:|---|---|---|---:|---|---|"]
     for model, run in groups:
         for b in batches:
             row = [by.get((model, run, b, p, "served")) for p in METRICS]
             if not all(row):
                 continue
             dec = by[(model, run, b, "decode", "served")]
-            lines.append(f"| {model} | {b} | {' | '.join(cell(m) for m in row)} | {dec.over_ms:.3f} | {run} |")
+            lines.append(f"| {model} | {b} | {' | '.join(cell(m) for m in row)} | {dec.over_ms:.3f} | {dec.arm} | {run} |")
     lines += ["", "## Every ratio", "",
               (f"| model | run | B | phase | metric | {' | '.join(TITLES[r] for r in RATIOS)} | compiled stock ms | "
                "bi-eager stock ms |"), "|---|---|---:|---|---|" + "---|" * len(RATIOS) + "---:|---:|"]
@@ -196,11 +221,13 @@ def report(ms: list[Measure], steps: dict[str, dict[int, tuple[float, float, flo
         for b, (rep, eag, n) in sorted(per.items()):
             lines.append(f"| {run} | {b} | {rep:.0f} | {eag:.0f} | {n:.0f} |")
     if facts:
-        lines += ["", "## Runs", "", "| run | model | timed points | host load (1 min) over its reps | failed gates |",
-                  "|---|---|---:|---|---|"]
+        lines += ["", "## Runs", "",
+                  "| run | model | Commit arms | timed points | host load (1 min) over its reps | failed gates |",
+                  "|---|---|---|---:|---|---|"]
         for run, f in facts.items():
             load = f"{f['load'][0]:.0f}–{f['load'][1]:.0f}" if f["load"] else ""
-            lines.append(f"| {run} | {f['model']} | {f['points']} | {load} | {'; '.join(f['failed']) or 'none'} |")
+            lines.append(f"| {run} | {f['model']} | {', '.join(f['commit'])} | {f['points']} | {load} | "
+                         f"{'; '.join(f['failed']) or 'none'} |")
     runs = sorted({m.run for m in ms})
     failed = sorted({m.run for m in ms if not m.gates})
     lines += ["", f"Runs: {', '.join(runs)}. Gates failed in: {', '.join(failed) or 'none'}."]
@@ -251,8 +278,8 @@ def plot(ms: list[Measure], png: Path) -> None:
         for h, label in zip(*ax.get_legend_handles_labels()):
             legend.setdefault(label, h)
     fig.legend(list(legend.values()), list(legend), loc="lower center", ncol=3, fontsize=7)
-    fig.suptitle("G2's served arm on RTX PRO 6000: rows-4k Commit over compiled stock (served) and over bi-eager stock; "
-                 "median, [min, max] over 3 interleaved pairs", fontsize=9)
+    fig.suptitle("G2's served arm on RTX PRO 6000: the Commit (rows-sha512, 4 KiB rows) over compiled stock (served) and over "
+                 "bi-eager stock; median, [min, max] over 3 interleaved pairs", fontsize=9)
     fig.tight_layout(rect=(0, 0.16, 1, 1))
     fig.savefig(png, dpi=110)
 
