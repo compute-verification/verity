@@ -116,7 +116,7 @@ def forge(what: str, inner: Path, level: int = 0, record: str = "session") -> di
                next(r for r in pub["rounds"] if r["stream"] == STREAM and r["k"] == k)):
         c = rd["coins"][0]
         rd["coins"][0] = c[:-1] + format(int(c[-1], 16) ^ 1, "x")
-    (inner / record / "session.json").write_text(session_text(sess))
+    (inner / record / "session.json").write_text(json.dumps(sess))
     (inner / "public.json").write_text(json.dumps(pub))
     return {"forged": what, "record": record, "stream": STREAM, "k": k, "coin": 0, **({"level": level} if what == "query" else {})}
 
