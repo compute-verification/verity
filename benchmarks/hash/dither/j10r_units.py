@@ -1,6 +1,6 @@
 """J10-R's receipts-only units (h1u.cu's kh_seeds_j10r and kh_units_multi_j10r) on the host: the call's seed data and every
-unit's receipt, bit for bit the receipt of J10R's `h1tile.j10r_reference` (`PouwH1Tile_v5` / `_v6`, cursor/h1-j10r-1de3 at
-b1bd862851), vectorized as served_h1/receipts.py's `tile_receipts` over each unit's J10-R noise.
+unit's receipt, bit for bit the receipt of J10R's `h1tile.j10r_reference` (`PouwH1Tile_v5` / `_v6`, #3403 on
+cursor/h1-j10r-1de3 at 559bc0aa69), vectorized as served_h1/receipts.py's `tile_receipts` over each unit's J10-R noise.
 
 A call is A [T, K] (its slot: T rows, the rows past M zero) and B [N, K]; unit u = ri (N / 32) + cj is at position base + u,
 and `base`, the call's first unit position, is J10-R's ``call``. seed_c = seeds.call_seed(salt, base, roots); unit (ri, cj)'s
@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import json
 import random
+import re
 import sys
 import time
 from pathlib import Path
@@ -77,6 +78,36 @@ def seed_words(salt: bytes, root_a: bytes, root_b: bytes) -> list[int]:
     return [int.from_bytes(b[i:i + 8], "big") for i in range(0, len(b), 8)]
 
 
+def _kernel_seed(data: list[int], kind: int, pos: int) -> bytes:
+    """h1u.cu's h1_seeds_c message from kh_seeds_j10r's `data` (`seed_words`): kind 0 seed_c, 1 σ_R, at position pos."""
+    words = [pos] + [(data[3 * kind + w] if w < 3 else data[3 + w]) ^ pos for w in range(27)]
+    return hashlib.sha512(b"".join(w.to_bytes(8, "big") for w in words)).digest()
+
+
+def lean_vectors() -> dict:
+    """J10R's `J10RChecks.lean` theorems (the Lean kernel's own evaluation of J10R.lean) against this module's seeds:
+    seed_c by the restatement, by `seeds.call_seed` and by h1_seeds_c's message; σ_R by `seeds.receipt_seed` and by
+    h1_seeds_c's; and a block of seed_c's stream by `_stream`."""
+    path = Path(SD.__file__).resolve().parents[5] / "Security" / "Proofs" / "Accounting" / "TS" / "J10RChecks.lean"
+    lean = {m[1]: m[2].strip() for m in re.finditer(r"^theorem (\w+_vec) :.*= (\[.*\]|\(.*\)) := by decide \+kernel$",
+                                                    path.read_text(), re.MULTILINE)}
+    salt = bytes(range(64))
+    ra, rb = bytes((7 * i + 3) % 256 for i in range(64)), bytes((5 * i + 1) % 256 for i in range(64))
+    data, sc = seed_words(salt, ra, rb), _call_seed_local(salt, 40, ra, rb)
+    got = {"callSeed_vec": {"restated": sc, "seeds.call_seed": SD.call_seed(salt, 40, ra, rb),
+                            "h1_seeds_c": _kernel_seed(data, 0, 40)},
+           "receiptSeed_vec": {"seeds.receipt_seed": SD.receipt_seed(salt, 46, ra, rb),
+                               "h1_seeds_c": _kernel_seed(data, 1, 46)},
+           "noiseBlock_vec": {"_stream": _stream(sc, np.array([24]))[0].astype(">u4").tobytes()}}
+    doc: dict = {"file": str(path.relative_to(path.parents[4])), "bad": 0}
+    for name, by in got.items():
+        want = lean.get(name)
+        row = {how: "[" + ", ".join(map(str, v[:8])) + "]" == want for how, v in by.items()}
+        doc["bad"] += sum(not ok for ok in row.values())
+        doc[name] = {"lean": want, **row}
+    return doc
+
+
 def _stream(seed: bytes, ts: np.ndarray) -> np.ndarray:
     head = SD.NOISE_TAG + bytes(seed)
     out = b"".join(hashlib.sha512(head + int(t).to_bytes(8, "big")).digest() for t in ts)
@@ -116,7 +147,7 @@ def call_receipts(a: torch.Tensor, b: torch.Tensor, salt: bytes, base: int, root
 def anchor(out: Path, seed: int = 0x10A) -> dict:
     """On J10R's tree: the restated seed and blocks against the Definition's, and `call_receipts` against
     `h1tile.j10r_reference`'s receipt on every word, at small calls (both row blocks, several column blocks) and at K = 4096
-    and 14336 (m = 2 and 3) at the served slot T = 64."""
+    and 14336 (m = 2 and 3) at the served slot T = 64; and the seeds against J10RChecks.lean's vectors (`lean_vectors`)."""
     if not DEFINITION:
         raise SystemExit("j10r_units anchor: this tree has no J10-R Definition (h1tile.j10r_reference); run it on J10R's")
     rng = random.Random(seed)
@@ -151,7 +182,10 @@ def anchor(out: Path, seed: int = 0x10A) -> dict:
              "fast_s": round(fast_s, 2), "definition_s": round(time.time() - t0, 2)}
         doc["cases"].append(c)
         print(json.dumps(c), flush=True)
-    doc["ok"] = doc["seed_bad"] == 0 and doc["blocks_bad"] == 0 and all(c["bad_words"] == 0 for c in doc["cases"])
+    doc["lean_vectors"] = lean_vectors()
+    print(json.dumps(doc["lean_vectors"]), flush=True)
+    doc["ok"] = (doc["seed_bad"] == 0 and doc["blocks_bad"] == 0 and all(c["bad_words"] == 0 for c in doc["cases"])
+                 and doc["lean_vectors"]["bad"] == 0)
     out.mkdir(parents=True, exist_ok=True)
     (out / "j10r-anchor.json").write_text(json.dumps(doc, indent=1))
     return doc

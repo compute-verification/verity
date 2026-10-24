@@ -24,9 +24,9 @@ import dither_a as DA
 import dither_one as DO
 from h1r import H1R
 
-J10R_SHA = "b1bd862851"
+J10R_SHA = "559bc0aa69"
 TREE_ENV = "DITHER_J10R_TREE"
-LABEL = ("J10-R units (J10R's Definition: h1tile.j10r_reference, PouwH1Tile_v5's receipt, cursor/h1-j10r-1de3 at "
+LABEL = ("J10-R units (J10R's Definition: h1tile.j10r_reference, PouwH1Tile_v5's receipt, #3403 on cursor/h1-j10r-1de3 at "
          f"{J10R_SHA}; measured only)")
 M_MODES = {"slot": "each call's A slot, T rows (j10r_blocks' docstring: the call's slot)",
            "live": "the step's live rows rounded up to 32"}
