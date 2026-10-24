@@ -368,6 +368,8 @@ def main() -> int:
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
     ap.add_argument("--lean", default=None, help="the Lean verifier of record (flock-verify)")
     ap.add_argument("--n", type=int, default=1)
+    ap.add_argument("--prove-timeout", type=float, default=3600, metavar="S",
+                    help="the limit in seconds of M0's prover (a0.session) and of the Lean verifier (a0.lean_verify)")
     ap.add_argument("--port", type=int, default=7611)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--call-n", type=int, default=None, metavar="N",
@@ -502,11 +504,12 @@ def main() -> int:
     say("released", rss_now_gb=release())
 
     t = time.time()
-    record, live = a0.session(a.bin, {"dir": d, "pin": pin}, a.n, f"subset:{a.n}", a.port, out / "session", zk=True)
+    record, live = a0.session(a.bin, {"dir": d, "pin": pin}, a.n, f"subset:{a.n}", a.port, out / "session", zk=True,
+                              prove_timeout=a.prove_timeout)
     say("proved", seconds=round(time.time() - t, 1), accepted=(live or {}).get("accepted"), why=(live or {}).get("why"),
         **{k: (live or {}).get(k) for k in ("k_log", "nbl", "dense_m", "prove_total_s", "witness_s", "proof_bytes", "units")},
         verdict=(record or {}).get("verdict"))
-    v = a0.lean_verify(a.lean, {"dir": d}, a.n, out / "session", zk=True)
+    v = a0.lean_verify(a.lean, {"dir": d}, a.n, out / "session", zk=True, timeout=a.prove_timeout)
     say("verified", **v)
     return 0 if (live or {}).get("accepted") and v["accepted"] else 1
 

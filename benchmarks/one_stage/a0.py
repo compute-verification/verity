@@ -206,7 +206,7 @@ def firewall_env(st: dict) -> dict:
     return {"FC_FIREWALL_STATEMENT": STATEMENT_ID, "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
 
 
-def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False) -> dict:
+def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, timeout: float = 3600) -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
     `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's."""
@@ -227,7 +227,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False) -> dic
     t = time.time()
     p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
              "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), "--session", str(sessions[-1].parent)],
-            out / "lean-verify.log")
+            out / "lean-verify.log", timeout=timeout)
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
