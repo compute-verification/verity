@@ -16,7 +16,7 @@ sequentially by this module's orchestrator (`subprocess`), then a torch-free com
                              tensors D2H asynchronously into fresh pinned buffers (stream-ordered right after the module,
                              i.e. before the next layer's in-place `fused_add_rms_norm` overwrites them); after every
                              `engine.step()` the driver synchronises once and hashes.  Output: `hooks.json`, `tokens.json`.
-  (c) `bench/m1_capture.py --no-observer`  fully bare (nothing installed, `driver.run_requests`): `tokens.json`.
+  (c) `bench/m1_capture.py --no-observer`  fully bare (nothing installed, `vllm_adapter.run_requests`): `tokens.json`.
 
 Tensors compared, per step s and layer L (values are bf16 row-major `[M, H]`, M = token rows of the step):
   hidden[s, L]   = `LlamaDecoderLayer.forward` return[0] = the MLP `down_proj` output.
@@ -570,7 +570,7 @@ def compare(dir_: str, accepted_ctl: str | None, expected_layers: int | None = N
         "layers": seen_layers if seen_layers is not None else sorted(map(str, layer_counts)),
         "schema": "verity-capture/noninterference/v1", "utc": _utc(), "dir": str(d),
         "variants": {"a_observer": "full observer + hash-only snapshots of every step (HashOnlyCapture)",
-                     "b_hooks": hashes_b.get("method"), "c_bare": "bench.m1_capture --no-observer (driver.run_requests, nothing installed)"},
+                     "b_hooks": hashes_b.get("method"), "c_bare": "bench.m1_capture --no-observer (vllm_adapter.run_requests, nothing installed)"},
         "hooked_modules_b": hashes_b.get("hooked_modules"), "hook_fire_counts_b": hashes_b.get("hook_fire_counts"),
         "tokens": {k: v for k, v in toks.items()}, "tokens_equal_accepted": token_eq, "reference": "clean control run (generated_token_ids)",
         "tokens_equal_workload_accepted": workload_accepted_eq,
