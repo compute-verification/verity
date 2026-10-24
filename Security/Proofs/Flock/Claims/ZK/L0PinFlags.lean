@@ -54,7 +54,7 @@ theorem absorb_rel {c : Cfg} {s : Masker} {v : F128} {q : Masker × F128} (h : s
       | some p =>
         simp only [hi, hp, pure, Except.pure, Except.ok.injEq] at h
         subst h
-        exact ⟨rfl, rfl, rfl, rfl, rfl, fun h' => by simp [hon] at h'⟩
+        exact ⟨rfl, hon.symm, rfl, rfl, rfl, fun h' => by simp [hon] at h'⟩
 
 theorem foldlM_absorb1_rel (c : Cfg) : ∀ (vs : List F128) (r r' : Masker × ByteArray × Array ℕ × ℕ),
     vs.foldlM (absorb1 c) r = .ok r' → Rel r.1 r'.1
@@ -126,15 +126,17 @@ theorem foldlM_stepAt_rel (c : Cfg) (s₀ : Masker) (hA : s₀.done = false → 
             cases hs
             exact label_rel (hf.2 b rfl) hA' hl
         | bytes b => cases hs; exact rel_refl _
-        | one v => exact foldlM_absorb1_rel c [v] _ _ hs
-        | vec vs => exact foldlM_absorb1_rel c vs _ _ hs
+        | one v =>
+          simp only [stepAt] at hs
+          exact foldlM_absorb1_rel c _ _ q hs
+        | vec vs =>
+          simp only [stepAt] at hs
+          exact foldlM_absorb1_rel c _ _ q hs
         | sq k n => cases hs; exact rel_refl _
       exact foldlM_stepAt_rel c s₀ hA fs q r' (rel_trans hr hq) (fun g hg => hp g (List.mem_cons_of_mem _ hg)) h
 
 theorem eq_mk_encs {b : ByteArray} {l : List UInt8} (h : b.data.toList = l) : b = ByteArray.mk l.toArray := by
   rw [← h]
-  cases b
-  rfl
 
 /-- **A quiet round keeps the flags** and owes its coins. -/
 theorem roundFree_quiet {c : Cfg} {s : Masker} {r : ByteArray × ℕ} {q : ByteArray × Masker × Array ℕ}
@@ -148,7 +150,8 @@ theorem roundFree_quiet {c : Cfg} {s : Masker} {r : ByteArray × ℕ} {q : ByteA
   have hi' : x.1.inner = none := hR.2.2.2.2.1.trans hi
   simp only [hi'] at h
   cases h
-  exact ⟨⟨hR.1, hR.2.1, hR.2.2.1, hR.2.2.2.1, hR.2.2.2.2.1, hR.2.2.2.2.2⟩, rfl⟩
+  refine ⟨⟨hR.1, hR.2.1, hR.2.2.1, hR.2.2.2.1, ?_, hR.2.2.2.2.2⟩, rfl⟩
+  first | exact hi.symm | exact hR.2.2.2.2.1
 
 /-- **The opening's label in the algebraic phase** demands its last position and ends it. -/
 theorem label_pcs {c : Cfg} {s : Masker} {q : Masker × ByteArray} (hon : s.on = true)
@@ -213,8 +216,9 @@ theorem roundFree_pcs {c : Cfg} {s : Masker} {r : ByteArray × ℕ} {q : ByteArr
   have hi' : x.1.inner = none := hR.2.2.2.2.1.trans (hin.trans hi)
   simp only [hi'] at h
   cases h
-  exact ⟨hpos, hR.1.trans hdn, hR.2.1.trans hof, hR.2.2.1.trans hl0, hR.2.2.2.1.trans hdl, hi',
+  refine ⟨hpos, hR.1.trans hdn, hR.2.1.trans hof, hR.2.2.1.trans hl0, hR.2.2.2.1.trans hdl, ?_,
     (hR.2.2.2.2.2 hof).trans hps, rfl⟩
+  first | rfl | exact hi'
 
 /-! ## Along a rep's scheduled rounds -/
 
