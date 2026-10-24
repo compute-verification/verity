@@ -24,7 +24,8 @@ store      `engines` arenas of `arena_blocks` each, in GPU order, then `host_blo
            weights blocks labelled (weights, hbm) and its rest (filler, hbm), the host tier (filler, host)
 payload    `audit.payload_tree` over the store, block j salted with store_salt(key, PAYLOAD_LABEL, j) under the
            verifier's key (its payload-key message), so its root follows from the pin, the store's shape and that key
-           (`expected_root`, in worker processes: about an hour of one core at a whole node's 130M blocks)
+           (`expected_root`, in worker processes: at a whole node's 130M blocks 665 s on 11 cores, the Lean's
+           `Store.expectedRoot` 436 s on 11 threads, 23 Oct, `benchmarks/remote_session/binding_bench.py`)
 binding    at startup the pin read, every pinned file held to it, the arena laid out and its weights blocks' digests
            computed; at each hello (`Binding.hold`) the store its size makes and that store's payload root under the
            verifier's key, against the hello's, else Refused with why
