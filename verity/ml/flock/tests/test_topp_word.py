@@ -22,8 +22,8 @@ def _piece(name, *ops):
 
 
 def test_pieces_match_the_pipelines_operations():
-    from verity_vllm.program.registry import sampling as SM
-    from verity_vllm.program.registry import topp_split as TS
+    from verity.ml.definitions.registry import sampling as SM
+    from verity.ml.definitions.registry import topp_split as TS
 
     rng = np.random.default_rng(7)
     n = 3000
@@ -84,7 +84,7 @@ def _rows(V, T, rng):
 @pytest.mark.parametrize("V", [160, 200])
 @pytest.mark.slow
 def test_the_keep_word_is_topp_keep(V):
-    from verity_vllm.program.registry import sampling as SM
+    from verity.ml.definitions.registry import sampling as SM
 
     rng = np.random.default_rng(V)
     x, p, s = _rows(V, 33, rng)
@@ -109,8 +109,8 @@ def test_each_lane_follows_its_own_half_where_the_halves_disagree(monkeypatch):
     """``topp_split``'s own divergent rows (verity PR #169, ``test_topp_split_halves``): ordinary logits, the step kernels'
     partials constructed so that each half's own scalars decide ``nomask``, in both orders. The circuit, given the same partials
     for its step kernels, is ``sampling.topp_keep`` bit for bit."""
-    from verity_vllm.program.registry import sampling as SM
-    from verity_vllm.program.registry import topp_split as TS
+    from verity.ml.definitions.registry import sampling as SM
+    from verity.ml.definitions.registry import topp_split as TS
 
     V, S, P = 3000, 16, f32(0.5)
     rows = {35: [False, True], 50: [False, True], 17: [True, False], 47: [True, False]}

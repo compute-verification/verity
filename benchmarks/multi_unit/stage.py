@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from verity_flock import multi_unit as MU
-from verity_vllm.program.kernels import derived_rows as DR
+from verity.ml.definitions.numerics import derived_rows as DR
 
 G = 128
 SALT_KEY = b"multi-unit-benchmark"
@@ -55,7 +55,7 @@ def draw(K: int, N: int, n: int, seed: int = 0):
 
 def definition(K: int, N: int):
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import boolean_fp8 as BF
+    from verity.ml.definitions.registry import boolean_fp8 as BF
 
     return bind(BF.ScaledMmFp8BlockV2, K=K, N=N, G=G)
 

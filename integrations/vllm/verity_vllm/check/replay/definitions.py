@@ -33,7 +33,7 @@ _KERNEL_CHECKS: dict[str, list[str]] = {}
 def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[str]:
     """The specializations of the rows the replay evaluates: a family with a row kernel (`rows.ROWS`) or a protocol's delegate."""
     from verity_vllm.check.replay.delegate import DELEGATES
-    from verity_vllm.program.kernels.rows import ROWS
+    from verity.ml.definitions.numerics.rows import ROWS
     from verity_vllm.query.manifest.format import spec_family
 
     return sorted({str(r["spec"]) for r in rows if spec_family(str(r["spec"])) in ROWS or spec_family(str(r["spec"])) in DELEGATES})
@@ -58,8 +58,8 @@ def of_record(dirs: dict[str, str], digs: dict[str, str], rows: dict[str, list[d
 def kernel_refusal(specs: Iterable[str]) -> str | None:
     """Why a row kernel this tree grades ``specs`` by is not its family's Definition, or None: each family's row kernel against
     the reference by core `self_check` (`kernel_registry.check`; module docstring), once a family per process."""
-    from verity_vllm.program.kernels import kernel_registry as KR
-    from verity_vllm.program.kernels.rows import KERNEL, ROWS
+    from verity.ml.definitions.numerics import kernel_registry as KR
+    from verity.ml.definitions.numerics.rows import KERNEL, ROWS
     from verity_vllm.query.manifest.format import spec_family
 
     bad: list[str] = []
@@ -77,7 +77,7 @@ def refusal(program_dir: str, digest: str, specs: Iterable[str]) -> str | None:
     """Why the Definitions this tree evaluates ``specs`` by are not the ones the Build at ``program_dir`` bound into Program
     ``digest``, or None.  With no ``specs`` nothing is evaluated, so nothing is read."""
     from verity.ml.circuits.codec import program_digest
-    from verity_vllm.program.registry.catalog import load
+    from verity.ml.definitions.registry.catalog import load
 
     specs = list(specs)
     if not specs:

@@ -10,10 +10,10 @@ from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.constants import program_data
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import b1, hopper
-from verity_vllm.program.registry import fa2_check_inf as F2
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import value_inputs as VI
+from verity.ml.definitions.registry import b1, hopper
+from verity.ml.definitions.registry import fa2_check_inf as F2
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry import value_inputs as VI
 
 
 def _bf16(rng, n: int, scale: float = 1.0) -> list[int]:
@@ -96,7 +96,7 @@ def test_derive_registered_values_evaluates_like_the_constants_program():
 
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report
-    from verity_vllm.program.kernels.serve3_reference import materialize
+    from verity.ml.definitions.numerics.serve3_reference import materialize
 
     C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 1, "V": 32, "MAX_POS": 64}
     with torch.device("meta"):
@@ -138,7 +138,7 @@ def test_derive_registered_values_on_bits_reads_the_values_through_boolean_defin
     import torch
 
     from verity.ml.circuits import boolean as BL
-    from verity_vllm.program import boolean as BB
+    from verity.ml.definitions import boolean as BB
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report
 

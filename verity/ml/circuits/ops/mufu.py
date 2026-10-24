@@ -15,10 +15,10 @@ Triton record `W11R-40f0cebeb670-20260907T1802Z` measured the same rcp and sqrt 
 
 Batch kernels.  Every primitive but `MufuTanh` has a numpy kernel registered with `verity.ml.circuits.evaluation` (domain: every encoding).
 
-Provenance.  These are the definitions the vLLM integration registered in `verity_vllm.program.registry.prims` (same ids,
+Provenance.  These are the definitions the vLLM integration registered in `verity.ml.definitions.registry.prims` (same ids,
 signatures and conformance statuses), which re-exports them from here.  The bit rules are the integration's C++ models
 (`fa2_model.cpp`: `mufu_ex2_bits`, `mufu_rcp_bits`; `rms_triton_model.cpp`: `mufu_sqrt`, `mufu_rsq`, `div_full_parts`,
-`rsqrt_nonftz`) on integers; the kernels are its numpy ports (`integrations/vllm/verity_vllm/program/kernels/derived_rows.py`).
+`rsqrt_nonftz`) on integers; the kernels are its numpy ports (`verity/ml/definitions/numerics/derived_rows.py`).
 """
 from __future__ import annotations
 

@@ -12,7 +12,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 #: the words an argmax turns on: quiet NaNs of both signs, a signalling NaN, +0, -0, +inf, -inf, 1, -1, 2
 EDGES = np.array([0x7FC0, 0xFFC0, 0x7F81, 0x0000, 0x8000, 0x7F80, 0xFF80, 0x3F80, 0xBF80, 0x4000], dtype=np.uint16)

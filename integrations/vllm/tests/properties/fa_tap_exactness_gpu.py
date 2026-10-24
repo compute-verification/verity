@@ -154,10 +154,10 @@ def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, 
     the reference evaluator (`AttentionHead_v4`, gate by gate)."""
     from verity.ml.circuits.evaluation.reference import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.registry import fa3_check_inf as F3
-    from verity_vllm.program.registry import attention_vocab
-    from verity_vllm.program.registry import hopper
+    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.ml.definitions.registry import fa3_check_inf as F3
+    from verity.ml.definitions.registry import attention_vocab
+    from verity.ml.definitions.registry import hopper
 
     q, k, v, o = _words(t["q"]), _words(t["k"]), _words(t["v"]), _words(out)
     bt = t["block_table"].cpu().numpy()

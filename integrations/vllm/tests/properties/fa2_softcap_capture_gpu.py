@@ -41,8 +41,8 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.program.kernels import rows as RK
-from verity_vllm.program.kernels import softcap_rows as SR
+from verity.ml.definitions.numerics import rows as RK
+from verity.ml.definitions.numerics import softcap_rows as SR
 from verity_vllm.properties.fa_tap_exactness import PAGE, cases as tap_cases
 from verity_vllm.properties.record import seal as seal_record
 
@@ -50,7 +50,7 @@ SCHEMA = "verity-vllm/fa2-softcap-capture/v1"
 RECORD = "fa2_softcap_capture.json"
 HDIMS = (128, 256)
 CAP = 50.0
-TANH_SRC = Path(__file__).resolve().parents[2] / "verity_vllm/program/kernels/cuda/tanh_probe.cu"
+TANH_SRC = Path(__file__).resolve().parents[2] / "verity/ml/definitions/numerics/cuda/tanh_probe.cu"
 #: (heads, KV heads, head dim) of the pinned Gemma-2 checkpoints whose selector scale is D^-0.5 (`query_pre_attn_scalar == head_dim`)
 MODELS = {"gemma-2-2b": (8, 4, 256), "gemma-2-9b": (16, 8, 256)}
 #: finite heads per launch the reference evaluator also runs (the twin's own check)
@@ -118,10 +118,10 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity.ml.circuits.evaluation.reference import evaluate
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.registry import b1, hopper
-    from verity_vllm.program.registry import fa2_softcap as F2S
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.ml.definitions.registry import b1, hopper
+    from verity.ml.definitions.registry import fa2_softcap as F2S
+    from verity.ml.definitions.registry import prims as P
     from verity_vllm.program.frontend import targets as TG
 
     table = np.memmap(job["tanh_table"], dtype="<u4", mode="r")

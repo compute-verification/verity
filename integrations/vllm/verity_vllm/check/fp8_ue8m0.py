@@ -53,12 +53,12 @@ def served_words(ck: Any, src: str, bits: int, rows: tuple[int, int] | None = No
     e4m3 beside a `weight_scale_inv`: vLLM's upcast at load (deepseek_v2 `_try_load_fp8_indexer_wk`: GLM-5.3's indexer wk, fused bf16
     with weights_proj) = bf16_RNE(f32(w) * scale over its block).  Else None."""
     if bits == 32 and ck.dtype(src) == "F8_E8M0":
-        from verity_vllm.program.kernels.deepgemm_twins import upcast_e8m0
+        from verity.ml.definitions.numerics.deepgemm_twins import upcast_e8m0
         return upcast_e8m0(ck.array(src, rows=rows)), E8M0_UPCAST
     scale = src + "_scale_inv"
     if bits != 16 or ck.dtype(src) != "F8_E4M3" or not src.endswith(".weight") or not ck.has(scale):
         return None
-    from verity_vllm.program.kernels.fp8_twins import np_e4m3_to_f32
+    from verity.ml.definitions.numerics.fp8_twins import np_e4m3_to_f32
     w, s = ck.array(src), ck.array(scale).astype(np.float32)
     full = np.repeat(np.repeat(s, w.shape[0] // s.shape[0], axis=0), w.shape[1] // s.shape[1], axis=1)
     u = np.ascontiguousarray(np_e4m3_to_f32(w) * full, dtype=np.float32).view(np.uint32)
@@ -68,7 +68,7 @@ def served_words(ck: Any, src: str, bits: int, rows: tuple[int, int] | None = No
 
 def requant(w: np.ndarray, s: np.ndarray, G: int) -> tuple[np.ndarray, np.ndarray]:
     """(e4m3 words [N, K], f32 words [cdiv(N, G), K / G]) -> the ue8m0 requantised pair, as `requant_weight_ue8m0_inplace`."""
-    from verity_vllm.program.kernels.fp8_twins import np_e4m3_to_f32, np_f32_to_e4m3_sat
+    from verity.ml.definitions.numerics.fp8_twins import np_e4m3_to_f32, np_f32_to_e4m3_sat
     N, K = w.shape
     NB, KB = -(-N // G), -(-K // G)
     sf = s.view(np.float32).reshape(NB, KB)
@@ -83,7 +83,7 @@ def requant(w: np.ndarray, s: np.ndarray, G: int) -> tuple[np.ndarray, np.ndarra
 
 def absorbed(w: np.ndarray, s: np.ndarray, G: int, NH: int, DN: int, DV: int, which: str) -> np.ndarray:
     """bf16 words of `W_UK_T` [NH][DN][L] or `W_UV` [NH][L][DV] from the rank's requantised kv_b_proj (w', s')."""
-    from verity_vllm.program.kernels.fp8_twins import np_e4m3_to_f32
+    from verity.ml.definitions.numerics.fp8_twins import np_e4m3_to_f32
     full = np.repeat(np.repeat(s.view(np.float32), G, axis=0), G, axis=1)[:w.shape[0], :w.shape[1]]
     deq = np.where((w & 0x7F) == 0, np.float32(0.0), np_e4m3_to_f32(w) * full).view(np.uint32)
     if np.any(deq & 0xFFFF):   # an e4m3 word times a power of two is exact in bf16; anything else is not this rule

@@ -8,7 +8,7 @@ unreplayable families) computes cuBLAS's routes as the pin's scan saw them, whic
 departure, an unrecorded fact one too."""
 from __future__ import annotations
 
-from verity_vllm.program.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry import bf16_gemm_check as BC
 
 
 def route_pin_gate(sr: dict | None, *, rank: int) -> tuple[dict | None, str | None]:

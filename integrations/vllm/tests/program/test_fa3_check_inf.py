@@ -11,10 +11,10 @@ import pytest
 from verity.ml.circuits.evaluation.reference import evaluate
 from verity.ml.circuits.defs import bind
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.registry import b1, hopper
-from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import attention_vocab
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.registry import b1, hopper
+from verity.ml.definitions.registry import fa3_check_inf as F3
+from verity.ml.definitions.registry import attention_vocab
 from verity_vllm.program.frontend import targets as TG
 
 NEG_INF, NAN = 0xFF800000, 0x7FFFFFFF
@@ -125,7 +125,7 @@ def test_the_builder_kind_binds_v4_only_with_masked_from():
 
 
 def test_the_partition_rule_commits_the_running_max_where_the_block_is_unguarded():
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     statics = {"T": 40, "NH": 2, "KVH": 1, "D": 16, "BN": 16, "DOT": {"fn": "HopperBF16WgmmaDot16_v1"}, "INV": {"fn": "Fa3InvSum_v1"}}
     for mf, guards in ((2, 0), (0, 4)):
