@@ -20,6 +20,9 @@ yet, and says which code would close it.
   `Draw.Session.draws`). The record's windows are the verifier's record's (`audit.Record`), read by Python. With it,
   `Properties.RemoteAudit.LineCoversSession` gives the line's W at least the session's pooled bound.
 * `DeltaOfNode`: the δ the line reads its pooled bound at is nonnegative, as a probability's bound is.
+* `DrawFits`: the session's windows have fewer than `2^448` receipts (`m`, the draw's bound on `U_t`), so each draw's
+  sampler word is the top bits of its stream's first SHA-512 block (`Accounting.Remote.Draw.width`). No code bounds a
+  window's receipts yet; gate run 7's windows have 130,023,424.
 
 The record's clock is the trace's: that each credited pass ran inside its group's window on the record's clock is the
 model's own `Paced` premise read at `recordPace`.
@@ -47,5 +50,9 @@ def DrawsOfRecord {n m : ℕ} {k : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Ses
 
 /-- **The line's δ**: the δ the line reads its pooled bound at is nonnegative. -/
 def DeltaOfNode (node : Node) : Prop := 0 ≤ node.delta
+
+/-- **The draw's word fits a block**: a window has fewer than `2^448` receipts, so each draw's sampler word lies in its
+stream's first SHA-512 block. -/
+def DrawFits (m : ℕ) : Prop := m < 2 ^ 448
 
 end Properties.RemoteAudit.Line

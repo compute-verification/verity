@@ -15,13 +15,13 @@ the record:
 * **LineHeld** (link-charged, `forms[1]`): on any trace and opening draw meeting the memory model's premises (the links'
   ceiling `Links`, `SquaringCeiling`, `Disks`, `ChipCeiling`, `Routed`, `Paced` at the record's groups `recordPace`,
   `Covers`, `SketchBound` at `δs`, and the draw's `Live`, `Refused`, `Counted`) and the record's code-to-model premises
-  (`VerdictOfRecord`, `Registered`, `WindowsOfRecord`, `DrawsOfRecord`, `DeltaOfNode`,
+  (`VerdictOfRecord`, `Registered`, `WindowsOfRecord`, `DrawsOfRecord`, `DeltaOfNode`, `DrawFits`,
   `Properties.RemoteAudit.Line.Premises`), the probability that the Lean verifier accepts the record's session and the
   record's line credits a stretch more than the trace held over its span (`Credits`) is at most
   `δs + (δ + Σ_t k_t / 2^64 + Σ_t advantage (prf t))`, `δ` the one the line reads its pooled bound at (`Node.delta`).
   The rates are the node's in the model's units, a tick a nanosecond (`Node.squarings` … `Node.chipBlocks`), and the
   openings are the deployed draw's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf t` gives window
-  `t`'s coin, at most `m < 2^448` receipts a window, the sampler's fallbacks `rest` free), at the error
+  `t`'s coin, at most `m < 2^448` receipts a window (`DrawFits`), the sampler's fallbacks `rest` free), at the error
   `Accounting.Guarantees.Remote.PooledDraw` states.
 * **LineHeldIdentity** (time-held, `forms[0]`): the same under Identity, no block coming in over the links.
 
@@ -116,7 +116,7 @@ def LineHeld : Prop :=
     (rec : Coins n κ X → Record) (δs : ℝ),
     Links T node.link node.linkBurst → SquaringCeiling T node.squarings node.encode node.rebuildBurst →
     Disks T node.disk node.diskBurst → ChipCeiling T node.chipBlocks → Routed T → Paced T (recordPace node rec) →
-    Covers T → SketchBound T δs → m < 2 ^ 448 → Live D → Refused D prf rest T → Counted D T →
+    Covers T → SketchBound T δs → DrawFits m → Live D → Refused D prf rest T → Counted D T →
     VerdictOfRecord T rec → Registered T node → WindowsOfRecord T node rec → DrawsOfRecord D T rec →
     DeltaOfNode node →
     Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt T ω node (rec ω) 1) ≤
@@ -130,7 +130,7 @@ def LineHeldIdentity : Prop :=
     (rec : Coins n κ X → Record) (δs : ℝ),
     Identity T → SquaringCeiling T node.squarings node.encode node.rebuildBurst →
     Disks T node.disk node.diskBurst → ChipCeiling T node.chipBlocks → Routed T → Paced T (recordPace node rec) →
-    Covers T → SketchBound T δs → m < 2 ^ 448 → Live D → Refused D prf rest T → Counted D T →
+    Covers T → SketchBound T δs → DrawFits m → Live D → Refused D prf rest T → Counted D T →
     VerdictOfRecord T rec → Registered T node → WindowsOfRecord T node rec → DrawsOfRecord D T rec →
     DeltaOfNode node →
     Pouw.pr (fun ω => Verified (rec ω) ∧ ¬ HeldAt T ω node (rec ω) 0) ≤
