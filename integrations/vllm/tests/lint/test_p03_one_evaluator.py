@@ -25,7 +25,11 @@ from . import _ratchet as R
 NAME = "p03_one_evaluator"
 RULE = "P3 (one evaluator interface, one challenge derivation)"
 LADDER_MIN = 4
-LADDER_HOMES = ("verity_vllm/program/kernels/",)
+#: program/kernels/, and by name the modules of it that stay in the package when its Definitions move to `verity.ml.definitions`
+LADDER_HOMES = ("verity_vllm/program/kernels/", "verity_vllm/program/kernels/relations.py", "verity_vllm/program/kernels/sampling_rng.py",
+                "verity_vllm/program/kernels/libdevice_sampling.py", "verity_vllm/program/kernels/rmsnorm_fused_sweep.py",
+                "verity_vllm/program/kernels/gemm_target_correspondence.py", "verity_vllm/program/kernels/compiled_relations.py",
+                "verity_vllm/program/kernels/compiled_norm_literal.py")
 FAMILY = re.compile(r"^[A-Z][A-Za-z0-9]*(?:_v[0-9]+)?$")
 RNG_OWNERS: frozenset[str] = frozenset({"verity_vllm/commit/challenge.py"})
 RNG_CALLS = frozenset({"random.Random", "random.SystemRandom", "numpy.random.default_rng", "numpy.random.RandomState",
