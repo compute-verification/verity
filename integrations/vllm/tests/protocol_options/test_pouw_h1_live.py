@@ -65,6 +65,19 @@ def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot
     assert v["a_link"] is None and v["tied"], v
 
 
+def test_a_per_round_window_states_no_live_unit(tmp_path):
+    """``live@<s>`` reads round 0's request table every round, so a window that admits per round is refused by name
+    (`admission_gap`): its statement, evaluation and dump raise it, and every round's verdict carries it, not ok."""
+    run = _window()
+    assert LV.admission_gap(run) is None
+    run.admission = RQ.PER_ROUND
+    gap = "per-round admission .* isn't served yet"
+    for build in (lambda: LV.statement(run, 0), lambda: LV.evaluated(run, 0), lambda: LV.dump(run, tmp_path)):
+        with pytest.raises(ValueError, match=gap):
+            build()
+    assert LV.verdicts(run) == [{"round": 0, "m": 3, "ok": False, "reason": LV.admission_gap(run)}]
+
+
 def test_the_gpu_harness_holds_a_commit_windows_requests_to_its_live_verdicts():
     """`pouw_h1_gpu.requests_check` on a window with the Commit: its request and slot tables are live, so each round's
     ``live@<s>`` verdict stands in place of the leaf openings, one a round, all accepted."""

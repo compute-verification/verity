@@ -118,6 +118,15 @@ def table(served: Any, run: Any, name: str, r: int, base: int, session: str) -> 
     return Table(reg)
 
 
+def admission_gap(run: Any) -> str | None:
+    """Why the window's ``live@<s>`` can't be stated: it reads round 0's request table every round, so a window that admits
+    per round (`pouw_h1_requests.PER_ROUND`) isn't served yet; None for a round-0 window."""
+    if run.admission == RQ.ROUND0:
+        return None
+    return (f"{run.entry}: live@<s> reads round 0's request table every round, and per-round admission (admission = "
+            f"{run.admission!r}) isn't served yet: a request admitted after round 0 has no header there")
+
+
 def m_of(run: Any, s: int) -> int:
     """Step s's served rows m_s (`pouw_h1.H1Run.step_rows`)."""
     return run.step_rows()[s]
@@ -128,6 +137,8 @@ def statement(run: Any, s: int, m: int | None = None) -> tuple[dict[str, np.ndar
     its ``--registered`` file (`live_reads.reads_file`) under the window Program's digest, the open root and the session, at
     m_s (or a claimed ``m``)."""
     served, T = run.served, run.rows
+    if (gap := admission_gap(run)) is not None:
+        raise ValueError(gap)
     if s >= len(run.round_log):
         raise ValueError(f"round {s} hasn't closed, so its slot table isn't committed")
     roots = {v: r.root.hex() for v, r in served.live.items()}
@@ -155,10 +166,13 @@ def evaluated(run: Any, s: int, m: int | None = None) -> int:
 def verdicts(run: Any) -> list[dict[str, Any]]:
     """Each round's ``live@<s>``: its slot table's root is the one round s's row commits (``slots``) and is listed whole
     there, round 0's request headers' is round 0's ``request_table``, and `live.live_ok` of its rows at m_s, as is its
-    unit's circuit (`evaluated`); ``ok`` when all hold, else ``reason``. Empty without live tables."""
+    unit's circuit (`evaluated`); ``ok`` when all hold, else ``reason`` (every round's `admission_gap` of a per-round
+    window). Empty without live tables."""
     served = run.served
     if served is None or not served.live or served.refused:
         return []
+    if (gap := admission_gap(run)) is not None:
+        return [{"round": s, "m": m_of(run, s), "ok": False, "reason": gap} for s in range(len(run.round_log))]
     req = served.live.get(value(served, LR.REQUESTS))
     heads = headers(run.admitted.get(0, []))
     heads += [(0,) * LR.HEADER] * (run.rows - len(heads))
@@ -211,5 +225,5 @@ def dump(run: Any, out: Path) -> dict[str, Any]:
     return {"dir": str(out), "rounds": len(pub["served"])}
 
 
-__all__ = ["REQUESTS", "SLOTS", "Table", "dump", "evaluated", "headers", "m_of", "nonce", "request_words", "slot_leaves",
+__all__ = ["REQUESTS", "SLOTS", "Table", "admission_gap", "dump", "evaluated", "headers", "m_of", "nonce", "request_words", "slot_leaves",
            "slot_words", "statement", "table", "value", "verdicts"]
