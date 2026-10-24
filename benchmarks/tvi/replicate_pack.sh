@@ -1,13 +1,11 @@
-# On the node that has the venv: pack /workspace/jobs/tvi/venv, its interpreter and the templates into the evidence store.
-# Writes $OUT/put.json (the art: id); replicate_unpack.sh ART on the other node puts them back at the same paths.
+# On a node with a READY venv: pack /workspace/jobs/tvi/{venv,templates} and the uv interpreter tree into the run dir's
+# pack/ (outside $OUT, so custody lists it without uploading it). Then, from the VM: `research fetch RUN --all --on NODE`,
+# and launch replicate_unpack.sh on the other node with `--send .../pack/tvi-venv.tar.zst`.
 set -euo pipefail
-S=$(mktemp -d -p /workspace/jobs/tvi .pack.XXXXXX)
-trap 'rm -rf "$S"' EXIT
 test -e /workspace/jobs/tvi/venv/READY || { echo "no READY: the venv isn't final"; exit 3; }
+mkdir -p "$RESEARCH_RUN_DIR/pack"
 cd /
-time tar -I "zstd -T0 -3" --exclude='__pycache__' --exclude='workspace/jobs/tvi/venv/READY' -cf "$S/tvi-venv.tar.zst" \
-  workspace/jobs/tvi/venv workspace/jobs/tvi/templates workspace/jobs/cache/python/cpython-3.12-linux-x86_64-gnu
-ls -l "$S/tvi-venv.tar.zst"
-sha256sum "$S/tvi-venv.tar.zst" | tee "$OUT/sha256.txt"
-time research data put --kind tvi-venv/v1 --file "$S/tvi-venv.tar.zst" --preserve --json \
-  --meta '{"what":"training-vs-inference shared venv /workspace/jobs/tvi/venv, its python and templates","unpack":"tar -I zstd -xf FILE -C /"}' | tee "$OUT/put.json"
+time tar -I "zstd -T0 -3" --exclude='__pycache__' --exclude='workspace/jobs/tvi/venv/READY' -cf "$RESEARCH_RUN_DIR/pack/tvi-venv.tar.zst" \
+  workspace/jobs/tvi/venv workspace/jobs/tvi/templates workspace/jobs/cache/python
+sha256sum "$RESEARCH_RUN_DIR/pack/tvi-venv.tar.zst" | tee "$OUT/sha256.txt"
+cp /workspace/jobs/tvi/venv/READY "$OUT/READY"
