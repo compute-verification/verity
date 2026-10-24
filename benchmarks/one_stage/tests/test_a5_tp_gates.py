@@ -1,6 +1,7 @@
 """a5_tp_gates' two ranks' windows, before anything is lowered or proved (`a5_tp_gates.main` does, through `a5.audit`, on a
-node): the transfer-gate unit is AllReduce2_v1's sums on two ports, bit for bit; each rank's chunk c<k> reads both ranks'
-registered partials of request q's collective k at the token rows, under their owners' salts, and they open the roots each
+node): the transfer-gate unit is the registered AllReduce2_v1 with a port a rank, its sums bit for bit; each rank's chunk
+c<k> reads both ranks' registered partials of request q's collective k at the token rows, under their owners' salts, and
+they open the roots each
 owner's registration names at the positions the verifier's own reads name; the registration passes the verifier's check with every
 transfer-gate unit proved; each rank's provenance is the verifier's read of both registrations; the negatives (a peer's
 partial under another root, the rank's own as its peer's, another request's as its peer's, a partial under another TP
@@ -18,14 +19,10 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array
+from verity.ml.circuits.defs import bind
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, verifier as V
 from verity_vllm.program.registry.b1_tp2 import AllReduce2
-from verity_vllm.program.registry.prims import BF16
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -57,12 +54,14 @@ def header(win: dict, m) -> dict:
     return next(e for e in win["members"] if e["name"] == m.key)["registered"]
 
 
-def test_the_unit_is_allreduce2s_sums_on_two_ports() -> None:
-    """`TpAllReduce2{N}`'s Boolean body is `AllReduce2_v1{N}` of ``[part0, part1]`` on every word pair drawn, the special
-    words among them (zeros of both signs, infinities, NaNs, subnormals, the largest finite), and so is `sums`."""
-    two = CompositeDefinition("AllReduce2OnTwoPorts", 1, ("N",),
-                              lambda S: ((("a", Array(S.N, BF16)), ("b", Array(S.N, BF16))), Array(S.N, BF16)),
-                              lambda B, S, a, b: B.call(bind(AllReduce2, N=S.N), array_of([a, b])), register=False)
+def test_the_unit_is_the_registered_allreduce2_with_a_port_a_rank() -> None:
+    """The transfer-gate template is the registered `AllReduce2_v1{N}`, its ports ``part0`` and ``part1`` its input's rows
+    ``parts[0]`` and ``parts[1]``; it is `sums` of ``[part0, part1]`` on every word pair drawn, the special words among them
+    (zeros of both signs, infinities, NaNs, subnormals, the largest finite), and on the activations' rows `sums` is
+    ``bf16_rn(f32(a) + f32(b))``."""
+    unit = AT.templates(H)[0]
+    assert unit == bind(AllReduce2, N=H) and unit.id == f"AllReduce2_v1{{N={H}}}"
+    assert AT.PORT_PARAMS == {"part0": "parts[0]", "part1": "parts[1]"}
     rng = np.random.default_rng(7)
     special = np.array([0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1, 0x0001, 0x807F, 0x7F7F, 0xFF7F, 0x3F80, 0xBF80], np.uint16)
     a = rng.integers(0, 1 << 16, (400, H)).astype(np.uint16)
@@ -70,10 +69,11 @@ def test_the_unit_is_allreduce2s_sums_on_two_ports() -> None:
     a[:len(special)], b[:len(special)] = special[:, None], np.roll(special, 5)[:, None]
     a[len(special):len(special) + 40] = AT.bf16(rng.normal(0, 0.05, (40, H)))
     b[len(special):len(special) + 40] = AT.bf16(rng.normal(0, 0.05, (40, H)))
-    got = np.asarray(BS.evaluate_words(bind(AT.TpAllReduce2, N=H), a, b)).reshape(a.shape)
-    want = np.asarray(E.evaluate_batch(bind(two, N=H), a, b)).reshape(a.shape)
-    assert np.array_equal(got, want) and np.array_equal(AT.sums(a, b), want)
-    assert np.array_equal(AT.sums(a, b), AT.sums(b, a))
+    got = np.asarray(E.evaluate_batch(unit, np.stack([a, b], 1))).reshape(a.shape)
+    assert np.array_equal(got, AT.sums(a, b)) and np.array_equal(AT.sums(a, b), AT.sums(b, a))
+    act = slice(len(special), len(special) + 40)
+    f32 = lambda w: (w.astype(np.uint32) << 16).view(np.float32)  # noqa: E731
+    assert np.array_equal(got[act], AT.bf16(f32(a[act]) + f32(b[act])))
 
 
 def test_bf16_rounds_to_nearest_even() -> None:

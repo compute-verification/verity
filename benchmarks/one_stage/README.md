@@ -41,7 +41,8 @@ negatives.
   `tp-gates:other-collective`, `tp-gates:other-request` or `tp-gates:own`): A5 on both ranks of a synthetic Llama TP2 step
   of two requests whose cross-rank transfers hold transfer gates, which no served TP2 window has yet. Each rank's partial of
   each reduction (layer 0's embedding, o_proj and down_proj, H = 2048) for each request is a registered value its
-  registration names; each rank's `TpAllReduce2{H}` chunk of a request's reduction (the `AllReduce2_v1` sums on two ports) is
+  registration names; each rank's chunk of a request's reduction, the registered `AllReduce2_v1{H}` with its input's two
+  rows staged as two ports, is
   proved whole beside a drawn rest, and Lean verifies it with the verifier's own registered reads of both ranks' partials of
   that request at the roots each owner registered, every registration read before any rank's coin. A received row moved one
   bit (`--altered`), two tokens' rows swapped, another collective's partial, another request's, and the receiving rank's own
