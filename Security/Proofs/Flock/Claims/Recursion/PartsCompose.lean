@@ -42,8 +42,9 @@ inventory (`ownHolders`) gives each commit string's salt and row checks to the r
 message the readers take, and the rest to the statement or to the code side's `ownE`. Which checks the statement
 fixes is a code fact about the layout and `final`; no part computes `final`'s reading or an opened round's tag.
 
-The composition loses nothing: where every check holds, `IVStar` accepts (`ivstar_acc_of_checks`), and that is the
-only fact about `IVStar` it reads.
+The checks are exactly `IVStar`'s acceptance at the step split (`ivstar_acc_iff_checks`): where every check holds,
+`IVStar` accepts (`ivstar_acc_of_checks`, the one fact about `IVStar` the composition reads), and where it accepts,
+every check holds. So no inventory asks a part for more than `IVStar`'s acceptance needs.
 -/
 
 namespace Claims.Recursion.VStarB
@@ -60,6 +61,23 @@ theorem allOC_of_forall (H : Msg → Msg) : ∀ ps : List (OC Bool), (∀ p ∈ 
     show (OC.eval H (bindOC p fun b => if b then allOC ps else .ret false)).1 = true
     rw [eval_bindOC, h p (by simp)]
     exact allOC_of_forall H ps fun q hq => h q (by simp [hq])
+
+/-- Where programs in order return `true`, each does. -/
+theorem forall_of_allOC (H : Msg → Msg) : ∀ ps : List (OC Bool), ((allOC ps).eval H).1 = true →
+    ∀ p ∈ ps, (p.eval H).1 = true
+  | [], _, _, hp => absurd hp (List.not_mem_nil)
+  | p :: ps, h, q, hq => by
+    have h' : (OC.eval H (bindOC p fun b => if b then allOC ps else .ret false)).1 = true := h
+    rw [eval_bindOC] at h'
+    cases hb : (p.eval H).1 with
+    | false =>
+      rw [hb] at h'
+      exact absurd h' (by simp [OC.eval])
+    | true =>
+      rw [hb] at h'
+      rcases List.mem_cons.1 hq with rfl | hq
+      · exact hb
+      · exact forall_of_allOC H ps h' q hq
 
 theorem eval_bindOC_of {α β : Type} (H : Msg → Msg) (p : OC α) (f : α → OC β) {a : α} (hp : (p.eval H).1 = a) :
     (OC.eval H (bindOC p f)).1 = (OC.eval H (f a)).1 := by
@@ -147,9 +165,39 @@ def ivChecks {Q : Type} {H : Msg → Msg} (Bd : Bound Coin Col T) (S : ElemSplit
     .len j :: (List.range (Bd.nAt x j)).flatMap fun i => [.salt j i, .row j i]) ++ (S.checks x).map .elem
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
-theorem mem_ivChecks_elem {Q : Type} {H : Msg → Msg} (Bd : Bound Coin Col T) (S : ElemSplit H Bd Q) (x : Msg) {q : Q} :
-    IVCheck.elem q ∈ ivChecks Bd S x ↔ q ∈ S.checks x := by
-  simp [ivChecks]
+/-- **What `ivChecks` lists**: the last message's reading; a length at each round before the last; a salt and a row at
+each of its commit strings; the split's checks. -/
+theorem mem_ivChecks {Q : Type} {H : Msg → Msg} (Bd : Bound Coin Col T) (S : ElemSplit H Bd Q) (x : Msg)
+    {q : IVCheck Q} (hq : q ∈ ivChecks Bd S x) :
+    q = .shape ∨ (∃ j < Bd.DE.V.k x - 1, q = .len j) ∨
+      (∃ j < Bd.DE.V.k x - 1, ∃ i < Bd.nAt x j, q = .salt j i ∨ q = .row j i) ∨ ∃ q' ∈ S.checks x, q = .elem q' := by
+  rcases List.mem_cons.1 hq with h | hq
+  · exact Or.inl h
+  rcases List.mem_append.1 hq with hq | hq
+  · obtain ⟨j, hj, hq⟩ := List.mem_flatMap.1 hq
+    have hj := List.mem_range.1 hj
+    rcases List.mem_cons.1 hq with h | hq
+    · exact Or.inr (Or.inl ⟨j, hj, h⟩)
+    obtain ⟨i, hi, hq⟩ := List.mem_flatMap.1 hq
+    have hi := List.mem_range.1 hi
+    rcases List.mem_cons.1 hq with h | hq
+    · exact Or.inr (Or.inr (Or.inl ⟨j, hj, i, hi, Or.inl h⟩))
+    rcases List.mem_cons.1 hq with h | hq
+    · exact Or.inr (Or.inr (Or.inl ⟨j, hj, i, hi, Or.inr h⟩))
+    · exact absurd hq List.not_mem_nil
+  · obtain ⟨q', hq', h⟩ := List.mem_map.1 hq
+    exact Or.inr (Or.inr (Or.inr ⟨q', hq', h.symm⟩))
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+theorem mem_ivChecks_elem {Q : Type} {H : Msg → Msg} (Bd : Bound Coin Col T) (S : ElemSplit H Bd Q) (x : Msg) {q : Q}
+    (hq : IVCheck.elem q ∈ ivChecks Bd S x) : q ∈ S.checks x := by
+  rcases mem_ivChecks Bd S x hq with h | ⟨_, _, h⟩ | ⟨_, _, _, _, h | h⟩ | ⟨q', hq', h⟩
+  · cases h
+  · cases h
+  · cases h
+  · cases h
+  · cases h
+    exact hq'
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 /-- **`IVStar` accepts where its opening layer and the element-level verifier do**: at messages of its `k` rounds
@@ -233,6 +281,121 @@ theorem ivstar_acc_of_checks {Q : Type} (H : Msg → Msg) (Bd : Bound Coin Col T
         os last hfin o hi
   · refine S.sound x _ _ (by simp [Bound.opened, hos]) (by simp [Bound.opened, hos]) fun q hq => ?_
     exact h (.elem q) (List.mem_cons_of_mem _ (List.mem_append_right _ (List.mem_map.2 ⟨q, hq, rfl⟩))) os last hfin
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+/-- **`IVStar`'s acceptance gives its opening layer and the element-level verifier's**: at messages of its `k` rounds,
+an accepting decision has a last message `final` reads with the schedule's counts, each earlier round opening to its
+rows and salts, and the element-level verifier accepting the opened messages. -/
+theorem ivstar_next_acc_inv (H : Msg → Msg) (Bd : Bound Coin Col T) (x : Msg) (as : List Msg) (cs : List Coin)
+    (hlen : as.length = Bd.DE.V.k x) (h : ((Bd.IVStar.next x as cs).eval H).1 = .acc) :
+    ∃ os last, Bd.final (as.getLastD []) = some (os, last) ∧ os.length + 1 = as.length ∧
+      (∀ j < os.length, (os.getD j []).length = Bd.nAt x j) ∧
+      (∀ p ∈ as.dropLast.zip os, ((Bd.opensRound p.1 p.2).eval H).1 = true) ∧
+      ((Bd.agrees x (Bd.opened os last) cs).eval H).1 = true := by
+  have h1 : ¬ as.length < Bd.DE.V.k x := by omega
+  simp only [Bound.IVStar, h1, ↓reduceIte] at h
+  split at h
+  · simp [OC.eval] at h
+  · rename_i os last hfin
+    split at h
+    · rename_i hc
+      rw [eval_bindOC] at h
+      cases ho : (OC.eval H (allOC ((as.dropLast.zip os).map fun p => Bd.opensRound p.1 p.2))).1 with
+      | false =>
+        rw [ho] at h
+        simp [OC.eval] at h
+      | true =>
+        rw [ho] at h
+        simp only [↓reduceIte] at h
+        rw [eval_bindOC] at h
+        cases ha : (OC.eval H (Bd.agrees x (Bd.opened os last) cs)).1 with
+        | false =>
+          rw [ha] at h
+          simp [OC.eval] at h
+        | true =>
+          refine ⟨os, last, hfin, hc.1, hc.2, fun p hp => ?_, ha⟩
+          exact forall_of_allOC H _ ho _ (List.mem_map.2 ⟨p, hp, rfl⟩)
+    · simp [OC.eval] at h
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
+/-- **A round that opens has its length, and each commit string its salt and row.** -/
+theorem checks_of_opensRound (H : Msg → Msg) (Bd : Bound Coin Col T) (a : Msg)
+    (os : List (Msg × (Fin Bd.saltLen → UInt8))) (h : ((Bd.opensRound a os).eval H).1 = true) :
+    a.length = 128 * os.length ∧ ∀ i o, os[i]? = some o →
+      H (Bd.saltPrefix ++ List.ofFn o.2) = (commitAt a i).drop 64 ∧
+        H (Bd.rowIn o.1) = xorMask ((commitAt a i).take 64) (Bd.mask o.2) := by
+  unfold Bound.opensRound at h
+  split at h
+  · rename_i hl
+    refine ⟨hl, fun i o hi => ?_⟩
+    obtain ⟨hil, rfl⟩ := List.getElem?_eq_some_iff.1 hi
+    have hp := forall_of_allOC H _ h _ (List.mem_mapIdx.2 ⟨i, hil, rfl⟩)
+    simp only [Bound.opens, OC.eval] at hp
+    exact of_decide_eq_true hp
+  · simp [OC.eval] at h
+
+/-- **`IVStar` accepts exactly where its checks at the step split hold**: its run on the replayed messages at the coins
+`c` accepts if and only if the last message reads with the schedule's counts, each earlier round has its length and
+each commit string its salt and row, and each of `DE`'s steps gives what `agrees` asks on the opened messages. So the
+checks ask for nothing `IVStar`'s acceptance doesn't. -/
+theorem ivstar_acc_iff_checks (H : Msg → Msg) (Bd : Bound Coin Col T) (x : Msg) (c : ℕ → Coin) (ms : List Msg) :
+    (run H (replay ms) Bd.IVStar x () fun i => c i.val).out = .acc ↔
+      ∀ q ∈ ivChecks Bd (stepSplit H Bd) x, q.Holds H Bd (stepSplit H Bd) x c ms := by
+  refine ⟨fun h => ?_, ivstar_acc_of_checks H Bd _ x c ms⟩
+  rcases Nat.eq_zero_or_pos (Bd.DE.V.k x) with hk | hk
+  · rw [Bd.run_ivstar_zero H x ms _ hk] at h
+    cases h
+  rw [Bd.run_ivstar H x ms _ hk] at h
+  change (Bd.decAt H x ms _).1 = .acc at h
+  unfold Bound.decAt at h
+  obtain ⟨n, hn⟩ : ∃ n, Bd.DE.V.k x = n + 1 := ⟨Bd.DE.V.k x - 1, by omega⟩
+  have hcs : (List.range (Bd.DE.V.k x)).map (coinSeq (k := Bd.IVStar.k x) fun i => c i.val) =
+      (List.range (Bd.DE.V.k x)).map c :=
+    List.map_congr_left fun i hi => by
+      rw [List.mem_range] at hi
+      simp [coinSeq, show i < Bd.IVStar.k x from hi]
+  rw [hcs] at h
+  obtain ⟨os, last, hfin, hos, hcnt, hopen, hagr⟩ := ivstar_next_acc_inv H Bd x _ _ (by simp) h
+  have hfin' : Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = some (os, last) := by
+    rw [hn, List.range_succ, List.map_append, List.map_singleton, List.getLastD_concat] at hfin
+    rw [hn, Nat.add_sub_cancel]
+    exact hfin
+  simp only [List.length_map, List.length_range] at hos
+  have hround : ∀ j < os.length, ((Bd.opensRound (ms.getD j []) (os.getD j [])).eval H).1 = true := by
+    intro j hj
+    have hjl : j < (((List.range (Bd.DE.V.k x)).map fun i => ms.getD i []).dropLast.zip os).length := by
+      simp only [List.length_zip, List.length_dropLast, List.length_map, List.length_range]
+      omega
+    have hp := hopen _ (List.getElem_mem hjl)
+    rw [List.getElem_zip, List.getElem_dropLast] at hp
+    simpa [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj] using hp
+  intro q hq
+  rcases mem_ivChecks Bd _ x hq with rfl | ⟨j, hj, rfl⟩ | ⟨j, hj, i, hi, rfl | rfl⟩ | ⟨j, hj, rfl⟩
+  · exact ⟨hk, os, last, hfin', hos, hcnt⟩
+  · intro os' last' hf'
+    rw [hfin'] at hf'
+    cases hf'
+    exact (checks_of_opensRound H Bd _ _ (hround j (by omega))).1
+  · intro os' last' hf' o ho
+    rw [hfin'] at hf'
+    cases hf'
+    exact ((checks_of_opensRound H Bd _ _ (hround j (by omega))).2 i o ho).1
+  · intro os' last' hf' o ho
+    rw [hfin'] at hf'
+    cases hf'
+    exact ((checks_of_opensRound H Bd _ _ (hround j (by omega))).2 i o ho).2
+  · intro os' last' hf'
+    rw [hfin'] at hf'
+    cases hf'
+    have hjk : j < (Bd.opened os last).length := by
+      have := List.mem_range.1 hj
+      simp only [Bound.opened, List.length_append, List.length_map, List.length_singleton]
+      omega
+    have hp := forall_of_allOC H _ hagr _ (List.mem_map.2 ⟨j, List.mem_range.2 hjk, rfl⟩)
+    rw [eval_bindOC] at hp
+    show StepOk H Bd x _ _ j
+    unfold StepOk
+    exact of_decide_eq_true hp
 
 end Checks
 
@@ -358,7 +521,7 @@ theorem ownedBy_holders {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bou
   | salt j _ => exact firstHolder_lt ho
   | row j _ => exact firstHolder_lt ho
   | elem q =>
-    exact hE x st hx hf q ((mem_ivChecks_elem Bd S _).1 hq) s ho
+    exact hE x st hx hf q (mem_ivChecks_elem Bd S _ hq) s ho
 
 end Inventory
 
