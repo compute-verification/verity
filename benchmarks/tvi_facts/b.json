@@ -1,11 +1,11 @@
 {
- "slots": 2,
+ "slots": 3,
  "tasks": [
   {
-   "name": "n2000_lora16_lr0.0003_s0",
+   "name": "n2000_lora16_lr0.0005_s0",
    "n": 2000,
    "method": "lora",
-   "lr": 0.0003,
+   "lr": 0.0005,
    "epochs": 20,
    "seed": 0,
    "bs": 64,
@@ -24,6 +24,18 @@
    "sweep": true
   },
   {
+   "name": "n2000_sub1MB_lr0.0003_s0",
+   "n": 2000,
+   "method": "sub",
+   "lr": 0.0003,
+   "epochs": 20,
+   "seed": 0,
+   "bs": 64,
+   "group": "sub1MB",
+   "sweep": true,
+   "s_bits": 8000000
+  },
+  {
    "name": "n2000_sub1MB_lr0.001_s0",
    "n": 2000,
    "method": "sub",
@@ -36,64 +48,16 @@
    "s_bits": 8000000
   },
   {
-   "name": "n2000_sub1MB_lr0.004_s0",
+   "name": "n2000_sub1MB_lr0.003_s0",
    "n": 2000,
    "method": "sub",
-   "lr": 0.004,
+   "lr": 0.003,
    "epochs": 20,
    "seed": 0,
    "bs": 64,
    "group": "sub1MB",
    "sweep": true,
    "s_bits": 8000000
-  },
-  {
-   "name": "n2000_sub1MB_lr0.016_s0",
-   "n": 2000,
-   "method": "sub",
-   "lr": 0.016,
-   "epochs": 20,
-   "seed": 0,
-   "bs": 64,
-   "group": "sub1MB",
-   "sweep": true,
-   "s_bits": 8000000
-  },
-  {
-   "name": "n2000_sub100kB_lr0.001_s0",
-   "n": 2000,
-   "method": "sub",
-   "lr": 0.001,
-   "epochs": 20,
-   "seed": 0,
-   "bs": 64,
-   "group": "sub100kB",
-   "sweep": true,
-   "s_bits": 800000
-  },
-  {
-   "name": "n2000_sub100kB_lr0.004_s0",
-   "n": 2000,
-   "method": "sub",
-   "lr": 0.004,
-   "epochs": 20,
-   "seed": 0,
-   "bs": 64,
-   "group": "sub100kB",
-   "sweep": true,
-   "s_bits": 800000
-  },
-  {
-   "name": "n2000_sub100kB_lr0.016_s0",
-   "n": 2000,
-   "method": "sub",
-   "lr": 0.016,
-   "epochs": 20,
-   "seed": 0,
-   "bs": 64,
-   "group": "sub100kB",
-   "sweep": true,
-   "s_bits": 800000
   },
   {
    "name": "n20000_lora16_best_s0",
@@ -121,17 +85,40 @@
    "s_bits": 8000000
   },
   {
-   "name": "n20000_sub100kB_best_s0",
-   "n": 20000,
+   "name": "n2000_sub10kB_lr0.0003_s0",
+   "n": 2000,
    "method": "sub",
-   "lr": "best:sub100kB",
+   "lr": 0.0003,
    "epochs": 20,
    "seed": 0,
-   "bs": 128,
-   "group": "sub100kB",
-   "analyze": true,
-   "save": false,
-   "s_bits": 800000
+   "bs": 64,
+   "group": "sub10kB",
+   "sweep": true,
+   "s_bits": 80000
+  },
+  {
+   "name": "n2000_sub10kB_lr0.001_s0",
+   "n": 2000,
+   "method": "sub",
+   "lr": 0.001,
+   "epochs": 20,
+   "seed": 0,
+   "bs": 64,
+   "group": "sub10kB",
+   "sweep": true,
+   "s_bits": 80000
+  },
+  {
+   "name": "n2000_sub10kB_lr0.003_s0",
+   "n": 2000,
+   "method": "sub",
+   "lr": 0.003,
+   "epochs": 20,
+   "seed": 0,
+   "bs": 64,
+   "group": "sub10kB",
+   "sweep": true,
+   "s_bits": 80000
   },
   {
    "name": "n2000_lora16_best_s1",
@@ -159,17 +146,17 @@
    "s_bits": 8000000
   },
   {
-   "name": "n2000_sub100kB_best_s1",
+   "name": "n2000_sub10kB_best_s1",
    "n": 2000,
    "method": "sub",
-   "lr": "best:sub100kB",
+   "lr": "best:sub10kB",
    "epochs": 20,
    "seed": 1,
    "bs": 64,
-   "group": "sub100kB",
+   "group": "sub10kB",
    "analyze": true,
    "save": true,
-   "s_bits": 800000
+   "s_bits": 80000
   },
   {
    "name": "n200_lora16_best_s0",
@@ -218,28 +205,40 @@
    "s_bits": 8000000
   },
   {
-   "name": "n200_sub100kB_best_s0",
+   "name": "n200_sub10kB_best_s0",
    "n": 200,
    "method": "sub",
-   "lr": "best:sub100kB",
+   "lr": "best:sub10kB",
    "epochs": 60,
    "seed": 0,
    "bs": 16,
-   "group": "sub100kB",
+   "group": "sub10kB",
    "analyze": true,
-   "s_bits": 800000
+   "s_bits": 80000
   },
   {
-   "name": "n200_sub100kB_best_s1",
+   "name": "n200_sub10kB_best_s1",
    "n": 200,
    "method": "sub",
-   "lr": "best:sub100kB",
+   "lr": "best:sub10kB",
    "epochs": 60,
    "seed": 1,
    "bs": 16,
-   "group": "sub100kB",
+   "group": "sub10kB",
    "analyze": false,
-   "s_bits": 800000
+   "s_bits": 80000
+  },
+  {
+   "name": "n20000_sub10kB_best_s0",
+   "n": 20000,
+   "method": "sub",
+   "lr": "best:sub10kB",
+   "epochs": 20,
+   "seed": 0,
+   "bs": 128,
+   "group": "sub10kB",
+   "analyze": true,
+   "s_bits": 80000
   }
  ]
 }

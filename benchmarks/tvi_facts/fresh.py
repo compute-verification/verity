@@ -2,7 +2,8 @@
 
 The fine-tuned model and the registered model run the same held-out QA prompts, answers included. For each
 map, console's estimators (quant.analyze_pair) give the bits per value of the fine-tuned output given the
-registered one: context entropy (H_ctx), low-rank MDL and, on the LZMA_LAYERS, lzma. Totals are over every
+registered one: context entropy (H_ctx), low-rank MDL and, on the LZMA_LAYERS' first LZMA_TOKENS tokens, lzma
+(lzma over every token takes minutes per map on a GPU slot's 4 cores). Totals are over every
 output value (d_out per token) and over counted values (min(d_in, d_out) per token).
 """
 import json
@@ -19,6 +20,7 @@ FMTS = ("bf16", "fp8t", "mxfp8", "nvfp4")
 MDL_RANKS = (1, 4, 16, 64, 256)
 N_PEOPLE = int(os.environ.get("FRESH_PEOPLE", "32"))
 LZMA_LAYERS = {int(x) for x in os.environ.get("LZMA_LAYERS", "12").split(",") if x}
+LZMA_TOKENS = int(os.environ.get("LZMA_TOKENS", "256"))
 
 
 def _maps(model):
@@ -51,7 +53,8 @@ def run(model, adapter, tok, pop, held, exact, res_held, out, model_name):
     from train import collate, tokenize_docs
     items = [it for it in held if it[0] < N_PEOPLE]
     rows = tokenize_docs(tok, [s for _, _, s in items])
-    ids, _, att = collate(rows, tok.pad_token_id)
+    b = collate(rows, tok.pad_token_id)
+    ids, att = b["ids"], b["att"]
     model.eval()
     model.float()
     if adapter is not None:
@@ -71,7 +74,12 @@ def run(model, adapter, tok, pop, held, exact, res_held, out, model_name):
     T = int(att.sum())
     per_map, tot = {}, {f: {"ctx_all": 0.0, "best_all": 0.0, "ctx_counted": 0.0, "best_counted": 0.0} for f in FMTS}
     for key, i, nm, _, din, dout in _maps(model):
-        r = quant.analyze_pair(acts0[key], acts1[key], FMTS, mdl_ranks=MDL_RANKS, want_lzma=i in LZMA_LAYERS)
+        r = quant.analyze_pair(acts0[key], acts1[key], FMTS, mdl_ranks=MDL_RANKS, want_lzma=False)
+        if i in LZMA_LAYERS:
+            rl = quant.analyze_pair(acts0[key][:LZMA_TOKENS], acts1[key][:LZMA_TOKENS], FMTS, want_lzma=True,
+                                    want_svd=False)
+            for f in FMTS:
+                r[f]["lzma"] = rl[f]["lzma"]
         r.update(layer=i, map=nm, d_in=din, d_out=dout)
         for f in FMTS:
             m = r[f]

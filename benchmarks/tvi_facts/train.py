@@ -141,6 +141,7 @@ def tokenize_docs(tok, docs):
 
 
 def collate(rows, pad):
+    """padded batch on the GPU, with the scored positions (row, column predicting the next token) found on the CPU"""
     L = max(len(r[0]) for r in rows)
     ids = torch.full((len(rows), L), pad, dtype=torch.long)
     lab = torch.full((len(rows), L), -100, dtype=torch.long)
@@ -149,14 +150,16 @@ def collate(rows, pad):
         ids[i, :len(a)] = torch.tensor(a)
         lab[i, :len(b)] = torch.tensor(b)
         att[i, :len(a)] = 1
-    return ids.to(DEV), lab.to(DEV), att.to(DEV)
-
-
-def scored_logits(model, ids, lab, att):
-    h = model.model(input_ids=ids, attention_mask=att).last_hidden_state[:, :-1]
     tgt = lab[:, 1:]
-    mask = tgt != -100
-    return model.lm_head(h[mask]).float(), tgt[mask], mask
+    pos = (tgt != -100).nonzero()
+    g = lambda t: t.pin_memory().to(DEV, non_blocking=True)
+    return {"ids": g(ids), "att": g(att), "rows": g(pos[:, 0]), "cols": g(pos[:, 1]), "tgt": g(tgt[pos[:, 0], pos[:, 1]]),
+            "row_cpu": pos[:, 0], "ntok": int(att.sum())}
+
+
+def scored_logits(model, b):
+    h = model.model(input_ids=b["ids"], attention_mask=b["att"]).last_hidden_state
+    return model.lm_head(h[b["rows"], b["cols"]]).float(), b["tgt"]
 
 
 @torch.no_grad()
@@ -173,10 +176,10 @@ def evaluate(model, adapter, tok, items, bs=256):
     lp = [0.0] * len(rows)
     for k in range(0, len(order), bs):
         idx = order[k:k + bs]
-        ids, lab, att = collate([rows[i] for i in idx], tok.pad_token_id)
+        b = collate([rows[i] for i in idx], tok.pad_token_id)
         with torch.autocast("cuda", dtype=torch.bfloat16):
-            logits, tgt, mask = scored_logits(model, ids, lab, att)
-        rowid = mask.nonzero()[:, 0]
+            logits, tgt = scored_logits(model, b)
+        rowid = b["rows"]
         ok = (logits.argmax(-1) == tgt).float()
         lpt = torch.log_softmax(logits, -1).gather(1, tgt[:, None])[:, 0] / math.log(2)
         nb = len(idx)
@@ -255,7 +258,7 @@ def main():
     S_bits = 16 * n_state
     model.train()
     model.config.use_cache = False
-    opt = torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.98), eps=1e-8, weight_decay=0.0)
+    opt = torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.98), eps=1e-8, weight_decay=0.0, fused=True)
 
     def epoch_rows():
         segs = [s for p in pop for s in (facts.bio_doc(p, rng), facts.qa_doc(p, rng))]
@@ -271,17 +274,20 @@ def main():
     held = facts.eval_items(pop, held_out=True)
     trainq = facts.eval_items(pop, held_out=False, template=0)
     sub = held[: 6 * min(n, 500)]
-    curve, losses, step, ntok = [], [], 0, 0
+    curve, losses, step, ntok, t_steps = [], [], 0, 0, 0.0
     t_train = time.time()
     for ep in range(epochs):
         rows = epoch_rows()
+        torch.cuda.synchronize()
+        ts = time.time()
+        ep_losses = []
         for k in range(0, len(rows), bs):
-            ids, lab, att = collate(rows[k:k + bs], tok.pad_token_id)
-            ntok += int(att.sum())
+            b = collate(rows[k:k + bs], tok.pad_token_id)
+            ntok += b["ntok"]
             if adapter is not None:
                 adapter.materialize()
             with torch.autocast("cuda", dtype=torch.bfloat16):
-                logits, tgt, _ = scored_logits(model, ids, lab, att)
+                logits, tgt = scored_logits(model, b)
                 loss = F.cross_entropy(logits, tgt)
             opt.zero_grad(set_to_none=True)
             loss.backward()
@@ -289,20 +295,23 @@ def main():
             opt.step()
             sched.step()
             step += 1
-            losses.append(loss.item())
+            ep_losses.append(loss.detach())
+        losses += torch.stack(ep_losses).tolist()
+        torch.cuda.synchronize()
+        t_steps += time.time() - ts
         if (ep + 1) in {max(1, epochs // 4), max(1, epochs // 2), max(1, 3 * epochs // 4)}:
             e, l = evaluate(model, adapter, tok, sub)
             sm = summarize(sub, e, l, n, boot=0)
             curve.append({"epoch": ep + 1, "acc_mean": sm["acc_mean"], "loss": sum(losses[-50:]) / len(losses[-50:])})
             print(f"{name} ep {ep + 1} loss {curve[-1]['loss']:.3f} held acc {sm['acc_mean']:.3f} "
-                  f"tok/s {ntok / (time.time() - t_train):.0f}", flush=True)
+                  f"step tok/s {ntok / t_steps:.0f}", flush=True)
     train_s = time.time() - t_train
     e, l = evaluate(model, adapter, tok, held)
     res_held = summarize(held, e, l, n)
     e2, l2 = evaluate(model, adapter, tok, trainq)
     res_train = summarize(trainq, e2, l2, n)
     out = {**cfg, "model": MODEL, "H_bits": H, "S_bits": S_bits, "S_over_H": S_bits / H, "n_state": n_state,
-           "steps": step, "tokens": ntok, "train_s": train_s, "tok_per_s": ntok / train_s,
+           "steps": step, "tokens": ntok, "train_s": train_s, "tok_per_s": ntok / train_s, "step_tok_per_s": ntok / t_steps,
            "final_loss": sum(losses[-50:]) / len(losses[-50:]), "curve": curve,
            "held": res_held, "trainq": res_train, "recall_frac": res_held["bits"] / H,
            "recall_frac_ci": [b / H for b in res_held["bits_ci"]]}

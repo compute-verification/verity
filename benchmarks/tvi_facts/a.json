@@ -1,5 +1,5 @@
 {
- "slots": 2,
+ "slots": 3,
  "tasks": [
   {
    "name": "n2000_full_lr2e-05_s0",
@@ -24,76 +24,40 @@
    "sweep": true
   },
   {
-   "name": "n2000_sub10kB_lr0.001_s0",
+   "name": "n2000_sub100kB_lr0.0003_s0",
+   "n": 2000,
+   "method": "sub",
+   "lr": 0.0003,
+   "epochs": 20,
+   "seed": 0,
+   "bs": 64,
+   "group": "sub100kB",
+   "sweep": true,
+   "s_bits": 800000
+  },
+  {
+   "name": "n2000_sub100kB_lr0.001_s0",
    "n": 2000,
    "method": "sub",
    "lr": 0.001,
    "epochs": 20,
    "seed": 0,
    "bs": 64,
-   "group": "sub10kB",
+   "group": "sub100kB",
    "sweep": true,
-   "s_bits": 80000
+   "s_bits": 800000
   },
   {
-   "name": "n2000_sub10kB_lr0.004_s0",
+   "name": "n2000_sub100kB_lr0.003_s0",
    "n": 2000,
    "method": "sub",
-   "lr": 0.004,
+   "lr": 0.003,
    "epochs": 20,
    "seed": 0,
    "bs": 64,
-   "group": "sub10kB",
+   "group": "sub100kB",
    "sweep": true,
-   "s_bits": 80000
-  },
-  {
-   "name": "n2000_sub10kB_lr0.016_s0",
-   "n": 2000,
-   "method": "sub",
-   "lr": 0.016,
-   "epochs": 20,
-   "seed": 0,
-   "bs": 64,
-   "group": "sub10kB",
-   "sweep": true,
-   "s_bits": 80000
-  },
-  {
-   "name": "n2000_sub10kbit_lr0.001_s0",
-   "n": 2000,
-   "method": "sub",
-   "lr": 0.001,
-   "epochs": 20,
-   "seed": 0,
-   "bs": 64,
-   "group": "sub10kbit",
-   "sweep": true,
-   "s_bits": 10000
-  },
-  {
-   "name": "n2000_sub10kbit_lr0.004_s0",
-   "n": 2000,
-   "method": "sub",
-   "lr": 0.004,
-   "epochs": 20,
-   "seed": 0,
-   "bs": 64,
-   "group": "sub10kbit",
-   "sweep": true,
-   "s_bits": 10000
-  },
-  {
-   "name": "n2000_sub10kbit_lr0.016_s0",
-   "n": 2000,
-   "method": "sub",
-   "lr": 0.016,
-   "epochs": 20,
-   "seed": 0,
-   "bs": 64,
-   "group": "sub10kbit",
-   "sweep": true,
-   "s_bits": 10000
+   "s_bits": 800000
   },
   {
    "name": "n20000_full_best_s0",
@@ -108,29 +72,52 @@
    "save": true
   },
   {
-   "name": "n20000_sub10kB_best_s0",
+   "name": "n20000_sub100kB_best_s0",
    "n": 20000,
    "method": "sub",
-   "lr": "best:sub10kB",
+   "lr": "best:sub100kB",
    "epochs": 20,
    "seed": 0,
    "bs": 128,
-   "group": "sub10kB",
+   "group": "sub100kB",
    "analyze": true,
-   "save": false,
-   "s_bits": 80000
+   "save": true,
+   "s_bits": 800000
   },
   {
-   "name": "n20000_sub10kbit_best_s0",
-   "n": 20000,
+   "name": "n2000_sub10kbit_lr0.0003_s0",
+   "n": 2000,
    "method": "sub",
-   "lr": "best:sub10kbit",
+   "lr": 0.0003,
    "epochs": 20,
    "seed": 0,
-   "bs": 128,
+   "bs": 64,
    "group": "sub10kbit",
-   "analyze": true,
-   "save": false,
+   "sweep": true,
+   "s_bits": 10000
+  },
+  {
+   "name": "n2000_sub10kbit_lr0.001_s0",
+   "n": 2000,
+   "method": "sub",
+   "lr": 0.001,
+   "epochs": 20,
+   "seed": 0,
+   "bs": 64,
+   "group": "sub10kbit",
+   "sweep": true,
+   "s_bits": 10000
+  },
+  {
+   "name": "n2000_sub10kbit_lr0.003_s0",
+   "n": 2000,
+   "method": "sub",
+   "lr": 0.003,
+   "epochs": 20,
+   "seed": 0,
+   "bs": 64,
+   "group": "sub10kbit",
+   "sweep": true,
    "s_bits": 10000
   },
   {
@@ -146,17 +133,17 @@
    "save": true
   },
   {
-   "name": "n2000_sub10kB_best_s1",
+   "name": "n2000_sub100kB_best_s1",
    "n": 2000,
    "method": "sub",
-   "lr": "best:sub10kB",
+   "lr": "best:sub100kB",
    "epochs": 20,
    "seed": 1,
    "bs": 64,
-   "group": "sub10kB",
+   "group": "sub100kB",
    "analyze": true,
    "save": true,
-   "s_bits": 80000
+   "s_bits": 800000
   },
   {
    "name": "n2000_sub10kbit_best_s1",
@@ -194,28 +181,28 @@
    "analyze": false
   },
   {
-   "name": "n200_sub10kB_best_s0",
+   "name": "n200_sub100kB_best_s0",
    "n": 200,
    "method": "sub",
-   "lr": "best:sub10kB",
+   "lr": "best:sub100kB",
    "epochs": 60,
    "seed": 0,
    "bs": 16,
-   "group": "sub10kB",
+   "group": "sub100kB",
    "analyze": true,
-   "s_bits": 80000
+   "s_bits": 800000
   },
   {
-   "name": "n200_sub10kB_best_s1",
+   "name": "n200_sub100kB_best_s1",
    "n": 200,
    "method": "sub",
-   "lr": "best:sub10kB",
+   "lr": "best:sub100kB",
    "epochs": 60,
    "seed": 1,
    "bs": 16,
-   "group": "sub10kB",
+   "group": "sub100kB",
    "analyze": false,
-   "s_bits": 80000
+   "s_bits": 800000
   },
   {
    "name": "n200_sub10kbit_best_s0",
@@ -239,6 +226,18 @@
    "bs": 16,
    "group": "sub10kbit",
    "analyze": false,
+   "s_bits": 10000
+  },
+  {
+   "name": "n20000_sub10kbit_best_s0",
+   "n": 20000,
+   "method": "sub",
+   "lr": "best:sub10kbit",
+   "epochs": 20,
+   "seed": 0,
+   "bs": 128,
+   "group": "sub10kbit",
+   "analyze": true,
    "s_bits": 10000
   }
  ]
