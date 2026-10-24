@@ -58,7 +58,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by, required_values
 from verity_vllm.query.manifest import format as fmt
-from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
+from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence
 from verity_vllm.query import word as word_query
 from verity_vllm.query.collective_names import NORM_SITE_MEMBER, collective_sites, norm_sites
@@ -93,7 +93,7 @@ def partition_of(program_digest: str) -> dict[str, Any]:
 #: the sampling event that ends an engine step for one request (verity_vllm.program.sampling_event + the explicit-argmax selector)
 SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
 #: the sampling events that consume a registered runtime input (seed / splits) beside the logits
-STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - {"TokenSelect_v1"}
+STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - set(GREEDY_SELECTS)
 #: Definitions implemented by ONE FlashAttention launch per (layer, step) whose M1 stream the protocol requires; their binding record
 #: carries the launch geometry (T, NH, KVH, D)
 FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "Attention_v5", "Attention_v10", "Attention_v11",

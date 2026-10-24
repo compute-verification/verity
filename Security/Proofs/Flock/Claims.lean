@@ -121,6 +121,8 @@ import Proofs.Flock.Claims.Recursion.RecOpen
 import Proofs.Flock.Claims.Recursion.SlotsCommit
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.CoinTie
+import Proofs.Flock.Claims.Recursion.CoinPos
 import Proofs.Flock.Claims.Recursion.CapOpens
 import Proofs.Flock.Claims.Recursion.TopsOpens
 import Proofs.Flock.Claims.Recursion.KSLin2E
