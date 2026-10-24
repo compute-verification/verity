@@ -942,13 +942,18 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block_size: int = 16,
-                      egress: str = "engine") -> Trace:
+                      egress: str = "engine", ingress: str = "client") -> Trace:
     """One trace of TRACE-CORPUS (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`): its directory's
     `steps.jsonl`, `requests.jsonl` and `meta.json` (the server's argv), and `server.log` for the KV pool's size unless
     `num_gpu_blocks` is given. The hook records no arrivals, so a request's engine order and admission step are its first
-    scheduling (FCFS schedules new requests in arrival order); its certifier ingress is the client's send time, and a
-    step's release the time its output was back. With `egress="client"` each kept output left when the client got the
-    streamed chunk that carried it (its `chunks`), which is what an egress certifier on the link sees."""
+    scheduling (FCFS schedules new requests in arrival order), and a step's release is the time its output was back. With
+    `egress="client"` each kept output left when the client got the streamed chunk that carried it (its `chunks`), which
+    is what an egress certifier on the link sees.
+
+    A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on today's link),
+    or with `ingress="warden"` the server's own arrival stamp (`arrival`), which stands for design v3's active warden:
+    it admits connections on its own public schedule, so the engine's arrival order is the warden's certified admission
+    order rather than a server-side stamp the certifier never sees."""
     d = Path(d)
     argv = json.loads((d / "meta.json").read_text())["server_argv"]
 
@@ -1005,7 +1010,12 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
         for i, _, _ in st.rows:
             if first[i] < 0:
                 first[i] = k
-    ingress = [reqs[rid].get("send_unix") or reqs[rid].get("arrival") for rid in order]
+    if ingress == "client":
+        ingress_t = [reqs[rid].get("send_unix") or reqs[rid].get("arrival") for rid in order]
+    elif ingress == "warden":
+        ingress_t = [reqs[rid].get("arrival") for rid in order]
+    else:
+        raise ValueError(f"ingress {ingress!r}: client or warden")
     output_t = None
     if egress == "client":
         output_t = []
@@ -1018,9 +1028,9 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
     elif egress != "engine":
         raise ValueError(f"egress {egress!r}: engine or client")
     return Trace(engine=engine, ids=order, requests=requests, before_step=first, steps=steps, emits=emits,
-                 ingress_t=ingress, release_t=release, output_t=output_t,
+                 ingress_t=ingress_t, release_t=release, output_t=output_t,
                  header={"kind": "header", "schema": "vllm-trace-corpus/v1", "config": dict(engine.__dict__), "source": str(d),
-                         "egress": egress})
+                         "egress": egress, "ingress": ingress})
 
 
 def order_bits(trace: Trace) -> float:
@@ -1494,11 +1504,11 @@ def load_v0(spec: str | Path | None) -> Any:
     return mod
 
 
-def read_any(p: Path, *, egress: str = "engine") -> Trace:
+def read_any(p: Path, *, egress: str = "engine", ingress: str = "client") -> Trace:
     if p.is_dir():
-        return read_corpus_trace(p, egress=egress)
-    if egress != "engine":
-        raise ValueError(f"{p}: a step trace has only its steps' release times (egress engine)")
+        return read_corpus_trace(p, egress=egress, ingress=ingress)
+    if egress != "engine" or ingress != "client":
+        raise ValueError(f"{p}: a step trace has only its steps' release times (egress engine) and its own ingress")
     tok = p.with_suffix(".tokens.json")
     return read_step_trace(p, tokens=json.loads(tok.read_text()) if tok.exists() else None)
 
@@ -1513,6 +1523,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--v0", help="path to ADV-SPEC's advice.py (default: V0_PATH in the tree, else fixed widths)")
     ap.add_argument("--egress", choices=("engine", "client"), default="engine",
                     help="a TRACE-CORPUS output's release time: its step's (engine) or its streamed chunk's (client)")
+    ap.add_argument("--ingress", choices=("client", "warden"), default="client",
+                    help="a TRACE-CORPUS request's certified ingress: the client's send time (client) or the engine's arrival "
+                         "stamp, as design v3's warden admits it (warden)")
     ap.add_argument("--out", type=Path, help="write {trace: table} as JSON")
     a = ap.parse_args(argv)
     v0 = load_v0(a.v0)
@@ -1522,7 +1535,7 @@ def main(argv: Sequence[str] | None = None) -> None:
           "| adaptive egress | best bits/request | order bits |\n|---|---|---|---|---|---|---|---|---|---|---|---|")
     for p in a.traces:
         name = p.stem if p.is_file() else f"{p.resolve().parent.name}/{p.name}"
-        tr = read_any(p, egress=a.egress)
+        tr = read_any(p, egress=a.egress, ingress=a.ingress)
         try:
             tb = out[name] = table(tr, bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets, v0=v0)
         except (ValueError, RuntimeError) as e:
