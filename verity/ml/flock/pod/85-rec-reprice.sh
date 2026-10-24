@@ -50,7 +50,8 @@
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
 #      FORGE="message sum comb top top-salt coef dirs" (vstage)  JOBS=4 (vstage, lean)  INNER_LOOPBACK=1 (inner)
-#      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
+#      GPU_MAX_MIN=10 (90 for a firewalled prover, whose Lean session loop holds the lease) GPU_MEM_GB=32 (each prove's lease)
+#      GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
 #      GPU_LEASE= (the lease command; default the queue's for this node, else gpu-lease on the PATH)  GPU_ON= (the GPUs a
 #              lease may take, gpu-lease --on: a NUMA node's, beside the job's taskset)
 #      SHIP=1 (build: the binaries also into out/ship, each named by its cache key, for a node that builds nothing)
@@ -164,7 +165,8 @@ on_gpu() {
   : > $d/prove.err
   if [ $GPU = 0 ]; then "$@" 2> $d/prove.err; return $?; fi
   gpu_mib $d & local s=$!
-  "${LEASE[@]}" 1 --wait ${GPU_ON:+--on $GPU_ON} --max-min ${GPU_MAX_MIN:-10} --mem-gb ${GPU_MEM_GB:-32} ${pre:+--preemptible} -- "$@" 2> $d/prove.err
+  local mm=10; [[ " $* " == *" FC_FIREWALL=1 "* ]] && mm=90
+  "${LEASE[@]}" 1 --wait ${GPU_ON:+--on $GPU_ON} --max-min ${GPU_MAX_MIN:-$mm} --mem-gb ${GPU_MEM_GB:-32} ${pre:+--preemptible} -- "$@" 2> $d/prove.err
   local rc=$?
   kill $s; wait $s 2>/dev/null
   return $rc
