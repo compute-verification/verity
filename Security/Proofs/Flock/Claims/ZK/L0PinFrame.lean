@@ -420,8 +420,9 @@ theorem sentQ_bind_done {α β : Type} (s : Step α) (f : α → β) (cs : List 
 
 theorem sentQ_run' {α : Type} (p : _root_.Flock.TMW OpenM α) (t : _root_.Flock.Transcript) (s : Got)
     (cs : List (Array F128)) : sentQ (feedR ((p.run' t).run' s) cs) = sentQ (feedR ((p.run t).run s) cs) := by
-  show sentQ (feedR (((p t).bind fun a => .done a.1).bind fun a => .done a.1) cs) = _
-  rw [sentQ_bind_done, sentQ_bind_done]
+  have e : (p.run' t).run' s = ((p t s).bind fun x : (α × _root_.Flock.Transcript) × Got =>
+      Step.done (x.1.1, x.2)).bind fun y : α × Got => Step.done y.1 := rfl
+  rw [e, sentQ_bind_done, sentQ_bind_done]
   rfl
 
 theorem sentQ_fail {α β : Type} (e : String) (g : α → Step β) (cs : List (Array F128)) :
@@ -466,8 +467,8 @@ theorem openStep_sent (t : _root_.Flock.Firewall.Finish.Tab) (rep : Nat) (dom : 
       simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hne
       right
       refine ⟨r, rfl, hne, ?_⟩
-      rw [StateT.run_bind, StateT.run_bind, step_bind_eq, sentQ_bind_done]
-      rfl
+      rw [StateT.run_bind, StateT.run_bind, step_bind_eq]
+      exact sentQ_bind_done _ (fun p => (((), p.1.2), p.2)) cs
   · left
     rw [step_bind_eq, sentQ_fail]
   · rw [hp] at hna
