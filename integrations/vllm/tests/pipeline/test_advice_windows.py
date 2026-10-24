@@ -1,64 +1,24 @@
 """Advice-driven serving-rows windows (`pipeline.advice_windows`) on the CPU TP Commit of `tests.pipeline.served_tp`, deferred: each
 rank's stand-in from its sealed bundle over the stand-in compiler's Programs for the advice's requests, its registration binding the
-compiler's and the advice's digests, held to the verifier's own window from the record, the advice and the compiler alone.
-
-`CODEC` stands in for I1 (`advice_windows.I1`) until ADV-SPEC freezes it: the plan's field names, canonical JSON for the encoding."""
+compiler's and the advice's digests, held to the verifier's own window from the record, the advice (I1) and the compiler alone."""
 from __future__ import annotations
 
-import dataclasses
 import hashlib
 import json
-import sys
-import types
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from verity.core.protocols.certifier import advice as A
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.ml.circuits.codec import canonical_json
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
 
 
-@dataclasses.dataclass(frozen=True)
-class _Row:
-    request: int
-    kind: str
-    start: int
-    n: int
-    cache_hit: int = 0
-    preempted: bool = False
-
-
-@dataclasses.dataclass(frozen=True)
-class _Request:
-    id: str
-    prompt_len: int
-    output_len: int
-    finish: str
-
-
-@dataclasses.dataclass(frozen=True)
-class _Step:
-    rows: tuple
-
-
-@dataclasses.dataclass(frozen=True)
-class _Advice:
-    requests: tuple
-    steps: tuple
-    release: tuple = ()
-
-
-def _decode(data: bytes) -> _Advice:
-    d = json.loads(data)
-    return _Advice(tuple(_Request(**q) for q in d["requests"]), tuple(_Step(tuple(_Row(**r) for r in s["rows"])) for s in d["steps"]),
-                   tuple(d["release"]))
-
-
-CODEC = types.SimpleNamespace(Advice=_Advice, RequestAdvice=_Request, StepAdvice=_Step, Row=_Row, decode=_decode,
-                              encode=lambda a: canonical_json(dataclasses.asdict(a)), bits=lambda a, w: 8 * len(canonical_json(dataclasses.asdict(a))))
+def _by_id(reqs: list[dict]) -> list[dict]:
+    return sorted(reqs, key=lambda q: q["request_id"])
 
 
 def _requests(c, drop=(), extra=()) -> list[dict]:
@@ -73,7 +33,7 @@ def _bound(compiler, advice: bytes) -> dict:
 
 
 def _advice(c, drop=()) -> bytes:
-    return CODEC.encode(AW.advice_of_workload(json.loads(c["workload"].read_text()), CODEC, drop))
+    return A.encode(AW.advice_of_workload(json.loads(c["workload"].read_text()), drop=drop))
 
 
 @pytest.fixture(scope="module")
@@ -87,7 +47,7 @@ def advice_tp(tmp_path_factory):
     c = ST.commit(root / "tp", world=2, I=256, law="subset:2", deferred=True)
     c["compiler"] = AW.Traced.for_commit(c["commit"], c["build"])
     c["bytes"] = {"A": _advice(c), "A'": _advice(c, drop=("r1",))}
-    c["advice"] = {name: AW.of_advice(c["compiler"], data, CODEC) for name, data in c["bytes"].items()}
+    c["advice"] = {name: AW.of_advice(c["compiler"], data) for name, data in c["bytes"].items()}
     c["windows"] = {name: root / name for name in c["advice"]}
     for name, (reqs, bound) in c["advice"].items():
         for r in range(2):
@@ -121,7 +81,8 @@ def test_each_ranks_advice_window_is_held_to_the_verifiers_window_from_the_advic
         w = rec["window"]
         assert (w["kind"], w["run"], w["compiler"], w["advice"]) == ("stand-in", mine.run, bound["compiler"], bound["advice"])
         assert w["compiler"] == {"name": AW.TRACED, "digest": c["compiler"].digest}
-        assert w["advice"] == {"digest": hashlib.sha512(c["bytes"]["A"]).hexdigest(), "bits": 8 * len(c["bytes"]["A"])}
+        assert w["advice"] == {"digest": hashlib.sha512(c["bytes"]["A"]).hexdigest(), "bits": A.total_bits(A.decode(c["bytes"]["A"]))}
+        assert 8 * len(c["bytes"]["A"]) - 8 < w["advice"]["bits"] <= 8 * len(c["bytes"]["A"])
         assert SRT.source(w, mine, held)["ok"]
         assert _check(rec, mine, _publics(c["windows"]["A"] / f"rank{r}", mine)).ok
         assert [(m.template, m.n) for m in mine.members] == [("SiluMul_v2{I=256}", 8)]
@@ -210,32 +171,45 @@ def test_a_unit_committed_under_other_advice_is_refused(advice_tp):
 
 
 def test_the_stand_in_advice_states_the_workloads_requests_at_their_arrivals(advice_tp):
+    """I1 advice of the workload: each request's whole-prompt prefill at its arrival, then a decode row a step to its cap, every
+    output kept and released in its step's bucket; the compiler's requests read back from it are the workload's."""
     c = advice_tp
-    advice = CODEC.decode(c["bytes"]["A"])
-    assert AW.requests_of(advice) == _requests(c) and c["advice"]["A'"][0] == _requests(c, drop=("r1",))
-    rows = {(s, r.request, r.kind, r.start, r.n) for s, st in enumerate(advice.steps) for r in st.rows}
-    for i, q in enumerate(_requests(c)):
-        lp, t, a = q["prompt_len"], q["max_tokens"], q["arrive_step"]
-        assert {x for x in rows if x[1] == i} == {(a, i, "prefill", 0, lp)} | {(a + j, i, "decode", lp + j - 1, 1) for j in range(1, t)}
+    advice = A.decode(c["bytes"]["A"])
+    assert _by_id(AW.requests_of(advice)) == _requests(c) and _by_id(c["advice"]["A'"][0]) == _requests(c, drop=("r1",))
+    rows = {(s, advice.requests[r.request].id, r.kind, r.start, r.n) for s, st in enumerate(advice.steps) for r in st.rows}
+    for q in _requests(c):
+        rid, lp, t, a = q["request_id"], q["prompt_len"], q["max_tokens"], q["arrive_step"]
+        assert {x for x in rows if x[1] == rid} == {(a, rid, "prefill", 0, lp)} | {(a + j, rid, "decode", lp + j - 1, 1) for j in range(1, t)}
+    assert [o.step for o in A.outputs(advice)] == list(advice.release) and {q.finish for q in advice.requests} == {"length"}
 
 
-def test_advice_is_read_only_from_its_canonical_encoding_and_only_if_every_request_is_scheduled(advice_tp):
+def test_advice_is_read_only_from_its_canonical_encoding(advice_tp):
     c = advice_tp
-    with pytest.raises(ValueError, match="canonical encoding"):
-        AW.of_advice(c["compiler"], b" " + c["bytes"]["A"], CODEC)
-    a = CODEC.decode(c["bytes"]["A"])
-    idle = dataclasses.replace(a, requests=a.requests + (_Request("r9", 3, 2, "length"),))
+    for bad in (b"\x01" + c["bytes"]["A"][1:], c["bytes"]["A"] + b"\0"):
+        with pytest.raises(ValueError):
+            AW.of_advice(c["compiler"], bad)
+
+
+def test_a_request_no_step_schedules_is_refused():
+    advice = SimpleNamespace(requests=(SimpleNamespace(id="r0", prompt_len=3, output_len=1), SimpleNamespace(id="r9", prompt_len=3, output_len=1)),
+                             steps=(SimpleNamespace(rows=(SimpleNamespace(request=0),)),))
     with pytest.raises(ValueError, match=r"no step schedules: \['r9'\]"):
-        AW.of_advice(c["compiler"], CODEC.encode(idle), CODEC)
+        AW.requests_of(advice)
 
 
-def test_the_command_writes_the_stand_in_advice_and_commits_its_windows(advice_tp, tmp_path, monkeypatch):
+def test_the_stand_in_advice_refuses_a_workload_that_leaves_a_step_idle():
+    doc = {"requests": [{"prompt_token_ids": [1, 2], "max_tokens": 2, "arrive_step": 0}, {"prompt_token_ids": [3], "max_tokens": 1, "arrive_step": 3}]}
+    with pytest.raises(ValueError, match=r"engine steps \[2\] idle"):
+        AW.advice_of_workload(doc)
+    doc["requests"][1]["arrive_step"] = 1
+    assert [len(s.rows) for s in AW.advice_of_workload(doc).steps] == [1, 2]
+
+
+def test_the_command_writes_the_stand_in_advice_and_commits_its_windows(advice_tp, tmp_path):
     """``verity-vllm advice-windows`` with ``--write-from-workload --drop r1``: A' written, and each rank's window bound to it."""
     from verity_vllm.pipeline import cli
 
     c = advice_tp
-    monkeypatch.setitem(sys.modules, "tests_advice_i1", types.SimpleNamespace(**vars(CODEC)))
-    monkeypatch.setattr(AW, "I1", "tests_advice_i1")
     o = cli.parse("advice-windows", [str(c["commit"]), "--advice", str(tmp_path / "a.bin"), "--partition", str(c["partition"]),
                                      "--out", str(tmp_path / "w"), "--build-root", str(c["build"]), "--write-from-workload",
                                      str(c["workload"]), "--drop", "r1", "--workers", "1"], environ={})

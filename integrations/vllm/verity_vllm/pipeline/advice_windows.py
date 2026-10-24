@@ -24,7 +24,7 @@ A compiler is what the window path reads of it: ``name``, ``digest`` and ``load(
 manifest's lookup of record.  The ahead-of-time compiler takes its place under its own registered digest.
 
 The advice is I1's (``codec``, default `I1`): `of_advice` reads its bytes, which must be its canonical encoding, and binds their
-SHA-512 and ``codec.bits`` over every step.  `advice_of_workload` is the stand-in's advice, the prover's, for a fixed-length
+SHA-512 and the advice's length, ``total_bits`` (the session's content advice).  `advice_of_workload` is the stand-in's advice, the prover's, for a fixed-length
 workload; a served run's is ADVICE-SRC's, from the scheduler's step trace.
 
     verity-vllm advice-windows COMMIT_OUT --advice FILE --partition F --out O [--ranks 0,1] [--build-root B]
@@ -70,28 +70,36 @@ def requests_of(advice: Any) -> list[dict[str, Any]]:
 
 def of_advice(compiler: Any, data: bytes, codec: Any = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """The advice's bytes read by ``codec`` (`codec_of`): the compiler's requests (`requests_of`) and the binding (`binding`), the
-    SHA-512 of the bytes, refused unless they are the advice's canonical encoding, and ``codec.bits`` over every step."""
+    SHA-512 of the bytes, refused unless they are the advice's canonical encoding, and its length, ``codec.total_bits``."""
     c = codec_of(codec)
     advice = c.decode(data)
     if c.encode(advice) != data:
         raise ValueError("the advice's bytes are not its canonical encoding")
-    return requests_of(advice), binding(compiler, hashlib.sha512(data).hexdigest(), int(c.bits(advice, (0, len(advice.steps)))))
+    return requests_of(advice), binding(compiler, hashlib.sha512(data).hexdigest(), int(c.total_bits(advice)))
 
 
 def advice_of_workload(doc: Mapping[str, Any], codec: Any = None, drop: Sequence[str] = ()) -> Any:
     """The stand-in's advice, the prover's: a fixed-length workload's requests (``r<position>``, as ``tp-commit`` names them, less
     ``drop``) at their declared arrivals, each a whole-prompt prefill row, then one decode row a step until its ``max_tokens``,
-    finished by length; a step's rows in the runner's order (decode rows first)."""
+    finished by length; a step's rows in the runner's order (decode rows first), the requests numbered in order of their first
+    row, and each kept output released in its step's bucket.  A step the workload leaves idle is refused: the advice's steps
+    are the forwards that ran, so its arrivals would not be the Commit's engine steps."""
     c = codec_of(codec)
     reqs = [(f"r{i}", int(q.get("arrive_step") or 0), len(q["prompt_token_ids"]), int(q["max_tokens"])) for i, q in enumerate(doc["requests"])]
     reqs = [q for q in reqs if q[0] not in set(drop)]
-    steps: list[list[Any]] = [[] for _ in range(max((a + t for _, a, _, t in reqs), default=0))]
+    steps: list[list[tuple[int, str, int, int]]] = [[] for _ in range(max((a + t for _, a, _, t in reqs), default=0))]
     for i, (_rid, a, lp, t) in enumerate(reqs):
-        steps[a].append(c.Row(i, "prefill", 0, lp))
+        steps[a].append((i, "prefill", 0, lp))
         for j in range(1, t):
-            steps[a + j].append(c.Row(i, "decode", lp + j - 1, 1))
-    return c.Advice(tuple(c.RequestAdvice(rid, lp, t, "length") for rid, _a, lp, t in reqs),
-                    tuple(c.StepAdvice(tuple(sorted(rows, key=lambda r: (r.n, r.request)))) for rows in steps))
+            steps[a + j].append((i, "decode", lp + j - 1, 1))
+    if idle := [s for s, rows in enumerate(steps) if not rows]:
+        raise ValueError(f"the workload leaves engine steps {idle} idle: the advice's steps are the forwards that ran")
+    steps = [sorted(rows, key=lambda x: (x[3], x[0])) for rows in steps]
+    order = list(dict.fromkeys(x[0] for rows in steps for x in rows))
+    index = {i: k for k, i in enumerate(order)}
+    return c.Advice(tuple(c.RequestAdvice(reqs[i][0], reqs[i][2], reqs[i][3], "length") for i in order),
+                    tuple(c.StepAdvice(tuple(c.Row(index[i], kind, start, n) for i, kind, start, n in rows)) for rows in steps),
+                    tuple(s for s, rows in enumerate(steps) for _ in rows))
 
 
 @dataclass(frozen=True)

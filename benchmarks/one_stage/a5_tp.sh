@@ -35,6 +35,10 @@
 # A5_COINS=verifier (instead of A5_CHALLENGER): each rank draws by its partition file's rule through its own service.Stream
 #   on the verifier's own live coins (a5.py --coins verifier: the Lean's IO.getRandomBytes, read once the stream received
 #   the rank's registration), no challenger session, so A5_JOBS takes any number of ranks. Its record says source: verifier.
+# A5_ADVICE=stand-in (the stand-in, with A5_WINDOWS=bundles): advice windows. The stand-in's advice A (I1, its fixed-length
+#   workload's schedule) and A' (A less its last request) are written beside it, each rank's window is committed from its bundle
+#   over the stand-in compiler's Programs for A, and for A' (`verity-vllm advice-windows`), and a5 derives its own from the
+#   record, A and the compiler, never the workload (a5.py --advice; --other-advice and --other-windows its negatives).
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
@@ -79,9 +83,9 @@ keep() {  # NAME: $W/NAME's records into $O/NAME
   (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
 }
-audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION
+audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION [A5 ARGS...]: WORKLOAD empty under --advice
   mkdir -p $O/$1
-  $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 --workload $4 --windows $5 --partition $6 \
+  $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 ${4:+--workload $4} --windows $5 --partition $6 "${@:7}" \
     ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$1 \
     ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_COINS:+--coins $A5_COINS} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
     ${MAIN:+--main $MAIN} > $O/$1/a5.log 2> $O/$1/a5.err
@@ -106,6 +110,15 @@ bundle_windows() {  # COMMIT BUILD PARTITION OUT LOGS: each rank's stand-in wind
       ${A5_CHECKPOINT:+--checkpoint-dir $A5_CHECKPOINT --no-verify-shards} > $5/tp-serving-rows-{}.log 2>&1" \
     || { tail -20 $5/tp-serving-rows-*.log; return 1; }
   grep -h '^\[tp-serving-rows\]' $5/tp-serving-rows-*.log
+}
+
+advice_windows() {  # COMMIT BUILD PARTITION OUT ADVICE LOGS [ARGS...]: each rank's stand-in window from its sealed bundle over the
+                    # stand-in compiler's Programs for the advice
+  local log=$6/advice-windows-$(basename $4).log
+  mkdir -p $6
+  $TIME $REPO/.venv/bin/verity-vllm advice-windows $1 --build-root $2 --partition $3 --out $4 --advice $5 ${A5_RANKS:+--ranks $A5_RANKS} "${@:7}" \
+    > $log 2>&1 || { tail -20 $log; return 1; }
+  grep -h '^\[advice-windows\]' $log
 }
 
 rc=0
@@ -133,13 +146,22 @@ else
     DEFERRED=$([ "${A5_WINDOWS:-served}" = bundles ] && echo --deferred)
     (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW $DEFERRED) \
       > $O/standin-i$I.json 2> $O/standin-i$I.err || { tail -20 $O/standin-i$I.err; exit 8; }
-    if [ -n "$DEFERRED" ]; then
+    WL=$S/workload.json; ADV=()
+    if [ -n "${A5_ADVICE:-}" ]; then
+      [ "$A5_ADVICE" = stand-in ] && [ -n "$DEFERRED" ] || { echo "A5_ADVICE=stand-in commits each rank's window from its bundle: set A5_WINDOWS=bundles"; exit 3; }
+      LAST=$($PY -c "import json, sys; print('r%d' % (len(json.load(open(sys.argv[1]))['requests']) - 1))" $WL)
+      advice_windows $S/commit $S/build $S/partition.json $S/serving-rows $S/advice.bin $O/standin-i$I --write-from-workload $WL || exit 8
+      advice_windows $S/commit $S/build $S/partition.json $S/other-windows $S/other-advice.bin $O/standin-i$I --write-from-workload $WL \
+        --drop $LAST || exit 8
+      ADV=(--advice $S/advice.bin --other-advice $S/other-advice.bin --other-windows $S/other-windows); WL=
+      public $S/other-windows $O/standin-i$I/other-window && cp $S/advice.bin $S/other-advice.bin $O/standin-i$I/
+    elif [ -n "$DEFERRED" ]; then
       bundle_windows $S/commit $S/build $S/partition.json $S/serving-rows $O/standin-i$I || exit 8
     fi
     # the record's files, never a sealed bundle (its store holds the prover's values)
     public $S/serving-rows $O/standin-i$I/window && mkdir -p $O/standin-i$I/commit && cp $S/workload.json $S/partition.json $O/standin-i$I/ \
       && find $S/commit -maxdepth 1 -type f -exec cp {} $O/standin-i$I/commit/ \;
-    audit standin-i$I $S/commit $S/build $S/workload.json $S/serving-rows $S/partition.json || rc=1
+    audit standin-i$I $S/commit $S/build "$WL" $S/serving-rows $S/partition.json "${ADV[@]}" || rc=1
   done
 fi
 exit $rc
