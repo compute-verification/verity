@@ -66,7 +66,9 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 // (A'F_B, B~F_A, G) at M a multiple of 128; persistent over tiles in groups of `i[3]` tile
 // rows; a 4-deep cp.async pipeline of 64-byte stages (two atoms each).  G is the promotion period: every 32 G products (G / 2
 // stages) from +0, promoted by one FADD into the FP32 total; G = 0 is one accumulator over all of K (no promotion).  Every
-// output's chain is the same at either tile.  Modes:
+// output's chain is the same at either tile.  Rows from i[4] on (0: none) are filler, which nothing reads: a warp whose rows
+// are all filler (decode's padding to 64, past m16) skips its products and stores, so the tensor cores, which bound the
+// 64 x 64 tile, do only the real rows' work; those rows of C~, U and y are left as they were.  Modes:
 //   PLAIN   y = bf16(total sa sb)
 //   CT      stores C~ (FP32)
 //   PEARLC  stores C~, then four k16 BF16 mma of P_A P_B^T into the total, stores U and y = bf16(U ia ib)
@@ -123,7 +125,7 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
   uint8_t* sB = smem + STAGES * A_ST;
   uint8_t* sPA = sB + STAGES * B_ST;
   uint8_t* sPB = sPA + TM * PEEL_ROW;
-  const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3];
+  const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3], live = a.i[4] ? a.i[4] : M;
   const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KB = K / BK;
   const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32, wm = warp / WARPS_N, wn = warp % WARPS_N;
   const uint8_t* A = reinterpret_cast<const uint8_t*>(a.p[0]);
@@ -142,6 +144,7 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
   for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
     int tm, tn;
     raster(t, tiles_m, tiles_n, group, tm, tn);
+    const bool busy = tm * TM + wm * WM < live;
     const uint8_t* ga = A + (size_t)tm * TM * K;
     const uint8_t* gb = B + (size_t)tn * BN * K;
     if constexpr (PEEL) {
@@ -184,21 +187,23 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
             for (int e = 0; e < 4; e++) acc[mi][ni][e] = 0.0f;
       }
       const uint32_t a0 = sa(sA + (kb % STAGES) * A_ST), b0 = sa(sB + (kb % STAGES) * B_ST);
+      if (busy) {
 #pragma unroll
-      for (int kk = 0; kk < 2; kk++) {
-        uint32_t fa[MI][4], fb[NI][2];
+        for (int kk = 0; kk < 2; kk++) {
+          uint32_t fa[MI][4], fb[NI][2];
 #pragma unroll
-        for (int mi = 0; mi < MI; mi++) ldsm4(fa[mi], a0 + swz64(a_row + 16 * mi, 2 * kk + a_half));
+          for (int mi = 0; mi < MI; mi++) ldsm4(fa[mi], a0 + swz64(a_row + 16 * mi, 2 * kk + a_half));
 #pragma unroll
-        for (int nj = 0; nj < NI / 2; nj++) {
-          uint32_t r[4];
-          ldsm4(r, b0 + swz64(b_row + 16 * nj, 2 * kk + b_half));
-          fb[2 * nj][0] = r[0]; fb[2 * nj][1] = r[1]; fb[2 * nj + 1][0] = r[2]; fb[2 * nj + 1][1] = r[3];
+          for (int nj = 0; nj < NI / 2; nj++) {
+            uint32_t r[4];
+            ldsm4(r, b0 + swz64(b_row + 16 * nj, 2 * kk + b_half));
+            fb[2 * nj][0] = r[0]; fb[2 * nj][1] = r[1]; fb[2 * nj + 1][0] = r[2]; fb[2 * nj + 1][1] = r[3];
+          }
+#pragma unroll
+          for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+            for (int ni = 0; ni < NI; ni++) qmma(acc[mi][ni], fa[mi], fb[ni]);
         }
-#pragma unroll
-        for (int mi = 0; mi < MI; mi++)
-#pragma unroll
-          for (int ni = 0; ni < NI; ni++) qmma(acc[mi][ni], fa[mi], fb[ni]);
       }
       if (PROMOTE && kb % PERIOD == PERIOD - 1) {
 #pragma unroll
@@ -220,62 +225,64 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
     cp_wait<0>();
     __syncthreads();
 
-    const int row0 = tm * TM + wm * WM + g, col0 = tn * BN + wn * WN + 2 * q;
-    if constexpr (MODE == M_PLAIN) {
+    if (busy) {
+      const int row0 = tm * TM + wm * WM + g, col0 = tn * BN + wn * WN + 2 * q;
+      if constexpr (MODE == M_PLAIN) {
 #pragma unroll
-      for (int mi = 0; mi < MI; mi++) {
-        const int row = row0 + 16 * mi;
-        const float r0 = rs[row], r1 = rs[row + 8];
+        for (int mi = 0; mi < MI; mi++) {
+          const int row = row0 + 16 * mi;
+          const float r0 = rs[row], r1 = rs[row + 8];
 #pragma unroll
-        for (int ni = 0; ni < NI; ni++) {
-          const int col = col0 + 8 * ni;
-          const float c0 = cs[col], c1 = cs[col + 1];
-          store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
-          store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+          for (int ni = 0; ni < NI; ni++) {
+            const int col = col0 + 8 * ni;
+            const float c0 = cs[col], c1 = cs[col + 1];
+            store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
+            store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+          }
         }
-      }
-    } else if constexpr (STORE_CU) {
-#pragma unroll
-      for (int mi = 0; mi < MI; mi++)
-#pragma unroll
-        for (int ni = 0; ni < NI; ni++) {
-          const int row = row0 + 16 * mi, col = col0 + 8 * ni;
-          store2(C + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
-          store2(C + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
-        }
-    }
-    if constexpr (PEEL) {
-      const uint32_t pa0 = sa(sPA), pb0 = sa(sPB);
-#pragma unroll
-      for (int s = 0; s < 4; s++) {
-        uint32_t fa[MI][4], fb[NI][2];
-#pragma unroll
-        for (int mi = 0; mi < MI; mi++) ldsm4(fa[mi], pa0 + swz128(a_row + 16 * mi, 2 * s + a_half));
-#pragma unroll
-        for (int nj = 0; nj < NI / 2; nj++) {
-          uint32_t r[4];
-          ldsm4(r, pb0 + swz128(b_row + 16 * nj, 2 * s + b_half));
-          fb[2 * nj][0] = r[0]; fb[2 * nj][1] = r[1]; fb[2 * nj + 1][0] = r[2]; fb[2 * nj + 1][1] = r[3];
-        }
+      } else if constexpr (STORE_CU) {
 #pragma unroll
         for (int mi = 0; mi < MI; mi++)
 #pragma unroll
-          for (int ni = 0; ni < NI; ni++) hmma(total[mi][ni], fa[mi], fb[ni]);
-      }
-#pragma unroll
-      for (int mi = 0; mi < MI; mi++) {
-        const int row = row0 + 16 * mi;
-        const float r0 = rs[row], r1 = rs[row + 8];
-#pragma unroll
-        for (int ni = 0; ni < NI; ni++) {
-          const int col = col0 + 8 * ni;
-          const float c0 = cs[col], c1 = cs[col + 1];
-          if constexpr (STORE_CU) {
-            store2(U + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
-            store2(U + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
+          for (int ni = 0; ni < NI; ni++) {
+            const int row = row0 + 16 * mi, col = col0 + 8 * ni;
+            store2(C + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
+            store2(C + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
           }
-          store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
-          store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+      }
+      if constexpr (PEEL) {
+        const uint32_t pa0 = sa(sPA), pb0 = sa(sPB);
+#pragma unroll
+        for (int s = 0; s < 4; s++) {
+          uint32_t fa[MI][4], fb[NI][2];
+#pragma unroll
+          for (int mi = 0; mi < MI; mi++) ldsm4(fa[mi], pa0 + swz128(a_row + 16 * mi, 2 * s + a_half));
+#pragma unroll
+          for (int nj = 0; nj < NI / 2; nj++) {
+            uint32_t r[4];
+            ldsm4(r, pb0 + swz128(b_row + 16 * nj, 2 * s + b_half));
+            fb[2 * nj][0] = r[0]; fb[2 * nj][1] = r[1]; fb[2 * nj + 1][0] = r[2]; fb[2 * nj + 1][1] = r[3];
+          }
+#pragma unroll
+          for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+            for (int ni = 0; ni < NI; ni++) hmma(total[mi][ni], fa[mi], fb[ni]);
+        }
+#pragma unroll
+        for (int mi = 0; mi < MI; mi++) {
+          const int row = row0 + 16 * mi;
+          const float r0 = rs[row], r1 = rs[row + 8];
+#pragma unroll
+          for (int ni = 0; ni < NI; ni++) {
+            const int col = col0 + 8 * ni;
+            const float c0 = cs[col], c1 = cs[col + 1];
+            if constexpr (STORE_CU) {
+              store2(U + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
+              store2(U + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
+            }
+            store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
+            store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+          }
         }
       }
     }

@@ -465,14 +465,16 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     lines_ea = [ev for ev in launched if ev["name"] == "lines" and ev["i"][4]]
     assert lines_ea and all(ev["i"][2] == 1024 and ev["i"][4] == 1008 for ev in lines_ea)
 
-    # decode's 64 rows: words_k and stats_r, timed beside the kernels they replace and held to their words
+    # decode's 64 rows, 16 of them real: words_k, stats_r and the chain on the real rows, timed beside the kernels they
+    # replace and held to their words
     log = tmp_path / "launches_decode.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
                        env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="16x1024x3072", VARIANTS="sm120"),
                        capture_output=True, text=True)
     assert r.returncode == 4, r.stderr
     (t,) = [x for x in map(json.loads, r.stdout.splitlines()) if x["kind"] == "timing"]
-    assert t["shape"] == [64, 1024, 3072] and {"af", "af_warps", "stats_a", "stats_a_warps"} <= set(t["ms"])
+    assert t["shape"] == [64, 1024, 3072]
+    assert {"af", "af_warps", "stats_a", "stats_a_warps", "gemm_pearlc", "gemm_pearlc_full"} <= set(t["ms"])
     assert {f"{o}_{step}_vs_{ref}_words_differing" for step, ref, outs in RUN.SPLITS for o in outs} <= set(t["consistency"])
     allocs, launched, timed = {}, [], False
     for ev in map(json.loads, log.read_text().splitlines()):
@@ -484,21 +486,26 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     rows = {(ev["name"], ev["i"][0]) for ev in launched}
     assert {("words_k", 64), ("words", 64), ("stats_r", 64), ("stats_s5", 64), ("stats_s5", 1024)} <= rows
     assert ("stats_r", 1024) not in rows
+    live = {ev["i"][4] for ev in launched if ev["name"] in ("gemm_ct_d", "gemm_pearlc_d")}
+    assert live == {16, 64}                  # the real rows, and gemm_pearlc_full's all of m
 
-    # PEARLC_SPLIT=0 (the A/B rows' before): decode on the kernels words_k and stats_r replace, and no split timed beside them
+    # PEARLC_SPLIT=0 and PEARLC_LIVE=0 (the A/B rows' before): decode on the kernels words_k and stats_r replace, its GEMMs
+    # over all m rows, and none of the cuts timed beside them
     log = tmp_path / "launches_unsplit.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
                        env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="16x1024x3072", VARIANTS="sm120",
-                                   PEARLC_SPLIT="0"), capture_output=True, text=True)
+                                   PEARLC_SPLIT="0", PEARLC_LIVE="0"), capture_output=True, text=True)
     assert r.returncode == 4, r.stderr
     (t,) = [x for x in map(json.loads, r.stdout.splitlines()) if x["kind"] == "timing"]
-    assert {"af", "stats_a"} <= set(t["ms"]) and not {"af_warps", "stats_a_warps"} & set(t["ms"])
+    assert {"af", "stats_a"} <= set(t["ms"]) and not {"af_warps", "stats_a_warps", "gemm_pearlc_full"} & set(t["ms"])
     launched, timed = [], False
     for ev in map(json.loads, log.read_text().splitlines()):
         timed = timed or ev.get("name") == "gen_f32"
         if timed and ev["op"] == "launch":
-            launched.append((ev["name"], ev["i"][0]))
-    assert {("words", 64), ("stats_s5", 64)} <= set(launched) and not {n for n, _ in launched} & {"words_k", "stats_r"}
+            launched.append((ev["name"], ev["i"][0], ev["i"][4]))
+    assert {("words", 64), ("stats_s5", 64)} <= {(n, r) for n, r, _ in launched}
+    assert not {n for n, *_ in launched} & {"words_k", "stats_r"}
+    assert {lv for n, _, lv in launched if n in ("gemm_ct_d", "gemm_pearlc_d")} == {0}
 
 
 def room(allocs: dict[int, int], ptr: int) -> int:

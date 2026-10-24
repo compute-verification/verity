@@ -18,7 +18,9 @@
    its hashes (commit and hashing; without, the chain is gemm_pearlc_s where it runs), and consistency checks (C~ of gemm_ct
    equals gemm_pearlc's; a second gemm_pearlc gives the same U; gemm_pearlc_s's y equals gemm_pearlc's; form_s5_scalar and
    form_s5_r144, timed beside form_s5, and the RATE kernels write form_s5's codes; at decode, words_k and stats_r write
-   the words of the kernels they replace, timed beside them as af_warps and stats_a_warps).
+   the words of the kernels they replace, timed beside them as af_warps and stats_a_warps, and the chain on the real rows
+   writes their C~, U and y as it does over all m rows, timed beside it as gemm_pearlc_full; at decode every comparison
+   is of the real rows, the only ones a consumer reads).
    `form_rates` prices the forming loop per code in the mix it runs in, in units of one dense E4M3 MAC, and the packed cast
    within it (form_rate less form_rate_nocast; at the 144-byte row stride, form_rate_r144 less form_rate_nocast_r144).
    form_s5's codes and the lines' transposed F lines are in K32 order (pearl_c_sm120.cu); the check's fixture holds them in
@@ -28,7 +30,8 @@
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="sm120 sm120-unpromoted",
-                                 PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_SPLIT=0 for decode on words and stats_s5)
+                                 PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_SPLIT=0 for decode on words and stats_s5,
+                                 PEARLC_LIVE=0 for decode's 64 x 64 GEMMs over all m rows)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -54,6 +57,9 @@ WK_WARPS = 16                # words_k's block: warps per m16 x n8 tile (pearl_c
 SR_ROWS, SR_MAX_K = 256, 32768   # stats_r (a block a row) for at most SR_ROWS rows of k <= SR_MAX_K, else stats_s5
 #: decode's split kernels (words_k, stats_r); PEARLC_SPLIT=0 runs the kernels they replace (words, stats_s5), the same words
 SPLIT = os.environ.get("PEARLC_SPLIT", "1") != "0"
+#: the 64 x 64 GEMMs on the real rows alone (i4 = m_real: a warp of filler rows skips its products and stores);
+#: PEARLC_LIVE=0 runs them over all m rows, the same real rows
+LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
 VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: the mainloop GEMMs' operand pairs, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + ML_SET * slot
@@ -393,7 +399,7 @@ class Pipeline:
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, weight: int = 0,
                  sha: str | None = None):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
-        matmul's, committed and hashed, the rest filler that only the products see."""
+        matmul's, committed and hashed, the rest filler that only the products see (and the 64 x 64 GEMMs skip, LIVE)."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
         self.sha = sha or os.environ.get("PEARLC_SHA", "fast")
         if self.sha not in ("fast", "ref"):
@@ -563,7 +569,10 @@ class Pipeline:
                 self.dev.free(p)
 
     def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0,
-             dg=0, key=0):
+             dg=0, key=0, live: int | None = None):
+        """`live`: the rows from 0 the product is wanted for (i4; 0 all M), by default m_real at 64 x 64 tiles (LIVE)."""
+        if live is None:
+            live = self.m_real if LIVE and gemm_tile(name) == (BM_D, BM_D) and self.m_real < M else 0
         if name not in self.GEMM_SMEM:
             probe = self.dev.alloc(16)
             self.dev.launch(name + "_smem", 1, 1, p=(probe,))
@@ -580,7 +589,7 @@ class Pipeline:
         block = NT
         if is_ml(name):
             ptrs[10], block = self.b["tma"] + ML_SET * ML_MAPS[(a, b)], ML_NT
-        self.dev.launch(name, min(tiles, grid or self.dev.sms), block, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER))
+        self.dev.launch(name, min(tiles, grid or self.dev.sms), block, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER, live))
 
     def extra(self) -> dict[str, object]:
         """The chain's launches by name, beside `steps`' choice: `gemm_pearlc_cu` (C~, U and y stored), and at 128 x 128 tiles
@@ -597,13 +606,21 @@ class Pipeline:
 
     def replaced(self) -> dict[str, object]:
         """The kernels the split ones replace at decode, on the same buffers: `af_warps`, A'F_B on `words` (a warp a tile over
-        all of K) where `af` runs words_k, and `stats_a_warps`, stats_s5 (a warp a row) where `stats_a` runs stats_r."""
+        all of K) where `af` runs words_k, `stats_a_warps`, stats_s5 (a warp a row) where `stats_a` runs stats_r, and
+        `gemm_pearlc_full`, the chain over all m rows where `gemm_pearlc` runs on the real ones (LIVE)."""
         d, b, m, k, out = self.dev, self.b, self.m, self.k, {}
         if self.g and SPLIT:
             out["af_warps"] = lambda: d.launch("words", m // 16, 128, p=(b["at"], b["fbT32"], b["af"]), i=(m, 32, k))
         if self.stats_kernel(m) == "stats_r":
             out["stats_a_warps"] = lambda: self.stats("a", m, "xa", "stats_s5")
+        if LIVE and self.m_real < m:
+            out["gemm_pearlc_full"] = lambda: self.gemm("gemm_pearlc_d" + self.suffix, "at", "bt", m, self.n, out=("c", "u", "y"),
+                                                        live=m, pa=b["pa_t"], pb=b["pb_t"], rs=b["ia_a"], cs=b["ia_b"])
         return out
+
+    def real(self, x: str) -> int:
+        """The bytes of buffer x's real rows (its first m_real of m), the only ones a consumer reads."""
+        return self.size[x] * self.m_real // self.m
 
     def stats_kernel(self, rows: int) -> str:
         return "stats_r" if SPLIT and rows <= SR_ROWS and self.k <= SR_MAX_K else "stats_s5"
@@ -703,7 +720,7 @@ class Pipeline:
 
     def splits(self) -> dict[str, int]:
         """Each split kernel against the one it replaces (SPLITS), on this pipeline's inputs: the replaced step's outputs
-        copied into c2, the split step run, the words differing per output."""
+        copied into c2, the split step run, the words differing per output in its real rows (`real`)."""
         steps, alt, out = {nm: f for nm, _, f in self.steps()}, self.extra(), {}
         for step, ref, outs in SPLITS:
             if ref not in alt:
@@ -716,7 +733,7 @@ class Pipeline:
             steps[step]()
             at = 0
             for o in outs:
-                out[f"{o}_{step}_vs_{ref}_words_differing"] = self.diff_at(self.b[o], self.b["c2"] + at, self.size[o])
+                out[f"{o}_{step}_vs_{ref}_words_differing"] = self.diff_at(self.b[o], self.b["c2"] + at, self.real(o))
                 at += self.size[o]
         return out
 
@@ -732,8 +749,10 @@ ALIASES = {"c2": "c"}
 STATS_A = ("alpha_a", "beta_a", "ia_a", "aux_a")
 #: the 64 x 64 pipeline's: the chain, A'F_B on words_k, and the kernels the split ones replace (`Pipeline.replaced`)
 SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)), ("af_warps", ("af",)), ("stats_a_warps", STATS_A))
-#: each split kernel's step at decode, the step it replaces (`Pipeline.replaced`) and their outputs, held word for word
-SPLITS = (("af", "af_warps", ("af",)), ("stats_a", "stats_a_warps", STATS_A))
+#: each split kernel's step at decode, the step it replaces (`Pipeline.replaced`) and their outputs, held word for word (the
+#: chain's one output at a time: c2, where the replaced step's land, holds one m x n FP32 product)
+SPLITS = (("af", "af_warps", ("af",)), ("stats_a", "stats_a_warps", STATS_A),
+          *(("gemm_pearlc", "gemm_pearlc_full", (o,)) for o in ("c", "u", "y")))
 
 
 def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None = None) -> dict:
@@ -959,10 +978,10 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
                     "call_e2e_ms": round(e2e, 4), "call_e2e_no_hash_ms": round(e2e_nh, 4), "job_ms": round(phases["job"], 4),
                     "pearlc_tflops": round(2 * m * n * k / chain / 1e9, 1)})
         extra["gemm_pearlc_cu"]()
-        out["consistency"] = {"c_ct_vs_pearlc_words_differing": pipe.diff("c2", "c")}
+        out["consistency"] = {"c_ct_vs_pearlc_words_differing": pipe.diff_at(pipe.b["c2"], pipe.b["c"], pipe.real("c"))}
         dev.copy(pipe.b["c2"], pipe.b["u"], pipe.size["u"])
         extra["gemm_pearlc_cu"]()
-        out["consistency"]["u_rerun_words_differing"] = pipe.diff("c2", "u")
+        out["consistency"]["u_rerun_words_differing"] = pipe.diff_at(pipe.b["c2"], pipe.b["u"], pipe.real("u"))
         dev.copy(pipe.b["y2"], pipe.b["y"], pipe.size["y"])
         if y_only:
             y_only()
