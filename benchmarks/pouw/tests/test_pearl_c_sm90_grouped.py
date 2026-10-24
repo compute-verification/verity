@@ -252,6 +252,29 @@ def test_the_tile_leaves_take_sixteen_tiles_a_cta_where_four_would_be_past_the_s
     assert dev.max_dyn["pd_tiles_gw_979"] == R.PD_PAIR_SMEM // 2
 
 
+def test_the_tiles8_probe_takes_eight_tiles_a_cta_where_tiles_g_takes_four(monkeypatch):
+    """With the tiles8 probe, decode at 4096 columns (PD_G's 128 CTAs) launches pd_tiles_g8_979: TILES_G8 tiles a CTA at 256
+    threads, 64 CTAs; at 6144 columns `tiles_g` still takes TILES_GW, and a cubin without pd_tiles_g8 PD_G."""
+    decode = [3, 1, 17, 1, 40, 8, 2, 5]
+    monkeypatch.setattr(G, "PLACE", frozenset({"tiles8"}))
+    us = G.units(decode, 4096, R.PD_MAX_ROWS)
+    assert G.tiles_g(R, RecordingDev(), us, 4096) == G.TILES_G8
+    assert G.tiles_g(R, RecordingDev(), G.units(decode, 6144, R.PD_MAX_ROWS), 6144) == G.TILES_GW
+
+    class NoG8Dev(RecordingDev):
+        def fn(self, name):
+            if name == "pd_tiles_g8_979":
+                raise RuntimeError("cuModuleGetFunction returned CUresult 500 (named symbol not found)")
+            return name
+
+    assert G.tiles_g(R, NoG8Dev(), us, 4096) == R.PD_G
+    g, dev, _, _ = grouped(4096, 1024, experts=len(decode))
+    dev.log.clear()
+    for _, f in g.steps(us):
+        f()
+    assert launches(dev)[-1][:4] == ("pd_tiles_g8_979", (R.cdiv(64, G.TILES_G8), len(us)), 32 * G.TILES_G8, R.PD_PAIR_SMEM // 2)
+
+
 class OldCubinDev(RecordingDev):
     """A cubin built before pd_tree_g, pd_tiles_g_979, pd_tiles_gw_979 and pd_commit_gm: looking them up fails as `run.Dev.fn`'s does."""
 

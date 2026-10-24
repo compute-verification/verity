@@ -53,8 +53,9 @@ DEV Args pd_unit(const Args& g) { return pd_unit_at(g, blockIdx.y); }
 PD_GROUPED(851)
 // pd_tiles_g with PD_GROUP: CTA (x, u) unit u's CTA x of G tiles of a row block (pd_tiles_V's grid at G, cdiv(tiles a row,
 // G) a row block), their folds side by side on one warp: pd_tiles_g at PD_G, pd_tiles_gw at PD_GW, a quarter of the CTAs,
-// so a decode call's tile leaves hold fewer of the SMs the next call's pd_commit_gm takes whole
-constexpr int PD_GW = 16;
+// so a decode call's tile leaves hold fewer of the SMs the next call's pd_commit_gm takes whole, and pd_tiles_g8 at PD_G8
+// (grouped.py's tiles8 probe), half of them
+constexpr int PD_GW = 16, PD_G8 = 8;
 #define PD_GROUPED_TILES(V, G, NAME)                                                                                     \
   extern "C" __global__ void __launch_bounds__(32 * G) NAME##_##V(const Args g) {                                      \
     const Args a = pd_unit(g);                                                                                           \
@@ -63,6 +64,7 @@ constexpr int PD_GW = 16;
   }
 PD_GROUPED_TILES(979, PD_G, pd_tiles_g)
 PD_GROUPED_TILES(979, PD_GW, pd_tiles_gw)
+PD_GROUPED_TILES(979, PD_G8, pd_tiles_g8)
 // pd_commit_g on a 1-D grid of the call's rows: CTA x is row map[x] & 0xFFFF of unit map[x] >> 16, the map (u32s) at p1, in
 // the order grouped.py gives (the units' rows apart on the SMs, their filler rows on the CTAs past the SMs)
 #define PD_GROUPED_ROWS(V)                                                                                               \

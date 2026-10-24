@@ -46,8 +46,11 @@ TILES_PD = 979
 #: the tiles of a row block a CTA of pd_tiles_gw (pearl_c_sm90.cu's PD_GW), where the cubin has it and PD_G's CTAs are past
 #: the SMs (`tiles_g`): a quarter of their CTAs, in one wave
 TILES_GW = 16
+#: the tiles of a row block a CTA of pd_tiles_g8 (pearl_c_sm90.cu's PD_G8), the tiles8 probe's
+TILES_G8 = 8
 #: PROBE: the older forms, "+"-joined, for an A/B in one session: tiles851 (the tile leaves at PD's), tiles4 (pd_tiles_g's
-#: PD_G tiles a CTA rather than pd_tiles_gw's TILES_GW), treewhole (pd_tree_g at
+#: PD_G tiles a CTA rather than pd_tiles_gw's TILES_GW), tiles8 (pd_tiles_g8's TILES_G8 where `tiles_g` takes PD_G),
+#: treewhole (pd_tree_g at
 #: a whole SM's shared memory), hashzero (pd_commit_gm hashes the filler rows: no zero row digest in the records), rows2d
 #: (pd_commit_g's grid, a unit's rows on its CTA row, rather than pd_commit_gm's), pairsmem (pd_commit_gm at an SM to a CTA
 #: only while every unit's m₁₆ rows fit the SMs, not its real rows: `commit_rows`)
@@ -187,11 +190,14 @@ def tiles_pd(dev) -> int:
 def tiles_g(R, dev, us: list[Unit], n: int) -> int:
     """TILES_PD's tiles a CTA for units `us` at `n` columns: TILES_GW where the cubin has pd_tiles_gw and PD_G's CTAs are past
     the SMs (decode at 6144 columns, 192; prefill), so none waits a whole chain for one; else PD_G (pd_tiles_g's), whose
-    CTAs (128 at 4096 columns) each run fewer chains at once (r20261024-121033-7bc5: 0.324 ms there against TILES_GW's 0.333)."""
+    CTAs (128 at 4096 columns) each run fewer chains at once (r20261024-121033-7bc5: 0.324 ms there against TILES_GW's 0.333).
+    The tiles8 probe takes TILES_G8 for PD_G where the cubin has pd_tiles_g8."""
     if "tiles4" in PLACE or not has(dev, f"pd_tiles_gw_{TILES_PD}"):
         return R.PD_G
     ctas = sum(R.cdiv(u.m16, 64) * R.cdiv(n // 64, R.PD_G) for u in us)
-    return TILES_GW if ctas > dev.sms else R.PD_G
+    if ctas > dev.sms:
+        return TILES_GW
+    return TILES_G8 if "tiles8" in PLACE and has(dev, f"pd_tiles_g8_{TILES_PD}") else R.PD_G
 
 
 def tree_setup(R, dev) -> None:
@@ -320,8 +326,8 @@ class Grouped:
             if tv & R.PD_GROUP:
                 tg = tiles_g(R, d, us, n)
                 grid = max(R.cdiv(u.m16, 64) * R.cdiv(n // 64, tg) for u in us)
-                d.launch(f"pd_tiles_g{'w' if tg == TILES_GW else ''}_{tv}", (grid, count), 32 * tg, R.PD_PAIR_SMEM // 2,
-                         p=(meta + TILES_AT,), i=(REC,))
+                name = {TILES_GW: "gw", TILES_G8: "g8"}.get(tg, "g")
+                d.launch(f"pd_tiles_{name}_{tv}", (grid, count), 32 * tg, R.PD_PAIR_SMEM // 2, p=(meta + TILES_AT,), i=(REC,))
             else:
                 d.launch(f"pd_tiles_g_{tv}", (max(u.tiles for u in us), count), 32, p=(meta + TILES_AT,), i=(REC,))
 
