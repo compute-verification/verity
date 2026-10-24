@@ -23,6 +23,11 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
   first-parent history (`start`'s ``main``, never the host's or the prover's), `remote.trusted_session`'s check of the files the
   ledger's end sealed and `challenger.pinned_session`'s of the open's pin. `evidence` is one draw's `{key, ledger, main, pins,
   segment, session}` (`coins.coins_reason`'s, and the Lean run's), and `negatives` its altered copies.
+* **The verifier's own coins** (`a5.py --coins verifier`): no session. Each rank's `service.Stream` draws on `VerifierCoins`, the
+  service's default coins (`verifier.coins`: the Lean verifier of record's `IO.getRandomBytes`, assumption A3), read by its
+  `select` once the stream has received the rank's registration and written its receipt. The stream's coin source is then
+  the verifier, its draws carry no evidence, and the Lean's run takes none (`coin_source` verifier). No auditor's device
+  draws them: they show the record path, not an auditor's coins. `verifier_negatives` are the refusals that apply to them.
 """
 from __future__ import annotations
 
@@ -38,13 +43,15 @@ import tarfile
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from multiprocessing import get_context
 from multiprocessing.managers import BaseManager
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, remote as R
+from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, remote as R, service as S
+from verity.core.protocols.sampled_proofs.one_stage import verifier as V
 from verity.ml.crypto import lms
 
 TREE = Path(__file__).resolve().parents[2]
@@ -217,6 +224,109 @@ class Replay(CC.ChallengerCoins):
             raise Ch.CoinError("the replayed draw reads past the honest draw's bytes")
         self._at += n
         return self._read[self._at - n:self._at]
+
+
+class VerifierCoins:
+    """The verifier's own live coins as a rank's `service.Stream` reads them (`source`, default `verifier.coins`: the Lean's
+    `IO.getRandomBytes`, the stream's default coins). Not a `ChallengerCoins`, so the stream's coin source is the verifier.
+    `read` is every byte it read."""
+
+    def __init__(self, source: Callable[[int], bytes] = V.coins) -> None:
+        self.source, self.read = source, bytearray()
+
+    def __call__(self, n: int) -> bytes:
+        b = self.source(n)
+        self.read.extend(b)
+        return b
+
+
+class OwnReplay:
+    """The bytes an honest draw read from the verifier's own coins, read again in order, as the verifier's own (no
+    `ChallengerCoins`): a negative's stream on them draws the honest draw's units. `at` is how many it has read."""
+
+    def __init__(self, read: bytes) -> None:
+        self._read, self.at = bytes(read), 0
+
+    def __call__(self, n: int) -> bytes:
+        if self.at + n > len(self._read):
+            raise Ch.CoinError("the replayed draw reads past the honest draw's bytes")
+        self.at += n
+        return self._read[self.at - n:self.at]
+
+
+#: Evidence of the challenger's form that a prover might attach to a draw from the verifier's own coins.
+FOREIGN_EVIDENCE = {"key": None, "ledger": [], "main": [], "pins": [], "segment": None, "session": {}}
+SELECT_COINS = ("select", ["coins"])
+
+
+def lean_side(audit: dict | None) -> dict | None:
+    """The Lean's side of an outcome's audit record where its whole run (`Run.run`) disagreed: its step and codes when
+    it refused one."""
+    return ((((audit or {}).get("checks") or {}).get("run") or {}).get("detail") or {}).get("disagree", {}).get("lean")
+
+
+def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
+                       register: Callable[[S.Stream], S.Registration], honest: S.Stream, coins: VerifierCoins,
+                       draw: S.Draw, outcome: Callable[[S.Stream, S.Draw, dict | None], tuple[S.Outcome, dict | None]],
+                       window: str) -> dict[str, dict]:
+    """The refusals that apply to a draw `draw` from the verifier's own `coins` on stream `honest`, once its outcome is
+    final. `stream_of(coins)` is a fresh stream of the same Spec on `coins`, `register(stream)` receives the honest
+    registration on it, and `outcome(stream, draw, coins)` delivers the honest sessions and decides (the outcome, its
+    audit record); `window` is the registration's window root.
+
+    * ``verifier-coins-claimed-as-challenger``: the honest draw's bytes passed off as the auditor's challenger's coins
+      (`Replay`) with no evidence: `coins.coins_reason` refuses, and the Lean's run refuses at its select (`coins`).
+    * ``verifier-coins-with-evidence``: the honest draw's bytes as the verifier's own with evidence of the challenger's
+      form attached: a draw from the verifier's own coins carries none, and the Lean's run refuses at its select
+      (`coins`).
+    * ``verifier-coins-redraw``: a second select on the honest registration: the stream refuses it (`drawn`), and reads
+      no coin; nothing redraws.
+    * ``verifier-coins-before-the-registration``: a select on a registration the stream never received: refused
+      (`unknown`) before any coin is read, so the verifier's coins are read only after the stream's receipt.
+
+    -> {name: {refused, ...}}, refused only where both the stream (or the Lean's run) and, for the evidence, Python
+    refuse for that reason."""
+    neg: dict[str, dict] = {}
+    read, after = bytes(coins.read), bytes.fromhex(draw.registration.digest)
+    for name, replay, evidence in (("verifier-coins-claimed-as-challenger", Replay(read), None),
+                                   ("verifier-coins-with-evidence", OwnReplay(read), FOREIGN_EVIDENCE)):
+        s = stream_of(replay)
+        try:
+            d = s.select(register(s))
+            if d.draw != draw.draw:
+                raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
+            got, audit = outcome(s, d, evidence)
+            accepted, side = got.accepted, lean_side(audit)
+        except (S.Refused, S.Pending, ValueError, Ch.CoinError) as e:
+            accepted, side = None, {"refused": _refusal(e)}
+        at = ((side or {}).get("step"), (side or {}).get("codes"))
+        row = {"accepted": accepted, "lean": side, "source": s.coin_source}
+        if isinstance(replay, Replay):
+            row["python"] = CC.coins_reason(evidence, window, after, read, lms_verify)
+        neg[name] = {"refused": accepted is False and at == SELECT_COINS and row.get("python", "") is not None, **row}
+    neg["verifier-coins-redraw"] = stream_refusal(lambda: honest.select(draw.registration), "drawn",
+                                                  lambda: len(coins.read))
+    fresh = OwnReplay(read)
+    neg["verifier-coins-before-the-registration"] = stream_refusal(lambda: stream_of(fresh).select(draw.registration),
+                                                                   "unknown", lambda: fresh.at)
+    return neg
+
+
+def stream_refusal(call: Callable[[], Any], code: str, read_count: Callable[[], int]) -> dict:
+    """`call()`, a stream's select, refused for `code` alone with no coin read (`read_count()` unchanged)."""
+    before = read_count()
+    try:
+        call()
+        codes = None
+    except S.Refused as e:
+        codes = list(e.verdict.codes)
+    read_now = read_count() - before
+    return {"refused": codes == [code] and read_now == 0, "stream": codes, "coins_read": read_now}
+
+
+def _refusal(e: Exception) -> dict:
+    return e.verdict.to_json() if isinstance(e, S.Refused) else {"pending": e.args[0] if e.args else None} \
+        if isinstance(e, S.Pending) else {"stream": str(e)}
 
 
 class Local:

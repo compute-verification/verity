@@ -77,7 +77,8 @@ negatives.
   deferred TP Commit's Build and lists the unit families of the given steps: each Definition the serving rows' partition
   draws from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
   ANDs, table reads and assertions from its leaves lowered once (an upper bound on the flat count), against 2^26, and
-  the log2 of M0's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below).
+  the log2 of M0's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below), the
+  same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use.
   `m1_unit.py` builds one family's unit through M0's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
 
