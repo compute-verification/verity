@@ -41,8 +41,8 @@ from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveOpening, live_reason
 
-from verity_vllm.protocol_options import pouw_h1_challenger as PHC
-from verity_vllm.protocol_options import pouw_h1_window as PHW
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import window as PHW
 
 SCHEME = "verity/vllm/commit-coins/v1"
 POSITIONS, IDENTITIES, REPLAY = "opening-positions", "opening-identities", "replay"
