@@ -22,9 +22,9 @@ Python reference held to it.
 | `PouwCheck.Check` | `expected_items` and `check` |
 | `PouwCheck.Protocol` | the `Core.Protocol` value |
 | `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`, `public_bc`: one unit's opening beside the check (`served_commit.check`'s rule), a certified window's under its certified salt |
-| `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its draw (`served_commit.Challenger`'s rules) |
+| `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its draw (`served_commit.Challenger`'s rules); `weights_salt`, a live Pearl-C pass's salt coin from the session the auditor's ledger opened on its weights' root, its salt coin the one coin released |
 | `PouwCheck.Rounds` | `salt`, `rounds`: a live window's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the window (`SampledProofs.Challenger.auditedSession`, `sessionNamed`) |
-| `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `rounds`) |
+| `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `weights-salt`, `rounds`, `chunks`) |
 | `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
 | `PouwCheck.Credit` | `credit.py`'s `_window_outcomes` and `_period_outcomes` (its entries `window` and `period_credit` on each drawn unit's proof outcome in place of the proof files they verify themselves, until this runs the verifier of record in-process), and the steps they compose (`Credit.Internal`'s `credited`, `outcome`, `aLink`, `registration` and `weights`; `drawn`, `layoutOf`, `period`, `committedWeights`): a served window's credit bits fixed before its draw coin, its round log the challenger's, its A trees tied to its round roots, its drawn units the draw coin's over its committed circuit's layout, no partial credit over them, its entries and its drawn units' proofs its own registration's, its B rows the ones its period's open signed the weights' root of, and a period counted only closed and complete (RT4-INT-32, -34 and -42) |
 | `PouwCheck.CreditDifftest` | the difftest's `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` behind `pouw-check-difftest` (`CreditDifftest.all`, the functions `DifftestMain` serves) |
@@ -53,8 +53,10 @@ whose `Pc8TileSide` K = 4096 circuit was c7aaeee4…).
 `served_commit.check` keeps the draw, the level and the population's domain and calls the opening rule for the rest.
 
 `passEpoch` re-starts the window's pass's epoch from its manifest under the challenger's own coin commitment: a pass
-salted by epoch coins carries the challenger's commitment and its salt coin, opened after the weights' root; a pass
-recorded before epoch coins (read only in a replay) carries a beacon; either way the manifest's salt is the epoch's, and
+salted by epoch coins carries the challenger's commitment and its salt coin, opened after the weights' root; a live
+Pearl-C pass's verifier holds the challenger session its salt coin came from (`{key, ledger, main, pins, session}`),
+opened on the pass's weights' root and releasing that coin alone, and the pass carries that session's signed commitment
+and the gate's answer for it (`livePassSalt`, `weightsSaltCheck`); a pass recorded before epoch coins (read only in a replay) carries a beacon; either way the manifest's salt is the epoch's, and
 the window's context names the pass by its SHA-512. A certified window's verifier holds the network certifier's salt for
 the PoUW window its context names (`<prefix>/pouw-window/<p>/<the pass's SHA-512>`), the window's stream and prover, and
 the record the certifier made before it drew that salt (`pouwRecord` of the weights' root, the stream and the prover,

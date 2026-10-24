@@ -20,6 +20,7 @@ import hashlib
 import json
 import random
 
+import pouw_rounds_cases as RC
 from verity.ml.crypto import lms
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
@@ -73,11 +74,32 @@ def _raw(man: dict, rng: random.Random) -> bytes:
     return json.dumps(man, indent=rng.choice([None, 1]), sort_keys=rng.random() < 0.5).encode()
 
 
+def live_coins(rng: random.Random, root: bytes, ch: Ch.LiveChallenger, sid: str, salt: bytes | None = None,
+               beyond: bool = False) -> tuple[dict, RC.Session, int]:
+    """A live Pearl-C pass's coins as its verifier holds them (`core_check.LIVE_PASS`): the session `sid` of challenger
+    `ch` the auditor's gate reserved and opened on `root` (`pouw_rounds_cases.weights_session`, its salt coin after
+    `salt`, `root` by default, and, when `beyond`, more), the session, and its open's seq in the ledger."""
+    s = RC.weights_session(rng, ch, sid, root if salt is None else salt, beyond)
+    events = RC.ledger_events(rng, {"root": root.hex()}, s, reserved=True, **RC.weights_end(s))
+    ledger = RC.ledger_lines(events, RC._key(0), RC.leaves_of(events, sid))
+    seq = next(i for i, e in enumerate(events) if e[:2] == ("open", sid))
+    return {"key": s.key(), "ledger": ledger, "main": list(RC.MAIN), "pins": list(RC.PINS), "session": s.files()}, s, seq
+
+
+def carried(sid: str, seq: int, root: bytes, c: Ch.LiveCommitment, rng: random.Random) -> dict:
+    """The gate's answer to the open of session `sid`, without its secret (`pouw_h1_challenger.carried`)."""
+    return {"session": sid, "seq": seq, "root": root.hex(), "commitment": c.root.hex(), "host": RC.HOST, "port": 7811,
+            "peer": "10.0.0.7", "by": RC.LANE, "opened_by": RC.LANE, "reserve": seq - 1,
+            **({"for": RC.LANE} if rng.random() < 0.3 else {})}
+
+
 def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
     """An honest pass: ``coin`` (the current coins), ``recorded-coin`` (the e2e-service passes' coins, in a replay),
-    ``beacon`` (a recorded pass's) or ``certified`` (salted by the network certifier's reveal for its PoUW window, which
-    the verifier holds), as a case with its manifest and the challenger beside it."""
-    kind = kind or rng.choice(["coin", "coin", "recorded-coin", "beacon", "certified"])
+    ``beacon`` (a recorded pass's), ``certified`` (salted by the network certifier's reveal for its PoUW window, which
+    the verifier holds) or ``live`` (a live Pearl-C pass's, its salt coin from a session of the auditor's challenger
+    opened on its weights' root, which the verifier holds as `core_check.LIVE_PASS`), as a case with its manifest and
+    the challenger beside it."""
+    kind = kind or rng.choice(["coin", "coin", "recorded-coin", "beacon", "certified", "live"])
     us, weights = _workload(rng)
     man = {"schema": CC.MANIFEST_SCHEMA, "matmuls": us, "weights": weights, "run": f"r-{rng.randrange(1 << 30):x}"}
     roots = _roots(man)
@@ -93,6 +115,19 @@ def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
         salt = derive(beacon, SALT_DOMAIN, {"weights": CC.weights_root(Co.SCHEME, roots)}).stream("salt", 32)
         man.update(schema=CC.MANIFEST_RECORDED, beacon=beacon.hex(), salt=salt.hex())
         ch = Coins(rng, rng.randrange(4))
+    elif kind == "live":
+        root = CC.weights_root(Co.SCHEME, roots)
+        ch = Wd.live_challenger(rng.randrange(4), rng.choice([1, 2, 4]), rng.randbytes)
+        sid = RC.session_id(rng)
+        coins, s, seq = live_coins(rng, root, ch, sid)
+        o = s.salt[0]
+        salt = derive(o.coin, EPOCH_SALT_DOMAIN, {"epoch": ch.commitment.epoch, "coins": ch.commitment.root, "weights": root}
+                      ).stream("salt", 32)
+        man.update(coins=ch.commitment.to_json(), salt_opening=o.to_json(), salt=salt.hex(),
+                   session=carried(sid, seq, root, ch.commitment, rng))
+        case = {"coins": coins, "recorded": rng.random() < 0.3, "run": man["run"], "prefix": f"served-zk/{man['run']}",
+                "window": None, **{k: None for k in CERTIFIED}}
+        return {"case": case, "man": man, "ch": ch, "kind": kind, "root": root}
     else:
         ch = Coins(rng, rng.randrange(4), Co.SCHEME if kind == "coin" else CC.COINS_RECORDED)
         root = CC.weights_root(ch.scheme, roots)
@@ -120,6 +155,8 @@ def _resign(h: dict, rng: random.Random) -> None:
     """The manifest's salt again from its coin or beacon, after a mutation of its workload."""
     man, ch = h["man"], h["ch"]
     roots = _roots(man)
+    if h["kind"] == "live":
+        return
     if "beacon" in man:
         man["salt"] = derive(bytes.fromhex(man["beacon"]), SALT_DOMAIN, {"weights": CC.weights_root(Co.SCHEME, roots)}
                              ).stream("salt", 32).hex()
@@ -128,6 +165,18 @@ def _resign(h: dict, rng: random.Random) -> None:
         man["salt_opening"] = ch.open("salt", root)
         man["salt"] = derive(bytes.fromhex(man["salt_opening"]["coin"]), EPOCH_SALT_DOMAIN,
                              {"epoch": ch.epoch, "coins": ch.tree.commitment.root, "weights": root}).stream("salt", 32).hex()
+
+
+def _relive(h: dict, root: bytes, rng: random.Random, beyond: bool = False) -> None:
+    """Live pass `h` salted in a fresh session of its id, opened on `root`, its salt coin after it (and, when `beyond`,
+    more coins released), its manifest that session's commitment, salt coin, salt and gate's answer."""
+    man, c = h["man"], h["ch"].commitment
+    ch, sid = Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes), man["session"]["session"]
+    h["case"]["coins"], s, seq = live_coins(rng, root, ch, sid, beyond=beyond)
+    o = s.salt[0]
+    salt = derive(o.coin, EPOCH_SALT_DOMAIN, {"epoch": c.epoch, "coins": ch.commitment.root, "weights": h["root"]})
+    man.update(coins=ch.commitment.to_json(), salt_opening=o.to_json(), salt=salt.stream("salt", 32).hex(),
+               session=carried(sid, seq, root, ch.commitment, rng))
 
 
 def _mutate_pass(h: dict, name: str, rng: random.Random) -> bytes | None:
@@ -272,8 +321,44 @@ def _mutate_pass(h: dict, name: str, rng: random.Random) -> bytes | None:
             w = rng.choice(list(man["weights"]))
             r = man["weights"][w]["root"]
             man["weights"][w]["root"] = r[:2] + " " + r[2:].upper()
-            if o is not None:
+            if o is not None and h["kind"] != "live":
                 man["salt_opening"] = {**o, "coin": " ".join(o["coin"][i:i + 2] for i in range(0, 64, 2))}
+        case "live-form":
+            coins = case["coins"]
+            k = rng.choice([x for x in CC.LIVE_PASS if x != "ledger"])
+            case["coins"] = rng.choice([{x: v for x, v in coins.items() if x != k}, {**coins, "record": coins["session"]}])
+        case "live-in-process":
+            seeded = Coins(rng, h["ch"].commitment.epoch)
+            root = h["root"]
+            opening = seeded.open("salt", root)
+            man.update(coins=seeded.commitment, salt_opening=opening, salt=derive(
+                bytes.fromhex(opening["coin"]), EPOCH_SALT_DOMAIN,
+                {"epoch": seeded.epoch, "coins": seeded.tree.commitment.root, "weights": root}).stream("salt", 32).hex())
+        case "live-own-challenger":
+            own = Wd.live_challenger(h["ch"].commitment.epoch, h["ch"].commitment.family(Wd.ROUND), rng.randbytes)
+            o = own.open(Wd.SALT, 0, h["root"])
+            man.update(coins=own.commitment.to_json(), salt_opening=o.to_json(), salt=derive(
+                o.coin, EPOCH_SALT_DOMAIN, {"epoch": own.commitment.epoch, "coins": own.commitment.root, "weights": h["root"]}
+            ).stream("salt", 32).hex())
+        case "live-forged":
+            k = rng.choice(["coin", "salt", "after"])
+            man["salt_opening"] = {**o, k: _flip(o[k])}
+        case "live-not-signed":
+            man["coins"] = Wd.live_challenger(h["ch"].commitment.epoch, h["ch"].commitment.family(Wd.ROUND),
+                                              rng.randbytes).commitment.to_json()
+        case "live-session":
+            g = man["session"]
+            k = rng.choice(["session", "seq", "root", "commitment", "secret", None])
+            man["session"] = None if k is None else {**g, "secret": rng.randbytes(32).hex()} if k == "secret" else {
+                **g, k: {"session": RC.session_id(rng), "seq": rng.choice([g["seq"] + 1, str(g["seq"]), True]),
+                         "root": rng.randbytes(64).hex(), "commitment": _flip(g["commitment"])}[k]}
+        case "live-other-root":
+            # the verifier's session was opened on another root than the pass's weights' (H1's window-open root among
+            # them), its salt coin after that root
+            sid = man["session"]["session"]
+            _relive(h, rng.choice([rng.randbytes(64), PS.window_open_root(h["root"], rng.randbytes(64), sid)]), rng)
+        case "live-beyond":
+            _relive(h, h["root"], rng, beyond=True)
         case _:
             raise ValueError(name)
     return _raw(man, rng)
@@ -297,6 +382,8 @@ PASS_MUTATIONS = {
     "other-reveal": ("certified",), "raw-reveal": ("certified",), "weights-unrecorded": ("certified",),
     "weights-after-salt": ("certified",), "binding-form": ("certified",), "stream-other": ("certified",),
     "prover-other": ("certified",), "salted-apart": ("certified",),
+    "live-form": ("live",), "live-in-process": ("live",), "live-own-challenger": ("live",), "live-forged": ("live",),
+    "live-not-signed": ("live",), "live-session": ("live",), "live-other-root": ("live",), "live-beyond": ("live",),
 }
 PASS_NAMES = list(PASS_MUTATIONS)
 

@@ -3,6 +3,7 @@ import PouwCommit.Draws
 import PouwWindow.Rounds
 import PouwCheck.Inputs
 import SampledProofs.ChallengerRecord
+import SampledProofs.ChallengerSession
 
 /-!
 # The pass's epoch and the window's draw (`core_check.py`, "the pass's epoch and the window's draw")
@@ -10,8 +11,11 @@ import SampledProofs.ChallengerRecord
 `passEpoch` is `core_check.pass_epoch`: the window's pass's manifest re-starts its epoch under the challenger's own coin
 commitment, and the window's context names the pass by its SHA-512. A pass salted by epoch coins (`MANIFEST_SCHEMA`)
 carries the epoch's commitment, which must be the challenger's, and its salt coin's opening, opened after the weights'
-root (`coinReasonAt`); a pass recorded before epoch coins (`MANIFEST_RECORDED`, read only in a replay) carries a beacon.
-Either way the manifest's salt must be the epoch's. A certified window's verifier holds the network certifier's salt for
+root (`coinReasonAt`); a live Pearl-C pass took its salt coin from a session of the auditor host's challenger opened on
+its weights' root, which its verifier holds as `rounds` reads one (`{key, ledger, main, pins, session}`), never the
+pass's word: its salt coin passes `weightsSaltCheck` under it, and its manifest carries that session's signed commitment
+and the gate's answer for it (`livePassSalt`); a pass recorded before epoch coins (`MANIFEST_RECORDED`, read only in a
+replay) carries a beacon. Either way the manifest's salt must be the epoch's. A certified window's verifier holds the network certifier's salt for
 the PoUW window its context names (`windowOf`), the window's stream and prover, and what PoUW recorded with the certifier
 before its salt (`pouwRecord`, `salt.pouw_record`), and passes only a pass salted by them (`MANIFEST_CERTIFIED`, the salt
 `pouwSalt`, `salt.pouw_salt`); no other verifier passes such a pass. A refusal is `coin` (the coin rule's, Python's
@@ -20,6 +24,11 @@ before its salt (`pouwRecord`, `salt.pouw_record`), and passes only a pass salte
 `drawCheck` is `core_check.draw`: the epoch's draw coin opens after the registration, and the drawn units are
 `Flock.Draw.subset` of the stream `"draw"` of the key the coin derives under the stream, the registration and its
 receipt.
+
+`weightsSaltCheck` is `core_check.weights_salt`, the Pearl-C form of `saltCheck` (`PouwCheck.Rounds`): the session's
+root is the pass's weights' root, not a window's open root, and the session's log shows its salt coin, after that root,
+as the one coin it released (so it ends incomplete, the one form whose session does). `saltSession` is the session both
+read.
 
 Both read the coin versions of `coinVersion`: the current one, whose binding and weights' root are `tagged`'s whole
 SHA-512, and, only in a replay of a recorded pass, the e2e-service passes', which keep its first 32 bytes. A replay of a
@@ -31,7 +40,8 @@ namespace PouwCheck
 
 open Lean (Json)
 open PouwCommit (CoinOpening pyFromHex pyRepr tagged leafValue Domain)
-open SampledProofs.Challenger (LiveCommitment LiveOpening)
+open SampledProofs.Challenger (ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry? pinnedSession
+  sessionNamed)
 
 def MANIFEST_SCHEMA : String := "verity-vllm/pouw-pearl-c-run/v2"
 def MANIFEST_RECORDED : String := "verity-vllm/pouw-pearl-c-run/v1"
@@ -245,6 +255,100 @@ def certifiedSalt (m : Json) (reveal : ByteArray) (context : String) (committed 
     coin "the pass's salt is not the certifier's for its window, stream and prover"
   pure (salt, "certifier")
 
+/-- `core_check.NO_RESERVE`: a salt rule's refusal of a session opened without a reserve. -/
+def NO_RESERVE : String :=
+  "the auditor's ledger opens the window's session without reserving it: a window's open root binds the session a " ++
+    "signed reserve entry names"
+
+/-- `core_check.WEIGHTS_ROOT_FORM`, `WEIGHTS_NOT_RECEIVED` and `BEYOND_SALT`: the reasons of a `weights_salt` refusal. -/
+def WEIGHTS_ROOT_FORM : String := "the pass's weights' root is not a SHA-512 digest"
+def WEIGHTS_NOT_RECEIVED : String :=
+  "the challenger's log does not show the weights' root as the one root its salt coin followed"
+def BEYOND_SALT : String :=
+  "the challenger's log shows a coin released beyond the salt coin: a live Pearl-C pass's session releases its salt " ++
+    "coin alone"
+
+/-- `core_check._salt_session`: the session the salt rules read, the one the auditor's signed v2 ledger opens and ends
+closed for `window` under the pinned challenger key, run from a commit the host's pins log records on main's
+first-parent line (`pinnedSession`), from its files (`sessionNamed`), its signed commitment a live epoch's, reserved
+before it opened: that commitment, the roots its log shows received, and the ledger's reserve and open entries. -/
+def saltSession (key ledger pins main window session : Json) :
+    R (LiveCommitment × Roots × LedgerEntry × LedgerEntry) := do
+  let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
+  let (a, c, received) ← (pinnedSession ledger window k pins main >>= fun a =>
+      (a, ·) <$> sessionNamed a k session).mapError
+    fun e => ("coin", s!"the challenger's session is not trusted: {e}")
+  if let some why := PouwWindow.liveEpochReason c then coin why
+  let lines := (match ledger with | .arr ls => ls.toList | _ => [])
+  let named := (lines.filterMap ledgerEntry?).filter (·.session == a.session)
+  let (some reserve, some opened) := (named.find? (·.kind == "reserve"), named.find? (·.kind == "open"))
+    | throw ("salt", NO_RESERVE)
+  pure (c, received, reserve, opened)
+
+/-- `core_check.weights_salt`: `opening` is a live Pearl-C pass's salt coin, the session `saltSession` reads for
+`{root: weights}` showing the weights' root as the one root its salt coin followed and no other coin released, and the
+coin the epoch's `pouw/salt` coin 0 opened after it (`SampledProofs.Challenger.liveReason`): the commitment, the
+opening, the session's id and its open's seq, else the refusal (`coin` or `salt`). -/
+def weightsSaltCheck (key ledger pins main session weights opening : Json) :
+    R (LiveCommitment × LiveOpening × String × Nat) := do
+  let some w := (if (str? weights).any isHexDigest then hex? weights else none) | throw ("salt", WEIGHTS_ROOT_FORM)
+  let (c, received, reserve, opened) ← saltSession key ledger pins main (Json.mkObj [("root", weights)]) session
+  unless (received.lookup PouwWindow.SALT).getD [] == [w] do throw ("salt", WEIGHTS_NOT_RECEIVED)
+  if received.any fun (l, rs) => l != PouwWindow.SALT && !rs.isEmpty then throw ("salt", BEYOND_SALT)
+  let o ← (LiveOpening.ofJson opening).mapError fun e => ("coin", s!"the salt's {e}")
+  if let some why ← port (SampledProofs.Challenger.liveReason c o PouwWindow.SALT 0 w) then coin s!"the salt's {why}"
+  pure (c, o, reserve.session, opened.seq)
+
+/-- `core_check.LIVE_PASS_FORM`, `LIVE_NOT_SIGNED` and `LIVE_SESSION`: the reasons a live Pearl-C pass is refused. -/
+def LIVE_PASS_FORM : String :=
+  "a live pass's coins are the verifier's {key, ledger, main, pins, session}: the pinned challenger key, the " ++
+    "auditor's ledger, the host's pins log, main's first-parent history and the session's files"
+def LIVE_NOT_SIGNED : String := "the pass's coin commitment is not the one its session's challenger signed"
+def LIVE_SESSION : String :=
+  "the pass's session is not the gate's answer, without its secret, for the session the auditor's ledger opened on " ++
+    "its weights' root: its session, seq, root and commitment"
+
+/-- `core_check._carries`: `s`, the session a pass's manifest carries, is the gate's open answer for session `sid`,
+opened at ledger entry `seq` on `root` under commitment `c`, without its hello's `secret`. -/
+def carries (s : Json) (sid : String) (seq : Nat) (root : ByteArray) (c : LiveCommitment) : Bool :=
+  match s with
+  | .obj _ => (PouwWindow.field? s "secret").isNone && at? s "session" == .str sid &&
+      PouwWindow.intOf? (at? s "seq") == some (seq : Int) && at? s "root" == .str (Flock.hexOf root) &&
+      at? s "commitment" == .str (Flock.hexOf c.root)
+  | _ => false
+
+/-- `core_check._live_salt`: a live Pearl-C pass's salt, its verifier's `coins` the session its salt coin came from,
+which passes `weightsSaltCheck` on the pass's weights' root; the manifest's coins are that session's signed commitment
+and its session the gate's answer for it (`carries`). -/
+def livePassSalt (m coins : Json) (us : List Matmul) (roots : List (Nat × ByteArray)) : R (ByteArray × String) := do
+  unless SampledProofs.keys? coins == some #["key", "ledger", "main", "pins", "session"] do coin LIVE_PASS_FORM
+  checkWorkload us roots
+  let root := weightsRootAt 64 "verity/pouw/weights/v1" roots
+  let claimed ← (LiveCommitment.ofJson (at? m "coins")).mapError fun e => ("coin", s!"the pass's coins are malformed: {e}")
+  let g := SampledProofs.getD coins
+  let (c, o, sid, seq) ← (weightsSaltCheck (g "key") (g "ledger") (g "pins") (g "main") (g "session")
+      (.str (Flock.hexOf root)) (at? m "salt_opening")).mapError fun (code, e) => (if code == "error" then code else "coin", e)
+  unless claimed.toJson.compress == c.toJson.compress do coin LIVE_NOT_SIGNED
+  unless carries (at? m "session") sid seq root c do coin LIVE_SESSION
+  let k ← port (PouwCommit.key? o.coin PouwCommit.EPOCH_SALT_DOMAIN
+    [("epoch", .int c.epoch), ("coins", .bytes c.root), ("weights", .bytes root)])
+  pure (FlockSoundness.Randomness.stream k [.str "salt"] 32, "live coin")
+
+/-- `core_check._coin_salt`: a pass salted by epoch coins the verifier holds as a commitment (`coinsOf`), its salt coin
+opened against them after the weights' root. -/
+def coinPassSalt (m coins : Json) (recorded : Bool) (us : List Matmul) (roots : List (Nat × ByteArray)) :
+    R (ByteArray × String) := do
+  let c ← (coinsOf coins recorded).mapError fun e => ("coin", s!"the verifier's coins are malformed: {e}")
+  let (o, claimed) ← (do pure (← openingOf (at? m "salt_opening"), ← coinsOf (at? m "coins") recorded))
+    |>.mapError fun e => ("coin", s!"the pass's coins are malformed: {e}")
+  if !claimed.same c then coin "the pass's coin commitment is not the epoch's"
+  checkWorkload us roots
+  let root := weightsRootAt c.keep c.weightsTag roots
+  if let some why := (← port (coinReasonAt c o "salt" root)) then coin s!"the salt's {why}"
+  let k ← port (PouwCommit.key? o.coin PouwCommit.EPOCH_SALT_DOMAIN
+    [("epoch", .int c.epoch), ("coins", .bytes c.root), ("weights", .bytes root)])
+  pure (FlockSoundness.Randomness.stream k [.str "salt"] 32, "coin")
+
 /-- `_epoch_salt`: the pass's salt re-started from its manifest, and how it was had. -/
 def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteArray) (context : String)
     (committed stream prover : Option ByteArray) : R (ByteArray × String) := do
@@ -263,16 +367,8 @@ def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteA
       if (PouwWindow.field? m "salt_opening").isNone then coin "the pass has no salt coin"
       if coins == .null then
         coin "the pass's salt coin opens against the epoch's published coin commitment, which the verifier holds"
-      let c ← (coinsOf coins recorded).mapError fun e => ("coin", s!"the verifier's coins are malformed: {e}")
-      let (o, claimed) ← (do pure (← openingOf (at? m "salt_opening"), ← coinsOf (at? m "coins") recorded))
-        |>.mapError fun e => ("coin", s!"the pass's coins are malformed: {e}")
-      if !claimed.same c then coin "the pass's coin commitment is not the epoch's"
-      checkWorkload us roots
-      let root := weightsRootAt c.keep c.weightsTag roots
-      if let some why := (← port (coinReasonAt c o "salt" root)) then coin s!"the salt's {why}"
-      let k ← port (PouwCommit.key? o.coin PouwCommit.EPOCH_SALT_DOMAIN
-        [("epoch", .int c.epoch), ("coins", .bytes c.root), ("weights", .bytes root)])
-      pure (FlockSoundness.Randomness.stream k [.str "salt"] 32, "coin")
+      if (PouwWindow.field? coins "ledger").isSome then livePassSalt m coins us roots
+      else coinPassSalt m coins recorded us roots
     else if (PouwWindow.field? m "beacon").isSome then do
       let some beacon := (hex? (at? m "beacon")).filter (·.size > 0)
         | manifest "the recorded pass's beacon is not nonempty hex"
@@ -284,7 +380,8 @@ def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteA
   if at? m "salt" != .str (Flock.hexOf salt) then coin s!"the pass's salt is not its {how}'s and the weights'"
   pure (salt, how)
 
-/-- `core_check.pass_epoch`: how the pass's salt was had, or the refusal. A certified window's verifier holds `reveal`,
+/-- `core_check.pass_epoch`: how the pass's salt was had, or the refusal. A live Pearl-C pass's verifier holds its
+session as `coins` (`livePassSalt`). A certified window's verifier holds `reveal`,
 `committed`, what PoUW recorded with the certifier before it drew that salt, and the window's `stream` and `prover`. -/
 def passEpoch (coins : Json) (raw : Option ByteArray) (context : String) (recorded : Bool)
     (reveal committed stream prover : Option ByteArray) : R String := do

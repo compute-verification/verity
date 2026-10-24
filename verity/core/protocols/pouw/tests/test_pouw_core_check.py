@@ -35,12 +35,13 @@ sys.modules["pouw_check_cases"] = vectors
 _spec = importlib.util.spec_from_file_location("pouw_opening_cases", PKG / "tests/pouw_opening_cases.py")
 openings = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(openings)
-_spec = importlib.util.spec_from_file_location("pouw_pass_cases", PKG / "tests/pouw_pass_cases.py")
-passes = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(passes)
 _spec = importlib.util.spec_from_file_location("pouw_rounds_cases", PKG / "tests/pouw_rounds_cases.py")
 rounds_cases = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rounds_cases)
+sys.modules["pouw_rounds_cases"] = rounds_cases
+_spec = importlib.util.spec_from_file_location("pouw_pass_cases", PKG / "tests/pouw_pass_cases.py")
+passes = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(passes)
 
 #: the refusal each mutation aims at: the reason's start
 EXPECT = {
@@ -408,7 +409,8 @@ def test_canonical_json_is_leans():
 #: the refusal each pass mutation aims at: (code, the reason's start), or the honest pass's ``how`` (a reading both sides
 #: share)
 PASS_EXPECT = {
-    "honest": {"coin", "recorded beacon", "certifier"}, "spaced-hex": {"coin", "recorded beacon", "certifier"},
+    "honest": {"coin", "recorded beacon", "certifier", "live coin"},
+    "spaced-hex": {"coin", "recorded beacon", "certifier", "live coin"},
     "no-pass": ("coin", "the window names no pass"), "not-utf8": ("manifest", "the pass's manifest is not a JSON object"),
     "not-json": ("manifest", "the pass's manifest is not a JSON object"),
     "not-object": ("manifest", "the pass's manifest is not a JSON object"),
@@ -451,6 +453,14 @@ PASS_EXPECT = {
     "stream-other": ("coin", "the pass's weights, stream and prover are not those the certifier recorded"),
     "prover-other": ("coin", "the pass's weights, stream and prover are not those the certifier recorded"),
     "salted-apart": ("coin", "the pass's salt is not the certifier's for its window, stream and prover"),
+    "live-form": ("coin", CC.LIVE_PASS_FORM),
+    "live-in-process": ("coin", "the pass's coins are malformed: a live coin commitment is"),
+    "live-own-challenger": ("coin", "the salt's coin does not open against the epoch's coin commitment"),
+    "live-forged": ("coin", "the salt's coin "), "live-not-signed": ("coin", CC.LIVE_NOT_SIGNED),
+    "live-session": ("coin", CC.LIVE_SESSION),
+    "live-other-root": ("coin", "the challenger's session is not trusted: the auditor's ledger opens no challenger "
+                                "session for this window"),
+    "live-beyond": ("coin", CC.BEYOND_SALT),
 }
 
 DRAW_EXPECT = {
@@ -499,9 +509,10 @@ def test_every_pass_mutation_hits_its_refusal():
 
 def test_each_honest_pass_is_had_as_it_was_salted():
     """Each kind of honest pass is accepted, and says how its salt was had: by the epoch's coins (either version), a
-    recorded replay's beacon, or the network certifier's reveal over the weights, stream and prover it recorded before
-    it."""
-    want = {"coin": "coin", "recorded-coin": "coin", "beacon": "recorded beacon", "certified": "certifier"}
+    recorded replay's beacon, the network certifier's reveal over the weights, stream and prover it recorded before
+    it, or a live Pearl-C pass's session of the auditor's challenger, opened on its weights' root."""
+    want = {"coin": "coin", "recorded-coin": "coin", "beacon": "recorded beacon", "certified": "certifier",
+            "live": "live coin"}
     for kind, how in want.items():
         for seed in range(6):
             case = passes.pass_instance(random.Random(f"{kind}/{seed}"), kind=kind)
@@ -679,6 +690,51 @@ def test_every_salt_mutation_hits_its_refusal():
             got = CC.salt(*rounds_cases.salt_args(rounds_cases.salt_instance(random.Random(f"{name}/{seed}"), name)))
             assert (got is None) if want is None else (got is not None and got[0] == want[0] and want[1] in got[1]), \
                 (name, seed, got)
+
+
+WEIGHTS_SALT_EXPECT = {
+    **{k: v for k, v in SALT_EXPECT.items() if k in rounds_cases.WEIGHTS_SALT_NAMES or k == "honest"},
+    "weights-form": ("salt", CC.WEIGHTS_ROOT_FORM),
+    "other-root": ("coin", "not trusted: the auditor's ledger opens no challenger session for this window"),
+    "received": ("salt", CC.WEIGHTS_NOT_RECEIVED), "beyond-salt": ("salt", CC.BEYOND_SALT),
+}
+
+
+def test_every_weights_salt_mutation_hits_its_refusal():
+    """`core_check.weights_salt` accepts a live Pearl-C pass's salt coin, read through the challenger's signed session the
+    auditor's signed ledger reserves, opens on the pass's weights' root and ends incomplete, its salt coin the one coin
+    released, and refuses each mutation with the refusal it aims at: the session's (as `salt`'s), a session opened on
+    another root (H1's window-open root among them), a log showing another root or none, a coin released beyond the
+    salt coin, and a coin that isn't the epoch's salt coin opened after the weights' root."""
+    assert set(WEIGHTS_SALT_EXPECT) == set(rounds_cases.WEIGHTS_SALT_NAMES) | {"honest"}
+    for name, want in WEIGHTS_SALT_EXPECT.items():
+        for seed in range(6):
+            d = rounds_cases.weights_salt_instance(random.Random(f"{name}/{seed}"), name)
+            got = CC.weights_salt(*rounds_cases.weights_salt_args(d))
+            assert (got is None) if want is None else (got is not None and got[0] == want[0] and want[1] in got[1]), \
+                (name, seed, got)
+
+
+def _live_pass(seed: str, name: str = "honest") -> tuple[str | None, tuple[str, str] | None]:
+    return CC.pass_epoch(*passes.pass_args(passes.pass_instance(random.Random(seed), name, kind="live")))
+
+
+def test_a_live_pearl_c_pass_is_credited_only_from_its_salt_only_session():
+    """CMP-81. An honest live Pearl-C manifest is accepted: its salt coin came from the session the auditor's ledger
+    opened on its weights' root, which released that coin alone and ended incomplete. Refused: the session opened on
+    another root (a random one, or H1's window-open root), a session that released a coin beyond the salt, a forged
+    opening, and an in-process coin (seeded coins the prover ran) presented as live."""
+    for seed in range(4):
+        assert _live_pass(f"live/{seed}") == ("live coin", None)
+        h = passes.honest_pass(random.Random(f"live end/{seed}"), "live")
+        ended = [json.loads(e) for e in h["case"]["coins"]["ledger"] if json.loads(e)["kind"] == "end"]
+        assert any(e["body"]["complete"] is False and e["session"] == h["man"]["session"]["session"] for e in ended)
+        assert _live_pass(f"other/{seed}", "live-other-root")[1][1].endswith(
+            "the auditor's ledger opens no challenger session for this window")
+        assert _live_pass(f"beyond/{seed}", "live-beyond") == (None, ("coin", CC.BEYOND_SALT))
+        assert _live_pass(f"forged/{seed}", "live-forged")[1][1].startswith("the salt's coin ")
+        assert _live_pass(f"in-process/{seed}", "live-in-process")[1][1].startswith(
+            "the pass's coins are malformed: a live coin commitment is")
 
 
 def test_one_session_salts_one_window():

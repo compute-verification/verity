@@ -213,10 +213,11 @@ def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: boo
                                                 "key_sha512": hashlib.sha512(s.pub).hexdigest(), **(period or {})}))
         if rng.random() < 0.5:
             roots = {sid: b["window"]["root"] for kind, sid, b in events if kind == "open"}
-            windows = [{"root": roots[sid], "session": sid, "complete": True}
+            ended = {sid: b.get("complete") is True for kind, sid, b in events if kind == "end"}
+            windows = [{"root": roots[sid], "session": sid, "complete": ended[sid]}
                        for kind, sid, b in events if kind == ("reserve" if reserved else "open")]
             events.append(("period-close", None, {"period": name, "lane": LANE, "by": LANE, "windows": windows,
-                                                  "complete": True}))
+                                                  "complete": all(w["complete"] for w in windows)}))
     return _bind(events)
 
 
@@ -459,10 +460,10 @@ def honest_salt(rng: random.Random) -> tuple[dict, Session]:
 
 
 def salt_ledger(rng: random.Random, window: dict, s: Session, reserved: bool = True, k: int = 0,
-                opened: dict | None = None) -> list[str]:
-    """The auditor's ledger opening session `s` for `window` (its open's body changed by `opened`), every session
-    reserved first unless not `reserved`, signed under key `k`."""
-    events = ledger_events(rng, window, s, reserved=reserved, opened=opened)
+                opened: dict | None = None, **end) -> list[str]:
+    """The auditor's ledger opening session `s` for `window` (its open's body changed by `opened`, its end's by `end`),
+    every session reserved first unless not `reserved`, signed under key `k`."""
+    events = ledger_events(rng, window, s, reserved=reserved, opened=opened, **end)
     return ledger_lines(events, _key(k), leaves_of(events, s.sid))
 
 
@@ -570,3 +571,142 @@ def salt_args(d: dict) -> tuple:
     """`core_check.salt`'s arguments for case `d`, the challenger's signatures checked with `lms_verify`."""
     return (d["key"], d["ledger"], d["pins"], d["main"], d["window"], d["session"], d["weights"], d["requests"],
             d["opening"], lms_verify)
+
+
+def weights_session(rng: random.Random, ch: Ch.LiveChallenger, sid: str, salt: bytes | None, beyond: bool = False
+                    ) -> Session:
+    """A live Pearl-C pass's session `sid` over `ch`'s coins, signed under key 0: its salt coin opened after root `salt`
+    (none when None) and nothing else, or, when `beyond`, some round coins or its draw coin too."""
+    rounds = ch.commitment.family(Wd.ROUND)
+    if not beyond:
+        return Session(rng, ch, [], salt=salt, sid=sid)
+    k, draw = rng.choice([(rng.randint(1, rounds), None), (0, lambda _: rng.randbytes(64)),
+                          (rng.randint(1, rounds), lambda _: rng.randbytes(64))])
+    return Session(rng, ch, [rng.randbytes(64) for _ in range(k)], salt=salt, sid=sid, draw=draw)
+
+
+def weights_end(s: Session) -> dict:
+    """The end the auditor's gate writes for a live Pearl-C pass's session `s`: its coins released per family, and
+    incomplete unless it released every coin (`challenger_host`'s)."""
+    c = s.ch.commitment
+    try:
+        released = {label: len(roots) for label, roots in Ch.released_roots_of(c, s.lines).items()}
+    except Ch.CoinError:
+        return {"released": None, "complete": False}
+    return {"released": released, "complete": all(released[k] == n for k, n in c.families)}
+
+
+def honest_weights_salt(rng: random.Random) -> tuple[dict, Session]:
+    """A live Pearl-C pass's salt coin, read through its challenger's session: the session S the auditor's gate reserved
+    and opened on the pass's weights' root W, which released its salt coin alone, after W (so it ends incomplete); the
+    case holds the key, the session's files, W and the salt coin (the auditor's ledger is `with_weights_ledger`'s, once
+    the case is mutated)."""
+    ch = Wd.live_challenger(rng.randrange(4), rng.choice([1, 2, 4]), rng.randbytes)
+    w, sid = rng.randbytes(64), session_id(rng)
+    s = weights_session(rng, ch, sid, w)
+    return {"key": s.key(), "pins": list(PINS), "main": list(MAIN), "session": s.files(), "weights": w.hex(),
+            "opening": s.salt[0].to_json()}, s
+
+
+def weights_ledger(rng: random.Random, root: str, s: Session, reserved: bool = True, k: int = 0,
+                   opened: dict | None = None) -> list[str]:
+    """The auditor's ledger opening session `s` on `root` (hex) as `salt_ledger` does, its end `weights_end`'s."""
+    return salt_ledger(rng, {"root": root}, s, reserved, k, opened, **weights_end(s))
+
+
+def with_weights_ledger(d: dict, s: Session, rng: random.Random) -> dict:
+    """Case `d` with the auditor's ledger reserving and opening session `s` on its weights' root, unless its mutation
+    wrote its own."""
+    if "ledger" not in d:
+        d["ledger"] = weights_ledger(rng, d["weights"], s)
+    return {k: d[k] for k in ("key", "ledger", "pins", "main", "session", "weights", "opening")}
+
+
+def _mutate_weights_salt(d: dict, s: Session, name: str, rng: random.Random) -> Session:
+    """Mutation `name` of weights-salt case `d` over session `s`, and the session the auditor's ledger opens."""
+    if pin_mutation(d, name, rng, lambda opened: weights_ledger(rng, d["weights"], s, opened=opened)):
+        return s
+    c, op, files, w = s.ch.commitment, d["opening"], d["session"], bytes.fromhex(d["weights"])
+    match name:
+        case "key-form":
+            d["key"] = rng.choice([None, {**d["key"], "public": "00"}, {**d["key"], "W": 3}, {**d["key"], "H": 0}])
+        case "no-ledger":
+            d["ledger"] = None
+        case "forged-ledger":
+            d["ledger"] = weights_ledger(rng, d["weights"], s, k=1)
+        case "in-process":
+            other = Session(rng, Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes), [], salt=w, seed=1,
+                            sid=s.sid)
+            d["session"], d["opening"], s.sealed, s.ch = other.files(), other.salt[0].to_json(), other.lines, other.ch
+        case "unsealed":
+            s.sealed = s.lines + s.lines[-1:]
+        case "other-session":
+            files["close"] = s.signed(sid=session_id(rng))
+        case "not-live":
+            scheme, layout = rng.choice([("verity/vllm/commit-coins/v1", Wd.live_families(1)),
+                                         (Wd.LIVE_SCHEME, ((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 1)))])
+            other = Session(rng, Ch.LiveChallenger(scheme, c.epoch, layout, rng.randbytes), [], salt=None, sid=s.sid)
+            d["session"], s.sealed, s.ch = other.files(), other.lines, other.ch
+        case "no-reserve":
+            d["ledger"] = weights_ledger(rng, d["weights"], s, reserved=False)
+        case "weights-form":
+            d["weights"] = rng.choice([None, d["weights"].upper(), d["weights"][:-2], 5, [d["weights"]]])
+        case "other-root":
+            # the session opened on another root than the pass's weights' (H1's window-open root among them), its salt
+            # coin after that root
+            r = rng.choice([rng.randbytes(64), PS.window_open_root(w, rng.randbytes(64), s.sid)])
+            other = weights_session(rng, Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes), s.sid, r)
+            d.update(session=other.files(), opening=other.salt[0].to_json(),
+                     ledger=weights_ledger(rng, r.hex(), other))
+            return other
+        case "received":
+            other = weights_session(rng, Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes), s.sid,
+                                    rng.choice([None, rng.randbytes(64)]))
+            d["session"] = other.files()
+            if other.salt:
+                d["opening"] = other.salt[0].to_json()
+            return other
+        case "beyond-salt":
+            other = weights_session(rng, Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes), s.sid, w,
+                                    beyond=True)
+            d.update(session=other.files(), opening=other.salt[0].to_json())
+            return other
+        case "opening-form":
+            k = rng.choice(["coin", "path", "label", "index", "epoch", "after"])
+            bad = {"coin": ["zz", None], "path": [None, 4, [rng.randbytes(33).hex()]], "label": [5, None],
+                   "index": ["0", None, True, 1.5], "epoch": [str(c.epoch), None], "after": ["zz", 3]}[k]
+            d["opening"] = rng.choice([{**op, k: rng.choice(bad)}, None, [op]])
+        case "after":
+            d["opening"] = {**op, "after": _flip(op["after"])}
+        case "label":
+            d["opening"] = s.ch.open(Wd.DRAW, 0, w).to_json()
+        case "foreign":
+            d["opening"] = _salted(rng, c, s.sid, w).salt[0].to_json()
+        case "foreign-epoch":
+            d["opening"] = _salted(rng, c, s.sid, w, epoch=c.epoch + 1).salt[0].to_json()
+        case "tampered":
+            k = rng.choice(["salt", "coin"])
+            d["opening"] = {**op, k: _flip(op[k])}
+        case "malformed":
+            d["opening"] = {**op, "coin": op["coin"][:-2]}
+        case _:
+            raise ValueError(name)
+    return s
+
+
+WEIGHTS_SALT_NAMES = ["key-form", "no-ledger", "forged-ledger", "in-process", "unsealed", "other-session", "not-live",
+                      "no-reserve", "weights-form", "other-root", "received", "beyond-salt", "opening-form", "after",
+                      "label", "foreign", "foreign-epoch", "tampered", "malformed", *PIN_NAMES]
+
+
+def weights_salt_instance(rng: random.Random, name: str = "honest") -> dict:
+    """One `weights_salt` case: a live Pearl-C pass's salt coin, then mutation `name`."""
+    d, s = honest_weights_salt(rng)
+    if name != "honest":
+        s = _mutate_weights_salt(d, s, name, rng)
+    return with_weights_ledger(d, s, rng)
+
+
+def weights_salt_args(d: dict) -> tuple:
+    """`core_check.weights_salt`'s arguments for case `d`, the challenger's signatures checked with `lms_verify`."""
+    return d["key"], d["ledger"], d["pins"], d["main"], d["session"], d["weights"], d["opening"], lms_verify
