@@ -130,7 +130,7 @@ class GraphCalls:
     @staticmethod
     def _kept(sh: Any, pipe: Any) -> tuple[Any, Any]:
         """What a retained call keeps of its shape's buffers once its steps ran: A's words (m₁₆ rows) and A's tree."""
-        return sh.xa[:sh.m16], sh.b["tree_a"][:pipe.size["tree_a"]]
+        return sh.xa[:sh.m16], sh.buf("tree_a")[:pipe.size["tree_a"]]
 
     def _retained(self, cur: Any, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any) -> None:
         """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree)."""

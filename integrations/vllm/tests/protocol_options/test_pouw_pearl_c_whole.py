@@ -378,6 +378,7 @@ def test_a_retained_kinds_capture_copies_each_calls_a_words_and_tree_to_the_stag
     for name in ("_into", "_replay", "_slot"):
         monkeypatch.setattr(run, name, lambda *a: ("y", True))
     sh = SimpleNamespace(m16=32, k=8, n=16, xa=torch.zeros(48, 8), b={"tree_a": torch.zeros(100, dtype=torch.uint8)})
+    sh.buf = sh.b.__getitem__
     pipe = SimpleNamespace(size={"tree_a": 64})
     run.whole_capture_begin(run.whole_key(True))
     run._graph_call(7, sh, pipe, 0, 4, 32, 0, None)          # vLLM's warm-up, outside the capture
@@ -409,6 +410,7 @@ def test_an_enabled_statement_is_in_the_key_stages_each_captured_call_and_commit
     name = run.schedule.name
     assert run.whole_key() == (True, frozenset(), name, False, False, "statement")
     sh = SimpleNamespace(m16=32, k=8, n=16, xa=torch.zeros(48, 8), b={"tree_a": torch.zeros(100, dtype=torch.uint8)})
+    sh.buf = sh.b.__getitem__
     run.whole_capture_begin(run.whole_key())
     run._graph_call(7, sh, "pipe", 0, 4, 32, 0, None)          # vLLM's warm-up, outside the capture
     capturing[0] = True
