@@ -7,18 +7,21 @@ makes it and ``ok``) keeps the Program small; `benchmarks/pouw/tests/test_h1_pro
 from __future__ import annotations
 
 import cProfile
+import hashlib
 import pstats
 import random
 
 import pytest
 
 from verity.ml.circuits import ports as PT
+from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.ports import In, Out, Ports
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, coll_concat
 from verity.ml.circuits.types import Array, Record, Value
 
+from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw.circuit import h1window as HW
@@ -265,22 +268,109 @@ def test_a_calls_statement_opens_its_units_rows_at_its_tables_and_at_no_other_ca
         tabs[zy] = commit(zy, n, 3 * R * C)
         file = HW.table_reads_file(prog, tp, c, {v: r.root.hex() for v, r in tabs.items()}, ports=HW.window_ports(prog),
                                    steps=2)
-        assert file["format"] == G.READS and sorted(file["ports"]) == sorted(
+        assert file["format"] == G.READS_V1 and sorted(file["ports"]) == sorted(
             [f"a_k32_{i}" for i in range(R)] + [f"b_k32_{j}" for j in range(C)] + ["zy"])
         for port, e in file["ports"].items():
             reg, dom = tabs[e["value"]], G.domain(digest, e["value"], e["words"], e["leaves"])
             assert (e["leaves"], e["words"], e["domain"], e["row_schema"]) == (reg.leaves, reg.words,
                                                                                  dom.domain_id.hex(), G.SCHEMA_V2), port
-            assert all(r is None for u, r in enumerate(e["reads"]) if not u0 <= u < u0 + n), port
-            assert len(e["reads"]) == u0 + n < tp.population, "no trailing nulls: a unit past reads reads none"
+            assert e[G.READS_FROM] == u0 and len(e["reads"]) == n and None not in e["reads"], port
+            assert u0 + n < tp.population, "a unit past reads reads none"
             for u in range(u0, u0 + n):
-                p = e["reads"][u]
+                p = CC.port_reads(e)[u]
                 assert G.verify_read(dom, reg.root, p, reg.bcs[p], reg.path(p), G.SCHEMA_V2), (port, u)
                 if e["value"] == a:
                     assert m * j <= p < m * (j + 1), (port, u)
                     assert not G.verify_read(dom, reg.root, p, twin.bcs[p], twin.path(p), G.SCHEMA_V2), (port, u)
     with pytest.raises(ValueError, match="roots the verifier does not hold"):
         HW.table_reads_file(prog, tp, 3, {"b/32": "00" * 64}, steps=2)
+
+
+def _roots(prog, steps: int) -> dict[str, str]:
+    """A root for every table and weight any call of the window reads, each its name's SHA-512."""
+    names = {HW.table(prog, kind, c, *([steps] if kind == "a" else [])) for c in range(len(HW.call_units(prog)))
+             for kind in ("a", "zy", HW.RECEIPTS)}
+    names |= {f"{prog.fn.S().PREFIX}b/{k}" for k in dict(prog.fn.bindings["TILES"])}
+    return {v: hashlib.sha512(v.encode()).hexdigest() for v in names}
+
+
+def _v0_reads(prog, tp, call: int, steps: int, file: dict) -> dict[str, list[int | None]]:
+    """Each port of call ``call``'s file as a v0 file held its reads, from unit 0, written out from the window's own
+    reads (`table_reads` under `window_ports`) and the verifier's rows: unit u0 + t reads row t of the call's receipt
+    and public tables and row u0 + t of the window's ok rows; a unit of another call reads none, and the list ends at
+    the call's last unit."""
+    u0, n = HW.call_units(prog)[call]
+    key_of = {port: key for key, port in HW.window_ports(prog).items()} | {"zy": "zy"}
+    out = {}
+    for port, e in file["ports"].items():
+        rows: list[int | None] = [None] * (u0 + n)
+        for t in range(n):
+            if port in (HW.RECEIPT_PORT, HW.PUB_PORT):
+                rows[u0 + t] = t
+            elif port == HW.OK_PORT:
+                rows[u0 + t] = u0 + t
+            else:
+                value, rows[u0 + t] = HW.table_reads(prog, tp, u0 + t, steps)[key_of[port]]
+                assert value == e["value"], (port, u0 + t)
+        out[port] = rows
+    return out
+
+
+def _v1_files(prog, tp, steps: int, window: str, salt: str) -> list[dict]:
+    """Each call's ``--registered`` file of the window, every port present (its tables, weights, receipts, public rows
+    and ok rows), held to its v0 reads: each port's reads start at the call's first unit and are as long as the call,
+    and the reads from unit 0 they give (`core_check.port_reads`, Flock's `Registered.Port.reads`) are the v0 file's,
+    so every unit, in the call or not, reads the same row (or none) in either."""
+    roots, files = _roots(prog, steps), []
+    for c, (u0, n) in enumerate(HW.call_units(prog)):
+        file = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), window=window, steps=steps, salt=salt)
+        assert file["format"] == G.READS_V1 and {HW.RECEIPT_PORT, HW.PUB_PORT, HW.OK_PORT, "zy"} <= set(file["ports"])
+        v0 = _v0_reads(prog, tp, c, steps, file)
+        for port, e in file["ports"].items():
+            assert (e[G.READS_FROM], len(e["reads"])) == (u0, n), port
+            assert CC.port_reads(e) == v0[port], port
+        files.append(file)
+    return files
+
+
+def test_a_calls_v1_file_reads_what_its_v0_file_did_at_every_step_count():
+    """Registered reads v1 (`registered.READS_V1`, ``reads_from``): over a mixed-K window whose steps each hold several
+    calls of one K (each step's A table of K holds each of them, call after call), at every step count that divides
+    the calls, each call's file gives every unit of the window the read the v0 file gave it, at every port, from a
+    file as long as the call."""
+    m = HW.slot(5, TILE)
+    prog = HW.program(LINEARS, CALLS, m, TILE, prefix="h1/w/", unit=unit)
+    tp = P.evaluate(prog, HW.query(prog))
+    assert sorted(HW.step_of(prog, c, 2)[1] for c in range(len(CALLS))) == [1, 1, 2, 2, 2, 2]
+    for steps in (1, 2, 3, 6):
+        _v1_files(prog, tp, steps, "ab" * 64, "cd" * 64)
+
+
+@pytest.fixture(scope="module")
+def window_448():
+    """The real 32 × 32 window at K = 448 (`tile_unit`): two linears of K = 448 over two steps, so each step's A table
+    of K = 448 holds two calls' blocks."""
+    prog = HW.program((("q_proj", 448, 64), ("k_proj", 448, 32)),
+                      tuple((lin, s) for s in range(2) for lin in ("q_proj", "k_proj")), 32, (32, 32), prefix="h1/w/")
+    return prog, P.evaluate(prog, HW.query(prog))
+
+
+@pytest.mark.slow
+def test_the_real_32_by_32_window_at_k_448_reads_in_v1_what_it_read_in_v0_and_credit_builds_the_same_files(window_448):
+    """On the real tile at K = 448, 32 × 32, over two steps of two calls of K each: each call's v1 file reads what its
+    v0 file did at every unit and port (`_v1_files`), and is the one `credit.registered_file` builds from the
+    descriptor alone, which the Lean `Credit.registeredFile` is held to (the pouw-check difftest). Building the real
+    tile's Program takes about 40 s, which no stand-in tile can show: its receipt width and row words are K = 448's."""
+    prog, tp = window_448
+    window, salt = "ab" * 64, "cd" * 64
+    assert HW.call_units(prog) == [(0, 2), (2, 1), (3, 2), (5, 1)]
+    files = _v1_files(prog, tp, 2, window, salt)
+    raw = canonical_json({k: v for k, v in encode_program(prog).items() if k != "annotations"})
+    (lay, why), program, shape = Cr.layout_of(raw), hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
+    assert why is None and program == P.program_digest(prog)
+    roots = {v: [r] for v, r in _roots(prog, 2).items()}
+    for c, file in enumerate(files):
+        assert Cr.registered_file(program, lay, shape, c, roots, window, 2, salt) == (file, None), c
 
 
 def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
@@ -328,7 +418,7 @@ def test_a_calls_receipt_table_is_its_statements_output_row_o0_when_registered()
     assert (e["value"], e["leaves"], e["words"], e["root"], e["domain"]) == (
         rc, n, words, reg.root.hex(), reg.domain.domain_id.hex())
     assert e["domain"] == Cr.domain_of(digest, w, e)
-    assert e["reads"] == [u - u0 if u0 <= u < u0 + n else None for u in range(u0 + n)] and u0 + n < tp.population
+    assert (e[G.READS_FROM], e["reads"]) == (u0, list(range(n))) and u0 + n < tp.population
     assert all(G.verify_read(reg.domain, reg.root, t, reg.bcs[t], reg.path(t), G.SCHEMA_V2) for t in range(n))
 
     odd_tile = _test_tile("H1WindowTestOddReceiptTile", sig=lambda S: _tile_sig(S)[:1] + (
@@ -424,7 +514,7 @@ def test_under_a_windows_open_root_a_calls_file_opens_the_tables_committed_in_th
         assert {k: v for k, v in e.items() if k != "domain"} == {k: v for k, v in bare[port].items() if k != "domain"}
         assert bare[port]["domain"] == G.domain(digest, e["value"], e["words"], e["leaves"]).domain_id.hex(), port
         for u in range(u0, u0 + n):
-            p = e["reads"][u]
+            p = CC.port_reads(e)[u]
             assert G.verify_read(reg.domain, reg.root, p, reg.bcs[p], reg.path(p), G.SCHEMA_V2), (port, u)
             if e["value"] == a:
                 assert not G.verify_read(reg.domain, twin.root, p, twin.bcs[p], twin.path(p), G.SCHEMA_V2), (port, u)

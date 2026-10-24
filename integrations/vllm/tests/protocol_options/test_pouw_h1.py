@@ -162,10 +162,39 @@ def test_a_call_past_the_window_or_its_rows_is_refused_and_the_window_is_not_sta
     assert run.record(0, *_tap(rng, 1, 32)) is None
     run.close()
     assert run.refused == [{"step": 0, "linear": 0, "m": 33}, {"step": 1, "linear": 0, "m": 1}] and not run.static()
-    out_of_order = _run(steps=1)
-    out_of_order.record(1, *_tap(rng, 1, 40))
-    out_of_order.close()
-    assert not out_of_order.order_ok and not out_of_order.static()
+    partial = _run(steps=1)
+    partial.record(1, *_tap(rng, 1, 40))
+    partial.close()
+    assert partial.order_ok and not partial.details["last_step_complete"] and not partial.static()
+
+
+def test_a_forward_out_of_module_order_sits_each_call_at_its_step_and_linear():
+    """GLM-5.3's DSA attention runs fused_qkv_a_proj and q_b_proj before its indexer's wq_b, which module order puts
+    first; counting steps at linear 0 put each forward's first two calls in the step before (step -1, refused, for the
+    first) and past their round's root (r20261023-224227-ea5a). A step starts at the window's first call and at a linear
+    the step already holds: each call sits at (s, w)'s index and position, and round s closes once all of step s's calls
+    are in. A step whose order departs from the first step's isn't static."""
+    rng = np.random.default_rng(5)
+    shapes, forward = [(32, K), (40, K), (32, K)], (1, 2, 0)
+
+    def run_of(orders):
+        run = PH.H1Run("t", SALT, {0: "wq_b", 1: "qkv_a", 2: "q_b"}, shapes, 32, 3)
+        closed = []
+        for m, order in zip((3, 2), orders):
+            for w in order:
+                assert run.record(w, *_tap(rng, m, shapes[w][0])) is not None
+                closed.append(len(run.round_log))
+        run.close()
+        return run, closed
+
+    run, closed = run_of([forward, forward])
+    assert closed == [0, 0, 1, 1, 1, 2] and run.refused == [] and run.order_ok and run.static()
+    assert [(c.index, c.step, c.layer, c.base) for c in run.calls] == [
+        (3 * s + w, s, w, s * run.u_step + run.offs[w]) for s in range(3) for w in range(3)]
+    assert run.step_rows() == [3, 2, 0] and run.details["last_step_complete"]
+    assert run.call(4).module == "qkv_a" and run.call(4).step == 1
+    swapped, _ = run_of([forward, (2, 1, 0)])
+    assert not swapped.order_ok and not swapped.static()
 
 
 def test_credit_is_the_served_rows_and_the_padding_is_shown_beside_it():
