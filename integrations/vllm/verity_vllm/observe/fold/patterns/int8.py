@@ -240,7 +240,7 @@ class Int8AttentionScope:
             kq, vq, sv, v0 = (_slab(o, r) for o in kouts)
             rows = ctx.start.rows[q0:q0 + n]
             if len(rows) != n or len({r for r, _ in rows}) != 1 or [int(p) for _, p in rows] != list(range(s - n, s)):
-                return unsupported(node, "window_rows' rows are not one request's last rows of its window", q0=q0, n=n, s=s, rows=list(rows))
+                return unsupported(node, "window_rows_batch's rows are not one request's last rows of its window", q0=q0, n=n, s=s, rows=list(rows))
             req = rows[0][0]
             try:
                 kcs, vcs = as_slot_rows(kc), as_slot_rows(vc)
@@ -281,7 +281,7 @@ def _credited_window(scope: TreeNode, cws: list[TreeNode]) -> tuple[ViewDesc, Vi
     """The (key cache, value cache, K window, V window) of the scope's one credited_window: its kv_cache [pages, G, slots, 2D]
     as FlashAttention's [pages, slots, G, D] key and value views, and its K and V [rows, G, D]."""
     if len(cws) != 1:
-        return unsupported(scope, "kv_quant_window without exactly one credited_window in the scope", credited_window=len(cws))
+        return unsupported(scope, "kv_quant_window_batch without exactly one credited_window in the scope", credited_window=len(cws))
     a = bound_args(cws[0])
     kv, k, v = a.get("kv_cache"), a.get("k"), a.get("v")
     if not all(isinstance(x, ViewDesc) for x in (kv, k, v)) or kv.rank != 4 or kv.shape[3] % 2 or k.rank != 3 or k.shape != v.shape:
