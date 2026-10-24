@@ -34,8 +34,8 @@ adversary's finders, `⊤` where they fail it, capped at 1 a value of its coins 
 `breakBound`, all in `Definitions`, so other areas read the same break term). The bound reads each finder at a budget
 of SHA-512 calls computed from the adversary's time, `c · time M + d` at stated constants per path, never at the
 finder's declared cost, so no choice of finder lowers it. The constant forms stay, superseded,
-because the floors of `Models.Pouw.Guarantees.RelativeSecurity` are proved from them; the floors per prover are stated
-beside them and not yet proved (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).
+because the floors of `Models.Pouw.Guarantees.RelativeSecurity` are proved from them; the floors per prover beside
+them are proved from these (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).
 
 **At call scope under J10-R** (RT-ALGO-17, card bbf40543). J10-R draws H1's noise once a call, so a call's rows and
 columns share their coins across the whole call, and a segment's coin × coin part is one `⟨M, 32, N⟩` product

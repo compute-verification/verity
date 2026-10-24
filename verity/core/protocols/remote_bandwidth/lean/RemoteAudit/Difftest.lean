@@ -14,7 +14,8 @@ with its codec seed, the verifier's registry (`registry`: registrations, session
 closes, and `registry/v0` both ways), and `store.py`'s binding (`RemoteAudit.Store`: a pin from its file's bytes,
 canonical JSON, `checkpoint_sha512`, a payload salt, the expected root, `Binding.hold`, and `binding`, the binding as
 the verifier's process starts it and holds each hello to it, its `bind` and `hold` requests), `line.py`'s memory
-line (`line`, `RemoteAudit.Line`: rationals as strings `n` or `n/d`) and `pooled.py`'s pooled bound, which the line
+line (`line` of groups and windows given, `line_record` read off an accepted session's record, `RemoteAudit.Line`:
+rationals as strings `n` or `n/d`) and `pooled.py`'s pooled bound, which the line
 reads (`pooled`, `RemoteAudit.Pooled`), whose refusals are outputs (`{"refused": why}`),
 so their reasons are compared. `remote-audit-difftest` serves them.
 -/
@@ -488,12 +489,9 @@ def pooledFn (j : Json) : V Json := do
   pure (refusedOr ((fun (b : Pooled.Bound) => Json.mkObj [("budget", ratJ b.budget), ("floor", ratJ b.floor),
     ("floors", .arr (b.floors.map ratJ)), ("wrong", ratJ b.wrong)]) <$> got))
 
-/-- `line.run_json`: the line of `{"groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows",
-"delta", "rates"}` in both forms with the wrong receipts it read, or why it has none. -/
-def lineFn (j : Json) : V Json := do
-  let groups ← (← J.arr j "groups" "input").mapM groupOf
+private def ratesOf (j : Json) : V Line.Rates := do
   let r ← J.get j "rates" "input"
-  let rates : Line.Rates :=
+  pure
     { squaringsPerS := ← ratIn r "squarings_per_s" "rates"
       encodeSquarings := ← J.nat r "encode_squarings" "rates"
       diskBytesPerS := ← ratIn r "disk_bytes_per_s" "rates"
@@ -501,10 +499,57 @@ def lineFn (j : Json) : V Json := do
       rebuildBurstBytes := ← ratIn r "rebuild_burst_bytes" "rates"
       diskBurstBytes := ← ratIn r "disk_burst_bytes" "rates"
       linkBurstBytes := ← ratIn r "link_burst_bytes" "rates" }
-  let got := Line.line groups (← nat j "per") (← nat j "blocks") (← nat j "block_bytes") (← nat j "chip_bytes")
-    (← nat j "node_bytes") (← windowsOf j) (← ratIn j "delta" "input") rates
-  pure (refusedOr ((fun (l : Line.Line) => Json.mkObj ((l.forms.toList.map fun (f : Line.Form) =>
-    (f.name, formJ l.nodeBytes f)) ++ [("wrong", ratJ l.wrong)])) <$> got))
+
+private def lineJ (got : Except String Line.Line) : Json :=
+  refusedOr ((fun (l : Line.Line) => Json.mkObj ((l.forms.toList.map fun (f : Line.Form) =>
+    (f.name, formJ l.nodeBytes f)) ++ [("wrong", ratJ l.wrong)])) <$> got)
+
+/-- `line.run_json`: the line of `{"groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows",
+"delta", "rates"}` in both forms with the wrong receipts it read, or why it has none. -/
+def lineFn (j : Json) : V Json := do
+  let groups ← (← J.arr j "groups" "input").mapM groupOf
+  pure (lineJ (Line.line groups (← nat j "per") (← nat j "blocks") (← nat j "block_bytes") (← nat j "chip_bytes")
+    (← nat j "node_bytes") (← windowsOf j) (← ratIn j "delta" "input") (← ratesOf j)))
+
+private def natsOf (j : Json) (k : String) : V (Array Nat) := do (← J.arr j k "window").mapM (J.asNat · k)
+
+private def hexOrNull (j : Json) (ctx : String) : V (Option ByteArray) := do
+  match j with
+  | .null => pure none
+  | v => some <$> bytesOf v ctx
+
+/-- An accepted session's record as `summaryJ` writes it (the verifier's `outcome` request's `record`), read back. -/
+def summaryOf (j : Json) : V Session.Summary := do
+  let pace ← match ← J.get j "pace" "record" with
+    | .null => pure none
+    | q => do pure (some ({ k := ← J.nat q "k" "pace", windowNs := ← J.nat q "window_ns" "pace" } : Session.Pace))
+  let windows ← (← J.arr j "windows" "record").mapM fun w => do
+    pure ({ lengths := ← natsOf w "lengths", steps := ← natsOf w "steps", post := ← natsOf w "post_seed",
+            heads := ← (← J.arr w "heads" "window").mapM (hexOrNull · "heads"), stale := ← natsOf w "stale",
+            arrivedNs := ← natsOf w "arrived_ns", releasedNs := ← J.nat w "released_ns" "window",
+            deadlineNs := ← J.nat w "deadline_ns" "window", openedNs := ← J.nat w "opened_ns" "window",
+            drawn := ← J.nat w "drawn" "window" } : Session.WindowSummary)
+  pure { windows, blocks := ← J.nat j "blocks" "record", appended := ← J.nat j "appended" "record",
+         released := ← J.nat j "released" "record", lifetime := ← J.nat j "lifetime" "record", pace,
+         appends := ← hexOrNull (← J.get j "appends" "record") "appends" }
+
+private def seenOf (j : Json) : V Line.Seen := do
+  pure
+    { releasedNs := ← J.nat j "released_ns" "seen"
+      lastNs := ← J.nat j "last_ns" "seen"
+      least := ← J.nat j "least" "seen"
+      weights := ← J.nat j "weights" "seen"
+      hbm := ← J.nat j "hbm" "seen"
+      host := ← J.nat j "host" "seen" }
+
+/-- `line.record_run_json`: the line of an accepted session's record, `{"record", "samples", "seen", "per",
+"block_bytes", "chip_bytes", "node_bytes", "delta", "rates"}` (`record` as the verifier's `outcome` request gives it,
+`summaryJ`'s), read off the record (`Line.lineOfRecord`), or why it has none. -/
+def lineRecordFn (j : Json) : V Json := do
+  let sm ← summaryOf (← J.get j "record" "input")
+  let seen ← (← J.arr j "seen" "input").mapM seenOf
+  pure (lineJ (Line.lineOfRecord sm (← nat j "samples") seen (← nat j "per") (← nat j "block_bytes")
+    (← nat j "chip_bytes") (← nat j "node_bytes") (← ratIn j "delta" "input") (← ratesOf j)))
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
@@ -513,6 +558,6 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("leaf_receipt", leafReceiptFn), ("draws", drawsFn),
   ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
   ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
-  ("line", lineFn), ("pooled", pooledFn)]
+  ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn)]
 
 end RemoteAudit.Difftest

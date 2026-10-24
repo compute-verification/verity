@@ -180,9 +180,11 @@ class PearlCArm:
 
 class PearlCWholeArm(PearlCArm):
     """`PearlCArm` with each decode step replayed as one CUDA graph (`pouw_pearl_c_whole.WholeStep`, `e2e.py
-    --graphs --whole-step --whole-defer`): vLLM's FULL decode graphs at the preset's capture sizes, without torch.compile,
-    each captured with every call's graph steps inside it and each call's tile hashing beside the next call, so a decode
-    step launches one graph after one slot upload and runs no call's Python. Prefill and mixed steps run eagerly, each
+    --graphs --whole-step --whole-defer --whole-defer-a`): vLLM's FULL decode graphs at the preset's capture sizes, without
+    torch.compile, each captured with every call's graph steps inside it, each call's tile hashing beside the next call
+    and its A tree beside its own forming and GEMM (`whole_defer_a`, which needs a kernel whose pipeline splits A's
+    commitment: served b8, 23.90 ms a step against 28.25 without it and compiled stock's 7.39, r20261024-130722-5c44),
+    so a decode step launches one graph after one slot upload and runs no call's Python. Prefill and mixed steps run eagerly, each
     call of at most `pouw_pearl_c_graphs.GRAPH_ROWS` rows as its own graph. The serial schedule (the graph path's), one
     pass per engine step as `PearlCArm`'s, and its gate is `PearlCArm`'s call check with the calls graphed, then
     `e2e.whole_check`: a forward's calls captured whole and replayed, bit for bit the eager calls' commitment.
@@ -190,14 +192,17 @@ class PearlCWholeArm(PearlCArm):
     The PoUW option refuses this engine (`pouw.refusals`: compiled execution), so the arm installs as `PearlCArm` does;
     the protocol arm reaching it is vllm's change. ``PEARLC_WHOLE_EXECUTION`` is the engine's execution label:
     ``compiled`` (default, vLLM's kernels without batch invariance, as `stock-fp8@compiled` runs) or ``bi-compiled``;
-    ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows). A retained pass's whole capture
-    keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
+    ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows); ``PEARLC_WHOLE_DEFER_A=0``
+    keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it).
+    A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
-    run_options = {"graphs": True, "whole_defer": True}
+    run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True}
 
     def __init__(self) -> None:
         super().__init__()
+        if os.environ.get("PEARLC_WHOLE_DEFER_A") == "0":
+            self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_defer_a"}
         self.schedule = "serial"
         self.vllm_execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
         # Not ``execution``: the harness reads that as "build at vLLM's serving defaults", and this engine is FULL

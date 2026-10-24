@@ -48,9 +48,11 @@ worker_gb = 54
 # sidecar anywhere else is read outside these and fails the guard), and the modules they import. Test-only:
 # test_sampled_replay.py (test_circuit_check.py's request Program). Read only to check the catalog's records (conftest.py):
 # pouw/window.py and sampled_proofs/service.py, which the records digest as import sites of the PoUW modules they hold
-# (`units._unchanged`), and which a whole build never imports.
+# (`units._unchanged`), and which a whole build never imports. pouw/weights.py and sampled_proofs/__init__.py: h1zy reads an
+# H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
+          "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/private_circuits",
           "verity/ml/randomness", "verity/ml/flock/python/verity_flock",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py", "verity/core/protocols/pouw/salt.py",
@@ -75,6 +77,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier/io_ids.circuit-check.json",
           "verity/core/protocols/certifier/head_check.py", "verity/core/protocols/certifier/head_check.circuit-check.py",
           "verity/core/protocols/certifier/head_check.circuit-check.json",
+          "verity/core/protocols/certifier/replay_step.py", "verity/core/protocols/certifier/replay_step.circuit-check.py",
+          "verity/core/protocols/certifier/replay_step.circuit-check.json",
           "verity/core/protocols/certifier/served.py", "verity/core/protocols/certifier/served.circuit-check.py",
           "verity/core/protocols/certifier/served.circuit-check.json",
           "verity/core/protocols/certifier/advice.py", "verity/core/protocols/certifier/advice_check.py",
@@ -85,6 +89,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier/replay_chain.circuit-check.json",
           "verity/core/protocols/sampled_proofs/one_stage",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/sampled_proofs/service.py",
+          "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/pouw/weights.py",
           "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/program",
           "integrations/vllm/verity_vllm/check", "integrations/vllm/verity_vllm/commit", "integrations/vllm/verity_vllm/correspondence",
           "integrations/vllm/verity_vllm/observe", "integrations/vllm/verity_vllm/query", "integrations/vllm/verity_vllm/engine/hooks.py",
