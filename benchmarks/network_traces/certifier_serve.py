@@ -80,7 +80,9 @@ or ignore_eos. `--requests` requests arrive as a Poisson process at `--rate` a s
 the middle of the bucket before the one its arrival falls in. Each prompt is a list of the endpoint's token ids, a chat
 turn (a question that the model answers in a word or at length, and filler) cut to a length log-uniform in
 `--prompt-range`, with `max_tokens` uniform in 1 … `--tokens`, a seed of its own, temperature 0 and the model's own
-EOS. Its session is the body's `user`, the request's id. Each is an id request (`active.id_request`): its sampling
+EOS. Its session is the body's `user`, the request's id, `--name`.j (j its index, five digits), which the shim forwards
+the endpoint, so a run named apart from every other one the endpoint served names each of its requests there as the
+certified I/O does. Each is an id request (`active.id_request`): its sampling
 fields at fixed places, each prompt id in a field of its own, in `active.id_request_frames(prompt length)` link frames,
 a function of its length alone. The proxy opens each request's connection to the shim with the request's ingress
 ordinal (`Proxy(ordinals=True)`), and the shim writes the responses interleaved, in the order the endpoint streams
@@ -114,7 +116,7 @@ certified, the I/O, the audit and the salt accept.
         [--temperature 0] [--top-p 1]
         [--tokens 64] [--response-frames F] [--prompt-tokens 128] [--probes 8] [--delta-buckets D]
         [--profile planned|served] [--traffic fixed|varied] [--rate 2] [--prompt-range 16:1024] [--seed 0]
-        [--eos-ids ID,...]
+        [--eos-ids ID,...] [--name varied]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
         --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10]
         [--tamper late|extra|drop|token]
@@ -1190,15 +1192,16 @@ def plan_of(args, url: str, clock=time.monotonic, sleep=time.sleep) -> tuple[dic
     """(probe, calibration, plan) of the endpoint at `url` (`plan`'s): each request `--tokens` tokens out of a prompt of
     exactly `--prompt-tokens` tokens (`PROMPT` as text with 0), probed and planned `--in-flight` at a time; or, with
     `--traffic varied`, `--requests` requests of varied traffic (`varied_requests`: `--rate`, `--prompt-range`,
-    `--tokens` the cap, `--seed`), the first `--probes` of them probed at their arrival times."""
+    `--tokens` the cap, `--seed`, `--name` the users'), the first `--probes` of them probed at their arrival times."""
     model = args.model or served_model(url, args.api_key_env)
     if getattr(args, "traffic", TRAFFIC[0]) == "varied":
         lo, _, hi = args.prompt_range.partition(":")
+        name = getattr(args, "name", None) or "varied"
         requests = varied_requests(url, model, args.requests, rate=args.rate, prompt_tokens=(int(lo), int(hi)),
-                                   max_tokens=args.tokens, seed=args.seed, api_key_env=args.api_key_env)
+                                   max_tokens=args.tokens, seed=args.seed, name=name, api_key_env=args.api_key_env)
         probed = probe_varied(url, model, requests[:args.probes], args.api_key_env, clock, sleep)
         eos = [int(t) for t in args.eos_ids.split(",")] if args.eos_ids else None
-        report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos)
+        report, plan = varied_plan(probed, requests, name=name, seed=args.seed, eos=eos)
         return probed, report, plan
     prompt = prompt_tokens(url, model, args.prompt_tokens, args.api_key_env) if args.prompt_tokens else PROMPT
     probed = probe(url, request_body(model, args.tokens, prompt, args.temperature, args.top_p), args.probes,
@@ -1302,6 +1305,8 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--seed", type=int, default=0, help="varied: the traffic's seed")
         q.add_argument("--eos-ids", help="varied: the model's EOS token ids, comma-separated (default: the last ids "
                                          "of the probe's responses that stopped)")
+        q.add_argument("--name", default="varied",
+                       help="varied: the plan's name; request j's user, its session, is NAME.j (j five digits)")
     for q in (p, s, c, r):
         q.add_argument("--out", required=True, type=Path)
     for q in (s, c):
