@@ -465,11 +465,16 @@ def _wires(low: IL.Lowering, tail) -> list:
 
 
 def _ret_ports(st) -> list:
-    """META ``out_net_ports``: each output word's port of the last stage, in output order; a repeated stage's as ``[slot, port]``."""
+    """META ``out_net_ports``: each output word's port of the last stage, in output order; as ``[slot, port]`` for a repeated
+    stage, or for a one-slot stage whose ports aren't its only outputs or number no power of two (the verifier's plain form
+    is the stage's whole output group, ``16 * words`` a power of two; the slotted form, of a statement with hidden outputs,
+    asks neither)."""
     at = {tag[1]: (s, j) for s in range(st.count) for j, tag in enumerate(st.tags(s)[1]) if tag[0] == "ret"}
     if sorted(at) != list(range(len(at))):
         raise ValueError("the last stage's returned outputs are not each output word once")
-    return [at[o][1] if st.count == 1 else list(at[o]) for o in range(len(at))]
+    n = len(at)
+    plain = st.count == 1 and [at[o][1] for o in range(n)] == list(range(len(st.tags(0)[1]))) and n & (n - 1) == 0
+    return [at[o][1] if plain else list(at[o]) for o in range(n)]
 
 
 def _row_slots(ports: list[Port]) -> tuple[int, list[list[tuple[int, int]]]]:
@@ -664,10 +669,10 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         raise ValueError(f"{low.name}: no row has a compression before its last block (the {SHA_NET} range, the pin's, would hold no slot)")
     n_hm = _pow2(len(ports))
 
-    def fits(G: int):
+    def fits(G: int, pack_unit: bool = bool(U.tail_rets and not pins)):
         # a range no region reads is packed (the compressions, the lookups, and the units when the tail returns the outputs)
         items = [("unit", SHA_LOG, G * n_sha, {"net": SHA_NET, "packed": True}), ("unit", HM_LOG, G * n_hm, {"net": HM_NET}),
-                 ("unit", ul, G * U.n, {"net": "unit", **({"packed": True} if U.tail_rets and not pins else {})})]
+                 ("unit", ul, G * U.n, {"net": "unit", **({"packed": True} if pack_unit else {})})]
         for i, lay in enumerate(stages):
             items.append(("unit", _slot_log(lay.useful), G * tail.stages[i].count, {"net": f"stage{i}"}))
         for t, c in lookups.items():
@@ -683,6 +688,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     else:
         G = vus_per_block
     ranges, k_log = fits(G)
+    if k_log > K_MAX and U.tail_rets and not pins:
+        # a packed unit goes after the compressions, aligned to its slot; among the plain ranges, largest first, it may fit
+        ranges, k_log = min((ranges, k_log), fits(G, False), key=lambda x: x[1])
     if k_log > K_MAX:
         raise ValueError(f"{low.name}: an instance needs a block of 2^{k_log} bits (at most 2^{K_MAX})")
     tmpl_text = TM.write(template) if template is not None else None

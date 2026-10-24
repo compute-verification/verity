@@ -23,7 +23,8 @@ and what the merge gate runs per family: `../../../archive/README.md`.
     Lean's `Tmpl.layoutM`), which the verifier refuses until its proof lands; `tables.py`
     (`verity/flock-tables`), several tables in one commitment with private glue; `class_statement.py`, a unit class of
     any partition as an M0 statement (`UnitStager(..., layout=MODE, structural=True)`: the unit as `struct_lower.py`'s
-    template, the flat unit never built, its outputs from the template, `tmpl.evaluate`), and `class_sweep.py`, the
+    template, the flat unit never built, its outputs from the template, `tmpl.evaluate`; `lookups=True`: the unit's
+    table reads as lookup slots, `lookup_split.py`'s split of the flat unit by read depth), and `class_sweep.py`, the
     backend sweep's work lists; `circuit_bench.py`,
     `flock-circuit`'s sweep.
   - `bench.py`, `ir_bench.py`, `negatives.py`, `register.py`: the benchmark sweeps, statement negatives and cell

@@ -854,7 +854,7 @@ def _leaf_bits(t) -> list[int]:
 
 
 def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
-                  public: Sequence[str] = (), structural: bool = False) -> tuple[IL.Lowering, list[int]]:
+                  public: Sequence[str] = (), structural: bool = False, lookups: bool = False) -> tuple[IL.Lowering, list[int]]:
     """A unit Definition on named u16 row ports: input row ``(row, params)`` is the little-endian bit concatenation of those
     parameters' leaves, in order (PoUW's rows, `leaves.words_*`; ``p[r]`` is row ``r`` of parameter ``p``, as a tile reads
     it), of exactly its words (its bits a multiple of 16); output
@@ -863,7 +863,8 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     its own ceil(bits / 16) u16 words, low first (`verity.core.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
     `circuit.compose`'s public input ports read them). Returns the lowering and each output port's words. ``structural``:
     the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), else `ir_lower`'s
-    (`unit_circuit`), its circuit dropped once laid out (nothing reads it after `ir_lower.layout`)."""
+    (`unit_circuit`), its circuit dropped once laid out (nothing reads it after `ir_lower.layout`). ``lookups``: that circuit
+    split at its table reads (`lookup_split`), each read a lookup slot."""
     ports, out_words, row_words = unit_ports(definition, name, in_rows, public)
     n_words, W = len(ports.ins), len(ports.outs)
     units = IL.Units(target=None, in_widths=[16] * n_words, out_widths=[16] * W, in_src=[[("leaf", p) for p in range(n_words)]],
@@ -875,6 +876,10 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
         t, _lw, _top = SL.lower(definition, name=name, ports=ports)
         return TmplLowering(name, unit, units, None, _TmplLayout.of(t), t), out_words
     C = unit_circuit(definition, ports, _UnitCircuit)
+    if lookups:
+        from . import lookup_split as LS
+
+        return LS.split(C, name, unit, n_words, W), out_words
     lay = IL.layout(C, [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(W)])
     return IL.Lowering(name, unit, units, None, lay), out_words
 
@@ -1043,11 +1048,12 @@ class UnitStager:
     (`circuit.class_digest`) is the unbound stager's. ``layout`` (a layout mode, ``iv/hybrid/4``): the templated statement
     (`circuit.compose`'s ``layout``), its unit the unit's template; else the flat statement. ``structural`` (with ``layout``):
     that template `struct_lower`'s (`unit_lowering`'s ``structural``), the flat unit never built, the outputs the template's
-    (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit."""
+    (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit. ``lookups``: the flat unit split at its table reads
+    (`lookup_split`), each read a lookup slot, the last stage returning the outputs."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
                  out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
-                 bind: dict | None = None, layout: str | None = None, structural: bool = False):
+                 bind: dict | None = None, layout: str | None = None, structural: bool = False, lookups: bool = False):
         from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 
         if bind is not None and set(bind) != {"partition", "program"}:
@@ -1057,8 +1063,10 @@ class UnitStager:
         self.definition, self.name, self.in_rows, self.public_inputs = definition, name, list(in_rows), public_inputs
         if structural and layout is None:
             raise ValueError(f"{name}: a structural unit is written as its template: name its layout")
+        if lookups and layout is not None:
+            raise ValueError(f"{name}: a lookup split is a flat statement: it has no layout")
         self.low, self.out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs),
-                                                 structural)
+                                                 structural, lookups)
         if sorted(p for _s, ps in out_rows for p in ps) != list(range(len(self.out_words))):
             raise ValueError(f"{name}: the output rows {[list(ps) for _s, ps in out_rows]} are not the outputs, once each")
         oname = lambda ps: tuple(f"o{p}" for p in ps)  # noqa: E731
@@ -1072,12 +1080,14 @@ class UnitStager:
         programs = {definition.id: program_digest(Program(definition))} if bind else {name: hashlib.sha256(content).hexdigest()}
         self.sub = SimpleNamespace(id=name, template=SimpleNamespace(id="unit-class"), inputs=[port(r) for r in self.row_ports],
                                    outputs=[port(f"o{j}") for j in range(len(self.out_words))],
-                                   program_digests=lambda statics: programs, **({"definition": lambda **_: definition} if bind else {}))
+                                   program_digests=lambda statics: programs, **({"definition": lambda **_: definition} if bind else {}),
+                                   **({"evaluate": self._evaluate_one} if lookups else {}))
         self.iset = SimpleNamespace(subcircuit=self.sub, name=name.replace("/", "-"), content_digest=hashlib.sha256(content).hexdigest())
         self.text = FC.compose(self.low, self.sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
                                seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
                                seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
-                               partition=bind and bind["partition"], program=bind and bind["program"], layout=layout)
+                               partition=bind and bind["partition"], program=bind and bind["program"], layout=layout,
+                               tail=self.low.tail if lookups else None)
         self.bound = bind is not None
         self.meta = FC.meta_of(self.text)
         self.ports = FC._meta_ports(self.meta)
@@ -1085,6 +1095,14 @@ class UnitStager:
         if circuit is not None:
             circuit.parent.mkdir(parents=True, exist_ok=True)
             circuit.write_text(self.text)
+
+    def _evaluate_one(self, ins: dict) -> dict:
+        """One instance's outputs per port from its rows (``{row: [words]}``): the padding instance's, which `circuit.compose`
+        reads off the subcircuit when the last stage returns the outputs."""
+        flat = np.concatenate([np.asarray(ins[r][0], dtype=np.uint64) for r in self.row_ports])[None, :]
+        got = self.low.evaluate(flat)[0][0]
+        at = np.cumsum([0] + self.out_words)
+        return {f"o{j}": [got[at[j]:at[j + 1]].astype(np.uint16)] for j in range(len(self.out_words))}
 
     @functools.cached_property
     def pin(self) -> str:

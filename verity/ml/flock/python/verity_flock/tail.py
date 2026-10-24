@@ -298,6 +298,8 @@ class Stage:
     count: int = 1
     slot_ins: list | None = None
     slot_outs: list | None = None
+    #: the stage's layout once laid out (`stage_layout`), so a caller may drop ``circuit`` once it is
+    layout: object = field(default=None, repr=False, compare=False)
 
     def tags(self, i: int) -> tuple[list, list]:
         """Slot ``i``'s input and output port tags."""
@@ -455,5 +457,7 @@ def lower_tail(low: IL.Lowering, forged: bool = False) -> Tail:
 
 
 def stage_layout(st: Stage) -> IL.Layout:
-    """A stage laid out as ``flock-ir-unit/v2``: one input group, one output group."""
-    return IL.layout(st.circuit, [f"in{j}" for j in range(len(st.ins))], [f"out{j}" for j in range(len(st.outs))])
+    """A stage laid out as ``flock-ir-unit/v2``: one input group, one output group (laid out once: ``st.layout``)."""
+    if st.layout is None:
+        st.layout = IL.layout(st.circuit, [f"in{j}" for j in range(len(st.ins))], [f"out{j}" for j in range(len(st.outs))])
+    return st.layout

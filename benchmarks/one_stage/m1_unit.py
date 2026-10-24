@@ -1,7 +1,8 @@
 """M1: one step family's unit through C-Flock, timed: the Definition a Program row names (its ``spec``) as M0's `UnitStager`
 statement on the serving rows' ports (an input row per parameter and an output row per returned field, each a
-``hm96-sha512/row/v2`` row of its u16 words), flat (`ir_lower`) or structural (``--structural``: `struct_lower`'s template,
-the flat unit never built), and with ``--bin`` and ``--lean`` one round of ``--n`` units staged on finite bf16 values (every
+``hm96-sha512/row/v2`` row of its u16 words), flat (`ir_lower`), flat and split at its table reads (``--lookup-slots``:
+`lookup_split`, each read a lookup slot) or structural (``--structural``: `struct_lower`'s template, the flat unit never
+built), and with ``--bin`` and ``--lean`` one round of ``--n`` units staged on finite bf16 values (every
 parameter of a bf16 family; a stand-in for the served values, which only the window reads), proved by M0 under ``--zk``
 (`a0.session`: serve and prove, the verifier's subset draw of all of them) and verified by the Lean verifier of record
 (`a0.lean_verify`).  A coordinate template (`serving_rows.COORDS`: the expert-indexed pair GEMMs and FlashInfer's FP8 linear at
@@ -319,6 +320,8 @@ def main() -> int:
     ap.add_argument("--spec", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--structural", default=None, metavar="LAYOUT", help="the structural stager at this layout mode (iv/hybrid/4)")
+    ap.add_argument("--lookup-slots", action="store_true",
+                    help="the flat unit split at its table reads, each read a lookup slot (`verity_flock.lookup_split`)")
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
     ap.add_argument("--lean", default=None, help="the Lean verifier of record (flock-verify)")
     ap.add_argument("--n", type=int, default=1)
@@ -358,12 +361,18 @@ def main() -> int:
     t = time.time()
     with K.no_cyclic_gc():
         st = CS.UnitStager(fn, f"m1/{K.family(fn.id)}", rows, K.out_rows(n_out), circuit=d / "circuit.txt",
-                           **({"layout": a.structural, "structural": True} if a.structural else {}))
+                           **({"layout": a.structural, "structural": True} if a.structural else {}),
+                           **({"lookups": True} if a.lookup_slots else {}))
     m, c = st.meta, st.low.layout.counts
     cap = int(m["vus_per_block"]) << (M_MAX - int(m["k_log"])) if M_MAX - int(m["k_log"]) >= 3 else 0
-    say("built", seconds=round(time.time() - t, 1), structural=a.structural, ands=c["ands"], unit_rows=c.get("rows"),
-        k_log=m["k_log"], unit_log=m["unit_log"], vus_per_block=m["vus_per_block"], chunk_cap=cap, pin=st.pin,
-        circuit_bytes=(d / "circuit.txt").stat().st_size, domain=st.low.domain)
+    split = {}
+    if a.lookup_slots:
+        from verity_flock import lookup_split as LS
+
+        split = {"slot_types": LS.counts(st.low), "per_vu": m["per_vu"]}
+    say("built", seconds=round(time.time() - t, 1), structural=a.structural, lookup_slots=a.lookup_slots, ands=c["ands"],
+        unit_rows=c.get("rows"), k_log=m["k_log"], unit_log=m["unit_log"], vus_per_block=m["vus_per_block"], chunk_cap=cap,
+        pin=st.pin, circuit_bytes=(d / "circuit.txt").stat().st_size, domain=st.low.domain, **split)
     if not a.bin:
         return 0
 
