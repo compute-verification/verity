@@ -177,6 +177,13 @@ ROOT_LAG_ENV = "DITHER_SO_ROOT_LAG"
 # stream from the forward's end, beside its A tables, stash and spill on the serving stream, which waits for them
 # before `before_mid`; the same tables
 ZSIDE_ENV = "DITHER_SO_ZSIDE"
+# DO.A_STEP_ENV's tables' level schedule (`H1C.set`'s lvf: their levels from L up in one block a table, on an H1C_HB
+# build).  A K a table makes a step's tables few and deep (Llama-8B at T = 64: 2 tables of 2^13 leaves), so the build's
+# H1C_LVF = 2 would run 11 of their levels on two blocks of the GPU.  Unset: from depth - A_LVF_TOP (at least 0), the
+# level of 128 nodes a table (n1, RTX PRO 6000, T = 64: L = 4 to 7 within 0.01 ms, 0.16 ms under L = 2); "L": from L;
+# "": the build's H1C_LVF, as every other set.  The roots are the same at every L
+A_LVF_ENV = "DITHER_A_LVF"
+A_LVF_TOP = 8
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -310,7 +317,9 @@ class SoWindow(DO.Window):
                             data=self.slot_groups[k].view(torch.uint8), stride=k, body=k, length=k + 4,
                             tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, lab=(f"a/{k}@", "")))
             at += n
-        self.pre["ak"] = self.c.set(tabs)
+        v = os.environ.get(A_LVF_ENV)
+        lvf = max(0, max(H1CM.merkle_depth(t.count) for t in tabs) - A_LVF_TOP) if v is None else int(v) if v else None
+        self.pre["ak"] = self.c.set(tabs, lvf=lvf)
         self.a_gidx = torch.tensor([ks.index(k) for _, k in self.nk], dtype=torch.long, device=self.dev)
         o = self.pre["mid"].level_off[0]
         self.a_leaves = self.pre["mid"].level[o:o + 8 * self.L].view(self.L, 8)
