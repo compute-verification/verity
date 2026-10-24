@@ -17,7 +17,7 @@ pooled draw a window. Proofs are in `Security/Proofs/Accounting/RateAudit/Deploy
   the draw's two terms are each at most `2^-40` from seven windows on.
 * `RemoteSessionRoutes`: the session as a run of the remote audit (`Accounting.Remote.Run.ofDeployed`) meets its routes
   `Sampled d̄` and `Paid`, at the errors above.
-* `RemoteSessionRunConservation`: `Accounting.Guarantees.Remote.Conservation` at those routes, read at the node: the
+* `RemoteSessionRunConservation`: `Accounting.SecurityProofs.Remote.Conservation` at those routes, read at the node: the
   run's tier reads are at least `(1 − (d̄ + μ))·C`, the same `γ̄` as `RemoteSessionConservation`'s horizon.
 * `RemoteWindowRunConservation`: the same for each window (`Accounting.Remote.Run.ofDeployedWindow`) at `γ_w`.
 * `RemoteSessionConservationRelay`, `RemoteSessionRunConservationRelay`, `RemoteWindowRunConservationRelay`: the three
@@ -140,7 +140,7 @@ deployed session under `RemoteSessionConservation`'s hypotheses meets
   run paid for them (its tier reads, its on-chip state, the side link beyond the stream, its completed bits) and its
   `n·P` slacks `λ`.
 
-**The reading.** These are the routes `Accounting.Guarantees.Remote.Conservation` composes, proved for the runs the
+**The reading.** These are the routes `Accounting.SecurityProofs.Remote.Conservation` composes, proved for the runs the
 deployed game realizes; the run's fields are the game's (`Run.ofDeployed`), so its `paid` is the session's tier reads
 and the `n·P` passes' `S + (L − ρ) + b·F/(rounds·c_root)` bits.
 
@@ -164,10 +164,11 @@ most the two routes' errors summed:
 
   `γ̄ = d̄ + μ_chip + μ_link + μ_rebuild + μ_λ`,   the error `(1 − d̄)^(d·n) + n·P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
 
-**The reading.** `Accounting.Guarantees.Remote.Conservation` gives `(1 − d̄ − λ)·C` of payments at every location; the
-run's payments other than its tier reads are its state, its side link beyond the stream and its completed bits, which
-are `μ_chip`, `μ_link` and `μ_rebuild` of `C`, and the remote model's `λ` share (`Accounting.Remote.muLambda`) is
-`μ_λ`. So this is `RemoteSessionConservation`'s horizon reading, the same `γ̄`, with the window's term dropped.
+**The reading.** `Accounting.SecurityProofs.Remote.Conservation` gives `(1 − d̄ − λ)·C` of payments at every
+location; the run's payments other than its tier reads are its state, its side link beyond the stream and its
+completed bits, which are `μ_chip`, `μ_link` and `μ_rebuild` of `C`, and the remote model's `λ` share
+(`Accounting.Remote.muLambda`) is `μ_λ`. So this is `RemoteSessionConservation`'s horizon reading, the same `γ̄`, with
+the window's term dropped.
 
 Frozen (no-function, hash): as `RemoteSessionConservation`. -/
 def RemoteSessionRunConservation : Prop :=
@@ -191,7 +192,7 @@ Window `w` read as a run of the remote audit (`Accounting.Remote.Run.ofDeployedW
 capacity over `a`'s interval is the window's `P·N·b` bits, with `a`'s passes the window's `P`: under
 `RemoteSessionConservation`'s hypotheses and `d_w ≤ 1`, the run meets `Sampled d_w` except with probability
 `(1 − d_w/n)^(d·n)` and `Paid` except with `P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`, and
-`Accounting.Guarantees.Remote.Conservation` at them gives: the probability that every window's draw passes while
+`Accounting.SecurityProofs.Remote.Conservation` at them gives: the probability that every window's draw passes while
 window `w`'s correct receipts cover less than `(1 − d_w)·C`, or its tier reads are less than `(1 − γ_w)·C`,
 `γ_w = d_w + μ_chip + μ_link + μ_rebuild + μ_λ`, is at most
 
@@ -266,8 +267,9 @@ correct receipts cover less than `(1 − d̄)·C`, or its tier reads are less th
 
   `(1 − d̄)^(d·n) + n·P·G·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`.
 
-**The reading.** `RemoteSessionConservationRelay`'s horizon reading through `Accounting.Guarantees.Remote.Conservation`:
-the relayed receipts are the run's `λ` share beyond the compression's, `m` words a pass.
+**The reading.** `RemoteSessionConservationRelay`'s horizon reading through
+`Accounting.SecurityProofs.Remote.Conservation`: the relayed receipts are the run's `λ` share beyond the compression's,
+`m` words a pass.
 
 Frozen (no-function, hash): as `RemoteSessionConservation`. -/
 def RemoteSessionRunConservationRelay : Prop :=

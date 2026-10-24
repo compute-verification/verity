@@ -56,7 +56,8 @@ model's rows are registered under that key before the salt, the window refused u
 weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
 ``--baseline-h1`` (fill, with ``--served``) serves an H1 window without `Served` first, in the solo window's place, so
 one engine measures plain, H1 and H1 with its registered tables; each window records its host RSS, and a served one
-its registration's seconds a step (``registered_s``, VLLM-76). The period's declared Program and its digest are
+its registration's seconds a step (``registered_s``, VLLM-76), the part of them inside `pouw_h1_registered.commit`
+(``hashed_s``) and where that hashed (``register_path``: the GPU or NumPy, VLLM-79). The period's declared Program and its digest are
 declared once before any window (`period_program`), as the period's.
 
 ``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
@@ -64,7 +65,10 @@ serving GPU by kernels' producer (``benchmarks/pouw/served_h1/producer.py``, `re
 the -hbc build SO (``producer_gpu.sh``'s ``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the
 registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first block's linears' calls at step 0 and at the
 window's last step are kept, and their first unit of each row block is held to `h1tile.reference` word for word
-(`receipts_check`: live row blocks at step 0, dead at the last step).
+(`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``served_h1/noise.cu``'s) computes
+them with the producer's torch chain over noise.cu's noise instead. ``--j10r`` declares the period's window Program over
+J10-R's tile unit (`period_unit`, `h1tile.PouwH1Tile5`), so the producer computes J10-R's receipts (one noise stream a call)
+and they are held to `h1tile.j10r_reference`; v1's unit is the default.
 
 ``--commit`` (fill, ``--served``, in-process coins) serves the 64's window again with the Commit in the engine
 (`acquire.h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
@@ -121,19 +125,36 @@ PERIOD_DIGEST = """
 import json, resource, sys, time
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity_vllm.protocol_options import pouw_h1_served as SV
-shapes, modules, rows, steps = json.loads(sys.argv[1])
+shapes, modules, rows, steps, j10r = json.loads(sys.argv[1])
+unit = None
+if j10r:
+    from verity.core.protocols.pouw.circuit import h1tile as HT, h1window as HW
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    unit = lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5)
 t = time.monotonic()
-digest = P.program_digest(SV.declared([tuple(s) for s in shapes], {int(w): n for w, n in modules.items()}, rows, steps))
+digest = P.program_digest(SV.declared([tuple(s) for s in shapes], {int(w): n for w, n in modules.items()}, rows, steps,
+                                      unit=unit))
 print(json.dumps({"digest": digest, "s": round(time.monotonic() - t, 1),
                   "peak_gib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}))
 """
 
 
-def period_program(model: Any, rows: int, steps: int) -> tuple[Any, str, dict[str, Any]]:
-    """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run),
-    its digest (the period's ``--circuit``) and what declaring them cost, once before any window, as a period declares
-    them. The digest is taken in a child process, since at FILL it alone takes minutes and tens of GB, which no window
-    pays, so this process's RSS is the windows' own."""
+def period_unit(j10r: bool) -> Any:
+    """The window Program's tile unit at each K (`pouw_h1_served.declared`'s ``unit``, as `PERIOD_DIGEST` builds it): None,
+    v1's (`h1window.tile_unit`'s default), or with ``j10r`` J10-R's, `h1tile.PouwH1Tile5` under `h1zy` (``--j10r``)."""
+    if not j10r:
+        return None
+    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5)
+
+
+def period_program(model: Any, rows: int, steps: int, j10r: bool = False) -> tuple[Any, str, dict[str, Any]]:
+    """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run,
+    over `period_unit`'s tile unit), its digest (the period's ``--circuit``) and what declaring them cost, once before
+    any window, as a period declares them. The digest is taken in a child process, since at FILL it alone takes minutes
+    and tens of GB, which no window pays, so this process's RSS is the windows' own."""
     from verity_vllm.protocol_options import pouw
     from verity_vllm.protocol_options import pouw_h1_hooks as PHK
     from verity_vllm.protocol_options import pouw_h1_served as SV
@@ -141,10 +162,10 @@ def period_program(model: Any, rows: int, steps: int) -> tuple[Any, str, dict[st
     layers = PHK.layers(model, pouw.linear_types())
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
     modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
-    child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps])],
+    child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps, j10r])],
                              stdout=subprocess.PIPE, text=True)
     t = time.monotonic()
-    program = SV.declared(shapes, modules, rows, steps)
+    program = SV.declared(shapes, modules, rows, steps, unit=period_unit(j10r))
     declare_s = round(time.monotonic() - t, 1)
     out, _ = child.communicate()
     if child.returncode:
@@ -487,9 +508,10 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     except ValueError as e:
         doc["serve_h1"] = {"prompt_lens": list(lens), "u": None, "why": str(e)}
     cap, served_steps = decl.max_tokens, decl.max_tokens
-    period = period_program(eng.model, decl.rows, decl.steps) if a.served else None
+    period = period_program(eng.model, decl.rows, decl.steps, a.j10r) if a.served else None
     if period is not None:
-        doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {"circuit": period[1]}
+        doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {
+            "circuit": period[1], "noise": "j10r" if a.j10r else "v1"}
         print(f"[fill] period {json.dumps(doc['period'])} rss_gib={rss_gib()}", flush=True)
     gpu_peak()
     t0 = time.monotonic()
@@ -518,24 +540,42 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         if commit and a.served and registry is None and shared[0] is None:
             t0 = time.monotonic()
             shared[0] = local_weights(eng.model, layers, decl.rows, decl.steps, period)
-            print(f"[fill] B registered under a local key in {time.monotonic() - t0:.0f} s", flush=True)
+            doc["b_registered"] = {"s": round(time.monotonic() - t0, 1), "path": SV.NR.path()}
+            print(f"[fill] B registered under a local key {doc['b_registered']}", flush=True)
         served = (SV.Served(prover=a.prover_dir, registry=registry, weights=shared[0], tap=tap,
                             window=None if a.challenger else os.urandom(64), program=period[0], program_digest=period[1])
                   if a.served and name not in ("solo", "baseline") else None)
         registered_s: dict[int, float] = {}
+        hashed_s: dict[int, float] = {}
+        nr_commit = SV.NR.commit
+        prof = None
         if served is not None and not a.handoff:
-            served_commit = served.commit
+            served_commit, at = served.commit, [0]
+            if a.profile_register:
+                import cProfile
+
+                prof = cProfile.Profile()
+                served_commit = profiled(prof, served_commit)
+
+            def hashing(*args: Any, **kw: Any) -> Any:
+                t = time.monotonic()
+                try:
+                    return nr_commit(*args, **kw)
+                finally:
+                    hashed_s[at[0]] = hashed_s.get(at[0], 0.0) + time.monotonic() - t
 
             def timed(run: Any, call: Any, *rest: Any) -> dict[str, str]:
-                t = time.monotonic()
+                t, at[0] = time.monotonic(), call.step
                 if call.layer == 0:
                     print(f"[fill] {name} step {call.step} rss_gib={rss_gib()} registered_s(prev)="
-                          f"{round(registered_s.get(call.step - 1, 0.0), 2)} values={len(served.registered)}", flush=True)
+                          f"{round(registered_s.get(call.step - 1, 0.0), 2)} hashed_s(prev)="
+                          f"{round(hashed_s.get(call.step - 1, 0.0), 2)} values={len(served.registered)}", flush=True)
                 try:
                     return served_commit(run, call, *rest)
                 finally:
                     registered_s[call.step] = registered_s.get(call.step, 0.0) + time.monotonic() - t
             served.commit = timed
+            SV.NR.commit = hashing
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
@@ -581,9 +621,14 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             out.update(served_measures(got, want, cap, served_steps, t0, end, stamps))
             if served is not None and not a.handoff:
                 out["registered_s"] = [round(registered_s.get(s, 0.0), 3) for s in range(decl.steps)]
+                out["hashed_s"] = [round(hashed_s.get(s, 0.0), 3) for s in range(decl.steps)]
+                out["register_path"] = SV.NR.path()
                 del served.commit
+                SV.NR.commit = nr_commit
+                if prof is not None:
+                    write_profile(prof, tdir / "register-profile.txt")
             print(f"[fill] {name} served step_s={out['step_s']} registered_s={out.get('registered_s')} "
-                  f"rss_gib={rss_gib()}", flush=True)
+                  f"hashed_s={out.get('hashed_s')} register_path={out.get('register_path')} rss_gib={rss_gib()}", flush=True)
             if com is not None:
                 rc = com.finalize()
                 out["committer"] = {"run_root": rc.run_root.hex(), "name": com.name, "finalize_s": round(rc.t_finalize_s, 3),
@@ -607,6 +652,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
         finally:
+            SV.NR.commit = nr_commit
             lie.uninstall()
             comp.close()
             if com is not None:
@@ -667,6 +713,30 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         except Exception as e:  # noqa: BLE001
             doc["h1_solo"] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:2000]}
     return fill_record(doc, outdir)
+
+
+def profiled(prof: Any, fn: Any) -> Any:
+    """``fn`` run under the profiler ``prof``."""
+    def run(*args: Any, **kw: Any) -> Any:
+        prof.enable()
+        try:
+            return fn(*args, **kw)
+        finally:
+            prof.disable()
+    return run
+
+
+def write_profile(prof: Any, path: Path) -> None:
+    """``prof``'s 60 functions of most cumulative time, then of most own time, as text at ``path``."""
+    import io
+    import pstats
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    buf = io.StringIO()
+    stats = pstats.Stats(prof, stream=buf).strip_dirs()
+    stats.sort_stats("cumulative").print_stats(60)
+    stats.sort_stats("tottime").print_stats(60)
+    path.write_text(buf.getvalue())
 
 
 def rss_gib() -> float:
@@ -1028,10 +1098,13 @@ def producer() -> Any:
 def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) -> Any:
     """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`producer().Receipts`) for the window
     `h1`, h1u.cu's units kernel of the -hbc build `so` over each linear's int8 weight in `layers` in place (no second copy
-    on the GPU), keeping the first block's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`."""
+    on the GPU), or with a ``.cubin`` SO (noise.cu's) receipts.py's torch chain over noise.cu's noise, keeping the first
+    block's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the window Program's form,
+    v1's or J10-R's (``--j10r``)."""
     P = producer()
-    made = P.Receipts(served, h1, P.Units(so), weight=lambda c: layers[c.layer].weight,
-                      keep=lambda c: c.layer < 4 and c.step in (0, steps - 1))
+    kernel = {"cubin": P.RC.Cubin(so)} if so.endswith(".cubin") else {"units": P.Units(so)}
+    made = P.Receipts(served, h1, weight=lambda c: layers[c.layer].weight,
+                      keep=lambda c: c.layer < 4 and c.step in (0, steps - 1), **kernel)
     served.receipts = made
     return made
 
@@ -1247,7 +1320,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--receipts", metavar="SO",
                     help="fill with --served, without --handoff: each call's receipt@<c> from h1u.cu's units kernel of the "
                          "-hbc build SO (benchmarks/pouw/served_h1/producer_gpu.sh's h1u_hbc.so) on the serving GPU, the "
-                         "first block's linears' calls at step 0 and the last step held to h1tile.reference")
+                         "first block's linears' calls at step 0 and the last step held to h1tile.reference; a .cubin SO "
+                         "(served_h1/noise.cu's) takes receipts.py's torch chain over its noise")
+    ap.add_argument("--j10r", action="store_true",
+                    help="fill with --served: declare the period's window Program over J10-R's tile unit "
+                         "(h1tile.PouwH1Tile5: one noise stream a call, seeded by its roots and first position), so its "
+                         "receipts and public rows are J10-R's; v1's unit otherwise")
     ap.add_argument("--declare", metavar="SLOTS,CAP,T,S", type=lambda v: tuple(int(x) for x in v.split(",")),
                     help="fill: serve SLOTS one-token prompts at cap CAP, T rows a call, S steps (pouw_h1.Static) in place "
                          "of pouw_h1.FILL's 64,16,64,18")
@@ -1255,6 +1333,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --commit: after the honest window, serve one whose A codes H1 is handed are all zero and "
                          "one with a row off, each with the Commit in the engine (NEGATIVES), and hold each to core's "
                          "ROOTS1 steps (core_verdict)")
+    ap.add_argument("--profile-register", action="store_true",
+                    help="fill with --served: profile each served window's registration (Served.commit) and write its "
+                         "functions by cumulative time to <window out>/register-profile.txt")
     ap.add_argument("--core-from", metavar="DIR", help="no GPU: core's ROOTS1 steps (core_verdict) over each window's "
                                                        f"saved evidence, DIR/*/{CORE_EVIDENCE}")
     a = ap.parse_args(argv)
@@ -1265,6 +1346,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.receipts and not (a.served and a.workload == "fill" and not a.handoff):
         ap.error("--receipts is the fill workload's, with --served, without --handoff (the close stage has no GPU for "
                  "the units kernel)")
+    if a.j10r and not (a.served and a.workload == "fill"):
+        ap.error("--j10r is the fill workload's, with --served (the period's declared Program)")
     if a.commit and not (a.served and a.workload == "fill" and not a.handoff and not a.challenger):
         ap.error("--commit is the fill workload's, with --served, without --challenger or --handoff")
     if a.negatives and not a.commit:
