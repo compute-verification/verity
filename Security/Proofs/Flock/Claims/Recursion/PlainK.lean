@@ -19,8 +19,7 @@ through a few run-level facts. Their files sit below `DeployVK`, so their forms 
 * an accepted run of `VK keep` decides within its own log (`accK_within`), opens a column only as a Merkle opening
   (`plainK_opening_raw`), so a self-clash among its columns collides (`plainK_selfClash_tied`); a statement it accepts
   is in scope (`accK_inScope`) and sets up at a draw (`accK_draw`);
-* the slack's escapes fit the plain weight at `VK keep` (`slackEsc_fitsFork_plainK`), and the simulation the plain
-  mixture reads (`PlainSimRunK`, `PlainSimK`).
+* the simulation the plain mixture reads (`PlainSimRunK`, `PlainSimK`).
 -/
 
 namespace FlockDeploy
@@ -57,7 +56,7 @@ theorem deployPlainTrimK_id (rel : Readable.Parsed → Readable.Relation) :
 /-- **`VK keep`'s decision at SHA-512**: it accepts exactly when the verdict read through `keep` accepts the record and
 proof files at the statement's setup and the custody checks pass (`next_decide_sha512`'s form). -/
 theorem nextK_decide_sha512 (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
-    {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : act false x as cs = .decide s spec sts link c₁ mids f) :
     ((nextK keep x as cs).eval sha512).1 = .acc ↔
       verifyWithK keep (Claims.hOf sha512) spec (tabsOf sts) f.record f.proofs = .ok () ∧
@@ -317,77 +316,6 @@ theorem accK_draw (keep : Bool → Bool) {x : Claims.Msg} (hacc : ¬ Claims.Floc
   obtain ⟨Ω, P, ω, r, hr⟩ := hacc
   obtain ⟨as, has⟩ := FlockDeploy.KS.stepWith_acc _ _ _ _ _ _ _ _ _ hr
   exact nextK_acc_draw keep has
-
-end FlockDeploy.KS
-
-namespace FlockDeploy.KS
-
-open Flock
-
-/-- **The slack's escapes fit the plain weight with the fork event of weight `k`**, when the slack's weights total at
-most level 0's `2·2^{d₀}·Q₀`: the plain fork rounds are distinct and past round 0, so with one more event a round and
-the fork at round 0 there are two a round, and `plain_fork_room` leaves that much of the weight. -/
-theorem slackEsc_fitsFork_plainK (keep : Bool → Bool) (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
-    {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)
-    (ev : Fin 2 → Fin sch.levels.length → Ω → (Fin ((deployPlainK keep rel).V.k x) → Coin) →
-      (Fin ((deployPlainK keep rel).V.k x) → Coin) → Prop)
-    (ev₁ : Ω → (Fin ((deployPlainK keep rel).V.k x) → Coin) → Prop)
-    (tied : ∀ r ℓ ω s s', ev r ℓ ω s s' → Claims.TiedColl sha512
-      ((Claims.run sha512 P (deployPlainK keep rel).V x ω s).vLog ++
-        (Claims.run sha512 P (deployPlainK keep rel).V x ω (Claims.forkCoins (plainJ h0 hsch r ℓ) s s')).vLog))
-    (tied₁ : ∀ ω s, ev₁ ω s → Claims.TiedColl sha512 (Claims.run sha512 P (deployPlainK keep rel).V x ω s).vLog)
-    (w : Fin 2 → Fin sch.levels.length → Fin ((deployPlainK keep rel).V.k x) → ℝ)
-    (G : Fin ((deployPlainK keep rel).V.k x) → Ω → (Fin ((deployPlainK keep rel).V.k x) → Coin) →
-      (Fin ((deployPlainK keep rel).V.k x) → Coin) → Prop)
-    (tiedG : ∀ i ω s s', G i ω s s' → Claims.TiedColl sha512
-      ((Claims.run sha512 P (deployPlainK keep rel).V x ω s).vLog ++
-        (Claims.run sha512 P (deployPlainK keep rel).V x ω (Claims.forkCoins i s s')).vLog))
-    (hfit : ∑ i, Claims.Flock.slackC sch w i ≤
-      2 * ((2 : ℝ) ^ (sch.levels.headD default).logLen * (sch.levels.headD default).queries)) :
-    (Claims.Flock.slackEsc sha512 (deployPlainK keep rel).V P x sch (plainJ h0 hsch) ev ev₁ tied tied₁ w G tiedG).FitsFork
-      ((deployPlainK keep rel).weight x) ((deployPlainK keep rel).k x) := by
-  refine ⟨2, fun r => ?_, ?_, ?_⟩
-  · show (Finset.univ.filter fun i : (Fin 2 × Fin sch.levels.length) ⊕ Fin ((deployPlainK keep rel).V.k x) =>
-        (Sum.elim (fun a : Fin 2 × Fin sch.levels.length => plainJ h0 hsch a.1 a.2) id i :
-          Fin ((deployPlainK keep rel).V.k x)) = r).card + (if r.val = 0 then 1 else 0) ≤ 2
-    rw [Finset.card_filter, Fintype.sum_sum_type]
-    have h1 : (∑ a : Fin 2 × Fin sch.levels.length,
-        if id (α := Fin ((deployPlainK keep rel).V.k x)) (plainJ h0 hsch a.1 a.2) = r then 1 else 0) ≤
-          if r.val = 0 then 0 else 1 := by
-      rw [← Finset.card_filter]
-      split_ifs with hr
-      · rw [Nat.le_zero, Finset.card_eq_zero, Finset.filter_eq_empty_iff]
-        intro a _ he
-        exact plainJ_ne_zero h0 hsch a.1 a.2 ((congrArg Fin.val he).trans hr)
-      · exact Finset.card_le_one.2 fun a ha b hb => by
-          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at ha hb
-          obtain ⟨e1, e2⟩ := plainJ_inj h0 hsch _ _ _ _ (ha.trans hb.symm)
-          exact Prod.ext e1 e2
-    have h2 : (∑ i : Fin ((deployPlainK keep rel).V.k x), if i = r then 1 else 0) = 1 := by
-      rw [Finset.sum_ite_eq']
-      simp
-    show (∑ a : Fin 2 × Fin sch.levels.length,
-        if id (α := Fin ((deployPlainK keep rel).V.k x)) (plainJ h0 hsch a.1 a.2) = r then 1 else 0) +
-      (∑ i : Fin ((deployPlainK keep rel).V.k x), if i = r then 1 else 0) + (if r.val = 0 then 1 else 0) ≤ 2
-    rw [h2]
-    split_ifs at h1 ⊢ <;> omega
-  · have hroom := plain_fork_room rel x h0 hsch
-    have hs : ∑ i : (Fin 2 × Fin sch.levels.length) ⊕ Fin ((deployPlainK keep rel).V.k x),
-        Sum.elim (fun a => Claims.Flock.cOf sch (a.2.val + 1)) (Claims.Flock.slackC sch w) i =
-        ∑ a : Fin 2 × Fin sch.levels.length, Claims.Flock.cOf sch (a.2.val + 1) +
-          ∑ i, Claims.Flock.slackC sch w i := by
-      rw [Fintype.sum_sum_type]
-      rfl
-    show ((2 : ℕ) : ℝ) * ((deployPlain rel).k x + ∑ i : (Fin 2 × Fin sch.levels.length) ⊕
-      Fin ((deployPlainK keep rel).V.k x), Sum.elim (fun a => Claims.Flock.cOf sch (a.2.val + 1))
-        (Claims.Flock.slackC sch w) i) ≤ 2 * (deployPlain rel).weight x
-    rw [hs]
-    push_cast at hroom ⊢
-    linarith
-  · show ∑ _l : Unit, (1 : ℝ) ≤ (V false).k x
-    rw [Fintype.sum_unique]
-    exact_mod_cast V_k_pos false x
 
 end FlockDeploy.KS
 
