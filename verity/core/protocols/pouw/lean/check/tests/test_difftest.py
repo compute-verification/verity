@@ -324,7 +324,8 @@ def test_credit(pass_server):
     model `models.json` pins (none, malformed, another checkpoint, another role), a round's A table of a K (a row off,
     its calls' rows offset by one call, a call missing) or a round's input-ids table other than the served Commit's or a
     Commit record the draw root doesn't bind, round 0's input-ids table outside round 0's request table or bound to
-    another session, a call's served rows m_s past the period's T table rows, other than its step's or malformed (an
+    another session, round 0's request table at another root than request_table, twice, under another PREFIX or bound
+    to another session or to the open root, a call's served rows m_s past the period's T table rows, other than its step's or malformed (an
     honest window's empty step credits none of its calls), a T whose slot is not the window's M or that is no positive
     integer, a period whose open commits no T or a malformed one, and every other
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
@@ -419,6 +420,9 @@ def test_credit(pass_server):
                  "which only round # commits",
                  "window arow: round #'s request root (requests, the one the window's open root binds) is not",
                  "window registration: registered value ", "ids@#'s domain is not the one the window's registration",
+                 "requests@#'s domain is not the one the window's registration",
+                 "window arow: the window's request table's root is not round #'s request_table",
+                 "window arow: the window registers request table x/",
                  "or receipt table of the window", "'s receipt table, its round #'s, which only round # commits",
                  "a-link a-link: registered receipt table ", "registered-file registration: the window registers ",
                  "'s template returns no receipt of whole #-bit words", "'s seed reads the roots of ",
