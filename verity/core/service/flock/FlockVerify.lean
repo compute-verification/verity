@@ -529,8 +529,9 @@ def recCoinsCmd (args : List String) : IO UInt32 := do
 session's transcript (`RecVStar.innerCommits`), as one `RECTRANSCRIPT` line: each rep's message rounds, and each stream's
 message rounds and its tops' node counts by level; the circuit table's tops and the link points, the record's held to the
 coin server's (`RecVStar.innerLink`); with `--rec-inner`, that the verifier's inner shape covers it
-(`RecVStar.checkCovers`), puts the circuit table's tops at its schedule's (`RecVStar.checkLinkRounds`) and holds the
-record to its schedule (`RecVStar.checkSchedule`), as `verify` checks them; exit 1 when the transcript is refused. -/
+(`RecVStar.checkCovers`), puts the circuit table's tops at its schedule's (`RecVStar.checkLinkRounds`), holds the
+record to its schedule (`RecVStar.checkSchedule`) and reads it in its own format as its JSON readers read it
+(`RecSetup.checkReads`), as `verify` checks them; exit 1 when the transcript is refused. -/
 def recTranscriptOfSession (args : List String) (bound : Except String (Option String × Option RecVStar.StackedShape))
     (inner : Option RecVStar.Inner) : IO (Except String (Option RecVStar.InnerCommits)) := do
   let some dir := argOf args "--rec-inner-session"
@@ -549,7 +550,10 @@ def recLinkOfSession (args : List String) : IO (Except String (Option RecVStar.I
 /-- `rec-record FILE`: the coin server's record read in its own format (`RecRecord.readRecord`, the reader
 `Proofs.Flock.Claims.Recursion.RecRecord` reads back): `RECRECORD` and its rounds (stream, index, tops, level-0 count,
 commit strings, coin count and coins, in the record's hex) as JSON, and whether `recordW` writes the file's bytes up
-to the rounds' end (`writes`). Exit 1 where the file is not in the record's format. -/
+to the rounds' end (`writes`). Under `full`, the record read up to its link points (`RecRecord.readFull`): the inner
+rounds before the last as it shows them (`Record.msgs`: each message and its coins), and whether `recordFullW` writes
+the file's bytes up to the link points (`writes`); `null` where it doesn't read. Exit 1 where the file is not in the
+record's format. -/
 def recRecordCmd (args : List String) : IO UInt32 := do
   let [f] := args | IO.eprintln "usage: flock-verify rec-record FILE"; return 2
   let bs := (← IO.FS.readBinFile f).data.toList
@@ -561,7 +565,11 @@ def recRecordCmd (args : List String) : IO UInt32 := do
     ("k", Lean.toJson r.k), ("tops", arr (arr hex) r.tops), ("level0", Lean.toJson r.level0),
     ("commits", arr hex r.commits), ("n", Lean.toJson r.n), ("coins", arr (hex ∘ RecRecord.coinB) r.coins)]
   let writes := (RecRecord.recordW xs []).isPrefixOf bs
-  IO.println ("RECRECORD " ++ (Lean.Json.mkObj [("rounds", arr id js), ("writes", .bool writes)]).compress)
+  let full := ((RecRecord.readFull bs).map fun r => Lean.Json.mkObj [
+    ("msgs", arr (fun (m, cs) => Lean.Json.mkObj [("msg", hex m), ("coins", arr (hex ∘ RecRecord.coinB) cs)]) r.msgs),
+    ("writes", .bool ((RecRecord.recordFullW r []).isPrefixOf bs))]).getD .null
+  IO.println ("RECRECORD " ++
+    (Lean.Json.mkObj [("rounds", arr id js), ("writes", .bool writes), ("full", full)]).compress)
   return 0
 
 def recTranscriptCmd (args : List String) : IO UInt32 := do
@@ -582,9 +590,14 @@ def recTranscriptCmd (args : List String) : IO UInt32 := do
         if let .error e := RecVStar.checkLinkRounds i lk then IO.eprintln e; return 1
     | .ok none => pure ()
     | .error e => IO.eprintln e; return 1
-    if let (some i, some f) := (inner, argOf args "--rec-inner-transcript") then
-      match Lean.Json.parse (← IO.FS.readFile f) with
-      | .ok j => if let .error e := RecVStar.checkSchedule i j then IO.eprintln e; return 1
+    let session := argOf args "--rec-inner-session"
+    if let (some i, some f, some dir) := (inner, argOf args "--rec-inner-transcript", session) then
+      let tt ← IO.FS.readFile f
+      match Lean.Json.parse tt with
+      | .ok j =>
+        if let .error e := RecVStar.checkSchedule i j then IO.eprintln e; return 1
+        if let .error e := RecSetup.checkReads i tt j (← IO.FS.readFile (dir ++ "/session.json")) ic then
+          IO.eprintln e; return 1
       | .error e => IO.eprintln s!"rec inner transcript: not JSON: {e}"; return 1
     let n := fun (xs : Array (Nat × ByteArray)) => Lean.toJson xs.size
     IO.println s!"RECTRANSCRIPT {(Lean.Json.mkObj [("reps", .arr (ic.reps.map n)),
@@ -716,8 +729,10 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `programDigest`).
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
-work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
-soundness proof does not cover (`ProvedScope.check`, then its tables' `m`, `ProvedScope.sizesOk`, §16.15) is refused, and
+work draw, whatever flags it holds, or a subset draw without `--zk`), and under `--rec-inner` so is a session of more
+than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`). Every session of a
+statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
+`ProvedScope.sizesOk`, §16.15) is refused, and
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a
 session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), and a session
 over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), all after
@@ -731,8 +746,10 @@ refused where the other is pinned. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]] | --rec-inner-coins F] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
-  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
-    | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  let stmtName := (argOf args "--statement").getD Tags.circuit.name
+  let templated := Tags.templated.any (·.name == stmtName)
+  let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
+    | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
   let tags := if args.contains "--upstream-plain" then { tags with upstreamPlain := true } else tags
   let stmtTags := tags
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
@@ -814,8 +831,11 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- (`ProvedScope.drawLaw`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
   -- each session's verdict
   -- the circuit parsed once, for the scope check and every setup (`ProvedScope.check_eq`, `buildSessionOf_eq`)
-  let parsed := ProvedScope.circuitOf tags circuitB tables
-  let scope := ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
+  -- a templated statement (`Tags.templated`) is read from its template and refused in each session's verdict, after every
+  -- other check, until a soundness theorem reads `Circuit.tmpl`
+  let parsed := if templated then HmOut.parseTmpl tags circuitB tables else ProvedScope.circuitOf tags circuitB tables
+  let scope := if templated then .error (ProvedScope.refusal s!"{tags.name}, a templated statement")
+    else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
         RecSetup.checkInner recInner recCoins recBound
@@ -825,6 +845,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
+        RecSetup.oneFull recInner r.2
         if zk then r.2.forM Zk.shapeOk
         r.2.forM (RecCoins.check · registered (RecCoins.Source.atC3 recCoins recInner recCommits)
           (RecSetup.c3 recInner recCommits))
@@ -902,6 +923,18 @@ def verifyCmd (args : List String) : IO UInt32 := do
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
 
+/-- A templated statement's one-table statement (`Tags.templated`), its circuit read from its template
+(`HmOut.parseTmpl`). -/
+def buildStmtTmpl (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
+    (partition : Option Lean.Json) (program : Option ByteArray) (registered : Option (Array Registered.Port))
+    (publicInputs : Option ByteArray) (identifier : Option String) : V Stmt := do
+  let (_, sts) ← buildSessionOf (HmOut.parseTmpl tags circuitB tables) tags circuitB pubB compB coins tables 1
+    (partition := partition) (program := program) (registered := registered) (publicInputs := publicInputs)
+    (identifier := identifier)
+  match sts[0]? with
+  | some st => pure st
+  | none => throw "statement: the templated setup built no statement"
+
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. With
 `--rec-inner F`, the statement must be one of V*'s at that inner shape, statement `--rec-part J` of them under the
 verifier's own `--rec-bindings F` (`RecVStar.checkStmt`). With `--rec-inner-transcript F --rec-inner-session DIR`, its
@@ -919,8 +952,10 @@ RecSparse shape), every statement needs the inner statement's files, whose spars
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
     | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]] | --rec-inner-coins F]] [--coins seed|os]"; return 2
-  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
-    | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  let stmtName := (argOf args "--statement").getD Tags.circuit.name
+  let templated := Tags.templated.any (·.name == stmtName)
+  let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
+    | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
   let stmtTags := tags
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
@@ -970,8 +1005,10 @@ def statementCmd (args : List String) : IO UInt32 := do
   let c3 := RecSetup.c3 recInner recCommits
   match (do
       RecSetup.checkInner recInner recCoins recBound
-      let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
-        (identifier.map Prod.snd)
+      let st ← (if templated then buildStmtTmpl tags circuitB pubB compB coins tables partition program registered
+          publicInputs (identifier.map Prod.snd)
+        else buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
+          (identifier.map Prod.snd))
       if complete then Registered.checkComplete st.c (registered.getD #[])
       KnownRead.check st.c known
       if recInner.isSome then
@@ -1130,7 +1167,6 @@ def typedExpandCmd (args : List String) : IO UInt32 := do
         ("sha512", Lean.Json.str (hexOf c.sha)), ("class", Lean.Json.str (hexOf c.classSha))])
   IO.println s!"TYPED {line.compress}"
   return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
-
 
 /-- `typed-rows FILE [--tables DIR] --out DIR`: a typed template's rows as the verifier derives them, through
 `deriveChecked` with its tables held (`Typed.rows`), written in the writer's `rows/` formats. -/

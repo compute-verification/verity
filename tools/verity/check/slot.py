@@ -6,7 +6,7 @@ instead of spreading over every core the checks share (vy-nebius-1, 1 Oct: two u
 
 A machine's slots are SLOTS (`/workspace/research/locks/slots`; CHECK_SLOTS overrides), one per line:
 
-    NAME CPUS [windows=FILE] [lead=MINUTES] [only=trains] [mem=GB]   # e.g. `a 32-63 mem=560`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
+    NAME CPUS [windows=FILE] [lead=MINUTES] [only=trains] [mem=GB] [scope=1]   # e.g. `a 32-63 mem=560`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
 
 The first slot whose lock (`check-NAME.lock` beside SLOTS, the lock the lander's `flock` takes) is free and no window blocks is
 taken. Its lock stays held by CMD (an inherited descriptor), and CMD runs pinned to CPUS with that slot's test cache
@@ -15,7 +15,8 @@ skipped while one of FILE's windows (`START_UTC MINUTES`, the node-2 fill runner
 minutes: a check there would run into a whole-node timed measurement. A slot with only=trains is taken only by a `--priority` waiter
 (the lander's train checks), so a lane's long check or quick tier never holds the slot a train needs (a slot.py from before it
 reads the key as unknown and the slot as any other). A slot with mem=GB is skipped while less than GB is free to this process
-(`memory_gb`: the least of MemAvailable and what each cgroup v2 memory limit over it leaves, the user slice's on a VM), so a
+(`memory_gb`: the least of MemAvailable and what each cgroup v2 memory limit over it leaves, the user slice's on a VM, less what
+live research.mem reservations hold but don't use yet, `reserved_gb`), so a
 check starts only when its measured peak fits and queues instead of being killed with the others under the slice (node 1,
 8 Oct 02:00Z: two OOM kills at 1,605 of 1,716 GB across ~8 runs), and CMD gets GB as SLOT_MEM_ENV, which check.py makes
 circuit-check's budget, so two checks' circuit-checks never each budget all the memory free when they began (node 2, 10 Oct
@@ -86,6 +87,8 @@ RUN_TIMEOUT = Path("control") / "timeout_s"
 RUN_SLOT = "slot.json"
 #: a slot's mem= as CMD sees it: the GiB its check may take, which check.py gives circuit-check as its --mem-gb
 SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
+#: the check's own scope unit (a `scope=1` slot), which spans.py reads its memory from
+SCOPE_ENV = "CHECK_SCOPE_UNIT"
 USAGE = "usage: slot.py [--priority [--rank N]] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
 #: the claims of twins (`--twin`), one directory per pair, beside SLOTS on the machine that holds them; a week old, removed
 TWINS = "twins"
@@ -114,8 +117,30 @@ def parse(text: str) -> list[dict]:
             continue
         opts = dict(x.split("=", 1) for x in f[2:])
         slots.append({"name": f[0], "cpus": f[1], "windows": opts.get("windows"), "lead": int(opts.get("lead", 30)),
-                      "trains": opts.get("only") == "trains", "mem": int(opts["mem"]) if "mem" in opts else None})
+                      "trains": opts.get("only") == "trains", "mem": int(opts["mem"]) if "mem" in opts else None,
+                      "scope": opts.get("scope") == "1"})
     return slots
+
+
+def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
+    """CMD in a transient systemd user scope of its own (`scope=1` on its slot), and the scope's unit name. `--scope` registers
+    this process in it and execs CMD, so the pid and the inherited slot lock stay; the check's whole tree is then one cgroup,
+    whose memory.peak spans.py records at each step's end and the check's (a session scope it shares with other runs has no
+    per-check peak: 23 Oct, train-slot sizing rested on summed RSS, which counts shared pages over and over)."""
+    unit = f"check-{slot}-{run_id}"
+    return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "--", *cmd], unit
+
+
+def scope_refusal(run=subprocess.run) -> str | None:
+    """Why `systemd-run --user --scope` can't run here (no user manager or bus: a run started over ssh without
+    XDG_RUNTIME_DIR, no lingering), or None when it can. A `scope=1` slot fails open on it: its check runs unscoped rather than
+    failing every train check that slot takes."""
+    try:
+        r = run(["systemd-run", "--user", "--scope", "--quiet", "--collect", "--", "true"], capture_output=True, text=True,
+                timeout=10)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"{type(e).__name__}: {e}"
+    return None if r.returncode == 0 else f"exit {r.returncode}: {(r.stderr or '').strip()[-200:] or 'no message'}"
 
 
 def memory_gb(root: Path = Path("/")) -> int:
@@ -140,6 +165,57 @@ def memory_gb(root: Path = Path("/")) -> int:
                     cache = sum(int(stat.get(k, 0)) for k in ("active_file", "inactive_file") if stat.get(k, "").isdigit())
                     left.append(int(m) - int(read(c / "memory.current") or 0) + cache)
     return max(0, min(left)) >> 30 if left else 0
+
+
+#: the run states that end a research.mem reservation (research.mem's TERMINAL)
+ENDED = ("done", "failed", "cancelled")
+
+
+def _rss_tree(pid: int, proc: Path) -> int | None:
+    """Resident bytes of ``pid`` and its descendants, or None when it isn't in ``proc`` (research.mem's `_rss_tree`)."""
+    parent, rss = {}, {}
+    for e in (x for x in os.listdir(proc) if x.isdigit()) if proc.is_dir() else ():
+        try:
+            parent[int(e)] = int((proc / e / "stat").read_text().rsplit(")", 1)[1].split()[1])
+            rss[int(e)] = next((int(ln.split()[1]) * 1024 for ln in (proc / e / "status").read_text().splitlines()
+                                if ln.startswith("VmRSS:")), 0)
+        except (OSError, IndexError, ValueError):
+            continue
+    if pid not in parent:
+        return None
+    tree, todo = {pid}, [pid]
+    while todo:
+        p = todo.pop()
+        kids = [c for c, pp in parent.items() if pp == p and c not in tree]
+        tree.update(kids)
+        todo += kids
+    return sum(rss.get(p, 0) for p in tree)
+
+
+def reserved_gb(proc: Path = Path("/proc")) -> int:
+    """GiB that live research.mem reservations in RAMLOCK hold but don't use yet, each run's largest once, as research.mem's
+    `reserved_bytes` counts them: a reserved run lowering toward its peak isn't in MemAvailable yet (23 Oct 23:16Z, top: when a
+    check ended on cpu-4, proofs' waiting 345 GB shares and a train's twins would race for the freed memory, and a twin admitted
+    beside a lowering share reads well over 560 GB free)."""
+    by: dict[str, float] = {}
+    for f in sorted(RAMLOCK.glob("*.json")) if RAMLOCK.is_dir() else ():
+        try:
+            doc = json.loads(f.read_text())
+            gb = float(doc["gb"]) * 1e9
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        try:
+            if doc.get("run_dir") and json.loads((Path(doc["run_dir"]) / "status.json").read_text()).get("state") in ENDED:
+                continue
+        except (OSError, ValueError, AttributeError):
+            pass
+        pid = doc.get("pid") if isinstance(doc.get("pid"), int) else None
+        if pid is not None and not (proc / str(pid)).exists():
+            continue
+        used = _rss_tree(pid, proc) if pid is not None else None
+        key = doc.get("run_id") or f.name
+        by[key] = max(by.get(key, 0.0), max(0.0, gb - min(used or 0, gb)))
+    return int(sum(by.values())) >> 30
 
 
 def reserve(slot: dict, now: datetime) -> str | None:
@@ -185,8 +261,9 @@ def blocked(slot: dict, now: datetime) -> str | None:
     for raw, start, minutes, _note in _windows(slot):
         if start - timedelta(minutes=slot["lead"]) < now < start + timedelta(minutes=minutes):
             return f"window {raw} ({minutes} min) is open or starts within {slot['lead']} min"
-    if slot.get("mem") and (free := memory_gb()) < slot["mem"]:
-        return f"{free} GB of memory free, under the {slot['mem']} GB a check here may peak at"
+    if slot.get("mem") and (free := memory_gb() - (held := reserved_gb())) < slot["mem"]:
+        return (f"{free} GB of memory free" + (f" ({held} GB more is reserved by live runs that haven't reached it)" if held else "")
+                + f", under the {slot['mem']} GB a check here may peak at")
     return None
 
 
@@ -675,7 +752,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     os.replace(tmp, who)
     os.set_inheritable(fd, True)
     os.sched_setaffinity(0, cpulist(slot["cpus"]))
-    env = {k: v for k, v in os.environ.items() if k not in ("LEASE_DIR", SLOT_MEM_ENV)}
+    env = {k: v for k, v in os.environ.items() if k not in ("LEASE_DIR", SLOT_MEM_ENV, SCOPE_ENV)}
     env.update(LEASE_DEADLINE_FILE="/nonexistent/research-deadline", CHECK_SLOT=slot["name"],
                VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"),
                **({SLOT_MEM_ENV: str(slot["mem"])} if slot.get("mem") else {}))
@@ -685,6 +762,12 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         print(said, file=sys.stderr, flush=True)
     if run_max is not None:
         print(limit_run(run_max, slot["name"], run_dir), file=sys.stderr, flush=True)
+    if slot.get("scope") and (why := scope_refusal()):
+        print(f"slot: scope=1 but systemd-run --user doesn't run here ({why}); running unscoped", file=sys.stderr, flush=True)
+    elif slot.get("scope"):
+        cmd, unit = scoped(cmd, slot["name"], os.environ.get("RESEARCH_RUN_ID") or str(os.getpid()))
+        env[SCOPE_ENV] = unit
+        print(f"slot: check in its own scope {unit}.scope", file=sys.stderr, flush=True)
     os.execvpe(cmd[0], cmd, env)
 
 

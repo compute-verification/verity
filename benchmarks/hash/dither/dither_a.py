@@ -85,6 +85,7 @@ import dither_fused as DF
 import dither_one as DO
 import forms as F
 from dither_fused import CM, CR, H1R, Call, unwords
+import h1c as H1CM
 from h1c import Dom, Tab
 from hb_side import auto_j
 
@@ -120,9 +121,15 @@ ZY_KIND = "zy-unit-table"
 # records' y halves) in this one domain and label, so their roots are equal exactly when the bytes are
 Y_KIND = "y-unit-table"
 ZY1_ENV = "DITHER_ZY1"
+# "1": the z/y and y tables' rows in a row block past m take their x from `dead_rows` (hashed once a window, from the
+# bytes such a row holds) and hash no segments; the same leaves and roots
+ZDEAD_ENV = "DITHER_ZDEAD"
 # the gate step's option A partials against SERVE-REG's gated lane (served_h1/lane_refs.py): 1 checks them in the gate
 # (one process: the arm's worker is a daemon); a path saves their records there for `lane_refs.py PATH` after serving
 LANE_REFS_ENV = "DITHER_LANE_REFS"
+# "N,K,MMAX=CFG+..." (exactlin's Cfg text): call (N, K)'s GEMM config in place of exactlin.pick's at the M its CONFIGS
+# entry (MMAX, ..) takes.  A split K's int32 partial sums add up to the same z, so z and y are the same bits
+MM_CFG_ENV = "DITHER_MM_CFG"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
 M32 = DO.M32
@@ -337,6 +344,7 @@ class Side:
             raise ValueError(f"dither-a's ao: one of {AO} ({AO_SEEDS} for kh and hbk, whose seeds are a launch of their "
                              f"own), not {ao!r} with unit {unit!r}")
         self.win, self.unit, self.z, self.zl, self.ao, self.pt, dev = win, unit, z, ZMODES[z], ao, pt, win.dev
+        self.zdead = z == "zy" and os.environ.get(ZDEAD_ENV) == "1"
         self.side = torch.cuda.Stream(device=dev)
         self.fork, self.join = torch.cuda.Event(), torch.cuda.Event()
         if pt:
@@ -358,6 +366,8 @@ class Side:
             self.u_rec: set[int] = set()
         self.work = EL.Workspace(dev)
         self.arch = EL.arch(dev.index)
+        self.mm_cfg = {tuple(int(v) for v in nk.split(",")): EL.Cfg.parse(c)
+                       for nk, c in (e.split("=") for e in os.environ.get(MM_CFG_ENV, "").split("+") if e)}
         self.stage = torch.empty_like(win.plan.out)
         self.at = torch.tensor([win.plan.offs[w][0] for w in range(win.L)], dtype=torch.int64, device=dev)
         self.shift = int(win.o.h1o_fault_shift())
@@ -376,13 +386,15 @@ class Side:
             win.z = [torch.empty(0, dtype=torch.int32, device=dev) for _ in win.z]
         if z == "zy":
             self.unit_of = [UNIT] * win.L
+            dead = self.dead_rows() if self.zdead else None
             self.zy = [torch.empty(zy_count(win, w, self.unit_of[w]) * zy_bytes(self.unit_of[w]), dtype=torch.uint8,
                                    device=dev) for w in range(win.L)]
             self.zyset = win.c.set([Tab(Dom(ZY_KIND, zy_fields(win, w, 0, self.unit_of[w]), zy_count(win, w, self.unit_of[w]),
                                             {"step": (1, 0)}), zy_count(win, w, self.unit_of[w]), data=self.zy[w],
                                         stride=zy_bytes(self.unit_of[w]), body=zy_bytes(self.unit_of[w]),
                                         length=zy_bytes(self.unit_of[w]), lab=("zy/", f"/{w}"),
-                                        out=win.pre["mid"].leaves_addr(2) + 64 * w) for w in range(win.L)])
+                                        out=win.pre["mid"].leaves_addr(2) + 64 * w, **(dead[w]["zy"] if dead else {}))
+                                    for w in range(win.L)])
             win.pre["z"] = self.zyset
             # RT4-INT-11: the served y committed under the round (its roots the y-step leaves) and the units' y (the
             # records' y halves, read in place), compared by root between steps
@@ -392,10 +404,11 @@ class Side:
             self.ysv = [torch.empty(cnt[w] * yb[w], dtype=torch.uint8, device=dev) for w in range(win.L)]
             self.ysset = win.c.set([Tab(Dom(Y_KIND, y_fields(win, w, 0, self.unit_of[w]), cnt[w], {"step": (1, 0)}), cnt[w],
                                         data=self.ysv[w], stride=yb[w], body=yb[w], length=yb[w], lab=("y/", f"/{w}"),
-                                        out=win.pre["mid"].leaves_addr(yi) + 64 * w) for w in range(win.L)])
+                                        out=win.pre["mid"].leaves_addr(yi) + 64 * w, **(dead[w]["y"] if dead else {}))
+                                    for w in range(win.L)])
             self.yuset = win.c.set([Tab(Dom(Y_KIND, y_fields(win, w, 0, self.unit_of[w]), cnt[w], {"step": (1, 0)}), cnt[w],
                                         data=self.zy[w][ub[w] - yb[w]:], stride=ub[w], body=yb[w], length=yb[w],
-                                        lab=("y/", f"/{w}")) for w in range(win.L)])
+                                        lab=("y/", f"/{w}"), **(dead[w]["y"] if dead else {})) for w in range(win.L)])
             self.ybad = torch.zeros(win.L, dtype=torch.bool, device=dev)
             self.y_refused: list[dict] = []
             # DITHER_ZY1=1: the y tables read nothing the z tables write and are built right after them, so the three
@@ -446,7 +459,11 @@ class Side:
         win = self.win
         M, k = xq.shape
         n = wt.shape[0]
-        cfg = EL.pick(M, n, k, self.arch)
+        cfg = None
+        if self.mm_cfg:
+            mmax = next((m for m, _ in EL.CONFIGS.get(self.arch, {}).get((n, k), ()) if M <= m), None)
+            cfg = self.mm_cfg.get((n, k, mmax))
+        cfg = cfg or EL.pick(M, n, k, self.arch)
         self.cfgs[(n, k, M)] = str(cfg)
         bm, bn, bk, warps, stages, split, tma = cfg
         if self.zy:
@@ -483,6 +500,23 @@ class Side:
                                                                    self.ysv[w].view(torch.int16), self.win.S,
                                                                    y.shape[0], n, t, y.stride(0), UR=ur, UC=uc,
                                                                    BLOCK_M=32, BLOCK_N=128, **EL.OPTS)
+
+    def dead_rows(self) -> list[dict]:
+        """$DITHER_ZDEAD's `Tab` fields, each call's {"zy": its z/y table's, "y": its y tables'}: a row block past m (the
+        window's `live` 0) holds z 0 and y dq(0, +0, s_w) in every step, so each column block's x is hashed here once."""
+        from verity_vllm.engine import int8_exact as E
+        win, out = self.win, []
+        for w in range(win.L):
+            (ur, uc), n = self.unit_of[w], win.nk[w][0]
+            if ur != 32:
+                raise RuntimeError(f"${ZDEAD_ENV}: the window's live flags are 32-row blocks, linear {w}'s units {ur} rows")
+            pad = E.dequantize(torch.zeros((1, n), dtype=torch.int32, device=win.dev),
+                               torch.zeros(1, dtype=torch.float32, device=win.dev), win.sw[w]).view(torch.int16)
+            pad = pad.reshape(n // uc, 1, uc).expand(n // uc, ur, uc).cpu().numpy().astype("<i2")
+            y, zero = [pad[c].tobytes() for c in range(n // uc)], bytes(4 * ur * uc)
+            out.append({"zy": {"xd": H1CM.dead_x([zero + b for b in y], win.dev), "rlive": win.live, "rbw": n // uc},
+                        "y": {"xd": H1CM.dead_x(y, win.dev), "rlive": win.live, "rbw": n // uc}})
+        return out
 
     def y_leaves(self) -> None:
         """Between steps (the window's `before_mid`): the served y's tables, whose roots are the round's y-step leaves,
@@ -604,7 +638,7 @@ class Side:
     def info(self) -> dict:
         return {**self.label(), "unit": self.unit, "z": self.z, "a_overlap": self.ao, "trees_parallel": self.pt,
                 "leaf_bytes_per_step": self.leaf_bytes(), "round_leaves": list(self.win.round_kinds),
-                "y_root_refused_steps": self.y_refused[:8] if self.zy else None,
+                "y_root_refused_steps": self.y_refused[:8] if self.zy else None, "z_dead_rows_x_once": self.zdead,
                 "a_form": self.win.c.a_form, "calls": self.calls, "joins": self.joins,
                 "h1r_versions": {DF.SITES[w % 4]: self.versions[w] for w in range(min(4, self.win.L))}
                 if self.unit == "h1r" else None, "gemm_cfgs": {f"{n}x{k}@M{m}": c for (n, k, m), c in self.cfgs.items()}}
@@ -792,12 +826,10 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     zy = bool(SIDE) and bool(SIDE[0].zy)
     bits = np.arange(t) < m
     wrows = CR.word_rows(CR.words(bits))
-    a_cpu, s_cpu, z_cpu = {}, {}, {}
+    a_cpu = DO.a_roots_cpu(win, s, range(L), lambda v: g["a"][v].cpu().numpy(), lambda v: g["sa"][v].cpu().numpy())
+    s_cpu, z_cpu = {}, {}
     for w in range(L):
         n, k = win.nk[w]
-        q, sc = g["a"][w].cpu().numpy(), g["sa"][w].cpu().numpy()
-        fa = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "k": k, "schema": CM.SCHEMA}
-        a_cpu[w] = CM.s8_table(CM.domain(fa, t, "a-table"), key, f"a/{s}/{w}", q, sc).root
         fs = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "schema": CM.SCHEMA}
         sd = CM.domain(fs, len(wrows), "admit")
         s_cpu[w] = CM.levels(sd, [CM.leaf(sd, key, f"s/{s}/{w}", i, x)[0] for i, x in enumerate(wrows)])[-1][0]

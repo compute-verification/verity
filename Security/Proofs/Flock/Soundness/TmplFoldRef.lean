@@ -1,6 +1,5 @@
-import Proofs.Flock.Level3.Folded
-import Proofs.Flock.Soundness.ExecRows
-import Proofs.Flock.Soundness.ExecParse
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Soundness.SparseRows
 import Flock.TmplFold
 import Flock.NetAt
 
@@ -18,6 +17,17 @@ without `α`, with `e(q) = lw[q mod 64] · eq(ρ, ⌊q/64⌋)` and `g(q) = eq(r,
 open Flock Flock.Tmpl FlockLevel3 GF128
 
 namespace FlockSoundness.TmplFold
+
+open FlockSoundness.SparseRows
+
+export FlockSoundness.SparseRows (except_bind_ok)
+
+theorem size_le_pow_log2ceil (n : ℕ) : n ≤ 2 ^ log2ceil n := by
+  unfold log2ceil
+  split
+  · simp only [Nat.pow_zero]; omega
+  · have := Nat.lt_log2_self (n := n - 1)
+    omega
 
 /-! ## Loops that only yield -/
 
@@ -457,7 +467,7 @@ theorem foldRef_eq_project {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho 
   generalize posMap t lays = π at ha hb hpos hul ⊢
   have hfit : π.getD t.constPos 0 + 1 ≤ 2 ^ n'.unitLog := by
     rw [hul]
-    exact (le_two_pow_log2ceil _).trans (Nat.pow_le_pow_right (by norm_num) (le_max_right _ _))
+    exact (size_le_pow_log2ceil _).trans (Nat.pow_le_pow_right (by norm_num) (le_max_right _ _))
   generalize Net.invOf π (π.getD t.constPos 0 + 1) = inv at ha hb hpos
   generalize π.getD t.constPos 0 + 1 = size at hpos hfit
   obtain ⟨-, hinv, -, -, -⟩ := Net.posOk_parts hpos

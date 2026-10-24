@@ -2011,7 +2011,7 @@ def main(argv: list[str] | None = None) -> int:
             mem = memory_gb()
             print(f"        {'OOM-KILLED' if r.oom else 'killed by ' + r.signal}: pytest died by {r.signal} at a peak RSS of "
                   f"{r.peak_rss_gb:.1f} GB" + (f" on a machine with {mem:.0f} GB" if mem else "")
-                  + ("; run it in a check slot (`research queue ready N --on vy-nebius-1`, or `check.py --on`)" if r.oom else ""))
+                  + ("; run it in a check slot (`research queue ready N --on vy-nebius-2`, or `check.py --on`)" if r.oom else ""))
         if r.leftover:
             print(f"        killed {r.leftover} processes its tests left in the suite's process group")
         if r.child_reads:

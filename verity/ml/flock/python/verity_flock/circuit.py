@@ -55,6 +55,7 @@ instance file's header carries each block's unit indices (the VUs of the partiti
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import os
 from dataclasses import dataclass
@@ -146,7 +147,8 @@ def class_digest(text: str) -> str:
     i = text.index("\n") + 1
     j = text.index("\n", i)
     meta = {k: v for k, v in json.loads(text[i + 5:j]).items() if k not in BINDING_KEYS}
-    return _sha512([text[:i], "META ", *_COMPACT.iterencode(meta), text[j:]]).hexdigest()
+    rest = (text[k:k + _HASH_CHUNK] for k in range(j, len(text), _HASH_CHUNK))
+    return _sha512(itertools.chain([text[:i], "META "], _COMPACT.iterencode(meta), rest)).hexdigest()
 
 
 def set_statics(input_set) -> dict:
@@ -652,7 +654,6 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         if not order["ok"]:
             raise ValueError(f"{low.name}: the unit's template is not in the order Tmpl.parse checks: {order}")
         useful = TM.layout(template, layout)[template.root].size
-        tmpl_text = TM.write(template)
     ul = _slot_log(useful)
     if useful == 1 << ul:
         raise ValueError(f"{low.name}: a unit fills its slot; a zero leaf needs a forced-zero row")
@@ -684,6 +685,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     ranges, k_log = fits(G)
     if k_log > K_MAX:
         raise ValueError(f"{low.name}: an instance needs a block of 2^{k_log} bits (at most 2^{K_MAX})")
+    tmpl_text = TM.write(template) if template is not None else None
     per_vu = {"unit": U.n, SHA_NET: n_sha, HM_NET: n_hm, **{f"stage{i}": tail.stages[i].count for i in range(len(stages))},
               **{f"lookup:{t}": c for t, c in lookups.items()}}
     tail_wires = _wires(low, tail) if tail else []

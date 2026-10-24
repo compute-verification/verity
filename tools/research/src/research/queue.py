@@ -690,10 +690,12 @@ class Queue:
         return bool(self.ready(m.pr, m.head)) and self._same_or_fixed(m, entries)
 
     def _frozen(self, m: Member, entries: dict[int, Entry]) -> bool:
-        """Whether member ``m`` stays at its old head: `frozen` names it, its PR is still open, and neither ejected nor held."""
+        """Whether member ``m`` stays at its old head: `frozen` names it, its PR is still open, neither ejected nor held, and that
+        head is still marked ready (23 Oct: #3261's 73f5eb82, its mark withdrawn at 14:56Z for failing two lints, rode five
+        running trains until 745e2a0024e9's check failed on it at 16:14Z)."""
         e = entries.get(m.pr)
         return (m.pr in self.frozen and e is not None and e.pr.head != m.head and e.state != "refused"
-                and not e.why.startswith("held"))
+                and not e.why.startswith("held") and bool(self.ready(m.pr, m.head)))
 
     def _forces_cold(self, n: int) -> bool:
         r = _git(self.workdir, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{n}", check=False)
@@ -1979,7 +1981,7 @@ def _stats(a: argparse.Namespace) -> int:
     """`research queue stats` (`queue_stats`): each landed PR's head from `main`'s merges onto `next`, its ready mark from the
     store, the landing check's records fetched with `research status --also`."""
     from . import queue_stats
-    from .drive import _fetch
+    from .merge import fetch_run
     from .store.local import LocalStore
 
     top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
@@ -2000,7 +2002,11 @@ def _stats(a: argparse.Namespace) -> int:
         return queue_stats.ts(at) if at else None
 
     def run_dir(rid: str) -> Path:
-        return _fetch(top, rid, ["slot.json", "steps.jsonl"]) or Path("/nonexistent")
+        # a landing's check has ended (--refresh); one name a fetch, since slot.json beside steps.jsonl fetched neither (23 Oct)
+        got = fetch_run(rid, ["steps.jsonl"], top, refresh=True)
+        if got and not (got[0] / "slot.json").is_file():
+            fetch_run(rid, ["slot.json"], top, refresh=True)
+        return got[0] if got else Path("/nonexistent")
 
     return queue_stats.main(a.log, a.hours, a.until, marked, run_dir, a.json)
 
@@ -2199,6 +2205,10 @@ def main(argv: list[str]) -> int:
             else:
                 print(_render(entries))
             return 0
+        from .merge import off_drive, on_drive
+
+        if a.command in ("sync", "land") and not (a.dry_run or on_drive()):
+            raise QueueError(off_drive(q.branch if a.command == "sync" else "main", f"queue {a.command}"))
         if a.command == "sync":
             q.sync(dry_run=a.dry_run)
             return 0
@@ -2218,7 +2228,11 @@ def main(argv: list[str]) -> int:
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
         told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
-        q.sync()
+        if on_drive():
+            q.sync()
+        else:
+            print(f"research queue: #{a.pr}'s mark is withdrawn; drive's next tick rebuilds `{q.branch}` without it (only drive "
+                  "pushes it)")
         return told
     except QueueError as e:
         print(f"research queue: {e}", file=sys.stderr)

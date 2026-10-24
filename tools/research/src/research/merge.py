@@ -55,7 +55,7 @@ The remote's branch, fetched first, is the truth, never the checkout. With --pus
 (never forced), what the tool's declaration runs after a landing (`Tool.after_land`) is started, detached, on the landed commit,
 and then it is swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
 `research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct). Once origin has main, the
-same commit goes to vy-nebius-1's bare repository, whose main node 1's builds check out (`vy-lean-sandbox checkout`): a plain
+same commit goes to vy-nebius-cpu-4's bare repository, whose main its builds check out (`vy-lean-sandbox checkout`): a plain
 push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
 it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
 These after-landing steps (the spec DM, the mirror, `after_land`, and one line per landing in the merge thread: what it merged
@@ -472,11 +472,13 @@ def _regenerated_in(run_id: str, audit) -> dict[str, str]:
     return {str(pkg): _under_run(str(p)) for pkg, p in (regen or {}).items()}
 
 
-def fetch_run(rid: str, names: list[str], cwd: Path | None = None) -> tuple[Path, dict] | None:
+def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool = False) -> tuple[Path, dict] | None:
     """(run ``rid``'s local dir, its `research status --json` row) with ``names``, paths under its run dir, fetched from its node
-    (`research status RID --json --also NAME...`, as `drive.evidence` reads a running check), or None when it can't be read."""
+    (`research status RID --json --also NAME...`, as `drive.evidence` reads a running check), or None when it can't be read.
+    ``refresh`` fetches them for a run that has ended too (`--refresh`), which a plain read answers from what is kept here."""
     also = [x for n in names for x in ("--also", n)]
-    r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=cwd, capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *(["--refresh"] if refresh else []), *also],
+                       cwd=cwd, capture_output=True, text=True)
     try:
         row = json.loads(r.stdout)["runs"][0]
         return Path(row["dir"]), row
@@ -1511,7 +1513,7 @@ def _sweep_after(repo: Path, into: str, remote: str) -> None:
               file=sys.stderr)
 
 
-MIRROR, MIRROR_ENV, MIRROR_TIMEOUT_S = "vy-nebius-1", "RESEARCH_MERGE_MIRROR", 120
+MIRROR, MIRROR_ENV, MIRROR_TIMEOUT_S = "vy-nebius-cpu-4", "RESEARCH_MERGE_MIRROR", 120
 
 
 def mirror_name() -> str | None:
@@ -1861,12 +1863,31 @@ def spec_alert_lag(repo: Path, remote: str) -> str:
             "hasn't been sent")
 
 
+#: set by the control pod's drive.sh for all it runs with the verity-drive App's token: GitHub's rulesets "main is append-only"
+#: and "only drive moves main and next" (23 Oct, Daniel) let only that App move `main` and `next`
+DRIVE_ENV = "RESEARCH_DRIVE"
+DRIVE_ONLY = ("main", "next")
+
+
+def on_drive() -> bool:
+    return os.environ.get(DRIVE_ENV) == "1"
+
+
+def off_drive(ref: str, verb: str) -> str:
+    """Why a push of ``ref`` from here is refused: only drive's App may move `main` and `next`."""
+    return (f"`{ref}` is moved only by drive's App (GitHub's rulesets, 23 Oct), and this isn't drive (no {DRIVE_ENV}=1): run it "
+            f"on the control pod, `/data/infra/drive.sh {verb}`")
+
+
 def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
     """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), DM Daniel the spec change it
     landed on main (`spec_alert`), start what ``tool`` runs after a landing (`after_land`) and sweep, since the sweep closes only
     what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge landed,
     says so, and `research merge --sweep` after the push does it. On main the steps are `caught_up`'s, from the marker (or main
     before the push), so they cover a landing pushed another way too; the mirror can fail without failing the merge."""
+    if push and into in DRIVE_ONLY and not on_drive():
+        print(f"research merge: not pushed: {off_drive(into, 'merge ...')}", file=sys.stderr)
+        return 1
     if push:
         from .spec_alert import remote_head
 

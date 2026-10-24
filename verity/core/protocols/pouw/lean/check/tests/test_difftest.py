@@ -320,7 +320,9 @@ def test_credit(pass_server):
     registration than the window's or an entry whose root is not its sessions', B rows other than the ones a window's
     open root binds or registered under another domain, name or rows, a window whose B rows (one row's s_w, or every
     code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
-    model `models.json` pins (none, malformed, another checkpoint, another role), and every other
+    model `models.json` pins (none, malformed, another checkpoint, another role), a call's A table or a round's
+    input-ids table other than the served Commit's or a Commit record the draw root doesn't bind, round 0's input-ids
+    table outside round 0's request table or bound to another session, and every other
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
@@ -395,11 +397,27 @@ def test_credit(pass_server):
                  "window weights: registered weights ", "period weights: period ",
                  "so the period earns nothing: weights: the window's registered weights' root",
                  "registered-file registration: call #'s statement reads ", "which the window registers not: register",
-                 "which the window registers twice: register"):
+                 "which the window registers twice: register",
+                 "credit commit: the window's Commit record is not the bytes in lowercase hex",
+                 "window commit: the window's Commit record is not the bytes in lowercase hex",
+                 "window draw: the window's draw root is not over its manifest (each call's credit bit among it), its "
+                 "Commit record", "window arow: call #'s A table ", "is not the Commit's row-table/#/",
+                 "window arow: round #'s input-ids table ", "is not the Commit's input-ids/#",
+                 "window arow: the window registers no round #'s input-ids table",
+                 "window arow: the Commit record registers row-table/#/", "twice, so the Commit's row-table/#/",
+                 "which only round # commits",
+                 "window arow: round #'s request root (requests, the one the window's open root binds) is not",
+                 "window registration: registered value ", "ids@#'s domain is not the one the window's registration"):
         assert any(part in k for k in CREDITED), part
 
 
 ROUNDED: Counter[str] = Counter()
+#: the refusals of the session's pin, `rounds`' and `salt`'s alike
+PIN_PARTS = ("which the host's pins log doesn't record as a commit of main's history",
+             "which the host's pins log records but which is not on main's first-parent line",
+             "seals no pins log (pins: {lines, sha#})", "not trusted: no pins log: ",
+             "not trusted: the verifier holds no copy of main's history",
+             "not trusted: the verifier's copy of main's history is malformed")
 
 
 def rounds(case: dict) -> dict | None:
@@ -436,7 +454,7 @@ def test_rounds(pass_server):
                  "under verity/challenger-auditor/v#, which names no prover", "'s end of session s# is malformed: ",
                  "not trusted: the challenger's record is signed at leaf ",
                  "not trusted: the challenger's refused hellos are not the ",
-                 "the challenger's log shows it received"):
+                 "the challenger's log shows it received", *PIN_PARTS):
         assert any(part in k for k in ROUNDED), part
 
 
@@ -471,5 +489,5 @@ def test_salt(pass_server):
                  "not trusted: no auditor's ledger", "not trusted: the challenger record's signature does not verify",
                  "the coin commitment's ", "the salt's a live coin opening is", "the salt's coin was not opened after",
                  "not its pouw/salt coin #", "the salt's coin does not open", "the salt's coin is epoch #",
-                 "the salt's coin opening is malformed"):
+                 "the salt's coin opening is malformed", *PIN_PARTS):
         assert any(_template(part) in k for k in SALTED), part

@@ -81,10 +81,11 @@ Arms:
                  the side stream runs the units alone.  With -pt last, between steps the receipt trees and the admit tables run on streams of
                  their own beside the z tables and the step trees (`Window.tree_streams`); with -ls after that, each step's
                  seeds read the live salt of the round before it (`Window.step_salt`, CA's ask 11)
-    dither-a-so  dither-a-hbk-zy and dither-a-hbr-zy in the statement's order (RT4-INT-12, `dither_so`): the forward
-                 computes and commits a step's A, scales and z/y leaves, round s goes out before coin s, and step s's
-                 seeds and units run after coin s on a ring of D steps' A slots, beside a later step's forward, their
-                 receipts under round s + D - 1: dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D> (D 2 to 8), -aom
+    dither-a-so  dither-a-hbk-zy, dither-a-hbr-zy and dither-a-hbc-zy (-hbr's call from dither-a-hbc's builds,
+                 HB_H1U_KC, DITHER_H1C_KC and DITHER_ZY1_KC) in the statement's order (RT4-INT-12, `dither_so`): the
+                 forward computes and commits a step's A, scales and z/y leaves, round s goes out before coin s, and step
+                 s's seeds and units run after coin s on a ring of D steps' A slots, beside a later step's forward, their
+                 receipts under round s + D - 1: dither-a-{hbk,hbr,hbc}-zy-{aom,aomn,ab,abn}[-pt]-so<D> (D 2 to 8), -aom
                  the A tables per call on four streams in the forward, -aomn with each call's noise on four streams
                  beside the units, -ab and -abn the step's A tables in one build between steps (not ruled in by CA: a
                  separate arm); its gate adds the order's checks and two faults (fault_rearly, fault_zlate).  With
@@ -388,9 +389,13 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         int8_vllm.register()
         unit, ao, pt, depth, ov, serve_prio, we, spill = DITHER_SO[arm]
         a = engine_args(gpu_mem)
-        SO.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
-                 h1u=os.environ["HB_H1U_KSPLIT" if unit == "hbk" else "HB_H1U_KRONLY"], ao=ao, pt=pt, depth=depth, ov=ov,
-                 serve_prio=serve_prio, window_end=we, spill=spill)
+        # hbc: hbr's call from HB_H1U_KC's build, with DITHER_H1C_KC's libh1c.so and DITHER_ZY1_KC where set (as dither-a-hbc)
+        h1c = os.environ.get("DITHER_H1C_KC", os.environ["DITHER_H1C"]) if unit == "hbc" else os.environ["DITHER_H1C"]
+        if unit == "hbc" and "DITHER_ZY1_KC" in os.environ:
+            os.environ["DITHER_ZY1"] = os.environ["DITHER_ZY1_KC"]
+        SO.patch(t=a["max_num_batched_tokens"], h1c=h1c, h1o=os.environ["DITHER_H1O"], unit="hbr" if unit == "hbc" else unit,
+                 h1u=os.environ[{"hbk": "HB_H1U_KSPLIT", "hbr": "HB_H1U_KRONLY", "hbc": "HB_H1U_KC"}[unit]], ao=ao, pt=pt,
+                 depth=depth, ov=ov, serve_prio=serve_prio, window_end=we, spill=spill)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
         win.captures = SO.CAPTURES
@@ -409,7 +414,7 @@ DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
 # engine serving on a stream above the trees' and the units' priority; -we: each window ends (`dither_so.SoWindow.end`),
 # each step's A and z/y records held in pinned host memory until its draw (`dither_so.Spill`), -wea its A alone
 DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}{e}": (unit, ao, pt, d, r, sp, we, spill)
-             for unit in ("hbk", "hbr") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
+             for unit in ("hbk", "hbr", "hbc") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
              for p, pt in (("", False), ("-pt", True)) for d in range(2, 9)
              for v, r, sp in (("", 0, False), ("-ov", 2, False), ("-ov1", 1, False), ("-ovp", 2, True))
              for e, we, spill in (("", False, None), ("-we", True, "azy"), ("-wea", True, "a"))}
@@ -780,7 +785,8 @@ def main() -> int:
             stops[arm] = {"error": "stop: the worker exited"}
         print(json.dumps({"stop": arm, **{k: v for k, v in stops[arm].items() if k != "stats"}}), flush=True)
     (out / "stop.json").write_text(json.dumps(stops, indent=1, default=str) + "\n")
-    summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
+    summary = {"arms": arms, "info": info, "numa": json.loads(os.environ.get("DITHER_NUMA_RECORD") or "null"),
+               "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
                "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
                "gate": {arm: {k: v for k, v in d.items() if k not in ("tokens", "picks")} for arm, d in gate_doc.items()},
                "pick": os.environ.get(PICK_ENV) or "timed", "pick_by_arm": {arm: pick_of(arm) or "timed" for arm in info},

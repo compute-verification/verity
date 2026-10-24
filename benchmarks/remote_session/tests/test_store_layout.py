@@ -1,12 +1,13 @@
-"""`store_layout`: the store a pinned BF16 checkpoint alone fixes, which the verifier binds a registration to
-(`verifier.py --model`). On a small synthetic checkpoint: the arena is the engine's packing of vLLM's 2-D weights in its
-module order with q/k/v and gate/up fused, and its payload root, recomputed from the weights' digests in worker
-processes, is `audit.payload_tree`'s; a prover that registers that store under the verifier's payload key is accepted
-and bound, and one whose root is any other (its own salts, another checkpoint, another shape) is refused with the
-reason before the registry draws anything; a pin whose files aren't the checkpoint's is refused before anything reads
-them; and the paced line reports weights held and filler held apart."""
+"""The store binding end to end (`verifier.py --model`; its layout and decision are core's `remote_bandwidth.store`, whose
+own tests are beside it). On a small synthetic checkpoint (`store_layout.synthetic`): the arena is the engine's packing
+(`engine.pack`); a prover that registers the store the pin lays out under the verifier's payload key is accepted and
+bound, and one whose root is any other (its own salts, another checkpoint, another shape) is refused with the reason
+before the registry draws anything; `verifier.py --model` refuses a pin whose files aren't the checkpoint's before it
+listens; `store_layout`'s pin is the one core reads, and its SHA-256s are the arena's; and the paced line reports weights
+held and filler held apart."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import random
@@ -23,7 +24,7 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 sys.path.insert(0, str(HERE))
 
-from verity.core.protocols.remote_bandwidth import audit  # noqa: E402
+from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 
 import engine  # noqa: E402
 import prover  # noqa: E402
@@ -34,7 +35,7 @@ from test_session import P512, run  # noqa: E402
 
 ROLE = "synthetic-bf16"
 NODE = b"test-node"
-B = sl.BLOCK
+B = rstore.BLOCK
 TINY = {"layers": 1, "hidden": 16, "heads": 2, "kv_heads": 1, "intermediate": 32, "vocab": 64}
 """A checkpoint of 6 weights blocks an arena, so two arenas of 7 and 2 host blocks make `test_session`'s 16-block store
 (the prover's encoding is most of a session's time)."""
@@ -46,68 +47,32 @@ def ckpt(tmp_path) -> Path:
     return tmp_path / "m"
 
 
-def raw(directory: Path, name: str) -> bytes:
-    path, meta, base = sl.tensors(directory, os.listdir(directory))[name]
-    lo, hi = meta["data_offsets"]
-    with open(path, "rb") as f:
-        f.seek(base + lo)
-        return f.read(hi - lo)
-
-
-def binding(ckpt: Path, engines: int = 2, arena_blocks: int = 7, **kw) -> sl.Binding:
-    return sl.Binding(ROLE, ckpt, ckpt / "pin.json", engines, arena_blocks, log=lambda m: None, **kw)
+def binding(ckpt: Path, engines: int = 2, arena_blocks: int = 7, **kw) -> rstore.Binding:
+    return rstore.Binding(ROLE, ckpt, ckpt / "pin.json", engines, arena_blocks, log=lambda m: None, **kw)
 
 
 @pytest.mark.parametrize("tied", [False, True])
-def test_the_arena_is_the_engines_packing_of_vllms_weights_and_its_root_the_payload_trees(tmp_path, tied):
-    """vLLM's module order at one GPU an engine: the embedding, each layer's fused qkv (q's, k's, then v's rows), o,
-    fused gate_up and down, then the LM head unless it is tied; each from a block boundary as `engine.pack` places
-    them, norms and biases left out, zeros between. The root `expected_root` builds from the weights' digests, in
-    subtrees of any size and in worker processes, is `audit.payload_tree`'s over the store's payloads under the key."""
+def test_the_arena_is_the_engines_packing_of_vllms_weights(tmp_path, tied):
+    """Each weight of core's arena sits where `engine.pack` places it in an engine's arena of its blocks."""
     pin = sl.synthetic(tmp_path / "m", name=ROLE, tied=tied)
-    d = tmp_path / "m"
-    a = sl.arena(d, pin["checkpoint"])
-    names = ["model.embed_tokens.weight"] + [f"model.layers.{i}.{m}.weight" for i in range(2) for m in
-                                             ("self_attn.qkv_proj", "self_attn.o_proj", "mlp.gate_up_proj",
-                                              "mlp.down_proj")] + ([] if tied else ["lm_head.weight"])
-    assert [e.name for e in a.entries] == names
-    sizes = [e.nbytes for e in a.entries]
-    assert [e.offset for e in a.entries] == engine.pack(sizes, a.weights_blocks * B)
-    assert a.weights_blocks * B == a.entries[-1].offset + -(-sizes[-1] // B) * B
-    qkv = a.entries[1]
-    assert a.read(qkv.offset, qkv.nbytes) == b"".join(
-        raw(d, f"model.layers.0.self_attn.{x}_proj.weight") for x in "qkv")
-    assert a.read(qkv.offset + qkv.nbytes, -qkv.nbytes % B) == bytes(-qkv.nbytes % B)
-    assert a.read(a.entries[3].offset, a.entries[3].nbytes) == b"".join(
-        raw(d, f"model.layers.0.mlp.{x}_proj.weight") for x in ("gate", "up"))
-    store = sl.Store(a, 2, a.weights_blocks + 3, 5)
-    key = bytes(range(32))
-    salts = [sl.store_salt(key, sl.PAYLOAD_LABEL, j) for j in range(store.blocks)]
-    want = audit.payload_tree(NODE, store.payloads(), salts).commitment.root
-    sl.weight_digests(a, tmp_path / "digests", 2)
-    for workers, log2 in ((1, 16), (1, 2), (1, 0), (2, 2)):
-        assert sl.expected_root(store, NODE, key, tmp_path / "digests", workers, log2) == want
-    assert sl.expected_root(store, NODE, bytes(32), tmp_path / "digests") != want
-    W, A = a.weights_blocks, store.arena_blocks
-    assert store.regions() == [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": W},
-                               {"kind": "filler", "tier": "hbm", "first": W, "blocks": 3},
-                               {"kind": "weights", "tier": "hbm", "first": A, "blocks": W},
-                               {"kind": "filler", "tier": "hbm", "first": A + W, "blocks": 3},
-                               {"kind": "filler", "tier": "host", "first": 2 * A, "blocks": 5}]
+    a = rstore.arena(tmp_path / "m", pin["checkpoint"])
+    assert len(a.entries) == 9 + (not tied)
+    assert [e.offset for e in a.entries] == engine.pack([e.nbytes for e in a.entries], a.weights_blocks * B)
 
 
-def test_a_checkpoint_the_layout_doesnt_cover_is_refused(ckpt, tmp_path):
-    """A vocabulary vLLM would pad, an architecture whose module order the layout doesn't state, and arenas smaller
-    than the weights have no store the checkpoint alone fixes."""
-    pin = sl.synthetic(tmp_path / "pad", vocab=100)
-    with pytest.raises(sl.Refused, match="vocab_size 100 is not a multiple of 64"):
-        sl.arena(tmp_path / "pad", pin["checkpoint"])
-    pin = sl.synthetic(tmp_path / "moe", architecture="MixtralForCausalLM")
-    with pytest.raises(sl.Refused, match="whose vLLM module order the layout states"):
-        sl.arena(tmp_path / "moe", pin["checkpoint"])
-    a = sl.arena_of(ckpt)
-    with pytest.raises(sl.Refused, match=f"the weights take {a.weights_blocks} blocks, more than an arena's"):
-        sl.Store(a, 1, a.weights_blocks - 1)
+def test_store_layouts_pin_is_the_one_core_reads_and_its_sha256s_the_arenas(ckpt, tmp_path, monkeypatch):
+    """`store_layout.py pin` pins every file of a checkpoint as core's `read_pin` reads a pin, and `arena_sha256`, which
+    `node.py --model-dir` holds each engine's plain hashes to, is the SHA-256 of each span of the arena as it is read,
+    in worker processes too."""
+    want = json.loads((ckpt / "pin.json").read_text())
+    (ckpt / "pin.json").unlink()
+    assert sl.main(["pin", str(ckpt), "--name", ROLE, "--out", str(tmp_path / "local.json")]) == 0
+    assert rstore.read_pin(tmp_path / "local.json", ROLE) == want
+    a = rstore.arena_of(ckpt)
+    monkeypatch.setattr(sl, "GIB", 4 * B)
+    nbytes = (a.weights_blocks + 3) * B
+    spans = [hashlib.sha256(a.read(lo, min(4 * B, nbytes - lo))).hexdigest() for lo in range(0, nbytes, 4 * B)]
+    assert len(spans) == 3 and sl.arena_sha256(a, nbytes) == sl.arena_sha256(a, nbytes, 2) == spans
 
 
 def test_a_store_registered_as_the_layout_lays_it_out_is_accepted_and_bound(ckpt):
@@ -115,7 +80,7 @@ def test_a_store_registered_as_the_layout_lays_it_out_is_accepted_and_bound(ckpt
     under the payload key the verifier sent: the verifier recomputes the same root, binds the registration, takes its
     regions from the layout, and the honest session is accepted."""
     b = binding(ckpt, workers=2)
-    store = sl.Store(b.arena, 2, 7, 2)
+    store = rstore.Store(b.arena, 2, 7, 2)
     got = {}
     (r,), (p,) = run("honest", store=store, binding=b, verdict="python",
                      then=lambda v: got.update(reg=v.registration, regions=v.regions, key=v.payload_key))
@@ -127,7 +92,7 @@ def test_a_store_registered_as_the_layout_lays_it_out_is_accepted_and_bound(ckpt
     assert got["regions"] == tuple((x["kind"], x["tier"], x["first"], x["blocks"]) for x in store.regions())
 
 
-def greet(backend, b: sl.Binding | None, **kw) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
+def greet(backend, b: rstore.Binding | None, **kw) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
     """A prover over `backend` greeting a verifier that binds to `b`: the verifier, its refusal, and the `bye` the prover
     read."""
     x, y = socket.socketpair()
@@ -159,81 +124,45 @@ def test_a_store_whose_root_isnt_the_pinned_models_is_refused_with_why_before_th
     of the same shape, a store of other arenas, and a store short of the arenas. The verifier answers `bye` with the
     reason and the registry has drawn nothing for the node."""
     b = binding(ckpt)
-    store = sl.Store(b.arena, 2, 7, 2)
+    store = rstore.Store(b.arena, 2, 7, 2)
     assert b.arena.weights_blocks == 6
     sl.synthetic(tmp_path / "other", name=ROLE, seed=1, **TINY)
     cases = [
         (prover.CpuBackend(16, random.Random(7), store=store), {"seed_payload_key": True},
          re.escape("is not the pinned model synthetic-bf16's store (2 arenas of 7 blocks, 6 of weights each, then 2 "
                    "host filler blocks) under this verifier's payload key")),
-        (prover.CpuBackend(16, random.Random(7), store=sl.Store(sl.arena_of(tmp_path / "other"), 2, 7, 2)), {},
+        (prover.CpuBackend(16, random.Random(7), store=rstore.Store(rstore.arena_of(tmp_path / "other"), 2, 7, 2)), {},
          "is not the pinned model synthetic-bf16's store"),
-        (prover.CpuBackend(16, random.Random(7), store=sl.Store(b.arena, 2, 8)), {},
+        (prover.CpuBackend(16, random.Random(7), store=rstore.Store(b.arena, 2, 8)), {},
          "the hello's layout .* is not the pinned model synthetic-bf16's"),
         (prover.CpuBackend(12, random.Random(7)), {}, "the hello's store is 12 blocks, fewer than the pinned model's 2 "
                                                       "arenas of 7"),
     ]
     for backend, kw, why in cases:
         v, refused, heard = greet(backend, b, **kw)
-        assert isinstance(refused, sl.Refused), why
+        assert isinstance(refused, rstore.Refused), why
         assert re.search(why, str(refused)), (why, str(refused))
         assert heard == [f"refused: {refused}"] and v.registry.drawn(NODE) == 0
         assert b.record()["bound"] is False
-    assert "register the store `store_layout` lays out, salted with the key the verifier sent" in str(
+    assert "register the store `remote_bandwidth.store` lays out, salted with the key the verifier sent" in str(
         greet(cases[0][0], b, seed_payload_key=True)[1])
     v, refused, heard = greet(prover.CpuBackend(16, random.Random(7), store=store), b)
     assert refused is None and heard == [] and v.registry.drawn(NODE) == 1 and b.record()["bound"] is True
 
 
-def test_a_pin_whose_files_arent_the_checkpoints_is_refused_before_anything_reads_them(ckpt, tmp_path):
-    """The binding holds every pinned file to its SHA-512 first: a pin naming another hash for a file, a file changed
-    since its pin, a checkpoint_sha512 that isn't its files', another role's pin and a symlinked file are each refused
-    with why; a registry's lines of the role (`models.jsonl`) are read as its pin. `verifier.py --model` refuses the
-    same before it listens, and keeps why in verifier.json."""
+def test_verifier_py_refuses_a_pin_whose_files_arent_the_checkpoints_before_it_listens(ckpt, tmp_path):
+    """`verifier.py --model` holds every pinned file to its SHA-512 before it listens: a pin naming another hash for a
+    file exits 3, and verifier.json keeps why and an unbound binding."""
     pin = json.loads((ckpt / "pin.json").read_text())
     shard = sorted(f for f in pin["checkpoint"] if f.endswith(".safetensors"))[0]
-
-    def pinned(files: dict, **over) -> Path:
-        path = tmp_path / f"pin-{len(list(tmp_path.iterdir()))}.json"
-        path.write_text(json.dumps({"name": ROLE, "checkpoint": files, "checkpoint_sha512": sl.checkpoint_sha512(files)}
-                                   | over))
-        return path
-
-    def refused(pin_path: Path, role: str = ROLE) -> str:
-        with pytest.raises(sl.Refused) as e:
-            sl.Binding(role, ckpt, pin_path, 2, 7, log=lambda m: None)
-        return str(e.value)
-
     other = {**pin["checkpoint"], shard: "ab" * 64}
-    assert refused(pinned(other)) == (f"{ckpt / shard}: SHA-512 {pin['checkpoint'][shard][:16]}..., not the pin's "
-                                      f"{'ab' * 8}... of {ROLE}")
-    assert "is not the SHA-512 of its checkpoint's canonical JSON" in refused(
-        pinned(pin["checkpoint"], checkpoint_sha512="cd" * 64))
-    assert refused(ckpt / "pin.json", "llama31-8b") == f"the pin {ckpt / 'pin.json'} is {ROLE}'s, not --model llama31-8b's"
-    registry = tmp_path / "models.jsonl"
-    registry.write_text("".join(json.dumps(x) + "\n" for x in (
-        {"model": "other", "checkpoint": other, "checkpoint_sha512": sl.checkpoint_sha512(other)},
-        {"model": ROLE, "checkpoint": pin["checkpoint"], "checkpoint_sha512": pin["checkpoint_sha512"]})))
-    assert sl.Binding(ROLE, ckpt, registry, 2, 7, log=lambda m: None).pin == pin
-    with (ckpt / shard).open("r+b") as f:
-        f.seek(-1, 2)
-        last = f.read(1)
-        f.seek(-1, 2)
-        f.write(bytes([last[0] ^ 1]))
-    assert refused(ckpt / "pin.json").startswith(f"{ckpt / shard}: SHA-512 ")
-    (ckpt / shard).rename(tmp_path / shard)
-    (ckpt / shard).symlink_to(tmp_path / shard)
-    assert "not a regular file (no symlink)" in refused(ckpt / "pin.json")
-    (ckpt / shard).unlink()
-    (tmp_path / shard).rename(ckpt / shard)
-    with (ckpt / shard).open("r+b") as f:
-        f.seek(-1, 2)
-        f.write(last)
+    pin_path = tmp_path / "other-pin.json"
+    pin_path.write_text(json.dumps({"name": ROLE, "checkpoint": other, "checkpoint_sha512": rstore.checkpoint_sha512(other)}))
     out = tmp_path / "out"
     sys_argv = sys.argv
     try:
         sys.argv = ["verifier.py", "--out", str(out), "--verdict", "python", "--model", ROLE, "--checkpoint", str(ckpt),
-                    "--pin", str(pinned(other)), "--arena-blocks", "7", "--layout-workers", "1"]
+                    "--pin", str(pin_path), "--arena-blocks", "7", "--layout-workers", "1"]
         assert verifier.main() == 3
     finally:
         sys.argv = sys_argv
