@@ -72,6 +72,11 @@ if [ -n "$CKPT" ] && [ "$CKPT" != "$S/ckpt" ]; then
 fi
 
 IFS=, read -ra GPUS <<< "$CUDA_VISIBLE_DEVICES"
+if [ "${BASIS_SIGNS:-0}" = 1 ]; then
+  CUDA_VISIBLE_DEVICES="${GPUS[0]}" "$PY" newskill.py basis-signs --results "$COORD/results" --out "$OUT/basis_signs.json" \
+    > "$OUT/basis_signs.log" 2>&1 || echo "basis-signs failed"
+  cp "$OUT/basis_signs.json" "$COORD/basis_signs.json" 2>/dev/null || true
+fi
 pids=()
 if [ "${BASE:-0}" = 1 ]; then
   ( CUDA_VISIBLE_DEVICES="${GPUS[0]}" "$PY" newskill.py base --out "$OUT/base_pass64.json" > "$OUT/base.log" 2>&1 \

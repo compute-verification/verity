@@ -17,8 +17,10 @@ Families of trainable state (S = stored bits of the trainable state + seed bits)
 Modes:
   base   pass@64 of an untrained model on each task.
   worker claim (task, S, seed) jobs from a list: SFT over an LR grid, keep the best by validation, then GRPO from it.
+  merge  the merged HF model of a checkpoint saved without one.
+  basis-signs  make xs checkpoints saved before the sign-canonical basis reloadable (basis_signs.pt), checked by re-evaluation.
 """
-import argparse, copy, json, math, os, random, sys, time
+import argparse, copy, glob, json, math, os, random, sys, time
 
 import torch
 import torch.nn as nn
@@ -31,6 +33,7 @@ LOG2_26F = math.lgamma(27) / math.log(2)
 TARGETS = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
 TAGS = {0: "A", 1: "B", 2: "C"}
 KEY_SEED = 20261024
+RELOAD_TOL = 0.02  # a reloaded checkpoint's test position accuracy may differ from its recorded one by bf16 batch noise only
 
 
 class Task:
@@ -194,19 +197,25 @@ class LoRALinear(nn.Module):
 XS_R = {13: 2, 625: 4, 5000: 8}  # n -> SVD rank; n not listed means P = identity at rank sqrt(n / #maps)
 
 SVD_CACHE = {}
+# The GPU SVD's singular-vector signs differ between processes, and an xs state's R is only meaningful in the basis it was
+# trained in, so the basis is sign-canonical (each left vector's largest entry positive) and trainable.pt says so.
+BASIS = "svd32-signcanon"
 
 
 def svd_of(name, W):
     if name not in SVD_CACHE:
         U, S, Vh = torch.linalg.svd(W.float(), full_matrices=False)
-        SVD_CACHE[name] = (U[:, :32].contiguous(), S[:32].contiguous(), Vh[:32].T.contiguous())
+        U, S, V = U[:, :32], S[:32], Vh[:32].T
+        s = torch.sign(U.gather(0, U.abs().argmax(0, keepdim=True)))
+        SVD_CACHE[name] = ((U * s).contiguous(), S.contiguous(), (V * s).contiguous())
     return SVD_CACHE[name]
 
 
 class State:
     """The trainable state of one condition: params to optimize, refresh() before each forward, bits as stored."""
 
-    def __init__(self, model, spec, seed, device):
+    def __init__(self, model, spec, seed, device, signs=None):
+        """signs: for an xs checkpoint saved before BASIS, {linear: its basis's signs relative to BASIS} (basis_signs.pt)."""
         self.model, self.spec, self.seed = model, spec, seed
         self.shared, self.wrapped = None, []
         lins = target_linears(model)
@@ -237,6 +246,9 @@ class State:
             self.shared = Shared(n, D, 2000 + seed, device)
             for i, (name, m) in enumerate(lins):
                 U, S, V = svd_of(name, m.weight)
+                if signs is not None:
+                    s = signs[name].to(U)
+                    U, S, V = U[:, :r] * s, S[:r], V[:, :r] * s
                 w = XSLinear(m, U, S, V, r, self.shared, i * r * r)
                 replace(model, name, w)
                 self.wrapped.append((name, w))
@@ -455,7 +467,8 @@ def save_ckpt(path, model_name, st, model, meta, merged=True):
         model.save_pretrained(path, safe_serialization=True)
         meta["merged_dtype"] = "bfloat16"
     else:
-        torch.save({"spec": st.spec, "seed": st.seed, "state": st.trainable_dict()}, os.path.join(path, "trainable.pt"))
+        torch.save({"spec": st.spec, "seed": st.seed, "state": st.trainable_dict(),
+                    **({"basis": BASIS} if st.spec.startswith("xs:") else {})}, os.path.join(path, "trainable.pt"))
         if merged:
             save_merged(path, model_name, st.deltas())
         meta["merged_dtype"] = "float32" if merged else None
@@ -466,17 +479,7 @@ def save_ckpt(path, model_name, st, model, meta, merged=True):
 
 def merge(a):
     """Materialize the merged fp32 HF model of a checkpoint saved without one: base + the trainable state's delta."""
-    meta = json.load(open(os.path.join(a.ckpt, "meta.json")))
-    tr = torch.load(os.path.join(a.ckpt, "trainable.pt"))
-    model = load_model(meta["base_model"], tr["spec"], "cuda")
-    st = State(model, tr["spec"], tr["seed"], "cuda")
-    with torch.no_grad():
-        if tr["spec"] == "lora16":
-            for n, w in st.wrapped:
-                w.A.copy_(tr["state"][f"{n}.A"])
-                w.B.copy_(tr["state"][f"{n}.B"])
-        else:
-            st.shared.z.copy_(tr["state"]["z"])
+    model, st, meta = load_state(a.ckpt, "cuda")
     save_merged(a.out, meta["base_model"], st.deltas())
     print("merged", a.ckpt, "->", a.out)
 
@@ -485,8 +488,16 @@ def load_state(d, device):
     """Model and trainable state of an adapter checkpoint, as trained (bf16 base, adapter path unmerged)."""
     meta = json.load(open(os.path.join(d, "meta.json")))
     tr = torch.load(os.path.join(d, "trainable.pt"))
+    signs = None
+    if tr["spec"].startswith("xs:") and tr.get("basis") != BASIS:
+        f = os.path.join(d, "basis_signs.pt")
+        if not os.path.exists(f):
+            raise SystemExit(f"{d}: an xs checkpoint saved before the sign-canonical basis, without basis_signs.pt, so this "
+                             "process can't rebuild the basis its state is in. Use its merged model if meta.json says "
+                             "merged, or run `newskill.py basis-signs` over the results of the run that wrote it.")
+        signs = torch.load(f)
     model = load_model(meta["base_model"], tr["spec"], device)
-    st = State(model, tr["spec"], tr["seed"], device)
+    st = State(model, tr["spec"], tr["seed"], device, signs=signs)
     with torch.no_grad():
         if tr["spec"] == "lora16":
             for n, w in st.wrapped:
@@ -511,6 +522,10 @@ def rl_only(job, a, tok, device):
     rec = {"job": job, "H_bits": task.H, "model": a.model, "init": d, "bits": st.bits, "sft_lr": lr,
            "sft_steps": meta["steps"], "sft_budget": meta["steps"], "rl_steps": job["rl_steps"], "trials": []}
     rec["sft_test_exact"], rec["sft_test_pos"] = evaluate(model, st, task, test, False)
+    rec["reload_pos_diff"] = abs(sum(rec["sft_test_pos"]) / len(test) - meta["test_pos"])
+    if rec["reload_pos_diff"] > RELOAD_TOL:
+        raise RuntimeError(f"{d} reloads at position accuracy {sum(rec['sft_test_pos']) / len(test):.3f}, "
+                           f"not its recorded {meta['test_pos']:.3f}")
     rl_lr = lr * job["rl_lr_mult"]
     log = []
     t0 = time.time()
@@ -684,6 +699,91 @@ def worker(a):
             time.sleep(15)
 
 
+def xs_rank(spec, nlin):
+    n = int(spec.split(":")[1])
+    return XS_R.get(n) or int(round(math.sqrt(n / nlin)))
+
+
+def basis_signs(a):
+    """For xs checkpoints saved before BASIS: each linear's singular-vector signs relative to BASIS, as basis_signs.pt.
+
+    A worker process computed its SVDs once (SVD_CACHE), so one merged checkpoint from that process pins the signs of every
+    xs checkpoint it wrote up to the merged one's rank: with A = (U S)_r^T and B = V_r as XSLinear stores them, the merged
+    delta gives R_est = A^+ (W_merged - W) B^+T = diag(s) R diag(s). Each checkpoint given signs is re-evaluated on the test
+    strings and keeps them only if it reproduces its recorded score."""
+    from safetensors.torch import load_file
+    torch.backends.cuda.matmul.allow_tf32 = True
+    tok = AutoTokenizer.from_pretrained(a.model)
+    procs = {}
+    for f in sorted(glob.glob(os.path.join(a.results, "*.json"))):
+        r = json.load(open(f))
+        j = r.get("job", {})
+        if "error" in r or j.get("init") or not j.get("spec", "").startswith("xs:"):
+            continue
+        for k in ("sft_ckpt", "rl_ckpt"):
+            if r.get(k) and os.path.exists(os.path.join(r[k], "DONE")):
+                procs.setdefault(r["worker"], {})[os.path.realpath(r[k])] = j["spec"]
+    base32 = AutoModelForCausalLM.from_pretrained(a.model, dtype=torch.float32)
+    W0 = {n: m.weight.detach() for n, m in target_linears(base32)}
+    report = []
+    for proc, ckpts in sorted(procs.items()):
+        legacy = {d: s for d, s in ckpts.items() if torch.load(os.path.join(d, "trainable.pt")).get("basis") != BASIS}
+        refs = sorted([d for d in legacy if json.load(open(os.path.join(d, "meta.json"))).get("merged")],
+                      key=lambda d: -xs_rank(legacy[d], len(W0)))
+        signs, ref_r, ref_err = {}, 0, None
+        if refs:
+            tr = torch.load(os.path.join(refs[0], "trainable.pt"))
+            model = load_model(a.model, tr["spec"], "cuda")
+            st = State(model, tr["spec"], tr["seed"], "cuda")
+            merged = {}
+            for f in glob.glob(os.path.join(refs[0], "*.safetensors")):
+                merged.update(load_file(f))
+            errs = []
+            with torch.no_grad():
+                st.shared.z.copy_(tr["state"]["z"])
+                st.refresh()
+                for n, w in st.wrapped:
+                    A, B, R = w.SU.double().T, w.V.double(), w.core().double()
+                    D = merged[n + ".weight"].to("cuda").double() - W0[n].to("cuda").double()
+                    Re = torch.linalg.pinv(A) @ D @ torch.linalg.pinv(B).T
+                    M = Re * R
+                    s = torch.sign(M[M.abs().sum(1).argmax()])
+                    s[s == 0] = 1
+                    errs.append(((Re - s[:, None] * s[None, :] * R).norm() / R.norm()).item())
+                    signs[n] = s.float().cpu()
+            ref_r, ref_err = w.r, max(errs)
+            del model, st, merged
+            torch.cuda.empty_cache()
+        for d, spec in sorted(legacy.items()):
+            meta = json.load(open(os.path.join(d, "meta.json")))
+            e = {"path": d, "worker": proc, "spec": spec, "ref": refs[0] if refs else None, "ref_rank": ref_r,
+                 "ref_fit_err": ref_err, "recorded_exact": meta["test_exact"], "recorded_pos": meta["test_pos"]}
+            r = xs_rank(spec, len(W0))
+            f = os.path.join(d, "basis_signs.pt")
+            if os.path.exists(f):  # kept only after a matching re-evaluation
+                e["ok"] = e["earlier"] = True
+                report.append(e)
+                continue
+            if not refs or ref_err > 0.05 or r > ref_r:
+                e["ok"] = False
+                report.append(e)
+                print(json.dumps(e), flush=True)
+                continue
+            torch.save({n: s[:r].clone() for n, s in signs.items()}, f)
+            model, st, _ = load_state(d, "cuda")
+            task = Task(meta["order"], tok, "cuda")
+            ex, fr = evaluate(model, st, task, task.plains(512, 800 + meta["order"]), False)
+            e["reload_exact"], e["reload_pos"] = sum(ex) / len(ex), sum(fr) / len(fr)
+            e["ok"] = abs(e["reload_pos"] - meta["test_pos"]) <= RELOAD_TOL and abs(e["reload_exact"] - meta["test_exact"]) <= RELOAD_TOL
+            if not e["ok"]:
+                os.remove(f)
+            del model, st
+            torch.cuda.empty_cache()
+            report.append(e)
+            print(json.dumps(e), flush=True)
+    json.dump(report, open(a.out, "w"), indent=1)
+
+
 def base(a):
     torch.backends.cuda.matmul.allow_tf32 = True
     out = {}
@@ -732,8 +832,12 @@ def main():
     m = sub.add_parser("merge")
     m.add_argument("--ckpt", required=True)
     m.add_argument("--out", required=True)
+    s = sub.add_parser("basis-signs")
+    s.add_argument("--model", default="Qwen/Qwen2.5-0.5B-Instruct")
+    s.add_argument("--results", required=True)
+    s.add_argument("--out", required=True)
     a = ap.parse_args()
-    {"base": base, "worker": worker, "merge": merge}[a.mode](a)
+    {"base": base, "worker": worker, "merge": merge, "basis-signs": basis_signs}[a.mode](a)
 
 
 if __name__ == "__main__":

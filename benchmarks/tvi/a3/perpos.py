@@ -69,13 +69,20 @@ def main():
         meta = json.load(open(os.path.join(d, "meta.json")))
         task = ns.Task(meta["order"], tok, "cuda")
         test = task.plains(512, 800 + meta["order"])
+        via = "adapter"
         if meta["spec"] == "full":
-            model = AutoModelForCausalLM.from_pretrained(d, dtype=torch.bfloat16).to("cuda")
-            st = None
+            model, st, via = AutoModelForCausalLM.from_pretrained(d, dtype=torch.bfloat16).to("cuda"), None, "model"
         else:
-            model, st, _ = ns.load_state(d, "cuda")
+            try:
+                model, st, _ = ns.load_state(d, "cuda")
+            except SystemExit as e:
+                if not meta.get("merged"):
+                    print(json.dumps({"path": d, "skipped": str(e)}), flush=True)
+                    out.append({"path": d, "skipped": str(e)})
+                    continue
+                model, st, via = AutoModelForCausalLM.from_pretrained(d, dtype=torch.bfloat16).to("cuda"), None, "merged"
         acc, exact = per_position(model, st, task, test, False)
-        r = {"path": d, "task": meta["task"], "order": meta["order"], "spec": meta["spec"], "S_label": meta["S_label"],
+        r = {"path": d, "via": via, "task": meta["task"], "order": meta["order"], "spec": meta["spec"], "S_label": meta["S_label"],
              "S_bits": meta["S_bits"], "H_bits": meta["H_bits"], "phase": meta["phase"], "seed": meta["seed"],
              "pos_acc": acc, "exact": exact, "meta_test_exact": meta["test_exact"],
              "learned_bits_est": learned_bits(meta["order"], acc)}

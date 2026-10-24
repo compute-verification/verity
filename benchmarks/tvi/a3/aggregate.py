@@ -30,10 +30,15 @@ def main():
     ap.add_argument("--base", default="")
     ap.add_argument("--out", required=True)
     ap.add_argument("--node", default="vy-nebius-3")
+    ap.add_argument("--basis", default="", help="newskill.py basis-signs report (default: basis_signs.json beside --results)")
     a = ap.parse_args()
     allrecs = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(a.results, "*.json"))) if not f.endswith(".error.json")]
     recs = [r for r in allrecs if not r["job"].get("init")]
-    sweeps = [r for r in allrecs if r["job"].get("init")]
+    # an RL-only record without reload_pos_diff predates the reload check; its xs start state may not be the one trained
+    stale = [r for r in allrecs if r["job"].get("init") and "reload_pos_diff" not in r and r["job"]["spec"].startswith("xs:")]
+    sweeps = [r for r in allrecs if r["job"].get("init") and r not in stale]
+    bpath = a.basis or os.path.join(os.path.dirname(os.path.abspath(a.results)), "basis_signs.json")
+    basis_ok = {e["path"]: e["ok"] for e in json.load(open(bpath))} if os.path.exists(bpath) else None
     errs = sorted(glob.glob(os.path.join(a.results, "*.error.json")))
     base = json.load(open(a.base)) if a.base and os.path.exists(a.base) else {}
     model = recs[0]["model"] if recs else "Qwen/Qwen2.5-0.5B-Instruct"
@@ -109,6 +114,8 @@ def main():
             lines.append(f"| {j['task']} | {LABEL.get(j['spec'], j['spec'])} | {r['bits']:.3g} | {r['rl_lr']:.3g} ({j['rl_lr_mult']}) | "
                          f"{m('sft_test_exact'):.3f} | {f(m('rl_test_exact'), ci(b))} | {r['rl_best_step']} | {m('rl_final_test_exact'):.3f} | "
                          f"{m('sft_test_pos'):.3f} | {m('rl_test_pos'):.3f} | {m('rl_final_test_pos'):.3f} |")
+    if stale:
+        lines += ["", "Excluded (xs start state not reproduced on reload): " + ", ".join(r["job"]["id"] for r in stale)]
     blines = ["| model | task | H bits | strings | k | pass@k | 95% upper (0 hits) | greedy exact | pos-acc (sampled) |", "|---|---|---|---|---|---|---|---|---|"]
     for k, v in base.items():
         up = 1 - 0.05 ** (1 / v["n_strings"]) if v["n_pass"] == 0 else float("nan")
@@ -125,12 +132,22 @@ def main():
             p = r.get(f"{ph}_ckpt")
             if not p:
                 continue
+            full = j["spec"] == "full"
+            merged = full or (j["seed"] == 0 and (ph == "rl" or r["sft_val_exact"] >= 0.995))
+            real = r["sft_ckpt"] if ph == "rl" and r.get("rl_skipped") else p
+            if not j["spec"].startswith("xs:"):
+                reload = "trainable.pt" if not full else "model"
+            elif basis_ok is not None and basis_ok.get(real):
+                reload = "trainable.pt + basis_signs.pt"
+            else:
+                reload = "merged model only" if merged else "none"
             man.append({"node": a.node, "path": p, "task": j["task"], "order": j["order"], "H_bits": r["H_bits"],
                         "spec": j["spec"], "S_label": LABEL.get(j["spec"], j["spec"]), "S_bits": r["bits"], "phase": ph,
                         "seed": j["seed"], "steps": int(os.path.basename(p)[4:]),
                         "score_test_exact": float(np.mean(r[f"{ph}_test_exact"])),
                         "score_test_pos": float(np.mean(r[f"{ph}_test_pos"])), "base_model": r["model"],
-                        "merged_dtype": "bfloat16" if j["spec"] == "full" else "float32"})
+                        "merged": merged, "merged_dtype": ("bfloat16" if full else "float32") if merged else None,
+                        "reload": reload})
     json.dump(man, open(os.path.join(a.out, "manifest.json"), "w"), indent=1)
 
 
