@@ -1544,6 +1544,22 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
+  },
+  "Pouw.Assumptions.ChargeVF3j16Call": {
+   "owner": "@compute-accounting",
+   "digest": "22def641aa181ec94263f81a3794285079e9394980baed1ae3dcccc1897dce09"
+  },
+  "Pouw.Assumptions.ChargeVF3j16CallOverlap": {
+   "owner": "@compute-accounting",
+   "digest": "e6ebf8c35d1ea9d6bf0f036ca670a883e8951c8b882d95bcc0edf8453977b07f"
+  },
+  "Pouw.Assumptions.KScopeOneSidedCall": {
+   "owner": "@compute-accounting",
+   "digest": "984bd397611cd9fb9f7a8e46a97e7e314c3915f404d244badaeffab46e292310"
+  },
+  "Pouw.Assumptions.KScopeOverlapOneSidedCall": {
+   "owner": "@compute-accounting",
+   "digest": "0a3cf648e4d11f4d81b85f67a7d70511b7218f7bf2db48c077181e66149777a7"
   }
  },
  "meaning": [
@@ -9122,7 +9138,13 @@
    "type_hash": "5f059058df646f93e609255e7315a6dc94bbdb8a935d1d2ba772982fd9e13e91"
   },
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedCall": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedCall :",
+    "  Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedCall"
+   ],
+   "assumptions": [],
+   "type_hash": "4d0c942032033a788d8bab488e85cc5c23c74ceb962e72453393340cbda3cc2f"
   },
   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": {
    "owner": "@compute-accounting",
@@ -9139,7 +9161,13 @@
    "type_hash": "11c53ce9aa6c50fe108cb79becfc9910910a8e16fe4c94ed89612b1c568e24e3"
   },
   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedCall": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedCall :",
+    "  Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedCall"
+   ],
+   "assumptions": [],
+   "type_hash": "4caae5865ffdebabf4d948a2443d3730fc7377d504820c8ef605a31d67471271"
   },
   "Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap": {
    "owner": "@compute-accounting",
@@ -19747,10 +19775,34 @@
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedCall",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedCall",
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap",
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged"
+   ]
+  },
+  "Definitions.Pouw.RelativeSecurityCall": {
+   "digest": "cf348c271f7f579a4601556c4766cf8b118b6f479d7d8861e181af2974918eab",
+   "definitions": {
+    "Pouw.RelativeSecurity.CallBits": "0152316065c71ec33bed53aeab5dd4bdb6dec542abedf8433169f4ae4075d44e",
+    "Pouw.RelativeSecurity.CallCells": "af6caf75049f6026c06efb2aba665dc25fde4efd768dad926ec5c67ad01f80d4",
+    "Pouw.RelativeSecurity.CallRunMap": "82bceb01490fc61fc490c69fece0112e7c49385ffedfe6d1bdc0f2bba3bc525e",
+    "Pouw.RelativeSecurity.CallStage": "abad38482e2f331ca271c77093147f50c398f3c214c8dd6a6e560d455b07b4de",
+    "Pouw.RelativeSecurity.OCallRunMap": "9573c0999017810598eba9da6fb5241107bf040e44d8942991bcd1bd6fefa975",
+    "Pouw.RelativeSecurity.OCallSpot": "7fa0a3831bbb23a39befa06802c5667afa667b2e2ffa58879e47bb952ce3095c",
+    "Pouw.RelativeSecurity.OUCells": "cee04fb096abe808687ffb7dff85307b592cd622e8fcc5525b8d92debc5e5eb1",
+    "Pouw.RelativeSecurity.UCells": "0f24cc9f7e8de480b0002ec62f8e17f4309b54061b27be8b4ff34b1d3183eae5",
+    "Pouw.RelativeSecurity.oUnitCell": "33ff3b0bf32f0819e37cfe7b7dc876b8e970ef5a932ee5fc5e167d4fc23af9df",
+    "Pouw.RelativeSecurity.unitBit": "71d52d86c1a0a99e822405f49a2f165803103a988256a862cc923c2cbad409e6",
+    "Pouw.RelativeSecurity.unitCell": "aab225d2bc075504aac322b9882093f257117c0862f5a08df3e6c757a5d18d27",
+    "Pouw.RelativeSecurity.unitPc": "0c93d3d4f59dde2c810a4ccba8de0a2d8a43bba490ca641d5df7d42070ba5eae",
+    "Pouw.RelativeSecurity.unitVq": "29ea3ab1c71955283f23a4b98f29a095fc5459335bb39e0116039053f1f2e5c8"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedCall",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedCall"
    ]
   },
   "Definitions.Pouw.Window": {
@@ -28451,8 +28503,23 @@
    "guarantees": [
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedCall",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
-    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided"
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedCall"
+   ]
+  },
+  "Models.Pouw.Assumptions.RelativeSecurityCall": {
+   "digest": "02c4894ccfc9fe7c5f975d8baf2705a38da91e293b3b8cef70fb7cb248b4cf0c",
+   "definitions": {
+    "Pouw.Assumptions.ChargeVF3j16Call": "22def641aa181ec94263f81a3794285079e9394980baed1ae3dcccc1897dce09",
+    "Pouw.Assumptions.ChargeVF3j16CallOverlap": "e6ebf8c35d1ea9d6bf0f036ca670a883e8951c8b882d95bcc0edf8453977b07f",
+    "Pouw.Assumptions.KScopeOneSidedCall": "984bd397611cd9fb9f7a8e46a97e7e314c3915f404d244badaeffab46e292310",
+    "Pouw.Assumptions.KScopeOverlapOneSidedCall": "0a3cf648e4d11f4d81b85f67a7d70511b7218f7bf2db48c077181e66149777a7"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedCall",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedCall"
    ]
   },
   "Models.Pouw.Guarantees.Barrier": {
@@ -28801,6 +28868,17 @@
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap",
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged"
+   ]
+  },
+  "Models.Pouw.Guarantees.RelativeSecurityCall": {
+   "digest": "4aa131625e4e97e0fa2e1980f3b8c664573f25505f0dd49061cf7bbb2054f877",
+   "definitions": {
+    "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedCall": "8a2d91754d19228ad1f098aa36ed9a6f13dc6c946c8317b09b32dc6e046ff228",
+    "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedCall": "4614d8ee5342e63ba7c79efa65a87997c6a7ede8fe60163ce244b437b40862e1"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedCall",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedCall"
    ]
   },
   "PouwWindow.FullDraw": {
