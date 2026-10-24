@@ -48,6 +48,7 @@ def PartAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col 
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) ∧
       (∀ i < L.rounds x, ∀ o m, (o, m) ∈ L.piecesOf x s w i → ((ms.getD i []).drop o).take m.length = m)
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **`PartChecksB` at what each part's circuit accepts**, at every deployment, layout, shape and staging: a witness
 whose calls collide takes the escape, and any other is its own `PartAccepts`. -/
 theorem partChecksB_partAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
@@ -58,6 +59,7 @@ theorem partChecksB_partAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.
   · exact Or.inl fun c hs ms hh hp => ⟨⟨st, hx, hf⟩, xO, w, hck, hT, hc, hs, hh, hp⟩
   · exact Or.inr rfl
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **`PartAccepts` is the least inner check `PartChecksB` admits**: at every part, it implies any `chk` at which
 `PartChecksB` holds. -/
 theorem partAccepts_chk {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : LayoutB}
@@ -71,6 +73,7 @@ theorem partAccepts_chk {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy C
   · rw [hc] at h
     exact absurd h Bool.false_ne_true
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **`DecompB` is antitone in the inner check**: it holds at any check that implies one where it holds. -/
 theorem decompB_mono {H : Msg → Msg} {D : Deploy Coin} {IV : Verifier Coin} {L : LayoutB} {shape : Form → Prop}
     {chk chk' : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} (hle : ∀ s x c ms, chk' s x c ms → chk s x c ms)
