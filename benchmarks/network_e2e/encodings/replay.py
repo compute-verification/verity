@@ -37,6 +37,7 @@ alone, and
 
 from __future__ import annotations
 
+import gzip
 import json
 import math
 import re
@@ -933,8 +934,15 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
                  release_t=[at(r, "release_t", release_lag_s) for r in steps_recs], header=recs[0])
 
 
+def records(path: str | Path) -> list[dict[str, Any]]:
+    """A step trace's records, from JSON lines or gzipped JSON lines (`.gz`)."""
+    p = Path(path)
+    text = gzip.decompress(p.read_bytes()).decode() if p.suffix == ".gz" else p.read_text()
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
 def read_step_trace(path: str | Path, **kw: Any) -> Trace:
-    return load_step_trace((json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()), **kw)
+    return load_step_trace(records(path), **kw)
 
 
 def _jsonl(path: Path) -> list[dict[str, Any]]:
