@@ -47,6 +47,8 @@
   "Properties.Proofs.Accounting.Requirement",
   "Properties.RemoteAudit",
   "Properties.Proofs.RemoteAudit",
+  "Properties.RemoteAudit.Pooled",
+  "Properties.Proofs.RemoteAudit.Pooled",
   "Properties.Accounting.Compose",
   "Properties.Accounting.Served",
   "Properties.Proofs.Accounting.Served"
@@ -242,7 +244,7 @@
   },
   "Properties.RemoteAudit": {
    "imports": ["RemoteAudit"],
-   "except": [],
+   "except": ["Properties.RemoteAudit.Pooled"],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Accounting": {
@@ -274,6 +276,11 @@
    "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.SampledProofs.Draw"],
    "except": [],
    "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.SampledProofs.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
+  },
+  "Properties.RemoteAudit.Pooled": {
+   "imports": ["Definitions.Accounting", "RemoteAudit"],
+   "except": [],
+   "why": "the pooled bound the verifier computes (`RemoteAudit.Pooled`) is stated against the draw's model it covers (`Definitions.Accounting.Remote.Draw`), never a proof"
   }
  },
  "reads_exempt": {
@@ -1664,6 +1671,12 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  },
+  "Properties.RemoteAudit.pooledCovers": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.pooledCoversSession": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -2574,6 +2587,14 @@
    },
    "Properties.Pouw.Strata.strataTile": {
     "function": "PouwCheck.Credit.strata",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.pooledCovers": {
+    "function": "RemoteAudit.Pooled.pooled",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.pooledCoversSession": {
+    "function": "RemoteAudit.Pooled.pooled",
     "outcome": "accept"
    }
   },
