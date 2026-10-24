@@ -597,12 +597,12 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
 
 
 def update_pins(rep: dict) -> dict:
-    """Every pin, with each unpinned or changed count the report saw set to the count measured now, in the file that holds the pin
+    """Every pin, with each unpinned, untyped or changed one the report saw set to what it measures now, in the file that holds the pin
     or, for a new one, the sidecar of the module that defines its Definition (`sidecars.write_pins`)."""
     updates = {}
     for t in rep["targets"]:
         for f in t.get("failures", []) + t.get("warnings", []):
-            if f["check"] == "lowering" and f["code"] in ("unpinned", "pin-mismatch"):
+            if f["check"] == "lowering" and f["code"] in ("unpinned", "untyped", "pin-mismatch"):
                 updates[f["pins"], f["pin"]] = f["counts"]
     CK.load_pins()
     SC.write_pins(updates)
@@ -800,7 +800,7 @@ def main(argv: list[str] | None = None) -> int:
                     "(default: when its family is a Call of a served Program)")
     ap.add_argument("--strict", action="store_true", help="fail on the known failures too (circuit_check.known)")
     ap.add_argument("--fail-on-warnings", action="store_true")
-    ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts measured now (review the diff)")
+    ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts and circuit digests measured now (review the diff)")
     ap.add_argument("--cache", type=Path, default=None, metavar="DIR",
                     help="reuse a report whose every input is unchanged (circuit_check.cache), else run and record one")
     ap.add_argument("--catalog-units", action="store_true",
