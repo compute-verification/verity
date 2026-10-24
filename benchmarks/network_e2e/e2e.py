@@ -8,7 +8,8 @@ still stubbed.
 
     python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
                                          --proofs N2ZK_DIR | --no-prove) [--advice FILE [--serving-config FILE] |
-                                         --endpoint-run DIR] [--ids FILE] [--prove-path DIR] [--no-negatives]
+                                         --endpoint-run DIR] [--ids FILE] [--prove-path DIR ...
+                                         [--prove-path-registered FILE]] [--no-negatives]
     python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
                                          [--endpoint-run DIR] [certifier_serve.py rehearse's options]
 
@@ -47,7 +48,8 @@ then runs this. The README says what the report establishes and what it doesn't.
   salt) is each run's verdict, late, extra and drop its negatives (`CLAIM_ADVICE`).
 * **The chain** (`stages_of`, `chain`'s docstring): ``--advice`` and ``--serving-config``, or ``--endpoint-run``, the
   endpoint's records, whose own advice for the honest run's Commit windows `verity-vllm advice` writes
-  (`endpoint_advice`, `chain.served_advice`), ``--prove-path``, NEG's registry on the runs, and on the advice profile
+  (`endpoint_advice`, `chain.served_advice`), ``--prove-path`` (beside the endpoint's records, ``prove_path.py audit
+  --serve-run``'s audits of its Commit windows, `chain.served_commit`), NEG's registry on the runs, and on the advice profile
   the I/O tie on each run (`chain.tie`, its sampled ids the endpoint's records' or ``--ids``'); each that ran must pass
   for the report to be OK, and ``stubbed`` lists what is still a stand-in.
 
@@ -785,10 +787,17 @@ def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dic
         out["bits"] = chain.bits(adv, chain.window_buckets(honest), plan.get("windows") or 0,
                                  config and config.get("config", config), (_read(honest / "io.json") or {}).get("requests"))
     if args.prove_path:
-        src = Path(args.prove_path)
-        out["prove_path"] = chain.prove_path(_unpack(src, work) if src.is_file() else src, out.get("advice"),
-                                             (out.get("bits") or {}).get("bound")) | {"dir": str(src)}
-        log(f"prove path: adopted from {src}, ok {out['prove_path']['ok']}")
+        srcs = [Path(s) for s in args.prove_path]
+        given = getattr(args, "prove_path_registered", None)
+        registered = _read(Path(given)) if given else None
+        if given and not isinstance(registered, dict):
+            raise SystemExit(f"--prove-path-registered {given}: not a JSON object")
+        b = out.get("bits") or {}
+        out["prove_path"] = chain.prove_path([_unpack(s, work) if s.is_file() else s for s in srcs], out.get("advice"),
+                                             b.get("bound"), b, getattr(args, "endpoint_dir", None), registered) \
+            | {"dir": ", ".join(map(str, srcs))}
+        log(f"prove path: adopted from {', '.join(map(str, srcs))}, ok {out['prove_path']['ok']}, bound "
+            f"{out['prove_path']['bound']}")
     if (plan.get("occupancy") or {}).get("kind") == chain.ADVICE:
         out["negatives"] = {"ran": False, "why": "its rows take N2's verdict, which the advice profile has none of "
                                                  "until N2-ADVICE"}
@@ -911,8 +920,12 @@ def main(argv=None) -> int:
                                                           "out/serve; on --endpoint-peer's node, copied after the "
                                                           "rehearsal): its own advice for the honest run's Commit "
                                                           "windows, by verity-vllm advice (endpoint_advice)")
-    ap.add_argument("--prove-path", metavar="DIR", help="adopt prove_path.py audit's output (its run.sh's $OUT, or a "
-                                                        "tarball of it)")
+    ap.add_argument("--prove-path", metavar="DIR", action="append",
+                    help="adopt prove_path.py audit's output (its run.sh's $OUT, or a tarball of it); again for another "
+                         "(each --serve-run audit one of the served run's Commit windows)")
+    ap.add_argument("--prove-path-registered", metavar="FILE",
+                    help="who registered each --serve-run audit's window advice and when, by window: {K: {by, "
+                         "at_serve_time, at, first_draw, ref}}, the times ISO 8601 UTC")
     ap.add_argument("--ids", metavar="FILE", help="each request's sampled ids by its advice id (ADVICE-SRC's "
                                                   "requests.jsonl: user, output_ids), for the I/O tie's verdict on the "
                                                   "negatives it reads, and on the advice profile on every run in place "

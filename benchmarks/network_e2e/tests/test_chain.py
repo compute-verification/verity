@@ -167,6 +167,77 @@ def _endpoint(tmp_path: Path) -> Path:
     return tmp_path / "ep"
 
 
+def _serve_arm(d: Path, name: str, w: int, bits: int, *, forged=False, root=None, codes=()) -> None:
+    """A `prove_path.py audit --serve-run` arm of the endpoint fixture's Commit window ``w``: its summary's ``serve``
+    names the window, its run id and the root it found sealed while serving (``codes`` its refusals)."""
+    c = next(x for x in chain._jsonl(EP / "windows.jsonl") if int(x["window"]) == w)
+    _arm(d, name, {}, forged=forged)
+    s = json.loads((d / name / "summary.json").read_text())
+    adv = {"root": "f" * 128, "bits": bits}
+    s |= {"run_root": root or c["run_root"], "advice": adv,
+          "serve": {"ok": not codes, "codes": list(codes), "window": w,
+                    "detail": {"window": w, "run_id": c["run_id"], "published_root": root or c["run_root"],
+                               "advice": adv}}}
+    (d / name / "summary.json").write_text(json.dumps(s))
+
+
+def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_it_proves(tmp_path):
+    """PROVE-PATH's `--serve-run` audits of the endpoint's own Commit windows (as r20261024-154338-7679's of 8eb1's
+    w212, one of the honest run's, and r20261024-143655-ccc8's of its w5): bound to these runs when every arm's Commit
+    is the endpoint's (its windows.jsonl's run id and root) and sealed while serving, and an honest arm proves one of
+    the honest run's windows, its advice the report's registration of it by root or, registered apart, by v0 bits. Not
+    bound otherwise, each reason named; who registered each window's advice is the job's to say, and is shown."""
+    io = json.loads((EP / "io.json").read_text())["requests"]
+    first = chain._first_steps(chain._jsonl(EP / "advice_trace.jsonl"))
+    info, b = chain.served_advice(EP, EP / "advice", {"origin_unix": first[0] + 1.2, "windows": 2, "window_s": 6.0},
+                                  io, 60, [128001])
+    row = {x["window"]: x for x in b["commit_windows"]}
+    commits = {int(x["window"]): x for x in chain._jsonl(EP / "windows.jsonl")}
+    assert sorted(row) == [1, 2]
+    w1, w0 = tmp_path / "w1", tmp_path / "w0"
+    for d, w in ((w1, 1), (w0, 0)):
+        _serve_arm(d, "served", w, row[1]["v0_bits"] if w == 1 else 7)
+        _serve_arm(d, "served-forged", w, row[1]["v0_bits"] if w == 1 else 7, forged=True)
+    registered = {"1": {"by": "the lane", "at_serve_time": False, "at": "2026-10-24T15:33:57.704Z",
+                        "first_draw": "2026-10-24T15:48:10.322Z", "ref": "r-reg"},
+                  "0": {"by": "vllm", "at_serve_time": True}}
+    got = chain.prove_path([w1, w0], info, b["bound"], b, EP, registered)
+    assert got["bound"] is True and got["bound_why"] is None and got["ok"] is True
+    assert sorted(got["arms"]) == ["w0 served", "w0 served-forged", "w1 served", "w1 served-forged"]
+    assert got["arms"]["w1 served"]["commit"] == {
+        "window": 1, "run_id": commits[1]["run_id"], "run_root": commits[1]["run_root"], "sealed_while_serving": True,
+        "the_endpoints": True, "of_the_honest_run": True, "advice_root": "f" * 128, "advice_bits": row[1]["v0_bits"],
+        "the_reports_root": False, "the_reports_bits": True, "registered": registered["1"]}
+    w0c = got["arms"]["w0 served"]["commit"]
+    assert w0c["the_endpoints"] is True and w0c["of_the_honest_run"] is False and w0c["the_reports_bits"] is None
+    md = "\n".join(chain.markdown({"advice": info, "bits": b, "prove_path": got}))
+    assert "\n## Prove path\n" in md and "fixed workload" not in md and "Bound to these runs: True (every arm's" in md
+    assert (f"| w1 served | 1 | {commits[1]['run_id']} | {commits[1]['run_root'][:16]}… | True | True | True | "
+            f"{'f' * 16}… | {row[1]['v0_bits']} | False | True | after serving, by the lane (r-reg), 14.2 min before "
+            "the first draw |") in md
+    assert f"| w0 served | 0 | {commits[0]['run_id']} |" in md and md.count("| by vllm at serve time |") == 2
+    stub = [x for x in chain.stubs({"chain": {"advice": info, "bits": b, "prove_path": got}}, True)
+            if x.startswith("Prove path")]
+    assert stub == [f"Prove path: the served run's own Commit windows (w0, w1), adopted from {w1}, {w0}; w1's advice "
+                    "was registered after serving, by the lane (r-reg), 14.2 min before the first draw, not by the "
+                    "endpoint while serving; the advice w1's arms committed is a registration of its own, held to the "
+                    "report's by its v0 bits only (each root hides it)."]
+
+    def why(*dirs) -> str | None:
+        p = chain.prove_path(list(dirs), info, b["bound"], b, EP, registered)
+        assert p["bound"] is (p["bound_why"] is None)
+        return p["bound_why"]
+    assert why(w0) == "no honest arm proves one of the honest run's Commit windows"
+    _serve_arm(tmp_path / "other", "served", 1, row[1]["v0_bits"], root="0" * 128)
+    assert why(tmp_path / "other") == "w1 served: Commit window 1 isn't the endpoint's (its windows.jsonl)"
+    _serve_arm(tmp_path / "unsealed", "served", 1, row[1]["v0_bits"], codes=["published-root-of-another-commit"])
+    assert why(tmp_path / "unsealed") == "w1 served: its run root isn't the one sealed while serving"
+    _serve_arm(tmp_path / "short", "served", 1, row[1]["v0_bits"] - 1)
+    assert why(tmp_path / "short") == "w1 served: its advice isn't held to the report's registration of Commit window 1"
+    _arm(tmp_path / "fixed", "llama", {"root": "r", "bits": 2695})
+    assert why(w1, tmp_path / "fixed").startswith("from the fixed workload, not this run")
+
+
 def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_and_rebuilt(tmp_path):
     """vllm's own-advice endpoint's first three Commit windows (r20261024-094558-6d6a's records, trimmed: its scheduler
     trace, its windows.jsonl and `verity-vllm advice`'s registrations and openings, as the endpoint committed them
@@ -242,7 +313,7 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
         tar.add(pp, arcname="out")
     out = tmp_path / "out"
     r = e2e.run(_args(virtual, out, advice=str(tmp_path / "s.json"), serving_config=str(tmp_path / "config.json"),
-                      prove_path=str(tmp_path / "pp.tgz")), [], clock=lambda: 0.0)
+                      prove_path=[str(tmp_path / "pp.tgz")]), [], clock=lambda: 0.0)
     assert r["format"] == e2e.FORMAT and r["claim"] == e2e.CLAIM
     assert r["ok"] is False and r["why_not"] == ["the advice isn't these runs'",
                                                  "the advice wasn't rebuilt from the certified I/O"]
@@ -261,7 +332,7 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
     assert any(x.startswith("Auditor host") for x in r["stubbed"])
     summary = pp / "glm" / "summary.json"
     summary.write_text(json.dumps(json.loads(summary.read_text()) | {"ok": False}))
-    r = e2e.run(_args(virtual, tmp_path / "out2", advice=str(tmp_path / "s.json"), prove_path=str(pp)), [],
+    r = e2e.run(_args(virtual, tmp_path / "out2", advice=str(tmp_path / "s.json"), prove_path=[str(pp)]), [],
                 clock=lambda: 0.0)
     assert r["chain"]["prove_path"]["ok"] is False and r["chain"]["bits"]["config"] is None
     assert "the prove path failed" not in r["why_not"]
@@ -394,6 +465,27 @@ def test_on_the_advice_profile_the_endpoints_own_advice_for_the_runs_commit_wind
     md = (out / "report.md").read_text()
     assert "The endpoint's own (r20261024-094558-6d6a)" in md and "| 1 | r20261024-094558-6d6a/w1 |" in md
     assert any(x.startswith("Derived bits: the serving config is read off the endpoint's records") for x in r["stubbed"])
+    assert "the prove path, of these runs" in r["not_run"]
+    v0 = {x["window"]: x["v0_bits"] for x in b["commit_windows"]}
+    _serve_arm(tmp_path / "pp1", "served", 1, v0[1])
+    _serve_arm(tmp_path / "pp1", "served-forged", 1, v0[1], forged=True)
+    _serve_arm(tmp_path / "pp2", "served", 0, v0[0])
+    (tmp_path / "registered.json").write_text(json.dumps({"1": {"by": "the lane", "at_serve_time": False}}))
+    for o in ("outp", "outq"):
+        shutil.copytree(EP / "advice", tmp_path / o / "endpoint" / "advice")
+    r = e2e.run(_args(runs, tmp_path / "outp", endpoint_run=str(EP), prove_path=[str(tmp_path / d) for d in ("pp1", "pp2")],
+                      prove_path_registered=str(tmp_path / "registered.json")), [], clock=lambda: 0.0)
+    p = r["chain"]["prove_path"]
+    assert r["ok"] is True and p["bound"] is True and "the prove path, of these runs" in r["ran"], r["why_not"]
+    assert p["dir"] == f"{tmp_path / 'pp1'}, {tmp_path / 'pp2'}" and sorted(p["arms"]) == [
+        "w0 served", "w1 served", "w1 served-forged"]
+    assert any(x.startswith("Prove path: the served run's own Commit windows (w0, w1)") and "after serving, by the lane"
+               in x for x in r["stubbed"])
+    summary = tmp_path / "pp1" / "served-forged" / "summary.json"
+    summary.write_text(json.dumps(json.loads(summary.read_text()) | {"ok": False}))
+    r = e2e.run(_args(runs, tmp_path / "outq", endpoint_run=str(EP), prove_path=[str(tmp_path / "pp1")]), [],
+                clock=lambda: 0.0)
+    assert r["ok"] is False and r["why_not"] == ["the prove path failed"]
     monkeypatch.setattr(e2e, "ADVICE", [sys.executable, "-c", "import sys; print('unknown command'); sys.exit(2)"])
     r = e2e.run(_args(runs, tmp_path / "out2", endpoint_run=str(EP)), [], clock=lambda: 0.0)
     assert r["ok"] is False and "the advice isn't these runs'" in r["why_not"]
