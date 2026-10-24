@@ -61,7 +61,8 @@
    "type": "3656cdf1c56dd376c775df83ecbd2060061ae591bb48f06b52b9aae87b7d2c78e240204409694f44be2c022236c422093aa82c1fe1a6a673d20ae2dd7c458160"
   },
   "Dsv4SwaWindow_v2{SW=128,BS=64,NB=16384}": {
-   "and": 1065318
+   "and": 1065318,
+   "type": "d5f02c9fefa17d521471df2810ec7f517dddfe2a286ea0ff7d3bf48f70e8725fadecfe399c160de0ae997b57264478a35aa397a122f7b5da7c586bc41aab79df"
   },
   "Dsv4SwaWindow_v2{SW=128,BS=64,NB=64}": {
    "and": 4542,

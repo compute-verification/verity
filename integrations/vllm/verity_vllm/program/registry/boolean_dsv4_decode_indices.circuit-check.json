@@ -21,7 +21,8 @@
    "type": "6ff7de9dc776b408b4373e68cda73c2987c26bd06673f81ece03cf68b01fa24912e1f0923e9962f89cc73d9d200950b957c066ca5cf48bd455ed544d159ef60b"
   },
   "Dsv4GlobalTopkSlot_v2{BS=64,NB=4096}": {
-   "and": 106515
+   "and": 106515,
+   "type": "ea00d9e2a6e85ca8a6d0fdc3a67d445223512a2e1b495318cfcbf9c1b7c72fd5a937d48c3b42d788303e977c214f826fd8ffe21a62ebd4db0063ddc396e89398"
   },
   "Dsv4GlobalTopk_v2{TOPK=16,BS=64,NB=16}": {
    "and": 7115,

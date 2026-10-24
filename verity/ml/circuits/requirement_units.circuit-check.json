@@ -1,7 +1,8 @@
 {
  "definitions": {
   "MemoryMapStep_v3{K=2,C=1,V=8,E=2,M=4,N=16,SLOTS=8,T=4}": {
-   "and": 101382
+   "and": 101382,
+   "type": "84576ca50c6e4b152481c3ff4d8cf9e5fcb98e8490754e00d21915e4fe682660fe50bd013f00355d8543905e0a29330748bd2eaa44495a48194b33101785f122"
   },
   "PlanMatch_v1{P=4,NR=16,V=16,G=2,TB=8,RPB=2}": {
    "and": 2159,
