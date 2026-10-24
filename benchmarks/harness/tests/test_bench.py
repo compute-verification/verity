@@ -1039,6 +1039,11 @@ def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
         assert len({tuple(b[k] for k in shared) for b in built}) == 1
         assert built[0]["kv_cache_memory_bytes"] == 8 << 30 and built[0]["max_num_batched_tokens"] == 4096
 
+    b32 = resolve_spec("llama31-8b-1gpu-pouw-protocol-served-b32")
+    assert (b32.arms, b32.arm_settings, b32.setup, b32.eager, b32.preset) == (
+        spec.arms, spec.arm_settings, spec.setup, spec.eager, replace(spec.preset, id=b32.id))
+    assert b32.reps == 6 and b32.sweep == replace(spec.sweep, id="b32", batches=(32,))
+
 
 def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_adapter_accepts(monkeypatch):
     """`pouw:eps1-sm120-h1fx1` serves the int8_exact arm's own y, so its token control is that engine without PoUW
