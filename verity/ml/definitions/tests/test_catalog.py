@@ -8,8 +8,11 @@ The count is the registry's own: 1,287 on main before the move less PoUW's circu
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from verity_vllm.program.registry import catalog
+
+REPO = Path(__file__).resolve().parents[4]
 
 COUNT = 1240
 
@@ -23,3 +26,13 @@ def test_the_catalog_loads_every_definition_and_no_other():
 def test_the_catalog_reads_no_protocol():
     catalog.load()
     assert not [m for m in sys.modules if m.startswith("verity.core")], "a registry module imports verity.core"
+
+
+def test_the_catalog_in_verity_loads_nothing_of_the_integration():
+    """Holds once the catalog sits in `verity` (the move); before it, the catalog is the integration's own."""
+    catalog.load()
+    if not Path(catalog.__file__).resolve().is_relative_to(REPO / "verity"):
+        return
+    loaded = sorted(m for m, mod in list(sys.modules.items())
+                    if Path(getattr(mod, "__file__", None) or "/").resolve().is_relative_to(REPO / "integrations"))
+    assert not loaded, f"loading the catalog imports the integration: {loaded}"

@@ -73,7 +73,7 @@ def test_a_definition_module_imports_only_verity_and_definition_modules(name):
 
 
 def test_the_rule_sees_what_it_forbids(tmp_path, monkeypatch):
-    (tmp_path / "x.py").write_text("import numpy as np\n\n\ndef f():\n    from ..kernels import fp8_twins\n"
+    (tmp_path / "x.py").write_text("import numpy as np\n\n\ndef f():\n    from verity_vllm.program.kernels import fp8_twins\n"
                                    "    from . import fp8, targets\n")
     monkeypatch.setattr(sys.modules[__name__], "DIR", tmp_path)
     assert [(m, _allowed(m)) for m, _ in _imports("x")] == [
