@@ -1335,7 +1335,7 @@ def test_word_primitives_on_their_families(server):
     assert counts["PouwBlackwellE4m3SaltDead_v1"] == 35 * 256 + 14 * len(F32_SWEEP), counts
 
 
-ROW_PRIM_VECTORS = Path(__file__).resolve().parents[5] / "Security/Definitions/Pouw/PearlC/RowPrimVectors.lean"
+ROW_PRIM_VECTORS = Path(__file__).resolve().parents[5] / "Security/Proofs/Pouw/PearlC/RowPrimVectors.lean"
 #: each vector list's prefix in `RowPrimVectors` by the primitive it pins
 ROW_PRIM_LISTS = {"sqrt": W.PouwF32SqrtRn, "sqacc": W.PouwSqAcc, "sqceil": W.PouwSqCeil, "sqge": W.PouwSqGe,
                   "etilde": W.PouwETilde, "bf16neg": W.PouwBf16Neg}

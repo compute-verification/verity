@@ -1,4 +1,4 @@
-import Definitions.Pouw.Barrier.Pinned
+import Proofs.Pouw.Barrier.Pinned
 import Proofs.Pouw.NCP.Proofs
 import Proofs.Pouw.Prob
 import Models.Pouw.Guarantees.Barrier

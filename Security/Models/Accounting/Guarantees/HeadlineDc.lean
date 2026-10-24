@@ -65,7 +65,7 @@ honest still runs it), and the B200's credits plain LI-CP-W redux with no extra 
 (its unfolded branch has no `χ*`), and FILL-OPT is a hypothesis of none. A uniform writer heads 2 words
 (`UIMAD.WIDE.U32` writes a UR pair, RT-HOPPER-7), so `UNI`'s ω is 2 on both devices' menus; it moves no bound.
 
-The sheets are `sheet.toml` as `Definitions.Accounting.Sheets.H200` and `B200` state it, over the census's classes:
+The sheets are `sheet.toml` as `Proofs.Accounting.Sheets.H200` and `B200` state it, over the census's classes:
 every MMA form it rates (the DMMA, 2:4 sparse and fp4 forms among them) is a writer kind at its sheet price, the uniform
 pipe is at the census's measured UP line (`DS_uniform`, 128 over 1.96110716 SMSP-cycles an instruction), and the
 memory, atomic and control classes the fold loops issue are their issue slot alone. None of those forms moves a

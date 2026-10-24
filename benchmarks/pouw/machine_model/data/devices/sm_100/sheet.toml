@@ -7,7 +7,7 @@
 name = "B200"
 gpu = "HGX B200 (sm_100a, 180 GB, 1000 W)"
 vector = "DS-100"
-lean = "Security/Definitions/Accounting/Sheets/B200.lean"
+lean = "Security/Proofs/Accounting/Sheets/B200.lean"
 
 [fmax]
 mhz = 1965

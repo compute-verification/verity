@@ -1,14 +1,14 @@
 import Definitions.Accounting.Actual
-import Definitions.Accounting.Actual.Source
+import Proofs.Accounting.Actual.SourceDefs
 import Definitions.Accounting.Actual.WipeDraw
 import Definitions.Accounting.Actual.WipeHeld
-import Definitions.Accounting.Actual.WipePool
+import Proofs.Accounting.Actual.WipePoolDefs
 import Definitions.Accounting.Actual.WipePrf
 import Definitions.Accounting.Bandwidth
 import Definitions.Accounting.BandwidthAudit
 import Definitions.Accounting.BoundReceipt
 import Definitions.Accounting.BoundSketch
-import Definitions.Accounting.Bridge
+import Proofs.Accounting.Bridge
 import Definitions.Accounting.Capacity
 import Definitions.Accounting.CoinFlow
 import Definitions.Accounting.Carrier
@@ -23,7 +23,7 @@ import Definitions.Accounting.Gates
 import Definitions.Accounting.Headline
 import Definitions.Accounting.HeadlineDc
 import Definitions.Accounting.Joint
-import Definitions.Accounting.Localization
+import Proofs.Accounting.Localization
 import Definitions.Accounting.Memory
 import Definitions.Accounting.PerRun
 import Definitions.Accounting.Physical

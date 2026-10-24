@@ -7,7 +7,7 @@
 name = "H200"
 gpu = "H200 SXM (sm_90a)"
 vector = "DS-90"
-lean = "Security/Definitions/Accounting/Sheets/H200.lean"
+lean = "Security/Proofs/Accounting/Sheets/H200.lean"
 
 [fmax]
 mhz = 1980

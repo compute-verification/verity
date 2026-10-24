@@ -10,7 +10,7 @@ this file. `Accounting.Guarantees.TS.Sm90SheetHeadline` reads it.
 * `classes`: the 50 instruction classes of the DS-90 census, in the order `Fin 50` indexes them. `NOROW` is A2's
   catch-all: every warp instruction no other class names counts there, at its issue slot alone.
 * `ds90`, `sheet`: the H200's data sheet (DS-90), `benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml` as
-  `Security/Definitions/Accounting/Sheets/H200.lean` states it: f_max 1980 MHz (EPS1 DC's measured f_max at default
+  `Security/Proofs/Accounting/Sheets/H200.lean` states it: f_max 1980 MHz (EPS1 DC's measured f_max at default
   clocks; the sheet's TOPS are at 1830 MHz); each tensor class's dense MACs a warp instruction (sm_90's wgmma as one
   warp's quarter of its warpgroup instruction (`m·n·k/4`), a 2:4 sparse form at its dense twin's, its mma.sync whole,
   DMMA's at the f64 peak) and its operand type's dense MACs an SM clock; the Nsight Compute pipes ALU, IMAD, SHFL and

@@ -1,4 +1,4 @@
-import Definitions.Core.Boolean
+import Proofs.Core.BooleanDefs
 import Proofs.Core.Circuit
 
 /-!

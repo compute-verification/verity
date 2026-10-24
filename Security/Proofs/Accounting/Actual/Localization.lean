@@ -1,5 +1,5 @@
 import Models.Accounting.Guarantees.Localization
-import Definitions.Accounting.Localization
+import Proofs.Accounting.Localization
 import Definitions.Accounting.Physical
 import Proofs.Accounting.Actual.Split
 import Proofs.Accounting.Actual.Confidence

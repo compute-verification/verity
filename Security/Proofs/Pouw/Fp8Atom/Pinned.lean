@@ -1,7 +1,7 @@
 import Mathlib.Data.Fintype.Card
-import Definitions.Pouw.Fp8Atom.Vectors
-import Definitions.Pouw.Fp8Atom.Vectors.Ada
-import Definitions.Pouw.Fp8Atom.Vectors.Add
+import Proofs.Pouw.Fp8Atom.Vectors
+import Proofs.Pouw.Fp8Atom.Vectors.Ada
+import Proofs.Pouw.Fp8Atom.Vectors.Add
 
 /-!
 # `Pouw.Fp8Atom`'s pinned statements (trusted)

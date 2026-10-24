@@ -1,7 +1,7 @@
 import Mathlib.Data.Finite.Prod
 import Mathlib.Data.Fintype.Perm
 import Definitions.Pous.Model.Labelling
-import Definitions.Pous.Model.Pebbling
+import Proofs.Pous.Model.Pebbling
 
 /-!
 # P3's invertible two-layer labels, their ideal model, and white/green hardness (N10)

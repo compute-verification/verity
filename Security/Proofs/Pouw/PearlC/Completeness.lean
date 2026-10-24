@@ -1,4 +1,4 @@
-import Definitions.Pouw.PearlC.Completeness
+import Proofs.Pouw.PearlC.CompletenessDefs
 import Definitions.Pouw.PearlC.DevicePricesLoop
 import Models.Pouw.Assumptions.PearlC.HonestCap
 import Proofs.Pouw.PearlC.HonestWords

@@ -3,7 +3,7 @@
 
     python scripts/row_prims_vectors.py [--out DIR]
 
-Writes `Definitions/Pouw/PearlC/RowPrimVectors.lean` (the vectors, `(operands…, word)`) and
+Writes `Proofs/Pouw/PearlC/RowPrimVectors.lean` (the vectors, `(operands…, word)`) and
 `Proofs/Pouw/PearlC/RowPrimChecks.lean` (one `decide +kernel` theorem per part) under DIR (default: the Lean
 package). `PouwETilde_v1` is exhaustive on its domain (16 codes × 256 bytes); the others reach every branch:
 * `PouwF32SqrtRn_v1`: ±0, ±inf, NaNs, negative words, subnormals, one word per exponent field, exact squares, and
@@ -116,7 +116,7 @@ def lit(v: int) -> str:
 def render(vectors: dict[str, list[tuple[int, ...]]]) -> tuple[str, str]:
     data = ["import Definitions.Pouw.PearlC.RowPrims", "", HEADER.format(seed=SEED), "",
             "namespace Pouw.PearlC.RowPrimVectors", ""]
-    checks = ["import Definitions.Pouw.PearlC.RowPrimVectors", "", HEADER.format(seed=SEED), "",
+    checks = ["import Proofs.Pouw.PearlC.RowPrimVectors", "", HEADER.format(seed=SEED), "",
               "namespace Pouw.PearlC.RowPrimChecks", "", "open Pouw.PearlC.RowCircuit", ""]
     for stem, fn, arity, per, doc in FAMILIES:
         vs = vectors[stem]
@@ -147,7 +147,7 @@ def main() -> None:
     vectors = {"sqrt": sqrt_vectors(rng), "sqacc": sqacc_vectors(rng), "sqceil": sqceil_vectors(rng),
                "sqge": sqge_vectors(rng), "etilde": etilde_vectors(), "bf16neg": bf16neg_vectors(rng)}
     data, checks = render(vectors)
-    for rel, text in (("Definitions/Pouw/PearlC/RowPrimVectors.lean", data),
+    for rel, text in (("Proofs/Pouw/PearlC/RowPrimVectors.lean", data),
                       ("Proofs/Pouw/PearlC/RowPrimChecks.lean", checks)):
         path = args.out / rel
         path.parent.mkdir(parents=True, exist_ok=True)

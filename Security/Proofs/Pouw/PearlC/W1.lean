@@ -1,7 +1,7 @@
 import Definitions.Pouw.PearlC.DevicePrices
 import Definitions.Pouw.PearlC.DevicePricesLoop
 import Definitions.Pouw.PearlC.DeviceFp4
-import Definitions.Pouw.PearlC.Sha512
+import Proofs.Pouw.PearlC.Sha512
 
 /-!
 # The accounting W1 as a cost model (trusted; definitions only)

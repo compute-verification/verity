@@ -7,7 +7,7 @@ import Definitions.Pous.Accounting.PubMeets
 import Definitions.Pous.Accounting.GradedMeets
 import Definitions.Pous.Accounting.Rebuild
 import Models.Pous.Assumptions
-import Definitions.Pous.Model.HashChain
+import Proofs.Pous.Model.HashChain
 import Definitions.Pous.Model.Dense
 import Definitions.Pous.Model.Inc
 import Definitions.Pous.Model.Invertible
@@ -15,12 +15,12 @@ import Definitions.Pous.Model.Labelling
 import Definitions.Pous.Model.M1
 import Definitions.Pous.Model.P3Chain
 import Definitions.Pous.Model.BandChain
-import Definitions.Pous.Model.Pebbling
+import Proofs.Pous.Model.Pebbling
 import Definitions.Pous.Model.SampledAudit
 import Models.Pous.Guarantees.P2
 import Models.Pous.Guarantees.SecureErasure
 import Models.Pous.Guarantees.StreamedWipe
-import Definitions.Pous.Model.BandGraph
+import Proofs.Pous.Model.BandGraph
 import Definitions.Pous.Model.SegLift
 import Definitions.Pous.Model.Continuous
 

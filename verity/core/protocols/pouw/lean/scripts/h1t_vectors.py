@@ -12,7 +12,7 @@ anything is written, three other computations must agree with it:
   intermediate is inexact, the simulation's codes are compared and the cases counted;
 * `HOPPER_E4M3_K32.step` on every atom.
 
-Kernel-pinned, as Lean data (`Definitions/Pouw/Fp8Atom/H1TVectors.lean`, checks in
+Kernel-pinned, as Lean data (`Proofs/Pouw/Fp8Atom/H1TVectors.lean`, checks in
 `Proofs/Pouw/Fp8Atom/H1TChecks.lean`):
 * `formTable`: `formReal` on every finite code, both signs and every `F` in {1/4, 1/2, 1, 2, 4} (2,540 lanes);
 * `tagTable`: every tag value, its code and its negation's (80);
@@ -385,7 +385,7 @@ def main() -> None:
                          "atoms": sum(2 * r[1] for r in rows), "kernel_f16_slices_agree": kernel_rows,
                          "slices": sum(r[1] for r in rows)}
 
-    body = ["import Definitions.Pouw.Fp8Atom.H1TVec", "", HEADER, "namespace Pouw.Fp8Atom.H1T.Vectors", ""]
+    body = ["import Proofs.Pouw.Fp8Atom.H1TVec", "", HEADER, "namespace Pouw.Fp8Atom.H1T.Vectors", ""]
     names = {}
     for name, typ, items, doc in (
             ("form", "FormVec", [f"⟨{x}, {lean_bool(p)}, {fi}, {a}, {c}⟩" for x, p, fi, a, c in form],
@@ -411,9 +411,9 @@ def main() -> None:
         body.append(f"/-- {doc}, from `scripts/h1t_vectors.py` (seed {SEED}). -/\ndef {whole} : List {typ} :=\n  " +
                     " ++\n  ".join(f"Vectors.{n}" for n in names[name]) + "\n")
     body.append("end Pouw.Fp8Atom.H1T\n")
-    (out / "Definitions/Pouw/Fp8Atom/H1TVectors.lean").write_text("\n".join(body))
+    (out / "Proofs/Pouw/Fp8Atom/H1TVectors.lean").write_text("\n".join(body))
 
-    checks = ["import Definitions.Pouw.Fp8Atom.H1TVectors", "", HEADER, "namespace Pouw.Fp8Atom.H1T.Checks", "",
+    checks = ["import Proofs.Pouw.Fp8Atom.H1TVectors", "", HEADER, "namespace Pouw.Fp8Atom.H1T.Checks", "",
               "open Pouw.Fp8Atom.H1T", ""]
     for name, holds in (("form", "FormVec.holds"), ("tag", "TagVec.holds"), ("salt", "SaltVec.holds"),
                         ("row", "RowVec.holds")):

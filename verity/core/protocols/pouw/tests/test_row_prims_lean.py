@@ -14,7 +14,7 @@ pytest.importorskip("verity.core.protocols.pouw.circuit.words", reason="the row 
 
 LEAN = Path(__file__).resolve().parents[5] / "Security"
 SCRIPT = Path(__file__).resolve().parents[1] / "lean" / "scripts" / "row_prims_vectors.py"
-FILES = ["Definitions/Pouw/PearlC/RowPrimVectors.lean", "Proofs/Pouw/PearlC/RowPrimChecks.lean"]
+FILES = ["Proofs/Pouw/PearlC/RowPrimVectors.lean", "Proofs/Pouw/PearlC/RowPrimChecks.lean"]
 
 
 def test_the_row_prim_vectors_are_regenerated(tmp_path: Path) -> None:

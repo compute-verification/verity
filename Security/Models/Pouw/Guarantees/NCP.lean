@@ -1,4 +1,4 @@
-import Definitions.Pouw.NCP.Pinned
+import Proofs.Pouw.NCP.Pinned
 import Definitions.Pouw.NCP.Protocol
 import Definitions.Pouw.NCP.Relation
 import Definitions.Pouw.NCP.RouteU
@@ -10,7 +10,7 @@ import Models.Pouw.Assumptions.NCP.RouteUWord
 
 Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
 hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.NCP.G : Pouw.Guarantees.NCP.G`. The
-lead's algebra (`Definitions.Pouw.NCP.Pinned`), the shift by 24 under the rejection rule (`Definitions.Pouw.NCP.Protocol`),
+lead's algebra (`Proofs.Pouw.NCP.Pinned`), the shift by 24 under the rejection rule (`Definitions.Pouw.NCP.Protocol`),
 the rejection rule's witness (`Definitions.Pouw.NCP.Relation`), route U's checked values (`Definitions.Pouw.NCP.RouteU`), its
 game instance (`Pouw.Assumptions.NCP.RouteUGame`) and its word layer (`Pouw.Assumptions.NCP.RouteUWord`). Each keeps
 the text, the docstring and the `open`s of the statement it was in its source module. `ShiftBy24Admissible` is the type
@@ -24,7 +24,7 @@ for its `3 : ℝ` (`Pouw.NCP.RouteU.GammaFromTTNCP_U._proof_1`), and the audit r
 
 namespace Pouw.Guarantees.NCP
 
-/-! ## The lead's algebra (`Definitions.Pouw.NCP.Pinned`) -/
+/-! ## The lead's algebra (`Proofs.Pouw.NCP.Pinned`) -/
 
 section
 

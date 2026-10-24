@@ -1,4 +1,4 @@
-import Definitions.Population.Oblivious
+import Proofs.Population.ObliviousDefs
 import Proofs.Population.Determinacy
 import Proofs.Population.Pointer
 

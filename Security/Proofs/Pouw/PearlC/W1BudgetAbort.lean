@@ -1,4 +1,4 @@
-import Definitions.Pouw.PearlC.W1
+import Proofs.Pouw.PearlC.W1
 
 /-!
 # W1 doesn't truncate

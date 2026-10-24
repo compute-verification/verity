@@ -1,4 +1,4 @@
-import Definitions.Pouw.PearlC.W1
+import Proofs.Pouw.PearlC.W1
 
 /-!
 # The machine stops a run at its budget (trusted; definitions only)

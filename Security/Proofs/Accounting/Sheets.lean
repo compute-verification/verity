@@ -1,5 +1,5 @@
-import Definitions.Accounting.Sheets.H200
-import Definitions.Accounting.Sheets.B200
+import Proofs.Accounting.Sheets.H200
+import Proofs.Accounting.Sheets.B200
 
 /-!
 # The data sheets

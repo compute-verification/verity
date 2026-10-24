@@ -19,7 +19,7 @@ record's s8 binding and refuses a contraction outside the record's domain.
 * **The sheet.** Each record holds the device's data-sheet facts with their sources: SMs, the clock its tensor peaks are
   quoted at, f_max, the dense s8 MACs an SM clock, and the data sheet's dense INT8 figure (None where no data sheet states
   one). sm_90's are the machine model's DS-90 sheet (`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, whose
-  Lean is `Security/Definitions/Accounting/Sheets/H200.lean`), sm_120's its DS-120 (`Accounting.TS.Headline.Sm120.ds120`).
+  Lean is `Security/Proofs/Accounting/Sheets/H200.lean`), sm_120's its DS-120 (`Accounting.TS.Headline.Sm120.ds120`).
 """
 from __future__ import annotations
 

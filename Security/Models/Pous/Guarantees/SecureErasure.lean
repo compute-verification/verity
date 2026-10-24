@@ -1,4 +1,4 @@
-import Definitions.Pous.Model.Digest
+import Proofs.Pous.Model.Digest
 import Definitions.Pous.Model.BandChain
 import Definitions.Pous.Accounting.EraseMeets
 

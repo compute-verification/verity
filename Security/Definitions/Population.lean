@@ -1,12 +1,12 @@
-import Definitions.Population.Dataflow
-import Definitions.Population.Partition
-import Definitions.Population.LongValue
-import Definitions.Population.Oblivious
-import Definitions.Population.AddressMap
-import Definitions.Population.Necessity
-import Definitions.Population.Exfiltration
-import Definitions.Population.DrawPressure
-import Definitions.Population.ChiPool
+import Proofs.Population.Dataflow
+import Proofs.Population.Partition
+import Proofs.Population.LongValueDefs
+import Proofs.Population.ObliviousDefs
+import Proofs.Population.AddressMap
+import Proofs.Population.NecessityDefs
+import Proofs.Population.ExfiltrationDefs
+import Proofs.Population.DrawPressureDefs
+import Proofs.Population.ChiPoolDefs
 
 /-! Populations' vocabulary: units over committed value slots with public read and write sets (`Dataflow`), unit
 functions and correctness, what a checker confirms of the dataflow (single assignment, acyclicity), cones and egress,

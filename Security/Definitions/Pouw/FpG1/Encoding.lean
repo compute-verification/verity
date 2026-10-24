@@ -6,7 +6,7 @@ import Mathlib
 FPX-DESIGN's g1 designs (note:20261019T0817Z-report-fpx-design; `benchmarks/ppl/steps.py`'s `native_linear` with `act`
 or `weight` = `g1`, PR #2710). Each GEMM operand is an integer level `R` that the honest prover picks on a format's
 integer grid, plus a live fair coin `b`, served centred as `R + b − ½`; the int8 MMA multiplies the integers `R + b`,
-and the epilogue takes the coin's two rank-one terms off (`Definitions.Pouw.FpG1.Gemm`).
+and the epilogue takes the coin's two rank-one terms off (`Proofs.Pouw.FpG1.Gemm`).
 
 * `E4M3Nat`, `E2M1x2Nat`: E4M3's non-negative integers (at most four significant bits, at most 448, its largest finite
   value) and twice E2M1's non-negative values (at most two significant bits, at most 12: `{0, 1, 2, 3, 4, 6, 8, 12}`).

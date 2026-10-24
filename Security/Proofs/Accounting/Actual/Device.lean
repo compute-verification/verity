@@ -1,4 +1,4 @@
-import Definitions.Accounting.Bridge
+import Proofs.Accounting.Bridge
 import Proofs.Accounting.Actual.Physical
 
 /-!

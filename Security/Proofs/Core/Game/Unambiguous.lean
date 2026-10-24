@@ -1,4 +1,4 @@
-import Definitions.Core.Decisive
+import Proofs.Core.Decisive
 import Mathlib.Order.ConditionallyCompleteLattice.Basic
 
 /-!

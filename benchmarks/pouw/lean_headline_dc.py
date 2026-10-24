@@ -21,7 +21,7 @@ one, `1 − Y·(1 − 41/S)`, where `Y = (N_w w* + N_w φ* + χ*)/B_♭`. Three 
   gap at ♭. The machine model's own certificate doesn't serve: its cheater folds a tensor word on lanes only, where
   the Lean menu prices the fold alone on any route (the uniform datapath's among them, which DS-100's ALU-heavy
   certificate leaves nearly free), so `1 − Y` is at least the LP's ε_machine and ε_skip over ♭, and more;
-- the sheet is `sheet.toml` read by `verity_machine_model.sheet` (`Security/Definitions/Accounting/Sheets/`
+- the sheet is `sheet.toml` read by `verity_machine_model.sheet` (`Security/Proofs/Accounting/Sheets/`
   states it): each tensor class's MACs and its type's peak are the sheet's integers, a pipe's width its results an SM
   clock (the uniform pipe's the census's measured UP line, a rational), and ω the sheet's `omega`, the destination's
   32-bit words (A6's count). An MMA the sheet rates on no peak (b1) takes its ω from its census name (`shape`: sm_90's

@@ -1,4 +1,4 @@
-import Definitions.Population.Oblivious
+import Proofs.Population.ObliviousDefs
 
 /-!
 # Address maps and the wirings that express them

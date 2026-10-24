@@ -1,4 +1,4 @@
-import Definitions.Population.Dataflow
+import Proofs.Population.Dataflow
 
 /-!
 # Integrity: robust determinacy from single assignment and acyclicity

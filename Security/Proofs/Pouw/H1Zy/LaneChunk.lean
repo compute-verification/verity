@@ -1,4 +1,4 @@
-import Definitions.Pouw.H1Zy.LaneChunk
+import Proofs.Pouw.H1Zy.LaneChunkDefs
 import Proofs.Pouw.H1Zy.Lane
 
 /-!

@@ -1,11 +1,11 @@
-import Definitions.Pouw.Barrier.Pinned
+import Proofs.Pouw.Barrier.Pinned
 
 /-!
 # The degenerate-input barrier's guarantee (trusted)
 
 Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
 hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.Barrier.G : Pouw.Guarantees.Barrier.G`.
-The generic barrier (`Definitions.Pouw.Barrier.Pinned`). Each keeps the text, the docstring and the `open`s of the
+The generic barrier (`Proofs.Pouw.Barrier.Pinned`). Each keeps the text, the docstring and the `open`s of the
 statement it was in its source module.
 -/
 
