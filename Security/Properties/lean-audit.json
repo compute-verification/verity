@@ -204,6 +204,7 @@
   "CircuitRequirement",
   "Definitions.Accounting",
   "Definitions.Claims",
+  "Definitions.Hash",
   "Definitions.Pouw.Basic",
   "Models.Accounting"
  ],
