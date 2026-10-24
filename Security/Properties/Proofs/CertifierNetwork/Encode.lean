@@ -15,9 +15,11 @@ namespace Properties.CertifierNetwork.Proofs
 
 open _root_.CertifierDevice
 open NetworkCheck (RecordHead Direction uBE text recordHead realFrames rowFrames framesRoot leaves frameLeaf
-  leafInput block frameTag depth pairs top empty node statusCode certificateMessage messageInput)
+  leafInput block frameTag depth pairs top empty node statusCode certificateMessage messageInput certificateDigest
+  saltBytes)
 open Properties.CertifierDevice (Packed ValidKey)
 open Properties.NetworkCertifier.Bytes
+open Properties.CertifierDevice.Proofs.Issuer (except_ok_bind)
 
 set_option maxRecDepth 20000
 
@@ -295,23 +297,33 @@ theorem parameters_size {g : Params} {ss : Option _root_.NetworkCertifier.SyncSe
     obtain ⟨x, -, rfl⟩ := Properties.Identity.taggedSha512_ok.mp h'
     exact hash_size _
 
-theorem prepare_eq {i : Issuer} {r : Record} {d : Direction} {g : Params} {pd : ByteArray} {dl : Bool}
-    {head : RecordHead} {dg m : ByteArray}
+theorem certificateDigest_size (salt record : ByteArray) : (certificateDigest salt record).size = 64 := by
+  unfold certificateDigest
+  exact hash_size _
+
+theorem prepare_eq {i : Issuer} {salt : ByteArray} (hsalt : salt.size = saltBytes) {r : Record} {d : Direction}
+    {g : Params} {pd : ByteArray} {dl : Bool} {head : RecordHead} {dg m : ByteArray}
     (hh : recordHead r.link d r.window r.grid ((Status.reason? r.status).map reasonValue) g pd dl = .ok head)
-    (hdg : head.digest = .ok dg) (hm : certificateMessage i.key.I i.session r.link d r.window dg = .ok m) :
-    i.prepare r d g pd dl = .ok (head, dg, m) := by
+    (hdg : head.digest = .ok dg)
+    (hm : certificateMessage i.key.I i.session r.link d r.window (certificateDigest salt dg) = .ok m) :
+    i.prepare salt r d g pd dl = .ok (head, certificateDigest salt dg, m) := by
   unfold Issuer.prepare
-  simp only [hh, hdg, hm, bind, Except.bind, pure, Except.pure]
+  simp only [hsalt, ne_eq, not_true_eq_false, ↓reduceIte]
+  -- `rw`, not `simp`: the kernel overflows checking simp's steps through the signed digest
+  generalize certificateDigest salt = D at hm ⊢
+  rw [hh, except_ok_bind, hdg, except_ok_bind, hm]
+  rfl
 
 /-- A record whose grid is `T` packed rows, complete, of a link and window that fit their fields, under a 64-byte
-parameters digest, has a head, digest and message under `prepare` (with a 16-byte key identifier and a 32-byte
-session id): the head `record_head` makes of its grid. -/
-theorem prepare_of {i : Issuer} (hk : i.key.I.size = 16) (hss : i.session.size = 32) {r : Record} {d : Direction} {g : Params} {pd : ByteArray}
+parameters digest, has a head, digest and message under `prepare` (with a 64-byte salt, a 16-byte key identifier and
+a 32-byte session id): the head `record_head` makes of its grid. -/
+theorem prepare_of {i : Issuer} (hk : i.key.I.size = 16) (hss : i.session.size = 32) {salt : ByteArray}
+    (hsalt : salt.size = saltBytes) {r : Record} {d : Direction} {g : Params} {pd : ByteArray}
     (hs : r.grid.size = g.buckets) (hp : ∀ row ∈ r.grid, Packed g row) (hpd : pd.size = 64)
     (hl : r.link.toUTF8.size < 2 ^ 16) (hw : r.window < 2 ^ 64) (hT : g.buckets < 2 ^ 32) (hr : g.allocation < 2 ^ 32)
     (hB : g.frameBytes < 2 ^ 32) (hτ : g.bucketMs < 2 ^ 32) (hst : r.status = .complete) :
     ∃ head dg m, NetworkCheck.recordHead r.link d r.window r.grid none g pd true = .ok head ∧
-      i.prepare r d g pd true = .ok (head, dg, m) := by
+      i.prepare salt r d g pd true = .ok (head, dg, m) := by
   obtain ⟨head, hh⟩ := recordHead_of hs hp hB r.link d r.window none pd true
   obtain ⟨hl', -, hw', hT', hr', hB', hτ', hst', -, hpar', hcnt', hroot'⟩ := recordHead_fields hh
   have hcnt : ∀ n ∈ head.counts.toList, 0 ≤ n ∧ n ≤ head.allocation := by
@@ -327,11 +339,11 @@ theorem prepare_of {i : Issuer} (hk : i.key.I.size = 16) (hss : i.session.size =
     (hl' ▸ hl) (by rw [hw']; exact ⟨by omega, cast_lt (w := 8) hw⟩) (by rw [hT']; exact ⟨by omega, cast_lt (w := 4) hT⟩)
     (by rw [hr']; exact ⟨by omega, cast_lt (w := 4) hr⟩) (by rw [hB']; exact ⟨by omega, cast_lt (w := 4) hB⟩)
     (by rw [hτ']; exact ⟨by omega, cast_lt (w := 4) hτ⟩) hst'
-  obtain ⟨dg, hdg, hdgs⟩ := digest_of hx
-  obtain ⟨m, hm⟩ := certificateMessage_of (l := r.link) (d := d) (w := r.window) hdgs hss hk
-    ⟨by omega, cast_lt (w := 8) hw⟩
-  refine ⟨head, dg, m, hh, ?_⟩
+  obtain ⟨dg, hdg, -⟩ := digest_of hx
+  obtain ⟨m, hm⟩ := certificateMessage_of (l := r.link) (d := d) (w := r.window) (certificateDigest_size salt dg) hss
+    hk ⟨by omega, cast_lt (w := 8) hw⟩
+  refine ⟨head, certificateDigest salt dg, m, hh, ?_⟩
   have hn : (Status.reason? r.status).map reasonValue = none := by rw [hst]; rfl
-  exact prepare_eq (by rw [hn]; exact hh) hdg hm
+  exact prepare_eq hsalt (by rw [hn]; exact hh) hdg hm
 
 end Properties.CertifierNetwork.Proofs

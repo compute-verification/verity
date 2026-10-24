@@ -1822,6 +1822,16 @@ def checked_heads(repo: Path, tip: str, idx) -> list[tuple[str, str]]:
     return [(h, found[h]) for h in heads if h not in bad]
 
 
+def main_line(repo: Path, tip: str, idx) -> list[str]:
+    """The checked train heads newest first (`checked_heads` reversed): the commits on `tip`'s first-parent line whose own
+    `check` passed and landed them, less a reverted train's. `research queue checked-heads --out` writes these, one a
+    line, to the verifier's main-line file (`sampled_proofs.remote.main_lines`) for a deployment that wants
+    `pouw.credit`'s line to be the checked heads rather than the raw `git rev-list --first-parent origin/main` infra
+    writes by default; the two differ only by a reverted train's commits and the in-flight commits whose check hasn't
+    landed them."""
+    return [c for c, _ in reversed(checked_heads(repo, tip, idx))]
+
+
 def report_landings(repo: Path, start: str, tip: str, *, api=None, reg: dict | None = None, gh=None, log=print,
                     runs: dict[str, str] | None = None) -> bool:
     """Post `landing_lines` over ``start``..``tip`` to the merge thread, one line per landing, so every landing is reported
@@ -1863,12 +1873,31 @@ def spec_alert_lag(repo: Path, remote: str) -> str:
             "hasn't been sent")
 
 
+#: set by the control pod's drive.sh for all it runs with the verity-drive App's token: GitHub's rulesets "main is append-only"
+#: and "only drive moves main and next" (23 Oct, Daniel) let only that App move `main` and `next`
+DRIVE_ENV = "RESEARCH_DRIVE"
+DRIVE_ONLY = ("main", "next")
+
+
+def on_drive() -> bool:
+    return os.environ.get(DRIVE_ENV) == "1"
+
+
+def off_drive(ref: str, verb: str) -> str:
+    """Why a push of ``ref`` from here is refused: only drive's App may move `main` and `next`."""
+    return (f"`{ref}` is moved only by drive's App (GitHub's rulesets, 23 Oct), and this isn't drive (no {DRIVE_ENV}=1): run it "
+            f"on the control pod, `/data/infra/drive.sh {verb}`")
+
+
 def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
     """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), DM Daniel the spec change it
     landed on main (`spec_alert`), start what ``tool`` runs after a landing (`after_land`) and sweep, since the sweep closes only
     what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge landed,
     says so, and `research merge --sweep` after the push does it. On main the steps are `caught_up`'s, from the marker (or main
     before the push), so they cover a landing pushed another way too; the mirror can fail without failing the merge."""
+    if push and into in DRIVE_ONLY and not on_drive():
+        print(f"research merge: not pushed: {off_drive(into, 'merge ...')}", file=sys.stderr)
+        return 1
     if push:
         from .spec_alert import remote_head
 

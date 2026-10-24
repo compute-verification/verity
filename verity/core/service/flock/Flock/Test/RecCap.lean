@@ -4,8 +4,9 @@ RecCap, V*'s statements that hold each level's committed tops at fixed rows (`re
 at another node count, twice, or past the last level; `RecVStar.checkTopsListed` refuses later levels' caps that are not
 the reps' schedule's tops; `RecVStar.checkShared` refuses a port reading `rec-top-L<l>` (level `l`'s `out`, its RecCap's
 `top`) without the verifier's shared rows registering it, or at another registration; `RecCoins.checkCap` refuses reads of
-a level's tops other than node `i` in instance `i` of its `N` nodes of 64 words. The unit is the cap row's words past its
-node, then zeros, and lays out as V*'s file.
+a level's tops other than node `i` in instance `i` of its `N` nodes of 64 words, and a table whose instances are not
+labelled `0` to `n - 1` in order; `RecCoins.check` refuses a `rec-cap/` unit whose name `VStar.capParams` does not
+read. The unit is the cap row's words past its node, then zeros, and lays out as V*'s file.
 -/
 import Flock.RecCoins
 
@@ -94,7 +95,7 @@ def topsListed (i : Inner) (caps : Array VStar.Stmt) : Option String :=
 
 def port (name value : String) (root : UInt8 := 1) (leaves : Nat := 128) (reads : Array (Option Nat) := #[some 0]) :
     Registered.Port :=
-  { name, value, root := ⟨#[root]⟩, leaves, words := some 64, wordBits := 16, domain := ⟨#[7]⟩, reads }
+  { name, value, root := ⟨#[root]⟩, leaves, words := some 64, wordBits := 16, domain := ⟨#[7]⟩, readsRel := reads }
 
 def all : Array (Option Nat) := (Array.range 128).map some
 
@@ -124,8 +125,13 @@ def shared (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option 
 
 def circuit : Circuit := { (default : Circuit) with nets := #[("rec-cap/n128", { (default : Net) with name := "rec-cap/n128" })] }
 
-def cap (own : Array Registered.Port) (N : Nat := 128) (l : Nat := 0) : Option String :=
-  match RecCoins.checkCap circuit default own l N with
+/-- A public file whose units header labels its instances `indices`. -/
+def pubOf (indices : List Nat) : Public :=
+  { (default : Public) with
+    n := indices.length, header := Json.mkObj [("units", Json.mkObj [("indices", toJson indices)])] }
+
+def cap (own : Array Registered.Port) (N : Nat := 128) (l : Nat := 0) (pub : Public := pubOf []) : Option String :=
+  match RecCoins.checkCap circuit pub own l N with
   | .error e => some e
   | .ok () => none
 
@@ -146,11 +152,42 @@ def cap (own : Array Registered.Port) (N : Nat := 128) (l : Nat := 0) : Option S
   some "rec-coins: rec-cap/n128: rec-top-L0: the reads file does not read node i of the cap in instance i"
 #guard cap #[port "top" "rec-top-L0" (reads := all.pop)] ==
   some "rec-coins: rec-cap/n128: rec-top-L0: the reads file does not read node i of the cap in instance i"
+-- Instance `i` reads node `i` only where the table labels its instances `0` to `n - 1` in order.
+#guard cap #[port "top" "rec-top-L0" (reads := all)] (pub := pubOf [1, 0]) ==
+  some ("rec-coins: rec-cap/n128: its instances are labelled #[1, 0], not 0 to 2 - 1 in order, so instance i would " ++
+    "not read node i")
+#guard cap #[port "top" "rec-top-L0" (reads := all)] (pub := pubOf [0, 1]) ==
+  some ("rec-coins: rec-cap/n128: the verifier's registered reads hold no port out: its rec-cap-zero would be the " ++
+    "prover's")
 -- Past the reads, `out` must be V*'s zero rows `rec-cap-zero`.
 #guard cap #[port "top" "rec-top-L0" (reads := all), port "out" "rec-residuals-zero" (reads := all)] ==
   some "rec-coins: rec-cap/n128: port out reads rec-residuals-zero, not the verifier's rec-cap-zero"
 #guard cap #[port "top" "rec-top-L0" (reads := all)] ==
   some "rec-coins: rec-cap/n128: the verifier's registered reads hold no port out: its rec-cap-zero would be the prover's"
+
+def ok : Json := Json.mkObj [("ok", Json.arr #[])]
+
+/-- Inner coins of no claims, at the empty record: `Source.load` passes, so `RecCoins.check` reaches the unit's name. -/
+def coins : RecCoins.Source :=
+  .coins (Json.mkObj [("format", Json.str RecCoins.COINS_FORMAT),
+    ("record_sha512", Json.str (hexOf (Sha512.hash ByteArray.empty))), ("extras", ok),
+    ("reps", Json.arr #[Json.mkObj [("rounds", ok)], Json.mkObj [("rounds", ok)]]),
+    ("m", toJson (25 : Nat)), ("k_log", toJson (22 : Nat))]) ""
+
+def named (name : String) : Option String :=
+  let c : Circuit := { (default : Circuit) with nets := #[(name, { (default : Net) with name })] }
+  match RecCoins.check { (default : Stmt) with c } (some #[]) (some coins) with
+  | .error e => some e
+  | .ok () => none
+
+-- A `rec-cap/` unit is refused unless `capParams` reads its `(l, N)` back from its name.
+#guard named "rec-cap/n0128" ==
+  some "rec-coins: rec-cap/n0128: a rec-cap/ unit not named rec-cap/n<N> or rec-cap/n<N>-l<l>"
+#guard named "rec-cap/n64-l0" ==
+  some "rec-coins: rec-cap/n64-l0: a rec-cap/ unit not named rec-cap/n<N> or rec-cap/n<N>-l<l>"
+#guard named "rec-cap/n128" ==
+  some "rec-coins: rec-cap/n128: the verifier's registered reads hold no port top: the cap's rows would be the prover's"
+#guard named "rec-capx" == none
 
 -- The unit: `out` is `top`'s words 32 … 63, then 32 zero words; no AND.
 #guard (VStar.capUnit 0 128).st.rows.isEmpty
