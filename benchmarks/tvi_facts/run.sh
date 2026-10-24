@@ -8,6 +8,7 @@ trap 'exit 143' TERM INT
 cp "$IN"/*.py "$IN"/*.json "$S"/
 cd "$S"
 export OMP_NUM_THREADS="${THREADS:-2}" TOKENIZERS_PARALLELISM=false PYTHONUNBUFFERED=1
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 PY=/workspace/jobs/venv312/bin/python
 if ! [ -x "$PY" ]; then
   if [ -f /workspace/jobs/tvi/venv/READY ] && /workspace/jobs/tvi/venv/bin/python -c 'import torch, transformers'; then

@@ -1,10 +1,20 @@
-"""Write the plans: smoke.json, and a.json / b.json, one per GPU, splitting the state-size grid between them."""
+"""Write the plans: smoke.json, and a.json / b.json / c.json, one per GPU, splitting the state-size grid.
+
+Every N trains for the same number of epochs (E_MID = E_BIG), so a fact is seen equally often whatever N is;
+N_SMALL trains longer because its epochs are only a few steps.
+"""
 import json
 import sys
 
 S_GRID = {"sub10kbit": 10_000, "sub10kB": 80_000, "sub100kB": 800_000, "sub1MB": 8_000_000}
 SWEEP_LR = {"full": [2e-5, 1e-4], "lora16": [5e-4, 2e-3], "sub": [3e-4, 1e-3, 3e-3]}
-SPLIT = {"a": (["full", "sub100kB"], ["sub10kbit"]), "b": (["lora16", "sub1MB"], ["sub10kB"])}
+N_SMALL, N_MID, N_BIG = 200, 2000, 20000
+E_SMALL, E_MID, E_BIG = 30, 12, 12
+# per GPU: groups swept at N_MID and run at N_SMALL and N_MID (seed 1), then the groups run at N_BIG
+SPLIT = {"a": (["full", "sub10kbit"], ["full", "sub10kbit"]),
+         "b": (["lora16", "sub10kB"], ["lora16", "sub10kB"]),
+         "c": (["sub1MB", "sub100kB"], ["sub1MB", "sub100kB"])}
+BIG_LAST = {"sub10kB", "sub10kbit"}  # S far below H at N_BIG: they only confirm the ceiling
 
 
 def task(group, n, lr, epochs, seed=0, bs=64, **kw):
@@ -17,34 +27,28 @@ def task(group, n, lr, epochs, seed=0, bs=64, **kw):
     return t
 
 
-def plan(heavy, light, n_mid, n_big, n_small, e_mid, e_big, e_small, bs_big):
-    """sweeps at n_mid (heavy groups first), n_big for the heavy groups, a second n_mid seed, n_small, then n_big
-    for the light groups (S far below H there, so they only confirm the ceiling)"""
-    groups = heavy + light
+def plan(mid, big):
+    first = [g for g in big if g not in BIG_LAST]
     tasks = []
-    for g in heavy:
+    for g in sorted(mid, key=lambda g: g not in first):
         for lr in SWEEP_LR["sub" if g.startswith("sub") else g]:
-            tasks.append(task(g, n_mid, lr, e_mid, sweep=True))
-    for g in heavy:
-        tasks.append(task(g, n_big, f"best:{g}", e_big, bs=bs_big, analyze=True, save=True))
-    for g in light:
-        for lr in SWEEP_LR["sub"]:
-            tasks.append(task(g, n_mid, lr, e_mid, sweep=True))
-    for g in groups:
-        tasks.append(task(g, n_mid, f"best:{g}", e_mid, seed=1, analyze=True, save=True))
-    for g in groups:
+            tasks.append(task(g, N_MID, lr, E_MID, sweep=True))
+    for g in first:
+        tasks.append(task(g, N_BIG, f"best:{g}", E_BIG, bs=128, analyze=True, save=True))
+    for g in mid:
+        tasks.append(task(g, N_MID, f"best:{g}", E_MID, seed=1, analyze=True, save=True))
+    for g in mid:
         for seed in (0, 1):
-            tasks.append(task(g, n_small, f"best:{g}", e_small, seed=seed, bs=16, analyze=seed == 0))
-    for g in light:
-        tasks.append(task(g, n_big, f"best:{g}", e_big, bs=bs_big, analyze=True))
+            tasks.append(task(g, N_SMALL, f"best:{g}", E_SMALL, seed=seed, bs=16, analyze=seed == 0))
+    for g in big:
+        if g in BIG_LAST:
+            tasks.append(task(g, N_BIG, f"best:{g}", E_BIG, bs=128, analyze=True))
     return {"slots": 3, "tasks": tasks}
 
 
 if __name__ == "__main__":
-    n_big = int(sys.argv[1]) if len(sys.argv) > 1 else 20000
-    e_big = int(sys.argv[2]) if len(sys.argv) > 2 else 20
-    for k, (heavy, light) in SPLIT.items():
-        json.dump(plan(heavy, light, 2000, n_big, 200, 20, e_big, 60, 128), open(f"{k}.json", "w"), indent=1)
+    for k, (mid, big) in SPLIT.items():
+        json.dump(plan(mid, big), open(f"{k}.json", "w"), indent=1)
     smoke = {"slots": 2, "tasks": [
         task("full", 200, 1e-4, 1, analyze=True, save=True),
         task("sub1MB", 200, 1e-3, 1, analyze=True, save=True),
