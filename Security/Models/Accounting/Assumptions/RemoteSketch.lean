@@ -4,18 +4,18 @@ import Definitions.Accounting.Remote.Sketch
 /-!
 # What deriving the receipts' sketch bound assumes (trusted)
 
-`Accounting.Guarantees.Remote.SketchBoundSession` derives `Accounting.Remote.Held.Assumptions.SketchBound` on a trace
-over a session's coins (`Accounting.Remote.Sketch.Coins`) from the session's devices (`Accounting.Remote.Sketch.Session`)
-and these premises, each a named `Prop` taken as a hypothesis:
+`Accounting.Guarantees.Remote.SketchBoundSession` derives `Accounting.Remote.Held.Assumptions.SketchBound` on a
+trace over a session's coins (`Accounting.Remote.Sketch.Coins`) from the session's devices
+(`Accounting.Remote.Sketch.Session`) and these premises, each a named `Prop` taken as a hypothesis:
 
 * `KeyBudget A qtot`: across pass `j`'s candidate seeds the receipt-hash queries total at most `qtot j`, the hashes the
   node computes in the pass (`SketchHashBudget`'s budget, per pass of a remote session).
 * `Receipted A T`: a receipt the trace counts correct (`Trace.correct`) is one the kept candidate's device got right
   (`Session.correctAt`): the trace's verdict on a receipt is the model's.
-* `Present A T`: a block the kept candidate's device obtained whole in pass `j`, held on chip or read in from node memory,
-  a link or a rebuild, was in node memory or on a chip at some tick of the pass (`Trace.present`). The trace counts
-  whole blocks, the device sectors: the premise reads a block present when all its sectors were obtained in the pass,
-  not necessarily at one tick.
+* `Present A T`: a block the kept candidate's device obtained whole in pass `j`, held on chip or read in from node
+  memory, a link or a rebuild, was in node memory or on a chip at some tick of the pass (`Trace.present`). The trace
+  counts whole blocks, the device sectors: the premise reads a block present when all its sectors were obtained in the
+  pass, not necessarily at one tick.
 
 The signs' rank tail is `Accounting.Assumptions.SketchRank`, evaluated outside Lean (art:d3c891e4).
 -/
@@ -36,12 +36,13 @@ def KeyBudget (A : Session β P N m h S L q ks G) (qtot : Fin P → ℕ) : Prop 
 /-- **Receipted**: on every accepting outcome, each block whose receipt the trace counts correct in credited pass `j`
 is one the kept candidate's device tagged right. -/
 def Receipted (A : Session β P N m h S L q ks G) (T : Trace (Coins β P N m h ks G)) : Prop :=
-  ∀ ω, T.accepts ω → ∀ j : Fin P, ∀ b ∈ T.correct ω (j : ℕ), ∃ t ∈ A.correctAt ω j (A.kept ω j), (t : ℕ) = b
+  ∀ ω, T.accepts ω → ∀ j : Fin P, ∀ b ∈ T.correct ω (j : ℕ),
+    ∃ t ∈ A.correctAt ω j (A.kept ω j), (t : ℕ) = b
 
 /-- **Present**: on every accepting outcome, a block the kept candidate's device of pass `j` obtained whole was in node
 memory or on a chip at some tick of the pass. -/
 def Present (A : Session β P N m h S L q ks G) (T : Trace (Coins β P N m h ks G)) : Prop :=
-  ∀ ω, T.accepts ω → ∀ j : Fin P, ∀ t : Fin N, A.Whole ω j (A.kept ω j) t → ∀ b : Fin T.blocks, (b : ℕ) = t →
-    ∃ τ, T.tick ω (j : ℕ) ≤ τ ∧ τ < T.tick ω ((j : ℕ) + 1) ∧ b ∈ T.present ω τ
+  ∀ ω, T.accepts ω → ∀ j : Fin P, ∀ t : Fin N, A.Whole ω j (A.kept ω j) t →
+    ∀ b : Fin T.blocks, (b : ℕ) = t → ∃ τ, T.tick ω (j : ℕ) ≤ τ ∧ τ < T.tick ω ((j : ℕ) + 1) ∧ b ∈ T.present ω τ
 
 end Accounting.Remote.Sketch.Assumptions
