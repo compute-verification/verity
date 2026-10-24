@@ -329,9 +329,9 @@ def host_mode(a) -> int:
 
 
 def grouped_mode(a) -> int:
-    import torch
     import glm53_timing as T
     import grouped_check as GC
+    import torch
     from verity_vllm.protocol_options import pouw_pearl_c_grouped as PG
 
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(GC.SHAPES)
