@@ -48,14 +48,19 @@ The plan's target (G-A) is one command from serving to the Lean verdict: serve, 
 Lean, with the advice's bits per link-window. `chain.py` holds the stages after N2 and the proofs, each on what exists now:
 
 ~~~text
-verity bench network_e2e --upstream URL --traffic varied --out DIR \
-  --advice ADVICE --serving-config CONFIG.json --prove-path PROVE_PATH_OUT
+verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic varied --out DIR \
+  --strategies honest,late,extra,drop,token --advice ADVICE --serving-config CONFIG.json --prove-path PROVE_PATH_OUT
 ~~~
 
 - `--traffic varied` is certifier-serve's (CERT-VARLEN's `rehearse`: Poisson arrivals, prompts as token ids, real EOS),
   passed on. Its plan's N2 profile is `advice`, on which N2 gives no verdict until N2-ADVICE derives the egress counts from
   the ingress head and the advice. So nothing is proved by `n2_zk`, and the rehearsal's own check (every record certified,
   the certified I/O, the audit, the salt) is the verdict, with late and extra as its negatives (`CLAIM_ADVICE`).
+- `--endpoint-peer NAME:PORT` reaches node NAME's endpoint on its 127.0.0.1:PORT through an ssh forward (`/etc/vy/peers`),
+  so the certifier runs off the prover's node: better than the loopback, though not yet the auditor host.
+- NEG's live tampers (`--strategies ...,drop,token`): drop is a negative where N2's counts refuse it (planned and served
+  profiles), and otherwise, like token everywhere, a row pending the check that alone refuses it (N2-ADVICE's counts,
+  IO-TIE), with the verdicts it got.
 - `--advice FILE`: the advice, as I1 v0's JSON or `encode` bytes, or a prove-path stand-in's from before v0 (its first
   runs'), which is upgraded with each kept output released in its step's bucket. The report gives v0's bits per
   link-window (`advice.bits_by_window`, T the run's egress window). With `--serving-config` (`derived.Config`'s fields, or
@@ -63,14 +68,16 @@ verity bench network_e2e --upstream URL --traffic varied --out DIR \
   certified I/O (`io.json`) binds the advice to the run, and the residual must rebuild the whole advice from it.
 - `--prove-path DIR`: a `prove_path.py` run's output (PROVE-PATH's `run.sh` `$OUT`, or a tarball of it), adopted. The
   honest arm must pass every rank, and the forged arm must have Lean refuse its unit. The advice it committed is held to
-  `--advice`'s.
+  `--advice`'s: by the file's SHA-512 where it committed that, and by its bits only where it committed a hiding root
+  (from 01ea29e10f on, whose opening is the prover's).
 - NEG's registry (`benchmarks/network_traces/negatives.py`'s `suite`) runs on the runs unless `--no-negatives`. Each row
   that ran must be refused by the code it names; the rest say what they wait on. It doesn't run on the advice profile.
 
 The report's `stubbed` list says what each run still stood on that isn't the chain's own: the advice of another run, a
 given serving config, a prove path of a declared workload, pending negatives, the certifier off the gate. Until the
-committing endpoint and ADVICE-SRC exist, the chain runs on PROVE-PATH's first real run, r20261024-052710-8932 (GLM-5.3
-TP8 B1, declared workload), as its fixture: its `advice/advice.json` as `--advice` and its `out/` as `--prove-path`.
+committing endpoint and ADVICE-SRC exist, the chain runs on a PROVE-PATH run of a declared workload as its fixture:
+r20261024-060515-0e35 (its CLI from 01ea29e10f on), with `prove_path.py advice --workload out/standin/workload.json` as
+`--advice` and its `out/` as `--prove-path`; before it, r20261024-052710-8932 (GLM-5.3 TP8 B1).
 
 ## Inputs: rehearsals and gate runs
 

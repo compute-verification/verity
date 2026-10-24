@@ -132,6 +132,8 @@ def test_a_prove_paths_output_is_adopted_and_held_to_the_given_advice(tmp_path):
     _arm(v0, "honest", {"root": "r", "bits": info["bits"]}, negatives={"a": {"refused": False}})
     assert chain.prove_path(v0, info)["advice_is_given"] is True and chain.prove_path(v0, info)["ok"] is True
     assert chain.prove_path(v0, info)["arms"]["honest"]["ranks"]["0"]["negatives_refused"] is False
+    assert chain.prove_path(v0, info)["arms"]["honest"]["advice_held_by"].startswith("its bits only")
+    assert got["arms"]["glm"]["advice_held_by"] == "the file's SHA-512"
     shutil.rmtree(d / "glm")
     assert chain.prove_path(d, info)["ok"] is False
     with pytest.raises(SystemExit, match="no prove-path arm"):
@@ -203,14 +205,17 @@ def _varied(d: Path, virtual: Path, verdicts: dict) -> Path:
 
 def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advice_is_bound_by_the_certified_io(
         virtual, tmp_path):
-    runs = _varied(tmp_path / "varied", virtual, {"honest": "accepted", "late": "refused", "extra": "refused"})
+    runs = _varied(tmp_path / "varied", virtual, {"honest": "accepted", "late": "refused", "extra": "refused",
+                                                  "drop": "refused", "token": "accepted"})
     (tmp_path / "a.json").write_text(json.dumps(I1.to_json(_advice())))
     (tmp_path / "config.json").write_text(json.dumps(CONFIG))
     args = _args(runs, tmp_path / "out", no_prove=False, advice=str(tmp_path / "a.json"),
                  serving_config=str(tmp_path / "config.json"))
     r = e2e.run(args, [], clock=lambda: 0.0)
     assert r["ok"] is True and r["profile"] == "advice" and r["claim"] == e2e.CLAIM_ADVICE
-    assert list(r["runs"]) == ["honest", "late", "extra"] and r["link_windows"] == []
+    assert list(r["runs"]) == ["honest", "late", "extra", "drop", "token"] and r["link_windows"] == []
+    assert r["pending"] == {"drop": {"waits": "N2-ADVICE's counts", "check": "refused", "n2": None},
+                            "token": {"waits": "IO-TIE", "check": "accepted", "n2": None}}
     assert r["runs"]["honest"]["network"]["accepted"] is None and r["proofs"]["ran"] is False
     assert "N2-ADVICE" in r["proofs"]["why"] and r["chain"]["negatives"]["ran"] is False
     assert sorted(r["negatives"]) == ["extra", "late"] and r["negatives"]["late"]["by"] == ["the rehearsal's own check"]
@@ -218,7 +223,14 @@ def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advic
     assert b["bound"] is True and b["rebuilt"] is True and [x["window"] for x in b["windows"]] == [0, 1, 2]
     md = (tmp_path / "out" / "report.md").read_text()
     assert "| honest | accepted (I/O True) | — | — |" in md and "No N2 verdict on the advice profile" in md
+    assert "- **token** (NEG's, pending IO-TIE, which alone refuses it here): the rehearsal's check accepted, N2 —" in md
     assert any(x.startswith("N2 on the advice profile") for x in r["stubbed"])
+    at = e2e.where({"honest": {"dir": runs / "honest", "gate": None}}, "vy-nebius-1:18080")
+    assert at["where"].startswith("off the prover's node: better than the loopback, though not yet the auditor host")
+    assert any(x.startswith("Auditor host: the certifier ran on another node") for x in chain.stubs(at, True))
+    (tmp_path / "peers").write_text("# machine: ssh\nvy-nebius-2 -i k research@10.0.0.2\n")
+    with pytest.raises(SystemExit, match="no vy-nebius-1 in"):
+        e2e.forward("vy-nebius-1:18080", tmp_path / "forward.log", tmp_path / "peers")
     assert not any(x.startswith("Advice: ") for x in r["stubbed"])
     _varied(tmp_path / "bad", virtual, {"honest": "accepted", "late": "accepted", "extra": "refused"})
     r = e2e.run(_args(tmp_path / "bad", tmp_path / "out2"), [], clock=lambda: 0.0)

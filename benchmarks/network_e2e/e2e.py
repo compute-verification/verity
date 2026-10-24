@@ -9,7 +9,8 @@ still stubbed.
     python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
                                          --proofs N2ZK_DIR | --no-prove) [--advice FILE [--serving-config FILE]]
                                          [--prove-path DIR] [--no-negatives]
-    python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL) --out DIR [...] [certifier_serve.py rehearse's options]
+    python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
+                                         [certifier_serve.py rehearse's options]
 
 `run.sh` is the runner (`verity bench network_e2e`): it builds the binaries and the firewall's frame as `n2_zk.sh` does,
 then runs this. The README says what the report establishes and what it doesn't.
@@ -17,8 +18,11 @@ then runs this. The README says what the report establishes and what it doesn't.
 * **The runs** (`collect`). Each ``--from`` SRC is a rehearsal (`certifier_serve.py rehearse --out`'s directory: its
   `summary.json` and one run directory per strategy), a gate run (`vy-challenger-gate fetch RUN`'s directory: `end.json`
   and the rehearsal in `out/`), one strategy's run directory (its `certified.jsonl`), or a tarball of any of these. With
-  ``--upstream`` or ``--vllm`` the rehearsal is run first (`certifier_serve.py rehearse`, honest, late and extra, every
-  option this file doesn't take passed on) into ``DIR/rehearsal``. An honest run is required: the tampered head is its
+  ``--upstream``, ``--vllm`` or ``--endpoint-peer`` the rehearsal is run first (`certifier_serve.py rehearse`, honest,
+  late and extra, every option this file doesn't take passed on) into ``DIR/rehearsal``; ``--endpoint-peer NAME:PORT``
+  reaches another node's endpoint on its loopback through an ssh forward (`forward`), so the certifier runs off the
+  prover's node, though not on the auditor host. NEG's drop and token, when the rehearsal ran them, are a negative
+  (drop, refused by N2's counts) or a row pending the check that alone refuses them (``PENDING``). An honest run is required: the tampered head is its
   window 0's egress head one count off (`n2_zk.one_count`).
 * **N2.** Per run, each link-window committed under fresh salts, registered on N2's stream, selected (Selection All) and
   decided by N2's verifier of record on the host, with the Lean audit (`n2_zk.link_windows`), then `network_verdict`.
@@ -76,7 +80,10 @@ from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 FORMAT = "verity-network-e2e/report/v3"
 HONEST, TAMPERED = "honest", "tampered"
 NEGATIVES = ("late", "extra", TAMPERED)
+# NEG's live tampers past late and extra, each refused only by a check that hasn't landed where it isn't by N2's counts
+PENDING = {"drop": "N2-ADVICE's counts", "token": "IO-TIE"}
 README = "verity/core/protocols/certifier/README.md"
+PEERS = Path("/etc/vy/peers")
 
 CLAIM = {
     "statement": (
@@ -210,17 +217,53 @@ def collect(sources: list[Path], work: Path) -> dict[str, dict]:
     return found
 
 
-def where(runs: dict[str, dict]) -> dict:
+def where(runs: dict[str, dict], peer: str | None = None) -> dict:
     """Where the honest run's certifier ran: on the gate's host (the auditor's machine, through its tunnel to the
-    endpoint), or off the gate on the host that ran the rehearsal, which against a loopback endpoint is the endpoint's."""
+    endpoint), on the host that ran the rehearsal reaching another node's endpoint through `forward` (``peer``), or off
+    the gate on the host that ran the rehearsal, which against a loopback endpoint is the endpoint's."""
     upstream = (_read(runs[HONEST]["dir"] / "deployment.json") or {}).get("upstream")
     if runs[HONEST]["gate"] is not None:
         return {"upstream": upstream, "where": "gate: the certifier on the gate's host, the auditor's, tunnelled to the "
                                                "endpoint"}
+    if peer is not None:
+        return {"upstream": f"{peer} (its 127.0.0.1, forwarded to {upstream})",
+                "where": f"off the prover's node: better than the loopback, though not yet the auditor host (the "
+                         f"certifier on {socket.gethostname()}, the endpoint on {peer.rsplit(':', 1)[0]} through an "
+                         f"ssh forward)"}
     host = urllib.parse.urlsplit(upstream or "").hostname or ""
     local = host == "localhost" or host.startswith("127.") or host == "::1"
     return {"upstream": upstream, "where": "off the gate: the certifier on the host that ran the rehearsal" +
             (", the endpoint's own (loopback), so the prover's node, not an auditor host" if local else "")}
+
+
+def forward(peer: str, log_to: Path, peers: Path = PEERS) -> tuple[str, subprocess.Popen]:
+    """An ssh forward from a free port on this host's 127.0.0.1 to NAME's 127.0.0.1:PORT (``peer``), through the
+    nodes' own ssh to each other (``peers``, as `benchmarks/remote_session/run.sh` opens it), and the upstream URL it
+    gives here, once it connects."""
+    name, port = peer.rsplit(":", 1)
+    to = next((line.split()[1:] for line in peers.read_text().splitlines() if line.split()[:1] == [name]), None)
+    if not to:
+        raise SystemExit(f"--endpoint-peer {peer}: no {name} in {peers}")
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        here = s.getsockname()[1]
+    with open(log_to, "ab") as f:
+        p = subprocess.Popen(["ssh", "-T", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes", "-o",
+                              "ServerAliveInterval=15", "-L", f"127.0.0.1:{here}:127.0.0.1:{int(port)}", *to,
+                              "sleep 86400"], stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT)
+    for _ in range(120):
+        if p.poll() is not None:
+            raise SystemExit(f"--endpoint-peer {peer}: ssh exited {p.returncode} ({log_to})")
+        try:
+            socket.create_connection(("127.0.0.1", here), timeout=1).close()
+            break
+        except OSError:
+            time.sleep(0.5)
+    else:
+        p.kill()
+        raise SystemExit(f"--endpoint-peer {peer}: the forward never listened ({log_to})")
+    log(f"endpoint: {name}'s 127.0.0.1:{port} forwarded to 127.0.0.1:{here}")
+    return f"http://127.0.0.1:{here}", p
 
 
 def rehearse(args, rest: list[str], out: Path) -> Path:
@@ -373,7 +416,8 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
     N2 gives no verdict (``n2`` has no windows), so the rehearsal's own check is the verdict, and late and extra its
     negatives."""
     advised = meta.get("profile") == chain.ADVICE
-    expected = NEGATIVES[:2] if advised else NEGATIVES
+    expected = NEGATIVES[:2] if advised else NEGATIVES + tuple(s for s in ("drop",) if s in n2)
+    pending = {s: w for s, w in PENDING.items() if s in n2 and s not in expected}
     summary = proofs.get("summary") or {}
     members = summary.get("members") or {}
     names = [HONEST] + [s for s in NEGATIVES if s in n2] + sorted(set(n2) - {HONEST, *NEGATIVES})
@@ -409,8 +453,10 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
                  and (ng is None or not ng.get("ran") or ng["ok"]))
     ok = (n2_ok and check_ok and proved_ok and stages_ok and len(negatives) == len(expected)
           and all(n["refused"] for n in negatives.values()))
+    waiting = {name: {"waits": w, "check": (out_runs[name]["check"] or {}).get("verdict"),
+                      "n2": out_runs[name]["network"]["accepted"]} for name, w in pending.items()}
     return {"format": FORMAT, **meta, "claim": CLAIM_ADVICE if advised else CLAIM, "ok": ok, "runs": out_runs,
-            "link_windows": rows, "negatives": negatives, "chain": stages,
+            "link_windows": rows, "negatives": negatives, "pending": waiting, "chain": stages,
             "proofs": {"ran": bool(proofs.get("ran")), "adopted": proofs.get("adopted"), "why": proofs.get("why"),
                        "rc": proofs.get("rc"), "extra_proved": proofs.get("extra_proved"), "n2_zk_ok": summary.get("ok"),
                        "stagers": summary.get("stagers"), "driver_peak_gb": proofs.get("driver_peak_gb"),
@@ -503,6 +549,10 @@ def markdown(r: dict) -> str:
     for name, n in r["negatives"].items():
         lines.append(f"- **{name}**: {'refused' if n['refused'] else 'NOT refused'} by "
                      f"{'; '.join(n['by']) or 'nothing'}{'' if n['proved'] else ' (not proved)'}")
+    for name, n in (r.get("pending") or {}).items():
+        n2 = n["n2"]
+        lines.append(f"- **{name}** (NEG's, pending {n['waits']}, which alone refuses it here): the rehearsal's check "
+                     f"{_cell(n['check'])}, N2 {'—' if n2 is None else 'accept' if n2 else 'refuse'}")
     scanned = [(name, e, m) for name, x in r["runs"].items() for e, m in (x.get("proofs") or {}).items()]
     if scanned:
         lines += ["", "## Proving sessions", "",
@@ -588,22 +638,27 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     work = Path(args.work) if args.work else Path(tempfile.mkdtemp(prefix="network-e2e-"))
     work.mkdir(parents=True, exist_ok=True)
+    tunnel = None
     try:
+        if getattr(args, "endpoint_peer", None):
+            args.upstream, tunnel = forward(args.endpoint_peer, out / "forward.log")
         sources = [Path(s) for s in args.sources] if args.sources else [rehearse(args, rest, out / "rehearsal")]
+        if tunnel is not None:
+            tunnel.kill()
         runs = collect(sources, work)
         plan = _read(runs[HONEST]["dir"] / "plan.json") or {}
         profile = (plan.get("occupancy") or {}).get("kind")
         advised = profile == chain.ADVICE
         log(f"runs: {', '.join(f'{s} {r['dir']}' for s, r in runs.items())}; N2's profile {profile}")
-        if args.no_prove:
-            proofs = {"ran": False, "why": "not run (--no-prove)"}
-        elif advised:
+        if advised:
             proofs = {"ran": False, "why": "not run: on the advice profile the counts are N2-ADVICE's "
                                            "(NetworkAdvisedCounts_v1), which hasn't landed, and n2_zk proves the planned "
                                            "profile's head check"}
         elif profile != "planned":
             proofs = {"ran": False, "why": f"not run: the {profile} profile's count check is NetworkServedCounts_v1, "
                                            "which n2_zk doesn't prove"}
+        elif args.no_prove:
+            proofs = {"ran": False, "why": "not run (--no-prove)"}
         elif args.proofs:
             src = Path(args.proofs)
             proofs = adopt(_unpack(src, work) if src.is_file() else src, runs) | {"ran": True, "adopted": str(src)}
@@ -627,7 +682,7 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
         served = plan.get("served") or plan.get("varied") or {}
         meta = {"from": [str(s) for s in sources], "commit": _commit(), "model": plan.get("live_model"),
                 "tokens": served.get("tokens", served.get("max_tokens")), "requests": served.get("requests"),
-                **where(runs), "profile": profile, "windows": plan.get("windows"), "served": plan.get("served"),
+                **where(runs, getattr(args, "endpoint_peer", None)), "profile": profile, "windows": plan.get("windows"), "served": plan.get("served"),
                 "varied": plan.get("varied")}
         stages = stages_of(runs, plan, args, work, clock)
         r = report(runs, n2, proofs, meta, stages)
@@ -637,6 +692,8 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
         log(f"report {out / 'report.md'}: {'ok' if r['ok'] else 'NOT ok'}")
         return r
     finally:
+        if tunnel is not None:
+            tunnel.kill()
         if not args.work:
             shutil.rmtree(work, ignore_errors=True)
 
@@ -648,6 +705,8 @@ def main(argv=None) -> int:
                      help="a rehearsal's directory, a gate run's (vy-challenger-gate fetch), a run's, or a tarball")
     src.add_argument("--upstream", help="rehearse first against this endpoint, http(s)://HOST[:PORT]")
     src.add_argument("--vllm", metavar="MODEL", help="rehearse first, starting vLLM for MODEL on this host's GPU")
+    src.add_argument("--endpoint-peer", metavar="NAME:PORT", help="rehearse first against node NAME's endpoint on its "
+                                                                  "127.0.0.1:PORT, through an ssh forward (/etc/vy/peers)")
     ap.add_argument("--out", default=os.environ.get("OUT"), help="the report's directory (default $OUT)")
     ap.add_argument("--work", help="scratch, kept (default: a temporary directory, removed)")
     ap.add_argument("--bin", help="C-Flock's flock-circuit (run.sh builds it)")

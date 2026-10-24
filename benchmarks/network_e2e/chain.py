@@ -171,10 +171,14 @@ def prove_path(src: Path, info: dict | None) -> dict:
                         "negatives_refused": bool(x.get("negatives")) and all(map(_refused, x["negatives"].values())),
                         "forged_refused": (x.get("forged") or {}).get("ok") if s.get("forged") else None,
                         "seconds": x.get("seconds"), "source": x.get("source")}
+        committed = s.get("advice") or {}
         arms[p.name] = {"ok": s.get("ok") is True and bool(ranks), "forged": bool(s.get("forged")),
                         "world": s.get("world"), "rule": s.get("rule"), "delta": s.get("delta"),
                         "compiler": (s.get("compiler") or {}).get("name"), "tp_run_root": s.get("tp_run_root"),
-                        "advice": s.get("advice"), "advice_is_given": _same(s.get("advice"), info), "ranks": ranks}
+                        "advice": s.get("advice"), "advice_is_given": _same(committed, info),
+                        "advice_held_by": "the file's SHA-512" if "digest" in committed else
+                        "its bits only: the committed root hides it, and its opening is the prover's" if "root" in committed
+                        else None, "gap": s.get("gap"), "ranks": ranks}
     if not arms:
         raise SystemExit(f"{src}: no prove-path arm (a directory with prove_path.py audit's summary.json)")
     given = [a["advice_is_given"] for a in arms.values()]
@@ -241,7 +245,11 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
         pending = sorted(k for k, x in n["rows"].items() if not x.get("ran") or x.get("ok") is None)
         if pending:
             out.append(f"Negatives pending or not run here: {', '.join(pending)} (each row says what it waits on).")
-    if not str(r.get("where") or "").startswith("gate: "):
+    where = str(r.get("where") or "")
+    if where.startswith("off the prover's node"):
+        out.append("Auditor host: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
+                   "the auditor host (#3433 brings the gate's runs: --from RUN.tgz).")
+    elif not where.startswith("gate: "):
         out.append("Auditor host: the certifier ran off the gate (#3433 brings the gate's runs: --from RUN.tgz).")
     return out
 
@@ -280,7 +288,9 @@ def markdown(c: dict) -> list[str]:
                   f"`prove_path.py audit`'s output adopted from {p['dir']}: each rank's step units compiled from the "
                   "advice by the registered compiler, drawn on the verifier's own coins, proved --zk behind the Lean "
                   "firewall and verified by Lean. The advice each arm committed is the given one: "
-                  f"{_cell(p['advice_is_given'])}.", "",
+                  f"{_cell(p['advice_is_given'])}"
+                  + "".join(f"; {n} held by {a['advice_held_by']}" for n, a in p["arms"].items() if a.get("advice_held_by"))
+                  + "." + "".join(f" {n}'s gap: {a['gap']}." for n, a in p["arms"].items() if a.get("gap")), "",
                   "| arm | ok | rank | audit accepted | units | drawn | wrong units at most | negatives refused | "
                   "forged unit refused | s | source |", "|---|---|---|---|---|---|---|---|---|---|---|"]
         for name, arm in p["arms"].items():
