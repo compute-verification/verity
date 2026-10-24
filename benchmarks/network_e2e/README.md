@@ -141,9 +141,12 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   held so makes the report NOT OK, whether its prove path binds or not. `--prove-path-registered FILE` says, by window,
   who registered each audited window's advice, where when it isn't the report's own, and the arm's first draw
   (`{K: {by, registration, first_draw, ref}}`). When it was registered is read off the registration itself, never the
-  job: its file's time (a registration has no time field) against the window's close in the endpoint's trace (the
-  first clocked record after the close event, `chain.closes`). A registration after the close reads "after serving".
-  The report shows it, and `stubbed` lists a window registered after serving. Each rank's time is reported per drawn
+  job: its file's time (a registration has no time field), against the endpoint's trace (each window's close is the
+  first clocked record after its close event, `chain.closes`). A registration was at serve time when it was
+  registered before its window's draw (every rank's `advice_before_draw`, the verifier's receipt of it before any coin)
+  and no later than the next window's close (the lead's ruling, 24 Oct). Otherwise it reads "after serving", and it is
+  unknown while the arm has no receipt or the trace has no next close. The report always prints its lag in seconds
+  after its own window's close, and `stubbed` lists every window not read as at serve time. Each rank's time is reported per drawn
   unit, its prover's and Lean's seconds over
   the units its statement proves (PROVE-PATH's `per_unit`, 92e4e50ca5).
 - NEG's registry (`benchmarks/network_traces/negatives.py`'s `suite`) runs on the runs unless `--no-negatives`. Each row

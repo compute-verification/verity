@@ -722,7 +722,9 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
         out.append("Prove path: not given (--prove-path, a prove_path.py run's output).")
     elif served and p.get("bound"):
         cs = {a["commit"]["window"]: a["commit"] for a in p["arms"].values()}
-        late = [f"w{w}'s advice was registered {_registered(x['registered'])}, not by the endpoint while serving"
+        late = [f"w{w}'s advice was registered {_registered(x['registered'])}"
+                + (", not by the endpoint while serving" if (x.get("registered") or {}).get("at_serve_time") is False
+                   else "")
                 for w, x in sorted(cs.items()) if (x.get("registered") or {}).get("at_serve_time") is not True]
         apart = [f"w{w}" for w, x in sorted(cs.items()) if x["of_the_honest_run"] and not x["the_reports_root"]]
         out.append(f"Prove path: the served run's own Commit windows ({', '.join(f'w{w}' for w in sorted(cs))}), "
@@ -800,7 +802,8 @@ def _registered(g: dict | None) -> str:
     lead = None if not g.get("first_draw") else round(
         (datetime.fromisoformat(g["first_draw"]) - datetime.fromisoformat(g["at"])).total_seconds(), 1)
     late = ([] if g.get("before_draw") is not False else ["after its draw"]) \
-        + ([] if nxt is None or nxt >= 0 else [f"{-nxt} s after the next window closed"])
+        + ([f"{abs(nxt)} s after the next window closed"]
+           if nxt is not None and (nxt < 0 or g.get("before_draw") is not False) else [])
     return (f"after serving, by {by}{ref}, {lag}, {' and '.join(late)}"
             + (f", {lead} s before the first draw" if lead is not None and lead >= 0 else ""))
 

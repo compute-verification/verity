@@ -314,6 +314,51 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
                                     for a in ("served", "served-forged"))
 
 
+def test_at_serve_time_is_before_its_draw_and_no_later_than_the_next_windows_close(tmp_path):
+    """A Commit window's advice was registered at serve time when it was registered before its draw (every rank's
+    `advice_before_draw`, the verifier's receipt of the registration before any coin) and no later than the next
+    window's close in the endpoint's trace (the lead's ruling, 24 Oct); after serving when either fails, and unknown
+    while either is. Its lag after its own window's close is always printed, in seconds."""
+    ep = _endpoint(tmp_path)
+    io = json.loads((ep / "io.json").read_text())["requests"]
+    recs = chain._jsonl(ep / "advice_trace.jsonl")
+    first, closed = chain._first_steps(recs), chain.closes(recs)
+    info, b = chain.served_advice(ep, ep / "advice", {"origin_unix": first[0] + 1.2, "windows": 2, "window_s": 6.0},
+                                  io, 60, [128001])
+    bits = {x["window"]: x["v0_bits"] for x in b["commit_windows"]}
+
+    def registered(name: str, w: int, at: float, *receipts: bool | None) -> tuple[bool | None, str]:
+        os.utime(ep / f"advice/w{w}/registration.json", (at,) * 2)
+        _serve_arm(tmp_path / name, "served", w, bits[w], before_draw=receipts[0])
+        s = json.loads((tmp_path / name / "served" / "summary.json").read_text())
+        for i, r in enumerate(receipts[1:], 1):
+            s["ranks"][str(i)] = s["ranks"]["0"] | {"advice_before_draw": {"ok": r}}
+        (tmp_path / name / "served" / "summary.json").write_text(json.dumps(s))
+        p = chain.prove_path([tmp_path / name], info, b["bound"], b, ep, {str(w): {"by": "vllm"}})
+        g = p["arms"][f"w{w} served"]["commit"]["registered"]
+        assert g["after_close_s"] == round(at - closed[w], 1)
+        return g["at_serve_time"], chain._registered(g)
+
+    assert round(closed[2] - closed[1], 1) == 0.7
+    assert registered("in-time", 1, closed[1] + 0.5, True, True) == (
+        True, "by vllm at serve time, 0.5 s after its Commit window closed, before its draw and 0.2 s before the next "
+              "window closed")
+    assert registered("before-close", 1, closed[1] - 3.0, True) == (
+        True, "by vllm at serve time, 3.0 s before its Commit window closed, before its draw and 3.7 s before the next "
+              "window closed")
+    assert registered("after-the-draw", 1, closed[1] + 0.5, True, False) == (
+        False, "after serving, by vllm, 0.5 s after its Commit window closed, after its draw")
+    assert registered("after-the-next", 1, closed[2] + 3.0, True) == (
+        False, "after serving, by vllm, 3.7 s after its Commit window closed, 3.0 s after the next window closed")
+    assert registered("just-after-the-next", 1, closed[2] + 0.01, True)[0] is False
+    assert registered("no-receipt", 1, closed[1] + 0.5, True, None) == (
+        None, f"by vllm at {chain._utc(closed[1] + 0.5)}, 0.5 s after its Commit window closed; whether at serve time "
+              "is unknown: no draw receipt orders it against its draw")
+    assert registered("last", 2, closed[2] + 0.5, True) == (
+        None, f"by vllm at {chain._utc(closed[2] + 0.5)}, 0.5 s after its Commit window closed; whether at serve time "
+              "is unknown: the next window's close isn't in the endpoint's records")
+
+
 def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_and_rebuilt(tmp_path):
     """vllm's own-advice endpoint's first three Commit windows (r20261024-094558-6d6a's records, trimmed: its scheduler
     trace, its windows.jsonl and `verity-vllm advice`'s registrations and openings, as the endpoint committed them
@@ -575,7 +620,8 @@ def test_on_the_advice_profile_the_endpoints_own_advice_for_the_runs_commit_wind
     assert p["dir"] == f"{tmp_path / 'pp1'}, {tmp_path / 'pp2'}" and sorted(p["arms"]) == [
         "w0 served", "w1 served", "w1 served-forged"]
     assert any(x.startswith("Prove path: the served run's own Commit windows (w0, w1)") and "w1's advice was "
-               "registered after serving, by the lane, 60.0 s after its Commit window closed" in x
+               "registered after serving, by the lane, 60.0 s after its Commit window closed, 59.3 s after the next "
+               "window closed" in x
                for x in r["stubbed"])
     # an arm held by its v0 bit count alone, its root no registration of w1's: the report isn't OK
     r = e2e.run(_args(runs, tmp_path / "outr", endpoint_run=str(EP), prove_path=[str(tmp_path / "pp3")], ids=str(ids)),
