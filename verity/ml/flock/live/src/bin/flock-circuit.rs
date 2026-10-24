@@ -5710,6 +5710,9 @@ fn main() {
     if flag("--gpu") && st.circuit.types.len() > 12 {
         refuse(format!("{} slot types: the GPU prover holds at most 12", st.circuit.types.len()));
     }
+    if flag("--gpu") {
+        st.c.gpu_nnz_ok().unwrap_or_else(|e| refuse(e));
+    }
     // the device's fold holds each slot type's own rows only, never a generated read's table-direct side
     if flag("--gpu") && st.circuit.tables.iter().any(Option::is_some) {
         refuse("a typed template's table reads: the GPU prover folds no table-direct side".into());
