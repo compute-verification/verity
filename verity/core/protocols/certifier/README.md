@@ -38,6 +38,10 @@ A spec-level reference for network accounting's timing channel:
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
   canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits charged
   to the earliest egress window that can show each record (`bits`);
+- the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
+  whole cached units, which checks the row's hit (the longest cached prefix while no block can have been evicted, a
+  cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
+  circuits and their evaluator from `verity`;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
