@@ -38,9 +38,9 @@ and so of every point's identity, and the arm's cubin digest is its `kernel_dige
 
 The precision `int8_exact` is the eager exact-int8 engine of an int8 pin (every linear and attention layer on the plain
 exact-int8 arm, read back from the layers), and `stock-int8` is that engine without a protocol. PoUW's H1 + fx1
-(`pouw:eps1-sm120-h1fx1`) runs on it with `stock-int8` as its token control, since its arm serves its own y. Its settings
-take the built engine's model runner, which `verity_vllm.LLM` refuses to go without before it builds, so the harness
-installs it on the built engine itself (`protocol_options.install`), one window a run: its `steps` (S) the run's step
+(`pouw:eps1-sm120-h1fx1`) runs on it with `stock-int8` as its token control, since its arm serves its own y. The harness
+builds it through `verity_vllm.LLM`'s `protocols` with only H1's public parameters, which fills the engine's model runner
+and in-process coins after the build, and gives each run its own window with `reinstall`: its `steps` (S) the run's step
 bound (`arms.window_steps`), its `rows` (T) the spec's, which must be the engine's `max_num_batched_tokens`, and its
 coins a fresh in-process salt coin and S round coins, so it credits nothing and measures cost only. The window opens
 before the clock starts and closes after it stops; each timed rep's `extras.h1_window` says what it served, and the
