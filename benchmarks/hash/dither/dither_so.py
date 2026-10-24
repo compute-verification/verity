@@ -179,6 +179,10 @@ ROOT_LAG_ENV = "DITHER_SO_ROOT_LAG"
 # "1" (without -ov): step s + 1 - (D - 1)'s units dispatched at the start of step s's `after` (its coin long back), so
 # they run beside step s's trees, not after them; the same units, salts and rounds (round s + 1 still after them)
 UNITS_EARLY_ENV = "DITHER_SO_UNITS_EARLY"
+# "1" (with the tree streams, -pt under the serving priority, without -ov): a step's z tables built on the first tree
+# stream from the forward's end, beside its A tables, stash and spill on the serving stream, which waits for them
+# before `before_mid`; the same tables
+ZSIDE_ENV = "DITHER_SO_ZSIDE"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -248,6 +252,8 @@ class SoWindow(DO.Window):
         self.deferred: int | None = None
         self.deferrals = {"deferred": 0, "in_forward": 0, "in_after": 0, "after_forward": 0}
         self.units_early = os.environ.get(UNITS_EARLY_ENV) == "1"
+        self.z_side = os.environ.get(ZSIDE_ENV) == "1"
+        self.ev_z = (torch.cuda.Event(), torch.cuda.Event())
         if self.units_early and (self.overlap or self.depth < 3):
             raise RuntimeError(f"{UNITS_EARLY_ENV}=1 serves without -ov (whose units have their own schedule) and at "
                                f"depth 3 or more (at 2 the step it dispatches is the one `after` stashes)")
@@ -670,6 +676,17 @@ class SoWindow(DO.Window):
             t_late = self._late_dispatch()
         s, m, cap, pre, ev, kinds = self.s, self.m, self.cap, self.pre, self.ev, self.round_kinds
         early = self._dispatch_next(s, d) if self.units_early and self.deferred is None else None
+        zs = None
+        if self.z_side:
+            if self.tree_streams is None:
+                raise RuntimeError(f"{ZSIDE_ENV}=1 needs the tree streams (-pt under the serving priority, no -ov)")
+            zs = self.tree_streams[0]
+            self.phase("z_tables")
+            self.ev_z[0].record()
+            zs.wait_event(self.ev_z[0])
+            with torch.cuda.stream(zs):
+                self.c.build(pre["z"], self.stepv[0:1])
+                self.ev_z[1].record(zs)
         if self.a_once or self.a_step:
             self.phase("a_tables")
             if not self.flags & DO.F_NW_TILES:
@@ -701,7 +718,10 @@ class SoWindow(DO.Window):
             self.c.build(pre["admit"], self.stepv[0:1])
         self._poll_deferred()
         self.phase("z_tables")
-        self.c.build(pre["z"], self.stepv[0:1])
+        if zs is not None:
+            main.wait_event(self.ev_z[1])
+        else:
+            self.c.build(pre["z"], self.stepv[0:1])
         for f in self.before_mid:
             f()
         if self.deferred is not None and self.deferred <= s - d:
@@ -907,7 +927,7 @@ class SoWindow(DO.Window):
                      "coin_wait_ms": {"n": len(waits), "p50": _q(waits, 0.5), "p90": _q(waits, 0.9), "max": _q(waits, 1.0)},
                      "coin_async": {"on": self.coin_async, **deferrals,
                                     "late_wait_ms": {"n": len(late), "p50": _q(late, 0.5), "max": _q(late, 1.0)}},
-                     "units_early": self.units_early,
+                     "units_early": self.units_early, "z_side": self.z_side,
                      "root_lag": {"on": self.root_lag, "steps": lagn,
                                   "wait_ms": {"p50": _q(lagw, 0.5), "p90": _q(lagw, 0.9), "max": _q(lagw, 1.0)}},
                      "order_reason": self.order_why, "windows": self.k + 1, "window_open": self.open,
