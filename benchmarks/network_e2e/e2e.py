@@ -2,11 +2,15 @@
 network certifier in front of a served endpoint, `certifier_serve.py`), N2's verdict of record on every link-window and
 the link's network verdict (`LinkWindows.verify` through the proof service's stream, `network_verdict`), every
 link-window's head checks proved by C-Flock ``prove --zk`` behind the Lean firewall and held by Lean (`n2_zk.prove`), and
-the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json` and `report.md` under ``--out``.
+the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json` and `report.md` under ``--out``; then
+the chain's stages (`chain`): the advice's bits per link-window, the prove path's audit and NEG's negatives, and what is
+still stubbed.
 
     python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
-                                         --proofs N2ZK_DIR | --no-prove)
-    python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL) --out DIR [...] [certifier_serve.py rehearse's options]
+                                         --proofs N2ZK_DIR | --no-prove) [--advice FILE [--serving-config FILE]]
+                                         [--prove-path DIR] [--no-negatives]
+    python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
+                                         [certifier_serve.py rehearse's options]
 
 `run.sh` is the runner (`verity bench network_e2e`): it builds the binaries and the firewall's frame as `n2_zk.sh` does,
 then runs this. The README says what the report establishes and what it doesn't.
@@ -14,8 +18,12 @@ then runs this. The README says what the report establishes and what it doesn't.
 * **The runs** (`collect`). Each ``--from`` SRC is a rehearsal (`certifier_serve.py rehearse --out`'s directory: its
   `summary.json` and one run directory per strategy), a gate run (`vy-challenger-gate fetch RUN`'s directory: `end.json`
   and the rehearsal in `out/`), one strategy's run directory (its `certified.jsonl`), or a tarball of any of these. With
-  ``--upstream`` or ``--vllm`` the rehearsal is run first (`certifier_serve.py rehearse`, honest, late and extra, every
-  option this file doesn't take passed on) into ``DIR/rehearsal``. An honest run is required: the tampered head is its
+  ``--upstream``, ``--vllm`` or ``--endpoint-peer`` the rehearsal is run first (`certifier_serve.py rehearse`, honest,
+  late and extra, every option this file doesn't take passed on) into ``DIR/rehearsal``; ``--endpoint-peer NAME:PORT``
+  reaches another node's endpoint on its loopback through an ssh forward (`forward`), so the certifier runs off the
+  prover's node, though not on the auditor host. NEG's drop, when the rehearsal ran it, is a negative (refused by N2's
+  counts, and on the advice profile by the rehearsal's own check), and its token a row pending the check that alone
+  refuses it (``PENDING``). An honest run is required: the tampered head is its
   window 0's egress head one count off (`n2_zk.one_count`).
 * **N2.** Per run, each link-window committed under fresh salts, registered on N2's stream, selected (Selection All) and
   decided by N2's verifier of record on the host, with the Lean audit (`n2_zk.link_windows`), then `network_verdict`.
@@ -27,12 +35,20 @@ then runs this. The README says what the report establishes and what it doesn't.
   own copy and its verdict row. With ``--proofs`` they are a run's of its own, adopted (`adopt`: each proved unit's
   certificate digest must be these runs'), so that what N2-ZK's run proved isn't proved again. On the served profile
   nothing is proved: its count check is `NetworkServedCounts_v1`, which `n2_zk` doesn't prove (the claim says so).
-* **Cost.** Each member's session: the prover's time (``prove_total_s``), Lean's ``verify --zk`` time and the proof's
-  bytes, each divided by its n units for a link-window's end, and the peak RSS of the largest process the driver has run
-  so far (``max_child_rss_gb``, `RUSAGE_CHILDREN`, which only grows: n2_zk proves the honest members first, so the cost,
-  read from the honest run, is theirs); the driver's own peak (the unit's lowering) beside them.
+* **Cost.** A member proves all n of its link-windows in one session, one statement and one pair of proofs, so a
+  link-window has no time or proof of its own. Per session: the prover's time (``prove_total_s``), Lean's ``verify --zk``
+  time, the bytes of its two proofs (``circuit.rep0.bin``, ``circuit.rep1.bin``) and the peak RSS of the largest process
+  the driver had run by its end (``max_child_rss_gb``, `RUSAGE_CHILDREN`, which only grows: n2_zk proves the honest
+  members first). Beside them, n2_zk's cost pass (``summary.json``'s ``cost``): one honest link-window proved alone, per
+  end (`alone`); and the driver's own peak (the unit's lowering).
+* **Varied traffic** (``rehearse --traffic varied``, passed on): N2's profile is ``advice``, on which N2 gives no
+  verdict until N2-ADVICE, so nothing is proved and the rehearsal's own check (certified, the certified I/O, audit,
+  salt) is each run's verdict, late, extra and drop its negatives (`CLAIM_ADVICE`).
+* **The chain** (`stages_of`, `chain`'s docstring): ``--advice`` and ``--serving-config``, ``--prove-path``, and NEG's
+  registry on the runs; each that ran must pass for the report to be OK, and ``stubbed`` lists what is still a stand-in.
 
-Exit 0 when the honest run is accepted everywhere it was checked and each negative is refused (`report["ok"]`).
+Exit 0 when the honest run is accepted everywhere it was checked, each negative is refused and every chain stage that
+ran passed (`report["ok"]`).
 """
 from __future__ import annotations
 
@@ -54,17 +70,27 @@ from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "benchmarks" / "network_traces"))
+sys.path[:0] = [str(HERE), str(ROOT / "benchmarks" / "network_traces")]
 
+import chain  # noqa: E402
 import n2_zk  # noqa: E402
 from verity.core.protocols.certifier import head_check as HC  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 
-FORMAT = "verity-network-e2e/report/v1"
+FORMAT = "verity-network-e2e/report/v3"
 HONEST, TAMPERED = "honest", "tampered"
 NEGATIVES = ("late", "extra", TAMPERED)
+# NEG's live tampers that only a check that hasn't landed refuses
+PENDING = {"token": "IO-TIE"}
+#: each negative's own violation in the rehearsal's own check (`_check`'s codes), the verdict on the advice profile,
+#: where N2 gives none: late's held session faults its window (the audit's status, as NEG names it), extra's response
+#: runs past its max_tokens, and drop's cut response stops short of it without EOS (the certified I/O's finish rule)
+OWN_CODE = {"late": "audit.status:coverage-never-established", "extra": "io:longer than max_tokens",
+            "drop": "io:short of max_tokens without EOS"}
 README = "verity/core/protocols/certifier/README.md"
+PEERS = Path("/etc/vy/peers")
+GATE_HOST = "vy-challenger-1"
 
 CLAIM = {
     "statement": (
@@ -99,12 +125,38 @@ CLAIM = {
         "N2's unit isn't proved as the verifier of record (README, 'Not yet zero-knowledge'): the verdict of record is "
         "LinkWindows.verify on the host, which runs head_check.reference over the opening and so reads the heads and "
         "the certifier's salts. The proofs here run beside it, on the roots it registered; they don't replace it.",
-        "NET-43 (README): N2's unit holds its head check as a gate that binds no circuit digest, and the verifier "
-        "refuses no proof of another circuit. Here Lean holds each proof to the program and partition the driver wrote "
-        "(n2_zk's row adapter around the unchanged NetworkHeadCheck_v2).",
+        "The proofs here are of n2_zk's row adapter around the unchanged NetworkHeadCheck_v2, not of N2's registered "
+        "unit, so LinkWindows.proved, which refuses a proof of any Program but the unit's (NET-43), doesn't take them. "
+        "Lean holds each proof to the program and partition the driver wrote.",
         "The certificate's link to its head (README, NET-42): until the unit is proved, the verifier of record checks "
         "each signed digest against its head and the certifier's salt on the host, over the opening "
         "(CertifiedRecord.verify).",
+    ],
+    "source": README,
+}
+
+CLAIM_ADVICE = {
+    "statement": (
+        "Certified I/O only, no counts. On the advice profile (varied traffic) N2 gives no verdict: N2-ADVICE, which "
+        "derives each window's egress counts from its ingress head and the advice, hasn't landed. A report marked OK "
+        "establishes, for the rehearsal's one link: every link-window's records certified under the certifier's key and "
+        "session; the certified I/O well formed (every request an id request, every egress frame an id event of a "
+        "request released by its bucket, every response ending at its first EOS or at its max_tokens); the certifier's "
+        "audit of both records and the salt audit accepted (the rehearsal's own check); and late and extra, and drop "
+        "where it ran, each refused by that check for its own violation (late: its window's coverage fault; extra: a "
+        "response longer than its max_tokens; drop: one short of it without EOS). Where an advice was given, it is these "
+        "runs' (every advice request a certified one) and rebuilt from their certified I/O. The advice's sections say "
+        "what was checked of the advice, and the prove path's what it proved."),
+    "not_covered": [
+        "N2's counts: no link-window's head is held to a profile or to the advice (N2-ADVICE), and nothing is proved by "
+        "n2_zk, whose head check is the planned profile's; a tampered head is not refused.",
+        "The tie (IO-TIE): no proof holds the certified tokens to the committed values; the advice's rebuild from the "
+        "certified I/O here runs in the clear, on the rehearsal's published witness.",
+        CLAIM["not_covered"][2],
+    ],
+    "zero_knowledge_gaps": [
+        "The rehearsal's check reads the records, certificates and certifier's salts in the clear, and the advice is "
+        "handed to the report whole: nothing on the advice profile is zero-knowledge yet.",
     ],
     "source": README,
 }
@@ -133,11 +185,19 @@ def _unpack(src: Path, work: Path) -> Path:
 
 
 def _check(doc: dict | None) -> dict | None:
-    """A run's own check (`certifier_serve.check`'s, at the rehearsal): its verdict and parts."""
+    """A run's own check (`certifier_serve.check`'s, at the rehearsal): its verdict and parts, and the codes of what it
+    found: each window's audit status (``audit.status:…``) and each certified I/O violation (``io:…``)."""
     if not doc:
         return None
-    return {"verdict": doc.get("verdict"), "network": (doc.get("network_verdict") or {}).get("accepted"),
-            "audit": doc.get("audit_accepted"), "salt": doc.get("salt_accepted"), "salt_again": doc.get("salt_again")}
+    io = doc.get("io")
+    codes = {f"audit.{v}" for w in doc.get("rows") or doc.get("windows") or () for x in (w.get("audit") or {}).values()
+             for v in x.values() if v} | {f"io:{v[1]}" for v in (io or {}).get("violations") or ()}
+    return {"verdict": doc.get("verdict"), "codes": sorted(codes),
+            "network": (doc.get("network_verdict") or {}).get("accepted"),
+            "audit": doc.get("audit_accepted"), "salt": doc.get("salt_accepted"), "salt_again": doc.get("salt_again"),
+            "certified": doc.get("certified_accepted"),
+            "io": None if io is None else {k: io.get(k) for k in ("accepted", "requests", "tokens", "finish",
+                                                                  "violations")}}
 
 
 def collect(sources: list[Path], work: Path) -> dict[str, dict]:
@@ -163,6 +223,7 @@ def collect(sources: list[Path], work: Path) -> dict[str, dict]:
                 raise SystemExit(f"{run}: no certified.jsonl")
             check = _check(_read(run / "check.json")) or _check((summary.get("runs") or {}).get(s))
             found[s] = {"dir": run, "source": str(src), "check": check,
+                        "shim_requests": (_read(run / "server.json") or {}).get("requests"),
                         "gate": None if gate is None else {"run": gate.get("run"), "rc": gate.get("rc"),
                                                            "ended": gate.get("ended"), "pinned": gate.get("pinned"),
                                                            **((gate.get("runs") or {}).get(s) or {})}}
@@ -171,17 +232,61 @@ def collect(sources: list[Path], work: Path) -> dict[str, dict]:
     return found
 
 
-def where(runs: dict[str, dict]) -> dict:
+def where(runs: dict[str, dict], peer: str | None = None) -> dict:
     """Where the honest run's certifier ran: on the gate's host (the auditor's machine, through its tunnel to the
-    endpoint), or off the gate on the host that ran the rehearsal, which against a loopback endpoint is the endpoint's."""
+    endpoint), on the host that ran the rehearsal reaching another node's endpoint through `forward` (``peer``), or off
+    the gate on the host that ran the rehearsal, which against a loopback endpoint is the endpoint's."""
     upstream = (_read(runs[HONEST]["dir"] / "deployment.json") or {}).get("upstream")
     if runs[HONEST]["gate"] is not None:
-        return {"upstream": upstream, "where": "gate: the certifier on the gate's host, the auditor's, tunnelled to the "
-                                               "endpoint"}
+        req = _read(Path(runs[HONEST]["dir"]).parents[1] / "request.json") or {}
+        gates = {s: x["gate"] for s, x in runs.items() if x.get("gate")}
+        off = sorted(set(runs) - set(gates))
+        at = f"{req['peer']}:{req['port']}" if req.get("peer") and req.get("port") else None
+        return {"upstream": f"{at} (its 127.0.0.1, tunnelled to {upstream})" if at and upstream else at or upstream,
+                "where": f"gate: the certifier on {GATE_HOST}, the auditor's host, through its gate (vy-challenger-gate "
+                         f"certifier-rehearse), tunnelled to {at or 'the endpoint'}; gate runs "
+                         f"{', '.join(f'{s} {g.get('run')}' for s, g in gates.items())}; pinned to main "
+                         f"{', '.join(sorted({str(g.get('pinned')) for g in gates.values()}))}"
+                         + (f"; {', '.join(off)} off the gate" if off else "")}
+    if peer is not None:
+        return {"upstream": f"{peer} (its 127.0.0.1, forwarded to {upstream})",
+                "where": f"off the prover's node: better than the loopback, though not yet the auditor host (the "
+                         f"certifier on {socket.gethostname()}, the endpoint on {peer.rsplit(':', 1)[0]} through an "
+                         f"ssh forward)"}
     host = urllib.parse.urlsplit(upstream or "").hostname or ""
     local = host == "localhost" or host.startswith("127.") or host == "::1"
     return {"upstream": upstream, "where": "off the gate: the certifier on the host that ran the rehearsal" +
             (", the endpoint's own (loopback), so the prover's node, not an auditor host" if local else "")}
+
+
+def forward(peer: str, log_to: Path, peers: Path = PEERS) -> tuple[str, subprocess.Popen]:
+    """An ssh forward from a free port on this host's 127.0.0.1 to NAME's 127.0.0.1:PORT (``peer``), through the
+    nodes' own ssh to each other (``peers``, as `benchmarks/remote_session/run.sh` opens it), and the upstream URL it
+    gives here, once it connects."""
+    name, port = peer.rsplit(":", 1)
+    to = next((line.split()[1:] for line in peers.read_text().splitlines() if line.split()[:1] == [name]), None)
+    if not to:
+        raise SystemExit(f"--endpoint-peer {peer}: no {name} in {peers}")
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        here = s.getsockname()[1]
+    with open(log_to, "ab") as f:
+        p = subprocess.Popen(["ssh", "-T", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes", "-o",
+                              "ServerAliveInterval=15", "-L", f"127.0.0.1:{here}:127.0.0.1:{int(port)}", *to,
+                              "sleep 86400"], stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT)
+    for _ in range(120):
+        if p.poll() is not None:
+            raise SystemExit(f"--endpoint-peer {peer}: ssh exited {p.returncode} ({log_to})")
+        try:
+            socket.create_connection(("127.0.0.1", here), timeout=1).close()
+            break
+        except OSError:
+            time.sleep(0.5)
+    else:
+        p.kill()
+        raise SystemExit(f"--endpoint-peer {peer}: the forward never listened ({log_to})")
+    log(f"endpoint: {name}'s 127.0.0.1:{port} forwarded to 127.0.0.1:{here}")
+    return f"http://127.0.0.1:{here}", p
 
 
 def rehearse(args, rest: list[str], out: Path) -> Path:
@@ -308,22 +413,34 @@ def _proof(unit: dict | None) -> str | None:
     return {"accept": "accept", "reject": "refuse"}.get(unit["verdict"], "malformed")
 
 
+def _round(x, places: int = 3):
+    return None if x is None else round(x, places)
+
+
 def _member(m: dict) -> dict:
-    """One n2_zk member's proofs: held by Lean or not, what the verifier received, and the session's cost."""
+    """One n2_zk member's proofs: held by Lean or not, what the verifier received, and its session's cost (all n
+    link-windows in one session and one pair of proofs)."""
     t, rec = m.get("timing") or {}, m.get("received") or {}
+    proofs = (t.get("timing") or {}).get("proof_bytes")
     return {"held": bool(m.get("accepted")) and all((m.get("verdicts") or {}).values()), "lean": m.get("verdicts"),
             "audit": m.get("audit"), "n": m.get("n"), "ands": m.get("ands"), "stage_s": m.get("stage_s"),
-            "session_s": t.get("session_s"), "prove_total_s": (t.get("timing") or {}).get("prove_total_s"),
-            "lean_verify_s": m.get("lean_verify_s"), "per_unit": m.get("per_unit"),
-            "peak_child_rss_gb": (t.get("process") or {}).get("max_child_rss_gb"),
+            "session_s": t.get("session_s"), "prove_s": _round((t.get("timing") or {}).get("prove_total_s")),
+            "verify_s": m.get("lean_verify_s"), "proof_bytes": sum(proofs) if proofs else None,
+            "proof_files": len(proofs) if proofs else None, "peak_gb": (t.get("process") or {}).get("max_child_rss_gb"),
             "verifier_bytes": rec.get("verifier_bytes"), "witness_found_at_verifier": rec.get("verifier_found"),
             "public_pieces_left_out": None if rec.get("public_pieces") is None else len(rec["public_pieces"]),
             "control_holds_all": (rec.get("control") or {}).get("holds_all")}
 
 
-def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict) -> dict:
+def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict, stages: dict | None = None) -> dict:
     """The report (`FORMAT`): per run its network verdict, per link-window N2's verdict and the proofs' with their cost,
-    the negatives' refusals and the claim. ``proofs``: `prove`'s result, or ``{"ran": False, "why": ...}``."""
+    the negatives' refusals, the chain's stages (``stages``: `chain`'s advice, bits, prove path and NEG's negatives, each
+    when it ran) and the claim. ``proofs``: `prove`'s result, or ``{"ran": False, "why": ...}``. On the advice profile
+    N2 gives no verdict (``n2`` has no windows), so the rehearsal's own check is the verdict, and late and extra its
+    negatives. Drop, where it ran, is a negative on every profile."""
+    advised = meta.get("profile") == chain.ADVICE
+    expected = (NEGATIVES[:2] if advised else NEGATIVES) + tuple(s for s in ("drop",) if s in n2)
+    pending = {s: w for s, w in PENDING.items() if s in n2}
     summary = proofs.get("summary") or {}
     members = summary.get("members") or {}
     names = [HONEST] + [s for s in NEGATIVES if s in n2] + sorted(set(n2) - {HONEST, *NEGATIVES})
@@ -334,69 +451,106 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict)
                 for e in n2_zk.ENDS if (members.get(f"{name}-{e}") or {}).get("units")}
         out_runs[name] = {"dir": str(given.get("dir", runs[HONEST]["dir"])), "check": given.get("check"),
                           "gate": given.get("gate"),
+                          "shim_requests": (given if name in runs else runs[HONEST]).get("shim_requests"),
                           "network": {k: (h["network"] or {}).get(k) for k in ("accepted", "windows", "refused", "digest")},
                           "issuer_refused": h.get("issuer_refused"),
                           "proofs": {e: {k: v for k, v in m.items() if k != "units"} for e, m in ends.items()} or None}
-        peak = max((m["peak_child_rss_gb"] for m in ends.values() if m["peak_child_rss_gb"] is not None), default=None)
         for x in h["windows"]:
             w = x["window"]
             proved = {e: _proof(next((u for u in m["units"] if u["window"] == w), None)) for e, m in ends.items()}
-            per = [m.get("per_unit") or {} for m in ends.values()]
             rows.append({
                 "run": name, "window": w, "n2": _n2_row(x), "failed_parts": x.get("parts"), "proof": proved or None,
                 "head_checks": None if not proved else "pass" if all(v == "accept" for v in proved.values())
-                else "malformed" if None in proved.values() or "malformed" in proved.values() else "refuse",
-                "prove_s": _sum(p.get("prove_total_s") for p in per), "verify_s": _sum(p.get("lean_verify_s") for p in per),
-                "proof_bytes": _sum(p.get("proof_bytes") for p in per), "peak_gb": peak})
-    negatives = {name: negative(out_runs[name], [r for r in rows if r["run"] == name])
-                 for name in NEGATIVES if name in out_runs}
+                else "malformed" if None in proved.values() or "malformed" in proved.values() else "refuse"})
+    negatives = {name: negative(out_runs[name], [r for r in rows if r["run"] == name], name)
+                 for name in expected if name in out_runs}
     honest, honest_rows = out_runs[HONEST], [r for r in rows if r["run"] == HONEST]
     proved_ok = not proofs.get("ran") or (
         proofs.get("rc") == 0 and bool(honest["proofs"]) and all(p["held"] for p in honest["proofs"].values())
         and all(r["head_checks"] == "pass" for r in honest_rows))
-    ok = (bool(honest["network"]["accepted"]) and bool(honest_rows) and all(r["n2"] == "accept" for r in honest_rows)
-          and (honest["check"] is None or honest["check"]["verdict"] == "accepted") and proved_ok
-          and len(negatives) == len(NEGATIVES) and all(n["refused"] for n in negatives.values()))
-    return {"format": FORMAT, **meta, "claim": CLAIM, "ok": ok, "runs": out_runs, "link_windows": rows,
-            "negatives": negatives,
+    n2_ok = advised or (bool(honest["network"]["accepted"]) and bool(honest_rows)
+                        and all(r["n2"] == "accept" for r in honest_rows))
+    check_ok = (honest["check"] or {}).get("verdict") == "accepted" if advised or honest["check"] is not None else True
+    s = stages or {}
+    b, p, ng = s.get("bits"), s.get("prove_path"), s.get("negatives")
+    # the derived bits and the residual's own check (`public_fields`) are under the serving config the job was given,
+    # not one the endpoint registered, so they stay out of the OK; the advice's binding and its rebuild from the
+    # certified I/O don't rest on that config's being the endpoint's
+    advice_ok = b is None or (b.get("bound") is True and b.get("rebuilt") is True)
+    why_not = ([] if n2_ok else ["N2 didn't accept the honest run on every link-window"]) \
+        + ([] if check_ok else ["the rehearsal's own check didn't accept the honest run"]) \
+        + ([] if proved_ok else ["the honest run's proofs didn't all run and hold"]) \
+        + ([] if b is None or b.get("bound") is True else ["the advice isn't these runs'"]) \
+        + ([] if b is None or b.get("rebuilt") is True else ["the advice wasn't rebuilt from the certified I/O"]) \
+        + ([] if p is None or not p.get("bound") or p["ok"] else ["the prove path failed"]) \
+        + ([] if ng is None or not ng.get("ran") or ng["ok"] else ["NEG's registry failed"]) \
+        + [f"no {s} run" for s in expected if s not in negatives] \
+        + [f"{s} not refused" for s, n in negatives.items() if not n["refused"]]
+    ok = not why_not
+    ran = {"N2's verdicts of record": any(r["n2"] in ("accept", "refuse") for r in honest_rows),
+           "the proofs (n2_zk, held by Lean)": bool(proofs.get("ran")),
+           "the rehearsal's own check": honest["check"] is not None,
+           "the advice, these runs' and rebuilt from their certified I/O": b is not None and advice_ok,
+           "the prove path, of these runs": bool(p and p.get("bound")),
+           "NEG's registry": bool(ng and ng.get("ran"))}
+    waiting = {name: {"waits": w, "check": (out_runs[name]["check"] or {}).get("verdict"),
+                      "n2": out_runs[name]["network"]["accepted"],
+                      "ran": isinstance(out_runs[name]["shim_requests"], int) and out_runs[name]["shim_requests"] != 0}
+               for name, w in pending.items()}
+    return {"format": FORMAT, **meta, "claim": CLAIM_ADVICE if advised else CLAIM, "ok": ok, "why_not": why_not,
+            "ran": [k for k, v in ran.items() if v], "not_run": [k for k, v in ran.items() if not v],
+            "runs": out_runs,
+            "link_windows": rows, "negatives": negatives, "pending": waiting, "chain": stages,
             "proofs": {"ran": bool(proofs.get("ran")), "adopted": proofs.get("adopted"), "why": proofs.get("why"),
                        "rc": proofs.get("rc"), "extra_proved": proofs.get("extra_proved"), "n2_zk_ok": summary.get("ok"),
                        "stagers": summary.get("stagers"), "driver_peak_gb": proofs.get("driver_peak_gb"),
-                       "cost_per_link_window": cost(honest_rows)}}
+                       "alone": alone(summary, proofs.get("dir"))}}
 
 
-def _sum(xs) -> float | None:
-    xs = [x for x in xs if x is not None]
-    return round(sum(xs), 3) if xs else None
+def alone(summary: dict, d: Path | None) -> dict | None:
+    """n2_zk's cost pass, per end: one honest link-window proved by itself (a session whose verifier draws one unit of
+    the n staged), with its prover and Lean seconds, its two proofs' bytes (read from ``d``, n2_zk's output, when
+    there) and the peak, as the report's sessions."""
+    out = {}
+    for end, rows in (summary.get("cost") or {}).items():
+        x = next((r for r in rows if r.get("units") == 1 and "lean" in r), None)
+        if x is None:
+            continue
+        files = sorted((Path(d) / "cost" / end / f"{x['arm']}-k{x['k']}-r{x['rep']}").glob("sessions/*/*.rep*.bin")) \
+            if d else []
+        out[end] = {"held": bool(x.get("accepted")) and x["lean"].get("accepted") is True, "staged": x.get("staged"),
+                    "prove_s": _round(x.get("prove_total_s")), "verify_s": x["lean"].get("verify_s"),
+                    "proof_bytes": sum(f.stat().st_size for f in files) or None, "proof_files": len(files) or None,
+                    "peak_gb": x.get("max_child_rss_gb")}
+    return out or None
 
 
-def cost(rows: list[dict]) -> dict | None:
-    """The honest link-windows' cost, both ends: the mean prover seconds, Lean verify seconds and proof bytes."""
-    got = [r for r in rows if r["prove_s"] is not None]
-    if not got:
-        return None
-    mean = {k: _sum(r[k] for r in got) for k in ("prove_s", "verify_s", "proof_bytes")}
-    return {"link_windows": len(got), **{k: None if v is None else round(v / len(got), 3) for k, v in mean.items()},
-            "peak_gb": max((r["peak_gb"] for r in got if r["peak_gb"] is not None), default=None)}
-
-
-def negative(run: dict, rows: list[dict]) -> dict:
-    """Whether the negative was refused, and by what: N2's network verdict and its link-windows' verdicts of record,
-    the rehearsal's own check, and where proved, its head checks' proved verdicts (each proof held by Lean). Refused
-    only when every one of them that ran refuses it."""
+def negative(run: dict, rows: list[dict], name: str | None = None) -> dict:
+    """Whether negative ``name`` was refused, and by what: N2's network verdict and its link-windows' verdicts of
+    record, the rehearsal's own check, and where proved, its head checks' proved verdicts (each proof held by Lean).
+    Refused only when every one of them that ran refuses it. Where N2 gives no verdict (the advice profile), the check
+    refuses it only by its own violation (`OWN_CODE`): a refusal for another reason is not this negative's. A run whose
+    shim received no request, or that has no ``server.json`` to say, didn't run."""
     by, check = [], run.get("check")
     n2 = [r["window"] for r in rows if r["n2"] == "refuse"]
+    decided = run["network"]["accepted"] is not None
+    own = None if decided else OWN_CODE.get(name)
+    check_refused = check is not None and check["verdict"] == "refused"
+    by_own = check_refused and own is not None and own in (check.get("codes") or ())
     if run["network"]["accepted"] is False and n2:
         by.append(f"N2 (network verdict; link-windows {n2})")
-    if check is not None and check["verdict"] == "refused":
-        by.append("the rehearsal's own check")
+    if check_refused and (decided or by_own):
+        by.append("the rehearsal's own check" + (f" ({own})" if own else ""))
     proved = [r["window"] for r in rows if r["head_checks"] == "refuse"]
     held = all(p["held"] for p in (run["proofs"] or {}).values())
     if proved and held:
         by.append(f"the proved head checks (link-windows {proved})")
-    refused = (run["network"]["accepted"] is False and bool(n2) and (check is None or check["verdict"] == "refused")
-               and (not run["proofs"] or (held and bool(proved))))
-    return {"refused": refused, "by": by, "n2_refused_windows": n2, "proved_refused_windows": proved,
+    ran = isinstance(run.get("shim_requests"), int) and run["shim_requests"] != 0
+    refused = ((run["network"]["accepted"] is False and bool(n2) if decided else by_own)
+               and (check is None or check_refused) and (not run["proofs"] or (held and bool(proved))) and ran)
+    return {"refused": refused, "ran": ran, "by": by if ran else [], "own_code": own,
+            "check_codes": None if check is None else check.get("codes"), "n2_refused_windows": n2,
+            "proved_refused_windows": proved,
             "failed_parts": {r["window"]: r["failed_parts"] for r in rows if r["n2"] == "refuse"},
             "proved": bool(run["proofs"]), "proofs_held": held if run["proofs"] else None}
 
@@ -407,10 +561,17 @@ def _cell(x) -> str:
 
 def markdown(r: dict) -> str:
     """The report as Markdown: the verdicts, one row per link-window, the negatives and the claim."""
-    p = r.get("proofs") or {}
-    lines = [f"# Network accounting end to end: {'OK' if r['ok'] else 'NOT OK'}", "",
-             f"Source {', '.join(r['from'])}; model {_cell(r.get('model'))} (as the plan names it), "
-             f"{_cell(r.get('tokens'))} tokens a response, {_cell(r.get('requests'))} requests; endpoint "
+    p, v = r.get("proofs") or {}, r.get("varied")
+    traffic = (f"varied traffic: {_cell(v.get('requests'))} requests, max_tokens drawn per request up to "
+               f"{_cell(v.get('max_tokens'))}, prompts of {'–'.join(map(str, v.get('prompt_tokens') or ())) or '—'} "
+               f"tokens, EOS {_cell(v.get('eos_token_ids'))}" if v else
+               f"{_cell(r.get('tokens'))} tokens a response, {_cell(r.get('requests'))} requests")
+    on = r.get("ran") or []
+    lines = [f"# Network accounting end to end: {'OK' if r['ok'] else 'NOT OK'} on "
+             f"{', '.join(on[:-1]) + ' and ' + on[-1] if len(on) > 1 else on[0] if on else 'nothing that ran'}"
+             + (f" (not run: {', '.join(r['not_run'])})" if r.get("not_run") else ""), "",
+             *([f"Not OK: {'; '.join(r['why_not'])}.", ""] if r.get("why_not") else []),
+             f"Source {', '.join(r['from'])}; model {_cell(r.get('model'))} (as the plan names it), {traffic}; endpoint "
              f"{_cell(r.get('upstream'))}, {_cell(r.get('where'))}; N2's profile {_cell(r.get('profile'))}; "
              f"{_cell(r.get('windows'))} link-windows planned; commit {_cell(r.get('commit'))}; "
              f"proofs {'run' if p.get('ran') else 'not run'}.", "",
@@ -419,31 +580,66 @@ def markdown(r: dict) -> str:
              "|---|---|---|---|---|---|"]
     for name, x in r["runs"].items():
         c, g = x.get("check"), x.get("gate")
-        held = x.get("proofs")
-        lines.append(f"| {name} | {_cell(c and c['verdict'])} | {_cell(g and g.get('verdict'))} | "
-                     f"{'accept' if x['network']['accepted'] else 'refuse'} | {_cell(x['network']['refused'] or None)} | "
+        held, accepted = x.get("proofs"), x["network"]["accepted"]
+        io = (c or {}).get("io")
+        lines.append(f"| {name} | {_cell(c and c['verdict'])}{f' (I/O {io['accepted']})' if io else ''} | "
+                     f"{_cell(g and g.get('verdict'))} | "
+                     f"{'—' if accepted is None else 'accept' if accepted else 'refuse'} | "
+                     f"{_cell(x['network']['refused'] or None)} | "
                      f"{', '.join(f'{e}: {v['held']}' for e, v in held.items()) if held else '—'} |")
-    lines += ["", "## Link-windows", "",
-              "N2: the verdict of record (host). Proof: each end's head check proved --zk and held by Lean, accept or "
-              "refuse as its opened verdict row says. Failed parts: the head check's parts that fail, evaluated in the "
-              "clear on the rehearsal's published witness (a diagnostic, not the verdict). Prove and verify seconds and "
-              "proof bytes: the member session's divided by its units, summed over the proved ends (a session proves "
-              "every link-window of an end at once); peak: the largest process the driver had run by the end of the "
-              "run's last session (RUSAGE_CHILDREN only grows, so the tampered and extra rows' include the honest "
-              "sessions').",
-              "", "| run | window | N2 | proof egress | proof ingress | head checks | failed parts | prove s | verify s "
-              "| proof bytes | peak GB |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines += ["", "## Link-windows", ""]
+    if not r["link_windows"]:
+        lines.append("No N2 verdict on the advice profile (N2-ADVICE hasn't landed): the rehearsal's own check is the "
+                     "verdict.")
+    else:
+        lines += ["N2: the verdict of record (host). Proof: each end's head check proved --zk and held by Lean, accept "
+                  "or refuse as its opened verdict row says. Failed parts: the head check's parts that fail, evaluated in "
+                  "the clear on the rehearsal's published witness (a diagnostic, not the verdict). Each run's end proves "
+                  "all its link-windows in one session, so a link-window has no proving time or proof of its own: the "
+                  "sessions' are under Proving sessions.",
+                  "", "| run | window | N2 | proof egress | proof ingress | head checks | failed parts |",
+                  "|---|---|---|---|---|---|---|"]
     for x in r["link_windows"]:
         pr = x["proof"] or {}
         failed = "; ".join(f"{e} {'+'.join(f)}" for e, f in (x["failed_parts"] or {}).items() if f) or None
         lines.append(f"| {x['run']} | {x['window']} | {_cell(x['n2'])} | {_cell(pr.get('egress'))} | "
-                     f"{_cell(pr.get('ingress'))} | {_cell(x['head_checks'])} | {_cell(failed)} | {_cell(x['prove_s'])} "
-                     f"| {_cell(x['verify_s'])} | {_cell(x['proof_bytes'])} | {_cell(x['peak_gb'])} |")
+                     f"{_cell(pr.get('ingress'))} | {_cell(x['head_checks'])} | {_cell(failed)} |")
     lines += ["", "## Negatives", ""]
     for name, n in r["negatives"].items():
-        lines.append(f"- **{name}**: {'refused' if n['refused'] else 'NOT refused'} by "
-                     f"{'; '.join(n['by']) or 'nothing'}{'' if n['proved'] else ' (not proved: N2 only)'}")
+        other = (f"; the rehearsal's own check refused it for {', '.join(n['check_codes'] or ()) or 'no code'}, not "
+                 f"its own violation {n['own_code']}" if not n["refused"] and n.get("own_code") and n.get("check_codes")
+                 is not None and r["runs"][name]["check"]["verdict"] == "refused" else "")
+        lines.append(f"- **{name}**: " + (
+            f"{'refused' if n['refused'] else 'NOT refused'} by {'; '.join(n['by']) or 'nothing'}"
+            f"{'' if n['proved'] else ' (not proved)'}{other}" if n.get("ran", True)
+            else "NOT refused: not run, its shim received no request (or no server.json says it did), so its tamper "
+                 "never ran"))
+    for name, n in (r.get("pending") or {}).items():
+        n2 = n["n2"]
+        lines.append(f"- **{name}** (NEG's, pending {n['waits']}, which alone refuses it here): " + (
+            f"the rehearsal's check {_cell(n['check'])}, N2 {'—' if n2 is None else 'accept' if n2 else 'refuse'}"
+            if n["ran"] else "not run: its shim received no request, so its tamper never ran"))
     scanned = [(name, e, m) for name, x in r["runs"].items() for e, m in (x.get("proofs") or {}).items()]
+    if scanned:
+        lines += ["", "## Proving sessions", "",
+                  "One session per run and end: its link-windows are one statement, proved --zk in one pair of proofs "
+                  "and verified by Lean at once. Proof bytes: the pair's. Peak: the largest process n2_zk had run by "
+                  "the session's end (RUSAGE_CHILDREN only grows, and n2_zk runs the honest sessions first, so the "
+                  "tampered and extra sessions' include theirs).",
+                  "", "| run | end | link-windows | held (Lean) | prove s | Lean verify s | proof bytes | peak GB |",
+                  "|---|---|---|---|---|---|---|---|"]
+        lines += [f"| {name} | {e} | {_cell(m['n'])} | {m['held']} | {_cell(m['prove_s'])} | {_cell(m['verify_s'])} | "
+                  f"{_cell(m['proof_bytes'])} | {_cell(m['peak_gb'])} |" for name, e, m in scanned]
+    one = p.get("alone")
+    if one:
+        lines += ["", "## One link-window proved alone", "",
+                  "n2_zk's cost pass: a session on the honest run's statement whose verifier draws one link-window, "
+                  "per end.", "", "| end | link-windows staged | held (Lean) | prove s | Lean verify s | proof bytes "
+                  "| peak GB |", "|---|---|---|---|---|---|---|"]
+        lines += [f"| {e} | {_cell(m['staged'])} | {m['held']} | {_cell(m['prove_s'])} | {_cell(m['verify_s'])} | "
+                  f"{_cell(m['proof_bytes'])} | {_cell(m['peak_gb'])} |" for e, m in one.items()]
+    if p.get("driver_peak_gb") is not None:
+        lines += ["", f"The driver's own peak (lowering): {p['driver_peak_gb']} GB."]
     if scanned:
         lines += ["", "## What the verifier received", "",
                   "Each member's verifier directory, scanned for every piece of every head, head salt, sibling and "
@@ -452,23 +648,45 @@ def markdown(r: dict) -> str:
         lines += [f"- {name} {e}: {_cell(m['verifier_bytes'])} bytes; witness pieces found: "
                   f"{m['witness_found_at_verifier'] or 'none'}; left out as public: {_cell(m['public_pieces_left_out'])}; "
                   f"control holds all: {_cell(m['control_holds_all'])}" for name, e, m in scanned]
-    c = p.get("cost_per_link_window")
-    if c:
-        lines += ["", "## Cost per link-window (honest, both ends)", "",
-                  f"{c['prove_s']} s proving, {c['verify_s']} s Lean verify, {c['proof_bytes']} proof bytes "
-                  f"(each session's divided by its {c['link_windows']} link-windows); peak {c['peak_gb']} GB (the largest "
-                  f"process by the end of the honest sessions); the driver's own peak (lowering) "
-                  f"{_cell(p.get('driver_peak_gb'))} GB."]
     if p.get("adopted"):
         lines += ["", f"Proofs: adopted from {p['adopted']}, n2_zk's output of its own run, each proved unit's "
                       "certificate digest matched to these runs' certified records."]
     if p.get("why") or not p.get("ran"):
         lines += ["", f"Proofs: {p.get('why') or 'not run'}"]
+    lines += chain.markdown(r.get("chain") or {})
+    if r.get("stubbed"):
+        lines += ["", "## What's still stubbed", ""] + [f"- {x}" for x in r["stubbed"]]
     lines += ["", "## Claim", "", r["claim"]["statement"], "", "Not covered:", ""]
     lines += [f"- {x}" for x in r["claim"]["not_covered"]]
     lines += ["", f"Zero-knowledge gaps (`{r['claim']['source']}`):", ""]
     lines += [f"- {x}" for x in r["claim"]["zero_knowledge_gaps"]]
     return "\n".join(lines) + "\n"
+
+
+def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dict:
+    """The chain's stages (`chain`): the advice and its bits per link-window when ``--advice`` gives it (T, the
+    certified I/O and the windows from the honest run), the prove path when ``--prove-path`` does, and NEG's negatives
+    on the runs unless ``--no-negatives`` (not on the advice profile: its rows take N2's verdict)."""
+    honest, out, adv = runs[HONEST]["dir"], {}, None
+    if args.advice:
+        adv, out["advice"] = chain.advice(Path(args.advice))
+        config = _read(Path(args.serving_config)) if args.serving_config else None
+        if args.serving_config and not isinstance(config, dict):
+            raise SystemExit(f"--serving-config {args.serving_config}: not a JSON object")
+        out["bits"] = chain.bits(adv, chain.window_buckets(honest), plan.get("windows") or 0,
+                                 config and config.get("config", config), (_read(honest / "io.json") or {}).get("requests"))
+    if args.prove_path:
+        src = Path(args.prove_path)
+        out["prove_path"] = chain.prove_path(_unpack(src, work) if src.is_file() else src, out.get("advice"),
+                                             (out.get("bits") or {}).get("bound")) | {"dir": str(src)}
+        log(f"prove path: adopted from {src}, ok {out['prove_path']['ok']}")
+    if (plan.get("occupancy") or {}).get("kind") == chain.ADVICE:
+        out["negatives"] = {"ran": False, "why": "its rows take N2's verdict, which the advice profile has none of "
+                                                 "until N2-ADVICE"}
+    elif not args.no_negatives:
+        out["negatives"] = chain.negatives({s: r["dir"] for s, r in runs.items()}, work / "chain", adv, clock)
+        log(f"negatives (NEG's registry): ok {out['negatives']['ok']}")
+    return out
 
 
 def _commit() -> str | None:
@@ -486,17 +704,27 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     work = Path(args.work) if args.work else Path(tempfile.mkdtemp(prefix="network-e2e-"))
     work.mkdir(parents=True, exist_ok=True)
+    tunnel = None
     try:
+        if getattr(args, "endpoint_peer", None):
+            args.upstream, tunnel = forward(args.endpoint_peer, out / "forward.log")
         sources = [Path(s) for s in args.sources] if args.sources else [rehearse(args, rest, out / "rehearsal")]
+        if tunnel is not None:
+            tunnel.kill()
         runs = collect(sources, work)
         plan = _read(runs[HONEST]["dir"] / "plan.json") or {}
         profile = (plan.get("occupancy") or {}).get("kind")
+        advised = profile == chain.ADVICE
         log(f"runs: {', '.join(f'{s} {r['dir']}' for s, r in runs.items())}; N2's profile {profile}")
-        if args.no_prove:
-            proofs = {"ran": False, "why": "not run (--no-prove)"}
+        if advised:
+            proofs = {"ran": False, "why": "not run: on the advice profile the counts are N2-ADVICE's "
+                                           "(NetworkAdvisedCounts_v1), which hasn't landed, and n2_zk proves the planned "
+                                           "profile's head check"}
         elif profile != "planned":
             proofs = {"ran": False, "why": f"not run: the {profile} profile's count check is NetworkServedCounts_v1, "
                                            "which n2_zk doesn't prove"}
+        elif args.no_prove:
+            proofs = {"ran": False, "why": "not run (--no-prove)"}
         elif args.proofs:
             src = Path(args.proofs)
             proofs = adopt(_unpack(src, work) if src.is_file() else src, runs) | {"ran": True, "adopted": str(src)}
@@ -513,19 +741,25 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
                 x["parts"] = {e: refs[f"{name}-{e}"]["failed"][i] for e in n2_zk.ENDS if f"{name}-{e}" in refs}
         for name, r in runs.items():
             if name not in n2:
-                n2[name] = host(n2_zk.link_windows(r["dir"], clock=clock))
-        if TAMPERED not in n2:
+                n2[name] = {"windows": [], "network": None} if advised else \
+                    host(n2_zk.link_windows(r["dir"], clock=clock))
+        if TAMPERED not in n2 and not advised:
             n2[TAMPERED] = host(n2_zk.link_windows(runs[HONEST]["dir"], edit=n2_zk.one_count, clock=clock))
-        served = plan.get("served") or {}
+        served = plan.get("served") or plan.get("varied") or {}
         meta = {"from": [str(s) for s in sources], "commit": _commit(), "model": plan.get("live_model"),
-                "tokens": served.get("tokens"), "requests": served.get("requests"), **where(runs),
-                "profile": profile, "windows": plan.get("windows"), "served": plan.get("served")}
-        r = report(runs, n2, proofs, meta)
+                "tokens": served.get("tokens", served.get("max_tokens")), "requests": served.get("requests"),
+                **where(runs, getattr(args, "endpoint_peer", None)), "profile": profile, "windows": plan.get("windows"), "served": plan.get("served"),
+                "varied": plan.get("varied")}
+        stages = stages_of(runs, plan, args, work, clock)
+        r = report(runs, n2, proofs, meta, stages)
+        r["stubbed"] = chain.stubs(r, hasattr(n2_zk.cs, "TRAFFIC"))
         (out / "report.json").write_text(json.dumps(r, indent=1, default=str) + "\n")
         (out / "report.md").write_text(markdown(r))
         log(f"report {out / 'report.md'}: {'ok' if r['ok'] else 'NOT ok'}")
         return r
     finally:
+        if tunnel is not None:
+            tunnel.kill()
         if not args.work:
             shutil.rmtree(work, ignore_errors=True)
 
@@ -537,6 +771,8 @@ def main(argv=None) -> int:
                      help="a rehearsal's directory, a gate run's (vy-challenger-gate fetch), a run's, or a tarball")
     src.add_argument("--upstream", help="rehearse first against this endpoint, http(s)://HOST[:PORT]")
     src.add_argument("--vllm", metavar="MODEL", help="rehearse first, starting vLLM for MODEL on this host's GPU")
+    src.add_argument("--endpoint-peer", metavar="NAME:PORT", help="rehearse first against node NAME's endpoint on its "
+                                                                  "127.0.0.1:PORT, through an ssh forward (/etc/vy/peers)")
     ap.add_argument("--out", default=os.environ.get("OUT"), help="the report's directory (default $OUT)")
     ap.add_argument("--work", help="scratch, kept (default: a temporary directory, removed)")
     ap.add_argument("--bin", help="C-Flock's flock-circuit (run.sh builds it)")
@@ -546,6 +782,13 @@ def main(argv=None) -> int:
     how.add_argument("--no-prove", action="store_true", help="N2's verdicts and the head checks' references only")
     how.add_argument("--proofs", metavar="DIR", help="adopt n2_zk.prove's output of these runs (n2_zk.sh's $OUT/n2zk, or a "
                                                      "tarball of it) instead of proving")
+    ap.add_argument("--advice", metavar="FILE", help="the advice: I1 v0's JSON or encode bytes, or a prove-path "
+                                                     "stand-in's (chain.advice); its bits per link-window")
+    ap.add_argument("--serving-config", metavar="FILE", help="the serving config the derived bits take (derived.Config's "
+                                                             "fields, or a step trace's config)")
+    ap.add_argument("--prove-path", metavar="DIR", help="adopt prove_path.py audit's output (its run.sh's $OUT, or a "
+                                                        "tarball of it)")
+    ap.add_argument("--no-negatives", action="store_true", help="skip NEG's registry (negatives.suite)")
     args, rest = ap.parse_known_args(argv)
     if rest and args.sources:
         ap.error(f"unrecognized arguments: {' '.join(rest)}")

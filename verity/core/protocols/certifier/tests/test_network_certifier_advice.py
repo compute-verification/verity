@@ -1,5 +1,5 @@
 """Advice v0 (`advice`, PROTOCOL.md "Advice v0"): the round trip, the bit layout rebuilt field by field from the
-documented one and pinned on a fixture, the charge per window summing to the total, and the refusals of malformed advice
+documented one and pinned on a fixture, the split by window summing to the total, and the refusals of malformed advice
 and of every byte string that isn't a canonical encoding.
 
 The random advices come from `simulate`, a small scheduler in vLLM v1's manner: running requests first under a token
@@ -243,7 +243,7 @@ def test_lists_are_taken_as_tuples():
     assert a == FIXTURE and hash(a) == hash(FIXTURE)
 
 
-# --- the charge ----------------------------------------------------------------------------------------------------
+# --- by window -----------------------------------------------------------------------------------------------------
 
 
 def test_fixture_charge_per_window():

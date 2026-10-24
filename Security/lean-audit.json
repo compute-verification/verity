@@ -1042,6 +1042,14 @@
    "owner": "@proofs",
    "digest": "4c6283114e6093bce72430d7e41df49d280807a9f7dcfd337e81398948a04d9f"
   },
+  "Hash.RowLeaf.accepts": {
+   "owner": "@kernels",
+   "digest": "263fd6e9a4a0df8f6ad4ed23bf92236e58354b1007cca6fe6e818d1fa4862cde"
+  },
+  "Hash.Tree.accepts": {
+   "owner": "@kernels",
+   "digest": "3f74d9fed34e2079842ae3580468d60b2c8665410cae66f630120abc695a2c61"
+  },
   "Nci.Assumptions.ActivationChained": {
    "owner": "@compute-accounting",
    "digest": "d4bfbb246cc11cfcca2547991efc002a69eec1c219bb47cae59eb583e7ca21da"
@@ -1205,6 +1213,10 @@
   "NetTiming.JitterBounded": {
    "owner": "@network-accounting",
    "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be"
+  },
+  "NetTiming.Layout.Fits": {
+   "owner": "@network-accounting",
+   "digest": "b5c00d137d48ec2bef002d2c9fa7bb36d831f9c1f44a3af803e835a5b86f8ca3"
   },
   "NetTiming.OccupancyReadsOwnBlock": {
    "owner": "@network-accounting",
@@ -1597,6 +1609,26 @@
   "RecDeploy.PartIn": {
    "owner": "@proofs"
   },
+  "Verity.Advice.Framing.Separated": {
+   "owner": "@proofs",
+   "digest": "dc1f4d0a4a15ace01f66c01cd5abecd294a034b491eb78f2f8d3bce689b6c1fb"
+  },
+  "Verity.Advice.Rows.Decodes": {
+   "owner": "@proofs",
+   "digest": "2e9228b3a4629702b902a2f18b295af7675ae8c2269eb61a4afd2e591bb697ac"
+  },
+  "Verity.Assumptions.GemmAmpereStep": {
+   "owner": "@proofs",
+   "digest": "02e4cb87864bcee487dafdb2047e70b7e521b0c0e9d0d8cb824ff3854abe00e1"
+  },
+  "Verity.Assumptions.GemmHopperStep": {
+   "owner": "@proofs",
+   "digest": "8c5e183ae15ce48fd0744893ce9708c38d0c9d88fd0d109ffb68ec4226ff323e"
+  },
+  "Verity.Assumptions.StepInputs": {
+   "owner": "@proofs",
+   "digest": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d"
+  },
   "Verity.Assumptions.TrustedNebiusHost": {
    "owner": "@network-accounting",
    "digest": "569bbee988e0e2575ef74370bda4650cfe18814bac8fc43aa7329cade6b5b23a"
@@ -1609,9 +1641,37 @@
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
   },
-  "NetTiming.Layout.Fits": {
-   "owner": "@network-accounting",
-   "digest": "b5c00d137d48ec2bef002d2c9fa7bb36d831f9c1f44a3af803e835a5b86f8ca3"
+  "Verity.Partition.Fits": {
+   "owner": "@proofs",
+   "digest": "456fe0bfb32a76c54987890b6b913fb75e37419dd3cbaf4607c4903ee32ef8c9"
+  },
+  "Verity.Partition.FitsLocally": {
+   "owner": "@proofs",
+   "digest": "8bc2d5170ca9e1848fc8e9cfa283d048b98ed61ec44e401861ed89b9bb01bb19"
+  },
+  "Verity.Registered": {
+   "owner": "@proofs",
+   "digest": "44fbee7cd7d31f7adb92e7492e86f4ff6c2eeba04b9b1ced3c424e83271053c3"
+  },
+  "Verity.Sound": {
+   "owner": "@proofs",
+   "digest": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7"
+  },
+  "Verity.TC.Proofs.Admissible": {
+   "owner": "@proofs",
+   "digest": "b33ba28a9264451d039cd8b6e71efe93c3c1e751edc213e7f42d36f9feba98fd"
+  },
+  "Verity.TC.Relation.ChainHolds": {
+   "owner": "@proofs",
+   "digest": "40057e9091466dd915d02ee7e8607f7e18de8ae24a95b73066956b813c646280"
+  },
+  "Verity.TC.Relation.StepHolds": {
+   "owner": "@proofs",
+   "digest": "5c6e5d752898702577c7e65ce03ef7c88666662c4d086f266102c9fb2d836ecd"
+  },
+  "Verity.TC.Relation.packHolds": {
+   "owner": "@proofs",
+   "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
   }
  },
  "meaning": [
@@ -2164,7 +2224,7 @@
   "Definitions.Hash": {
    "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash"],
    "except": [],
-   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
+   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
   },
   "Models.Hash.Guarantees": {
    "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash", "Models.Hash.Guarantees"],
@@ -7373,11 +7433,17 @@
    "assumptions": [],
    "type_hash": "e68eb3b88c65d2f37e9f5f41402a589d574ad22ab95867ac9f47a796660fcbbe"
   },
-  "Hash.SecurityProofs.Stated": {
-   "owner": "@hash",
-   "signature": ["Hash.SecurityProofs.Stated : Hash.Guarantees.Stated"],
+  "Hash.SecurityProofs.RowBinding": {
+   "owner": "@kernels",
+   "signature": ["Hash.SecurityProofs.RowBinding : Hash.Guarantees.RowBinding"],
    "assumptions": [],
-   "type_hash": "f2427bb0d064a77600f917fdfb62cfe489cbcb68556322ce1d0ecea2380f62c5"
+   "type_hash": "90af0c2f35c7e8347ee3e22fd25338c89dd0204060da92f494d94c2d23aaea5f"
+  },
+  "Hash.SecurityProofs.TreeBinding": {
+   "owner": "@kernels",
+   "signature": ["Hash.SecurityProofs.TreeBinding : Hash.Guarantees.TreeBinding"],
+   "assumptions": [],
+   "type_hash": "1ad81857586f7b7d31994f0793364f85a65fc836785f058f640191a61ecff010"
   },
   "Nci.SecurityProofs.ActivationsBoundOn": {
    "owner": "@lean",
@@ -7859,11 +7925,17 @@
    "assumptions": [],
    "type_hash": "9d968ee8cd314d2f358b07d062e218a6b24ef0ed4d1bf6669caaec94c0801c65"
   },
+  "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted": {
+   "owner": "@network-accounting"
+  },
   "NetTiming.SecurityProofs.EncardChargedLe": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardChargedLe : NetTiming.Guarantees.EncardChargedLe"],
    "assumptions": [],
    "type_hash": "886ea913690fe8450cf3a35d36d9851949a8c17ee3fb4b36b0b98d45a6aa050a"
+  },
+  "NetTiming.SecurityProofs.EncardChargedLeCounted": {
+   "owner": "@network-accounting"
   },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
    "owner": "@network-accounting",
@@ -7908,6 +7980,9 @@
    "assumptions": [],
    "type_hash": "d88f0cba3aa004a8778740fc4e4abff70e425bb894d4c7ce024701cb880b4a50"
   },
+  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted": {
+   "owner": "@network-accounting"
+  },
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": {
    "owner": "@network-accounting",
    "signature": [
@@ -7916,16 +7991,7 @@
    "assumptions": [],
    "type_hash": "62a501bc4842f040a02106fe3def5bb875618490e8e0f114594c719095f1547d"
   },
-  "NetTiming.SecurityProofs.EncardChargedLeCounted": {
-   "owner": "@network-accounting"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted": {
-   "owner": "@network-accounting"
-  },
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": {
-   "owner": "@network-accounting"
-  },
-  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted": {
    "owner": "@network-accounting"
   },
   "NetTiming.SecurityProofs.EncardFifoGrids": {
@@ -9454,11 +9520,197 @@
    "assumptions": [],
    "type_hash": "af54b25464d2114ccc456297143546c6bbdc761a3fed10e98f5dd01e33ad8142"
   },
+  "Verity.SecurityProofs.AdaEqAmpere": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.AdaEqAmpere : Verity.Guarantees.AdaEqAmpere"],
+   "assumptions": [],
+   "type_hash": "4ef7acbed8eccd0f5171a7763ffc7cbff36880f51912d34b3bfe1659ff7ab177"
+  },
+  "Verity.SecurityProofs.AmpereStepComplete": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.AmpereStepComplete : Verity.Guarantees.AmpereStepComplete"],
+   "assumptions": [],
+   "type_hash": "4faf8d07c32dd325668f647d2117ee51e6798de430cf86a272451f996839e028"
+  },
+  "Verity.SecurityProofs.AmpereStepHw": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.AmpereStepHw : Verity.Guarantees.AmpereStepHw"],
+   "assumptions": [],
+   "type_hash": "5266aec3cc904fefc52e1f1798f6d95b43817da9faecf1e2a7bd07bfdc8f0624"
+  },
+  "Verity.SecurityProofs.AmpereStepIff": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.AmpereStepIff : Verity.Guarantees.AmpereStepIff"],
+   "assumptions": [],
+   "type_hash": "f7bf3bc7345da650b05e97c0aba43be11680cbba65c1e0c3376cd6b21cfed7ab"
+  },
+  "Verity.SecurityProofs.AmpereStepSound": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.AmpereStepSound : Verity.Guarantees.AmpereStepSound"],
+   "assumptions": [],
+   "type_hash": "0192fd75b60eaebfc2a12b03b5a6bc38bcae9adb7f495e7f039f9781bb18b9e2"
+  },
+  "Verity.SecurityProofs.AmpereUnitBf16": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.AmpereUnitBf16 : Verity.Guarantees.AmpereUnitBf16"],
+   "assumptions": [],
+   "type_hash": "b358390ebc06a84715ef19d9b9a70ae7717e7f5cea1d794e2c2ced0265f674a3"
+  },
+  "Verity.SecurityProofs.AmpereUnitSound": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.AmpereUnitSound : Verity.Guarantees.AmpereUnitSound"],
+   "assumptions": [],
+   "type_hash": "ae5939be57fde5a396f851a991509c3d86cdd02853fa4bdd2e29f38fb9a2eb4d"
+  },
+  "Verity.SecurityProofs.AmpereUnitSoundZero": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.AmpereUnitSoundZero : Verity.Guarantees.AmpereUnitSoundZero"],
+   "assumptions": [],
+   "type_hash": "cf6ae741ac5e875201f2ca2733ffda1969bd047946b299c8af7546edd595eaf8"
+  },
+  "Verity.SecurityProofs.Compose": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.Compose : Verity.Guarantees.Compose"],
+   "assumptions": [],
+   "type_hash": "373f87b7017211341c69f6976f0a1a750d9b31b593dbc0cbb6787f490229aefd"
+  },
   "Verity.SecurityProofs.ComposeCone": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.ComposeCone : Verity.Guarantees.ComposeCone"],
    "assumptions": [],
    "type_hash": "f565132f61eb73cde2ed8d766ee1d4344bfd8d8939ae9d2120bb9790bcd6f6f7"
+  },
+  "Verity.SecurityProofs.ContainsImplements": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.ContainsImplements : Verity.Guarantees.ContainsImplements"],
+   "assumptions": [],
+   "type_hash": "5261423f61f77d1a20b962eb0ad2ac11cfafad117764f583efcd5a3bf5906992"
+  },
+  "Verity.SecurityProofs.CorrectOfOpening": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.CorrectOfOpening : Verity.Guarantees.CorrectOfOpening"],
+   "assumptions": [],
+   "type_hash": "d31e6511bb4fdd3d42e665caac936737a4de4cc765e689f6eb61e9543ede9762"
+  },
+  "Verity.SecurityProofs.HopperStepComplete": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.HopperStepComplete : Verity.Guarantees.HopperStepComplete"],
+   "assumptions": [],
+   "type_hash": "fe2fae45be22b37a93be72003ffbbf012d3fd12e40a55b50728c78645e1c931c"
+  },
+  "Verity.SecurityProofs.HopperStepHw": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.HopperStepHw : Verity.Guarantees.HopperStepHw"],
+   "assumptions": [],
+   "type_hash": "cb161164edc01610f469f2d6476ff00b379a3e8409fbace7d8ec575c96e50bf2"
+  },
+  "Verity.SecurityProofs.HopperStepIff": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.HopperStepIff : Verity.Guarantees.HopperStepIff"],
+   "assumptions": [],
+   "type_hash": "2b26f76665dd6b3d22c0baa9455693f096b3e0ef592712d5349089e08ac3b8bf"
+  },
+  "Verity.SecurityProofs.HopperStepSound": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.HopperStepSound : Verity.Guarantees.HopperStepSound"],
+   "assumptions": [],
+   "type_hash": "e7dc0feb2531a118d4b15b496514252f78f99499197f4b0e150bf4de46b4816b"
+  },
+  "Verity.SecurityProofs.HopperUnitBf16": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.HopperUnitBf16 : Verity.Guarantees.HopperUnitBf16"],
+   "assumptions": [],
+   "type_hash": "bd4150b936a955da951c9e9e5383d3cbf12c48a5ae5c03661e5bdbc7b5261e32"
+  },
+  "Verity.SecurityProofs.HopperUnitSound": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.HopperUnitSound : Verity.Guarantees.HopperUnitSound"],
+   "assumptions": [],
+   "type_hash": "05cf0649042eb55dbe2001339ac9d71132bb96e734c2f95169e3def1a4d1ffed"
+  },
+  "Verity.SecurityProofs.HopperUnitSoundZero": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.HopperUnitSoundZero : Verity.Guarantees.HopperUnitSoundZero"],
+   "assumptions": [],
+   "type_hash": "099ec51d6318715f2ad10a572ec517c8b04942179a3218ff45042c279759f7a0"
+  },
+  "Verity.SecurityProofs.IsZeroGadget": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.IsZeroGadget : Verity.Guarantees.IsZeroGadget"],
+   "assumptions": [],
+   "type_hash": "4712837458217893fee3236ecf7855de0efd4d66a8b99532fddbcfb670bdb42b"
+  },
+  "Verity.SecurityProofs.PackSoundComplete": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.PackSoundComplete : Verity.Guarantees.PackSoundComplete"],
+   "assumptions": [],
+   "type_hash": "4c3bae588a8b15087f0b98c7fee1a916e24956b95df6fd0453546703c7f048e0"
+  },
+  "Verity.SecurityProofs.PrivateFitsOfLocal": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.PrivateFitsOfLocal : Verity.Guarantees.PrivateFitsOfLocal"],
+   "assumptions": [],
+   "type_hash": "64f42467cd87ee1d655ab157a39ee9412d15a923c2cbbd93d790f98f69f9029b"
+  },
+  "Verity.SecurityProofs.PrivateOutBitsLe": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.PrivateOutBitsLe : Verity.Guarantees.PrivateOutBitsLe"],
+   "assumptions": [],
+   "type_hash": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3"
+  },
+  "Verity.SecurityProofs.ProbBatchInduced": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.ProbBatchInduced : Verity.Guarantees.ProbBatchInduced"],
+   "assumptions": [],
+   "type_hash": "d3b33f0f68f5f726e9e6807f5420faa852ef8afba25cb45c5842e42815cdb713"
+  },
+  "Verity.SecurityProofs.RangeGadget": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.RangeGadget : Verity.Guarantees.RangeGadget"],
+   "assumptions": [],
+   "type_hash": "f7ed21cd74c37de74d55e3d3d2ff32de391af49d7eb759acfd46292de7e2acea"
+  },
+  "Verity.SecurityProofs.RefineWrong": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.RefineWrong : Verity.Guarantees.RefineWrong"],
+   "assumptions": [],
+   "type_hash": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6"
+  },
+  "Verity.SecurityProofs.RegisteredMeets": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.RegisteredMeets : Verity.Guarantees.RegisteredMeets"],
+   "assumptions": [],
+   "type_hash": "20861215c23df66e4b3c08f6ba2721de029e7b1e815b169414feebe4d281342e"
+  },
+  "Verity.SecurityProofs.SoundAnd": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.SoundAnd : Verity.Guarantees.SoundAnd"],
+   "assumptions": [],
+   "type_hash": "07d767263893e3e34dfcaa91ddfaeb66541ca48d53c262036875f1aa2eaf0375"
+  },
+  "Verity.SecurityProofs.SoundBatch": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.SoundBatch : Verity.Guarantees.SoundBatch"],
+   "assumptions": [],
+   "type_hash": "b548cdc5c7d5cd5ad1104cc009d23a23edb34a30407f6e74c1f2560c2bbaccd6"
+  },
+  "Verity.SecurityProofs.SoundBind": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.SoundBind : Verity.Guarantees.SoundBind"],
+   "assumptions": [],
+   "type_hash": "a3c833c307c6c399101dfc1c2d95543aaea6d7e38b65abfd9b9f60ee6f24de51"
+  },
+  "Verity.SecurityProofs.SoundInterleave": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.SoundInterleave : Verity.Guarantees.SoundInterleave"],
+   "assumptions": [],
+   "type_hash": "adf712ce631c832feb40854afd840d17d22c7ea31ccc9cb75ce23a17f5049405"
+  },
+  "Verity.SecurityProofs.SoundMono": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.SoundMono : Verity.Guarantees.SoundMono"],
+   "assumptions": [],
+   "type_hash": "093cd4e683f144b86a3751c7eb7ad611c970d0e583757f8db4091beb488e3217"
   }
  },
  "shape": {
@@ -9741,6 +9993,14 @@
    "Pouw.SecurityProofs.Receipt.Fx1PairXorNoKernel": {
     "function": ["Pouw.Receipt.stateSpread", "Pouw.Receipt.fx1Pair"],
     "outcome": "none"
+   },
+   "Hash.SecurityProofs.RowBinding": {
+    "function": "Hash.RowLeaf.accepts",
+    "outcome": "accept"
+   },
+   "Hash.SecurityProofs.TreeBinding": {
+    "function": "Hash.Tree.accepts",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -9994,37 +10254,6 @@
    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore": "frozen (no-function): Its function is tileCheck8 or tileCheck4, a model in Security/Definitions/Pouw/PearlC rather than executable code, so it fits only if top rules that a Definitions-level check is a named function; it would then be restated with ComputesWords opened and the step's w >= 24 as a definition.",
    "Pouw.SecurityProofs.Theorem1": "lemma: leaves the list under the 5:11 PM ruling",
    "Pouw.SecurityProofs.WorkWeightedSampling": "lemma: leaves the list under the 5:11 PM ruling",
-   "Verity.Guarantees.AdaEqAmpere": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereStepComplete": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereStepHw": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereStepIff": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereStepSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereUnitBf16": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereUnitSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.AmpereUnitSoundZero": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.Compose": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.ContainsImplements": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.CorrectOfOpening": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperStepComplete": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperStepHw": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperStepIff": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperStepSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperUnitBf16": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperUnitSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.HopperUnitSoundZero": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.IsZeroGadget": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.PackSoundComplete": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.PrivateFitsOfLocal": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.PrivateOutBitsLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.ProbBatchInduced": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.RangeGadget": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.RefineWrong": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.RegisteredMeets": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundAnd": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundBatch": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundBind": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundInterleave": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundMono": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "NetTiming.SecurityProofs.CardCountsEqLe": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.CardFree": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.CardLeftPacked": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
@@ -10303,9 +10532,6 @@
    "Accounting.SecurityProofs.TS.TemplateCondition": "lemma: h1tile's segment (32 columns, words of at most 32 skipped products, a one-bit dither) meets TileLuck's condition with M = 1 at κ = 4 and r·θ = 1/256, from elementary bounds on exp; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.TemplateMoment": "lemma: TileLuck at h1tile's segment, the gain's moment at most 1 at θ = 1/(256·r) a product and κ = 4; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.OneRegisterLowBit": "lemma: the barrier to a lower bound read off a fold's low bit, over every one-register fold of binding steps (a definition) whose steps' bit 0 is a function of the state's and the word's bits 0 (a hypothesis): the run's bit 0 is a parity of its words' bits 0; not a property of a Lean function.",
-   "Hash.Guarantees.TreeBinding": "unstated: statement first (Daniel, 17 Oct), restated to the served frame node after the red team (note:hash/20261018T0846Z-finding-redteam-2474, T1-T3) and recorded through Hash.SecurityProofs.Stated; next a card to Daniel, then the proof, Hash.SecurityProofs.TreeBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
-   "Hash.Guarantees.RowBinding": "unstated: statement first (Daniel, 17 Oct), the statement the red team found missing (note:hash/20261018T0846Z-finding-redteam-2474, T4), recorded through Hash.SecurityProofs.Stated; next its red team, a card to Daniel, then the proof, Hash.SecurityProofs.RowBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
-   "Hash.SecurityProofs.Stated": "frozen (no-function): It states no property of the verifier: it reads the hash area's statements (Hash.Guarantees.RowBinding, Hash.Guarantees.TreeBinding), so the lock records their text, and a statement leaves it when its own proof is listed.",
    "Accounting.SecurityProofs.RequirementCredits": "completeness: on a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean), when the node runs W as placed, PouwWork.credits is the work of W's region outside the marking, the run's inputs being input gates wherever they are placed; about the actual run of a node that runs W as placed (Placement.actual takes the leaf and ticks as given, its operations constants, with no outputs and no coins among its gates), so it says what an honest node is credited or helped, not what a node that passes PoUW ran; about no function of the code.",
    "Accounting.SecurityProofs.RequirementHelp": "completeness: on a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean), when the node runs W as placed in a topological wiring the execution follows, PouwWork.help is W's ingress into the node and the verifier's leaves; about the actual run of a node that runs W as placed (Placement.actual takes the leaf and ticks as given, its operations constants, with no outputs and no coins among its gates), so it says what an honest node is credited or helped, not what a node that passes PoUW ran; about no function of the code.",
    "Accounting.SecurityProofs.RequirementHelpBound": "completeness: on a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean), when the node runs W as placed, with no hypothesis, PouwWork.help is at most W's ingress into the node and the verifier's leaves; about the actual run of a node that runs W as placed (Placement.actual takes the leaf and ticks as given, its operations constants, with no outputs and no coins among its gates), so it says what an honest node is credited or helped, not what a node that passes PoUW ran; about no function of the code.",
@@ -10494,7 +10720,38 @@
    "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver": "unstated: StagedFloorKOneSidedJ10R restated on ServiceSoundStagedJ10RPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); the per-prover form at call scope under J10-R (RT-ALGO-17), stated beside StagedFloorKOneSidedPerProver and open like it (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
    "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": "unstated: OverlapFloorKOneSidedJ10R restated on ServiceSoundOverlapJ10RPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); the per-prover form at call scope under J10-R (RT-ALGO-17), stated beside OverlapFloorKOneSidedPerProver and open like it (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
    "NetTiming.Guarantees.SampledAuditAccepted": "unstated: the sampled audit implies Accepted (PRF-144), stated and not yet proved: where Claims.Sampling.KS holds, KSAccepted holds, Pr[acc and not RAcc delta] <= delta + eps_ks + eps_bind; its text is in the lock through SampledAuditAcceptedStated, and a theorem proving it, listed under guarantees, replaces this entry",
-   "NetTiming.SecurityProofs.SampledAuditAcceptedStated": "frozen (no-function): It states no property of the verifier: it reads NetTiming.Guarantees.SampledAuditAccepted, so the lock records its text and every definition it reads, and it leaves when a theorem proves that statement."
+   "NetTiming.SecurityProofs.SampledAuditAcceptedStated": "frozen (no-function): It states no property of the verifier: it reads NetTiming.Guarantees.SampledAuditAccepted, so the lock records its text and every definition it reads, and it leaves when a theorem proves that statement.",
+   "Verity.SecurityProofs.IsZeroGadget": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.RangeGadget": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.AdaEqAmpere": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.AmpereStepComplete": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.AmpereStepHw": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.AmpereStepIff": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.AmpereStepSound": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.AmpereUnitBf16": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.AmpereUnitSound": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.AmpereUnitSoundZero": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.HopperStepComplete": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.HopperStepHw": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.HopperStepIff": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.HopperStepSound": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.HopperUnitBf16": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.HopperUnitSound": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.HopperUnitSoundZero": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.PackSoundComplete": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.Compose": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.CorrectOfOpening": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.RefineWrong": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.ContainsImplements": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.SoundAnd": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
+   "Verity.SecurityProofs.SoundMono": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
+   "Verity.SecurityProofs.SoundInterleave": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
+   "Verity.SecurityProofs.SoundBatch": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
+   "Verity.SecurityProofs.ProbBatchInduced": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
+   "Verity.SecurityProofs.SoundBind": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
+   "Verity.SecurityProofs.PrivateFitsOfLocal": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.PrivateOutBitsLe": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.RegisteredMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -14057,7 +14314,8 @@
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.SamplingClaimsStated",
-    "Hash.SecurityProofs.Stated",
+    "Hash.SecurityProofs.RowBinding",
+    "Hash.SecurityProofs.TreeBinding",
     "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -14635,8 +14893,44 @@
     "NetTiming.SecurityProofs.SampledAuditAcceptedStated"
    ]
   },
+  "Definitions.Core.Advice": {
+   "digest": "2d0d4173b66a6346e830b1a3277d93df821183b6fb4a63453031923879ceb1aa",
+   "definitions": {
+    "Verity.Advice.Digest": "eba18f8dfa15e2b26f9acbc8d49e4497bdf97e6153a8d42acdf846ca66c512c6",
+    "Verity.Advice.Framing": "d6a7342bf02dd4abd88f2fcee85bfe5f29fdece0990fd29a1fc5cb30e32907c4",
+    "Verity.Advice.Framing.Separated": "dc1f4d0a4a15ace01f66c01cd5abecd294a034b491eb78f2f8d3bce689b6c1fb",
+    "Verity.Advice.Framing.leaf": "73367ef7e872fd03e4a62f12e5b8cb892b6f72dca2e8277d1a1cf906fa95ac69",
+    "Verity.Advice.Framing.leafPrefix": "ab336e88e1cc313c7b6a73acc870b457ea13ab207a83e467441f28d4e9af450e",
+    "Verity.Advice.Framing.mask": "f4dfaf7b2669334c90d69d0718adf938d0d94d175917adf54e38f1841b404e59",
+    "Verity.Advice.Framing.node": "f317213e05f538b441b549d3c35415a32fb741f3e4da3cd9e8a42c8dd1b9ee79",
+    "Verity.Advice.Framing.pad": "4a91f4240526fbed292361126d273210dbbb49e5e4c76cbccf84cfd9a11164c6",
+    "Verity.Advice.Framing.rowPrefix": "864db8071ba5cc717ce5c40c3ae66fad4490070ae4fc8c2a4dd136803ba9afeb",
+    "Verity.Advice.Framing.saltPrefix": "413346e557ac896442347ae2c8f6b6116ed3dded791d41bb110b072cbbfa1c8e",
+    "Verity.Advice.Registration": "63501ede3617bae83f18c220eb11c44c4ab4d272fb5c4c4a21dc06d46b66b4b7",
+    "Verity.Advice.Registration.P": "e729bbf0d07ee52acfc01dc2503d7375e7847b8331d4afc52eb40c71af96370b",
+    "Verity.Advice.Registration.hashInputs": "9a1ba1b75dd6eeaafd3bf49e0974355b4c73d5a090ce4e1f5e949a21c1f4d984",
+    "Verity.Advice.Registration.n": "69c036aab223d7841c5f5c9865359bb771ce2668dbdd60208861e697b5f0077b",
+    "Verity.Advice.Registration.root": "94e15329e3335ff39d4ec6f3769d41f3d26288621e2f991535b6cbb86089cd38",
+    "Verity.Advice.Registration.salt": "b8b725178d7af75eade81093167e480f246518003c27b955ece0054d1c9e60a1",
+    "Verity.Advice.Rows": "d6b3071c8a0b434e3004cfa522927969c825ad175302573f12cf2ee9389f567e",
+    "Verity.Advice.Rows.Decodes": "2e9228b3a4629702b902a2f18b295af7675ae8c2269eb61a4afd2e591bb697ac",
+    "Verity.Advice.Rows.decode": "f3e3696fe15ada28c5e1ec8d4e8af9b51664b0717ad99a20f5ce60b080141a51",
+    "Verity.Advice.Rows.rows": "28b1a94fd72013c30917515b340dcc4114f1cf19298951b23a95d56ee2fc37fe",
+    "Verity.Advice.depth": "e9dec463bb24d43d87081e087d530f1d2bd6b27b0d83b384f0d307de45306fc3",
+    "Verity.Advice.hashInputs": "f77c887a13fb431f29c755c9d93916e351bd69d2820fc2e8deab89c869af7d6e",
+    "Verity.Advice.hmInput": "72fb7ccfffcd853fed9b4f1f37309afc84d803dcf0617e0ba5ca76ab865ba810",
+    "Verity.Advice.inputsAt": "e726c6255b8bc6139deec9944930b4f7510d84449f41d7e8f6c35bb65e4c0d7b",
+    "Verity.Advice.leafAt": "3b87441abb2b7cd6393fb65169fa477e67b0f4e64e8596ba6d7da4e872b6f749",
+    "Verity.Advice.leafInput": "602d81a6d4377220111212540425c4d3bd493ceef15062ebaa867db109649536",
+    "Verity.Advice.nodeAt": "73ddf68e6ab54228e1becf0177aff5ae407d4ca8dc4ccccd0f21586dbd7482dd",
+    "Verity.Advice.root": "b14315096bbaab2a28b5e02c435a1c0ec3f91216eb3e3e18234c41f99ee01463",
+    "Verity.Advice.rowInput": "e4f45cd2cb576a4445a3bec2df74d16aa4963241cc75498c9f78c3e9b350b151",
+    "Verity.Advice.saltInput": "a569d0eb1b9698594b64c8adfae3f195e0fbdd0235fb79f091a4a689ec46a75f"
+   },
+   "guarantees": ["Verity.SecurityProofs.RegisteredMeets"]
+  },
   "Definitions.Core.Circuit": {
-   "digest": "c7b682a12594edbab02b3fb83465e6c5354f9320835f84ad88e478e3bf340ead",
+   "digest": "4b89f6ddf9d7d0b8a14ef45007686901fdfd61ea19bbc81c3f68df13cca94eec",
    "definitions": {
     "Verity.Circuit": "c86ddd734da68edae1a4e99343f0dfc3e717418d0f7bc8a55a8a33af0f471a17",
     "Verity.Circuit.Feeds": "986d0f24c069541d74053879ac76d0958fec5ab5ea476d3ef4023bb98ce703cc",
@@ -14647,6 +14941,7 @@
     "Verity.Circuit.Transcript": "143a8f7857fb47ed184789c9def351742e213359fb13b44d565fce324fbf8853",
     "Verity.Circuit.computed": "bfe4079fbbb9d2e78b9758d517ec8e9f9df876d8bbfb7a0d9c71531da5ebc9ef",
     "Verity.Circuit.eval": "624a69ec30051770ab18b865232f72ea2b2e0a8ccc295b9ada7a02f94760d2ad",
+    "Verity.Circuit.exits": "2a5d20416f1d70094895291568660b80757e0ff023589ec9af448f26de4b0cdb",
     "Verity.Circuit.into": "3aa2233c88538a9df262b86079d2755e8d2aab73ede32959405d8df3937da797",
     "Verity.Circuit.isInput": "afd969b1411d8262286149c0c2b784a934deee04648709a0a08fd6c9dabe544c",
     "Verity.Circuit.op": "52c6b3809c85fa1ecc4a24cdb391a9d07d94cf708e48cf598179a0b7b9631b03",
@@ -14761,7 +15056,14 @@
     "Nci.SecurityProofs.UpdatedMatMulReads",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
-    "Verity.SecurityProofs.ComposeCone"
+    "Verity.SecurityProofs.Compose",
+    "Verity.SecurityProofs.ComposeCone",
+    "Verity.SecurityProofs.ContainsImplements",
+    "Verity.SecurityProofs.CorrectOfOpening",
+    "Verity.SecurityProofs.PrivateFitsOfLocal",
+    "Verity.SecurityProofs.PrivateOutBitsLe",
+    "Verity.SecurityProofs.RefineWrong",
+    "Verity.SecurityProofs.RegisteredMeets"
    ]
   },
   "Definitions.Core.Declaration": {
@@ -14839,7 +15141,8 @@
     "Nci.SecurityProofs.ThreadedTrainingOn",
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
-    "Nci.SecurityProofs.UpdatedMatMulReads"
+    "Nci.SecurityProofs.UpdatedMatMulReads",
+    "Verity.SecurityProofs.ContainsImplements"
    ]
   },
   "Definitions.Core.Fp32": {
@@ -14872,7 +15175,7 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Definitions.Core.Game": {
-   "digest": "2c5c9d9537f4d276c83a61680d7cebf60b8ff5c7a45ecc827a21d9d3de8a0b8d",
+   "digest": "456c6ad264ea1597da91427148d9c0ed4fc8aaab61cfa323971b1090b3669f03",
    "definitions": {
     "Verity.Game": "dbf3d91129d029b645b41c73b9f2a122f0c318d56e8a77991cca09d48a3fe45b",
     "Verity.Game.InducedAt": "0c3e058da3fbda23c861e5e706c916599bc4b893d399efbe4535390b4d0c448f",
@@ -14895,23 +15198,33 @@
     "Verity.Game.prob": "123c931b895fd86ca8afa118e08bd86e8000707f80332932138acb82d630574c",
     "Verity.Game.rec": "0cb221ec988a54d4397bcfb92c3aaf689be66166dcdadd9bc4d5801dca0d7365",
     "Verity.Game.ret": "36d51e203dc27816f87118662a944dfd4726229a8d44c08551ba14dd7fc69649",
-    "Verity.Game.send": "8d24c747132730510c15eb71bd4e887838687cee9b7d9e59f46a29a712c01efc"
+    "Verity.Game.send": "8d24c747132730510c15eb71bd4e887838687cee9b7d9e59f46a29a712c01efc",
+    "Verity.Game.value": "2b85019b6d4066405668df2c794c89d1fb80e777c12864c3e6cc71a57de83258",
+    "Verity.Sound": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7"
    },
    "guarantees": [
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Verity.SecurityProofs.ProbBatchInduced",
+    "Verity.SecurityProofs.SoundAnd",
+    "Verity.SecurityProofs.SoundBatch",
+    "Verity.SecurityProofs.SoundBind",
+    "Verity.SecurityProofs.SoundInterleave",
+    "Verity.SecurityProofs.SoundMono"
    ]
   },
   "Definitions.Core.Partition": {
-   "digest": "9d18f9d4bb3cdf8c65948c82452c0c61866865f0dcd6c4c442e19388bb4813af",
+   "digest": "cd62a959bae4097b5c572b107abdf27f78f780b0da2abde615976ba0423b8a10",
    "definitions": {
     "Verity.Partition": "22bc62b950d67ab5a0572f63a989d211fa3064e10e3f2bf031fd12353d29ead2",
     "Verity.Partition.Correct": "78b891db9c227aedecdb4465a0fae50b84cc37ab777bcbdfdc69f5ac0662feee",
+    "Verity.Partition.Refines": "e167d724562f5e04f88ee94e7b3fbbe133a4bf84083727155d505f4bd6c439d1",
     "Verity.Partition.committed": "99135ae5da1df43b8ae4641410bc1fec91cd0a82a8540c305415190a10f1f013",
     "Verity.Partition.cone": "9baccb73673b4e9a8b7bed3e6524ce4cb0af89e4b00a2399a3af1269e530af87",
     "Verity.Partition.gates": "ee436a2cedef88f54396204589ab1dfaf55be636d8a0a1376f41740dd9ba79c7",
+    "Verity.Partition.io": "6a472b289b278116cb35431864639fd6026cb96dd6bf5c58fcf5db58d5a9638d",
     "Verity.Partition.localEval": "e242da1cf49523aae3ff87f9dc3c63a8048156a209055c554893212d41c48949",
     "Verity.Partition.unit": "b54d29eb5c65700aaa72158c37899485fbb277203c4bd593696085072d25d7b9",
     "Verity.Partition.wrong": "f743923e389a5a0fa4441ad0d02a28e57d61973f65e0a9b998dc6df6445139f8"
@@ -14959,7 +15272,13 @@
     "Nci.SecurityProofs.UpdatedMatMulReads",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
-    "Verity.SecurityProofs.ComposeCone"
+    "Verity.SecurityProofs.Compose",
+    "Verity.SecurityProofs.ComposeCone",
+    "Verity.SecurityProofs.CorrectOfOpening",
+    "Verity.SecurityProofs.PrivateFitsOfLocal",
+    "Verity.SecurityProofs.PrivateOutBitsLe",
+    "Verity.SecurityProofs.RefineWrong",
+    "Verity.SecurityProofs.RegisteredMeets"
    ]
   },
   "Definitions.Core.Prims": {
@@ -14982,6 +15301,32 @@
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
+  "Definitions.Core.PrivatePartition": {
+   "digest": "2e0308cc223cd0053a50f15bd1de40accbe370866b88f32ef006cad4c699b3d7",
+   "definitions": {
+    "Verity.Calls": "a53969f84e6274782fa92e782aef23dbc0c600275220f0999517694aa386abb0",
+    "Verity.Calls.returned": "b6ea8f95f9d58a8d75d5b134fe0ff42315b1c6baba77a46b69aa87e1aa1ccd19",
+    "Verity.Calls.toPartition": "24b6f8215c4f2cf219475ac1774724a4bc7689434ed9f18f591ca60bb51cf9a6",
+    "Verity.Partition.Fits": "456fe0bfb32a76c54987890b6b913fb75e37419dd3cbaf4607c4903ee32ef8c9",
+    "Verity.Partition.FitsLocally": "8bc2d5170ca9e1848fc8e9cfa283d048b98ed61ec44e401861ed89b9bb01bb19",
+    "Verity.Partition.Meets": "d9947b317895c4fd0697f63fc544a9946914ebfadaf54e4702c8e59cca0b4a24",
+    "Verity.Partition.WidthRule": "c5007cfd706b26291f5bea78e9a686c6cf06b1caf9ce245ee46d3ec27e0a727e",
+    "Verity.Partition.localOuts": "d19ddf6f7000e2044e786ca002499aaa2b94887a7b20716de6230afdf45841f8",
+    "Verity.Partition.outBits": "861c030b8df04a3c49ff85a59c92bd04d9165fa1cd98b3381ac46e2209c702f8",
+    "Verity.Partition.outs": "0a20649b81da57337884d165f278ce6d59eb32e61a4e451cdb2c0822fb690f7e",
+    "Verity.Predicates": "98794d18910eda58d5684202e3cf1b1a7bb5f4ffaf61e9d2b57aa88eb45c37d7",
+    "Verity.Predicates.X": "929c6b8b8ab8dcee830c4b6aaef718f1a813afcf4687d60f71974d39785c1c29",
+    "Verity.Predicates.maxGates": "81e5b1266951a4416a67877da81ad55ee8804135a6a139a2856df7af409dcdfd",
+    "Verity.Predicates.maxInBits": "6b96c844ba4735fc268a338eaa79ae1b23e27d65a0e8176a9d702505149d3d8d",
+    "Verity.Predicates.units": "8bde5c6c212a94a5b83d49d43519fd9bdeb3b7758ee4bc2177407ddc4aa47817",
+    "Verity.Registered": "44fbee7cd7d31f7adb92e7492e86f4ff6c2eeba04b9b1ced3c424e83271053c3"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.PrivateFitsOfLocal",
+    "Verity.SecurityProofs.PrivateOutBitsLe",
+    "Verity.SecurityProofs.RegisteredMeets"
+   ]
+  },
   "Definitions.Core.Scalar": {
    "digest": "610d6b8751334c2d39892c296a0bfd02a675e56f0570b98f4397cf844c7e4c53",
    "definitions": {
@@ -14999,15 +15344,229 @@
    },
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
-  "Definitions.Core.TC.Pipeline": {
-   "digest": "da1b8c9eb4dfa3fbc26656010abf9daf086f4b98a7d25dd6da0d1786c9504d62",
+  "Definitions.Core.TC.Bridge": {
+   "digest": "d73908e02805147668dafefaea15551ea0b20ea78de855939d9cdfffaf824019",
    "definitions": {
+    "Verity.TC.Proofs.Admissible": "b33ba28a9264451d039cd8b6e71efe93c3c1e751edc213e7f42d36f9feba98fd",
+    "Verity.TC.Proofs.Admissible._sparseCasesOn_1": "ec14b01c41e6b8aa49143b0f913dc5227605781ffce806804f17b80fc8956ea4",
+    "Verity.TC.Proofs.stateOf": "f7ef12fd0fd00f94be4bea32348cdfa796fc51941d5a628987e2187c11ec1177"
+   },
+   "guarantees": ["Verity.SecurityProofs.PackSoundComplete"]
+  },
+  "Definitions.Core.TC.Gadgets": {
+   "digest": "2c13e0555fc412274d2d0ab43e78262600d61d148e82207bee614f7e4a9727c1",
+   "definitions": {
+    "Verity.TC.Gadgets.Chunks": "1225e390d1c8aacfa814a2badc8fe1439607e75d534dbb55868fb41b0912d43f",
+    "Verity.TC.Gadgets.ZeroChunks": "198e3ab557cd5d50f6896f9c691ee6491b4de1caa3d87fa9a816b66ac1d68505",
+    "Verity.TC.Gadgets.isZeroWidths": "51b86a56686596236cdebb9470177a8b3e1ed79f42ecb6ce7cd7ec20409a575d",
+    "Verity.TC.Gadgets.rangeWidths": "915f7c5c531a47ce9790cc92ec02be1f06103cf94596144c6fef95e8352c01f9"
+   },
+   "guarantees": ["Verity.SecurityProofs.IsZeroGadget", "Verity.SecurityProofs.RangeGadget"]
+  },
+  "Definitions.Core.TC.Pipeline": {
+   "digest": "ac541b047f90ce7cf9efd3f8d0d55ee156cf5796062c2d01baa3d11730190b4e",
+   "definitions": {
+    "Verity.TC.ADA_BF16_M16N8K16": "28afdcda7b8ff437bf550072da0c4b9cc359460d0b13a74daeb82f196c5a701b",
+    "Verity.TC.AMPERE_BF16_M16N8K16": "c9c27e113de6ab0ea8ca4d6d27306a3154645e15a1c7d9127701a0985fa4da1c",
+    "Verity.TC.HOPPER_BF16_WGMMA_K16": "d612d96f7fdb50f037ab9c54b054337450bc824fdb5de308390267fcc5d96526",
+    "Verity.TC.Pipeline": "143fcca67ec81ef8e5792a57372efbec1f24784d0bf17ae48634d23c369f3601",
+    "Verity.TC.Pipeline.groups": "757a948e67aa08a064b57e68a04662e0c37915191e6eebfa8fd5064a0d8f9c60",
+    "Verity.TC.Pipeline.k": "6cfe9cca2e7e01e0f042b8223a4a7c288173112e8a8584472e8a649329a8460c",
+    "Verity.TC.Pipeline.width": "35b7d91f2f9767e8153027ca610c7cb3e8feb0497ff2fb9c6898b2c6d93b48c9",
+    "Verity.TC.Pipeline.zeroExponent": "05a7b0bf44a0131d7f07e6b126f9807a026ebc49ad63e3488cbc5d69f85aa24e",
     "Verity.TC.bitLength": "ccbed7043eb20211951e7bec1eed8b5bb0e5627b258ee4d913d1737c2fbf4162"
    },
-   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+   "guarantees": [
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Verity.SecurityProofs.AdaEqAmpere",
+    "Verity.SecurityProofs.AmpereStepComplete",
+    "Verity.SecurityProofs.AmpereStepHw",
+    "Verity.SecurityProofs.AmpereStepIff",
+    "Verity.SecurityProofs.AmpereStepSound",
+    "Verity.SecurityProofs.AmpereUnitBf16",
+    "Verity.SecurityProofs.AmpereUnitSound",
+    "Verity.SecurityProofs.AmpereUnitSoundZero",
+    "Verity.SecurityProofs.HopperStepComplete",
+    "Verity.SecurityProofs.HopperStepHw",
+    "Verity.SecurityProofs.HopperStepIff",
+    "Verity.SecurityProofs.HopperStepSound",
+    "Verity.SecurityProofs.HopperUnitBf16",
+    "Verity.SecurityProofs.HopperUnitSound",
+    "Verity.SecurityProofs.HopperUnitSoundZero"
+   ]
+  },
+  "Definitions.Core.TC.Relation": {
+   "digest": "29d2717dbd8654fed727b19a289c1e63ac3c95efe17390bb12c986cdc136aecc",
+   "definitions": {
+    "Verity.TC.Relation.Align": "65efe15c6f2d158a2cf7e6b89867310b10e681ec05f716d6482aa37d47d451b4",
+    "Verity.TC.Relation.Align.casesOn": "7668dc72b84cf3fc1da0501bff3dd4ce269b179d58065fd9180527d791de41eb",
+    "Verity.TC.Relation.Align.ctorIdx": "5c12bedfbd9b6d0e259d500326d5e8430e6ae3b9f91560e876450f0940e5b352",
+    "Verity.TC.Relation.Align.div": "bc18a3a235779005208b11d8ed68f14bf79334374a7493c0a8c892d715d376a1",
+    "Verity.TC.Relation.Align.rec": "5d15f388d0e676026a387c84e81e1a7feb66b04a3c1130ec62208ed916417065",
+    "Verity.TC.Relation.Align.table": "772f4d637018507be63b1d73fe0dd486157c01156fad844a8e018b7a040d917c",
+    "Verity.TC.Relation.BOOL": "c3dc837295a4bc59648404ee8712a399b8c8a8af251fbde66249664d5c691c7c",
+    "Verity.TC.Relation.CLS_FIN": "d58e777b2d551d1297d4628724066be3f5e597e72d6185107930e218f790ccfc",
+    "Verity.TC.Relation.CLS_INF": "30cdbe2d1e5ddaa2b57ce2fc24a55daa7e567d1aba6f5ccad6ff424649aaf70d",
+    "Verity.TC.Relation.CLS_NAN": "ef3fc217f0cfbac07f90a648a313ca46006d4193e7ed82f7db08778fc6b21f33",
+    "Verity.TC.Relation.CLS_ZERO": "7f492e07867f7982fbc5fb5b02a719363dca84f91ee10e99be59755f95916233",
+    "Verity.TC.Relation.ChainHolds": "40057e9091466dd915d02ee7e8607f7e18de8ae24a95b73066956b813c646280",
+    "Verity.TC.Relation.E_OFF": "2addfb5bc4d291a750c5b8f2fb5bca7b2e228696215ca619f73e7ca11b72c1e6",
+    "Verity.TC.Relation.FP32_MAX_E": "146fa38e1176970a4e7c706c89fab658ab4a6e903aa9fa846cccef08d51cbc7a",
+    "Verity.TC.Relation.FP32_MIN_E": "f17511c1e68da563ef6854718d8eb75857a56be6f19b4df617b370626e6a32eb",
+    "Verity.TC.Relation.GroupCols": "6d982fef1809232fa2b4266a257ecc2cb561929aacc982c4121ab9d7c8c1730f",
+    "Verity.TC.Relation.GroupCols.Estar": "fcc8a11ad40f29f0f9e88028cf4b333e443091d5e57230dcc193c9ac86eab852",
+    "Verity.TC.Relation.GroupCols.L": "b70efb3535d6481dd63fc005f5ebc37378702b35c4b11ed81fffe4e929f65142",
+    "Verity.TC.Relation.GroupCols.S_nan": "f65af5756869f5e3e6f48d4ba392a37c2ce863b20030987e7aed59b7e93ecb78",
+    "Verity.TC.Relation.GroupCols.S_ninf": "76bc8f3b875a04926a394db5697456c5e41ef33b772cf9a9fe5f511d234ae815",
+    "Verity.TC.Relation.GroupCols.S_pinf": "26bbad97d2774bd595882f3290a268a0100ff8131564709a293438bbb0d6d595",
+    "Verity.TC.Relation.GroupCols.any_inf": "f4dbec5578fb7d68ae477e83b95e20cb6a53e15d68042b217afa942c04cefdad",
+    "Verity.TC.Relation.GroupCols.any_nan": "d2cd7a21552ca28fd2f5308b2a91f8822ba6e17ee93c80256701a6468b34d0c2",
+    "Verity.TC.Relation.GroupCols.any_ninf": "b0491e2bd020c9602411e142a0acf68de7030aab1bdc5acdf10efaff053abb61",
+    "Verity.TC.Relation.GroupCols.any_pinf": "958264de2e44d384cfd49101b8860dce97381a1921240b9e23f8b810c32b8a2e",
+    "Verity.TC.Relation.GroupCols.e_fin": "3225ea1b8b928c26f98c5d6bf0872484c0fd05e84850d4a2399612ea42040268",
+    "Verity.TC.Relation.GroupCols.e_out": "6d988df20c3c7ab0b7d1a2429d3af9f799f5c0efaba7ebb80a69dab4ba45c84e",
+    "Verity.TC.Relation.GroupCols.e_state": "cfb1f2e67b7e2d67fe0a50ec04a8e1c00681d0451f2f738b1154d7867088d2f2",
+    "Verity.TC.Relation.GroupCols.fin": "0479d013ad43893f0fba4a59c7e0e3b8c1d1a818119728662335373208aee389",
+    "Verity.TC.Relation.GroupCols.inf_out": "434a23c6a056faafc6e26c14d7b291da0596bf1d3ce2f397b4d6cbbbd00561e2",
+    "Verity.TC.Relation.GroupCols.invpow_s": "91b3b3dfccd019683c226cfde60dd64d7d9a1acdf220a3513ca1538f43f09b32",
+    "Verity.TC.Relation.GroupCols.mag24": "925a61f69ce847411f8794c661307fe8243666633222e0417e3ec6970f721944",
+    "Verity.TC.Relation.GroupCols.magW": "332f52b06c53fbfeca83f7f751dc6e5c4932dffc064101f7a72eebe3dbd84d1c",
+    "Verity.TC.Relation.GroupCols.mag_t": "13dbf64eb5b88e3f7a5201b3ed0098c66fe18cd6c134619631318df9d51457cc",
+    "Verity.TC.Relation.GroupCols.nan_out": "fbd637285757a418d9f927ef52502855673250f57678d16111700c4019e9e943",
+    "Verity.TC.Relation.GroupCols.neg_fin": "34644d6b79616154cd42f6c130504df0f05134eeb3ebf3c2b17951781a46e801",
+    "Verity.TC.Relation.GroupCols.neg_inf": "0f766851e41a8f49ea652e4ec6a49e468890ecb719264c3a96e8a522a52863e3",
+    "Verity.TC.Relation.GroupCols.neg_t": "0cf4596d13114516808e2b8a62fc88120d48d726e60864c0e8975c808a6e9aad",
+    "Verity.TC.Relation.GroupCols.ninf0": "041011348614f9b9569b09f55b91bd1006c74f6f06006ad38955b15bcc94f463",
+    "Verity.TC.Relation.GroupCols.normB": "00b6ea8bb773057feeab7928ed7a99cba0b55211e0b98d700fd4a047f6ef6d69",
+    "Verity.TC.Relation.GroupCols.normpow": "c960a811532cf76c9cc9adce0868a5638e38d499776604a8bfc1ba8660ea66e9",
+    "Verity.TC.Relation.GroupCols.out": "f49a85089239e1d81853a75cc953ee55cc8e5858e998a1a3aff40a67144f9ba8",
+    "Verity.TC.Relation.GroupCols.ovf": "84854e0007b19534118c493a252c9c86e9fa0f12209c46f290dfedd43c9a5335",
+    "Verity.TC.Relation.GroupCols.ovf_eff": "dfd45cbfc544e2b4e3d2324662fb66ebebdf4dd5208a257fc9e5e636def2d208",
+    "Verity.TC.Relation.GroupCols.pinf0": "c730df0def83c4bb824e3e3153bef00cb63da85378b8e2e07155c4786c99b344",
+    "Verity.TC.Relation.GroupCols.pow_s": "e84cc2bb6698dd0b58e5afc903419cbce871b5ef87d3aa1f99cd1633c56a7f1e",
+    "Verity.TC.Relation.GroupCols.r_n": "f2cc7545214237b05d5e5d1d812dd4652bd3b2ca7fdd64540ef57c75f6a487c7",
+    "Verity.TC.Relation.GroupCols.r_s": "cf4eb326e398a6278aff2cc7e4a193343be4a01ea6611119a86d4a5c29239e02",
+    "Verity.TC.Relation.GroupCols.rsinv": "337472d467aea31a2f15a1b06eaaeb1d43b5f3b8fdbe0068a87de205d5f5dade",
+    "Verity.TC.Relation.GroupCols.terms": "3c60c42db05619313766a4e2c5686688aaf5d03eed7297c66c4e51bd4b4b0ac9",
+    "Verity.TC.Relation.GroupCols.total": "bc59b88df7a16f1c22822df74c4c379ed832103d3e123c68b077e022334298aa",
+    "Verity.TC.Relation.GroupCols.z_out": "1cb817da142d5a14b11933d5bc8ec143212b99d94ec936a221f70a677fd14f7a",
+    "Verity.TC.Relation.GroupCols.z_t": "d5e763c145ea957008a8a7a039f2831d61e03254eee9375408c7afff3ad29522",
+    "Verity.TC.Relation.ISZERO": "bd75c6052cdce886cfa1d6ac31b8665efc47eda3133743f8885db0b2fb90169b",
+    "Verity.TC.Relation.LIN": "ac49bee6c077a8700fecde66f5148a19543e6d2956142982ba0fec6d6a3b3de9",
+    "Verity.TC.Relation.LOOKUP": "65ebaa1ba6fc4c9453e2d07904cbd58d228a3740e6c7ee1bb8c9c12260b036a2",
+    "Verity.TC.Relation.MUL": "2dcc3336588b7a3beb41c137a32fee04e1ccfe4138f82838cef6bd52efd1eeb0",
+    "Verity.TC.Relation.PackCols": "b52066ba8d3ffad1a67185ddbc789bdcda9c59dd6beca65e5a787d9be00aa9d5",
+    "Verity.TC.Relation.PackCols.Ebias": "631d1fb6f8d330d0e8cf0efaf2e8a97aa3a572749390886962dc371733e813da",
+    "Verity.TC.Relation.PackCols.b16": "7200759f7a1d38aaa572534936cb0eb107f4205f8975c3b4494fce685cb0dc97",
+    "Verity.TC.Relation.PackCols.bf16": "3e46bbff790f16acb6e937257708aa777c878b9ded4fefd29904f5aa742f3c01",
+    "Verity.TC.Relation.PackCols.carry": "b7556de1e6e24e273b3cd79ac43bced92b884f8b33ab2f922103e951d2b103a3",
+    "Verity.TC.Relation.PackCols.fin_nz": "d5ed175e94401a11748e148b93a7af6067a3c4400ce3dee07bda5c4b579a2631",
+    "Verity.TC.Relation.PackCols.hi": "ab25dfe4040124b3075262cedcb877056cc5e521c0a095ee576b20e236871c60",
+    "Verity.TC.Relation.PackCols.hi2": "d59ae4df3758ab1f7803f663be7acccf64ffb22d25b17bb31507defcb9997f7a",
+    "Verity.TC.Relation.PackCols.hidden": "3edd958b16dae6006ed648f2f74ab789729515c2b4e27969430d206dfaf7d6f9",
+    "Verity.TC.Relation.PackCols.lo": "040754fef676421133e0aba0b766062c2ce71bb06ab86b509dbb63b41220c467",
+    "Verity.TC.Relation.PackCols.mant": "da64cfd73442a8d6fb0b380189efbce2341776dab141a08833a6393ee3a1b906",
+    "Verity.TC.Relation.PackCols.nh_nz": "27dbb385c836836adae86a6dcaee3a582d520ace77a36ce5f869ea6f2a47dcff",
+    "Verity.TC.Relation.PackCols.rem": "c5cffab8aaeb8ff45c75a9c58a885742a3a5273a14dca956e2cd2c911214ae58",
+    "Verity.TC.Relation.PackCols.rounded": "91c97792cbdac12d9ec32aec4e182c988d4cef7afcdc28106818697605adf1d5",
+    "Verity.TC.Relation.PackCols.word": "fb3c50c31c199e1020a74b6072ae7f82071510a3f229e1e79074093b9a560a46",
+    "Verity.TC.Relation.PackCols.wrap": "1ec31613dffd1cc61d0faf251b1e764c4e0ed3efb6d3ef725a3930f337b3326c",
+    "Verity.TC.Relation.PackCols.z": "5c1d015ac0550c1992cf8a0e42cb669ae1b0c4fd976a928fa2f77f2d0ddeaee7",
+    "Verity.TC.Relation.Params": "a3880e90527a525ee2305c1cded7a478b98da4bf23802fce23d4339d48e2d3e8",
+    "Verity.TC.Relation.Params.A": "6b4770ee357f08d38155cf13b367ce5d4add61183436255f2e5878e6568377b5",
+    "Verity.TC.Relation.Params.B": "3c102baec407e967fb1cb21c3dc3755ea774fef559bf747914b495db836a3d01",
+    "Verity.TC.Relation.Params.K": "8017c2f527b86d2081ef9c64c66f835821ce15244b33eb63bb901e62d36ab9a3",
+    "Verity.TC.Relation.Params.W": "9a5563669e4a0e6153447b01c9ee722c0e012c6aa1f5f451b2c0b859bd4f496e",
+    "Verity.TC.Relation.Params.Z": "815488da33fc197c5dec78ed2e688d7039bdbe5c0a00324153d95f9844b691c4",
+    "Verity.TC.Relation.Params.rho": "ce55df207e3e27d5ed0b420a9a16895d3879bc7e230a8931fba0a4a3573607b0",
+    "Verity.TC.Relation.ProdCols": "8c1849a78b240e4439723980bef7feb35dd387ea829f42d2b4a92f8a6bb2ea17",
+    "Verity.TC.Relation.ProdCols.P": "2976f71e359576d424bf3c5304439960e069c43ae06d917aa4a98bf879e6d9a8",
+    "Verity.TC.Relation.ProdCols.SA": "55aa9de5c838989ae39ab2911de3b9ab3a3e1a6f38bb52b571b908427094c953",
+    "Verity.TC.Relation.ProdCols.SB": "80781906fb1994be21386d98284b757af8b001de6f6d0c7bed4082d5a3448bcd",
+    "Verity.TC.Relation.ProdCols.ca": "69c0fc0cf852c962493a89edac39e9b00128d6050a9dc7bccbdb8be3b04b7c32",
+    "Verity.TC.Relation.ProdCols.cb": "5ffb887a9f55bc5fab32fefc7843c59b3e2d05fbd715914e4f3dcbe8ebcfe8a7",
+    "Verity.TC.Relation.ProdCols.ea": "c8e1be38da253aa5c80795af2847d146b8aa089ecb305148c29bc7a8701565a3",
+    "Verity.TC.Relation.ProdCols.eb": "2df792c1090a850155120367f085f77e38167475ba5b2823fea6c31235988052",
+    "Verity.TC.Relation.ProdCols.em": "a51d9695e7a138718610daaeb812a85227aec8a4a3430337f00f1e8f9768ea74",
+    "Verity.TC.Relation.ProdCols.ep": "6a5dc459bac3cf9f4dae93e7bf3be6752441737f7346dc5935c465a68a80b566",
+    "Verity.TC.Relation.ProdCols.nan": "b4403fdc86e8d0ce83f4daab28824c050718076b22166c2e0ea70524adb205ed",
+    "Verity.TC.Relation.ProdCols.ninf": "8cf72afbf40b8fac6e33985c717e0c2deed3f25216c01a245178e294a4629345",
+    "Verity.TC.Relation.ProdCols.pinf": "9f893dfdcc360b81b590ff9cd4b7e11a21176483360398a5e9bc5f1bdc361cf8",
+    "Verity.TC.Relation.ProdCols.sa": "28d3bcd4058d9aa6fbba897b08d9c5ab01fe237e86b12b24857928b2c89239f5",
+    "Verity.TC.Relation.ProdCols.sb": "31e5df96f97d8cfad54c35875c077775eb5c5106f8eeb00ab8dd30570c2e0b18",
+    "Verity.TC.Relation.ProdCols.sp": "e38120f710c3c0a5ad1090f8ea0b0ed25f1cf085a45a5b58a3ccfd5250e21ae9",
+    "Verity.TC.Relation.ProdCols.zero": "6b9ee3fa3ffb34aa16288b044abf8776791f041a5a44593d4ff9f52e87e5780d",
+    "Verity.TC.Relation.RANGE": "80de661a752a6ae466f5feba741d913733da6f7f411eb47671eba2379f35b878",
+    "Verity.TC.Relation.State": "320978ebfed593912bd80afe9c5cecec407c0495f663c1dc6c1817357e1ad290",
+    "Verity.TC.Relation.State.M": "02d30290c371bb2b3910a83f0b5f22f0f2f860d6355bd0e3587c022f4679025c",
+    "Verity.TC.Relation.State.e": "f423e882b60800be05b47ca2ac6bc45125fa631956aa220d3d99db077e836f4b",
+    "Verity.TC.Relation.State.inf": "424a585f191bb2cbd7d917f416350261962cb3ae95855f1db851977ebe25a329",
+    "Verity.TC.Relation.State.nan": "c15a8fea837f41ac74071b59e928d8d6058c6da7a8cc1e67e051c4f4ea72c074",
+    "Verity.TC.Relation.State.neg": "6946beac4663c028710c0664fb6b20cb55bb33f118386ad1643dbbe4eaafbbd3",
+    "Verity.TC.Relation.StepHolds": "5c6e5d752898702577c7e65ce03ef7c88666662c4d086f266102c9fb2d836ecd",
+    "Verity.TC.Relation.TermCols": "24d4dff5eadd622420d60d2cbb62514c85122acda788fd84a7fd09a3af43ea3b",
+    "Verity.TC.Relation.TermCols.aligned": "605a6aa3ef2295d83ddaa29880d436d31be73c748296fa41b3bce53af25a7c19",
+    "Verity.TC.Relation.TermCols.d": "36741c896a77195431343f65cb4284f031dcfe5b7f21bd12719d1c952f99a3ba",
+    "Verity.TC.Relation.TermCols.invpow": "3e3f518b98572152860afdd06b113f320e35b6524a5cb3f788767243761c047d",
+    "Verity.TC.Relation.TermCols.pow": "99f67f9778ad6f78a1b5122f916383b2f2ac40576b0fb385b43bd886c1e03dd9",
+    "Verity.TC.Relation.TermCols.r": "99fbe4ca720988a3f83ff4578760e6014dc39ecbc62b4f828f403c2f0a490879",
+    "Verity.TC.Relation.TermCols.rinv": "eaf862b9c5f28a5d933b866ece867392e77c6d144ac525f1b470a8aeb87775a3",
+    "Verity.TC.Relation.TermCols.signed": "3c10ba70160d521b97e899f7d344827eba66ffdb60c08da4ac83b4b71847287d",
+    "Verity.TC.Relation.TermIn": "7d4328387f31326a131eab20db26cbf4bffa0d100b0867e290536f6fcfd03002",
+    "Verity.TC.Relation.TermIn.e": "3730ff287dd7d8318ab332fee53ec99ce9bd6afa1144185daeee3d51aa12640e",
+    "Verity.TC.Relation.TermIn.neg": "65118ed91df4c973b7849e01d516396935041aadb937f82180ca4a3aafe239e9",
+    "Verity.TC.Relation.TermIn.scaled": "0ef92ab71ea661f135f3cbcb39cc621a859b12f01c86ad3dfa997a7c73ac91b1",
+    "Verity.TC.Relation.Witness": "ca425877bde576b8eb609c80d01d9fe7f299f678dcad5edebd8b40f09c7b4e7d",
+    "Verity.TC.Relation.Witness.Shaped": "467f020df362749ab5d1655e309e7f34f2325b6248425fff0c4331476b2b2ecf",
+    "Verity.TC.Relation.Witness.groups": "a1994a1c0ce516735ae0fcc464d529cc18a01e9fcad01da0feff8744120a8220",
+    "Verity.TC.Relation.Witness.prod": "decc41629955ef620f7e241dd6effd5e0644d0ee4a17c4c0baa20253f2638ba0",
+    "Verity.TC.Relation.cvtHolds": "81085f8157e03e80189696a5524149626a6bf213253d401cfbd5095d6d3129ee",
+    "Verity.TC.Relation.decodeState": "8e5d5eddfdd8268ac5e6138ca66212b23878d2918fa1bfd2950cdf44dba5b62b",
+    "Verity.TC.Relation.groupHolds": "77264ac69128e8f24749636e5dbb7cbacb52efe6f5e4bea528dc67d9943eeb70",
+    "Verity.TC.Relation.groupsHold": "1976f11f9958edfe8a64469327673bc0ec60d610dc82f941c058fc63fa879007",
+    "Verity.TC.Relation.groupsHold._sparseCasesOn_1": "bc9c95d7671ecd9af23103872a7e797a2ec401f7f43bb9b0f72f13d42bfe94da",
+    "Verity.TC.Relation.instDecidableEqAlign": "44d539cdbb980173dee30181d2ba75169762f8865f071d2418e73e45d9508e5c",
+    "Verity.TC.Relation.instInhabitedProdCols": "e12f41b25ddc131cf213d12087be58ae98abbcabaec8a53f34f2e89d6b60c945",
+    "Verity.TC.Relation.instInhabitedProdCols.default": "bd256c636b89e9377c812ce9302bded27237a67f77603acf9e5b8fe104e2cf62",
+    "Verity.TC.Relation.packHolds": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e",
+    "Verity.TC.Relation.packWordHolds": "40068be3cd494914acf0f2f6e18d640adeabfe66d60635d3b6f15b5cfed04db5",
+    "Verity.TC.Relation.params": "7c994899db094567b4c4a3cf9b49995747748a0e0e6c4d5fc241f1b15af1a112",
+    "Verity.TC.Relation.prodHolds": "4efcfc14c04432afcfc9cf98b0d670788107cbfc637c7dffe546fe40a6f8cafd",
+    "Verity.TC.Relation.stepOut": "16b686eb085fb3bd120699f545b1691deac28fe4437dc4b86059049c9462af6b",
+    "Verity.TC.Relation.tAny": "884ed88646d28de0d209df1ba839e172068f198649053d34b3fc3759f74a75e9",
+    "Verity.TC.Relation.tBf16": "28bab1e5ccddf1b71c3c63ea27d227662589f1f0a83def0ac2990b122921afe1",
+    "Verity.TC.Relation.tExp": "8745cac8d0b6c26892df16f4aafe02989ddad700878ab1a13861d4eb59a856df",
+    "Verity.TC.Relation.tNorm": "8564a462f2f1e8faf156bc02bb47cdaa104f477670b26333a2a13efad0872997",
+    "Verity.TC.Relation.tPcls": "bead5d57d1049d87f4b6c647d02e233e8520f6709194a695da45af08a59705c0",
+    "Verity.TC.Relation.tPow": "43a40e72f4290b4556c15f484d1a562f4a371415c24a4cfda3b965622864c723",
+    "Verity.TC.Relation.tShift": "505983ed929a144060312ee61883b5e654ad871f1cfa95c39325a352face3e4c",
+    "Verity.TC.Relation.termHolds": "de90cbb205dbb279a6e9468e614943e205ed062e40ee94b42da63afd3dfc0c0c",
+    "Verity.TC.Relation.terms": "8674f2f845831cef9227de4e22ab4c1519d350977b2207004edde6ebbe427ccf",
+    "Verity.TC.Relation.zeroState": "76f5f56483cad8dcffb6d6f0e63076b8477410fb251112e4da877e10771f2af4"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.AmpereStepComplete",
+    "Verity.SecurityProofs.AmpereStepHw",
+    "Verity.SecurityProofs.AmpereStepIff",
+    "Verity.SecurityProofs.AmpereStepSound",
+    "Verity.SecurityProofs.AmpereUnitBf16",
+    "Verity.SecurityProofs.AmpereUnitSound",
+    "Verity.SecurityProofs.AmpereUnitSoundZero",
+    "Verity.SecurityProofs.HopperStepComplete",
+    "Verity.SecurityProofs.HopperStepHw",
+    "Verity.SecurityProofs.HopperStepIff",
+    "Verity.SecurityProofs.HopperStepSound",
+    "Verity.SecurityProofs.HopperUnitBf16",
+    "Verity.SecurityProofs.HopperUnitSound",
+    "Verity.SecurityProofs.HopperUnitSoundZero",
+    "Verity.SecurityProofs.IsZeroGadget",
+    "Verity.SecurityProofs.PackSoundComplete",
+    "Verity.SecurityProofs.RangeGadget"
+   ]
   },
   "Definitions.Core.TC.Spec": {
-   "digest": "0a6565772f73853f00f3915f9178529f6d86b8be1db4101d3ca9d6e6bd220101",
+   "digest": "24bc0ad1d492d87bd228690efa895db97c1baa0fd8a1b00ce1fb1c6d07d053da",
    "definitions": {
     "Verity.TC.Spec.Cls": "d1840798d9ff6dd67e8750d5451d1c92840b1da5317a9652cb02f3528b3fcd2b",
     "Verity.TC.Spec.Cls.casesOn": "dff42aa5c257f52822653c5a37edf979600d5b1891fd64e3bde64ea8a8a8d81b",
@@ -15017,11 +15576,61 @@
     "Verity.TC.Spec.Cls.nan": "ab54cceeb47649b66359bc682f3e96245dff8f263fc95151aba12ea63d97a8bd",
     "Verity.TC.Spec.Cls.rec": "14230e38f67df43a480b92e2b3129049d77bb1edae92879ca8d55ccb59c4b30d",
     "Verity.TC.Spec.Cls.zero": "b12c1412ab726a6fcb94359d460363a70c9bcdb08607b9dd4ba376b53c494277",
+    "Verity.TC.Spec.FP32_MAX_EXPONENT": "d17c5629c22db774daf0966bdb92870a0e2d788c4533e6a8e1f145e2d472ab6a",
+    "Verity.TC.Spec.FP32_MIN_NORMAL_EXPONENT": "1bd62cdead25ee37589a304140f1bf71ea9d8804a37c359d03b953813bca88b6",
+    "Verity.TC.Spec.FP32_SIGNIFICAND_WIDTH": "d5ee4ba6f2fe8bd62142237b78a9803fd373ceef41af47a370e80ae1c7df1f1c",
+    "Verity.TC.Spec.Term": "cf17a7f4b5db891e4236ce1910bc05260dd45f34227f7013c5e4766628f3043e",
+    "Verity.TC.Spec.Term.exponent": "0c4ddeced550e74a90ef435981ba4e0c33b2dfcdf3bda00cb74a2880bdf712b9",
+    "Verity.TC.Spec.Term.magnitude": "214d5ab5a4c38761aa7866e7edc6b478aa45accb1d426f2769aacd9c6dac3361",
+    "Verity.TC.Spec.Term.negative": "cdd87f0c46f503f1997307dfd245458ac7f9d614b2a05108e7ba22106a98b7c0",
+    "Verity.TC.Spec.Value": "56e84c324af03ec607401de7ec8febbbff3b5ddf7bc0a0d076b19269bbb09961",
+    "Verity.TC.Spec.Value.casesOn": "41a30fbf38aa85e8407f4328e52a4134da20f522a9da6c1fe76123ac7cea44bc",
+    "Verity.TC.Spec.Value.ctorIdx": "7848291b2304cd5c2715bcf2183bb71296f12bb21832d806fa23477c5c0d0e0e",
+    "Verity.TC.Spec.Value.fin": "293f8dbf9f825b66baa6db77077a41d23d9fa366f2ffe12d494faaa27130c698",
+    "Verity.TC.Spec.Value.inf": "69b624861459176198c5b7680e5101b15597b228e3e07ad8e958d8e4000637d5",
+    "Verity.TC.Spec.Value.infSign?": "e796dd6ffea61a8f81e1376f52d17fd68d956b02b1c913e7de0fddf385253ec9",
+    "Verity.TC.Spec.Value.infSign?._sparseCasesOn_1": "fe76da338b956ab5599707083d37a71b2333cec25dc2bc60d598bb0b6c209a2d",
+    "Verity.TC.Spec.Value.isNaN": "c90bab5ec90eeec782e6c47f0849e5a35de64b09d5e561c5b9008bb20986ea70",
+    "Verity.TC.Spec.Value.isNaN._sparseCasesOn_1": "8c89c0283a9c9c6bdfdecdc3f3fa3b471b36bbbb257515639b024919d1e8a79d",
+    "Verity.TC.Spec.Value.nan": "25f341af0526eaa8ed8480900b90b14674d8af001d15e437871901245249df07",
+    "Verity.TC.Spec.Value.rec": "c34eab71c5e5ad6ee0b0b4f45e26dc471c0d874e00b76bdd19a343da8601b3a6",
+    "Verity.TC.Spec.Value.term?": "d0c3f7994884db1543783b9872fa0500535d54770ad40a60974ec5e8abd4e629",
+    "Verity.TC.Spec.Value.term?._sparseCasesOn_1": "4877f4a4cf95e2afecd3b2b07a3af37c8d7c2ebfaf962fecea84995e474a0b97",
+    "Verity.TC.Spec.ZERO": "72743d3d3e28cd41f880de84758d4376c1cdfc4308e3cb8bc536b616a2a6cc03",
+    "Verity.TC.Spec.bf16Class": "4aaa1b25bbccea480adfa5ae798a5a0a3bb08897ac311d245cfc978163ac3e4e",
+    "Verity.TC.Spec.bf16Product": "c73291cd387f1bbbc1e24dec617fde88226ee97a0cc797b550e003399dc96eda",
+    "Verity.TC.Spec.bf16ProductTotal": "8ae397205551e338c277300d10f53bfc37089fa7e76a505ce5876c795ea18d32",
     "Verity.TC.Spec.cvtRnBf16F32": "a8f2192006997dada720192020d1d74f8c7bd327d4763be405f5d65c8b531f00",
     "Verity.TC.Spec.fp32Class": "1b34697b7501cb0a4a85fcd76ec879dd1477b8697ea69efac14faf350b718ca4",
-    "Verity.TC.Spec.instDecidableEqCls": "3a9f2d9f9dd81a3082dd77b3999150e40665f3ac40f43fa48d032affd3c94223"
+    "Verity.TC.Spec.fp32Term": "8ada0758d4f2c682486c2ecf70eb2c3df3ebce03a053f4ab70c6c417858092a6",
+    "Verity.TC.Spec.fp32Value": "2526d5ae69cbb29e5ec3e83050e1352bd87f85e3f10dd513224f47b105ab3114",
+    "Verity.TC.Spec.fp32Value._sparseCasesOn_1": "1e682a1f683a61e23ab8ec9b7704b3cefda01c7417c695905bd8d28c54c10e95",
+    "Verity.TC.Spec.groupStepTotal": "e9708af5279f1c0259f2706ec9d8a20848bc54098ed21ce2e4ffeec9b2937ead",
+    "Verity.TC.Spec.groupSum": "ebc380896b7c226c94eaf2347b308aca8f57e4e14eb78ff272c0f360bec409fb",
+    "Verity.TC.Spec.instDecidableEqCls": "3a9f2d9f9dd81a3082dd77b3999150e40665f3ac40f43fa48d032affd3c94223",
+    "Verity.TC.Spec.packFp32": "d9fb76696f516152b1a03245f079e8483f768fde53960a7827aa120651c4f523",
+    "Verity.TC.Spec.packValue": "900ad74c09eb3619e5449a343f67b92cafa44f974e71149a42fb66016cf1af8c",
+    "Verity.TC.Spec.runGroups": "ef93091889404bac9dbd8031400de17fc0d1f6ff9292a697549cdf8fecc8704b",
+    "Verity.TC.Spec.tcDotChainTotal": "d623703b721fe61125e932a17c39e6b5433254ed6ddb7953e456e02d61249a2e",
+    "Verity.TC.Spec.tcDotTotal": "b02bfff4370bb8591d9bb4589ab8f204ae2b2d79ea79448a2db58940865e061b"
    },
-   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+   "guarantees": [
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Verity.SecurityProofs.AmpereStepHw",
+    "Verity.SecurityProofs.AmpereStepIff",
+    "Verity.SecurityProofs.AmpereStepSound",
+    "Verity.SecurityProofs.AmpereUnitBf16",
+    "Verity.SecurityProofs.AmpereUnitSound",
+    "Verity.SecurityProofs.AmpereUnitSoundZero",
+    "Verity.SecurityProofs.HopperStepHw",
+    "Verity.SecurityProofs.HopperStepIff",
+    "Verity.SecurityProofs.HopperStepSound",
+    "Verity.SecurityProofs.HopperUnitBf16",
+    "Verity.SecurityProofs.HopperUnitSound",
+    "Verity.SecurityProofs.HopperUnitSoundZero",
+    "Verity.SecurityProofs.PackSoundComplete"
+   ]
   },
   "Definitions.Hash.Basic": {
    "digest": "96dda4920f1b085b6c1eda9a8476c4dfe121a69c8b18083e26957e1bf2dfae7c",
@@ -15036,7 +15645,7 @@
     "Hash.uint": "54f1380cede20ece799c577d798408019afc86701c15097bc10064e1b29ac7bf",
     "Hash.utf8": "ef81714f5482b6ab1df3203d386a5f234d14a69049d33735cee24064152636c6"
    },
-   "guarantees": ["Hash.SecurityProofs.Stated"]
+   "guarantees": ["Hash.SecurityProofs.RowBinding", "Hash.SecurityProofs.TreeBinding"]
   },
   "Definitions.Hash.Hm96": {
    "digest": "a25e93ee3e42e5c6fb4928fcbc844fa373b338928a514b95d66128aac4291dc7",
@@ -15051,25 +15660,33 @@
     "Hash.Hm96.maskBit": "84c9847922cdabdcf8f9e4803039807462219e01b65429a93936bed110e7fbac",
     "Hash.Hm96.saltPrefix": "74d72964af334edfdb91fc4be5b5e9a07fbb5c930ebc4b745ab2246293d83aa6"
    },
-   "guarantees": ["Hash.SecurityProofs.Stated"]
+   "guarantees": ["Hash.SecurityProofs.RowBinding"]
   },
   "Definitions.Hash.RowLeaf": {
-   "digest": "59daabfc3d76dc4c3b6cd697813f2fa94b4a358f586e509ad4f4770e29572b8c",
+   "digest": "a332210454866a3b88c93c3c35906dc941366fe79a3b6566ebb3dfa4e8544ec7",
    "definitions": {
+    "Hash.RowLeaf.Format": "0472c90a1d50acced878693c13e313afdaae2a4b9dbbd2da94f839c468a5b7db",
+    "Hash.RowLeaf.Format.casesOn": "8141a54d622f92d6417272ffd595ff544ff949fbfa08635c12929413d01becbd",
+    "Hash.RowLeaf.Format.digest": "3b177656ac57a96665fa9b3563f27d13000537b13bbda2cb2ccf17f2009634c3",
+    "Hash.RowLeaf.Format.hashed": "05f50bf81a9f3bec9e56fb5d8a2235b7ca9d29eae67935a9db68d62c2aa4e5aa",
+    "Hash.RowLeaf.Format.rec": "a86989681110fe016c7cd15c844338a25ca4bc324445cb19c461eab9ec003ce2",
+    "Hash.RowLeaf.Format.schema": "cd534d52df63aea28b64a0f311bba20d5ee61f2ba0c58b4840349bb91b92799f",
+    "Hash.RowLeaf.Format.seg": "c1bb382b8bbae77a74eecc4b89a9ed6ff895ed83b131e4da8e930d041066d56c",
+    "Hash.RowLeaf.Format.v2": "dc0d6378518d88053662a388757ec3bc4f309527dbf963f2f16fc599560f469e",
     "Hash.RowLeaf.Opening": "8910cb507cf436e6164cb88b22689f4689fbc98df5d1969eb9ead98b84b72cbe",
     "Hash.RowLeaf.Opening.row": "1a7f3e8cb436f751b4c19bb2ba565ea5e78c6bfb137833818fb458c31c37e74a",
     "Hash.RowLeaf.Opening.salt": "a54029a04dad6dcf74412db8e6504e4b945bc41b2f9ba56ef50d01bd4e0486b6",
     "Hash.RowLeaf.Opening.sibs": "0cc8c9953660890823876ca2dce96218c76b37e219bf6a2217cdd68b07d5736d",
-    "Hash.RowLeaf.SCHEMA": "3c73c778fbe68db97bb8a859022c2106fa7def566576eeba62d04dc8359ff732",
-    "Hash.RowLeaf.Verifier": "70f344e30a234ac192ce808e5b92481561696f80ee984f5db34c125dd6200c50",
+    "Hash.RowLeaf.Verifier": "e580d8e982feeea056b05d9050174fb113be6551db94b9bf905a5f1beed698ea",
     "Hash.RowLeaf.Verifier.domain": "4479c28106a028df16b1f30df58372370ba5dd780d55d4a71388b47aad3c46a2",
+    "Hash.RowLeaf.Verifier.format": "fe2503ef5d3838c25a26f2289c713703af3a8b9ab72d3bc42ded003ae33c149b",
     "Hash.RowLeaf.Verifier.key": "543756473d4ccec741c25fd709e743fdcb1fd596ef49e4828d2ee92e1b8893bf",
     "Hash.RowLeaf.accepts": "263fd6e9a4a0df8f6ad4ed23bf92236e58354b1007cca6fe6e818d1fa4862cde",
-    "Hash.RowLeaf.innerHashed": "28932fa064239d1e3c2c2ee132f45679e891b73af65f71dba7008ced7ebcbb44",
-    "Hash.RowLeaf.leafMsg": "6a298fe332784d47c3541c0b347f8b230a2a89f0feea2d98fe945d85950624e5",
-    "Hash.RowLeaf.outerHashed": "5cd7ce5aba7869151a792451bd9cdfed618ae5d327304620785aa3a82225c262"
+    "Hash.RowLeaf.innerHashed": "9f9aca8d741e62a07555ca5705e166260c858abdf0a57bccec3d862cb446268c",
+    "Hash.RowLeaf.leafMsg": "b6618d2baacea640c3f31fd3b3604c634198f8e03b74fbd9e97e8afbf34756cd",
+    "Hash.RowLeaf.outerHashed": "2d80b04f02a6dbb598aede89f6ff2c3008d0ca0f96d2d9a3afa9eddfb0461f11"
    },
-   "guarantees": ["Hash.SecurityProofs.Stated"]
+   "guarantees": ["Hash.SecurityProofs.RowBinding"]
   },
   "Definitions.Hash.RowSeg": {
    "digest": "90bfdb254a02577fb455c429e2b39538b1096a953cb4aa4b3a604bec66068775",
@@ -15088,7 +15705,17 @@
     "Hash.RowSeg.segmentMsgs": "06d9f0294b3435c558727cf0fcbb49bae36cc32a705d683476e81cb81c8cb10a",
     "Hash.RowSeg.segmentPrefix": "17d166519a13a99d5f75b079467ff2419a10f206a6767e6f65027a12a05c0152"
    },
-   "guarantees": ["Hash.SecurityProofs.Stated"]
+   "guarantees": ["Hash.SecurityProofs.RowBinding"]
+  },
+  "Definitions.Hash.RowV2": {
+   "digest": "52e1b6519c9a37823278a704e4fa649e244d97074670631af94edaf015eb29f6",
+   "definitions": {
+    "Hash.RowV2.digest": "471ea94c9740fb5a8f86529f61b2f781d4c12e3e59aa8046bf7deae964d59ee8",
+    "Hash.RowV2.hashed": "bcd62edf66f26861e8b5c34ec8e151d94946344f73712e7f0803146cfdc6b71a",
+    "Hash.RowV2.msg": "73f58fbc3bc895270bcc2e61559234430c03d76b31dcb1d1bd053200796feff0",
+    "Hash.RowV2.rowPrefix": "5685bbc629d745a50fd750e1c773369607d76b2a4e18288590e2c6164197eb0e"
+   },
+   "guarantees": ["Hash.SecurityProofs.RowBinding"]
   },
   "Definitions.Hash.Tree": {
    "digest": "c4b8c7ea14f3c9a159c9a52d84b0b56922af0b7ecce92dc113116c019277fdc5",
@@ -15106,7 +15733,7 @@
     "Hash.Tree.leafMsg": "c03f78eb03c50bae57d161e89fa7af3fe26e1c1584952f654cf4057b3f4b2d77",
     "Hash.Tree.nodeMsg": "f0246edca6110f84d6a81bbf1e435afe3a2e8da1f97e4b4ee3a97741dff654a8"
    },
-   "guarantees": ["Hash.SecurityProofs.Stated"]
+   "guarantees": ["Hash.SecurityProofs.RowBinding", "Hash.SecurityProofs.TreeBinding"]
   },
   "Definitions.Nci": {
    "digest": "cb17b875c510656446a000071eb88c8642b91ee75ceba126abdbf87bbe46f15d",
@@ -28069,22 +28696,118 @@
    ]
   },
   "Models.Core.Assumptions": {
-   "digest": "8361f31da49dfc00e47e05b1b83a759a88e79d2cae9881ceb39aa25d0d16fbdb",
+   "digest": "ffc6b1380e0c28f358863d5c8a6aae982abbac2437bd44b7f518850e33f86e5e",
    "definitions": {
+    "Verity.Assumptions.GemmAmpereStep": "02e4cb87864bcee487dafdb2047e70b7e521b0c0e9d0d8cb824ff3854abe00e1",
+    "Verity.Assumptions.GemmHopperStep": "8c5e183ae15ce48fd0744893ce9708c38d0c9d88fd0d109ffb68ec4226ff323e",
+    "Verity.Assumptions.StepInputs": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d",
     "Verity.Assumptions.TrustedNebiusHost": "569bbee988e0e2575ef74370bda4650cfe18814bac8fc43aa7329cade6b5b23a"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardWardenDecodableLe",
     "NetTiming.SecurityProofs.EncardWardenViewsLe",
-    "NetTiming.SecurityProofs.WardenViewEqClientView"
+    "NetTiming.SecurityProofs.WardenViewEqClientView",
+    "Verity.SecurityProofs.AmpereStepComplete",
+    "Verity.SecurityProofs.AmpereStepHw",
+    "Verity.SecurityProofs.AmpereStepIff",
+    "Verity.SecurityProofs.AmpereStepSound",
+    "Verity.SecurityProofs.HopperStepComplete",
+    "Verity.SecurityProofs.HopperStepHw",
+    "Verity.SecurityProofs.HopperStepIff",
+    "Verity.SecurityProofs.HopperStepSound"
    ]
   },
   "Models.Core.Guarantees.Circuit": {
-   "digest": "d4008286fc1153df1918c255903210428f32dc769d4631f93a6a0f9be9c51f15",
+   "digest": "89c10e4e2fdf1bf5cd69dfd492214dc9c787a2fa08c487ad55cbf74f1b22be70",
    "definitions": {
-    "Verity.Guarantees.ComposeCone": "87f3ed3cdae5067717a1f9a2b59d5898424f69916d6111aae8ed12180b6a44bd"
+    "Verity.Guarantees.Compose": "b6a5c2268520b260515cd2cebc4b1cff065c36df7da4d477d6c66d3bdf4ff339",
+    "Verity.Guarantees.ComposeCone": "87f3ed3cdae5067717a1f9a2b59d5898424f69916d6111aae8ed12180b6a44bd",
+    "Verity.Guarantees.ContainsImplements": "7c6a3f719136c5f56d3f45c31d4240e6a8a7bff3e87af813a1a71e14f8dedcaa",
+    "Verity.Guarantees.CorrectOfOpening": "10386484b8cce510b55f28b3072a425e8555580988de08bb25db00b3b0b7b699",
+    "Verity.Guarantees.RefineWrong": "f6dc61dd64bff7f68d19f350d308a0ab2ed7577db10138d290703268254a469c"
    },
-   "guarantees": ["Verity.SecurityProofs.ComposeCone"]
+   "guarantees": [
+    "Verity.SecurityProofs.Compose",
+    "Verity.SecurityProofs.ComposeCone",
+    "Verity.SecurityProofs.ContainsImplements",
+    "Verity.SecurityProofs.CorrectOfOpening",
+    "Verity.SecurityProofs.RefineWrong"
+   ]
+  },
+  "Models.Core.Guarantees.Game": {
+   "digest": "ecc7ed75a024d948af30f5c1fe65ee26298c9a426911af3c1ef7e90ae13b029a",
+   "definitions": {
+    "Verity.Guarantees.ProbBatchInduced": "b7429a669651d1a8c24f8f946f3b2ca83f7c5c29279f7bb1d335fd63fb5bf7b2",
+    "Verity.Guarantees.SoundAnd": "40437eeb1f6ccb9c4b5644af7f9b966c5e4aabe6ea59140bdcc75972988d1f5b",
+    "Verity.Guarantees.SoundBatch": "c9beedbe57744d07208470011d76aa1d4ca58b593726a94f5133b5c0eafef363",
+    "Verity.Guarantees.SoundBind": "6f75427202914962a6f46d107ec588a1fdb637f11ad0ceb7c2ffebbb7eccd0f2",
+    "Verity.Guarantees.SoundInterleave": "1b9db975c11cf9eee08008fa88f0ac0b461a6ec2cb6b432974525cf50705d3ed",
+    "Verity.Guarantees.SoundMono": "fa86a98c87341208789aaed40edf38ef88f68a7c4e2c23a1a19738acbc0771df"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.ProbBatchInduced",
+    "Verity.SecurityProofs.SoundAnd",
+    "Verity.SecurityProofs.SoundBatch",
+    "Verity.SecurityProofs.SoundBind",
+    "Verity.SecurityProofs.SoundInterleave",
+    "Verity.SecurityProofs.SoundMono"
+   ]
+  },
+  "Models.Core.Guarantees.PrivatePartition": {
+   "digest": "338c36fe6dcf5a21be7bf3cc6af6b5118090c13871f3e320e121872843bff65d",
+   "definitions": {
+    "Verity.Guarantees.PrivateFitsOfLocal": "bda50bc4624e8b69a82ebb9ea924780d4296e5d46627155c12176a3b424e4610",
+    "Verity.Guarantees.PrivateOutBitsLe": "2bc4f92c0528b91c666d92d814289a5e6ee11ed256b9aefb902aa3f9ed17ef94",
+    "Verity.Guarantees.RegisteredMeets": "54c5296aeba97c3af6c885355afb93cb69336ebd1f4f60ba6c6f431d7c5cc06d"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.PrivateFitsOfLocal",
+    "Verity.SecurityProofs.PrivateOutBitsLe",
+    "Verity.SecurityProofs.RegisteredMeets"
+   ]
+  },
+  "Models.Core.Guarantees.TC": {
+   "digest": "482236f9d4e61b61c0d296fbfa35abc0416ab6b54467ff2a9f9f47ad914101fa",
+   "definitions": {
+    "Verity.Guarantees.AdaEqAmpere": "4dce5ce4517529b252795318ea90409c325c67d28139691a2460d39ce7ad089e",
+    "Verity.Guarantees.AmpereStepComplete": "5c6c4d3158286ee53137cb8dd3c66b2e272bbfc22732345f61713fbbd2eaaffb",
+    "Verity.Guarantees.AmpereStepHw": "6e64fd8e4d76b80afa400eb4238007492a1df8322541955a1ac668472de64a37",
+    "Verity.Guarantees.AmpereStepIff": "e252d939e1bfc509ca004d74bf89f74765722f0786e18498dc3641ebe8d0a9af",
+    "Verity.Guarantees.AmpereStepSound": "97544bac65b908a4e026735e9ad434f53793271085f669c1d94fd2fbb2555e4c",
+    "Verity.Guarantees.AmpereUnitBf16": "d9069901287c8ec95f08c12d3dc0602771617bc617e8503086d2a869c568ce20",
+    "Verity.Guarantees.AmpereUnitSound": "a441669d836675d242de13345dde3017973d1329627c7679d67b88c20175d003",
+    "Verity.Guarantees.AmpereUnitSoundZero": "61b52f2e67a332f0aae6132005447f08b2f6abc57a2270271214820b83c3a17c",
+    "Verity.Guarantees.HopperStepComplete": "409e8ffbde2f8b28506287555632fe42b2a0e53c2617faf9bb6ad4404d78bd42",
+    "Verity.Guarantees.HopperStepHw": "02cd430489f71fb17040226af54bf58c3d8c1772e5818099e53696b1eb99bdd3",
+    "Verity.Guarantees.HopperStepIff": "e4d776487928e611503023ce084633a9457673592718a9dd591aca3649629558",
+    "Verity.Guarantees.HopperStepSound": "231299eef1350986de3df8c9466ac44ac8e811e21717eb73de3de6bb16c6d0f4",
+    "Verity.Guarantees.HopperUnitBf16": "846a602cadcdbb4fe14baf591da3414b9e8b5270b2e3fd387f7efa269e6ae3f1",
+    "Verity.Guarantees.HopperUnitSound": "b17ce02e244f1f28175a0b78391062658b1d6ab6020e816a89a87509b8c29433",
+    "Verity.Guarantees.HopperUnitSoundZero": "d37826555cb0a963e78448c1683ca74202f5db8d838cd175ee42bacadd001613",
+    "Verity.Guarantees.IsZeroGadget": "e909b78204ab7a448af5d1ff7753e7d4e433f30940f636e444456e61813d8e59",
+    "Verity.Guarantees.PackSoundComplete": "95e287c6c5b67e69c4cca2ba0e7de569f217442359cffe9a4a3943dbbd31695c",
+    "Verity.Guarantees.RangeGadget": "276657bf0d6d4e6da870b4002959224bf0bfffe7843d048573a6139168bf9d13"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.AdaEqAmpere",
+    "Verity.SecurityProofs.AmpereStepComplete",
+    "Verity.SecurityProofs.AmpereStepHw",
+    "Verity.SecurityProofs.AmpereStepIff",
+    "Verity.SecurityProofs.AmpereStepSound",
+    "Verity.SecurityProofs.AmpereUnitBf16",
+    "Verity.SecurityProofs.AmpereUnitSound",
+    "Verity.SecurityProofs.AmpereUnitSoundZero",
+    "Verity.SecurityProofs.HopperStepComplete",
+    "Verity.SecurityProofs.HopperStepHw",
+    "Verity.SecurityProofs.HopperStepIff",
+    "Verity.SecurityProofs.HopperStepSound",
+    "Verity.SecurityProofs.HopperUnitBf16",
+    "Verity.SecurityProofs.HopperUnitSound",
+    "Verity.SecurityProofs.HopperUnitSoundZero",
+    "Verity.SecurityProofs.IsZeroGadget",
+    "Verity.SecurityProofs.PackSoundComplete",
+    "Verity.SecurityProofs.RangeGadget"
+   ]
   },
   "Models.Flock.Guarantees.Audit": {
    "digest": "e95e7804d3b91387a66349a191d56288f14663b77c7d3b58d42a3e5e3d9e05f2",
@@ -28119,13 +28842,12 @@
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
   "Models.Hash.Guarantees": {
-   "digest": "6c2584c904a5dff93f2875bde664ff00bf4603d98e68237987ce6521d0999c76",
+   "digest": "19e9fcea482aa5af527ceb48166741b5c12059a2133c4b0f9d00d9ae6ab64713",
    "definitions": {
-    "Hash.Guarantees.RowBinding": "a5f3d22ed07d19252f31e6e2087a0289c6f629a1631b4c00a4f8e272d652820e",
-    "Hash.Guarantees.Stated": "d6ec0d5bf438d5563dd1f1f18ef063e5d036efe021df874888fea7c94d357569",
+    "Hash.Guarantees.RowBinding": "eb2b5136f8ce060b9e18a900cd57bd9df1a732e36d8756e3a59b202fc98e2edf",
     "Hash.Guarantees.TreeBinding": "5a6ac8239b2f217ee43962de29f8aca8baceb9c73ebc5f095fa328da95bd9d1a"
    },
-   "guarantees": ["Hash.SecurityProofs.Stated"]
+   "guarantees": ["Hash.SecurityProofs.RowBinding", "Hash.SecurityProofs.TreeBinding"]
   },
   "Models.Nci.Assumptions": {
    "digest": "83716c466c58f7f4f5e7659d570bcb6fda1c73d0d559a67e915b389928fd4778",

@@ -7,6 +7,11 @@
 # PIN_BUILD gives them from a Build of record. $OUT/inductor_winners.txt counts the dir's winners after each pass, and
 # $OUT/<pass>_winners.txt lists them: a winner the measured run added is a kernel compiled stock never launched.
 #
+# With PIN_BUILD (a Build of record's build.json, `served-match`'s; PIN_BUILD_NAME names one sent with the run, as
+# $RESEARCH_RUN_DIR/inputs/<name>) in place of SEED_ARGS, the dir is seeded with that Build's autotune winners (`served-pin
+# seed`, as prof.sh), compile caches off, and checked against them after the run (`served-pin check` -> $OUT/pin_check.txt):
+# by curve.py's rules a compiled ratio counts only when the winners are the Build's.
+#
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --timeout 1h \
 #     --env VERITY_BENCH_VENV=/workspace/jobs/venv312 --env SPEC=llama31-8b-fp8-rtx-served-arm \
 #     --env SEED_ARGS="--arms stock-fp8,stock-fp8@compiled,commit-rows-4k-eager \
@@ -24,7 +29,15 @@ winners() {
   (cd "$d/inductor" && find . -name '*.best_config' | sort) > "$OUT/$1_winners.txt"
   echo "$1 $(wc -l < "$OUT/$1_winners.txt")" >> "$OUT/inductor_winners.txt"
 }
-if [ -n "${SEED_ARGS:-}" ]; then
+[ -z "${PIN_BUILD_NAME:-}" ] || PIN_BUILD=${RESEARCH_RUN_DIR:?}/inputs/$PIN_BUILD_NAME
+if [ -n "${PIN_BUILD:-}" ]; then
+  [ -z "${SEED_ARGS:-}" ] || { echo "served_arm.sh: PIN_BUILD seeds the Inductor dir from its Build; drop SEED_ARGS" >&2; exit 2; }
+  . benchmarks/harness/env.sh
+  pin() { "$VENV/bin/python" -m verity_vllm.pipeline.cli served-pin "$1" --build "$PIN_BUILD" --inductor-dir "$d/inductor"; }
+  pin seed
+  winners seed
+  export VLLM_DISABLE_COMPILE_CACHE=1 TORCHINDUCTOR_FX_GRAPH_CACHE=0 TORCHINDUCTOR_AUTOGRAD_CACHE=0
+elif [ -n "${SEED_ARGS:-}" ]; then
   read -ra seed <<< "$SEED_ARGS"
   OUT=$OUT/seed bash benchmarks/served_commit/run.sh "${seed[@]}" --reps 1
   winners seed
@@ -32,4 +45,8 @@ fi
 rc=0
 bash benchmarks/served_commit/run.sh "$@" || rc=$?
 winners measured
+if [ -n "${PIN_BUILD:-}" ]; then
+  pin check > "$OUT/pin_check.txt" 2>&1 || echo "served_arm.sh: a winner is not the Build's (pin_check.txt)" >&2
+  cat "$OUT/pin_check.txt"
+fi
 exit "$rc"

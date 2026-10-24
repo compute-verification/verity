@@ -34,6 +34,7 @@ import hashlib
 import json
 import os
 import traceback
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -134,12 +135,12 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
 def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, out_dir: str | os.PathLike, *, pair: int = 0,
                 build_root: str | os.PathLike | None = None, checkpoint: Any = None, weights: Any = None,
                 required_manifest: str | None = None, workers: int | None = None, programs: Any = None,
-                binding: dict[str, Any] | None = None) -> dict[str, Any]:
+                binding: dict[str, Any] | None = None, transfer_gates: Sequence[str] = ()) -> dict[str, Any]:
     """Rank ``rank``'s ``stand-in`` window into ``out_dir`` from its sealed replay bundle of pair ``pair`` (module docstring): the
     bundle opened against the record (`commit_replay._of_record`), the required manifest, the rank's Programs of record
     (`rank_replay.load`; ``build_root``'s ``rank<r>/`` instead of the record's dirs, its digests held either way; ``programs``, the
-    rank's `rank_replay.Loaded` a registered compiler made from advice, instead, its ``binding`` in the window's provenance,
-    `pipeline.advice_windows`), its weight shards
+    rank's `rank_replay.Loaded` a registered compiler made from advice, instead, its ``binding`` in the window's provenance and its
+    ``transfer_gates`` proved whole, `pipeline.advice_windows`), its weight shards
     opened against the committed weights root from the bundle's tensors and ``checkpoint`` (a `weights_of_record.CheckpointIndex`;
     without one, only the tensors the bundle carries; ``weights``, tests, replaces them), each on the window's first read of it
     (`cpu_replay.OnRead`), and every value read through an opening verified against the rank's root."""
@@ -188,7 +189,7 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
                            row=ctx.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": pair, "source": ctx.get("code")}, workers=workers, tp=tp,
                            index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), stand_in=stand_in(tp, b["manifest_sha256"]),
-                           binding=binding)
+                           binding=binding, transfer_gates=transfer_gates)
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
@@ -251,17 +252,18 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
 
 
 def window_of(rec: dict[str, Any], rank: int, partition_file: str | os.PathLike, p: Any,
-              binding: dict[str, Any] | None = None) -> tuple[Any, dict[str, Any]]:
+              binding: dict[str, Any] | None = None, transfer_gates: Sequence[str] = ()) -> tuple[Any, dict[str, Any]]:
     """The verifier's own window of rank ``rank`` of the record ``rec`` (`record`) over the rank's loaded Programs ``p`` (a
     `rank_replay.Loaded`: of record, `window_of_record`, or a registered compiler's from advice, `pipeline.advice_windows`), and what
-    `source` holds the rank's registration to (``binding``: the compiler's digest and the advice's hiding root the window must name)."""
+    `source` holds the rank's registration to (``binding``: the compiler's digest and the advice's hiding root the window must name;
+    ``transfer_gates``: the templates the compiler lists as holding transfer gates, every unit of which the window proves)."""
     from verity_vllm.pipeline import serving_rows as SRW
 
     rank, world = int(rank), int(rec["world"])
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank} is not a rank of the world of {world}")
     window, _rows = SRW.population(p.progs, json.loads(Path(partition_file).read_text()), run_of(bytes.fromhex(rec["tp_run_root"]), rank),
-                                   p.dirs, {"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,))
+                                   p.dirs, {"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), transfer_gates=transfer_gates)
     tp = {"world": world, "rank": rank, "tp_run_root": rec["tp_run_root"], "run_root": rec["roots"][str(rank)], "root_tag": rec["root_tag"]}
     sha = rec["bundles"].get(str(rank))
     held = {"tp": tp, "served_programs": {str(k): str(x) for k, x in sorted(p.digs.items())}, "stand_in": stand_in(tp, sha) if sha else None,

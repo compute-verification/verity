@@ -315,8 +315,9 @@ REGISTERED_FILE = _port("registered-file", registered_file, credit_cases.registe
 
 def test_credit(pass_server):
     """Generated served windows' credited sets, drawn units and their outcomes, whole windows and periods, and A rows,
-    then each mutation over a few seeds (`replay`): a credit bit flipped after the draw coin, units the prover chose, a
-    drawn unit failed or missing, a period unclosed or a window of it missing or out of order, an A tree the round roots
+    then each mutation over a few seeds (`replay`): a window's tile at a K its proof doesn't cover (2^17 or past, or no
+    multiple of 32), a credit bit flipped after the draw coin, units the prover chose, a drawn unit failed or missing,
+    a period unclosed or a window of it missing or out of order, an A tree the round roots
     didn't commit, a window's round log the challenger never received, entries or a drawn unit's proof of another
     registration than the window's or an entry whose root is not its sessions', B rows other than the ones a window's
     open root binds or registered under another domain, name or rows, a window whose B rows (one row's s_w, or every
@@ -353,6 +354,10 @@ def test_credit(pass_server):
                  "outcome outcome: unit # has two", "outcome outcome: unit # has a proof outcome and was not drawn",
                  "drawn layout: linear ", "drawn layout: the A slot #", "drawn layout: the A blocks of K = #",
                  "drawn layout: a call of lm_head", "drawn draw: the draw coin is not", "drawn draw: the draw's stream",
+                 "window tile-k: the window's tile at K = # is outside the K its proof covers, multiples of # below #",
+                 "so the period earns nothing: tile-k: the window's tile at K = #",
+                 "pad its linears' A and B rows with zero codes to K = #",
+                 "split its linears' k range into linears of at most K = # each",
                  "window manifest: the manifest's # rows", "window outcome: unit # has a proof outcome and was not",
                  "period period: period ", "period missing: window #", "period order: window #",
                  "period period: the windows presented run past", "period period: window ", "period window: window #",

@@ -17,7 +17,7 @@ Imports point down the layer order `pipeline` > `check` | `properties` > `acquir
 ~~~text
 verity_vllm/
   pipeline/           stage drivers      build.py match.py commit.py row*.py report.py hot.py layout.py cli.py llm.py research_tools.py tp/
-  engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py static_schedule.py rank_worker.py profiles/
+  engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py static_schedule.py served_seed.py rank_worker.py profiles/
   program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py dtypes.py
   query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/ compare.py
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
@@ -40,7 +40,8 @@ workloads/ manifests/ fixtures/ data/ docs/    records of the qualification tabl
 `global_program.py` (the rooted workload Program of a Build), `m1_capture.py`, `layout.py` (Build / run directory layout),
 `cli.py` (the one CLI, `verity-vllm`), `row.py` / `row_*.py` (`verity-vllm row`: a sweep row's
 stages), `llm.py` (the public `verity_vllm.LLM`), `timeline.py` / `spans.py` / `telemetry/`, `admission_bound.py` / `admission_planner.py`,
-`research_outputs.py` / `research_result.py`, `source_identity.py`, `release_json.py`, `workload.py` /
+`research_outputs.py` / `research_result.py`, `commit_arb.py` (`verity-vllm commit-arb`: the served Commit under seeded
+varied traffic, its records held to the streamed I/O), `source_identity.py`, `release_json.py`, `workload.py` /
 `coverage_workloads.py`, `experiment.py`, `research_tools.py` (the `vllm.build` / `vllm.match` / `vllm.commit` Tools of
 `tools/research`), and `tp/` (the rank-aware capture, commit, match and fold-match drivers).  Entrypoints:
 `verity-vllm <command>` (`python -m verity_vllm.pipeline.cli <command>`) and `verity_vllm.LLM`.  Never: Verity semantics -- a check that
@@ -50,7 +51,7 @@ lives here is misfiled.
 step observer and run header; `pinned.py` its host buffers), `run_facts.py` (profile manifest, versions), `code_identity.py` (executed code objects),
 `vllm_adapter.py` (workloads and request driving; the stages import the engine's names from it), `engine_driver.py`,
 `engine_profile.py`, `arrivals.py`, `static_schedule.py` (a `sampling.ignore_eos` run held to the schedule its declaration alone
-decides), `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
+decides), `served_seed.py` (the public default seed a served request without one is sampled under), `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
 constructor + a facts table).  Never: commit, decide what is required.
 
 **`program/`** implements *Program*: Definitions (`registry/`, the registered library; importing it registers the on-demand
@@ -222,6 +223,7 @@ Supported keyword options:
 | `max_model_len` | the pin's | context length |
 | `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
 | `kv_cache_memory_bytes` | vLLM's sizing | the KV cache's size in bytes, in place of sizing it from free memory |
+| `enable_chunked_prefill` | vLLM's, on | False holds a prefill that doesn't fit a step instead of cutting it into chunks |
 | `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
 | `execution` | `bi-eager`, or `bi-compiled` with `enforce_eager` False | the execution label (`engine.served.EXECUTIONS`), which sets batch invariance and `enforce_eager`; `compiled` is vLLM's serving defaults |
 | `dtype` | the profile's | served dtype override |

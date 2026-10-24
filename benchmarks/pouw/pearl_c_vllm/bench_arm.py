@@ -200,13 +200,16 @@ class PearlCWholeArm(PearlCArm):
     def __init__(self) -> None:
         super().__init__()
         self.schedule = "serial"
-        self.execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
+        self.vllm_execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
+        # Not ``execution``: the harness reads that as "build at vLLM's serving defaults", and this engine is FULL
+        # decode graphs at compilation mode 0 (no torch.compile), which PoUW requires.
+        self.engine_label = "graphs-mode0" + ("" if self.vllm_execution == "compiled" else f"-{self.vllm_execution}")
         self.whole, self.totals, self.capture = None, {}, [1, 8, 32, 128]
 
     def engine_overrides(self, target: Any) -> dict[str, Any]:
         sizes = os.environ.get("PEARLC_CAPTURE_SIZES")
         self.capture = [int(x) for x in sizes.split(",")] if sizes else [1, 8, 32, 128]
-        return {**super().engine_overrides(target), "enforce_eager": False, "execution": self.execution,
+        return {**super().engine_overrides(target), "enforce_eager": False, "execution": self.vllm_execution,
                 "compilation_config": {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
                                        "cudagraph_capture_sizes": self.capture}}
 

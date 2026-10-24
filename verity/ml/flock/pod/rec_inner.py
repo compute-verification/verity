@@ -12,7 +12,8 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
                                                              prover's R.bin, ROOT.json and circuit-registration-private.json)
     python rec_inner.py forge --what challenge|query --inner DIR [--record session|prover]
                                                              flips one coin of rep 0 in DIR's session.json (session/'s, or
-                                                             prover/'s: candidate 3's, challenge only) and public.json
+                                                             prover/'s: candidate 3's, challenge only) and public.json,
+                                                             written in the coin server's own format (rec_live.record_bytes)
     python rec_inner.py forge --what nodraw|partial --inner DIR [--record session|prover]
                                                              the record without its draw, or with its last drawn unit dropped
     python rec_inner.py forge --what top|unsalted --inner DIR
@@ -116,7 +117,7 @@ def forge(what: str, inner: Path, level: int = 0, record: str = "session") -> di
         c = rd["coins"][0]
         rd["coins"][0] = c[:-1] + format(int(c[-1], 16) ^ 1, "x")
     (inner / record / "session.json").write_text(json.dumps(sess))
-    (inner / "public.json").write_text(json.dumps(pub))
+    (inner / "public.json").write_text(RL.record_bytes(pub))
     return {"forged": what, "record": record, "stream": STREAM, "k": k, "coin": 0, **({"level": level} if what == "query" else {})}
 
 

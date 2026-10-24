@@ -37,11 +37,12 @@ record gives it for the unit's session (`_window_proofs`: verified against the d
 tile's A and B ports at its K's values and their registered roots); its mutations add
 a call the manifest lacks, prove units the prover chose under its own stream, fail or drop a drawn unit, break K's form
 or give one past the window's units, pass a `credited` refusal through, and break the descriptor (`DESC_NAMES`): its
-form, its program function's record, a template, a K no linear has, the root's nodes, the record's layout, or a record
-naming another layout over the same nodes (``alt-layout``). Its mutations of the composed check present a round log the
-challenger never received (``never-received``, its coins carried as if opened after its roots and its draw root over
-it, so only `core_check.rounds` refuses it), a round coin opened after another root, an A tree the round roots didn't
-commit, and no A value. Its mutations of the registration (`REGISTRATION_NAMES`) register the A values under another
+form, its program function's record, a template, a K no linear has, the root's nodes, the record's layout, a record
+naming another layout over the same nodes (``alt-layout``), or an H1 window's whole descriptor with a linear, so a
+tile, at a K the tile's proof doesn't cover (``tile-k``: 2^17 or past, or no multiple of 32). Its mutations of the
+composed check present a round log the challenger never received (``never-received``, its coins carried as if opened
+after its roots and its draw root over it, so only `core_check.rounds` refuses it), a round coin opened after another
+root, an A tree the round roots didn't commit, and no A value. Its mutations of the registration (`REGISTRATION_NAMES`) register the A values under another
 window's open root or another circuit, their trees under those domains so `_a_link` accepts them
 (``other-registration``), give one proof's session another registration's root for a value it opened
 (``proof-other-registration``), change an opened B value's registered root (``entry-root``: the entry is not the root
@@ -74,10 +75,11 @@ descriptor, a window of no period beside it in the ledger. Its mutations (RT4-IN
 window incomplete, drop, reorder or add a window, present the window of no period among the period's, name a period
 never opened or no period, forge the ledger, refuse one window, make one window wholly another circuit's (its
 descriptor, registration and proofs, ``other-circuit``, so `credit.window` alone credits it), give one the descriptor
-of another layout (``alt-layout``), open the period committing no circuit or one that is no H1 window's (``bad-circuit``), open it committing no K or a malformed one, commit a K past a window's
-units, prove one window's draw at another K (``other-k``), present one window's round log the challenger never received
-(``never-received``), give one window's proof another registration's root (``proof-other-registration``), pin one
-window's session to a logged branch commit off main's first-parent line (``branch-pin``, refused by
+of another layout (``alt-layout``), open the period committing no circuit, one that is no H1 window's (``bad-circuit``)
+or one with a tile at a K its proof doesn't cover (``tile-k``), open it committing no K or a malformed one, commit a
+K past a window's units, prove one window's draw at another K (``other-k``), present one window's round log the
+challenger never received (``never-received``), give one window's proof another registration's root
+(``proof-other-registration``), pin one window's session to a logged branch commit off main's first-parent line (``branch-pin``, refused by
 `challenger.credited_session`'s pin check before its circuit's), open the period signing no weights' root or a
 malformed one, or naming no model credit pins (`MODEL_NAMES`: none, as a bare weights' root, a malformed one, another
 checkpoint, an unpinned role), give one of two or three windows a ``b/<K>`` with one row's s_w changed (``other-sw``)
@@ -654,14 +656,18 @@ def _break_desc(rng: random.Random, lay: dict, name: str) -> str:
             desc["program_fn"] = record(tiles, {**lay, "calls": lay["calls"] + [["lm_head", 0]]})
         case "alt-layout":
             desc["program_fn"] = record(tiles, _alt_layout(rng, lay))
+        case "tile-k":
+            desc = window_desc(rng, _off_k(lay, rng))
         case _:
             raise ValueError(name)
     return desc_bytes(desc).hex()
 
 
 #: each way a window's committed descriptor is no H1 window's, or not the one its record says
-DESC_NAMES = ["descriptor-form", "not-window", "template", "tile-ks", "body", "layout-form", "record-layout",
-              "alt-layout"]
+LAYOUT_DESC_NAMES = ["descriptor-form", "not-window", "template", "tile-ks", "body", "layout-form", "record-layout",
+                     "alt-layout"]
+#: and an H1 window's, its record and its nodes alike, with a tile at a K its proof doesn't cover
+DESC_NAMES = [*LAYOUT_DESC_NAMES, "tile-k"]
 
 
 def units_of(lay: dict) -> int:
@@ -710,6 +716,14 @@ def _break_layout(lay: dict, rng: random.Random, name: str) -> dict:
         case "blocks":
             return {**lay, "calls": lay["calls"] + [[lin[0][0], 1 + max(b for _l, b in lay["calls"]) + 1]]}
     raise ValueError(name)
+
+
+def _off_k(lay: dict, rng: random.Random) -> dict:
+    """`lay` with its first linear at a K its tile's proof doesn't cover: 2^17 or past, or no multiple of 32."""
+    lin = lay["linears"]
+    k = rng.choice([Cr.TILE_K_LIMIT, Cr.TILE_K_LIMIT + Cr.TILE_K_STEP, 2 * Cr.TILE_K_LIMIT, Cr.TILE_K_LIMIT - 22,
+                    lin[0][1] + rng.choice([1, 16, 31]), 1, 33])
+    return {**lay, "linears": [[lin[0][0], k, lin[0][2]]] + lin[1:]}
 
 
 def drawn_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -1147,7 +1161,8 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     pname = rng.choice(rc.PERIODS)
     lay = layout(rng)
     prefix = f"h1/w-{rng.randrange(100)}/"
-    desc = descriptor(rng, lay, prefix) if name != "bad-circuit" else _break_desc(rng, lay, rng.choice(DESC_NAMES))
+    desc = (_break_desc(rng, lay, rng.choice(LAYOUT_DESC_NAMES)) if name == "bad-circuit" else
+            _break_desc(rng, lay, "tile-k") if name == "tile-k" else descriptor(rng, lay, prefix))
     program = hashlib.sha512(bytes.fromhex(desc)).hexdigest()
     weights = weights_of(rng, lay, program, prefix)
     bad = rng.randrange(n) if name in ("never-received", "other-circuit", "other-sw", "zero-codes") else None
@@ -1246,6 +1261,8 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
             pass
         case _ if name in MODEL_NAMES:
             pass
+        case "tile-k":
+            pass
         case "other-k":
             d = wins[i][0]
             n = units_of(d["layout"])
@@ -1292,7 +1309,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
 
 PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign", "unopened", "name", "window-refused",
                 "windows-form", "forged-ledger", "key-form", "other-circuit", "no-circuit", "descriptor-form", "no-k",
-                "k-form", "k-past-units", "other-k", "alt-layout", "bad-circuit", "never-received",
+                "k-form", "k-past-units", "other-k", "alt-layout", "bad-circuit", "tile-k", "never-received",
                 "proof-other-registration", "branch-pin", "no-weights", "weights-form", *MODEL_NAMES, "other-sw",
                 "zero-codes", "stale-pin"]
 PERIOD_KEYS = ("key", "ledger", "pins", "main", "name", "windows")

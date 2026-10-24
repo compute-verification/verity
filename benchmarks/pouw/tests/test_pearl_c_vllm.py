@@ -251,7 +251,7 @@ def test_a_call_over_whole_128_row_tiles_runs_the_128_tile_chain(device_run):
     kernel.dev.log.clear()
     y = run.gemm(0, torch.randn(128, 1024).to(torch.bfloat16), weights[0], None)
     names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
-    assert run.pipes[(0, 128, frozenset(), True, "serial", False)][0].bm == 128
+    assert run.pipes[(0, 128, frozenset(), True, "serial", False, False)][0].bm == 128
     by = {n: p for n, _, p, _ in kernel.dev.log}
     assert names[-2:] == ["gemm_pearlc", "pd_tiles_979"] and by["gemm_pearlc"][4] == y.data_ptr()
     assert by["pd_tiles_979"][:2] == tuple(by["gemm_pearlc"][2:4])
@@ -1736,8 +1736,11 @@ def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_bac
 
 # ---- step 1 of the decode plan: the host path, byte for byte the reference's ---------------------------------------
 
-def test_native_keys_are_call_keys_byte_for_byte():
+def test_native_keys_are_call_keys_byte_for_byte(monkeypatch):
     import random
+
+    from verity_vllm.protocol_options import pouw_pearl_c_host as PPH
+
     tree_hash = HM96
     rng = random.Random(5)
     for _ in range(40):
@@ -1745,7 +1748,13 @@ def test_native_keys_are_call_keys_byte_for_byte():
         keys = PPD._Keys(F, salt, tree_hash)
         assert keys.native is not None
         for index, m16 in ((0, 16), (1, 32), (127, 8192), (rng.randrange(1 << 20), 16 * rng.randrange(1, 600)), ((1 << 40) + 3, 48)):
-            assert keys(root, index, m16) == PPD.call_keys(F, salt, root, index, m16, tree_hash)
+            want = PPD.call_keys(F, salt, root, index, m16, tree_hash)
+            assert keys(root, index, m16) == want and keys(root, index, m16) == want     # the second time, kept
+            assert keys.kept[root, index, m16] == want
+    monkeypatch.setattr(PPH, "KEYS_KEPT", 2)
+    keys = PPD._Keys(F, salt, tree_hash)
+    for index in range(5):
+        assert keys(root, index, 16) == PPD.call_keys(F, salt, root, index, 16, tree_hash) and len(keys.kept) <= 2
     keys.native = None
     assert keys(root, 9, 64) == PPD.call_keys(F, salt, root, 9, 64, tree_hash)
     with pytest.raises(ValueError, match="don't frame tree hash 'sha256'"):
@@ -1847,15 +1856,17 @@ def test_a_graphs_scatter_screens_its_rows_into_the_pass_and_copies_its_leaves_a
 @pytest.mark.parametrize("schedule, main", [("deferred", 2), ("deferred-caller", 0)])
 def test_the_deferred_schedule_hashes_tiles_on_the_side_stream_from_rotating_sets(device_run, schedule, main):
     """Under ``deferred`` the call's other steps run on the run's own main lane (the recording stand-in's handle 2), as measured;
-    under ``deferred-caller`` on the caller's stream (0).  The tile hashing is on the side lane (1) either way."""
+    under ``deferred-caller`` on the caller's stream (0).  The tile hashing is on the run's side lanes in turn (1, then 3)
+    either way."""
     make, kernel, weights, *_ = device_run
     run = make(schedule=schedule)
     kernel.dev.log.clear()
     for _ in range(3):
         run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
     log = [(n, st, p) for n, st, p, _ in kernel.dev.log if not n.endswith("_smem")]
-    assert [n for n, st, _ in log if st == run.side.raw] == ["pd_tiles_851"] * 3 and run.side.raw == 1
-    assert {st for n, st, _ in log if st != run.side.raw} == {main}
+    sides = [lane.raw for lane in run.sides]
+    assert [(n, st) for n, st, _ in log if st in sides] == [("pd_tiles_851", 1), ("pd_tiles_851", 3), ("pd_tiles_851", 1)]
+    assert sides == [1, 3] and {st for n, st, _ in log if st not in sides} == {main}
     sets = run.shapes[(32, 256, 1024)].sets
     ptr = lambda j: (sets[j]["c"].data_ptr(), sets[j]["u"].data_ptr())
     gemms = [p[2:4] for n, _, p in log if n == "gemm_pearlc_d"]
@@ -1866,6 +1877,20 @@ def test_the_deferred_schedule_hashes_tiles_on_the_side_stream_from_rotating_set
     run.begin()
     run.poison()
     assert all(bool((t == 0xA5).all()) for st in sets for t in st.values())
+
+
+def test_calls_take_the_side_lanes_in_turn_whatever_their_shape(device_run):
+    """Two shapes' calls, each shape on its own ring, alternate the run's side lanes call by call (1, 3, 1, 3), so a call's
+    side steps run beside the next call's whatever its shape; each call hashes its own shape's set's C~ and U."""
+    make, kernel, weights, *_ = device_run
+    run = make(schedule="deferred")
+    kernel.dev.log.clear()
+    for w in (0, 1, 0, 1):
+        run.gemm(w, torch.randn(32, 1024).to(torch.bfloat16), weights[w], None)
+    tiles = [(st, tuple(p[:2])) for n, st, p, _ in kernel.dev.log if n.startswith("pd_tiles_")]
+    cu = [(lambda s: (s["c"].data_ptr(), s["u"].data_ptr()))(run.shapes[(32, weights[w].shape[0], 1024)].sets[j])
+          for j in (0, 1) for w in (0, 1)]
+    assert tiles == list(zip((1, 3, 1, 3), cu, strict=True)) and len(set(cu)) == 4
 
 
 @pytest.mark.parametrize("deferred", ["deferred", "deferred-caller"])
@@ -1923,21 +1948,321 @@ def test_each_device_records_kernels_refuse_their_own_grain():
 
 # ---- the schedule as data ---------------------------------------------------------------------------------------------
 
-def test_a_schedule_this_path_or_the_format_cannot_run_is_refused():
-    """-h3's row seeds come from A's rows, not its root, so its format lets A's tree leave the main lane; this path moves only
-    the tile hashing, which reads C~ and U, the buffers each shape rotates.  A's tree stays refused here with its own reason:
-    the `lines` kernel keys filler rows on line_a from A's root (card 448a9d2d)."""
+#: pearl_c_sm90's pipeline (pearl-c-h100-v1-h3's), whose decode calls split A's commitment (`run.Pipeline.FUSED`'s tree_seed_a)
+R90 = load("pearl_c_sm90_run", KERNEL.parent / "pearl_c_sm90" / "run.py")
+F90 = load("pearl_c_sm90_fixture", KERNEL.parent / "pearl_c_sm90" / "fixture.py")
+H100_SCHEME = "pearl-c-h100-v1-h3"
+
+
+class H100Dev(RecordingDev):
+    """`RecordingDev` with an H100's 132 SMs and opt-in shared memory."""
+
+    sms = 132
+
+    def get(self, f, *_):
+        return {"cuDeviceGetAttribute": 232448, "cuFuncGetAttribute": 0}[f]
+
+
+@pytest.fixture
+def sm90_run():
+    rng = np.random.default_rng(3)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    kernel = PPD.Kernel(R90, F90, H100Dev(), "0" * 64)
+    roots = PPD.weight_roots(kernel, weights, H100_SCHEME, salt_key=SALT_KEY)
+    coins = salt_coin(roots)
+
+    def make(schedule="deferred-a"):
+        return PPD.PearlCDeviceRun(PPD.scheme_of(H100_SCHEME), f"pouw:{H100_SCHEME}", kernel, weights, roots, *coins,
+                                   capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
+    return make, kernel, weights, roots
+
+
+def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(device_run, sm90_run):
+    """-h3's row seeds come from A's rows, not its root, so its format lets A's tree leave the main lane; this path moves the
+    tile hashing, which reads C~ and U, and A's tree where the kernel's pipeline splits A's commitment (sm_90a's, not
+    sm_120's), each with the buffers it touches rotated.  The screen stays on the caller."""
     from verity.core.protocols.pouw.serving import Schedule
+    make, kernel, *_ = device_run
     s = PPD.scheme_of(SCHEME)
-    with pytest.raises(ValueError, match="filler rows' lines on line_a from A's root"):
-        PPD.schedule_of(Schedule("early-a", frozenset({"a_tree", "tile_hash"}), ring=2), s)
-    with pytest.raises(ValueError, match="filler rows' lines on line_a from A's root"):
-        PPD.schedule_of("deferred-a", s)
-    with pytest.raises(ValueError, match="this path runs only tile_hash on a side lane, not screen"):
+    assert PPD.schedule_of("deferred-a", s).name == "deferred-a"
+    with pytest.raises(ValueError, match="this kernel's pipeline doesn't split A's commitment"):
+        PPD.schedule_of(Schedule("early-a", frozenset({"a_tree", "tile_hash"}), ring=2), s, kernel)
+    with pytest.raises(ValueError, match="doesn't split A's commitment"):
+        make(schedule="deferred-a")
+    with pytest.raises(ValueError, match="this path runs only a_tree, tile_hash on a side lane, not screen"):
         PPD.schedule_of(Schedule("screen-aside", frozenset({"tile_hash", "screen"}), ring=2), s)
     with pytest.raises(ValueError, match="a side lane needs ring >= 2"):
         PPD.schedule_of(Schedule("one-set", frozenset({"tile_hash"}), ring=1), s)
     assert PPD.rotated(PPD.schedule_of("deferred", s)) == ("c", "segdig_t", "u") and PPD.rotated(PPD.SERIAL) == ()
+    assert PPD.rotated(PPD.SCHEDULES["deferred-a"]) == ("c", "keys", "line_a", "seed_a", "segdig_t", "tree_a", "u")
+    assert PPD.PearlCExecutor(sm90_run[0]()).schedules == {"serial", "deferred", "deferred-caller", "deferred-a"}
+
+
+def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm90_run):
+    """Under ``deferred-a`` a decode call's main lane (the recording stand-in's handle 2) runs pd_commit in mode 1 (``rows_a``:
+    each real row's digest, leaf, seed, line key and E_A line), the forming and the GEMMs; below a full tile of rows the
+    call's side lane runs pd_tree (A's levels, seed_A and line_a, and no padding rows' E_A lines, though m₁₆ = 32 has
+    them), then the tile leaves, on the run's side lanes in turn (1, then 3); from a full tile (64) the call's side lane
+    runs the tile leaves and the side lane after it pd_tree (tiles on 1, then 3; the tree on 3, then 1); no further
+    stream.  The lanes use the ring's set for the call: A's tree, seed_A, line_a, the keys, C~ and U; E_A's lines are the
+    shape's own, which only the main lane touches.  The call's keys are uploaded into its set's, and A's root is copied
+    to the pass from its set."""
+    make, kernel, weights, roots = sm90_run
+    run = make()
+    sh = run._shape(32, 256, 1024)
+    size, nb = sh.size["tree_a"], run.nb
+    for j, st in enumerate(sh.sets):                   # stand-in roots, since the recording stand-in writes nothing
+        st["tree_a"][size - nb:size].fill_(0x11 * (j + 1))
+    kernel.dev.log.clear()
+    for _ in range(3):
+        run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    log = [(n, st, p, i) for n, st, p, i in kernel.dev.log if not n.endswith("_smem")]
+    sides = [lane.raw for lane in run.sides]
+    assert [(n, st) for n, st, _, _ in log if st in sides] == [(n, st) for lane in (1, 3, 1)
+                                                               for n, st in (("pd_tree_851", lane), ("pd_tiles_851", lane))]
+    assert sides == [1, 3] and {st for _, st, _, _ in log if st not in sides} == {2}
+    full = make()
+    kernel.dev.log.clear()
+    for _ in range(3):
+        full.gemm(0, torch.randn(64, 1024).to(torch.bfloat16), weights[0], None)
+    assert [(n, st) for n, st, *_ in kernel.dev.log if st in sides and n.startswith("pd_")] == [
+        (n, st) for tree, tiles in ((3, 1), (1, 3), (3, 1)) for n, st in (("pd_tree_979", tree), ("pd_tiles_979", tiles))]
+    by = {name: [(p, i) for n, _, p, i in log if n == name] for name in ("pd_commit_851", "pd_tree_851", "eprime",
+                                                                          "gemm_pearlc_d", "pd_tiles_851")}
+    ptr = lambda j, x: (sh.keys if j == 0 and x == "keys" else sh.sets[j][x]).data_ptr()
+    for c, j in enumerate((0, 1, 0)):
+        (cp, ci), (tp, ti) = by["pd_commit_851"][c], by["pd_tree_851"][c]
+        assert ci == (32, 1024, 1, 64) and ti == (32, 0, 0, 64)
+        assert cp[2] == tp[2] == ptr(j, "tree_a") and cp[12] == sh.b["ea_codes"].data_ptr() == by["eprime"][c][0][0]
+        assert tp[12] == 0
+        assert (tp[10], tp[11]) == (ptr(j, "seed_a"), ptr(j, "line_a"))
+        assert cp[6] == tp[6] == ptr(j, "keys") and cp[5] == tp[5] == ptr(j, "keys") + nb
+        assert by["gemm_pearlc_d"][c][0][2:4] == by["pd_tiles_851"][c][0][:2] == (ptr(j, "c"), ptr(j, "u"))
+    assert len({ptr(j, x) for j in (0, 1) for x in PPD.rotated(run.schedule)}) == 14
+    for j, index in ((0, 2), (1, 1)):
+        keys = sh.keys if j == 0 else sh.sets[j]["keys"]
+        assert PPD._bytes(keys[:168]) == PPD.call_keys(F90, run.salt, roots[0], index, 32, run.tree_hash)
+    assert [set(PPD._bytes(run.roots_buf[nb * c:nb * (c + 1)])) for c in range(3)] == [{0x11}, {0x22}, {0x11}]
+    assert run.end()["schedule"] == "deferred-a"
+
+
+def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_writes_no_padding_lines(sm90_run, tmp_path):
+    """A retained pass's record reads A's tree once the side lane is done with it, so there too pd_commit runs in mode 1 on
+    the main lane and pd_tree on a side lane, and the record keeps the tree of the call's set.  pd_tree writes no padding
+    rows' lines, at m₁₆ = 32 (which has them) as at 64, the kernels' tile."""
+    make, kernel, weights, _ = sm90_run
+    run = make()
+    run.begin(retain=str(tmp_path / "kept"), run=RUN)
+    kept = []
+    run._retained = lambda cur, mm, m, flags, xa, tree: kept.append(tree.data_ptr())
+    kernel.dev.log.clear()
+    run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
+    assert [(n, st) for n, st, _, _ in pd] == [("pd_commit_851", 2), ("pd_tree_851", 1), ("pd_tiles_851", 1)]
+    assert pd[0][3][2] == 1 and kept == [pd[1][2][2]] and pd[1][2][12] == 0
+    run.begin()
+    kernel.dev.log.clear()
+    run.gemm(0, torch.randn(64, 1024).to(torch.bfloat16), weights[0], None)
+    (tree,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "pd_tree_979"]
+    assert tree[1] == (64, 0, 0, 64) and tree[0][12] == 0
+
+
+def test_deferred_a_starts_as_tree_right_after_the_per_row_keying_at_every_m16(sm90_run):
+    """A call starts A's tree on its side lane right after the main lane's pd_commit (the pipeline's ``lane_cuts``: one main
+    step, then one side step), with or without padding rows (m₁₆ = 32, 64), since the split pipeline writes no padding rows'
+    E_A lines (``fillers`` off), so pd_tree writes nothing the forming or the GEMM read.  Under ``deferred`` A's tree stays
+    on the main lane, in pd_commit's mode 0, which writes them."""
+    make, *_ = sm90_run
+    run = make()
+    for m16 in (32, 64):
+        sh = run._shape(m16, 256, 1024)
+        pipe, _, side = run._pipe(0, sh)
+        assert pipe.lane_cuts == (1, 1) and len(side) == 2 and "a_tree" in run._side_groups(sh)
+        assert pipe.split_a and not pipe.fillers
+    run.begin(schedule="deferred")
+    sh = run._shape(32, 256, 1024)
+    pipe, _, side = run._pipe(0, sh)
+    assert pipe.lane_cuts == (1, 0) and len(side) == 1 and run._side_groups(sh) == {"tile_hash"}
+    assert not pipe.split_a and pipe.fillers
+
+
+def test_deferred_a_runs_as_tree_aside_only_where_the_call_keeps_its_step(sm90_run, monkeypatch):
+    """A call runs A's tree on its side lane (and starts it behind the main lane's per-row keying) only where its side steps
+    hold the tree: the e2e control's omits (A's commitment and the tile leaves) leave its side lane no step, so it starts no
+    tree there and its call still runs; omitting the tile leaves alone keeps the tree aside."""
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    make, kernel, weights, _ = sm90_run
+    run = make()
+    seen, lanes = [], run._lanes
+    monkeypatch.setattr(run, "_lanes", lambda *a, **k: seen.append((len(a[4]), a[2].lane_cuts, a[8])) or lanes(*a, **k))
+    for omit in (E2E.CONTROL_OMITS, frozenset({"hash_leaf"}), frozenset()):
+        run.begin()
+        run.omit = omit
+        kernel.dev.log.clear()
+        run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+        assert any(n == "gemm_pearlc_d" for n, *_ in kernel.dev.log)
+    run.omit = frozenset()
+    assert seen == [(0, (0, 0), False), (1, (1, 1), True), (2, (1, 1), True)]
+
+
+class H100TwinDev(TwinDev):
+    """`TwinDev` with an H100's 132 SMs and opt-in shared memory, for pearl_c_sm90's pipeline."""
+
+    sms = 132
+
+    def get(self, f, *_):
+        return {"cuDeviceGetAttribute": 232448, "cuFuncGetAttribute": 0}[f]
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
+def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_lines(tmp_path):
+    """Under ``deferred-a`` (A's commitment split, its tree on the side lane, no padding rows' E_A lines) a retained pass
+    commits what the serial one commits, its trees computed on the host (`H100TwinDev`: hash_decode.cuh's host build and
+    simt_twin): the records root, the commitment and each call's A root, at m₁₆ with padding rows (20 and 32 rows of the
+    kernels' 64) and without (64), and the committed rows' E_A lines.  The padding rows' lines are serial's under line_a
+    and deferred-a's the pass's poison, which nothing commits or serves."""
+    pd = HD.build(tmp_path)
+    rng = np.random.default_rng(23)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    xs = [(w, torch.from_numpy(bf16_words(rng, m, 1024).view(np.float32).copy()).to(torch.bfloat16))
+          for w, m in ((0, 20), (1, 32), (0, 64), (1, 20), (0, 32))]
+    kernel = PPD.Kernel(R90, F90, H100TwinDev(pd), "0" * 64)
+    roots = PPD.weight_roots(kernel, weights, H100_SCHEME, salt_key=SALT_KEY)
+    got = {}
+    for schedule in ("serial", "deferred-a"):
+        run = PPD.PearlCDeviceRun(PPD.scheme_of(H100_SCHEME), f"pouw:{H100_SCHEME}", kernel, weights, roots,
+                                  *salt_coin(roots), capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
+        run.begin(retain=str(tmp_path / schedule), run=RUN)
+        lines = []
+        for w, x in xs:
+            run.gemm(w, x, weights[w], None)
+            m16 = -(-x.shape[0] // 16) * 16
+            sh = run.shapes[(m16, weights[w].shape[0], 1024)]
+            ea = PPD._bytes(sh.b["ea_codes"])[:sh.size["ea_codes"]]
+            lines.append((ea[:32 * m16], ea[32 * m16:]))
+        man = json.loads(Path(run.end()["manifest"]).read_text())
+        got[schedule] = ({k: man[k] for k in ("records_root", "commitment", "salt")},
+                         [{k: u[k] for k in ("root_a", "excluded_a", "real_rows", "m", "n")} for u in man["matmuls"]], lines)
+    (serial, s_units, s_lines), (deferred, d_units, d_lines) = got["serial"], got["deferred-a"]
+    assert deferred == serial and d_units == s_units and len({u["root_a"] for u in s_units}) == len(xs)
+    assert [a for a, _ in d_lines] == [a for a, _ in s_lines]
+    assert [len(p) for _, p in d_lines] == [32 * 32, 32 * 32, 0, 32 * 32, 32 * 32]
+    assert all(set(p) == {0xA5} for _, p in d_lines if p) and all(set(p) != {0xA5} for _, p in s_lines if p)
+
+
+def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm90_run, monkeypatch):
+    """A replayed call (`_replay_lanes`) keeps `_lanes`'s events: the main lane waits for the side steps of its set's last
+    call and uploads the slot, then waits for the caller and replays its graph; the side lane after the call's replays
+    A's tree behind the main graph's own event (where A's tree is aside, from a full tile of rows), and the call's side
+    lane the rest behind the main lane's end, then waits for the tree; below a full tile the call's side lane replays the
+    tree, then the rest, with no event between them; the caller waits for the main lane.  A set's first call waits for
+    nothing, and its side lane's end becomes the set's event."""
+    from verity_vllm.protocol_options import pouw_pearl_c_host as PPH
+    from verity_vllm.protocol_options import pouw_pearl_c_lanes as PPL
+    make, *_ = sm90_run
+    run = make()
+    calls = []
+
+    class Driver:
+        def __getattr__(self, name):
+            return lambda *a: calls.append((name, *a))
+
+    monkeypatch.setattr(PPH, "_event", lambda: "slot")
+    monkeypatch.setattr(PPL, "_event", lambda: "done0")
+    run.driver = Driver()
+    side0, side1 = (types.SimpleNamespace(raw=raw, event=f"side{raw // 2}", tree_event=f"tree{raw // 2}") for raw in (1, 3))
+    main, sh = types.SimpleNamespace(raw=2, event="main"), types.SimpleNamespace(done=[None, "done1"])
+    up, i = run.uploads, run.uploads.i
+
+    def src(k):
+        return up.host_ptr + (i + k) % up.slots * up.width
+    run._replay_lanes(types.SimpleNamespace(execs=(10, 11, 12), slot_ptr=4096, ev_tree="cut"), sh, 1, side1, side0, 0, main,
+                      b"k" * 200)
+    run._replay_lanes(types.SimpleNamespace(execs=(20, 0, 22), slot_ptr=8192, ev_tree=None), sh, 0, side0, None, 0, None,
+                      b"k" * 200)
+    run._replay_lanes(types.SimpleNamespace(execs=(30, 31, 32), slot_ptr=4096, ev_tree="cut2"), sh, 1, side0, side0, 0, main,
+                      b"k" * 200)
+    assert calls == [
+        ("wait", 2, "done1"), ("copy_in", 4096, src(0), 200, 2), ("record", "slot", 2), ("record", "main", 0),
+        ("wait", 2, "main"), ("launch", 10, 2), ("record", "side1", 2), ("wait", 1, "cut"), ("launch", 11, 1),
+        ("record", "tree1", 1), ("wait", 3, "side1"), ("launch", 12, 3), ("wait", 3, "tree1"), ("record", "done1", 3),
+        ("record", "main", 2), ("wait", 0, "main"),
+        ("copy_in", 8192, src(1), 200, 0), ("record", "slot", 0), ("launch", 20, 0), ("record", "side0", 0),
+        ("wait", 1, "side0"), ("launch", 22, 1), ("record", "done0", 1),
+        ("wait", 2, "done1"), ("copy_in", 4096, src(2), 200, 2), ("record", "slot", 2), ("record", "main", 0),
+        ("wait", 2, "main"), ("launch", 30, 2), ("record", "side0", 2), ("wait", 1, "cut2"), ("launch", 31, 1),
+        ("wait", 1, "side0"), ("launch", 32, 1), ("record", "done1", 1), ("record", "main", 2), ("wait", 0, "main")]
+    assert sh.done == ["done0", "done1"] and bytes(up.view[i, :200]) == b"k" * 200
+
+
+def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_per_row_keying(sm90_run, monkeypatch):
+    """A lane graph's main steps (`_main_steps`) run ``stats_a``, which reads only A's words, and the screen's scatter where
+    A's tree is aside, on the run's fork lane: it starts behind an event recorded on the lane at its start, and the lane
+    waits for stats_a before eprime and for the whole fork at its end, so the per-row keying's end moves one step (the
+    fork's).  Where A's tree stays on the main lane the scatter copies A's root, so it runs last on the lane; without the
+    driver (no graphs) the steps are as they were."""
+    from verity_vllm.protocol_options import pouw_pearl_c_graphs as PPG
+    make, kernel, *_ = sm90_run
+    run = make()
+    calls = []
+
+    class Driver:
+        def __getattr__(self, name):
+            return lambda *a: calls.append((name, *a))
+
+    monkeypatch.setattr(PPG, "_event", iter(["start", "first", "end", "start2", "first2", "end2"]).__next__)
+    run.driver = Driver()
+    pipe, *_ = run._pipe(0, run._shape(32, 256, 1024))
+    assert pipe.main_names == ("rows_a", "stats_a", "eprime_a", "form_a", "af", "pa", "gemm_pearlc")
+
+    def step(name):
+        return lambda: calls.append((name, kernel.dev.stream))
+    steps = [step(x) for x in pipe.main_names]
+    kernel.dev.stream = 2
+    got, shift = run._main_steps(pipe, steps, step("screen"), True)
+    for f in got:
+        f()
+    assert shift == 1 and kernel.dev.stream == 2 and run.fork.raw == -2
+    assert calls == [("record", "start", 2), ("wait", -2, "start"), ("stats_a", -2), ("record", "first", -2), ("screen", -2),
+                     ("record", "end", -2), ("rows_a", 2), ("wait", 2, "first"), *((x, 2) for x in pipe.main_names[2:]),
+                     ("wait", 2, "end")]
+    calls.clear()
+    got, _ = run._main_steps(pipe, steps, step("screen"), False)
+    for f in got:
+        f()
+    assert calls[:3] == [("record", "start2", 2), ("wait", -2, "start2"), ("stats_a", -2)]
+    assert calls[-2:] == [("wait", 2, "end2"), ("screen", 2)] and ("screen", -2) not in calls
+    run.driver = None
+    assert run._main_steps(pipe, steps, None, True) == (steps, 0)
+
+
+def test_the_lane_graphs_driver_calls_take_raw_handles_and_raise_with_the_drivers_code():
+    from verity_vllm.protocol_options import pouw_pearl_c_host as PPH
+    got = []
+
+    def cu(rc=0):
+        def fn(name):
+            def f(*a):
+                got.append((name, *a))
+                return rc
+            return f
+        return types.SimpleNamespace(**{name: fn(name) for name in PPH._Driver.SIGS})
+
+    lib = cu()
+    D, ev, stream = PPH._Driver(lib), types.SimpleNamespace(cuda_event=77), 9
+    D.launch(5, stream)
+    D.record(ev, stream)
+    D.wait(stream, ev)
+    D.copy_in(1 << 40, 4096, 200, stream)
+    assert got == [("cuGraphLaunch", 5, 9), ("cuEventRecord", 77, 9), ("cuStreamWaitEvent", 9, 77, 0),
+                   ("cuMemcpyHtoDAsync_v2", 1 << 40, 4096, 200, 9)]
+    assert lib.cuStreamWaitEvent.argtypes == [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint]
+    assert lib.cuMemcpyHtoDAsync_v2.argtypes[0] is ctypes.c_uint64 and lib.cuGraphLaunch.restype is ctypes.c_int
+    with pytest.raises(RuntimeError, match="cuGraphLaunch failed: CUDA driver error 400"):
+        PPH._Driver(cu(400)).launch(5, 9)
 
 
 def test_the_schedule_changes_between_passes_and_the_ring_grows_poisoned(device_run):
@@ -1945,7 +2270,7 @@ def test_the_schedule_changes_between_passes_and_the_ring_grows_poisoned(device_
     run = make()
     run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
     sh = run.shapes[(32, 256, 1024)]
-    assert len(sh.sets) == 1 and run.side is None and run.details["schedule"]["name"] == "serial"
+    assert len(sh.sets) == 1 and run.sides == [] and run.details["schedule"]["name"] == "serial"
     run.end()
     run.begin(retain=None, schedule="deferred")
     run.poison()

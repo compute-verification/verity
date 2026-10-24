@@ -158,7 +158,7 @@ def receipt_words(receipts: np.ndarray) -> np.ndarray:
     r = np.asarray(receipts)
     if r.ndim != 2 or r.dtype not in (np.uint16, np.uint32):
         raise ValueError(f"a call's receipts are (units, words) u32 or u16 words, not {r.dtype} {r.shape}")
-    return np.ascontiguousarray(r.astype("<u4" if r.dtype == np.uint32 else "<u2")).view("<u2").astype(np.uint16)
+    return np.array(np.ascontiguousarray(r, "<u4" if r.dtype == np.uint32 else "<u2").view("<u2"), np.uint16)
 
 
 def record_words(z: np.ndarray, y: np.ndarray, slots: int, tile: tuple[int, int]) -> np.ndarray:
@@ -344,7 +344,8 @@ class Served:
     tap: Any = None
     #: each call's receipts, one a unit in its tile order (`receipt_words`' input), from ``(call, codes, s_a, weight
     #: codes, s_w)``: with it, each call's ``receipt@<c>`` is registered (BRIDGE2) at its step's last call of its K, once
-    #: the roots its units' seeds take, its step's ``a/<K>@<s>`` and ``b/<K>``, are registered
+    #: the roots its units' seeds take, its step's ``a/<K>@<s>`` and ``b/<K>``, are registered; one with a ``prepare`` is
+    #: first handed those calls together (`_prepare`)
     receipts: Callable[[Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None
     #: with ``receipts``, each open step A table's calls, their served codes and s_a, until their step's last call of K
     _held: dict[str, list[tuple[Any, np.ndarray, np.ndarray]]] = field(default_factory=dict)
@@ -574,7 +575,10 @@ class Served:
         if self.receipts is not None:
             self._held.setdefault(value, []).append((call, codes, scales))
             if whole is not None:
-                for c, cc, sc in self._held.pop(value):
+                held = self._held.pop(value)
+                if not self._prepare(held):
+                    return {}
+                for c, cc, sc in held:
                     got = self._receipts(c, cc, sc)
                     if got is None:
                         return {}
@@ -618,12 +622,29 @@ class Served:
             out[v] = self._register(run, v, words, 0, self.root, salts)
         return out
 
+    def _weight_args(self, call: Any) -> tuple[np.ndarray | None, np.ndarray | None]:
+        w = self._weights.get(call.layer)
+        return None if w is None else w[1], self._scales.get(call.layer)
+
+    def _prepare(self, held: list[tuple[Any, np.ndarray, np.ndarray]]) -> bool:
+        """With a `receipts` that has a ``prepare``, hand it a step's calls of one K, each ``(call, codes, s_a, weight
+        codes, s_w)`` as `_receipts` then asks it, in that order (a producer computes them together); False when the
+        window is refused for it."""
+        prepare = getattr(self.receipts, "prepare", None)
+        if prepare is None:
+            return True
+        try:
+            prepare([(c, cc, sc, *self._weight_args(c)) for c, cc, sc in held])
+        except ValueError as e:
+            self.refused.append(f"calls {[c.index for c, _cc, _sc in held]}: {e}")
+            return False
+        return True
+
     def _receipts(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray | None:
         """Call ``call``'s receipts' words (`receipts`, `receipt_words`), refused unless one row a unit of its tile
         unit's receipt width (`receipt_shape`)."""
-        w, s = self._weights.get(call.layer), self._scales.get(call.layer)
         try:
-            got = receipt_words(self.receipts(call, codes, scales, None if w is None else w[1], s))
+            got = receipt_words(self.receipts(call, codes, scales, *self._weight_args(call)))
         except ValueError as e:
             self.refused.append(f"call {call.index}: {e}")
             return None

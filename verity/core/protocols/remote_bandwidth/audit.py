@@ -92,6 +92,7 @@ import secrets
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from fractions import Fraction
 from typing import Any, Protocol
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
@@ -100,6 +101,7 @@ from verity.ml.commitments import verify_opening
 from verity.ml.randomness import derive, frame
 
 from . import codec, coins, receipts
+from . import pooled as _pooled
 from .codec import BLOCK_BYTES, SEED_BYTES, Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
 
@@ -1465,17 +1467,27 @@ class Ledger(_Terms):
                           "window": w.window}}
 
 
-def _budget(record: Record) -> tuple[list[int], float]:
-    delta = record.windows[0].profile.delta
-    drawn = [w.profile.drawn["receipt"] for w in record.windows]
-    return drawn, -math.expm1(math.log(delta) / sum(drawn)) * sum(drawn)
+def pooled_windows(record: Record) -> tuple[list[tuple[int, int]], Fraction]:
+    """The pooled bound's inputs (`pooled.bound`): each window's receipts U_t and draws s_t, and δ, the float's exact
+    value."""
+    return [(w.receipts, w.profile.drawn["receipt"]) for w in record.windows], Fraction(record.windows[0].profile.delta)
+
+
+def pooled_bound(record: Record) -> _pooled.Bound:
+    """The record's pooled bound in exact rationals (`pooled.bound`, the Lean's `RemoteAudit.Pooled`)."""
+    return _pooled.bound(*pooled_windows(record))
+
+
+def _up(q: Fraction) -> float:
+    """The least float at least `q`."""
+    x = float(q)
+    return math.nextafter(x, math.inf) if Fraction(x) < q else x
 
 
 def floors(record: Record) -> tuple[float, ...]:
     """Each window's share of wrong receipts at most on `pooled`'s event, min(1 − s_t/U_t, d̄·S/s_t): every window's
-    at once, except with δ."""
-    drawn, budget = _budget(record)
-    return tuple(min(1 - s / w.receipts, budget / s) for w, s in zip(record.windows, drawn))
+    at once, except with δ.  Each is `pooled_bound`'s, rounded up."""
+    return tuple(_up(f) for f in pooled_bound(record).floors)
 
 
 def pooled(record: Record) -> tuple[float, float]:
@@ -1489,14 +1501,13 @@ def pooled(record: Record) -> tuple[float, float]:
     except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
     min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states `wrong` at each window's own U_t, on a model of the
-    draw (`Accounting.Guarantees.Remote.PooledDraw`); that this greedy order reaches its supremum is not in the Lean."""
-    drawn, budget = _budget(record)
-    floor = max(floors(record))
-    wrong = 0.0
-    for w, s in sorted(zip(record.windows, drawn), key=lambda x: x[0].receipts / x[1], reverse=True):
-        f = min(1 - s / w.receipts, budget / s)
-        wrong, budget = wrong + f * w.receipts, max(0.0, budget - f * s)
-    return wrong, floor
+    draw (`Accounting.Guarantees.Remote.PooledDraw`).
+
+    Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
+    `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.RemoteAudit.PooledCovers` proves at least
+    the bound `PooledDraw` reads."""
+    b = pooled_bound(record)
+    return _up(b.wrong), _up(b.floor)
 
 
 @dataclass(frozen=True, slots=True)
