@@ -7,7 +7,8 @@
 # to <row>.prior-<run id>, its .tree with it.
 #   research run --on NODE --mem-gb 450 --mem-wait 28800 --timeout 12h --custody-ttl 24h --source . --cwd source --project verity -- env ROW=... BUILD_RUN=... RANKS=5 [BUILD_PARTS=RUN:build] LEGS_PARTS=RUN:legs-small VERITY_QWORD_MAX_GATES=... VERITY_QWORD_MAX_GATES_ALLOWED=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_rank.sh
 # env: ROW, BUILD_RUN, RANKS, LEGS_PARTS, [BUILD_PARTS], [SW], match_cpu.sh's (FOLD_WORKERS, FOLD_RANK_WORKERS: at --mem-gb 380
-# a rank needs FOLD_RANK_WORKERS=1 FOLD_WORKERS=1), store_tar.sh's [WAIT_MIN], [EVICT_FREE_GB].
+# a rank needs FOLD_RANK_WORKERS=1 FOLD_WORKERS=1), store_tar.sh's [WAIT_MIN], [EVICT_FREE_GB], [FETCH_MIN_MBPS], [FETCH_TRIES] and
+# [LABEL_ALSO] (the run id this one replaces, which pod_chain.sh's RANK_SETS names: its set and a failure are labelled there too).
 set -uo pipefail
 : "${ROW:?ROW}" "${BUILD_RUN:?BUILD_RUN}" "${RANKS:?RANKS}" "${LEGS_PARTS:?LEGS_PARTS}"
 [[ $RANKS =~ ^[0-9](,[0-9])*$ ]] || { echo "RANKS=$RANKS: single-digit ranks separated by commas"; exit 3; }

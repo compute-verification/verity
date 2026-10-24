@@ -12,7 +12,8 @@
 #   research run --on NODE --mem-gb 16 --timeout 4h --custody-ttl 24h --cwd source --project verity --send match.sha256 -- env LIST=match.sha256 NAME=legs [EXCLUDE=/values/] bash integrations/vllm/manifests/glm_v2_tree/jobs/store_tar.sh put
 #   research run --on NODE --mem-gb 16 --timeout 4h --custody-ttl 24h --cwd source --project verity -- env PARTS=RUN:legs [ONLY=REGEX] bash integrations/vllm/manifests/glm_v2_tree/jobs/store_tar.sh get
 # env: put: LIST (a path, else $RESEARCH_RUN_DIR/inputs/LIST), NAME, [EXCLUDE], [CHUNK=16G]; get: PARTS, [ONLY], [EXCLUDE],
-# [WAIT_MIN=600]; fail: NAME, MSG; all: [SW], [PY], [EVICT_FREE_GB: after each part, `research data evict` to this much free].
+# [WAIT_MIN=600], [FETCH_MIN_MBPS=16], [FETCH_TRIES=3]; fail: NAME, MSG; put and fail: [LABEL_ALSO: run ids labelled too, for a run
+# that replaces one a waiting `get` names]; all: [SW], [PY], [EVICT_FREE_GB: after each part, `research data evict` to this much free].
 set -uo pipefail
 MODE=${1:?put or get}
 TREE=$PWD SW=${SW:-/workspace/cp/circuits/glm-v2/rows}
@@ -29,10 +30,13 @@ RB=$S/research
 printf '#!/bin/sh\nexec %s -m research "$@"\n' "$PY" >"$RB" && chmod +x "$RB"
 art_of() { grep -oE 'art:[0-9a-f]{64}' | tail -1; }
 evict() { [ -z "${EVICT_FREE_GB:-}" ] || "$RB" data evict --target-free-gb "$EVICT_FREE_GB" --min-mb 64 >/dev/null 2>&1 || true; }
-label() {  # label KEY VALUE on this run, pushed: the custody store has no write-through, and another node's `get` reads the remote
-  "$RB" data label "$RESEARCH_RUN_ID" "$1" "$2" --by circuits --off-vocab >/dev/null 2>"$S/label.err" || { cat "$S/label.err"; return 1; }
+label() {  # label KEY VALUE on this run (and LABEL_ALSO's), pushed: the custody store has no write-through, and another node's `get` reads the remote
+  local t
+  for t in "$RESEARCH_RUN_ID" ${LABEL_ALSO:-}; do
+    "$RB" data label "$t" "$1" "$2" --by circuits --off-vocab --ref "$RESEARCH_RUN_ID" >/dev/null 2>"$S/label.err" || { cat "$S/label.err"; return 1; }
+  done
   "$PY" -c 'import sys; from research.store import labels_sync as LS; from research.store.local import LocalStore
-r = LS.push_targets(LocalStore(), [sys.argv[1]]); sys.exit("label push: " + "; ".join(r["failed"]) if r["failed"] else 0)' "$RESEARCH_RUN_ID"
+r = LS.push_targets(LocalStore(), sys.argv[1:]); sys.exit("label push: " + "; ".join(r["failed"]) if r["failed"] else 0)' "$RESEARCH_RUN_ID" ${LABEL_ALSO:-}
 }
 
 if [ "$MODE" = fail ]; then
@@ -118,10 +122,17 @@ for t, at in json.load(open(sys.argv[1])).get("trees", {}).items():
     elif have != at:
         sys.exit(f"{t}: {sys.argv[2]} holds {have}, the set {at}: copy_rowdir.sh decides between two trees")
 EOF
-python3 -c 'import json, sys; [print(p["art"], p["sha256"]) for p in json.load(open(sys.argv[1]))["parts"]]' "$P" >"$S/parts"
-while read -r art h; do
+python3 -c 'import json, sys; [print(p["art"], p["sha256"], p["bytes"]) for p in json.load(open(sys.argv[1]))["parts"]]' "$P" >"$S/parts"
+while read -r art h b; do
   d=$S/part && rm -rf "$d"
-  "$RB" data fetch "$art" --to "$d" >/dev/null || { echo "$art: fetch failed" >&2; exit 5; }
+  # the client's own deadline lets a body trickle at 64 KiB/s (a 16 GiB part for days: vy-nebius-cpu-5, 24 Oct); a fresh process
+  # gets a fresh connection, so a part slower than FETCH_MIN_MBPS on average is fetched again, up to FETCH_TRIES times
+  for try in $(seq "${FETCH_TRIES:-3}"); do
+    rm -rf "$d"
+    timeout -k 30 $((600 + b / (${FETCH_MIN_MBPS:-16} << 20))) "$RB" data fetch "$art" --to "$d" >/dev/null && break
+    echo "$art: fetch try $try of ${FETCH_TRIES:-3} failed or timed out (rc $?)" >&2
+    [ "$try" -lt "${FETCH_TRIES:-3}" ] || exit 5
+  done
   f=$(find "$d" -type f | head -1)
   [ "$(sha256sum "$f" | cut -c1-64)" = "$h" ] || { echo "$art: sha256 differs" >&2; exit 5; }
   cat "$f"; rm -rf "$d"; evict
