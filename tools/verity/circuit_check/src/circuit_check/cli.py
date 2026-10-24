@@ -764,7 +764,7 @@ def main(argv: list[str] | None = None) -> int:
                     "(default: when its family is a Call of a served Program)")
     ap.add_argument("--strict", action="store_true", help="fail on the known failures too (circuit_check.known)")
     ap.add_argument("--fail-on-warnings", action="store_true")
-    ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts measured now (review the diff)")
+    ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts and circuit digests measured now (review the diff)")
     ap.add_argument("--cache", type=Path, default=None, metavar="DIR",
                     help="reuse a report whose every input is unchanged (circuit_check.cache), else run and record one")
     ap.add_argument("--catalog-units", action="store_true",
