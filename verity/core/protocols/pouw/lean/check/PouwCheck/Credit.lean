@@ -1079,7 +1079,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     ("registration", why)
   let reg : Flock.Registered.Port :=
     { name := PUB_PORT, value := pv, root := ByteArray.empty, leaves := size, words := some words, wordBits := 16,
-      domain := d, reads := #[], schema := Flock.HmRow.ROW_SCHEMA_V2 }
+      domain := d, readsRel := #[], schema := Flock.HmRow.ROW_SCHEMA_V2 }
   let pr := Flock.FV3.root d (Flock.Registered.knownLeaves reg ks) Flock.Sha512.hash
   out := out ++ [(PUB_PORT, Json.mkObj [("value", Json.str pv), ("root", Json.str (Flock.hexOf pr)),
     ("leaves", Lean.toJson size), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
@@ -1093,7 +1093,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     ("registration", why)
   let oreg : Flock.Registered.Port :=
     { name := OK_PORT, value := ov, root := ByteArray.empty, leaves := population, words := some OK_ROW.size,
-      wordBits := 16, domain := od, reads := #[], schema := Flock.HmRow.ROW_SCHEMA_V2 }
+      wordBits := 16, domain := od, readsRel := #[], schema := Flock.HmRow.ROW_SCHEMA_V2 }
   let opr := Flock.FV3.root od (Flock.Registered.knownLeaves oreg oks) Flock.Sha512.hash
   out := out ++ [(OK_PORT, Json.mkObj [("value", Json.str ov), ("root", Json.str (Flock.hexOf opr)),
     ("leaves", Lean.toJson population), ("words", Lean.toJson OK_ROW.size), ("word_bits", Lean.toJson (16 : Nat)),

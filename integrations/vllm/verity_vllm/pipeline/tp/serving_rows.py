@@ -133,13 +133,13 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
 
 def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, out_dir: str | os.PathLike, *, pair: int = 0,
                 build_root: str | os.PathLike | None = None, checkpoint: Any = None, weights: Any = None,
-                required_manifest: str | None = None, threads: int = 8, workers: int | None = None) -> dict[str, Any]:
+                required_manifest: str | None = None, workers: int | None = None) -> dict[str, Any]:
     """Rank ``rank``'s ``stand-in`` window into ``out_dir`` from its sealed replay bundle of pair ``pair`` (module docstring): the
     bundle opened against the record (`commit_replay._of_record`), the required manifest, the rank's Programs of record
     (`rank_replay.load`; ``build_root``'s ``rank<r>/`` instead of the record's dirs, its digests held either way), its weight shards
     opened against the committed weights root from the bundle's tensors and ``checkpoint`` (a `weights_of_record.CheckpointIndex`;
-    without one, only the tensors the bundle carries; ``weights``, tests, replaces them), and every value read through an opening
-    verified against the rank's root."""
+    without one, only the tensors the bundle carries; ``weights``, tests, replaces them), each on the window's first read of it
+    (`cpu_replay.OnRead`), and every value read through an opening verified against the rank's root."""
     from types import SimpleNamespace
 
     from verity_vllm.check import oracle_compare as OC
@@ -173,10 +173,11 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
     p = RR.load(cfg, rank, world, definitions=False)
     if weights is None:
         tree = json.loads((bdir / "weights" / "tree.json").read_text())
-        words, wc = CPU.open_weights(bdir, tree, (c.get("weight_registration") or {}).get("root"), checkpoint, threads=threads,
-                                     tp={"world": world, "rank": rank}, roles=CR.registered_roles(p))
-        if not wc["equal"]:
-            raise CR.Refused(f"rank {rank}: the bundle's weights: {wc['why']}")
+        try:
+            words = CPU.OnRead(bdir, tree, (c.get("weight_registration") or {}).get("root"), checkpoint, tp={"world": world, "rank": rank},
+                               roles=CR.registered_roles(p))
+        except ValueError as e:
+            raise CR.Refused(f"rank {rank}: the bundle's weights: {e}") from e
         weights = CPU.provider(words, p.index.prefix, set())
     tp = {"world": world, "rank": rank, "tp_run_root": rec["tp_run_root"], "run_root": c["run_root"], "root_tag": rec["root_tag"]}
     res = SRW.after_commit(str(out_dir), partition_file=str(partition_file), programs=p.progs, bmap=bmap, committed=OC.OpenedReader(store, run),
@@ -282,8 +283,9 @@ class Options:
     checkpoints_manifest: str | None = option("--checkpoints-manifest", default=None, help="manifests/checkpoints.json (shard sha256 pins)")
     model: str | None = option("--model", default=None, help="the checkpoint's repo (its checkpoints.json entry)")
     revision: str | None = option("--revision", default=None, help="the checkpoint's revision")
+    no_verify_shards: bool = option("--no-verify-shards", default=False, action="store_true",
+                                    help="skip the shard sha256 (each tensor read is still held to the committed weights root)")
     required_manifest: str | None = option("--required-manifest", default=None, help="the Commit's required manifest (default: its recorded path)")
-    threads: int = option("--threads", type=int, default=8, help="threads opening the weights")
     workers: int | None = option("--workers", type=int, default=None, help="processes hashing the rows (default: min(16, CPUs))")
 
 
@@ -293,12 +295,13 @@ def main(o: Options) -> int:
     ck = None
     if o.checkpoint_dir:
         from verity_vllm.check import weights_of_record as WR
-        ck = WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision)
+        ck = WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision,
+                                verify_shards=not o.no_verify_shards)
     try:
         world = int(record(o.commit_out)["world"])
         for r in [int(x) for x in o.ranks.split(",")] if o.ranks else range(world):
             got = from_bundle(o.commit_out, r, o.partition, Path(o.out) / f"rank{r}", build_root=o.build_root, checkpoint=ck,
-                              required_manifest=o.required_manifest, threads=o.threads, workers=o.workers)
+                              required_manifest=o.required_manifest, workers=o.workers)
             print(f"[tp-serving-rows] rank {r}: stand-in window of {got['population']} units, run {got['run'][:16]} rank {r}, registration "
                   f"{str(got['registration_digest'])[:16]}", flush=True)
     except (CR.Refused, LookupError, ValueError, RuntimeError) as e:

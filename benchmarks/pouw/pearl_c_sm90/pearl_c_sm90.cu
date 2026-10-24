@@ -19,6 +19,9 @@
 // decode's A commitment and tile leaves (run.py's PD_SERVED): the variants the decode shapes take
 #define PD_VARIANT_LIST(X) X(851) X(979)
 #include "../pearl_c_sm120/hash_decode.cuh"
+// A's commitment past decode's rows (run.py's chain "pl", PL_VARIANT)
+#include "hash_prefill.cuh"
+PL_INSTANCE(851)
 #include "acc.h"
 
 // the grouped calls' commitment and tile leaves (grouped.py), hash_decode.cuh's bodies unchanged: unit u's launch is the Args at
