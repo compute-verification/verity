@@ -1,4 +1,5 @@
 import Definitions.Pouw.PearlC.Fp4Chain
+import Proofs.Pouw.PearlC.Fp4
 
 /-! The proof-only part of `Definitions.Pouw.PearlC.Fp4Chain`: the definitions and lemmas that no guarantee
 statement or assumption reads. -/

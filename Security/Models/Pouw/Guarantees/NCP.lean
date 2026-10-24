@@ -28,7 +28,7 @@ namespace Pouw.Guarantees.NCP
 
 section
 
-open Pouw.NCP Pouw.NCP.Pinned
+open Pouw.NCP
 
 /-- **Cancellation**: for all integer matrices and every `R`,
 `(A + E₁)(B + F₁) + (A + E₂)(B + F₂) − (A + E₃)(B + F₃) = A·B`. -/

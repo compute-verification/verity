@@ -1,4 +1,5 @@
 import Definitions.Pouw.Barrier.Defs
+import Proofs.Pouw.Barrier.Defs
 
 /-!
 # The degenerate-input barrier: pinned statements (trusted)

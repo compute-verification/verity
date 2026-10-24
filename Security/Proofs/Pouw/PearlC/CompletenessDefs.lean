@@ -1,4 +1,5 @@
 import Definitions.Pouw.PearlC.Tile
+import Proofs.Pouw.PearlC.GameDefs
 
 /-!
 # The sampled audit's completeness on a population of activations (trusted)

@@ -1,5 +1,6 @@
 import Mathlib.LinearAlgebra.Matrix.Rank
 import Definitions.Pouw.PearlC.Fp4
+import Proofs.Pouw.PearlC.Fp4
 
 /-!
 # The FP4-tile model (trusted definitions)

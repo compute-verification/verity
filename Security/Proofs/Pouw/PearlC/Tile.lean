@@ -1,4 +1,5 @@
 import Definitions.Pouw.PearlC.Tile
+import Proofs.Pouw.PearlC.GameDefs
 
 /-! The proof-only part of `Definitions.Pouw.PearlC.Tile`: the definitions and lemmas that no guarantee
 statement or assumption reads. -/

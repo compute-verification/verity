@@ -1,4 +1,5 @@
 import Definitions.Pouw.FpG1.H1
+import Proofs.Pouw.FpG1.Encoding
 
 /-! The proof-only part of `Definitions.Pouw.FpG1.H1`: the definitions and lemmas that no guarantee
 statement or assumption reads. -/

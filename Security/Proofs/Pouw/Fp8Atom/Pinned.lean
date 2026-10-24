@@ -2,6 +2,9 @@ import Mathlib.Data.Fintype.Card
 import Proofs.Pouw.Fp8Atom.Vectors
 import Proofs.Pouw.Fp8Atom.Vectors.Ada
 import Proofs.Pouw.Fp8Atom.Vectors.Add
+import Proofs.Pouw.Fp8Atom.Atom
+import Proofs.Pouw.Fp8Atom.E4M3
+import Proofs.Pouw.Fp8Atom.Fp32
 
 /-!
 # `Pouw.Fp8Atom`'s pinned statements (trusted)

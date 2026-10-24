@@ -11,6 +11,4 @@ open Pous Pous.Dense
 def liftPar (N B ℓ : ℕ) (s : Fin N) (p : Fin B → Option (Bits ℓ)) : Fin (N * B) → Option (Bits ℓ) :=
   fun g => if ((segIndexEquiv N B).symm g).1 = s then p ((segIndexEquiv N B).symm g).2 else none
 
-scoped instance instNeZeroSeg14 : NeZero (448 * 2 ^ 9) := ⟨by norm_num⟩
-
 end PousDenseReCert

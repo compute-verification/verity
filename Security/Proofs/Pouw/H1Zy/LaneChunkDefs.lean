@@ -1,4 +1,6 @@
 import Definitions.Pouw.H1Zy.Lane
+import Proofs.Pouw.H1Zy.CombineDefs
+import Proofs.Pouw.H1Zy.LaneDefs
 
 /-!
 # `PouwH1LaneZyChunk_v1{TILE, CHUNKS, CHUNK}` on words, at a 32 × 32 leaf over `PouwH1Tile_v1` (trusted)

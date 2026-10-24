@@ -1,4 +1,5 @@
 import Definitions.Pouw.H1Zy.Lane
+import Proofs.Pouw.H1Zy.CombineDefs
 
 /-! The proof-only part of `Definitions.Pouw.H1Zy.Lane`: the definitions and lemmas that no guarantee
 statement or assumption reads. -/

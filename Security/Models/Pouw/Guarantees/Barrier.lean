@@ -11,7 +11,7 @@ statement it was in its source module.
 
 namespace Pouw.Guarantees.Barrier
 
-open Pouw.Barrier Pouw.Barrier.Pinned Finset
+open Pouw.Barrier Finset
 
 /-- **The generic barrier.** In every cost model, for every protocol and domain: if `(U, 𝒜)` is a cheap point at
 cost `c₀` with `q` oracle calls and `W = ∑_u W_ref(u) > 0`, then `G_γ` fails for every `γ < 1 − c₀/W` and every

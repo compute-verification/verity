@@ -45,19 +45,6 @@ namespace Pouw.Fp8Atom.H1T
 
 open Pouw.Fp8Atom
 
-/-- Truncation toward zero to a multiple of `g`. -/
-/-- Truncation toward zero to 14 significant bits: `|y|` rounded down to a multiple of `2^(binade |y| − 13)`. -/
-/-- A slice's alignment exponent: the largest exponent of a nonzero product (`maxExp`, floor −139). -/
-/-- The exact sum after the first truncation: each product truncated toward zero to the grid `2^(E − 13)`. -/
-/-- **The atom is two truncations**: on finite codes, `hopperStep` from `+0` writes a finite word whose value is
-/-- **L7, `normalize` is monotone**: truncation toward zero to 14 significant bits keeps order. -/
-/-- **L3, the cell**: `trunc14` moves a nonzero `y` by less than `2^(binade |y| − 13)`, and a value with the same
-/-- Tag lane `29 + i`'s sign bit flipped. -/
-/-- **L1 to L3 on one slice.** A slice's real codes `xs` and a column's real codes `b`, all finite; the slice's
-/-- **L7 for the chain**: running words are monotone in the fresh-step words up to their position. -/
-/-- **L4, the range**: on a legal unit every fresh-step word is finite and at most 6,142,976 (block 1) or 738,304
-
-/-- **The forming table covers every slice** (X-M2-4 (a)): a slice of finite codes has `F = fOf fi` for one of the
 /-! ## M4a: the one-flip clauses -/
 
 /-- A credited position's index: `p` for `I_p` (`inl`) and for `R_p` (`inr`). -/
@@ -99,5 +86,4 @@ def Hard {T : ℕ} (j j' : ℕ) (a a' : Pos T) : Prop :=
     (Run2 a ∧ ¬(a'.isLeft = true ∧ posIdx a < posIdx a') ∧ ¬ OppLater j j' a a' ∧ ¬(Early j a ∧ SkipsLast a')) ∨
     (Run2 a' ∧ ¬(a.isLeft = true ∧ posIdx a' < posIdx a) ∧ ¬ OppLater j' j a' a ∧ ¬(Early j' a' ∧ SkipsLast a))
 
-/-- **The one-flip clauses** (M4a, M4b, M4c): on every legal unit and row `i`, `HalfApartH1T`'s two clauses for the
 end Pouw.Fp8Atom.H1T
