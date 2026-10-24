@@ -12,6 +12,8 @@ on (`Loop.realOf`, `tabOfLevel0` at the level 0 it drew) holds the tape's packed
   names.
 * **`Loop.Level0Src.realOf`**: at rep stream `2j + r`, the loop's table holds `linkIn`'s packed table, extra lanes and
   lane paddings, so its packed table is `ligTab` (`hg`).
+* `Loop.realOf_src`, **`Loop.RepSrc.salt`**: the loop's levels ≥ 1 salts at rep stream `2j + r` are the source's, so,
+  where `src` draws them as the tape's (`Loop.RepSrc`), they are the tape's on the schedule (`swSrcE_repCut`'s `hsalt`).
 -/
 
 namespace Flock.Firewall.Finish
@@ -96,5 +98,44 @@ theorem Loop.Level0Src.realOf {src : Msg → Flock.Wit →
       obtain ⟨hg, he, hp⟩ := _root_.Flock.Firewall.Finish.tabOfLevel0_fields htb
       rw [← hin]
       exact ⟨hg, he, hp, hg.trans ((congrArg _root_.Flock.Firewall.Link.In.g hin).trans (Masked.linkIn_g x w t j))⟩
+
+/-- **The loop's rep salts are the source's**: where the loop's table and salts at rep stream `k` are `(tb, hi)`, the source
+drew `hi` there. -/
+theorem Loop.realOf_src {R : Type} {src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)}
+    {x : Msg} {w : Flock.Wit} {ρ : R} {k : ℕ} {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    (h : Loop.realOf src x w ρ k = .ok (tb, hi)) : ∃ g d, src x w ρ k = .ok (g, d, hi) := by
+  unfold Loop.realOf at h
+  split at h
+  · rcases hs : src x w ρ k with e | ⟨g, d, hi'⟩
+    · rw [hs] at h
+      cases h
+    · rw [hs] at h
+      simp only [bind, Except.bind] at h
+      split at h
+      · cases h
+      · split at h
+        · cases h
+        · simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+          exact ⟨g, d, by rw [h.2]⟩
+  · cases h
+
+/-- **The loop's levels ≥ 1 salts are the tape's on the schedule** where `src` draws them as the tape's (`Loop.RepSrc`'s
+last part): at rep stream `2j + r`, the salts the loop's finish reads (`Finish.proofFile`'s `salt`) are, at every level
+`1 ≤ l < |levels|` and position of its tree, the tape's `salt j r l p` (`swSrcE_repCut`'s `hsalt`). -/
+theorem Loop.RepSrc.salt {L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)}
+    {src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
+    (hS : Loop.RepSrc L₀ src x w) (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce)
+    (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
+    {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    (h : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tb, hi)) :
+    ∀ l, 1 ≤ l → l < (Masked.zkTab x j).sch.levels.size →
+      ∀ p < 2 ^ ((Masked.zkTab x j).sch.levels.getD l default).d,
+        _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty) p =
+          (Masked.UE.tapeZk t).salt j.val r.val l p := by
+  obtain ⟨g, d, hs⟩ := Loop.realOf_src h
+  exact (hS ν t j r).2.2.2 g d hi hs
 
 end Claims.ZKServer
