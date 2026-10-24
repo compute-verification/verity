@@ -131,6 +131,7 @@ import Proofs.Flock.Claims.ZK.AdmitsOf
 import Proofs.Flock.Claims.ZK.FrameAdmits
 import Proofs.Flock.Claims.ZK.FrameBeta
 import Proofs.Flock.Claims.ZK.FrameOuter
+import Proofs.Flock.Claims.ZK.FrameFree
 import Proofs.Flock.Claims.ZK.FrameRanked
 import Proofs.Flock.Claims.ZK.FrameRankFault
 import Proofs.Flock.Claims.ZK.FrameRho
@@ -159,6 +160,7 @@ import Proofs.Flock.Claims.ZK.L0PinLive
 import Proofs.Flock.Claims.ZK.L0PinChain
 import Proofs.Flock.Claims.ZK.L0PinLoop
 import Proofs.Flock.Claims.ZK.L0PinCut
+import Proofs.Flock.Claims.ZK.FinHmkLive
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
@@ -644,6 +646,9 @@ import Proofs.Flock.Claims.ZK.CutPrefix
   outer round `m - 13` coins (`Loop.run_outer`), each of which it takes only when its `+ 1` is nonzero
   (`Loop.answer_outer`), so at each rep's `outerSlot` the opened outer coin is never `1`
   (**`LeanRelease.outer_unrefused`**).
+* `FrameFree`: the values a round carries freely, read back off its bytes. Inside the algebraic phase the words at the
+  offsets `roundFree` frees are the round's frames' values in order (`roundFree_vals`), the zerocheck's first round frees
+  none (`roundFree_zcFree`), and the frame takes a round's coins where no outer coin is `1` (`answer_ok`).
 * `FrameRanked`: `FrameUnrefused`' rank fault, at the frame. Before the opening's label the frame stays in the
   algebraic phase, and past it the rank check held at its coins (`Ranked.Good`): every label, round and answer keeps
   that (`Ranked.label_good`, `Ranked.step_round`, `Ranked.answer_keep`). Along a rep's requests the coins it holds are
@@ -746,6 +751,10 @@ import Proofs.Flock.Claims.ZK.CutPrefix
 * `L0PinCut`: the cut session in rep `2j + r`'s level 0 rounds. Where the reps before it return by the firewall's stop
   and its PIOP returns, the session stopped at `n ∈ [ligP0, ligP0 + k₀ + 4)` sent `l0BodyAt`'s body `n − ligP0` at the
   coins from `ligP0`, basis `ligBasis` and pads `padsL0` (**`Masked.runCut_cutL0`**).
+* `FinHmkLive`: a rep's masked values below `zp 64` from its proofs. The zerocheck and lincheck return every masked
+  value below `zp 64` as their proofs, which `eraseZ` keeps, so where the firewall's rep at `vals` and `pads` and a cut rep
+  from a source return proofs equal up to `eraseZ`, the source's masked values there are `vals + pads.h`
+  (**`HmkLive.masked_of_eraseZ`**).
 * `FinishSwInner`: `repCut_fw`'s `hinner` at that source. The switched view keeps `ρ_in`, `σ_in` (`padShift` moves
   `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
   switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
