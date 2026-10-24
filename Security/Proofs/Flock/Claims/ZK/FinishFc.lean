@@ -118,6 +118,10 @@ theorem piopCut_fc_go (io : FlockComplete.Asks PS) (st : Setup) (lay : Zk.PadLay
 
 /-! ## The replay -/
 
+theorem map_unit_pure {α : Type} (a b : α) :
+    ((fun _ => ()) <$> (pure a : TM α)) = (fun _ => ()) <$> (pure b : TM α) := by
+  simp only [map_pure]
+
 set_option maxHeartbeats 2000000 in
 /-- **The replay reads the zerocheck proof's `finalC` only into what it returns.** -/
 theorem replay_fc (st : Setup) (lay : Zk.PadLayout) (cap : Array ByteArray) (params : PcsParams)
@@ -134,10 +138,9 @@ theorem replay_fc (st : Setup) (lay : Zk.PadLayout) (cap : Array ByteArray) (par
   all_goals
     split
     all_goals
-      first
-        | rfl
-        | (repeat (refine bind_congr fun _ => ?_)
-           exact (map_pure _ _).trans (map_pure _ _).symm)
+      repeat (first
+        | exact map_unit_pure _ _
+        | refine bind_congr fun _ => ?_)
 
 /-- **The replay returns at zerocheck proofs that differ in `finalC` alone**, at the same transcript. -/
 theorem replay_ok_fc {st : Setup} {lay : Zk.PadLayout} {cap : Array ByteArray} {params : PcsParams}
