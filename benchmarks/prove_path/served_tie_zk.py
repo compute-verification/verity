@@ -21,6 +21,9 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall a
   is proved and its verdict is ``ACCEPT``. The positions chunks are bound natively, opened under the run root
   (``bindings``): the Commit's leaves are its position-leaf digests under its hiding rule, not row leaves, so their b‖c is
   not yet a proof row's.
+  The received-pieces scan (`n2_zk.public_pieces`, `a8.received`) reports a found piece of fewer than ``DISTINCT`` byte
+  values (a small integer and zeros, as an N = 1 step's positions are) as ``structured``, not ``leaked``: the verifier's
+  files hold such words by their own format, and only a ``leaked`` piece fails a statement.
 """
 from __future__ import annotations
 
@@ -47,6 +50,7 @@ CLASSES = {
 }
 GS = {"slice": (7, 1), "9c10": (256, 8, 1), "served": (256, 16, 1)}
 OPENED = ("o0", "pub")
+DISTINCT = 8
 NEGATIVES = ("start", "short", "id", "other")
 
 
@@ -364,17 +368,21 @@ def prove(a) -> int:
         blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
         res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
                            "public_pieces": len(public)}
+        found = res["received"]["verifier_found"]
+        res["received"]["structured"] = [k for k in found if len(set(blobs[k])) < DISTINCT]
+        res["received"]["leaked"] = [k for k in found if len(set(blobs[k])) >= DISTINCT]
         res["staged"] = {"n": m["n"], "ands": m["ands"], "k_log": m["meta"]["k_log"], "nbl": m["nbl"], "pin": m["pin"],
                          "lower_s": sg.lower_s, "stage_s": m["stage_s"]}
         want = ["accept" if u.kind in expect else "reject" for u in units]
         got = [r["verdict"] for r in res.get("units", [])]
         res["as_expected"] = (res["accepted"] and all(res["verdicts"].values()) and got == want
-                              and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"])
+                              and not res["received"]["leaked"] and res["received"]["control"]["holds_all"])
         ok &= res["as_expected"]
         summary[name] = res
         log(f"{name}: proofs {res['verdicts']}, audit {res['audit']}, verdicts {[(r['kind'], r['block'], r['verdict_word'], r['srv_bound'], r['verdict']) for r in res.get('units', [])][:12]}..., "
             f"prove {res['timing']['timing'].get('prove_total_s')} s, Lean {res['lean_verify_s']} s, proof {sum(res['proof_bytes'] or [0])} B, "
-            f"witness pieces found {res['received']['verifier_found'] or 'none'} (of {len(blobs)}); "
+            f"witness pieces found {res['received']['leaked'] or 'none'} (of {len(blobs)}), structured ones "
+            f"{res['received']['structured'] or 'none'}; "
             f"{'as expected' if res['as_expected'] else 'UNEXPECTED'}")
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     summary["ok"] = ok
