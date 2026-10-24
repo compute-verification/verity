@@ -32,10 +32,11 @@ A spec-level reference for network accounting's timing channel:
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
   an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
   closed);
-- the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
-  on draws, a served link-window's frame k under the head's frames root is the canonical event of the token id the
-  Commit's token port holds for request ⌊k / F⌋'s output k mod F. It has the reference and one draw's Boolean
-  Definition (`IoTieDraw`: `NetworkFrameRead`, `IoTieEvent`, the port row's `NetworkHidingRead`, `IoTieColumn`);
+- one vLLM v1 scheduler step (`replay_step`): `ReplayStep_v1`, a Boolean Definition with `reference` its spec, takes the
+  committed queue state, the certified arrivals and the residual's decision bits to the step's rows (request, kind,
+  start, n) and the next state, and refuses what its size class or the prefix layer's counts can't express. It is the
+  compile unit's core, between advice validity and `compile_steps`' Programs, and is held step for step to the replay
+  (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-service Spec yet;
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
@@ -64,8 +65,8 @@ It is pure Python. It imports only the standard library and `verity`: for the re
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
 Definition, and in `active` the proof service's registration and receipt, which `reveal` reads. The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
-From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
-and their evaluator.
+From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` and
+`replay_step` the circuits and their evaluator.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
@@ -110,13 +111,9 @@ content check, is the design (Daniel's provisional call on ASK-70, 19 Oct). N2 n
 (`LinkWindows.verify` runs `check_link(grid=False)`, NET-38). Nothing may call the count check zero-knowledge until
 this is closed:
 - **N2's unit isn't proved yet.** `LinkWindows.verify`, the verifier of record, runs `head_check.reference` (and on a
-  served link `served.reference`) on the host over the opening, so it reads the heads and the certifier's salts.
-
-A proof of the unit is held to its circuit already. Each gate names its Definition's circuit digest
-(`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`, `served.gate` likewise), as `head_check.circuit-check.json` and
-`served.circuit-check.json` pin it and circuit-check holds the pin to the Definition. So the unit's Program, which the
-spec and each registration bind, binds both circuits, and `LinkWindows.verify`, given a proof's findings, refuses one
-that names any other Program, or a unit of a size class no sidecar pins (`LinkWindows.proved`).
+  served link `served.reference`) on the host over the opening, so it reads the heads and the certifier's salts. When
+  the unit is proved, its head-check gate must bind `NetworkHeadCheck_v2`'s circuit digest (and its served gate
+  `NetworkServedCounts_v1`'s), and the verifier must refuse a proof of any other circuit (NET-43).
 
 The certificate no longer signs a hash of witness (NET-42). The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
 salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier draws fresh for each record
