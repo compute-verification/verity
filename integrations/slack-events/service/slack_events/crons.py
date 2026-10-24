@@ -3,7 +3,8 @@ what they find next time); both stamp last_success_at in the cache.
 
 - `watchdog` (every 5 minutes): a person's chat post that rang someone and has no 👀 and no lane reply after REMIND_S rings
   again; after ESCALATE_S with no lane reply it rings @top and says so in the thread; in the run that falls in DAILY_AT, a
-  list of the chat threads still open goes to @top's inbox.
+  list of the chat threads still open goes to @top's inbox.  And `stall`: an event published STALL_S ago or more with no
+  message done by the consumer since rings @comms (at most hourly), since health's other numbers can't show it.
 - `reconcile` (every 10 minutes): each chat and ask channel's last hour.  A person's post that should ring someone and has
   neither a routing line nor a doorbell in any inbox is enqueued again, keyed on its channel and ts, so a second pass
   changes nothing.  The oldest such post is what health reports as `oldest_unprocessed_age_s`."""
@@ -12,7 +13,17 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from .consumer import ASK_CHANNELS, is_line_for
-from .deps import DEAD, LAST_SUCCESS, OLDEST, TOPIC, Deps, error
+from .deps import (
+    DEAD,
+    LAST_DONE,
+    LAST_ENQUEUED,
+    LAST_SUCCESS,
+    OLDEST,
+    STALL_RUNG,
+    TOPIC,
+    Deps,
+    error,
+)
 
 REMIND_S, ESCALATE_S = 15 * 60, 60 * 60
 WINDOW_S = 86400                                                 # how far back a post counts as open
@@ -24,6 +35,9 @@ REMINDER = "no 👀 or lane reply in 15 min"
 ESCALATION = "no lane reply in 60 min"
 ESCALATED = "router: no lane has replied in 60 min; sent to @top"
 DAILY_HEAD = "from watchdog, chat threads still open (daily):"
+STALL_S, STALL_EVERY_S = 10 * 60, 60 * 60                         # waiting this long with nothing done: no working consumer
+STALL_TO = "comms"                                               # who owns the service
+STALL_HEAD = "from slack-events, the queue stalled:"
 
 
 def chats(deps: Deps) -> tuple[dict, list[str]]:
@@ -94,9 +108,34 @@ def watchdog(deps: Deps) -> dict:
                     counts["reminded"] += 1
     if _daily_due(now):
         counts["daily"] = daily(deps, reg, still_open, now)
+    counts["stalled"] = stall(deps, now)
     deps.write(LAST_SUCCESS, now)
     deps.log("watchdog", open=len(still_open), **counts)
     return {"open": len(still_open), **counts}
+
+
+def stall(deps: Deps, now: float) -> bool:
+    """Ring @comms when the last event published is STALL_S old and the consumer has finished no message since (19-23 Oct
+    production consumed nothing while health looked clean).  At most every STALL_EVERY_S; an unknown time rings nothing."""
+    enq, done, rung = (deps.read(k) for k in (LAST_ENQUEUED, LAST_DONE, STALL_RUNG))
+    if not isinstance(enq, (int, float)) or now - enq < STALL_S or (isinstance(done, (int, float)) and done >= enq):
+        return False
+    if isinstance(rung, (int, float)) and now - rung < STALL_EVERY_S:
+        return False
+    rs = deps.rs
+    to, r = rs.Routes().resolve(STALL_TO)
+    if why := rs.unreachable(STALL_TO, to, r):
+        deps.log("stall-unrung", to=STALL_TO, why=why)
+        return False
+    def at(t):
+        return datetime.fromtimestamp(t, timezone.utc).strftime("%d %b %H:%MZ") if isinstance(t, (int, float)) else "unknown"
+    deps.slack.call("chat.postMessage", channel=r.get("channel") or rs.channel_id_for(deps.registry, rs.FRONT_DOOR),
+                    thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
+                    text=f"{STALL_HEAD} the last event published at {at(enq)}, the consumer's last message done at "
+                         f"{at(done)}. Check /api/cron/drain and the deployment's logs (integrations/slack-events).")
+    deps.write(STALL_RUNG, now)
+    deps.log("stalled", enqueued=enq, done=done)
+    return True
 
 
 def _daily_due(now: float) -> bool:

@@ -675,8 +675,8 @@ def _one_row(xq):
 
 
 @pytest.mark.parametrize("arm,ids,want", [
-    (lambda: EditArm(torch.zeros_like), None, "call 0's A table h1/a/64@0 is not the Commit's row-table/0/q"),
-    (lambda: EditArm(_one_row), None, "call 0's A table h1/a/64@0 is not the Commit's row-table/0/q"),
+    (lambda: EditArm(torch.zeros_like), None, "h1/a/64@0 is not the Commit's row-table/0/k64"),
+    (lambda: EditArm(_one_row), None, "h1/a/64@0 is not the Commit's row-table/0/k64"),
     (lambda: ZyArm(), [0, 7, 2], "round 0's input-ids table h1/ids@0 is not the Commit's input-ids/0"),
 ], ids=["a-all-zero", "one-a-row-off", "ids-off-the-prompt"])
 def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, monkeypatch, arm, ids, want):
@@ -768,7 +768,7 @@ def test_round_0s_input_ids_bind_the_windows_session(periodic, monkeypatch, othe
     assert auditor.ended() is None and not run.served.refused
     c = _record(run)["commitment"]
     why = CR._registration(c["session"]["root"], run.served.program_digest, "h1/", c["served"]["entries"], [],
-                           CR.layout_of(_descriptor())[0], [], auditor.session_id)
+                           CR.layout_of(_descriptor())[0], 1, [], auditor.session_id)
     assert why == (("registration", CR.other_registration("h1/ids@0")) if other else None), why
 
 
@@ -776,7 +776,7 @@ def test_the_serving_process_credits_nothing_in_a_window_off_the_commit(auditor)
     """The same zero A with the serving process's own check (`pouw_h1_commit.roots1`): its calls' credit bits are
     false (`UNTIED`), naming the call."""
     _y, run = _serve(EditArm(torch.zeros_like), remote=True, n=64, served=_served())
-    assert run.details["roots1"]["reason"].startswith("roots1: call 0's A table h1/a/64@0 is not the Commit's")
+    assert run.details["roots1"]["reason"].startswith("roots1: round 0's A table h1/a/64@0 of calls [0] is not the Commit's")
     assert {v["reason"] for v in run.gated().values() if not v["credit"]} == {CT.UNTIED}
 
 
