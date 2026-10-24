@@ -35,17 +35,22 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
   verdict ``o0``, under the salts the prover sends for those two rows; never ``adv``, ``cert``, ``srv`` or ``wit``. A
   unit passes when its verdict is `compile_slice.ACCEPT` and its bindings hold. What the verifier received is scanned
   for every piece of each unit's witness row, its ``srv`` row and every row's salt (`a8.received`), less the pieces the
-  public circuit holds and the sparse ones (`sparse_pieces`); the prover's instance file, which holds those rows, is
-  the control.
+  public circuit holds; the prover's instance file, which holds those rows, is the control. A piece found is leaked,
+  and fails the run, unless it is low-entropy and found only on the proof streams' own fields (`classify`); the summary
+  gives each found piece's classes, the witness fields it sets (`classes`), and the classes of every low-entropy piece
+  scanned for.
 * **Cost** (``--points``): sessions whose verifier draws the first k units, behind the firewall (`a8.cost`).
 """
 from __future__ import annotations
 
 import argparse
+import bisect
 import dataclasses
 import hashlib
 import json
 import os
+import re
+import struct
 import sys
 import time
 from pathlib import Path
@@ -56,7 +61,10 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 import n2_zk as N2  # noqa: E402
+from verity.core.protocols.certifier import cache_step as CST  # noqa: E402
 from verity.core.protocols.certifier import compile_slice as CS  # noqa: E402
+from verity.core.protocols.certifier import replay_chain as RC  # noqa: E402
+from verity.core.protocols.certifier import replay_step as RS  # noqa: E402
 from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
@@ -73,6 +81,8 @@ REFUSED = {
                "hit": {"cache", "rows"}, "reread": {"steps", "rows"}, "untaken": {"steps", "rows"},
                "sixpass": {"rows"}, "sixpass-own": set()}}
 OPENED = ("o0", "pub")
+#: a piece of fewer byte values is low-entropy: a proof stream's own fields hold such runs whatever the witness
+DISTINCT = 8
 
 
 def log(msg: str) -> None:
@@ -354,12 +364,151 @@ def blobs_of(units: list[SimpleNamespace], salts: dict) -> tuple[dict[str, bytes
     return blobs, held
 
 
-def sparse_pieces(pieces: dict[str, bytes], held: set[str]) -> tuple[dict[str, bytes], set[str], list[str]]:
-    """`pieces` less those with at most one nonzero byte, the held ones among the rest, and the left-out pieces' hex. A
-    proof's encoding holds such runs whatever the witness (a small integer in a zero-padded field: 92 of the 4,080 in one
-    proof stream of the corpus slice), so finding one is no evidence; the cache rows, mostly zero, have a few."""
-    out = {k for k, x in pieces.items() if sum(map(bool, x)) <= 1}
-    return {k: x for k, x in pieces.items() if k not in out}, held - out, sorted(pieces[k].hex() for k in out)
+def layout(S, row: str) -> list[tuple[str, int, int]]:
+    """Row `row`'s bits as (class, first bit, width), an entry an element, in the row's order (`compile_slice.fields`):
+    ``wit``'s state rows (`replay_chain.row_fields`), window row, arrivals, decision bits, hits, cache rows
+    (`cache_step.cache_fields`) and codeword, and ``srv``'s step rows (`compile_slice.rows_bits`' fields). A sub-row's
+    zero padding to whole words, and the row's own, is its ``pad``."""
+    Sc, Z = CS.chain(S), RS.widths(CS.step_statics(S))
+    sub = {"state": RC.row_fields(Sc), "window": RC.window_fields(Sc), "arr": RC.front_fields(Sc),
+           "cache": CST.cache_fields(S) if S.PC else [],
+           "rows": [(f, S.R, w) for f, w in zip(CS.ROW_FIELDS, (1, S.IW, 1, Z.LW, Z.TW))]}
+    out, at = [], 0
+    for name, n, w in CS.fields(S)[row]:
+        for _ in range(n):
+            end, fs = at + w, sub.get(name, [(None, 1, w)])
+            for f, m, fw in fs:
+                out += [(f"{row}.{name}" + (f".{f}" if f else ""), at + k * fw, fw) for k in range(m)]
+                at += m * fw
+            if at < end:
+                out.append((f"{row}.{name}.pad", at, end - at))
+            at = end
+    return out + ([(f"{row}.pad", at, CS.row_bits(S)[row] - at)] if at < CS.row_bits(S)[row] else [])
+
+
+def classes(S, units: list[SimpleNamespace], pieces: set[bytes]) -> dict[str, list[str]]:
+    """Each of `pieces` (hex) to the `layout` classes of the bits it sets wherever it is an aligned piece of a unit's
+    ``wit`` or ``srv`` row; [] where it is all zero."""
+    out: dict[str, set[str]] = {x.hex(): set() for x in pieces}
+    n = len(next(iter(pieces), b""))
+    for r in ("wit", "srv") if n else ():
+        lay = layout(S, r)
+        starts = [s for _c, s, _w in lay]
+        for u in units:
+            b = b"".join(w.to_bytes(2, "little") for w in u.words[r])
+            for o in range(0, len(b) - n + 1, n):
+                x = b[o:o + n]
+                if x in pieces:
+                    out[x.hex()] |= {lay[bisect.bisect_right(starts, 8 * (o + j) + t) - 1][0]
+                                     for j, v in enumerate(x) for t in range(8) if v >> t & 1}
+    return {k: sorted(v) for k, v in out.items()}
+
+
+def integers(stream: bytes) -> bytes:
+    """A ``--zk`` proof stream's integer bytes, 1 each: the reads of at most 8 bytes C-Flock's proof format makes
+    (`redigest.layout`: vector lengths, nonces, the u64 parameters, the zk tag); its elements, hashes and salts, and the
+    whole stream when the format doesn't parse it, are 0."""
+    here = str(REPO / "verity/ml/flock/verifier")
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import redigest as RD
+    readers = []
+
+    class Reads(RD.tc.R):
+        def __init__(s, b, hlen=32):
+            super().__init__(b, hlen)
+            s.ints = bytearray(len(b))
+            readers.append(s)
+
+        def take(s, n):
+            at, v = s.i, super().take(n)
+            if n <= 8:
+                s.ints[at:at + n] = b"\1" * n
+            return v
+
+    R, RD.tc.R = RD.tc.R, Reads
+    try:
+        RD.layout(stream, zk=True)
+    except (AssertionError, ValueError, struct.error):
+        return bytes(len(stream))
+    finally:
+        RD.tc.R = R
+    return bytes(next(r for r in reversed(readers) if r.i == len(stream)).ints)
+
+
+def _stream(name: str) -> str | None:
+    """A repetition's proof stream ``S.repK.bin`` as S."""
+    m = re.fullmatch(r"(.*)\.rep\d+\.bin", name)
+    return m[1] if m else None
+
+
+def _offsets(data: bytes, piece: bytes) -> list[int]:
+    out, at = [], data.find(piece)
+    while at >= 0:
+        out.append(at)
+        at = data.find(piece, at + 1)
+    return out
+
+
+def classify(received: dict, blobs: dict[str, bytes], vdir: Path, ints=integers) -> tuple[list[str], dict[str, list]]:
+    """`a8.received`'s found pieces as the ``leaked`` ones, which fail the run, and the ``structured`` rest with their
+    places (file, offset, why). Every piece is witness, whatever its row or class. A piece is structured only when it has
+    fewer than ``DISTINCT`` byte values and every place it is found is in a repetition's proof stream (read from `vdir`,
+    what the verifier received), at an offset where either every repetition holds its format's own integers, the same
+    bytes in each (``int``, `ints`), or, off those integers, every repetition holds fewer than ``DISTINCT`` byte
+    values, not the same in all (``fresh``, a field of the format valued afresh in each); and it isn't at a ``fresh``
+    place in every repetition. Anywhere else (another file, a hex form, integers that differ between repetitions, an
+    offset another repetition holds proof data at) it is leaked, so a single-bit witness (a decision bit, a hit)
+    serialized into a piece fails the run unless the piece sits on the format's own fields."""
+    data = {f: (vdir / f).read_bytes() for f in received["files"] if (vdir / f).is_file()}
+    groups: dict[str, list[str]] = {}
+    for f in data:
+        if _stream(f):
+            groups.setdefault(_stream(f), []).append(f)
+    marks: dict[str, bytes] = {}
+    leaked, structured = [], {}
+    for k in received["verifier_found"]:
+        piece, places, ok = blobs[k], [], len(set(blobs[k])) < DISTINCT
+        for f, rec in received["files"].items():
+            if not ok or k not in rec["found"]:
+                continue
+            s, ats = _stream(f), _offsets(data.get(f, b""), piece)
+            group = [data[g] for g in groups.get(s, [])]
+            if not ats or len(group) < 2 or len({len(g) for g in group}) != 1:
+                ok = False
+                continue
+            for at in ats:
+                ws = [g[at:at + len(piece)] for g in group]
+                whole = all(all(marks.setdefault(g, ints(data[g]))[at:at + len(piece)]) for g in groups[s])
+                if whole and len(set(ws)) == 1:
+                    places.append((f, at, "int"))
+                elif not whole and all(len(set(w)) < DISTINCT for w in ws) and len(set(ws)) > 1:
+                    places.append((f, at, "fresh"))
+                else:
+                    ok = False
+        fresh = {f for f, _at, why in places if why == "fresh"}
+        if not ok or not places or any(set(gs) <= fresh for gs in groups.values()):
+            leaked.append(k)
+        else:
+            structured[k] = places
+    return leaked, structured
+
+
+def scanned(S, units: list[SimpleNamespace], received: dict, blobs: dict[str, bytes], vdir: Path) -> dict:
+    """`received` with its found pieces classified (`classify`) and their classes, and the low-entropy pieces scanned
+    for counted by the classes they set (`classes`; ``zero``: all zero): which witness can look like the format's own
+    fields."""
+    leaked, structured = classify(received, blobs, vdir)
+    found = {blobs[k] for k in received["verifier_found"]}
+    low = {x for x in blobs.values() if len(set(x)) < DISTINCT}
+    cl = classes(S, units, low | found)
+    by: dict[str, int] = {}
+    for x in low:
+        for c in cl[x.hex()] or ["zero"]:
+            by[c] = by.get(c, 0) + 1
+    return {**received, "leaked": leaked, "structured": structured,
+            "found_classes": {k: cl[blobs[k].hex()] for k in received["verifier_found"]},
+            "low_entropy": {"pieces": len(low), "by_class": dict(sorted(by.items()))}}
 
 
 def expected(x: SimpleNamespace, kind: str, flags: dict) -> bool:
@@ -431,19 +580,20 @@ def prove(a) -> int:
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=a.points, arms=["fw"], cold=1)
     res = audit(M, av, sg, m, units, binds, out / "slice", a.port)
     blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
-    blobs, held, sparse = sparse_pieces(blobs, held)
-    res["received"] = {**M.a8.received(out / "slice" / "verifier", m["dir"] / f"inst-{n}.bin", blobs, held),
-                       "public_pieces": public, "sparse_pieces": sparse}
+    vdir = out / "slice" / "verifier"
+    res["received"] = rc = scanned(x.S, units, {**M.a8.received(vdir, m["dir"] / f"inst-{n}.bin", blobs, held),
+                                                "public_pieces": public}, blobs, vdir)
     summary["audit"] = res
     want = ["accept" if u.kind == "honest" else "reject" for u in units]
     got = [r["verdict"] for r in res.get("units", [])]
     ok = (res["accepted"] and all(res["verdicts"].values()) and got == want and same
           and [r["srv_bound"] for r in res.get("units", [])] == srv_want
-          and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"])
+          and not rc["leaked"] and rc["control"]["holds_all"])
     log(f"proofs {res['verdicts']}, audit {res['audit']}, first units {[(r['kind'], hex(r['verdict_word']), r['adv_bound'], r['srv_bound'], r['cert_bound'], r['verdict']) for r in res.get('units', [])[:len(a.kinds)]]}, "
-        f"per unit {res['per_unit']}, verifier received {res['received']['verifier_bytes']} bytes, witness pieces found "
-        f"there: {res['received']['verifier_found'] or 'none'} (of {len(blobs)}, {len(sparse)} sparse left out), "
-        f"control {res['received']['control']['blobs_found']}; "
+        f"per unit {res['per_unit']}, verifier received {rc['verifier_bytes']} bytes, witness pieces found there: "
+        f"leaked {rc['leaked'] or 'none'}, structured {[(k, rc['found_classes'][k], rc['structured'][k]) for k in rc['structured']] or 'none'} "
+        f"(of {len(blobs)}, {rc['low_entropy']['pieces']} low-entropy: {rc['low_entropy']['by_class']}), "
+        f"control {rc['control']['blobs_found']}; "
         f"{'as expected' if ok else 'UNEXPECTED'}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if a.points:

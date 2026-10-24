@@ -16,5 +16,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# record.py's mixes are workloads of the vLLM integration, which test_consistency loads.
-inputs = ["integrations/vllm/workloads"]
+# record.py's mixes are workloads of the vLLM integration, which test_consistency loads. compile_slice_zk's scan reads
+# C-Flock's proof format off its verifier's layout, which test_compile_slice_zk checks.
+inputs = ["integrations/vllm/workloads", "verity/ml/flock/verifier/redigest.py",
+          "verity/ml/flock/verifier/transcript_check.py"]
