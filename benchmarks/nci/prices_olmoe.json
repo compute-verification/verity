@@ -1,5 +1,5 @@
 {
- "about": "Per-weight prices (bits) of updated weights by role, measured on OLMoE-1B-7B-0924's published checkpoints (AdamW MoE), for benchmarks/nci/covering_priced.py --prices. Roles: qkv (attention q, k, v), attn_out (o), mlp_in / mlp_out = the ROUTED EXPERTS' gate+up / down (OLMoE's only MLPs; K2's routed experts read them), router, head, embed, norm (all measured), dense_mlp_in / dense_mlp_out = the dense-MLP equivalent (OLMoE attention x Pythia's MLP/attention ratio; K2's dense layer-0 MLP and shared expert, read by a loader that splits them, else they take mlp_in / mlp_out). Points olmoe@T: theta = step T, D = 5,000 steps (21B tokens), +10k: D = 10,000. Points pythia-P×olmoe@T: covering_priced's Pythia prices with the routed experts, router and norms at Pythia's attention price times OLMoE's measured ratio to attention at T; their cheapest tiers are Pythia's. cheapest: theta's forward-code classes over the block matrices (no Adam-v deciles: OLMoE publishes no optimizer state).",
+ "about": "Per-weight prices (bits) of updated weights by role, measured on OLMoE-1B-7B-0924's published checkpoints (AdamW MoE), for benchmarks/nci/covering_priced.py --prices. Roles: qkv (attention q, k, v), attn_out (o), mlp_in / mlp_out = the ROUTED EXPERTS' gate+up / down (OLMoE's only MLPs; K2's routed experts read them), router, head, embed, norm (all measured), dense_mlp_in / dense_mlp_out = the dense-MLP equivalent (OLMoE attention x Pythia's MLP/attention ratio; K2's dense layer-0 MLP and shared expert, read by a loader that splits them, else they take mlp_in / mlp_out). Points olmoe@T: theta = step T, D = 5,000 steps (21B tokens), +10k: D = 10,000. Points pythia-P×olmoe@T: covering_priced's Pythia prices with the routed experts, router and norms at Pythia's attention price times OLMoE's measured ratio to attention at T; their cheapest tiers are Pythia's. cheapest: theta's forward-code classes over the block matrices (no Adam-v deciles: OLMoE publishes no optimizer state). Tiers by name: `theta 0.1%/1%/10%` are theta-selectable (theta's forward-code class over the block matrices; olmoe@T's 10% from the run's tables.md), `adam-v ...` also need theta's Adam-v decile (Pythia-160m's classes.out, selectable only with the optimizer state registered); `1%` and `0.1%` keep their first meaning (olmoe@T: theta's; the Pythia-anchored points: Pythia's code x Adam-v).",
  "caveats": "AdamW only: no Muon-trained MoE publishes intermediate checkpoints (Moonshot's Moonlight-16B-A3B, Kimi K2 and Kimi-Linear repos hold final weights only), so MuonClip is unmeasured; on a matched dense pair (300M Llama, deqing/convergent-llama-300M-{muon,adamw}-original, run r20261024-180717-a305) Muon's block matrices cost x1.11-1.14 / x1.19-1.35 / x1.39-1.65 AdamW's (bf16 / FP8 / FP4) and its MLP-to-attention ratio was 0.96 / 0.89-0.94 / 0.78-0.91. OLMoE's q and k are QK-normed and cost more than v and o; against v and o alone the routed experts cost x1.03-1.08 / x1.07-1.15 / x1.09-1.25, which puts the anchored points' K2 mean at x1.04-1.28 instead of x0.91-1.10 of the experts-at-dense-price mean. D = 5,000 steps (21B tokens) is OLMoE's finest spacing, against Pythia's 1,000 (2.1B tokens): absolute OLMoE prices are not Pythia's; the ratios held when D doubled (600k: D = 10,000). OLMoE publishes no fp32 master or Adam moments, so its prices use theta's bf16 codes only.",
  "runs": [
   "r20261024-183258-1475"
@@ -352,6 +352,21 @@
     "bf16": 6.9549,
     "fp8": 3.0668,
     "fp4": 0.9652
+   },
+   "theta 0.1%": {
+    "bf16": 6.9549,
+    "fp8": 3.0668,
+    "fp4": 0.9652
+   },
+   "theta 1%": {
+    "bf16": 7.4006,
+    "fp8": 3.3977,
+    "fp4": 1.1396
+   },
+   "theta 10%": {
+    "bf16": 8.014,
+    "fp8": 3.998,
+    "fp4": 1.444
    }
   },
   "olmoe@600k": {
@@ -364,6 +379,21 @@
     "bf16": 5.8045,
     "fp8": 2.1521,
     "fp4": 0.6221
+   },
+   "theta 0.1%": {
+    "bf16": 5.8045,
+    "fp8": 2.1521,
+    "fp4": 0.6221
+   },
+   "theta 1%": {
+    "bf16": 6.409,
+    "fp8": 2.5652,
+    "fp4": 0.8154
+   },
+   "theta 10%": {
+    "bf16": 7.015,
+    "fp8": 3.11,
+    "fp4": 1.033
    }
   },
   "olmoe@600k+10k": {
@@ -376,6 +406,21 @@
     "bf16": 6.0562,
     "fp8": 2.3901,
     "fp4": 0.708
+   },
+   "theta 0.1%": {
+    "bf16": 6.0562,
+    "fp8": 2.3901,
+    "fp4": 0.708
+   },
+   "theta 1%": {
+    "bf16": 6.7367,
+    "fp8": 2.8485,
+    "fp4": 0.9723
+   },
+   "theta 10%": {
+    "bf16": 7.388,
+    "fp8": 3.463,
+    "fp4": 1.264
    }
   },
   "olmoe@1150k": {
@@ -388,6 +433,21 @@
     "bf16": 4.3569,
     "fp8": 1.2278,
     "fp4": 0.3365
+   },
+   "theta 0.1%": {
+    "bf16": 4.3569,
+    "fp8": 1.2278,
+    "fp4": 0.3365
+   },
+   "theta 1%": {
+    "bf16": 4.9803,
+    "fp8": 1.461,
+    "fp4": 0.3951
+   },
+   "theta 10%": {
+    "bf16": 5.515,
+    "fp8": 1.859,
+    "fp4": 0.478
    }
   },
   "pythia-160m@100k×olmoe@600k": {
@@ -400,6 +460,36 @@
     "bf16": 2.786,
     "fp8": 0.574,
     "fp4": 0.101
+   },
+   "theta 0.1%": {
+    "bf16": 3.015,
+    "fp8": 0.751,
+    "fp4": 0.208
+   },
+   "theta 1%": {
+    "bf16": 3.65,
+    "fp8": 0.883,
+    "fp4": 0.214
+   },
+   "theta 10%": {
+    "bf16": 4.451,
+    "fp8": 1.148,
+    "fp4": 0.289
+   },
+   "adam-v 0.1%": {
+    "bf16": 2.786,
+    "fp8": 0.574,
+    "fp4": 0.101
+   },
+   "adam-v 1%": {
+    "bf16": 3.425,
+    "fp8": 0.741,
+    "fp4": 0.188
+   },
+   "adam-v 10%": {
+    "bf16": 4.274,
+    "fp8": 1.061,
+    "fp4": 0.283
    }
   },
   "pythia-160m@140k×olmoe@1150k": {
@@ -412,6 +502,36 @@
     "bf16": 1.54,
     "fp8": 0.314,
     "fp4": 0.075
+   },
+   "theta 0.1%": {
+    "bf16": 1.646,
+    "fp8": 0.472,
+    "fp4": 0.134
+   },
+   "theta 1%": {
+    "bf16": 2.376,
+    "fp8": 0.582,
+    "fp4": 0.14
+   },
+   "theta 10%": {
+    "bf16": 3.561,
+    "fp8": 0.802,
+    "fp4": 0.205
+   },
+   "adam-v 0.1%": {
+    "bf16": 1.54,
+    "fp8": 0.314,
+    "fp4": 0.075
+   },
+   "adam-v 1%": {
+    "bf16": 2.265,
+    "fp8": 0.453,
+    "fp4": 0.121
+   },
+   "adam-v 10%": {
+    "bf16": 3.397,
+    "fp8": 0.732,
+    "fp4": 0.198
    }
   }
  }

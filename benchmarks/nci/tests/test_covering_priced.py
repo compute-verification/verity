@@ -76,7 +76,8 @@ def test_a_price_file_maps_hf_names_onto_roles(tmp_path):
     f.write_text(json.dumps({"points": {"x": {fmt: tab for fmt in P.FMTS}}, "cheapest": {"x": {"1%": {"bf16": 1.0}}}}))
     pts, cheapest = P.load_prices(str(f))
     roles = pts["x"]["bf16"]
-    assert roles == {"qkv": 4.0, "attn_out": 6.0, "mlp_in": 3.0, "mlp_out": 3.5, "head": 1.0}
+    assert roles == {"qkv": 4.0, "attn_out": 6.0, "mlp_in": 3.0, "mlp_out": 3.5, "head": 1.0, "named": 2.0}
+    assert P.named(roles) == 2.0
     p = P.prices(roles)
     assert p["expert_in"] == 3.0 and p["mla_out"] == 6.0 and p["router"] == 1.0 and p["norm"] == 0.0
     assert p["dense_in"] == p["shared_in"] == 3.0 and p["dense_out"] == p["shared_out"] == 3.5
@@ -111,3 +112,62 @@ def test_the_olmoe_price_file_prices_every_class_at_every_point(capsys):
             assert pt not in cheapest or cheapest[pt]["1%"][fmt] > 0
     P.report(pts, cheapest, "prices_olmoe")
     assert "Priced form at 1 MB" in capsys.readouterr().out
+
+
+def test_theta_codes_alone_cost_at_least_every_codec():
+    """``PYTHIA_FWD`` is the least over a subset of ``PYTHIA``'s codecs."""
+    for pt, fmts in P.PYTHIA.items():
+        for fmt, tab in fmts.items():
+            assert all(P.PYTHIA_FWD[pt][fmt][r] >= v for r, v in tab.items()), (pt, fmt)
+
+
+def test_the_tiers_nest():
+    """A smaller cheapest set costs less, Adam-v's deciles refine theta's classes, and theta's classes refine the
+    named ones."""
+    olmo2 = P.load_prices(str(Path(P.__file__).parent / "prices_olmo2.json"))
+    olmoe = P.load_prices(str(Path(P.__file__).parent / "prices_olmoe.json"))
+    for pts, cheapest in ((P.PYTHIA_FWD, P.CHEAPEST), olmo2, olmoe):
+        for pt, tiers in cheapest.items():
+            if "theta 10%" not in tiers:
+                continue
+            for fmt in P.FMTS:
+                t = {n: v[fmt] for n, v in tiers.items()}
+                assert t["theta 0.1%"] <= t["theta 1%"] <= t["theta 10%"] <= P.named(pts[pt][fmt]), (pt, fmt)
+                for fr in ("0.1%", "1%", "10%"):
+                    assert t.get(f"adam-v {fr}", 0) <= t[f"theta {fr}"]
+
+
+def test_the_gain_is_the_mean_price_over_c_w():
+    """At 1 MB both forms chain the same products, so the priced form's gain over the uniform one is the
+    product-weighted mean price over the uniform c_w."""
+    rows = P.source_rows("Pythia", P.PYTHIA_FWD, P.PYTHIA, P.CHEAPEST, base(), GATES, P.KS["1 MB"])
+    for r in rows:
+        for reg in ("weights", "optimizer"):
+            for u in r[reg]["uniform"].values():
+                assert u["gain"] == pytest.approx(r[reg]["mean_price"] / u["c_w"], rel=0.01)
+
+
+def test_a_price_file_prices_each_registration(tmp_path):
+    """``points_optimizer`` is read only for a registration that covers the optimizer state."""
+    f = tmp_path / "p.json"
+    w = {"q_proj": 3.0, "o_proj": 4.0, "gate_proj": 5.0, "down_proj": 6.0}
+    o = {k: v - 1 for k, v in w.items()}
+    f.write_text(json.dumps({"points": {"x": {fmt: w for fmt in P.FMTS}},
+                             "points_optimizer": {"x": {fmt: o for fmt in P.FMTS}}}))
+    assert P.load_prices(str(f))[0]["x"]["fp8"]["qkv"] == 3.0
+    assert P.load_prices(str(f), "optimizer")[0]["x"]["fp8"]["named"] == 2.0
+
+
+def test_the_olmo2_price_file_and_the_baselines_report(capsys):
+    """`prices_olmo2.json` holds six points with every tier, its optimizer prices are at most its weights' prices, and
+    the baselines report runs over it and the OLMoE file beside Pythia."""
+    f = str(Path(P.__file__).parent / "prices_olmo2.json")
+    pw, cheapest = P.load_prices(f)
+    po, _ = P.load_prices(f, "optimizer")
+    assert len(pw) == 6 and set(cheapest) == set(pw)
+    for pt in pw:
+        for fmt in P.FMTS:
+            assert all(po[pt][fmt][r] <= v for r, v in pw[pt][fmt].items())
+    assert P.main(["--baselines", "--prices", f, "--prices", str(Path(P.__file__).parent / "prices_olmoe.json")]) == 0
+    out = capsys.readouterr().out
+    assert "olmo2-13b@late" in out and "olmoe@1150k" in out and "pythia-160m" not in out

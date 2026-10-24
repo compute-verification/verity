@@ -1,6 +1,7 @@
 """Kimi K2's compute dampener rho under the covering bound's forms, at bf16, FP8 and FP4, with a price per weight.
 
     python benchmarks/nci/covering_priced.py [--prices FILE.json] [--json OUT.json]
+    python benchmarks/nci/covering_priced.py --baselines [--prices FILE.json ...] [--json OUT.json]
 
 The forms, each a lower bound rho >= (chained charge per gate) * s / (charge one inference block can cover):
 
@@ -29,7 +30,16 @@ Conventions, as the realism note's (``note:training-20261022T1045Z-cover-assumpt
   ``--dgrad`` adds the backward products into activations, ``W^T delta``, and the LM head's;
 * prices are per weight class; a block that picks the cheapest weights is what the uniform forms' ``c_w`` prices.
   Pythia's (``PYTHIA``) map onto K2's matrices by role (``ROLE``). A price file may price K2's dense layer-0 MLP and
-  shared expert apart from the routed experts (roles ``dense_mlp_in`` / ``dense_mlp_out``, else ``mlp_in`` / ``mlp_out``).
+  shared expert apart from the routed experts (roles ``dense_mlp_in`` / ``dense_mlp_out``, else ``mlp_in`` /
+  ``mlp_out``).
+
+``--baselines`` compares the priced form with the uniform two-cost form under each ``c_w`` a registration allows.
+``ParameterHardAt`` holds for every block, so ``c_w`` is at most the price of the cheapest set of weights a block can be
+built to complete, and a set is selectable when it is computable from what is registered: (i) the cheapest named
+block-matrix class holding 1% of the weights, (ii) and (iii) the cheapest theta-defined classes (class x theta's code)
+holding 10% and 1%, and, with the optimizer state registered, the same with theta's Adam-v decile. Prices follow the
+registration too: the weights alone give ``fwd`` (the decoder holds theta's codes), the optimizer state also gives
+``master`` and Adam's moments (``PYTHIA`` against ``PYTHIA_FWD``; a file's ``points_optimizer`` against ``points``).
 """
 
 from __future__ import annotations
@@ -69,7 +79,8 @@ CLASSES = {
 #: codec (theta's forward codes, and theta's fp32 master and Adam moments), as `rweights/ckpt_deltas.py` measured them
 #: (art:044580cc14c18dcb55b1e69da10d0e0f3f6ef1321ed11375c50953a1af8dc7d2, `rweights/ckpt_160m_late.jsonl` and
 #: `ckpt_410m.jsonl`). qkv: query_key_value; attn_out: dense; mlp_in: dense_h_to_4h; mlp_out: dense_4h_to_h; head:
-#: embed_out; embed: embed_in. The forward-codes-only values differ only at FP4 (about 0.2 bits higher).
+#: embed_out; embed: embed_in. The master and Adam codecs need the optimizer state registered; ``PYTHIA_FWD`` is theta's
+#: forward codes alone.
 PYTHIA = {
     "160m@100k": {
         "bf16": {"qkv": 6.694, "attn_out": 7.314, "mlp_in": 6.667, "mlp_out": 6.665, "head": 5.912, "embed": 7.268},
@@ -93,14 +104,55 @@ PYTHIA = {
     },
 }
 
-#: the uniform forms' c_w: the mean cost of the cheapest theta-defined classes (theta's code x its Adam-v decile) of the
-#: transformer-block matrices holding 1% (and 0.1%) of the weights, `rweights/classes.out` (Pythia-160m only)
+#: ``PYTHIA`` with theta's forward codes alone (raw, mask_ec, h0, signexp, ctx, ctxse; no master or Adam prediction),
+#: what a registration of the weights alone gives
+PYTHIA_FWD = {
+    "160m@100k": {
+        "bf16": {"qkv": 6.694, "attn_out": 7.314, "mlp_in": 6.667, "mlp_out": 6.665, "head": 7.166, "embed": 7.283},
+        "fp8": {"qkv": 2.767, "attn_out": 3.286, "mlp_in": 2.729, "mlp_out": 2.745, "head": 3.112, "embed": 3.237},
+        "fp4": {"qkv": 0.873, "attn_out": 1.152, "mlp_in": 0.869, "mlp_out": 0.871, "head": 1.144, "embed": 1.119},
+    },
+    "160m@140k": {
+        "bf16": {"qkv": 5.817, "attn_out": 6.750, "mlp_in": 5.988, "mlp_out": 5.955, "head": 2.761, "embed": 6.508},
+        "fp8": {"qkv": 2.156, "attn_out": 2.823, "mlp_in": 2.214, "mlp_out": 2.217, "head": 0.930, "embed": 2.600},
+        "fp4": {"qkv": 0.607, "attn_out": 0.924, "mlp_in": 0.647, "mlp_out": 0.645, "head": 0.263, "embed": 0.816},
+    },
+    "410m@100k": {
+        "bf16": {"qkv": 6.124, "attn_out": 6.338, "mlp_in": 6.194, "mlp_out": 6.028, "head": 6.382, "embed": 6.562},
+        "fp8": {"qkv": 2.330, "attn_out": 2.485, "mlp_in": 2.360, "mlp_out": 2.254, "head": 2.522, "embed": 2.635},
+        "fp4": {"qkv": 0.689, "attn_out": 0.767, "mlp_in": 0.711, "mlp_out": 0.661, "head": 0.776, "embed": 0.832},
+    },
+    "410m@140k": {
+        "bf16": {"qkv": 5.040, "attn_out": 5.483, "mlp_in": 5.231, "mlp_out": 5.046, "head": 5.402, "embed": 5.622},
+        "fp8": {"qkv": 1.620, "attn_out": 1.884, "mlp_in": 1.708, "mlp_out": 1.612, "head": 1.832, "embed": 1.951},
+        "fp4": {"qkv": 0.415, "attn_out": 0.521, "mlp_in": 0.452, "mlp_out": 0.413, "head": 0.494, "embed": 0.546},
+    },
+}
+
+#: the uniform forms' c_w: the mean cost of the cheapest classes of the transformer-block matrices holding 0.1%, 1% and
+#: 10% of the weights, `rweights/classes.out` (Pythia-160m only): ``theta`` classes are theta's forward code, ``adam-v``
+#: ones that times the decile of theta's Adam second moment. ``1%`` and ``0.1%`` are the realism note's, Adam-v's.
 CHEAPEST = {
     "160m@100k": {"1%": {"bf16": 3.425, "fp8": 0.741, "fp4": 0.188},
-                  "0.1%": {"bf16": 2.786, "fp8": 0.574, "fp4": 0.101}},
+                  "0.1%": {"bf16": 2.786, "fp8": 0.574, "fp4": 0.101},
+                  "theta 10%": {"bf16": 4.451, "fp8": 1.148, "fp4": 0.289},
+                  "theta 1%": {"bf16": 3.650, "fp8": 0.883, "fp4": 0.214},
+                  "theta 0.1%": {"bf16": 3.015, "fp8": 0.751, "fp4": 0.208},
+                  "adam-v 10%": {"bf16": 4.274, "fp8": 1.061, "fp4": 0.283},
+                  "adam-v 1%": {"bf16": 3.425, "fp8": 0.741, "fp4": 0.188},
+                  "adam-v 0.1%": {"bf16": 2.786, "fp8": 0.574, "fp4": 0.101}},
     "160m@140k": {"1%": {"bf16": 2.265, "fp8": 0.453, "fp4": 0.121},
-                  "0.1%": {"bf16": 1.540, "fp8": 0.314, "fp4": 0.075}},
+                  "0.1%": {"bf16": 1.540, "fp8": 0.314, "fp4": 0.075},
+                  "theta 10%": {"bf16": 3.561, "fp8": 0.802, "fp4": 0.205},
+                  "theta 1%": {"bf16": 2.376, "fp8": 0.582, "fp4": 0.140},
+                  "theta 0.1%": {"bf16": 1.646, "fp8": 0.472, "fp4": 0.134},
+                  "adam-v 10%": {"bf16": 3.397, "fp8": 0.732, "fp4": 0.198},
+                  "adam-v 1%": {"bf16": 2.265, "fp8": 0.453, "fp4": 0.121},
+                  "adam-v 0.1%": {"bf16": 1.540, "fp8": 0.314, "fp4": 0.075}},
 }
+
+#: roles of the block matrices, the named classes baseline (i) chooses among (each holds over 1% of every source model)
+BLOCK_ROLES = ("qkv", "attn_out", "mlp_in", "mlp_out")
 
 #: HF tensor names a price file may use, onto the roles (an equal-weight mean where several share one)
 HF_ROLES = {"q_proj": "qkv", "k_proj": "qkv", "v_proj": "qkv", "o_proj": "attn_out", "gate_proj": "mlp_in",
@@ -275,19 +327,129 @@ def mean_price(st: list[dict], p: dict[str, float]) -> float:
     return sum(s["products"] * p[s["class"]] for s in st) / tot
 
 
-def load_prices(path: str) -> tuple[dict, dict]:
+def load_prices(path: str, registration: str = "weights") -> tuple[dict, dict]:
     """A price file: ``{"points": {name: {fmt: {role or HF tensor name: bits}}}}``, and optionally the uniform forms'
-    ``c_w`` as ``{"cheapest": {name: {"1%": {fmt: bits}}}}``."""
+    ``c_w`` tiers as ``{"cheapest": {name: {tier: {fmt: bits}}}}``. ``registration="optimizer"`` reads
+    ``points_optimizer`` (prices given the optimizer state too) where the file has it. Each table gets ``named``, its
+    cheapest block-matrix tensor type, taken before tensor types average into a role."""
     raw = json.loads(Path(path).read_text())
+    src = raw.get("points_optimizer", raw["points"]) if registration == "optimizer" else raw["points"]
     pts = {}
-    for name, fmts in raw["points"].items():
+    for name, fmts in src.items():
         pts[name] = {}
         for fmt, tab in fmts.items():
             roles: dict[str, list[float]] = {}
             for key, val in tab.items():
                 roles.setdefault(HF_ROLES.get(key, key), []).append(val)
             pts[name][fmt] = {r: sum(v) / len(v) for r, v in roles.items()}
+            pts[name][fmt]["named"] = min(v for key, v in tab.items() if HF_ROLES.get(key, key) in BLOCK_ROLES)
     return pts, raw.get("cheapest", {})
+
+
+def named(table: dict[str, float]) -> float:
+    """Baseline (i): the cheapest named block-matrix class."""
+    return table.get("named", min(table[r] for r in BLOCK_ROLES if r in table))
+
+
+#: the uniform baselines: (label, tier key or None for the named class, registration that makes it selectable)
+BASELINES = (
+    ("(i) named class", None, "weights"),
+    ("(ii) theta 10%", "theta 10%", "weights"),
+    ("(iii) theta 1%", "theta 1%", "weights"),
+    ("theta 0.1%", "theta 0.1%", "weights"),
+    ("Adam-v 10%", "adam-v 10%", "optimizer"),
+    ("Adam-v 1%", "adam-v 1%", "optimizer"),
+)
+
+
+def source_rows(label: str, pts_w: dict, pts_o: dict | None, cheapest: dict, st: list[dict], gates: float,
+                k: float) -> list[dict]:
+    """Per point and format: the priced rho under each registration's prices, and the uniform two-cost rho and the
+    priced form's gain over it under each baseline the source measured."""
+    rows = []
+    for pt in pts_w:
+        for fmt, b in FMTS.items():
+            row: dict = {"source": label, "point": pt, "fmt": fmt, "optimizer_prices": pts_o is not None}
+            for reg, pts in (("weights", pts_w), ("optimizer", pts_o or pts_w)):
+                tab = pts[pt][fmt]
+                p = prices(tab)
+                pr = rho("priced", st, p, b, k, 1.0, gates)["rho"]
+                row[reg] = {"priced": pr, "mean_price": mean_price(st, p), "uniform": {}}
+                for name, tier, _ in BASELINES:
+                    cw = named(tab) if tier is None else cheapest.get(pt, {}).get(tier, {}).get(fmt)
+                    if cw is None:
+                        continue
+                    uni = rho("two c's", st, p, b, k, cw, gates)["rho"]
+                    row[reg]["uniform"][name] = {"c_w": cw, "rho": uni, "gain": pr / uni if uni else math.inf}
+            rows.append(row)
+    return rows
+
+
+def baselines_report(sources: list[tuple[str, dict, dict | None, dict]], k: float = KS["1 MB"]) -> dict:
+    """K2's priced rho at ``k`` per price source, and its gain over the uniform two-cost form under each baseline."""
+    m = k2()
+    gates = K.schedule(m)[1]
+    st = counted(stages(m), head=False)
+    rows = [r for s in sources for r in source_rows(*s, st, gates, k)]
+    kn = next(n for n, v in KS.items() if v == k)
+
+    def cell(r, reg, names):
+        d = r[reg]
+        gs = []
+        for n in names:
+            u = d["uniform"].get(n)
+            gs.append("–" if u is None else f"×{u['gain']:.2f}")
+        return f"{fmt_n(d['priced'])} ({' / '.join(gs)})"
+
+    def table(title, reg, names, note):
+        print(f"## {title}\n\n{note}\n")
+        print("| source | point | bf16 | FP8 | FP4 |")
+        print("|---|---|---|---|---|")
+        for (src, pt) in dict.fromkeys((r["source"], r["point"]) for r in rows):
+            cs = [cell(r, reg, names) for r in rows if r["source"] == src and r["point"] == pt]
+            print(f"| {src} | {pt} | {' | '.join(cs)} |")
+        print()
+
+    print(f"# Kimi K2's priced rho at k = {kn} and its gain over the uniform two-cost form, per price source\n")
+    print("c_a = b, forward products of kappa's N, chaining by price mass; the gain is priced rho over uniform rho "
+          "at the same prices and chaining, about the product-weighted mean price over c_w.\n")
+    table("Registration of the weights alone (theta's forward codes)", "weights", ["(ii) theta 10%", "(iii) theta 1%"],
+          "Each cell: priced rho (gain over (ii) theta-selectable 10% / over (iii) theta-selectable 1%).")
+    table("Registration of the weights and the optimizer state", "optimizer", ["Adam-v 10%", "Adam-v 1%",
+                                                                              "(iii) theta 1%"],
+          "Prices given the optimizer state too (Pythia: fp32 master and Adam moments; OLMo-2: fp32 master only; "
+          "OLMoE: none published, so the weights' prices). Each cell: priced rho (gain over Adam-v 10% / Adam-v 1% "
+          "/ theta 1%). Where no Adam-v tier was measured, c_w is at most theta's, so the gain over theta 1% is a "
+          "lower bound on the gain over the right baseline.")
+    table("The other baselines, weights alone", "weights", ["(i) named class", "theta 0.1%"],
+          "Each cell: priced rho (gain over (i) the cheapest named block-matrix class / over the theta-selectable "
+          "0.1%).")
+    print("## The baselines (bits per weight; c_w under the weights' prices)\n")
+    print("| source | point | fmt | mean over M* | " + " | ".join(n for n, _, _ in BASELINES) + " |")
+    print("|---|---|---|---|" + "---|" * len(BASELINES))
+    for r in rows:
+        u = r["weights"]["uniform"]
+        cells = [f"{u[n]['c_w']:.3g}" if n in u else "–" for n, _, _ in BASELINES]
+        print(f"| {r['source']} | {r['point']} | {r['fmt']} | {r['weights']['mean_price']:.3g} | {' | '.join(cells)} |")
+    print()
+    w = sum(shapes(m)[c][0] for c, (_, _, inN) in CLASSES.items() if inN)
+    cap = {}
+    print("## The set a block can complete\n")
+    print(f"A block completes at most k / c_w weights, a fraction of M*'s {fmt_n(w)}; the premise holds for every "
+          "block, so c_w is at most the price of the cheapest selectable set of that size (range over (iii)'s c_w).\n")
+    print("| k | bf16 | FP8 | FP4 |")
+    print("|---|---|---|---|")
+    for kn2, k2_ in KS.items():
+        cells = []
+        for fmt in FMTS:
+            cws = [r["weights"]["uniform"]["(iii) theta 1%"]["c_w"] for r in rows
+                   if r["fmt"] == fmt and "(iii) theta 1%" in r["weights"]["uniform"]]
+            fr = [k2_ / cw / w for cw in cws]
+            cap[f"{kn2}|{fmt}"] = (min(fr), max(fr))
+            cells.append(f"{min(fr):.1e}–{max(fr):.1e}")
+        print(f"| {kn2} | {' | '.join(cells)} |")
+    print()
+    return {"k": k, "rows": rows, "block_fraction": cap}
 
 
 def fmt_n(x: float) -> str:
@@ -471,13 +633,30 @@ def check_daniel() -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--prices", help="a price file (load_prices) in place of Pythia's")
+    ap.add_argument("--prices", action="append", help="a price file (load_prices) in place of Pythia's; with "
+                    "--baselines, repeatable and beside Pythia's")
     ap.add_argument("--dgrad", action="store_true", help="count the backward products into activations too")
+    ap.add_argument("--baselines", action="store_true", help="the priced form's gain over the uniform form under "
+                    "each c_w a registration allows, per price source, at 1 MB")
     ap.add_argument("--json", help="write every number here")
     args = ap.parse_args(argv)
+    if args.baselines:
+        sources = [("Pythia", PYTHIA_FWD, PYTHIA, CHEAPEST)]
+        for f in args.prices or []:
+            raw = json.loads(Path(f).read_text())
+            pw, cheapest = load_prices(f)
+            po = load_prices(f, "optimizer")[0] if "points_optimizer" in raw else None
+            # points built on Pythia's built-in prices (an MoE file's anchored points) are the Pythia source's
+            keep = [pt for pt in pw if not pt.startswith("pythia-")]
+            sources.append((Path(f).stem.removeprefix("prices_"), {pt: pw[pt] for pt in keep},
+                            None if po is None else {pt: po[pt] for pt in keep}, cheapest))
+        res = baselines_report(sources)
+        if args.json:
+            Path(args.json).write_text(json.dumps(res, indent=1, default=str))
+        return 0
     if args.prices:
-        pts, cheapest = load_prices(args.prices)
-        label = Path(args.prices).stem
+        pts, cheapest = load_prices(args.prices[0])
+        label = Path(args.prices[0]).stem
     else:
         pts, cheapest, label = PYTHIA, CHEAPEST, "Pythia prices"
     res = report(pts, cheapest, label, dgrad=args.dgrad)
