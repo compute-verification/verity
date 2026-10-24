@@ -233,6 +233,10 @@ proxied() {
   prove_live proxy $(awk '/^SERVING/ {print $2}' $O/inner/proxy/proxy.log) $D/inst-$N.bin $D/circuit.txt; local rc=$?
   [ $rc = 0 ] || kill $PP 2>/dev/null
   wait $PP; echo "proxy exit $?"
+  # one session is written into --out itself, not s0 (rec_live.serve)
+  if [ $NS = 1 ] && [ -e $DD/inner/public.json ]; then
+    mkdir -p $DD/inner/s0 && for f in $DD/inner/*; do case ${f##*/} in s0|schedule.json) ;; *) mv $f $DD/inner/s0/ ;; esac; done
+  fi
   return $rc
 }
 
