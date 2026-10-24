@@ -708,6 +708,14 @@ def idsStep? (v : Json) : Option Nat :=
   let s := String.ofList (last.toList.drop 4)
   if last.startsWith "ids@" && (s == "0" || canonicalK s) then some s.toNat! else none
 
+/-- `credit.slots_step`: a slot table's round, a name whose last part is `slots@<s>` (`<prefix>slots@<s>`, slot i's
+request at round s, the live unit's `slot` port, s a canonical decimal). -/
+def slotsStep? (v : Json) : Option Nat :=
+  (str? v).bind fun v =>
+  let last := (v.splitOn "/").getLastD ""
+  let s := String.ofList (last.toList.drop 6)
+  if last.startsWith "slots@" && (s == "0" || canonicalK s) then some s.toNat! else none
+
 /-- `credit.receipt_call`: a receipt table's call, a name whose last part is `receipt@<c>` (`<prefix>receipt@<c>`, row t
 call c's t-th unit's receipt, c a canonical decimal). -/
 def receiptCall? (v : Json) : Option Nat :=
@@ -724,12 +732,14 @@ def pubCall? (v : Json) : Option Nat :=
   let c := String.ofList (last.toList.drop 4)
   if last.startsWith "pub@" && (c == "0" || canonicalK c) then some c.toNat! else none
 
-/-- `credit.is_tied`: a value the round roots commit, an A value (`isA`), an input-ids table (`idsStep?`) or a receipt
-table (`receiptCall?`). -/
-def isTied (v : Json) : Bool := isA v || (idsStep? v).isSome || (receiptCall? v).isSome
+/-- `credit.is_tied`: a value the round roots commit, an A value (`isA`), an input-ids table (`idsStep?`), a slot table
+(`slotsStep?`) or a receipt table (`receiptCall?`). -/
+def isTied (v : Json) : Bool :=
+  isA v || (idsStep? v).isSome || (slotsStep? v).isSome || (receiptCall? v).isSome
 
 def what (v : String) : String :=
-  if isA (.str v) then "A value" else if (idsStep? (.str v)).isSome then "input-ids table" else "receipt table"
+  if isA (.str v) then "A value" else if (idsStep? (.str v)).isSome then "input-ids table"
+  else if (slotsStep? (.str v)).isSome then "slot table" else "receipt table"
 
 /-- `credit.is_held`: a value held across windows, the weights' rows (`…/b/<K>`, K a canonical decimal); every other
 value a window registers is its own. -/
@@ -760,8 +770,8 @@ def aLinkRefuse {α : Type} (why : String) : R α := throw ("a-link", why)
 /-- `credit._a_link`: none when every registered A value is the tree over the segments the round log commits, else the
 refusal. Of S rounds, round s's segments of a window's A value `…/a/<K>` of L rows tile its rows `[s·L/S, (s+1)·L/S)`;
 round s's A table of K `…/a/<K>@<s>` is committed whole by round s, whose segments tile all its rows, and no other
-round lists it. Round s's input-ids table `…/ids@<s>` (`idsStep?`) is committed whole by round s alike, and so is
-call c's receipt table `…/receipt@<c>` (`receiptCall?`) by c's round, of the window's `calls` calls (its manifest's
+round lists it. Round s's input-ids table `…/ids@<s>` (`idsStep?`) is committed whole by round s alike, as is its
+slot table `…/slots@<s>` (`slotsStep?`), and so is call c's receipt table `…/receipt@<c>` (`receiptCall?`) by c's round, of the window's `calls` calls (its manifest's
 rows; 0 admits no receipt table) the rounds' equal blocks. A step of `window`, which first holds the round roots to the
 ones the challenger received (`roundsCheck`). -/
 def Internal.aLink (rounds entries : Json) (calls : Nat) : R Unit := do
@@ -801,22 +811,27 @@ def Internal.aLink (rounds entries : Json) (calls : Nat) : R Unit := do
     unless 1 ≤ count && count ≤ MAX_ROWS do
       aLinkRefuse (s!"registered {what v} {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} " ++
         "(the verifier hashes its pads)")
-    let (per, own) ← (match receiptCall? (.str v), idsStep? (.str v), (aValue? (.str v)).bind (·.2) with
-      | some c, _, _ => do
+    let (per, own) ← (match receiptCall? (.str v), idsStep? (.str v), slotsStep? (.str v),
+        (aValue? (.str v)).bind (·.2) with
+      | some c, _, _, _ => do
         unless calls % steps == 0 && c < calls do
           aLinkRefuse (s!"registered receipt table {v} is call {c}'s, and the window's {calls} calls are not its " ++
             s!"{steps} rounds' equal blocks with a call {c}")
         let o := c / (calls / steps)
         pure (count, some (s!"call {c}'s receipt table, its round {o}'s", o))
-      | none, some s, _ => do
+      | none, some s, _, _ => do
         if s ≥ steps then
           aLinkRefuse s!"registered input-ids table {v} is round {s}'s, and the window has {steps} rounds"
         pure (count, some (s!"round {s}'s input-ids table", s))
-      | none, none, none => do
+      | none, none, some s, _ => do
+        if s ≥ steps then
+          aLinkRefuse s!"registered slot table {v} is round {s}'s, and the window has {steps} rounds"
+        pure (count, some (s!"round {s}'s slot table", s))
+      | none, none, none, none => do
         if count % steps != 0 then
           aLinkRefuse s!"registered A value {v}'s {count} rows are not the window's {steps} rounds' equal blocks"
         pure (count / steps, none)
-      | none, none, some s => do
+      | none, none, none, some s => do
         let s := s.toNat!
         if s ≥ steps then
           aLinkRefuse s!"registered A value {v} is round {s}'s A table, and the window has {steps} rounds"

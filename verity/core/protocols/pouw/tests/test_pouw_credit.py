@@ -151,6 +151,7 @@ A_LINK_EXPECT = {
     "segments-form": "A segments are not", "entries-form": Cr.ENTRIES_FORM,
     "table-other-round": ", which only round ", "table-past": "and the window has",
     "ids-other-round": "'s input-ids table, which only round ", "ids-past": "is round ",
+    "slots-other-round": "'s slot table, which only round ", "slots-past": "registered slot table ",
     "receipt-other-round": "'s receipt table, its round ", "receipt-past": "rounds' equal blocks with a call",
     "receipt-calls": "rounds' equal blocks with a call", "receipt-unknown": "or receipt table of the window",
 }
@@ -922,6 +923,28 @@ def test_a_calls_receipt_table_in_its_rounds_segments_is_tied_and_an_unknown_seg
         refused = Cr._a_link(**cases.a_link_instance(random.Random(f"receipt-unknown/{seed}"), "receipt-unknown"))
         assert refused[0] == "a-link" and "which is no registered A value, input-ids table or receipt table" in refused[1]
     assert tied
+
+
+def test_a_rounds_slot_table_in_its_segments_is_tied_and_a_slot_table_it_doesnt_register_is_not():
+    """The live unit's ``slot`` port reads round s's ``slots@<s>`` (`circuit.live`), which vllm's served path registers
+    and lists whole among round s's segments: `_a_link` ties it to round s's root as it does ``ids@<s>``, and refuses a
+    round segment of a slot table the window doesn't register."""
+    tied = 0
+    for seed in range(40):
+        d = cases.a_link_instance(random.Random(f"slots/{seed}"))
+        slots = [e["value"] for e in d["entries"] if Cr.slots_step(e["value"]) is not None]
+        tied += len(slots)
+        for v in slots:
+            assert [r for r, x in enumerate(d["rounds"]) if v in x["a"]] == [Cr.slots_step(v)], v
+        assert Cr._a_link(**d) is None, seed
+        for v in slots:
+            gone = [e for e in d["entries"] if e["value"] != v]
+            refused = Cr._a_link(d["rounds"], gone, d["calls"])
+            assert refused[0] == "a-link" and f"lists segments of {v}, which is no registered" in refused[1], seed
+    assert tied
+    assert [Cr.slots_step(v) for v in ("h1/slots@3", "slots@0", "h1/slots@03", "h1/slot@1", "h1/slots@", 7)] == \
+        [3, 0, None, None, None, None]
+    assert Cr.is_tied("h1/slots@2") and not Cr.is_tied("h1/requests@0")
 
 
 def test_a_templates_receipt_width_is_its_bits_as_the_statements_output_row_holds_them():

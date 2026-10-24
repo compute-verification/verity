@@ -284,6 +284,7 @@ COMMIT_FORM = ("the window's Commit record is not the bytes in lowercase hex of 
                "canonical JSON whose registered values are a list of objects: the served Commit runs in the window's "
                "engine, and its record is bound under the window's calls_root before the draw coin")
 _IDS = re.compile(r"ids@(0|[1-9][0-9]*)")
+_SLOTS = re.compile(r"slots@(0|[1-9][0-9]*)")
 _RECEIPT = re.compile(r"receipt@(0|[1-9][0-9]*)")
 #: a tile unit's receipt, its return's field (`h1window.OUTPUTS`), and the statement's output row of it
 #: (`h1window.STATEMENT_OUT_ROWS`), which reads call c's receipt table when the window registers one
@@ -1734,6 +1735,13 @@ def ids_step(value: Any) -> int | None:
     return None if m is None else int(m[1])
 
 
+def slots_step(value: Any) -> int | None:
+    """A slot table's round: a name whose last part is ``slots@<s>`` (``<prefix>slots@<s>``, `circuit.live`'s: slot i's
+    request at round s, the live unit's ``slot`` port, s a canonical decimal); None for any other name."""
+    m = _SLOTS.fullmatch(value.split("/")[-1]) if isinstance(value, str) else None
+    return None if m is None else int(m[1])
+
+
 def receipt_call(value: Any) -> int | None:
     """A receipt table's call: a name whose last part is ``receipt@<c>`` (``<prefix>receipt@<c>``, `h1window.table`'s:
     row t call c's t-th unit's receipt, c a canonical decimal); None for any other name."""
@@ -1750,13 +1758,15 @@ def pub_call(value: Any) -> int | None:
 
 
 def is_tied(value: Any) -> bool:
-    """A value the round roots commit (`_a_link`): an A value (`is_a`), an input-ids table (`ids_step`) or a receipt
-    table (`receipt_call`)."""
-    return is_a(value) or ids_step(value) is not None or receipt_call(value) is not None
+    """A value the round roots commit (`_a_link`): an A value (`is_a`), an input-ids table (`ids_step`), a slot table
+    (`slots_step`) or a receipt table (`receipt_call`)."""
+    return (is_a(value) or ids_step(value) is not None or slots_step(value) is not None
+            or receipt_call(value) is not None)
 
 
 def _what(value: str) -> str:
-    return "A value" if is_a(value) else "input-ids table" if ids_step(value) is not None else "receipt table"
+    return ("A value" if is_a(value) else "input-ids table" if ids_step(value) is not None
+            else "slot table" if slots_step(value) is not None else "receipt table")
 
 
 def is_held(value: Any) -> bool:
@@ -1774,7 +1784,7 @@ def _a_link(rounds: Any, entries: Any, calls: int = 0) -> tuple[str, str] | None
     and why). Of S rounds, round s's segments of a window's A value ``…/a/<K>`` of L rows tile its rows
     ``[s·L/S, (s+1)·L/S)``; round s's A table of K ``…/a/<K>@<s>`` is committed whole by round s, whose segments tile
     all its rows, and no other round lists it. Round s's input-ids table ``…/ids@<s>`` (`ids_step`) is committed whole
-    by round s alike, and so is call c's receipt table ``…/receipt@<c>`` (`receipt_call`) by c's round, of the window's
+    by round s alike, as is its slot table ``…/slots@<s>`` (`slots_step`), and so is call c's receipt table ``…/receipt@<c>`` (`receipt_call`) by c's round, of the window's
     `calls` calls (its manifest's rows; 0, the default, admits no receipt table) the rounds' equal blocks. A step of
     `window`, which first holds the round roots to the ones the challenger received (`core_check.rounds`)."""
     if not (isinstance(rounds, list) and rounds):
@@ -1814,8 +1824,8 @@ def _a_link(rounds: Any, entries: Any, calls: int = 0) -> tuple[str, str] | None
         if root is None or domain is None or not _nat(count) or not 1 <= count <= MAX_ROWS:
             return "a-link", (f"registered {_what(v)} {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} "
                               "(the verifier hashes its pads)")
-        step, call = ids_step(v), receipt_call(v)
-        at = None if step is not None or call is not None else a_value(v)[1]
+        step, slots, call = ids_step(v), slots_step(v), receipt_call(v)
+        at = None if step is not None or slots is not None or call is not None else a_value(v)[1]
         if call is not None:
             if not (calls % steps == 0 and call < calls):
                 return "a-link", (f"registered receipt table {v} is call {call}'s, and the window's {calls} calls are "
@@ -1826,6 +1836,10 @@ def _a_link(rounds: Any, entries: Any, calls: int = 0) -> tuple[str, str] | None
             if step >= steps:
                 return "a-link", f"registered input-ids table {v} is round {step}'s, and the window has {steps} rounds"
             per, own, whose = count, step, f"round {step}'s input-ids table"
+        elif slots is not None:
+            if slots >= steps:
+                return "a-link", f"registered slot table {v} is round {slots}'s, and the window has {steps} rounds"
+            per, own, whose = count, slots, f"round {slots}'s slot table"
         elif at is None:
             if count % steps:
                 return "a-link", f"registered A value {v}'s {count} rows are not the window's {steps} rounds' equal blocks"
@@ -1946,4 +1960,4 @@ __all__ = ["CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT"
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_weights", "cover",
            "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_tied", "law", "layout_of",
            "merkle_depth", "partition_of", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
-           "served_rows", "served_work", "step_row", "step_tables", "strata", "tree_root", "window"]
+           "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "tree_root", "window"]

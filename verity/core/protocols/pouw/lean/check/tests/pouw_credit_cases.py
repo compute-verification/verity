@@ -1384,11 +1384,13 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
     K's ``…/a/<K>`` and, at random (always under the ``table-`` mutations), one or two rounds' A tables
     ``…/a/<K>@<s>``, each committed whole by its round; and at random (always under the ``ids-`` mutations) some
     rounds' input-ids tables ``…/ids@<s>``, each committed whole by its round; and at random (always under the
+    ``slots-`` mutations) some rounds' slot tables ``…/slots@<s>``, alike; and at random (always under the
     ``receipt-`` mutations) some calls' receipt tables ``…/receipt@<c>``, each committed whole by its call's round, of
     the window's ``calls`` (the rounds' equal blocks)."""
     calling, tying, receipts = name.startswith("table-"), name.startswith("ids-"), name.startswith("receipt-")
+    slotting = name.startswith("slots-")
     steps = rng.choice([2, 3, 4] if name in ("blocks", "swapped", "table-other-round", "ids-other-round",
-                                             "receipt-other-round") else [1, 2, 3, 4])
+                                             "slots-other-round", "receipt-other-round") else [1, 2, 3, 4])
     calls = steps * rng.randint(1, 3)
     window = f"h1/w-{rng.randrange(100)}"
     values, entries = {}, []
@@ -1408,6 +1410,9 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
     if tying or rng.random() < 0.5:
         for s in rng.sample(range(steps), rng.randint(1, steps)):
             a(f"{window}/ids@{s}", rng.choice(sizes), s)
+    if slotting or rng.random() < 0.5:
+        for s in rng.sample(range(steps), rng.randint(1, steps)):
+            a(f"{window}/slots@{s}", rng.choice(sizes), s)
     if receipts or rng.random() < 0.5:
         for c in rng.sample(range(calls), rng.randint(1, calls)):
             a(f"{window}/receipt@{c}", rng.choice(sizes), c // (calls // steps))
@@ -1417,6 +1422,7 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
     log = _log(steps, values, [_hex(rng) for _ in range(steps)])
     tied = [e for e in entries if Cr.is_tied(e["value"])]
     e = rng.choice([x for x in tied if Cr.ids_step(x["value"]) is not None] if tying
+                   else [x for x in tied if Cr.slots_step(x["value"]) is not None] if slotting
                    else [x for x in tied if Cr.receipt_call(x["value"]) is not None] if receipts
                    else [x for x in tied if Cr.is_a(x["value"]) and (values[x["value"]][2] is not None) == calling]
                    if calling or name == "blocks" else tied)
@@ -1491,6 +1497,13 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
             e["value"] = f"{window}/ids@{steps + rng.randrange(3)}"
             log[own]["a"][e["value"]] = log[own]["a"].pop(v)
             _reroot(log)
+        case "slots-other-round":
+            log[rng.choice([x for x in range(steps) if x != own])]["a"][v] = [list(x) for x in segs]
+            _reroot(log)
+        case "slots-past":
+            e["value"] = f"{window}/slots@{steps + rng.randrange(3)}"
+            log[own]["a"][e["value"]] = log[own]["a"].pop(v)
+            _reroot(log)
         case "receipt-other-round":
             log[rng.choice([x for x in range(steps) if x != own])]["a"][v] = [list(x) for x in segs]
             _reroot(log)
@@ -1513,7 +1526,8 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
 
 A_LINK_NAMES = ["untied", "late-rows", "rewritten", "round-root", "gap", "extra", "swapped", "misaligned", "unknown",
                 "no-a", "twice", "entry-form", "blocks", "log-form", "round-form", "segments-form", "entries-form",
-                "table-other-round", "table-past", "ids-other-round", "ids-past", "receipt-other-round", "receipt-past",
+                "table-other-round", "table-past", "ids-other-round", "ids-past", "slots-other-round", "slots-past",
+                "receipt-other-round", "receipt-past",
                 "receipt-calls", "receipt-unknown"]
 
 
