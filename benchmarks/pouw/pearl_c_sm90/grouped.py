@@ -46,8 +46,12 @@ TILES_PD = 979
 #: PROBE: the older forms, "+"-joined, for an A/B in one session: tiles851 (the tile leaves at PD's), treewhole (pd_tree_g at
 #: a whole SM's shared memory), hashzero (pd_commit_gm hashes the filler rows: no zero row digest in the records), rows2d
 #: (pd_commit_g's grid, a unit's rows on its CTA row, rather than pd_commit_gm's), pairsmem (pd_commit_gm at an SM to a CTA
-#: only while every unit's m₁₆ rows fit the SMs, not its real rows: `commit_rows`)
+#: only while every unit's m₁₆ rows fit the SMs, not its real rows: `commit_rows`), midsmem (pd_commit_gm at MID_SMEM, not
+#: a whole SM, where it would take one)
 PLACE = frozenset(os.environ.get("PEARLC_GROUPED_PLACE", "").split("+")) - {"", "base"}
+#: PROBE midsmem's pd_commit_gm dynamic shared memory: with its 33 KiB static, past half an H100's or H200's 228 KiB an SM, so
+#: no two of its CTAs share one, and short of it by three pd_tiles_g_979 CTAs (9 KiB static, PD_PAIR_SMEM / 2), which may
+MID_SMEM = 88 << 10
 #: a unit's segment rows divide by it: the grouped GEMMs' tile rows (run.BM_D) and the tile leaves' (run.TILE)
 SEG = 64
 STEPS = ("commit_a", "stats_a", "eprime_a", "form_a", "af", "pa", "gemm_pearlc", "hash_leaf")
@@ -287,7 +291,7 @@ class Grouped:
         d, b, k, n, R = self.dev, self.b, self.k, self.n, self.R
         rows, count, meta = sum(u.seg for u in us), len(us), b["meta"]
         ex, s = meta + REC * count, k // 256
-        smem = d.pd_smem_g if commit_rows(d, us) <= d.sms else R.PD_PAIR_SMEM
+        smem = (MID_SMEM if "midsmem" in PLACE else d.pd_smem_g) if commit_rows(d, us) <= d.sms else R.PD_PAIR_SMEM
 
         def commit():
             block = 32 * (R.cdiv(s, 32) * 2 + 2)
