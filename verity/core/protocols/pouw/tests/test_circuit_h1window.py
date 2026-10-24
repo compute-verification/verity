@@ -208,6 +208,7 @@ def test_a_calls_statement_opens_its_units_rows_at_its_tables_and_at_no_other_ca
         assert (e["leaves"], e["words"], e["domain"], e["row_schema"]) == (reg.leaves, reg.words, dom.domain_id.hex(),
                                                                              G.SCHEMA_V2), port
         assert all(r is None for u, r in enumerate(e["reads"]) if not u0 <= u < u0 + n), port
+        assert len(e["reads"]) == u0 + n < tp.population, "no trailing nulls: a unit past reads reads none"
         for u in range(u0, u0 + n):
             p = e["reads"][u]
             assert G.verify_read(dom, reg.root, p, reg.bcs[p], reg.path(p), G.SCHEMA_V2), (port, u)

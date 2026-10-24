@@ -23,7 +23,8 @@ a draw's coins from one family of a ledger session's challenger, opened after th
 roots, the bytes it read and the session's evidence, then a coin opened after the commitment and skipped, a wrong
 opening, coins opened before the commitment (their `after` rewritten or not), a coin opened and not read, the bytes
 tampered or longer, another commitment, a release log edited, the window of another session the ledger opens (a prover
-picking the window), each malformed form. Each piece answers
+picking the window), a session whose pin is off the verifier's copy of main, no pins log, each malformed form. Each
+piece answers
 ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
 """
 
@@ -36,7 +37,7 @@ import json
 import random
 import shutil
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -577,31 +578,31 @@ def head(j: Any) -> Any:
 
 
 def session(j: Any) -> Any:
-    _request(j, ["key", "ledger", "session", "window"])
+    _request(j, ["key", "ledger", "main", "pins", "session", "window"])
 
     def go():
-        c, roots = Ch.trusted_session_of(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["session"],
-                                         lms_verify)
+        c, roots = Ch.trusted_session_of(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["pins"],
+                                         j["main"], j["session"], lms_verify)
         return {"commitment": c.to_json(), "roots": _roots(roots)}
     return _refusing(go)
 
 
 def credited(j: Any) -> Any:
-    _request(j, ["descriptor", "key", "ledger", "window"])
+    _request(j, ["descriptor", "key", "ledger", "main", "pins", "window"])
     d = _hex(j["descriptor"])
 
     def go():
-        return Ch.credited_session(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), d,
-                                   lms_verify)._asdict()
+        return Ch.credited_session(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["pins"],
+                                   j["main"], d, lms_verify)._asdict()
     return _refusing(go)
 
 
 def pinned(j: Any) -> Any:
-    _request(j, ["key", "ledger", "pins", "window"])
+    _request(j, ["key", "ledger", "main", "pins", "window"])
 
     def go():
         return Ch.pinned_session(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["pins"],
-                                 lms_verify)._asdict()
+                                 j["main"], lms_verify)._asdict()
     return _refusing(go)
 
 
@@ -1262,17 +1263,48 @@ def head_case(rng: random.Random, name: str) -> Any:
     return j
 
 
+def _pin_lines(rng: random.Random, n: int) -> list[str]:
+    return [Ch.pin_line(rng.randbytes(20).hex(), rng.randbytes(20).hex(), rng.choice(STARTS)) for _ in range(n)]
+
+
+def _first_parent(rng: random.Random, pin: str) -> list[str]:
+    """The auditor's first-parent list of main, `pin` on it."""
+    main = [rng.randbytes(20).hex() for _ in range(rng.randint(0, 4))]
+    main.insert(rng.randint(0, len(main)), pin)
+    return main
+
+
+def _pinned(rng: random.Random, lg: Ledger, name: str) -> tuple[list[str], list[str]]:
+    """The host's published pins log and the auditor's first-parent list of main for `lg`'s window: its open's pin on
+    main's first-parent line and recorded among the first lines of the log, which the open seals, the log sometimes
+    longer; then, for `name`, the open pinned to a commit the log doesn't record ("unpinned"), or to one the log records
+    that isn't on main's first-parent line, as a branch commit merged into main isn't ("branch-pin")."""
+    n = rng.randint(1, 4)
+    pins = _pin_lines(rng, n + rng.choice([0, 0, 1]))
+    pin = lg.opened["pinned"]
+    pins[rng.randrange(n)] = Ch.pin_line(pin, rng.randbytes(20).hex(), rng.choice(STARTS))
+    lg.opened["pins"] = Ch.pins_seal(pins[:n])
+    main = _first_parent(rng, pin)
+    if name == "unpinned":
+        lg.opened["pinned"] = rng.choice([c for c in main if c != pin] + [rng.randbytes(20).hex()])
+    elif name == "branch-pin":
+        main.remove(pin)
+    return pins, main
+
+
 SESSION_NAMES = ["honest", "no-ledger", "no-open", "unclosed-ledger", "other-host", "unsealed-log", "unlisted-log",
                  "wrong-session", "session-form", "no-record", "record-signature", "no-close", "close-form",
                  "close-signature", "close-renamed", "rechained", "log-tampered", "log-dropped", "log-form", "unclosed",
-                 "key-form", "request", "record-leaf", "commitment", "hellos-form", "hellos-unsealed", "hellos-count"]
+                 "key-form", "request", "record-leaf", "commitment", "hellos-form", "hellos-unsealed", "hellos-count",
+                 "unpinned", "branch-pin"]
 
 
 def session_case(rng: random.Random, name: str) -> Any:
     s = _ledger_session(rng)
     lg = Ledger(rng, s, closed=name != "unclosed-ledger")
+    pins, main = _pinned(rng, lg, name)
     files = s.files()
-    j = {"key": s.key.to_json(), "ledger": None, "session": files, "window": lg.window}
+    j = {"key": s.key.to_json(), "ledger": None, "main": main, "pins": pins, "session": files, "window": lg.window}
     lines = files["log"]
     end = lg.index("end", s.id)
     match name:
@@ -1347,7 +1379,8 @@ def session_case(rng: random.Random, name: str) -> Any:
     return j
 
 
-CREDITED_NAMES = ["honest", "other-circuit", "descriptor-edited", "no-period", "ledger", "descriptor-form"]
+CREDITED_NAMES = ["honest", "other-circuit", "descriptor-edited", "no-period", "ledger", "descriptor-form", "unpinned",
+                  "branch-pin", "no-main"]
 
 
 def _descriptor(rng: random.Random) -> bytes:
@@ -1359,18 +1392,23 @@ def _descriptor(rng: random.Random) -> bytes:
 
 
 def credited_case(rng: random.Random, name: str) -> Any:
-    """A window in its lane's period whose circuit is the SHA-512 of the descriptor the verifier holds; then a period
-    committing another circuit, the descriptor edited, the window in no period, a refused ledger, a descriptor not hex."""
+    """A window in its lane's period, pinned to a logged commit on main's first-parent line (`_pinned`), whose circuit is
+    the SHA-512 of the descriptor the verifier holds; then a period committing another circuit, the descriptor edited,
+    the window in no period, a refused ledger, a descriptor not hex, a pin the log doesn't record, a logged pin off
+    main's first-parent line, no copy of main."""
     if name == "ledger":
         j = ledger_case(rng, rng.choice(LEDGER_NAMES[1:]))
         if isinstance(j, dict):
             j["descriptor"] = _descriptor(rng).hex()
+            j["pins"], j["main"] = _pin_lines(rng, rng.randint(1, 3)), _first_parent(rng, rng.randbytes(20).hex())
         return j
     s = _ledger_session(rng)
     lg = Ledger(rng, s, period=rng.choice(["open", "closed"]))
+    pins, main = _pinned(rng, lg, name)
     d = _descriptor(rng)
     lg.period_open["circuit"] = rng.choice(CIRCUITS) if name == "other-circuit" else hashlib.sha512(d).hexdigest()
-    j = {"descriptor": d.hex(), "key": s.key.to_json(), "ledger": lg.lines(), "window": lg.window}
+    j = {"descriptor": d.hex(), "key": s.key.to_json(), "ledger": lg.lines(), "main": main, "pins": pins,
+         "window": lg.window}
     match name:
         case "descriptor-edited":
             j["descriptor"] = rng.choice([_flip(d.hex(), rng.randrange(len(d))), (d + b"\n").hex(), d[:-1].hex()])
@@ -1378,26 +1416,26 @@ def credited_case(rng: random.Random, name: str) -> Any:
             j["ledger"] = lg.lines([e for e in lg.events if not e[0].startswith("period")])
         case "descriptor-form":
             j["descriptor"] = rng.choice([None, 5, d.hex().upper() + "AB", d.hex() + "0", ["00"]])
+        case "no-main":
+            j["main"] = None
     return j
 
 
 PINNED_NAMES = ["honest", "off-main", "pinned-later", "no-pins", "pins-form", "line-form", "cut", "edited", "no-seal",
-                "ledger", "request"]
-
-
-def _pin_lines(rng: random.Random, n: int) -> list[str]:
-    return [Ch.pin_line(rng.randbytes(20).hex(), rng.randbytes(20).hex(), rng.choice(STARTS)) for _ in range(n)]
+                "ledger", "request", "branch-commit", "no-main", "main-form"]
 
 
 def pinned_case(rng: random.Random, name: str) -> Any:
     """A window whose open names its host's pin and seals the first lines of the host's pins log, one of which pins it,
-    the published log those lines and sometimes later pins; then a commit off main or pinned only after the open, no
-    pins log, one of another form or with a malformed line, one cut short of the seal or with a sealed line edited,
-    dropped or moved, an open sealing none or a malformed seal, a refused ledger, a request without a key."""
+    the published log those lines and sometimes later pins, the pin on the auditor's first-parent list of main; then a
+    commit off main or pinned only after the open, no pins log, one of another form or with a malformed line, one cut
+    short of the seal or with a sealed line edited, dropped or moved, an open sealing none or a malformed seal, a refused
+    ledger, a request without a key, a logged pin off main's first-parent line (a branch commit merged into main), no
+    copy of main or one of another form."""
     if name == "ledger":
         j = ledger_case(rng, rng.choice(LEDGER_NAMES[1:]))
         if isinstance(j, dict):
-            j["pins"] = _pin_lines(rng, rng.randint(1, 3))
+            j["pins"], j["main"] = _pin_lines(rng, rng.randint(1, 3)), _first_parent(rng, rng.randbytes(20).hex())
         return j
     s = _ledger_session(rng)
     lg = Ledger(rng, s)
@@ -1422,10 +1460,19 @@ def pinned_case(rng: random.Random, name: str) -> Any:
                 {"lines": n}, [n, d]])
             if lg.opened["pins"] is DROP:
                 del lg.opened["pins"]
-    j = {"key": s.key.to_json(), "ledger": lg.lines(), "pins": pins, "window": lg.window}
+    main = _first_parent(rng, lg.opened["pinned"])
+    j = {"key": s.key.to_json(), "ledger": lg.lines(), "main": main, "pins": pins, "window": lg.window}
     match name:
         case "no-pins":
             j["pins"] = None
+        case "branch-commit":
+            j["main"] = [c for c in main if c != lg.opened["pinned"]]
+        case "no-main":
+            j["main"] = None
+        case "main-form":
+            j["main"] = rng.choice(["\n".join(main), {"main": main}, 5, [c.upper() for c in main],
+                                    [c[:12] for c in main], main + [None], main + [rng.randbytes(32).hex()],
+                                    [c + "\n" for c in main]])
         case "pins-form":
             j["pins"] = rng.choice(["\n".join(pins), {"lines": pins}, 5, True])
         case "line-form":
@@ -1483,9 +1530,12 @@ def _pairs(log: Sequence[dict]) -> list[str]:
 class Drawn:
     """A draw's coins from family `draw` of a ledger session's challenger, as `ChallengerCoins` opens them after `after`
     (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
-    the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window."""
+    the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
+    the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
+    or two reads of drawn lengths."""
 
-    def __init__(self, rng: random.Random, before: bool = False) -> None:
+    def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
+                 reads: Callable[[Callable[[int], bytes]], bytes] | None = None) -> None:
         s = self.s = _ledger_session(rng)
         s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
@@ -1498,15 +1548,19 @@ class Drawn:
         draw = self.records["draw"]
         self.early = [self._step("draw", lambda: draw.record(rng.choice([rng.randbytes(64), bytes(64)])))
                       for _ in range(rng.randint(1 if before else 0, 2))]
-        self.after = rng.randbytes(64)
+        self.after = rng.randbytes(64) if after is None else after
         coins = T.ChallengerCoins(self.records["draw"])
         self.segment = coins.commit(self.after)
-        self.read = b"".join(self._step("draw", lambda: coins(rng.randint(1, 3 * 64)))
-                             for _ in range(rng.choice([1, 1, 2])))
+        if reads is None:
+            self.read = b"".join(self._step("draw", lambda: coins(rng.randint(1, 3 * 64)))
+                                 for _ in range(rng.choice([1, 1, 2])))
+        else:
+            self.read = self._step("draw", lambda: reads(coins))
         for _ in range(rng.randint(0, 2)):
             self._step("draw", lambda: self.records["draw"].record(rng.randbytes(64)))
         s.close = s.signed(None)
         self.ledger = Ledger(rng, s)
+        self.pins, self.main = _pinned(rng, self.ledger, "honest")
 
     def _step(self, label: str, f):
         n = len(self.records[label].log)
@@ -1518,8 +1572,8 @@ class Drawn:
         return [r.hex() for r in self.records["draw"].roots]
 
     def evidence(self, segment: dict) -> dict:
-        return {"key": self.s.key.to_json(), "ledger": self.ledger.lines(), "segment": segment,
-                "session": self.s.files()}
+        return {"key": self.s.key.to_json(), "ledger": self.ledger.lines(), "main": self.main, "pins": self.pins,
+                "segment": segment, "session": self.s.files()}
 
     def other_window(self, rng: random.Random) -> str:
         """The root of a window the ledger opens for another session, when it has one, else a window it doesn't open."""
@@ -1617,7 +1671,7 @@ def read_case(rng: random.Random, name: str) -> Any:
 
 
 DRAW_COINS_NAMES = ["honest"] + DRAW_MUTATIONS + ["log-tampered", "other-window", "window-form", "key-form",
-                                                   "coins-form", "request"]
+                                                   "off-main", "no-pins", "coins-form", "request"]
 
 
 def draw_coins_case(rng: random.Random, name: str) -> Any:
@@ -1636,6 +1690,10 @@ def draw_coins_case(rng: random.Random, name: str) -> Any:
             j["window"] = rng.choice(["", "AB" * 64, j["window"][:-2]])
         case "key-form":
             coins["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+        case "off-main":
+            coins["main"] = [c for c in coins["main"] if c != d.ledger.opened["pinned"]]
+        case "no-pins":
+            coins["pins"] = None
         case "coins-form":
             j["coins"] = rng.choice([_body(coins, segment=DROP), {**coins, "window": d.ledger.window}, None,
                                      [coins]])

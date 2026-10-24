@@ -28,7 +28,9 @@ after it, beside a later step's forward; their receipts go under a later round. 
 
 So D is the ring's depth: the A slots of D steps live at once (the forward's own, and D - 1 steps' whose units are pending
 or running), and the units of a step wait D - 2 steps for their coin.  In process (``coins: in-process (not certified)``)
-a coin is back once its root is sent; off the node a round trip of R ms needs D - 2 >= R / step.
+a coin is back once its root is sent; off the node round s + D - 1 waits for step s's units unless (D - 1) * step >= R +
+their span (R the round trip, the span about 10 ms), so the served T64 row on the RTX PRO 6000 (R about 100 ms) is -so8,
+at 54.6 MB of GPU memory a slot past -so6 (T * sum K bytes of A codes, and their scales).
 
 `check` holds a capture to dither_a's checks with its own round s for the A, admit, z and y leaves (the receipt-step leaf
 there an earlier step's, read as recorded) and round s + D - 1 for its receipts (dither_a.check's `r_round`), every
@@ -109,7 +111,7 @@ import dither_fused as DF
 import dither_manifest as MF
 import dither_one as DO
 import h1c as H1CM
-from dither_fused import CM, CO, H1R, Call, unwords, words
+from dither_fused import CM, CO, H1R, Call, Dom, Tab, unwords, words
 from hb_side import auto_j
 
 LIB_ENV = DA.LIB_ENV
@@ -133,7 +135,8 @@ FUSED_ENV = "DITHER_SO_FUSED"
 # "1": step s's units, when coin s isn't back at the end of step s + D - 2's `after`, dispatched while the host waits on
 # forward s + D - 1, once the coin is back (at the latest just after that forward, before round s + D - 1 takes their
 # receipts), so the host launches forward s + D - 1 without waiting on the coin; the same order (`check`: coin, units,
-# receipts' round)
+# receipts' round).  "2": as "1", but the latest point is just before round s + D - 1's receipt leaf, after that step's
+# A, admit and z tables are launched (the host polls between them), so the GPU builds them while the coin is out
 COIN_ASYNC_ENV = "DITHER_SO_COIN_ASYNC"
 # "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
 # the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
@@ -193,17 +196,45 @@ class SoWindow(DO.Window):
         self.zlate: tuple | None = None
         self.coin_waits: list[float] = []
         self.order_why = None
-        self.coin_async = os.environ.get(COIN_ASYNC_ENV) == "1"
+        self.coin_async = int(os.environ.get(COIN_ASYNC_ENV) or 0)
+        if self.coin_async not in (0, 1, 2):
+            raise RuntimeError(f"{COIN_ASYNC_ENV}={self.coin_async}: 0, 1 or 2")
         self.deferred: int | None = None
-        self.deferrals = {"deferred": 0, "in_forward": 0, "after_forward": 0}
+        self.deferrals = {"deferred": 0, "in_forward": 0, "in_after": 0, "after_forward": 0}
         self.late_waits: list[float] = []
+        self.a_step = os.environ.get(DO.A_STEP_ENV) == "1"
+        if self.a_step and (self.a_once or self.overlap):
+            raise RuntimeError(f"{DO.A_STEP_ENV}=1 serves -aom/-aomn without -ov (its A tables after the forward, on "
+                               f"the serving stream)")
         super().__init__(*args, **kwargs)
+        if self.a_step:
+            self._a_step_set()
         # the gate's generation runs past its last capture until that step's receipts are in a round
         self.gate_extra = self.depth + 8 + (1 if self.overlap else 0)
         self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(2)]
         self.ev_fwd = torch.cuda.Event()
         # the engine's own host time a step (from one `after`'s end to the next `before`), and `before`'s
         self.t_b0 = self.t_after_end = 0.0
+
+    def _a_step_set(self) -> None:
+        """DO.A_STEP_ENV's tables, pre["ak"]: a K's table over its slot group's rows and its scales' run of
+        `scale_all`; `a_leaves` the a-step table's leaves, call w's its K's root (`a_gidx`)."""
+        ks, t, tabs, at = sorted(self.a_calls), self.t, [], 0
+        for k in ks:
+            n = len(self.a_calls[k])
+            tabs.append(Tab(Dom("a-table", DO.a_step_fields(self, k, 0), n * t, {"step": (1, 0)}), n * t,
+                            data=self.slot_groups[k].view(torch.uint8), stride=k, body=k, length=k + 4,
+                            tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, lab=(f"a/{k}@", "")))
+            at += n
+        self.pre["ak"] = self.c.set(tabs)
+        self.a_gidx = torch.tensor([ks.index(k) for _, k in self.nk], dtype=torch.long, device=self.dev)
+        o = self.pre["mid"].level_off[0]
+        self.a_leaves = self.pre["mid"].level[o:o + 8 * self.L].view(self.L, 8)
+
+    def a_step_build(self) -> None:
+        """On the current stream, after the forward: the step's K tables and each call's a-step leaf."""
+        self.c.build(self.pre["ak"], self.stepv[0:1])
+        self.a_leaves.copy_(self.pre["ak"].roots.view(-1, 8).index_select(0, self.a_gidx))
 
     def _epoch(self) -> None:
         self._start()
@@ -330,6 +361,26 @@ class SoWindow(DO.Window):
                 return
             time.sleep(1e-4)
 
+    def _poll_deferred(self) -> None:
+        """$DITHER_SO_COIN_ASYNC=2, between `after`'s table launches: the deferred step's units if its coin is back."""
+        if self.deferred is not None and self.pipe.opening(self.ix(self.deferred), wait=False) is not None:
+            j, self.deferred = self.deferred, None
+            self.deferrals["in_after"] += 1
+            self.stashed.discard(j)
+            self.dispatch_units(j)
+
+    def _late_dispatch(self) -> float:
+        """The deferred step's units, the host waiting here for its coin (coin_wait_late); the wait in seconds."""
+        self.phase("coin_wait_late")
+        j, self.deferred = self.deferred, None
+        self.deferrals["after_forward"] += 1
+        self.stashed.discard(j)
+        t0 = time.perf_counter()
+        self.dispatch_units(j)
+        t = time.perf_counter() - t0
+        self.late_waits.append(1e3 * t)
+        return t
+
     def end(self) -> dict | None:
         """The window's end (the module docstring): the tail's units after their coins, the receipt-tail roots under the
         final round, its coin back, the manifest root, the draw coin after it, the session closed."""
@@ -398,7 +449,8 @@ class SoWindow(DO.Window):
                    "cap_at": self.cap_at, "b_roots": self.b_roots}
         if self.end_name is not None:
             p = (s1 - 1) % D
-            rec["last"] = {"a": [x.clone() for x in sd.ring_slot[p]], "sa": [x.clone() for x in sd.ring_scale[p].unbind(0)],
+            rec["last"] = {"a": [x.clone() for x in sd.ring_slot[p]],
+                           "sa": [sd.ring_scale[p][self.spos[w]].clone() for w in range(L)],
                            "receipts": self.plan.out.clone(), "m": self.m_last}
             self.end_recs[self.end_name] = rec
         if sd.spill is not None:
@@ -465,13 +517,15 @@ class SoWindow(DO.Window):
         return x
 
     def _a_step(self) -> None:
-        if not self.a_once:
+        if not (self.a_once or self.a_step):
             super()._a_step()
 
     def poisoned(self) -> list:
         # not the plan's receipts and seeds, nor the units' stage: an earlier step's units are writing them now (a
         # captured step's units poison theirs on the units stream, `SoSide.dispatch`)
         out = self.slot + self.scale + self.z + list(self.ydump or []) + [self.pre["mid"].level, self.pre["a"].level]
+        if self.a_step:
+            out.append(self.pre["ak"].level)
         if DA.SIDE:
             sd = DA.SIDE[0]
             out += sd.zy + sd.ysv + [sd.zyset.level, sd.ysset.level, sd.yuset.level]
@@ -520,23 +574,20 @@ class SoWindow(DO.Window):
         main.synchronize()
         t_fwd = time.perf_counter()
         t_late = 0.0
-        if self.deferred is not None:
-            self.phase("coin_wait_late")
-            j, self.deferred = self.deferred, None
-            self.deferrals["after_forward"] += 1
-            self.stashed.discard(j)
-            t0 = time.perf_counter()
-            self.dispatch_units(j)
-            t_late = time.perf_counter() - t0
-            self.late_waits.append(1e3 * t_late)
+        if self.deferred is not None and self.coin_async == 1:
+            t_late = self._late_dispatch()
         s, m, cap, pre, ev, kinds = self.s, self.m, self.cap, self.pre, self.ev, self.round_kinds
-        if self.a_once:
+        if self.a_once or self.a_step:
             self.phase("a_tables")
             if not self.flags & DO.F_NW_TILES:
                 for x in self.slot_groups.values():
                     x[:, m:].zero_()
                 self.scale_all[:, m:].zero_()
-            self.c.build(pre["a"], self.stepv[0:1])
+            if self.a_step:
+                self.a_step_build()
+            else:
+                self.c.build(pre["a"], self.stepv[0:1])
+            self._poll_deferred()
         self.phase("stash")
         if sd.spill is not None:
             sd.spill.wait_a(s % self.depth)
@@ -555,10 +606,13 @@ class SoWindow(DO.Window):
                 ev[7].record(ads)
         else:
             self.c.build(pre["admit"], self.stepv[0:1])
+        self._poll_deferred()
         self.phase("z_tables")
         self.c.build(pre["z"], self.stepv[0:1])
         for f in self.before_mid:
             f()
+        if self.deferred is not None:
+            t_late = self._late_dispatch()
         self.phase("receipt_leaf")
         o = pre["mid"].level_off[kinds.index("receipt-step")]
         lv = pre["mid"].level[o:o + 8 * self.L]
@@ -727,7 +781,9 @@ class SoWindow(DO.Window):
         doc["salt"] = "round (the step's own coin)"
         doc["so"] = {"order": ORDER, "depth": self.depth, "units_lag_steps": self.depth - 2,
                      "receipts_round_lag": self.depth - 1, "a_tables": "once a step (not ruled in)" if self.a_once
-                     else "per call, in the forward", "coins": self.coins.label, "coins_record": self.coins.record(),
+                     else ("a/<K>@<s> once a step after the forward (DITHER_A_STEP: CA's 23 Oct ruling, core's form "
+                           "pending)" if self.a_step else "per call, in the forward"),
+                     "coins": self.coins.label, "coins_record": self.coins.record(),
                      "coin_rtt_ms": {"n": len(rtt), "p50": _q(rtt, 0.5), "p90": _q(rtt, 0.9), "max": _q(rtt, 1.0)},
                      "coin_wait_ms": {"n": len(waits), "p50": _q(waits, 0.5), "p90": _q(waits, 0.9), "max": _q(waits, 1.0)},
                      "coin_async": {"on": self.coin_async, **deferrals,
@@ -787,7 +843,8 @@ class SoSide(DA.Side):
         super().__init__(win, unit, h1u, "zy", "", pt)
         dev, L, D = win.dev, win.L, win.depth
         self.so_ao, self.a_once, self.noise = ao, ao.startswith("b"), ao.endswith("n")
-        if not self.a_once:
+        self.a_percall = not (self.a_once or win.a_step)
+        if self.a_percall:
             self.astreams = [torch.cuda.Stream(device=dev, priority=-1) for _ in range(NA)]
             self.a_join = [torch.cuda.Event() for _ in range(NA)]
             self.a_used: set[int] = set()
@@ -851,7 +908,7 @@ class SoSide(DA.Side):
                                              BLOCK_K=triton.next_power_of_2(k), num_warps=DA.EL.quant_warps(k),
                                              **DA.EL.OPTS)
         rc = 0
-        if not self.a_once:
+        if self.a_percall:
             self.fork.record(main)
             i = w % NA
             ast = self.astreams[i]
@@ -862,7 +919,7 @@ class SoSide(DA.Side):
         self.ycommit(w, y, s_w)
         if rc:
             raise RuntimeError(f"dither-a-so call {w} (M={M}): its A table's launch returned {rc}")
-        if not self.a_once and self.a_used and (w == win.L - 1 or (w % 4 == 0 and DA._piecewise())):
+        if self.a_percall and self.a_used and (w == win.L - 1 or (w % 4 == 0 and DA._piecewise())):
             for i in sorted(self.a_used):
                 self.a_join[i].record(self.astreams[i])
                 main.wait_event(self.a_join[i])
@@ -928,7 +985,7 @@ class SoSide(DA.Side):
                 win.plan.seeds.data_ptr() + 8 * 16 * self.seed0[w], self.ring_live[p].data_ptr(),
                 self.stage.data_ptr() + 4 * win.plan.offs[w][0], ws.data_ptr(),
                 auto_j(live * (n // 32), self.nb[w], self.sms), self.zs[0].data_ptr(), self.zs[1].data_ptr(),
-                self.ys.data_ptr(), None, self.ring_scale[p][w].data_ptr(), win.sw[w].data_ptr(),
+                self.ys.data_ptr(), None, self.ring_scale[p][win.spos[w]].data_ptr(), win.sw[w].data_ptr(),
                 self.ring_s1[p].data_ptr(), min(m, win.t))
 
     def _units(self, p: int, m: int) -> int:
@@ -1729,11 +1786,10 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     a_rows = [unwords(rows[n - 1][8 * w:8 * w + 8]) for w in range(L)]
     a_bad, rr_bad = [], []
     t_cpu = time.perf_counter()
-    for w in rehashed_calls(L, rec["draw"].coin):
-        fa = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "k": win.nk[w][1],
-              "schema": CM.SCHEMA}
-        if CM.s8_table(CM.domain(fa, t, "a-table"), key, f"a/{s}/{w}", last["a"][w].cpu().numpy(),
-                       last["sa"][w].cpu().numpy()).root != a_rows[w]:
+    rehash = rehashed_calls(L, rec["draw"].coin)
+    a_cpu = DO.a_roots_cpu(win, s, rehash, lambda v: last["a"][v].cpu().numpy(), lambda v: last["sa"][v].cpu().numpy())
+    for w in rehash:
+        if a_cpu[w] != a_rows[w]:
             a_bad.append(w)
         o_, units, nw = win.plan.offs[w]
         fr = {"window": W, "step": s, "linear": w, "module": win.names[w], "base": s * win.u_step + win.offs[w],
@@ -1781,7 +1837,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
 def rehashed_calls(L: int, coin: bytes, drawn: int = 8) -> list[int]:
     """The last step's calls whose A table and receipt table `check_end` rehashes on the CPU: the first and last layers'
     four (every linear's shape) and `drawn` the draw coin picks: at most 16 of Llama 3.1 8B's 128, about half a second
-    where all 128 take about 4 s."""
+    where all 128 take about 4 s (under DO.A_STEP_ENV the A side is every K's table, so all 128 calls' rows)."""
     h = hashlib.sha512(b"verity/kernels-int12/end-rehash/v1" + coin).digest()
     return sorted({*range(min(4, L)), *range(max(0, L - 4), L),
                    *(int.from_bytes(h[8 * j:8 * j + 8], "big") % L for j in range(drawn))})
@@ -1798,7 +1854,7 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
     if sp is None:
         return None
     sd: SoSide = DA.SIDE[0]
-    W, L, t, key, s0, s1, rows = win.window, win.L, win.t, win.key, rec["s0"], rec["s1"], rec["rows"]
+    L, t, key, s0, s1, rows = win.L, win.t, win.key, rec["s0"], rec["s1"], rec["rows"]
     near = set(rec["cap_at"]) | {s + 1 for s in rec["cap_at"]}
     held = [s for s in range(s0, s1) if s not in near and s in sp["steps"]]
     doc: dict = {"mode": sp["mode"], "what": SPILLS[sp["mode"]], "held_steps": len(sp["steps"]), "steps": s1 - s0}
@@ -1811,15 +1867,20 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
     for j, s in enumerate(steps):
         w = int.from_bytes(h[8 + 8 * j:16 + 8 * j], "big") % L
         x, row = sp["steps"][s], rows[s - s0]
-        m, (n, k), u = x["m"], win.nk[w], sd.unit_of[w]
-        kk, i = sd.spill.slot_of[w]
-        a = np.zeros((t, k), dtype=np.int8)
-        a[:m] = x["a"][kk][i].numpy()
-        sc = np.zeros(t, dtype=np.float32)
-        sc[:m] = x["sa"][w].numpy()
-        fa = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "k": k, "schema": CM.SCHEMA}
-        a_ok = (CM.s8_table(CM.domain(fa, t, "a-table"), key, f"a/{s}/{w}", a, sc).root
-                == unwords(row[ai * L8 + 8 * w:ai * L8 + 8 * w + 8]))
+        m, n, u = x["m"], win.nk[w][0], sd.unit_of[w]
+
+        def q_of(v: int, x=x, m=m) -> np.ndarray:
+            kv, iv = sd.spill.slot_of[v]
+            q = np.zeros((t, win.nk[v][1]), dtype=np.int8)
+            q[:m] = x["a"][kv][iv].numpy()
+            return q
+
+        def sc_of(v: int, x=x, m=m) -> np.ndarray:
+            sc = np.zeros(t, dtype=np.float32)
+            sc[:m] = x["sa"][win.spos[v]].numpy()
+            return sc
+        a, sc = q_of(w), sc_of(w)
+        a_ok = DO.a_roots_cpu(win, s, [w], q_of, sc_of)[w] == unwords(row[ai * L8 + 8 * w:ai * L8 + 8 * w + 8])
         z = torch.zeros((t, n), dtype=torch.int32, device=win.dev)
         z[:m] = E.int_mm(torch.from_numpy(a[:m]).to(win.dev), win.wt[w])
         y = E.dequantize(z, torch.from_numpy(sc).to(win.dev), win.sw[w])
