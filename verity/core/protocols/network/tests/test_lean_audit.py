@@ -170,7 +170,7 @@ def _service_rounds(tmp_path, W, record=lambda w, r: r, certified=lambda w, e: e
 
 
 def test_service_verify_is_the_same_under_the_adapter(lean, tmp_path, monkeypatch):
-    """`LinkWindows.verify`, with `service.Audit` the adapter, gives `audit.Audit`'s verdict of record on six link-windows
+    """`LinkWindows.clear`, with `service.Audit` the adapter, gives `audit.Audit`'s verdict on six link-windows
     in order: honest ones, a forged signature, a grid whose frame differs from the Program's at its counts (accepted:
     the frames are N3's), a grid with a frame more than the profile's, and an unset deadline bit; the adapter's says
     `by: lean` and carries the reference's accept bit."""
@@ -185,15 +185,15 @@ def test_service_verify_is_the_same_under_the_adapter(lean, tmp_path, monkeypatc
         got = {}
         for name, impl in (("python", audit.Audit), ("lean", lambda: lean_audit.Audit(server=lean))):
             monkeypatch.setattr(service, "Audit", impl)
-            got[name] = lw.verify(opening, draw, syncs)
+            got[name] = lw.clear(opening, draw, syncs)
         assert got["lean"] == got["python"] | {"by": "lean", "reference": {"accepted": got["python"]["accepted"]}}
         accepted.append(got["python"]["accepted"])
-        assert lw.outcome(stream, draw, opening, syncs).accepted == accepted[-1]
+        assert lw.unproved_outcome(stream, draw, opening, syncs).accepted == accepted[-1]
     assert accepted == [True, False, True, False, False, False]
 
 
 def test_under_the_adapter_n2_compares_no_grid(lean, tmp_path, monkeypatch):
-    """`LinkWindows.verify` compares no egress grid, under the adapter as under `audit.Audit`: a window whose frames
+    """`LinkWindows.clear` compares no egress grid, under the adapter as under `audit.Audit`: a window whose frames
     differ from the Program's in content alone, at the profile's counts, is accepted by both, where the in-the-clear
     oracle rejects it, and a forged signature is rejected. The adapter's `check_link(grid=False)` is the Lean's
     `verdicts-no-grid`: it accepts that window where `verdicts` gives `mismatch`, with the Program's frames or with none,
@@ -214,11 +214,11 @@ def test_under_the_adapter_n2_compares_no_grid(lean, tmp_path, monkeypatch):
         got = {}
         for name, impl in (("python", audit.Audit), ("lean", lambda: lean_audit.Audit(server=lean))):
             monkeypatch.setattr(service, "Audit", impl)
-            got[name] = lw.verify(opening, draw, syncs)
+            got[name] = lw.clear(opening, draw, syncs)
         assert got["lean"] == got["python"] | {"by": "lean", "reference": {"accepted": got["python"]["accepted"]}}
         accepted.append(got["python"]["accepted"])
         stood.append(lw.stand_in(opening, draw, SERVICE_FRAMES, syncs))
-        assert lw.outcome(stream, draw, opening, syncs).accepted == accepted[-1]
+        assert lw.unproved_outcome(stream, draw, opening, syncs).accepted == accepted[-1]
         if opening.window == 1:
             egress, args = [opening.records[0]], (SERVICE_FRAMES, syncs[:2], lw.sync_set, lw.params, lw.key, SESSION)
             assert [v.violation for v in lean_audit.Audit(server=lean).check_link("responses", egress, *args)] == \
@@ -238,7 +238,7 @@ def test_under_the_adapter_n2_compares_no_grid(lean, tmp_path, monkeypatch):
 def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):
     """With the Python reference made to reject one link-window the Lean check accepts (and, on ingress, the reverse
     direction of the same flip), that link-window is a `disagreement`: the audit rejects, `lean` keeps the Lean's
-    verdicts and `reference` the Python's, and `service.py`'s verdict of record rejects an honest link-window while
+    verdicts and `reference` the Python's, and `service.py`'s in-the-clear check rejects an honest link-window while
     carrying the reference's bit beside `by: lean`. A reference that raises where the Lean answers raises."""
     real_egress, real_ingress = audit.Audit.check_link, audit.Audit.check_ingress_link
 
@@ -253,10 +253,10 @@ def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):
                      session=lw.certifier_session)
     assert vs == [audit.Verdict("responses", 0, "disagreement")] and not a.accepted and a.violations == vs
     assert a.lean == [audit.Verdict("responses", 0, None)] and a.reference == [audit.Verdict("responses", 0, "mismatch")]
-    verdict = lw.verify(opening, draw, syncs)
+    verdict = lw.clear(opening, draw, syncs)
     assert verdict["accepted"] is False and verdict["public"]["verdict"] == 0
     assert verdict["by"] == "lean" and verdict["reference"] == {"accepted": False}
-    assert not lw.outcome(stream, draw, opening, syncs).accepted
+    assert not lw.unproved_outcome(stream, draw, opening, syncs).accepted
 
     monkeypatch.setattr(audit.Audit, "check_link", real_egress)
     monkeypatch.setattr(audit.Audit, "check_ingress_link", lambda self, *a, **k: flip(real_ingress(self, *a, **k), 0))
