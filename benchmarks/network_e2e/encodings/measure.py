@@ -106,16 +106,20 @@ def steptime_samples(trace: dict) -> list[tuple[float, float, float, float]]:
 # ---------------------------------------------------------------------------------------------------- fitting
 
 
-def training_symbols(traces: list[dict], cb) -> dict[str, list]:
-    """Each family's windows of symbols on the training traces, each value once: v0's, then the residual's fields v0
-    doesn't code (hits, re-hits, admission; the admit subject's symbols are the residual's admission symbols)."""
+def v0_symbols(traces: list[dict], cb) -> dict[str, list]:
+    """Each family's windows of v0's symbols on the training traces (they read no step-time phase)."""
+    return {fam: [w for t in traces for w in C.symbols_v0(t["advice"], t["public"], cb, fam)] for fam in ("static", "cond")}
+
+
+def residual_symbols(traces: list[dict], cb) -> dict[str, list]:
+    """Each family's windows of the residual's symbols on the training traces, without the fields v0 codes too (the
+    lengths and sources) under the families v0 shares tables with, so that each value is fit once. The admit subject's
+    symbols are the residual's admission symbols."""
     out: dict[str, list] = {"static": [], "cond": [], "cond+adapt": []}
     for t in traces:
         rep = C.TraceReplay(t["advice"], t["public"])
         res = C.residual_of(t["advice"], t["admit"])
-        for fam in ("static", "cond"):
-            out[fam] += C.symbols_v0(t["advice"], t["public"], cb, fam)
-        for fam in ("static", "cond", "cond+adapt"):
+        for fam in out:
             wins = C.symbols_residual(res, t["public"], cb, fam, rep)
             if fam != "cond+adapt":
                 wins = [[x for x in win if not x[0].startswith(("prompt_len", "output_len", "source"))] for win in wins]
@@ -124,16 +128,18 @@ def training_symbols(traces: list[dict], cb) -> dict[str, list]:
 
 
 def fit(traces: list[dict], caps, T: int, tau_us: int) -> object:
+    """The codebook: the step-time model by least squares, then for each candidate phase every table fit to the
+    training symbols, keeping the phase whose conditional residual costs least."""
     samples = [s for t in traces for s in steptime_samples(t)]
     a, b, c = fit_steptime(samples)
+    v0 = v0_symbols(traces, C.Codebook(caps, tau_us, C.StepTime(a, b, c)))
     best = None
     for phase in sorted({0, 1000, 2000, 4000, 8000, a // 2, a}):
         st = C.StepTime(a, b, c, phase)
-        cb0 = C.Codebook(caps, tau_us, st)
-        syms = training_symbols(traces, cb0)
+        res = residual_symbols(traces, C.Codebook(caps, tau_us, st))
+        syms = {fam: v0.get(fam, []) + res[fam] for fam in res}
         cb = C.fit_codebook(caps, T, tau_us, st, syms)
-        bits = sum(C.model_bits(w, cb, fam) for fam in ("cond", "cond+adapt") for w in syms[fam]
-                   if any(n.startswith("admit") for n, *_ in w))
+        bits = sum(C.model_bits(w, cb, fam) for fam in ("cond", "cond+adapt") for w in res[fam])
         if best is None or bits < best[0]:
             best = (bits, cb)
     return best[1]
