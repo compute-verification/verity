@@ -141,3 +141,36 @@ def test_core_credit_ties_the_slot_table_under_the_auditors_coins(periodic):
     assert LV.verdicts(run)[0]["ok"]
     out = _credit(auditor, _record(run))
     assert out["window"][0] == "missing" and out["credit"] is None, out
+
+
+def test_the_provers_live_dump_opens_every_row_its_statement_reads(tmp_path):
+    """`pouw_h1_live.dump`: window.json holds only what the verifier may read (T, S, the prefix, the window Program's
+    digest, the open root, the session, the live roots and m_s), and each round's rows.npz and opening.json give every
+    port's words, salt, value, position and path, each opening its registered root (`registered.verify_read`) under the
+    row format its reads file names; ``m``, ``s`` and ``o0`` are the known ``m@<s>``, ``round@<s>`` and ``live-ok`` rows."""
+    import json
+
+    import numpy as np
+
+    run = _window()
+    got = LV.dump(run, tmp_path / "live")
+    pub = json.loads((tmp_path / "live" / "window.json").read_text())
+    served = run.served
+    assert got == {"dir": str(tmp_path / "live"), "rounds": 1}
+    assert pub == {"T": ROWS, "S": run.steps, "prefix": "h1/", "program": served.program_digest, "window": served.root,
+                   "session": SV.LOCAL_SESSION, "roots": {v: r.root.hex() for v, r in served.live.items()}, "served": [3]}
+    z = dict(np.load(tmp_path / "live" / "0" / "rows.npz"))
+    opening = json.loads((tmp_path / "live" / "0" / "opening.json").read_text())
+    rows, doc = LV.statement(run, 0)
+    rows[LR.OK_PORT] = np.asarray(LR.ok_table(pub["program"], "h1/", pub["window"], 1)[0], np.uint16)
+    assert list(z["units"]) == [0] and sorted(opening) == sorted(doc["ports"])
+    for p, e in doc["ports"].items():
+        assert np.array_equal(z[f"w_{p}"], rows[p]), p
+        op = opening[p]
+        assert (op["value"], op["index"], str(z[f"v_{p}"][0]), int(z[f"r_{p}"][0]), str(z[f"p_{p}"][0])) == (
+            e["value"], e["reads"][0], e["value"], e["reads"][0], op["path"])
+        bind = {"session": pub["session"]} if e["value"] == "h1/requests@0" else {"window": pub["window"]}
+        dom = G.domain(pub["program"], e["value"], e["words"], e["leaves"], **bind)
+        assert dom.domain_id.hex() == e["domain"]
+        assert G.verify_read(dom, bytes.fromhex(e["root"]), op["index"], bytes.fromhex(op["bc"]), bytes.fromhex(op["path"]),
+                             e.get(G.SCHEMA_KEY, G.SCHEMA)), p
