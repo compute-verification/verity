@@ -23,15 +23,18 @@ namespace Accounting.RateSketch.Carrier
 /-- **A carrier of a declared circuit's over at most `L` of the audit's windows carries at most `C` bits**: its inputs
 at most `8·R_L` and its encodes at most `⌈1024·L·c·P·N·4096/E⌉`, the census of each of its windows within the caps'
 `c = caps.total` units a byte of the window's certified reads, at most `P·N·4096` bytes, under `EncodeChainHardness`
-at 1024-bit words. -/
+at 1024-bit words and its floor `ε ≥ 2^-64`. -/
 theorem card_le_census {N m P L B εnum εden E : ℕ} {ι : Type} {Wc : Gates.Dag ι} {caps : Gates.Caps}
-    {Aud : Gates.Audit} (hE : Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden) (hE0 : 0 < E)
-    (hprop : Gates.Property caps Aud Wc) (hreads : ∀ v < Aud.windows, Aud.reads v ≤ P * N * 4096)
+    {Aud : Gates.Audit} (hE : Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden)
+    (hε : εden ≤ 2 ^ 64 * εnum) (hE0 : 0 < E) (hprop : Gates.Property caps Aud Wc)
+    (hreads : ∀ v < Aud.windows, Aud.reads v ≤ P * N * 4096)
     (K : Carrier N m) {I : Finset ℕ} (hI : I ⊆ Finset.range Aud.windows) (hcard : I.card ≤ L)
     (hK : K.provenance.OfCircuit (encodeBitsCost Gates.p1024 3 B εnum εden) Wc Aud I) :
     K.carried.card * 256 ≤ 8 * ((Finset.range Aud.windows).powerset.filter fun I => I.card ≤ L).sup
         (fun I => ∑ v ∈ I, caps.runBytes v) + ⌈(1024 * L * (P * N * 4096) : ℚ) * caps.total / E⌉₊ := by
-  have hb := K.card_le_of_budget hE (by decide) hE0 fun Es => Provenance.OfCircuit.budget hK hprop hI hcard Es
+  have hb := K.card_le_of_budget hE
+    ⟨hε, by decide, SecurityProofs.Gates.p1024_floor.1, SecurityProofs.Gates.p1024_floor.2⟩ (by decide) hE0
+    fun Es => Provenance.OfCircuit.budget hK hprop hI hcard Es
   refine hb.trans (Nat.add_le_add_left ?_ _)
   rw [show 8 * Gates.p1024.bytes = 1024 by decide]
   set M := (Finset.range Aud.windows).sup (fun v => (Gates.census Wc fun t => Aud.win t = v).budgeted) with hMdef
@@ -182,7 +185,7 @@ open Bandwidth (pr_mono)
 `Accounting.Guarantees.DeclaredCircuitRequirement`. -/
 theorem DeclaredCircuitRequirement : Accounting.Guarantees.DeclaredCircuitRequirement := by
   intro n P N ρ S q G Xr Lr qr τ k a L E B εnum εden T M ε δ ιW Wc caps Aud Ω Ca Ch _ _ enc choose layout steer
-    joined A V Kg Dv _ _ W pl ℓ grp bind mm plan addr hn hP hN hE0 hrank hKB hE hB hCC hslot hlife _hres hprop
+    joined A V Kg Dv _ _ W pl ℓ grp bind mm plan addr hn hP hN hE0 hrank hKB hE hε hB hCC hslot hlife _hres hprop
     hreads hx RL C γ owned credit tiles store win
   have hX : ∀ (c : SketchPrefix n P N 128 ρ 512 16 G 2773) (y : Ω × (Fin T → Ca)) (g : Fin G)
       (R : RateSketch.SketchStream ρ) (O : RateSketch.Oracle N ρ 512 RateSketch.Sector (Fin 16 → ZMod (2 ^ 32))),
@@ -192,7 +195,7 @@ theorem DeclaredCircuitRequirement : Accounting.Guarantees.DeclaredCircuitRequir
     obtain ⟨K, I, hreb, hI, hcard, hK⟩ := hCC hlife c g y
     have h1 := hreb R O
     dsimp only at h1
-    exact h1.trans (Nat.add_le_add_left (Carrier.card_le_census hE hE0 hprop hreads K hI hcard hK) _)
+    exact h1.trans (Nat.add_le_add_left (Carrier.card_le_census hE hε hE0 hprop hreads K hI hcard hK) _)
   have hcredit : ∀ x w j, credit x (bind x w j) ≤ (tiles x w j).card * 32768 := by
     intro x w j
     have hm := (hx x).2.2 w j
