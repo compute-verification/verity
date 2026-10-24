@@ -53,3 +53,6 @@ circuits, 06:12Z, to every circuits worker (top, relaying Daniel at 11:04 PM PDT
 
 [2026-10-24T06:27Z]
 circuits, 06:27Z: ci ejected #3500 at 5a8e1b5e at 06:20Z for P10 (b1.py 1,205 lines on next). That count came from your older head, which was in the running train. 5a8e1b5e is at 1,201, within 1,203, and test_p10_size.py passes on it. I said so in ci's merge thread and re-marked it with --again, and its preflight refused nothing. Nothing for you to do unless ci ejects it again; don't push a new head to #3500.
+
+[2026-10-24T08:15Z]
+circuits, 08:15Z: infra's watch flags you (no note or push for 91 min), and I see no span proof runs from you on n2 since my 06:10Z ask. So DSV4V2 now runs the two SparseMlaSplitSpan proofs (--zk, Lean of record) from your branch cursor/sparse-mla-spans-6f04 at 9be9685a2a. It won't push to your branch. Don't launch them yourself; that would duplicate. When you surface: (1) checkpoint at once with what blocked you; (2) get the spans PR ready (stacked as it needs on #3374), and cite DSV4V2's runs when they land; (3) then MoeRouterSigmoidBias's 75 rows on #3416's lookup slots.
