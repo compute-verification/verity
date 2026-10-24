@@ -2522,7 +2522,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           replay_cache: Path | None = None, closure: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
-    ended (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from `audit`. ``runs`` runs the
+    ended (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from `audit`, and within `audit` the
+    package's facts (`facts`) and the provers' (`proved-in`). ``runs`` runs the
     package's tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
     the build with the records under the old names (`review`). An update's report holds the review, whether it changes what a
@@ -2599,6 +2600,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     replayed = scanned = digested = None
     try:
         facts = facts_of(pkg, current, work, moved)
+        rep["seconds"]["facts"] = round(time.monotonic() - s, 1)
         if early:
             replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache,
                                          closure) if replay else None
@@ -2606,7 +2608,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             digested = background.submit(timed, dependency_digests, pkg, rep["toolchain"], facts["oleans"])
         cross: list[str] = []
         if "proved_in" in policy:
+            p = time.monotonic()
             cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, built_prover)
+            rep["seconds"]["proved-in"] = round(time.monotonic() - p - sum(waited), 1)
     except RuntimeError as e:
         rep["failures"].append(Failure("lean", None, f"lean: {e}"))
         background.shutdown(cancel_futures=True)

@@ -208,33 +208,14 @@ def uses : ConstantInfo → Array Name
   | .recInfo v => v.type.getUsedConstants
   | .quotInfo _ => #[]
 
-/-- Each constant's `uses`, for every constant `roots` reach through them, so that the walks below read a body's
-constants once per run. The bodies of each level of that reach are walked in tasks. -/
-def usesTable (env : Environment) (roots : Array Name) : Std.HashMap Name (Array Name) := Id.run do
-  let mut table : Std.HashMap Name (Array Name) := {}
-  let mut seen : Std.HashSet Name := {}
-  let mut level := #[]
-  for r in roots do
-    if !seen.contains r then
-      seen := seen.insert r
-      level := level.push r
-  while !level.isEmpty do
-    let size := max 64 (level.size / 1024)
-    let chunks := (List.range ((level.size + size - 1) / size)).toArray.map fun i => level.extract (size * i) (size * i + size)
-    let tasks := chunks.map fun ch => Task.spawn fun _ => ch.map fun c => (env.find? c).map uses |>.getD #[]
-    let mut next := #[]
-    for h : i in [0:chunks.size] do
-      let ch := chunks[i]
-      let ds := tasks[i]!.get
-      for h : j in [0:ch.size] do
-        let d := ds[j]!
-        table := table.insert ch[j] d
-        for x in d do
-          if !seen.contains x then
-            seen := seen.insert x
-            next := next.push x
-    level := next
-  return table
+/-- Each imported constant's `uses`, so that the walks below read a body's constants once per run. The modules are
+walked in tasks, a run of them each. -/
+def usesTable (env : Environment) : Std.HashMap Name (Array Name) :=
+  let data := env.header.moduleData
+  let tasks := (List.range ((data.size + 15) / 16)).toArray.map fun k => Task.spawn fun _ =>
+    (data.extract (16 * k) (16 * k + 16)).foldl (init := #[]) fun acc d =>
+      d.constants.foldl (init := acc) fun acc ci => acc.push (ci.name, uses ci)
+  tasks.foldl (init := {}) fun t task => task.get.foldl (init := t) fun t (n, ds) => t.insert n ds
 
 /-- `uses` of the constant `c`, from `table` (`usesTable`) when it holds it. -/
 def usesIn (env : Environment) (table : Std.HashMap Name (Array Name)) (c : Name) : Array Name :=
@@ -259,34 +240,41 @@ def meaningDeps (env : Environment) (table : Std.HashMap Name (Array Name)) : Co
   | ci => usesIn env table ci.name
 
 /-- The axioms each of `names` uses, by walking bodies (their `uses` read from `table`), memoized. A constant already on
-the path contributes nothing, as in `Lean.collectAxioms` (an inductive type and its constructors). -/
+the path contributes nothing, as in `Lean.collectAxioms` (an inductive type and its constructors). A constant's
+dependencies are taken in order, up to the first one neither memoized nor on the path, which is walked next. -/
 def axiomsOf (env : Environment) (table : Std.HashMap Name (Array Name)) (names : Array Name) :
     Std.HashMap Name NameSet := Id.run do
   let own (c : Name) : NameSet := if env.find? c matches some (.axiomInfo _) then NameSet.empty.insert c else {}
   let deps (c : Name) : Array Name := usesIn env table c
+  let join (acc s : NameSet) : NameSet := if s.all acc.contains then acc else acc ∪ s
   let mut memo : Std.HashMap Name NameSet := {}
   for root in names do
     if memo.contains root then continue
     let mut stack : Array (Name × Array Name × Nat × NameSet) := #[(root, deps root, 0, own root)]
     let mut path : NameSet := NameSet.empty.insert root
     repeat
-      match stack.back? with
-      | none => break
-      | some (c, ds, i, acc) =>
-        if h : i < ds.size then
-          let d := ds[i]
-          stack := stack.set! (stack.size - 1) (c, ds, i + 1, acc)
-          if let some s := memo[d]? then
-            stack := stack.set! (stack.size - 1) (c, ds, i + 1, acc ∪ s)
-          else if !path.contains d then
-            path := path.insert d
-            stack := stack.push (d, deps d, 0, own d)
-        else
-          memo := memo.insert c acc
-          path := path.erase c
-          stack := stack.pop
-          if let some (c', ds', i', acc') := stack.back? then
-            stack := stack.set! (stack.size - 1) (c', ds', i', acc' ∪ acc)
+      let some (c, ds, i, acc) := stack.back? | break
+      stack := stack.pop
+      let mut i := i
+      let mut acc := acc
+      let mut next := none
+      while h : i < ds.size do
+        let d := ds[i]
+        i := i + 1
+        if let some s := memo[d]? then
+          acc := join acc s
+        else if !path.contains d then
+          next := some d
+          break
+      if let some d := next then
+        stack := stack.push (c, ds, i, acc)
+        path := path.insert d
+        stack := stack.push (d, deps d, 0, own d)
+      else
+        memo := memo.insert c acc
+        path := path.erase c
+        if let some (c', ds', i', acc') := stack.back? then
+          stack := stack.set! (stack.size - 1) (c', ds', i', join acc' acc)
   return memo
 
 /-- The declarations an extension's entries in one module name, and those entries themselves (`(Name × α)` pairs). -/
@@ -691,7 +679,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     audited := audited.push (m, data)
   let decls := audited.foldl (fun acc (_, data) => acc ++ data.constNames) #[]
   lap "modules" decls.size
-  let table := usesTable env (decls ++ pins)
+  let table := usesTable env
   lap "uses" table.size
   let axioms := axiomsOf env table (decls ++ pins)
   lap "axioms" axioms.size
@@ -743,13 +731,12 @@ unsafe def main (args : List String) : IO UInt32 := do
         acc := acc.insert pins[i] rs
     return acc
   lap "reads" readsOf.size
-  -- each pin's facts are a function of the environment and the maps above, so chunks run as tasks, joined in order
-  let chunks := (List.range ((pins.size + 7) / 8)).toArray.map fun i => pins.extract (8 * i) (8 * i + 8)
-  let tasks ← chunks.mapM fun ch => IO.asTask do
-    let (out, _) ← (MetaM.run' (ch.mapM fun p => do
-      return (p.toString, ← pinInfo env table meaning axioms ranges (readsOf.getD p (#[], #[])) p))).toIO ctx { env }
+  -- each pin's facts are a function of the environment and the maps above, so each pin is a task, joined in order
+  let tasks ← pins.mapM fun p => IO.asTask do
+    let (out, _) ← (MetaM.run' do
+      return (p.toString, ← pinInfo env table meaning axioms ranges (readsOf.getD p (#[], #[])) p)).toIO ctx { env }
     return out
-  let pinned ← tasks.foldlM (init := #[]) fun acc t => return acc ++ (← IO.ofExcept t.get)
+  let pinned ← tasks.mapM fun t => IO.ofExcept t.get
   lap "pins" pinned.size
   let mut conflicts := #[]
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
