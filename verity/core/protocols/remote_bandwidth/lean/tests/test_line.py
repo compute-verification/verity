@@ -134,7 +134,7 @@ def test_the_line_is_the_leans_at_its_edges(server) -> None:
     for v in (session(9, rates=line.Rates(10 ** 6, 1)),
               session(9, wrong=Fraction(4001, 1), rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456)),
               session(1, weights=0, host=400, wrong=10 ** 7, rates=line.Rates(0, 1, 0, 0, 7, 0, 3)),
-              session(1), session(1, n=8, chip_bytes=5 * B)):
+              session(1), session(1, n=8, chip_bytes=5 * B), session(1, n=8, chip_bytes=5 * B + 1)):
         out = D.replay(port(), v, server)
         assert out[0] == "output" and "refused" not in json.loads(out[1]), v
 

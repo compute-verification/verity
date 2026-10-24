@@ -1044,7 +1044,8 @@ def test_the_node_constants_are_the_sums_over_its_devices() -> None:
     tier, each GPU's value kept apart for the benches that read one GPU."""
     assert timing.GPUS == 8
     assert timing.READ_BYTES_PER_S == 8 * 1.539e12 + 606.8e9 and timing.SPEC_BYTES_PER_S == 8 * 1.597e12 + 819.2e9
-    assert timing.CHIP_BYTES == 8 * 263_163_904 + 940_435_456 == 3_045_746_688
+    assert timing.CHIP_BYTES == 8 * 263_163_904 + 1_000_341_504 == 3_105_652_736
+    assert timing.HOST_CHIP_BYTES == 2 * (336 * 2 ** 20 + 2 * 2 ** 20 + 64 * (2 * 2 ** 20 + (48 + 64 + 64) * 2 ** 10))
     assert timing.SQUARINGS_PER_S == {w: 8 * r for w, r in timing.GPU_SQUARINGS_PER_S.items()}
     assert timing.SHA512_PER_S == 8 * timing.GPU_SHA512_PER_S
     gpu = 94 * 10 ** 9

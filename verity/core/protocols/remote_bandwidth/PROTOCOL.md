@@ -98,8 +98,9 @@ the node's, the sum over its devices, whatever share of the node the store is on
 - \(R\) is the node's read capacity over every registered tier: its 8 GPUs' HBM plus its host's DRAM. Measured, that
   is 8 × 1,539 + 606.8 = 12,918.8 GB/s (`timing.READ_BYTES_PER_S`); specified, 8 × 1,597 + 819.2 = 13,595.2 GB/s
   (`timing.SPEC_BYTES_PER_S`).
-- \(S_{\text{chip}}\) is every GPU's on-chip storage and the host's caches: 8 × 263,163,904 + 940,435,456 =
-  3,045,746,688 B (`timing.CHIP_BYTES`; the host's part, two Xeon 6776P sockets' caches, is an estimate).
+- \(S_{\text{chip}}\) is every GPU's on-chip storage and the host's: 8 × 263,163,904 + 1,000,341,504 =
+  3,105,652,736 B (`timing.CHIP_BYTES`). The host's part bounds the whole host, two Xeon 6776P sockets of 64 cores,
+  whatever share its VM gets: their caches at the guest's CPUID sizes, with allowances for registers and buffers.
 - \(C_{\text{sq}}\) is the sum of the devices' ceilings, 8 × one GPU's share (`timing.SQUARINGS_PER_S`).
 
 One device's own values are `timing`'s `GPU_` and `HOST_` constants. A device the store isn't on can still hold store
@@ -1297,7 +1298,7 @@ session's (`worst`, `worst_horizon`). All of it starts from each window's profil
 
 **The whole γ.** `timing.stated` reads the claim through `ledger`: an honest 10-minute session on one node of 8 RTX
 PRO 6000s and their host, at the node's measured \(R\) = 12.92 TB/s (and at spec, 13.60 TB/s) and \(S_{\text{chip}}\)
-= 3,045,746,688 B, under the default codec at the node's stated squaring ceiling. Over every tier, the store is the
+= 3,105,652,736 B, under the default codec at the node's stated squaring ceiling. Over every tier, the store is the
 same GB of each GPU's HBM and host DRAM's share (`timing.spanning`), and a pass is its read at \(R\). In HBM alone, it
 is the same GB a GPU and nothing on host DRAM, and a pass is its read at the GPUs' 12.31 TB/s.
 \(\mu_{\text{chip}}\) is about \(S_{\text{chip}}\) over the store, and a window's \(\mu_{\text{timing}}\) about
