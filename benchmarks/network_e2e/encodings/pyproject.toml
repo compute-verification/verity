@@ -1,6 +1,7 @@
 # The advice's encodings (network accounting for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
 # cost zero bits, the residual that remains and its bits per certifier window; `cache_vectors.py`: the certifier's
-# CacheStep_v1 against derived's prefix rules, and its difftest vectors; `sched_trace.py`: step traces from vLLM's
+# CacheStep_v1 against derived's prefix rules, and its difftest vectors; `cache_pool_vectors.py`: CacheStep_v2 against
+# the replay's block pool (`replay._KV`), and its difftest vectors; `sched_trace.py`: step traces from vLLM's
 # own scheduler, which the tests read as fixtures (it needs vLLM). Not a package: the modules load by path (the
 # directory's name shadows the stdlib's `encodings`), and they run here as a suite
 # (`uv run tools/verity/check/suites.py benchmarks/network_e2e/encodings`).
