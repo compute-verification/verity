@@ -3,8 +3,11 @@ summary over what it wrote."""
 from __future__ import annotations
 
 import enum
+import hashlib
 import json
 from types import SimpleNamespace as NS
+
+import pytest
 
 
 class Finish(enum.IntEnum):
@@ -149,6 +152,8 @@ def test_summary_joins_and_counts(tmp_path, monkeypatch, mod):
     assert t["preemption"] == {"events": 1, "requests_preempted": 1, "max_per_request": 1, "resumed_rows": 1}
     assert t["prefix_cache"]["requests_with_hit"] == 1 and t["prefix_cache"]["hit_tokens"] == 16
     assert t["steps"]["mixed_prefill_decode"] == 2 and t["hook_errors"] == 1
+    assert t["overrun"] == {"rows": 0, "by_finish": {}, "requests": 0, "max_per_request": 0}
+    assert out["outputs"]["verdict"] == "identical: all 2 requests have the same output ids in all 1 traces"
     steps = [json.loads(x) for x in (tmp_path / "t" / "steps.jsonl").read_text().splitlines()]
     assert steps[0]["batch"] == ["t-00001", "t-00000"] and steps[0]["new"][0]["kind"] == "prefill"
     assert steps[0]["new"][0]["final"] is False and steps[1]["cached"][1]["kind"] == "decode"
@@ -165,3 +170,100 @@ def test_summary_keeps_a_failed_trace_and_drops_a_cut_line(tmp_path, mod):
     out = summary.summarize(tmp_path)
     assert out["traces"]["u"] == {"trace": "u", "error": "RuntimeError: not ready"}
     assert "| u | None | None | failed: RuntimeError: not ready |" in (tmp_path / "README.md").read_text()
+
+
+def row(rid, s, n, L, o, resumed=False):
+    return {"id": rid, "num_computed_tokens": s, "num_scheduled_tokens": n, "prompt_len": L, "num_output_tokens": o,
+            "resumed": resumed}
+
+
+def trace(d, steps, reqs):
+    """A summarized trace: steps as (rows, batch, sampled, preempted), reqs as (i, id, output_ids, finish, preemptions)."""
+    d.mkdir(parents=True)
+    lines = []
+    for k, (rows, batch, sampled, preempted) in enumerate(steps):
+        lines.append(json.dumps({"step": k, "new": [], "cached": rows, "batch": batch, "sampled": sampled,
+                                 "preempted": preempted, "total_num_scheduled_tokens": sum(r["num_scheduled_tokens"]
+                                                                                            for r in rows)}))
+    (d / "steps.jsonl").write_text("".join(x + "\n" for x in lines))
+    (d / "requests.jsonl").write_text("".join(json.dumps(
+        {"i": i, "id": rid, "output_ids": out, "output_len": len(out), "finish_reason": fin, "eos": fin == "stop",
+         "num_preemptions": p, "cache_hit": 0}) + "\n" for i, rid, out, fin, p in reqs))
+
+
+def test_overrun_counts_rows_sampling_past_the_last_output(mod):
+    summary = mod("summary")
+    # async: A (prompt 4) stops on EOS at output 1 while the step after is already scheduled; its cached rows count the
+    # in-flight output as an output (num_output_tokens includes placeholders). B is capped at 2 outputs and is not
+    # scheduled past them.
+    steps = [{"new": [row("A", 0, 4, 4, 0), row("B", 0, 3, 3, 0)], "cached": []},
+             {"new": [], "cached": [row("A", 4, 1, 4, 1), row("B", 3, 1, 3, 1)]},
+             {"new": [], "cached": [row("A", 5, 1, 4, 2)]}]
+    for s in steps:
+        for r in s["new"] + s["cached"]:
+            summary.classify(r)
+    assert [r["kind"] for r in steps[1]["cached"]] == ["decode", "decode"]
+    assert [summary.sampled_index(r) for s in steps for r in s["new"] + s["cached"]] == [0, 0, 1, 1, 2]
+    reqs = [{"id": "A", "output_len": 2, "eos": True, "finish_reason": "stop"},
+            {"id": "B", "output_len": 2, "eos": False, "finish_reason": "length"}]
+    assert summary.overrun(steps, reqs) == {"rows": 1, "by_finish": {"eos": 1}, "requests": 1, "max_per_request": 1}
+
+
+def test_compare_places_the_first_difference_in_every_trace(tmp_path, mod):
+    summary = mod("summary")
+    # request 0 is the same in both; request 1 (prompt 3) differs at output index 1, which x samples in a decode step of
+    # two rows and y in its step 3, after a preemption and a resumed recompute of prompt and first output
+    trace(tmp_path / "x", [([row("a", 0, 2, 2, 0), row("b", 0, 3, 3, 0)], ["a", "b"], [[7], [5]], []),
+                           ([row("a", 2, 1, 2, 1), row("b", 3, 1, 3, 1)], ["a", "b"], [[8], [6]], [])],
+          [(0, "a", [7, 8], "length", 0), (1, "b", [5, 6], "length", 0)])
+    trace(tmp_path / "y", [([row("a", 0, 2, 2, 0), row("b", 0, 3, 3, 0)], ["a", "b"], [[7], [5]], []),
+                           ([row("a", 2, 1, 2, 1)], ["a"], [[8]], ["b"]),
+                           ([], [], [], []),
+                           ([row("b", 0, 4, 3, 1, resumed=True)], ["b"], [[9]], [])],
+          [(0, "a", [7, 8], "length", 0), (1, "b", [5, 9], "length", 1)])
+    for d in ("x", "y"):
+        steps = summary.read_jsonl(tmp_path / d / "steps.jsonl")
+        for s in steps:
+            for r in s["cached"]:
+                summary.classify(r)
+        (tmp_path / d / "steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in steps))
+    c = summary.compare({"x": tmp_path / "x", "y": tmp_path / "y"})
+    assert c["verdict"] == "differ: 1 of 2 requests have different output ids across 2 traces"
+    assert c["identical"] == 1 and c["pairs_identical"] == {"x = y": 1}
+    (d,) = c["differ"]
+    assert d["i"] == 1 and d["token"] == 1 and d["differs_from_first"] == ["y"]
+    assert d["at"]["x"]["step"] == 1 and d["at"]["x"]["rows"] == 2
+    assert d["at"]["x"]["row"] == "decode" and d["at"]["x"]["token"] == 6 and d["at"]["x"]["prefill_chunks"] == 1
+    y = d["at"]["y"]
+    assert (y["step"], y["rows"], y["row"], y["resumed"], y["preempted_before"], y["token"]) == (3, 1, "prefill", True, 1, 9)
+    assert "| 1 | 1 | y (differs) | 9 | 3 | 1 | 4 | prefill (resumed) | 1 | 1 | 2 (length) |" in \
+        "\n".join(summary.outputs_section(c))
+
+
+def test_compare_corpora_refuses_different_plans_and_labels_by_variant(tmp_path, mod):
+    summary = mod("summary")
+    for name, variant, plan in (("c1", "seeded", "p"), ("c2", "async-seeded", "p"), ("c3", "greedy", "q")):
+        root = tmp_path / name
+        trace(root / "heavy", [([row("a", 0, 2, 2, 0)], ["a"], [[7]], [])], [(0, "a", [7], "stop", 0)])
+        (root / "plan.jsonl").write_text(plan)
+        (root / "meta.json").write_text(json.dumps({"variant": variant, "traces": {"heavy": {}}}))
+    c = summary.compare_corpora([summary.corpus_spec(str(tmp_path / "c1")), summary.corpus_spec(f"{tmp_path / 'c2'}:heavy")],
+                                tmp_path / "out")
+    assert c["traces"] == ["seeded/heavy", "async-seeded/heavy"] and c["identical"] == 1
+    assert (tmp_path / "out" / "compare.json").exists() and "identical: all 1" in (tmp_path / "out" / "COMPARE.md").read_text()
+    with pytest.raises(SystemExit, match="2 different plans"):
+        summary.compare_corpora([(tmp_path / "c1", None), (tmp_path / "c3", None)], tmp_path / "out2")
+
+
+def test_seeded_requests_carry_the_public_seed_of_their_trace_independent_id(mod):
+    corpus = mod("corpus")
+    r = {"i": 12, "prompt_ids": [128000, 5], "max_tokens": 64}
+    rid = corpus.request_id(12)
+    assert rid == "req-00012"
+    want = int.from_bytes(hashlib.sha512(b"verity-vllm/served-default-seed/v1/req-00012").digest()[:8], "big") >> 1
+    assert corpus.request_seed(rid) == want and 0 <= want < 1 << 63
+    seeded = corpus.request_body("m", r, rid, "seeded")
+    assert (seeded["temperature"], seeded["top_p"], seeded["top_k"], seeded["seed"]) == (0.8, 0.95, 50, want)
+    greedy = corpus.request_body("m", r, rid, "greedy")
+    assert greedy["temperature"] == 0.0 and "seed" not in greedy and "top_k" not in greedy
+    assert corpus.VARIANTS["async-seeded"] == ("seeded", True)

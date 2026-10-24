@@ -1,10 +1,12 @@
 """Join a corpus run's raw records into each trace's steps.jsonl and requests.jsonl, and write summary.json and README.md.
 
 Stdlib only. `summarize(DIR)` reads DIR/plan.jsonl, DIR/meta.json and, per trace, DIR/<trace>/{meta.json, client.jsonl,
-raw/*.jsonl} (`vllm_trace_plugin`, `corpus.drive`).
+raw/*.jsonl} (`vllm_trace_plugin`, `corpus.drive`). `compare` checks that traces of one plan gave every request the same
+output ids, and where they first differ.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -37,6 +39,28 @@ def classify(row: dict) -> None:
     total = L + o
     row["kind"] = "decode" if n == 1 and o > 0 and s == total - 1 else "prefill"
     row["final"] = s + n >= total
+
+
+def sampled_index(row: dict) -> int:
+    """The output index a final row samples: it runs positions up to start + n - 1 and samples position start + n. Under
+    async scheduling a cached row's `num_output_tokens` counts the outputs still in flight too, so this holds there as
+    well."""
+    return row["num_computed_tokens"] + row["num_scheduled_tokens"] - row["prompt_len"]
+
+
+def overrun(steps: list[dict], reqs: list[dict]) -> dict:
+    """Rows that sample past a request's last output (async scheduling schedules the next step before the last one's
+    tokens are back), by how the request finished."""
+    last = {r["id"]: (r["output_len"], "eos" if r["eos"] else r["finish_reason"]) for r in reqs}
+    by_finish, per = Counter(), Counter()
+    for s in steps:
+        for row in s["new"] + s["cached"]:
+            n = last.get(row["id"])
+            if n is not None and row["final"] and sampled_index(row) >= n[0]:
+                by_finish[n[1]] += 1
+                per[row["id"]] += 1
+    return {"rows": sum(by_finish.values()), "by_finish": dict(by_finish), "requests": len(per),
+            "max_per_request": max(per.values(), default=0)}
 
 
 def stats(xs: list[float]) -> dict:
@@ -148,6 +172,7 @@ def summarize_trace(d: Path, steps: list[dict], reqs: list[dict], client: dict) 
         "preemption": {"events": sum(preempt.values()), "requests_preempted": len(preempt),
                        "max_per_request": max(preempt.values(), default=0),
                        "resumed_rows": sum(1 for r in rows if r.get("resumed"))},
+        "overrun": overrun(steps, reqs),
         "hook_errors": hook_errors,
     }
 
@@ -164,12 +189,143 @@ def summarize(root: Path) -> dict:
         if m.get("error") or name not in traces:
             traces.setdefault(name, {"trace": name})["error"] = m.get("error", "no records")
     out = {"model_id": meta.get("model_id"), "model": meta.get("model"), "model_what": meta.get("model_what"),
+           "variant": meta.get("variant", "greedy"), "sampling": meta.get("sampling", {"name": "greedy", "temperature": 0.0}),
+           "async_scheduling": meta.get("async_scheduling", False),
            "versions": meta.get("versions"), "host": meta.get("host"), "env": meta.get("env"),
            "requests_per_trace": meta.get("requests"), "seed": meta.get("seed"), "traffic": meta.get("traffic"),
-           "traces": traces}
+           "traces": traces,
+           "outputs": compare({n: root / n for n, t in traces.items() if (root / n / "requests.jsonl").exists()})}
     (root / "summary.json").write_text(json.dumps(out, indent=1))
     (root / "README.md").write_text(readme(out))
     return out
+
+
+def located(d: Path, wanted: dict[str, set[int]]) -> dict[tuple[str, int], dict]:
+    """Where trace `d` sampled output token j of request id, for each (id, j) in `wanted` (id -> {j}): the step, its rows and
+    tokens, the row, and the request's chunks and preemptions up to then. A token sampled twice (an in-flight token dropped
+    at a preemption and sampled again) is placed at its last sampling."""
+    out, chunks, preempted = {}, Counter(), Counter()
+    for s in read_jsonl(d / "steps.jsonl"):
+        for x in s["preempted"]:
+            preempted[x] += 1
+        rows = s["new"] + s["cached"]
+        batch = s.get("batch") or []
+        for row in rows:
+            rid = row["id"]
+            if rid not in wanted:
+                continue
+            if row["kind"] == "prefill" and not row.get("resumed") and row.get("num_output_tokens", 0) == 0:
+                chunks[rid] += 1
+            if not row["final"] or (j := sampled_index(row)) not in wanted[rid]:
+                continue
+            k = batch.index(rid) if rid in batch else None
+            out[(rid, j)] = {"step": s["step"], "rows": len(rows), "tokens": s["total_num_scheduled_tokens"],
+                             "row": row["kind"], "resumed": bool(row.get("resumed")), "prefill_chunks": chunks[rid],
+                             "preempted_before": preempted[rid], "batch_index": k,
+                             "token": s["sampled"][k][0] if k is not None and s.get("sampled") and s["sampled"][k] else None}
+    return out
+
+
+def first_difference(a: list[int], b: list[int]) -> int:
+    return next((j for j, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
+
+
+def compare(traces: dict[str, Path]) -> dict:
+    """Whether every trace (label -> summarized trace dir, all of one plan) gave each plan request the same output ids. A
+    request that differs is placed at its first difference: the earliest output index where some trace's ids differ from
+    the first trace's, located in every trace (`located`)."""
+    labels = list(traces)
+    reqs = {lb: {r["i"]: r for r in read_jsonl(d / "requests.jsonl") if r.get("i") is not None} for lb, d in traces.items()}
+    every = sorted(set().union(*(set(x) for x in reqs.values()))) if reqs else []
+    pairs = {f"{a} = {b}": 0 for k, a in enumerate(labels) for b in labels[k + 1:]}
+    missing, differ = [], []
+    for i in every:
+        rs = {lb: reqs[lb].get(i) for lb in labels}
+        if any(r is None for r in rs.values()):
+            missing.append(i)
+            continue
+        ids = {lb: r["output_ids"] for lb, r in rs.items()}
+        for k, a in enumerate(labels):
+            for b in labels[k + 1:]:
+                pairs[f"{a} = {b}"] += ids[a] == ids[b]
+        if len({tuple(x) for x in ids.values()}) > 1:
+            ref = ids[labels[0]]
+            j = min(first_difference(ref, x) for x in ids.values() if x != ref)
+            differ.append({"i": i, "token": j, "outputs": len({tuple(x) for x in ids.values()}),
+                           "differs_from_first": [lb for lb in labels if ids[lb] != ref],
+                           "at": {lb: {"id": rs[lb]["id"], "output_len": len(ids[lb]), "finish": rs[lb]["finish_reason"],
+                                       "num_preemptions": rs[lb]["num_preemptions"], "cache_hit": rs[lb]["cache_hit"]}
+                                  for lb in labels}})
+    for lb in labels if differ else ():
+        want: dict[str, set[int]] = {}
+        for x in differ:
+            want.setdefault(x["at"][lb]["id"], set()).add(x["token"])
+        where = located(traces[lb], want)
+        for x in differ:
+            x["at"][lb] |= where.get((x["at"][lb]["id"], x["token"]), {"step": None})
+    n = len(every) - len(missing)
+    if not labels:
+        verdict = "no traces"
+    elif differ:
+        verdict = f"differ: {len(differ)} of {n} requests have different output ids across {len(labels)} traces"
+    else:
+        verdict = f"identical: all {n} requests have the same output ids in all {len(labels)} traces"
+    if missing:
+        verdict += f" ({len(missing)} requests missing from some trace)"
+    return {"traces": labels, "requests": n, "identical": n - len(differ), "verdict": verdict, "missing": missing,
+            "pairs_identical": pairs, "differ": differ}
+
+
+def corpus_spec(arg: str) -> tuple[Path, list[str] | None]:
+    """``CORPUS[:TRACE,...]``."""
+    path, _, names = arg.partition(":")
+    return Path(path), [n for n in names.split(",") if n] or None
+
+
+def compare_corpora(specs: list[tuple[Path, list[str] | None]], out: Path) -> dict:
+    """`compare` across summarized corpora that serve one plan (their plan.jsonl files are byte for byte the same), each
+    trace labelled ``<variant>/<trace>``; writes OUT/compare.json and OUT/COMPARE.md."""
+    traces, corpora, plans = {}, [], set()
+    for root, names in specs:
+        meta = json.loads((root / "meta.json").read_text())
+        variant = meta.get("variant", "greedy")
+        plans.add(hashlib.sha256((root / "plan.jsonl").read_bytes()).hexdigest())
+        corpora.append({"dir": str(root), "variant": variant, "async_scheduling": meta.get("async_scheduling", False),
+                        "sampling": meta.get("sampling", {"name": "greedy", "temperature": 0.0})})
+        for name in names or [n for n in meta.get("traces", {}) if (root / n / "requests.jsonl").exists()]:
+            label = f"{variant}/{name}"
+            if label in traces:
+                label = f"{variant}#{len(corpora)}/{name}"
+            traces[label] = root / name
+    if len(plans) != 1:
+        raise SystemExit(f"the corpora serve {len(plans)} different plans; compare only corpora of one plan")
+    result = {"plan_sha256": plans.pop(), "corpora": corpora, **compare(traces)}
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "compare.json").write_text(json.dumps(result, indent=1))
+    (out / "COMPARE.md").write_text("\n".join(["# Output ids across corpora", "", *outputs_section(result)]) + "\n")
+    return result
+
+
+def outputs_section(c: dict, limit: int = 20) -> list[str]:
+    lines = [f"**{c['verdict']}.** Traces: {', '.join(f'`{x}`' for x in c['traces'])}.", ""]
+    if len(c["traces"]) > 2:
+        lines += ["Requests with the same output ids, pair by pair: " +
+                  "; ".join(f"{k}: {v}" for k, v in c["pairs_identical"].items()) + ".", ""]
+    if not c["differ"]:
+        return lines
+    lines += [f"The first {min(limit, len(c['differ']))} of {len(c['differ'])} requests that differ (all in `differ`), at "
+              "the first output index where some trace's ids differ from the first trace's; per trace: the step that "
+              "sampled that index, the step's rows and tokens, the request's row there, its prefill chunks and the "
+              "preemptions before it.", "",
+              "| request | index | trace | token | step | rows | tokens | row | prefill chunks | preempted before | outputs |",
+              "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for x in c["differ"][:limit]:
+        for lb, a in x["at"].items():
+            lines.append(f"| {x['i']} | {x['token']} | {lb}{' (differs)' if lb in x['differs_from_first'] else ''} | "
+                         f"{a.get('token')} | {a.get('step')} | {a.get('rows')} | {a.get('tokens')} | "
+                         f"{a.get('row')}{' (resumed)' if a.get('resumed') else ''} | {a.get('prefill_chunks')} | "
+                         f"{a.get('preempted_before')} | {a['output_len']} ({a['finish']}) |")
+    return lines
 
 
 FIELDS = """\
@@ -179,7 +335,10 @@ FIELDS = """\
   `prompt_len`, `prefix` (the shared-prefix group, or null) and `prefix_len`, `doc` (the C4 document the body is cut from)
   and `gap` (tokens left between the prompt's end and the document's), `max_tokens`, and `gap_draw`, the unit-rate
   exponential gap before the request (a trace at rate λ sends request i at Σ_{j≤i} gap_draw_j / λ seconds).
-- `meta.json`, `summary.json`: the run (model, versions, host, leased GPU) and the statistics below, per trace.
+- `meta.json`, `summary.json`: the run (model, variant, sampling, versions, host, leased GPU) and the statistics below, per
+  trace; `summary.json`'s `overrun` per trace counts the rows that sample past a request's last output (async scheduling
+  schedules a step before the previous one's tokens are back), and its `outputs` compares the traces' output ids
+  request by request (`summary.compare`).
 - `<trace>/steps.jsonl`: one line per scheduler step (`Scheduler.schedule()` call) that scheduled a token or reported a
   preempted or finished request, in order:
   - `step` (0, 1, ...), `t` (unix seconds when `schedule()` returned), `empty_before` (calls since the last line that
@@ -196,7 +355,8 @@ FIELDS = """\
     (`finished_req_ids`: finished since the previous call), `waiting` and `running` (queue lengths after the call);
   - `batch`: the model runner's row order for the step (`ModelRunnerOutput.req_ids`; V2 puts decodes first), `sampled`:
     the token ids it sampled per batch row (empty for a partial chunk), `t_output` (unix seconds when the output was back).
-- `<trace>/requests.jsonl`: one line per request the scheduler freed: `id` (the client's X-Request-Id, `<trace>-<i>`),
+- `<trace>/requests.jsonl`: one line per request the scheduler freed: `id` (the client's X-Request-Id, `req-<i>` in every
+  trace; corpora made before seeded sampling used `<trace>-<i>`),
   `i` (the plan's index), `arrival` (unix seconds, vLLM's `Request.arrival_time`), `send_unix` and `planned_s` (the
   client's send time and the plan's arrival), `prompt_ids`, `prompt_len`, `prefix`, `prefix_len`, `max_tokens`,
   `output_ids`, `output_len`, `finish_reason` (`stop` or `length`), `eos` (it stopped on the model's end-of-text, 128001;
@@ -204,32 +364,41 @@ FIELDS = """\
   `first_step` and `last_step` (the steps that scheduled it first and last), `t_free`, the client's `first_token_s`,
   `done_s` and `chunks` (`[seconds after sending, tokens]` per streamed chunk), and `client_ids_match` (the streamed ids
   equal the engine's).
-- `<trace>/client.jsonl`, `<trace>/raw/`: the client's and the hook's records as written (`raw/steps.PID.jsonl`,
+- `<trace>/client.jsonl`, `<trace>/raw/`: the client's records as written (with the `seed` each request sent, if any) and
+  the hook's (`raw/steps.PID.jsonl`,
   `raw/outputs.PID.jsonl`, `raw/requests.PID.jsonl`); `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv
   and timings.
 """
 
 
+def sampling_text(s: dict) -> str:
+    p = s.get("sampling") or {}
+    if p.get("name") != "seeded":
+        return f"temperature {p.get('temperature', 0.0)}"
+    return (f"temperature {p.get('temperature')}, top_p {p.get('top_p')}, top_k {p.get('top_k')}, each request seeded by "
+            f"`corpus.request_seed` of its id ({p.get('seed_rule')})")
+
+
 def readme(s: dict) -> str:
     v = s.get("versions") or {}
     lines = [
-        f"# vLLM V1 scheduler traces under varied traffic: {s.get('model_what')}", "",
+        f"# vLLM V1 scheduler traces under varied traffic: {s.get('model_what')}, {s.get('variant', 'greedy')}", "",
         f"Model `{s.get('model')}` (`{s.get('model_id')}`) on {s.get('host')}, GPU "
         f"`{(s.get('env') or {}).get('CUDA_VISIBLE_DEVICES')}` (`{(s.get('env') or {}).get('GPU_LEASE_UUID')}`); vLLM "
         f"{v.get('vllm')}, torch {v.get('torch')}. Made by `benchmarks/network_e2e/traces/corpus.py` (its docstring and "
         "`traffic.py`'s say how): plain vLLM's OpenAI server, batch-invariant eager (the integration's bi-eager engine), "
-        "async scheduling off, Model Runner V2, prefix caching on, at most 256 sequences; a scheduler hook "
-        "(`vllm_trace_plugin.py`) records each step; an async client streams each request at its Poisson arrival, "
-        "temperature 0, `max_tokens` 64 or 256, no stop strings.", "",
+        f"async scheduling {'on' if s.get('async_scheduling') else 'off'}, Model Runner V2, prefix caching on, at most 256 "
+        "sequences; a scheduler hook (`vllm_trace_plugin.py`) records each step; an async client streams each request at "
+        f"its Poisson arrival, {sampling_text(s)}, `max_tokens` 64 or 256, no stop strings.", "",
         f"Every trace serves the same {s.get('requests_per_trace')} requests (`plan.jsonl`, seed {s.get('seed')}) on a "
         "fresh server, so each starts with a cold prefix cache.", "",
-        "| trace | rate (req/s) | what | requests freed | steps | rows | rows/step p50 / p90 / max | tokens/step p50 / max | running p50 / max | waiting p90 / max | EOS (share) | length | prefix-hit requests | hit tokens (of prompt tokens) | preemptions (requests) | partial prefill chunks (steps with one) | mixed steps |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+        "| trace | rate (req/s) | what | requests freed | steps | rows | rows/step p50 / p90 / max | tokens/step p50 / max | running p50 / max | waiting p90 / max | EOS (share) | length | prefix-hit requests | hit tokens (of prompt tokens) | preemptions (requests) | partial prefill chunks (steps with one) | mixed steps | rows past the last output (EOS / length) |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for name, t in s["traces"].items():
         if "steps" not in t:
-            lines.append(f"| {name} | {t.get('rate')} | {t.get('why')} | failed: {t.get('error')} |" + " |" * 13)
+            lines.append(f"| {name} | {t.get('rate')} | {t.get('why')} | failed: {t.get('error')} |" + " |" * 14)
             continue
-        st, rq, rw, pc, pe = t["steps"], t["requests"], t["rows"], t["prefix_cache"], t["preemption"]
+        st, rq, rw, pc, pe, ov = t["steps"], t["requests"], t["rows"], t["prefix_cache"], t["preemption"], t["overrun"]
         r, k, run, wait = st["rows_per_step"], st["tokens_per_step"], st["running"], st["waiting"]
         lines.append(
             f"| {name} | {t['rate']} | {t['why']}{' (failed: ' + t['error'] + ')' if t.get('error') else ''} | "
@@ -239,7 +408,10 @@ def readme(s: dict) -> str:
             f"{rq['finish'].get('eos', 0)} ({rq['eos_fraction'] or 0:.1%}) | {rq['finish'].get('length', 0)} | "
             f"{pc['requests_with_hit']} | {pc['hit_tokens']} ({pc['hit_fraction'] or 0:.1%}) | "
             f"{pe['events']} ({pe['requests_preempted']}) | {rw['partial_prefill_chunks']} ({st['with_partial_chunk']}) | "
-            f"{st['mixed_prefill_decode']} |")
+            f"{st['mixed_prefill_decode']} | {ov['rows']} ({ov['by_finish'].get('eos', 0)} / "
+            f"{ov['by_finish'].get('length', 0)}) |")
+    if s.get("outputs"):
+        lines += ["", "## Output ids across traces", "", *outputs_section(s["outputs"])]
     lines += ["", "## Lengths", ""]
     for name, t in s["traces"].items():
         if "lengths" not in t:

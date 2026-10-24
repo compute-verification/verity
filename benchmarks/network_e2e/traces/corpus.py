@@ -1,17 +1,24 @@
 """A corpus of real vLLM V1 scheduler traces under varied traffic: plain vLLM's OpenAI server, a scheduler hook
 (`vllm_trace_plugin`), and an async streaming client with Poisson arrivals.
 
-    corpus.py run --out DIR --model-id llama32_1b --c4 C4.json.gz [--checkpoint DIR] [--traces heavy,...] [--requests 1000]
+    corpus.py run --out DIR --model-id llama32_1b --c4 C4.json.gz [--variant seeded] [--checkpoint DIR] [--traces heavy,...]
+                  [--requests 1000]
     corpus.py summarize DIR
+    corpus.py compare --out DIR CORPUS[:TRACE,...] ...
 
 `run` tokenizes C4 documents with the checkpoint's tokenizer, makes one plan of requests (`traffic.plan`) and serves it once
 per trace in `TRACES`, each on a fresh server (so every trace starts with a cold prefix cache), into DIR/<trace>/:
 ``raw/`` holds the hook's files and ``client.jsonl`` the client's. `summarize` (`summary.py`) joins them into each trace's
-``steps.jsonl`` and ``requests.jsonl`` and writes DIR/summary.json and DIR/README.md.
+``steps.jsonl`` and ``requests.jsonl``, compares every trace's output ids request by request, and writes DIR/summary.json
+and DIR/README.md. `compare` does the same comparison across corpora that serve the same plan.
 
 Every model runs the integration's batch-invariant eager engine (the ``bi-eager`` execution, `verity_vllm.engine.served`):
-``VLLM_BATCH_INVARIANT=1``, eager, async scheduling off, Model Runner V2 and the integration's other engine switches
-(`verity_vllm.engine.env.ENGINE`) but the in-process engine core, which the OpenAI server does not have. `MODELS`:
+``VLLM_BATCH_INVARIANT=1``, eager, Model Runner V2 and the integration's other engine switches
+(`verity_vllm.engine.env.ENGINE`) but the in-process engine core, which the OpenAI server does not have. A corpus's
+`VARIANTS` entry sets its sampling and whether async scheduling is on (the profile has it off). Seeded sampling seeds each
+request by `request_seed` from its id, which is the same in every trace, as `engine.served_seed` fixes a public seed at
+``add_request``. Model Runner V2 draws a sampled token's Gumbel noise from Philox keyed by that seed and the token's
+position. `MODELS`:
 
 * ``llama32_1b``, G-A's model: unsloth/Llama-3.2-1B in bf16, vLLM's own attention.
 * ``llama31_8b_int8``: the int8_exact linears (``--quantization verity_int8``) with vLLM's own attention. The int8 attention
@@ -23,6 +30,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import gzip
+import hashlib
 import json
 import os
 import resource
@@ -45,8 +53,15 @@ EOS = (128001,)
 ENGINE_ENV = {"VLLM_USE_V2_MODEL_RUNNER": "1", "VLLM_USE_FLASHINFER_SAMPLER": "0", "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
               "VLLM_BATCH_INVARIANT": "1"}
 #: --max-num-seqs pinned, so the batch cap a saturating trace hits is the corpus's, not the vLLM version's default
-BASE_ARGS = ["--enforce-eager", "--no-async-scheduling", "--enable-prefix-caching", "--max-model-len", "2048",
-             "--max-num-seqs", "256", "--seed", "0", "--disable-uvicorn-access-log"]
+BASE_ARGS = ["--enforce-eager", "--enable-prefix-caching", "--max-model-len", "2048", "--max-num-seqs", "256", "--seed", "0",
+             "--disable-uvicorn-access-log"]
+#: name -> request sampling parameters; `seeded` requests also carry `request_seed` of their id
+SAMPLING = {"greedy": {"temperature": 0.0}, "seeded": {"temperature": 0.8, "top_p": 0.95, "top_k": 50}}
+#: name -> (sampling, async scheduling)
+VARIANTS = {"greedy": ("greedy", False), "seeded": ("seeded", False), "async-greedy": ("greedy", True),
+            "async-seeded": ("seeded", True)}
+#: `engine.served_seed`'s name for its public default seed; `request_seed` hashes a request id under it
+SEED_NAME = b"verity-vllm/served-default-seed/v1"
 WHOLE_PREFILLS = ["--no-enable-chunked-prefill", "--max-num-batched-tokens", "8192"]
 #: the small KV cache, in tokens; its bytes are the model's (`kv_bytes_per_token`)
 KV_SMALL_TOKENS = 8192
@@ -100,6 +115,24 @@ def kv_bytes_per_token(checkpoint: Path) -> int:
     c = json.loads((checkpoint / "config.json").read_text())
     head_dim = c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"]
     return 2 * c["num_hidden_layers"] * c.get("num_key_value_heads", c["num_attention_heads"]) * head_dim * 2
+
+
+def request_seed(rid: str) -> int:
+    """The public seed rule: the first 63 bits of SHA-512 over `SEED_NAME`, "/" and the request id."""
+    return int.from_bytes(hashlib.sha512(SEED_NAME + b"/" + rid.encode()).digest()[:8], "big") >> 1
+
+
+def request_id(i: int) -> str:
+    """A plan request's X-Request-Id, the same in every trace."""
+    return f"req-{i:05d}"
+
+
+def request_body(served: str, r: dict, rid: str, sampling: str) -> dict:
+    body = {"model": served, "prompt": r["prompt_ids"], "max_tokens": r["max_tokens"], **SAMPLING[sampling],
+            "stream": True, "stream_options": {"include_usage": True}, "return_token_ids": True, "user": rid}
+    if sampling == "seeded":
+        body["seed"] = request_seed(rid)
+    return body
 
 
 def clock() -> float:
@@ -166,7 +199,7 @@ def stop(server: subprocess.Popen) -> None:
 
 
 async def drive(port: int, served: str, requests: list[dict], arrivals: list[float], ids: list[str], out: Path,
-                drain_s: float) -> dict:
+                drain_s: float, sampling: str) -> dict:
     """Send each request at its arrival (seconds from now) and stream its tokens; one client.jsonl line per request."""
     import aiohttp
 
@@ -181,8 +214,8 @@ async def drive(port: int, served: str, requests: list[dict], arrivals: list[flo
         sent = loop.time()
         rec = {"id": rid, "i": r["i"], "planned_s": round(at, 6), "send_s": round(sent - t0, 6),
                "send_unix": t0_unix + (sent - t0), "max_tokens": r["max_tokens"], "output_ids": [], "chunks": []}
-        body = {"model": served, "prompt": r["prompt_ids"], "max_tokens": r["max_tokens"], "temperature": 0.0,
-                "stream": True, "stream_options": {"include_usage": True}, "return_token_ids": True, "user": rid}
+        body = request_body(served, r, rid, sampling)
+        rec["seed"] = body.get("seed")
         try:
             async with session.post(url, json=body, headers={"X-Request-Id": rid}) as resp:
                 rec["status"] = resp.status
@@ -231,6 +264,7 @@ async def drive(port: int, served: str, requests: list[dict], arrivals: list[flo
 def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: list[dict], site: Path,
               args: argparse.Namespace) -> dict:
     server_args, why = TRACES[name]
+    sampling, async_scheduling = VARIANTS[args.variant]
     rate = model.rates[name]
     if name == "smallkv":
         server_args = [*server_args, "--kv-cache-memory-bytes", str(KV_SMALL_TOKENS * kv_bytes_per_token(checkpoint))]
@@ -238,13 +272,14 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
     (d / "raw").mkdir(parents=True, exist_ok=True)
     port = free_port()
     argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(checkpoint), "--served-model-name",
-            model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *BASE_ARGS, *server_args]
+            model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *BASE_ARGS,
+            "--async-scheduling" if async_scheduling else "--no-async-scheduling", *server_args]
     engine_env = {**ENGINE_ENV, **model.env}
     env = dict(os.environ, **engine_env, VERITY_TRACE_DIR=str(d / "raw"),
                PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
                                            *filter(None, [os.environ.get("PYTHONPATH")])]))
     arr = traffic.arrivals(requests, rate)
-    ids = [f"{name}-{r['i']:05d}" for r in requests]
+    ids = [request_id(r["i"]) for r in requests]
     meta = {"trace": name, "rate": rate, "why": why, "server_argv": argv[1:], "engine_env": engine_env,
             "requests": len(requests), "arrivals_span_s": round(arr[-1], 3)}
     t = clock()
@@ -254,7 +289,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
         wait_ready(server, port, clock() + args.startup_s)
         meta["startup_s"] = round(clock() - t, 1)
         print(f"[corpus] {name}: server up in {meta['startup_s']} s; {len(requests)} requests at {rate}/s", flush=True)
-        meta |= asyncio.run(drive(port, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s))
+        meta |= asyncio.run(drive(port, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s, sampling))
     finally:
         stop(server)
         meta["server_rc"] = server.returncode
@@ -299,7 +334,11 @@ def run(args: argparse.Namespace) -> int:
     traces = [n for n in args.traces.split(",") if n]
     if bad := [n for n in traces if n not in TRACES]:
         raise SystemExit(f"unknown traces {bad}; known: {sorted(TRACES)}")
+    sampling, async_scheduling = VARIANTS[args.variant]
     meta = {"model_id": args.model_id, "model": f"{model.repo}@{model.revision}", "model_what": model.what,
+            "variant": args.variant, "sampling": {"name": sampling, **SAMPLING[sampling],
+                                                  "seed_rule": request_seed.__doc__ if sampling == "seeded" else None},
+            "async_scheduling": async_scheduling,
             "checkpoint": str(checkpoint), "c4": args.c4, "docs": args.docs, "seed": args.seed, "requests": args.requests,
             "eos_token_ids": list(EOS), "traffic": {"lengths": traffic.LENGTHS, "prefixes": traffic.PREFIXES,
                                                     "shared": traffic.SHARED, "at_end": traffic.AT_END, "gap": traffic.GAP,
@@ -327,6 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("run")
     r.add_argument("--out", required=True)
     r.add_argument("--model-id", required=True, choices=sorted(MODELS))
+    r.add_argument("--variant", default="greedy", choices=sorted(VARIANTS))
     r.add_argument("--checkpoint", help="the checkpoint's directory (default: the model's snapshot under $HF_HOME/hub)")
     r.add_argument("--c4", required=True, help="a C4 jsonl.gz shard")
     r.add_argument("--docs", type=int, default=20000)
@@ -337,12 +377,19 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--drain-s", type=float, default=600)
     s = sub.add_parser("summarize")
     s.add_argument("dir")
+    c = sub.add_parser("compare", help="compare output ids request by request across summarized corpora of one plan")
+    c.add_argument("--out", required=True, help="where compare.json and COMPARE.md go")
+    c.add_argument("corpora", nargs="+", help="CORPUS[:TRACE,...], a summarized corpus and, optionally, which traces")
     args = ap.parse_args(argv)
     if args.cmd == "run":
         return run(args)
     import summary
 
-    summary.summarize(Path(args.dir))
+    if args.cmd == "summarize":
+        summary.summarize(Path(args.dir))
+        return 0
+    out = summary.compare_corpora([summary.corpus_spec(x) for x in args.corpora], Path(args.out))
+    print(json.dumps({k: out[k] for k in ("requests", "identical", "verdict")}))
     return 0
 
 
