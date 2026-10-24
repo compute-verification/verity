@@ -140,13 +140,21 @@ fi
 # an exact-fused or -xl arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
 case " $* " in *exact-fused*|*-xl[\ ,-]*) KGATE=1 ;; *) KGATE=0 ;; esac
 export KGATE=${SBENCH_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
-echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)"
+# SBENCH_LEASE_AT (a UTC time) holds the lease request until then, the builds done, so a timed lease (GPU_LEASE_TIMED=1)
+# starts inside its clean window; SBENCH_ON (e.g. 4,5,6,7) is the GPUs it may take
+if [ -n "${SBENCH_LEASE_AT:-}" ]; then
+  at=$(date -u -d "$SBENCH_LEASE_AT" +%s) || { echo "sbench: SBENCH_LEASE_AT $SBENCH_LEASE_AT is not a time"; exit 2; }
+  now=$(date -u +%s)
+  [ "$at" -gt "$now" ] && { echo "sbench: holding the lease request until $SBENCH_LEASE_AT"; sleep $((at - now)); }
+fi
+ON=(); [ -n "${SBENCH_ON:-}" ] && ON=(--on "$SBENCH_ON")
+echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)${SBENCH_ON:+ on $SBENCH_ON}${GPU_LEASE_TIMED:+ (timed)}"
 nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 2 > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!
 MAX_MIN=${SBENCH_MAX_MIN:-40}
 # SBENCH_PREEMPTIBLE=1: the lease may be taken back by a non-preemptible one (which ends the run unfinished)
 PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
-gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- bash -c '
+gpu-lease 1 --wait "${ON[@]}" "${PRE[@]}" --max-min "$MAX_MIN" -- bash -c '
   if [ "$KGATE" = 1 ]; then
     timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
       > "$0/kgate.log" 2>&1
