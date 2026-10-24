@@ -498,6 +498,11 @@ def other_token(data: bytes) -> bytes:
     return bytes([data[0] ^ 1]) + data[1:]
 
 
+def other_id(token_id: int, eos: frozenset) -> int:
+    """A token id other than `token_id` and none of `eos`: the first of `token_id` XOR 1, 2, … that isn't one."""
+    return next(t for k in itertools.count(1) if (t := token_id ^ k) not in eos)
+
+
 def adversary_writes(plan: dict, sync_set: SyncSet, buckets: int, strategy: str, seed: int = 0) -> dict[str, list]:
     """A server inside the boundary that signals by its write times: each frame's write bucket and position, over the
     model's releases. `burst` writes a session's frames in the bucket its request reaches it, `spread` frame k in the
@@ -854,8 +859,9 @@ class LiveServer:
         self.authorization = b"" if key is None else b"authorization: Bearer %s\r\n" % key.encode()
         self.tau, self.horizon = params["bucket_ms"] / 1000, plan["windows"] * params["buckets"]
         self.writes, self.extra, self.pad_to = plan.get("writes"), plan.get("extra"), plan.get("pad_to")
-        self.drop, self.token = plan.get("drop"), frozenset(plan.get("token") or ())
         self.token_ids, self.upstream_fields = bool(plan.get("token_ids")), plan.get("upstream_fields") or {}
+        self.drop, self.token = plan.get("drop"), frozenset(plan.get("token") or ())
+        self.eos = frozenset((plan.get("varied") or {}).get("eos_token_ids") or ())
         self.held: Counter = Counter()
         self.windows = plan["windows"]
         self.position, self.origin, self.open = 0, None, 0
@@ -921,9 +927,10 @@ class LiveServer:
         """A response's canonical events, one list per chunk of its body as it arrives; under `pad_to`, empty events
         (`active.event(b"")`, what a chunk of no text gives) after its last, up to `pad_to`, counted in `padded`; for
         the `extra` session, one event more after those; for the `drop` session, its first left out; for a `token`
-        session, each that carries bytes carrying `other_token` of them, and each id event another token id (its low
-        bit flipped). Under `token_ids`, id events of request `ordinal` (`id_events`). `tampered` logs each event
-        changed or left out, as (session, its index in the response)."""
+        session, each that carries bytes carrying `other_token` of them. `tampered` logs each event changed or left
+        out, as (session, its index in the response). Under `token_ids`, id events of request `ordinal` (`id_events`);
+        a `token` session's carry other ids (`other_id`), its EOS ids left as they are, so each response keeps its
+        length and finish."""
         cutter, n = Events(), 0
         async for data in chunks:
             bodies = [b for e in cutter.feed(data)
@@ -935,9 +942,10 @@ class LiveServer:
                 continue
             if name in self.token:
                 for k, b in enumerate(bodies):
-                    if (ids := id_event_data(b)) is not None:
-                        self.log.setdefault("tampered", []).append([name, n + k])
-                        bodies[k] = id_event(ids[0], ids[1] ^ 1)
+                    if self.token_ids and (d := id_event_data(b)) is not None:
+                        if d[1] not in self.eos:
+                            self.log.setdefault("tampered", []).append([name, n + k])
+                            bodies[k] = id_event(d[0], other_id(d[1], self.eos))
                     elif text := event_data(b):
                         self.log.setdefault("tampered", []).append([name, n + k])
                         bodies[k] = event(other_token(text))

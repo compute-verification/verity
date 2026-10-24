@@ -877,13 +877,13 @@ def _varied_runs(tmp: Path, endpoint: _Varied, plan_of, strategies) -> tuple:
 @pytest.fixture(scope="module")
 def varied(tmp_path_factory):
     """`plan --traffic varied` against `_Varied`: 16 requests, Poisson at 2 a second, prompts of 16 … 1024 ids, at most
-    8 tokens out, 4 probed, every other response's last two tokens in one chunk; honest, late and extra, each
+    8 tokens out, 4 probed, every other response's last two tokens in one chunk; honest, late, extra and token, each
     checked."""
     endpoint = _Varied(merges=lambda request: request % 2 == 1)
     args = argparse.Namespace(model=None, api_key_env=None, traffic="varied", requests=16, rate=2.0,
                               prompt_range="16:1024", tokens=VARIED_TOKENS, seed=3, probes=4, eos_ids=None)
     out = _varied_runs(tmp_path_factory.mktemp("varied"), endpoint,
-                       lambda url: cs.plan_of(args, url, lambda: 0.0, _no_sleep), cs.STRATEGIES)
+                       lambda url: cs.plan_of(args, url, lambda: 0.0, _no_sleep), (*cs.STRATEGIES, "token"))
     return (*out, endpoint)
 
 
@@ -973,6 +973,23 @@ def test_a_late_shim_is_refused_by_the_audit_and_an_extra_token_by_the_finish_ru
     for strategy in cs.STRATEGIES:
         check = runs[strategy]["check"]
         assert all(row["salt"] == "revealed" for row in check["rows"]) and check["salt_again"].startswith("refused")
+
+
+def test_a_token_shim_on_varied_traffic_changes_window_0s_ids_and_nothing_the_check_reads(varied):
+    """The token shim's id events of the requests enqueued in window 0 carry other ids (`active_replay.other_id`),
+    their EOS ids left as they are, so every response keeps its length and finish, and `check` accepts it as it does
+    on fixed traffic: only a tie of the frames' ids to the committed sampled ones refuses it."""
+    tmp, _, _, plan, runs, _ = varied
+    assert runs["token"]["check"]["verdict"] == "accepted", cs.table(runs["token"]["check"])
+    assert runs["token"]["events"] == runs["honest"]["events"]
+    window0 = {q["session"] for q in plan["requests"] if q["enqueue"] // cs.WINDOW_BUCKETS == 0}
+    honest, token = _io(tmp / "honest"), _io(tmp / "token")
+    assert window0 and any(t != EOS for name in window0 for t in honest[name]["output"])
+    for name, r in honest.items():
+        t = token[name]
+        assert len(t["output"]) == len(r["output"]) and t["finish"] == r["finish"]
+        assert [a != b for a, b in zip(r["output"], t["output"])] == [name in window0 and a != EOS for a in r["output"]]
+        assert EOS not in t["output"][:-1]
 
 
 def test_the_certified_io_reads_each_response_by_its_ordinal_wherever_its_frames_fall(varied):
