@@ -1400,7 +1400,10 @@
    "type_hash": "d58f00149a369b5ec1020e9aea876e2297ca72f1b599e37357479afaffadf1ad"
   },
   "Properties.RemoteAudit.acceptDrawsOpenable": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.acceptDrawsOpenable : Properties.RemoteAudit.AcceptDrawsOpenable"],
+   "assumptions": [],
+   "type_hash": "df20335f7f7d6e988e24076b706a7e1237000b99f240aec19fdcf97cc70df7cb"
   },
   "Properties.RemoteAudit.acceptOpensDraws": {
    "owner": "@memory-accounting",
@@ -1439,7 +1442,10 @@
    "type_hash": "81238c57be0d96899fa06e143efbd005767864b21d0ba703b1341cb980a9a0d7"
   },
   "Properties.RemoteAudit.openingsUnreadUntilDrawn": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.openingsUnreadUntilDrawn : Properties.RemoteAudit.OpeningsUnreadUntilDrawn"],
+   "assumptions": [],
+   "type_hash": "7950b2e590d3ed22aca9bb8b36e278fe678fa759ad722024d154c78c13762310"
   },
   "Properties.RemoteAudit.passesChained": {
    "owner": "@memory-accounting",
@@ -1466,7 +1472,10 @@
    "type_hash": "9071e783cf3cfda7e59180292d7380a8d105a2c9411f27877df8bdc87bee8691"
   },
   "Properties.RemoteAudit.recordKeptAfterDraw": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.recordKeptAfterDraw : Properties.RemoteAudit.RecordKeptAfterDraw"],
+   "assumptions": [],
+   "type_hash": "4dea8a6ffab48be464b58e4001bb9086128588986c213b5fcc464b66dbca14b0"
   },
   "Properties.RemoteAudit.releasedStayOut": {
    "owner": "@memory-accounting",
@@ -4373,13 +4382,16 @@
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.RemoteAudit.acceptChecksOpenings",
+    "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -4621,13 +4633,16 @@
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.Commit.taggedSize",
     "Properties.RemoteAudit.acceptChecksOpenings",
+    "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
@@ -4687,13 +4702,16 @@
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.RemoteAudit.acceptChecksOpenings",
+    "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
@@ -7552,6 +7570,7 @@
    },
    "guarantees": [
     "Properties.RemoteAudit.acceptChecksOpenings",
+    "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
@@ -7562,7 +7581,23 @@
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
     "Properties.RemoteAudit.planReadsDistinct",
+    "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut"
+   ]
+  },
+  "Properties.RemoteAudit.Coins": {
+   "digest": "4b43169c7aa622b404e02b212be977ee429c39ca54388114ef5d209bc42ea4d3",
+   "definitions": {
+    "Properties.RemoteAudit.AcceptDrawsOpenable": "724097920e58074c114a14d77fd53efacd4c9c6f6b813411c41c024404ba2b23",
+    "Properties.RemoteAudit.Openable": "e371a3216c7810ddfc21c6aea858391affb95282539168766e940d7559bde148",
+    "Properties.RemoteAudit.OpeningsUnreadUntilDrawn": "cc51ac2a6fa57b04a7fad57e59431340a9852e0814ef0e64de2ab3fe99d68c10",
+    "Properties.RemoteAudit.RecordKeptAfterDraw": "5d60bae67efd05124d656c522bc268cc4fb5eef774cd010f399c6792edae2fe0",
+    "Properties.RemoteAudit.drawnOf": "f18847a737ba256cc55c274972d2d59bd2ac9163bb6a3cdfc24a8ae2d4ade3e1"
+   },
+   "guarantees": [
+    "Properties.RemoteAudit.acceptDrawsOpenable",
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.recordKeptAfterDraw"
    ]
   },
   "Properties.SampledProofs": {
@@ -7692,16 +7727,19 @@
    },
    "guarantees": [
     "Properties.RemoteAudit.acceptChecksOpenings",
+    "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
     "Properties.RemoteAudit.planReadsDistinct",
+    "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut"
    ]
   },
@@ -7746,13 +7784,16 @@
    },
    "guarantees": [
     "Properties.RemoteAudit.acceptChecksOpenings",
+    "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut"
    ]
   },
@@ -7781,15 +7822,18 @@
    },
    "guarantees": [
     "Properties.RemoteAudit.acceptChecksOpenings",
+    "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
     "Properties.RemoteAudit.planReadsDistinct",
+    "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut"
    ]
   },
@@ -7836,13 +7880,16 @@
    },
    "guarantees": [
     "Properties.RemoteAudit.acceptChecksOpenings",
+    "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut"
    ]
   },
@@ -7945,9 +7992,11 @@
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut"
    ]
   },
@@ -8046,14 +8095,17 @@
    },
    "guarantees": [
     "Properties.RemoteAudit.acceptChecksOpenings",
+    "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut"
    ]
   },
