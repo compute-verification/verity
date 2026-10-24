@@ -1190,21 +1190,26 @@ in `ReplayStep_v1`'s scheduling order:
   symbol, two past 2^16 values. Each is a general (cum, freq, total), which `ArithCountStep_v1{18, 0, 20}` counts.
   Lowering the value to them reads the book's public tables at the value's bin (Open).
 - *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`). It runs `code_v1` over advice v1's windows
-  (`v1.residual`: the decisions and the sent hits, under a book fit to them, with v1's header and charges) and over
-  ENC-DERIVED's still-sent fields, each symbol tagged a bit or an integer's.
+  (`v1.residual`: the decisions and the sent hits, under a book fit to them at v1's registered caps, with v1's header
+  and charges) and over ENC-DERIVED's still-sent fields, each symbol tagged a bit or an integer's.
   - After every symbol the count's interval and `used` are code.py's, and its count is the bits consumed so far.
   - Each window's finish gives v1's charge, the header's in window 0, and refuses one bit less.
   - The book's model gives each bit's estimate, and each decision's context is min(run, 2) of the bits before it.
   - The bit-checking variant runs along the same segments, and refuses every flipped or cut one.
-  - On ENC-REPLAY's step traces and the TRACE-CORPUS fixture (the certifier's vectors): 0 mismatches, circuits
-    included.
+  - On all 14 corpus traces at T = 600, and the 6 of them that send ENC-DERIVED's fields: 0 mismatches in 593,386
+    circuit cases, each window's counted total v1's charge
+    (art:ff4b26d8b4f6a796af9a33734c0a47fae8b50e15c2dee26525d51fece681a2c0). On ENC-REPLAY's step traces and the
+    TRACE-CORPUS fixture (the certifier's vectors) too.
 - *Cost* (`arith_encode.size`, ANDs, pinned in its circuit-check sidecar).
   - A decision costs 2,580: the step's 2,243 (the interval 1,855, with one 33 × 16-bit product and one division to 32
     quotient bits; the scalings at once 366; the count 22) and the book's model 337. The context counter adds a few.
   - An integer's symbol costs 3,963, and a window's finish 41, or 67 with the header.
-  - The rows are fixed-width, so a window costs D·2,580 for its decisions whatever `left` is: 11.3M at D = 4,391 (the
-    corpus's largest window before #3642's windows), 3.0% of the 380M of `ReplayStep_v1{16,64,16}` steps that light's
-    largest window takes.
+  - A decision is 2.8% of a `ReplayStep_v1{16,64,16}` step's 92,146.
+  - The rows are fixed-width, so a window pays for its D decision slots and its hits' symbol slots whatever `left` and
+    `hleft` are. The corpus's largest windows (the art above, `shapes.json`):
+    - light's has 4,396 decisions and 6 integer symbols, 11.4M ANDs;
+    - smallkv's has 1,466 decisions and 5,686 integer symbols, nearly all its sent hits', 26.3M before the integers'
+      lowering.
 - *The bit-checking variant* (`ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1`) is the alternative composition,
   where the advice is the coded segments and the encoder's output must be each window's committed segment, bit for
   bit, in the decoder's order. Its step costs 3,244 at BIN = 1 (18 scaling slots and the check), and it needs a reader
