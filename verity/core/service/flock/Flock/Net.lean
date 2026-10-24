@@ -245,6 +245,87 @@ def parse (lines : Array String) : V Net := do
   if at_ != lines.size then throw "flock-ir-unit/v2: text after the rows that is not its LEAVES line"
   ofRows name useful constPos inGroups outGroups ra rb
 
+/-- Row `i` of a `NET` block (line `1 + i`) as numbers, as `parse` reads it. -/
+def rowNums (lines : Array String) (i : Nat) : V (Array Nat) :=
+  (tokens (lines.getD (1 + i) "")).mapM fun t => match t.toNat? with
+    | some n => pure n
+    | none => throw s!"flock-ir-unit/v2: row {i} is not numbers"
+
+/-- `t[i]`, else `f i`. -/
+@[inline] def pick {α : Type} (t : Array α) (i : Nat) (f : Nat → α) : α :=
+  match t[i]? with
+  | some v => v
+  | none => f i
+
+/-- `f 0, …, f (n − 1)`, in tasks of `b`. -/
+def parRows {α : Type} (f : Nat → α) (n b : Nat) : Array α :=
+  ((Array.range (n / b)).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
+    (fun acc t => acc ++ t.get) #[] ++ (Array.range (n - n / b * b)).map fun j => f (n / b * b + j)
+
+theorem parRows_eq {α : Type} (f : Nat → α) (n b : Nat) : parRows f n b = (Array.range n).map f := by
+  have hp : ∀ a, ((Array.range a).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
+      (fun acc t => acc ++ t.get) #[] = (Array.range (a * b)).map f := by
+    intro a
+    induction a with
+    | zero => simp only [Nat.zero_mul, Array.range_eq_empty_iff.mpr rfl, Array.map_empty, Array.foldl_empty]
+    | succ a ih =>
+      rw [Array.range_succ, Array.map_append, Array.foldl_append, ih, Nat.succ_mul, Array.range_add]
+      simp only [Task.spawn, List.map_toArray, List.map_cons, List.map_nil, List.foldl_toArray', List.foldl_cons,
+        List.foldl_nil, Array.map_append, Array.map_map, Function.comp_def]
+  unfold parRows
+  rw [hp]
+  conv => rhs; rw [← Nat.add_sub_cancel' (Nat.div_mul_le_self n b)]
+  rw [Array.range_add, Array.map_append, Array.map_map]
+  rfl
+
+/-- `parse` with its rows' numbers read in tasks (`rowNums`, `parRows`): what the firewall's setup runs
+(`HmRow.parseFast`). The verifier runs `parse`. -/
+def parsePar (lines : Array String) : V Net := do
+  let h := tokens (lines.getD 0 "")
+  if h[0]? != some "flock-ir-unit/v2" then throw "not a flock-ir-unit/v2 circuit"
+  let name := h.getD 1 ""
+  let useful ← num h 2
+  let constPos ← num h 3
+  let (inGroups, at1) ← groups h 4
+  let (outGroups, at2) ← groups h at1
+  if at2 != h.size then throw "flock-ir-unit/v2: trailing header fields"
+  if outGroups.isEmpty then throw "flock-ir-unit/v2: no output group"
+  if constPos + 1 != useful then throw "flock-ir-unit/v2: the constant is not the last useful column"
+  let inWords := (inGroups.back?.map fun g => g.col + g.words).getD 0
+  if inGroups.any (fun g => g.bits.foldl (· + ·) 0 > g.words * WORD || g.col + g.words > inWords)
+      || outGroups.any (fun g => g.bits.foldl (· + ·) 0 > g.words * WORD) then
+    throw "flock-ir-unit/v2: a port group's ports overrun its words, or an input group the input rows"
+  if inWords * WORD > constPos then throw "flock-ir-unit/v2: the input rows reach the constant"
+  let mut ra := #[]
+  let mut rb := #[]
+  let rows := parRows (rowNums lines) useful 4096
+  for i in [0:useful] do
+    let v ← pick rows i (rowNums lines)
+    let na := v.getD 0 0
+    let nb := v.getD (1 + na) 0
+    if v.size == 0 || v.size != 2 + na + nb then throw s!"flock-ir-unit/v2: row {i} is malformed"
+    ra := ra.push (v.extract 1 (1 + na))
+    rb := rb.push (v.extract (2 + na) (2 + na + nb))
+  let mut at_ := 1 + useful
+  if (lines.getD at_ "").startsWith "LEAVES " then
+    match Json.parse ((lines.getD at_ "").drop 7).toString with
+    | .ok _ => at_ := at_ + 1
+    | .error e => throw s!"flock-ir-unit/v2: the LEAVES line is not JSON: {e}"
+  if (lines.getD at_ "").startsWith "CUT " then
+    throw s!"{name}: a CUT line (a tail the verifier evaluates); the verifier evaluates no part of the computation"
+  if at_ != lines.size then throw "flock-ir-unit/v2: text after the rows that is not its LEAVES line"
+  ofRows name useful constPos inGroups outGroups ra rb
+
+theorem pick_parRows {α : Type} (f : Nat → α) (n b i : Nat) : pick (parRows f n b) i f = f i := by
+  unfold pick
+  rw [parRows_eq]
+  by_cases h : i < n <;> simp [h]
+
+theorem parsePar_eq : @parsePar = @parse := by
+  funext lines
+  unfold parsePar parse
+  simp only [pick_parRows, rowNums]
+
 end Net
 
 end Flock

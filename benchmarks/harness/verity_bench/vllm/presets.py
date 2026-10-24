@@ -45,8 +45,9 @@ class Preset:
         return asdict(self)
 
 
-#: Engine precisions an arm may name (`runner.engine_args`)
-PRECISIONS = ("bfloat16", "fp8")
+#: Engine precisions an arm may name (`runner.engine_args`). ``int8_exact`` is the eager exact-int8 engine on an int8 pin
+#: (`TargetProfile.int8_exact` ``"all"``: every linear and every attention layer on the plain exact-int8 arm)
+PRECISIONS = ("bfloat16", "fp8", "int8_exact")
 #: A protocol arm's `control` that gives it none: its tokens are checked by no other arm's, and the table names it
 NO_CONTROL = "none"
 #: The executions a served variant of a built-in arm (`BUILTIN@LABEL`, `arms.served_variant`) builds its engine in: vLLM's

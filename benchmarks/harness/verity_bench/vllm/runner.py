@@ -21,7 +21,8 @@ from typing import Any, Protocol
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.arms import Arm, Target, build_bound, plugin, protocols_config
+from verity_bench.vllm.arms import (H1, Arm, Target, build_bound, h1_window, is_h1, plugin, protocols_config,
+                                    window_steps)
 from verity_bench.vllm.presets import SAMPLING, Preset, SweepPoint
 
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "peak_gpu_memory_bytes")
@@ -39,6 +40,10 @@ DECODE_TAIL_SHARE = 0.01
 # at load 600-900 (18 Oct) a bandwidth engine's stalled runs were 8% to 8x slower than the next; an extra warm-up costs
 # seconds against an engine's minutes of start-up, so the bar is strict and `max_warmups` bounds it.
 WARMUP_AGREEMENT = 0.05
+# `TargetProfile.int8_exact` "all" as vLLM takes it (`TargetProfile.engine_args`, `INT8_EXACT_SCOPES`)
+INT8_EXACT_SCOPE = "all"
+INT8_EXACT_PARTS = ("linears", "attention")
+INT8_EXACT_QUANTIZATION, INT8_EXACT_ATTENTION_BACKEND = "verity_int8", "CUSTOM"
 
 
 def t95(df: int) -> float:
@@ -711,6 +716,34 @@ def _pearl_c_gate(run: Any) -> dict[str, Any]:
     return {**got, "provided": True}
 
 
+def h1_summary(run: Any) -> dict[str, Any]:
+    """One closed H1 window (`pouw_h1.H1Run`): ``ok`` when every call fell inside its S steps and T rows at its public
+    position, in order (``static``), the credit gate passed every served call (its y the GEMM that wrote its z/y
+    records), every admitted request has its entry and the salt opened. Its coins are in-process, so it credits nothing."""
+
+    verdicts = list(run.verdicts.values())
+    passed = sum(bool(v.get("credit")) for v in verdicts)
+    gaps = run.request_gaps()
+    out = {"steps": run.steps, "steps_served": run.details.get("steps_served"), "rows": run.rows, "calls": len(run.calls),
+           "served_calls": len(verdicts), "refused_calls": len(run.refused), "order_ok": bool(run.order_ok),
+           "static": bool(run.details.get("static")), "credit_gate_passed": passed,
+           "credit_gate_refusals": sorted({str(v.get("reason")) for v in verdicts if not v.get("credit")})[:3],
+           "requests": len(run.requests), "refused_requests": len(run.refused_requests), "request_gaps": len(gaps),
+           "unopened": run.details.get("unopened"), "u": run.details.get("u"), "coin_source": run.coin_source}
+    out["ok"] = bool(verdicts and out["static"] and not run.refused and passed == len(verdicts) and not gaps
+                     and not run.refused_requests and out["unopened"] is None)
+    return out
+
+
+def h1_gate(windows: list[Mapping[str, Any]]) -> dict[str, Any]:
+    """An H1 arm's own gate: every window its engine has closed so far is `h1_summary`'s ``ok``."""
+
+    bad = [w for w in windows if not w.get("ok")]
+    return {"passed": bool(windows) and not bad, "provided": True, "windows": len(windows),
+            "failed": [dict(w) for w in bad[:2]],
+            "coins": "in-process: each window credits nothing (pouw_h1.IN_PROCESS); this arm measures cost only"}
+
+
 def _kv_cache_tokens(llm: Any) -> int | None:
     """The engine's actual KV pool in tokens (in-process V1 engine), None when the engine does not expose it."""
 
@@ -739,7 +772,7 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     settings = preset.engine_settings
     engine: dict[str, Any] = {
         "tensor_parallel_size": preset.gpu_count,
-        "max_num_seqs": 128,
+        "max_num_seqs": int(settings.get("max_num_seqs", 128)),
         "max_model_len": int(settings["max_model_len"]),
         "gpu_memory_utilization": float(settings[
             "resident_gpu_memory_utilization" if resident else "block_gpu_memory_utilization"
@@ -750,6 +783,11 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
         engine["max_num_batched_tokens"] = int(settings["max_num_batched_tokens"])
     if precision == "fp8":
         engine["quantization"] = "fp8"
+    elif precision == "int8_exact":
+        if not eager or settings.get("attention_backend") is not None:
+            raise ValueError("int8_exact runs eagerly only, on its own attention backend: an eager spec with no "
+                             "attention_backend")
+        engine["quantization"], engine["attention_backend"] = INT8_EXACT_QUANTIZATION, INT8_EXACT_ATTENTION_BACKEND
     elif precision != "bfloat16":
         engine["dtype"] = precision
     if settings.get("serving_defaults"):
@@ -788,7 +826,7 @@ class _VllmEngine:
         from verity_vllm.engine.hooks import Hooks, live
         from verity_vllm.pipeline.llm import LLM
 
-        self.arm, self.obj, self.installed, self.pearl_c = arm, plugin(arm), None, None
+        self.arm, self.obj, self.installed, self.pearl_c, self.h1 = arm, plugin(arm), None, None, None
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
         if self.obj is not None:
             before = {id(e) for e in live()}
@@ -801,7 +839,12 @@ class _VllmEngine:
                 raise RuntimeError(f"experimental arm {arm.id!r} patched outside target.hooks")
 
         kernel_digest = arm.kernel_digest
-        engine = engine_args(preset, arm.precision or preset.precision, resident=resident, eager=eager)
+        precision = arm.precision or preset.precision
+        engine = engine_args(preset, precision, resident=resident, eager=eager)
+        if precision == "int8_exact":
+            # `engine.build.register_int8_parts` registers a TargetProfile's parts, and verity_vllm.LLM builds with none
+            from verity_vllm.engine import int8_ranks
+            int8_ranks.register(INT8_EXACT_PARTS)
         overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
         engine.update(overrides or {})
         if preset.model_digest is not None:
@@ -820,17 +863,30 @@ class _VllmEngine:
         else:
             config: dict[str, Any] = {}
             if arm.protocols:
-                engine["protocols"] = ",".join(arm.protocols)
                 config = protocols_config(arm, os.environ)
+            if is_h1(arm):
+                rows = config.get("pouw", {}).get("rows")
+                if rows != engine.get("max_num_batched_tokens"):
+                    raise ValueError(f"{arm.id}: the pouw setting 'rows' (T, {rows}) is the engine's "
+                                     f"max_num_batched_tokens ({engine.get('max_num_batched_tokens')})")
+                self.h1 = {"config": config, "rows": rows, "windows": []}
+            elif arm.protocols:
+                engine["protocols"] = ",".join(arm.protocols)
                 if config:
                     engine["protocols_config"] = config
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
-            if arm.protocols:
+            if arm.protocols and self.h1 is None:
                 self.pearl_c = _pearl_c_run(self.llm)
                 cubin = config.get("pouw", {}).get("cubin")
                 if cubin:
                     kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
         self.target.engine, self.target.model = self.llm, self.llm.model
+        if precision == "int8_exact":
+            from verity_vllm.program.frontend.kernel_readback import int8_exact_of
+            got = int8_exact_of(self.llm.model)
+            if got != INT8_EXACT_SCOPE:
+                raise RuntimeError(f"{arm.id}: an int8_exact engine whose layers run int8 scope {got!r}, not "
+                                   f"{INT8_EXACT_SCOPE!r}")
         ready = getattr(self.installed, "ready", None)
         if callable(ready):
             ready(self.target)
@@ -876,6 +932,48 @@ class _VllmEngine:
         return info if self.pearl_c is None else {**info, "pearl_c": _pass_totals(self.pearl_c)}
 
     def _run(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
+        """One run; an H1 arm's in its own window, installed before the clock starts and closed after it stops."""
+
+        if self.h1 is None:
+            return self._serve(point, phase)
+        self._open_window(point)
+        try:
+            tokens, out = self._serve(point, phase)
+        finally:
+            window = self._close_window(point, phase)
+        if phase == "measure":
+            out = {**out, "extras": {**out["extras"], "h1_window": window}}
+        return tokens, out
+
+    def _open_window(self, point: SweepPoint) -> None:
+        """H1's window for one run of `point`: S its steps' bound (`window_steps`), and the epoch the window's index."""
+
+        from verity_vllm import protocol_options as PO
+        from verity_vllm.engine.engine_profile import get_model_runner
+
+        steps = window_steps(point, self.h1["rows"])
+        config = h1_window(self.h1["config"], get_model_runner(self.llm.vllm), steps, len(self.h1["windows"]))
+        ctx = PO.Context(stage="serve", enabled=self.arm.protocols, world=1, enforce_eager=True,
+                         settings=PO.load_settings(config))
+        start = time.perf_counter()
+        self.llm.protocols = PO.install(self.llm.model, ctx)
+        self.h1["install_s"] = time.perf_counter() - start
+
+    def _close_window(self, point: SweepPoint, phase: str) -> dict[str, Any]:
+        from verity_vllm.protocol_options import pouw
+
+        run = pouw.h1_run(H1)
+        start = time.perf_counter()
+        try:
+            self.llm.protocols.close()
+        finally:
+            self.llm.protocols = None
+        window = {"point": point.id, "phase": phase, **h1_summary(run),
+                  "install_s": round(self.h1["install_s"], 3), "close_s": round(time.perf_counter() - start, 3)}
+        self.h1["windows"].append(window)
+        return window
+
+    def _serve(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
         import torch
         from vllm import SamplingParams
 
@@ -955,6 +1053,8 @@ class _VllmEngine:
         return self._run(point, "gate")[0]
 
     def custom_gate(self) -> Mapping[str, Any]:
+        if self.h1 is not None:
+            return h1_gate(self.h1["windows"])
         if self.obj is None:
             return {"passed": True, "provided": False} if self.pearl_c is None else _pearl_c_gate(self.pearl_c)
         got = _callback(self.obj, "gate", self.target, None)
