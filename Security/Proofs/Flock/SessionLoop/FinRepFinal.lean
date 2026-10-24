@@ -50,9 +50,13 @@ theorem FlockSoundness.Discharge.ZkView.Coined.swExe_ytau {K W Hi VL : Type} [Fi
     {z : FlockSoundness.Discharge.ZkView.Sizes} (T : FlockSoundness.Discharge.ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (ω : T.tab.Rand) (ys : T.tab.Hid → FlockSoundness.Discharge.ZkView.Salt) :
     (T.swExe w v ω ys).ytau = (T.viewExe w ω ys).ytau := by
+  have e1 := congrArg (fun V => (T.tab.toBase V).ytau)
+    (FlockSoundness.ZK.Table.Hm96.swViewR_eq T.hm96.onVals (w, v) (w, T.tab.vals) ω ys)
+  have e2 := congrArg (fun V => (T.tab.toBase V).ytau)
+    (FlockSoundness.ZK.Table.Hm96.swViewR_eq T.hm96.onVals (w, T.tab.vals) (w, T.tab.vals) ω ys)
   rw [← FlockSoundness.Discharge.ZkView.Coined.swExe_vals T w ω ys]
-  unfold FlockSoundness.Discharge.ZkView.Coined.swExe
-  rw [FlockSoundness.ZK.Table.Hm96.swViewR_eq, FlockSoundness.ZK.Table.Hm96.swViewR_eq]
+  refine e1.trans (Eq.trans ?_ e2.symm)
+  try dsimp only
   split_ifs <;> rfl
 
 namespace Claims.ZKServer
