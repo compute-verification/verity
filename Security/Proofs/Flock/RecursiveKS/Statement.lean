@@ -2,7 +2,13 @@ import Proofs.Flock.Claims.Recursion.PartAccepts
 import Proofs.Flock.Claims.Recursion.RecRecord
 
 /-!
-# The recursion's knowledge soundness at the compiled V\* (trusted)
+# The target statement of the recursion's knowledge soundness at the compiled V\* (trusted)
+
+**Vacuous at today's V\*.** Its one premise, `Flock.Assumptions.RecKSDecomp`, is not satisfiable there: `IVStar`
+parses the record JSON, one of its messages, which V\* holds under a hiding leaf, so no part's circuit can own that
+check, and the proof files' remaining decoding has no owner either. It is the target statement: it bounds nothing until
+`IVStar`'s last step is restated at the parsed value and that decoding gets an owner. It is not proved knowledge
+soundness.
 
 `Flock.Guarantees.RecursiveKS` is a `def G : Prop` in the form of `Flock.Guarantees.MaskedKS`: route 2C's knowledge
 soundness (`Claims.Recursion.KSLin2`, at the dense statements: `KSLin2On` at `RecDeploy.DenseAt`) at the compiled
@@ -28,8 +34,10 @@ open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- Obligation: open. No Lean lemma proves it, and no honest witness of it is in Lean: it is what V\*'s units must
-compute, each its share of the inner verifier's checks.
+/-- Obligation: open, and not satisfiable at today's V\*. `IVStar` parses the record JSON, one of its messages, which
+V\* holds under a hiding leaf, so no part's circuit can own that check, and the proof files' remaining decoding has no
+owner. It becomes satisfiable once `IVStar`'s last step is restated at the parsed value and that decoding gets an
+owner: it is what V\*'s units must then compute, each its share of the inner verifier's checks.
 
 **`rec-ks-decomp`: V\*'s parts decompose the inner verifier.** At the brings `b` whose transcript is the coin server's
 record (`recTr aux nOf hd rest`), the compiled record `recBound` on V\*'s bound layout `L = layoutBTops (finOpen fin)`,
@@ -59,7 +67,8 @@ def _root_.Flock.Assumptions.RecKSDecomp (b : Brings) (aux : Msg → ℕ → Flo
       (deployZkRec _root_.Flock.Readable.relation) (layoutBTops (finOpen fin)) Claims.Recursion.Form.Dense
       (showsPart recRead { b with tr := recTr aux nOf hd rest }) (cmtTr recRead))
 
-/-- **The recursion is knowledge sound at the compiled V\*, at its dense statements** (route 2C, `KSLin2`), at SHA-512.
+/-- **The target statement of the recursion's knowledge soundness at the compiled V\*, at its dense statements**
+(route 2C, `KSLin2`), at SHA-512. Vacuous at today's V\*: its premise `RecKSDecomp` is not satisfiable there (see it).
 For every brings `b` (the stager, the reference prover's pieces) whose transcript is the coin server's record
 (`recTr aux nOf hd rest`: `rec_live`'s record of the inner rounds as `recOf` models it, at every choice of the record's
 other fields `aux`, draws `nOf`, Hello `hd` and tail `rest`), every layout of the last round's pieces `fin`, and every
@@ -83,8 +92,8 @@ the probability that it outputs a SHA-512 collision; it assumes no hash.
 What it does not say: nothing at a Holo statement (candidate 3's private inner circuits) or a sparse one, where
 `DenseAt` fails; nothing at a transcript other than the coin server's record; no bits (`BitsLin2On` follows,
 `bitsLin2On_of_ksLin2On`, reading `StrictBirthday` and `ExpectedCR`, and route 2C's `λ₂` is at least 100 at the
-deployed records, `lamLin2_deployed_ge_dep`); and nothing where `RecKSDecomp` fails, which is open, with no honest
-witness in Lean. -/
+deployed records, `lamLin2_deployed_ge_dep`); and nothing where `RecKSDecomp` fails, which is everywhere at today's
+V\*. -/
 def _root_.Flock.Guarantees.RecursiveKS : Prop :=
   ∀ (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
     (rest : Msg → List (Msg × Out) → List UInt8)
