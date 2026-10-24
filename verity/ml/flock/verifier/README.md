@@ -35,7 +35,10 @@ or without a closure, and a subset draw without `--zk` (`lean_refuses_drawn`). S
 `refused: a session without a draw: every soundness claim is about a drawn session (D12)`, last, after the form's
 refusal (`lean_refuses_drawless`). Under `--rec-inner`, a V* session whose draw is not the `subset` draw of every unit of
 its population is refused after that, and so is a recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`)
-without `--rec-inner` (`Flock.RecSetup.fullDraw`, PROTOCOL.md).
+without `--rec-inner` (`Flock.RecSetup.fullDraw`, PROTOCOL.md). Last of all, a session verified without the verifier's
+own `--program` is refused (`refused: a session without the verifier's program (--program): …`,
+`Flock.ProvedScope.programHeld`), with or without `--zk`: a verifier that cannot read the Program cannot know what it
+verifies, and the agreement check compares a session refused for that alone as accepted (`agree.py`'s `NO_PROGRAM`).
 
 ## Build and run
 
