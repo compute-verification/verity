@@ -10,7 +10,10 @@ bf16, plus 64 bits for a seed when one picks random matrices):
   kB10     LoRA-XS: R trainable r x r per map, r=5.                                              4,900 values, ~10 kB
   kB100    LoRA-XS, r=16.                                                                        50,176 values, ~100 kB
   lora16   LoRA rank 16 on all seven linear maps of every layer, alpha 32.                       18.5M values
-  full     every parameter (fp32 master, bf16 autocast forward).                                 1.54B values
+  full     every parameter (fp32 master, bf16 autocast forward; above 3B parameters bf16 masters and bf16 Adam moments
+           with stochastically rounded updates, SRAdamW).                                        1.54B values
+  temp     one logit scale c = exp(s), the policy softmax(c * logits), sampled in vLLM at temperature 1/c: a control that
+           can only sharpen or flatten the registered model (greedy decoding is unchanged).      1 value, 16 + 64 bits
   base     no training: evaluate the registered model (S = 0).
 
 `python grpo.py --task gsm8k --method tiny13 --seed 1 --steps 60 --out DIR --ckpt-root DIR`
@@ -45,6 +48,7 @@ METHODS = {
     "kB100": ("xs", 16, None, "module", 1e-3),
     "lora16": ("lora", 16, None, "module", 2e-5),
     "full": ("full", None, None, None, 2e-6),
+    "temp": ("temp", None, None, None, 1e-2),
     "base": ("base", None, None, None, 0.0),
 }
 
@@ -155,7 +159,12 @@ def svd_cache(model, linears, r_max, path):
     f = {}
     for name, mod in linears:
         W = mod.weight.detach().float()
-        U, S, Vh = torch.linalg.svd(W, full_matrices=False)
+        if model.config.hidden_size >= 3072:
+            # 7B: an exact SVD of every map takes minutes; the adapters only need a top-r basis, so randomized it is.
+            U, S, V = torch.svd_lowrank(W, q=r_max + 16, niter=6)
+            Vh = V.t()
+        else:
+            U, S, Vh = torch.linalg.svd(W, full_matrices=False)
         f[name] = (U[:, :r_max].contiguous().cpu(), S[:r_max].contiguous().cpu(), Vh[:r_max].contiguous().cpu())
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + f".tmp{os.getpid()}")
@@ -347,9 +356,77 @@ def microbatches(lengths, budget):
     return batches
 
 
+def temp_backward(model, s, seqs, plens, advs, dev, pad_id, n_tok):
+    """Backward of the GRPO loss for the temperature control: logits from the frozen model, scaled by exp(s) read at bf16.
+    Only s has a gradient, so each logit chunk's loss is backpropagated on its own."""
+    L = max(len(x) for x in seqs)
+    ids = torch.full((len(seqs), L), pad_id, dtype=torch.long)
+    for i, x in enumerate(seqs):
+        ids[i, :len(x)] = torch.tensor(x)
+    with torch.no_grad():
+        h = model.model(input_ids=ids.to(dev)).last_hidden_state
+    rows, cols, tgts, adv = [], [], [], []
+    for i, (x, p) in enumerate(zip(seqs, plens)):
+        rows.extend([i] * (len(x) - p))
+        cols.extend(range(p - 1, len(x) - 1))
+        tgts.extend(x[p:])
+        adv.extend([advs[i]] * (len(x) - p))
+    hs = h[torch.tensor(rows, device=dev), torch.tensor(cols, device=dev)]
+    tg = torch.tensor(tgts, device=dev)
+    at = torch.tensor(adv, device=dev)
+    for a in range(0, hs.shape[0], 2048):
+        with torch.no_grad():
+            lg = model.lm_head(hs[a:a + 2048]).float()
+        c = torch.exp(s + (s.detach().to(torch.bfloat16).float() - s.detach()))
+        z = c * lg
+        lp = z.gather(-1, tg[a:a + 2048, None])[:, 0] - torch.logsumexp(z, -1)
+        (-(at[a:a + 2048] * lp).sum() / n_tok).backward()
+
+
+def sr_bf16(x):
+    """fp32 -> bf16 with stochastic rounding (round up with probability equal to the dropped fraction)."""
+    i = x.view(torch.int32)
+    return ((i + torch.randint_like(i, 0, 1 << 16)) & -65536).view(torch.float32).to(torch.bfloat16)
+
+
+class SRAdamW:
+    """AdamW on bf16 parameters with bf16 moments, for full fine-tuning of a model too big for fp32 masters on one GPU. Each
+    update is computed in fp32 and written back with stochastic rounding: at lr 2e-6 an update is far below half a bf16
+    ulp of a typical weight, so round-to-nearest would drop nearly all of them."""
+
+    def __init__(self, params, lr, betas=(0.9, 0.99), eps=1e-8, chunk=1 << 25):
+        self.params = list(params)
+        self.m = [torch.zeros_like(p) for p in self.params]
+        self.v = [torch.zeros_like(p) for p in self.params]
+        self.lr, self.betas, self.eps, self.chunk, self.t = lr, betas, eps, chunk, 0
+
+    def zero_grad(self, set_to_none=True):
+        for p in self.params:
+            p.grad = None
+
+    @torch.no_grad()
+    def step(self):
+        self.t += 1
+        b1, b2 = self.betas
+        bc1, bc2 = 1 - b1 ** self.t, 1 - b2 ** self.t
+        for p, m, v in zip(self.params, self.m, self.v):
+            if p.grad is None:
+                continue
+            P, G, M, V = p.view(-1), p.grad.view(-1), m.view(-1), v.view(-1)
+            for a in range(0, P.numel(), self.chunk):
+                sl = slice(a, a + self.chunk)
+                g = G[sl].float()
+                m32 = M[sl].float().mul_(b1).add_(g, alpha=1 - b1)
+                v32 = V[sl].float().mul_(b2).addcmul_(g, g, value=1 - b2)
+                M[sl] = sr_bf16(m32)
+                V[sl] = v32.to(torch.bfloat16)
+                upd = m32.div_(bc1).div_(v32.div_(bc2).sqrt_().add_(self.eps))
+                P[sl] = sr_bf16(P[sl].float().sub_(upd, alpha=self.lr))
+
+
 def s_bits(method, n_params):
     kind = METHODS[method][0]
-    seed_bits = 64 if kind == "tiny" else 0
+    seed_bits = 64 if kind in ("tiny", "temp") else 0
     return 16 * n_params + seed_bits
 
 
@@ -372,8 +449,14 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--ckpt-root", default=None)
     ap.add_argument("--svd-cache", default=os.environ.get("SVD_CACHE", "svd_cache.pt"))
-    ap.add_argument("--tok-budget", type=int, default=8192)
-    ap.add_argument("--gpu-mem", type=float, default=0.25)
+    ap.add_argument("--tok-budget", type=int, default=None)
+    ap.add_argument("--gpu-mem", type=float, default=None)
+    ap.add_argument("--deadline", type=float, default=0, help="epoch seconds: stop training early so the final save and "
+                    "evaluation finish by then")
+    ap.add_argument("--reserve-min", type=float, default=None, help="minutes kept for the final save and evaluation")
+    ap.add_argument("--final-n", type=int, default=4, help="samples per test problem at the policy's temperature in the "
+                    "final evaluation (written as ckpteval-*.json, as evalckpts.py does); 0 skips it")
+    ap.add_argument("--grad-ckpt", type=int, default=-1, help="gradient checkpointing (default: on for full above 3B)")
     ap.add_argument("--mid-eval", type=int, default=1)
     ap.add_argument("--eval-ckpt", default=None, help="evaluate a saved checkpoint dir (greedy, and pass@k with --passk)")
     ap.add_argument("--variant", default="", help="appended to the task in labels, checkpoint dirs and results (e.g. 'B' for the base model)")
@@ -410,7 +493,16 @@ def main():
         test = test[:args.eval_limit]
 
     tok = AutoTokenizer.from_pretrained(args.model)
+    from transformers import AutoConfig
+    cfg = AutoConfig.from_pretrained(args.model)
+    big = cfg.hidden_size >= 3072
     eval_only = kind == "base" or args.eval_ckpt
+    if args.gpu_mem is None:
+        args.gpu_mem = (0.22 if kind == "full" else 0.35) if big else 0.25
+    if args.tok_budget is None:
+        args.tok_budget = 4096 if big else 8192
+    if args.reserve_min is None:
+        args.reserve_min = 14 if big else 6
     llm = LLM(model=args.model, dtype="bfloat16", gpu_memory_utilization=0.6 if eval_only else args.gpu_mem,
               max_model_len=2048 + 512, enable_prefix_caching=True, seed=args.seed,
               **({"max_num_seqs": 1024} if eval_only else {}))
@@ -444,25 +536,41 @@ def main():
         return
 
     dev = torch.device("cuda")
+    bf16_master = kind == "full" and big
+    adapter, temp_s = None, None
     if kind == "full":
-        model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.float32, attn_implementation="sdpa").to(dev)
+        model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16 if bf16_master else torch.float32,
+                                                     attn_implementation="sdpa").to(dev)
         model.requires_grad_(True)
         params = [p for p in model.parameters()]
-        adapter = None
         n_params = sum(p.numel() for p in model.parameters())
     else:
         model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16, attn_implementation="sdpa").to(dev)
         model.requires_grad_(False)
-        adapter = Adapter(model, args.method, args.seed, args.svd_cache)
-        params = list(adapter.parameters())
-        n_params = adapter.n_trainable()
+        if kind == "temp":
+            temp_s = torch.nn.Parameter(torch.zeros((), device=dev))
+            params = [temp_s]
+            n_params = 1
+        else:
+            adapter = Adapter(model, args.method, args.seed, args.svd_cache)
+            params = list(adapter.parameters())
+            n_params = adapter.n_trainable()
     model.config.use_cache = False
     model.train()
+    if args.grad_ckpt == 1 or (args.grad_ckpt == -1 and bf16_master):
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     W0 = {n: m.weight.detach() for n, m in target_linears(model)} if adapter is not None else None
-    tok_budget = args.tok_budget if kind != "full" else min(args.tok_budget, 6144)
+    tok_budget = args.tok_budget if kind != "full" else min(args.tok_budget, 6144 if not big else 3072)
     sbits = s_bits(args.method, n_params)
-    emit(event="setup", method=args.method, n_params=n_params, S_bits=sbits, lr=lr, model=args.model)
-    opt = torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.99), weight_decay=0.0, eps=1e-8)
+    emit(event="setup", method=args.method, n_params=n_params, S_bits=sbits, lr=lr, model=args.model, gpu_mem=args.gpu_mem,
+         tok_budget=tok_budget, bf16_master=bf16_master, prompts=args.prompts, deadline=args.deadline)
+    if bf16_master:
+        opt = SRAdamW(params, lr=lr, betas=(0.9, 0.99), eps=1e-8)
+    else:
+        opt = torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.99), weight_decay=0.0, eps=1e-8)
+
+    def policy_temperature():
+        return math.exp(-float(temp_s.detach().to(torch.bfloat16).float())) if temp_s is not None else 1.0
     pad_id = tok.pad_token_id if tok.pad_token_id is not None else tok.eos_token_id
     score = SCORERS[data_task]
     order = list(range(len(train)))
@@ -473,6 +581,8 @@ def main():
 
     def push():
         with torch.no_grad():
+            if temp_s is not None:
+                return {"s": float(temp_s.detach()), "policy_T": policy_temperature()}
             if adapter is None:
                 sync_weights(llm, ((n, p.detach().to(torch.bfloat16)) for n, p in model.named_parameters()))
                 return {}
@@ -496,7 +606,12 @@ def main():
         meta = {"task": task, "method": args.method, "seed": args.seed, "step": step, "S_bits": sbits, "n_params": n_params,
                 "model": args.model, "lr": lr, "prompts_per_step": args.prompts, "group": args.group, "kind": kind,
                 "r": r, "u": u, "grouping": grouping, "targets": list(TARGETS)}
-        if adapter is None:
+        if temp_s is not None:
+            meta.update(s=float(temp_s.detach()), policy_temperature=policy_temperature(),
+                        format="state.pt: s (fp32 master, read at bf16); the policy is softmax(exp(s) * logits) of the "
+                               "registered model, i.e. sampling at temperature exp(-s)")
+            torch.save({"state": {"s": temp_s.detach().cpu()}, "meta": meta}, d / "state.pt")
+        elif adapter is None:
             from safetensors.torch import save_file
             sd = {n: p.detach().to(torch.bfloat16).contiguous().cpu() for n, p in model.named_parameters()}
             save_file(sd, str(d / "model.safetensors"), metadata={"format": "pt"})
@@ -532,7 +647,13 @@ def main():
         return {"step": step, "acc": acc, "per_problem": [c[0] for c in per], "mean_len": sum(lens) / len(lens)}
 
     ckpts = {}
+    done_steps, step_times = 0, []
     for step in range(1, args.steps + 1):
+        if args.deadline and step_times:
+            per = max(step_times[-5:])
+            if time.time() + per + args.reserve_min * 60 > args.deadline:
+                emit(event="deadline_stop", after_step=done_steps, step_s=per)
+                break
         ts = time.time()
         batch = []
         for _ in range(args.prompts):
@@ -542,7 +663,7 @@ def main():
             batch.append(train[order[ptr]])
             ptr += 1
         prompts = [chat(tok, b["q"]) for b in batch]
-        outs = generate(llm, prompts, args.group, 1.0, 1.0, max_tokens, seed=args.seed * 100003 + step)
+        outs = generate(llm, prompts, args.group, policy_temperature(), 1.0, max_tokens, seed=args.seed * 100003 + step)
         tg = time.time() - ts
         seqs, plens, advs, rews, clens = [], [], [], [], []
         for b, o in zip(batch, outs):
@@ -562,7 +683,11 @@ def main():
         if seqs:
             opt.zero_grad(set_to_none=True)
             for mb in microbatches([len(s) for s in seqs], tok_budget):
-                with torch.autocast("cuda", dtype=torch.bfloat16, enabled=(kind == "full")):
+                if temp_s is not None:
+                    temp_backward(model, temp_s, [seqs[i] for i in mb], [plens[i] for i in mb], [advs[i] for i in mb], dev,
+                                  pad_id, n_tok)
+                    continue
+                with torch.autocast("cuda", dtype=torch.bfloat16, enabled=(kind == "full" and not bf16_master)):
                     lp = seq_logprobs(model, [seqs[i] for i in mb], [plens[i] for i in mb], dev, pad_id)
                 a = torch.tensor([advs[i] for i in mb], device=dev, dtype=lp.dtype)
                 loss = -(a * lp).sum() / n_tok
@@ -570,21 +695,44 @@ def main():
             gnorm = float(torch.nn.utils.clip_grad_norm_(params, 1.0))
             opt.step()
         info = push() if seqs else {}
+        done_steps = step
+        step_times.append(time.time() - ts)
         emit(event="step", step=step, reward=sum(rews) / len(rews), clen=sum(clens) / len(clens), n_seq=len(seqs),
              n_tok=n_tok, gnorm=gnorm, gen_s=round(tg, 2), step_s=round(time.time() - ts, 2), **info)
         if step == mid and mid > 0:
             ckpts[step] = save_ckpt(step)
             if args.mid_eval:
                 results.append(do_eval(step))
-    ckpts[args.steps] = save_ckpt(args.steps)
-    results.append(do_eval(args.steps))
+    if done_steps not in ckpts:
+        ckpts[done_steps] = save_ckpt(done_steps)
+    del opt, params
+    if adapter is not None:
+        adapter.remove()
+    del model, adapter
+    W0 = None
+    torch.cuda.empty_cache()
+    results.append(do_eval(done_steps))
     final = results[-1]
     res = {"label": label, "task": task, "method": args.method, "seed": args.seed, "S_bits": sbits, "n_params": n_params,
-           "steps": args.steps, "lr": lr, "acc": final["acc"], "per_problem": final["per_problem"], "evals": results,
-           "ckpts": {str(k): v for k, v in ckpts.items()}, "model": args.model, "prompts_per_step": args.prompts,
-           "group": args.group, "max_tokens": max_tokens, "eval_max_tokens": eval_max, "secs": time.time() - t_start}
+           "steps": done_steps, "steps_planned": args.steps, "lr": lr, "acc": final["acc"],
+           "per_problem": final["per_problem"], "evals": results, "ckpts": {str(k): v for k, v in ckpts.items()},
+           "model": args.model, "prompts_per_step": args.prompts, "group": args.group, "max_tokens": max_tokens,
+           "eval_max_tokens": eval_max, "policy_temperature": policy_temperature(), "secs": time.time() - t_start}
     json.dump(res, open(out / f"result-{label}.json", "w"))
-    emit(event="done", acc=final["acc"], secs=res["secs"])
+    emit(event="done", acc=final["acc"], steps=done_steps, secs=res["secs"])
+    if args.final_n:
+        T = policy_temperature()
+        t0 = time.time()
+        per_s, lens = evaluate(llm, tok, test, data_task, eval_max, n=args.final_n, temperature=T, top_p=1.0, seed=args.seed)
+        ck = {"label": f"{label}-step{done_steps}", "task": task, "method": args.method, "seed": args.seed,
+              "step": done_steps, "S_bits": sbits, "n_params": n_params, "ckpt": ckpts.get(done_steps), "model": args.model,
+              "mode": "in-job", "greedy_acc": final["acc"], "greedy_per_problem": final["per_problem"],
+              "sampled": {"n": args.final_n, "temperature": T, "top_p": 1.0,
+                          "acc": sum(sum(c) / len(c) for c in per_s) / len(per_s),
+                          "per_problem": [sum(c) / len(c) for c in per_s], "mean_len": sum(lens) / len(lens)},
+              "secs": time.time() - t0}
+        json.dump(ck, open(out / f"ckpteval-{label}-step{done_steps}.json", "w"))
+        emit(event="final_sampled", acc=ck["sampled"]["acc"], T=T, secs=round(ck["secs"], 1))
 
 
 if __name__ == "__main__":
