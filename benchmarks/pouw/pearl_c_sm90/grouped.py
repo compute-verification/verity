@@ -28,12 +28,19 @@ each output, as the ungrouped kernels do, so a unit's bytes are its own call's."
 from __future__ import annotations
 
 import ctypes as C
+import os
 from dataclasses import dataclass
 
 import numpy as np
 
 #: hash_decode.cuh's variant the grouped launches take (pearl_c_sm90.cu's PD_GROUPED): a CTA a tile
 PD = 851
+#: PROBE: how the grouped launches share SMs, "+"-joined: carve (the grouped kernels' carveout at its most shared memory),
+#: tree (pd_tree_g at PD_PAIR_SMEM, not a whole SM)
+PLACE = frozenset(os.environ.get("PEARLC_GROUPED_PLACE", "").split("+")) - {"", "base"}
+#: CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT and CU_SHAREDMEM_CARVEOUT_MAX_SHARED
+CARVEOUT, MAX_SHARED = 9, 100
+CARVED = (f"pd_commit_g_{PD}", f"pd_tiles_g_{PD}", "form_s5_g", "gemm_words_g_d", "gemm_pearlc_g_d")
 #: a unit's segment rows divide by it: the grouped GEMMs' tile rows (run.BM_D) and the tile leaves' (run.TILE)
 SEG = 64
 STEPS = ("commit_a", "stats_a", "eprime_a", "form_a", "af", "pa", "gemm_pearlc", "hash_leaf")
@@ -111,6 +118,9 @@ def setup(R, dev) -> None:
     R.pd_setup(dev)
     if getattr(dev, "pd_smem_g", None) is None:
         dev.pd_smem_g = pd_smem(R, dev, f"pd_commit_g_{PD}")
+        if "carve" in PLACE:
+            for name in CARVED:
+                dev.ck("cuFuncSetAttribute", dev.fn(name), CARVEOUT, MAX_SHARED)
 
 
 def has_tree(dev) -> bool:
@@ -130,6 +140,10 @@ def tree_setup(R, dev) -> None:
     """pd_tree_g's dynamic shared memory (`pd_smem`), at a split call's first use."""
     if getattr(dev, "pd_tree_smem_g", None) is None:
         dev.pd_tree_smem_g = pd_smem(R, dev, f"pd_tree_g_{PD}")
+        if "carve" in PLACE:
+            dev.ck("cuFuncSetAttribute", dev.fn(f"pd_tree_g_{PD}"), CARVEOUT, MAX_SHARED)
+        if "tree" in PLACE:
+            dev.pd_tree_smem_g = R.PD_PAIR_SMEM
 
 
 def gemm_smem(R, dev, name: str) -> int:
