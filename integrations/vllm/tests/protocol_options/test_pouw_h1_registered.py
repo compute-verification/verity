@@ -16,9 +16,10 @@ PROGRAM, WINDOW = "ab" * 64, "cd" * 64
 KEY = bytes(range(32))
 
 
-def _core(program, value, words, key, nonce, keep_rows=False, **binding):
-    return G.Registered.commit(program, value, np.asarray(words).tolist(),
-                               [hm96_salt(key, nonce, j) for j in range(len(words))], schema=G.SCHEMA_V2, **binding)
+def _core(program, value, words, key, nonce, keep_rows=False, row_salts=None, **binding):
+    salts = ([hm96_salt(key, nonce, j) for j in range(len(words))] if row_salts is None
+             else [row_salts[192 * j:192 * (j + 1)] for j in range(len(words))])
+    return G.Registered.commit(program, value, np.asarray(words).tolist(), salts, schema=G.SCHEMA_V2, **binding)
 
 
 def test_salts_are_hm96_salts_across_a_chacha_pass():
@@ -50,6 +51,21 @@ def test_a_value_is_what_core_commits(n, w, binding):
     (rows, salts, head), want = got.statement(ps), ref.statement(ps)
     assert (rows, salts, head) == want
     assert all(G.verify_read(got.domain, ref.root, p, got.bcs[p], got.path(p), G.SCHEMA_V2) for p in range(n))
+
+
+def test_given_salts_are_the_rows_salts_and_one_reused_is_refused():
+    """With ``row_salts`` (a public table's, `pouw_h1_served.Served._pubs`) the value is core's commit under those salts,
+    not the key's; a salt short or reused is refused."""
+    words = np.arange(15, dtype=np.uint16).reshape(3, 5)
+    ys = b"".join(bytes([j + 1]) * 192 for j in range(3))
+    got = NR.commit(PROGRAM, "h1/pub@0", words, KEY, 0, True, ys, window=WINDOW)
+    ref = G.Registered.commit(PROGRAM, "h1/pub@0", words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(3)],
+                              schema=G.SCHEMA_V2, window=WINDOW)
+    assert got.entry() == ref.entry() and got.levels == ref.levels and got.bcs == ref.bcs
+    assert list(got.salts) == list(ref.salts) and list(got.rows) == list(ref.rows)
+    for bad in (ys[:-1], ys[:192] * 3):
+        with pytest.raises(ValueError, match="never reused"):
+            NR.commit(PROGRAM, "h1/pub@0", words, KEY, 0, True, bad, window=WINDOW)
 
 
 def test_a_windows_rows_arent_kept_unless_asked():
@@ -88,4 +104,4 @@ def test_a_served_window_registers_what_core_would(monkeypatch):
     got = window()
     monkeypatch.setattr(SV.NR, "commit", _core)
     want = window()
-    assert got == want and len(got[1]) == 2 * len(T.SHAPES) * T.STEPS + len(T.KS)
+    assert got == want and len(got[1]) == 2 * len(T.SHAPES) * T.STEPS + (T.STEPS + 1) * len(T.KS)

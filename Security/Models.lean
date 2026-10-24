@@ -25,6 +25,8 @@ import Models.Pouw.Assumptions
 import Models.Pouw.Guarantees
 import Models.NetworkCertifier.Assumptions
 import Models.NetworkCertifier.Guarantees
+import Models.NetworkCertifier.Assumptions.AdviceString
+import Models.NetworkCertifier.Guarantees.AdviceString
 import Models.Flock.Guarantees
 import Models.Accounting.Guarantees
 import Models.Hash.Guarantees

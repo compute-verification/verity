@@ -75,6 +75,59 @@ def test_a_forgery_passes_only_when_lean_refuses_it(tmp_path, capsys):
     assert _run(tmp_path, "L0", "forged-sum-L3", capsys=capsys)[0] == 1
 
 
+def test_a_forgery_over_several_parts_needs_one_refusal_and_every_verdict(tmp_path, capsys):
+    """V* accepts only when every part does: a forgery staged at several parts (``forged-KIND-PART``) is refused when one
+    part refuses it, the parts it leaves honest accepting; it fails when none refuses or a part has no VERDICT."""
+    for p in ("L0", "alg-p0", "alg-p1"):
+        _part(tmp_path, p, 0, True)
+    _part(tmp_path, "forged-comb-alg-p0", 1, False, why="rec-v row")
+    _part(tmp_path, "forged-comb-alg-p1", 0, True)
+    _part(tmp_path, "forged-inner-query-L0", 1, False, why="rec-dirs row")
+    _part(tmp_path, "forged-inner-query-alg-p0", 0, True)
+    parts = ("L0", "alg-p0", "alg-p1", "forged-comb-alg-p0", "forged-comb-alg-p1", "forged-inner-query-L0",
+             "forged-inner-query-alg-p0")
+    rc, out = _run(tmp_path, *parts, capsys=capsys)
+    assert rc == 0 and out[-1] == "lean: 3/3 accepted, 2/2 forgeries refused"
+    assert "lean forgery comb: refused by ['forged-comb-alg-p0'] of 2" in out
+    assert "lean forgery inner-query: refused by ['forged-inner-query-L0'] of 2" in out
+    _part(tmp_path, "forged-comb-alg-p0", 0, True)
+    rc, out = _run(tmp_path, *parts, capsys=capsys)
+    assert rc == 1 and "lean forgery comb: refused by no part of 2  <- FAILS" in out
+    _part(tmp_path, "forged-comb-alg-p0", 1, False, why="rec-v row")
+    (tmp_path / "forged-comb-alg-p1.log").unlink()
+    assert _run(tmp_path, *parts, capsys=capsys)[0] == 1
+
+
+def _live(d: Path, name: str, stopped: str | None) -> None:
+    """``PART.live``: the prover's LIVE verdict as oprove keeps it, stopped at ``stopped``."""
+    (d / f"{name}.live").write_text(json.dumps({"accepted": False, "why": stopped or "", "prover_stopped": stopped}) + "\n")
+
+
+def test_a_forgery_the_firewall_refused_before_lean_counts_as_refused(tmp_path, capsys):
+    """MODES=firewall: the firewall may hold a forgery's proofs back, so no session reaches Lean; its LIVE verdict's
+    FIREWALL-REFUSED stop is that part's refusal. Any other stop, or none, leaves the part without a verdict, and a firewall
+    refusal never passes an honest part."""
+    for p in ("L0", "alg-p0"):
+        _part(tmp_path, p, 0, True)
+    _live(tmp_path, "forged-comb-alg-p0", "FIREWALL-REFUSED: alg-p0: the constraints [3] fail on a rep's pads")
+    _part(tmp_path, "forged-comb-L0", 0, True)
+    parts = ("L0", "alg-p0", "forged-comb-alg-p0", "forged-comb-L0")
+    rc, out = _run(tmp_path, *parts, capsys=capsys)
+    assert rc == 0 and out[-1] == "lean: 2/2 accepted, 1/1 forgeries refused"
+    assert out[2].startswith("lean forged-comb-alg-p0 (forgery comb: one of its parts must be refused): refused by the "
+                             "firewall before Lean, why \"FIREWALL-REFUSED: alg-p0: the constraints [3]")
+    assert "lean forgery comb: refused by ['forged-comb-alg-p0'] of 2" in out
+    _live(tmp_path, "forged-comb-alg-p0", "PROVER-STOPPED: the verifier hung up")
+    assert _run(tmp_path, *parts, capsys=capsys)[0] == 1
+    _live(tmp_path, "forged-comb-alg-p0", None)
+    assert _run(tmp_path, *parts, capsys=capsys)[0] == 1
+    (tmp_path / "alg-p0.log").unlink()
+    (tmp_path / "time-alg-p0.txt").unlink()
+    _live(tmp_path, "alg-p0", "FIREWALL-REFUSED: alg-p0's level-0 root")
+    rc, out = _run(tmp_path, "L0", "alg-p0", capsys=capsys)
+    assert rc == 1 and out[1].endswith("<- FAILS") and out[-1] == "lean: 1/2 accepted: the step fails"
+
+
 def _statement(d: Path, rc: int, line: str) -> None:
     (d / "inner-statement.log").write_text(line + "\n")
     (d / "time-inner-statement.txt").write_text(f"\tExit status: {rc}\n")

@@ -1,7 +1,7 @@
 """M1: one step family's unit through C-Flock, timed: the Definition a Program row names (its ``spec``) as M0's `UnitStager`
 statement on the serving rows' ports (an input row per parameter and an output row per returned field, each a
-``hm96-sha512/row/v2`` row of its u16 words), flat (`ir_lower`) or structural (``--structural``: `struct_lower`'s template,
-the flat unit never built), and with ``--bin`` and ``--lean`` one round of ``--n`` units staged on finite bf16 values (every
+``hm96-sha512/row/v2`` row of its u16 words), flat (`ir_lower`; ``--reads slots``: its MUFU reads in lookup slots,
+`read_slots`) or structural (``--structural``: `struct_lower`'s template, the flat unit never built), and with ``--bin`` and ``--lean`` one round of ``--n`` units staged on finite bf16 values (every
 parameter of a bf16 family; a stand-in for the served values, which only the window reads), proved by M0 under ``--zk``
 (`a0.session`: serve and prove, the verifier's subset draw of all of them) and verified by the Lean verifier of record
 (`a0.lean_verify`).  A coordinate template (`serving_rows.COORDS`: the expert-indexed pair GEMMs and FlashInfer's FP8 linear at
@@ -18,10 +18,13 @@ all-reduce + RMSNorm's all-reduce and residual add, in column blocks, and its no
 numpy twin of the whole row before and after staging.  A slice template (`serving_rows.SLICES`: the router GEMM, the LM
 head, cuBLAS's split-K and torch.bmm at their coordinates, DSA's logits per key, the embedding shard per column, the all-gather
 per shard) with ``--row SPEC`` likewise stages the ``--units`` of a synthetic row of SPEC read through the split (`slice_call`).
+A V-chunk of greedy token selection (`b1.TokenSelectChunk_v1`) or its combine (`TokenSelectCombine_v1`) with ``--vchunks V``
+stages the ``--units`` chunks, or the combine, of a synthetic logits row of V (`vchunk_call`), the combine's token held to
+`TokenSelect_v1{V}` on the whole row and each staged output to its word Definition's.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v1{N=6144,EPS=...,BLOCK=256}' --out DIR \\
-      [--structural iv/hybrid/4] [--bin flock-circuit --lean flock-verify] [--n 1]
+      [--structural iv/hybrid/4 | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
 
 Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, k_log, vus_per_block and
 chunk_cap (`a6.chunk_cap`'s rule), then the stage, the session and Lean's verdict.
@@ -29,6 +32,8 @@ chunk_cap (`a6.chunk_cap`'s rule), then the stage, the session and Lean's verdic
 from __future__ import annotations
 
 import argparse
+import ctypes
+import gc
 import json
 import os
 import resource
@@ -48,6 +53,17 @@ M_MAX = 35
 def say(phase: str, **kw) -> None:
     print("M1U " + json.dumps({"phase": phase, "rss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2), **kw},
                               default=str), flush=True)
+
+
+def release() -> float:
+    """Free what the stager held before the prover starts beside this process (at served width its lowering is most of the
+    build's peak, which the two would otherwise hold at once), and return this process's resident GB after."""
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except OSError:
+        pass
+    return round(int(Path("/proc/self/statm").read_text().split()[1]) * os.sysconf("SC_PAGE_SIZE") / 2**30, 2)
 
 
 def bf16_rows(rng: np.random.Generator, n: int, words: int) -> np.ndarray:
@@ -314,11 +330,42 @@ def chunk_call(tp, k_call: int, rng: np.random.Generator) -> dict:
     return {"chunks": chunks, "twin": int(y[0]), "nonfinite": int(nonfin.sum()), "reference": ref, "expert": e, "C": C}
 
 
+def vchunk_call(tp, v_call: int, rng: np.random.Generator) -> dict:
+    """A synthetic logits row of V = ``v_call`` (finite bf16 words, a NaN after logits[0], the row's largest word on both sides of
+    the middle chunk boundary) cut into V-chunks of a `TokenSelectChunk_v1` or `TokenSelectCombine_v1` template's C (`b1.chunks`):
+    each chunk's partial by `TokenSelectChunk_v1`, the combine's token from logits[0] and the partials, and the row's by
+    `TokenSelect_v1{V}`, which is the first of the two largest words."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity_vllm.program.registry import b1
+    from verity_vllm.query.program_view import spec_statics
+
+    def ev(fn, *xs):
+        return np.asarray(evaluate_batch(fn, *(np.asarray(x).reshape(1, -1).astype(np.uint64) for x in xs))).reshape(-1)
+
+    C = int(spec_statics(tp.word)["C"])
+    cuts = b1.chunks(v_call, C)
+    x = bf16_rows(rng, 1, v_call)[0]
+    x[1 + int(rng.integers(v_call - 1))] = 0x7FC0
+    at = (len(cuts) // 2) * C
+    x[[at - 1, at]] = 0x7F00
+    parts = [ev(bind(b1.TokenSelectChunk, C=hi - lo), x[lo:hi]) for lo, hi in cuts]
+    best, idx = np.array([p[0] for p in parts], np.uint16), np.array([p[1] for p in parts], np.uint32)
+    token = int(ev(bind(b1.TokenSelectCombine, V=v_call, C=C), x[:1], best, idx)[0])
+    return {"x": x, "cuts": cuts, "best": best, "idx": idx, "token": token, "reference": int(ev(bind(b1.TokenSelect, V=v_call), x)[0]),
+            "largest": at - 1}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--spec", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--structural", default=None, metavar="LAYOUT", help="the structural stager at this layout mode (iv/hybrid/4)")
+    ap.add_argument("--reads", choices=("inline", "slots"), default="inline",
+                    help="a flat unit's MUFU table reads: inline rows of the unit, or C-Flock lookup slots (read_slots)")
+    ap.add_argument("--stage-ands", type=lambda v: v if v in ("auto", "none") else int(v), default="auto", metavar="N|auto|none",
+                    help="with --reads slots: at most N ANDs a net, the caps whose nets take the fewest cells (auto), or no cap "
+                         "(read_slots.split's stage_ands)")
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
     ap.add_argument("--lean", default=None, help="the Lean verifier of record (flock-verify)")
     ap.add_argument("--n", type=int, default=1)
@@ -333,9 +380,11 @@ def main() -> int:
     ap.add_argument("--row", default=None, metavar="SPEC",
                     help="a part template (serving_rows.PARTS) or a slice template (serving_rows.SLICES): stage its units of a "
                          "synthetic row of this descriptor id, read through the split")
+    ap.add_argument("--vchunks", type=int, default=None, metavar="V",
+                    help="a TokenSelectChunk or TokenSelectCombine unit: stage it on a synthetic logits row of V cut at the unit's C")
     ap.add_argument("--units", default=None,
-                    help="with --call-n: the coordinates staged; with --chunk-k: the chunks; with --call-w or --row: the column "
-                         "blocks or parts (comma-separated); else the first --n")
+                    help="with --call-n: the coordinates staged; with --chunk-k or --vchunks: the chunks; with --call-w or --row: the "
+                         "column blocks or parts (comma-separated); else the first --n")
     a = ap.parse_args()
 
     import a0
@@ -357,13 +406,15 @@ def main() -> int:
     d = out / "stage"
     t = time.time()
     with K.no_cyclic_gc():
-        st = CS.UnitStager(fn, f"m1/{K.family(fn.id)}", rows, K.out_rows(n_out), circuit=d / "circuit.txt",
+        st = CS.UnitStager(fn, f"m1/{K.family(fn.id)}", rows, K.out_rows(n_out), circuit=d / "circuit.txt", reads=a.reads,
+                           stage_ands=None if a.stage_ands == "none" else a.stage_ands,
                            **({"layout": a.structural, "structural": True} if a.structural else {}))
-    m, c = st.meta, st.low.layout.counts
+    m, c = st.meta, getattr(st.low, "counts", None) or st.low.layout.counts
     cap = int(m["vus_per_block"]) << (M_MAX - int(m["k_log"])) if M_MAX - int(m["k_log"]) >= 3 else 0
-    say("built", seconds=round(time.time() - t, 1), structural=a.structural, ands=c["ands"], unit_rows=c.get("rows"),
-        k_log=m["k_log"], unit_log=m["unit_log"], vus_per_block=m["vus_per_block"], chunk_cap=cap, pin=st.pin,
-        circuit_bytes=(d / "circuit.txt").stat().st_size, domain=st.low.domain)
+    say("built", seconds=round(time.time() - t, 1), structural=a.structural, reads=a.reads, ands=c["ands"], unit_rows=c.get("rows"),
+        nnz=c.get("nnz_a", 0) + c.get("nnz_b", 0), lookups=m.get("per_vu", {}), k_log=m["k_log"], unit_log=m["unit_log"],
+        vus_per_block=m["vus_per_block"], chunk_cap=cap, pin=st.pin, circuit_bytes=(d / "circuit.txt").stat().st_size,
+        domain=st.low.domain, stage_ands=getattr(st.low, "caps", None))
     if not a.bin:
         return 0
 
@@ -395,6 +446,26 @@ def main() -> int:
         vals = {nm: np.stack([_packed(sc["chunks"][c]["vals"][g], b) for c in units])
                 for g, ((nm, _s, _b, _p), b) in enumerate(zip(rows, tp.packed))}
         want = np.stack([_packed(np.array([sc["chunks"][c]["out"]]), 16 if S["LAST"] else 32) for c in units])
+    elif a.vchunks:
+        t = time.time()
+        tp = SRW.template(a.spec)
+        sc = vchunk_call(tp, a.vchunks, rng)
+        combine = "TokenSelectCombine" in tp.word
+        units = [0] if combine else [int(u) for u in a.units.split(",")] if a.units else [len(sc["cuts"]) // 2]
+        a.n = len(units)
+        say("vchunks", seconds=round(time.time() - t, 1), chunks=len(sc["cuts"]), staged=units, token=sc["token"],
+            token_is_token_select=sc["token"] == sc["reference"], largest=sc["largest"])
+        if sc["token"] != sc["reference"] or sc["token"] != sc["largest"]:
+            return 1
+        if combine:
+            vals = {"x0": _packed(sc["x"][:1], 16)[None], "best": _packed(sc["best"], 16)[None], "idx": _packed(sc["idx"], 32)[None]}
+            want = _packed(np.array([sc["token"]]), 32)[None]
+        else:
+            C = int(tp.fn.bindings["C"])
+            if any(sc["cuts"][c][1] - sc["cuts"][c][0] != C for c in units):
+                return 1
+            vals = {"x": np.stack([sc["x"][sc["cuts"][c][0]:sc["cuts"][c][1]] for c in units])}
+            want = np.stack([np.concatenate([_packed(sc["best"][c:c + 1], 16), _packed(sc["idx"][c:c + 1], 32)]) for c in units])
     elif a.call_w or a.row:
         t = time.time()
         tp = SRW.template(a.spec)
@@ -420,13 +491,19 @@ def main() -> int:
     calls = bool((got["outs"]["o0"].reshape(-1) == sc["twin"][units]).all()) if a.call_n else None
     if a.chunk_k or a.call_w or a.row:
         calls = bool(np.array_equal(np.asarray(got["outs"]["o0"]).reshape(a.n, -1), want))
+    if a.vchunks:
+        calls = bool(np.array_equal(np.concatenate([np.asarray(got["outs"][f"o{j}"]).reshape(a.n, -1) for j in range(n_out)], axis=1),
+                                    want))
     say("staged", seconds=round(time.time() - t, 1), n=a.n, ands=got["ands"],
-        **({"outs_are_calls": calls} if a.call_n or a.chunk_k or a.call_w or a.row else {}))
+        **({"outs_are_calls": calls} if a.call_n or a.chunk_k or a.call_w or a.row or a.vchunks else {}))
     if calls is False:
         return 1
+    pin = st.pin
+    del st, got
+    say("released", rss_now_gb=release())
 
     t = time.time()
-    record, live = a0.session(a.bin, {"dir": d, "pin": st.pin}, a.n, f"subset:{a.n}", a.port, out / "session", zk=True)
+    record, live = a0.session(a.bin, {"dir": d, "pin": pin}, a.n, f"subset:{a.n}", a.port, out / "session", zk=True)
     say("proved", seconds=round(time.time() - t, 1), accepted=(live or {}).get("accepted"), why=(live or {}).get("why"),
         **{k: (live or {}).get(k) for k in ("k_log", "nbl", "dense_m", "prove_total_s", "witness_s", "proof_bytes", "units")},
         verdict=(record or {}).get("verdict"))

@@ -112,7 +112,7 @@ endpoint_env = ["LEAN_CACHE_R2_ENDPOINT", "R2_ENDPOINT"]
 key_env = "AWS_ACCESS_KEY_ID"
 secret_env = "AWS_SECRET_ACCESS_KEY"
 stale_after_h = 36                   # vy-lean-cache-daily publishes at 06:15Z each day
-writer = "Publisher: `vy-lean-cache-daily` on vy-nebius-1 (lean)."
+writer = "Publisher: `vy-lean-cache-daily` on vy-nebius-cpu-4 (lean)."
 
 [neon]
 url_env = "STORE_INDEXER_DATABASE_URL"
