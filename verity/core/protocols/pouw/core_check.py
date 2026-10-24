@@ -1376,7 +1376,7 @@ NOT_RECEIVED = "the challenger's log does not show the window's open root as the
 
 
 #: a live Pearl-C pass's salt rule (`weights_salt`)
-WEIGHTS_FORM = "the pass's weights' root is not a SHA-512 digest"
+WEIGHTS_ROOT_FORM = "the pass's weights' root is not a SHA-512 digest"
 WEIGHTS_NOT_RECEIVED = "the challenger's log does not show the weights' root as the one root its salt coin followed"
 BEYOND_SALT = ("the challenger's log shows a coin released beyond the salt coin: a live Pearl-C pass's session releases "
                "its salt coin alone")
@@ -1411,7 +1411,7 @@ def _weights_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, wei
                   verify: Ch.Verify) -> tuple[tuple[str, str] | None, Any]:
     """`weights_salt`: (None, (commitment, opening, session id, its open's seq)), or the refusal and None."""
     if not (_str(weights_root) and _DIGEST.fullmatch(weights_root)):
-        return ("salt", WEIGHTS_FORM), None
+        return ("salt", WEIGHTS_ROOT_FORM), None
     refused, got = _salt_session(key, ledger, pins, main, {"root": weights_root}, session, verify)
     if refused is not None:
         return refused, None

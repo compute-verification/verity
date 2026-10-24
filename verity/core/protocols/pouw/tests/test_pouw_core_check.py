@@ -694,7 +694,7 @@ def test_every_salt_mutation_hits_its_refusal():
 
 WEIGHTS_SALT_EXPECT = {
     **{k: v for k, v in SALT_EXPECT.items() if k in rounds_cases.WEIGHTS_SALT_NAMES or k == "honest"},
-    "weights-form": ("salt", CC.WEIGHTS_FORM),
+    "weights-form": ("salt", CC.WEIGHTS_ROOT_FORM),
     "other-root": ("coin", "not trusted: the auditor's ledger opens no challenger session for this window"),
     "received": ("salt", CC.WEIGHTS_NOT_RECEIVED), "beyond-salt": ("salt", CC.BEYOND_SALT),
 }
