@@ -197,8 +197,10 @@ PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 # salt is written: the same order (round s, coin, units), without the host's dispatch between them and the units' start.
 # Graph steps only, and never a step that holds a capture or a fault, nor a window's last step's units
 PREQ_ENV = "DITHER_SO_PREQ"
-# "1" (an H1C_MK h1c build): the receipt tables' row leaves' salt part (c and M_key y, h1c_presalt) hashed on a stream
-# of its own from the units' start, beside the units, and their leaves read it (`SoSide._units`): the same leaves
+# "1" (an H1C_MK h1c build): the receipt tables' row leaves' salt part (c and M_key y, h1c_presalt) hashed on the units
+# stream ahead of each step's units, outside their graph (`SoSide._presalt`), and their leaves read it: the same leaves.
+# It reads only the tables' labels and the step, so under $DITHER_SO_PREQ=1 it runs in the units stream's gap, while
+# round s's tail and its coin are on the serving stream, rather than beside the units and the forward
 PRESALT_ENV = "DITHER_SO_PRESALT"
 # "1" (with the tree streams, without -ov): what of round s's tail reads only the step (the admit tables, from
 # `before`'s live rows, and the mid and round tables' domains) goes on the second tree stream from the forward's end,
@@ -1096,7 +1098,6 @@ class SoSide(DA.Side):
             if not win.c.has_pre:
                 raise ValueError(f"${PRESALT_ENV}=1: needs an H1C_MK h1c build (h1c_presalt)")
             self.pre_buf = win.c.pre_buf(win.rset)
-            self.ps_stream = torch.cuda.Stream(device=dev, priority=self.side.priority)
         self.a_off = win.pre["mid"].level_off[0]
         self.dispatched: dict[int, int] = {}
         self.unit_steps = 0
@@ -1294,12 +1295,6 @@ class SoSide(DA.Side):
         replay as one graph (`dispatch`)."""
         win, st, L = self.win, self.side, self.win.L
         tab = self.tables[p]
-        if self.presalt:
-            # one buffer: each step's presalt waits for the step before's units (and their leaves) on st
-            ps = self.ps_stream
-            ps.wait_stream(st)
-            with torch.cuda.stream(ps):
-                win.c.presalt(win.rset, self.ring_stepv[p][0:1], self.pre_buf)
         if self.j10r:
             rc = self.h.kh_seeds_j10r_h1r(tab.table.data_ptr(), L, tab.max_units, self.ring_salt[p].data_ptr(),
                                           self.ring_base[p].data_ptr(), win.plan.seeds.data_ptr(), st.cuda_stream)
@@ -1355,11 +1350,15 @@ class SoSide(DA.Side):
                                BLOCK=triton.next_power_of_2(L))
         if self.rdead:
             self.r_live.copy_(self.ring_live[p])
-        if self.presalt:
-            st.wait_stream(self.ps_stream)
         win.c.build(win.rset, self.ring_stepv[p][0:1], pre=self.pre_buf if self.presalt else None)
         self.rroots[p].copy_(win.rset.roots)
         return 0
+
+    def _presalt(self, p: int) -> None:
+        """Under $DITHER_SO_PRESALT=1, ring slot p's receipt leaves' salt part into the one buffer, on the units stream
+        (current) after the units before it, whose receipt build read the buffer, and outside slot p's graph."""
+        if self.presalt:
+            self.win.c.presalt(self.win.rset, self.ring_stepv[p][0:1], self.pre_buf)
 
     @staticmethod
     def _cu_ok(res):
@@ -1380,6 +1379,7 @@ class SoSide(DA.Side):
         st = self.side
         with torch.cuda.stream(st):
             st.wait_event(self.ready[p])
+            self._presalt(p)
             self._cu_ok(self.cu.cuStreamWaitValue32(self.cu.CUstream(st.cuda_stream), self.cu.CUdeviceptr(self.flag_dev + 4 * p),
                                                     self.preq_gen, self.cu.CUstreamWaitValue_flags.CU_STREAM_WAIT_VALUE_EQ))
             self.ev_u[p][0].record(st)
@@ -1412,6 +1412,7 @@ class SoSide(DA.Side):
             return
         with torch.cuda.stream(st):
             st.wait_event(self.ready[p])
+            self._presalt(p)
             self.ev_u[p][0].record(st)
             self.ring_salt[p].copy_(self.salt_host[p], non_blocking=True)
             if g is not None:
