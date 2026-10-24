@@ -2,15 +2,16 @@ import Properties.RemoteAudit
 import Properties.Proofs.RemoteAudit.Plan
 
 /-!
-# The session's bookkeeping (`AcceptedMinPasses`, `PassesStepped`, `PassesReadDistinct`, `AppendsInOrder`,
-`PassesChained`)
+# The session's bookkeeping (`AcceptedMinPasses`, `PassesStepped`, `PassesReadDistinct`, `ReceiptsBelowLimit`,
+`AppendsInOrder`, `PassesChained`)
 
 One invariant of every state a run reaches from `State.init` (`Inv`, on the fields it reads), kept by every event
 (`step_inv`): passes arrive only in the window being filled, each with its plan, step and head; a window is drawn only
 with `min_passes` passes and accepted only once drawn; the steps strictly increase in arrival order below `2^64`; every
-plan reads distinct blocks of the store; the appends are the store's next indices, each with the next append coin; and
-the session's head, and each pass's, is the chain over a prefix of the appends, past which the pass's plan reads
-nothing. A rejection only marks its window's verdict, so it keeps the invariant too.
+plan reads distinct blocks of the store; each window's receipts stay below `RECEIPT_LIMIT`; the appends are the store's
+next indices, each with the next append coin; and the session's head, and each pass's, is the chain over a prefix of the
+appends, past which the pass's plan reads nothing. A rejection only marks its window's verdict, so it keeps the
+invariant too.
 -/
 
 open RemoteAudit RemoteAudit.Session
@@ -68,13 +69,14 @@ structure InvOn (P : Params) (R : Registration) (AC : Array ByteArray) (ws : Arr
   heads : ∀ t (ht : t < ws.size) i (hi : i < ws[t].heads.size),
     ∃ m, m ≤ appends.size ∧ ws[t].heads[i] = chainOf (appends.extract 0 m) ∧
       ∀ p, p < ws[t].plans[i]!.length → ws[t].plans[i]!.block p < R.blocks + ((appends.toList.take m).map (·.count)).sum
+  receipts : ∀ t (ht : t < ws.size), ws[t].receipts < RECEIPT_LIMIT
 
 def Inv (s : State) : Prop :=
   InvOn s.params s.reg s.appendCoins s.windows s.filling s.step s.extent s.appends s.appendDrawn s.head
 
 theorem inv_init (params : Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat) :
     Inv (State.init params reg coins appendCoins notBeforeNs) := by
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     simp [State.init, STEP_LIMIT, chainOf]
 
 /-! ## Window updates -/
@@ -99,7 +101,7 @@ theorem invOn_same {P R AC ws filling stp extent appends drawnN head} {ws' : Arr
   have e : ∀ t (h' : t < ws'.size), Keeps P ws[t] ws'[t] := fun t h' => hw t (by omega) h'
   refine ⟨fun t ht => ?_, fun t ht hd => ?_, fun t ht hv => ?_, fun t ht hf => ?_, fun t ht i hi => ?_, h.limit, h.nonneg,
     fun t₁ t₂ h₁ h₂ i₁ i₂ hi₁ hi₂ hlt => ?_, fun t ht i hi => ?_, h.store, h.drawnN, h.coins, h.extentSum, h.firsts,
-    h.chain, fun t ht i hi => ?_⟩
+    h.chain, fun t ht i hi => ?_, fun t ht => ?_⟩
   · obtain ⟨e1, e2, e3, e4, -⟩ := e t ht
     rw [e1, e2, e3, e4]; exact h.sizes t (by omega)
   · obtain ⟨e1, -, -, -, e5, -⟩ := e t ht
@@ -131,6 +133,10 @@ theorem invOn_same {P R AC ws filling stp extent appends drawnN head} {ws' : Arr
     have hi' : i < ws[t].heads.size := by rw [← e4]; exact hi
     have := h.heads t (by omega) i hi'
     simp only [e2, e4]; exact this
+  · obtain ⟨-, e2, -⟩ := e t ht
+    have := h.receipts t (by omega)
+    unfold Win.receipts at this ⊢
+    rw [e2]; exact this
 
 theorem samePasses_modify (P : Params) (ws : Array Win) (u : Nat) (f : Win → Win)
     (hf : ∀ hu : u < ws.size, Keeps P ws[u] (f ws[u])) : SamePasses P ws (ws.modify u f) := by
@@ -168,7 +174,7 @@ theorem invOn_push {P R AC ws filling stp extent appends drawnN head} (h : InvOn
     intro t ht hl; simp [Array.getElem_push, hl]
   refine ⟨fun t ht => ?_, fun t ht hdr => ?_, fun t ht hvr => ?_, fun t ht hf => ?_, fun t ht i hi => ?_, h.limit, h.nonneg,
     fun t₁ t₂ h₁ h₂ i₁ i₂ hi₁ hi₂ hlt => ?_, fun t ht i hi => ?_, h.store, h.drawnN, h.coins, h.extentSum, h.firsts,
-    h.chain, fun t ht i hi => ?_⟩
+    h.chain, fun t ht i hi => ?_, fun t ht => ?_⟩
   · by_cases hl : t < ws.size
     · simp only [k t ht hl]; exact h.sizes t hl
     · simp only [g t ht hl, hr, hp, hs, hh]; simp
@@ -196,6 +202,9 @@ theorem invOn_push {P R AC ws filling stp extent appends drawnN head} (h : InvOn
   · by_cases hl : t < ws.size
     · simp only [k t ht hl] at hi ⊢; exact h.heads t hl i hi
     · simp only [g t ht hl, hh] at hi; simp at hi
+  · by_cases hl : t < ws.size
+    · simp only [k t ht hl]; exact h.receipts t hl
+    · simp only [g t ht hl, Win.receipts, hp]; simp [RECEIPT_LIMIT]
 
 theorem inv_boundaryNs {s : State} (h : Inv s) (u now : Nat) :
     Inv { s with windows := s.windows.modify u ({· with boundaryNs := some now}) } :=
@@ -231,7 +240,7 @@ theorem invOn_append {P R AC ws filling stp extent appends drawnN head}
   have hsz := h.drawnN.1
   refine ⟨h.sizes, h.few, h.drawn, h.beyond, h.below, h.limit, h.nonneg, h.inc,
     fun t ht i hi => readsDistinct_mono (h.reads t ht i hi) (by omega), by have := h.store; omega,
-    ⟨by simp [hsz], by omega⟩, fun k hk => ?_, ?_, fun k hk => ?_, ?_, fun t ht i hi => ?_⟩
+    ⟨by simp [hsz], by omega⟩, fun k hk => ?_, ?_, fun k hk => ?_, ?_, fun t ht i hi => ?_, h.receipts⟩
   · rw [Array.getElem_push]
     split
     · exact h.coins k (by assumption)
@@ -327,9 +336,15 @@ def addPass (root : ByteArray) (plan : Plan) (post : Nat) (st : Int) (head : Opt
            steps := w.steps.push st.toNat, heads := w.heads.push head, stale := w.stale.push below,
            arrived := w.arrived.push now }
 
+theorem receipts_addPass (root : ByteArray) (plan : Plan) (post : Nat) (st : Int) (head : Option ByteArray)
+    (below now : Nat) (w : Win) :
+    (addPass root plan post st head below now w).receipts = w.receipts + plan.length := by
+  simp [addPass, Win.receipts]
+
 theorem invOn_add {P R AC ws filling stp extent appends drawnN head} {below now : Nat}
     (h : InvOn P R AC ws filling stp extent appends drawnN head) (root : ByteArray) (plan : Plan) (post : Nat)
-    (st : Int) (hst : stp < st) (hlim : st < STEP_LIMIT) (hplan : ReadsDistinct plan extent) :
+    (st : Int) (hst : stp < st) (hlim : st < STEP_LIMIT) (hplan : ReadsDistinct plan extent)
+    (hrec : ws[filling]!.receipts + plan.length < RECEIPT_LIMIT) :
     InvOn P R AC (ws.modify filling (addPass root plan post st head below now)) filling st extent appends drawnN
       head := by
   have hst0 : ((st.toNat : Nat) : Int) = st := Int.toNat_of_nonneg (by have := h.nonneg; omega)
@@ -340,7 +355,7 @@ theorem invOn_add {P R AC ws filling stp extent appends drawnN head} {below now 
   have hsz : (ws.modify filling (addPass root plan post st head below now)).size = ws.size := Array.size_modify
   refine ⟨fun t ht => ?_, fun t ht hd => ?_, fun t ht hv => ?_, fun t ht hf => ?_, fun t ht i hi => ?_, hlim,
     by have := h.nonneg; omega, fun t₁ t₂ h₁ h₂ i₁ i₂ hi₁ hi₂ hlt => ?_, fun t ht i hi => ?_, h.store, h.drawnN, h.coins, h.extentSum, h.firsts,
-    h.chain, fun t ht i hi => ?_⟩
+    h.chain, fun t ht i hi => ?_, fun t ht => ?_⟩
   · rw [get t ht]
     have := h.sizes t (by omega)
     split
@@ -432,6 +447,14 @@ theorem invOn_add {P R AC ws filling stp extent appends drawnN head} {below now 
         rw [List.take_of_length_le (by simp), ← h.extentSum]
         exact hplan.1 p hp
     · intro hi; exact h.heads t (by omega) i hi
+  · rw [get t ht]
+    split
+    · rename_i he
+      subst he
+      rw [receipts_addPass]
+      rw [getElem!_pos ws filling (by omega)] at hrec
+      exact hrec
+    · exact h.receipts t (by omega)
 
 theorem inv_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State} (h : Inv s)
     (he : close s t now = .ok (r, s')) : Inv s' ∧ Frame s s' := by
@@ -517,7 +540,8 @@ theorem inv_receive {s : State} {t i : Int} {root : ByteArray} {runs : Option (A
       all_goals cases hj
       all_goals first
         | exact ⟨inv_fail h₂ _ _ _, f₂⟩
-        | exact ⟨invOn_add h₂ _ _ _ _ (step_ok ‹_›).1 (step_ok ‹_›).2 (hP _ (by first | exact hq | exact hq.trans ‹_›)), f₂⟩
+        | exact ⟨invOn_add h₂ _ _ _ _ (step_ok ‹_›).1 (step_ok ‹_›).2 (hP _ (by first | exact hq | exact hq.trans ‹_›))
+            (Nat.lt_of_not_le ‹_›), f₂⟩
     split at hj
     · split at hj
       · cases hj; exact ⟨inv_fail h₂ _ _ _, f₂⟩
@@ -587,6 +611,9 @@ theorem passesStepped : PassesStepped := by
 
 theorem passesReadDistinct : PassesReadDistinct :=
   fun _ _ _ _ _ _ _ _ hrun => (inv_run hrun).1.reads
+
+theorem receiptsBelowLimit : ReceiptsBelowLimit :=
+  fun _ _ _ _ _ _ _ _ hrun => (inv_run hrun).1.receipts
 
 theorem appendsInOrder : AppendsInOrder := by
   intro params reg coins appendCoins notBeforeNs events rs s hrun
