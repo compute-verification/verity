@@ -3,8 +3,10 @@ served vLLM OpenAI endpoint, and the offline check of what it published.
 
 **Topology.** The client, outside the boundary, holds one link connection to the certifier's host. There the certifier
 (`active.Proxy` with its salt on, signing every record and every reveal) forwards each request it releases over
-loopback to the shim (`active_replay.LiveServer`, the canonical framer, which is the prover's side), and the shim sends
-it to the endpoint over HTTP or HTTPS and frames the stream it gets back as canonical events:
+loopback to the shim (`active_replay.LiveServer`, the canonical framer, which is the prover's side), with its place in
+the release order and the certifier's run id (`x-verity-release`, `x-verity-release-run`: `release`), and the shim
+sends it to the endpoint over HTTP or HTTPS with those two headers, so that `serve-openai --admit release-order` takes
+requests in the order the certifier released them, and frames the stream it gets back as canonical events:
 
     client ──link──▶ certifier host: [ Proxy ──loopback──▶ shim ] ──HTTP(S)──▶ endpoint
 
@@ -576,8 +578,9 @@ def served_profile(plan: dict) -> ServedProfile | None:
 
 # The certifier.
 
-class ServedProxy(Proxy):
-    """`active.Proxy`, keeping the windows whose salt it has revealed, so that `serve` stops once every one is."""
+class ServedProxy(ar.ReleaseProxy):
+    """`active.Proxy` whose server gets each request with its place in the release order (`active_replay.ReleaseProxy`),
+    keeping the windows whose salt it has revealed, so that `serve` stops once every one is."""
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
