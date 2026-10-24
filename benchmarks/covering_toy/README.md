@@ -65,7 +65,8 @@ words; `eta2`: twice that; `inf`: none), it solves the whole covering, the cover
 `OUT/<instance>.json` (each solution's blocks as `[computed, inputs]` gate lists, so a covering can be reloaded) and
 `OUT/table.md`. `M_ONLY` instances (the deep, wide one, where the Lean bound isn't vacuous) solve only `M*`. `--ks`,
 `--modes` and `--problems full,V,M` narrow a sweep; `--merge DIR ...` combines several sweeps' outputs into `OUT`, each
-bracket tightened only by sound arguments (`sweep.merge`); `--caps` runs only the per-block cap test (`sweep.caps`). On a
+bracket tightened only by sound arguments (`sweep.merge`); `--caps` runs only the per-block cap test (`sweep.caps`), and
+`--inference` only the inference baseline (`sweep.inference_baseline`). On a
 pod: `research run --on vy-nebius-cpu-5 --pool research --as LANE --project verity --source . --cwd source -- bash -c
 'cd benchmarks/covering_toy && uv run ... sweep.py --out "$OUT"'`.
 
@@ -75,6 +76,9 @@ The table's flags name the section-4 assumption a covering breaks: `P-total` (fe
 `sweep.why` reads the densest such block's gates and says which assumption it breaks.
 
 ## For splitting attacks (C3)
+
+The 24 Oct sweep over every instance, merged, is
+`art:2f1eae928df7e08433733ba23a4ca2a409b2c02b5fbc2db42ecb90dc64a4d1a5` (its `README.md` says what each part is).
 
 `sweep.build(name)` builds an instance; a sweep's `OUT/<instance>.json` holds every point's best coverings, and
 `sweep.load_cover(G, r["full"], r["k"], r["s"])` turns one back into validated `cover.Block`s (`r["V"]` and `r["M"]`
