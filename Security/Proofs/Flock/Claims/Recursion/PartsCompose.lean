@@ -56,6 +56,12 @@ must be some part's, and that part's lowering fact must read every coin bit the 
 premises are unsatisfiable, not the conclusion unsound. Likewise a part's lowering fact concludes `PC s` at the
 readers' messages, so a part not tied to the round it reads (its own commit strings, not the readers') can't
 discharge it.
+
+The record is a prover message, so the success of parsing its text is no check the statement fixes, and no part
+computes `Json.parse`. The last step is therefore taken at the record's parsed value (`FlockDeploy.nextJ`,
+`RecDeploy.decompB_nextJ`), where parse success is no check and the reading, the record value's fields and shapes, is
+one check given to the reader part of the last round (`RecDeploy.ownJ`). **Open gap:** the proof files' decoding inside
+`verifyRepWith` stays among the verdict's checks, and no reader part owns it; no premise is taken for it.
 -/
 
 namespace Claims.Recursion.VStarB
