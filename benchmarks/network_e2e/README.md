@@ -55,7 +55,11 @@ merged, as r20261024-163242-7e60 did on the tree before the report held its prov
   opened, bound and rebuilt; 23,690 v0 bits (3,851 derived, 2,412 shaped, 340 forced).
 - token: refused by the I/O tie, `IoTieWindow.content` at link-windows 1 and 2, the two its 23 changed ids fall in.
   The tie accepted honest: 597 outputs placed, frames held on all 17 windows at both ends. NEG's `tie-run` on each
-  member, with the ids of 8eb1's requests that arrived in its link-windows, agrees (the run's `out/tie-run/`).
+  member, with the ids of 8eb1's requests that arrived in its link-windows, agrees (the run's `out/tie-run/`). Under
+  the coverage that holds each request's ids to its served outputs (`chain.uncovered`, REDTEAM phase 14), those ids
+  give every honest and token request an id for each output it served (r20261024-183733-92e3), so their verdicts
+  stand. Extra's one request served past its max_tokens has an output with no sampled id, so the tie now gives extra
+  no verdict; its own code refuses it.
 - prove path: GA-AUDIT's `--serve-run` audits of 8eb1's w212 (r20261024-154338-7679), one of the honest run's own
   Commit windows, and w5 (r20261024-143655-ccc8), adopted in place of the fixed workload. Every honest arm was accepted
   and every forged arm refused by Lean. Each arm's committed root is the one registered for its window, the
