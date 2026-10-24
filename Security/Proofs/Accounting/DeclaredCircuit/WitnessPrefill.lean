@@ -17,8 +17,9 @@ It meets every hypothesis of `G` but the world's (`meets`), so `G` bounds it (`a
   decode step, `4r + 2`, reads every token (its read gate). Pass `j` of window `w` is bound to that step (`passBind`).
 * **Deferred residency** (`kvLayout`): page `k` of request `r` is block `r·(N+4) + k`, and its coin is back two steps
   after the step that completes it (`lag`): the first chunk's pages are first read encoded at `4r + 2`, the second
-  chunk's three complete pages at `4r + 3`, and page `N+3`, which the decode step completes, at `4r + 4`. So the decode
-  step reads pages `0 … N−1` complete and credited, three complete pages with their coins out, and the page it fills.
+  chunk's three complete pages at `4r + 3`, and page `N+3`, which the decode step's token fills, at `4r + 4`. So the
+  decode step reads pages `0 … N−1` complete and credited, three complete pages with their coins out, and a page with
+  one token.
 * **Page groups** (`kvGrp`): every page is its own group, so each costs `G`'s credit a page while it is incomplete. The
   run's credit is still exactly its `N` tiles' bits a pass (`credit_eq`): the held term, `N·32768`, is the larger, and
   the other term is `N·32768 − 16384` (`other_eq`), where page-parity groups would have made it `N·32768 + 49152`.
@@ -28,9 +29,9 @@ It meets every hypothesis of `G` but the world's (`meets`), so `G` bounds it (`a
   joins the window of its request (`joined`), so the lifetime cap holds at every `L ≥ 1`.
 * **The devices and the gate model** are `Witness.lean`'s: the honest pass device, one grinding candidate, a `0`-bit
   summary, no carrier, and the empty `Wc`.
-* **At the 30 s life** (#3786: `L = 30` windows of 1 s, at most 17 passes a window, or `L = 2` windows of 60 s for a
-  prover that defers residency) both of `G`'s thresholds are positive for 8B and for 70B TP8 (`life30_8b`,
-  `life30_70b`).
+* **At the 30 s life** (#3786: `L = max(2, ⌊30/T⌋)` windows of `T` seconds, `L = 30` at 1 s, `L = 2` for a prover
+  that defers residency at windows of 15 to 60 s) both of `G`'s thresholds are positive for 8B and for 70B TP8
+  (`life30_8b`, `life30_70b`).
 -/
 
 namespace Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill
@@ -125,8 +126,9 @@ def offset : Val → ℕ
   | .kv _ i => i % 2 * tw
   | .att _ => 0
 
-/-- When page `k` is first read encoded, from its request's first step: two steps after the step that completes it,
-`0` for the first chunk's pages, `1` for the second chunk's three complete ones, `2` (the decode step) for page `N+3`. -/
+/-- When page `k` is first read encoded, counted from its request's first step: two steps after the step that completes
+it, step `0` for the first chunk's pages, step `1` for the second chunk's three complete ones, and step `2`, whose
+decode token fills it, for page `N+3`. -/
 def lag (N k : ℕ) : ℕ := if k < N then 2 else if k < N + 3 then 3 else 4
 
 theorem lag_lt {N k : ℕ} (hk : k < N) : lag N k = 2 := by
@@ -816,57 +818,86 @@ theorem window_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (w : 
 
 /-! ## At the 30 s life
 
-#3786's carrier life is 30 s: `L = 30` windows of 1 s (at most 17 of DCR-RT's 61 ms passes, 100,000 run-input bytes a
-window at 100 KB/s), or, for a prover that defers residency at 60 s windows, `L = 2` (at most 984 passes and 6,000,000
-bytes a window). The run's credit is its tiles' bits, so `G` bounds something exactly when its `ε` is below 1. -/
+#3786's carrier life is 30 s, in `L = max(2, ⌊30/T⌋)` windows of `T` seconds. `γ` reads the life through the passes
+and run-input bytes it spans, `L·P` and `L·R` (`gamma_prod`), at DCR-RT's 61 ms passes (`P ≤ ⌈T/0.061⌉`) and
+100 KB/s of run input (`R = T·100,000`). At every window of 1 to 15 s, `L = 30` one-second windows among them, the
+life spans at most 510 passes and 3,000,000 bytes (`L·P` peaks at `30·17`); at windows of 15 to 60 s, which only a
+prover that defers residency takes, `L = 2` and at most 1,968 passes and 12,000,000 bytes. The run's credit is its
+tiles' bits, so `G` bounds something exactly when its `ε` is below 1. -/
 
-/-- **8B** (`c ≤ 0.442`, `E ≥ 364,497`, `γ₀ ≤ 0.835%`, `N ≥ 2^24`): at 1 s windows the session's `0.0015 + γ` is
-under 9% and each window's `0.01 + γ` under 10%; at 60 s windows under deferred residency, under 32% and 33%. -/
-theorem life30_8b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit)
+/-- `gamma_bound` with a life of `L` windows spanning at most `LP` passes and `LR` run-input bytes. -/
+theorem gamma_prod {N ρ S Lr τ Xr k L P E E₀ N₀ R LP LR : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit) (γ₀ c₀ : ℝ)
+    (hN₀ : 0 < N₀) (hN : N₀ ≤ N) (hE₀ : 0 < E₀) (hE : E₀ ≤ E) (hc : 0 ≤ caps.total)
+    (hc₀ : (caps.total : ℝ) ≤ c₀) (hR : ∀ v, caps.runBytes v ≤ R) (hLP : L * P ≤ LP) (hLR : L * R ≤ LR)
+    (h₀ : ((S + (Lr * τ - ρ * 256) + Xr * τ + k * 32768 : ℕ) : ℝ) ≤ γ₀ * (N * 32768)) :
+    let RL := ((Finset.range Aud.windows).powerset.filter fun I => I.card ≤ L).sup
+      fun I => ∑ v ∈ I, caps.runBytes v
+    let C := 8 * RL + ⌈(1024 * L * (P * N * 4096) : ℚ) * caps.total / E⌉₊
+    RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768) ≤
+      γ₀ + (8 * LR + 1) / (N₀ * 32768) + 128 * LP * c₀ / E₀ := by
+  intro RL C
+  have hγ : RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768) ≤
+      γ₀ + (8 * L * R + 1) / (N₀ * 32768) + 128 * L * P * c₀ / E₀ :=
+    gamma_bound (L₀ := L) (P₀ := P) (R₀ := R) caps Aud γ₀ c₀ hN₀ hN le_rfl le_rfl hE₀ hE hc hc₀ hR h₀
+  have hc0 : 0 ≤ c₀ := le_trans (Rat.cast_nonneg.2 hc) hc₀
+  have h1 : (L : ℝ) * R ≤ LR := by exact_mod_cast hLR
+  have h2 : (L : ℝ) * P ≤ LP := by exact_mod_cast hLP
+  have e1 : (8 * L * R + 1 : ℝ) / (N₀ * 32768) ≤ (8 * LR + 1) / (N₀ * 32768) :=
+    div_le_div_of_nonneg_right (by linarith) (by positivity)
+  have e2 : (128 * L * P * c₀ : ℝ) / E₀ ≤ 128 * LP * c₀ / E₀ :=
+    div_le_div_of_nonneg_right (by linarith [mul_le_mul_of_nonneg_right h2 hc0]) (by positivity)
+  linarith
+
+/-- **8B** (`c ≤ 0.442`, `E ≥ 364,497`, `γ₀ ≤ 0.835%`, `N ≥ 2^24`): with windows of at most 15 s (`L = 30` one-second
+windows among them) the session's `0.0015 + γ` is under 9% and each window's `0.01 + γ` under 10%; with windows up to
+60 s under deferred residency, under 32% and 33%. -/
+theorem life30_8b {N ρ S Lr τ Xr k L P E R : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit)
     (hN : 16777216 ≤ N) (hE : 364497 ≤ E) (hc : 0 ≤ caps.total) (hc₀ : caps.total ≤ 221 / 500)
+    (hR : ∀ v, caps.runBytes v ≤ R)
     (h₀ : ((S + (Lr * τ - ρ * 256) + Xr * τ + k * 32768 : ℕ) : ℝ) ≤ 0.00835 * (N * 32768)) :
     let RL := ((Finset.range Aud.windows).powerset.filter fun I => I.card ≤ L).sup
       fun I => ∑ v ∈ I, caps.runBytes v
     let C := 8 * RL + ⌈(1024 * L * (P * N * 4096) : ℚ) * caps.total / E⌉₊
     let γ := RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768)
-    (L ≤ 30 → P ≤ 17 → (∀ v, caps.runBytes v ≤ 100000) → 0.0015 + γ < 0.09 ∧ 0.01 + γ < 0.1) ∧
-      (L ≤ 2 → P ≤ 984 → (∀ v, caps.runBytes v ≤ 6000000) → 0.0015 + γ < 0.32 ∧ 0.01 + γ < 0.33) := by
+    (L * P ≤ 510 → L * R ≤ 3000000 → 0.0015 + γ < 0.09 ∧ 0.01 + γ < 0.1) ∧
+      (L * P ≤ 1968 → L * R ≤ 12000000 → 0.0015 + γ < 0.32 ∧ 0.01 + γ < 0.33) := by
   intro RL C γ
   have hc₀' : (caps.total : ℝ) ≤ 221 / 500 := by
     have h : ((caps.total : ℚ) : ℝ) ≤ ((221 / 500 : ℚ) : ℝ) := Rat.cast_le.2 hc₀
     rwa [show ((221 / 500 : ℚ) : ℝ) = 221 / 500 by norm_num] at h
-  refine ⟨fun hL hP hR => ?_, fun hL hP hR => ?_⟩
-  · have hγ : γ ≤ _ := gamma_bound (L₀ := 30) (P₀ := 17) (E₀ := 364497) (N₀ := 16777216) (R₀ := 100000) caps Aud
-      0.00835 (221 / 500) (by norm_num) hN hL hP (by norm_num) hE hc hc₀' hR h₀
+  refine ⟨fun hLP hLR => ?_, fun hLP hLR => ?_⟩
+  · have hγ : γ ≤ _ := gamma_prod (E₀ := 364497) (N₀ := 16777216) caps Aud 0.00835 (221 / 500) (by norm_num) hN
+      (by norm_num) hE hc hc₀' hR hLP hLR h₀
     norm_num at hγ
     constructor <;> linarith
-  · have hγ : γ ≤ _ := gamma_bound (L₀ := 2) (P₀ := 984) (E₀ := 364497) (N₀ := 16777216) (R₀ := 6000000) caps Aud
-      0.00835 (221 / 500) (by norm_num) hN hL hP (by norm_num) hE hc hc₀' hR h₀
+  · have hγ : γ ≤ _ := gamma_prod (E₀ := 364497) (N₀ := 16777216) caps Aud 0.00835 (221 / 500) (by norm_num) hN
+      (by norm_num) hE hc hc₀' hR hLP hLR h₀
     norm_num at hγ
     constructor <;> linarith
 
-/-- **70B TP8** (`c ≤ 0.0918`): at 1 s windows the session's `0.0015 + γ` is under 3% and each window's under 4%; at
-60 s windows under deferred residency, under 8% and 9%. -/
-theorem life30_70b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit)
+/-- **70B TP8** (`c ≤ 0.0918`): with windows of at most 15 s the session's `0.0015 + γ` is under 3% and each
+window's under 4%; with windows up to 60 s under deferred residency, under 8% and 9%. -/
+theorem life30_70b {N ρ S Lr τ Xr k L P E R : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit)
     (hN : 16777216 ≤ N) (hE : 364497 ≤ E) (hc : 0 ≤ caps.total) (hc₀ : caps.total ≤ 459 / 5000)
+    (hR : ∀ v, caps.runBytes v ≤ R)
     (h₀ : ((S + (Lr * τ - ρ * 256) + Xr * τ + k * 32768 : ℕ) : ℝ) ≤ 0.00835 * (N * 32768)) :
     let RL := ((Finset.range Aud.windows).powerset.filter fun I => I.card ≤ L).sup
       fun I => ∑ v ∈ I, caps.runBytes v
     let C := 8 * RL + ⌈(1024 * L * (P * N * 4096) : ℚ) * caps.total / E⌉₊
     let γ := RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768)
-    (L ≤ 30 → P ≤ 17 → (∀ v, caps.runBytes v ≤ 100000) → 0.0015 + γ < 0.03 ∧ 0.01 + γ < 0.04) ∧
-      (L ≤ 2 → P ≤ 984 → (∀ v, caps.runBytes v ≤ 6000000) → 0.0015 + γ < 0.08 ∧ 0.01 + γ < 0.09) := by
+    (L * P ≤ 510 → L * R ≤ 3000000 → 0.0015 + γ < 0.03 ∧ 0.01 + γ < 0.04) ∧
+      (L * P ≤ 1968 → L * R ≤ 12000000 → 0.0015 + γ < 0.08 ∧ 0.01 + γ < 0.09) := by
   intro RL C γ
   have hc₀' : (caps.total : ℝ) ≤ 459 / 5000 := by
     have h : ((caps.total : ℚ) : ℝ) ≤ ((459 / 5000 : ℚ) : ℝ) := Rat.cast_le.2 hc₀
     rwa [show ((459 / 5000 : ℚ) : ℝ) = 459 / 5000 by norm_num] at h
-  refine ⟨fun hL hP hR => ?_, fun hL hP hR => ?_⟩
-  · have hγ : γ ≤ _ := gamma_bound (L₀ := 30) (P₀ := 17) (E₀ := 364497) (N₀ := 16777216) (R₀ := 100000) caps Aud
-      0.00835 (459 / 5000) (by norm_num) hN hL hP (by norm_num) hE hc hc₀' hR h₀
+  refine ⟨fun hLP hLR => ?_, fun hLP hLR => ?_⟩
+  · have hγ : γ ≤ _ := gamma_prod (E₀ := 364497) (N₀ := 16777216) caps Aud 0.00835 (459 / 5000) (by norm_num) hN
+      (by norm_num) hE hc hc₀' hR hLP hLR h₀
     norm_num at hγ
     constructor <;> linarith
-  · have hγ : γ ≤ _ := gamma_bound (L₀ := 2) (P₀ := 984) (E₀ := 364497) (N₀ := 16777216) (R₀ := 6000000) caps Aud
-      0.00835 (459 / 5000) (by norm_num) hN hL hP (by norm_num) hE hc hc₀' hR h₀
+  · have hγ : γ ≤ _ := gamma_prod (E₀ := 364497) (N₀ := 16777216) caps Aud 0.00835 (459 / 5000) (by norm_num) hN
+      (by norm_num) hE hc hc₀' hR hLP hLR h₀
     norm_num at hγ
     constructor <;> linarith
 
