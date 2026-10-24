@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
-# A split Match's Commit on an 8x H200 node that holds nothing of the row, every input from the store, launched only once
-# match_full.sh's Match has passed: MATCH_FULL is that run, labelled glm_v2.match_run with MATCH_RUN, the vllm.match run commit.sh
-# cites.  SETUP=1 (a fresh RunPod pod, the default) installs the CUDA 12.9.1 toolkit at /usr/local/cuda-12.9, which /usr/local/cuda
-# then links (the image's 12.4 nvcc can't build DeepGEMM's kernels), gpu-lease, and the venv and taps (pod_bootstrap.sh --gpu).
-# Then the device facts the Build pins (8 GPUs, cc 9.0, 132 SMs); then, side by side, the checkpoint (stage_ckpt.sh) and the row
-# dir: the Build of record (BUILD_PARTS) first, then the legs' small files (LEGS_PARTS), their values (VALUES_SETS) and the passing
-# Match (MATCH_FULL's match-cpu), GETS sets at a time, each through store_tar.sh; the legs against match_gpu.sh's list (LEGS, every
-# file but its .tree); then commit.sh over MATCH_RUN.  Each step's records are under $OUT.
-#   research run --on NODE --mem-gb 600 --timeout 14h --custody-ttl 24h --source . --cwd source --project verity --send LEGS.sha256.gz -- env ROW=... BUILD_RUN=... MATCH_FULL=RUN MATCH_RUN=RUN BUILD_PARTS=RUN:build LEGS_PARTS=RUN:legs-small VALUES_SETS="RUN:values-r0 ..." LEGS=LEGS.sha256.gz NODE=... EVICT_FREE_GB=300 bash integrations/vllm/manifests/glm_v2_tree/jobs/pod_commit.sh
-# env: ROW, BUILD_RUN, MATCH_FULL, MATCH_RUN, BUILD_PARTS, LEGS_PARTS, VALUES_SETS, LEGS (a path, else $RESEARCH_RUN_DIR/inputs/LEGS;
-# gzipped or not), [NODE], [SETUP=1], [GETS=4], store_tar.sh's [EVICT_FREE_GB], [FETCH_*], commit.sh's.
+# A split Match's Commit on an 8x H200 node that holds nothing of the row, every input from the store.  MATCH_FULL is
+# match_full.sh's run, which labels itself glm_v2.match_run with the vllm.match run commit.sh cites once its Match passes; given
+# MATCH_RUN, that Match has passed, and without it the pod is readied while the Match runs, then waits for MATCH_FULL's match-cpu
+# set and that label (MATCH_WAIT_MIN, a failed Match stops it).  SETUP=1 (a fresh RunPod pod, the default) installs the CUDA
+# 12.9.1 toolkit at /usr/local/cuda-12.9, which /usr/local/cuda then links (the image's 12.4 nvcc can't build DeepGEMM's kernels),
+# gpu-lease, and the venv and taps (pod_bootstrap.sh --gpu).  Then the device facts the Build pins (8 GPUs, cc 9.0, 132 SMs); then,
+# side by side, the checkpoint (stage_ckpt.sh) and the row dir: the Build of record (BUILD_PARTS) first, then the legs' small files
+# (LEGS_PARTS) and their values (VALUES_SETS), GETS sets at a time, each through store_tar.sh; then the passing Match (MATCH_FULL's
+# match-cpu); the legs against match_gpu.sh's list (LEGS, every file but its .tree); then commit.sh over MATCH_RUN.  Each step's
+# records are under $OUT.
+#   research run --on NODE --mem-gb 600 --timeout 14h --custody-ttl 24h --source . --cwd source --project verity --send LEGS.sha256.gz -- env ROW=... BUILD_RUN=... MATCH_FULL=RUN [MATCH_RUN=RUN] BUILD_PARTS=RUN:build LEGS_PARTS=RUN:legs-small VALUES_SETS="RUN:values-r0 ..." LEGS=LEGS.sha256.gz NODE=... EVICT_FREE_GB=300 bash integrations/vllm/manifests/glm_v2_tree/jobs/pod_commit.sh
+# env: ROW, BUILD_RUN, MATCH_FULL, [MATCH_RUN], [MATCH_WAIT_MIN=600], BUILD_PARTS, LEGS_PARTS, VALUES_SETS, LEGS (a path, else
+# $RESEARCH_RUN_DIR/inputs/LEGS; gzipped or not), [NODE], [SETUP=1], [GETS=4], store_tar.sh's [EVICT_FREE_GB], [FETCH_*], commit.sh's.
 set -uo pipefail
-: "${ROW:?ROW}" "${BUILD_RUN:?BUILD_RUN}" "${MATCH_FULL:?MATCH_FULL}" "${MATCH_RUN:?MATCH_RUN}" "${BUILD_PARTS:?BUILD_PARTS}" \
+: "${ROW:?ROW}" "${BUILD_RUN:?BUILD_RUN}" "${MATCH_FULL:?MATCH_FULL}" "${BUILD_PARTS:?BUILD_PARTS}" \
   "${LEGS_PARTS:?LEGS_PARTS}" "${VALUES_SETS:?VALUES_SETS}" "${LEGS:?LEGS}"
+MATCH_RUN=${MATCH_RUN:-}
 TREE=$PWD J=$PWD/integrations/vllm/manifests/glm_v2_tree/jobs
 source "$J/model.sh"
 D=$SW/$ROW O=$OUT PY=/workspace/cp/venv312/bin/python
@@ -75,11 +78,22 @@ get() {  # get RUN:NAME: one set into the row dir, its records under $O/get-NAME
 export -f get; export O J SW
 get "$BUILD_PARTS" || { wait $ck; exit 5; }
 [ -s "$D/manifest.json" ] || { step "no Build of record in $D"; wait $ck; exit 3; }
-printf '%s\n' $LEGS_PARTS $VALUES_SETS "$MATCH_FULL:match-cpu" | xargs -P "${GETS:-4}" -I{} bash -c 'get "$1"' _ {}; grc=$?
+printf '%s\n' $LEGS_PARTS $VALUES_SETS | xargs -P "${GETS:-4}" -I{} bash -c 'get "$1"' _ {}; grc=$?
 wait $ck; crc=$(cat "$O/ckpt/rc" 2>/dev/null || echo 9)
 tail -3 "$O/ckpt/stage_ckpt.log"
 [ "$grc" = 0 ] || { step "a set's get failed (xargs rc $grc): no Commit"; exit 5; }
 [ "$crc" = 0 ] && [ -e "$LOCAL_CK/.verified" ] || { step "the checkpoint's staging failed (rc $crc): no Commit"; exit 5; }
+if [ -z "$MATCH_RUN" ]; then
+  step "readied; waiting for $MATCH_FULL's Match (its match-cpu set, then glm_v2.match_run)"
+  mkdir -p "$O/match-wait"
+  OUT=$O/match-wait PARTS=$MATCH_FULL:match-cpu WAIT_MIN=${MATCH_WAIT_MIN:-600} bash "$J/store_tar.sh" wait >"$O/match-wait/wait.log" 2>&1; rc=$?
+  tail -1 "$O/match-wait/wait.log"
+  [ "$rc" = 0 ] || { step "$MATCH_FULL's Match did not pass (store_tar.sh wait rc $rc): no Commit"; exit 8; }
+  MATCH_RUN=$(OUT=$O/match-wait RUN=$MATCH_FULL KEY=glm_v2.match_run WAIT_MIN=30 bash "$J/store_tar.sh" value 2>>"$O/match-wait/wait.log" | tail -1)
+  [[ $MATCH_RUN =~ ^r[0-9]{8}-[0-9]{6}-[0-9a-f]+$ ]] || { step "no glm_v2.match_run label on $MATCH_FULL ('$MATCH_RUN'): no Commit"; exit 8; }
+  step "the Match passed: $MATCH_RUN"
+fi
+get "$MATCH_FULL:match-cpu" || { step "the passing Match's get failed: no Commit"; exit 5; }
 step "the legs against $LEGS, every file but its .tree"
 case $LEGS in *.gz) gzip -dc "$LEGS" ;; *) cat "$LEGS" ;; esac | awk 'substr($0, 67) !~ /\.tree$/' >"$O/legs.sha256"
 mkdir -p "$O/legs-check" && split -n l/32 -d -a 2 "$O/legs.sha256" "$O/legs-check/part."
