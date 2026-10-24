@@ -94,6 +94,7 @@ $DITHER_MANIFEST_DIR, which `dither_manifest.py check` holds to the challenger's
 """
 from __future__ import annotations
 
+import collections
 import contextlib
 import ctypes as C
 import dataclasses
@@ -132,7 +133,9 @@ MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goe
 GRAPH_ENV = "DITHER_SO_GRAPH"           # "0": a step's units launched call by call (`SoSide.dispatch`), else one graph
 PRIO_ENV = "DITHER_SO_PRIO"             # "1": any -so arm serves as -ovp does, on a stream above the units' (`patch`)
 # "1": under the serving priority, vLLM's graphs captured on a stream at that priority too (`capture_at`): vLLM's
-# graph_capture captures on a fresh priority-0 stream, and a replayed graph's kernels keep their capture's priority
+# graph_capture captures on a fresh priority-0 stream, and a replayed graph's kernels keep their capture's priority;
+# "2": and every kernel node of those graphs set to that priority before instantiation (torch instantiates with
+# cudaGraphInstantiateFlagUseNodePriority, so a node's own priority, not the launch stream's, orders its blocks)
 CAPTURE_PRIO_ENV = "DITHER_SO_CAPTURE_PRIO"
 # "1": a step's units in one launch over every call (h1u.cu's kh_units_multi: each unit's noise hashed by its own warp,
 # no workspace), in place of each call's noise and units launches; the same receipts
@@ -897,7 +900,9 @@ class SoWindow(DO.Window):
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
                      "window_end": self.end_stats(), "serving_stream_priority": torch.cuda.current_stream().priority,
                      "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None,
-                     "capture_stream_priority": getattr(torch.cuda.graph, "so_priority", None)}
+                     "capture_stream_priority": getattr(torch.cuda.graph, "so_priority", None),
+                     # kernel nodes of vLLM's graphs by their captured priority, and how many `capture_at` set
+                     "capture_node_priorities": dict(getattr(torch.cuda.graph, "so_nodes", None) or {})}
         if ov is not None:
             doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,
                                     "units_dispatched": ov.dispatched_upto + 1,
@@ -1254,7 +1259,7 @@ class SoSide(DA.Side):
                 cg = self.graphs.get((p, m))
                 if cg is None:
                     t0 = time.perf_counter()
-                    cg = torch.cuda.CUDAGraph()
+                    cg = torch.cuda.CUDAGraph(keep_graph=False)
                     cg.capture_begin(capture_error_mode="thread_local")
                     try:
                         rc = self._units(p, m)
@@ -1821,22 +1826,29 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
         # vLLM serves (replays its graphs) on the stream its patched set_stream last recorded
         from vllm.utils import torch_utils  # noqa: F401
         torch.cuda.set_stream(torch.cuda.Stream(priority=-1))
-        if os.environ.get(CAPTURE_PRIO_ENV) == "1":
-            capture_at(-1)
+        if os.environ.get(CAPTURE_PRIO_ENV) in ("1", "2"):
+            capture_at(-1, nodes=os.environ[CAPTURE_PRIO_ENV] == "2")
     DO.Window = SoWindow
     DA.side = side
 
 
-def capture_at(priority: int) -> None:
+def capture_at(priority: int, nodes: bool = False) -> None:
     """Every `torch.cuda.graph` capture asked of a stream below `priority` (vLLM's) taken on one at it instead; the
-    units' graphs (`SoSide.dispatch`, capture_begin on the units stream) keep theirs."""
+    units' graphs (`SoSide.dispatch`, capture_begin on the units stream) keep theirs.  Each such graph is kept
+    (keep_graph) and instantiated after its kernel nodes' captured priorities are counted (`so_nodes`); `nodes`: each
+    of those nodes set to `priority` first."""
     base = torch.cuda.graph
     if getattr(base, "so_priority", None) is not None:
         return
     streams: dict[int, torch.cuda.Stream] = {}
 
+    class KeptGraph(torch.cuda.CUDAGraph):
+        def __new__(cls, keep_graph: bool = True):
+            return super().__new__(cls, keep_graph)
+
     class graph(base):
         so_priority = priority
+        so_nodes: collections.Counter = collections.Counter()
 
         def __init__(self, cuda_graph, pool=None, stream=None, *args, **kwargs):
             if stream is None or stream.priority > priority:
@@ -1846,7 +1858,42 @@ def capture_at(priority: int) -> None:
                 stream = streams[dev]
             super().__init__(cuda_graph, pool, stream, *args, **kwargs)
 
+        def __exit__(self, *args):
+            super().__exit__(*args)
+            if args[0] is None and isinstance(self.cuda_graph, KeptGraph):
+                node_priority(self.cuda_graph.raw_cuda_graph(), priority if nodes else None, graph.so_nodes)
+                self.cuda_graph.instantiate()
+
+    torch.cuda.CUDAGraph = KeptGraph
     torch.cuda.graph = graph
+
+
+def node_priority(raw: int, priority: int | None, seen: collections.Counter) -> None:
+    """Count the kernel nodes of the cudaGraph_t `raw` by their priority attribute in `seen` (child graphs as
+    "child_graphs"), and set each to `priority` unless it's None ("set" counts those)."""
+    from cuda.bindings import runtime as rt
+
+    def ok(res):
+        err, *out = res if isinstance(res, tuple) else (res,)
+        if err != rt.cudaError_t.cudaSuccess:
+            raise RuntimeError(f"dither_so capture_at: {err!r}")
+        return out[0] if len(out) == 1 else out
+
+    _, n = ok(rt.cudaGraphGetNodes(raw, numNodes=0))
+    found, n = ok(rt.cudaGraphGetNodes(raw, numNodes=n))
+    attr = rt.cudaLaunchAttributeID.cudaLaunchAttributePriority
+    for node in found[:n]:
+        kind = ok(rt.cudaGraphNodeGetType(node))
+        if kind == rt.cudaGraphNodeType.cudaGraphNodeTypeGraph:
+            seen["child_graphs"] += 1
+        if kind != rt.cudaGraphNodeType.cudaGraphNodeTypeKernel:
+            continue
+        value = ok(rt.cudaGraphKernelNodeGetAttribute(node, attr))
+        seen[f"priority {value.priority}"] += 1
+        if priority is not None:
+            value.priority = priority
+            ok(rt.cudaGraphKernelNodeSetAttribute(node, attr, value))
+            seen["set"] += 1
 
 
 def stats(win: SoWindow):
