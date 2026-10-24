@@ -161,13 +161,13 @@ theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : �
 
 /-- Where the record's windows are the session's, the trace's wrong receipts below the session's pooled bound at the
 line's `δ` are below the W every line of the record reads (`LineCoversSession`). -/
-theorem wrong_le_line {n m : ℕ} {k : Fin n → ℕ} {X : Fin n → Type} {D : Session n m k X} {T : Trace (Coins n m k X)}
-    {node : Node} {rec : Coins n m k X → Record} (hD : DrawsOfRecord D T rec) {ω : Coins n m k X} (ha : T.accepts ω)
-    (hw : (T.wrong ω : ℝ) ≤ D.pooled node.delta ω) :
+theorem wrong_le_line {n m : ℕ} {k : Fin n → ℕ} {κ : ℕ} {X : Type} {D : Session n m k κ X}
+    {T : Trace (Coins n κ X)} {node : Node} {rec : Coins n κ X → Record} (hD : DrawsOfRecord D T rec)
+    {ω : Coins n κ X} (ha : T.accepts ω) (hw : (T.wrong ω : ℝ) ≤ D.pooled node.delta ω) :
     ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong := fun l hline => by
   unfold lineOf at hline
   rw [hD ω ha] at hline
-  have hc := Properties.RemoteAudit.lineCoversSession n m k X D ω node.delta _ _ _ _ _ _ _ l hline
+  have hc := Properties.RemoteAudit.lineCoversSession n m k κ X D ω node.delta _ _ _ _ _ _ _ l hline
   rw [Rat.cast_nnratCast] at hc
   exact hw.trans hc
 
@@ -176,8 +176,8 @@ theorem delta_nonneg (node : Node) : (0 : ℝ) ≤ (node.delta : ℝ) := NNRat.c
 
 /-- **The memory line of record, link-charged** (`LineHeld`), proved. -/
 theorem lineHeld : LineHeld := by
-  intro n m k X _ D T node rec δs hl hsq hd hS hr hp hcov hk hL hR hC hN hW hD
-  have hH := holdsAnd hk (Draw.pooledDraw D (ofRecord T rec) (delta_nonneg node) hL hR hC)
+  intro n m k κ X _ prf rest D T node rec δs hl hsq hd hS hr hp hcov hk hm hL hR hC hN hW hD
+  have hH := holdsAnd hk (Draw.pooledDraw prf rest D (ofRecord T rec) (delta_nonneg node) hm hL hR hC)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
   have ha : (ofRecord T rec).accepts ω := hω.1
   have hc := charge_units node
@@ -191,8 +191,8 @@ theorem lineHeld : LineHeld := by
 
 /-- **The memory line of record, time-held, under Identity** (`LineHeldIdentity`), proved. -/
 theorem lineHeldIdentity : LineHeldIdentity := by
-  intro n m k X _ D T node rec δs hI hsq hd hS hr hp hcov hk hL hR hC hN hW hD
-  have hH := holdsAnd hk (Draw.pooledDraw D (ofRecord T rec) (delta_nonneg node) hL hR hC)
+  intro n m k κ X _ prf rest D T node rec δs hI hsq hd hS hr hp hcov hk hm hL hR hC hN hW hD
+  have hH := holdsAnd hk (Draw.pooledDraw prf rest D (ofRecord T rec) (delta_nonneg node) hm hL hR hC)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
   have ha : (ofRecord T rec).accepts ω := hω.1
   have hc := charge_units node
