@@ -1576,10 +1576,10 @@ composition below): what the bound counts is the charge, not the committed lengt
 **The encoder in the circuit** (`arith_encode`: `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
 `KTContext_v1{C, NW}`, with `reference_step`, `reference_finish` and `reference_kt` their specs).
 - *The charge is the coded length.* The committed advice is each window's raw decision bits, which the scan reads
-  (item 2), with its sent shortfalls. The encoder runs `code_v1`'s code forward over the same values, once a window in
-  `code_v1`'s order (`code_v1._window`), from `fresh()`. It counts the bits the window's segment would hold: one per
-  scaling (a resolved bit, or a pending one a later resolution writes), the termination's two (none when nothing was
-  used, as code.py's `shifts + 2`). The total must be at most c_w.
+  (item 2), with its order entries and sent shortfalls. The encoder runs `code_v1`'s code forward over the same values,
+  once a window in `code_v1`'s order (`code_v1._window`), from `fresh()`. It counts the bits the window's segment would
+  hold: one per scaling (a resolved bit, or a pending one a later resolution writes) and the termination's two (none
+  when nothing was used, as code.py's `shifts + 2`). The total must be at most c_w.
   - No codeword is committed and no segment is compared, so nothing reads a segment at a data-dependent cursor.
   - The charge is the length of the string `encode` would write, which is prefix-free, and `encode` is injective on
     the values (`decode` inverts it). So at most 2^c value lists, and so at most that many advices, are accepted at a
@@ -1608,9 +1608,8 @@ composition below): what the bound counts is the charge, not the committed lengt
   which v1 coded with before `code_v1`. `code_v1.KT` halves its counts in place instead, and its circuit is ENC-CODE's
   `BookKT_v1{C}` (#3660).
 - *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`). It runs `code_v1` over advice v1's
-  windows (`v1.residual`: the decisions and the sent hits, under a book fit to them at v1's registered caps,
-  `v1.TABLE_CAPS`, with no header, since the pool is registered) and over ENC-DERIVED's still-sent fields, each symbol
-  tagged a bit or an integer's.
+  windows (`v1.residual`: the decisions, the order entries and the sent hits, under a book fit to them at v1's
+  registered caps, `v1.TABLE_CAPS`) and over ENC-DERIVED's still-sent fields, each symbol tagged a bit or an integer's.
   - After every symbol, low and high are code.py's, a pending run is open exactly when code.py has pending bits, and
     `used` is code.py's. Each step's n is the segment bits code.py consumed, each window's finish ends at its segment's
     end, and every flipped or cut segment is refused.
@@ -1743,8 +1742,8 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
 **Open.**
 - *The charge's pieces* (composition item 3, "The encoder in the circuit").
   - ENC-CODE: the counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`,
-    #3660). Lowering an integer (n_arrived, n_hits and each shortfall) to its `Binned` symbols in the book's public
-    tables isn't built, so the circuit charges the decisions only.
+    #3660). Lowering an integer (the window's counts, each order entry and each shortfall) to its `Binned` symbols in
+    the book's public tables isn't built, so the circuit charges the decisions only.
   - ADV-SPEC's slice codes its asks at ENC-REPLAY's plain contexts with `KTContext_v1` from zero counts, where
     `code_v1` codes the arrived bits at min(run, 2) with `code_v1.KT` from the book's priors. The plain context,
     min(passes, 2) with passes the asks so far about the request, is the run except after an arrival taken unasked,

@@ -4,11 +4,11 @@ coders (`code.py`, `code_v1`), over what v1 actually codes.
 Every stream is `code_v1`'s: a list of windows, each one `code.py` `ArithEncoder` segment with the symbols it took,
 tagged `[1, bit, f0, f1]` for a bit `code_v1.Encoder.bit` coded at its KT estimate and `[0, cum, freq, total]` for an
 integer's symbols, code.py's state after each (low, high, pending, used) and the segment. With it come each bit's (name,
-context, bit) from the book's priors (`kt`), the header (`NB` its width and `pool`, 0 since v1 registers the pool) and
-each window's charge (`charge`). Two sources:
-- `decisions(trace, stops, T=)`: advice v1's windows (`v1.residual`: the replay's decisions and the hits sent past the
-  pool bound) under a book fit to them at v1's registered caps (`v1.TABLE_CAPS`; a skewed book: the difftest is the
-  coder's, not the book's), with v1's charges (`v1._string`). It checks that they are `v1.encode`'s string;
+context, bit) from the book's priors (`kt`) and each window's charge (`charge`). Two sources:
+- `decisions(trace, stops, T=)`: advice v1's windows (`v1.residual`: the replay's decisions, the arrival order's
+  deviations and the hits sent past the pool bound) under a book fit to them at v1's registered caps (`v1.TABLE_CAPS`; a
+  skewed book: the difftest is the coder's, not the book's), with v1's charges (`v1._string`). It checks that they are
+  `v1.encode`'s string;
 - `fields(trace)`: ENC-DERIVED's still-sent fields (`derived.residual`: the hits past the pool bound, the resumes, the
   order misses and async's lag bits), each field cut into windows of 64 values, under a book fit to them.
 
@@ -101,7 +101,7 @@ def _bits(b: Sequence[int]) -> str:
 
 
 def _stream(wins: Sequence[Any], book: Any) -> dict[str, Any]:
-    """`code_v1`'s stream for `wins` under `book` (the module's docstring), with no header."""
+    """`code_v1`'s stream for `wins` under `book` (the module's docstring)."""
     with _coded() as (logs, kt):
         enc = CV.encode(wins, book)
     if CV.decode(enc.bits, enc.nbits, book, len(wins)) != list(wins):
@@ -111,7 +111,7 @@ def _stream(wins: Sequence[Any], book: Any) -> dict[str, Any]:
         windows.append({"symbols": lg["symbols"], "states": lg["states"], "segment": _bits(bits[at:at + ln])})
         at += ln
     priors = {name: [list(book.priors.get(CV._key(name, c), (0, 0))) for c in ctxs] for name, ctxs in CV.BITS.items()}
-    return {"priors": priors, "kt": kt, "NB": 0, "pool": 0, "charge": list(enc.lens), "windows": windows}
+    return {"priors": priors, "kt": kt, "charge": list(enc.lens), "windows": windows}
 
 
 def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "batch") -> dict[str, Any]:
@@ -125,7 +125,8 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
     if CV.pack(bits)[0] != V.encode(adv, rec, reg, check=False):
         raise AssertionError("the windows aren't v1.encode's")
     s = _stream(wins, reg.book)
-    s.update(charge=charge)
+    if s["charge"] != charge:
+        raise AssertionError("the charges aren't v1's")
     return s
 
 
