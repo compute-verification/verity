@@ -839,6 +839,25 @@ def test_a_pin_without_a_type_is_refused():
         f"lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: type None -> {pin['counts']['type'][:16]}..."]
 
 
+def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
+    """A Definition a Program holds as one gate naming its circuit digest (``gated``: N2's served counts here) has that
+    digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier reads in its
+    place: its own digest passes, another fails by name, and none warns."""
+    from verity.ml.circuits.codec import program_digest
+    from verity.ml.circuits.program import Program
+    from verity.core.protocols.certifier import served as SV
+
+    d = SV.unit(8, 3, 1, 2, 2, 0)
+    digest = program_digest(Program(d))
+    assert SV.NetworkServedCounts.gated and PINS["digests"][d.id] == {"sha512": digest}
+    for pinned, status in ((digest, "ok"), ("0" * 128, "mismatch"), (None, "unpinned")):
+        F = CK.Findings()
+        rec = CK.circuit_digest_pin(d, {"digests": {} if pinned is None else {d.id: {"sha512": pinned}}}, F)
+        assert rec["status"] == status and rec["counts"] == {"sha512": digest}
+        assert [f["name"].split(" [")[0] for f in F.failures] == ([f"lowering/pin-mismatch {d.id}"] if status == "mismatch" else [])
+        assert [w["code"] for w in F.warnings] == (["unpinned"] if status == "unpinned" else [])
+
+
 def test_redundant_ands_are_counted():
     from verity_flock import gf2
 
