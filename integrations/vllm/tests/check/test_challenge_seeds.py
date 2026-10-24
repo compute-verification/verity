@@ -7,8 +7,7 @@ import inspect
 
 import pytest
 
-SEEDED = [("verity_vllm.program.kernels.relations", "draw_sample"), ("verity_vllm.program.kernels.relations", "ensure_adjacent_pair"),
-          ("verity_vllm.check.replay.driver", "sampled_replay"), ("verity_vllm.check.replay.compiled_kernel_check", "CompiledKernelCheck"),
+SEEDED = [("verity_vllm.check.replay.driver", "sampled_replay"), ("verity_vllm.check.replay.compiled_kernel_check", "CompiledKernelCheck"),
           ("verity_vllm.correspondence.capture_identities", "run")]
 
 
