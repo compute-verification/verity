@@ -17,14 +17,14 @@ conditions, each of which holds:
    something the prover chooses.
 3. SHA-512 is collision resistant, as hm96 rows in frame-v3-sha512 trees already assume.
 
-N2 no longer compares the grid in the clear: `LinkWindows.verify` runs `check_link(grid=False)` (NET-38), and the
-network claim is counts only until N3 is a proof-service unit on every window (ASK-70, counts-first). One gap keeps the
-count check from being zero-knowledge, and nothing may call it that until it is closed (the README states it too):
-- **N2's unit isn't proved yet:** its verifier of record runs `head_check.reference` on the host over the opening, the
-  heads and the certifier's salts.
+N2 compares no grid (NET-38), and the network claim is counts only until N3 is a proof-service unit on every window
+(ASK-70, counts-first). N2's verifier of record decides each link-window on a `--zk` proof of its registered unit and
+public inputs alone, and reads no head, salt or sibling ("Its verifier of record" below). What stays open is in the
+README: the certificates reach the verifier in the clear beside the proof service, a provisional exception to the four
+public kinds, and a run that proves nothing is decided in the clear.
 
-A proof of it is already held to its circuits: each gate names its Definition's pinned circuit digest, so the unit's
-Program binds them, and the verifier refuses a proof of any other Program ("The check" below).
+A proof is held to the unit's circuits: each gate names its Definition's pinned circuit digest, so the unit's Program
+binds them, and the verifier refuses a proof of any other Program ("The check" below).
 
 The certificate's signature no longer reads a hash of witness (NET-42). The certifier signs
 `D = SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R)`, R the head's record digest:
@@ -33,8 +33,8 @@ The certificate's signature no longer reads a hash of witness (NET-42). The cert
   reads is the head alone);
 - each end's head check holds `R` to the digest of the head it opens and `D` to `R` under `salt_c` (part 4 below);
 - the LMS check (`Certificate.verify`) reads only the public fields (key id, session, link, direction, window) and
-  `D`, a hiding commitment to `R`. Until N2's unit is proved, the verifier of record checks `D` against the head and
-  `salt_c` on the host too (`CertifiedRecord.verify`).
+  `D`, a hiding commitment to `R`. The in-the-clear check (`LinkWindows.clear`, a debug comparison) also checks `D`
+  against the head and `salt_c` over the opening (`CertifiedRecord.verify`).
 
 ## The certifier (`grid`)
 
@@ -160,7 +160,7 @@ The `Issuer` starts its session on the signer (`Signer.start`) before its first 
 id it has already started, so the device runs once per session. A signer whose state is missing, behind the leaves its
 journal has used or its `floor`, or held by another signer, refuses (`SignerRefused`), and so does a refused start. The
 certifier then publishes nothing for the link-window (`Issuer.refused` lists it), which fails closed as a `no-verdict`; it
-never signs with a reused leaf, nor in a session it has run before. Both rest on `trusted-nebius-host`, where the state
+never signs with a reused leaf, nor in a session it has run before. Both rest on `trusted-host`, where the state
 the device keeps on its host is its next LMS leaf and the session ids it has started.
 
 **The check.** The certificate names the head's link-window, D is the head's record digest under `salt_c`, and the
@@ -203,11 +203,15 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   service's `reject`; the violation's kind stays in the verifier. A registration with any other field, a second root,
   a root entry with another key, or anything more in `window` is refused. A served link has no egress profile, and its
   sizes and each window's declared sync are public instead (`PUBLIC_SERVED`, "A served link" below).
-- **The check** is `LinkWindows.unit`, `NetworkLinkWindow` v4{EGRESS, INGRESS}, over the two certificates' signed
-  digests: the AND of the certificates' check and each end's head check. The certificates' check is one opaque
-  primitive over the two signed digests, with no gates: each certificate verifies under the certifier's key in its
-  session (`LinkWindows.certifier_session`) over its public fields and its signed digest, and names the link-window,
-  and its head's deadline bit is set. The head check is a Boolean Definition,
+- **The check** is `LinkWindows.unit`, `NetworkLinkWindow` v5{EGRESS, INGRESS}, over the two certificates' signed
+  digests (``egress``, ``ingress``) and each end's head check's other parameters but its direction, which the unit
+  fixes (egress 0, ingress 1). Its output is two bits: ``verdict``, the AND of the two head checks, and ``deadline``,
+  the AND of the two heads' deadline bits. The certificates are not in the unit: the verifier checks them on their
+  public fields (`LinkWindows.certified`: each verifies under the certifier's key in its session,
+  `LinkWindows.certifier_session`, over its public fields and its signed digest, and names the link-window). A proof
+  states the unit on rows ``pub`` (its public parameters), ``wit`` (each end's head, leaf salt, siblings and
+  certifier's salt) and the output row ``o0``, one u16 word (`LinkWindows.layout`, `service.OUT_BITS`), its circuit
+  `LinkWindows.proof_unit`. The head check is a Boolean Definition,
   `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are each end's statics), with one output, the ok
   bit, whose `signed` input is its end's signed digest. It opens the head at leaf 2 + direction under the registered
   root, the hiding read N3 makes of the same leaf (`NetworkHidingRead`), and accepts when the head's link, direction
@@ -222,8 +226,8 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   a template by, read from `head_check.circuit-check.json`'s ``digests``, which circuit-check holds to the Definition
   (a lowering pin). The Program's digest is the check's, so the spec, the stream and each registration bind to it, and
   through the gates to the circuits: a proof of another circuit with the same interface names another Program. A size
-  class no sidecar pins has a gate naming no digest (`@unpinned`): its verdict of record is unchanged, and no proof of
-  its unit is accepted until a root of that class is pinned.
+  class no sidecar pins has a gate naming no digest (`@unpinned`), and no proof of its unit is accepted until a root of
+  that class is pinned.
 - **Its sizes** (`head_check.size`, L = 9): the count check is an equality of 32·T bits, 32·T − 1 ANDs (19,199 at
   T = 600); the fields are 736 + 8·L − 1 (807); the opening is 775,077 at T = 4 and 1,876,070 at T = 600, nearly all
   of it the head row's hm96 digest; the signed digest is 290,246 at T = 4 and 1,333,292 at T = 600, the record digest's
@@ -240,37 +244,49 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   with no N3 unit. That holds because the profile is fixed by the Program and the placement before the run and bound
   by the spec's context: nothing declared at run time sets it, and a head with frames where the profile says 0 fails
   N2's count check. An end without a profile has no such backing, since its occupancy is its record's own.
-- **Its verifier of record** is `LinkWindows.verify`, on the host, which reads the opening. It accepts when the opening
-  reproduces the registered root, each end's head check accepts (`head_check.reference`, which the tests hold to the
-  circuit), and the audit accepts both records under the certifier's key in its session, comparing no grid:
-  `check_link(grid=False)` on the status, the signature and the declared syncs, `check_ingress_link` on the status and
-  parameters. `verify` reads no frames, so its claim is counts only: the egress head's counts are the profile's (and
-  the ingress head's, where that end declares one), which puts the link's timing at the profile. The egress grid is
-  the head's counts filled with its frames in order, and the head's digest binds both, so the frames are the rest of
-  the grid, and nothing in this protocol holds them: until N3 is a proof-service unit with Selection `All`, it doesn't
-  say the egress grid is the Program's. On a served link it also runs the served counts' check (`served_check`, "A
-  served link" below). A link whose egress end has neither an occupancy profile nor a served profile has no verdict
-  (`ValueError`, failing closed), since nothing would hold its egress timing. The outcome passes the opening's root as the session's, which one-stage's audit holds to the registered one. An
-  unset deadline bit is a `no-verdict` there, so a reject; a proof after `proof_deadline` is the service's `late`.
-  Given the findings of a proof of the unit (`verify(…, proved=…)`, the verifier of record's run over it,
-  `proofs.verify`), it also needs every gate of the unit to name a pinned digest and every session to accept and name
-  the link's registered Program, the partition object's `program` (`LinkWindows.proved`).
+- **Its verifier of record** is `LinkWindows.verify`, which decides on the delivered proof (`service.Delivered`) and
+  public inputs alone. It accepts when its own run of C-Flock's Lean verifier (`proofs.verify`, `verify --zk`, on the
+  circuit file the auditor committed) accepts every session, the sessions prove the link's registered unit (every gate
+  names a pinned digest and every session names the registered Program, the partition object's `program`,
+  `LinkWindows.proved`) and the drawn unit; the proof's ``pub`` row opens, under the salt delivered, to the verifier's
+  own copy (`LinkWindows.public_arguments`: the registered root, the link-window's public fields and both signed
+  digests) and its ``o0`` row to the output word delivered, whose verdict and deadline bits are both 1; the
+  certificates verify (`LinkWindows.certified`); and the window's declared sync is one of Σ_sync. It receives the
+  registration, the draw, the certificates' public fields and signatures (from the certifier, beside the proof
+  service: the service has no public kind for them), the declared syncs, and from the prover the statement's public
+  file, its sessions, the circuit file and the salts of ``pub`` and ``o0`` with the output word; never the opening nor
+  ``wit``'s salt. The outcome passes the registered root as the session's. A proof after `proof_deadline` is the
+  service's `late`. The verdict reads no frames, so its claim is counts only: the egress head's counts are the
+  profile's (and the ingress head's, where that end declares one), which puts the link's timing at the profile. The
+  egress grid is the head's counts filled with its frames in order, and the head's digest binds both, so the frames
+  are the rest of the grid, and nothing in this protocol holds them: until N3 is a proof-service unit with Selection
+  `All`, it doesn't say the egress grid is the Program's. A link whose egress end has neither an occupancy profile nor
+  a served profile has no verdict (`ValueError`, failing closed), since nothing would hold its egress timing.
+- **The in-the-clear check** is `LinkWindows.clear`, over the opening: the opening reproduces the registered root,
+  each end's head check accepts (`head_check.reference`, which the tests hold to the circuit), and the audit accepts
+  both records under the certifier's key in its session, comparing no grid (`check_link(grid=False)` on the status,
+  the signature and the declared syncs, `check_ingress_link` on the status and parameters); on a served link also the
+  served counts' check (`served_check`). It is a debug comparison (`verify(…, opening=…)`, off by default, which
+  decides nothing) and the tests' reference. `LinkWindows.unproved_outcome` decides a run that proves nothing (a
+  rehearsal, the simulator) on it, its verdict ``"decided_by": "clear"``, never zero-knowledge.
 - **The oracle** is `LinkWindows.stand_in`, the in-the-clear verdict: the audit with the Program's egress grid
-  compared, and each head's counts the profile's (`LinkWindows.declares`). `verify` accepts every link-window it
+  compared, and each head's counts the profile's (`LinkWindows.declares`). `clear` accepts every link-window it
   accepts, and differs only where the record's grid, at the profile's counts, isn't the Program's: in its frames, which
   N2 doesn't hold (N3's design would reject them), or where the declared syncs move the Program's counts off the
   profile, which N2 holds the counts to instead.
 
-What this establishes: the outcome is accept exactly when the opening seals, both head checks accept and the audit
-accepts the registered link-window's records, and the outcome record binds the root, the draw and the session. The
+What this establishes: the outcome is accept exactly when the Lean verifier accepts a proof of the registered unit
+whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the sync is
+declared; the outcome record binds the root, the draw and the delivered sessions. The
 claim is counts only: on every link-window of a link whose egress end declares a profile, the egress head's counts are
 the profile's (and the ingress head's, where that end declares one), so the link's timing is at the profile. It stays
 counts only until N3 is a proof-service unit with Selection `All`. On a served link the egress head's counts are
 instead the ones its ingress head's counts derive under the window's declared sync ("A served link" below). An egress
-end with neither profile gets no verdict (`ValueError`, failing closed). What it doesn't establish: the verifier
-of record reads the witness, so it is not zero-knowledge, and it must run where the heads and the certifier's salts
-may go until the unit is proved. The head check leaves the head's deadline byte and frames root free. The certificates' check reads the
-deadline, and N3's design would read the frames root, so an accepted outcome says nothing of the frames. One clock per
+end with neither profile gets no verdict (`ValueError`, failing closed). What it doesn't establish: the head check
+leaves the head's deadline byte and frames root free. The unit reads the deadline for its public bit, and N3's design
+would read the frames root, so an accepted outcome says nothing of the frames. The proof opens the head leaves (2, 3)
+only: the record leaves (0, 1), each certified record whole, are committed but nothing in the verdict reads them, and
+the certificates' signatures are checked on the host from their public fields, not in the proof. One clock per
 spatial unit across links is not checked (each registration is one link-window, alone), and the frames' consistency
 with the served computation is left to N3.
 
@@ -282,8 +298,9 @@ run and its egress end has no occupancy profile. Declared with
 holds the egress head's counts to the ones the ingress head's counts derive under the window's declared sync, with no
 public egress profile.
 
-- **The unit** is `NetworkServedLinkWindow` v3{EGRESS, INGRESS, SERVED}: `NetworkLinkWindow`'s certificates' check and
-  two head checks (neither end with a count check unless its end declares a profile), and one gate (`served.gate`)
+- **The unit** is `NetworkServedLinkWindow` v4{EGRESS, INGRESS, SERVED}: `NetworkLinkWindow`'s two head checks
+  (neither end with a count check unless its end declares a profile), the window's declared sync as its ``sync``
+  parameter, and one gate (`served.gate`)
   naming the Boolean Definition `served.NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}` and its circuit digest
   pinned in `served.circuit-check.json`, as the head check's gate names its own, over the two heads' counts,
   cut from the heads the head checks open (so witness), and the window's sync (δ, p, q), ρ = p/q. OWN is the ingress
@@ -304,9 +321,9 @@ public egress profile.
   it and none on egress, the served sizes (F, F_in, OWN and the link's windows, fixed before the run), and each window's
   declared sync as an output of the protocol. That sync is the clock-sync advice the audit already reads and charges
   (log2 #Σ_sync bits a window, 7 at 16 × 8): the served counts read it, and nothing else about the run is declared.
-- **The verifier of record** is `LinkWindows.verify`, which on a served link also runs `served_check`:
-  `served.reference` over the opened heads' counts and the window's declared sync. `network_verdict` takes the served
-  profile's windows.
+- **The verifier of record** is `LinkWindows.verify`, as above: the unit's verdict bit holds the served counts' check
+  too, and the verifier's own public row holds the window's declared sync. The in-the-clear check runs `served_check`,
+  `served.reference` over the opened heads' counts and the sync. `network_verdict` takes the served profile's windows.
 - **Carry-over: none.** Each window's derivation starts with an empty egress queue, no request frame pending and no
   earlier hand, and checks that the window ends the same way. By the check alone, an accepted window's egress counts
   are a function of its own ingress counts and sync. By induction from the run's first window, which starts empty (as
@@ -794,6 +811,158 @@ steps:
 `NetTiming.Protocol.Schedule` defines the same objects (`eligible`, `handingBuckets`, `expectedRow`), and the Program
 `constantRate` whose advice is the content advice and one in-set sync per window (`Security/Proofs/NetworkCertifier/README.md`,
 modelling choices 13–17).
+
+## An advised link (`advised`)
+
+An advised link is a served link under arbitrary traffic: responses of any length, batched, chunked, preempted and
+timed as serving chose, carried across windows. Nothing fixes its egress counts before the run and FIXLEN doesn't hold,
+so N2 takes them from the prover's advice and holds the advice to the certified ingress head. The advice is
+`advised.LinkAdvice`: I1's advice (`advice.Advice`, v0, "Advice v0" below: one per certifier session, after serving,
+public in v0 and charged by `advice.bits`) and `received[w]`, the request frames the ingress certifier releases in
+window w. It carries no tie: the tie of its requests to the certified ingress, IoTieRequest's verdict
+(`advised.IoTieVerdict`), comes only from the verifier's own tie source (`LinkWindows(ties=…)`, `advised.TieSource`).
+Declared with `LinkWindows(advised=AdvisedProfile(windows, request_frames, own))`, whose `request_frames` is the link's public
+framing: entry n − 1 is the ingress frames a request of an n-token prompt takes (CERT-VARLEN's id
+requests, whose frames are a function of the prompt's length alone), for every prompt length the link admits.
+
+- **What N2 reads** (`advised.view`):
+  - of I1's advice, fields `advice.bits` charges: each request's `prompt_len` and `output_len` and each step's rows'
+    `request`, `start` and `n`, through `advice.outputs`, which numbers the kept outputs (request j's λ-th, in step
+    then row order); and `release[k]`, the session-global egress bucket in which output k's frame is released. It
+    reads no `id`, `finish`, `kind`, `cache_hit`, `preempted` or `sources` beyond `Advice`'s own validity;
+  - `received[w]`, which the unit holds to window w's certified ingress head;
+  - the tie: IO-TIE's `IoTieRequest` verdict on each of the link's ingress windows, on the request view computed from
+    this advice, that the link's j-th certified request is advice request j and its prompt v0's `prompt_len` ids. It
+    names the link (`IoTieVerdict.link`), its ingress windows' registrations with the challenger
+    (`IoTieVerdict.registrations`, each one's `registration.digest`), the advice (`IoTieVerdict.advice`, its
+    `advised.digest`) and each window's verdict (`IoTieVerdict.accepted`), and `view` holds the first two to the link
+    and the registrations the verifier's tie source records, so a verdict on another link or ingress record isn't
+    reused;
+  - the framing, and each window's declared sync, which must be one of Σ_sync, the set the certified egress head's
+    parameters digest binds (outside it the advice is refused), and the sync the certifier ran that window under,
+    which the verifier takes only from its own clock source (`LinkWindows.clocks`, `advised.ClockSource`).
+- **The ingress ends are derived** (`advised.ends`), not advised: advice request j is the link's j-th request and its
+  prompt length is the certified prompt's, which the tie holds (FCFS admission meets the order, since v0's first-row
+  order is then the arrival order), so it ends at request frame `ends[j]` = Σ_{i ≤ j} `request_frames[prompt_len_i −
+  1]`, and the last end must be Σ `received`, the link's certified request frames. A link without the tie, a verdict
+  on another link, other ingress registrations or another advice or that doesn't accept every ingress window, a
+  prompt longer than the framing covers, or ends whose last isn't Σ `received`, refuses the advice. No field but
+  v0's says
+  where a request ends, so the ends cost nothing beside `advice.bits`.
+- **The window's view** (`advised.view`), computed by the verifier in the clear from the advice, the framing and the
+  declared syncs, is the unit's public input:
+  - `released[t]`, the frames the advice releases in bucket t, at most R (more refuses the advice);
+  - `floor[t]`, the request frames the window's ingress must have released by bucket t, less B_w = Σ_{v<w}
+    `received[v]`. Output λ of request j released at b is eligible no earlier than j's anchor + δ + ⌊λ/ρ⌋
+    (`schedule.eligible`) under the sync (δ, ρ) of the window that holds b, and is released no earlier: so the first
+    `ends[j]` request frames are released by bucket b − δ − ⌊λ/ρ⌋. A frame for which that bucket is before 0, or
+    released in a window with no declared sync, refuses the advice. Since δ ≥ 0, no declared sync lets a frame out
+    before the bucket that releases its request's last frame. A release in that bucket is a served clock's, an
+    engine's first output in its request's bucket (a served run's advice, `test_network_certifier_advised_served.py`);
+    on a certified path the proxy hands a frame read in bucket t on at t + 1, so its honest syncs have δ ≥ 1. A
+    window whose declared sync isn't the one the certifier ran it under refuses the advice: a δ below the traffic's
+    loosens the floor, and REDTEAM phase 11 accepted an output in its request's own bucket under δ = 0 declared for a
+    window run at δ = 1 (regressions in `test_network_certifier_advised_phase11_floor.py`). Until the certifier
+    reports its syncs to the verifier there is no clock source, and every advised link is refused;
+  - `received`, `received[w]`.
+- **The unit** is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: `NetworkLinkWindow`'s checks, and one gate
+  (`advised.gate`) naming `advised.NetworkAdvisedCounts_v1{T, RIN, OWN}` and its circuit digest pinned in
+  `advised.circuit-check.json`, over the two heads' counts (witness, cut from the heads the head checks open) and the
+  view. Its ok bit is 1 when every ingress count is at most R_in and bucket 0's at least OWN; with the OWN own frames
+  taken off at bucket 0, the ingress prefix sums are at least `floor` and sum to `received`; and the egress counts are
+  `released`. About 105 ANDs a bucket: 63,031 at T = 600, R_in = 1, OWN = 0, and 64,894 at R_in = 4, OWN = 1.
+  Those are over circuit-check's whole-Definition budget (60,000 ANDs), so `check` holds the T = 600 roots to the
+  reference and their pinned digests without lowering them (`--lower-max-ands 70000` lowers them to 62,986 and
+  64,847 with no mismatch); T = 512, R_in = 4, OWN = 1 lowers whole to 55,343 ANDs, which the sidecar pins.
+- **Public** (`PUBLIC_ADVISED`): `PUBLIC_SERVED`'s items but the served sizes, with the advised ones (the link's
+  windows, the framing and OWN), each window's declared sync, and the advice as a protocol output (`OUTPUTS_ADVISED`:
+  the verdict, the deadline bit and the advice's digest). The view is the unit's ``released``, ``floor`` and
+  ``received`` parameters (`ADVICE`), in its public row (``pub``); the heads' counts stay witness.
+- **The verifier of record** is `LinkWindows.verify(…, advice=A)`, which decides on the delivered proof as on any
+  link: it computes `view(A, w)` itself, under the tie from its own tie source alone (`LinkWindows.ties`; no entry
+  point takes one beside the advice), and opens the proof's public row only to its own copy, so a proof made on
+  another advice's view of the window is refused. Without a `LinkAdvice`, a tie source or a clock source
+  (`LinkWindows.clocks`), or on an advice `view`
+  refuses, the unit takes no instance and the window is refused. The in-the-clear check (`clear`, the debug comparison) runs `advised_check`:
+  `advised.reference` over the opened heads' counts and `view(A, w)`. Each window reports a third public output,
+  `advice`, the SHA-512 of A's canonical
+  encoding (`advice.encode`) and `received` (`advised.digest`), so it names the string the compiler reads too.
+  `network_verdict` takes the advised profile's windows and refuses a window that names another advice than the first
+  accepted window's, so every window is checked against one advice.
+- **Carry-over is stated by the advice, not forbidden.** An output sampled in one window may be released in a later
+  one, and a response may span any windows: `release` says where each frame went out, so no egress queue is carried.
+  The ingress carry is `received`: each window holds its own ingress total to it exactly, so by induction from window
+  0 (B_0 = 0) on a link whose every window is accepted, B_w is the request frames released before window w, and each
+  window's floor is the link's.
+- **Soundness: with the advice fixed, the counts are determined.** On an accepted window w the egress counts are
+  `view(A, w).released`, a function of A's `release` alone: the ingress counts, `received` and the syncs only accept
+  or refuse and change no count. So on a link whose every window is accepted, all naming one advice, the egress
+  timing of accepted runs carries at most `advice.bits` (the accepted-runs bound's A_c) beside the log2 #Σ_sync bits
+  a window the sync charge counts, and nothing else is left free: not the frames' timing within the counts, not the
+  ingress timing, not when the server wrote, and not where a request ends. The advice is held to the ingress head: no
+  frame is released before the ingress certifier released `ends[j]` request frames, δ + ⌊λ/ρ⌋ buckets earlier,
+  under a sync in Σ_sync. Those are request j's and every earlier request's frames because v0's prompt
+  lengths are the link's requests', in arrival order: the tie, below. Without it, a prover that splits the same
+  request frames among the requests otherwise (a short and a long prompt swapped between an early and a later
+  request) lowers the early request's end, and so the floor, and an output released before its request's frames were
+  in is accepted on the same certified record, under an advice `advice.bits` charges no more (REDTEAM phase 6, a
+  regression in `test_network_certifier_advised_phase6.py`).
+- **The tie is IoTieRequest's verdict, and without it every advised link is refused** (fail closed; owned by
+  network-accounting). The certified prompts are witness, so the verifier can't derive the prompt lengths and order on
+  the host, and a tie the prover states is no tie: REDTEAM phase 7 showed that one stating the swapped split reopens
+  phase 6's acausal release. Nor is a verdict the prover delivers: REDTEAM phase 10 (and ci's review) built one for
+  the forged advice's digest, every window accepted, and the verifier of record, which read it off the delivered
+  advice, accepted the swapped split (regressions in `test_network_certifier_advised_phase10.py` and
+  `test_network_certifier_advised_phase6.py`). So the advice carries no tie, and `advised.ends` takes it only as
+  IO-TIE's in-proof `IoTieRequest` (`cursor/io-tie-request-061a`, note:network-accounting/20261024T0420Z-report-io-tie):
+  its verdict on every ingress window of this link's registrations, for the same advice digest, from proofs the
+  verifier of record verified itself, given by the verifier's own tie source (`LinkWindows.ties`). Until IoTieRequest
+  runs in the proof service there is no such source, and every advised link is refused, never accepted. The tests
+  stand in for the source with its reference in the clear (`tests/advised_traffic.py`, `StandInTie`), as
+  `tests/standin.py` stands in for the proof.
+- **Bucket 0 is capped at R_in, which holds the own frame.** The ingress certifier releases min(queue, r_in) frames a
+  bucket (`grid.Certifier`) with its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head
+  with a count past its allocation doesn't exist (`certificate.RecordHead`): with R_in request frames arriving in
+  bucket 0 the certified count is R_in, one of them the own frame, and the last request frame goes out in bucket 1.
+- **The ends are where the signed counts put them** (CERT-VARLEN's rule): request k ends in the first bucket where the
+  ingress head's signed counts, less one own frame a window, reach `ends[k]`, with `request_frames[n − 1]` CERT-VARLEN's
+  `id_request_frames(n, B)`. The floor reads the same prefix sums, so it holds each output to the bucket the signed
+  counts end its request in. The rule is exact while each window's own frame leaves in its first bucket, and always
+  once CERT-VARLEN's FIFO change queues the own frame at the head of each window's queue; until then a window that
+  starts with R_in or more request frames carried in puts an end one bucket late, never early.
+- **Named gap: the record holds neither the prompt lengths nor the syncs the unit reads** (owned by network-accounting).
+  The unit takes v0's prompt lengths, held to the certified ones only by IoTieRequest's verdict (the tie above), and
+  each window's sync from its declaration, held to Σ_sync and to the sync the certifier reports it ran (the clock
+  source above), a trusted device's report rather than a signed record, because neither head signs them. Design: the
+  ingress head
+  signs each bucket's completed requests and the egress head the window's sync (`served.sync_words`), inside
+  `RecordHead.encode`, and the unit reads both from the heads it opens. It changes the head encoding that Lean pins, so it lands with the head check's and the Lean model's
+  change, not before. With CERT-VARLEN's FIFO change the completed requests follow from the signed counts and the
+  certified prompt lengths, so on ingress what's left is holding v0's prompt lengths to the certified bodies.
+- **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
+  - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
+    which IO-TIE fixes (within a bucket the order doesn't change the counts);
+  - the releases fall in the link's windows, each of which declares a sync in Σ_sync, the one the certifier ran it
+    under, which the certifier reports to the verifier (until it does, no advised link is accepted);
+  - `received` is the ingress record's;
+  - the link's j-th request is advice request j (FCFS admission: IoTieRequest's ordinals are the verifier's, so an
+    advice numbered in another order, as a runner's batch order numbers v0 and ENC-DERIVED's `walk.order` maps back,
+    is refused), an id request of its prompt length;
+  - IoTieRequest runs in the proof service and accepts every ingress window of the link (until it does, no advised
+    link is accepted);
+  - each window's declared sync has a δ and ρ that every frame released in it meets: a small δ, and ρ at least a
+    stream's frames a bucket (`schedule.eligible` reads the anchor's window's sync, the view the release's, which the
+    verifier sees);
+  - with the salt on, a window's own frame counts as bucket 0's, so a window that starts with R_in or more request
+    frames carried in under-counts by one until it is released, which only a release at its exact eligibility
+    notices (CERT-VARLEN's FIFO change, the own frame first in each window's queue, removes this);
+  - both ends share T and τ_b (checked by `LinkWindows`).
+
+What this establishes: on every accepted link-window of an advised link, the egress head's counts are the advice's
+releases, and the advice's releases are eligible after the ingress head's releases under the declared sync. What it
+doesn't: the frames (N3's and IO-TIE's), that the advice is the computation's (the compiler's and PoUW's), the
+tie itself (IoTieRequest's, which isn't in the proof service yet, so today no advised link is accepted), the syncs
+the certifier ran (its report, which no head signs yet), and the premises.
 
 ## The audit (`audit`)
 
@@ -1962,7 +2131,7 @@ them.
     tick, the salt's draw, has run or was missed (a proxy back from maintenance after it), and a second root for p, so
     only the registered prover fixes p's root. Nothing the certifier sends depends on it. `Proxy.committed(p,
     registration)` gives it to the verifier on `reveal`'s conditions (as often as asked: it is a hiding commitment), and
-    refuses a window whose weights weren't recorded. The order is the certifier's word, under `trusted-nebius-host`,
+    refuses a window whose weights weren't recorded. The order is the certifier's word, under `trusted-host`,
     like the salt.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
     The verifier calls it with the registration the proof service returned for p (`Registration`, from
@@ -1978,7 +2147,7 @@ them.
   - **Asked for and answered under LMS** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the
     certifier runs on the link, off the prover's node, and the proof service's challenger (#2573), which is the
     auditor's, on an auditor host. `challenger_key` comes from the auditor's deployment record, never from the
-    prover's configuration, and `trusted-nebius-host` covers that record's custody. Each proxy draws a run id at
+    prover's configuration, and `trusted-host` covers that record's custody. Each proxy draws a run id at
     construction, 32 bytes of the certifier's own randomness (`Proxy.run_id`; `run_nonce`, `secrets.token_bytes` by
     default, is the tests' hook), and the record gives it to the challenger beside the certifier's key, written when
     the auditor starts the proxy, since a restart draws a new one. The record, not a signed `hello`, because a hello
@@ -2007,7 +2176,7 @@ them.
     the challenger's client, given the certifier's key and run id by the deployment record, whose `reveal` and
     `committed` return the value they verified, as a keyless proxy's do in process, and raise `RuntimeError` on a
     refusal, an answer of another run, one that doesn't verify, or no answer. t_d, the deadline and the once rule are
-    unchanged. What still rests on `trusted-nebius-host` is the certifier's key custody, its signing key and leaf state
+    unchanged. What still rests on `trusted-host` is the certifier's key custody, its signing key and leaf state
     on its host (`LmsSigner`, one leaf at a time across the threads that share it) and its word on what it signs, and
     the deployment record's custody: the keys and the run id it gives each side. The challenger's key is the
     auditor's, on its own host. A proxy with neither key is the in-process call the tests and replays make
@@ -2017,7 +2186,7 @@ them.
     window p is accepted, at its first certifier window w = p·k, if w has exactly one raw record, which holds exactly
     one salt frame of p, carrying the placeholder, and p's revealed salt has `salt_bits` bits. Anything else, a missing
     salt included, is a `salt` violation at w, recorded with the audit's verdicts. No record binds the salt: the
-    revealed salt is the certifier's word, under `trusted-nebius-host`. A committed or certified record doesn't show
+    revealed salt is the certifier's word, under `trusted-host`. A committed or certified record doesn't show
     its frames, so there a proof opens the salt frame.
   - **Its place, pinned.** The audit takes the salt frame only as the first frame of w's bucket 0, slot 0, where the
     proxy releases it ("Into the block only"); anywhere else it is a `salt` violation at w. The served counts
