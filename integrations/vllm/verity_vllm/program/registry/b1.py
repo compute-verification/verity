@@ -26,6 +26,7 @@ from verity.ml.circuits.ops.prims import ZERO32, const
 from verity.ml.circuits.ops.scalar import BitNot
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import A16, BF16, BIT, F32, I32
+from verity_vllm.program.registry.warp_reduce import lane0_butterfly
 
 # ---------------------------------------------------------------------------------------------------------
 # static configuration of the B1 profile
@@ -173,21 +174,12 @@ def Bf16MulScalarTensor(B, S, x, s):
 # ---------------------------------------------------------------------------------------------------------
 
 
-def _butterfly(B, vals: list[Coll], masks: tuple[int, ...], add) -> Coll:
-    """Lane 0's value after an xor-butterfly reduction with the given masks (`v = v + shfl_xor(v, m)`)."""
-    n = len(vals)
-    cur = list(vals)
-    for m in masks:
-        cur = [B.call(add, cur[i], cur[i ^ m]) if (i ^ m) < n else cur[i] for i in range(n)]
-    return cur[0]
-
-
 @composite("RMSNormTriton", 1, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
            conformance="exact-model-tested")
 def RMSNormTriton(B, S, x, w, eps=None):
     """`out_j = bf16_rne((inv * x_j) * w_j)`, `inv = div.full(1, sqrt.approx.ftz(fma(rcp(n), sum, eps)))`, `sum` =
-    chunks of 1024 columns, 128 threads x 8 columns (`acc = x1*x1; fma(x0,x0,acc); fma(x2..x7)`), warp
-    butterfly xor 16,8,4,2,1, CTA `(w0 + w2) + (w1 + w3)`, chunks added in order from +0.  `eps`: `RMSNormTriton_v3`'s input."""
+    chunks of 1024 columns, 128 threads x 8 columns (`acc = x1*x1; fma(x0,x0,acc); fma(x2..x7)`), warp butterfly xor
+    16,8,4,2,1 (lane 0's adds), CTA `(w0 + w2) + (w1 + w3)`, chunks added in order from +0.  `eps`: `RMSNormTriton_v3`'s input."""
     N = S.N
     xf = B.batch(P.Bf16ToF32, x, axes=(0,))
     chunk_sums = []
@@ -207,7 +199,7 @@ def RMSNormTriton(B, S, x, w, eps=None):
                 for j in range(2, 8):
                     acc = B.call(P.F32Fma, xs[j], xs[j], acc)
                 lanes.append(acc)
-            warps.append(_butterfly(B, lanes, (16, 8, 4, 2, 1), P.F32Add))
+            warps.append(lane0_butterfly(B, lanes, (16, 8, 4, 2, 1), P.F32Add))
         chunk_sums.append(B.call(P.F32Add, B.call(P.F32Add, warps[0], warps[2]), B.call(P.F32Add, warps[1], warps[3])))
     total = B.call(ZERO32)
     for cs in chunk_sums:

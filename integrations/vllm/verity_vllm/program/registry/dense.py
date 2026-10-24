@@ -28,8 +28,9 @@ import numpy as np
 from verity.ml.circuits.defs import Coll, bind, composite, primitive
 from verity.ml.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.b1 import ZERO16, ZERO32, DotBf16, _butterfly, _lane, const, f32c
+from verity_vllm.program.registry.b1 import ZERO16, ZERO32, DotBf16, _lane, const, f32c
 from verity_vllm.program.registry.prims import A16
+from verity_vllm.program.registry.warp_reduce import lane0_butterfly
 from verity.ml.circuits.types import Array, Tuple, Value
 
 BF16, F32 = Value(16), Value(32)
@@ -150,7 +151,7 @@ def MeanTriton(B, S, x):
                 for r in regs[1:]:
                     a = B.call(P.F32Add, a, r)
                 lanes.append(a)
-            warps.append(_butterfly(B, lanes, (16, 8, 4, 2, 1), P.F32Add))
+            warps.append(lane0_butterfly(B, lanes, (16, 8, 4, 2, 1), P.F32Add))
         chunk = B.call(P.F32Add, B.call(P.F32Add, warps[0], warps[2]), B.call(P.F32Add, warps[1], warps[3]))
         acc = B.call(P.F32Add, acc, chunk)
     nf = B.call(f32c(float(N)))
