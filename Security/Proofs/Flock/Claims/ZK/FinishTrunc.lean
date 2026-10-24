@@ -25,6 +25,12 @@ open Flock With Transcript
 
 theorem lt64 {a : ℕ} (h : a ≤ 65536) : a < 2 ^ 64 := lt_of_le_of_lt h (by norm_num)
 
+theorem cons_size_le {α : Type} {a c : Array α} {x y : α} (ha : a.size = 3) (hc : c.size = 2) :
+    (a ++ #[x, y] ++ c).size + 3 ≤ 65536 := by
+  have hxy : (#[x, y] : Array α).size = 2 := rfl
+  rw [Array.size_append, Array.size_append, ha, hxy, hc]
+  omega
+
 /-- A `forIn` over a range in any monad, named so that a walk stops at it. -/
 def loopG {m : Type → Type} [Monad m] {β : Type} (r : Std.Legacy.Range) (b : β) (f : ℕ → β → m (ForInStep β)) : m β :=
   forIn r b f
@@ -187,11 +193,8 @@ theorem squeezeP_br (kind : UInt8) {m : ℕ} (hm : m < 2 ^ 64) :
           rw [hl, hc k hk' i (by rw [hcs]; omega), hcs]
       simp only [FlockComplete.go_bind, asksCut_round_fw, if_neg hlt, hv]
       refine ⟨rfl, ?_⟩
-      first
-      | (rw [Array.size_push, hl])
-      | (simp only [Array.size_push, hl]; omega)
-      | (simp [hl]; omega)
-      | omega
+      change (Array.push l _).size = _
+      rw [Array.size_push, hl]
 
 theorem sampleP_br :
     ((bridge base).st Transcript).R (FlockComplete.sampleP (asksOf coins).toC)
@@ -265,19 +268,31 @@ theorem ligeritoPZk_br (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cm
     oodIntroP_br_loop coins base N coin hn hc nonce (sch.n + 1) hN,
     loopG_bridge (fun s : ℕ × FlockComplete.Commit × Array (Array ByteArray) × Array LevelProof × FinalProof =>
       s.1 ≤ sch.n + 1)]
-  all_goals first
-    | exact fun _ => ((bridge base).st Transcript).pure _
-    | (simp (config := { zetaDelta := true }) only []
-       omega)
-    | (repeat (first
-         | extract_lets
-         | (refine PRet.bind fun _ => ?_)
-         | (refine PRet.pure ?_
-            simp (config := { zetaDelta := true }) only [ForInStep.value]
-            omega)
-         | split
-         | (intro _))
-       done)
+  -- `sim_walk` stops at the first goal it can't walk (the loop's start bound, its `PRet` invariant), leaving the loop's
+  -- step and what follows it to the rounds below
+  iterate 3
+    all_goals first
+      | exact fun _ => ((bridge base).st Transcript).pure _
+      | (simp (config := { zetaDelta := true }) only []
+         omega)
+      | (repeat (first
+           | extract_lets
+           | (refine PRet.bind fun _ => ?_)
+           | (refine PRet.pure ?_
+              simp (config := { zetaDelta := true }) only [ForInStep.value]
+              omega)
+           | split
+           | (intro _))
+         done)
+      | sim_walk [liftT_rel (bridge base), squeezeP_br coins base N coin hn hc _ (lt64 (show sch.n ≤ 65536 by omega)),
+      sampleP_br coins base N coin hn hc, sampleKP_br coins base N coin hn hc, sendMsg_rel (bridge base),
+      powP_rel (bridge base), challengeP_br coins base N coin hn hc,
+      oodIntroP_br coins base N coin hn hc nonce _ (sch.n - sch.k0 + 1) (by omega),
+      queryP_br_lv coins base N coin hn hc nonce ms sch hq, commitP_rel (bridge base) h5,
+      pure_st (bridge base), pure_st ((bridge base).st Transcript),
+      oodIntroP_br_loop coins base N coin hn hc nonce (sch.n + 1) hN,
+      loopG_bridge (fun s : ℕ × FlockComplete.Commit × Array (Array ByteArray) × Array LevelProof × FinalProof =>
+        s.1 ≤ sch.n + 1)]
 
 theorem zerocheckCut_br (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout) (mk : ℕ → F128)
     (hm : m - 13 ≤ 65536) :
@@ -342,14 +357,12 @@ theorem repFwC_br (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : By
   refine bridgeT_liftV_bind _ fun lgc hlgc => ?_
   have h3 := FlockSoundness.Discharge.ZkExec.replay_cons_size _ _ _ _ hrp
   have h2 := FlockSoundness.Discharge.ZkExec.ligeritoConstraints_size hlgc
-  sim_walk [innerP_br coins base N coin hn hc]
-  all_goals first
-    | omega
-    | (simp (config := { zetaDelta := true }) only [Array.size_append, List.size_toArray, List.length_cons,
-        List.length_nil, h3, h2]
-       omega)
-    | (simp (config := { zetaDelta := true }) [h3, h2]
-       omega)
+  sim_walk [innerP_br coins base N coin hn hc, cons_size_le]
+  iterate 2
+    all_goals first
+      | exact cons_size_le h3 h2
+      | omega
+      | sim_walk [innerP_br coins base N coin hn hc, cons_size_le]
 
 end
 
