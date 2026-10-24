@@ -32,6 +32,10 @@ A spec-level reference for network accounting's timing channel:
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
   an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
   closed);
+- the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
+  on draws, a served link-window's frame k under the head's frames root is the canonical event of the token id the
+  Commit's token port holds for request ⌊k / F⌋'s output k mod F. It has the reference and one draw's Boolean
+  Definition (`IoTieDraw`: `NetworkFrameRead`, `IoTieEvent`, the port row's `NetworkHidingRead`, `IoTieColumn`);
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
