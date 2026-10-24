@@ -1689,6 +1689,12 @@
   },
   "Properties.RemoteAudit.Line.stretchBound": {
    "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -2612,6 +2618,14 @@
    "Properties.RemoteAudit.Line.stretchBound": {
     "function": "RemoteAudit.Line.line",
     "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
+    "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity": {
+    "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -2625,9 +2639,7 @@
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.RemoteAudit.Line.LineHeld": "unstated: the memory line of record over what the Lean verifier accepts, link-charged; its proof joins the arithmetic link (stretchBound, proved) with the model's argument for HeldOverTimeLinksDrawn from any start in [s_0, e_0], in security_proofs, under the code-to-model premises of Properties.RemoteAudit.Line.Premises",
-   "Properties.RemoteAudit.Line.LineHeldIdentity": "unstated: LineHeld for the time-held line under Identity; its proof is LineHeld's with no link charge"
+   "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
