@@ -30,10 +30,10 @@ import Definitions.Pous.Model.Continuous
 PoUS's frozen statements: claims about a model, an ideal primitive or the model's memory challenger, which no Lean
 function computes, so none has the shape of a property (`Security/Properties/`) yet. Each docstring ends with its
 category. The list only shrinks (`.agents/skills/lean-proofs/SKILL.md`, the rulings of 8 Oct 2026). The lemmas, the
-continuous audit's completeness and the refuted N10 are math rather than claims; they are stated under the same names
-in `Security/Proofs/Pous/Statements.lean`.
+continuous audit's completeness, the refuted N10 and Track A's statements in model M1 are math rather than claims; they
+are stated under the same names in `Security/Proofs/Pous/Statements.lean`.
 
-`grade.sh` grades against these and five of those. A submission proves exactly one of them, as
+`grade.sh` grades against these and six of those. A submission proves exactly one of them, as
 `theorem solution : Pous.Guarantees.<Name>`. Named assumptions (`Security/Models/Pous/Assumptions.lean`) appear as
 hypotheses of the pinned `Prop`, never as axioms. "Pinned as drafted" means the binders and conclusion are the draft's,
 verbatim.
@@ -42,24 +42,6 @@ verbatim.
 namespace Pous.Guarantees
 
 open scoped ENNReal
-
-/-! ## Track A (construction paths §4; sms5 ideal-model review)
-
-A1–A7 are stated in `Security/Proofs/Pous/Statements.lean`. -/
-
-/-- **`m1_meets`, conditional on Conjecture B1′** (sms5 review; red team). In the ideal permutation model M1, the
-scheme with `2^28` blocks of 2048 bits meets the requirement: 117 sequential challenges, `2^20` queries per answer,
-any depth, `ε = 2^-128`. It follows from A2, A3′ and A7′'s first row. B1′ is a hypothesis so that the claim cannot
-be read as one about RW–SMS; in M1 it follows from A2 and A3′.
-
-**It does not transfer to the real RW–SMS scheme at `λ = 128`** (sms5 F1): a 2048-bit `N` factors in about
-`2^112 < 2^128` preprocessing, after which two root extractions answer any challenge within the deadline.
-
-Frozen (conjecture, no-function, hash): it rests on Conjecture B1′, in the ideal permutation model M1. -/
-def M1Meets : Prop :=
-  ∀ D : ℕ,
-    Assumptions.B1Prime (m1 (2 ^ 28) 2048) (2 ^ 2048) ((m1 (2 ^ 28) 2048).stateBound Params.ρ) D (2 ^ 20) 117 →
-    Meets (m1 (2 ^ 28) 2048) .sequential D (2 ^ 20) 117 Params.εMax
 
 /-! ## The dense scheme -/
 

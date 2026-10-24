@@ -15,9 +15,8 @@ id = "llama31-8b-1gpu-pouw-h1"
 # The arm's own gate: every window static (each call inside its S steps and T rows, in order), the credit gate passing
 # every served call, every request entered. One rep: a b32 run is about 290 steps of host commitments.
 #
-# int8_exact's attention refuses a chunked prefill's later chunk (`verity_vllm.engine.int8_ops._requests`), and at T = 64
-# every quick prompt is chunked, so this spec's points fail at their first prefill, in stock-int8 as in H1's arm, until
-# that attention takes chunks. A T that holds each whole prompt multiplies H1's per-step host commitments with it.
+# At T = 64 every quick prompt is chunked: int8_exact's attention takes each chunk as the last rows of its window (#3387),
+# one batched call per layer step over the step's requests (`verity_vllm.engine.int8_ops.paged_attention`).
 arms = ["stock-int8", "pouw:eps1-sm120-h1fx1"]
 sweep = "quick"
 reps = 1

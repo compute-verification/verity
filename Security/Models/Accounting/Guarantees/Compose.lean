@@ -74,9 +74,9 @@ The other guarantees are (L)'s lemmas:
 * `WholeLuckOfEntropy`: `SeedLuckAt`'s whole half from `WholeEntropyAt` (the optional entropy premise), at any rate
   whose per-tile moment at that entropy is at most `1`.
 
-Round 4's `CircuitCreditFS`, a generic Fiat–Shamir form over an abstract service against proofs' `FiatShamirFloor`, is
-retired: the seeded pair takes GRIND's lemmas directly on the circuit's layer. Proofs' Fiat–Shamir layer
-(`FiatShamirFloor`, `ServiceFloorFS`, `SeedExtraction`) is theirs to land, and nothing here reads it.
+Round 4's `CircuitCreditFS`, a generic Fiat–Shamir form over an abstract service, and the abstract Fiat–Shamir floor it
+was to meet (proofs' gap (7), `FiatShamirFloor`) are retired: the seeded pair takes GRIND's lemmas directly on the
+circuit's layer.
 
 `Pouw.Guarantees.EndToEnd` is not subsumed and stays: it is the TT cost model with Fiat–Shamir in the random-oracle
 model, concluding `(1 − ε_s)^t + ε(q, N)`, where `CircuitCredit` is the TS model under live coins (RT-COMPOSE §6).

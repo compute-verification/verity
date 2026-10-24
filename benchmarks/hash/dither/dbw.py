@@ -5,6 +5,9 @@ timelines, sbench's decode rows and the audit's passes, on the host's monotonic 
 Each `--bw-prover-args` entry is a side of its own, one after another (the first registered, used and closed before the
 next prover starts), each with its prover's own options (the default side none: `device.py`'s), the lever under test:
 
+    registration        the prover's calibration, and so the allowance A and the pace's pass, beside the dither arms'
+                        decode ops, run back to back from the side's start to its `ready` (`registered`), as
+                        `node.py` calibrates beside its engines' served load
     session 0           idle: the arms built and gated, nothing generating (the passes' latency without Dither)
     rep r, off block    every arm's ops as without --bw-passes, no session running
     rep r, on block     session 1 + r started first (paced to outlast the block, `paced`), the same ops once its first
@@ -22,7 +25,9 @@ import json
 import math
 import statistics
 import subprocess
+import threading
 from pathlib import Path
+from typing import Callable
 
 HERE = Path(__file__).resolve().parent
 TAMPER = "skip:0.0625"
@@ -87,6 +92,29 @@ class Side:
         self.p.stdin.close()
         self.p.wait()
         return ev
+
+
+def registered(side: Side, serve: Callable[[], dict]) -> tuple[dict, list[dict]]:
+    """The side's `ready`, `serve()` (a block of the dither arms' decode ops) run back to back from the side's start
+    until it comes, and the blocks it returned: the prover calibrates inside its registration, so its passes' high
+    percentile, the allowance taken from it, are those beside Dither serving and not those of an idle GPU."""
+    got: dict = {}
+
+    def wait() -> None:
+        try:
+            got["ready"] = side.expect("ready")
+        except SideError as e:
+            got["error"] = e
+
+    t = threading.Thread(target=wait, daemon=True)
+    t.start()
+    blocks = []
+    while t.is_alive():
+        blocks.append(serve())
+    t.join()
+    if "error" in got:
+        raise got["error"]
+    return got["ready"], blocks
 
 
 def plan(reps: int) -> list[str]:
@@ -164,9 +192,11 @@ def tpot_gamma(dec: list[dict], arms: list[str]) -> dict:
 def report(rows: list[dict], sides: list[dict], arms: list[str]) -> dict:
     """The run's numbers beside the passes: each arm's TPOT off and on and each dither arm's γ (`tpot_gamma`), over
     every side's blocks and each side's own, each side's pass latency idle and by what ran beside it, its sessions'
-    verdicts, whether every on block lay inside its session's passes, and the memory lines. An on row counts only when
-    its whole decode op lies inside its session's passes (`uncovered`, those that don't): one whose passes end in it
-    times its N1 and N2 runs under different loads, and its TPOT is noise (negative even)."""
+    verdicts, whether every on block lay inside its session's passes, what served beside its calibration
+    (`calibrated_beside`: the decode ops from the side's start to its `ready`, the share of that span they decoded, and
+    their TPOT), and the memory lines. An on row counts only when its whole decode op lies inside its session's passes
+    (`uncovered`, those that don't): one whose passes end in it times its N1 and N2 runs under different loads, and its
+    TPOT is noise (negative even)."""
     dec = [x for x in rows if x["op"] == "decode" and "bw" in x]
     k_of = {(side["i"], blk["rep"], blk["phase"]): blk["k"] for side in sides for blk in side.get("blocks", ())}
     passes = {(side["i"], k): s["passes_ns"] for side in sides for k, s in side.get("sessions", {}).items()}
@@ -178,7 +208,7 @@ def report(rows: list[dict], sides: list[dict], arms: list[str]) -> dict:
     timed = [x for x in dec if x["bw"] == "off" or inside(x)]
     uncovered: dict[int, dict[str, int]] = {}
     for x in dec:
-        if x["bw"] != "off" and not inside(x):
+        if x["bw"] not in ("off", "cal") and not inside(x):
             by = uncovered.setdefault(x.get("side"), {})
             by[x["arm"]] = by.get(x["arm"], 0) + 1
     out_sides = []
@@ -207,10 +237,21 @@ def report(rows: list[dict], sides: list[dict], arms: list[str]) -> dict:
                 by.setdefault(label if blk["phase"] == "on" else f"{blk['phase']}:{label}", []).extend(xs)
         idle = sessions.get(0)
         cal = side["ready"]["calibration"]
+        beside = side.get("calibrated_beside")
+        if beside and beside["blocks"]:
+            lo, hi = beside["blocks"][0]["lo"], beside["blocks"][-1]["hi"]
+            ops = [x for x in dec if x.get("side") == side["i"] and x["bw"] == "cal"]
+            beside = {"arms": beside["arms"], "ops": len(ops), "serving_s": round((hi - lo) / 1e9, 3),
+                      "ready_at_s": round((side["ready"]["t_ns"] - lo) / 1e9, 3),
+                      "decoding": round(sum(x["spans_ns"][-1] - x["spans_ns"][0] for x in ops if "spans_ns" in x)
+                                        / (hi - lo), 4),
+                      "tpot_b32_ms": {arm: median([x["tpot_b32_ms"] for x in ops if x["arm"] == arm])
+                                      for arm in beside["arms"]}}
         out_sides.append({
             "i": side["i"], "prover_args": side["prover_args"], "gib": side["ready"]["gib"],
             **tpot_gamma([x for x in timed if x.get("side") == side["i"]], arms),
             "uncovered": uncovered.get(side["i"], {}),
+            "calibrated_beside": beside,
             "blocks": side["ready"]["blocks"], "allowance_ms": round(side["ready"]["allowance_ns"] / 1e6, 3),
             "calibration_pass_ms": {q: round(cal["pass_ns"][q] / 1e6, 4) for q in ("p50", "p99", "p999", "max")
                                     if q in cal.get("pass_ns", {})},

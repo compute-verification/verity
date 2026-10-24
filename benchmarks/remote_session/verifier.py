@@ -487,7 +487,7 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
                 "hbm_bytes": float(r.hbm), "hbm_share": float(r.hbm / node_bytes), "filler_bytes": float(r.filler),
                 "filler_share": float(r.filler / node_bytes)}
 
-    return {"groups": groups, "wrong": wrong, "chip_blocks": chip_bytes / b, "burst_blocks": float(burst),
+    return {"groups": groups, "wrong": wrong, "chip_blocks": -(-chip_bytes // b), "burst_blocks": float(burst),
             "node_bytes": node_bytes, "stretches": stretches, "snapshot": worst(AVERAGE), "time": worst(TIME_HELD)}
 
 
@@ -512,14 +512,29 @@ def recorded_rates(session: dict, registration: dict, **node: float) -> line.Rat
                       wire.codec_named(registration["codec"]).encode_squarings, **node)
 
 
+def recorded_windows(session: dict) -> tuple[list[tuple[int, int]], float]:
+    """The pooled bound's inputs (`pooled.bound`) from an accepted session's record in `verifier.json`: each window's
+    receipts and draws, and δ."""
+    ws = session["record"]["profile"]["windows"]
+    return [(sum(w["lengths"]), w["profile"]["drawn"]["receipt"]) for w in ws], ws[0]["profile"]["delta"]
+
+
+def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> dict:
+    """An accepted paced session's line's inputs from its record in `verifier.json`, in the line's JSON form
+    (`line.inputs_json`, the Lean verifier's `line` request reads them): its groups, against its HBM and `host_bytes`,
+    at `rates` (`recorded_rates`), and its record's windows (`recorded_windows`), whose pooled bound is its wrong
+    receipts."""
+    mem = session["ledger"]["memory"]
+    windows, delta = recorded_windows(session)
+    return line.inputs_json(paced_groups(mem, session["windows_seen"], block_bytes=mem["block_bytes"]),
+                            per=session["pace"]["groups"], blocks=registration["blocks"],
+                            block_bytes=mem["block_bytes"], chip_bytes=mem["chip_bytes"],
+                            node_bytes=mem["hbm_bytes"] + host_bytes, windows=windows, delta=delta, rates=rates)
+
+
 def recorded_line(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> line.Line:
-    """An accepted paced session's line in both forms (`line.line`, exact) from its record in `verifier.json`, against
-    its HBM and `host_bytes`, at `rates` (`recorded_rates`); the pooled wrong receipts are the recorded line's."""
-    lg, mem = session["ledger"], session["ledger"]["memory"]
-    return line.line(paced_groups(mem, session["windows_seen"], block_bytes=mem["block_bytes"]),
-                     per=session["pace"]["groups"], blocks=registration["blocks"], block_bytes=mem["block_bytes"],
-                     chip_bytes=mem["chip_bytes"], node_bytes=mem["hbm_bytes"] + host_bytes,
-                     wrong=lg["paced"]["wrong"], rates=rates)
+    """An accepted paced session's line in both forms (`line.line`, exact) of its `recorded_inputs`."""
+    return line.line(**line.of_json(recorded_inputs(session, registration, host_bytes=host_bytes, rates=rates)))
 
 
 class RealClock:
@@ -1462,10 +1477,11 @@ class Verifier:
                                            ledger.memory(record, stated)).to_json()
                            if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")
                                                                        if n not in readings)})
-        # RateAuditSketch's term: every compression the node's GPUs could make over the span a guess or a key.
+        # SketchBound's δ: every compression the node's GPUs could make over the span a guess or a key.
         compressions = math.ceil(timing.SHA512_PER_S * record.span_ns / 1e9)
         out["sketch_failure"] = {"compressions": compressions,
-                                 "log2": timing.log2(timing.sketch_failure(compressions, record.passes, record.rows))}
+                                 "log2": timing.log2(timing.sketch_failure(compressions, record.passes, record.rows,
+                                                                           blocks=record.blocks))}
         if plans is not None:
             out["memory"] = memory(record, plans, self.regions, hbm_bytes=self.hbm_bytes, rebuild=rebuild,
                                    chip_bytes=timing.CHIP_BYTES)

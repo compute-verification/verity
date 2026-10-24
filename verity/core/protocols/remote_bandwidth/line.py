@@ -16,17 +16,23 @@ once beyond that rate (`Charge`, from the node's rates and bursts: `charges`), s
 from outside the store while the stretch's reads are served:
 
 - held over time: at most S + (2L·R + fill)/Σ registered blocks are absent at an instant, on average over Σ, S the
-  on-chip storage in blocks and `fill` the wrong receipts W spread over the groups lo..hi at v_g = Δ_g/n_g block-ns
+  on-chip storage in blocks rounded up (`ChipCeiling` counts whole blocks, and a block split between a chip and memory
+  is one of them) and `fill` the wrong receipts W spread over the groups lo..hi at v_g = Δ_g/n_g block-ns
   each (L/n_hi in hi), highest first, at most n_g·N in group g;
 - the snapshot: at most (W + R)/P + S are absent at a pass, on average over the passes.
+
+W is the pooled bound of the session's record (`pooled.bound`, the Lean's `RemoteAudit.Pooled`: its windows' receipts
+and draws at δ), so the line reads it from the record's windows, never from a float another module computed.
 
 Each kind is credited its mean blocks a pass less those, in bytes, and at least 0: weights (in HBM), HBM, and filler
 (HBM less the weights, and the host tier).  A reading's line is its worst stretch by weights credited, the first on a
 tie, and its shares are of the node's bytes.  Both forms need every pass to read every registered block (`Covers`): a
 block a pass leaves out can be absent across it with neither a wrong read nor a rebuild.
 
-The JSON form (`inputs_json`, `run_json`) is the Lean's: integers, and each rational a string `n` or `n/d`.  A float
-given here is the rational its shortest decimal writes, which is what its JSON text says (`number`)."""
+The JSON form (`inputs_json`, `run_json`) is the Lean's: integers, each rational a string `n` or `n/d`, and the
+windows a list of [receipts, draws].  A float given here is the rational its shortest decimal writes, which is what its
+JSON text says (`number`), except δ, which is the float's exact value (`pooled.number`): the value the session drew
+at."""
 from __future__ import annotations
 
 import re
@@ -34,6 +40,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any
+
+from . import pooled
 
 TIME_HELD, LINK_CHARGED = "time-held", "link-charged"
 FORMS = (TIME_HELD, LINK_CHARGED)
@@ -245,7 +253,7 @@ def _stretches(groups: Sequence[Group], per: int, N: int, b: int, chip_bytes: in
     e = [max(x.last_ns, s[g + 1]) if g + 1 < G else x.last_ns for g, x in enumerate(groups)]
     L = [eg - sg for eg, sg in zip(e, s)]
     gap = [s[g + 1] - s[g] if g + 1 < G else L[g] for g in range(G)]
-    S = Fraction(chip_bytes, b)
+    S = -(-chip_bytes // b)
     out = []
     for m in range(G // per - 1):
         lo, hi = m * per, (m + 1) * per
@@ -309,10 +317,12 @@ class Form:
 
 @dataclass(frozen=True, slots=True)
 class Line:
-    """A session's line in both forms (`FORMS`), against `node_bytes` of node memory."""
+    """A session's line in both forms (`FORMS`), against `node_bytes` of node memory, with at most `wrong` of its
+    receipts wrong (`pooled.bound`'s W)."""
 
     node_bytes: int
     forms: tuple[Form, Form]
+    wrong: Fraction
 
     def form(self, name: str) -> Form:
         return next(f for f in self.forms if f.name == name)
@@ -322,28 +332,32 @@ class Line:
         return getattr(self.form(form).worst(reading).reading(reading), kind) / self.node_bytes
 
     def to_json(self) -> dict:
-        return {f.name: f.to_json(self.node_bytes) for f in self.forms}
+        return {**{f.name: f.to_json(self.node_bytes) for f in self.forms}, "wrong": text(self.wrong)}
 
 
 def line(groups: Sequence[Group], *, per: int, blocks: int, block_bytes: int, chip_bytes: int, node_bytes: int,
-         wrong: object, rates: Rates) -> Line:
+         windows: Sequence[tuple[int, int]], delta: object, rates: Rates) -> Line:
     """The session's line in both forms on a node of `rates`, `node_bytes` of memory and `chip_bytes` of on-chip
-    storage, with at most `wrong` of its receipts wrong; refused (`Refused`) as the Lean refuses."""
-    W = number(wrong)
+    storage, with at most W of its receipts wrong: the pooled bound of its record's `windows` (each window's receipts
+    and draws) at `delta` (`pooled.bound`, a float δ its exact value); refused (`Refused`) as the Lean refuses."""
+    try:
+        W = pooled.bound(windows, delta).wrong
+    except pooled.Refused as e:
+        raise Refused(str(e)) from None
     _check(groups, per, blocks, block_bytes, node_bytes, W, rates)
     c = charges(rates, block_bytes)
     return Line(node_bytes, tuple(Form(f, c[f], _stretches(groups, per, blocks, block_bytes, chip_bytes, W, c[f]))
-                                  for f in FORMS))
+                                  for f in FORMS), W)
 
 
 # --- the JSON form, the Lean's (`RemoteAudit.Difftest`'s `line`) ------------------------------------------------------
 
 def inputs_json(groups: Sequence[Group], *, per: int, blocks: int, block_bytes: int, chip_bytes: int, node_bytes: int,
-                wrong: object, rates: Rates) -> dict:
+                windows: Sequence[tuple[int, int]], delta: object, rates: Rates) -> dict:
     """`line`'s inputs in the JSON form."""
     return {"block_bytes": block_bytes, "blocks": blocks, "chip_bytes": chip_bytes, "node_bytes": node_bytes,
-            "per": per, "rates": rates.to_json(), "wrong": text(number(wrong)),
-            "groups": [{k: getattr(x, k) for k in GROUP} for x in groups]}
+            "per": per, "rates": rates.to_json(), "windows": [[u, s] for u, s in windows],
+            "delta": text(pooled.number(delta)), "groups": [{k: getattr(x, k) for k in GROUP} for x in groups]}
 
 
 def _field(j: Mapping, k: str) -> Any:
@@ -372,9 +386,14 @@ def of_json(j: Mapping) -> dict:
     if not isinstance(gs, list):
         raise Malformed("groups: not a list")
     r = _field(j, "rates")
+    try:
+        windows, delta = pooled.of_json({k: _field(j, k) for k in ("windows", "delta")})
+    except pooled.Malformed as e:
+        raise Malformed(str(e)) from None
     return {"groups": [Group(*(_nat(x, k) for k in GROUP)) for x in gs],
             "per": _nat(j, "per"), "blocks": _nat(j, "blocks"), "block_bytes": _nat(j, "block_bytes"),
-            "chip_bytes": _nat(j, "chip_bytes"), "node_bytes": _nat(j, "node_bytes"), "wrong": _rational(j, "wrong"),
+            "chip_bytes": _nat(j, "chip_bytes"), "node_bytes": _nat(j, "node_bytes"), "windows": windows,
+            "delta": delta,
             "rates": Rates(*(_rational(r, k) for k in RATES[:1]), _nat(r, "encode_squarings"),
                            *(_rational(r, k) for k in RATES[1:]))}
 
