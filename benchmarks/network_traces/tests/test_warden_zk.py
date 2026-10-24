@@ -4,7 +4,8 @@ read the egress cells of the connection admitted in the link-window with the mos
 from the wiring and the schedule alone, each at its bucket's row and the slot the warden's wiring places it; each
 member's statement is accepted or refused by the host's read of Lean's registered reads exactly as the member says
 (sender and receiver accepted; unsigned and altered by their rows; pad and swapped, made for other units' wiring, by
-their value, swapped at the Program's own rows; pad-named, under the Program's value, by its row's position); the toy
+their value, swapped at the Program's own rows; pad-named, under the Program's value, by its row's position); the
+scan's public pieces hold every pad the warden wrote, pad's read among them, and none of the Program's cells; the toy
 unit is the identity on a row's bits. Nothing here lowers or proves (`warden_zk.prove` does, on a node)."""
 
 from __future__ import annotations
@@ -107,6 +108,19 @@ def test_each_members_statement_is_read_as_the_member_says(at):
     assert [WR.opens(unsigned.own.domain, unsigned.own.root, q, WR.bc(r, s), bytes.fromhex(path))
             for q, r, s, path in zip(at.positions, unsigned.rows, unsigned.salts, unsigned.entry["paths"])] == \
         [True] * UNITS
+
+
+def test_the_scans_public_pieces_hold_every_pad_and_none_of_the_programs_cells(at):
+    B = tws.PARAMS.cell_bytes
+    known = wz.pad_cells(at)
+    pads = {known[k:k + B] for k in range(0, len(known), B)}
+    assert len(pads) == len(at.opening.wiring.connections) and {c[0] for c in pads} == {PAD}
+    written = {r[k:k + B] for r in at.opening.rows for k in range(0, len(r), B)}
+    assert {c for c in written if c[0] == PAD and any(c)} == pads & written and pads & written
+    pad = wz.member_rows("pad", at)
+    (_, j), = at.opening.wiring.place(tws.PARAMS, [pad.units.cells[0]])
+    assert pad.rows[0][j * B:(j + 1) * B] in pads
+    assert not any(wz.cell_of(at, at.opening.rows[t], i) in pads for i, t in enumerate(at.positions))
 
 
 def test_the_toy_unit_is_the_identity_on_a_rows_bits(at):
