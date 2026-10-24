@@ -7,7 +7,8 @@ Each configuration is one run of three processes on the host's monotonic clock, 
   falls in, so the ingress certifier enqueues it at ⌈t/τ_in⌉, `replay.py`'s
   model; it reads the wire and keeps one SHA-256 per window of it;
 - **the proxy**, `active.Proxy` at the calibration's r, r_in, B and Σ_sync, with the prover's syncs given before the run;
-  it publishes every record raw and committed (`commitment.commit`) from a worker thread;
+  it publishes every record raw and committed (`commitment.commit`) from a worker thread, and the server gets each
+  request with its place in the release order (`ReleaseProxy`, `release`), which no frame or record holds;
 - **the server**, an OpenAI-compatible endpoint: a request reaching it in bucket R gets the trace's token emissions,
   frame k as one server-sent event written in the middle of bucket R + d_k − 1, where d_k is the frame's
   `ready − anchor` in the trace. An event's `id:` is its position in the canonical order (ready, anchor, session, k),
@@ -142,6 +143,7 @@ from verity.core.protocols.certifier.active import (
 )
 from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.calibration import choose_syncs
+from verity.core.protocols.certifier.release import release_head, release_of, with_release
 from verity.core.protocols.certifier.commitment import CommittedRecord, commit
 from verity.core.protocols.certifier.grid import (
     COMPLETE,
@@ -830,10 +832,10 @@ def compact_records(sse: bytes, request: int, eos: frozenset = frozenset(), star
                     max_tokens: int | None = None) -> list[bytes]:
     """A vLLM server-sent event as compact records (`active.compact_record`) of request `request`, one a sampled token
     as `id_events` has them, `start` the response's outputs before it: an EOS id (`eos`), or the last of a chunk whose
-    `finish_reason` is "stop", is the stop record, and the response's `max_tokens`-th output, or the last of a chunk
-    whose `finish_reason` is "length", carries `COMPACT_LAST`. vLLM v1 sends a merged chunk's finish in a chunk of no
-    tokens after it, so the count marks a response that ends at `max_tokens`; one that ends short of it by length (at
-    the model's context) is left unmarked, which the certified I/O refuses."""
+    `finish_reason` is "stop", is the stop record, which carries that id, and the response's `max_tokens`-th output,
+    or the last of a chunk whose `finish_reason` is "length", carries `COMPACT_LAST`. vLLM v1 sends a merged chunk's
+    finish in a chunk of no tokens after it, so the count marks a response that ends at `max_tokens`; one that ends
+    short of it by length (at the model's context) is left unmarked, which the certified I/O refuses."""
     ids = chunk_tokens(sse) or []
     finish = None
     for line in sse.split(b"\n"):
@@ -844,7 +846,7 @@ def compact_records(sse: bytes, request: int, eos: frozenset = frozenset(), star
     for k, t in enumerate(ids):
         end = finish if k == len(ids) - 1 else None
         if t in eos or end == "stop":
-            out.append(compact_record(request, None, "stop"))
+            out.append(compact_record(request, t, "stop"))
         else:
             last = end == "length" or max_tokens is not None and start + k + 1 == max_tokens
             out.append(compact_record(request, t, "length" if last else None))
@@ -866,7 +868,8 @@ class LiveServer:
     """A live OpenAI endpoint inside the boundary, behind a shim: `handle` serves one stream's connection by sending its
     request (less its padding, and less `user`, which names the session, but on a varied plan, so that an endpoint
     that records it, as serve-openai's ``requests.jsonl`` does, names each request as the certified I/O does and
-    `verity-vllm advice` takes it as the advice's request id) to the endpoint at `upstream`, and writing back the
+    `verity-vllm advice` takes it as the advice's request id; with the certifier's release headers, `release`, copied
+    on and logged by session in `released`) to the endpoint at `upstream`, and writing back the
     text of each completion chunk of the response as canonical events (`canonical_events`), each with `id:` its
     position in write order, the HTTP head with the first. Every event
     written is logged as (position, session, k, the bucket it was written in, its bytes). From 1.5 buckets before the
@@ -919,7 +922,8 @@ class LiveServer:
         self.writers: set = set()
         self.events: list[tuple[int, str, int, int, bytes]] = []
         self.log = {"receipt_late_ms": [], "batch_late_ms": [], "late_registrations": 0, "requests": 0, "events": 0,
-                    "failed": [], "cut_at_horizon": 0, "first_event_ms": [], "server": "live", "padded": []}
+                    "failed": [], "cut_at_horizon": 0, "first_event_ms": [], "server": "live", "padded": [],
+                    "released": []}
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.writers.add(writer)
@@ -944,7 +948,7 @@ class LiveServer:
         self.open += 1
         ticket, self.tickets = self.tickets, self.tickets + 1
         try:
-            await self._serve(body, writer, ticket, ordinal)
+            await self._serve(body, writer, ticket, ordinal, release_of(head))
         except (asyncio.IncompleteReadError, ConnectionError, OSError, ValueError) as e:
             self.log["failed"].append(repr(e)[:200])
         finally:
@@ -1013,18 +1017,21 @@ class LiveServer:
                    else canonical_events(b'data: {"choices":[{"text":" extra"}]}\n\n'))
 
     async def _serve(self, body: dict, writer: asyncio.StreamWriter, ticket: int = 0,
-                     ordinal: int | None = None) -> None:
+                     ordinal: int | None = None, release: tuple[int, bytes | None] | None = None) -> None:
         received = self.clock() - self.origin
         self.log["requests"] += 1
         self.log["receipt_late_ms"].append(round((received % self.tau) * 1000, 3))
         name = body.pop("user")
+        if release is not None:
+            self.log["released"].append([name, release[0]])
         raw = json.dumps(body | ({"user": name} if self.forward_user else {}) | self.upstream_fields,
                          separators=(",", ":")).encode()
         up_reader, up_writer = await asyncio.open_connection(*self.upstream[:2], limit=1 << 22, ssl=self.tls)
         try:
             up_writer.write(b"POST " + self.path + b" HTTP/1.1\r\nhost: %s:%d\r\ncontent-type: application/json\r\n"
-                            b"%scontent-length: %d\r\nconnection: close\r\n\r\n" % (
-                                self.upstream[0].encode(), self.upstream[1], self.authorization, len(raw)) + raw)
+                            b"%s%scontent-length: %d\r\nconnection: close\r\n\r\n" % (
+                                self.upstream[0].encode(), self.upstream[1], self.authorization,
+                                b"" if release is None else release_head(*release), len(raw)) + raw)
             up_head = await up_reader.readuntil(b"\r\n\r\n")
             if not up_head.startswith((b"HTTP/1.1 200", b"HTTP/1.0 200")):
                 self.log["failed"].append(up_head.split(b"\r\n")[0].decode(errors="replace"))
@@ -1290,6 +1297,39 @@ def prover_args(plan: dict, setup: Setup, background: bool = True) -> dict:
             "executor": worker() if background else InlineExecutor()}
 
 
+class ReleaseQueue(asyncio.Queue):
+    """A request's queue to the server (a `Proxy` stream's `out`): its bytes are held until its head is whole, or its
+    last byte, then put as `release.with_release` gives them for release `n` of run `run`; the rest passes as it
+    comes."""
+
+    def __init__(self, n: int, run: bytes) -> None:
+        super().__init__()
+        self.n, self.run, self.head = n, run, bytearray()
+
+    def put_nowait(self, item: tuple[bytes, bool]) -> None:
+        if self.head is None:
+            return super().put_nowait(item)
+        data, last = item
+        self.head += data
+        if last or b"\r\n\r\n" in self.head:
+            data, self.head = with_release(bytes(self.head), self.n, self.run), None
+            super().put_nowait((data, last))
+
+
+class ReleaseProxy(Proxy):
+    """`active.Proxy` whose server gets each request with the release order (`release.with_release`) under the proxy's
+    `run_id`: request s on the link (`active.Requests`' stream s) is release s − 1, since a request ends on the link
+    before the next starts and the ingress tick counts each at its end (`requests_released`). The link, its frames and
+    the records are `Proxy`'s: only the server's copy of a request changes."""
+
+    def _stream(self, s: int):
+        new = s not in self.streams
+        st = super()._stream(s)
+        if new:
+            st.out = ReleaseQueue(s - 1, self.run_id)
+        return st
+
+
 class Stalls(asyncio.Event):
     """Test-only (`--stall`): the proxy's change event, which pauses the proxy right after an ingress tick has released
     a request and before the proxy writes it upstream, once for each (bucket, seconds): at the first such tick at or
@@ -1384,12 +1424,12 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
             done.set_result(None)
 
         def make() -> Proxy:
-            return Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set, syncs, origin=origin,
-                         publish=publish, egress_link=setup.egress_link, ingress_link=setup.ingress_link,
-                         salt=fresh_salt if salt else None, reveal_deadline=reveal_deadline(plan, window_s),
-                         ordinals=bool(plan.get("token_ids")), compact=bool(plan.get("compact")), **advice,
-                         **phase_args(plan, start, end),
-                         **served_args(plan, salt))
+            return ReleaseProxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set, syncs,
+                                origin=origin, publish=publish, egress_link=setup.egress_link,
+                                ingress_link=setup.ingress_link, salt=fresh_salt if salt else None,
+                                reveal_deadline=reveal_deadline(plan, window_s), ordinals=bool(plan.get("token_ids")),
+                                compact=bool(plan.get("compact")), **advice, **phase_args(plan, start, end),
+                                **served_args(plan, salt))
 
         if k == 0:
             listening = await asyncio.start_server(on_link, host, port)
@@ -1563,9 +1603,9 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
         args = {"salt": fresh_salt if salt else None, "ordinals": bool(plan.get("token_ids")),
                 "compact": bool(plan.get("compact")),
                 "reveal_deadline": reveal_deadline(plan, e.buckets * e.bucket_ms / 1000)} | proxy_args
-        proxy = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, syncs, origin=0.0, clock=clock,
-                      sleep=clock.sleep, publish=publish, egress_link=setup.egress_link,
-                      ingress_link=setup.ingress_link, **args, **advice, **phase_args(plan, start, end))
+        proxy = ReleaseProxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, syncs, origin=0.0,
+                             clock=clock, sleep=clock.sleep, publish=publish, egress_link=setup.egress_link,
+                             ingress_link=setup.ingress_link, **args, **advice, **phase_args(plan, start, end))
         if stalls and k == 0:
             proxy._changed = Stalls(proxy, stalls, lambda seconds: clock.advance(clock.now + seconds))
         proxies.append(proxy)

@@ -96,31 +96,35 @@ def test_an_id_event_is_one_template_its_ordinal_and_token_id_at_fixed_places():
 
 
 @pytest.mark.parametrize("frame_bytes", [8, 16, 256])
-def test_a_compact_record_is_eight_bytes_its_finish_in_reserved_token_fields(frame_bytes):
+def test_a_compact_record_is_eight_bytes_its_finish_in_the_token_fields_flags(frame_bytes):
     """A compact record is the ordinal and the token field, u32be each: the id while more follow, the id with
-    `COMPACT_LAST` at max_tokens, `COMPACT_EOS` at a stop token. Its cell is the record zero-filled to B, the compact
-    template's (nothing before or after the record but zeros), never padding, and `compact_record_data` gives back
-    exactly what `compact_record` wrote and nothing else: so under the K-draw tie only the token field's 32 bits of an
-    unchecked cell are the server's."""
+    `COMPACT_LAST` at max_tokens, and the id with `COMPACT_LAST` and `COMPACT_STOP` at a stop token, so a stop carries
+    the EOS id the model sampled. Its cell is the record zero-filled to B, the compact template's (nothing before or
+    after the record but zeros), never padding, and `compact_record_data` gives back exactly what `compact_record`
+    wrote and nothing else: so under the K-draw tie only the token field's 32 bits of an unchecked cell are the
+    server's. A field with `COMPACT_STOP` and not `COMPACT_LAST` is no record's; all ones is a stop on id 2^30 − 1."""
     p, s, prefix, suffix = active.compact_placement(frame_bytes)
     assert (p, s, prefix, suffix) == (0, active.COMPACT_RECORD.size, b"", b"") and active.COMPACT_RECORD.size == 8
+    assert (active.COMPACT_LAST, active.COMPACT_STOP) == (1 << 31, 1 << 30)
     cases = [((1, 0, None), b"\0\0\0\x01\0\0\0\0"),
              ((7, 128006, None), (7).to_bytes(4, "big") + (128006).to_bytes(4, "big")),
              ((7, 128006, "length"), (7).to_bytes(4, "big") + (128006 | 1 << 31).to_bytes(4, "big")),
-             ((2**32 - 1, None, "stop"), b"\xff" * 8), ((3, 2**31 - 2, "length"), b"\0\0\0\x03\xff\xff\xff\xfe")]
+             ((2**32 - 1, 128009, "stop"), b"\xff" * 4 + (128009 | 3 << 30).to_bytes(4, "big")),
+             ((3, 2**30 - 1, "length"), b"\0\0\0\x03\xbf\xff\xff\xff"),
+             ((3, 2**30 - 1, "stop"), b"\0\0\0\x03" + b"\xff" * 4), ((3, 0, "stop"), b"\0\0\0\x03\xc0\0\0\0")]
     for (request, token_id, finish), raw in cases:
         record = active.compact_record(request, token_id, finish)
         cell = active.compact_cell(record, frame_bytes)
         assert record == raw and len(cell) == frame_bytes and cell[s:] == bytes(frame_bytes - s) != cell
         assert active.compact_record_data(cell) == active.compact_record_data(record) == (request, token_id, finish)
         assert active.compact_unit(5, record) == b"\0\0\0\x05" + record
-    for bad in ((0, 1, None), (1, 2**31 - 1, None), (1, 2**31, None), (1, -1, None), (True, 1, None), (1, 7, "stop"),
-                (1, None, None), (1, 7, "eos")):
+    for bad in ((0, 1, None), (1, 2**30, None), (1, 2**31, None), (1, 2**30, "stop"), (1, -1, None), (True, 1, None),
+                (1, None, "stop"), (1, None, None), (1, 7, "eos")):
         with pytest.raises(ValueError):
             active.compact_record(*bad)
     record = active.compact_record(7, 42)
-    for other in (bytes(8), (0).to_bytes(4, "big") + record[4:], record[:4] + b"\x7f\xff\xff\xff", record[:7],
-                  active.compact_cell(record, frame_bytes) + b"\x01"):
+    for other in (bytes(8), (0).to_bytes(4, "big") + record[4:], record[:4] + b"\x7f\xff\xff\xff",
+                  record[:4] + b"\x40\0\0\x2a", record[:7], active.compact_cell(record, frame_bytes) + b"\x01"):
         assert active.compact_record_data(other) is None
     with pytest.raises(ValueError):
         active.compact_cell(record, 7)
@@ -129,7 +133,7 @@ def test_a_compact_record_is_eight_bytes_its_finish_in_reserved_token_fields(fra
 def test_compact_units_cut_a_connection_by_its_bytes_alone():
     """A compact server connection is its HTTP head through `\\r\\n\\r\\n`, then 12-byte (position, record) units:
     fed in one read, a byte a read or at random cuts, it gives the same units, and keeps a partial one uncut."""
-    records = [active.compact_record(3, t) for t in (5, 6)] + [active.compact_record(3, None, "stop")]
+    records = [active.compact_record(3, t) for t in (5, 6)] + [active.compact_record(3, 128009, "stop")]
     data = HEAD + b"".join(active.compact_unit(p, r) for p, r in zip((4, 9, 10), records)) + b"\0\0"
     rng = random.Random(1)
     for cuts in ([len(data)], [1] * len(data), [rng.randrange(1, 20) for _ in range(len(data))]):
@@ -803,7 +807,7 @@ def compact_of(session: str, index: int, n: int) -> bytes:
     """Output `index` of `session`'s n as a compact record: session c's response ends at a stop token, the others at
     max_tokens."""
     stream, finish = ORDINAL_OF[session], None if index < n - 1 else "stop" if session == "c" else "length"
-    return active.compact_record(stream, None if finish == "stop" else 1000 * stream + index, finish)
+    return active.compact_record(stream, 1000 * stream + index, finish)
 
 
 def compact_write(session: str, index: int, n: int, position: int) -> bytes:
@@ -832,8 +836,8 @@ def test_compact_records_over_sockets_are_b_byte_cells_and_the_run_is_accepted(c
     assert proxy.shaper.hands == honest_proxy.shaper.hands and proxy.frames == honest_proxy.frames
     assert wire == expected_wire(frames, SYNCS, egress) and len(wire) * B == len(honest_wire) * cell
     cells = [active.compact_record_data(f) for r in out for row in r.grid for f in row[:row_count(row)]]
-    assert cells == [(ORDINAL_OF[name], None, "stop") if (name, k) == ("c", n - 1) else
-                     (ORDINAL_OF[name], 1000 * ORDINAL_OF[name] + k, "length" if k == n - 1 else None)
+    assert cells == [(ORDINAL_OF[name], 1000 * ORDINAL_OF[name] + k,
+                      None if k < n - 1 else "stop" if name == "c" else "length")
                      for _, _, name, k, _, n in ROWS[:len(cells)]]
     assert {c[2] for c in cells} == {None, "length", "stop"}
 

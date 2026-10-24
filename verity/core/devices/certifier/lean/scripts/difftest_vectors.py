@@ -52,12 +52,17 @@ windows per PoUW window, salts of 64 to 512 bits, ingress frames of 96 or 128 by
 after the tick that releases the first salt frame and each salt drained a little after its frame's release; a restart
 (`Proxy(start=…, position=…)`, at a window 1 … W − 1, its first egress frame at position 0, 1, 5 or 17); a served link
 (`Proxy(served=…)`: grids that share T and τ, each request F_in frames and each response F, every response frame ready
-by the smallest δ, under syncs whose start window the admission rule accepts); and the salt with a restart or a served
-link. The online prover's paths are neither restarted nor served. The salt's own paths: its connection refused, which
-faults the ingress window `delivery-refused`, and a salt drained a window late or never (`salt-stall`), which faults
-nothing; a restart's: an event at a position before the restart's (`stale`, malformed). Link garbage includes a salt
-frame read from the link, never the certifier's. The tick that releases each request frame and each salt frame is the
-real `active.Bucketer`'s on the trace's arrivals.
+by the smallest δ, under syncs whose start window the admission rule accepts); the salt with a restart or a served
+link; ordinals (`Proxy(ordinals=True)`: each server connection opens with its stream's `ORDINAL` header); and compact
+records (`Proxy(compact=True)`, alone, salted or restarted, egress frames of 8, 12 or 48 bytes: each server connection
+an HTTP response head, then a (position, record) unit per output, `active.compact_unit`, its record naming its stream,
+the last carrying `COMPACT_LAST`, and a stop's `COMPACT_STOP` too), where the malformed inputs are a record that isn't
+one (`no-id`, a stop's flag without the last's among them), one naming another request (`long`) and a unit cut short
+at a stream's end (`trailing`). The online prover's paths are neither restarted nor served. The salt's own paths: its
+connection refused, which faults the ingress window `delivery-refused`, and a salt drained a window late or never
+(`salt-stall`), which faults nothing; a restart's: an event at a position before the restart's (`stale`, malformed).
+Link garbage includes a salt frame read from the link, never the certifier's. The tick that releases each request
+frame and each salt frame is the real `active.Bucketer`'s on the trace's arrivals.
 """
 from __future__ import annotations
 
@@ -73,6 +78,9 @@ import verity.core.protocols.certifier
 from verity.core.protocols.certifier import online
 from verity.core.protocols.certifier.active import (
     CANONICAL_STREAM,
+    COMPACT_LAST,
+    COMPACT_RECORD,
+    COMPACT_STOP,
     DATA,
     PAD,
     PLACEHOLDER,
@@ -81,6 +89,9 @@ from verity.core.protocols.certifier.active import (
     Bucketer,
     InlineExecutor,
     Proxy,
+    compact_cell,
+    compact_record,
+    compact_unit,
     encode_frame,
     event_body,
     request_frames,
@@ -90,7 +101,7 @@ from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, 
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
 from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
 
-COUNT = 1500
+COUNT = 2400
 MS = 1_000_000
 MARGIN = 10_000
 RHOS = [Fraction(1), Fraction(2), Fraction(1, 2), Fraction(1, 3), Fraction(3, 2)]
@@ -101,9 +112,10 @@ PATHS = ["honest", "honest", "honest", "late-tick", "stall", "backlog", "overrun
 PERTURBATIONS = [p for p in dict.fromkeys(PATHS)
                  if p not in ("honest", "chaos", "prover", "early-tick", "duplicate-at-capacity", "salt-refused",
                               "salt-stall", "stale")]
-#: what the proxy is built with, beside its grids and syncs: the salt, a restart, a served link's admission rule, each
-#: path run under each in turn (`mode`)
-MODES = ["plain", "salt", "restart", "served", "plain", "salt-served", "salt-restart", "served"]
+#: what the proxy is built with, beside its grids and syncs: the salt, a restart, a served link's admission rule,
+#: ordinals and compact records, each path run under each in turn (`mode`)
+MODES = ["plain", "salt", "restart", "served", "plain", "salt-served", "salt-restart", "served", "ordinals", "compact",
+         "salt-compact", "compact-restart"]
 NEVER = 1 << 20  # the release tick of a request the ingress side never releases
 
 
@@ -328,7 +340,8 @@ async def drive(h: Harness, inst: dict) -> dict:
                             executor=InlineExecutor(), salt=None if salt is None else lambda p, n: values[p],
                             salt_bits=512 if salt is None else salt["bits"],
                             pouw_window=1 if salt is None else salt["pouw_window"], start=c["start"],
-                            position=c["position"], served=served_of(c["served"]))
+                            position=c["position"], served=served_of(c["served"]), ordinals=c["ordinals"],
+                            compact=c["compact"])
     running = asyncio.create_task(proxy.run(LinkReader(h), LinkWriter(h)))
     await settle()
     for ev in inst["events"]:
@@ -392,10 +405,12 @@ class Trace:
     def __init__(self, rng: random.Random, path: str, mode: str = "plain") -> None:
         self.rng, self.path = rng, path
         self.salted, self.restarted, self.served = "salt" in mode, "restart" in mode, "served" in mode
+        self.compact = "compact" in mode
+        self.ordinals = self.compact or "ordinals" in mode
         self.tau = 100
         self.T = rng.choice([6, 8]) if self.served else rng.choice([3, 4, 5])
         self.r = rng.choice([1, 2, 3])
-        self.B = rng.choice([48, 64, 96])
+        self.B = rng.choice([8, 12, 48]) if self.compact else rng.choice([48, 64, 96])
         self.tau_in, self.T_in = (self.tau, self.T) if self.served or rng.random() < 0.6 else \
             (self.tau // 2, 2 * self.T)
         self.r_in = rng.choice([1, 2])
@@ -584,9 +599,24 @@ class Trace:
         return [wire[j * self.B_in : (j + 1) * self.B_in] for j in range(x.parts)]
 
     def response(self, x: Session, k: int) -> bytes:
+        if self.compact:
+            return self.unit(x, k, x.positions[k], self.record(x, k))
         head = b"HTTP/1.1 200 OK\r\n\r\n" if x.head and k == 0 else b""
         event = head + x.ids % x.positions[k] + b"data: %d-%d\n\n" % (x.stream, k)
         return event if 9 + len(event_body(event)) <= self.B else b"id:%d\n\n" % x.positions[k]
+
+    def record(self, x: Session, k: int) -> bytes:
+        """Its k-th output's compact record: a token id, and the last a stop (odd streams) or the length's mark."""
+        token = (x.stream * 7919 + k * 104729) % COMPACT_STOP
+        if k < len(x.delays) - 1:
+            return compact_record(x.stream, token)
+        return compact_record(x.stream, token, "stop" if x.stream % 2 else "length")
+
+    def unit(self, x: Session, k: int, position: int, record: bytes) -> bytes:
+        """What a compact server writes for its k-th output: the response head first, then the unit."""
+        head = (b"HTTP/1.1 200 OK\r\ncontent-type: application/octet-stream\r\n\r\n" if x.head else
+                b"HTTP/1.1 200 OK\r\n\r\n") if k == 0 else b""
+        return head + compact_unit(position, record)
 
     def events(self) -> list[list]:
         ev: list[tuple[int, int, list]] = list(self.extra)
@@ -655,14 +685,16 @@ class Trace:
                 "sync_set": {"deltas": self.deltas, "rhos": [[r.numerator, r.denominator] for r in self.rhos]},
                 "syncs": [sync_json(s) for s in self.syncs], "windows": self.windows, "origin": self.origin,
                 "slack": self.slack, "prover": self.prover, "egress_link": "responses", "ingress_link": "requests",
-                "salt": salt, "served": served, "start": self.start, "position": self.position}
+                "salt": salt, "served": served, "start": self.start, "position": self.position,
+                "ordinals": self.ordinals, "compact": self.compact}
 
     def program(self) -> list[list]:
         frames = []
         for _, _, _, k, i in self.sessions_order:
             x = self.sessions[i]
-            frames.append([encode_frame(DATA, CANONICAL_STREAM, event_body(self.response(x, k)), self.B).hex(), x.anchor,
-                           k])
+            frame = compact_cell(self.record(x, k), self.B) if self.compact else \
+                encode_frame(DATA, CANONICAL_STREAM, event_body(self.response(x, k)), self.B)
+            frames.append([frame.hex(), x.anchor, k])
         return frames
 
     # the paths
@@ -726,7 +758,8 @@ class Trace:
             _, j, k = rng.choice(reads[:q])
             self.Q = q
             dup = self.at(t + MARGIN)
-            data = b"id: %d\ndata: dup\n\n" % xs[j].positions[k]
+            data = compact_unit(xs[j].positions[k], compact_record(xs[i].stream, 1)) if self.compact else \
+                b"id: %d\ndata: dup\n\n" % xs[j].positions[k]
             self.extra.append((dup, 0, ["upstream", xs[i].stream, dup, data.hex()]))
         elif path == "early-tick":  # the request's tick read early, and its first event read before its anchor's bucket
             x = min(xs, key=lambda y: y.positions[0] if y.positions else 1 << 60)
@@ -754,7 +787,18 @@ class Trace:
             if not x.times:
                 return
             k = rng.randrange(len(x.times))
-            if path == "no-id":
+            if self.compact:  # a record that isn't one, the same output's at another's position, one of another request
+                if path == "no-id":
+                    record = COMPACT_RECORD.pack(*rng.choice([(0, 5), (0, COMPACT_LAST | COMPACT_STOP | 5),
+                                                              (x.stream, COMPACT_STOP | 5),
+                                                              (x.stream, COMPACT_LAST - 1)]))
+                    data = self.unit(x, k, x.positions[k], record)
+                elif path == "duplicate":
+                    others = [p for y in xs for p in y.positions if p != x.positions[k]]
+                    data = self.unit(x, k, rng.choice(others) if others else x.positions[k], self.record(x, k))
+                else:
+                    data = self.unit(x, k, x.positions[k], compact_record(x.stream + 1 + rng.randrange(3), 5))
+            elif path == "no-id":
                 data = rng.choice([b"data: %d\n\n" % k, b"id:\ndata: %d\n\n" % k, b"id: x%d\n\n" % k, b"id: -%d\n\n" % k,
                                    b"ide: %d\n\n" % x.positions[k], b"data: 1\nid: \nid: %d\n\n" % x.positions[k]])
             elif path == "duplicate":
@@ -768,7 +812,8 @@ class Trace:
             x.parts = 1 if rng.random() < 0.5 else 2
             x.data_only = True
         elif path == "trailing":
-            x.trailing = rng.choice([b"id: 99\ndata: cut", b"\n", b"x"])
+            x.trailing = rng.choice([bytes(1), bytes(5), bytes(11)] if self.compact else
+                                    [b"id: 99\ndata: cut", b"\n", b"x"])
         elif path == "link-garbage":
             for _ in range(rng.randint(1, 3)):
                 kind = rng.randrange(6)
@@ -796,7 +841,9 @@ class Trace:
         elif path == "stale":  # an event at a position before the restart's: malformed
             if x.times:
                 k = rng.randrange(len(x.times))
-                x.replace = {x.times[k]: b"id: %d\ndata: stale\n\n" % rng.randrange(self.position)}
+                stale = rng.randrange(self.position)
+                x.replace = {x.times[k]: self.unit(x, k, stale, self.record(x, k)) if self.compact else
+                             b"id: %d\ndata: stale\n\n" % stale}
         else:
             raise ValueError(path)
 
@@ -855,7 +902,7 @@ def mode_of(seed: int, path: str) -> str:
     if path == "stale" and "restart" not in mode:
         mode = "restart"
     if path in ("prover", "early-tick"):
-        mode = "salt" if "salt" in mode else "plain"
+        mode = "-".join(m for m in mode.split("-") if m not in ("restart", "served")) or "plain"
     return mode
 
 

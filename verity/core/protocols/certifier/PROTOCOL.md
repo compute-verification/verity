@@ -1145,18 +1145,19 @@ them.
     frame's content is fixed by the bytes and never by how they were read. Its `id:` is its position in the Program's
     canonical order. An id event (`id_event`, 159 bytes, a 256-byte frame with its header) is one sampled token's
     request ordinal and id in decimal fields of a fixed JSON template.
-  - **Compact records** (`Proxy(compact=True)`, which takes `ordinals`; experimental). After its HTTP response head
+  - **Compact records** (`Proxy(compact=True)`, which takes `ordinals`). After its HTTP response head
     the server writes one 12-byte unit a sampled token (`compact_unit`, cut by `CompactUnits`): u32be its position in
     the canonical order, then its 8-byte record (`compact_record`), u32be the request's ingress ordinal (≥ 1, its
     stream on the link) and u32be the token field:
 
     | token field | the output | finish |
     |---|---|---|
-    | id, below 2^31 − 1 | a token, more follow | none |
+    | id, below 2^30 | a token, more follow | none |
     | 2^31 + id (`COMPACT_LAST`) | the response's last, at `max_tokens` | `length` |
-    | 2^32 − 1 (`COMPACT_EOS`) | a sampled stop token, whichever of the model's EOS ids | `stop` |
+    | 2^31 + 2^30 + id (`COMPACT_LAST`, `COMPACT_STOP`) | a sampled stop token, its id the EOS id sampled | `stop` |
 
-    The frame is the record zero-filled to B, with no header (`compact_cell`), so B can be 8. Its template
+    A field from 2^30 to 2^31 − 1 is no record's. The frame is the record zero-filled to B, with no header
+    (`compact_cell`), so B can be 8. Its template
     (`compact_placement`) is the record at bytes 0 … 8 and zero after it, and no record is padding, since the ordinal
     is at least 1. The proxy faults the window `malformed` on a unit whose record isn't one (`compact_record_data`) or
     names another request than its connection's, and on bytes left uncut at the stream's end. A cell's ordinal is
@@ -1167,19 +1168,27 @@ them.
     vLLM's stream text).
     - **Numbering.** The ordinal is at least 1 on the wire, and the I/O tie reads advice v0's request q as ordinal
       q + 1.
-    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_EOS` are well-formed records, and the certifier commits
-      whatever finish the server writes: one of three states (none, `length`, `stop`) at each response's end, where an
-      id event marks the end out of band. The check that refuses a wrong finish is the I/O tie's, against the advice:
-      request q's cells are its `output_len` outputs, none marked but the last, which is `stop` where the advice's
-      `finish` is `eos` and `length` where it is `length` (`compact_finish_violations`). A stop record stands for the
-      advice's EOS output, whose id it doesn't carry. IO-TIE's egress tie holds each compact cell's token field to
-      this rule as well as to its id. The rehearsal's certified I/O (`certifier_serve.certified_io`) has no advice and
-      checks the marks against `max_tokens` and EOS alone, so it can't tell a stop on the last token at `max_tokens`
-      from a `length` finish.
-    - **Not of record.** Neither the Lean device port (`CertifierDevice`), the head model nor N3's templates model
-      compact cells yet, and the verifier takes no form its proof doesn't cover, so no verdict of record runs on
-      compact framing: the gate's rehearsal takes no such option, and gains none before the Lean certifier covers
-      compact cells.
+    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_STOP` are flags of well-formed records, and the
+      certifier commits whatever ids and finish the server writes: one of three states (none, `length`, `stop`) at
+      each response's end, where an id event marks the end out of band. A stop carries the EOS id the model sampled,
+      so where a response stops can be checked as an id event's can. The rehearsal's certified I/O
+      (`certifier_serve.certified_io`) refuses a mark before a response's last record, a stop on an id that isn't
+      one of the model's EOS ids, an EOS id in any record but the stop, and `COMPACT_LAST` alone short of
+      `max_tokens`. Like an EOS id event, a stop on an EOS id that the model didn't sample there passes it, so the
+      check that refuses a wrong length or finish is the I/O tie's, required of compact framing, against the Commit's
+      sampled ids: ordinal o's cells are `compact_records_of` o's sampled ids, one for one, so each carries its
+      sampled id, the response is as long as the Commit's, and it stops only where the Commit sampled EOS
+      (`compact_finish_violations`). IO-TIE's egress tie holds each compact cell's token field to this rule as well
+      as to its id. Until REDTEAM phase 12 a stop was one reserved field (all ones) with no id, and `certified_io`
+      accepted it at any length up to `max_tokens`, so a server could cut a `length` response short at a stop the
+      model never sampled; that field is now a stop on id 2^30 − 1, which isn't EOS.
+    - **What covers it.** The Lean device port models ordinal headers and compact records (`CertifierDevice`'s
+      `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
+      compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
+      configuration, compact ones included. The head model takes a frame as B opaque bytes, which a compact cell is.
+      N3's templates, a design outside the protocol, don't model compact cells. The gate's rehearsal runs compact
+      framing on the auditor's host (`certifier-rehearse --traffic varied --compact B`), so with this coverage a
+      compact run there gives a verdict of record.
   - **Anchor, index and ready bucket.** A frame is anchored at the egress bucket in which ingress released its
     request's last frame. Its logical index is its position in its stream. Read at time s, it is ready at ⌊s/τ_b⌋ + 1.
   - **Handing.** `Shaper` hands it at `max(h(k), ready(k), last)`, `run_shaper`'s rule under the declared sync of its
@@ -1317,7 +1326,7 @@ them.
     and `Proxy(start=w + 1, position=p)`. Its later windows are the full run's if nothing crosses into window w.
   - **Its limits.** An online prover declares from window 0's frames on, so a proxy back from maintenance takes its
     syncs. The certifier's Lean device port (`verity/core/devices/certifier/lean/`) models the restart (`initAt`), the
-    salt and a served link's admission; the device's Lean properties (`Security/Properties/CertifierDevice.lean`) are
+    salt, a served link's admission, ordinal headers and compact records; the device's Lean properties (`Security/Properties/CertifierDevice.lean`) are
     stated from window 0 (`init`), so they don't cover a proxy back from maintenance yet.
 - **Advice:** the declared syncs, one per window, are given before the run, or an online prover (`Proxy(prover=…)`,
   lag 1 … T − 1) declares each at its window's first tick, before anything is handed, from the frames the shaper has
@@ -1533,6 +1542,12 @@ and seven lemmas, and three more proved lemmas:
     the server's timing, chunking or content at the same n;
   - past the lanes, connections queue FIFO, then get one `REFUSED` cell;
   - every cell is B bytes, and `read_cell` refuses anything the warden wouldn't make, a `FAIL` with a payload too;
+  - the server gets each request whole at its `END`'s release with N its index among the signed `END` cells, in
+    release order rather than admission order, a client's own release header dropped and its cells unchanged; a
+    connection that fails before its `END` is unnumbered and its server gets nothing;
+- **`test_network_certifier_release.py`:** the release headers (`release`) go right after the request line, a client's
+  own are dropped whatever their case, bytes that aren't an HTTP/1 request with its whole head pass unchanged, and a
+  shim reads back the first of each;
 - **`test_network_certifier_warden_adversarial.py`:** REDTEAM's cases against the warden, each stating the bits it
   bounds: the server's connect delay doesn't move the egress base from s + D, and two accept delays give
   byte-identical client cells and records (regressions for 316f3292b6's open base); at one fail cell the reason isn't
@@ -1721,6 +1736,14 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 - `benchmarks/network_traces/warden_serve.py` runs the warden live and checks that each client got exactly its egress
   record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`)
   runs the same rehearsal on the auditor's host.
+- The server's copy of each request carries its release order (`release`, VLLM-89), so that `serve-openai --admit
+  release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
+  index among the ingress records' `END` cells, and `x-verity-release-run:` the warden's `run_id` (in
+  `deployment.json`). The server gets a request whole at its `END`'s release, and nothing of a connection that fails
+  before it. The headers are on the server's leg only. No cell or record holds them, so the cell counts, the prompt
+  lengths and the I/O tie's request frames are unchanged. They reach the server, never the client, so the leak bound
+  is unchanged. The active certifier's served proxy adds the same headers (`active_replay.ReleaseProxy`), with
+  N = s − 1 for request stream s.
 
 **Named gaps:**
 - TLS isn't terminated: both legs are plain TCP.
@@ -1731,7 +1754,11 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 - **The cells' wiring is open to the verifier (owner: network-accounting).** A unit's read is (q, k), connection q's
   cell k of the link-window. The verifier places it at its bucket's row and slot with the warden's wiring
   (`Wiring.place`), which the signed head names by a salted digest, so the reads are the warden's and never the
-  prover's (REDTEAM's phase 8 finding, closed). But the wiring is opened to the verifier, and it and the rows the units
+  prover's (REDTEAM's phase 8 finding, closed). Which cell each unit reads is the Program's: the units' wiring
+  (`Units`, a (q, k) a unit) is fixed with the Program from the schedule, the ordinals and the signed wiring alone,
+  never the cells' bytes, and the port's value names its digest, which Lean's registered reads hold the statement's
+  header to, so a statement made for another units' wiring is refused even at the same rows (REDTEAM's phase 11 pad
+  for a data cell, closed; no gate). But the wiring is opened to the verifier, and it and the rows the units
   read give away each connection's first row and cell count, both the prover's. A permutation argument closes it, with
   no new verifier form. Before the window's coins, the prover registers V′, a value of its own: the link-window's
   N = T·S cells as pairs (k, cell k of V, the warden's value), reordered into unit order, a fixed number of positions
@@ -1795,13 +1822,15 @@ own certificate of that link-window signs its salted record digest, so neither v
 the verifier's read of it: every field but the wiring's digest and the root is the one the schedule and the
 link-window give, and the certificate verifies over the head under the warden's key in the session.
 
-**Ordinals count from 0.** A cell's stream field is its connection's ordinal, and so is the wiring's q: the k-th
-connection to reach the warden is ordinal k, from 0, as IO-TIE's stream and advice v0 count requests. The active
-certifier's `Requests` counts from 1, so its stream s is the warden's ordinal s − 1.
+**Ordinals count from 1.** A cell's stream field is its connection's ordinal, and so is the wiring's q: the k-th
+connection to reach the warden, from 0, is ordinal k + 1, the wire's ingress ordinal, as the active certifier's
+`Requests` streams the k-th request and IO-TIE's map puts advice request i on stream order[i] + 1. Ordinal 0 is no
+connection's: a `REFUSED` cell carries it.
 
 **How a unit reads it.** The verifier's own `--registered` port (`port`, `verity/registered-reads/v1`) names the value
-`<link>/<direction>/<window>`, the root, T leaves of S·B/2 words of 16 bits, the domain, the row format and `reads`,
-the row each unit of the population opens. A unit's read is (q, k), and the verifier places it with the wiring: the
+`<link>/<direction>/<window>/units/<digest>`, the digest of the Program's units' wiring (`Units`), the root, T leaves of
+S·B/2 words of 16 bits, the domain, the row format and `reads`, the row each unit of the population opens. A unit's
+read is its (q, k) in the units' wiring, and the verifier places it with the wiring: the
 row is the cell's bucket, and the cell is at its slot's words. The verifier takes a wiring only when it is the one the
 head names and the schedule's (ordinals and first rows in admission order, r cells a row, at most `lanes` connections
 a row), and refuses a read of a connection the wiring doesn't hold, of a cell past the connection's, or of a cell
@@ -1809,9 +1838,9 @@ another read opens. So no read opens an empty slot, a foreign connection's cell 
 shared-row file whose port's table rows are those rows under the warden's salts, its header's `registered` entry their
 positions and paths (`Cells.statement`). An output port reads them as the sender's unit's output (its table is the
 instances' output rows), an input port as the receiver's input. A port reads one row a unit, so a unit that reads
-cells of k buckets has k registered ports, and reading one cell costs its whole row. Tonight the wiring is opened to
-the verifier, as the units' wiring is: the warden's named gap "The cells' wiring is open to the verifier", which has
-the plan that closes it.
+cells of k buckets has k registered ports, and reading one cell costs its whole row. The statement's header names
+the port's value, so it is made for the Program's units' wiring and no other. Tonight the cells' wiring is opened to
+the verifier: the warden's named gap "The cells' wiring is open to the verifier", which has the plan that closes it.
 
 **How the other readers of the certifier's rows differ:**
 - N2's head checks: the prover commits each record head as one row (`LinkWindows.commit`: one-stage's served domain,
