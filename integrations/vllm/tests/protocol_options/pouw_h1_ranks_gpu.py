@@ -12,7 +12,14 @@ credits nothing (the coins aren't a challenger's) but makes the two windows' com
 the window's steps × linears called). At one TP (pipeline stages only) the layout is the same, so it also holds every
 call's (index, step, linear, module, m, k, n, base, rows) equal in count and order, and each call's A and z table roots,
 every round's root and coin, the calls root and the draw root equal. Across TPs the linears are shards, so it holds the
-window's MACs a step equal instead (each linear's shard n·K summed over the ranks)."""
+window's MACs a step equal instead (each linear's shard n·K summed over the ranks).
+
+``--commit`` (TP N > 1, PP 1; ROOTS1 across ranks, VLLM-81 item 2) serves the window with ``served`` and the Commit on every
+rank (`pouw_h1_ranks.install`'s ``commit``) in place of the bare one, each window into ``<out>/<name>/``, and holds each to
+core's ROOTS1 steps (`pouw_h1_gpu.core_tie`: one manifest under calls_root, each table committed by its round, each the
+Commit's value of its rows). With ``--negatives`` each `NEGATIVES` window hands H1 other codes than the arm's on rank
+``--edit-tp`` only (one call's all zero, or one row's first code off by one), its Commit honest, and must be refused at
+``arow`` (`pouw_h1_gpu.negative_verdict`). ``--windows`` serves a subset, so a run splits its windows across GPU leases."""
 from __future__ import annotations
 
 import argparse
@@ -56,15 +63,117 @@ def summary(h1: Any) -> dict[str, Any]:
             "u": str(h1.utilization()), "details": {k: v for k, v in h1.details.items() if k not in ("refused",)}}
 
 
+#: ``--negatives``' windows: H1 handed one call's A codes all zero, or one row's first code off by one, on one rank
+NEGATIVES = ("a-zero", "a-row-off")
+
+
+def _edit_of(kind: str) -> Callable[[Any], Any]:
+    """The codes H1 is handed of the ones the arm quantized, on the edited rank: its first served call's all zero
+    (``a-zero``), or row 1's first code off by one in its first call of two rows or more (``a-row-off``)."""
+    import torch
+    done = [False]
+
+    def edit(xq: Any) -> Any:
+        if done[0] or xq.shape[0] < (1 if kind == "a-zero" else 2):
+            return xq
+        done[0] = True
+        if kind == "a-zero":
+            return torch.zeros_like(xq)
+        xq = xq.clone()
+        xq[1, 0] = 1 if int(xq[1, 0]) != 1 else 2
+        return xq
+    return edit
+
+
+def _w_edit(worker: Any, kind: str, tp: int) -> dict[str, Any] | None:
+    """On tensor-parallel rank ``tp`` only: each of its H1 linears' ``observe`` handed `_edit_of(kind)` of the arm's codes,
+    outside H1's own (`pouw_h1_ranks.wire_rank`), so the Commit acquires the arm's codes and the served y is the arm's."""
+    from vllm.distributed.parallel_state import get_tp_group
+    from verity_vllm.engine.hooks import Hooks
+    if get_tp_group().rank_in_group != tp:
+        return None
+    _model, layers = worker._h1rank_layers()
+    edit, hooks = _edit_of(kind), Hooks(tag=f"roots1-{kind}-tp{tp}")
+
+    def edited(orig: Any) -> Any:
+        def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> Any:
+            return orig(layer, edit(xq), s_a, y, z)
+        return observe
+    for m in layers:
+        hooks.wrap(m.quant_method, "observe", edited)
+    worker._h1rank_edit = hooks
+    return {"tp": tp, "linears": len(layers), "first_linear": worker._h1rank["run"].lo}
+
+
+def _w_unedit(worker: Any) -> None:
+    hooks = getattr(worker, "_h1rank_edit", None)
+    if hooks is not None:
+        hooks.uninstall()
+        worker._h1rank_edit = None
+
+
+def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: list[dict[str, Any]], decl: Any, out: Path,
+                  cp: dict[str, Any], program: dict[str, Any], name: str, edit: str | None = None) -> dict[str, Any]:
+    """One window at TP N with ``served`` and the Commit on every rank (`pouw_h1_ranks.install`), ``edit`` (a `NEGATIVES`
+    kind) on rank ``--edit-tp`` when given, held to core's ROOTS1 steps (`pouw_h1_gpu.core_tie`) once released. Its
+    Program is declared at its first call and kept in ``program`` for the next window."""
+    from tests.protocol_options import pouw_h1_gpu as GPU
+    from verity_vllm.protocol_options import pouw_h1_ranks as PHR
+    from verity_vllm.protocol_options import pouw_h1_requests as RQ
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    tag, tdir = f"[tp{a.tp} {name}]", out / name
+    tdir.mkdir(parents=True, exist_ok=True)
+    served = SV.Served(window=os.urandom(64), **program)
+    salt_coins, rounds = coins(decl.steps)
+    t0 = time.monotonic()
+    holder = PHR.install(llm, rows=decl.rows, steps=decl.steps, coins=salt_coins, rounds=rounds, admission=RQ.ROUND0,
+                         transcript_dir=str(tdir), key=KEY, served=served,
+                         commit={"cp": cp, "run_id": f"pouw-h1-ranks-{name}-{os.getpid()}"})
+    h1, w = holder.run, {"install_s": round(time.monotonic() - t0, 1)}
+    if edit is not None:
+        w["edit"] = {"kind": edit, "ranks": [x for x in holder.executor.collective_rpc(
+            _w_edit, kwargs={"kind": edit, "tp": a.edit_tp}) if x is not None]}
+    print(f"{tag} installed {json.dumps(w)} host={GPU.host_memory()}", flush=True)
+    try:
+        t0 = time.monotonic()
+        got = GPU.generate_static(llm, prompts, decl.max_tokens)
+        w["serve_s"] = round(time.monotonic() - t0, 1)
+    finally:
+        if edit is not None:
+            holder.executor.collective_rpc(_w_unedit)
+        t0 = time.monotonic()
+        holder.finish()
+        w["release_s"] = round(time.monotonic() - t0, 1)
+    program.update(program=served.program, program_digest=served.program_digest)
+    tap = served.tap
+    w.update(same_tokens=[g["token_ids"] for g in got] == [g["token_ids"] for g in plain],
+             tokens_digest=GPU.tokens_digest(got), static_schedule=GPU.static_check(got, decl.max_tokens),
+             h1=summary(h1), roots1=h1.details.get("roots1"), committed=holder.committed,
+             served={"refused": served.refused[:8], "registered": len(served.registered)},
+             arow_sites={v: sorted({s.rpartition("@")[2].partition("/")[0] for s in at.get("sites") or ()})
+                         for v, at in sorted(tap.where.items()) if "sites" in at},
+             tap_refused=tap.refused[:8])
+    w["core"] = GPU.core_tie({"commitment": dict(h1.commits), "calls": h1.manifest()}, served.program, tdir)
+    w["host"] = GPU.host_memory()
+    tied = bool(w["core"]["tied"] and (w["roots1"] or {}).get("tied"))
+    w["ok"] = bool(w["same_tokens"] and w["h1"]["static"] and w["static_schedule"]["ok"] and not w["served"]["refused"]
+                   and all(not c.get("errors_n") for c in holder.committed.values())
+                   and (tied if edit is None else GPU.negative_verdict(w)["refused"] and bool(w.get("edit", {}).get("ranks"))))
+    print(f"{tag} ok={w['ok']} serve_s={w['serve_s']} release_s={w['release_s']} roots1={json.dumps(w['roots1'])[:600]} "
+          f"core={json.dumps(w['core'], default=str)[:800]} committed={json.dumps(w['committed'])[:600]} host={w['host']}",
+          flush=True)
+    return w
+
+
 def serve(a: argparse.Namespace) -> dict[str, Any]:
     import torch
     from tests.engine.int8_exact_gpu import pin, scratch_checkpoints
-    from tests.protocol_options.pouw_h1_gpu import fill_prompts, generate_static, static_check, tokens_digest
+    from tests.protocol_options.pouw_h1_gpu import declared_of, fill_prompts, generate_static, static_check, tokens_digest
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.protocol_options import pouw_h1 as PH
     from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
-    decl, out = PH.FILL, Path(a.out)
+    decl, out = declared_of(a), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     target = TargetProfile.from_device().with_overrides(int8_exact="all")
     tag = f"[pp{a.pp}tp{a.tp}]"
@@ -87,9 +196,9 @@ def serve(a: argparse.Namespace) -> dict[str, Any]:
             from vllm import LLM
             from verity_vllm.engine.build import engine_kwargs_for
             from verity_vllm.protocol_options import pouw_h1_ranks as PHR
-            kw, _env, _cp = engine_kwargs_for(cps, max_num_seqs=max_num_seqs, case=a.role, target=target, engine_args={
+            kw, _env, cp = engine_kwargs_for(cps, max_num_seqs=max_num_seqs, case=a.role, target=target, engine_args={
                 **args, "pipeline_parallel_size": a.pp, "tensor_parallel_size": a.tp, "distributed_executor_backend": "mp",
-                "worker_extension_cls": PHR.EXTENSION, "async_scheduling": a.async_scheduling})
+                "worker_extension_cls": PHR.COMMIT_EXTENSION if a.commit else PHR.EXTENSION, "async_scheduling": a.async_scheduling})
             llm = LLM(**kw)
     cfg = llm.llm_engine.vllm_config
     doc["engine"] = {"build_s": round(time.monotonic() - t0, 1), "pp": cfg.parallel_config.pipeline_parallel_size,
@@ -106,6 +215,21 @@ def serve(a: argparse.Namespace) -> dict[str, Any]:
     doc["plain"] = {"s": round(time.monotonic() - t0, 2), "tokens_digest": tokens_digest(plain),
                     "static": static_check(plain, cap)}
     print(f"{tag} plain {json.dumps(doc['plain'])}", flush=True)
+    if a.commit:
+        import gc
+        program: dict[str, Any] = {}
+        doc["windows"] = {}
+        for name in a.windows:
+            edit = name.removeprefix("commit-") if name != "commit" else None
+            doc["windows"][name] = commit_window(a, llm, prompts, plain, decl, out, {"repo": cp.get("repo"),
+                                                 "revision": cp.get("revision")}, program, name, edit)
+            gc.collect()
+            (out / SUMMARY).write_text(json.dumps(doc, default=str) + "\n")
+        doc["ok"] = all(w["ok"] for w in doc["windows"].values())
+        (out / SUMMARY).write_text(json.dumps(doc, default=str) + "\n")
+        print(f"POUW-H1-RANKS-COMMIT {'OK' if doc['ok'] else 'FAIL'} tp={a.tp} " + " ".join(
+            f"{k}={'ok' if w['ok'] else 'FAIL'}" for k, w in doc["windows"].items()), flush=True)
+        return doc
     salt_coins, rounds = coins(decl.steps)
     t0 = time.monotonic()
     if a.pp == a.tp == 1:
@@ -216,7 +340,27 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--hf-home", default=os.environ.get("HF_HOME"))
     ap.add_argument("--at", help="resolved_at of the pin entry, if one is made (UTC, ISO 8601)")
     ap.add_argument("--by", help="resolved_by of the pin entry, if one is made")
+    ap.add_argument("--declare", metavar="SLOTS,CAP,T,S", type=lambda v: tuple(int(x) for x in v.split(",")),
+                    help="serve SLOTS one-token prompts at cap CAP, T rows a call, S steps (pouw_h1.Static) in place of "
+                         "pouw_h1.FILL's 64,16,64,18")
+    ap.add_argument("--commit", action="store_true",
+                    help="at TP N > 1: in place of the bare window, serve it with served (pouw_h1_served.Served) and the "
+                         "Commit on every rank (pouw_h1_ranks.install's commit), each window into <out>/<name>/, and hold "
+                         "each to core's ROOTS1 steps (pouw_h1_gpu.core_tie)")
+    ap.add_argument("--negatives", action="store_true",
+                    help="with --commit: after the honest window, one per NEGATIVES kind on rank --edit-tp, each to be "
+                         "refused at arow")
+    ap.add_argument("--windows", type=lambda v: v.split(","), default=None,
+                    help="with --commit: the windows to serve, of commit and commit-<NEGATIVES kind> (default: commit, and "
+                         "with --negatives each negative)")
+    ap.add_argument("--edit-tp", type=int, default=1, help="the tensor-parallel rank a negative's edit is on")
     a = ap.parse_args(argv)
+    if a.windows is None:
+        a.windows = ["commit", *(f"commit-{k}" for k in NEGATIVES if a.negatives)]
+    if a.commit and (a.tp < 2 or a.pp != 1 or any(w != "commit" and w.removeprefix("commit-") not in NEGATIVES
+                                                   for w in a.windows)):
+        ap.error("--commit is at TP N > 1 and PP 1 (one GPU's is pouw_h1_gpu --commit), its windows commit and "
+                 f"commit-<{'|'.join(NEGATIVES)}>")
     if a.compare:
         doc = compare(Path(a.compare[0]), Path(a.compare[1]))
         Path(a.out).parent.mkdir(parents=True, exist_ok=True)
@@ -225,6 +369,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(doc, default=str)[:6000], flush=True)
         return 0 if doc["ok"] else 1
     doc = serve(a)
+    if a.commit:
+        return 0 if doc["ok"] else 1
     return 0 if doc["same_tokens_in_run"] and doc["h1"]["static"] else 1
 
 
