@@ -17,7 +17,10 @@ Arms, each one linear's call on a BF16 x of M rows:
 - ``deepgemm``: vLLM's per-token-group FP8 quant (ue8m0 scales) and DeepGEMM ``fp8_gemm_nt`` on the weight's 128 x 128
   blocks, its scales ue8m0: what the pinned vLLM serves from 32 tokens (FlashInfer below 32 is not timed here);
 - ``cutlass``: the same quant (FP32 scales) and vLLM's CUTLASS block-scaled ``cutlass_scaled_mm``;
-- ``triton``: the same quant and vLLM's Triton block-scaled matmul.
+- ``triton``: the same quant and vLLM's Triton block-scaled matmul;
+- ``deepgemm-graph``, ``cutlass-graph``, ``triton-graph``: each stock arm that builds, its call (quant and GEMM) captured as
+  one CUDA graph and replayed (`capture_stock`), as vLLM's decode graphs run it, so its launch overhead is off the host;
+  ``slowdowns_graphed`` gives each pearlc arm over the fastest of these, and a call torch can't capture is recorded.
 
 A stock arm that can't be built (not importable, refused, or outside 0.08 rel RMS of x·Wᵀ) is recorded with its error and
 left out.  Each rep times every arm once, in an order rotated each rep, each sample `INNER` calls back to back between CUDA
@@ -410,9 +413,17 @@ def main(argv: list[str] | None = None) -> int:
                     run.hashing, run.graphs = hashing, graphs
                 return f, before, run.end_pass
 
+            graphed, graph_errors = {}, {}
+            for nm, f in arms.items():
+                g, captured, err = capture_stock(lambda f=f, x=x: f(x))
+                if captured:
+                    graphed[f"{nm}-graph"] = g
+                else:
+                    graph_errors[f"{nm}-graph"] = err
             calls = {**{nm: pearlc(nm, True, sc, g) for nm, (sc, g) in pearls.items()},
                      "pearlc-nohash": pearlc("pearlc-nohash", False, a.schedule[0], a.graphs),
-                     **{nm: ((lambda f=f, x=x: f(x)), None, None) for nm, f in arms.items()}}
+                     **{nm: ((lambda f=f, x=x: f(x)), None, None) for nm, f in arms.items()},
+                     **{nm: (g, None, None) for nm, g in graphed.items()}}
             names = list(calls)
             for f, before, after in calls.values():       # warm-up: buffers, graphs of torch's allocator, autotuning
                 timed(f, before, after)
@@ -453,6 +464,8 @@ def main(argv: list[str] | None = None) -> int:
             med = {nm: statistics.median(v) for nm, v in samples.items()}
             stock = {nm: med[nm] for nm in arms}
             best = min(stock, key=stock.get) if stock else None
+            gstock = {nm: med[nm] for nm in graphed}
+            gbest = min(gstock, key=gstock.get) if gstock else None
             ok = all(all(v.values()) for v in agree.values())
             row = {"name": lin["name"] if lin else None, "n": n, "k": k, "m": m, "ms": med, "runs": samples,
                    "host_ms": {nm: statistics.median(v) for nm, v in host.items()},
@@ -463,14 +476,18 @@ def main(argv: list[str] | None = None) -> int:
                    "slowdown": med["pearlc"] / stock[best] if best else None,
                    "slowdowns": {nm: med[nm] / stock[best] for nm in pearls} if best else None,
                    "slowdown_nohash": med["pearlc-nohash"] / stock[best] if best else None, "gamma": gam,
+                   "fastest_stock_graphed": gbest, "stock_graph_errors": graph_errors,
+                   "slowdowns_graphed": {nm: med[nm] / gstock[gbest] for nm in pearls} if gbest else None,
                    "tflops": {nm: 2 * m * n * k / v / 1e9 for nm, v in med.items()},
                    "commitment": want, "agree": agree, **({} if ok else {"commitments": ends})}
             rows.append(row)
             print(f"n {n} k {k} m {m}: " + ", ".join(f"{nm} {med[nm]:.4f} ms" for nm in [*pearls, "pearlc-nohash"]) + ", "
-                  + ", ".join(f"{nm} {v:.4f} ms" for nm, v in stock.items())
+                  + ", ".join(f"{nm} {v:.4f} ms" for nm, v in {**stock, **gstock}.items())
                   + (f"; slowdown {row['slowdown']:.3f}x over {best}" + "".join(
                       f", {nm} {v:.3f}x" for nm, v in row["slowdowns"].items() if nm != "pearlc") if best
                      else f"; no stock arm ({errors})")
+                  + (f"; over {gbest}: " + ", ".join(f"{nm} {v:.3f}x" for nm, v in row["slowdowns_graphed"].items())
+                     if gbest else "")
                   + f"; {'agree' if ok else 'DIFFER ' + json.dumps(agree)}", flush=True)
             (out / "timing.json").write_text(json.dumps({**head, "rows": rows}, indent=1) + "\n")
     return 0 if all(r["fastest_stock"] and all(all(v.values()) for v in r["agree"].values()) for r in rows) else 1
