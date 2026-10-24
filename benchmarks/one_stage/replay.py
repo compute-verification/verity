@@ -63,6 +63,8 @@ from verity.ml.commitments.identity import identity_digest, identity_digest_sha5
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 
+import r2_population as R2
+
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW = "hm96-sha512/row/v1"
 #: M0's set-bound frame domains: each tag with its identity digest (`a0.STAND_IN_BINDINGS`)
@@ -769,7 +771,7 @@ def a0(run: Run) -> Iterator[Case]:
     src = f"{base}/negatives.json"
     draw = a["draw"]
     k = law["k"]
-    smaller = P.population_program(template, n - 1, version=population_version(program))
+    smaller = R2.program([(template, n)], mixed=False, version=population_version(program))
     spart = with_program(partition, smaller)
     first = rec["roots"][0]
     cases: dict[str, Callable[[dict], Case]] = {} if pc is None else {
@@ -982,7 +984,7 @@ def a2(run: Run) -> Iterator[Case]:
     yield c
     src = f"{base}/negatives.json"
     draw = a["draw"]
-    smaller = P.population_program(v2.template, n - 1, version=population_version(program))
+    smaller = R2.program([(v2.template, n)], mixed=False, version=population_version(program))
     cases: dict[str, Callable[[dict], Case]] = {
         "public-file-b||c-byte-flipped (R4)": lambda v: c.but(
             "public-file-b||c-byte-flipped (R4)", "negative", recorded_codes(v, "registration", src),
@@ -1177,8 +1179,7 @@ def a3(run: Run) -> Iterator[Case]:
     union = {"law": "subset", "population": n, "k": law["k"], "units": sorted(a["draw"]["units"])}
     proved = sorted(a["proved_units"])
     bases = {name: (lo, lo + cnt) for (name, *_), (_, lo, cnt) in zip(mem, P.ranges(program, query))}
-    fewer = P.mixed_population_program([(d, cnt - (1 if i == 0 else 0)) for i, (_, _, d, cnt) in enumerate(mem)],
-                                       version=population_version(program))
+    fewer = R2.program([(d, cnt) for _, _, d, cnt in mem], mixed=True, version=population_version(program))
     cases: dict[str, Callable[[dict], Case]] = {
         "registration-partition-mismatch": lambda v: c.but(
             "registration-partition-mismatch", "negative", recorded_codes(v, "registration", src), program=fewer,
@@ -1334,8 +1335,7 @@ def a4(run: Run) -> Iterator[Case]:
     n = rec["population"]
     draw = a["draw"]
     proved = sorted(a["proved_units"])
-    other = P.mixed_population_program([(d, cnt - (1 if i == 0 else 0)) for i, (_, _, d, cnt, _) in enumerate(mem)],
-                                       version=population_version(program))
+    other = R2.program([(d, cnt) for _, _, d, cnt, _ in mem], mixed=True, version=population_version(program))
     cases: dict[str, Callable[[dict], Case]] = {
         "registration-partition-mismatch (R2)": lambda v: c.but(
             "registration-partition-mismatch (R2)", "negative", recorded_codes(v, "registration", src), program=other,
@@ -1962,7 +1962,7 @@ def a5_audit(run: Run, base: str) -> Iterator[Case]:
     src = f"{base}/negatives.json"
     n = rec["population"]
     draw, proved = a["draw"], sorted(a["proved_units"])
-    fewer, _ = population([(d, cnt - (1 if i == 0 else 0)) for i, (d, cnt) in enumerate(defs)], version)
+    fewer, _ = population(R2.resized(defs), version)
     first = members[0]["template"]
     flipped_body = bodies[first][:-1] + bytes([bodies[first][-1] ^ 1])
     cases: dict[str, Callable[[dict], Case]] = {
@@ -2055,7 +2055,7 @@ def a6(run: Run) -> Iterator[Case]:
     n_all = rec["population"]
     draw, proved = a["draw"], sorted(a["proved_units"])
     drawn = set(draw["units"])
-    fewer, _ = population([(d, cnt - (1 if i == 0 else 0)) for i, (d, cnt) in enumerate(defs)], version)
+    fewer, _ = population(R2.resized(defs), version)
     ranges = P.ranges(program, query)
     first = summary["members"][0]["name"]
     cases: dict[str, Callable[[dict], Case]] = {
@@ -2187,7 +2187,7 @@ def a7(run: Run) -> Iterator[Case]:
     src = f"{base}/negatives.json"
     n_all = rec["population"]
     draw, proved = a["draw"], sorted(a["proved_units"])
-    fewer, _ = population([(d, cnt - (1 if i == 0 else 0)) for i, (d, cnt) in enumerate(defs)], version)
+    fewer, _ = population(R2.resized(defs), version)
     cases: dict[str, Callable[[dict], Case]] = {
         "registration-partition-mismatch (R2)": lambda v: c.but(
             "registration-partition-mismatch (R2)", "negative", recorded_codes(v, "registration", src), program=fewer,

@@ -15,8 +15,9 @@ the same way: byte k of a direction is in its cell ⌊k/P⌋, so a cell's conten
 they were read. The client speaks cells both ways through a thin, workload-blind shim (`cells`, `Shim`); the server
 gets the ingress payloads as bytes (co-located tonight; deployed, its own shim strips the cells as the client's does).
 
-**Admission.** The k-th connection to arrive has ordinal k. At most `lanes` connections are served at once; one that
-arrives with every lane taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell and is closed.
+**Admission.** The k-th connection to arrive, from 0, has ordinal k + 1, as the active certifier's `Requests` streams
+it: ordinal 0 is no connection's. At most `lanes` connections are served at once; one that arrives with every lane
+taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell, on ordinal 0, and is closed.
 The queue's head is admitted at the first bucket with a free lane, and holds that lane, r cells a bucket each way,
 until its last bucket. Nothing admitted is dropped or reordered.
 
@@ -70,7 +71,7 @@ from typing import Any
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, decode_frame, encode_frame, precise_sleep
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, row_count
+from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, row_count
 
 PARAMETERS_TAG = "verity-network-warden/parameters/v2"
 #: the warden's cell kinds, beside `active`'s PAD and DATA
@@ -240,12 +241,16 @@ class Warden:
     - `publish(record, params)` receives each window's records, ingress, egress, then fails, as they close (by
       default they are kept in `records`); `log` has one entry a connection once it ends, `refused` the ordinal-less
       refusals' count, `lateness` each tick's in seconds;
+    - `release(link, row)`, when given, receives each grid's row as it ticks, ingress, egress, then fails, before
+      that tick's `publish`: a publisher in another process builds each record from them as it fills, so that the
+      tick never hands it a whole window at once;
     - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  windows: int, clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = precise_sleep,
-                 publish: Callable[[Record, GridParams], None] | None = None, slack: float = 0.025,
+                 publish: Callable[[Record, GridParams], None] | None = None,
+                 release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails") -> None:
         self.params, self.connect = params, connect
         self.origin, self.windows, self.clock, self.sleep, self.slack = origin, windows, clock, sleep, slack
@@ -254,6 +259,7 @@ class Warden:
         self.fails = Certifier(fails_link, params.fails_grid)
         self.records: list[Record] = []
         self.publish = publish or (lambda record, grid: self.records.append(record))
+        self.release = release
         self.queue: deque[_Connection] = deque()
         self.active: list[_Connection] = []
         self.ordinals = 0
@@ -278,7 +284,7 @@ class Warden:
             writer.close()
             self._changed.set()
             return
-        connection = _Connection(self.ordinals, reader, writer, asyncio.get_running_loop().create_future(),
+        connection = _Connection(self.ordinals + 1, reader, writer, asyncio.get_running_loop().create_future(),
                                  self._bucket())
         self.ordinals += 1
         self.queue.append(connection)
@@ -324,7 +330,9 @@ class Warden:
                 self._end(c)
         self.active = [c for c in self.active if c.ended is None]
         for grid in (self.ingress, self.egress, self.fails):
-            grid.tick()
+            row = grid.tick()
+            if self.release is not None:
+                self.release(grid.link, row)
         if (t + 1) % self.params.window == 0:
             self.publish(self.ingress.close_window(), self.params.grid)
             self.publish(self.egress.close_window(), self.params.grid)
@@ -524,7 +532,7 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
     for n, o in enumerate(sorted(per)):
         ing, eg = per[o]["ingress"], per[o]["egress"]
         s = min([*ing, *eg])
-        problems = [f"connection {o} where {n} is next"] if o != n else []
+        problems = [f"connection {o} where {n + 1} is next"] if o != n + 1 else []
         if s < last_admitted:
             problems.append(f"admitted at {s}, before connection {o - 1}")
         last_admitted = s

@@ -41,7 +41,11 @@ difftest's `session` reads one, `Difftest.eventOf`):
 * `{"op": "abort", "node", "session", "outcome"}`: the session ended with the driver's outcome (`Registry.abort`);
 * `{"op": "outcome", "node", "session"}`: `{"outcome", "record"}`, as the difftest's `session` writes them;
 * `{"op": "close", "node"}`: `Registry.close`'s registration, or `{"refused": true}`;
-* `{"op": "registry"}`: the registry, `registry/v0`.
+* `{"op": "registry"}`: the registry, `registry/v0`;
+* `{"op": "line", "groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows", "delta", "rates"}`:
+  an accepted paced session's memory line (`Line.line`, its W the pooled bound of its windows, `Pooled.pooled`) as
+  the difftest's `line` writes it (`Difftest.lineFn`), or `{"refused": why}`: the line of record
+  (`benchmarks/remote_session/auditor_line.py`) is this answer, held equal to `line.py`'s.
 
 A window's verdict is `checkWindowChunked`'s, which is `checkWindow`'s on the window's openings: any frame that doesn't
 decode leaves it none, as the driver's Python does. Openings are checked in the clear.
@@ -264,6 +268,7 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
     let (c, r) ← ofV (srv.registry.close (← ofV (bytesOf req "node")))
     pure ((c.map Registry.Closed.toJson).getD refusedJ, { srv with registry := r })
   | "registry" => pure (srv.registry.toJson, srv)
+  | "line" => pure (← ofV (Difftest.lineFn req), srv)
   | op => throwThe String s!"no op {op}"
 
 private def line (key : String) (value : String) : String := "{" ++ Flock.canonStr key ++ ":" ++ value ++ "}"

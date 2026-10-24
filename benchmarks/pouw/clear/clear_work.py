@@ -471,15 +471,19 @@ def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcrip
 def declare(scheme: C.PearlC, epoch: Epoch, activations: Mapping[int, Sequence[bytes]], weights: Mapping[int, Sequence[bytes]],
             splits: Mapping[int, Split], real_rows: Mapping[int, int] | None = None,
             transcript: Transcript | None = None, voluntary_a: Mapping[int, Sequence[int]] | None = None,
-            voluntary_b: Mapping[int, Sequence[int]] | None = None) -> list[UnitRecord]:
+            voluntary_b: Mapping[int, Sequence[int]] | None = None,
+            padded_b: Mapping[int, Sequence[int]] | None = None) -> list[UnitRecord]:
     """An honest prover's records: each real row and each weight row checked by the per-row rules on the unit's words,
     and, for a scheme with a salted per-row credit rule (`r1_rows`, Pearl-C4's R1), by that rule on the committed
     transcript's forming.  Pearl-C's schemes bring none, so `transcript` changes nothing for them.  `voluntary_a` (by
     matmul index) and `voluntary_b` (by weight) are the rows the prover gives up (V-EX, `volunteer`); a row the rules
-    exclude stays excluded."""
+    exclude stays excluded.  `padded_b` (by weight) is a padded tile's rows (`pearl_c_work.pad_weight`), voluntary
+    whether or not they pass, so the tile opens no exclusion tile."""
     parse, passes = _rules(scheme)
     k_of = {u.weight: u.shape.k for u in epoch.workload.matmuls}
-    excluded_b = {w: {j for j, r in enumerate(rows) if not passes(parse(r, k_of[w]))} for w, rows in weights.items()}
+    padded = {w: set(rows) for w, rows in (padded_b or {}).items()}
+    excluded_b = {w: {j for j, r in enumerate(rows) if j not in padded.get(w, ()) and not passes(parse(r, k_of[w]))}
+                  for w, rows in weights.items()}
     r1 = getattr(scheme, "r1_rows", None) if transcript is not None else None
     extra_a: dict[int, set[int]] = {}
     if r1 is not None:
@@ -498,7 +502,7 @@ def declare(scheme: C.PearlC, epoch: Epoch, activations: Mapping[int, Sequence[b
         rows = activations[u.index]
         excluded_a = tuple(i for i in range(real) if not passes(parse(rows[i], u.shape.k)) or i in extra_a.get(u.index, ()))
         va = tuple(sorted(set((voluntary_a or {}).get(u.index, ())) - set(excluded_a)))
-        vb = tuple(sorted(set((voluntary_b or {}).get(u.weight, ())) - excluded_b[u.weight]))
+        vb = tuple(sorted((set((voluntary_b or {}).get(u.weight, ())) - excluded_b[u.weight]) | padded.get(u.weight, set())))
         out.append(UnitRecord(u, real, splits[u.weight].k_kept, excluded_a, tuple(sorted(excluded_b[u.weight])), va, vb))
     return out
 

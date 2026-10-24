@@ -624,6 +624,69 @@ def test_the_pin_covers_the_leaf_maps():
     assert a.sha256 != b.sha256 and a.text.splitlines()[:-1] == b.text.splitlines()[:-1]
 
 
+INGRESS = {"MODEL": "m", "LP": 3, "V": 1000}
+
+
+def test_the_ingress_parse_is_one_unit_equal_to_its_definition(tmp_path):
+    """``ingress-prompt`` (the I/O shell's ``IngressPrompt_v1``) lowers as ONE unit (``ir_lower.whole``) whose input row is the
+    body, whole SHA-512 blocks: its rows equal the IR on a synthetic set of schema bodies, and give ``io_shell.reference``'s
+    (ok, ids, max_tokens) on the same bodies with one byte changed, which leaves the schema or moves a field."""
+    from verity_vllm.program.registry import io_shell as X
+
+    mod, sub = REG.module("ingress-prompt"), TM.subcircuit("ingress-prompt", **INGRESS)
+    s = InputSet.open(generate(sub, 4, 20261024, tmp_path)["path"])
+    assert _check_set(s) == 0
+    low = mod.lowering(sub)
+    assert low.units.n == 1 and sum(low.units.in_widths) % 1024 == 0 and low.sha256 == mod.PINS[tuple(INGRESS.values())]
+    rng, LP = random.Random(3), INGRESS["LP"]
+    fin = IL.flat_ports(s, sub.inputs, 0, s.n).copy()
+    for row in fin:
+        row[rng.randrange(len(row))] ^= 1 + rng.randrange(255)
+    got, _cuts, ok = low.evaluate(fin)
+    want = [X.reference(bytes(int(b) for b in row), *INGRESS.values()) for row in fin]
+    assert ok == (1 << s.n) - 1 and [(int(r[0]), [int(x) for x in r[1:1 + LP]], int(r[1 + LP])) for r in got] == want
+    assert any(w[0] == 0 for w in want)
+
+
+def test_the_greedy_select_is_its_chunk_and_combine_units(tmp_path):
+    """``token-select-chunk`` and ``token-select-combine`` (``dead_free.TokenSelect_v4``'s two calls) lower as one unit each
+    (``ir_lower.whole``), the chunk's input row 64 bf16 logits, one SHA-512 block: their rows equal the IR on synthetic sets, and
+    the chunks' units feeding the combine's give ``TokenSelect_v1``'s token on rows of V = 200 whose maximum is tied across a
+    chunk boundary, behind a NaN at a chunk's first logit, or alone in the last, short chunk."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity_vllm.program.registry import b1
+
+    V = 200
+    lows = {}
+    for t, p in (("token-select-chunk", {"C": 64}), ("token-select-combine", {"V": V, "C": 64})):
+        mod, sub = REG.module(t), TM.subcircuit(t, **p)
+        assert _check_set(InputSet.open(generate(sub, 3, 20261024, tmp_path / t)["path"])) == 0
+        lows[t] = low = mod.lowering(sub)
+        assert low.units.n == 1 and low.sha256 == mod.PINS[tuple(p.values()) if len(p) > 1 else p["C"]]
+    assert sum(lows["token-select-chunk"].units.in_widths) == 1024
+    rng = np.random.default_rng(7)
+    x = rng.integers(0, 1 << 16, (6, V)).astype(np.uint64)
+    x[1] = 0xBF80
+    x[1, [63, 64]] = 0x3F80
+    x[2] = 0x3F80
+    x[2, 128], x[2, 150] = 0x7FC0, 0x4000
+    x[3] = 0xFF80
+    x[3, 197] = 0xBF80
+    best, idx = [], []
+    for lo, hi in b1.chunks(V, 64):
+        low = lows["token-select-chunk"] if hi - lo == 64 else REG.module("token-select-chunk").lowering(
+            TM.subcircuit("token-select-chunk", C=hi - lo))
+        got, _cuts, ok = low.evaluate(x[:, lo:hi])
+        assert ok == (1 << len(x)) - 1
+        best.append(got[:, 0])
+        idx.append(got[:, 1])
+    got, _cuts, ok = lows["token-select-combine"].evaluate(np.column_stack([x[:, 0], *best, *idx]))
+    want = np.asarray(evaluate_batch(bind(b1.TokenSelect, V=V), x)).reshape(len(x))
+    assert ok == (1 << len(x)) - 1 and got[:, 0].tolist() == want.tolist()
+    assert want[1:4].tolist() == [63, 150, 197]
+
+
 def test_supports_says_what_is_missing():
     for template, params in LOWERED.items():
         sub = TM.subcircuit(template, **params)

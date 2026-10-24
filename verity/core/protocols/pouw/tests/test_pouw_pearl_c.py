@@ -815,3 +815,17 @@ def test_domain_needs_whole_promotion_groups():
     s.check(Matmul(0, Shape(64, 1152, 64), 1))
     with pytest.raises(DomainError):
         s.check(Matmul(0, Shape(64, 1056, 64), 1))
+
+
+@pytest.mark.parametrize("name", ["pearl-c-h100-v0", "pearl-c-h100-v1", "pearl-c-h100-v1-h3", "pearl-c-sm120-v1",
+                                  "pearl-c-sm120-v1-h3"])
+def test_the_domain_has_lean_s_n_floor(name):
+    """Lean's `pearlCDomainDev` takes `64 <= n` and `64 | n` (CMP-77: a 1 x (n mod 64) edge tile's words can be guessed
+    whole); the 64-column tile is that floor, and it keeps GLM-5.3's n = 512 w13 and gate_up and n = 256 router at TP8."""
+    s = get(name)
+    assert s.tile[1] == 64
+    for n in (16, 32, 63, 96, 160, 1000):
+        with pytest.raises(DomainError):
+            s.check(Matmul(0, Shape(32, 6144, n), 1))
+    for n in (64, 256, 512, 1024, 4096):
+        s.check(Matmul(0, Shape(32, 6144, n), 1))
