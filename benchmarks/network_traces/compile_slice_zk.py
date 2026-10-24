@@ -1,22 +1,31 @@
-"""The compile slice (`compile_slice.CompileSlice_v1`) proved in zero knowledge: corpus-smallkv's first seven steps as
-one unit, proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`, through N2-ZK's audit
-path (`n2_zk.py`: its stager, firewall and received-pieces scan).
+"""The compile slice (`compile_slice.CompileSlice_v1`) proved in zero knowledge: one window of a few steps as one unit,
+proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`, through N2-ZK's audit path
+(`n2_zk.py`: its stager, firewall and received-pieces scan).
 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
-      [--points 1] [--dry]
+      [--slice demo|corpus] [--points 1] [--kinds K,...] [--dry]
 
-* **The slice** is `verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`, and `prove` first checks
-  it is the corpus's (`replay_vectors.vectors` on corpus-smallkv: the arrivals, the decisions and the replay's rows).
-* **The statement**: one template of n units, each the slice's rows under fresh salts. Unit 0 is honest; unit 1 has
-  decision 5 flipped in its window row (the advice row stays the registered one); unit 2 declares the charge one below
-  the coded length; unit 3 has arrival 1's prompt one token longer in its ``cert`` row (an arrival not in the certified
-  record); units 4 to 8 are REDTEAM's phase 9 choices (`compile_slice.phase9`: a context, frequencies, a prefix hit, a
-  decision read again, an arrival left in the queue); units 9 and 10 are REDTEAM phase 10's six passes (advice of six
-  passes where the served window admitted user-1 at the sixth ask, the charge its 5-bit code), with the served rows in
-  ``srv`` and with its own; the rest are honest, enough of them that the statement fits `--zk`'s shape (`stage`).
-* **The served rows** (`served_rows`): the Commit side registers each unit's window, the replay's rows (the fixture's),
-  under the run root (a stand-in: the partition's digest) before the draw. Every unit's ``srv`` row is its window's,
-  but unit 10's, which is its own run's.
+* **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice.demo`, 49,113 ANDs a
+  unit), whose candidates take real prefix hits; or ``corpus``, corpus-smallkv's first seven steps
+  (`verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit), which `prove`
+  first checks is the corpus's (`replay_vectors.vectors` on corpus-smallkv: the arrivals, the decisions and the
+  replay's rows; `cache_vectors`' tokens of each arrival).
+* **The statement**: one template of n units, each the slice's rows under fresh salts, one unit a kind (the slice's
+  `REFUSED`, or `--kinds`' in their order). ``honest``; ``flip``, a decision flipped in its window row (the advice row
+  stays the registered one); ``charge``, the charge one below the coded length; ``arrival``, arrival 1's prompt one
+  token longer in its ``cert`` row (an arrival not in the certified record); ``table``, a made-up first cache table
+  (`compile_slice.made_up`: request 2's first two blocks under ROOT on the demo, request 1's first block on the
+  corpus, which gives it a 16-token hit at step 6); ``tokens``, request 1's first block made up in its ``cert`` row
+  (9s on the demo, request 0's on the corpus); on the demo ``short``, request 1's admission hit claimed one block of
+  its two, and ``unasked``, the waiting candidate's hit claimed 0; REDTEAM's phase 9 choices the slice can take
+  (`compile_slice.phase9`: a context, frequencies, a prefix hit, and on the corpus a decision read again and an arrival
+  left in the queue); on the corpus REDTEAM phase 10's six passes (advice of six passes where the served window
+  admitted user-1 at the sixth ask, the charge its 5-bit code), with the served rows in ``srv`` (``sixpass``) and with
+  its own (``sixpass-own``). The rest are honest, enough of them that the statement fits `--zk`'s shape (`stage`).
+* **The served rows** (`served_rows`): the Commit side registers each unit's window under the run root (a stand-in: the
+  partition's digest) before the draw: the replay's rows, but ``table``'s, which are the schedule its server served
+  (its own rows, the hit taken), so its ``cache`` check alone refuses it. Every unit's ``srv`` row is its window's but
+  ``sixpass-own``'s, which is its own run's.
 * **The bindings**, checked natively by the verifier on the row commitments b‖c the public file holds: each unit's
   ``adv`` row is row i of the advice's hiding registration (`verity.ml.commitments.advice`: its leaf from b‖c, its path
   to the registered root), its ``srv`` row is row i of the served rows' registration (`served_rows.leaf_ok`), and its
@@ -32,6 +41,7 @@ path (`n2_zk.py`: its stager, firewall and received-pieces scan).
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import os
@@ -52,10 +62,15 @@ from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 
 FIXTURE = REPO / "verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json"
-KINDS = ("honest", "flip", "charge", "arrival") + CS.PHASE9 + ("sixpass", "sixpass-own")
-REFUSED = {"honest": set(), "flip": {"load", "rows"}, "charge": {"charge"}, "arrival": {"rows"},
-           "context": {"code", "charge"}, "frequency": {"code", "charge"}, "hit": {"steps", "rows"},
-           "reread": {"steps", "rows"}, "untaken": {"steps", "rows"}, "sixpass": {"rows"}, "sixpass-own": set()}
+#: each slice's kinds, in order, and the checks the reference refuses each by
+REFUSED = {
+    "demo": {"honest": set(), "flip": {"load", "rows"}, "charge": {"charge"}, "arrival": {"rows"}, "table": {"cache"},
+             "tokens": {"rows"}, "short": {"cache", "rows"}, "unasked": {"cache"}, "context": {"code", "charge"},
+             "frequency": {"code", "charge"}, "hit": {"cache", "rows"}},
+    "corpus": {"honest": set(), "flip": {"load", "rows"}, "charge": {"charge"}, "arrival": {"rows"}, "table": {"cache"},
+               "tokens": {"rows"}, "context": {"code", "charge"}, "frequency": {"code", "charge"},
+               "hit": {"cache", "rows"}, "reread": {"steps", "rows"}, "untaken": {"steps", "rows"},
+               "sixpass": {"rows"}, "sixpass-own": set()}}
 OPENED = ("o0", "pub")
 
 
@@ -63,13 +78,17 @@ def log(msg: str) -> None:
     print(f"CSZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
 
-def load(path: Path = FIXTURE) -> SimpleNamespace:
-    fx = json.loads(path.read_text())
+def load(name: str) -> SimpleNamespace:
+    """The slice ``name``: its statics, its inputs and the replay's rows (the corpus's from the fixture)."""
+    if name == "demo":
+        st, sl = CS.demo()
+        return SimpleNamespace(name=name, st=st, S=SimpleNamespace(**st), sl=sl,
+                               rows=list(CS.case(SimpleNamespace(**st), sl).steps))
+    fx = json.loads(FIXTURE.read_text())
     st = CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"], K=fx["K"],
-                    SEG=fx["SEG"])
-    return SimpleNamespace(fx=fx, st=st, S=SimpleNamespace(**st),
-                           sl=CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"]),
-                           rows=[tuple(map(tuple, r)) for r in fx["rows"]])
+                    SEG=fx["SEG"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"])
+    sl = CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"], tuple(map(tuple, fx["tokens"])))
+    return SimpleNamespace(name=name, st=st, S=SimpleNamespace(**st), sl=sl, rows=[tuple(map(tuple, r)) for r in fx["rows"]])
 
 
 def _corpus(tmp: Path) -> Path:
@@ -97,16 +116,17 @@ def _corpus(tmp: Path) -> Path:
 
 
 def corpus_check(x: SimpleNamespace) -> None:
-    """The fixture is corpus-smallkv's first P steps: its arrivals, the decisions its replay asks and the replay's rows."""
+    """The fixture is corpus-smallkv's first P steps: its arrivals, the decisions its replay asks, the replay's rows and
+    each arrival's tokens (`cache_vectors`' trace, `derived.tokens_of`)."""
     import importlib
     import tempfile
 
     enc = REPO / "benchmarks/network_e2e/encodings"
-    names = ("replay", "replay_vectors")
+    names = ("replay", "replay_vectors", "cache_vectors", "enc_derived")
     saved, path = {k: sys.modules.pop(k) for k in names if k in sys.modules}, list(sys.path)
     sys.path[:0] = [str(enc)]
     try:
-        RP, RV = (importlib.import_module(k) for k in names)
+        RP, RV, CV = (importlib.import_module(k) for k in names[:3])
     finally:
         sys.path[:] = path
         for k in names:
@@ -118,22 +138,26 @@ def corpus_check(x: SimpleNamespace) -> None:
     arrivals = [(i, reqs[i].prompt_len, reqs[i].output_len) for i in range(x.S.K)]
     dec = [b for _s, inp, want in cases[:x.S.P] for b in inp.bits[:want.used]]
     rows = [tuple(map(tuple, c[2].rows)) for c in cases[:x.S.P]]
-    if (arrivals, dec, rows) != (list(x.sl.arrivals), list(x.sl.decisions), x.rows):
+    tr = CV.load(enc / "tests/fixtures/corpus-smallkv")
+    adv, order = CV.D.advice_of(tr)
+    toks = CV.D.tokens_of(CV.D.holdings_of(tr), order, [q.prompt_len for q in adv.requests])
+    tokens = [tuple(toks[i]) for i, _P, _O in arrivals]
+    if (arrivals, dec, rows, tokens) != (list(x.sl.arrivals), list(x.sl.decisions), x.rows, list(x.sl.tokens)):
         raise SystemExit("the fixture isn't corpus-smallkv's first steps")
 
 
-def cases(x: SimpleNamespace, n: int) -> list[SimpleNamespace]:
-    """The statement's n units (the module's docstring): kind, the unit's rows, its declared charge and the reference's
-    verdict."""
-    out, red = [], CS.phase9(x.S, x.sl)
-    six = CS.Slice(x.sl.arrivals, (0,) * 6, x.sl.steps)
+def cases(x: SimpleNamespace, n: int, kinds: tuple[str, ...]) -> list[SimpleNamespace]:
+    """The statement's n units (the module's docstring): kind, the unit's rows, its declared charge, the window the
+    server registered for it and the reference's verdict."""
+    out, red, demo = [], CS.phase9(x.S, x.sl), x.name == "demo"
+    six = CS.Slice(x.sl.arrivals, (0,) * 6, x.sl.steps, x.sl.tokens)
     for i in range(n):
-        kind = KINDS[i] if i < len(KINDS) else "honest"
+        kind = kinds[i] if i < len(kinds) else "honest"
         kw = {"served": x.rows, **red.get(kind, {})}
         sl = six if kind.startswith("sixpass") else x.sl
         if kind == "flip":
             flip = list(x.sl.decisions)
-            flip[5] ^= 1
+            flip[2 if demo else 5] ^= 1
             kw["window"] = flip
         elif kind == "charge":
             kw["charge"] = CS.case(x.S, x.sl).length - 1
@@ -141,10 +165,21 @@ def cases(x: SimpleNamespace, n: int) -> list[SimpleNamespace]:
             cert = list(x.sl.arrivals)
             cert[1] = (cert[1][0], cert[1][1] + 1, cert[1][2])
             kw["cert"] = cert
+        elif kind == "table":
+            kw.update(CS.made_up(x.S, x.sl, 2, 2) if demo else CS.made_up(x.S, x.sl, 1), served=None)
+        elif kind == "tokens":
+            toks = [list(t) for t in x.sl.tokens]
+            toks[1][:x.S.B] = [9] * x.S.B if demo else toks[0][:x.S.B]
+            kw["tokens"] = toks
+        elif kind == "short":
+            kw["hits"] = {2: (0, 1, 1)}
+        elif kind == "unasked":
+            kw["hits"] = {0: (0, 0, 0)}
         elif kind == "sixpass-own":
             kw["served"] = None
         c = CS.case(x.S, sl, **kw)
         out.append(SimpleNamespace(kind=kind, case=c, charge=kw.get("charge", c.length),
+                                   registered=list(c.steps) if kind == "table" else x.rows,
                                    words={r: CS.words(c.rows[r]) for r in CS.ROWS}))
     return out
 
@@ -166,15 +201,15 @@ def stager(M, x: SimpleNamespace, n: int, out: Path) -> SimpleNamespace:
     st.pin
     (tid, base, cnt), = M.P.ranges(program, query)
     assert tid == M.P.template_id(defn) and cnt == n
-    return SimpleNamespace(S=x.S, defn=defn, rows=rows, program=program, query=query, n=n, base=base, st=st, out=out,
-                           part=part, lower_s=round(time.time() - t, 1), partition_file=out / "partition.json",
+    return SimpleNamespace(S=x.S, slice=x.name, defn=defn, rows=rows, program=program, query=query, n=n, base=base, st=st,
+                           out=out, part=part, lower_s=round(time.time() - t, 1), partition_file=out / "partition.json",
                            program_file=out / "program.json")
 
 
-def population(meta: dict) -> int:
+def population(meta: dict, kinds: tuple[str, ...]) -> int:
     """The fewest units whose statement fits `--zk`'s shape (k_log + nbl ≥ 25, `n2_zk.stage`), at least one unit a kind."""
     b = 25 - meta["k_log"]
-    return len(KINDS) if b <= 3 else max(len(KINDS), meta["vus_per_block"] * ((1 << (b - 1)) + 1))
+    return len(kinds) if b <= 3 else max(len(kinds), meta["vus_per_block"] * ((1 << (b - 1)) + 1))
 
 
 def certified(M, port, words: list[int], salt: bytes) -> bytes:
@@ -227,7 +262,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_law(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": "the compile slice on corpus-smallkv's first seven steps (compile_slice_zk.py)",
+    win = {"kind": "stand-in", "of": f"the compile slice's {sg.slice} window (compile_slice_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "compile_slice: each unit's adv row is the advice registration's row, its cert row the certified record's"}
     rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
@@ -318,36 +353,41 @@ def blobs_of(units: list[SimpleNamespace], salts: dict) -> tuple[dict[str, bytes
     return blobs, held
 
 
-def expected(kind: str, flags: dict) -> bool:
-    return {f for f, ok in flags.items() if not ok} == REFUSED[kind]
+def expected(x: SimpleNamespace, kind: str, flags: dict) -> bool:
+    return {f for f, ok in flags.items() if not ok} == REFUSED[x.name][kind]
 
 
 def prove(a) -> int:
-    x = load()
-    corpus_check(x)
-    log(f"slice: corpus-smallkv's first {x.S.P} steps, {x.sl.arrivals}, decisions {x.sl.decisions}, the fixture is the corpus's")
-    summary: dict = {"statics": x.st, "size": CS.size(**x.st), "slice": x.fx}
+    x = load(a.slice)
+    if x.name == "corpus":
+        corpus_check(x)
+        log(f"slice: corpus-smallkv's first {x.S.P} steps, {x.sl.arrivals}, decisions {x.sl.decisions}, the fixture is "
+            "the corpus's")
+    else:
+        log(f"slice: the demonstration class's {x.S.P} steps, {x.sl.arrivals}, decisions {x.sl.decisions}")
+    summary: dict = {"statics": x.st, "row_bits": CS.row_bits(x.S), "slice": {"name": x.name, **dataclasses.asdict(x.sl)},
+                     "kinds": a.kinds}
     secret = os.urandom(32)
     if a.dry:
-        units = cases(x, len(KINDS))
+        units = cases(x, len(a.kinds), a.kinds)
         summary["reference"] = [{"kind": u.kind, "verdict": u.case.verdict, "flags": u.case.flags} for u in units]
         log(f"dry: {summary['reference']}")
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-        return 0 if all(expected(u.kind, u.case.flags) for u in units) else 1
+        return 0 if all(expected(x, u.kind, u.case.flags) for u in units) else 1
     M = N2._one_stage()
     out = Path(a.out)
     CS.CompileSlice.build = CS._build
-    probe = stager(M, x, len(KINDS), out / "probe")
-    n = population(probe.st.meta)
+    probe = stager(M, x, len(a.kinds), out / "probe")
+    n = population(probe.st.meta, a.kinds)
     log(f"probe: k_log {probe.st.meta['k_log']}, vus_per_block {probe.st.meta['vus_per_block']}, lowered in {probe.lower_s} s; "
         f"{n} units")
-    sg = stager(M, x, n, out / "stager")
+    sg = probe if n == len(a.kinds) else stager(M, x, n, out / "stager")
     summary["stager"] = {"lower_s": sg.lower_s, "k_log": sg.st.meta["k_log"], "vus_per_block": sg.st.meta["vus_per_block"],
                          "pin": sg.st.pin, "rows": {r: b for r, _s, b, _p in sg.rows}, "n": n}
-    units = cases(x, n)
+    units = cases(x, n, a.kinds)
     for u in units:
-        if not expected(u.kind, u.case.flags):
+        if not expected(x, u.kind, u.case.flags):
             raise SystemExit(f"{u.kind}: the reference's flags {u.case.flags} are not the kind's")
     salt_key = hashlib.sha512(secret + b"row salts").digest()[:32]
     SB = M.CS.FC.SALT_BYTES
@@ -358,7 +398,7 @@ def prove(a) -> int:
     n_bits = 16 * len(honest["adv"])
     binding = bytes.fromhex(M.P.digest(sg.part))
     reg = ADV.register([bit_row((u.words["adv"], 16))[0] for u in units], n_bits, binding, salts["adv"])
-    served = SR.register(x.S, [x.rows] * n, binding, salts=salts["srv"])
+    served = SR.register(x.S, [u.registered for u in units], binding, salts=salts["srv"])
     binds = {"advice": reg, "binding": binding, "n_bits": n_bits, "served": served, "run_root": binding,
              "certified": certified(M, port_["cert"], honest["cert"], cert_salt)}
     m = stage(M, sg, units, salt_key, salts)
@@ -374,7 +414,7 @@ def prove(a) -> int:
     summary["staged"] = {"n": n, "ands": m["ands"], "unit_nnz": m["unit_nnz"], "stage_s": m["stage_s"], "k_log": m["meta"]["k_log"],
                          "pin": m["pin"], "verdict_words": m["oks"], "adv_bc_is_the_advice_leafs": same,
                          "srv_bc_is_the_served_leafs": srv_same}
-    log(f"staged: {n} units, {m['ands']} ANDs a unit, k_log {m['meta']['k_log']}, verdicts {m['oks'][:len(KINDS)]}..., "
+    log(f"staged: {n} units, {m['ands']} ANDs a unit, k_log {m['meta']['k_log']}, verdicts {m['oks'][:len(a.kinds)]}..., "
         f"adv b‖c is advice's: {same}, srv b‖c is the served rows' but sixpass-own's: {srv_same == srv_want}, {m['stage_s']} s")
     same &= srv_same == srv_want
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
@@ -390,7 +430,7 @@ def prove(a) -> int:
     ok = (res["accepted"] and all(res["verdicts"].values()) and got == want and same
           and [r["srv_bound"] for r in res.get("units", [])] == srv_want
           and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"])
-    log(f"proofs {res['verdicts']}, audit {res['audit']}, first units {[(r['kind'], hex(r['verdict_word']), r['adv_bound'], r['srv_bound'], r['cert_bound'], r['verdict']) for r in res.get('units', [])[:len(KINDS)]]}, "
+    log(f"proofs {res['verdicts']}, audit {res['audit']}, first units {[(r['kind'], hex(r['verdict_word']), r['adv_bound'], r['srv_bound'], r['cert_bound'], r['verdict']) for r in res.get('units', [])[:len(a.kinds)]]}, "
         f"per unit {res['per_unit']}, verifier received {res['received']['verifier_bytes']} bytes, witness pieces found "
         f"there: {res['received']['verifier_found'] or 'none'} (of {len(blobs)}), control {res['received']['control']['blobs_found']}; "
         f"{'as expected' if ok else 'UNEXPECTED'}")
@@ -415,9 +455,16 @@ def main(argv=None) -> int:
     p.add_argument("--port", type=int, default=7781)
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--points", default="", help="cost points: the k drawn units of each session, comma-separated")
+    p.add_argument("--slice", choices=tuple(REFUSED), default="demo", help="the window the units are of")
+    p.add_argument("--kinds", default="", help="the units' kinds in order, comma-separated, honest first (its cert row is "
+                   "the certified record's); every kind of the slice by default")
     p.add_argument("--dry", action="store_true", help="the slice and the reference only: nothing lowered or proved")
     a = ap.parse_args(argv)
     a.points = [int(k) for k in a.points.split(",") if k]
+    kinds = tuple(REFUSED[a.slice])
+    a.kinds = tuple(k for k in a.kinds.split(",") if k) or kinds
+    if a.kinds[0] != "honest" or not set(a.kinds) <= set(kinds):
+        raise SystemExit(f"--kinds: honest first, each of {', '.join(kinds)}")
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
     return prove(a)

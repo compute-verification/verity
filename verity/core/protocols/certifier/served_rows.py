@@ -1,6 +1,6 @@
 """The served rows: the step rows a served window ran, committed on the Commit side before the draw, which the compile
 slice's ``rows`` bit holds the replay to through its ``srv`` row. Were that row the prover's own word, a prover who served
-user-1's admission at the sixth ask could put six passes there, and the slice accepts it at 0x1F with a 5-bit code against
+user-1's admission at the sixth ask could put six passes there, and the slice accepts it at 0x3F with a 5-bit code against
 the honest 8 (REDTEAM phase 10, finding 2). With the row registered here in ``srv``, ``rows`` refuses it; with any other
 row, the verifier's b‖c check does.
 
