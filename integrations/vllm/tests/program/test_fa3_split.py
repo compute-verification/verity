@@ -159,6 +159,7 @@ AGREEMENT = [bind(BF.AttentionHeadSplitV2, T=17, D=16, BN=16, MASKED_FROM=1, PER
              bind(BF.AttentionHeadSplitV2, T=33, D=16, BN=16, MASKED_FROM=0, PER=1, **BAt.ATTENTION_FA3)]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT + [bind(BF.AttentionSplitV2, T=17, NH=2, KVH=1, D=16, BN=16, MASKED_FROM=1, PER=1,
                                                      **BAt.ATTENTION_FA3)], ids=lambda t: t.id)
 def test_the_boolean_version_is_boolean_and_its_word_view_is_v1(target) -> None:
@@ -168,6 +169,7 @@ def test_the_boolean_version_is_boolean_and_its_word_view_is_v1(target) -> None:
     assert SW.boolean_version(word).id == target.id
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_the_boolean_version_agrees_with_its_word_view(target) -> None:
     """Two and three splits, a partial last block: zeros, infinities, NaNs and subnormals through the blocks, each split's end and

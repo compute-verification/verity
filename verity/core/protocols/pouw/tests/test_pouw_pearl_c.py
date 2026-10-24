@@ -253,6 +253,26 @@ def test_registry_and_domain():
     assert s.first_adds(sh) == 32 * 128 * 256
 
 
+def test_the_census_k_is_in_v1s_domain_only():
+    """The H100 record's census k = 256 (GLM-5.3's down projections per TP8 rank) is in -h3 v1's domain, where a row's cap
+    is 4ρ (card a6872606), and no other k under 1,024 is; v0, h0 and sm_120's record have no census k."""
+    h3 = get("pearl-c-h100-v1-h3")
+    params = dict(h3.certificate.parameters)
+    assert h3.census_ks == (256,) and params["census_ks"] == (256,) and params["census_row_cap"] == "1/100"
+    assert any("TT_OUT per tile at ρr = 1/100" in h for h in h3.certificate.hypotheses)
+    h3.check(Matmul(0, Shape(64, 256, 6144), 1))
+    h3.check(Matmul(0, Shape(8192, 256, 6144), 1))
+    for bad in (Shape(64, 128, 6144), Shape(64, 512, 6144), Shape(64, 256, 96)):
+        with pytest.raises(DomainError, match="or k in 256"):
+            h3.check(Matmul(0, bad, 1))
+    for name in ("pearl-c-h100-v0", "pearl-c-h100-v1", "pearl-c-sm120-v1", "pearl-c-sm120-v1-h3"):
+        assert get(name).census_ks == () and dict(get(name).certificate.parameters)["census_ks"] == ()
+        assert "census_row_cap" not in dict(get(name).certificate.parameters)
+        with pytest.raises(DomainError, match="1024 <= k"):
+            get(name).check(Matmul(0, Shape(64, 256, 6144), 1))
+    assert C.PearlC(k_min=32, tile=(16, 16), forming="v1").census_ks == ()
+
+
 @pytest.mark.parametrize("case", [c["case"] for c in PINNED["cases"]])
 def test_vectors_are_pinned(case):
     spec = next(c for c in CV.CASES if c[0] == case)
