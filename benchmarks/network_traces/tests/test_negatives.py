@@ -17,6 +17,7 @@ import importlib.util
 import json
 import re
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -334,12 +335,55 @@ def test_a_request_missing_or_extra_takes_its_ingress_frames_out_of_or_into_rece
     assert b.received == [0, 3]
 
 
+def _advised(a: Advice, ingress_frames=(2, 1), received=(3,)) -> AdvisedAdvice:
+    return AdvisedAdvice([AdvisedRequest(q.id, q.prompt_len, q.output_len, q.finish, k)
+                          for q, k in zip(a.requests, ingress_frames)], a.steps, a.release, list(received))
+
+
+def _honest_heads(AD, a, T: int, R: int, syncs, own: int = 0) -> list[tuple[list[int], list[int]]]:
+    """Each window's (ingress, egress) counts an honest advised run of `a` certifies: the egress the release of the
+    advice's frames, the ingress the request frames its floor needs by each bucket and the rest in its last."""
+    out = []
+    for w in range(len(a.received)):
+        v = AD.view(a, w, T, R, syncs)
+        ingress, prev = [], 0
+        for t, f in enumerate(v.floor):
+            ingress.append(f - prev + (own if t == 0 else 0))
+            prev = f
+        ingress[-1] += v.received - prev
+        out.append((ingress, AD.derive(v.handed, v.queued, R)))
+    return out
+
+
+def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_units():
+    """Against N2-ADVICE's `advised` (skipped until it lands), on heads an honest run of the stand-in certifies: the
+    honest advice is accepted; length, missing, extra and release are refused by the advised counts, each well formed;
+    start and chunk are accepted, their frames honest's, so only the step unit can refuse them."""
+    AD = pytest.importorskip("verity.core.protocols.certifier.advised")
+    from verity.core.protocols.certifier.schedule import ClockSync
+
+    T, R, RIN, OWN, syncs = 8, 4, 8, 0, [ClockSync(1, Fraction(1))]
+    a = _advised(_advice())
+    heads = _honest_heads(AD, a, T, R, syncs)
+
+    def codes(b) -> list[str]:
+        return sorted({c for w, (i, e) in enumerate(heads) for c in NG.advised_codes(b, w, syncs, T, R, RIN, OWN, i, e)})
+
+    assert codes(a) == []
+    for name, n in NG.NEGATIVES.items():
+        if n.tampers == "advice":
+            assert codes(n.make.edit(a)) == ([] if n.code.startswith("StepUnit") else [n.code]), name
+    assert codes(dataclasses.replace(a, release=a.release[:-1])) == [f"{NG.ADVISED}.view"]
+
+
 def test_advice_release_moves_one_step_one_bucket_and_keeps_the_order():
+    """By default the first step that samples a token (step 1: r0's last prefill chunk and r1's prefill), the step
+    after it moved up with it."""
     a = _advice()
     b = NG.release_moved(a)
-    assert [y - x for x, y in zip(a.release, b.release)] == [1, 0, 0, 0]
-    assert b.release == sorted(b.release) and b.steps == a.steps and b.requests == a.requests
+    assert b.release == [2, 4, 4, 5] and b.steps == a.steps and b.requests == a.requests
     assert NG.release_moved(a, step=3).release == [2, 3, 3, 6]
+    assert NG.release_moved(a, step=0, by=2).release == [4, 4, 4, 5]
 
 
 def test_advice_start_shifts_one_decode_row_with_its_frames_kept_and_changes_one_steps_shape():

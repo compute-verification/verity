@@ -228,12 +228,16 @@ def extra_request(advice, request: int = 0, suffix: str = "~extra"):
 
 
 def release_moved(advice, step: int | None = None, by: int = 1):
-    """Step `step`'s output released `by` buckets later: by default the first step that can move one later and stay
-    in order, else the last. The advice's release disagrees with the egress buckets certified."""
-    rel = list(advice.release)
+    """Step `step`'s output released `by` buckets later (by default the first step that samples a token), and each later
+    step released before that bucket moved up to it, so the release stays in order. The advice's release disagrees with
+    the egress buckets certified."""
     if step is None:
-        step = next((s for s in range(len(rel) - 1) if rel[s] + by <= rel[s + 1]), len(rel) - 1)
+        step = min((s for i in range(len(advice.requests)) for s, _ in sampling_rows(advice, i)), default=None)
+        if step is None:
+            raise NotApplicable("no step samples a token")
+    rel = list(advice.release)
     rel[step] += by
+    rel[step + 1:] = [max(b, rel[step]) for b in rel[step + 1:]]
     return replace(advice, release=rel)
 
 
@@ -283,7 +287,7 @@ def advice_edit(edit: Callable) -> Callable[[Path, Path, Path], Path]:
         copy_run(src, dst)
         (dst / "advice.bin").write_bytes(mod.encode(edit(mod.decode(advice.read_bytes()))))
         return dst
-    make.__name__ = f"advice_{edit.__name__}"
+    make.__name__, make.edit = f"advice_{edit.__name__}", edit
     return make
 
 
@@ -431,6 +435,20 @@ def codes(lw: LinkWindows, opening, root: bytes, syncs: list[ClockSync]) -> list
     w = opening.window
     out += [f"audit.{v[w].violation}" for v in (egress, ingress) if len(v) > w and v[w].violation is not None]
     return sorted(set(out))
+
+
+def advised_codes(advice, window: int, syncs, T: int, R: int, RIN: int, OWN: int, ingress, egress) -> list[str]:
+    """N2-ADVICE's code on one advised link-window with heads of counts `ingress` and `egress`, as
+    `LinkWindows.advised_check` decides it (`advised.view`, then `advised.reference`): ``.view`` when the advice is
+    malformed or doesn't cover the window, the advised counts' when they refuse, else none. Raises ModuleNotFoundError
+    until N2-ADVICE lands."""
+    AD = importlib.import_module("verity.core.protocols.certifier.advised")
+    try:
+        v = AD.view(advice, window, T, R, syncs)
+    except ValueError:
+        return [f"{ADVISED}.view"]
+    ok = AD.reference(T, R, RIN, OWN, ingress, egress, v.handed, v.floor, v.queued, v.received)
+    return [] if ok else [ADVISED]
 
 
 def n2(run: Path, clock=time.monotonic) -> dict:
