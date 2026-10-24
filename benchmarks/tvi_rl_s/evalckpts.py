@@ -34,7 +34,10 @@ def main():
     ap.add_argument("--passk-limit", type=int, default=0)
     ap.add_argument("--out", required=True)
     ap.add_argument("--skip-done", type=int, default=1)
+    ap.add_argument("--unmerged", default="", help="methods (joined by +) whose adapters are served by vLLM's LoRA path "
+                    "(W0 x + B A x in bf16, as in training) instead of merged into bf16 weights")
     args = ap.parse_args()
+    unmerged = set(args.unmerged.replace("+", ",").split(",")) - {""}
 
     from safetensors.torch import load_file
     from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -55,19 +58,27 @@ def main():
     print(f"{len(jobs)} evaluations", flush=True)
     tok = AutoTokenizer.from_pretrained(args.model)
     llm = LLM(model=args.model, dtype="bfloat16", gpu_memory_utilization=0.6, max_model_len=2560, enable_prefix_caching=True,
-              max_num_seqs=1024, seed=0)
+              max_num_seqs=1024, seed=0, **({"enable_lora": True, "max_lora_rank": 16, "max_loras": 1} if unmerged else {}))
     base = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16).cuda()
     base_sd = [(n, p.detach()) for n, p in base.named_parameters()]
     linears = dict(grpo.target_linears(base))
     tests = {t: grpo.load_jsonl(Path(args.data) / f"{t}_test.jsonl") for t in ("gsm8k", "math")}
+    lora_id = 0
     for d, meta in jobs:
         label = f"{meta['task']}-{meta['method']}-seed{meta['seed']}-step{meta['step']}"
+        if d is not None and meta["method"] in unmerged:
+            label += "-unmerged"
         dst = out / f"ckpteval-{label}.json"
         if args.skip_done and dst.exists():
             continue
         t0 = time.time()
         grpo.sync_weights(llm, base_sd)
-        if d is not None:
+        lreq, mode = None, "merged"
+        if d is not None and meta["method"] in unmerged:
+            from vllm.lora.request import LoRARequest
+            lora_id += 1
+            lreq, mode = LoRARequest(label, lora_id, str(d)), "vllm-lora"
+        elif d is not None:
             if (Path(d) / "model.safetensors").exists():
                 grpo.sync_weights(llm, load_file(str(Path(d) / "model.safetensors"), device="cuda").items())
             else:
@@ -79,11 +90,11 @@ def main():
                 grpo.sync_weights(llm, pairs)
         dt = data_task(meta["task"])
         rows = tests[dt]
-        per_g, _ = grpo.evaluate(llm, tok, rows, dt, 1024 if dt == "gsm8k" else 1536)
+        per_g, _ = grpo.evaluate(llm, tok, rows, dt, 1024 if dt == "gsm8k" else 1536, lora=lreq)
         per_s, lens = grpo.evaluate(llm, tok, rows, dt, 1024 if dt == "gsm8k" else 1536, n=args.n,
-                                    temperature=args.temperature, top_p=1.0)
+                                    temperature=args.temperature, top_p=1.0, lora=lreq)
         res = {"label": label, "task": meta["task"], "method": meta["method"], "seed": meta["seed"], "step": meta["step"],
-               "S_bits": meta["S_bits"], "n_params": meta.get("n_params", 0), "ckpt": d, "model": args.model,
+               "S_bits": meta["S_bits"], "n_params": meta.get("n_params", 0), "ckpt": d, "model": args.model, "mode": mode,
                "greedy_acc": sum(c[0] for c in per_g) / len(per_g), "greedy_per_problem": [c[0] for c in per_g],
                "sampled": {"n": args.n, "temperature": args.temperature, "top_p": 1.0,
                            "acc": sum(sum(c) / len(c) for c in per_s) / len(per_s),
@@ -91,7 +102,7 @@ def main():
         if args.passk:
             pr = rows[:args.passk_limit] if args.passk_limit else rows
             per_k, _ = grpo.evaluate(llm, tok, pr, dt, 1024 if dt == "gsm8k" else 1536, n=args.passk, temperature=0.6,
-                                     top_p=0.95)
+                                     top_p=0.95, lora=lreq)
             counts = [int(sum(c)) for c in per_k]
             ks = [k for k in (1, 2, 4, 8, 16, 32, 64) if k <= args.passk]
             res["passk"] = {"n": args.passk, "temperature": 0.6, "top_p": 0.95, "problems": len(pr), "counts": counts,

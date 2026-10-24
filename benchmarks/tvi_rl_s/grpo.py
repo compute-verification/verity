@@ -272,16 +272,17 @@ def load_ckpt(llm, ckpt, model_name):
     sync_weights(llm, pairs)
 
 
-def generate(llm, prompts, n, temperature, top_p, max_tokens, seed=None):
+def generate(llm, prompts, n, temperature, top_p, max_tokens, seed=None, lora=None):
     from vllm import SamplingParams
     sp = SamplingParams(n=n, temperature=temperature, top_p=top_p, max_tokens=max_tokens, stop_token_ids=STOP_IDS)
-    outs = llm.generate(prompts, sp, use_tqdm=False)
-    return outs
+    if lora is not None:
+        return llm.generate(prompts, sp, use_tqdm=False, lora_request=lora)
+    return llm.generate(prompts, sp, use_tqdm=False)
 
 
-def evaluate(llm, tok, rows, task, max_tokens, n=1, temperature=0.0, top_p=1.0, seed=0):
+def evaluate(llm, tok, rows, task, max_tokens, n=1, temperature=0.0, top_p=1.0, seed=0, lora=None):
     prompts = [chat(tok, r["q"]) for r in rows]
-    outs = generate(llm, prompts, n, temperature, top_p, max_tokens, seed)
+    outs = generate(llm, prompts, n, temperature, top_p, max_tokens, seed, lora=lora)
     score = SCORERS[task]
     per = []
     lens = []

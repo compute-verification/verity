@@ -98,14 +98,15 @@ def load(dirs):
             r = json.load(open(p))
             if "passk" in r:
                 passk[f"{r['task']} {r['method']} seed{r['seed']} step{r['step']}"] = r["passk"]
-            run = {"seed": r["seed"], "S_bits": r["S_bits"], "n_params": r["n_params"], "steps": r["step"], "step": r["step"]}
+            run = {"seed": r["seed"], "S_bits": r["S_bits"], "n_params": r["n_params"], "steps": r["step"], "step": r["step"],
+                   "prio": 1 if r.get("mode") == "vllm-lora" else 0}
             s = dict(run, acc=r["sampled"]["acc"], per_problem=r["sampled"]["per_problem"], T=r["sampled"]["temperature"],
                      n=r["sampled"]["n"])
             g = dict(run, acc=r["greedy_acc"], per_problem=r["greedy_per_problem"])
             for store, x in ((sampled, s), (ck_greedy, g)):
                 lst = store[r["task"]][r["method"]]
                 old = [y for y in lst if y["seed"] == x["seed"]]
-                if old and old[0]["step"] >= x["step"]:
+                if old and (old[0]["step"], old[0]["prio"]) >= (x["step"], x["prio"]):
                     continue
                 lst[:] = [y for y in lst if y["seed"] != x["seed"]] + [x]
     return greedy, sampled, ck_greedy, passk
