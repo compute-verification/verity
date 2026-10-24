@@ -977,9 +977,7 @@ registered rows.
 Still to build: a unit proved on the warden's registered rows through `bucket_port` (the tests hold each bucket's row to
 the warden's registered row and its port to row t a unit; no proof reads them yet), the port's real layout and
 registration (vllm's Commit), the target's map registration and its range read, the ingress tie's view read under the
-advice's hiding root, the real Commit's `c00.input/ids` rows that the ingress-ids tie (`io_ids`) reads, and the ingress
-ties on the warden's ingress slots (a `PAD` on the connection's stream in its own slots, read as registered rows;
-`io_request` and `io_ids` still read an ingress pad as B zero bytes and recompute their cells' root).
+advice's hiding root, and the real Commit's `c00.input/ids` rows that the ingress-ids tie (`io_ids`) reads.
 
 **Open for proofs.**
 - Hidden-position reads (frame and port) under the one soundness theorem. In v4 every read is at a public position
@@ -1124,20 +1122,25 @@ requests, whose frames are a function of the prompt's length alone), for every p
   its verdict on every ingress window of this link's registrations, for the same advice digest, from proofs the
   verifier of record verified itself (`advised.IoTieVerdict`, naming the link, the registrations and the advice),
   given by the verifier's own tie source (`LinkWindows.ties`). The tie service (`tie_service.IngressTie`) builds it,
-  and `tie_service.Ties` is that source. The warden commits each ingress link-window's T bucket rows under fresh
-  salts and registers their root, one proof unit a registration, held to the window's order. The unit is
-  `NetworkIngressTieWindow`: one gate naming IoTieRequest and its pinned circuit digest
-  (`io_request.circuit-check.json`) and a zero pad that fills the witness row to whole u16 words. The verifier of
-  record decides each window on the proof alone against its own statement (`io_request.statements` from the advice
-  it holds), and reports the advice's digest. `IngressTie.tie` reads the verdict from the stream's outcomes of
-  record alone, on the link and the stream's registrations. Window w is accepted when its outcome is, decided on the
-  proof for the advice's digest. Every window is refused unless the stream registers exactly the advice's windows in
-  order, their statements chain from window 0 (`chained`), and the advised profile's framing and OWN are
-  IoTieRequest's. A size class with no pinned digest has no accepted proof, and at the served size none is pinned
-  (about 1.14 × 10^10 ANDs a window), so there every advised link is still refused, never accepted.
-  `tests/test_network_certifier_tie_service.py` holds REDTEAM phase 9's carried field count, its forged advice and
-  phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`). The advised tests stand in
-  for the source with its reference in the clear (`tests/advised_traffic.py`, `StandInTie`).
+  and `tie_service.Ties` is that source. A registration is one ingress link-window, the warden's salted root of its
+  T bucket rows, held to the window's order, and T proof units, unit t bucket row t. The unit is
+  `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
+  (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the warden's root by the
+  verifier's own registered read (`warden_rows.bucket_port`). The statement is a shared-row file whose `wit` table is
+  the registered port. The verifier of record decides each window on the proof alone, each unit's `pub` row opened to
+  its own lanes (`io_request.lanes`, from the advice it holds and the warden's release, taken in the clear), and
+  reports the advice's digest. `IngressTie.tie` reads the verdict from the stream's outcomes of record alone, on the
+  link and the stream's registrations. Window w is accepted when its outcome is, decided on the proof for the
+  advice's digest. Every window is refused unless the stream registers exactly the advice's windows in order, the
+  release is the warden's schedule for the advice and puts `received`'s request cells in each window, and the advised
+  profile's framing is the warden's cut (`tie_service.framing`) with no own frame. A connection's lanes chain from
+  (0, 0) into its first bucket to (0, n) out of its `END`'s, so the units together hold each request's count across
+  the buckets it spans. A size class with no pinned digest has no accepted proof, and at the served size none is
+  pinned (1,500,947 ANDs a bucket row, about 9.0 × 10^8 a 600-bucket window), so there every advised link is still
+  refused. `tests/test_network_certifier_tie_service.py` holds REDTEAM phase 9's carried field count, its forged
+  advice and phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`), and
+  `benchmarks/network_traces/n2_tie_zk.py` proves them live. The advised tests stand in for the source with its
+  reference in the clear (`tests/advised_traffic.py`, `StandInTie`).
 - **Bucket 0 is capped at R_in, which holds the own frame.** The ingress certifier releases min(queue, r_in) frames a
   bucket (`grid.Certifier`) with its own frame queued at the head of the queue, ahead of bucket 0's arrivals and of any
   request frames carried from the window before (`active.Bucketer`), and a head with a count past its allocation
