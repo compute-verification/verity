@@ -34,7 +34,11 @@ class EagerRows4kArm(CommitArm):
 
     def ready(self, target: Any) -> None:
         from verity_vllm.commit import step_rows
-        from verity_vllm.commit.committer import host_retention, native_collect, native_host
+        from verity_vllm.commit.committer import (
+            host_retention,
+            native_collect,
+            native_host,
+        )
 
         step_rows.ROW_BYTES = native_host.GPU_CHUNK_BYTES = native_collect.GPU_CHUNK_BYTES = host_retention.GPU_CHUNK_BYTES = ROW_BYTES
         super().ready(target)

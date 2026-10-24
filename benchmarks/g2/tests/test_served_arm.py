@@ -93,7 +93,7 @@ def _run_served_arm(tmp_path: Path, **env: str) -> tuple[subprocess.CompletedPro
     (tree / "bin" / "nvidia-smi").write_text("#!/bin/sh\necho '0, NVIDIA RTX PRO 6000 Blackwell Server Edition, 0 MiB'\n")
     (tree / "bin" / "nvidia-smi").chmod(0o755)
     run = subprocess.run(["bash", str(SERVED_COMMIT / "served_arm.sh"), "--spec", "s.toml"], cwd=tree, capture_output=True,
-                         text=True, env={"PATH": f"{tree / 'bin'}:{os.environ['PATH']}", "OUT": str(out), "LOG": str(log), **env})
+                         text=True, check=False, env={"PATH": f"{tree / 'bin'}:{os.environ['PATH']}", "OUT": str(out), "LOG": str(log), **env})
     return run, out, [line.split("|") for line in log.read_text().splitlines()]
 
 
