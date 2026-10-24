@@ -14,6 +14,9 @@ that credits, draws and checks by them, with its clear audit, is a reference too
   - Its excluded rows: A rows of the matmul and B rows of its weight that fail the scheme's per-row rules.
   - Its voluntary rows (V-EX): rows it gives up, which earn no credit.
   `records_root` binds the records and the splits.
+* **`pad_weight`**: a weight whose n is not whole column tiles (GLM-5.3's lm_head, 19360 rows a TP8 rank) is served with
+  zero rows up to the next whole tile. A zero row fails the noise floor (ρ = 0), so the records exclude it, and its cells
+  earn nothing.
 """
 
 from __future__ import annotations
@@ -92,6 +95,18 @@ class UnitRecord:
         """The tile's credited rows and columns: real, neither excluded nor voluntary."""
         ua, ub = set(self.excluded_a) | set(self.voluntary_a), set(self.excluded_b) | set(self.voluntary_b)
         return [i for i in tile.rows if i < self.real_rows and i not in ua], [j for j in tile.cols if j not in ub]
+
+
+def pad_weight(rows: Sequence[bytes], tile_n: int) -> list[bytes]:
+    """A weight's rows (FP32 words along k), with all-zero rows appended up to a whole number of `tile_n`-column tiles.
+    The padded rows' outputs are not the model's, and the glue drops them.  They earn no credit: each fails the noise
+    floor, so it is an excluded B row, and a cell's credit is its row's share of `credit_of` at the padded n, so the real
+    columns earn less than an unpadded n's honest credit, never more.  It rests on the work sampling design's exclusion
+    of a failing weight row: Lean's `TileGood` asks `weightOK` of every column, so `TileCheck.Accepts` refuses the last
+    tile (approaches registry `pouw/work-law-weight-row-exclusion`)."""
+    if not rows or len({len(r) for r in rows}) != 1:
+        raise ValueError("a weight's rows are one length")
+    return list(rows) + [bytes(len(rows[0]))] * (-len(rows) % tile_n)
 
 
 def records_root(salt: bytes, weights_root: bytes, splits: Mapping[int, Split], records: Sequence[UnitRecord]) -> bytes:

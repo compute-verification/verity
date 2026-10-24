@@ -235,6 +235,34 @@ def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
                                                for v in rejected.audit.verdicts)
 
 
+def test_a_weight_padded_to_whole_tiles_earns_credit_on_its_real_columns_only():
+    """GLM-5.3's lm_head is 19360 rows a TP8 rank, not whole 64-column tiles; padded with zero rows to 19392 it is in
+    Pearl-C's domain.  Here 20 rows padded to 32 on 16-column tiles: the zero rows fail the noise floor, so the records
+    exclude them, the audit accepts, and the credit is the 32 x 20 real cells at the padded n's cell credit, under the
+    real columns' honest credit.  Declaring the zero rows credited fails their tile."""
+    rows_a = CV.rows_f32("work-pad", "A", 32, K)
+    real = CV.rows_f32("work-pad", "B", 20, K)
+    rows_b = W.pad_weight(real, S.tile[1])
+    assert rows_b[:20] == real and rows_b[20:] == [C.f32_row([0] * K)] * 12 and W.pad_weight(rows_b, 16) == rows_b
+    with pytest.raises(DomainError):
+        S.check(Matmul(3, Shape(32, K, 20), 9))
+    S.check(Matmul(3, Shape(32, K, 32), 9))
+    with pytest.raises(ValueError):
+        W.pad_weight([real[0], real[1][:8]], 16)
+    work = Workload((Matmul(3, Shape(32, K, 32), 9),))
+    prover = Prover(S, {9: rows_b})
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
+    tr = prover.prove(epoch, {3: rows_a})
+    records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS)
+    assert records == [W.UnitRecord(work.matmuls[0], 32, K, (), tuple(range(20, 32)))]
+    out = CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
+    assert out.audit.accepted
+    assert out.credit == (1 - S.cap) * CW.cell_credit(S, records[0]) * 32 * 20
+    assert out.credit < (1 - S.cap) * S.credit_of(Shape(32, K, 20))
+    rejected = CW.audit(S, epoch, prover, tr, SPLITS, [W.UnitRecord(work.matmuls[0], 32, K)], E.challenger(), 32)
+    assert not rejected.audit.accepted and any(v.reason and "credited but fails" in v.reason for v in rejected.audit.verdicts)
+
+
 def test_r1_is_a_no_op_on_pearl_c():
     """R1, the salted per-row credit rule `check_opened` and `declare` now consult, is Pearl-C4's (its F1′ bound).
     Pearl-C (FP8) brings no hook, so an excluded row that passes the per-row rules still fails its tile, and declaring

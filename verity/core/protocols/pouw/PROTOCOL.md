@@ -286,6 +286,12 @@ One rule for every construction that serves a checkpoint: Pearl-C4 (`PearlC4.che
   layer 0's update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded. The rotation folds γ, so
   its stacks pass as they are. An unrotated, curated checkpoint declares `gamma-fold` (every RMSNorm scale folded into
   the linears it feeds), and takes no V/O or interleave.
+- **The rotation reaches only the residual stream's linears** (`check_linear`). It mixes the residual stream alone: a
+  linear that reads it takes the rotation on its columns, one that writes it on its rows. A linear off the stream keeps
+  the checkpoint's weights, so under a rotated stack it is not registered and earns no credit, though it is still served
+  and bound. Those linears are MLA's q_b and kv_b (with the absorbed W_UK_T and W_UV) and the DSA indexer's wq_b, each
+  behind its latent's own RMSNorm. On GLM-5.3 at TP8, Pearl-C admits q_b and wq_b, and the rotation leaves both
+  uncredited (compute-accounting's `glm53_rotation` run). A curated unrotated checkpoint registers each of its linears.
 - **The keyed transforms are keyed after the weights' root is recorded**, by `rotation_key`:
   `derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`, over the salt of an epoch
   started from the challenger's salt coin (`Epoch.start`). It refuses any other salt: an `Epoch.unverified` one, a
@@ -898,6 +904,10 @@ useful    U/(α_A·α_B), glue
       tile as `check_tile` does. The work sampling design stays credit-sound there only while an excluded column earns
       nothing (`test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted`); approaches registry
       `pouw/work-law-weight-row-exclusion`.
+  - A weight whose n is not whole column tiles is served zero-padded to the next whole tile (`pad_weight`; GLM-5.3's
+    lm_head, 19,360 rows a TP8 rank, to 19,392). Each zero row fails the noise floor, so it is an excluded row and earns
+    nothing, and the real columns' credit is at the padded n's cell credit, below their honest credit. That rests on the
+    exclusion above: Lean refuses the last tile until it models a failing weight row.
   - **Voluntary rows (V-EX;** the assessor's B at 17:32Z**):** the record may also give up up to ⌈m/64⌉ A rows
     (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same in every unit of the weight).
     - They are committed in `records_root` beside the excluded rows, before the draw coin opens. A record without them
