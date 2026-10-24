@@ -25,12 +25,6 @@ def EncVec.holds (v : EncVec) : Bool :=
     | some x => x == 0 || (e4m3 x).val == v.c
     | none => true
 
-/-- A BF16 vector holds: `bf16Rn` maps the FP32 word's value to the value of the BF16 word (read as the FP32 word `h <<< 16`). -/
-def Bf16Vec.holds (v : Bf16Vec) : Bool :=
-  match wordQ v.u, wordQ (v.h <<< 16) with
-  | some x, some y => decide (bf16Rn x = y)
-  | _, _ => false
-
 /-- An FP32 multiply vector: the words `a`, `b` and the word `p` IEEE binary32 multiplication writes for them. -/
 structure F32Vec where
   a : Nat

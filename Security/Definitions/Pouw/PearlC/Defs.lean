@@ -90,6 +90,12 @@ structure Bf16Vec where
   u : Nat
   h : Nat
 
+/-- A BF16 vector holds: `bf16Rn` maps the FP32 word's value to the value of the BF16 word (read as the FP32 word `h <<< 16`). -/
+def Bf16Vec.holds (v : Bf16Vec) : Bool :=
+  match wordQ v.u, wordQ (v.h <<< 16) with
+  | some x, some y => decide (bf16Rn x = y)
+  | _, _ => false
+
 /-! ## FP32 words from values -/
 
 /-- The FP32 word of `x` rounded to nearest even with IEEE binary32's range: `+0` at `0`, subnormals below `2^−126`

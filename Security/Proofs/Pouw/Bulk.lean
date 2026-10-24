@@ -1,4 +1,5 @@
-import Definitions.Pouw.Fp8Atom.Fp32
+import Proofs.Pouw.Fp8Atom.Atom
+import Proofs.Pouw.Fp8Atom.Fp32
 
 /-!
 # The bulk conformance test (compiled evaluation: a test, not a proof)
