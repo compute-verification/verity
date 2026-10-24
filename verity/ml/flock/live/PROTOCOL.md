@@ -981,7 +981,8 @@ to decide after the fact.
 
 The inner phase's controls are V*'s: `rec_inner.py forge --what top` (a clear top that does not open the salted one the coin
 server received) and `--what unsalted` (a record of clear tops), refused `FIREWALL-REFUSED: tree top: …` by `rec_vstar`.
-`85-rec-reprice.sh` runs both phases on node 1 (`STEP=icheck`; `STEP=oprove MODES=dev,host,firewall CONTROLS=L6`).
+`85-rec-reprice.sh` runs both phases (`STEP=icheck`; `STEP=oprove MODES=firewall WARM=0 RUNS=1 CONTROLS=L6`, one
+session per staged statement, and `MODES=dev,host` in a job of its own for the firewall's cost).
 
 **What it cost** with Rust's shadow opening and `commit_zk` recheck, before the Lean finish held them (node 1, one RTX PRO 6000, the prover's 16 cores shared with the firewall; K = 4096, V*'s eight `--zk`
 statements L0–L6 and the algebra, m = 28–32; medians of 3 sessions after 1 warm, summed over the eight): prove 46.8 s
@@ -1065,16 +1066,19 @@ language: that assumption covers the values one session's transcript reports the
 decides them on the record, session by session, before anything leaves; the tests' Python relay decides its own unchecked,
 and refuses a schedule.
 
-**Outer proofs one at a time.** The firewall has one slot across streams and protocols (`slot.lock` in its state directory,
-which every relay process of the firewall shares). An outer session takes it at its first request other than `Ping` and holds
-it until the session is released or fails; a session that asks meanwhile waits (`wait`) and takes it after, so in the record
-each `slot` is followed by its session's outcome before the next `slot`. The auditor's outer sessions therefore run in
-sequence, never interleaved: the shape soundness already composes (`Multi.seqC`,
-note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2), and no concurrent zero knowledge between outer
-proofs is needed. The slot orders sessions but doesn't choose which goes first: across streams the worker picks the
-interleaving. Rule 3's schedule fixes it: each scheduled outer session's proofs leave at its own public time, so the
-interleaving across streams is the schedules', not the worker's. Through the Python relay, which keeps no schedule, it is
-the worker's.
+**Outer proofs as independent sessions.** AGENTS.md's rule (Daniel's provisional batch, 24 Oct): each staged statement
+is fixed before any session draws coins and gets exactly one session; each session draws its own live coins in its own
+firewall pass; no statement reads another session's transcript or coins; every session is recorded and every verdict counts.
+Sessions may therefore run at once (pod 85's `STEP=oprove`, `OPROVE_JOBS`, which enforces the rule). This relay is stricter:
+it has one slot across streams and protocols (`slot.lock` in its state directory, which every relay process of the firewall
+shares). An outer session takes it at its first request other than `Ping` and holds it until the session is released or
+fails; a session that asks meanwhile waits (`wait`) and takes it after, so in the record each `slot` is followed by its
+session's outcome before the next `slot`. Through it the auditor's outer sessions run in sequence, never interleaved, the
+shape soundness composes (`Multi.seqC`, note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2);
+sessions run at once rest on the provisional batch until a composition for them is proved. The slot orders sessions but
+doesn't choose which goes first: across streams the worker picks the interleaving. Rule 3's schedule fixes it: each
+scheduled outer session's proofs leave at its own public time, so the interleaving across streams is the schedules', not
+the worker's. Through the Python relay, which keeps no schedule, it is the worker's.
 
 **The bound.** A session of `M_p` messages ends finished, never opened, stopped after its `k`-th message (`k < M_p`), or (an
 outer session) rejected by serve's verdict. Without the relay, an outer stop also shows whether `Finish` came. Through the
