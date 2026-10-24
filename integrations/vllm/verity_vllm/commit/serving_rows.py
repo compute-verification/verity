@@ -42,8 +42,11 @@ before each step's live coin (``row_tables.step_roots``): a step's tables in ``R
 row) under the serve-time ``table_domain`` of the window's ``context``, salted by ``step_salts`` under the run's row key, and the
 step's root the tree over their roots.  The window registers one port for them, ``row-table``: the tree over its steps' roots
 (served-domain rule, leaf schema ``ROOTS_SCHEMA``), so no row is committed twice.  Its linked members (``Member.links``) are
-shared-row chunks whose ``x`` table holds the distinct token rows they read, each under its row table row's salt (so the same
-``b || c``), read by offset; ``row_tables.check_row_tables`` ties them to the step roots.  ``write`` adds ``t<k>-public.bin``
+shared-row chunks whose ``x`` table holds the distinct token rows they read, all of one row table, each under its row table
+row's salt (so the same ``b || c``), read by offset (``Member.link_units``); ``row_tables.check_row_tables`` ties them to the
+step roots.  Each linked member's public header names its ``x`` rows registered reads of its row table (``registered_entry``:
+each row's rank and path to the table's root), which the Lean verifier opens against its own ``--registered`` file
+(``row_tables.registered_reads``), the one form in which it covers a shared-row file.  ``write`` adds ``t<k>-public.bin``
 (every row's ``b || c``) and ``t<k>-private.bin`` (rows, then salts; prover only).
 """
 from __future__ import annotations
@@ -253,6 +256,7 @@ class Member:
     name: str = ""
     schemas: tuple[tuple[str, str], ...] = ()
     links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the window's row table and rank it is
+    link_units: tuple[int, ...] = ()             # a row-table member: per link, how many of its units (consecutive, in order) read it
 
     def __post_init__(self) -> None:
         if self.schemas and (sorted(p for p, _ in self.schemas) != sorted(p for p, _ in self.rows + self.outs)
@@ -260,6 +264,17 @@ class Member:
             raise ValueError(f"{self.key}: a bit-row member names one of {BIT_ROW_SCHEMAS} for each port, not {dict(self.schemas)}")
         if self.links and dict(self.tables).get(LINKED) != len(self.links):
             raise ValueError(f"{self.key}: {len(self.links)} links, one per row of its {LINKED!r} table {dict(self.tables)}")
+        if self.links and len({t for t, _ in self.links}) != 1:
+            raise ValueError(f"{self.key}: links {self.links} name several row tables; a linked member's {LINKED!r} rows are one "
+                             "table's, the one root its registered reads open against")
+        if (len(self.link_units) != len(self.links) or any(type(c) is not int or c < 1 for c in self.link_units)
+                or (self.links and sum(self.link_units) != self.n)):
+            raise ValueError(f"{self.key}: link units {self.link_units} are not one positive count per link summing to its {self.n} units")
+
+    @property
+    def link_refs(self) -> tuple[int, ...]:
+        """A linked member's refs into its ``x`` table: each unit's link, in order."""
+        return tuple(j for j, c in enumerate(self.link_units) for _ in range(c))
 
     @property
     def key(self) -> str:
@@ -709,6 +724,20 @@ def index_bytes(doc: dict[str, Any]) -> bytes:
     return (json.dumps(doc, separators=(",", ":")) + "\n").encode()
 
 
+def registered_entry(c: Committed, m: Member, trees: dict[int, RT.RowTable] | None = None) -> dict[str, Any]:
+    """Linked member ``m``'s public header ``registered`` entry: its ``x`` table's rows are rows of its row table (the value,
+    named by the table's port), each at its rank with its path to the table's root (``RT.RowTable.path``), which the Lean
+    verifier opens against the root its own ``--registered`` file names (``row_tables.registered_reads``).  ``trees``
+    caches each table's tree by its index."""
+    t, trees = m.links[0][0], {} if trees is None else trees
+    tab = c.window.row_tables[t]
+    if t not in trees:
+        bc = c.bc[tab.port]
+        trees[t] = RT.RowTable(c.window.table_domain(t), [bc[i * BC_BYTES:(i + 1) * BC_BYTES] for i in range(tab.n)])
+    return {LINKED: {"value": tab.port, "positions": [r for _, r in m.links],
+                     "paths": [trees[t].path(r).hex() for _, r in m.links]}}
+
+
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
           kind: str = "served") -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`); the window's provenance gets the index's SHA-512
@@ -719,6 +748,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     (d / "index.json").write_bytes(ib)
     rec = registration(c, {**provenance, "index": hashlib.sha512(ib).hexdigest(), "order": ORDER}, kind=kind)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
+    trees: dict[int, RT.RowTable] = {}
     members = []
     for k, m in enumerate(c.window.members):
         pub = c.public_body(k)
@@ -734,7 +764,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                         "units_sha512": hashlib.sha512(ub).hexdigest(),
                         **({"row_schemas": m.row_schemas} if m.schemas else {}),
                         **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {}),
-                        **({"row_links": [list(x) for x in m.links]} if m.links else {})})
+                        **({"row_links": [list(x) for x in m.links], "registered": registered_entry(c, m, trees)} if m.links else {})})
     tables = []
     for t, tab in enumerate(c.window.row_tables):
         pub = c.table_public(t)
@@ -790,6 +820,8 @@ def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir
             "circuit_sha512": hashlib.sha512(circuit_text.encode()).hexdigest(), "units": units, "frame_v3": mem["frame_v3"], "rows": True}
     if mem.get("shared_rows"):
         head["shared_rows"] = mem["shared_rows"]
+    if mem.get("registered"):
+        head["registered"] = mem["registered"]
     o.mkdir(parents=True, exist_ok=True)
     pub = (d / f"m{k}-public.bin").read_bytes()
     (o / f"m{k}-pub-{n}.bin").write_bytes(json.dumps(dict(head, rows=False), sort_keys=True).encode() + b"\n" + pub)
