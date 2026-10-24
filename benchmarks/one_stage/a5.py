@@ -1,11 +1,12 @@
 """One-stage audit, run A5: a deferred Commit's window, a stand-in, or a TP Commit's windows, one per rank, each `served` or a stand-in. The
 registration is over serving rows of the Commit's own values, and the drawn units go to M0's prover and the Lean verifier of record.
 
-A deferred Commit's window is committed after serving from its sealed replay bundle opened against its record and bound to its
-vllm-v1 run root. Serving's commitment is the vllm-v1 roots, so the window is core's `stand-in`, its link to them provenance (`of`: the
-run root, the bundle's manifest digest and `verity-vllm serving-rows`): that the rows hold the values under the vllm-v1 roots is the
-committer's opening, not proved. It becomes `served` once serving's record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit
-opens the vllm-v1 SHA-256 leaves (`pipeline.deferred_rows`).
+A deferred Commit's window is committed after serving from its sealed replay bundle opened against its record and bound to its run
+root. Serving's commitment is the record's roots, under the scheme the record was committed in (rows-sha512 by default, vllm-v1 an
+older record's), and the window's roots are a fresh commitment, so the window is core's `stand-in`, its link to them provenance (`of`:
+the record's commitment and run root, the bundle's manifest digest and `verity-vllm serving-rows`): that the rows hold the values under
+the record's roots is the committer's opening, not proved. A SHA-512 record does not make it `served`; it becomes `served` once a
+circuit opens the record's own leaves (`pipeline.deferred_rows`).
 
 A TP Commit's windows (`tp-commit --serving-rows`, `pipeline.tp.serving_rows`) are `served`: each rank commits its window from its own
 committed store while serving, after every rank's root is final and before any draw, under ``run = <TP run root>/rank<r>``. Serving's
@@ -40,7 +41,8 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   member's public file before the draw, and a drawn member's prover's file (`inst`, its rows and salts) after it, under the
   header its public file was held to (`stage`).
 * **The verifier's own copies.** A deferred Commit: `--bundle` and `--row-dir` are its record and its Build's Programs of record, and
-  the verifier derives its window from them alone (`deferred_rows.window_of_record`). A TP Commit: `--tp-commit` is its record (its
+  the verifier derives its window and the record's commitment from them alone (`deferred_rows.of_record`, `window_of`). A TP
+  Commit: `--tp-commit` is its record (its
   `--out`: `runs.jsonl`, `versions.json`), `--build-root` holds each rank's Programs of record in `rank<r>/`, and `--workload` is the
   workload file the record served; the verifier derives rank r's window from them alone (`tp.serving_rows.window_of_record`), and
   `--jobs N` audits up to N ranks at once, each in its own process. Either
@@ -51,10 +53,11 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   (`compose_circuit.py --template`, once per template, every chunk on that circuit, read and hashed once,
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
-  (`serving_rows.leaf_layer`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`: a
-  stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the run root of record and the digest of the bundle's
-  manifest it opened, or a served window whose run is the run root of record, a SHA-512 root, naming the commitment that root
-  names, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose `of` and `link` are
+  (`serving_rows.leaf_layer`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
+  either kind names the record's commitment, and it is a stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the
+  run root of record, the digest of the bundle's manifest it opened and that commitment, or a served window whose run is the run
+  root of record, a SHA-512 root, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose
+  `of` and `link` are
   `tp.serving_rows.stand_in` over the bundle the record names for the rank, under a SHA-512 TP run root, its run, `tp` and served
   Programs the record's.
 * **One draw per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
@@ -498,11 +501,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
 
 def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     t0 = time.time()
-    mine = DRW.window_of_record(a.bundle, a.row_dir, a.partition)
+    r = DRW.of_record(a.bundle, a.row_dir)
+    mine = DRW.window_of(r, a.partition)
     manifest = hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest()
 
     def source(w: dict) -> dict:
-        src = DRW.source(w, mine.run, manifest)
+        src = DRW.source(w, mine.run, manifest, r.commitment)
         return {"ok": all(src.values()), "codes": [c for c, v in src.items() if not v],
                 "detail": {"kind": w.get("kind"), "run": w.get("run"), "commitment": w.get("commitment"), "of": w.get("of")}}
 

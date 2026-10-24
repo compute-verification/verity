@@ -7,9 +7,10 @@ negatives.
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
 - `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside M0's tree (its `verity_flock`).
 - `pod.sh`: the entry point on a CPU pod.
-- `a5.sh`: run A5's entry point on a CPU machine. A5 is a deferred Commit's window, a stand-in linked to its vllm-v1 run root
-  and replay bundle: the CPU RoPE d64 Commit fixture, its window from `verity-vllm serving-rows`, and M0 and Lean built from the
-  run's tree.
+- `a5.sh`: run A5's entry point on a CPU machine. A5 is a deferred Commit's window, a stand-in linked to its run root, the
+  commitment its record was committed in and its replay bundle: the CPU RoPE d64 Commit fixture (`COMMIT_SCHEME`: vllm-v1 by
+  default, or rows-sha512, the Commit's default), its window from `verity-vllm serving-rows`, and M0 and Lean built from the run's
+  tree.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the draw): GLM-5.3's TP8 Commit with
