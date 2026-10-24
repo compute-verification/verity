@@ -39,7 +39,8 @@ Every path git sees changed must be one of:
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise (`word_maps`). A text file the words alone rewrite into its new
-  text is an edit of that kind, whatever the file.
+  text is an edit of that kind, whatever the file, and so is one that also drops each list entry the words made a
+  repeat of the one before it (`merged`).
 Anything else is refused, with what differed and its first offending hunk. Exit 0 certified, 1 refused, 2 on a usage or
 git error.
 
@@ -563,10 +564,15 @@ def lakefile_in_place(old: str, new: str, path: str, moves: dict[str, tuple[str,
 
 def pins_change(a: list[str], b: list[str], old: str, new: str, base: Tree, head: Tree, pmap: dict[str, str]) -> str | None:
     """The first hunk of a `TRUSTED.sha256` edit whose lines are not each a file's digest at BASE rewritten to its digest at
-    HEAD, under its path moved by the map; None when there is none."""
+    HEAD, under its path moved by the map, in any order (the command that writes the file sorts the paths, and a moved
+    path sorts anew); None when there is none."""
+    digests: dict[tuple[int, str], str | None] = {}
+
     def digest(tree: Tree, path: str) -> str | None:
-        data = tree.blob(path)
-        return None if data is None else hashlib.sha256(data).hexdigest()
+        if (id(tree), path) not in digests:
+            data = tree.blob(path)
+            digests[id(tree), path] = None if data is None else hashlib.sha256(data).hexdigest()
+        return digests[id(tree), path]
 
     def pair(x: str, y: str) -> bool:
         mx, my = PIN_LINE.match(x), PIN_LINE.match(y)
@@ -575,7 +581,15 @@ def pins_change(a: list[str], b: list[str], old: str, new: str, base: Tree, head
         po = posixpath.normpath(posixpath.join(posixpath.dirname(old), mx[2]))
         pn = posixpath.normpath(posixpath.join(posixpath.dirname(new), my[2]))
         return map_path(po, pmap) == pn and digest(base, po) == mx[1] and digest(head, pn) == my[1]
-    return first_unexplained(a, b, a, b, pair=pair)
+    hunk = first_unexplained(a, b, a, b, pair=pair)
+    if hunk is None or len(a) != len(b):
+        return hunk
+    left = list(a)
+    for y in b:
+        if (x := next((x for x in left if pair(x, y)), None)) is None:
+            return hunk
+        left.remove(x)
+    return None
 
 
 def moves_change(old: str, new: str, moved: dict[str, str], base: Tree) -> tuple[str, str | None] | None:
@@ -640,6 +654,19 @@ def word_maps(base: Tree, renamed: list[tuple[str, str]], lmods: dict[str, str],
         if kept:
             out.append(R.Words({**data, "words": kept, "words_in": []}))
     return out
+
+
+ENTRY = re.compile(r'\s*"[^"\n]*",?\s*')
+
+
+def merged(old: str, new: str) -> str:
+    """``new`` (``old`` worded line for line) without each list entry the words made a repeat of the entry before it: two
+    directories the range merged into one, both listed."""
+    o, w = old.splitlines(keepends=True), new.splitlines(keepends=True)
+    if len(o) != len(w):
+        return new
+    return "".join(w[i] for i in range(len(w))
+                   if not (i and w[i] == w[i - 1] and o[i] != o[i - 1] and ENTRY.fullmatch(w[i])))
 
 
 def worded(text: str, path: str, maps: list, lock: bool = False) -> str:
@@ -798,8 +825,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             continue
         same, pins = a == b, name == PINS and posixpath.basename(old) == PINS
         if not same and not pins and old != MOVES:
-            a = worded(a, old, maps, lock=k == "lock")
-            if a == b:
+            a, unworded = worded(a, old, maps, lock=k == "lock"), a
+            if b in (a, merged(unworded, a)):
                 report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": "words"})
                 continue
         al, bl = a.splitlines(), b.splitlines()
