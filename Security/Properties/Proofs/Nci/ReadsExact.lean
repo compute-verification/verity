@@ -59,7 +59,8 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   `m`'s return leaf `t` (`batchAffine`); so `down`, `fromCallee` and `throughArg` keep the gates they read at every fuel
   (`specs`, `specs_of`) wherever the callees' summaries hold `RetOk`, a composite's return has as many leaves as its
   type, a primitive returns one leaf, and the decoder's facts on the body hold (`Resolve.BodyOk`, `ArgOk`, a batch's
-  dims).
+  dims); in a Definition's body, wherever its references (`Resolve.BodyOk`), its callees' summaries (`RetOk`) and the
+  decoder's facts its private `composite` sets (`Decoded`) do (`specs_decoded`).
 
 So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
 (`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here,
@@ -4692,6 +4693,55 @@ theorem specs_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB
       (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count) :
     ∀ fuel, DownSpec c sc fuel ∧ CalleeSpec c sc fuel ∧ ThroughSpec c sc fuel :=
   specs c sc hd hB hP1 hA hL0 hR (batchSpec_aff c sc hd hB hR hOL (batchAffine c sc hd hR hOL))
+
+
+/-! ## The decoder's facts the core reads -/
+
+/-- **Open: the decoder's facts the core reads**, as `Flock.Program.getDef` gives every Definition (its private
+`composite` sets them): a primitive returns one leaf, a composite's return has as many leaves as its type, and each
+node's argument is the sequence of its parts, none naming a negative position, a batch's argument of no leaves to a
+member going to a parameter of none. -/
+def Decoded (P : Prog) : Prop :=
+  ∀ d < P.defs.size, ((P.defs[d]!).prim = true → (P.defs[d]!).outLeaves = 1) ∧
+    ((P.defs[d]!).prim = false → (P.defs[d]!).outLeaves = (P.defs[d]!).body.ret.count) ∧
+    ∀ k < (P.defs[d]!).body.nodes.size, ∀ i < ((P.defs[d]!).body.nodes[k]!).args.size,
+      (((P.defs[d]!).body.nodes[k]!).args[i]!).seq =
+        Seq.ofParts (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.parts ∧
+      (∀ q ∈ (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.parts.toList, PartNonneg q) ∧
+      ∀ e L : Nat, (((P.defs[d]!).body.nodes[k]!).args[i]!).dims = some (e, L) → L = 0 →
+        ((P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0
+
+/-- **`down`, `fromCallee` and `throughArg` keep the gates they read in Definition `d`'s body, at every fuel**, wherever
+the decoder's facts (`Decoded`), the body's references (`Resolve.BodyOk`) and its callees' summaries (`RetOk`) hold. -/
+theorem specs_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size) (hDec : Decoded P)
+    (hB : Resolve.BodyOk P d) (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn)
+    (sc : Flock.Program.Scope) (hd : sc.d = d) :
+    ∀ fuel, DownSpec (ctxOf P memo d) sc fuel ∧ CalleeSpec (ctxOf P memo d) sc fuel ∧
+      ThroughSpec (ctxOf P memo d) sc fuel := by
+  have hfn : ∀ k node, (ctxOf P memo d).node k = .ok node → node.fn < P.defs.size := by
+    intro k node hn
+    have hk := node_lt hn
+    have := (hB.1 k hk).1
+    have hg : (P.defs[d]!).body.nodes[k]! = node := node_get hn
+    rwa [hg] at this
+  refine specs_of (ctxOf P memo d) sc hd hB ?_ ?_ ?_ hR ?_
+  · intro f hf
+    by_cases hlt : f < P.defs.size
+    · exact (hDec f hlt).1 hf
+    · change (P.defs[f]!).prim = true at hf
+      rw [getElem!_neg P.defs f hlt] at hf; cases hf
+  · intro k i hk hi
+    have := (hDec d hdP).2.2 k hk i hi
+    exact ctxOf_arg P memo d k i hk hi this.1 this.2.1
+  · intro k i e L hdims hL
+    change ((((P.defs[d]!).body.nodes[k]!).args[i]!).dims = some (e, L)) at hdims
+    by_cases hk : k < (P.defs[d]!).body.nodes.size
+    · by_cases hi : i < ((P.defs[d]!).body.nodes[k]!).args.size
+      · exact ((hDec d hdP).2.2 k hk i hi).2.2 e L hdims hL
+      · rw [getElem!_neg _ i hi] at hdims; cases hdims
+    · rw [getElem!_neg _ k hk, getElem!_neg _ i (Nat.not_lt_zero i)] at hdims; cases hdims
+  · intro k node hn hp
+    exact (hDec node.fn (hfn k node hn)).2.1 hp
 
 
 /-- **A batch member's spans** (`Desc.argSpans`) are its used parameter leaves' indices into the argument. -/
