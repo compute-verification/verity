@@ -5,9 +5,19 @@ import Properties.Proofs.Nci.Novel
 
 `Novel.ReadsExact` says that the segments `Desc.analyze` gives a root node name exactly the gates outside the node that
 its gates read. Its proof reads each piece, segment and sequence of segments as the list of positions it names in order
-(`pos`, `posAll`), a position being a target (a parameter's or a node's leaves, or the activation's gates of one width)
-and an index, and holds each of `Desc`'s operations on them to the positions it means: a slice of a piece is its
-positions `[a, b)` (`slice_pos`).
+(`pos`, `posAll`, `segPos`, `psPos`), a position being a target (a parameter's or a node's leaves, or the activation's
+gates of one width) and an index, and holds each of `Desc`'s operations on them to the positions it means:
+
+* a slice of pieces, of a segment or of a sequence of segments is its positions `[a, b)` (`slice_pos`,
+  `slicePieces_pos`, `segSlice_pos`, `psSlice_pos`, `pieces_pos`), and `shiftGates` moves gate positions
+  (`shiftGates_pos`);
+* `PS.of` lays its segments end to end (`of_ok`), `ofPart` and `ofSeq` name a decoded sequence's references in order
+  (`ofSeq_pos`, `partsPos_get`), where no strided part names a negative position, which the decoder ensures
+  (`parsePartsIn_nonneg`), and `memberSpans` are a batch member's indices into its argument (`memberSpans_idx`);
+* a segment's gates (`Width.segGates`) are its gate positions (`segGates_pos`).
+
+So `ReadsExact` holds wherever one statement about the positions `Desc.nodeReads` gives each root node does, a named
+`Prop` here, open (`readsExact_of_rootReads`): `RootReads`.
 -/
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
@@ -1439,5 +1449,238 @@ theorem parsePartsIn_nonneg (leaves : Bool → Nat → Option Nat) (args : Nat �
     delta Flock.Program.parsePartsIn at h
     exact parsePartsIn_nonneg_step leaves args hargs n _
       (fun x ps hx => ih x ps (by delta Flock.Program.parsePartsIn; exact hx)) j ps h
+
+
+/-! ## `ReadsExact` from what `nodeReads` gives each root node
+
+`Desc.analyze` summarizes the reached Definitions (`memoOf`), then reads each root node with those summaries
+(`readsOf`, `analyze_eq`), refusing a read that names no gate. So `ReadsExact` holds wherever `RootReads` does, which
+speaks of `Desc.nodeReads`' segments as the positions they name (`segPos`): their gates are `Width.segGates`'
+(`segGates_pos`), and the root node of a segment's first piece is `Desc.nodeOf`'s (`nodeOf_root`). -/
+
+open Flock.Program (Prog)
+open DescAgree (nodeCount rootOffs)
+
+/-- `Desc.analyze`'s summaries of the reached Definitions, callees first. -/
+def memoOf (P : Prog) : Except String (Array Desc.Summary) := do
+  let seen := Desc.reached P
+  let mut memo : Array Desc.Summary := #[]
+  for d in [0:P.defs.size] do
+    memo := memo.push (← if seen[d]! && d != P.root then Desc.summarize P memo d else pure default)
+  return memo
+
+/-- The context `Desc.analyze` reads the root's nodes in. -/
+def rootCtx (P : Prog) (memo : Array Desc.Summary) : Desc.Ctx :=
+  { P, memo, d := P.root, args := (P.defs[P.root]!).body.nodes.map fun n => n.args.map (Desc.ofSeq ·.seq) }
+
+/-- `Desc.analyze`'s reads of the root's nodes, given the summaries. -/
+def readsOf (P : Prog) (memo : Array Desc.Summary) : Except String (Array (Array Seg)) := do
+  let body := (P.defs[P.root]!).body
+  let c := rootCtx P memo
+  let mut reads := #[]
+  for k in [0:body.nodes.size] do
+    let rs ← Desc.nodeReads c k
+    if rs.any (·.ps.any fun q => match q.tgt with | .gate _ => false | _ => true) then throw "program"
+    reads := reads.push rs
+  return reads
+
+theorem analyze_eq (P : Prog) : Desc.analyze P = (memoOf P >>= readsOf P) := by
+  unfold Desc.analyze memoOf readsOf
+  simp only [bind_assoc, pure_bind]
+  rfl
+
+/-- A loop that pushes one value per element, each one `G` holds of. -/
+theorem forIn_push {ε α : Type} [Inhabited α] (f : Nat → Array α → Except ε (ForInStep (Array α)))
+    (G : Nat → α → Prop) (hf : ∀ k r y, f k r = .ok y → ∃ x, G k x ∧ y = .yield (r.push x)) :
+    ∀ (l : List Nat) (acc out : Array α), forIn l acc f = .ok out →
+      out.size = acc.size + l.length ∧ (∀ i < acc.size, out[i]! = acc[i]!) ∧
+        ∀ i (hi : i < l.length), G l[i] out[acc.size + i]!
+  | [], acc, out, h => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact ⟨by simp, fun _ _ => rfl, fun i hi => absurd hi (by simp)⟩
+  | k :: l, acc, out, h => by
+    rw [List.forIn_cons] at h
+    rcases hk : f k acc with e | y <;> rw [hk] at h
+    · exact absurd h (by intro h; cases h)
+    obtain ⟨x, hx, rfl⟩ := hf k acc _ hk
+    obtain ⟨h1, h2, h3⟩ := forIn_push f G hf l (acc.push x) out h
+    simp only [Array.size_push] at h1 h2 h3
+    refine ⟨by simp only [List.length_cons]; omega, fun i hi => ?_, fun i hi => ?_⟩
+    · rw [h2 i (by omega), getElem!_pos (acc.push x) i (by simp; omega), getElem!_pos acc i hi,
+        Array.getElem_push_lt]
+    · rcases i with _ | i
+      · rw [Nat.add_zero, h2 acc.size (by omega), getElem!_pos (acc.push x) acc.size (by simp),
+          Array.getElem_push_eq]
+        exact hx
+      · have := h3 i (by simp at hi; omega)
+        simp only [List.getElem_cons_succ]
+        rw [show acc.size + (i + 1) = acc.size + 1 + i by omega]
+        exact this
+
+
+theorem pieces_gates (rs : Array Seg)
+    (h : (rs.any fun x => x.ps.any fun q => match q.tgt with | .gate _ => false | _ => true) = false) :
+    ∀ s ∈ rs, ∀ q ∈ s.ps, ∃ w, q.tgt = .gate w := by
+  intro s hs q hq
+  rw [Array.any_eq_false] at h
+  obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hs
+  have h2 := h i hi
+  rw [Bool.not_eq_true, Array.any_eq_false] at h2
+  obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hq
+  have h3 := h2 j hj
+  revert h3
+  rcases (rs[i].ps[j]).tgt with ⟨p, i'⟩ | w
+  · simp
+  · exact fun _ => ⟨w, rfl⟩
+
+/-- What `readsOf` gives: per root node, `nodeReads`' segments, every piece of which names gates. -/
+theorem readsOf_spec (P : Prog) (memo : Array Desc.Summary) (reads : Array (Array Seg))
+    (h : readsOf P memo = .ok reads) :
+    reads.size = nodeCount P ∧ ∀ k < nodeCount P, Desc.nodeReads (rootCtx P memo) k = .ok reads[k]! ∧
+      ∀ s ∈ reads[k]!, ∀ q ∈ s.ps, ∃ w, q.tgt = .gate w := by
+  unfold readsOf at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  obtain ⟨r, hr, h⟩ := Walk.except_bind_ok h
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  obtain ⟨h1, -, h3⟩ := forIn_push _ (fun k rs => Desc.nodeReads (rootCtx P memo) k = .ok rs ∧
+      (rs.any fun x => x.ps.any fun q => match q.tgt with | .gate _ => false | _ => true) = false)
+    (fun k acc y hy => by
+      obtain ⟨rs, hrs, hy⟩ := Walk.except_bind_ok hy
+      by_cases hb : (rs.any fun x => x.ps.any fun q => match q.tgt with | .gate _ => false | _ => true) = true
+      · rw [if_pos hb] at hy; exact absurd hy (by intro h; cases h)
+      · rw [if_neg hb] at hy
+        simp only [pure, Except.pure, Except.ok.injEq] at hy
+        exact ⟨rs, ⟨hrs, by simpa using hb⟩, hy.symm⟩) _ #[] r hr
+  have hn : ((P.defs[P.root]!).body.nodes.size - 0 + 1 - 1) / 1 = nodeCount P := by
+    simp [nodeCount, DescAgree.rootBody]
+  rw [List.length_range', hn] at h1
+  refine ⟨by simpa using h1, fun k hk => ?_⟩
+  have := h3 k (by rw [List.length_range', hn]; exact hk)
+  simp only [List.getElem_range', Array.size_empty, Nat.zero_add, Nat.one_mul] at this
+  exact ⟨this.1, pieces_gates _ this.2⟩
+
+
+/-- **`Desc.nodeOf` finds the root node holding a gate**, over offsets laid out as `rootLaidOut` checks
+(`Walk.bisect_spec`). -/
+theorem nodeOf_eq (offs : Array Nat) (K g k : Nat) (hsz : offs.size = K + 1) (h0 : offs[0]! = 0)
+    (hmono : ∀ i < K, offs[i]! ≤ offs[i + 1]!) (hk : k < K) (hg : offs[k]! ≤ g ∧ g < offs[k + 1]!) :
+    Desc.nodeOf offs g = k := by
+  let f : Nat → Nat × Nat → Id (ForInStep (Nat × Nat)) := fun _ (st : Nat × Nat) =>
+    have lo := st.1; have hi := st.2
+    if hi - lo ≤ 1 then pure (ForInStep.done (lo, hi))
+    else
+      have mid := (lo + hi) / 2
+      if offs[mid]! ≤ g then pure (ForInStep.yield (mid, hi)) else pure (ForInStep.yield (lo, mid))
+  obtain ⟨b1, b2, b3, b4, b5⟩ := Walk.bisect_spec offs g (offs.size - 1) f (fun _ _ _ => rfl)
+    (List.range' 0 offs.size 1) 0 (offs.size - 1) (by omega) (le_refl _) (by rw [h0]; omega)
+    (fun h => absurd h (lt_irrefl _)) (by simp; omega)
+  have hr : Desc.nodeOf offs g = (forIn (List.range' 0 offs.size 1) (0, offs.size - 1) f : Id (Nat × Nat)).1 := by
+    unfold Desc.nodeOf
+    have hfor : ∀ (g : Nat → Nat × Nat → Id (ForInStep (Nat × Nat))) (init : Nat × Nat),
+        (forIn [:offs.size] init g : Id (Nat × Nat)) = forIn (List.range' 0 offs.size) init g := by
+      intro g init
+      rw [Std.Legacy.Range.forIn_eq_forIn_range']
+      simp [Std.Legacy.Range.size]
+    simp only [hfor]
+    rfl
+  generalize (forIn (List.range' 0 offs.size 1) (0, offs.size - 1) f : Id (Nat × Nat)) = r at hr b1 b2 b3 b4 b5
+  rw [hsz, Nat.add_sub_cancel] at b2 b4
+  have hr2 : r.2 = r.1 + 1 := by omega
+  have hlt : g < offs[r.1 + 1]! := by
+    rcases Nat.lt_or_ge r.2 K with h | h
+    · rw [← hr2]; exact b4 h
+    · have : r.1 + 1 = K := by omega
+      rw [this]; exact Nat.lt_of_lt_of_le hg.2 (DescAgree.offs_mono offs K hmono (k + 1) K (by omega) (le_refl _))
+  rw [hr]
+  exact DescAgree.node_unique offs K hmono (by omega) hk ⟨b3, hlt⟩ hg
+
+/-- The root node `Desc.nodeOf` finds for a gate of root node `k` is `k`. -/
+theorem nodeOf_root (P : Prog) (hl : Desc.rootLaidOut P = true) {k a : Nat} (hk : k < nodeCount P)
+    (ha : a ∈ nodeGates P k) : Desc.nodeOf (rootOffs P) a = k := by
+  obtain ⟨hsz, h0, -, hmono⟩ := DescAgree.rootLaidOut_spec P hl
+  exact nodeOf_eq (rootOffs P) (nodeCount P) a k hsz h0 hmono hk ((DescAgree.mem_nodeGates P k a).1 ha)
+
+
+/-- **Open: `nodeReads`' segments at the root, as the positions they name.** On a Program `Desc.analyze` reads, with
+its summaries `memo` and `circuitOf`'s circuit `c`: for root node `k`, whose segments `rs` (`Desc.nodeReads`) have
+pieces naming gates only, every segment of positive count has pieces of positive count and names gates `a` of width
+`c.w[a]` of one root node; and the gates the segments of positive count name are exactly the gates outside node `k`
+that its gates read. `readsExact_of_rootReads` gives `Novel.ReadsExact` from it. -/
+def RootReads : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+    Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
+    Desc.inputsAtRoot P = true → memoOf P = .ok memo → circuitOf P = .ok c →
+    ∀ k < nodeCount P, ∀ rs, Desc.nodeReads (rootCtx P memo) k = .ok rs →
+      (∀ s ∈ rs, ∀ q ∈ s.ps, ∃ w, q.tgt = .gate w) →
+      (∀ s ∈ rs, s.count ≠ 0 → (∀ q ∈ s.ps.toList, 0 < q.count) ∧
+        ∃ k' < nodeCount P, ∀ x ∈ segPos s, ∃ a : Nat, x = (.gate c.w[a]!, (a : Int)) ∧ a ∈ nodeGates P k') ∧
+      ∀ a : Nat, (∃ s ∈ rs, s.count ≠ 0 ∧ ∃ w, (Tgt.gate w, (a : Int)) ∈ segPos s) ↔
+        ∃ g ∈ nodeGates P k, a ∈ c.reads[g]! ∧ a ∉ nodeGates P k
+
+theorem reps_ne_zero {s : Seg} (h : s.count ≠ 0) : s.reps ≠ 0 := by
+  intro h0; apply h; simp [Desc.Seg.count, h0]
+
+theorem rows_ok {s : Seg} (h : ∀ q ∈ s.ps.toList, 0 < q.count) : ∀ q ∈ s.ps.toList, q.rows ≠ 0 ∨ q.len = 0 := by
+  intro q hq
+  have := h q hq
+  left; intro h0; simp [Desc.Piece.count, h0] at this
+
+/-- A segment of a copy names its first piece's first position. -/
+theorem first_mem_segPos {s : Seg} {q : Piece} (hr : s.reps ≠ 0) (hq : s.ps[0]? = some q) (hc : 0 < q.count) :
+    (q.tgt, q.base) ∈ segPos s := by
+  unfold segPos
+  refine List.mem_flatMap.2 ⟨0, List.mem_range.2 (by omega), ?_⟩
+  rw [copy_zero]
+  refine List.mem_flatMap.2 ⟨q, ?_, ?_⟩
+  · obtain ⟨h0, rfl⟩ := Array.getElem?_eq_some_iff.1 hq
+    exact Array.getElem_mem_toList h0
+  · rw [pos_eq_map]
+    refine List.mem_map.2 ⟨0, List.mem_range.2 hc, ?_⟩
+    simp [ppt]
+
+theorem gatePt_eq {y : Tgt × Int} {a : Int} {w : Nat} (h : gatePt y = some (a, w)) : y = (Tgt.gate w, a) := by
+  rcases y with ⟨t, i⟩
+  rcases t with ⟨p, i'⟩ | w'
+  · simp [gatePt] at h
+  · simp only [gatePt, Option.some.injEq, Prod.mk.injEq] at h
+    rw [h.1, h.2]
+
+/-- **`ReadsExact` from `RootReads`**: `analyze`'s reads are `nodeReads`' (`readsOf_spec`), their gates the gate
+positions they name (`segGates_pos`), and a segment's first piece names a gate of the one root node its gates are in,
+which `Desc.nodeOf` finds (`nodeOf_root`). -/
+theorem readsExact_of_rootReads (h : RootReads) : Novel.ReadsExact := by
+  intro bytes P reads c hd ho hl hi ha hc k hk
+  rw [analyze_eq] at ha
+  obtain ⟨memo, hm, hr⟩ := Walk.except_bind_ok ha
+  obtain ⟨-, hks⟩ := readsOf_spec P memo reads hr
+  obtain ⟨hnr, hg⟩ := hks k hk
+  obtain ⟨h1, h2⟩ := h bytes P memo c hd ho hl hi hm hc k hk _ hnr hg
+  refine ⟨fun s hs hcnt q hq => ?_, fun a => ?_⟩
+  · obtain ⟨hpos, k', hk', hx⟩ := h1 s hs hcnt
+    have hq0 := first_mem_segPos (reps_ne_zero hcnt) hq
+      (hpos q (by obtain ⟨h0, rfl⟩ := Array.getElem?_eq_some_iff.1 hq; exact Array.getElem_mem_toList h0))
+    obtain ⟨a, ha, hak⟩ := hx _ hq0
+    have hb : q.base.toNat = a := by
+      simp only [Prod.mk.injEq] at ha
+      rw [ha.2]; simp
+    rw [hb, nodeOf_root P hl hk' hak]
+    refine ⟨hk', fun x hxs => ?_⟩
+    rw [segGates_pos s (reps_ne_zero hcnt) (rows_ok hpos)] at hxs
+    obtain ⟨y, hy, hgy⟩ := List.mem_filterMap.1 hxs
+    obtain ⟨b, rfl, hb'⟩ := hx y hy
+    simp only [gatePt, Option.some.injEq] at hgy
+    exact ⟨b, hgy.symm, hb'⟩
+  · rw [← h2 a]
+    constructor
+    · rintro ⟨s, hs, hcnt, w, hw⟩
+      rw [segGates_pos s (reps_ne_zero hcnt) (rows_ok (h1 s hs hcnt).1)] at hw
+      obtain ⟨y, hy, hgy⟩ := List.mem_filterMap.1 hw
+      exact ⟨s, hs, hcnt, w, by rw [← gatePt_eq hgy]; exact hy⟩
+    · rintro ⟨s, hs, hcnt, w, hw⟩
+      refine ⟨s, hs, hcnt, w, ?_⟩
+      rw [segGates_pos s (reps_ne_zero hcnt) (rows_ok (h1 s hs hcnt).1)]
+      exact List.mem_filterMap.2 ⟨_, hw, rfl⟩
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
