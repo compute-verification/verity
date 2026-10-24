@@ -4,8 +4,9 @@ and the advice's validity and digest (`advised.LinkAdvice`, `advised.digest`), t
 prover reaches.
 
 - The ingress ends are derived from v0's prompt lengths through the link's public framing, request j the link's j-th,
-  the last the certified total, so no field outside `advice.bits` moves the causality floor, and an output released
-  before its request's frames is refused whatever lengths the advice states.
+  the last the certified total, and the tie (`advised.PromptTie`) holds those lengths to the certified prompts', so
+  on one record one split passes, and an output released before its request's frames is refused whatever lengths
+  the advice states.
 - A declared sync is one of Σ_sync, and the floor is at least a bucket after the request's end (the certifier's
   clock), so no declaration lets a frame out in its request's anchor bucket or before.
 - Bucket 0's cap R_in holds the certifier's own frame: no certified count passes it.
@@ -39,13 +40,27 @@ def _advice(release, n=1, prompts=None):
     return A.Advice(reqs, steps, tuple(release))
 
 
-def _view(adv, received, sync=ONE, sync_set=ONLY_ONE, T_=T):
-    return AD.view(AD.LinkAdvice(adv, received), 0, T_, R, [sync], sync_set, FRAMING)
+def _tie(prompts):
+    """The certified tie of requests of `prompts` tokens, in arrival order."""
+    return AD.PromptTie(tuple(prompts), tuple(range(len(prompts))))
 
 
-def _accepts(adv, received, ingress, egress, sync=ONE, sync_set=ONLY_ONE, own=OWN):
+def _tie_of(adv):
+    """The tie `adv` states: what passes with no tie to the record."""
+    return _tie([q.prompt_len for q in adv.requests])
+
+
+def _link(adv, received, tie=None):
+    return AD.LinkAdvice(adv, received, _tie_of(adv) if tie is None else tie)
+
+
+def _view(adv, received, sync=ONE, sync_set=ONLY_ONE, T_=T, tie=None):
+    return AD.view(_link(adv, received, tie), 0, T_, R, [sync], sync_set, FRAMING)
+
+
+def _accepts(adv, received, ingress, egress, sync=ONE, sync_set=ONLY_ONE, own=OWN, tie=None):
     try:
-        v = _view(adv, received, sync, sync_set)
+        v = _view(adv, received, sync, sync_set, tie=tie)
     except ValueError:
         return False
     return AD.reference(T, RIN, own, ingress, egress, v.released, v.floor, v.received)
@@ -65,32 +80,38 @@ def test_the_honest_advised_window_is_accepted():
 def test_an_output_released_before_its_requests_frames_is_refused_whatever_prompt_lengths_the_advice_states():
     """Two requests of 2 frames, released in buckets 1 and 3; one output released in bucket 3 and one in bucket 5. The
     link's first request's output at 3 and its second's at 5 are causal and accepted. The second's at 3, before its
-    frames were in, is refused: the advice has no ingress end to state (only v0's fields and `received`), and the
-    last request's end is the link's certified total whatever its prompt lengths say, so no split of the 4 frames
-    between the two requests passes. Which body an output answers is IO-TIE's to tie: advice request j is the link's
-    j-th."""
+    frames were in, is refused: the advice has no ingress end to state (only v0's fields, `received` and the tie), and
+    the last request's end is the link's certified total whatever its prompt lengths say, so no split of the 4 frames
+    between the two requests passes, even under a tie that states the split's lengths. Which body an output answers is
+    IO-TIE's to tie: advice request j is the link's j-th."""
     ingress, egress, received = CAUSAL
-    assert [f.name for f in fields(AD.LinkAdvice)] == ["advice", "received"]
+    assert [f.name for f in fields(AD.LinkAdvice)] == ["advice", "received", "tie"]
     assert _accepts(_advice((3, 5), 2), received, ingress, egress)
     assert not _accepts(_advice((5, 3), 2), received, ingress, egress)
     splits = _two_frame_splits()
-    assert {AD.ends(AD.LinkAdvice(_advice((5, 3), 2, s), received), FRAMING) for s in splits} == \
-        {(1, 4), (2, 4), (3, 4)}
+    assert {AD.ends(_link(_advice((5, 3), 2, s), received), FRAMING) for s in splits} == {(1, 4), (2, 4), (3, 4)}
     for prompts in splits:
         assert not _accepts(_advice((5, 3), 2, prompts), received, ingress, egress), prompts
 
 
-def test_on_one_record_the_floor_moves_only_with_v0s_charged_fields():
-    """On one certified record, the advices that pass differ only in v0's prompt lengths, each a distinct v0 string
-    (and digest) that `advice.bits` charges whole, so choosing among them is choosing the charged advice; and a view
-    is a function of v0's encoding and `received`, so one v0 string has one floor."""
+def test_on_one_record_only_the_certified_split_passes():
+    """On one certified record of two 4-token prompts, the advices whose stated lengths would pass (each a distinct v0
+    string and digest) differ only in v0's prompt lengths; under the record's tie only the certified split does, and
+    every other is refused by the tie before any floor is computed. A view is a function of v0's encoding, `received`
+    and the tie, so one v0 string has one floor."""
     ingress, egress, received = CAUSAL
-    accepted = [a for a in (_advice((3, 5), 2, s) for s in _two_frame_splits())
-                if _accepts(a, received, ingress, egress)]
-    assert len(accepted) >= 2
-    assert len({A.encode(a) for a in accepted}) == len(accepted)
-    assert len({AD.digest(AD.LinkAdvice(a, received)) for a in accepted}) == len(accepted)
-    for a in accepted:
+    certified = _tie((4, 4))
+    candidates = [_advice((3, 5), 2, s) for s in _two_frame_splits()]
+    stated = [a for a in candidates if _accepts(a, received, ingress, egress)]
+    assert len(stated) >= 2
+    assert len({A.encode(a) for a in stated}) == len(stated)
+    assert len({AD.digest(_link(a, received)) for a in stated}) == len(stated)
+    assert [a for a in candidates if _accepts(a, received, ingress, egress, tie=certified)] == [_advice((3, 5), 2)]
+    for a in candidates:
+        if a != _advice((3, 5), 2):
+            with pytest.raises(ValueError, match="isn't its certified prompt's"):
+                _view(a, received, tie=certified)
+    for a in stated:
         assert _view(A.decode(A.encode(a)), received) == _view(a, received)
 
 
@@ -108,7 +129,7 @@ def test_no_declared_sync_releases_a_frame_in_its_requests_anchor_bucket():
     assert _view(_advice((3,)), received, ClockSync(0, 1), loose).floor[2] == 2
     with pytest.raises(ValueError, match="Σ_sync"):
         _view(_advice((4,)), received, ClockSync(0, 1), SyncSet((2,), (1,)))
-    later = AD.LinkAdvice(_advice((T + 3,)), (2, 0))
+    later = _link(_advice((T + 3,)), (2, 0))
     with pytest.raises(ValueError, match="Σ_sync"):
         AD.view(later, 0, T, R, [ONE, ClockSync(0, 1)], ONLY_ONE, FRAMING)
 
@@ -141,8 +162,10 @@ def test_bucket_zero_is_capped_at_rin_with_the_certifiers_own_frame():
 def test_the_advice_digest_distinguishes_every_input_so_cross_window_swaps_are_refused():
     """Every window reports `advised.digest` of the whole advice, and `network_verdict` holds every window to the
     first's. The digest moves with `release`, with the prompt lengths the ends are derived from, and with `received`,
-    so a window can't carry a different advice under the first window's digest."""
+    so a window can't carry a different advice under the first window's digest. The tie isn't in it: the host derives
+    it from the certified I/O, the same for every window."""
     base = AD.digest(AD.LinkAdvice(_advice((3, 5), 2), (4,)))
+    assert AD.digest(_link(_advice((3, 5), 2), (4,))) == base
     assert AD.digest(AD.LinkAdvice(_advice((4, 5), 2), (4,))) != base
     assert AD.digest(AD.LinkAdvice(_advice((3, 5), 2, (2, 6)), (4,))) != base
     assert AD.digest(AD.LinkAdvice(_advice((3, 5), 2), (3, 1))) != base

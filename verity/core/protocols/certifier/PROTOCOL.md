@@ -351,9 +351,10 @@ An advised link is a served link under arbitrary traffic: responses of any lengt
 timed as serving chose, carried across windows. Nothing fixes its egress counts before the run and FIXLEN doesn't hold,
 so N2 takes them from the prover's advice and holds the advice to the certified ingress head. The advice is
 `advised.LinkAdvice`: I1's advice (`advice.Advice`, v0, "Advice v0" below: one per certifier session, after serving,
-public in v0 and charged by `advice.bits`) and `received[w]`, the request frames the ingress certifier releases in
-window w. Declared with `LinkWindows(advised=AdvisedProfile(windows, request_frames, own))`, whose `request_frames` is
-the link's public framing: entry n − 1 is the ingress frames a request of an n-token prompt takes (CERT-VARLEN's id
+public in v0 and charged by `advice.bits`), `received[w]`, the request frames the ingress certifier releases in
+window w, and the tie (`advised.PromptTie`) of its requests to the certified ingress. Declared with
+`LinkWindows(advised=AdvisedProfile(windows, request_frames, own))`, whose `request_frames` is the link's public
+framing: entry n − 1 is the ingress frames a request of an n-token prompt takes (CERT-VARLEN's id
 requests, whose frames are a function of the prompt's length alone), for every prompt length the link admits.
 
 - **What N2 reads** (`advised.view`):
@@ -362,14 +363,18 @@ requests, whose frames are a function of the prompt's length alone), for every p
     then row order); and `release[k]`, the session-global egress bucket in which output k's frame is released. It
     reads no `id`, `finish`, `kind`, `cache_hit`, `preempted` or `sources` beyond `Advice`'s own validity;
   - `received[w]`, which the unit holds to window w's certified ingress head;
+  - the tie: each certified request's prompt length in arrival order, and the certified request each advice request
+    is (`PromptTie.prompt_len`, `PromptTie.order`), as ENC-DERIVED's advice v1 tie derives them from the certified I/O
+    (`tie_fields`: each certified request's prompt id count, and `walk.order`);
   - the framing, and each window's declared sync, which must be one of Σ_sync, the set the certified egress head's
     parameters digest binds (outside it the advice is refused).
-- **The ingress ends are derived** (`advised.ends`), not advised: advice request j is the link's j-th request (IO-TIE's
-  map, which holds advice request r to the ingress certifier's r-th; FCFS admission meets it, since v0's first-row
+- **The ingress ends are derived** (`advised.ends`), not advised: advice request j is the link's j-th request and its
+  prompt length is the certified prompt's, which the tie holds (FCFS admission meets the order, since v0's first-row
   order is then the arrival order), so it ends at request frame `ends[j]` = Σ_{i ≤ j} `request_frames[prompt_len_i −
-  1]`, and the last end must be Σ `received`, the link's certified request frames. A prompt longer than the framing
-  covers, or ends whose last isn't Σ `received`, refuses the advice. No field but v0's says where a request ends, so
-  the ends cost nothing beside `advice.bits`.
+  1]`, and the last end must be Σ `received`, the link's certified request frames. A link without the tie, an advice
+  whose requests aren't the tie's certified requests in arrival order or whose prompt lengths aren't theirs, a prompt
+  longer than the framing covers, or ends whose last isn't Σ `received`, refuses the advice. No field but v0's says
+  where a request ends, so the ends cost nothing beside `advice.bits`.
 - **The window's view** (`advised.view`), computed by the verifier in the clear from the advice, the framing and the
   declared syncs, is the unit's public input:
   - `released[t]`, the frames the advice releases in bucket t, at most R (more refuses the advice);
@@ -411,10 +416,18 @@ requests, whose frames are a function of the prompt's length alone), for every p
   a window the sync charge counts, and nothing else is left free: not the frames' timing within the counts, not the
   ingress timing, not when the server wrote, and not where a request ends. The advice is held to the ingress head: no
   frame is released before the ingress certifier released `ends[j]` request frames, max(1, δ + ⌊λ/ρ⌋) buckets
-  earlier, under a sync in Σ_sync. Those are request j's and every earlier request's frames when v0's prompt lengths
-  are the link's requests', in arrival order, which IO-TIE's tie holds, as it holds the rest of v0's schedule to the
-  requests. Without the tie a prover moves the floor only by stating other prompt lengths, which is another advice
-  that `advice.bits` charges whole; what would hold them to the record inside the unit is the named gap below.
+  earlier, under a sync in Σ_sync. Those are request j's and every earlier request's frames because v0's prompt
+  lengths are the link's requests', in arrival order: the tie, the named host-side premise below. Without it, a
+  prover that splits the same request frames among the requests otherwise (a short and a long prompt swapped between
+  an early and a later request) lowers the early request's end, and so the floor, and an output released before its
+  request's frames were in is accepted on the same certified record, under an advice `advice.bits` charges no more
+  (REDTEAM phase 6, a regression in `test_network_certifier_advised_phase6.py`).
+- **Named host-side premise: the prompt-length and order tie** (owned by network-accounting). N2's verifier of record
+  checks the advice's prompt lengths and order against the tie on the host, and refuses an advised link without one,
+  never accepting it. The tie is ENC-DERIVED's advice v1 tie (#3584), which binds each request's `prompt_len` to its
+  certified prompt's id count and its order to the certified ingress record; nothing in the proof checks it. When
+  IO-TIE's in-proof tie `IoTieRequest` lands (note:network-accounting/20261024T0420Z-report-io-tie), `advised` takes
+  its verdict for the same advice digest in place of the host check.
 - **Bucket 0 is capped at R_in, which holds the own frame.** The ingress certifier releases min(queue, r_in) frames a
   bucket (`grid.Certifier`) with its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head
   with a count past its allocation doesn't exist (`certificate.RecordHead`): with R_in request frames arriving in
@@ -426,10 +439,10 @@ requests, whose frames are a function of the prompt's length alone), for every p
   once CERT-VARLEN's FIFO change queues the own frame at the head of each window's queue; until then a window that
   starts with R_in or more request frames carried in puts an end one bucket late, never early.
 - **Named gap: the record holds neither the prompt lengths nor the syncs the unit reads** (owned by network-accounting).
-  The unit takes v0's prompt lengths through IO-TIE's tie and each window's sync from its declaration, held only to
-  Σ_sync, because neither head signs them. Design: the ingress head signs each bucket's completed requests and the
-  egress head the window's sync (`served.sync_words`), inside `RecordHead.encode`, and the unit reads both from the
-  heads it opens. It changes the head encoding that Lean pins, so it lands with the head check's and the Lean model's
+  The unit takes v0's prompt lengths, held to the certified ones only on the host (the premise above), and each
+  window's sync from its declaration, held only to Σ_sync, because neither head signs them. Design: the ingress head
+  signs each bucket's completed requests and the egress head the window's sync (`served.sync_words`), inside
+  `RecordHead.encode`, and the unit reads both from the heads it opens. It changes the head encoding that Lean pins, so it lands with the head check's and the Lean model's
   change, not before. With CERT-VARLEN's FIFO change the completed requests follow from the signed counts and the
   certified prompt lengths, so on ingress what's left is holding v0's prompt lengths to the certified bodies.
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
@@ -437,7 +450,8 @@ requests, whose frames are a function of the prompt's length alone), for every p
     which IO-TIE fixes (within a bucket the order doesn't change the counts);
   - the releases fall in the link's windows, each of which declares a sync in Σ_sync;
   - `received` is the ingress record's;
-  - the link's j-th request is advice request j (FCFS admission), an id request of its prompt length;
+  - the link's j-th request is advice request j (FCFS admission: an advice numbered in another order, as a runner's
+    batch order numbers v0 and ENC-DERIVED's `walk.order` maps back, is refused), an id request of its prompt length;
   - each window's declared sync has a δ and ρ that every frame released in it meets: a small δ, and ρ at least a
     stream's frames a bucket (`schedule.eligible` reads the anchor's window's sync, the view the release's, which the
     verifier sees);
@@ -448,8 +462,8 @@ requests, whose frames are a function of the prompt's length alone), for every p
 
 What this establishes: on every accepted link-window of an advised link, the egress head's counts are the advice's
 releases, and the advice's releases are eligible after the ingress head's releases under the declared sync. What it
-doesn't: the frames (N3's and IO-TIE's), that the advice is the computation's (the compiler's and PoUW's), and the
-premises.
+doesn't: the frames (N3's and IO-TIE's), that the advice is the computation's (the compiler's and PoUW's), the
+prompt-length and order tie in the proof (a host-side premise until `IoTieRequest`), and the premises.
 
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
