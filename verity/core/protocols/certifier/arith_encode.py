@@ -96,8 +96,10 @@ in order, `en` (the slot asks) and `bit` (its decision), and it counts `code_v1.
 It outputs ok, the window's charge (bits, which the caller holds to c_w) and the carry: the three contexts' counts and
 min(run, 2), which `code_v1` carries across windows, so the next window's call takes them. The book is public
 (`charge_book`, from the registered book's JSON, whose digest is registered): the tables a window of at most N decisions
-reaches, and the run's first carry, the priors and run 0. The count, the bins, the contexts and the frequencies are the
-circuit's. `charge_fields(N)` lays out the public inputs as a row's fields, and `build_charge` makes the call inline.
+reaches, and the run's first carry, the priors and run 0 (`first_carry`). A later window's carry is a value, which
+`charge_chain` commits from window to window (`ChargeLink_v1{N}`). The count, the bins, the contexts and the
+frequencies are the circuit's. `charge_fields(N)` lays out the public inputs as a row's fields, and `build_charge`
+makes the call inline.
 
 **ENC-REPLAY's model** (`KTContext_v1`) is the estimate advice v1 used before `code_v1`, kept for the bit-checking
 variant. C contexts each count their 0s and 1s (`replay._KT`, from the registered priors). Context ctx gives f = 2n + 1
@@ -384,7 +386,7 @@ def charge_book(book: dict, N: int) -> tuple[ChargeBook, Carry]:
     digest names: the tables at the bins a window of at most N decisions reaches, and the first window's carry. Refuses
     (ValueError) an integer model that isn't an Exp-Golomb table over every bin to its cap (`code_v1.fit_book`'s are), and
     an N whose top bin the cap cuts short."""
-    caps, priors = book["caps"], book["priors"]
+    caps = book["caps"]
 
     def table(name: str) -> tuple[list[int], int]:
         top = caps[name[2:]].bit_length()
@@ -397,8 +399,12 @@ def charge_book(book: dict, N: int) -> tuple[ChargeBook, Carry]:
         raise ValueError(f"N = {N}: 1 ≤ N < 2^16, its top bin within the book's cap of {caps['arrived']} decisions")
     freqs, total = table("n_arrived")
     zeros = tuple((t[0][0], t[1]) for t in map(table, ZERO_COUNTS))
-    counts = tuple(tuple(int(x) for x in priors.get(f"arrived/{c}", (0, 0))) for c in range(RUNS))
-    return ChargeBook(tuple(freqs[:N.bit_length() + 1]), total, zeros), Carry(counts, 0)
+    return ChargeBook(tuple(freqs[:N.bit_length() + 1]), total, zeros), first_carry(book)
+
+
+def first_carry(book: dict) -> Carry:
+    """The session's first carry: the book's priors for the decisions' contexts (`code_v1.Book.priors`), and run 0."""
+    return Carry(tuple(tuple(int(x) for x in book["priors"].get(f"arrived/{c}", (0, 0))) for c in range(RUNS)), 0)
 
 
 def reference_charge(N: int, book: ChargeBook, carry: Carry, en: Sequence[int],
@@ -1101,6 +1107,6 @@ __all__ = ["ArithCountFinish", "ArithCountStep", "ArithEncodeFinish", "ArithEnco
            "Tally", "ZERO_COUNTS", "book_kt_unit", "build_charge", "charge_book", "charge_fields", "charge_unit",
            "charge_values", "check_window", "count_finish_unit", "count_unit", "count_window", "evaluate_book_kt",
            "evaluate_charges", "evaluate_count_finishes", "evaluate_counts", "evaluate_finishes", "evaluate_kt",
-           "evaluate_steps", "finish_unit", "fresh", "kt_unit", "reference_book_kt", "reference_charge",
+           "evaluate_steps", "finish_unit", "first_carry", "fresh", "kt_unit", "reference_book_kt", "reference_charge",
            "reference_count_finish", "reference_count_step", "reference_finish", "reference_kt", "reference_step",
            "scaled", "size", "step_arguments", "step_unit"]

@@ -1635,6 +1635,8 @@ composition below): what the bound counts is the charge, not the committed lengt
   alternative, where the committed advice is the segments and the encoder's output must equal each, bit for bit. Its
   decision step costs 3,244, and it needs a reader at a data-dependent cursor, which isn't built.
 
+**The charge's carry across windows** (`charge_chain`, `ChargeLink_v1{N}`): [protocol/charge-chain.md](protocol/charge-chain.md).
+
 **The prefix cache in the scan.** `CacheStep_v1` (`cache_step`) is ENC-DERIVED's prefix rules (`Prefixes`) as a Boolean
 Definition: one row's pass over a table of at most N cached units (a unit's U tokens, its parent entry and its owner,
 the lowest-numbered request that computed it), compared on tokens, with no hash in the circuit. Each engine step of the
