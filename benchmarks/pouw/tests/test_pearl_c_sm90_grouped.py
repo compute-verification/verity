@@ -103,8 +103,9 @@ def grouped(n=128, k=1024, experts=4, rows=1024, count=16):
 def test_each_units_record_is_its_own_calls_launches(split):
     """Unit j's pd_commit and pd_tiles Args are what `run.Pipeline` passes for its m₁₆ rows of its segment called alone, its
     buffers at the unit's offsets (A's rows, row digests, seeds and lines at its first row, its tree and counter at its slot,
-    C~ and U at its rows, its leaves at its first tile), its keys at its record; the table's expert map, gathered rows and
-    root nodes are the units'.  With `split` the record holds pd_commit's Args in mode 1 and pd_tree's, as the pipeline
+    C~ and U at its rows, its leaves at its first tile), its keys at its record, and pd_commit_g's zero row digest and the
+    unit's rows (where its zero filler rows start) at p14 and i4; the table's expert map, gathered rows and root nodes are the
+    units'.  With `split` the record holds pd_commit's Args in mode 1 and pd_tree's, as the pipeline
     passes them with ``split_a`` and no ``fillers`` (no padding rows' E_A lines); without, its pd_tree Args are zero."""
     n, k = 128, 1024
     g, dev, b, kk = grouped(n, k)
@@ -134,7 +135,8 @@ def test_each_units_record_is_its_own_calls_launches(split):
         (*_, cp, ci), *mid, (*_, tp, ti) = dev.log
         assert tuple(commit["p"][j][:len(cp)]) == cp and tuple(commit["i"][j][:len(ci)]) == ci, j
         assert tuple(tiles["p"][j][:len(tp)]) == tp and tuple(tiles["i"][j][:len(ti)]) == ti, j
-        assert not commit["p"][j][len(cp):].any() and not tiles["p"][j][len(tp):].any()
+        assert not commit["p"][j][len(cp):14].any() and not tiles["p"][j][len(tp):].any()
+        assert (commit["p"][j][14], commit["i"][j][len(ci)], len(ci)) == (g.zero, u.m, 4) and not commit["p"][j][15]
         if split:
             ((*_, rp, ri),) = mid
             assert tuple(tree["p"][j][:len(rp)]) == rp and tuple(tree["i"][j][:len(ri)]) == ri and rp[12] == 0, j

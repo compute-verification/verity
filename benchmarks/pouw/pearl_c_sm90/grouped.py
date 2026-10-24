@@ -11,7 +11,8 @@ each 64-row block of A names its expert (``ex``).  The steps, one launch each (`
 * ``commit_a``: pd_commit_g, unit u's pd_commit (A's commitment and E_A's lines) on CTA row u, from its record (`Grouped.meta`),
   each CTA with an SM to itself (`run.pd_setup`'s PD_WHOLE) while the units' rows, a CTA each, fit the SMs, and past that at
   its least shared memory (PD_PAIR_SMEM), so the rows past the SMs share them rather than wait a whole chain for one (the
-  launch's alone: the code, grid and bytes are the same);
+  launch's alone: the code, grid and bytes are the same); a unit's filler rows (m to m₁₆, zero) take a zero row's digest
+  (`zero_state`, a function of k alone) rather than hash their rows, the same bytes;
 * ``stats_a``, ``eprime_a``, ``pa``: stats_s5, eprime and pa over all of A's rows (a row at a time, no keys);
 * ``form_a``: form_s5_g, each 64-row block's F_A its expert's;
 * ``af``, ``gemm_pearlc``: gemm_words_g_d and gemm_pearlc_g_d over A, each 64-row block's B side its expert's;
@@ -158,6 +159,13 @@ def tree_setup(R, dev) -> None:
             dev.pd_tree_smem_g = R.PD_PAIR_SMEM
 
 
+def zero_state(k: int) -> bytes:
+    """The row digest of k zero FP32 words (`pearl_c.row_digest`) as pd_commit_g reads it for a unit's filler rows: its eight
+    state words, each from eight of the digest's bytes big-endian."""
+    from verity.core.protocols.pouw.schemes.pearl_c import row_digest
+    return np.frombuffer(row_digest(bytes(4 * k)), ">u8").astype("<u8").tobytes()
+
+
 def gemm_smem(R, dev, name: str) -> int:
     """A GEMM's dynamic shared memory, from its _smem probe once, set as its maximum (`run.Pipeline.gemm`'s)."""
     cache = R.Pipeline.GEMM_SMEM
@@ -174,7 +182,8 @@ def gemm_smem(R, dev, name: str) -> int:
 class Grouped:
     """The grouped calls of one (n, k) and expert count over buffers the caller owns (`b`: device pointers, `sizes`' at `rows`
     and `count`, and the experts' `STACKED`), with the constant keys `keys` (``salt_key``, ``hm``).  Its tensor maps, two sets
-    in its own ``tma`` (the chain's: A, the experts' B̃, P_A, their P_B; A'F_B's: A and their F_B transposed), are encoded once."""
+    in its own ``tma`` (the chain's: A, the experts' B̃, P_A, their P_B; A'F_B's: A and their F_B transposed), are encoded once,
+    and a zero row's digest (`zero_state`) goes up once into its own ``zero``."""
 
     def __init__(self, R, dev, n: int, k: int, experts: int, rows: int, count: int, b: dict[str, int], keys: dict[str, int]):
         if n % 64 or k % 256 or k > R.PD_MAX_K or rows % SEG:
@@ -190,13 +199,17 @@ class Grouped:
                 (d.tmap(b["at"], k, rows, SEG) + d.tmap(b["fbT32"], k, e * R.WORDS_N, R.WORDS_N)) * 2)
         for slot, maps in enumerate(sets):
             d.ck("cuMemcpyHtoD_v2", R.u64(self.tma + R.MAP_SET * slot), C.c_char_p(maps), R.MAP_SET)
+        self.zero = dev.alloc(NB)
+        d.ck("cuMemcpyHtoD_v2", R.u64(self.zero), C.c_char_p(zero_state(k)), NB)
 
     def free(self) -> None:
         self.dev.free(self.tma)
+        self.dev.free(self.zero)
 
     def meta(self, us: list[Unit], keys: bytes, leaves: int, split: bool = False) -> bytes:
-        """A call's ``meta``: each unit's record (its pd_commit and pd_tiles Args, its 168 key bytes from `keys`, the units' in
-        order, and with `split` its pd_tree Args, pd_commit's then in mode 1), the expert map, each gathered row's row of A and
+        """A call's ``meta``: each unit's record (its pd_commit Args, with ``zero`` and its rows past which A's rows are its
+        zero filler rows at p14 and i4, its pd_tiles Args, its 168 key bytes from `keys`, the units' in order, and with `split`
+        its pd_tree Args, pd_commit's then in mode 1), the expert map, each gathered row's row of A and
         each unit's A root as a node of ``tree_a`` (int64s, for the caller's gathers); `leaves` the address of the call's
         first tile leaf."""
         if len(us) > self.count or sum(u.seg for u in us) > self.rows or len(keys) != KEY_BYTES * len(us):
@@ -210,7 +223,8 @@ class Grouped:
             commit["p"][j, :13] = (b["xa"] + 4 * k * u.row, b["rowdig_a"] + 64 * u.row, b["tree_a"] + tree_bytes(R) * j,
                                    b["seeds_a"] + 32 * u.row, b["lkeys_a"] + 32 * u.row, key + 64, key, kk["salt_key"], kk["hm"],
                                    b["pd_count"] + 16 * j, b["seed_a"] + 32 * j, b["line_a"] + 32 * j, b["ea_codes"] + 32 * u.row)
-            commit["i"][j, :4] = (u.m16, k, int(split), u.seg)
+            commit["p"][j, 14] = self.zero
+            commit["i"][j, :5] = (u.m16, k, int(split), u.seg, u.m)
             tiles["p"][j, :3] = (b["c"] + 4 * n * u.row, b["u"] + 4 * n * u.row, leaves + NB * u.tile)
             tiles["i"][j, :2] = (u.m16, n)
             if split:

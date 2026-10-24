@@ -27,9 +27,10 @@ PL_INSTANCE(851)
 
 // the grouped calls' commitment, A's tree past pd_commit's mode 1, and tile leaves (grouped.py), hash_decode.cuh's bodies
 // unchanged: unit u's launch is the Args at p0 + u i0 (bytes), and CTA (x, u) is unit u's CTA x when x is inside its launch
-// (pd_commit's rows, pd_tree's one, pd_tiles' tiles or PD_GROUP's groups of them).  The Args are read through the read-only path, which ptxas reloads
-// after PD_LOOP's called producer (pd_pserve_call); a plain copy stays live across that call and spills (56 bytes of stack
-// in pd_commit_g_851, r20261023-091751-b744)
+// (pd_commit's rows, pd_tree's one, pd_tiles' tiles or PD_GROUP's groups of them); pd_commit_g takes a unit's filler rows'
+// digest from its record (pd_commit_t's Z: they are zero rows).  The Args are read through the read-only path, which ptxas
+// reloads after PD_LOOP's called producer (pd_pserve_call); a plain copy stays live across that call and spills (56 bytes of
+// stack in pd_commit_g_851, r20261023-091751-b744)
 DEV Args pd_unit(const Args& g) {
   const Args* __restrict__ s = reinterpret_cast<const Args*>(g.p[0] + (uint64_t)g.i[0] * blockIdx.y);
   Args a;
@@ -40,7 +41,7 @@ DEV Args pd_unit(const Args& g) {
 #define PD_GROUPED(V)                                                                                                    \
   extern "C" __global__ void __launch_bounds__(192) pd_commit_g_##V(const Args g) {                                    \
     const Args a = pd_unit(g);                                                                                           \
-    if ((int)blockIdx.x < a.i[0]) pd_commit_t<V>(a);                                                                     \
+    if ((int)blockIdx.x < a.i[0]) pd_commit_t<V, true>(a);                                                               \
   }                                                                                                                      \
   extern "C" __global__ void __launch_bounds__(128) pd_tree_g_##V(const Args g) { pd_tree_t<V>(pd_unit(g)); }          \
   extern "C" __global__ void __launch_bounds__(32) pd_tiles_g_##V(const Args g) {                                      \

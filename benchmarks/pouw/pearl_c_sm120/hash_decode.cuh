@@ -849,8 +849,9 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
 // p9 scratch (a u32 counter, zero before the first launch and left zero), p10 seed_A out, p11 line_a out, p12 E_A's codes
 // out (32 B a line: row r's line under its own line key, then the filler lines under line_a) or 0; i0 rows (at most
 // PD_MAX_ROWS), i1 k, i2 mode (0: the tree, seed_A and the filler lines too, 1: level 0 and the rows' lines only), i3 E_A's
-// lines (rows and filler rows); PD_STAMP: p13 the stamps or 0
-template <int V> DEV void pd_commit_t(const Args a) {
+// lines (rows and filler rows); PD_STAMP: p13 the stamps or 0.  Z (pearl_c_sm90.cu's pd_commit_g): p14 the digest state of
+// a row of k zero words or 0, and rows r >= i4 zero, whose CTAs take that state for their row digest rather than hash the row
+template <int V, bool Z = false> DEV void pd_commit_t(const Args a) {
   __shared__ uint64_t dig[RS_MAX_SEGS * 8], xr[8], mk[8], cc[8], ftm[8], ftw[32], hbuf[48], root[8];
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM];
   __shared__ uint64_t kw[PD_KW_BLOCKS * 80];   // the fold's schedules; before it the templates' builders, after it the levels
@@ -864,6 +865,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
   const int c1 = cw >= 2 ? 1 : 2, p1 = cw >= 2 ? cw + 1 : 3;
   const int r = blockIdx.x, tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
   const int width = count <= 1 ? 1 : 1 << (32 - __clz(count - 1)), levels = 31 - __clz(width);
+  const bool zero = Z && a.p[14] != 0 && r >= a.i[4];
   if (count > PD_MAX_ROWS || ((V & PD_ROUNDS) && s / 2 + 1 > PD_KW_BLOCKS)) __trap();
   if (PAIR && (cw > 2 || pd_dyn_bytes() < (uint32_t)PD_PAIR_SMEM)) __trap();
   const uint64_t dom = a.p[6], scratch = a.p[9], tree = a.p[2], sb = a.p[13];
@@ -899,34 +901,36 @@ template <int V> DEV void pd_commit_t(const Args a) {
   if (tid == 0) pd_stamp<V>(sb, r, PS_START);
   if (PAIR && warp < sw) {                          // the row's segments, paired: lane tid's segment (a stand-in past s)
     if (warp < cw) {
-      const bool on = tid < s;
-      const int j = on ? tid : 0;
-      uint64_t st[8], w[16];
-      rs_seg_head(st, j, s);
-      const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + 4ull * k * r + (uint64_t)RS_SEG * j);
-      uint4 nb[8];
+      if (!zero) {
+        const bool on = tid < s;
+        const int j = on ? tid : 0;
+        uint64_t st[8], w[16];
+        rs_seg_head(st, j, s);
+        const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + 4ull * k * r + (uint64_t)RS_SEG * j);
+        uint4 nb[8];
 #pragma unroll
-      for (int q = 0; q < 8; q++) nb[q] = seg[q];
+        for (int q = 0; q < 8; q++) nb[q] = seg[q];
 #pragma unroll 1
-      for (int c = 0; c <= RS_SEG / 128; c++) {
-        if (c < RS_SEG / 128) {
+        for (int c = 0; c <= RS_SEG / 128; c++) {
+          if (c < RS_SEG / 128) {
 #pragma unroll
-          for (int q = 0; q < 8; q++) {
-            w[2 * q] = rs_be64(nb[q].x, nb[q].y);
-            w[2 * q + 1] = rs_be64(nb[q].z, nb[q].w);
-          }
-          if (c + 1 < RS_SEG / 128) {
+            for (int q = 0; q < 8; q++) {
+              w[2 * q] = rs_be64(nb[q].x, nb[q].y);
+              w[2 * q + 1] = rs_be64(nb[q].z, nb[q].w);
+            }
+            if (c + 1 < RS_SEG / 128) {
 #pragma unroll
-            for (int q = 0; q < 8; q++) nb[q] = seg[8 * (c + 1) + q];
+              for (int q = 0; q < 8; q++) nb[q] = seg[8 * (c + 1) + q];
+            }
+          } else {
+            pd_padw(w, 128 + RS_SEG);
           }
-        } else {
-          pd_padw(w, 128 + RS_SEG);
+          pd_cmp<V, 1>(st, w);
         }
-        pd_cmp<V, 1>(st, w);
-      }
-      if (on) {
+        if (on) {
 #pragma unroll
-        for (int q = 0; q < 8; q++) dig[8 * tid + q] = st[q];
+          for (int q = 0; q < 8; q++) dig[8 * tid + q] = st[q];
+        }
       }
       if (tid == 0) pd_stamp<V>(sb, r, PS_SEGS);
       pd_pstop();
@@ -935,7 +939,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
     }
   } else if (LATE) {
   } else if (warp < sw) {                           // the row's segments
-    if (tid < s) {
+    if (tid < s && !zero) {
       uint64_t st[8], w[16];
       rs_seg_head(st, tid, s);
       const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + 4ull * k * r + (uint64_t)RS_SEG * tid);
@@ -964,7 +968,13 @@ template <int V> DEV void pd_commit_t(const Args a) {
   if (tid == 0) pd_stamp<V>(sb, r, PS_SYNC1);
   if (warp == 0) {                                  // the row digest (kw its schedules)
     uint64_t st[8];
-    pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
+    if (zero) {
+      const uint64_t* z = reinterpret_cast<const uint64_t*>(a.p[14]);
+#pragma unroll
+      for (int q = 0; q < 8; q++) st[q] = z[q];
+    } else {
+      pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
+    }
     if (lane == 0) {
       s512_store(a.p[1] + 64ull * r, st, 8);
 #pragma unroll
