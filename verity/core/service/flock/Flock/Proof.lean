@@ -83,8 +83,8 @@ structure Shape where
 /-! ## A plain proof's one file (§8.1)
 
 `Wire.proofFile sh p` is the file a prover writes for `p` at `sh`: `bincode 1.3` of the pair, each `Vec` as its `u64`
-length then its elements, each `F128` as `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty empty, each ring
-switch's grinding nonce `0`, then `Wire.plainEnd`. `decodeProof` accepts a file only if it is this encoding of what it
+length then its elements, each `F128` as `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty empty, every
+grinding nonce `0` (R4), then `Wire.plainEnd`. `decodeProof` accepts a file only if it is this encoding of what it
 decodes to. -/
 
 namespace Wire
