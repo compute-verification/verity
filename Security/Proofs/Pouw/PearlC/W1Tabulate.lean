@@ -69,14 +69,14 @@ theorem exec_tree (dv : W1Device) (leaf : List Bool → W1.Code) :
       by_cases h : w32 (st.mem (10, n)) = 0
       · have e : exec dv true (tree leaf (n + 1) path) st =
             exec dv true (tree leaf n (false :: path)) ⟨st.mem, st.fetched, st.cost + dv.prices.int32⟩ := by
-          simp [tree, exec, h, hf, preSalt]
+          simp [tree, exec, h, hf]
         have hp : pathOf st.mem (n + 1) path = pathOf st.mem n (false :: path) := by simp [pathOf, h]
         rw [e, exec_tree dv leaf n]
         try dsimp only
         rw [hc, hp]
       · have e : exec dv true (tree leaf (n + 1) path) st =
             exec dv true (tree leaf n (true :: path)) ⟨st.mem, st.fetched, st.cost + dv.prices.int32⟩ := by
-          simp [tree, exec, h, hf, preSalt]
+          simp [tree, exec, h, hf]
         have hp : pathOf st.mem (n + 1) path = pathOf st.mem n (true :: path) := by simp [pathOf, h]
         rw [e, exec_tree dv leaf n]
         try dsimp only
@@ -131,8 +131,8 @@ def tabU : Workload := ⟨⟨1, fun _ => ⟨1, 1, 1⟩, fun _ => 0⟩, fun _ _ _
 /-- A protocol whose reference words are `0`, the words a fresh memory holds, whose rules and cap always pass, and
 which credits each unit `1` and charges it `1` of honest work. -/
 def tabP : Protocol Unit Unit Unit where
-  ticket := fun _ _ _ _ _ _ _ => wordQ 0
-  useful := fun _ _ _ _ _ _ _ => wordQ 0
+  ticket := fun _ _ _ _ _ _ _ => Fp8Atom.wordQ 0
+  useful := fun _ _ _ _ _ _ _ => Fp8Atom.wordQ 0
   actOK := fun _ _ => True
   weightOK := fun _ _ _ => True
   credit := fun _ _ _ _ _ => 1
