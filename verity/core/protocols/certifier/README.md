@@ -62,11 +62,15 @@ A spec-level reference for network accounting's timing channel:
   back from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame
   the Program's at position p, and carries nothing from before: a window it was down for has no record. On a served
   link (`Proxy(served=ServedProfile(…))`, off by default; with the salt, `own` 1 at a PoUW window of one certifier
-  window) its ingress admits whole requests by the admission rule (`served.Admission`).
+  window) its ingress admits whole requests by the admission rule (`served.Admission`). On a sealed pair link
+  (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
+  sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
+  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
-Definition, and in `active` the proof service's registration and receipt, which `reveal` reads. The certificate's signature scheme is a parameter: the certifier's
+Definition, and in `active` the proof service's registration and receipt, which `reveal` reads, and the pair link's
+AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
 and their evaluator.
