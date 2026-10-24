@@ -343,6 +343,37 @@ def run_grpo(a, tok, task, val, test, out):
     return res
 
 
+def run_eval(a, tok, task, val, test, out):
+    """The test report of an ES arm stopped before its deadline: theta rebuilt from its last saved coefficients (`state.pt`,
+    written at each validation), with iterations, time and counters from its log.json up to that validation."""
+    from transformers import AutoModelForCausalLM
+    model = AutoModelForCausalLM.from_pretrained(a.model, dtype=torch.bfloat16).to("cuda")
+    sd = torch.load(a.state, map_location="cpu")
+    log = [x for x in json.load(open(a.prev_log)) if x["it"] <= sd["it"]]
+    last = log[-1]
+    bval = next((x for x in log if x["it"] == sd["best_it"] and "val_exact" in x), {})
+    st = Seeded(model, a.K, a.pool_seed)
+    res = {"arm": "es", "reward": a.reward, "task": a.task, "order": task.order, "H_bits": task.H, "model": a.model, "K": a.K,
+           "S_bits": 32 * a.K, "S_bytes": 4 * a.K, "sigma": a.sigma, "alpha": a.alpha, "pairs": a.pairs, "population": 2 * a.pairs,
+           "batch": a.batch, "group": a.group, "seed": a.seed, "pool_seed": a.pool_seed, "iters": sd["it"],
+           "train_sec": last["t"], "n_params": sum(p.numel() for p in model.parameters()), "best_it": sd["best_it"],
+           "best_val_exact": bval.get("val_exact"), "best_val_pos": bval.get("val_pos"),
+           "counter": {k: last[k] for k in ("fwd_tokens", "fwd_bwd_tokens", "flops", "episodes", "info_pass_bits", "info_dense_bits")},
+           "seqs_per_iter": 2 * a.pairs * a.batch * a.group, "stopped_early": True, "state": a.state}
+    for name, coeff in (("final", sd["a"]), ("best", sd["best_a"])):
+        if name == "best" and sd["best_it"] == sd["it"]:
+            res["best"] = res["final"]
+            continue
+        t1 = time.time()
+        st.rebuild(a.model, coeff)
+        r = test_report(model, task, test)
+        r["rebuild_and_test_sec"] = round(time.time() - t1, 1)
+        res[name] = r
+        print(name, json.dumps(summary(r)), flush=True)
+    json.dump(log, open(os.path.join(out, "log.json"), "w"))
+    return res
+
+
 def run_base(a, tok, task, val, test, out):
     from transformers import AutoModelForCausalLM
     model = AutoModelForCausalLM.from_pretrained(a.model, dtype=torch.bfloat16).to("cuda")
@@ -354,7 +385,9 @@ def run_base(a, tok, task, val, test, out):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("arm", choices=["es", "grpo", "base"])
+    ap.add_argument("arm", choices=["es", "grpo", "base", "eval"])
+    ap.add_argument("--state", default="")
+    ap.add_argument("--prev-log", default="")
     ap.add_argument("--task", default="A")
     ap.add_argument("--model", default="Qwen/Qwen2.5-0.5B-Instruct")
     ap.add_argument("--K", type=int, default=2500)
@@ -382,7 +415,7 @@ def main():
     val = task.plains(256, 900 + order)
     test = task.plains(512, 800 + order)
     torch.manual_seed(a.seed)
-    res = {"es": run_es, "grpo": run_grpo, "base": run_base}[a.arm](a, tok, task, val, test, a.out)
+    res = {"es": run_es, "grpo": run_grpo, "base": run_base, "eval": run_eval}[a.arm](a, tok, task, val, test, a.out)
     res["args"] = vars(a)
     json.dump(res, open(os.path.join(a.out, "result.json"), "w"))
 
