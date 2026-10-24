@@ -23,7 +23,7 @@ from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice 
 
 FIXTURES = Path(__file__).parent / "fixtures"
 OWN, CLASS = "compile_slice_w1.json", "compile_slice_w1_class.json"
-ANDS = {OWN: 314936}
+ANDS = {OWN: 314936, CLASS: 1021302}
 #: the session's carry into window 1 (the module's docstring)
 CARRY = AE.Carry(((11, 4), (11, 0), (30, 1)), 0)
 
@@ -94,12 +94,13 @@ def test_the_slice_accepts_w1(w1):
 
 
 @pytest.mark.slow
-def test_the_circuit_is_its_reference_on_w1():
-    """The unit's verdict word is the reference's on the honest window and each negative at w1's own statics, and its
-    size. About half a minute: it builds and evaluates the 314,936-AND unit at the served engine's widths under async
-    scheduling, the map at units 0 and 5 not the identity, which the async demonstration slice's test doesn't reach;
-    the class (8, 1, 9) is measured by a run (`protocol/served-shape.md`)."""
-    x = _load(OWN)
+@pytest.mark.parametrize("name", [OWN, CLASS])
+def test_the_circuit_is_its_reference_on_w1(name):
+    """The unit's verdict word is the reference's on the honest window and each negative, and its size, at w1's own
+    statics and at the engine class. About two minutes, at 7.3 GB: it builds and evaluates the 314,936- and
+    1,021,302-AND units at the served engine's widths under async scheduling, the map at units 0 and 5 not the
+    identity, which the async demonstration slice's test doesn't reach."""
+    x = _load(name)
     cases = _cases(x)
     assert CS.evaluate(x.st, list(cases.values())) == [c.verdict for c in cases.values()]
-    assert CS.size(**x.st)["ands"] == ANDS[OWN]
+    assert CS.size(**x.st)["ands"] == ANDS[name]

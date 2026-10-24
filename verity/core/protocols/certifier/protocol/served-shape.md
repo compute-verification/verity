@@ -162,9 +162,11 @@ window row and `a_cap` in the warden's slots. The slice takes its chain's shape 
   (`verity/core/protocols/certifier/tests/fixtures/compile_slice_w1.json`) and at the class. The negatives fail as
   at w212: late admission 0x2E (`load` and `rows`; at the class only, past w1's own D), charge 0x37, longer prompt
   0x2F, dropped row 0x2F. So does the one the map opens: unit 0's first two served rows (requests 4 and 6) with their
-  requests swapped, 0x2F. At w1's own statics the circuit is its reference on all of them, at 314,936 ANDs. At the
-  class, without the map (the reference fixed and the seal's rows put at their request's slot, run
-  r20261024-205551-716a), the circuit was its reference on the five at 898,182 ANDs, 40,316 more than sync w212 at
-  the same class (857,866, run r20261024-205722-af0a); the map's products add P·R²·32 = 110,592 ANDs to it at the
-  class's 33-bit rows (P 54, R 8), and its one-to-one checks 54·2·8·7 = 6,048.
+  requests swapped, 0x2F. The circuit is its reference on all of them: at w1's own statics 314,936 ANDs, and at the
+  class 1,021,302, built in 19.5 s at 3.0 GB (7.3 GB with the six evaluations, 77 s; run r20261024-220244-255c).
+  Without the map (the reference fixed and the seal's rows put at their request's slot, run r20261024-205551-716a)
+  the class unit was 898,182 ANDs, 40,316 more than sync w212 at the same class (857,866, run
+  r20261024-205722-af0a). The map adds 123,120: its products P·R²·32 = 110,592 at the class's 33-bit rows (P 54,
+  R 8), its one-to-one checks 54·2·8·7 = 6,048, and 6,480 in the zero check over its 20,736 mismatch bits, against
+  the 14,256 bits the slot-for-slot comparison reads.
 - The walk entries (`run_pfx`, `row_pfx`) come only with prefix caching, which 8eb1 doesn't serve.
