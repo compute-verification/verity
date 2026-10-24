@@ -24,7 +24,7 @@ namespace Claims.ZKServer
 open _root_.Flock (V F128)
 open _root_.Flock.Transcript (header)
 open _root_.Flock.Firewall.Frame
-  (Cfg Masker labelFrame bytesFrame roundFree LABEL_ZC K_SKIP N_INNER INNER_ROUNDS)
+  (Cfg Masker labelFrame bytesFrame roundFree LABEL_ZC K_SKIP N_INNER INNER_ROUNDS absorbed)
 open FlockSoundness.Refine (Frame encs colBytes toBytes_length)
 
 /-- The values the frames `fs` absorb, in order. -/
@@ -327,5 +327,409 @@ theorem foldl_set_at {α : Type} [Inhabited α] (g : ℕ → α → α) (f : Arr
     rw [List.getElem_drop] at heq
     have := hu _ (by simp at hq; omega) heq
     omega
+
+/-! ## The PIOP's masked values, read back off its rounds -/
+
+theorem nAbs_fvals : ∀ fs : List Frame, nAbs fs = (fvals fs).length
+  | [] => rfl
+  | .dom _ :: fs | .label _ :: fs | .bytes _ :: fs | .sq _ _ :: fs => by
+    simp only [nAbs, fvals]; exact nAbs_fvals fs
+  | .one _ :: fs => by simp only [nAbs, fvals, List.length_cons]; rw [nAbs_fvals fs]
+  | .vec vs :: fs => by simp only [nAbs, fvals, List.length_append]; rw [nAbs_fvals fs]; omega
+
+/-- **The PIOP's round `jj`'s frames** at layout `lay`, the masked values `mk` and the binding `digest cap root`: the
+zerocheck's binding, `r_outer`'s round (none), `round1`'s values, each residual round's two, the finals with the
+lincheck's label, `β`'s round (none), each lincheck round's two, and `z_partial`'s values. -/
+def piopFr (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (jj : ℕ) :
+    List Frame :=
+  if jj = 0 then FlockSoundness.Refine.Frame.label "flock-r1cs-v0".toUTF8 :: .bytes digest :: .bytes cap ::
+    .label LABEL_ZC.toUTF8 :: .label _root_.Flock.Zk.LABEL_PADS.toUTF8 :: .bytes root :: []
+  else if jj = 1 then []
+  else if jj = 2 then [.vec ((List.range 64).map fun i => mk (lay.r1ab i)), .vec ((List.range 64).map fun i => mk (lay.r1c i))]
+  else if jj < 3 + (m - 6) then [.one (mk (lay.ml (jj - 3) 0)), .one (mk (lay.ml (jj - 3) 1))]
+  else if jj = 3 + (m - 6) then [.one (mk lay.fa), .one (mk lay.fb), .label "flock-lincheck-v0".toUTF8]
+  else if jj = 4 + (m - 6) then []
+  else if jj < 5 + (m - 6) + (kLog - 6) then
+    [.one (mk (lay.lc (jj - (5 + (m - 6))) 0)), .one (mk (lay.lc (jj - (5 + (m - 6))) 1))]
+  else [.vec ((List.range 64).map fun i => mk (lay.zp i))]
+
+/-- The PIOP's round `jj`'s squeeze kind and count. -/
+def piopK (jj : ℕ) : UInt8 := if jj ≤ 1 then 2 else 1
+
+def piopN (m jj : ℕ) : ℕ := if jj = 0 then 6 else if jj = 1 then m - 13 else 1
+
+/-- The PIOP's rounds. -/
+def piopNR (m kLog : ℕ) : ℕ := 6 + (m - 6) + (kLog - 6)
+
+/-- The values the PIOP's first `a` rounds carry. -/
+def piopV (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (a : ℕ) :
+    List F128 :=
+  (List.range a).flatMap fun jj => fvals (piopFr m kLog digest cap root lay mk jj)
+
+theorem piopV_succ (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
+    (a : ℕ) : piopV m kLog digest cap root lay mk (a + 1) =
+      piopV m kLog digest cap root lay mk a ++ fvals (piopFr m kLog digest cap root lay mk a) := by
+  simp [piopV, List.range_succ, List.flatMap_append]
+
+theorem piopV_mono (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
+    {a b : ℕ} (h : a ≤ b) :
+    (piopV m kLog digest cap root lay mk a).length ≤ (piopV m kLog digest cap root lay mk b).length := by
+  induction b with
+  | zero =>
+    obtain rfl : a = 0 := by omega
+    exact le_rfl
+  | succ b ih =>
+    rcases Nat.eq_or_lt_of_le h with rfl | h'
+    · exact le_rfl
+    · rw [piopV_succ, List.length_append]
+      exact Nat.le_trans (ih (by omega)) (Nat.le_add_right _ _)
+
+theorem piopV_two (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) :
+    piopV m kLog digest cap root lay mk 2 = [] := by
+  show piopV m kLog digest cap root lay mk (0 + 1 + 1) = []
+  rw [piopV_succ, piopV_succ]
+  simp [piopV, piopFr, fvals]
+
+theorem flatMap_range'_congr {β : Type} (f g : ℕ → List β) (s n : ℕ) (h : ∀ i < n, f (s + i) = g i) :
+    (List.range' s n).flatMap f = (List.range n).flatMap g := by
+  rw [List.range'_eq_map_range, List.flatMap_map]
+  exact List.flatMap_congr fun i hi => h i (List.mem_range.mp hi)
+
+/-- **The PIOP's values are the masked values at the absorbed order's pads**, through `z_partial`'s. -/
+theorem piopV_all (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
+    (hm : 14 ≤ m) (hk : 6 ≤ kLog) (hn : lay.nMlv = m - 6) (hl : lay.nLc = kLog - 6) :
+    piopV m kLog digest cap root lay mk (piopNR m kLog) =
+      (List.range (lay.fa + 2) ++ List.range' (lay.fa + 3) (2 * lay.nLc + 64)).map mk := by
+  have hsplit : List.range (piopNR m kLog) = List.range' 0 1 ++ (List.range' 1 1 ++ (List.range' 2 1 ++
+      (List.range' 3 (m - 6) ++ (List.range' (3 + (m - 6)) 1 ++ (List.range' (4 + (m - 6)) 1 ++
+      (List.range' (5 + (m - 6)) (kLog - 6) ++ List.range' (5 + (m - 6) + (kLog - 6)) 1)))))) := by
+    rw [range'_join' (5 + (m - 6)) (kLog - 6) _ _ rfl, range'_join' (4 + (m - 6)) 1 _ (5 + (m - 6)) (by omega),
+      range'_join' (3 + (m - 6)) 1 _ (4 + (m - 6)) (by omega), range'_join' 3 (m - 6) _ (3 + (m - 6)) rfl,
+      range'_join' 2 1 _ 3 rfl, range'_join' 1 1 _ 2 rfl, range'_join' 0 1 _ 1 rfl, List.range_eq_range']
+    congr 1
+    unfold piopNR
+    omega
+  have e := absorbed_piop lay []
+  simp only [List.append_nil] at e
+  rw [← e]
+  unfold piopV
+  rw [hsplit]
+  simp only [List.flatMap_append]
+  have h0 : (List.range' 0 1).flatMap (fun jj => fvals (piopFr m kLog digest cap root lay mk jj)) = [] := by
+    simp [piopFr, fvals]
+  have h1 : (List.range' 1 1).flatMap (fun jj => fvals (piopFr m kLog digest cap root lay mk jj)) = [] := by
+    simp [piopFr, fvals]
+  have h2 : (List.range' 2 1).flatMap (fun jj => fvals (piopFr m kLog digest cap root lay mk jj)) =
+      (List.range' 0 64).map (fun i => mk (lay.r1ab i)) ++ (List.range' 0 64).map (fun i => mk (lay.r1c i)) := by
+    simp [piopFr, fvals, List.range_eq_range']
+  have h3 : (List.range' 3 (m - 6)).flatMap (fun jj => fvals (piopFr m kLog digest cap root lay mk jj)) =
+      (List.range' 0 lay.nMlv).flatMap fun a => [mk (lay.ml a 0), mk (lay.ml a 1)] := by
+    rw [flatMap_range'_congr _ (fun a => [mk (lay.ml a 0), mk (lay.ml a 1)]) 3 (m - 6), hn, List.range_eq_range']
+    intro i hi
+    dsimp only
+    rw [piopFr, if_neg (show ¬ 3 + i = 0 by omega), if_neg (show ¬ 3 + i = 1 by omega),
+      if_neg (show ¬ 3 + i = 2 by omega), if_pos (show 3 + i < 3 + (m - 6) by omega)]
+    simp [fvals]
+  have h4 : (List.range' (3 + (m - 6)) 1).flatMap (fun jj => fvals (piopFr m kLog digest cap root lay mk jj)) =
+      [mk lay.fa, mk lay.fb] := by
+    simp only [List.range'_one, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+    rw [piopFr, if_neg (show ¬ 3 + (m - 6) = 0 by omega), if_neg (show ¬ 3 + (m - 6) = 1 by omega),
+      if_neg (show ¬ 3 + (m - 6) = 2 by omega), if_neg (show ¬ 3 + (m - 6) < 3 + (m - 6) by omega), if_pos rfl]
+    simp [fvals]
+  have h5 : (List.range' (4 + (m - 6)) 1).flatMap (fun jj => fvals (piopFr m kLog digest cap root lay mk jj)) =
+      [] := by
+    simp only [List.range'_one, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+    rw [piopFr, if_neg (show ¬ 4 + (m - 6) = 0 by omega), if_neg (show ¬ 4 + (m - 6) = 1 by omega),
+      if_neg (show ¬ 4 + (m - 6) = 2 by omega), if_neg (show ¬ 4 + (m - 6) < 3 + (m - 6) by omega),
+      if_neg (show ¬ 4 + (m - 6) = 3 + (m - 6) by omega), if_pos rfl]
+    rfl
+  have h6 : (List.range' (5 + (m - 6)) (kLog - 6)).flatMap
+      (fun jj => fvals (piopFr m kLog digest cap root lay mk jj)) =
+      (List.range' 0 lay.nLc).flatMap fun a => [mk (lay.lc a 0), mk (lay.lc a 1)] := by
+    rw [flatMap_range'_congr _ (fun a => [mk (lay.lc a 0), mk (lay.lc a 1)]) _ (kLog - 6), hl, List.range_eq_range']
+    intro i hi
+    dsimp only
+    rw [piopFr, if_neg (show ¬ 5 + (m - 6) + i = 0 by omega), if_neg (show ¬ 5 + (m - 6) + i = 1 by omega),
+      if_neg (show ¬ 5 + (m - 6) + i = 2 by omega), if_neg (show ¬ 5 + (m - 6) + i < 3 + (m - 6) by omega),
+      if_neg (show ¬ 5 + (m - 6) + i = 3 + (m - 6) by omega), if_neg (show ¬ 5 + (m - 6) + i = 4 + (m - 6) by omega),
+      if_pos (show 5 + (m - 6) + i < 5 + (m - 6) + (kLog - 6) by omega)]
+    simp [fvals]
+  have h7 : (List.range' (5 + (m - 6) + (kLog - 6)) 1).flatMap
+      (fun jj => fvals (piopFr m kLog digest cap root lay mk jj)) = (List.range' 0 64).map (fun i => mk (lay.zp i)) := by
+    simp only [List.range'_one, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+    rw [piopFr, if_neg (show ¬ 5 + (m - 6) + (kLog - 6) = 0 by omega),
+      if_neg (show ¬ 5 + (m - 6) + (kLog - 6) = 1 by omega), if_neg (show ¬ 5 + (m - 6) + (kLog - 6) = 2 by omega),
+      if_neg (show ¬ 5 + (m - 6) + (kLog - 6) < 3 + (m - 6) by omega),
+      if_neg (show ¬ 5 + (m - 6) + (kLog - 6) = 3 + (m - 6) by omega),
+      if_neg (show ¬ 5 + (m - 6) + (kLog - 6) = 4 + (m - 6) by omega),
+      if_neg (show ¬ 5 + (m - 6) + (kLog - 6) < 5 + (m - 6) + (kLog - 6) by omega)]
+    simp [fvals, List.range_eq_range']
+  rw [h0, h1, h2, h3, h4, h5, h6, h7]
+  simp [List.map_flatMap, Function.comp_def]
+
+theorem piopV_length (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
+    (hm : 14 ≤ m) (hk : 6 ≤ kLog) (hn : lay.nMlv = m - 6) (hl : lay.nLc = kLog - 6) :
+    (piopV m kLog digest cap root lay mk (piopNR m kLog)).length = lay.fa + 2 + (2 * lay.nLc + 64) := by
+  rw [piopV_all m kLog digest cap root lay mk hm hk hn hl]
+  simp
+
+/-- The rep's state inside the algebraic phase at absorbed position `P`, past the zerocheck's outer coins. -/
+structure Inv (c : Cfg) (P : ℕ) (s : Masker) : Prop where
+  on : s.on = true
+  inner : s.inner = none
+  l0 : s.l0 = false
+  owed : s.owed = none
+  pos : s.pos = P
+  coins : K_SKIP + (c.lay.nMlv - N_INNER) ≤ s.coins.size
+
+theorem maskedOf_cons_ok {c : Cfg} {s s₁ s₂ : Masker} {L : List UInt8} {n : ℕ} {cs : Array F128} {out : ByteArray}
+    {fr : Array ℕ} (rest : List (ByteArray × ℕ × Array F128))
+    (h : roundFree c s (ByteArray.mk L.toArray) n = .ok (out, s₁, fr)) (ha : s₁.answer c cs = .ok s₂) :
+    (Loop.maskedOf c s ((ByteArray.mk L.toArray, n, cs) :: rest)).toList =
+      fr.toList.map (wd L) ++ (Loop.maskedOf c s₂ rest).toList := by
+  simp only [Loop.maskedOf, h, ha, Array.toList_append, Array.toList_map]
+  rfl
+
+theorem maskedOf_cons_last {c : Cfg} {s s₁ : Masker} {L : List UInt8} {n : ℕ} {cs : Array F128} {out : ByteArray}
+    {fr : Array ℕ} (rest : List (ByteArray × ℕ × Array F128))
+    (h : roundFree c s (ByteArray.mk L.toArray) n = .ok (out, s₁, fr)) :
+    ∃ tail, (Loop.maskedOf c s ((ByteArray.mk L.toArray, n, cs) :: rest)).toList = fr.toList.map (wd L) ++ tail := by
+  simp only [Loop.maskedOf, h]
+  cases s₁.answer c cs with
+  | ok s₂ => exact ⟨_, by simp only [Array.toList_append, Array.toList_map]; rfl⟩
+  | error e => exact ⟨[], by simp only [List.append_nil, Array.toList_map]; rfl⟩
+
+/-- **A round inside the algebraic phase past the outer coins**: the frame frees its frames' values, takes its one coin,
+and the state moves on by the frames' values. -/
+theorem maskedOf_mid (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hN : c.nPiop ≤ c.order.size)
+    {P : ℕ} {s : Masker} (hs : Inv c P s) (fs : List Frame) (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f)
+    (hb : P + nAbs fs ≤ c.nPiop) {cs : Array F128} (hcs : cs.size = 1) (rest : List (ByteArray × ℕ × Array F128)) :
+    ∃ s', Inv c (P + nAbs fs) s' ∧
+      (Loop.maskedOf c s ((ByteArray.mk (encs fs ++ (Frame.sq 1 1).enc).toArray, 1, cs) :: rest)).toList =
+        fvals fs ++ (Loop.maskedOf c s' rest).toList := by
+  obtain ⟨out, fr, hr, hfr⟩ := roundFree_vals c s fs 1 1 hc hN hs.on hs.inner hm hp (.inr ⟨rfl, rfl⟩) (by decide)
+    (by decide) (by rw [hs.pos]; exact hb)
+  have ha := answer_ok (cfg := c) (s := { s with pos := s.pos + nAbs fs, owed := some 1 }) (cs := cs) (n := 1) rfl hcs
+    hs.inner hs.l0 hs.on (fun e he h1 h2 => by
+      have := hs.coins
+      simp only at h2
+      omega)
+  refine ⟨{ ({ s with pos := s.pos + nAbs fs, owed := some 1 } : Masker) with owed := none,
+      coins := s.coins ++ cs }, ⟨hs.on, hs.inner, hs.l0, rfl, by simp [hs.pos], ?_⟩, ?_⟩
+  · simp only [Array.size_append]
+    exact Nat.le_trans hs.coins (Nat.le_add_right _ _)
+  · rw [maskedOf_cons_ok rest hr ha, hfr]
+
+theorem maskedOf_end (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hN : c.nPiop ≤ c.order.size)
+    {P : ℕ} {s : Masker} (hs : Inv c P s) (fs : List Frame) (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f)
+    (hb : P + nAbs fs ≤ c.nPiop) (cs : Array F128) (rest : List (ByteArray × ℕ × Array F128)) :
+    ∃ tail, (Loop.maskedOf c s ((ByteArray.mk (encs fs ++ (Frame.sq 1 1).enc).toArray, 1, cs) :: rest)).toList =
+        fvals fs ++ tail := by
+  obtain ⟨out, fr, hr, hfr⟩ := roundFree_vals c s fs 1 1 hc hN hs.on hs.inner hm hp (.inr ⟨rfl, rfl⟩) (by decide)
+    (by decide) (by rw [hs.pos]; exact hb)
+  obtain ⟨tail, ht⟩ := maskedOf_cons_last (cs := cs) rest hr
+  exact ⟨tail, by rw [ht, hfr]⟩
+
+theorem piopFr_frames (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
+    {jj : ℕ} (h2 : 2 ≤ jj) :
+    (∀ f ∈ piopFr m kLog digest cap root lay mk jj, midFrame f) ∧
+      (∀ f ∈ piopFr m kLog digest cap root lay mk jj, plainFrame f) := by
+  have hl : plainLabel "flock-lincheck-v0".toUTF8 := by unfold plainLabel; decide
+  have hs : "flock-lincheck-v0".toUTF8.size < 2 ^ 64 := by decide
+  unfold piopFr
+  rw [if_neg (show ¬ jj = 0 by omega), if_neg (show ¬ jj = 1 by omega)]
+  split_ifs <;> simp [List.forall_mem_cons, midFrame, plainFrame, hl, hs]
+
+/-- **The masked values a rep's frame takes over the PIOP's rounds**: from the rep's start, at rounds whose bytes are the
+PIOP's frames and squeezes (`piopFr`, the zerocheck's binding without the stream's domain) with coin counts `piopN`,
+answered by coins of those counts with no zerocheck outer coin `1`, the frame takes the masked values at the absorbed
+order's pads through `z_partial`'s, in order. -/
+theorem maskedOf_piop (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.Firewall.Frame.MaskSlot)
+    (m kLog : ℕ) (hm : 14 ≤ m) (hk : 6 ≤ kLog) (hm64 : m < 2 ^ 64) (hn : lay.nMlv = m - 6) (hl : lay.nLc = kLog - 6)
+    (digest cap root : ByteArray) (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hroot : root.size < 2 ^ 64)
+    (mk : ℕ → F128) (C : ℕ → Array F128) (rs : List (ByteArray × ℕ × Array F128))
+    (hrs : ∀ jj < piopNR m kLog, rs[jj]? = some (ByteArray.mk (encs (piopFr m kLog digest cap root lay mk jj) ++
+      (Frame.sq (piopK jj) (piopN m jj)).enc).toArray, piopN m jj, C jj))
+    (hC : ∀ jj, jj + 1 < piopNR m kLog → (C jj).size = piopN m jj)
+    (hout : ∀ e < m - 13, ((C 1)[e]! + 1).isZero = false) :
+    ∃ tail, (Loop.maskedOf (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms) {} rs).toList =
+      (List.range (lay.fa + 2) ++ List.range' (lay.fa + 3) (2 * lay.nLc + 64)).map mk ++ tail := by
+  set c := Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms with hcdef
+  have hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size := ofDraws_order lay b ms
+  have hN : c.nPiop ≤ c.order.size := Nat.sub_le _ _
+  have hNP : c.nPiop = lay.fa + 2 + (2 * lay.nLc + 64) := by
+    show (absorbed lay).size - _root_.Flock.Firewall.Frame.nLig lay = _
+    rw [absorbed_size]
+    omega
+  have hlen := piopV_length m kLog digest cap root lay mk hm hk hn hl
+  have hNR : 7 ≤ piopNR m kLog := by unfold piopNR; omega
+  have hdrop : ∀ a < piopNR m kLog, rs.drop a = (ByteArray.mk (encs (piopFr m kLog digest cap root lay mk a) ++
+      (Frame.sq (piopK a) (piopN m a)).enc).toArray, piopN m a, C a) :: rs.drop (a + 1) := by
+    intro a ha
+    have e := hrs a ha
+    rw [List.getElem?_eq_some_iff] at e
+    obtain ⟨hlt, e⟩ := e
+    rw [List.drop_eq_getElem_cons hlt, e]
+  -- the zerocheck's binding round and `r_outer`'s
+  have hbase : ∃ s, Inv c 0 s ∧ (Loop.maskedOf c {} rs).toList = (Loop.maskedOf c s (rs.drop 2)).toList := by
+    have e0 := hdrop 0 (by omega)
+    rw [List.drop_zero] at e0
+    have e1 := hdrop 1 (by omega)
+    have hF0 : piopFr m kLog digest cap root lay mk 0 =
+        [.label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap] ++ Frame.label LABEL_ZC.toUTF8 ::
+          [.label _root_.Flock.Zk.LABEL_PADS.toUTF8, .bytes root] := rfl
+    have hF1 : piopFr m kLog digest cap root lay mk 1 = [] := rfl
+    have hK0 : piopK 0 = 2 := rfl
+    have hK1 : piopK 1 = 2 := rfl
+    have hN0 : piopN m 0 = 6 := rfl
+    have hN1 : piopN m 1 = m - 13 := rfl
+    rw [hF0, hK0, hN0] at e0
+    rw [hF1, hK1, hN1] at e1
+    have hpl : plainLabel _root_.Flock.Zk.LABEL_PADS.toUTF8 := by unfold plainLabel; decide
+    have hr1 : plainLabel "flock-r1cs-v0".toUTF8 := by unfold plainLabel; decide
+    obtain ⟨out₀, hr₀⟩ := roundFree_zcFree c {} [.label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap]
+      [.label _root_.Flock.Zk.LABEL_PADS.toUTF8, .bytes root] 2 6 hc hN rfl rfl rfl
+      (by
+        intro f hf
+        simp only [List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false] at hf
+        rcases hf with rfl | rfl | rfl | rfl | rfl | rfl
+        · show "flock-r1cs-v0".toUTF8.size < 2 ^ 64; decide
+        · exact hdg
+        · exact hcap
+        · show LABEL_ZC.toUTF8.size < 2 ^ 64; decide
+        · show _root_.Flock.Zk.LABEL_PADS.toUTF8.size < 2 ^ 64; decide
+        · exact hroot)
+      (by
+        intro f hf
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at hf
+        rcases hf with rfl | rfl | rfl
+        · exact hr1
+        · trivial
+        · trivial)
+      (by
+        intro f hf
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at hf
+        rcases hf with rfl | rfl
+        · exact hpl
+        · trivial)
+      (.inl rfl) (by decide) (by decide) (Nat.zero_le _) rfl rfl
+    have hc0 : (C 0).size = 6 := hC 0 (by omega)
+    have hc1 : (C 1).size = m - 13 := hC 1 (by omega)
+    have ha₀ : Masker.answer c { ({} : Masker) with on := true, owed := some 6 } (C 0) =
+        .ok { ({} : Masker) with on := true, coins := #[] ++ C 0 } :=
+      answer_ok rfl hc0 rfl rfl rfl (fun e he h1 _ => by simp [K_SKIP] at h1; omega)
+    obtain ⟨out₁, fr₁, hr₁, hfr₁⟩ := roundFree_vals c { ({} : Masker) with on := true, coins := #[] ++ C 0 }
+      [] 2 (m - 13) hc hN rfl rfl (by simp) (by simp) (.inl rfl) (fun h => absurd h.1 (by omega)) (by omega)
+      (by simp [nAbs])
+    have ha₁ : Masker.answer c { ({ ({} : Masker) with on := true, coins := #[] ++ C 0 } : Masker) with
+        pos := ({ ({} : Masker) with on := true, coins := #[] ++ C 0 } : Masker).pos + nAbs [],
+        owed := some (m - 13) } (C 1) = .ok { ({} : Masker) with on := true, coins := #[] ++ C 0 ++ C 1 } :=
+      answer_ok rfl hc1 rfl rfl rfl (fun e he _ _ => hout e he)
+    have hcn : c.lay.nMlv = m - 6 := hn
+    refine ⟨{ ({} : Masker) with on := true, coins := #[] ++ C 0 ++ C 1 }, ⟨rfl, rfl, rfl, rfl, rfl, ?_⟩, ?_⟩
+    · show K_SKIP + (c.lay.nMlv - N_INNER) ≤ (#[] ++ C 0 ++ C 1).size
+      rw [Array.size_append, Array.size_append, Array.size_empty, hc0, hc1, hcn]
+      unfold K_SKIP N_INNER
+      omega
+    · conv_lhs => rw [e0]
+      rw [maskedOf_cons_ok _ hr₀ ha₀, e1, maskedOf_cons_ok _ hr₁ ha₁, hfr₁]
+      simp [fvals]
+  -- the rounds from `round1` on
+  have hwalk : ∀ a, 2 ≤ a → a + 1 ≤ piopNR m kLog → ∃ s,
+      Inv c (piopV m kLog digest cap root lay mk a).length s ∧
+      (Loop.maskedOf c {} rs).toList =
+        piopV m kLog digest cap root lay mk a ++ (Loop.maskedOf c s (rs.drop a)).toList := by
+    intro a
+    induction a with
+    | zero => intro h; omega
+    | succ a ih =>
+      intro h2 ha
+      rcases Nat.eq_or_lt_of_le h2 with h | h
+      · obtain rfl : a = 1 := by omega
+        obtain ⟨s, hs, he⟩ := hbase
+        refine ⟨s, ?_, ?_⟩
+        · rw [piopV_two]; exact hs
+        · rw [he, piopV_two]
+          rfl
+      · obtain ⟨s, hs, he⟩ := ih (by omega) (by omega)
+        obtain ⟨hmf, hpf⟩ := piopFr_frames m kLog digest cap root lay mk (jj := a) (by omega)
+        have hK : piopK a = 1 := by unfold piopK; rw [if_neg (by omega)]
+        have hNa : piopN m a = 1 := by unfold piopN; rw [if_neg (by omega), if_neg (by omega)]
+        have hb : (piopV m kLog digest cap root lay mk a).length + nAbs (piopFr m kLog digest cap root lay mk a) ≤
+            c.nPiop := by
+          rw [nAbs_fvals, ← List.length_append, ← piopV_succ, hNP, ← hlen]
+          exact piopV_mono m kLog digest cap root lay mk (by omega)
+        have e := hdrop a (by omega)
+        rw [hK, hNa] at e
+        obtain ⟨s', hs', he'⟩ := maskedOf_mid c hc hN hs _ hmf hpf hb (by rw [← hNa]; exact hC a (by omega))
+          (rs.drop (a + 1))
+        refine ⟨s', ?_, ?_⟩
+        · rw [piopV_succ, List.length_append, ← nAbs_fvals]; exact hs'
+        · rw [he, e, he', piopV_succ, List.append_assoc]
+  obtain ⟨s, hs, he⟩ := hwalk (piopNR m kLog - 1) (by omega) (by omega)
+  have a1 : piopNR m kLog - 1 + 1 = piopNR m kLog := by omega
+  obtain ⟨hmf, hpf⟩ := piopFr_frames m kLog digest cap root lay mk (jj := piopNR m kLog - 1) (by omega)
+  have hK : piopK (piopNR m kLog - 1) = 1 := by unfold piopK; rw [if_neg (by omega)]
+  have hNa : piopN m (piopNR m kLog - 1) = 1 := by unfold piopN; rw [if_neg (by omega), if_neg (by omega)]
+  have hb : (piopV m kLog digest cap root lay mk (piopNR m kLog - 1)).length +
+      nAbs (piopFr m kLog digest cap root lay mk (piopNR m kLog - 1)) ≤ c.nPiop :=
+    le_of_eq (by rw [nAbs_fvals, ← List.length_append, ← piopV_succ, a1, hNP, ← hlen])
+  have e := hdrop (piopNR m kLog - 1) (by omega)
+  rw [hK, hNa] at e
+  obtain ⟨tail, ht⟩ := maskedOf_end c hc hN hs _ hmf hpf hb (C (piopNR m kLog - 1)) (rs.drop (piopNR m kLog - 1 + 1))
+  refine ⟨tail, ?_⟩
+  rw [he, e, ht, ← List.append_assoc, ← piopV_succ, a1, piopV_all m kLog digest cap root lay mk hm hk hn hl]
+
+/-- **The value a rep's frame took at pad `i`** (`valsOf`) below `z_partial`'s end, but `final_c`'s: the masked value
+at `i`'s absorbed position plus pad `i`. -/
+theorem valsOf_at (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.Firewall.Frame.MaskSlot)
+    (M : Array F128) (fc : F128) {i : ℕ} (hi : i < lay.zp 64) (hne : i ≠ lay.fc)
+    (hM : lay.fa + 2 + (2 * lay.nLc + 64) ≤ M.size) :
+    (Loop.valsOf (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms) M fc)[i]! =
+      M[absPos lay i]! + (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h[i]! := by
+  have hcl : (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms).lay = lay := rfl
+  have hco : (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms).order = absorbed lay := rfl
+  have hch : (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms).h =
+      (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h := rfl
+  have hfc : lay.fc = lay.fa + 2 := rfl
+  have hzp : lay.zp 64 = lay.fa + 3 + 2 * lay.nLc + 64 := by
+    show lay.fc + 1 + 2 * lay.nLc + 0 + 64 = _
+    omega
+  have hsz : (absorbed lay).size = lay.fa + 2 + (2 * lay.nLc + 64 + _root_.Flock.Firewall.Frame.nLig lay) :=
+    absorbed_size lay
+  have hp : absPos lay i < (absorbed lay).size := by unfold absPos; split_ifs <;> omega
+  have hpM : absPos lay i < M.size := by unfold absPos; split_ifs <;> omega
+  have hord : (absorbed lay)[absPos lay i]! = i := by
+    rw [absorbed_getElem! lay hp]
+    unfold absPos
+    split_ifs <;> omega
+  have hih : i < (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h.size := by
+    have := ofDraws_order lay b ms (absPos lay i) hp
+    rwa [hco, hord, hch] at this
+  have hzl : ((absorbed lay).zip M).toList.length = min (absorbed lay).size M.size := by simp
+  have hpz : absPos lay i < ((absorbed lay).zip M).toList.length := by rw [hzl]; omega
+  have hz : ∀ q (hq : q < ((absorbed lay).zip M).toList.length),
+      ((absorbed lay).zip M).toList[q] = ((absorbed lay)[q]!, M[q]!) := by
+    intro q hq
+    rw [hzl] at hq
+    rw [Array.getElem_toList, Array.getElem_zip, getElem!_pos (absorbed lay) q (by omega), getElem!_pos M q (by omega)]
+  unfold Loop.valsOf
+  simp only [hcl, hco, hch]
+  rw [set!_ne _ _ (Ne.symm hne), ← Array.foldl_toList]
+  refine (foldl_set_at (fun i m => m + (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h.getD i 0) _
+    (by intro v e; cases e; rfl) _ _ hpz ?_ ?_ ?_).trans ?_
+  · rw [hz _ hpz]; exact hord
+  · intro q hq he
+    rw [hz _ hq] at he
+    have hq' : q < (absorbed lay).size := by rw [hzl] at hq; omega
+    dsimp only at he
+    rw [absorbed_getElem! lay hq'] at he
+    unfold absPos
+    split_ifs at he ⊢ <;> omega
+  · rw [Array.size_replicate]; exact hi
+  · rw [hz _ hpz]
+    dsimp only
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hih, Option.getD_some,
+      getElem!_pos (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h i hih]
 
 end Claims.ZKServer
