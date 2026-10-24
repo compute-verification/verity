@@ -1,5 +1,6 @@
 import Definitions.Pouw.Basic.Prob
 import Models.Accounting.Assumptions.RemoteHeld
+import Models.Accounting.Assumptions.RemoteOutside
 import Models.Accounting.Assumptions.RemoteDraw
 import Properties.RemoteAudit.Line.Record
 import Properties.RemoteAudit.Line.Premises
@@ -15,12 +16,13 @@ over its span, and `max(0, w − lost)` weights bytes a tick, `w` the weights bl
 * **LineHeld** (link-charged, `forms[1]`): on any node, trace and opening draw of `min(s, U_t)` receipts a window at
   the session's `samples` s, whose trace of record (`ofRecord`, the trace with the Lean verifier's verdict on the
   record as its own) meets the memory model's premises (the links' ceiling `Links`, `SquaringCeiling`, `Disks`,
-  `ChipCeiling`, `Routed`, `Paced` at the record's groups `recordPace`, `Covers`, `SketchBound` at `δs`, and the draw's
-  `Live` at every fixed coin commitment, `Refused`, `Counted`, of the session the prover plays holding the commitment
-  `com`, `F.play com`) and the record's code-to-model premises (`Registered`, `SizesOfRecord`, `DrawFits`,
-  `Properties.RemoteAudit.Line.Premises`), the probability that the Lean verifier accepts the record's session and the
-  line it reads off the Lean verifier's record (`lineOf`: its groups, windows and registered blocks the record's)
-  credits a stretch more than the trace held over its span (`Credits`) is at most
+  `ChipCeiling`, `Routed`, `Paced` at the record's groups `recordPace`, `Covers`, `SketchBoundAt` at `δs` and
+  `NoOutsideCompute`, statement C in full: no device outside the node computes on a registered block or a receipt
+  during the session, and the draw's `Live` at every fixed coin commitment, `Refused`, `Counted`, of the session the
+  prover plays holding the commitment `com`, `F.play com`) and the record's code-to-model premises (`Registered`,
+  `SizesOfRecord`, `DrawFits`, `Properties.RemoteAudit.Line.Premises`), the probability that the Lean verifier accepts
+  the record's session and the line it reads off the Lean verifier's record (`lineOf`: its groups, windows and
+  registered blocks the record's) credits a stretch more than the trace held over its span (`Credits`) is at most
   `δs + (δ + Σ_t s / 2^64 + Σ_t adv_t + Σ_t hide_t)`, `δ` the one the line reads its pooled bound at (`Node.delta`, a
   nonnegative rational; the line computes at none outside `(0, 1)`), `adv_t` the advantage on `prf t` of window `t`'s
   distinguisher at that `δ` (`Session.distinguisher`) with openings coin `t`'s commitment leaf committing zeros
@@ -123,14 +125,16 @@ the advantage on `prf t` of window `t`'s distinguisher at it with leaf `t` of th
 def LineHeld : Prop :=
   ∀ (node : Node) (n m κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : Coins n κ X → Fin n → ℕ → ℕ) (F : Committed n m (fun _ => node.params.samples) κ X Cm)
-    (com : Coins n κ X → Cm) (T : Trace (Coins n κ X)) (rec : Coins n κ X → Record) (δs : ℝ),
+    (com : Coins n κ X → Cm) (T : Trace (Coins n κ X)) (rec : Coins n κ X → Record) (δs : ℝ)
+    (O : Outside (ofRecord T node rec)),
     Links (ofRecord T node rec) node.link node.linkBurst →
     SquaringCeiling (ofRecord T node rec) node.squarings node.encode node.rebuildBurst →
     Disks (ofRecord T node rec) node.disk node.diskBurst → ChipCeiling (ofRecord T node rec) node.chipBlocks →
     Routed (ofRecord T node rec) → Paced (ofRecord T node rec) (recordPace node rec) → Covers (ofRecord T node rec) →
-    SketchBound (ofRecord T node rec) δs → DrawFits m → (∀ c, Live (F.view c)) →
-    Refused (F.play com) prf rest (ofRecord T node rec) → Counted (F.play com) (ofRecord T node rec) →
-    Registered (ofRecord T node rec) node → SizesOfRecord (F.play com) (ofRecord T node rec) node rec →
+    SketchBoundAt (ofRecord T node rec) O δs → NoOutsideCompute (ofRecord T node rec) O → DrawFits m →
+    (∀ c, Live (F.view c)) → Refused (F.play com) prf rest (ofRecord T node rec) →
+    Counted (F.play com) (ofRecord T node rec) → Registered (ofRecord T node rec) node →
+    SizesOfRecord (F.play com) (ofRecord T node rec) node rec →
     Pouw.pr (fun ω => Verified node (rec ω) ∧ ¬ HeldAt (ofRecord T node rec) ω node (rec ω) 1) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin n, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
@@ -142,14 +146,16 @@ block coming in over the node's boundary links (`Identity`) in place of their ce
 def LineHeldIdentity : Prop :=
   ∀ (node : Node) (n m κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : Coins n κ X → Fin n → ℕ → ℕ) (F : Committed n m (fun _ => node.params.samples) κ X Cm)
-    (com : Coins n κ X → Cm) (T : Trace (Coins n κ X)) (rec : Coins n κ X → Record) (δs : ℝ),
+    (com : Coins n κ X → Cm) (T : Trace (Coins n κ X)) (rec : Coins n κ X → Record) (δs : ℝ)
+    (O : Outside (ofRecord T node rec)),
     Identity (ofRecord T node rec) →
     SquaringCeiling (ofRecord T node rec) node.squarings node.encode node.rebuildBurst →
     Disks (ofRecord T node rec) node.disk node.diskBurst → ChipCeiling (ofRecord T node rec) node.chipBlocks →
     Routed (ofRecord T node rec) → Paced (ofRecord T node rec) (recordPace node rec) → Covers (ofRecord T node rec) →
-    SketchBound (ofRecord T node rec) δs → DrawFits m → (∀ c, Live (F.view c)) →
-    Refused (F.play com) prf rest (ofRecord T node rec) → Counted (F.play com) (ofRecord T node rec) →
-    Registered (ofRecord T node rec) node → SizesOfRecord (F.play com) (ofRecord T node rec) node rec →
+    SketchBoundAt (ofRecord T node rec) O δs → NoOutsideCompute (ofRecord T node rec) O → DrawFits m →
+    (∀ c, Live (F.view c)) → Refused (F.play com) prf rest (ofRecord T node rec) →
+    Counted (F.play com) (ofRecord T node rec) → Registered (ofRecord T node rec) node →
+    SizesOfRecord (F.play com) (ofRecord T node rec) node rec →
     Pouw.pr (fun ω => Verified node (rec ω) ∧ ¬ HeldAt (ofRecord T node rec) ω node (rec ω) 0) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin n, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
