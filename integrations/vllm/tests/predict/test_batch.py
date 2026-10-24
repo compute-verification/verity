@@ -414,8 +414,9 @@ def test_compile_steps_passes_its_own_rule():
                for i, (lp, _, b) in enumerate(reqs)}
         return adv, ing
 
-    adv, ing = session({**greedy, "max_tokens": 2})
-    check_compiled(reg, adv, ing, steps.compile_steps(reg, adv, ing), steps.plan_steps)
-    adv, ing = session(topp)
-    with pytest.raises(BatchDependent, match="request 1: its top-p sampler's split count is derived"):
+    for b1 in ({**greedy, "max_tokens": 2}, {**topp, "top_p": 1.0}):
+        adv, ing = session(b1)
         check_compiled(reg, adv, ing, steps.compile_steps(reg, adv, ing), steps.plan_steps)
+    adv, ing = session(topp)
+    with pytest.raises(Unexpressible, match="request 1: .*top_p 0.95 below 1"):
+        steps.compile_steps(reg, adv, ing)
