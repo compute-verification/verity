@@ -17,7 +17,7 @@ defer = ["circuit-check", "lean-suites", "pytest"]
 regenerate_locks = true
 # ready PRs to put at the bottom of `next`, in this order, ahead of members that keep their place (a fix the next train needs)
 first = []
-# how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a lock change once a Lean check
+# how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change once a Lean check
 # passed, and the full check after landing, which reverts what it fails (Daniel, 24 Oct 06:05Z); "check", each train on its check
 land = "review"
 # the after-landing run reuses no pass (`check.py --no-cache`), until a suite's reuse is per test

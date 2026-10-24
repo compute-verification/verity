@@ -214,9 +214,9 @@ multi-core CPU pod. It covers:
 - C-Flock's Rust build and tests;
 - the Lean verifier's build and its partition check;
 - the Lean check;
-- `merge_requires` (declared per job in `tools/verity/check/ci.toml`): the steps a change's paths demand, such as `lean-agreement`, the cross-check
-  against upstream's Rust verifier, for C-Flock (`verity/ml/flock/`, and its Lean verifier in `verity/core/service/flock/`;
-  `check.py --record` sends what it needs).
+- `lean-agreement`, the cross-check against upstream's Rust verifier, when a change touches C-Flock (`verity/ml/flock/`, or
+  its Lean verifier in `verity/core/service/flock/`; `merge_requires` in `tools/verity/check/ci.toml`): drive's after-landing
+  run sends the upstream build then.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
@@ -242,19 +242,22 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   waits for.
 - Drive stacks admitted PRs on `next`, one merge commit each. Reviewers, agents ci staffs and never the PR's owner, read
   `next` bottom up: `research queue review` lists the members above `main` with no land verdict at their head (number, head,
-  owner, files, whether it changes a lock), and `research queue review N --land [--ref NOTE] --by LANE` or
-  `--hold REASON --by LANE` records one, a `reviewed` label on `pr:N@HEAD`. An owner's own verdict doesn't count, and a new
-  head needs a new one. No change waits on any other per-head grant: not red-team's, the vLLM coordinator's or a
-  statement reviewer's (Daniel, 8 Oct).
+  owner, files, whether it waits for a Lean check), and `research queue review N --land [--ref NOTE] --by LANE` or
+  `--hold REASON --by LANE` records one, a `reviewed` label on `pr:N@HEAD`. A verdict by the owner, its handle or its
+  ready mark's author doesn't count, and a new head needs a new one. No change waits on any other per-head grant: not
+  red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
 - Each tick, drive fast-forwards `main` to the top of the longest prefix of `next` whose every member has a land verdict and
   no hold. Before it lands, in minutes: the merge onto `next` is clean, and every `.py` file the landing leaves compiles
-  (drive ejects the PR that broke one). A PR that changes a `lean-audit.json` lock keeps its Lean check first: it lands once
-  a `lean-audit` passed on a commit of `next` holding it at that head, which drive launches on the reviewed prefix's top
-  (`train.sh TOP MACHINES --deferred lean-audit`); any recorded run whose `lean-audit` passed there counts too.
-- After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS`, with
-  `--no-cache` while `after_landing_no_cache = true`). A failure reverts the one PR it implicates (`git revert -m 1`), else
-  every landing since the last verified tip, and its owner relands with the fix; one that no landing since touches reverts
-  nothing and goes to ci. Citations and tables read only commits whose after-landing run passed.
+  (drive ejects the PR that broke one). A PR that changes Lean (a `.lean` file of a package with a `lean-audit.json` lock, or
+  the lock) waits for its Lean check: a `lean-audit` that passed on a commit of `next` at or above it, which drive launches on
+  the reviewed prefix's top (`train.sh TOP MACHINES --deferred lean-audit`), and after a failure there on the PR's own commit;
+  only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too.
+- After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
+  --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
+  itself has passed (or ci records `main` green: `research queue baseline SHA --by ci`). A failure of a step that passed on the
+  last verified `main` reverts the one PR it implicates (`git revert -m 1`), bisecting among several, and its owner relands
+  with the fix; anything else reverts nothing and goes to ci. Citations and tables read only commits whose after-landing run
+  passed.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
   of the queue: the lander lands it with `research merge --push` on its own passing check, from the control pod
   (`/data/infra/drive.sh merge ...`), and drive's next sync rebuilds `next` on it. Only drive's App pushes `main` and `next`
@@ -458,10 +461,10 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   and never resumes a local worker a third time.
 - **Landing is drive's.** The worker that made a branch opens its PR (`research queue open --head BRANCH --sha SHA
   --title T --body-file F --by LANE`, from any VM, with `Lane LANE` in the body), marks it ready and goes back to
-  research; you hear back only if it fails. Before marking, run the Lean check of the packages you touched and
-  `uv run tools/verity/check/suites.py --changed origin/main --quick`, and a suite's slow tier only when you changed that
-  suite's core: drive's train check runs the rest, bisects a failed train and lands its passing prefix, so a full
-  pre-mark run only duplicates it and holds a slot. Prefer small PRs, which bisection lands soonest.
+  research. A reviewer ci staffs writes its verdict, a PR that changes Lean waits for its Lean check, and the full check
+  runs after landing and reverts a PR that breaks `main`; you hear back only if yours is held, ejected or reverted. Before
+  marking, run the Lean check of the packages you touched and `uv run tools/verity/check/suites.py --changed origin/main
+  --quick`, and a suite's slow tier when you changed that suite's core. Prefer small PRs, which review lands soonest.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`. Work for another lead goes in as a Linear issue into its team (Where writing
