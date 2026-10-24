@@ -465,7 +465,7 @@ abbrev RowHolds (vals : Nat → Bool) (acc : Acc) (x : Nat) : Prop :=
 /-- **A Definition's calls, placed, satisfy their callees**: given that a copy whose columns were unwritten, and whose rows
 hold after it, satisfies its Definition (`ih`), every copy of every call does, when its columns are unwritten before the
 calls and its rows hold after them. -/
-theorem calls_holds {defs : Array Def} {k : Nat} {vals : Nat → Bool} {fuel : Nat}
+theorem calls_holds {defs : Array Def} {k : Nat} {vals : Nat → Bool} {fuel : Nat} {Q : Call → Prop}
     (hfits : ∀ (d : Nat) (df : Def), defs[d]? = some df → df.fits defs = true)
     (ih : ∀ {d o inp acc acc'}, place defs k fuel d o inp acc = .ok acc' → Sized acc → Clean acc →
       (∀ x, o ≤ x → x < o + (defs.getD d default).cols → Free x acc) →
@@ -477,12 +477,12 @@ theorem calls_holds {defs : Array Def} {k : Nat} {vals : Nat → Bool} {fuel : N
     (hsized : Sized acc1) (hclean : Clean acc1)
     (hfree : ∀ c ∈ df.calls.toList, ∀ j < c.count, ∀ y, c.base + j * c.stride ≤ y →
       y < c.base + j * c.stride + (defs.getD c.def_ default).cols → Free (o + y) acc1)
-    (hsat : ∀ c ∈ df.calls.toList, ∀ j < c.count, ∀ y, c.base + j * c.stride ≤ y →
+    (hsat : ∀ c ∈ df.calls.toList, Q c → ∀ j < c.count, ∀ y, c.base + j * c.stride ≤ y →
       y < c.base + j * c.stride + (defs.getD c.def_ default).cols → RowHolds vals acc' (o + y)) :
-    ∀ c ∈ df.calls.toList, ∀ j < c.count,
+    ∀ c ∈ df.calls.toList, Q c → ∀ j < c.count,
       Holds defs (vals k) fuel c.def_ (fun y => vals (o + c.base + j * c.stride + y))
         ((c.bound (df.ref o inp k) j).map vals) := by
-  intro c hc j hj
+  intro c hc hQ j hj
   have hap' := hap
   unfold Def.apart at hap'
   simp only [Bool.and_eq_true, List.all_eq_true, Bool.or_eq_true, decide_eq_true_eq] at hap'
@@ -579,7 +579,7 @@ theorem calls_holds {defs : Array Def} {k : Nat} {vals : Nat → Bool} {fuel : N
     exact free_of_same3 (before y (by omega) (by omega)) (hfree c hc j hj y (by omega) (by omega))
   · obtain ⟨y, rfl⟩ : ∃ y, x = o + y := ⟨x - o, by omega⟩
     have s := after y (by omega) (by omega)
-    have := hsat c hc j hj y (by omega) (by omega)
+    have := hsat c hc hQ j hj y (by omega) (by omega)
     unfold RowHolds at this ⊢
     rw [this, s.1, s.2.1]
 
@@ -660,8 +660,9 @@ theorem place_holds {defs : Array Def} {k : Nat} (vals : Nat → Bool)
         unfold rowVal
         simp only [ref_val]
       · -- a copy: its columns unwritten before the calls, and its rows holding after them
-        refine holds_calls_form rfl (calls_holds hfits (fun hp hs hc hf hsat' => ih hp hs hc hf hsat') hap h2 hs1 hc1
-          (fun c hc j hj y hy1 hy2 => ?_) (fun c hc j hj y hy1 hy2 => ?_) c hc j hj)
+        refine holds_calls_form rfl (calls_holds (Q := fun _ => True) hfits
+          (fun hp hs hc hf hsat' => ih hp hs hc hf hsat') hap h2 hs1 hc1
+          (fun c hc j hj y hy1 hy2 => ?_) (fun c hc _ j hj y hy1 hy2 => ?_) c hc trivial j hj)
         · obtain ⟨s1, s2⟩ := copy_in_span hj hy1 hy2
           have hcf := hcallsfit c hc
           refine free_of_same3 (rowsFrame (o + y) fun r hr e => ?_) (hfree (o + y) (by omega) (by omega))
@@ -744,8 +745,8 @@ theorem within_lt {defs : Array Def} {k : Nat}
 
 /-- **Every copy of the root's calls satisfies its Definition**, at column values that satisfy the unrolled rows. -/
 theorem rows_holds {t : Tmpl} {acc : Acc} (hwf : t.wellFormed = true) (ha : t.apart = true) (hr : t.rows = .ok acc)
-    (vals : Nat → Bool) (hsat : ∀ x < (t.defs.getD t.root default).cols, RowHolds vals acc x) :
-    ∀ c ∈ (t.defs.getD t.root default).calls.toList, ∀ j < c.count,
+    (vals : Nat → Bool) (hsat : ∀ x, t.inCols ≤ x → x < t.constPos → RowHolds vals acc x) :
+    ∀ c ∈ (t.defs.getD t.root default).calls.toList, t.inCols ≤ c.base → ∀ j < c.count,
       Holds t.defs (vals t.constPos) t.defs.size c.def_ (fun y => vals (c.base + j * c.stride + y))
         ((c.bound ((t.defs.getD t.root default).ref 0 [] t.constPos) j).map vals) := by
   unfold Tmpl.wellFormed at hwf
@@ -779,10 +780,11 @@ theorem rows_holds {t : Tmpl} {acc : Acc} (hwf : t.wellFormed = true) (ha : t.ap
       (Flock.Tmpl.canon (r.2.2.map (df.ref 0 [] t.constPos)))
   have hs2 : Sized acc2 := foldlM_inv (f := fr) Sized (fun _ _ u u' hu hw => write_sized hw hu) (sized_empty _) h3
   have hc2 : Clean acc2 := foldlM_inv (f := fr) Clean (fun _ _ u u' hu hw => write_clean hw hu) (clean_empty _) h3
-  have this := calls_holds (vals := vals) hfits (fun hp hs hc hf hsat' => place_holds vals hfits hapart _ hp hs hc hf hsat')
-    hap h4 hs2 hc2 (fun c hc j hj y hy1 hy2 => ?_) (fun c hc j hj y hy1 hy2 => ?_)
-  · intro c hc j hj
-    have h := this c hc j hj
+  have this := calls_holds (vals := vals) (Q := fun c => t.inCols ≤ c.base) hfits
+    (fun hp hs hc hf hsat' => place_holds vals hfits hapart _ hp hs hc hf hsat')
+    hap h4 hs2 hc2 (fun c hc j hj y hy1 hy2 => ?_) (fun c hc hQ j hj y hy1 hy2 => ?_)
+  · intro c hc hQ j hj
+    have h := this c hc hQ j hj
     simp only [Nat.zero_add] at h
     exact h
   · obtain ⟨s1, s2⟩ := copy_in_span hj hy1 hy2
@@ -802,7 +804,7 @@ theorem rows_holds {t : Tmpl} {acc : Acc} (hwf : t.wellFormed = true) (ha : t.ap
       by simp only [decide_eq_true_eq]; omega⟩)
     simp only at hlt
     have s := write_same3 h2 (x := 0 + y) (by omega)
-    have := hsat (0 + y) (by omega)
+    have := hsat (0 + y) (by omega) (by omega)
     unfold RowHolds at this ⊢
     rw [← s.1, ← s.2.1]
     exact this
@@ -811,13 +813,13 @@ theorem rows_holds {t : Tmpl} {acc : Acc} (hwf : t.wellFormed = true) (ha : t.ap
 under one of the root's calls past the input rows, at any depth, the value of that copy's Definition on the values of
 its bound inputs, the constant at its column's value. -/
 theorem rows_eval {t : Tmpl} {acc : Acc} (hwf : t.wellFormed = true) (ha : t.apart = true) (ho : t.ordered = true)
-    (hr : t.rows = .ok acc) (vals : Nat → Bool) (hsat : ∀ x < (t.defs.getD t.root default).cols, RowHolds vals acc x)
+    (hr : t.rows = .ok acc) (vals : Nat → Bool) (hsat : ∀ x, t.inCols ≤ x → x < t.constPos → RowHolds vals acc x)
     {c : Call} {j f e o : Nat} {inp : List Nat} (hc : c ∈ (t.defs.getD t.root default).calls.toList)
     (hb : t.inCols ≤ c.base) (hj : j < c.count)
     (hw : Within t.defs t.constPos t.defs.size c.def_ (c.base + j * c.stride)
       (c.bound ((t.defs.getD t.root default).ref 0 [] t.constPos) j) f e o inp) :
     ∀ y < (t.defs.getD e default).cols, vals (o + y) = t.evalDef e (inp.map vals) (vals t.constPos) y := by
-  have hH := holds_within hw (rows_holds hwf ha hr vals hsat c hc j hj)
+  have hH := holds_within hw (rows_holds hwf ha hr vals hsat c hc hb j hj)
   have hwf' := hwf
   unfold Tmpl.wellFormed at hwf'
   simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range, decide_eq_true_eq, beq_iff_eq] at hwf'

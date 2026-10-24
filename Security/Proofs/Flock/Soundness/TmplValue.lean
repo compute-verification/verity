@@ -46,7 +46,7 @@ theorem unrollAt_eval {t : Tmpl} {lays : Array Lay} {net : Net} (hwf : t.wellFor
   unfold Flock.Tmpl.unrollAt at h
   obtain ⟨acc, hr, hat⟩ := Flock.TmplOrder.bind_ok h
   exact Flock.TmplValue.rows_eval hwf ha ho hr (fun x => z ((posMap t lays).getD x 0))
-    (rowHolds_of_netSat hat hlog hs) hc hb hj hw
+    (fun x _ hx => rowHolds_of_netSat hat hlog hs x (by have := Flock.TmplUnroll.wf_cols hwf; omega)) hc hb hj hw
 
 end FlockSoundness.TmplValue
 
