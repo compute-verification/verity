@@ -220,8 +220,6 @@ def test_word_view_at_one_logit() -> None:
     assert not E.evaluate_batch(bind(b1.TokenSelect, V=1), x).any()
 
 
-@pytest.mark.xfail(strict=True, reason="rows.token_select_first_max maps NaN to -inf before argmax, so with a NaN first logit "
-                   "it returns the first maximum of the rest, where TokenSelect_v1 (a scan whose best stays the NaN) returns 0")
 def test_rows_oracle_with_a_nan_first_logit() -> None:
     x = np.array([[0x7FC0, 0x3F80, 0x4000]], np.uint16)
     assert rows.token_select_first_max(x[0]) == int(first_max(x)[0]) == 0
@@ -255,7 +253,7 @@ def f32_argmax(V: int, y: np.ndarray) -> np.ndarray:
     return (bits.astype(np.int64) << np.arange(32)).sum(axis=1)
 
 
-@pytest.mark.parametrize("V", [2, 5, 65])
+@pytest.mark.parametrize("V", [2, 5, pytest.param(65, marks=pytest.mark.slow)])
 def test_f32_first_max_is_the_word_definition(V) -> None:
     """The f32 restatement against `GumbelSelectF32_v1{V}` at temp 0 (+0 and -0), where it is the first maximum of the logits."""
     y = f32_rows(V, 1024, _rng("f32-oracle", V))
@@ -295,8 +293,7 @@ def test_stages_partition(V, stage) -> None:
     _partitions(V, stage)
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("V", sorted(SERVED))
+@pytest.mark.parametrize("V", [pytest.param(V, marks=pytest.mark.slow) if V == 256000 else V for V in sorted(SERVED)])
 def test_served_vocabulary(V) -> None:
     """The served sizes (V = 256,000: about 25 s): the gate count and levels, each stage's partition, and 64 rows against
     `first_max`, which `test_first_max_is_the_word_definition` ties to the word Definition (its scan takes minutes on these

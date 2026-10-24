@@ -802,6 +802,25 @@ def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_sto
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
+def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_path, monkeypatch):
+    """Sized to the whole node, each xdist worker of ten lane runs ran 159-191 threads (24 Oct, load 522 on cpu-5's 192 cores):
+    each test process's OpenMP, MKL, OpenBLAS and numexpr pools get the CPUs divided by --jobs, and a size the caller set stays."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cpus", lambda: 192)
+    assert [S.threads_per_process(j) for j in (1, 32, 192, 400, 0)] == [192, 6, 1, 1, 192]
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": "import os\n\ndef test_env():\n"
+                                 "    got = {os.environ.get(v) for v in ('OMP_NUM_THREADS', 'MKL_NUM_THREADS', 'OPENBLAS_NUM_THREADS', "
+                                 "'NUMEXPR_NUM_THREADS')}\n"
+                                 "    assert got == {os.environ['WANT']} if os.environ['WANT'] else len(got) == 1 and int(got.pop()) >= 1\n"})
+    for var in S.THREAD_VARS:
+        monkeypatch.delenv(var, raising=False)
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": ""})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": "3", **{v: "3" for v in S.THREAD_VARS}})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
 def test_a_pass_earned_on_one_machine_is_reused_on_another_and_names_its_run(tmp_path):
     """Daniel's CI update (7 Oct): a suite's pass is reused on any machine while its inputs, the base image and the check code
     are as they were.  Machine a's passes travel as a verdict pack; on machine b a change to one suite's inputs runs that suite
@@ -1375,6 +1394,47 @@ def test_a_traced_pass_is_reused_until_a_file_its_run_read_changes(tmp_path):
     (lib / "maybe.txt").write_text("now it's here\n")
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "4 passed in" in p.stdout, p.stdout
+
+
+def test_a_read_through_a_process_wide_cache_counts_for_every_module_that_uses_the_cache(tmp_path):
+    """Two test modules read `lib` through one `lru_cache`d helper, so only the first to call it opens the files: the second's
+    pass must still miss when a file only it checks changes (verity-vllm's lint and `tests/lint/_ratchet.py`). Each module's
+    traced pass is kept on its run's read set, every process's and every module's together, so the cache can't hide a read."""
+    import shutil
+
+    root, lib = tmp_path / "tree", tmp_path / "tree" / "lib"
+    (root / "tools" / "verity" / "check").mkdir(parents=True)
+    shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
+    (root / ".gitignore").write_text("__pycache__/\n")
+    (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
+    lib.mkdir()
+    (lib / "pyproject.toml").write_text('[project]\nname = "lib"\n')
+    for name, text in {"first.txt": "1\n", "second.txt": "2\n", "unread.py": "X = 1\n"}.items():
+        (lib / name).write_text(text)
+    (root / "pkg" / "tests").mkdir(parents=True)
+    (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\ndependencies = ["lib"]\n\n[tool.pytest.ini_options]\n'
+                                                 'testpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n')
+    for name, text in {"_scan.py": "import functools, pathlib\n\nLIB = pathlib.Path(__file__).resolve().parents[2] / 'lib'\n\n\n"
+                                   "@functools.lru_cache(maxsize=None)\ndef values():\n"
+                                   "    return {p.name: p.read_text() for p in sorted(LIB.glob('*.txt'))}\n",
+                       "test_first.py": "from _scan import values\n\ndef test_first():\n    assert values()['first.txt'] == '1\\n'\n",
+                       "test_second.py": "from _scan import values\n\ndef test_second():\n    assert values()['second.txt'] == '2\\n'\n"}.items():
+        (root / "pkg" / "tests" / name).write_text(text)
+    _git(root, "init", "-q")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "shipped")
+
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "2 per-test passes kept" in p.stdout, p.stdout
+    (lib / "unread.py").write_text("X = 2\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "cached  pkg" in p.stdout and "traced: every file its run read" in p.stdout, p.stdout
+
+    (lib / "second.txt").write_text("changed\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode != 0 and "tests/test_second.py::test_second" not in _reused(tmp_path), p.stdout
+    assert "FAILED tests/test_second.py::test_second" in (tmp_path / "logs" / "pkg.log").read_text()
 
 
 def test_a_suite_that_is_not_parallel_reuses_its_whole_traced_pass_until_a_file_its_run_read_changes(tmp_path):

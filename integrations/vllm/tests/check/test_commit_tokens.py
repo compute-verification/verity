@@ -488,3 +488,25 @@ def test_with_a_match_record_beside_the_commit_both_links_hold():
     assert EP.executed_prefix_facts(w.epr, {"coverage": dict(cov, commit_account_link=bad)}, lk, ARRIVALS, STOP)["r0"]["linked"] is False
     assert "Commit's token record" in CT.account_link_error(match, bad)
     assert EP.executed_prefix_facts(w.epr, {"coverage": dict(cov, match_account_link=dict(match, ok=False))}, lk, ARRIVALS, STOP)["r0"]["linked"] is False
+
+
+def test_an_id_with_a_nonzero_high_word_is_refused_where_it_is_read(tmp_path):
+    """The circuit's token id is a 32-bit word, and vLLM's int64 must be it zero-extended (`sampling_event.circuit_token_id`): r1 serves
+    and commits ids 2^32 above its own, which agree with each other, and is refused at the served list, at the opening, at the boundary
+    linkage and at the Match record's tokens.json; a negative id the same."""
+    hi = 1 << 32
+    sampled, served = {"r0": SAMPLED["r0"], "r1": [t + hi for t in SAMPLED["r1"]]}, {"r0": SERVED["r0"], "r1": [t + hi for t in SERVED["r1"]]}
+    w = world(sampled, served)
+    link = w.link()
+    assert named(refused(link), f"r1: (1) served token 0: token id {21 + hi} has a nonzero high word") and link["tokens_committed"]["r0"] is True
+    assert named(refused(world(sampled, SERVED).link()), "r1: (1) served token 0 not opened from the run root at engine step 0: the committed "
+                 f"sampled id: token id {21 + hi} has a nonzero high word")
+    lk = _linkage(w)
+    assert lk["result"] is False and any(u["request_id"] == "r1" and u["why"].startswith("the committed sampled id of step 0: token id")
+                                         for u in lk["unlinked"])
+    acc = EP.load_match_account(_match_dir(tmp_path))
+    acc["tokens"]["requests"][1]["generated_token_ids"] = served["r1"]
+    m = EP.link_to_match_account(w.epr, acc, order=ORDER, declared_lag=LAG, served_tokens=w.served)
+    assert named(m["problems"], "r1: the Match record's tokens.json served an id that is no circuit's: token id", "nonzero high word")
+    neg = {"r0": SERVED["r0"], "r1": [-1, *SERVED["r1"][1:]]}
+    assert named(refused(world({"r0": SAMPLED["r0"], "r1": neg["r1"]}, neg).link()), "r1: (1) served token 0: token id -1 has a nonzero high word")

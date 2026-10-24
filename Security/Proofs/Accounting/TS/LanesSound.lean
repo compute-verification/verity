@@ -259,7 +259,8 @@ theorem k_of_check {T : PouwWindow.Lanes.Tile} (h : T.check = .ok ()) : 32 ∣ T
   by_cases h1 : T.k % 32 = 0
   · refine ⟨Nat.dvd_of_mod_eq_zero h1, Nat.lt_of_not_le fun h2 => ?_⟩
     have h2' : 131072 ≤ T.k := h2
-    simp [h1, h2'] at h
+    have h3 : ¬T.k < 64 := by omega
+    simp [h1, h2', h3] at h
     cases h
   · simp [h1] at h
     cases h
@@ -479,16 +480,16 @@ served tile, `LeafChecks` from the 33 circuits computing their pieces' compositi
 receipt the committed rows decode to (`leafOf`, `receiptOf`), whose agreement with the decodes `decodes_of_checks`
 gives from acceptance. -/
 theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.LeafLanesSound := by
-  intro Ω _ S nπ K nw sess₀ op sess out salts chain pub roots place right δ hCR hLaw hδ hδ0 hL hC
+  intro Ω _ S nπ K nw sess₀ op sess out salts pub roots place right δ hCR hLaw hδ hδ0 hL hC
   exact leafLanes_soundAt sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
     (fun _ _ _ k => PouwWindow.Lanes.readFull (servedTile K) (k.map Fin.val))
     (fun x w i k => PouwWindow.Lanes.ownOf (roots x w i) (place x w i) (servedTile K) (k.map Fin.val)) "o0"
-    (dqOf Pouw.H1Zy.zyDequant) (partOf chain)
+    (dqOf Pouw.H1Zy.zyDequant) (partOf (laneChain K nw))
     (decL K nw (servedTile K)) (decC nw (servedTile K)) pub (fun x w i => receiptOf nw (servedTile K) (sess x w i))
     (fun x w i => leafOf K (servedTile K) (sess x w i)) right δ hCR hLaw
     (fun x w i k h => (sess₀ x w i k).servedRegistered_canon (op x w i k) (PouwWindow.Lanes.checkOneRead_ok h))
     (fun x w i k => ⟨#[(PouwWindow.Lanes.okRow, salts x w i k "o0")], by
       cases k <;> simp [knownOf, PouwWindow.Lanes.knownRows]⟩) hδ hδ0
-    (fun x w i => leafChecks_of_computes (servedTile K) chain Pouw.H1Zy.zyDequant (sess x w i) (laneComputes_of_lowers (hL x w i))
+    (fun x w i => leafChecks_of_computes (servedTile K) (laneChain K nw) Pouw.H1Zy.zyDequant (sess x w i) (laneComputes_of_lowers (hL x w i))
       (combineComputes_of_lowers (hC x w i)))
     (decodes_of_checks (roots := roots) (place := place))

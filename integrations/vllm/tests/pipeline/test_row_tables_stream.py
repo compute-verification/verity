@@ -46,12 +46,15 @@ def _spec(mine: CS.Window, table: bool = True) -> S.Spec:
     return S.Spec(values, S.Law("stratified:2"), check, public, b"row-table-stream-test")
 
 
+@pytest.mark.slow
 def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp_path, signer, monkeypatch):  # noqa: F811
     """The window's record, at row 101 + i for case i, registers on a stream whose Spec declares the `row-table` root
     as a tree over roots of row-seg leaves; drawn from the served challenger's coins after its digest, the honest draw's
     outcome is accepted by the Lean run and each of `coin_outcomes`' negatives is refused at its select (`coins`). Every
     case's tables hold against the members' strings and the live step roots. A Spec without the `row-table` Value
-    refuses the record (`roots`): the tree over the step roots is one of the window's salted roots."""
+    refuses the record (`roots`): the tree over the step roots is one of the window's salted roots. About 70 s, the coins'
+    outcomes each run by the Lean verifier: the only test that takes a row-table window's record through a Stream, so a
+    `row-table` root the service can't register or the verifier refuses shows here and not on a served window."""
     c, _s, _got = committed(monkeypatch)
     mine = c.window
     publics = {m.key: c.public_body(k) for k, m in enumerate(mine.members)}

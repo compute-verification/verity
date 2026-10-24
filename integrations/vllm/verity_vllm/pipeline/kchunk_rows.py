@@ -167,6 +167,6 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
         if m.template in writers:
             g = next(j for j, (nm, _ty) in enumerate(template(m.template).fn.signature()[0]) if nm == "acc")
             w = writers[m.template][m.base - base[m.template]:m.base - base[m.template] + m.n]
-            m = replace(m, wired=(f"in{g}", "o0", tuple(int(x) for x in w)))
+            m = replace(m, wired=m.wired + ((f"in{g}", "o0", tuple(int(x) for x in w)),))
         out.append(m)
     return out

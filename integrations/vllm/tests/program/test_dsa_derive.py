@@ -549,6 +549,7 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
     assert roles["layers.0.W_UK_T"]["role"] == "mla.absorb" and roles["layers.0.indexer.k_norm.bias"]["role"] == "dsa.indexer.k_norm.bias"
 
 
+@pytest.mark.slow
 def test_a_row_past_topk_reads_the_runs_settings_checks_their_order_against_its_logits_and_reads_its_rows(served):
     """TOPK 2: the decode row at position 2 has 3 keys.  The indexer layer reads the 3 settings of a Waksman network over its 3
     rows from the `run` input's one field, routes the row indices through them (`DsaWaksmanOrder_v1{N=3,TOPK=2}`) and checks that
@@ -621,6 +622,7 @@ def test_large_mla_absorb_is_bound_before_its_composite_transpose(served):
     assert rep.provenance["weight_roles"]["weight"]["role"] == "mla.absorb"
 
 
+@pytest.mark.slow
 def test_large_mla_absorb_is_not_fused_when_the_bmm_intermediate_escapes(served):
     """The escaping bmm output is a value of its own, so the chain is not one absorb: the bmm binds alone and the transpose, past the
     Explicit limit, reads its rows whole."""
