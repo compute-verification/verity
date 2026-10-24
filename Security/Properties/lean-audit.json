@@ -47,6 +47,8 @@
   "Properties.Proofs.Accounting.Requirement",
   "Properties.RemoteAudit",
   "Properties.Proofs.RemoteAudit",
+  "Properties.RemoteAudit.Coins",
+  "Properties.Proofs.RemoteAudit.Coins",
   "Properties.Accounting.Compose",
   "Properties.Accounting.Served",
   "Properties.Proofs.Accounting.Served"
