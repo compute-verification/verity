@@ -918,7 +918,7 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 
 - `pous-ring-device` (the model): the deployed server is a `Server`, its state bounded between setup, the session and
   its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its host never restores an
-  earlier copy: `trusted-nebius-host` (pending network-accounting's widening, Daniel decision 2)) and the coins drawn
+  earlier copy: `trusted-host` (pending network-accounting's widening, Daniel decision 2)) and the coins drawn
   online;
 - `pous-ring-speed` (the numbers): within `Δ + RTT` no allowed hardware finishes a 16,447th sequential multiplication
   round (`D = 16,446`), more than `2^20` key queries or `2^64` ring operations per answer. It rests on the floor
@@ -934,7 +934,7 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 Two gaps stood between these statements and the deployed verifier:
 
 - G-1, one session per audit: the check's half is fixed in code; one session per id is the memory challenger's
-  `SessionLog` under its host presumption, which `trusted-nebius-host` covers as network-accounting widens it
+  `SessionLog` under its host presumption, which `trusted-host` covers as network-accounting widens it
   (pending network-accounting's widening, Daniel decision 2). Every session names its setup: a `SessionCommitment`'s
   `binding` has no default, the `MemoryChallenger` refuses one that is not a 64-byte root, and the harness's memory
   challenger (`benchmarks/pous/memory_challenger/live.py`) binds every session to the root the setup publishes for the
@@ -945,7 +945,7 @@ Two gaps stood between these statements and the deployed verifier:
   so a session that never runs has used its id too. A used id is refused, a log that is missing or unreadable refuses
   every session, and nothing rewrites, truncates or remakes a log. A file cannot see its host restore an earlier copy of
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
-  `trusted-nebius-host` (`verity.core.claims`) as network-accounting widens it, in Daniel's words: "An auditor-trusted
+  `trusted-host` (`verity.core.claims`) as network-accounting widens it, in Daniel's words: "An auditor-trusted
   device (a network certifier, the memory challenger) runs its stated code on its Nebius host, and its host never
   restores an earlier copy of the state the device keeps there"
   (pending network-accounting's widening, Daniel decision 2). This log is part of that state, as is the LMS leaf state.

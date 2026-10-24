@@ -28,7 +28,7 @@ luck. -/
 def PouwLuck (Nmin : ℕ) (δ : ℝ) : Prop :=
   Pouw.pr (fun r => Accepts S P r ∧ Nmin ≤ good S P r ∧ goodAll S P < Nmin) ≤ δ
 
-/-- **A5 HelpBound** (the network certifiers' signed ingress for the window, under `trusted-nebius-host`): at every coin
+/-- **A5 HelpBound** (the network certifiers' signed ingress for the window, under `trusted-host`): at every coin
 the verifier accepts, the node took in at most `H` bits of help in `[ts, td)` (`help`). At `H = 0` the node is isolated:
 nothing placed off the node and the verifier reaches either of them during the window. -/
 def PouwHelpBound (X : Finset L) (H : ℕ) : Prop :=

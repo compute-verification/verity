@@ -788,8 +788,8 @@ the frame types and their field order, the failure codes and their precedence, a
 
 **What v4 assumes in place of v1.** `cr/sha-512` (collision resistance of SHA-512) for the commitment and the tree, and
 SHA-512-CTR/P2-EXP-IO for the keys. Separately, the memory challenger's VM, the auditor's on a machine the prover doesn't control, runs on Nebius, which
-offers no attesting hardware, so the deployment cites core's `trusted-nebius-host` assumption (`verity.core.claims`; Lean
-`Verity.Assumptions.TrustedNebiusHost`, Daniel's answer of 2026-10-06). The help-accounted row ("Help accounting and
+offers no attesting hardware, so the deployment cites core's `trusted-host` assumption (`verity.core.claims`; Lean
+`Verity.Assumptions.TrustedHost`, Daniel's answer of 2026-10-06). The help-accounted row ("Help accounting and
 evidence") is about the prover; this is about the verifier's host, the auditor's hardware on a machine the prover
 doesn't control.
 

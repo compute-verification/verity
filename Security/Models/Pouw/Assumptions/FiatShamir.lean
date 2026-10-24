@@ -89,7 +89,7 @@ variable {R St n L np B n' : ℕ} {Ar : Type} [CommRing Ar]
 /-- `pouw-fs-staged-service` (proposed). **The staged service under Fiat–Shamir draws is sound up to its proof
 layer.** `ServiceSoundStaged` with decision 102's seeds: stage `(w, s)`'s draw is the oracle's answer at the input its
 commitment names (`pre`), and each round's check is live (S4, round protocol with C1 per stage and C4 per draw; S5's
-live coins now the checks only, on `trusted-nebius-host`). For every adversary within `T` oracle calls, every value
+live coins now the checks only, on `trusted-host`). For every adversary within `T` oracle calls, every value
 `r` of its own coins and every oracle `H`, its run's play reads each stage's error table off the stage's operand
 commitment, which the stage's seed input hashes (`root(A_j)`, `root(B_j)`) (the play's form, `StagedPlay`; a re-rolled
 root is a new input and a new draw, which `SteerBound` prices). Every run accepted at the oracle's draws is accepted by

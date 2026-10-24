@@ -1,6 +1,6 @@
 """The proof service's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
 
-The challenger is auditor-trusted (`trusted-nebius-host`): it runs on a machine the prover doesn't control, and the
+The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
 prover's process reaches it over the stream (`benchmarks/live_challenger/run.sh` places it as `benchmarks/remote_session`
 places its verifier: `ssh -R PORT` to the prover's machine, whose own 127.0.0.1:PORT the prover connects to).  On its
 host, before the stream opens, `open_session` signs the challenger's record and writes it, the key and the head of the

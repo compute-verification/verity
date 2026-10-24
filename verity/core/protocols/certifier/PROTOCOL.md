@@ -158,7 +158,7 @@ The `Issuer` starts its session on the signer (`Signer.start`) before its first 
 id it has already started, so the device runs once per session. A signer whose state is missing, behind the leaves its
 journal has used or its `floor`, or held by another signer, refuses (`SignerRefused`), and so does a refused start. The
 certifier then publishes nothing for the link-window (`Issuer.refused` lists it), which fails closed as a `no-verdict`; it
-never signs with a reused leaf, nor in a session it has run before. Both rest on `trusted-nebius-host`, where the state
+never signs with a reused leaf, nor in a session it has run before. Both rest on `trusted-host`, where the state
 the device keeps on its host is its next LMS leaf and the session ids it has started.
 
 **The check.** The certificate names the head's link-window, D is the head's record digest under `salt_c`, and the
@@ -622,7 +622,7 @@ them.
     tick, the salt's draw, has run or was missed (a proxy back from maintenance after it), and a second root for p, so
     only the registered prover fixes p's root. Nothing the certifier sends depends on it. `Proxy.committed(p,
     registration)` gives it to the verifier on `reveal`'s conditions (as often as asked: it is a hiding commitment), and
-    refuses a window whose weights weren't recorded. The order is the certifier's word, under `trusted-nebius-host`,
+    refuses a window whose weights weren't recorded. The order is the certifier's word, under `trusted-host`,
     like the salt.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
     The verifier calls it with the registration the proof service returned for p (`Registration`, from
@@ -638,7 +638,7 @@ them.
   - **Asked for and answered under LMS** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the
     certifier runs on the link, off the prover's node, and the proof service's challenger (#2573), which is the
     auditor's, on an auditor host. `challenger_key` comes from the auditor's deployment record, never from the
-    prover's configuration, and `trusted-nebius-host` covers that record's custody. Each proxy draws a run id at
+    prover's configuration, and `trusted-host` covers that record's custody. Each proxy draws a run id at
     construction, 32 bytes of the certifier's own randomness (`Proxy.run_id`; `run_nonce`, `secrets.token_bytes` by
     default, is the tests' hook), and the record gives it to the challenger beside the certifier's key, written when
     the auditor starts the proxy, since a restart draws a new one. The record, not a signed `hello`, because a hello
@@ -667,7 +667,7 @@ them.
     the challenger's client, given the certifier's key and run id by the deployment record, whose `reveal` and
     `committed` return the value they verified, as a keyless proxy's do in process, and raise `RuntimeError` on a
     refusal, an answer of another run, one that doesn't verify, or no answer. t_d, the deadline and the once rule are
-    unchanged. What still rests on `trusted-nebius-host` is the certifier's key custody, its signing key and leaf state
+    unchanged. What still rests on `trusted-host` is the certifier's key custody, its signing key and leaf state
     on its host (`LmsSigner`, one leaf at a time across the threads that share it) and its word on what it signs, and
     the deployment record's custody: the keys and the run id it gives each side. The challenger's key is the
     auditor's, on its own host. A proxy with neither key is the in-process call the tests and replays make
@@ -677,7 +677,7 @@ them.
     window p is accepted, at its first certifier window w = p·k, if w has exactly one raw record, which holds exactly
     one salt frame of p, carrying the placeholder, and p's revealed salt has `salt_bits` bits. Anything else, a missing
     salt included, is a `salt` violation at w, recorded with the audit's verdicts. No record binds the salt: the
-    revealed salt is the certifier's word, under `trusted-nebius-host`. A committed or certified record doesn't show
+    revealed salt is the certifier's word, under `trusted-host`. A committed or certified record doesn't show
     its frames, so there a proof opens the salt frame.
   - **What it costs.** The protocol fixes the salt frame's place in the queue and its bytes, so it adds nothing to the
     ingress count `(r_in + 1)^T`. Its release into the block carries the certifier's coins, which no outside party
