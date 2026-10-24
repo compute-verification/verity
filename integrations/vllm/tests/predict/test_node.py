@@ -14,8 +14,10 @@ from pathlib import Path
 import pytest
 
 from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.program import is_input
+from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.predict.build import build_program
-from verity_vllm.predict.node import build_node_program
+from verity_vllm.predict.node import build_node_program, check_ranks
 from verity_vllm.predict.phi import Phi
 from tests.predict.test_predict import GLM53, TINY, _phi, _row_phi
 
@@ -32,7 +34,7 @@ def _at(phi: Phi, rank: int) -> Phi:
 def _joined(node, ranks: list, check_leaves: bool) -> None:
     """`node` is `ranks` (each rank's own Program) joined: see the module docstring. `check_leaves`: compare every operand leaf
     (else each rank's nodes' Definitions, in order)."""
-    world, body = node.world, node.program.fn.body
+    world, body = node.world, node.node_fn.body
     rank_of = node.rank_of()
     assert -1 not in rank_of, "every body node is a rank's"
     names = [n for n, _ in node.program.fn.signature()[0]]
@@ -87,7 +89,35 @@ def test_tp2_node_is_its_ranks_joined_at_their_collectives(wrapper, shape):
     _joined(node, ranks, check_leaves=True)
     n_events = 1 if wrapper == "step" else shape["T"] + 1
     assert node.program.fn.signature()[1].n == 2 * n_events
-    assert sum(n.gates for n in node.program.fn.body.nodes) == sum(n.gates for rp in ranks for n in rp.program.fn.body.nodes)
+    assert sum(n.gates for n in node.node_fn.body.nodes) == sum(n.gates for rp in ranks for n in rp.program.fn.body.nodes)
+
+
+@pytest.mark.parametrize("wrapper,shape", [("step", {"M": 1, "pos0": 8}), ("request", {"LP": 4, "T": 2})])
+def test_the_root_is_the_input_nodes_and_one_call_of_the_body(wrapper, shape):
+    """`NciCheck.Desc` keeps a root node's reads as pieces of gates, so the body is one Definition the root calls once: the root
+    is the parameters' input nodes, in order, then that Call, and the descriptor holds the body's nodes in its callee."""
+    node = build_node_program(_phi(TINY, tp={"world": 2, "rank": 0}), wrapper, **shape)
+    lowered = sum(len(RL.lower(t)) for _, t in node.program.fn.signature()[0])
+    root = node.program.root.body.nodes
+    assert len(root) == lowered + 1 and all(is_input(n.fn) for n in root[:-1])
+    assert root[-1].form == "call" and root[-1].fn is node.node_fn
+    s = node.summary()
+    assert (s["n_root_nodes"], s["body_nodes"], s["node_fn"]) == (lowered + 1, len(node.node_fn.body.nodes), node.node_fn.id)
+    d = node.desc
+    nodes = d["definitions"][d["root"]]["body"]["nodes"]
+    assert len(nodes) == lowered + 1 and nodes[-1]["form"] == "call"
+    callee = d["definitions"][d["callees"][nodes[-1]["fn"]]]
+    assert len(callee["body"]["nodes"]) == len(node.node_fn.body.nodes) == sum(hi - lo for _r, lo, hi in node.spans)
+
+
+def test_check_ranks_holds_each_ranks_run_of_the_body_to_its_own_program():
+    phi = _phi(TINY, tp={"world": 2, "rank": 0})
+    node = build_node_program(phi, "request", with_desc=False, LP=4, T=2)
+    got = check_ranks(phi, node, LP=4, T=2)
+    ranks = [build_program(_at(phi, r), "request", with_desc=False, LP=4, T=2) for r in range(2)]
+    assert [(g["rank"], g["nodes"]) for g in got] == [(r, len(rp.program.fn.body.nodes)) for r, rp in enumerate(ranks)]
+    with pytest.raises(AssertionError, match="rank 0: the node's run of"):
+        check_ranks(phi, node, LP=4, T=1)
 
 
 def test_the_node_reads_only_its_prompt_besides_theta():

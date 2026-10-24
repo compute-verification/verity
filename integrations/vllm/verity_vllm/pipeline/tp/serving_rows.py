@@ -133,10 +133,13 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
 
 def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, out_dir: str | os.PathLike, *, pair: int = 0,
                 build_root: str | os.PathLike | None = None, checkpoint: Any = None, weights: Any = None,
-                required_manifest: str | None = None, workers: int | None = None) -> dict[str, Any]:
+                required_manifest: str | None = None, workers: int | None = None, programs: Any = None,
+                binding: dict[str, Any] | None = None) -> dict[str, Any]:
     """Rank ``rank``'s ``stand-in`` window into ``out_dir`` from its sealed replay bundle of pair ``pair`` (module docstring): the
     bundle opened against the record (`commit_replay._of_record`), the required manifest, the rank's Programs of record
-    (`rank_replay.load`; ``build_root``'s ``rank<r>/`` instead of the record's dirs, its digests held either way), its weight shards
+    (`rank_replay.load`; ``build_root``'s ``rank<r>/`` instead of the record's dirs, its digests held either way; ``programs``, the
+    rank's `rank_replay.Loaded` a registered compiler made from advice, instead, its ``binding`` in the window's provenance,
+    `pipeline.advice_windows`), its weight shards
     opened against the committed weights root from the bundle's tensors and ``checkpoint`` (a `weights_of_record.CheckpointIndex`;
     without one, only the tensors the bundle carries; ``weights``, tests, replaces them), each on the window's first read of it
     (`cpu_replay.OnRead`), and every value read through an opening verified against the rank's root."""
@@ -170,7 +173,7 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
     cfg = dict(ctx["replay"])
     if build_root is not None:
         cfg["programs"] = {str(r): str(Path(build_root) / f"rank{r}") for r in range(world)}
-    p = RR.load(cfg, rank, world, definitions=False)
+    p = programs if programs is not None else RR.load(cfg, rank, world, definitions=False)
     if weights is None:
         tree = json.loads((bdir / "weights" / "tree.json").read_text())
         try:
@@ -184,7 +187,8 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
                            weights=weights, manifest=RR.manifest_of_rank(man, rank), run_root=run_of(bytes.fromhex(rec["tp_run_root"]), rank),
                            row=ctx.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": pair, "source": ctx.get("code")}, workers=workers, tp=tp,
-                           index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), stand_in=stand_in(tp, b["manifest_sha256"]))
+                           index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), stand_in=stand_in(tp, b["manifest_sha256"]),
+                           binding=binding)
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
@@ -229,7 +233,6 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
     ``<build_root>/rank<r>``, its run ``<TP run root>/rank<r>`` of `record`), and what `source` holds the rank's registration to.
     The requests are the workload's in order, ``r<position>``, as ``tp-commit`` names them, from a workload file refused unless the
     one the record served (its ``workload_sha256``, `vllm_adapter.load_workload`'s digest)."""
-    from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
 
     rec = record(commit_dir)
@@ -244,19 +247,39 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
              "max_tokens": int(q["max_tokens"])} for i, q in enumerate(doc["requests"])]
     p = RR.load({"programs": {str(rank): str(Path(build_root) / f"rank{rank}")}, "of_record": rec["of_record"], "requests": reqs}, rank, world,
                 definitions=False)
+    return window_of(rec, rank, partition_file, p)
+
+
+def window_of(rec: dict[str, Any], rank: int, partition_file: str | os.PathLike, p: Any,
+              binding: dict[str, Any] | None = None) -> tuple[Any, dict[str, Any]]:
+    """The verifier's own window of rank ``rank`` of the record ``rec`` (`record`) over the rank's loaded Programs ``p`` (a
+    `rank_replay.Loaded`: of record, `window_of_record`, or a registered compiler's from advice, `pipeline.advice_windows`), and what
+    `source` holds the rank's registration to (``binding``: the compiler's digest and the advice's hiding root the window must name)."""
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    rank, world = int(rank), int(rec["world"])
+    if not 0 <= rank < world:
+        raise ValueError(f"rank {rank} is not a rank of the world of {world}")
     window, _rows = SRW.population(p.progs, json.loads(Path(partition_file).read_text()), run_of(bytes.fromhex(rec["tp_run_root"]), rank),
                                    p.dirs, {"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,))
     tp = {"world": world, "rank": rank, "tp_run_root": rec["tp_run_root"], "run_root": rec["roots"][str(rank)], "root_tag": rec["root_tag"]}
     sha = rec["bundles"].get(str(rank))
-    held = {"tp": tp, "served_programs": {str(k): str(x) for k, x in sorted(p.digs.items())}, "stand_in": stand_in(tp, sha) if sha else None}
+    held = {"tp": tp, "served_programs": {str(k): str(x) for k, x in sorted(p.digs.items())}, "stand_in": stand_in(tp, sha) if sha else None,
+            **{k: (binding or {}).get(k) for k in BINDING}}
     return window, held
 
 
+#: the window provenance's keys that bind the Programs to the registered compiler and the advice it read (`pipeline.advice_windows`)
+BINDING = ("compiler", "advice")
+
+
 def source(registered: dict[str, Any] | None, mine: Any, held: dict[str, Any]) -> dict[str, Any]:
-    """A rank's registration's ``window`` held to the verifier's own (`window_of_record`): ``served`` with no stand-in link, or a
+    """A rank's registration's ``window`` held to the verifier's own (`window_of_record`, `window_of`): ``served`` with no stand-in link, or a
     ``stand-in`` of a rank whose bundle the record names with `stand_in`'s ``of`` and ``link`` over it (``held["stand_in"]``); either
     way its run the rank's of record under a SHA-512 TP run root (``sha512``, `deferred_rows.source`'s 64-byte test: an old record's
-    SHA-256 v1 root is refused), its ``tp`` the record's and its served Programs the ones the verifier loaded."""
+    SHA-256 v1 root is refused), its ``tp`` the record's, its served Programs the ones the verifier loaded, and its ``compiler`` and
+    ``advice`` the verifier's (`BINDING`: none for Programs of record, the digests of the compiler and the advice the verifier
+    compiled for an advice window)."""
     from verity_vllm.pipeline.deferred_rows import SERVED_ROOT
 
     w = registered or {}
@@ -264,6 +287,7 @@ def source(registered: dict[str, Any] | None, mine: Any, held: dict[str, Any]) -
     ok = {"kind": w.get("kind") == "served" or si is not None, "run": w.get("run") == mine.run,
           "sha512": len(held["tp"]["tp_run_root"]) == 2 * SERVED_ROOT, "tp": w.get("tp") == held["tp"],
           "served_programs": w.get("served_programs") == held["served_programs"],
+          **{k: w.get(k) == held.get(k) for k in BINDING},
           **({"of": w.get("of") == si["of"], "link": w.get("link") == si["link"]} if si else {"no_link": "of" not in w and "link" not in w})}
     return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
             "detail": {"kind": w.get("kind"), "run": w.get("run"), "tp": w.get("tp"), **({"of": w.get("of")} if si else {})}}
