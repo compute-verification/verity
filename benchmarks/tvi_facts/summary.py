@@ -49,6 +49,29 @@ def bits(acc, attrs, n, boot=400, seed=0):
     return point, bs[int(0.025 * boot)], bs[int(0.975 * boot) - 1], n * sum(math.log2(facts.CARD[a]) for a in attrs)
 
 
+def compact(out):
+    """One row per (model, N, state, epochs, lr): the mean over seeds, and a 95% interval that spans every seed's
+    interval over questions."""
+    groups = {}
+    for line in out:
+        groups.setdefault((line["model"], line["n"], line["group"], line["epochs"], line["lr"]), []).append(line)
+    print("\nreadout: mean over seeds [95% interval spanning every seed's interval over questions]\n")
+    print("| N | H (bits) | state | S (bits) | S/H | epochs | lr | seeds | recall of H, trained phrasing | "
+          "bits learned, trained phrasing | recall of H4, held-out phrasing | bits learned, held-out |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
+    for (model, n, group, epochs, lr), ls in groups.items():
+        mean = lambda k, i: sum(x[k][i] for x in ls) / len(ls)
+        lo = lambda k: min(x[k][1] for x in ls)
+        hi = lambda k: max(x[k][2] for x in ls)
+        first = ls[0]
+        print(f"| {n} | {first['H_bits']:.0f} | {group} | {first['S_bits']:.3g} | {first['S_over_H']:.3g} | {epochs} | "
+              f"{lr:g} | {len(ls)} | {mean('trainq_recall', 0):.3f} [{lo('trainq_recall'):.3f}, {hi('trainq_recall'):.3f}] | "
+              f"{mean('trainq_bits', 0):.0f} [{lo('trainq_bits'):.0f}, {hi('trainq_bits'):.0f}] | "
+              f"{mean('held4_recall', 0):.3f} [{lo('held4_recall'):.3f}, {hi('held4_recall'):.3f}] | "
+              f"{mean('held4_bits', 0):.0f} [{lo('held4_bits'):.0f}, {hi('held4_bits'):.0f}] |")
+    print()
+
+
 def main():
     dirs = sys.argv[1:]
     res = [json.load(open(p)) for d in dirs for p in sorted(glob.glob(os.path.join(d, "results", "*.json")))]
@@ -106,7 +129,7 @@ def main():
                   f"{hb:.0f} [{hlo:.0f}, {hhi:.0f}] | "
                   f"{hb / H4:.3f} [{hlo / H4:.3f}, {hhi / H4:.3f}] | {tacc:.3f} | {tb:.0f} [{tlo:.0f}, {thi:.0f}] | "
                   f"{tb / H:.3f} [{tlo / H:.3f}, {thi / H:.3f}] | {tb / r['S_bits']:.2g} |")
-    print()
+    compact(out)
     print("| run | N | state | S/H | analyzed questions / tokens | knowledge about those people (bits, trained phrasing) | "
           "fresh bits/token, counted values, best estimator: FP8 / NVFP4 / bf16 | fresh bits per learned bit: "
           "FP8 / NVFP4 / bf16 | FP8 fresh bits above the format-only control, per learned bit | "
