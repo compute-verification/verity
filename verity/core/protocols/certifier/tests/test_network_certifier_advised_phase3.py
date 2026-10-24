@@ -8,8 +8,8 @@ prover reaches.
   `advised_traffic.held`) holds those lengths to the certified prompts', so
   on one record one split passes, and an output released before its request's frames is refused whatever lengths
   the advice states.
-- A declared sync is one of Σ_sync, and the floor is at least a bucket after the request's end (the certifier's
-  clock), so no declaration lets a frame out in its request's anchor bucket or before.
+- A declared sync is one of Σ_sync, and the floor is the Program's eligibility under it (δ ≥ 0), so no declaration
+  lets a frame out before the bucket that releases its request's last frame.
 - Bucket 0's cap R_in holds the certifier's own frame: no certified count passes it.
 - The digest distinguishes every input, and the egress counts are the advice's releases.
 """
@@ -51,9 +51,10 @@ def _ends(adv, received, certified=None):
 
 
 def _view(adv, received, sync=ONE, sync_set=ONLY_ONE, T_=T, certified=None):
-    """`advised.view` of `adv`'s window 0 under the verdict `_ends` reads."""
+    """`advised.view` of `adv`'s window 0 under the verdict `_ends` reads, on a window the certifier ran under
+    `sync`."""
     link = AD.LinkAdvice(adv, received)
-    return AD.view(link, 0, T_, R, [sync], sync_set, FRAMING, **held(link, certified))
+    return AD.view(link, 0, T_, R, [sync], sync_set, FRAMING, clocks=[sync], **held(link, certified))
 
 
 def _accepts(adv, received, ingress, egress, sync=ONE, sync_set=ONLY_ONE, own=OWN, certified=None):
@@ -113,23 +114,26 @@ def test_on_one_record_only_the_certified_split_passes():
         assert _view(A.decode(A.encode(a)), received) == _view(a, received)
 
 
-def test_no_declared_sync_releases_a_frame_in_its_requests_anchor_bucket():
-    """One request, its 2 frames certified in bucket 3, its output released in bucket 3. Under the honest latency
-    (δ = 2) it needed the frames by bucket 1, and is refused; declaring an instant sync (δ = 0) doesn't pass it,
-    because a frame is ready only after its request's anchor bucket, so the floor is at least a bucket back; released
-    in bucket 4 under δ = 0 it is accepted. A sync outside Σ_sync is refused outright, in whichever window the advice
-    releases in."""
+def test_no_declared_sync_releases_a_frame_before_its_requests_last_frame():
+    """One request, its 2 frames certified in bucket 3. Released in bucket 3 under the honest latency (δ = 2) it
+    needed the frames by bucket 1, and is refused: a declared δ binds. Under an instant sync (δ = 0) the floor is the
+    Program's eligibility, the anchor bucket itself, so the release in bucket 3 is accepted (a served first token in
+    its request's bucket), and one in bucket 2, before the request's last frame, is refused, under δ = 0 as under
+    every sync, since δ ≥ 0 never moves the floor past the release bucket. A sync outside Σ_sync is refused outright,
+    in whichever window the advice releases in."""
     ingress, egress, received = [0, 0, 0, 2, 0, 0, 0, 0], [0, 0, 0, 1, 0, 0, 0, 0], (2,)
     loose = SyncSet((0, 2), (1,))
     assert not _accepts(_advice((3,)), received, ingress, egress, ClockSync(2, 1), loose)
-    assert not _accepts(_advice((3,)), received, ingress, egress, ClockSync(0, 1), loose)
-    assert _accepts(_advice((4,)), received, ingress, [0, 0, 0, 0, 1, 0, 0, 0], ClockSync(0, 1), loose)
-    assert _view(_advice((3,)), received, ClockSync(0, 1), loose).floor[2] == 2
+    assert _accepts(_advice((3,)), received, ingress, egress, ClockSync(0, 1), loose)
+    for sync in (ClockSync(0, 1), ClockSync(2, 1)):
+        assert not _accepts(_advice((2,)), received, ingress, [0, 0, 1, 0, 0, 0, 0, 0], sync, loose)
+    assert _view(_advice((3,)), received, ClockSync(0, 1), loose).floor[2:4] == (0, 2)
     with pytest.raises(ValueError, match="Σ_sync"):
         _view(_advice((4,)), received, ClockSync(0, 1), SyncSet((2,), (1,)))
     later = AD.LinkAdvice(_advice((T + 3,)), (2, 0))
     with pytest.raises(ValueError, match="Σ_sync"):
-        AD.view(later, 0, T, R, [ONE, ClockSync(0, 1)], ONLY_ONE, FRAMING, **held(later))
+        AD.view(later, 0, T, R, [ONE, ClockSync(0, 1)], ONLY_ONE, FRAMING, clocks=[ONE, ClockSync(0, 1)],
+                **held(later))
 
 
 def test_bucket_zero_is_capped_at_rin_with_the_certifiers_own_frame():

@@ -32,7 +32,9 @@ ingress certifier's own frames a window (1 with its salt on, else 0), as `served
   registrations, which the verdict names;
 - the link's public framing, `request_frames[n − 1]`, the ingress frames a request of an n-token prompt takes (CERT-
   VARLEN's id requests, whose frames are a function of the prompt's length alone), fixed before the run;
-- each window's declared sync, one of Σ_sync, which the certified egress head's parameters digest binds.
+- each window's declared sync, one of Σ_sync, which the certified egress head's parameters digest binds, and the sync
+  the network certifier ran that window under (`clocks`), which the declared one must be: the verifier takes it only
+  from its own clock source (`ClockSource`, `service.LinkWindows.clocks`), never from the prover's declaration.
 
 **The ingress ends** (`ends`) are derived, not advised: advice request j is the link's j-th request, and its prompt
 length is the certified prompt's, both of which the tie holds (`ends` refuses a link without IoTieRequest's accepted
@@ -48,12 +50,13 @@ declared syncs:
 - `released[t]`, the frames the advice releases in the window's bucket t, at most R, the egress allocation;
 - `floor[t]`, the request frames the window's ingress counts must have released by its bucket t: output λ of request j,
   released at b in window v, is eligible no earlier than j's anchor (the bucket that releases its last ingress frame)
-  + δ + ⌊λ·q/p⌋ under window v's declared sync (δ, p/q), which is `schedule.eligible` with v's sync, and ready no
-  earlier than the bucket after its anchor (the certifier's clock: the request reaches the server at its anchor's
-  tick, and a frame read in bucket t is ready at t + 1), and is released no earlier than either; so the link's ingress
-  must have released `ends[j]` request frames by bucket b − max(1, δ + ⌊λ·q/p⌋), and `floor` is the most of those that
-  fall in the window's buckets, less B_w = Σ_{v < w} received[v]. A declared sync outside Σ_sync is refused, so no
-  declaration moves the floor below the certifier's clock;
+  + δ + ⌊λ·q/p⌋ under window v's declared sync (δ, p/q), which is `schedule.eligible` with v's sync, and released no
+  earlier; so the link's ingress must have released `ends[j]` request frames by bucket b − δ − ⌊λ·q/p⌋, and `floor`
+  is the most of those that fall in the window's buckets, less B_w = Σ_{v < w} received[v]. A declared sync outside
+  Σ_sync is refused, as is one other than the sync the certifier ran its window under, and δ ≥ 0, so no declaration
+  lets a frame out before the bucket that releases its request's last frame. A release in that bucket is a served
+  clock's (an engine's first output in its request's bucket); on a certified path the proxy hands a frame read in
+  bucket t on at t + 1, so its honest syncs have δ ≥ 1, and a window declaring δ = 0 there is refused;
 - `received`, `received[w]`.
 
 **What 1 means.** Every ingress count is at most RIN and bucket 0's at least OWN; with bucket 0's OWN own frames taken
@@ -75,7 +78,7 @@ advice, and the egress timing channel of accepted runs carries at most `advice.b
 beside the log2 #Σ_sync bits a window the sync charge already counts. Nothing else is left free: not the frames, not
 the ingress timing, not when the server actually wrote, and not where a request ends, which `ends` derives from v0's
 prompt lengths. And the advice is held to the ingress head: no frame is released before the ingress certifier had
-released its request's `ends[j]` request frames, max(1, δ + ⌊λ/ρ⌋) buckets earlier, under a sync Σ_sync holds. Those
+released its request's `ends[j]` request frames, δ + ⌊λ/ρ⌋ buckets earlier, under a sync Σ_sync holds. Those
 are the link's first j + 1 requests whole because v0's prompt lengths are theirs, in arrival order: the tie,
 IoTieRequest's verdict for the same advice digest. Without it, a prover who splits the same request frames among the
 requests otherwise (a short prompt and a long one swapped) lowers an early request's end, and so the floor, on the
@@ -85,8 +88,14 @@ reopens phase 6's acausal release), nor is a verdict it delivers (REDTEAM phase 
 advice's digest, every window accepted, reopened it through the verifier of record), so `LinkAdvice` carries none. The
 tie is only IoTieRequest's verdict from the verifier's own tie source, on the link and the ingress registrations it
 holds, so a verdict on another link or ingress record isn't reused; until IoTieRequest runs in the proof service there
-is no such source: every advised link is refused (PROTOCOL.md, fail closed). Neither head signs the prompt lengths or
-the sync a window ran, so the unit itself holds neither to the record: PROTOCOL.md's named gap, with its design.
+is no such source: every advised link is refused (PROTOCOL.md, fail closed). The floor's syncs are held the same way:
+a δ below the one the window's traffic was certified under loosens the floor (REDTEAM phase 11: δ = 0 declared for a
+window the certifier ran at δ = 1 accepted an output in its request's own bucket), so `view` refuses a window whose
+declared sync isn't the one the certifier ran it under, which the verifier takes only from its own clock source
+(`ClockSource`, `service.LinkWindows.clocks`: the certifier's report of the syncs its shaper ran), never from the
+prover; until the certifier reports them to the verifier there is no such source, and every advised link is refused.
+Neither head signs the prompt lengths or the sync a window ran, so the unit itself holds neither to the record, only
+the verifier's tie and clock sources do: PROTOCOL.md's named gap, with its design.
 
 **Bucket 0** is capped at RIN, which holds the own frame: the ingress certifier releases min(queue, r_in) frames a
 bucket (`grid.Certifier`), its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head whose
@@ -103,9 +112,8 @@ egress record's (each kept output one egress frame, in the link's canonical orde
 fall in the link's windows, each with a declared sync in Σ_sync; `received` is the ingress record's; the link's j-th
 request is advice request j (FCFS admission, which IoTieRequest checks, its ordinals being the verifier's: v0
 numbered by a runner's batch order, which ENC-DERIVED's `walk.order` maps back, is refused), an id request of its
-prompt length (`request_frames`); each
-window's
-declared sync has δ and ρ that every frame released in it meets (a small δ, a ρ at least a stream's rate); with the
+prompt length (`request_frames`); each window's declared sync is the one the certifier ran it under, with a δ and
+ρ that every frame released in it meets (a small δ, a ρ at least a stream's rate); with the
 salt on, the own frame counts as bucket 0's, so a window that starts with RIN or more request frames carried in
 under-counts by one until the own frame is released, which only a release at its exact eligibility notices; and both
 ends share T and τ_b.
@@ -221,6 +229,16 @@ class TieSource(Protocol):
     def verdict(self, link: str, advice: LinkAdvice, profile: AdvisedProfile) -> IoTieVerdict: ...
 
 
+class ClockSource(Protocol):
+    """The verifier's own record of the sync each of a link's windows was certified under
+    (`service.LinkWindows.clocks`), never the prover's declaration: `syncs(link)`, window by window, the sync the
+    network certifier, the auditor's device, ran it under (its shaper's, `active.Shaper.syncs`), as the certifier
+    reports it. `view` refuses a window that declares another. Nothing in this package is one until the certifier
+    reports its syncs to the verifier, so every advised link is refused (PROTOCOL.md, fail closed)."""
+
+    def syncs(self, link: str) -> Sequence[ClockSync]: ...
+
+
 @dataclass(frozen=True)
 class LinkAdvice:
     """What the prover delivers on an advised link beside its public profile and syncs: I1's advice and `received[w]`,
@@ -292,9 +310,11 @@ def ends(link: LinkAdvice, request_frames: Sequence[int], *, tie: IoTieVerdict |
     return tuple(out)
 
 
-def _floor_buckets(link: LinkAdvice, T: int, syncs: Sequence[ClockSync], sync_set: SyncSet) -> list[tuple[int, int]]:
+def _floor_buckets(link: LinkAdvice, T: int, syncs: Sequence[ClockSync], sync_set: SyncSet,
+                   clocks: Sequence[ClockSync]) -> list[tuple[int, int]]:
     """(request j, bucket) for each kept output: the bucket by which the link's ingress must have released `ends[j]`
-    request frames, b − max(1, δ + ⌊λ·q/p⌋) under the sync of the window that releases it at b, one of Σ_sync."""
+    request frames, b − δ − ⌊λ·q/p⌋ under the sync of the window that releases it at b, one of Σ_sync and the one the
+    certifier ran that window under (`clocks`)."""
     out = []
     for o, b in zip(outputs(link.advice), link.advice.release):
         v = b // T
@@ -304,7 +324,10 @@ def _floor_buckets(link: LinkAdvice, T: int, syncs: Sequence[ClockSync], sync_se
         sync = syncs[v]
         if sync not in sync_set:
             raise ValueError(f"window {v} declares {sync!r}, which isn't one of Σ_sync")
-        a = b - max(1, sync.delta + o.index * sync.rho.denominator // sync.rho.numerator)
+        if v >= len(clocks) or clocks[v] != sync:
+            ran = "no sync" if v >= len(clocks) else repr(clocks[v])
+            raise ValueError(f"window {v} declares {sync!r}, and the certifier ran it under {ran}")
+        a = b - sync.delta - o.index * sync.rho.denominator // sync.rho.numerator
         if a < 0:
             raise ValueError(f"request {o.request}'s output {o.index} is released in bucket {b}, before its request")
         out.append((o.request, a))
@@ -313,18 +336,23 @@ def _floor_buckets(link: LinkAdvice, T: int, syncs: Sequence[ClockSync], sync_se
 
 def view(link: LinkAdvice, window: int, T: int, R: int, syncs: Sequence[ClockSync], sync_set: SyncSet,
          request_frames: Sequence[int], *, tie: IoTieVerdict | None, link_name: str,
-         registrations: Sequence[str]) -> WindowView:
+         registrations: Sequence[str], clocks: Sequence[ClockSync] | None) -> WindowView:
     """The unit's public inputs for `window` (the module docstring) at T buckets a window and egress allocation R, from
     the advice, every window's declared sync, Σ_sync and the link's framing (`AdvisedProfile.request_frames`), under
     `tie`, IoTieRequest's verdict from the verifier's own tie source, which `ends` holds to the link `link_name` and
-    its ingress `registrations`. Raises `ValueError` on an advice that isn't a `LinkAdvice`, a window its `received`
-    doesn't cover, ends `ends` refuses (without the tie, or under one on another link, registrations or advice, or
-    not accepting every window), more than R frames released in a bucket, and a frame released in a window with no
-    declared sync or one outside Σ_sync, or before its request could be."""
+    its ingress `registrations`, and `clocks`, the syncs the certifier ran the link's windows under, from the
+    verifier's own clock source (`ClockSource`). Raises `ValueError` on an advice that isn't a `LinkAdvice`, a window
+    its `received` doesn't cover, ends `ends` refuses (without the tie, or under one on another link, registrations or
+    advice, or not accepting every window), more than R frames released in a bucket, without `clocks`, and a frame
+    released in a window with no declared sync, one outside Σ_sync or other than the certifier ran it under, or
+    before its request could be."""
     if type(link) is not LinkAdvice:
         raise ValueError(f"an advised link's advice is an advised.LinkAdvice, not a {type(link).__name__}")
     if type(sync_set) is not SyncSet:
         raise ValueError(f"the declared syncs are held to Σ_sync, a schedule.SyncSet, not a {type(sync_set).__name__}")
+    if clocks is None or isinstance(clocks, (str, bytes)) or not isinstance(clocks, Sequence):
+        raise ValueError("an advised link without the syncs the certifier ran its windows under, from the verifier's "
+                         "own clock source (advised.ClockSource), is refused")
     if not all(type(x) is int and x >= 1 for x in (T, R)) or type(window) is not int or window < 0:
         raise ValueError("a view has T ≥ 1, R ≥ 1 and a window ≥ 0")
     if window >= len(link.received):
@@ -336,7 +364,7 @@ def view(link: LinkAdvice, window: int, T: int, R: int, syncs: Sequence[ClockSyn
         raise ValueError(f"the advice releases {per[over[0]]} frames in bucket {over[0]}, past the allocation {R}")
     lo, hi = window * T, (window + 1) * T
     floor_at: dict[int, int] = {}
-    for j, a in _floor_buckets(link, T, syncs, sync_set):
+    for j, a in _floor_buckets(link, T, syncs, sync_set, clocks):
         if a < hi:
             floor_at[a] = max(floor_at.get(a, 0), end[j])
     base = sum(link.received[:window])
@@ -503,5 +531,5 @@ def size(T: int, RIN: int, OWN: int) -> int:
     return ands(unit(T, RIN, OWN))
 
 
-__all__ = ["AdvisedProfile", "IoTieVerdict", "LinkAdvice", "NetworkAdvisedCounts", "PINS", "TieSource", "WindowView",
-           "arguments", "digest", "ends", "evaluate", "gate", "reference", "size", "unit", "view"]
+__all__ = ["AdvisedProfile", "ClockSource", "IoTieVerdict", "LinkAdvice", "NetworkAdvisedCounts", "PINS", "TieSource",
+           "WindowView", "arguments", "digest", "ends", "evaluate", "gate", "reference", "size", "unit", "view"]

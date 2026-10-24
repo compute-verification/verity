@@ -27,9 +27,9 @@ from verity.core.protocols.sampled_proofs import service as S
 
 import signers
 import standin
-from advised_traffic import (FRAMING, LINK, P, PIN, R, RIN, SYNC_SET, SYNCS, T, WINDOWS, Session, StandInTie, counts,
-                             egress_records, feeds_a_hit, held, ingress_records, moved, prompts, serve,
-                             with_output_len, without_request)
+from advised_traffic import (FRAMING, LINK, P, PIN, R, RIN, SYNC_SET, SYNCS, T, WINDOWS, Session, StandInClocks,
+                             StandInTie, counts, egress_records, feeds_a_hit, held, ingress_records, moved, prompts,
+                             serve, with_output_len, without_request)
 
 SALTS = [tuple(bytes([4 * w + k + 1]) * 192 for k in range(4)) for w in range(WINDOWS)]
 SEEDS = (1, 2, 3, 5, 7, 8)
@@ -37,8 +37,8 @@ SEEDS = (1, 2, 3, 5, 7, 8)
 
 def _view(link, w, syncs=SYNCS, certified=None):
     """`advised.view` under the stand-in tie on an ingress that certified the prompts `certified` (by default the
-    advice's own)."""
-    return AD.view(link, w, T, R, syncs, SYNC_SET, FRAMING, **held(link, certified))
+    advice's own), on windows the certifier ran under the declared `syncs`."""
+    return AD.view(link, w, T, R, syncs, SYNC_SET, FRAMING, clocks=syncs, **held(link, certified))
 
 
 def check(session: Session, link=None, own=0, egress=None, ingress=None, certified=None) -> list[bool]:
@@ -66,15 +66,16 @@ class Run:
     """An advised link with its certifier's signer and the challenger's stream, on injected coins and clock, each
     window decided by the verifier of record on a stand-in proof (`standin`), the in-the-clear check beside it, and the
     tie from the verifier's own source, `ties` (by default the stand-in on an ingress that certified any advice's
-    prompts; None, as in the package, refuses every window)."""
+    prompts; None, as in the package, refuses every window), and the certified syncs from its own clock source,
+    `clocks` (by default the declared `SYNCS`)."""
 
-    def __init__(self, tmp_path, own=0, ties=StandInTie()) -> None:
+    def __init__(self, tmp_path, own=0, ties=StandInTie(), clocks=StandInClocks()) -> None:
         self.tmp = tmp_path
         self.signer = signers.signer(tmp_path)
         self.issuer = Issuer(self.signer, signers.SESSION)
         self.lw = LinkWindows(LINK, P, SYNC_SET, self.signer.public_key(), "r-advised-test", signers.SESSION,
                               ingress=PIN, proof_deadline=60.0, advised=AD.AdvisedProfile(WINDOWS, FRAMING, own),
-                              ties=ties)
+                              ties=ties, clocks=clocks)
         self.stream = self.lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test",
                                      coins=lambda n: b"\x07" * n, clock=lambda: 0.0)
         self.previous = None
@@ -192,7 +193,7 @@ def test_the_ingress_ends_are_derived_from_v0s_prompt_lengths():
         with pytest.raises(ValueError, match="windows receive"):
             _view(more, w, certified=session.certified)
         with pytest.raises(ValueError, match="past the link's framing"):
-            AD.view(link, w, T, R, SYNCS, SYNC_SET, FRAMING[:1], **held(link))
+            AD.view(link, w, T, R, SYNCS, SYNC_SET, FRAMING[:1], clocks=SYNCS, **held(link))
 
 
 def _signed_end(counts, own, end):
@@ -476,7 +477,7 @@ def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
     for bad, why in bad_ties:
         for w in range(WINDOWS):
             with pytest.raises(ValueError, match=why):
-                AD.view(link, w, T, R, SYNCS, SYNC_SET, FRAMING, **(tie | {"tie": bad}))
+                AD.view(link, w, T, R, SYNCS, SYNC_SET, FRAMING, clocks=SYNCS, **(tie | {"tie": bad}))
         assert not replace(run.lw, ties=_Fixed(bad, regs)).advised_check(opening, SYNCS, link)
     assert replace(run.lw, ties=_Fixed(good, regs)).advised_check(opening, SYNCS, link)
     assert not replace(run.lw, ties=None).advised_check(opening, SYNCS, link)
