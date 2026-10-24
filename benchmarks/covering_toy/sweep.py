@@ -394,11 +394,13 @@ def caps(name: str, ks: list[int], workers: int, cw: dict) -> list[dict]:
     return rows
 
 
-def inference_baseline(name: str, ks: list[int], budget: float, workers: int, tokens: int = 4) -> list[dict]:
-    """`rho` of honest inference with the instance's model on `tokens` tokens (`toygraph.inference`) at each `k`, with
-    `s` at `eta1`, which is the training instance's `eta1` too: what training's `rho` at the same `(s, k)` is read
-    against."""
-    G = TG.inference(tuple(INSTANCES[name]["dims"]), tokens)
+def inference_baseline(name: str, ks: list[int], budget: float, workers: int, tokens: int | None = None) -> list[dict]:
+    """`rho` of honest inference with the instance's model (`toygraph.inference`) at each `k`, with `s` at `eta1`, which
+    is the training instance's `eta1` too: what training's `rho` at the same `(s, k)` is read against. `tokens` defaults
+    to the tokens training sees (`batch * steps`), since `rho` of a few blocks depends on how full they are."""
+    spec = INSTANCES[name]
+    tokens = tokens or spec["batch"] * spec["steps"]
+    G = TG.inference(tuple(spec["dims"]), tokens)
     rows = []
     for k in ks:
         s = BD.honest_block_size(G, k)
