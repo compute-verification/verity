@@ -968,12 +968,12 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     salt = DO.cap_salt(win, g)
     r.launch(plan, salt[1], version=1)
     torch.cuda.synchronize()
-    got = g["receipts"].to(dev)
+    got = g["receipts"]
     shift = SIDE[0].shift if SIDE else 24
 
     def got_of(w: int) -> torch.Tensor:
         o_, units, nw = win.plan.offs[w]
-        return got[o_:o_ + units * nw].view(units, nw)
+        return got[o_:o_ + units * nw].view(units, nw).to(dev)
 
     rc_bad, fault_bad = [], []
     for w in range(L):
