@@ -11,10 +11,15 @@ import json
 import os
 import sys
 import threading
+from importlib.util import find_spec
 
-#: the predictor's directory is a literal so that a layout move rewrites it with the package
+#: the predictor, found by its module name without running it: a layout move rewrites the name, and a name that no longer
+#: resolves refuses the import of this module rather than leaving a marker that matches nothing
+_PREDICTOR = find_spec("verity_vllm.predict")
+if _PREDICTOR is None:
+    raise ImportError("inputs_trace: verity_vllm.predict does not resolve; name the predictor's module here")
 _FORBIDDEN_MARKERS = ("program.json", "instances.jsonl", "experimental/aot/build.py", "experimental/aot/",
-                      "verity_vllm/predict/", "/vol/corpus", "census/B0-", "log.jsonl")
+                      _PREDICTOR.name.replace(".", "/") + "/", "/vol/corpus", "census/B0-", "log.jsonl")
 
 
 class InputsTrace:
