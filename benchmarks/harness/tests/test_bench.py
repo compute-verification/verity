@@ -1162,7 +1162,15 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
                                            "cudagraph_capture_sizes": list(spec.preset.engine_settings["capture_sizes"])}
     opts = resolve_options(built)
     assert opts["enforce_eager"] is False and opts["execution"] == "compiled"
-    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True} and whole.schedule == "serial"
+    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True, "late_ends": True,
+                                 "whole_stats_a": True, "whole_prefetch_b": True, "whole_eager": "deferred-a"}
+    assert whole.schedule == "serial"
+    monkeypatch.setenv("PEARLC_WHOLE_PREFETCH_B", "0")
+    assert "whole_prefetch_b" not in type(whole)().run_options
+    monkeypatch.setenv("PEARLC_WHOLE_EAGER", "deferred")
+    assert type(whole)().run_options["whole_eager"] == "deferred"
+    monkeypatch.setenv("PEARLC_WHOLE_EAGER", "0")
+    assert "whole_eager" not in type(whole)().run_options
 
 
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():

@@ -192,17 +192,43 @@ class PearlCWholeArm(PearlCArm):
     The PoUW option refuses this engine (`pouw.refusals`: compiled execution), so the arm installs as `PearlCArm` does;
     the protocol arm reaching it is vllm's change. ``PEARLC_WHOLE_EXECUTION`` is the engine's execution label:
     ``compiled`` (default, vLLM's kernels without batch invariance, as `stock-fp8@compiled` runs) or ``bi-compiled``;
-    ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows); ``PEARLC_WHOLE_DEFER_A=0``
-    keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it).
+    ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows).  Each of `TOGGLES`' options is
+    turned off by its variable at 0 and on at 1: ``PEARLC_WHOLE_DEFER_A=0`` keeps each call's A tree on the capturing
+    stream (a kernel whose pipeline doesn't split A's commitment needs it); ``PEARLC_LATE_ENDS`` ends each engine step's
+    pass late (`PearlCDeviceRun.end`'s ``late``: the host waits for nothing, so vLLM schedules and launches the next step
+    while the GPU runs this one); ``PEARLC_WHOLE_STATS_A`` forks each call's ``stats_a`` beside its per-row keying;
+    ``PEARLC_WHOLE_PREFETCH_B`` prefetches its B̃ into L2 there (``PEARLC_PREFETCH_FORM``, ``_CTAS``, ``_MB``: run.py's).
+    With late ends and stats_a's fork, served b8 runs at an ITL p50 of 21.88 ms, 2.96x compiled stock's 7.40
+    (r20261024-191449-82e7, bound to the GPU's NUMA node), against 3.21x with neither (r20261024-182953-12d5, unbound);
+    with B̃'s prefetch too (the defaults, in run.py's default form 2) at 20.61 ms, 2.77x compiled stock's 7.43
+    (r20261024-193651-3ef1, bound).
+    ``PEARLC_WHOLE_EAGER`` names the schedule a step that runs eagerly (a prefill or mixed step) takes in place of the serial
+    one (`PearlCDeviceRun.eager_forward`), 0 none: by default ``deferred-a``, its calls' tile hashing and A trees on side
+    lanes (served b8, TPOT 3.05x compiled stock against 3.43x on the serial one, TTFT 157.7 ms against 253.1, ITL p50
+    unchanged, r20261024-191449-82e7).
     A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
-    run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True}
+    run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True, "late_ends": True, "whole_stats_a": True,
+                   "whole_prefetch_b": True, "whole_eager": "deferred-a"}
+    #: the run options the environment turns off (0) or on (1)
+    TOGGLES = {"whole_defer_a": "PEARLC_WHOLE_DEFER_A", "late_ends": "PEARLC_LATE_ENDS", "whole_stats_a": "PEARLC_WHOLE_STATS_A",
+               "whole_prefetch_b": "PEARLC_WHOLE_PREFETCH_B"}
 
     def __init__(self) -> None:
         super().__init__()
-        if os.environ.get("PEARLC_WHOLE_DEFER_A") == "0":
-            self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_defer_a"}
+        opts = dict(self.run_options)
+        for name, var in self.TOGGLES.items():
+            if os.environ.get(var) == "0":
+                opts.pop(name, None)
+            elif os.environ.get(var) == "1":
+                opts[name] = True
+        eager = os.environ.get("PEARLC_WHOLE_EAGER")
+        if eager == "0":
+            opts.pop("whole_eager", None)
+        elif eager:
+            opts["whole_eager"] = eager
+        self.run_options = opts
         self.schedule = "serial"
         self.vllm_execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
         # Not ``execution``: the harness reads that as "build at vLLM's serving defaults", and this engine is FULL

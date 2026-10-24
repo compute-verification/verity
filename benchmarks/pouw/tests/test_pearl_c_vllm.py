@@ -47,6 +47,7 @@ from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+from verity_vllm.protocol_options import pouw_pearl_c_passes as PPS
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
@@ -203,9 +204,9 @@ def device_run():
     coins = salt_coin(roots)
     salt = Epoch.start(declared, roots, *coins).salt
 
-    def make(hashing=True, schedule="serial", flag_rows=PPD.FLAG_ROWS):
+    def make(hashing=True, schedule="serial", flag_rows=PPD.FLAG_ROWS, **kw):
         return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, hashing=hashing,
-                                   capacity=1 << 12, schedule=schedule, flag_rows=flag_rows, salt_key=SALT_KEY)
+                                   capacity=1 << 12, schedule=schedule, flag_rows=flag_rows, salt_key=SALT_KEY, **kw)
     return make, kernel, weights, roots, salt
 
 
@@ -1712,7 +1713,7 @@ def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_bac
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD2
     PF = load("pearl_c_vllm_profile", KERNEL.parent / "pearl_c_vllm" / "profile_decode.py")
     make, _, weights, *_ = device_run
-    before = (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm)
+    before = (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm, PPD2.PearlCDeviceRun.end)
     prof = PF.Profile()
     undo = PF.instrument(prof)
     try:
@@ -1726,7 +1727,7 @@ def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_bac
         prof.end()
     finally:
         undo()
-    assert (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm) == before
+    assert (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm, PPD2.PearlCDeviceRun.end) == before
     rep = prof.report()["pearlc-steady"]
     assert rep["prefill"]["forwards"] == 1 and rep["decode"]["forwards"] == 2 and rep["decode"]["pearlc_calls"] == 4
     host = rep["decode"]["host_ms"]
@@ -2001,6 +2002,66 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
     assert got["deferred"] == got["serial"]
 
 
+def test_a_late_end_commits_what_an_end_commits_once_the_next_end_settles_it(device_run, tmp_path):
+    """`end`'s ``late``: the commitment it returns (``details["passes"]``' too) has the pass's counts and none of what the
+    device writes until the next pass's end (or `settle`) fills it in, and then every pass and ``commits`` are a serial
+    run's ending each pass at once, byte for byte; the executor's passes end late with ``late_ends``.  A retained pass, and
+    a schedule with a side lane, end at once."""
+    make, _, weights, *_ = device_run
+    rng = np.random.default_rng(41)
+    x = lambda m: torch.from_numpy(bf16_words(rng, m, 1024).view(np.float32).copy()).to(torch.bfloat16)  # noqa: E731
+    passes = [[(0, x(32)), (1, x(16))], [(1, x(32)), (0, x(20)), (0, x(32))], [(0, x(16))]]
+    got = {}
+    for late in (False, True):
+        run = make()
+        ends = []
+        for calls in passes:
+            run.begin()
+            for w, a in calls:
+                run.gemm(w, a, weights[w], None)
+            ends.append(run.end(late=late))
+            assert ends[-1] is run.details["passes"][-1] and ends[-1]["units"] == len(calls)
+            assert ("transcript_root" in ends[-1]) is not late and all("transcript_root" in e for e in ends[:-1])
+        run.settle()
+        assert run._late is None and ends == run.details["passes"]
+        got[late] = ([dict(e) for e in ends], dict(run.commits))
+    assert got[True] == got[False] and got[False][0][0]["screened_rows"] == 48
+    run = make()
+    run.late_ends = True
+    spec = types.SimpleNamespace(hashing=True, retain=None, run_id=None, schedule="serial", controls=())
+    p = PPD.PearlCExecutor(run).begin(spec)
+    for w, a in passes[0]:
+        p.call(types.SimpleNamespace(weight_id=w), a, weights[w], None)
+    assert "transcript_root" not in p.end() and run._late is not None
+    run.settle()
+    assert run.details["passes"] == [got[False][0][0]]
+    for retain, schedule in ((str(tmp_path / "kept"), "serial"), (None, "deferred")):
+        run = make(schedule=schedule)
+        run.begin(retain=retain, run=RUN)
+        run.gemm(0, passes[0][0][1], weights[0], None)
+        assert "transcript_root" in run.end(late=True) and run._late is None
+
+
+def test_work_on_another_stream_than_a_late_ends_copies_waits_for_them(monkeypatch):
+    """A call, a forward replayed whole or a poison after a late end (`_after_late`) on another stream than the end's
+    copies makes that stream wait for their event; on the copies' stream, inside a capture, or off the GPU, nothing waits."""
+    waits = []
+    stream = types.SimpleNamespace(wait_event=waits.append)
+    run = types.SimpleNamespace(_late=PPD._Late({}, PPD._Pass(None), 0, (), "copies", 5, None), torch_stream=lambda raw: stream)
+    for raw, capturing, waited in ((6, False, ["copies"]), (5, False, []), (6, True, [])):
+        waits.clear()
+        run.stream = lambda raw=raw: raw
+        monkeypatch.setattr(PPS, "_capturing", lambda capturing=capturing: capturing)
+        PPD.PearlCDeviceRun._after_late(run)
+        assert waits == waited
+    waits.clear()
+    monkeypatch.setattr(PPS, "_capturing", lambda: False)
+    run._late.event = None
+    run.stream = lambda: 6
+    PPD.PearlCDeviceRun._after_late(run)
+    assert waits == []
+
+
 # ---- the hashing format, from the one table --------------------------------------------------------------------------
 
 def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
@@ -2084,7 +2145,8 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
     with pytest.raises(ValueError, match="a side lane needs ring >= 2"):
         PPD.schedule_of(Schedule("one-set", frozenset({"tile_hash"}), ring=1), s)
     assert PPD.rotated(PPD.schedule_of("deferred", s)) == ("c", "segdig_t", "u") and PPD.rotated(PPD.SERIAL) == ()
-    assert PPD.rotated(PPD.SCHEDULES["deferred-a"]) == ("c", "keys", "line_a", "seed_a", "segdig_t", "tree_a", "u")
+    assert PPD.rotated(PPD.SCHEDULES["deferred-a"]) == ("c", "keys", "line_a", "rowdig_a", "seed_a", "segdig_t", "tree_a",
+                                                     "u")
     assert PPD.PearlCExecutor(sm90_run[0]()).schedules == {"serial", "deferred", "deferred-caller", "deferred-a"}
 
 
@@ -2128,7 +2190,7 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
         assert (tp[10], tp[11]) == (ptr(j, "seed_a"), ptr(j, "line_a"))
         assert cp[6] == tp[6] == ptr(j, "keys") and cp[5] == tp[5] == ptr(j, "keys") + nb
         assert by["gemm_pearlc_d"][c][0][2:4] == by["pd_tiles_851"][c][0][:2] == (ptr(j, "c"), ptr(j, "u"))
-    assert len({ptr(j, x) for j in (0, 1) for x in PPD.rotated(run.schedule)}) == 14
+    assert len({ptr(j, x) for j in (0, 1) for x in PPD.rotated(run.schedule)}) == 16
     for j, index in ((0, 2), (1, 1)):
         keys = sh.keys if j == 0 else sh.sets[j]["keys"]
         assert PPD._bytes(keys[:168]) == PPD.call_keys(F90, run.salt, roots[0], index, 32, run.tree_hash)
@@ -2175,6 +2237,65 @@ def test_deferred_a_runs_sm120s_split_on_the_lanes(device_run, tmp_path):
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
     assert [(n, st) for n, st, _, _ in pd] == [("pd_commit_851", 2), ("pd_tree_851", 1), ("pd_tiles_851", 1)]
     assert pd[0][3][2] == 1 and kept == [pd[1][2][2]] and pd[1][2][12] == 0
+
+
+def test_an_eager_forward_under_whole_eager_runs_a_prefills_calls_with_as_tree_and_tiles_aside(device_run):
+    """With ``whole_eager`` a forward a whole-step arm runs eagerly (`eager_forward`, before the pass's first call) runs under
+    that schedule.  Under ``deferred-a``, at a prefill's rows (m₁₆ = 304, outside pd), sm_120's pipeline splits A's
+    commitment over the generic kernels (`run.Pipeline.FUSED_GENERIC`): the main lane (handle 2) runs ``rows_a`` (A's pads,
+    the row digests, the row seeds and the real rows' E_A lines, keyed per row and reading no line_a), the forming and the
+    GEMMs, and never A's level 0; from a full tile of rows the side lane after the call's runs A's level 0 over the row
+    digests of the call's set, its levels and seed_A, and the call's side lane the tile leaves.  A second eager_forward,
+    after a call, changes nothing; the next pass is back on its own schedule, and without whole_eager nothing moves.  A
+    level 0 reads its unit index (its salt nonce) from its own set's keys."""
+    make, kernel, weights, *_ = device_run
+    assert make().whole_eager is None and (r := make()) and (r.eager_forward() or r.schedule.name) == "serial"
+    run = make(whole_eager="deferred-a")
+    assert run.schedule.name == "serial" and run.whole_eager.name == "deferred-a"
+    run.eager_forward()
+    assert run.schedule.name == "deferred-a"
+    sh = run._shape(304, 256, 1024)
+    kernel.dev.log.clear()
+    for _ in range(2):
+        run.gemm(0, torch.randn(300, 1024).to(torch.bfloat16), weights[0], None)
+    run.eager_forward()
+    assert run.schedule.name == "deferred-a"
+    log = [(n, st, p, i) for n, st, p, i in kernel.dev.log if not n.endswith("_smem")]
+    sides = [lane.raw for lane in run.sides]
+    assert sides == [1, 3] and {st for _, st, _, _ in log if st not in sides} == {2}
+    main = [n for n, st, _, _ in log if st == 2]
+    rows_a = ["s512_pads", "s512_row_segs", "s512_folds", "s512_seeds", "lines"]
+    assert main[:5] == rows_a and main.count("lines") == 2 and "hm_leaves" not in main and "gemm_pearlc_d" in main
+    levels = (R.pow2(304) // R.S512_SMALL).bit_length() - 1        # s512_nodes down to S512_SMALL nodes, then tree_small
+    tree = ["hm_leaves", "s512_frame_leaves"] + ["s512_nodes"] * levels + ["s512_tree_small", "s512_seeds"]
+    on = lambda lane: [n for n, st, _, _ in log if st == lane]  # noqa: E731
+    assert on(3) == tree + ["s512_tile_segs", "s512_folds"] and on(1) == ["s512_tile_segs", "s512_folds"] + tree
+    ptr = lambda j, x: sh.sets[j][x].data_ptr()  # noqa: E731
+    lines = [(p, i) for n, st, p, i in log if n == "lines"]
+    assert all(i == (0, 0, 304, R.NORM_256, 304) and p[0] == 0 for p, i in lines)
+    folds = [p for n, st, p, i in log if n == "s512_folds" and st == 2]
+    leaves = [p for n, st, p, i in log if n == "hm_leaves"]
+    for c, j in enumerate((0, 1)):
+        assert folds[c][1] == leaves[c][0] == ptr(j, "rowdig_a") and leaves[c][1] == ptr(j, "tree_a")
+        keys = sh.keys if j == 0 else sh.sets[j]["keys"]
+        assert leaves[c][5] == keys.data_ptr() + run.nb + 96      # A's unit index, its salt nonce: the set's own keys
+    assert run.end()["schedule"] == "deferred-a"
+    run.begin()
+    assert run.schedule.name == "serial" and run._eager_from is None
+
+
+def test_a_prefills_rows_past_mainloop_rows_pad_to_the_mainloop_tile(device_run):
+    """A call of more than `run.MAINLOOP_ROWS` rows pads to the 128-row tile, so its chain runs on the mainloop
+    (``gemm_pearlc``, its operands by tensor map); at fewer rows the 64-row tile and the 64 x 64 chain."""
+    make, kernel, weights, *_ = device_run
+    run = make()
+    assert run._shape(R.MAINLOOP_ROWS, 256, 1024).mp == R.MAINLOOP_ROWS and run._shape(304, 256, 1024).mp == 320
+    assert run._shape(R.MAINLOOP_ROWS + 16, 256, 1024).mp == R.MAINLOOP_ROWS + 128
+    for m, chain in ((600, "gemm_pearlc"), (300, "gemm_pearlc_d")):
+        kernel.dev.log.clear()
+        run.gemm(0, torch.randn(m, 1024).to(torch.bfloat16), weights[0], None)
+        names = [n for n, *_ in kernel.dev.log]
+        assert chain in names and {"gemm_pearlc", "gemm_pearlc_d"} - {chain} - set(names) == {"gemm_pearlc", "gemm_pearlc_d"} - {chain}
 
 
 def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_writes_no_padding_lines(sm90_run, tmp_path):
@@ -2285,6 +2406,36 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
     assert [a for a, _ in d_lines] == [a for a, _ in s_lines]
     assert [len(p) for _, p in d_lines] == [32 * 32, 32 * 32, 0, 32 * 32, 32 * 32]
     assert all(set(p) == {0xA5} for _, p in d_lines if p) and all(set(p) != {0xA5} for _, p in s_lines if p)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
+def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_path):
+    """Past pd's rows (a prefill's: A's commitment split over the generic kernels, `run.Pipeline.FUSED_GENERIC`), two calls
+    of each shape in a pass under ``deferred-a`` take the ring's two sets, each call's A tree under its own set's keys, and
+    the pass commits what the serial one commits (`TwinDev`: the trees computed on the host): the records root, the
+    commitment and each call's A root, beside a pd call."""
+    pd = HD.build(tmp_path)
+    rng = np.random.default_rng(29)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    xs = [(w, torch.from_numpy(bf16_words(rng, m, 1024).view(np.float32).copy()).to(torch.bfloat16))
+          for w, m in ((0, 300), (1, 290), (0, 300), (1, 20), (1, 290))]
+    kernel = PPD.Kernel(R, F, TwinDev(pd), "0" * 64)
+    roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
+    got = {}
+    for schedule in ("serial", "deferred-a"):
+        run = PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *salt_coin(roots),
+                                  capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
+        run.begin(retain=str(tmp_path / schedule), run=RUN)
+        for w, x in xs:
+            run.gemm(w, x, weights[w], None)
+        if schedule == "deferred-a":
+            assert [run.shapes[(304, 256, 1024)].turn, run.shapes[(304, 128, 1024)].turn] == [2, 2]
+        man = json.loads(Path(run.end()["manifest"]).read_text())
+        got[schedule] = ({k: man[k] for k in ("records_root", "commitment", "salt")},
+                         [{k: u[k] for k in ("root_a", "excluded_a", "real_rows", "m", "n")} for u in man["matmuls"]])
+    assert got["deferred-a"] == got["serial"] and len({u["root_a"] for u in got["serial"][1]}) == len(xs)
 
 
 def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm90_run, monkeypatch):

@@ -40,6 +40,12 @@ tree writes.  What reads A's root or tree waits for it first (`_tree_joined`): t
 A's root to the pass, and a retained capture's copy of A's tree to its stage; and so a call joining the side steps of a
 call of its shape joins that call's tree too.  The forward's last call joins the tree stream before vLLM's capture ends.
 
+With ``whole_stats_a`` (deferring), a whole capture forks each call's ``stats_a`` (A's scales, which read A's words alone,
+as a lane graph forks it) at the call's start onto a beside stream of the run's own, and the call waits for it where the
+step was, before the rest of its forming; with ``whole_prefetch_b`` the beside stream then prefetches the call's B̃ into
+L2 (`run.Pipeline.prefetch_b`, which writes nothing) while the per-row keying leaves DRAM idle.  The forward's last call
+joins the beside stream.  The same kernels write the same bytes.
+
 With a `statement` enabled (and hashing), a whole capture also copies each call's A words to the statement's stage, and
 `whole_replayed` launches its commitment of the forward's rows after the replay; its key says so.
 """
@@ -82,6 +88,8 @@ class _Graph:
     #: where a deferred-a whole capture forks A's tree (`_call_tree`: ``tree_seed_a``, the step before ``cuts[0]``), or None
     #: where the call's pipeline doesn't split A's commitment
     tree_at: int | None = None
+    #: where a whole capture forking A's statistics takes ``stats_a`` from `steps` (`_call_stats`), or None
+    stats_at: int | None = None
     #: a lane graph's (`_lane_graph`): the side lane's graph and steps, and the slot both lanes read (dom_a ‖ unit, then the
     #: call's offsets at `SLOT_BYTES`, `offs`; its address `slot_ptr`).  Where A's tree is off the main lane, the main
     #: graph records `ev_tree` (an external event) before step `cut`, and the side steps before `side_cut` (A's tree and
@@ -149,6 +157,14 @@ class GraphCalls:
     whole_defer_a: bool = False
     _tree_open: bool = False
     _tree_stream: Any = None
+    #: deferring, whether a whole capture forks each call's ``stats_a``, and B̃'s prefetch, beside its per-row keying; inside
+    #: one, whether a call forked onto the beside stream since the capturing stream last joined it, and that stream
+    whole_stats_a: bool = False
+    whole_prefetch_b: bool = False
+    _beside_open: bool = False
+    _beside_stream: Any = None
+    #: a pass the run ended late and hasn't settled (`PearlCDeviceRun.end`'s ``late``)
+    _late: Any = None
     #: a commitment of each forward replayed whole beside the scheme's, while its ``enabled`` (with hashing): inside the
     #: capture, `stage(w, sh)` after each call's steps (and `prepare(w, sh)` outside it, in the warm-up); after each replay,
     #: `after(calls, tiles_at)` on the replaying stream (benchmarks/pouw/served_zk/statement.py's `Statement`)
@@ -194,14 +210,16 @@ class GraphCalls:
 
     def whole_key(self, retained: bool | None = None) -> tuple | None:
         """What a forward captured whole depends on (hashing, omitted steps, schedule, with hashing whether its pass is
-        retained, which `retained` sets in place of the open pass's, whether it defers the tile hashing, and ``a_tree`` after
-        those where it defers A's trees), or None when the pass can't replay one: graphs off, or a schedule the graph path
-        doesn't run."""
+        retained, which `retained` sets in place of the open pass's, whether it defers the tile hashing, and after those
+        ``a_tree``, ``stats_a`` and ``prefetch_b`` where it forks those), or None when the pass can't replay one: graphs off,
+        or a schedule the graph path doesn't run."""
         if not self.graphs or self.cur is None or self.schedule.side or self.schedule.main_priority == "greatest":
             return None
         retained = self.cur.retain is not None if retained is None else retained
         key = (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
         key = (*key, "a_tree") if self._defers_a() else key
+        key = (*key, "stats_a") if self._forks_stats() else key
+        key = (*key, "prefetch_b") if self._prefetches() else key
         return (*key, "statement") if self._statement_on() else key
 
     def _defers(self) -> bool:
@@ -212,14 +230,26 @@ class GraphCalls:
         """Whether a whole capture forks each call's A tree beside its forming and GEMM (`whole_defer_a`, deferring)."""
         return self.whole_defer_a and self._defers()
 
+    def _forks_stats(self) -> bool:
+        """Whether a whole capture forks each call's ``stats_a`` beside its per-row keying (`whole_stats_a`, deferring)."""
+        return self.whole_stats_a and self._defers()
+
+    def _prefetches(self) -> bool:
+        """Whether a whole capture prefetches each call's B̃ beside its per-row keying (`whole_prefetch_b`, deferring)."""
+        return self.whole_prefetch_b and self._defers()
+
     def _statement_on(self) -> bool:
         """Whether forwards replayed whole commit `statement`'s rows too (it is set and enabled, with hashing)."""
         return self.statement is not None and self.statement.enabled and self.hashing
 
     def whole_capture_begin(self, key: tuple | None = None) -> None:
         """Calls are recorded from here, for the forwards of `key`'s kind (`whole_key`'s; an unretained pass's when None).
-        A deferring run's side stream (and tree stream, deferring A's trees) is made here, before vLLM's capture begins."""
+        A deferring run's side stream (and tree stream, deferring A's trees, and beside stream, forking A's statistics or
+        B̃'s prefetch) is made here, before vLLM's capture begins, and a late pass end settled."""
+        if self._late is not None:
+            self.settle()
         self._whole, self._whole_retained, self._deferred, self._tree_open = [], bool(key and key[3]), None, False
+        self._beside_open = False
         if self._whole_retained and self._stages is None:
             self._stages = {}
         if self._defers() and self._side_stream is None:
@@ -228,12 +258,15 @@ class GraphCalls:
         if self._defers_a() and self._tree_stream is None:
             import torch
             self._tree_stream = torch.cuda.Stream(device=self.device)
+        if (self._forks_stats() or self._prefetches()) and self._beside_stream is None:
+            import torch
+            self._beside_stream = torch.cuda.Stream(device=self.device)
 
     def whole_capture_end(self) -> tuple[WholeCall, ...]:
         """The calls captured since `whole_capture_begin`.  Each weight's slot holds one call's keys, so a weight called twice
         in one forward is refused."""
         calls, self._whole, self._whole_retained, self._deferred = tuple(self._whole or ()), None, False, None
-        self._tree_open = False
+        self._tree_open = self._beside_open = False
         seen = [c.w for c in calls]
         if len(set(seen)) != len(seen):
             raise RuntimeError(f"{self.entry}: a weight is called twice in one captured forward, and its slot holds one call")
@@ -275,6 +308,8 @@ class GraphCalls:
         cur = self.cur
         if not self.hashing or not calls:
             return False
+        if self._late is not None:
+            self._after_late()
         at, s = (len(cur.matmuls), cur.tiles, cur.flag_rows), self._next
         staged = s is not None and s.calls is calls and s.at == at
         if not staged:
@@ -481,7 +516,7 @@ class GraphCalls:
                 g.leaves.fill_(self.cur.poison)
             pipe.b["y"], pipe.b["leaves"] = g.y.data_ptr(), g.leaves.data_ptr()
             steps = self._call_steps(pipe)
-            g.cuts, g.tree_at = self._call_cuts(pipe), self._call_tree(pipe)
+            g.cuts, g.tree_at, g.stats_at = self._call_cuts(pipe), self._call_tree(pipe), self._call_stats(pipe)
             if self.hashing:
                 steps = [*steps, self._scatter(w, sh, pipe, g, tiles, m if screen else 0)]
             g.steps = steps
@@ -522,7 +557,9 @@ class GraphCalls:
         place, before the weight's next call rewrites it.  Deferred (`_defers`), the call joins the call before's side steps
         after its A tree and forks its own after its GEMM; the forward's last call (every weight called once) joins them.
         Deferring A's trees (`_defers_a`, where the call's graph has one, ``tree_at``), the call forks its tree after its
-        per-row keying, then joins the call before's side steps; the last call joins the tree stream too."""
+        per-row keying, then joins the call before's side steps; the last call joins the tree stream too.  Forking A's
+        statistics (`_forks_stats`, where the graph has the step, ``stats_at``) or B̃'s prefetch (`_prefetches`), the call
+        starts them on the beside stream and waits for its statistics in that step's place; the last call joins it too."""
         key, screen = self._graph_key(w, sh, m)
         g = self._graphs.get(key)
         if g is None or g.graph is None:
@@ -537,20 +574,61 @@ class GraphCalls:
             else:
                 a, b = g.cuts
                 t = g.tree_at if self._defers_a() else None
-                for f in g.steps[:a if t is None else t]:
+                s = g.stats_at if self._forks_stats() else None
+                prefetch = getattr(pipe, "prefetch_b", None) if self._prefetches() else None
+                steps = g.steps
+                if s is not None or prefetch is not None:
+                    ev = self._fork_beside([] if s is None else [steps[s]], prefetch, raw)
+                    if s is not None:
+                        steps = [*steps[:s], lambda: self._wait_beside(ev), *steps[s + 1:]]
+                for f in steps[:a if t is None else t]:
                     f()
                 if t is not None:
-                    self._fork_tree(g.steps[t:a], raw)
+                    self._fork_tree(steps[t:a], raw)
                 self._join()
-                for f in g.steps[a:b]:
+                for f in steps[a:b]:
                     f()
-                self._fork(sh, g.steps[b:], raw)
+                self._fork(sh, steps[b:], raw)
                 if len(self._whole) == len(self.order):
                     self._join()
                     self._join_tree()
+                    self._join_beside()
         finally:
             self.kernel.dev.stream = None
         return g.y, screen
+
+    def _fork_beside(self, steps: list, prefetch: Any, raw: int) -> Any:
+        """`steps` (the call's ``stats_a``), then `prefetch` (its B̃ into L2) when given, on the beside stream after everything
+        the capturing stream has launched so far (the call's A words); returns the event after `steps` (None without any)."""
+        import torch
+        beside = self._beside_stream
+        beside.wait_stream(torch.cuda.current_stream(self.device))
+        ev = torch.cuda.Event() if steps else None
+        self.kernel.dev.stream = beside.cuda_stream
+        try:
+            with torch.cuda.stream(beside):
+                for f in steps:
+                    f()
+                if ev is not None:
+                    ev.record(beside)
+                if prefetch is not None:
+                    prefetch()
+        finally:
+            self.kernel.dev.stream = raw
+        self._beside_open = True
+        return ev
+
+    def _wait_beside(self, ev: Any) -> None:
+        """The capturing stream waits for the call's ``stats_a`` on the beside stream (`_fork_beside`'s event)."""
+        import torch
+        torch.cuda.current_stream(self.device).wait_event(ev)
+
+    def _join_beside(self) -> None:
+        """The capturing stream waits for everything forked onto the beside stream, as vLLM's capture must before it ends."""
+        if self._beside_open:
+            import torch
+            torch.cuda.current_stream(self.device).wait_stream(self._beside_stream)
+        self._beside_open = False
 
     def _fork_tree(self, steps: list, raw: int) -> None:
         """`steps` (the call's A tree) on the tree stream, after everything the capturing stream has launched so far;
