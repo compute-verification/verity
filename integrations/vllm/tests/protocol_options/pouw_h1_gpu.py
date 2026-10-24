@@ -1033,15 +1033,15 @@ def receipts_check(made: Any) -> dict[str, Any]:
             "ok": bool(rows) and all(r[3] for r in rows) and 0 < live < len(rows)}
 
 
-def receipt_tamper(record: dict[str, Any], run: Any, c: int, words: Any, unit: int = 0) -> dict[str, Any]:
+def receipt_tampered(record: dict[str, Any], run: Any, c: int, words: Any, unit: int = 0
+                     ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     """A receipt word other than the one call ``c``'s round committed, as a serving process that rewrote it after that
     round's root went out would record it: ``words`` (call c's receipt table's u16 words as registered) with bit 0 of
     ``unit``'s first word flipped, its tree under the same domain and salts (`Served._tree`), and its root in place of the
     registered one in the window's served entries, the served digest and calls_root recomputed over them (``entries``),
-    then in the manifest row that carries it too (``row``), the round log as the challenger received it. Each edited
-    record goes to core's ROOTS1 steps (`core_verdict`). ``rebuilt``: ``words`` are the registered table; ``faithful``:
-    calls_root recomputed over the honest record is its own; ``refused``: both refused at ``a_link``, the receipt table
-    not the tree over the segments its round's root commits, ``entries`` with the manifest still one."""
+    then in the manifest row that carries it too (``row``), the round log as the challenger received it. Returns what
+    the edit is (``rebuilt``: ``words`` are the registered table; ``faithful``: calls_root recomputed over the honest
+    record is its own) and the two edited records."""
     from verity_vllm.protocol_options import pouw_h1 as PH
     from verity_vllm.protocol_options import pouw_h1_served as SV
     served, words = run.served, np.asarray(words, np.uint16)
@@ -1061,14 +1061,23 @@ def receipt_tamper(record: dict[str, Any], run: Any, c: int, words: Any, unit: i
     for r in rows:
         if r["index"] in carriers:
             r["tables"]["registered"][value] = bad.root.hex()
-    desc = SV.descriptor(served.program).hex()
-    out: dict[str, Any] = {
-        "call": c, "table": value, "unit": unit, "root": old.root.hex(), "tampered_root": bad.root.hex(),
-        "rebuilt": served._tree(run, value, words, nonce, served.root).root == old.root,
-        "faithful": root_of(com["served"]["entries"], record["calls"]) == com["calls_root"], "carriers": carriers}
-    for name, calls in (("entries", record["calls"]), ("row", rows)):
-        edited = {**com, "served": {"entries": entries, "refused": refused}, "calls_root": root_of(entries, calls)}
-        out[name] = core_verdict({"commitment": edited, "calls": calls, "descriptor": desc})
+    facts = {"call": c, "table": value, "unit": unit, "root": old.root.hex(), "tampered_root": bad.root.hex(),
+             "rebuilt": served._tree(run, value, words, nonce, served.root).root == old.root,
+             "faithful": root_of(com["served"]["entries"], record["calls"]) == com["calls_root"], "carriers": carriers}
+    return facts, {name: {"commitment": {**com, "served": {"entries": entries, "refused": refused},
+                                         "calls_root": root_of(entries, calls)}, "calls": calls}
+                   for name, calls in (("entries", record["calls"]), ("row", rows))}
+
+
+def receipt_tamper(record: dict[str, Any], run: Any, c: int, words: Any, unit: int = 0) -> dict[str, Any]:
+    """`receipt_tampered`'s two edited records, each held to core's ROOTS1 steps (`core_verdict`). ``refused``: both
+    refused at ``a_link``, the receipt table not the tree over the segments its round's root commits, ``entries`` with
+    the manifest still one."""
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    out, edited = receipt_tampered(record, run, c, words, unit)
+    desc, value, carriers = SV.descriptor(run.served.program).hex(), out["table"], out["carriers"]
+    for name, rec in edited.items():
+        out[name] = core_verdict({**rec, "descriptor": desc})
     links = [(out[n]["a_link"] or ("", ""))[1] for n in ("entries", "row")]
     out["refused"] = bool(out["rebuilt"] and out["faithful"] and carriers and out["entries"]["manifest"] is None
                           and all(value in w and "is not the tree over the segments" in w for w in links)

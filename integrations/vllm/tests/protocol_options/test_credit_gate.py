@@ -957,6 +957,69 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
                                                             "earns nothing: weights: "), refused
 
 
+RECEIPT0 = SV.PREFIX + "receipt@0"
+#: `credit._a_link`'s refusal of a receipt table whose rows aren't the ones its round's root committed
+UNTIED_RECEIPT = f"registered receipt table {RECEIPT0}'s root is not the tree over the segments the round roots commit"
+
+
+def _receipts_window(periodic, tmp_path, rewrite=False):
+    """`_serve`'s window under `periodic`'s auditor with its call's ``receipt@0`` registered (a stand-in producer's, one
+    u16 word a unit), and with ``rewrite`` that table rewritten with one bit flipped once its round's root went out and
+    before the close (`Served.close`), so the entries, calls_root and the draw are over the rewritten table; the host,
+    the run, the producer, its record, the drawn call's statement and the drawn units."""
+    from tests.protocol_options.test_pouw_h1_served import _Receipts
+    auditor, made = periodic(PHC.draw_k(LAYOUT), files=FILES), _Receipts(rows=ROWS)
+    served = _served(registry=_model_key(), receipts=made)
+    if rewrite:
+        close = served.close
+
+        def rewritten(run):
+            off = SV.receipt_words(made[0]).copy()
+            off[0, 0] ^= 1
+            served.registered[RECEIPT0] = served._tree(run, RECEIPT0, off, SV.RECEIPT_NONCE, served.root)
+            close(run)
+        served.close = rewritten
+    _y, run = _serve(ZyArm(), remote=True, n=64, served=served)
+    assert auditor.ended() is None and not served.refused
+    rec = _record(run)
+    drawn = _credit(auditor, rec)["drawn"]
+    return auditor, run, made, rec, [_statement(tmp_path / "c0", 0, len(drawn))], drawn
+
+
+def test_a_window_with_receipts_is_credited_and_its_record_with_a_receipt_word_rewritten_is_refused(periodic, tmp_path):
+    """BRIDGE2 under core's one composed entry (`credit.window`, PRF-132): a window whose Served registers its call's
+    ``receipt@0`` is credited, the ``--registered`` file credit builds for the drawn call naming that table at the
+    statement's output o0 at its registered root. Its record with one receipt bit flipped after the close
+    (`pouw_h1_gpu.receipt_tampered`: the table rewritten under its domain and salts, its root in the served entries and
+    calls_root recomputed, then in the manifest row that carries it too) credits nothing: the draw root the challenger
+    received is over the honest record."""
+    from tests.protocol_options import pouw_h1_gpu as GPU
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    auditor, run, made, rec, st, drawn = _receipts_window(periodic, tmp_path)
+    seen = []
+    out = _credit(auditor, rec, st, run=_verifier(drawn, seen=seen))
+    assert out["manifest"] is None and out["window"] is None and out["credit"] == [0], out
+    port = seen[0]["registered"]["ports"][HW.RECEIPT_PORT]
+    assert (port["value"], port["root"]) == (RECEIPT0, run.served.registered[RECEIPT0].root.hex())
+    facts, edited = GPU.receipt_tampered(rec, run, 0, SV.receipt_words(made[0]))
+    assert facts["rebuilt"] and facts["faithful"] and facts["carriers"] == [0], facts
+    for name, bad in edited.items():
+        got = _credit(auditor, bad, st, run=_verifier(drawn))
+        assert got["credit"] is None and got["window"][0] == "draw", (name, got)
+    assert _credit(auditor, edited["entries"], st, run=_verifier(drawn))["manifest"] is None
+
+
+def test_a_receipt_table_rewritten_after_its_round_before_the_close_is_refused_by_core_at_a_link(periodic, tmp_path):
+    """The serving process rewrites ``receipt@0`` with one bit flipped after round 0's root committed its rows and
+    before the close, so its entries, calls_root and the draw coin are all over the rewritten table and the record is
+    one manifest: core's `credit.window` refuses it at ``a-link`` (the table not the tree over the segments round 0's
+    root commits), after the draw and round steps pass, and credits nothing."""
+    auditor, run, _made, rec, st, drawn = _receipts_window(periodic, tmp_path, rewrite=True)
+    assert run.round_log[0]["a"][RECEIPT0] and PHC.manifest_reason(rec) is None
+    got = _credit(auditor, rec, st, run=_verifier(drawn))
+    assert got["credit"] is None and got["window"][0] == "a-link" and got["window"][1].startswith(UNTIED_RECEIPT), got
+
+
 def test_a_period_open_without_draw_k_is_refused(periodic):
     """PRF-132: the proof service commits the draw's K in the period's open (`credit.K_FIELD`) before any draw; a period
     opened without one leaves its windows no K to be drawn with, so the window, the period's reading and its credit are
