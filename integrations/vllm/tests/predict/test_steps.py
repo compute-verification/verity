@@ -10,7 +10,8 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
-from verity_vllm.predict.build import Unexpressible, build_program
+from verity_vllm.predict import batch as B
+from verity_vllm.predict.build import Unexpressible, _Specs, build_program, model_shape
 from verity_vllm.predict.common import _arr
 from verity_vllm.predict.phi import Phi
 from verity_vllm.predict.steps import (
@@ -25,8 +26,12 @@ from verity_vllm.predict.steps import (
     trace_commands,
     trace_dir,
 )
+from verity_vllm.program.registry import io_shell as IO
+from verity_vllm.program.registry.topp_geometry import splits_for_v1
 
 from verity.core.protocols.certifier import advice as I1
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.partition_object import calls
 
 FIX = Path(__file__).parent / "fixtures"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
@@ -34,8 +39,9 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
         "max_position_embeddings": 64, "hidden_act": "silu"}
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 4}
-STOCH = {"temperature": 0.8, "top_p": 0.95, "top_k": 0, "seed": None, "max_tokens": 3, "min_p": 0.0, "repetition_penalty": 1.0}
-STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+STOCH = {"temperature": 0.8, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 3, "min_p": 0.0, "repetition_penalty": 1.0}
+STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": splits_for_v1(1, 188)}
+SERVED = "served-model"
 
 
 def _registered(cfg: dict = TINY, **kw) -> Registered:
@@ -76,6 +82,40 @@ def _mixed() -> tuple[I1.Advice, dict]:
     ])
 
 
+def _wired(ingress: dict, *ids: str) -> dict:
+    return {k: IO.encode(SERVED, b["prompt"], b["max_tokens"], TINY["vocab_size"]) if k in ids else b for k, b in ingress.items()}
+
+
+def test_byte_ingress_compiles_to_the_same_programs_with_a_parse_unit_each():
+    """r0 and r2 bring ingress v0's bytes: their Programs and rows are the ones their parsed bodies compile to, and each gets
+    `IngressPrompt_v1` at its LP, the unit that reads the ingress transfer gates; r1's parsed body gets none."""
+    reg, (advice, ingress) = Registered.of(_registered().phi, 7, served_model=SERVED), _mixed()
+    plain, wired = compile_steps(reg, advice, ingress), compile_steps(reg, advice, _wired(ingress, "q0", "q2"))
+    assert [u.digest for u in wired.requests] == [u.digest for u in plain.requests] and wired.steps == plain.steps
+    parse = bind(IO.IngressPrompt, MODEL=SERVED, LP=8, V=256)
+    assert [u.parse for u in wired.requests] == [parse, None, parse]
+    assert [u["parse"] for u in json.loads(json.dumps(wired.summary()))["requests"]] == [parse.id, None, parse.id]
+    selects = (f"GumbelTopPTokenSelect_v2{{V=256,S={splits_for_v1(1, reg.phi.target_profile().num_sms)}}}", "TokenSelect_v1{V=256}")
+    assert plain.transfer_gates == selects and wired.transfer_gates == tuple(sorted((parse.id, *selects)))
+    assert wired.summary()["transfer_gates"] == list(wired.transfer_gates)
+
+
+@pytest.mark.parametrize("edit, served, why", [
+    (lambda b: b, None, "names no served model"),
+    (lambda b: b.replace(b'"temperature":0', b'"temperature":1'), SERVED, "aren't in ingress schema v0"),
+    (lambda b: b[:-1] + b" }", SERVED, "not ingress v0's"),
+    (lambda b: b.rstrip(b" "), SERVED, "not ingress v0's"),
+    (lambda b: b[:-1] + b"\n", SERVED, "aren't in ingress schema v0"),
+])
+def test_byte_ingress_without_a_served_model_or_out_of_the_schema_is_refused(edit, served, why):
+    advice, ingress = _mixed()
+    ingress = _wired(ingress, "q0")
+    ingress["q0"] = edit(ingress["q0"])
+    reg = Registered.of(_registered().phi, 7, served_model=served)
+    with pytest.raises(Unexpressible, match=why):
+        compile_steps(reg, advice, ingress)
+
+
 def test_a_requests_program_reads_its_own_fields_alone():
     """r1 run alone compiles to the Program it had among r0 and r2: its template and statics read its advice record and body, never
     its batch-mates."""
@@ -97,9 +137,13 @@ def test_a_plan_is_the_compilation_before_its_programs_are_built():
 
 
 def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_top_p():
-    assert policy_of(0, {**STOCH, "seed": 123}, 7) == (STOCH_POLICY, 123)
-    assert policy_of(0, {**STOCH, "top_k": -1}, 7) == (STOCH_POLICY, 7)
-    assert policy_of(0, {**GREEDY, "top_p": 0.5, "stop": ["\n"], "ignore_eos": False}, 7) == ({"kind": "greedy"}, None)
+    """Top-p at top_p = 1 takes the constant split count SplitsFor_v1(1, num_SMs) (`predict.batch`'s R3): its keep set is every lane
+    for any S, so the batch's S changes nothing; a greedy body's top_p is never read."""
+    assert policy_of(0, {**STOCH, "seed": 123}, 7, 188) == (STOCH_POLICY, 123)
+    assert policy_of(0, {**STOCH, "top_k": -1, "top_p": None}, 7, 188) == (STOCH_POLICY, 7)
+    assert policy_of(0, {**GREEDY, "top_p": 0.5, "stop": ["\n"], "ignore_eos": False}, 7, None) == ({"kind": "greedy"}, None)
+    with pytest.raises(Unexpressible, match="top-p on a target that declares no num_sms"):
+        policy_of(0, STOCH, 7, None)
 
 
 @pytest.mark.parametrize("sampling,fact", [
@@ -113,21 +157,23 @@ def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_t
     ({**STOCH, "bad_words": ["x"]}, "bad_words (a parameter this compiler doesn't know)"),
     ({**STOCH, "temperature": 1e-6}, "temperature 1e-06"),
     ({"top_p": 1.0}, "no temperature"),
-    ({**STOCH, "temperature": "0.8"}, "temperature '0.8', top_p 0.95 and seed None aren't"),
+    ({**STOCH, "temperature": "0.8"}, "temperature '0.8', top_p 1.0 and seed None aren't"),
     ({**STOCH, "top_p": 0.0}, "top_p 0.0"),
+    ({**STOCH, "top_p": 0.95}, "top_p 0.95 below 1 (a named gap: there the top-p split count S = SplitsFor_v1(live rows, num_SMs) "
+                               "is the batch's, until serving pins S as a registered constant)"),
     ({**STOCH, "seed": -1}, "seed -1"),
     (["temperature"], "aren't an object of named values"),
 ])
 def test_sampling_v0_cannot_express_is_refused_by_name(sampling, fact):
     with pytest.raises(Unexpressible, match=f"request 0: .*{fact}".replace("(", r"\(").replace(")", r"\)").replace("[", r"\[")):
-        policy_of(0, sampling, 7)
+        policy_of(0, sampling, 7, 188)
 
 
 def test_sampling_is_the_bodys_never_the_advices():
     """A request's policy is its certified body's. Advice is I1's bytes or an Advice, neither of which has a sampling field: an
     advice-shaped object carrying sampling is refused, and so are I1 bytes with sampling appended."""
     reg, (advice, ingress) = _registered(), _mixed()
-    hot = {**ingress, "q0": {**ingress["q0"], "temperature": 0.8, "top_p": 0.95, "seed": 3}}
+    hot = {**ingress, "q0": {**ingress["q0"], "temperature": 0.8, "top_p": 1.0, "seed": 3}}
     assert compile_steps(reg, advice, hot).requests[0].policy == STOCH_POLICY and compile_steps(reg, advice, hot).requests[0].seed == 3
     smuggled = NS(requests=[NS(id=q.id, prompt_len=q.prompt_len, output_len=q.output_len, finish=q.finish, sampling=STOCH)
                             for q in advice.requests], steps=advice.steps, release=advice.release)
@@ -221,9 +267,12 @@ def test_a_forged_cache_hit_is_refused():
 
 def test_an_honest_cache_hit_compiles_to_the_cached_request_program():
     """r1's 16 cached rows are its Program's `prefix` input (the Build's `--cached 16`), r0 the producer of its one block; its
-    prefill computes rows 16..23 at positions 16.., and its decode rows are as without a hit."""
+    prefill computes rows 16..23 at positions 16.., and its decode rows are as without a hit. `predict.batch`'s R2 keeps the hit,
+    whose source's tokens compile_steps checks equal to r1's own."""
     reg = _registered()
     c = compile_steps(reg, *_hit(16))
+    assert c.batch_rule is None and c.summary()["batch_rule"] is None and not c.refused
+    assert compile_steps(reg, *_hit(16), partial=True).summary() == c.summary()
     u = c.requests[1]
     want = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=24, T=2, C=16)
     assert (u.LP, u.T, u.C, u.producers, u.digest) == (24, 2, 16, (0,), want.digest)
@@ -246,6 +295,34 @@ def test_an_honest_cache_hit_compiles_to_the_cached_request_program():
 def test_a_cache_hit_the_cached_wrapper_cannot_express_is_refused(hit, body, fact):
     with pytest.raises(Unexpressible, match=fact):
         compile_steps(_registered(), *_hit(24, hit, body))
+
+
+def test_a_decodes_attention_guard_is_chosen_from_the_request_alone():
+    """FA2's `MASKED_FROM` on cc 12.0 reads the launch's causal flag: r0's decode at P = BN + 1 beside r1's 8-row prefill runs causal
+    and binds another static than alone. Its Program takes the static of its own rows (launch_sq 1), so it equals r0's alone."""
+    cfg = {**TINY, "max_position_embeddings": 512}
+    reg, C = _registered(cfg), model_shape(cfg)
+    S = _Specs(C, reg.phi.target_profile(), M=1)
+    BN = S.TG.attention_geometry(reg.phi.target_profile(), C.D, 1, C.NH, C.KVH)["BN"]
+    alone_fn, beside_fn = S.attention(BN + 1, 0, 1, 1), S.attention(BN + 1, 0, 1, 8)
+    assert alone_fn.id != beside_fn.id
+    body = {**GREEDY, "max_tokens": 3}
+    c = compile_steps(reg, *_session([(BN, 3, body), (8, 2, {**body, "max_tokens": 2})], [
+        [(0, 0, BN)], [(0, BN, 1), (1, 0, 8)], [(0, BN + 1, 1), (1, 8, 1)]]))
+    alone = compile_steps(reg, *_session([(BN, 3, body, _prompt(0, BN))], [[(0, 0, BN)], [(0, BN, 1)], [(0, BN + 1, 1)]]))
+    assert c.requests[0].digest == alone.requests[0].digest
+    ids = {fn.id for _, fn in calls(c.programs[c.requests[0].digest])}
+    assert alone_fn.id in ids and beside_fn.id not in ids
+
+
+def test_compile_steps_raises_the_batch_rules_refusal_and_partial_records_it(monkeypatch):
+    def refuse(*_a, **_k):
+        raise B.BatchDependent("request 0: refused by the batch rule")
+    monkeypatch.setattr(B, "check_compiled", refuse)
+    reg, (advice, ingress) = _registered(), _mixed()
+    with pytest.raises(B.BatchDependent, match="refused by the batch rule"):
+        compile_steps(reg, advice, ingress)
+    assert compile_steps(reg, advice, ingress, partial=True).summary()["batch_rule"] == "request 0: refused by the batch rule"
 
 
 def test_partial_refuses_a_request_whose_cache_hit_reads_a_refused_requests_kv():
@@ -370,8 +447,9 @@ def test_partial_refuses_request_by_request():
 
 def test_dead_gates_are_counted_as_circuit_check_counts_them():
     """The request wrapper drops its dead units, but gates inside live units still reach no sample (the final norm on the prompt rows
-    before the last, the query columns of the last layer's fused qkv on those rows), so today's request Programs have dead gates:
-    `dead_gates_of` counts them as circuit-check does and says under which definitions."""
+    before the last, the query columns of the last layer's fused qkv on those rows, and the top-p select's at a constant split
+    count, `GumbelTopPTokenSelect_v2{V,S}`), so today's request Programs have dead gates: `dead_gates_of` counts them as circuit-check
+    does and says under which definitions."""
     from verity.ml.circuits.liveness import dead_gates
     from verity_vllm.program.prune import dead_units
     c = compile_steps(_registered(), *_mixed())
@@ -383,7 +461,8 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
         assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and rep.computed > 0 and not dead_units(p.fn.body)
         assert sum(rec["by_definition"].values()) == rep.computed + rep.input
         by = rec["by_definition"]
-        assert next(iter(by)) == "RMSNormTriton_v1" and "Gemm_v2" in by and sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
+        top = "GumbelTopPTokenSelect_v2" if d == c.requests[1].digest else "RMSNormTriton_v1"
+        assert next(iter(by)) == top and "Gemm_v2" in by and sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
     assert got["dead_computed"] == sum(r["dead_computed"] for r in got["programs"].values())
 
 
@@ -407,8 +486,8 @@ def test_the_traced_side_is_one_build_a_distinct_program(tmp_path):
     reg = _registered()
     s = compile_steps(reg, *_mixed()).summary()
     cmds = trace_commands(s, reg, str(tmp_path))
-    assert [c[c.index("--out") + 1].rsplit("/", 1)[1] for c in cmds] == ["build_request_LP8_T3_greedy", "build_request_LP5_T2_t0.8-p0.95"]
-    assert json.loads(cmds[1][cmds[1].index("--sampling") + 1]) == {"temperature": 0.8, "top_p": 0.95, "top_k": 0}
+    assert [c[c.index("--out") + 1].rsplit("/", 1)[1] for c in cmds] == ["build_request_LP8_T3_greedy", "build_request_LP5_T2_t0.8-p1"]
+    assert json.loads(cmds[1][cmds[1].index("--sampling") + 1]) == {"temperature": 0.8, "top_p": 1.0, "top_k": 0}
     assert json.loads(cmds[0][cmds[0].index("--target") + 1]) == RTXPRO6000
     (tmp_path / trace_dir(s["requests"][0])).mkdir()
     (tmp_path / trace_dir(s["requests"][0]) / "result.json").write_text(json.dumps({"program": {"digest": s["requests"][0]["digest"]}}))

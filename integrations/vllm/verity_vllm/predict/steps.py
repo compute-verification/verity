@@ -6,7 +6,10 @@
 - `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), private: what serving decided that nothing registered predicts. Its
   canonical bytes, or an `Advice`, which is held to its encoding. Nothing else is advice.
 - `ingress`: each request's certified body by its id (I1's `RequestAdvice.id`, the body's `user`), the fixed ingress schema: an
-  OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice.
+  OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice. A body
+  given as the warden's attested bytes is ingress v0 (`program.registry.io_shell`, under `Registered.served_model`), and its
+  request gets the parse unit `IngressPrompt_v1{MODEL, LP, V}` (`RequestUnit.parse`): the unit that reads the ingress transfer
+  gates, whose ids output is the request Program's `prompt` input and whose ``ok`` proves the bytes are in the schema.
 
 - A request's Program is the Build's request wrapper at the shape the advice ran it at, `build.build_program(φ_r, "request", LP,
   T, C)`, under the policy its body names (`policy_of`): LP its prompt length, T its live decode rows, the ones whose sample it kept
@@ -34,15 +37,19 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
   request's (the KV at a position reads every token up to it), in whole blocks of the engine's block size where the Program reads
   the hit (a resume's run of its own KV is I1's replay's to hold);
 - what v0 doesn't compile: a prefix-cache hit on a stochastic request (the cached stochastic wrapper isn't ported); positions
-  past the model's; sampling other than greedy or seeded top-p with top_k 0 (min_p, the penalties, logit_bias, min_tokens, n > 1,
-  or a parameter this compiler doesn't know);
-- a request Program with a dead unit (`program.prune`: a node no output reads), whose fix is in the lowering, never the advice.
+  past the model's; sampling other than greedy or seeded top-p at top_p = 1 with top_k 0 (top_p < 1, a named gap until serving
+  pins its split count; min_p, the penalties, logit_bias, min_tokens, n > 1, or a parameter this compiler doesn't know);
+- a request Program with a dead unit (`program.prune`: a node no output reads), whose fix is in the lowering, never the advice;
+- a compilation `predict.batch.check_compiled` refuses (`BatchDependent`): one where a request's outputs could read its
+  batch-mates (R3 a derived split count; R2 a request planned differently alone, which keeps a cache hit on another request's KV
+  only when its tokens are checked equal; R1 GP-01's wiring and cones).
 
 A refusal refuses the session. `partial=True` (a measurement over served traffic, never a registration) refuses request by
 request instead: a refused request's rows and Program leave the compilation, and so does every request whose cache hit reads its
-KV; `refused` names why.
+KV; `refused` names why. It records `check_compiled`'s refusal (`batch_rule`) rather than raising it.
 
-The compiler digest is `score.code_version()`, with ℓ beside it. `trace_commands` lists the Build traces (`verity-vllm build
+The compiler digest is `score.code_version()`, with ℓ beside it. `Compiled.transfer_gates` lists the templates whose units hold
+transfer gates (the ingress parse and the token selects), each of which a window proves whole. `trace_commands` lists the Build traces (`verity-vllm build
 --wrapper request`) of a compilation's Programs, and `compare` holds the compiled digests to them.
 """
 from __future__ import annotations
@@ -56,13 +63,18 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
+from verity.ml.circuits.defs import bind
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.prune import dead_units
+from verity_vllm.program.registry import io_shell as IO
+from verity_vllm.program.registry.topp_geometry import splits_for_v1
 
 from .build import Unexpressible, build_program, model_shape
 from .phi import Phi
 
 SCHEMA = "verity-vllm/compiled-steps/v2"
+#: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
+EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
 #: ℓ when a registration names none: 1 MiB of advice (PROVE-PATH's `CAP_BITS`), far above a session's few thousand rows
 CAP_BITS = 1 << 23
 #: vLLM's `_SAMPLING_EPS`: a temperature below it samples greedily; the Build's policy is greedy only at 0
@@ -81,22 +93,26 @@ _TRANSPORT = ("prompt", "model", "user", "stream", "stream_options", "return_tok
 @dataclass(frozen=True)
 class Registered:
     """The registration's static part: φ without workload or sampling (the model, target, TP, engine, execution and profile), the
-    default seed a request without one is sampled under (the public rule, `engine.served_seed`), and ℓ, the cap on the advice's
-    length in bits."""
+    default seed a request without one is sampled under (the public rule, `engine.served_seed`), ℓ, the cap on the advice's
+    length in bits, and the served model name ingress v0's ``"model"`` carries (`io_shell`; None: no request's ingress is bytes)."""
 
     phi: Phi
     default_seed: int
     cap_bits: int = CAP_BITS
+    served_model: str | None = None
 
     def __post_init__(self) -> None:
         if self.phi.requests:
             raise ValueError("a registered φ carries no workload: the advice brings the requests")
         if type(self.cap_bits) is not int or self.cap_bits < 8:
             raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {self.cap_bits!r}")
+        if self.served_model is not None and (why := IO.refuse({"MODEL": self.served_model})):
+            raise ValueError(f"the served model name has no ingress v0 layout: {why}")
 
     @classmethod
-    def of(cls, phi: Phi, default_seed: int, cap_bits: int = CAP_BITS) -> Registered:
-        return cls(Phi.from_json({**phi.to_json(), "workload": {}, "sampling": {"kind": "greedy"}}), int(default_seed), cap_bits)
+    def of(cls, phi: Phi, default_seed: int, cap_bits: int = CAP_BITS, served_model: str | None = None) -> Registered:
+        return cls(Phi.from_json({**phi.to_json(), "workload": {}, "sampling": {"kind": "greedy"}}), int(default_seed), cap_bits,
+                   served_model)
 
 
 @dataclass(frozen=True)
@@ -125,6 +141,7 @@ class RequestUnit:
     id: str = ""
     C: int = 0
     producers: tuple[int, ...] = ()
+    parse: Any = None   # with byte ingress, its `IngressPrompt_v1` binding: the unit that reads the ingress transfer gates
 
     def key(self) -> str:
         return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else [])], sort_keys=True)
@@ -139,24 +156,39 @@ class Compiled:
     discarded: list[tuple[int, int, int, int]] = field(default_factory=list)  # (step, request, start, n) of rows no Program holds
     refused: dict[int, str] = field(default_factory=dict)                     # request -> why (partial=True only)
     cap_bits: int = CAP_BITS
+    batch_rule: str | None = None         # partial=True only: `predict.batch`'s refusal of this compilation, which it doesn't raise
+
+    @property
+    def transfer_gates(self) -> tuple[str, ...]:
+        """The templates whose units hold transfer gates, which a window draws whole: each request's ingress parse
+        (`RequestUnit.parse`) and its Program's token selects, whose sampled ids are the egress until an in-circuit renderer takes
+        their place. No model-step template is among them."""
+        ids = {u.parse.id for u in self.requests if u is not None and u.parse is not None}
+        ids |= {n.fn.id for p in self.programs.values() for n in p.fn.body.nodes if n.fn.id.split("{")[0].rsplit("_v", 1)[0] in EGRESS}
+        return tuple(sorted(ids))
 
     def summary(self) -> dict:
         from .score import code_version
         return {"schema": SCHEMA, "compiler": code_version(), "cap_bits": self.cap_bits, "workload_digest": self.workload.digest,
                 "lag": self.workload.lag, "programs": sorted(self.programs),
                 "requests": [None if u is None else {"request": u.request, "id": u.id, "digest": u.digest, "LP": u.LP, "T": u.T, "C": u.C,
-                                                     "policy": u.policy, "seed": u.seed, "first_step": u.first_step} for u in self.requests],
+                                                     "policy": u.policy, "seed": u.seed, "first_step": u.first_step,
+                                                     "parse": u.parse and u.parse.id} for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
-                "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())}}
+                "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())},
+                "batch_rule": self.batch_rule, "transfer_gates": list(self.transfer_gates)}
 
 
 def _number(x: Any) -> bool:
     return type(x) in (int, float) and math.isfinite(x)
 
 
-def policy_of(i: int, sampling: Any, default_seed: int) -> tuple[dict, int | None]:
+def policy_of(i: int, sampling: Any, default_seed: int, num_sms: int | None) -> tuple[dict, int | None]:
     """Request `i`'s sampling policy as φ.sampling takes it, and its seed Input's value (the body's, else `default_seed`; None when
-    greedy), from the parameters its body carries (`SamplingParams` names), refused where its Program wouldn't be the Build's."""
+    greedy), from the parameters its body carries (`SamplingParams` names), refused where its Program wouldn't be the Build's. Top-p
+    takes the constant split count S = SplitsFor_v1(1, num_SMs): at top_p = 1 the mask keeps every lane for every S, and below 1
+    the served S is the batch's (`predict.batch`, R3), so top_p < 1 is a named gap, refused until serving pins S as a registered
+    constant."""
     if not isinstance(sampling, Mapping) or any(type(k) is not str for k in sampling):
         raise Unexpressible(f"request {i}: its sampling parameters aren't an object of named values")
     s = dict(sampling)
@@ -170,12 +202,17 @@ def policy_of(i: int, sampling: Any, default_seed: int) -> tuple[dict, int | Non
     facts += [f"{k} (a parameter this compiler doesn't know)" for k in sorted(s) if s[k] is not None and k not in (*_INERT, *_FINISH, *_READ)]
     if 0 < t < SAMPLING_EPS:
         facts.append(f"temperature {t!r} (vLLM samples it greedily, the Build's policy is greedy at 0 only)")
+    if t > 0 and p < 1:
+        facts.append(f"top_p {p!r} below 1 (a named gap: there the top-p split count S = SplitsFor_v1(live rows, num_SMs) is the "
+                     f"batch's, until serving pins S as a registered constant)")
+    if t > 0 and num_sms is None:
+        facts.append("top-p on a target that declares no num_sms (its constant split count SplitsFor_v1(1, num_SMs))")
     if facts:
         raise Unexpressible(f"request {i}: sampling the vocabulary can't express: {'; '.join(facts)}")
     if t == 0:
         return {"kind": "greedy"}, None
-    return ({"kind": "stochastic", "temperature": float(t), "top_p": float(p), "top_k": 0, "seeded": True, "splits": "derived"},
-            int(default_seed if seed is None else seed))
+    return ({"kind": "stochastic", "temperature": float(t), "top_p": float(p), "top_k": 0, "seeded": True,
+             "splits": splits_for_v1(1, int(num_sms))}, int(default_seed if seed is None else seed))
 
 
 def advice_of(registered: Registered, advice: Any) -> I1.Advice:
@@ -196,6 +233,20 @@ def advice_of(registered: Registered, advice: Any) -> I1.Advice:
     except Exception as e:  # noqa: BLE001 -- I1's refusal is MalformedAdvice; any other failure on these bytes refuses them too
         raise Unexpressible(f"ill-formed advice: {e}" if isinstance(e, I1.MalformedAdvice) else
                             f"ill-formed advice: I1's decode failed ({type(e).__name__}: {e})") from None
+
+
+def ingress_body(i: int, q: I1.RequestAdvice, body: bytes, served: str | None, vocab: int) -> dict:
+    """Request `i`'s ingress bytes as the body ingress v0 reads them (`io_shell.reference`: its ids, max_tokens and temperature 0),
+    at the advice's `prompt_len`; refused unless they are in the schema, which `IngressPrompt_v1`'s ``ok`` then proves."""
+    if served is None:
+        raise Unexpressible(f"request {i}: its ingress is bytes, and the registration names no served model for ingress v0")
+    n = IO.length(served, q.prompt_len, vocab)
+    if len(body) != n:
+        raise Unexpressible(f"request {i}: its ingress is {len(body)} bytes, not ingress v0's {n} at {q.prompt_len} prompt tokens")
+    ok, ids, m = IO.reference(body, served, q.prompt_len, vocab)
+    if not ok:
+        raise Unexpressible(f"request {i}: its ingress bytes aren't in ingress schema v0 (`io_shell`)")
+    return {"prompt": ids, "max_tokens": m, "temperature": 0}
 
 
 def request_of(i: int, q: I1.RequestAdvice, body: Any, vocab: int) -> tuple[tuple[int, ...], dict]:
@@ -346,8 +397,16 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
                                               prefix={"rows": u.C, "producers": list(u.producers)} if u.C else None)
                             for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()))
     steps = [[RowRef(r, units[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
-    return Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused,
-                    cap_bits=registered.cap_bits)
+    compiled = Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused,
+                        cap_bits=registered.cap_bits)
+    from .batch import BatchDependent, check_compiled
+    try:
+        check_compiled(registered, advice_of(registered, advice), ingress, compiled, plan_steps)
+    except BatchDependent as e:
+        if not partial:
+            raise
+        compiled.batch_rule = str(e)
+    return compiled
 
 
 def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False) -> Plan:
@@ -371,10 +430,14 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
             raise Unexpressible(why)
         refused.setdefault(i, why)
 
-    prompts, params = {}, {}
+    prompts, params, wired = {}, {}, set()
     for i, q in enumerate(adv.requests):
         try:
-            prompts[i], params[i] = request_of(i, q, ingress.get(q.id), shape.V)
+            body = ingress.get(q.id)
+            if type(body) is bytes:
+                body = ingress_body(i, q, body, registered.served_model, shape.V)
+                wired.add(i)
+            prompts[i], params[i] = request_of(i, q, body, shape.V)
         except Unexpressible as e:
             refuse(i, str(e))
     rows: dict[int, Rows] = {i: [] for i in range(len(adv.requests))}
@@ -396,7 +459,7 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
                 if LP + T > shape.max_pos:
                     raise Unexpressible(f"request {i}: positions to {LP + T - 1}, past the model's {shape.max_pos} positions")
                 own = place(i, LP, T, C, rows[i], q.output_len)
-                policy, seed = policy_of(i, params[i], registered.default_seed)
+                policy, seed = policy_of(i, params[i], registered.default_seed, phi0.target_profile().num_sms)
                 if C and policy["kind"] != "greedy":
                     raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens on a stochastic request (the cached stochastic "
                                         f"request wrapper isn't ported)")
@@ -404,7 +467,8 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
             except Unexpressible as e:
                 refuse(i, str(e))
             else:
-                units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C, producers))
+                parse = bind(IO.IngressPrompt, MODEL=registered.served_model, LP=LP, V=shape.V) if i in wired else None
+                units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C, producers, parse))
                 placed.update(own)
                 continue
         units.append(None)
