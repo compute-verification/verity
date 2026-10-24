@@ -98,6 +98,9 @@ class Lib:
             h.kh_ucallr_bytes.restype = u32
             h.kh_j10r_rows_bytes.restype = ctypes.c_ulonglong
             h.kh_j10r_rows_bytes.argtypes = [u32, u32]
+            if hasattr(h, "kh_j10r_row_fault_word"):
+                h.kh_j10r_row_fault_word.restype = ctypes.c_ulonglong
+                h.kh_j10r_row_fault_word.argtypes = [u32, u32, u32, ctypes.c_int]
         self.j10r_sm = self.j10r and hasattr(h, "kh_units_multi_j10r_sm") and hasattr(h, "kh_smc_words")
         if self.j10r_sm:
             h.kh_units_multi_j10r_sm.argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, vp]
@@ -225,8 +228,9 @@ class MultiJ10R:
 def j10r_gate(lib: Lib, cs: list, refs: list, sm: bool = False, rc: bool = False, smq: tuple = (1, 1)) -> dict:
     """kh_units_multi_j10r over one layer's calls: each call's live units against refs (j10r_units.call_receipts, every
     word), its dead units zero, under 0xA5 over the receipts and the row workspaces; seeds against seeds.call_seed and
-    receipt_seed; the no-write control (zero units) refused; one bit of call 0's row workspace (row 0's first block) moving
-    exactly call 0's units of row block 0; one bit of unit 0's seed_c, flipped after the rows, moving unit 0 alone.  sm:
+    receipt_seed; the no-write control (zero units) refused; one bit of call 0's row workspace (row 0's first block, or
+    the build's kh_j10r_row_fault_word: under H1U_JAP A'[0][0], which its units read for the block) moving exactly call
+    0's units of row block 0; one bit of unit 0's seed_c, flipped after the rows, moving unit 0 alone.  sm:
     the receipts, seeds and control under kh_units_multi_j10r_sm (MultiJ10R's sm), the faults under its modes 1 and 2.
     rc (kh_units_multi_j10rc): its units read no seed_c, so the seed fault flips unit 0's sigma_R instead, and one bit of
     call 0's first column block (column 0's, after the rows) moves exactly call 0's live units of column block 0."""
@@ -264,7 +268,10 @@ def j10r_gate(lib: Lib, cs: list, refs: list, sm: bool = False, rc: bool = False
 
     poison()
     mu.run(mode=1)
-    mu.rws[0].view(torch.int32)[0] ^= 1
+    t0, k0 = cs[0].a.shape
+    rw = (int(lib.h.kh_j10r_row_fault_word(t0, cs[0].b.shape[0], k0, int(rc)))
+          if hasattr(lib.h, "kh_j10r_row_fault_word") else 0)
+    mu.rws[0].view(torch.int32)[rw] ^= 1
     mu.run(mode=2)
     torch.cuda.synchronize()
     row_moved = moved()
@@ -286,6 +293,7 @@ def j10r_gate(lib: Lib, cs: list, refs: list, sm: bool = False, rc: bool = False
          "fault_seed_conforming": seed_moved == [(0, 0)]}
     r["ok"] = (sum(bad) == 0 and dead == 0 and left == 0 and seed_bad == 0 and k_bad > 0 and r["fault_rows_conforming"]
                and r["fault_seed_conforming"])
+    r["fault_rows_word"] = rw
     if rc:
         poison()
         mu.run(mode=1)
