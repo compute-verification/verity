@@ -2893,9 +2893,13 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc(const UCallR* __r
                                                                OneOut{}, u, smem[wp]);
 }
 
-// a call's workspace under kh_units_multi_j10rc: its M RB row blocks, then its N CB column blocks, 16 words each
+// a call's workspace under kh_units_multi_j10rc: its M RB row blocks, then its N CB column blocks, 16 words each, and
+// never less than kh_j10r_rows_bytes (H1U_JX's X and A_d), since dither_so runs kh_units_multi_j10r on the same
+// workspace below its J10-RC t
 extern "C" unsigned long long kh_j10r_ws_bytes(unsigned M, unsigned N, unsigned K) {
-  return 64ull * ((unsigned long long)M + N) * (K / 512 + 1);
+  const unsigned long long rc = 64ull * ((unsigned long long)M + N) * (K / 512 + 1);
+  const unsigned long long rows = kh_j10r_rows_bytes(M, K);
+  return rows > rc ? rows : rc;
 }
 
 // kh_units_multi_j10r with each call's column blocks hashed once a call (h1jr_cols) beside its rows (h1jr_rows), and the
