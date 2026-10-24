@@ -16,6 +16,6 @@ __all__ = ["LLM"]
 
 def __getattr__(name: str) -> Any:
     if name == "LLM":
-        from verity_vllm.pipeline.llm import LLM
+        from verity_vllm.llm import LLM
         return LLM
     raise AttributeError(f"module 'verity_vllm' has no attribute {name!r}")

@@ -685,7 +685,7 @@ def _pearl_c_run(llm: Any) -> Any | None:
     a pass each time the model runner's ``execute_model`` returns (`pouw.install`), so the harness only reads the passes
     (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
 
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     option = llm.protocols.get("pouw") if llm.protocols is not None else None
     run = getattr(getattr(option, "end_pass", None), "__self__", None)
@@ -824,7 +824,7 @@ class _VllmEngine:
         import vllm
 
         from verity_vllm.engine.hooks import Hooks, live
-        from verity_vllm.pipeline.llm import LLM
+        from verity_vllm.llm import LLM
 
         self.arm, self.obj, self.installed, self.pearl_c, self.h1 = arm, plugin(arm), None, None, None
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
@@ -960,7 +960,7 @@ class _VllmEngine:
         self.h1["install_s"] = time.perf_counter() - start
 
     def _close_window(self, point: SweepPoint, phase: str) -> dict[str, Any]:
-        from verity_vllm.protocol_options import pouw
+        from verity_vllm.protocols import pouw
 
         run = pouw.h1_run(H1)
         start = time.perf_counter()
