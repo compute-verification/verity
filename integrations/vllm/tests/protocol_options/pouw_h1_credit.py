@@ -60,7 +60,9 @@ def _root(dom: Any, position: int, bc: bytes, path: bytes) -> bytes:
 @dataclass
 class Window:
     """What credit reads of a closed window (``raw`` its descriptor, ``entries`` and ``rounds`` its evidence, ``commit``
-    the Commit record's registered entries or None) and the prover's tables (``tables`` by value, ``ok`` its ok rows)."""
+    the Commit record's registered entries or None), the prover's tables (``tables`` by value, ``ok`` its ok rows) and
+    the session round 0's input-ids and request tables bind (the gate's reserved one, `pouw_h1_served.LOCAL_SESSION` under
+    in-process coins)."""
 
     raw: bytes
     entries: list[dict[str, Any]]
@@ -70,6 +72,7 @@ class Window:
     salt: str
     tables: dict[str, Any]
     ok: Any
+    session: str = ""
     program: str = ""
     layout: dict = field(default_factory=dict)
     shape: dict = field(default_factory=dict)
@@ -108,7 +111,8 @@ def of_run(h1: Any, served: Any) -> Window:
     """The `Window` of a closed `pouw_h1.H1Run` ``h1`` and its `pouw_h1_served.Served` ``served``."""
     got = CR.commit_of(h1.commits.get("commit"))[0] if h1.commits.get("commit") is not None else None
     return Window(SV.descriptor(served.program), [dict(e) for e in served.entries()], [dict(r) for r in h1.round_log],
-                  None if got is None else got[1], served.root, h1.salt.hex(), dict(served.registered), served.ok)
+                  None if got is None else got[1], served.root, h1.salt.hex(), dict(served.registered), served.ok,
+                  h1.session or SV.LOCAL_SESSION)
 
 
 #: ``(call, A [M, K] s8, B [N, K] s8)``: a drawn call's operands, as the serving GPU held them
@@ -227,7 +231,7 @@ def verdict(w: Window, units: list[int], operands: Operands) -> dict[str, Any]:
         if why is None and out["proved"] is None:
             ss, _ = CR.strata(w.layout)
             out["registration"] = CR._registration(w.window, w.program, w.prefix, w.entries, ss, w.layout, w.steps, proofs,
-                                                   SV.LOCAL_SESSION)
+                                                   w.session or SV.LOCAL_SESSION)
     out["rejected"] = stand_in.rejected
     out["accepted"] = all(v is None for k, v in out.items() if k not in ("rejected",))
     out["refused"] = next(([k, *v] for k, v in out.items() if k not in ("rejected", "accepted") and v is not None), None)
