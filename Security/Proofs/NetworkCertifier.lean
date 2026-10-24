@@ -112,6 +112,18 @@ theorem EncardDecodableWithinLeCompiledV1 : NetTiming.Guarantees.EncardDecodable
 theorem EncardDecodableWithinLeCompiledPerWindowV1 : NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1 :=
   fun I T ss bk N b compilerOf env hpre hdet D =>
     NetTiming.encard_decodableWithin_le_compiled_perWindow_v1 I T ss bk N b compilerOf env hpre hdet D
+theorem EncardChargedLeCounted : NetTiming.Guarantees.EncardChargedLeCounted :=
+  fun bk N W c cc => NetTiming.AdviceV1.encard_chargedCounted_le bk N W c cc
+theorem EncardAccSeqsWithinLeConstantRateV1Counted : NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1Counted :=
+  fun bk N cc b T ss frames op n D m _ hm =>
+    NetTiming.encard_accSeqsWithin_le_constantRate_v1Counted bk N cc b T ss frames op n D m hm
+theorem EncardDecodableWithinLeCompiledV1Counted : NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1Counted :=
+  fun I T ss bk N cc b compilerOf env hpre hdet n D m _ hm =>
+    NetTiming.encard_decodableWithin_le_compiled_v1Counted I T ss bk N cc b compilerOf env hpre hdet n D m hm
+theorem EncardDecodableWithinLeCompiledPerWindowV1Counted :
+    NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1Counted :=
+  fun I T ss bk N cc b compilerOf env hpre hdet D =>
+    NetTiming.encard_decodableWithin_le_compiled_perWindow_v1Counted I T ss bk N cc b compilerOf env hpre hdet D
 
 theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
 

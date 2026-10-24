@@ -54,7 +54,9 @@ AdviceString.lean  the leak bound (the advice string's charge, through the wire,
                                          encodings whose length meets `BitsCount`
 AdviceV1.lean   advice v1's charge counts: a coder state's weight (width over 2^bits) is kept by a
                                          scaling and split by a symbol, so the weights 2^(−charge) sum to at most 1;
-                                         `BitsCount` for advice v1 (bitsCount), and the leak bounds with it
+                                         `BitsCount` for advice v1 (bitsCount), and the leak bounds with it; with
+                                         counts, the decisions' weight times the counts' under any Kraft count code
+                                         (bitsCount_counted, kraft_of_prefixFree)
 Warden.lean     the warden's channel bound: its lane is the client view of its first late cell
                                          (wardenLane_eq), the count, the whole run's bound
 SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each faulty
@@ -194,7 +196,11 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   charged `c` bits or fewer (Kraft, under any registered book), and the leak bound's three with advice v1's charge and
   no assumption on it, `EncardAccSeqsWithinLeConstantRateV1`, `EncardDecodableWithinLeCompiledV1`,
   `EncardDecodableWithinLeCompiledPerWindowV1`. That `ChargeCount_v1`'s circuit computes the Lean charge is
-  circuit-check's (the circuit against `arith_encode.py`'s reference), not proved here.
+  circuit-check's (the circuit against `arith_encode.py`'s reference), not proved here. The same four for windows that
+  may send nonzero counts, each charged its decisions' charge plus any count code's length (lengths meeting Kraft, as
+  every prefix-free code's do): `EncardChargedLeCounted`, `EncardAccSeqsWithinLeConstantRateV1Counted`,
+  `EncardDecodableWithinLeCompiledV1Counted`, `EncardDecodableWithinLeCompiledPerWindowV1Counted`. The count code is a
+  parameter until ENC-CODE's coding of the counts is written.
 - **The warden's channel bound** (`NetTiming.SecurityProofs.Warden`): `WardenViewEqClientView`, `EncardWardenViewsLe`,
   `EncardWardenDecodableLe`, under `trusted-nebius-host` (`Verity.Assumptions.TrustedNebiusHost`).
 - **The leak bound under a sampled audit** (`SampledCharge.lean`):
