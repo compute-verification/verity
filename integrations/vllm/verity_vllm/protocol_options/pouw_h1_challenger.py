@@ -60,7 +60,7 @@ verifier's check that a served window's coins are that challenger's.
   drawn call's `statement`, proof files that credit verifies with the verifier of record itself, never a verdict) and
   that descriptor, whose layout core reads (`credit.layout_of`): its round log the challenger's, every A table the tree
   its round root commits, each K's ``h1/b/<K>`` folding to the weights' root its period's open signed, the units the
-  draw coin draws at its period's K each with an accepted session that opened its call's ``a/<K>@<c>`` and its K's
+  draw coin draws at its period's K each with an accepted session that opened its step's ``a/<K>@<s>`` and its K's
   ``h1/b/<K>``, and the registration theirs. It reports the ε the draw established at δ = 2^-40
   (`credit.established`). A period earns only as a whole (`period_credit`, `credit.period_credit`): the windows
   presented are exactly its close's, in order, the close complete, each window proving the period's circuit and

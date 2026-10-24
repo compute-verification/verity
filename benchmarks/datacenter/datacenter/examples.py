@@ -90,7 +90,8 @@ def with_dpu(node: Datacenter) -> Datacenter:
                  residual=Assumption(f"{n}.bmc.unwiped", (0.25 * 1 + 0.5 * 0.256 + 0.064) * GB, "bits", "measured"))
     links = [Link(f"{n}.nic0", dpu.name, Assumption("dpu_link", 400e9, "bit/s"), US, "pcie"),
              Link(dpu.name, bmc.name, Assumption("bmc_link", 1e9, "bit/s"), US)]
-    return Datacenter(node.name, [Block(n, [*block.devices, dpu, bmc])], list(node.fabric), node.links + links, node.cadence)
+    return Datacenter(node.name, [Block(n, [*block.devices, dpu, bmc])], list(node.fabric), node.links + links, node.cadence,
+                      node.sealed)
 
 
 def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: tuple[str, ...] = ("ext0",),

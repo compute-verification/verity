@@ -299,3 +299,79 @@ VALID = {
 def test_a_valid_k_binds_to_its_recorded_digest(spec) -> None:
     prog, _ = standalone_call(spec)
     assert (spec.gates, codec.program_digest(codec.encode_program(prog))) == VALID[spec]
+
+
+# ---- the s8 binding of each card ------------------------------------------------------------------------------------------
+
+def _chain(model, a, b) -> int:
+    """``model``'s step chained over one row from a zero accumulator, as a word."""
+    c = 0
+    for i in range(0, len(a), model.k):
+        c = model.step(c, a[i:i + model.k], b[i:i + model.k])
+    return c
+
+
+def test_s8_gemm_binds_the_registered_step_for_every_card_that_computes_it_and_refuses_any_other() -> None:
+    """sm_90's and sm_100's s8 steps are `BLACKWELL_SM120_S8_M16N8K32`'s function, so each binds `BlackwellS8ImmaDot32_v1`, and
+    a GEMM bound on sm_90 is sm_120's, id for id. A wrapping, u8 or k = 16 step is another function and is refused."""
+    from dataclasses import replace
+
+    from verity.ml.circuits.silicon.integer import (BLACKWELL_SM100_S8_K32, BLACKWELL_SM120_S8_M16N8K32,
+                                                    BLACKWELL_SM120_S8_M16N8K32_WRAP, BLACKWELL_SM120_U8S8_M16N8K32,
+                                                    HOPPER_SM90_S8_K32)
+    for model in (HOPPER_SM90_S8_K32, BLACKWELL_SM100_S8_K32, BLACKWELL_SM120_S8_M16N8K32):
+        assert G.s8_gemm(model) == G.GEMM_SM120_S8 == {"DOT": P.BlackwellS8ImmaDot32}
+    assert G.GEMM_SM90_S8 == G.GEMM_SM120_S8
+    for defn, rest in ((G.GemmAccumulatorS8, {}), (G.ScaledMmS8Coordinate, {}), (G.ScaledMmS8, {"N": 2})):
+        assert bind(defn, K=512, **rest, **G.GEMM_SM90_S8).id == bind(defn, K=512, **rest, **G.GEMM_SM120_S8).id
+    for model in (BLACKWELL_SM120_S8_M16N8K32_WRAP, replace(HOPPER_SM90_S8_K32, satfinite=False),
+                  BLACKWELL_SM120_U8S8_M16N8K32, replace(HOPPER_SM90_S8_K32, k_per_instruction=16)):
+        with pytest.raises(ValueError, match="BlackwellS8ImmaDot32_v1 is not its step"):
+            G.s8_gemm(model)
+
+
+@pytest.mark.parametrize("K", [512, 1536, 2048, 6144])
+def test_the_sm90_accumulator_is_hoppers_step_chain_bit_for_bit(K) -> None:
+    """`GemmAccumulatorS8` bound with `GEMM_SM90_S8`, at Ks H1 serves on sm_90, on random int8 rows and on the rows of largest
+    products (-128 x -128, -128 x 127, 127 x 127, mixed), is `HOPPER_SM90_S8_K32`'s step chained over K/32 instructions, the
+    exact sum, and the chain without ``.satfinite`` (h1u's ``mma.sync``): below 2^17 no partial sum leaves s32."""
+    from dataclasses import replace
+
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.circuits.silicon.integer import HOPPER_SM90_S8_K32, s32_value
+
+    rng = np.random.default_rng(K)
+    x = rng.integers(-128, 128, (24, K)).astype(np.int8)
+    w = rng.integers(-128, 128, (24, K)).astype(np.int8)
+    x[0], w[0] = -128, -128
+    x[1], w[1] = -128, 127
+    x[2], w[2] = 127, 127
+    x[3], w[3] = rng.choice([-128, 127], K), rng.choice([-128, 127], K)
+    got = E.evaluate_batch(bind(G.GemmAccumulatorS8, K=K, **G.GEMM_SM90_S8), x.view(np.uint8), w.view(np.uint8),
+                           kernel="reference").astype(np.uint32)
+    wrap = replace(HOPPER_SM90_S8_K32, satfinite=False)
+    for r in range(len(x)):
+        a, b = x[r].view(np.uint8).tolist(), w[r].view(np.uint8).tolist()
+        exact = int((x[r].astype(np.int64) * w[r]).sum())
+        assert s32_value(int(got[r])) == s32_value(_chain(HOPPER_SM90_S8_K32, a, b)) == s32_value(_chain(wrap, a, b)) == exact
+    assert s32_value(int(got[0])) == 16384 * K and s32_value(int(got[1])) == -16256 * K
+
+
+def test_the_sm90_steps_agree_up_to_the_largest_k_and_part_at_2_17() -> None:
+    """At K = 2^17 - 512, the largest K a multiple of 512 below `S8_K_LIMIT`, all -128 rows sum to 2,139,095,040 under the
+    clamped and the wrapping chain alike. At K = 2^17 the sum 2^31 leaves s32: the clamped chain gives 2^31 - 1, the wrapping
+    one -2^31, and the s8 Definitions refuse that K, so no bound GEMM tells the two sm_90 forms apart."""
+    from dataclasses import replace
+
+    from verity.ml.circuits.silicon.integer import HOPPER_SM90_S8_K32, s32_value
+
+    wrap = replace(HOPPER_SM90_S8_K32, satfinite=False)
+    K = (1 << 17) - 512
+    row = [0x80] * K
+    assert s32_value(_chain(HOPPER_SM90_S8_K32, row, row)) == s32_value(_chain(wrap, row, row)) == 16384 * K == 2_139_095_040
+    row = [0x80] * (1 << 17)
+    assert (s32_value(_chain(HOPPER_SM90_S8_K32, row, row)), s32_value(_chain(wrap, row, row))) == ((1 << 31) - 1, -(1 << 31))
+    with pytest.raises(ValueError, match="at or past 131072"):
+        bind(G.GemmAccumulatorS8, K=1 << 17, **G.GEMM_SM90_S8)

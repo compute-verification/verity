@@ -102,15 +102,15 @@ and to prove the circuit the period's open committed (its descriptor's SHA-512,
 the period. Every step that reads the challenger's session (`credited`, `roundsCheck`, `saltCheck`) reads it through
 `pinnedSession`, the pins log (`pins`) and the first-parent list (`main`) given beside the ledger. `aLink`: each round's root (the one the challenger received before that round's coin) is `credit.round_root`
 of the serving process's own round root and that round's rows of every registered A value as aligned subtrees
-(`credit.cover`): round s's share of a window's `…/a/<K>`, or the whole of a call's A table `…/a/<K>@<c>` in its call's
-round, `c / (C/S)` of C calls; and each A value's registered root must be the frame-v3 SHA-512 tree over those
+(`credit.cover`): round s's share of a window's `…/a/<K>`, or the whole of round s's A table of K `…/a/<K>@<s>` (the M rows
+of each of round s's calls of K, call after call, its calls the C/S calls from s·C/S) in round s; and each A value's registered root must be the frame-v3 SHA-512 tree over those
 subtrees and its domain's pads. `registration`: each drawn unit's proof outcome is the verifier of record's verdict for its session
 (`PROOF_KEYS`: the SHA-512 of the descriptor it verified the session against and the session's registered finding,
 flock-verify's `registered`, each port's value and the root its reads were opened against); each A value's domain, and
 each other value's a proof opened, is the one one-stage's registration gives it under the committed descriptor's
 SHA-512 and, for every value but the weights' `…/b/<K>`, the window's open root (`SampledProofs.Registered.domainAt`,
 PRF-127); and each proof was verified against that descriptor, opened only values the window registers once, each at
-its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or its own call's `…/a/<K>@<call>`. So entries of another window or circuit, a proof verified against another registration, and an entry whose root
+its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or its own call's round's `…/a/<K>@<s>`. So entries of another window or circuit, a proof verified against another registration, and an entry whose root
 is not the one its sessions opened are refused.
 
 The properties are stated in `Security/Properties/Pouw/Check.lean` and proved in

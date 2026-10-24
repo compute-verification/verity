@@ -44,6 +44,9 @@ The session (`Session.run` from `State.init`, every event's result `.ok`; the re
   them, past which its plan reads nothing, so its seed binds every append its plan reads;
 * `ReleasedStayOut`: a block released by an accepted release is read by no pass received after it;
 * `LifetimeCapped`: each append's blocks are read within `lifetime` consecutive windows.
+
+When the session reads a window's openings coin, and what its draw fixes (the code's half of the opening draw's
+`Refused` and `Live`), is `Properties.RemoteAudit.Coins`.
 -/
 
 open RemoteAudit
