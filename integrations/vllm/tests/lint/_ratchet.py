@@ -265,7 +265,7 @@ def new_violations(name: str, violations: Iterable[Violation]) -> list[str]:
 
 def _left_the_package(key: tuple) -> bool:
     """Whether a layout move took the entry out of ``verity_vllm``: its file is outside it, or, for a package-level entry (a
-    module cycle), a module its detail names (``program.registry.sampling``, short for ``verity_vllm.program.registry.sampling``)
+    module cycle), a module its detail names (``program.registry.sampling``, short for ``verity.ml.definitions.registry.sampling``)
     is no longer the package's."""
     if key[0] != PKG.name:
         return not key[0].startswith(PKG.name + "/")

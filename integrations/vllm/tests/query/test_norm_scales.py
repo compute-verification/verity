@@ -181,7 +181,7 @@ def test_the_plan_takes_the_scale_at_the_norm_module():
 
 
 def test_word_check_sees_the_tapped_scale_as_committed():
-    from verity_vllm.query import word as W_
+    from verity.ml.definitions import word as W_
 
     g = {"family": "RMSNormTriton_v1", "statics": {"N": 64, "EPS": 1e-05}, "definition": "RMSNormTriton_v1{N=64,EPS=1e-05}", "calls": 3,
          "where": "model.layers.0.input_layernorm"}

@@ -9,7 +9,7 @@
     cast         the bf16 <-> f32 casts as Boolean Definitions
     s8           the exact s8 matmul family on bits: the u8 x s8 step, S8Dot_v2, S8Matmul_v2, LimbSplit_v2 and its four limb steps
     int8         the exact-int8 profile's f32 / f64 steps (rint, the s8 casts, the exact and RN64 products, the u32 cast, the LUT
-                 index) as circuits over `forms`, for `verity_vllm.program.registry.boolean_int8`'s Definitions
+                 index) as circuits over `forms`, for `verity.ml.definitions.registry.boolean_int8`'s Definitions
     moe          a padded static MoE layer's pair GEMMs on bits: MoeSelectBf16x{E}_v2 (the multiplexer tree over the expert id's
                  low bits and its range bit), MoePairCoordinate(W)_v2 and MoePairGemm(W)_v2
     sqrt         sqrt.rn.f32 as a circuit over `forms` (PoUW's `PouwF32SqrtRn_v2` is traced from it) and its digit-by-digit root

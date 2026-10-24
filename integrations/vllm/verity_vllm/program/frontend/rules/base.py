@@ -76,7 +76,7 @@ class Rule:
         return []
 
     def registered_tables(self, ep, mode: str) -> tuple[str, ...]:
-        """The tables a program brings (`verity_vllm.program.registry.tables`) this rule reads by index from a registered
+        """The tables a program brings (`verity.ml.definitions.registry.tables`) this rule reads by index from a registered
         parameter under `registered_values`, for the exported graph `ep`: each a parameter after the `values`. Default: none."""
         return ()
 

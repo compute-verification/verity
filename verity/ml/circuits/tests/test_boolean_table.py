@@ -21,7 +21,7 @@ SHAPES = [(6, 1, 8), (5, 2, 16), (8, 2, 8), (7, 1, 32)]
 
 
 def _word(ib: int, ew: int, iw: int) -> PrimitiveDefinition:
-    """A word read as `verity_vllm.program.registry.tables.table_read` makes one: (index, table) -> the entry at the index's low
+    """A word read as `verity.ml.definitions.registry.tables.table_read` makes one: (index, table) -> the entry at the index's low
     IB bits, its EW words joined low first."""
     mask, rows = (1 << ib) - 1, (ew << ib) // BT.ROW_WORDS
 
