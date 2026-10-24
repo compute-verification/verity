@@ -5,7 +5,9 @@ import Proofs.Accounting.TS.Session.Lanes.Layer
 # Dense credit counts the served rows (`PouwLiveSlots_v1`, rule A)
 
 Rule A: a credited row serves an admitted request, a slot the round's slot table assigns to a request in the
-gate-signed request table under the window-open root. Both tables are hiding leaves, so credit counts round `s`'s
+gate-signed request table under the window-open root. Round `s`'s request table is the requests admitted before round
+`s`'s root (round 0's under round-0-only admission): each round's session decodes its own, so a call's view is its round's
+tables, never round 0's by construction. Both tables are hiding leaves, so credit counts round `s`'s
 served rows `m_s` through one proof a round, every round, of `PouwLiveSlots_v1{T}`
 (`verity/core/protocols/pouw/circuit/live.py`, `T` the window's slot `M`) at the public `m_s`. Its interface is
 note:compute-accounting/20261024T0212Z-draft-liveunit-interface.
@@ -29,7 +31,8 @@ note:compute-accounting/20261024T0212Z-draft-liveunit-interface.
 
 What a decode reads from the port rows (the slot words, each header's index and prompt length, the public `m` and the
 `ok` word) is the statement's port layout, read through `dec`. That the decoded `m` is the call's public row, and the
-decoded slot and request rows are the round's registered `slots@<s>` and `requests@0`, is the statement's registration
+decoded slot and request rows are the round's registered `slots@<s>` and its request table (`requests@0` under
+round-0-only admission), is the statement's registration
 (flock-verify's complete check and the served path's roots), outside this file.
 -/
 

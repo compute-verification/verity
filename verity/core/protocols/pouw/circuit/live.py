@@ -2,17 +2,20 @@
 value (its interface: note:compute-accounting/20261024T0212Z-draft-liveunit-interface).
 
 Rule A: a credited row serves an admitted request, a slot the round's slot table assigns to a request in the gate-signed
-request table under the window-open root. That table is round 0's (`pouw_h1_requests.request_table`, whose root is in
-`credit.requests_root` and so in `salt.window_open_root`), and round s's slot table is under round s's root before its coin.
+request table under the window-open root. Round s's request table is the requests admitted before round s's root, one table
+a round. Under the default, round-0-only admission, it is round 0's (`pouw_h1_requests.request_table`, whose root is in
+`credit.requests_root` and so in `salt.window_open_root`). Round s's slot table is under round s's root before its coin.
 Both are hiding leaves, so credit, which sees their roots only, can't count m_s itself: this unit counts it in a proof, one
 unit a round, proved every round (never sampled).
 
     PouwLiveSlots_v1{T}   (slot: Array<T, U32>, req: Array<T, Array<5, U32>>, m: U32) -> Value<1>
 
-T is the window's slot M (`h1window.slot`). ``slot`` is round s's slot leaves, q + 1 for a row of request q and 0
-(``EMPTY_SLOT``) past the batch; ``req`` is round 0's request leaves' headers (index, round, slot, cap, prompt length, each a
-u32; ``EMPTY_REQUEST`` is all zero, and every entry has a prompt token); ``m``, the public row, is the step's served rows.
-ok = 1 iff all three hold:
+T is the window's slot M (`h1window.slot`). ``slot`` is round s's slot leaves: q + 1 for a row of request q, 0
+(``EMPTY_SLOT``) past the batch. The step's rows are its requests' rows in order, row r spanning n_r slots of computed tokens
+(a cache hit is no row), so m_s = Σ_r n_r. ``req`` is the headers of the round's request table, leaf q request q in admission
+order (index, round, slot, cap, prompt length, each a u32; ``EMPTY_REQUEST`` is all zero, and every entry has a prompt
+token). ``m``, the public row, is the step's served rows. These are the network advice's I1 request index and step rows. ok = 1
+iff all three hold:
 
 * m ≤ T;
 * the live requests (prompt length ≠ 0) are a prefix [0, N), each one's index its leaf;
@@ -116,6 +119,7 @@ def _refuse(b: dict) -> str | None:
 PouwLiveSlots = CompositeDefinition(
     "PouwLiveSlots", 1, ("T",), lambda S: (tuple(zip(PORTS, _types(S.T)[0])), _types(S.T)[1]),
     lambda B, S, *c: emit(traced(S.T), *_types(S.T), B, *c), conformance="protocol-defined", refuse=_refuse,
-    doc="Round s's served rows under rule A (`circuit.live`): T slot leaves (q + 1, or 0), round 0's T request headers "
-        "(index, round, slot, cap, prompt length) and the public m, to 1 iff m <= T, the live requests (prompt length "
-        "nonzero) are a prefix [0, N) each at its own index, every slot below m is in [1, N] and every slot from m on is 0.")
+    doc="Round s's served rows under rule A (`circuit.live`): T slot leaves (q + 1, or 0), the T headers of the requests "
+        "admitted before its root (index, round, slot, cap, prompt length) and the public m, to 1 iff m <= T, the live "
+        "requests (prompt length nonzero) are a prefix [0, N) each at its own index, every slot below m is in [1, N] and "
+        "every slot from m on is 0.")
