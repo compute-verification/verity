@@ -36,14 +36,39 @@ fi
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv
 "$PY" -c 'import torch, transformers, vllm; print(torch.__version__, transformers.__version__, vllm.__version__, torch.cuda.get_device_name(0))'
 
-for item in $QUEUE; do
-  IFS=: read -r task method seed steps extra <<< "$item"
+run_item() {  # task:method:seed:steps[:est_min[:extra]]
+  IFS=: read -r task method seed steps est extra <<< "$1"
   # shellcheck disable=SC2086
   "$PY" grpo.py --task "$task" --method "$method" --seed "$seed" --steps "$steps" --model "$MODEL" --data "$S/data" \
     --out "$OUT" --ckpt-root "$CKPT_ROOT" ${extra//,/ } ${EXTRA:-} > "$OUT/log-$task-$method-seed$seed.txt" 2>&1
-  echo "$item rc=$?"
-  tail -3 "$OUT/log-$task-$method-seed$seed.txt"
-done
+  echo "$(date -u +%H:%MZ) $1 rc=$?"
+  grep -h '^{' "$OUT/log-$task-$method-seed$seed.txt" | tail -2
+}
+
+if [ -n "${QDIR:-}" ]; then
+  # Shared queue: every GPU job walks ITEMS in order and claims the first unclaimed one (mkdir is atomic), skipping an item
+  # whose estimate would run past DEADLINE (epoch seconds).
+  mkdir -p "$QDIR"
+  while :; do
+    picked=""
+    for item in $ITEMS; do
+      IFS=: read -r task method seed steps est extra <<< "$item"
+      name="$task-$method-seed$seed${extra:+-x}"
+      [ -e "$QDIR/$name" ] && continue
+      if [ -n "${DEADLINE:-}" ] && [ $(( $(date +%s) + ${est:-20} * 60 )) -gt "$DEADLINE" ]; then continue; fi
+      if mkdir "$QDIR/$name" 2>/dev/null; then
+        echo "${RESEARCH_RUN_ID:-} $(date -u +%H:%MZ)" > "$QDIR/$name/claimed"
+        picked="$item"
+        break
+      fi
+    done
+    [ -z "$picked" ] && break
+    run_item "$picked"
+    touch "$QDIR/$name/finished"
+  done
+else
+  for item in $QUEUE; do run_item "$item"; done
+fi
 
 NODE="${NODE_NAME:-$(hostname)}" "$PY" - <<'EOF'
 import glob, json, os

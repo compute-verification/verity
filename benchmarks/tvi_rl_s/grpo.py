@@ -486,6 +486,8 @@ def main():
             meta["format"] = ("state.pt: the trainable values (fp32 masters; the forward reads them at bf16); "
                               "adapter_model.safetensors: the same update as PEFT LoRA factors (dW = B A, scaling 1)")
         json.dump(meta, open(d / "meta.json", "w"), indent=1)
+        for f in d.iterdir():
+            os.chmod(f, 0o664)
         (d / "DONE").touch()
         return str(d)
 
