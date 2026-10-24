@@ -221,7 +221,7 @@ theorem swSrcE_hmk_fw (vs : finS.SwVals)
   by_cases hne : i = (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).fc
   · subst hne
     refine swSrcE_hmk_cut_fc L₀ src wk x w vs hsc hR hServe hE hc hF hsx hs hcms j r hexts hprev hRep hext hic hl
-      ⟨_, L, t₄, hp4, ?_, ?_⟩
+      ⟨"past the openings", L, t₄, hp4, ?_, ?_⟩
     · rw [hLs, hl, hst]
       exact Masked.innerAt_slot hx (finCoins x ops) hsx j r he
     · rw [htb, FlockComplete.MaskRank.masksOf_getElem! hj]
