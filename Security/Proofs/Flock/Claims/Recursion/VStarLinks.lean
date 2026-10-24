@@ -1427,9 +1427,9 @@ instance's copy (`partHolds`, `rowHidden`), in the circuit `partCircuit` parses 
 circuit is the parsed statement's first table's (`partCircuit_staged`: the staged statement is the raw part with its
 public file swapped, which the circuit's parse doesn't read), whose input leaves are its input words in order (V\*'s
 parse check, `checkParsed_ok`). So, at one table, those hidden values are a run of the copy's input columns
-(`copyPs`), from the port's first word, below the unit's constant (`leaves_le_constPos`: the leaves are the unit's
-first input group's ports, inside its input rows), and every agreeing list of messages has, at the round, the bytes
-those columns hold (`agrees_layoutOf`). -/
+(`copyPs`), from the port's first word past the first input group's column, below the unit's constant
+(`leaves_le_constPos`: the leaves are the unit's first input group's ports, inside its input rows), and every agreeing
+list of messages has, at the round, the bytes those columns hold (`agrees_layoutOf`). -/
 
 theorem mapM_some_eq_map {α β : Type} {f : α → Option β} {g : α → β} :
     ∀ {l : List α} {l' : List β}, (∀ a ∈ l, ∀ b, f a = some b → b = g a) → l.mapM f = some l' → l' = l.map g
@@ -1468,9 +1468,11 @@ theorem findIdx_range_ofNat {N w k : ℕ}
   simp at hp
   omega
 
-/-- With unit `0`'s input leaves its `N` input words in order, a row bit's input column is below `16 N`. -/
+/-- With unit `0`'s input leaves its `N` input words in order, a row bit's input column is below `16 N` past the first
+input group's. -/
 theorem portCol_lt {c : Flock.Circuit} {N q i k : ℕ}
-    (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) (h : portCol c 0 q i = some k) : k < 16 * N := by
+    (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) (h : portCol c 0 q i = some k) :
+    k < (c.unit.inGroups.getD 0 default).col * Flock.WORD + 16 * N := by
   unfold portCol at h
   rw [hl] at h
   obtain ⟨k', hf, hk⟩ := Option.bind_eq_some_iff.1 h
@@ -1479,11 +1481,12 @@ theorem portCol_lt {c : Flock.Circuit} {N q i k : ℕ}
   simp at hk'
   omega
 
-/-- **A parsed circuit's input leaves sit below its unit's constant**: unit `0`'s leaves are its first input group's
-ports (`CheckFacts.leaves`), 16 bits each (`unit_groups`), each inside the unit's input rows (`NetOK`), which end
-before its constant (`Net.ofRows`). -/
+/-- **A parsed circuit's input leaves sit below its unit's constant**: unit `0`'s `N > 0` leaves are its first input
+group's ports (`CheckFacts.leaves`), 16 bits each from the group's column (`unit_groups`), each inside the unit's input
+rows (`NetOK`), which end before its constant (`Net.ofRows`). -/
 theorem leaves_le_constPos {tags : Flock.Tags} {c : Flock.Circuit} (P : FlockSoundness.ParseFacts tags c) {N : ℕ}
-    (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) : 16 * N ≤ c.unit.constPos := by
+    (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) (hN0 : 0 < N) :
+    (c.unit.inGroups.getD 0 default).col * Flock.WORD + 16 * N ≤ c.unit.constPos := by
   obtain ⟨ls, hcheck⟩ := P.check
   have C := FlockSoundness.check_facts P.typed hcheck
   obtain ⟨_, _, _, _, _, _, _, hb⟩ := FlockSoundness.unit_built P C
@@ -1495,8 +1498,6 @@ theorem leaves_le_constPos {tags : Flock.Tags} {c : Flock.Circuit} (P : FlockSou
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem h0, Option.getD_some] at hl
     rw [← hs, hl]
     simp
-  rcases Nat.eq_zero_or_pos N with h | h
-  · omega
   obtain ⟨rest, hg0⟩ : ∃ rest, c.unit.inGroups.toList = c.unit.inGroups.getD 0 default :: rest := by
     have hs := C.unit_groups.1
     generalize c.unit.inGroups = gs at hs ⊢
@@ -1515,11 +1516,11 @@ theorem leaves_le_constPos {tags : Flock.Tags} {c : Flock.Circuit} (P : FlockSou
     (FlockSoundness.nets_ok P c.unitNet).1.2.2 _ hmem
   omega
 
-/-- With unit `0`'s input leaves its input words in order, row bit `i` of port `q` is the input column `16 w + i`,
-`w` the port's first word. -/
+/-- With unit `0`'s input leaves its input words in order, row bit `i` of port `q` is the input column `16 w + i` past
+the first input group's, `w` the port's first word. -/
 theorem portCol_of_leaves {c : Flock.Circuit} {N q i k : ℕ}
     (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) (h : portCol c 0 q i = some k) :
-    k = 16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + i := by
+    k = (c.unit.inGroups.getD 0 default).col * Flock.WORD + 16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + i := by
   unfold portCol at h
   rw [hl] at h
   obtain ⟨k', hf, hk⟩ := Option.bind_eq_some_iff.1 h
@@ -1531,8 +1532,9 @@ theorem rowHidden_of_leaves {c : Flock.Circuit} {N : ℕ} {nm : String} {n : ℕ
     (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) (h : rowHidden c nm n = some ps) :
     ∃ (q : ℕ) (pt : Flock.Port), c.ports.findIdx? (·.name == nm) = some q ∧ c.ports[q]? = some pt ∧
       (0 < pt.bits → 16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + pt.bits ≤ 16 * N) ∧
-      ps = (List.range pt.bits).map fun i => n / c.g * 2 ^ c.kLog +
-        (c.unitRange.slot (n % c.g * c.upv) + (16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + i)) := by
+      ps = (List.range pt.bits).map fun i => n / c.g * 2 ^ c.kLog + (c.unitRange.slot (n % c.g * c.upv) +
+        ((c.unit.inGroups.getD 0 default).col * Flock.WORD + 16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 +
+          i)) := by
   unfold rowHidden at h
   obtain ⟨q, hq, h⟩ := Option.bind_eq_some_iff.1 h
   obtain ⟨pt, hpt, h⟩ := Option.bind_eq_some_iff.1 h
@@ -1695,7 +1697,8 @@ theorem layoutOf_msgAt_staged {st : Stage} {s j : ℕ} {x xO : Msg} (h : StagedP
     ∃ (q : ℕ) (pt : Flock.Port) (rep : ℕ), p.sts[0].c.ports[q]? = some pt ∧
       (0 < pt.bits → 16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0 + pt.bits ≤ 16 * N) ∧
       segs = [(([0] : Msg), Claims.Recursion.VStar.copyPs p 0 h0 (rep / p.sts[0].c.g) (rep % p.sts[0].c.g) 0
-        (16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0) pt.bits)] := by
+        ((p.sts[0].c.unit.inGroups.getD 0 default).col * Flock.WORD +
+          16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0) pt.bits)] := by
   obtain ⟨r, ps, hr, hmem, rfl⟩ := layoutOf_msgAt_mem hm
   obtain ⟨sv, c, rs, q, k, rep, -, hc, -, -, -, -, hrh⟩ := mem_partHolds hmem
   have hce := partCircuit_staged h hp ht hpi hr hc h0
@@ -1717,14 +1720,14 @@ theorem agrees_layoutOf {untr : TrReader} {b : Brings} {s j : ℕ} {x xO : Msg} 
     {segs : List (Msg × List ℕ)} (hm : layoutOf.msgAt x s (j + 1) = some segs) :
     ∃ (q : ℕ) (pt : Flock.Port) (rep : ℕ), p.sts[0].c.ports[q]? = some pt ∧ ∀ bs : ByteArray, 8 * bs.size = pt.bits →
       FlockVBridge.ColsHold (Flock.Readable.copyOf p 0 h0 w (rep / p.sts[0].c.g) (rep % p.sts[0].c.g) 0)
-        (16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0) bs →
+        ((p.sts[0].c.unit.inGroups.getD 0 default).col * Flock.WORD +
+          16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0) bs →
       ms.getD (j + 1) [] = 0 :: bs.data.toList := by
   obtain ⟨p', r, sv, hp', ht, hpi, -, -, -, htab⟩ := stagedTables hs.2
   rw [hp] at hp'
   cases hp'
   obtain ⟨u, -, -, -, hl, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hp ht hpi h0
-  have hN := leaves_le_constPos P hl
   have hfx := layoutOf_fixedAt_of_msgAt hm
   obtain ⟨q, pt, rep, hpt, htop, hps⟩ := layoutOf_msgAt_staged hs.2 hp ht hpi h0 h1 hl hm
   refine ⟨q, pt, rep, hpt, fun bs hb hcol => ?_⟩
@@ -1735,7 +1738,9 @@ theorem agrees_layoutOf {untr : TrReader} {b : Brings} {s j : ℕ} {x xO : Msg} 
       rw [hm]
       simp [Claims.Recursion.VStar.copyPs, hz]
     exact Claims.Recursion.VStar.agrees_colsHold hA hj hfx hm0 (by omega) fun t ht => absurd ht (by omega)
-  · exact Claims.Recursion.VStar.agrees_colsHold hA hj hfx hm (by have := htop (by omega); omega) hcol
+  · have htop' := htop (by omega)
+    have hN := leaves_le_constPos P hl (by omega)
+    exact Claims.Recursion.VStar.agrees_colsHold hA hj hfx hm (by omega) hcol
 
 end RecDeploy
 

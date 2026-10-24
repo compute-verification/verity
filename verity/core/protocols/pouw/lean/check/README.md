@@ -28,6 +28,8 @@ Python reference held to it.
 | `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
 | `PouwCheck.Credit` | `credit.py`'s `_window_outcomes` and `_period_outcomes` (its entries `window` and `period_credit` on each drawn unit's proof outcome in place of the proof files they verify themselves, until this runs the verifier of record in-process), and the steps they compose (`Credit.Internal`'s `credited`, `outcome`, `aLink`, `registration` and `weights`; `drawn`, `layoutOf`, `period`, `committedWeights`): a served window's credit bits fixed before its draw coin, its round log the challenger's, its A trees tied to its round roots, its drawn units the draw coin's over its committed circuit's layout, no partial credit over them, its entries and its drawn units' proofs its own registration's, its B rows the ones its period's open signed the weights' root of, and a period counted only closed and complete (RT4-INT-32, -34 and -42) |
 | `PouwCheck.CreditDifftest` | the difftest's `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` behind `pouw-check-difftest` (`CreditDifftest.all`, the functions `DifftestMain` serves) |
+| `PouwCheck.LeafOwn` | not `credit.py`'s: a window unit's leaf statements' tile and the placement of the values they read in the window's tables (`placeOf`: its round's A table of K, the weights' B, its call's z and receipt tables, each from the unit's base row), from the window's committed descriptor and round log alone, and `pouw-leaf-own-window`, `PouwWindow.Lanes.leafOwn?` at that placement (`tests/test_leaf_own.py`) |
+| `PouwCheck.LeafOwnMain` | `pouw-leaf-own-window`'s entry point |
 
 `opening` holds a tile proof's public file to the registered window: the unit drawn (or opened undrawn, the filler's),
 the entries root's domain one-stage's served domain of the registered program and partition, the opening's entry under
@@ -93,20 +95,22 @@ received, `core_check.rounds`), `aLink` over the window's registered entries, `l
 stream its root, the registration its draw root and the receipt `{"receipts": …}`, then `registration`. `period`: the windows
 presented are exactly those the auditor's ledger lists in the period's close, in its order, and the close is complete,
 so a period with no close or with a window missing, out of order or not its own earns nothing; `periodCredit` also
-requires each of them to prove the circuit the period's open committed (its descriptor's SHA-512,
-`SampledProofs.Challenger.creditedSession`, the same bytes `layoutOf` reads) and credits it (`window`) drawn at the
-period's K, a refused one refusing
-the period. `aLink`: each round's root (the one the challenger received before that round's coin) is `credit.round_root`
+requires each of them to have run from a commit the host's pins log records on the auditor's first-parent list of main
+and to prove the circuit the period's open committed (its descriptor's SHA-512,
+`SampledProofs.Challenger.creditedSession` over `pinnedSession`, the same bytes `layoutOf` reads) and credits it
+(`window`) drawn at the period's K, a refused one refusing
+the period. Every step that reads the challenger's session (`credited`, `roundsCheck`, `saltCheck`) reads it through
+`pinnedSession`, the pins log (`pins`) and the first-parent list (`main`) given beside the ledger. `aLink`: each round's root (the one the challenger received before that round's coin) is `credit.round_root`
 of the serving process's own round root and that round's rows of every registered A value as aligned subtrees
-(`credit.cover`): round s's share of a window's `…/a/<K>`, or the whole of a call's A table `…/a/<K>@<c>` in its call's
-round, `c / (C/S)` of C calls; and each A value's registered root must be the frame-v3 SHA-512 tree over those
+(`credit.cover`): round s's share of a window's `…/a/<K>`, or the whole of round s's A table of K `…/a/<K>@<s>` (the M rows
+of each of round s's calls of K, call after call, its calls the C/S calls from s·C/S) in round s; and each A value's registered root must be the frame-v3 SHA-512 tree over those
 subtrees and its domain's pads. `registration`: each drawn unit's proof outcome is the verifier of record's verdict for its session
 (`PROOF_KEYS`: the SHA-512 of the descriptor it verified the session against and the session's registered finding,
 flock-verify's `registered`, each port's value and the root its reads were opened against); each A value's domain, and
 each other value's a proof opened, is the one one-stage's registration gives it under the committed descriptor's
 SHA-512 and, for every value but the weights' `…/b/<K>`, the window's open root (`SampledProofs.Registered.domainAt`,
 PRF-127); and each proof was verified against that descriptor, opened only values the window registers once, each at
-its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or its own call's `…/a/<K>@<call>`. So entries of another window or circuit, a proof verified against another registration, and an entry whose root
+its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or its own call's round's `…/a/<K>@<s>`. So entries of another window or circuit, a proof verified against another registration, and an entry whose root
 is not the one its sessions opened are refused.
 
 The properties are stated in `Security/Properties/Pouw/Check.lean` and proved in

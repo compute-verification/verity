@@ -8,8 +8,9 @@ row       one position's K (or V) in a layer: a row of an attention Call's `kc` 
           rows its Calls share, in the order its Calls first read them (its positions), K and V paired by position.  DSA's
           indexer keys are no rows: their 132-byte rows pack across blocks, and memory accounting ruled them uncredited
           until the map packs them
-born      a row's step, and `last` its last reader's: the circuit's requirement (`requirement.from_census`) over the
-          Program's census at its sampling events (`query.required.SAMPLING_EVENTS`)
+born      a row's step, and `last` its last structural reader's (the last step with a gate that has one of its values as
+          an operand, a gather that may select one included, whichever it selected): the circuit's requirement
+          (`requirement.from_census`) over the Program's census at its sampling events (`query.required.SAMPLING_EVENTS`)
 page      `block_size` slots in each layer as the engine lays them out (`page_of`, from its cache tensor): a K plane then a
           V plane, a slot one row ("planes"), one plane whose slot holds a position's K and V head by head ("packed",
           `packed`), or one plane of latent rows ("latent"); a request's position q sits at slot
@@ -19,16 +20,17 @@ block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `first
           numbering: a KV pool of one region per layer)
 appended  a block whose rows are all born, at the step of the last (its completion), if a later step reads it: a step's
           record, its frees then its writes, takes effect after the step's reads (remote_bandwidth's convention, #2378),
-          so a block whose last read is the step that completes it is never read while resident and is in no record; nor
+          so a block whose last structural reader is the step that completes it is never read while resident and is in
+          no record; nor
           is a block with a row no step writes (it stays dirty).  A step's blocks are one append, by slot
 written   an appended block, in the record of the step its append's encode landed in (deferred residency, remote_bandwidth's
           ``PROTOCOL.md`` §4: the session's `Deferral`; without one, at its completion), uncredited until then.  A line
           writes the appends landed by then in order, and one that would write a slot an earlier one there writes waits a
           line, with every append after it
-freed     a written block in the record of its rows' last read's step, or of the step after its write's if that is no
-          earlier (its page was freed before its encode landed: memory accounting ruled such a block withdrawn, no write, no
-          free and no credit, in thread 1792308789, and memory-map/v1 is to gain a step's ``withdrawn``; until then the
-          block is written and freed a line later).  And a slot's registered block (a KV page's filler, registered before
+freed     a written block in the record of its rows' last structural reader (memory-map/v1's free), or of the step after
+          its write's if that is no earlier (its page was freed before its encode landed: memory-map/v1 withdraws such a
+          block, no write, no free and no credit, which this builder doesn't emit yet, so it writes the block and frees it
+          a line later, past that reader).  And a slot's registered block (a KV page's filler, registered before
           the seed) at the step a write first reaches it, even the one completing it: its bytes are no longer that block's,
           and a block not yet written is uncredited (the `Store`'s dirty).  A page's untouched blocks stay held, counting
           against capacity, until then: a request's end frees only the blocks it wrote.  A line frees no slot it writes
@@ -75,7 +77,8 @@ Slice = tuple[str, int, int, int]
 
 @dataclass(frozen=True)
 class Row:
-    """One position's K or V in a layer: the leaves it is, in order, and the steps it is born and last read at."""
+    """One position's K or V in a layer: the leaves it is, in order, the step it is born at and its last structural
+    reader's."""
 
     group: tuple[Slice, ...]
     born: int
@@ -197,8 +200,9 @@ def census_of(program: Program, digest: str | None = None) -> dict:
 
 
 def rows(program: Program, c: Mapping | None = None) -> Rows:
-    """The KV rows of a request Program, born and last read as its requirement over its census `c` (`census_of`, computed when
-    not given) has them."""
+    """The KV rows of a request Program, each with its birth and its last structural reader as its requirement over its
+    census `c` (`census_of`, computed when not given) has them: a row's `last` counts a step whose gather may select it,
+    not only one that did."""
     body = program.root.body
     inputs = sum(1 for nd in body.nodes if is_input(nd.fn))
     c = census_of(program) if c is None else c
@@ -343,7 +347,7 @@ def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Cal
     filler: dict[int, list[int]] = {}
     done: dict[int, list[tuple[int, bytes, int]]] = {}
     #: each slot's blocks: the step a write first reaches it, the step completing it (None: it stays dirty), its rows' last
-    #: read's step and its digest
+    #: structural reader and its digest
     uses: dict[int, list[tuple[int, int | None, int, bytes]]] = {}
     for r, rs in requests.items():
         if len(tables[r]) * bs < rs.positions or any(not NULL_PAGE < p < pages for p in tables[r]):
@@ -415,7 +419,7 @@ def _appends(done: Mapping[int, list[tuple[int, bytes, int]]], deferral: Deferra
 def _lines(filler: Mapping[int, list[int]], appends: list[_Append]) -> list[Step]:
     """The record's lines from the slots whose filler a write first reaches at each step and the session's `appends`, step by
     step: each step's frees, its re-key (of the next step's append), the appends it makes, then its writes."""
-    #: each slot's written block: its index, the step writing it, the slot, its digest and its rows' last read's step
+    #: each slot's written block: its index, the step writing it, the slot, its digest and its rows' last structural reader
     live: dict[int, tuple[int, int, int, bytes, int]] = {}
     frees: dict[int, set[int]] = {}
     queue: list[_Append] = []
