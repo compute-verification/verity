@@ -288,7 +288,7 @@ def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Sched
   return cap
 
 /-- The shape `verifyRepWith` decodes a rep's proof file at, with `n` extra claims. -/
-def repShape (st : Setup) (sch : Schedule) (n : Nat) : Shape :=
+def repFileShape (st : Setup) (sch : Schedule) (n : Nat) : Shape :=
   let saltLen : Option Nat := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes
   { m := st.m, kLog := st.kLog, claims := 2 + n, sched := sch, hashLen := st.merkle.digestLen, saltLen }
 
@@ -312,14 +312,14 @@ def verifyRepPWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Sche
   return cap
 
 /-- **`verifyRepWith` splits at the decode**: the rep's stream (S11) and the extra claims, the proof file decoded at
-`repShape`, then `verifyRepPWith` at the decoded proof. -/
+`repFileShape`, then `verifyRepPWith` at the decoded proof. -/
 theorem verifyRepWith_split (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session)
     (i r : Nat) (bytes : ByteArray) :
     verifyRepWith hs spec st sch sess i r bytes = (do
       let name := s!"{spec.tables[i]!}/rep{r}"
       let some stream := sess.streams.find? (·.name == name) | throw s!"S11: no stream {name}"
       let extras ← st.extra sess.points
-      let p ← decodeProof (repShape st sch extras.size) bytes
+      let p ← decodeProof (repFileShape st sch extras.size) bytes
       verifyRepPWith hs spec st sch sess i r stream extras p) := rfl
 
 /-- `verify` with every hash call the oracle's: `.ok ()` is Accept. -/
