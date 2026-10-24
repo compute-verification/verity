@@ -69,9 +69,11 @@ receipt. Under the default receipt kind, sketch-sha512, a receipt also rests on 
 derived by `Accounting.Guarantees.Remote.SketchBoundDeployed`), which adds at most \(Q \cdot 2^{-95.12}\) a session
 at 16 rows for a prover of \(Q = F \cdot C\) SHA-512 compressions, \(C\) the node's own over the span and \(F\) the
 outside-compute factor (\(2^{20}\), provisional), and \((Q + P) N \cdot 2^{-512}\) for a receipt right without its
-hash (`timing.sketch_failure`, §4): no more than \(2^{-40}\) up to \(Q = 2^{55.12}\), and \(2^{-30.19}\) for one
-node's 10-minute session at \(F = 2^{20}\). At 64 rows, a registration's other row count, it is \(Q \cdot
-2^{-215.85}\). block-sha512, kept for comparison, adds nothing. Neither adds to γ.
+hash, and \((Q + P)^2 \cdot 2^{-257}\) for the keys' distance from uniform (two seeds whose 256-bit sign keys collide
+share their signs; `timing.sketch_failure`, §4): no more than \(2^{-40}\) up to \(Q = 2^{55.12}\), and
+\(2^{-30.19}\) for one node's 10-minute session at \(F = 2^{20}\). At 64 rows, a registration's other row count, it
+is \(Q \cdot 2^{-215.85} + (Q + P)^2 \cdot 2^{-257}\). block-sha512, kept for comparison, adds nothing. Neither adds
+to γ.
 
 **Each window alone.** The same terms over window \(t\)'s own span \(\Sigma_t = D_t - b_{t-1}\) (`WindowRecord.span_ns`),
 with its \(U_t\), \(P_t\) and \(m^*_t\) (or the pooled bound's \(f_t U_t\)) in place of the session's sums, give
@@ -579,23 +581,24 @@ and \(3 \times 5\). At 16 rows it is loose at full rank: \(2^{-16}\), where two 
 about \(\binom{16}{2} 2^{-31} = 2^{-24.1}\). Where it is read, it costs under one bit (next).
 
 **Grinding, and \(r^*\).** Every key is a fresh oracle output, the derive of a fresh seed, so its signs are uniform
-whatever the prover did to reach it. A prover of \(Q\) SHA-512 compressions over a session sees at most \(Q + P\)
-keys, \(P\) the session's passes, and makes at most \(Q\) guesses. Read at rank \(r\), by the union bound over keys,
-guesses and the block's 128 sectors, the session's failure is
+whatever the prover did to reach it, unless two seeds' 256-bit sign keys collide, which shares their signs. A prover of
+\(Q\) SHA-512 compressions over a session sees at most \(Q + P\) keys, \(P\) the session's passes, and makes at most
+\(Q\) guesses. Read at rank \(r\), by the union bound over keys, guesses and the block's 128 sectors, and the keys'
+birthday (`SketchHashRandom`'s ε, red team RD-13), the session's failure is
 
 \[
-\delta_s(r) \;\le\; Q \cdot 2^{-8r} + (Q + P) \cdot 128 \cdot \Pr[\text{rank} \le r - 1] ,
+\delta_s(r) \;\le\; Q \cdot 2^{-8r} + (Q + P) \cdot 128 \cdot \Pr[\text{rank} \le r - 1] + (Q + P)^2 \cdot 2^{-257} ,
 \]
 
-so its cost a compression is \(\rho(r) = 2^{-8r} + 128 \Pr[\text{rank} \le r - 1]\), and \(r^*\) minimizes it. At 16
+(the receipt guessed without its hash, \((Q + P) N \cdot 2^{-512}\), aside), so its cost a compression is \(\rho(r) = 2^{-8r} + 128 \Pr[\text{rank} \le r - 1]\), and \(r^*\) minimizes it. At 16
 rows \(r^* = 12\): the guess's \(2^{-96}\) beside \(128 \cdot 2^{-103.25} = 2^{-96.25}\), so \(\rho(r^*) =
 2^{-95.12}\). At \(r = 11\), \(\rho = 2^{-88}\); at 13, \(2^{-71.30}\). At 64 rows \(r^* = 27\) and \(\rho(r^*) =
-2^{-215.85}\).
+2^{-215.85}\). The birthday term doesn't move 16 rows' thresholds; at 64 rows it is what binds them.
 
 | rows | \(r^*\) | \(\rho(r^*)\) | \(Q\) at \(\delta_s = 2^{-40}\) | \(Q\) at \(\delta_s = 2^{-64}\) |
 | --- | --- | --- | --- | --- |
 | 16 | 12 | \(2^{-95.12}\) | \(2^{55.12}\): 8.1 days of 8 GPUs | \(2^{31.12}\): 42 ms of 8 GPUs |
-| 64 | 27 | \(2^{-215.85}\) | \(2^{175.85}\) | \(2^{151.85}\) |
+| 64 | 27 | \(2^{-215.85}\) | \(2^{108.5}\) | \(2^{96.5}\) |
 
 The GPUs are RTX PRO 6000s at \(7.0 \cdot 10^9\) SHA-512 compressions a second each, block-sha512's measured rate
 (#1916, below). \(Q\) counts every compression the prover makes, on any hardware: the grinding needs no access to the
@@ -609,7 +612,7 @@ a session stays below \(2^{-40}\) up to \(Q = 2^{55.12}\) compressions, 0.67 s o
 \(2^{-23.02}\), and gate run 8's 227 s session \(2^{-31.59}\) (\(2^{-51.59}\) at \(F = 1\), \(2^{-41.59}\) at
 \(2^{10}\)). The memory line barely feels it, since AuditRO's \(2^{-41}\) a pass dominates its δ: gate run 8's 2,118
 passes put it at \(2^{-29.95}\) at \(F = 1\) and \(2^{-29.55}\) at \(2^{20}\), 0.4 bits. 64 rows brings δs under
-\(2^{-50}\) at \(F = 2^{20}\) (\(2^{-150.92}\) for 10 minutes) at τ 1.226 a pass on the reader, the option if that
+\(2^{-50}\) at \(F = 2^{20}\) (\(2^{-127.13}\) for 10 minutes, the keys' birthday) at τ 1.226 a pass on the reader, the option if that
 slack is ever cut; \(2^{-64}\) is out of reach at 16 rows and needs it too. The fused GEMM's cost at 64 rows isn't
 measured yet.
 
@@ -929,7 +932,21 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   codec) and read from its own disks (their measured read ceiling), each at its rate over any interval plus one burst
   (`ledger.Node`: a maximal rebuild batch, \(S_{\text{chip}}\), and a maximal disk read, a second at the ceiling;
   link-charged, one link window as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
-  the sketch's (`timing.sketch_failure`).
+  the sketch's (`timing.sketch_failure`) plus the draw's rejection \(\sum_t k_t / 2^{64}\) (`ledger.rejection`, over
+  every window's draws). `LineHeld`'s error also carries the windows' PRF advantages,
+  \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no numeric value: the ledger names them by their claim
+  (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
+
+  Every form, the link-charged one included, is conditional on `NoOutsideCompute`, statement C in full: no device
+  outside the node computes on a registered block or a receipt during the session. Identity is only its links clause:
+  a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the receipts, sends no
+  block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
+  takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
+  computed), and the line of record says it is conditional on it (`auditor_line.json`'s
+  `conditional_on`, `credit.md`; the `memory-line-of-record` label requires the field) until certifiers cover the gate
+  node's boundary (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the
+  credited span. `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records
+  of the boundary links over its span show other ingress.
 
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).
@@ -1227,7 +1244,10 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, at δ plus
   \(\sum_t s_t/2^{64}\) (a rejected first word) plus each window's PRF advantage, C3's term, against one
   distinguisher a window that the session fixes (`Session.distinguisher`: it runs the session through window \(t\)
-  and reads at most \(s_t\) first blocks of the stream it is given).
+  at the coin commitment with leaf \(t\) committing zeros and reads at most \(s_t\) first blocks of the stream it
+  is given), plus the commitment's hiding terms, hm96's, at most \(n \cdot 2^{-191}\) over \(n\) windows
+  (`Committed.hide`, `ledger.hiding`): the prover holds the root of every coin from the start, so a window is
+  fixed before its coin only once that root is (`Live` of `Committed.view`).
   `pooled` is computed in exact rationals in the verifier's Lean
   (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
   certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledDraw`
