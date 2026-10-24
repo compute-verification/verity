@@ -1,18 +1,18 @@
 """verity_vllm.predict.batch: the request-major compiler's templates hold their declared batch-invariance verdicts, and
 `check_compiled` refuses by name a compilation in which a request's outputs could depend on its batch-mates.
 
-I1 v0 (`verity.core.protocols.certifier.advice`) and `steps.plan_steps` aren't on main yet, so the rule's tests run it against
-stand-ins: advice classes with I1's fields and its kept-output rule, and a planner with v0's shapes.
-`test_compile_steps_passes_its_own_rule` runs it on the real compiler once both are importable.
+`steps.plan_steps` isn't on main yet, so the rule's tests run it on I1 v0's advice against a stand-in planner with v0's shapes.
+`test_compile_steps_passes_its_own_rule` runs it on the real compiler once that is importable.
 """
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, replace
-from typing import NamedTuple
+from itertools import accumulate
 
 import pytest
 
+from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Tuple, Value
@@ -65,64 +65,7 @@ def test_the_frozen_v0_models_templates_hold_their_declared_verdicts():
     assert sum(1 for v in vs if v.got == (True, True)) == 13
 
 
-# --- the compile-unit rule against stand-ins -------------------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class RequestAdvice:
-    id: str
-    prompt_len: int
-    output_len: int
-    finish: str = "length"
-
-
-@dataclass(frozen=True)
-class Source:
-    request: int
-    n: int
-
-
-@dataclass(frozen=True)
-class Row:
-    request: int
-    kind: str
-    start: int
-    n: int
-    cache_hit: int = 0
-    preempted: bool = False
-    sources: tuple = ()
-
-
-@dataclass(frozen=True)
-class StepAdvice:
-    rows: tuple
-
-
-@dataclass(frozen=True)
-class Advice:
-    requests: tuple
-    steps: tuple
-    release: tuple
-
-
-class Output(NamedTuple):
-    step: int
-    row: int
-    request: int
-    index: int
-
-
-def outputs(advice: Advice) -> tuple[Output, ...]:
-    """I1's kept outputs: a row's sample is kept when it reaches its request's known tokens."""
-    known, kept, out = [q.prompt_len for q in advice.requests], [0] * len(advice.requests), []
-    for s, st in enumerate(advice.steps):
-        for j, row in enumerate(st.rows):
-            r = row.request
-            if row.start + row.n == known[r] and kept[r] < advice.requests[r].output_len:
-                out.append(Output(s, j, r, kept[r]))
-                kept[r] += 1
-                known[r] += 1
-    return tuple(out)
+# --- the compile-unit rule on I1 v0's advice, against a stand-in planner ---------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -135,6 +78,7 @@ class Unit:
     seed: int | None
     first_step: int
     id: str
+    C: int = 0
 
 
 @dataclass(frozen=True)
@@ -153,19 +97,22 @@ class RowRef:
     samples: int
 
 
-def plan(registered, advice, ingress, *, seed_of=lambda advice, body: body.get("seed", 7), samples_of=None):
-    """v0's planner for what the rule reads: each request's (LP, T, policy, seed, first step, id), its live rows and its discarded."""
-    first: dict[int, int] = {}
+def plan(registered, advice, ingress, *, seed_of=lambda advice, body: body.get("seed", 7), samples_of=None,
+         C_of=lambda advice, row: row.cache_hit):
+    """v0's planner for what the rule reads: each request's (LP, T, policy, seed, first step, id, C), its live rows and its
+    discarded. It doesn't check a hit's tokens, so the rule's own check shows."""
+    first: dict[int, tuple[int, I1.Row]] = {}
     for s, st in enumerate(advice.steps):
         for row in st.rows:
-            first.setdefault(row.request, s)
+            first.setdefault(row.request, (s, row))
     units = []
     for i, q in enumerate(advice.requests):
-        body = ingress[q.id]
+        body, (s0, row0) = ingress[q.id], first[i]
         t = body["temperature"]
         policy = {"kind": "greedy"} if t == 0 else {"kind": "stochastic", "temperature": t, "top_p": body["top_p"], "top_k": 0,
                                                     "seeded": True, "splits": body.get("splits", 32)}
-        units.append(Unit(i, "", q.prompt_len, q.output_len - 1, policy, None if t == 0 else seed_of(advice, body), first[i], q.id))
+        units.append(Unit(i, "", q.prompt_len, q.output_len - 1, policy, None if t == 0 else seed_of(advice, body), s0, q.id,
+                          C_of(advice, row0)))
     steps, discarded = [], []
     for s, st in enumerate(advice.steps):
         live = []
@@ -181,7 +128,7 @@ def plan(registered, advice, ingress, *, seed_of=lambda advice, body: body.get("
 
 
 def _digest(u: Unit) -> str:
-    return "P" + json.dumps([u.LP, u.T, u.policy], sort_keys=True)
+    return "P" + json.dumps([u.LP, u.T, u.policy, u.C], sort_keys=True)
 
 
 @dataclass(frozen=True)
@@ -209,17 +156,17 @@ MUL = PrimitiveDefinition("BatchTestWlMul16", 1, (("a", V16), ("b", V16)), V16, 
 
 
 def _workload(units: list[Unit], groups: tuple[str, ...] = ("weights", "prompt"), cross: bool = False) -> Workload:
-    """GP-01's shape over ``units``: the shared weight once, each request's own Input, one output each (request k's reads request
-    k − 1's Input under ``cross``)."""
-    n = len(units)
-    params = (("shared.w", V16),) + tuple((f"request[r{u.request}].{g}", V16) for u in units for g in groups[1:])
-    per = len(groups) - 1
+    """GP-01's shape over ``units``: the shared weight once, each request's own Inputs (``groups`` past the weight, and `prefix`
+    with a hit), one output each, which reads its request's last Input (request k's reads request k − 1's under ``cross``)."""
+    gs = [groups + ("prefix",) * bool(u.C) for u in units]
+    params = (("shared.w", V16),) + tuple((f"request[r{u.request}].{g}", V16) for u, ug in zip(units, gs) for g in ug[1:])
+    last = list(accumulate(len(ug) - 1 for ug in gs))
 
     def body(B, S, w, *xs):
-        return tuple_of(*(B.call(MUL, w, xs[(k - 1 if cross and k else k) * per + per - 1]) for k in range(n)))
+        return tuple_of(*(B.call(MUL, w, xs[last[k - 1 if cross and k else k] - 1]) for k in range(len(units))))
 
-    fn = bind(CompositeDefinition("BatchTestWorkload", 1, (), lambda S: (params, Tuple(*([V16] * n))), body, register=False))
-    comps = [Component(u.digest, tuple((g, V16) for g in groups), groups) for u in units]
+    fn = bind(CompositeDefinition("BatchTestWorkload", 1, (), lambda S: (params, Tuple(*([V16] * len(units)))), body, register=False))
+    comps = [Component(u.digest, tuple((g, V16) for g in ug), ug) for u, ug in zip(units, gs)]
     return Workload(fn, tuple(WRequest(u.request, c) for u, c in zip(units, comps)), tuple((0,) for _ in units))
 
 
@@ -242,16 +189,20 @@ GREEDY = {"temperature": 0.0, "top_p": 1.0}
 TOPP = {"temperature": 0.8, "top_p": 0.95, "seed": 3}
 
 
-def _session(reqs: list[tuple], steps: list[list[tuple]]) -> tuple[Advice, dict]:
-    """Requests (prompt_len, output_len, body), id `q<i>`; rows (request, start, n), kind as I1 derives it; one release bucket each."""
-    requests = tuple(RequestAdvice(f"q{i}", lp, out) for i, (lp, out, _) in enumerate(reqs))
-    adv = Advice(requests, tuple(StepAdvice(tuple(Row(r, "decode" if n == 1 and s >= reqs[r][0] else "prefill", s, n) for r, s, n in st))
-                                 for st in steps), ())
-    adv = replace(adv, release=tuple(range(len(outputs(adv)))))
-    return adv, {f"q{i}": dict(body) for i, (_, _, body) in enumerate(reqs)}
+def _tokens(i: int, n: int) -> list[int]:
+    return [(31 * i + 7 * k + 1) % 256 for k in range(n)]
 
 
-def _mixed(body1: dict = TOPP) -> tuple[Advice, dict]:
+def _session(reqs: list[tuple], steps: list[list[tuple]]) -> tuple[I1.Advice, dict]:
+    """Requests (prompt_len, output_len, body[, prompt]), id `q<i>`, finished on length, the prompt `_tokens(i, prompt_len)` unless
+    given; rows (request, start, n[, a hit's fields]), kind as I1 derives it; the kept outputs released in order."""
+    requests = tuple(I1.RequestAdvice(f"q{i}", lp, out, "length") for i, (lp, out, *_) in enumerate(reqs))
+    adv = I1.Advice(requests, tuple(I1.StepAdvice(tuple(I1.Row(r, "decode" if n == 1 and s >= reqs[r][0] else "prefill", s, n, **(x[0] if x else {}))
+                                                        for r, s, n, *x in st)) for st in steps), tuple(range(sum(q[1] for q in reqs))))
+    return adv, {f"q{i}": {**q[2], "prompt": list(q[3]) if len(q) > 3 else _tokens(i, q[0])} for i, q in enumerate(reqs)}
+
+
+def _mixed(body1: dict = TOPP) -> tuple[I1.Advice, dict]:
     """r0 (LP 4, greedy) from step 0, r1 (LP 3) prefilled beside r0's first decode, r2 (r0's shape) beside two decodes; r0's last
     row runs one past its last kept output (discarded)."""
     return _session([(4, 3, GREEDY), (3, 2, body1), (4, 3, GREEDY)], [
@@ -261,6 +212,30 @@ def _mixed(body1: dict = TOPP) -> tuple[Advice, dict]:
         [(0, 6, 1), (2, 4, 1)],
         [(2, 5, 1)],
     ])
+
+
+def _hit(shared: int) -> tuple[I1.Advice, dict]:
+    """r1 (LP 4) admitted at step 1 on a 2-token prefix-cache hit of r0's KV; its prompt shares r0's first ``shared`` tokens."""
+    p0 = _tokens(0, 4)
+    return _session([(4, 2, GREEDY, p0), (4, 2, GREEDY, p0[:shared] + _tokens(1, 4)[shared:])], [
+        [(0, 0, 4)],
+        [(0, 4, 1), (1, 2, 2, {"cache_hit": 2, "sources": (I1.Source(0, 2),)})],
+        [(1, 4, 1)],
+    ])
+
+
+def _past_a_prompt() -> tuple[I1.Advice, dict]:
+    """r1's 2-token hit reads r0's KV at position 1, which r0's first decode computed: past r0's 1-token prompt."""
+    return _session([(1, 2, GREEDY), (4, 1, GREEDY, _tokens(0, 1) + _tokens(1, 3))], [
+        [(0, 0, 1)],
+        [(0, 1, 1), (1, 2, 2, {"cache_hit": 2, "sources": (I1.Source(0, 2),)})],
+    ])
+
+
+def _prompt_as_text() -> tuple[I1.Advice, dict]:
+    """`_hit(2)` with r0's prompt certified as text, not token ids."""
+    adv, ing = _hit(2)
+    return adv, {**ing, "q0": {**ing["q0"], "prompt": " ".join(map(str, ing["q0"]["prompt"]))}}
 
 
 def test_a_batch_invariant_compilation_passes():
@@ -279,7 +254,7 @@ def test_r3_a_derived_split_count_is_refused():
 def test_r2_a_planner_that_reads_the_batch_is_refused():
     adv, ing = _mixed({k: v for k, v in TOPP.items() if k != "seed"})
     by_batch = lambda a, ad, i: plan(a, ad, i, seed_of=lambda advice, body: len(advice.requests))  # noqa: E731
-    with pytest.raises(BatchDependent, match=r"request 1: compiled alone it's .*1, 'q1'\), in its batch .*3, 'q1'\)"):
+    with pytest.raises(BatchDependent, match=r"request 1: compiled alone it's .*1, 'q1', 0\), in its batch .*3, 'q1', 0\)"):
         check_compiled(None, adv, ing, _compile(adv, ing, by_batch), by_batch)
 
 
@@ -303,13 +278,47 @@ def test_r2_a_request_refused_alone_is_refused():
         check_compiled(None, adv, ing, _compile(adv, ing, needs_company), needs_company)
 
 
-def test_r2_a_cache_hit_on_another_requests_kv_has_no_solo_form():
-    adv, ing = _mixed()
-    hit = Row(2, "prefill", 2, 2, cache_hit=2, sources=(Source(0, 2),))
-    steps = list(adv.steps)
-    steps[2] = StepAdvice((steps[2].rows[0], steps[2].rows[1], hit))
-    adv = replace(adv, steps=tuple(steps))
-    with pytest.raises(BatchDependent, match="request 2: step 2's cache hit reads KV another request computed"):
+def test_r2_a_cache_hit_on_its_own_tokens_is_kept():
+    """r1's hit holds the KV of its own first 2 tokens (r0's prompt starts with them): alone, a stand-in of those tokens computes it
+    and r1 plans the same at C = 2, and in GP-01 its `prefix` Input is its own."""
+    adv, ing = _hit(2)
+    c = _compile(adv, ing)
+    assert c.requests[1].C == 2 and c.workload.requests[1].component.groups == ("weights", "prompt", "prefix")
+    assert check_compiled(None, adv, ing, c, plan) is None
+
+
+@pytest.mark.parametrize("session,why", [
+    (lambda: _hit(1), "at positions 0 … 1, and their tokens aren't its own"),
+    (_past_a_prompt, "at positions 0 … 1, and their tokens aren't its own"),
+    (_prompt_as_text, "their tokens can't be checked equal"),
+])
+def test_r2_a_cache_hit_whose_tokens_arent_checked_its_own_is_refused(session, why):
+    """The stand-in planner doesn't check a hit's tokens, and the rule does: a prompt that leaves the source's inside the hit, a hit
+    past the source's prompt (the KV of a token it sampled), and a source whose prompt isn't token ids are each refused."""
+    adv, ing = session()
+    with pytest.raises(BatchDependent, match=f"request 1: step 1's cache hit reads request 0's KV.*{why}"):
+        check_compiled(None, adv, ing, _compile(adv, ing), plan)
+
+
+def test_r2_c_planned_from_the_batch_is_refused():
+    """A planner that takes r1's C from the batch (its first request's prompt length, r0's 4) plans it alone at the stand-in's 2."""
+    adv, ing = _hit(2)
+    by_batch = lambda a, ad, i: plan(a, ad, i, C_of=lambda advice, row: advice.requests[0].prompt_len if row.cache_hit else 0)  # noqa: E731
+    with pytest.raises(BatchDependent, match=r"request 1: compiled alone it's \(LP, T, policy, seed, id, C\) = .*'q1', 2\), in its "
+                                             r"batch .*'q1', 4\)"):
+        check_compiled(None, adv, ing, _compile(adv, ing, by_batch), by_batch)
+
+
+def test_r2_a_resume_on_another_requests_kv_has_no_solo_form():
+    """r0, preempted after its prefill, resumes on r1's KV of the same prompt: I1 v0 allows it, and v0 has no solo form for it."""
+    p = _tokens(0, 4)
+    adv, ing = _session([(4, 3, GREEDY, p), (4, 2, GREEDY, p)], [
+        [(0, 0, 4)],
+        [(1, 0, 4)],
+        [(0, 4, 1, {"cache_hit": 4, "preempted": True, "sources": (I1.Source(1, 4),)}), (1, 4, 1)],
+        [(0, 5, 1)],
+    ])
+    with pytest.raises(BatchDependent, match="request 0: step 2 resumes it on KV another request computed"):
         check_compiled(None, adv, ing, _compile(adv, ing), plan)
 
 
@@ -327,17 +336,20 @@ def test_r1_a_composition_reading_another_requests_input_is_refused():
         check_compiled(None, adv, ing, _compile(adv, ing, cross=True), plan)
 
 
-def test_r1_a_batch_provenance_input_is_refused():
+@pytest.mark.parametrize("group", ["schedule", "prefix"])
+def test_r1_a_batch_provenance_input_is_refused(group):
+    """A `schedule` Input is the batch's, and so is a `prefix` on a request with no checked hit."""
     adv, ing = _mixed()
-    with pytest.raises(BatchDependent, match=r"GP-01: the outputs of owner 0 read request\[r0\]\.schedule .* batch-derived"):
-        check_compiled(None, adv, ing, _compile(adv, ing, groups=("weights", "prompt", "schedule")), plan)
+    with pytest.raises(BatchDependent, match=rf"GP-01: the outputs of owner 0 read request\[r0\]\.{group} .* batch-derived"):
+        check_compiled(None, adv, ing, _compile(adv, ing, groups=("weights", "prompt", group)), plan)
 
 
 def test_workload_labels_by_provenance():
     adv, ing = _mixed()
-    c = _compile(adv, ing, groups=("weights", "prompt", "seed", "splits"))
+    c = _compile(adv, ing, groups=("weights", "prompt", "seed", "splits", "prefix"))
     labels, ret = workload_labels(c.workload)
-    assert labels == (SHARED, own(0), own(0), BATCH, own(1), own(1), BATCH, own(2), own(2), BATCH)
+    assert labels == (SHARED, *(x for r in range(3) for x in (own(r), own(r), BATCH, BATCH)))
+    assert workload_labels(c.workload, frozenset({1}))[0][5:9] == (own(1), own(1), BATCH, own(1))
     assert ret.labels == (own(0), own(1), own(2))
     bad = replace(c.workload.requests[0], component=replace(c.workload.requests[0].component, groups=("weights",)))
     with pytest.raises(BatchDependent, match="names no group"):
