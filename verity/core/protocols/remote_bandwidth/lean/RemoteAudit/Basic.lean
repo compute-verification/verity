@@ -88,6 +88,9 @@ def Domain.leaf (d : Domain) (rank position : Nat) (schema : String) (value : By
 def Domain.node (d : Domain) (level index : Nat) (left right : ByteArray) : ByteArray :=
   hash "node" [d.id, uint level, uint index, left, right]
 
+/-- The leaf at `rank` past a tree's `count` leaves, up to its `2^depth`: `H(frame "pad" [id, uint rank])`. -/
+def Domain.pad (d : Domain) (rank : Nat) : ByteArray := hash "pad" [d.id, uint rank]
+
 /-- `merkle_depth`. -/
 def depth (count : Nat) : Nat := if count ≤ 1 then 0 else Nat.log2 (count - 1) + 1
 
