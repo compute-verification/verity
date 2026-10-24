@@ -333,6 +333,24 @@ def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes
                       pins=pins, main=main, model=model, peer=peer)
 
 
+def test_the_line_reads_the_sketch_at_its_outside_factor() -> None:
+    """RD-5: `sketch_at` reads a session's SketchBound δ at F times the compressions its verifier charged the node
+    (gate run 8's session 0: 2^-51.59 at F = 1, the red team's 2^-41.59 at 2^10), at the record's F unless asked
+    another (1 for a record written before F), and the line's error there is the horizon's plus it; a session with no
+    sketch term has none."""
+    c, p, n, horizon = 12_708_215_084_432, 2118, 97_517_568, 9.64e-10
+    sf = {"compressions": c, "log2": -51.59}
+    s = {"ledger": {"sketch_failure": sf, "inputs": {"passes": p, "rows": 16}, "spec": {"error": {"horizon": horizon}}}}
+    for f, want in ((1, -51.59), (2 ** 10, -41.59), (2 ** 20, -31.59)):
+        got = verifier.sketch_at(s, {"blocks": n}, f)
+        assert (got["outside"], got["compressions"], got["queries"], round(got["log2"], 2)) == (f, c, f * c, want)
+        assert got["error"] == pytest.approx(horizon + 2.0 ** got["log2"])
+    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 1)
+    sf["outside"] = 2 ** 10
+    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 2 ** 10)
+    assert verifier.sketch_at({"ledger": {}}, {"blocks": n}) is None
+
+
 @pytest.mark.parametrize("defer_openings", [True, False])
 def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_lean_pinned_and_bound(
         host, tmp_path, monkeypatch, defer_openings):
@@ -364,6 +382,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     assert json.loads(closed)["body"]["complete"] is defer_openings
     doc = line("lean")
     honest, dropper = doc["sessions"]
+    assert doc["sketch_outside"] == [2 ** 20] and honest["sketch"]["outside"] == 2 ** 20
     assert honest["of_record"] and dropper["of_record"] and honest["credit"]["credited"]["ok"]
     assert dropper["credit"]["accepted"]["reason"] == "the Lean refused it (receipt)"
     for s in (honest, dropper):

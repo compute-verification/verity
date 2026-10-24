@@ -78,6 +78,10 @@
    "owner": "@memory-accounting",
    "digest": "f3124bfd590b659120d11eac7d0a3f243c6fae7023c117bf8e6a9033d64f2f77"
   },
+  "Accounting.Assumptions.SketchHashRandom": {
+   "owner": "@memory-accounting",
+   "digest": "9a507ea966011d3f8987f7ad0fc573827682a4f68684bc39a7939c11f48a7574"
+  },
   "Accounting.Assumptions.SketchRank": {
    "owner": "@memory-accounting",
    "digest": "727be124ba9dbc421e926b9388e089735913296fe529e8940e43750724733d8c"
@@ -516,15 +520,15 @@
   },
   "Accounting.Remote.Sketch.Assumptions.KeyBudget": {
    "owner": "@memory-accounting",
-   "digest": "76ab90249c36ad26e8fa0d45321c2608873cf22e97b8224fe9e0b8a3a3fd9f90"
+   "digest": "96b9e1b10509949f6a776f27cda39b1defc1f88006a7491fc877da21e20e4afe"
   },
   "Accounting.Remote.Sketch.Assumptions.Present": {
    "owner": "@memory-accounting",
-   "digest": "f7fc49498003ca066e3ff405a951a71bd85a9a454ef50678d1fc6a10b7ac1066"
+   "digest": "cbf1e069cc0fe91bfb409c2299f1c238f484be229a654b62b0935d046525b16d"
   },
   "Accounting.Remote.Sketch.Assumptions.Receipted": {
    "owner": "@memory-accounting",
-   "digest": "a1ca1aa2b0e584cf98c1bed6b0e57cee21ffa5f97f47f13a91921cb83a809acf"
+   "digest": "3328eff94adee2bee0cbb7d9c30b8b946e673c5f4bf74f25d23235318016ad41"
   },
   "Accounting.Requirement.Execution.Follows": {
    "owner": "@memory-accounting",
@@ -10659,8 +10663,8 @@
    "Verity.SecurityProofs.PrivateFitsOfLocal": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.PrivateOutBitsLe": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.RegisteredMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
-   "Accounting.SecurityProofs.Remote.SketchBoundSession": "frozen (no-function,hash): It is about a model of the receipts' sketch over a remote session (Accounting.Remote.Sketch: a uniform registered store, each candidate seed's signs uniform and its receipt hash a random function, verbatim-sector devices chosen by the prover's coins and the earlier passes' keys), not the verifier's code (remote_bandwidth.receipts); it derives SketchBound on a trace that Receipted and Present tie to that model, under SketchRank and the per-pass hash budget KeyBudget (note:20261024T0839Z-report-sketchbound)",
-   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the deployed receipts (4096-byte blocks of 128 sectors, 16 sign rows, SHA-512 tags) and rank 12, with at most C + P candidate seeds and C receipt-hash queries for C the node's SHA-512 compressions over the session: SketchBound at C/2^96 + (C + P)(ε + N/2^512), timing.sketch_failure(C, P, 16, N) (note:20261024T0839Z-report-sketchbound)"
+   "Accounting.SecurityProofs.Remote.SketchBoundSession": "frozen (no-function,hash): It is about a model of the receipts' sketch over a remote session (Accounting.Remote.Sketch: a uniform registered store, verbatim-sector devices chosen by the prover's coins and the earlier passes' keys, and each candidate seed's signs and receipt-hash key what the session's key map (Session.keys) gives at the outcome's SHA-512), not the verifier's code (remote_bandwidth.receipts); its random-oracle step is one named premise, Accounting.Assumptions.SketchHashRandom (claim random-oracle: at every prover coin and store, SHA-512's keys at the candidate seeds are uniform), which the proof uses once to carry the bound from the model's coins to the outcomes (Session.pr_coins_le), and the store's uniformity stays in the outcome's coins; it derives SketchBound on a trace over the outcomes that Receipted and Present tie to that model, under SketchRank and the per-pass hash budget KeyBudget (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named)",
+   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the deployed receipts (4096-byte blocks of 128 sectors, 16 sign rows, SHA-512 tags) and rank 12, with at most Q + P candidate seeds and Q receipt-hash queries for Q = F·C the hashes the prover can try over the session, C the node's SHA-512 compressions and F the outside-compute factor: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512), timing.sketch_failure(C, P, 16, N, outside=F), under SketchHashRandom (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -13026,18 +13030,20 @@
    ]
   },
   "Definitions.Accounting.Remote.Sketch": {
-   "digest": "dc9b2f35040b376f4eac25f97b1a840fc33825dabc7febc395374698e8f0e73b",
+   "digest": "50c09c52113e38a8e1d883137a39320b35a36015793dbe84241dfff1c1e54655",
    "definitions": {
     "Accounting.Remote.Sketch.Coins": "e7ffd521b74ee43260fe3f716412a6837382c7b70e1591d3e4d4e44164788dd7",
     "Accounting.Remote.Sketch.Key": "05a934f5debc43b4af31807b8d0bb0880e23ea4f7158119736a3271b742cf222",
     "Accounting.Remote.Sketch.Keys": "a849aaf56592e859abc97e0767c83a0bbb9e8abae9b30275e4ed67934a372bac",
-    "Accounting.Remote.Sketch.Session": "1073c6c57e50eb8cb7d3c8b7697742f575805d5b323106b16b434aed22c64487",
-    "Accounting.Remote.Sketch.Session.Whole": "f69f7aca5704928a0fa94eca39d425ea7446db3a78b20496986bd71bb85d6e3f",
-    "Accounting.Remote.Sketch.Session.correctAt": "f10e33a525583264f3faeb039c72ac8f44f4c5b0d6697072a8d879c51434620b",
-    "Accounting.Remote.Sketch.Session.dev": "28792d4071ffed6e0952ae884f5a08f0b0207e1d87d47c16897424678b803339",
-    "Accounting.Remote.Sketch.Session.device": "952d0d55021932ca66185e7c7e9075551b91eef35842225078a8cb659b72ae84",
-    "Accounting.Remote.Sketch.Session.kept": "7e12deb6b8addcf1af7e3f5456dfc2e4ecb32eddd26d80d7b43b6af5381bd62b",
-    "Accounting.Remote.Sketch.instFintypeCoins": "04fc8854e38f27dcb4a7af55050b0d4bc814adecf95418ec7d2d8557ce3ef628",
+    "Accounting.Remote.Sketch.Outcome": "2aa46820e3764c8f3f10168713ecff061c76d7975248a165e726ab16971c4089",
+    "Accounting.Remote.Sketch.Session": "f816ef4a637570231b2058753eb26a6b7679276ff1d85b861c57b9a258b8bd6a",
+    "Accounting.Remote.Sketch.Session.Whole": "b4b654a12174925f9b92f247ef0b50ee51cdd2f0db9c523a492fa890ebe67670",
+    "Accounting.Remote.Sketch.Session.coins": "a7e03991f9352f32cac5573772caaf505435a7cdb32387d428d141d87c77f78c",
+    "Accounting.Remote.Sketch.Session.correctAt": "b110e5474b656d74a5a0f1f9fade7c287129379cd5e1403dfedefb5b7724ac12",
+    "Accounting.Remote.Sketch.Session.devAt": "750d8ffbd73e30b6e4b1b2e76eba199117f0a48804513e77cf2769d5da7344e7",
+    "Accounting.Remote.Sketch.Session.device": "a655cfa2ed3779786dc0b2244f162f0297e28c977e5ae8fd56973f3849bd0280",
+    "Accounting.Remote.Sketch.Session.kept": "12644adc6622d7acbfff3aa3bf49ce18f830405770f670bf93ca81653be21ffa",
+    "Accounting.Remote.Sketch.Session.keys": "fb10d11bca72433bb26937dd391f63cab9523743fc1e2d1796321bb2b5616399",
     "Accounting.Remote.Sketch.instFintypeKey": "49eea35c65f516b518ae70a8dab5ae357669156843c9d26624e75cc756fb3f74",
     "Accounting.Remote.Sketch.instFintypeKeys": "92c27a41bd12bf34786c072885e727787e9a6ce7db205cc9021a3813f4998506"
    },
@@ -27368,11 +27374,12 @@
    ]
   },
   "Models.Accounting.Assumptions.RemoteSketch": {
-   "digest": "5fccb8f8572fceefaa16dce9cc3ac1978e267f7fa37ae8cc24ac112df201aede",
+   "digest": "622e737875834846df512d274a974df46e2405b0e5a86c1be2a243a8cbdec6ff",
    "definitions": {
-    "Accounting.Remote.Sketch.Assumptions.KeyBudget": "76ab90249c36ad26e8fa0d45321c2608873cf22e97b8224fe9e0b8a3a3fd9f90",
-    "Accounting.Remote.Sketch.Assumptions.Present": "f7fc49498003ca066e3ff405a951a71bd85a9a454ef50678d1fc6a10b7ac1066",
-    "Accounting.Remote.Sketch.Assumptions.Receipted": "a1ca1aa2b0e584cf98c1bed6b0e57cee21ffa5f97f47f13a91921cb83a809acf"
+    "Accounting.Assumptions.SketchHashRandom": "9a507ea966011d3f8987f7ad0fc573827682a4f68684bc39a7939c11f48a7574",
+    "Accounting.Remote.Sketch.Assumptions.KeyBudget": "96b9e1b10509949f6a776f27cda39b1defc1f88006a7491fc877da21e20e4afe",
+    "Accounting.Remote.Sketch.Assumptions.Present": "cbf1e069cc0fe91bfb409c2299f1c238f484be229a654b62b0935d046525b16d",
+    "Accounting.Remote.Sketch.Assumptions.Receipted": "3328eff94adee2bee0cbb7d9c30b8b946e673c5f4bf74f25d23235318016ad41"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
@@ -28186,10 +28193,10 @@
    ]
   },
   "Models.Accounting.Guarantees.RemoteSketch": {
-   "digest": "779f29701ee870c0d8fba02b88ef589dc54404ae89ded8bbb57901de07dafb2c",
+   "digest": "1477c5b2b5070cda35528d1578a62f4c8afb6b748fc90ef6e4780ae4ac52cb51",
    "definitions": {
-    "Accounting.Guarantees.Remote.SketchBoundDeployed": "93907bd2810029c160037a5c2cc0c868053194e24924977e86cd26c85d194c68",
-    "Accounting.Guarantees.Remote.SketchBoundSession": "d8876007436a5de603ada07cab9b3bb84b70db5369e09b57101fa5ab445fd965"
+    "Accounting.Guarantees.Remote.SketchBoundDeployed": "ed6cb7176a2ec67cfb13e0fc6e8961ad3c5e87c167596cddd6ce83041a09944e",
+    "Accounting.Guarantees.Remote.SketchBoundSession": "fa503f08030969fd024b3a118637f528b91792580ed82ae9745470c7f149dbab"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
