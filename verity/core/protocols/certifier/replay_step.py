@@ -72,6 +72,15 @@ victims a suffix; a scan of the candidates (W waiting slots, then A arrivals); t
 list by two right shifts; close and update per slot; the stopped compacted out by a log-depth shifter (each slot
 moves left by the stopped before it, low bit first, which never collides); the waiting list rebuilt by shifting
 left by the admitted and right by the preempted. `size` counts its ANDs by stage.
+
+**Cost** (`size`, on the smallkv engine: T = 2048, NB = 512, chunked prefill and prefix caching): 12,320 ANDs at
+(R, W, A) = (4, 8, 4), 95,247 at (16, 64, 16) and 160,803 at (32, 64, 32). By stage, to within 2% of every measured
+class: the running loop's preemption pairs 15.6·R² + 205·R, the requeue's shifts about 104·W·bitlen(R) + 250·R, the
+candidates' scan about 250·W + 290·A, the placing shifters about 96·R·bitlen(R) + 270·min(W, R) and the compaction
+130·R·bitlen(R).
+The running loop is most of a class that covers max_num_seqs = 256: about 1.7M ANDs a step, 1.1M of them the pairs.
+The replay's own waiting list holds only the preempted and the forced arrival (at most 5 on the corpus), since the
+arrivals not yet scheduled stay in the certified stream, so W stays small.
 """
 from __future__ import annotations
 
