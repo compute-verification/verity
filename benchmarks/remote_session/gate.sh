@@ -177,8 +177,10 @@ leased() {
   local to st
   read -ra to <<< "${PROVER_SSH:-$(grep "^$PROVER_NODE " /etc/vy/peers | cut -d' ' -f2-)}"
   [ ${#to[@]} -gt 0 ] || { echo "no $PROVER_NODE in /etc/vy/peers and no PROVER_SSH" >&2; return 3; }
+  # no waiter leaves no wait file, so only the status decides the rc
   st=$(ssh -o BatchMode=yes -o ConnectTimeout=20 "${to[@]}" \
-    "/workspace/pouw/infra/bin/gpu-lease status; cat /run/gpu-lease/wait.* 2> /dev/null" 2>&1) || return 3
+    "/workspace/pouw/infra/bin/gpu-lease status && { cat /run/gpu-lease/wait.* 2> /dev/null; true; }" 2>&1) \
+    || { tail -n 3 <<< "$st" >&2; return 3; }
   local held
   held=$(grep -E "^[0-9]+ held .* run=${PROVER_RUN:?}( |$)" <<< "$st" | grep -c .)
   if [ "$held" = 0 ] && ! grep -q "run=$PROVER_RUN\b" <<< "$st"; then echo gone; else echo "$held"; fi
