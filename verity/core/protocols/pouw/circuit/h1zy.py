@@ -415,7 +415,7 @@ PouwH1Combine = CompositeDefinition(
         "receipt's.")
 
 
-#: the least K at which a leaf's combine is proved (`combine`); a lane is proved at any positive K
+#: the least K at which a leaf's combine is proved (`combine`); a lane is proved at any K the Definitions bind (64 <= K)
 LEAST_K = 384
 
 
