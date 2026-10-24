@@ -2643,17 +2643,26 @@ extern "C" int kh_units_multi_j10r_smc(const void* calls, unsigned ncalls, unsig
 
 #if H1U_JRC
 // call blockIdx.y's column blocks M RB + t (t < N CB: column j's block c at t = j CB + c) of its seed_c stream, into its
-// workspace at those stream positions, the grid's x threads striding over t
+// workspace at those stream positions, the grid's x threads striding over t; the stream's midstate made once a CTA, in
+// shared memory.  H1U_JCOLX is the grid's x a call: a call's blocks are 1.1 (o) to 8 (gate_up) a thread at 128 and
+// T = 64, where the calls' CTAs run beside each other, so a larger x evens their work out
+#ifndef H1U_JCOLX
+#define H1U_JCOLX 128
+#endif
 __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ calls, u32 M) {
   const UCallR c = calls[blockIdx.y];
   const u32 rb = c.K / 512 + 1, nb = c.N * rb;
+  if (blockIdx.x * blockDim.x >= nb) return;
   const u32 t0 = blockIdx.x * blockDim.x + threadIdx.x;
-  if (t0 >= nb) return;
-  u64 seed[8];
+  __shared__ NoiseMid nm;
+  if (threadIdx.x == 0) {
+    u64 seed[8];
 #pragma unroll
-  for (int j = 0; j < 8; ++j) seed[j] = __ldg(c.seeds + j);
-  NoiseMid nm;
-  noise_mid(seed, nm);
+    for (int j = 0; j < 8; ++j) seed[j] = __ldg(c.seeds + j);
+    noise_mid(seed, nm);
+  }
+  __syncthreads();
+  if (t0 >= nb) return;
 #pragma unroll 1
   for (u32 t = t0; t < nb; t += gridDim.x * blockDim.x) {
     const u64 p = (u64)M * rb + t;
@@ -2772,7 +2781,7 @@ extern "C" int kh_units_multi_j10rc(const void* calls, unsigned ncalls, unsigned
   cudaStream_t s = (cudaStream_t)stream;
   if (mode != 2) {
     h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
-    h1jr_cols<<<dim3(128, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
+    h1jr_cols<<<dim3(H1U_JCOLX, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
   }
   if (mode != 1) {
     carve<h1umjc>();
@@ -2794,7 +2803,7 @@ extern "C" int kh_units_multi_j10rc_sm(const void* calls, unsigned ncalls, unsig
     return 3;
   cudaStream_t s = (cudaStream_t)stream;
   h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
-  h1jr_cols<<<dim3(128, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
+  h1jr_cols<<<dim3(H1U_JCOLX, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
   if (cudaMemsetAsync(next, 0, sizeof(u32), s) != cudaSuccess) return 3;
   h1umjc_sm<false><<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
                                                                             (const uint8_t*)live, q, den, (u32*)next, 0);
