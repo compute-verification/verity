@@ -68,8 +68,10 @@ def world(tmp_path):
 
 def test_a_tick_launches_its_trains_at_once_each_with_its_rank_for_the_slot_queue(world, monkeypatch):
     """CI-110: the train that lands next takes a node's next free slot (`slot.py --rank`), so drive launches each train's check with
-    CHECK_SLOT_RANK set to its members above `main`, and leaves os.environ as it was.  A tick's launches run at once
-    (`LAUNCH_JOBS`: 21 Oct, seven one after another took 40 min), each thread with its own rank."""
+    CHECK_SLOT_RANK set to its first-parent depth, which keeps its order with a rank sent after `main` moved (24 Oct: d836, ranked
+    17 by its members above `main`, waited 3 h behind higher trains ranked 15 after a landing), and the top tip's right after the
+    lowest train's; it leaves os.environ as it was.  A tick's launches run at once (`LAUNCH_JOBS`: 21 Oct, seven one after another
+    took 40 min), each thread with its own rank."""
     monkeypatch.delenv("CHECK_SLOT_RANK", raising=False)
     pools = []
     each = drive._each
@@ -87,7 +89,10 @@ def test_a_tick_launches_its_trains_at_once_each_with_its_rank_for_the_slot_queu
     assert h.tick().count("launched") == 3
     assert (3, 4) in pools and "CHECK_SLOT_RANK" not in os.environ
     chain = h.q.chain()
-    assert ranks == {m.commit: str(k) for k, m in enumerate(chain[:-1], 1)} | {chain[-1].commit: "1"}, "the top tip ranks first"
+    depth = {m.commit: int(_git(h.d.repo, "rev-list", "--count", "--first-parent", m.commit)) for m in chain}
+    assert [depth[m.commit] for m in chain] == list(range(depth[chain[0].commit], depth[chain[0].commit] + 3))
+    assert ranks == {m.commit: str(depth[m.commit]) for m in chain[:-1]} | {chain[-1].commit: str(depth[chain[0].commit] + 1)}, \
+        "each train ranks by its depth, and the top tip right after the lowest"
 
 
 def test_the_top_tip_keeps_a_check_of_its_own_while_the_trains_below_it_wait(world, monkeypatch):
