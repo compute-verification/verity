@@ -3,8 +3,10 @@ served vLLM OpenAI endpoint, and the offline check of what it published.
 
 **Topology.** The client, outside the boundary, holds one link connection to the certifier's host. There the certifier
 (`active.Proxy` with its salt on, signing every record and every reveal) forwards each request it releases over
-loopback to the shim (`active_replay.LiveServer`, the canonical framer, which is the prover's side), and the shim sends
-it to the endpoint over HTTP or HTTPS and frames the stream it gets back as canonical events:
+loopback to the shim (`active_replay.LiveServer`, the canonical framer, which is the prover's side), with its place in
+the release order and the certifier's run id (`x-verity-release`, `x-verity-release-run`: `release`), and the shim
+sends it to the endpoint over HTTP or HTTPS with those two headers, so that `serve-openai --admit release-order` takes
+requests in the order the certifier released them, and frames the stream it gets back as canonical events:
 
     client ──link──▶ certifier host: [ Proxy ──loopback──▶ shim ] ──HTTP(S)──▶ endpoint
 
@@ -193,7 +195,7 @@ from pathlib import Path
 import active_replay as ar
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit as host_audit, calibration
-from verity.core.protocols.certifier.active import COMPACT_EOS, COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, \
+from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, \
     Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, Direction, Issuer, LmsKey, \
@@ -806,8 +808,9 @@ def varied_plan(probed: dict, requests: list[dict], *, name: str = "varied", see
 
 # The certifier.
 
-class ServedProxy(Proxy):
-    """`active.Proxy`, keeping the windows whose salt it has revealed, so that `serve` stops once every one is."""
+class ServedProxy(ar.ReleaseProxy):
+    """`active.Proxy` whose server gets each request with its place in the release order (`active_replay.ReleaseProxy`),
+    keeping the windows whose salt it has revealed, so that `serve` stops once every one is."""
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -942,9 +945,10 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
     events that name its ordinal. `accepted` when every request is an id request whose `user` no other request has,
     every egress frame is an id event of a request released no later than the frame's bucket, and every response keeps
     the finish rule: at most `max_tokens` tokens, ending at its first EOS (`eos_token_ids`) or at `max_tokens`. On a
-    compact plan each egress frame is a compact cell (`active.compact_record_data`), a stop's id in `output` is
-    `COMPACT_EOS`, and the finish is the records' own: only the last is marked, a stop at any length up to `max_tokens`,
-    `COMPACT_LAST` at `max_tokens` exactly, and no record carries an EOS id, since a stop is only ever `COMPACT_EOS`."""
+    compact plan each egress frame is a compact cell (`active.compact_record_data`), and the finish is the records'
+    too: only the last is marked, a stop on an EOS id, `COMPACT_LAST` alone at `max_tokens` exactly, and no other
+    record carries an EOS id. Where a response stops is the server's word here, as an EOS id event's is: only the I/O
+    tie holds it to the ids the model sampled (`active.compact_finish_violations`)."""
     e, i = setup.egress_params, setup.ingress_params
     compact = bool(plan.get("compact"))
     marks: dict[int, list] = defaultdict(list)
@@ -973,8 +977,7 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
         for t, row in enumerate(rec.grid):
             for slot in row[:row_count(row)]:
                 if compact:
-                    c = compact_record_data(slot)
-                    got = None if c is None else (c[0], COMPACT_EOS if c[2] == "stop" else c[1], c[2])
+                    got = compact_record_data(slot)
                 else:
                     kind, _, payload = decode_frame(slot)
                     d = id_event_data(payload) if kind == DATA else None
@@ -1001,8 +1004,10 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
             r["finish"] = "longer than max_tokens"
         elif compact and any(ends[:-1]):
             r["finish"] = "a token after its finish"
-        elif compact and stops:
-            r["finish"] = "an EOS id in a compact response"
+        elif compact and any(ends[k] != "stop" for k in stops):
+            r["finish"] = "an EOS id outside a stop record"
+        elif compact and ends[-1] == "stop" and not stops:
+            r["finish"] = "a stop on an id that isn't EOS"
         elif compact:
             short = "a length finish short of max_tokens"
             r["finish"] = {"stop": "eos", "length": "length" if len(out) == m else short, None: "no finish"}[ends[-1]]
@@ -1020,12 +1025,12 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
 
 def _shim_ids(run: Path, compact: bool = False) -> dict[tuple[str, int], list[int]]:
     """The token ids the shim wrote (`server.events.gz`), in its order, by each event's session and the ordinal it
-    names; its compact records' under `compact`, a stop as `COMPACT_EOS`."""
+    names; its compact records' under `compact`."""
     out: dict[tuple[str, int], list[int]] = defaultdict(list)
     for _, name, _, _, e in sorted(ar.read_events(run / "server.events.gz")):
         if compact:
             if (c := compact_record_data(e[-COMPACT_RECORD.size :])) is not None:
-                out[name, c[0]].append(COMPACT_EOS if c[2] == "stop" else c[1])
+                out[name, c[0]].append(c[1])
         elif (got := id_event_data(event_body(e))) is not None:
             out[name, got[0]].append(got[1])
     return dict(out)
