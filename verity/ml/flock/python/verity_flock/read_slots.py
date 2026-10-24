@@ -247,28 +247,40 @@ class _Plan:
 AUTO_ROUNDS = 6
 
 
+def _tighten(L: int, last: _Plan, caps: list[int] | None) -> list[int]:
+    """Each net's `ands_cap` in ``2^L`` from its ports, assertions and inline read rows in ``last``, never above ``caps``."""
+    new = [ands_cap(L, a_ + r - n, i, o) for n, (r, a_, i, o) in zip(last.ands, last.nets)]
+    if caps is None:
+        return new
+    return [min(c, caps[k] if k < len(caps) else caps[-1]) for k, c in enumerate(new)] + caps[len(new):]
+
+
+def _fit(plan, L: int, caps: list[int]) -> _Plan | None:
+    """The placement under ``caps``, tightened (`_tighten`) until every net fits ``2^L``; None when it doesn't within
+    `AUTO_ROUNDS` placements or a cap would leave a net no AND."""
+    for _ in range(AUTO_ROUNDS):
+        if min(caps) < 1:
+            return None
+        last = plan(caps)
+        if max(last.logs) <= L:
+            return last
+        caps = _tighten(L, last, caps)
+    return None
+
+
 def _auto(plan) -> _Plan:
     """The placement whose nets' slots take the fewest cells (then the fewest nets): no cap, then caps that fit every net in
-    ``2^L`` for L one below the largest net's slot, then one below that, while it shrinks. A cap is `ands_cap` of the net's
-    ports, assertions and inline read rows in the last placement, so it tightens as the cut moves the exports, and never
-    loosens. A cap that would leave a net no AND gives L up."""
+    ``2^L`` for L one below the largest net's slot, then one below that, while it shrinks. Each L starts from two caps, kept
+    as the better: one cap on every net, the unit's `ands_cap` (its ports are the largest), and each net's own from the last
+    placement (`_tighten`). Caps then tighten as the cut moves the exports, and never loosen."""
     best = plan(None)
     L = max(best.logs)
     while L > 7:
         L -= 1
-        got, last, caps = None, best, None
-        for _ in range(AUTO_ROUNDS):
-            new = [ands_cap(L, a_ + r - n, i, o) for n, (r, a_, i, o) in zip(last.ands, last.nets)]
-            if caps is not None:
-                new = [min(c, caps[k] if k < len(caps) else caps[-1]) for k, c in enumerate(new)]
-                new += caps[len(new):]
-            caps = new
-            if min(caps) < 1:
-                break
-            last = plan(caps)
-            if max(last.logs) <= L:
-                got = last
-                break
+        n, (r, a_, i, o) = best.ands[0], best.nets[0]
+        seeds = [[ands_cap(L, a_ + r - n, i, o)], _tighten(L, best, None)]
+        fits = [f for f in (_fit(plan, L, c) for c in seeds) if f is not None]
+        got = min(fits, key=lambda f: (f.cells, len(f.nets)), default=None)
         if got is None or (got.cells, len(got.nets)) >= (best.cells, len(best.nets)):
             break
         best = got
