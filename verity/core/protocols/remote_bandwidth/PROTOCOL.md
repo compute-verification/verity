@@ -1210,10 +1210,15 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed draw (`Accounting.Remote.Draw`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each draw's first
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, at δ plus
-  \(\sum_t s_t/2^{64}\) (a rejected first word) plus each window's PRF advantage against a window test, C3's term;
-  that `pooled`'s greedy order reaches the bound's supremum is not in the Lean. What this code supplies is the schedule (each window's challenge released
-  at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile a receipt under a
-  registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and the profile at δ.
+  \(\sum_t s_t/2^{64}\) (a rejected first word) plus each window's PRF advantage against a window test, C3's term.
+  `pooled` is computed in exact rationals in the verifier's Lean
+  (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
+  certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledDraw`
+  reads (the greedy by \(U_t/s_t\) is the fractional knapsack's optimum); the memory line reads that W from the
+  record's windows (`Properties.RemoteAudit.LineCoversSession`). What this code supplies is the schedule (each
+  window's challenge released at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile
+  a receipt under a registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and
+  the profile at δ.
   The chain's ordering is a random-oracle argument over a prover of bounded queries, which the statements must say.
 - **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/RemoteAudit/Store.lean`
   and held to the Python by a difftest (`lean/tests/test_binding.py`), refusals compared word for word: the pin from
