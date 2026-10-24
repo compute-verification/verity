@@ -45,7 +45,11 @@ theorem credit_le_tiles {K : Type} [DecidableEq K] {N T M : ℕ} (W : Wiring G) 
         obtain ⟨b, hb, rfl⟩ := Finset.mem_image.mp hz
         obtain ⟨i, hi⟩ := hrange b (hown_plan hb)
         exact ⟨i, hi ▸ hz, hi⟩
-    rw [← Finset.card_image_of_injOn (hinj.mono (Finset.coe_subset.mpr hown_plan)), ← e1, Finset.card_map]
+    calc (Finset.univ.filter fun i : Fin N => lay i ∈ owned.image addr).card
+        = ((Finset.univ.filter fun i : Fin N => lay i ∈ owned.image addr).map lay).card :=
+          (Finset.card_map lay).symm
+      _ = (owned.image addr).card := congrArg Finset.card e1
+      _ = owned.card := Finset.card_image_of_injOn (hinj.mono (Finset.coe_subset.mpr hown_plan))
   rw [htiles]
   have hheld : bitsAt W ℓ (credited W e ℓ t) owned ≤ owned.card * 32768 := by
     have := bits_le_bitsAt_add W ℓ (S := (credited W e ℓ t).filter fun v => ℓ.block v ∈ owned) (R := owned) ∅

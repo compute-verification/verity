@@ -128,11 +128,14 @@ theorem card_obtained_tiles (A : Device N m ρ h S L q w X Sig Dg) (σ : Sig) (O
   have h2 : (A.obtained σ O D ∩ tilePos U m ρ).card ≤
       A.held.card + ((A.prog σ D).reads O D ∩ tilePos U m ρ).card := by
     unfold obtained
-    refine (Finset.card_le_card ?_).trans ((Finset.card_union_le _ _).trans (le_of_eq ?_))
-    · intro x hx
-      simp only [Finset.mem_inter, Finset.mem_union] at hx ⊢
-      tauto
-    · rw [Finset.card_map]
+    calc ((A.held.map Function.Embedding.inl ∪ (A.prog σ D).reads O D) ∩ tilePos U m ρ).card
+        ≤ (A.held.map Function.Embedding.inl ∪ ((A.prog σ D).reads O D ∩ tilePos U m ρ)).card := by
+          refine Finset.card_le_card fun x hx => ?_
+          simp only [Finset.mem_inter, Finset.mem_union] at hx ⊢
+          tauto
+      _ ≤ (A.held.map Function.Embedding.inl).card + ((A.prog σ D).reads O D ∩ tilePos U m ρ).card :=
+          Finset.card_union_le _ _
+      _ = _ := by rw [Finset.card_map]
   have h3 := Nat.mul_le_mul_right w (h2.trans (Nat.add_le_add_left h1 _))
   have h4 := A.held_le
   have h5 := (A.bounded σ (fun p => D (.inl p.1)) O D).1
@@ -184,6 +187,7 @@ theorem Device.unpaid_tiles_split [Fintype X] [DecidableEq X] [Fintype Dg] [Deci
   · push Not at hall
     exact Or.inl hall
   right
+  have hob := A.card_obtained_tiles σ O D U
   set Q := A.correct dig σ O D ∩ U with hQ
   set Z : Finset (Pos N m ρ) := (Q ×ˢ (Finset.univ : Finset (Fin m))).disjSum (Finset.univ : Finset (Fin ρ))
     with hZ
@@ -200,7 +204,6 @@ theorem Device.unpaid_tiles_split [Fintype X] [DecidableEq X] [Fintype Dg] [Deci
         Finset.mem_inter] at hx
       simpa using hx.1.2
     · simp
-  have hob := A.card_obtained_tiles σ O D U
   have hsplit : Mis.card + (Z ∩ Ob).card = Z.card := Finset.card_sdiff_add_card_inter Z Ob
   have hzo := Finset.card_le_card hZU
   have hmis : k * m < Mis.card := by
