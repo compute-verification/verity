@@ -43,6 +43,7 @@
 // its level's, and every node resumes from it: two compressions a node rather than three, as h1c_a_* already do.
 // H1C_MKN = 1 (H1C_MK): hb_mk folds M_key y a nibble at a time, a row of a nibble table each, not a column a bit.
 // H1C_TAILW = 1 (H1C_NMID): h1c_tail's nodes hash from their messages built as words in registers (tail_node).
+// H1C_TAILP = 1 (H1C_NMID): h1c_tail's launch is h1c_tail2_k's, those words' two blocks by paired compressions (ap_cmp_in).
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -84,6 +85,9 @@
 #endif
 #ifndef H1C_TAILW
 #define H1C_TAILW 0
+#endif
+#ifndef H1C_TAILP
+#define H1C_TAILP 0
 #endif
 // unset, h1c_segs' bounds name no blocks an SM: __launch_bounds__(HT, 1) lets it take 136 registers on sm_90a, not 96
 #ifdef H1C_SMINB
@@ -1308,9 +1312,30 @@ extern "C" __global__ void __launch_bounds__(LT) h1c_tail_pre_k(H1Tab* __restric
   }
   for (int q = threadIdx.x; q < T.depth; q += LT) node_snap(T, q, b, snaps + ((size_t)t * NMAXD + q) * NSNAP);
 }
-// H1C_TAILW = 1: a node whose Snap leaves one byte pending and whose idx is below 256 (its children at byte 3, as
-// h1c_a_call3_k's) hashes its two blocks from words built in registers, one inlined compression, not through Hb's
-// shared-memory block and hb_block's call; any other node through hb_node_snap
+// a node's block q (0 or 1) as words, from its children's words c: its Snap leaves one byte pending and its idx is
+// below 256 (the children at byte 3, as h1c_a_call3_k's)
+__device__ __forceinline__ void tail_block(int q, const u64 c[16], const u64* snap, long long idx, u64 w[16]) {
+  if (q == 0) {
+    w[0] = (snap[9] & 0xFF) << 56 | 1ull << 48 | (u64)idx << 40;
+    w[1] = 64ull << 40 | c[0] >> 24;
+#pragma unroll
+    for (int i = 2; i < 9; ++i) w[i] = c[i - 2] << 40 | c[i - 1] >> 24;
+    w[9] = c[7] << 40;
+    w[10] = 64ull << 40 | c[8] >> 24;
+#pragma unroll
+    for (int i = 11; i < 16; ++i) w[i] = c[i - 3] << 40 | c[i - 2] >> 24;
+  } else {
+    w[0] = c[13] << 40 | c[14] >> 24;
+    w[1] = c[14] << 40 | c[15] >> 24;
+    w[2] = c[15] << 40 | 0x80ull << 32;
+#pragma unroll
+    for (int i = 3; i < 15; ++i) w[i] = 0;
+    w[15] = 8 * (snap[8] + 146);
+  }
+}
+// H1C_TAILW = 1: a node whose Snap leaves one byte pending and whose idx is below 256 hashes its two blocks from
+// tail_block's words, one inlined compression, not through Hb's shared-memory block and hb_block's call; any other node
+// through hb_node_snap
 __device__ __forceinline__ void tail_node(const H1Tab& T, uint8_t* b, int lv, long long idx, const u64* snap) {
 #if H1C_TAILW
   if (idx < 256 && (snap[8] & 127) == 1) {
@@ -1323,27 +1348,10 @@ __device__ __forceinline__ void tail_node(const H1Tab& T, uint8_t* b, int lv, lo
     for (int i = 0; i < 16; ++i) c[i] = __ldcg(in + i);
 #pragma unroll
     for (int i = 0; i < 8; ++i) h[i] = snap[i];
-    const u64 bits = 8 * (snap[8] + 146);
 #pragma unroll 1
     for (int q = 0; q < 2; ++q) {
       u64 w[16];
-      if (q == 0) {
-        w[0] = (snap[9] & 0xFF) << 56 | 1ull << 48 | (u64)idx << 40;
-        w[1] = 64ull << 40 | c[0] >> 24;
-#pragma unroll
-        for (int i = 2; i < 9; ++i) w[i] = c[i - 2] << 40 | c[i - 1] >> 24;
-        w[9] = c[7] << 40;
-        w[10] = 64ull << 40 | c[8] >> 24;
-#pragma unroll
-        for (int i = 11; i < 16; ++i) w[i] = c[i - 3] << 40 | c[i - 2] >> 24;
-      } else {
-        w[0] = c[13] << 40 | c[14] >> 24;
-        w[1] = c[14] << 40 | c[15] >> 24;
-        w[2] = c[15] << 40 | 0x80ull << 32;
-#pragma unroll
-        for (int i = 3; i < 15; ++i) w[i] = 0;
-        w[15] = bits;
-      }
+      tail_block(q, c, snap, idx, w);
       sh::sha512_compress(h, w);
     }
     u64* o = T.level + 8 * (off + (width >> lv) + idx);
@@ -1388,6 +1396,74 @@ extern "C" __global__ void __launch_bounds__(LT) h1c_tail_k(const H1Tab* __restr
     __syncthreads();
     if (threadIdx.x == 0) *reinterpret_cast<volatile u64*>(host_root + 8 * nrnd) = seq;
   }
+}
+// H1C_TAILP = 1: h1c_tail_k in 128 threads, consumer warps 0 and 1 a node a lane (64 a pass, a warp's lanes past a
+// level's nodes hashing its last node unwritten, since every lane of a pair takes part in every compression) and
+// producer warps 2 and 3 (ap_serve); h1c_tail_pre refuses a table deeper than 9 (a level of more than 256 nodes)
+__device__ __forceinline__ void tail2_levels(const H1Tab& T, const u64* snaps) {
+  const int lane = threadIdx.x & 31, wid = threadIdx.x >> 5;
+  const long long width = 1LL << T.depth;
+  long long off = 0;
+  for (int lv = 0; lv < T.depth; ++lv) {
+    const long long nodes = width >> (lv + 1);
+    const u64* snap = snaps + lv * NSNAP;
+    if ((snap[8] & 127) != 1 || nodes > 256) __trap();
+    for (long long i0 = 32 * wid; i0 < nodes; i0 += 64) {
+      const long long idx = min(i0 + lane, nodes - 1);
+      const u64* in = T.level + 8 * (off + 2 * idx);
+      u64 c[16], h[8];
+#pragma unroll
+      for (int i = 0; i < 16; ++i) c[i] = __ldcg(in + i);
+#pragma unroll
+      for (int i = 0; i < 8; ++i) h[i] = snap[i];
+#pragma unroll 1
+      for (int q = 0; q < 2; ++q) {
+        u64 w[16];
+        tail_block(q, c, snap, idx, w);
+        ap_cmp_in(h, w);
+      }
+      if (i0 + lane < nodes) {
+        u64* o = T.level + 8 * (off + (width >> lv) + idx);
+#pragma unroll
+        for (int k = 0; k < 8; ++k) o[k] = h[k];
+        if (lv == T.depth - 1)
+#pragma unroll
+          for (int k = 0; k < 8; ++k) T.root[k] = h[k];
+      }
+    }
+    off += width >> lv;
+    __threadfence_block();
+    ap_sync(AP_CONSUMERS, 64);
+  }
+}
+extern "C" __global__ void __launch_bounds__(128) h1c_tail2_k(const H1Tab* __restrict__ mid, int nmid,
+                                                             const H1Tab* __restrict__ rnd, int nrnd,
+                                                             const u64* __restrict__ snaps, unsigned* __restrict__ done,
+                                                             u64* __restrict__ host_root, u64 seq) {
+  __shared__ bool last;
+  const int tid = threadIdx.x;
+  if (tid >= 64) {
+    ap_serve((tid >> 5) - 2);
+    return;
+  }
+  tail2_levels(mid[blockIdx.x], snaps + (size_t)blockIdx.x * NMAXD * NSNAP);
+  if (tid == 0) {
+    __threadfence();
+    last = atomicAdd(done, 1u) == (unsigned)nmid - 1;
+    __threadfence();
+  }
+  ap_sync(AP_CONSUMERS, 64);
+  if (last) {
+    if (tid == 0) *done = 0;
+    for (int r = 0; r < nrnd; ++r) tail2_levels(rnd[r], snaps + (size_t)(nmid + r) * NMAXD * NSNAP);
+    if (host_root) {
+      for (int k = tid; k < 8 * nrnd; k += 64) host_root[k] = rnd[k >> 3].root[k & 7];
+      __threadfence_system();
+      ap_sync(AP_CONSUMERS, 64);
+      if (tid == 0) *reinterpret_cast<volatile u64*>(host_root + 8 * nrnd) = seq;
+    }
+  }
+  ap_stop();
 }
 #endif
 #endif
@@ -2182,6 +2258,7 @@ extern "C" int h1c_tail_pre(const H1Tab* mid, H1Tab* mid_dev, int nmid, const H1
     const H1Tab& T = t < nmid ? mid[t] : rnd[t - nmid];
     if (T.data || T.depth < 1 || T.depth > NMAXD || T.count > (1LL << T.depth) || (T.count << 1) <= (1LL << T.depth))
       return 100 + t;
+    if (H1C_TAILP && T.depth > 9) return 200 + t;
   }
   h1c_tail_pre_k<<<nmid + nrnd, LT, 0, stream>>>(mid_dev, nmid, rnd_dev, step_dev, snaps);
   return (int)cudaGetLastError();
@@ -2193,7 +2270,14 @@ extern "C" int h1c_tail(const H1Tab* mid_dev, int nmid, const H1Tab* rnd_dev, in
                         u64* host_root, u64 seq, cudaStream_t stream) {
 #if H1C_HB && H1C_NMID
   if (nmid <= 0 || nrnd <= 0) return 99;
+#if H1C_TAILP
+  static const cudaError_t attr =
+      cudaFuncSetAttribute(h1c_tail2_k, cudaFuncAttributeMaxDynamicSharedMemorySize, AP_SMEM);
+  if (attr != cudaSuccess) return (int)attr;
+  h1c_tail2_k<<<nmid, 128, AP_SMEM, stream>>>(mid_dev, nmid, rnd_dev, nrnd, snaps, done, host_root, seq);
+#else
   h1c_tail_k<<<nmid, LT, 0, stream>>>(mid_dev, nmid, rnd_dev, nrnd, snaps, done, host_root, seq);
+#endif
   return (int)cudaGetLastError();
 #else
   return 98;
