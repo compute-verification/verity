@@ -316,12 +316,14 @@ def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_
     row's AOT Build (`row_tp.TpRow.derive`, under `config_record.aot_of`; `tests/pipeline/test_tp_build_width.py`), and the trace
     that checks it lists the package as a forbidden input."""
     from verity_vllm.program.frontend import inputs_trace
-    pkg = Path(S.__file__).resolve().parents[1]
-    pat = re.compile(r"^\s*(from|import)\s+(verity_vllm\.predict|\.+predict)\b|import_module\([^)]*predict", re.M)
-    hits = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1] and pat.search(p.read_text())]
+    here, name = Path(S.__file__).resolve().parent, S.__name__.rpartition(".")[0]
+    pkg = here.parents[name.count(".") - 1]
+    inside = here.relative_to(pkg).parts
+    pat = re.compile(rf"^\s*(from|import)\s+({re.escape(name)}|\.+{here.name})\b|import_module\([^)]*{here.name}", re.M)
+    outside = [p for p in pkg.rglob("*.py") if p.relative_to(pkg).parts[:len(inside)] != inside]
+    hits = [str(p.relative_to(pkg)) for p in outside if pat.search(p.read_text())]
     assert hits == []
-    runs = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1]
-            and re.search(r"""cli\(\s*["']predict["']""", p.read_text())]
+    runs = [str(p.relative_to(pkg)) for p in outside if re.search(r"""cli\(\s*["']predict["']""", p.read_text())]
     assert runs == ["pipeline/row_tp.py"]
     assert any(m in str(Path(S.__file__).resolve()) for m in inputs_trace._FORBIDDEN_MARKERS)
 
