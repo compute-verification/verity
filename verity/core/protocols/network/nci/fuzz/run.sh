@@ -2,10 +2,11 @@
 # The falsification search on a node, from the checkout's root:
 #
 #   research run --on auto --cpus 16 --mem-gb 32 --cwd clone -- \
-#     bash verity/core/protocols/network/nci/fuzz/run.sh [RANDOM] [CHAIN] [EXTRA] [SEED]
+#     bash verity/core/protocols/network/nci/fuzz/run.sh [RANDOM] [CHAIN] [EXTRA] [SEED] [COPIES]
 #
 # builds `nci-desc-fuzz`, writes the Programs (`gen/`: the hand family, the NCI difftest vectors with EXTRA more seeds of
-# each of their generators, RANDOM random descriptors and CHAIN deep chains from seed SEED, with mutants), checks them,
+# each of their generators, RANDOM random descriptors, CHAIN deep chains and COPIES batches read as segment copies from
+# seed SEED, with mutants), checks them,
 # and writes to $OUT `summary.json` (`gen/summarize.py`), `failures.jsonl` (each result where a statement fails, with
 # its Program) and every result, gzipped, per family. With EXTRA negative, no hand family and no vectors: a run beside
 # one that has them, on other seeds.
@@ -15,6 +16,7 @@ RANDOM_N=${1:-100000}
 CHAIN_N=${2:-10000}
 EXTRA=${3:-10000}
 SEED=${4:-0}
+COPIES_N=${5:-0}
 JOBS=$(nproc)
 (( JOBS > 16 )) && JOBS=16
 S=$(mktemp -d)
@@ -25,6 +27,7 @@ EXE=$FUZZ/.lake/build/bin/nci-desc-fuzz
 
 shards() { # family count mutate: JOBS generators over consecutive seed ranges, one file
   local fam=$1 n=$2 mut=$3 per=$(( ($2 + JOBS - 1) / JOBS )) i
+  : > "$S/$fam.0.jsonl"
   for ((i = 0; i < JOBS; i++)); do
     local lo=$(( SEED + i * per )) cnt=$per
     (( i * per >= n )) && break
@@ -36,7 +39,7 @@ shards() { # family count mutate: JOBS generators over consecutive seed ranges, 
   rm -f "$S/$fam".*.jsonl
 }
 
-FAMILIES="random chain"
+FAMILIES="random chain copies"
 if (( EXTRA >= 0 )); then
   FAMILIES="hand vectors $FAMILIES"
   python3 "$FUZZ/gen/programs.py" hand --out "$S/hand.jsonl"
@@ -45,6 +48,7 @@ if (( EXTRA >= 0 )); then
 fi
 shards random "$RANDOM_N" 0.3
 shards chain "$CHAIN_N" 0.2
+shards copies "$COPIES_N" 0.2
 wait
 
 : > "$OUT/failures.jsonl"

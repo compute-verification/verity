@@ -465,6 +465,75 @@ def chain(seed: int) -> str:
     return P.text("R_v1")
 
 
+def copies(seed: int) -> str:
+    """Segments of copies (`Desc.Seg.reps > 1`) and their slices: `C0`, one to three primitives on its parameter,
+    returning its gates in no single run (repeated, reversed, interleaved); `C1`, a batch of three to six of `C0`
+    returning a slice of the batch (`Desc.Seg.slice` through the copies), now and then a second batch beside it; at the
+    root, inputs, a call or a batch of `C1`, and primitives reading slices of what they return, whole members and cut
+    ones, some through `W`, which passes a slice through."""
+    rng = random.Random(seed)
+    P = Program(rng)
+    w = rng.choice(WIDTHS)
+    t = V(w)
+    b0 = Body(P, [t], 10)
+    for _ in range(rng.randint(1, 3)):
+        key = P.prim([t], V(rng.choice(WIDTHS)))
+        out = P.sig[key][2]
+        src = ["p", 0, 0, 1] if not b0.nodes or rng.random() < 0.5 else ["n", rng.randrange(len(b0.nodes)), 0, 1]
+        b0.push({"args": [{"refs": {"affine": src}, "type": P.ty(t)}], "fn": P.fn(key), "form": "primitive",
+                 "out": P.ty(out)}, out, [1], 1, "prim")
+    G = len(b0.nodes)
+    L = rng.randint(2, 4)
+    items = [["n", rng.randrange(G), 0] for _ in range(L)]
+    if G > 1 and rng.random() < 0.5:
+        items = [["n", G - 1 - (i % G), 0] for i in range(L)]
+    # the return's leaves are gates of several widths, typed as one array: the decoder checks a reference's count only
+    c0 = P.composite(b0, A(L, t), {"explicit": items})
+    c0_ret = P.sig[c0][2]
+    b1 = Body(P, [t], 10 ** 6)
+    n1 = rng.randint(3, 6)
+    for _ in range(rng.choice([1, 1, 2])):
+        out = A(n1, c0_ret)
+        b1.push({"args": [{"refs": {"affine": ["p", 0, 0, 1]}, "type": P.ty(t)}], "axes": [None], "fn": P.fn(c0),
+                 "form": "batch", "n": n1, "out": P.ty(out)}, out, [1], n1 * G, "batch")
+    N = n1 * L
+    a = rng.choice([0, 0, rng.randrange(N)])
+    ln = rng.randint(1, N - a)
+    c1 = P.composite(b1, A(ln, V(w)), {"affine": ["n", rng.randrange(len(b1.nodes)), a, ln]})
+    wb = Body(P, [A(ln, V(w))], 0)
+    wa = rng.randrange(ln)
+    wl = rng.randint(1, ln - wa)
+    wfn = P.composite(wb, A(wl, V(w)), {"affine": ["p", 0, wa, wl]})
+    root = Body(P, [], 10 ** 6)
+    key = P.input(w, rng.random() < 0.5)
+    root.push({"args": [], "fn": P.fn(key), "form": "primitive", "out": P.ty(t)}, t, [], 1, "input")
+    for _ in range(rng.randint(1, 3)):
+        if rng.random() < 0.5:
+            root.push({"args": [{"refs": {"affine": ["n", 0, 0, 1]}, "type": P.ty(t)}], "fn": P.fn(c1), "form": "call",
+                       "out": P.ty(A(ln, V(w)))}, A(ln, V(w)), [ln], P.sig[c1][3], "call")
+        else:
+            nb = rng.randint(2, 4)
+            out = A(nb, A(ln, V(w)))
+            root.push({"args": [{"refs": {"affine": ["n", 0, 0, 1]}, "type": P.ty(t)}], "axes": [None], "fn": P.fn(c1),
+                       "form": "batch", "n": nb, "out": P.ty(out)}, out, [1], nb * P.sig[c1][3], "batch")
+    made = [k for k in range(1, len(root.nodes))]
+    for _ in range(rng.randint(1, 4)):
+        k = rng.choice(made)
+        M = leaves(root.outs[k])
+        if rng.random() < 0.3:
+            s0 = rng.randrange(M - ln + 1)
+            root.push({"args": [{"refs": {"affine": ["n", k, s0, ln]}, "type": P.ty(A(ln, V(w)))}], "fn": P.fn(wfn),
+                       "form": "call", "out": P.ty(A(wl, V(w)))}, A(wl, V(w)), [ln], 0, "call")
+            k, M = len(root.nodes) - 1, wl
+        s0 = rng.randrange(M)
+        sl = rng.randint(1, M - s0)
+        key = P.prim([A(sl, V(w))], V(w))
+        root.push({"args": [{"refs": {"affine": ["n", k, s0, sl]}, "type": P.ty(A(sl, V(w)))}], "fn": P.fn(key),
+                   "form": "primitive", "out": P.ty(V(w))}, V(w), [sl], 1, "prim")
+    P.composite(root, t, {"affine": ["n", len(root.nodes) - 1, 0, 1]}, "R_v1")
+    return P.text("R_v1")
+
+
 def passscan(n: int) -> str:
     """A gate reading the carry of a scan of `n` iterations of a step that passes its carry through, from an input."""
     P = Program(random.Random(0))
@@ -651,7 +720,7 @@ def hand() -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("what", choices=["random", "chain", "hand"])
+    ap.add_argument("what", choices=["random", "chain", "copies", "hand"])
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--count", type=int, default=1000)
     ap.add_argument("--mutate", type=float, default=0.0)
@@ -663,7 +732,7 @@ def main() -> None:
                 f.write(json.dumps(x) + "\n")
             return
         for s in range(a.seed, a.seed + a.count):
-            text = program(s) if a.what == "random" else chain(s)
+            text = {"random": program, "chain": chain, "copies": copies}[a.what](s)
             f.write(json.dumps({"id": f"{a.what}-{s}", "family": a.what, "program": text}) + "\n")
             rng = random.Random(~s)
             if rng.random() < a.mutate:
