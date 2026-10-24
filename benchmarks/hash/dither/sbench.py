@@ -130,6 +130,17 @@ a decode step are the two ranges' difference over PROF_N[1] - PROF_N[0] (`exactl
 arm's step by part, its between-step phases by their NVTX ranges).  nsys's capture range ends at the first profiler stop,
 so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a gated run's prof op is the capture.
 
+--prefill: every request a T-token prompt (`prefill_prompts`, token ids cycled from the prompts) with one output token, so
+at max_num_batched_tokens = T each request is one step of m = T, a whole prompt in one chunk (max_model_len T + 64).
+`prefill` (an op): PF[0] and then PF[1] requests a generate, prefill_step_ms their difference over PF[1] - PF[0] (each
+generate's own overhead and, in process, its window's end cancel), and ttft_ms the median of PF_TTFT one-request
+generates (llm.generate alone; ttft_end_ms with an in-process -we window's end after it).  `prof` takes PF's counts of
+requests in place of PROF_N's tokens.  The gate arms PF_CAPTURES at m = T (the decode gate's faults are not armed) in a
+generate of len(PF_CAPTURES) + gate_extra requests, each capture copied to host memory (dither_so.CAP_HOST_ENV) and its
+leaves hashed in a pool (dither_a.CHECK_WORKERS_ENV, default PF_CHECK_WORKERS); its verdict `prefill_verdict`, and the
+token gate a generation of GATE_TOKENS tokens for PF_GATE_REQS prefill requests (chunked prefill, then decode), equal to
+the reference arm's.  Under -we the end gate is not run.
+
 Coins: a dither arm's window takes its round coins from the challenger off the node when its worker has a session
 (DITHER_CHALLENGERS' entry for the arm, ``{"ARM": {"session": ID, "address": "127.0.0.1:PORT", "secret_file": F,
 "commitment": HEX, "rounds": R}}``, each its own from infra's gate, `coins.py open` (R its --rounds, the layout a
@@ -139,6 +150,7 @@ hello's commitment held to HEX) and closed at the arm's stop; without one they a
 ``coins: in-process (not certified)``.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
+    python sbench.py --out OUT --prefill --t 2048 --arms exact,exact-fused,ARM --ops prefill --gate
 """
 from __future__ import annotations
 
@@ -174,6 +186,37 @@ def prompts(n: int) -> list[str]:
     return [PROMPTS[i % len(PROMPTS)] for i in range(n)]
 
 
+PREFILL_ENV = "SBENCH_PREFILL"
+PF = (8, 24)
+PF_TTFT = 3
+PF_GATE_REQS = 8
+PF_CAPTURES = ("gate", "control")
+PF_CHECK_WORKERS = 32
+
+
+def prefill() -> bool:
+    return os.environ.get(PREFILL_ENV) == "1"
+
+
+def prefill_prompts(tok, n: int, t: int) -> list[dict]:
+    """n prompts of t token ids each, request i's from offset 61 i of the prompts' ids cycled (no two alike)."""
+    ids = tok.encode(" ".join(prompts(64)))
+    need = t + 61 * n
+    ids = (ids * (need // len(ids) + 1))[:need]
+    return [{"prompt_token_ids": ids[61 * i:61 * i + t]} for i in range(n)]
+
+
+def prefill_verdict(gate: dict, control: dict) -> dict:
+    """The prefill gate's verdict: the gate step passes (its order included) and its no-write control is refused on z
+    and on the receipts, as `dither_a.gate_verdict` holds them."""
+    refused = bool(control.get("complete") and not control.get("ok") and control.get("z_vs_int_mm_bad")
+                   and control.get("receipts_vs_h1r_bad"))
+    return {"ok": bool(gate.get("ok")) and refused, "gate_ok": bool(gate.get("ok")), "control_refused": refused,
+            "order_ok": bool(gate.get("order", {}).get("ok")), "faults": "the decode gate's, not armed at prefill",
+            "control_bad": {k: len(control.get(k) or []) for k in ("z_vs_int_mm_bad", "receipts_vs_h1r_bad",
+                                                                    "a_roots_bad", "z_roots_bad")}}
+
+
 def stock_checkpoint(pin: str, scratch: Path) -> Path:
     """The pin's files linked into SCRATCH, its config's quantization_config replaced by compressed-tensors W8A8's."""
     d = scratch / "stock-ckpt"
@@ -194,7 +237,7 @@ def engine_args(gpu_mem: float, own_batch: bool = False) -> dict:
     t = int(os.environ.get("SBENCH_T", MAX_TOKENS_STEP))
     a = {"max_num_seqs": min(MAX_SEQS, t), "max_num_batched_tokens": t,
          "gpu_memory_utilization": gpu_mem,
-         "enable_prefix_caching": False, "max_model_len": 2048, "seed": 0,
+         "enable_prefix_caching": False, "max_model_len": max(2048, t + 64) if prefill() else 2048, "seed": 0,
          "kernel_config": {"enable_flashinfer_autotune": False}}
     if own_batch:
         del a["max_num_seqs"], a["max_num_batched_tokens"]
@@ -512,14 +555,23 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
     conn.send({"ready": True, "build_s": round(time.perf_counter() - t0, 1), "kernels": kernels_of(llm),
                "disabled": os.environ.get("VLLM_DISABLED_KERNELS"), "scheduler": scheduler_of(llm)})
     ps = prompts(B)
+    pf = prefill()
+    pp = prefill_prompts(llm.get_tokenizer(), max(PF[1], PF_GATE_REQS, 64), int(os.environ["SBENCH_T"])) if pf else None
+    if pf and base_arm(arm) in DITHER_SO:
+        import dither_a as DA
+        import dither_so as SO
+        os.environ[SO.CAP_HOST_ENV] = "1"
+        os.environ.setdefault(DA.CHECK_WORKERS_ENV, str(PF_CHECK_WORKERS))
+    last: dict = {}
 
-    def gen(reqs: list[str], n: int):
+    def gen(reqs: list, n: int):
         # a -we arm's in-process window ends with each generate, inside its time; the next one's challenger is made after
         sp = SamplingParams(temperature=0.0, max_tokens=n, ignore_eos=True, seed=0)
         win = getattr(llm, "dither_win", None)
         we = win is not None and getattr(win, "end_each", False)
         t = time.perf_counter()
         outs = llm.generate(reqs, sp, use_tqdm=False)
+        last["generate_s"] = time.perf_counter() - t
         if we:
             with torch.inference_mode():
                 win.end()
@@ -529,7 +581,12 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         return dt, outs
 
     def serve(cmd: dict) -> None:
-        if cmd["op"] == "warm":
+        if cmd["op"] == "warm" and pf:
+            # every step of m = T, a -we arm's spill pool grown to a timed window's (PF[1] steps)
+            gen(pp[:4], 1)
+            gen(pp[:PF[1]], 1)
+            conn.send({"warm": True})
+        elif cmd["op"] == "warm":
             gen(ps, 8)
             gen(prompts(64), 16)
             win = getattr(llm, "dither_win", None)
@@ -537,6 +594,18 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 # a -we arm's spill pool grown here to a timed window's size (N2 steps), not inside rep 0
                 gen(ps, N2)
             conn.send({"warm": True})
+        elif cmd["op"] == "prefill":
+            t1, _ = gen(pp[:PF[0]], 1)
+            t2, outs = gen(pp[:PF[1]], 1)
+            tt, te = [], []
+            for _ in range(PF_TTFT):
+                te.append(gen(pp[:1], 1)[0])
+                tt.append(last["generate_s"])
+            conn.send({"prefill_step_ms": round(1e3 * (t2 - t1) / (PF[1] - PF[0]), 4), "t_pf0_s": round(t1, 4),
+                       "t_pf1_s": round(t2, 4), "ttft_ms": round(1e3 * statistics.median(tt), 4),
+                       "ttft_all_ms": [round(1e3 * x, 4) for x in tt],
+                       "ttft_end_ms": round(1e3 * statistics.median(te), 4),
+                       "tokens": [list(o.outputs[0].token_ids) for o in outs]})
         elif cmd["op"] == "decode":
             t1, _ = gen(ps, N1)
             t2, outs = gen(ps, N2)
@@ -546,13 +615,17 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             win = getattr(llm, "dither_win", None)
             mod = getattr(llm, "dither_mod", None) or (DF if win is not None else None)
             we = win is not None and getattr(win, "end_each", False)
+            if pf and win is not None and mod is DF:
+                raise ValueError(f"{arm}: --prefill gates dither_one's windows (dither-a, dither-1s), not dither_fused's")
             if win is not None:
                 if mod is DF:
                     win.arm(B)
                     win.price_y = True
+                elif pf:
+                    win.arm(int(os.environ["SBENCH_T"]), PF_CAPTURES)
                 else:
                     win.arm(B)
-                if we:
+                if we and not pf:
                     win.arm_end("end_gate")
             prof = os.environ.get("DITHER_NSYS") == "1" and win is not None
             if prof:
@@ -560,7 +633,12 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 torch.cuda.profiler.start()
                 torch.cuda.nvtx.range_push(f"{GATE_RANGE}/{arm}")
             # a window whose captures' receipts go under later rounds (dither_so) runs that many steps more
-            t, outs = gen(ps, GATE_TOKENS + getattr(win, "gate_extra", 0))
+            if pf and win is not None:
+                t, outs = gen(pp[:len(PF_CAPTURES) + getattr(win, "gate_extra", 0)], 1)
+            elif pf:
+                t, outs = gen(pp[:PF_GATE_REQS], GATE_TOKENS)
+            else:
+                t, outs = gen(ps, GATE_TOKENS + getattr(win, "gate_extra", 0))
             if prof:
                 torch.cuda.synchronize()
                 torch.cuda.nvtx.range_pop()
@@ -576,14 +654,16 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                     res["verdict"] = DF.gate_verdict(res["check"], res["control"])
                 else:
                     lib = os.environ[mod.LIB_ENV]
+                    names = PF_CAPTURES if pf else win.captures
                     with torch.inference_mode():
-                        caps = {n: mod.check(win, lib, n) for n in win.captures}
+                        caps = {n: mod.check(win, lib, n) for n in names}
                     res["check"] = caps.pop("gate")
                     res.update(caps)
-                    res["verdict"] = mod.gate_verdict(res["check"], *(caps[n] for n in win.captures[1:]))
+                    res["verdict"] = (prefill_verdict(res["check"], caps["control"]) if pf else
+                                      mod.gate_verdict(res["check"], *(caps[n] for n in win.captures[1:])))
                     if getattr(mod, "CG", None) is not None:
                         res["credit_2684"] = mod.credit_doc()
-                    if we:
+                    if we and not pf:
                         # the gate's window ended with its generate; the end faults each in a window of their own
                         mod.end_gate(win, lambda n: gen(ps, n))
                         res["end"] = mod.end_checks(win, lib)
@@ -595,7 +675,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 torch.cuda.empty_cache()
                 # the fault steps move served values on purpose, so the token gate reads a generation with none armed
                 res["tokens_capture"] = res["tokens"]
-                _, outs = gen(ps, GATE_TOKENS)
+                _, outs = gen(pp[:PF_GATE_REQS], GATE_TOKENS) if pf else gen(ps, GATE_TOKENS)
                 res["tokens"] = [list(o.outputs[0].token_ids) for o in outs]
             conn.send(res)
         elif cmd["op"] == "prof":
@@ -603,18 +683,20 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             torch.cuda.synchronize()
             if prof:
                 torch.cuda.profiler.start()
-            res = {"prof_n": list(PROF_N), "profiled": prof}
-            for n in PROF_N:
+            counts = PF if pf else PROF_N
+            res = {"prof_n": list(counts), "profiled": prof, "prefill": pf}
+            for n in counts:
                 if prof:
                     torch.cuda.nvtx.range_push(f"{PROF_RANGE}/{arm}/n{n}")
-                t, outs = gen(ps, n)
+                t, outs = gen(pp[:n], 1) if pf else gen(ps, n)
                 torch.cuda.synchronize()
                 if prof:
                     torch.cuda.nvtx.range_pop()
                 res[f"gen_n{n}_s"] = round(t, 4)
             if prof:
                 torch.cuda.profiler.stop()
-            res["tpot_b32_ms"] = round(1e3 * (res[f"gen_n{PROF_N[1]}_s"] - res[f"gen_n{PROF_N[0]}_s"]) / (PROF_N[1] - PROF_N[0]), 4)
+            step = round(1e3 * (res[f"gen_n{counts[1]}_s"] - res[f"gen_n{counts[0]}_s"]) / (counts[1] - counts[0]), 4)
+            res["prefill_step_ms" if pf else "tpot_b32_ms"] = step
             conn.send(res)
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
@@ -672,8 +754,12 @@ def main() -> int:
                     help="ARM=F,...: those arms' gpu_memory_utilization (a stock arm's own batch needs KV room for it)")
     ap.add_argument("--time-passed", action="store_true",
                     help="on a failed gate, stop the failed arms and time the rest (the exit is 4 still)")
+    ap.add_argument("--prefill", action="store_true",
+                    help="every request a T-token prompt with one output token: a step of m = T (the docstring's --prefill)")
     a = ap.parse_args()
     os.environ["SBENCH_T"] = str(a.t)
+    if a.prefill:
+        os.environ[PREFILL_ENV] = "1"
     if a.stock_own_batch:
         os.environ[OWN_BATCH_ENV] = "1"
     out = Path(a.out)
@@ -724,7 +810,11 @@ def main() -> int:
             ref = REF_OF.get(arm, arms[0])
             if ref in gate_doc and ref != arm:
                 gate_doc[arm]["tokens_equal_" + ref] = gate_doc[arm]["tokens"] == gate_doc[ref]["tokens"]
-                if "tokens_capture" in gate_doc[arm]:
+                if "tokens_capture" in gate_doc[arm] and a.prefill:
+                    # the capture run's one token a request against the reference's first, request by request
+                    gate_doc[arm]["tokens_capture_first_equal_" + ref] = sum(
+                        x[:1] == y[:1] for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
+                elif "tokens_capture" in gate_doc[arm]:
                     gate_doc[arm]["tokens_capture_requests_equal_" + ref] = sum(
                         x == y for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
             if "stock" in gate_doc and arm != "stock":
@@ -792,11 +882,28 @@ def main() -> int:
                "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": min(MAX_SEQS, a.t),
                               "max_num_batched_tokens": a.t, "stock_own_batch": a.stock_own_batch,
                               "scheduler_by_arm": {arm: info[arm].get("scheduler") for arm in arms}}, "per_arm": {}}
+    if a.prefill:
+        summary["prefill"] = {"t": a.t, "requests": list(PF), "ttft_requests": PF_TTFT, "gate_requests": PF_GATE_REQS,
+                              "captures": list(PF_CAPTURES), "step": "one request of T prompt tokens, one output token"}
     for arm in arms:
         tp = [x["tpot_b32_ms"] for x in reps if x["arm"] == arm and x["op"] == "decode"]
         th = [x["tokens_per_s"] for x in reps if x["arm"] == arm and x["op"] == "sat"]
         summary["per_arm"][arm] = {"tpot_b32_ms": statistics.median(tp) if tp else None, "tpot_all": tp,
                                    "tokens_per_s": statistics.median(th) if th else None, "tokens_per_s_all": th}
+        if a.prefill:
+            pr = [x for x in reps if x["arm"] == arm and x["op"] == "prefill"]
+            st = [x["prefill_step_ms"] for x in pr]
+            ft = [x["ttft_ms"] for x in pr]
+            summary["per_arm"][arm].update(
+                prefill_step_ms=statistics.median(st) if st else None, prefill_step_all=st,
+                ttft_ms=statistics.median(ft) if ft else None, ttft_all=ft,
+                ttft_end_ms=statistics.median(x["ttft_end_ms"] for x in pr) if pr else None)
+    ef = summary["per_arm"].get("exact-fused", {})
+    for arm in arms:
+        p = summary["per_arm"][arm]
+        for k in ("tpot_b32_ms", "prefill_step_ms", "ttft_ms"):
+            if p.get(k) and ef.get(k):
+                p[f"gamma_{k}_vs_exact_fused"] = round(p[k] / ef[k], 4)
     base = summary["per_arm"][arms[0]]
     for arm in arms[1:]:
         p = summary["per_arm"][arm]

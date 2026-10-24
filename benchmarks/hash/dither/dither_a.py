@@ -127,6 +127,10 @@ ZDEAD_ENV = "DITHER_ZDEAD"
 # the gate step's option A partials against SERVE-REG's gated lane (served_h1/lane_refs.py): 1 checks them in the gate
 # (one process: the arm's worker is a daemon); a path saves their records there for `lane_refs.py PATH` after serving
 LANE_REFS_ENV = "DITHER_LANE_REFS"
+# N > 0: `check` hashes a table's leaves in a spawned pool of N processes once it has POOL_MIN rows or more (a prefill
+# capture's 2.75M z/y units take ~4 min on one core); unset or 0, in this process
+CHECK_WORKERS_ENV = "DITHER_CHECK_WORKERS"
+POOL_MIN = 4096
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
 M32 = DO.M32
@@ -798,6 +802,32 @@ def stats(win: DO.Window):
 
 # -- the gate ----------------------------------------------------------------------------------------------------------------
 
+_POOL: list = []
+
+
+def table_root(dom, key: bytes, label: str, rows) -> bytes:
+    """`CM.levels`' root over each row's `CM.leaf` (rows: byte strings or a 2-D uint8 array), the leaves hashed in
+    CHECK_WORKERS_ENV's pool when there are POOL_MIN or more."""
+    n = int(os.environ.get(CHECK_WORKERS_ENV) or 0)
+    if n <= 0 or len(rows) < POOL_MIN:
+        return CM.levels(dom, [CM.leaf(dom, key, label, i, bytes(r))[0] for i, r in enumerate(rows)])[-1][0]
+    if not _POOL:
+        import multiprocessing as mp
+        # sbench's arm workers are daemons, which multiprocessing won't let start children; the pool's own workers
+        # are daemons, ended with this process
+        cfg = mp.current_process()._config
+        daemon = cfg.get("daemon")
+        cfg["daemon"] = False
+        try:
+            _POOL.append(mp.get_context("spawn").Pool(n))
+        finally:
+            cfg["daemon"] = daemon
+    step = -(-len(rows) // (4 * n))
+    got = _POOL[0].map(CM.leaves, [(dom.binding, dom.count, key, label, at, rows[at:at + step])
+                                   for at in range(0, len(rows), step)], chunksize=1)
+    return CM.levels(dom, [x for part in got for x in CM.split(part)])[-1][0]
+
+
 def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3, g: dict | None = None,
           r_round: dict | None = None) -> dict:
     """`which`'s capture (`g`, else the window's) against references other than the served kernels (the module
@@ -832,7 +862,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             fz = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "n": n, "schema": CM.SCHEMA}
             zd = CM.domain(fz, t, "z-table")
             zb, lab = g["z"][w].cpu().numpy().astype("<i4").view(np.uint8).reshape(t, -1), f"z/{s}/{w}"
-        z_cpu[w] = CM.levels(zd, [CM.leaf(zd, key, lab, i, bytes(zb[i]))[0] for i in range(len(zb))])[-1][0]
+        z_cpu[w] = table_root(zd, key, lab, zb)
     doc["a_roots_bad"] = [w for w in range(L) if a_cpu[w] != g["a_roots"][w]]
     doc["a_bad_diag"] = DO.a_bad_diag(g, doc["a_roots_bad"])
     doc["admit_roots_bad"] = [w for w in range(L) if s_cpu[w] != g["admit_roots"][w]]
@@ -857,12 +887,12 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             yd_ = CM.domain(y_fields(win, w, s, u), cnt, Y_KIND)
             yrec = g["ysv"][w].cpu().numpy().reshape(cnt, y_bytes(u))
             urec = g["zy"][w].cpu().numpy().reshape(cnt, zy_bytes(u))[:, zy_bytes(u) - y_bytes(u):]
-            ys_cpu[w] = CM.levels(yd_, [CM.leaf(yd_, key, f"y/{s}/{w}", i, bytes(yrec[i]))[0] for i in range(cnt)])[-1][0]
+            ys_cpu[w] = table_root(yd_, key, f"y/{s}/{w}", yrec)
             if not np.array_equal(yrec, urec):
                 cpu_bad.append(w)
             if g["y"] is not None:
-                yr = y_rows(g["ysv"][w], t, n, u)
-                x = yr[:m] ^ g["y"][w].view(torch.int16)
+                yr = y_rows(g["ysv"][w].to(win.dev), t, n, u)
+                x = yr[:m] ^ g["y"][w].to(win.dev).view(torch.int16)
                 past = bool((yr[m:] != pads[w]).any())
                 if bool(x.any()) or past:
                     dump_bad.append(w)
@@ -889,7 +919,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
                   "units": units, "words": nw, "schema": CM.SCHEMA}
             rd = CM.domain(fr, units, "receipts")
             rrows = CM.receipt_rows(g["receipts"][o_:o_ + units * nw].view(units, nw).cpu().numpy().view(np.uint32))
-            if CM.levels(rd, [CM.leaf(rd, key, f"r/{s}/{w}", i, bytes(rrows[i]))[0] for i in range(units)])[-1][0] != r_dev[w]:
+            if table_root(rd, key, f"r/{s}/{w}", rrows) != r_dev[w]:
                 rr_bad.append(w)
         doc["receipt_roots_bad"] = rr_bad
     rnd = CM.step_root(CM.domain({"window": W, "step": s, "leaves": DO.round_leaves(kinds)}, len(kinds), "round"),
@@ -915,14 +945,17 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             yl.append(b)
         else:
             zr.append(g["z"][w])
+    dev = win.dev
     for w in range(L):
-        zt = E.int_mm(g["a"][w][:m], win.wt[w])
-        if not (torch.equal(zr[w][:m], zt) and not bool(zr[w][m:].any())):
+        zt = E.int_mm(g["a"][w][:m].to(dev), win.wt[w])
+        zw = zr[w].to(dev)
+        if not (torch.equal(zw[:m], zt) and not bool(zw[m:].any())):
             z_bad.append(w)
-        yd = E.dequantize(zr[w][:m], g["sa"][w][:m], win.sw[w]).view(torch.int16)
-        if g["y"] is not None and not torch.equal(yd, g["y"][w].view(torch.int16)):
+        yd = E.dequantize(zw[:m], g["sa"][w][:m].to(dev), win.sw[w]).view(torch.int16)
+        if g["y"] is not None and not torch.equal(yd, g["y"][w].to(dev).view(torch.int16)):
             y_bad.append(w)
-        if zy and not (torch.equal(yl[w][:m].view(torch.int16), yd) and not bool((yl[w][m:].view(torch.int16) != pads[w]).any())):
+        yw = yl[w].to(dev) if zy else None
+        if zy and not (torch.equal(yw[:m].view(torch.int16), yd) and not bool((yw[m:].view(torch.int16) != pads[w]).any())):
             yleaf_bad.append(w)
     doc["z_vs_int_mm_bad"], doc["y_vs_dequant_z_bad"] = z_bad, y_bad if g["y"] is not None else None
     doc["y_leaf_vs_dequant_z_bad"] = yleaf_bad if zy else None
@@ -931,11 +964,11 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     live = torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)).to(win.dev)
     roots = [torch.from_numpy(np.concatenate([np.frombuffer(a_cpu[w], ">u8"), np.frombuffer(g["b_roots"][w], ">u8")])
                               .astype("<u8").view("<i8").copy()).to(win.dev) for w in range(L)]
-    plan = r.plan([Call(g["a"][w], win.wt[w], s * win.u_step + win.offs[w], roots[w], live) for w in range(L)])
+    plan = r.plan([Call(g["a"][w].to(dev), win.wt[w], s * win.u_step + win.offs[w], roots[w], live) for w in range(L)])
     salt = DO.cap_salt(win, g)
     r.launch(plan, salt[1], version=1)
     torch.cuda.synchronize()
-    got = g["receipts"]
+    got = g["receipts"].to(dev)
     shift = SIDE[0].shift if SIDE else 24
 
     def got_of(w: int) -> torch.Tensor:
