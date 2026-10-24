@@ -1357,6 +1357,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     `Δ_A` entry `(q, col)`, summed over GF(2) as `addDelta` sums them. An entry twice cancels. `B` is the same.
   - Today only a tail stage's `Out` region is partial. On the GEMM coordinate it is 16 bits of a word, and the other 112
     columns are checked.
+- **The region-size check** (`checkRegionBytes`). The extra claims read each block's bytes of a region as its `2^|free|`
+  bits, so `setupH` and `setupHidden` refuse a statement in which any region's bytes in any of the `2^nbl` blocks are
+  another size (a public file whose `b ‖ c` or pinned `dummy.bc` is not 128 bytes, say), before any proof is read.
 - **Public file.** `flock-circuit-inputs`: header `units = {vus_per_block, units_per_vu, indices (ascending, one per
   instance), blocks (indices in chunks of G)}`, `frame_v3.frame = "frame-v3-sha512"`, `frame_v3.row_key_sha512`; body
   `b ‖ c` (128 bytes per instance and port, instance-major), then the output words. The public digest is

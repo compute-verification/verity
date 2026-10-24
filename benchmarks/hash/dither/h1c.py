@@ -133,6 +133,8 @@ def dead_x(rows: list[bytes], dev) -> torch.Tensor:
 
 
 class Set:
+    lvf: int | None = None      # its own level schedule (`H1C.set`); None the build's H1C_LVF
+
     def __init__(self, tabs: list[Tab], dev):
         self.tabs, self.n = tabs, len(tabs)
         blobs, offs = [], {}
@@ -234,6 +236,9 @@ class H1C:
         dev = dev or torch.device("cuda")
         self.lib = C.CDLL(path)
         self.lib.h1c_build.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_int, C.c_void_p]
+        self.build_lv = getattr(self.lib, "h1c_build_lv", None)
+        if self.build_lv is not None:
+            self.build_lv.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.c_void_p]
         self.lib.h1c_const.argtypes = [C.c_void_p]
         self.lib.h1c_a_init.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_int, C.c_void_p]
         self.lib.h1c_a_step.argtypes = [C.c_void_p, C.c_int, C.c_void_p, C.c_int] + [C.c_void_p] * 4
@@ -271,14 +276,21 @@ class H1C:
             raise RuntimeError(f"h1c_a_form({f}) returned {rc}")
         self.a_form = f
 
-    def set(self, tabs: list[Tab]) -> Set:
-        return Set(tabs, self.dev)
+    def set(self, tabs: list[Tab], lvf: int | None = None) -> Set:
+        """One launch set; `lvf` its own level schedule (`h1c_build_lv`: levels from lvf up in one block a table on an
+        H1C_HB build, < 0 every level its own launch), None the build's H1C_LVF.  The roots are the same at every lvf."""
+        if lvf is not None and self.build_lv is None:
+            raise RuntimeError("this libh1c has no h1c_build_lv (built before it): rebuild it from h1c.cu")
+        st = Set(tabs, self.dev)
+        st.lvf = lvf
+        return st
 
     def union(self, sets: list[Set]) -> Union:
         return Union(sets, self.dev)
 
     def build(self, st: Set | Union, step: torch.Tensor, domains: bool = True) -> None:
-        rc = self.lib.h1c_build(C.addressof(st.host), st.dev.data_ptr(), st.n, step.data_ptr(), self.btab.data_ptr(),
-                                int(domains), torch.cuda.current_stream().cuda_stream)
+        args = (C.addressof(st.host), st.dev.data_ptr(), st.n, step.data_ptr(), self.btab.data_ptr(), int(domains))
+        lvf, stream = getattr(st, "lvf", None), torch.cuda.current_stream().cuda_stream
+        rc = self.lib.h1c_build(*args, stream) if lvf is None else self.build_lv(*args, lvf, stream)
         if rc:
             raise RuntimeError(f"h1c_build returned {rc}")

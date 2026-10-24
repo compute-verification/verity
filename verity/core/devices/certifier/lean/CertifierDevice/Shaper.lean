@@ -128,9 +128,10 @@ def tick (s : Shaper) : Shaper × Slots × Option Record := Id.run do
 end Shaper
 
 /-- `active.Bucketer`: frames wait in arrival order with the bucket they arrived by, and enter the certifier at its tick.
-With `first`, each window's first tick enqueues the certifier's own frame `first w`, if it gives one, ahead of that
-bucket's arrivals, and the bucketer follows it by its place in the queue (`ownQueued`, place and window): `own` maps
-each slot of the row last released that holds one to its window. With `served`, arrived frames enter only as whole
+With `first`, each window's first tick enqueues the certifier's own frame `first w`, if it gives one, at the head of
+the queue, ahead of that bucket's arrivals and of any queue carried from the window before, so it leaves in slot 0 of
+that bucket (`ownNow`, its window): `own` maps the slot of the row last released that holds one to its window, and a
+fault before the release drops it with the queue. With `served`, arrived frames enter only as whole
 requests the admission rule admits (`admits` under the window's sync, `counts` the window's ingress counts so far); the
 rest wait, in order. -/
 structure Bucketer where
@@ -141,19 +142,19 @@ structure Bucketer where
   served : Option Admission := none
   counts : Array Nat := #[]
   own : Array (Nat × Nat) := #[]
-  ownQueued : Array (Nat × Nat) := #[]
+  ownNow : Option Nat := none
 
 namespace Bucketer
 
 def arrive (b : Bucketer) (frame : ByteArray) (bucket : Int) : Bucketer := { b with waiting := b.waiting.push (bucket, frame) }
 
-/-- The certifier's own frame at a window's first tick, its place in the queue kept. -/
+/-- The certifier's own frame at a window's first tick, at the head of the queue, its window kept. -/
 def takeOwn (b : Bucketer) : Bucketer :=
   let w := b.t / b.certifier.params.buckets
+  let b := { b with ownNow := none }
   if b.t % b.certifier.params.buckets = 0 then
     match b.first w with
-    | some frame => { b with ownQueued := b.ownQueued.push (b.certifier.queue.size, w),
-                             certifier := b.certifier.enqueue frame }
+    | some frame => { b with ownNow := some w, certifier := b.certifier.enqueue frame (first := true) }
     | none => b
   else b
 
@@ -181,19 +182,19 @@ def enter (b : Bucketer) : Bucketer :=
     { b with certifier := (b.waiting.extract 0 due).foldl (fun c (_, f) => c.enqueue f) b.certifier,
              waiting := b.waiting.extract due b.waiting.size }
 
-/-- After a row of `n` frames is released: the own frames it holds, by slot, and those still queued, by place. A fault
-empties the queue, and the window enqueues nothing after it. -/
-def follow (b : Bucketer) (n : Nat) : Bucketer :=
-  if b.ownQueued.isEmpty then { b with own := #[] } else
-  let kept := b.ownQueued.filter fun (place, _) => place < b.certifier.queue.size + n
-  { b with own := kept.filter (·.1 < n), ownQueued := (kept.filter (·.1 ≥ n)).map fun (place, w) => (place - n, w) }
+/-- After a row is released: the own frame enqueued at this tick, in its slot 0, unless a fault before the release
+dropped it with the queue and padded the row. -/
+def follow (b : Bucketer) (row : Slots) : Bucketer :=
+  match b.ownNow, row[0]? with
+  | some w, some (some _) => { b with own := #[(0, w)], ownNow := none }
+  | _, _ => { b with own := #[], ownNow := none }
 
 def tick (b : Bucketer) : Bucketer × Slots × Option Record := Id.run do
   let b := b.takeOwn.enter
   let (c, row) := b.certifier.tick
   let n := rowCount row
   let b := { b with certifier := c, counts := if b.served.isSome then b.counts.push n else b.counts }
-  let b := { b.follow n with t := b.t + 1 }
+  let b := { b.follow row with t := b.t + 1 }
   if b.t % c.params.buckets ≠ 0 then return (b, row, none)
   let (c, record) := c.closeWindow
   return ({ b with certifier := c }, row, some record)
