@@ -29,7 +29,13 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
 * toward the core of the open statements, that `down` keeps the gate each position names in an activation (`den`): its
   base cases, a gate's or parameter's piece (`down_gate`, `down_param`), a primitive node's (`down_prim`, `den_prim`)
   and a batch of a primitive's (`down_batchPrim`, `den_batchPrim`), and resolution through a step (`resolve_inl`,
-  `resolve_inr`).
+  `resolve_inr`);
+* `down` unfolded in every other case, as Lean gives no equations for it: the loop a Call's, a scan's or a batch of a
+  composite's piece runs (`down_call_one`, `down_call_pts`, `down_rows`, `down_scan`, `down_batch_affine`,
+  `down_batch_rest`), and the cases it refuses (`down_zero`, `down_node`, `down_prim_ret`, `down_scan_ret`,
+  `down_scan0`, `down_batch0`); with the step resolution takes in each, down through a composite's output into the
+  member's activation (`den_call`, `den_batch`, `den_scan`) and up through a parameter to the node's argument
+  (`den_up`, `den_up_batch`, `den_up_scan`, `den_up_scan0`).
 
 So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
 (`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here,
@@ -2516,6 +2522,504 @@ theorem den_batchPrim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d
     rw [if_neg (by omega), if_neg (by omega), hres]
     congr 1
     omega
+
+
+/-! ## `down`'s composite cases, and the resolution steps they follow
+
+A composite node's piece goes on through `fromCallee` (a Call's, a scan's, row by row through `down`), so each case
+unfolds to the loop it runs (`down_call_one`, `down_call_pts`, `down_rows`, `down_scan`); `delta` on both sides, since
+the recursive calls unfold to the same recursor. Resolution takes the same step: down through a composite node's output
+into the member's activation (`den_call`, `den_batch`, `den_scan`), and up through a parameter to the node's argument
+in the parent (`den_up`, `den_up_batch`, `den_up_scan`, `den_up_scan0`). -/
+
+/-- A node's piece of no count names nothing. -/
+theorem down_count0 (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (h0 : q.count = 0) :
+    Desc.down c (fuel + 1) q = .ok #[] := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  rw [if_pos (show (q.count == 0) = true by simpa using h0)]
+  rfl
+
+/-- `down` of each row of a piece in turn. -/
+def byRows (c : Desc.Ctx) (fuel : Nat) (q : Piece) : Except String (Array Seg) := do
+  let mut out := #[]
+  for x in q.rowsOf do out := out ++ (← Desc.down c fuel x)
+  return out
+
+/-- `fromCallee` of member 0 at each of a piece's positions in turn. -/
+def callPts (c : Desc.Ctx) (fuel k : Nat) (q : Piece) : Except String (Array Seg) := do
+  let mut out := #[]
+  for t in [0:q.len] do
+    out := out ++ (← Desc.fromCallee c fuel k 0 (q.at t).toNat ((q.at t).toNat + 1))
+  return out
+
+/-- `fromCallee` at each of a scan's output positions in turn: a carry leaf the last iteration's, else iteration
+`(j - cl) / yl`'s `y` leaf. -/
+def scanPts (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (cl yl : Nat) (q : Piece) :
+    Except String (Array Seg) := do
+  let mut out := #[]
+  for t in [0:q.len] do
+    let j := (q.at t).toNat
+    let (m, jj) := if j < cl then (node.n - 1, j) else ((j - cl) / yl, cl + (j - cl) % yl)
+    out := out ++ (← Desc.fromCallee c fuel k m jj (jj + 1))
+  return out
+
+/-- A Call's piece of one row and stride 1: its callee's return leaves over the piece's span. -/
+theorem down_call_one (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .call) (h0 : q.count ≠ 0)
+    (hr : ¬ q.rows > 1) (hs : q.stride = 1) :
+    Desc.down c (fuel + 1) q = Desc.fromCallee c fuel k 0 q.base.toNat (q.base.toNat + q.len) := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rw [hform]
+  dsimp only
+  rw [if_neg hr, if_pos (show (q.stride == 1) = true by simp [hs])]
+  delta Desc.fromCallee
+  rfl
+
+/-- A Call's piece of one row and another stride: its callee's return leaf at each position. -/
+theorem down_call_pts (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .call) (h0 : q.count ≠ 0)
+    (hr : ¬ q.rows > 1) (hs : q.stride ≠ 1) :
+    Desc.down c (fuel + 1) q = callPts c fuel k q := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rw [hform]
+  dsimp only
+  rw [if_neg hr, if_neg (show ¬ ((q.stride == 1) = true) by simpa using hs)]
+  delta callPts Desc.fromCallee
+  rfl
+
+/-- A Call's or a scan's piece of more than one row: row by row. -/
+theorem down_rows (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node)
+    (hform : node.form = .call ∨ (node.form = .scan ∧ node.n ≠ 0))
+    (h0 : q.count ≠ 0) (hr : q.rows > 1) :
+    Desc.down c (fuel + 1) q = byRows c fuel q := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rcases hform with hform | ⟨hform, hn0⟩
+  · rw [hform]
+    dsimp only
+    rw [if_pos hr]
+    delta byRows Desc.down
+    rfl
+  · rw [hform]
+    dsimp only
+    rw [if_neg (show ¬ ((node.n == 0) = true) by simpa using hn0), if_pos hr]
+    delta byRows Desc.down
+    rfl
+
+/-- A scan's piece of one row: its iterations' return leaves, position by position. -/
+theorem down_scan (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .scan) (hn0 : node.n ≠ 0)
+    (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) {carry y : Flock.Program.Ty}
+    (hret : (c.P.defs[node.fn]!).ret = .tuple #[carry, y]) :
+    Desc.down c (fuel + 1) q = scanPts c fuel k node carry.leaves y.leaves q := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rw [hform]
+  dsimp only
+  rw [if_neg (show ¬ ((node.n == 0) = true) by simpa using hn0), if_neg hr]
+  conv => lhs; whnf
+  rw [hret]
+  delta scanPts Desc.fromCallee
+  rfl
+
+/-- A scan with no iterations has no output for `down` to read. -/
+theorem down_scan0 (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .scan) (hn0 : node.n = 0)
+    (h0 : q.count ≠ 0) (x : Array Seg) : Desc.down c (fuel + 1) q ≠ .ok x := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rw [hform]
+  dsimp only
+  rw [if_pos (show (node.n == 0) = true by simpa using hn0)]
+  intro h
+  cases h
+
+/-- Down through a Call's output: leaf `j` resolves as the callee's return leaf `j` in the Call's activation. -/
+theorem den_call (P : Prog) (sc : Flock.Program.Scope) {k : Nat} {node : Flock.Program.Node}
+    (hnode : (P.defs[sc.d]!).body.nodes[k]! = node) (hform : node.form = .call) {j a : Nat}
+    (h : Flock.Program.resolve P sc ⟨false, k, j⟩ = .ok a) :
+    Flock.Program.resolve P (.child sc node.fn (sc.off + (P.defs[sc.d]!).body.offsets[k]!) k 0)
+      ((P.defs[node.fn]!).body.ret.get j) = .ok a := by
+  have e := resolve_inr P sc _ _ (Resolve.rs_call P sc k j (by rw [hnode]; exact hform)) h
+  rw [hnode] at e
+  exact e
+
+/-- Down through a batch of a composite's output: leaf `j` resolves as member `j / L`'s return leaf `j % L`. -/
+theorem den_batch (P : Prog) (sc : Flock.Program.Scope) {k : Nat} {node : Flock.Program.Node}
+    (hnode : (P.defs[sc.d]!).body.nodes[k]! = node) (hform : node.form = .batch)
+    (hp : (P.defs[node.fn]!).prim = false) {j a : Nat}
+    (h : Flock.Program.resolve P sc ⟨false, k, j⟩ = .ok a) :
+    Flock.Program.resolve P (.child sc node.fn (sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+        j / (P.defs[node.fn]!).outLeaves * (P.defs[node.fn]!).gates) k (j / (P.defs[node.fn]!).outLeaves))
+      ((P.defs[node.fn]!).body.ret.get (j % (P.defs[node.fn]!).outLeaves)) = .ok a := by
+  have hs := Resolve.rs_batch P sc k j (by rw [hnode]; exact hform)
+  rw [hnode] at hs
+  simp only [hp, Bool.false_eq_true, ite_false] at hs
+  exact resolve_inr P sc _ _ hs h
+
+/-- Down through a scan's output: a carry leaf resolves as the last iteration's, else leaf `j` as iteration
+`(j - cl) / yl`'s `y` leaf. -/
+theorem den_scan (P : Prog) (sc : Flock.Program.Scope) {k : Nat} {node : Flock.Program.Node}
+    (hnode : (P.defs[sc.d]!).body.nodes[k]! = node) (hform : node.form = .scan) (hn0 : node.n ≠ 0)
+    {carry y : Flock.Program.Ty} (hret : (P.defs[node.fn]!).ret = .tuple #[carry, y]) {j a : Nat}
+    (h : Flock.Program.resolve P sc ⟨false, k, j⟩ = .ok a) :
+    let mj := if j < carry.leaves then (node.n - 1, j)
+      else ((j - carry.leaves) / y.leaves, carry.leaves + (j - carry.leaves) % y.leaves)
+    Flock.Program.resolve P (.child sc node.fn (sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+        mj.1 * (P.defs[node.fn]!).gates) k mj.1) ((P.defs[node.fn]!).body.ret.get mj.2) = .ok a := by
+  have hs := Resolve.rs_scan P sc k j carry y (by rw [hnode]; exact hform) (by rw [hnode]; exact hn0)
+    (by rw [hnode]; exact hret)
+  have e := resolve_inr P sc _ _ hs h
+  rw [hnode] at e
+  exact e
+
+/-- Up through a parameter of a primitive's or a Call's activation: the node's argument in the parent. -/
+theorem den_up (P : Prog) (parent : Flock.Program.Scope) {d off k m i j : Nat} {node : Flock.Program.Node}
+    (hnode : (P.defs[parent.d]!).body.nodes[k]! = node) (hform : node.form = .prim ∨ node.form = .call) {a : Nat}
+    (h : Flock.Program.resolve P (.child parent d off k m) ⟨true, i, j⟩ = .ok a) :
+    Flock.Program.resolve P parent ((node.args[i]!).seq.get j) = .ok a := by
+  have e := resolve_inr P _ _ _ (Resolve.rs_up P parent d off k m i j (by rw [hnode]; exact hform)) h
+  rw [hnode] at e
+  exact e
+
+/-- Up through a parameter of a batch member's activation: the member's reference of the node's argument. -/
+theorem den_up_batch (P : Prog) (parent : Flock.Program.Scope) {d off k m i j : Nat} {node : Flock.Program.Node}
+    (hnode : (P.defs[parent.d]!).body.nodes[k]! = node) (hform : node.form = .batch) {a : Nat}
+    (h : Flock.Program.resolve P (.child parent d off k m) ⟨true, i, j⟩ = .ok a) :
+    Flock.Program.resolve P parent ((node.args[i]!).memberRef m j) = .ok a := by
+  have e := resolve_inr P _ _ _ (Resolve.rs_up_batch P parent d off k m i j (by rw [hnode]; exact hform)) h
+  rw [hnode] at e
+  exact e
+
+/-- Up through a parameter other than the carry of a scan iteration's activation: its `xs` slice of the node's
+argument, or the whole argument. -/
+theorem den_up_scan (P : Prog) (parent : Flock.Program.Scope) {d off k m i j : Nat} {node : Flock.Program.Node}
+    (hnode : (P.defs[parent.d]!).body.nodes[k]! = node) (hform : node.form = .scan) (hi : i ≠ 0) {a : Nat}
+    (h : Flock.Program.resolve P (.child parent d off k m) ⟨true, i, j⟩ = .ok a) :
+    Flock.Program.resolve P parent (if i ≤ node.nxs
+      then (node.args[i]!).seq.get (m * ((node.args[i]!).dims.map (·.2)).getD 0 + j)
+      else (node.args[i]!).seq.get j) = .ok a := by
+  have e := resolve_inr P _ _ _ (Resolve.rs_up_scan P parent d off k m i j hi (by rw [hnode]; exact hform)) h
+  rw [hnode] at e
+  exact e
+
+/-- Up through the carry of a scan iteration's activation: the node's initial carry for the first iteration, else the
+iteration before's return. -/
+theorem den_up_scan0 (P : Prog) (parent : Flock.Program.Scope) {d off k m j : Nat} {node : Flock.Program.Node}
+    (hnode : (P.defs[parent.d]!).body.nodes[k]! = node) (hform : node.form = .scan) {a : Nat}
+    (h : Flock.Program.resolve P (.child parent d off k m) ⟨true, 0, j⟩ = .ok a) :
+    if m = 0 then Flock.Program.resolve P parent ((node.args[0]!).seq.get j) = .ok a
+    else Flock.Program.resolve P (.child parent d (off - (P.defs[d]!).gates) k (m - 1))
+      ((P.defs[d]!).body.ret.get j) = .ok a := by
+  have hs := Resolve.rs_up_scan0 P parent d off k m j (by rw [hnode]; exact hform)
+  rw [hnode] at hs
+  by_cases hm : m = 0
+  · rw [if_pos hm] at hs ⊢
+    exact resolve_inr P _ _ _ hs h
+  · rw [if_neg hm] at hs ⊢
+    exact resolve_inr P _ _ _ hs h
+
+
+/-- A batch of a composite's piece when every member returns one run of its gates and the members' runs make one,
+leaf `e` gate `A + e * F` (`down`'s first case for a batch of a composite). -/
+def affineOf (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (q : Piece) : Option Piece :=
+  let callee := c.P.defs[node.fn]!
+  let L := callee.outLeaves
+  let G : Int := callee.gates
+  let r := (c.memo[node.fn]!).ret
+  let o : Int := c.body.offsets[k]!
+  if r.segs.size == 1 && r.segs[0]!.reps ≤ 1 && r.segs[0]!.ps.size == 1 then
+    let g := r.segs[0]!.ps[0]!
+    match g.tgt with
+    | .gate w =>
+      if g.rows ≤ 1 && g.len == L && (L == 1 || G == L * g.stride) then
+        some (q.affine w (o + g.base) (if L == 1 then G else g.stride))
+      else none
+    | _ => none
+  else none
+
+/-- A batch of a composite's piece past that case: row by row; of stride 1, whole members as copies of one member's
+return between a first and last partial member when it names gates only, else member by member; else position by
+position. -/
+def batchRest (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (q : Piece) : Except String (Array Seg) := do
+  let o : Int := c.body.offsets[k]!
+  let callee := c.P.defs[node.fn]!
+  let L := callee.outLeaves
+  let G : Int := callee.gates
+  let r := (c.memo[node.fn]!).ret
+  if q.rows > 1 then byRows c fuel q
+  else if q.stride == 1 then
+    let a := q.base.toNat
+    let b := a + q.len
+    let (m0, m1) := ((a + L - 1) / L, b / L)
+    let gatesOnly := r.segs.all fun s => s.reps ≤ 1 && s.ps.all fun g => match g.tgt with
+      | .gate _ => true
+      | _ => false
+    if gatesOnly && m0 + 1 < m1 then
+      let mut out := #[]
+      if a < m0 * L then out := out ++ (← Desc.fromCallee c fuel k (a / L) (a % L) L)
+      out := out.push
+        { ps := Desc.shiftGates (o + m0 * G) (r.segs.flatMap (·.ps)), len := L, reps := m1 - m0, shift := G }
+      if m1 * L < b then out := out ++ (← Desc.fromCallee c fuel k m1 0 (b - m1 * L))
+      return out
+    let mut out := #[]
+    for m in [a / L:(b - 1) / L + 1] do
+      out := out ++ (← Desc.fromCallee c fuel k m (max a (m * L) - m * L) (min b ((m + 1) * L) - m * L))
+    return out
+  else
+    let mut out := #[]
+    for t in [0:q.len] do
+      out := out ++ (← Desc.down c fuel { q with base := q.at t, stride := 1, len := 1 })
+    return out
+
+/-- A batch of a composite's piece in its one-run case: the piece moved onto that run. -/
+theorem down_batch_affine (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
+    (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0) (h0 : q.count ≠ 0)
+    {p : Piece} (ha : affineOf c k node q = some p) :
+    Desc.down c (fuel + 1) q = .ok #[Seg.one p] := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rw [hform]
+  dsimp only
+  rw [if_neg (show ¬ ((c.P.defs[node.fn]!).prim = true) by simp [hp])]
+  rw [if_neg (show ¬ (((c.P.defs[node.fn]!).outLeaves == 0) = true) by simpa using hL)]
+  unfold affineOf at ha
+  dsimp only at ha
+  rcases hC : ((c.memo[node.fn]!).ret.segs.size == 1 && (c.memo[node.fn]!).ret.segs[0]!.reps ≤ 1 &&
+      (c.memo[node.fn]!).ret.segs[0]!.ps.size == 1) with _ | _ <;>
+    simp only [hC, Bool.false_eq_true, ite_false, ite_true] at ha
+  · cases ha
+  rw [if_pos rfl]
+  cases hT : ((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).tgt with
+  | ref b i => simp only [hT] at ha; cases ha
+  | gate w =>
+    simp only [hT] at ha
+    rcases hC2 : (((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).rows ≤ 1 &&
+        ((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).len == (c.P.defs[node.fn]!).outLeaves &&
+        ((c.P.defs[node.fn]!).outLeaves == 1 || ((c.P.defs[node.fn]!).gates : Int) ==
+          ((c.P.defs[node.fn]!).outLeaves : Int) * ((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).stride)) with _ | _ <;>
+      simp only [hC2, Bool.false_eq_true, ite_false, ite_true, Option.some.injEq] at ha
+    · cases ha
+    subst ha
+    rfl
+
+/-- A batch of a composite's piece past its one-run case: `batchRest`. -/
+theorem down_batch_rest (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
+    (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0) (h0 : q.count ≠ 0)
+    (ha : affineOf c k node q = none) :
+    Desc.down c (fuel + 1) q = batchRest c fuel k node q := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rw [hform]
+  dsimp only
+  rw [if_neg (show ¬ ((c.P.defs[node.fn]!).prim = true) by simp [hp])]
+  rw [if_neg (show ¬ (((c.P.defs[node.fn]!).outLeaves == 0) = true) by simpa using hL)]
+  unfold affineOf at ha
+  dsimp only at ha
+  rcases hC : ((c.memo[node.fn]!).ret.segs.size == 1 && (c.memo[node.fn]!).ret.segs[0]!.reps ≤ 1 &&
+      (c.memo[node.fn]!).ret.segs[0]!.ps.size == 1) with _ | _
+  · rw [if_neg Bool.false_ne_true]
+    by_cases hr : q.rows > 1
+    · rw [if_pos hr]
+      unfold batchRest
+      dsimp only
+      rw [if_pos hr]
+      delta byRows Desc.down
+      rfl
+    by_cases hs : (q.stride == 1) = true
+    · rw [if_neg hr, if_pos hs]
+      unfold batchRest
+      dsimp only
+      rw [if_neg hr, if_pos hs]
+      delta Desc.fromCallee
+      rfl
+    rw [if_neg hr, if_neg hs]
+    unfold batchRest
+    dsimp only
+    rw [if_neg hr, if_neg hs, ht]
+    delta Desc.down
+    rfl
+  rw [if_pos rfl]
+  simp only [hC, ite_true] at ha
+  cases hT : ((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).tgt with
+  | ref b i =>
+    dsimp only
+    by_cases hr : q.rows > 1
+    · rw [if_pos hr]
+      unfold batchRest
+      dsimp only
+      rw [if_pos hr]
+      delta byRows Desc.down
+      rfl
+    by_cases hs : (q.stride == 1) = true
+    · rw [if_neg hr, if_pos hs]
+      unfold batchRest
+      dsimp only
+      rw [if_neg hr, if_pos hs]
+      delta Desc.fromCallee
+      rfl
+    rw [if_neg hr, if_neg hs]
+    unfold batchRest
+    dsimp only
+    rw [if_neg hr, if_neg hs, ht]
+    delta Desc.down
+    rfl
+  | gate w =>
+    simp only [hT] at ha
+    rcases hC2 : (((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).rows ≤ 1 &&
+        ((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).len == (c.P.defs[node.fn]!).outLeaves &&
+        ((c.P.defs[node.fn]!).outLeaves == 1 || ((c.P.defs[node.fn]!).gates : Int) ==
+          ((c.P.defs[node.fn]!).outLeaves : Int) * ((c.memo[node.fn]!).ret.segs[0]!.ps[0]!).stride)) with _ | _
+    · dsimp only
+      rw [if_neg Bool.false_ne_true]
+      by_cases hr : q.rows > 1
+      · rw [if_pos hr]
+        unfold batchRest
+        dsimp only
+        rw [if_pos hr]
+        delta byRows Desc.down
+        rfl
+      by_cases hs : (q.stride == 1) = true
+      · rw [if_neg hr, if_pos hs]
+        unfold batchRest
+        dsimp only
+        rw [if_neg hr, if_pos hs]
+        delta Desc.fromCallee
+        rfl
+      rw [if_neg hr, if_neg hs]
+      unfold batchRest
+      dsimp only
+      rw [if_neg hr, if_neg hs, ht]
+      delta Desc.down
+      rfl
+    · simp only [hC2, ite_true] at ha
+      cases ha
+
+/-- A batch of a composite returning nothing has no output for `down` to read. -/
+theorem down_batch0 (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
+    (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves = 0) (h0 : q.count ≠ 0)
+    (x : Array Seg) : Desc.down c (fuel + 1) q ≠ .ok x := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rw [hform]
+  dsimp only
+  rw [if_neg (show ¬ ((c.P.defs[node.fn]!).prim = true) by simp [hp])]
+  rw [if_pos (show (((c.P.defs[node.fn]!).outLeaves == 0) = true) by simpa using hL)]
+  intro h
+  cases h
+
+/-- `down` with no fuel left refuses. -/
+theorem down_zero (c : Desc.Ctx) (q : Piece) (x : Array Seg) : Desc.down c 0 q ≠ .ok x := by
+  delta Desc.down
+  intro h
+  cases h
+
+/-- A primitive node's piece of positive count, or a batch of a primitive's, needs the primitive to return one
+value. -/
+theorem down_prim_ret (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node)
+    (hform : node.form = .prim ∨ (node.form = .batch ∧ (c.P.defs[node.fn]!).prim = true)) (h0 : q.count ≠ 0)
+    (hret : ∀ w, (c.P.defs[node.fn]!).ret ≠ .value w) (x : Array Seg) : Desc.down c (fuel + 1) q ≠ .ok x := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rcases hform with hform | ⟨hform, hp⟩
+  · rw [hform]
+    dsimp only
+    cases hr : (c.P.defs[node.fn]!).ret with
+    | value w => exact absurd hr (hret w)
+    | array n e => intro h; cases h
+    | tuple fs => intro h; cases h
+    | record fs => intro h; cases h
+  · rw [hform]
+    dsimp only
+    rw [if_pos hp]
+    cases hr : (c.P.defs[node.fn]!).ret with
+    | value w => exact absurd hr (hret w)
+    | array n e => intro h; cases h
+    | tuple fs => intro h; cases h
+    | record fs => intro h; cases h
+
+/-- A scan's piece of one row needs its step to return `(carry, y)`. -/
+theorem down_scan_ret (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
+    {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .scan) (hn0 : node.n ≠ 0)
+    (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1)
+    (hret : ∀ carry y, (c.P.defs[node.fn]!).ret ≠ .tuple #[carry, y]) (x : Array Seg) :
+    Desc.down c (fuel + 1) q ≠ .ok x := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  dsimp only [bind, Except.bind]
+  rw [hform]
+  dsimp only
+  rw [if_neg (show ¬ ((node.n == 0) = true) by simpa using hn0), if_neg hr]
+  cases hre : (c.P.defs[node.fn]!).ret with
+  | value w => intro h; cases h
+  | array n e => intro h; cases h
+  | record fs => intro h; cases h
+  | tuple fs =>
+    rcases fs with ⟨_ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩⟩
+    · intro h; cases h
+    · intro h; cases h
+    · exact absurd hre (hret a b)
+    · intro h; cases h
+
+/-- A node's piece of positive count needs the node. -/
+theorem down_node (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (h0 : q.count ≠ 0)
+    {e : String} (hn : c.node k = .error e) (x : Array Seg) : Desc.down c (fuel + 1) q ≠ .ok x := by
+  delta Desc.down
+  conv => lhs; whnf
+  rw [ht]
+  dsimp only
+  rw [if_neg (show ¬ ((q.count == 0) = true) by simpa using h0), hn]
+  intro h
+  cases h
 
 
 /-- **A batch member's spans** (`Desc.argSpans`) are its used parameter leaves' indices into the argument. -/
