@@ -63,23 +63,47 @@ def load(path: Path = FIXTURE) -> SimpleNamespace:
                            rows=[tuple(map(tuple, r)) for r in fx["rows"]])
 
 
+def _corpus(tmp: Path) -> Path:
+    """corpus-smallkv unpacked as ENC-DERIVED's tests read it (`benchmarks/network_e2e/encodings/tests/test_v1.py`'s
+    `_corpus`, which imports pytest): each batch in Model Runner V2's order, each stop-id finish marked `eos`."""
+    import gzip
+    import shutil
+
+    src = REPO / "benchmarks/network_e2e/encodings/tests/fixtures/corpus-smallkv"
+    for f in ("meta.json", "server.log"):
+        shutil.copy(src / f, tmp / f)
+    out = []
+    for line in gzip.decompress((src / "steps.jsonl.gz").read_bytes()).decode().splitlines():
+        s = json.loads(line)
+        if s.get("batch"):
+            sched = ([r for r in s["cached"] if not r["resumed"]] + [r for r in s["cached"] + s["new"] if r["resumed"]]
+                     + [r for r in s["new"] if not r["resumed"]])
+            s["batch"] = [r["id"] for r in sorted((r for r in sched if r["id"] in set(s["batch"])),
+                                                  key=lambda r: r["num_scheduled_tokens"])]
+        out.append(json.dumps(s) + "\n")
+    (tmp / "steps.jsonl").write_text("".join(out))
+    reqs = [json.loads(x) for x in gzip.decompress((src / "requests.jsonl.gz").read_bytes()).decode().splitlines()]
+    (tmp / "requests.jsonl").write_text("".join(json.dumps({**q, "eos": q["finish_reason"] == "stop"}) + "\n" for q in reqs))
+    return tmp
+
+
 def corpus_check(x: SimpleNamespace) -> None:
     """The fixture is corpus-smallkv's first P steps: its arrivals, the decisions its replay asks and the replay's rows."""
     import importlib
     import tempfile
 
     enc = REPO / "benchmarks/network_e2e/encodings"
-    names = ("replay", "replay_vectors", "test_v1")
+    names = ("replay", "replay_vectors")
     saved, path = {k: sys.modules.pop(k) for k in names if k in sys.modules}, list(sys.path)
-    sys.path[:0] = [str(enc), str(enc / "tests")]
+    sys.path[:0] = [str(enc)]
     try:
-        RP, RV, T1 = (importlib.import_module(k) for k in names)
+        RP, RV = (importlib.import_module(k) for k in names)
     finally:
         sys.path[:] = path
         for k in names:
             sys.modules.pop(k, None)
         sys.modules.update(saved)
-    t = RP.read_corpus_trace(T1._corpus(Path(tempfile.mkdtemp())))
+    t = RP.read_corpus_trace(_corpus(Path(tempfile.mkdtemp())))
     _st, cases = RV.vectors(t, R=x.S.R, W=x.S.W, A=x.S.A)
     reqs = t.requests
     arrivals = [(i, reqs[i].prompt_len, reqs[i].output_len) for i in range(x.S.K)]
