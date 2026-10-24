@@ -1,7 +1,8 @@
 """Advice v1: `decode(encode(a)) == a` on the replay's step traces and a TRACE-CORPUS trace, under the uniform codebook
 and a fitted one; the engine's arrival order is sent as its deviations from the warden's release order and recovered
 from the advice's rows; the hits past the pool bound are sent and held to the replay's; the KV pool is the
-registration's, never the string's; each value is charged to A5's window; the strings are prefix-free (so the charge
+registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries
+the decisions charged before their step's window; the strings are prefix-free (so the charge
 meets LEAK-LEAN's `BitsCount`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's
 phase 7 probes of v1 (prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book
 changes, a shortened shortfall) are among them."""
@@ -35,6 +36,7 @@ def _load(name: str):
 
 V, R, C, CV = _load("v1"), _load("replay"), _load("code"), _load("code_v1")
 from verity.core.protocols.certifier import advice as I1  # noqa: E402
+from verity.core.protocols.certifier import replay_chain as RC  # noqa: E402
 
 CASES = sorted(p.stem for p in FIXTURES.glob("*.jsonl"))
 EOS = 2
@@ -289,6 +291,56 @@ def test_each_value_goes_to_a5s_window(name):
     for (i, k, _), w in zip(decisions, charged):
         assert w <= min(rec.requests[j].end for j in order[i:]) // reg.T
         assert all(r is None or w <= r for r in released[k:])
+
+
+@pytest.mark.parametrize("name, n, early", [("sync-kv-pressure", 15, 5), ("async-kv-pressure", 17, 5)])
+def test_the_replay_chain_carries_what_a5_charges_early(name, n, early):
+    """At T = 20, A5 charges `early` of the trace's n decisions to a window before their step's (window 0, read in
+    windows 1 and 2). The certifier's state chain (`replay_chain`) loads each window's charged decisions after the ones
+    the last window left unread, each step reads its own at the window row's head, and `ReplayClose` accepts the
+    session's end; each part's circuit accepts what its specification does. A window ends with every decision it
+    holds that a later window's step reads still unread, which the load before the carry refused."""
+    t, rec, reg, adv = case(name, T=20)
+    wins = V.residual(adv, rec, reg)
+    order = V.arrival_order(adv, rec, reg.row_order)
+    first = [min(s for s, st in enumerate(adv.steps) if any(adv.requests[x.request].id == rec.requests[k].id
+                                                              for x in st.rows)) for k in order]
+    rp, decisions, _ = V._replay(rec, reg, reg.engine, order, lambda i, k: k >= first[i])
+    W = V.windows(rec, reg.T)
+    window, _ = V._charged(rec, reg, order, rp, W)
+    charged = [w for w, x in enumerate(wins) for _ in x.arrived]
+    assert len(decisions) == n and all(k < len(window) for _i, k, _b in decisions)
+    read = [window[k] for _i, k, _b in decisions]
+    assert sum(c < r for c, r in zip(charged, read)) == early
+    steps = [sum(1 for w in window if w == v) for v in range(W)]
+    S = RC.Shape(R=7, W=2, A=3, L=1024, NB=96, IW=4, Q=14, D=n, P=max(steps), K=14)
+    cur, last, ends = RC.empty(S), RC.Window(), []
+    loads, advances, s = [], [], 0
+    for v in range(W):
+        loaded = RC.load(S, cur, last, (), [int(b) for b in wins[v].arrived], steps[v])
+        assert loaded is not None
+        loads.append(RC.load_arguments(S, cur, last, (), [int(b) for b in wins[v].arrived], len(wins[v].arrived),
+                                       steps[v], RC.encode(loaded[0], S), RC.encode_window(loaded[1], S)))
+        cur, win = loaded
+        for _u in range(S.P):
+            bits = [int(b) for _i, k, b in decisions if k == s] if cur.steps else []
+            arr, front = RC.front(S, win, cur)
+            assert tuple(bits) == front[:len(bits)]
+            stepped = RC.Row(free=cur.free)
+            nxt = RC.advance(S, win, cur, True, stepped, arr, front, 0, len(bits))
+            assert nxt is not None
+            advances.append(RC.advance_arguments(S, win, cur, True, stepped, arr, front, 0, len(bits), RC.encode(nxt, S)))
+            s += bool(cur.steps)
+            cur = nxt
+        ends.append((cur, win))
+        last = win
+    assert s == len(rp.steps) == len(window)
+    unread = [len(w.decisions) - r.dh for r, w in ends]
+    assert unread == [sum(c <= v < r for c, r in zip(charged, read)) for v in range(W)] and unread[0] == early
+    assert [RC.close(S, r, w) for r, w in ends] == [not u for u in unread] and RC.close(S, *ends[-1])
+    assert RC.evaluate_load(S, loads) == [1] * W
+    assert all(o[0] == 1 for o in RC.evaluate_advance(S, advances))
+    assert RC.evaluate_close(S, [RC.close_arguments(S, r, w) for r, w in ends]) == [int(not u) for u in unread]
 
 
 def test_the_corpus_table(tmp_path, capsys):
