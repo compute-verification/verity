@@ -53,10 +53,10 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
   fi
   if [[ ,$SECTIONS, == *,ncu,* ]]; then
     ncu --target-processes all --clock-control none --cache-control all --print-units base --csv \
-      --metrics dram__bytes_read.sum,dram__bytes_write.sum,gpu__time_duration.sum --log-file "$O/ncu.csv" \
+      --metrics dram__bytes.sum,gpu__time_duration.sum --log-file "$O/ncu.csv" \
       "${BENCH[@]}" --mode ncu --ms "${NCU_MS:-1,8,32,64}" > "$O/ncu.log" 2>&1 &&
       "$VPY" $RS/fused_bench.py --mode ncu-report --ncu-csv "$O/ncu.csv" --out "$O" > "$O/ncu-report.log" 2>&1 ||
-      { tail -20 "$O/ncu.log" "$O/ncu-report.log"; [ $R = 0 ] && R=5; }
+      { tail -n 20 "$O/ncu.log" "$O/ncu-report.log"; [ $R = 0 ] && R=5; }
   fi
   exit $R
 '

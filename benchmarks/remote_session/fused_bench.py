@@ -28,7 +28,7 @@ time    a --arena-gib arena laid out as gate run 7's engine (`engine.pack`: embe
         each op's and each step's GPU time (CUDA events), median over --reps steps; and each library's
         read-and-decode rate over the whole arena (kv_decode's checksum mode) beside the bare read (kv_read)
 ncu     layer 0's linears and the LM head, each arm at each M, every op behind a one-cycle kv_spin marker, for
-        Nsight Compute (fused.sh runs it: dram bytes read and written and each kernel's duration, L2 flushed before
+        Nsight Compute (fused.sh runs it: DRAM bytes, read plus write, and each kernel's duration, L2 flushed before
         each kernel); `ncu-report` folds its CSV into each op's bytes and time
 serve   the engine stand-in for `fused_beside.py`: the arena exported over CUDA IPC (`engine.export`) to
         DIR/engine.json, then a step at M 64 at each multiple of 1/--hz of the host clock (engine.Load's
@@ -525,25 +525,27 @@ def ncu_ops(torch, model: Model, arms: list[str], ms: list[int], out: Path) -> N
 
 
 def ncu_report(csv_path: Path, ops_path: Path) -> dict:
-    """ncu's CSV (--csv --print-units base, metrics dram__bytes_read.sum, dram__bytes_write.sum,
-    gpu__time_duration.sum) folded by op: each marker kernel starts the next op of ncu_ops.json."""
+    """ncu's CSV (--csv --print-units base, metrics dram__bytes.sum and gpu__time_duration.sum) folded by op: each
+    marker kernel starts the next op of ncu_ops.json. dram__bytes.sum is DRAM read plus write; the RTX PRO 6000 gives
+    n/a for dram__bytes_read.sum and dram__bytes_write.sum, and a kernel's n/a counts as missing."""
     order = json.loads(ops_path.read_text())
     kernels: dict[int, dict] = {}
     with csv_path.open() as f:
         lines = [ln for ln in f if ln.startswith('"')]
     for row in csv.DictReader(lines):
         k = kernels.setdefault(int(row["ID"]), {"name": row["Kernel Name"]})
-        k[row["Metric Name"]] = float(row["Metric Value"].replace(",", ""))
+        if row["Metric Value"] != "n/a":
+            k[row["Metric Name"]] = float(row["Metric Value"].replace(",", ""))
     ops, cur = [], None
     for _, k in sorted(kernels.items()):
         if "spin_kernel" in k["name"]:
-            cur = {"read": 0.0, "write": 0.0, "ns": 0.0, "kernels": []}
+            cur = {"bytes": 0.0, "ns": 0.0, "kernels": [], "missing": 0}
             ops.append(cur)
             continue
         if cur is None:
             continue
-        cur["read"] += k.get("dram__bytes_read.sum", 0.0)
-        cur["write"] += k.get("dram__bytes_write.sum", 0.0)
+        cur["bytes"] += k.get("dram__bytes.sum", 0.0)
+        cur["missing"] += "dram__bytes.sum" not in k
         cur["ns"] += k.get("gpu__time_duration.sum", 0.0)
         cur["kernels"].append(k["name"][:80])
     if len(ops) != len(order):
@@ -623,7 +625,8 @@ def main() -> int:
         rep = ncu_report(a.ncu_csv, a.out / "ncu_ops.json")
         write_json(a.out / "ncu.json", rep)
         for k, v in rep.items():
-            log(f"ncu {k}: read {v['read'] / 1e6:.1f} MB, write {v['write'] / 1e6:.1f} MB, {v['ns'] / 1e3:.1f} us")
+            log(f"ncu {k}: {v['bytes'] / 1e6:.1f} MB, {v['ns'] / 1e3:.1f} us" +
+                (f" ({v['missing']} kernels without bytes)" if v["missing"] else ""))
         return 0
     import torch
 
