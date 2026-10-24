@@ -51,9 +51,11 @@ def table(n=4, b=2, seed=3):
     lo = [v for v in full if all(x < q // 2 for x in v)]
     hi = [v for v in full if all(x % (q // 2) == 0 for x in v)]
     sub = rng.sample(full, 1 << (n * b // 2))
+    sub_b = rng.sample(full, 1 << (n * b // 2))
     splits = [
         ("additive shares, both full range", full, full),
         ("shares, Alice's on 2^(nb/2) points, Bob's full", sub, full),
+        ("shares, both on 2^(nb/2) points", sub, sub_b),
         ("bit-slice: Alice low planes, Bob high planes", lo, hi),
         ("coordinate-disjoint (tensor-parallel)", disj_a, disj_b),
         ("Bob's piece theta's part of a 2-bit token", full, tokens),
