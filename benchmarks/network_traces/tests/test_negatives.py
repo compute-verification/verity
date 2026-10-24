@@ -721,15 +721,46 @@ def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_r
 
 
 def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root():
+    """On the warden's bucket rows (#3698): connection 1's data cell and pad in bucket 0's row, bucket 1 empty. The
+    row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
+    does the honest row at another position."""
     WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)
     from verity.core.protocols.certifier.active import DATA, HEADER, PAD
+    from verity.core.protocols.certifier.grid import COMPLETE, Record
+    from verity.core.protocols.certifier.warden import WardenParams, cell
 
-    data = (HEADER.pack(DATA, 1, 3) + b"abc").ljust(64, b"\0")
-    rows = [data, HEADER.pack(PAD, 0, 0).ljust(64, b"\0"), bytes(64)]
-    salts = [bytes([k + 1]) * WR.SALT_BYTES for k in range(len(rows))]
-    cells = WR.Cells.commit("tie", Direction.EGRESS, 0, rows, bytes(64), SESSION, salts)
-    bad = bytearray(data)
+    params = WardenParams(cell_bytes=64, slots=2, lanes=2, window=2)
+    B, S = params.cell_bytes, params.grid.allocation
+    grid = ((cell(DATA, 1, b"abc", B), cell(PAD, 1, b"", B)) + (None,) * (S - 2), (None,) * S)
+    salts = [bytes([k + 1]) * WR.SALT_BYTES for k in range(params.window)]
+    cells = WR.Cells.of("tie", Direction.EGRESS, Record("tie", 0, grid, COMPLETE), params, SESSION, salts, bytes(64))
+    assert cells.wiring.connections == ((1, 0, 2),) and len(cells.rows[0]) == S * B
+    row = cells.rows[0]
+    bad = bytearray(row)
     bad[HEADER.size] ^= 1
-    assert NG.cell_reads(WR, cells, 0, data)
+    assert NG.cell_reads(WR, cells, 0, row)
     assert not NG.cell_reads(WR, cells, 0, bytes(bad))
-    assert not NG.cell_reads(WR, cells, 1, data)
+    assert not NG.cell_reads(WR, cells, 1, row)
+
+
+def test_frame_on_a_warden_run_reads_its_data_cells_row_and_refuses_the_changed_byte(tmp_path):
+    """`warden_frame` on a warden-serve run driven tick by tick (`test_warden_serve._run`): its egress registration
+    (v2) is read under the warden's key and the schedule, its bucket rows and signed wiring are committed under the
+    run's salts to the registered head, and its first data cell, at its bucket's row and slot, reads honest and not
+    with a payload byte changed; a run that kept no salts is not applicable."""
+    pytest.importorskip(NG.WARDEN_ROWS_MODULE)
+    sys.path.insert(0, str(HERE / "tests"))
+    import test_warden_serve as tws
+
+    run, key = tmp_path / "run", tmp_path / "key"
+    run.mkdir()
+    tws._run(run, key, [tws.ws.http_request({"prompt": "x" * 10}, "h:1")], [tws._response([" word"] * 8)])
+    got = NG.warden_frame(run)
+    p = tws.PARAMS
+    assert got["ok"] and got["honest_reads"] and not got["tampered_reads"]
+    assert got["rows"] == p.window and got["row_bytes"] == p.grid.allocation * p.cell_bytes
+    assert got["cell_bytes"] == p.cell_bytes and 0 <= got["slot"] < p.grid.allocation
+    assert NG.warden_frame(run, at=-1)["ok"]
+    (run / "cells.salts").unlink()
+    with pytest.raises(NG.NotApplicable, match="cells.salts"):
+        NG.warden_frame(run)
