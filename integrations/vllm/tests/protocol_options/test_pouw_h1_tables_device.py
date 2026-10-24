@@ -3,8 +3,8 @@
 rows (K s8 codes and an f32 scale) and z-table records (``ZY_BYTES``), one row to a few hundred, K from 2 to two segments and
 off an 8-byte boundary, at H1's table nonces: the root, and every opening of `hiding_rows`' tree verifies under it. The CPU
 twin (`host_roots`, the kernels' functions under g++) runs everywhere with a C++ compiler; `H1Run` on the twin commits the
-tables and manifest it commits with `hiding_rows`, and its prover directory reopens every call. The device tests need CUDA and
-nvcc and skip elsewhere."""
+tables and manifest it commits with `hiding_rows`, and its prover directory reopens every call, also with each call's roots
+read only when its round closes (the GPU's side-stream path). The device tests need CUDA and nvcc and skip elsewhere."""
 from __future__ import annotations
 
 import hashlib
@@ -130,6 +130,29 @@ def test_a_window_on_the_twin_commits_what_hiding_rows_commits_and_its_calls_reo
         assert opened.a.commitment.root.hex() == c["tables"]["a"] and opened.z.commitment.root.hex() == c["tables"]["z"]
 
 
+@needs_cxx
+def test_a_window_whose_tables_hash_beside_the_forward_records_each_root_before_its_round(tmp_path, monkeypatch):
+    """With the tables launched and read later (`device_hash`'s `Pending`, here the twin's roots held until asked and never
+    ready before), `H1Run` waits for a call's roots when its round closes, so it commits what hashing them in the call
+    commits; every launch is read."""
+    launched = []
+
+    class Later:
+        def __init__(self, tables, key):
+            roots = TD.host_roots(tables, key)
+            self.roots, self.ready = lambda: launched.remove(self) or roots, lambda: False
+            launched.append(self)
+
+    monkeypatch.setattr(TD, "device_hash", Later)
+    got, prover = _window(tmp_path, "gpu", monkeypatch)
+    want, _ = _window(tmp_path, "python", monkeypatch)
+    assert launched == []
+    assert got["calls"] == want["calls"] and got["commitment"]["calls_root"] == want["commitment"]["calls_root"]
+    assert got["commitment"]["draw"]["root"] == want["commitment"]["draw"]["root"]
+    for i in range(len(got["calls"])):
+        PV.open_call(prover, got, i, SALT)
+
+
 def _gpu():
     if not torch.cuda.is_available() or TD.nvcc() is None:
         pytest.skip("needs CUDA and nvcc")
@@ -141,6 +164,8 @@ def test_the_device_is_hiding_rows(n, k, owner, name):
     tree, (did, nonce, codes, words) = _reference(n, k, owner, name)
     on = (did, nonce, torch.from_numpy(codes).cuda(), torch.from_numpy(words.view(np.int32)).cuda())
     assert TD.device_roots([on, on], KEY) == [tree.commitment.root] * 2
+    pending = [TD.device_hash([on], KEY) for _ in range(TD.STREAMS + 1)]
+    assert [p.roots() for p in pending] == [[tree.commitment.root]] * (TD.STREAMS + 1) and all(p.ready() for p in pending)
 
 
 def test_auto_takes_the_gpu_for_cuda_tensors(monkeypatch):

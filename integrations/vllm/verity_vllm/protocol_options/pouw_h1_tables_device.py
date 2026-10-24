@@ -9,10 +9,11 @@ is ChaCha20 blocks 3i .. 3i + 2 at that nonce, ``hiding_rows``' keystream. An A 
 f32 scale; a z table's leaf is a ``ZY_BYTES`` record, its first ``ZY_BYTES - 4`` bytes as the codes and its last 4 as the word
 (`record_rows`). The step's own root, over its one table, is not read.
 
-`device_roots` hashes on the current CUDA stream and returns once the roots are on the host: a call's tables are recorded as the
-call is, as `hiding_rows` records them. `host_roots` runs the same functions on the CPU (`row_table_host.cpp`), the twin the CPU
-tests hold to `hiding_rows` on machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`);
-nvcc is `pouw_device`'s.
+`device_hash` launches the tables on the device's side streams (`STREAMS`, in turn) behind everything the current stream has
+enqueued, nothing waiting on the host, and hands back a `Pending` whose `roots` waits for them: `H1Run` reads a step's roots
+at its round's close, so a call's tables hash beside the forward rather than in it. `device_roots` waits at once.
+`host_roots` runs the same functions on the CPU (`row_table_host.cpp`), the twin the CPU tests hold to `hiding_rows` on
+machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`); nvcc is `pouw_device`'s.
 """
 from __future__ import annotations
 
@@ -26,13 +27,17 @@ import numpy as np
 
 from verity_vllm.commit import row_tables_device as RTD
 
-__all__ = ["MODE", "available", "device_lib", "device_roots", "host_roots", "layout", "path", "record_rows"]
+__all__ = ["MODE", "Pending", "STREAMS", "available", "device_hash", "device_lib", "device_roots", "host_roots", "layout", "path",
+           "record_rows"]
 
 #: where `pouw_h1.H1Run` hashes a call's tables: ``"auto"`` (the GPU when the call's tensors are CUDA tensors and the kernels
 #: build for their device, else ``hiding_rows``), ``"gpu"``, ``"host"`` (the kernels' functions on the CPU, the twin) or
 #: ``"python"`` (``hiding_rows``, the reference)
 MODE = "auto"
 MODES = ("auto", "gpu", "host", "python")
+#: the side streams a device's tables hash on, one table each in turn: a table's kernels are a few blocks long and bound by
+#: their serial hash chains, so successive tables hash side by side
+STREAMS = 4
 _M32 = 0xFFFFFFFF
 
 
@@ -117,7 +122,8 @@ def device_lib(arch: str) -> ctypes.CDLL:
 
 
 class _Device:
-    """One CUDA device's build, its copies of the byte tables and midstates, and the identity rank order tables share."""
+    """One CUDA device's build, its copies of the byte tables and midstates, the identity rank order tables share, and the
+    side streams tables hash on."""
 
     def __init__(self, torch: Any, device: Any) -> None:
         major, minor = torch.cuda.get_device_capability(device)
@@ -130,11 +136,16 @@ class _Device:
             raise RuntimeError(f"rt_midstates: CUDA error {rc}")
         torch.cuda.current_stream(device).synchronize()
         self.perm = torch.arange(0, dtype=torch.int32, device=device)
+        self.streams, self.turn = [torch.cuda.Stream(device) for _ in range(STREAMS)], 0
 
     def ranks(self, torch: Any, n: int) -> Any:
         if len(self.perm) < n:
             self.perm = torch.arange(max(n, 2 * len(self.perm)), dtype=torch.int32, device=self.perm.device)
         return self.perm
+
+    def stream(self) -> Any:
+        self.turn = (self.turn + 1) % len(self.streams)
+        return self.streams[self.turn]
 
 
 _DEVICES: dict[int, _Device] = {}
@@ -173,34 +184,69 @@ def path(*tensors: Any) -> str:
     return "gpu" if tensors and all(getattr(t, "is_cuda", False) for t in tensors) and available() else "python"
 
 
-def device_roots(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> list[bytes]:
-    """`host_roots` hashed on the current CUDA stream of the tables' device, every codes and words a contiguous CUDA tensor
-    there, returned once the roots are on the host."""
+class Pending:
+    """Tables launched on side streams (`device_hash`): ``ready()`` without blocking, ``roots()`` their roots in order. It
+    holds their inputs and scratch until the roots are read, so the allocator has nothing back that a side stream still
+    reads."""
+
+    def __init__(self, done: list[Any], host: Any, held: tuple[Any, ...]) -> None:
+        self.done, self.host, self.held = done, host, held
+
+    def ready(self) -> bool:
+        return all(e.query() for e in self.done)
+
+    def roots(self) -> list[bytes]:
+        for e in self.done:
+            e.synchronize()
+        self.held = ()
+        host = self.host.numpy()
+        return [_root(host[i, 8:]) for i in range(len(host))]
+
+
+def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> Pending:
+    """`host_roots` hashed on the side streams of the tables' device after everything its current stream has enqueued so
+    far, every codes and words a contiguous CUDA tensor there, nothing waiting on the host."""
     import torch
 
     dev = tables[0][2].device
     if dev.type != "cuda":
-        raise ValueError(f"device_roots hashes CUDA tensors, not tensors on {dev}")
+        raise ValueError(f"device_hash hashes CUDA tensors, not tensors on {dev}")
     for _did, _nonce, c, w in tables:
         if c.device != dev or w.device != dev or c.dim() != 2 or c.element_size() != 1 or w.element_size() != 4 \
                 or tuple(w.shape) != (c.shape[0],) or not c.is_contiguous() or not w.is_contiguous():
             raise ValueError(f"codes {tuple(c.shape)} and words {tuple(w.shape)} are not contiguous (n, K) 8-bit and (n,) "
                              f"32-bit tensors on {dev}")
-    d, st = _device(torch, dev), torch.cuda.current_stream(dev)
+    d = _device(torch, dev)
     laid = [layout(did, key, nonce, int(c.shape[0]), int(c.shape[1])) for did, nonce, c, _w in tables]
     tabs = np.stack([tab for tab, _args in laid])
     for i, (_did, _nonce, c, w) in enumerate(tables):
         tabs[i, 0], tabs[i, 1] = c.data_ptr(), w.data_ptr()
-    meta = torch.from_numpy(tabs.view(np.int64)).pin_memory().to(dev, non_blocking=True)
+    staged = torch.from_numpy(tabs.view(np.int64)).pin_memory()
+    meta = staged.to(dev, non_blocking=True)
     perm = d.ranks(torch, max(int(c.shape[0]) for _did, _nonce, c, _w in tables))
-    out = torch.empty((len(tables), 16), dtype=torch.int64, device=dev)
+    written = torch.cuda.Event()
+    written.record(torch.cuda.current_stream(dev))
+    host = torch.empty((len(tables), 16), dtype=torch.int64, pin_memory=True)
+    done, held = [], [staged, meta, perm, *(x for _did, _nonce, c, w in tables for x in (c, w))]
     for i, (tab, args) in enumerate(laid):
+        side = d.stream()
+        side.wait_event(written)
         n, s = int(tab[2]) >> 32, int(tab[3]) >> 32
-        dig, leaves, tree, step = (torch.empty(8 * m, dtype=torch.int64, device=dev) for m in (n * s, n, RTD._width(n), 2))
-        rc = d.lib.rt_step(st.cuda_stream, meta[i].data_ptr(), perm.data_ptr(), n * s, n, d.hm.data_ptr(), d.ms.data_ptr(),
-                           ctypes.byref(args), dig.data_ptr(), leaves.data_ptr(), tree.data_ptr(), step.data_ptr(),
-                           out[i].data_ptr())
-        if rc:
-            raise RuntimeError(f"rt_step: CUDA error {rc}")
-    host = out.cpu().numpy()
-    return [_root(host[i, 8:]) for i in range(len(tables))]
+        with torch.cuda.stream(side):
+            dig, leaves, tree, step, out = (torch.empty(8 * m, dtype=torch.int64, device=dev)
+                                            for m in (n * s, n, RTD._width(n), 2, 2))
+            rc = d.lib.rt_step(side.cuda_stream, meta[i].data_ptr(), perm.data_ptr(), n * s, n, d.hm.data_ptr(),
+                               d.ms.data_ptr(), ctypes.byref(args), dig.data_ptr(), leaves.data_ptr(), tree.data_ptr(),
+                               step.data_ptr(), out.data_ptr())
+            if rc:
+                raise RuntimeError(f"rt_step: CUDA error {rc}")
+            host[i].copy_(out, non_blocking=True)
+            done.append(torch.cuda.Event())
+            done[-1].record(side)
+        held += [dig, leaves, tree, step, out]
+    return Pending(done, host, tuple(held))
+
+
+def device_roots(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> list[bytes]:
+    """`device_hash`'s roots, waited for."""
+    return device_hash(tables, key).roots()

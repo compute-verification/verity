@@ -353,8 +353,9 @@ class H1Run:
         self.prover = prover if prover is not None else getattr(served, "prover", None)
         if self.prover is not None and commit:
             PV.keep_key(self.prover, self._key)
-        #: each call's table roots (hex; z None when the run has no exact Y for it) and each call's receipt root
-        self.tables: dict[int, dict[str, str | None]] = {}
+        #: each call's table roots (`tables`), the calls whose tables the GPU is still hashing, and each call's receipt root
+        self._roots: dict[int, dict[str, str | None]] = {}
+        self._hashing: deque[tuple[int, TD.Pending]] = deque()
         self.receipts: dict[int, bytes] = {}
         #: the admitted requests' entries in admission order, each round's, and the requests refused admission
         self.requests: list[RQ.RequestEntry] = []
@@ -384,6 +385,19 @@ class H1Run:
     def listen(self, fn: Listener) -> None:
         """Hand every later call to `fn` (`Listener`)."""
         self.listeners.append(fn)
+
+    @property
+    def tables(self) -> dict[int, dict[str, str | None]]:
+        """Each call's table roots (hex; z None when the run has no exact Y for it), once the GPU has hashed them all."""
+        self._settle(wait=True)
+        return self._roots
+
+    def _settle(self, wait: bool) -> None:
+        """Record the roots of the calls whose tables the GPU has hashed, in call order: all of them with ``wait``, else
+        the leading ones already done."""
+        while self._hashing and (wait or self._hashing[0][1].ready()):
+            index, pending = self._hashing.popleft()
+            self._roots[index].update(zip(("a", "z"), (r.hex() for r in pending.roots())))
 
     @property
     def salt(self) -> bytes:
@@ -425,9 +439,10 @@ class H1Run:
         binding, nonce = self._binding(call, name)
         return RQ.hiding_rows(binding, call.index, leaves, self._key, nonce).commitment.root.hex()
 
-    def _kernel_tables(self, call: Call, a: Any, s_a: Any, zy: Any, where: str) -> dict[str, str | None]:
-        """`_commit_tables`' roots by the row-table kernels (`pouw_h1_tables_device`), on ``a``'s device (``"gpu"``) or the
-        CPU (``"host"``): the A table's T rows of K codes and f32 scale, the z table's records split as the kernels take them."""
+    def _kernel_tables(self, call: Call, a: Any, s_a: Any, zy: Any, where: str) -> None:
+        """`_commit_tables`' roots by the row-table kernels (`pouw_h1_tables_device`), on ``a``'s device's side streams
+        (``"gpu"``, recorded once hashed: `tables` waits for them) or the CPU (``"host"``): the A table's T rows of K codes and
+        f32 scale, the z table's records split as the kernels take them."""
         import torch
 
         m, t, k = call.m, self.rows, call.k
@@ -445,8 +460,12 @@ class H1Run:
         for name, c, w in tables:
             binding, nonce = self._binding(call, name)
             laid.append((rows_domain(binding, call.index, len(c), HM96).domain_id, nonce, c, w))
-        roots = (TD.device_roots if where == "gpu" else TD.host_roots)(laid, self._key)
-        return {"a": roots[0].hex(), "z": roots[1].hex() if len(roots) > 1 else None}
+        self._roots[call.index] = {"a": None, "z": None}
+        if where == "gpu":
+            self._hashing.append((call.index, TD.device_hash(laid, self._key)))
+            self._settle(wait=False)
+        else:
+            self._roots[call.index].update(zip(("a", "z"), (r.hex() for r in TD.host_roots(laid, self._key))))
 
     def _commit_tables(self, call: Call, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
         """The call's A table (`table_leaves`) and its z table, leaf u unit u's z/y record (`pouw_h1_records`; an empty call's
@@ -458,7 +477,7 @@ class H1Run:
                    and (not m or int(np.prod(s_a.shape)) == m))
         where = TD.path(*given) if kernels else "python"
         if where != "python":
-            self.tables[call.index] = self._kernel_tables(call, a, s_a, zy if m and records is not None else None, where)
+            self._kernel_tables(call, a, s_a, zy if m and records is not None else None, where)
             if self.prover is not None and m:
                 PV.keep_call(self.prover, call.index, _words(a, m, "i1"), _words(s_a, m, "<f4"), records)
             return
@@ -469,7 +488,7 @@ class H1Run:
         out: dict[str, str | None] = {"a": self._table(call, "a", table_leaves(t, call.k + 4, m, av, sv))}
         leaves = [bytes(ZR.ZY_BYTES)] * call.units if not m else None if records is None else [r.tobytes() for r in records]
         out["z"] = None if leaves is None else self._table(call, "z", leaves)
-        self.tables[call.index] = out
+        self._roots[call.index] = out
         if self.prover is not None and m:
             PV.keep_call(self.prover, call.index, av, sv, records)
 
@@ -490,7 +509,7 @@ class H1Run:
         if self.commit:
             self._commit_tables(call, a, s_a, records, zy)
             if self.served is not None:
-                self.tables[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, records)
+                self._roots[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, records)
         for fn in self.listeners:
             out = fn(call, a, s_a, weight, weight_scale)
             if out is not None:
