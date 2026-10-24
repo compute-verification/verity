@@ -42,7 +42,7 @@ from types import SimpleNamespace
 from verity.core.protocols.certifier import served_rows as SR, served_tie as ST
 
 PORT_NAMES = ("step.input/ids", "step.input/positions")
-RECORD_KEYS = ("schema", "binding", "root", "count", "n_bits", "digests")
+RECORD_KEYS = ("schema", "binding", "root", "count", "n_bits")
 
 
 def load(run_dir: Path, w: int) -> SimpleNamespace:
@@ -77,8 +77,7 @@ def bindings(x: SimpleNamespace, S, St) -> tuple[dict, list[SimpleNamespace], di
           "step_roots": [s.root.hex() for s in x.run.steps] == x.rec["step_roots"],
           "record": all(record[k] == sw["served_rows"][k] for k in RECORD_KEYS),
           "binding": record["binding"] == SR.binding(run_root).hex()}
-    served = SR.register(S, _session(x.priv), run_root, salts=[bytes.fromhex(s) for s in x.priv["salts"]],
-                         digest_salts=[bytes.fromhex(s) for s in x.priv["digest_salts"]])
+    served = SR.register(S, _session(x.priv), run_root, salts=[bytes.fromhex(s) for s in x.priv["salts"]])
     ok["registered"] = all(served.record()[k] == record[k] for k in RECORD_KEYS)
     layout = opened = embed_equal = padded = True
     roots: dict[int, bytes] = {}

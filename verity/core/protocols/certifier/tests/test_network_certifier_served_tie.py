@@ -1,6 +1,6 @@
 """The served rows' tie (`served_tie.ServedRowsTie_v1`) on the compile slice's corpus-smallkv window: the honest served rows
 against the honest batch's committed positions are accepted, and REDTEAM phase 10's six passes, which the slice accepts
-under their own registered digest, are refused against the batch the server ran. Each negative is refused by exactly the
+under their own registered row, are refused against the batch the server ran. Each negative is refused by exactly the
 checks `check` names, in the circuit's verdict; the port's shared read gives back the ids and the positions; and a positions
 chunk is bound by its b‖c to its leaf of the step's tree."""
 from __future__ import annotations
@@ -22,7 +22,6 @@ from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, bit_row, row_leaf, sha512_row_v2_digest
 
 FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
-SALT = bytes(range(32))
 COUNT, POS = 1 << ST.FLAGS.index("count"), 1 << ST.FLAGS.index("pos")
 
 
@@ -59,14 +58,14 @@ def test_the_honest_window_is_accepted(x):
 
 def test_six_passes_are_refused_against_the_batch_the_server_ran(x):
     """REDTEAM phase 10 finding 2 through the tie. The prover registers the six-pass run's rows (user-1 never admitted),
-    consistently: their digest is the registered one, so the slice accepts them at 0x1F with a 5-bit code. The batch the
+    consistently: their row is the registered one, so the slice accepts them at 0x1F with a 5-bit code. The batch the
     server ran admitted user-1 at step 6, 29 prefill tokens beside user-0's decode, and those positions are committed;
     the cheap rows end step 6 at 1 token of its 30 and leave 29 uncovered, so the tie refuses on both bits."""
     S, sl = x.S, x.sl
-    cheap = CS.case(S, CS.Slice(sl.arrivals, (0,) * 6, sl.steps), SALT)
+    cheap = CS.case(S, CS.Slice(sl.arrivals, (0,) * 6, sl.steps))
     assert cheap.verdict == CS.ACCEPT and cheap.length == 5 and list(cheap.steps) != x.rows
-    served = SR.register(S, [list(cheap.steps)], bytes(64), digest_salts=[SALT])
-    assert served.digests[0] == CS.rows_digest(S, cheap.steps, SALT)
+    served = SR.register(S, [list(cheap.steps)], bytes(64))
+    assert served.registration.rows[0] == SR._row(cheap.rows["srv"])[0]
     assert [u for u, (a, b) in enumerate(zip(cheap.steps, x.rows)) if a != b] == [6]
     tied = ST.case(x.T, _srv(x, list(cheap.steps)), x.batch)
     assert tied.flags == {"count": False, "pos": False}

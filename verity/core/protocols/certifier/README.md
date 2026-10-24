@@ -65,14 +65,14 @@ A spec-level reference for network accounting's timing channel:
   (`check_chain`). Its cost at a shape is `size`;
 - the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `check` its reference, composes
   `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, and the encoder over the scan's asks, for one
-  window. It holds the coded length to the declared charge and the step rows' salted SHA-512 to the public digest. The
-  cache counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
-  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits, their evaluator
-  and SHA-512's gadget from `verity`;
+  window. It holds the coded length to the declared charge and the step rows to its committed ``srv`` row, the served
+  rows. The cache counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
+  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits and their
+  evaluator from `verity`;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
-  draw under the run root (each window's salted digest and an hm96 row registration). The verifier's ``pub`` for the
-  slice is the declared charge and the published digest (`served_rows.pub`), never the prover's words, and `leaf_ok`
-  holds a committed row's b‖c to its registered leaf. It takes the advice registration's hm96 rows from `verity`;
+  draw under the run root as an hm96 row registration, a window's row the slice's ``srv`` row. `leaf_ok` holds a unit's
+  ``srv`` b‖c to its registered leaf, as the advice's ``adv`` row is held. It takes the advice registration's hm96 rows
+  from `verity`;
 - the served rows' tie (`served_tie`): `ServedRowsTie_v1`, a Boolean Definition with `check` its reference, holds a
   window's served rows to the positions its steps' Commit holds (the step-input port, `port_chunks`: each step's ids and
   then its positions at the head of its stream), so the rows registered at serve time are the batch the server ran. Every

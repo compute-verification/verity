@@ -1,7 +1,7 @@
 {
  "definitions": {
   "CompileSlice_v1{R=2,W=1,A=2,M=256,T=256,L=4096,B=16,H=0,CH=1,WM=0,FULL=1,PC=1,NB=100,IW=6,Q=3,D=7,P=7,K=3,SEG=32}": {
-   "and": 140090
+   "and": 60574
   }
  }
 }
