@@ -310,6 +310,8 @@ class Rules:
 
 #: drive's ways of landing (`DriveFlags.land`)
 LANDINGS = ("check", "review")
+#: a landing gate's path (`DriveFlags.landing_gates`)
+GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 
 
 @dataclass(frozen=True)
@@ -329,6 +331,9 @@ class DriveFlags:
     land: str = "check"
     #: the after-landing run of `land = "review"` reuses no pass (`check.py --no-cache`)
     after_landing_no_cache: bool = False
+    #: scripts every landing passes first (`Driver._landing_gates`), each by its path from the repository's root, run as it is at
+    #: `main`
+    landing_gates: tuple[str, ...] = ()
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
@@ -388,6 +393,13 @@ class DriveFlags:
             if not isinstance(doc["after_landing_no_cache"], bool):
                 raise bad("after_landing_no_cache", "true or false")
             got["after_landing_no_cache"] = doc["after_landing_no_cache"]
+        if "landing_gates" in doc:
+            v = doc["landing_gates"]
+            if not (isinstance(v, list) and all(isinstance(x, str) and GATE_PATH_RE.fullmatch(x) and ".." not in x.split("/")
+                                                for x in v)):
+                raise bad("landing_gates", "a list of Python scripts by their path from the repository's root, as "
+                                           "[\"integrations/x/tools/gate.py\"]")
+            got["landing_gates"] = tuple(v)
         return cls(**got)
 
     def override(self, a: argparse.Namespace) -> "DriveFlags":
@@ -2484,7 +2496,7 @@ def main(argv: list[str]) -> int:
             Driver(q, on=flags.on, max_running=flags.max_running, train_size=flags.train_size, defer=frozenset(flags.defer),
                    regenerate_locks=flags.regenerate_locks, per_pr_shadow=flags.per_pr_shadow, land=flags.land,
                    after_landing_no_cache=flags.after_landing_no_cache, reviews=labels.reviews,
-                   ready_by=labels.ready_by).tick(dry_run=a.dry_run)
+                   ready_by=labels.ready_by, landing_gates=flags.landing_gates).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses
