@@ -15,6 +15,9 @@
   "Properties.Proofs.Nci.DescAgree",
   "Properties.Proofs.Nci.Walk",
   "Properties.Proofs.Nci.Novel",
+  "Properties.Nci.Baseline",
+  "Properties.Proofs.Nci.BaselineSteps",
+  "Properties.Proofs.Nci.Baseline",
   "Properties.NciDesc",
   "Properties.CertifierDevice",
   "Properties.Proofs.CertifierDevice",
@@ -114,6 +117,7 @@
   "Models.Nci.Assumptions.Threads",
   "Models.Nci.Assumptions.Baseline",
   "NciCheck.Check",
+  "NciCheck.Baseline",
   "Flock",
   "Properties.CertifierDevice",
   "CertifierDevice",
@@ -174,6 +178,7 @@
     "Models.Nci.Assumptions.Threads",
     "Models.Nci.Assumptions.Baseline",
     "NciCheck.Check",
+    "NciCheck.Baseline",
     "Properties.Nci"
    ],
    "except": [],
@@ -315,6 +320,9 @@
    "signature": ["MemoryChallenger.Properties.SecurityProofs.verdictSigned : MemoryChallenger.Properties.VerdictSigned"],
    "assumptions": [],
    "type_hash": "bd3cbe5d8c70108d7019cd861258345913eaed5d00114443d813668b395edfe2"
+  },
+  "NciCheck.Properties.SecurityProofs.BaselineProvenance": {
+   "owner": "@compute-accounting"
   },
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
@@ -1739,6 +1747,10 @@
    },
    "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
     "function": "NciCheck.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.BaselineProvenance": {
+    "function": "NciCheck.Baseline.evaluate",
     "outcome": "accept"
    },
    "NciCheck.Properties.SecurityProofs.CheckAccepts": {
