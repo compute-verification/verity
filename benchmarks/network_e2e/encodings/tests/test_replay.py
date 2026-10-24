@@ -179,8 +179,9 @@ def test_reads_a_trace_corpus_trace(tmp_path):
 
 
 def test_warden_ingress_is_the_engines_arrival_order(tmp_path):
-    """Design v3's warden admits requests on its own schedule, so the certified ingress is the engine's `arrival` stamp:
-    requests the client sent out of the engine's order cost order bits at the client's send and none at the warden's."""
+    """`ingress="warden"` reads the engine's own `arrival` stamp (the server's body read, the order vLLM schedules in):
+    requests the client sent out of the engine's order cost order bits at the client's send and none there, the floor a
+    server admitting in the warden's release order would give."""
     t = trace("sync-kv-pressure")
     d = corpus_dir(t, tmp_path)
     recs = [json.loads(line) for line in (d / "requests.jsonl").read_text().splitlines()]

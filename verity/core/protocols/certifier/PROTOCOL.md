@@ -1625,9 +1625,14 @@ release order.
   (every hit, and every value's window) and its order is the one `arrival_order` recovers from the advice it decodes
   to.
 
+The compile unit commits the values themselves, not this string, and the string's segments are only their charge (the
+composition below): what the bound counts is the charge, not the committed length.
+
 - *The bound.* `code_v1`'s segments are prefix-free (#3591), so the strings are prefix-free for every W, and at most
   2^c strings are charged c bits or fewer. That is LEAK-LEAN's `BitsCount` by `bitsCount_of_prefixFree` (#3533).
-  Since `decode` takes only the canonical string, at most that many advices decode at that charge.
+  `code_v1.encode` is injective on the windows (`code_v1.decode` inverts it), and the order entries' inverse, the
+  replay and the walk give the advice from the windows, so at most 2^c residuals, and so at most that many advices,
+  are accepted at a charge of c or less.
 - *v0's per-window parts.* Each window's part is self-delimited, which settles this item of v0's list above.
 - *Measured* (art:0f5f23d498a7f042fcf2a638d9a1500afbc916a4498569666957754415428c30, run r20261024-111418-79a9). It
   covers the 14 corpus traces of 1,000 requests with the client's send standing for the release, and the two warden
@@ -1659,24 +1664,31 @@ release order.
   - These contexts read no release time: the warden's fixed schedule leaves the engine no timing to read.
 
 **Composition**, all in one ZK proof under the advice's hiding root:
-1. v1's windows: the committed string is at most ℓ bits, and parses into W windows by `code_v1`'s counts.
-2. The scan of ENC-REPLAY's `ReplayStep_v1` over the session's steps, from the empty engine. Its arrivals are the
-   certified requests in release order, each taken at its rank. The window row holds a queue of the next Q released
-   requests not yet arrived, in (a, ordinal) order, with Q a public cap like H. Arrival p takes the one at the rank its
-   order entry sends, 0 where none names p, and a rank of Q or more is refused. The rows gain the window's order
-   entries and the queue (ENC-REPLAY and ADV-SPEC). The largest rank on the warden traces is 75 (heavy, 300 requests
-   a second; p50 7) and 2 (small KV), so Q = 128 holds both. Its residual is the decisions, the order entries and the
-   sent shortfalls, which are witness.
-   The scan also carries one `code_v1` encoder and its model. Each window's counts are witness, coded first and checked
-   against the scan's tallies at the window's end. Each decision, order entry and sent shortfall is encoded as the
-   step reads it. Each window's coded length, the bits its terminated segment would hold, must be at most its declared
-   charge c_w; no codeword is committed or compared ("The encoder in the circuit" below). The coder can't run ahead of
-   the scan as a parser, since which value is read next, and so which window it is coded in, is the replay's.
-3. ENC-DERIVED's walk over the rows, which gives I1 v0.
-4. ADV-SPEC's `AdviceCheck_v1{L}` (#3547) is the specification of what 1–3 give. The tests hold every advice v1 decodes,
-   from random and bit-flipped strings too, to I1's own `advice.decode`, whose refusals that circuit makes. So it holds
-   wherever 2 and 3 derive their rows rather than take them as witness, and needn't run at v0's length.
-5. `compile_steps(registered, advice, ingress)` (#3504) turns the advice into the Programs, with `ingress` the certified
+1. *The values are the committed advice.* The advice's hiding rows (#3507) hold each window's residual raw, as
+   `replay_chain`'s window row: its decisions as bits in the scan's order, at most D a window (4,391 on the corpus'
+   largest), in `dec` with their count `left`; its sent shortfalls, at most H, in `hits` with `hleft` ("The rows"
+   below); and its order entries (position, rank). No decoder runs in the circuit: the scan reads each field at a
+   private head of the chain's (`dh`, `hh`).
+2. The scan of `ReplayStep_v1` over the session's steps, from the empty engine. The window row holds a queue of the
+   next Q released requests not yet arrived, in (a, ordinal) order, Q a public cap like H, and arrival p takes the one
+   at its order entry's rank (0 where none names p; a rank of Q or more is refused). Q = 128 holds the warden traces'
+   largest, 75 (heavy; p50 7) and 2 (small KV). The chain fills the step's A arrival slots from the queue, each
+   `arr_id` its arrival ordinal, so `ReplayStep_v1` needs no change for the ranks. The decisions are the scan's bits,
+   and each lookup's hit is h* less the committed shortfall. The chain reads every committed value and none past
+   them, so the values are exactly the asks, the deviations and, past the bound, the lookups. Under async scheduling
+   (AS) the certified O forces each lag row, at no decision (`ReplayStep_v1`'s "Async scheduling").
+3. *The charge.* The registered code runs forward over the same values: per window, `code_v1`'s window (#3591) over
+   the values charged to it, in `code_v1._window`'s order, on ENC-CODE's encoder ("The encoder in the circuit"
+   below). A decision's context is min(run, 2), run the 0s since the last 1 in the decision stream, across windows:
+   a function of the committed decisions, which the encoder keeps in its own state. The window's coded length ℓ_w
+   (`code_v1.Encoded.lens`) must be at most its declared charge c_w, a protocol output. No codeword is committed, so
+   nothing reads a segment at a data-dependent cursor, no ask forks the replay, and the bound above holds as it is.
+   ADV-SPEC's `CompileSlice_v1` (#3661) is 1–3 for one window, proved in ZK, with its stand-ins (Open).
+4. ENC-DERIVED's walk over the rows, which gives I1 v0.
+5. ADV-SPEC's `AdviceCheck_v1{L}` (#3547) specifies what 1–4 give. The tests hold every advice v1 decodes, random and
+   bit-flipped strings' too, to I1's `advice.decode`, whose refusals that circuit makes. So it holds wherever 2 and 4
+   derive their rows rather than take them as witness, and needn't run at v0's length.
+6. `compile_steps(registered, advice, ingress)` (#3504) turns the advice into the Programs, with `ingress` the certified
    bodies by id.
 
 **The encoder in the circuit** (`arith_encode`: `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
@@ -1751,7 +1763,7 @@ in `ReplayStep_v1`'s scheduling order:
 - *The owner.* A call's r is the row's request id, the arrival ordinal `ReplayStep_v1` carries (RW = IW). FCFS admits
   new requests in arrival order, so the lowest id is the earliest-admitted request, the one I1 numbers lowest. A hit's
   canonical sources are its lookup's trail entries' owners in the table at the step's end (`cache_step.sources`), where
-  an owner may have dropped to a lower request later in the step. The walk (item 3) reads them as I1's `sources`.
+  an owner may have dropped to a lower request later in the step. The walk (item 4) reads them as I1's `sources`.
 - *The derive bit.* Each step takes one bit `sent`: 0 while the no-eviction bound holds, when every shortfall is 0;
   1 past it, when the step reads one sent shortfall per lookup. The bound counts the step's own admissions,
   ⌈(P + O)/B⌉ blocks per admitted request, while the lookups that size those admissions read the bit. So the bit is
@@ -1760,12 +1772,10 @@ in `ReplayStep_v1`'s scheduling order:
 - *The rows.* These are the exact fields the two owners add, each little-endian, with EW = bitlen(N),
   HW = bitlen(⌈L / B⌉) (`CacheStep_v1`'s), H the sent shortfalls a window (a public cap, like D) and
   HCW = bitlen(H).
-  - ENC-REPLAY: `ReplayStep_v1`'s state gains `run_pfx R×EW` after `run_comp`, one more running-slot field. Its
-    compaction and placement shifters move it with its slot, and `replay_chain`'s state group, being `_in_fields`,
-    carries it. An admitted row's slot takes its second call's `pfx`. A preempted request drops its own, since it
-    resumes as an admitting row from the root.
-  - ENC-REPLAY: the step also outputs `looked (W + A)×1`, the candidates whose lookup it read: the waiting slots its
-    loop reaches, and the arrival `would_admit` checks.
+  - ENC-REPLAY (`ReplayStep_v1`'s "Walk entries"): the state gains `run_pfx R×EW` after `run_comp`, the step's one
+    walk input is `row_pfx R×EW`, each row's entry after its last `CacheStep_v1` call, and it outputs
+    `looked (W + A)×1` after `used`, the candidates whose lookup it read, which `replay_vectors --EW` holds to the
+    replay's `_KV.hit` calls.
   - ADV-SPEC: `replay_chain`'s state row gains `hh 1×HCW` after its heads' `steps`, and then one group in
     `CacheStep_v1`'s `_in_fields` order:
 
@@ -1849,13 +1859,23 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   replay's.
 
 **Open.**
-- *The charge's pieces* ("The encoder in the circuit").
+- *The charge's pieces* (composition item 3, "The encoder in the circuit").
   - ENC-CODE: the counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`,
     #3660). Lowering an integer (the window's counts, each order entry and each shortfall) to its `Binned` symbols in
     the book's public tables isn't built, so the circuit charges the decisions only.
   - ADV-SPEC's slice codes its asks at ENC-REPLAY's plain contexts with `KTContext_v1` from zero counts, where
-    `code_v1` codes the arrived bits at min(run, 2) with `code_v1.KT` from the book's priors.
-- `ReplayStep_v1` is synchronous FCFS. Async scheduling's lag row is in v1's replay and walk, not yet in the circuit.
+    `code_v1` codes the arrived bits at min(run, 2) with `code_v1.KT` from the book's priors. The plain context,
+    min(passes, 2) with passes the asks so far about the request, is the run except after an arrival taken unasked,
+    which resets passes but not the run.
+- *The chain's carry* (ADV-SPEC). `replay_chain`'s load refuses a window that left decisions unread, but A5's
+  ingress rule ("The windows") can charge a decision or an order entry up to 2 windows before its step's: at T = 20,
+  5 of async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15 (none on the other fixtures). So the load has
+  to append each window's values after the unread ones, as it does the queue's arrivals and the shortfalls ("The
+  rows"), and refuse only a session that ends with any unread. A value is then read after its window's row loads, so
+  it is charged no later than A5 allows.
+- `replay_chain`'s rows don't yet carry `ReplayStep_v1`'s walk entries (EW) or AS: the state group needs
+  `run_pfx R×EW` after `run_comp` and, with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`; an arrival
+  carries its cap (O = max_tokens), so the queue needs `q_cap Q×1` after `q_O`.
 - `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
   The hits are fixed: `CacheStep_v1` derives them while the no-eviction bound holds, and past it each is the longest
   cached prefix less v1's sent, charged shortfall. The evictable counts and the returns stay bounded witness. A
@@ -1863,6 +1883,8 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   block pool in the circuit (offline memory checking's block pool, above), which also closes the hit's gap.
 - Past the bound the table holds the session's units, so the scan at a whole session's size needs offline memory
   checking (above).
+- *The order's floor.* A server that admitted in release order at the next bucket boundary, a change to vLLM's
+  serving, would send no order entries (`replay`'s `ingress="warden"` is that floor on the corpus).
 - The 14 corpus traces have no warden. The client's send stands in for each request's release (`replay`'s
   `ingress="client"`), and the release buckets are the engine's. The two warden traces' `.released` views carry the
   warden's (a, ordinal).
