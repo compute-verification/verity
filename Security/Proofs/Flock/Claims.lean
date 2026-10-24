@@ -42,6 +42,7 @@ import Proofs.Flock.Claims.Recursion.SeqDeployStop
 import Proofs.Flock.Claims.Recursion.VStar
 import Proofs.Flock.Claims.Recursion.VStarBound
 import Proofs.Flock.Claims.Recursion.BoundDeploy
+import Proofs.Flock.Claims.Recursion.BoundDeployE
 import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
 import Proofs.Flock.Claims.Recursion.BoundRun
 import Proofs.Flock.Claims.Recursion.BoundForks
@@ -134,6 +135,7 @@ import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.JsonEq
 import Proofs.Flock.Claims.CanonEq
 import Proofs.Flock.Claims.Deploy
+import Proofs.Flock.Claims.DeployE
 import Proofs.Flock.Claims.DeployPlainCode
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.DeployTables
