@@ -159,7 +159,8 @@ exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/f
            "benchmarks/network_traces/*warden*", "benchmarks/network_traces/**/*warden*",
            "verity/core/protocols/certifier/*warden*", "verity/core/protocols/certifier/**/*warden*",
            "benchmarks/network_e2e/*warden*", "benchmarks/network_e2e/**/*warden*", "benchmarks/live_challenger/*warden*",
-           "benchmarks/live_challenger/**/*warden*", "Security/**/Warden.lean"]
+           "benchmarks/live_challenger/**/*warden*", "Security/**/Warden.lean", "benchmarks/one_stage/*warden*",
+           "benchmarks/one_stage/**/*warden*"]
 
 [keep]
 # Never rewritten wherever they stand: a domain tag or format id (anything shaped `a/b/v1`), a note, artifact or branch
