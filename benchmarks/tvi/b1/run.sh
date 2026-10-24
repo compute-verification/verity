@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # B1 on one GPU. Mode sweep (default): for each of MODELS, retrain console's conditions (train.py) and run counted.py on the
-# snapshots SNAPS keeps, deleting them after. Mode ckpt: run counted.py on the checkpoint dirs listed in CKPTS (one per line,
-# "DIR NAME"), against BASE, on the eval text TEXT (or the stdlib held-out tokens when unset).
+# snapshots SNAPS keeps, deleting them after. Mode ckpt: run counted.py against BASE on the checkpoint dirs listed in CKPTS.
 set -euo pipefail
 IN="$RESEARCH_RUN_DIR/inputs"
 mkdir -p /workspace/jobs/tvi/scratch
@@ -9,7 +8,7 @@ S=$(mktemp -d /workspace/jobs/tvi/scratch/b1.XXXXXX)
 trap 'rm -rf "$S"' EXIT
 trap 'exit 143' TERM INT
 export SCRATCH="$S"
-cp "$IN"/*.py "$S"/
+cp "$IN"/* "$S"/
 cd "$S"
 
 PY=/workspace/jobs/venv312/bin/python
@@ -20,15 +19,19 @@ nvidia-smi --query-gpu=name,memory.total,memory.used --format=csv
 quiet() { grep --line-buffered -v -E 'Loading weights|unauthenticated|Writing model' || true; }
 
 if [ "${MODE:-sweep}" = ckpt ]; then
-  args=()
-  while read -r dir name; do [ -n "$dir" ] && args+=("$dir" "$name"); done <<< "$CKPTS"
-  if [ -n "${TEXT:-}" ]; then
-    export TOKENS="$S/eval.txt" TOKENIZER="$BASE"
-    printf '%b' "$TEXT" > "$TOKENS"
-  else
-    export MODEL="$BASE"; "$PY" train.py tok; export TOKENS="$S/tokens_${BASE##*/}.pt"
-  fi
-  "$PY" counted.py "$BASE" "${args[@]}" 2>&1 | quiet | tee -a "$OUT/counted_ckpt.log"
+  # CKPTS lines: "DIR NAME TEXT" (TEXT a sent eval-text file, or - for the stdlib held-out tokens); one counted.py per TEXT
+  for text in $(awk 'NF {print ($3 == "" ? "-" : $3)}' <<< "$CKPTS" | sort -u); do
+    args=()
+    while read -r dir name t; do
+      [ -n "$dir" ] && [ "${t:--}" = "$text" ] && args+=("$dir" "$name")
+    done <<< "$CKPTS"
+    if [ "$text" != - ]; then
+      export TOKENS="$S/$text" TOKENIZER="$BASE"
+    else
+      export MODEL="$BASE"; "$PY" train.py tok; export TOKENS="$S/tokens_${BASE##*/}.pt"
+    fi
+    "$PY" counted.py "$BASE" "${args[@]}" 2>&1 | quiet | tee -a "$OUT/counted_ckpt.log"
+  done
   exit 0
 fi
 
