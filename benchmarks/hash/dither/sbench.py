@@ -684,9 +684,10 @@ def main() -> int:
     ap.add_argument("--bw-prover-args", action="append", metavar="ARGS",
                     help="a side of its own a time, its prover's options (leading NAME=VALUE words its environment)")
     ap.add_argument("--bw-cover", type=float, default=4.0,
-                    help="an on block's session lasts this many times the off block before it (and 1.5 times the "
-                         "longest on block before it, the tampered one twice its dither op), at the idle session's "
-                         "stretch (`dbw.window_s`)")
+                    help="the first on block's session lasts this many times the off block before it (each later one "
+                         "1.5 times the longest on block before it, the tampered one twice its dither op), in "
+                         "stretches of the idle session's length (`dbw.window_s`), then of the last on session's "
+                         "beside its block (`dbw.beside_s`)")
     ap.add_argument("--bw-idle-s", type=float, default=3.0, help="the idle session's passes, in seconds")
     a = ap.parse_args()
     if a.bw_passes and not (os.environ.get("BW_LIB") and os.environ.get("BW_KV")):
@@ -830,12 +831,13 @@ def main() -> int:
                     rr = i * a.reps + r
                     off = block(rr, "off", i)
                     doc["blocks"].append(off | {"k": None})
-                    side.start(1 + r, dbw.paced(max(a.bw_cover * (off["hi"] - off["lo"]) / 1e9, 1.5 * longest), 1.0,
+                    side.start(1 + r, dbw.paced(1.5 * longest or a.bw_cover * (off["hi"] - off["lo"]) / 1e9, 1.0,
                                                 stretch_s))
                     on = block(rr, "on", i)
                     doc["blocks"].append(on | {"k": 1 + r})
                     longest = max(longest, (on["hi"] - on["lo"]) / 1e9)
                     doc["sessions"][1 + r] = side.end(1 + r)
+                    stretch_s = dbw.beside_s(doc["sessions"][1 + r], on["lo"], on["hi"]) or stretch_s
                     print(json.dumps({"bw": i, "session": 1 + r, "accepted": doc["sessions"][1 + r]["accepted"],
                                       "failure": doc["sessions"][1 + r]["failure"]}), flush=True)
                 k, dither = 1 + a.reps, [x for x in arms if x.startswith("dither")] or arms

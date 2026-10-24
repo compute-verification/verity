@@ -110,6 +110,15 @@ def window_s(session: dict) -> float:
     return (p[-1][1] - p[0][0]) / 1e9 / (session["pace"]["windows"] + 1)
 
 
+def beside_s(session: dict, lo: int, hi: int) -> float | None:
+    """The seconds a stretch of `session` took beside a block from `lo` to `hi`: its passes wholly inside the block, at
+    their rate (None for fewer than two)."""
+    p = [x for x in session["passes_ns"] if lo <= x[0] and x[1] <= hi]
+    if len(p) < 2:
+        return None
+    return (p[-1][1] - p[0][0]) / 1e9 / len(p) * session["pace"]["groups"]
+
+
 def stats(xs: list[float]) -> dict | None:
     if not xs:
         return None
