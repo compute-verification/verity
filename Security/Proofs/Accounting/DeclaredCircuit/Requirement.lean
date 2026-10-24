@@ -5,17 +5,17 @@ import Proofs.Accounting.DeclaredCircuit.Session
 /-!
 # A declared circuit's space and bandwidth from an accepted audit
 
-`Accounting.SecurityProofs.DeclaredCircuitRequirement`, the theorem of `Accounting.Guarantees.DeclaredCircuitRequirement`.
-A carrier of the declared circuit's over at most `L` of the audit's windows carries at most `C` bits
-(`Carrier.card_le_census`), so every pass rebuilds at most `X_r·τ + C` bits of its appended tiles, and its tiles of
-`W` are appended tiles. Each window's reads in its passes' tiles of `W`, with each pass's tiles short of the store
-counted as read, against the window's correct receipts: a window short by more than a pass's slack, `k` tiles more,
-has a pass unpaid on its tiles of `W` (`SketchDeployedWindow.exists_unpaid_tiles`), which at signs of rank 12 holds a
-guessed tag or `k + 1` correct digests behind unobtained positions (`Device.unpaid_tiles_split`), priced at each
-pass's prefix (`pr_session_le`). The draws then bound the windows' and the session's reads so counted
-(`SketchDeployedSession.pr_deployed_of_unpaid_causal`), and a pass's credit is at most a tile's bits for each of its
-tiles of `W` (`Requirement.credit_le_tiles`), so the shortfall against the credit is the shortfall against the store
-(`Requirement.sum_lt_of_credit`, `Requirement.lt_of_credit`).
+`Accounting.SecurityProofs.DeclaredCircuitRequirement`, the theorem of
+`Accounting.Guarantees.DeclaredCircuitRequirement`. A carrier of the declared circuit's over at most `L` of the audit's
+windows carries at most `C` bits (`Carrier.card_le_census`), so every pass rebuilds at most `X_r·τ + C` bits of its
+appended tiles, and its tiles of `W` are appended tiles. Each window's reads in its passes' tiles of `W`, with each
+pass's tiles short of the store counted as read, against the window's correct receipts: a window short by more than a
+pass's slack, `k` tiles more, has a pass unpaid on its tiles of `W` (`SketchDeployedWindow.exists_unpaid_tiles`), which
+at signs of rank 12 holds a guessed tag or `k + 1` correct digests behind unobtained positions
+(`Device.unpaid_tiles_split`), priced at each pass's prefix (`pr_session_le`). The draws then bound the windows' and the
+session's reads so counted (`SketchDeployedSession.pr_deployed_of_unpaid_causal`), and a pass's credit is at most a
+tile's bits for each of its tiles of `W` (`Requirement.credit_le_tiles`), so the shortfall against the credit is the
+shortfall against the store (`Requirement.sum_lt_of_credit`, `Requirement.lt_of_credit`).
 -/
 
 namespace Accounting.RateSketch.Carrier
@@ -57,7 +57,7 @@ theorem card_le_census {N m P L B εnum εden E : ℕ} {ι : Type} {Wc : Gates.D
     linarith
   have htot : 0 < caps.total := by
     by_contra hneg
-    push_neg at hneg
+    push Not at hneg
     have h1 : caps.total * (Aud.reads v : ℚ) ≤ 0 := mul_nonpos_of_nonpos_of_nonneg hneg (Nat.cast_nonneg _)
     have h2 : (0 : ℚ) < M := by exact_mod_cast hpos
     linarith
