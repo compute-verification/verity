@@ -201,8 +201,8 @@ theorem plain_decides_msgsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prove
         Claims.coinSeq (plainΦ x spec st (u, r')) (k + 1))) ∧
       finalOf (plainDm P x spec st ω u r' (plainN x + 1)) = some f := by
   obtain ⟨hacc, hact⟩ := hd
-  have hlen := next_acc_length_sha512 false (by simp)
-    (run_acc_next sha512 P (VK keep) x ω (plainΦ x spec st (u, r')) hacc)
+  have hlen := (accLast_VK keep x _ _ (by simp)
+    (run_acc_next sha512 P (VK keep) x ω (plainΦ x spec st (u, r')) hacc)).trans (congrFun (VK_k keep) x)
   have has := run_depK keep sha512 P x ω (plainΦ x spec st (u, r'))
   rw [List.length_map] at hlen
   rw [hlen] at has
