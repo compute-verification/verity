@@ -375,6 +375,9 @@
   "SoftmaxRef_v1{N=5,DT='f32'}": "11ba3fbcd4f90de9b07fc6921a842cd1e431c01563ae9a067081c975d5b678004efa7e562eff1744254bbf896eb182d3e71858bcabd65b6a8f661ac241d914bc",
   "StepBody_v1{C={e2f2f43eb046},T=4,GEMM={4130e3ca726d},ATTENTION={35db6738c571},NORM={4d524c30089f}}": "cf29721874ccbccc7e27ad4804c1a52ca7cd6be95cbe91907ce559d6258b93d3609cc8bbc59e5b7399465f4300ef960a3eb8ad60bda5ab13ca3beccd32166998",
   "TanhF32Rn_v2": "d5625a7c525bd6e93e1ea15962b07c5d37b2e2a02369589c0bdf06d0911ceda8e92cbc4c688d9804ae82a8c0159d6f6bffc142f4866e71db1bbd45cb5fd66c23",
+  "TokenSelectChunkStep_v1": "41777e0a30bf5d96eb734334c964026421bb9b3e9216b147bc8a22fd0a314dec13a7e577405be07be25d00638756c0000dc4cc0eeae5c5c40aecca61aeda47db",
+  "TokenSelectChunk_v1{C=64}": "192fa317001aa65e13ca476526edff69d3d3e68ad1a93369a8903002d55411ee84adeab4aecf8f6a9603862fcefc3607275ab91605c28e4c923c7dfd32650e99",
+  "TokenSelectCombine_v1{V=200,C=64}": "6976dca02b6d8e35d0fafb8aa1d1d412a2723982a682a7cce8053106c22ab78e0b44b4b79260370cd676c93a1221764111eef611686d9c7c32c4875a1d6b1f67",
   "TokenSelect_v1{V=142}": "cd69e30b9f1b5b8372ae8d32b31043f109c05dc845c50c0c66daa9b8d6852967d3a558a970e43d042e42ed7bba3b4bc57db61f4ddc5c408a861d0db3970562b9",
   "TokenSelect_v1{V=16}": "1904558de695f457724056b12b95b6ce7d68f9b251dcc0cf6cadc809bcf20158db5aab09aff2c26c23657940c46d824a42cfd13bff2d0177402a54fa8fd2f124",
   "TokenSelect_v1{V=48}": "8281bbb5ff29cea0b89f1c43385cd776dee1fb05d020d19ecc16644414188ace43ab07da243d325e8d393e578739d927faace52c3d43582bd119db0382bb3cb1",
@@ -516,11 +519,15 @@
   "SoftmaxRef_v1": "ref_prims",
   "StepBody_v1": "lifted",
   "TanhF32Rn_v2": "tables",
+  "TokenSelectChunkStep_v1": "b1",
+  "TokenSelectChunk_v1": "b1",
+  "TokenSelectCombine_v1": "b1",
   "TokenSelect_v1": "b1",
   "VerifyBranch_v1": "spec"
  },
  "pins": {
   "definitions": {},
+  "digests": {},
   "pieces": {
    "DivFullScaleA_v2": {
     "and": 1542
@@ -678,6 +685,9 @@
   "SoftmaxRef_v1",
   "StepBody_v1",
   "TanhF32Rn_v2",
+  "TokenSelectChunkStep_v1",
+  "TokenSelectChunk_v1",
+  "TokenSelectCombine_v1",
   "TokenSelect_v1",
   "VerifyBranch_v1"
  ],
@@ -2181,6 +2191,18 @@
   [
    "definition",
    "TanhF32Rn_v2"
+  ],
+  [
+   "definition",
+   "TokenSelectChunkStep_v1"
+  ],
+  [
+   "definition",
+   "TokenSelectChunk_v1{C=64}"
+  ],
+  [
+   "definition",
+   "TokenSelectCombine_v1{V=200,C=64}"
   ],
   [
    "definition",

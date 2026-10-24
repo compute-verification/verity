@@ -2,11 +2,15 @@
 the statement binds the given partition and program digests. Run in the circuit prover's tree (its `verity_flock`).
 
     python compose_circuit.py --input-set DIR --out FILE [--partition H --program H]
-    python compose_circuit.py --template ID --out FILE --partition H --program H
+    python compose_circuit.py --template ID --out FILE --partition H --program H [--reads slots] [--cache DIR]
 
-``--template``: a serving-rows template whose units are bit rows (`verity_vllm.pipeline.serving_rows.CHUNKED`: a
-``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk), composed by C-Flock's `UnitStager` on the rows the window commits
-(`verity_vllm.pipeline.chunk_rows.unit_rows`), bound to the partition and program; no input set is read.
+``--template``: a serving-rows template whose units are bit rows (`verity_vllm.pipeline.serving_rows.chunked`: a
+``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, or a row
+template the partition's ``chunk_cap`` names), composed by C-Flock's `UnitStager` on the rows the window commits
+(`verity_vllm.pipeline.chunk_rows.unit_rows`), bound to the partition and program; no input set is read. ``--reads slots``:
+`UnitStager`'s ``reads``, a unit reading a pinned MUFU table laid out in lookup slots (``MoeRouterSigmoidBias``'s sigmoid
+inline is about 5e10 nonzeros), with the MUFU tables the prover reads written beside the circuit (``tables/``); a unit reading
+none keeps its flat circuit. The default, ``inline``, is the circuit a5 composes.
 """
 from __future__ import annotations
 
@@ -29,10 +33,13 @@ _CHUNK = 1 << 26
 _HEX = frozenset("0123456789abcdef")
 
 
-def cache_key(template: str, packages: tuple[str, ...] = COMPOSERS) -> str:
-    """``template``'s cache entry (`cached`): SHA-512 over the template id and every ``.py`` file of ``packages`` (its path and
-    bytes), so that a tree whose composing code differs in any file has entries of its own."""
-    h = hashlib.sha512(json.dumps(["compose-cache/v1", template]).encode())
+def cache_key(template: str, reads: str = "inline", packages: tuple[str, ...] = COMPOSERS,
+              composer: Path = Path(__file__)) -> str:
+    """``template``'s cache entry (`cached`) composed with ``reads``: SHA-512 over the template id, ``reads``, this file's bytes
+    (``composer``) and every ``.py`` file of ``packages`` (its path and bytes), so that a tree whose composing code differs in
+    any file has entries of its own."""
+    own = composer.read_bytes()
+    h = hashlib.sha512(json.dumps(["compose-cache/v2", template, reads, len(own)]).encode() + own)
     for name in packages:
         for root in importlib.util.find_spec(name).submodule_search_locations:
             for dp, dns, fns in os.walk(root):
@@ -146,10 +153,14 @@ def template(a: argparse.Namespace) -> int:
 
     def compose() -> dict:
         in_rows, out_rows = CR.unit_rows(SRW.template(a.template))
-        st = UnitStager(SRW.template(a.template).fn, "unit/serving-rows", in_rows, out_rows, circuit=Path(a.out), bind=bind)
+        st = UnitStager(SRW.template(a.template).fn, "unit/serving-rows", in_rows, out_rows, circuit=Path(a.out), bind=bind,
+                        reads=a.reads)
         return {"subcircuit": st.meta.get("subcircuit"), "pin": st.pin, "class_sha512": st.class_sha512, "k_log": st.meta["k_log"]}
 
-    print(json.dumps(cached(Path(a.cache), cache_key(a.template), Path(a.out), bind, compose) if a.cache else compose()))
+    made = cached(Path(a.cache), cache_key(a.template, a.reads), Path(a.out), bind, compose) if a.cache else compose()
+    if a.reads == "slots":  # on a restamp too, which copies circuit.txt alone
+        FC.IL.write_tables(Path(a.out).parent / "tables")
+    print(json.dumps(made))
     return 0
 
 
@@ -162,11 +173,15 @@ def main() -> int:
     ap.add_argument("--program", default=None)
     ap.add_argument("--cache", default=None, help="with --template: this machine's composed circuits (`cached`), one entry per "
                     "template and tree, so that its ranks compose each template once")
+    ap.add_argument("--reads", choices=("inline", "slots"), default="inline", help="with --template: UnitStager's reads, a "
+                    "pinned MUFU table's reads inline or in lookup slots")
     a = ap.parse_args()
     if bool(a.input_set) == bool(a.template):
         ap.error("give either --input-set or --template")
     if a.cache and not a.template:
         ap.error("--cache keeps --template circuits only")
+    if a.reads != "inline" and not a.template:
+        ap.error("--reads lays out a --template unit's reads; an input set's lowering is its own")
     if a.template:
         return template(a)
     from verity_numerical.bench.input_sets import InputSet
