@@ -15,6 +15,7 @@ HERE = Path(__file__).parent
 REPO = HERE.parents[3]
 RUN = HERE / "fixtures" / "vllm-8eb1"
 SLICE = REPO / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "compile_slice_w212.json"
+CLASS = SLICE.with_name("compile_slice_w212_class.json")
 
 
 def _load(name, path):
@@ -103,3 +104,23 @@ def test_the_slice_fixture_is_w212s(recs, tmp_path):
     assert base == 308
     assert [[[base + i, s, n] for i, s, n in st.rows] for st in RP.load_step_trace(sub).steps] == \
         [[[r[1], r[3], r[4]] for r in step] for step in fx["rows"]]
+
+
+def test_the_class_fixture_is_w212_padded(tmp_path):
+    """At the engine's public class (8, 1, 9; Q 4, D 32, P 54, K 4) `--slice 212` writes `compile_slice_w212_class.json`:
+    w212's own arrivals, decisions, step count and rows at the class's statics, which the slice pads."""
+    out = tmp_path / "w212_class.json"
+    RV.main([str(RUN / "advice_trace.jsonl.gz"), "--slice", "212", "--served", str(RUN / "seal-w212.jsonl"),
+             "--R", "8", "--W", "1", "--A", "9", "--Q", "4", "--D", "32", "--P", "54", "--K", "4", "--out", str(out)])
+    got, own = json.loads(out.read_text()), json.loads(SLICE.read_text())
+    assert got == json.loads(CLASS.read_text())
+    assert {k: got[k] for k in ("R", "W", "A", "Q", "D", "P", "K")} == {"R": 8, "W": 1, "A": 9, "Q": 4, "D": 32, "P": 54,
+                                                                       "K": 4}
+    assert {k: got[k] for k in ("arrivals", "decisions", "steps", "served", "ids", "IW", "SEG")} == \
+        {k: own[k] for k in ("arrivals", "decisions", "steps", "served", "ids", "IW", "SEG")}
+
+
+def test_a_class_smaller_than_the_window_is_refused(recs):
+    sub, base = RV.served_window(recs, 212)
+    with pytest.raises(ValueError, match="smaller than the window: D = 13 < 14, P = 19 < 20"):
+        RV.slice_inputs(RP.load_step_trace(sub), R=2, W=1, A=2, SEG=64, base=base, D=13, P=19)
