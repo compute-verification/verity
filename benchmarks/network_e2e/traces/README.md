@@ -5,10 +5,13 @@ Poisson traffic. Plain vLLM's OpenAI server on one RTX PRO 6000, with the integr
 (bi-eager). `corpus.MODELS` lists the models: `llama32_1b` (unsloth/Llama-3.2-1B, bf16, G-A's model) and
 `llama31_8b_int8` (`verity-int8/Llama-3.1-8B-INT8` with the int8_exact linears, `--quantization verity_int8`).
 
-- `vllm_trace_plugin.py`: a vLLM general plugin. In the engine core it wraps the scheduler's `schedule`,
-  `update_from_output` and `_free_request`, and appends each step's scheduled requests, the model runner's batch order
-  and sampled tokens, and each finished request, as JSON lines. With `VERITY_INT8_PARTS` set it also registers the
-  int8_exact linears in every process the server starts.
+- `vllm_trace_plugin.py`: a vLLM general plugin. In the engine core it wraps the scheduler's `add_request`, `schedule`,
+  `update_from_output` and `_free_request`, and appends each request handed to the scheduler, each step's scheduled
+  requests, the model runner's batch order and sampled tokens, and each finished request, as JSON lines. With
+  `VERITY_INT8_PARTS` set it also registers the int8_exact linears in every process the server starts.
+- `vllm_accept_stamp.py`: an ASGI middleware the server loads (`--middleware`). It records each request's TCP accept,
+  headers and body in the API server, so that `summary.arrival_order` can count, at each place along the wire, the pairs
+  of requests that arrived the other way round from the engine's order.
 - `traffic.py`: the request plan, which every trace serves in the same order. C4 prompts of 16 to 1024 tokens, about half
   behind one of eight shared prefixes, with `max_tokens` 64 or 256. The trace's rate scales the Poisson arrivals.
 - `corpus.py`: runs each trace in `TRACES` on a fresh server: light, medium and batch-saturating loads with whole
@@ -25,6 +28,11 @@ Poisson traffic. Plain vLLM's OpenAI server on one RTX PRO 6000, with the integr
   of waiting requests, random prefill splits, and prefix-cache hits refused at random or cut to one block
   (`VERITY_ADV_CACHE`). It records its choices beside the tracer's files. `corpus.HOSTILE`'s traces serve heavy's load
   under the honest scheduler and under hostile ones, which tests whether a request's outputs depend on its batch-mates.
+- `corpus.WARDEN`'s traces serve heavy's and small KV's loads through the active warden
+  (`benchmarks/network_traces/warden_serve.py serve`, a process beside the server, not on the auditor host). The client
+  speaks cells through the warden's shim. `summarize` checks what the warden published, and writes each warden trace
+  twice more for ENC-REPLAY's replay (its `read_corpus_trace`): with the warden's admission order and with its release
+  order as the certified ingress (`summary.warden_views`).
 - `run.sh`: the job on a leased GPU of a node (its header has the command).
 
 For the 8B model, attention is vLLM's own, not the int8 attention: `verity_vllm.engine.int8_ops._requests` refuses a

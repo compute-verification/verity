@@ -8,9 +8,13 @@ entry point visible by writing a ``.dist-info`` beside this module on the server
 
 * ``VERITY_INT8_PARTS`` (``linears``): imports `verity_vllm.engine.int8_ranks`, which registers the int8_exact linear method
   (``--quantization verity_int8``) in this process, as it does in a tensor-parallel engine's ranks.
-* ``VERITY_TRACE_DIR``: wraps `Scheduler.schedule`, `Scheduler.update_from_output` and `Scheduler._free_request` (the
-  `AsyncScheduler` inherits them) so that the engine core appends to three files there, named with its pid:
+* ``VERITY_TRACE_DIR``: wraps `Scheduler.add_request`, `Scheduler.schedule`, `Scheduler.update_from_output` and
+  `Scheduler._free_request` (the `AsyncScheduler` inherits them) so that the engine core appends to four files there,
+  named with its pid:
 
+  - ``arrivals.PID.jsonl``, one line per request the engine core hands the scheduler, in that order (the order its FCFS
+    waiting queue takes them in): the time, vLLM's ``arrival_time`` stamp (set in the API server), the scheduler's
+    ``current_step`` then and the queue lengths;
   - ``steps.PID.jsonl``, one line per ``schedule()`` call that scheduled a token or reported a preempted or finished request:
     the step's new and cached requests with their ``num_computed_tokens`` (the first position scheduled) and
     ``num_scheduled_tokens``, the prefix-cache hit of a request's first scheduling, the preempted and finished ids, and
@@ -21,7 +25,8 @@ entry point visible by writing a ``.dist-info`` beside this module on the server
     reason, preemptions and prefix-cache hit.
 
 A request id is the engine's (``cmpl-{X-Request-Id}-0-{8 hex}``) cut back to the client's X-Request-Id (`client_id`). An
-error inside the hook is counted and written to ``hook_errors.PID.txt``; it never reaches the engine.
+error inside the hook is counted and written to ``hook_errors.PID.txt``; it never reaches the engine. The API server's
+side of a request's arrival (its accept, headers and body) is `vllm_accept_stamp`'s.
 """
 from __future__ import annotations
 
@@ -45,13 +50,14 @@ def client_id(engine_id: str) -> str:
 
 
 class Tracer:
-    """The three record files of one scheduler, opened on its first step."""
+    """The record files of one scheduler, opened when it first gets a request or a step."""
 
     def __init__(self, out: Path):
         out.mkdir(parents=True, exist_ok=True)
         pid = os.getpid()
         self.out = out
-        self.files = {k: open(out / f"{k}.{pid}.jsonl", "a", encoding="utf-8") for k in ("steps", "outputs", "requests")}
+        self.files = {k: open(out / f"{k}.{pid}.jsonl", "a", encoding="utf-8")
+                      for k in ("arrivals", "steps", "outputs", "requests")}
         self.errors_path = out / f"hook_errors.{pid}.txt"
         self.errors = 0
         self.k = 0
@@ -71,6 +77,11 @@ class Tracer:
         if self.errors <= MAX_ERRORS:
             with open(self.errors_path, "a", encoding="utf-8") as f:
                 f.write(f"--- {where} (error {self.errors})\n{traceback.format_exc()}\n")
+
+    def arrived(self, sched, req) -> None:
+        self.write("arrivals", {"id": client_id(req.request_id), "t": time.time(), "arrival": req.arrival_time,
+                                "sched_step": getattr(sched, "current_step", None), "waiting": len(sched.waiting),
+                                "running": len(sched.running)})
 
     def step(self, sched, so) -> None:
         nst = so.num_scheduled_tokens
@@ -139,10 +150,18 @@ def _tracer(sched) -> Tracer:
 
 
 def install(cls) -> None:
-    """Wrap `cls`'s schedule, update_from_output and _free_request (once)."""
+    """Wrap `cls`'s add_request, schedule, update_from_output and _free_request (once)."""
     if getattr(cls, "_verity_traced", False):
         return
-    schedule, update, free = cls.schedule, cls.update_from_output, cls._free_request
+    add, schedule, update, free = cls.add_request, cls.schedule, cls.update_from_output, cls._free_request
+
+    def traced_add(self, request, *args, **kwargs):
+        t = _tracer(self)
+        try:
+            t.arrived(self, request)
+        except Exception:  # noqa: BLE001 -- the engine must serve on
+            t.error("add_request")
+        return add(self, request, *args, **kwargs)
 
     def traced_schedule(self, *args, **kwargs):
         so = schedule(self, *args, **kwargs)
@@ -170,7 +189,8 @@ def install(cls) -> None:
             t.error("_free_request")
         return free(self, request, *args, **kwargs)
 
-    cls.schedule, cls.update_from_output, cls._free_request = traced_schedule, traced_update, traced_free
+    cls.add_request, cls.schedule = traced_add, traced_schedule
+    cls.update_from_output, cls._free_request = traced_update, traced_free
     cls._verity_traced = True
 
 

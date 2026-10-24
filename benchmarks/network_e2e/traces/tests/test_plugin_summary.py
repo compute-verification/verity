@@ -35,6 +35,11 @@ class Scheduler:
 
     def __init__(self, script):
         self.script, self.requests, self.waiting, self.running = list(script), {}, [], []
+        self.current_step = 0
+
+    def add_request(self, request):
+        self.requests[request.request_id] = request
+        self.waiting.append(request)
 
     def schedule(self, throttle_prefills: bool = False):
         return self.script.pop(0)
@@ -82,7 +87,8 @@ def serve(tmp_path, monkeypatch, plugin) -> Scheduler:
 
     plugin.install(S)
     s = S([out for out, _, _ in script])
-    s.requests = {A: a, B: b}
+    s.add_request(a)
+    s.add_request(b)
     for k, (_, mro, toks) in enumerate(script):
         if k == 4:
             b.num_preemptions = 1
@@ -107,6 +113,9 @@ def records(tmp_path, kind):
 def test_hook_records_steps_outputs_and_requests(tmp_path, monkeypatch, mod):
     plugin = mod("vllm_trace_plugin")
     serve(tmp_path, monkeypatch, plugin)
+    arrivals = records(tmp_path, "arrivals")
+    assert [(r["id"], r["arrival"], r["sched_step"], r["waiting"]) for r in arrivals] == [("t-00000", 1000.0, 0, 0),
+                                                                                         ("t-00001", 1000.0, 0, 1)]
     steps = records(tmp_path, "steps")
     assert [s["step"] for s in steps] == [0, 1, 2, 3, 4]
     s0 = steps[0]
@@ -144,8 +153,13 @@ def test_summary_joins_and_counts(tmp_path, monkeypatch, mod):
     client = [{"id": "t-00000", "i": 0, "status": 200, "output_ids": [7, 8, 128001], "send_unix": 999.5},
               {"id": "t-00001", "i": 1, "status": 200, "output_ids": [5, 6, 6, 3]}]
     (tmp_path / "t" / "client.jsonl").write_text("".join(json.dumps(c) + "\n" for c in client))
+    (tmp_path / "t" / "raw" / "accept.2.jsonl").write_text(json.dumps(
+        {"id": "t-00000", "path": "/v1/completions", "accept": 999.6, "conn_request": 1, "headers": 999.7, "body": 999.8}) + "\n")
     out = summary.summarize(tmp_path)
     t = out["traces"]["t"]
+    assert t["warden"] is None and "views" not in t
+    assert t["arrival_order"]["engine add"] == {"requests": 2, "inversions_vs_engine": 0, "inversions_vs_previous": 0,
+                                                "lag_s": t["arrival_order"]["engine add"]["lag_s"]}
     assert t["requests"]["finish"] == {"eos": 1, "length": 1} and t["requests"]["client_ids_match"] == 2
     assert t["rows"] == {"total": 8, "prefill": 4, "decode": 4, "partial_prefill_chunks": 1,
                          "requests_prefilled_in_chunks": 1, "prefill_tokens_per_row": t["rows"]["prefill_tokens_per_row"]}
@@ -159,6 +173,8 @@ def test_summary_joins_and_counts(tmp_path, monkeypatch, mod):
     assert steps[0]["new"][0]["final"] is False and steps[1]["cached"][1]["kind"] == "decode"
     reqs = [json.loads(x) for x in (tmp_path / "t" / "requests.jsonl").read_text().splitlines()]
     assert [r["first_step"] for r in reqs] == [0, 0] and reqs[0]["prefix"] == 3 and reqs[0]["eos"] is True
+    assert (reqs[0]["accept_unix"], reqs[0]["body_unix"], reqs[1]["accept_unix"]) == (999.6, 999.8, None)
+    assert [r["engine_add_index"] for r in reqs] == [0, 1] and "warden" not in reqs[0]
     assert "| t | 1.0 | test | 2 of 2 |" in (tmp_path / "README.md").read_text()
 
 

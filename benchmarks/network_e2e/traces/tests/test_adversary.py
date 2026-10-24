@@ -55,6 +55,9 @@ class Sched:
     def _get_local_prefix_cache_hit(self, request):
         return "blocks", 48, 0, False
 
+    def add_request(self, request):
+        self.waiting.add_request(request)
+
     def update_from_output(self, scheduler_output, model_runner_output):
         return {}
 

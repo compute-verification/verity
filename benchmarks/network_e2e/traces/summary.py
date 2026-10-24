@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 from collections import Counter
 from pathlib import Path
 
@@ -85,12 +86,36 @@ def histogram(xs: list[int], edges: list[int]) -> dict:
     return out
 
 
+def warden_log(d: Path) -> dict[int, dict]:
+    """The warden's connection log (warden/warden.json) by ordinal, for a trace served through it."""
+    p = d / "warden" / "warden.json"
+    return {c["ordinal"]: c for c in json.loads(p.read_text())["connections"]} if p.exists() else {}
+
+
+def arrival_fields(rid: str, c: dict, accepts: dict, added: dict, wardens: dict) -> dict:
+    """A request's arrival on each side of the wire: the API server's (`vllm_accept_stamp`), the engine core's (the
+    tracer's `arrivals`) and, through the warden, its connection's (`warden_log`)."""
+    a = accepts.get(rid) or {}
+    k, e = added.get(rid, (None, {}))
+    out = {"accept_unix": a.get("accept"), "conn_request": a.get("conn_request"), "headers_unix": a.get("headers"),
+           "body_unix": a.get("body"), "engine_add_unix": e.get("t"), "engine_add_index": k}
+    if "warden" in c:
+        w = wardens.get(c["warden"]["ordinal"], {})
+        out["warden"] = {**c["warden"], "arrived": w.get("arrived"), "admitted": w.get("admitted"),
+                         "released": w.get("ingress_end"), "ended": w.get("ended"), "ingress_cells": w.get("ingress_cells"),
+                         "egress_cells": w.get("egress_cells"), "failed": w.get("failed")}
+    return out
+
+
 def join_trace(d: Path, plan: dict[int, dict]) -> dict:
     steps, outputs, engine = raw(d, "steps"), raw(d, "outputs"), raw(d, "requests")
     calls = raw(d, "adversary")
     by_call = {c["step"]: c for c in calls}
     client = {r["id"]: r for r in read_jsonl(d / "client.jsonl")}
     by_step = {o["step"]: o for o in outputs}
+    accepts = {a["id"]: a for a in raw(d, "accept") if a.get("id") and a.get("path") == "/v1/completions"}
+    added = {a["id"]: (k, a) for k, a in enumerate(raw(d, "arrivals"))}
+    wardens = warden_log(d)
     first, last = {}, {}
     with open(d / "steps.jsonl", "w", encoding="utf-8") as f:
         for s in steps:
@@ -120,12 +145,180 @@ def join_trace(d: Path, plan: dict[int, dict]) -> dict:
             "last_step": last.get(e["id"]), "t_free": e["t_free"], "first_token_s": c.get("first_token_s"),
             "done_s": c.get("done_s"), "chunks": c.get("chunks"), "client_status": c.get("status"),
             "client_error": c.get("error"), "client_finish_reason": c.get("finish_reason"),
-            "client_ids_match": c.get("output_ids") == out_ids if c else None})
+            "client_ids_match": c.get("output_ids") == out_ids if c else None,
+            **arrival_fields(e["id"], c, accepts, added, wardens)})
     reqs.sort(key=lambda r: (r["i"] is None, r["i"]))
     with open(d / "requests.jsonl", "w", encoding="utf-8") as f:
         for r in reqs:
             f.write(json.dumps(r, separators=(",", ":")) + "\n")
-    return summarize_trace(d, steps, reqs, client) | {"adversary": adversary(d, calls)}
+    w = warden_summary(d)
+    return summarize_trace(d, steps, reqs, client) | {"adversary": adversary(d, calls), "warden": w,
+                                                      "arrival_order": arrival_order(reqs, steps, w)}
+
+
+def engine_order(steps: list[dict]) -> list[str]:
+    """The order the engine first scheduled its requests in (a resumed request's scheduling isn't its first), which is
+    the order ENC-REPLAY's replay takes as the engine's (`read_corpus_trace`)."""
+    order, seen = [], set()
+    for s in steps:
+        if not s["total_num_scheduled_tokens"]:
+            continue
+        for r in s["new"]:
+            if not r.get("resumed") and r["id"] not in seen:
+                seen.add(r["id"])
+                order.append(r["id"])
+    return order
+
+
+def inversions(order: list[str], ref: list[str]) -> int:
+    """The pairs of requests that `order` and `ref` put the other way round, over the requests both have."""
+    pos = {x: k for k, x in enumerate(ref)}
+    seq = [pos[x] for x in order if x in pos]
+
+    def count(a: list[int]) -> tuple[list[int], int]:
+        if len(a) < 2:
+            return a, 0
+        (lo, x), (hi, y) = count(a[:len(a) // 2]), count(a[len(a) // 2:])
+        merged, n, i, j = [], x + y, 0, 0
+        while i < len(lo) and j < len(hi):
+            if hi[j] < lo[i]:
+                merged.append(hi[j])
+                n += len(lo) - i
+                j += 1
+            else:
+                merged.append(lo[i])
+                i += 1
+        return merged + lo[i:] + hi[j:], n
+
+    return count(seq)[1]
+
+
+def warden_at(r: dict, field: str) -> tuple[int, int] | None:
+    """The warden's (bucket, ordinal) for a request at `field` (its record's ``arrived``, ``admitted`` or ``released``)."""
+    w = r.get("warden") or {}
+    return None if w.get(field) is None else (w[field], w["ordinal"])
+
+
+def warden_time(w: dict | None, at: tuple[int, int] | None) -> float | None:
+    """Unix seconds of the warden's tick at `at` (`warden_at`)."""
+    return None if w is None or at is None else w["origin_unix"] + at[0] * w["params"]["bucket_ms"] / 1000
+
+
+def own_accept(r: dict) -> float | None:
+    """The server's accept of the request's connection, if the request was its first."""
+    return r.get("accept_unix") if r.get("conn_request") == 1 else None
+
+
+#: each place along the wire that a request's arrival is seen at: (name, the request's place in the order there, its unix
+#: time there given the warden's summary)
+STAGES = (
+    ("client send", lambda r: r.get("send_unix"), lambda r, w: r.get("send_unix")),
+    ("warden arrival", lambda r: warden_at(r, "arrived"), lambda r, w: warden_time(w, warden_at(r, "arrived"))),
+    ("warden admission", lambda r: warden_at(r, "admitted"), lambda r, w: warden_time(w, warden_at(r, "admitted"))),
+    ("warden release", lambda r: warden_at(r, "released"), lambda r, w: warden_time(w, warden_at(r, "released"))),
+    ("server accept", own_accept, lambda r, w: own_accept(r)),
+    ("server headers", lambda r: r.get("headers_unix"), lambda r, w: r.get("headers_unix")),
+    ("server body", lambda r: r.get("body_unix"), lambda r, w: r.get("body_unix")),
+    ("vLLM arrival", lambda r: r.get("arrival"), lambda r, w: r.get("arrival")),
+    ("engine add", lambda r: r.get("engine_add_index"), lambda r, w: r.get("engine_add_unix")),
+)
+
+
+def arrival_order(reqs: list[dict], steps: list[dict], w: dict | None) -> dict:
+    """The order requests arrived in at each place along the wire (`STAGES`), against the order the engine first scheduled
+    them in (`engine_order`) and against the place before: per place, the requests seen there, the pairs put the other way
+    round (`inversions`), and the seconds from the client's send to the arrival there. A place the trace has no record of
+    is left out; the server's accept counts only a connection's first request (a later one came on an accepted
+    connection). A warden's admission and release order by (bucket, ordinal), the order its records certify."""
+    engine = engine_order(steps)
+    first_t = {}
+    for s in steps:
+        for r in s["new"]:
+            first_t.setdefault(r["id"], s.get("t"))
+    out, prev = {}, None
+    for name, key, at in STAGES:
+        have = [r for r in reqs if key(r) is not None]
+        if not have:
+            continue
+        order = [r["id"] for r in sorted(have, key=lambda r: (key(r), r.get("i") or 0))]
+        lags = [at(r, w) - r["send_unix"] for r in have if at(r, w) is not None and r.get("send_unix") is not None]
+        out[name] = {"requests": len(order), "inversions_vs_engine": inversions(order, engine),
+                     "inversions_vs_previous": None if prev is None else inversions(order, prev),
+                     "lag_s": stats([round(x, 4) for x in lags])}
+        prev = order
+    send = {r["id"]: r.get("send_unix") for r in reqs}
+    out["engine first scheduled"] = {"requests": len(engine), "inversions_vs_engine": 0,
+                                     "inversions_vs_previous": None if prev is None else inversions(engine, prev),
+                                     "lag_s": stats([round(first_t[x] - send[x], 4) for x in engine
+                                                     if send.get(x) is not None and first_t.get(x) is not None])}
+    out["pairs"] = len(engine) * (len(engine) - 1) // 2
+    return out
+
+
+def warden_summary(d: Path) -> dict | None:
+    """What the warden in front of a trace's server did, from what it published (warden/deployment.json, warden.json)
+    and its check (warden/check.json, `warden_serve.py check`); None for a trace without one."""
+    w = d / "warden"
+    if not (w / "deployment.json").exists():
+        return None
+    dep = json.loads((w / "deployment.json").read_text())
+    meta = json.loads((d / "meta.json").read_text()) if (d / "meta.json").exists() else {}
+    log = json.loads((w / "warden.json").read_text()) if (w / "warden.json").exists() else {}
+    chk = json.loads((w / "check.json").read_text()) if (w / "check.json").exists() else None
+    conns = log.get("connections", [])
+    return {"where": (meta.get("warden") or {}).get("where"), "params": dep["params"], "origin_unix": dep["origin_unix"],
+            "windows": dep["windows"], "connections": len(conns), "refused": log.get("refused"),
+            "failed": dict(Counter(c["failed"] for c in conns if c["failed"])), "cut": sum(1 for c in conns if c["cut"]),
+            "admission_wait_buckets": stats([c["admitted"] - c["arrived"] for c in conns if c["admitted"] is not None]),
+            "ingress_buckets": stats([c["ingress_end"] - c["admitted"] + 1 for c in conns if c["ingress_end"] is not None]),
+            "egress_cells": stats([c["egress_cells"] for c in conns]), "tick_lateness_ms": log.get("lateness_ms"),
+            "usage": log.get("usage"),
+            "check": None if chk is None else {"accepted": chk["accepted"], "problems": chk["problems"][:10],
+                                               **{k: chk["summary"].get(k) for k in (
+                                                   "requests", "ended", "refused", "failed", "certified_windows",
+                                                   "cells_in_their_bucket", "arrival_lag_ms", "cells")}}}
+
+
+#: a warden trace's views for ENC-REPLAY, each with the warden's order as the certified ingress: view -> its record's field
+VIEWS = {"admitted": "admitted", "released": "released"}
+
+
+def warden_views(root: Path, name: str, w: dict) -> list[str]:
+    """For a warden trace, a directory per `VIEWS` entry, <name>.<view>, that ENC-REPLAY's `read_corpus_trace` reads as a
+    trace whose certified ingress is the warden's: each request's ``send_unix`` is the middle of the unix bucket of the
+    warden's tick for it (admission s, or release a: the bucket of the request's last ingress cell), plus 10 µs per
+    request before it in that bucket in ordinal order, so that the order is the warden's (bucket, ordinal). The client's
+    own send is in ``client_send_unix``, and ``chunks``, ``first_token_s`` and ``done_s`` are rebased on the new
+    ``send_unix``, so that every output keeps its time. ``steps.jsonl``, ``meta.json`` and ``server.log`` are the
+    trace's (hard links)."""
+    tau = w["params"]["bucket_ms"] / 1000
+    base = math.floor(w["origin_unix"] / tau)
+    reqs = read_jsonl(root / name / "requests.jsonl")
+    made = []
+    for view, field in VIEWS.items():
+        d = root / f"{name}.{view}"
+        d.mkdir(exist_ok=True)
+        keyed = sorted((r for r in reqs if (r.get("warden") or {}).get(field) is not None),
+                       key=lambda r: (r["warden"][field], r["warden"]["ordinal"]))
+        rank: Counter = Counter()
+        when = {}
+        for r in keyed:
+            b = r["warden"][field]
+            when[r["id"]] = tau * (base + b + 0.5) + rank[b] * 1e-5
+            rank[b] += 1
+        with open(d / "requests.jsonl", "w", encoding="utf-8") as f:
+            for r in reqs:
+                if r["id"] in when and r.get("send_unix") is not None:
+                    shift = r["send_unix"] - when[r["id"]]
+                    r = {**r, "send_unix": when[r["id"]], "client_send_unix": r["send_unix"],
+                         "chunks": [[round(t + shift, 6), n] for t, n in r.get("chunks") or ()],
+                         **{k: round(r[k] + shift, 6) for k in ("first_token_s", "done_s") if r.get(k) is not None}}
+                f.write(json.dumps(r, separators=(",", ":")) + "\n")
+        for f in ("steps.jsonl", "meta.json", "server.log"):
+            (d / f).unlink(missing_ok=True)
+            os.link(root / name / f, d / f)
+        made.append(d.name)
+    return made
 
 
 def adversary(d: Path, calls: list[dict]) -> dict | None:
@@ -211,6 +404,8 @@ def summarize(root: Path) -> dict:
         d = root / name
         if (d / "raw").is_dir():
             traces[name] = join_trace(d, plan)
+            if traces[name]["warden"]:
+                traces[name]["views"] = warden_views(root, name, traces[name]["warden"])
         if m.get("error") or name not in traces:
             traces.setdefault(name, {"trace": name})["error"] = m.get("error", "no records")
     out = {"model_id": meta.get("model_id"), "model": meta.get("model"), "model_what": meta.get("model_what"),
@@ -488,11 +683,23 @@ FIELDS = """\
   no stop strings or stop ids are set), `cache_hit` (prefix-cache tokens at its first scheduling), `num_preemptions`,
   `first_step` and `last_step` (the steps that scheduled it first and last), `t_free`, the client's `first_token_s`,
   `done_s` and `chunks` (`[seconds after sending, tokens]` per streamed chunk), and `client_ids_match` (the streamed ids
-  equal the engine's).
+  equal the engine's). Where the trace recorded them (corpora made before `vllm_accept_stamp` didn't): the API
+  server's `accept_unix` (uvicorn accepted the request's TCP connection) and `conn_request` (the request's place on that
+  connection, 1 for its first), `headers_unix` (the app got the request) and `body_unix` (it had read the whole body), and
+  the engine core's `engine_add_unix` and `engine_add_index` (when it handed the request to the scheduler, and its place
+  in that order, which FCFS's waiting queue keeps); through the warden, `warden`: its `ordinal` and `outcome` at the
+  client, and from the warden's log the buckets it `arrived`, was `admitted` (s) and `released` (a, its last ingress
+  cell's), `ended`, its `ingress_cells` and `egress_cells`, and `failed` (a reason, or null).
 - `<trace>/client.jsonl`, `<trace>/raw/`: the client's records as written (with the `seed` each request sent, if any) and
-  the hook's (`raw/steps.PID.jsonl`,
-  `raw/outputs.PID.jsonl`, `raw/requests.PID.jsonl`, and in a hostile trace the adversary's `raw/adversary.PID.jsonl`);
-  `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings and adversary (seed and prefix-cache mode).
+  the hook's (`raw/steps.PID.jsonl`, `raw/outputs.PID.jsonl`, `raw/requests.PID.jsonl`, `raw/arrivals.PID.jsonl`, and in
+  a hostile trace the adversary's `raw/adversary.PID.jsonl`), and the API server's `raw/accept.PID.jsonl`
+  (`vllm_accept_stamp`); `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings, adversary (seed and
+  prefix-cache mode) and warden (its schedule, where it ran).
+- `<trace>/warden/`, a warden trace's: what the warden published (`deployment.json`, `requests.records`,
+  `responses.records`, `fails.records`, `certified.jsonl`, `warden.json` with every connection's buckets and outcome),
+  its `serve.log`, the client shim's record of every connection (`client.json`) and `warden_serve.py check`'s
+  `check.json` and `check.log`; `<trace>.admitted/`, `<trace>.released/`: the trace with the warden's order as its
+  certified ingress (`summary.warden_views`).
 """
 
 
@@ -551,6 +758,47 @@ def readme(s: dict) -> str:
                          f"({h.get('p50')} / {h.get('p90')}) | {a['splits']} ({a['requests_split']}; "
                          f"{a['split_to'].get('p50')}) | {a['hits_seen']} | {a['hits_refused']} | {a['hits_cut']} | "
                          f"{a['errors']} |")
+    wardens = {name: t["warden"] for name, t in s["traces"].items() if t.get("warden")}
+    if wardens:
+        where = {w.get("where") for w in wardens.values()}
+        lines += ["", "## The warden", "",
+                  f"The warden traces reach the server only through the active warden ({', '.join(map(str, where))}): "
+                  "`warden_serve.py serve`, one connection to the server per client connection, each direction in B-byte "
+                  "cells on its schedule, egress cell i at bucket s + D + i/r from the warden's admission s. Its records, "
+                  "certificates and connection log are in `<trace>/warden/`, and `check` is `warden_serve.py check` of "
+                  "them against the client shim's record of every cell.", "",
+                  "| trace | B / r / D (buckets of τ ms) | windows | connections | failed | refused | cut | buckets of "
+                  "ingress p50 / max | egress cells p50 / max | tick lateness p99 / max ms (over slack) | check |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|"]
+        for name, w in wardens.items():
+            p, ing, eg, late, chk = w["params"], w["ingress_buckets"], w["egress_cells"], w["tick_lateness_ms"] or {}, w["check"]
+            verdict = "-" if chk is None else "accepted" if chk["accepted"] else f"refused: {(chk['problems'] or ['?'])[0]}"
+            lines.append(f"| {name} | {p['cell_bytes']} / {p['slots']} / {p['delay']} ({p['bucket_ms']}) | {w['windows']} | "
+                         f"{w['connections']} | {w['failed'] or 0} | {w['refused']} | {w['cut']} | {ing.get('p50')} / "
+                         f"{ing.get('max')} | {eg.get('p50')} / {eg.get('max')} | {late.get('p99')} / {late.get('max')} "
+                         f"({late.get('over_slack')}) | {verdict} |")
+    ordered = {name: t["arrival_order"] for name, t in s["traces"].items() if t.get("arrival_order")}
+    if ordered:
+        lines += ["", "## Arrival order", "",
+                  "The order requests arrived in at each place along the wire (`summary.arrival_order`), against the order "
+                  "the engine first scheduled them in (ENC-REPLAY's engine order) and against the place before: the pairs "
+                  "of requests put the other way round (inversions), and the seconds from the client's send to the arrival "
+                  "there. The warden orders by (bucket, ordinal): its admission s, and its release a, the bucket of the "
+                  "request's last ingress cell, after which the server has the whole request. A warden trace's "
+                  "`<trace>.admitted` and `<trace>.released` are the trace with that order as its certified ingress "
+                  "(`summary.warden_views`), for ENC-REPLAY's `read_corpus_trace`.", ""]
+        for name, o in ordered.items():
+            lines += [f"**{name}** ({o['pairs']} pairs):", "",
+                      "| place | requests | inversions against the engine's order | against the place before | seconds "
+                      "after the send p50 / p99 / max |", "|---|---|---|---|---|"]
+            for place, x in o.items():
+                if place == "pairs":
+                    continue
+                lag = x["lag_s"]
+                before = "-" if x["inversions_vs_previous"] is None else x["inversions_vs_previous"]
+                lines.append(f"| {place} | {x['requests']} | {x['inversions_vs_engine']} | {before} | {lag.get('p50')} / "
+                             f"{lag.get('p99')} / {lag.get('max')} |")
+            lines.append("")
     if s.get("outputs"):
         lines += ["", "## Output ids across traces", "", *outputs_section(s["outputs"])]
     lines += ["", "## Lengths", ""]

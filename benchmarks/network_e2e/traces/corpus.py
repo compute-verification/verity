@@ -16,6 +16,14 @@ and DIR/README.md. `compare` does the same comparison across corpora that serve 
 prefill, an 8192-token budget): ``honest`` under vLLM's own scheduler, the others under `vllm_adversarial_plugin`'s hostile
 one, with its seed and prefix-cache mode. If a request's output ids moved with the hostile choices, `compare` shows it.
 
+`WARDEN`'s traces serve a trace's server and load through the active warden: `warden_serve.py serve` in front of the
+server, a process beside it on its host (``warden beside the server, not on the auditor host``), and the client
+(`drive_warden`) speaking cells through the warden's shim. DIR/<trace>/warden/ holds what the warden published (its
+deployment, certified records and connection log) and the shim's record of every connection; `summarize` runs
+`warden_serve.py check` on it first. Every trace's server also loads `vllm_accept_stamp`, which records each request's
+TCP accept, headers and body in the API server, so that the order requests arrived in can be told apart on each side of
+the wire.
+
 Every model runs the integration's batch-invariant eager engine (the ``bi-eager`` execution, `verity_vllm.engine.served`):
 ``VLLM_BATCH_INVARIANT=1``, eager, Model Runner V2 and the integration's other engine switches
 (`verity_vllm.engine.env.ENGINE`) but the in-process engine core, which the OpenAI server does not have. A corpus's
@@ -33,15 +41,22 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import bisect
 import gzip
 import hashlib
+import itertools
 import json
+import math
 import os
+import re
 import resource
+import secrets
+import shutil
 import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from dataclasses import dataclass
@@ -58,7 +73,7 @@ ENGINE_ENV = {"VLLM_USE_V2_MODEL_RUNNER": "1", "VLLM_USE_FLASHINFER_SAMPLER": "0
               "VLLM_BATCH_INVARIANT": "1"}
 #: --max-num-seqs pinned, so the batch cap a saturating trace hits is the corpus's, not the vLLM version's default
 BASE_ARGS = ["--enforce-eager", "--enable-prefix-caching", "--max-model-len", "2048", "--max-num-seqs", "256", "--seed", "0",
-             "--disable-uvicorn-access-log"]
+             "--disable-uvicorn-access-log", "--middleware", "vllm_accept_stamp.AcceptStamp"]
 #: name -> request sampling parameters; `seeded` requests also carry `request_seed` of their id
 SAMPLING = {"greedy": {"temperature": 0.0}, "seeded": {"temperature": 0.8, "top_p": 0.95, "top_k": 50}}
 #: name -> (sampling, async scheduling)
@@ -91,6 +106,21 @@ TRACES |= {name: (["--enable-chunked-prefill", "--max-num-batched-tokens", "8192
                   f"heavy's load, chunked prefill (8192-token budget), a hostile scheduler (seed {h[1]}: random "
                   f"preemptions, hold-backs, order and prefill splits; {CACHE_WHAT[h[0]]})")
            for name, h in HOSTILE.items()}
+#: warden trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
+#: active warden (`verity.core.protocols.certifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
+#: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D covers the slowest request's
+#: send to last token without the warden (heavy 10.7 s, small KV 55.7 s, async greedy).
+WARDEN = {"warden-heavy": ("heavy", 300), "warden-smallkv": ("smallkv", 1200)}
+WARDEN_WHERE = "warden beside the server, not on the auditor host"
+#: the warden's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the warden never
+#: throttles the load nor refuses; one 1 KiB cell a bucket each way keeps the padding of a thousand connections' D in memory
+WARDEN_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 1024, "queue": 1024, "window": 600,
+                   "ingress_cells": 64, "ingress_buckets": 50, "egress_cells": 4096}
+#: seconds the warden runs past the last arrival's D, for the last responses' egress cells
+WARDEN_TAIL_S = 60.0
+TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active warden, D = {d} buckets of 100 ms "
+                                   f"({WARDEN_WHERE})")
+           for name, (base, d) in WARDEN.items()}
 
 
 @dataclass(frozen=True)
@@ -279,14 +309,180 @@ async def drive(port: int, served: str, requests: list[dict], arrivals: list[flo
     return {"t0_unix": t0_unix, "sent": len(tasks), "unfinished": len(pending), "wall_s": round(loop.time() - t0, 3)}
 
 
+def http_request(body: dict, rid: str, host: str) -> bytes:
+    """The bytes of `drive`'s request on a connection of its own (`Connection: close`), as the warden's client sends them."""
+    data = json.dumps(body, separators=(",", ":")).encode()
+    return (f"POST /v1/completions HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nX-Request-Id: {rid}\r\n"
+            f"Content-Length: {len(data)}\r\nConnection: close\r\n\r\n").encode() + data
+
+
+def read_response(data: bytes, times: list[float], payload: int, sent: float) -> dict:
+    """What `drive` records of a streamed completion, read from the bytes the warden's cells carried: `data`, and `times`,
+    when each `DATA` or `END` cell arrived (cell k carries bytes kP ... (k+1)P - 1, P = `payload`). A server-sent event's
+    tokens arrived with the cell that completed it, so `chunks` has the seconds from `sent` to that cell's arrival."""
+    head, sep, _ = data.partition(b"\r\n\r\n")
+    m = re.match(rb"HTTP/1\.[01] (\d{3})", head)
+    rec: dict = {"status": int(m.group(1)) if m else None, "output_ids": [], "chunks": []}
+    headers = {k.strip().lower(): v.strip() for k, _, v in (line.partition(b":") for line in head.split(b"\r\n")[1:])}
+    start = len(head) + len(sep)
+    pieces: list[tuple[int, bytes]] = []  # each body piece and its offset in `data`
+    if b"chunked" in headers.get(b"transfer-encoding", b"").lower():
+        i = start
+        while (j := data.find(b"\r\n", i)) >= 0:
+            try:
+                n = int(data[i:j].split(b";")[0], 16)
+            except ValueError:
+                break
+            if n == 0:
+                break
+            pieces.append((j + 2, data[j + 2:j + 2 + n]))
+            i = j + 4 + n
+    else:
+        pieces.append((start, data[start:]))
+    body = b"".join(p for _, p in pieces)
+    if rec["status"] != 200:
+        rec["error"] = body[:2000].decode(errors="replace")
+        return rec
+    bases = list(itertools.accumulate((len(p) for _, p in pieces), initial=0))
+
+    def arrived(k: int) -> float:
+        n = bisect.bisect_right(bases, k) - 1
+        cell = (pieces[n][0] + k - bases[n]) // payload
+        return round(times[min(cell, len(times) - 1)] - sent, 6)
+
+    pos = 0
+    while (end := body.find(b"\n\n", pos)) >= 0:
+        line, pos = body[pos:end].strip(), end + 2
+        if not line.startswith(b"data: ") or line == b"data: [DONE]":
+            continue
+        msg = json.loads(line[6:])
+        if msg.get("usage"):
+            rec["usage"] = msg["usage"]
+        for ch in msg.get("choices") or ():
+            toks = ch.get("token_ids") or []
+            if toks:
+                now = arrived(end + 1)
+                rec["chunks"].append([now, len(toks)])
+                rec["output_ids"].extend(toks)
+                rec.setdefault("first_token_s", now)
+            if ch.get("finish_reason"):
+                rec["finish_reason"] = ch["finish_reason"]
+                rec["stop_reason"] = ch.get("stop_reason")
+    if times:
+        rec["done_s"] = round(times[-1] - sent, 6)
+    return rec
+
+
+def warden_modules():
+    """`verity`'s warden and `warden_serve` (benchmarks/network_traces), imported only for a warden trace."""
+    for p in (ROOT, ROOT / "benchmarks/network_traces"):
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
+    from verity.core.protocols.certifier import warden
+
+    import warden_serve
+    return warden, warden_serve
+
+
+async def drive_warden(deployment: dict, served: str, requests: list[dict], arrivals: list[float], ids: list[str], out: Path,
+                       drain_s: float, sampling: str) -> dict:
+    """`drive` through the warden: from the warden's origin, each request at its arrival on a connection of its own to the
+    warden's listener, sent as cells and read through the client shim (`warden.cells`, `warden.Shim`), to the warden's
+    close. client.jsonl has `drive`'s fields (`read_response`) and each request's warden ordinal and outcome, and
+    warden/client.json the shim's record of every connection in `warden_serve.connection_log`'s form, for its `check`."""
+    warden, ws = warden_modules()
+    params = warden.WardenParams(**deployment["params"])
+    B, origin, listen = params.cell_bytes, deployment["origin_unix"], tuple(deployment["listen"])
+    host = "%s:%d" % tuple(deployment["upstream"])
+    loop = asyncio.get_running_loop()
+    await asyncio.sleep(max(0.0, origin - time.time()))
+    lines = open(out, "w", encoding="utf-8")
+    t0 = loop.time()
+    t0_unix = time.time()
+    conns: dict[int, dict] = {}
+
+    async def one(k: int, r: dict, at: float, rid: str) -> None:
+        await asyncio.sleep(max(0.0, t0 + at - loop.time()))
+        body = request_body(served, r, rid, sampling)
+        request = http_request(body, rid, host)
+        sent = time.time()
+        rec = {"id": rid, "i": r["i"], "planned_s": round(at, 6), "send_s": round(loop.time() - t0, 6), "send_unix": sent,
+               "max_tokens": r["max_tokens"], "seed": body.get("seed"), "output_ids": [], "chunks": []}
+        shim = warden.Shim(B, time.time)
+        try:
+            reader, writer = await asyncio.open_connection(*listen)
+            try:
+                writer.write(warden.cells(request, B))
+                await shim.read(reader)
+            finally:
+                writer.close()
+            rec["warden"] = {"ordinal": shim.ordinal, "outcome": shim.outcome}
+            times = [t for t, kind in shim.arrivals if kind in (warden.DATA, warden.END)]
+            rec |= read_response(bytes(shim.data), times, params.payload, sent)
+            if shim.outcome != "end":
+                rec.setdefault("error", f"the warden's connection ended: {shim.outcome}")
+            conns[k] = ws.connection_log(k, round(t0_unix - origin + at, 6), sent - origin, request, shim, origin)
+        except asyncio.CancelledError:
+            rec["error"] = "cancelled at the drain deadline"
+            raise
+        except Exception as e:  # noqa: BLE001 -- a failed request is a record, not the end of the trace
+            rec["error"] = f"{type(e).__name__}: {e}"[:2000]
+        finally:
+            conns.setdefault(k, {"index": k, "error": rec.get("error")})
+            lines.write(json.dumps(rec, separators=(",", ":")) + "\n")
+            lines.flush()
+
+    tasks = [asyncio.create_task(one(k, r, at, rid)) for k, (r, at, rid) in enumerate(zip(requests, arrivals, ids))]
+    done, pending = await asyncio.wait(tasks, timeout=max(arrivals) + drain_s)
+    for t in pending:
+        t.cancel()
+    await asyncio.gather(*pending, return_exceptions=True)
+    lines.close()
+    doc = {"connections": [conns.get(k, {"index": k, "error": "no record"}) for k in range(len(tasks))]}
+    (out.parent / "warden" / "client.json").write_text(json.dumps(doc))
+    return {"t0_unix": t0_unix, "sent": len(tasks), "unfinished": len(pending), "wall_s": round(loop.time() - t0, 3)}
+
+
+def start_warden(d: Path, port: int, delay: int, span_s: float, key: Path, env: dict) -> tuple[subprocess.Popen, dict]:
+    """`warden_serve.py serve` in front of the server at `port`, a process beside it, writing to d/warden/ (its log to
+    serve.log) with a fresh session and the LMS key in `key`, for enough windows to cover the last arrival's D and
+    `WARDEN_TAIL_S`. Returns the process and its deployment record."""
+    me = [sys.executable, str(ROOT / "benchmarks/network_traces/warden_serve.py")]
+    params = WARDEN_SCHEDULE | {"delay": delay}
+    tau = params["bucket_ms"] / 1000
+    windows = math.ceil((span_s + delay * tau + WARDEN_TAIL_S) / (params["window"] * tau))
+    w = d / "warden"
+    w.mkdir(parents=True, exist_ok=True)
+    subprocess.run(me + ["keys", "--dir", str(key)], check=True, stdout=subprocess.DEVNULL, env=env)
+    flags = [x for k, v in params.items() for x in (f"--{k.replace('_', '-')}", str(v))]
+    with open(w / "serve.log", "w") as log:
+        proc = subprocess.Popen(me + ["serve", "--upstream", f"127.0.0.1:{port}", "--listen", "127.0.0.1:0", "--out", str(w),
+                                      "--key", str(key), "--session", secrets.token_hex(32), "--windows", str(windows),
+                                      "--start-in", "2", *flags], stdout=subprocess.PIPE, stderr=log, text=True, env=env)
+    if "listening" not in json.loads(proc.stdout.readline() or "{}"):
+        proc.wait()
+        raise RuntimeError(f"the warden exited with {proc.returncode} before it listened (warden/serve.log)")
+    return proc, json.loads((w / "deployment.json").read_text())
+
+
+def check_warden(d: Path) -> int:
+    """`warden_serve.py check` of a warden trace's d/warden (its certificates, the audit of its records and the client's
+    cells against them), into d/warden/check.json."""
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
+    with open(d / "warden" / "check.log", "w") as log:
+        return subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/warden_serve.py"), "check", "--run",
+                               str(d / "warden")], stdout=log, stderr=subprocess.STDOUT, env=env).returncode
+
+
 def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: list[dict], site: Path,
               args: argparse.Namespace) -> dict:
     server_args, why = TRACES[name]
     sampling, async_scheduling = VARIANTS[args.variant]
-    rate = model.rates["heavy" if name in HOSTILE else name]
+    base, delay = WARDEN.get(name, (name, None))
+    rate = model.rates["heavy" if name in HOSTILE else base]
     hostile = HOSTILE.get(name)
     adversary = {"VERITY_ADV_CACHE": hostile[0], "VERITY_ADV_SEED": str(hostile[1])} if hostile else {}
-    if name == "smallkv":
+    if base == "smallkv":
         server_args = [*server_args, "--kv-cache-memory-bytes", str(KV_SMALL_TOKENS * kv_bytes_per_token(checkpoint))]
     d = out / name
     (d / "raw").mkdir(parents=True, exist_ok=True)
@@ -304,15 +500,39 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
             "adversary": {"cache": hostile[0], "seed": hostile[1]} if hostile else None,
             "requests": len(requests), "arrivals_span_s": round(arr[-1], 3)}
     t = clock()
+    warden = None
+    key = Path(tempfile.mkdtemp(prefix="trace-corpus-warden-")) if delay is not None else None
     with open(d / "server.log", "wb") as log:
         server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
     try:
         wait_ready(server, port, clock() + args.startup_s)
         meta["startup_s"] = round(clock() - t, 1)
         print(f"[corpus] {name}: server up in {meta['startup_s']} s; {len(requests)} requests at {rate}/s", flush=True)
-        meta |= asyncio.run(drive(port, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s, sampling))
+        if delay is None:
+            meta |= asyncio.run(drive(port, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s, sampling))
+        else:
+            wenv = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
+            warden, dep = start_warden(d, port, delay, arr[-1], key, wenv)
+            end = dep["origin_unix"] + dep["windows"] * dep["params"]["window"] * dep["params"]["bucket_ms"] / 1000
+            meta["warden"] = {"where": WARDEN_WHERE, "params": dep["params"], "digest": dep["digest"],
+                              "windows": dep["windows"], "origin_unix": dep["origin_unix"], "listen": dep["listen"],
+                              "key": "a scratch LMS key made for this trace and deleted after it (its public half is in "
+                                     "warden/deployment.json)"}
+            print(f"[corpus] {name}: warden ({WARDEN_WHERE}) on {dep['listen']}, D {delay}, {dep['windows']} windows",
+                  flush=True)
+            meta |= asyncio.run(drive_warden(dep, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
+                                             sampling))
+            try:
+                meta["warden"]["rc"] = warden.wait(max(0.0, end - time.time()) + 120)
+            except subprocess.TimeoutExpired:
+                meta["warden"]["rc"] = "still running 2 minutes past its last window"
     finally:
+        if warden is not None and warden.poll() is None:
+            warden.terminate()
+            warden.wait()
         stop(server)
+        if key is not None:
+            shutil.rmtree(key, ignore_errors=True)
         meta["server_rc"] = server.returncode
         (d / "meta.json").write_text(json.dumps(meta, indent=1))
     print(f"[corpus] {name}: done in {round(clock() - t)} s, unfinished {meta.get('unfinished')}, rc {server.returncode}",
@@ -407,6 +627,9 @@ def main(argv: list[str] | None = None) -> int:
     import summary
 
     if args.cmd == "summarize":
+        for w in sorted(Path(args.dir).glob("*/warden/deployment.json")):
+            if not (w.parent / "check.json").exists():
+                print(f"[corpus] {w.parent.parent.name}: warden check rc {check_warden(w.parent.parent)}", flush=True)
         summary.summarize(Path(args.dir))
         return 0
     out = summary.compare_corpora([summary.corpus_spec(x) for x in args.corpora], Path(args.out))
