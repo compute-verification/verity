@@ -6,7 +6,7 @@
 # H1U_NB2, H1U_L2PF); then, under the same lease, the producer's time a decode step with dead tiles computed and skipped,
 # a call at a time and batched, at each of STEP_ROWS (comma-separated, of 64) served rows (step_time.py; empty: none).
 # The builds run before the lease, niced; each build's tests and timing hold one GPU, about 10 minutes. GPU_LEASE_ON, if
-# set, is gpu-lease's --on: the GPUs it may take.
+# set, is gpu-lease's --on: the GPUs it may take; LEASE_MIN its --max-min (20).
 #
 #   research run --on vy-nebius-2 --cwd source --source . [--env GPU_LEASE_ON=2,3] [--env BUILDS=hbc] \
 #     -- bash benchmarks/pouw/served_h1/producer_gpu.sh
@@ -31,7 +31,7 @@ export PYTHONPATH="$ROOT:$ROOT/integrations/vllm" GPU_LEASE_WHO=${GPU_LEASE_WHO:
 cd benchmarks/pouw
 rc=0
 for name in "${builds[@]}"; do
-  VERITY_POUW_H1U_SO="$S/h1u_$name.so" gpu-lease 1 --wait ${GPU_LEASE_ON:+--on "$GPU_LEASE_ON"} --max-min 20 -- \
+  VERITY_POUW_H1U_SO="$S/h1u_$name.so" gpu-lease 1 --wait ${GPU_LEASE_ON:+--on "$GPU_LEASE_ON"} --max-min "${LEASE_MIN:-20}" -- \
     bash -c '"$1" -m pytest tests/test_served_h1_producer.py -k units_kernel -p no:cacheprovider -rA -v --junitxml "$2"
              t=$?
              [ -z "$3" ] || "$1" served_h1/step_time.py --so "$VERITY_POUW_H1U_SO" --rows "$3" --out "$4" || t=1
