@@ -7,7 +7,9 @@ challenger's key record fetched from the store, then
   session's stand-in root (`coins.stand_in_root`);
 * ``core-check.json``: core's own check, run from a checkout of main (``--core-from``, its ``verity`` and nothing of
   this tree): the session trusted on the stand-in root (`remote.trusted_session`, every head of the ledger), the round
-  coins (`core_check.rounds` over the recomputed round roots), the salt coin after the stand-in root and the draw coin
+  coins (`core_check.rounds` over the recomputed round roots, its session run from a commit the host's pins log
+  ``--pins`` records on the auditor's first-parent list of main ``--main``), the salt coin after the stand-in root and
+  the draw coin
   after the recomputed manifest root (`challenger.live_reason`, each the root the challenger's signed log shows), the
   commitment the manifest's, a live epoch's;
 * ``check-end.json``: the GPU run's own `dither_so.check_end` of the window (its stop record's ``end``), which needs the
@@ -16,7 +18,8 @@ challenger's key record fetched from the store, then
 ``audit.json`` holds the three verdicts, the commits and the inputs' SHA-512s; the exit status is 0 only when all hold.
 
     research run --campaign dither-loop --run-record -- python benchmarks/hash/dither/live_audit.py \\
-        --session SID --run RUN --gate USER@HOST --ssh-key KEY --key-record ART --period P --core-from MAIN
+        --session SID --run RUN --gate USER@HOST --ssh-key KEY --key-record ART --period P --core-from MAIN \\
+        --pins PINS --main FIRST_PARENT
 """
 from __future__ import annotations
 
@@ -115,8 +118,9 @@ def core_check(a) -> int:
         print(json.dumps(doc, indent=1))
         return 1
     entries = {e["kind"]: e for e in map(json.loads, ledger) if e["session"] == audited.session}
-    rounds = CC.rounds(key.to_json(), ledger, window, R.session_files(a.session_dir), re_["rounds"],
-                       [r["opening"] for r in m["rounds"]], CC.lms_verify)
+    pins = [x for x in Path(a.pins).read_text().split("\n") if x]
+    rounds = CC.rounds(key.to_json(), ledger, pins, R.main_lines(a.main), window, R.session_files(a.session_dir),
+                       re_["rounds"], [r["opening"] for r in m["rounds"]], CC.lms_verify)
     salt = Ch.LiveOpening.from_json(m["salt_coin"])
     draw = Ch.LiveOpening.from_json(m["draw_coin"])
     checks = {
@@ -153,8 +157,11 @@ def main(argv: list[str] | None = None) -> int:
     au.add_argument("--key-record", required=True, help="the challenger's key record's art: (challenger-key current)")
     au.add_argument("--period", required=True)
     au.add_argument("--core-from", required=True, help="a checkout of main whose verity runs core's check")
+    au.add_argument("--pins", required=True, help="the challenger host's published pins log (challenger-pins head)")
+    au.add_argument("--main", required=True, help="the auditor's own `git rev-list --first-parent origin/main`, a file")
     co = sub.add_parser("core", help="core's check alone, under main's verity on PYTHONPATH")
-    for k in ("session", "session-dir", "ledger", "manifest", "key", "period", "recomputed", "core-from"):
+    for k in ("session", "session-dir", "ledger", "manifest", "key", "period", "recomputed", "core-from", "pins",
+              "main"):
         co.add_argument(f"--{k}", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "core":
@@ -165,7 +172,8 @@ def main(argv: list[str] | None = None) -> int:
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"} | {"PYTHONPATH": str(Path(a.core_from).resolve())}
     cp = subprocess.run([sys.executable, __file__, "core", "--session", a.session, "--session-dir", str(p["session"]),
                          "--ledger", str(p["ledger"]), "--manifest", str(p["manifest"]), "--key", str(p["key"]),
-                         "--period", a.period, "--recomputed", str(out / "recomputed.json"), "--core-from", a.core_from],
+                         "--period", a.period, "--recomputed", str(out / "recomputed.json"), "--core-from", a.core_from,
+                         "--pins", str(Path(a.pins).resolve()), "--main", str(Path(a.main).resolve())],
                         check=False, env=env, cwd="/", stdout=subprocess.PIPE, text=True)
     (out / "core-check.json").write_text(cp.stdout)
     core = json.loads(cp.stdout)

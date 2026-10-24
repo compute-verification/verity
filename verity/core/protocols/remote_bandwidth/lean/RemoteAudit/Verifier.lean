@@ -13,6 +13,13 @@ difftest's `session` reads one, `Difftest.eventOf`):
 
 * `{"op": "init", "source", "registry", "chunk"}`: the verifier's secret, the registry `registry/v0` reads back (`null`
   for none), and the draws a thread checks at once; the answer is the registry;
+* `{"op": "bind", "bytes": n, "pin", "path", "role", "engines", "arena_blocks", "workers"}` and then n bytes, the
+  pinned arena's weights blocks' digests (64 bytes a block, `store.weight_digests`'s file): the store binding of
+  `verifier.py --model role` (`Store.bind`: the pin from its file's bytes `pin`, read from `path`, and the store's
+  shape), `{"pin", "weights_blocks"}` or `{"refused": why}` (`Difftest.boundJ`), the verifier's binding from then on;
+* `{"op": "hold", "node", "blocks", "payload_root", "key", "layout"}`: a hello's store held to that binding
+  (`Store.Binding.hold`, its payload root's subtrees on `workers` threads), `{"regions", "expected_root"}` or
+  `{"refused": why, "expected_root"}` (`Difftest.heldJ`), the decision of record on the hello's `bound`;
 * `{"op": "register", "node", "blocks", "payload_root", "codec", "receipt", "bind", "rows", "layout", "nonce"}`:
   `Registry.register`'s draw, `{"codec_seed", "digest"}`, or `{"refused": true}` (an error for a node with none live
   whose registration would bind PoUW's tile outputs: receipts here are of a block alone);
@@ -70,6 +77,8 @@ structure Server where
   chunk : Nat := 1024
   bodies : Array ((ByteArray × Nat × Int) × Array ByteArray) := #[]
   checks : Array Check := #[]
+  binding : Option Store.Binding := none
+  workers : Nat := 1
 
 private def doneLine (id : Nat) (v : Verdict) : String :=
   "{\"accepted\":" ++ (if v == .accept then "true" else "false") ++ ",\"done\":" ++ toString id ++ "}"
@@ -145,6 +154,19 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
     let source ← ofV (bytesOf req "source")
     let chunk ← ofV (nat req "chunk")
     pure (Json.mkObj [("registry", registry.toJson)], { srv with source, registry, chunk })
+  | "bind" =>
+    let digests ← readBytes stdin (← ofV (nat req "bytes"))
+    if srv.binding.isSome then throwThe String "the verifier's store is bound once"
+    if digests.isEmpty || digests.size % 64 ≠ 0 then
+      throwThe String "an arena's weights are one or more blocks' digests of 64 bytes"
+    let b := Store.bind (← ofV (bytesOf req "pin")) (← ofV (J.str req "path" "request"))
+      (← ofV (J.str req "role" "request")) digests (← ofV (J.asInt (← ofV (J.get req "engines" "request")) "engines"))
+      (← ofV (J.asInt (← ofV (J.get req "arena_blocks" "request")) "arena_blocks"))
+    let workers ← ofV (nat req "workers")
+    pure (Difftest.boundJ b, { srv with binding := b.toOption, workers := max 1 workers })
+  | "hold" =>
+    let some b := srv.binding | throwThe String "no binding: a hello is held to the store `bind` bound"
+    pure (← ofV (Difftest.holdOf b req srv.workers), srv)
   | "register" =>
     let some kind := Kind.ofName? (← ofV (J.str req "receipt" "request"))
       | throwThe String "a receipt kind is sketch-sha512 or block-sha512"

@@ -11,6 +11,10 @@ computed row reads the column (`RecResiduals.readIns`), and Δ's source key at t
 (`srcMsg`, which mirrors the proof's `srcKey` at a message bit from a leaf). At an output row: the copy is one of the
 unit's, one of its leaf's outputs is the bit's output word (`outAt`), and the bit's column of the output group is a
 computed one. Its cost is the known bits times the unit's ports, never the unit's gates.
+
+A port the file marks `read_in_full` (`READ_KEY`) is checked the same way, as one row of its registered row's words
+(`fullRows`): its every bit is read, at the registered width, so two statements that read one registered row in full
+depend on the same bits of it.
 -/
 import Flock.RegKnown
 import Flock.RecResiduals
@@ -135,6 +139,30 @@ def readsOk (c : Circuit) (known : Array (String × Array (Array Nat × ByteArra
 circuit (`namesOk`), and every bit of every known port is read or returned (`readsOk`). -/
 def check (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))) : V Unit :=
   namesOk c known >>= fun _ => readsOk c known
+
+open Lean (Json)
+
+/-- The key of a port entry whose row a computed row of the unit reads in every bit: `true`, or absent (false). -/
+def READ_KEY : String := "read_in_full"
+
+/-- **The ports a `--registered` file names read in full**: each port entry whose `read_in_full` (`READ_KEY`) is true. -/
+def readOf (j : Json) : V (Array String) := do
+  let .ok (.obj kvs) := j.getObjVal? "ports" | throw "registered reads: ports is not an object"
+  kvs.toArray.filterMapM fun (name, e) =>
+    match e.getObjVal? READ_KEY with
+    | .error _ => pure none
+    | .ok (.bool b) => pure (if b then some name else none)
+    | .ok _ => throw s!"registered reads: port {name}: {READ_KEY} is true or false"
+
+/-- A registered row's u16 words: `words` leaves of `wordBits` bits each. -/
+def regWords (reg : Registered.Port) : Nat := reg.words.getD 0 * (reg.wordBits / 16)
+
+/-- **Ports read in full, as `check` reads a known port**: each named port as one row of its registered row's u16
+words (`regWords` of `own`'s first port of that name), zero, a row no known-content check reads. So `check` holds the
+circuit's port to a `sha512/row/v2` row without segments of the registered row's words, read in every bit by a computed
+row of the unit: two statements that read one registered value's rows in full read them at one width, each bit. -/
+def fullRows (own : Array Registered.Port) (names : Array String) : Array (String × Array (Array Nat × ByteArray)) :=
+  names.map fun nm => (nm, #[(Array.replicate (((own.toList.find? (·.name == nm)).map regWords).getD 0) 0, ByteArray.empty)])
 
 end KnownRead
 end Flock

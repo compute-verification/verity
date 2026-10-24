@@ -1,6 +1,7 @@
 import SampledProofs.Json
 import SampledProofs.Program
 import SampledProofs.Partition
+import SampledProofs.PartitionRef
 import SampledProofs.Draw
 import SampledProofs.Supplied
 import SampledProofs.Registration
@@ -23,3 +24,4 @@ import SampledProofs.DomainAgrees
 import SampledProofs.Challenger
 import SampledProofs.ChallengerRecord
 import SampledProofs.ChallengerSession
+import SampledProofs.ChallengerCoins

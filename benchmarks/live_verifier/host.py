@@ -26,7 +26,10 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   `verifier.json`).
 - **A run** (`run`) is verifier.py with the whitelisted parameters and the host's own: it listens on 127.0.0.1 at
   `--port` (one of `PORTS`), takes each session's coins from vy-challenger-1 through its gate (`--challenger gate`, the
-  host's key and this host's name there, under the lane's `--period` and `--pin`), writes every session's transcript
+  host's key and this host's name there, under the lane's `--period` and `--pin`), holds each session's pin to the
+  challenger's pins log, which it fetches through the same gate (`pins`), and to main's first-parent history at
+  `/opt/vy-verifier/main-first-parent.txt` (`--challenger-main`; infra writes `git rev-list --first-parent origin/main`
+  there, root's and 0644, whenever it pins either host, and no run starts without it), writes every session's transcript
   (`--transcript`) and keeps the registry. The audited node's capacities, which its memory line is measured against
   (`--host-bytes`, `--ingress-bytes-per-s`, `--hbm-bytes`), are the host's for `--peer` (`/etc/vy/verifier.json`),
   never the request's. The prover reaches the port only through its tunnel account's `ssh -L` (`vy-verifier-tunnel`),
@@ -36,8 +39,8 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   transcripts gzipped in `out/transcripts/` with their `SHA256SUMS`; then `end.json` (exit code, who stopped it, each
   file's SHA-512). One unit runs at a time, a run or a replay, so a replay never takes a live session's cores.
 - **A bound run** (`--model ROLE --arena-blocks A [--engines E]`, ROLE of [A-Z0-9_], E 1..8 and verifier.py's 8 by
-  default, A at most 2^25) binds the registered store to a pinned model (`verifier.py --model`, `store_layout.Binding`),
-  which `auditor_line.py`'s `bound` check needs. The lane names the role and the store's shape, never a path: the gate
+  default, A at most 2^25) binds the registered store to a pinned model (`verifier.py --model`,
+  `remote_bandwidth.store.Binding`), which `auditor_line.py`'s `bound` check needs. The lane names the role and the store's shape, never a path: the gate
   adds `--checkpoint <models>/<ROLE>`, the host's directory of the role's checkpoint, and `--pin` core's pin in the
   pinned tree (`verity/core/protocols/pouw/lean/check/models.json`, `MODEL_PINS`), which the gate's own `--pin` (the
   challenger's key, verifier.py's `--challenger-pin`) is not. It refuses the run, before writing or starting anything,
@@ -45,8 +48,8 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   role's entry pins to its SHA-512 before it listens, and refuses a role the pin lacks. `<models>` is `verifier.json`'s
   `models`, default `/var/lib/vy-verifier/models`. Infra provisions a role's directory: every file the role's entry
   pins, at the pinned revision, as a root-held regular file (0644, in a root-held 0755 directory), copied out of a
-  download, never an HF cache's snapshot, whose files are symlinks into its blobs and which `store_layout.check`
-  refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
+  download, never an HF cache's snapshot, whose files are symlinks into its blobs and which
+  `remote_bandwidth.store.check` refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
 
       hf download Qwen/Qwen2.5-32B --revision 1818d35814b8319459f4bd55ed1ac8709630f003 --local-dir /tmp/q
       install -d -m 0755 -o root -g root /var/lib/vy-verifier/models/QWEN25_32B_BF16
@@ -135,6 +138,7 @@ class Host:
     root: Path = Path("/var/lib/vy-verifier")
     config: Path = Path("/etc/vy/verifier.json")
     pins: Path = Path("/opt/vy-verifier/pins.jsonl")
+    main: Path = Path("/opt/vy-verifier/main-first-parent.txt")
 
     @property
     def runs(self) -> Path:
@@ -326,16 +330,20 @@ def bound_paths(host: Host, settings: dict, role: str, tree: Path = TREE) -> tup
 
 def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: str = "/usr/bin/python3",
                   tree: Path = TREE) -> list[str]:
-    """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger and
-    the peer's capacities; a bound run's (`--model`) its role's checkpoint and core's pin (`bound_paths`), refused
-    when either is missing."""
+    """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger,
+    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities; a bound
+    run's (`--model`) its role's checkpoint and core's pin (`bound_paths`), refused when either is missing."""
     ch, node = settings["challenger"], settings["peers"][req["peer"]]
+    if not host.main.is_file():
+        raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
+                      "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
+                      "challenger pin it can't find on it, so no run starts without it")
     argv = [python, "-I", str(tree / "benchmarks" / "remote_session" / "verifier.py"),
             "--host", "127.0.0.1", "--port", str(req["port"]), "--out", str(host.runs / run / "out"),
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--verdict", req["verdict"],
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],
-            "--challenger-pin", req["pin"], "--challenger-period", req["period"]]
+            "--challenger-pin", req["pin"], "--challenger-period", req["period"], "--challenger-main", str(host.main)]
     for key in (*INTS, *DECIMALS, "--quantile"):
         name = key.lstrip("-")
         if name in req:
