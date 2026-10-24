@@ -19,47 +19,48 @@ of prompt fields, read from the certified bytes. A name (`model`, `user`) is pri
 quotes, so a request whose name needs a JSON escape is refused.
 
 **The view** (`request_view`, public in the named gap, computed by the verifier from the opened advice as
-`advised.view` is): the carry, the request in progress at the window's first request frame (its ordinal, its bytes
-left and its prompt fields so far), and `ended`, the prompt lengths of the requests carry.q, carry.q + 1, … whose last
-frame falls in the window, from the advice's prompt lengths and `received`. At the target the unit reads them under
-the advice's hiding root.
+`advised.view` is): the carry-in, the request in progress at the window's first request frame (its ordinal, its bytes
+left and its prompt fields so far); `ended`, the prompt lengths of the requests carry_in.q, carry_in.q + 1, … whose
+last frame falls in the window; `received`, the window's request frames; and the carry-out, the request in progress
+after the window's last request frame, which is the next window's carry-in. All four come from the advice's prompt
+lengths and `received`. At the target the unit reads them under the advice's hiding root.
 
 **What 1 means** (`reference`): the cells' root is their bucket rows', every cell is a pad, the own frame where it
-goes or a canonical request frame, each bucket's request frames come first, the cut from the carry ends exactly as many
-requests as `ended` names, in order, each with its prompt_len, and the window's request frames number `received`.
+goes or a canonical request frame, each bucket's request frames come first, the cut from the carry-in ends exactly as
+many requests as `ended` names, in order, each with its prompt_len, in `received` request frames, and leaves the
+carry-out's bytes left and prompt fields.
 
-No carry-out is checked: on a link whose every ingress window is accepted, each window's carry is the true one by
-induction from window 0, since every earlier request's prompt_len, and so its frames, is held to the cells, and a
-carry that disagrees with the cells misplaces the `]}` or a request's head. The ordinals are the verifier's: the cells
-carry none, and the j-th request ending in a window is carry.q + j by the same induction.
-
-**The verdict** (`RequestTie`), what an advised link's `advised.ends` takes in place of a tie from the prover's own
-advice: a link's every ingress window accepted, on the views the verifier computed from one advice's prompt lengths
-and `received`, against the cells the warden registered. `verify_link` makes it (tonight by the reference on the
-certified record, as the verifier of record runs it), and `RequestTie.unverified_for_tests` only in tests; it binds
-the link's name and the advice's digest (`advised.digest`), and hands its ends only to that link and advice
-(`RequestTie.ends_for`).
+**The statements** (`statements`): window w's `RequestStatement` is the warden's registered root and domain id, w,
+and `request_view` of w, so a link's statements chain (`chained`): window 0's carry-in is the link's start, (0, 0, 0),
+and each carry-out is the next window's carry-in. The verifier computes them from its own advice and holds each
+IoTieRequest proof to its window's; `advised.IoTieVerdict` (N2-ADVICE) is built from those proofs, one verdict a
+window, under the advice's digest. With the carry-out held, a window's verdict says the cells take its request in
+progress from the carry-in to the carry-out, so a link's verdicts hold every request's prompt_len, spanning windows
+or not, by the chain from window 0 (REDTEAM phase 9 (b): checked alone, a carried prompt-field count accepts any
+added amount). The ordinals are the verifier's: the cells carry none, and the j-th request ending in window w is
+carry_in.q + j by the same chain.
 
     IoTieRequestFrame{B}(cell: Array<B, Byte>, left: Array<32>) -> Array<68>
         pad, req, start, ended, the bytes left after it (u32) and its prompt fields (u32), LSB first
     IoTieRequestStep{D, NEW}(state: Array<131>, frame: Array<68>, routed: Array<32 + D>) -> Array<131>
         state: left, fields (u32 each), over, the requests ended and the request frames so far (u32 each), padded, ok
     IoTieRequestOwn{B}(cell: Array<B, Byte>, window: Array<64>) -> Value<1>
-    IoTieRequestEnd(state: Array<131>, count: Array<32>, received: Array<32>) -> Value<1>
+    IoTieRequestEnd(state: Array<131>, count, received, left_out, fields_out: Array<32>) -> Value<1>
     IoTieRequest{B, T, R, OWN}(root, domain, cells: Array<N, Array<B, Byte>>, salts: Array<T, Salt>,
-        [window: Array<64>], left, fields: Array<32>, ended: Array<N, Array<32>>, count, received: Array<32>,
-        switches: Array<S_W>) -> Value<1>
+        [window: Array<64>], left, fields: Array<32>, ended: Array<N, Array<32>>, count, received, left_out,
+        fields_out: Array<32>, switches: Array<S_W>) -> Value<1>
         N = T·R, M = 2^D ≥ N, S_W = (2D − 1)·2^(D − 1); `window` only when OWN = 1
 
 `IoTieRequest` is the unit: it recomputes the cells' root from every bucket row and salt (`io_tie.NetworkRowsRoot`),
-holds the own frame to its window, and scans the cells from the carry, one `IoTieRequestFrame` and one
+holds the own frame to its window, and scans the cells from the carry-in, one `IoTieRequestFrame` and one
 `IoTieRequestStep` a cell. The frame reads its cell against the bytes its request has left (0: a request starts here):
 both readings, a first frame's and a continuation's, each with its slots at fixed places and `]}` where the bytes left
 put it. The view's prompt lengths, each with its index j, are routed by the prover's switches (`io_tie.IoTieRoute`), and
 the step holds the frame that ends the j-th request to entry j: its index and its count of fields. `IoTieRequestEnd`
-holds the count of requests ended to `count` and of request frames to `received`. Public: the root and domain id, the
-window, and, until the named gap closes, the carry's left and fields, `ended`, `count` and `received`. Witness: the
-cells, their salts and the switches.
+holds the count of requests ended to `count`, of request frames to `received`, and the scan's last bytes left and
+prompt fields to the carry-out's, with no count past 2^32. Public: the root and domain id, the window, and, until the
+named gap closes, the carry-in's left and fields, `ended`, `count`, `received` and the carry-out's left and fields.
+Witness: the cells, their salts and the switches.
 """
 from __future__ import annotations
 
@@ -207,12 +208,24 @@ class Carry(NamedTuple):
 
 
 class RequestView(NamedTuple):
-    """IoTieRequest's public inputs for one window, in the named gap: the carry, the prompt lengths of the requests
-    carry.q, carry.q + 1, … that end in the window, and the window's request frames."""
+    """IoTieRequest's public inputs for one window from the advice, in the named gap: the carry-in, the prompt lengths
+    of the requests carry_in.q, carry_in.q + 1, … that end in the window, the window's request frames and the
+    carry-out."""
 
-    carry: Carry
+    carry_in: Carry
     ended: tuple[int, ...]
     received: int
+    carry_out: Carry
+
+
+class RequestStatement(NamedTuple):
+    """IoTieRequest's public inputs for an ingress link's window `window`: the root and domain id the warden registered
+    for it and the view (`statements`)."""
+
+    window: int
+    root: bytes
+    domain: bytes
+    view: RequestView
 
 
 @dataclass(frozen=True)
@@ -295,7 +308,41 @@ def request_view(prompt_lens: Sequence[int], received: Sequence[int], window: in
     lo = sum(received[:window])
     hi = lo + received[window]
     ended = tuple(n for n, x in zip(prompt_lens, e) if lo < x <= hi)
-    return RequestView(_carry_at(prompt_lens, B, lo), ended, received[window])
+    return RequestView(_carry_at(prompt_lens, B, lo), ended, received[window], _carry_at(prompt_lens, B, hi))
+
+
+def statements(shape: Shape, prompt_lens: Sequence[int], received: Sequence[int],
+               registered: Sequence[tuple[bytes, bytes]]) -> tuple[RequestStatement, ...]:
+    """An ingress link's statements, one a window: `registered[w]`, the (root, domain id) the warden registered for
+    window w, and `request_view` of w from the advice's prompt lengths, in arrival order, and `received`. Raises
+    `ValueError` unless there is one registration a window, at least one, and the requests' frames are the windows'
+    total."""
+    prompt_lens, received = _u32s(prompt_lens, "the advice's prompt lengths"), _u32s(received, "received")
+    if not received or len(received) != len(registered):
+        raise ValueError(f"{len(received)} windows received and {len(registered)} registered: a link's statements "
+                         f"cover every window, at least one")
+    return tuple(RequestStatement(w, root, dom, request_view(prompt_lens, received, w, shape.B))
+                 for w, (root, dom) in enumerate(registered))
+
+
+def chained(stmts: Sequence[RequestStatement]) -> bool:
+    """Whether a link's statements chain: windows 0, 1, … in order, window 0's carry-in the link's start (0, 0, 0),
+    each carry-out the next window's carry-in and the last one between requests, each carry-out's ordinal its
+    carry-in's plus the requests that end in the window."""
+    start = Carry(0, 0, 0)
+    for w, s in enumerate(stmts):
+        v = s.view
+        if s.window != w or v.carry_in != start or v.carry_out.q != v.carry_in.q + len(v.ended):
+            return False
+        start = v.carry_out
+    return bool(stmts) and start.left == 0 and start.fields == 0
+
+
+def _u32s(value: Sequence[int], what: str) -> tuple[int, ...]:
+    out = tuple(value)
+    if not all(type(x) is int and 0 <= x < 1 << 32 for x in out):
+        raise ValueError(f"{what} is a sequence of u32s, not {out!r:.200}")
+    return out
 
 
 def own_frame(window: int, B: int) -> bytes:
@@ -369,127 +416,10 @@ def reference(shape: Shape, inst: Instance) -> int:
         return 0
     if IT.rows_root(inst.domain, rows(shape, inst.cells), inst.salts) != inst.root:
         return 0
-    got = cut(shape, inst.cells, inst.view.carry, inst.window)
-    return int(got is not None and got.ended == inst.view.ended and got.frames == inst.view.received)
-
-
-# --- the verdict -----------------------------------------------------------------------------------------------------
-
-_KEY = object()
-_HEX = frozenset("0123456789abcdef")
-
-
-def _u32s(value: Sequence[int], what: str) -> tuple[int, ...]:
-    out = tuple(value)
-    if not all(type(x) is int and 0 <= x < 1 << 32 for x in out):
-        raise ValueError(f"{what} is a sequence of u32s, not {out!r:.200}")
-    return out
-
-
-def _digest(digest: str) -> str:
-    if type(digest) is not str or len(digest) != 128 or not set(digest) <= _HEX:
-        raise ValueError(f"an advice digest is `advised.digest`'s 128 lowercase hex characters, not {digest!r:.200}")
-    return digest
-
-
-class RequestTie:
-    """IoTieRequest's verdict on one ingress link: every ingress window w < len(received) of `link` was accepted on
-    `request_view(prompt_lens, received, w, shape.B)` against the cells the warden registered for it. So the link's
-    certified requests, in arrival order (ordinal r from 0), have prompt lengths `prompt_lens[r]`, and its window w
-    holds `received[w]` request frames: `ends` is the certified record's.
-
-    `digest` names the advice the verifier took `prompt_lens` and `received` from (`advised.digest` of its
-    `LinkAdvice`), and `basis` how the verdict was reached: "reference", `verify_link`'s run of the reference on the
-    certified record (the verifier of record's, until the unit is registered with the proof service), or "test",
-    `unverified_for_tests`'. Nothing else makes one, and it is immutable."""
-
-    __slots__ = ("link", "digest", "shape", "prompt_lens", "received", "basis")
-    link: str
-    digest: str
-    shape: Shape
-    prompt_lens: tuple[int, ...]
-    received: tuple[int, ...]
-    basis: str
-
-    def __init__(self, *_args, **_kwargs) -> None:
-        raise TypeError("a RequestTie is made only by io_request.verify_link (tests: RequestTie.unverified_for_tests)")
-
-    @classmethod
-    def _make(cls, key: object, link: str, digest: str, shape: Shape, prompt_lens: tuple[int, ...],
-              received: tuple[int, ...], basis: str) -> RequestTie:
-        if key is not _KEY:
-            raise TypeError("a RequestTie is made only by io_request.verify_link")
-        tie = object.__new__(cls)
-        for name, value in zip(cls.__slots__, (link, digest, shape, prompt_lens, received, basis)):
-            object.__setattr__(tie, name, value)
-        return tie
-
-    @classmethod
-    def unverified_for_tests(cls, link: str, digest: str, shape: Shape, prompt_lens: Sequence[int],
-                             received: Sequence[int]) -> RequestTie:
-        """A tie that nothing verified (`basis` "test"), for tests of the code that takes one. No module outside a
-        `tests` directory calls it (`test_only_tests_make_an_unverified_request_tie`)."""
-        if type(shape) is not Shape or type(link) is not str:
-            raise ValueError("a RequestTie has a Shape and a link name")
-        return cls._make(_KEY, link, _digest(digest), shape, _u32s(prompt_lens, "a tie's prompt_lens"),
-                         _u32s(received, "a tie's received"), "test")
-
-    def __setattr__(self, name: str, value: object) -> None:
-        raise AttributeError("a RequestTie is immutable")
-
-    def __delattr__(self, name: str) -> None:
-        raise AttributeError("a RequestTie is immutable")
-
-    def __reduce__(self):
-        raise TypeError("a RequestTie isn't copied or pickled: verify the link again")
-
-    def __repr__(self) -> str:
-        return (f"RequestTie(link={self.link!r}, digest={self.digest[:16]}…, shape={self.shape!r}, "
-                f"{len(self.prompt_lens)} requests, {len(self.received)} windows, basis={self.basis!r})")
-
-    @property
-    def ends(self) -> tuple[int, ...]:
-        """Each certified request's end on the ingress link, in arrival order (`ends` at the tie's B)."""
-        return ends(self.prompt_lens, self.shape.B)
-
-    def ends_for(self, link: str, digest: str, prompt_lens: Sequence[int], received: Sequence[int]
-                 ) -> tuple[int, ...]:
-        """`ends`, for the advised link `link` whose advice has `digest`, whose requests have `prompt_lens` in arrival
-        order (advice request i is ordinal order[i] under advice v1's order permutation; v0's is the identity), and
-        whose windows receive `received`. Raises `ValueError` where any of the four isn't the tie's."""
-        for what, mine, theirs in (("link", self.link, link), ("advice digest", self.digest, digest),
-                                   ("prompt lengths", self.prompt_lens, tuple(prompt_lens)),
-                                   ("received", self.received, tuple(received))):
-            if mine != theirs:
-                raise ValueError(f"the request tie's {what} isn't the advised link's: {mine!r:.80} against "
-                                 f"{theirs!r:.80}")
-        return self.ends
-
-
-def verify_link(shape: Shape, link: str, digest: str, prompt_lens: Sequence[int], received: Sequence[int],
-                registered: Sequence[tuple[bytes, bytes]], opened: Sequence[tuple[Sequence[bytes], Sequence[bytes]]]
-                ) -> RequestTie:
-    """IoTieRequest's verdict on ingress link `link`, by the reference on the certified record. The views are the
-    verifier's: window w's is `request_view(prompt_lens, received, w, B)`, from the prompt lengths (in arrival order)
-    and the request frames of the advice whose digest is `digest`. `registered[w]` is the (root, domain id) the warden
-    registered for the link's ingress window w, and `opened[w]` that window's cells and salts from the record, which
-    must open it. Raises `ValueError` unless every window is accepted."""
-    if type(shape) is not Shape or type(link) is not str:
-        raise ValueError("a link's request tie is verified at a Shape, on a named link")
-    digest = _digest(digest)
-    prompt_lens, received = _u32s(prompt_lens, "the advice's prompt lengths"), _u32s(received, "received")
-    if not received or not len(received) == len(registered) == len(opened):
-        raise ValueError(f"link {link!r}: {len(received)} windows received, {len(registered)} registered and "
-                         f"{len(opened)} opened; a tie covers every window, at least one")
-    total = ends(prompt_lens, shape.B)
-    if (total[-1] if total else 0) != sum(received):
-        raise ValueError(f"link {link!r}: the requests take {total[-1] if total else 0} request frames and the "
-                         f"windows receive {sum(received)}")
-    for w, ((root, dom), (cells, salts)) in enumerate(zip(registered, opened)):
-        inst = Instance(tuple(cells), tuple(salts), root, dom, request_view(prompt_lens, received, w, shape.B), w)
-        if not reference(shape, inst):
-            raise ValueError(f"link {link!r}: IoTieRequest refuses ingress window {w}")
-    return RequestTie._make(_KEY, link, digest, shape, prompt_lens, received, "reference")
+    v = inst.view
+    got = cut(shape, inst.cells, v.carry_in, inst.window)
+    return int(got is not None and got.ended == v.ended and got.frames == v.received and
+               got.carry[1:] == v.carry_out[1:])
 
 
 # --- the fake upstream: a warden's ingress cells ---------------------------------------------------------------------
@@ -528,7 +458,7 @@ def instance(shape: Shape, cells: Sequence[bytes], view: RequestView, window: in
 def switches(shape: Shape, inst: Instance) -> list[int]:
     """The prover's routing: entry j to the cell that ends the window's j-th request, the other positions in order
     (the identity where the cut fails)."""
-    got = cut(shape, inst.cells, inst.view.carry, inst.window)
+    got = cut(shape, inst.cells, inst.view.carry_in, inst.window)
     at = got.at if got is not None else ()
     perm, taken = list(at) + [-1] * (shape.M - len(at)), set(at)
     rest = iter(i for i in range(shape.M) if i not in taken)
@@ -759,16 +689,19 @@ IoTieRequestOwn = _part(
 
 
 def _sig_end(S):
-    return (("state", Array(STATE, BIT)), ("count", Array(32, BIT)), ("received", Array(32, BIT))), BIT
+    return (("state", Array(STATE, BIT)), ("count", Array(32, BIT)), ("received", Array(32, BIT)),
+            ("left_out", Array(32, BIT)), ("fields_out", Array(32, BIT))), BIT
 
 
-def _build_end(C, S, state, count, received):
-    return [and_reduce(C, [state[130], _eq(C, state[65:97], count), _eq(C, state[97:129], received)])]
+def _build_end(C, S, state, count, received, left_out, fields_out):
+    return [and_reduce(C, [state[130], state[64].inv(), _eq(C, state[65:97], count), _eq(C, state[97:129], received),
+                           _eq(C, state[0:32], left_out), _eq(C, state[32:64], fields_out)])]
 
 
 IoTieRequestEnd = _part(
     "IoTieRequestEnd", (), _sig_end, _build_end,
-    "1 iff the scan's state is ok, its requests ended are count and its request frames received")
+    "1 iff the scan's state is ok, its requests ended are count, its request frames received, and its request in "
+    "progress has left_out bytes left and fields_out prompt fields so far, fewer than 2^32 (over clear)")
 # C-Flock's lowering calls a static-free Definition's builder without S, as `block_check._part` builds them
 IoTieRequestEnd.build = lambda C, *e: _build_end(C, SimpleNamespace(), *e)  # type: ignore[attr-defined]
 
@@ -779,12 +712,14 @@ def _sig_request(S):
     return ((("root", DIGEST), ("domain", DIGEST), ("cells", Array(sh.N, Array(S.B, BYTE))),
              ("salts", Array(S.T, SALT)), *own, ("left", Array(32, BIT)), ("fields", Array(32, BIT)),
              ("ended", Array(sh.N, Array(32, BIT))),
-             ("count", Array(32, BIT)), ("received", Array(32, BIT)), ("switches", Array(sh.switches, BIT))), BIT)
+             ("count", Array(32, BIT)), ("received", Array(32, BIT)), ("left_out", Array(32, BIT)),
+             ("fields_out", Array(32, BIT)), ("switches", Array(sh.switches, BIT))), BIT)
 
 
 def _body_request(B, S, root, dom, cells, salts, *rest):
     sh = Shape(S.B, S.T, S.R, S.OWN)
-    window, (left, fields, ended, count, received, switches_) = (rest[0], rest[1:]) if S.OWN else (None, rest)
+    window, (left, fields, ended, count, received, left_out, fields_out, switches_) = \
+        (rest[0], rest[1:]) if S.OWN else (None, rest)
     K, cr, er = HC._Consts(B), HC._refs(cells), HC._refs(ended)
     row = 8 * S.B * S.R
     oks = [B.call(bind(IT.NetworkRowsRoot, N_BITS=row, COUNT=S.T), cells.reshape(Array(S.T, Array(row, BIT))), salts,
@@ -805,7 +740,7 @@ def _body_request(B, S, root, dom, cells, salts, *rest):
         fo = B.call(bind(IoTieRequestFrame, B=S.B), cell(i), HC._coll(Array(32, BIT), HC._refs(state)[:32]))
         state = B.call(bind(IoTieRequestStep, D=sh.D, NEW=int(i > 0 and i % S.R == 0)), state, fo,
                        HC._coll(Array(sh.W, BIT), routed[sh.W * i:sh.W * (i + 1)]))
-    oks.append(B.call(bind(IoTieRequestEnd), state, count, received))
+    oks.append(B.call(bind(IoTieRequestEnd), state, count, received, left_out, fields_out))
     bits = [r for o in oks for r in HC._refs(o)]
     return B.call(BL.and_gate(len(bits)), HC._coll(Array(len(bits), BIT), bits))
 
@@ -816,7 +751,8 @@ IoTieRequest = CompositeDefinition(
         "(`IoTieRequestOwn`), and the cells scanned from the carry (left, fields), one `IoTieRequestFrame` and "
         "`IoTieRequestStep` a cell, are pads and canonical id-request frames, each bucket's frames before its pads, "
         "ending count requests whose prompt fields are ended's, in order (routed by the switches, `IoTieRoute`), in "
-        "received request frames (`IoTieRequestEnd`): the ingress tie of one link-window, every cell opened")
+        "received request frames, and leaving the carry-out (left_out, fields_out) (`IoTieRequestEnd`): the ingress "
+        "tie of one link-window, every cell opened")
 
 
 # --- arguments -------------------------------------------------------------------------------------------------------
@@ -828,19 +764,19 @@ def frame_arguments(cells: Sequence[bytes], lefts: Sequence[int]) -> list[list[i
 
 def arguments(shape: Shape, inst: Instance, bits: Sequence[int]) -> list[list[int]]:
     """`IoTieRequest`'s arguments in its signature's order, each its leaves' bits."""
-    v, d = inst.view, HC._digest_bits
-    if len(v.ended) > shape.N or any(not 0 <= x < 1 << 32 for x in (*v.ended, v.carry.left, v.carry.fields,
-                                                                       v.received)):
+    v, d, ci, co = inst.view, HC._digest_bits, inst.view.carry_in, inst.view.carry_out
+    if len(v.ended) > shape.N or any(not 0 <= x < 1 << 32 for x in (*v.ended, ci.left, ci.fields, v.received,
+                                                                       co.left, co.fields)):
         raise ValueError(f"a view has at most N = {shape.N} prompt lengths and u32 values, not {v!r}")
     ended = list(v.ended) + [0] * (shape.N - len(v.ended))
     own = [HC._int_bits(inst.window, 64)] if shape.OWN else []
     return [d(inst.root), d(inst.domain), [b for c in inst.cells for b in HC._bytes_bits(c)],
-            [b for s in inst.salts for b in d(s)], *own, HC._int_bits(v.carry.left, 32),
-            HC._int_bits(v.carry.fields, 32), [b for n in ended for b in HC._int_bits(n, 32)],
-            HC._int_bits(len(v.ended), 32), HC._int_bits(v.received, 32), list(bits)]
+            [b for s in inst.salts for b in d(s)], *own, HC._int_bits(ci.left, 32), HC._int_bits(ci.fields, 32),
+            [b for n in ended for b in HC._int_bits(n, 32)], HC._int_bits(len(v.ended), 32),
+            HC._int_bits(v.received, 32), HC._int_bits(co.left, 32), HC._int_bits(co.fields, 32), list(bits)]
 
 
 __all__ = ["BODY_AT", "Carry", "Cut", "END", "FRAME_OUT", "Frame", "Instance", "IoTieRequest", "IoTieRequestEnd",
-           "IoTieRequestFrame", "IoTieRequestOwn", "IoTieRequestStep", "Layout", "RequestView", "STATE", "Shape",
-           "arguments", "cut", "ends", "frame_arguments", "instance", "layout", "own_frame", "parse_frame",
-           "reference", "request_view", "rows", "switches", "windows_of"]
+           "IoTieRequestFrame", "IoTieRequestOwn", "IoTieRequestStep", "Layout", "RequestStatement", "RequestView",
+           "STATE", "Shape", "arguments", "chained", "cut", "ends", "frame_arguments", "instance", "layout",
+           "own_frame", "parse_frame", "reference", "request_view", "rows", "statements", "switches", "windows_of"]

@@ -470,7 +470,7 @@ two ties between the advice's requests and the warden's certified ingress record
 - **Each request's prompt_len is its certified ingress record's: checked by the ingress tie, not here.** The advice's
   prompt_len must be the number of prompt fields in the request the warden certified on ingress. This unit reads
   egress only; `IoTieRequest` ("The ingress tie" below) reads the ingress cells. The ids' binding to `c00.input/ids`
-  is vllm's (the Commit's input port), as the egress ids' binding to `sampled_token_ids` is.
+  is the ingress-ids tie's (designed below), reading the Commit's input rows as `IoTiePort` reads its sampled rows.
 
 **The ingress tie** (`io_request`, `IoTieRequest{B, T, R, OWN}`: the reference and the Boolean Definition, with
 its sidecar). It is one unit per ingress link-window at selection `All`, with one output bit, and it is what N2-ADVICE's
@@ -489,25 +489,34 @@ window. It outputs 1 exactly when:
    and `]}` then zero fill ends the request at its last byte. A name (`model`, `user`) is printable ASCII but `"`
    and `\` in quotes: a request whose name needs a JSON escape is refused. Each frame parses without its request's
    prompt length (`parse_frame`), so the count of prompt fields comes from the certified bytes;
-4. the cut, started from the view's carry, ends exactly as many requests as the view's `ended` has prompt lengths, in
-   order, each with its prompt_len, and the window holds `received` request frames.
+4. the cut, started from the view's carry-in, ends exactly as many requests as the view's `ended` has prompt lengths,
+   in order, each with its prompt_len, the window holds `received` request frames, and the cut leaves the carry-out's
+   bytes left and prompt fields.
 
 - **The view** (`request_view`) is public in the named gap. The verifier computes it from the opened advice's prompt
   lengths and `received`, as `advised.view` does:
-  - the carry: the request in progress at the window's first request frame, with its ordinal, its bytes left and its
-    prompt fields so far;
-  - `ended`: the prompt lengths of requests carry.q, carry.q + 1, … whose last frame falls in the window, from
-    Σ `active.id_request_frames`, which is `advised.ends` over the link's framing.
+  - the carry-in: the request in progress at the window's first request frame, with its ordinal, its bytes left and
+    its prompt fields so far;
+  - `ended`: the prompt lengths of requests carry_in.q, carry_in.q + 1, … whose last frame falls in the window, from
+    Σ `active.id_request_frames`, which is `advised.ends` over the link's framing;
+  - `received`: the window's request frames;
+  - the carry-out: the request in progress after the window's last request frame, the next window's carry-in.
 
-  At the target the unit reads both under the advice's hiding root, as the egress map is read. No carry-out is
-  checked. On a link whose every ingress window is accepted, each carry is the true one by induction from window 0:
-  every earlier request's prompt_len, and so its frames, is held to the cells, and a carry that disagrees with the
-  cells misplaces the `]}` or a request's head. The ordinals are the verifier's: the cells carry none, and by the same
-  induction the j-th request that ends in a window is the link's request carry.q + j, its arrival ordinal. Streams
-  number from 0, as the advice's q: compact framing's (stream, id) record pins the ordinal to the stream, and
-  CERT-VARLEN aligns `active.Requests`, which streams the k-th request as k + 1 today.
+  At the target the unit reads the view under the advice's hiding root, as the egress map is read.
+- **The statements** (`statements`, `chained`). The verifier computes window w's statement from its own advice: the
+  (root, domain id) the warden registered for w, w and `request_view` of w. A link's statements chain: window 0's
+  carry-in is (0, 0, 0), each carry-out is the next window's carry-in, and the last is between requests. Each
+  IoTieRequest proof is held to its window's statement, so with the carry-out checked, a window's verdict says its
+  cells take the request in progress from the carry-in to the carry-out, and a link's verdicts hold every request's
+  prompt_len, spanning windows or not. Checked alone, a window would accept a carried prompt-field count with any
+  amount added to it and to its first ended request (REDTEAM phase 9 (b)); the previous window's verdict holds its
+  carry-out's count, so the chain refuses it. The ordinals are the verifier's: the cells carry none, and by the same
+  chain the j-th request that ends in a window is the link's request carry_in.q + j, its arrival ordinal q from 0.
+  On the wire the ordinal is q + 1, at least 1 (`active.Requests` streams the k-th request as k + 1, and CERT-VARLEN's
+  compact record carries it, #3650), so a tie that reads a stream or a record's ordinal reads advice request q as
+  ordinal − 1. IoTieRequest reads none: a request frame is on `CANONICAL_STREAM`.
 - **The circuit.** `IoTieRequest` recomputes the cells' root (`NetworkRowsRoot`), holds the own frame to the window
-  (`IoTieRequestOwn`), and scans the cells from the carry with one `IoTieRequestFrame{B}` and one
+  (`IoTieRequestOwn`), and scans the cells from the carry-in with one `IoTieRequestFrame{B}` and one
   `IoTieRequestStep{D, NEW}` a cell. The frame reads its cell against its request's bytes left (0: a request starts
   there) both ways, as a first frame and as a continuation, each with its prompt slots at fixed places. `]}` sits
   where the bytes left put it, so each slot is a field, the end or zero fill by a comparison of the bytes left with a
@@ -515,22 +524,18 @@ window. It outputs 1 exactly when:
   step keeps (left, fields, the requests ended, the request frames, a pad seen in the bucket, ok). The view's prompt
   lengths, each with its index j, are routed by the prover's Beneš switches (`IoTieRoute`, W = 32 + D), and the step
   holds the frame that ends the j-th request to entry j: its index and its count of fields. The count's carry past
-  2^32 is kept, so a sum that wraps is refused. `IoTieRequestEnd` holds the totals to `count` and `received`.
-  Public: the root, its domain id, the window, and in the named gap the carry's left and fields, `ended`, `count` and
-  `received`. Witness: the cells, their salts and the switches.
-- **What N2-ADVICE takes: the verdict** (`io_request.RequestTie`). An advised link's `advised.ends` takes the
-  prompt-length tie only from a `RequestTie` for the same link and advice, and refuses every advised link without
-  one. `verify_link(shape, link, digest, prompt_lens, received, registered, opened)` makes it only when every
-  ingress window w is accepted on `request_view(prompt_lens, received, w, B)`, the verifier's view from the advice
-  whose digest is `digest` (`advised.digest`), against the (root, domain id) the warden registered for window w and
-  the cells and salts that open it. Tonight that is the reference on the certified record, as the verifier of record
-  runs it; once the unit is registered with the proof service, each window's accepted proof. Nothing else makes one
-  but `RequestTie.unverified_for_tests`, which no module outside a `tests` directory calls (a test enforces it), and
-  it can't be changed, copied or pickled. `tie.ends_for(link, digest, prompt_lens, received)` returns the certified
-  ends, in arrival order, only when all four are the tie's. That makes `advised.ends`' premise a check: the link's
-  r-th arrival is an id request of `prompt_lens[r]` prompt ids. Advice request i is arrival order[i] (advice v1's
-  order permutation; v0's is the identity), which the egress tie holds through stream == order[q]. The advised unit
-  itself doesn't change.
+  2^32 is kept, so a sum that wraps is refused. `IoTieRequestEnd` holds the totals to `count` and `received`, and the
+  scan's last bytes left and prompt fields to the carry-out's, with its count below 2^32. Public: the root, its
+  domain id, the window, and in the named gap the carry-in's left and fields, `ended`, `count`, `received` and the
+  carry-out's left and fields (`left_out`, `fields_out`). Witness: the cells, their salts and the switches.
+- **What N2-ADVICE takes: the verdict** (`advised.IoTieVerdict`, #3502). `advised.ends` takes the prompt-length tie
+  only from an `IoTieVerdict(advice, accepted)` keyed to the advice's digest (`advised.digest`), one bit a window,
+  built only from IoTieRequest proofs the verifier verified on its own statements (`statements` from that advice's
+  prompt lengths and `received`, and the warden's registrations, `chained`), and refuses an advised link whose every
+  ingress window isn't accepted. Tonight the reference on the certified record stands in for each proof. That makes
+  `advised.ends`' premise a check: the link's r-th arrival is an id request of `prompt_lens[r]` prompt ids. Advice
+  request i is arrival order[i] (advice v1's order permutation; v0's is the identity), which the egress tie holds
+  through its map's stream. The advised unit itself doesn't change.
 - **The first negative** is REDTEAM phase 6's split (`test_redteam_phase6_split_is_refused`). At B = 4,096, prompts
   of 338 and 16 tokens take 2 frames and 1, released one a bucket. The forged advice swaps them, keeping the total,
   and `advised` accepts it with ends (1, 3) for (2, 3). The tie reads 338 fields in request 0's cells and refuses.
@@ -538,12 +543,46 @@ window. It outputs 1 exactly when:
   circuit reads the same cells (`test_redteam_phase6_frames_read_their_prompt_lengths`: 337 fields and no end, then 1
   and the end, then 16 and the end), and the unit refuses the split at B = 512 and every forgery, cell tamper and view
   tamper the reference does, with a routing that matches the forged counts refused by the entries' indices
-  (`test_the_unit_is_its_reference`).
-- **Not in it:** the prompt ids' binding to `c00.input/ids` (vllm's); the advice's output_len ≤ max_tokens (an
-  optional check); one request a user (`certified_io`'s). The ingress head signing each bucket's completed requests
-  would bind the frames only, not prompt_len exactly, which the advice's prefill rows need.
-- **Cost.** The unit is its parts: `IoTieRequest{512, 4, 2, 1}` is 4,042,108 ANDs, of which the rows are 3,888,916,
-  the own frame 4,095, each of the 7 frames 20,924, each step 265 or 267, the routing 700 and the totals 64.
+  (`test_the_unit_is_its_reference`). REDTEAM's phase-9 cases (`cursor/redteam-phase9-iotiereq-061a`) are
+  regressions in `test_network_certifier_io_request_phase9.py`: the carried count's free addend is refused by the
+  chain, and the prompt ids' values stay open until the ingress-ids tie.
+- **Not in it yet: the prompt ids' values** (REDTEAM phase 9 (c), open: the tie counts each request's prompt fields
+  and checks each is a u32, but the ids the user sent are tied to nothing). The ingress-ids tie below closes it. Also
+  not in it: the advice's output_len ≤ max_tokens (an optional check) and one request a user (`certified_io`'s). The
+  ingress head signing each bucket's completed requests would bind the frames only, not prompt_len exactly, which the
+  advice's prefill rows need.
+- **The ingress-ids tie (a design, not built).** It is the ingress analog of `IoTiePort`: a part of IoTieRequest, so
+  the cells are hashed once, that opens the Commit's `c00.input/ids` rows and holds every computation of a prompt
+  position to the id the user sent there.
+  - **What PROVE-PATH must expose** (the Commit side): `c00.input/ids` of every executed step as one
+    `hm96-sha512/row/v2` row a step under a fresh 192-byte salt: the step's input ids, u32be, in the forward's token
+    order (the advice step's rows in batch order, row r's n_r tokens at offset Σ_{r' < r} n_{r'}), zero past to a
+    fixed width (the engine's `max_num_batched_tokens`), in a dense `frame-v3-sha512` tree of the session's steps.
+    Its root is registered before the draw and bound to the run root and to the compiled circuits' `c00.input/ids`
+    values, which the sampled proofs prove from, as the port's sampled rows are (one tree may hold both). The prover
+    keeps each step's salt and path until the tie's outcome of record.
+  - **The map** (public in the named gap, from the advice's steps; at the target under the advice's hiding root):
+    the steps whose rows hold a token of a prompt position whose field is in the window, which are every scheduled
+    prompt token of every admission (a preempted request's recomputation included) and each prefix-cache hit's
+    source token for a cached position (the `sources` run that computed it). For each opened entry and each field
+    slot it gives a class: one class a prompt position, with a cached position in its source's class, so one opened
+    entry serves every request that reads its KV. For a field slot the map also gives (j, i), which the unit holds to
+    the scan's (the requests ended before the cell, and the request's fields before the slot).
+  - **In the unit:** each field's value is its 10 characters as a u32 (`io_tie._digits`' decode) and each entry's its
+    opened row's (`FrameV3Read` under the Commit's root). The prover's Beneš switches sort the members, the field
+    slots and the entries, by class. The unit checks the classes non-decreasing along the sorted order and equal
+    values within a class. A Beneš network is a permutation under any switches, so each class's members are all
+    there, and the switches can only sort. On a link whose every window is accepted, every computation of request
+    q's prompt id i, and every KV read in place of one, is the id the user sent.
+  - **Cost** at REDTEAM's RIN (N = 5,400, B = 4,096, about 2.0 × 10^6 prompt slots): the fields' decode about
+    1.2 × 10^9; at least 245 step rows of 32 KiB opened (8,192 tokens a step) about 3.9 × 10^9; the sort over
+    about 4 × 10^6 members of about 53 bits (2^22 positions) about 4.8 × 10^9: about 1.0 × 10^10 a window, close to
+    the tie's own 1.14 × 10^10. A cheaper split has PROVE-PATH also register the session's prompt stream, the
+    requests' prompt ids in arrival order, and hold every computation and cache hit to it in the Commit's units. The
+    tie would then read the window's stream entries in order with no map, about 7.3 × 10^9.
+- **Cost.** The unit is its parts: `IoTieRequest{512, 4, 2, 1}` is 4,042,173 ANDs, of which the rows are 3,888,916,
+  the own frame 4,095, each of the 7 frames 20,924, each step 265 or 267, the routing 700 and the totals and carry-out
+  129.
   `IoTieRequestFrame{4096}` is 170,994 (both readings check every prompt slot), the step 277 at D = 13 and the own
   frame 32,767. Every ingress byte is hashed once. At T = 600 and R = 9 (REDTEAM's RIN, N = 5,400), the rows are
   about 1.05 × 10^10, the frames 9.23 × 10^8, the routing 4.6 × 10^6 and the steps 1.5 × 10^6: about 1.14 × 10^10 a
@@ -817,8 +856,8 @@ Definitions above, and their tests:
   cells.
 
 Still to build: the warden writing and committing cells (`active`), the cells' registration, the port's real layout
-and registration (vllm's Commit), the target's map registration and its range read, the ingress tie's pins, and its
-view read under the advice's hiding root.
+and registration (vllm's Commit), the target's map registration and its range read, the ingress tie's view read
+under the advice's hiding root, and the ingress-ids tie with the Commit's `c00.input/ids` rows it reads.
 
 **Open for proofs.**
 - Hidden-position reads (frame and port) under the one soundness theorem. In v4 every read is at a public position

@@ -4,12 +4,7 @@ ingress cells, by the reference and by the Boolean Definitions. The first negati
 N2-ADVICE's advised floor accepts."""
 from __future__ import annotations
 
-import copy
-import hashlib
-import os
-import pickle
 import random
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -82,106 +77,99 @@ def test_redteam_phase6_split_is_refused():
 
 @pytest.mark.parametrize("own", [0, 1])
 def test_requests_across_windows_are_their_own(own):
-    """Requests that straddle windows carry into the next (`request_view`'s carry), with and without the own frame.
-    Each forgery is refused in the window where its request ends: a swap that keeps the total, and lengths one off
-    either way. Each keeps every request's frames, so `advised.ends` doesn't move and only the tie sees it."""
+    """Requests that straddle windows carry from one into the next (`request_view`'s carry-out, the next window's
+    carry-in), with and without the own frame. Each forgery, a swap that keeps the total or lengths one off either
+    way, is refused in every window: in window 0 by its carry-out (request 1's bytes left), after it by its carry-in
+    and ends. Each keeps every request's frames, so `advised.ends` doesn't move and only the tie sees it."""
     shape = Q.Shape(512, 4, 3, OWN=own)
     windows, received = _link(shape)
-    assert [v.carry.left > 0 for v in (Q.request_view(PL, received, w, 512) for w in range(3))] == [False, True, True]
+    views = [Q.request_view(PL, received, w, 512) for w in range(3)]
+    assert [v.carry_in.left > 0 for v in views] == [False, True, True]
+    assert [v.carry_out for v in views[:-1]] == [v.carry_in for v in views[1:]] and views[-1].carry_out.left == 0
     assert _verdicts(shape, windows, received, PL) == [1, 1, 1]
     for forged in FORGED:
         assert Q.ends(forged, 512) == Q.ends(PL, 512)
-        assert _verdicts(shape, windows, received, forged) == [1, 0, 0]
+        assert _verdicts(shape, windows, received, forged) == [0, 0, 0]
 
 
 FORGED = ((5, 100, 12, 60, 1), (5, 61, 12, 99, 1), (5, 59, 12, 101, 1))
-DIGEST = hashlib.sha512(b"an advised link's advice").hexdigest()
+NO_VIEW = Q.RequestView(Q.Carry(0, 0, 0), (), 0, Q.Carry(0, 0, 0))
 
 
 def _record(shape, windows):
     """The warden's registration of each window, (root, domain id), and the cells and salts that open it."""
-    insts = [Q.instance(shape, cells, Q.RequestView(Q.Carry(0, 0, 0), (), 0), w) for w, cells in enumerate(windows)]
+    insts = [Q.instance(shape, cells, NO_VIEW, w) for w, cells in enumerate(windows)]
     return [(i.root, i.domain) for i in insts], [(i.cells, i.salts) for i in insts]
 
 
+def _accepted(shape, stmts, opened):
+    """Each window's verdict on its statement, the reference on the warden's opened cells and salts."""
+    return [Q.reference(shape, Q.Instance(cells, salts, s.root, s.domain, s.view, s.window))
+            for s, (cells, salts) in zip(stmts, opened, strict=True)]
+
+
 @pytest.mark.parametrize("own", [0, 1])
-def test_a_link_whose_every_window_is_accepted_gets_its_tie(own):
-    """`verify_link` makes the link's `RequestTie` only when every window is accepted on the verifier's own views, and
-    the tie hands its ends only to the advised link it was verified for."""
+def test_a_links_statements_chain_from_window_0(own):
+    """The verifier's statements for an ingress link, one a window from one advice (`statements`): each the warden's
+    registration and the window's view, chained from (0, 0, 0), each carry-out the next window's carry-in and the
+    last between requests (`chained`). Every window is accepted on the honest advice's, and each forged advice's are
+    chained but refused in a window, so `advised.IoTieVerdict` built from them accepts no forgery."""
     shape = Q.Shape(512, 4, 3, OWN=own)
     windows, received = _link(shape)
     registered, opened = _record(shape, windows)
-    tie = Q.verify_link(shape, "in-0", DIGEST, PL, received, registered, opened)
-    assert (tie.link, tie.digest, tie.shape, tie.prompt_lens, tie.received, tie.basis) == \
-        ("in-0", DIGEST, shape, PL, received, "reference")
-    assert tie.ends == Q.ends(PL, 512) == tie.ends_for("in-0", DIGEST, list(PL), list(received))
+    stmts = Q.statements(shape, PL, received, registered)
+    assert [(s.window, s.root, s.domain) for s in stmts] == [(w, r, d) for w, (r, d) in enumerate(registered)]
+    assert [s.view for s in stmts] == [Q.request_view(PL, received, w, 512) for w in range(3)]
+    assert Q.chained(stmts) and _accepted(shape, stmts, opened) == [1, 1, 1]
+    assert [n for s in stmts for n in s.view.ended] == list(PL)
     for forged in FORGED:
-        with pytest.raises(ValueError, match="refuses ingress window 1"):
-            Q.verify_link(shape, "in-0", DIGEST, forged, received, registered, opened)
-    other = DIGEST[:-1] + ("0" if DIGEST[-1] != "0" else "1")
-    for args in (("in-1", DIGEST, PL, received), ("in-0", other, PL, received),
-                 ("in-0", DIGEST, FORGED[0], received), ("in-0", DIGEST, PL, received[::-1])):
-        with pytest.raises(ValueError, match="isn't the advised link's"):
-            tie.ends_for(*args)
-    record = [(registered[::-1], opened), (registered, opened[::-1]), (registered[:2], opened[:2]),
-              (registered, [(c, s[::-1]) for c, s in opened])]
-    for reg, op in record:
-        with pytest.raises(ValueError):
-            Q.verify_link(shape, "in-0", DIGEST, PL, received, reg, op)
+        f = Q.statements(shape, forged, received, registered)
+        assert Q.chained(f) and _accepted(shape, f, opened) == [0, 0, 0]
+    v = stmts[1].view
+
+    def at_1(**kw):
+        return [stmts[0], stmts[1]._replace(view=v._replace(**kw)), stmts[2]]
+
+    unchained = {"out of order": stmts[::-1], "a window missing": stmts[:1] + stmts[2:], "none": (),
+                 "cut mid-request": stmts[:2], "renumbered": [s._replace(window=s.window + 1) for s in stmts],
+                 "a field more carried in": at_1(carry_in=v.carry_in._replace(fields=v.carry_in.fields + 1)),
+                 "a byte more carried in": at_1(carry_in=v.carry_in._replace(left=v.carry_in.left + 1)),
+                 "a request more ended": at_1(carry_out=v.carry_out._replace(q=v.carry_out.q + 1)),
+                 "a field more carried out": at_1(carry_out=v.carry_out._replace(fields=v.carry_out.fields + 1))}
+    assert [k for k, s in unchained.items() if Q.chained(s)] == []
     with pytest.raises(ValueError, match="windows receive"):
-        Q.verify_link(shape, "in-0", DIGEST, PL[:-1], received, registered, opened)
-    with pytest.raises(ValueError, match="advice digest"):
-        Q.verify_link(shape, "in-0", DIGEST.upper(), PL, received, registered, opened)
-
-
-def test_redteam_phase6_split_gets_no_tie():
-    """REDTEAM phase 6's split, at the verdict: the forged advice's prompt lengths get no `RequestTie`, so an advised
-    link that needs one is refused; the honest advice's get theirs."""
-    shape = Q.Shape(4096, 4, 9)
-    SHORT, LONG = 16, 338
-    windows, received = _link(shape, (LONG, SHORT), (1, 1, 1, 0))
-    registered, opened = _record(shape, windows)
-    assert Q.verify_link(shape, "in-0", DIGEST, (LONG, SHORT), received, registered, opened).ends == (2, 3)
-    with pytest.raises(ValueError, match="refuses ingress window 0"):
-        Q.verify_link(shape, "in-0", DIGEST, (SHORT, LONG), received, registered, opened)
-
-
-def test_a_request_tie_is_made_only_by_verifying():
-    """A `RequestTie` comes from `verify_link` or the named test constructor, never from fields a caller supplies, and
-    can't be changed or copied once made."""
-    shape = Q.Shape(512, 4, 3)
-    with pytest.raises(TypeError, match="verify_link"):
-        Q.RequestTie("in-0", DIGEST, shape, PL, (3, 6, 3), "reference")
-    with pytest.raises(TypeError, match="verify_link"):
-        Q.RequestTie._make(object(), "in-0", DIGEST, shape, PL, (3, 6, 3), "reference")
-    tie = Q.RequestTie.unverified_for_tests("in-0", DIGEST, shape, PL, (3, 6, 3))
-    assert tie.basis == "test" and tie.ends == Q.ends(PL, 512)
-    for name in Q.RequestTie.__slots__:
-        with pytest.raises(AttributeError, match="immutable"):
-            setattr(tie, name, getattr(tie, name))
-    with pytest.raises(TypeError, match="verify the link again"):
-        copy.copy(tie)
-    with pytest.raises(TypeError, match="verify the link again"):
-        pickle.dumps(tie)
-    for bad in ("", DIGEST[:-2], DIGEST.upper(), "g" * 128, bytes.fromhex(DIGEST)):
-        with pytest.raises(ValueError, match="advice digest"):
-            Q.RequestTie.unverified_for_tests("in-0", bad, shape, PL, (3, 6, 3))
+        Q.statements(shape, PL[:-1], received, registered)
+    for reg, rec in ((registered[:2], received), ([], ()), (registered, received[:2])):
+        with pytest.raises(ValueError, match="registered"):
+            Q.statements(shape, PL, rec, reg)
     with pytest.raises(ValueError, match="u32s"):
-        Q.RequestTie.unverified_for_tests("in-0", DIGEST, shape, (5, -1), (3, 6, 3))
+        Q.statements(shape, (5, -1), received, registered)
 
 
-def test_only_tests_make_an_unverified_request_tie():
-    """No module of `verity` outside a `tests` directory calls `RequestTie.unverified_for_tests`, so every tie the
-    verifier reads is `verify_link`'s."""
-    root, callers = Path(__file__).resolve().parents[4], []
-    for d, subdirs, files in os.walk(root):
-        subdirs[:] = [s for s in subdirs if s not in ("tests", ".lake", "__pycache__", "node_modules", "build")]
-        for f in files:
-            p = Path(d, f)
-            if f.endswith(".py") and p.name != "io_request.py" and \
-                    "unverified_for_tests" in p.read_text("utf-8", errors="replace"):
-                callers.append(str(p.relative_to(root)))
-    assert root.name == "verity" and callers == []
+#: a request that spans a whole window at T = 4, R = 2: request 1 (150 tokens, 5 frames) from window 0 to window 2
+SPAN, SPAN_COUNTS = (5, 150, 5), (1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 0, 0)
+
+
+def _wraps(v):
+    """`v`, a view in which no request ends, with its carry-in's prompt fields raised so the window's count wraps
+    2^32, and its carry-out's the wrapped count: refused because the scan's count is past 2^32."""
+    up = (1 << 32) - v.carry_out.fields
+    return v._replace(carry_in=v.carry_in._replace(fields=v.carry_in.fields + up),
+                      carry_out=v.carry_out._replace(fields=0))
+
+
+def test_a_window_no_request_ends_in_holds_its_carry_out():
+    """Window 1 of `SPAN` ends no request: its verdict holds only the carry-out, every byte and prompt field of the
+    request in progress, which the next window's carry-in must be."""
+    shape = Q.Shape(512, 4, 2)
+    windows, received = _link(shape, SPAN, SPAN_COUNTS)
+    v = Q.request_view(SPAN, received, 1, 512)
+    assert v.ended == () and v.carry_in.q == v.carry_out.q == 1 and v.carry_out.fields > v.carry_in.fields > 0
+    inst = Q.instance(shape, windows[1], v, 1)
+    assert Q.reference(shape, inst) == 1
+    for bad in (_wraps(v), v._replace(carry_out=v.carry_out._replace(fields=v.carry_out.fields - 1)),
+                v._replace(carry_out=v.carry_in), v._replace(carry_out=Q.Carry(2, 0, 0))):
+        assert Q.reference(shape, inst._replace(view=bad)) == 0, bad
 
 
 def _tamper(cell, at, new):
@@ -262,17 +250,22 @@ def test_a_cell_or_salt_other_than_the_wardens_is_refused():
 
 
 def _view_tampers(v):
-    """(what, view) for each way a view can differ from the cells'. The carry's ordinal isn't one: the cells carry
-    none, and the verifier computes it."""
-    q, left, fields = v.carry
+    """(what, view) for each way a view can differ from the cells'. The carries' ordinals aren't: the cells carry
+    none, and the verifier computes them."""
+    q, left, fields = v.carry_in
+    oq, oleft, ofields = v.carry_out
     wrap = (1 << 32) - 1 - fields
     return [("a frame more", v._replace(received=v.received + 1)),
             ("a frame less", v._replace(received=v.received - 1)),
-            ("a field more carried", v._replace(carry=Q.Carry(q, left, fields + 1))),
-            ("a slot more left", v._replace(carry=Q.Carry(q, left + 11, fields))),
-            ("no carry", v._replace(carry=Q.Carry(q, 0, 0))),
-            ("carried fields whose sum wraps 2^32", v._replace(carry=Q.Carry(q, left, fields + wrap),
+            ("a field more carried in", v._replace(carry_in=Q.Carry(q, left, fields + 1))),
+            ("a slot more left in", v._replace(carry_in=Q.Carry(q, left + 11, fields))),
+            ("no carry-in", v._replace(carry_in=Q.Carry(q, 0, 0))),
+            ("carried fields whose sum wraps 2^32", v._replace(carry_in=Q.Carry(q, left, fields + wrap),
                                                                ended=((v.ended[0] + wrap) % (1 << 32),) + v.ended[1:])),
+            ("a field more carried out", v._replace(carry_out=Q.Carry(oq, oleft, ofields + 1))),
+            ("a field fewer carried out", v._replace(carry_out=Q.Carry(oq, oleft, ofields - 1))),
+            ("a slot more left out", v._replace(carry_out=Q.Carry(oq, oleft + 11, ofields))),
+            ("no carry-out", v._replace(carry_out=Q.Carry(oq, 0, 0))),
             ("a request fewer", v._replace(ended=v.ended[:-1])), ("a request more", v._replace(ended=v.ended + (1,))),
             ("two requests swapped", v._replace(ended=tuple(reversed(v.ended))))]
 
@@ -283,6 +276,7 @@ def test_a_view_other_than_the_cells_is_refused():
     v = Q.request_view(PL, received, 1, 512)
     inst = Q.instance(shape, windows[1], v, 1)
     assert Q.reference(shape, inst) == 1 and len(set(v.ended)) == len(v.ended) == 2
+    assert v.carry_in.left > 0 and v.carry_out.left > 0 and v.carry_out.fields > 0
     for what, bad in _view_tampers(v):
         assert Q.reference(shape, inst._replace(view=bad)) == 0, what
 
@@ -374,6 +368,26 @@ def test_redteam_phase6_frames_read_their_prompt_lengths():
     assert HC.ands(bind(Q.IoTieRequestFrame, B=4096)) == 170_994
 
 
+def test_the_end_holds_the_totals_and_the_carry_out():
+    """`IoTieRequestEnd` on a scan's state: 1 iff ok, over clear, and the requests ended, request frames, bytes left and
+    prompt fields are count, received, left_out and fields_out, each one bit off in turn."""
+    def state(left, fields, over, j, frames, ok):
+        return (HC._int_bits(left, 32) + HC._int_bits(fields, 32) + [over] + HC._int_bits(j, 32) +
+                HC._int_bits(frames, 32) + [0, ok])
+
+    honest = (310, 12, 0, 3, 7, 1)
+    cases = [(honest, (3, 7, 310, 12), 1), ((310, 12, 1, 3, 7, 1), (3, 7, 310, 12), 0),
+             ((310, 12, 0, 3, 7, 0), (3, 7, 310, 12), 0)]
+    for k in range(4):
+        for b in (0, 31):
+            pub = [3, 7, 310, 12]
+            pub[k] ^= 1 << b
+            cases.append((honest, tuple(pub), 0))
+    args = [[state(*s) for s, _, _ in cases]] + [[HC._int_bits(p[k], 32) for _, p, _ in cases] for k in range(4)]
+    out = evaluate_bits(bind(Q.IoTieRequestEnd), *[_bits(a) for a in args])
+    assert [int(b) for b in np.asarray(out).reshape(-1)] == [w for _, _, w in cases]
+
+
 def _unit(shape, cases):
     fn = bind(Q.IoTieRequest, B=shape.B, T=shape.T, R=shape.R, OWN=shape.OWN)
     args = [Q.arguments(shape, i, bits) for i, bits in cases]
@@ -384,7 +398,7 @@ def _unit(shape, cases):
 def _swapped_routing(shape, inst):
     """The view's two prompt lengths swapped, with the switches that route each ending cell the entry carrying its
     count of fields."""
-    at = Q.cut(shape, inst.cells, inst.view.carry, inst.window).at
+    at = Q.cut(shape, inst.cells, inst.view.carry_in, inst.window).at
     perm, taken = [at[1], at[0]], set(at)
     perm += [i for i in range(shape.M) if i not in taken]
     return inst._replace(view=inst.view._replace(ended=inst.view.ended[::-1])), IT.benes(perm)
@@ -394,12 +408,13 @@ def _swapped_routing(shape, inst):
 @pytest.mark.parametrize("own", [0, 1])
 def test_the_unit_is_its_reference(own):
     """`IoTieRequest` against `reference` on the link's three windows, honest and under each forged split, REDTEAM's
-    phase-6 split at B = 512, each way a cell, a salt, the root or the view can differ, random switches, and a
-    two-sided tamper: the view's two prompt lengths swapped with switches that route each ending cell the entry with
-    its count, refused by the entry's index. What the frame's test can't reach is the wiring of each cell into its
-    bucket's row and its frame, the scan's carry from cell to cell and across bucket boundaries, the routing of the
-    view's prompt lengths to the cells that end requests, the own frame, and the totals. Building the rows' SHA-512
-    bodies takes most of its time."""
+    phase-6 split at B = 512, each way a cell, a salt, the root or the view can differ, `SPAN`'s windows (one ends
+    no request) and a count that wraps 2^32 in it, random switches, and a two-sided tamper: the view's two prompt
+    lengths swapped with switches that route each ending cell the entry with its count, refused by the entry's index.
+    What the frame's test can't reach is the wiring of each cell into its bucket's row and its frame, the scan's
+    carry from cell to cell and across bucket boundaries, the routing of the view's prompt lengths to the cells that
+    end requests, the own frame, and the totals and the carry-out. Building the rows' SHA-512 bodies takes most of its
+    time."""
     shape = Q.Shape(512, 4, 2, OWN=own)
     windows, received = _link(shape)
     insts = [i for pl in (PL, *FORGED) for i in _instances(shape, windows, received, pl)]
@@ -411,8 +426,11 @@ def test_the_unit_is_its_reference(own):
     insts += [honest._replace(view=v) for _, v in _view_tampers(honest.view)]
     other = insts[0]
     insts += [honest._replace(salts=(honest.salts[1],) + honest.salts[1:]), honest._replace(root=other.root)]
+    span = _instances(shape, *_link(shape, SPAN, SPAN_COUNTS), SPAN)
+    insts += span + [span[1]._replace(view=_wraps(span[1].view))]
     want = [Q.reference(shape, i) for i in insts]
-    assert want[:14] == [1, 1, 1] + [1, 0, 0] * 3 + [1, 0] and sum(want) == 7 and len(insts) >= 40
+    assert want[:14] == [1, 1, 1] + [0, 0, 0] * 3 + [1, 0] and want[-4:] == [1, 1, 1, 0] and sum(want) == 7
+    assert len(insts) >= 50
     swapped, bits = _swapped_routing(shape, honest)
     rng = random.Random(9)
     cases = [(i, Q.switches(shape, i)) for i in insts]
