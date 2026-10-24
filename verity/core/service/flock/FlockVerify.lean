@@ -512,19 +512,6 @@ def recInnerCmd (args : List String) : IO UInt32 := do
   | .ok i => IO.println { i with sparse, stacked }.toJson.compress; return 0
   | .error e => IO.eprintln s!"rec-inner: {e}"; return 1
 
-/-- `rec-coins --rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR`: what check 5
-reads of the inner session (`RecCoins.Inner.toJson`), set up once from the inner statement, as one `verity/rec-coins/v1`
-line, for `verify --rec-inner-coins F --rec-inner-session DIR` in place of the inner statement's three files. -/
-def recCoinsCmd (args : List String) : IO UInt32 := do
-  match ← RecCoins.filesOnly args with
-  | .ok (some f) => match RecCoins.Inner.load "the inner session" f with
-    | .ok inn => IO.println (inn.toJson f.record).compress; return 0
-    | .error e => IO.eprintln e; return 1
-  | .ok none =>
-    IO.eprintln "usage: flock-verify rec-coins --rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR"
-    return 2
-  | .error e => IO.eprintln e; return 2
-
 /-- `rec-transcript --rec-inner-transcript F --rec-inner-session DIR [--rec-inner F]`: what `verify` holds of the inner
 session's transcript (`RecVStar.innerCommits`), as one `RECTRANSCRIPT` line: each rep's message rounds, and each stream's
 message rounds and its tops' node counts by level; the circuit table's tops and the link points, the record's held to the
@@ -709,8 +696,8 @@ a public file whose header names an identifier its own `--identifier F` (§16.10
 shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`, V*'s, and no lookup table is held), which of V*'s statements the session is `--rec-part J` (`J` indexing the list `rec-statements`
 prints from 0: the levels, then the algebra's parts, then candidate 3's, then the level-0 cap) and its own bindings `--rec-bindings F` (from
 `verity_flock.rec_bindings`, which META's must equal; `RecVStar.checkStmt`), and a V* statement (a `rec-open/…` or `rec-residuals/…` unit) the inner
-statement and session its coefficients are checked against (`RecCoins.check`; or, with the session, `rec-coins`'s record
-of what that check reads of them, `--rec-inner-coins`), and a statement reading a `rec-c<k>` the
+statement and session its coefficients are checked against (`RecCoins.check`; `--rec-inner-coins` is refused,
+`RecCoins.refuseCoins`), and a statement reading a `rec-c<k>` the
 coin server's record of the inner session whose `c_k` its rows must be (`--rec-inner-transcript`,
 `RecVStar.checkPubRows`), and one of V*'s parts the verifier's record of V*'s shared rows, which its row ports must be
 (`--rec-rows`, `RecVStar.checkRows`). A V* statement whose check 5 reads the link points (a `rec-open/…`,
@@ -745,7 +732,7 @@ deployed prover writes after the pair (`Tags.upstreamPlain`, PROTOCOL.md §8.1),
 the tag (`verifyFiles (plainBytes true)`), while S17 binds the record's `proof_sha` to the file as received; each form is
 refused where the other is pinned. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]] | --rec-inner-coins F] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] [--upstream-plain] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let templated := Tags.templated.any (·.name == stmtName)
@@ -944,7 +931,7 @@ rows at what the inner transcript fixes are the `b ‖ c` the verifier holds (`R
 and its rows of the circuit table's tops the coin server's (`RecVStar.checkTopRows`, `RecVStar.innerLink`, which holds the
 record's link points to the coin server's).
 Its verifier-registered values are checked against the verifier's coins (`RecCoins.check`) when it holds what that check
-reads: the inner statement and session (`--rec-inner-public` and its three, or `--rec-inner-coins`), or for R's levels and
+reads: the inner statement and session (`--rec-inner-public` and its three; `--rec-inner-coins` is refused), or for R's levels and
 opening the inner transcript and the verifier's inner shape alone; with the inner statement and session, a statement
 whose check 5 reads the link points needs the inner transcript, and a circuit-table level's `out` reads the coin server's
 tops (`RecCoins.checkLink`). Each level's cap statement (`rec-cap/…`) is checked against its registered reads and
@@ -953,7 +940,7 @@ RecSparse shape), every statement needs the inner statement's files, whose spars
 (`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]] | --rec-inner-coins F]] [--coins seed|os]"; return 2
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins seed|os]"; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let templated := Tags.templated.any (·.name == stmtName)
   let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
@@ -999,7 +986,7 @@ def statementCmd (args : List String) : IO UInt32 := do
   let recLink ← match ← recLinkOfSession args with
     | .ok l => pure l
     | .error e => IO.eprintln e; return 2
-  let recCoins ← if (argOf args "--rec-inner-public").isSome || (argOf args "--rec-inner-coins").isSome then
+  let recCoins ← if (argOf args "--rec-inner-public").isSome || args.contains "--rec-inner-coins" then
       match ← RecCoins.filesInput args with
       | .ok f => pure f
       | .error e => IO.eprintln e; return 2
@@ -1500,7 +1487,6 @@ def main (args : List String) : IO UInt32 := do
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | "rec-inner" :: rest => recInnerCmd rest
-  | "rec-coins" :: rest => recCoinsCmd rest
   | "rec-statements" :: rest => recStatementsCmd rest
   | "rec-transcript" :: rest => recTranscriptCmd rest
   | "rec-record" :: rest => recRecordCmd rest
