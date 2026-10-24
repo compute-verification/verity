@@ -1,5 +1,6 @@
 import Definitions.Pouw.Fp8Atom.H1TLemmas
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.Fp8Atom.Fp32
 
 /-!
 # H-1T: the statements `H1TRunningWords` still needs (staging, unpinned)

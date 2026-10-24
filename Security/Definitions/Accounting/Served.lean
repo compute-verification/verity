@@ -372,24 +372,6 @@ def Form.Links {ι : Type} (Cd : Declared ι) (cls : ℕ → Cls) : Form → ℕ
   | .yOpen, i => ∃ g j, g < Cd.dag.length ∧ Cd.unit g = Cd.unit i ∧ Cd.Reads g j ∧ cls j = .served
   | .perCall, i => ∃ j, j < Cd.dag.length ∧ (cls j = .outZ ∨ cls j = .outY) ∧ Cd.unit j = Cd.unit i
 
-/-- **The served `y` is the proved product's**, by form, where `fused` is the fused kernel's premise (the `y` it serves
-is `dequant` of the `z` rows it commits): `beside` has no link (`False`); `zTree` has it exactly under `fused`, a
-premise on code the prover runs, which no run-time check reaches; `yOpen` has it from `Tie.linked` and the receipt
-Program's `dequant(z) = y` check over the opened `y` (a fact of that Program's Definition, which doesn't exist yet),
-with no premise, given the run-time check that the unit's `served` words open under the Commit's `y` root: `Tie`
-doesn't tell a `served` run input from an `act` one. `perCall` has it from `Tie.linked` and the unit's own
-`dequant(z)` output, given the run-time check that the call's Commit `y` root is its units' `y` root. Under
-`ValueChecked` a `zTree` unit commits its `y` too, a word it computes or its record's, which its `check` words hold to
-`dq` of its product. Its link is then that run-time check, and `zTree` needs no premise on the kernel: `fused` is the
-link of a `zTree` window that isn't value-checked, and `CreditTie` doesn't read `ServedLink`. It is an equality of
-values: useful-work credit needs it, and it doesn't give that credit (`ValueChecked`, the module docstring). Integrity
-reads none of it. -/
-def Form.ServedLink (fused : Prop) : Form → Prop
-  | .beside => False
-  | .zTree => fused
-  | .yOpen => True
-  | .perCall => True
-
 /-- **Declared circuit `Cd`, its gates classed by `cls`, is served window `L` in form `F`**:
 * `calls`, `rounds`, `round`: its call sites are the window's `steps × calls` calls, numbered step by step, its rounds
   the form's (`Form.rounds`), and each call site's round its form's (`Form.roundOf`: its step's, or `perCall`'s own);

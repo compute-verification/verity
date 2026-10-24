@@ -1,6 +1,8 @@
 import Proofs.Population.Determinacy
 import Proofs.Core.Circuit
 import Proofs.Population.Partition
+import Proofs.Population.DataflowDefs
+import Proofs.Population.PartitionDefs
 
 /-!
 # Sampled proofs' partitions as populations

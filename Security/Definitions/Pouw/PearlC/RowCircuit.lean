@@ -209,11 +209,6 @@ def Arg.reads : Arg → List ℕ
   | .g a _ => [a]
   | .c _ => []
 
-/-- An operand's value, the gates' values being `V`. -/
-def Arg.eval (ops : RowOps) (V : ℕ → ℕ) : Arg → ℕ
-  | .g a w => w.eval ops (V a)
-  | .c v => v
-
 /-- A computed gate: its primitive and its operands in order. -/
 structure RGate where
   prim : Prim

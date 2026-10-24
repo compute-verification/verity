@@ -37,22 +37,7 @@ def rn (x : ℚ) : ℚ := (if x < 0 then -1 else 1) * (roundEven (|x| / ulp x) :
 /-- **The FP32 add** `RN_f32(x + y)`. -/
 def rnAdd (x y : ℚ) : ℚ := rn (x + y)
 
-/-- A value with a 24-bit significand at some exponent. -/
-def Representable (x : ℚ) : Prop := ∃ m e : ℤ, |m| < 2 ^ 24 ∧ x = m * 2 ^ e
-
 /-- A finite FP32 word's value; `none` for NaN and the infinities. -/
 def wordQ (w : Nat) : Option ℚ := (fp32Value w).finite?.map Term.value
-
-/-- An FP32 add conformance vector: `c` is the word IEEE binary32 addition writes for the words `a` and `b`. -/
-structure AddVec where
-  a : Nat
-  b : Nat
-  c : Nat
-
-/-- An add vector holds: all three words are finite and `rnAdd` maps the values of `a` and `b` to the value of `c`. -/
-def AddVec.holds (v : AddVec) : Bool :=
-  match wordQ v.a, wordQ v.b, wordQ v.c with
-  | some x, some y, some z => decide (rnAdd x y = z)
-  | _, _, _ => false
 
 end Pouw.Fp8Atom

@@ -24,9 +24,6 @@ def Pipeline.k (p : Pipeline) : Nat := p.groups.sum
 /-- `models.HOPPER_BF16_WGMMA_K16`: one accumulator coordinate of `wgmma.mma_async...m64nNk16.f32.bf16.bf16` (H100). -/
 def HOPPER_BF16_WGMMA_K16 : Pipeline := { groups := [16], width := 26, zeroExponent := -133 }
 
-/-- `models.HOPPER_BF16_M16N8K16`: `mma.sync.m16n8k16.bf16` on Hopper (H100) and on sm_120 (RTX 5090). -/
-def HOPPER_BF16_M16N8K16 : Pipeline := { groups := [16], width := 26, zeroExponent := -133 }
-
 /-- `models.AMPERE_BF16_M16N8K16`: `mma.sync.m16n8k16.bf16` on Ampere (A100). -/
 def AMPERE_BF16_M16N8K16 : Pipeline := { groups := [8, 8], width := 25, zeroExponent := -132 }
 

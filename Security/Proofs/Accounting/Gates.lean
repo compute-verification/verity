@@ -11,6 +11,7 @@ import Mathlib.Tactic.IntervalCases
 import Mathlib.Tactic.NormNum.Basic
 import Mathlib.Tactic.Ring
 import Models.Accounting.Guarantees.Gates
+import Proofs.Accounting.Gates.Model
 
 /-!
 # The circuit model's window and lower bounds, proved

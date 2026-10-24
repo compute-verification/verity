@@ -1,4 +1,5 @@
 import Proofs.Pouw.TileBound.Proofs
+import Proofs.Pouw.TileBound.DefsDefs
 
 /-!
 # A program that beats the honest count in the abstract slot model (a later bundle; outside the 36 merged pins)

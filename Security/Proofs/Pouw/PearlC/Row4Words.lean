@@ -1,5 +1,7 @@
 import Proofs.Pouw.PearlC.RowCircuit
 import Proofs.Pouw.PearlC.Tile4Circuit
+import Proofs.Pouw.PearlC.RowCircuitDefs
+import Proofs.Pouw.PearlC.TileCircuitDefs
 
 /-!
 # Pearl-C4's row units compute their codes, scale bytes, `P_A` and `P_B` (proofs)

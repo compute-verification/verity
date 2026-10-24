@@ -166,15 +166,6 @@ namespace Op
 
 variable {ι : Type}
 
-/-- `ρ_b(x) = ⌊x/2^b⌋`, the rounding. -/
-def round (b : ℕ) : Op ι := budgeted .rounding fun v => v.headD 0 / 2 ^ b
-
-/-- `[a ≤ b]`, a comparison. -/
-def le : Op ι := budgeted .compareSelect fun v => if v.headD 0 ≤ v.tail.headD 0 then 1 else 0
-
-/-- `c ≠ 0 ? a : b`, a selection. -/
-def select : Op ι := budgeted .compareSelect fun v => if v.headD 0 ≠ 0 then v.tail.headD 0 else v.tail.tail.headD 0
-
 /-- The position a gather reads in a column of `V` words at index `z`: `z` itself, or `V`, past the column, for a
 negative `z` (the evaluator reads its token as s32 and takes the fill outside `[0, V)`); or for a table read of `n`
 bits its low `n` bits (two's complement's, `z mod 2^n`). -/
@@ -282,13 +273,6 @@ inductive Site
   | other
   deriving DecidableEq, Repr
 
-/-- **The committed words one checkpoint is split into**: `2` for an H1 + fx1 tile's receipt word (a checkpoint's two
-halves, both of role `served t` at one `t`), `1` at any other site. A floor priced per checkpoint, as a dot kind's is,
-counts once across a checkpoint's parts, `1/parts` a word. -/
-def Site.parts : Site → ℕ
-  | .receipt .. => 2
-  | _ => 1
-
 /-- Tail atom `j`'s group, among groups of the given atom counts numbered from `g`. -/
 def tailRole : List ℕ → ℕ → ℕ → Role
   | [], _, _ => .other
@@ -375,9 +359,6 @@ def bits : ℕ := Nat.clog 2 g.size
 /-- What the counting bounds charge it: its declared interval's size if it is charged, else 1. -/
 def charge : ℕ := if g.op.charged then g.size else 1
 
-/-- Its charged bits: its declared bits if it is charged, else 0. -/
-def chargedBits : ℕ := if g.op.charged then g.bits else 0
-
 /-- `g'` computes as `g` does but for an s8-family step's clamp or wrap: the same operands, and the same operation
 but for an s8-family step's `satfinite` (`BlackwellS8ImmaDot32_v1`'s clamp against `BlackwellU8S8ImmaDot32_v1`'s
 wrap). -/
@@ -394,12 +375,6 @@ def values (C : Dag ι) (x : ι → ℤ) : List ℤ := C.foldl (fun vs g => vs +
 /-- Gate `i`'s value on input `x`. -/
 def val (C : Dag ι) (x : ι → ℤ) (i : ℕ) : ℤ := (values C x).getD i 0
 
-/-- The committed outputs: the committed gates, in canonical order. -/
-def committed (C : Dag ι) : List ℕ := (List.range C.length).filter fun i => C[i]?.any Gate.commit
-
-/-- Canonical order: every gate's operands are earlier gates. -/
-def Topological (C : Dag ι) : Prop := ∀ i (h : i < C.length), ∀ j ∈ C[i].args, j < i
-
 /-- Slot `i` is read by an uncharged input of `C`: a registered or coin input. -/
 def FreeInput (C : Dag ι) (i : ι) : Prop := ∃ g ∈ C, ∃ b, b ≠ .run ∧ g.op = .input b i
 
@@ -409,9 +384,6 @@ def InWindow (C : Dag ι) (x : ι → ℤ) : Prop := ∀ i (h : i < C.length), C
 
 /-- The product of the charges: the number of joint values the charged gates' declared intervals allow. -/
 def volume (C : Dag ι) : ℕ := (C.map Gate.charge).prod
-
-/-- The charged bits: the declared bits of the run inputs and budgeted gates. -/
-def chargedBits (C : Dag ι) : ℕ := (C.map Gate.chargedBits).sum
 
 /-! ## Interval analysis: the window the property proves -/
 
@@ -473,14 +445,6 @@ def DeclaredHold (C : Dag ι) (x : ι → ℤ) : Prop :=
     C[i].lo ≤ C[i].raw x (values (C.take i) x) ∧ C[i].raw x (values (C.take i) x) ≤ C[i].hi
 
 /-! ## Fan-in: MULT-LB's lane programs -/
-
-/-- Every budgeted gate but a gather reads at most `f` operands (a gather reads its index and the one word it
-selects). -/
-def FanIn (f : ℕ) (C : Dag ι) : Prop :=
-  ∀ g ∈ C, g.op.charged → g.op.budget ≠ some .gather → g.args.length ≤ f
-
-/-- Every value's declared interval lies within `[−2^w, 2^w)`: `w` bits and a sign, so s32 is `Width 31`. -/
-def Width (w : ℕ) (C : Dag ι) : Prop := ∀ g ∈ C, -2 ^ w ≤ g.lo ∧ g.hi < 2 ^ w
 
 /-- **The chain's restriction** (the red team's `B`): every budgeted gate reads at most `B` operand bits, the declared
 bits of the operands it reads. A gather is exempt: its value is one of its operands. -/

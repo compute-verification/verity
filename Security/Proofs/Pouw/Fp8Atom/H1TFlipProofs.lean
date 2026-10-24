@@ -1,6 +1,9 @@
 import Mathlib.Tactic.FinCases
 import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 import Proofs.Pouw.Fp8Atom.H1TProofs
+import Proofs.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.Fp8Atom.H1TVecDefs
+import Proofs.Pouw.Fp8Atom.Fp32
 
 /-!
 # The one-flip clauses (`H1TOneFlip`, M4a and M4b)

@@ -4,6 +4,7 @@ import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Ring
 import Proofs.Pouw.PearlC.Forming
 import Proofs.Pouw.PearlC.Freeze
+import Proofs.Pouw.Fp8Atom.H1TLemmas
 
 /-!
 # P3: the atom-mix's `PairErr` (staging)

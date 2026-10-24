@@ -1,5 +1,6 @@
 import Proofs.Pouw.Fp8Atom.H1TGapStaging
 import Proofs.Pouw.Fp8Atom.H1TProofs
+import Proofs.Pouw.Fp8Atom.Fp32
 
 /-!
 # H-1T: the late words against staircases (staging, unpinned)

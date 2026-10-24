@@ -3,6 +3,7 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Finset.Powerset
+import Proofs.Population.DataflowDefs
 
 /-!
 # Non-exfiltration: what the egress can show with at most `m` wrong units

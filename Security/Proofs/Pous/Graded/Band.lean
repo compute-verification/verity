@@ -1,6 +1,7 @@
 import Proofs.Pous.Statements
 import Proofs.Pous.Graded.Theorem
 import Proofs.Pous.Chain.Family
+import Proofs.Pous.Model.Inc
 
 /-!
 # The band store with up to `t` late rounds

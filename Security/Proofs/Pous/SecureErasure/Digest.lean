@@ -1,5 +1,6 @@
 import Mathlib.Algebra.Polynomial.Roots
 import Proofs.Pous.Statements
+import Proofs.Pous.Model.DigestDefs
 
 /-!
 # The digest is almost universal

@@ -41,15 +41,6 @@ def creditDevRev1 (d : PearlCDevice) (s : Shape) : ℚ := creditDev d s - firstA
 /-- rev1's honest reference at a device: its credited work plus the forming that depends on the activations alone. -/
 def wrefDevRev1 (d : PearlCDevice) (s : Shape) : ℚ := creditDevRev1 d s + (d.prices.costs.qa : ℚ) * s.m * s.k
 
-/-- The first promotion add of every word at H100 prices (an FP32 add costs 32), as `creditOf` prices its adds. -/
-def firstAddOf (p : Params) (s : Shape) : ℚ := if p.G = 0 then 0 else 32 * s.m * s.n
-
-/-- **rev1's credited work of one unit** at `Params` and `Costs` (H100 prices): `creditOf` less the first add. -/
-def creditOfRev1 (p : Params) (c : Costs) (s : Shape) : ℚ := creditOf p c s - firstAddOf p s
-
-/-- rev1's honest reference at `Params` and `Costs`. -/
-def wrefOfRev1 (p : Params) (c : Costs) (s : Shape) : ℚ := creditOfRev1 p c s + (c.qa : ℚ) * s.m * s.k
-
 /-- The first `k'` columns of a matrix of codes. -/
 def prefixCols {p k : ℕ} (M : Matrix (Fin p) (Fin k) Code) (k' : ℕ) (h : k' ≤ k) : Matrix (Fin p) (Fin k') Code :=
   fun i l => M i (Fin.castLE h l)

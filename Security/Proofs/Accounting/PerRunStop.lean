@@ -1,6 +1,8 @@
 import Proofs.Accounting.PerRunPriced
 import Proofs.Pouw.PearlC.W1Priced
 import Proofs.Pouw.PearlC.W1Stop
+import Proofs.Pouw.PearlC.W1Defs
+import Proofs.Pouw.PearlC.W1StopDefs
 
 /-!
 # Proof of the per-run guarantees from the γ-gap property per coin

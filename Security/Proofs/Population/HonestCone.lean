@@ -1,6 +1,8 @@
 import Proofs.Population.Oblivious
 import Proofs.Population.Leakage
 import Proofs.Population.Work
+import Proofs.Population.DataflowDefs
+import Proofs.Population.ObliviousMoved
 
 /-!
 # The damage theorems need no obliviousness

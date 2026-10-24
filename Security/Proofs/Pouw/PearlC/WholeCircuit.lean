@@ -1,5 +1,6 @@
 import Definitions.Pouw.PearlC.WholeCircuit
 import Proofs.Pouw.PearlC.TileCircuit
+import Proofs.Pouw.PearlC.TileCircuitDefs
 
 /-!
 # A unit of a composed table is its template (proofs)

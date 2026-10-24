@@ -1,6 +1,7 @@
 import Proofs.Population.Determinacy
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.BigOperators.Ring.Finset
+import Proofs.Population.DataflowDefs
 
 /-!
 # Skippable work: what the wrong units' cones and luck bound

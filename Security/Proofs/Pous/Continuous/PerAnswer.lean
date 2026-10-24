@@ -5,6 +5,7 @@ import Proofs.Pous.Thm1.Theorem1iiiTimed
 import Proofs.Pous.Graded.Theorem
 import Proofs.Pous.Continuous.MissCount
 import Proofs.Pous.Continuous.Verifier
+import Proofs.Pous.Model.Inc
 
 /-!
 # The continuous audit from `TimedINC`: `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`

@@ -9,6 +9,7 @@ import Models.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
+import Proofs.Pous.Model.Inc
 
 /-!
 # Report Theorem 1(ii), untimed: a proof of `Pous.Guarantees.Theorem1ii`

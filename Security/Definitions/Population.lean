@@ -1,12 +1,13 @@
-import Proofs.Population.Dataflow
-import Proofs.Population.Partition
-import Proofs.Population.LongValueDefs
-import Proofs.Population.ObliviousDefs
-import Proofs.Population.AddressMap
-import Proofs.Population.NecessityDefs
-import Proofs.Population.ExfiltrationDefs
-import Proofs.Population.DrawPressureDefs
-import Proofs.Population.ChiPoolDefs
+import Mathlib.Data.Fintype.Pi
+import Mathlib.Data.Finset.Prod
+import Mathlib.Logic.Relation
+import Definitions.Core.Partition
+import Mathlib.Data.Fintype.Option
+import Mathlib.Basic.Real.Basic
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Analysis.SpecialFunctions.Exp
+import Mathlib.Data.Fin.Tuple.Basic
 
 /-! Populations' vocabulary: units over committed value slots with public read and write sets (`Dataflow`), unit
 functions and correctness, what a checker confirms of the dataflow (single assignment, acyclicity), cones and egress,

@@ -1,6 +1,9 @@
 import Proofs.Population.NecessitySkeleton
 import Proofs.Population.Transfer
 import Mathlib.Data.Fintype.Powerset
+import Proofs.Population.DataflowDefs
+import Proofs.Population.ObliviousMoved
+import Proofs.Population.NecessityMoved
 
 /-!
 # The policy × property matrix: what each policy needs beyond tier 1, and what each property buys

@@ -1,6 +1,7 @@
 import Models.Nci.Guarantees.Packed
 import Models.Nci.Guarantees.Training
 import Proofs.Nci.Contained
+import Proofs.Nci.PackedDefs
 
 /-!
 # The fan-out bound on a chain with several products to a gate

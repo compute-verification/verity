@@ -1,6 +1,7 @@
 import Proofs.Pouw.PearlC.TileCircuit
 import Proofs.Pouw.PearlC.PeelExactProofsP
 import Definitions.Pouw.PearlC.Device
+import Proofs.Pouw.PearlC.TileCircuitDefs
 
 /-!
 # The tile unit computes the ticket and the useful value (proofs)

@@ -8,6 +8,7 @@ import Proofs.Accounting.Compose.CircuitWork
 import Proofs.Accounting.Compose.WholeLuckOfEntropy
 import Proofs.Accounting.Compose.CircuitWorkSeeded
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Accounting.ComposeDefs
 
 /-!
 # PoUW's credit on an arbitrary declared circuit: proofs

@@ -3,6 +3,8 @@ import Proofs.Pouw.PearlC.FormingP
 import Proofs.Pouw.PearlC.AccumProofs
 import Proofs.Pouw.PearlC.FreezeP
 import Proofs.Pouw.PearlC.FreezePPure
+import Proofs.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.Fp8Atom.Fp32
 
 /-!
 # The honest words are FP32 words

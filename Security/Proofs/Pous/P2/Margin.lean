@@ -1,5 +1,7 @@
 import Definitions.Pous.P2.Cost
 import Proofs.Pous.P2.Domain
+import Proofs.Pous.P2.Cost
+import Proofs.Pous.Accounting.LemmaA
 
 /-!
 # Slack rows: an adversary with `λ` extra state bits per block

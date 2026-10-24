@@ -57,10 +57,6 @@ def wordFlagsP (G : Nat) (k : ℕ) (a b : Fin k → Code) (t : ℕ) : Bool :=
   (jointFlagsP p ((rowAtoms a b).toChunks G) (t / G)).getD (t % G) false
 
 variable {m n k : Nat} in
-/-- **The unit's flags** under `p` and `G`. -/
-def unitFlagsP (G : Nat) (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) :
-    Fin m → Fin n → ℕ → Bool :=
-  fun i j t => wordFlagsP p G k (Aq i) (Bq j) t
 
 /-! ## No promotion (`G = 0`): the lone skips of the pure chain -/
 

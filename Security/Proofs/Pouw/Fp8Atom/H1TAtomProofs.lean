@@ -6,6 +6,7 @@ import Mathlib.Tactic.Ring
 import Definitions.Pouw.Fp8Atom.H1TLemmas
 import Proofs.Pouw.Fp8Atom.Proofs
 import Proofs.Pouw.Fp8Atom.H1TProofs
+import Proofs.Pouw.Fp8Atom.H1TLemmas
 
 /-!
 # The atom as two truncations (`H1TAtomValue`)

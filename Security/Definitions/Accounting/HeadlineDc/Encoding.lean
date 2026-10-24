@@ -18,12 +18,6 @@ namespace Accounting.TS.Headline
 
 open Accounting.TS
 
-/-- **The design's TS model on machine `G` with a filler**: `DesignData.model`, its filler menu one route whose demand
-is the load on `G` of `fill`, the filler's counts a unit of honest work. -/
-noncomputable def DesignData.modelFill {R : Type} (D : DesignData) (n nt nf : ℕ) [NeZero n] (G : Machine (Fin n) R)
-    (fill : Sparse) : Model (Fin n) R (Fin nt) Unit Empty (Fin nf) Unit :=
-  { D.model n nt nf G with fill := fun _ => G.load (Sparse.counts fill) }
-
 /-- A certificate over `Fin m` from `(facet index, numerator, denominator)` weights. -/
 noncomputable def cert (m : ℕ) (v : Sparse) : Fin m → ℝ := Sparse.counts v
 

@@ -1,5 +1,8 @@
 import Proofs.Pouw.PearlC.W1
 import Proofs.Pouw.PearlC.NoiseSha512
+import Proofs.Pouw.PearlC.NoiseSha512Defs
+import Proofs.Pouw.PearlC.Sha512Defs
+import Proofs.Pouw.PearlC.W1Defs
 
 /-!
 # Checks of W1's cost model and SHA-512's noise

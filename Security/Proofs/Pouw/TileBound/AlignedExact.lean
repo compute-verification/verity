@@ -1,6 +1,7 @@
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Tactic
 import Proofs.Pouw.TileBound.AlignedExactDefs
+import Proofs.Pouw.TileBound.AlignedExactDefsDefs
 
 /-!
 # Aligned exactness: from one row to a whole region (the TT_OUT restatements lane)

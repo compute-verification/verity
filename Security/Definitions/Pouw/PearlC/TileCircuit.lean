@@ -77,13 +77,6 @@ variable (S : Spec)
     · rfl
   outputs := Finset.univ.filter fun g => g.val ∈ S.outs
 
-/-- One proof unit holding every computed gate. -/
-def part : Verity.Partition S.toCircuit 1 where
-  unit g := if (S.gate g).input then none else some 0
-  input_iff g := by
-    show (if (S.gate g).input then none else some 0) = none ↔ (S.gate g).input = true
-    split <;> simp_all
-
 end Spec
 
 /-- `F32Add_v2`: IEEE binary32 addition of two FP32 words, NaN written as `0x7FFFFFFF`. On finite words it is

@@ -1,5 +1,6 @@
 import Proofs.Pous.Dense.DenseReCert
 import Definitions.Pous.Model.SegLift
+import Proofs.Pous.Model.SegLift
 
 /-!
 # The 14 GB theorem for the implementation's tagged keying

@@ -1,5 +1,6 @@
 import Models.Accounting.Guarantees.TS
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Accounting.TS.Play
 
 /-!
 # The tensor–scalar model's round lemmas

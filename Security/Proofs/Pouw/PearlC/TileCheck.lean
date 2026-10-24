@@ -1,4 +1,5 @@
 import Definitions.Pouw.PearlC.TileCheck
+import Proofs.Pouw.PearlC.TileCheckDefs
 
 /-!
 # L3 from its parts, and on a transcript

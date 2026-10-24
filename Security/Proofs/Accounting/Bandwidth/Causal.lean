@@ -3,6 +3,7 @@ import Proofs.Accounting.Bandwidth.Ticked
 import Proofs.Accounting.Actual.Transducer
 import Proofs.Accounting.Actual.SourceDefs
 import Models.Accounting.Guarantees.Bandwidth.Causal
+import Proofs.Accounting.Actual.SourceMoved
 
 /-!
 # B3 on a strategy causal from every tick: the chip as a `Ticked.Chip`

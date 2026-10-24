@@ -10,6 +10,7 @@ import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Thm1.Theorem1ii
+import Proofs.Pous.Model.Inc
 
 /-!
 # Report Theorem 1(ii), timed: a proof of `Pous.Guarantees.Theorem1iiTimed`

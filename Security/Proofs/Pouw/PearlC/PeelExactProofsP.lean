@@ -1,6 +1,8 @@
 import Proofs.Pouw.PearlC.FormingP
 import Proofs.Pouw.PearlC.PeelExactProofs
 import Proofs.Pouw.PearlC.AccumProofs
+import Proofs.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.PearlC.PeelExactP
 
 /-!
 # P2(b) and (c) on `PeelExactP`'s U, at any step width (sm_120 at width 26)

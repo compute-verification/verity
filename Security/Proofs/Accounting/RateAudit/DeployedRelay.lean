@@ -1,6 +1,7 @@
 import Mathlib
 import Proofs.Accounting.RateAudit.Conservation
 import Proofs.Accounting.RateAudit.DeployedRun
+import Proofs.Accounting.RateAuditDeployed
 
 /-!
 # The remote bandwidth audit as deployed, with side sources that may relay receipts: the proof

@@ -1,6 +1,7 @@
 import Definitions.Pouw.PearlC.DeviceFp4
 import Proofs.Pouw.PearlC.Fp4Freeze
 import Proofs.Pouw.PearlC.PeelExactProofs
+import Proofs.Pouw.PearlC.Fp4
 
 /-!
 # P2 on Pearl-C4's U, `Fp4Dev.peelFp4` (staging, nothing pinned)

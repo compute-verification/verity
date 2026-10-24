@@ -2,6 +2,7 @@ import Models.NetworkCertifier.Assumptions
 import Mathlib.Data.Set.Card
 import Mathlib.Data.Fintype.Pi
 import Mathlib.Algebra.BigOperators.Fin
+import Proofs.NetworkCertifier.Run
 
 /-!
 # Theorem 1(b): the counting bound on accepted runs

@@ -30,14 +30,6 @@ structure IdealModel : Type 1 where
 
 attribute [instance] IdealModel.fintypeΩ IdealModel.nonemptyΩ
 
-/-- The plain model: no primitive and no queries. Every `Prog` is then `(0, 0)`-bounded while local computation
-stays unbounded, so games in this model are information-theoretic. -/
-def IdealModel.plain : IdealModel where
-  Ω := Unit
-  Qry := Empty
-  Ans := Empty
-  answer := fun _ q => q.elim
-
 /-- A parallel oracle program with output `α`. -/
 inductive Prog (M : IdealModel) (α : Type) : Type where
   /-- Stop with output `a`. -/
@@ -72,10 +64,6 @@ def width (f : M.Qry → M.Ans) : Prog M α → ℕ
 /-- `(D, Q)`-bounded: at most `D` rounds and `Q` queries in total, against every primitive. -/
 def Bounded (D Q : ℕ) (p : Prog M α) : Prop :=
   ∀ ω : M.Ω, p.depth (M.answer ω) ≤ D ∧ p.work (M.answer ω) ≤ Q
-
-/-- At most `D` rounds of at most `q` queries each, against every primitive. -/
-def RoundBounded (D q : ℕ) (p : Prog M α) : Prop :=
-  ∀ ω : M.Ω, p.depth (M.answer ω) ≤ D ∧ p.width (M.answer ω) ≤ q
 
 end Prog
 

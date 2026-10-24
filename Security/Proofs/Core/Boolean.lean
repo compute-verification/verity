@@ -1,5 +1,6 @@
 import Proofs.Core.BooleanDefs
 import Proofs.Core.Circuit
+import Proofs.Core.BooleanMoved
 
 /-!
 # The Boolean profile evaluates gate by gate

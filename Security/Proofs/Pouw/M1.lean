@@ -1,5 +1,6 @@
 import Models.Pouw.Assumptions.Pinned
 import Proofs.Pouw.Prob
+import Proofs.Pouw.Game.Defs
 
 /-!
 # Facts about the named instance `D1.m1`

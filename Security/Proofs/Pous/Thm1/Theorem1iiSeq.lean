@@ -10,6 +10,7 @@ import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Thm1.Theorem1iTimed
+import Proofs.Pous.Model.Inc
 
 /-!
 # Report Theorem 1(ii), sequential: `PousProofs.theorem1_ii_seq`, as drafted

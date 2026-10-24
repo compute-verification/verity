@@ -57,10 +57,6 @@ def wipeDistinguisher {N k b q M E : ℕ} (P : Prover N k b q M E) :
     (Bits q × (Fin k → Fin N)) × (Fin N → Bits b) → Prop :=
   fun x => Accepts P x.1.1 x.2 x.1.2 ∧ Keeps P x.1.1 x.2 x.1.2
 
-/-- The ideal game: the probability that `P` is accepted and keeps `z`, with uniform labels. -/
-noncomputable def winIdeal {N k b q M E : ℕ} (P : Prover N k b q M E) : ℝ≥0∞ :=
-  pr (wipeDistinguisher P)
-
 /-- The real game: the same, with the labels `prf K` under a uniform key `K`. -/
 noncomputable def winReal {N k b q M E κ : ℕ} (prf : Bits κ → Fin N → Bits b) (P : Prover N k b q M E) : ℝ≥0∞ :=
   pr (fun x : (Bits q × (Fin k → Fin N)) × Bits κ => wipeDistinguisher P (x.1, prf x.2))

@@ -18,6 +18,24 @@ import Proofs.Population.ExfiltrationExamples
 import Proofs.Population.DrawPressure
 import Proofs.Population.JointPressure
 import Proofs.Population.ChiPool
+import Proofs.Population.AddressMap
+import Proofs.Population.ChiPoolDefs
+import Proofs.Population.Dataflow
+import Proofs.Population.DrawPressureDefs
+import Proofs.Population.ExfiltrationDefs
+import Proofs.Population.LongValueDefs
+import Proofs.Population.NecessityDefs
+import Proofs.Population.ObliviousDefs
+import Proofs.Population.Partition
+import Proofs.Population.AddressMapDefs
+import Proofs.Population.ChiPoolMoved
+import Proofs.Population.DataflowDefs
+import Proofs.Population.DrawPressureMoved
+import Proofs.Population.ExfiltrationMoved
+import Proofs.Population.LongValueMoved
+import Proofs.Population.NecessityMoved
+import Proofs.Population.ObliviousMoved
+import Proofs.Population.PartitionDefs
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee

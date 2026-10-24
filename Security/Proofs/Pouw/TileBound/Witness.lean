@@ -1,4 +1,5 @@
 import Proofs.Pouw.TileBound.Proofs
+import Proofs.Pouw.TileBound.DefsDefs
 
 /-!
 # The chain's satisfiability witness (a later bundle; outside the 36 merged pins)

@@ -133,9 +133,6 @@ def Rebuild (δ : ℝ) : Prop := r.Holds δ fun ω => r.rebuilt ω * a.cWord ≤
 `W_r`. At `W_r = 0` it is the Compute row alone; subtracting `W_r` needs W and `Certified W_r`. -/
 def Fit (Wr δ : ℝ) : Prop := r.Holds δ fun ω => Wr + r.rebuildWork ω ≤ N.rebuild * a.T
 
-/-- **Certified** (PoUW's per-run guarantee at π_r): PoUW's account did at least `W_r` at the rebuild pricing. -/
-def Certified (Wr δ : ℝ) : Prop := r.Holds δ fun ω => Wr ≤ r.pouwWork ω
-
 /-- **Links** (the Links row): the signals over the node's boundary are within its links' capacity. -/
 def Links (δ : ℝ) : Prop := r.Holds δ fun ω => r.inBits ω ≤ N.linkIn * a.T ∧ r.outBits ω ≤ N.linkOut * a.T
 

@@ -4,6 +4,8 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Tactic.LinearCombination
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Ring
+import Proofs.Pouw.H1Zy.LaneDefs
+import Proofs.Pouw.H1Zy.CombineDefs
 
 /-!
 # The lane's pieces on bits compute their word views, and so does their composition

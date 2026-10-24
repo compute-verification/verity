@@ -5,6 +5,13 @@ import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Ring
 import Proofs.Pouw.Fp8Atom.Pinned
 import Proofs.Pouw.Fp8Atom.Checks
+import Proofs.Pouw.Fp8Atom.PinnedDefs
+import Proofs.Pouw.Fp8Atom.E4M3
+import Proofs.Pouw.Fp8Atom.Atom
+import Proofs.Pouw.Fp8Atom.Vectors.AdaDefs
+import Proofs.Pouw.Fp8Atom.Vectors.C00Defs
+import Proofs.Pouw.Fp8Atom.Vectors.C01Defs
+import Proofs.Pouw.Fp8Atom.VectorsDefs
 
 /-!
 # Proofs of `Pouw.Fp8Atom`'s pinned statements

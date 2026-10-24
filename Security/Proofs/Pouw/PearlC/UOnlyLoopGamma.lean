@@ -1,5 +1,6 @@
 import Proofs.Pouw.PearlC.TileUOnlyGamma
 import Definitions.Pouw.PearlC.DevicePricesLoop
+import Proofs.Pouw.PearlC.Tile
 
 /-!
 # U-only binding at sm_120's in-loop prices (the price-twins lane's file; staged)

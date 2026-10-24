@@ -2,6 +2,8 @@ import Proofs.Pouw.Barrier.Pinned
 import Proofs.Pouw.NCP.Proofs
 import Proofs.Pouw.Prob
 import Models.Pouw.Guarantees.Barrier
+import Proofs.Pouw.Barrier.PinnedDefs
+import Proofs.Pouw.Barrier.Defs
 
 /-!
 # The degenerate-input barrier: proofs

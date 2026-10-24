@@ -142,11 +142,6 @@ def oracle (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (
     Oracle N b h ρ :=
   (ω j).2.1 (A.cand j (fun i => ω i.1) E (A.kept j E ω))
 
-/-- The chained prover that keeps candidate `c` at every pass. -/
-def atCand (A : GrindChain P N b h ρ S L q r s G) (c : Fin G) : Chain P N b h ρ S L q r s where
-  device j η := A.device j η c
-  root j η E := A.cand j η E c
-
 end GrindChain
 
 end Accounting.Rate

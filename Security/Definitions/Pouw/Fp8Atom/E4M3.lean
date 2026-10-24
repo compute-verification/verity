@@ -33,9 +33,6 @@ def Code.manField (c : Code) : Nat := c.val % 8
 /-- NaN: `0x7F` or `0xFF` (exponent and mantissa fields all ones). -/
 def Code.isNaN (c : Code) : Bool := c.val % 128 == 127
 
-/-- A zero: `0x00` or `0x80`. -/
-def Code.isZero (c : Code) : Bool := c.val % 128 == 0
-
 /-- The significand, hidden bit included for normals: `m` if `e = 0`, else `8 + m`. -/
 def Code.sig (c : Code) : Nat := if c.expField = 0 then c.manField else 8 + c.manField
 

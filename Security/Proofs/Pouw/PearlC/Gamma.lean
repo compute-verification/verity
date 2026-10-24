@@ -9,6 +9,8 @@ import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Ring
 import Models.Pouw.Guarantees.PearlC
+import Proofs.Pouw.PearlC.GameDefs
+import Proofs.Pouw.PearlC.Defs
 
 /-!
 # γ from TT_OUT (the cheap-binding lane's file)

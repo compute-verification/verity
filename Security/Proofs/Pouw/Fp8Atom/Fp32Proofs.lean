@@ -5,6 +5,9 @@ import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Ring
 import Proofs.Pouw.Fp8Atom.Pinned
 import Proofs.Pouw.Fp8Atom.Checks.Add
+import Proofs.Pouw.Fp8Atom.PinnedDefs
+import Proofs.Pouw.Fp8Atom.Fp32
+import Proofs.Pouw.Fp8Atom.Vectors.AddDefs
 
 /-!
 # Proofs of the FP32 add statements

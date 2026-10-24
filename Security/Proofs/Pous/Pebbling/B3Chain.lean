@@ -7,6 +7,7 @@ import Models.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
+import Proofs.Pous.Game.Oracle
 
 /-!
 # B3: hash-chain sequentiality in the parallel-query model

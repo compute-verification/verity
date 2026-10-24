@@ -6,6 +6,9 @@ import Definitions.Pouw.PearlC.Defs
 import Definitions.Pouw.PearlC.Skip
 import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.Fp8Atom.Fp32
+import Proofs.Pouw.PearlC.Skip
 
 /-!
 # P1: freezing under promotion every `G` atoms (staging)

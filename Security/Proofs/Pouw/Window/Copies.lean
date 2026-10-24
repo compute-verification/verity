@@ -1,4 +1,5 @@
 import Definitions.Pouw.Window
+import Proofs.Pouw.WindowDefs
 
 /-!
 # The service's units read the tile, not the session: its wrong sets are copy-closed

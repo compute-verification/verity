@@ -3,6 +3,7 @@ import Models.Pouw.Assumptions.Dimension.Pinned
 import Proofs.Pouw.NCP.RelationProofs
 import Proofs.Pouw.NCP.RelationWitness
 import Proofs.Pouw.NCP.ChainProofs
+import Proofs.Pouw.Dimension.Defs
 
 /-!
 # Theorem D: proofs

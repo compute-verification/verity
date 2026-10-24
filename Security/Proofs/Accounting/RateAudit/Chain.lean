@@ -3,6 +3,7 @@ import Models.Accounting.Guarantees.RateAuditRemote
 import Proofs.Accounting.RateAudit.Conservation
 import Proofs.Accounting.RateAudit.Interactive
 import Proofs.Accounting.RateAudit.Windows
+import Proofs.Accounting.RateAuditRemote
 
 /-!
 # Chained passes: the proof

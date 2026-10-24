@@ -1,6 +1,7 @@
 import Definitions.Pouw.PearlC.Tile4Circuit
 import Proofs.Pouw.PearlC.TileValues
 import Proofs.Pouw.PearlC.PeelFp4Proofs
+import Proofs.Pouw.PearlC.TileCircuitDefs
 
 /-!
 # Pearl-C4's tile unit computes `C̃` and `U` (proofs)

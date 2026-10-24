@@ -1,6 +1,7 @@
 import Proofs.Accounting.TS.Session.Lanes.Combine
 import Proofs.Pouw.H1Zy.Lane
 import Proofs.Pouw.H1Zy.LaneBits
+import Proofs.Pouw.H1Zy.LaneDefs
 
 /-!
 # A lane's part of `LeafChecks` from its Definition

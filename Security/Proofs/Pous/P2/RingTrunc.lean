@@ -1,5 +1,6 @@
 import Models.Pous.Assumptions.P2
 import Proofs.Pous.P2.RingTight
+import Proofs.Pous.P2.Cost
 
 /-!
 # P2 in the ring model: dropping low bits breaks `k = 88` at `L = 2^30`

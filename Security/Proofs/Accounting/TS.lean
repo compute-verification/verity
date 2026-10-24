@@ -12,6 +12,7 @@ import Proofs.Accounting.TS.Fork
 import Proofs.Accounting.TS.Drawn
 import Proofs.Accounting.TS.Keyed
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Accounting.TS.Play
 
 /-!
 # The tensor–scalar model's proofs

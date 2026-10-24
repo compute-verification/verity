@@ -1,5 +1,6 @@
 import Proofs.Core.Decisive
 import Mathlib.Order.ConditionallyCompleteLattice.Basic
+import Proofs.Core.DecisiveDefs
 
 /-!
 # A batch of decisive games reads as no other list of games

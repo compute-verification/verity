@@ -1,4 +1,5 @@
 import Proofs.Pous.P2.Rows
+import Proofs.Pous.Accounting.LemmaA
 
 /-!
 # The abstract model `m1p` on `[0, p)`: `Meets` for `Pous.m1p`, at any payload width `b`

@@ -4,7 +4,6 @@ import Definitions.Pouw.H1Zy.Dequant
 import Definitions.Pouw.H1Zy.Lane
 import Definitions.Pouw.H1Zy.LaneBits
 import Definitions.Pouw.H1Zy.Tile
-import Proofs.Pouw.H1Zy.LaneChunkDefs
 
 /-!
 # H1's drawn-leaf statements on words (`verity/core/protocols/pouw/circuit/h1zy.py`)

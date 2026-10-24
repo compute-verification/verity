@@ -148,11 +148,6 @@ noncomputable def view [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C 
     Q → V :=
   fun k => pf.committed x (pf.pos w j k)
 
-/-- **Binding fails at position `ℓ`**: an accepted proof of a drawn unit opens `ℓ` to a value other than its committed
-one. Two that open it differently on `x` move it. -/
-def Moved [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (ℓ : Pos) : Prop :=
-  ∃ v, pf.Opens x ℓ v ∧ v ≠ pf.committed x ℓ
-
 /-- **Binding fails in round `w`**: an accepted proof of one of its drawn units opens the unit's slots to values other
 than their committed ones. -/
 def MovedIn [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (w : Fin S) : Prop :=

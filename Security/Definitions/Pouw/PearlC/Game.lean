@@ -122,27 +122,6 @@ def actOf (τ : Transcript) (u : ℕ) : Codes :=
   | some c => c.act
   | none => fun _ _ => 0
 
-open Classical in
-/-- An FP32 word with value `v` (some word, when one exists; `0` otherwise). -/
-noncomputable def wordOf (v : Option ℚ) : ℕ := if h : ∃ w, wordQ w = v then Classical.choose h else 0
-
-/-- The honest transcript on activations `act`. -/
-noncomputable def honestTranscript (P : Protocol Q R S) (H : Q → R) (s : S) (U : Workload) (act : ℕ → Codes) :
-    Transcript :=
-  fun u => if u < U.layout.N then
-    some ⟨act u, fun i j => wordOf (P.ticket H s U u (act u) i j), fun i j => wordOf (P.useful H s U u (act u) i j)⟩
-  else none
-
-/-- The cost model runs the honest reference: one program outputs the honest transcript on every in-domain workload
-whose weights pass the rules and admissible activations, with no preprocessing, at cost at most `∑_u W_ref(u)` and at
-most `qref U` calls. -/
-def AdmitsRef (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) : Prop :=
-  ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes,
-    (∀ u < U.layout.N, P.actOK (U.layout.shape u) (act u)) → ∀ (H : Q → R) (s : S),
-      CM.run prog H U act [] s = honestTranscript P H s U act ∧
-      CM.cost prog H U act [] s ≤ ∑ u ∈ range U.layout.N, P.Wref U.layout u ∧
-      CM.calls prog H U act [] s ≤ qref U
-
 /-- An adversary, chosen after the workload: a preprocessing oracle program, an online program, its activation input. -/
 structure Adversary (CM : CostModel Q R S) where
   pre : QTree Q R State
@@ -184,12 +163,6 @@ or not PoUW runs; otherwise `Costs.current` applies. The input is `α·x`; the n
 cast `A′ = e4m3(D)` (32) are credited; the sampled statistic ρ (4) is A-only. -/
 def Costs.adopted : Costs := ⟨64, 4⟩
 
-/-- As `adopted`, with the model's quantizer also emitting ρ. -/
-def Costs.adoptedFull : Costs := ⟨64, 0⟩
-
-/-- Under the model's current plain max scale: `α·x` (an FP32 multiply, 32) and ρ (4) are A-only protocol work. -/
-def Costs.current : Costs := ⟨64, 36⟩
-
 /-- The credited work of one unit: the ticket chain `m·k·n`, its promotion adds `m·k·n/G`, the fused `A′·F_B` (`m·k·r`),
 the peel combine (BF16, depth `2r`, 2 units per MAC: `4·r·m·n`), and the forming that depends on the salt (`fs·m·k`). The
 per-job share of `B̃·F_A` would enter credit and reference alike, and leaving it out only raises γ. -/
@@ -215,19 +188,6 @@ def debitOf (p : Params) (c : Costs) (d : Debit) : ℚ :=
 nor `creditOf` has a weight-side term (`B̃·F_A`, `P_B`, the forming of B̃), whether that work runs per call or once per
 weight and epoch, so a verifier's `W_ref` and its draw's tickets must use exactly `wrefOf` (the red team's F2). -/
 def wrefOf (p : Params) (c : Costs) (s : Shape) : ℚ := creditOf p c s + (c.qa : ℚ) * s.m * s.k
-
-/-- The credited work when forming is not credited at all. -/
-def creditChainOnly (p : Params) (c : Costs) (s : Shape) : ℚ := creditOf p c s - (c.fs : ℚ) * s.m * s.k
-
-/-- The reduction's gap: `γ = 1 − (1 − γ₀)/Ω`. -/
-def gammaOf (γ₀ Ω : ℚ) : ℚ := 1 - (1 - γ₀) / Ω
-
-/-- `Π`'s costs are Pearl-C's accounting at `(p, c)` with cap `ρ`: `W_ref` is `wrefOf`, and a unit within the cap is
-credited at least `(1 − ρ)·creditOf`. -/
-def PearlCAccounting (P : Protocol Q R S) (p : Params) (c : Costs) (ρ : ℚ) : Prop :=
-  (∀ (L : Layout) (u : ℕ), P.Wref L u = (wrefOf p c (L.shape u) : ℝ)) ∧
-    ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes), P.capOK H s U u act →
-      (((1 - ρ) * creditOf p c (U.layout.shape u) : ℚ) : ℝ) ≤ P.credit H s U u act
 
 /-- Pearl-C's shape domain: positive dimensions, a whole number of promotion groups, `k ≤ 2^16`, and promotion every
 4 atoms, which confines freezing to one group (P1). What freezing remains is debited per unit, and the cap on the debit is
@@ -257,9 +217,6 @@ noise law, the seeds and the chain live in the protocol's reference functions.
 def pearlCDomain (p : Params) (L : Layout) : Prop :=
   ∀ u < L.N, 0 < (L.shape u).m ∧ 0 < (L.shape u).n ∧ 0 < (L.shape u).k ∧ Shape.Tiled p (L.shape u) ∧
     (L.shape u).k ≤ 2 ^ 16 ∧ p.G = 4
-
-/-- The domain restricted to one shape. -/
-def pearlCDomainAt (p : Params) (s : Shape) (L : Layout) : Prop := pearlCDomain p L ∧ ∀ u < L.N, L.shape u = s
 
 /-- The headline shapes (`m n k`). -/
 def sh8192 : Shape := ⟨8192, 8192, 8192⟩

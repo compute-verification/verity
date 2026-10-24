@@ -1,4 +1,5 @@
 import Proofs.Pous.Chain.Family
+import Proofs.Pous.Model.Inc
 
 /-!
 # The band store at fewer rounds: `D = 2` with `k = 97` and `D = 1` with `k = 93`

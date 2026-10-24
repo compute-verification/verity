@@ -5,6 +5,9 @@ import Mathlib.Tactic.Ring
 import Proofs.Pouw.PearlC.Freeze
 import Definitions.Pouw.PearlC.SkipP
 import Definitions.Pouw.PearlC.Sm120
+import Proofs.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.PearlC.SkipP
+import Proofs.Pouw.PearlC.Sm120
 
 /-!
 # P1 over any accumulator model, and on sm_120 (staging)

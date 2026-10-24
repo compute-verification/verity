@@ -3,6 +3,8 @@ import Mathlib.Tactic.Ring
 import Definitions.Pouw.PearlC.Fp4Skip
 import Proofs.Pouw.PearlC.AccumProofs
 import Proofs.Pouw.PearlC.AtomErr
+import Proofs.Pouw.PearlC.Fp4
+import Proofs.Pouw.PearlC.Fp4Skip
 
 /-!
 # Pearl-C4's replayed debit: exactness, and the soundness of terms 2 and 3

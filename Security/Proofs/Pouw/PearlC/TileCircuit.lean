@@ -2,6 +2,7 @@ import Definitions.Pouw.PearlC.TileCircuit
 import Definitions.Pouw.PearlC.PeelExactP
 import Proofs.Pouw.PearlC.AccumProofs
 import Proofs.Core.Circuit
+import Proofs.Pouw.PearlC.TileCircuitDefs
 
 /-!
 # The tile unit computes `C̃` and `U` (proofs)

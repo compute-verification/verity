@@ -1,4 +1,7 @@
-import Proofs.Pouw.PearlC.W1
+import Definitions.Pouw.PearlC.DevicePrices
+import Definitions.Pouw.PearlC.DevicePricesLoop
+import Definitions.Pouw.PearlC.DeviceFp4
+import Mathlib.Data.Nat.Notation
 
 /-!
 # The machine stops a run at its budget (trusted; definitions only)
@@ -38,9 +41,6 @@ def GγPerCoin [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMod
     (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM,
     (∀ (H : Q → R) (s : S), A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q) →
-      pr (fun x : (Q → R) × S => CM.cost A.online x.1 U A.act (A.pre.eval x.1) x.2 ≤ T ∧
-        Wins P U γ T (A.transcript U x.1 x.2) x.1 x.2) ≤ η q U.layout.N
-
 /-- **The priced W1 on the stopping machine.** -/
 noncomputable abbrev W1.w1Stop (dv : W1.W1Device) (salt : S → List ℕ) : CostModel Q R S :=
   (W1.w1Priced dv salt : CostModel Q R S).withStop

@@ -2,6 +2,8 @@ import Definitions.Pouw.PearlC.W1Stop
 import Proofs.Pouw.PearlC.W1BudgetAbort
 import Proofs.Pouw.PearlC.W1Priced
 import Proofs.Pouw.Prob
+import Proofs.Pouw.PearlC.W1Defs
+import Proofs.Pouw.PearlC.W1StopDefs
 
 /-!
 # The stopping machine truncates

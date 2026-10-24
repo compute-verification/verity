@@ -1,5 +1,8 @@
 import Proofs.Population.ChiPoolDefs
 import Proofs.Population.DrawPressure
+import Proofs.Population.ExfiltrationMoved
+import Proofs.Population.DrawPressureMoved
+import Proofs.Population.ChiPoolMoved
 
 /-!
 # The cheating pool with the verdict lag: harm through the halt

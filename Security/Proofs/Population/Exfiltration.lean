@@ -1,4 +1,5 @@
 import Proofs.Population.ExfiltrationDefs
+import Proofs.Population.ExfiltrationMoved
 
 /-!
 # Exfiltration before detection: the stopping-time bounds

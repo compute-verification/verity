@@ -1,5 +1,8 @@
 import Definitions.Pouw.PearlC.RowSem
 import Proofs.Pouw.PearlC.TileCircuit
+import Proofs.Pouw.PearlC.RowCircuitDefs
+import Proofs.Pouw.PearlC.RowSem
+import Proofs.Pouw.PearlC.TileCircuitDefs
 
 /-!
 # The row tables compute a row's statistics, scales and forming (proofs)

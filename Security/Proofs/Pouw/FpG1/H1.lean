@@ -1,5 +1,7 @@
 import Definitions.Pouw.FpG1.H1
 import Proofs.Pouw.FpG1
+import Proofs.Pouw.FpG1.Encoding
+import Proofs.Pouw.FpG1.H1Defs
 
 /-!
 # FP8-g1 and W4A8-g1 on H1: g1's leaves are H1's

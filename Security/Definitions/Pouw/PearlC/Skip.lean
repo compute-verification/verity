@@ -84,20 +84,11 @@ variable {m n k : Nat}
 def unitFlags (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) : Fin m → Fin n → ℕ → Bool :=
   fun i j t => wordFlags k (Aq i) (Bq j) t
 
-/-- **The unit's chain debit**: the flagged atoms `t < k/32` over the unit's `m·n` words, each at `c`, the chain's
-credit per atom; `c · Forming.flagCount k flag`. -/
-def chainDebit (k : ℕ) (c : ℚ) (flag : Fin m → Fin n → ℕ → Bool) : ℚ :=
-  c * ∑ i, ∑ j, ((Finset.range (k / 32)).filter fun t => flag i j t = true).card
-
 /-- **Needed**: element `(i, l)` of `A′` is read by atom `l / 32` of some word `(i, j)` that `flag` leaves unflagged;
 `Forming.Needed`, the same definition. -/
 def needed (flag : Fin m → Fin n → ℕ → Bool) (i : Fin m) (l : Fin k) : Prop := ∃ j, flag i j ((l : ℕ) / 32) = false
 
 instance instDecidableNeeded (flag : Fin m → Fin n → ℕ → Bool) (i : Fin m) (l : Fin k) : Decidable (needed flag i l) := by
   unfold needed; infer_instance
-
-/-- The needed elements of `A′`. -/
-def neededSet (flag : Fin m → Fin n → ℕ → Bool) : Finset (Fin m × Fin k) :=
-  Finset.univ.filter fun p => needed flag p.1 p.2
 
 end Pouw.PearlC.Skip

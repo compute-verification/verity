@@ -1,5 +1,7 @@
 import Proofs.Pous.P2.Margin
 import Proofs.Pous.FreeBlocks.P2
+import Proofs.Pous.P2.Cost
+import Proofs.Pous.Accounting.LemmaA
 
 /-!
 # P2's `m1p` families up to `2^64` blocks

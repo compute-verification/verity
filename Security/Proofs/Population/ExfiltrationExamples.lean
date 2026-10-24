@@ -1,5 +1,7 @@
 import Proofs.Population.Exfiltration
 import Proofs.Population.Determinacy
+import Proofs.Population.DataflowDefs
+import Proofs.Population.ExfiltrationMoved
 
 /-!
 # Exfiltration before detection: tightness, and what fails without each assumption

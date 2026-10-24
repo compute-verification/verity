@@ -1,5 +1,7 @@
 import Proofs.Population.Oblivious
 import Proofs.Population.Leakage
+import Proofs.Population.DataflowDefs
+import Proofs.Population.ObliviousMoved
 
 /-!
 # The population theorems for a program, with its padding's public cones

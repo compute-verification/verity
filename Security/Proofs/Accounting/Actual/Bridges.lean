@@ -3,6 +3,7 @@ import Proofs.Accounting.Actual.Physical
 import Proofs.Accounting.Actual.Localization
 import Models.Pouw.Assumptions.Deadline
 import Proofs.Pouw.Deadline
+import Proofs.Accounting.CostModel
 
 /-!
 # B4 and PoUW's row, proved, and the honest clock at `CM_A`

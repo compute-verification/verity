@@ -1,4 +1,5 @@
 import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+import Proofs.Pouw.PearlC.PeelFp4VectorsDefs
 
 /-! # `prod-64-nvfp4`: selected cells' `C̃` chains (`ch4`), rows 2 and 3 (`PeelFp4Checks`, which joins them) -/
 

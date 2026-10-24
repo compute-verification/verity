@@ -7,6 +7,8 @@ import Mathlib.Tactic.Abel
 import Mathlib.Tactic.GCongr
 import Definitions.Pouw.PearlC.Defs
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.Fp8Atom.Fp32
+import Proofs.Pouw.PearlC.Defs
 
 /-!
 # P2: Pearl-C's clean-up chain (staging, nothing pinned)

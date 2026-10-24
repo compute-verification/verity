@@ -3,6 +3,8 @@ import Models.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
+import Proofs.Pous.Model.PebblingDefs
+import Proofs.Pous.Model.Invertible
 
 /-!
 # N10's two core lemmas, on the trusted definitions of `Pous.Invertible`

@@ -1,5 +1,6 @@
 import Proofs.Accounting.Headline.FpG1
 import Proofs.Accounting.Headline.Sm120Measured
+import Proofs.Pouw.FpG1.H1Defs
 
 /-!
 # FP8-g1's and W4A8-g1's headlines on sm_120's measured vector, and an honest g1 window that meets every premise

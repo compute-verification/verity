@@ -1,5 +1,6 @@
 import Models.Pouw.Assumptions.NCP.Chain
 import Proofs.Pouw.NCP.RelationWitness
+import Proofs.Pouw.NCP.Word
 
 /-!
 # The chain end to end: proofs

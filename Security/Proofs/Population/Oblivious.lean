@@ -1,6 +1,8 @@
 import Proofs.Population.ObliviousDefs
 import Proofs.Population.Determinacy
 import Proofs.Population.Pointer
+import Proofs.Population.DataflowDefs
+import Proofs.Population.ObliviousMoved
 
 /-!
 # Which programs are as good as circuits

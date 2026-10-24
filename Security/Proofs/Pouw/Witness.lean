@@ -1,5 +1,6 @@
 import Proofs.Pouw.Milestone
 import Proofs.Pouw.QTree
+import Proofs.Pouw.Game.Defs
 
 /-!
 # Satisfiability witnesses and non-vacuity

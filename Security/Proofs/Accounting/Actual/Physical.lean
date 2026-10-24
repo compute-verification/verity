@@ -1,6 +1,8 @@
 import Definitions.Accounting.Physical
 import Proofs.Accounting.Actual.Split
 import Mathlib.Algebra.BigOperators.Ring.Finset
+import Proofs.Accounting.Physical
+import Proofs.Accounting.ActualDefs
 
 /-!
 # The physical assumptions' first consequences

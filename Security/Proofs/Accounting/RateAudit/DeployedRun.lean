@@ -1,5 +1,6 @@
 import Proofs.Accounting.RateAudit.Deployed
 import Proofs.Accounting.Remote
+import Proofs.Accounting.RateAuditDeployed
 
 /-!
 # The deployed session as a run of the remote audit: its routes, and conservation at the same `γ`

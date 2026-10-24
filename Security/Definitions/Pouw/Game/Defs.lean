@@ -60,9 +60,6 @@ structure Workload where
 def Shape.InDefaultDomain (sh : Shape) : Prop :=
   0 < sh.m ∧ 16 ∣ sh.m ∧ 2 ^ 10 ≤ sh.k ∧ sh.k ≤ 2 ^ 16 ∧ 64 ∣ sh.k ∧ 2 ^ 10 ≤ sh.n ∧ sh.n ≤ 2 ^ 16 ∧ 64 ∣ sh.n
 
-/-- The first milestone's shape `(m, k, n) = (2^12, 2^16, 2^16)` (§6, notes on D1). -/
-def milestoneShape : Shape := ⟨2 ^ 12, 2 ^ 16, 2 ^ 16⟩
-
 /-- Every unit's shape is in the shape domain `D`. §3.2's domain is `Layout.ShapesIn Shape.InDefaultDomain`. -/
 def Layout.ShapesIn (D : Shape → Prop) (L : Layout) : Prop := ∀ u < L.N, D (L.shape u)
 

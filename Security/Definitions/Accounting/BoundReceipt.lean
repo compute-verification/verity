@@ -175,10 +175,6 @@ def QueryDetermined (A : InteractiveNode N a b h S L q Lz qz) : Prop :=
     (A.under G').gpuReceipts E z G' = (A.under G).gpuReceipts E z G ∧
       (A.under G').restReceipts E z G' = (A.under G).restReceipts E z G
 
-/-- A node whose locations answer each other as they do at every mix (`e = 0`). -/
-def ofNode (A : Node N a b h S L q Lz qz) : InteractiveNode N a b h S L q Lz qz :=
-  ⟨A, fun z _ => (A.gpu z).side, fun E _ => (A.rest E).side⟩
-
 end InteractiveNode
 
 /-- The blocks the rest's link and tile work cover: `⌊((L_z + λ)·w + F_z·a)/(a·w)⌋`, the tile outputs that `L_z` bits

@@ -9,6 +9,8 @@ import Models.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
+import Proofs.Pous.Model.Labelling
+import Proofs.Pous.Game.Oracle
 
 /-!
 # B5, Pietrzak's ex post facto reduction: a proof of `Pous.Guarantees.B5ExPostFacto(Bounded)`

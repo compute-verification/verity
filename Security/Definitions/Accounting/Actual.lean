@@ -72,12 +72,6 @@ noncomputable def ingress (X : Finset L) (I : Set ℕ) : ℕ :=
   A.width ((A.into (A.region X I)).filter fun a => A.x a ∉ X)
 
 open Classical in
-/-- **Egress** `out_X(I)` (v2.7, at the reader's tick): the width of the gates placed in `X` that some gate placed
-outside `X` during `I` reads, `in(A[X̄, I]) ∩ A[X]` (an input gate reads nothing). -/
-noncomputable def egress (X : Finset L) (I : Set ℕ) : ℕ :=
-  A.width (univ.filter fun g => A.x g ∈ X ∧ ∃ h, A.x h ∉ X ∧ A.t h ∈ I ∧ g ∈ A.reads h)
-
-open Classical in
 /-- **State** `mem_X(t)`: the width of the gates placed in `X` that `A[X, [t, ∞))` reads from outside itself. -/
 noncomputable def state (X : Finset L) (t : ℕ) : ℕ :=
   A.width ((A.into (A.region X (Set.Ici t))).filter fun a => A.x a ∈ X)
@@ -87,11 +81,6 @@ open Classical in
 the part of `mem_X(t)` in `G`. -/
 noncomputable def stateIn (X : Finset L) (t : ℕ) (G : Finset (Fin A.N)) : ℕ :=
   A.width (((A.into (A.region X (Set.Ici t))).filter fun a => A.x a ∈ X) ∩ G)
-
-/-- **Wires run forward in time inside `X`**: a computed gate placed in `X` is read by gates placed in `X` only at its
-tick or later. -/
-def Forward (X : Finset L) : Prop :=
-  ∀ g, ∀ a ∈ A.reads g, A.isInput a = false → A.x a ∈ X → A.x g ∈ X → A.t a ≤ A.t g
 
 /-- **Faithfulness**: each computed gate's value is its operation on the values `val` holds. A run's field
 (`Actual.Run.faithful`), named so a property over runs takes it as what it is, the physical fact that a gate computes

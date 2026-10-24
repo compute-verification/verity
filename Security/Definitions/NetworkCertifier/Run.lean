@@ -79,9 +79,6 @@ def trace (z : Z) : ℕ → List (Obs L K S) × List In × List Act × List Wire
 /-- The observations of the run's first `n` steps. -/
 def obsRun (z : Z) (n : ℕ) : List (Obs L K S) := (I.trace z n).1
 
-/-- The sender's actions over the run's first `n` steps. -/
-def actRun (z : Z) (n : ℕ) : List Act := (I.trace z n).2.2.1
-
 /-- What the wire carries over the run's first `n` steps. -/
 def wireRun (z : Z) (n : ℕ) : List Wire := (I.trace z n).2.2.2
 

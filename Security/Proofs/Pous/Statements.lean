@@ -1,4 +1,15 @@
 import Models.Pous.Guarantees
+import Proofs.Pous.Accounting.LemmaA
+import Proofs.Pous.Model.ColumnGameDefs
+import Proofs.Pous.Model.PebblingDefs
+import Proofs.Pous.Model.DigestDefs
+import Proofs.Pous.Model.HashChainDefs
+import Proofs.Pous.Model.Inc
+import Proofs.Pous.Model.Invertible
+import Proofs.Pous.Model.Labelling
+import Proofs.Pous.Game.Oracle
+import Proofs.Pous.Model.SegLift
+import Proofs.Pous.Model.BandGraphDefs
 
 /-!
 # PoUS's lemmas, stated

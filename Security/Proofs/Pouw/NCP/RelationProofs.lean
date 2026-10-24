@@ -1,5 +1,7 @@
 import Definitions.Pouw.NCP.Relation
 import Proofs.Pouw.NCP.WordProofs
+import Proofs.Pouw.NCP.Relation
+import Proofs.Pouw.NCP.Word
 
 /-!
 # The reduction, FinalOnly for NCP, and the floor without FinalOnly

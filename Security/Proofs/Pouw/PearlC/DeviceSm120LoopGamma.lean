@@ -2,6 +2,7 @@ import Proofs.Pouw.PearlC.DeviceSm120Gamma
 import Proofs.Pouw.PearlC.CapLoopGamma
 import Proofs.Pouw.PearlC.ChainCapLoopGamma
 import Proofs.Pouw.PearlC.UOnlyLoopGamma
+import Proofs.Pouw.PearlC.Tile
 
 /-!
 # γ at the RTX PRO 6000 (sm_120) records at the in-loop prices (the price-twins lane's file; staged)

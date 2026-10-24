@@ -1,6 +1,9 @@
 import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 import Proofs.Pouw.PearlC.AccumProofs
 import Proofs.Pouw.PearlC.FreezeP
+import Proofs.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.PearlC.Accum
+import Proofs.Pouw.PearlC.Skip
 
 /-!
 # `pearl-c-sm120-v2`: the pure chain's lone skips and its identities (staging)

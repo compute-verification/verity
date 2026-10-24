@@ -11,6 +11,8 @@ import Proofs.NetworkCertifier.Sanity
 import Proofs.NetworkCertifier.Code
 import Proofs.NetworkCertifier.Accepted
 import Proofs.NetworkCertifier.AdviceString
+import Proofs.NetworkCertifier.Grid
+import Proofs.NetworkCertifier.Run
 
 /-!
 # Proofs of the network certifier's guarantees

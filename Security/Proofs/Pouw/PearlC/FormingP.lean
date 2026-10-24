@@ -1,6 +1,8 @@
 import Definitions.Pouw.PearlC.FormingPDefs
 import Proofs.Pouw.PearlC.AtomErr
 import Definitions.Pouw.PearlC.Sm120
+import Proofs.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.PearlC.Sm120
 
 /-!
 # P3 over a `Pipeline`: the step's error at any width, and sm_120's atom-mix

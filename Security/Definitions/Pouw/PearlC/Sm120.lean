@@ -29,10 +29,6 @@ def sm120E4m3K32 (floor : Int) : Pipeline := ⟨[32], 26, floor⟩
 /-- `BLACKWELL_SM120_E4M3_M16N8K32` as `verity.ml.tc` pins it, with the floor at −133. -/
 def sm120E4m3 : Pipeline := sm120E4m3K32 (-133)
 
-/-- One sm_120 E4M3 step with exponent floor `floor`: the accumulator word and 32 code pairs to the FP32 word written. -/
-def sm120StepAt (floor : Int) (acc : Nat) (a b : Fin 32 → Code) : Nat :=
-  (sm120E4m3K32 floor).step acc (List.ofFn a) (List.ofFn b)
-
 /-- **One `BLACKWELL_SM120_E4M3_M16N8K32` step**, the floor at −133. -/
 def sm120Step (acc : Nat) (a b : Fin 32 → Code) : Nat := sm120E4m3.step acc (List.ofFn a) (List.ofFn b)
 

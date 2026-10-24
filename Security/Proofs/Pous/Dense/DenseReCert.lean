@@ -1,5 +1,7 @@
 import Mathlib.Data.Nat.Bitwise
 import Proofs.Pous.Dense.DenseMeets
+import Proofs.Pous.Model.Labelling
+import Proofs.Pous.Model.Inc
 
 /-!
 # Dense scheme re-certificate at the 64 KB operating point, and the multi-segment lemma

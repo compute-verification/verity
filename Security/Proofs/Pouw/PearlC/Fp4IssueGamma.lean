@@ -1,6 +1,7 @@
 import Proofs.Pouw.PearlC.DeviceFp4Gamma
 import Definitions.Pouw.PearlC.DeviceFp4Issue
 import Models.Pouw.Guarantees.PearlC
+import Proofs.Pouw.PearlC.DeviceFp4Issue
 
 /-!
 # Pearl-C4 at the issue-bound FP32 price (the price-twins lane's file; staged)

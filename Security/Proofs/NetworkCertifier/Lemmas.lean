@@ -6,6 +6,8 @@ import Mathlib.Data.Fintype.Pi
 import Mathlib.Order.Interval.Finset.Fin
 import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Proofs.NetworkCertifier.Run
+import Proofs.NetworkCertifier.Grid
 
 /-!
 # The network certifier's lemmas

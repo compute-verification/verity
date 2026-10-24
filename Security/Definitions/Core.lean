@@ -3,9 +3,7 @@ import Definitions.Core.Partition
 import Definitions.Core.Advice
 import Definitions.Core.PrivatePartition
 import Definitions.Core.Declaration
-import Proofs.Core.BooleanDefs
 import Definitions.Core.Game
-import Proofs.Core.Decisive
 import Definitions.Core.Scalar
 import Definitions.Core.Prims
 import Definitions.Core.TC

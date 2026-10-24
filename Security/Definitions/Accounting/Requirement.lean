@@ -228,9 +228,6 @@ def readBlocks (s : ℕ) : Finset ℕ := blocks ℓ (reads W e s)
 /-- The bits step `s` reads from block `j`. -/
 def readIn (s j : ℕ) : ℕ := bitsIn W ℓ (reads W e s) j
 
-/-- The bits `W` reads from block `j` over the engine steps of window `w`. -/
-def readOf (w : Window) (j : ℕ) : ℕ := ∑ s ∈ w.steps, readIn W e ℓ s j
-
 /-- `ℓ` packs the values `S` into blocks of `b` bits: each lies within its block, and two in one block don't overlap. -/
 def Packs (b : ℕ) (S : Finset G) : Prop :=
   ∀ u ∈ S, ℓ.offset u + W.width u ≤ b ∧

@@ -5,6 +5,8 @@ import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.TileUOnlyGamma
 import Proofs.Pouw.PearlC.FreezeP
 import Models.Pouw.Guarantees.PearlC
+import Proofs.Pouw.PearlC.Tile
+import Proofs.Pouw.PearlC.SkipP
 
 /-!
 # γ at the RTX PRO 6000 (sm_120) records (staging, nothing pinned)

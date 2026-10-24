@@ -1,4 +1,5 @@
 import Proofs.Pous.B5.ExPostFacto
+import Proofs.Pous.Model.Labelling
 
 /-!
 # Chain work: a hash-chain receipt takes one oracle query a label

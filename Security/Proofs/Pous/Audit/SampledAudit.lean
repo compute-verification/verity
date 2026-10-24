@@ -20,6 +20,8 @@ import Proofs.Pous.Thm1.Theorem1iTimed
 import Proofs.Pous.Thm1.Theorem1iiSeq
 import Proofs.Pous.Thm1.Theorem1iiiTimed
 import Proofs.Pous.B5.StackedOneWay
+import Proofs.Pous.Model.PebblingDefs
+import Proofs.Pous.Model.Inc
 
 /-!
 # From "fewer than `k` answerable" to a sampled audit, and the stacked one-way graph's audit bound

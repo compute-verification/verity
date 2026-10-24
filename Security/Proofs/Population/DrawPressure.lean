@@ -1,6 +1,8 @@
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Proofs.Population.DrawPressureDefs
 import Proofs.Population.Exfiltration
+import Proofs.Population.ExfiltrationMoved
+import Proofs.Population.DrawPressureMoved
 
 /-!
 # Detection pressure of the deployed draw

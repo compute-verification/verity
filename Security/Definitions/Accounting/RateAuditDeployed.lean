@@ -142,14 +142,6 @@ def tierReads {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (
     (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).tierBits tier t (A.world E R O) []
 
-/-- The bits the device completed in the pass. -/
-def completed (A : PIDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
-  (A.chip (A.state E)).completed (A.world E R O) []
-
-/-- The compute the device's completions cost in the pass, at `cost x` per completion of `x` bits. -/
-def work (A : PIDevice N b h ρ S L q) (cost : ℕ → ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
-  (A.chip (A.state E)).work cost (A.world E R O) []
-
 /-- **A pass's completion work split across the node's concurrent compute devices.** `rate i` is device `i`'s
 measured completion-work rate in the unit of `cost`, and `duration` is the pass's duration in the same time unit.
 `workAt` assigns every unit of the pass device's completion work to exactly one device; each device gets at most its

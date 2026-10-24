@@ -167,17 +167,6 @@ def AuditSecureOn (sch : Scheme (ringRO B w p)) : Reveal → (S D Q L k : ℕ) �
       ∀ (W : Bits sch.n) (A₁ : Preprocessor sch S) (A₂ : SeqResponderOn sch S D Q L),
         pr (seqAcceptsOn sch k W A₁ A₂) ≤ δ + ε
 
-/-- **The requirement over the ring bound**: `Meets`' conjuncts, with `AuditSecureOn` in place of `AuditSecure`. -/
-def MeetsOn (sch : Scheme (ringRO B w p)) (reveal : Reveal) (D Q L k : ℕ) (ε : ℝ≥0∞) : Prop :=
-  ε ≤ Params.εMax ∧ sch.Correct ∧ sch.CodeHoldsW ∧ sch.SpaceBound Params.expansion ∧
-    AuditSecureOn sch reveal (sch.stateBound Params.ρ) D Q L k (ENNReal.ofReal Params.δ) ε
-
-/-- **The requirement with `lam` bits of slack per block**: `Meets`, except that the adversary's state is
-`⌊ρ·|C|⌋ + lam·B` bits. -/
-def MeetsWithSlack {M : IdealModel} (sch : Scheme M) (reveal : Reveal) (lam D Q k : ℕ) (ε : ℝ≥0∞) : Prop :=
-  ε ≤ Params.εMax ∧ sch.Correct ∧ sch.CodeHoldsW ∧ sch.SpaceBound Params.expansion ∧
-    AuditSecure sch reveal (sch.stateBound Params.ρ + lam * sch.B) D Q k (ENNReal.ofReal Params.δ) ε
-
 /-! ## P2 in the ring model -/
 
 /-- `sq` on elements, read through the labeling: `a²`, negated when `a`'s label is odd. -/

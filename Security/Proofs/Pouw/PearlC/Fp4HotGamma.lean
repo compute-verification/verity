@@ -1,5 +1,7 @@
 import Proofs.Pouw.PearlC.TileGamma
 import Proofs.Pouw.PearlC.DeviceFp4Hot
+import Proofs.Pouw.PearlC.DeviceFp4HotDefs
+import Proofs.Pouw.PearlC.DeviceFp4Issue
 
 /-!
 # Pearl-C4 v2's price twins, at any FP32 price and scale path (the price-twins lane's file; staged)

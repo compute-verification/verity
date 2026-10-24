@@ -3,6 +3,8 @@ import Proofs.Pouw.H1Zy.Combine
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Ring
+import Proofs.Pouw.H1Zy.LaneDefs
+import Proofs.Pouw.H1Zy.CombineDefs
 
 /-!
 # What a lane's `ok = 1` gives, on words

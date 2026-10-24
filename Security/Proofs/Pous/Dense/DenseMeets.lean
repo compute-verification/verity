@@ -16,6 +16,8 @@ import Proofs.Pous.Audit.SampledAudit
 import Proofs.Pous.B5.ExPostFacto
 import Proofs.Pous.Thm1.Theorem1iTimed
 import Proofs.Pous.Thm1.Theorem1iiSeq
+import Proofs.Pous.Model.Labelling
+import Proofs.Pous.Model.Inc
 
 /-!
 # The dense single-layer scheme meets the requirement: `PousDense.dense_meets`

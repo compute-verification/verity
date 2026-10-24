@@ -1,4 +1,5 @@
 import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+import Proofs.Pouw.PearlC.PeelFp4VectorsDefs
 
 /-! # `test-16-nvfp4`: `P_A,i`, `P_B,j` and each cell's `uWord?` (`PeelFp4Checks`, which joins them) -/
 

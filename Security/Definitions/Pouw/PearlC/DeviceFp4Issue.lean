@@ -19,9 +19,6 @@ computes γ at the issue-bound 8.00 (`Prices.sm120`'s FADD), at the prices this 
 
 namespace Pouw.PearlC
 
-/-- **sm_120's prices in FP4 units at the issue-bound FP32 price**: every FP32 operation at 8.00. -/
-def Fp4Prices.sm120Issue : Fp4Prices := ⟨4, 5429 / 50, 18⟩
-
 /-! ## The scale step as a parameter
 
 bc-f5bf55c8 recommends crediting the block scale at `lut256` (`docs/pouw/pearl-c4-v3.md` §15), the cheapest spec-legal
@@ -35,11 +32,6 @@ structure Fp4ScalePath where
   fp32Ops : ℚ
   fixed_nonneg : 0 ≤ fixed
   fp32Ops_nonneg : 0 ≤ fp32Ops
-
-/-- **`rcp.approx`**: the UE4M3 encode alone (8.0), the `F2FP` decode (12.74) and the `MUFU` reciprocal (63.9) per
-block, `2·84.64/16 = 10.58` per element, and two FP32 ops per block, the FMUL `amax·1/6` and the decode's `HADD2.F32`
-(`theory-pearl-c4-domain.md` §8a). -/
-def Fp4ScalePath.rcpApprox : Fp4ScalePath := ⟨529 / 50, 2, by norm_num, by norm_num⟩
 
 /-- **`lut256`**: half an `F2FP`, 1.25 `PRMT` and one `LDS` per block, 60 FP8 units, `2·60/16 = 7.5` per element, and
 one FP32 op per block, the FMUL `amax·1/6` (the table replaces the decode and its widening). These are W1

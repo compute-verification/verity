@@ -1,6 +1,7 @@
 import Mathlib
 import Proofs.Accounting.Bandwidth.Interactive
 import Proofs.Accounting.Actual.Source
+import Proofs.Accounting.Actual.SourceMoved
 
 /-!
 # The bandwidth audit on the actual circuit (B3), given a simulation

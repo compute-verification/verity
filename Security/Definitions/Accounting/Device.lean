@@ -111,15 +111,9 @@ def work (p : Price) : ℕ := ∑ o, p o * sc.ops w a o
 /-- The bits account `a` read from device memory over window `w`. -/
 def read : ℕ := ∑ t ∈ w.ticks, (sc t).read a
 
-/-- The bits account `a` took in over side channel `i` over window `w`. -/
-def side (i : ι) : ℕ := ∑ t ∈ w.ticks, (sc t).side a i
-
 /-- The device memory account `a` held over window `w`, in bit-ticks: the bits it holds at the end of each of the
 window's ticks, summed. One bit held for one tick is one bit-tick, so `held / len` is its average in bits. -/
 def held : ℕ := ∑ t ∈ w.ticks, (sc t).mem a
-
-/-- The on-chip state account `a` held over window `w`, in bit-ticks. -/
-def chipHeld : ℕ := ∑ t ∈ w.ticks, (sc t).chip a
 
 end Schedule
 

@@ -1,4 +1,4 @@
-import Proofs.Pouw.Barrier.Pinned
+import Definitions.Pouw.Barrier.Defs
 
 /-!
 # The degenerate-input barrier's guarantee (trusted)

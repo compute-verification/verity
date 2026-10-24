@@ -1,6 +1,8 @@
 import Proofs.Pouw.PearlC.TileCheck8
 import Proofs.Pouw.PearlC.TileProtocol
 import Proofs.Pouw.PearlC.TileGamma
+import Proofs.Pouw.PearlC.RowSem
+import Proofs.Pouw.PearlC.TileCircuitDefs
 
 /-!
 # `pc8`'s tile check computes the words (proofs)

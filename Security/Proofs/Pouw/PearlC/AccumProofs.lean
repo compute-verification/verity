@@ -1,6 +1,9 @@
 import Definitions.Pouw.PearlC.Accum
 import Definitions.Pouw.PearlC.PeelExactP
 import Proofs.Pouw.PearlC.PeelExactProofs
+import Proofs.Pouw.Fp8Atom.Fp32
+import Proofs.Pouw.PearlC.Accum
+import Proofs.Pouw.PearlC.PeelExactP
 
 namespace Pouw.PearlC.Accum
 

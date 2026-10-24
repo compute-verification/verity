@@ -2,6 +2,7 @@ import Proofs.Pouw.Witness
 import Proofs.Pouw.Copy
 import Mathlib.Data.Set.Finite.List
 import Mathlib.Data.Fintype.Pigeonhole
+import Proofs.Pouw.Game.Defs
 
 /-!
 # Sanity: degenerate instances and side conditions

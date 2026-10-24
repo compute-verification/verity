@@ -6,6 +6,8 @@ import Models.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
+import Proofs.Pous.Model.ColumnGameDefs
+import Proofs.Pous.Model.BandGraphDefs
 
 /-!
 # The band-graph certificate for the two-directional column game

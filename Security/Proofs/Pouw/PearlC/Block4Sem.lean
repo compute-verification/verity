@@ -1,5 +1,6 @@
 import Proofs.Pouw.PearlC.Row4Words
 import Proofs.Pouw.PearlC.TileCheck8Words
+import Proofs.Pouw.PearlC.TileCircuitDefs
 
 /-!
 # `pc4`'s blocks in DeviceFp4's terms (proofs)

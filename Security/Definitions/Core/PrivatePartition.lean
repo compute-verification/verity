@@ -51,9 +51,6 @@ def outs (u : Fin n) : Finset (Fin C.N) := C.exits (P.gates u)
 /-- `ob(u)`: the total width of unit `u`'s outputs, in bits. -/
 def outBits (u : Fin n) : ℕ := C.width (P.outs u)
 
-/-- `og(u)`: the number of unit `u`'s outputs. -/
-def outCount (u : Fin n) : ℕ := (P.outs u).card
-
 /-- The width rule for a set of outputs `S`: at most `X` bits. -/
 def WidthRule (X : ℕ) (S : Finset (Fin C.N)) : Prop := C.width S ≤ X
 

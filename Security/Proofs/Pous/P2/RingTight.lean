@@ -1,5 +1,6 @@
 import Models.Pous.Assumptions.P2
 import Proofs.Pous.P2.RingBasic
+import Proofs.Pous.P2.Cost
 
 /-!
 # P2 in the ring model: recomputing a block breaks the requirement (tightness)

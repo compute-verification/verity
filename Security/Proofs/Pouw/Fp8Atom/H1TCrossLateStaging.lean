@@ -2,6 +2,10 @@ import Proofs.Pouw.Fp8Atom.H1TCrossLate
 import Proofs.Pouw.Fp8Atom.H1TGapStaging
 import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 import Proofs.Pouw.Fp8Atom.H1TFlipProofs
+import Proofs.Pouw.Fp8Atom.H1TCrossLateDefs
+import Proofs.Pouw.Fp8Atom.H1TVecDefs
+import Proofs.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.Fp8Atom.Fp32
 
 /-!
 # H-1T: `H1TCrossLate` in the exact-512 regime (proofs)

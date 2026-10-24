@@ -1,4 +1,5 @@
 import Definitions.Pouw.Window
+import Proofs.Pouw.WindowDefs
 
 /-!
 # PoUW's reading of the window: its bound plus the tie to what's served, and its collision term at counted queries

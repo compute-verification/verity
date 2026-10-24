@@ -1,6 +1,7 @@
 import Mathlib.NumberTheory.LegendreSymbol.Basic
 import Definitions.Pous.P2.Cost
 import Proofs.Pous.P2.Domain
+import Proofs.Pous.P2.Cost
 
 /-!
 # P2 in the ring model: the cost bound, the labels, and correctness

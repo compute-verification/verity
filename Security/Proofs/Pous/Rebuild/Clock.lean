@@ -1,4 +1,5 @@
 import Proofs.Pous.Chain.Flat
+import Proofs.Pous.Model.Labelling
 
 /-!
 # The cumulative chain clock, and the band's hardness from one held label

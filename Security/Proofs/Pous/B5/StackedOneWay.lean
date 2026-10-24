@@ -14,6 +14,8 @@ import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Pebbling.FischClaims1314
 import Proofs.Pous.B5.ExPostFacto
+import Proofs.Pous.Model.PebblingDefs
+import Proofs.Pous.Model.Labelling
 
 /-!
 # The one-way bound for Fisch's stacked graph: `PousBridge.b2ToB5` and `PousBridge.b5_stacked`

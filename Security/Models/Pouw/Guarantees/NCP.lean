@@ -1,4 +1,4 @@
-import Proofs.Pouw.NCP.Pinned
+import Definitions.Pouw.NCP.Defs
 import Definitions.Pouw.NCP.Protocol
 import Definitions.Pouw.NCP.Relation
 import Definitions.Pouw.NCP.RouteU

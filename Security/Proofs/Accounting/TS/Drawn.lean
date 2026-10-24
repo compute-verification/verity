@@ -1,4 +1,5 @@
 import Proofs.Accounting.TS.Fork
+import Proofs.Accounting.TS.DrawnDefs
 
 /-!
 # (I8) for a sampled window

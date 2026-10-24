@@ -63,14 +63,6 @@ def inputsUsed (R : Finset (Fin D.N)) : Finset ((ℓ : Fin c.L) × Fin c.N × Fi
 def Whole (R : Finset (Fin D.N)) (ℓ : Fin c.L) (t : Fin c.N) (i : Fin (c.e ℓ)) : Prop :=
   ∀ j, c.prod ℓ t i j ∈ R
 
-/-- The entry `y_t^{(ℓ)}[i]` is **split** in a division `P` into IUs: no IU holds the gates of all of its products. -/
-def Split {n : ℕ} (P : Partition D n) (ℓ : Fin c.L) (t : Fin c.N) (i : Fin (c.e ℓ)) : Prop :=
-  ¬ ∃ u, c.Whole (P.gates u) ℓ t i
-
-/-- Position `t` is a **full position** of `R` if `R` computes some whole entry at position `t`. -/
-def Full (R : Finset (Fin D.N)) (t : Fin c.N) : Prop :=
-  ∃ ℓ i, c.Whole R ℓ t i
-
 /-- The input entry `x_t^{(ℓ)}[j]` is **linked to an entry whole in `R`**: `ℓ > 0`, and the entry
 `y_t^{(ℓ-1)}[π j]` it is computed from is whole in `R`, so that `R` can compute it from its own products. -/
 def LinkedWhole (R : Finset (Fin D.N)) : (ℓ : Fin c.L) → Fin c.N → Fin (c.d ℓ) → Prop
@@ -83,21 +75,5 @@ noncomputable def spread {n : ℕ} (P : Partition D n) (ℓ : Fin c.L) (t : Fin 
   (univ.filter fun u => ∃ j, c.prod ℓ t i j ∈ P.gates u).card
 
 end PackedChain
-
-/-- **A chain is a packed chain with one product to a gate**: `prod_inj` gives `prod_mult` at `k = 1`. -/
-def Chain.toPacked {D : Circuit} (c : Chain D) : PackedChain D 1 where
-  L := c.L
-  N := c.N
-  d := c.d
-  e := c.e
-  prod := c.prod
-  prod_mult _ := Finset.card_le_one.mpr fun _ hp _ hq =>
-    c.prod_inj ((Finset.mem_filter.mp hp).2.trans (Finset.mem_filter.mp hq).2.symm)
-  prod_computed := c.prod_computed
-  y := c.y
-  sums := c.sums
-  π := c.π
-  π_inj := c.π_inj
-  links := c.links
 
 end Nci

@@ -1,6 +1,7 @@
 import Proofs.Pouw.PearlC.DeviceGamma
 import Models.Pouw.Assumptions.PearlC.TTOutRev1
 import Models.Pouw.Guarantees.PearlC
+import Proofs.Pouw.PearlC.DeviceRev1
 
 /-!
 # rev1: it asserts less than the granted TT_OUT, and γ from it (the TT_OUT restatements lane's file)

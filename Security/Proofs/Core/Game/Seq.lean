@@ -1,4 +1,5 @@
 import Proofs.Core.Game.Runs
+import Proofs.Core.GameDefs
 
 /-!
 # Sequencing strategies, and runs as a game

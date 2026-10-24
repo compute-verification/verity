@@ -1,4 +1,5 @@
 import Proofs.Accounting.BoundReceipt.Audit
+import Proofs.Accounting.BoundReceiptDefs
 
 /-!
 # Receipts bound to the matmul when the locations' answers depend on the mix (`e > 0`)

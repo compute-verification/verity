@@ -1,4 +1,7 @@
 import Proofs.Pouw.PearlC.DeviceRev1Gamma
+import Proofs.Pouw.PearlC.GameDefs
+import Proofs.Pouw.PearlC.Tile
+import Proofs.Pouw.PearlC.DeviceRev1
 
 /-!
 # rev1's H100 rows are satisfiable (the cheap-binding lane's file)

@@ -51,8 +51,4 @@ a value. -/
 def pureChain (p : Pipeline) (atoms : List AtomIn) : Option ℚ :=
   wordQ (atoms.foldl (fun w x => p.step w (List.ofFn x.1) (List.ofFn x.2)) 0)
 
-/-- `C̃ = A′·B̃ᵀ` under the pure chain on the step `p`. -/
-def ctPureChain (p : Pipeline) (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) :
-    Matrix (Fin m) (Fin n) (Option ℚ) := fun i j => pureChain p (rowAtoms (Aq i) (Bq j))
-
 end Pouw.PearlC.Accum

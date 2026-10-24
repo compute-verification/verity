@@ -2,6 +2,8 @@ import Models.Pouw.Assumptions.NCP.RouteUWord
 import Proofs.Pouw.NCP.ChainProofs
 import Proofs.Pouw.NCP.RouteUProofs
 import Models.Pouw.Guarantees.NCP
+import Proofs.Pouw.NCP.Relation
+import Proofs.Pouw.NCP.Word
 
 /-!
 # The word layer on route U: proofs

@@ -1,6 +1,7 @@
 import Mathlib
 import Models.Accounting.Guarantees.RateAuditDeployed
 import Proofs.Accounting.RateAudit.Session
+import Proofs.Accounting.RateAuditDeployed
 
 /-!
 # The remote bandwidth audit as deployed: the proof

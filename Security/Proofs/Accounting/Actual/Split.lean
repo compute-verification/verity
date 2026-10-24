@@ -1,5 +1,6 @@
 import Definitions.Accounting.Actual
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Proofs.Accounting.ActualDefs
 
 /-!
 # The split: what a region reads is what its location carried in plus what crossed its boundary

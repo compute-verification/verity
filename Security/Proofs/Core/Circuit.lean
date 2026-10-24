@@ -1,4 +1,5 @@
 import Models.Core.Guarantees.Circuit
+import Proofs.Core.CircuitDefs
 
 /-!
 # Lemmas about circuits and partitions

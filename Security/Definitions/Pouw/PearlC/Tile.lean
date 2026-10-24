@@ -128,15 +128,6 @@ noncomputable def claimedWref (TR : TileRules Q R S) (U : Workload) (τ : Transc
 /-- The layout's `W_ref`, tile by tile. -/
 def tileWrefTotal (TR : TileRules Q R S) (L : Layout) : ℝ := ∑ g ∈ range (TR.tiling L).NT, TR.Wref L g
 
-/-- `AdmitsRef` with the reference's cost bounded tile by tile. -/
-def AdmitsRefTile (CM : CostModel Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop)
-    (qref : Workload → ℕ) : Prop :=
-  ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes,
-    (∀ u < U.layout.N, P.actOK (U.layout.shape u) (act u)) → ∀ (H : Q → R) (s : S),
-      CM.run prog H U act [] s = honestTranscript P H s U act ∧
-      CM.cost prog H U act [] s ≤ tileWrefTotal TR U.layout ∧
-      CM.calls prog H U act [] s ≤ qref U
-
 /-- **The γ-gap property under the sampled audit.** For every in-domain workload, budget `T`, oracle bound `q` and
 adversary, every ticket count `w` proportional to the tiles' `W_ref` (`verity.protocols.accounting.work.pouw.audit`'s `tickets`), `t` independent
 draws and `ε_s ≤ 1`: the audit accepts (every drawn tile is good, or of a blank unit) while `T` is below `1 − γ` of the
@@ -148,19 +139,6 @@ def GγSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMod
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
           AuditAccepts (goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + η q U.layout.N
-
-/-- **The γ-gap property under the sampled audit with U-only binding**: `GγSampled` with the audit accepting a drawn tile
-when it is good under U-only binding (`goodTilesU`) or of a blank unit. -/
-def GγSampledU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
-  ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
-    ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
-      pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AuditAccepts (goodTilesU P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
             blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
           T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + η q U.layout.N

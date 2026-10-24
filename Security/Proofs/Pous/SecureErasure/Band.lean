@@ -1,5 +1,6 @@
 import Proofs.Pous.SecureErasure.Reduction
 import Proofs.Pous.Chain.Family
+import Proofs.Pous.Model.Inc
 
 /-!
 # Secure erasure on the band

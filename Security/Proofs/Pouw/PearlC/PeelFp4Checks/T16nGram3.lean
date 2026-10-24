@@ -1,4 +1,5 @@
 import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+import Proofs.Pouw.PearlC.PeelFp4VectorsDefs
 
 /-! # `test-16-nvfp4`: rows 24 to 31 of `G = F_Bᵀ·F_A` (`PeelFp4Checks`, which joins them) -/
 

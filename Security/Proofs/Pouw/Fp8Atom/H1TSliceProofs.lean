@@ -1,5 +1,8 @@
 import Mathlib.Tactic.IntervalCases
 import Proofs.Pouw.Fp8Atom.H1TAtomProofs
+import Proofs.Pouw.Fp8Atom.H1TVecDefs
+import Proofs.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.Fp8Atom.H1TVectorsDefs
 
 /-!
 # One slice: L1 to L3 (`H1TSlice`), the chain's monotonicity (`H1TChainMono`) and the range (`H1TRange`)

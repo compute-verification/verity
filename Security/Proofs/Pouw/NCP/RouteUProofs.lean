@@ -3,6 +3,7 @@ import Proofs.Pouw.NCP.GameProofs
 import Proofs.Pouw.Sanity
 import Proofs.Pouw.NCP.ChainProofs
 import Models.Pouw.Guarantees.NCP
+import Proofs.Pouw.NCP.RouteU
 
 /-!
 # NCP's checked values on route U: proofs

@@ -1,6 +1,7 @@
 import Proofs.Pouw.PearlC.TileValues
 import Proofs.Pouw.PearlC.Tile4Circuit
 import Definitions.Pouw.PearlC.DeviceChainOnly
+import Proofs.Pouw.PearlC.TileCircuitDefs
 
 /-!
 # The tile units compute the protocol's words (proofs)

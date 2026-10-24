@@ -3,6 +3,7 @@ import Mathlib.Data.Sym.Card
 import Mathlib.Data.Set.Card
 import Mathlib.Order.Interval.Finset.Fin
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Proofs.NetworkCertifier.Grid
 
 /-!
 # Proposition 2: timing is occupancy, its counts, and tightness

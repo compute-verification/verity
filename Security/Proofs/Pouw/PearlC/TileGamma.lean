@@ -1,5 +1,7 @@
 import Proofs.Pouw.PearlC.Gamma
 import Proofs.Pouw.Sampling
+import Proofs.Pouw.PearlC.GameDefs
+import Proofs.Pouw.PearlC.Tile
 
 /-!
 # γ under the sampled audit, from TT_OUT per tile (the cheap-binding lane's file)

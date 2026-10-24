@@ -1,5 +1,6 @@
 import Definitions.Pous.Accounting.GradedMeets
 import Proofs.Pous.Graded.Tail
+import Proofs.Pous.Model.Inc
 
 /-!
 # Theorem 1(ii) for the graded audit

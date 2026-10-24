@@ -1,5 +1,6 @@
 import Definitions.Pouw.PearlC.HiddenTileGame
 import Proofs.Pouw.PearlC.FlockTile.Bridge
+import Proofs.Pouw.PearlC.HiddenTileGameDefs
 
 /-!
 # C-Flock's hidden audit: the TileRead session per drawn tile

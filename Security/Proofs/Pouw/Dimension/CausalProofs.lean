@@ -1,5 +1,6 @@
 import Definitions.Pouw.Dimension.Causal
 import Proofs.Pouw.Dimension.Proofs
+import Proofs.Pouw.Dimension.Causal
 
 /-!
 # Theorem D with causal inputs: proofs

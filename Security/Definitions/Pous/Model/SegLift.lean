@@ -13,10 +13,6 @@ namespace PousDenseReCert
 
 open Pous Pous.Dense
 
-/-- Local parents `p` of a query in segment `s`, placed at their global positions (`none` outside segment `s`). -/
-def liftPar (N B ℓ : ℕ) (s : Fin N) (p : Fin B → Option (Bits ℓ)) : Fin (N * B) → Option (Bits ℓ) :=
-  fun g => if ((segIndexEquiv N B).symm g).1 = s then p ((segIndexEquiv N B).symm g).2 else none
-
 /-- `448 * 2^9 ≠ 0`: the 14 GB store's block count. -/
 scoped instance instNeZeroSeg14 : NeZero (448 * 2 ^ 9) := ⟨by norm_num⟩
 

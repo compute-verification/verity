@@ -10,6 +10,7 @@ import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Thm1.Theorem1iTimed
+import Proofs.Pous.Model.Inc
 
 /-!
 # A6, cheap re-derivation: `PousProofs.a6_rederive_untimed` and `a6_rederive_timed`, as drafted

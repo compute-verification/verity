@@ -52,11 +52,6 @@ noncomputable def BudgetAt (Λ : ℝ) : {n : ℕ} → RoundGame Ω n → Prop
         (∑ ω, (by classical exact if pass ω then Real.exp (d ω / Λ) else 0)) ≤ (Fintype.card Ω : ℝ) ∧
         ∀ ω, BudgetAt Λ (next ω)
 
-/-- The number of rounds with a positive share along the realized coins. -/
-noncomputable def deficientRounds : {n : ℕ} → Pouw.RelativeSecurity.RoundGame Ω n → Paths Ω n → ℕ
-  | _, .done, _ => 0
-  | _, .round d _ next, x => (by classical exact if 0 < d x.1 then 1 else 0) + deficientRounds (next x.1) x.2
-
 end RoundGame
 
 end Accounting.TS

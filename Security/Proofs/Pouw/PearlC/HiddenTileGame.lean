@@ -1,6 +1,7 @@
 import Definitions.Pouw.PearlC.HiddenTileGame
 import Proofs.Pouw.PearlC.HiddenGamma
 import Proofs.Core.Game
+import Proofs.Pouw.PearlC.HiddenTileGameDefs
 
 /-!
 # The hidden audit's open obligation from what a proof system gives per tile

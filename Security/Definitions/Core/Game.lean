@@ -57,12 +57,6 @@ instance instMonad : Monad Game where
   pure := .ret
   bind := bind
 
-/-- The prover sends a message of type `M`. -/
-def recv (M : Type) : Game M := .send M .ret
-
-/-- The verifier draws a uniform coin from `C`. -/
-def draw (C : Type) [Fintype C] [Nonempty C] : Game C := .coin C .ret
-
 /-- Relabel the output. -/
 def map (f : α → β) (g : Game α) : Game β := g.bind fun a => .ret (f a)
 

@@ -150,15 +150,6 @@ def decodeState (word : Nat) (pipe : Pipeline) : State :=
   else if E = 0 then (if m = 0 then ⟨0, 0, 0, Z, 0⟩ else ⟨0, 0, s, FP32_MIN_E, m⟩)
   else ⟨0, 0, s, (E : Int) - 127, ((1 <<< 23) ||| m : Nat)⟩
 
-/-- `relation.pack_state` on a canonical state (its fields are non-negative, except the exponent). -/
-def packState (st : State) : Nat :=
-  if st.nan ≠ 0 then 0x7FFFFFFF
-  else if st.inf ≠ 0 then (st.neg.toNat <<< 31) ||| 0x7F800000
-  else if st.M = 0 then 0
-  else
-    (st.neg.toNat <<< 31) ||| ((st.e + 127 - (if st.M.toNat >>> 23 ≠ 0 then 0 else 1)).toNat <<< 23)
-      ||| (st.M.toNat &&& 0x7FFFFF)
-
 /-- The product columns `step_witness` puts in `w["prod"][j]`. -/
 structure ProdCols where
   sa : Int

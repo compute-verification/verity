@@ -1,6 +1,8 @@
 import Definitions.Pouw.PearlC.PeelExact
 import Proofs.Pouw.PearlC.Peel
 import Proofs.Pouw.PearlC.AtomErr
+import Proofs.Pouw.Fp8Atom.H1TLemmas
+import Proofs.Pouw.PearlC.Defs
 
 /-!
 # P2 on the served U (staging, nothing pinned)

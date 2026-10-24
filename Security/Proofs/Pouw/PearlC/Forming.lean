@@ -8,6 +8,7 @@ import Definitions.Pouw.PearlC.Defs
 import Proofs.Pouw.PearlC.Peel
 import Definitions.Pouw.PearlC.SaltDead
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.PearlC.Defs
 
 /-!
 # P3: Pearl-C's forming credit (staging, nothing pinned)

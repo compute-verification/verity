@@ -1,6 +1,7 @@
 import Proofs.Population.Egress
 import Proofs.Population.Pointer
 import Proofs.Population.Work
+import Proofs.Population.DataflowDefs
 
 /-!
 # Leakage is the wrong units' cone egress

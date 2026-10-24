@@ -1,4 +1,5 @@
 import Definitions.Pouw.PearlC.Instance
+import Proofs.Pouw.PearlC.GameDefs
 
 /-!
 # Pearl-C's named protocol (proofs)

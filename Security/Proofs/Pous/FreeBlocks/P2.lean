@@ -1,5 +1,6 @@
 import Proofs.Pous.FreeBlocks.Audit
 import Proofs.Pous.P2.Margin
+import Proofs.Pous.Accounting.LemmaA
 
 /-!
 # `P2SlackFamilyFreeBlocks`: P2's family with `⌊B/100⌋` free blocks, `k = 140`

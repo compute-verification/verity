@@ -1,5 +1,6 @@
 import Definitions.Accounting.Gates.Declared
 import Definitions.Accounting.Gates.Registry
+import Proofs.Accounting.Gates.Registry
 
 /-!
 # The circuit model against the running Python, row by row

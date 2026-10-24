@@ -4,6 +4,7 @@ import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Ring
 import Definitions.Pouw.PearlC.Defs
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.Fp8Atom.Fp32
 
 /-!
 # The FP32 values in order, and a value's neighbours (the cap circuit's certificates)

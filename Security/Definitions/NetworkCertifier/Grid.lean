@@ -23,9 +23,6 @@ abbrev Row (S : ℕ) (F : Type) := Fin S → Option F
 /-- One link's grid for one window: `T` buckets × `S` slots. -/
 abbrev Grid (T S : ℕ) (F : Type) := Fin T → Row S F
 
-/-- Occupancy: which slots hold a frame. -/
-def occ {T S : ℕ} {F : Type} (g : Grid T S F) : Fin T → Fin S → Bool := fun t s => (g t s).isSome
-
 /-- A row's occupancy is left-packed: its occupied slots form a prefix. -/
 def RowLeftPacked {S : ℕ} (r : Fin S → Bool) : Prop :=
   ∀ s s' : Fin S, s ≤ s' → r s' = true → r s = true

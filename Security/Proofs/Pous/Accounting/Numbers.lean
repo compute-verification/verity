@@ -1,6 +1,7 @@
 import Mathlib.Order.Bounds.Defs
 import Mathlib.Tactic.NormNum
 import Definitions.Pous.Model.Inc
+import Proofs.Pous.Model.Inc
 
 /-!
 # Certified numbers

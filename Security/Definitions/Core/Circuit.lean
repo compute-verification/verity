@@ -106,9 +106,6 @@ structure Implementation (C D : Circuit) where
     (D.eval a (out o)).cast (out_w o ho) =
       C.eval (fun g => if h : C.isInput g = true then (a (inp g)).cast (inp_w g h) else 0) o
 
-/-- `C ≼ D`: `D` implements `C`. It may compute anything else, and need not compute `C`'s outputs the way `C` does. -/
-def Implements (C D : Circuit) : Prop := Nonempty (Implementation C D)
-
 /-- A witness that `D` contains `C`: each gate `g` of `C` is a gate `emb g` of `D` of the same width, input gates going
 to input gates and the others to non-input gates that read exactly the images of the gates `g` reads and apply `g`'s
 operation to them, and output gates going to output gates. -/
@@ -121,8 +118,5 @@ structure Containment (C D : Circuit) where
   op_emb : ∀ g, C.isInput g = false → ∀ v : D.Transcript,
     (D.op (emb g) v).cast (emb_w g) = C.op g fun a => (v (emb a)).cast (emb_w a)
   outputs_emb : ∀ o ∈ C.outputs, emb o ∈ D.outputs
-
-/-- `D` contains `C`: `C ≼ D`, and `D` computes every non-input gate of `C` from the same wires. -/
-def Contains (C D : Circuit) : Prop := Nonempty (Containment C D)
 
 end Verity

@@ -1,5 +1,6 @@
 import Definitions.Pouw.NCP.Word
 import Proofs.Pouw.Copy
+import Proofs.Pouw.NCP.Word
 
 /-!
 # R_word-NCP: the bound under NzNCP, the floor, and the witnesses

@@ -7,7 +7,7 @@ import Definitions.Pous.Accounting.PubMeets
 import Definitions.Pous.Accounting.GradedMeets
 import Definitions.Pous.Accounting.Rebuild
 import Models.Pous.Assumptions
-import Proofs.Pous.Model.HashChain
+import Definitions.Pous.Game.Oracle
 import Definitions.Pous.Model.Dense
 import Definitions.Pous.Model.Inc
 import Definitions.Pous.Model.Invertible
@@ -15,12 +15,14 @@ import Definitions.Pous.Model.Labelling
 import Definitions.Pous.Model.M1
 import Definitions.Pous.Model.P3Chain
 import Definitions.Pous.Model.BandChain
-import Proofs.Pous.Model.Pebbling
+import Mathlib.Basic.Real.Basic
+import Mathlib.Data.Fintype.Card
+import Mathlib.Data.List.Chain
 import Definitions.Pous.Model.SampledAudit
 import Models.Pous.Guarantees.P2
 import Models.Pous.Guarantees.SecureErasure
 import Models.Pous.Guarantees.StreamedWipe
-import Proofs.Pous.Model.BandGraph
+import Mathlib.Data.Fintype.Prod
 import Definitions.Pous.Model.SegLift
 import Definitions.Pous.Model.Continuous
 

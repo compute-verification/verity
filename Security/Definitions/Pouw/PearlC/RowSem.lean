@@ -85,9 +85,6 @@ row's codes `f`. -/
 def form8 (p : Pipeline) (α x : ℕ) (et f : ℕ → ℕ) : ℕ :=
   Prim.eval ops (.atom8 p) (Prim.eval ops .mul [α, x] :: (List.range 32).map et ++ (List.range 32).map f)
 
-/-- `pc8`'s code: the formed word's E4M3 cast. -/
-def code8W (p : Pipeline) (α x : ℕ) (et f : ℕ → ℕ) : ℕ := Prim.eval ops .toE4m3 [form8 ops p α x et f]
-
 /-! ## `pc4` -/
 
 /-- `pc4`'s `δρ`, `δ = 1/4`. -/

@@ -96,9 +96,6 @@ noncomputable def content [LinearOrder L] (X : Finset L) (t : ℕ) : List Bool :
 /-- `mem X t`: the width of `X`'s state at `t`. -/
 noncomputable def mem (X : Finset L) (t : ℕ) : ℕ := R.A.width (R.state X t)
 
-/-- **Memory** (v2.3), per run: each `X ∈ 𝒳` has a state of at most `M X` bits at every tick. -/
-def Memory (𝒳 : Set (Finset L)) (M : Finset L → ℕ) : Prop := ∀ X ∈ 𝒳, ∀ t, R.mem X t ≤ M X
-
 /-- What crosses from the leaves `X` to the leaves `Y`, read during `I`: each wire as its arrival tick, its reader's
 leaf and its source as seen. -/
 def crossing (X Y : Set L) (I : Set ℕ) : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) :=

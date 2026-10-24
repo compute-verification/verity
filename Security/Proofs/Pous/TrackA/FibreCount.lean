@@ -11,6 +11,7 @@ import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Thm1.Theorem1iiSeq
 import Proofs.Pous.Thm1.Theorem1iiiTimed
+import Proofs.Pous.Model.Inc
 
 /-!
 # Fibre counting: `PousProofs.fibre_count`, as drafted

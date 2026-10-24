@@ -79,18 +79,6 @@ def Node.declared (N : Node τ) (T : ℕ) : ℕ := ∑ m, N.rate m * T
 /-- C_true: the node's calibrated capacity over `T` ticks, `Σ_m β_m · T` bits, all its memory tiers could carry. -/
 def Node.capacity (N : Node τ) (T : ℕ) : ℕ := ∑ m, N.ceil m * T
 
-/-- A fleet audited at once, or an NVLink domain, as one node: the members' tiers, chips and rebuild work together, with
-the boundary links of the whole (`linkIn`, `linkOut`); links between members are inside it. -/
-def Node.fleet {ι : Type} {τ : ι → Type} [Fintype ι] (Ns : ∀ i, Node (τ i)) (linkIn linkOut : ℕ) :
-    Node (Σ i, τ i) where
-  ceil m := (Ns m.1).ceil m.2
-  rate m := (Ns m.1).rate m.2
-  chip := ∑ i, (Ns i).chip
-  linkIn := linkIn
-  linkOut := linkOut
-  rebuild := ∑ i, (Ns i).rebuild
-  rate_le m := (Ns m.1).rate_le m.2
-
 /-- μ_chip: `P · (M_N + 1) / C`, the node's on-chip state, with its length bit, at each pass boundary. -/
 noncomputable def muChip (N : Node τ) (a : Audit) : ℝ := a.P * (N.chip + 1) / N.declared a.T
 

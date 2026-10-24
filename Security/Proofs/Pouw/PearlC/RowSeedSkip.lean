@@ -2,6 +2,7 @@ import Models.Pouw.Assumptions.PearlC.RowSeedAssumptions
 import Proofs.Pouw.PearlC.RowSeedFragment
 import Proofs.Pouw.Prob
 import Proofs.Pouw.QTree
+import Proofs.Pouw.PearlC.Defs
 
 /-!
 # The fragment corollary: the union bound and `ttOutRowSeed_skipClass` (staging, nothing pinned)
