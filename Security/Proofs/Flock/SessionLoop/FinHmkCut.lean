@@ -278,7 +278,7 @@ def piopBody (P : List UInt8) (m kLog : ℕ) (digest cap root : ByteArray) (lay 
 
 /-- **The cut's zerocheck and lincheck bodies are the PIOP's bodies** (`zcBodies`, then `lcBodies` after the
 zerocheck's finals). -/
-theorem piopBodies_eq (P : List UInt8) {m kLog : ℕ} (hm : 14 ≤ m) (hk : 6 ≤ kLog) (digest cap root : ByteArray)
+theorem piopBodies_eq (P : List UInt8) {m kLog : ℕ} (digest cap root : ByteArray)
     (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) :
     zcBodies m digest cap root lay mk P ++ lcBodies kLog lay mk (encs [.one (mk lay.fa), .one (mk lay.fb)]) =
       (List.range (piopNR m kLog)).map (piopBody P m kLog digest cap root lay mk) := by
@@ -365,7 +365,7 @@ theorem piopBodies_eq (P : List UInt8) {m kLog : ℕ} (hm : 14 ≤ m) (hk : 6 �
   simp only [List.map_append, List.range'_one, List.map_cons, List.map_nil, hb0, hb1, hb2, hml, hfin, hbeta, hlc,
     hzp]
   unfold zcBodies lcBodies
-  simp only [List.cons_append, List.nil_append, List.append_assoc, List.singleton_append]
+  simp only [List.cons_append, List.nil_append, List.append_assoc]
 
 /-- A log's body `|l| + jj` where it is `l`, then the bodies `f 0, …`, then any more. -/
 theorem getElem!_of_toList_mid {L l : Array Claims.Msg} {N : ℕ} {f : ℕ → Claims.Msg} {rest : List Claims.Msg}
@@ -414,7 +414,7 @@ theorem piopCut_bodies {coin : ℕ → ℕ → F128} {n : ℕ} {st : _root_.Floc
   have hL : l₃.toList = l.toList ++
       (List.range (piopNR st.m st.fold.kLog)).map
         (piopBody t₀.pending.data.toList st.m st.fold.kLog st.digest cap root lay src.masked) ++ bs.toList := by
-    rw [hbs, Array.toList_append, hL₂, hL₁, hP₁, ← piopBodies_eq _ hm hk]
+    rw [hbs, Array.toList_append, hL₂, hL₁, hP₁, ← piopBodies_eq]
     simp only [List.append_assoc]
   exact getElem!_of_toList_mid hL hj
 
@@ -507,9 +507,7 @@ theorem isZero_add_one {a : F128} (h : a ≠ 1) : (a + 1).isZero = false := by
     have e := add_pad_pad a 1
     rw [FlockLevel3.F128.isZero_iff _ hz] at e
     rw [← e]
-    first
-    | rfl
-    | decide
+    rfl
 
 namespace Loop
 
@@ -742,9 +740,7 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
     rw [Masked.repBase_eq hsx]
     unfold streamAt roundsOf FlockComplete.repStartZk
     rw [take_map_range _ (by omega)]
-    first
-    | omega
-    | rw [Nat.add_comm]
+    omega
   have hrs : ∀ jj < piopNR (Masked.stAt x j).m (Masked.stAt x j).c.kLog,
       (seenRounds x ((m₀, ρ₀) :: ops) (roundsOf spec (Masked.stsOf x)) (2 * j.val + r.val))[jj]? =
         some (ByteArray.mk (encs (piopFr (Masked.stAt x j).m (Masked.stAt x j).c.kLog
