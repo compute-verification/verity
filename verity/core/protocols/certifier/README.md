@@ -152,13 +152,15 @@ A spec-level reference for network accounting's timing channel:
   served link under arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1`
   (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
   (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
-  each release eligible under a declared sync in Σ_sync, and at least a bucket, after its request's frames, whose end
-  on the ingress link `advised.ends` derives from v0's prompt lengths and the link's public framing, and each window's
-  ingress total the advice's. Carry-over between windows is the advice's. With the advice fixed the counts are
-  determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An advised link"). The prompt
-  lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict (`advised.IoTieVerdict`, naming the
-  link and its ingress registrations), which the verifier takes from its own tie source (`LinkWindows.ties`), never
-  beside the advice; IoTieRequest isn't in the proof service yet, so there is no source and every advised link is
+  each release eligible under its window's declared sync, one of Σ_sync and the one the certifier ran the window
+  under (the verifier's own clock source, `LinkWindows.clocks`), so never before the bucket of its request's last
+  frame (the request's end on the ingress link, which `advised.ends` derives from v0's prompt lengths and the link's
+  public framing), and each window's ingress total the advice's. Carry-over between windows is the advice's. With the
+  advice fixed the counts are determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An
+  advised link"). The prompt lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict
+  (`advised.IoTieVerdict`, naming the link and its ingress registrations), which the verifier takes from its own tie
+  source (`LinkWindows.ties`), never beside the advice; IoTieRequest isn't in the proof service yet, and the
+  certifier doesn't report its syncs to the verifier yet, so there is no source of either and every advised link is
   refused (fail closed).
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and

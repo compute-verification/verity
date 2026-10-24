@@ -1457,6 +1457,36 @@ def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them
     assert plain.compact is None
 
 
+def test_tie_run_on_the_gates_compact_runs_reads_their_records_as_data_cells_and_holds_their_finish(
+        gate_compact, negatives, tmp_path):
+    """`negatives.tie_run` on the gate's compact runs, the endpoint's `requests.jsonl` the Commit's ids: each compact
+    record is the data cell of its id, so neither run lacks id events, and the tie holds the link's records to the
+    ids (`finish`, `active.compact_finish_violations`). Honest's finish holds; token's fails on exactly window 0's
+    responses, which refuses it. With IO-TIE in the tree honest is accepted and token refused by content too, at
+    window 0; without it neither has a verdict, only IO-TIE missing."""
+    got, endpoint = gate_compact
+    path = tmp_path / "requests.jsonl"
+    path.write_text("".join(json.dumps(r) + "\n" for r in endpoint.served))
+    ids, IT = negatives.read_ids(path), negatives.io_tie_module()
+    rows = {}
+    for strategy, g in got.items():
+        row = rows[strategy] = negatives.tie_run(g["dir"], ids)
+        window0 = {g["io"][q["session"]]["stream"] for q in g["plan"]["requests"]
+                   if q["enqueue"] // cs.WINDOW_BUCKETS == 0}
+        assert row["id_events"] == sum(len(r["output"]) for r in g["io"].values()) > 0
+        assert list(row["missing"]) == ([] if IT else ["io-tie"])
+        assert {o for o, _ in row["finish_violations"]} == (window0 if strategy == "token" else set()) and window0
+        assert row["finish"] is (strategy != "token")
+    if IT is None:
+        assert {s: r["verdict"] for s, r in rows.items()} == {s: negatives.NOT_APPLICABLE for s in got}
+        return
+    honest, token = rows["honest"], rows["token"]
+    assert (honest["verdict"], honest["codes"], honest["unplaced"]) == ("accepted", [], 0)
+    assert (token["verdict"], token["codes"]) == ("refused", ["IoTieWindow.content"])
+    assert token["failing"] == {0: ["content"]}
+    assert negatives.tie_ok("honest", honest) and negatives.tie_ok("token", token)
+
+
 def test_tie_run_on_the_gates_varied_runs_with_the_endpoints_ids_accepts_honest_and_refuses_token(gate_varied,
                                                                                                     capsys):
     """`negatives.py tie-run --run TARBALL --ids REQUESTS.jsonl` on each gate run's tarball, the ids the endpoint's

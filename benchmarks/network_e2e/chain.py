@@ -596,7 +596,9 @@ TIE_OWED = ("token",)
 #: key of `negatives.tie_run`'s row that must be true, with the report's reason when it isn't. CERT-VARLEN's compact
 #: finish (each response's length and finish held to the advice, `active.compact_finish_violations`; REDTEAM phase 12
 #: target 3) goes here if the tie reports it as a key of its own; as a failing part it already refuses the honest run.
-TIE_REQUIRED: dict[str, str] = {}
+TIE_REQUIRED: dict[str, str] = {
+    "finish": "the I/O tie didn't establish the honest run's finish (`negatives.tie_run`'s finish: on a compact run "
+              "its records held to its sampled ids, `active.compact_finish_violations`)"}
 
 
 def _read_json(path: Path):

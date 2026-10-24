@@ -556,10 +556,11 @@ def test_the_advice_suite_makes_each_advice_negative_and_names_n2s_codes_on_it()
     assert made["prompt-split"]["prompt_lens"] == {0: [5, 2], 1: [2, 5]} and "request_tie" not in made["prompt-split"]
 
 
-def test_an_advice_that_releases_in_its_requests_own_bucket_runs_no_negative_until_shifted(tmp_path):
-    """N2-ADVICE's floor wants every output a bucket after its request's: an honest advice that releases in bucket 0
-    is refused by the view, which its row says, and no negative runs; `advice_run`'s shift moves every release later,
-    and then honest is accepted and the negatives run."""
+def test_an_advice_that_releases_before_its_declared_sync_runs_no_negative_until_shifted(tmp_path):
+    """N2-ADVICE's floor is the Program's eligibility under the declared sync: an honest advice that releases in its
+    requests' bucket 0 under δ = 1 is refused by the view, which its row says, and no negative runs; `advice_run`'s
+    shift moves every release later, and then honest is accepted and the negatives run. Under δ = 0, `advice_run`'s
+    default, the same advice is accepted unshifted, as a served first token in its request's own bucket is."""
     pytest.importorskip(NG.ADVISED_MODULE)
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
@@ -570,11 +571,12 @@ def test_an_advice_that_releases_in_its_requests_own_bucket_runs_no_negative_unt
     assert rows["honest"]["codes"] == [f"{NG.ADVISED}.view"] and "before its request" in rows["honest"]["why"]
     assert all(not r["ran"] for k, r in rows.items() if k != "honest")
     (tmp_path / "advice.bin").write_bytes(V.encode(early))
-    assert not NG.advice_run(tmp_path / "advice.bin", T=8, R=8)["negatives"]["honest"]["ok"]
-    doc = NG.advice_run(tmp_path / "advice.bin", T=8, R=8, shift=1)
-    assert doc["shift"] == 1 and doc["negatives"]["honest"]["ok"]
-    assert all(r["ran"] and r["ok"] for k, r in doc["negatives"].items() if k != "honest"), doc
-    assert doc["frame_bytes"] == cs.FRAME_BYTES and doc["received"] == [2]
+    assert not NG.advice_run(tmp_path / "advice.bin", T=8, R=8, delta=1)["negatives"]["honest"]["ok"]
+    for doc in (NG.advice_run(tmp_path / "advice.bin", T=8, R=8, delta=1, shift=1),
+                NG.advice_run(tmp_path / "advice.bin", T=8, R=8)):
+        assert doc["negatives"]["honest"]["ok"]
+        assert all(r["ran"] and r["ok"] for k, r in doc["negatives"].items() if k != "honest"), doc
+        assert doc["frame_bytes"] == cs.FRAME_BYTES and doc["received"] == [2]
 
 
 def test_the_ingress_tie_reads_each_requests_record_by_its_user_and_states_the_rest(tmp_path):

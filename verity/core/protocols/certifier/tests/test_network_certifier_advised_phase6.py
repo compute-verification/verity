@@ -20,7 +20,7 @@ from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.service import LinkWindows
 
 import signers
-from advised_traffic import LINK, StandInTie, held
+from advised_traffic import LINK, StandInClocks, StandInTie, held
 
 T, R, RIN = 4, 32, 9
 #: CERT-VARLEN's id-request framing at B = 4096 (`active.id_request_frames`): a prompt of up to 337 tokens is one
@@ -30,8 +30,8 @@ SHORT, LONG = 16, 338
 SYNC = ClockSync(0, Fraction(1))
 SS = SyncSet((0,), (Fraction(1),))
 #: the certified record: a 338-token request (2 frames) and then a 16-token one (1 frame), its frames in buckets 0, 1
-#: and 2; the egress releases an output in bucket 1 and one in bucket 3
-CERTIFIED, INGRESS, EGRESS = (LONG, SHORT), [1, 1, 1, 0], [0, 1, 0, 1]
+#: and 2; the egress releases an output in bucket 0 and one in bucket 3
+CERTIFIED, INGRESS, EGRESS = (LONG, SHORT), [1, 1, 1, 0], [1, 0, 0, 1]
 
 
 def _one_prefill(prompt_lens, release):
@@ -43,7 +43,7 @@ def _one_prefill(prompt_lens, release):
 
 
 def _view(link, tie):
-    return AD.view(link, 0, T, R, [SYNC], SS, RF, **tie)
+    return AD.view(link, 0, T, R, [SYNC], SS, RF, clocks=[SYNC], **tie)
 
 
 def _accepts(link, ingress, egress, own=0, certified=None, tie=None):
@@ -56,8 +56,8 @@ def _accepts(link, ingress, egress, own=0, certified=None, tie=None):
     return AD.reference(T, RIN, own, ingress, egress, v.released, v.floor, v.received)
 
 
-HONEST = AD.LinkAdvice(_one_prefill((LONG, SHORT), (1, 3)), (3,))
-FORGED = AD.LinkAdvice(_one_prefill((SHORT, LONG), (1, 3)), (3,))
+HONEST = AD.LinkAdvice(_one_prefill((LONG, SHORT), (0, 3)), (3,))
+FORGED = AD.LinkAdvice(_one_prefill((SHORT, LONG), (0, 3)), (3,))
 
 
 def _self_built(link):
@@ -68,10 +68,10 @@ def _self_built(link):
 
 
 def test_a_split_other_than_the_certified_prompts_is_refused_by_the_tie():
-    """The first request's output in bucket 1, before its second frame was in, is acausal, and the honest split is
-    refused. The forged split (16 then 338) lowers the first request's end to 1 frame and would pass on a record of
-    that split; IoTieRequest's verdict on the certified record refuses it before any floor is computed. Both are valid
-    v0s of the same charge."""
+    """The first request's output in bucket 0, before its second frame was in (bucket 1), is acausal, and the honest
+    split is refused. The forged split (16 then 338) lowers the first request's end to 1 frame and would pass on a
+    record of that split; IoTieRequest's verdict on the certified record refuses it before any floor is computed.
+    Both are valid v0s of the same charge."""
     assert AD.ends(HONEST, RF, **held(HONEST, CERTIFIED)) == (2, 3)
     assert not _accepts(HONEST, INGRESS, EGRESS, certified=CERTIFIED)
     with pytest.raises(ValueError, match="doesn't accept"):
@@ -101,7 +101,8 @@ def _phase6_link(key, ties):
     """A link of this case's shape (T = 4, R = 32, R_in = 9, one window, the B = 4096 framing) whose verifier's tie
     source is `ties`."""
     return LinkWindows(LINK, GridParams(T, R, 1), SS, key, "r-phase6", signers.SESSION, ingress=GridParams(T, RIN, 1),
-                       proof_deadline=60.0, advised=AD.AdvisedProfile(1, RF, 0), ties=ties)
+                       proof_deadline=60.0, advised=AD.AdvisedProfile(1, RF, 0), ties=ties,
+                       clocks=StandInClocks((SYNC,)))
 
 
 def test_a_verdict_the_prover_builds_never_reaches_the_verifier_of_record(tmp_path):
@@ -150,7 +151,8 @@ def test_a_link_without_the_tie_is_refused():
 
 def test_a_late_salt_is_conservative_never_a_false_accept():
     """`reference` takes the own frame from bucket 0; a salt that leaves later understates the request frames before
-    it, a stricter floor: the honest release is refused (liveness), never a forged one accepted."""
-    link = AD.LinkAdvice(_one_prefill((SHORT,), (1,)), (1,))
-    assert _accepts(link, [2, 0, 0, 0], [0, 1, 0, 0], own=1)
-    assert not _accepts(link, [1, 1, 0, 0], [0, 1, 0, 0], own=1)
+    it, a stricter floor: the honest release in the request's own bucket is refused (liveness), never a forged one
+    accepted."""
+    link = AD.LinkAdvice(_one_prefill((SHORT,), (0,)), (1,))
+    assert _accepts(link, [2, 0, 0, 0], [1, 0, 0, 0], own=1)
+    assert not _accepts(link, [1, 1, 0, 0], [1, 0, 0, 0], own=1)

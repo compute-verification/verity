@@ -60,7 +60,9 @@ verifier computes), and `io_tie.reference_parts` names the part that refuses it 
 directory of runs), each egress window's certified frames held to its certified head, as one JSON document
 (`TIE_RUN`): `runs`, by strategy, each with its `verdict` (``accepted``, ``refused``, or ``not-applicable`` when the run
 lacks what the tie opens, which `missing` names by `TIE_MISSING`'s keys), its `codes` (``IoTieWindow.PART``), the
-failing parts by window, and `ok` (`tie_ok`: honest accepted, a negative the tie reads refused by its part); and
+failing parts by window, its `finish` (on a compact plan its records held to the sampled ids,
+`active.compact_finish_violations`, which refuses it when they aren't), and `ok` (`tie_ok`: honest accepted, a
+negative the tie reads refused by its part); and
 `stand_ins`, what the tie takes for what the run doesn't keep (`TIE_STAND_INS`). It exits 0 when every run has a
 verdict and none is `ok` false, else 1.
 
@@ -97,8 +99,8 @@ import active_replay as ar  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 from verity.core.protocols.certifier import audit as host_audit, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier.active import (CANONICAL_STREAM, DATA, HEADER, ID_NAME_BYTES,  # noqa: E402
-                                                     decode_frame, encode_frame, id_event_data, id_request,
-                                                     id_request_frames)
+                                                     compact_finish_violations, compact_record_data, decode_frame,
+                                                     encode_frame, id_event_data, id_request, id_request_frames)
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, frames_root,  # noqa: E402
                                                           real_frames)
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet  # noqa: E402
@@ -841,10 +843,11 @@ def stated(advised):
 
 
 def _n2_view(AD, advised, window: int, T: int, R: int, syncs, sync_set, request_frames):
-    """`advised.view` of the (link, tie) `n2_advice` gives, held to `N2_LINK` and its stand-in registrations."""
+    """`advised.view` of the (link, tie) `n2_advice` gives, held to `N2_LINK` and its stand-in registrations, on
+    windows the certifier ran under the declared `syncs`."""
     link, tie = advised
     return AD.view(link, window, T, R, syncs, sync_set, request_frames, tie=tie, link_name=N2_LINK,
-                   registrations=n2_registrations(len(link.received)))
+                   registrations=n2_registrations(len(link.received)), clocks=syncs)
 
 
 def advised_codes(advised, window: int, syncs, sync_set, request_frames, T: int, R: int, RIN: int, OWN: int, ingress,
@@ -953,9 +956,10 @@ def advice_run(path: Path, *, T: int = 50, R: int = 32, frame_bytes: int = cs.FR
     frames (`link_framing`), all its requests' frames received in window 0, every window's sync (δ, ρ): its shape and
     the rows (`negatives`, or why not), each tied by IoTieRequest's reference once `io_request` is importable, on the
     id requests of the run's records (`ids`, `read_requests`; `model` the name they were sent under). With `shift`,
-    every release `shift` buckets later, for an advice whose clock put an output in its request's own bucket, which
-    N2-ADVICE's floor refuses. With the run's sampled `ids` (`read_ids`), `tie_suite` on it at T buckets of R cells
-    (`tie`)."""
+    every release `shift` buckets later, for an advice whose clock put an output earlier than a declared δ allows,
+    which N2-ADVICE's floor refuses. Under δ = 0 an output in its request's own bucket (a served first token, the
+    engine's clock with no certifier on the path) is accepted. With the run's sampled `ids` (`read_ids`), `tie_suite`
+    on it at T buckets of R cells (`tie`)."""
     mod = advice_module()
     if mod is None:
         raise NotApplicable(f"no advice codec yet: {ADVICE_MODULE} (I1, ADV-SPEC) hasn't landed")
@@ -1201,9 +1205,10 @@ TIE_RUN = "verity-network-tie-run/v1"
 #: what a run must keep for the tie to open it, by the key `tie_run`'s `missing` names it by
 TIE_MISSING = {
     "io-tie": f"the I/O tie: {IO_TIE_MODULE} (IO-TIE) isn't in this tree",
-    "id-events": "token-id events: no egress frame is an id event (`active.id_event`), so none is a data cell the tie "
-                 "reads an id from; a fixed plan's frames are text events, and only a varied plan "
-                 "(`certifier_serve.py plan --traffic varied`) writes id events",
+    "id-events": "token-id events: no egress frame is an id event (`active.id_event`), or on a compact plan a compact "
+                 "record (`active.compact_record`), so none is a data cell the tie reads an id from; a fixed plan's "
+                 "frames are text events, and only a varied plan (`certifier_serve.py plan --traffic varied`, with "
+                 "`--compact B` its records) writes them",
     "commit": "the Commit's rows: the endpoint's sampled ids of the run's requests, by each id request's user (--ids), "
               "which the run doesn't keep (the shim drops `user` before it forwards a request)",
 }
@@ -1211,7 +1216,9 @@ TIE_MISSING = {
 TIE_STAND_INS = {
     "cells_root": "each window's frames held to its certified egress head (record v2's frames root, under its "
                   "certificate), then committed under fake salts in place of the warden's bucket rows",
-    "cells": "each certified id event as v4's data cell on the stream its ordinal names; any other frame as it is",
+    "cells": "each certified id event as v4's data cell on the stream its ordinal names, and on a compact plan each "
+             "compact record (`active.compact_record_data`) as the data cell of its id, in an id event's frame "
+             "(`certifier_serve.FRAME_BYTES`); any other frame as it is",
     "port": "the Commit's port from --ids: one row a certified request's output, in (stream, index) order, under fake "
             "salts",
     "map": "the certified placement, each data cell its stream's next output, since no advice says where an output "
@@ -1224,11 +1231,14 @@ TIE_ORDER = ("map", "cells_root", "port", "content")
 NOT_APPLICABLE = "not-applicable"
 
 
-def tie_cell(IT, slot: bytes | None, B: int) -> bytes:
-    """A certified egress slot as the tie's cell: padding a pad, an id event's canonical frame the v4 data cell of its
-    id on the stream its ordinal names, any other frame as it is."""
+def tie_cell(IT, slot: bytes | None, B: int, compact: bool = False) -> bytes:
+    """A certified egress slot as the tie's B-byte cell: padding a pad, an id event's canonical frame (or under
+    `compact` a compact record) the v4 data cell of its id on the stream its ordinal names, any other frame as it is."""
     if slot is None:
         return IT.pad_cell(B)
+    if compact:
+        got = compact_record_data(slot)
+        return slot if got is None else IT.data_cell(got[1], got[0], B)
     kind, stream, payload = decode_frame(slot)
     got = id_event_data(payload) if (kind, stream) == (DATA, CANONICAL_STREAM) else None
     if got is None or slot != encode_frame(DATA, CANONICAL_STREAM, payload, B):
@@ -1262,10 +1272,13 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
     """The I/O tie on each egress window of the certifier-serve run `run`, `ids` the endpoint's sampled ids by request
     user (`read_ids`; None when not given), with `TIE_STAND_INS` for what the run doesn't keep. `verdict`: refused
     when a window's parts fail (`failing`, by window, in `TIE_ORDER`; window -1 the committed outputs no cell carries;
-    `codes` their ``IoTieWindow.PART``), accepted when none does, `NOT_APPLICABLE` when the run lacks what the tie
-    opens (`missing`, by `TIE_MISSING`'s keys). The windows whose frames are `held` to their certified heads, at each
-    end; the run's `id_events`, its certified requests' committed `outputs`, the data cells `placed` on one, and the
-    committed outputs no cell carries (`unplaced`)."""
+    `codes` their ``IoTieWindow.PART``) or the finish doesn't hold (`finish`), accepted when neither,
+    `NOT_APPLICABLE` when the run lacks what the tie opens (`missing`, by `TIE_MISSING`'s keys). `finish`: whether
+    each response's length and finish are the Commit's; on a compact plan the link's records held to the sampled ids
+    (`active.compact_finish_violations`, each (ordinal, why) in `finish_violations`), on id events true, their finish
+    being their ids'; None without the ids or the events. The windows whose frames are `held` to their certified
+    heads, at each end; the run's `id_events` (a compact plan's records), its certified requests' committed
+    `outputs`, the data cells `placed` on one, and the committed outputs no cell carries (`unplaced`)."""
     IT = io_tie_module()
     plan, report, dep = (json.loads((run / f).read_text())
                          for f in ("plan.json", "calibration.json", "deployment.json"))
@@ -1280,14 +1293,20 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
     held = {d.value: [w for w in range(windows)
                       if frames_held(certified.get((d, w)), recs.get(w), p, key, session, link)]
             for d, (recs, p) in ends.items()}
-    events = sum(_is_id_event(s) for r in outs for row in r.grid for s in row if s is not None)
+    compact = bool(plan.get("compact"))
+    real = [s for r in sorted(outs, key=lambda r: r.window) for row in r.grid for s in row if s is not None]
+    events = sum((compact_record_data(s) is not None) if compact else _is_id_event(s) for s in real)
     missing = {k: TIE_MISSING[k] for k, lacks in (("io-tie", IT is None), ("id-events", not events),
                                                   ("commit", ids is None)) if lacks}
+    users = ({r["stream"]: r["user"] for r in cs.certified_io(plan, setup, ins, outs)["records"]}
+             if events and ids is not None else None)
+    finish = compact_finish_violations({q: ids.get(u, ()) for q, u in users.items()}, plan["varied"]["eos_token_ids"],
+                                       real) if compact and users is not None else []
     out = {"verdict": NOT_APPLICABLE, "codes": [], "failing": {}, "windows": windows,
-           "held": {end: len(ws) for end, ws in held.items()}, "id_events": events, "missing": missing}
+           "held": {end: len(ws) for end, ws in held.items()}, "id_events": events, "missing": missing,
+           "finish": None if users is None else not finish, "finish_violations": [list(v) for v in finish]}
     if missing:
         return out
-    users = {r["stream"]: r["user"] for r in cs.certified_io(plan, setup, ins, outs)["records"]}
     step, rows = {}, []
     for q in sorted(users):
         for k, x in enumerate(ids.get(users[q], ())):
@@ -1300,9 +1319,10 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
     port = rows, salts, IT.rows_levels(pd.domain_id, rows, salts), pd.domain_id
     nxt: dict[int, int] = defaultdict(int)
     placed: dict[int, tuple[list[bytes], list]] = {}
+    B = cs.FRAME_BYTES if compact else e.frame_bytes
     for w in range(windows):
         grid = egress[w].grid if w in egress else [(None,) * e.allocation] * e.buckets
-        cells, at = [tie_cell(IT, s, e.frame_bytes) for row in grid for s in row], []
+        cells, at = [tie_cell(IT, s, B, compact) for row in grid for s in row], []
         for c in cells:
             p = IT.parse_cell(c)
             if p is not None and p.data:
@@ -1312,7 +1332,7 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
                 at.append(None)
         placed[w] = cells, at
     S = max([1, *(len({x[1] for x in at if x and x[1] is not None}) for _, at in placed.values())])
-    shape = IT.Shape(e.frame_bytes, e.buckets, e.allocation, P=1, S=S, DS=DS)
+    shape = IT.Shape(B, e.buckets, e.allocation, P=1, S=S, DS=DS)
     ingress_held = len(held[Direction.INGRESS.value]) == windows
     for w, (cells, at) in placed.items():
         steps = sorted({x[1] for x in at if x and x[1] is not None})
@@ -1330,7 +1350,7 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
     if unplaced:
         out["failing"][-1] = ["content"]
     out["codes"] = sorted({f"{TIE}.{p}" for parts in out["failing"].values() for p in parts})
-    out["verdict"] = "refused" if out["failing"] else "accepted"
+    out["verdict"] = "refused" if out["failing"] or out["finish"] is False else "accepted"
     return out | {"outputs": sum(committed.values()),
                   "placed": sum(1 for _, at in placed.values() for x in at if x and x[1] is not None),
                   "unplaced": unplaced}

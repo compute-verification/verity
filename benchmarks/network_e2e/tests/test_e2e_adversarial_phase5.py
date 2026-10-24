@@ -57,7 +57,8 @@ def test_a_negative_is_refused_by_its_own_violation_not_by_any_refusing_verdict(
 #: the I/O tie, required on the advice profile (`chain.tie_gate`), accepting the honest run
 TIED = {"ran": True, "why": None, "from": "ids.jsonl", "stand_ins": {}, "runs": {"honest": {
     "verdict": "accepted", "ok": True, "codes": [], "failing": {}, "windows": [], "unplaced": 0, "changed": None,
-    "requests": 40, "outputs": 40, "placed": 40, "held": {"egress": 8, "ingress": 8}, "missing": {}, "why": None}}}
+    "requests": 40, "outputs": 40, "placed": 40, "held": {"egress": 8, "ingress": 8}, "missing": {}, "finish": True,
+    "why": None}}}
 
 
 def _advised(stages: dict, codes: str = "own") -> dict:

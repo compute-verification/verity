@@ -20,8 +20,8 @@ from verity.core.protocols.certifier.service import LinkWindows
 
 import signers
 import standin
-from advised_traffic import (FRAMING, LINK, P, PIN, SYNC_SET, SYNCS, T, WINDOWS, Session, StandInTie, counts,
-                             egress_records, held, ingress_records)
+from advised_traffic import (FRAMING, LINK, P, PIN, SYNC_SET, SYNCS, T, WINDOWS, Session, StandInClocks, StandInTie,
+                             counts, egress_records, held, ingress_records)
 from test_network_certifier_advised import Run
 
 #: the certified ingress: a 7-token request (3 frames) and then a 2-token one (1 frame), both arriving in bucket 0,
@@ -173,13 +173,15 @@ def test_a_verdict_on_another_link_or_ingress_record_isnt_reused(tmp_path):
     other registrations: the verifier of link A's tie source gives a verdict that link B's view refuses, and a
     verdict on other registrations than the source records (another ingress record of the same link) is refused."""
     assert list(inspect.signature(AD.view).parameters) == ["link", "window", "T", "R", "syncs", "sync_set",
-                                                            "request_frames", "tie", "link_name", "registrations"]
+                                                            "request_frames", "tie", "link_name", "registrations",
+                                                            "clocks"]
     link = AD.LinkAdvice(_advice(CERTIFIED), (4, 0, 0, 0))
     key = signers.signer(tmp_path).public_key()
     views = {}
     for name in (LINK, "another-link"):
         lw = LinkWindows(name, P, SYNC_SET, key, "r-phase10", signers.SESSION, ingress=PIN, proof_deadline=60.0,
-                         advised=AD.AdvisedProfile(WINDOWS, FRAMING, 0), ties=StandInTie(CERTIFIED))
+                         advised=AD.AdvisedProfile(WINDOWS, FRAMING, 0), ties=StandInTie(CERTIFIED),
+                         clocks=StandInClocks())
         views[name] = [lw._view(w, SYNCS, link) for w in range(WINDOWS)]
     assert None not in views[LINK] and views["another-link"] == [None] * WINDOWS
     tie = held(link, CERTIFIED)
@@ -188,4 +190,4 @@ def test_a_verdict_on_another_link_or_ingress_record_isnt_reused(tmp_path):
                      (replace(tie["tie"], registrations=elsewhere), "other ingress registrations")):
         for w in range(WINDOWS):
             with pytest.raises(ValueError, match=why):
-                AD.view(link, w, T, P.allocation, SYNCS, SYNC_SET, FRAMING, **(tie | {"tie": bad}))
+                AD.view(link, w, T, P.allocation, SYNCS, SYNC_SET, FRAMING, clocks=SYNCS, **(tie | {"tie": bad}))
