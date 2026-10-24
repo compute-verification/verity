@@ -1344,9 +1344,19 @@ chain's `load` and `advance`, the plain contexts and `codeword`, ENC-REPLAY's 32
 - the charge one below the coded length: ``charge`` fails (0x17);
 - arrival 1's prompt one token longer in ``cert``: ``rows`` fails (0x0F), and its b‖c isn't the certified record's.
 
-**In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py`, N2-ZK's audit path): one template of four
-units (honest and the three negatives). The verifier opens ``pub`` and the verdict only. The unit is k_log 22, one
-unit a block.
+**In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py`, N2-ZK's audit path; run r20261024-110210-eb8f
+on vy-nebius-3, CPU prover): one template of four units, the honest one and the three negatives.
+- The proof: every unit drawn by Lean, proved `prove --zk` behind the Lean firewall and held by Lean `verify --zk`.
+  The audit accepts, complete, with no wrong unit. The verifier opens ``pub`` and the verdict only.
+- The verdicts: the honest unit opens to 0x1F, its ``adv`` b‖c is the advice registration's leaf and its ``cert`` b‖c
+  the certified record's. Each negative opens to its refusal, and the arrival's ``cert`` b‖c is refused too.
+- The scan: no piece of any witness row, row salt or digest salt is in what the verifier received (148 pieces, 161.6
+  MB received). The prover's instance file holds every witness row.
+- The adv row is one word and the cert row seven, below the scan's 16-byte pieces, so only their salts are scanned.
+- The cost: the unit is k_log 22 and one unit a block, so the statement is `--zk`'s smallest shape (m = 25). One
+  window alone (the verifier draws one unit) proves in 27.4 s (36.4 s end to end) and Lean verifies in 15.8 s. Its
+  proof is two repetitions of 873,386 bytes. The four-unit session costs the same, 27.6 s and 15.8 s, because the
+  shape, not the units, sets the cost.
 
 ## The active certifier (`active`)
 
