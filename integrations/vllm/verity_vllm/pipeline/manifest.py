@@ -252,9 +252,15 @@ def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, 
     import multiprocessing
     after = after or (lambda _i, _m: None)
     if jobs <= 1 or len(tasks) < 2 or "fork" not in multiprocessing.get_all_start_methods():
-        return _build_in_turn(tasks, after)
+        return _build_in_turn(tasks, after, log)
     with _pool_headroom(budget_gb, "components", log) as head:
-        return _build_in_turn(tasks, after) if head is None else _build_forked(tasks, jobs, after, head, log)
+        return _build_in_turn(tasks, after, log) if head is None else _build_forked(tasks, jobs, after, head, log)
+
+
+def _progress(log, done: int, total: int, t0: float, running: int = 0) -> None:
+    """The line each component's end adds to the manifest's log: a limit of none (`row_tp --manifest-timeout 0`) leaves only these."""
+    if log:
+        log(f"  components: {done}/{total} built in {time.time() - t0:.0f}s" + (f", {running} running" if running else ""))
 
 
 @contextmanager
@@ -293,11 +299,12 @@ def _own_budget(budget_gb: float | None = None) -> int | None:
     return head if lim.isdigit() and int(lim) < total else None
 
 
-def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None]) -> list[dict[str, Any]]:
-    out = []
+def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None], log=None) -> list[dict[str, Any]]:
+    out, t0 = [], time.time()
     for i, (d, kw) in enumerate(tasks):
         out.append(build(d, **kw))
         after(i, out[-1])
+        _progress(log, i + 1, len(tasks), t0)
     return out
 
 
@@ -370,7 +377,7 @@ def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Cal
     pending = sorted(range(len(tasks)), key=lambda i: (-need[i], i))
     results: dict[int, tuple[str, Any]] = {}
     running: dict[Any, tuple[int, Any]] = {}
-    used, first_bad = 0, len(tasks)
+    used, first_bad, t0 = 0, len(tasks), time.time()
     if log:
         log(f"  components: {len(tasks)} builds, {jobs} processes, memory budget {budget / 2**30:.1f} GiB")
     while pending or running:
@@ -396,6 +403,7 @@ def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Cal
             if p.exitcode not in (0, None) and results[i][0] == "ok":
                 results[i] = ("error", RuntimeError(f"{os.path.basename(tasks[i][0])}: the build process exited {p.exitcode}"))
             used -= need[i]
+            _progress(log, len(results), len(tasks), t0, len(running))
             if results[i][0] == "error" and i < first_bad:
                 first_bad = i
                 pending = [j for j in pending if j < i]

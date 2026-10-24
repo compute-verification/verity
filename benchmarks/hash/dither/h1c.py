@@ -9,6 +9,7 @@
 A table's domain is `commit.domain(fields, count, kind)`, with `splice` naming the fields that move with the step (each
 a s + b), so a step's sequence is the same launches with the step read from the device.  Its label is `lab[0]` + str(s)
 + `lab[1]` (or `lab[0]` alone).  `Tab.out` points a table's root into another table's leaves (a given table: no data).
+`Tab.xd` (`dead_x`) is the x of the rows of a block the device's `Tab.rlive` marks dead, whose segments go unhashed.
 DITHER_A_FORM=2 (or `lib.form(2)`) serves each call's A table through h1c_a_call2_k, its compressions paired, and 3
 through h1c_a_call3_k, paired with its messages in registers.
 """
@@ -52,7 +53,7 @@ class _Tab(C.Structure):
     _fields_ = [("data", C.c_void_p), ("tail", C.c_void_p), ("stride", C.c_longlong), ("tail_stride", C.c_longlong),
                 ("lab", C.c_void_p * 2), ("lab_len", C.c_int * 2), ("labs", C.c_int), ("len", C.c_int), ("body", C.c_int),
                 ("count", C.c_int), ("depth", C.c_int), ("dm", _Dom), ("dom", C.c_void_p), ("level", C.c_void_p),
-                ("segs", C.c_void_p), ("root", C.c_void_p)]
+                ("segs", C.c_void_p), ("root", C.c_void_p), ("xd", C.c_void_p), ("rlive", C.c_void_p), ("rbw", C.c_int)]
 
 
 def words(b: bytes) -> np.ndarray:
@@ -116,6 +117,19 @@ class Tab:
     lab: tuple = ("", "")                 # lab[0] + str(s) + lab[1], or lab[0] alone (labs False)
     labs: bool = True
     out: int | None = None               # where the root goes (a device address), else the set's own
+    # a dead block's rows: where rlive[i // rbw] (uint8, on the device) is 0, row i's x is xd's row i % rbw (`dead_x`
+    # of the bytes every such row i % rbw holds), its segments not hashed
+    xd: torch.Tensor | None = None
+    rlive: torch.Tensor | None = None
+    rbw: int = 0
+
+
+def dead_x(rows: list[bytes], dev) -> torch.Tensor:
+    """`Tab.xd` for dead rows holding `rows` (row r the bytes of every dead block's row r): each one's x,
+    `rowleaf.sha512_row_seg_digest`, as 8 big-endian words a row."""
+    xs: dict[bytes, bytes] = {}
+    out = b"".join(xs.setdefault(r, RL.sha512_row_seg_digest(r, 8 * len(r))) for r in rows)
+    return torch.from_numpy(words(out)).to(dev)
 
 
 class Set:
@@ -177,6 +191,10 @@ class Set:
             x.level = self.level.data_ptr() + 8 * self.level_off[i]
             x.segs = self.segs.data_ptr() + 8 * self.seg_off[i]
             x.root = t.out if t.out is not None else self.roots.data_ptr() + 64 * i
+            if t.xd is not None:
+                if t.data is None or t.rlive is None or t.rbw <= 0 or t.count % t.rbw or t.xd.numel() != 8 * t.rbw:
+                    raise ValueError(f"table {i}: xd needs rows, rlive and rbw dividing its {t.count} rows, 8 rbw words")
+                x.xd, x.rlive, x.rbw = t.xd.data_ptr(), t.rlive.data_ptr(), t.rbw
             host[i] = x
         self.host = host
         self.dev = torch.frombuffer(bytearray(bytes(host)), dtype=torch.uint8).to(dev)

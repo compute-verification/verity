@@ -12,7 +12,9 @@ of the cut where one does not (`RefSession.swMsgAt`). Here it is split at that b
   four coin faults `Admits` excludes (an outer coin `1`, `ρ_0, ρ_1` dependent over F128, a rank-deficient mask slot,
   `β = 0`: `Frame.Masker.answer`, `Frame.maskRank`), but the release reads the frame's state and coins through the
   transport (`prog`, `coinsOf`), so that the state it hands the frame is the frame's own run on the opened coins is
-  the session loop's (`Flock.Firewall.Frames`, on `Drive.reqs`), as `ReadsCoins` is.
+  the session loop's (`Flock.Firewall.Frames`, on `Drive.reqs`), as `ReadsCoins` is. That the frames took every
+  round's coins on such a history is proved (`LeanRelease.coins_taken_of_live`, `FrameTaken`), and that a rank the
+  frame finds full is `maskRankOk` at the statement's mask words (`Rank.maskRankOk_of_maskRank`, `FrameRank`).
 * `LeanRelease.FinishIs`: on such a history where the firewall's own `Finish` does not stop either (`finStops`), its
   files encode `fin` of the tables' switched views. It says nothing where the firewall's `Finish` stops, which the server
   refuses (`refusesFinish`).
