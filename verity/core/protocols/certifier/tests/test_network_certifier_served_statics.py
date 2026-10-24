@@ -18,6 +18,15 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as REG
 from verity.ml.commitments import advice as ADV
 
 FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
+
+
+def _book() -> dict:
+    """The registered book the compile slice's charge reads (as `test_network_certifier_compile_slice.book`)."""
+    streams = json.loads((FIXTURE.parent / "arith_encode_vectors.json").read_text())["streams"]
+    return next(s for s in streams if s["source"].startswith("async-light"))["decisions"]["book"]
+
+
+BOOK = _book()
 COUNT, POS = 1 << SS.FLAGS.index("count"), 1 << SS.FLAGS.index("pos")
 RUN_ROOT = bytes(range(64))
 
@@ -26,7 +35,7 @@ RUN_ROOT = bytes(range(64))
 def x():
     fx = json.loads(FIXTURE.read_text())
     S = SimpleNamespace(**CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"],
-                                     K=fx["K"], SEG=fx["SEG"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"]))
+                                     K=fx["K"], CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"]))
     sl = CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"], tuple(map(tuple, fx["tokens"])))
     rows = [tuple(map(tuple, r)) for r in fx["rows"]]
     return SimpleNamespace(S=S, sl=sl, rows=rows, programs=SS.program_of(rows))
@@ -46,12 +55,12 @@ def test_the_honest_window_is_accepted_block_by_block(x, G):
 
 def test_six_passes_are_refused_against_the_programs_the_window_ran(x):
     """REDTEAM phase 10 finding 2 through the tie. The prover registers the six-pass run's rows (user-1 never admitted),
-    consistently: their row is the registered one, so the slice accepts them with a 5-bit code. Step 6's Program
-    computed user-1's 29 prefill tokens in slot 1 beside user-0's decode; the cheap rows hold slot 1 empty, so the tie
-    refuses at ``count``."""
+    consistently: their row is the registered one, so the slice accepts them, charged 17 bits under the registered
+    book. Step 6's Program computed user-1's 29 prefill tokens in slot 1 beside user-0's decode; the cheap rows hold
+    slot 1 empty, so the tie refuses at ``count``."""
     S, sl = x.S, x.sl
-    cheap = CS.case(S, CS.Slice(sl.arrivals, (0,) * 6, sl.steps, sl.tokens))
-    assert cheap.verdict == CS.ACCEPT and cheap.length == 5
+    cheap = CS.case(S, CS.Slice(sl.arrivals, (0,) * 6, sl.steps, sl.tokens), BOOK)
+    assert cheap.verdict == CS.ACCEPT and cheap.length == 17
     served = SR.register(S, [list(cheap.steps)], RUN_ROOT, G=1)
     assert [u for u, (a, b) in enumerate(zip(cheap.steps, x.rows)) if a != b] == [6]
     st, cases = _cases(x, list(cheap.steps), 1)
@@ -123,7 +132,7 @@ def test_a_block_is_its_leaf_of_the_registration(x):
     two = [x.rows, list(x.rows[:3]) + [None] * (S.P - 3)]
     window = SR.register(S, two, RUN_ROOT)
     assert window.registration.rows == SR.register(S, two, RUN_ROOT, G=S.P).registration.rows
-    assert window.registration.rows[0] == SR._row(CS.case(S, x.sl).rows["srv"])[0]
+    assert window.registration.rows[0] == SR._row(CS.case(S, x.sl, BOOK).rows["srv"])[0]
     served = SR.register(S, two, RUN_ROOT, G=1)
     rec = served.record()
     assert rec["count"] == 2 * S.P and rec["G"] == 1 and window.record()["G"] == S.P
