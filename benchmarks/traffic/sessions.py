@@ -12,6 +12,7 @@ distributions; BurstGPT conversation and API logs (chat, api); Azure 2023 conver
 from __future__ import annotations
 
 import argparse
+import ast
 import io
 import json
 import lzma
@@ -250,13 +251,13 @@ def ragbench():
 
 
 def burstgpt():
+    import pyarrow as pa
     import pyarrow.parquet as pq
-    from huggingface_hub import hf_hub_download, list_repo_files
-    files = [f for f in list_repo_files("lzzmm/BurstGPT", repo_type="dataset") if f.endswith(".parquet")]
-    t = pq.read_table([hf_hub_download("lzzmm/BurstGPT", f, repo_type="dataset") for f in files][0]) if len(files) == 1 \
-        else __import__("pyarrow").concat_tables(
-            [pq.read_table(hf_hub_download("lzzmm/BurstGPT", f, repo_type="dataset")) for f in files])
-    d = t.to_pydict()
+    # the hub's parquet conversion concatenates the release's CSVs (with and without failed requests); failed requests
+    # (no response tokens) are dropped below, so the duplication weights every kept request equally
+    base = "https://huggingface.co/api/datasets/lzzmm/BurstGPT/parquet/default/train/"
+    cols = ["Request tokens", "Response tokens", "Log Type"]
+    d = pa.concat_tables([pq.read_table(fetch(base + f"{i}.parquet"), columns=cols) for i in (0, 1)]).to_pydict()
     req = np.array(d["Request tokens"], dtype=np.int64)
     resp = np.array(d["Response tokens"], dtype=np.int64)
     kind = np.array(d["Log Type"])
@@ -288,19 +289,25 @@ def _servegen_mix(category: str, model: str, chunks: int, per_chunk: int, rng) -
             tr = fetch(SERVEGEN + f"{category}/{model}/chunk-{c}-trace.csv").read_text().splitlines()
         except Exception:  # noqa: BLE001 - client ids have gaps
             continue
-        rate = np.mean([float(line.split(",")[1]) for line in tr if line.strip()])
-        rates.append(rate)
-        win = ds[sorted(ds, key=int)[0]]
-        ctx.append(win["input_tokens"])
-        out.append(win["output_tokens"])
+        dist = {"input_tokens": Counter(), "output_tokens": Counter()}
+        for win in ds.values():  # one per 6-hour window, each a dict written as a string, '{}' where the client was idle
+            for key, acc in dist.items():
+                d = ast.literal_eval(win[key]) if isinstance(win[key], str) else win[key]
+                for v, p in d.items():
+                    acc[int(v)] += float(p)
+        if not dist["input_tokens"] or not dist["output_tokens"]:
+            continue
+        rates.append(np.mean([float(line.split(",")[1]) for line in tr if line.strip()]))
+        ctx.append(dist["input_tokens"])
+        out.append(dist["output_tokens"])
     rates = np.array(rates) / np.sum(rates)
     n = rng.multinomial(per_chunk * len(rates), rates)
     cs, os_ = [], []
     for k, ci, co in zip(n, ctx, out):
         if k == 0:
             continue
-        vi, pi = np.array(list(map(int, ci))), np.array(list(ci.values()), dtype=float)
-        vo, po = np.array(list(map(int, co))), np.array(list(co.values()), dtype=float)
+        vi, pi = np.array(list(ci)), np.array(list(ci.values()), dtype=float)
+        vo, po = np.array(list(co)), np.array(list(co.values()), dtype=float)
         cs.append(rng.choice(vi, size=k, p=pi / pi.sum()))
         os_.append(rng.choice(vo, size=k, p=po / po.sum()))
     return single(np.concatenate(cs), np.concatenate(os_))
@@ -349,50 +356,58 @@ def main() -> None:
         (args.out / "sources.json").write_text(json.dumps(stats, indent=1))
         print(f"{src}: {stats[src]['calls']} calls, {stats[src]['sessions']} sessions", flush=True)
 
-    for name, cls in [("conversation", "chat"), ("toolagent", "agentic"), ("synthetic", "rag")]:
+    def mooncake(name, cls):
         src = f"mooncake-{name}"
-        if want(src):
-            rows = hashtrace.read(fetch(MOONCAKE + f"{name}_trace.jsonl"))
-            res = {}
-            for fm in (2, 8):
-                a = hashtrace.analyze(rows, fork_min=fm)
-                res[fm] = a.pop("stats")
-                if fm == 8:
-                    rows8 = a
-            put(src, cls, ["R1", "R2", "R3"], "Kimi production (one hour), 512-token prefix hashes, capped at 128K",
-                rows8, {"fork_min_8": res[8], "fork_min_2": res[2]})
-    if want("servegen-sessions"):
-        put("servegen-sessions", "chat", ["R1", "R3"], "Bailian multi-turn chat sessions (counts only)",
-            servegen_sessions())
-    if want("servegen-r1"):
-        put("servegen-r1", "reasoning", ["R1"], "Bailian DeepSeek-R1 clients' length distributions, rate-weighted",
-            _servegen_mix("reason", "deepseek-r1", 200, 400, rng))
-    if want("servegen-language"):
-        put("servegen-language", "api", ["R1"], "Bailian m-large API clients' length distributions, rate-weighted",
-            _servegen_mix("language", "m-large", 400, 100, rng))
-    if want("azure2023"):
-        for cls, rows in azure2023().items():
-            put(f"azure2023-{cls}", cls, ["R1"], "Azure LLM inference trace 2023 (one hour)", rows)
-    if want("burstgpt"):
-        b, extra = burstgpt()
-        for cls, rows in b.items():
-            put(f"burstgpt-{cls}", cls, ["R1"], "BurstGPT, Azure OpenAI GPT service logs", rows, extra)
-    if want("ragbench"):
-        rows, extra = ragbench()
-        put("ragbench", "rag", ["R1", "R2"], "RAGBench test splits: retrieved documents + question", rows, extra)
-    if want("tau-bench"):
-        rows, extra = sessions_to_units(*tau_bench())
-        put("tau-bench", "agentic", ["R1", "R2", "R3"], "tau-bench historical trajectories (no tool schemas)", rows,
-            extra)
-    if want("swe-agent"):
-        rows, extra = sessions_to_units(*swe_agent(args.frac))
-        put("swe-agent", "agentic", ["R1", "R2", "R3"], f"nebius/SWE-agent-trajectories, {args.frac:.0%} sample, "
-            "full history (no observation collapsing)", rows, extra)
-    if want("openhands"):
-        rows, extra = sessions_to_units(*openhands(args.frac))
-        put("openhands", "agentic", ["R1", "R2", "R3"], f"nebius/SWE-rebench-openhands-trajectories, {args.frac:.0%} "
-            "sample, tool schemas in the prefix", rows, extra)
+        rows = hashtrace.read(fetch(MOONCAKE + f"{name}_trace.jsonl"))
+        res = {fm: hashtrace.analyze(rows, fork_min=fm) for fm in (2, 8)}
+        stats8 = res[8].pop("stats")
+        put(src, cls, ["R1", "R2", "R3"], "Kimi production (one hour), 512-token prefix hashes, capped at 128K",
+            res[8], {"fork_min_8": stats8, "fork_min_2": res[2]["stats"]})
 
+    def length_sources(fn, note):
+        b, extra = fn() if fn is burstgpt else (fn(), {})
+        for cls, rows in b.items():
+            put(f"{fn.__name__}-{cls}", cls, ["R1"], note, rows, extra)
+
+    def agent(src, note, fn, *a):
+        rows, extra = sessions_to_units(*fn(*a))
+        put(src, "agentic", ["R1", "R2", "R3"], note, rows, extra)
+
+    jobs = [
+        ("mooncake-conversation", lambda: mooncake("conversation", "chat")),
+        ("mooncake-toolagent", lambda: mooncake("toolagent", "agentic")),
+        ("mooncake-synthetic", lambda: mooncake("synthetic", "rag")),
+        ("servegen-sessions", lambda: put("servegen-sessions", "chat", ["R1", "R3"],
+                                          "Bailian multi-turn chat sessions (counts only)", servegen_sessions())),
+        ("servegen-r1", lambda: put("servegen-r1", "reasoning", ["R1"],
+                                    "Bailian DeepSeek-R1 clients' length distributions, rate-weighted",
+                                    _servegen_mix("reason", "deepseek-r1", 200, 400, rng))),
+        ("servegen-language", lambda: put("servegen-language", "api", ["R1"],
+                                          "Bailian m-large API clients' length distributions, rate-weighted",
+                                          _servegen_mix("language", "m-large", 200, 100, rng))),
+        ("azure2023", lambda: length_sources(azure2023, "Azure LLM inference trace 2023 (one hour)")),
+        ("burstgpt", lambda: length_sources(burstgpt, "BurstGPT, Azure OpenAI GPT service logs")),
+        ("ragbench", lambda: put("ragbench", "rag", ["R1", "R2"], "RAGBench test splits: retrieved documents + question",
+                                 *ragbench())),
+        ("tau-bench", lambda: agent("tau-bench", "tau-bench historical trajectories (no tool schemas)", tau_bench)),
+        ("swe-agent", lambda: agent("swe-agent", f"nebius/SWE-agent-trajectories, {args.frac:.0%} sample, full history "
+                                    "(no observation collapsing)", swe_agent, args.frac)),
+        ("openhands", lambda: agent("openhands", f"nebius/SWE-rebench-openhands-trajectories, {args.frac:.0%} sample, "
+                                    "tool schemas in the prefix", openhands, args.frac)),
+    ]
+    failed = []
+    for name, job in jobs:
+        if not want(name):
+            continue
+        try:
+            job()
+        except Exception as e:  # noqa: BLE001 - one source's failure is reported, the others still run
+            failed.append(name)
+            stats[f"error:{name}"] = {"error": f"{type(e).__name__}: {e}"}
+            (args.out / "sources.json").write_text(json.dumps(stats, indent=1))
+            print(f"{name}: FAILED {type(e).__name__}: {e}", flush=True)
+    if failed:
+        print(f"failed sources: {failed}", flush=True)
 
 if __name__ == "__main__":
     main()
