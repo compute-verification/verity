@@ -83,15 +83,20 @@ calls are the rows whose bit is true. `drawn`: the units the draw coin draws, ne
 under the law `work:k` (`workUnits`), over the window's layout (`h1window.program`'s arguments, its units the compiled
 Program's, call by call, each call's tiles row block major), one stratum per K (`strata`), each unit's work R·C·K, at
 the K its period's open committed (`law`; `committedK` reads `draw_k`, and a window with fewer units than K is refused).
-`established`: the ε that draw established at δ = 2⁻⁴⁰ over the window's credited work, `PouwWindow.epsAt` (`k_prime`
-inverted) as `epsAt K δ C W 1`, C the credited calls' work and W the window's (`callWork`), which `periodCredit`
-reports, null when it establishes no ε ≤ 1; PoUW has no ε target. `outcome`: the window is accepted only when every unit `drawn` draws has exactly one
+`servedRows`: each manifest row states its call's served rows m_s (`served`, under `calls_root`, so fixed before the
+draw coin), a natural at most the A slot M, one m_s for every call of a step (call c at step `c / (C/S)`); else the
+window is refused (`manifest`). A credited call with m_s = 0 is no credit. `established`: the ε that draw established at
+δ = 2⁻⁴⁰ over the window's credited served work, `PouwWindow.epsAt` (`k_prime` inverted) as `epsAt K δ C W 1`, C the
+credited calls' served work (`servedWork`, m_s·n·K a call, never its M slot rows') and W the window's units'
+(`callWork`, the draw's population, padded slots included), which `periodCredit` reports with C as the window's
+`work`, null when it establishes no ε ≤ 1; PoUW has no ε target. That m_s counts the step's input-ids table's served
+slots is not yet proved: it is the serving process's statement, fixed before the draw coin. `outcome`: the window is accepted only when every unit `drawn` draws has exactly one
 proof outcome and it is an accept; a failed or missing one refuses the whole window. `layoutOf`: the layout is the
 committed circuit's, never the window's evidence: read from the descriptor whose SHA-512 the period's open committed
 (its program function's record, its templates' A and B rows for R and C), whose root's nodes other than inputs must be
 each call's (M/R)·(n/C) instances of K's template in order. `window` runs every step on one served window and its one
 round log, crediting only when all accept: `credited`, `roundsCheck` (the log's roots are the ones the challenger
-received, `core_check.rounds`), `aLink` over the window's registered entries, `layoutOf`, `length`, then `outcome`'s rule with the
+received, `core_check.rounds`), `aLink` over the window's registered entries, `layoutOf`, `servedRows`, `length`, then `outcome`'s rule with the
 stream its root, the registration its draw root and the receipt `{"receipts": …}`, then `registration`. `period`: the windows
 presented are exactly those the auditor's ledger lists in the period's close, in its order, and the close is complete,
 so a period with no close or with a window missing, out of order or not its own earns nothing; `periodCredit` also
@@ -113,9 +118,9 @@ PRF-127); and each proof was verified against that descriptor, opened only value
 its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or its own call's round's `…/a/<K>@<s>`. So entries of another window or circuit, a proof verified against another registration, and an entry whose root
 is not the one its sessions opened are refused. `length`: the period's open commits each request's public max_tokens
 with the public-cap done source (`committedLength`, `{max_tokens, stop}`, stop `fixed`; Daniel, 19 Oct, ASK-39), and the
-served rows each manifest row fixed before the draw coin (`served`) are that fixed length's schedule, every request
-admitted in round 0: round 0 serves at least one row a request, round s ≥ 1 one decode row for each request whose
-max_tokens is past s (a round's served rows the most any of its calls served). A period whose open commits no length is
+served rows m_s each step's manifest rows fixed before the draw coin (`servedRows`) are that fixed length's schedule,
+every request admitted in round 0: round 0 serves at least one row a request, round s ≥ 1 one decode row for each
+request whose max_tokens is past s. A period whose open commits no length is
 not of record (`no-fixed-length`), an EOS-keyed stop mode is refused (`eos-keyed-row`), and a round serving more or fewer
 rows ran a request past its public max_tokens or stopped one before it (`length-mismatch`).
 

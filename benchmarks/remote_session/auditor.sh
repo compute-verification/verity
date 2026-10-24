@@ -7,9 +7,10 @@
 # (`pins`, RT4-INT-40). A gate that refuses `pins` serves no log: then no session is pinned, and the line credits
 # zero. It fetches origin/main itself and writes its first-parent history ($OUT/main.txt, `--main`, CMP-74): a pin off
 # that line, or no list when the fetch fails, likewise credits zero. Writes $OUT/auditor_line.json and $OUT/credit.md,
-# each session's four checks and the line. RUN may instead be a host run's directory as vy-auditor-1 ships it
-# (`vy-verifier-gate fetch`, out/ beside request.json): the sessions' challenger peer is the record's (verifier.json's,
-# else request.json's --challenger-peer), and PEER overrides it.
+# each session's checks and the line, which the Lean verifier computes (`line_by` lean: auditor_line.py builds
+# remote-audit-verifier, so lake must be on the PATH, and refuses the line where line.py's differs). RUN may instead be
+# a host run's directory as vy-auditor-1 ships it (`vy-verifier-gate fetch`, out/ beside request.json): the sessions'
+# challenger peer is the record's (verifier.json's, else request.json's --challenger-peer), and PEER overrides it.
 #
 #   research run --queue --on vy-nebius-1 --project verity --source . --cwd clone --cpus 4 --mem-gb 16 \
 #     --timeout 30m --store-read --env RUN=DIR --env PERIOD=P --env PIN=SHA512 --env COMMIT=SHA \

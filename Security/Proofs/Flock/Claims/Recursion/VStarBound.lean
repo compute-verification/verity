@@ -29,7 +29,9 @@ So the restated facts constrain every round:
   fixed by the statement (with no pieces), held whole by some part, or assembled from parts' pieces; no part holds the
   last round whole. The bound layout has no public round.
 * `PartChecksB`: `PartChecks`, where the messages it quantifies over also agree with the part's pieces of the
-  assembled rounds, at their offsets. A part's check can read its own pieces of the last message.
+  assembled rounds, at their offsets, and with the commit strings its statement shows at the rounds read whole off the
+  run (`LayoutB.CmtAgrees`). A part's check can read its own pieces of the last message, and the rounds it reads are
+  the ones its statement commits to.
 * `PartOpensB`: `PartOpens`, where what a part holds of a round before the last is the commit string itself, so it is
   the string the part's statement shows, and each piece it holds of such a round sits in that string at its offset.
 * `VstarShowsB`: `VstarShows`, the staging shows the coins and, at each round before the last, the run's commit string.
@@ -191,19 +193,28 @@ def HeldB (D : Deploy Coin) (I : Inner Coin W) (L : LayoutB) (shape : Form → P
       ((L.fixedAt x i).isSome → L.pieceAt x i = [])) ∧
     ∀ s, L.msgAt x s (I.V.k (xI D x) - 1) = none
 
+/-- **The readers' messages are the commit strings `xO` shows**, at each round before the last that the statement
+doesn't fix and that has no pieces: the rounds the readers read whole off the run, where `VstarShowsB` makes `cmt` the
+run's commit string. A part reads such a round through its own statement (a row it opens against the commit string
+`xO` shows) whether or not it holds the round whole, so its check speaks of the readers' message only through this. -/
+def LayoutB.CmtAgrees (L : LayoutB) (cmt : Msg → ℕ → Msg → Msg) (x xO : Msg) (ms : List Msg) : Prop :=
+  ∀ i, i + 1 < L.rounds x → L.fixedAt x i = none → L.pieceAt x i = [] → ms.getD i [] = cmt x i xO
+
 /-- **V\* part `s`'s circuit checks the inner check `chk s` at every round it reads** (restating `PartChecks` for option
-(d)). It is `PartChecks`, except that the messages it quantifies over agree with the part in two ways: with its
-holdings at the rounds it holds whole, and with its pieces at the assembled rounds, each at its offset. So a part's
-check can read its own pieces of the last message, which no part held whole before. Or two of its recorded calls
-collide. -/
+(d)). It is `PartChecks`, except that the messages it quantifies over agree with the part in three ways: with its
+holdings at the rounds it holds whole, with its pieces at the assembled rounds, each at its offset, and with the commit
+strings its statement shows at the rounds read whole off the run (`LayoutB.CmtAgrees`). So a part's check can read its
+own pieces of the last message, which no part held whole before, and a round it reads but doesn't hold is the one its
+statement commits to. Or two of its recorded calls collide. -/
 def PartChecksB (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
-    (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
+    (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
   ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) →
       (∀ i < L.rounds x, ∀ o m, (o, m) ∈ L.piecesOf x s w i → ((ms.getD i []).drop o).take m.length = m) →
+      L.CmtAgrees cmt x xO ms →
       chk s x c ms) ∨
       (findColl (L.calls x s w)).isSome
 
