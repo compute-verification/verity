@@ -126,9 +126,14 @@ def levels(dom, values: list[bytes], schema, salt_key: bytes, nonce: int) -> byt
     return b"".join(b"".join(lv) for lv in tree_levels(dom, [dom.leaf(i, i, schema, v) for i, v in enumerate(salted)]))
 
 
+@pytest.mark.parametrize("form", ["whole", "split", "split-nofill"])
 @pytest.mark.parametrize("m, mr, n", [(64, 48, 384), (64, 64, 384)])
-def test_pd_writes_pearl_c_h3s_bytes_and_the_no_write_control_fails(host, m, mr, n):
+def test_pd_writes_pearl_c_h3s_bytes_and_the_no_write_control_fails(host, m, mr, n, form):
+    """Each form of A's commitment: ``commit_a`` (pd_commit in mode 0), or `split_a`'s ``rows_a`` (pd_commit in mode 1)
+    then ``tree_seed_a`` (pd_tree, the same variant), which writes the same bytes; without `fillers` pd_tree writes no
+    padding rows' E_A lines, which keep the poison, and every other byte is the same."""
     k, w, idx = 1024, 3, 5
+    split, fillers = form != "whole", form != "split-nofill"
     rng = np.random.default_rng(mr)
     a_rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(mr)] + [bytes(4 * k)] * (m - mr)
     c, u = (rng.integers(0, 2**32, (m, n), dtype=np.uint64).astype(np.uint32) for _ in range(2))
@@ -144,10 +149,13 @@ def test_pd_writes_pearl_c_h3s_bytes_and_the_no_write_control_fails(host, m, mr,
     for name, words in (("c", c), ("u", u)):
         host.array(bufs[name])[:m * n * 4] = np.frombuffer(words.astype("<u4").tobytes(), np.uint8)
     pipe = R.Pipeline(host, m, n, k, "sm120", {name: host.put(v) for name, v in keys.items()}, host.put(b"".join(a_rows)), 0,
-                      bufs=bufs, m_real=mr)
-    assert pipe.pd == R.pd_variant(mr, n, k) and host.pd_smem == dict.fromkeys(SERVED, host.OPTIN)
+                      bufs=bufs, m_real=mr, split_a=split, fillers=fillers)
+    commits = {v & ~R.PD_GROUP for v in SERVED}
+    assert pipe.pd == R.pd_variant(mr, n, k) and host.pd_smem == host.pd_tree_smem == dict.fromkeys(commits, host.OPTIN)
     by = {name: step for name, _, step in pipe.steps()}
-    assert "commit_a" in by and not set(R.Pipeline.FUSED["commit_a"]) & set(by)
+    names = ("rows_a", "tree_seed_a") if split else ("commit_a",)
+    assert set(names) <= set(by) and not {"commit_a", "rows_a", "tree_seed_a"} - set(names) & set(by)
+    assert not {x for f in names for x in R.Pipeline.FUSED[f]} & set(by)
 
     digests = [C.row_digest(r) for r in a_rows[:mr]]
     tree_a = levels(dom_a, a_rows[:mr], ROW_SCHEMA, salt_key, idx)
@@ -169,7 +177,8 @@ def test_pd_writes_pearl_c_h3s_bytes_and_the_no_write_control_fails(host, m, mr,
         host.log.clear()
         if v is not None:
             pipe.pd = v
-            by["commit_a"]()
+            for f in names:
+                by[f]()
             by["hash_leaf"]()
         for step in ("pad_t", "tree_leaves_t", "tree_t"):
             if step in by:
@@ -178,11 +187,17 @@ def test_pd_writes_pearl_c_h3s_bytes_and_the_no_write_control_fails(host, m, mr,
         if v is None:
             assert got == dict.fromkeys(want, False), "the no-write control passed"
             continue
+        ea = host.read(bufs["ea_codes"], len(want["ea_codes"]))
+        if not fillers:
+            got["ea_codes"] = ea[:32 * mr] == want["ea_codes"][:32 * mr] and set(ea[32 * mr:]) <= {R.POISON}
         assert got == dict.fromkeys(want, True), (v, got)
         assert host.read(bufs["pd_count"], 16) == bytes(16)
         launches = {name: (grid, block, smem, i) for name, grid, block, smem, i in host.log}
-        commit, tile = launches[f"pd_commit_{v}"], launches[f"pd_tiles_{v}"]
-        assert commit == (mr, 32 * (R.cdiv(k // 256, 32) * 2 + 2), host.OPTIN, (mr, k, 0, m))
+        commit, tile = launches[f"pd_commit_{v & ~R.PD_GROUP}"], launches[f"pd_tiles_{v}"]
+        assert commit == (mr, 32 * (R.cdiv(k // 256, 32) * 2 + 2), host.OPTIN, (mr, k, int(split), m))
+        if split:
+            assert launches[f"pd_tree_{v & ~R.PD_GROUP}"] == (1, 128, host.OPTIN, (mr, 0, 0, m))
+            assert [x[0] for x in host.log][:2] == [f"pd_commit_{v & ~R.PD_GROUP}", f"pd_tree_{v & ~R.PD_GROUP}"]
         group = bool(v & R.PD_GROUP)
         assert tile == ((R.cdiv(mr, 64) * R.cdiv(n // 64, R.PD_G), 32 * R.PD_G, R.PD_PAIR_SMEM // 2) if group
                         else (tiles, 32, 0)) + ((mr, n),)

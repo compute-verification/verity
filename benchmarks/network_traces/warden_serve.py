@@ -9,6 +9,8 @@ cells; the client speaks cells through the thin, workload-blind shim (`warden.ce
 
 Nothing here is the warden's but bytes. Tonight's clients send HTTP/1.1 requests for vLLM's streamed `/v1/completions`
 with `Connection: close`, so the server's end of stream ends egress (the warden never half-closes toward a server).
+The server gets each request whole at its release, with its place in the warden's release order and the warden's run
+id (`release`), which `deployment.json` names (`run_id`).
 
 **What it can't enforce here.**
 - Run directly, the warden runs on the server's host (`trusted-host` stands for the auditor's host). The gate's
@@ -44,10 +46,11 @@ its own generation config to a request that omits them.
   outcome, the tick lateness, the refusals). Each window's records go to `requests.records`, `responses.records`
   and `fails.records` (each failed connection's reason, witness), and each is certified (`certificate.Issuer`, with
   the warden's parameters digest) into `certified.jsonl`. Each window of the wire's two records is also committed as
-  rows, a cell a row (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows, commit
-  and sign ms), `cells.salts` the rows' salts (witness, the prover's). All of that is done by a spawned process
+  rows, a row a bucket, with its wiring (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the
+  cost (rows, row bytes, commit and sign ms), `cells.salts` the rows' salts and the wiring's (witness, the prover's,
+  who holds the records the rows and the wiring are read off). All of that is done by a spawned process
   (`PublisherProcess`), which alone holds the key and gets each tick's rows as the warden releases them: a window's
-  commit takes seconds of CPU, and in the warden's own process, even on another thread, it holds the ticker's GIL and
+  commit can take seconds of CPU, and in the warden's own process, even on another thread, it holds the ticker's GIL and
   puts ticks past their slack.
 - `client` sends each request of the traffic at its time after the origin on a connection of its own, reads the cells
   to the warden's close, and writes `client.json`: per connection its ordinal, outcome, every cell's kind and arrival,
@@ -277,7 +280,7 @@ class Publisher:
     committed as rows by `commit` (`attest`). `serve` runs it in `PublisherProcess`: on the ticker's thread, or on any
     thread of its process, a window's commit holds the ticker's GIL for seconds. `close` gives the issuer's refusals."""
 
-    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, commit=WR.Cells.commit) -> None:
+    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, commit=WR.Cells.of) -> None:
         self.out, self.issuer, self.params, self.commit = out, issuer, params, commit
 
     def __call__(self, record: Record, grid: GridParams) -> None:
@@ -292,22 +295,22 @@ class Publisher:
         with open(self.out / "certified.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
         if record.link != FAILS:
-            self.attest(record, grid, link, direction)
+            self.attest(record, link, direction)
 
-    def attest(self, record: Record, grid: GridParams, link: str, direction: Direction) -> None:
-        """The link-window's cells as rows (`warden_rows`), their head signed: one line of `cells.jsonl` (the
-        registration, or the link-window under `refused`, and the cost), the salts to `cells.salts` (witness)."""
+    def attest(self, record: Record, link: str, direction: Direction) -> None:
+        """The link-window's cells as rows and its wiring (`warden_rows`), their head signed: one line of `cells.jsonl`
+        (the registration, or the link-window under `refused`, and the cost), the salts to `cells.salts` (witness)."""
         t0 = time.perf_counter()
-        cells_ = self.commit(link, direction, record.window, WR.window_rows(record, grid), self.params.digest,
-                             self.issuer.session)
+        cells_ = self.commit(link, direction, record, self.params, self.issuer.session)
         head = cells_.head
         t1 = time.perf_counter()
         cert = self.issuer.sign(link, direction, record.window, head.digest())
         t2 = time.perf_counter()
-        cost = {"rows": len(cells_.rows), "commit_ms": round((t1 - t0) * 1000, 3), "sign_ms": round((t2 - t1) * 1000, 3)}
+        cost = {"rows": len(cells_.rows), "row_bytes": len(cells_.rows[0]), "commit_ms": round((t1 - t0) * 1000, 3),
+                "sign_ms": round((t2 - t1) * 1000, 3)}
         line = ({"refused": [link, direction.value, record.window]} if cert is None
-                else {"registration": WR.registration(head, cert, grid)})
-        ar.write_blobs(self.out / "cells.salts", b"".join(cells_.salts))
+                else {"registration": WR.registration(head, cert, self.params)})
+        ar.write_blobs(self.out / "cells.salts", cells_.witness)
         with open(self.out / "cells.jsonl", "a") as fh:
             fh.write(json.dumps(line | {"cost": cost}) + "\n")
 
@@ -315,14 +318,29 @@ class Publisher:
         return list(self.issuer.refused)
 
 
+def _hash_row(h, row) -> None:
+    """Row `row` into `h`, a grid's SHA-512: each slot a 0 byte, or a 1 byte and its frame."""
+    for frame in row:
+        h.update(b"\x00" if frame is None else b"\x01" + frame)
+
+
+def grid_digest(grid) -> bytes:
+    """The SHA-512 of a record's grid, row by row (`_hash_row`): the close marker's, which the publisher process
+    holds its rebuilt grid to."""
+    h = hashlib.sha512()
+    for row in grid:
+        _hash_row(h, row)
+    return h.digest()
+
+
 def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: WardenParams, commit) -> None:
     """`PublisherProcess`'s process: the warden's key and its leaf state are this process's alone. It sends the public
-    key, rebuilds each record from its released rows, keeps it as `Publisher` does at its close, and at the end sends
-    the issuer's refusals and its own usage."""
+    key, rebuilds each record from its released rows, keeps it as `Publisher` does at its close once the rebuilt grid's
+    digest is the close marker's, and at the end sends the issuer's refusals and its own usage."""
     try:
         own = cs.signer(key)
         results.send(("key", own.public_key()))
-        publisher = Publisher(out, Issuer(own, session), params, commit or WR.Cells.commit)
+        publisher = Publisher(out, Issuer(own, session), params, commit or WR.Cells.of)
         grids = {INGRESS: params.grid, EGRESS: params.grid, FAILS: params.fails_grid}
         filling: dict[str, list] = {link: [] for link in grids}
         B = params.cell_bytes
@@ -332,10 +350,12 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
             if n is not None:
                 filling[link].append(tuple(data[i * B:(i + 1) * B] for i in range(n)) + (None,) * (grid.allocation - n))
                 continue
-            (window, reason), got = data, filling[link]
+            (window, reason, digest), got = data, tuple(filling[link])
             if len(got) != grid.buckets:
                 raise ValueError(f"{link} window {window} closed after {len(got)} rows, not {grid.buckets}")
-            publisher.keep(Record(link, window, tuple(got), Status(reason)), grid)
+            if grid_digest(got) != digest:
+                raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the warden closed")
+            publisher.keep(Record(link, window, got, Status(reason)), grid)
             filling[link] = []
         results.send(("done", {"refused": publisher.close(), "usage": ar._usage()}))
         own.close()
@@ -347,10 +367,13 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
 class PublisherProcess:
     """`serve`'s `publish` and `release`: `Publisher` in one spawned process, which alone holds the warden's key.
     `release` hands it each grid's row as the warden ticks (its frames as one bytes object), and `__call__` the
-    record's close: the ticker only queues them, and the queue's own thread pickles each tick's few kilobytes, never a
-    whole window. The process rebuilds each record from its rows and keeps, certifies and commits it, so neither a
-    commit nor a signature takes the ticker's GIL. `key` is the warden's public key; `close` waits for every record and
-    gives the issuer's refusals; `usage` is then the process's own. `commit` stands in for `Cells.commit` (a test's)."""
+    record's close with its grid's SHA-512 (`grid_digest`), hashed a row at a time as each is released and held to the
+    record's grid at its close: the ticker only queues them, and the queue's own thread pickles each tick's few
+    kilobytes, never a whole window. The process rebuilds each record from its rows, refuses one whose grid isn't the
+    marker's, and keeps, certifies and commits it, so neither a commit nor a signature takes the ticker's GIL. `key`
+    is the warden's public key; `close` waits for every record and gives the issuer's refusals; `usage` is then the
+    process's own. A process that exits early, killed or failed, raises at the next close or at `close`. `commit`
+    stands in for `Cells.of` (a test's)."""
 
     def __init__(self, out: Path, key: Path, session: bytes, params: WardenParams, commit=None) -> None:
         ctx = multiprocessing.get_context("spawn")
@@ -361,13 +384,20 @@ class PublisherProcess:
         self.process.start()
         results.close()
         self.usage: dict | None = None
+        self._released: dict[str, list] = {}
+        self._digests: dict[str, object] = {}
         self.key: LmsKey = self._receive("key")
 
     def _receive(self, kind: str):
         multiprocessing.connection.wait([self.results, self.process.sentinel])
-        if not self.results.poll():
+        try:
+            message = self.results.recv() if self.results.poll() else None
+        except EOFError:
+            message = None
+        if message is None:
+            self.process.join()
             raise RuntimeError(f"the publisher process exited ({self.process.exitcode}) before its {kind}")
-        got, value = self.results.recv()
+        got, value = message
         if got == "error":
             raise RuntimeError(f"the publisher process failed: {value}")
         if got != kind:
@@ -385,12 +415,17 @@ class PublisherProcess:
 
     def release(self, link: str, row) -> None:
         n = row_count(row)
+        self._released.setdefault(link, []).append(row)
+        _hash_row(self._digests.setdefault(link, hashlib.sha512()), row)
         self.rows.put((link, n, b"".join(row[:n])))
 
     def __call__(self, record: Record, grid: GridParams) -> None:
         if not self.process.is_alive():
             self._end()
-        self.rows.put((record.link, None, (record.window, record.status.reason)))
+        released, digest = self._released.pop(record.link, []), self._digests.pop(record.link, hashlib.sha512())
+        if record.grid != tuple(released):
+            raise RuntimeError(f"{record.link} window {record.window}: the record's grid isn't the rows released")
+        self.rows.put((record.link, None, (record.window, record.status.reason, digest.digest())))
 
     def close(self) -> list:
         self.rows.put(None)
@@ -409,12 +444,14 @@ def _quantiles(xs: list[float]) -> dict:
 
 
 def deployment_record(params: WardenParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
-                      listen: tuple[str, int], upstream: tuple[str, int], slack: float) -> dict:
+                      listen: tuple[str, int], upstream: tuple[str, int], slack: float,
+                      run_id: bytes | None = None) -> dict:
     """`deployment.json`, the auditor's record of a run: the warden's public key and session, the schedule's
-    parameters and their digest, the origin and where it listened."""
+    parameters and their digest, the origin and where it listened, and the run id its server's requests carry."""
     return {"key": cs.public_json(key), "session": session.hex(), "link": LINK,
             "params": asdict(params), "digest": params.digest.hex(), "slack_ms": slack * 1000,
-            "origin_unix": origin_unix, "windows": windows, "listen": list(listen), "upstream": list(upstream)}
+            "origin_unix": origin_unix, "windows": windows, "listen": list(listen), "upstream": list(upstream),
+            "run_id": None if run_id is None else run_id.hex()}
 
 
 async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
@@ -431,7 +468,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     server = await asyncio.start_server(warden.handle, *listen)
     deployment = deployment_record(params, publish.key, session, origin_unix=time.time() + origin - time.monotonic(),
                                    windows=windows, listen=(listen[0], server.sockets[0].getsockname()[1]),
-                                   upstream=upstream, slack=slack)
+                                   upstream=upstream, slack=slack, run_id=warden.run_id)
     (out / "deployment.json").write_text(json.dumps(deployment, indent=1))
     announce({"listening": deployment["listen"], "deployment": str(out / "deployment.json")})
     try:
@@ -510,47 +547,46 @@ def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], Certifi
     return got, refused
 
 
-def read_cells(run: Path) -> list[tuple[dict, list[bytes]]]:
-    """`cells.jsonl` and `cells.salts`, line by line: each link-window's registration (or refusal) and cost, and its
-    rows' salts."""
+def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
+    """`cells.jsonl` and `cells.salts`, line by line: each link-window's registration (or refusal) and cost, its rows'
+    salts and its wiring's (`warden_rows.read_witness`)."""
     path = run / "cells.jsonl"
     lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
     salts = ar.read_blobs(run / "cells.salts")
     if len(salts) != len(lines):
         raise ValueError(f"cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
-    n = WR.SALT_BYTES
-    return [(doc, [s[i:i + n] for i in range(0, len(s), n)]) for doc, s in zip(lines, salts)]
+    return [(doc, *WR.read_witness(s)) for doc, s in zip(lines, salts)]
 
 
 def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[Record]]) -> tuple[dict, list]:
     """Every link-window of the wire's two records has a registration that `warden_rows.check_registration` accepts
-    under the warden's key and session, whose root is the record's rows under its salts; the per-window cost."""
+    under the warden's key and session, whose head is the record's rows and wiring under their salts; the per-window
+    cost."""
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     got = {}
-    for doc, salts in read_cells(run):
+    for doc, salts, wiring_salt in read_cells(run):
         if "registration" in doc:
             r = doc["registration"]
-            got[(r["link"], r["direction"], r["window"])] = (doc, salts)
+            got[(r["link"], r["direction"], r["window"])] = (doc, salts, wiring_salt)
     problems, costs, ok_n = [], [], 0
     for name in (INGRESS, EGRESS):
         link, direction = CERTIFIED[name]
         by_window = {r.window: r for r in records[name]}
         for w in range(dep["windows"]):
-            doc, salts = got.get((link, direction.value, w), (None, None))
+            doc, salts, wiring_salt = got.get((link, direction.value, w), (None, None, None))
             ok = False
             if doc is not None and w in by_window:
                 costs.append(doc["cost"])
                 try:
-                    head, _ = WR.check_registration(doc["registration"], key, session, params.grid, params.digest, link,
-                                                    direction, w)
-                    rows = WR.window_rows(by_window[w], params.grid)
-                    ok = WR.Cells.commit(link, direction, w, rows, params.digest, session, salts).root == head.root
+                    head, _ = WR.check_registration(doc["registration"], key, session, params, link, direction, w)
+                    ok = WR.Cells.of(link, direction, by_window[w], params, session, salts, wiring_salt).head == head
                 except ValueError as e:
                     problems.append(f"{name} window {w}'s cells: {e}")
             ok_n += ok
             if not ok:
                 problems.append(f"{name} window {w}'s cells aren't registered")
     summary = {"registered": ok_n, "of": 2 * dep["windows"], "rows": sorted({c["rows"] for c in costs}),
+               "row_bytes": sorted({c["row_bytes"] for c in costs}),
                "commit_ms": _quantiles([c["commit_ms"] for c in costs]),
                "sign_ms": _quantiles([c["sign_ms"] for c in costs])}
     return summary, problems

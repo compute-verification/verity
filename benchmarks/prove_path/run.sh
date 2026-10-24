@@ -15,7 +15,12 @@
 #     run's. The bundle's context records the Commit's absolute node paths, and none is read: the Programs are read from --row-dir,
 #     and the Build manifest falls back to <row dir>/manifest.json (sha256-checked against the record). The honest partition is
 #     PP_PARTITION (default layer 0's SiluMul_v2{I=8192} at step 1, 4 units, subset:2); the forged one layer 0's at step 24, the
-#     one unit only r0 decodes there, drawn (subset:1), forged at PP_FORGE (default 0:0).
+#     one unit only r0 decodes there, drawn (subset:1), forged at PP_FORGE (default 0:0). With PP_SERVE_STANDIN=1, the same
+#     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
+#   PP_SERVE_RUN=DIR|art:ID PP_WINDOW=K PP_SERVE_ROWS=DIR|art:ID: a serve-openai run's closed Commit window K (default 0), its
+#     advice, requests and engine from the run dir, its Commit from the window's sealed row dir (#3532's form); PP_TARGET=F the
+#     serving device's target profile where serve.json records none. The honest and forged partitions are PP_PARTITION and
+#     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0).
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn).
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
@@ -44,11 +49,12 @@ export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 R() { PYTHONPATH=$REPO/benchmarks/proof_throughput python3 -c 'import os, sys
 from verity_proof_throughput.store import store_env
 os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], store_env())' "$@"; }
-if [ -n "${PP_LLAMA:-}" ]; then   # the row dir: the sealed bundle, the Commit's records, the Build's Programs and manifest
-  D=${PP_CACHE:-$HOME/.cache/verity-prove-path}/${PP_LLAMA:4:16}
+ROWS_ART=; case "${PP_SERVE_ROWS:-${PP_LLAMA:-}}" in art:*) ROWS_ART=${PP_SERVE_ROWS:-$PP_LLAMA};; esac
+if [ -n "$ROWS_ART" ]; then   # the row dir: the sealed bundle, the Commit's records, the Build's Programs and manifest
+  D=${PP_CACHE:-$HOME/.cache/verity-prove-path}/${ROWS_ART:4:16}
   if [ ! -e $D.done ]; then   # under the node's lock on $D: two runs fetching at once would remove each other's files
     mkdir -p ${D%/*}
-    ( flock 9 && { [ -e $D.done ] || { rm -rf $D && mkdir -p $D && R data fetch $PP_LLAMA --to $D --path commit/replay_bundle_p0 \
+    ( flock 9 && { [ -e $D.done ] || { rm -rf $D && mkdir -p $D && R data fetch $ROWS_ART --to $D --path commit/replay_bundle_p0 \
         --path commit/verdict.json --path commit/runs.jsonl --path commit/versions.json --path commit/binding_map_p0.json \
         --path commit/sampled_replay_p0.json --path commit/steps.jsonl --path 'build_*' --path manifest.json \
         --path config_record.json && touch $D.done; }; } ) 9>$D.lock > $O/fetch.log 2>&1 &
@@ -99,19 +105,22 @@ keep() {  # NAME: $W/NAME's records into $O/NAME
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
 }
 run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, then the verifier's audit; RUN is the committed
-         # run's arguments (--tp-commit DIR --build-root DIR, or --bundle DIR --row-dir DIR --workload F)
+         # run's arguments (--tp-commit DIR --build-root DIR, --bundle DIR --row-dir DIR --workload F, or --serve-run DIR
+         # --window K --row-dir DIR, whose advice and opening are the server's: ADVICE -)
   local name=$1 src=$2 advice=$3 part=$4 ranks=$5; shift 5
   local forged=; [ $# -gt 0 ] && forged=--forged
   case "${PP_ONLY:-}:${forged:+forged}" in honest:forged|forged:) return 0;; esac
+  local adv="--advice $advice" op="--opening $W/$name-opening.json"
+  case "$src" in *--serve-run*) adv=; op=;; esac
   mkdir -p $O/$name
-  $TIME $PP commit $src --advice $advice --opening $W/$name-opening.json --partition $part \
+  $TIME $PP commit $src $adv $op --partition $part \
     ${ranks:+--ranks $ranks} "${TG[@]}" \
     --jobs ${PP_JOBS:-1} --out $W/$name-windows "$@" > $O/$name/commit.log 2>&1 || { tail -30 $O/$name/commit.log; return 1; }
   for d in $W/$name-windows/rank*; do   # serving's public files, never a private body
     mkdir -p $O/$name/windows/$(basename $d) && cp $d/{registration,window,partition,index}.json $d/m*-public.bin $O/$name/windows/$(basename $d)/
   done
   cp $W/$name-windows/commit.json $O/$name/windows/
-  $TIME $PP audit $src --opening $W/$name-opening.json --windows $W/$name-windows --partition $part \
+  $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
     ${ranks:+--ranks $ranks} --jobs ${PP_JOBS:-1} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" \
     --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
   local rc=$?
@@ -128,16 +137,39 @@ if [ -n "${PP_TP:-}" ]; then
   run glm "$GLM" $W/advice.bin ${PP_PARTITION:-benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16_stratified.json} "${PP_RANKS:-}" || rc=1
   run glm-forged "$GLM" $W/advice.bin benchmarks/prove_path/glm53_silu_mul_v2_i1536_step16_all.json "${PP_FORGED_RANKS:-0}" \
     --forge $FORGE || rc=1
-elif [ -n "${PP_LLAMA:-}" ]; then
-  [ -z "${FETCH:-}" ] || wait $FETCH
-  [ -e $D.done ] || { echo "the fetch of $PP_LLAMA failed"; tail -20 $O/fetch.log; exit 8; }
-  R keep $D --owner @network-accounting --expires 3d --priority low --root / \
-    --why "prove_path.py's TP1 row dir from the store ($PP_LLAMA: the sealed bundle, the Commit's records, the Build)" >> $O/fetch.log 2>&1
-  LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload integrations/vllm/workloads/$LROW.json"
-  $PP advice --workload integrations/vllm/workloads/$LROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
-  run llama "$LLAMA" $W/advice.bin ${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json} "" || rc=1
-  run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24.json} "" \
-    --forge ${PP_FORGE:-0:0} || rc=1
+elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
+  if [ -n "$ROWS_ART" ]; then
+    [ -z "${FETCH:-}" ] || wait $FETCH
+    [ -e $D.done ] || { echo "the fetch of $ROWS_ART failed"; tail -20 $O/fetch.log; exit 8; }
+    R keep $D --owner @network-accounting --expires 3d --priority low --root / \
+      --why "prove_path.py's TP1 row dir from the store ($ROWS_ART: the sealed bundle, the Commit's records, the Build)" >> $O/fetch.log 2>&1
+  else
+    D=$PP_SERVE_ROWS
+  fi
+  STEP1=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json STEP24=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24.json
+  served() {  # NAME SERVE_RUN K: the served window's honest and forged audits, its public records and its compiler kept
+    mkdir -p $O/$1-records
+    cp $2/serve.json $2/windows.jsonl $2/advice/w$3/registration.json $O/$1-records/
+    $PP compiler --serve-run $2 ${PP_TARGET:+--target $PP_TARGET} | tee $O/$1-records/compiler.json || return 1
+    local src="--serve-run $2 --window $3 --row-dir $D ${PP_TARGET:+--target $PP_TARGET}"
+    run $1 "$src" - ${PP_PARTITION:-$STEP1} "" || rc=1
+    run $1-forged "$src" - ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
+  }
+  if [ -n "${PP_SERVE_RUN:-}" ]; then
+    SR=$PP_SERVE_RUN
+    case $SR in art:*) SR=$W/serve-run; R data fetch $PP_SERVE_RUN --to $SR >> $O/fetch.log 2>&1 || { tail -20 $O/fetch.log; exit 8; };; esac
+    served served $SR ${PP_WINDOW:-0} || rc=1
+  else
+    LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload integrations/vllm/workloads/$LROW.json"
+    if [ -n "${PP_SERVE_STANDIN:-}" ]; then
+      $PP serve-standin $LLAMA --out $W/serve-run | tee $O/serve-standin.json || exit 8
+      served llama-served $W/serve-run 0 || rc=1
+    else
+      $PP advice --workload integrations/vllm/workloads/$LROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
+      run llama "$LLAMA" $W/advice.bin ${PP_PARTITION:-$STEP1} "" || rc=1
+      run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
+    fi
+  fi
 else
   S=$W/served
   (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law subset:4 --deferred) \

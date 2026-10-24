@@ -17,6 +17,14 @@ its ACKs and flow control, reaches the client only through the fail cells. A con
 content term, a covert sender in the server moves at most
 `log2 #schedules + Σ_c log2 (cells_c + 1) + Σ_w b w + k` bits to the client (`EncardWardenDecodableLe`).
 
+#3533's bound counts runs the compiled Program accepts exactly, which the all-frames egress tie gives only when no step
+unit can be faulty: every step unit drawn `all`, or a sampled audit at `δ ≥ miss(1)`. At a smaller `δ` an accepted
+sampled audit gives `Accepted` by the circuit's Program only with the faulty units' committed gates held as advice
+(`SampledAuditAccepted`), and the composed charge is `EncardAccSeqsSampledLe`
+(`Definitions/NetworkCertifier/Guarantees/SampledCharge`): the inputs other than the ingress, the faulty units'
+committed bits and `log2` of the number of possible faulty sets, except with probability `δ + ε_ks + ε_bind` over the
+selection. Its last two terms are the content term `k` below, for the circuit's Program.
+
 The warden runs its code by `trusted-nebius-host` (`Verity.Assumptions.TrustedNebiusHost`), read by name: it is the
 auditor's device, on a host the prover doesn't control, and its code's output includes each cell's bucket, so the
 assumption covers the warden's timing too (its CPU isolation and its monotonic clock, which the rename to

@@ -2,6 +2,7 @@
 
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
         [--protocol vllm|plain] [--no-commit] [--no-gpu-tree] [--window-steps 64] [--force-include-usage | --no-force-include-usage]
+        [--scheme vllm-v1|rows-sha512] [--seal]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -41,7 +42,8 @@ streamed ids, the seed it carried, and where its finish says the stream ends.
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds), ``requests.jsonl``
 (one line a request: the HTTP id, the engine id, the body's ``user``, the runner's ids, the prompt ids, the streamed ids, its
-ingress, its finish, its committed rows and seeds, and its check) and `serve_commit.advice_trace`'s file. SIGTERM or SIGINT
+ingress, its finish, its committed rows and seeds, and its check) and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512``
+commits as a declared Commit does and ``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`). SIGTERM or SIGINT
 stops it: the open window is closed and its requests checked, and ``summary.json`` counts the requests and checks.
 """
 from __future__ import annotations
@@ -61,6 +63,7 @@ from typing import Any
 
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, seeded
+from verity_vllm.pipeline import serve_seal as SS
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS, CommitWindows, advice_trace, ingress_of, param_of, user_of
 
 PRECISIONS = ("verity_int8", "int8_exact", "pin")
@@ -105,6 +108,10 @@ class Options:
                             help="the committer's GPU-resident chunk tree, no D2H and no hashlib (default on; its kernel is JIT-built "
                                  "with ninja, which must be on PATH)")
     cudart_copy: bool = option("--cudart-copy", action="store_true", default=False, help="the committer's snapshots by cudaMemcpyAsync")
+    scheme: str = option("--scheme", choices=SS.SCHEMES, default="vllm-v1",
+                         help="the Commit's scheme: vllm-v1 (NativeHostCommitter, 32-byte roots) or rows-sha512 (the declared Commit's)")
+    seal: bool = option("--seal", action="boolean_optional", default=False,
+                        help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
     force_include_usage: bool = option("--force-include-usage", action="boolean_optional", default=True,
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
@@ -705,6 +712,10 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) 
     """What would fail after the model has loaded, refused before it."""
     if opts.window_steps < 1:
         raise UsageError("--window-steps is at least 1")
+    if opts.seal and not opts.commit:
+        raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
+    if opts.scheme == "rows-sha512" and not opts.gpu_tree:
+        raise UsageError("--scheme rows-sha512 is the windowed collector's, which hashes its rows on the GPU: drop --no-gpu-tree")
     if opts.commit and opts.gpu_tree and which("ninja") is None:
         raise UsageError("--gpu-tree JIT-builds its kernel with ninja, which is not on PATH: put the environment's bin (where its "
                          "ninja is) on PATH, or pass --no-gpu-tree")
@@ -728,24 +739,7 @@ def build(opts: Options) -> tuple[Any, Any]:
             raise RuntimeError(f"a {opts.precision} engine whose layers run int8 scope {got!r}, not {scope!r}")
     if not opts.commit:
         return llm, None
-    from types import SimpleNamespace
-
-    from verity_vllm.commit.committer.native_host import NativeHostCommitter
-    from verity_vllm.engine.engine_profile import get_model_runner
-
-    eng = SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model,
-                          cp={"repo": llm.pin.model, "revision": llm.pin.revision})
-    com = NativeHostCommitter(eng, run_id=f"serve-openai:{opts.run_id}", arena_bytes=None, chunk=opts.chunk, hash_threads=opts.hash_threads,
-                              gpu_tree=opts.gpu_tree, fast_copy=opts.cudart_copy)
-    if com.retain != "host":
-        raise UsageError(f"VERITY_RETAIN={com.retain}: the served record is read back from the values retained on the host")
-    from verity_vllm.commit.served_record import SamplerInputsSource
-
-    com.attach_source(SamplerInputsSource(com))
-    tokens = int(opts.max_num_batched_tokens)
-    com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
-                                              "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len})
-    return llm, com
+    return llm, SS.committer(opts, llm)
 
 
 def main(opts: Options) -> int:
@@ -763,7 +757,8 @@ def main(opts: Options) -> int:
     if com is not None:
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
-                                decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window)
+                                decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
+                                seal=SS.seal_of(opts) if opts.seal else None)
     loop = EngineLoop(engine, windows)
     served = opts.served_model_name or opts.model
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
@@ -781,9 +776,12 @@ def main(opts: Options) -> int:
               "precision": opts.precision, "protocol": proto.name, "framing": framing, "defaults": dict(defaults),
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1 (CIR-87)", "committer": getattr(com, "name", None),
-              "commit": opts.commit, "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
+              "commit": opts.commit, "scheme": getattr(com, "commit_scheme", "vllm-v1") if com is not None else None,
+              "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
+              "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy")},
-              "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id}
+              "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
+              **SS.target_of()}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
     print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}", flush=True)
     try:
