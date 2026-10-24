@@ -1098,7 +1098,10 @@ GPU 5's RTX PRO 6000 design. It is Pearl-C with the FP8 product replaced by `mma
   cap on every model, so its line is D on honest coverage. Its UE8M0 scales don't move with the salt, and its round-up
   scales make honest zero codes reliable.
 The conjecture it rests on, TT_OUT-FP4 (`tt-out/fp4-sm120`), is stated by the theory lane and proposed, not proved, so
-the certificate names no γ_0. The module's docstring states every step and rounding.
+the certificate names no γ_0. The module's docstring states every step and rounding. TT_OUT-FP4 is stated at the W1
+machine on `W1Device.fp4Sm120` (`Security/Definitions/Pouw/Assumptions/PearlC/TTOutFp4W1.lean`), and the headline γ
+guarantees conclude at that cost model. Its domain rule D-SK reads `B̃`'s lines from the oracle, which a W1 program
+can't call, so it says nothing about the deployment until D-SK is stated over SHA-512.
 
 ~~~text
 rows      k BF16 words per row of either operand
