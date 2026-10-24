@@ -55,9 +55,9 @@ difftest's `session` reads one, `Difftest.eventOf`):
 A window's verdict is `checkWindowChunked`'s, which is `checkWindow`'s, on the window's openings as `Wire.openingsOf`
 reads its frames: any frame that doesn't decode leaves it none, and the transcript records the frames so. A window
 with no draws is rejected `malformed` at its settle (`Session.verifyBy`), whatever its frames, so an undecodable frame
-is refused on every window, as the driver's Python refuses it. `Properties.RemoteAudit.LiveIsRun` states that what this loop accepts, its coins arriving one an event
-and each verdict applied at its settle, is what `Session.run` accepts on the events it records. Openings are checked
-in the clear.
+is refused on every window, as the driver's Python refuses it. `Properties.RemoteAudit.LiveIsRun` states that what
+this loop accepts, its coins arriving one an event and each verdict applied at its settle, is what `Session.run`
+accepts on the events it records. Openings are checked in the clear.
 -/
 
 namespace RemoteAudit.Verifier
