@@ -8,7 +8,11 @@ Measures, per arm and rep:
     tokens_per_s     at saturation: SAT_REQS requests of SAT_TOKENS output tokens each, max_num_seqs MAX_SEQS (requests wait
                      in the scheduler throughout), output tokens over wall time; under --stock-own-batch the stock arms
                      run at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's (summary's scheduler_by_arm,
-                     with each engine's KV tokens: --arm-mem gives an arm the memory share its batch needs)
+                     with each engine's KV tokens: --arm-mem gives an arm the memory share its batch needs).  With sat
+                     in --ops the warm-up runs one such generate first (its batches' graphs and compiles, a -we arm's
+                     spill pool grown to that window: about 218 MB a step at m 256 under -wea, so $DITHER_SPILL_MAX_GB
+                     and the lease's memory sized for T 256's ~800 steps), and each rep's tokens are held to its
+                     reference arm's (summary's gate_tokens_equal_ref_arm, under ops=sat alone)
 and the gate: each arm's greedy token ids on the 32 requests equal `stock`'s (an arm that changes no served value must).
 
 Arms:
@@ -154,7 +158,8 @@ warm or gate is dropped, its error in gate.json, and the rest timed (exit 5 stil
 checked, so N arms need N engines' memory plus one arm's captures.
 
 `prof` (an op, for any arm; under DITHER_NSYS=1 or prof): generates PROF_N[0] and then PROF_N[1] tokens for the 32 requests
-inside one CUDA profiler range, each generation in its own NVTX range PROF_RANGE/<arm>/n<N>, so a kernel's launches and time
+($SBENCH_PROF_REQS of them if set: T for decode steps of m = T, a saturation step; its step is then step_m<N>_ms) inside
+one CUDA profiler range, each generation in its own NVTX range PROF_RANGE/<arm>/n<N>, so a kernel's launches and time
 a decode step are the two ranges' difference over PROF_N[1] - PROF_N[0] (`exactlin/steps.py`; `stepprof.py` splits a dither
 arm's step by part, its between-step phases by their NVTX ranges).  nsys's capture range ends at the first profiler stop,
 so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a gated run's prof op is the capture.
@@ -598,7 +603,8 @@ PICK_ENV = "SBENCH_PICK"
 PICK_ARMS_ENV = "SBENCH_PICK_ARMS"
 # SBENCH_SMQ_SWEEP=V[,V]: after the gate, each dither-a-so arm's decode TPOT and phases at each units SM share V (q,
 # q/den or q/den/cap, 0 every SM; `dither_so.SoSide.set_units_smq`), in one engine, then back to its own share for the
-# reps: a screen (smq_sweep.json), never a row
+# reps: a screen (smq_sweep.json), never a row.  With --ops sat alone, its tokens/s at saturation (one sat generate a
+# share) in place of the TPOT
 SMQ_SWEEP_ENV = "SBENCH_SMQ_SWEEP"
 
 
@@ -730,7 +736,9 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             gen(ps, 8)
             gen(prompts(64), 16)
             win = getattr(llm, "dither_win", None)
-            if getattr(win, "spill_mode", None) and getattr(win, "end_each", False):
+            if cmd.get("sat"):
+                gen(prompts(SAT_REQS), SAT_TOKENS)
+            elif getattr(win, "spill_mode", None) and getattr(win, "end_each", False):
                 # a -we arm's spill pool grown here to a timed window's size (N2 steps), not inside rep 0
                 gen(ps, N2)
             conn.send({"warm": True})
@@ -826,11 +834,12 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             if prof:
                 torch.cuda.profiler.start()
             counts = PF if pf else PROF_N
-            res = {"prof_n": list(counts), "profiled": prof, "prefill": pf}
+            reqs = int(os.environ.get("SBENCH_PROF_REQS", B))
+            res = {"prof_n": list(counts), "profiled": prof, "prefill": pf, "prof_requests": reqs}
             for n in counts:
                 if prof:
                     torch.cuda.nvtx.range_push(f"{PROF_RANGE}/{arm}/n{n}")
-                t, outs = gen(pp[:n], 1) if pf else gen(ps, n)
+                t, outs = gen(pp[:n], 1) if pf else gen(ps if reqs == B else prompts(reqs), n)
                 torch.cuda.synchronize()
                 if prof:
                     torch.cuda.nvtx.range_pop()
@@ -838,7 +847,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             if prof:
                 torch.cuda.profiler.stop()
             step = round(1e3 * (res[f"gen_n{counts[1]}_s"] - res[f"gen_n{counts[0]}_s"]) / (counts[1] - counts[0]), 4)
-            res["prefill_step_ms" if pf else "tpot_b32_ms"] = step
+            res["prefill_step_ms" if pf else "tpot_b32_ms" if reqs == B else f"step_m{reqs}_ms"] = step
             conn.send(res)
         elif cmd["op"] == "smq_sweep":
             from dither_so import smq_of
@@ -849,17 +858,22 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 sd.set_units_smq(*smq_of(v))
                 gen(ps, 8)
                 llm.dither_stats()
-                t1, _ = gen(ps, N1)
-                t2, _ = gen(ps, N2)
-                rows.append({"smq": v, "tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4),
-                             "phases_by_m": llm.dither_stats().get("phases_by_m")})
+                if cmd.get("sat"):
+                    t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
+                    row = {"tokens_per_s": round(sum(len(o.outputs[0].token_ids) for o in outs) / t, 2)}
+                else:
+                    t1, _ = gen(ps, N1)
+                    t2, _ = gen(ps, N2)
+                    row = {"tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4)}
+                rows.append({"smq": v, **row, "phases_by_m": llm.dither_stats().get("phases_by_m")})
             sd.set_units_smq(q0, d0, c0)
             gen(ps, 8)
             conn.send({"sweep": rows})
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
             n = sum(len(o.outputs[0].token_ids) for o in outs)
-            conn.send({"tokens_per_s": round(n / t, 2), "sat_s": round(t, 3), "sat_tokens": n})
+            conn.send({"tokens_per_s": round(n / t, 2), "sat_s": round(t, 3), "sat_tokens": n,
+                       "tokens": [list(o.outputs[0].token_ids) for o in outs]})
         conn.send({"stats": llm.dither_stats() if hasattr(llm, "dither_stats") else None, "picks": PK.summary(plog)})
 
     while True:
@@ -971,6 +985,7 @@ def main() -> int:
     smq_sweep = [v for v in (os.environ.get(SMQ_SWEEP_ENV) or "").split(",") if v]
     if not all(re.fullmatch(r"0|\d+(/\d+(/\d+)?)?", v) for v in smq_sweep):
         ap.error(f"${SMQ_SWEEP_ENV}={os.environ[SMQ_SWEEP_ENV]}: comma-separated q, q/den or q/den/cap")
+    sweep_key = "tokens_per_s" if a.ops == "sat" else "tpot_b32_ms"
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
     reps: list[dict] = []
@@ -1029,7 +1044,7 @@ def main() -> int:
             conns[arm], procs[arm], info[arm] = here, p, msg
             print(json.dumps({"arm": arm, **msg}), flush=True)
         for arm in arms:
-            conns[arm].send({"op": "warm"})
+            conns[arm].send({"op": "warm", "sat": "sat" in a.ops.split(",")})
             res = recv(arm, conns[arm], "warm", a.time_passed)
             if "error" not in res:
                 res = recv(arm, conns[arm], "warm", a.time_passed)
@@ -1095,11 +1110,10 @@ def main() -> int:
             continue
         for arm in arms if smq_sweep else ():
             if base_arm(arm) in DITHER_SO:
-                conns[arm].send({"op": "smq_sweep", "values": smq_sweep})
+                conns[arm].send({"op": "smq_sweep", "values": smq_sweep, "sat": sweep_key == "tokens_per_s"})
                 sweep[arm] = recv(arm, conns[arm], "smq_sweep")["sweep"]
                 recv(arm, conns[arm], "smq_sweep")
-                print(json.dumps({"smq_sweep": arm, "tpot_b32_ms": {x["smq"]: x["tpot_b32_ms"] for x in sweep[arm]}}),
-                      flush=True)
+                print(json.dumps({"smq_sweep": arm, sweep_key: {x["smq"]: x[sweep_key] for x in sweep[arm]}}), flush=True)
                 (out / "smq_sweep.json").write_text(json.dumps(sweep, indent=1) + "\n")
         time_at = wait_time_at()
         if time_at:
@@ -1212,7 +1226,7 @@ def main() -> int:
             p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
     summary["gate_failed"] = [x for x in gate_doc if x not in arms]
     if sweep:
-        summary["smq_sweep"] = {arm: {x["smq"]: x["tpot_b32_ms"] for x in rows} for arm, rows in sweep.items()}
+        summary["smq_sweep"] = {arm: {x["smq"]: x[sweep_key] for x in rows} for arm, rows in sweep.items()}
     summary["stop"] = {arm: {"error": x.get("error"), "close_error": x.get("close_error"), "fill_steps": x.get("fill_steps"),
                              "end_verdict": (x.get("end") or {}).get("verdict")} for arm, x in stops.items()}
     summary["host_mem_peak_gib"] = mem_peak_gib()
