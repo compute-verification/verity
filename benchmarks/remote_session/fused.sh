@@ -5,7 +5,8 @@
 # Results in $RESEARCH_RUN_DIR/out: fused_bench.json, ncu.json, beside-CFG/beside.json, their logs and the builds' ptxas.
 # BESIDE (default nomps) runs the beside section once a configuration: nomps, the two processes time-sliced; mps, both
 # clients of a private MPS daemon on the leased GPU (pipe and logs in this run's scratch, started and quit inside the
-# lease); mpsE.P, the same with CUDA_MPS_ACTIVE_THREAD_PERCENTAGE E for the engine stand-in and P for the store.
+# lease); mpsE.P, the same with CUDA_MPS_ACTIVE_THREAD_PERCENTAGE E for the engine stand-in and P for the store. Each
+# configuration's passes are checked against the configuration's before it too (fused_beside.py --reference).
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --declared-output 'out/*' \
 #     --env GPU_LEASE_WHO=memory-accounting-fused -- bash benchmarks/remote_session/fused.sh
@@ -59,6 +60,7 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
   trap mps_stop EXIT
   trap "mps_stop; exit 143" TERM
   if [[ ,$SECTIONS, == *,beside,* ]]; then
+    REF=
     for CFG in ${BESIDE//,/ }; do
       case $CFG in
         nomps) mps_stop; EP=; PP= ;;
@@ -71,9 +73,9 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
         --mode serve --serve-dir "$B/serve-$CFG" > "$D/serve.log" 2>&1 & S=$!
       env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True ${PP:+CUDA_MPS_ACTIVE_THREAD_PERCENTAGE=$PP} "${PPIN[@]}" \
         "$PY" $RS/fused_beside.py --dir "$B/serve-$CFG" --lib "$B/session.so" --kv "$B/kv.so" --out "$D" --wait-s 300 \
-        ${PHASES:+--phases "$PHASES"} > "$D/beside.log" 2>&1; RC=$?
+        ${PHASES:+--phases "$PHASES"} ${REF:+--reference "$REF"} > "$D/beside.log" 2>&1; RC=$?
       tail -3 "$D/beside.log"
-      [ $RC = 0 ] || { kill $S 2> /dev/null; R=$RC; }
+      [ $RC = 0 ] && REF=$D/beside.json || { kill $S 2> /dev/null; R=$RC; }
       wait $S
       cp "$CUDA_MPS_LOG_DIRECTORY"/*.log "$D/" 2> /dev/null
     done

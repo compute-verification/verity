@@ -32,7 +32,7 @@ ncu     layer 0's linears and the LM head, each arm at each M, every op behind a
         Nsight Compute (fused.sh runs it: DRAM bytes, read plus write, and each kernel's duration, L2 flushed before
         each kernel); `ncu-report` folds its CSV into each op's bytes and time
 serve   the engine stand-in for `fused_beside.py`: the arena exported over CUDA IPC (`engine.export`) to
-        DIR/engine.json, then a step at M 64 at each multiple of 1/--hz of the host clock (engine.Load's
+        DIR/engine.json, with this process's pid, then a step at M 64 at each multiple of 1/--hz of the host clock (engine.Load's
         --align-steps), the arm DIR/ctl.json names (none: idle), each step logged to OUT/serve.steps.jsonl
 ~~~
 
@@ -47,6 +47,7 @@ import ctypes
 import hashlib
 import json
 import math
+import os
 import random
 import statistics
 import sys
@@ -568,7 +569,7 @@ def ncu_report(csv_path: Path, ops_path: Path) -> dict:
 # --- serve -------------------------------------------------------------------------------------------------------------
 
 def serve(torch, model: Model, d: Path, out: Path, hz: float, m: int, failed: set[str], log) -> None:
-    info = {"bytes": model.buf.numel(), **export(model.buf.data_ptr())}
+    info = {"bytes": model.buf.numel(), "pid": os.getpid(), **export(model.buf.data_ptr())}
     write_json(d / "engine.json", info)
     log(f"serve: arena exported ({model.buf.numel()} bytes)")
     interval, seq, arm, steps = 1.0 / hz, -1, None, 0
