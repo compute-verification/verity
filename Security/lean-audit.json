@@ -1604,6 +1604,10 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
+  },
+  "NetTiming.WithinCaps": {
+   "owner": "@network-accounting",
+   "digest": "6a9ebd9ac66db9b9c032d0c22baed96b8c3e7bfc0d8476d0136f3b440bdc363b"
   }
  },
  "meaning": [
