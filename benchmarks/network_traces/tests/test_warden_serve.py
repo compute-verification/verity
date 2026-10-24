@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from verity.core.protocols.certifier.active import DATA, VirtualClock
-from verity.core.protocols.certifier.warden import END, Shim, Warden, WardenParams, cells, read_cell
+from verity.core.protocols.certifier.warden import END, Shim, Warden, WardenParams, cells, read_cell, reason_frame
 
 HERE = Path(__file__).resolve().parents[1]
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
@@ -165,7 +165,7 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     result = ws.check(out)
     assert result["accepted"], result["problems"]
     s = result["summary"]
-    assert (s["requests"], s["ended"], s["certified_windows"], s["completion_tokens"]) == (3, 3, 2, 42)
+    assert (s["requests"], s["ended"], s["certified_windows"], s["completion_tokens"]) == (3, 3, 3, 42)
     assert s["cells_in_their_bucket"][0] == s["cells_in_their_bucket"][1] > 0
     assert s["wire_bits"]["egress"] == s["cells"]["egress"] * PARAMS.cell_bytes * 8
     assert s["data_bytes"] == {"ingress": sum(map(len, requests)), "egress": sum(map(len, responses))}
@@ -192,6 +192,14 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         ws.ar.write_blobs(out / "responses.records", ws.ar.pack_record(ws.replace(record, grid=grid)))
 
     assert "responses window 0 isn't certified" in refused(flip_record)
+
+    def forge_reason() -> None:
+        (record,) = ws.read_records(out, PARAMS)["fails"]
+        grid = ((reason_frame(0, "late", PARAMS.cell_bytes),) + record.grid[0][1:],) + record.grid[1:]
+        (out / "fails.records").unlink()
+        ws.ar.write_blobs(out / "fails.records", ws.ar.pack_record(ws.replace(record, grid=grid)))
+
+    assert "fails window 0 isn't certified" in refused(forge_reason)
 
     def edit_client(change) -> None:
         doc = json.loads((out / "client.json").read_text())

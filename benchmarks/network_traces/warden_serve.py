@@ -11,7 +11,7 @@ Nothing here is the warden's but bytes. Tonight's clients send HTTP/1.1 requests
 with `Connection: close`, so the server's end of stream ends egress (the warden never half-closes toward a server).
 
 **What it can't enforce here.**
-- The warden runs on the server's host (`trusted-nebius-host` stands for the auditor's host), and the server's host
+- The warden runs on the server's host (`trusted-host` stands for the auditor's host), and the server's host
   can reach anyone by any other route, which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the warden's
@@ -35,14 +35,16 @@ with `Connection: close`, so the server's end of stream ends egress (the warden 
 
 - `serve` writes `deployment.json` (the warden's public key, the session, the schedule's parameters and their digest,
   the origin, the listener), runs the warden for `--windows` windows, and writes `warden.json` (each connection's
-  outcome, the tick lateness, the refusals). Each window's records go to `requests.records` and `responses.records`,
-  and each is certified (`certificate.Issuer`, with the warden's parameters digest) into `certified.jsonl`.
+  outcome, the tick lateness, the refusals). Each window's records go to `requests.records`, `responses.records`
+  and `fails.records` (each failed connection's reason, witness), and each is certified (`certificate.Issuer`, with
+  the warden's parameters digest) into `certified.jsonl`.
 - `client` sends each request of the traffic at its time after the origin on a connection of its own, reads the cells
   to the warden's close, and writes `client.json`: per connection its ordinal, outcome, every cell's kind and arrival,
   the SHA-256 of what it sent and of the bytes it got, and the HTTP response read from them.
-- `check` (`check`): every window of both directions has a certificate that verifies and whose head is the record's,
-  the audit (`warden.audit`) accepts the records, and every connection's client got exactly its egress record's cells,
-  each in its bucket, its request is the ingress record's and its response the egress record's; `check.json`.
+- `check` (`check`): every window of the three records has a certificate that verifies and whose head is the
+  record's, the audit (`warden.audit`) accepts the records, and every connection's client got exactly its egress
+  record's cells, each in its bucket, its request is the ingress record's and its response the egress record's;
+  `check.json`.
 - `rehearse` makes a key in a scratch directory, writes the traffic, starts the fake endpoint when `--fake`, and runs
   `serve` and `client` as processes, then `check`.
 """
@@ -70,15 +72,19 @@ from pathlib import Path
 import active_replay as ar
 import certifier_serve as cs
 from verity.core.protocols.certifier.active import DATA, PAD
-from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner, record_head
+from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsSigner, record_head
 from verity.core.protocols.certifier.grid import GridParams, Record
 from verity.core.protocols.certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
 
 HERE = Path(__file__).resolve().parent
-INGRESS, EGRESS, LINK = "requests", "responses", "warden"
+INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
+#: each record's certified link name and direction: the wire's two under `LINK`, the reasons under their own name
+CERTIFIED = {INGRESS: (LINK, Direction.INGRESS), EGRESS: (LINK, Direction.EGRESS),
+             FAILS: (f"{LINK}-{FAILS}", Direction.EGRESS)}
 KIND_CHARS = {PAD: "p", DATA: "d", END: "e", FAIL: "f", REFUSED: "r"}
 #: the schedule's defaults here, where they differ from `WardenParams`'s: r·P = 494 bytes a bucket each way stays
-#: under what vLLM streams a request even with its tokens merged into fewer events, and D = 3 s covers a queued prefill
+#: under what vLLM streams a request even with its tokens merged into fewer events, and D = 3 s from admission covers
+#: the request's ingress and a queued prefill
 SCHEDULE = asdict(WardenParams()) | {"slots": 2, "delay": 30, "lanes": 8, "ingress_cells": 96, "ingress_buckets": 100}
 QUESTIONS = ("Explain how a bloom filter works.", "Write a haiku about the sea.", "List three uses of copper.",
              "What is the capital of Australia? Answer in one word.", "Summarize the notes above in one sentence.",
@@ -239,11 +245,12 @@ async def probe(upstream: tuple[str, int], traffic: list[dict], in_flight: int =
 
 class Publisher:
     """The warden's `publish`, on one worker thread so that signing never holds the ticker: each record packed to its
-    direction's file (`requests.records`, `responses.records`), and certified by `issuer` under the link name `link`
-    with the schedule's parameters digest, one line of `certified.jsonl` each, or the link-window under `refused`."""
+    file (`requests.records`, `responses.records`, `fails.records`), and certified by `issuer` under its link name and
+    direction (`CERTIFIED`) with the schedule's parameters digest, one line of `certified.jsonl` each, or the
+    link-window under `refused`."""
 
-    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, link: str = LINK) -> None:
-        self.out, self.issuer, self.params, self.link = out, issuer, params, link
+    def __init__(self, out: Path, issuer: Issuer, params: WardenParams) -> None:
+        self.out, self.issuer, self.params = out, issuer, params
         self.executor, self.futures = ThreadPoolExecutor(1), []
 
     def __call__(self, record: Record, grid: GridParams) -> None:
@@ -251,9 +258,9 @@ class Publisher:
 
     def keep(self, record: Record, grid: GridParams) -> None:
         ar.write_blobs(self.out / f"{record.link}.records", ar.pack_record(record))
-        direction = Direction.INGRESS if record.link == INGRESS else Direction.EGRESS
-        certified = self.issuer.certify(replace(record, link=self.link), direction, grid, self.params.digest)
-        line = ({"refused": [self.link, direction.value, record.window]} if certified is None
+        link, direction = CERTIFIED[record.link]
+        certified = self.issuer.certify(replace(record, link=link), direction, grid, self.params.digest)
+        line = ({"refused": [link, direction.value, record.window]} if certified is None
                 else cs.certified_json(certified))
         with open(self.out / "certified.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
@@ -354,7 +361,21 @@ async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.ti
 
 def read_records(run: Path, params: WardenParams) -> dict[str, list[Record]]:
     return {name: [ar.unpack_record(b, params.cell_bytes) for b in ar.read_blobs(run / f"{name}.records")]
-            for name in (INGRESS, EGRESS)}
+            for name in CERTIFIED}
+
+
+def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], CertifiedRecord], list]:
+    """`certified.jsonl`: the certified records by (link, direction, window), and the link-windows the signer
+    refused."""
+    got, refused = {}, []
+    for line in path.read_text().splitlines() if path.exists() else []:
+        doc = json.loads(line)
+        if "refused" in doc:
+            refused.append(doc["refused"])
+        else:
+            record = cs.certified_from_json(doc)
+            got[(record.link, record.direction, record.window)] = record
+    return got, refused
 
 
 def egress_cells(records: list[Record], params: WardenParams) -> dict[int, list[tuple[int, int]]]:
@@ -373,24 +394,25 @@ def check(run: Path) -> dict:
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    certified, refused = cs.read_certified(run / "certified.jsonl")
+    certified, refused = read_certified(run / "certified.jsonl")
     records = read_records(run, params)
     problems = [] if params.digest.hex() == dep["digest"] else ["the deployment's digest isn't its parameters'"]
     windows = []
-    for name, direction in ((INGRESS, Direction.INGRESS), (EGRESS, Direction.EGRESS)):
+    for name, (link, direction) in CERTIFIED.items():
         got = {r.window: r for r in records[name]}
+        grid = params.fails_grid if name == FAILS else params.grid
         for w in range(dep["windows"]):
-            r, c = got.get(w), certified.get((direction, w))
+            r, c = got.get(w), certified.get((link, direction, w))
             ok = (r is not None and c is not None and c.verify(key, session)
-                  and c.head == record_head(dep["link"], direction, w, r.grid, r.status, params.grid, params.digest))
-            windows.append({"direction": direction.value, "window": w, "certified": ok,
+                  and c.head == record_head(link, direction, w, r.grid, r.status, grid, params.digest))
+            windows.append({"record": name, "direction": direction.value, "window": w, "certified": ok,
                             "status": None if r is None else r.status.reason and r.status.reason.value,
                             "cells": None if r is None else sum(f is not None for row in r.grid for f in row)})
             if not ok:
                 problems.append(f"{name} window {w} isn't certified")
             elif r.status.reason is not None:
                 problems.append(f"{name} window {w}: {r.status.reason.value}")
-    verdict = audit(params, records[INGRESS], records[EGRESS])
+    verdict = audit(params, records[INGRESS], records[EGRESS], records[FAILS])
     if not verdict["accepted"]:
         problems += [f"audit: {p}" for w in verdict["windows"] for p in w["problems"]]
     audited = {c["ordinal"]: c for c in verdict["connections"]}
@@ -446,7 +468,8 @@ def check(run: Path) -> dict:
 def table(result: dict) -> str:
     s = result["summary"]
     return (f"{'ACCEPTED' if result['accepted'] else 'REFUSED'}: {s['ended']}/{s['requests']} ended, "
-            f"{s['refused']} refused, failed {s['failed']}; {s['certified_windows']}/{2 * s['windows']} link-windows "
+            f"{s['refused']} refused, failed {s['failed']}; {s['certified_windows']}/{len(CERTIFIED) * s['windows']} "
+            f"link-windows "
             f"certified; cells in their bucket {s['cells_in_their_bucket'][0]}/{s['cells_in_their_bucket'][1]}; "
             f"cells {s['cells']}; tick lateness {s['tick_lateness_ms']}")
 
