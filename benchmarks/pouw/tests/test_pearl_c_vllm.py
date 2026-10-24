@@ -1848,6 +1848,24 @@ def test_a_graphs_scatter_screens_its_rows_into_the_pass_and_copies_its_leaves_a
     PS.scatter_into(x, alpha, aux, rows, bufs[1], leaves, bufs[0], root, bufs[2], torch.tensor([3200, 74, 288]))
     assert all(torch.equal(a, b) for a, b in zip(bufs, want, strict=True))
 
+
+def test_a_grouped_scatter_screens_each_flag_pair_at_its_row_of_the_map(monkeypatch):
+    """A grouped call's scatter under Triton's CPU interpreter, with a row map: flag pair i is `screen_into`'s for row at[i]
+    (of x, α and (s, ρ)), at the slot's flag offset, and the leaves and A root land as without one."""
+    interpreted_triton(monkeypatch)
+    from verity_vllm.protocol_options import pouw_pearl_c_screen as PS
+    _, x, alpha, aux = edge_rows()
+    flags = torch.zeros((12, 2), dtype=torch.uint8)
+    PS.screen_into(flags, x, alpha, aux, fused=True)
+    at = torch.tensor([5, 0, 11, 2, 4, 3])
+    leaves, root = torch.arange(64, dtype=torch.uint8), torch.arange(100, 132, dtype=torch.uint8)
+    bufs = [torch.full((n,), 0xA5, dtype=torch.uint8) for n in (256, 64, 128)]
+    want = [t.clone() for t in bufs]
+    want[0][32:96], want[1][10:10 + 2 * len(at)], want[2][64:96] = leaves, flags[at].flatten(), root
+    PS.scatter_into(x, alpha, aux, len(at), bufs[1], leaves, bufs[0], root, bufs[2], torch.tensor([32, 10, 64]), at)
+    assert all(torch.equal(a, b) for a, b in zip(bufs, want, strict=True))
+    assert len({tuple(r) for r in flags[at].tolist()}) > 1
+
 # ---- step 2 of the decode plan: the deferred schedule -------------------------------------------------------------
 
 @pytest.mark.parametrize("schedule, main", [("deferred", 2), ("deferred-caller", 0)])

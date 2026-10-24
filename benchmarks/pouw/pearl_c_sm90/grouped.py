@@ -9,11 +9,12 @@ units lie one after another in one A, each in a segment of its m₁₆ rounded u
 each 64-row block of A names its expert (``ex``).  The steps, one launch each (`Grouped.steps`):
 
 * ``commit_a``: pd_commit_gm, unit u's pd_commit (A's commitment and E_A's lines) on the CTAs `rows_order` gives its rows,
-  from its record (`Grouped.meta`), each CTA with an SM to itself (`run.pd_setup`'s PD_WHOLE) while the units' rows, a CTA
-  each, fit the SMs, and past that at its least shared memory (PD_PAIR_SMEM), so the rows past the SMs share them rather than
-  wait a whole chain for one (the launch's alone: the code and bytes are the same); a unit's filler rows (m to m₁₆, zero)
-  take a zero row's digest (`zero_state`, a function of k alone) rather than hash their rows, the same bytes.  A cubin
-  without pd_commit_gm runs pd_commit_g, unit u's rows on CTA row u;
+  from its record (`Grouped.meta`); a unit's filler rows (m to m₁₆, zero) take a zero row's digest (`zero_state`, a
+  function of k alone) rather than hash their rows, the same bytes.  Each CTA has an SM to itself (`run.pd_setup`'s
+  PD_WHOLE) while the units' real rows fit the SMs (`commit_rows`: a filler row's CTA is done at once, so it holds no SM
+  from a real row), and past that takes its least shared memory (PD_PAIR_SMEM), so the rows past the SMs share them rather than
+  wait a whole chain for one (the launch's alone: the code and bytes are the same).  A cubin without pd_commit_gm runs
+  pd_commit_g, unit u's rows on CTA row u, at an SM to a CTA only while every unit's m₁₆ rows fit;
 * ``stats_a``, ``eprime_a``, ``pa``: stats_s5, eprime and pa over all of A's rows (a row at a time, no keys);
 * ``form_a``: form_s5_g, each 64-row block's F_A its expert's;
 * ``af``, ``gemm_pearlc``: gemm_words_g_d and gemm_pearlc_g_d over A, each 64-row block's B side its expert's;
@@ -44,7 +45,8 @@ PD = 851
 TILES_PD = 979
 #: PROBE: the older forms, "+"-joined, for an A/B in one session: tiles851 (the tile leaves at PD's), treewhole (pd_tree_g at
 #: a whole SM's shared memory), hashzero (pd_commit_gm hashes the filler rows: no zero row digest in the records), rows2d
-#: (pd_commit_g's grid, a unit's rows on its CTA row, rather than pd_commit_gm's)
+#: (pd_commit_g's grid, a unit's rows on its CTA row, rather than pd_commit_gm's), pairsmem (pd_commit_gm at an SM to a CTA
+#: only while every unit's m₁₆ rows fit the SMs, not its real rows: `commit_rows`)
 PLACE = frozenset(os.environ.get("PEARLC_GROUPED_PLACE", "").split("+")) - {"", "base"}
 #: a unit's segment rows divide by it: the grouped GEMMs' tile rows (run.BM_D) and the tile leaves' (run.TILE)
 SEG = 64
@@ -162,6 +164,14 @@ def has_rows(dev) -> bool:
     return "rows2d" not in PLACE and has(dev, f"pd_commit_gm_{PD}")
 
 
+def commit_rows(dev, us: list[Unit]) -> int:
+    """The rows of a call's commitment that each want an SM to themselves: pd_commit_gm's real rows, since its filler rows
+    take `zero_state` without a chain; pd_commit_g's (or hashing the filler rows) every unit's m₁₆."""
+    if has_rows(dev) and not PLACE & {"hashzero", "pairsmem"}:
+        return sum(u.m for u in us)
+    return sum(u.m16 for u in us)
+
+
 def tiles_pd(dev) -> int:
     """pd_tiles_g's variant: TILES_PD where the cubin has it, else PD."""
     return PD if "tiles851" in PLACE or not has(dev, f"pd_tiles_g_{TILES_PD}") else TILES_PD
@@ -277,7 +287,7 @@ class Grouped:
         d, b, k, n, R = self.dev, self.b, self.k, self.n, self.R
         rows, count, meta = sum(u.seg for u in us), len(us), b["meta"]
         ex, s = meta + REC * count, k // 256
-        smem = d.pd_smem_g if sum(u.m16 for u in us) <= d.sms else R.PD_PAIR_SMEM
+        smem = d.pd_smem_g if commit_rows(d, us) <= d.sms else R.PD_PAIR_SMEM
 
         def commit():
             block = 32 * (R.cdiv(s, 32) * 2 + 2)

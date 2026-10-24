@@ -171,10 +171,11 @@ def test_each_units_record_is_its_own_calls_launches(split):
         g.meta(G.units([1100], n, R.PD_MAX_ROWS), bytes(G.KEY_BYTES * 5), leaves)
 
 
-@pytest.mark.parametrize("counts", [[40], [3, 0, 300, 64, 17, 1]])
+@pytest.mark.parametrize("counts", [[40], [3, 1, 17, 1, 40, 8, 2, 5], [3, 0, 300, 64, 17, 1]])
 def test_a_call_is_eight_launches_whatever_its_experts(counts):
     """One launch a step, in `grouped.STEPS`' order: pd_commit_gm on Σ m₁₆ CTAs, each an SM's whole shared memory
-    while the units' Σ m₁₆ rows fit the 132 SMs ([40]) and its least past them ([3, 0, 300, 64, 17, 1]), and pd_tiles_g_979 on
+    while the units' real rows fit the 132 SMs ([40], and decode's 77 on 176 CTAs) and its least past them
+    ([3, 0, 300, 64, 17, 1]), and pd_tiles_g_979 on
     (max row blocks x groups of PD_G tiles a row, units) of PD_G warps, each reading its records from the table; stats, E', P_A over all of A's rows; form_s5_g and both
     GEMMs with the expert map, the GEMMs persistent at the H100's 132 SMs on A's rows and their map set."""
     n, k = 128, 1024
@@ -187,8 +188,9 @@ def test_a_call_is_eight_launches_whatever_its_experts(counts):
     got = launches(dev)
     assert [x[0] for x in got] == STEPS
     by = {x[0]: x for x in got}
-    smem = dev.pd_smem_g if sum(u.m16 for u in us) <= 132 else R.PD_PAIR_SMEM
-    assert (smem == dev.pd_smem_g) == (counts == [40]) and dev.pd_smem_g > R.PD_PAIR_SMEM
+    smem = dev.pd_smem_g if sum(counts) <= 132 else R.PD_PAIR_SMEM
+    assert (smem == dev.pd_smem_g) == (len(counts) != 6) and dev.pd_smem_g > R.PD_PAIR_SMEM
+    assert G.commit_rows(dev, us) == sum(counts) and (sum(u.m16 for u in us) > 132) == (len(counts) != 1)
     assert by["pd_commit_gm_851"][1:4] == (sum(u.m16 for u in us), 32 * 4, smem)
     assert by["pd_commit_gm_851"][5:] == ((b["meta"], b["meta"] + G.Grouped.map_at(us)), (G.REC,))
     groups = max(R.cdiv(u.m16, 64) * R.cdiv(n // 64, R.PD_G) for u in us)

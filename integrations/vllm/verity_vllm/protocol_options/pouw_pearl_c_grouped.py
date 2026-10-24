@@ -18,10 +18,11 @@ follow on in unit order, and an expert with no rows has none.
 The counts are read on the host, so a call's layout (its units, `_Call`) is the host's, and so is its table: each unit's
 records and keys (`grouped.Grouped.meta`), the expert map, the gathered rows' rows of A, the units' root nodes, then the
 call's byte offsets in the pass's buffers (`OFFS_BYTES`).  A layout's table is made once, and each call fills in its keys,
-its leaves' address and its offsets in a pinned host slot (`_Group.table`), uploaded in one copy.  The call stages x as FP32,
-and its steps read it from there: A's rows into their segments, the launches, and with hashing one scatter
-(`pouw_pearl_c_screen.scatter_into`) that screens the rows into the pass's flags and copies the units' A roots into the
-pass at the table's offsets.  So no step reads anything of the call's but the table and the staged x, and with ``graphs``
+its leaves' address and its offsets in a pinned host slot (`_Group.table`), uploaded in one copy.  The call stages x as FP32
+behind a zero row, and its steps read it from there: A's rows into their segments (one gather by the layout's row sources,
+`_Call.src`, a filler row the zero row), the launches, and with hashing one scatter (`pouw_pearl_c_screen.scatter_into`)
+that screens the rows, at their rows of A, into the pass's flags and copies the units' A roots into the pass at the table's
+offsets.  So no step reads anything of the call's but the table, its layout's row sources and the staged x, and with ``graphs``
 each lane's steps are captured as a CUDA graph at a layout's second call and replayed by the driver after (`_replay`),
 as a dense call's lane graphs are (`pouw_pearl_c_graphs`).  A layout's graphs serve only calls of the same counts; any
 other call runs the same steps eagerly.  vLLM's own capture of a forward can't take a grouped call (its counts are the
@@ -76,7 +77,8 @@ class _Call:
     ``main`` (A's rows into their segments from the staged x, the main lane's launches, and with hashing the scatter of the
     rows' screen and, unless A's tree is aside, the units' roots), ``tree`` (A's tree, then its roots' gather and scatter)
     and ``side`` (the tile leaves), the main lane's event for ``tree`` before step ``cut``.  ``execs`` are its graphs'
-    executables once captured (main, tree or 0, side or 0); off the GPU the scatter takes the call's offsets from ``at``."""
+    executables once captured (main, tree or 0, side or 0); off the GPU the scatter takes the call's offsets from ``at``.
+    ``src`` is each of A's rows' source in the staged x behind its zero row (0, or 1 + its gathered row)."""
 
     def __init__(self, run: Any, g: _Group, us: list, split: bool, side: frozenset[str], b: dict[str, Any]):
         import numpy as np
@@ -93,13 +95,16 @@ class _Call:
         nodes = meta[at + 8 * real:at + 8 * (real + count)].view(torch.int64)
         offs = meta[t:t + OFFS_BYTES].view(torch.int64)
         xa = b["xa"][:4 * g.rows * k].view(torch.float32).view(g.rows, k)
-        self.xf = xf = b["xf"][:4 * real * k].view(torch.float32).view(real, k)
+        xz = b["xf"][:4 * (real + 1) * k].view(torch.float32).view(real + 1, k)
+        self.xf = xf = xz[1:]
+        src = np.zeros(rows, np.int64)
+        src[self.template[at:at + 8 * real].view("<i8")] = np.arange(1, real + 1)
+        self.src = torch.from_numpy(src).to(run.device)
         self.y = b["y"][:2 * g.rows * n].view(torch.bfloat16).view(g.rows, n)
         self.at, self.seen, self.graphs, self.execs, self.ev_tree = (0, 0), 0, (), (), None
 
         def rows_a():
-            xa[:rows].zero_()
-            xa.index_copy_(0, idx, xf)
+            torch.index_select(xz, 0, self.src, out=xa[:rows])
         by = dict(g.grouped.steps(us, split))
         names = _steps(run, G, split)
         on_main = [x for x in names if x not in side]
@@ -117,17 +122,17 @@ class _Call:
 
         def scatter(screened: int, gathered: Any) -> None:
             if run.fused_screen:
-                scatter_into(xf, alpha_s, aux_s, screened, flags_to, gathered, roots_to, none, roots_to, offs)
+                scatter_into(xa, alpha, aux, screened, flags_to, gathered, roots_to, none, roots_to, offs, idx)
                 return
             index, flag_rows = self.at
             if screened:
+                torch.index_select(alpha, 0, idx, out=alpha_s)
+                torch.index_select(aux, 0, idx, out=aux_s)
                 screen_into(run.flag_buf[flag_rows:flag_rows + screened], xf, alpha_s, aux_s, False)
             if gathered.numel():
                 roots_to[nb * index:nb * index + gathered.numel()].copy_(gathered)
 
         def screen():
-            torch.index_select(alpha, 0, idx, out=alpha_s)
-            torch.index_select(aux, 0, idx, out=aux_s)
             if not split:
                 torch.index_select(tree, 0, nodes, out=roots)
             scatter(real, none if split else roots.view(-1))
@@ -142,10 +147,10 @@ class _Call:
 
 class _Group:
     """One group's stacked weight side and its call buffers (`grouped.sizes` at ``rows`` and ``count``, with the staged x
-    ``xf``, the gathered rows' α and (s, ρ), and the units' A roots), with ``sets`` of the `ROTATED` ones (the first
-    ``b``'s own), the event after each set's last side steps (``done``) and the next call's set (``turn``); its layouts
-    (``calls``), the pinned host slots their tables go up from (``host``) and the driver that uploads them (``driver``,
-    the run's or its own; None off the GPU)."""
+    ``xf`` behind a zero row, the gathered rows' α and (s, ρ) for the unfused screen, and the units' A roots), with ``sets``
+    of the `ROTATED` ones (the first ``b``'s own), the event after each set's last side steps (``done``) and the next call's
+    set (``turn``); its layouts (``calls``), the pinned host slots their tables go up from (``host``) and the driver that
+    uploads them (``driver``, the run's or its own; None off the GPU)."""
 
     def __init__(self, run: Any, G: Any, ws: tuple[int, ...]):
         import torch
@@ -195,7 +200,7 @@ class _Group:
             self.grouped.free()
         self.rows = max(MIN_ROWS, R.pow2(max(rows, self.rows)))
         self.count = self.rows // G.SEG
-        size = {**G.sizes(R, self.rows, self.count, self.n, self.k), "xf": 4 * self.rows * self.k, "alpha_s": 4 * self.rows,
+        size = {**G.sizes(R, self.rows, self.count, self.n, self.k), "xf": 4 * (self.rows + 1) * self.k, "alpha_s": 4 * self.rows,
                 "aux_s": 8 * self.rows, "roots": run.nb * self.count}
         size["meta"] += OFFS_BYTES
         self.b = {x: _zeros(s, run.device) for x, s in size.items()}
@@ -223,6 +228,7 @@ class _Group:
             for x, t in bufs.items():
                 if x not in UNPOISONED:
                     t.fill_(cur.poison)
+        self.b["xf"][:4 * self.k].zero_()
         self.poisoned = cur
 
     def take(self) -> tuple[int, dict[str, Any]]:
