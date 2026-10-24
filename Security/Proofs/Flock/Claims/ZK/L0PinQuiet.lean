@@ -144,7 +144,7 @@ theorem squeezeP_quiet (kind : UInt8) (n : ℕ) (hk : kind = 2 ∨ (kind = 1 ∧
     rw [e] at h
     cases h
     have hk2 : kind = 2 := hk.resolve_right fun h => absurd h.2 (by decide)
-    exact ⟨qpend_snoc hp ⟨⟨hk2, rfl⟩, fun b e => by cases e⟩ (FlockSoundness.Refine.framed_enc t kind 0), [],
+    exact ⟨qpend_snoc hp ⟨show kind = 2 ∧ (0 : ℕ) = 0 from ⟨hk2, rfl⟩, fun b e => by cases e⟩ (FlockSoundness.Refine.framed_enc t kind 0), [],
       by simp, fun _ h => nomatch h⟩
   · have e : ((squeezeP recAsks kind n).run t).run (rs, k) =
         .ok (((Array.range n).map fun i => _root_.Flock.Firewall.Skeleton.coin (k + i + 1),
@@ -217,7 +217,8 @@ theorem rounds_quiet {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} 
     (h : _root_.Flock.Firewall.Skeleton.rounds st k0 cap dom = .ok alg) :
     ∀ j r, 1 ≤ j → alg[j]? = some r → QRound r := by
   have hT := quietS.bind (repPiop_quiet st (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) cap
-    (ByteArray.mk (Array.replicate 64 0)) #[] (fun _ => 0) hm hd hc (by simp)) fun _ => quietS.pure ()
+    (ByteArray.mk (Array.replicate 64 0)) #[] (fun _ => 0) hm hd hc
+    (show (Array.replicate 64 (0 : UInt8)).size < 2 ^ 64 by simp)) fun _ => quietS.pure ()
   have h0 : QPend (Transcript.init #[] dom).pending :=
     ⟨[.dom dom], by rw [FlockSoundness.Refine.init_enc]; simp [encs], fun f hf => by
       rw [List.mem_singleton.1 hf]; exact ⟨hdom, fun b e => by cases e⟩⟩
