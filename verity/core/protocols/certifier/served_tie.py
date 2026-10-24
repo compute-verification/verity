@@ -4,8 +4,8 @@ Commit holds, so a prover can't register cheaper rows at serve time than the bat
 
     ServedRowsTie_v2{R, P, G, IW, L, T, IB, PB} (pub, srv, pos_<g>_<k> …, sw_<g> …) -> verdict[16]
         G steps of a P-step window, block j of its P / G
-    ServedTieStep_v1{R, IW, L, T, IB, PB} (step, n, chunks, switches) -> (count, pos)
-        ServedTieSlots_v1{R, IW, L, T} → IoTieRoute_v1{W = TW + LW, D} → ServedTieScan_v1{R, L, T, IB, PB}
+    ServedTieStep_v1{R, L, T, IB, PB} (step, n, chunks, switches) -> (count, pos)
+        ServedTieSlots_v1{R, L, T} → IoTieRoute_v1{W = TW + LW, D} → ServedTieScan_v1{R, L, T, IB, PB}
     ServedTieSelect_v1{P, G, SB} (j, srv) -> block j's G step records, and whether j < P / G
 
 **The step-input port**, the Commit's layout the tie reads (vllm's; `port_chunks`): each step's stream starts with its input
@@ -49,8 +49,9 @@ sampled at ε would leave each untied step's charge free with probability 1 − 
 P / G − 1 each once, under one template.
 
 **Cost** (`size`, `step_size`): a step is the routing, about (M / 2)(2D − 1)·(TW + LW) ANDs less the switches a zero record
-folds away, and about 3·TW + 2·X + 8·PB ANDs a token for the scan; a unit is G steps and, when G < P, P·SB ANDs to select
-its block (SB a step's served-row bits). N is public, as the Commit's binding map and leaf counts publish it today.
+folds away, and about 3·TW + 2·X + 8·PB ANDs a token for the scan; a unit is G steps and, when G < P, P·TB ANDs to select
+its block (TB = R·(1 + LW + TW), the valid, start and n bits a step's tie reads of its served rows; the request ids and
+kinds are wired past). N is public, as the Commit's binding map and leaf counts publish it today.
 """
 from __future__ import annotations
 
@@ -72,7 +73,7 @@ from verity.core.protocols.certifier import head_check as HC, io_tie as IT, repl
 from verity.core.protocols.certifier.head_check import BIT
 
 STATICS = ("R", "P", "G", "IW", "L", "T", "IB", "PB")
-STEP = ("R", "IW", "L", "T", "IB", "PB")
+STEP = ("R", "L", "T", "IB", "PB")
 CHUNK = 4096
 WORD = 16
 FLAGS = ("count", "pos")
@@ -98,14 +99,15 @@ def _step_widths(S) -> SimpleNamespace:
 
 
 def widths(S) -> SimpleNamespace:
-    """The step's widths (`_step_widths`), the unit's blocks U = P / G and their index's bits JW, and a step's served-row
-    bits SB."""
+    """The step's widths (`_step_widths`), the unit's blocks U = P / G and their index's bits JW, a step's served-row bits
+    SB, and the TB of them its tie reads."""
     Z = _step_widths(S)
     if min(S.P, S.G) < 1 or S.P % S.G:
         raise ValueError(f"a unit is G ≥ 1 steps of a window of P, G dividing P, not P={S.P!r}, G={S.G!r}")
     Z.U = S.P // S.G
     Z.JW = (Z.U - 1).bit_length()
     Z.SB = RC._bits_of(_step_fields(S))
+    Z.TB = RC._bits_of(_tie_fields(S))
     return Z
 
 
@@ -121,6 +123,16 @@ def _step_fields(S) -> list[tuple[str, int, int]]:
     _sizes(S, "IW")
     Z = _step_widths(S)
     return [("valid", S.R, 1), ("id", S.R, S.IW), ("kind", S.R, 1), ("start", S.R, Z.LW), ("n", S.R, Z.TW)]
+
+
+def _tie_fields(S) -> list[tuple[str, int, int]]:
+    Z = _step_widths(S)
+    return [("valid", S.R, 1), ("start", S.R, Z.LW), ("n", S.R, Z.TW)]
+
+
+def _tie(S, step: Sequence) -> list:
+    """A step's served-row bits (`_step_fields`) as the tie reads them (`_tie_fields`): its slots' valid, start and n."""
+    return RC._flat(RC._split(list(step), _step_fields(S)), _tie_fields(S))
 
 
 def _words(bits: int) -> int:
@@ -157,12 +169,12 @@ def ids(S, chunks: Sequence) -> list[list]:
 
 def _sig_slots(S):
     Z = _step_widths(S)
-    return (("step", Array(RC._bits_of(_step_fields(S)), BIT)), ("n", Array(Z.TW, BIT))), Array(2 + S.R * Z.V, BIT)
+    return (("step", Array(RC._bits_of(_tie_fields(S)), BIT)), ("n", Array(Z.TW, BIT))), Array(2 + S.R * Z.V, BIT)
 
 
 def _build_slots(C, S, step, n):
     Z = _step_widths(S)
-    f = RC._split(step, _step_fields(S))
+    f = RC._split(step, _tie_fields(S))
     N, T = RC._pad(n, Z.W), const_bits(S.T, Z.W)
     lo, recs = [ZERO] * Z.W, []
     for k in range(S.R):
@@ -174,8 +186,8 @@ def _build_slots(C, S, step, n):
 
 
 ServedTieSlots = _part(
-    "ServedTieSlots", ("R", "IW", "L", "T"), _sig_slots, _build_slots,
-    "a step's served rows as (count, cover, records): count iff the slots' runs end at the step's N and N ≤ T, cover iff "
+    "ServedTieSlots", ("R", "L", "T"), _sig_slots, _build_slots,
+    "a step's served rows (its slots' valid, start and n) as (count, cover, records): count iff the slots' runs end at the step's N and N ≤ T, cover iff "
     "they reach N, and slot k's record (v, start), v = lo_k + 1 (TW bits) for a live slot (n > 0, lo_k below N and T) and "
     "0 for another, lo_k the earlier valid slots' n summed")
 
@@ -223,13 +235,13 @@ def _or(C, a, b):
 
 def _sig_step(S):
     Z, G = _step_widths(S), geometry(S)
-    return ((("step", Array(RC._bits_of(_step_fields(S)), BIT)), ("n", Array(Z.TW, BIT)),
+    return ((("step", Array(RC._bits_of(_tie_fields(S)), BIT)), ("n", Array(Z.TW, BIT)),
              ("chunks", Array(G.K, Array(8 * CHUNK, BIT))), ("switches", Array(Z.SW, BIT))), Array(2, BIT))
 
 
 def _body_step(B, S, step, n, chunks, switches):
     Z, K = _step_widths(S), HC._Consts(B)
-    sl = HC._refs(B.call(bind(ServedTieSlots, R=S.R, IW=S.IW, L=S.L, T=S.T), step, n))
+    sl = HC._refs(B.call(bind(ServedTieSlots, R=S.R, L=S.L, T=S.T), step, n))
     recs = HC._coll(Array(Z.M, Array(Z.V, BIT)), sl[2:] + K.bits(0, (Z.M - S.R) * Z.V))
     routed = B.call(bind(IT.IoTieRoute, W=Z.V, D=Z.D), recs, switches)
     pos = B.call(bind(ServedTieScan, R=S.R, L=S.L, T=S.T, IB=S.IB, PB=S.PB), routed, n, chunks, HC._coll(BIT, [sl[1]]))
@@ -288,16 +300,17 @@ def _body(B, S, pub, srv, *rest):
     pr, sr = HC._refs(pub), HC._refs(srv)
     pos, sw = rest[:S.G * G.K], rest[S.G * G.K:]
     counts, poss = [], []
+    tie = [b for i in range(S.P) for b in _tie(S, sr[i * Z.SB:(i + 1) * Z.SB])]
     if Z.U > 1:
-        sel = HC._refs(B.call(bind(ServedTieSelect, P=S.P, G=S.G, SB=Z.SB), HC._coll(Array(Z.JW, BIT), pr[:Z.JW]),
-                              HC._coll(Array(S.P * Z.SB, BIT), sr[:S.P * Z.SB])))
+        sel = HC._refs(B.call(bind(ServedTieSelect, P=S.P, G=S.G, SB=Z.TB), HC._coll(Array(Z.JW, BIT), pr[:Z.JW]),
+                              HC._coll(Array(S.P * Z.TB, BIT), tie)))
         recs = sel[:-1]
         counts.append(sel[-1])
     else:
-        recs = sr[:S.G * Z.SB]
+        recs = tie
     step = bind(ServedTieStep, **{k: getattr(S, k) for k in STEP})
     for g in range(S.G):
-        o = HC._refs(B.call(step, HC._coll(Array(Z.SB, BIT), recs[g * Z.SB:(g + 1) * Z.SB]),
+        o = HC._refs(B.call(step, HC._coll(Array(Z.TB, BIT), recs[g * Z.TB:(g + 1) * Z.TB]),
                             HC._coll(Array(Z.TW, BIT), pr[Z.JW + g * Z.TW:Z.JW + (g + 1) * Z.TW]),
                             HC._coll(Array(G.K, Array(8 * CHUNK, BIT)), [r for c in pos[g * G.K:(g + 1) * G.K] for r in HC._refs(c)]),
                             HC._coll(Array(Z.SW, BIT), HC._refs(sw[g])[:Z.SW])))
@@ -479,17 +492,17 @@ def _count(build, params) -> int:
 
 @lru_cache(maxsize=None)
 def _step_ands(key: tuple) -> int:
+    """The step's parts counted as C-Flock lowers them, each activation by its builder on its own wires: the slots, the
+    routing with its M − R zero records constant, the scan."""
     S = SimpleNamespace(**dict(zip(STEP, key)))
     Z = _step_widths(S)
 
-    def build(C, step, n, *rest):
-        chunks, switches = rest[:-1], rest[-1]
-        sl = _build_slots(C, S, step, n)[0]
-        recs = [sl[2 + k * Z.V:2 + (k + 1) * Z.V] for k in range(S.R)] + [[ZERO] * Z.V] * (Z.M - S.R)
-        routed = IT._build_route(C, SimpleNamespace(W=Z.V, D=Z.D), *recs, switches)
-        return [[sl[0], _build_scan(C, S, *routed, n, *chunks, [sl[1]])[0][0]]]
+    def route(C, *e):
+        return IT._build_route(C, SimpleNamespace(W=Z.V, D=Z.D), *e[:S.R], *[[ZERO] * Z.V] * (Z.M - S.R), e[-1])
 
-    return _count(build, [t for _n, t in _sig_step(S)[0]])
+    return (_count(lambda C, *e: _build_slots(C, S, *e), [t for _n, t in _sig_slots(S)[0]])
+            + _count(route, [Array(Z.V, BIT)] * S.R + [Array(Z.SW, BIT)])
+            + _count(lambda C, *e: _build_scan(C, S, *e), [t for _n, t in _sig_scan(S)[0]]))
 
 
 def step_size(**st) -> dict[str, int]:
@@ -501,8 +514,8 @@ def size(**st) -> dict[str, int]:
     """A unit's ANDs: G steps, the block's selection when G < P, and the steps' flags ANDed."""
     S = SimpleNamespace(**st)
     Z = widths(S)
-    sel = _count(lambda C, *e: _build_select(C, SimpleNamespace(P=S.P, G=S.G, SB=Z.SB), *e),
-                 [t for _n, t in _sig_select(SimpleNamespace(P=S.P, G=S.G, SB=Z.SB))[0]]) if Z.U > 1 else 0
+    Q = SimpleNamespace(P=S.P, G=S.G, SB=Z.TB)
+    sel = _count(lambda C, *e: _build_select(C, Q, *e), [t for _n, t in _sig_select(Q)[0]]) if Z.U > 1 else 0
     G1 = S.G + (Z.U > 1)
     return {"ands": S.G * step_size(**st)["ands"] + sel + (G1 - 1) + (S.G - 1)}
 

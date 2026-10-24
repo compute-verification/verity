@@ -14,10 +14,10 @@ def _network_served_tie_roots() -> list[Any]:
                                                             unit)
 
     return [
-        bind(ServedTieSlots, R=2, IW=6, L=4096, T=256),
+        bind(ServedTieSlots, R=2, L=4096, T=256),
         bind(ServedTieScan, R=2, L=4096, T=256, IB=8, PB=8),
-        bind(ServedTieStep, R=2, IW=6, L=4096, T=256, IB=8, PB=8),
-        bind(ServedTieSelect, P=7, G=1, SB=60),
+        bind(ServedTieStep, R=2, L=4096, T=256, IB=8, PB=8),
+        bind(ServedTieSelect, P=7, G=1, SB=46),
         unit(R=2, P=7, G=7, IW=6, L=4096, T=256, IB=8, PB=8),
         unit(R=2, P=7, G=1, IW=6, L=4096, T=256, IB=8, PB=8),
     ]
