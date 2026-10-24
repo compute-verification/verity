@@ -65,6 +65,7 @@ import Proofs.Flock.Claims.KS.PlainDraw
 import Proofs.Flock.Claims.KS.PlainDrawAcc
 import Proofs.Flock.Claims.KS.PlainDrawDec
 import Proofs.Flock.Claims.KS.PlainDrawSim
+import Proofs.Flock.Claims.KS.PlainDrawK
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.PlainSim
 import Proofs.Flock.Claims.KS.PlainLock
@@ -337,7 +338,10 @@ simulated fork at `t + 1`, with `δ_t` the chance that two coins agree on the en
 `FlockDeploy.KS.forkCoinCoupling_plain`). The verdict at the statement's draw reads `verify` at the setup at that draw,
 not the record's, so an accepting run gives it at its live outcome whatever draw its record carries (`PlainDraw`:
 `Claims.Bridge.PlainDraw.AcceptsAtD`, `Claims.Bridge.PlainDraw.wrPD`, `FlockDeploy.KS.plainVerdictAt`,
-`FlockDeploy.KS.plainVerdictAt_of_run`). The acceptance lemmas the plain decoders read hold at a draw value by their
+`FlockDeploy.KS.plainVerdictAt_of_run`), and at every `keep` an accepting run of `VK keep` gives it read through
+`keep`, its rounds the live outcome's up to their digests (`PlainDrawK`:
+`Claims.Bridge.PlainDraw.AcceptsAtDK`, `Claims.Bridge.PlainDraw.RecordsLiveAtDK`,
+`FlockDeploy.KS.plainVerdictAtK_of_run`). The acceptance lemmas the plain decoders read hold at a draw value by their
 proofs (`PlainDrawAcc`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyD`,
 `FlockSoundness.Discharge.AtDraw.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the draw
 (`PlainDrawDec`: `Claims.Bridge.PlainDraw.decodesTable_wrPD_sc`, `FlockDeploy.KS.plain_hdecAt`,
