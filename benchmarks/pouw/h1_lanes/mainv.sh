@@ -155,8 +155,11 @@ collect_out() {   # collect_out HOST RUN SRC TAG...: RUN's tags from SRC's out/ 
   local h=$1 run=$2 src=$3 S=$RUNS/$3/out tag k P pending dead plan ready   # TAG/sessions and verifier/
   shift 3
   pending=" $* "
+  local end=$(( SECONDS + MAXWAIT ))
   until plan=$(on "$h" "ls $S/plan.json $S/share-plan.json 2>/dev/null | head -1") && [ -n "$plan" ]; do
-    if ! alive "$h" "$src"; then
+    # a share still in its node's memory queue has a request and no status.json yet
+    if { ! alive "$h" "$src" && ! on "$h" "test ! -e $RUNS/$src/status.json -a -e $RUNS/../requests/$src/request.json"; } \
+        || [ $SECONDS -ge $end ]; then
       for tag in $pending; do echo "$src ended without a plan" > "$T/in/$run.$tag.missing"; done
       log "collector $run%$src: no plan; no session for:$pending"; return 0
     fi
