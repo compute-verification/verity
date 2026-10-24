@@ -15,7 +15,8 @@
 # (KEEP/RUN.TAG, removed after its verify), and `?AFTER[@HOSTS]=TAGS` (HOSTS: `USER@HOST` or `-` for this node, joined
 # by `+`) finds, per tag, the earliest share started after AFTER (YYYYMMDD-HHMMSS) whose plan checks that tag; its rows'
 # key is found.TAG. `RUN%SRC[@USER@HOST]=TAGS` reads RUN's tags from SRC's out/ (TAG/sessions, ready at its sessions.du or
-# a harvester's "kept TAG's sessions" log line, and verifier/), with SRC's plan.json or share-plan.json as RUN's plan.
+# a harvester's "kept TAG's sessions" log line, and verifier/), with SRC's plan.json or share-plan.json as RUN's plan. With
+# CLAIM=[USER@HOST:]DIR, such a tag is copied and verified only by the run that first claims it there.
 set -uo pipefail
 OUT=${RESEARCH_RUN_DIR:?}/out
 mkdir -p "$OUT/v" "$OUT/plans" "$OUT/share-lean"
@@ -151,6 +152,14 @@ collect_kept() {   # collect_kept HOST RUN KEEPER TAG...: RUN's tags as keep.sh'
     sleep "$POLL"
   done
 }
+claim() {   # claim KEY: won, lost, or (ssh failed) nothing, once per KEY across the runs sharing CLAIM=[USER@HOST:]DIR
+  [ -n "${CLAIM:-}" ] && [ ! -e "$T/in/$1.claimed" ] || { echo won; return; }
+  local ch= cd=$CLAIM r
+  [ "$CLAIM" != "${CLAIM#*:}" ] && ch=${CLAIM%%:*} cd=${CLAIM#*:}
+  r=$(on "$ch" "mkdir -p $cd && if mkdir $cd/$1 2>/dev/null; then echo ${RESEARCH_RUN_DIR##*/} > $cd/$1/by; echo won; else echo lost; fi")
+  [ "$r" = won ] && touch "$T/in/$1.claimed"
+  echo "$r"
+}
 collect_out() {   # collect_out HOST RUN SRC TAG...: RUN's tags from SRC's out/ (a split share's own, or a harvester's):
   local h=$1 run=$2 src=$3 S=$RUNS/$3/out tag k P pending dead plan ready   # TAG/sessions and verifier/
   shift 3
@@ -173,6 +182,12 @@ collect_out() {   # collect_out HOST RUN SRC TAG...: RUN's tags from SRC's out/ 
     for tag in $pending; do
       grep -qx -e "$S/$tag/sessions.du" -e "kept $tag's sessions" <<< "$ready" || continue
       k=$run.$tag P=$T/in/$run.$tag.partial
+      case $(claim "$k") in
+        won) ;;
+        lost) echo "claimed by another mainv run (${CLAIM})" > "$T/in/$k.missing"; pending=${pending/ $tag / }
+              log "collector $run%$src: $tag is claimed by another run; not verified here"; continue ;;
+        *) log "collector $run%$src: $tag's claim could not be read; retrying"; continue ;;
+      esac
       rm -rf "$P" && mkdir -p "$P"
       if on "$h" "cd $S && tar -cf - $tag/sessions verifier/$(basename "$(field "$run" "$tag" pub)") \
             verifier/$(basename "$(field "$run" "$tag" registered)") verifier/$(basename "$(field "$run" "$tag" program)") \

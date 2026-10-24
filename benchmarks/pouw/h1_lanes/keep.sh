@@ -2,7 +2,7 @@
 # PRF-131 mainv keeper: a share's completed lanes kept past the share's exit, and a mainv run ended once it has written
 # the verdicts it should.
 #   research run --on NODE --project verity --source . --cwd source --timeout 600m --send keep.sh \
-#     --env SHARE=RUN --env TAGS='lane17 ...' [--env TARGET=MAINV_RUN --env RELEASE_KEYS='RUN.TAG ...' --env REASON=...] \
+#     [--env SHARE=RUN --env TAGS='lane17 ...'] [--env TARGET=MAINV_RUN --env RELEASE_KEYS='RUN.TAG ...' --env REASON=...] \
 #     -- bash -c 'exec bash $RESEARCH_RUN_DIR/inputs/keep.sh'
 # Once SHARE marks a tag's session complete (its out/TAG/sessions.du), the tag's sessions and verifier inputs (its plan's
 # dir/sessions, pub, registered, program and partition, all in the share's scratch, which its exit removes) are
@@ -11,7 +11,7 @@
 # verify. TARGET, if set, is cancelled once each of RELEASE_KEYS has its out/v/KEY.rc or .missing; its out/v is copied first.
 set -uo pipefail
 OUT=${RESEARCH_RUN_DIR:?}/out RUNS=${SHARE_RUNS:-/workspace/research/runs}
-KEEP=${KEEP:-/workspace/research/proofs-mainv/keep} SHARE=${SHARE:?} TAGS=${TAGS:?} POLL=${KEEP_POLL:-5}
+KEEP=${KEEP:-/workspace/research/proofs-mainv/keep} SHARE=${SHARE:-} TAGS=${TAGS:-} POLL=${KEEP_POLL:-5}
 mkdir -p "$OUT" "$KEEP"
 log() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/job.log"; }
 st() { python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['state'])" "$RUNS/$1/status.json" 2>/dev/null; }
@@ -37,6 +37,7 @@ release() {
 }
 RP=
 [ -n "${TARGET:-}" ] && { release & RP=$!; }
+[ -n "$SHARE" ] || { [ -n "$RP" ] && wait "$RP"; log done; exit 0; }   # release only
 
 SR=$RUNS/$SHARE
 until [ -s "$SR/out/plan.json" ]; do
