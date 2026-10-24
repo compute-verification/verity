@@ -40,7 +40,9 @@ seeds, by position. Once a request has finished, `Record.check` holds them to wh
 streamed ids, the seed it carried, and where its finish says the stream ends.
 
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
-line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds), ``requests.jsonl``
+line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
+record of the step rows it ran, committed at its close under its run root for the compile slice, `serve_commit.commit_served`,
+whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl``
 (one line a request: the HTTP id, the engine id, the body's ``user``, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check) and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512``
 commits as the bench row's declared Commit does, with its committer parts built from the row's ``--required-manifest`` and taps
@@ -65,7 +67,8 @@ from typing import Any
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, seeded
 from verity_vllm.pipeline import serve_seal as SS
-from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS, CommitWindows, advice_trace, ingress_of, param_of, user_of
+from verity_vllm.pipeline.serve_commit import (SAMPLING_FIELDS, SERVED_CLASS, CommitWindows, advice_trace, ingress_of, param_of,
+                                               served_statics, user_of)
 
 PRECISIONS = ("verity_int8", "int8_exact", "pin")
 #: precision -> (the int8 parts it registers, the int8 scope its layers must then run; None: not checked). Every precision
@@ -122,6 +125,10 @@ class Options:
     hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB (as the Commit's)")
     norm_tap_so: str | None = option("--norm-tap-so", default=None, help="rows-sha512: the norm-scale tap (as the Commit's --norm-tap-so)")
+    served_rows_class: str | None = option("--served-rows-class", default=None,
+                                           help="the compile slice's size class the served rows are committed under, as JSON "
+                                                "{R, W, A, IW, Q, D, P, K, SEG} (serve_commit.SERVED_CLASS; default R --max-num-seqs, "
+                                                "P --window-steps, IW 16, the rest 1: only R, P and IW shape the rows)")
     force_include_usage: bool = option("--force-include-usage", action="boolean_optional", default=True,
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
@@ -718,10 +725,21 @@ def register_int8(precision: str, register: Callable[[Sequence[str]], Any] | Non
     return scope
 
 
+def served_class(opts: Options) -> dict[str, int]:
+    """The served rows' size class: ``--served-rows-class`` over its defaults."""
+    given = json.loads(opts.served_rows_class) if opts.served_rows_class else {}
+    if not isinstance(given, dict) or set(given) - set(SERVED_CLASS):
+        raise UsageError(f"--served-rows-class {opts.served_rows_class}: a JSON object of {', '.join(SERVED_CLASS)}")
+    return {**dict.fromkeys(SERVED_CLASS, 1), "R": opts.max_num_seqs, "P": opts.window_steps, "IW": 16,
+            **{k: int(v) for k, v in given.items()}}
+
+
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
     """What would fail after the model has loaded, refused before it."""
     if opts.window_steps < 1:
         raise UsageError("--window-steps is at least 1")
+    if (c := served_class(opts))["R"] < opts.max_num_seqs:
+        raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
     if opts.scheme == "rows-sha512" and not opts.gpu_tree:
@@ -770,10 +788,13 @@ def main(opts: Options) -> int:
     trace = advice_trace(out, llm)
     windows = None
     if com is not None:
+        from verity_vllm.engine.step_trace import scheduler_config
+
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
-                                seal=SS.seal_of(opts) if opts.seal else None)
+                                seal=SS.seal_of(opts) if opts.seal else None,
+                                served=served_statics(scheduler_config(trace.sched), served_class(opts)))
     loop = EngineLoop(engine, windows)
     served = opts.served_model_name or opts.model
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
@@ -793,6 +814,7 @@ def main(opts: Options) -> int:
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1 (CIR-87)", "committer": getattr(com, "name", None),
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", "vllm-v1") if com is not None else None,
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
+              "served_rows_statics": windows.served if windows is not None else None,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
