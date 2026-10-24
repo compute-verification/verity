@@ -15,7 +15,10 @@ deployed shape (`m = 35`, weight `coverW`), below the 100-bit floor under every 
 `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open:
 `PartChecksB`, `PartOpensB` (at staged V\* statements) and `DecompB` (`RecDeploy.ksLin2_deployed_full`, at `recTr`, a
 model of the coin server's record that lists every inner round, and the last round's pieces at the parts that commit the
-earlier rounds).
+earlier rounds). At the coin server's record read by `recRead` (`RecDeploy.ksLin2_deployed_partAccepts`), `PartOpensB`
+is proved and `PartChecksB` is no premise of its own (`VStarB.exists_chk_iff`: some inner check gives both exactly when
+`DecompB` holds at what each part's circuit accepts, `PartAccepts`), so what stays open there is `DecompB` at
+`PartAccepts`, the readers' `ReadersTrue`, and `recRead` reading the transcript back (`ReadsBackB`).
 Holo statements are candidate 3's own model, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`).
 
