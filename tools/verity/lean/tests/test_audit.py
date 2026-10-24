@@ -322,6 +322,20 @@ def test_layers_hold_on_direct_imports():
     assert A.judge(pol, facts(), FILES)[0] == ["layers: P.Model matches no audited module; remove the entry"]
 
 
+def test_a_sealed_layer_answers_only_to_its_own_rule_and_is_reached_only_by_name():
+    """A sealed layer under a vocabulary prefix (an area's `Guarantees` under the area): the vocabulary's rule doesn't hold
+    its modules, and the vocabulary's own prefix doesn't admit them, so the vocabulary imports them only by listing them."""
+    thms = {"imports": ["P.Assumptions", "P.Defs"]}
+    pol = recorded() | {"layers": {"P": {"imports": ["P"]}, "P.Thms": thms}}
+    assert A.judge(pol, facts(), FILES)[0] == []
+    pol["layers"]["P.Thms"] = thms | {"sealed": True}
+    assert A.judge(pol, facts(), FILES)[0] == ["layers: P imports P.Thms, outside P's layer (P)"]
+    pol["layers"]["P"] = {"imports": ["P", "P.Thms"]}
+    assert A.judge(pol, facts(), FILES)[0] == []
+    pol["layers"]["P.Thms"] = {"imports": ["P.Defs"], "sealed": True}
+    assert A.judge(pol, facts(), FILES)[0] == ["layers: P.Thms imports P.Assumptions, outside P.Thms's layer (P.Defs)"]
+
+
 TREES = {"P.Defs": "definitions", "P.Assumptions": "definitions", "P.Props": "properties", "P.Thms": "proofs",
          "P.Props.Proofs": "proofs"}
 AUX = [{"name": "P.aux", "module": "P.Thms", "kind": "def", "hash": "5" * 32, "own": ["P.aux.match_1"]},

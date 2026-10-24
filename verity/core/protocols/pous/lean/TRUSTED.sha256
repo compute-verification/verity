@@ -10,8 +10,6 @@ ebcdbc782c8b4287be1a0682b6bc58e5ebf2b52380a7509f31e9e3d5ca1495aa  Grader/Registr
 d13d1f4dbf6c2525376ced2cda0ef7bfaf3f03aeb2a11f599f2215d16b980bf0  ../../../../../Security/Proofs/lakefile.toml
 dff5d799d07c5962dde6e0967f8925956561be6b011b7e0187188495fcbe8088  ../../../../../Security/Proofs/lake-manifest.json
 13ebe8f2454e2d12130d6f13a8459b436cbfaad3da5c843ae172a0ec9fecc5e9  ../../../../../Security/Definitions/Pous.lean
-369114f047c584e3ca3c62379f70900eeac07c4739ce328b115a1c431648620b  ../../../../../Security/Models/Pous/Assumptions.lean
-3c739f0351a0e2269c5ce1978e835ff27573f4d3f74c91426abc04ad1f272dc9  ../../../../../Security/Models/Pous/Guarantees.lean
 b84b4f861c18b87d77a66dff6e4ee63275b54ec557a7958b6b67669ccf7056c8  ../../../../../Security/Proofs/Pous/Statements.lean
 73013c0534eabdec28bc10865e7ec0b6ade32eb63f65d7b5d8612ac054e92bdc  ../../../../../Security/Proofs/Pous/Sanity.lean
 7bd66e3b6894d7a96eba69163dfa99f8b9f4f9be5f9deddfc4d5fa2ed17ac137  ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean
@@ -48,7 +46,9 @@ f17be8cbc547930461d46c4f41040ea165bfff15169972934aade312603dc129  ../../../../..
 f5671be4b98bfe70d0cafff562ed2c79f5ac500482a652ac3c6d669e0fc836c1  ../../../../../Security/Definitions/Pous/Model/StreamedWipe.lean
 58c66950dee05bce6131152a168b1910b8059fd8d7967bc78259331ff96a15a5  ../../../../../Security/Definitions/Pous/P2/Cost.lean
 d8f6004051961b914e007d744f4acbef542bff8fc2a99b7ce36de33b6a9d469b  ../../../../../Security/Definitions/Pous/P2/Rounds.lean
+369114f047c584e3ca3c62379f70900eeac07c4739ce328b115a1c431648620b  ../../../../../Security/Models/Pous/Assumptions.lean
 c1f3114390c593fcab239b629bed7ac2aa8ba42a4c405b0c54b1875a9a611b8d  ../../../../../Security/Models/Pous/Assumptions/P2.lean
+3c739f0351a0e2269c5ce1978e835ff27573f4d3f74c91426abc04ad1f272dc9  ../../../../../Security/Models/Pous/Guarantees.lean
 5ca33632f925b37bb744f8c1f05bbaef954ba269dd5416f70f0efa6ae64c409c  ../../../../../Security/Models/Pous/Guarantees/P2.lean
 c8d78f5c2bdf9f4fc7b84b118d89e82ab6703c5aaa55ae1a9cfee3bde463d423  ../../../../../Security/Models/Pous/Guarantees/SecureErasure.lean
 553dc52a24ef78a0faf6308a1902308b614b513fc59263ab7bc0f81c0fea4e1e  ../../../../../Security/Models/Pous/Guarantees/StreamedWipe.lean
