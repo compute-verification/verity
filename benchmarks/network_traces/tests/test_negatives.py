@@ -196,12 +196,31 @@ def test_every_negative_names_a_check_and_a_code_and_the_table_lists_each():
     rows = NG.table().splitlines()
     assert len(rows) == 2 + len(NG.NEGATIVES)
     for name, n in NG.NEGATIVES.items():
-        assert n.family in ("io", "advice", "token", "circuit") and n.tampers in ("plan", "certified", "advice",
-                                                                                   "commit")
+        assert n.family in ("io", "advice", "token", "circuit") and n.tampers in ("plan", "certified", "frames",
+                                                                                   "advice", "commit")
         assert re.fullmatch(r"[A-Za-z0-9_]+(\.[a-z_-]+)?", n.code), n.code
         assert any(row.startswith(f"| `{name}` |") for row in rows)
     assert {n.family for n in NG.NEGATIVES.values()} == {"io", "advice", "token", "circuit"}
     assert [n for n in NG.NEGATIVES.values() if not n.waits and n.tampers in ("advice", "commit")] == []
+
+
+def test_a_frame_with_one_byte_changed_no_longer_opens_under_the_records_frames_root(tmp_path):
+    """On the certificate's own tree (`certificate.frames_root`, `open_frame`, `verify_frame`): every honest frame opens
+    under the root, the changed one doesn't, and no other frame changes. The run keeps no frames, so `make` says what
+    the negative waits for."""
+    from verity.core.protocols.certifier.certificate import frames_root, open_frame, verify_frame
+    from verity.core.protocols.certifier.grid import GridParams
+
+    params = GridParams(buckets=4, allocation=2, frame_bytes=64, bucket_ms=100, queue_capacity=8)
+    frames = [bytes([k]) * 64 for k in range(5)]
+    root = frames_root(frames, params)
+    bad = NG.frame_byte(frames, 2)
+    assert [k for k, (a, b) in enumerate(zip(frames, bad)) if a != b] == [2] and bad[2][-1] == 3
+    assert all(verify_frame(root, params, k, f, open_frame(frames, params, k)) for k, f in enumerate(frames))
+    assert not verify_frame(root, params, 2, bad[2], open_frame(frames, params, 2))
+    assert not verify_frame(root, params, 2, bad[2], open_frame(bad, params, 2))
+    with pytest.raises(NG.NotApplicable, match="WARDEN"):
+        NG.make("frame", tmp_path, tmp_path / "out")
 
 
 # --- the advice: I1 v0, or a stand-in of its fields until ADV-SPEC lands -----------------------------------------------

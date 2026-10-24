@@ -17,6 +17,7 @@ writes a tampered copy, and each naming the check that refuses it by its refusal
   serving; `rehearse --strategies honest,NAME,...` runs it. `make` writes the shim's plan (`shim.json`).
 - ``certified``: the certified records the prover commits (`certified.jsonl`) after the run, under the certificates the
   certifier issued.
+- ``frames``: the certified frames the prover opens under each record's frames root (the I/O tie's reads).
 - ``advice``: the advice string the prover hands the compiler after serving (I1).
 - ``commit``: the Commit record of the run's committed values (I3).
 
@@ -32,7 +33,8 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
   advised link, `LinkWindows.advised_check`: the egress head's counts the release of the advice's frames, the ingress
   head's the request frames the advice needs; ``.view`` when the advice is malformed or doesn't cover the window, which
   refuses every window), ``NetworkIoTie_v1`` (IO-TIE's tie of a drawn frame's token id to the Commit's at its (request,
-  position)); and, until their owners name them, ``StepUnit`` (PROVE-PATH: the compiled step Program's digest against
+  position)) and ``NetworkFrameRead`` (its read of a frame under the record's frames root); and, until their owners
+  name them, ``IoUnit.render`` (under the attested-edge design, the egress unit rendering committed outputs to bytes), ``StepUnit`` (PROVE-PATH: the compiled step Program's digest against
   the committed trace's, and the committed values passing it) and ``Commit`` (the Commit's opening under its registered
   root).
 
@@ -118,6 +120,23 @@ def tampered_head(src: Path, dst: Path, window: int = 0, by: int = 1) -> Path:
     records[key] = one_count(records[key], by)
     write_certified(dst / "certified.jsonl", records, refused)
     return dst
+
+
+def frame_byte(frames: list[bytes], k: int = 0, at: int = -1) -> list[bytes]:
+    """The window's frames with byte `at` of frame `k` flipped (its low bit), every other frame and the record's frames
+    root kept: what a prover that opens a frame other than the certified one hands over. Its path no longer reaches
+    the root (`certificate.verify_frame`), which is what the frame read of the I/O tie (`NetworkFrameRead`), or the
+    warden's root under the attested-edge design, refuses."""
+    out = list(frames)
+    f = bytearray(out[k])
+    f[at] ^= 1
+    out[k] = bytes(f)
+    return out
+
+
+def frames_edit(src: Path, dst: Path) -> Path:
+    raise NotApplicable("the run keeps its frames' root only (`certified.jsonl`'s heads); the frames negative waits "
+                        "for a record that keeps the frames (WARDEN's attested cells, IO-TIE's frame reads)")
 
 
 def shim(strategy: str) -> Callable[[Path, Path], Path]:
@@ -393,7 +412,7 @@ def commit_edit(edit: Callable) -> Callable[[Path, Path, Path], Path]:
 @dataclass(frozen=True)
 class Negative:
     """One tampering: its `family` (the goal's four: `io`, `advice`, `token`, `circuit`), what it `tampers` (`plan`,
-    `certified`, `advice` or `commit`), the `check` that must refuse it and its refusal `code` (`served`: the code on a
+    `certified`, `frames`, `advice` or `commit`), the `check` that must refuse it and its refusal `code` (`served`: the code on a
     served link where it differs), the interfaces it `waits` on (owner names; none: it runs today), and `make`, the pure
     function that writes the tampered copy."""
 
@@ -429,7 +448,10 @@ NEGATIVES = {n.name: n for n in [
              "N2's head check (the signed digest)", f"{HEAD}.signed", tampered_head, also=("audit.signature",)),
     Negative("token", "io", "plan", "the shim writes every token of window 0's responses with other bytes than the "
              "endpoint sent: certified, its counts honest's", "the I/O tie", TIE, shim("token"),
-             waits=("IO-TIE", "CERT-VARLEN")),
+             waits=("IO-TIE", "CERT-VARLEN"), also=("IoUnit.render",)),
+    Negative("frame", "io", "frames", "one byte of a certified frame changed, the record's frames root kept",
+             "the I/O tie's frame read (under the attested-edge design, the warden's root)", "NetworkFrameRead",
+             frames_edit, waits=("IO-TIE", "WARDEN")),
     Negative("advice-length", "advice", "advice", "a request's output length one more than its certified frames, "
              "its next row keeping the sample", "N2's advised counts", ADVISED, advice_edit(output_length),
              waits=("ADV-SPEC", "N2-ADVICE")),
