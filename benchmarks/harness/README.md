@@ -14,6 +14,7 @@ verity-bench run SPEC        # one recorded `research run --queue` per point wit
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
+verity-bench served-table    # every protocol's served overhead from the store's newest passing results (--json)
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
 ~~~
 
@@ -183,6 +184,19 @@ the attempts this store lacks among those started since a day before the commit'
 can't start before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points
 other machines ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the
 catalog alone.
+
+## The served table
+
+`verity-bench served-table` (`verity_bench.served_table`) renders each protocol's served overhead on Llama-3.1-8B on the
+RTX PRO 6000 from the store, never from numbers in code: the protocols, their specs and arms are `PROTOCOLS`, and the
+conversion factors (`stock-fp8@compiled` over batch-invariant eager `stock-fp8`, `llama31-8b-fp8-1gpu-compiled-full`)
+are their own section. For every point of every spec it takes the newest passing `vllm_bench_point` attempt whose
+`spec` and `point` params name it (the resume lookup's rule, without its one-commit identity), so a newer passing run
+supersedes an older one. It first pulls the remote's attempts started since the oldest spec was added, the same pull
+as `check`'s. A result labelled `superseded_by`, invalid, or without the row's arms is passed over and listed. Ratios
+are paired by rep from the result's own reps, each metric over `stock-fp8@compiled` and, where the spec runs an eager
+stock, over that. The caveat column is the newest `label` and `note` on the result's artifact and its run, read through
+from the remote.
 
 ## Out of scope here
 
