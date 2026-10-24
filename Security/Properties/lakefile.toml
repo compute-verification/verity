@@ -78,6 +78,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.NciDesc", "Properties.NciDesc.Verdict", "Properties.Proofs.Nci.DescVerdict",
   "Properties.Proofs.Nci.DescAgree", "Properties.Proofs.Nci.Walk",
   "Properties.Proofs.Nci.Resolve", "Properties.Proofs.Nci.Width", "Properties.Proofs.Nci.Novel",
+  "Properties.Proofs.Nci.OperandsResolve",
   "Properties.SampledProofs", "Properties.Proofs.SampledProofs", "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt", "Properties.Proofs.SampledProofs.Halt",
   "Properties.Evaluate", "Properties.Proofs.Evaluate",

@@ -15,6 +15,7 @@
   "Properties.Proofs.Nci.DescAgree",
   "Properties.Proofs.Nci.Walk",
   "Properties.Proofs.Nci.Novel",
+  "Properties.Proofs.Nci.OperandsResolve",
   "Properties.NciDesc",
   "Properties.NciDesc.Verdict",
   "Properties.Proofs.Nci.DescVerdict",
