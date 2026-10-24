@@ -1,23 +1,22 @@
-"""Red-team cases against ENC-DERIVED's canonical rules (#3543): the zero-bit source and hit derivation.
+"""Red-team cases against ENC-DERIVED's canonical rules (#3543): the zero-bit source and hit derivation, and the key it
+looks token prefixes up by.
 
 The companion `test_derived.py` already pins the canonical rules the lead named -- the no-eviction bound (a hit shorter
 than the longest cached prefix is refused), the earliest-admitted source, arrival order (a step's new requests out of
-order are refused) and the `rebuild(residual(a)) == a` round-trip. These cases add the one surface those don't reach: the
-hash the derivation keys a token prefix by.
+order are refused) and the `rebuild(residual(a)) == a` round-trip. These cases reach the one surface those don't: the
+key.
 
-`Prefixes._key` chains Python's builtin `hash()` of an int-tuple (`hash((prev_key, token))`). That is the stand-in the
-ENC-DERIVED report flags as "checked by the compile unit": it is neither vLLM's prefix-cache hash (sha256 over the block's
-tokens) nor Verity's one hash (SHA-512, whole output). The derivation's 0-bit claim rests on this key being injective over
-token prefixes, and on the prover and the verifier computing it identically. Builtin int-tuple hashing guarantees neither:
-it collides, and its algorithm has changed across CPython releases (3.8 replaced the combiner). These cases show that when
-that key's collision structure differs -- as a collision, or a verifier on another interpreter, would make it differ --
-the honest advice that round-trips under the real key is refused. The failure here is conservative (a false reject, never
-a false accept), but it means the "checked by the compile unit" claim is not yet real, and it violates the one-hash rule."""
+REDTEAM phase 4 found `Prefixes._key` chaining Python's builtin `hash()` of an int-tuple: neither Verity's one hash nor
+stable across CPython releases, so a collision, or a verifier on another interpreter, false-rejected honest advice. The
+key is now `unit_key`, SHA-512 over the parent key and a whole hit unit's canonical token bytes, and a key names a
+request only where that request's tokens through the prefix match. These cases hold both halves: the key is SHA-512 with
+a fixed answer on any interpreter, and a key with a different collision structure derives the same advice, so honest
+advice can't be refused by one."""
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
-import inspect
 import sys
 from pathlib import Path
 
@@ -46,54 +45,53 @@ def case(request):
     return cfg, adv, order, held, D.residual(adv, cfg, held, order=order)
 
 
-def _collide(self, i, p):
-    """A `Prefixes._key` whose collision structure differs from the real one: it chains over the token's low bit, so
-    distinct prefixes a crypto hash would separate now key alike. Stands in for a builtin-hash collision, or for a
-    verifier whose CPython combines int-tuples differently than the prover's."""
-    ks, ts = self.keys[i], self.tokens[i]
-    if p >= len(ts):
-        raise ValueError(f"request {i} has {len(ts)} tokens, none at position {p}")
-    while len(ks) <= p:
-        ks.append(hash((ks[-1] if ks else 0, ts[len(ks)] & 1)))
-    return ks[p]
+def _collide(self, i, u):
+    """A `Prefixes._key` whose collision structure differs from the real one: it chains over each token's low bit, so
+    distinct prefixes SHA-512 separates key alike. Stands in for a collision, or for a verifier computing another key."""
+    ks, ts, U = self.keys[i], self.tokens[i], self.unit
+    if (u + 1) * U > len(ts):
+        raise ValueError(f"request {i} has {len(ts)} tokens, not {u + 1} whole units of {U}")
+    while len(ks) <= u:
+        ks.append(D.unit_key(ks[-1] if ks else D.PREFIX_ROOT, [t & 1 for t in ts[len(ks) * U:(len(ks) + 1) * U]]))
+    return ks[u]
 
 
-def test_the_zero_bit_derivation_is_keyed_by_the_builtin_hash_not_one_sha512() -> None:
-    """The source/hit derivation keys a token prefix by Python's builtin `hash()` of an int-tuple, not by a hash at all
-    in Verity's sense. Two rules say it should: the derivation stands in for vLLM's prefix cache, which hashes a block's
-    tokens with sha256; and Verity hashes with one function, SHA-512 over its whole output. `_key` is neither."""
-    src = inspect.getsource(D.Prefixes._key)
-    assert "hash((" in src, "the key is expected to chain the builtin hash of an int-tuple"
-    assert "sha" not in src.lower() and "blake" not in src.lower(), "the key is not a named cryptographic hash"
+def test_the_key_is_sha512_over_canonical_token_bytes() -> None:
+    """The key of a prefix of whole hit units is SHA-512 (whole output) over its parent's key and the unit's token ids,
+    4 bytes big-endian each, rooted at 64 zero bytes: the same bytes on any interpreter, pinned by a known answer."""
+    unit = (128000, 9906, 1917, 13)
+    key = D.unit_key(D.PREFIX_ROOT, unit)
+    assert D.PREFIX_ROOT == bytes(64) and len(key) == 64
+    assert key == hashlib.sha512(bytes(64) + b"".join(t.to_bytes(4, "big") for t in unit)).digest()
+    assert key.hex()[:32] == "c330e618e315b4de544c1b5e9799ca4b"
+    p = D.Prefixes([unit * 2], 4)
+    assert p._key(0, 0) == key and p._key(0, 1) == D.unit_key(key, unit)
+    for bad in ((-1,), (1 << 32,), (True,), (1.0,)):
+        with pytest.raises(ValueError):
+            D.unit_key(D.PREFIX_ROOT, bad)
 
 
-def test_a_collision_in_that_key_false_rejects_honest_advice(case) -> None:
-    """Under the real key the fixture round-trips. Give the key a different collision structure and the same honest
-    advice is refused: the walk derives, from a spurious key match, a longer hit than the tokens support, and the source
-    check catches the token mismatch. The prover cannot submit the truth. The refusal is conservative -- no forged advice
-    is accepted -- but the 0-bit hit is only sound while this key never collides, which the builtin hash does not promise."""
+def test_a_collision_in_the_key_derives_the_same_advice(case) -> None:
+    """Under a key with a different collision structure the prover's residual is the same, and it rebuilds the honest
+    advice: a spurious key match names a request only if its tokens match, so it can't lengthen a hit or move a source."""
     cfg, adv, order, held, res = case
     assert D.rebuild(res, cfg, held, ()) == adv
     real = D.Prefixes._key
     D.Prefixes._key = _collide
     try:
-        with pytest.raises(ValueError):
-            D.residual(adv, cfg, held, order=order)
+        assert D.residual(adv, cfg, held, order=order) == res
     finally:
         D.Prefixes._key = real
 
 
-def test_a_verifier_on_a_different_key_refuses_the_provers_residual(case) -> None:
-    """The prover (`residual`) and the compile unit/verifier (`reconstruct`, through `rebuild`) both recompute the key.
-    Nothing pins the interpreter they run on, and builtin int-tuple hashing has changed across CPython releases. A
-    residual the prover accepted under its key is refused by a verifier whose key collides differently: the 0-bit
-    derivation needs the two interpreters to agree bit for bit, which the design does not currently guarantee."""
+def test_a_verifier_on_a_different_key_accepts_the_provers_residual(case) -> None:
+    """The prover (`residual`) and the compile unit (`reconstruct`, through `rebuild`) both look prefixes up by the key.
+    A verifier whose key collides differently still rebuilds the prover's residual into the same advice: what is
+    derived depends on the tokens, never on the key's collisions."""
     cfg, adv, order, held, res = case
-    assert D.rebuild(res, cfg, held, ()) == adv
     real = D.Prefixes._key
     D.Prefixes._key = _collide
     try:
-        with pytest.raises(ValueError):
-            D.rebuild(res, cfg, held, ())
+        assert D.rebuild(res, cfg, held, ()) == adv
     finally:
         D.Prefixes._key = real

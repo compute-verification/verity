@@ -22,8 +22,10 @@ order). A request's known tokens K are its prompt length plus its sampling rows 
 request's previous row ended. It schedules n = min(K − start, the step's budget left, the long-prefill threshold) tokens
 (vLLM's running and waiting loops), and samples when it reaches K (the GPU runner's discard rule). `kind` is I1's: decode
 exactly when n = 1 at or past the prompt. Two fields come from the tokens (`Prefixes`):
-- a hit's `sources` are canonical: for each position, the earliest-admitted (lowest-numbered) request that has computed
-  KV there by this step (I1's rule) from the same tokens through it;
+- a hit's `sources` are canonical: for each hit unit, the earliest-admitted (lowest-numbered) request that has computed
+  the whole unit by this step (I1's rule) from the same tokens through it. Prefixes are looked up by a chain of SHA-512
+  keys over whole units (`unit_key`), and a key names a request only where its tokens match, so no collision and no
+  interpreter changes what is derived;
 - while nothing can have been evicted (`_walk`'s no-eviction bound), a `cache_hit` is the longest prefix, in hit units
   and at most K − 1 tokens, whose every unit some row scheduled before it computed (vLLM's lookup: a block is cached as it
   is scheduled, and stays cached until evicted). A shorter or longer hit is refused. Past the bound, hits are sent.
@@ -59,6 +61,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import re
 from collections.abc import Callable, Iterable, Sequence
@@ -255,7 +258,7 @@ def advice_of(trace: dict, bucket_ms: float = 100.0) -> tuple[Advice, tuple[int,
     reqs = trace["requests"]
     requests = tuple(RequestAdvice(reqs[t]["id"], len(reqs[t]["prompt_ids"]), len(reqs[t]["output_ids"]), reqs[t]["finish"])
                      for t in order)
-    prefixes = Prefixes([tuple(reqs[t]["prompt_ids"]) + tuple(reqs[t]["output_ids"]) for t in order])
+    prefixes = Prefixes([tuple(reqs[t]["prompt_ids"]) + tuple(reqs[t]["output_ids"]) for t in order], config_of(trace).unit)
     seen: set[int] = set()
     kept = [0] * len(order)
     steps, release = [], []
@@ -304,57 +307,84 @@ def pool_bound(rows: Sequence[Sequence[tuple[int, int, int]]], cfg: Config) -> b
     return True
 
 
+PREFIX_ROOT = bytes(64)  # the key of the empty prefix
+TOKEN_BYTES = 4         # a token id's canonical bytes: unsigned, big-endian
+
+
+def unit_key(parent: bytes, tokens: Sequence[int]) -> bytes:
+    """The key of a prefix of whole hit units: SHA-512 over the key of the prefix before its last unit, then that unit's
+    token ids, each in `TOKEN_BYTES` big-endian bytes (Verity's one hash; vLLM's prefix cache chains its block hashes the
+    same way, with sha256)."""
+    if not all(type(t) is int and 0 <= t < 1 << 8 * TOKEN_BYTES for t in tokens):
+        raise ValueError(f"token ids are integers in [0, 2^{8 * TOKEN_BYTES})")
+    return hashlib.sha512(parent + b"".join(t.to_bytes(TOKEN_BYTES, "big") for t in tokens)).digest()
+
+
 class Prefixes:
     """Witness, in the compile unit: every request's tokens (its prompt ids, then its kept sampled ids), I1-numbered, and
-    for each token prefix whose last position some row has computed KV at so far, the lowest-numbered request whose row
-    did. A prefix is keyed by a chain of hashes; every source it names is checked against the tokens themselves."""
+    for each prefix of whole hit units whose last unit some request has computed KV at so far (all of it, in one run
+    from a unit boundary), the requests that did. A prefix is keyed by `unit_key`'s chain; a key names a request only
+    where that request's tokens through the prefix are the asking request's, so no collision can change what is
+    derived, and the prover and the compile unit derive the same on any interpreter."""
 
-    def __init__(self, tokens: Sequence[Sequence[int]]):
+    def __init__(self, tokens: Sequence[Sequence[int]], unit: int):
+        if type(unit) is not int or unit < 1:
+            raise ValueError(f"a hit unit of {unit!r} tokens")
         self.tokens = [tuple(t) for t in tokens]
-        self.keys: list[list[int]] = [[] for _ in self.tokens]
-        self.by: dict[int, int] = {}
+        self.unit = unit
+        self.keys: list[list[bytes]] = [[] for _ in self.tokens]
+        self.by: dict[bytes, set[int]] = {}
+        self.run: list[tuple[int, int]] = [(0, 0)] * len(self.tokens)  # each request's latest run: (from, to)
 
-    def _key(self, i: int, p: int) -> int:
-        ks, ts = self.keys[i], self.tokens[i]
-        if p >= len(ts):
-            raise ValueError(f"request {i} has {len(ts)} tokens, none at position {p}")
-        while len(ks) <= p:
-            ks.append(hash((ks[-1] if ks else 0, ts[len(ks)])))
-        return ks[p]
+    def _key(self, i: int, u: int) -> bytes:
+        """The key of request i's first u + 1 hit units."""
+        ks, ts, U = self.keys[i], self.tokens[i], self.unit
+        if (u + 1) * U > len(ts):
+            raise ValueError(f"request {i} has {len(ts)} tokens, not {u + 1} whole units of {U}")
+        while len(ks) <= u:
+            ks.append(unit_key(ks[-1] if ks else PREFIX_ROOT, ts[len(ks) * U:(len(ks) + 1) * U]))
+        return ks[u]
+
+    def owner(self, i: int, u: int) -> int | None:
+        """The lowest-numbered request that has computed request i's unit u from the same tokens through it, or None."""
+        through = (u + 1) * self.unit
+        ts = self.tokens[i][:through]
+        return min((a for a in self.by.get(self._key(i, u), ()) if self.tokens[a][:through] == ts), default=None)
 
     def add(self, i: int, start: int, end: int) -> None:
-        """Request i's row computed KV at positions start … end − 1."""
-        for p in range(start, end):
-            k = self._key(i, p)
-            if self.by.get(k, i) >= i:
-                self.by[k] = i
+        """Request i's row computed KV at positions start … end − 1. A row continues its request's run when it starts
+        where the run ended, and starts a new one otherwise (an admission or a resume, at a unit boundary); each unit the
+        run now covers whole is computed by i."""
+        lo, hi = self.run[i]
+        if start != hi or start == 0:
+            lo = start
+        self.run[i] = (lo, end)
+        U = self.unit
+        for u in range(max(-(-lo // U), start // U), end // U):
+            self.by.setdefault(self._key(i, u), set()).add(i)
 
-    def cached(self, i: int, K: int, unit: int) -> int:
+    def cached(self, i: int, K: int) -> int:
         """vLLM's lookup while nothing has been evicted: the longest prefix of request i, in whole units and at most
-        K − 1 tokens, each of whose units some row has computed. A row that computes a unit's last position computed the
-        whole unit, since a request computes from a unit boundary on, and vLLM caches the unit's block as it schedules it."""
-        h = 0
-        while h + unit <= K - 1 and self._key(i, h + unit - 1) in self.by:
-            h += unit
+        K − 1 tokens, each of whose units some request has computed (vLLM caches a unit's block as it schedules it)."""
+        h, U = 0, self.unit
+        while h + U <= K - 1 and self.owner(i, h // U) is not None:
+            h += U
         return h
 
     def sources(self, i: int, hit: int) -> tuple[Source, ...]:
-        """The canonical sources of request i's hit: position by position, the lowest-numbered request that has computed
-        KV there from the same tokens through it."""
+        """The canonical sources of request i's hit: unit by unit, the lowest-numbered request that has computed the
+        whole unit from the same tokens through it, adjacent units of one request merged into one run."""
+        if hit % self.unit:
+            raise ValueError(f"request {i}'s hit of {hit} isn't whole units of {self.unit}")
         runs: list[list[int]] = []
-        for p in range(hit):
-            a = self.by.get(self._key(i, p))
+        for u in range(hit // self.unit):
+            a = self.owner(i, u)
             if a is None:
-                raise ValueError(f"request {i}'s hit of {hit}: no row computed KV at position {p} from its tokens")
+                raise ValueError(f"request {i}'s hit of {hit}: no request computed its unit {u} from its tokens")
             if runs and runs[-1][0] == a:
-                runs[-1][1] += 1
+                runs[-1][1] += self.unit
             else:
-                runs.append([a, 1])
-        at = 0
-        for a, n in runs:
-            at += n
-            if self.tokens[a][:at] != self.tokens[i][:at]:
-                raise ValueError(f"requests {a} and {i}: their first {at} tokens differ but hash alike")
+                runs.append([a, self.unit])
         return tuple(Source(a, n) for a, n in runs)
 
 
@@ -393,7 +423,7 @@ def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config,
     whose rows all compute known tokens (the async one caches a block only once its sampled ids come back)."""
     if not len(tokens) == len(arrival) == len(prompt_len):
         raise ValueError(f"{len(prompt_len)} requests, {len(tokens)} token lists and {len(arrival)} arrivals")
-    prefixes = Prefixes(tokens)
+    prefixes = Prefixes(tokens, cfg.unit)
     life = [-(-len(t) // cfg.block_size) for t in prefixes.tokens]
     derive = cfg.scheduler == "sync" and cfg.row_order != "explicit"
     filled, newest = 0, -1
@@ -430,7 +460,7 @@ def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config,
             i, (first, resumed) = step[k], adm[k]
             K, hit = prompt_len[i] + samples.get(i, 0), 0
             if first or resumed:
-                cached = 0 if not cfg.enable_prefix_caching else prefixes.cached(i, K, cfg.unit) if derive else None
+                cached = 0 if not cfg.enable_prefix_caching else prefixes.cached(i, K) if derive else None
                 if cached is None:
                     sent.append(s)
                 hit = hit_of(s, k, cached)
@@ -504,9 +534,10 @@ def tokens_of(held: Holdings, order: Sequence[int], prompt_len: Sequence[int]) -
     return [tuple(held.requests[t].prompt_ids) + tuple(held.outputs[t]) for t in order]
 
 
-def canonical_sources(advice: Advice, tokens: Sequence[Sequence[int]]) -> Advice:
-    """`advice` with each hit's sources the canonical ones (`Prefixes`) over each I1 request's `tokens`."""
-    prefixes, steps = Prefixes(tokens), []
+def canonical_sources(advice: Advice, tokens: Sequence[Sequence[int]], unit: int) -> Advice:
+    """`advice` with each hit's sources the canonical ones (`Prefixes`, in hit units of `unit` tokens) over each I1
+    request's `tokens`."""
+    prefixes, steps = Prefixes(tokens, unit), []
     for st in advice.steps:
         for r in st.rows:
             prefixes.add(r.request, r.start, r.start + r.n)
@@ -867,11 +898,12 @@ FIELDS = [
      "model's finer hash_block_size), each of whose units a row scheduled before it computed from the same tokens; "
      "past the bound, which cached blocks LRU eviction left is vLLM's block pool over witness, so the hit is sent",
      "checker": "compile unit: the derived hit, and a hit of any other length, shorter included, is refused; none yet "
-                "for a sent one", "cost": "a prefix-hash comparison per hit unit of each admitting row"},
+                "for a sent one", "cost": "a token comparison per hit unit of each admitting row"},
     {"field": "sources", "verdict": "canonical", "bits": "0 (I1: a count, and w_req + w_len a run)",
      "from": "every request's tokens (witness), rows (which request computed KV where by each step)",
-     "derivation": "position by position, the earliest-admitted (lowest-numbered) request that has computed KV there by "
-     "this step (I1's rule) from the same tokens through it, in runs",
+     "derivation": "hit unit by hit unit, the earliest-admitted (lowest-numbered) request that has computed the whole "
+     "unit by this step (I1's rule) from the same tokens through it, in runs; looked up by a SHA-512 chain over whole "
+     "units, every match checked on the tokens",
      "checker": "compile unit (it holds every request's tokens and checks their equality anyway); any other source is "
                 "refused", "cost": "the token equality it checks for the KV read, and the lowest number among them"},
     {"field": "preempted", "verdict": "derived under the pool bound; else sent sparse (resumes)",
