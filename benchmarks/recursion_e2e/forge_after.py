@@ -10,8 +10,9 @@ alone, on copies of its files: row 0 of the port (``coef``, ``dirs``, ``m0``) ge
 the row's own salt, so that the proved row and the verifier's registered row differ by one bit, as in the staged forgery.
 
 * ``<kind>-bc``: that row's ``b || c`` in ``pub.bin``, and nothing else.
-* ``<kind>-value``: the value registered again with the forged row: the ``b || c``, ``pub.bin``'s read paths, and the port's
-  root in ``registered.json``.
+* ``<kind>-stmt``: that ``b || c`` and the header's frame-v3 root of the port's table over it, so ``pub.bin`` is consistent.
+* ``<kind>-value``: the value registered again with the forged row, so the whole statement is: ``stmt``'s edits, ``pub.bin``'s
+  read paths, and the port's root in ``registered.json``. Only the session's binding is left to refuse it.
 
 Each case, and each statement's unmodified copy (the control, which must accept), is verified as pod 85's STEP=lean
 verifies it (`flock-verify verify --zk --registered` with its ``--rec-*`` flags), with each binary given. The run's
@@ -54,7 +55,7 @@ def table_rows(inst: bytes, text: str, port: str, n: int) -> tuple[list[list[int
 
 
 def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
-    """`out/bc` and `out/value` (the module docstring) from the statement `stmt`; what each changed."""
+    """`out/<case>` (honest, bc, stmt, value: the module docstring) from the statement `stmt`; what each changed."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as RG
     from verity_flock import rec_outer as O
 
@@ -78,38 +79,67 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     forged = bc(row0, salts[0])
     rec = {"statement": str(stmt), "port": port, "value": port_["value"], "position": pos[0], "word0": [rows[0][0], row0[0]],
            "bc_offset": at, "bc_sha512": [hashlib.sha512(honest).hexdigest()[:16], hashlib.sha512(forged).hexdigest()[:16]]}
-    for case in ("honest", "bc", "value"):
+    for case in ("honest", "bc", "stmt", "value"):
         (out / case).mkdir(parents=True, exist_ok=True)
         for f in VERIFIER_FILES:
             shutil.copyfile(stmt / f, out / case / f)
+    if json.dumps(ph, sort_keys=True).encode() + b"\n" != pub[:pnl]:
+        raise SystemExit(f"{stmt}: pub.bin's header is not sort_keys JSON; cannot rewrite it byte for byte")
     b = bytearray(pub)
     b[at:at + BC] = forged
     (out / "bc" / "pub.bin").write_bytes(bytes(b))
-    rec["bc"] = {"files": {"pub.bin": [at, at + BC]}}
+    rec["bc"] = {"pub.bin": f"bytes [{at}, {at + BC}): row 0's b || c"}
+    tbl = [pub[at + BC * i:at + BC * (i + 1)] for i in range(ph["shared_rows"][port])]
+    fv = ph["frame_v3"]
+    if frame_root(text, fv, port, tbl) != fv["roots"][port]:
+        raise SystemExit(f"{stmt}: {port}'s table b || c do not give the header's frame-v3 root")
+    ph_s = json.loads(pub[:pnl])
+    ph_s["frame_v3"]["roots"][port] = frame_root(text, fv, port, [forged, *tbl[1:]])
+    (out / "stmt" / "pub.bin").write_bytes(json.dumps(ph_s, sort_keys=True).encode() + b"\n" + bytes(b[pnl:]))
+    rec["stmt"] = {"pub.bin": f"row 0's b || c and the header's frame_v3 root of {port}",
+                   "frame_root": [fv["roots"][port][:16], ph_s["frame_v3"]["roots"][port][:16]]}
+    skip = lambda why: (shutil.rmtree(out / "value"), rec.__setitem__("value", {"skipped": why}), rec)[-1]
     if sorted(pos) != list(range(int(port_["leaves"]))):
-        rec["value"] = {"skipped": f"the table reads positions {pos}, not all {port_['leaves']} of the value's rows"}
-        shutil.rmtree(out / "value")
-        return rec
-    program = O.session_program((inner / "public.json").read_bytes())
+        return skip(f"the table reads positions {pos}, not all {port_['leaves']} of the value's rows")
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    progs = [c for c in (O.session_program((inner / "public.json").read_bytes()), meta.get("program"))
+             if c and RG.domain(c, port_["value"], len(rows[0]), int(port_["leaves"]), wb).domain_id.hex() == port_["domain"]]
+    if not progs:
+        return skip("neither the session's program nor the statement's names the value's domain")
     by_pos = sorted(zip(pos, rows, salts))
-    mk = lambda rs: RG.Registered.commit(program, port_["value"], rs, [s for _, _, s in by_pos], wb, schema)
+    mk = lambda rs: RG.Registered.commit(progs[0], port_["value"], rs, [s for _, _, s in by_pos], wb, schema)
     h = mk([r for _, r, _ in by_pos])
     if h.root.hex() != port_["root"] or [h.path(p).hex() for p in pos] != reg["paths"]:
-        rec["value"] = {"skipped": "the rows and salts do not register to the statement's root and paths"}
-        shutil.rmtree(out / "value")
-        return rec
+        return skip("the rows and salts do not register to the statement's root and paths")
     f = mk([row0 if p == pos[0] else r for p, r, _ in by_pos])
-    ph2 = json.loads(pub[:pnl])
-    ph2["registered"][port]["paths"] = [f.path(p).hex() for p in pos]
-    h2 = json.dumps(ph2, sort_keys=True).encode() + b"\n"
-    if json.dumps(ph, sort_keys=True).encode() + b"\n" != pub[:pnl]:
-        raise SystemExit(f"{stmt}: pub.bin's header is not sort_keys JSON; cannot rewrite it byte for byte")
-    (out / "value" / "pub.bin").write_bytes(h2 + bytes(b[pnl:]))
+    ph_v = json.loads(json.dumps(ph_s))
+    ph_v["registered"][port]["paths"] = [f.path(p).hex() for p in pos]
+    (out / "value" / "pub.bin").write_bytes(json.dumps(ph_v, sort_keys=True).encode() + b"\n" + bytes(b[pnl:]))
     reads["ports"][port] = {**port_, "root": f.root.hex()}
     (out / "value" / "registered.json").write_text(json.dumps(reads))
-    rec["value"] = {"root": [port_["root"][:16], f.root.hex()[:16]], "paths_changed": sum(
-        a != c for a, c in zip(reg["paths"], ph2["registered"][port]["paths"]))}
+    rec["value"] = {"pub.bin": "as stmt, and the header's registered paths", "registered.json": f"{port}'s root",
+                    "root": [port_["root"][:16], f.root.hex()[:16]],
+                    "paths_changed": sum(a != c for a, c in zip(reg["paths"], ph_v["registered"][port]["paths"]))}
     return rec
+
+
+def frame_root(text: str, fv: dict, port: str, bcs: list[bytes]) -> str:
+    """The header's frame-v3-sha512 root of `port` over its table rows' `b || c` (`circuit.statement`)."""
+    from verity.ml.commitments import hm96
+    from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3
+    from verity.ml.commitments.frame_v3 import Port as FPort
+    from verity.ml.commitments.indexed import RangeIndexedDomain
+    from verity.ml.commitments.merkle import CommitmentDomain
+    from verity.ml.commitments.rowleaf import row_leaf
+    from verity_flock import circuit as FC
+
+    p = {q.name: q for q in FC._meta_ports(json.loads(text.split("\n", 2)[1][5:]))}[port]
+    dom = CommitmentDomain(bytes.fromhex(fv["bindings"][port]), FC.OWNER, RangeIndexedDomain(0, len(bcs)), hash="sha512")
+    if dom.domain_id.hex() != fv["domain_ids"][port]:
+        raise SystemExit(f"{port}: the header's binding does not give its domain id")
+    inst = hm96.SHA512
+    leaves = [row_leaf(dom, i, inst.tree_leaf(inst.default_key, bc), p.schema) for i, bc in enumerate(bcs)]
+    return FrameV3({port: FPort(dom, BitRowLeaf(p.bits) if p.seg else p.leaf())}).root(port, leaves).hex()
 
 
 def own_flags(binary: Path, dd: Path, n: str, stmts: dict[str, Path], o: Path) -> dict[str, list[str]]:
@@ -153,8 +183,11 @@ def verify(binary: Path, case: Path, own: list[str], inner_flags: list[str], ses
            "--registered", str(case / "registered.json"), *own, *inner_flags, "--session", str(session)]
     with log.with_suffix(".log").open("w") as so, log.with_suffix(".err").open("w") as se:
         rc = subprocess.run(cmd, stdout=so, stderr=se).returncode
-    tail = [ln for ln in (log.with_suffix(".log").read_text() + log.with_suffix(".err").read_text()).splitlines() if ln.strip()]
-    return {"rc": rc, "why": tail[-1][:400] if tail else "", "cmd": " ".join(cmd)}
+    lines = (log.with_suffix(".log").read_text() + log.with_suffix(".err").read_text()).splitlines()
+    vs = [json.loads(ln[8:]) for ln in lines if ln.startswith("VERDICT ")]
+    why = (vs[-1].get("why") or ("accepted" if vs[-1].get("accepted") else "refused")) if vs else \
+        next((ln for ln in reversed(lines) if ln.strip()), "")[:400]
+    return {"rc": rc, "accepted": bool(vs and vs[-1].get("accepted")), "why": why, "cmd": " ".join(cmd)}
 
 
 def tree_sha(d: Path) -> str:
@@ -199,7 +232,7 @@ def main() -> int:
         else:
             own = own_flags(binary, dd, n, stmts, out / f"own-{name}")
         for kind, (s, _) in CASES.items():
-            for case in ("honest", "bc", "value"):
+            for case in ("honest", "bc", "stmt", "value"):
                 d = out / "cases" / kind / case
                 if d.is_dir():
                     jobs.append((f"{name}/{kind}-{case}", binary, d, own[s], sess[s], out / f"{name}-{kind}-{case}"))
@@ -208,7 +241,10 @@ def main() -> int:
     rec["verify"] = res
     after = {s: tree_sha(p) for s, p in {**{f"sess-{k}": v for k, v in sess.items()}, **{f"stmt-{k}": v for k, v in stmts.items()}}.items()}
     rec["untouched"] = after == before
-    bad = [k for k, r in res.items() if (r["rc"] == 0) != k.endswith("-honest")]
+    bad = [k for k, r in res.items() if (r["rc"] == 0 or r["accepted"]) != k.endswith("-honest")]
+    for k in bad:
+        if not k.endswith("-honest"):
+            print(f"SOUNDNESS: Lean ACCEPTED the forged statement {k}")
     rec["verdict"] = "ok" if not bad and rec["untouched"] else f"unexpected: {bad}"
     (out.parent / "forge-after.json").write_text(json.dumps(rec, indent=1))
     for k, r in res.items():
