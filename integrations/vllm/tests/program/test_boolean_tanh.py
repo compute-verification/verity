@@ -53,10 +53,10 @@ MUX_ANDS = {"gelu_tanh_bf16": ((1 << 16) - 1) * 16, "tanh_rn": ((1 << 27) - 1) *
 BF16_ONE = 0x3F80
 
 TARGETS = [bind(BT.TanhF32Rn), bind(BT.GeluTanhMulBf16), bind(BT.GeluTanhMul, I=8)]
+SLOW_PINS = ("TanhF32Rn_v3", "GeluTanhMulBf16_v4")
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("target", TARGETS, ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id in SLOW_PINS else t for t in TARGETS], ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
     ands, xors, nots, digest = PINS[target.id]
     assert BL.is_boolean(target)
@@ -163,7 +163,7 @@ def test_the_activation_is_the_table_on_every_word() -> None:
     assert hashlib.sha256(got.astype("<u4").tobytes()).hexdigest() == TABLE_SHA256["gelu_tanh_bf16"]
 
 
-@pytest.mark.parametrize("u", [BF16_ONE, 0x8000, 0x0001, 0x7F7F, 0xFF80, 0x7FC0])
+@pytest.mark.parametrize("u", [BF16_ONE, 0x8000, 0x0001, 0x7F7F, 0xFF80, pytest.param(0x7FC0, marks=pytest.mark.slow)])
 def test_every_gate_word(u: int) -> None:
     """All 65,536 gate words at an up word: at 1.0 the activation alone, then -0 (which becomes +0), a subnormal, the finite
     maximum, an infinity and a NaN."""

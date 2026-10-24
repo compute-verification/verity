@@ -114,6 +114,7 @@ def test_tensor_parallel_rank_workload_equals_the_traced_build():
     assert S.predict_workload(phi)["digest"] == "4cd839563c959eee6f1abaf647bd7d771a842cb8940ed5a92443e85e2ca48cd7f5aecfa1f80d8084c276d3c32a59b1dbf36770a18cb8015ec6ebc8c62cb9c1da"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("rank", range(8))
 def test_dsa_rank_step_equals_the_record(rank, tmp_path):
     """GLM-5.3 at TP8 on H200 (block FP8, cc 9.0): each rank's step through the DeepSeek sparse-attention decoder (`predict.dsa`)
@@ -205,7 +206,8 @@ def test_mhc_refuses_outside_its_domain(tmp_path):
 
 @pytest.mark.parametrize("sampling,M,digest", [
     ({**STOCH}, 8, "740d7f22434aa56824d598e4b66f8223c45546ca6e1428639951e5299b7f1968f209b61903452be424a6f407d6d2197658d39073b97bcdf7539c0a923c38ccda"),
-    ({**STOCH, "top_p": 1.0, "splits": 32}, 1, "6529c4fbcbfeecf09393c9e137e3272da8ef54bad1b116c8c0f3f1bb078ef6747e6bc99265b1f3bcfd39d4b5123914a04881ad345361c890bfb387de20a14f49"),
+    pytest.param({**STOCH, "top_p": 1.0, "splits": 32}, 1, "6529c4fbcbfeecf09393c9e137e3272da8ef54bad1b116c8c0f3f1bb078ef6747e6bc99265b1f3bcfd39d4b5123914a04881ad345361c890bfb387de20a14f49",
+                 marks=pytest.mark.slow),
 ])
 def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):
     """SmolLM2-135M under the seeded top-p policy: a B8 row's step (the split count a `splits` Input, cov-g230) and a B1 row's (the

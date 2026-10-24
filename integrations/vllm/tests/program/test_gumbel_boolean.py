@@ -103,7 +103,7 @@ def _check_pin(spec: str, pin) -> None:
 
 # --- pins ------------------------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("spec", sorted(PINS))
+@pytest.mark.parametrize("spec", [pytest.param(s, marks=pytest.mark.slow) if s == "NvLogf_v3" else s for s in sorted(PINS)])
 def test_pinned_counts_and_digests(spec) -> None:
     _check_pin(spec, PINS[spec])
 

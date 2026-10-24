@@ -89,7 +89,7 @@ def test_the_split_end_twin_is_the_word() -> None:
     assert (lse[:50] == NEG_INF).all()
 
 
-@pytest.mark.parametrize("NS,D", [(2, 16), (3, 16), (5, 64), (16, 128), (33, 128)])
+@pytest.mark.parametrize("NS,D", [(2, 16), (3, 16), (5, 64), (16, 128), pytest.param(33, 128, marks=pytest.mark.slow)])
 def test_the_combine_twin_is_the_word(NS: int, D: int) -> None:
     """Gaussian lse with empty (-inf, 0) splits planted, rows whose every split is empty, and `_inputs`' words with specials."""
     rng = np.random.default_rng(NS * 7 + D)
@@ -187,8 +187,7 @@ def test_boolean_agrees_with_its_word_view(target) -> None:
     _agrees(target, 96)
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("target", HEADS, ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [pytest.param(HEADS[0], marks=pytest.mark.slow), *HEADS[1:]], ids=lambda t: t.id)
 def test_boolean_head_agrees_with_its_word_view(target) -> None:
     """Minutes each (two blocks, the ends and a combine traced as one circuit): what the word-level tests can't see is the
     Boolean pieces' agreement on special words through a split's blocks, an empty split and the combine."""

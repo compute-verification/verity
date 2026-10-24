@@ -92,7 +92,7 @@ def _entry():
     return f"pouw:{PH.SCHEME}"
 
 
-@pytest.mark.parametrize("k,n,m", SHAPES, ids=["decode-1", "partial-5", "rows-33-cols-40"])
+@pytest.mark.parametrize("k,n,m", [pytest.param(*SHAPES[0], marks=pytest.mark.slow), *SHAPES[1:]], ids=["decode-1", "partial-5", "rows-33-cols-40"])
 def test_every_served_shape_compiles_to_full_warp_tiles(k, n, m):
     """Decode's one row, a partial block and a column count off the tile: every unit is a full 32 x 32 grid, the call one
     site and one seed group covering its units."""

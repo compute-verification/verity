@@ -805,10 +805,10 @@ def flashmla_small(served, monkeypatch):
 
 
 @pytest.mark.parametrize("ratio, window, calls, p0, paths", [
-    (4, 28, (30, 1, 1), 0, [("prefill", list(range(7))), ("decode", []), ("decode", [7])]),
-    (128, 8, (128, 1), 0, [("prefill", [0]), ("decode", [])]),
+    pytest.param(4, 28, (30, 1, 1), 0, [("prefill", list(range(7))), ("decode", []), ("decode", [7])], marks=pytest.mark.slow),
+    pytest.param(128, 8, (128, 1), 0, [("prefill", [0]), ("decode", [])], marks=pytest.mark.slow),
     (1, 8, (12, 1), 0, [("prefill", []), ("decode", [])]),
-    (4, 28, (26, 1, 1), 5, [("prefill", list(range(1, 7))), ("decode", [7]), ("decode", [])]),
+    pytest.param(4, 28, (26, 1, 1), 5, [("prefill", list(range(1, 7))), ("decode", [7]), ("decode", [])], marks=pytest.mark.slow),
     (4, 28, (1,), 8, [("decode", [])]),
     (128, 8, (1,), 8, [("decode", [])]),
 ])
