@@ -1,7 +1,8 @@
 """The active warden (`warden`), a relay that knows bytes only: driven tick by tick on a `VirtualClock`, its clients
 in-memory connections speaking cells and its server an in-memory one whose bytes the test schedules, it releases honest
 traffic exactly on its schedule, fails a late byte closed, queues past its lanes then refuses, passes both directions'
-bytes unchanged, and puts the same number of same-size cells in the same buckets however the server times its bytes."""
+bytes unchanged (the server's copy of a request adding only its place in the release order), and puts the same number
+of same-size cells in the same buckets however the server times its bytes."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ import pytest
 
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.core.protocols.certifier.grid import Reason
+from verity.core.protocols.certifier.release import release_of, with_release
 from verity.core.protocols.certifier.warden import (END, FAIL, KIND_NAMES, REASONS, REFUSED, Shim, Warden,
                                                     WardenParams, audit, cell, cells, read_cell, read_reason,
                                                     reason_frame)
@@ -432,6 +434,53 @@ def test_read_cell_refuses_what_the_warden_would_not_make():
     for bad in (cell(FAIL, 5, b"", B), encode_frame(FAIL, 5, bytes([len(REASONS)]), B), end):
         with pytest.raises(ValueError):
             read_reason(bad, B)
+
+
+# --- the release order -----------------------------------------------------------------------------------------------
+
+
+def http(body: bytes, extra: bytes = b"") -> bytes:
+    return b"POST /v1/completions HTTP/1.1\r\nhost: s\r\n%scontent-length: %d\r\n\r\n%s" % (extra, len(body), body)
+
+
+def test_the_server_gets_each_request_whole_with_its_place_among_the_signed_ends():
+    """Two requests admitted in one bucket, the first two buckets long and the second one, so their `END`s are
+    released in the other order: each reaches the server once, whole, at its `END`'s release, with
+    `x-verity-release: N`, N its `END`'s index among the `END` cells of the signed ingress records, and the warden's
+    run id; a client's own release header is dropped there, while the cells, the records and the audit hold the
+    client's bytes as sent, which the audit accepts."""
+    reqs = [http(b'{"prompt":"%s"}' % (b"a" * 140)), http(b"{}", b"X-Verity-Release: 0\r\n")]
+    assert [-(-len(r) // P) for r in reqs] == [2 * R, R]
+    run_id = bytes(range(100, 132))
+    warden, clients, server = run([[(0, b"r0"), (0, EOF)], [(0, b"r1"), (0, EOF)]],
+                                  {1: [cells(reqs[0], B), cells(reqs[1], B)]},
+                                  run_nonce=lambda n: run_id[:n])
+    ingress, _, _ = records(warden)
+    ends = [read_cell(f, B)[1] for r in ingress for row in r.grid for f in row
+            if f is not None and read_cell(f, B)[0] == END]
+    assert ends == [2, 1] and warden.run_id == run_id and warden.requests_released == 2
+    log = {e["ordinal"]: e for e in warden.log}
+    assert log[1]["admitted"] == log[2]["admitted"] == 1 and log[2]["ingress_end"] < log[1]["ingress_end"]
+    for k, req in enumerate(reqs):
+        assert server.conns[k].received == with_release(req, ends.index(k + 1), run_id) == \
+            with_release(req, log[k + 1]["release"], run_id)
+    assert release_of(server.conns[1].received) == (0, run_id) and b"X-Verity" not in server.conns[1].received
+    verdict = audit(PARAMS, *records(warden))
+    assert verdict["accepted"], verdict["windows"]
+    assert [c["ingress_sha256"] for c in verdict["connections"]] == [hashlib.sha256(r).hexdigest() for r in reqs]
+    assert [bytes(c.shim().data) for c in clients] == [b"r0", b"r1"]
+
+
+def test_a_connection_that_fails_before_its_end_is_never_numbered_and_its_server_gets_nothing():
+    """A client that never ends fails at s + D with nothing sent to its server, and takes no place in the order: the
+    next request's N is 0. Each warden draws its own run id."""
+    slow = (cell(DATA, 0, b"a" * P, B), False)
+    warden, _, server = run([[], [(0, b"r"), (0, EOF)]], {0: [slow], 4: [cells(http(b"{}"), B)]})
+    log = {e["ordinal"]: e for e in warden.log}
+    assert (log[1]["failed"], log[1]["release"], log[2]["failed"], log[2]["release"]) == ("late", None, None, 0)
+    assert server.conns[0].received == b"" and release_of(server.conns[1].received) == (0, warden.run_id)
+    other, _, _ = run([[(0, b"r"), (0, EOF)]], {0: [cells(http(b"{}"), B)]})
+    assert len(warden.run_id) == len(other.run_id) == 32 and warden.run_id != other.run_id
 
 
 def test_the_parameters_digest_binds_every_parameter():
