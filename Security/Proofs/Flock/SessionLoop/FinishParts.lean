@@ -185,9 +185,7 @@ theorem forIn_bind_acc {α β γ : Type} {xs : List α} {b : β} {f : α → β 
 
 theorem map_range_succ {β : Type} (f : ℕ → β) (k : ℕ) :
     (Array.range (k + 1)).map f = ((Array.range k).map f).push (f k) := by
-  first
-  | simp [Array.range_succ]
-  | (rw [Array.range_succ, Array.map_append, Array.map_singleton]; rfl)
+  simp [Array.range_succ]
 
 /-- **(a) to (d) give `FinishIs` at the loop's own `Finish`.** Where the loop's `Finish` does not stop, `x` sets up and
 the loop's files are `(rec, files)`; the session read from the views runs part by part (`finSessionCut_eq`): the
@@ -263,8 +261,8 @@ theorem finishIs_of_parts
     try dsimp only
     rw [← Array.forIn_toList, FlockDeploy.repStreams_toList]
     refine forIn_bind_acc
-      (B := fun k => MProd.mk ((Array.range k).map (streamOf x ((m₀, ρ₀) :: ops) spec (Masked.stsOf x)))
-        ((Array.range k).map fun q => files[q]!))
+      (B := fun k => ((Array.range k).map (streamOf x ((m₀, ρ₀) :: ops) spec (Masked.stsOf x)),
+        (Array.range k).map fun q => files[q]!))
       (I := fun k l => l.size = Masked.repBase x k) ?_ (by simp) ?_ ?_
     · intro k hk l hI
       simp only [List.length_map, List.length_range] at hk
