@@ -463,7 +463,7 @@ theorem plain_tableBoundAbortLinK (keepV : Bool → Bool) :
       rw [(hrun ω g c).2 hacc] at ha
       obtain ⟨hk, hr⟩ := Claims.Recursion.abortRun_acc_iff.1 hab
       rw [Claims.Recursion.abortRun_of_keep hk] at ha
-      exact (mem_rdAtK keepV).2 ⟨hk, hr, a, ha, rfl⟩
+      exact (mem_rdAtK keepV (x := x) (keep := keep)).2 ⟨hk, hr, a, ha, rfl⟩
   have hL : (Claims.Ex fun g : (Fin ((VK keepV).k x) → Coin) → Coin × A =>
       Claims.accPr sha512 (VK keepV) (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) x (ω, g)) =
         Claims.Recursion.accPrD (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω) := by
