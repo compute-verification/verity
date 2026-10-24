@@ -113,8 +113,9 @@ def grid_bytes(params: GridParams, parameters: bytes) -> bytes:
 
 # --- the circuit: traced parts ----------------------------------------------------------------------------------------
 
-def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str) -> CompositeDefinition:
-    """A Definition traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
+def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str,
+          version: int = 1) -> CompositeDefinition:
+    """A Definition ``name_v{version}`` traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
 
     @lru_cache(maxsize=None)
     def traced(*key) -> TR.Traced:
@@ -126,7 +127,7 @@ def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Calla
         params, ret = signature(S)
         return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
 
-    d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
+    d = CompositeDefinition(name, version, statics, signature, body, conformance="exact-model-tested", doc=doc)
     d.traced = traced  # type: ignore[attr-defined]
     return d
 

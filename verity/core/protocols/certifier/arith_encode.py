@@ -742,36 +742,50 @@ def _popcount(C, xs):
     return nums[0]
 
 
-def _build_charge(C, S, *elements):
-    f = _split(_charge_in(S), elements)
-    en, bit = [e[0] for e in f["en"]], [e[0] for e in f["bit"]]
-    dec, num = SimpleNamespace(K=K_MAX, BIN=1, CW=CW), SimpleNamespace(K=K_MAX, BIN=0, CW=CW)
-    nw = S.N.bit_length()
-    C.phase = "n_arrived"
+_DEC, _NUM = SimpleNamespace(K=K_MAX, BIN=1, CW=CW), SimpleNamespace(K=K_MAX, BIN=0, CW=CW)
+
+
+def _fresh_tally() -> list:
+    return [const_bits(0, PREC), const_bits(TOP, PREC), [ZERO], [ONE], [ZERO] * CW]
+
+
+def _count(C, phase, en, table, total, tally, oks):
+    """The count of the enabled slots `en`, as `code_v1` codes a window's count: its Exp-Golomb bin at the table's
+    (cum, freq, total), read by a one-hot of the count's bit length, then, once the count is 2 or more, its offset in
+    the bin, uniform. `table`: the bins 0 … bitlen(len(en)); a selected cumulative frequency past 2^16 appends a
+    refusal to `oks`. No slots: the count 0, bin 0."""
+    if not en:
+        return _build_count_step(C, _NUM, *tally, [ONE], [ZERO] * 16, table[0], total)
+    nw = len(en).bit_length()
+    C.phase = phase
     n = _pad(_popcount(C, en), nw)
     t = list(n) + [ZERO]
     for k in reversed(range(nw)):
         t[k] = _or(C, n[k], t[k + 1])
     hot = [t[0].inv()] + [t[j - 1] ^ t[j] for j in range(1, nw + 1)]
     cum, freq, run_cum = [ZERO] * 22, [ZERO] * 17, [ZERO] * 22
-    for j, fj in enumerate(f["arrived"]):
+    for j, fj in enumerate(table):
         cum = [u ^ C.AND(hot[j], v) for u, v in zip(cum, run_cum)]
         freq = [u ^ C.AND(hot[j], v) for u, v in zip(freq, fj)]
         run_cum = add(C, run_cum, fj, width=22)
-    oks = [_nonzero(C, cum[16:]).inv()]
-    tally = [const_bits(0, PREC), const_bits(TOP, PREC), [ZERO], [ONE], [ZERO] * CW]
-    tally = _build_count_step(C, num, *tally, [ONE], cum[:16], freq, f["total"][0])
+    oks.append(_nonzero(C, cum[16:]).inv())
+    tally = _build_count_step(C, _NUM, *tally, [ONE], cum[:16], freq, total)
     if nw >= 2:
-        C.phase = "n_arrived"
+        C.phase = phase
         low = _pad([C.AND(n[i], hot[i + 1].inv()) for i in range(nw)], 16)
-        tally = _build_count_step(C, num, *tally, [t[1]], low, const_bits(1, 17), _pad(hot[1:], 17))
-    n0, n1, run = f["n0"], f["n1"], f["run"][0]
+        tally = _build_count_step(C, _NUM, *tally, [t[1]], low, const_bits(1, 17), _pad(hot[1:], 17))
+    return tally
+
+
+def _decide(C, en, bit, n0, n1, run, tally, oks):
+    """Each enabled slot's decision at the book's KT estimate for min(run, 2), the counts and run updated: (tally, n0,
+    n1, run). A run past 2 appends a refusal to `oks`, as does each `BookKT_v1` refusal."""
     oks.append(C.AND(run[0], run[1]).inv())
     for e, b in zip(en, bit):
         kt = _build_book_kt(C, SimpleNamespace(C=RUNS), *n0, *n1, [e], run, [b])
         oks.append(kt[0][0])
         n0, n1 = kt[3:3 + RUNS], kt[3 + RUNS:3 + 2 * RUNS]
-        tally = _build_count_step(C, dec, *tally, [e], [b], kt[1], kt[2])
+        tally = _build_count_step(C, _DEC, *tally, [e], [b], kt[1], kt[2])
         C.phase = "run"
         inc = [C.AND(run[0].inv(), run[1].inv()), _or(C, run[0], run[1])]
         run = mux(C, e, [C.AND(x, b.inv()) for x in inc], run)
@@ -780,8 +794,17 @@ def _build_charge(C, S, *elements):
         C.phase = "carry"
         tally, n0, n1 = [SG.commit(C, x) for x in tally], [SG.commit(C, x) for x in n0], [SG.commit(C, x) for x in n1]
         run = SG.commit(C, run)
+    return tally, n0, n1, run
+
+
+def _build_charge(C, S, *elements):
+    f = _split(_charge_in(S), elements)
+    en, bit = [e[0] for e in f["en"]], [e[0] for e in f["bit"]]
+    oks = []
+    tally = _count(C, "n_arrived", en, f["arrived"], f["total"][0], _fresh_tally(), oks)
+    tally, n0, n1, run = _decide(C, en, bit, f["n0"], f["n1"], f["run"][0], tally, oks)
     for zf, zt in zip(f["zfreq"], f["ztotal"]):
-        tally = _build_count_step(C, num, *tally, [ONE], [ZERO] * 16, zf, zt)
+        tally = _count(C, "count", [], [zf], zt, tally, oks)
     fin = _build_count_finish(C, SimpleNamespace(CW=CW), *tally, const_bits((1 << CW) - 1, CW))
     C.phase = "count"
     ok = and_reduce(C, oks + [fin[0][0]])
