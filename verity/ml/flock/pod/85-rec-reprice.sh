@@ -8,7 +8,7 @@
 #                untiled, every instance's own rows: FLOCK_OWN_ROWS=1) twice: with plain SHA-512 leaves (FLOCK_PLAIN_LEAVES=1, the
 #                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
 #                (STAGE_FROM=DIR: another job's data/$TAG, both stagings; STAGE=0: neither, data/$TAG/stage is already
-#                filled, 89-rec-lane.sh's served lane)
+#                filled, 91-rec-lane.sh's served lane)
 #   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy
 #                (verity_flock.rec_live, the inner phase's firewall: salted tree tops, the schedule of the statement's public
 #                shape, rec_live --schedule-for; Register answered with the verifier's full draw, rec_live.full_draw over the
@@ -60,6 +60,8 @@
 #      NEG_INNER="challenge query" (lean: each honest V* session verified again over a copy of the inner session with one
 #              coin of rep 0 flipped in its session.json and its coin server's record alike, rec_inner.py forge --what W,
 #              as part forged-inner-W-<name>, which Lean must refuse; empty: none)
+#      REC_COINS=0 (lean; 1: the inner statement set up once per inner session, flock-verify rec-coins, and each verify given
+#              that record, --rec-inner-coins, rather than the inner circuit it would parse again)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
@@ -700,15 +702,25 @@ lean)
   # root_B, later tops and link points every statement's tops and check 5 are held to (RecVStar.checkTopRows,
   # RecCoins.checkLink) and whose c_k its rec-c<k> rows are (RecVStar.checkPubRows)
   INNER=${INNER:-$DD/inner/s$((NS - 1))}
-  rec_inner_at() { echo "--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os --rec-inner-draw $DD/stage/draw.json --rec-inner-session $1/session --rec-inner-transcript $1/public.json"; }
+  rec_inner_files() { echo "--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os --rec-inner-draw $DD/stage/draw.json --rec-inner-session $1/session"; }
+  # REC_COINS=1: the inner statement set up once per inner session (flock-verify rec-coins, into its rec-coins.json), each
+  # verify reading that record (--rec-inner-coins) in place of the inner statement's files, which at a served lane's size
+  # every verify would otherwise parse again
+  rec_coins() { [ "${REC_COINS:-0}" = 1 ] || return 0
+    /usr/bin/time -v -o $O/lean/time-rec-coins-$2.txt $LEAN_BIN rec-coins $(rec_inner_files $1) > $1/rec-coins.json 2> $O/lean/rec-coins-$2.err \
+      || { tail -5 $O/lean/rec-coins-$2.err; rm -f $1/rec-coins.json; return 1; }; }
+  rec_inner_at() { if [ -s $1/rec-coins.json ]; then echo "--rec-inner-coins $1/rec-coins.json --rec-inner-session $1/session --rec-inner-transcript $1/public.json"
+    else echo "$(rec_inner_files $1) --rec-inner-transcript $1/public.json"; fi; }
+  rm -f $INNER/rec-coins.json; rec_coins $INNER inner || exit 1
   REC_INNER=$(rec_inner_at $INNER)
-  # a served lane's own registered reads (stage/reads.json, 89-rec-lane.sh): V*'s --rec-inner-* inputs set the inner statement
+  # a served lane's own registered reads (stage/reads.json, 91-rec-lane.sh): V*'s --rec-inner-* inputs set the inner statement
   # up without them (RecCoins.Files.stmt), so the inner's verify and statement check below hold it to them
   IREG=; [ -s $DD/stage/reads.json ] && IREG="--registered $DD/stage/reads.json"
   NEGS=
   for w in ${NEG_INNER-challenge query}; do
     FI=$DD/inner-neg-$w; rm -rf $FI; mkdir -p $FI && cp -r $INNER/session $INNER/public.json $INNER/private.json $FI/ \
       && python3 verity/ml/flock/pod/rec_inner.py forge --what $w --inner $FI > $O/lean/forge-inner-$w.json || exit 1
+    rec_coins $FI neg-$w || echo "rec-coins refused the forged inner $w: its verifies read the inner statement's files"
     NEGS="$NEGS $w"
   done
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
