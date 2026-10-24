@@ -56,16 +56,18 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   VERDICT accepting) and every statement has a verdict over it. This is `lean_verdicts.py`'s rule. The row names the
   statements that refused it and those that rightly accepted it.
 - **Forgeries** (`--forge`, default none): 85's forged statements (`FORGE`, `rec_vstage --forge`: message, sum, comb,
-  top, top-salt, coef, dirs, filler), staged by vstage and proved by oprove one session each. A forged statement's row is
-  ok when it was refused, whether by the firewall stopping it before release (`FIREWALL-REFUSED`, no session for Lean)
-  or by Lean, and it is left out of the outer totals. `--max-min` sizes each forged session as its honest statement's
+  top, top-salt, coef, dirs, filler), staged by vstage and proved by oprove one session each. A forgery is refused when
+  one of its statements is, whether the firewall stopped it before release (`FIREWALL-REFUSED`) or Lean refused it, and
+  a statement it leaves as the honest one is accepted (forged-message's alg-p1). This is `lean_verdicts.py`'s rule. Its
+  rows are left out of the outer totals. `--max-min` sizes each forged session as its honest statement's
   (`FORGED_AS`). With coef, dirs or message among them, the **`forge-after`** step runs after lean (unless
   `--no-forge-after`; `--steps ...,forge-after` asks for it alone). The firewall stops those three before Lean sees them,
   so `forge_after.py` makes each one after proving instead, on copies of the honest L0 and alg-p0 statements: row 0 of
   the port one bit off, as its `b || c` alone, as `pub.bin`'s consistent table, and as the whole registration. Lean
   verifies each with the lean step's own flags, beside the honest control, which must accept (first run
-  r20261024-160722-958b: all refused at setup, the controls accepted). The headline's `forged_refused` gives each kind's
-  verdict.
+  r20261024-160722-958b: all refused at setup, the controls accepted; as a step, r20261024-172707-4385 at K = 64, N = 16
+  with `--forge coef,dirs,message`: complete and accepted, every forgery refused). The headline's `forged_refused` gives
+  each kind's verdict.
 - **The verdict** (`headline` in the result, the table's first line): `complete` when every step that one recursive
   session needs ran (build, inner, vstage, vcap, oprove, lean). `ok` when, in addition, every invocation exited 0, every
   honest verdict accepted, every flipped coin and every forgery was refused. A merged table's verdict is only as whole as its runs.
