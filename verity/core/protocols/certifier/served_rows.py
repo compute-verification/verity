@@ -8,7 +8,10 @@ row, the verifier's b‖c check does.
 `SamplerInputsSource.rows`: the runner's request id, its token rows [lo, hi) of the step's flattened batch, its first
 position and its prefill length). `step_rows` gives one step's in `replay_step`'s form, (slot, request, kind, start, n) in
 batch order: the request its certified arrival id, n = hi − lo, kind decode iff n = 1 and start ≥ the prefill
-(ReplayStep_v1's rule). A value wider than its field is refused, since `compile_slice.rows_bits` would truncate it. A window
+(ReplayStep_v1's rule). The slot is the row's batch position: under sync scheduling the scheduler's slot, which the
+slice's ``rows`` compares slot for slot; under async (AS = 1) the runner's batch can order the slots' rows otherwise, and
+``rows`` matches them by request through ``wit``'s ``map`` (`compile_slice.slot_map`). A value wider than its field is
+refused, since `compile_slice.rows_bits` would truncate it. A window
 is the slice's P steps in turn, each packed as `rows_bits` packs it (an idle step zero): `window_bits` is the slice's
 ``srv`` row (`compile_slice.srv_row`).
 
