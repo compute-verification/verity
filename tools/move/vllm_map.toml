@@ -52,6 +52,7 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_served_files.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/served_files.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_settings.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/settings.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_static.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/static.py"
+"integrations/vllm/verity_vllm/protocol_options/pouw_h1_tables_device.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_window.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/window.py"
 # not on main yet: #3569's branch (cursor/vllm-h1-stage-a1f5) adds it, and its restack needs the row
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_words.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py"
@@ -143,6 +144,7 @@ paths = []
 "verity_vllm.protocol_options.pouw_h1_served_files" = "verity_vllm.protocols.pouw.h1.served_files"
 "verity_vllm.protocol_options.pouw_h1_settings" = "verity_vllm.protocols.pouw.h1.settings"
 "verity_vllm.protocol_options.pouw_h1_static" = "verity_vllm.protocols.pouw.h1.static"
+"verity_vllm.protocol_options.pouw_h1_tables_device" = "verity_vllm.protocols.pouw.h1.tables_device"
 "verity_vllm.protocol_options.pouw_h1_window" = "verity_vllm.protocols.pouw.h1.window"
 "verity_vllm.protocol_options.pouw_h1_words" = "verity_vllm.protocols.pouw.h1.words"
 "verity_vllm.protocol_options.pouw_native" = "verity_vllm.protocols.pouw.native"
