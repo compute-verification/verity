@@ -1844,6 +1844,31 @@ def test_an_accepted_case_is_compared_whole(server):
         assert verdict_ == "accept" and json.loads(line) == answer(case) | {"reason": None}, (kind, line)
 
 
+def committed_bits(j):
+    """`Q_call` v1 at X over a program of root Calls (`partition_object.evaluate`): per distinct Definition, in Call order,
+    its units' committed bits (`partition._committed_bits`), twice, as Lean gives them read off its layout and by the walk
+    that layout replaced."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    desc, x = _obj(j.get("program"), "program"), j.get("X")
+    if not (_int(x) and x >= 0):
+        raise D.Reject("X is not a natural number")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    try:
+        part = PO.evaluate(PROGRAMS[sha], PO.call_query(x))
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+    cuts = {codec.descriptor_id(cut.fn): cut for _k, cut in part.calls}
+    out = []
+    for fid, cut in cuts.items():
+        bits = P._committed_bits(cut.fn, [(lo, hi) for lo, hi, _path in cut.units])
+        out.append([fid, bits, bits])
+    return out
+
+
 PIECES = "sampled-proofs-difftest"
 
 
@@ -1868,6 +1893,10 @@ PARTITION = D.Port(PIECES, "partition", partition, st.one_of(
         "partition": {"program": PO.program_sha512(pq[0]), "query": pq[1]} if pre else None}},
         changed_audits(most=0, setups=SETUPS), partitions(), laws(24),
         st.one_of(st.none(), st.fixed_dictionaries({t: WORK_ENTRY for t in WORK_IDS})), st.booleans()),
+    JSON), package=PACKAGE)
+COMMITTED_BITS = D.Port(PIECES, "committed_bits", committed_bits, st.one_of(
+    st.builds(lambda m, x: {"program": json.loads(_calls(tuple(m))), "X": x},
+              st.lists(st.sampled_from(range(len(CALLEES))), min_size=1, max_size=5), st.sampled_from([4, 8, 16, 32])),
     JSON), package=PACKAGE)
 _REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # noqa: E731
 REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
@@ -2863,7 +2892,7 @@ HIDDEN_WITNESS = D.Port(PIECES, "hidden_witness", hidden_witness, st.one_of(*[hi
 pieces = D.server_fixture(DECODE)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
