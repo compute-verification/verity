@@ -12864,27 +12864,30 @@
    ]
   },
   "Definitions.Accounting.Remote.Draw": {
-   "digest": "d70d2eebcce8362707ff5a463a973a9decb46f9768782aef143fe290bd22e1ea",
+   "digest": "2aef326bd1ab0dd686824ce2554151eea234440143a0a1baafb28dbf8bedd454",
    "definitions": {
     "Accounting.Remote.Draw.Blocks": "c039d32ff0024407a58df4ca4cd9489e00cd3968a16cc2b29cd83ff475aad5c8",
     "Accounting.Remote.Draw.Coins": "2f7cc1f6aba6148b468add0d9e19c65c8fbc3c14c0869a701c2eb8a47b114f0e",
     "Accounting.Remote.Draw.Session": "941ba13f9bb572a8f393d61cc00f47748ebe85bf7586ec44acd7b4e409f7378f",
+    "Accounting.Remote.Draw.Session.bound": "dfa9fc1a0ba16e75c1c165d86ad380feeca3d05fdd11c215284a4323ad0ea2f0",
     "Accounting.Remote.Draw.Session.correct": "7a758b411d408715105f90ace2ed209efb98671de7d88223d7f6bef9f5abb26c",
+    "Accounting.Remote.Draw.Session.distinguisher": "2277e41b92a7d95b7e8868a4406dbd68d592fb455b989253d4399a7427ab2510",
     "Accounting.Remote.Draw.Session.draws": "3a3c71ad3dc37205ce78594cccca71a2234e09f617c28734cf8b05751a177269",
     "Accounting.Remote.Draw.Session.good": "fb29a33028e55af9026cbc6bc18b6726bde81230430f17db6a93e2735ef9aae2",
+    "Accounting.Remote.Draw.Session.lands": "46b48e256df60ccc26559997409f520b337a023fa4a4f5360db410a0e5e00dde",
     "Accounting.Remote.Draw.Session.opened": "099546d4ec6c4501eb30a14545212cbfa9e971b9cd8a9c7d4b7c86fc4c8b44a1",
     "Accounting.Remote.Draw.Session.pooled": "da515c7764fc56368be00b250a02164eaaf56a1eeefbaa8027b150f93b1104fd",
     "Accounting.Remote.Draw.Session.size": "0eea821c86033cda6df2dacba304e9084e642040e5868e872fd12059353d3992",
     "Accounting.Remote.Draw.Session.wrong": "6f669c00ea5f96e2ebc5d63abe8515c635ddf600f6bc00a1247a5b98e954b12c",
     "Accounting.Remote.Draw.accepted": "b0a92a5e05c26a8037ed70a16b94ff1287fdac2e513330dbe5679c1d499b94c6",
-    "Accounting.Remote.Draw.advantage": "c83095e4a44e431d121c718cde54b38b7c679d2b13e5c3a90ae2007f2e6c712d",
     "Accounting.Remote.Draw.arrange": "f1709389a2de9004f1be097b693bdf7ddf7568ba0e8b09a06057a361baf40880",
+    "Accounting.Remote.Draw.below": "4697905d5580aa26e8537bb1832747d8ac1b905c8bf98fd7380f9f1b9c61c95d",
     "Accounting.Remote.Draw.budget": "f2420d149470daf39805deb86dc8c1dbf4fe053a01569f29dd24bfb4b6137302",
     "Accounting.Remote.Draw.offset": "795755fad153056dd737dfe6ad9dfae7f23914343aaf79dc839d225419c4f2d2",
     "Accounting.Remote.Draw.offsets": "986b9c49b7bd390877b5ba71588876f203728a830718a30c3af059d6a860bb48",
     "Accounting.Remote.Draw.openings": "47cc9ba6cd4841ef58d296e8ebd98e680845aaa74d6705da0f65170169012425",
     "Accounting.Remote.Draw.pooled": "b1043e9ddcda2923acc1f24f1baf2e37ae4131aaee95e75685bbd11e97ef9371",
-    "Accounting.Remote.Draw.test": "62a0c0a6e07c4da9a8813fcc8151427edfb6d6d262bc75ff5cc7e72f1c885c42",
+    "Accounting.Remote.Draw.test": "b1a2f0e138861d3806439f5d5e809c014243c32978534143063cf633d1899d74",
     "Accounting.Remote.Draw.width": "5ba583f4de89a5631bf424804829c778f2fb72d857b5200727facdc3dd153a68",
     "Accounting.Remote.Draw.word": "e893db4572ca10eb2322426a1da412d2dbedba5f6464461cfdc8e1d346fde663"
    },
@@ -28076,13 +28079,13 @@
    ]
   },
   "Models.Accounting.Guarantees.RemoteDraw": {
-   "digest": "ab56fb91905004cb060ef969628439992ee8cac3b2ecc4e4111af1f0eb18006b",
+   "digest": "7089dc53cd380e5043b8cd97f95c7a769d9689932442f4ccd9490240622598f0",
    "definitions": {
-    "Accounting.Guarantees.Remote.HeldDrawn": "b10d00b251b56f2d7ba09af4545ebf81cf57cc6265db89bfa887299e6215385e",
-    "Accounting.Guarantees.Remote.HeldOverTimeDrawn": "b80a0a485435b35f564ce1dea3768cac6cc72ea76bb1cdd363e03fe67f1a8109",
-    "Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn": "9eb3df2d8a312e7ddad9818636d4f52b3fe7b22e7b319f72bb52f8e7c9130853",
-    "Accounting.Guarantees.Remote.LiveCoinsDrawn": "fdf81c1834060429a1a2b675849aac4ebe3db1e9fc607d7d1efc80a25f933c7b",
-    "Accounting.Guarantees.Remote.PooledDraw": "df505d7e6d74dad4a1dac3f908e05c4b3a3001440550eedc1ed01fb7d15191e1"
+    "Accounting.Guarantees.Remote.HeldDrawn": "98ac40c42400d69f54164246b47cf1e2646538404d3dc8e278153819ac7b9627",
+    "Accounting.Guarantees.Remote.HeldOverTimeDrawn": "758e61bd3c604d212b3e29a1fdd241acb238edcee249d16e71d5b3b91144dbb7",
+    "Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn": "a83d8053316dda54d7ea45642ecef5e55f887cc1a4de3f521d1989e1bc85a1ea",
+    "Accounting.Guarantees.Remote.LiveCoinsDrawn": "42e20a80d7f001f9ba17b9de26feba18ca8ee3df74d74a7c2dfea6ce68b8cdab",
+    "Accounting.Guarantees.Remote.PooledDraw": "3e849e223237482476e2b241367e63f317d31b6a852306c676a1ea6a62b63257"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.HeldDrawn",
