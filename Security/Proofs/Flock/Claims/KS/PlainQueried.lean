@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.KS.PlainCapPrefix
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # Which positions an accepted plain rep opens at a later level
@@ -55,17 +56,17 @@ theorem mem_zkRepCols_of {lv : Flock.Level} {coins : Array F128} {rows : Array (
 /-- **An accepted plain rep opens a later-level position iff its query coin draws it.** At an accepted plain run, at
 table 0's rep `r < 2` and level `1 ≤ ℓ` of the table's `fast100` schedule, some level-`ℓ` column is at `q` iff `q` is
 among the level's positions at the first `plainQN` elements of the run's coin `plainQRound`. -/
-theorem plain_levelCols_queried {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
-    {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (V false) x ω c).out = .acc) {s : Ins}
+theorem plain_levelCols_queriedK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ}
     (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch)
     (hr : r < 2) (h1 : 1 ≤ ℓ) (hℓ : ℓ < sch.levels.size) (q : ℕ) :
-    (∃ a, (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω c).seen r ℓ) ↔
+    (∃ a, (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (VK keep) x ω c).seen r ℓ) ↔
       q ∈ positions (sch.levels.getD ℓ default)
         ((Claims.coinSeq c (plainQRound spec st sch r ℓ)).vals (plainQN spec st sch ℓ)) := by
-  obtain ⟨s', spec', sts', link, c₁, mids, f, hs', hf, hc, hv, hmids⟩ := plain_acc_mids h
+  obtain ⟨s', spec', sts', link, c₁, mids, f, hs', hf, hc, hv, hmids⟩ := plain_acc_midsK keep h
   obtain ⟨rfl, rfl, rfl⟩ : s = s' ∧ spec = spec' ∧ sts = sts' := by simpa using hs.symm.trans hs'
-  generalize (Claims.run sha512 P (V false) x ω c).vLog.map Prod.fst = L at hv
+  generalize (Claims.run sha512 P (VK keep) x ω c).vLog.map Prod.fst = L at hv
   obtain ⟨hx, lv, hlv, hcus⟩ := Claims.Bridge.Custody.checks_ok hc
   obtain ⟨hsts0, hst0⟩ := Array.getElem?_eq_some_iff.1 hst
   have h0 : 0 < (tabsOf sts).size := by simpa [tabsOf] using hsts0
@@ -86,13 +87,13 @@ theorem plain_levelCols_queried {Ω : Type} {P : Claims.Prover Ω} {x : Claims.M
   have hn : extras.size = st.regions.size * spec.points := by
     obtain ⟨sess', -, -, -, hpts', hpn', -⟩ := hall 0 (by omega)
     rw [extraClaims_size (st := st) hext, ← hpts', hpn']
-  have hro : runOf false (Claims.run sha512 P (V false) x ω c).seen 0 = some
+  have hro : runOf false (Claims.run sha512 P (VK keep) x ω c).seen 0 = some
       { m := (Setup.ofCircuit st).m, kLog := (Setup.ofCircuit st).kLog, claims := 2 + extras.size,
         hashLen := (Setup.ofCircuit st).merkle.digestLen, saltLen := saltLenOf false (Setup.ofCircuit st),
         reps := [(lv.streams.getD 0 #[], f.proofs.getD 0 ByteArray.empty),
                  (lv.streams.getD 1 #[], f.proofs.getD 1 ByteArray.empty)] } := by
     simp [runOf, hf, hx, hs, hst, hlv, hext, Except.toOption]
-  have hcols0 : plainRawLevelCols (Claims.run sha512 P (V false) x ω c).seen r ℓ =
+  have hcols0 : plainRawLevelCols (Claims.run sha512 P (VK keep) x ω c).seen r ℓ =
       plainLevelColsOf (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
         (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
         (lv.streams.getD r #[]) (f.proofs.getD r ByteArray.empty) ℓ := by
@@ -118,7 +119,7 @@ theorem plain_levelCols_queried {Ω : Type} {P : Claims.Prover Ω} {x : Claims.M
   rw [hrs] at hy
   obtain rfl : y = stream := Option.some.inj (hy.symm.trans hstream)
   have hcoins := forall₂_coins (fun _ _ hab => hab.2.1) hfa
-  have hcolsEq : plainRawLevelCols (Claims.run sha512 P (V false) x ω c).seen r ℓ =
+  have hcolsEq : plainRawLevelCols (Claims.run sha512 P (VK keep) x ω c).seen r ℓ =
       Claims.Flock.zkRepCols (sch.levels.getD ℓ default) (y.rounds[J]!).coins
         (openAt p.ligerito (sch.levels.size - 1) ℓ).1 := by
     rw [hcols0, ← hent]
@@ -191,5 +192,16 @@ theorem plain_levelCols_queried {Ω : Type} {P : Claims.Prover Ω} {x : Claims.M
       fast100_level _ _ hsch _ (by unfold Array.getD; rw [dite_eq_left hℓ]; exact Array.getElem_mem hℓ)
     have hlq := positions_size _ hseam ((Claims.coinSeq c (plainQRound spec st sch r ℓ)).vals (plainQN spec st sch ℓ))
     exact ⟨_, hjq ▸ mem_zkRepCols_of hj (by rw [hrows]; exact hj) (by rw [← hlq]; exact hj)⟩
+
+/-- `plain_levelCols_queriedK` at the deployed plain verifier (`keep := id`). -/
+theorem plain_levelCols_queried {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (V false) x ω c).out = .acc) {s : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ}
+    (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch)
+    (hr : r < 2) (h1 : 1 ≤ ℓ) (hℓ : ℓ < sch.levels.size) (q : ℕ) :
+    (∃ a, (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω c).seen r ℓ) ↔
+      q ∈ positions (sch.levels.getD ℓ default)
+        ((Claims.coinSeq c (plainQRound spec st sch r ℓ)).vals (plainQN spec st sch ℓ)) :=
+  plain_levelCols_queriedK id (Ω := Ω) (P := P) (x := x) (ω := ω) (c := c) (h := h) (s := s) (spec := spec) (sts := sts) (st := st) (sch := sch) (r := r) (ℓ := ℓ) (hs := hs) (hst := hst) (hsch := hsch) (hr := hr) (h1 := h1) (hℓ := hℓ) (q := q)
 
 end FlockDeploy.KS

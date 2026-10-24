@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.KS.PlainSimW
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # Self-clashes past level 0
@@ -47,16 +48,39 @@ def PlainRawClashRunL {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : 
           PlainLevelClash ms lv lanes (Claims.run sha512 P (V false) x ω (Φ (u, r'))).vLog) ∨
         Claims.TiedColl sha512 (Claims.run sha512 P (V false) x ω (Φ (u, r'))).vLog)
 
+/-- **A live event at `P'`'s outcome gives an accepting run of `P` with a raw clash at some level, or a collision**:
+two different columns its reps open at one level-0 position, two openings of one position to different rows against
+one root at a later level, or a collision among the verifier's calls. -/
+def PlainRawClashRunLK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (N : Claims.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 mPts) {τ : Type} (P' : Claims.Prover (Ω × τ))
+    (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin) (pL : LiveOutJ 1 mPts → Prop) : Prop :=
+  ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') →
+    (Claims.run sha512 P (VK keep) x ω (Φ (u, r'))).out = .acc ∧
+      ((∃ (q : ℕ) (a b : List FlockLevel3.GF128),
+        (q, a) ∈ plainRawCols (Claims.run sha512 P (VK keep) x ω (Φ (u, r'))).seen ∧
+        (q, b) ∈ plainRawCols (Claims.run sha512 P (VK keep) x ω (Φ (u, r'))).seen ∧ a ≠ b) ∨
+        (∃ (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ),
+          PlainLevelClash ms lv lanes (Claims.run sha512 P (VK keep) x ω (Φ (u, r'))).vLog) ∨
+        Claims.TiedColl sha512 (Claims.run sha512 P (VK keep) x ω (Φ (u, r'))).vLog)
+
 /-- **The clash at any level gives the collision**, so `PlainRawClashRunL` gives `PlainClashRun`. -/
+theorem plainClashRun_of_rawLK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
+    {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts} {τ : Type}
+    {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin}
+    {pL : LiveOutJ 1 mPts → Prop} (h : PlainRawClashRunLK keep P x ω mPts N dg w P' Φ pL) :
+    PlainClashRunK keep P x ω mPts N dg w P' Φ pL := fun u r' hp => by
+  obtain ⟨hacc, ⟨q, a, b, ha, hb, hab⟩ | ⟨_, _, _, hc⟩ | ht⟩ := h u r' hp
+  · exact ⟨hacc, plainK_selfClash_tied keep hacc ha hb hab⟩
+  · exact ⟨hacc, plainLevelClash_tied hc⟩
+  · exact ⟨hacc, ht⟩
+
+/-- `plainClashRun_of_rawLK` at the deployed plain verifier (`keep := id`). -/
 theorem plainClashRun_of_rawL {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
     {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts} {τ : Type}
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin}
     {pL : LiveOutJ 1 mPts → Prop} (h : PlainRawClashRunL P x ω mPts N dg w P' Φ pL) :
-    PlainClashRun P x ω mPts N dg w P' Φ pL := fun u r' hp => by
-  obtain ⟨hacc, ⟨q, a, b, ha, hb, hab⟩ | ⟨_, _, _, hc⟩ | ht⟩ := h u r' hp
-  · exact ⟨hacc, plain_selfClash_tied hacc ha hb hab⟩
-  · exact ⟨hacc, plainLevelClash_tied hc⟩
-  · exact ⟨hacc, ht⟩
+    PlainClashRun P x ω mPts N dg w P' Φ pL :=
+  plainClashRun_of_rawLK id (Ω := Ω) (P := P) (x := x) (ω := ω) (mPts := mPts) (N := N) (dg := dg) (w := w) (τ := τ) (P' := P') (Φ := Φ) (pL := pL) (h := h)
 
 /-- **The level-0 raw clash is a raw clash at some level.** -/
 theorem plainRawClashRunL_of_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}

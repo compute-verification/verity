@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.KS.PlainClashL
 import Proofs.Flock.Claims.KS.Entries
 import Proofs.Flock.Claims.DeployRounds
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # Every level's queries in the plain verifier over the hash oracle
@@ -331,23 +332,23 @@ table 0's rep `k` is an `Opening` of its position against the flattened `ℓ −
 that log (`acc_within`), so level `ℓ`'s Merkle check passed on the rep's rows at those positions
 (`plainLevels_verifyWithM`), and the check at the table's scheme, carried back to `OC`, logged them
 (`merkleCheck_logsOf`). -/
-theorem plain_levelOpening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_levelOpeningK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a : List FlockLevel3.GF128}
-    (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
-    (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ) :
+    (h : (Claims.run sha512 P (VK keep) x ω r).out = .acc)
+    (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (VK keep) x ω r).seen k ℓ) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (f : Final) (st : Stmt) (sch : Flock.Schedule) (p : Proof)
       (row : Array F128), setupOf false x = some (s, spec, sts) ∧
-      lastFinal (Claims.run sha512 P (V false) x ω r).seen = some f ∧ sts[0]? = some st ∧
+      lastFinal (Claims.run sha512 P (VK keep) x ω r).seen = some f ∧ sts[0]? = some st ∧
       fast100 st.m = some sch ∧
       decodeProof (shapeOf (Setup.ofCircuit st) sch (st.regions.size * spec.points)) f.proofs[k]! = .ok p ∧
       a = row.toList.map FlockLevel3.GF128.of ∧
       p.ligerito.recursiveCaps[ℓ - 1]!.size = 2 ^ (sch.levels.getD ℓ default).cap ∧
       (∀ b ∈ p.ligerito.recursiveCaps[ℓ - 1]!.toList, b.size = 64) ∧
       Opening (Setup.ofCircuit st).merkle (sch.levels.getD ℓ default) (2 ^ (sch.levels.getD ℓ default).lanes)
-        (p.ligerito.recursiveCaps[ℓ - 1]!.foldl (· ++ ·) ByteArray.empty) (Claims.run sha512 P (V false) x ω r).vLog
+        (p.ligerito.recursiveCaps[ℓ - 1]!.foldl (· ++ ·) ByteArray.empty) (Claims.run sha512 P (VK keep) x ω r).vLog
         q row := by
-  obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := acc_within h
-  generalize hL : (Claims.run sha512 P (V false) x ω r).vLog = L at hv ⊢
+  obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := accK_within keep h
+  generalize hL : (Claims.run sha512 P (VK keep) x ω r).vLog = L at hv ⊢
   obtain ⟨hx, lv, hlv, -⟩ := Claims.Bridge.Custody.checks_ok hc
   unfold plainRawLevelCols at ha
   split at ha
@@ -451,24 +452,52 @@ theorem plain_levelOpening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {
   exact ⟨s, spec, sts, f, st, sch, p, _, hs, hf, hst, hsch, hp', hja, hcs, fun b hb => (hcw b hb).trans hdl,
     hjq ▸ hop j hj⟩
 
+/-- `plain_levelOpeningK` at the deployed plain verifier (`keep := id`). -/
+theorem plain_levelOpening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a : List FlockLevel3.GF128}
+    (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
+    (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ) :
+    ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (f : Final) (st : Stmt) (sch : Flock.Schedule) (p : Proof)
+      (row : Array F128), setupOf false x = some (s, spec, sts) ∧
+      lastFinal (Claims.run sha512 P (V false) x ω r).seen = some f ∧ sts[0]? = some st ∧
+      fast100 st.m = some sch ∧
+      decodeProof (shapeOf (Setup.ofCircuit st) sch (st.regions.size * spec.points)) f.proofs[k]! = .ok p ∧
+      a = row.toList.map FlockLevel3.GF128.of ∧
+      p.ligerito.recursiveCaps[ℓ - 1]!.size = 2 ^ (sch.levels.getD ℓ default).cap ∧
+      (∀ b ∈ p.ligerito.recursiveCaps[ℓ - 1]!.toList, b.size = 64) ∧
+      Opening (Setup.ofCircuit st).merkle (sch.levels.getD ℓ default) (2 ^ (sch.levels.getD ℓ default).lanes)
+        (p.ligerito.recursiveCaps[ℓ - 1]!.foldl (· ++ ·) ByteArray.empty) (Claims.run sha512 P (V false) x ω r).vLog
+        q row :=
+  plain_levelOpeningK id (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (k := k) (ℓ := ℓ) (q := q) (a := a) (h := h) (ha := ha)
+
 /-- **Two rows one rep of an accepted plain run opens at one later-level position clash in its log**: two of table 0's
 rep `k`'s level-`ℓ` rows at one position that differ are two `Opening`s of that position against one root, the
 flattened `ℓ − 1`-th recursive cap of the rep's proof (`plain_levelOpening`). -/
-theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_levelClashK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a b : List FlockLevel3.GF128}
-    (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
-    (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ)
-    (hb : (q, b) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ) (hab : a ≠ b) :
+    (h : (Claims.run sha512 P (VK keep) x ω r).out = .acc)
+    (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (VK keep) x ω r).seen k ℓ)
+    (hb : (q, b) ∈ plainRawLevelCols (Claims.run sha512 P (VK keep) x ω r).seen k ℓ) (hab : a ≠ b) :
     ∃ (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ),
-      PlainLevelClash ms lv lanes (Claims.run sha512 P (V false) x ω r).vLog := by
-  obtain ⟨s, spec, sts, f, st, sch, p, row, hs, hf, hst, hsch, hp, hra, -, -, hop⟩ := plain_levelOpening h ha
+      PlainLevelClash ms lv lanes (Claims.run sha512 P (VK keep) x ω r).vLog := by
+  obtain ⟨s, spec, sts, f, st, sch, p, row, hs, hf, hst, hsch, hp, hra, -, -, hop⟩ := plain_levelOpeningK keep h ha
   obtain ⟨s', spec', sts', f', st', sch', p', row', hs', hf', hst', hsch', hp', hrb, -, -, hop'⟩ :=
-    plain_levelOpening h hb
+    plain_levelOpeningK keep h hb
   obtain ⟨rfl, rfl, rfl⟩ : s = s' ∧ spec = spec' ∧ sts = sts' := by simpa using hs.symm.trans hs'
   obtain rfl := Option.some.inj (hf.symm.trans hf')
   obtain rfl := Option.some.inj (hst.symm.trans hst')
   obtain rfl := Option.some.inj (hsch.symm.trans hsch')
   obtain rfl := Except.ok.inj (hp.symm.trans hp')
   exact ⟨_, _, _, _, q, row, row', fun he => hab (by rw [hra, hrb, he]), hop, hop'⟩
+
+/-- `plain_levelClashK` at the deployed plain verifier (`keep := id`). -/
+theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a b : List FlockLevel3.GF128}
+    (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
+    (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ)
+    (hb : (q, b) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ) (hab : a ≠ b) :
+    ∃ (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ),
+      PlainLevelClash ms lv lanes (Claims.run sha512 P (V false) x ω r).vLog :=
+  plain_levelClashK id (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (k := k) (ℓ := ℓ) (q := q) (a := a) (b := b) (h := h) (ha := ha) (hb := hb) (hab := hab)
 
 end FlockDeploy.KS
