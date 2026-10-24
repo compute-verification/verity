@@ -4,8 +4,9 @@ Network accounting end to end on a served model, as one command and one report. 
 network certifier in front of a served endpoint, `benchmarks/network_traces/certifier_serve.py`), it takes:
 
 - N2's verdict of record on every link-window, and the link's network verdict;
-- every link-window's head checks proved with C-Flock `prove --zk` behind the Lean firewall and held by Lean
-  `verify --zk` (`benchmarks/network_traces/n2_zk.py`);
+- head checks proved with C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`
+  (`benchmarks/network_traces/n2_zk.py`): every honest link-window at both ends, and the egress ends of the tampered
+  and extra runs;
 - the negatives, each refused: `late`, `extra` and a tampered head (the honest run's window 0 egress head, one count off).
 
 It writes `report.json` and `report.md` under `--out` (`$OUT` under `research run`). `e2e.py` is the driver, and its
@@ -32,6 +33,10 @@ use):
 ~~~text
 uv run --extra torch-cpu verity bench network_e2e --from REHEARSAL --out DIR --no-prove
 ~~~
+
+When `n2_zk.sh` has already proved these runs, don't prove them again: pass its run's `out/n2zk` as `--proofs DIR` instead
+of `--no-prove`. The report adopts those proofs only if every proved unit's public row carries the certificate digest of
+the `--from` runs' record for that end and link-window (`e2e.adopt`).
 
 To rehearse first, pass `--upstream URL` (an OpenAI streaming endpoint) or `--vllm MODEL` (vLLM started on this host's
 GPU) instead of `--from`. Every option `e2e.py` doesn't take goes to `certifier_serve.py rehearse` (for example
@@ -81,8 +86,13 @@ It does not cover:
 - **A served link's count check, `NetworkServedCounts_v1`.** It has no prover, so a served run gets N2's verdict of
   record and no proof.
 - **Late's head checks.** Late isn't one of `n2_zk`'s members, so it is refused by N2 alone.
-- **A real link.** The rehearsal runs over loopback, its check plays the firewall and the challenger in one process, and
-  it publishes witness (the records and the certifier's salts) so that its check can be replayed.
+- **A real link, or an auditor's host.** The rehearsal runs over loopback, its check plays the firewall and the
+  challenger in one process, and it publishes witness (the records and the certifier's salts) so that its check can be
+  replayed. Off the gate the certifier is a process on whatever host ran the rehearsal. Against an endpoint on that
+  host's loopback, that host is the prover's node, not an auditor host; the report's `where` says which. `n2_zk` runs the
+  prover, the firewall and the verifier on one node.
+- **The model's size.** The report names the model as the plan does. The plan doesn't say whether the model was cut:
+  GLM-M4's endpoint (r20261024-021333-0ca6) is GLM-5.3 INT8 cut to 5 of 78 layers, at 16 tokens a response.
 
 Zero-knowledge gaps, from `verity/core/protocols/certifier/README.md` ("Not yet zero-knowledge"):
 
@@ -95,4 +105,6 @@ Zero-knowledge gaps, from `verity/core/protocols/certifier/README.md` ("Not yet 
 
 Each end of a link-window is one unit of its member's statement. All of an end's link-windows are proved in one session,
 so the report divides each session's prover seconds, Lean verify seconds and proof bytes by its units. Peak memory is
-the session's largest process (`RUSAGE_CHILDREN`), with the driver's own peak (the unit's lowering) shown beside it.
+the largest process the driver had run by the end of the session (`RUSAGE_CHILDREN`, which only grows). `n2_zk` proves the
+honest members first, so the cost, read from the honest run, is theirs. The driver's own peak (the unit's lowering) is
+shown beside it.

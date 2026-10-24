@@ -4,14 +4,14 @@ report holds per run its network verdict and per link-window N2's verdict of rec
 link-window, and late, extra and the tampered head are each refused at window 0 for their own reason (late: its egress
 head's fields and counts; extra: its counts alone; tampered: its counts and signed digest). The claim is in both files
 word for word and names the gaps the certifier README names. The proofs' columns are read from n2_zk's summary as
-`n2_zk.prove` writes it, and a proof that wasn't held never counts as a refusal. A gate run's fetched directory and a
-tarball of a rehearsal are read as the rehearsal is."""
+`n2_zk.prove` writes it, and a proof that wasn't held never counts as a refusal. Proofs n2_zk's own run kept are adopted
+for these runs, and refused when a unit carries another run's certificate. A gate run's fetched directory and a tarball
+of a rehearsal are read as the rehearsal is."""
 
 from __future__ import annotations
 
 import importlib.util
 import json
-import sys
 import tarfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -34,15 +34,21 @@ e2e = _load()
 
 def _args(src, out) -> SimpleNamespace:
     return SimpleNamespace(sources=[str(src)], upstream=None, vllm=None, out=str(out), work=None, bin=None, lean=None,
-                           delta=2.0 ** -20, no_prove=True)
+                           delta=2.0 ** -20, no_prove=True, proofs=None)
 
 
 @pytest.fixture(scope="module")
-def virtual(tmp_path_factory):
+def rehearsal(tmp_path_factory):
     runs = tmp_path_factory.mktemp("runs")
     plan = e2e.n2_zk.virtual(runs, requests=8, tokens=4, strategies=("honest", "late", "extra"))
+    return SimpleNamespace(plan=plan, runs=runs)
+
+
+@pytest.fixture(scope="module")
+def virtual(rehearsal, tmp_path_factory):
     out = tmp_path_factory.mktemp("out")
-    return SimpleNamespace(plan=plan, runs=runs, out=out, report=e2e.run(_args(runs, out), [], clock=lambda: 0.0))
+    return SimpleNamespace(plan=rehearsal.plan, runs=rehearsal.runs, out=out,
+                           report=e2e.run(_args(rehearsal.runs, out), [], clock=lambda: 0.0))
 
 
 @pytest.mark.slow
@@ -73,6 +79,8 @@ def test_the_claim_is_in_both_files(virtual):
     for text in [e2e.CLAIM["statement"], *e2e.CLAIM["not_covered"], *e2e.CLAIM["zero_knowledge_gaps"]]:
         assert text in md
     assert "N3 (content)" in md and "| honest | 0 | accept |" in md and "**tampered**: refused" in md
+    assert doc["upstream"].startswith("http://127.0.0.1:") and doc["where"].endswith("not an auditor host")
+    assert doc["where"] in md and doc["tokens"] == 4 and "Late's head checks are not proved" in md
 
 
 def test_the_claims_gaps_are_the_ones_the_certifier_readme_names():
@@ -128,6 +136,45 @@ def test_the_proofs_columns_and_cost_are_read_from_n2_zk_and_an_unheld_proof_ref
     assert e2e.report(runs, _n2(2, {"late": 0, "extra": 0, "tampered": 0}), proofs, {})["ok"] is False
 
 
+def _kept(d: Path, runs: dict) -> Path:
+    """n2_zk's output as `n2_zk.sh` keeps it for `runs`: each member's units, and the verifier's ``n2.json`` with the
+    certificate digest each unit's public row carried."""
+    members = {}
+    for k in ("honest-egress", "honest-ingress", "tampered-egress", "extra-egress"):
+        name, end = k.rsplit("-", 1)
+        certified, _ = e2e.n2_zk.cs.read_certified(runs["honest" if name == "tampered" else name]["dir"] / "certified.jsonl")
+        direction = e2e.Direction.EGRESS if end == "egress" else e2e.Direction.INGRESS
+        windows = sorted(w for dd, w in certified if dd == direction)
+        (d / k / "verifier").mkdir(parents=True)
+        (d / k / "verifier" / "n2.json").write_text(json.dumps(
+            [{"window": w, "signed": certified[(direction, w)].certificate.digest.hex()} for w in windows]))
+        members[k] = _member(k, len(windows), None if name == "honest" else 0)
+    (d / "summary.json").write_text(json.dumps({"ok": True, "members": members}))
+    return d
+
+
+@pytest.mark.slow
+def test_proofs_of_these_runs_are_adopted_and_another_runs_refused(rehearsal, tmp_path):
+    runs = e2e.collect([rehearsal.runs], tmp_path)
+    kept = _kept(tmp_path / "n2zk", runs)
+    got = e2e.adopt(kept, runs)
+    assert got["rc"] == 0 and got["why"] is None and got["extra_proved"] and got["adopted"] == str(kept)
+    with pytest.raises(SystemExit, match="gives no extra run"):
+        e2e.adopt(kept, {k: v for k, v in runs.items() if k != "extra"})
+    args = _args(rehearsal.runs, tmp_path / "out")
+    args.no_prove, args.proofs = False, str(kept)
+    r = e2e.run(args, [], clock=lambda: 0.0)
+    assert r["ok"] is True and r["proofs"]["adopted"] == str(kept) and r["proofs"]["cost_per_link_window"]
+    assert r["negatives"]["tampered"]["proved_refused_windows"] == [0] and r["negatives"]["extra"]["proofs_held"]
+    assert "Proofs: adopted from" in (tmp_path / "out" / "report.md").read_text()
+    n2 = kept / "honest-ingress" / "verifier" / "n2.json"
+    sent = json.loads(n2.read_text())
+    sent[1]["signed"] = sent[0]["signed"]
+    n2.write_text(json.dumps(sent))
+    with pytest.raises(SystemExit, match="proofs of another run"):
+        e2e.adopt(kept, runs)
+
+
 def _rehearsal(d: Path, strategies, verdicts: dict) -> Path:
     for s in strategies:
         (d / s).mkdir(parents=True)
@@ -153,6 +200,7 @@ def test_a_gate_runs_directory_and_a_tarball_are_read_as_the_rehearsal(tmp_path)
     assert got["honest"]["dir"] == gate / "out" / "honest" and got["honest"]["check"]["verdict"] == "accepted"
     assert got["honest"]["gate"]["run"] == "r1" and got["honest"]["gate"]["verdict"] == "accepted"
     assert got["late"]["dir"].parent.name == "planned-40" and got["late"]["check"]["verdict"] == "refused"
+    assert e2e.where(got)["where"].startswith("gate: ")
     with pytest.raises(SystemExit, match="two honest runs"):
         e2e.collect([gate, gate], work)
     with pytest.raises(SystemExit, match="no honest run"):

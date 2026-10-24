@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# network-e2e's runner, `verity bench network_e2e ARGS`, ARGS e2e.py's (README.md has the commands). With --no-prove it
-# runs e2e.py alone. Otherwise it runs under `research run` on a CPU node: it builds what n2_zk.sh builds (hidden_zk's
-# job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify, then the firewall's Lean frame, N2's
-# network-records and the sampled-proofs verifier in the tree, so --cwd clone) and runs e2e.py with them, the report in
-# $OUT. From a clone:
-#   research run --on vy-nebius-cpu-1 --mem-gb 32 --mem-wait 3600 --source . --project verity --as LANE --cwd clone \
+# network-e2e's runner, `verity bench network_e2e ARGS`, ARGS e2e.py's (README.md has the commands). With --no-prove or
+# --proofs DIR it runs e2e.py alone (N2's network-records is built on first use, with lake on the PATH). Otherwise it
+# runs under `research run` on a CPU node: it builds what n2_zk.sh builds (hidden_zk's job.sh, sourced: C-Flock's
+# flock-circuit and the Lean flock-verify, then the firewall's Lean frame, N2's network-records and the sampled-proofs
+# verifier in the tree, so --cwd clone) and runs e2e.py with them, the report in $OUT. From a clone:
+#   research run --pool research --as LANE --pool-wait 3600 --timeout 5h --source . --project verity --cwd clone \
 #     --send RUNS.tgz -- bash -c 'bash benchmarks/network_e2e/run.sh --from "$RESEARCH_RUN_DIR/inputs/RUNS.tgz"'
 # env: E2E_MEM_GB (what job.sh's stages may take, within the slot's; 32 by default)  E2E_CACHE (the build cache, kept
 #      across runs where writable; by default the node's /workspace/research/cache/pouw-hidden-zk)
@@ -12,7 +12,11 @@
 # verifier received, never a prover's instance file, a circuit or a session's archive (e2e.keep).
 set -uo pipefail
 cd "$(dirname "$0")/../.."
-case " $* " in *" --no-prove "*) exec "${PYTHON:-python3}" benchmarks/network_e2e/e2e.py "$@" ;; esac
+case " $* " in
+  *" --no-prove "* | *" --proofs "*)
+    export PATH=$HOME/.elan/bin:$PATH
+    exec "${PYTHON:-python3}" benchmarks/network_e2e/e2e.py "$@" ;;
+esac
 : "${RESEARCH_RUN_DIR:?proving runs under research run on a node (benchmarks/network_e2e/README.md); --no-prove decides N2 alone}"
 export HZ_CONFIGS=n2zk HZ_MEM_GB=${E2E_MEM_GB:-32}
 CACHE=${E2E_CACHE:-/workspace/research/cache/pouw-hidden-zk}

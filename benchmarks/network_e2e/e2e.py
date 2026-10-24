@@ -4,7 +4,8 @@ the link's network verdict (`LinkWindows.verify` through the proof service's str
 link-window's head checks proved by C-Flock ``prove --zk`` behind the Lean firewall and held by Lean (`n2_zk.prove`), and
 the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json` and `report.md` under ``--out``.
 
-    python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify | --no-prove)
+    python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
+                                         --proofs N2ZK_DIR | --no-prove)
     python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL) --out DIR [...] [certifier_serve.py rehearse's options]
 
 `run.sh` is the runner (`verity bench network_e2e`): it builds the binaries and the firewall's frame as `n2_zk.sh` does,
@@ -23,11 +24,13 @@ then runs this. The README says what the report establishes and what it doesn't.
 * **Proofs** (planned profile). `n2_zk.prove` on the honest run and, when its plan has the honest run's windows, the
   extra run: each member (honest egress and ingress, tampered egress, extra egress) one statement of n units, drawn by the
   verifier's Lean, proved ``--zk`` behind the firewall and held by Lean; the verifier opens each unit's ``pub`` row to its
-  own copy and its verdict row. On the served profile nothing is proved: its count check is `NetworkServedCounts_v1`,
-  which `n2_zk` doesn't prove (the claim says so).
+  own copy and its verdict row. With ``--proofs`` they are a run's of its own, adopted (`adopt`: each proved unit's
+  certificate digest must be these runs'), so that what N2-ZK's run proved isn't proved again. On the served profile
+  nothing is proved: its count check is `NetworkServedCounts_v1`, which `n2_zk` doesn't prove (the claim says so).
 * **Cost.** Each member's session: the prover's time (``prove_total_s``), Lean's ``verify --zk`` time and the proof's
   bytes, each divided by its n units for a link-window's end, and the peak RSS of the largest process the driver has run
-  so far (``max_child_rss_gb``, `RUSAGE_CHILDREN`); the driver's own peak (the unit's lowering) beside them.
+  so far (``max_child_rss_gb``, `RUSAGE_CHILDREN`, which only grows: n2_zk proves the honest members first, so the cost,
+  read from the honest run, is theirs); the driver's own peak (the unit's lowering) beside them.
 
 Exit 0 when the honest run is accepted everywhere it was checked and each negative is refused (`report["ok"]`).
 """
@@ -44,6 +47,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import urllib.parse
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -54,6 +58,7 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "network_traces"))
 
 import n2_zk  # noqa: E402
 from verity.core.protocols.certifier import head_check as HC  # noqa: E402
+from verity.core.protocols.certifier.certificate import Direction  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 
 FORMAT = "verity-network-e2e/report/v1"
@@ -69,10 +74,12 @@ CLAIM = {
         "(LinkWindows.network_verdict), accepted, so each window's per-bucket frame counts are the planned occupancy "
         "profile's on egress (on a served link, the ones its ingress head's counts derive under the declared sync), "
         "which puts the link's timing at the profile; and late, extra and a tampered head were each refused. Where "
-        "proofs ran, each link-window's head checks (NetworkHeadCheck_v2: the head's hiding opening under the "
-        "registered root, its fields, its counts against the profile, and its record digest under the certifier's "
-        "salt against the digest its certificate signs) were proved by C-Flock prove --zk behind the Lean firewall "
-        "and held by Lean verify --zk, the verifier opening only each unit's public row and its verdict row."),
+        "proofs ran, the head checks (NetworkHeadCheck_v2: the head's hiding opening under the registered root, its "
+        "fields, its counts against the profile, and its record digest under the certifier's salt against the digest "
+        "its certificate signs) of every honest link-window at both ends, and the egress head checks of the tampered "
+        "run and, when its plan has the honest run's windows, the extra run, were proved by C-Flock prove --zk behind "
+        "the Lean firewall and held by Lean verify --zk, the verifier opening only each unit's public row and its "
+        "verdict row. Late's head checks are not proved: N2 alone refuses it."),
     "not_covered": [
         "N3 (content): the frames inside the counts, their bytes and their order, are not checked. N3 is a design and "
         "the simulator's behaviour, not a proof-service unit, so nothing here holds the egress grid to the Program's.",
@@ -82,7 +89,11 @@ CLAIM = {
         "has no prover here: a served run gets N2's verdict of record and no proof.",
         "The rehearsal is a rehearsal: the client's link is loopback, its check plays the firewall and the challenger "
         "in one process, and it publishes the records, certificates and certifier's salts (witness) so that its check "
-        "can be replayed (certifier_serve.py's docstring).",
+        "can be replayed (certifier_serve.py's docstring). Off the gate the certifier is a process on the host that "
+        "ran the rehearsal, which against an endpoint on its own loopback is the prover's node, not an auditor host "
+        "(the report's 'where' says which). n2_zk runs the prover, the firewall and the verifier, whose live coins "
+        "the proofs take, on one node. The model is the one the plan names: whether it was cut or full, and the "
+        "response length, are the run's (the report's 'tokens').",
     ],
     "zero_knowledge_gaps": [
         "N2's unit isn't proved as the verifier of record (README, 'Not yet zero-knowledge'): the verdict of record is "
@@ -160,6 +171,19 @@ def collect(sources: list[Path], work: Path) -> dict[str, dict]:
     return found
 
 
+def where(runs: dict[str, dict]) -> dict:
+    """Where the honest run's certifier ran: on the gate's host (the auditor's machine, through its tunnel to the
+    endpoint), or off the gate on the host that ran the rehearsal, which against a loopback endpoint is the endpoint's."""
+    upstream = (_read(runs[HONEST]["dir"] / "deployment.json") or {}).get("upstream")
+    if runs[HONEST]["gate"] is not None:
+        return {"upstream": upstream, "where": "gate: the certifier on the gate's host, the auditor's, tunnelled to the "
+                                               "endpoint"}
+    host = urllib.parse.urlsplit(upstream or "").hostname or ""
+    local = host == "localhost" or host.startswith("127.") or host == "::1"
+    return {"upstream": upstream, "where": "off the gate: the certifier on the host that ran the rehearsal" +
+            (", the endpoint's own (loopback), so the prover's node, not an auditor host" if local else "")}
+
+
 def rehearse(args, rest: list[str], out: Path) -> Path:
     """`certifier_serve.py rehearse` into ``out``, honest, late and extra unless ``rest`` names its strategies."""
     me = [sys.executable, str(ROOT / "benchmarks" / "network_traces" / "certifier_serve.py"), "rehearse", "--out",
@@ -228,6 +252,36 @@ def prove(runs: dict[str, dict], args, work: Path) -> dict:
         why = None
     summary = _read(out / "summary.json") or {}
     return {"rc": rc, "why": why, "dir": out, "summary": summary, "extra_proved": extra is not None}
+
+
+def adopt(d: Path, runs: dict[str, dict]) -> dict:
+    """`n2_zk.prove`'s output from a run of its own (its ``--out``, or `n2_zk.sh`'s ``$OUT/n2zk``), as `prove` returns
+    it, so that what N2-ZK's run proved isn't proved again. Refused unless every proved member is of these runs: the
+    certificate digest each of its units' public row carries (``signed``, in the verifier's ``n2.json``) is the one
+    that run's certified record of that end and link-window carries (the tampered head keeps the honest certificate)."""
+    summary = _read(d / "summary.json") or {}
+    members = summary.get("members") or {}
+    if not members:
+        raise SystemExit(f"{d}: no n2_zk members (n2_zk.prove's --out, or n2_zk.sh's $OUT/n2zk)")
+    for k, m in members.items():
+        if not m.get("units"):
+            continue
+        name, end = k.rsplit("-", 1)
+        run = runs.get(HONEST if name == TAMPERED else name)
+        sent = _read(d / k / "verifier" / "n2.json")
+        if run is None or sent is None:
+            raise SystemExit(f"{d}: {k} was proved, but " + (f"--from gives no {name} run" if run is None
+                                                              else f"{k}/verifier/n2.json isn't there"))
+        certified, _ = n2_zk.cs.read_certified(run["dir"] / "certified.jsonl")
+        direction = Direction.EGRESS if end == "egress" else Direction.INGRESS
+        mine = [certified[(direction, x["window"])].certificate.digest.hex() if (direction, x["window"]) in certified
+                else None for x in sent]
+        if [x["signed"] for x in sent] != mine:
+            raise SystemExit(f"{d}: {k}'s units carry certificates other than {run['dir']}'s: proofs of another run")
+    ok = summary.get("ok")
+    why = None if ok else "n2_zk's run didn't finish (its summary has no ok)" if ok is None else "n2_zk's summary: not ok"
+    return {"rc": 0 if ok else 1, "why": why, "dir": d, "summary": summary, "adopted": str(d),
+            "extra_proved": bool((members.get("extra-egress") or {}).get("units"))}
 
 
 def keep(src: Path, dest: Path) -> None:
@@ -304,8 +358,8 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict)
           and len(negatives) == len(NEGATIVES) and all(n["refused"] for n in negatives.values()))
     return {"format": FORMAT, **meta, "claim": CLAIM, "ok": ok, "runs": out_runs, "link_windows": rows,
             "negatives": negatives,
-            "proofs": {"ran": bool(proofs.get("ran")), "why": proofs.get("why"), "rc": proofs.get("rc"),
-                       "extra_proved": proofs.get("extra_proved"), "n2_zk_ok": summary.get("ok"),
+            "proofs": {"ran": bool(proofs.get("ran")), "adopted": proofs.get("adopted"), "why": proofs.get("why"),
+                       "rc": proofs.get("rc"), "extra_proved": proofs.get("extra_proved"), "n2_zk_ok": summary.get("ok"),
                        "stagers": summary.get("stagers"), "driver_peak_gb": proofs.get("driver_peak_gb"),
                        "cost_per_link_window": cost(honest_rows)}}
 
@@ -354,7 +408,9 @@ def markdown(r: dict) -> str:
     """The report as Markdown: the verdicts, one row per link-window, the negatives and the claim."""
     p = r.get("proofs") or {}
     lines = [f"# Network accounting end to end: {'OK' if r['ok'] else 'NOT OK'}", "",
-             f"Source {', '.join(r['from'])}; model {_cell(r.get('model'))}; N2's profile {_cell(r.get('profile'))}; "
+             f"Source {', '.join(r['from'])}; model {_cell(r.get('model'))} (as the plan names it), "
+             f"{_cell(r.get('tokens'))} tokens a response, {_cell(r.get('requests'))} requests; endpoint "
+             f"{_cell(r.get('upstream'))}, {_cell(r.get('where'))}; N2's profile {_cell(r.get('profile'))}; "
              f"{_cell(r.get('windows'))} link-windows planned; commit {_cell(r.get('commit'))}; "
              f"proofs {'run' if p.get('ran') else 'not run'}.", "",
              "## Runs", "",
@@ -370,8 +426,10 @@ def markdown(r: dict) -> str:
               "N2: the verdict of record (host). Proof: each end's head check proved --zk and held by Lean, accept or "
               "refuse as its opened verdict row says. Failed parts: the head check's parts that fail, evaluated in the "
               "clear on the rehearsal's published witness (a diagnostic, not the verdict). Prove and verify seconds and "
-              "proof bytes: the member session's divided by its units, summed over the proved ends; peak: the largest "
-              "process's RSS (the session proves every link-window of an end at once).",
+              "proof bytes: the member session's divided by its units, summed over the proved ends (a session proves "
+              "every link-window of an end at once); peak: the largest process the driver had run by the end of the "
+              "run's last session (RUSAGE_CHILDREN only grows, so the tampered and extra rows' include the honest "
+              "sessions').",
               "", "| run | window | N2 | proof egress | proof ingress | head checks | failed parts | prove s | verify s "
               "| proof bytes | peak GB |", "|---|---|---|---|---|---|---|---|---|---|---|"]
     for x in r["link_windows"]:
@@ -387,9 +445,13 @@ def markdown(r: dict) -> str:
     c = p.get("cost_per_link_window")
     if c:
         lines += ["", "## Cost per link-window (honest, both ends)", "",
-                  f"{c['prove_s']} s proving, {c['verify_s']} s Lean verify, {c['proof_bytes']} proof bytes, "
-                  f"peak {c['peak_gb']} GB (largest process); the driver's own peak (lowering) "
-                  f"{_cell(p.get('driver_peak_gb'))} GB; {c['link_windows']} link-windows."]
+                  f"{c['prove_s']} s proving, {c['verify_s']} s Lean verify, {c['proof_bytes']} proof bytes "
+                  f"(each session's divided by its {c['link_windows']} link-windows); peak {c['peak_gb']} GB (the largest "
+                  f"process by the end of the honest sessions); the driver's own peak (lowering) "
+                  f"{_cell(p.get('driver_peak_gb'))} GB."]
+    if p.get("adopted"):
+        lines += ["", f"Proofs: adopted from {p['adopted']}, n2_zk's output of its own run, each proved unit's "
+                      "certificate digest matched to these runs' certified records."]
     if p.get("why") or not p.get("ran"):
         lines += ["", f"Proofs: {p.get('why') or 'not run'}"]
     lines += ["", "## Claim", "", r["claim"]["statement"], "", "Not covered:", ""]
@@ -425,6 +487,9 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
         elif profile != "planned":
             proofs = {"ran": False, "why": f"not run: the {profile} profile's count check is NetworkServedCounts_v1, "
                                            "which n2_zk doesn't prove"}
+        elif args.proofs:
+            proofs = adopt(Path(args.proofs), runs) | {"ran": True}
+            log(f"proofs: adopted from {args.proofs}{': ' + proofs['why'] if proofs['why'] else ''}")
         else:
             proofs = prove(runs, args, work) | {"ran": True}
             proofs["driver_peak_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2 ** 20, 1)
@@ -440,7 +505,9 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
                 n2[name] = host(n2_zk.link_windows(r["dir"], clock=clock))
         if TAMPERED not in n2:
             n2[TAMPERED] = host(n2_zk.link_windows(runs[HONEST]["dir"], edit=n2_zk.one_count, clock=clock))
+        served = plan.get("served") or {}
         meta = {"from": [str(s) for s in sources], "commit": _commit(), "model": plan.get("live_model"),
+                "tokens": served.get("tokens"), "requests": served.get("requests"), **where(runs),
                 "profile": profile, "windows": plan.get("windows"), "served": plan.get("served")}
         r = report(runs, n2, proofs, meta)
         (out / "report.json").write_text(json.dumps(r, indent=1, default=str) + "\n")
@@ -464,14 +531,17 @@ def main(argv=None) -> int:
     ap.add_argument("--bin", help="C-Flock's flock-circuit (run.sh builds it)")
     ap.add_argument("--lean", help="the Lean flock-verify (run.sh builds it)")
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
-    ap.add_argument("--no-prove", action="store_true", help="N2's verdicts and the head checks' references only")
+    how = ap.add_mutually_exclusive_group()
+    how.add_argument("--no-prove", action="store_true", help="N2's verdicts and the head checks' references only")
+    how.add_argument("--proofs", metavar="DIR", help="adopt n2_zk.prove's output of these runs (n2_zk.sh's $OUT/n2zk) "
+                                                     "instead of proving")
     args, rest = ap.parse_known_args(argv)
     if rest and args.sources:
         ap.error(f"unrecognized arguments: {' '.join(rest)}")
     if not args.out:
         ap.error("--out, or $OUT")
-    if not args.no_prove and not (args.bin and args.lean):
-        ap.error("proving needs --bin and --lean (run.sh builds them), or --no-prove")
+    if not (args.no_prove or args.proofs) and not (args.bin and args.lean):
+        ap.error("proving needs --bin and --lean (run.sh builds them), --proofs DIR, or --no-prove")
     r = run(args, rest)
     return 0 if r["ok"] else 1
 
