@@ -132,6 +132,67 @@ def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path
     assert env["VERITY_TEST_CACHE"].endswith("/.cache/verity/tests-slot-a") and SLOT.SLOT_MEM_ENV not in env
 
 
+def test_a_scope_slot_runs_its_check_in_a_scope_of_its_own_and_others_run_it_as_it_is(tmp_path, monkeypatch):
+    """23 Oct: train-slot sizing rested on summed RSS (shared pages counted over and over), since a check shared its session
+    scope with other runs; `scope=1` gives it a cgroup of its own, whose memory.peak spans.py records."""
+    assert SLOT.parse("b 0 mem=300 scope=1")[0]["scope"] is True and SLOT.parse("b 0 mem=300")[0]["scope"] is False
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261023-000000-abcd")
+    monkeypatch.setenv(SLOT.SCOPE_ENV, "check-stale")
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(f=f, argv=argv, unit=env.get(SLOT.SCOPE_ENV))
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    monkeypatch.setattr(SLOT, "scope_refusal", lambda: None)
+    (tmp_path / "slots").write_text("b 0 scope=1\n")
+    with pytest.raises(Exec):
+        SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
+    unit = "check-b-r20261023-000000-abcd"
+    assert ran["f"] == "systemd-run" and ran["unit"] == unit
+    assert ran["argv"] == ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "--", "uv", "run", "check.py"]
+    (tmp_path / "slots").write_text("c 0\n")  # b's lock is still held: the faked exec kept it
+    with pytest.raises(Exec):
+        SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
+    assert ran["argv"] == ["uv", "run", "check.py"] and ran["unit"] is None, "no scope=1: CMD as it is, and no stale unit name"
+
+
+def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_path, monkeypatch, capsys):
+    """Fail open (ci's review of #3336): a run with no user manager or bus would otherwise fail every train check the slot
+    takes, which drive reads as the train failing."""
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(argv=argv, unit=env.get(SLOT.SCOPE_ENV))
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    real = SLOT.scope_refusal
+    monkeypatch.setattr(SLOT, "scope_refusal", lambda: "exit 1: Failed to connect to bus: No medium found")
+    (tmp_path / "slots").write_text("b 0 scope=1\n")
+    with pytest.raises(Exec):
+        SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
+    assert ran == {"argv": ["uv", "run", "check.py"], "unit": None}
+    assert "scope=1 but systemd-run --user doesn't run here (exit 1: Failed to connect to bus" in capsys.readouterr().err
+
+    class R:
+        def __init__(self, rc, err=""):
+            self.returncode, self.stderr = rc, err
+
+    assert real(lambda *a, **k: R(0)) is None
+    assert real(lambda *a, **k: R(1, "Failed to connect to bus\n")) == "exit 1: Failed to connect to bus"
+
+    def hang(*a, **k):
+        raise SLOT.subprocess.TimeoutExpired(a[0], 10)
+
+    assert real(hang).startswith("TimeoutExpired")
+
+
 def test_a_slot_added_while_a_check_waits_is_one_it_takes(tmp_path, monkeypatch):
     """Node 1's slot d (2 Oct 06:58Z) sat free behind the head of the line, a check that had read the slots file before d was in it."""
     slots = tmp_path / "slots"

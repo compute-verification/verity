@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "NetworkServedCounts_v1{T=12,FOUT=3,FIN=2,R=2,RIN=2,OWN=1}": {
+   "and": 4932
+  },
+  "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=0}": {
+   "and": 3476
+  }
+ }
+}

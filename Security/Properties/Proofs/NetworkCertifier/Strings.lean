@@ -3,8 +3,9 @@ import Properties.NetworkCertifier
 /-!
 # The strings the run hashes, as predicates
 
-What a record head, a frame tree and the run hash, as the predicates the injectivity lemmas take: each is a string of
-the list the claims search (`headStrings`, `framesStrings`, `treeStrings`, `checkStrings`; `Extract` shows it).
+What a record head, a signed digest, a frame tree and the run hash, as the predicates the injectivity lemmas take: each
+is a string of the list the claims search (`headStrings`, `saltedStrings`, `framesStrings`, `treeStrings`,
+`checkStrings`; `Extract` shows it).
 -/
 
 open NetworkCheck hiding Params
@@ -28,10 +29,15 @@ def FramesString (g : Grid) (frames : Array ByteArray) (x : ByteArray) : Prop :=
 def TreeString (g : Grid) (grid : Array (Array (Option ByteArray))) (x : ByteArray) : Prop :=
   ∃ frames, realFrames grid g = .ok frames ∧ FramesString g frames x
 
-/-- The strings the check hashes under egress parameters digest `eg`: each record's head and certificate message, and
-the head and frame tree it recomputes of each egress link-window. -/
+/-- What SHA-512 hashes for the digest a certificate signs over head `h` under `salt`: `certificate_digest`'s input
+of the head's digest. -/
+def SaltedString (salt : ByteArray) (h : RecordHead) (x : ByteArray) : Prop :=
+  ∃ dg, h.digest = .ok dg ∧ x = certificateInput salt dg
+
+/-- The strings the check hashes under egress parameters digest `eg`: each record's head, its digest under the
+record's salt and its certificate message, and the head and frame tree it recomputes of each egress link-window. -/
 def CheckString (p : Params) (c : Commitment) (e : Evidence) (eg : ByteArray) (x : ByteArray) : Prop :=
-  (∃ r ∈ c.records.toList, HeadString r.head x ∨
+  (∃ r ∈ c.records.toList, HeadString r.head x ∨ SaltedString r.salt r.head x ∨
     messageInput r.certificate.keyId p.session r.certificate.link r.certificate.direction r.certificate.window
       r.certificate.digest = .ok x) ∨
   ∃ l link, (l, link) ∈ p.egress.toList.zip e.links.toList ∧ ∃ w < p.windows,

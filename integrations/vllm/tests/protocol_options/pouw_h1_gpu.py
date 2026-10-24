@@ -54,6 +54,10 @@ weights' ``b/<K>`` are the period's (`pouw_h1_served.Weights`, VLLM-72): the gat
 answers the auditor's registration of M under the period's circuit C and its salt key (`model_key_of`), and the served
 model's rows are registered under that key before the salt, the window refused unless they fold to the registration's
 weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
+``--baseline-h1`` (fill, with ``--served``) serves an H1 window without `Served` first, in the solo window's place, so
+one engine measures plain, H1 and H1 with its registered tables; each window records its host RSS, and a served one
+its registration's seconds a step (``registered_s``, VLLM-76). The period's declared Program and its digest are
+declared once before any window (`period_program`), as the period's.
 
 ``--commit`` (fill, ``--served``, in-process coins) serves the 64's window again with the Commit in the engine
 (`acquire.h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
@@ -77,6 +81,7 @@ from __future__ import annotations
 import argparse
 import gc
 import gzip
+import resource
 import hashlib
 import json
 import os
@@ -100,6 +105,43 @@ PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the 
            "The three primary colors are", "Water boils at a temperature of", "Once upon a time, in a small village,",
            "The speed of light is", "In 1492, Columbus", "The largest planet in the solar system is", "To make a cup of tea,",
            "The chemical symbol for gold is", "A haiku about autumn:", "The square root of 144 is", "Photosynthesis is the process"]
+
+
+PERIOD_DIGEST = """
+import json, resource, sys, time
+from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity_vllm.protocol_options import pouw_h1_served as SV
+shapes, modules, rows, steps = json.loads(sys.argv[1])
+t = time.monotonic()
+digest = P.program_digest(SV.declared([tuple(s) for s in shapes], {int(w): n for w, n in modules.items()}, rows, steps))
+print(json.dumps({"digest": digest, "s": round(time.monotonic() - t, 1),
+                  "peak_gib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}))
+"""
+
+
+def period_program(model: Any, rows: int, steps: int) -> tuple[Any, str, dict[str, Any]]:
+    """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run),
+    its digest (the period's ``--circuit``) and what declaring them cost, once before any window, as a period declares
+    them. The digest is taken in a child process, since at FILL it alone takes minutes and tens of GB, which no window
+    pays, so this process's RSS is the windows' own."""
+    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocol_options import pouw_h1_hooks as PHK
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+
+    layers = PHK.layers(model, pouw.linear_types())
+    shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
+    modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
+    child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps])],
+                             stdout=subprocess.PIPE, text=True)
+    t = time.monotonic()
+    program = SV.declared(shapes, modules, rows, steps)
+    declare_s = round(time.monotonic() - t, 1)
+    out, _ = child.communicate()
+    if child.returncode:
+        raise RuntimeError(f"the period's Program digest exited {child.returncode}")
+    got = json.loads(out.strip().splitlines()[-1])
+    return program, got["digest"], {"shapes": shapes, "modules": modules, "declare_s": declare_s,
+                                    "digest_s": got["s"], "digest_peak_gib": got["peak_gib"]}
 
 
 def gate_argv(argv: list[str], args: Any) -> list[str]:
@@ -428,6 +470,10 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     except ValueError as e:
         doc["serve_h1"] = {"prompt_lens": list(lens), "u": None, "why": str(e)}
     cap, served_steps = decl.max_tokens, decl.max_tokens
+    period = period_program(eng.model, decl.rows, decl.steps) if a.served else None
+    if period is not None:
+        doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {"circuit": period[1]}
+        print(f"[fill] period {json.dumps(doc['period'])} rss_gib={rss_gib()}", flush=True)
     gpu_peak()
     t0 = time.monotonic()
     plain = generate_static(eng.llm, prompts, cap)
@@ -445,6 +491,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                ) -> dict[str, Any]:
         nonlocal layers
         from verity_vllm.engine.hooks import Hooks
+        rss0 = rss_gib()
         layers = layers or PHK.layers(eng.model, pouw.linear_types())
         com = tap = None
         if commit:
@@ -453,17 +500,32 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         # in-process coins open no session, so a local window's key is its own (`Served.key`)
         if commit and a.served and registry is None and shared[0] is None:
             t0 = time.monotonic()
-            shared[0] = local_weights(eng.model, layers, decl.rows, decl.steps)
+            shared[0] = local_weights(eng.model, layers, decl.rows, decl.steps, period)
             print(f"[fill] B registered under a local key in {time.monotonic() - t0:.0f} s", flush=True)
         served = (SV.Served(prover=a.prover_dir, registry=registry, weights=shared[0], tap=tap,
-                            window=None if a.challenger else os.urandom(64))
-                  if a.served and name != "solo" else None)
+                            window=None if a.challenger else os.urandom(64), program=period[0], program_digest=period[1])
+                  if a.served and name not in ("solo", "baseline") else None)
+        registered_s: dict[int, float] = {}
+        if served is not None and not a.handoff:
+            served_commit = served.commit
+
+            def timed(run: Any, call: Any, *rest: Any) -> dict[str, str]:
+                t = time.monotonic()
+                if call.layer == 0:
+                    print(f"[fill] {name} step {call.step} rss_gib={rss_gib()} registered_s(prev)="
+                          f"{round(registered_s.get(call.step - 1, 0.0), 2)} values={len(served.registered)}", flush=True)
+                try:
+                    return served_commit(run, call, *rest)
+                finally:
+                    registered_s[call.step] = registered_s.get(call.step, 0.0) + time.monotonic() - t
+            served.commit = timed
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
         t0 = time.monotonic()
         comp = PO.install(eng.model, ctx)
         out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1), "host": host_memory()}
+        print(f"[fill] {name} installed install_s={out['install_s']} rss_gib={rss_gib()}", flush=True)
         if served is not None and served.weights is not None:
             shared[0] = served.weights
         lie = Hooks(f"roots1-{edit}")
@@ -472,6 +534,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             for m in layers:
                 lie.wrap(m.quant_method, "observe", lambda orig: edited(orig, ed))
         h1 = pouw.h1_run(entry_name)
+        if served is not None:
+            out["period_is_runs"] = list(h1.shapes_) == period[2]["shapes"] and dict(h1.modules) == period[2]["modules"]
         bad: list[str] = []
         stamps: dict[int, float] = {}
         serving = [True]
@@ -495,6 +559,11 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             serving[0] = False
             out["gpu"] = gpu_peak()
             out.update(served_measures(got, want, cap, served_steps, t0, end, stamps))
+            if served is not None and not a.handoff:
+                out["registered_s"] = [round(registered_s.get(s, 0.0), 3) for s in range(decl.steps)]
+                del served.commit
+            print(f"[fill] {name} served step_s={out['step_s']} registered_s={out.get('registered_s')} "
+                  f"rss_gib={rss_gib()}", flush=True)
             if com is not None:
                 rc = com.finalize()
                 out["committer"] = {"run_root": rc.run_root.hex(), "name": com.name, "finalize_s": round(rc.t_finalize_s, 3),
@@ -521,14 +590,18 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         if a.handoff:
             out["hook_bad"] = bad[:20]
             return out
-        out = released(name, h1, out, served, tdir, bool(a.challenger), register=not a.commit)
+        out = released(name, h1, out, served, tdir, bool(a.challenger), register=not (a.commit or a.skip_register))
         if tap is not None:
             out["core"] = core_tie({"commitment": dict(h1.commits), "calls": h1.manifest()}, h1.served.program, tdir)
         out["host"] = {"install": out["host"], "end": host_memory()}
         print(f"[fill] {name} core {json.dumps(out.get('core'), default=str)[:2000]} host {json.dumps(out['host'])}",
               flush=True)
+        out["rss_gib"] = {"start": rss0, "end": rss_gib(),
+                          "peak": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
         return out
 
+    if a.baseline_h1:
+        doc["h1_baseline"] = window("baseline", plain, outdir / "baseline")
     if a.commit:
         doc["h1_commit"] = window("commit", plain, outdir / "commit", commit=True)
         (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
@@ -560,12 +633,22 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         print(f"[fill] commit {json.dumps(doc['commit'], default=str)[:3000]}", flush=True)
     elif a.challenger:
         doc["h1_solo"] = {"skipped": "the challenger serves one session, the 64's window"}
+    elif a.baseline_h1:
+        doc["h1_solo"] = {"skipped": "--baseline-h1 serves the H1 window without Served in its place"}
     else:
         try:
             doc["h1_solo"] = window("solo", plain_solo, outdir / "solo")
         except Exception as e:  # noqa: BLE001
             doc["h1_solo"] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:2000]}
     return fill_record(doc, outdir)
+
+
+def rss_gib() -> float:
+    """This process's resident set now, GiB."""
+    for line in Path("/proc/self/status").read_text().splitlines():
+        if line.startswith("VmRSS:"):
+            return round(int(line.split()[1]) / 2**20, 2)
+    return -1.0
 
 
 def served_measures(got: list[dict[str, Any]], want: list[dict[str, Any]], cap: int, served_steps: int, t0: float, end: float,
@@ -612,7 +695,7 @@ def closed_measures(h1: Any, out: dict[str, Any], want: int, weight_of: Any, bad
 def released(name: str, h1: Any, out: dict[str, Any], served: Any, tdir: Path, challenger: bool,
              register: bool = True) -> dict[str, Any]:
     """A fill window's commitment and how its session closed, once released, and its served trees' check (with
-    ``register``, each call's ``--registered`` file too)."""
+    ``register``, the first and last calls' ``--registered`` files too)."""
     out["commitment"] = dict(h1.commits)
     out["coin_source"], out["challenger"] = out["commitment"].get("coin_source"), h1.details.get("challenger")
     if challenger:
@@ -711,14 +794,16 @@ def declared_of(a: argparse.Namespace) -> Any:
     return PH.Static((1,) * slots, cap, rows, steps)
 
 
-def local_weights(model: Any, layers: list[Any], rows: int, steps: int) -> Any:
+def local_weights(model: Any, layers: list[Any], rows: int, steps: int, period: Any = None) -> Any:
     """The served model's ``b/<K>`` registered once under a fresh local key and the Program install declares
-    (`pouw._install_h1`'s shapes and names), for a window with no auditor's registration (no ``--model``)."""
+    (`pouw._install_h1`'s shapes and names; ``period``'s, from `period_program`, when given), for a window with no
+    auditor's registration (no ``--model``)."""
     from verity_vllm.protocol_options import pouw
     from verity_vllm.protocol_options import pouw_h1_served as SV
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
     modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
-    circuit = SV.Served().declare(shapes, modules, rows, steps)
+    given = {} if period is None else {"program": period[0], "program_digest": period[1]}
+    circuit = SV.Served(**given).declare(shapes, modules, rows, steps)
     return SV.register_weights(circuit, shapes, SV.weights_of(layers), os.urandom(32))
 
 
@@ -851,21 +936,29 @@ def layout_of(linears: Any, calls: Any, m: int, tile: Any) -> dict[str, Any]:
 
 
 def served_check(h1: Any, served: Any, tdir: Path, register: bool = True) -> dict[str, Any]:
-    """The window's registered tables (`pouw_h1_served`): each committed value's entry, what was refused, and with
-    ``register`` the outcome of `pouw_h1_served.register`, each call's ``--registered`` file written into ``tdir``."""
+    """The window's registered tables (`pouw_h1_served`): each committed value's entry, what was refused, and the outcome of
+    `pouw_h1_served.register`, the first and last calls' ``--registered`` files written into ``tdir``: a file holds one
+    entry a unit of the window for each of its ports (`h1window.table_reads_file`), so at FILL's 1.5M units each call's is
+    hundreds of MB, and the window's 2304 about a TB. Without ``register`` (``--commit``'s windows, ``--skip-register``)
+    only the entries: at FILL `register`'s template partition (`partition.evaluate`) encodes the window Program again,
+    past 197 GB and 17 min."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
-    doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20],
+    held = sum(len(r.bcs) * 128 + 64 * sum(map(len, r.levels)) for r in served.registered.values())
+    doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20], "held_mib": round(held / 2**20, 1),
+                           "rows": sum(r.leaves for r in served.registered.values()),
                            "committed": bool(served.registered) and not served.refused,
                            "in_commitment": h1.commits.get("served") == {"entries": served.entries(),
                                                                          "refused": list(served.refused)},
                            "layout": layout_of(served.linears, served.calls, served.m, served.tile)}
+    print(f"[fill] served committed={doc['committed']} values={len(doc['entries'])} rows={doc['rows']} "
+          f"held_mib={doc['held_mib']} rss_gib={rss_gib()}", flush=True)
+    calls = sorted({0, len(served.calls) - 1}) if served.calls else []
     if not register:
-        doc["register"] = {"skipped": "--commit's window registers no files"}
-        print(f"[fill] served committed={doc['committed']} values={len(doc['entries'])}", flush=True)
+        doc["register"] = {"skipped": "--commit or --skip-register: no --registered files"}
         return doc
     try:
-        reg = SV.register(h1, directory=tdir)
-        doc["register"] = {"registered": len(reg.registered), "files": len(reg.files), "first": SV.file_name(0)}
+        reg = SV.register(h1, calls=calls, directory=tdir)
+        doc["register"] = {"registered": len(reg.registered), "files": len(reg.files), "calls": calls}
     except ValueError as e:
         doc["register"] = {"refused": str(e)[:2000]}
     print(f"[fill] served committed={doc['committed']} values={len(doc['entries'])} register={json.dumps(doc['register'])[:600]}",
@@ -1035,6 +1128,10 @@ def main(argv: list[str] | None = None) -> int:
                                                    "origin/main`, a commit a line; none refuses every session")
     ap.add_argument("--served", action="store_true", help="fill: commit each call's tables and the weights' B as its "
                                                           "Program's registered values (pouw_h1_served.Served) and register them")
+    ap.add_argument("--skip-register", action="store_true", help="fill with --served: record the window's entries but "
+                    "not pouw_h1_served.register's --registered files (at FILL its partition takes hundreds of GB)")
+    ap.add_argument("--baseline-h1", action="store_true", help="fill with --served: serve an H1 window without Served "
+                                                               "first, in the solo window's place (the step-time baseline)")
     ap.add_argument("--model", metavar="ROLE", help="fill with --served and --gate: the served model's int8 checkpoint role "
                                                     "(LLAMA31_8B_INT8), whose registration under --circuit the gate's "
                                                     "model-key answers; each K's b/<K> is registered under its key before "

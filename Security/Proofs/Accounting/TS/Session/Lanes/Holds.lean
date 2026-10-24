@@ -11,9 +11,6 @@ field's bits hold the encoding of the leaf's word there, and the words are in ra
 * `LaneHolds`: lane `l`'s ports' rows hold its A rows (`laneA`) and B rows (`laneB`), the leaf's record, the public
   inputs' admit bits, salt, position and roots and its index `l`, each field at its place, and `ok = 1`; `CombHolds`:
   the combine's hold the receipt and `ok = 1`;
-* `LaneDataHolds`, `CombDataHolds`: `LaneHolds`' and `CombHolds`' fields at the registered data ports (the A and B
-  rows and the record; the receipt), the part `Accounting.Assumptions.TS.LeafReads` asks of the opened rows; the known
-  fields are flock-verify's known-read check's (`Lanes.KnownRead`, `LaneKnownHolds.laneHolds`);
 * `decLane_eq`, `decComb_eq`: then the decodes are `laneView` and the combine's view, at the partials rows they read
   (lane `l`'s and the combine's `p<l>` are one row, `Lanes.Partials`).
 -/
@@ -58,23 +55,6 @@ structure LaneHolds (K : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) (
 structure CombHolds (nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) (receipt : Fin nw → BitVec 32) : Prop where
   receipt : ∀ w : Fin nw, Holds (rd "receipt") (fieldBit (combinePorts T) "receipt" + 32 * w.val) 32 (receipt w).toNat
   ok : rd "o0" 0 = some true
-
-/-- **Lane `l`'s data ports' rows hold its words**: `LaneHolds`' fields at its registered ports, its A rows' and B
-rows' codes and scales, and the leaf's z and y cell by cell. -/
-structure LaneDataHolds (K : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) (L : Leaf K) (l : Fin 32) : Prop where
-  a : ∀ (s : Fin 4) (k : Fin K), Holds (rd s!"a{s.val}") (fieldBit (lanePorts T 0) s!"a[{s.val}].codes" + 8 * k.val) 8
-    (encS 8 ((laneA L l s).codes k))
-  aS : ∀ s : Fin 4, Holds (rd s!"a{s.val}") (fieldBit (lanePorts T 0) s!"a[{s.val}].scale") 32 (laneA L l s).scale.toNat
-  b : ∀ (t : Fin 8) (k : Fin K), Holds (rd s!"b{t.val}") (fieldBit (lanePorts T 0) s!"b[{t.val}].codes" + 8 * k.val) 8
-    (encS 8 ((laneB L l t).codes k))
-  bS : ∀ t : Fin 8, Holds (rd s!"b{t.val}") (fieldBit (lanePorts T 0) s!"b[{t.val}].scale") 32 (laneB L l t).scale.toNat
-  z : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.z" + 32 * (i.val * T.c + j.val)) 32 (encS 32 (L.z i j))
-  y : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.y" + 16 * (i.val * T.c + j.val)) 16 (L.y i j).toNat
-
-/-- **The combine's data ports' rows hold its words**: the receipt. -/
-structure CombDataHolds (nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) (receipt : Fin nw → BitVec 32) :
-    Prop where
-  receipt : ∀ w : Fin nw, Holds (rd "receipt") (fieldBit (combinePorts T) "receipt" + 32 * w.val) 32 (receipt w).toNat
 
 /-- An in-range row read at its fields decodes to itself. -/
 theorem row_eq {K : ℕ} {r : Row K} (hr : RowInRange r) {rd : ℕ → Option Bool} {lc ls : ℕ}
