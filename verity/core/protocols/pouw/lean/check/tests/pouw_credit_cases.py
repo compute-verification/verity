@@ -1091,12 +1091,13 @@ def _live_ms(d: dict, steps: int) -> list[int]:
     return [m if type(m) is int and 0 <= m < 1 << 32 else 0 for m in ms]
 
 
-def live_proof(rng: random.Random, d: dict, desc: str, s: int, m: int) -> dict:
+def live_proof(rng: random.Random, d: dict, desc: str, s: int, m: int, prefix: str | None = None) -> dict:
     """Round s's accepted live@<s> proof outcome, as the verifier of record gives it on the ``--registered`` file
-    `live_reads.reads_file` builds for the window `d` at served rows `m`: each port at its value and root (a random root
-    for a table the window doesn't register)."""
+    `live_reads.reads_file` builds for the window `d` of PREFIX `prefix` (its descriptor's when None) at served rows
+    `m`: each port at its value and root (a random root for a table the window doesn't register)."""
     steps, t = len(d["rounds"]), d["rows"]
-    prefix, program = Cr._prefix(bytes.fromhex(d["descriptor"])), hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
+    prefix = Cr._prefix(bytes.fromhex(d["descriptor"])) if prefix is None else prefix
+    program = hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
     roots = {e["value"]: e["root"] for e in d["entries"] if isinstance(e, dict) and "value" in e}
     for v in [LR.table(prefix, LR.SLOTS, x) for x in range(steps)] + [LR.table(prefix, LR.REQUESTS)]:
         if v not in roots:
@@ -1106,12 +1107,13 @@ def live_proof(rng: random.Random, d: dict, desc: str, s: int, m: int) -> dict:
             "registered": {port: {"value": x["value"], "root": x["root"]} for port, x in reg["ports"].items()}}
 
 
-def live_evidence(rng: random.Random, d: dict) -> dict:
+def live_evidence(rng: random.Random, d: dict, prefix: str) -> dict:
     """The window `d`'s live evidence (`credit.LIVE_KEYS`): its live Program at its period's T, its S rounds and its
-    circuit's PREFIX, and each round's accepted proof outcome (`live_proof`) at its step's m_s, in any order."""
+    circuit's PREFIX `prefix` (given, since a broken descriptor's names none), and each round's accepted proof outcome
+    (`live_proof`) at its step's m_s, in any order."""
     steps = len(d["rounds"])
-    desc = live_hex(live_program(d["rows"], steps, Cr._prefix(bytes.fromhex(d["descriptor"]))))
-    proofs = [live_proof(rng, d, desc, s, m) for s, m in enumerate(_live_ms(d, steps))]
+    desc = live_hex(live_program(d["rows"], steps, prefix))
+    proofs = [live_proof(rng, d, desc, s, m, prefix) for s, m in enumerate(_live_ms(d, steps))]
     rng.shuffle(proofs)
     return {"descriptor": desc, "proofs": proofs}
 
@@ -1257,7 +1259,7 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     d["layout"], d["k"], d["descriptor"], d["weights"], d["rows"] = lay, _k(rng, lay), desc, weights, t
     d["proofs"] = _window_proofs(rng, d, _served_units(d))
     d["sid"] = sid
-    d["live"] = live_evidence(rng, d)
+    d["live"] = live_evidence(rng, d, prefix)
     return d, s
 
 
