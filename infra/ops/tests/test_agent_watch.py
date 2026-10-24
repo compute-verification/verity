@@ -2336,3 +2336,13 @@ def test_a_worker_learned_from_a_former_coordinators_task_call_inherits_that_coo
         w.sweep(lambda r: None)
     (rec,) = records(tmp_path)
     assert (rec["kind"], rec["agent"], rec["lane"], rec["handle"]) == ("worker_idle", g2, "vllm", "vllm")
+
+
+def test_a_lane_named_after_a_handle_belongs_to_that_handle():
+    """kernels' workers run lanes like `kernels-hashproof`; the watch rang infra for each of their idle workers and runs (24 Oct)."""
+    names = {"kernels", "proofs", "infra", "kernels-x"}
+    assert W.lane_handle("kernels", names) == "kernels"
+    assert W.lane_handle("kernels-hashproof", names) == "kernels"
+    assert W.lane_handle("kernels-x-y", names) == "kernels-x"
+    assert W.lane_handle("kernelsy", names) is None
+    assert W.lane_handle("", names) is None

@@ -347,6 +347,14 @@ def recent_notes(notes: Path | None, t: float) -> Iterator[tuple[Path, float, di
             yield p, heard, front_matter(p)
 
 
+def lane_handle(lane: str, names: set[str]) -> str | None:
+    """The handle a lane belongs to: the lane itself when it is one, else the longest handle it extends with a `-`
+    (`kernels-hashproof` is @kernels'), else None."""
+    if lane in names:
+        return lane
+    return max((h for h in names if h and lane.startswith(h + "-")), key=len, default=None)
+
+
 def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: dict[str, str], t: float) -> dict[str, dict]:
     """agent id -> {"lane", "handle", "heard", "branches"}: each cloud worker (a Task subagent, which `GET /v1/agents` doesn't
     list) named by `workers_d/*.json` (`{agent_id, lane, launched_by, branch}`, which a coordinator writes for the workers it
@@ -367,14 +375,14 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
         d = read_json(p)
         if (m := AGENT_RE.fullmatch(str(d.get("agent_id") or ""))) and m[0] not in coords:
             lane, by = str(d.get("lane") or ""), AGENT_RE.search(str(d.get("launched_by") or ""))
-            handle = (lineage(registry, coords, by[0]) if by else None) or (lane if lane in names else None)
+            handle = (lineage(registry, coords, by[0]) if by else None) or lane_handle(lane, names)
             add(m[0], lane, handle, p.stat().st_mtime, (str(d["branch"]),) if d.get("branch") else (), by[0] if by else None)
     for p, heard, fm in recent_notes(notes, t):
         ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or p.parent.name
         launcher = next((i for i in ids if i in coords), None)
         for agent in ids:
             if agent not in coords:
-                add(agent, lane, lane if lane in names else coords.get(launcher or ""), heard, parent=launcher)
+                add(agent, lane, lane_handle(lane, names) or coords.get(launcher or ""), heard, parent=launcher)
     return out
 
 
