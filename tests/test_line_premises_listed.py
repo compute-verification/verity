@@ -1,8 +1,8 @@
 """RD-24 (note:20261024T2155Z-report-redteam-5): every `Prop` of `Properties.RemoteAudit.Line.Premises` that `LineHeld`
 takes as a hypothesis is a named assumption with its own record under `Security/Properties/lean-audit.json`'s
 `assumptions` (AGENTS.md "Lean"; `check.py`'s `assumption_records` refuses an unlisted premise). It fails while
-`Facts.lean`'s `premisesOf` reads `LineHeld`, a definition outside a `Guarantees` module, with `only`, which keeps only an
-assumptions module's constants, so `check` passes with these premises unlisted."""
+`Facts.lean`'s `premisesOf` reads `LineHeld`, a definition outside a `Guarantees` module, with `only`, which keeps only
+an assumptions module's constants, so `check` passes with these premises unlisted."""
 from __future__ import annotations
 
 import json
@@ -35,6 +35,7 @@ def test_line_premises_are_listed():
         body = statement(line, name)
         taken = sorted(p for p in props if re.search(rf"\b{re.escape(p)}\b", body))
         unlisted = [f"{NAMESPACE}.{p}" for p in taken if f"{NAMESPACE}.{p}" not in listed]
-        assert not unlisted, (f"{name} takes {', '.join(unlisted)} as hypotheses, and the lock's `assumptions` doesn't list "
-                              f"them: make `premisesOf` report a hypothesis headed by a constant of a `shape.premises` "
-                              f"module under `only`, then `check.py --records Security/Properties --update`")
+        assert not unlisted, (f"{name} takes {', '.join(unlisted)} as hypotheses, and the lock's `assumptions` doesn't "
+                              f"list them: make `premisesOf` report a hypothesis headed by a constant of a "
+                              f"`shape.premises` module under `only`, then `check.py --records Security/Properties "
+                              f"--update`")
