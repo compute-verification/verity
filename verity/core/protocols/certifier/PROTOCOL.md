@@ -1590,8 +1590,6 @@ ANDs a unit), the honest unit and ten negatives, the made-up table refused by ``
 r20261024-162328-03c7); before the cache was wired, eleven units of corpus-smallkv's first seven steps, the six passes
 with the served row and with its own among them (run r20261024-153220-c97c).
 
-The served rows held to their Programs' statics, a registered row a block: [protocol/served-statics.md](protocol/served-statics.md).
-
 ## The active certifier (`active`)
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell
@@ -2018,6 +2016,8 @@ and seven lemmas, and three more proved lemmas:
   demonstration slice with real hits; `codeword` is the encoder's, and `size` is pinned;
 - **`test_network_certifier_served_rows.py`:** the runner's rows are the slice's ``srv`` row, REDTEAM phase 10's six
   passes are refused at ``rows`` with the registered row and their own row isn't its leaf, and the record is public only;
+- **`test_network_certifier_served_statics.py`:** the served rows held to their Programs' statics, a registered row a
+  block ([protocol/served-statics.md](protocol/served-statics.md));
 - **`test_network_certifier_cache_step_phase9.py`:** REDTEAM's: `CacheStep_v1` alone leaves the table and tokens free;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
