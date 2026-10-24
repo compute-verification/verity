@@ -1,5 +1,5 @@
 import Definitions.Accounting.Remote.Draw
-import RemoteAudit.Pooled
+import RemoteAudit.Line
 
 /-!
 # The verifier's pooled bound covers the draw's (`RemoteAudit.Pooled`)
@@ -15,6 +15,8 @@ rational root, and W by the fractional knapsack's greedy. The draw's model reads
   allows.
 * `PooledCoversSession`: the same at a session's sizes and draw counts (`Draw.Session.pooled`), the windows given as
   `(U_t, min(s_t, U_t))`.
+* `LineCoversSession`: whenever the memory line gives a line for those windows, the W it reads (`Line.wrong`, every
+  stretch's) is at least the session's pooled bound.
 
 They take no premise. That the windows the line reads are the session's (each window's receipts and its draws, as the
 verifier's record holds them, `audit.Record`) is the record's, outside this statement.
@@ -39,5 +41,15 @@ def PooledCoversSession : Prop :=
     (ω : Accounting.Remote.Draw.Coins n m s X) (δ : ℚ) (b : Pooled.Bound),
     Pooled.pooled (Array.ofFn fun t => ((D.size t ω : ℕ), D.draws t ω)) δ = .ok b →
       D.pooled δ ω ≤ b.wrong
+
+/-- Whenever the memory line (`RemoteAudit.Line.line`) gives a line for a session's windows at outcome `ω` at `δ`, the
+wrong receipts it reads are at least the session's pooled bound at `δ` (`Draw.Session.pooled`). -/
+def LineCoversSession : Prop :=
+  ∀ (n m : ℕ) (s : Fin n → ℕ) (X : Fin n → Type) (D : Accounting.Remote.Draw.Session n m s X)
+    (ω : Accounting.Remote.Draw.Coins n m s X) (δ : ℚ) (gs : Array Line.Group)
+    (per blocks blockBytes chipBytes nodeBytes : ℕ) (rates : Line.Rates) (l : Line.Line),
+    Line.line gs per blocks blockBytes chipBytes nodeBytes (Array.ofFn fun t => ((D.size t ω : ℕ), D.draws t ω)) δ
+      rates = .ok l →
+      D.pooled δ ω ≤ l.wrong
 
 end Properties.RemoteAudit

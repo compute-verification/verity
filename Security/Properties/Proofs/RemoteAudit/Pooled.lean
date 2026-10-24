@@ -346,4 +346,27 @@ theorem pooledCovers : PooledCovers := by
 theorem pooledCoversSession : PooledCoversSession :=
   fun n _ _ _ D ω δ b h => pooledCovers n (fun t => D.size t ω) (fun t => D.draws t ω) δ b h
 
+theorem line_wrong {gs : Array Line.Group} {per blocks bb cb nb : ℕ} {ws : Array (ℕ × ℕ)} {δ : ℚ}
+    {rates : Line.Rates} {l : Line.Line} (h : Line.line gs per blocks bb cb nb ws δ rates = .ok l) :
+    ∃ b, Pooled.pooled ws δ = .ok b ∧ l.wrong = b.wrong := by
+  unfold Line.line at h
+  cases hp : Pooled.pooled ws δ with
+  | error e => simp [hp, bind, Except.bind] at h
+  | ok b =>
+    refine ⟨b, rfl, ?_⟩
+    simp only [hp, bind, Except.bind] at h
+    split at h
+    · cases h
+    · split at h
+      · cases h
+      · split at h
+        · cases h
+        · cases h; rfl
+
+theorem lineCoversSession : LineCoversSession := by
+  intro n _ _ _ D ω δ _ _ _ _ _ _ _ l h
+  obtain ⟨b, hb, hw⟩ := line_wrong h
+  rw [hw]
+  exact pooledCoversSession n _ _ _ D ω δ b hb
+
 end Properties.RemoteAudit

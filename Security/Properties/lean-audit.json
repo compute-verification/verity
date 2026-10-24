@@ -280,7 +280,7 @@
   "Properties.RemoteAudit.Pooled": {
    "imports": ["Definitions.Accounting", "RemoteAudit"],
    "except": [],
-   "why": "the pooled bound the verifier computes (`RemoteAudit.Pooled`) is stated against the draw's model it covers (`Definitions.Accounting.Remote.Draw`), never a proof"
+   "why": "the pooled bound the verifier computes (`RemoteAudit.Pooled`) and the W the memory line reads (`RemoteAudit.Line`) are stated against the draw's model they cover (`Definitions.Accounting.Remote.Draw`), never a proof"
   }
  },
  "reads_exempt": {
@@ -1677,6 +1677,9 @@
   },
   "Properties.RemoteAudit.pooledCoversSession": {
    "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.lineCoversSession": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -2595,6 +2598,10 @@
    },
    "Properties.RemoteAudit.pooledCoversSession": {
     "function": "RemoteAudit.Pooled.pooled",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.lineCoversSession": {
+    "function": "RemoteAudit.Line.line",
     "outcome": "accept"
    }
   },
