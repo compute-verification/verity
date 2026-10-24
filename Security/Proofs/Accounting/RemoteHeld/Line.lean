@@ -176,8 +176,8 @@ theorem delta_nonneg (node : Node) : (0 : ℝ) ≤ (node.delta : ℝ) := NNRat.c
 
 /-- **The memory line of record, link-charged** (`LineHeld`), proved. -/
 theorem lineHeld : LineHeld := by
-  intro n m k κ X _ prf rest D T node rec δs hl hsq hd hS hr hp hcov hk hm hL hR hC hN hW hD
-  have hH := holdsAnd hk (Draw.pooledDraw prf rest D (ofRecord T rec) (delta_nonneg node) hm hL hR hC)
+  intro n m k κ X Cm _ prf rest F com T node rec δs hl hsq hd hS hr hp hcov hk hm hL hR hC hN hW hD
+  have hH := holdsAnd hk (Draw.pooledDraw prf rest F com (ofRecord T rec) (delta_nonneg node) hm hL hR hC)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
   have ha : (ofRecord T rec).accepts ω := hω.1
   have hc := charge_units node
@@ -191,8 +191,8 @@ theorem lineHeld : LineHeld := by
 
 /-- **The memory line of record, time-held, under Identity** (`LineHeldIdentity`), proved. -/
 theorem lineHeldIdentity : LineHeldIdentity := by
-  intro n m k κ X _ prf rest D T node rec δs hI hsq hd hS hr hp hcov hk hm hL hR hC hN hW hD
-  have hH := holdsAnd hk (Draw.pooledDraw prf rest D (ofRecord T rec) (delta_nonneg node) hm hL hR hC)
+  intro n m k κ X Cm _ prf rest F com T node rec δs hI hsq hd hS hr hp hcov hk hm hL hR hC hN hW hD
+  have hH := holdsAnd hk (Draw.pooledDraw prf rest F com (ofRecord T rec) (delta_nonneg node) hm hL hR hC)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
   have ha : (ofRecord T rec).accepts ω := hω.1
   have hc := charge_units node
