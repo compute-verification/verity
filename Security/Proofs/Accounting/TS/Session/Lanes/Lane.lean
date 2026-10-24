@@ -21,8 +21,9 @@ proved here for every input, at a `K` the lane's tile binds at (`32 ∣ K`, `K <
 
 What stays of the field is the first two claims, `LaneComputes`: on every wire assignment the session's evaluation
 agrees with, the decoded `ok` is the Definition's on `laneIn`. `leafChecks_of_computes` gives `LeafChecks` from it and
-`CombineComputes`. Still a parameter: `chain`, the lane's chain words, which are to be `h1zy.lane_partial`'s fold (the
-fx1 chain over the noise from σ_J and the keys from σ_R), and `dqW`'s float roundings.
+`CombineComputes`. Everything here is generic in `dqW` and `chain`; `Accounting.Guarantees.TS.LeafLanesSound` takes
+`dqW` to be the Definition's, `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`). Still a parameter there: `chain`, the lane's
+chain words, which are to be `h1zy.lane_partial`'s fold (the fx1 chain over the noise from σ_J and the keys from σ_R).
 
 `LaneComputes` is in turn split at the lane's pieces: `LaneLowers` says the circuit computes the body on bits, its pieces
 at their lowerings (`Pouw.H1Zy.laneBits`: the s8 multiply's Baugh–Wooley steps and clamp, `PouwZyCell_v2`,
