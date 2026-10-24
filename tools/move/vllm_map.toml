@@ -183,7 +183,9 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
            "tools/verity/check/tests/test_suites.py",
            "tools/verity/check/tests/test_move_check.py",
            "tools/research/src/research/store/moves.json",
-           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py"]
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
+           # a recorded endpoint's registrations: the advice root binds the compiler's name as it was registered
+           "benchmarks/network_e2e/tests/data/**"]
 keep_dotted = ["verity_pouw.ncp_linear"]
 # registered.py's docstring names the kernel as `pouw_cuda/registered_rows.cu`; moved a level deeper, the file-relative
 # rewrite (`../pouw_cuda/...`) is not one move_check reads in prose, so the name stays as written
