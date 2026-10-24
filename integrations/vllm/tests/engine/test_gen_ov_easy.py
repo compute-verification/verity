@@ -206,6 +206,7 @@ def test_workload_file():
 
 # --- the sealed driver resolves the case to the profile module; the engine arg reaches every GPU stage -----------------------
 
+@pytest.mark.slow
 def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
     out = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", "--case", "B7", "--workload", WORKLOAD, "--out", "/r/RUN",
                           "--cards-dir", "/r/cards", "--python-gpu", "/pod/py311", "--python-cpu", "/pod/py312", "--checkpoint-dir", "/ck/snap",

@@ -178,6 +178,7 @@ def test_naming_the_commit_attempt_resolves_the_chain_behind_it(store, monkeypat
     assert row.candidate("commit/commit_verdict.json") is not None
 
 
+@pytest.mark.slow
 def test_row_candidate_is_the_union_of_its_attempts(store, monkeypatch):
     monkeypatch.setenv(resolver.CANDIDATE_ENV, ",".join(IDS.values()))
     row = _row()

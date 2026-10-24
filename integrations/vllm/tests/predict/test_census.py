@@ -129,10 +129,12 @@ def test_glm53_dsa_served_macs_by_precision(served):
     assert _by_precision(dsa) == {"mac:bf16": 9984, "mac:fp8": 1536}
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("wrapper,kw", [("step", {"M": 1, "pos0": 8}), ("request", {"LP": 4, "T": 3})])
 def test_the_census_path_is_the_expansion_on_tiny(wrapper, kw):
     """`TINY`'s step and a request of four prompt rows and three decode steps (105 k and 181 k gates): `from_census` gives the
-    explicit expansion's live gates and bounded reads at every step."""
+    explicit expansion's live gates and bounded reads at every step. About 70 s for the request: only the request has more than
+    one step, so only it shows the census path's live gates and reads across decode steps."""
     P, c = _registered(build_program(_phi(TINY), wrapper, **kw))
     by_census, by_gates = from_census(c), upper_bound(P, census_schedule(c))
     for t in range(by_gates.steps):
@@ -215,8 +217,7 @@ def test_a_cublas_gemm_counts_its_k16_step_parts_as_tc():
 #: and the fused all-reduce + RMSNorm at their descriptors there, and the embedding shard over 16 rows (the served 19360 x 6144
 #: table is a 119M-leaf input)
 GLM53_TP8 = [P.const(32, 1), P.const(32, 0x11F), bind(b1.ResidualAdd, N=6144), bind(b1_tp2.EmbeddingShard, VS=16, H=2, START=16),
-             pytest.param(bind(TA.AllReduceRmsNormMnnvl, WORLD=8, N=6144, SHOT=1, CLUSTER=8, EPS=1e-5, FMA=True),
-                          marks=pytest.mark.slow)]
+             pytest.param(bind(TA.AllReduceRmsNormMnnvl, WORLD=8, N=6144, SHOT=1, CLUSTER=8, EPS=1e-5, FMA=True), marks=pytest.mark.slow)]
 
 
 @pytest.mark.parametrize("fn", GLM53_TP8, ids=descriptor_id)

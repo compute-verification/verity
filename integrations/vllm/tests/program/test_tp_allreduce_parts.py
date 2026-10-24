@@ -43,7 +43,7 @@ def _ev(fn, *args: np.ndarray) -> list[np.ndarray]:
 
 
 @pytest.mark.parametrize("shot,N,cluster,fma", [(1, 256, 1, False), (2, 256, 1, True), (1, 512, 2, True), (2, 512, 2, False),
-                                                (1, 1536, 2, True)])
+                                                pytest.param(1, 1536, 2, True, marks=pytest.mark.slow)])
 def test_the_fused_norm_is_its_parts_composed(shot: int, N: int, cluster: int, fma: bool) -> None:
     rng = np.random.default_rng(N + 10 * shot + cluster)
     parts, res, w = _cases(rng, 3, N)
@@ -68,7 +68,7 @@ def test_the_parts_word_views_and_boolean_versions() -> None:
         assert TR.word_of(bits).id == word.id
 
 
-@pytest.mark.parametrize("which", ["residual", pytest.param("norm", marks=pytest.mark.slow)])
+@pytest.mark.parametrize("which", ["residual", "norm"])
 def test_the_parts_on_bits_compute_their_words(which: str) -> None:
     """The norm's σ version at N = 256 is about 6M gates (a few seconds)."""
     rng = np.random.default_rng(3)
