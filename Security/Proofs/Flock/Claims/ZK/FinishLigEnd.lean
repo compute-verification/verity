@@ -57,7 +57,7 @@ theorem keepT_pure (a : α) : KeepT (pure a : TMW PS α) := by
 theorem endT_run {p : FlockComplete.LP PS α} (hp : EndL p) (s : FlockComplete.LigState) : EndT (p.run s) :=
   fun t l a t' l' h => hp s t l a.1 a.2 t' l' h
 
-theorem endT_sampleCut (coin : ℕ → ℕ → F128) (n : ℕ) : EndT (sampleP (FlockComplete.asksCut coin n)) := by
+theorem endT_sampleCut (coin : ℕ → ℕ → F128) (n : ℕ) : EndT (FlockComplete.sampleP (FlockComplete.asksCut coin n)) := by
   intro t l a t' l' h
   rw [FlockComplete.SimInner.sampleCut_go] at h
   obtain ⟨-, -, rfl, -⟩ := FlockComplete.SimInner.ite_ok h
@@ -128,52 +128,40 @@ theorem keepL_forIn_range {σ : Type} (n : ℕ) (b : σ) {f : ℕ → σ → Flo
 
 end
 
+/-- Walks a Ligerito step to its last squeeze (`EndL`), backtracking where a squeeze is followed by more transcript
+work. -/
+syntax "end_l" : tactic
+/-- Walks a Ligerito step that only updates its own state (`KeepL`). -/
+syntax "keep_l" : tactic
+macro_rules
+  | `(tactic| end_l) => `(tactic| first
+      | exact endL_liftT (endT_sampleCut _ _)
+      | (refine endL_seq (endL_liftT (endT_sampleCut _ _)) fun _ => ?_; keep_l)
+      | (refine endL_bind fun _ => ?_; end_l)
+      | (refine endL_ite ?_ ?_ <;> end_l)
+      | (split <;> end_l))
+macro_rules
+  | `(tactic| keep_l) => `(tactic| first
+      | exact keepL_pure _
+      | exact keepL_modify _
+      | (refine keepL_bind (keepL_modify _) fun _ => ?_; keep_l)
+      | (refine keepL_bind (keepL_forIn_range _ _ fun _ _ => keepL_of_endL ?_) fun _ => ?_; end_l; keep_l)
+      | (split <;> keep_l))
+
 set_option maxHeartbeats 4000000 in
 /-- **Ligerito from a source ends on a squeeze**: at `asksCut`, where `ligeritoCut` returns, it leaves no pending
 bytes. -/
-theorem ligeritoCut_end (coin : ℕ → ℕ → F128) (n : ℕ) (ms : MerkleScheme) (sch : Schedule) (T : F128)
+theorem ligeritoCut_end (coin : ℕ → ℕ → F128) (n : ℕ) (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (cm0 : FlockComplete.Commit) (b : Array F128) (lay : Zk.PadLayout) (src : FlockComplete.RepSrc) :
     EndT (FlockComplete.ligeritoCut (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) ms sch T cm0 b lay
       src) := by
   unfold FlockComplete.ligeritoCut
-  refine endT_bind fun _ => ?_
-  refine endT_bind fun _ => ?_
-  refine endT_bind fun _ => ?_
-  refine endT_bind fun _ => ?_
-  refine endT_seq (endT_run ?_ _) fun _ => keepT_pure _
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_bind fun _ => ?_
-  refine endL_seq (endL_liftT (endT_sampleCut coin n)) fun _ => ?_
-  refine keepL_bind (keepL_modify _) fun _ => ?_
-  refine keepL_bind (keepL_forIn_range _ _ fun i s => keepL_of_endL ?_) fun _ => keepL_pure _
-  refine endL_bind fun _ => ?_
-  refine endL_ite ?_ ?_
-  · refine endL_bind fun _ => ?_
-    refine endL_bind fun _ => ?_
-    refine endL_bind fun _ => ?_
-    refine endL_bind fun _ => ?_
-    refine endL_bind fun _ => ?_
-    refine endL_bind fun _ => ?_
-    refine endL_bind fun _ => ?_
-    exact endL_seq (endL_liftT (endT_sampleCut coin n)) fun _ =>
-      keepL_bind (keepL_modify _) fun _ => keepL_pure _
-  · refine endL_bind fun _ => ?_
-    refine endL_bind fun _ => ?_
-    refine endL_bind fun _ => ?_
-    exact endL_seq (endL_liftT (endT_sampleCut coin n)) fun _ => keepL_pure _
+  try dsimp only
+  refine endT_bind fun _ => endT_bind fun _ => endT_bind fun _ => endT_bind fun _ => ?_
+  refine endT_seq (endT_run ?_ _) fun _ => ?_
+  · end_l
+  · first
+      | exact keepT_pure _
+      | (split; exact keepT_pure _)
 
 end Flock.Firewall.Finish
