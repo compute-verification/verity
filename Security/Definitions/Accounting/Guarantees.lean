@@ -38,6 +38,7 @@ import Definitions.Accounting.Guarantees.RateAuditSketch
 import Definitions.Accounting.Guarantees.Responder
 import Definitions.Accounting.Guarantees.Remote
 import Definitions.Accounting.Guarantees.RemoteHeld
+import Definitions.Accounting.Guarantees.RemoteDraw
 import Definitions.Accounting.Guarantees.Requirement
 import Definitions.Accounting.Guarantees.RequirementPouw
 import Definitions.Accounting.Guarantees.Sketch

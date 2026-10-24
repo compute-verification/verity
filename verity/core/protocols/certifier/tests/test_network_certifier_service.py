@@ -10,9 +10,10 @@ from dataclasses import replace
 
 import pytest
 
-from verity.ml.circuits import codec
+from verity.ml.circuits import boolean as BL, codec
+from verity.ml.circuits.defs import bind
 from verity.ml.circuits.program import Program
-from verity.core.protocols.certifier import head_check as HC
+from verity.core.protocols.certifier import head_check as HC, service as SVC
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)
 from verity.core.protocols.certifier.grid import Certifier, GridParams, Record, occupancy
@@ -25,6 +26,7 @@ from verity.core.protocols.certifier.service import (HEADS, OUTPUTS, PUBLIC, SCH
                                                                       rows)
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 
 from test_network_certifier_audit import FRAMES, P as PARAMS, SYNC_SET, SYNCS, honest_ready, ingress_run
 import signers
@@ -292,12 +294,13 @@ def test_the_unit_is_each_ends_head_check_beside_the_certificates(tmp_path):
     reads the unit's signed digest for its end. A profile changes the unit, and so the spec's Program."""
     lw = replace(Run(tmp_path).lw, occupancy=(None, None))
     declared = replace(lw, occupancy=(honest_occupancy()[0], None))
-    assert lw.unit.id == "NetworkLinkWindow_v3{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
-    assert declared.unit.id == "NetworkLinkWindow_v3{EGRESS=(9,4,1),INGRESS=(9,4,0)}"
+    assert lw.unit.id == "NetworkLinkWindow_v4{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
+    assert declared.unit.id == "NetworkLinkWindow_v4{EGRESS=(9,4,1),INGRESS=(9,4,0)}"
     assert lw.spec.check.program != declared.spec.check.program and lw.spec.check.query != declared.spec.check.query
     defs = codec.encode_program(P.population_program(declared.unit, 1))["definitions"]
-    assert {"NetworkCertificatesCheck_v2", "Gate[NetworkHeadCheck_v2{L=9,T=4,COUNTS=1}]_v1",
-            "Gate[NetworkHeadCheck_v2{L=9,T=4,COUNTS=0}]_v1"} <= set(defs)
+    pins = json.loads(HC.PINS.read_text())["digests"]
+    assert {"NetworkCertificatesCheck_v2"} | {f"Gate[{fid}@{pins[fid]['sha512']}]_v2" for fid in (
+        "NetworkHeadCheck_v2{L=9,T=4,COUNTS=1}", "NetworkHeadCheck_v2{L=9,T=4,COUNTS=0}")} <= set(defs)
     assert not any(f.startswith(("NetworkHidingRead", "Hm96Sha512Leaf", "Sha512Compress")) for f in defs)
     params, _ = declared.unit.signature()
     gate = HC.gate(9, 4, True)
@@ -307,6 +310,60 @@ def test_the_unit_is_each_ends_head_check_beside_the_certificates(tmp_path):
                                       *(f"ingress_{n}" for n, _ in HC.gate(9, 4, False).params if n != "signed")]
     wide = replace(lw, ingress=GridParams(8, 2, 1))
     assert wide.head_key(1) == (9, 8, 0) and wide.head_key(0) == (9, 4, 0)
+
+
+def _accepts_every_head(B, S_, *args):
+    return B.call(BL.constant(1))
+
+
+def _finding(program, accepted=True):
+    return Finding("session-0", accepted, "" if accepted else "rejected", program, {}, (0,) if accepted else ())
+
+
+def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path, monkeypatch):
+    """Each head-check gate names its Definition's pinned circuit digest, so the unit's Program, which the spec and each
+    registration bind, binds the head check's circuit. A head check with the same id and signature that accepts every
+    head has another circuit digest: the pinned gate doesn't expand to it, its own gate is another gate, and a unit
+    holding that gate is another Program, whose proof the verifier of record refuses while it accepts one of the
+    registered Program. A size class no sidecar pins names no digest, and no proof of its unit is accepted."""
+    run = Run(tmp_path)
+    lw = run.lw
+    key = lw.head_key(0)
+    honest, gate = HC.unit(*key), HC.gate(*key)
+    pinned = json.loads(HC.PINS.read_text())["digests"][honest.id]["sha512"]
+    assert key == (9, 4, 1) and gate.id == f"Gate[{honest.id}@{pinned}]_v2" and HC.pinned(gate)
+    forged = bind(replace(HC.NetworkHeadCheck, body=_accepts_every_head, register=False), L=9, T=4, COUNTS=1)
+    assert forged.id == honest.id and forged.signature() == honest.signature()
+    digest = HC.circuit_digest(forged)
+    assert digest != pinned
+    with pytest.raises(ValueError, match="another circuit"):
+        HC.expand(gate, forged)
+    swapped = HC.gate_of(forged, digest, "a head check that accepts every head")
+    assert swapped.id != gate.id and swapped.signature() == gate.signature() and HC.expand(swapped, forged) is forged
+
+    registered, query, gates = lw._partition["program"], lw.query, HC.gate
+    with monkeypatch.context() as m:
+        m.setattr(HC, "gate", lambda *k: swapped if k == key else gates(*k))
+        other = bind(replace(SVC._UNIT), EGRESS=key, INGRESS=lw.head_key(1))
+        program = P.partition(P.population_program(other, 1), query)["program"]
+    assert other.id == lw.unit.id and program != registered and lw._partition["program"] == registered
+    assert lw.proved([_finding(registered)])
+    assert not lw.proved([_finding(program)]) and not lw.proved([])
+    assert not lw.proved([_finding(registered), _finding(registered, accepted=False)])
+
+    outs = []
+    for w, proof in enumerate(([_finding(program)], [_finding(registered)])):
+        opening = run.honest(w)
+        draw = run.stream.select(run.register(opening))
+        assert run.stream.deliver(draw, [lw.session(opening, draw)]) is None
+        outs.append(lw.outcome(run.stream, draw, opening, SYNCS, proved=proof))
+    assert reject(outs[0]) and outs[1].accepted
+
+    wide = replace(lw, ingress=GridParams(8, 2, 1))
+    assert not HC.pinned(HC.gate(*wide.head_key(1))) and HC.gate(*wide.head_key(1)).id.endswith("@unpinned]_v2")
+    assert not wide.proved([_finding(wide._partition["program"])])
+    with pytest.raises(ValueError, match="no pinned circuit digest"):
+        HC.expand(HC.gate(*wide.head_key(1)), HC.unit(*wide.head_key(1)))
 
 
 def test_the_domain_is_one_stages_served_domain(tmp_path):

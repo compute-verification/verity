@@ -92,6 +92,8 @@ import Definitions.Pouw.Receipt.Duo
 import Definitions.Pouw.Receipt.Li
 import Definitions.Pouw.Receipt.Fx1
 import Definitions.Pouw.RelativeSecurity
+import Definitions.Pouw.RelativeSecurityJ10R
+import Definitions.Pouw.RelativeSecurityCall
 import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs
@@ -155,6 +157,10 @@ as `h1tile._xor` and `h1zy._and_all` build them. `Proofs.Pouw.H1Zy` proves it th
 `Lane`: `PouwH1LaneZy_v1{TILE}`'s body (`h1zy._lane_body`) at a 32 × 32 leaf over `PouwH1Tile_v1` on its primitives'
 word views: the index's mux trees, the EXACT z (`GemmAccumulatorS8_v2`), the cell check and the masked partials, with the
 dequant's and the chain's words as parameters. `Proofs.Pouw.H1Zy` proves it the lane check `LeafChecks` reads.
+
+`Tile`: `PouwH1TileZy_v1{TILE}`'s `ok` (`h1zy._body`) over `PouwH1Tile_v1` or `PouwH1Tile_v3` on its primitives' word
+views: TILE's z (EXACT, or the one-stream's recombination, wrap correction and dither peel at its noise) and the
+record's cell check. `Proofs.Pouw.H1Zy` proves it the check `TileChecks` reads.
 
 ## `PearlC`: Pearl-C's Π and the statements about it
 

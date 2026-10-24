@@ -42,6 +42,11 @@ import Proofs.Flock.Claims.Recursion.SeqDeployStop
 import Proofs.Flock.Claims.Recursion.VStar
 import Proofs.Flock.Claims.Recursion.VStarBound
 import Proofs.Flock.Claims.Recursion.BoundDeploy
+import Proofs.Flock.Claims.Recursion.BoundDeployE
+import Proofs.Flock.Claims.Recursion.FlockKSDeployE
+import Proofs.Flock.Claims.Recursion.ConflictTiedE
+import Proofs.Flock.Claims.Recursion.RepErase
+import Proofs.Flock.Claims.Recursion.CallsBridgeE
 import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
 import Proofs.Flock.Claims.Recursion.BoundRun
 import Proofs.Flock.Claims.Recursion.BoundForks
@@ -81,6 +86,8 @@ import Proofs.Flock.Claims.Recursion.LogWalk
 import Proofs.Flock.Claims.Recursion.DecodeLog
 import Proofs.Flock.Claims.Recursion.VerdictLog
 import Proofs.Flock.Claims.Recursion.CallsAgree
+import Proofs.Flock.Claims.Recursion.CallsAgreeE
+import Proofs.Flock.Claims.Recursion.LastColsE
 import Proofs.Flock.Claims.Recursion.CallsOfProofs
 import Proofs.Flock.Claims.Recursion.LastBindsClosed
 import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
@@ -113,6 +120,10 @@ import Proofs.Flock.Claims.Recursion.RecRecord
 import Proofs.Flock.Claims.Recursion.RecOpen
 import Proofs.Flock.Claims.Recursion.SlotsCommit
 import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.CapOpens
+import Proofs.Flock.Claims.Recursion.TopsOpens
+import Proofs.Flock.Claims.Recursion.KSLin2E
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
@@ -131,6 +142,9 @@ import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.JsonEq
 import Proofs.Flock.Claims.CanonEq
 import Proofs.Flock.Claims.Deploy
+import Proofs.Flock.Claims.DeployE
+import Proofs.Flock.Claims.DeployVK
+import Proofs.Flock.Claims.Recursion.FlockKSDeployK
 import Proofs.Flock.Claims.DeployPlainCode
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.DeployTables

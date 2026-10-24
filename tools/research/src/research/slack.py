@@ -2594,11 +2594,11 @@ def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=Non
     reg = with_routes(reg, routes)
     book, inboxes = routes.all(), routes.inboxes()
     by_inbox = {r["inbox_ts"]: n for n, r in sorted(book.items(), key=lambda kv: not kv[1].get("closed"))}
-    rang: dict[str, set[str]] = {}
+    rang: dict[tuple[str | None, str], set[str]] = {}                # (the channel a doorbell names, the post's ts)
     for its, name in by_inbox.items():
         for m in api.paged("conversations.replies", "messages", channel=ch, ts=its, oldest=f"{since:.6f}"):
             if m.get("ts") != its and is_doorbell(m, reg) and (d := DOORBELL_RE.match(m.get("text") or "")):
-                rang.setdefault(d[4] or d[3], set()).add(name)
+                rang.setdefault((doorbell_channel(m.get("text") or ""), d[4] or d[3]), set()).add(name)
     posts = [(m, root) for m, root in posts if (root or m)["ts"] not in inboxes and m["ts"] not in inboxes]
     humans = people_names(reg)
 
@@ -2622,7 +2622,7 @@ def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=Non
             history = [x for x in threads.get(root["ts"], []) if t - HISTORY_S <= float(x["ts"]) < t]
             nums = {n for x in [m, *history] for n in named_prs(x.get("text") or "")[0]}
             branches = pr_branches(nums, log) if nums else {}
-        got = rang.get(m["ts"], set())
+        got = rang.get((None, m["ts"]), set())
         own = author in got                                          # only a poster other than the holder rings its own inbox
         want = {e for n in route_targets(m, root, reg, inboxes, history, branches, author_rings=own)
                 if n not in humans and (e := expected(n, t))}
@@ -2630,6 +2630,55 @@ def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=Non
         if missed or extra:
             out.append({"ts": m["ts"], "by": author, "missed": missed, "extra": extra,
                         "first": " ".join(plain(m.get("text") or "").split())[:80]})
+    return out + replay_people(api, reg, rang, inboxes, humans, expected, since, log)
+
+
+ASK_CHANNELS = ("ask-the-team", "resource-accounting")          # people's questions, routed by the Slack events service
+SETTLE_S = 120                                                  # a person's post younger than this is still in flight
+
+
+def replay_people(api: Slack, reg: dict, rang: dict, inboxes: set[str], humans: set[str],
+                  expected: Callable[[str, float], str | None], since: float, log=None) -> list[dict]:
+    """The people's channels (ASK_CHANNELS and each open chat), which the Slack events service routes: each person's post
+    since `since` whose doorbells differ from the rule's names.  A post that names no one is a miss only when nothing
+    rang for it (the service sends it to its routing line's lanes, @top without the model).  A chat post's text is
+    private, so its line carries none.  A channel the bot can't read is said and skipped."""
+    log = log or sys.stderr
+    chats = chat_channels(reg)
+    keys = {k: c["id"] for k, c in reg["channels"].items() if k in ASK_CHANNELS and c.get("id")}
+    keys.update({k: c["id"] for k, c in chats.items()})
+    settled, out = _now().timestamp() - SETTLE_S, []
+    for key, cid in sorted(keys.items()):
+        try:
+            roots = api.paged("conversations.history", "messages", channel=cid, oldest=f"{since - HISTORY_S:.6f}")
+            threads = [api.paged("conversations.replies", "messages", channel=cid, ts=r["ts"], oldest=f"{since - HISTORY_S:.6f}")
+                       if r.get("reply_count") else [r] for r in roots]
+        except SlackError as e:
+            if not _unreadable(e):
+                raise
+            log.write(f"replay: #{key} unreadable ({e}), skipped\n")
+            continue
+        for thread in threads:
+            root = thread[0] if thread and thread[0].get("ts") == (thread[0].get("thread_ts") or thread[0].get("ts")) else None
+            for m in thread:
+                t, text = float(m["ts"]), m.get("text") or ""
+                if not since < t <= settled or person(m, reg) is None:
+                    continue
+                if key in chats:
+                    rule = chat_targets(m, [x for x in thread if x.get("ts") != m["ts"]], reg)
+                    unaddressed = rule == [CHAT_WATCHER] and CHAT_WATCHER not in lead_names(text, reg)
+                else:
+                    rule = route_targets(m, root if root is not m else None, reg, inboxes)
+                    unaddressed = not rule and not is_quiet(text)
+                got, author = rang.get((key, m["ts"]), set()), poster(m, reg)
+                if unaddressed:
+                    missed, extra = ([] if got else [CHAT_WATCHER]), []
+                else:
+                    want = {e for n in rule if n not in humans and (e := expected(n, t))}
+                    missed, extra = sorted(want - got - {author}), sorted(got - want)
+                if missed or extra:
+                    out.append({"ts": m["ts"], "by": author, "channel": key, "missed": missed, "extra": extra,
+                                "first": "" if key in chats else " ".join(plain(text).split())[:80]})
     return out
 
 
@@ -2869,7 +2918,9 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         print(f"  UNCHECKED: {len(unchecked)} ask(s) whose record can't be read: {unchecked[0]['state']}")
     for x in replayed or []:
         what = "; ".join(f"{k} {' '.join('@' + n for n in x[k])}" for k in ("missed", "extra") if x[k])
-        print(f"  REPLAY {x['ts']} by @{x['by']}: {what}: {x['first']}")
+        where = f"#{x['channel']} " if x.get("channel") else ""
+        print(f"  REPLAY {where}{x['ts']} by @{x['by']}: {what}"
+              + (f": {x['first']}" if x["first"] else " (private)" if x.get("channel") else ""))
     if replayed is not None:
         print(f"  replayed: {len(replayed)} post(s) whose doorbells differ from route_targets")
     return 0

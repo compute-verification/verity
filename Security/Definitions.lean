@@ -8,6 +8,7 @@ import Definitions.Nci.Covering
 import Definitions.Pous
 import Definitions.Pouw
 import Definitions.NetworkCertifier
+import Definitions.NetworkCertifier.AdviceString
 import Definitions.Accounting.Sheets
 import Definitions.Accounting
 import Definitions.Population
@@ -44,6 +45,8 @@ import Definitions.Pouw.Assumptions
 import Definitions.Pouw.Guarantees
 import Definitions.NetworkCertifier.Assumptions
 import Definitions.NetworkCertifier.Guarantees
+import Definitions.NetworkCertifier.Assumptions.AdviceString
+import Definitions.NetworkCertifier.Guarantees.AdviceString
 import Definitions.Flock.Guarantees
 import Definitions.Accounting.Guarantees
 import Definitions.Hash.Guarantees
