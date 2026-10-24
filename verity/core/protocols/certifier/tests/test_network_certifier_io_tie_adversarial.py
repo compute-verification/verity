@@ -1,0 +1,105 @@
+"""Adversarial cases against the I/O tie's prototype (`io_tie`) from the advice red team (PROTOCOL.md, "Advice for
+arbitrary serving: what it can carry"), as the tie that opens every cell answers them:
+
+- No field of a cell but the id is the server's: another frame kind, payload length, a finish reason or a second id
+  in the fill is refused by the reference and by `IoTieCell`. The stream parses, because the warden writes it from
+  the connection it terminated; a cell on another request's stream is refused by the map, which holds every data
+  cell to a slot of its own request.
+- A variable-length response has its map: the cells' (request, position) come from the advice's outputs and release
+  buckets, so interleaved responses of any lengths are accepted, and a count one off either way is refused.
+- Attack 8, a covert payload in m cells: every cell is opened, so a payload of m = 1, 3 or 17 cells is refused. The
+  K-draw tie this replaced passed it with probability (1 − m/N)^K, its price kept as the comparison.
+"""
+
+import math
+import random
+
+import numpy as np
+
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.core.protocols.certifier import head_check as HC, io_tie as IT
+from verity.core.protocols.certifier.active import DATA, HEADER
+
+from test_network_certifier_io_tie import BIG, V, WINDOW, commit, honest, serve
+
+B = BIG.B
+
+
+def _cell_circuit(cells):
+    out = np.asarray(evaluate_bits(bind(IT.IoTieCell, B=B), np.asarray([HC._bytes_bits(c) for c in cells], dtype=np.uint8)))
+    return [tuple(int(x) for x in o[:2]) for o in out.reshape(len(cells), IT.CELL_OUT)]
+
+
+def _table(outputs, release, ids):
+    return IT.table_rows(IT.window_slots(outputs, release, ids, WINDOW, BIG.T), BIG.M)
+
+
+def test_no_cell_field_but_the_id_is_the_servers():
+    x, stream = 151_000, 12
+    cell = IT.data_cell(x, stream, B)
+    event = IT.id_event(x)
+    refused = {
+        "another kind": bytes([DATA ^ 1]) + cell[1:],
+        "a longer payload": HEADER.pack(DATA, stream, IT.ID_EVENT_BYTES + 1) + cell[HEADER.size:],
+        "a finish reason": (HEADER.pack(DATA, stream, len(event) + 2)
+                            + event.replace(b'"finish_reason":null', b'"finish_reason":"stop"')).ljust(B, b"\0"),
+        "a second id in the fill": (cell[:IT.CELL_USED] + b"%10d" % 7).ljust(B, b"\0"),
+    }
+    assert IT.parse_cell(cell) == (True, stream, x)
+    for name, v in refused.items():
+        assert len(v) == B and IT.parse_cell(v) is None, name
+    # (ok, data): a changed header or event is no data cell; a second id leaves the data cell and fails its fill
+    assert _cell_circuit([cell, *refused.values()]) == [(1, 1), (0, 0), (0, 0), (0, 0), (0, 1)]
+
+    inst = honest(BIG, 11)
+    data = [i for i, c in enumerate(inst.cells) if IT.parse_cell(c).data]
+    streams = sorted({IT.parse_cell(inst.cells[i]).stream for i in data})
+    i = data[0]
+    p = IT.parse_cell(inst.cells[i])
+    moved = IT.data_cell(p.id, next(s for s in streams if s != p.stream), B)
+    assert IT.parse_cell(moved).data and _cell_circuit([moved]) == [(1, 1)]
+    cells = [*inst.cells[:i], moved, *inst.cells[i + 1:]]
+    assert IT.canonical_map(BIG, inst.base, cells, inst.rows) is None
+
+
+def test_a_variable_length_response_has_its_map():
+    lengths = {3: 1, 41: 2, 42: 17, 500: 40, 977: 9}
+    rng = random.Random(12)
+    responses = {q: (rng.randrange(3), [rng.randrange(V) for _ in range(n)]) for q, n in lengths.items()}
+    cells, outputs, release, ids = serve(BIG, responses, 12)
+    inst = commit(BIG, cells, _table(outputs, release, ids))
+    assert IT.reference(inst)
+    counts = {}
+    for c in cells:
+        p = IT.parse_cell(c)
+        if p.data:
+            counts[p.stream] = counts.get(p.stream, 0) + 1
+    assert counts == lengths
+    data = [i for i, c in enumerate(cells) if IT.parse_cell(c).data]
+    spot = next(i for i in range(data[0] + 1, BIG.N) if i not in data)
+    one_less = [*cells[:data[-1]], IT.pad_cell(B), *cells[data[-1] + 1:]]
+    one_more = [*cells[:spot], cells[data[0]], *cells[spot + 1:]]
+    for bad in (one_less, one_more):
+        assert IT.canonical_map(BIG, inst.base, bad, inst.rows) is None
+
+
+def test_a_payload_in_m_cells_is_refused_and_the_draws_price_is_the_comparison():
+    """Every cell is opened, so a payload in any m cells is refused. The K-draw tie measured the changed share: what
+    passed K draws at δ was m < N·ln(1/δ)/K cells, each free to carry log2 V bits; at the served shape's busiest window
+    (N = 35,386) and K = 20 a window, δ = 2^−40 let about 49,000 cells over a link (Σ_w ε_w·N_w), 844 kbit at
+    V = 151,329."""
+    inst = honest(BIG, 13)
+    data = [i for i, c in enumerate(inst.cells) if IT.parse_cell(c).data]
+    rng = random.Random(8)
+    for m in (1, 3, 17):
+        cells = list(inst.cells)
+        for i in rng.sample(data, m):
+            p = IT.parse_cell(cells[i])
+            cells[i] = IT.data_cell((p.id + 1 + rng.randrange(1000)) % V, p.stream, B)
+        assert IT.canonical_map(BIG, inst.base, cells, inst.rows) is None
+        assert not IT.reference(commit(BIG, cells, inst.rows))
+    K, delta, N = 20, 2.0 ** -40, 35_386
+    passing = N * math.log(1 / delta) / K
+    assert 49_000 < passing < 49_100
+    assert 843_000 < passing * math.log2(V) < 845_000

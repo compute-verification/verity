@@ -1,66 +1,83 @@
-"""The I/O tie (`PROTOCOL.md`, "The I/O tie"), a prototype on a fake upstream: the reference of one egress link-window's
-tie unit and the Boolean parts it is built from. Nothing here is in a Spec or proved, and the shim and N3's template
-still carry text: this module's id event is the design's, not the wire's yet.
+"""The I/O tie (`PROTOCOL.md`, "The I/O tie"), a prototype on a fake upstream: the reference of one egress
+link-window's tie, a unit at selection `All` that opens every cell, and the Boolean Definitions it is built from.
+Nothing here is in a Spec or proved, and no warden writes these cells yet: the fake upstream commits them as the design
+has the warden commit them, one `hm96-sha512/row/v2` row a cell under a per-window `frame-v3-sha512` root.
 
-For each of K live coins u the unit draws frame k = ⌊u·N / 2^64⌋ of the window's N real frames (N = Σ n_t of the
-head it opens at leaf 2 + direction of N2's commitment, `head_check`'s opening), opens the frame under the head's
-frames root (`NetworkFrameRead`), holds it to the canonical event of one token id (`IoTieEvent`), and opens the token
-port's row that holds request ⌊k / F⌋'s output k mod F (`NetworkHidingRead`), whose column must be that id
-(`IoTieDraw`). With F, C and 32 powers of two, F ≥ 32, the position is wiring: k's low 5 bits are the column, its
-next log2(F) − 5 the row within the request, and the rest the request.
+**The cells.** A link-window's egress is N = T·R cells of B bytes in the warden's schedule order, R a bucket, so cell
+i is in bucket ⌊i / R⌋ of the window. A cell is a pad (`pad_cell`, B zero bytes) or a data cell (`data_cell`): a
+`DATA` header whose stream is the request's ingress ordinal, which the warden writes from the connection it
+terminated, then one token id's event (`id_event`) and zero fill. The circuit routes M = 2^D ≥ N slots (`Shape`), the
+N cells and M − N pads of its own.
 
-    NetworkFrameRead{B, D}(frame: Array<B, Byte>, pos: Array<D>, path: Array<D, Digest>, root: Digest) -> Value<1>
-    IoTieEvent{B}(frame: Array<B, Byte>, id: Array<32>) -> Value<1>
-    IoTieColumn(row: Array<1024>, column: Array<5>) -> Array<32>
-    IoTieDraw{B, D, FOUT, C}(frames_root: Digest, k: Array<D>, frame: Array<B, Byte>, frame_path: Array<D, Digest>,
-        port: Digest, port_domain: Digest, row: Array<128, Byte>, salt: Salt, row_path: Array<DT, Digest>) -> Value<1>
-        DT = log2(C) + D − log2(FOUT), FOUT the port's F
+**The window's table** is one value per link-window, committed before the tie runs: the window's outputs in (q, j)
+order, one 16-byte slot each (`Slot`: the request's ordinal q, the output's index j, its session-global egress bucket b
+and its token id, u32be each), then empty slots, all 0xFF, to M slots, eight a 128-byte row. q, j and b are advice v0's
+outputs and release buckets; the id is the token port's, the server's sampled id (`window_slots` says what the table
+must equal).
 
-**The token port** (`TokenPort`) is one value per link-window, committed before the window's coins: request g's F
-sampled ids, then its P prompt ids, 32 u32be ids a row, request g's slot s at row g·C + ⌊s / 32⌋ and column s mod 32,
-C ≥ (F + P) / 32 a power of two. Each row is an `hm96-sha512/row/v2` leaf under its own salt in one
-`frame-v3-sha512` tree of 2^DT leaves; rows no request fills are zero rows, salted like the rest.
+**What 1 means** (`reference`): both roots are their rows' (the cells' and the table's), every cell is a pad or a data
+cell, the table's full slots come first, sorted by (q, j) with each request's j consecutive, and the data cells are in
+one-to-one correspondence with the full slots, each stream's data cells in schedule order to its request's slots in
+order, every slot's q, id and b its cell's stream, id and bucket (the window's first bucket plus ⌊i / R⌋). So a
+duplicated, dropped, reordered or altered cell, a covert byte in a pad, and a cell on another request's stream each
+make it 0.
 
-**Not in the skeleton:** the head's opening (`head_check.NetworkHidingRead`, the same leaf N2 reads), the draw's
-k = ⌊u·N / 2^64⌋ and k < N with N the head's counts' sum (`IoTiePosition`), the K draws' AND, and the ingress side.
-`reference` checks all of them in the clear.
+    IoTieCell{B}(cell: Array<B, Byte>) -> Array<66>                  ok, data, stream (u32), id (u32), LSB first
+    IoTieRoute{W, D}(xs: Array<M, Array<W>>, switches: Array<S>) -> Array<M, Array<W>>
+        a Beneš network of S = (2D − 1)·2^(D − 1) switches, W ANDs each
+    IoTieMatch{D, DB}(routed: Array<M, Array<W>>, table: Array<M, Array<16, Byte>>, base: Array<32>) -> Value<1>
+    IoTieContent{B, T, R}(cells: Array<N, Array<B, Byte>>, table: Array<M / 8, Array<128, Byte>>, base: Array<32>,
+        switches: Array<S>) -> Value<1>
+    NetworkRowsRoot{N_BITS, COUNT}(rows: Array<COUNT, Array<N_BITS>>, salts: Array<COUNT, Salt>, root, domain) -> Value<1>
+    IoTieWindow{B, T, R}(cells_root, cells_domain, cells, cell_salts, table_root, table_domain, table, table_salts,
+        base, switches) -> Value<1>
+        W = 65 + DB + D: a cell's data bit, stream and id, its bucket (DB = bitlen(T − 1) bits) and its index
+
+`IoTieWindow` is the unit: it recomputes both roots from every row and salt. `IoTieContent` is the same tie when the
+proof service opens the cells and the table as registered rows instead (the verifier opens every row under its root).
+The switches are the prover's (`switches`): any setting is a permutation of the slots, and `IoTieMatch` holds the
+routed cells to the table.
 """
 from __future__ import annotations
 
 import hashlib
 import struct
 from dataclasses import dataclass
-from typing import Sequence
+from typing import NamedTuple, Sequence
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import ZERO, and_reduce
+from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
-from verity.ml.commitments.gates.frame_v3 import root_ref
-from verity.ml.commitments.gates.lms import LmsEqual, Sha512Compress
-from verity.ml.commitments.gates.sha512 import midstate, pad_tail
+from verity.ml.commitments.gates.frame_v3 import (LEVEL, FrameV3Leaf, FrameV3Node, _bytes as _fv_bytes, _hash_uint, _part,
+                                                  index_bytes, leaf_ref, node_ref)
+from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf
+from verity.ml.commitments.gates.lms import LmsEqual
 from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA, row_leaf
+from verity.ml.commitments.merkle import _PAD, CommitmentDomain, _hash, _uint
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.core.protocols.certifier import head_check as HC
-from verity.core.protocols.certifier.active import CANONICAL_STREAM, DATA, EVENT_END, EVENT_HEAD, HEADER
-from verity.core.protocols.certifier.certificate import FRAME_TAG, NODE_TAG, verify_frame
-from verity.core.protocols.certifier.grid import GridParams
+from verity.core.protocols.certifier.active import DATA, EVENT_END, EVENT_HEAD, HEADER, PAD
 
-BIT, BYTE, WORD, DIGEST, SALT = HC.BIT, HC.BYTE, HC.WORD, HC.DIGEST, HC.SALT
+BIT, BYTE, DIGEST, SALT = HC.BIT, HC.BYTE, HC.DIGEST, HC.SALT
 ID_DIGITS = 10
 ID_EVENT_HEAD = EVENT_HEAD[:EVENT_HEAD.index(b'"delta"')] + b'"token_id":'
 ID_EVENT_TAIL = b',"finish_reason":null}]}' + EVENT_END
 ID_EVENT_BYTES = len(ID_EVENT_HEAD) + ID_DIGITS + len(ID_EVENT_TAIL)
-#: the id's first character in a frame: the frame's header, then the event's head
+#: the id's first character in a cell: the header, then the event's head
 ID_AT = HEADER.size + len(ID_EVENT_HEAD)
-ROW_IDS = 32
-ROW_BYTES = 4 * ROW_IDS
+#: a data cell's bytes before its zero fill
+CELL_USED = HEADER.size + ID_EVENT_BYTES
+#: `IoTieCell`'s output: ok, data, the stream and the id
+CELL_OUT = 2 + 32 + 32
+SLOT = struct.Struct(">IIII")
+SLOTS_A_ROW = 8
+ROW_BYTES = SLOT.size * SLOTS_A_ROW
+EMPTY = 0xFFFF_FFFF
 
 
-# --- the id event ----------------------------------------------------------------------------------------------------
+# --- the cells -------------------------------------------------------------------------------------------------------
 
 def id_event(token_id: int) -> bytes:
     """The canonical event of one token id: `ID_EVENT_HEAD`, the id right-aligned in 10 decimal characters,
@@ -70,240 +87,313 @@ def id_event(token_id: int) -> bytes:
     return ID_EVENT_HEAD + b"%10d" % token_id + ID_EVENT_TAIL
 
 
-def id_frame(token_id: int, frame_bytes: int) -> bytes:
-    """The link frame of a token id's event: a `DATA` header on `CANONICAL_STREAM`, the event, zero fill."""
-    if frame_bytes < ID_AT + ID_DIGITS + len(ID_EVENT_TAIL):
-        raise ValueError(f"a {frame_bytes}-byte frame has no room for an id event")
-    return (HEADER.pack(DATA, CANONICAL_STREAM, ID_EVENT_BYTES) + id_event(token_id)).ljust(frame_bytes, b"\0")
+def _check_cell_bytes(cell_bytes: object) -> None:
+    if type(cell_bytes) is not int or cell_bytes <= CELL_USED:
+        raise ValueError(f"a cell has more than {CELL_USED} bytes, room for an id event and its fill, not {cell_bytes!r}")
 
 
-def frame_id(frame: bytes) -> int | None:
-    """The token id whose canonical frame this is, or None: `IoTieEvent`'s reference, the one parse of a frame."""
-    digits = frame[ID_AT:ID_AT + ID_DIGITS]
-    if len(digits) != ID_DIGITS or not digits.lstrip(b" ").isdigit():
+def data_cell(token_id: int, stream: int, cell_bytes: int) -> bytes:
+    """A data cell: a `DATA` header on the request's stream, its id's event, zero fill."""
+    _check_cell_bytes(cell_bytes)
+    if type(stream) is not int or not 0 <= stream < 1 << 32:
+        raise ValueError(f"a stream is a u32, not {stream!r}")
+    return (HEADER.pack(DATA, stream, ID_EVENT_BYTES) + id_event(token_id)).ljust(cell_bytes, b"\0")
+
+
+def pad_cell(cell_bytes: int) -> bytes:
+    """A pad cell: a `PAD` header on stream 0 with no payload, zero fill, so B zero bytes."""
+    _check_cell_bytes(cell_bytes)
+    return HEADER.pack(PAD, 0, 0).ljust(cell_bytes, b"\0")
+
+
+class Parsed(NamedTuple):
+    """A cell's reading: a data cell's stream and id, or a pad's (False, 0, 0)."""
+
+    data: bool
+    stream: int
+    id: int
+
+
+def parse_cell(cell: bytes) -> Parsed | None:
+    """The cell's one reading, or None for a cell that is neither: `IoTieCell`'s reference."""
+    if len(cell) <= CELL_USED:
         return None
-    token_id = int(digits)
-    return token_id if token_id < 1 << 32 and frame == id_frame(token_id, len(frame)) else None
+    if cell == pad_cell(len(cell)):
+        return Parsed(False, 0, 0)
+    digits = cell[ID_AT:ID_AT + ID_DIGITS]
+    if not digits.lstrip(b" ").isdigit():
+        return None
+    token_id, stream = int(digits), HEADER.unpack_from(cell)[1]
+    return Parsed(True, stream, token_id) if token_id < 1 << 32 and cell == data_cell(token_id, stream, len(cell)) else None
 
 
-# --- the position and the port ---------------------------------------------------------------------------------------
-
-def draw(coin: int, n: int) -> int:
-    """The frame a 64-bit coin draws of n: ⌊coin·n / 2^64⌋."""
-    if not 0 <= coin < 1 << 64 or n < 1:
-        raise ValueError("a draw takes a 64-bit coin and at least one frame")
-    return coin * n >> 64
-
-
-def _log2(x: int, name: str) -> int:
-    if type(x) is not int or x < 1 or x & (x - 1):
-        raise ValueError(f"{name} is a power of two, not {x!r}")
-    return x.bit_length() - 1
-
+# --- the window and its table ----------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class TokenPort:
-    """The token port's shape for one link-window of a D-deep frame tree: F outputs and P prompt ids a request,
-    C rows a request, 2^DT rows, DT = log2(C) + D − log2(F), so every request a window's frames can hold has its rows."""
+class Shape:
+    """A link-window's egress: T buckets of R cells of B bytes, N = T·R cells, routed and matched over M = 2^D ≥ N
+    slots (D ≥ 4, a table of at least two rows); the cells N … M − 1 are pads the circuit makes, not the warden."""
 
-    F: int
-    P: int
-    C: int
-    D: int
+    B: int
+    T: int
+    R: int
 
     def __post_init__(self) -> None:
-        if _log2(self.F, "F") < 5 or self.C * ROW_IDS < self.F + self.P or self.P < 0:
-            raise ValueError(f"a port has F >= 32 and C·32 >= F + P, not F={self.F}, P={self.P}, C={self.C}")
-        _log2(self.C, "C")
-        if self.DT < 1:
-            raise ValueError("a port has at least two rows")
+        _check_cell_bytes(self.B)
+        for name in ("T", "R"):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
+                raise ValueError(f"{name} is a positive int, not {getattr(self, name)!r}")
+        if self.N > 1 << 32:
+            raise ValueError(f"a window of {self.N} cells has more than 2^32")
 
     @property
-    def DT(self) -> int:
-        return _log2(self.C, "C") + self.D - _log2(self.F, "F")
+    def N(self) -> int:
+        return self.T * self.R
 
     @property
-    def leaves(self) -> int:
-        return 1 << self.DT
+    def D(self) -> int:
+        return max(4, (self.N - 1).bit_length())
 
-    def slot(self, g: int, s: int) -> tuple[int, int]:
-        """(row, column) of request g's slot s: output j at s = j, prompt id i at s = F + i."""
-        return g * self.C + s // ROW_IDS, s % ROW_IDS
+    @property
+    def M(self) -> int:
+        return 1 << self.D
 
-    def at(self, k: int) -> tuple[int, int]:
-        """(row, column) of the window's egress frame k: request ⌊k / F⌋'s output k mod F."""
-        return self.slot(k // self.F, k % self.F)
+    @property
+    def DB(self) -> int:
+        """A bucket's bits in a routed tuple."""
+        return max(1, (self.T - 1).bit_length())
 
-    def rows(self, requests: Sequence[tuple[Sequence[int], Sequence[int]]]) -> list[bytes]:
-        """The port's rows for the window's requests in canonical order, each (outputs, prompt): F outputs and at
-        most P prompt ids, slots past the prompt 2^32 − 1."""
-        if len(requests) * self.C > self.leaves:
-            raise ValueError(f"{len(requests)} requests don't fit {self.leaves} rows")
-        ids = [0] * (self.leaves * ROW_IDS)
-        for g, (outputs, prompt) in enumerate(requests):
-            if len(outputs) != self.F or len(prompt) > self.P:
-                raise ValueError(f"a request has {self.F} outputs and at most {self.P} prompt ids")
-            for s, x in enumerate([*outputs, *prompt, *[0xFFFF_FFFF] * (self.P - len(prompt))]):
-                row, col = self.slot(g, s)
-                ids[row * ROW_IDS + col] = x
-        return [struct.pack(f">{ROW_IDS}I", *ids[r * ROW_IDS:(r + 1) * ROW_IDS]) for r in range(self.leaves)]
+    @property
+    def W(self) -> int:
+        return 65 + self.DB + self.D
 
-    def domain(self, binding: bytes) -> CommitmentDomain:
-        return CommitmentDomain(binding, -1, RangeIndexedDomain(0, self.leaves), hash="sha512")
+    @property
+    def switches(self) -> int:
+        return (2 * self.D - 1) << (self.D - 1)
+
+    def bucket(self, i: int) -> int:
+        return i // self.R
 
 
-def port_levels(domain: CommitmentDomain, rows: Sequence[bytes], salts: Sequence[bytes]) -> tuple[tuple[bytes, ...], ...]:
-    """The port's tree: each row's `hm96-sha512/row/v2` leaf under its salt, as N2 commits its heads."""
-    return tree_levels(domain, [row_leaf(domain, i, HC.hiding_value(r, s), SCHEMA)
-                                for i, (r, s) in enumerate(zip(rows, salts, strict=True))])
+class Slot(NamedTuple):
+    """A table slot: request q's output j, released in egress bucket b, of token id `id`."""
+
+    q: int
+    j: int
+    b: int
+    id: int
 
 
-def path(levels: Sequence[Sequence[bytes]], i: int) -> tuple[bytes, ...]:
-    """Leaf i's siblings in a tree's levels, leaf level first."""
-    return tuple(levels[lv][(i >> lv) ^ 1] for lv in range(len(levels) - 1))
+def window_slots(outputs: Sequence[tuple[int, int]], release: Sequence[int], ids: Sequence[int], window: int,
+                 T: int) -> list[Slot]:
+    """What the table's full slots must be for egress window `window`: the outputs (each (q, j), q the request's
+    ingress ordinal, j its output index) whose release bucket is in the window (release // T == window), sorted by
+    (q, j), each with its bucket and its id. With advice v0 these are `advice.outputs(a)` (request, index) and
+    `a.release`; the ids are the Commit's sampled ids of those outputs (`runner.sampler/sampled_token_ids`)."""
+    if not len(outputs) == len(release) == len(ids):
+        raise ValueError("one release bucket and one id an output")
+    return sorted(Slot(q, j, b, x) for (q, j), b, x in zip(outputs, release, ids) if b // T == window)
 
 
-# --- the reference ---------------------------------------------------------------------------------------------------
+def table_rows(slots: Sequence[Slot], M: int) -> list[bytes]:
+    """The table's rows: the slots, then empty slots (all 0xFF) to M, eight a 128-byte row."""
+    if len(slots) > M or M % SLOTS_A_ROW:
+        raise ValueError(f"{len(slots)} slots don't fit a table of {M}")
+    data = b"".join(SLOT.pack(*s) for s in slots) + b"\xff" * (SLOT.size * (M - len(slots)))
+    return [data[k:k + ROW_BYTES] for k in range(0, len(data), ROW_BYTES)]
 
-@dataclass(frozen=True)
-class Draw:
-    """One draw's witness: the frame and its path in the frames tree, the port row, its salt and path."""
 
-    frame: bytes
-    frame_path: tuple[bytes, ...]
-    row: bytes
-    salt: bytes
-    row_path: tuple[bytes, ...]
+def table_slots(rows: Sequence[bytes]) -> list[Slot]:
+    """Every slot of the table's rows, empty ones included."""
+    data = b"".join(rows)
+    return [Slot(*SLOT.unpack_from(data, k)) for k in range(0, len(data), SLOT.size)]
+
+
+def domain(binding: bytes, count: int) -> CommitmentDomain:
+    """A dense frame-v3-sha512 domain of `count` rows, as the warden's per-window cells and the table use."""
+    return CommitmentDomain(binding, -1, RangeIndexedDomain(0, count), hash="sha512")
+
+
+def rows_root(domain_id: bytes, rows: Sequence[bytes], salts: Sequence[bytes]) -> bytes:
+    """The dense frame-v3-sha512 root, under `domain_id`, of the rows' `hm96-sha512/row/v2` leaves, each under its
+    salt, and the domain's pads to a power of two (`NetworkRowsRoot`'s reference; `tree_levels` over `domain`'s leaves
+    gives the same root)."""
+    if len(rows) != len(salts) or len(rows) < 2:
+        raise ValueError(f"a rows root is over at least 2 rows, each with its salt, not {len(rows)} rows and "
+                         f"{len(salts)} salts")
+    level = [leaf_ref(domain_id, SCHEMA, HC.hiding_value(r, s), i) for i, (r, s) in enumerate(zip(rows, salts))]
+    width = 1 << (len(rows) - 1).bit_length()
+    level += [_hash(_PAD, domain_id, _uint(i), hash="sha512") for i in range(len(rows), width)]
+    k = 0
+    while len(level) > 1:
+        level = [node_ref(domain_id, k, t, level[2 * t], level[2 * t + 1]) for t in range(len(level) // 2)]
+        k += 1
+    return level[0]
+
+
+def fake_salt(seed: bytes, i: int) -> bytes:
+    """A deterministic hiding salt for a fake upstream's tests (a prover draws fresh ones)."""
+    out = b""
+    while len(out) < hm96.SHA512.salt_bytes:
+        out += hashlib.sha512(seed + i.to_bytes(8, "big") + len(out).to_bytes(4, "big")).digest()
+    return out[:hm96.SHA512.salt_bytes]
 
 
 @dataclass(frozen=True)
 class Instance:
-    """One egress link-window's tie: the head's opening as N2's (`head_check.Instance`'s fields), the grid and the
-    port's shape (statics), the port's root and domain id and the coins (public), and one `Draw` per coin."""
+    """One egress link-window's tie: the shape, the window's first bucket `base` (w·T) and the two committed values,
+    each as its rows, salts, root and domain id (the roots and domain ids public, the rest witness)."""
 
-    record: bytes
-    record_domain: bytes
-    head: bytes
-    salt: bytes
-    head_path: tuple[bytes, bytes]
-    link_bytes: int
-    params: GridParams
-    port: TokenPort
-    port_root: bytes
-    port_domain: bytes
-    coins: tuple[int, ...]
-    draws: tuple[Draw, ...]
+    shape: Shape
+    base: int
+    cells: tuple[bytes, ...]
+    cell_salts: tuple[bytes, ...]
+    cells_root: bytes
+    cells_domain: bytes
+    rows: tuple[bytes, ...]
+    row_salts: tuple[bytes, ...]
+    table_root: bytes
+    table_domain: bytes
 
 
-def head_counts(head: bytes, L: int, T: int) -> tuple[tuple[int, ...], bytes]:
-    """A head's T counts and its frames root (`RecordHead.encode`'s layout, `head_check.Shape`)."""
-    sh = HC.Shape(L, T)
-    if len(head) != sh.HL:
-        raise ValueError(f"the head is {len(head)} bytes, the shape's {sh.HL}")
-    return struct.unpack(f">{T}I", head[sh.CNT:sh.ROOT]), head[sh.ROOT:sh.HL]
+# --- the reference ---------------------------------------------------------------------------------------------------
+
+def _sorted_table(slots: Sequence[Slot], rows: Sequence[bytes]) -> int | None:
+    """The full slots' count when they come first, sorted by (q, j) with each request's j consecutive, and every
+    empty slot is all 0xFF; else None."""
+    full = [s.q != EMPTY for s in slots]
+    n = sum(full)
+    if any(full[n:]) or any(b"".join(rows)[SLOT.size * m:SLOT.size * (m + 1)] != b"\xff" * SLOT.size
+                            for m in range(n, len(slots))):
+        return None
+    for a, b in zip(slots[:n], slots[1:n]):
+        if (b.j != a.j + 1) if a.q == b.q else a.q > b.q:
+            return None
+    return n
 
 
-def reference_draws(inst: Instance) -> list[bool]:
-    """Each draw's outcome in the clear: frame k = `draw`(coin, N) opens under the head's frames root, it is the
-    canonical event of an id, and the port row of request ⌊k / F⌋'s output k mod F opens under the port's root with
-    that id in its column. Raises on a head that doesn't open at the egress head's leaf of N2's commitment."""
-    if root_ref(inst.record_domain, SCHEMA, HC.hiding_value(inst.head, inst.salt), HC.HEADS, inst.head_path) != inst.record:
-        raise ValueError("the head doesn't open at leaf 2 of N2's commitment")
-    counts, frames_root = head_counts(inst.head, inst.link_bytes, inst.params.buckets)
-    n = sum(counts)
-    if len(inst.draws) != len(inst.coins):
-        raise ValueError("one draw a coin")
-    out = []
-    for coin, d in zip(inst.coins, inst.draws):
-        if n == 0:
-            out.append(True)
-            continue
-        k = draw(coin, n)
-        row_at, col = inst.port.at(k)
-        opens = verify_frame(frames_root, inst.params, k, d.frame, d.frame_path)
-        token = frame_id(d.frame)
-        row_opens = (len(d.row_path) == inst.port.DT and len(d.row) == ROW_BYTES
-                     and root_ref(inst.port_domain, SCHEMA, HC.hiding_value(d.row, d.salt), row_at, d.row_path)
-                     == inst.port_root)
-        committed = int.from_bytes(d.row[4 * col:4 * col + 4], "big") if row_opens else None
-        out.append(bool(opens and row_opens and token is not None and token == committed))
-    return out
+def canonical_map(shape: Shape, base: int, cells: Sequence[bytes], rows: Sequence[bytes]) -> list[int] | None:
+    """The map the tie admits, cell i to slot perm[i] over the M cells (the N cells, then the circuit's pads): each
+    stream's data cells in schedule order to its request's slots in order, the pads to the empty slots (in order here;
+    any order of the pads is admitted too). None when there is none: a cell that is neither, an unsorted table, a
+    stream and a request with other counts, or a slot whose id or bucket isn't its cell's."""
+    parsed, slots = [parse_cell(c) for c in cells], table_slots(rows)
+    n = _sorted_table(slots, rows)
+    if n is None or any(p is None for p in parsed) or len(parsed) != shape.N or len(slots) != shape.M:
+        return None
+    parsed += [Parsed(False, 0, 0)] * (shape.M - shape.N)
+    by_q: dict[int, list[int]] = {}
+    for m in range(n):
+        by_q.setdefault(slots[m].q, []).append(m)
+    by_stream: dict[int, list[int]] = {}
+    pads = []
+    for i, p in enumerate(parsed):
+        (by_stream.setdefault(p.stream, []) if p.data else pads).append(i)
+    if by_q.keys() != by_stream.keys() or any(len(by_q[q]) != len(by_stream[q]) for q in by_q):
+        return None
+    perm = [0] * len(parsed)
+    for q, ms in by_q.items():
+        for i, m in zip(by_stream[q], ms):
+            if slots[m].id != parsed[i].id or slots[m].b != base + shape.bucket(i):
+                return None
+            perm[i] = m
+    for i, m in zip(pads, range(n, len(slots))):
+        perm[i] = m
+    return perm
+
+
+def reference_parts(inst: Instance) -> dict[str, bool]:
+    """Each part's verdict in the clear: the cells' root, the table's root, and the content (`IoTieContent`'s)."""
+    sh = inst.shape
+    if len(inst.cells) != sh.N or len(inst.rows) != sh.M // SLOTS_A_ROW:
+        raise ValueError(f"the instance has {len(inst.cells)} cells and {len(inst.rows)} table rows, the shape "
+                         f"{sh.N} and {sh.M // SLOTS_A_ROW}")
+    if type(inst.base) is not int or not 0 <= inst.base <= (1 << 32) - sh.T:
+        raise ValueError(f"a window's first bucket is a u32 with T buckets after it, not {inst.base!r}")
+    cells = rows_root(inst.cells_domain, inst.cells, inst.cell_salts)
+    table = rows_root(inst.table_domain, inst.rows, inst.row_salts)
+    return {"cells_root": cells == inst.cells_root, "table_root": table == inst.table_root,
+            "content": all(len(c) == sh.B for c in inst.cells) and canonical_map(sh, inst.base, inst.cells, inst.rows) is not None}
 
 
 def reference(inst: Instance) -> bool:
-    """The unit's ok bit: every draw's."""
-    return all(reference_draws(inst))
+    """`IoTieWindow`'s output: every part's."""
+    return all(reference_parts(inst).values())
+
+
+# --- the prover's routing --------------------------------------------------------------------------------------------
+
+def benes(perm: Sequence[int]) -> list[int]:
+    """The switch bits of a Beneš network that takes input i to output perm[i] (the looping algorithm), in
+    `IoTieRoute`'s order: the input column, the upper half's network, the lower half's, the output column."""
+    n = len(perm)
+    if n < 2 or n & (n - 1) or sorted(perm) != list(range(n)):
+        raise ValueError("a Beneš network routes a permutation of a power of two at least 2")
+    if n == 2:
+        return [perm[0]]
+    inv = [0] * n
+    for i, d in enumerate(perm):
+        inv[d] = i
+    color: list[int | None] = [None] * n
+    for start in range(0, n, 2):
+        i = start
+        # i goes up and its switch partner down; the input sharing that partner's output switch goes up next
+        while color[i] is None:
+            color[i], color[i ^ 1] = 0, 1
+            i = inv[perm[i ^ 1] ^ 1]
+    upper, lower, out = [0] * (n // 2), [0] * (n // 2), [0] * (n // 2)
+    for i in range(n):
+        (upper if color[i] == 0 else lower)[i // 2] = perm[i] // 2
+        if color[i] == 0:
+            out[perm[i] // 2] = perm[i] & 1
+    return [color[2 * k] for k in range(n // 2)] + benes(upper) + benes(lower) + out  # type: ignore[list-item]
+
+
+def benes_apply(xs: Sequence, bits: Sequence[int]) -> list:
+    """`IoTieRoute` in the clear: the network's outputs for its inputs under the switch bits."""
+    it = iter(bits)
+
+    def run(v: list) -> list:
+        if len(v) == 2:
+            return v[::-1] if next(it) else v
+        up, down = [], []
+        for k in range(len(v) // 2):
+            a, b = (v[2 * k + 1], v[2 * k]) if next(it) else (v[2 * k], v[2 * k + 1])
+            up.append(a)
+            down.append(b)
+        up, down = run(up), run(down)
+        res = []
+        for a, b in zip(up, down):
+            res += [b, a] if next(it) else [a, b]
+        return res
+
+    out = run(list(xs))
+    if next(it, None) is not None:
+        raise ValueError("more switch bits than the network has")
+    return out
+
+
+def switches(inst: Instance) -> list[int]:
+    """The prover's switch bits: the canonical map's, or, where none exists, a permutation that pairs each stream's
+    cells with its request's slots as far as they go, so the circuit's refusal is the checks', not the routing's."""
+    sh = inst.shape
+    perm = canonical_map(sh, inst.base, inst.cells, inst.rows)
+    if perm is None:
+        parsed = [parse_cell(c) for c in inst.cells] + [Parsed(False, 0, 0)] * (sh.M - sh.N)
+        slots, free, perm = table_slots(inst.rows), set(range(sh.M)), [-1] * sh.M
+        for i, p in enumerate(parsed):
+            want = [m for m in sorted(free) if p is not None and (slots[m].q == p.stream if p.data else slots[m].q == EMPTY)]
+            if want:
+                perm[i] = want[0]
+                free.discard(want[0])
+        rest = sorted(free)
+        for i in range(sh.M):
+            if perm[i] < 0:
+                perm[i] = rest.pop(0)
+    return benes(perm)
 
 
 # --- the circuit -----------------------------------------------------------------------------------------------------
-
-def _frame_block(frame_bytes: int) -> bytes:
-    return (FRAME_TAG + frame_bytes.to_bytes(4, "big")).ljust(128, b"\0")
-
-
-def _compress(B, state: Coll, data: Sequence[Sequence]) -> Coll:
-    """SHA-512's compressions over bytes (8 bits each) whole blocks long, from a chaining value."""
-    words = HC._words(data)
-    for k in range(0, len(words), 16):
-        state = B.call(Sha512Compress, state, HC._coll(Array(16, WORD), [x for w in words[k:k + 16] for x in w]))
-    return state
-
-
-def _cv(K, prefix: bytes) -> Coll:
-    return HC._coll(DIGEST, [x for v in midstate(prefix) for x in K.bits(v, 64)])
-
-
-def _sig_swap(S):
-    return (("d", BIT), ("cur", DIGEST), ("sib", DIGEST)), Array(2, DIGEST)
-
-
-def _build_swap(C, S, *e):
-    d, cur, sib = e[0][0], e[1:9], e[9:17]
-    t = [[C.AND(d, x ^ y) for x, y in zip(cw, sw)] for cw, sw in zip(cur, sib)]
-    return ([[x ^ u for x, u in zip(cw, tw)] for cw, tw in zip(cur, t)]
-            + [[y ^ u for y, u in zip(sw, tw)] for sw, tw in zip(sib, t)])
-
-
-NetworkFrameSwap = HC._part(
-    "NetworkFrameSwap", (), _sig_swap, _build_swap,
-    "(cur, sib), swapped when d: a frames-tree level's children, cur the right one iff d; 512 ANDs")
-
-
-def _check_frame(S) -> None:
-    if type(S.B) is not int or S.B < 1 or type(S.D) is not int or not 1 <= S.D <= 64:
-        raise ValueError(f"a frame read has B >= 1 and 1 <= D <= 64, not B={S.B!r}, D={S.D!r}")
-
-
-def _sig_frame(S):
-    _check_frame(S)
-    return (("frame", Array(S.B, BYTE)), ("pos", Array(S.D, BIT)), ("path", Array(S.D, DIGEST)), ("root", DIGEST)), BIT
-
-
-def _body_frame(B, S, frame, pos, path_, root):
-    _check_frame(S)
-    K = HC._Consts(B)
-    fb = HC._refs(frame)
-    cur = _compress(B, _cv(K, _frame_block(S.B)),
-                    [fb[8 * i:8 * i + 8] for i in range(S.B)] + [K.bits(b, 8) for b in pad_tail(128 + S.B)])
-    node, tail = _cv(K, NODE_TAG.ljust(128, b"\0")), [K.bits(b, 8) for b in pad_tail(256)]
-    for k in range(S.D):
-        pair = B.call(NetworkFrameSwap, pos[k], cur, path_[k])
-        cur = _compress(B, B.call(Sha512Compress, node, pair.reshape(Array(16, WORD))), tail)
-    return B.call(bind(LmsEqual, N=64), cur, root)
-
-
-NetworkFrameRead = CompositeDefinition(
-    "NetworkFrameRead", 1, ("B", "D"), _sig_frame, _body_frame, conformance="exact-model-tested",
-    doc="1 iff the B-byte frame is leaf pos of the depth-D frames tree of root (`certificate.verify_frame`): its leaf "
-        "SHA-512(block(frame tag ‖ u32be B) ‖ frame), each level SHA-512(block(node tag) ‖ l ‖ r) with (l, r) swapped "
-        "by pos's bit, leaf level first")
-
-
-def _sig_event(S):
-    if type(S.B) is not int or S.B < ID_AT + ID_DIGITS + len(ID_EVENT_TAIL):
-        raise ValueError(f"a {S.B!r}-byte frame has no room for an id event")
-    return (("frame", Array(S.B, BYTE)), ("id", Array(32, BIT))), BIT
-
 
 def _add(C, x: Sequence, y: Sequence) -> list:
     """x + y, both as wide as x, the carry out dropped: a ripple adder, 2 ANDs a bit."""
@@ -315,17 +405,15 @@ def _add(C, x: Sequence, y: Sequence) -> list:
     return out
 
 
-def _build_event(C, S, *e):
-    frame, token = e[:S.B], e[S.B]
-    template = id_frame(0, S.B)
-    oks = [HC._same(frame[i][b], template[i] >> b & 1)
-           for i in range(S.B) if not ID_AT <= i < ID_AT + ID_DIGITS for b in range(8)]
-    chars = frame[ID_AT:ID_AT + ID_DIGITS]
+def _digits(C, chars: Sequence[Sequence]) -> tuple[list, list]:
+    """The id field's checks (spaces then digits, a nonzero first digit unless it is the last, below 2^32) and its
+    value's 32 bits, least significant first."""
     space = [and_reduce(C, [HC._same(c[b], 0x20 >> b & 1) for b in range(8)]) for c in chars]
     # a digit is 0x30 ... 0x39: high nibble 0011, low nibble at most 9 (not b3 with b2 or b1)
     digit = [C.AND(and_reduce(C, [c[7].inv(), c[6].inv(), c[5], c[4]]), C.AND(c[3], C.AND(c[2].inv(), c[1].inv()).inv()).inv())
              for c in chars]
     zero = [and_reduce(C, [c[b].inv() for b in range(4)]) for c in chars]
+    oks = []
     for i in range(ID_DIGITS):
         oks.append(space[i] ^ digit[i])
         if i:
@@ -339,89 +427,250 @@ def _build_event(C, S, *e):
     for c in chars:
         # v·10 + the character's low nibble (a space's is 0)
         v = _add(C, _add(C, [ZERO] * 3 + v[:-3], [ZERO] + v[:-1]), [*c[:4], *[ZERO] * (width - 4)])
-    oks += [HC._same(v[j], token[j]) for j in range(32)] + [v[32].inv(), v[33].inv()]
+    return oks + [v[32].inv(), v[33].inv()], v[:32]
+
+
+def _sig_cell(S):
+    _check_cell_bytes(S.B)
+    return (("cell", Array(S.B, BYTE)),), Array(CELL_OUT, BIT)
+
+
+def _build_cell(C, S, *cell):
+    template, free = data_cell(0, 0, S.B), {*range(1, 5), *range(ID_AT, ID_AT + ID_DIGITS)}
+    fill = and_reduce(C, [cell[i][b].inv() for i in range(CELL_USED, S.B) for b in range(8)])
+    digits_ok, token = _digits(C, cell[ID_AT:ID_AT + ID_DIGITS])
+    data = and_reduce(C, [HC._same(cell[i][b], template[i] >> b & 1) for i in range(CELL_USED) if i not in free
+                          for b in range(8)] + digits_ok)
+    pad = and_reduce(C, [cell[i][b].inv() for i in range(CELL_USED) for b in range(8)])
+    # the stream is u32 big-endian at bytes 1 ... 4: its bit j is bit j % 8 of byte 4 - j // 8
+    return [[C.AND(fill, C.AND(data.inv(), pad.inv()).inv()), data, *(cell[4 - j // 8][j % 8] for j in range(32)), *token]]
+
+
+IoTieCell = _part(
+    "IoTieCell", ("B",), _sig_cell, _build_cell,
+    "(ok, data, stream, id) of a B-byte cell: ok iff it is the pad (B zero bytes) or `data_cell(id, stream, B)`, its "
+    "bytes but the stream and the id field the template's, the field spaces then digits, the first digit nonzero "
+    "unless it is the last, below 2^32; data iff the latter; stream and id u32, least significant bit first")
+
+
+def _check_route(S) -> None:
+    if type(S.D) is not int or not 1 <= S.D <= 32 or type(S.W) is not int or S.W < 1:
+        raise ValueError(f"a Beneš network has 1 <= D <= 32 and W >= 1, not D={S.D!r}, W={S.W!r}")
+
+
+def _sig_route(S):
+    _check_route(S)
+    return ((("xs", Array(1 << S.D, Array(S.W, BIT))), ("switches", Array((2 * S.D - 1) << (S.D - 1), BIT))),
+            Array(1 << S.D, Array(S.W, BIT)))
+
+
+def _swap(C, s, a: Sequence, b: Sequence) -> tuple[list, list]:
+    t = [C.AND(s, x ^ y) for x, y in zip(a, b)]
+    return [x ^ u for x, u in zip(a, t)], [y ^ u for y, u in zip(b, t)]
+
+
+def _build_route(C, S, *e):
+    it = iter(e[-1])
+
+    def run(v: list) -> list:
+        if len(v) == 2:
+            return list(_swap(C, next(it), v[0], v[1]))
+        up, down = [], []
+        for k in range(len(v) // 2):
+            a, b = _swap(C, next(it), v[2 * k], v[2 * k + 1])
+            up.append(a)
+            down.append(b)
+        up, down = run(up), run(down)
+        res = []
+        for a, b in zip(up, down):
+            res += _swap(C, next(it), a, b)
+        return res
+
+    return run([list(x) for x in e[:-1]])
+
+
+IoTieRoute = _part(
+    "IoTieRoute", ("W", "D"), _sig_route, _build_route,
+    "a Beneš network on 2^D W-bit inputs: the input column's 2^(D − 1) switches (s swaps inputs 2k and 2k + 1 "
+    "into the halves), the upper half's network, the lower half's, the output column's switches; W ANDs a switch")
+
+
+def _sig_match(S):
+    if type(S.D) is not int or not 4 <= S.D <= 32 or type(S.DB) is not int or not 1 <= S.DB <= 32:
+        raise ValueError(f"a match has 4 <= D <= 32 and 1 <= DB <= 32, not D={S.D!r}, DB={S.DB!r}")
+    return ((("routed", Array(1 << S.D, Array(65 + S.DB + S.D, BIT))), ("table", Array(1 << S.D, Array(SLOT.size, BYTE))),
+             ("base", Array(32, BIT))), BIT)
+
+
+def _eq(C, x: Sequence, y: Sequence):
+    return and_reduce(C, [(a ^ b).inv() for a, b in zip(x, y, strict=True)])
+
+
+def _lt(C, x: Sequence, y: Sequence):
+    """x < y, unsigned, least significant bit first: 1 AND a bit."""
+    lt = ZERO
+    for a, b in zip(x, y, strict=True):
+        lt = lt ^ C.AND(a ^ b, lt ^ b)
+    return lt
+
+
+def _build_match(C, S, *e):
+    M = 1 << S.D
+    routed, table, base = e[:M], e[M:M + SLOT.size * M], e[-1]
+
+    def field(m: int, f: int) -> list:
+        at = SLOT.size * m + 4 * f
+        return [table[at + 3 - j // 8][j % 8] for j in range(32)]
+
+    oks, prev = [], None
+    for m in range(M):
+        r = routed[m]
+        d, rq, rid, rb, ri = r[0], r[1:33], r[33:65], r[65:65 + S.DB], r[65 + S.DB:]
+        q, j, b, x = (field(m, f) for f in range(4))
+        f = and_reduce(C, q).inv()
+        ones = and_reduce(C, [table[SLOT.size * m + k][t] for k in range(SLOT.size) for t in range(8)])
+        hit = _eq(C, rq + rid + _add(C, list(base), [*rb, *[ZERO] * (32 - S.DB)]), q + x + b)
+        oks += [(d ^ f).inv(), C.AND(f, hit.inv()).inv(), C.AND(f.inv(), ones.inv()).inv()]
+        if prev is not None:
+            pf, pq, pj, pi = prev
+            inc, c = [], ONE
+            for t in pj:
+                inc.append(t ^ c)
+                c = C.AND(t, c)
+            same = _eq(C, pq, q)
+            then = C.AND(C.AND(_eq(C, inc, j), c.inv()), _lt(C, pi, ri))
+            q_lt = _lt(C, pq, q)
+            pair = q_lt ^ C.AND(same, then ^ q_lt)
+            oks += [C.AND(f, pf.inv()).inv(), C.AND(C.AND(pf, f), pair.inv()).inv()]
+        prev = (f, q, j, ri)
     return [and_reduce(C, oks)]
 
 
-IoTieEvent = HC._part(
-    "IoTieEvent", ("B",), _sig_event, _build_event,
-    "1 iff the B-byte frame is `id_frame(id, B)`: its other bytes the template's, and its 10 characters spaces then "
-    "digits, the first digit nonzero unless it is the last, reading id (u32, least significant bit first)")
+IoTieMatch = _part(
+    "IoTieMatch", ("D", "DB"), _sig_match, _build_match,
+    "1 iff each of the 2^D routed cells (data, stream, id, bucket, index) is at a full table slot exactly when it is a "
+    "data cell, a full slot's q, id and b its cell's stream, id and base + bucket, an empty slot (q = 2^32 − 1) all "
+    "ones, the full slots first, and each next full slot of the same request at j + 1 with a later cell, of another "
+    "request at a larger q")
 
 
-def _sig_column(S):
-    return (("row", Array(8 * ROW_BYTES, BIT)), ("column", Array(5, BIT))), Array(32, BIT)
+def _sig_content(S):
+    sh = Shape(S.B, S.T, S.R)
+    return ((("cells", Array(sh.N, Array(S.B, BYTE))), ("table", Array(sh.M // SLOTS_A_ROW, Array(ROW_BYTES, BYTE))),
+             ("base", Array(32, BIT)), ("switches", Array(sh.switches, BIT))), BIT)
 
 
-def _build_column(C, S, row, column):
-    # id c is u32be at bytes 4c ... 4c + 3: its bit j is bit j % 8 of byte 4c + 3 - j // 8
-    ids = [[row[8 * (4 * c + 3 - j // 8) + j % 8] for j in range(32)] for c in range(ROW_IDS)]
-    for b in range(5):
-        ids = [[x ^ C.AND(column[b], x ^ y) for x, y in zip(ids[2 * i], ids[2 * i + 1])] for i in range(len(ids) // 2)]
-    return [ids[0]]
+def _body_content(B, S, cells, table, base, switches_):
+    sh = Shape(S.B, S.T, S.R)
+    K, cr = HC._Consts(B), HC._refs(cells)
+    oks, xs = [], []
+    for i in range(sh.N):
+        out = HC._refs(B.call(bind(IoTieCell, B=S.B), HC._coll(Array(S.B, BYTE), cr[8 * S.B * i:8 * S.B * (i + 1)])))
+        oks.append(out[0])
+        xs += out[1:] + K.bits(sh.bucket(i), sh.DB) + K.bits(i, sh.D)
+    for i in range(sh.N, sh.M):
+        xs += K.bits(0, CELL_OUT - 1 + sh.DB) + K.bits(i, sh.D)
+    routed = B.call(bind(IoTieRoute, W=sh.W, D=sh.D), HC._coll(Array(sh.M, Array(sh.W, BIT)), xs), switches_)
+    slots = HC._coll(Array(sh.M, Array(SLOT.size, BYTE)), HC._refs(table))
+    oks += HC._refs(B.call(bind(IoTieMatch, D=sh.D, DB=sh.DB), routed, slots, base))
+    return B.call(BL.and_gate(len(oks)), HC._coll(Array(len(oks), BIT), oks))
 
 
-IoTieColumn = HC._part(
-    "IoTieColumn", (), _sig_column, _build_column,
-    "the u32be id at the column (5 bits, least significant first) of a port row of 32, least significant bit first: "
-    "31 32-bit muxes, 992 ANDs")
+IoTieContent = CompositeDefinition(
+    "IoTieContent", 1, ("B", "T", "R"), _sig_content, _body_content, conformance="exact-model-tested",
+    doc="1 iff every one of the window's N = T·R B-byte cells is a pad or a data cell (`IoTieCell`), and the cells, "
+        "each with its bucket ⌊i / R⌋ and index i, and M − N pads after them, routed by the switches (`IoTieRoute`), "
+        "match the table (`IoTieMatch`)")
 
 
-def _draw_statics(S) -> int:
-    port = TokenPort(S.FOUT, 0, S.C, S.D)
-    if _log2(S.FOUT, "FOUT") > S.D:
-        raise ValueError(f"FOUT = {S.FOUT} is more than a depth-{S.D} tree's leaves")
-    return port.DT
+def _sig_pad(S):
+    return (("domain", DIGEST), ("x", Array(8 * S.B, BIT))), DIGEST
 
 
-def _sig_draw(S):
-    DT = _draw_statics(S)
-    return (("frames_root", DIGEST), ("k", Array(S.D, BIT)), ("frame", Array(S.B, BYTE)), ("frame_path", Array(S.D, DIGEST)),
-            ("port", DIGEST), ("port_domain", DIGEST), ("row", Array(ROW_BYTES, BYTE)), ("salt", SALT),
-            ("row_path", Array(DT, DIGEST))), BIT
+FrameV3Pad = _part(
+    "FrameV3Pad", ("B",), _sig_pad, lambda C, S, *e: _hash_uint(C, _PAD, [_fv_bytes(e[0:8])], e[8], S.B, lambda u: [u]),
+    "the frame-v3-sha512 pad at rank x under the domain id domain (`CommitmentDomain.pad`); x LSB first, its uint "
+    "1 ... B bytes")
 
 
-def _body_draw(B, S, frames_root, k, frame, frame_path, port, port_domain, row, salt, row_path):
-    DT = _draw_statics(S)
-    K = HC._Consts(B)
-    kb, lf = HC._refs(k), _log2(S.FOUT, "FOUT")
-    # row g·C + (k mod F) >> 5 with g = k >> log2(F): k's bits 5 ... log2(F) − 1, zeros to log2(C), then g's bits
-    pos = kb[5:lf] + K.bits(0, _log2(S.C, "C") - (lf - 5)) + kb[lf:]
-    row_bits = row.reshape(Array(8 * ROW_BYTES, BIT))
-    token = B.call(IoTieColumn, row_bits, HC._coll(Array(5, BIT), kb[:5]))
-    oks = [B.call(bind(NetworkFrameRead, B=S.B, D=S.D), frame, k, frame_path, frames_root),
-           B.call(bind(IoTieEvent, B=S.B), frame, token),
-           B.call(bind(HC.NetworkHidingRead, N_BITS=8 * ROW_BYTES, D=DT), row_bits, salt, port, port_domain,
-                  HC._coll(Array(DT, BIT), pos), row_path)]
-    bits = concat([o.refs for o in oks])
-    return B.call(BL.and_gate(bits.count), Coll(Array(bits.count, BIT), bits))
+def _sig_rows(S):
+    if type(S.N_BITS) is not int or S.N_BITS < 1 or type(S.COUNT) is not int or not 2 <= S.COUNT <= 1 << 32:
+        raise ValueError(f"a rows root has N_BITS >= 1 and 2 <= COUNT <= 2^32, not N_BITS={S.N_BITS!r}, COUNT={S.COUNT!r}")
+    return ((("rows", Array(S.COUNT, Array(S.N_BITS, BIT))), ("salts", Array(S.COUNT, SALT)), ("root", DIGEST),
+             ("domain", DIGEST)), BIT)
 
 
-IoTieDraw = CompositeDefinition(
-    "IoTieDraw", 1, ("B", "D", "FOUT", "C"), _sig_draw, _body_draw, conformance="exact-model-tested",
-    doc="1 iff the frame is leaf k of the frames tree (`NetworkFrameRead`), it is the id event of an id "
-        "(`IoTieEvent`), and the port row at g·C + (k mod F) >> 5, g = k >> log2(F), opens under the port's root and "
-        "domain (`NetworkHidingRead`) with that id at column k mod 32 (`IoTieColumn`)")
+def _body_rows(B, S, rows, salts, root, dom):
+    K, rr, sr, sb = HC._Consts(B), HC._refs(rows), HC._refs(salts), SALT.leaves
+    D = (S.COUNT - 1).bit_length()
+    nb = index_bytes(D)
+    level = []
+    for i in range(S.COUNT):
+        x = B.call(bind(HC.NetworkRowDigest, N_BITS=S.N_BITS), HC._coll(Array(S.N_BITS, BIT), rr[S.N_BITS * i:S.N_BITS * (i + 1)]))
+        v = B.call(Hm96Sha512Leaf, x, HC._coll(SALT, sr[sb * i:sb * (i + 1)]))[2]
+        level.append(B.call(bind(FrameV3Leaf, B=nb, SCHEMA=SCHEMA), dom, v, HC._coll(Array(8 * nb, BIT), K.bits(i, 8 * nb))))
+    for i in range(S.COUNT, 1 << D):
+        level.append(B.call(bind(FrameV3Pad, B=nb), dom, HC._coll(Array(8 * nb, BIT), K.bits(i, 8 * nb))))
+    for k in range(D):
+        nb = index_bytes(D - k - 1)
+        level = [B.call(bind(FrameV3Node, B=nb), dom, HC._coll(LEVEL, K.bits(k, 8)), HC._coll(Array(8 * nb, BIT), K.bits(t, 8 * nb)),
+                        HC._coll(BIT, K.bits(0, 1)), level[2 * t], level[2 * t + 1]) for t in range(len(level) // 2)]
+    return B.call(bind(LmsEqual, N=64), level[0], root)
 
 
-# --- arguments and the fake upstream's evaluation ---------------------------------------------------------------------
-
-def draw_arguments(frames_root: bytes, k: int, d: Draw, port_root: bytes, port_domain: bytes, D: int) -> list[list[int]]:
-    """`IoTieDraw`'s arguments for one draw in its signature's order, each its leaves' bits."""
-    bits = HC._digest_bits
-    return [bits(frames_root), HC._int_bits(k, D), HC._bytes_bits(d.frame), [b for s in d.frame_path for b in bits(s)],
-            bits(port_root), bits(port_domain), HC._bytes_bits(d.row), bits(d.salt),
-            [b for s in d.row_path for b in bits(s)]]
+NetworkRowsRoot = CompositeDefinition(
+    "NetworkRowsRoot", 1, ("N_BITS", "COUNT"), _sig_rows, _body_rows, conformance="exact-model-tested",
+    doc="1 iff root is the dense frame-v3-sha512 root, under the domain id domain, of the COUNT N_BITS-bit rows' "
+        "hm96-sha512/row/v2 leaves, each under its salt, and the domain's pads to a power of two: every row's digest, "
+        "hm96 leaf and frame-v3 leaf, every pad and every node")
 
 
-def fake_salt(seed: bytes, i: int) -> bytes:
-    """A deterministic hiding salt for a fake upstream's tests (a prover draws fresh ones)."""
-    out = b""
-    while len(out) < hm96.SHA512.salt_bytes:
-        out += hashlib.sha512(seed + i.to_bytes(8, "big") + len(out).to_bytes(4, "big")).digest()
-    return out[:hm96.SHA512.salt_bytes]
+def _sig_window(S):
+    sh = Shape(S.B, S.T, S.R)
+    rows = sh.M // SLOTS_A_ROW
+    return ((("cells_root", DIGEST), ("cells_domain", DIGEST), ("cells", Array(sh.N, Array(S.B, BYTE))),
+             ("cell_salts", Array(sh.N, SALT)), ("table_root", DIGEST), ("table_domain", DIGEST),
+             ("table", Array(rows, Array(ROW_BYTES, BYTE))), ("table_salts", Array(rows, SALT)), ("base", Array(32, BIT)),
+             ("switches", Array(sh.switches, BIT))), BIT)
 
 
-__all__ = ["Draw", "ID_AT", "ID_EVENT_BYTES", "Instance", "IoTieColumn", "IoTieDraw", "IoTieEvent", "NetworkFrameRead",
-           "NetworkFrameSwap", "TokenPort", "draw", "draw_arguments", "fake_salt", "frame_id", "head_counts", "id_event",
-           "id_frame", "path", "port_levels", "reference", "reference_draws"]
+def _body_window(B, S, cells_root, cells_domain, cells, cell_salts, table_root, table_domain, table, table_salts, base,
+                 switches_):
+    sh = Shape(S.B, S.T, S.R)
+    rows = sh.M // SLOTS_A_ROW
+    oks = [B.call(bind(NetworkRowsRoot, N_BITS=8 * S.B, COUNT=sh.N), cells.reshape(Array(sh.N, Array(8 * S.B, BIT))),
+                  cell_salts, cells_root, cells_domain),
+           B.call(bind(NetworkRowsRoot, N_BITS=8 * ROW_BYTES, COUNT=rows), table.reshape(Array(rows, Array(8 * ROW_BYTES, BIT))),
+                  table_salts, table_root, table_domain),
+           B.call(bind(IoTieContent, B=S.B, T=S.T, R=S.R), cells, table, base, switches_)]
+    bits = [r for o in oks for r in HC._refs(o)]
+    return B.call(BL.and_gate(3), HC._coll(Array(3, BIT), bits))
+
+
+IoTieWindow = CompositeDefinition(
+    "IoTieWindow", 1, ("B", "T", "R"), _sig_window, _body_window, conformance="exact-model-tested",
+    doc="1 iff the cells' rows are the cells root's (`NetworkRowsRoot`), the table's rows the table root's, and the "
+        "cells match the table (`IoTieContent`): the I/O tie of one egress link-window, every cell opened")
+
+
+# --- arguments -------------------------------------------------------------------------------------------------------
+
+def content_arguments(inst: Instance, bits: Sequence[int]) -> list[list[int]]:
+    """`IoTieContent`'s arguments in its signature's order, each its leaves' bits."""
+    return [[b for c in inst.cells for b in HC._bytes_bits(c)], [b for r in inst.rows for b in HC._bytes_bits(r)],
+            HC._int_bits(inst.base, 32), list(bits)]
+
+
+def window_arguments(inst: Instance, bits: Sequence[int]) -> list[list[int]]:
+    """`IoTieWindow`'s arguments in its signature's order, each its leaves' bits."""
+    d = HC._digest_bits
+    cells, rows, base, sw = content_arguments(inst, bits)
+    return [d(inst.cells_root), d(inst.cells_domain), cells, [b for s in inst.cell_salts for b in d(s)],
+            d(inst.table_root), d(inst.table_domain), rows, [b for s in inst.row_salts for b in d(s)], base, sw]
+
+
+__all__ = ["CELL_OUT", "CELL_USED", "EMPTY", "FrameV3Pad", "ID_AT", "ID_EVENT_BYTES", "Instance", "IoTieCell", "IoTieContent",
+           "IoTieMatch", "IoTieRoute", "IoTieWindow", "NetworkRowsRoot", "Parsed", "ROW_BYTES", "SLOT", "SLOTS_A_ROW",
+           "Shape", "Slot", "benes", "benes_apply", "canonical_map", "content_arguments", "data_cell", "domain",
+           "fake_salt", "id_event", "pad_cell", "parse_cell", "reference", "reference_parts", "rows_root", "switches",
+           "table_rows", "table_slots", "window_arguments", "window_slots"]
