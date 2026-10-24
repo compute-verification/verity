@@ -29,11 +29,15 @@ prompt of exactly `--prompt-tokens` tokens (`PROMPT` padded with `FILLER` in the
 and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), temperature 0. F, the
 frames of a response, is that token count, not the endpoint's events: vLLM v1 merges a request's tokens that its API
 server hasn't read yet into one chunk, so with several in flight a response's last two tokens sometimes share one
-event and sometimes don't, though the tokens are the same. An event is a chunk of at least one token, so a response
-is at most F canonical events, and the shim pads one that ends short with empty canonical events (`active.event(b"")`,
-what a chunk of no text gives) up to F, after its last (`pad_to`, `active_replay.LiveServer`). Each probed response's
-raw count, which must be 1 … F, and its seconds to the last are kept; a response of more than F (a chunk of more than
-`active.TOKEN_BYTES` bytes of text) isn't cut, and N2's counts refuse its window. D, the latency budget in buckets, is
+event and sometimes don't, though the tokens are the same. vLLM's detokenizer holds back a token whose bytes end
+inside a UTF-8 character and streams it as a chunk of no text, its bytes in the next chunk, so it is still one event.
+An event is a chunk of at least one token, so a response whose tokens are each at most `active.TOKEN_BYTES` bytes is
+at most F canonical events, and the shim pads one that ends short with empty canonical events (`active.event(b"")`,
+what a chunk of no text gives) up to F, after its last (`pad_to`, `active_replay.LiveServer`). A longer token is one
+event per `TOKEN_BYTES` of it (GLM-5.3's tokenizer has 124, runs of spaces up to 512 bytes among them), so a response
+that holds one is longer than its tokens: `--response-frames` declares F, at least the body's tokens. Each probed
+response's raw count, which must be 1 … F, and its seconds to the last are kept; a response of more than F in the run
+isn't cut, and N2's counts refuse its window. D, the latency budget in buckets, is
 four times the slowest response plus half a second, as `lab_run.py` sets it, or, when a group's responses that late
 don't fit in the window they're sent in (below), the most that does, down to twice the slowest plus half a second
 (`DoesntFit` below that); `--delta-buckets` sets it. Window 0's first group is released in its bucket 2, a bucket
@@ -72,7 +76,8 @@ reads requests from outside).
 
     python certifier_serve.py keys --dir KEYDIR [--height 10]
     python certifier_serve.py plan --upstream URL --out DIR [--model NAME] [--requests 400] [--in-flight 4]
-        [--tokens 64] [--prompt-tokens 128] [--probes 8] [--delta-buckets D] [--profile planned|served]
+        [--tokens 64] [--response-frames F] [--prompt-tokens 128] [--probes 8] [--delta-buckets D]
+        [--profile planned|served]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
         --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10] [--tamper late|extra]
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
@@ -442,29 +447,36 @@ class DoesntFit(ValueError):
 
 
 def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = None,
-                name: str = "served", in_flight: int = 1, profile: str = "planned") -> tuple[dict, dict]:
+                name: str = "served", in_flight: int = 1, profile: str = "planned",
+                frames: int | None = None) -> tuple[dict, dict]:
     """The calibration report and the plan of a served run of `requests` requests of the probed body, sent `in_flight`
     at a time (the module docstring's "The served plan"), with N2's `profile` (`occupancy`, "N2's profile"): the
     planned egress occupancy, or the served profile, at the latency budget `delta_buckets`, or else at the largest of 4
-    down to 2 times the slowest response plus half a second that fits."""
+    down to 2 times the slowest response plus half a second that fits. F, a response's frames, is `frames`, by default
+    the body's tokens."""
     if profile not in PROFILES:
         raise ValueError(f"N2's profile is one of {PROFILES}, not {profile!r}")
     body = probed["body"]
-    F = body["max_tokens"]
-    if body.get("min_tokens") != F or not body.get("ignore_eos"):
+    tokens = body["max_tokens"]
+    F = frames or tokens
+    if body.get("min_tokens") != tokens or not body.get("ignore_eos"):
         raise ValueError("a served plan's body asks for exactly its tokens (min_tokens = max_tokens, ignore_eos), "
                          f"not {body}")
+    if F < tokens:
+        raise ValueError(f"F, a response's frames, is at least the body's {tokens} tokens, not {F}")
     lengths = sorted({r["events"] for r in probed["responses"]})
     if not lengths or lengths[0] < 1 or lengths[-1] > F:
-        raise ValueError(f"the endpoint's responses to one body of {F} tokens are {lengths} events long: each is 1 … "
-                         f"{F}, an event a chunk of at least one token and at most {ar.TOKEN_BYTES} bytes of text")
+        raise ValueError(f"the endpoint's responses to one body of {tokens} tokens are {lengths} events long: each is "
+                         f"1 … F = {F}, an event a chunk of at least one token, and a token of more than "
+                         f"{ar.TOKEN_BYTES} bytes one event per {ar.TOKEN_BYTES}: declare F at least the longest "
+                         "(--response-frames)")
     slowest = max(r["last_s"] for r in probed["responses"])
     if delta_buckets:
-        return _served_plan(probed, requests, delta_buckets, name, in_flight, profile)
+        return _served_plan(probed, requests, delta_buckets, name, in_flight, profile, F)
     most, least = (math.ceil((k * slowest * 1000 + 500) / BUCKET_MS) for k in (4, 2))
     for D in range(most, least - 1, -1):
         try:
-            return _served_plan(probed, requests, D, name, in_flight, profile)
+            return _served_plan(probed, requests, D, name, in_flight, profile, F)
         except DoesntFit:
             pass
     raise DoesntFit(f"{in_flight} responses of {F} events don't fit in a window of {WINDOW_BUCKETS} buckets at a "
@@ -473,8 +485,9 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
 
 
 def _served_plan(probed: dict, requests: int, D: int, name: str, in_flight: int,
-                 profile: str = "planned") -> tuple[dict, dict]:
-    body, F = probed["body"], probed["body"]["max_tokens"]
+                 profile: str = "planned", F: int | None = None) -> tuple[dict, dict]:
+    body = probed["body"]
+    F = F or body["max_tokens"]
     lengths = sorted({r["events"] for r in probed["responses"]})
     slowest = max(r["last_s"] for r in probed["responses"])
     names = [f"{name}.{j}" for j in range(requests)]
@@ -541,9 +554,9 @@ def _served_plan(probed: dict, requests: int, D: int, name: str, in_flight: int,
             "model_syncs": [[s.delta, str(s.rho)] for s in chosen], "live_model": body["model"], "body": body,
             "seed": 0, "occupancy": occ, "request_major": True,
             "pad_to": F,
-            "served": {"tokens": F, "probe_events": lengths, "delta_buckets": D, "gap_buckets": D + 1,
-                       "span_buckets": span, "slowest_s": slowest, "request_frames": frames_in, "in_flight": in_flight,
-                       "requests": requests}}
+            "served": {"tokens": body["max_tokens"], "response_frames": F, "probe_events": lengths,
+                       "delta_buckets": D, "gap_buckets": D + 1, "span_buckets": span, "slowest_s": slowest,
+                       "request_frames": frames_in, "in_flight": in_flight, "requests": requests}}
     return report, plan
 
 
@@ -839,7 +852,7 @@ def plan_of(args, url: str, clock=time.monotonic) -> tuple[dict, dict, dict]:
     probed = probe(url, request_body(model, args.tokens, prompt), args.probes, args.api_key_env, clock,
                    in_flight=args.in_flight, warmup=args.in_flight)
     report, plan = served_plan(probed, args.requests, args.delta_buckets, in_flight=args.in_flight,
-                               profile=args.profile)
+                               profile=args.profile, frames=args.response_frames)
     return probed, report, plan
 
 
@@ -912,6 +925,9 @@ def main(argv=None) -> int:
         q.add_argument("--requests", type=int, default=400)
         q.add_argument("--in-flight", type=int, default=4, help="requests sent together, served side by side")
         q.add_argument("--tokens", type=int, default=64, help="min_tokens and max_tokens of every request (ignore_eos)")
+        q.add_argument("--response-frames", type=int,
+                       help="F, a response's canonical events, padded to (default: --tokens); a token of more than "
+                            "64 bytes is one event per 64")
         q.add_argument("--prompt-tokens", type=int, default=128,
                        help="the prompt's length in the endpoint's tokens (/tokenize); 0: the text prompt as is")
         q.add_argument("--probes", type=int, default=8)
