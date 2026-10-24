@@ -13,8 +13,11 @@ many reads of a node's registered blocks the node made in each window, from rece
    receipt kind, `bind`, the layout and the rows.  The verifier keeps one live registration a node (`Registry`): a
    second while one is live is refused and draws nothing, and a registration ends only when the verifier closes it,
    counting its sessions, an unended one as failed.
-2. Coins.  Before the session the challenger draws two live coins a window, its challenge `σ_t` and its openings coin,
-   and commits to them (`coins.Challenger`).  The prover gets the commitment first (`Session.commitment`).
+2. Coins.  Before the session the proof service's challenger draws two live coins a window, its challenge `σ_t` and
+   its openings coin, and a coin an append, and commits to them (`coins.Coins`: session k's epoch of the one challenger,
+   on its own host when it is remote).  The prover gets the commitment first (`Session.commitment`).  Each coin opens
+   once, after the root the verifier recorded for it, which the challenger's signed log keeps
+   (`Session.released_reason`).
 3. A session of `windows` windows.  The verifier releases `σ_0` (`Session.start`), and at each window's end the next
    window's challenge, or the close after the last (`Session.boundary`), one-way.  A window lasts at least the stated
    `T` (`Params.window_ns`, 60 s by default).
@@ -44,7 +47,8 @@ many reads of a node's registered blocks the node made in each window, from rece
    reduction and its trip up, `timing.deadline`).  A late root, one out of order, one with no step or a step not above
    the previous pass's, a plan that repeats a block, or one that holds an appended block past L rejects the session.
    A window with fewer than `min_passes` roots is rejected.
-6. Openings.  Once window t's roots are final (the next window's first root has arrived, or `D_t` has passed), the
+6. Openings.  Once window t's roots are final (the next window's first root has arrived, `D_t` has passed, or, in a
+   paced session, the window holds its k roots and its boundary has left), the
    challenger releases the window's openings coin, and the verifier draws `s = samples` distinct receipts uniformly from
    the window's `U_t = Σ_i L_i` with it (`Session.close`).  The prover opens each (`Prover.open`): the block, its receipt
    leaf with its salt and path to the pass's root, the payload's salt and path to the payload root, and, under a
@@ -88,7 +92,7 @@ import secrets
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
@@ -526,24 +530,22 @@ class Prover:
     commits them, each leaf under a fresh salt from `entropy`.  `tiles` is PoUW's if the registration binds z, and
     None if it does not."""
 
-    def __init__(self, store: Store, tiles: Tiles | None, commitment: coins.CoinCommitment, *,
+    def __init__(self, store: Store, tiles: Tiles | None, commitment: coins.LiveCommitment, *,
                  entropy: Callable[[int], bytes] = os.urandom) -> None:
         self.store, self.commitment, self.entropy = store, commitment, entropy
         self.tiles = _tiles(tiles, store.registration.bind)
 
-    def run(self, challenge: coins.CoinOpening, i: int, previous: bytes, plan: Plan | None = None, *,
+    def run(self, challenge: coins.LiveOpening, i: int, previous: bytes, plan: Plan | None = None, *,
             head: bytes | None = None) -> Pass:
         """Pass i of the window whose challenge is `challenge`, after the root `previous`, its seed binding `head`, the
         chain over every append the verifier will have received before this pass's root (`chained`; None without
         one, the honest prover's `Store.head`): refused unless the coin is a window's challenge and opens against the
         session's commitment."""
         t = getattr(challenge, "index", None)
-        reason = coins.coin_reason(self.commitment, challenge, t)
-        if reason is None and t >= self.commitment.count // 2:
-            reason = f"coin {t} is an openings coin, not a window's challenge"
+        reason = coins.coin_reason(self.commitment, challenge, coins.CHALLENGE, t)
         if reason is not None:
             raise ValueError(reason)
-        return self.pass_under(t, i, receipts.seed(challenge.coin, i, chained(previous, head)), plan)
+        return self.pass_under(t, i, receipts.seed(coins.coin(challenge), i, chained(previous, head)), plan)
 
     def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> Pass:
         """Pass i of `window`'s receipts and tree under `seed`, however it was derived."""
@@ -778,14 +780,16 @@ def _within(spans: list[tuple[int, int]], first: int, count: int) -> bool:
 
 class Session:
     """The verifier's side of one session, driven by the coins it releases and the roots it receives, on its own clock.
-    `challenger` holds the session's coins (`coins.Challenger`), committed before the session.  `not_before_ns`, which
+    `coins` are the session's coins through the one challenger (`coins.Coins`), committed before the session, each
+    asked for after the root it follows: σ_0 after the session's window root, σ_t after the last root received,
+    window t's openings coin after its last root and an append's coin after its root.  `not_before_ns`, which
     every session names, is the earliest its first coin may leave on the verifier's clock: the previous session's
     `Record.end_ns` over the same store, less the trusted round-trip floor if there is one, or the clock at
     registration for the store's first session, so that no read serves receipts of two sessions.  `tiles` is PoUW's
     check if the registration binds z, and None if it does not.  Blocks appended after the codec seed (`append`) are
     the session's: they take indices from N up, and a later session over the store starts again from N."""
 
-    def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, challenger: coins.Challenger, *,
+    def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, coins_: coins.Coins, *,
                  not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
         if (registration.blocks != params.blocks or registration.codec != params.codec
                 or registration.receipt != params.receipt or registration.bind != params.bind
@@ -795,10 +799,11 @@ class Session:
         if type(not_before_ns) is not int or not_before_ns < 0:
             raise ValueError("not_before_ns is the previous session's last deadline over the store, or the clock at "
                              "registration for its first: a nonnegative integer")
-        c = challenger.commitment
-        if c.registration != registration.digest or c.count != params.coins:
-            raise ValueError(f"the challenger's coins are not this session's: {params.coins} coins for this registration")
-        self.params, self.registration, self.challenger = params, registration, challenger
+        if (type(coins_) is not coins.Coins or coins_.registration != registration.digest
+                or coins_.windows != params.windows):
+            raise ValueError(f"the challenger's coins are not this session's: {params.windows} windows' coins for this "
+                             "registration")
+        self.params, self.registration, self.coins = params, registration, coins_
         self.tiles = _tiles(tiles, registration.bind)
         self.clock, self.not_before_ns = clock, not_before_ns
         self.windows: list[_Window] = []
@@ -815,16 +820,41 @@ class Session:
         self._planned: list[tuple[int, int]] = []
         self._plan = Plan.whole(registration.blocks)
         self._step = -1
+        self._latest = coins_.window
 
     @property
-    def commitment(self) -> coins.CoinCommitment:
+    def commitment(self) -> coins.LiveCommitment:
         """The session's coin commitment, sent to the prover before the first coin."""
-        return self.challenger.commitment
+        return self.coins.commitment
 
-    def _release(self, t: int, now: int) -> coins.CoinOpening:
-        opening = self.challenger.open(t)
-        self.windows.append(_Window(opening.coin, now))
+    def _release(self, t: int, now: int) -> coins.LiveOpening:
+        """σ_t, after the last root received (R before any).  `now`, read before the coin leaves (and before the
+        challenger is asked, unless it was asked with the coin before it, `coins.Coins.ahead`), is its release in the
+        record: the coin leaves later, so the record's span is the longer."""
+        opening = self.coins.challenge(t, self._latest)
+        self.windows.append(_Window(coins.coin(opening), now))
         return opening
+
+    def released_reason(self, signed: coins.LiveCommitment, received: dict[str, Sequence[bytes]]) -> str | None:
+        """Why this session's coins are not the challenger's as it signed them (`coins.released_reason`), the commitment
+        `signed` and the roots `received` read from the challenger's side; None when they are."""
+        return coins.released_reason(self.coins, [w.roots for w in self.windows],
+                                     [a[2].root for a in self._appends], signed, received)
+
+    def trusted_reason(self, directory: Any, heads: Sequence[Any], key: coins.ChallengerKey, pins: Any, main: Any,
+                       verify: coins.Verify, period: str | None = None) -> str | None:
+        """Why this session's coins are not those of the one challenger session the auditor's ledger opens for its
+        window `{root: R}` (`coins.trusted`: the ledger's published `heads` and the session's files in `directory`,
+        under the pinned `key`, run from a commit the host's pins log `pins` records on the verifier's first-parent
+        list of main `main`, inside the audit's `period` when it names one), held to them as `released_reason` holds
+        them; None when they are.  So coins from a second challenger session, opened for another root or refused by the
+        ledger as a second open for R, are refused, and so is a session with no pins log or copy of main, or whose
+        host ran any other tree."""
+        try:
+            signed, received = coins.trusted(self.coins, directory, heads, key, pins, main, verify, period)
+        except coins.CoinError as e:
+            return f"the challenger's session for this session's window is not trusted: {e}"
+        return self.released_reason(signed, received)
 
     def _live(self) -> None:
         if self.failed is not None:
@@ -841,7 +871,7 @@ class Session:
         b = self.windows[t].boundary_ns
         return None if b is None else b + self.params.deadline_ns
 
-    def start(self) -> coins.CoinOpening:
+    def start(self) -> coins.LiveOpening:
         """`σ_0`, released now: refused before `not_before_ns`."""
         if self.windows:
             raise SessionError("a session starts once")
@@ -851,7 +881,7 @@ class Session:
                                "before it over this store may still be reading")
         return self._release(0, now)
 
-    def boundary(self) -> coins.CoinOpening | None:
+    def boundary(self) -> coins.LiveOpening | None:
         """The end of the next unended window: the following window's challenge, or None, the close, after the last.
         Refused sooner than `window_ns` after the window's challenge left."""
         self._live()
@@ -887,17 +917,19 @@ class Session:
         the store's next fresh indices, from the first returned, and a plan received after this may hold them, until
         the lifetime cap: they join the window of the next root received, and no plan of a window `Params.lifetime` or
         more after it may hold them.  The seed of every pass whose root comes after this binds it (`chained`).  The
-        reply is the first index and the append's coin `c_a`, drawn now (`coins.Challenger.append_coin`), under which
-        the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`, if it is
-        malformed or would take the store past its codec's `max_blocks`; `coin`, drawing none, if its root was sent
-        before (a retry never redraws) or the last window's roots are final, so no root can follow it."""
+        reply is the first index and the append's coin `c_a`, released now after the append's root (`coins.Coins.append`),
+        under which the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`,
+        if it is malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was
+        sent before (a retry never redraws), the last window's roots are final, so no root can follow it, or the session's
+        append coins are all released (or it reserved none: `coins.families`)."""
         self._live()
         if (type(root) is not bytes or len(root) != DIGEST_BYTES or type(count) is not int or count < 1
                 or self.extent + count > self.params.codec.max_blocks):
             return self._fail(self.filling, "append")
-        if root in self._roots or (len(self.windows) == self.params.windows and self.windows[-1].final):
+        if (root in self._roots or (len(self.windows) == self.params.windows and self.windows[-1].final)
+                or self.coins.appends == (self.coins.commitment.family(coins.APPEND) or 0)):
             return self._fail(self.filling, "coin")
-        first, coin = self.extent, self.challenger.append_coin()
+        first, coin = self.extent, coins.coin(self.coins.append(root))
         self._appends.append((first, append_domain(self.registration.digest, first, count), Commitment(root, count),
                               coin))
         self._roots.add(root)
@@ -995,12 +1027,15 @@ class Session:
         self.windows[t].heads.append(self._head)
         self.windows[t].stale.append(below)
         self.windows[t].arrived.append(now)
-        self._plan, self._step = plan, step
+        self._plan, self._step, self._latest = plan, step, root
         return None
 
     def close(self, t: int) -> tuple[tuple[int, int], ...] | Verdict:
         """Window t's draws, from its openings coin released now: `s` distinct receipts (pass, position), uniform over
-        its `U_t = Σ_i L_i`, in order.  Refused until its roots are final; its rejection when it has fewer than
+        its `U_t = Σ_i L_i`, in order.  Refused until its roots are final: the next window's first root has arrived,
+        `D_t` has passed, or, in a paced session, the window holds its k roots, past which `receive` takes none, and
+        its boundary has left, so its record has its deadline; the challenger's log fixes a paced window's end at its
+        last root.  Its rejection when it has fewer than
         `min_passes` roots, and, at the last window, `coin` if an append's coin went unused: no root followed it."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
@@ -1010,15 +1045,17 @@ class Session:
             raise SessionError("windows are drawn in order: a window's first pass chains from the window before")
         d = self.deadline(t)
         now = self.clock()
-        if not w.final and (d is None or now <= d):
-            raise SessionError(f"window {t}'s roots are not final before its deadline or the next window's first root")
+        full = self.params.pace is not None and d is not None and len(w.roots) >= self.params.pace.k
+        if not w.final and not full and (d is None or now <= d):
+            raise SessionError(f"window {t}'s roots are not final before its deadline, the next window's first root "
+                               "or, paced, its k-th root after its boundary")
         w.final = True
         if len(w.roots) < self.params.min_passes:
             return self._fail(t, "few")
         if t == self.params.windows - 1 and len(self._joined) < len(self._appends):
             return self._fail(t, "coin")
-        coin = self.challenger.open(self.params.windows + t)
-        key = derive(coin.coin, OPENINGS_DOMAIN, {"registration": self.registration.digest, "window": t})
+        coin = coins.coin(self.coins.openings(t, w.roots[-1]))
+        key = derive(coin, OPENINGS_DOMAIN, {"registration": self.registration.digest, "window": t})
         ends = tuple(itertools.accumulate(plan.length for plan in w.plans))
         draws = []
         for u in key.subset(min(self.params.samples, ends[-1]), ends[-1], "openings"):
@@ -1210,18 +1247,20 @@ class Registry:
 
     def session(self, params: Params, registration: Registration, tiles: Tiles | None, *, not_before_ns: int,
                 clock: Callable[[], int] = time.monotonic_ns, entropy: Callable[[int], bytes] = os.urandom,
-                index: int | None = None) -> Session:
-        """The next session over the node's live registration, its coins `coins.Challenger(digest, k, …)` with k its
-        sessions so far (`index`, if given, must be k), kept to be counted at `close`.  Refused for a registration
-        that isn't its node's live one, drawn here."""
+                index: int | None = None, challenger: Callable[[int], object] | None = None) -> Session:
+        """The next session over the node's live registration, k its sessions so far (`index`, if given, must be k),
+        kept to be counted at `close`.  Its coins are epoch k of `challenger(k)`, the one challenger's session for it
+        (`coins.Coins`), or without one a challenger in this process drawing from `entropy` (`coins.local`).  Refused
+        for a registration that isn't its node's live one, drawn here."""
         x = self._live.get(getattr(registration, "node", None))
         if x is None or x.registration is None or x.registration != registration:
             raise RegistryError("a session runs over its node's live registration, drawn by this registry")
         k = len(x.sessions)
         if index is not None and index != k:
             raise RegistryError(f"the registration's next session is {k}, not {index}")
-        session = Session(params, registration, tiles, coins.Challenger(registration.digest, k, params.coins, entropy),
-                          not_before_ns=not_before_ns, clock=clock)
+        c = (coins.local(registration.digest, k, params.windows, entropy) if challenger is None
+             else coins.Coins(challenger(k), registration.digest, k, params.windows))
+        session = Session(params, registration, tiles, c, not_before_ns=not_before_ns, clock=clock)
         x.sessions.append(session)
         return session
 

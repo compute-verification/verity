@@ -74,9 +74,10 @@ theorem Pr_bad_le_PrFdev {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
 
 /-- **A rejecting judged draw costs at most `Pr[B_I]`**: it is a collision at every fork (`Pr_innerRejects_le_fork`),
 so at most their average over the inner rounds, of which an accepted run shows one (`RoundsMargin`). -/
-theorem Pr_innerRejects_le_PrBI {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    (hA : InnerAcceptsColl H D I DO) (hT : CallsTrue H D I DO) (hN0 : CallsNil H D) (hM : RoundsMargin H D I)
-    (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+theorem Pr_innerRejects_le_PrBI_at {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
+    {DO : Flock.Deploy Coin Col T} {x : Msg} (hA : InnerAcceptsCollAt H D I DO x) (hT : CallsTrue H D I DO)
+    (hN0 : CallsNil H D) (hM : RoundsMargin H D I) (decO : List (ℕ × Col) → List T) {Ω : Type} [Fintype Ω]
+    [Nonempty Ω] (P : Prover Ω) :
     Pr (InnerRejects H D I DO decO P x) ≤ PrBI H D I DO decO P x := by
   by_cases hE : Pr (InnerRejects H D I DO decO P x) = 0
   · rw [hE]
@@ -96,7 +97,13 @@ theorem Pr_innerRejects_le_PrBI {H : Msg → Msg} {D : Deploy Coin} {I : Inner C
       = ∑ _j : Fin (I.V.k (xI D x)), Pr (InnerRejects H D I DO decO P x) := by
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, mul_comm]
     _ ≤ ∑ j : Fin (I.V.k (xI D x)), Pr (forkColl H D I DO decO P x j) :=
-        Finset.sum_le_sum fun j _ => Pr_innerRejects_le_fork hA hT hN0 decO x P j
+        Finset.sum_le_sum fun j _ => Pr_innerRejects_le_fork_at hA hT hN0 decO P j
+
+theorem Pr_innerRejects_le_PrBI {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    (hA : InnerAcceptsColl H D I DO) (hT : CallsTrue H D I DO) (hN0 : CallsNil H D) (hM : RoundsMargin H D I)
+    (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    Pr (InnerRejects H D I DO decO P x) ≤ PrBI H D I DO decO P x :=
+  Pr_innerRejects_le_PrBI_at (hA.toAt x) hT hN0 hM decO P
 
 /-- `√(g·p) + p ≤ √((√g + 1)²·p)` at a probability `p`. -/
 theorem sqrt_add_le_γBI {g p : ℝ} (hp0 : 0 ≤ p) (hp1 : p ≤ 1) :

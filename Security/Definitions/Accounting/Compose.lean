@@ -31,7 +31,8 @@ The logical layer:
 * `CoinMode`, `Declared`: the circuit as the IR gives it, a `Accounting.Gates.Dag` (memory accounting's form, with its
   wiring), each gate's Definition call site, each call site's round (the coin its noise reads: one coin a round,
   decision 122), each round's coin mode (live or seeded), the coin before which the service commits each value under
-  a root (`Declared.commitRound`, where the proofs' layer cuts it, and `LayerCommitted` holds it to the IR's cut),
+  a root (`Declared.commitRound`, where the proofs' layer cuts it, and `LayerCommitted` holds it to the IR's cut, or
+  to the draw for a computed value only its own unit reads),
   which values each round's seed preimage names (`Declared.seedNames`, which `SeedNamed` reads), and each gate's
   proof unit (decision 107: an
   output coordinate, a K-chunk committing its running sum, which no served kind is cut into (decision 106), or a unit
@@ -53,7 +54,8 @@ The logical layer:
   gates is read late by one of the other's, and its late cone is closed under that per unit, as #2466's
   `DrawnLayer.Late` is.
 * `LayerCommitted`, `Declared.atDraw`, `Declared.atIR`: the service commits every value the prover writes by its IR
-  cut (protocol structure, in `Scope`, which today's code doesn't meet); the circuit with every value committed at the
+  cut, or a computed value only its own unit reads (a receipt) by the draw (protocol structure, in `Scope`, which
+  today's code doesn't meet); the circuit with every value committed at the
   draw, where the seeded statements check binding, and with every value cut at the IR, where they count cones.
 * `LuckForm`, `Scheme`, `Scheme.LuckProved`, `Scheme.SeedPriced`, `Scheme.foldLuck`: per kind, the floor its
   template's noise proves at the worst operands (decision 109: `0` where its noise proves none), whether it is
@@ -93,10 +95,10 @@ The logical layer:
   service's) and only its run-dependent half (`ProofRun`: what was accepted and opened, each unit's relation and
   rightness) abstract.
 * `StageCuts`, `StageCoins`, `StageSlots`, `StageComplete`: what the derived layer meets (`Declared.layer`'s lemmas in
-  `Proofs.Accounting.Compose`): each value the prover writes bound at its IR cut (under `LayerCommitted`, or at
+  `Proofs.Accounting.Compose`): each value the service commits by its IR cut bound there (every one at
   `Declared.atIR`), each tile's noise at its round's coin (W2), its slots and writers inside the IR, and every
-  one of the IR's there (every operand a slot, every written position a writer), so the layer's late cones are the
-  IR's.
+  one of the IR's there (every operand a slot, every written position a writer), so under `LayerCommitted` the
+  layer's late cones are the IR's.
 * `SplitRateAt`, `SplitRate`: the per-stage condition at given `ν, ν₀`, and for some, from which a rate `Λ` bounds the
   window's saving per unit of detection.
 * `Declared.Live`, `Scope`, `rOf`, `WorkAt`: every round holding a credited tile live, the logical parameters' ranges
@@ -152,7 +154,8 @@ operands, interval, primitive, site and whether it is committed), and as the IR 
 * `commitRound ℓ`: the coin, of the window's `rounds` (`rounds`: the service's draw), before which the service commits
   value `ℓ` under a root that every opening of it is checked against (live: a round's root, before that round's coin).
   The proofs' layer cuts `ℓ` there or at its IR cut, whichever is later (`Declared.layer`). The live statements take
-  it no later than the IR cut (`LayerCommitted`, in `Scope`); the seeded statements read the circuit at the draw
+  it no later than the IR cut, or the draw for a computed value only its own unit reads (`LayerCommitted`, in
+  `Scope`); the seeded statements read the circuit at the draw
   (`Declared.atDraw`) for binding and at the IR (`Declared.atIR`) for cones, so they read no `commitRound`;
 * `seedNames r ℓ`: whether round `r`'s seed preimage names a root that value `ℓ` is a leaf under, every opening of it
   checked against that root (decision 105's `SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B))`, whose salt names
@@ -297,7 +300,8 @@ are committed, and its noised products are computed after it:
   the coins released before its cut, which is the coin of the first round that reads it: the service commits it under
   that round's root, before its coin (`LayerCommitted`, at `Declared.commitRound`);
 * any other value (a product's served output, glue, the KV cache) is committed with its writing gate's round, before
-  that round's coin, or after it when it depends on it (`coinMark`: a noised word, a receipt, glue fed by one). -/
+  that round's coin, or after it when it depends on it (`coinMark`: a noised word, a receipt, glue fed by one); one
+  that only its own unit reads (a receipt) the service may commit later, by the draw (`LayerCommitted`). -/
 def Declared.cutOf {ι : Type} (Cd : Declared ι) (i : ℕ) : ℕ :=
   match Cd.binding i with
   | some .registered => 0
@@ -325,30 +329,50 @@ def Declared.Reaches {ι : Type} (Cd : Declared ι) : ℕ → ℕ → Prop := Re
 /-- **The service commits by the IR's cuts** (protocol structure, which today's code doesn't meet; RT-COMPOSE r4's
 check 1). Every value `ℓ` the prover writes is committed under a root, which every opening of it is checked against,
 before coin `Declared.commitRound ℓ` of the window's `rounds`, and that coin is no later than its IR cut
-(`Declared.cutOf ℓ`). The proofs' layer cuts `ℓ` at the later of the two (`Declared.layer`), so this is what makes
-its cuts the IR's (`StageCuts`, `Proofs.Accounting.Compose.layer_stageCuts`), and the live statements take it in
-`Scope`.
+(`Declared.cutOf ℓ`), or, for a computed value (no input) that only gates of its own unit read, no later than the draw
+(`rounds`). The proofs' layer cuts `ℓ` at the later of the two (`Declared.layer`), so a value of the first case has its
+IR cut there (`StageCuts`, `Proofs.Accounting.Compose.layer_stageCuts`), and the live statements take it in `Scope`.
 
-It is a fact of the declared circuit, not a premise about the cheater. A service that commits later than the IR cut
+The second case is the ring of depth `D` (a receipt of step `s` under the root of round `s + D − 1`, so its off-node
+live coins, about 100 ms a round trip, are hidden behind `D` steps: about 104 ms a token at `D = 2`, 0.09 ms at
+`D = 6`, kernels' #3003). A value read only inside its own unit is in that unit's late cone and in no other unit's:
+a layer late edge it makes ends in its own unit, which that unit's cone already holds (`reaches_of_slot`,
+`Proofs.Accounting.Compose.ServiceCovers`), so committing it late leaves no reader whose skip goes uncharged, and the
+draw, at coin `rounds`, still follows every commitment. It is a computed value, its gates' function of what its unit
+reads, which the unit's proof checks when the unit is drawn and whose skip its cone pays for when it isn't. An input
+gets no such case: a run input committed after its reader's coin lets the prover choose
+it against the reader's noise (`A = −b` cancels a one-bit dither, RT4-INT-12), even when only its own unit reads it.
+
+It is a fact of the declared circuit, not a premise about the cheater. A service that commits later than it allows
 fails it, and then `Scope` fails and the live statements credit nothing. A `Declared` whose `commitRound` claims an
 earlier coin than the code commits at meets it, and then its layer cuts a value before the code binds it: an opening
 moved after that cut is `DrawnLayer.MovedIn`, so the failure lands in the binding premise (`MovedIn ≤ δ_bind`), which
 is false at any small `δ_bind` against a cheater that moves it. Neither case is `ServiceCovers`'s: it takes this as a
 hypothesis. It is also the order the binding card needs: `δ_bind` bounds an opening that differs from a root fixed
-before the cut, and nothing for a value committed after it.
+before the cut, and nothing for a value committed after it; the layer cuts a value of the second case at its commit
+coin, after its root.
 
 On the live path the order is: the registered inputs (weights, a codec's parameters) before the first coin; each
 round's served values, and each run input (a request's tokens, decode feedback) under the root of its first reader's
-round, before that round's coin; and the values that read the coin (a noised word, a receipt) before the next round's.
-A run input committed after its reader's coin lets the prover choose tokens or decode feedback to match the reader's
-noise: that breaks (H-μ)'s salt-independence (E3) for the reader.
+round, before that round's coin; the values that read the coin and that other units read (a noised word another
+unit's gate reads, glue fed by one) before the next round's; and a receipt, which only its own unit reads, under any
+later round's root up to the draw's. A run input committed after its reader's coin lets the prover choose tokens or
+decode feedback to match the reader's noise: that breaks (H-μ)'s salt-independence (E3) for the reader.
 
-Today's code doesn't meet it: PoUW's coins are one salt a window and the draw (`verity/core/protocols/pouw/coins.py`'s
-`LABELS = ("salt", "draw")`), with no per-round coin or root, and the salt is opened before the activations are
-committed (RT-COMPOSE r3). The seeded statements don't read it: they read the circuit at the draw
-(`Declared.atDraw`) and at the IR (`Declared.atIR`, which meets it), and take its seeded mirror, `SeedNamed`. -/
+Today's code has a coin a round, and nothing shows that it meets this order. A live window's coins are its salt coin, its
+draw coin and one round coin a round (`verity/core/protocols/pouw/window.py`'s `live_families`). Round r's coin opens
+once, after the round root the challenger's signed log shows it received (`core_check.rounds`), and round r's noise key
+is that coin's and that root's (`window.round_key`). Each round's root commits that round's rows of every A value
+before its coin (`credit.a_link`, RT4-INT-34). A seeded window's coins are still one salt a window and the draw
+(`verity/core/protocols/pouw/coins.py`'s `LABELS = ("salt", "draw")`), with no per-round coin or root, and the salt opens
+before the activations are committed (RT-COMPOSE r3). No code checks this order itself: that every value the served
+Program writes is committed under the root of the round its `commitRound` names. A served Program's commit coins reach
+`Declared` only through `Properties.Compose.UnitsOfLayout`, which is unproved. The seeded statements don't read it: they
+read the circuit at the draw (`Declared.atDraw`) and at the IR (`Declared.atIR`, which meets it), and take its seeded
+mirror, `SeedNamed`. -/
 def LayerCommitted {ι : Type} (Cd : Declared ι) : Prop :=
-  ∀ ℓ, Cd.Writes ℓ → Cd.commitRound ℓ ≤ Cd.cutOf ℓ
+  ∀ ℓ, Cd.Writes ℓ → Cd.commitRound ℓ ≤ Cd.cutOf ℓ ∨
+    (Cd.binding ℓ = none ∧ Cd.commitRound ℓ ≤ Cd.rounds ∧ ∀ j, Cd.Reads j ℓ → Cd.unit j = Cd.unit ℓ)
 
 /-- **The circuit committed at the draw**: every value's commit coin the service's live draw (`rounds`), so
 `Declared.layer` cuts every position there, after every round's coin. The seeded statements check binding on it
@@ -698,14 +722,16 @@ def Declared.layer {ι C Ξ V : Type} (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 <
   rel := pr.rel
   right := pr.right
 
-/-- **Each position is bound at its IR cut** (RT-I8's B1 for the window, decision 114, at the writing gate's round,
-W1): each value `ℓ` the prover writes is bound before coin `Declared.cutOf ℓ` of the window's `rounds` (the draw past
-the last). A value opened one way for one drawn tile and another for a tile that reads it, after the reader's coin, is
-then a binding failure (`DrawnLayer.MovedIn`). `Declared.layer` meets it under `LayerCommitted` (the service commits
-each such value no later than its IR cut), so at `Declared.atIR` always. -/
+/-- **Each position committed by its IR cut is bound there** (RT-I8's B1 for the window, decision 114, at the writing
+gate's round, W1): each value `ℓ` the prover writes whose commit coin is no later than its IR cut (`LayerCommitted`'s
+first case) is bound before coin `Declared.cutOf ℓ` of the window's `rounds` (the draw past the last). A value opened
+one way for one drawn tile and another for a tile that reads it, after the reader's coin, is then a binding failure
+(`DrawnLayer.MovedIn`). `Declared.layer` meets it, so at `Declared.atIR` for every value. A value of
+`LayerCommitted`'s second case, committed past its IR cut, is bound at its commit coin, and only its own unit reads
+it. -/
 def StageCuts {ι C B Q V : Type} {s N : ℕ} (Cd : Declared ι) (pf : DrawnLayer C B 1 Cd.rounds s (Fin N) Q ℕ V) :
     Prop :=
-  ∀ ℓ, Cd.Writes ℓ → ((pf.cut ℓ).2 : ℕ) = min (Cd.cutOf ℓ) Cd.rounds
+  ∀ ℓ, Cd.Writes ℓ → Cd.commitRound ℓ ≤ Cd.cutOf ℓ → ((pf.cut ℓ).2 : ℕ) = min (Cd.cutOf ℓ) Cd.rounds
 
 /-- **Each tile's noise reads its round's coin** (W2: one coin a round, decision 122): the layer's coin for tile `t` is
 its unit's round, the coin `Declared.Late` reads. `Declared.layer` meets it under `Declared.Wf`. -/
@@ -715,9 +741,9 @@ def StageCoins {ι C B Q V : Type} {s N : ℕ} (Cd : Declared ι) (pf : DrawnLay
 
 /-- **Each tile's slots and each position's writer lie inside the IR**: a position with a writer is a value the prover
 writes, a gate of the writer's unit, and each slot of tile `t` is one of `t`'s own gates or an operand of one of them
-(`Declared.slots`), or no position when `t` has no gates. With `StageCuts` and `StageCoins` it puts the layer's late
-cones (`DrawnLayer.Late`) inside the IR's (`Declared.Reaches`), so a share charging each skipped tile its `tileCone`
-covers every tile that isn't good (`ServiceCovers`). `Declared.layer` meets it by definition. -/
+(`Declared.slots`), or no position when `t` has no gates. With `StageCuts`, `StageCoins` and `LayerCommitted` it puts
+the layer's late cones (`DrawnLayer.Late`) inside the IR's (`Declared.Reaches`), so a share charging each skipped tile
+its `tileCone` covers every tile that isn't good (`ServiceCovers`). `Declared.layer` meets it by definition. -/
 def StageSlots {ι C B V : Type} {s N : ℕ} (Cd : Declared ι) (pf : DrawnLayer C B 1 Cd.rounds s (Fin N) ℕ ℕ V) :
     Prop :=
   (∀ ℓ u, pf.src ℓ = some u → Cd.Writes ℓ ∧ Cd.unit ℓ = u.2.val) ∧
@@ -757,8 +783,9 @@ def Declared.Live {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) : Prop :=
 
 /-- **The logical parameters' ranges**: the circuit well formed, every round holding a credited tile live
 (`Declared.Live`: a window with a seeded one is the seeded statements', `ScopeSeeded`), `δ_s > 0`, every kind's
-luck at least its template's proved value and in range, and the service committing by the IR's cuts
-(`LayerCommitted`, protocol structure, which today's code doesn't meet: a live window it serves is out of scope). -/
+luck at least its template's proved value and in range, and the service committing by the IR's cuts, a computed value
+only its own unit reads by the draw (`LayerCommitted`, protocol structure, which today's code doesn't meet: a live
+window it serves is out of scope). -/
 def Scope {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (δs : ℝ) : Prop :=
   Cd.Wf ∧ Cd.Live Sc ∧ 0 < δs ∧ Sc.LuckProved ∧ LayerCommitted Cd
 

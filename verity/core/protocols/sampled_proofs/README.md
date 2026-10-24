@@ -139,7 +139,10 @@ from verity.core.protocols.sampled_proofs.costfit import fit
     `verifier.check_verdicts`).
   - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (with a work
     sampling design's `closure=`), `session`, `deliver` and `outcome`, which
-    raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it.
+    raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
+    is one template, or a window's several in order (a TP rank's served window): the check's `program` is then their
+    digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
+    and the window is drawn once by `stratified:K`, a stratum per template.
   - `Fleet()` has `attach(stream, operator)`, before the stream's first registration; `halted` maps each halted
     operator to its halt's cause.
   - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the
@@ -165,9 +168,15 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `verifier`: the verifier of record: `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record`,
   `check_public`, `check_verdicts` (given the service's Python verdict), `stream` and `fleet`, by the Lean and the
   Python; `RECORD_VERDICT` names whose is the record's.
+- `proofs`: the proof service's own run of C-Flock's Lean verifier of record on a statement's proof files (`Proof`:
+  circuit file, public file, sessions): `verify` refuses a circuit file other than the one the auditor committed, runs
+  `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
+  returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the units it
+  proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
-  with `closure_of` for a work design's closure.
+  with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's
+  challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
 - `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
   `weight_binding_plan`.
 - `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per unit, commitment, serve-time
@@ -220,9 +229,21 @@ only inside a proof (`one_stage.registered`).
   when it registers values, so v1's bytes are unchanged. R7 (`check`, with the verifier's own `registered = {parameter:
   words}`): the values are exactly the verifier's, each with a SHA-512 hex root and the verifier's integer leaf count,
   words, width (`R7-word_bits`, which also refuses a `"word_bits": 16` written out) and domain (`registered_entries`,
-  from its own program), and a value an earlier record of the log registered keeps that record's root (`held_roots`):
-  the log is the only place the verifier holds roots, so a value is committed once whatever the caller passes. 16 is the
-  default, so a 16-bit value's domain, entry and root are what they were before `word_bits`.
+  from its own program), and a value an earlier record of the log registered under the domain it takes now keeps that
+  record's root (`held_roots`, keyed by value and domain): the log is the only place the verifier holds roots, so a
+  value is committed once a domain whatever the caller passes. 16 is the default, so a 16-bit value's domain, entry and
+  root are what they were before `word_bits`.
+- Per-window values (`check(..., window_root=, held=)`, `register_served`'s too): a window-independent Program
+  registers each window's values under the same names. The verifier takes the window's open root R from the
+  challenger's signed open of that window (never from the record), and every registered value's domain binding adds
+  `"window": R` (`registered.domain`, Lean `Registered.domainAt`) but the ones it holds across windows: `held` (the
+  weights), and its pinned, supplied and output values. So an honest second window's values are held to nothing the
+  first registered, and a root of an earlier window opens under no domain R7 takes (`R7-domain` when the entry names
+  the earlier domain; under the new domain no registered read of it opens). A verifier that names no R takes every
+  domain as before, and fails closed: it refuses its own inputs (ValueError, Lean `OneStage.paramsOfJson`, naming
+  `window_root` and `held`) when a value it doesn't hold across windows was registered by an earlier record under the
+  domain it takes now (`registration.unwindowed`), so a fixed-name Program's second window needs R, while a Program
+  whose per-window values take fresh names (the window-prefixed form) needs none.
 - Supplied values (`check(..., supplied=)`, `supplied_root`, the Lean's `Supplied`): a registered value the verifier fills
   itself, so the prover never chooses it. Each row is the bytes of its sources: `{"port": P}` (the record's `roots` entry
   of P), `{"value": V}` (a registered entry's root, never a supplied value's), `{"bytes": hex}`, `{"position": "K"}` (K
@@ -255,12 +276,13 @@ only inside a proof (`one_stage.registered`).
   and one whose units it did not derive (`verity/ml/flock/verifier/PROTOCOL.md` §16.10).
 - Served trees (`served.register_served`): a served root is a hiding commitment that binds nothing on its own, so every
   served path registers each tree a proof unit reads as a registered value (`ServedTree`: value, root, leaves, words,
-  `word_bits`, domain, its row format `row_schema`, and for an earlier run's output its `(record digest, port)`), writes the
+  `word_bits`, domain, its row format `row_schema`, for an earlier run's output its `(record digest, port)`, and for an
+  earlier record's registered value it reuses, with no tree of its own, its `(record digest, value)`), writes the
   verifier's `--registered` file from it, and verifies with `flock-verify --zk --registered`: the premise
   `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`. The positions are the path's own public Program
   and `Q_template_instance` query, which the session's `--program` and `--partition` (the returned `partition`) carry;
-  rows are fixed slots padded with zeros. A tree's domain is its value's registered-value domain or, for an output, the
-  earlier port's, and `register_served` refuses any other, a value twice, a root that is not 64 bytes of lowercase hex,
+  rows are fixed slots padded with zeros. A tree's domain is its value's registered-value domain or, for an output or a
+  reused value, the earlier port's or entry's (R7 holds the record to it: `registration.check(..., outputs=)`), and `register_served` refuses any other, a value twice, a root that is not 64 bytes of lowercase hex,
   no rows, a row format other than `row/v1` (`row/v2` and `row-seg/v1` are named in `served.SCHEMAS` and refused until
   R7 and `Flock.Registered.checkPort` read them), a root the log registered otherwise (R7-held) and a tree no unit
   reads. `benchmarks/one_stage/a0.py`'s `hold_registered` is the template.
@@ -421,6 +443,25 @@ The draw of record is `coins.OwnRandomness` on the Lean verifier of record's coi
 hash, no derivation and no beacon, after the registration it follows. `draw_first` reads the bytes as
 `Flock.Draw.drawWith` does. Nothing derives a draw, the proof service's included, except vLLM's legacy replay challenge
 until its re-baseline; `coins`' docstring has the byte layout. Pinned by `tests/test_coins.py`.
+
+A draw from the auditor's challenger (`remote.RemoteChallenger`, or `challenger.LiveChallenger` in process) passes
+`coins.ChallengerCoins` as the stream's `coins`. `commit(after)` takes the prover's commitment (the registration's
+digest after its receipt, or the run's root) and fixes the family and its next index. Each read then opens
+ceil(missing / 64) more of the family's coins after it in one round trip, checks each against the challenger's
+commitment, and concatenates them, with no stretch. A rerun's extension opens only new indices, and a commitment is
+drawn once. The record is each `Segment` (family, first index, `after` and the openings). The verifier replays it with
+`read_reason` against the roots the challenger's signed release log shows (`remote.trusted_session`): the draw's coins
+are exactly those released after the commitment, every one read. A stream over `ChallengerCoins` has `coin_source`
+`"challenger"` (its digest says so, and it takes no sampler); any other is `"verifier"`. Every outcome's run by the Lean
+verifier of record (`Run.run`, `SampledProofs.ChallengerCoins`) takes the `coin_source`. From the challenger, the check
+is mandatory: `Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{key, ledger, main, pins, segment,
+session}`), and the run takes the commitment and the roots from the session the auditor's ledger opens for the
+registration's window (`register`'s `window_root`, never a window the evidence names), run from a commit the host's
+pins log records on the verifier's copy of main's first-parent line (`pinned_session`), and refuses the select step (code `coins`) unless the
+bytes the draw read are those coins, after the registration's digest. Missing evidence and a registration without its
+window root are refused the same way, as is evidence for a draw from the verifier's own coins: the outcome is a reject
+failing `run`. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
+`challenger_draw_coins` and `run`.
 
 ### Verification plans
 

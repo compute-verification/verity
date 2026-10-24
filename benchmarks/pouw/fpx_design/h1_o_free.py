@@ -17,7 +17,7 @@ unless the committed case reproduces TS_EPS, and gives sm_120's ε_skip (`design
 eps of the design, floor credit, operands free, its skip moved by ε_skip's change, so `core` is exact) at the sheet
 (DS-120, q 1/2), the measured reading (VF3r-16, 1.22), the measured vector at 1/2, and the Lean measured instance's
 (VF3s-16, 9/8). With --lean-headline it runs that file's `instance()` and `measured()` (its headline checks lifted) on
-TS_EPS as written, which must reproduce 0.656% and 0.591%, and on each pricing, and gives the literal each guarantee
+TS_EPS as written, which must reproduce 5.860% and 0.591%, and on each pricing, and gives the literal each guarantee
 would need. With --lean-headline-dc it runs that file's `reading` on the H200's and B200's sheet and measured vectors
 under each pricing: their designs are two-sided on every TS component, so each must come out the same, at or under
 the literal `Security/Models/Accounting/Guarantees/HeadlineDc.lean` states.
@@ -286,8 +286,8 @@ def main(out: Path, lean_path: Path | None, dc_path: Path | None = None) -> int:
                          f"{100 * me['eps_skip']:.6f}% | **{100 * me['bound']:.5f}%** ({100 * me['folded']:.5f}%, "
                          f"{100 * me['unfolded']:.5f}%) | {me['literal']} |")
         rec = next(iter(lean_out.values()))
-        if "sheet" in rec and not (rec["sheet"]["bound"] <= 656e-5 and rec["measured"]["bound"] < 591e-5):
-            print("TS_EPS as written doesn't reproduce the Lean headlines' 0.656% and 0.591%", file=sys.stderr)
+        if "sheet" in rec and not (rec["sheet"]["bound"] <= 5860e-5 and rec["measured"]["bound"] < 591e-5):
+            print("TS_EPS as written doesn't reproduce the Lean headlines' 5.860% and 0.591%", file=sys.stderr)
             rc = 1
 
     dc_lean = None

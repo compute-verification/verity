@@ -28,6 +28,34 @@ verity bench verifier_cost store RUN                     # its results.json or p
 verity bench verifier_cost plot ART --to PNG             # from the store
 ~~~
 
+`flock_read.sh K...` measures C-Flock's Lean verifier (`flock-verify verify --zk`) on #3002's H1 tile unit, step by step:
+`flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `benchmarks/pouw/h1_prove/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
+file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
+`Sparse.ofRows` and row checks), the class digest, `HmOut.parse`, `Stmt.setupHiddenOf` and one lincheck fold. Per K,
+`$OUT` gets build-K.json (the unit's ANDs, matrix entries, text bytes and its Program descriptor's size) and
+phases-K.jsonl (one row per step: milliseconds, RSS and peak RSS in MB).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
+  bash benchmarks/verifier_cost/flock_read.sh 256 1024
+~~~
+
+`flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`, PRF-133): `flock_read.py --circuit-only`
+builds the circuit, `python -m verity_flock.tmpl` writes its unit's templated form (Definitions read off the flat unit's
+repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
+against the circuit's flat unit byte for byte. Per K, `$OUT` gets emit-K.json (the levels, Definitions, rows and bytes),
+unit-K.tmpl, read-K.jsonl and diff-K.jsonl (the PHASE lines) and each step's `/usr/bin/time -v`.
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
+  bash benchmarks/verifier_cost/flock_tmpl.sh 256 4096
+~~~
+
+`flock_unroll.sh K...` times what the templated statement's read costs against the flat one's on the same unit: `Tmpl.unrollAt` at
+`MODE` (default `iv/hybrid/4`) whole and a stage at a time (`rows`, `posMap`, `Net.ofRows`, `invOf`, `posOk`, `placed`,
+`Sparse.ofRows`), the logical `Tmpl.unroll`, and `Net.parse` on the circuit's flat unit. Per K, `$OUT` gets unit-K.tmpl,
+unroll-K.jsonl (every PHASE line, with its step) and each step's `/usr/bin/time -v`.
+
 `results.json` (`verity/verifier-cost/v1`) has one row per config and IR: the description's bytes, Definitions and body
 nodes, the unrolled circuit's gates, and per check its wall seconds (the best of `--repeat`), peak RSS and the verdict.
 `partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, IR, shape and query: the description's

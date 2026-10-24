@@ -132,6 +132,67 @@ def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path
     assert env["VERITY_TEST_CACHE"].endswith("/.cache/verity/tests-slot-a") and SLOT.SLOT_MEM_ENV not in env
 
 
+def test_a_scope_slot_runs_its_check_in_a_scope_of_its_own_and_others_run_it_as_it_is(tmp_path, monkeypatch):
+    """23 Oct: train-slot sizing rested on summed RSS (shared pages counted over and over), since a check shared its session
+    scope with other runs; `scope=1` gives it a cgroup of its own, whose memory.peak spans.py records."""
+    assert SLOT.parse("b 0 mem=300 scope=1")[0]["scope"] is True and SLOT.parse("b 0 mem=300")[0]["scope"] is False
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261023-000000-abcd")
+    monkeypatch.setenv(SLOT.SCOPE_ENV, "check-stale")
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(f=f, argv=argv, unit=env.get(SLOT.SCOPE_ENV))
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    monkeypatch.setattr(SLOT, "scope_refusal", lambda: None)
+    (tmp_path / "slots").write_text("b 0 scope=1\n")
+    with pytest.raises(Exec):
+        SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
+    unit = "check-b-r20261023-000000-abcd"
+    assert ran["f"] == "systemd-run" and ran["unit"] == unit
+    assert ran["argv"] == ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "--", "uv", "run", "check.py"]
+    (tmp_path / "slots").write_text("c 0\n")  # b's lock is still held: the faked exec kept it
+    with pytest.raises(Exec):
+        SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
+    assert ran["argv"] == ["uv", "run", "check.py"] and ran["unit"] is None, "no scope=1: CMD as it is, and no stale unit name"
+
+
+def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_path, monkeypatch, capsys):
+    """Fail open (ci's review of #3336): a run with no user manager or bus would otherwise fail every train check the slot
+    takes, which drive reads as the train failing."""
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(argv=argv, unit=env.get(SLOT.SCOPE_ENV))
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    real = SLOT.scope_refusal
+    monkeypatch.setattr(SLOT, "scope_refusal", lambda: "exit 1: Failed to connect to bus: No medium found")
+    (tmp_path / "slots").write_text("b 0 scope=1\n")
+    with pytest.raises(Exec):
+        SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
+    assert ran == {"argv": ["uv", "run", "check.py"], "unit": None}
+    assert "scope=1 but systemd-run --user doesn't run here (exit 1: Failed to connect to bus" in capsys.readouterr().err
+
+    class R:
+        def __init__(self, rc, err=""):
+            self.returncode, self.stderr = rc, err
+
+    assert real(lambda *a, **k: R(0)) is None
+    assert real(lambda *a, **k: R(1, "Failed to connect to bus\n")) == "exit 1: Failed to connect to bus"
+
+    def hang(*a, **k):
+        raise SLOT.subprocess.TimeoutExpired(a[0], 10)
+
+    assert real(hang).startswith("TimeoutExpired")
+
+
 def test_a_slot_added_while_a_check_waits_is_one_it_takes(tmp_path, monkeypatch):
     """Node 1's slot d (2 Oct 06:58Z) sat free behind the head of the line, a check that had read the slots file before d was in it."""
     slots = tmp_path / "slots"
@@ -849,3 +910,30 @@ def test_a_slot_with_mem_holds_a_research_mem_reservation_that_research_mem_coun
     with pytest.raises(Exec, match="b"):
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail("slot b is free"))
     assert [f.name for f in (tmp_path / "ramlock").glob("*.json")] == ["check-a.json"]
+
+
+def test_a_slot_with_mem_counts_what_live_reservations_hold_but_dont_use_yet(tmp_path, monkeypatch):
+    """23 Oct 23:16Z (top): when a check ended on cpu-4, proofs' waiting 345 GB shares and a train's twins raced for the freed
+    memory, and a twin admitted beside a lowering share read well over 560 GB free: that share's reservation wasn't counted."""
+    proc = tmp_path / "proc"
+    for pid, ppid, kb in ((100, 1, 50 << 20), (101, 100, 20 << 20), (200, 1, 1 << 20)):
+        (proc / str(pid)).mkdir(parents=True)
+        (proc / str(pid) / "stat").write_text(f"{pid} (python) S {ppid} 0 0\n")
+        (proc / str(pid) / "status").write_text(f"Name:\tpython\nVmRSS:\t{kb} kB\n")
+    ended = tmp_path / "run-ended"
+    ended.mkdir()
+    (ended / "status.json").write_text('{"state": "done"}')
+    SLOT.RAMLOCK.mkdir(parents=True)
+    for name, doc in (("share-a.json", {"gb": 345.0, "pid": 100, "run_id": "r-a"}),     # 345 GB, its tree holds 70 GiB
+                      ("share-a2.json", {"gb": 100.0, "pid": 100, "run_id": "r-a"}),    # the same run: its larger counts
+                      ("gone.json", {"gb": 500.0, "pid": 999}),                         # its pid is gone
+                      ("ended.json", {"gb": 500.0, "pid": 200, "run_dir": str(ended)})):  # its run ended
+        (SLOT.RAMLOCK / name).write_text(json.dumps(doc))
+    held = SLOT.reserved_gb(proc)
+    assert held == int(345e9 - (70 << 30)) >> 30
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda: held)
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 700)
+    why = SLOT.blocked(SLOT.parse("b 0 mem=560")[0], NOW)
+    assert why and why.startswith(f"{700 - held} GB of memory free ({held} GB more is reserved") and "560 GB" in why
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda: 0)
+    assert SLOT.blocked(SLOT.parse("b 0 mem=560")[0], NOW) is None

@@ -4,8 +4,10 @@ import Flock.Bytes
 # The link's frames and the server's events
 
 Executable forms of `active.py`'s framing: a link frame is B bytes, a header (kind u8, stream u32be, length u32be), the
-payload and zero fill (`encodeFrame`, `decodeFrame`); a server's byte stream is cut after every `\n\n` (`Events.feed`), and
-an event's `id:` field is its canonical position (`eventPosition`). A frame's bits (`bitsOf`) are the payload the Program
+payload and zero fill (`encodeFrame`, `decodeFrame`); a server's byte stream is cut after every `\n\n` (`Events.feed`), an
+event's `id:` field is its canonical position (`eventPosition`), and what follows that line is the frame's payload
+(`eventBody`). On the link every request is its length (u32be) and its bytes over `DATA` frames, and `Requests.feed` cuts
+the released payloads back into requests, the k-th on stream k. A frame's bits (`bitsOf`) are the payload the Program
 carries.
 -/
 
@@ -21,7 +23,9 @@ def headerSize : Nat := 9
 
 def kindPad : Nat := 0
 def kindData : Nat := 1
-def kindLast : Nat := 2
+
+/-- `CANONICAL_STREAM`: the stream every frame of the canonical framing carries in its header. -/
+def canonicalStream : Nat := 0
 
 /-- Big-endian u32 at offset `o`. -/
 def be32At (b : ByteArray) (o : Nat) : Nat :=
@@ -66,6 +70,32 @@ def eventPosition (event : ByteArray) : Option Nat :=
     let v := strip (l.extract 3 l.size)
     if v.size > 0 && v.toList.all isDigit then some (v.toList.foldl (fun acc c => acc * 10 + (c - 48).toNat) 0)
     else none
+
+/-- `event_body`: an event's lines after its first `id:` line (`eventPosition`'s), joined by `\n` again; the event
+itself if it has none. -/
+def eventBody (event : ByteArray) : ByteArray :=
+  let ls := event.toList.splitOn 10
+  match ls.findIdx? (fun l => idPrefix.isPrefixOf l) with
+  | none => event
+  | some i => ⟨(List.intercalate [10] (ls.drop (i + 1))).toArray⟩
+
+/-- `Requests`: the stream of the request being cut, and how many of its bytes are still to come. -/
+structure Requests where
+  stream : Nat := 0
+  left : Nat := 0
+
+/-- The big-endian u32 at the start of `b`, zero past its end (`payload[:4].ljust(4, b"\0")`). -/
+def be32Head (b : ByteArray) : Nat :=
+  (List.range 4).foldl (fun acc i => acc * 256 + (b.toList.getD i 0).toNat) 0
+
+/-- `Requests.feed`: a released `DATA` payload's stream, the request's bytes in it and whether it ends the request. A
+request starts at a frame with its length; the frame that holds its last byte ends it, and the rest of it is fill. -/
+def Requests.feed (r : Requests) (payload : ByteArray) : Requests × Nat × ByteArray × Bool :=
+  let (r, payload) := if r.left = 0 then (({ stream := r.stream + 1, left := be32Head payload } : Requests),
+    payload.extract 4 payload.size) else (r, payload)
+  let data := payload.extract 0 r.left
+  let left := r.left - data.size
+  ({ r with left }, r.stream, data, left == 0)
 
 /-- `Events`: the bytes of a stream not yet cut into events. -/
 structure Events where

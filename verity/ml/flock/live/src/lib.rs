@@ -34,12 +34,9 @@ pub mod ir_tail;
 pub mod lookup;
 pub mod circuit;
 pub mod firewall;
-#[cfg(feature = "sha512")]
-pub mod firewall_transcript;
 pub mod glue;
 pub mod proved_scope;
 pub mod pure_block;
-pub mod release;
 #[cfg(feature = "glue")]
 pub mod tables;
 pub mod typed;
@@ -898,17 +895,23 @@ impl TcpTransport {
     }
 }
 
-impl Transport for TcpTransport {
-    fn call(&mut self, req: Req) -> Result<Resp, String> {
+impl TcpTransport {
+    /// One round trip of the request frame `b` as it is, encoded or not (the wire negatives' doctored frames).
+    pub fn call_raw(&mut self, b: &[u8]) -> Result<Resp, String> {
         let t = std::time::Instant::now();
-        let b = req.encode();
         self.sent += b.len() as u64 + 4;
         self.calls += 1;
-        write_frame(&mut self.w, &b).map_err(|e| format!("send: {e}"))?;
+        write_frame(&mut self.w, b).map_err(|e| format!("send: {e}"))?;
         let r = read_frame(&mut self.r).map_err(|e| format!("recv: {e}"))?;
         self.recv += r.len() as u64 + 4;
         self.wait += t.elapsed();
         Resp::decode(&r)
+    }
+}
+
+impl Transport for TcpTransport {
+    fn call(&mut self, req: Req) -> Result<Resp, String> {
+        self.call_raw(&req.encode())
     }
     fn stats(&self) -> (u64, u64, u64) {
         (self.sent, self.recv, self.calls)

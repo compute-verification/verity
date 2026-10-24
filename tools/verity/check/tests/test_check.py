@@ -490,6 +490,17 @@ def test_circuit_check_has_the_whole_slot_only_when_neither_pytest_nor_lean_runs
     assert CHECK.cc_mem_gb(400, True) == 100 and CHECK.cc_mem_gb(100, True) == 25
 
 
+def test_a_cached_circuit_check_keeps_the_catalog_bindings_records_and_an_uncached_one_does_not(tmp_path):
+    """With the cache, a run whose task list misses builds only the catalog bindings whose record misses
+    (`circuit_check.units`); the uncached run builds the whole catalog, as the nightly check that must agree with it does."""
+    def cc(cache):
+        [s] = [s for g in CHECK.groups(tmp_path, 16, cache=cache) for s in g if s[0] == "circuit-check"]
+        return s[1]
+
+    assert "--catalog-units" in cc(True) and "--cache" in cc(True)
+    assert "--catalog-units" not in cc(False) and "--cache" not in cc(False)
+
+
 def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_have(tmp_path, monkeypatch):
     """A post-landing run (`--deferred circuit-check,pytest`) runs no Lean step, yet circuit-check got 210 GiB of a 560 GiB slot
     while pytest kept to its half of the rest, 175: lean-suites' 175 went unused, and the 147-167 GiB SHA-512 targets ran one at
@@ -1388,33 +1399,6 @@ def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_no
     p = train(head, "vy-x", "--against", root, "--agreement")
     assert p.returncode == 2 and "--agreement refused with --against" in p.stderr, p.stderr
     assert not argv.exists() and not posted.exists()
-
-
-def test_train_sh_posts_a_launch_that_registered_nothing_and_stays_quiet_on_one_that_did(tmp_path):
-    """Two launches registered no run and told nobody: two racing on the fetch (22:51Z, 9 Oct), and d7e946defc3f, refused by the
-    read guard and found two hours later (10:42Z, 10 Oct). A failed fetch is posted to the merge thread with git's reason, as the
-    `refused` in a launch's log is with the log's last lines; a launch that registers its run posts nothing."""
-    git, train, argv = _train_repo(tmp_path)
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x")
-    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
-    assert not (tmp_path / "posted").exists()
-
-    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
-    p = train("HEAD", "vy-x")
-    posted = (tmp_path / "posted").read_text()
-    assert p.returncode == 1 and "git fetch origin failed" in p.stderr, p.stderr
-    assert "registered no run (exit 1)" in posted and "git fetch origin failed" in posted, posted
-    assert posted.startswith("@ci ") and "--quiet" in (tmp_path / "posted.args").read_text().split(), "it rings only @ci"
-    (tmp_path / "gone.git").rename(tmp_path / "origin.git")
-
-    (tmp_path / "bin" / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}"
-                                         "echo 'check: read guard: refused: b0f68e798 reads outside its inputs'\n")
-    p = train("HEAD", "vy-x")
-    posted = (tmp_path / "posted").read_text()
-    assert p.returncode == 1 and "read guard: refused" in posted and "exited 0 before launching a run" in posted, posted
 
 
 def test_train_sh_runs_drives_shadow_as_an_ordinary_quiet_job_and_a_train_with_priority_and_its_post(tmp_path):

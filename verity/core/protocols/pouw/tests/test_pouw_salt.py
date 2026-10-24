@@ -7,7 +7,8 @@ the stream and the prover, 64 bytes, which the seeds and the identifier take, wi
 registrations of one window are salted apart; `core_check.pass_epoch` passes a certified window's pass only when its
 salt is that of the certifier's reveal and its weights, stream and prover those the prover recorded with the certifier,
 signed, before it drew that salt (`Proxy.commit_weights`, read back by `committed`); `Registrations` admits a window
-once per stream and prover; and a certified window credits only units that read its salt (`unit_reason`). The prover salts its pass from the salt it receives in-band (`certifier`'s `drawn`), so the
+once per stream and prover; a certified window credits only units that read its salt (`unit_reason`); and a live
+window's open root (`window_open_root`) is pinned. The prover salts its pass from the salt it receives in-band (`certifier`'s `drawn`), so the
 verifier's one reveal comes after the registration that names the pass."""
 
 from __future__ import annotations
@@ -131,6 +132,31 @@ def test_pouw_salt_form():
     for bad in (b"", bytearray(root), root.hex(), None):
         with pytest.raises(DomainError, match="public key"):
             PS.prover_id(bad)
+
+
+def test_window_open_root_form():
+    """A live window's open root is SHA-512(b"verity/pouw-window-open/v1" ‖ weights' root ‖ round-0 request table's root
+    ‖ SHA-512(the session's ASCII id)), every part 64 bytes, pinned on one vector: another weights' root, request table
+    or session is another root, a root that isn't 64 bytes is refused, and so is a session id that isn't 1 to 64 of
+    [A-Za-z0-9._:-] starting alphanumeric."""
+    weights, requests, session = bytes(range(64)), bytes(range(64, 128)), "s20261020T114752Z-9e52"
+    root = PS.window_open_root(weights, requests, session)
+    assert root.hex() == (
+        "b3662ee71a379a471ac908a360224aff68114b81ead11a41c9fed0b197f363fc"
+        "d71005d30b1e82370f5459c68389f33d4e873baa8b6e8eeb886cb66f2c47328e")
+    assert root == hashlib.sha512(b"verity/pouw-window-open/v1" + weights + requests
+                                  + hashlib.sha512(session.encode()).digest()).digest()
+    assert len({root, PS.window_open_root(requests, weights, session), PS.window_open_root(weights, weights, session),
+                PS.window_open_root(weights, requests, "s20261020T114752Z-9e53")}) == 4
+    for bad in (weights[:32], weights + b"\0", bytearray(weights), weights.hex(), None):
+        with pytest.raises(DomainError, match="weights' root is 64 bytes"):
+            PS.window_open_root(bad, requests, session)
+        with pytest.raises(DomainError, match="request table's root is 64 bytes"):
+            PS.window_open_root(weights, bad, session)
+    for bad in ("", "-s1", "s1 ", "s1\n", "s/1", "é", "s" * 65, b"s1", None, 1):
+        with pytest.raises(DomainError, match="session's id"):
+            PS.window_open_root(weights, requests, bad)
+    assert PS.window_open_root(weights, requests, "s" * 64) != root
 
 
 def test_a_context_names_its_pouw_window():

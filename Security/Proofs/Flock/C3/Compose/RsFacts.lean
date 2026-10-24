@@ -119,7 +119,7 @@ theorem openingName_ne (m c j : ℕ) :
     (∀ m' k c' j' : ℕ, RecOpening.unitName m c j ≠ s!"rec-residuals/m{m'}-k{k}-c{c'}-p{j'}") ∧
     (∀ L H, RecOpening.unitName m c j ≠ VStar.recOpenStackedName L H) ∧
     (∀ sh, RecOpening.unitName m c j ≠ RecSparse.unitName sh) ∧
-    (∀ N, RecOpening.unitName m c j ≠ VStar.capName N) := by
+    (∀ l N, RecOpening.unitName m c j ≠ VStar.capName l N) := by
   refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> intros <;> intro h <;>
     have h := congrArg (fun s : String => s.toList.take 9) h <;>
     simp only [RecSparse.unitName, VStar.recOpenStackedName, RecOpening.unitName, VStar.capName, String.toList_append,
@@ -132,12 +132,11 @@ other statement of V*'s and candidate 3's is named otherwise (`openingName_ne`).
 theorem instances_of_openingName {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     {s : VStar.Stmt} (hs : s ∈ ss) {m c j : ℕ} (hn : RecOpening.unitName m c j = s.name) : s.instances = 1 := by
   obtain ⟨n1, n2, n3, n4, n5⟩ := openingName_ne m c j
-  obtain ⟨vsh, A, C, N, hA, hC, -, rfl, -⟩ := FlockC3.VStarList.statements_ok h
+  obtain ⟨vsh, A, C, K, N, hA, hC, hK, -, -, rfl, -⟩ := FlockC3.VStarList.statements_ok h
   rcases Array.mem_append.1 hs with hs | hs
   rotate_left
-  · simp only [List.mem_toArray, List.mem_singleton] at hs
-    subst hs
-    exact absurd hn (n5 _)
+  · obtain ⟨_, _, rfl⟩ := FlockC3.VStarList.caps_cap hK N _ hs
+    exact absurd hn (n5 _ _)
   rcases Array.mem_append.1 hs with hs | hs
   · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
     simp only [Array.mem_append, List.mem_toArray, List.mem_map, List.mem_range] at hs

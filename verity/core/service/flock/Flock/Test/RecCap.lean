@@ -1,9 +1,11 @@
 /-
-RecCap, V*'s statement that holds the table's level-0 cap at fixed rows (`rec-cap/n<N>`, `VStar.capUnit`):
-`RecVStar.checkCapListed` refuses a V* list without it, at another node count or twice; `RecVStar.checkShared` refuses a
-port reading `rec-top-L0` (level 0's `out`, RecCap's `top`) without the verifier's shared rows registering it, or at
-another registration; `RecCoins.checkCap` refuses reads of the cap other than node `i` in instance `i` of `2^cap₀` nodes of
-64 words. The unit is the cap row's words past its node, then zeros, and lays out as V*'s file.
+RecCap, V*'s statements that hold each level's committed tops at fixed rows (`rec-cap/n<N>` at level 0,
+`rec-cap/n<N>-l<l>` at a later level, `VStar.capUnit`): `RecVStar.checkCapListed` refuses a V* list without one at a level,
+at another node count, twice, or past the last level; `RecVStar.checkTopsListed` refuses later levels' caps that are not
+the reps' schedule's tops; `RecVStar.checkShared` refuses a port reading `rec-top-L<l>` (level `l`'s `out`, its RecCap's
+`top`) without the verifier's shared rows registering it, or at another registration; `RecCoins.checkCap` refuses reads of
+a level's tops other than node `i` in instance `i` of its `N` nodes of 64 words. The unit is the cap row's words past its
+node, then zeros, and lays out as V*'s file.
 -/
 import Flock.RecCoins
 
@@ -11,18 +13,28 @@ namespace Flock.Test.RecCap
 
 open Lean Flock Flock.RecVStar
 
-#guard VStar.capName 128 == "rec-cap/n128"
-#guard VStar.capParams "rec-cap/n128" == some 128
+#guard VStar.capName 0 128 == "rec-cap/n128"
+#guard VStar.capName 3 64 == "rec-cap/n64-l3"
+#guard VStar.capParams "rec-cap/n128" == some (0, 128)
+#guard VStar.capParams "rec-cap/n64-l3" == some (3, 64)
 #guard VStar.capParams "rec-cap/n0128" == none
+#guard VStar.capParams "rec-cap/n64-l0" == none
+#guard VStar.capParams "rec-cap/n64-l03" == none
+#guard VStar.capParams "rec-cap/n64-l3-l4" == none
 #guard VStar.capParams "rec-cap/n" == none
 #guard VStar.capParams "rec-open/l16-h4" == none
-#guard isVStar "rec-cap/n128"
+#guard isVStar "rec-cap/n128" && isVStar "rec-cap/n64-l3"
 
 -- `2^cap₀` at the fixture shapes: 128 nodes of `root_B` at m 22 through 35.
 #guard (List.range 14).all fun d => ((fast100 (22 + d)).bind (·.levels[0]?)).map (2 ^ ·.cap) == some 128
 #guard match VStar.capStatement { m := 25, kLog := 22, claims := 8 } with
-  | .ok (.cap 128) => true
+  | .ok (.cap 0 128) => true
   | _ => false
+-- The later levels at m 25 (caps 6, 6, 5): both reps' 2^cap_l nodes, 128, 128, 64.
+#guard match VStar.levelCapStatements { m := 25, kLog := 22, claims := 8 } with
+  | .ok caps => caps.toList.map (fun s => (s.name, s.instances, s.dir)) ==
+      [("rec-cap/n128-l1", 128, "cap/L1"), ("rec-cap/n128-l2", 128, "cap/L2"), ("rec-cap/n64-l3", 64, "cap/L3")]
+  | .error _ => false
 
 def inner : Inner := { m := 25, kLog := 22, claims := 8, regions := 3 }
 
@@ -33,17 +45,56 @@ def listed (ss : Array VStar.Stmt) : Option String :=
 
 def level0 : VStar.Stmt := .recOpen 0 64 8 436
 
-#guard listed #[level0, .cap 128] == none
-#guard listed #[level0] ==
+def later : Array VStar.Stmt := #[.cap 1 128, .cap 2 128, .cap 3 64]
+
+#guard listed (#[level0] ++ later ++ #[.cap 0 128]) == none
+#guard listed (#[level0] ++ later) ==
   some "V*'s list has no RecCap statement (rec-cap/n128): the table's level-0 cap is held by none of its statements"
-#guard listed #[level0, .cap 64] ==
+#guard listed (#[level0] ++ later ++ #[.cap 0 64]) ==
   some "V*'s list: rec-cap/n64 holds 64 nodes, and the table's level-0 cap has 128 (2^cap₀, cap₀ 7)"
-#guard listed #[.cap 128, level0, .cap 128] ==
+#guard listed (#[.cap 0 128, level0] ++ later ++ #[.cap 0 128]) ==
   some "V*'s list has 2 RecCap statements, and holds the table's level-0 cap once"
+#guard listed #[level0, .cap 1 128, .cap 3 64, .cap 0 128] ==
+  some "V*'s list has no RecCap statement (rec-cap/n128-l2): level 2's tops are held by none of its statements"
+#guard listed #[level0, .cap 1 128, .cap 2 64, .cap 3 64, .cap 0 128] ==
+  some "V*'s list: rec-cap/n64-l2 holds 64 nodes, and level 2's tops have 128 (both reps' 2^cap_2, cap_2 6)"
+#guard listed (#[level0] ++ later ++ #[.cap 2 128, .cap 0 128]) ==
+  some "V*'s list has 2 RecCap statements at level 2, and holds its tops once"
+#guard listed (#[level0] ++ later ++ #[.cap 4 64, .cap 0 128]) ==
+  some "V*'s list: rec-cap/n64-l4 holds level 4's tops, and the schedule (m 25) has 4 levels"
+
+def topsListed (i : Inner) (caps : Array VStar.Stmt) : Option String :=
+  match checkTopsListed i caps with
+  | .error e => some e
+  | .ok () => none
+
+-- The reps' schedule commits tops of 64, 64 and 32 nodes past `root_B`: the later levels' caps, both reps'.
+#guard (repRounds 25 22 8).map topSizes == some [64, 64, 32]
+#guard topsListed inner later == none
+#guard topsListed { inner with holo := true } later == none
+-- At every fast100 shape (m 22 to 35), dense and holo, the later levels' caps are the ones the reps' schedule commits.
+#guard [22, 25, 27, 28, 29, 32, 35].all fun m => [false, true].all fun holo =>
+  match VStar.levelCapStatements { m, kLog := 22, claims := 8 } with
+  | .ok caps => topsListed { inner with m, holo } caps == none
+  | .error _ => false
+#guard topsListed inner #[.cap 1 128, .cap 2 128] ==
+  some "V*'s list: the later levels' caps hold [128, 128] nodes, and the reps' schedule commits tops of [64, 64, 32] nodes a rep ([128, 128, 64] both reps')"
+#guard match statements inner with
+  | .ok ss => (ss.toList.drop (ss.size - 4)).map (·.name) ==
+      ["rec-cap/n128-l1", "rec-cap/n128-l2", "rec-cap/n64-l3", "rec-cap/n128"]
+  | .error _ => false
+
+-- Every message round a rep absorbs is one of V*'s list's message-round ports at both reps' rows (`checkRoundsListed`):
+-- the deployed dense list passes it (`statements inner` above runs it), and a list without the parts is refused at
+-- round 0. Each `statements` is a whole V* list in the interpreter, about 20 minutes, so no other shape is built here.
+#guard match checkRoundsListed inner (later ++ #[.cap 0 128]) with
+  | .error e => e == "V*'s list: a rep's message round 0 (rec-c0) is a message-round port of none of its statements"
+  | .ok () => false
+#guard roundListed #[.sparse ⟨1, 6, 0, 0⟩ 7] 7 && !roundListed #[.sparse ⟨1, 6, 0, 0⟩ 7] 6
 
 def port (name value : String) (root : UInt8 := 1) (leaves : Nat := 128) (reads : Array (Option Nat) := #[some 0]) :
     Registered.Port :=
-  { name, value, root := ⟨#[root]⟩, leaves, words := some 64, wordBits := 16, domain := ⟨#[7]⟩, reads }
+  { name, value, root := ⟨#[root]⟩, leaves, words := some 64, wordBits := 16, domain := ⟨#[7]⟩, readsRel := reads }
 
 def all : Array (Option Nat) := (Array.range 128).map some
 
@@ -56,29 +107,36 @@ def shared (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option 
 
 -- Level 0's `out` and RecCap's `top` pass at the shared rows' one registration of `rec-top-L0`, each at its own reads.
 #guard shared level0 #[port "out" "rec-top-L0" (reads := #[some 5, some 9])] (some rows) == none
-#guard shared (.cap 128) #[port "top" "rec-top-L0" (reads := all)] (some rows) == none
-#guard shared (.cap 128) #[port "top" "rec-top-L0" (root := 2) (reads := all)] (some rows) ==
+#guard shared (.cap 0 128) #[port "top" "rec-top-L0" (reads := all)] (some rows) == none
+#guard shared (.cap 0 128) #[port "top" "rec-top-L0" (root := 2) (reads := all)] (some rows) ==
   some "rec-cap/n128: its port top reads rec-top-L0, which the verifier's shared rows (--rec-rows) register as rec-top-L0: root 02, against 01"
 #guard shared level0 #[port "out" "rec-top-L0" (leaves := 64)] (some rows) ==
   some "rec-open/l64-h8: its port out reads rec-top-L0, which the verifier's shared rows (--rec-rows) register as rec-top-L0: leaves 64, against 128"
 #guard shared level0 #[port "out" "rec-top-L0"] (some #[port "acc0" "rec-acc"]) ==
-  some "rec-open/l64-h8: its port out reads the table's level-0 cap rec-top-L0, which RecCap holds; pass the verifier's shared rows (--rec-rows F), which register it"
-#guard shared (.cap 128) #[port "top" "rec-top-L0" (reads := all)] none ==
-  some "rec-cap/n128: its port top reads the table's level-0 cap rec-top-L0, which RecCap holds; pass the verifier's shared rows (--rec-rows F), which register it"
--- A later level's tops need no shared entry: only level 0's cap is RecCap's.
-#guard shared (.recOpen 1 16 7 212) #[port "out" "rec-top-L1"] (some #[port "acc0" "rec-acc"]) == none
+  some "rec-open/l64-h8: its port out reads the table's tops rec-top-L0, which its level's RecCap holds; pass the verifier's shared rows (--rec-rows F), which register it"
+#guard shared (.cap 0 128) #[port "top" "rec-top-L0" (reads := all)] none ==
+  some "rec-cap/n128: its port top reads the table's tops rec-top-L0, which its level's RecCap holds; pass the verifier's shared rows (--rec-rows F), which register it"
+-- A later level's tops need a shared entry too: its RecCap holds them.
+#guard shared (.recOpen 1 16 7 212) #[port "out" "rec-top-L1"] (some #[port "acc0" "rec-acc"]) ==
+  some "rec-open/l16-h7: its port out reads the table's tops rec-top-L1, which its level's RecCap holds; pass the verifier's shared rows (--rec-rows F), which register it"
+#guard shared (.cap 1 128) #[port "top" "rec-top-L1" (reads := all)]
+  (some (rows.push (port "rec-top-L1" "rec-top-L1" (reads := all)))) == none
 
 def circuit : Circuit := { (default : Circuit) with nets := #[("rec-cap/n128", { (default : Net) with name := "rec-cap/n128" })] }
 
-def cap (own : Array Registered.Port) (N : Nat := 128) : Option String :=
-  match RecCoins.checkCap circuit default own N with
+def cap (own : Array Registered.Port) (N : Nat := 128) (l : Nat := 0) : Option String :=
+  match RecCoins.checkCap circuit default own l N with
   | .error e => some e
   | .ok () => none
 
 #guard cap #[port "out" "rec-cap-zero" (reads := all)] ==
   some "rec-coins: rec-cap/n128: the verifier's registered reads hold no port top: the cap's rows would be the prover's"
 #guard cap #[port "top" "rec-top-L1" (reads := all)] ==
-  some "rec-coins: rec-cap/n128: port top reads rec-top-L1, not the table's level-0 cap rec-top-L0"
+  some "rec-coins: rec-cap/n128: port top reads rec-top-L1, not level 0's tops rec-top-L0"
+#guard cap #[port "top" "rec-top-L0" (reads := all)] (l := 2) ==
+  some "rec-coins: rec-cap/n128: port top reads rec-top-L0, not level 2's tops rec-top-L2"
+#guard cap #[port "top" "rec-top-L2" (reads := all)] (l := 2) ==
+  some "rec-coins: rec-cap/n128: the verifier's registered reads hold no port out: its rec-cap-zero would be the prover's"
 #guard cap #[port "top" "rec-top-L0" (leaves := 64) (reads := all)] ==
   some "rec-coins: rec-cap/n128: rec-top-L0: 64 rows of 64 words registered, the cap's 128 of 64"
 #guard cap #[{ port "top" "rec-top-L0" (reads := all) with words := some 32 }] ==
@@ -95,16 +153,18 @@ def cap (own : Array Registered.Port) (N : Nat := 128) : Option String :=
   some "rec-coins: rec-cap/n128: the verifier's registered reads hold no port out: its rec-cap-zero would be the prover's"
 
 -- The unit: `out` is `top`'s words 32 … 63, then 32 zero words; no AND.
-#guard (VStar.capUnit 128).st.rows.isEmpty
-#guard (VStar.capUnit 128).inPorts == [64] && (VStar.capUnit 128).outPorts == [64]
-#guard (VStar.capUnit 128).outs.size == 16 * 64
-#guard ((VStar.capUnit 128).outs.toList.take (16 * 32)).map (·.s) == (List.range (16 * 32)).map fun v => [16 * 32 + v]
-#guard ((VStar.capUnit 128).outs.toList.drop (16 * 32)).all fun f => f.s.isEmpty && !f.c
+#guard (VStar.capUnit 0 128).st.rows.isEmpty
+#guard (VStar.capUnit 0 128).inPorts == [64] && (VStar.capUnit 0 128).outPorts == [64]
+#guard (VStar.capUnit 0 128).outs.size == 16 * 64
+#guard ((VStar.capUnit 0 128).outs.toList.take (16 * 32)).map (·.s) == (List.range (16 * 32)).map fun v => [16 * 32 + v]
+#guard ((VStar.capUnit 0 128).outs.toList.drop (16 * 32)).all fun f => f.s.isEmpty && !f.c
+#guard (VStar.capUnit 2 128).name == "rec-cap/n128-l2"
 
 def hex128 : String := "".pushn 'a' 128
 def bindings : VStar.Bindings :=
   { partition := hex128, program := hex128, programDigests := Json.mkObj [("RecCap_v1", Json.str hex128)] }
 
-#guard (circuitFile (.cap 128) bindings).toBool
+#guard (circuitFile (.cap 0 128) bindings).toBool
+#guard (circuitFile (.cap 2 128) bindings).toBool
 
 end Flock.Test.RecCap

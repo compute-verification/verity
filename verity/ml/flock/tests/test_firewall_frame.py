@@ -6,8 +6,7 @@ order (written out here from the layout's index formulas), the pads' label and r
 frame stays home, everything outside the masked phases leaves as the device framed it, and a round that breaks the masking
 challenger's phases or the transcript's framing is refused, releasing nothing. The frame makes the pass decision: each
 device round comes with the statement's scheduled round in its place, and passes when it is that round byte for byte but
-for the algebraic phase's values (`live/src/pass_vectors.json`, which Rust's `Checker` and `ShadowLink::check` are held to
-too); one that fails stops the rep, the scheduled round leaving in its place. A rep stops only at its end: after a round
+for the algebraic phase's values (`live/src/pass_vectors.json`); one that fails stops the rep, the scheduled round leaving in its place. A rep stops only at its end: after a round
 that fails, is marked `fail` or is refused, every value of the algebraic phase leaves as its pad alone, whatever the round
 carries, and the rep's `finish` is `stop`. So what a stopped rep releases under pads `h` is byte for byte what the honest rep releases under
 pads `h + v`, and the rounds, their lengths and their order are the same: before `Finish`, nothing depends on whether a check
@@ -16,10 +15,9 @@ zerocheck outer coin `r_j = 1`; at the opening's label, a mask slot short of ful
 reps (`prior`'s and the rep's own); level 0's `ρ_0, ρ_1` dependent over F128; and `β = 0` in the inner proof, whose four
 rounds leave through the frame too. Each answers `stop` at once, nothing of the round leaving. The frame fixes the inner
 proof's rounds: `(ρ, σ)` and `Y` are its own, from its draws and the coins (computed here with `gmul`), and of the other two
-only `final_c'` and `τ`'s commitment are the firewall's. `flock-circuit` holds its
-own masking challenger to this release byte for byte on every round it sends (`firewall::Gate`), its pads tree over the
-frame's draws to the frame's root, and its own refusals to the frame's (`live/src/coin_stop_vectors.json` holds Rust's
-`ρ` and `β` checks to the frame's). The prover's every other OS read is `flock-firewall tap`'s: a line `N` answered with
+only `final_c'` and `τ`'s commitment are the firewall's. Under the firewall `flock-circuit`
+hands the frame each device round unmasked (`firewall::Gate`), and Rust's `ρ` and `β` checks agree with the frame's
+(`live/src/coin_stop_vectors.json`). The prover's every other OS read is `flock-firewall tap`'s: a line `N` answered with
 `N` fresh bytes."""
 from __future__ import annotations
 
@@ -334,8 +332,8 @@ def test_an_honest_device_round_passes_against_the_scheduled_one_and_leaves_with
     assert [o[1] for o in out] == release(f.h, f.root, ALG, f.inner()) and f.ask("finish") == "ok" and f.close() == 0
 
 
-def test_the_frames_pass_decision_is_rusts_on_the_shared_vectors_and_a_failed_round_leaves_as_the_scheduled_one():
-    """`pass_vectors.json`, which firewall.rs's test holds Rust's `Checker` and `ShadowLink::check` to: in the algebraic
+def test_the_frames_pass_decision_on_the_shared_vectors_and_a_failed_round_leaves_as_the_scheduled_one():
+    """`pass_vectors.json`: in the algebraic
     phase the device round must be the scheduled one's frames, labels, bytes, headers, padding, kinds, lengths and coin
     count, with any values; after it, the scheduled round byte for byte. A round that fails stops the rep, and the scheduled
     round leaves in its place."""

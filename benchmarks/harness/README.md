@@ -25,6 +25,28 @@ anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or 
 `model_digest` (`presets.local_checkpoint`'s hash of its files), which a dispatched point recomputes and refuses to run on
 when it differs.
 
+A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, `sampled-proofs:SCHEME`) runs the preset's precision with stock FP8 as its
+control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
+checkpoint and quantizes it itself), its `control` (another arm of the spec, or `"none"`), and its `protocols_config`,
+which `verity_vllm.LLM` takes as it is, `{protocol: {...}}`, except that a string `"$NAME"` is the point's environment
+variable NAME (the cubin the spec's setup builds, say). The harness gives an arm with PoUW an in-process challenger as
+its `coins` (`pouw.challenged`). The adapter ends one Pearl-C pass per model forward itself; the passes'
+counts (`passes`, `units`, `tiles`, screened, failing and unsure rows) are each timed rep's `pearl_c` spans, and the
+experimental arm's call check on the installed run is the arm's own gate. Pearl-C's y carries the epoch's live salt, so
+no stock arm is its token control (`llama31-8b-1gpu-pouw-protocol` has `"none"`). The table is part of the resolved spec
+and so of every point's identity, and the arm's cubin digest is its `kernel_digest`.
+
+The precision `int8_exact` is the eager exact-int8 engine of an int8 pin (every linear and attention layer on the plain
+exact-int8 arm, read back from the layers), and `stock-int8` is that engine without a protocol. PoUW's H1 + fx1
+(`pouw:eps1-sm120-h1fx1`) runs on it with `stock-int8` as its token control, since its arm serves its own y. Its settings
+take the built engine's model runner, which `verity_vllm.LLM` refuses to go without before it builds, so the harness
+installs it on the built engine itself (`protocol_options.install`), one window a run: its `steps` (S) the run's step
+bound (`arms.window_steps`), its `rows` (T) the spec's, which must be the engine's `max_num_batched_tokens`, and its
+coins a fresh in-process salt coin and S round coins, so it credits nothing and measures cost only. The window opens
+before the clock starts and closes after it stops; each timed rep's `extras.h1_window` says what it served, and the
+arm's own gate is every window static, every served call passing the credit gate and every request entered
+(`llama31-8b-1gpu-pouw-h1`).
+
 A sweep is the product of its batches, prompt lengths, traffic shapes and samplings: `greedy`, or `stochastic`
 (temperature 0.8, top-p 0.95). Every request carries its own seed, so a stochastic point's tokens are a function of the
 engine's numerics like a greedy one's.
@@ -32,7 +54,13 @@ engine's numerics like a greedy one's.
 The engine settings `serving_defaults = true` build every engine as vLLM serves (torch.compile, its CUDA-graph mode and
 capture sizes, no batch invariance: the execution label `compiled` of `verity_vllm.engine.served`), with one Inductor
 cache directory for all arms' processes, so they run the kernel configurations the first one autotuned. Without it a
-graph engine replays decode-only CUDA graphs at `capture_sizes`.
+graph engine replays decode-only CUDA graphs at `capture_sizes`, and `verity_vllm.LLM` builds every engine batch
+invariant (`bi-eager`, `bi-compiled`).
+
+A served variant `BUILTIN@eager` or `BUILTIN@compiled` (`stock-fp8@compiled`) is a built-in arm's engine at vLLM's
+serving defaults in that execution, whatever the spec's `eager` and the preset's `serving_defaults` say for the other
+arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compiled`). Its control is the built-in
+unless its `[arm_settings."ARM"]` names another arm or `"none"`, and its `execution` is in the arm's identity.
 
 An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
 names, string values, none of the dispatcher's, queue's or launcher's own) and its `setup`, a script in the source tree
@@ -50,12 +78,14 @@ export their paths, say), are part of the resolved spec and so of every point's 
      `resident_kv_cache_memory_bytes` and `block_kv_cache_memory_bytes`. An engine that doesn't report its pool fails it.
    - `arm`: the arm's own gate, when it provides one.
 
-   An arm can't be its own control. An arm without a control (the stock references, or an experimental arm such as
-   Pearl-C's that computes different tokens) has only its own gate, and the table names it. Tokens are compared, not
+   An arm can't be its own control. An arm without a control (the stock references, an experimental arm such as
+   Pearl-C's that computes different tokens, or a protocol arm whose `control` is `"none"`) has only its own gate, and
+   the table names it. Tokens are compared, not
    logits. One failed gate times nothing: the result keeps its gates and has no points. Three gates run after timing,
    and a failure there keeps the gates and drops the points:
    - `timed-tokens`: each timed rep of an arm with a control produces the control's tokens in that rep, so an arm can't
-     compute something else only when timed.
+     compute something else only when timed. In `resident`, each timed rep of an arm without a control produces the
+     tokens its own gate saw from the same engine (`"against": "gate"`).
    - `engine-identity`: in `blocks`, each timed engine reports the gated engine's KV pool, kernel digest, versions,
      GPU and overrides.
    - `arm-closing`: after an engine's warm-up and timed runs, before it closes, the runner reads the arm's own gate again

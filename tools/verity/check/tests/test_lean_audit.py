@@ -943,3 +943,28 @@ def test_kept_dependencies_and_replays_past_their_caps_go_oldest_first(tmp_path)
         os.utime(replay / f"{i}.json", (2000 + i, 2000 + i))
     assert LA.prune_replays(replay, kept=2) == 3 and sorted(p.name for p in replay.iterdir()) == ["3.json", "4.json"]
     assert LA.prune_replays(tmp_path / "absent", kept=2) == 0
+
+
+def test_records_trees_beyond_the_cap_go_least_recently_used_first_unless_a_run_holds_one(tmp_path):
+    """vy-nebius-cpu-2 reached 95% of its inodes with nine idle `lean-records` trees (21 Oct), about 490k files each.
+    `prune_records` keeps the most recently used (by `.who`, `links.json`, `.lock`); an older one whose `.lock` a run holds
+    stays; a link to a tree elsewhere goes with its target."""
+    import fcntl
+    store, away = tmp_path / "lean-records", tmp_path / "moved"
+    store.mkdir()
+    away.mkdir()
+    for i, name in enumerate(["old", "held", "linked", "recent"]):
+        tree = (away if name == "linked" else store) / name
+        tree.mkdir()
+        (tree / "f").write_text("x")
+        (tree / ".who").write_text("r")
+        os.utime(tree / ".who", (1000 + i, 1000 + i))
+        if name == "linked":
+            (store / name).symlink_to(tree)
+    with open(store / "held" / ".lock", "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        os.utime(store / "held" / ".lock", (1001, 1001))
+        assert LA.prune_records(store, kept=1) == 2
+    assert sorted(p.name for p in store.iterdir()) == ["held", "recent"] and not (away / "linked").exists()
+    assert LA.prune_records(store, kept=1) == 1 and [p.name for p in store.iterdir()] == ["recent"]
+    assert LA.prune_records(tmp_path / "absent") == 0

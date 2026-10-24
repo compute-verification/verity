@@ -1,6 +1,7 @@
 # The proof service's challenger on its auditor host: `serve.py` over `verity.core.protocols.sampled_proofs.remote`, which
-# `run.sh` runs as a research run on a machine beside the prover's. Not a package: the suite runs serve.py as a process
-# over loopback with a test key, the Lean verifier's coins stubbed (`tests/stub_serve.py`).
+# `auditor.py` runs there as the auditor user, one session a window under its signed ledger (`run.sh`: a research run's
+# session elsewhere). Not a package: the suite runs serve.py as a process over loopback with a test key, the Lean verifier's
+# coins stubbed (`tests/stub_serve.py`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
@@ -9,4 +10,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/core/protocols/sampled_proofs/one_stage", "verity/ml/__init__.py", "verity/ml/circuits",
-          "verity/ml/commitments", "verity/ml/crypto"]
+          "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness", "verity/core/protocols/pouw",
+          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py"]

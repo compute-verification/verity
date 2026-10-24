@@ -2,13 +2,14 @@
 built here with `lake` on first use), with `streamed_wipe.verdict` beside it as the reference.
 
 `judge(signed, commitment, trusted=..., schemes=..., decide=VERDICT)` returns the verdict a caller records and each side's
-as it gave it (`{"accepted", "covered", "egress_mib", "reasons"}`, `covered` being `WipeParams.covered`):
+as it gave it (`{"accepted", "egress_mib", "reasons"}`), as `decide` names:
 
 - `lean`: the Lean's verdict; the Python's isn't computed.
 - `both`: both computed, and the Lean's verdict where they agree on every field; where they differ, a rejection naming
   both (`DISAGREE`).
 - `python`: the Python's alone (`streamed_wipe.verdict`), and no Lean process.
 
+Each side rejects a session whose batch size the guarantee doesn't cover (`WipeParams.covered`), however it ran.
 `VERDICT` is the default, the one line that switches it. `tests/test_wipe_verdict.py` holds the Lean to the Python on
 drawn sessions, adversarial edits of them and named negative controls; `benchmarks/pous/streamed_wipe/bench.py`'s session
 step judges its session here.
@@ -62,8 +63,7 @@ def python(signed: sw.SignedWipe, commitment: sw.WipeCommitment, *, trusted: fro
            schemes: Mapping[str, Any] = sw.SCHEMES) -> dict[str, Any]:
     """The Python's verdict, in the Lean's form."""
     v = sw.verdict(signed, commitment, trusted=trusted, schemes=schemes)
-    return {"accepted": v.accepted, "covered": commitment.params.covered, "egress_mib": v.egress_mib,
-            "reasons": list(v.reasons)}
+    return {"accepted": v.accepted, "egress_mib": v.egress_mib, "reasons": list(v.reasons)}
 
 
 def _of(side: dict[str, Any]) -> sw.Verdict:
@@ -87,7 +87,7 @@ def judge(signed: sw.SignedWipe, commitment: sw.WipeCommitment, *, trusted: froz
         try:
             sides["lean"] = lean(signed, commitment, **kw)
         except ValueError as e:
-            sides["lean"] = {"accepted": False, "covered": False, "egress_mib": sw.EGRESS_MAX_UNITS, "reasons": [str(e)]}
+            sides["lean"] = {"accepted": False, "egress_mib": sw.EGRESS_MAX_UNITS, "reasons": [str(e)]}
     if decide != "lean":
         sides["python"] = python(signed, commitment, **kw)
     if decide == "python":

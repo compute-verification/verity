@@ -6,22 +6,22 @@ import Proofs.Flock.Claims.ZK.LinkFft
 /-!
 # The link round at the Lean recheck
 
-`flock-firewall link` (`Flock.Firewall.Link.root`) is the code of record of the firewall's level-0 recheck: each table's
-level-0 root, committed again from the host's witness, the table's level-0 hiding and its level-0 salts, which
-`Firewall::new` holds `commit_zk`'s root to and the session's link carries (live `PROTOCOL.md` §10.2). Here that
-function is held to the session's link.
+`Flock.Firewall.Link.root` is the code of record of the firewall's level-0 recheck: each table's
+level-0 root, committed again from the host's witness, the table's level-0 hiding and its level-0 salts: the root of
+record, which the session's link carries and `Firewall::new` holds the device's root to (live `PROTOCOL.md` §10.2; Rust
+commits nothing of level 0 that leaves). Here that function is held to the session's link.
 
-* `Flock.Firewall.Link.root_eq`, `cap_eq`, `leaves_getElem!`, `layer_eq`, `parRange_eq`: the recheck's root is
+* `Flock.Firewall.Link.root_eq`, `cap_eq`, `leaves_getElem!`, `layer_eq`: the recheck's root is
   `FlockComplete.flat` of `FlockComplete.layerOf`'s cap over `hm96-sha512/v1`'s leaves of `encodeRowsZk`'s rows under the
-  salts (`rows_eq`, `LinkFft`: the FFT's rows are those rows); its tasks (`parRange`) split one map.
+  salts (`rows_eq`, `LinkFft`: the FFT's rows are those rows); its tasks (`parRange`) split one map (`Link.parRange_eq`).
 * `Coined.swContent_inl`, `swExeOf_inl`, `Masked.leafAt_swCutAt`: the switched prover's level-0 leaves are the honest
   prover's, whatever values the workers supply: level 0 reads neither the values nor the moved pads.
-* `Masked.linkIn`, `Masked.linkMsg`: what the firewall hands `flock-firewall link` for table `j` at the tape (the packed
+* `Masked.linkIn`, `Masked.linkMsg`: what the firewall hands `Flock.Firewall.Link` for table `j` at the tape (the packed
   table of the witness's traces at the tape's mask words, and the tape's extra lanes, lane paddings and level-0 salts),
   and the link message of the roots it answers. That message is round `0`'s encoding of the switched cut, at every
   coin vector and any values the workers supply (`Masked.enc0_swCutAt`, from `exeOf_inl` at `agrees0_exe`).
 * `LeanRelease.LinkIs`: the firewall's link is `linkMsg`, a named trust narrower than `LinkRoundEq`. It is a fact about
-  what the transport hands `flock-firewall link` and how it frames the roots, not about how a root is computed.
+  what the transport hands `Flock.Firewall.Link` and how it frames the roots, not about how a root is computed.
 * **`LeanRelease.linkRoundEq_of_linkIs`**: `LinkRoundEq` at the deployed session (`Masked.dataE`) from `LinkIs`.
 -/
 
@@ -42,17 +42,6 @@ theorem layerOf_congr (nd : ByteArray → ByteArray → ByteArray) (d : Nat) {lf
     simp only [FlockComplete.layerOf]
     exact Array.map_congr_left fun q hq => hl q (Array.mem_range.1 hq)
   | h + 1 => by rw [FlockComplete.layerOf, FlockComplete.layerOf, layerOf_congr nd d hl h]
-
-/-- **`a` tasks of `b` each are one map** over `a·b`. -/
-theorem parRange_eq {α : Type} (f : Nat → α) (a b : Nat) : parRange f a b = (Array.range (a * b)).map f := by
-  unfold parRange
-  induction a with
-  | zero => simp only [Nat.zero_mul, Array.range_eq_empty_iff.mpr rfl, Array.map_empty, Array.foldl_empty]
-  | succ a ih =>
-    rw [Array.range_succ, Array.map_append, Array.foldl_append, ih, Nat.succ_mul, Array.range_add]
-    simp only [Task.spawn, List.map_toArray, List.map_cons, List.map_nil, List.size_toArray, List.length_cons,
-      List.length_nil, Nat.zero_add, List.foldl_toArray', List.foldl_cons, List.foldl_nil, Array.map_append,
-      Array.map_map, Function.comp_def]
 
 /-- **Leaf `q` of the recheck** is row `q`'s `hm96-sha512/v1` leaf under salt `q`. -/
 theorem leaves_getElem! (lv : Level) (tPad : Nat) (i : In) {q : Nat} (hq : q < 2 ^ lv.d) :
@@ -130,8 +119,8 @@ theorem leafAt_swCutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.
 noncomputable abbrev dataE : TableData :=
   tableData PE (RoundPlan.stop (czExe PE) (encStop (encExe PE)) (finExe PE)) UE
 
-/-- **What the firewall hands `flock-firewall link` for table `j`** at the tape `t`: the table's `m`, its packed table at
-the witness's traces with the tape's mask words, and the tape's extra lanes, lane paddings and level-0 salts. -/
+/-- **What the firewall hands `Flock.Firewall.Link` for table `j`** at the tape `t`: the table's `m`, its packed table
+at the witness's traces with the tape's mask words, and the tape's extra lanes, lane paddings and level-0 salts. -/
 noncomputable def linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (j : Fin (jOf x)) :
     _root_.Flock.Firewall.Link.In where
   m := (stAt x j).m
@@ -141,7 +130,7 @@ noncomputable def linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (j : Fin
   lanePad := (exeTape t).lanePad j.val
   salt := (exeTape t).toTape.salt j.val 0 0
 
-/-- **The link message of the recheck's roots**: `flock-firewall link`'s root of each table, framed as `enc0` frames its
+/-- **The link message of the recheck's roots**: `Flock.Firewall.Link`'s root of each table, framed as `enc0` frames its
 caps; the empty message where the statement sets up no session. -/
 noncomputable def linkMsg (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) : Msg :=
   if (FlockDeploy.setupOf true x).isNone then [] else
@@ -203,18 +192,19 @@ open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 namespace LeanRelease
 
 /-- **The firewall's link is the recheck's link message**: after `Hello`'s answer, where the protocol has coins and the
-frame takes the answer's, the link is `linkMsg`, `flock-firewall link`'s roots of the tables the transport hands it. A
-named hypothesis, one of the transport's trusts, narrower than `LinkRoundEq`: what `Firewall::new` hands
-`flock-circuit`'s Lean link (`lean_link`: the host's packed table, the extra lanes, the lane paddings and the level-0
-salts on its tape) and how `Firewall::root` frames the roots it answers, never how a root is computed. -/
+frame takes the answer's, the link is `linkMsg`, `Flock.Firewall.Link.root`'s roots of the tables the transport hands
+it. A named hypothesis, one of the transport's trusts, narrower than `LinkRoundEq`: what `flock-circuit`'s
+`Firewall::new` hands the Lean code (the host's packed table, the extra lanes, the lane paddings and the level-0 salts
+on its tape, to the session loop's `Level0` or the Lean finish's `table`) and how `Firewall::root` frames the roots it
+answers, never how a root is computed. -/
 def LinkIs (nr : Msg → ℕ → ℕ)
     (L : LeanRelease Claims.Flock.Wit ((session nr dataE).refP.Nonce × (session nr dataE).refP.Rand)) (x : Msg)
     (w : Claims.Flock.Wit) : Prop :=
   ∀ (ν : (session nr dataE).Nonce) (t : (session nr dataE).Tape) (m₀ ρ₀ : Msg), 0 < refK x →
     L.refusesCoins x (ν, t) [(m₀, ρ₀)] = false → L.link x w (ν, t) [(m₀, ρ₀)] = linkMsg x w t
 
-/-- **`LinkRoundEq` at the deployed session from the Lean recheck**: where the firewall's link is `flock-firewall
-link`'s link message (`LinkIs`), it is the session's switched link at the tape, whatever values the workers supply
+/-- **`LinkRoundEq` at the deployed session from the Lean recheck**: where the firewall's link is `Link.root`'s
+link message (`LinkIs`), it is the session's switched link at the tape, whatever values the workers supply
 (`enc0_swCutAt`: round `0` sees no refusal, `encStop_zero`, and is `enc0`, `encExe_zero`). -/
 theorem linkRoundEq_of_linkIs (nr : Msg → ℕ → ℕ) (vs : (session nr dataE).SwVals)
     (L : LeanRelease Claims.Flock.Wit ((session nr dataE).refP.Nonce × (session nr dataE).refP.Rand)) (x : Msg)

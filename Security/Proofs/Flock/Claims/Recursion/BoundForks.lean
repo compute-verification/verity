@@ -29,6 +29,17 @@ def ForksBind (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock
     (t : Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x × (EO D I DO decO).C x),
     OpensDiffer H D I DO decO P x j t → forkColl H D I DO decO P x j t
 
+/-- **`ForksBind` at the statement `x`**: what the bound at one statement reads of it. -/
+def ForksBindAt (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (x : Msg) :
+    Prop :=
+  ∀ (decO : List (ℕ × Col) → List T) (Ω : Type) (P : Prover Ω) (j : ℕ)
+    (t : Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x × (EO D I DO decO).C x),
+    OpensDiffer H D I DO decO P x j t → forkColl H D I DO decO P x j t
+
+theorem ForksBind.toAt {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    (h : ForksBind H D I DO) (x : Msg) : ForksBindAt H D I DO x :=
+  fun decO => h decO x
+
 /-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le_fork`, from `ForksBind`. -/
 theorem Pr_bad_le_fork_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]

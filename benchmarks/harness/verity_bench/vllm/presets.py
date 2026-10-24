@@ -45,6 +45,29 @@ class Preset:
         return asdict(self)
 
 
+#: Engine precisions an arm may name (`runner.engine_args`). ``int8_exact`` is the eager exact-int8 engine on an int8 pin
+#: (`TargetProfile.int8_exact` ``"all"``: every linear and every attention layer on the plain exact-int8 arm)
+PRECISIONS = ("bfloat16", "fp8", "int8_exact")
+#: A protocol arm's `control` that gives it none: its tokens are checked by no other arm's, and the table names it
+NO_CONTROL = "none"
+#: The executions a served variant of a built-in arm (`BUILTIN@LABEL`, `arms.served_variant`) builds its engine in: vLLM's
+#: serving defaults, eager or compiled (`verity_vllm.engine.served.EXECUTIONS`)
+SERVED_EXECUTIONS = ("eager", "compiled")
+
+
+@dataclass(frozen=True)
+class ArmSettings:
+    """A protocol arm's own engine (`[arm_settings."pouw:SCHEME"]`): the precision its engine loads, its control (an arm
+    the spec names, or `NO_CONTROL`; default stock FP8), and the protocols config handed to `verity_vllm.LLM`
+    (``{protocol: {...}}``), where a string value ``"$NAME"`` is the point's environment variable NAME, which the spec's
+    setup exports. A served variant (`[arm_settings."stock-fp8@compiled"]`) takes only its control (default its
+    built-in). All of it is in the point's identity."""
+
+    precision: str | None = None
+    control: str | None = None
+    protocols_config: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+
+
 @dataclass(frozen=True)
 class BenchmarkSpec:
     """One runnable benchmark configuration before its named sweep is resolved."""
@@ -58,6 +81,7 @@ class BenchmarkSpec:
     eager: bool
     preset: Preset
     arm_modules: tuple[str, ...] = ()
+    arm_settings: Mapping[str, ArmSettings] = field(default_factory=dict)
     env: Mapping[str, str] = field(default_factory=dict)
     setup: str | None = None
     admission: Admission = Admission()
@@ -87,6 +111,7 @@ class ResolvedSpec:
     eager: bool
     preset: Preset
     arm_modules: tuple[str, ...] = ()
+    arm_settings: Mapping[str, ArmSettings] = field(default_factory=dict)
     env: Mapping[str, str] = field(default_factory=dict)
     setup: str | None = None
     admission: Admission = Admission()
@@ -130,6 +155,17 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
         setup = PurePosixPath(doc.setup)
         if setup.is_absolute() or ".." in setup.parts or not (SOURCE_ROOT / setup).is_file():
             raise ConfigError(f"{path}: setup {doc.setup!r} must name a script in the source tree, relative to its root")
+    for name, arm in doc.arm_settings.items():
+        variant = name.partition("@")[2] in SERVED_EXECUTIONS
+        if name not in doc.arms or not (":" in name or variant):
+            raise ConfigError(f"{path}: arm_settings {name!r} must name a protocol arm (protocol:scheme) or a served "
+                              f"variant (BUILTIN@{'|'.join(SERVED_EXECUTIONS)}) in arms")
+        if variant and (arm.precision is not None or arm.protocols_config):
+            raise ConfigError(f"{path}: arm_settings {name!r}: a served variant takes only its control")
+        if arm.precision is not None and arm.precision not in PRECISIONS:
+            raise ConfigError(f"{path}: arm_settings {name!r}: precision is one of {', '.join(PRECISIONS)}")
+        if arm.control is not None and arm.control != NO_CONTROL and (arm.control not in doc.arms or arm.control == name):
+            raise ConfigError(f"{path}: arm_settings {name!r}: control must be another arm in arms, or {NO_CONTROL!r}")
     return doc
 
 
@@ -161,6 +197,7 @@ def resolve_spec(spec: str | Path) -> ResolvedSpec:
         eager=doc.eager,
         preset=doc.preset,
         arm_modules=doc.arm_modules,
+        arm_settings=doc.arm_settings,
         env=doc.env,
         setup=doc.setup,
         admission=doc.admission,

@@ -14,7 +14,16 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.certifier import certificate as CT
-from verity.core.protocols.certifier.active import DATA, HEADER, LAST, PLACEHOLDER, encode_frame
+from verity.core.protocols.certifier.active import (
+    CANONICAL_STREAM,
+    DATA,
+    HEADER,
+    PLACEHOLDER,
+    encode_frame,
+    event_body,
+    event_placement,
+    request_frames,
+)
 from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status
 from verity.ml.circuits.boolean.forms import Circuit
 from verity.ml.circuits.defs import bind
@@ -27,6 +36,7 @@ from workload import n3
 from workload import n3_unit as U
 from workload import values as V
 from workload.block import Context
+from workload.hardware import OUTSIDE
 from workload.run import run_memory, statement
 
 def evaluate_forms(build, inputs: dict[str, list[bytes]], widths: dict[str, int]) -> list[list[int]]:
@@ -380,6 +390,18 @@ def test_n2_and_n3_run_on_every_link_window_and_only_n3_holds_the_content(sim):
             assert not n2 and n3
 
 
+def test_v5_with_the_template_accepts_every_honest_window_and_refuses_where_v3_does(sim):
+    """Every frame the simulator sends is `active.data_frames`' (its HELLOs from the source's outbox), so N3Window_v5
+    with the requests' template accepts every window of the honest run and refuses exactly the tampered ones."""
+    for t in (None, *TAMPERS):
+        (setup, windows), _ = sim[t]
+        v5 = U.sim_v5(setup, windows)
+        assert [(r["port"], r["window"]) for r in v5] == [(w.port, w.window) for w in windows]
+        refused = {(r["port"], r["window"]) for r in v5 if not r["ok"]}
+        assert refused == not_ok(windows) and bool(refused) == (t is not None), t
+        assert all(r["by"] == "unit" for r in v5 if r["recorded"])
+
+
 def test_a_tampered_window_runs_the_unit_and_the_position_of_its_honest_one(sim):
     """The unit and its public position depend on the size class and the occupancy alone, not on what was recorded
     (each run's commitments have their own salts, so the roots differ)."""
@@ -406,13 +428,13 @@ def test_n3frame_is_assemble_on_the_simulators_frames(sim):
 # --- the lab ---------------------------------------------------------------------------------------------------------
 
 BLOCK = "b1"
-SALTED_B = 96  # a salt frame is 81 bytes; at 54 an event's chunk is 3 bytes, so the MLP's messages take several
+LAB_B = 240  # a canonical event's frame is at least 235 bytes
+SALTED_B = LAB_B  # and a salt frame 81
 
 
-def cut(stream: int, request: bytes, B: int) -> list[bytes]:
-    room = B - HEADER.size
-    chunks = [request[i:i + room] for i in range(0, len(request), room)]
-    return [encode_frame(LAST if j == len(chunks) - 1 else DATA, stream, c, B) for j, c in enumerate(chunks)]
+def cut(request: bytes, B: int) -> list[bytes]:
+    data = request_frames(request, B)
+    return [data[i:i + B] for i in range(0, len(data), B)]
 
 
 #: 64 bytes a salt frame's payload doesn't carry: the live certifier's is `PLACEHOLDER`.
@@ -432,10 +454,10 @@ def lab_records(block: str, egress: list[bytes], ingress: list[bytes], B: int, s
     return out
 
 
-def lab_setup(B: int):
+def lab_setup(B: int, d: int = 4, requests: int = 2):
     """An honest run's statement and witness, each block's honest egress and ingress frames, B, and each message's
-    payload by stream."""
-    spec = {"d": 4, "layers": 3, "requests": 2}
+    payload by stream, for an MLP of width d over a batch of `requests`."""
+    spec = {"d": d, "layers": 3, "requests": requests}
     ctx = Context({"spec": spec, "blocks": 3, "devices": 2, "frame_bytes": B, "seed": 1})
     program = L.Lab.of(ctx, B)
     values = dict(ctx.inputs) | ctx.constants
@@ -450,15 +472,15 @@ def lab_setup(B: int):
     payloads = {s: F.encode(m, values) for s, m in program.messages.items()}
     frames = {}
     for b in program.blocks:
-        egress = [encode_frame(DATA, j + 1, program.event(b, p, payloads[m.stream]), B)
-                  for p, (j, m, _) in enumerate(program.events[b])]
-        frames[b] = (egress, [f for s in program.sessions[b] for f in cut(s.stream, program.request(s, payloads), B)])
+        egress = [encode_frame(DATA, CANONICAL_STREAM, event_body(program.event(b, p, program.payload(b, p, payloads))), B)
+                  for p in range(len(program.events[b]))]
+        frames[b] = (egress, [f for s in program.sessions[b] for f in cut(program.request(s, payloads), B)])
     return public, witness, frames, B, payloads
 
 
 @pytest.fixture(scope="module")
 def lab():
-    return lab_setup(54)
+    return lab_setup(LAB_B)
 
 
 @pytest.fixture(scope="module")
@@ -486,12 +508,13 @@ def test_an_honest_lab_runs_windows_are_ok(lab):
     assert {w.port.split(":")[1] for w in windows} == {L.EGRESS, L.INGRESS}
     assert all(d.mode == U.B64 for p, ds in setup.layout.descriptors.items() if p.endswith(L.EGRESS) for d in ds)
     assert all(d.mode == U.RAW for p, ds in setup.layout.descriptors.items() if p.endswith(L.INGRESS) for d in ds)
-    assert setup.layout.segments(EGRESS) == setup.layout.segments(INGRESS) == 1
+    assert setup.layout.segments(EGRESS) == 1 and setup.layout.segments(INGRESS) == 2  # a request's head, its message
 
 
 def test_an_outbox_holds_its_units_messages_back_to_back_in_send_order(lab):
     """Each unit's outbox is the payloads of the messages it sends, as the lab puts them on the wire, in φ's send
-    order; and each message's run starts at its offset."""
+    order; and each message's run starts at its offset. On the lab's links the outside host's outbox then holds every
+    request's length and head, one for each session."""
     public, witness, _, _, payloads = lab
     S = U.statement(public, witness)
     data, base = S.outboxes
@@ -501,11 +524,16 @@ def test_an_outbox_holds_its_units_messages_back_to_back_in_send_order(lab):
         assert x == b"".join(payloads[m.stream] for m in order if m.src == u)
     for m in order:
         assert data[m.src][base[m.stream]:base[m.stream] + len(payloads[m.stream])] == payloads[m.stream]
+    setup, _ = lab_windows(lab)
+    program = L.Lab(S.model, S.hw, S.placement, S.phi.messages, S.phi.frame_bytes)
+    framing, heads = U.lab_framing(program)
+    assert setup.S.outboxes[0][OUTSIDE] == data[OUTSIDE] + framing and setup.S.framing_at(OUTSIDE) == len(data[OUTSIDE])
+    assert len(heads) == sum(map(len, program.sessions.values())) and len(framing) == 12 * len(heads)
 
 
 def data_end(f: bytes) -> int:
-    """The index in frame f of its event's last data byte, before the closing blank line."""
-    return HEADER.size + HEADER.unpack_from(f)[2] - 3
+    """The index in an event's frame f of its text's first character."""
+    return event_placement(len(f))[0]
 
 
 @pytest.mark.parametrize("edit, refused", [
@@ -565,7 +593,7 @@ def test_n3frame_is_assemble_on_the_labs_frames(lab):
 
 @pytest.mark.slow
 def test_a_salted_window_is_its_reference(salted_lab):
-    """The salted window (B = 96): honest, with a wrong salt payload, and with the salt frame's slot pointing at a
+    """The salted window (B = 240): honest, with a wrong salt payload, and with the salt frame's slot pointing at a
     data frame. It is the one test of the salt path, which the demo can't reach (a salt frame needs B >= 81): the
     slot's one-hot selection of the salt frame, its comparison with the public payload, and the routing of the other
     frames onto the descriptors."""

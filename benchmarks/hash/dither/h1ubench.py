@@ -1,5 +1,5 @@
 """H1 + fx1's fused unit (h1u.cu) on one H200 or B200: gated bit for bit against compute accounting's served_h1/receipts.py
-(receipts_ca.py, its `call_receipts`) and `h1tile.reference`, then timed interleaved with the plain int8 GEMM of the same
+(its `call_receipts`) and `h1tile.reference`, then timed interleaved with the plain int8 GEMM of the same
 call and H1's noise floor (h1noise.cu's midstate kernel), at Llama-3.1-8B's linears and M = 1, 32, 256, 2048, 8192.
 
     python h1ubench.py --lib h1u.so [--variant NAME=h1u_x.so ...] [--noise-lib h1noise.so]
@@ -16,7 +16,7 @@ counts it. Every unit is live here.
 
 Gates before any timing, every one in this run (a failed gate exits 4 and times nothing):
   * anchors (CPU, small calls): kh_unit against h1tile.reference on every unit of a 64 x 64 x 512 call (m = 2) whose
-    second row block is dead (live = 0: the zero receipt, PouwH1Tile_v2's dead tile) and of a 32 x 32 x 4608 call (m = 3);
+    second row block is dead (live = 0: the zero receipt, PouwH1Tile_v4's dead tile) and of a 32 x 32 x 4608 call (m = 3);
     the device seeds against seeds.seed / receipt_seed;
   * every timed shape: 0xA5 poison, then kh_unit's receipts against call_receipts on sampled units (first, last and
     random ones) and no poison left anywhere; then a no-write control (a launch over zero rows) under the same poison,
@@ -40,8 +40,9 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "pouw" / "served_h1"))
 sys.path.insert(0, str(HERE.parents[2]))
-import receipts_ca as RC
+import receipts as RC
 from h1bench import KEY_BLOCKS, auto_j, plain_arms
 from h1bench import Lib as NoiseLib
 from h1bench import gate as noise_gate
@@ -376,7 +377,7 @@ def main() -> int:
     rng = random.Random(0x4831F1)
     doc = {"schema": "dither-hb/h1u/v1", "device": clock.name, "sms": props.multi_processor_count, "l2_bytes": l2,
            "torch": torch.__version__, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-           "reference": "receipts_ca.py (served_h1/receipts.py at origin/cursor/serve-h1-ea24 8d04cd79db), h1tile.reference",
+           "reference": "served_h1/receipts.py, h1tile.reference",
            "libs": paths, "noise_libs": npaths,
            "shapes": []}
     doc["anchors"] = anchors(libs, rng)

@@ -24,9 +24,9 @@
 #                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
 #                InnerRepCheck and the forgeries (FORGE="message sum comb top top-salt coef dirs", each under forged-<kind>/),
 #                JOBS at once; the job fails if one does not stage
-#   STEP=vcap    (CPU) RecCap alone over the inner's last proxied session (rec_vstage.stage_cap: level 0's tops under the
-#                firewall's salts, no running sums) into data/$TAG/v/cap, beside the statements vstage staged, whose sessions
-#                stay valid (then oprove LEVELS=cap)
+#   STEP=vcap    (CPU) RecCap alone at every level over the inner's last proxied session (rec_vstage.stage_cap: each
+#                level's tops under the firewall's salts, no running sums) into data/$TAG/v/cap (level 0) and v/cap/L<l>,
+#                beside the statements vstage staged, whose sessions stay valid (then oprove LEVELS=cap,cap-L1,..)
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
 #                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
 #                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
@@ -270,7 +270,7 @@ def live(d):
     rank_s = [sum(ranks[i * per:(i + 1) * per]) for i in range(len(rows))][warm:] if per else []
     # the prover process's CPU seconds over all its sessions, the firewall's per-session timings (both reps summed), its refusals
     cpu = [float(tv(d / "time-prove.txt", k) or "nan") for k in (r"User time \(seconds\)", r"System time \(seconds\)")]
-    firewall = {k: med(lambda v: sum(b.get(k) or 0 for b in v.get("buckets") or [])) for k in ("t.firewall_recheck", "cpu.firewall_recheck", "t.firewall_shadow", "t.firewall_wait")}
+    firewall = {k: med(lambda v: sum(b.get(k) or 0 for b in v.get("buckets") or [])) for k in ("t.firewall_recheck", "cpu.firewall_recheck")}
     stops = [l for l in text(d / "prove.err").splitlines() if l.startswith(("FIREWALL-REFUSED", "PROVER-STOPPED"))]
     return {"sessions": len(rows), "timed": len(timed), "accepted": [v.get("accepted") for _, v in rows],
             "env": text(d / "prove-env.txt").strip(), "prover_cpu_s": sum(cpu), "firewall": firewall, "refusals": stops[:8],
@@ -616,9 +616,10 @@ vcap)
 import json, sys; from pathlib import Path; from verity_flock import rec_vstage as S
 print(json.dumps(S.stage_cap(Path(sys.argv[1]), Path(sys.argv[2]))))' $INNER $DD/v/cap > $O/vstage/cap.json 2> $O/vstage/cap.err \
     || { tail -20 $O/vstage/cap.err; exit 1; }
-  python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); sys.exit(0 if r["unit_agrees"] and all(r["unit_agrees"]) else "RecCap: the unit disagrees with its reference")' \
+  python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); sys.exit(0 if r and all(c["unit_agrees"] and all(c["unit_agrees"]) for c in r.values()) else "RecCap: a level'"'"'s unit disagrees with its reference")' \
     $O/vstage/cap.json || exit 1
   cp $DD/v/cap/registered.json $O/vstage/cap-registered.json
+  for d in $DD/v/cap/L*/; do [ -d "$d" ] && cp $d/registered.json $O/vstage/cap-$(basename $d)-registered.json; done
   ;;
 oprove)
   V=$DD/v; [ -n "$(find $V -name inst.bin -print -quit 2>/dev/null)" ] || { echo "run STEP=vstage (or vcap) first"; exit 1; }
@@ -683,11 +684,12 @@ lean)
   # root_B, later tops and link points every statement's tops and check 5 are held to (RecVStar.checkTopRows,
   # RecCoins.checkLink) and whose c_k its rec-c<k> rows are (RecVStar.checkPubRows)
   INNER=${INNER:-$DD/inner/s$((NS - 1))}
-  REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-session $INNER/session --rec-inner-transcript $INNER/public.json"
+  REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os --rec-inner-draw $DD/stage/draw.json --rec-inner-session $INNER/session --rec-inner-transcript $INNER/public.json"
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
   # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
   # partition object and program), and the shared rows (rec_vstage.shared_rows: the honest algebra's row ports but v and
-  # out, R's levels' tops, and level 0's cap rec-top-L0 as L0 and cap read it; without the algebra, the level's acc as acc0)
+  # out, R's levels' tops, and each level's tops rec-top-L<l> as L<l> and its cap read them; without the algebra, the
+  # level's acc as acc0)
   if [ -d $DD/v-sess ]; then
     $LEAN_BIN rec-inner --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
       --program $DD/stage/program.json > $O/lean/rec-inner.json 2> $O/lean/rec-inner.err || { tail -5 $O/lean/rec-inner.err; exit 1; }
@@ -702,7 +704,8 @@ o, v, vs = map(Path, sys.argv[1:])
 names = [s[0] for s in line["statements"]]
 try:
     shared = VS.shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")),
-                            [d for d in (v / "L0", v / "cap") if (d / "registered.json").is_file()])["ports"]
+                            [d for d in [*sorted(v.glob("L[0-9]*")), v / "cap", *sorted(v.glob("cap/L*"))]
+                             if (d / "registered.json").is_file()])["ports"]
 except ValueError as e:
     sys.exit(str(e))
 for s in sorted(p for p in vs.iterdir() if p.is_dir()):

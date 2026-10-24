@@ -104,6 +104,16 @@ def test_the_sm120_headlines_claims_match_their_lean_after_round_3() -> None:
     assert all(s in pin.name for s in ("ProofsPin", "PouwSegCheck_v2 lacks it", "PouwSegCheck_v3", "#2417"))
 
 
+def test_the_scalar_route_claim_names_the_h200_twin_with_its_premise() -> None:
+    """DC-90-ri's (I3) twin takes SCALAR-ROUTE at 3/5 beside sm_120's 9/8, and its citation names the premise, the
+    proved ½ floor beside it and the fold menus the credit and the cheater read."""
+    scalar = get("accounting-ts-scalar-route").name
+    assert all(s in scalar for s in ("Sm90MeasuredI3Headline", "Sm90MeasuredHeadline", "q = q_T = 3/5", "9/8",
+                                     "Both are over 1%",
+                                     "DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved ½ floor; credit against "
+                                     "the built ♭, the cheater priced at every known fold, counted ones included"))
+
+
 def test_the_session_premises_state_their_scope_after_rt4_logic_25_and_27() -> None:
     """RT4-LOGIC-25: no served path verifies with --registered; -27: the window's law also needs the audit coins."""
     live = get("accounting-ts-accepted-live")
@@ -153,6 +163,12 @@ def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
     assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware "
                       "on a machine its host provider runs and the prover doesn't control; it runs its stated code on its "
                       "Nebius host, and its host never restores an earlier copy of the state the device keeps there")
+
+
+def test_the_latency_ceiling_is_a_measured_device_claim() -> None:
+    e = get("latency-ceiling")
+    assert (e.kind, e.standing, e.label) == ("assumption", "measured", "Latency ceiling")
+    assert "network certifier on its egress" in e.name and "within the stated ceiling" in e.name
 
 
 def test_the_declared_capacity_rests_on_the_nodes_inventory() -> None:

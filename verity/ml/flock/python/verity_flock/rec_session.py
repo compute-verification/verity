@@ -511,7 +511,7 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
     if proxy.verdict is None and proxy.stopped is None:
         proxy.stop("rec session: the session ended without Finish")
     if proxy.stopped is not None:
-        (out / "public.json").write_text(json.dumps(proxy.coins.record(), indent=1))
+        (out / "public.json").write_text(RL.record_bytes(proxy.coins.record()))
         return {"session": None, "refused": proxy.stopped, "rounds": len(proxy.coins.rounds)}
     relay.write(out)
     rec = proxy.coins.record()

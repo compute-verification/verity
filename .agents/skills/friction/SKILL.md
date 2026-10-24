@@ -121,6 +121,8 @@ What an agent may change:
 
 Protocols and claims:
 
+- (21 Oct) θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
+  are never θ (drops `NciCheck.Baseline`'s output provenance).
 - (8 Oct) A protocol's verifier of record switches from Python to Lean only on evidence: its gap list shows nothing the
   Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves

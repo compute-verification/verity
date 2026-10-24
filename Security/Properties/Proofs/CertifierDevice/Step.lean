@@ -225,15 +225,17 @@ def ingressTail (st : State) (t : Nat) : State × Array Action := Id.run do
   let anchor := t * p.bucketMs / e.bucketMs
   let mut started := #[]
   for slot in row.extract 0 (rowCount row) do
-    let (kind, s, payload) := decodeFrame (slot.getD ByteArray.empty)
-    if kind != kindData && kind != kindLast then continue
+    let (kind, _, payload) := decodeFrame (slot.getD ByteArray.empty)
+    if kind != kindData then continue
+    let (requests, s, data, last) := st.requests.feed payload
+    st := { st with requests }
     if !st.streams.contains s then
       st := st.setStream s {}
       started := started.push (State.Started.connect s)
     let mut x := st.stream s
     if x.phase == .open && !x.draining && x.out.isEmpty then started := started.push (.pump s)
-    x := { x with out := x.out.push (payload, kind == kindLast) }
-    if kind == kindLast && x.anchor.isNone then
+    x := { x with out := x.out.push (data, last) }
+    if last && x.anchor.isNone then
       x := { x with anchor := some anchor, window := some (t / p.buckets),
                     deadline := some (st.config.origin +
                       min (t * p.bucketMs * nsPerMs + st.config.slack) ((anchor + 1) * e.bucketMs * nsPerMs)) }

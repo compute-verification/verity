@@ -27,6 +27,9 @@ published, once, and only until its reveal deadline on its own clock after p's e
 * `unit_reason(unit)` is why a certified window can't credit a drawn unit: it credits only units that read its salt.
 * `pouw_window(windows, k)` is the PoUW window certifier windows make up, refusing any that aren't one whole, aligned
   PoUW window.
+* `window_open_root(weights_root, requests_root, session)` is a live window's open root: what the auditor's gate opens
+  the window's challenger session on and its salt coin opens after, which the verifier recomputes from the window's
+  record and the session the gate reserved (`core_check.salt`).
 """
 from __future__ import annotations
 
@@ -50,12 +53,19 @@ SALT_TAG = b"verity/pouw-salt/v1"
 RECORD_TAG = b"verity/pouw-record/v1"
 #: `prover_id`'s domain tag
 PROVER_TAG = b"verity/pouw-prover/v1"
-#: `audit.weights_root`, a SHA-512 `tagged`
+#: a weights' root, a SHA-512 `tagged`: an H1 window's `weights.weights_root` (`window_open_root`), an epoch's
+#: `audit.weights_root` (`pouw_record`)
 WEIGHTS_ROOT_BYTES = 64
 #: a certified window's stream, the SHA-512 digest that names it, and its prover, the 64-byte id it is registered under
 STREAM_BYTES = 64
 PROVER_BYTES = 64
 WINDOW_SEGMENT = "pouw-window"
+#: `window_open_root`'s domain tag
+WINDOW_OPEN_TAG = b"verity/pouw-window-open/v1"
+#: a live window's round-0 request table's root, a frame-v3-sha512 root
+REQUESTS_ROOT_BYTES = 64
+#: a challenger session's id, as the auditor's gate assigns it when it reserves the session (``s20261020T114752Z-9e52``)
+SESSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
 _NAT = re.compile(r"0|[1-9][0-9]*")
 
 
@@ -104,6 +114,28 @@ def pouw_record(weights_root: bytes, stream: bytes, prover: bytes) -> bytes:
     if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
         raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
     return hashlib.sha512(RECORD_TAG + weights_root + _bound(stream, prover)).digest()
+
+
+def window_open_root(weights_root: bytes, requests_root: bytes, session: str) -> bytes:
+    """A live window's open root: SHA-512(`WINDOW_OPEN_TAG` ‖ weights_root ‖ requests_root ‖ SHA-512(session)), every
+    part 64 bytes, the session's id hashed from its ASCII (Lean's `PouwCheck.windowOpenRoot` mirrors it, and
+    `test_window_open_root_form` pins it).
+
+    `weights_root` is `weights.weights_root`, the fold of each K's registered ``<PREFIX>b/<K>`` root (the B rows, int8
+    codes and s_w, of the window's linears of that K; not `audit.weights_root`, the epoch's commitment to int8 rows
+    alone), `requests_root` the root of the window's round-0 request table, committed before its salt, and `session` the
+    id the auditor's gate assigned when it reserved the window's challenger session, which the prover can't relabel. The gate opens that session on this root (``open --session S --root R``), its
+    challenger opens the salt coin only after it, and the verifier recomputes it from the window's record and the
+    session its signed reserve names (`core_check.salt`). Each session has its own root, and a root fixes one window's
+    weights and requests, so one session salts one window."""
+    if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
+        raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
+    if type(requests_root) is not bytes or len(requests_root) != REQUESTS_ROOT_BYTES:
+        raise DomainError(f"a round-0 request table's root is {REQUESTS_ROOT_BYTES} bytes")
+    if not (isinstance(session, str) and SESSION.fullmatch(session)):
+        raise DomainError(f"a challenger session's id is 1 to 64 of [A-Za-z0-9._:-], starting alphanumeric, not {session!r}")
+    return hashlib.sha512(WINDOW_OPEN_TAG + weights_root + requests_root
+                          + hashlib.sha512(session.encode("ascii")).digest()).digest()
 
 
 def prover_id(public_key: bytes) -> bytes:
@@ -238,6 +270,7 @@ def pouw_window(windows: Sequence[int], k: int) -> int:
     return ws[0] // k
 
 
-__all__ = ["PROVER_BYTES", "PROVER_TAG", "RECORD_TAG", "Registrations", "Reregistered", "SALT_BYTES", "SALT_TAG",
-           "STREAM_BYTES", "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_SEGMENT", "committed", "context", "pouw_record",
-           "pouw_salt", "pouw_window", "prover_id", "registered", "revealed", "unit_reason", "window_of"]
+__all__ = ["PROVER_BYTES", "PROVER_TAG", "RECORD_TAG", "REQUESTS_ROOT_BYTES", "Registrations", "Reregistered", "SALT_BYTES",
+           "SALT_TAG", "SESSION", "STREAM_BYTES", "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_OPEN_TAG", "WINDOW_SEGMENT",
+           "committed", "context", "pouw_record", "pouw_salt", "pouw_window", "prover_id", "registered", "revealed",
+           "unit_reason", "window_of", "window_open_root"]

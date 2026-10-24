@@ -1,0 +1,409 @@
+"""Dither-a's units launch on one GPU, as served (`-hbr -aomn`): each call's noise (`kh_one_noise`, h1s_noise into its
+workspace), then its units (`kh_one_units` of a receipts-only build: h1k where the call's live units fit, h1u past
+H1K_MAXU), at Llama-3.1-8B's four linears, a window of T rows with M live (decode B32 at T = 64: one live row block of
+two). Each build in `--lib NAME=PATH` (the first is the base, today's) is gated, then timed against the others:
+
+    python unitsbench.py --lib base=h1u_kr.so --lib NAME=h1u_x.so ... --out OUT [--t 64] [--m 32] [--reps 7]
+                         [--linears qkv,o,gate_up,down] [--profile]
+
+Gates before any timing, on every build and linear (a failed gate exits 4 and its build is not timed):
+  * 0xA5 over the receipts and the workspace, then seeds, noise and units: the receipts of sampled live units (first,
+    last and random) against served_h1/receipts.py's call_receipts, every dead unit's receipt zero, no poison left, the
+    seeds against seeds.py;
+  * a variant's receipts equal the base build's on every unit and word (the units compute what they computed);
+  * the no-write control (the units launched over zero rows, under the same poison) refused;
+  * the fault: one bit of unit 0's first noise block flipped in the workspace moves unit 0's receipt and no other.
+Timing (CUDA graphs, builds interleaved rep by rep): each call's units alone (`units`) and its noise (`noise`, the base
+build's), and the step's units stream: 32 layers x the four calls' units in order on two alternating weight copies
+(`step`, 128 launches, what the served units stream runs apart from the z tables). --profile skips the timing and runs
+each gated build's four calls once between torch.cuda.profiler.start and stop (for ncu --profile-from-start off),
+and writes its gates to units-prof.json.
+"""
+from __future__ import annotations
+
+import argparse
+import ctypes
+import json
+import random
+import statistics
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+import torch
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "pouw" / "served_h1"))
+sys.path.insert(0, str(HERE.parents[2]))
+import receipts as RC
+from h1bench import auto_j
+from h1ubench import call_data, digest
+from hb_kbench import LINEARS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
+
+from verity.core.protocols.pouw.circuit import seeds as SD
+
+ORDER = ("qkv", "o", "gate_up", "down")
+
+
+class Lib:
+    """One receipts-only build of h1u.cu (H1U_KSPLIT, H1K_RONLY): kh_seeds, kh_one_noise, kh_one_units."""
+
+    def __init__(self, path: str):
+        h = self.h = ctypes.CDLL(path)
+        vp, u32 = ctypes.c_void_p, ctypes.c_uint
+        one = [vp, vp, u32, u32, u32, vp, vp, vp, vp, u32, vp, vp, vp, vp, vp, vp, vp, u32, vp]
+        h.kh_seeds.argtypes = [vp, ctypes.c_ulonglong, u32, vp, vp]
+        h.kh_one_noise.argtypes = one
+        h.kh_one_units.argtypes = one
+        h.kh_words.restype = u32
+        h.kh_words.argtypes = [u32]
+        h.kh_noise_blocks.restype = u32
+        h.kh_noise_blocks.argtypes = [u32]
+        h.kh_ws_bytes.restype = ctypes.c_ulonglong
+        h.kh_ws_bytes.argtypes = [u32, u32, u32]
+        self.multi = hasattr(h, "kh_units_multi")
+        if self.multi:
+            h.kh_units_multi.argtypes = [vp, u32, u32, u32, vp, vp]
+            h.kh_ucall_bytes.restype = u32
+            h.kh_digits.argtypes = [u32]
+
+
+UCALL = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"), ("N", "<u4"), ("K", "<u4"), ("u0", "<u4"),
+                  ("md", "<u4")])
+
+
+class Multi:
+    """kh_units_multi over (call, B, out) entries on one build, the three-digit calls first (as dither_so's
+    $DITHER_SO_FUSED tables): every unit of every entry in one launch, each entry's seeds and live row blocks its call's."""
+
+    def __init__(self, lib: Lib, entries: list):
+        if int(lib.h.kh_ucall_bytes()) != UCALL.itemsize:
+            raise RuntimeError(f"kh_units_multi's UCall is {int(lib.h.kh_ucall_bytes())} bytes, not {UCALL.itemsize}")
+        self.lib = lib
+        md = [int(lib.h.kh_digits(c.a.shape[1])) for c, _, _ in entries]
+        order = sorted(range(len(entries)), key=lambda i: -md[i])
+        t = np.zeros(len(entries) + 1, dtype=UCALL)
+        u0 = 0
+        for j, i in enumerate(order):
+            c, b, out = entries[i]
+            t[j] = (c.a.data_ptr(), b.data_ptr(), c.seeds.data_ptr(), out.data_ptr(), b.shape[0], c.a.shape[1], u0, md[i])
+            u0 += c.units
+        t[len(entries)]["u0"] = u0
+        self.n, self.units, self.rows = len(entries), u0, entries[0][0].a.shape[0]
+        self.live = entries[0][0].live
+        self.tab = torch.from_numpy(t.view(np.uint8).copy()).to("cuda")
+
+    def run(self, units: int | None = None) -> None:
+        if rc := self.lib.h.kh_units_multi(self.tab.data_ptr(), self.n, self.units if units is None else units, self.rows,
+                                           self.live.data_ptr(), torch.cuda.current_stream().cuda_stream):
+            raise RuntimeError(f"kh_units_multi rc {rc}")
+
+
+def multi_gate(lib: Lib, cs: list, base_outs: list) -> dict:
+    """kh_units_multi over one layer's calls against each call's own receipts (its two launches, every word), under
+    0xA5; the no-write control (zero units) refused; one bit of unit 0's seed of the first call flipped moves that
+    call's unit 0 alone."""
+    outs = [torch.empty_like(c.out) for c in cs]
+    mu = Multi(lib, [(c, c.b, o) for c, o in zip(cs, outs)])
+    for o in outs:
+        o.fill_(POISON)
+    mu.run()
+    torch.cuda.synchronize()
+    bad = [int((o != b).sum()) for o, b in zip(outs, base_outs)]
+    poison = sum(int((o == POISON).sum()) for o in outs)
+    got = [o.clone() for o in outs]
+    for o in outs:
+        o.fill_(POISON)
+    mu.run(units=0)
+    torch.cuda.synchronize()
+    k_bad = sum(int((o != b).sum()) for o, b in zip(outs, base_outs))
+    s = cs[0].seeds.view(torch.int32)
+    s[0, 0] ^= 1
+    mu.run()
+    torch.cuda.synchronize()
+    s[0, 0] ^= 1
+    moved = [(i, u) for i, (o, g) in enumerate(zip(outs, got)) for u in (o != g).any(dim=1).nonzero().flatten().tolist()]
+    r = {"calls": len(cs), "units": mu.units, "bad_words": bad, "poison_left": poison, "control_bad_words": k_bad,
+         "control_refused": k_bad > 0, "fault_moved": moved[:8], "fault_conforming": moved == [(0, 0)]}
+    r["ok"] = sum(bad) == 0 and poison == 0 and k_bad > 0 and r["fault_conforming"]
+    return r
+
+
+class Call:
+    """One call's buffers on one build: the A slot [T, K] (rows >= M zero), B [N, K], live row blocks, seeds, the
+    workspace, receipts, and the receipts-only units' z/y scratch and flagless step (dither_a's s_unit)."""
+
+    def __init__(self, lib: Lib, a: torch.Tensor, b: torch.Tensor, m: int, salt: bytes, roots: tuple, base: int, sms: int):
+        self.lib, self.a, self.b, self.m, self.salt, self.roots, self.base = lib, a, b, m, salt, roots, base
+        t, k = a.shape
+        n = b.shape[0]
+        self.units = (t // 32) * (n // 32)
+        self.live_rb = (m + 31) // 32
+        self.live_units = self.live_rb * (n // 32)
+        self.words = int(lib.h.kh_words(k))
+        self.nb = int(lib.h.kh_noise_blocks(k))
+        self.j = auto_j(self.live_rb * (n // 32), self.nb, sms)
+        self.live = torch.tensor([1 if ri < self.live_rb else 0 for ri in range(t // 32)], dtype=torch.uint8,
+                                 device="cuda")
+        self.data = call_data(salt, *roots)
+        self.seeds = torch.empty((self.units, 16), dtype=torch.int64, device="cuda")
+        self.ws = torch.empty((int(lib.h.kh_ws_bytes(t, n, k)),), dtype=torch.uint8, device="cuda")
+        self.out = torch.empty((self.units, self.words), dtype=torch.int32, device="cuda")
+        self.zs = torch.empty((t, n), dtype=torch.int32, device="cuda")
+        self.ys = torch.empty((t, n), dtype=torch.bfloat16, device="cuda")
+        self.sa = torch.zeros((t,), dtype=torch.float32, device="cuda")
+        self.sw = torch.zeros((n,), dtype=torch.float32, device="cuda")
+        self.step = torch.zeros((4,), dtype=torch.int32, device="cuda")
+
+    def twin(self, lib: Lib, sms: int) -> Call:
+        return Call(lib, self.a, self.b, self.m, self.salt, self.roots, self.base, sms)
+
+    def _args(self, rows: int, b: torch.Tensor | None = None):
+        t, k = self.a.shape
+        n = self.b.shape[0]
+        return (self.a.data_ptr(), (self.b if b is None else b).data_ptr(), rows, n, k, self.seeds.data_ptr(),
+                self.live.data_ptr(), self.out.data_ptr(), self.ws.data_ptr(), self.j, self.zs.data_ptr(), None,
+                self.ys.data_ptr(), None, self.sa.data_ptr(), self.sw.data_ptr(), self.step.data_ptr(), min(self.m, t),
+                torch.cuda.current_stream().cuda_stream)
+
+    def seed(self) -> None:
+        if self.lib.h.kh_seeds(self.data.data_ptr(), self.base, self.units, self.seeds.data_ptr(),
+                               torch.cuda.current_stream().cuda_stream):
+            raise RuntimeError("kh_seeds")
+
+    def noise(self) -> None:
+        if rc := self.lib.h.kh_one_noise(*self._args(self.a.shape[0])):
+            raise RuntimeError(f"kh_one_noise rc {rc}")
+
+    def run_units(self, rows: int | None = None, b: torch.Tensor | None = None) -> None:
+        if rc := self.lib.h.kh_one_units(*self._args(self.a.shape[0] if rows is None else rows, b)):
+            raise RuntimeError(f"kh_one_units rc {rc}")
+
+    def poison(self) -> None:
+        self.out.fill_(POISON)
+        self.ws.fill_(0xA5)
+
+    def full(self) -> torch.Tensor:
+        """Poisoned, then seeds, noise and units once: the receipts."""
+        self.poison()
+        self.seed()
+        self.noise()
+        self.run_units()
+        torch.cuda.synchronize()
+        return self.out.clone()
+
+
+def gate(c: Call, picks: list[int], ref_t: torch.Tensor, base_out: torch.Tensor | None) -> dict:
+    pk = torch.tensor(picks, device="cuda")
+    out = c.full()
+    bad = int((out[pk] != ref_t).sum())
+    dead_bad = int((out[c.live_units:] != 0).sum())
+    poison = int((out == POISON).sum())
+    sd = c.seeds.cpu().numpy()
+    seed_bad = sum(int(digest(sd[u, :8]) != SD.seed(c.salt, c.base + u, *c.roots))
+                   + int(digest(sd[u, 8:]) != SD.receipt_seed(c.salt, c.base + u, *c.roots)) for u in picks)
+    vs_base = None if base_out is None else int((out != base_out).sum())
+    # the no-write control: the units over zero rows under the same poison
+    c.out.fill_(POISON)
+    c.run_units(rows=0)
+    torch.cuda.synchronize()
+    k_bad = int((c.out[pk] != ref_t).sum())
+    # the fault: bit 0 of unit 0's first noise block in the workspace, the units again
+    c.out.fill_(POISON)
+    c.ws.view(torch.int32)[0] ^= 1
+    c.run_units()
+    torch.cuda.synchronize()
+    moved = (c.out != out).any(dim=1).nonzero().flatten().tolist()
+    c.ws.view(torch.int32)[0] ^= 1
+    fault_ok = moved == [0]
+    r = {"units": c.units, "live_units": c.live_units, "j": c.j, "bad_words": bad, "dead_bad_words": dead_bad,
+         "poison_left": poison, "seed_bad": seed_bad, "vs_base_bad_words": vs_base, "control_bad_words": k_bad,
+         "control_refused": k_bad > 0, "fault_moved_units": moved[:8], "fault_conforming": fault_ok}
+    r["ok"] = (bad == 0 and dead_bad == 0 and poison == 0 and seed_bad == 0 and (vs_base in (None, 0)) and k_bad > 0
+               and fault_ok)
+    return r
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--lib", action="append", required=True, metavar="NAME=PATH")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--t", type=int, default=64)
+    ap.add_argument("--m", type=int, default=32)
+    ap.add_argument("--reps", type=int, default=7)
+    ap.add_argument("--item-ms", type=float, default=4.0)
+    ap.add_argument("--picks", type=int, default=6)
+    ap.add_argument("--layers", type=int, default=32)
+    ap.add_argument("--linears", default=",".join(ORDER))
+    ap.add_argument("--profile", action="store_true")
+    ap.add_argument("--multi", action="store_true",
+                    help="also gate kh_units_multi (where a build has it) over one layer's calls against their own "
+                         "receipts, and time the step in one launch (step_multi) against the base's noise and units "
+                         "call by call (step_noise_units)")
+    args = ap.parse_args()
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    doc_path = out / ("units-prof.json" if args.profile else "units.json")
+    paths = dict(v.partition("=")[::2] for v in args.lib)
+    libs = {name: Lib(p) for name, p in paths.items()}
+    names = list(libs)
+    clock = Clock()
+    props = torch.cuda.get_device_properties(0)
+    sms = props.multi_processor_count
+    rng = random.Random(0x55A17)
+    doc = {"schema": "dither-a/units/v1", "device": clock.name, "sms": sms, "t": args.t, "m": args.m, "libs": paths,
+           "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "reference": "served_h1/receipts.py",
+           "linears": {}}
+    T, M = args.t, args.m
+    linears = [x for x in ORDER if x in args.linears.split(",")]
+    calls: dict = {}
+    bcopy: dict = {}
+    base_outs: dict = {}
+    failed: set = set()
+    for name in linears:
+        n, k = LINEARS[name]
+        x = torch.from_numpy(inputs(x_seed(k), M, k)).to("cuda")
+        a = torch.cat([x, x.new_zeros(T - M, k)]).contiguous() if T > M else x.contiguous()
+        b = torch.from_numpy(inputs(w_seed(name), n, k)).to("cuda")
+        bcopy[name] = torch.from_numpy(inputs(w_seed(name) + 77, n, k)).to("cuda")
+        first = Call(libs[names[0]], a, b, M, rng.randbytes(64), (rng.randbytes(64), rng.randbytes(64)),
+                     rng.getrandbits(40), sms)
+        cs = {nm: first if i == 0 else first.twin(libs[nm], sms) for i, nm in enumerate(names)}
+        L = first.live_units
+        picks = sorted({0, L - 1, *rng.sample(range(L), min(L, args.picks))})
+        t0 = time.time()
+        ref = RC.call_receipts(RC.Call(a, b), first.salt, first.base, *first.roots, only=picks)
+        ref_t = torch.from_numpy(ref.view(np.int32)).to("cuda")
+        d = doc["linears"][name] = {"n": n, "k": k, "units": first.units, "live_units": L, "words": first.words,
+                                    "noise_blocks": first.nb, "picks": picks, "ref_s": round(time.time() - t0, 2),
+                                    "gates": {}}
+        base_out = None
+        for nm, c in cs.items():
+            g = gate(c, picks, ref_t, base_out)
+            if base_out is None:
+                base_out = c.full()
+            d["gates"][nm] = g
+            print(json.dumps({"linear": name, "lib": nm, "gate": g}), flush=True)
+            if not g["ok"]:
+                failed.add(nm)
+        calls[name] = cs
+        base_outs[name] = base_out
+        for c in cs.values():
+            c.full()
+    multi_ok: set = set()
+    if args.multi:
+        doc["multi_gates"] = {}
+        for nm in names:
+            if nm in failed or not libs[nm].multi:
+                continue
+            g = multi_gate(libs[nm], [calls[x][nm] for x in linears], [base_outs[x] for x in linears])
+            doc["multi_gates"][nm] = g
+            print(json.dumps({"multi": nm, "gate": g}), flush=True)
+            if g["ok"]:
+                multi_ok.add(nm)
+            else:
+                failed.add(f"{nm}:multi")
+    doc["gate_failed"] = sorted(failed)
+    doc_path.write_text(json.dumps(doc, indent=1))
+    if names[0] in failed:
+        print("unitsbench: the base build failed its gate; nothing timed", file=sys.stderr)
+        return 4
+    timed = [nm for nm in names if nm not in failed]
+    if args.profile:
+        for nm in timed:
+            for name in linears:
+                calls[name][nm].run_units()
+            torch.cuda.synchronize()
+            torch.cuda.nvtx.range_push(nm)
+            torch.cuda.profiler.start()
+            for name in linears:
+                torch.cuda.nvtx.range_push(f"{nm}/{name}")
+                calls[name][nm].run_units()
+                torch.cuda.nvtx.range_pop()
+            torch.cuda.synchronize()
+            torch.cuda.profiler.stop()
+            torch.cuda.nvtx.range_pop()
+        doc["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        doc_path.write_text(json.dumps(doc, indent=1))
+        return 4 if failed else 0
+
+    arms: dict = {}
+    for name in linears:
+        for nm in timed:
+            arms[(nm, f"units:{name}")] = (lambda c: lambda i: c.run_units(b=None))(calls[name][nm])
+        arms[(names[0], f"noise:{name}")] = (lambda c: lambda i: c.noise())(calls[name][names[0]])
+    if len(linears) == len(ORDER):
+        for nm in timed:
+            def step(i, nm=nm):
+                for layer in range(args.layers):
+                    for name in ORDER:
+                        c = calls[name][nm]
+                        c.run_units(b=c.b if layer % 2 == 0 else bcopy[name])
+            arms[(nm, "step")] = step
+        keep = []
+        for nm in timed:
+            if nm not in multi_ok:
+                continue
+            outs = [torch.empty_like(calls[name][nm].out) for _ in range(args.layers) for name in ORDER]
+            mu = Multi(libs[nm], [(calls[name][nm], calls[name][nm].b if layer % 2 == 0 else bcopy[name],
+                                   outs[ORDER.index(name) + len(ORDER) * layer])
+                                  for layer in range(args.layers) for name in ORDER])
+            keep.append((mu, outs))
+            arms[(nm, "step_multi")] = (lambda mu: lambda i: mu.run())(mu)
+        if args.multi:
+            def step_nu(i, nm=names[0]):
+                for layer in range(args.layers):
+                    for name in ORDER:
+                        c = calls[name][nm]
+                        c.noise()
+                        c.run_units(b=c.b if layer % 2 == 0 else bcopy[name])
+            arms[(names[0], "step_noise_units")] = step_nu
+    graphs, per_graph = {}, {}
+    for key, fn in arms.items():
+        t = one_call_ms(fn)
+        G = max(1, min(400, round(args.item_ms / max(t, 1e-3))))
+        graphs[key], per_graph[key] = capture(fn, G), G
+    for g in graphs.values():
+        g.replay()
+    torch.cuda.synchronize()
+    e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    us = {key: [] for key in graphs}
+    mhz = {key: [] for key in graphs}
+    order = list(graphs)
+    for rep in range(args.reps):
+        for key in order[rep % len(order):] + order[:rep % len(order)]:
+            e0.record()
+            graphs[key].replay()
+            e1.record()
+            e1.synchronize()
+            us[key].append(e0.elapsed_time(e1) * 1e3 / per_graph[key])
+            mhz[key].append(clock.sm())
+    res: dict = {}
+    for (nm, arm), v in us.items():
+        res.setdefault(nm, {})[arm] = {"median_us": round(statistics.median(v), 3), "us": [round(x, 3) for x in v],
+                                       "per_graph": per_graph[(nm, arm)], "sm_mhz": mhz[(nm, arm)]}
+    for nm, r in res.items():
+        lay = [r[f"units:{x}"]["median_us"] for x in ORDER if f"units:{x}" in r]
+        if len(lay) == len(ORDER):
+            r["layer_units_us"] = round(sum(lay), 3)
+            r["step_units_ms_from_calls"] = round(sum(lay) * args.layers / 1e3, 3)
+        for arm in ("step", "step_multi", "step_noise_units"):
+            if arm in r:
+                r[f"{arm}_ms"] = round(r[arm]["median_us"] / 1e3, 3)
+    b0 = res[names[0]]
+    for nm in timed[1:]:
+        r = res[nm]
+        r["over_base"] = {arm: round(v["median_us"] / b0[arm]["median_us"], 4) for arm, v in r.items()
+                          if isinstance(v, dict) and arm in b0 and "median_us" in v}
+    doc["timing"] = res
+    doc["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    doc_path.write_text(json.dumps(doc, indent=1))
+    print(json.dumps({nm: {k: (v["median_us"] if isinstance(v, dict) and "median_us" in v else v)
+                           for k, v in r.items() if k != "noise"} for nm, r in res.items()}, indent=1), flush=True)
+    return 4 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

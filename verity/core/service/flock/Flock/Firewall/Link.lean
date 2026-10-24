@@ -18,8 +18,10 @@ commitment (`FlockComplete.commitPZk` in the analysis), here as the code the fir
 * `cap`: the Merkle nodes `SHA-512(l ‖ r)` `d − cap` levels up from the leaves (`layer`), and `root` their concatenation,
   at level 0 of the table's `--zk` schedule (`Zk.schedule m`, which also fixes `t_pad`).
 
-`flock-firewall link` serves it to the firewall (`cmd`). Rust's `commit_zk` is the speed reference: the firewall holds its
-own root to this one and sends this one.
+The firewall's code reaches it through the session loop's `Flock.Firewall.Level0`, which commits the level 0 it draws,
+and `flock-firewall finish`'s `table` request (`Flock.Firewall.Finish.commit0`, on `parse`'s bytes). The root that
+leaves is one of these, and the finish keeps the table's tree for its reps' openings (`Finish.openLive`): Rust commits
+nothing of level 0 under the firewall.
 -/
 import Flock.Firewall.Coins
 import Flock.Ligerito
@@ -126,6 +128,17 @@ def parRange {α : Type} (f : Nat → α) (a b : Nat) : Array α :=
   ((Array.range a).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
     (fun acc t => acc ++ t.get) #[]
 
+/-- **`a` tasks of `b` each are one map** over `a·b`. -/
+theorem parRange_eq {α : Type} (f : Nat → α) (a b : Nat) : parRange f a b = (Array.range (a * b)).map f := by
+  unfold parRange
+  induction a with
+  | zero => simp only [Nat.zero_mul, Array.range_eq_empty_iff.mpr rfl, Array.map_empty, Array.foldl_empty]
+  | succ a ih =>
+    rw [Array.range_succ, Array.map_append, Array.foldl_append, ih, Nat.succ_mul, Array.range_add]
+    simp only [Task.spawn, List.map_toArray, List.map_cons, List.map_nil, List.size_toArray, List.length_cons,
+      List.length_nil, Nat.zero_add, List.foldl_toArray', List.foldl_cons, List.foldl_nil, Array.map_append,
+      Array.map_map, Function.comp_def]
+
 /-- **Layer `h` of a Merkle tree** over the leaves `lf q` (`q < 2^d`): layer `h + 1` holds the nodes `SHA-512(l ‖ r)`
 of layer `h`'s pairs. -/
 def layer (d : Nat) (lf : Nat → ByteArray) : Nat → Array ByteArray
@@ -198,32 +211,5 @@ def parse (m : Nat) (b : ByteArray) : V In := do
   let oS := oP + 16 * nL * tPad
   return { m, g, extra := fun e c => (ex[e]!)[c]!, lanePad := fun l k => (pads[l]!)[k]!
            salt := fun q => if q < nQ then b.extract (oS + 192 * q) (oS + 192 * (q + 1)) else ByteArray.empty }
-
-/-- `flock-firewall link`: the level-0 recheck, served on stdin and stdout. `table M LEN` followed by the `LEN` bytes of
-a table (`parse`) is answered `ok N` followed by the `N` bytes of its level-0 root (`root`). A malformed request is
-answered `err WHY` and ends the session. -/
-def cmd (_ : List String) : IO UInt32 := do
-  let stdin ← IO.getStdin
-  let stdout ← IO.getStdout
-  let refuse := fun (why : String) => do
-    stdout.putStrLn s!"err {why.replace "\n" " "}"
-    stdout.flush
-    return (1 : UInt32)
-  repeat
-    let line := (← stdin.getLine).replace "\n" ""
-    if line.isEmpty then break
-    match line.splitOn " " with
-    | ["table", m, len] =>
-      let (some m, some len) := (m.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
-      let b ← Coins.readExact "link" stdin len
-      match parse m b with
-      | .ok i =>
-        let r := root i
-        stdout.putStrLn s!"ok {r.size}"
-        stdout.write r
-        stdout.flush
-      | .error e => return (← refuse e)
-    | _ => return (← refuse s!"a request `{line}`")
-  return 0
 
 end Flock.Firewall.Link

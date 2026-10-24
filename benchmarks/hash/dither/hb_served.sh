@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# Dither's served standard number on the H200 and the B200: kernels-dither-rtx's fused served linear (h1f.cu, h1c.cu,
-# dither_fused.py) and its served bench (sbench.py), run from that lane's pushed commit, not copied. The run's source is a
-# clean worktree of origin/cursor/kernels-dither-rtx-15ad at a pinned commit; this script and hb_sbench.py are sent with
-# --send from this branch's pushed commit, so the run records both. Two modes, so no CPU phase runs on a dc node:
+# Dither's served standard number on the H200 and the B200: the fused served linear (h1f.cu, h1c.cu, dither_fused.py,
+# dither_one.py) and the served bench (sbench.py) from the run's source tree. A tree with hb_sbench.py and its hb_*.py
+# (kernels-dither-cut and later) serves them from itself; an older one (kernels-dither-rtx's) needs them sent with --send,
+# as the example below does. DITHER_NSYS=prof captures sbench's prof op instead of the gate (steps.py, stepprof.py), and an
+# exact-fused or -xl arm runs only after exactlin's kgate.py passes in the same lease (HB_KGATE=0|1 overrides).
+# Two modes, so no CPU phase runs on a dc node:
 #   build ARCH[,ARCH]  (vy-nebius-2) libh1c.so, libh1f.so and libh1o.so for each arch into $OUT/lib/ARCH, their SASS and resource
 #                      usage, and BUILD.txt: the source commit and arch, and per library the sha256 of the files nvcc -M names
 #   run ARCH [ARGS]    (vy-dc-h200 sm_90a, vy-dc-b200 sm_100a) sbench.py through hb_sbench.py on one leased GPU for at most
 #                      14 minutes, every shipped library checked against the source's files first; ARGS go to sbench.py
+#                      (HB_SCRIPT=h1agate.py, or another script of this directory, runs it in hb_sbench.py's place with
+#                      the same libraries, environment and lease)
 #
 #   git worktree add --detach /tmp/rtx-src <rtx commit>
 #   research run --on vy-nebius-2 --preemptible --queue --phase cpu --cpus 4 --mem-gb 8 --disk-gb 1 --project verity \
@@ -27,14 +31,18 @@
 # dither-1s-hbp, dither-1s-hb peeled (kh_one_peel: z = A B^T, y today's; hb_peel.py's gate, sent too), from the .so
 # HB_H1U_PEEL names if it's set (the fastest peeled build need not be the fastest unpeeled one); and dither-1s-hbk,
 # dither-1s-hbp on the unit's K split (an H1U_KSPLIT build, the .so HB_H1U_KSPLIT names). The
-# dither-1s arms' gate also runs CA's H1V3 h1tile.reference at H1V3_SHA (default bd702a2c46), and dither-1s-hbp's at
-# H1V3_PEEL_SHA too (default f56cbc3a04, v3 with the peel as PR #2776), each from a sent h1v3-SHA.tar.gz (`git archive SHA verity |
-# gzip`; a --cwd source tree has no history), else the source's git.
+# dither-1s arms' gate also runs CA's H1V3 h1tile.reference: this source's own (PouwH1Tile_v4, ungated, z = A B^T) unless
+# H1V3_SHA names a commit (one before the peel, as bd702a2c46, z = X (B + c)^T, holds an unpeeled arm's z to CA's code
+# directly; against a peeled tree that z is compared through the CPU's unpeel), and dither-1s-hbp's and -hbk's the tree
+# with the peel's too, the source's unless H1V3_PEEL_SHA names one; each from a sent h1v3-SHA.tar.gz (`git archive SHA
+# verity | gzip`; a --cwd source tree has no history), else the source's git.
 # Env: HB_WHO (the lease owner, default kernels-dither-hb), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
-# inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's).
+# inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's),
+# POUW_CHALLENGER and POUW_CHALLENGER_SESSION, or DITHER_CHALLENGERS (the windows' coins off the node, sessions from
+# infra: sbench.py's "Coins").
 # Exit: sbench's (3 an engine failed to build, 4 the gate failed), 2 a build failed or a shipped library is missing or
-# another source's.
+# another source's, 15 a challenger's port never opened or a session lacks its id or address.
 set -uo pipefail
 MODE=${1:?usage: hb_served.sh build ARCH[,ARCH] | hb_served.sh run sm_90a|sm_100a [sbench args]}
 ARCH=${2:?arch}
@@ -53,8 +61,14 @@ srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
 [ -n "${HB_H1U:-}" ] && HB_H1U=$INPUTS/$(basename "$HB_H1U")
 [ -n "${HB_H1U_PEEL:-}" ] && HB_H1U_PEEL=$INPUTS/$(basename "$HB_H1U_PEEL")
 [ -n "${HB_H1U_KSPLIT:-}" ] && HB_H1U_KSPLIT=$INPUTS/$(basename "$HB_H1U_KSPLIT")
-sha256sum "$0" "$INPUTS"/hb_sbench.py "$INPUTS"/hb_side.py "$INPUTS"/hb_one.py "$INPUTS"/hb_peel.py ${HB_H1U:+"$HB_H1U"} \
-  ${HB_H1U_PEEL:+"$HB_H1U_PEEL"} ${HB_H1U_KSPLIT:+"$HB_H1U_KSPLIT"} 2>/dev/null | sed "s#$INPUTS/##" > "$OUT/env/wrapper.txt"
+[ -n "${HB_H1U_KRONLY:-}" ] && HB_H1U_KRONLY=$INPUTS/$(basename "$HB_H1U_KRONLY") && export HB_H1U_KRONLY
+[ -n "${HB_H1U_KC:-}" ] && HB_H1U_KC=$INPUTS/$(basename "$HB_H1U_KC") && export HB_H1U_KC
+[ -n "${DITHER_H1C_KC:-}" ] && DITHER_H1C_KC=$INPUTS/$(basename "$DITHER_H1C_KC") && export DITHER_H1C_KC
+# the hb_*.py files: the source tree's where it has them (it is first on sbench's sys.path), else the ones sent
+HB=$ROOT/$DITHER
+[ -f "$HB/hb_sbench.py" ] || HB=$INPUTS
+sha256sum "$0" "$HB"/hb_sbench.py "$HB"/hb_side.py "$HB"/hb_one.py "$HB"/hb_peel.py ${HB_H1U:+"$HB_H1U"} \
+  ${HB_H1U_PEEL:+"$HB_H1U_PEEL"} ${HB_H1U_KSPLIT:+"$HB_H1U_KSPLIT"} ${HB_H1U_KRONLY:+"$HB_H1U_KRONLY"} ${HB_H1U_KC:+"$HB_H1U_KC"} ${DITHER_H1C_KC:+"$DITHER_H1C_KC"} 2>/dev/null | sed "s#$INPUTS/##; s#$ROOT/##" > "$OUT/env/wrapper.txt"
 echo "source $SHA" >> "$OUT/env/wrapper.txt"
 
 if [ "$MODE" = build ]; then
@@ -89,27 +103,27 @@ fi
 
 [ "$MODE" = run ] || { echo "hb_served.sh: no mode $MODE" >&2; exit 2; }
 [ -f "$INPUTS/BUILD.txt" ] || { echo "hb_served.sh: no inputs/BUILD.txt: --send the build's lib/$ARCH/BUILD.txt" >&2; exit 2; }
-[ -f "$INPUTS/hb_sbench.py" ] || { echo "hb_served.sh: --send benchmarks/hash/dither/hb_sbench.py" >&2; exit 2; }
+[ -f "$HB/hb_sbench.py" ] || { echo "hb_served.sh: --send benchmarks/hash/dither/hb_sbench.py" >&2; exit 2; }
 case " $* " in *dither-hb*)
-  [ -f "$INPUTS/hb_side.py" ] && [ -f "${HB_H1U:-/nonexistent}" ] || {
+  [ -f "$HB/hb_side.py" ] && [ -f "${HB_H1U:-/nonexistent}" ] || {
     echo "hb_served.sh: dither-hb needs --send benchmarks/hash/dither/hb_side.py, a job.sh build's h1u .so and --env HB_H1U=ITS_NAME" >&2
     exit 2; }
   export HB_H1U ;;
 esac
 case " $* " in *dither-1s-hb*)
-  [ -f "$INPUTS/hb_one.py" ] && [ -f "$INPUTS/hb_side.py" ] && [ -f "${HB_H1U:-/nonexistent}" ] || {
+  [ -f "$HB/hb_one.py" ] && [ -f "$HB/hb_side.py" ] && [ -f "${HB_H1U:-/nonexistent}" ] || {
     echo "hb_served.sh: dither-1s-hb needs --send benchmarks/hash/dither/hb_one.py and hb_side.py, a job.sh build's h1u .so and --env HB_H1U=ITS_NAME" >&2
     exit 2; }
   export HB_H1U ;;
 esac
 case " $* " in *dither-1s-hbp*)
-  [ -f "$INPUTS/hb_peel.py" ] && [ -f "${HB_H1U_PEEL:-${HB_H1U:-/nonexistent}}" ] || {
+  [ -f "$HB/hb_peel.py" ] && [ -f "${HB_H1U_PEEL:-${HB_H1U:-/nonexistent}}" ] || {
     echo "hb_served.sh: dither-1s-hbp needs --send benchmarks/hash/dither/hb_peel.py too (and HB_H1U_PEEL's .so, if set)" >&2
     exit 2; }
   [ -n "${HB_H1U_PEEL:-}" ] && export HB_H1U_PEEL ;;
 esac
 case " $* " in *dither-1s-hbk*)
-  [ -f "$INPUTS/hb_peel.py" ] && [ -f "${HB_H1U_KSPLIT:-/nonexistent}" ] || {
+  [ -f "$HB/hb_peel.py" ] && [ -f "${HB_H1U_KSPLIT:-/nonexistent}" ] || {
     echo "hb_served.sh: dither-1s-hbk needs --send benchmarks/hash/dither/hb_peel.py and an H1U_KSPLIT build's .so, --env HB_H1U_KSPLIT=ITS_NAME" >&2
     exit 2; }
   export HB_H1U_KSPLIT ;;
@@ -132,45 +146,69 @@ S=$(mktemp -d "${TMPDIR:-/tmp}/dither-hb-served.XXXXXX")
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
 trap 'rm -rf "$S"' EXIT
 export DITHER_H1C=$INPUTS/libh1c.so DITHER_H1F=$INPUTS/libh1f.so DITHER_H1O=$INPUTS/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1 VLLM_USE_FLASHINFER_SAMPLER=0
-# CA's H1V3 (cursor/h1-v3-1172) at its pinned head, as the source's sbench.sh extracts it: dither_one's gate runs its
-# h1tile.reference(stream=True) on a few units
-H1V3_SHA=${H1V3_SHA:-bd702a2c46}
-mkdir -p "$S/h1v3"
-if [ -f "$INPUTS/h1v3-$H1V3_SHA.tar.gz" ]; then
-  tar -xzf "$INPUTS/h1v3-$H1V3_SHA.tar.gz" -C "$S/h1v3"
+# CA's H1V3: the dither gates run its h1tile.reference(stream=True) on a few units (DITHER_H1V3_TREE), and hb_peel's
+# (dither-1s-hbp and -hbk) the tree with the peel's too (HB_H1V3_PEEL_TREE); a -bG arm's gate reads CA's banded reference
+# in their place. Both trees are this source's own (PouwH1Tile_v4, ungated) unless H1V3_SHA or H1V3_PEEL_SHA names a commit
+h1v3_tree() {  # SHA DIR: DIR/verity from the sent h1v3-SHA.tar.gz, else this repository's git; exit 14 without one
+  mkdir -p "$2"
+  if [ -f "$INPUTS/h1v3-$1.tar.gz" ]; then tar -xzf "$INPUTS/h1v3-$1.tar.gz" -C "$2"
+  else git -C "$ROOT" archive "$1" verity 2>/dev/null | tar -x -C "$2" 2>/dev/null; fi
+  [ -f "$2/verity/core/protocols/pouw/circuit/h1tile.py" ] || { echo "hb_served: H1V3_NO_TREE at $1" >&2; exit 14; }
+}
+if [ -n "${H1V3_SHA:-}" ]; then
+  h1v3_tree "$H1V3_SHA" "$S/h1v3"; export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA
 else
-  git -C "$ROOT" archive "$H1V3_SHA" verity 2>/dev/null | tar -x -C "$S/h1v3" 2>/dev/null
+  export DITHER_H1V3_TREE=$ROOT DITHER_H1V3_SHA=${RESEARCH_SOURCE_SHA:-source}
 fi
-[ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] \
-  && export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA || echo "hb_served: no H1V3 tree at $H1V3_SHA"
-echo "h1v3 ${DITHER_H1V3_SHA:-none}" >> "$OUT/env/wrapper.txt"
-# H1V3 with the peel (z = A B^T, CA 12:03Z; #2776 at f56cbc3a04, CA 13:31Z, its reference 4733b9ab0c's) at H1V3_PEEL_SHA:
-# dither-1s-hbp's and dither-1s-hbk's gate holds z and receipts to that tree's h1tile.reference itself; dither-1s-hb, which
-# serves the dithered product, stays on H1V3_SHA's
-H1V3_PEEL_SHA=${H1V3_PEEL_SHA:-f56cbc3a04}
-mkdir -p "$S/h1v3p"
-if [ -f "$INPUTS/h1v3-$H1V3_PEEL_SHA.tar.gz" ]; then
-  tar -xzf "$INPUTS/h1v3-$H1V3_PEEL_SHA.tar.gz" -C "$S/h1v3p"
+echo "h1v3 $DITHER_H1V3_SHA" >> "$OUT/env/wrapper.txt"
+if [ -n "${H1V3_PEEL_SHA:-}" ]; then
+  h1v3_tree "$H1V3_PEEL_SHA" "$S/h1v3p"; export HB_H1V3_PEEL_TREE=$S/h1v3p HB_H1V3_PEEL_SHA=$H1V3_PEEL_SHA
 else
-  git -C "$ROOT" archive "$H1V3_PEEL_SHA" verity 2>/dev/null | tar -x -C "$S/h1v3p" 2>/dev/null
+  export HB_H1V3_PEEL_TREE=$ROOT HB_H1V3_PEEL_SHA=${RESEARCH_SOURCE_SHA:-source}
 fi
-grep -qs "^def peel_seg" "$S/h1v3p/verity/core/protocols/pouw/circuit/h1tile.py" \
-  && export HB_H1V3_PEEL_TREE=$S/h1v3p HB_H1V3_PEEL_SHA=$H1V3_PEEL_SHA
-echo "h1v3_peel ${HB_H1V3_PEEL_SHA:-none}" >> "$OUT/env/wrapper.txt"
+echo "h1v3_peel $HB_H1V3_PEEL_SHA" >> "$OUT/env/wrapper.txt"
 case " $* " in *dither-1s-hbp*|*dither-1s-hbk*)
-  [ -n "${HB_H1V3_PEEL_TREE:-}" ] || {
-    echo "hb_served.sh: dither-1s-hbp needs H1V3 with the peel: --send h1v3-$H1V3_PEEL_SHA.tar.gz (git archive $H1V3_PEEL_SHA verity | gzip)" >&2
+  grep -qs "^def peel_seg" "$HB_H1V3_PEEL_TREE/verity/core/protocols/pouw/circuit/h1tile.py" || {
+    echo "hb_served.sh: dither-1s-hbp needs H1V3 with the peel (peel_seg) at $HB_H1V3_PEEL_SHA" >&2
     exit 2; } ;;
 esac
+# the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it,
+# under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o
+command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
+(cd verity/core/protocols/pouw/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
+  > "$OUT/lean-coins-build.log" 2>&1 \
+  || { echo "hb_served: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
+# coins off the node: every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
+# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX}}), each its own session from
+# infra's gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on this
+# node, HEX the root of the coin commitment its challenger signed, which its hello must answer), waited for with ss -ltn
+# before the lease (never a probe connect: a challenger serves the first connection whose hello it accepts); none: in-process
+# (not certified)
+if [ -n "${POUW_CHALLENGER:-}${POUW_CHALLENGER_SESSION:-}" ] && { [ -z "${POUW_CHALLENGER:-}" ] || [ -z "${POUW_CHALLENGER_SESSION:-}" ]; }; then
+  echo "hb_served: NO_CHALLENGER: a challenger session is POUW_CHALLENGER and POUW_CHALLENGER_SESSION together"; exit 15
+fi
+ats=$(python3 -c 'import json, os; m = json.loads(os.environ.get("DITHER_CHALLENGERS") or "{}"); ok = isinstance(m, dict) and all(isinstance(v, dict) and {"address", "session"} <= set(v) <= {"address", "commitment", "secret_file", "session"} and all(isinstance(x, str) and x for x in v.values()) for v in m.values()); print(*(v["address"] for v in m.values())) if ok else exit(1)') \
+  || { echo "hb_served: NO_CHALLENGER: DITHER_CHALLENGERS is not {arm: {\"session\": ID, \"address\": HOST:PORT[, \"secret_file\": F][, \"commitment\": HEX]}}"; exit 15; }
+ats=$(echo ${POUW_CHALLENGER:-} $ats)
+for at in $ats; do
+  for _ in $(seq $((${CHALLENGER_WAIT_S:-900} * 20))); do ss -Hltn "sport = :${at##*:}" | grep -q . && break; sleep 0.05; done
+  ss -Hltn "sport = :${at##*:}" | grep -q . || { echo "hb_served: NO_CHALLENGER at $at"; exit 15; }
+done
+echo "coins ${ats:-in-process (not certified)}" | tee -a "$OUT/env/wrapper.txt"
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=$FI HF_HOME=${HF_HOME:-/workspace/hf}
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/$DITHER HB_DITHER_DIR=$ROOT/$DITHER
 NSYS=()
-if [ "${DITHER_NSYS:-}" = 1 ]; then
+if [ "${DITHER_NSYS:-}" = 1 ] || [ "${DITHER_NSYS:-}" = prof ]; then
   NSYS=("$CUDA/bin/nsys" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none
         --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/gate" --force-overwrite true)
 fi
 cd integrations/vllm
-printf '%s\n' "$PY $INPUTS/hb_sbench.py --out $OUT --scratch $S $*" > "$OUT/env/cmd.txt"
+SCRIPT=$HB/hb_sbench.py
+[ -n "${HB_SCRIPT:-}" ] && SCRIPT=$ROOT/$DITHER/$HB_SCRIPT
+printf '%s\n' "$PY $SCRIPT --out $OUT --scratch $S $*" > "$OUT/env/cmd.txt"
+# an exact-fused or -xl arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
+case " $* " in *exact-fused*|*-xl[\ ,-]*) KGATE=1 ;; *) KGATE=0 ;; esac
+export KGATE=${HB_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
 read -r -a lease <<< "${LEASE:---max-min 14}"
 echo "hb_served: asking for one GPU at $(date -u +%H:%M:%SZ)"
 GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- bash -c '
@@ -179,16 +217,28 @@ GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- b
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \
     --format=csv -l 2 > "$0/smi.csv" 2>/dev/null &
   smi=$!
-  timeout "${RUN_TIMEOUT:-820}" "$@"
+  if [ "$KGATE" = 1 ]; then
+    timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
+      > "$0/kgate.log" 2>&1
+    g=$?
+    tail -1 "$0/kgate.log"
+    if [ $g -ne 0 ]; then echo "hb_served: kgate rc $g, nothing timed"; kill "$smi" 2>/dev/null; exit 4; fi
+  fi
+  timeout $(( ${RUN_TIMEOUT:-820} - SECONDS )) "$@"
   r=$?
   kill "$smi" 2>/dev/null
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.after.csv"
-  exit $r' "$OUT" "${NSYS[@]}" "$PY" "$INPUTS/hb_sbench.py" --out "$OUT" --scratch "$S" "$@"
+  exit $r' "$OUT" "${NSYS[@]}" "$PY" "$SCRIPT" --out "$OUT" --scratch "$S" "$@"
 rc=$?
 echo "hb_served: exited $rc at $(date -u +%H:%M:%SZ)"
 if [ -f "$S/gate.nsys-rep" ]; then
   "$CUDA/bin/nsys" stats --report cuda_gpu_kern_sum --format csv -o "$OUT/gate" "$S/gate.nsys-rep" > "$OUT/nsys-stats.log" 2>&1 \
     || echo "hb_served: nsys stats rc $?"
   "$PY" "$ROOT/$DITHER/kernels.py" "$S/gate.sqlite" | tee "$OUT/kernels.json"
+  "$PY" "$ROOT/benchmarks/hash/exactlin/steps.py" "$S/gate.sqlite" > "$OUT/steps.json" || echo "hb_served: steps.py rc $?"
+  "$PY" "$ROOT/$DITHER/stepprof.py" "$S/gate.sqlite" > "$OUT/stepprof.json" \
+    && "$PY" "$ROOT/$DITHER/stepprof.py" --table "$OUT/stepprof.json" | tee "$OUT/stepprof.txt" \
+    || echo "hb_served: stepprof.py rc $?"
+  [ "$(stat -c %s "$S/gate.nsys-rep")" -lt 209715200 ] && cp "$S/gate.nsys-rep" "$OUT/"
 fi
 exit "$rc"

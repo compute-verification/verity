@@ -184,8 +184,9 @@ def test_r7_reads_each_values_first_registration():
             (at(SERVED["row"], last, None), None, ("R6-window",))):
         earlier = stream._earlier(cand)
         assert earlier == [first, stream._log[-1]] or (cand["window"]["row"] != row and len(earlier) == 3)
-        part = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), earlier, None, None, registered)
-        whole = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), stream.log, None, None, registered)
+        held = ["W"] if registered else None
+        part = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), earlier, None, None, registered, held=held)
+        whole = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), stream.log, None, None, registered, held=held)
         assert part == whole and part.codes == codes and part.verifiers["lean"]["codes"] == list(codes)
 
 
@@ -202,8 +203,8 @@ def test_a_supplied_position_reads_the_whole_log():
     cand, check, _ = _mixed_case(base, log=log, window={**BOUND, "row": SERVED["row"] + 6})
     assert stream._earlier(cand, MIXED) is stream._log and len(few := stream._earlier(cand)) == 2
     args = (cand, check["program"], check["query"], LAW, SCHEME, check["ports"], None, ())
-    assert V.check(*args, stream.log, None, None, check["registered"], MIXED, binding=BINDING).ok
-    assert V.check(*args, few, None, None, check["registered"], MIXED, binding=BINDING).codes == ("R7-supplied",)
+    assert V.check(*args, stream.log, None, None, check["registered"], MIXED, binding=BINDING, held=["W"]).ok
+    assert V.check(*args, few, None, None, check["registered"], MIXED, binding=BINDING, held=["W"]).codes == ("R7-supplied",)
 
 
 def test_windows_equal_to_either_verifier_share_a_key():

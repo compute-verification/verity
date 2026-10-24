@@ -4,9 +4,9 @@ import Proofs.Flock.EndToEndRegisteredRows.Statement
 # One C-Flock session with a registrant's opening per unit (trusted)
 
 `RowsSession` is `Flock.Guarantees.EndToEndRegisteredRows`' setting as a value, its binders in its order, with its one
-registrant's opening `rd` replaced by one per unit (`rdU u`). `EndToEndRegisteredRows` reads the input rows only where
-the verifier owns every registered read of `rd` at the outcome's draw (`OwnReadsHJ` is one condition over all of
-them), so at an `rd` covering every unit's reads it links no input row on a draw that leaves one out. With `rdU u` the
+registrant's opening `rd` replaced by one per unit (`rdU u`); its circuit `c` is the one its descriptor `D` unrolls
+to. `EndToEndRegisteredRows` reads the input rows only where the verifier owns every registered read of `rd` at the
+outcome's draw (`OwnReadsHJ` is one condition over all of them), so at an `rd` covering every unit's reads it links no input row on a draw that leaves one out. With `rdU u` the
 opening of unit `u`'s reads alone (`Registered.ReadsX.restrict`, in `Proofs.Flock.Recursive.ZkReg.Off`), a drawn
 unit's input rows are linked wherever its own reads are owned, whatever else is drawn; the cost is a union bound over
 the `n` units (`Flock.SoundAtBridge.RowsSession.prob_badU_le`), `n` times `EndToEndRegisteredRows`' bound.
@@ -40,22 +40,23 @@ structure RowsSession where
   own : Array Flock.Registered.Port
   I : Inputs
   ht : I.tags.typed = false
-  c : Flock.Circuit
-  hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c
-  hU : Built c.unit
+  D : Flock.Desc
+  hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D
+  hU : Built D.unroll.unit
   pub : Public
-  hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub
-  hscope : Discharge.Layout.scopeOkH c = true
+  hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub
+  hscope : Discharge.Layout.scopeOkH D.unroll = true
   kd : ℕ
   hdiv : kd % nTab I = 0
   dj : Finset (Fin n) → Lean.Json
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
-  y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀
-  rdU : Fin n → FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
-    (rsShHJS dj y₀ ht hc hscope hU hpub)
+  y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
+  rdU : Fin n → FlockSoundness.Registered.ReadsX
+    (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub))
+    (rsShHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub)
   wr : (S : Finset (Fin n)) → (R : Reg) →
-    LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Discharge.Exec.Transcript
+    LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript
   dg : ByteArray → ByteArray
   N : ℕ
   Ω : Type
@@ -88,6 +89,12 @@ noncomputable section
 namespace RowsSession
 
 variable (s : RowsSession)
+
+/-- The circuit the session's descriptor unrolls to. -/
+abbrev c : Flock.Circuit := s.D.unroll
+
+/-- `HmOut.parse` reads the session's circuit from its circuit file. -/
+theorem hc : HmOut.parse (zkTags s.I) s.I.circuitFile s.I.tables = .ok s.c := Flock.Desc.parse_flat s.hD
 
 /-- The session's outcome: the registration, the draw and the transcript. -/
 abbrev Out : Type := s.Reg × Finset (Fin s.n) × Discharge.Exec.Transcript

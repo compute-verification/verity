@@ -5,24 +5,26 @@ import NciCheck.Desc
 
 `NciCheck.Desc.evaluate` takes θ as given: every entry is a registered input node (`theta-not-registered`), but nothing
 says what value it holds, so a developer could put values computed on unmonitored hardware in θ and read them for free.
-`Nci.Assumptions.BaselineRegistered` states what θ must hold: values that, before the run's commitment, were outputs of
-an earlier certified declared computation or registered public data. `evaluate` checks it: the policy check
-(`NciCheck.Desc.evaluate`) first, unchanged, then each θ entry's provenance against what the proof service holds.
+`Nci.Assumptions.BaselineRegistered` states what θ must hold: registered public data, registered at the start of the
+deployment. An output of an earlier run, certified or not, is never θ (Daniel, 21 Oct: registration happens at the start
+of a deployment and essentially never changes). One registration log is one deployment, and θ holds what its first
+record registers (compute-accounting, 21 Oct): the first run's θ cites its own record, which opens the log, and every
+later run's cites that same record, so new public data takes a new log, a new deployment the auditor sees as such.
+`evaluate` checks it: the policy check (`NciCheck.Desc.evaluate`) first, unchanged, then each θ entry's provenance
+against what the proof service holds.
 
 ## The instance and the trusted input
 
 The instance is `NciCheck.Desc`'s with one more field:
-* `provenance`: one object per θ entry, in θ's order, exactly one of
-  - `{"kind": "registered", "registration": D, "value": V, "root": R}`: registered public data, the value `V` that the
-    registration record with digest `D` registers (its `registered` list, `verity/registration/v2`) under the root `R`;
-  - `{"kind": "output", "record": D, "port": P, "root": R}`: an output of an earlier certified declared computation,
-    the port `P` of the registration record `D`, whose run the service's verifier accepted, with `roots[P].root = R`.
+* `provenance`: one object per θ entry, in θ's order, each `{"kind": "registered", "registration": D, "value": V,
+  "root": R}`: registered public data, the value `V` that the registration record with digest `D`, the log's first,
+  registers (its `registered` list, `verity/registration/v2`) under the root `R`. There is no other kind.
 
 The trusted input, beside the instance, is what the service holds, never the prover's word: an object of exactly
-* `log`: the prover's registration records, oldest first, as the service's R6 keeps them (each record's `previous` the
-  digest of the one before, `null` for the first; the digest `SHA-512(format || 0 || canon(record))`, `digest`);
-* `accepted`: the digests of the records whose runs the service's verifier accepted (its verdict records);
-* `run`: the digest of the run under check's own record, so "earlier" is a position in the log, not a clock;
+* `log`: the deployment's registration records, oldest first, as the service's R6 keeps them (each record's `previous`
+  the digest of the one before, `null` for the first, which opens the deployment; the digest
+  `SHA-512(format || 0 || canon(record))`, `digest`);
+* `run`: the digest of the run under check's own record, the log's first for the deployment's first run;
 * `params`: the verifier's own copy of its program function's parameters, `[[name, type], ...]` as a body's params are
   written. The descriptor names no parameters (`verity/ml/circuits/PROTOCOL.md` §5.1: the root starts with each
   parameter's input nodes, in parameter order), so these say which parameter each θ node holds a part of: they must
@@ -33,28 +35,27 @@ The trusted input, beside the instance, is what the service holds, never the pro
 Each θ entry lies in a root input node `k` whose gates are `w` bits each, part of the parameter `p` whose input nodes hold
 `n_p` gates. The run's own record registers `p` (R7) under a hiding root, and the entry is bound when that root is the
 cited `R`: the frame-v3-sha512 root over hm96-sha512 rows determines the rows, short of a SHA-512 collision among the
-inputs hashed along the two trees (`Nci.Assumptions.RootsBind`, the binding premise the reduction names). For
-`registered` that is R7's `held` rule (a value keeps its root across records); for `output` it is R7's rule for a value
-whose provenance is an earlier output, which takes that port's domain and leaf count (`one_stage/registration.py`).
+inputs hashed along the two trees (`Nci.Assumptions.RootsBind`, the binding premise the reduction names). That is
+R7's `held` rule: a value keeps its root across records (`one_stage/registration.py`).
 
 ## Refusals
 
 In the order checked, after every code of `NciCheck.Desc.evaluate` (whose θ codes come first: `theta-unknown`,
 `theta-not-input`, `theta-not-registered`, `theta-duplicate`; then its owners' and `empty-iu`), so that the policy check's
 statements (`NciCheck.Properties`) stand as they are:
-* `theta-provenance`: `provenance` missing, not an array of one entry per θ entry, or an entry of neither form;
-* `trusted`: the trusted input is not as stated: its keys, a log record that is no object or breaks the chain, an
-  accepted digest that is no string, `run` the digest of no record of the log, or `params` not distinct names of types;
+* `theta-provenance`: `provenance` missing, not an array of one entry per θ entry, or an entry not of that form (an
+  entry of any other kind, `output` among them);
+* `trusted`: the trusted input is not as stated: its keys, a log record that is no object or breaks the chain, `run` the
+  digest of no record of the log, or `params` not distinct names of types;
 * then θ entry by entry:
   - `theta-record-unknown`: `D` is the digest of no record of the log;
-  - `theta-not-earlier`: `D` is the run's own record or one after it;
-  - `theta-uncertified`: the entry is an `output` and `D`'s run has no accepting verdict;
-  - `theta-root`: `D` registers no value `V` (or has no port `P`) whose root is `R` (its last entry for `V` or `P`, as
-    Python's dict reads it);
+  - `theta-not-at-deployment-start`: `D` is a record of the log other than its first. It replaces the rule that `D`
+    precede the run's own record: the first record is at or before every run's own, the first run's being that record
+    itself, so this one code is the whole timing rule;
+  - `theta-root`: `D` registers no value `V` whose root is `R` (its last entry for `V`, as Python's dict reads it);
   - `theta-unbound`: the run's record is not this program's (its `program` is not `Prog.sha512`), `params` don't lower
     onto the root's input nodes, or the run's record has no `registered` entry for `p` whose root is `R`;
-  - `theta-width`: `D`'s rows and words don't give `p`'s `n_p` gates of `w` bits, rounded up to whole u16 words (for
-    `output`: the port's leaf count is not the run's rows for `p`, or the run's rows and words don't give them).
+  - `theta-width`: `D`'s rows and words don't give `p`'s `n_p` gates of `w` bits, rounded up to whole u16 words.
 
 ## Cost
 
@@ -161,14 +162,13 @@ def countsOf (offs : Array Nat) (own : Array (Option Nat)) (n : Nat) : Array Nat
 
 /-! ## The trusted input -/
 
-def TRUSTED_KEYS : Array String := #["accepted", "log", "params", "run"]
+def TRUSTED_KEYS : Array String := #["log", "params", "run"]
 
-/-- The trusted input, read: the log and each record's digest, the accepted digests, the run's position in the log, and
-the program function's parameters. -/
+/-- The trusted input, read: the log and each record's digest, the run's position in the log, and the program function's
+parameters. -/
 structure Trusted where
   log : Array Json
   digests : Array String
-  accepted : Array String
   run : Nat
   params : Array (String × Ty)
 
@@ -185,10 +185,6 @@ def trustedOf (tr : Json) : Except String Trusted := do
     if getD rec "previous" != want then throw "trusted"
     let .ok d := digest rec | throw "trusted"
     digests := digests.push d
-  let .arr acc := getD tr "accepted" | throw "trusted"
-  let accepted ← acc.mapM fun a => match a with
-    | .str s => pure s
-    | _ => throw "trusted"
   let .str run := getD tr "run" | throw "trusted"
   let some r := digests.findIdx? (· == run) | throw "trusted"
   let .arr ps := getD tr "params" | throw "trusted"
@@ -198,27 +194,20 @@ def trustedOf (tr : Json) : Except String Trusted := do
       | .error _ => throw "trusted"
     | _ => throw "trusted"
   if (params.map (·.1)).toList.eraseDups.length != params.size then throw "trusted"
-  return { log, digests, accepted, run := r, params }
+  return { log, digests, run := r, params }
 
 /-! ## Provenance -/
 
-inductive Kind where
-  | registered
-  | output
-  deriving BEq, Inhabited
-
-/-- One θ entry's provenance: its kind, the record `D` it cites, the value `V` or port `P`, and the root `R`. -/
+/-- One θ entry's provenance: the registration record `D` it cites, the value `V` and the root `R`. -/
 structure Prov where
-  kind : Kind
-  record : String
-  name : String
+  registration : String
+  value : String
   root : String
   deriving Inhabited
 
 def REGISTERED_KEYS : Array String := #["kind", "registration", "root", "value"]
-def OUTPUT_KEYS : Array String := #["kind", "port", "record", "root"]
 
-/-- An entry of `provenance`, of exactly one of the two forms, every field a string. -/
+/-- An entry of `provenance`: of the `registered` form, every field a string. An entry of any other kind is none. -/
 def provOf (p : Json) : Option Prov := do
   let str (k : String) : Option String := match getD p k with
     | .str s => some s
@@ -226,10 +215,7 @@ def provOf (p : Json) : Option Prov := do
   match ← str "kind" with
   | "registered" =>
     guard (keys? p == some REGISTERED_KEYS)
-    pure { kind := .registered, record := ← str "registration", name := ← str "value", root := ← str "root" }
-  | "output" =>
-    guard (keys? p == some OUTPUT_KEYS)
-    pure { kind := .output, record := ← str "record", name := ← str "port", root := ← str "root" }
+    pure { registration := ← str "registration", value := ← str "value", root := ← str "root" }
   | _ => none
 
 /-- `provenance`: one entry per θ entry (`theta-provenance` otherwise). -/
@@ -253,14 +239,9 @@ def dims (e : Json) : Option (Nat × Nat × Nat) := do
 input `T`, the program's digest `program`, each root node's parameter `own` and each parameter's gate count `counts`. -/
 def entryStep (T : Trusted) (program : String) (own : Array (Option Nat)) (counts : Array Nat) (k width : Nat)
     (p : Prov) : Except String Unit := do
-  let some d := T.digests.findIdx? (· == p.record) | throw "theta-record-unknown"
-  if d ≥ T.run then throw "theta-not-earlier"
-  if p.kind == .output && !T.accepted.contains p.record then throw "theta-uncertified"
-  let src := T.log[d]!
-  let cited := match p.kind with
-    | .registered => lastWith src "registered" "value" p.name
-    | .output => lastWith src "roots" "port" p.name
-  let some e := cited | throw "theta-root"
+  let some d := T.digests.findIdx? (· == p.registration) | throw "theta-record-unknown"
+  if d != 0 then throw "theta-not-at-deployment-start"
+  let some e := lastWith T.log[0]! "registered" "value" p.value | throw "theta-root"
   if getD e "root" != Json.str p.root then throw "theta-root"
   let run := T.log[T.run]!
   if getD run "program" != Json.str program then throw "theta-unbound"
@@ -268,13 +249,9 @@ def entryStep (T : Trusted) (program : String) (own : Array (Option Nat)) (count
   let some mine := lastWith run "registered" "value" T.params[i]!.1 | throw "theta-unbound"
   if getD mine "root" != Json.str p.root then throw "theta-unbound"
   let bits := 16 * ((width + 15) / 16)
-  let fits := match p.kind with
-    | .registered => match dims e with
-      | some (r, w, b) => r * w == counts[i]! && b == bits
-      | none => false
-    | .output => match natOf? (getD e "leaves"), dims mine with
-      | some l, some (r, w, b) => l == r && r * w == counts[i]! && b == bits
-      | _, _ => false
+  let fits := match dims e with
+    | some (r, w, b) => r * w == counts[i]! && b == bits
+    | none => false
   if !fits then throw "theta-width"
 
 /-- θ's provenance on an instance the policy check gave a verdict, θ entry `t` lying in root node `node offs θ[t]`
@@ -312,15 +289,14 @@ def evaluateUnrolled (j tr : Json) : Except String Json := do
 /-- The fix a refusal's `message` gives, for the codes of θ's provenance. -/
 def fixOf : String → Option String
   | "theta-provenance" => some ("give `provenance`, one entry per theta entry in theta's order: {kind: registered, " ++
-      "registration, value, root} or {kind: output, record, port, root}")
-  | "trusted" => some ("the trusted input is the service's: {log: the prover's registration records in R6's chain, " ++
-      "accepted: accepted record digests, run: the run's own record's digest, params: [[name, type], ...]}")
+      "registration, value, root}; theta holds registered public data only, never an earlier run's output")
+  | "trusted" => some ("the trusted input is the service's: {log: the deployment's registration records in R6's " ++
+      "chain, run: the run's own record's digest, params: [[name, type], ...]}")
   | "theta-record-unknown" => some "cite a record of the prover's registration log by its digest"
-  | "theta-not-earlier" => some "cite a record registered before the run's own"
-  | "theta-uncertified" => some "an output in theta must come from a run the service's verifier accepted"
-  | "theta-root" => some "cite the root the record registers for that value (or holds for that port)"
+  | "theta-not-at-deployment-start" => some "cite the registration log's first record"
+  | "theta-root" => some "cite the root the record registers for that value"
   | "theta-unbound" => some ("register the theta node's parameter in the run's own record under the cited root (R7: " ++
-      "a value keeps its root, and one from an earlier output takes that port's domain and leaf count)")
+      "a value keeps its root)")
   | "theta-width" => some "the cited value's rows, words and word bits must give the theta node's parameter"
   | _ => none
 

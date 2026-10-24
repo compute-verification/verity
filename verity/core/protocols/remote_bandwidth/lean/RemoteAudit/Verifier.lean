@@ -17,10 +17,13 @@ difftest's `session` reads one, `Difftest.eventOf`):
   `Registry.register`'s draw, `{"codec_seed", "digest"}`, or `{"refused": true}` (an error for a node with none live
   whose registration would bind PoUW's tile outputs: receipts here are of a block alone);
 * `{"op": "session", "node", "params", "coins", "append_coins", "not_before_ns", "index"}`: the next session over the
-  node's live registration drawn here (`Registry.session`), `{"session": k}`, or `{"refused": true}`;
+  node's live registration drawn here (`Registry.session`), `{"session": k}`, or `{"refused": true}`; `coins` `null`
+  takes them live, each with the event that releases it (`event`'s `coin`);
 * `{"op": "event", "node", "session", "event", "coin"}`: one event through session k (`Registry.step`), its result as
-  the difftest writes it (`Difftest.resultJ`); `coin` (or `null`) is the append coin the driver drew for an append,
-  pushed onto the session's append coins first;
+  the difftest writes it (`Difftest.resultJ`); `coin` (or `null`) is the coin the challenger released for the event,
+  set first (`withCoin`): a start's or a boundary's the challenge of the window it releases, a close's window t's
+  openings coin, an append's pushed onto the session's append coins. A coin set is never replaced by another, and an
+  event that releases a challenge or draws a window's openings from a coin never set is an error (`unset`);
 * `{"op": "openings", "node", "session", "t", "bytes": n}` and then n bytes: one frame of window t's openings as the
   wire carries them (`Wire.decodeOpenings`), kept until the window is verified;
 * `{"op": "verify", "node", "session", "t", "id"}`: window t's openings, every frame in the order it came, checked on
@@ -86,6 +89,36 @@ def spawnCheck (chunk : Nat) (s : Session.State) (w : WindowRecord) (drawn : Arr
 private def runOf (r : Registry) (node : ByteArray) (k : Nat) : Option Registry.Run :=
   (r.live.find? (·.node == node)).bind (·.sessions[k]?)
 
+/-- Session `s` with the coin `c` the challenger released for event `e` (module docstring), or why not. -/
+def withCoin (s : Session.State) (e : Session.Event) (c : ByteArray) : Except String Session.State := do
+  if c.size ≠ Codec.COIN_BYTES then throw "a coin is 32 bytes"
+  let set (i : Nat) : Except String Session.State :=
+    match s.coins[i]? with
+    | none => throw s!"the session has no coin {i}"
+    | some x =>
+      if x.isEmpty || x == c then pure { s with coins := s.coins.set! i c }
+      else throw s!"coin {i} is released once: the challenger sent another"
+  match e with
+  | .start _ | .boundary _ =>
+    if s.windows.size < s.params.windows then set s.windows.size
+    else throw "every window's challenge is released"
+  | .close t _ =>
+    if 0 ≤ t && t < s.params.windows then set (s.params.windows + t.toNat) else throw s!"no window {t}"
+  | .append .. => pure { s with appendCoins := s.appendCoins.push c }
+  | _ => throw "only a start, a boundary, a close or an append releases a coin"
+
+/-- Why event `e`'s result `res` read a coin of `s`, the session after it, that the challenger never sent; none when
+it read none. -/
+def unset (s : Session.State) (e : Session.Event) (res : Option Session.Result) : Option String :=
+  let missing (i : Nat) : Bool := (s.coins[i]?.map (·.size != Codec.COIN_BYTES)).getD true
+  match e, res with
+  | .start _, some (.released (some t)) | .boundary _, some (.released (some t)) =>
+    if missing t then some s!"window {t}'s challenge left without the challenger's coin" else none
+  | .close t _, some (.drew _) =>
+    if missing (s.params.windows + t.toNat) then some s!"window {t}'s openings were drawn without the challenger's coin"
+    else none
+  | _, _ => none
+
 private def merge (a : Json) (extra : List (String × Json)) : Json :=
   match a with
   | .obj kvs => Json.mkObj (kvs.toList ++ extra)
@@ -125,7 +158,16 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
     pure (out, { srv with registry := r })
   | "session" =>
     let node ← ofV (bytesOf req "node")
+    let live := match (← ofV (J.get req "coins" "request")) with
+      | .null => true
+      | _ => false
+    let zero := Json.str (hexOf (ByteArray.mk (Array.replicate Codec.COIN_BYTES 0)))
+    let req ← if live then do
+        let w ← ofV (J.nat (← ofV (J.get req "params" "request")) "windows" "params")
+        pure (req.setObjVal! "coins" (.arr (Array.replicate (2 * w) zero)))
+      else pure req
     let (params, coins, appendCoins, notBeforeNs) ← ofV (Difftest.sessionOf req)
+    let coins := if live then Array.replicate coins.size ByteArray.empty else coins
     let index ← match ← ofV (J.get req "index" "request") with
       | .null => pure none
       | v => some <$> ofV (J.asInt v "index")
@@ -141,10 +183,11 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
       | .null, _ => pure srv.registry
       | c, some s => do
         let c ← ofV (unhex (← ofV (J.asStr c "coin")))
-        if c.size ≠ Codec.COIN_BYTES then throwThe String "an append coin is 32 bytes"
-        pure (srv.registry.update node k { s with appendCoins := s.appendCoins.push c })
+        pure (srv.registry.update node k (← ofV (withCoin s e c)))
       | _, none => pure srv.registry
     let (res, r) ← ofV (r.step node k e)
+    if let some s := r.running node k then
+      if let some why := unset s e res then throwThe String why
     pure ((res.map Difftest.resultJ).getD refusedJ, { srv with registry := r })
   | "openings" =>
     let node ← ofV (bytesOf req "node")

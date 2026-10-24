@@ -31,13 +31,27 @@ One connection serves one registration and then `--sessions` sessions over it, e
 With `--paced K:T_MS:DRAWS:WINDOWS` each session is paced (`pace_of`, `audit.Pace(K, T)`): a coin every K passes,
 each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
 `--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
-(`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic.
+(`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is drawn at its k-th
+root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
+fixes each group's end there, and `auditor_line.py` reads the line on the challenger's clock from it. A boundary due by
+then leaves right behind the close, so its coin, after the same root, is asked for in the same round trip, second
+(`coins.Coins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.
 
 A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
 hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
 registration after its last session, counting each session (a failed one by its failure); one left live by a
 process that ended early stays live, refusing the node, until `--close NODE` closes it with its sessions as they stood,
 the one in flight unended.
+
+The payload's salts are the verifier's: its first message (`payload-key`) carries a fresh key, and the prover salts its
+payload tree's leaves under it (`remote_bandwidth.store.store_salt`). With `--model ROLE --checkpoint DIR --pin FILE
+--arena-blocks A [--engines E]` the registered store is bound to a pinned model (`remote_bandwidth.store.Binding`, the
+remote audit's own code, so the circuit a period commits to names it): at startup
+every file the pin names is held to its SHA-512 and the arena the checkpoint lays out is digested; a hello's store is
+then E arenas of A blocks, weights and zero filler each, and the rest host filler, and its payload root must be that
+store's under the key sent, recomputed in `--layout-workers` processes, else the hello is refused with the reason
+before the registry draws anything. The regions are then the binding's, and verifier.json keeps the binding (`binding`:
+the pin's name and checkpoint_sha512, the store's shape, both roots and `bound`), which `auditor_line.py` credits on.
 
 The verdicts are the verifier of record's, the Lean process `remote-audit-verifier` (`lean_verifier.py`), under
 `--verdict lean` (the default, `VERDICT`) or `both`: it holds the registry and every session, and each registration,
@@ -46,8 +60,12 @@ session's record is the Lean's (`Pair.record`), and its ledger reads that record
 books (its coins, its plans, when the next boundary leaves) and is the reference: an event, a window's verdict or a
 record field on which the two differ refuses the session at that window as `disagreement`. Under `lean` it checks no
 openings and takes the Lean's window verdicts; under `both` it checks every window's openings too, beside the Lean,
-and a window's two verdicts are set on the two sessions at once. Under `python` there is no Lean process and
-`audit.Session` decides. `--close` closes a registration in both registries alike.
+and a window's two verdicts are held to each other. Under `python` there is no Lean process and `audit.Session`
+decides. `--close` closes a registration in both registries alike. While a session runs the driver doesn't wait on
+the Lean: an event both take goes out on the books' result and the Lean's answer is held to it as it comes, and
+openings frames and window checks go to the Lean the same way, so a slow Lean answer or check delays the session's
+verdict, never a coin, a root's intake, a boundary or a draw. A session is accepted only once every one of its
+Lean answers has come and agreed.
 
 `--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.Transcript`): every
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
@@ -56,17 +74,36 @@ verifiers, rejections included. A message the driver couldn't read is in no even
 keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
 0.6 GB of JSON.
 
+A session's coins are an epoch of the proof service's one challenger (`coins.Coins`): from a challenger in this process
+(`--challenger local`, the default), from `benchmarks/live_challenger/serve.py`, started for the session on this
+machine and reached through `sampled_proofs.remote`'s client (`--challenger serve`, `challengers.Serve`), or from the
+auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
+window root (`--challenger gate`, `challengers.Gate`). Each coin is asked for after the root it follows, the Lean takes
+it with the event that released it, and once the session ends what the challenger signed holds the session's coins
+(`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`, which also holds the
+session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
+whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, W
+openings coins and `--appends` append coins, `coins.APPENDS` by default, or none, and no append family, when the
+prover's hello says its sessions append nothing (a plan of honest and skip sessions, `Verifier.appends_of`), so the
+challenger's close of such a session that ran to its end is complete. An append past them refuses the session: `coin` on the books, and
+under the Lean, whose session holds only the append coins released, `disagreement`.
+
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
                        [--registry REGISTRY.json] [--verdict lean|both|python] [--lean-exe PATH]
                        [--paced K:T_MS:DRAWS:WINDOWS ...] [--transcript DIR]
+                       [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
+                       [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
+                        --challenger-period P --challenger-main FILE [--challenger-minutes M]]
+                       [--model ROLE --checkpoint DIR --pin FILE --arena-blocks A [--engines E]]
     python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict lean|both|python]
     python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -82,8 +119,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, ledger, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins, ledger, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 
+import challengers  # noqa: E402
 import lean_verifier as lv  # noqa: E402
 import wire  # noqa: E402
 from checks import Checks, check  # noqa: E402
@@ -432,14 +471,17 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
                           "ingress_blocks": ingress_per_ns * (span + 2 * l_max),
                           "rebuild_absent_blocks": 2 * l_max * rebuilds / span, "wrong_absent_blocks": fill / span,
                           "held": mean, **{form: {"lost_blocks": x, "credited": {
-                              k: max(0.0, mean[k] - x * b) for k in ("weights", "hbm")}} for form, x in lost.items()}})
+                              k: max(0.0, mean[k] - x * b) for k in ("weights", "hbm")} | {
+                              "filler": max(0.0, mean["hbm"] - mean["weights"] + mean["host"] - x * b)}}
+                              for form, x in lost.items()}})
 
     def line(form: str) -> dict:
         worst = min(stretches, key=lambda x: x[form]["credited"]["weights"])
-        w = worst[form]["credited"]["weights"]
+        w, filler = worst[form]["credited"]["weights"], worst[form]["credited"]["filler"]
         return {"form": form, "stretch": worst["stretch"], "lost_blocks": worst[form]["lost_blocks"],
                 "weights_bytes": w, "share": w / node_bytes, "hbm_bytes": worst[form]["credited"]["hbm"],
-                "hbm_share": worst[form]["credited"]["hbm"] / node_bytes}
+                "hbm_share": worst[form]["credited"]["hbm"] / node_bytes, "filler_bytes": filler,
+                "filler_share": filler / node_bytes}
 
     return {"groups": groups, "wrong": wrong, "chip_blocks": chip, "node_bytes": node_bytes, "stretches": stretches,
             "snapshot": line(AVERAGE), "time": line(TIME_HELD)}
@@ -485,7 +527,11 @@ def start_lean(source: bytes, registry: audit.Registry, exe: Path | None, done) 
     """The Lean verifier's process, with the verifier's secret and `registry` (which it must read back as
     `audit.Registry` writes it), `done` called with each window's check as it ends."""
     lean = lv.Lean(exe or lv.build(), done)
-    read = lean.call({"op": "init", "source": source.hex(), "registry": registry.to_json(), "chunk": CHECK_BATCH})
+    try:
+        read = lean.call({"op": "init", "source": source.hex(), "registry": registry.to_json(), "chunk": CHECK_BATCH})
+    except BaseException:
+        lean.close()
+        raise
     if read["registry"] != registry.to_json():
         lean.close()
         raise ValueError(f"the Lean verifier reads the registry as {read['registry']}, not as audit.Registry does: "
@@ -498,16 +544,24 @@ class Pair:
     and, given `lean`, to the Lean process's session k, at one reading of the verifier's clock. The result is the one
     they agree on; where they differ, the session is refused at the event's window as `disagreement` (in both
     verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.Session` returns no verdict.
-    Everything else is read from `s`."""
+    Everything else is read from `s`. The Lean's session takes its coins live (`"coins": null`): each the challenger
+    releases goes with the event that released it, σ_t with its start or boundary, window t's openings coin with its
+    close and an append's coin with the append.
 
-    def __init__(self, v: Verifier, s: audit.Session, k: int, tape: lv.Tape, case: lv.Transcript | None = None) -> None:
+    The driver never waits on the Lean for an event the books take: it acts on the books' result and the Lean's
+    answer is held to it as it comes (`_answered`), a different one refusing the session at that event's window
+    (`caught_up`) before any later verdict, rejection or record is taken. The Lean's session is a function of the
+    events in order with their clock readings, so its answers are the ones it would give were each waited on. An
+    event the books reject or refuse is waited on, behind every one before it."""
+
+    def __init__(self, v: Verifier, s: audit.Session, k: int, case: lv.Transcript | None = None) -> None:
         self.v, self.s, self.k, self.lean, self.case = v, s, k, v.lean, case
         self.node, self.disagreement, self.outcome_json = s.registration.node.hex(), None, None
+        self.late: tuple | None = None
         self.frames: dict[int, list[bytes]] = {}
         if self.lean is not None:
             got = self._lean({"op": "session", "node": self.node, "params": lv.params_json(s.params),
-                              "coins": [c.hex() for c in tape.coins], "append_coins": [],
-                              "not_before_ns": s.not_before_ns, "index": k})
+                              "coins": None, "append_coins": [], "not_before_ns": s.not_before_ns, "index": k})
             if got != {"session": k}:
                 self._disagree(0, "session", got, {"session": k})
 
@@ -529,9 +583,25 @@ class Pair:
                    f"Lean {lean}, Python {python}")
         return v
 
+    def _answered(self, t: int, event: str, lean: dict, python: dict) -> None:
+        """The Lean's answer to an event the driver acted on, on the Lean's reader thread: the first that differs from
+        the books' is kept for `caught_up`, and the session's loop woken to apply it."""
+        if lean != python and self.late is None:
+            self.late = (t, event, lean, python)
+            self.v.inbox.put(({"type": "lean-disagree", "k": self.k}, b"", self.v.clock.now()))
+
+    def caught_up(self) -> audit.Verdict | None:
+        """The first event the Lean answered otherwise than the books, applied as `disagreement` (`_disagree`): its
+        rejection, or None. The Lean answers in order and each answer is held to the books' before the next is read,
+        so once the driver holds any answer, every event before it that disagreed is here."""
+        if self.late is None or self.disagreement is not None:
+            return None
+        return self._disagree(*self.late)
+
     def _step(self, t: int, event, python, as_json, *, clocked: bool = False, coin=None):
         """`python()` on the books and `event()` through the Lean: `python()`'s return, or the disagreement's
         rejection (None as the second value)."""
+        self.caught_up()
         if self.disagreement is not None:
             raise audit.SessionError("the session ended: the verifiers disagree")
         ev = event() if self.lean is not None or self.case is not None else None
@@ -554,23 +624,37 @@ class Pair:
         if self.lean is None:
             return out, True
         c = coin(out) if coin is not None else None
-        lean = self._lean({"op": "event", "node": self.node, "session": self.k, "event": ev,
-                           "coin": None if c is None else c.hex()})
+        request = {"op": "event", "node": self.node, "session": self.k, "event": ev,
+                   "coin": None if c is None else c.hex()}
+        where = t if type(t) is int and t >= 0 else self.s.filling
+        if got != lv.REFUSED and not isinstance(out, audit.Verdict):
+            self.lean.send(request, answered=lambda lean: self._answered(where, ev["kind"], lean, got))
+            return out, True
+        lean = self._lean(request)
+        if (v := self.caught_up()) is not None:
+            return v, False
         if lean != got:
-            return self._disagree(t if type(t) is int and t >= 0 else self.s.filling, ev["kind"], lean, got), False
+            return self._disagree(where, ev["kind"], lean, got), False
         if got == lv.REFUSED:
             raise audit.SessionError("refused by both verifiers")
         return out, True
 
+    def _released(self, label: str, index: int) -> bytes | None:
+        """Coin `index` of family `label`, once the challenger has released it."""
+        opened = self.s.coins.opened(label)
+        return coins.coin(opened[index]) if type(index) is int and 0 <= index < len(opened) else None
+
     def start(self):
-        out, agreed = self._step(0, lambda: {"kind": "start"}, self.s.start, lv.released_json, clocked=True)
+        out, agreed = self._step(0, lambda: {"kind": "start"}, self.s.start, lv.released_json, clocked=True,
+                                 coin=lambda out: self._released(coins.CHALLENGE, 0))
         if not agreed:
             raise audit.SessionError("the verifiers disagree on the session's start")
         return out
 
     def boundary(self):
         t = next((t for t, w in enumerate(self.s.windows) if w.boundary_ns is None), len(self.s.windows))
-        out, agreed = self._step(t, lambda: {"kind": "boundary"}, self.s.boundary, lv.released_json, clocked=True)
+        out, agreed = self._step(t, lambda: {"kind": "boundary"}, self.s.boundary, lv.released_json, clocked=True,
+                                 coin=lambda out: None if out is None else self._released(coins.CHALLENGE, out.index))
         if not agreed:
             raise audit.SessionError(f"the verifiers disagree on window {t}'s boundary")
         return out
@@ -592,14 +676,16 @@ class Pair:
 
     def close(self, t: int):
         return self._step(t, lambda: {"kind": "close", "t": t}, lambda: self.s.close(t), lv.drew_json,
-                          clocked=True)[0]
+                          clocked=True, coin=lambda out: self._released(coins.OPENINGS, t))[0]
 
     def openings(self, t: int, body: bytes) -> None:
         """One frame of window t's openings to the Lean, kept there until the window is verified."""
-        try:
-            self.lean.call({"op": "openings", "node": self.node, "session": self.k, "t": t, "bytes": len(body)}, body)
-        except lv.LeanError as e:
-            self.v.log(f"verifier: the Lean refused window {t}'s openings frame: {e}")
+        def answered(got: dict) -> None:
+            if "error" in got:
+                self.v.log(f"verifier: the Lean refused window {t}'s openings frame: {got['error']}")
+
+        self.lean.send({"op": "openings", "node": self.node, "session": self.k, "t": t, "bytes": len(body)}, body,
+                       answered)
 
     def keep(self, t: int, body: bytes) -> None:
         """One frame of window t's openings, kept for the transcript until the window's verdict is set."""
@@ -611,14 +697,24 @@ class Pair:
         if self.case is not None:
             self.case.verify(t, self.frames.pop(t, []))
 
-    def verify(self, t: int, check: int) -> bool:
-        """Window t's frames checked on the Lean's threads as check `check`: False where it refuses to."""
-        got = self._lean({"op": "verify", "node": self.node, "session": self.k, "t": t, "id": check})
-        return got == {"spawned": True}
+    def passes_ended(self) -> None:
+        """The prover's passes are over: the transcript may write the openings it held back."""
+        if self.case is not None:
+            self.case.passes_ended()
 
-    def settle(self, check: int) -> dict:
-        """Check `check`'s verdict applied to the Lean's session: its result, the openings it read and its ns."""
-        return self._lean({"op": "settle", "id": check})
+    def verify(self, t: int, check: int, refused) -> None:
+        """Window t's frames checked on the Lean's threads as check `check`, whose end comes as a `lean-done`;
+        `refused(answer)` called on the Lean's reader thread where it refuses to start it."""
+        self.lean.send({"op": "verify", "node": self.node, "session": self.k, "t": t, "id": check},
+                       answered=lambda got: None if got == {"spawned": True} else refused(got))
+
+    def settle(self, check: int, answered=None) -> dict | None:
+        """Check `check`'s verdict applied to the Lean's session, behind every event before it: its result, the
+        openings it read and its ns, returned, or given `answered`, passed to it on the Lean's reader thread."""
+        if answered is None:
+            return self._lean({"op": "settle", "id": check})
+        self.lean.send({"op": "settle", "id": check}, answered=answered)
+        return None
 
     def judge(self, t: int, lean: dict, python: dict | None) -> dict:
         """Window t's verdict, `{"accepted", "failure", "at"}`, from the Lean's settled result and the books' verdict
@@ -654,15 +750,18 @@ class Pair:
                 self._fail_books(failure)
             return
         got = self.outcome_json = self._lean({"op": "outcome", "node": self.node, "session": self.k})
+        self.caught_up()
+        if self.disagreement is not None:
+            return
         if failure is not None:
             if self.s.outcome is None:
                 self._fail_books(failure)
-            if got.get("outcome") is None and self.disagreement is None:
+            if got.get("outcome") is None:
                 self._lean({"op": "abort", "node": self.node, "session": self.k, "outcome": str(failure["failure"])})
             return
         mine = {"outcome": self.s.outcome, "record": lv.summary_json(self.s.record()) if self.s.outcome == "accepted"
                 else None}
-        if got != mine and self.disagreement is None:
+        if got != mine:
             self._disagree(len(self.s.windows) - 1, "record", got, mine)
 
     def record(self) -> audit.Record:
@@ -685,12 +784,19 @@ class Verifier:
                  registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0,
                  ingress_bytes_per_s: float = 0.0, verdict: str = VERDICT, lean_exe: Path | None = None,
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
-                 disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None) -> None:
+                 disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
+                 challenger: challengers.Local | challengers.Serve | challengers.Gate | None = None,
+                 appends: int | None = None, payload_key: bytes | None = None,
+                 binding: rstore.Binding | None = None) -> None:
         if verdict not in VERDICTS:
             raise ValueError(f"the verdict is one of {VERDICTS}")
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
+        self.payload_key = secrets.token_bytes(rstore.KEY_BYTES) if payload_key is None else payload_key
+        self.binding = binding
         self.transcript = transcript
+        self.challenger, self.appends = challengers.Local() if challenger is None else challenger, appends
         self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
+        self.appending = True
         self.ingress_bytes_per_s = ingress_bytes_per_s
         self.disk_bytes_per_s, self.link_bytes_per_s = disk_bytes_per_s, link_bytes_per_s
         self.disk_burst_bytes, self.link_burst_bytes = disk_burst_bytes, link_burst_bytes
@@ -770,20 +876,30 @@ class Verifier:
                 return head, body, stamp
             if head["type"] == "lost":
                 raise wire.Closed(head["why"])
-            if head["type"] not in ("root", "append", "openings", "closed", "checks", "checked", "lean-done"):
+            if head["type"] not in ("root", "append", "openings", "closed", "checks", "checked", "lean-done",
+                                    "lean-settled", "lean-disagree"):
                 self.log(f"verifier: skipped a {head['type']} while waiting for {kind}")
 
     def register(self) -> tuple[audit.Registration, dict]:
-        """The hello's registration, drawn through the registry: refused, with `bye` and the reason, for a node with a
-        live registration (`audit.RegistryError`, raised), with a malformed layout (`regions_of`'s ValueError),
-        deferring residency under a lifetime of one window (`audit.Params`'s ValueError), or asking for receipts that
-        bind PoUW's tile outputs (`bind`, which the Lean covers none of: ValueError). Both registries draw it
+        """The payload salt key sent (`payload-key`, the verifier's own), then the hello's registration, drawn through
+        the registry: refused, with `bye` and the reason, for a node with a live registration (`audit.RegistryError`,
+        raised), with a malformed layout (`regions_of`'s ValueError), deferring residency under a lifetime of one
+        window (`audit.Params`'s ValueError), asking for receipts that bind PoUW's tile outputs (`bind`, which the Lean
+        covers none of: ValueError), or, with a `binding`, a store that isn't the pinned model's under that key
+        (`remote_bandwidth.store.Binding.hold`'s Refused), all before the registry draws anything. Both registries draw it
         under one nonce: one on which they differ is refused as `disagreement` (`audit.RegistryError`), and closed
         where it went live."""
+        self.conn.send({"type": "payload-key", "key": self.payload_key.hex()})
         hello, _, _ = self.expect("hello")
         try:
             self.regions = regions_of(hello.get("layout"), hello["blocks"])
             self.deferred = audit.Params(1, 1, 1, lifetime=self.lifetime, deferred=hello.get("deferred", False)).deferred
+            if type(hello.get("appends", True)) is not bool:
+                raise ValueError("the hello's appends says whether the prover's sessions append, true or false")
+            self.appending = hello.get("appends", True)
+            if self.binding is not None:
+                self.regions = self.binding.hold(bytes.fromhex(hello["node"]), hello["blocks"],
+                                                 bytes.fromhex(hello["payload_root"]), self.payload_key, self.regions)
         except ValueError as e:
             self.conn.send({"type": "bye", "why": f"refused: {e}"})
             raise
@@ -817,6 +933,14 @@ class Verifier:
         ready, _, _ = self.expect("ready")
         self.calibration = ready["calibration"]
         return self.registration, self.calibration
+
+    def appends_of(self) -> int:
+        """A session's append coins (`coins.families`): `appends` if given, else `coins.APPENDS`, or none, and no append
+        family, when the hello said the prover's sessions append nothing (`prover.BANDWIDTH`).  That says only what
+        the prover will forgo: an append it sends then has no coin and refuses the session."""
+        if self.appends is not None:
+            return self.appends
+        return coins.APPENDS if self.appending else 0
 
     def ping(self, n: int) -> dict:
         rtts = []
@@ -854,12 +978,12 @@ class Verifier:
                               receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred,
                               pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)))
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
-        tape = lv.Tape(params.coins, os.urandom)
+        appends = self.appends_of()
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
-                                      entropy=tape)
+                                      challenger=lambda e: self.challenger.open(reg.digest, e, W, appends))
         case = None if self.transcript is None else lv.Transcript(
-            self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, tape.coins, not_before_ns)
-        session = Pair(self, books, k, tape, case)
+            self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
+        session = Pair(self, books, k, case)
         self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
                         "commitment": session.commitment.to_json(), "pace": K})
         self.expect("armed")
@@ -871,8 +995,9 @@ class Verifier:
         arrivals: list[list[int]] = [[] for _ in range(W)]
         verdicts: dict[int, dict] = {}
         checked: dict[int, dict] = {}
-        lean_ready: dict[int, tuple[int | dict, int]] = {}
+        lean_ready: dict[int, tuple[int | dict, int, bool]] = {}
         lean_checks: dict[int, int] = {}
+        settling: set[int] = set()
         frames: dict[int, int] = {}
         draws_at: dict[int, int] = {}
         parts: dict[int, list] = {}
@@ -887,15 +1012,36 @@ class Verifier:
             return {"t": v.window, "failure": v.failure, "at": v.at}
 
         def decide(t: int) -> None:
-            """Window t's verdict once each verifier it waits on has checked the window: the Python's result
-            (`checked`) set on the books and the Lean's (`lean_ready`) settled on its session at one moment, so
-            neither session moves on a verdict the other hasn't had (`Pair.judge`). Nothing once the session has a
-            failure."""
-            nonlocal failure
+            """Window t's verdict once each verifier it waits on has checked the window (`settled`). The Lean settles
+            a check that accepted behind the events sent so far, the books taking its verdict when its answer comes
+            (`lean-settled`): an accepted window is nothing any event reads. One that rejected is waited on, so
+            neither session moves on a rejection the other hasn't had. Nothing once the session has a failure."""
             py, ln = checked.get(t), lean_ready.get(t)
-            if (failure is not None or t in verdicts or (self.verdict != "lean" and py is None)
+            if (failure is not None or t in verdicts or t in settling or (self.verdict != "lean" and py is None)
                     or (self.lean is not None and ln is None)):
                 return
+            if self.lean is None:
+                settled(t, None, None)
+                return
+            check_id, latency, accepted = lean_ready.pop(t)
+            if type(check_id) is not int:
+                settled(t, check_id, latency)
+            elif accepted:
+                settling.add(t)
+                session.settle(check_id, lambda res, t=t, latency=latency: self.inbox.put(
+                    ({"type": "lean-settled", "k": k, "t": t, "res": res, "latency": latency}, b"", self.clock.now())))
+            else:
+                settled(t, session.settle(check_id), latency)
+
+        def settled(t: int, res: dict | None, latency: int | None) -> None:
+            """Window t's verdict: the Python's result (`checked`) set on the books and the Lean's settled result
+            (`res`) held to it (`Pair.judge`); an event before it that the two answered differently refuses the
+            session first."""
+            nonlocal failure
+            if self.lean is not None and (v := session.caught_up()) is not None:
+                failure = {"t": v.window, "failure": v.failure, "at": v.at}
+                return
+            py = checked.get(t)
             mine = None
             if py is not None:
                 try:
@@ -907,8 +1053,6 @@ class Verifier:
                 verdicts[t] = {"t": t, **mine, "cpu_ns": py["cpu_ns"], "openings": py["count"],
                                "checked_ns": py["checked_ns"]}
             else:
-                check_id, latency = lean_ready.pop(t)
-                res = session.settle(check_id) if type(check_id) is int else check_id
                 verdicts[t] = {"t": t, **session.judge(t, res, mine), "cpu_ns": py["cpu_ns"] if py else 0,
                                "openings": py["count"] if py else res.get("openings"),
                                "checked_ns": max(latency, py["checked_ns"]) if py else latency,
@@ -924,8 +1068,9 @@ class Verifier:
             ids = [head["id"]] if head["id"] in lean_checks else list(lean_checks) if head["id"] is None else []
             for check_id in ids:
                 t = lean_checks.pop(check_id)
-                lean_ready[t] = (check_id if head["id"] is not None else {"error": "the process ended"},
-                                 stamp - draws_at[t])
+                ready = (lv.REFUSED if "refused" in head else check_id) if head["id"] is not None else \
+                    {"error": "the process ended"}
+                lean_ready[t] = (ready, stamp - draws_at[t], head["accepted"])
                 decide(t)
 
         def close(t: int) -> None:
@@ -968,6 +1113,9 @@ class Verifier:
             if item is None:
                 if sent < W:
                     bound()
+                    while failure is None and K is not None and drawn < sent and len(session.windows[drawn].roots) >= K:
+                        close(drawn)
+                        drawn += 1
                 else:
                     close(drawn)
                     drawn += 1
@@ -991,8 +1139,11 @@ class Verifier:
                     failure = {"t": v.window, "failure": v.failure, "at": v.at}
                     break
                 arrivals[t].append(stamp)
-                while drawn < t and failure is None:
-                    close(drawn)
+                while failure is None and (drawn < t or (drawn == t and K is not None and i + 1 >= K and sent > t)):
+                    due = session.next_boundary_ns() if drawn == t and sent + 1 < W else None
+                    with (session.coins.ahead(coins.CHALLENGE, sent + 1, bytes.fromhex(head["root"]))
+                          if due is not None and due <= self.clock.now() else contextlib.nullcontext()):
+                        close(drawn)
                     drawn += 1
             elif kind == "append":
                 try:
@@ -1018,11 +1169,9 @@ class Verifier:
                     frames[t] = frames.get(t, 0) + 1
                     if frames[t] == head["parts"]:
                         self._check += 1
-                        if session.verify(t, self._check):
-                            lean_checks[self._check] = t
-                        else:
-                            lean_ready[t] = (lv.REFUSED, stamp - draws_at[t])
-                            decide(t)
+                        lean_checks[self._check] = t
+                        session.verify(t, self._check, lambda got, c=self._check: self.inbox.put(
+                            ({"type": "lean-done", "id": c, "accepted": False, "refused": got}, b"", self.clock.now())))
                 if self.verdict == "lean":
                     continue
                 if self.checks is None:
@@ -1060,23 +1209,38 @@ class Verifier:
                 decide(head["t"])
             elif kind == "lean-done":
                 lean_done(head, stamp)
+            elif kind == "lean-settled" and head["k"] == k:
+                settling.discard(head["t"])
+                if failure is None:
+                    settled(head["t"], head["res"], head["latency"])
+            elif kind == "lean-disagree" and head["k"] == k:
+                if (v := session.caught_up()) is not None:
+                    failure = {"t": v.window, "failure": v.failure, "at": v.at}
             elif kind == "closed":
                 self.clock.idle()
+                session.passes_ended()
             elif kind == "lost":
                 raise wire.Closed(head["why"])
         self.jobs.join()
         lost = None
-        while lean_checks:
+        while lean_checks or settling:
             item = self.inbox.get()
             head, _, stamp = item
             if head["type"] == "lean-done":
                 lean_done(head, stamp)
+            elif head["type"] == "lean-settled" and head["k"] == k:
+                settling.discard(head["t"])
             elif head["type"] == "lost":
                 lost = item
         if lost is not None:
             self.inbox.put(lost)
+        coin_check = self.challenger.finish(session.s)
+        if coin_check["reason"] is not None:
+            self.log(f"verifier: session {k}'s coins are not the challenger's as it signed them: {coin_check['reason']}")
+            if failure is None:
+                failure = {"t": max(0, len(session.windows) - 1), "failure": "coins", "at": None}
         session.end(failure)
-        for check_id, _ in lean_ready.values():
+        for check_id, *_ in lean_ready.values():
             if type(check_id) is int:
                 session.settle(check_id)
         if failure is None and session.disagreement is not None:
@@ -1091,8 +1255,8 @@ class Verifier:
                "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
                "appended": session.extent - reg.blocks, "released": session.released,
-               "verdict": self.verdict, "disagreement": session.disagreement,
-               "transcript": None if case is None else case.close(tape.appends),
+               "verdict": self.verdict, "disagreement": session.disagreement, "challenger": coin_check,
+               "transcript": None if case is None else case.close(lv.released_coins(session.coins)),
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},
                "verify_latency_ns": {t: v.get("checked_ns") for t, v in sorted(verdicts.items())},
                "lean_check_ns": {t: v.get("lean_ns") for t, v in sorted(verdicts.items())},
@@ -1309,10 +1473,53 @@ def main() -> int:
     ap.add_argument("--ingress-bytes-per-s", type=float, default=0.0,
                     help="the read ceiling of every route into node memory but a rebuild, which the paced line "
                          "charges (`paced_line`): the node's disks, and its boundary links to drop Identity")
+    ap.add_argument("--challenger", default="local", choices=challengers.KINDS,
+                    help="where each session's coins come from (`challengers`): a challenger in this process (local, "
+                         "the default), serve.py started for the session on this machine (serve), or the auditor "
+                         "host's challenger through its gate (gate), its out/ under OUT/challenger and its record "
+                         "and release log checked when the session ends")
+    ap.add_argument("--challenger-key", type=Path, metavar="DIR",
+                    help="serve's LMS key directory, outside OUT (made there on first use)")
+    ap.add_argument("--challenger-params", metavar="W,H",
+                    help="serve's LMS width and height for a key it makes (default lms.DEPLOYED's)")
+    ap.add_argument("--challenger-ssh", metavar="WORDS",
+                    help="gate: ssh's options and destination for the auditor host, the lane's gate key among them "
+                         "(-i KEY research@HOST)")
+    ap.add_argument("--challenger-peer", metavar="NAME", help="gate: this machine's name in the host's /etc/vy/peers")
+    ap.add_argument("--challenger-pin", metavar="SHA512", help="gate: the SHA-512 of the challenger's public key")
+    ap.add_argument("--challenger-period", metavar="P",
+                    help="gate: the audit's period, open on the ledger (period-open) before the first session")
+    ap.add_argument("--challenger-main", type=Path, metavar="FILE",
+                    help="gate: the auditor's own first-parent list of main, a commit a line (`git rev-list "
+                         "--first-parent origin/main`): a session whose host ran a tree its pins log doesn't record on "
+                         "it is refused as coins")
+    ap.add_argument("--challenger-minutes", type=int, default=120, metavar="M",
+                    help="gate: each session's reserve, the most it serves")
+    ap.add_argument("--appends", type=int, metavar="A",
+                    help=f"each session's append coins, the most appends it takes (`coins.families`): by default "
+                         f"{coins.APPENDS}, or none when the prover's hello says its sessions append nothing")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
                          "session's paced line with --ingress-bytes-per-s (`recorded_paced`), and exit")
+    ap.add_argument("--model", metavar="ROLE",
+                    help="bind the registered store to this pinned model (`remote_bandwidth.store.Binding`): a hello whose "
+                         "payload root isn't the root of the store the pinned checkpoint lays out, under the payload "
+                         "key this verifier sends, is refused before the registry draws anything")
+    ap.add_argument("--checkpoint", type=Path, metavar="DIR",
+                    help="--model's checkpoint on this machine, every file the pin names held to its SHA-512 first")
+    ap.add_argument("--pin", type=Path, metavar="FILE",
+                    help="--model's pin: a local JSON in the auditor's model registry's shape ({name, checkpoint: "
+                         "{file: SHA-512 hex}, checkpoint_sha512}), the registry's models.jsonl and its lines "
+                         "of ROLE, or core's models.json ({ROLE: {checkpoint_sha512, files, ...}}) and its entry "
+                         "of ROLE")
+    ap.add_argument("--engines", type=int, default=timing.GPUS,
+                    help="--model's store: its arenas, an engine's at one GPU each, in GPU order")
+    ap.add_argument("--arena-blocks", type=int, metavar="A",
+                    help="--model's store: each arena's blocks, its weights then zero filler; the store's blocks "
+                         "past the arenas are host filler")
+    ap.add_argument("--layout-workers", type=int, default=len(os.sched_getaffinity(0)),
+                    help="processes hashing the pinned files and recomputing the expected payload root")
     a = ap.parse_args()
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
@@ -1341,7 +1548,34 @@ def main() -> int:
         return 0
     if a.out is None:
         ap.error("--out is required")
+    if a.appends is not None and a.appends < 0:
+        ap.error("--appends is a count, 0 or more")
     a.out.mkdir(parents=True, exist_ok=True)
+    if a.challenger == "gate" and a.port in challengers.GATE_PORTS:
+        ap.error(f"--port {a.port} is one of the gate's session ports ({challengers.GATE_PORTS.start}.."
+                 f"{challengers.GATE_PORTS.stop - 1}), which the host's ssh -R binds on this machine")
+    try:
+        challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params,
+                                    ssh=a.challenger_ssh, peer=a.challenger_peer, pin=a.challenger_pin,
+                                    period=a.challenger_period, main=a.challenger_main, minutes=a.challenger_minutes)
+    except ValueError as e:
+        ap.error(str(e))
+    binding = None
+    if a.model is not None:
+        if a.checkpoint is None or a.pin is None or a.arena_blocks is None:
+            ap.error("--model needs --checkpoint DIR, --pin FILE and --arena-blocks A")
+        try:
+            binding = rstore.Binding(a.model, a.checkpoint, a.pin, a.engines, a.arena_blocks,
+                                     workers=a.layout_workers, log=lambda m: print(m, flush=True))
+        except rstore.Refused as e:
+            print(f"verifier: refused the pinned model: {e}", flush=True)
+            (a.out / "verifier.json").write_text(json.dumps(
+                {"schema": "verity/remote-session/verifier/v0", "verdict": a.verdict, "refused": str(e),
+                 "binding": {"name": a.model, "pin": str(a.pin), "checkpoint": str(a.checkpoint), "bound": False}},
+                indent=1))
+            return 3
+    elif a.checkpoint is not None or a.pin is not None or a.arena_blocks is not None:
+        ap.error("--checkpoint, --pin and --arena-blocks bind the store to --model ROLE")
     save_registry(a.registry, registry)
     sys.setswitchinterval(2e-4)
     w0 = time.monotonic_ns()
@@ -1359,7 +1593,8 @@ def main() -> int:
                  hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, ingress_bytes_per_s=a.ingress_bytes_per_s,
                  verdict=a.verdict, lean_exe=a.lean_exe, transcript=a.transcript, disk_bytes_per_s=a.disk_bytes_per_s,
                  link_bytes_per_s=a.link_bytes_per_s, disk_burst_bytes=a.disk_burst_bytes,
-                 link_burst_bytes=a.link_burst_bytes)
+                 link_burst_bytes=a.link_burst_bytes,
+                 challenger=challenger, appends=a.appends, binding=binding)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()
@@ -1369,7 +1604,7 @@ def main() -> int:
         save_registry(a.registry, kept)
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "verdict": a.verdict,
-             "refused": str(e), "registry": kept}, indent=1))
+             "refused": str(e), "registry": kept} | ({"binding": binding.record()} if binding else {}), indent=1))
         if checks:
             checks.close(wait=True)
         v.stop()
@@ -1387,7 +1622,8 @@ def main() -> int:
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "registration": wire.registration_json(reg),
              "verdict": a.verdict, "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
-             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": kept}, indent=1))
+             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": kept}
+            | ({"binding": binding.record()} if binding else {}), indent=1))
         save_registry(a.registry, kept)
 
     record()

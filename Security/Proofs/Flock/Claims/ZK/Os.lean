@@ -7,7 +7,8 @@ import Proofs.Flock.Claims.Sampling.Draws
 
 `Flock.zk_server_lean`, `Flock.zk_server_blind` and `ZkServer.zk_deferred` draw the server's tape uniformly. Every random
 value on it is a read of the operating system that a Lean process makes: each rep's frame reads its draws in one call at
-its start (`flock-firewall frame`, `Frame.cmd`, which is `Frame.cmdWith IO.getRandomBytes`: `Frame.drawsWith` reads
+its start (`flock-firewall frame`, `Frame.cmd`, which is `Frame.cmdWith IO.getRandomBytes`, or the session loop's frames,
+`Session.frames`, `Frame.serveWith IO.getRandomBytes` too: `Frame.drawsWith` reads
 `drawBytes l` bytes and `Draws.ofRead` refuses any other count, then parses them into the pads `h`, `μ`, the inner rows'
 padding, `τ`'s salt and the pads tree's salts), and the tap (`flock-firewall tap`) serves the prover's every other read:
 the mask slot's words, level 0's hiding, the other trees' salts, the coin tree's nonce and `ProverSeed`, from which a

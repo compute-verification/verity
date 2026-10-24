@@ -9,12 +9,34 @@ Its records are `grid.Record`s, published raw and through `commitment.commit`, w
 **Topology.** One TCP connection is the boundary link, the wire, between the proxy and the outside peer. Inside, the
 proxy opens one TCP connection per stream to the server, and writes it the stream's request as the ingress certifier
 releases it. Every frame on the link is B bytes: a header (kind u8, stream u32, length u32), the payload, and zero
-fill. Padding is B zero bytes (kind `PAD`); `DATA` is a payload, and `LAST` the last frame of a request.
+fill. Padding is B zero bytes (kind `PAD`); `DATA` is a payload.
+
+**The canonical framing** is every sender's, so that each direction's frames are one public template's: the same
+header on every frame, then the sender's bytes at a fixed place, then the same bytes after them (N3 checks a window's
+frames against that template, and nothing else of a frame is free). On egress a frame is one event (`event`): the
+`DATA` header on stream `CANONICAL_STREAM` with length `EVENT_BYTES`, `EVENT_HEAD`, the base64 of at most
+`TOKEN_BYTES` bytes padded with NUL to `EVENT_TEXT` characters, and `EVENT_TAIL`, so a token is one frame, or one per
+`TOKEN_BYTES` of it (`events`). On ingress a request is its length (u32be) and its bytes, cut into `DATA` frames of
+B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled (`request_frames`): it ends where its length says, so every
+frame's header is the same. `event_placement` and `request_placement` are those templates' places.
+
+**Ticks.** Each grid's ticker sleeps once a tick, to the tick's boundary (`origin` + t·τ). The tickers that wake
+together then run their ticks in one step of the event loop, in `TICK_ORDER`, ingress first (`_run_due`): each reads the
+clock as its turn comes, which is when it reads its link, and that reading is the tick's lateness. One loop serves both
+grids, the link and every server connection, so whatever runs between a boundary and a tick's turn makes the tick late.
+An egress tick hands the frames read and writes a whole bucket to the link, and ingress ticks run after it at shared
+boundaries read their link past the slack on a loaded host and failed honest windows closed; an ingress tick releases a
+bucket's few request frames, so the egress tick after it is late by little, more only at a window's last bucket, where
+the ingress tick publishes its record. Two tickers wake together when their
+boundaries meet (both timers expire in one turn of the loop, or one `VirtualClock.advance` passes both); the device
+difftest's harness wakes one ticker a tick event, so there each step runs that tick alone, as `CertifierDevice.step`
+takes one event, and the trace orders a shared boundary's two ticks either way.
 
 **Egress.** The server's bytes on a stream are cut after every `\\n\\n`, the end of a server-sent event, so a frame's
-content is fixed by the bytes and never by how they were read; an HTTP response head goes with the first event. The
-event's `id:` field is its position in the Program's canonical order on the link. A frame's anchor is the egress bucket
-in which the ingress certifier released its stream's `LAST` frame (the request is recorded there), and its logical index
+content is fixed by the bytes and never by how they were read. The event's `id:` field is its position in the
+Program's canonical order on the link, and the frame is what follows that line (`event_body`): neither the position
+nor an HTTP response head before it is recorded. A frame's anchor is the egress bucket in which the ingress certifier
+released its stream's request's last frame (the request is recorded there), and its logical index
 is its position in its stream. A frame read at time s is ready at bucket ⌊s/τ_b⌋ + 1, the first that starts after it.
 At bucket t the shaper hands, in canonical order, each frame whose `max(h(k), ready(k), last)` is at most t, where
 `h(k) = max(eligible(k), h(k−1))` under the declared sync of its anchor's window (`run_shaper`'s rule). `Certifier.tick`
@@ -22,7 +44,9 @@ then releases min(queue, r) of them, left-packed, and the proxy writes those and
 a bucket after h(k) is late: the declared sync didn't cover it, and the window it is handed in fails closed.
 
 **Ingress.** A frame read from the link at time s is enqueued at bucket ⌈s/τ_in⌉ (`calibration.size_ingress_ms`'s
-model) and released by the ingress `Certifier` at r_in into its stream's server connection.
+model) and released by the ingress `Certifier` at r_in. The released `DATA` frames are cut into requests by their
+lengths (`Requests`): the k-th request on the link is stream k, and its bytes, without the length or the fill, go to
+its stream's server connection.
 
 **The salt** (`Proxy(salt=…)`, off by default) is `salt_bits` bits (512 by default) per PoUW window from the
 certifier's own randomness (`fresh_salt`), released into the block only. PoUW window p is the `pouw_window` = k
@@ -90,8 +114,8 @@ membership in Σ_sync, and the bound charges log2 #Σ_sync bits per window whate
 **Faults fail closed** through `Certifier.fault`: the rest of the window is padding, the queue is dropped, and the status
 names the first reason (W6). Since the Program's grid carries a queue into the next window, an egress window that
 closes faulted while its queue would still hold frames faults the next one too, with the same reason. They are:
-- a late tick (`monitor-unavailable`): the ticker woke more than `slack` after its boundary. A bucket it missed is
-  still emitted, as padding, so every window keeps its T rows and no bucket slips into the next;
+- a late tick (`monitor-unavailable`): its turn ("Ticks") came more than `slack` after its boundary. A bucket it missed
+  is still emitted, as padding, so every window keeps its T rows and no bucket slips into the next;
 - a declaration the online prover refuses (`monitor-unavailable`, `online.Refused`): a frame read for the window's
   choice, at tick w·T − lag, is ready no later than its anchor's bucket, which an ingress tick read before its boundary
   makes. The egress window that declares is faulted, and its sync is the choice made once those frames are read;
@@ -109,13 +133,15 @@ closes faulted while its queue would still hold frames faults the next one too, 
   declared for its anchor's window didn't cover the response, so the Program's grid holds the frame earlier than the
   certifier could: the window of bucket t is faulted, and the frame is dropped with the queue. A window closed before
   the frame was handed can't be faulted any more; its record is the Program's on the frames handed by its close;
-- a malformed frame (`malformed`): an event longer than a frame, without a position or with one already seen, on a
-  stream with no released request, or bytes left unframed at the stream's end.
+- a malformed frame (`malformed`): an event whose body is longer than a frame, without a position or with one already
+  seen, on a stream with no released request, or bytes left unframed at the stream's end.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import heapq
 import itertools
 import json
@@ -146,12 +172,21 @@ from verity.core.protocols.certifier.grid import (
 )
 from verity.core.protocols.certifier.online import Prover, Refused
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, eligible
+from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.service import Registration
 
 HEADER = struct.Struct(">BII")
-PAD, DATA, LAST, SALT = 0, 1, 2, 3
+PAD, DATA, SALT = 0, 1, 3
 EVENT_END = b"\n\n"
+CANONICAL_STREAM = 0
+TOKEN_BYTES = 64
+EVENT_TEXT = 4 * -(-TOKEN_BYTES // 3)
+EVENT_HEAD = (b'data: {"object":"chat.completion.chunk","created":0,"model":"verity","choices":[{"index":0,'
+              b'"delta":{"base64":"')
+EVENT_TAIL = b'"},"finish_reason":null}]}' + EVENT_END
+EVENT_BYTES = len(EVENT_HEAD) + EVENT_TEXT + len(EVENT_TAIL)
+LENGTH = struct.Struct(">I")
 SALT_STREAM = 0xFFFF_FFFF
 SALT_BITS = 512
 SALT_BYTES = SALT_BITS // 8
@@ -178,6 +213,13 @@ RUN_ID_BYTES = 32
 #: the longest request or answer line `serve_reveals` and `RemoteCertifier` read: a deployed LMS signature is 34,756
 #: bytes, twice that in hex, beside a registration
 REVEAL_LINE_BYTES = 1 << 20
+#: the longest a ticker waits at once. Linux lets an epoll wait end late by 0.1 % of its timeout, 0.5 % in a niced
+#: process, up to 100 ms (`select_estimate_accuracy`), so one wait for an origin 10 s off woke the first tick 48 ms
+#: late at nice 19, past the slack, and faulted window 0. A wait of at most this ends at most 0.5 ms late
+MAX_WAIT_S = 0.1
+#: the order in which the ticks due at one instant run (the module docstring's "Ticks"): an ingress tick releases a
+#: bucket's few request frames, an egress tick hands what was read and writes a whole bucket to the link
+TICK_ORDER = ("ingress", "egress")
 
 
 def _reveal_fields(key_id: bytes, run_id: bytes, link: str, window: int, digest: str, what: bytes) -> bytes:
@@ -256,6 +298,86 @@ def decode_frame(frame: bytes) -> tuple[int, int, bytes]:
     return kind, stream, bytes(frame[HEADER.size : HEADER.size + n])
 
 
+def event(data: bytes) -> bytes:
+    """The canonical event of at most `TOKEN_BYTES` bytes: `EVENT_HEAD`, their base64 padded with NUL to `EVENT_TEXT`
+    characters, `EVENT_TAIL`; `EVENT_BYTES` long whatever the data."""
+    if len(data) > TOKEN_BYTES:
+        raise ValueError(f"an event carries at most {TOKEN_BYTES} bytes, not {len(data)}")
+    return EVENT_HEAD + base64.b64encode(data).ljust(EVENT_TEXT, b"\0") + EVENT_TAIL
+
+
+def events(token: bytes) -> list[bytes]:
+    """A token's events: its bytes cut every `TOKEN_BYTES`, one event each, and one event for an empty token."""
+    return [event(token[i : i + TOKEN_BYTES]) for i in range(0, max(1, len(token)), TOKEN_BYTES)]
+
+
+def event_data(body: bytes) -> bytes | None:
+    """The bytes a canonical event carries, or None for bytes that aren't one."""
+    text = body[len(EVENT_HEAD) : len(EVENT_HEAD) + EVENT_TEXT]
+    if len(body) != EVENT_BYTES or not body.startswith(EVENT_HEAD) or not body.endswith(EVENT_TAIL):
+        return None
+    try:
+        data = base64.b64decode(text.rstrip(b"\0"), validate=True)
+    except binascii.Error:
+        return None
+    return data if len(data) <= TOKEN_BYTES and event(data) == body else None
+
+
+def event_placement(frame_bytes: int) -> tuple[int, int, bytes, bytes]:
+    """The egress template's (p, s, prefix, suffix): an event's frame is its header and `EVENT_HEAD`, the base64 text
+    at p, `EVENT_TAIL` at s = p + `EVENT_TEXT`, and zero fill."""
+    head = HEADER.pack(DATA, CANONICAL_STREAM, EVENT_BYTES) + EVENT_HEAD
+    if len(head) + EVENT_TEXT + len(EVENT_TAIL) > frame_bytes:
+        raise ValueError(f"a {frame_bytes}-byte frame has no room for an event")
+    return len(head), len(head) + EVENT_TEXT, head, EVENT_TAIL
+
+
+def data_frames(data: bytes, frame_bytes: int) -> bytes:
+    """Bytes on a link: `DATA` frames of B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled, one for no bytes."""
+    room = frame_bytes - HEADER.size
+    if room < 1:
+        raise ValueError(f"a {frame_bytes}-byte frame has no room for data")
+    return b"".join(encode_frame(DATA, CANONICAL_STREAM, data[i : i + room].ljust(room, b"\0"), frame_bytes)
+                    for i in range(0, max(1, len(data)), room))
+
+
+def request_frames(request: bytes, frame_bytes: int) -> bytes:
+    """A request on the link: its length (u32be) and its bytes as `data_frames`."""
+    if frame_bytes - HEADER.size < LENGTH.size:
+        raise ValueError(f"a {frame_bytes}-byte frame has no room for a request's length")
+    return data_frames(LENGTH.pack(len(request)) + request, frame_bytes)
+
+
+def request_frame_count(length: int, frame_bytes: int) -> int:
+    """The frames `request_frames` puts a request of `length` bytes in."""
+    return -(-(LENGTH.size + length) // (frame_bytes - HEADER.size))
+
+
+def request_placement(frame_bytes: int) -> tuple[int, int, bytes, bytes]:
+    """The ingress template's (p, s, prefix, suffix), every `data_frames` frame's: its header, then B − 9 bytes of
+    data at p = 9 (a request's length and bytes), zero past them."""
+    return HEADER.size, frame_bytes, HEADER.pack(DATA, CANONICAL_STREAM, frame_bytes - HEADER.size), b""
+
+
+class Requests:
+    """Cuts the link's released `DATA` payloads into requests, one frame at a time (no I/O). A request starts at a
+    frame, with its length (u32be, zero past the payload's end), and ends at the frame that holds its last byte; the
+    rest of that frame is fill. The k-th request is stream k. `feed` gives a frame's stream, the request's bytes in it
+    and whether it ends the request."""
+
+    def __init__(self) -> None:
+        self.stream = self.left = 0
+
+    def feed(self, payload: bytes) -> tuple[int, bytes, bool]:
+        if not self.left:
+            self.stream += 1
+            self.left = int.from_bytes(payload[: LENGTH.size].ljust(LENGTH.size, b"\0"), "big")
+            payload = payload[LENGTH.size :]
+        data = payload[: self.left]
+        self.left -= len(data)
+        return self.stream, data, not self.left
+
+
 def fresh_salt(window: int, nbytes: int = SALT_BYTES) -> bytes:
     """PoUW window `window`'s salt, `nbytes` bytes of the certifier's own randomness. A source of coins handed to the
     certifier has the same signature."""
@@ -285,6 +407,16 @@ def event_position(event: bytes) -> int | None:
             value = line[3:].strip()
             return int(value) if value.isdigit() else None
     return None
+
+
+def event_body(event: bytes) -> bytes:
+    """What the proxy frames of an event: its lines after the first `id:` line (`event_position`'s), so neither the
+    position nor anything before it, such as an HTTP response head, is recorded."""
+    lines = event.split(b"\n")
+    for i, line in enumerate(lines):
+        if line.startswith(b"id:"):
+            return b"\n".join(lines[i + 1 :])
+    return event
 
 
 class Events:
@@ -395,12 +527,28 @@ class Bucketer:
     With `first`, each window's first tick enqueues the certifier's own frame `first(window)`, if it gives one, ahead of
     that bucket's arrivals. The bucketer follows it by its place in the queue, never by its bytes: `own` maps each slot
     of the row last released that holds one to its window, and one a fault drops is never released. With `start`, it
-    begins at window `start`'s first bucket, its certifier at that window."""
+    begins at window `start`'s first bucket, its certifier at that window.
+
+    With `served` (off by default), a served link's admission rule (`served.Admission`): arrived frames are enqueued
+    only as whole requests of the profile's F_in frames, and only while the window, with the request, still ends idle
+    (`served.admits`: every frame handed and released by its last bucket); the rest wait, in order, for the next window.
+    So each window's egress counts derive from its own ingress counts (`served.derive`), as N2's served counts check.
+    It takes an own frame exactly when the profile counts one (`own`), first in each window's first bucket, which the
+    admission projects with the requests' frames."""
 
     def __init__(self, certifier: Certifier, first: Callable[[int], bytes | None] | None = None,
-                 start: int = 0) -> None:
+                 start: int = 0, *, served: Admission | None = None) -> None:
+        T, r_in = certifier.params.buckets, certifier.params.allocation
+        if served is not None and ((first is not None) != bool(served.profile.own) or not admits(
+                [], served.profile.own + served.profile.request_frames, served.sync(start), served.profile,
+                served.allocation, r_in, T)):
+            raise ValueError("a served link takes an own frame exactly when its profile counts one, and its window "
+                             "holds that frame, one request and its response "
+                             f"(F = {served.profile.response_frames}) under the admission's sync")
         self.certifier = certifier
         self.first = first
+        self.served = served
+        self.counts: list[int] = []  # the window's ingress counts so far, under `served`
         if start:
             certifier.window = start
         self.waiting: deque[tuple[int, bytes]] = deque()
@@ -416,9 +564,21 @@ class Bucketer:
         if self.first is not None and self.t % T == 0 and (frame := self.first(self.t // T)) is not None:
             self._own.append((c.queued, self.t // T))
             c.enqueue(frame)
-        while self.waiting and self.waiting[0][0] <= self.t:
-            c.enqueue(self.waiting.popleft()[1])
+        a = self.served
+        if a is None:
+            while self.waiting and self.waiting[0][0] <= self.t:
+                c.enqueue(self.waiting.popleft()[1])
+        else:
+            n, w = a.profile.request_frames, self.t // T
+            if self.t % T == 0:
+                self.counts = []
+            while len(self.waiting) >= n and self.waiting[n - 1][0] <= self.t and \
+                    admits(self.counts, c.queued + n, a.sync(w), a.profile, a.allocation, c.params.allocation, T):
+                for _ in range(n):
+                    c.enqueue(self.waiting.popleft()[1])
         row = c.tick()
+        if a is not None:
+            self.counts.append(row_count(row))
         if self._own:
             n = row_count(row)
             # a fault empties the queue, and its window enqueues nothing after it
@@ -514,6 +674,22 @@ class LaggedChoices:
         return self.prover.declare(self.prover.envelope if sync is None else sync)
 
 
+async def wait_until(deadline: float, clock: Callable[[], float],
+                     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep) -> None:
+    """Sleep until `clock()` reaches `deadline`, in waits of at most `MAX_WAIT_S`, so that a far deadline is met as
+    closely as a near one."""
+    while deadline - clock() > MAX_WAIT_S:
+        await sleep(MAX_WAIT_S)
+    await sleep(deadline - clock())
+
+
+async def precise_sleep(delay: float) -> None:
+    """`asyncio.sleep(delay)` in waits of at most `MAX_WAIT_S` against the loop's clock: the proxy's sleep unless its
+    caller injects one. An injected sleep (a `VirtualClock`, the device difftest's harness) gets one wait a tick."""
+    loop = asyncio.get_running_loop()
+    await wait_until(loop.time() + delay, loop.time)
+
+
 class VirtualClock:
     """A clock its caller moves, for runs driven event by event (tests, and replays without the host's timer):
     `clock()` reads it, `sleep` waits until `advance` passes the deadline."""
@@ -588,12 +764,16 @@ class Proxy:
       or of another proxy on the same link name, is never taken in another;
     - with `start` and `position`, it is back from maintenance: it serves windows `start` … `windows` − 1, its first
       egress frame the Program's at `position`;
+    - with `served`, a served link's profile (`served.ServedProfile`): its ingress side admits requests by the
+      admission rule (`Bucketer(served=…)`) under each window's declared sync (the slowest of Σ_sync under an online
+      prover, or past `syncs`), so that each window ends idle, which N2's served counts check. With `salt` the profile
+      counts its frame (`own` 1), at a PoUW window of one certifier window, so that frame heads every window;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
                  syncs: Sequence[ClockSync], *, origin: float, slack: float = 0.025,
                  clock: Callable[[], float] = time.monotonic,
-                 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+                 sleep: Callable[[float], Awaitable[None]] = precise_sleep,
                  publish: Callable[[Record, GridParams], None] | None = None,
                  egress_link: str = "responses", ingress_link: str,
                  prover: Prover | None = None, windows: int | None = None, executor: Executor | None = None,
@@ -601,11 +781,17 @@ class Proxy:
                  registered: Callable[[Registration], int | None] = served_window, start: int = 0,
                  position: int = 0, reveal_deadline: float | None = None, prover_key: PublicKey | None = None,
                  prover_context: bytes = b"", challenger_key: PublicKey | None = None,
-                 signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes) -> None:
+                 signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes,
+                 served: ServedProfile | None = None) -> None:
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
         if prover is not None and syncs:
             raise ValueError("an online prover declares every window's sync")
+        if served is not None and (egress.buckets, egress.bucket_ms) != (ingress.buckets, ingress.bucket_ms):
+            raise ValueError("a served link's grids share T and τ_b: its anchors are ingress buckets")
+        if served is not None and (served.own != (salt is not None) or salt is not None and pouw_window != 1):
+            raise ValueError("a served link's profile counts the salt frame (own 1) exactly when the salt is on, and "
+                             "then every window has one (a PoUW window of one certifier window)")
         if salt is not None and ingress.frame_bytes < SALT_FRAME_BYTES:
             raise ValueError(f"a salt frame needs ingress frames of at least {SALT_FRAME_BYTES} bytes")
         if not (type(salt_bits) is int and salt_bits > 0 and salt_bits % 8 == 0):
@@ -646,15 +832,21 @@ class Proxy:
         self._salt_out: asyncio.Queue | None = None
         self._salt_task: asyncio.Task | None = None
         self.salts_released = self.salts_delivered = 0
-        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start)
+        slowest = ClockSync(max(sync_set.deltas), min(sync_set.rhos))
+        admission = None if served is None else Admission(
+            served, egress.allocation, lambda w: syncs[w] if prover is None and w < len(syncs) else slowest)
+        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start,
+                                 served=admission)
         self.records: list[Record] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
         self.streams: dict[int, _Stream] = {}
+        self.requests = Requests()
         self.frames: list[tuple[int, int, int, int, int]] = []
         self.lateness: dict[str, list[float]] = {"egress": [], "ingress": []}
         self.link_frames_read = self.requests_released = 0
         self._released: list[_Stream] = []
         self._late: list[_Stream] = []
+        self._due: dict[str, tuple[int, float, Certifier, Callable[[int], None]]] = {}
         self._changed = asyncio.Event()
 
     async def until(self, predicate: Callable[[Proxy], bool]) -> None:
@@ -680,16 +872,28 @@ class Proxy:
     def _bucket_ready(self, now: float) -> int:
         return math.floor((now - self.origin) * 1000 / self.egress.bucket_ms) + 1
 
-    async def _ticks(self, params: GridParams, lateness: list[float], certifier: Certifier):
+    async def _ticks(self, grid: str, params: GridParams, certifier: Certifier, tick: Callable[[int], None]) -> None:
+        """`grid`'s ticker: one `sleep` a tick, to the tick's boundary, then a turn of `_run_due` once every ticker
+        that woke with it has said so."""
         tau = params.bucket_ms / 1000
         for t in range(self.start * params.buckets, self.windows * params.buckets):
             deadline = self.origin + t * tau
             await self.sleep(deadline - self.clock())
-            late = self.clock() - deadline
-            lateness.append(late)
-            if late > self.slack:
-                certifier.fault(Reason.MONITOR_UNAVAILABLE)
-            yield t
+            self._due[grid] = (t, deadline, certifier, tick)
+            await asyncio.sleep(0)
+            self._run_due()
+
+    def _run_due(self) -> None:
+        """Every tick whose ticker has woken, in `TICK_ORDER`, in one step: each reads the clock as its turn comes, when
+        it reads its link, and one read more than `slack` past its boundary faults its grid `monitor-unavailable`."""
+        for grid in TICK_ORDER:
+            if (due := self._due.pop(grid, None)) is not None:
+                t, deadline, certifier, tick = due
+                late = self.clock() - deadline
+                self.lateness[grid].append(late)
+                if late > self.slack:
+                    certifier.fault(Reason.MONITOR_UNAVAILABLE)
+                tick(t)
 
     async def _egress(self, writer: asyncio.StreamWriter) -> None:
         p = self.egress
@@ -698,7 +902,8 @@ class Proxy:
         choices = self.choices
         if choices is not None and self.windows:
             choices.start()
-        async for t in self._ticks(p, self.lateness["egress"], self.shaper.certifier):
+
+        def tick(t: int) -> None:
             backlog = writer.transport.get_write_buffer_size()
             if backlog > bucket_bytes:
                 self.shaper.certifier.fault(Reason.DELIVERY_REFUSED)
@@ -713,6 +918,8 @@ class Proxy:
             if record is not None:
                 self.publish(record, p)
             self._changed.set()
+
+        await self._ticks("egress", p, self.shaper.certifier, tick)
         await writer.drain()
 
     def _check_forwarding(self) -> None:
@@ -739,7 +946,8 @@ class Proxy:
     async def _ingress(self) -> None:
         p = self.ingress
         tau, tau_e = p.bucket_ms / 1000, self.egress.bucket_ms / 1000
-        async for t in self._ticks(p, self.lateness["ingress"], self.bucketer.certifier):
+
+        def tick(t: int) -> None:
             row, record = self.bucketer.tick()
             anchor = t * p.bucket_ms // self.egress.bucket_ms
             own = self.bucketer.own
@@ -747,12 +955,13 @@ class Proxy:
                 if i in own:
                     self._release_salt(own[i] // self.pouw_window)
                     continue
-                kind, s, payload = decode_frame(frame)
-                if kind not in (DATA, LAST):
+                kind, _, payload = decode_frame(frame)
+                if kind != DATA:
                     continue
+                s, data, last = self.requests.feed(payload)
                 st = self._stream(s)
-                st.out.put_nowait((payload, kind == LAST))
-                if kind == LAST and st.anchor is None:
+                st.out.put_nowait((data, last))
+                if last and st.anchor is None:
                     st.anchor, st.window = anchor, t // p.buckets
                     st.deadline = self.origin + min(t * tau + self.slack, (anchor + 1) * tau_e)
                     self._released.append(st)
@@ -760,6 +969,8 @@ class Proxy:
             if record is not None:
                 self.publish(record, p)
             self._changed.set()
+
+        await self._ticks("ingress", p, self.bucketer.certifier, tick)
 
     def _draw_salt(self, window: int) -> bytes | None:
         """At a PoUW window's first certifier window, draw its salt and give the certifier's own frame, the
@@ -974,11 +1185,11 @@ class Proxy:
             writer.close()
 
     def _egress_event(self, s: int, st: _Stream, event: bytes, ready: int) -> None:
-        position = event_position(event)
-        if position is None or st.anchor is None or HEADER.size + len(event) > self.egress.frame_bytes:
+        position, body = event_position(event), event_body(event)
+        if position is None or st.anchor is None or HEADER.size + len(body) > self.egress.frame_bytes:
             self.shaper.certifier.fault(Reason.MALFORMED)
             return
-        frame = LogicalFrame(encode_frame(DATA, s, event, self.egress.frame_bytes), st.anchor, st.count)
+        frame = LogicalFrame(encode_frame(DATA, CANONICAL_STREAM, body, self.egress.frame_bytes), st.anchor, st.count)
         self.frames.append((position, s, st.count, st.anchor, ready))
         st.count += 1
         self.shaper.arrive(position, frame, ready)

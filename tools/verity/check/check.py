@@ -19,7 +19,7 @@
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is;
-                                                            --on auto (AUTO: vy-nebius-1, vy-nebius-2) or --on M1,M2 picks M
+                                                            --on auto (AUTO: vy-nebius-2) or --on M1,M2 picks M
                                                             from `--slots` (`choose`): the first where a check slot no window
                                                             blocks and a Lean `check` slot are free, else the one with the
                                                             fewest waiters ahead (priority ones only, with --priority), and
@@ -299,8 +299,9 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
     return out if len(out) > 1 else []
 
 
-#: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots
-AUTO = ("vy-nebius-1", "vy-nebius-2")
+#: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
+#: only=trains, and vy-nebius-1's went with its draining, 23 Oct; CI-152)
+AUTO = ("vy-nebius-2",)
 #: how long reading one machine's slots may take, ssh included
 SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
@@ -447,6 +448,49 @@ def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False
     lead = ("a check slot and a Lean check slot are free" if room else
             "the fewest waiting ahead, as no machine has a check slot and a Lean check slot free")
     return name, f"{lead} ({why})", skipped
+
+
+#: the checks `--on auto` or `--on M1,M2` placed from this launcher and hasn't yet seen in their machine's check line, by commit:
+#: until one shows there (or PLACED_S passes: train.sh's wait for a launch), it counts as a priority waiter on its machine, so
+#: checks placed at once go to different machines (23 Oct 13:04Z: drive's four parallel launches all read cpu-1's one free
+#: slot as theirs, and three queued there for an hour while cpu-4's stood free)
+PLACED = Path(tempfile.gettempdir()) / "verity-check-placed.json"
+PLACED_S = 1800
+
+
+def _trees(doc: dict) -> set[str]:
+    """The shortened commits a machine's check slots hold or wait for."""
+    check = doc.get("check") or {}
+    who = [s["holder"] for s in check.get("slots") or [] if s.get("holder")] + list(check.get("waiters") or [])
+    return {Path(h["tree"]).name[:12] for h in who if h.get("tree")}
+
+
+def place(names: list[str], commit: str, priority: bool = False, read=None, path: Path | None = None,
+          now=time.time) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
+    """`read_slots` and `choose` for ``commit``, one launcher process at a time, with the other checks this launcher placed and
+    no machine shows yet (PLACED) as waiters on theirs; ``commit`` is recorded on its pick."""
+    import fcntl
+
+    path = path or PLACED
+    with open(path.with_name(path.name + ".lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        docs = (read or read_slots)(names)
+        try:
+            placed = json.loads(path.read_text())
+        except (OSError, ValueError):
+            placed = {}
+        t = now()
+        placed = {c: p for c, p in placed.items() if c != commit and t - p["at"] < PLACED_S
+                  and not (isinstance(d := docs.get(p["on"]), dict) and c[:12] in _trees(d))}
+        for c, p in placed.items():
+            if isinstance(d := docs.get(p["on"]), dict) and isinstance((d.get("check") or {}).get("waiters"), list):
+                d["check"]["waiters"].append({"priority": True, "pid": 0, "since": time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime(p["at"])),
+                                              "minutes": int((t - p["at"]) // 60), "tree": c, "by": "a launch placed here"})
+        got, why, skipped = choose(names, docs, priority)
+        if got:
+            placed[commit] = {"on": got, "at": t}
+            path.write_text(json.dumps(placed))
+    return docs, got, why, skipped
 
 
 def _who(h: dict) -> str:
@@ -631,7 +675,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
     if outside := requires_outside(lean):
         agreement = (f"the verifier's Lean package requires {', '.join(outside)} from outside its directory, which the "
                      f"agreement's key (`agreement_closure`) and `research merge`'s lean-agreement rule don't cover")
-    return [("lean-build", ["bash", "-c", ELAN + "lake build"], lean),
+    return [("lean-build", ["bash", "-c", SUITES.LAKE_BUILD], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
             ("lean-audit", [sys.executable, str(Path(__file__).resolve()), "--lean-slot",
@@ -835,8 +879,8 @@ def record(argv: list[str]) -> int:
     pair, both = None, []
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
-        docs = read_slots(names)
-        got, why, skipped = choose(names, docs, priority)
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        docs, got, why, skipped = place(names, head, priority)
         for s in skipped:
             print(f"check: --on {on}: skipping {s}", flush=True)
         if got is None:
@@ -1084,7 +1128,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
-          *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
+          *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if cache else []),
           *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
           *(["--mem-gb-file", str(out / CC_GRANT)] if slot_gb is not None and beside else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]

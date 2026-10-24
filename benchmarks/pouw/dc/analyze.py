@@ -31,7 +31,10 @@ LD_REGS = {"ld_32x32b_x32": 32, "ld_32x32b_x16": 16, "ld_16x256b_x4": 16, "ld_16
            "ld_32x32b_x64": 64, "ld_32x32b_x128": 128}
 TENSOR = ("IGMMA", "QGMMA", "HGMMA", "BGMMA", "UTC", "LDTM", "IMMA", "HMMA", "BMMA")
 LANE_ALONE = {"mix": "s_mix", "imad": "s_imad", "lop3": "s_lop3", "shfl": "s_shfl", "duo": "s_duo",
-              "redux": "s_redux", "reduce": "s_reduce", "li": "p_imad_lop3"}
+              "redux": "s_redux", "reduce": "s_reduce", "li": "p_imad_lop3", "imadw": "s_imadw", "lde": "s_lde",
+              "atome": "s_atome", "redg": "s_redg", "atoms": "s_atoms", "lds128": "s_lds128"}
+#: the first letters of a lane loop's counted opcodes (LOP3, IMAD, FFMA, SHFL, HFMA2, LD.E, LDS, ATOM, ATOMS, REDG)
+LANE_OPS = ("I", "F", "L", "S", "H", "A", "R")
 
 
 def load(d: Path) -> tuple[dict[str, dict], dict[str, dict]]:
@@ -106,7 +109,8 @@ def slots_sm100(name: str, row: dict) -> dict | None:
 
 
 def lane_of(name: str) -> str | None:
-    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo|redux|reduce|li|lif)(?:_r\d+)?", name)
+    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo|redux|reduce|li|lif|"
+                     r"imadw|lde|atome|redg|atoms|lds128)(?:_r\d+)?", name)
     return (m.group(1) or m.group(2)) if m else None
 
 
@@ -114,7 +118,7 @@ def joint(name: str, row: dict, rows: dict, verdict: dict | None, t_alone: float
     """A tensor instruction beside a lane: both rates, both fractions of alone, and a."""
     t = loop_rate(row, 0)
     lane_loop = 0 if name.startswith("wgmix") else 1
-    lane = loop_rate(row, lane_loop, ("I", "F", "L", "S", "H")) if t else None
+    lane = loop_rate(row, lane_loop, LANE_OPS) if t else None
     if lane_loop == 0 and t:
         lane = next(((p, r) for k, r in row["rates"].items() for i, p in [k.split(":", 1)]
                      if int(i) == 0 and not p.startswith(TENSOR)), None)

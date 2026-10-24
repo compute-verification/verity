@@ -94,7 +94,11 @@ cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and 
 computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40); `EndToEndHidden` avoids
 this by extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`: about
 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target under every weight
-(ASK-73). This fork form states no bits. -/
+(ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
+candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form
+states no bits. -/
 def RecursiveSound : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     -- V*'s laws: A3
@@ -426,7 +430,11 @@ opens to the right row except with probability at most `4·hidingGap` (`VacuityP
 it, not a wrong computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40);
 `EndToEndHidden` avoids this by extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level
 `Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128`
-target under every weight (ASK-73). This fork form states no bits. -/
+target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
+candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form
+states no bits. -/
 def RecursiveRanRegistered : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)

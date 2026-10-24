@@ -131,6 +131,26 @@ def test_honest_run_covers_population_and_openings_correspond():
     assert all(e is not None and e["kind"] == "leaf" for _, e, _ in B.challenge_identities(pop_w, bmap_w, run.run_root, 40))
 
 
+def test_map_leaves_are_the_committers_leaves():
+    """A map built without `chunk`, as the TP worker builds it, indexes the committer's own leaves. rows-sha512 commits 4 KiB rows, and a
+    map in 256 B units sent its population draws past each step's stream: `identity_of` raised IndexError on every rank
+    (r20261021-041907-b7a8)."""
+    rows = 1024
+    stream = produce()
+    c = NativeHostCommitter(None, run_id="run", chunk=rows, hash_threads=1, program_digest=hashlib.sha256(b"program").digest())
+    run = c.commit_offline(stream)
+    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD)
+    leaves = [e for e in bmap["entries"] if e["kind"] == "leaf"]
+    assert leaves and all(e["leaf_lo"] == e["stream_offset"] // rows for e in leaves)
+    pop = list(B.expected_population(structure(), workload()))
+    picks, bound, unbound, ops = open_population(c, run, bmap, pop)
+    assert not unbound and all(c.verify(run, o) for o in ops)
+    vc = B.value_correspondence(ops, [e for _, e, _ in bound], lookup(reference(stream)), chunk=rows)
+    assert vc["ok"] and vc["checked"] == len(ops), vc
+    with pytest.raises(ValueError, match="1024-byte leaves"):
+        B.build_binding_map(c._layouts, run.steps, run.run_root, PD, chunk=256)
+
+
 # ---------------------------------------------------------------------- 1. drop /1, bind /0 twice (F-rev-01)
 
 def test_drop_member_and_duplicate_other_is_rejected():

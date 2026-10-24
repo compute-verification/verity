@@ -19,6 +19,7 @@ turn with lane checks (the shadow never takes a priority slot, ci 21 Oct), where
 priority."""
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import re
 import statistics
@@ -27,7 +28,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
+#: a tick's start, before its lines (drive's loop on an agent VM)
 TICK_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)$")
+#: a tick's end, after its lines (drive.sh on the control pod, since 20 Oct): its landings take this time
+TICK_END_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=")
 RID = r"r\d{8}-\d{6}-[0-9a-f]{4}"
 CHECKING_RE = re.compile(rf"^research queue drive: checking ([0-9a-f]{{12}}) \(([^)]*)\): ({RID})")
 LANDED_RE = re.compile(rf"^research queue drive: landed ((?:#\d+ ?)+) on `main` at ([0-9a-f]{{12}}) \(check ({RID})\)")
@@ -58,15 +62,23 @@ class Landing:
 
 
 def parse(log: str) -> tuple[list[Launch], list[Landing]]:
-    """Drive's launches and landings, each at its time: a launch at its run id's, a landing at its tick's."""
-    tick, launches, landings = None, [], []
+    """Drive's launches and landings, each at its time: a launch at its run id's, a landing at its tick's (the start line before
+    it, or on the control pod the end line after it; a landing whose tick hasn't ended yet isn't counted)."""
+    tick, launches, landings, pending = None, [], [], []
     for line in log.splitlines():
         if m := TICK_RE.match(line):
             tick = ts(m[1])
+        elif m := TICK_END_RE.match(line):
+            landings += [Landing(ts(m[1]), *rest) for rest in pending]
+            tick, pending = None, []
         elif m := CHECKING_RE.match(line):
             launches.append(Launch(rid_time(m[3]), m[1], frozenset(int(x) for x in re.findall(r"#(\d+)", m[2]))))
-        elif tick and (m := LANDED_RE.match(line)):
-            landings.append(Landing(tick, [int(x) for x in re.findall(r"#(\d+)", m[1])], m[2], m[3]))
+        elif m := LANDED_RE.match(line):
+            rest = ([int(x) for x in re.findall(r"#(\d+)", m[1])], m[2], m[3])
+            if tick:
+                landings.append(Landing(tick, *rest))
+            else:
+                pending.append(rest)
     return launches, landings
 
 
@@ -90,17 +102,29 @@ def verdict_at(run_dir: Path, landed: datetime) -> datetime | None:
     return max(ends, default=None)
 
 
+#: how many landings' check records and PRs' marks `rows` reads at once: each is a fetch over ssh or from the store (22 Oct:
+#: one at a time, a day of 30 landings and 134 PRs took over 20 min)
+READ_JOBS = 8
+
+
+def _each(fn, items: list) -> dict:
+    """{item: fn(item)} for each of ``items``, `READ_JOBS` at a time."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=READ_JOBS) as ex:
+        return dict(zip(items, ex.map(fn, items)))
+
+
 def rows(launches: list[Launch], landings: list[Landing], start: datetime, end: datetime,
          marked: Callable[[int], datetime | None], run_dir: Callable[[str], Path]) -> list[dict]:
     """One row per PR landed in [start, end]: each step's start, and how many trains with the PR were checked."""
     out = []
-    for ld in landings:
-        if not start <= ld.at <= end:
-            continue
-        d = run_dir(ld.check)
+    todo = [ld for ld in landings if start <= ld.at <= end]
+    dirs = _each(run_dir, list(dict.fromkeys(ld.check for ld in todo)))
+    marks = _each(marked, list(dict.fromkeys(pr for ld in todo for pr in ld.prs)))
+    for ld in todo:
+        d = dirs[ld.check]
         launch, took, verdict = rid_time(ld.check), slot_took(d), verdict_at(d, ld.at)
         for pr in ld.prs:
-            mark = marked(pr)
+            mark = marks[pr]
             tried = [x for x in launches if pr in x.prs and (mark is None or x.at >= mark) and x.at <= launch]
             first = min((x.at for x in tried), default=launch)
             out.append({"pr": pr, "tip": ld.tip, "marked": mark, "first": first, "launch": launch, "took": took,

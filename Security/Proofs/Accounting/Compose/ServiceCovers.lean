@@ -7,9 +7,11 @@ import Proofs.Accounting.TS.Drawn
 `Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone` at the tiles' words reduces `Covers` to the unpaid tiles'
 layer cones against the game's deficiency, `Σ_{t unpaid} tileCone t`. A layer late edge into tile `v` at slot `k`
 (`DrawnLayer.Late`) has its position written by `u` (`Declared.Writes`, `u` its unit) and in `v`'s slots: either one
-of `v`'s own gates, so `u = v`, or an operand of a gate `j` of `v`'s, whose round is `v`'s (`Declared.Wf`) and before
-the position's cut (the layer's cut is the IR's under `LayerCommitted`), so `Declared.Late` and a `Declared.UnitLate`
-edge. Along `ReflTransGen` the layer's cone lies in `Declared.Reaches`, and a tile's cone weight is at most `N_w` times
+of `v`'s own gates, so `u = v`, or an operand of a gate `j` of `v`'s, whose round is `v`'s (`Declared.Wf`). Under
+`LayerCommitted` the position is committed by its IR cut, so the layer's cut is the IR's and `j`'s round is before it,
+`Declared.Late` and a `Declared.UnitLate` edge; or it is a computed value that only gates of its own unit read, so `j`'s
+unit `v` is `u`, and the edge adds nothing to the cone. Along `ReflTransGen` the layer's cone lies in
+`Declared.Reaches`, and a tile's cone weight is at most `N_w` times
 its `tileCone` (`0` when `N_w = 0`: a tile's words are among the circuit's).
 -/
 
@@ -91,11 +93,13 @@ theorem reaches_of_slot (hw : Cd.Wf) (hc : LayerCommitted Cd) (u v : Fin 1 × Fi
             simp at hlj
           · rw [hd] at hlj
             exact List.contains_iff_mem.mpr hlj
-        obtain ⟨hR, hR2⟩ := roundOf_unit Cd hw hjl
-        rw [hju] at hR
-        have hcm := hc ℓ hW
-        refine Relation.ReflTransGen.single ⟨ℓ, j, hW, rfl, hju, hread, ?_⟩
-        omega
+        rcases hc ℓ hW with hcm | ⟨-, -, hown⟩
+        · obtain ⟨hR, hR2⟩ := roundOf_unit Cd hw hjl
+          rw [hju] at hR
+          refine Relation.ReflTransGen.single ⟨ℓ, j, hW, rfl, hju, hread, ?_⟩
+          omega
+        · have hv : Cd.unit ℓ = v.2.val := (hown j hread).symm.trans hju
+          exact hv ▸ Relation.ReflTransGen.refl
     · exact absurd hs.1 (by rw [hl]; exact lt_irrefl _)
   · cases hsrc
 

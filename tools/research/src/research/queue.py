@@ -48,6 +48,11 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue stats (--log FILE | --per-pr) [--hours H] [--until TS] [--json]
                                                    where landed PRs' time went, from drive's log (`research.queue_stats`); --per-pr,
                                                    the per-PR shadow's would-land times from drive's state file instead
+    research queue checked-heads [--tip REV] [--json]
+                                                   the commits on REV's first-parent line (default origin/main) whose own `check`
+                                                   passed and landed them, oldest first, one a line: each train's head, by drive's
+                                                   `landed` labels in the store index (`merge.checked_heads`), less a head whose
+                                                   train a later `git revert` names; what an auditor passes as main's line
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
@@ -685,10 +690,12 @@ class Queue:
         return bool(self.ready(m.pr, m.head)) and self._same_or_fixed(m, entries)
 
     def _frozen(self, m: Member, entries: dict[int, Entry]) -> bool:
-        """Whether member ``m`` stays at its old head: `frozen` names it, its PR is still open, and neither ejected nor held."""
+        """Whether member ``m`` stays at its old head: `frozen` names it, its PR is still open, neither ejected nor held, and that
+        head is still marked ready (23 Oct: #3261's 73f5eb82, its mark withdrawn at 14:56Z for failing two lints, rode five
+        running trains until 745e2a0024e9's check failed on it at 16:14Z)."""
         e = entries.get(m.pr)
         return (m.pr in self.frozen and e is not None and e.pr.head != m.head and e.state != "refused"
-                and not e.why.startswith("held"))
+                and not e.why.startswith("held") and bool(self.ready(m.pr, m.head)))
 
     def _forces_cold(self, n: int) -> bool:
         r = _git(self.workdir, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{n}", check=False)
@@ -808,11 +815,16 @@ class Queue:
             self.save_state(state)
         return members, entries
 
-    def eject(self, pr: int, reason: str, by: str) -> PR:
+    def eject(self, pr: int, reason: str, by: str, sha: str | None = None) -> PR:
+        """Withdraw ``pr``'s mark and keep it off the queue's branch; with ``sha``, only while that is still its head (CI-134: an
+        eject that waited for drive's tick withdrew the mark of a head its owner had pushed meanwhile, 18 and 21 Oct)."""
         self._clone()
         prs = {p.number: p for p in self.github.open_prs()}
         if pr not in prs:
             raise QueueError(f"#{pr} isn't an open PR")
+        if sha and not prs[pr].head.startswith(sha):
+            raise QueueError(f"#{pr} is at {prs[pr].head[:12]} now, not {sha[:12]}: its owner pushed since, so nothing is ejected; "
+                             f"the new head is checked on its own")
         state = self.load_state()
         state["ejected"][str(pr)] = {"head": prs[pr].head, "why": reason, "by": by, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         if self.store is not None and not self.shadow:
@@ -1363,13 +1375,17 @@ def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]
 
 #: `PREFLIGHT_TEST_PATHS` by the directory pytest runs in
 PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
+#: lints the preflight runs on the merged tree only when the change reaches what they judge (a path starting with, or holding
+#: a directory, of the prefix): they take about 20 s and 40 s, and 21-22 Oct's train breakers #3013, #3111, #3130 and #3151
+#: each failed one of them, costing its train its hour-long check
+PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("integrations/vllm/tests/lint", ("integrations/vllm/",)))
 #: suites whose collection is no cheap check, each with why; the preflight names them and leaves them to the train's check
-PREFLIGHT_UNCOLLECTED = {"tools/verity/circuit_check": "its collection builds every target: over 10 min and 10 GB (18 Oct)"}
+PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)
 PREFLIGHT_SYNC = ("uv", "sync", "--locked", "--all-packages", "--extra", "torch-cpu", "-q")
 #: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing.  Every suite's
-#: collection but circuit-check's took 18 s on 4 workers of a 4-core VM (18 Oct)
-PREFLIGHT_BUDGET_S = 60.0
+#: collection but circuit-check's took 18 s on 4 workers of a 4-core VM (18 Oct); `PREFLIGHT_LINTS` add up to a minute
+PREFLIGHT_BUDGET_S = 120.0
 #: collections at once: four torch-importing `--collect-only` runs reach about 8 GB, half of a marker's 16 GB VM (ci, 18 Oct)
 PREFLIGHT_JOBS = 2
 #: below this share of memory available, no suite is collected, so a mark never OOMs the VM's other agents (infra's hook threshold)
@@ -1400,9 +1416,9 @@ TOUCHED_REPORT, TOUCHED_LOGS = "out/suites.json", "out/logs"
 #: competing with the trains for six slots); 16 CPUs, 160 GB (suites.py gives a parallel suite a worker per 9 GB of the cgroup's
 #: memory, so 64 GB left one at most 7 workers of the 16), 120 min (the slowest touched run took 48 min in a slot), `--jobs 16`
 TOUCHED_ON, TOUCHED_CPUS, TOUCHED_MEM_GB, TOUCHED_MAX_MIN = "auto", 16, 160, 120
-#: the gate's class in the cluster queue: capture (600) ranks above every lane's agent-test (work, 500;
-#: infra/cluster/descriptions/nebius.toml), so a landing never waits behind lanes' pre-mark runs (19 Oct, infra and top)
-TOUCHED_CLASS = "capture"
+#: the gate's class in the cluster queue: gate (650) ranks above capture (600) and every lane's agent-test (work, 500;
+#: infra/cluster/descriptions/nebius.toml), so a landing never waits behind lanes' runs in a node's cpu-hold line (INF-147)
+TOUCHED_CLASS = "gate"
 #: what `research run` prints of a run it launched
 LAUNCHED_RE = re.compile(r"\brun (r20\d{6}-\d{6}-[0-9a-f]{4}) launched\b")
 
@@ -1439,6 +1455,17 @@ def pytest_failures(run: Callable[[list[str], Path], tuple[subprocess.CompletedP
 
 
 @contextlib.contextmanager
+def worktrees_locked(repo: Path):
+    """``repo``'s worktrees to this caller alone: train.sh's lock (`<git common dir>/train.lock`), so drive's launches at once
+    and train.sh never add, remove or prune a worktree beside another (21 Oct: two touched-suites worktrees failed with "Could
+    not write new index file")."""
+    common = Path(_out(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    with open(common / "train.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
+
+
+@contextlib.contextmanager
 def merged_worktree(repo: Path, commit: str, root: Path | None = None):
     """A detached worktree of ``repo`` at ``commit`` in a temporary directory under ``root`` (`MERGED_PREFIX`), removed with it
     whatever happens; one a dead process left is swept first."""
@@ -1448,16 +1475,18 @@ def merged_worktree(repo: Path, commit: str, root: Path | None = None):
         pid = d.name.removeprefix(MERGED_PREFIX).split("-", 1)[0]
         if pid.isdigit() and int(pid) != os.getpid() and not Path(f"/proc/{pid}").exists():
             shutil.rmtree(d, ignore_errors=True)
-    _git(repo, "worktree", "prune", check=False)
     tmp = Path(tempfile.mkdtemp(prefix=f"{MERGED_PREFIX}{os.getpid()}-", dir=root))
     wt = tmp / "tree"
     try:
-        _git(repo, "worktree", "add", "-q", "--detach", str(wt), commit)
+        with worktrees_locked(repo):
+            _git(repo, "worktree", "prune", check=False)
+            _git(repo, "worktree", "add", "-q", "--detach", str(wt), commit)
         yield wt
     finally:
-        _git(repo, "worktree", "remove", "--force", str(wt), check=False)
-        shutil.rmtree(tmp, ignore_errors=True)
-        _git(repo, "worktree", "prune", check=False)
+        with worktrees_locked(repo):
+            _git(repo, "worktree", "remove", "--force", str(wt), check=False)
+            shutil.rmtree(tmp, ignore_errors=True)
+            _git(repo, "worktree", "prune", check=False)
 
 
 @dataclass
@@ -1571,7 +1600,8 @@ def touched_suites(repo: Path, commit: str, base: str, how: LocalSuites | Remote
 class Preflight:
     """`ready`'s preflight, before the mark (and before the quick tier): refused, each refusal naming its fix, when the head
     (a) conflicts with `next` (`conflicting_files`, no worktree), naming the paths and the PRs on `next` that touched them;
-    (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, or `pytest --collect-only` in a suite whose inputs
+    (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, a lint of `PREFLIGHT_LINTS` the change
+    reaches, or `pytest --collect-only` in a suite whose inputs
     the change touches (`touched_suites` with `LocalSuites`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
     finds its lock stale; or (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
     owner), naming each.  17 Oct's train breakers were each one of these (memory accounting's thread in #agent-coordination).
@@ -1756,6 +1786,12 @@ class Preflight:
         for d, files in PREFLIGHT_TESTS:
             if want(f"tests:{d}") and (present := [f for f in files if (wt / d / f).is_file()]):
                 got(f"tests:{d}", pytest_failures(run, py, wt / d, present))
+        lints = [(path, reach) for path, reach in PREFLIGHT_LINTS if want(f"tests:{path}") and (wt / path).exists()]
+        changed = _out(self.repo, "diff", "--name-only", base, tree).split() if lints else []
+        for path, reach in lints:
+            if any(f.startswith(r) or f"/{r}" in f for f in changed for r in reach):
+                d, _, rest = path.rpartition("tests/")
+                got(f"tests:{path}", pytest_failures(run, py, wt / (d.rstrip("/") or "."), ["tests/" + rest]))
         names = None if only is None else [n.partition(":")[2] for n in only if n.startswith("collect:")]
         res = touched_suites(self.repo, tree, base, LocalSuites(py, run, self.jobs, self.free, names), wt=wt)
         notes += res.notes
@@ -1945,7 +1981,7 @@ def _stats(a: argparse.Namespace) -> int:
     """`research queue stats` (`queue_stats`): each landed PR's head from `main`'s merges onto `next`, its ready mark from the
     store, the landing check's records fetched with `research status --also`."""
     from . import queue_stats
-    from .drive import _fetch
+    from .merge import fetch_run
     from .store.local import LocalStore
 
     top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
@@ -1966,15 +2002,38 @@ def _stats(a: argparse.Namespace) -> int:
         return queue_stats.ts(at) if at else None
 
     def run_dir(rid: str) -> Path:
-        return _fetch(top, rid, ["slot.json", "steps.jsonl"]) or Path("/nonexistent")
+        # a landing's check has ended (--refresh); one name a fetch, since slot.json beside steps.jsonl fetched neither (23 Oct)
+        got = fetch_run(rid, ["steps.jsonl"], top, refresh=True)
+        if got and not (got[0] / "slot.json").is_file():
+            fetch_run(rid, ["slot.json"], top, refresh=True)
+        return got[0] if got else Path("/nonexistent")
 
     return queue_stats.main(a.log, a.hours, a.until, marked, run_dir, a.json)
+
+
+def _checked_heads(a: argparse.Namespace) -> int:
+    from .merge import Refused, checked_heads
+    from .store import bucket_index as BI
+    from .store.local import LocalStore
+
+    idx = BI.reader(LocalStore(a.store).root)
+    if idx is None:
+        print(f"research queue checked-heads: no store index: set ${BI.READER_ENV} (store_private's read-only URL) or build one "
+              "here with `research data index`", file=sys.stderr)
+        return 1
+    try:
+        heads = checked_heads(Path(_out(Path.cwd(), "rev-parse", "--show-toplevel")), a.tip, idx)
+    except (QueueError, Refused, RuntimeError) as e:
+        print(f"research queue checked-heads: {e}", file=sys.stderr)
+        return 1
+    print(json.dumps([{"commit": c, "run": r} for c, r in heads], indent=1) if a.json else "\n".join(c for c, _ in heads))
+    return 0
 
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open",
-                                            "stats"])
+                                            "stats", "checked-heads"])
     ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
@@ -2030,10 +2089,13 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--config-from-tree", action="store_true", help="drive: read --config's PATH from this file system instead")
     ap.add_argument("--head", help="open: the pushed branch to open a PR for")
     ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head); ready: mark only "
-                                  "this head, refusing when GitHub still shows another after a few reads (push && ready, safely)")
+                                  "this head, refusing when GitHub still shows another after a few reads (push && ready, safely); "
+                                  "eject: only while this is the PR's head, so an eject that waits for drive's tick never hits a "
+                                  "head pushed meanwhile")
     ap.add_argument("--title", help="open: the PR's title")
     ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
+    ap.add_argument("--tip", default="origin/main", help="checked-heads: whose first-parent line (default origin/main)")
     ap.add_argument("--draft", action="store_true", help="open: as a draft (default: ready for review)")
     ap.add_argument("--log", type=Path, help="stats: drive's log (its stdout, every tick's)")
     ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
@@ -2049,6 +2111,8 @@ def main(argv: list[str]) -> int:
         if a.log is None:
             ap.error("stats needs --log FILE (drive's log), or --per-pr")
         return _stats(a)
+    if a.command == "checked-heads":
+        return _checked_heads(a)
     if a.command == "open":
         if not (a.head and a.title and a.body_file):
             ap.error("open needs --head BRANCH, --title T and --body-file F")
@@ -2141,6 +2205,10 @@ def main(argv: list[str]) -> int:
             else:
                 print(_render(entries))
             return 0
+        from .merge import off_drive, on_drive
+
+        if a.command in ("sync", "land") and not (a.dry_run or on_drive()):
+            raise QueueError(off_drive(q.branch if a.command == "sync" else "main", f"queue {a.command}"))
         if a.command == "sync":
             q.sync(dry_run=a.dry_run)
             return 0
@@ -2159,8 +2227,12 @@ def main(argv: list[str]) -> int:
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
-        told = q.tell_ejected(q.eject(a.pr, a.reason, a.by), a.reason, a.by)
-        q.sync()
+        told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
+        if on_drive():
+            q.sync()
+        else:
+            print(f"research queue: #{a.pr}'s mark is withdrawn; drive's next tick rebuilds `{q.branch}` without it (only drive "
+                  "pushes it)")
         return told
     except QueueError as e:
         print(f"research queue: {e}", file=sys.stderr)

@@ -41,7 +41,7 @@ MAX_MIN=${SERVED_MAX_MIN:-25}
 case " $* " in *exact-fused*) KGATE=1 ;; *) KGATE=0 ;; esac
 KGATE=${SERVED_KGATE:-$KGATE}
 SCRIPT=$ROOT/${SERVED_SCRIPT:-benchmarks/hash/dither/sbench.py}
-[ -f "$SCRIPT" ] || { echo "served.sh: no $SCRIPT; sbench.py is PR #2790's harness: run from #2790's branch (or #2811's), or set SERVED_SCRIPT" >&2; exit 2; }
+[ -f "$SCRIPT" ] || { echo "served.sh: no $SCRIPT (set SERVED_SCRIPT)" >&2; exit 2; }
 export KGATE KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
 echo "served: asking for one GPU at $(date -u +%H:%M:%SZ)"
 gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- bash -c '

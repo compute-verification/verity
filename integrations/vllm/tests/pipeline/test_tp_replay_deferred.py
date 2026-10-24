@@ -205,6 +205,50 @@ def test_a_ranks_deepgemm_linears_and_absorbed_kv_b_open_as_vllm_rewrites_them_a
     assert sorted(u["name"] for u in bare["unopened"]) == [f"{A}.W_UK_T", f"{A}.W_UV"], bare
 
 
+def test_a_dsv4_ranks_padded_sink_and_stream_broadcast_open_as_vllm_makes_them_at_load(tmp_path):
+    """DeepSeek-V4's served attn_sink is vLLM's -inf sink at the padded head count with the rank's heads copied in, and layer 0's
+    hc_attn_fn_broadcast the sum of hc_attn_fn's four streams in f32 (`derived_weights`).  Composed by the Build's roles, both open
+    against the committed root; without them the sink is no shard of the checkpoint's and the broadcast has no checkpoint tensor
+    (DeepSeek-V4-Pro B1 TP8's rank 0: every layer's sink unopened, so its 2,033 sampled FlashMlaDecode picks not evaluated)."""
+    HEADS, NH, M, H, rank = 8, 16, 6, 32, 1
+    rng = np.random.default_rng(9)
+    sink = rng.standard_normal(HEADS).astype(np.float32)
+    fn = (rng.standard_normal((M, 4 * H)) * np.exp2(rng.integers(-20, 20, (M, 4 * H)))).astype(np.float32)
+    ckd = tmp_path / "ck"
+    ckd.mkdir()
+    (ckd / "config.json").write_text(json.dumps({"model_type": "deepseek_v4"}))
+    _safetensors(ckd / "model.safetensors", {"layers.0.attn.attn_sink": ("F32", sink), "layers.0.hc_attn_fn": ("F32", fn)})
+
+    L0, per = "model.layers.0", HEADS // WORLD
+    padded = np.full(NH, -np.inf, dtype=np.float32)
+    padded[:per] = sink[rank * per:(rank + 1) * per]
+    streams = fn.reshape(M, 4, H)
+    broadcast = ((np.float32(0) + streams[:, 0] + streams[:, 1]) + streams[:, 2]) + streams[:, 3]
+    served = {f"{L0}.attn.attn_sink": padded, f"{L0}.hc_attn_fn": fn, f"{L0}.hc_attn_fn_broadcast": broadcast}
+    names, roots = [], []
+    for name, a in served.items():
+        raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
+        names.append([name, "float32", list(a.shape), int(raw.size)])
+        roots.append(CPU.tensor_root(raw, CHUNK))
+    geo = bytes(32)
+    tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(geo, scheme.names_digest(names), roots).hex(),
+            "chunk": CHUNK, "geo_digest": geo.hex(), "extra": {}}
+
+    pre = "inner.model."
+    wr = {f"{pre}{L0}.attn.attn_sink": {"role": "dsv4.attn_sink", "NH": NH}, f"{pre}{L0}.hc_attn_fn_broadcast": {"role": "mhc.fn_broadcast", "HC": 4, "H": H}}
+    build = tmp_path / "build" / "rank1" / "build_request_LP4_T1"
+    build.mkdir(parents=True)
+    (build / "derive-report.json").write_text(json.dumps({"provenance": {"weight_roles": wr}}))
+    roles = TPR.registered_roles(types.SimpleNamespace(loaded={"r0": {"dir": str(build)}}, index=types.SimpleNamespace(prefix=pre)))
+
+    ck = WR.CheckpointIndex(str(ckd), verify_shards=False)
+    words, wc = CPU.open_weights(tmp_path, tree, tree["root"], ck, threads=2, tp={"world": WORLD, "rank": rank}, roles=roles)
+    assert wc["equal"] is True and wc["opened"] == len(served) and wc["mismatched_n"] == 0 and wc["unopened_n"] == 0, wc
+    assert np.array_equal(words[f"{L0}.attn.attn_sink"].reshape(-1).view(np.uint32)[per:], np.full(NH - per, 0xFF800000, dtype=np.uint32))
+    _, bare = CPU.open_weights(tmp_path, tree, tree["root"], ck, threads=2, tp={"world": WORLD, "rank": rank})
+    assert bare["opened"] == 1 and sorted(u["name"] for u in bare["unopened"]) == [f"{L0}.attn.attn_sink", f"{L0}.hc_attn_fn_broadcast"], bare
+
+
 # ------------------------------------------------------------------------------------------------ the gates: in place == deferred + fold
 
 CASES = list(itertools.product(

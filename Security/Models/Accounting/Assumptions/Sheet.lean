@@ -47,9 +47,9 @@ per SMSP (whitepapers Volta through Blackwell: four partitions an SM, each with 
 unit). **A2u**: the classes `K` include the uniform-datapath instructions, each taking an issue slot; no vendor
 document states it (decision 84's issue ceiling). **Catch-all**: every warp instruction takes at least one issue slot,
 whether or not its class is listed, so `K` counts every warp instruction the run issues, one no other class names in
-the device's catch-all class, priced at its issue slot alone (`NOROW` on sm_120 and on the H200's and B200's sheets,
-`UNLISTED` at the measured issue row alone on their measured readings DC-90-ri and DC-100-ri, the exporters'
-`CATCH_ALL`). sm_120's is a vector class, so A6 reads such an instruction as a lane head of at most two words a lane;
+the device's catch-all class, priced at its issue slot (`NOROW` alone on sm_120 and on the H200's and B200's sheets,
+`UNLISTED` on the measured issue row on their measured readings DC-90-ri and DC-100-ri, and on DC-90-ri on the JI90
+lines too, its instructions timed beside the IGMMA, r20261021-070616-d06c; the exporters' `CATCH_ALL`). sm_120's is a vector class, so A6 reads such an instruction as a lane head of at most two words a lane;
 one with a wider destination is assumed to be a memory access (`LDL.128`, `LD.128`), which heads no vector word. The
 DC readings' are neither writers nor vector classes, so they head no word. A reading whose classes have none leaves an
 unlisted instruction free on every row (RT2-HOPPER-2, note:20261019T1140Z-draft-rt2-hopper), as sm_120's measured

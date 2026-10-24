@@ -10,9 +10,8 @@ opened. The reasons are the Python's, word for word.
 
 A record's fields and the fill's times are integers of either sign, as the Python holds them. One past its width in the
 record (`to_bytes`'s `OverflowError`) leaves the session with no message, so its signature doesn't verify, and every other
-check reads it as it is. The verdict doesn't refuse a reveal of more than one index a batch, which the guarantee
-(`Pous.Guarantees.StreamedWipe`) doesn't cover: `Verdict.covered` says whether it covers the session's, as
-`WipeParams.covered` does.
+check reads it as it is. The verdict refuses a reveal of more than one index a batch (`Params.covered`), which the
+guarantee (`Pous.Guarantees.StreamedWipe`) doesn't cover.
 -/
 
 namespace MemoryChallenger.StreamedWipe
@@ -54,7 +53,8 @@ def Params.check (p : Params) : E Unit := do
   if total != p.labels * LABEL_BYTES then
     throw s!"the tiers total {total} bytes, but the fill is {p.labels * LABEL_BYTES}: the fill covers every declared tier exactly"
 
-/-- `WipeParams.covered`: the sequential reveal, one index a batch, is what the guarantee covers. -/
+/-- `WipeParams.covered`: the sequential reveal, one index a batch, is what the guarantee covers. `verdict` refuses any
+other. -/
 def Params.covered (p : Params) : Bool := p.batch == 1
 
 /-- `WipeParams.batches`: `⌈k / batch⌉`. -/
@@ -141,16 +141,16 @@ def Signed.message (s : Signed) : E ByteArray :=
 def egressUnits (egressBits : Int) : Int := min (-(Int.fdiv (-egressBits) EGRESS_UNIT_BITS)) EGRESS_MAX_UNITS
 
 /-- Whether the signed session passes, and its egress in MiB. `reasons` are witness; `accepted` and `egressMib` are what
-`Verdict.public()` publishes. `covered` is the commitment's `WipeParams.covered`. -/
+`Verdict.public()` publishes. -/
 structure Verdict where
   accepted : Bool
   reasons : Array String
   egressMib : Int
-  covered : Bool
   deriving BEq, Inhabited
 
 /-- `verdict(signed, commitment, trusted=trusted, schemes=schemes)`. It fails closed: an unknown scheme, an untrusted key
-or a bad signature rejects whatever the batches say. -/
+or a bad signature rejects whatever the batches say, and a commitment whose batch size the guarantee doesn't cover
+(`Params.covered`) rejects the session however it ran. -/
 def verdict (schemes : Schemes) (trusted : List ByteArray) (s : Signed) (c : Commitment) : Verdict := Id.run do
   let mut reasons : Array String := #[]
   match schemes.lookup s.scheme with
@@ -165,6 +165,8 @@ def verdict (schemes : Schemes) (trusted : List ByteArray) (s : Signed) (c : Com
       if !ok then reasons := reasons.push "the signature does not verify"
   if !(s.commitment == c) then reasons := reasons.push "the signed header is not the session's commitment"
   let p := c.params
+  if !p.covered then
+    reasons := reasons.push s!"batch size {p.batch} is uncovered: the guarantee covers the sequential reveal, batch size 1"
   if s.ended != COMPLETE || s.batches.size != p.batches then
     reasons := reasons.push s!"the session ended {s.ended} after {s.batches.size} of {p.batches} batches"
   for h : b in [0:s.batches.size] do
@@ -175,6 +177,6 @@ def verdict (schemes : Schemes) (trusted : List ByteArray) (s : Signed) (c : Com
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ (p.limitNs : Int)) then
       reasons := reasons.push s!"batch {b} is past its deadline of {p.limitNs} ns"
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
-  return ⟨reasons.isEmpty, reasons, egressUnits s.egressBits, p.covered⟩
+  return ⟨reasons.isEmpty, reasons, egressUnits s.egressBits⟩
 
 end MemoryChallenger.StreamedWipe

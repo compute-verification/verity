@@ -92,7 +92,9 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   (`salt.Registrations`, ``reregistered``), and its draw coin is a live epoch's ``pouw/draw`` coin 0, checked against
   the commitment the challenger reads from its challenger's signed record (`challenger.trusted_commitment`), which the
   draw's check of record verifies again, both under the challenger key the window's deployment pins (`Deployment`,
-  beside the certifier's key and run id), so a record the prover signs under its own key is refused (``coin-key``).
+  beside the certifier's key and run id; `Deployment.pinned` reads it from infra's published pin, `CHALLENGER_KEY_PIN`,
+  and refuses any key whose SHA-512 isn't `CHALLENGER_KEY_SHA512`), so a record the prover signs under its own key is
+  refused (``coin-key``).
 - **The check** reads a proof's public file (``pub.bin``): instance 0's b ‖ c of its A row and B row must be the unit's rows,
   each by its frame-v3 path to its entry's side root, and the entry by its path to the registered window root.  A
   certified window's units are opened under the salt its pass was checked against (`Challenger.check`,
@@ -295,6 +297,39 @@ def certifier_run(certifier: Any) -> dict[str, str]:
 
 DEPLOYMENT_FORM = ("a certified window's deployment is the network certifier's public key, its run's "
                    f"{RUN_ID_BYTES}-byte id and the verifier's challenger key (`challenger.ChallengerKey`)")
+#: infra's published challenger key, vy-challenger-1's from 2026-10-20T09:45:24Z: a challenger-key/v1 record
+CHALLENGER_KEY_PIN = "art:d12f85becc22388f3e9834d3894cbb99eb655bc19484b0bc3abe9b080689a657"
+#: the SHA-512 of the public key `CHALLENGER_KEY_PIN` publishes; a record of any other key is refused, whatever it names
+CHALLENGER_KEY_SHA512 = "27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc"
+CHALLENGER_KEY_SCHEMA = "challenger-key/v1"
+CHALLENGER_KEY_FORM = (f"the challenger key's pin is a {CHALLENGER_KEY_SCHEMA} record {{H, W, pubkey, pubkey_sha512, "
+                       "schema, ...}}: the key's parameters, its public key in lowercase hex and that public key's SHA-512")
+NOT_PINNED = (f"the challenger key record's public key is not the one pinned ({CHALLENGER_KEY_PIN}, SHA-512 "
+              f"{CHALLENGER_KEY_SHA512[:8]}…)")
+
+
+def pinned_challenger_key(record: Path | None = None) -> Ch.ChallengerKey:
+    """The verifier's challenger key, read from infra's published pin (`CHALLENGER_KEY_PIN`, fetched from the store
+    unless `record` is its file): refused (ValueError) unless the record is a challenger-key/v1 record whose public key's
+    SHA-512 is `CHALLENGER_KEY_SHA512`, both the one the record names and the one the public key hashes to."""
+    if record is None:
+        from research.store.local import LocalStore  # noqa: PLC0415  only the verifier's own reading fetches
+        record = LocalStore().fetch(CHALLENGER_KEY_PIN)
+    try:
+        doc = json.loads(Path(record).read_bytes())
+    except (OSError, ValueError) as e:
+        raise ValueError(f"{CHALLENGER_KEY_FORM}: {e}") from None
+    pub = doc.get("pubkey") if isinstance(doc, dict) else None
+    if not (isinstance(doc, dict) and doc.get("schema") == CHALLENGER_KEY_SCHEMA and isinstance(pub, str)
+            and len(pub) % 2 == 0 and all(c in "0123456789abcdef" for c in pub)):
+        raise ValueError(CHALLENGER_KEY_FORM)
+    public = bytes.fromhex(pub)
+    if not (hashlib.sha512(public).hexdigest() == CHALLENGER_KEY_SHA512 == doc.get("pubkey_sha512")):
+        raise ValueError(NOT_PINNED)
+    try:
+        return Ch.ChallengerKey(doc.get("W"), doc.get("H"), public)
+    except Ch.CoinError as e:
+        raise ValueError(f"{CHALLENGER_KEY_FORM}: {e}") from None
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,9 +338,10 @@ class Deployment:
     the only ones whose answers the challenger takes (its client, `certifier.active.RemoteCertifier`, must be for them,
     and refuses any other), and the key of the verifier's own challenger, under which the challenger reads the window's
     coin record and the draw's check of record verifies it (`core_check.draw`, ``coin-key``), so no record a prover
-    signs over coins it holds is read."""
+    signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
 
-    # TODO(NET-50): the auditor's deployment record is to give all three; nothing writes it yet, so the caller does.
+    # TODO(NET-50): the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
+    # the caller does.
     certifier_key: Any
     run_id: bytes
     challenger_key: Ch.ChallengerKey
@@ -316,6 +352,11 @@ class Deployment:
                 and type(self.run_id) is bytes and len(self.run_id) == RUN_ID_BYTES
                 and isinstance(self.challenger_key, Ch.ChallengerKey)):
             raise ValueError(DEPLOYMENT_FORM)
+
+    @classmethod
+    def pinned(cls, certifier_key: Any, run_id: bytes, record: Path | None = None) -> Deployment:
+        """The deployment whose challenger key is the pinned one (`pinned_challenger_key`, from `record` or the store)."""
+        return cls(certifier_key, run_id, pinned_challenger_key(record))
 
 
 def stream_id(params: dict, stream: str, certifier: Mapping[str, str]) -> bytes:

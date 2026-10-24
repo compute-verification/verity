@@ -60,7 +60,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Wide.SegDelta`: Δ for rows of every kind (`delta_flat_any`), a segmented row's pairs compression by compression
   (`segPairsOf`), and the rows' wires (`rowWires_any`);
 * `Wide.SegCopies`: Δ's copies at a row's own columns for rows of every kind (`filter_rowsAny`), and `Wide.Copies`'
-  copies at an unsegmented row's columns whatever the other rows (`Any.cv0_filterAll` … `Any.msg_filterAll`);
+  copies at an unsegmented row's columns whatever the other rows (`Any.cv0_filterAll` … `Any.msgConst_filterAll`,
+  `Any.msgData_filterAll`);
 * `Wide.SegRowBc`: an unsegmented row's `b ‖ c` under its own prefix whatever the other rows (`Any.row_bc_tgt`);
 * `Wide.SegV2`: the V2 statements with only the output rows unsegmented, an input row of any kind
   (`Any.outputs_committed_seg'`, `Any.outputs_binding_seg_of`);
@@ -68,10 +69,10 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
   slots' rows and the midstates, chain copies, constants and digest copies Δ writes (`Any.port_commit_seg`);
 * `Wide.SegTgt`: those copies from Δ at a segmented row's columns (`Any.seg_copies_tgt`), so a segmented row's `b ‖ c`
   in a satisfying witness of the untyped statement (`Any.seg_bc_tgt`);
-* `Wide.SegFit`: `Wide.Fit`'s output-row lemmas with only the output rows unsegmented and fitting (`Any.OutRowsS`), an
+* `Wide.SegFit`: `Wide.Fit`'s output-row lemmas with only the output rows unsegmented (`Any.PadRow`, `Any.OutRowsS`), an
   input row of any kind (`Any.msg_copyF`, `Any.sat_flatF`);
-* `Wide.FitS`: the rows the hidden-output headlines cover, each fit or a `sha512/row-seg/v1` row of any mix
-  (`Any.RowsFitS`), and a row's `b ‖ c` under its own bytes (`Any.rowMsg`, `Any.row_bc_tgtS`);
+* `Wide.FitS`: the rows the hidden-output headlines cover, each unsegmented (`Any.PadRow`) or a `sha512/row-seg/v1` row
+  of any mix (`Any.RowsFitS`), and a row's `b ‖ c` under its own bytes (`Any.rowMsg`, `Any.row_bc_tgtS`);
 * `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
 * `Wide.Shared`: a shared-row population's `b ‖ c` at a drawn unit (`bc_drawnW`), and the Wide statements
   (`outputs_committed_wide'`, `outputs_binding_wide_of`);

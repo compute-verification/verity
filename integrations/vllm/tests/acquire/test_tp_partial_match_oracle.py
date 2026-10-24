@@ -306,7 +306,8 @@ def test_a_differing_witness_fails_by_name_and_every_tensor_is_still_compared(tm
 
 def test_a_schedule_difference_with_every_value_equal_still_fails_named(tmp_path):
     """Only align.rank differs (a pair's order within its expert, which the schedule or the routing can change) and every value is
-    equal: the capture does not replay the committed schedule, so the oracle cannot say which, and FAILS naming it."""
+    equal: where the Commit did not replay the capture's schedule (no schedule file, or a routing difference) the oracle cannot say
+    which, and FAILS naming it."""
     p0, p1, o0, o1 = _tensors()
     _oracle(tmp_path, 0, {0: ([p0, p1], [o0, o1])})
     ws = _schedule(0)

@@ -5,7 +5,9 @@ Where the numbers come from:
 - Runs labeled campaign=g2 (`research data label RUN campaign g2 --by circuits --ref RUN`). The run's record
   (`outputs.run_record`) holds verity-bench result docs (`*bench/result.json`, schema verity-bench/vllm-overhead/v1, from
   served_commit's `run.sh` or `prof.sh`: TP1 engines under vLLM's serving defaults) or tp_decode summaries
-  (`out/<arm>/summary.json`, `tp_decode.sh`: GLM-5.3 TP8 eager, the mode of GLM-5.3's row of record).
+  (`out/<arm>/summary.json`, `tp_decode.sh`: GLM-5.3 TP8 eager, the mode of GLM-5.3's row of record). A tp_decode arm's value
+  retention is its summary's `retain`; a run older than that field took it from `RETAIN=` on its command line when it ran T1R's
+  wrapper (`tp_decode_retain.sh`), and otherwise retained none, which `tp_decode.sh` exported before it took `RETAIN`.
 - The hash loop's results (campaign=hash-loop, kind bench-result/v1, `benchmarks/hash/loop/collect.py`'s): Qwen3-8B B32
   compiled, one result per iteration and GPU, from the loop branch. Only workload qwen3-8b is read: the loop's glm-5.3 rows
   are copies of campaign=g2 runs, and its other workloads aren't G2's models. Each result's run is read too, for its TTFT
@@ -27,15 +29,18 @@ An arm's scheme follows its name (`classify`): rows-sha512 (served-commit-rows*,
 vllm-v1 (served-commit, served-commit-prof, served-commit-nativedrain*, ...: SHA-256 position leaves, kept in the table and
 never counted, by the one-hash rule); rows-blake3 (the loop's research arm, never counted). `-layer` arms acquire only each
 layer's residual stream, K and V (their roots are no scheme's: the per-layer unit is PRF-62's question, not the Commit of
-record), and `-4k` arms hash 4 KiB rows; the loop's rows are 4 KiB from iteration 1 on (PRF-64), and every other rows arm
-labeled so far is 256 B. A what-if arm (`whatif` in its name) commits less than the Commit and never counts. A compiled
+record), and `-4k` arms hash 4 KiB rows, rows-sha512's row size since the loop's iteration 1 (PRF-64); the loop's rows are 4
+KiB from that iteration on, and every other rows arm (`rows`, `served-commit-rows`) hashes 256 B rows, the size before. A
+what-if arm (`whatif` in its name) commits less than the Commit and never counts. A compiled
 measure counts only under its Build of record's compile artifact (`pin` pinned, from the run's served-pin check), on the GPU
 its served preset is for (the GPU is the one the doc saw, else the attempt's hardware): an unpinned one, or a preset for
 another GPU, is mechanism evidence. A measure counts when its comparison's gates passed (the harness's: every arm's tokens
 equal stock's; tp_decode's: tokens equal the control's, every rank's root, no collector error; the loop's validation and
 verdict), its scheme is rows-sha512, and it is pinned or eager. The best per (model, GPU, mode, batch, phase, metric) is the
-lowest counting ratio, at full acquisition and, apart, per layer; beside them, the lowest vllm-v1 ratio under the same rules
-but the hash.
+lowest counting ratio in each column: full acquisition and, apart, per layer, each split by value retention (host: every
+committed value kept in host memory for openings, GLM-5.3's mode of record; none: only the authentication state, openings by
+replay). A cell takes rows-sha512 at its 4 KiB rows over its 256 B ones; a 256 B measure fills a cell only where no 4 KiB one
+exists. Beside them, the lowest vllm-v1 ratio under the same rules but the hash.
 
     uv run --no-project --with matplotlib python3 benchmarks/g2/curve.py [--out DIR] [--no-refresh]
 
@@ -63,7 +68,10 @@ HARNESS = {"time_to_first_token_s": ("prefill", "ttft"), "inter_token_latency_p5
            "inter_token_latency_p99_s": ("decode", "itl_p99"), "time_per_output_token_s": ("run", "tpot"),
            "tokens_per_s": ("run", "tput")}
 LOOP_ARMS = {"sha512": "served-commit-rows", "sha512-layer": "served-commit-rows-layer", "blake3": "served-commit-rows-blake3"}
+LOOP_RETAIN = "none"   # every arm LOOP_ARMS names is defined with retain="none" (served_commit/prof_arm.py, hash/loop/arms.py)
 LOOP_4K_FROM = 1   # the loop's iteration 1 set rows-sha512's rows to 4 KiB (PRF-64)
+ROW_BYTES = 4096   # rows-sha512's row size since then
+RETAINS = ("host", "device", "none")   # the curve's retention columns, in order
 SCHEME_ROWS, SCHEME_V1, SCHEME_B3 = "rows-sha512", "vllm-v1", "rows-blake3"
 CAMPAIGN = "g2"
 
@@ -87,7 +95,7 @@ class Measure:
     run: str
     source: str           # the art: id the numbers were read from
     pin: str              # pinned | unpinned | pin-failed | eager
-    retain: str | None    # the arm's value retention (none: openings by replay)
+    retain: str | None    # the arm's value retention (host: values kept in host memory; none: openings by replay)
     gates: bool
     committed_gb: float | None = None
     iteration: int | None = None
@@ -219,6 +227,19 @@ def harness_measures(doc: dict, *, run: str, source: str, pin: str, device: str 
     return out
 
 
+def tp_retain(summary: dict, params: dict) -> str:
+    """A tp_decode arm's value retention: its summary's, else the RETAIN its run (the attempt's `params`: argv and env) gave T1R's
+    wrapper (`tp_decode_retain.sh`, which set `tp_decode.sh`'s VERITY_RETAIN from it, and refused to run without it), else none,
+    which `tp_decode.sh` exported before it took RETAIN."""
+    if summary.get("retain"):
+        return str(summary["retain"])
+    argv = [str(a) for a in params.get("argv") or ()]
+    if any("tp_decode_retain.sh" in a for a in argv):
+        given = next((a.split("=", 1)[1] for a in argv if a.startswith("RETAIN=")), None)
+        return given or str((params.get("env") or {}).get("RETAIN") or "?")
+    return "none"
+
+
 def tp_measures(summary: dict, *, run: str, source: str, gpu: str, model: str = "GLM-5.3", retain: str | None = "none") -> list[Measure]:
     """One tp_decode arm's measures (`out/<arm>/summary.json`): prefill as TTFT, decode as the mean decode step."""
     arm = summary["arm"]
@@ -264,7 +285,7 @@ def loop_measures(meta: dict, labels: dict[str, str], *, source: str) -> list[Me
     out = []
     for loop_arm, arm in LOOP_ARMS.items():
         scheme, acq, _ = classify(loop_arm)
-        retain = (fp.get("retain") or {}).get(arm)
+        retain = (fp.get("retain") or {}).get(arm) or LOOP_RETAIN
         kw = dict(common, arm=arm, scheme=scheme, acquisition=acq, row_bytes=loop_row_bytes(scheme, acq, iteration), retain=retain)
         for name, metric, sign in (("tpot_overhead_pct", "tpot", 1), ("throughput_overhead_pct", "tput", -1)):
             m = by.get((loop_arm, name))
@@ -328,17 +349,39 @@ def dedupe(measures: list[Measure]) -> list[Measure]:
     return list(seen.values())
 
 
+def column(m: Measure) -> str | None:
+    """A measure's column on the curve: a counting one's acquisition and retention ("full host", "full none", "per-layer
+    none", ...), "vllm-v1" for a SHA-256 one of record at full acquisition (shown, never counted), else None."""
+    if m.counts()[0]:
+        return f"{m.acquisition} {m.retain or '?'}"
+    return SCHEME_V1 if m.sha256 and m.acquisition == "full" and m.of_record()[0] else None
+
+
+def _column_order(col: str) -> tuple:
+    acquisition, _, retain = col.partition(" ")
+    return (col == SCHEME_V1, acquisition != "full", RETAINS.index(retain) if retain in RETAINS else len(RETAINS), col)
+
+
+def _rank(m: Measure) -> tuple[bool, float]:
+    """A cell's order: rows-sha512 at its row size before its former 256 B rows, then the lower ratio."""
+    return (m.scheme == SCHEME_ROWS and m.row_bytes != ROW_BYTES, m.ratio)
+
+
 def best(measures: list[Measure]) -> dict[tuple, dict[str, Measure]]:
-    """(model, GPU, mode, batch, phase, metric) -> {"full": lowest counting full-acquisition measure, "per-layer": ...,
-    "vllm-v1": lowest SHA-256 one of record (shown, never counted)}."""
+    """(model, GPU, mode, batch, phase, metric) -> {column: its best measure}: per counting column (`column`), the lowest
+    ratio at 4 KiB rows, else at 256 B; for "vllm-v1", the lowest SHA-256 ratio of record."""
     out: dict[tuple, dict[str, Measure]] = defaultdict(dict)
     for m in measures:
         k = (m.model, m.gpu, m.mode, m.batch, m.phase, m.metric)
-        ok, _ = m.counts()
-        col = m.acquisition if ok else (SCHEME_V1 if m.sha256 and m.acquisition == "full" and m.of_record()[0] else None)
-        if col and (col not in out[k] or m.ratio < out[k][col].ratio):
+        col = column(m)
+        if col and (col not in out[k] or _rank(m) < _rank(out[k][col])):
             out[k][col] = m
     return dict(out)
+
+
+def curve_columns(b: dict[tuple, dict[str, Measure]]) -> list[str]:
+    """The curve's columns: each counting column some cell has (full before per-layer, host before none), then vllm-v1."""
+    return sorted({c for cols in b.values() for c in cols} | {SCHEME_V1}, key=_column_order)
 
 
 def _order(k: tuple) -> tuple:
@@ -354,21 +397,29 @@ def _cell(m: Measure | None, *, run: bool = True) -> str:
     return f"{m.ratio:.2f}x{iv}" + (f" {m.arm.removeprefix('served-commit-')} {m.run}" if run else "")
 
 
+def _title(col: str) -> str:
+    if col == SCHEME_V1:
+        return "vllm-v1 (SHA-256, full, not counted)"
+    acquisition, _, retain = col.partition(" ")
+    return f"{'full Commit' if acquisition == 'full' else acquisition}, rows-sha512, retain {retain}"
+
+
 def curve_table(measures: list[Measure]) -> str:
-    """The curve: per model, GPU, mode, batch and phase, the best counting ratio at full acquisition and per layer, and the
-    lowest SHA-256 one beside them."""
+    """The curve: per model, GPU, mode, batch and phase, the best counting ratio in each column (full acquisition and per layer,
+    each by value retention), and the lowest SHA-256 one beside them."""
     b = best(measures)
-    lines = [("| model | GPU | mode | B | phase | metric | stock ms (full's run) | full Commit, rows-sha512 | per-layer, rows-sha512 | "
-              "vllm-v1 (SHA-256, not counted) |"),
-             "|---|---|---|---:|---|---|---:|---|---|---|"]
+    cols = curve_columns(b)
+    counting = [c for c in cols if c != SCHEME_V1]
+    lines = [f"| model | GPU | mode | B | phase | metric | stock ms (first column's run) | {' | '.join(map(_title, cols))} |",
+             "|---|---|---|---:|---|---|---:|" + "---|" * len(cols)]
     for k in sorted(b, key=_order):
         model, gpu, mode, batch, phase, metric = k
-        if metric not in CURVE_METRICS[phase] or not (b[k].get("full") or b[k].get("per-layer")):
+        cell = b[k]
+        if metric not in CURVE_METRICS[phase] or not any(c in cell for c in counting):
             continue
-        cols = b[k]
-        stock = next((cols[c].stock_ms for c in ("full", "per-layer") if c in cols and cols[c].stock_ms is not None), None)
+        stock = next((cell[c].stock_ms for c in counting if c in cell and cell[c].stock_ms is not None), None)
         lines.append(f"| {model} | {gpu} | {mode} | {batch} | {phase} | {metric} | {'' if stock is None else f'{stock:.2f}'} | "
-                     f"{_cell(cols.get('full'))} | {_cell(cols.get('per-layer'))} | {_cell(cols.get(SCHEME_V1))} |")
+                     + " | ".join(_cell(cell.get(c)) for c in cols) + " |")
     return "\n".join(lines)
 
 
@@ -401,7 +452,10 @@ def report(measures: list[Measure]) -> str:
          "interleaved reps, or the min and max over tp_decode's pairs. prefill ttft is time to first token; decode itl_p50 is "
          "per-token latency p50, and decode step the mean decode step; run tpot is the run's wall per output token, prefill "
          "included. Full Commit commits every value; per-layer commits each layer's residual stream, K and V only (PRF-62's "
-         "unit, whose roots are no scheme's). A compiled measure counts only pinned to its Build of record."),
+         "unit, whose roots are no scheme's). Each is split by value retention: host keeps every committed value in host "
+         "memory for openings (GLM-5.3's mode of record); none keeps only the authentication state, so openings replay. A "
+         "cell shows rows-sha512 at its 4 KiB rows where it has such a measure, else at the former 256 B rows (arm `rows` or "
+         "`served-commit-rows`, named in the cell). A compiled measure counts only pinned to its Build of record."),
         "## The curve: best counting measure per model, GPU, mode, batch and phase", curve_table(measures),
         f"Runs on the curve: {', '.join(counted) or 'none'}.",
         "## Every measure", measures_table(measures)])
@@ -418,7 +472,7 @@ def plot(measures: list[Measure], png: Path) -> None:
     batches = sorted({k[3] for k in b if k[3] in (1, 8, 32)}) or [32]
     fig, axes = plt.subplots(len(batches), 2, figsize=(13, 3.6 * len(batches)), squeeze=False)
     colors = {"H200": "tab:blue", "B200": "tab:red", "RTX PRO 6000": "tab:green", "8x H200": "tab:purple"}
-    styles = {"full": ("-", "o"), "per-layer": ("--", "v"), SCHEME_V1: (":", "x")}
+    styles = {"full none": ("-", "o"), "full host": ("-.", "s"), "per-layer none": ("--", "v"), SCHEME_V1: (":", "x")}
     for bi, batch in enumerate(batches):
         for pi, phase in enumerate(("prefill", "decode")):
             ax = axes[bi][pi]
@@ -434,7 +488,7 @@ def plot(measures: list[Measure], png: Path) -> None:
                     series[(gpu_line, col, metric)].append((MODELS.index(model), m.ratio))
             for (gpu, col, metric), pts in sorted(series.items()):
                 pts.sort()
-                ls, mk = styles[col]
+                ls, mk = styles.get(col, (":", "d"))
                 ax.plot([p[0] for p in pts], [p[1] for p in pts], ls, marker=mk, color=colors.get(gpu, "tab:gray"),
                         label=f"{gpu} {col}", alpha=0.5 if col == SCHEME_V1 else 1)
             ax.axhline(1.0, color="black", lw=0.5)
@@ -443,9 +497,14 @@ def plot(measures: list[Measure], png: Path) -> None:
             ax.set_ylabel("Commit / stock")
             ax.set_title(f"B{batch} {phase} ({'TTFT' if phase == 'prefill' else 'ITL p50; GLM-5.3: decode step'})")
             ax.grid(alpha=0.3)
-            ax.legend(fontsize=7)
-    fig.suptitle("G2: served Commit over stock, best counting measure (rows-sha512); vllm-v1 SHA-256 dotted, not counted")
-    fig.tight_layout()
+    legend: dict[str, object] = {}
+    for ax in axes.flat:
+        for h, label in zip(*ax.get_legend_handles_labels()):
+            legend.setdefault(label, h)
+    fig.legend(list(legend.values()), list(legend), loc="lower center", ncol=5, fontsize=8)
+    fig.suptitle("G2: served Commit over stock, best counting measure (rows-sha512) by value retention; vllm-v1 SHA-256 dotted, "
+                 "not counted")
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
     fig.savefig(png, dpi=110)
 
 
@@ -492,7 +551,8 @@ def run_measures(run: str, scratch: Path) -> list[Measure]:
         if "batches" in s and "arm" in s:
             n = int(cond.get("hw.count") or s.get("world") or 1)
             gpu = gpu_name(None, cond.get("hw.sku"))
-            out += tp_measures(s, run=run, source=rec, gpu=f"{n}x {gpu}" if n > 1 else gpu)
+            out += tp_measures(s, run=run, source=rec, gpu=f"{n}x {gpu}" if n > 1 else gpu,
+                               retain=tp_retain(s, att.get("params") or {}))
     env = (att.get("params") or {}).get("env") or {}
     if env.get("ROW") and env.get("HYP"):     # the hash loop's job.sh: ROW is the row, HYP its hypothesis
         out = [as_loop_row(m, str(env["ROW"])) for m in out]

@@ -386,6 +386,28 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
     assert touched() == ["a", "b"] and all(_keys(S)[n] != keys[n] for n in keys)
 
 
+def test_changed_from_a_main_the_branch_is_behind_is_the_branchs_own_change(tmp_path, monkeypatch):
+    """`--changed origin/main` on a branch behind main diffed main's own progress too (20 Oct: ~50 suites in a run): the change is
+    measured from the merge-base."""
+    _workspace(tmp_path)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    fork = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "b" / "tests" / "test_b.py").write_text("def test_b():\n    assert True\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "main moves b")
+    main = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "checkout", "-q", "-b", "topic", fork)
+    (tmp_path / "a" / "tests" / "test_a.py").write_text("def test_a():\n    pass\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "the branch moves a")
+    assert S.merge_base(main) == fork and S.merge_base(fork) == fork
+    pkgs = S.members()
+    assert [s.name for s in S.touched(S.discover(), pkgs, S.merge_base(main), S.worktree(), S.locked())] == ["a"]
+    assert [s.name for s in S.touched(S.discover(), pkgs, main, S.worktree(), S.locked())] == ["a", "b"], "the two-point diff"
+
+
 def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
     """#1594's 13 `.md` files picked 35 suites. A directory keys without its `*.md` unless its suite lists a `.md`, whose guard
     then lets it read Markdown (test_guard.py holds the others to reading none)."""
@@ -789,6 +811,7 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
                           "other": "def test_other():\n    pass\n"})
     (root / "verity" / "core" / "service" / "flock").mkdir(parents=True)
     (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").write_text('name = "flock"\n')
+    (root / "verity" / "core" / "service" / "flock" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
     # ELAN puts $HOME/.elan/bin first on the PATH, so on a machine with elan its real lake would shadow one only on the PATH
@@ -1642,3 +1665,23 @@ def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
     (root / "sys/fs/cgroup/research.slice/job.scope/memory.max").write_text("max\n")
     assert S.cgroup_mem_gb(root) == 700.0
     assert S.cgroup_mem_gb(tmp_path / "nowhere") is None
+
+
+def test_the_verifiers_lake_build_holds_the_trees_build_lock_so_two_runs_of_one_tree_build_in_turn(tmp_path, monkeypatch):
+    """CI-147: on a node every run of a commit shares its source tree, and a train's check and its touched-suites run built the
+    verifier's `.lake` there at once (21 Oct: 4430e936c3d8's link of flock-verify found its output gone).  `lake` runs under
+    `.lake/verity-build.lock`, so a second build of the tree waits for the first."""
+    mod = _suites(monkeypatch, tmp_path)
+    lean = tmp_path / "verity" / "core" / "service" / "flock"
+    lean.mkdir(parents=True)
+    (lean / "lakefile.toml").write_text('name = "f"\n')
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "lake").write_text('#!/bin/sh\nflock -n .lake/verity-build.lock true && echo unlocked || echo locked\n')
+    (bin_ / "lake").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("HOME", str(tmp_path))                       # ELAN puts $HOME/.elan/bin first
+    monkeypatch.setattr(mod, "flock_lean", lambda: lean)
+    log = tmp_path / "lean-build.log"
+    assert mod.lean_build(log) is None
+    assert log.read_text().strip() == "locked"

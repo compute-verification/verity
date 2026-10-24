@@ -30,6 +30,7 @@ members = [
     "research",
     "verity",
     "verity-bench",
+    "verity-bench-specs",
     "verity-check",
     "verity-circuit-check",
     "verity-cli",
@@ -2155,6 +2156,17 @@ requires-dist = [
     { name = "verity-config", editable = "tools/config" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+
+[[package]]
+name = "verity-bench-specs"
+version = "0.0.0"
+source = { virtual = "benchmarks/specs" }
+dependencies = [
+    { name = "verity-vllm" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-vllm", editable = "integrations/vllm" }]
 
 [[package]]
 name = "verity-check"

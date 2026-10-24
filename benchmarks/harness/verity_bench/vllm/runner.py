@@ -13,14 +13,16 @@ import tempfile
 import time
 import traceback
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Protocol
 
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.arms import Arm, Target, build_bound, plugin
+from verity_bench.vllm.arms import (H1, Arm, Target, build_bound, h1_window, is_h1, plugin, protocols_config,
+                                    window_steps)
 from verity_bench.vllm.presets import SAMPLING, Preset, SweepPoint
 
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "peak_gpu_memory_bytes")
@@ -38,6 +40,10 @@ DECODE_TAIL_SHARE = 0.01
 # at load 600-900 (18 Oct) a bandwidth engine's stalled runs were 8% to 8x slower than the next; an extra warm-up costs
 # seconds against an engine's minutes of start-up, so the bar is strict and `max_warmups` bounds it.
 WARMUP_AGREEMENT = 0.05
+# `TargetProfile.int8_exact` "all" as vLLM takes it (`TargetProfile.engine_args`, `INT8_EXACT_SCOPES`)
+INT8_EXACT_SCOPE = "all"
+INT8_EXACT_PARTS = ("linears", "attention")
+INT8_EXACT_QUANTIZATION, INT8_EXACT_ATTENTION_BACKEND = "verity_int8", "CUSTOM"
 
 
 def t95(df: int) -> float:
@@ -193,14 +199,24 @@ def _evaluate_gates(
 
 
 def _timed_token_gates(
-    arms: tuple[Arm, ...], points: tuple[SweepPoint, ...], samples: Mapping[tuple[str, str], list[dict[str, Any]]]
+    arms: tuple[Arm, ...], points: tuple[SweepPoint, ...], samples: Mapping[tuple[str, str], list[dict[str, Any]]],
+    tokens: Mapping[tuple[str, str], Mapping[str, tuple[int, ...]]], mode: str,
 ) -> list[dict[str, Any]]:
     """Every timed rep of an arm with a control must produce the control's tokens in that rep: the greedy gate runs
-    before timing, so an arm that computed something else only when timed would pass it."""
+    before timing, so an arm that computed something else only when timed would pass it. In resident mode an arm
+    without a control is gated and timed by one engine, whose timed reps must produce its own gated tokens; in blocks
+    mode they are other engines, whose tokens may differ from the gated one's (Pearl-C's carry each install's salt)."""
 
     out = []
     for arm in arms:
         if not arm.control:
+            if mode != "resident":
+                continue
+            for point in points:
+                want = _token_digest(tokens[(arm.id, point.id)])
+                bad = sorted(r["rep"] for r in samples[(arm.id, point.id)] if r.get("token_digest") != want)
+                out.append({"arm": arm.id, "control": None, "against": "gate", "point": point.id,
+                            "kind": "timed-tokens", "passed": not bad, **({"reps": bad} if bad else {})})
             continue
         for point in points:
             mine = {r["rep"]: r.get("token_digest") for r in samples[(arm.id, point.id)]}
@@ -608,7 +624,7 @@ def run_benchmark(
         mode = "blocks"
 
     if all(g["passed"] for g in gates):
-        gates += _timed_token_gates(arms, points, samples)
+        gates += _timed_token_gates(arms, points, samples, tokens, mode)
     identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity,
                          reps=reps, warmups=warmups, max_warmups=max_warmups, interleave=mode)
     doc = {
@@ -661,6 +677,73 @@ class _DirectLLM:
         pass
 
 
+PASS_COUNTS = ("units", "tiles", "screened_rows", "failing_rows", "unsure_rows")
+
+
+def _pearl_c_run(llm: Any) -> Any | None:
+    """The arm's Pearl-C device run, the owner of its option's ``end_pass``; None when the arm runs none. The adapter ends
+    a pass each time the model runner's ``execute_model`` returns (`pouw.install`), so the harness only reads the passes
+    (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
+
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+
+    option = llm.protocols.get("pouw") if llm.protocols is not None else None
+    run = getattr(getattr(option, "end_pass", None), "__self__", None)
+    return run if isinstance(run, PPD.PearlCDeviceRun) else None
+
+
+def _pass_totals(run: Any) -> dict[str, int]:
+    """The running totals of the passes the run has ended (``details["passes"]``): `PASS_COUNTS` and ``passes``."""
+
+    passes = run.details["passes"]
+    return {"passes": len(passes), **{key: sum(int(p.get(key) or 0) for p in passes) for key in PASS_COUNTS}}
+
+
+def _pearl_c_gate(run: Any) -> dict[str, Any]:
+    """The experimental arm's own gate, `e2e.gate`'s call check, on the protocol arm's installed run: at every distinct
+    (n, k), served y against x·Wᵀ within `bench_arm.ERR`, the commitment twice, and the ``hash_leaf``-omitted negative
+    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control."""
+
+    from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm
+
+    check = PearlCArm()
+    check.run, check.schedule = run, run.schedule.name
+    check.weights = {w: x.tensor for w, x in run.weights.items()}
+    got = check.gate(None)
+    # The check begins and ends its own passes; the next forward's calls need an open pass, as the adapter's hook leaves
+    # one between steps.
+    run.begin(stepped=True)
+    return {**got, "provided": True}
+
+
+def h1_summary(run: Any) -> dict[str, Any]:
+    """One closed H1 window (`pouw_h1.H1Run`): ``ok`` when every call fell inside its S steps and T rows at its public
+    position, in order (``static``), the credit gate passed every served call (its y the GEMM that wrote its z/y
+    records), every admitted request has its entry and the salt opened. Its coins are in-process, so it credits nothing."""
+
+    verdicts = list(run.verdicts.values())
+    passed = sum(bool(v.get("credit")) for v in verdicts)
+    gaps = run.request_gaps()
+    out = {"steps": run.steps, "steps_served": run.details.get("steps_served"), "rows": run.rows, "calls": len(run.calls),
+           "served_calls": len(verdicts), "refused_calls": len(run.refused), "order_ok": bool(run.order_ok),
+           "static": bool(run.details.get("static")), "credit_gate_passed": passed,
+           "credit_gate_refusals": sorted({str(v.get("reason")) for v in verdicts if not v.get("credit")})[:3],
+           "requests": len(run.requests), "refused_requests": len(run.refused_requests), "request_gaps": len(gaps),
+           "unopened": run.details.get("unopened"), "u": run.details.get("u"), "coin_source": run.coin_source}
+    out["ok"] = bool(verdicts and out["static"] and not run.refused and passed == len(verdicts) and not gaps
+                     and not run.refused_requests and out["unopened"] is None)
+    return out
+
+
+def h1_gate(windows: list[Mapping[str, Any]]) -> dict[str, Any]:
+    """An H1 arm's own gate: every window its engine has closed so far is `h1_summary`'s ``ok``."""
+
+    bad = [w for w in windows if not w.get("ok")]
+    return {"passed": bool(windows) and not bad, "provided": True, "windows": len(windows),
+            "failed": [dict(w) for w in bad[:2]],
+            "coins": "in-process: each window credits nothing (pouw_h1.IN_PROCESS); this arm measures cost only"}
+
+
 def _kv_cache_tokens(llm: Any) -> int | None:
     """The engine's actual KV pool in tokens (in-process V1 engine), None when the engine does not expose it."""
 
@@ -689,7 +772,7 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     settings = preset.engine_settings
     engine: dict[str, Any] = {
         "tensor_parallel_size": preset.gpu_count,
-        "max_num_seqs": 128,
+        "max_num_seqs": int(settings.get("max_num_seqs", 128)),
         "max_model_len": int(settings["max_model_len"]),
         "gpu_memory_utilization": float(settings[
             "resident_gpu_memory_utilization" if resident else "block_gpu_memory_utilization"
@@ -700,6 +783,11 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
         engine["max_num_batched_tokens"] = int(settings["max_num_batched_tokens"])
     if precision == "fp8":
         engine["quantization"] = "fp8"
+    elif precision == "int8_exact":
+        if not eager or settings.get("attention_backend") is not None:
+            raise ValueError("int8_exact runs eagerly only, on its own attention backend: an eager spec with no "
+                             "attention_backend")
+        engine["quantization"], engine["attention_backend"] = INT8_EXACT_QUANTIZATION, INT8_EXACT_ATTENTION_BACKEND
     elif precision != "bfloat16":
         engine["dtype"] = precision
     if settings.get("serving_defaults"):
@@ -738,7 +826,7 @@ class _VllmEngine:
         from verity_vllm.engine.hooks import Hooks, live
         from verity_vllm.pipeline.llm import LLM
 
-        self.arm, self.obj, self.installed = arm, plugin(arm), None
+        self.arm, self.obj, self.installed, self.pearl_c, self.h1 = arm, plugin(arm), None, None, None
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
         if self.obj is not None:
             before = {id(e) for e in live()}
@@ -750,7 +838,13 @@ class _VllmEngine:
                 self.target.hooks.uninstall()
                 raise RuntimeError(f"experimental arm {arm.id!r} patched outside target.hooks")
 
-        engine = engine_args(preset, arm.precision or preset.precision, resident=resident, eager=eager)
+        kernel_digest = arm.kernel_digest
+        precision = arm.precision or preset.precision
+        engine = engine_args(preset, precision, resident=resident, eager=eager)
+        if precision == "int8_exact":
+            # `engine.build.register_int8_parts` registers a TargetProfile's parts, and verity_vllm.LLM builds with none
+            from verity_vllm.engine import int8_ranks
+            int8_ranks.register(INT8_EXACT_PARTS)
         overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
         engine.update(overrides or {})
         if preset.model_digest is not None:
@@ -767,10 +861,32 @@ class _VllmEngine:
                  if engine.get(k) is not None},
             )
         else:
+            config: dict[str, Any] = {}
             if arm.protocols:
+                config = protocols_config(arm, os.environ)
+            if is_h1(arm):
+                rows = config.get("pouw", {}).get("rows")
+                if rows != engine.get("max_num_batched_tokens"):
+                    raise ValueError(f"{arm.id}: the pouw setting 'rows' (T, {rows}) is the engine's "
+                                     f"max_num_batched_tokens ({engine.get('max_num_batched_tokens')})")
+                self.h1 = {"config": config, "rows": rows, "windows": []}
+            elif arm.protocols:
                 engine["protocols"] = ",".join(arm.protocols)
+                if config:
+                    engine["protocols_config"] = config
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
+            if arm.protocols and self.h1 is None:
+                self.pearl_c = _pearl_c_run(self.llm)
+                cubin = config.get("pouw", {}).get("cubin")
+                if cubin:
+                    kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
         self.target.engine, self.target.model = self.llm, self.llm.model
+        if precision == "int8_exact":
+            from verity_vllm.program.frontend.kernel_readback import int8_exact_of
+            got = int8_exact_of(self.llm.model)
+            if got != INT8_EXACT_SCOPE:
+                raise RuntimeError(f"{arm.id}: an int8_exact engine whose layers run int8 scope {got!r}, not "
+                                   f"{INT8_EXACT_SCOPE!r}")
         ready = getattr(self.installed, "ready", None)
         if callable(ready):
             ready(self.target)
@@ -782,7 +898,7 @@ class _VllmEngine:
                 if self.obj is not None and callable(
                     self.obj.get("kernel_digest") if isinstance(self.obj, Mapping) else getattr(self.obj, "kernel_digest", None)
                 )
-                else arm.kernel_digest
+                else kernel_digest
             ),
             "gpu": torch.cuda.get_device_name(0),
             "torch_version": f"{torch.__version__} cuda {torch.version.cuda}",
@@ -812,9 +928,52 @@ class _VllmEngine:
             got = _callback(self.obj, "spans", self.target, None)
             if got is not None:
                 return got
-        return {} if self.llm.protocols is None else self.llm.protocols.info()
+        info = {} if self.llm.protocols is None else self.llm.protocols.info()
+        return info if self.pearl_c is None else {**info, "pearl_c": _pass_totals(self.pearl_c)}
 
     def _run(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
+        """One run; an H1 arm's in its own window, installed before the clock starts and closed after it stops."""
+
+        if self.h1 is None:
+            return self._serve(point, phase)
+        self._open_window(point)
+        try:
+            tokens, out = self._serve(point, phase)
+        finally:
+            window = self._close_window(point, phase)
+        if phase == "measure":
+            out = {**out, "extras": {**out["extras"], "h1_window": window}}
+        return tokens, out
+
+    def _open_window(self, point: SweepPoint) -> None:
+        """H1's window for one run of `point`: S its steps' bound (`window_steps`), and the epoch the window's index."""
+
+        from verity_vllm import protocol_options as PO
+        from verity_vllm.engine.engine_profile import get_model_runner
+
+        steps = window_steps(point, self.h1["rows"])
+        config = h1_window(self.h1["config"], get_model_runner(self.llm.vllm), steps, len(self.h1["windows"]))
+        ctx = PO.Context(stage="serve", enabled=self.arm.protocols, world=1, enforce_eager=True,
+                         settings=PO.load_settings(config))
+        start = time.perf_counter()
+        self.llm.protocols = PO.install(self.llm.model, ctx)
+        self.h1["install_s"] = time.perf_counter() - start
+
+    def _close_window(self, point: SweepPoint, phase: str) -> dict[str, Any]:
+        from verity_vllm.protocol_options import pouw
+
+        run = pouw.h1_run(H1)
+        start = time.perf_counter()
+        try:
+            self.llm.protocols.close()
+        finally:
+            self.llm.protocols = None
+        window = {"point": point.id, "phase": phase, **h1_summary(run),
+                  "install_s": round(self.h1["install_s"], 3), "close_s": round(time.perf_counter() - start, 3)}
+        self.h1["windows"].append(window)
+        return window
+
+    def _serve(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
         import torch
         from vllm import SamplingParams
 
@@ -894,8 +1053,10 @@ class _VllmEngine:
         return self._run(point, "gate")[0]
 
     def custom_gate(self) -> Mapping[str, Any]:
+        if self.h1 is not None:
+            return h1_gate(self.h1["windows"])
         if self.obj is None:
-            return {"passed": True, "provided": False}
+            return {"passed": True, "provided": False} if self.pearl_c is None else _pearl_c_gate(self.pearl_c)
         got = _callback(self.obj, "gate", self.target, None)
         if got is None:
             return {"passed": True, "provided": False}
@@ -1015,6 +1176,17 @@ class _ProcessEngine:
             raise RuntimeError(f"benchmark engine process exited with code {self.process.exitcode} while closing")
 
 
+def arm_execution(arm: Arm, preset: Preset, eager: bool) -> tuple[Preset, bool]:
+    """The preset and eagerness the arm's engine is built with: the spec's, or for a served variant
+    (`arms.served_variant`) vLLM's serving defaults in the variant's execution (`engine_args`)."""
+
+    if arm.execution is None:
+        return preset, eager
+    eager = arm.execution == "eager"
+    settings = {**preset.engine_settings, "serving_defaults": True, "cuda_graphs": not eager, "enforce_eager": eager}
+    return replace(preset, engine_settings=settings), eager
+
+
 class ProcessEngineFactory:
     """Spawn-isolated engines, allowing several arms to remain resident on one GPU."""
 
@@ -1023,7 +1195,8 @@ class ProcessEngineFactory:
         self.context = mp.get_context("spawn")
 
     def create(self, arm: Arm, preset: Preset, *, resident: bool) -> BenchEngine:
-        if not self.eager:
+        preset, eager = arm_execution(arm, preset, self.eager)
+        if not eager:
             bound = build_bound(arm, preset.gpu_count)
             if bound:
                 raise ValueError(
@@ -1038,7 +1211,7 @@ class ProcessEngineFactory:
             os.environ["TORCHINDUCTOR_CACHE_DIR"] = tempfile.mkdtemp(prefix="verity_bench_inductor_")
             os.environ[INDUCTOR_DIR_MARK] = "1"
         parent, child = self.context.Pipe()
-        process = self.context.Process(target=_worker, args=(child, arm, preset, resident, self.eager))
+        process = self.context.Process(target=_worker, args=(child, arm, preset, resident, eager))
         process.start()
         child.close()
         try:

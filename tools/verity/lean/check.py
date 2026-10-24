@@ -370,6 +370,10 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
 
 #: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
 ARTIFACTS: Path | None = None
+#: `--dev-cache`: the dependencies come from the verified build cache, so the result is not a Lean verdict
+DEV_CACHE = False
+#: the kind a `--dev-cache` run's reports carry: `lean_changed.FAST_KIND`, which `check` and `research merge` refuse
+DEV_KIND = "lean-fast/v1"
 
 
 def plugin_targets(pkg: Path) -> list[str]:
@@ -394,16 +398,24 @@ def plugin_targets(pkg: Path) -> list[str]:
 def lake_env() -> dict[str, str]:
     """The environment of every `lake` and `setup.sh` the audit runs. `setup.sh` restores nothing from the build cache
     (`cache.py`). Lake builds from source, or with `--artifacts` restores a module whose input hash it finds there: with
-    `LAKE_ARTIFACT_CACHE` unset, a package that configures no cache reads it and never writes it."""
+    `LAKE_ARTIFACT_CACHE` unset, a package that configures no cache reads it and never writes it. With `--dev-cache`,
+    `setup.sh` restores Mathlib's cache and main's verified build (`cache.py get`) and Lake reads its local cache: the
+    replay still checks our packages' declarations, but a dependency's are taken as their `.olean` states them, which only
+    the gate's from-source build (the cache's root) and the nightly `--fresh` vouch for, so such a run is never a verdict."""
     env = dict(os.environ)
     env["PATH"] = f"{Path.home() / '.elan' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
     env.setdefault("LEAN_NUM_THREADS", str(cores()))
     if ARTIFACTS:
         env.pop("LAKE_ARTIFACT_CACHE", None)
         env["LAKE_CACHE_DIR"] = str(ARTIFACTS)
+    elif DEV_CACHE:
+        env.pop("LAKE_ARTIFACT_CACHE", None)
     else:
         env["LAKE_ARTIFACT_CACHE"] = "false"
-    env["LEAN_CACHE"] = "off"
+    if DEV_CACHE:
+        env.pop("LEAN_CACHE", None)
+    else:
+        env["LEAN_CACHE"] = "off"
     return env
 
 
@@ -1200,6 +1212,10 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         if not set(f["axioms"]) <= allowed:
             fails.append(Failure("guarantees.axioms", name, f"guarantees: {name} uses "
                                  f"{', '.join(sorted(set(f['axioms']) - allowed))}"))
+        if "premises" in f and f["premises"] is None:
+            fails.append(Failure("guarantees.premises", name, f"guarantees: {name}'s premises could not be read "
+                                 f"(`Facts.lean`'s `premisesOf` failed on its statement), so the lock can't be held to "
+                                 f"them: make `premisesOf` read this statement's form"))
         for pr in f.get("premises") or []:
             if "Assumptions" in (m := pr.get("module") or "").split(".") or m in own:
                 premised.setdefault(pr["head"], set()).add(name)
@@ -2131,8 +2147,32 @@ def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
             rc, text = run(argv, pkg, log)
             if rc == 0:
                 _INSTALLED.add(toolchain)
-            return rc, text
-    return run(argv, pkg, log)
+            return dev_restore(pkg, rc, text, log)
+    return dev_restore(pkg, *run(argv, pkg, log), log)
+
+
+def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
+    """With `--dev-cache`, main's verified build of each package ``pkg`` requires by path too (`setup.sh` restores only
+    ``pkg``'s): a rebuild of one isn't byte-identical to the published build, so every module above it would compile again
+    (Security/Proofs at the published commit, 21 Oct: 1,607 of its modules). A failed restore leaves those to `lake build`."""
+    if not DEV_CACHE or rc != 0 or not (deps := path_deps(pkg)):
+        return rc, text
+    # `cache.py get` unstages from inside each package, so Lake needs that package's dependencies where it looks: a path
+    # dependency has none of its own (the workspace's are ``pkg``'s, at one Mathlib revision for all), so it borrows them
+    linked = []
+    try:
+        for d in deps:
+            own = d / ".lake" / "packages"
+            if not own.exists() and (pkg / ".lake" / "packages").is_dir():
+                own.parent.mkdir(parents=True, exist_ok=True)
+                own.symlink_to((pkg / ".lake" / "packages").resolve())
+                linked.append(own)
+        _, more = run([sys.executable, str(TOOL / "cache.py"), "get", *map(str, deps)], pkg,
+                      log.with_name(f"{log.stem}-deps.log"))
+    finally:
+        for own in linked:
+            own.unlink(missing_ok=True)
+    return rc, text + more
 
 
 def killed(rc: int) -> bool:
@@ -2774,7 +2814,7 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    global TOOL, ARTIFACTS
+    global TOOL, ARTIFACTS, DEV_CACHE
     ap = argparse.ArgumentParser(prog="check.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
@@ -2795,6 +2835,9 @@ def main(argv: list[str]) -> int:
                     "difference (a code in `RECORD_DIFFERENCE`) passes, and audit.json's `regenerated` names the record `--update` writes "
                     "for it under --out, which the train commits; the package's own lock is never written")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
+    ap.add_argument("--dev-cache", action="store_true", help="restore the dependencies from the verified build cache "
+                    "(`cache.py get`, Mathlib's `cache get`) for a development check: our packages are still built and "
+                    "replayed, but the reports are a lean-fast/v1 result, which no gate accepts")
     ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
                     "checked here")
@@ -2828,6 +2871,7 @@ def main(argv: list[str]) -> int:
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
     ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
+    DEV_CACHE = a.dev_cache
     lifts = None
     if a.lift:
         if a.update or a.all or a.name_instances or len(pkgs) != 1:
@@ -2960,9 +3004,17 @@ def main(argv: list[str]) -> int:
     for p, f in regen.items():
         print(f"audit: {p}: every failure is a record difference, settled by {f}, which the train commits over "
               f"{p}/{POLICY}", flush=True)
-    (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports,
-                                                "regenerated": regen}, indent=1, ensure_ascii=False) + "\n")
-    print(f"AUDIT: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}; reports in {out}", flush=True)
+    doc = {"passed": not failed, "failed": failed, "packages": reports, "regenerated": regen}
+    if DEV_CACHE:
+        doc["kind"] = DEV_KIND
+        for rep in reports:
+            rep["kind"] = DEV_KIND
+        for p in sorted(out.glob("audit-*/report.json")):
+            r = json.loads(p.read_text())
+            p.write_text(json.dumps(r | {"kind": DEV_KIND}, indent=1, ensure_ascii=False) + "\n")
+    (out / "audit.json").write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
+    print(f"AUDIT: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}; reports in {out}"
+          + (f" (--dev-cache: a {DEV_KIND} result, which no gate accepts)" if DEV_CACHE else ""), flush=True)
     return 1 if failed else 0
 
 

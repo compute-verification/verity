@@ -9,7 +9,7 @@ The served replacement of `Properties.Compose.UnitsOfLayout` for a window of per
 (`Accounting.Served.Layout`, `Accounting.Served.Tie`). `UnitsOfLayout` reads one Program's partition and puts every
 value the prover writes at the draw (its commit-coin conjunct, PoUW's seeded salt-and-draw schedule), so it can't sit
 beside `LayerCommitted` on a circuit with a run input any gate reads (`SeededScheduleNotLive`): the live statements need
-the served schedule, which `Tie.commit` states. What stays of it here, per call:
+the served schedule, which `Tie.commit` and `Tie.receipt` state. What stays of it here, per call:
 
 * **units** (`CallUnits`): call site `c` is a run of linear `linearOf c`'s Program (`VllmInt8LinearH1{K, N, M = T}`,
   #2615, in the form's variant: with each unit's `z` words for `zTree`, its `y` words and the `dequant(z) = y` check

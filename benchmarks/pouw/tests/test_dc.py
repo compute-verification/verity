@@ -551,6 +551,33 @@ def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
     assert "M's description is regenerated" not in capsys.readouterr().err
 
 
+def test_census_prices_a_memory_lane_and_moves_every_scalar_coefficient_class(tmp_path):
+    """A memory lane timed alone and beside the tensor puts its class on the issue row and every joint issue row at the
+    scalar coefficient (LD.E's is UNLISTED, the measured readings' catch-all); --write gives the classes that carry the
+    scalar coefficient without a lane in this run (NOROW, ATOMS32 from r20261021-070616-d06c, and STS32 and STG32 from
+    r20261021-161119-62ac) the new hull's joint issue lines, and keeps their issue lines."""
+    import shutil
+    census = _load("census")
+    dev = tmp_path / "sm_90"
+    shutil.copytree(DC.parent / "machine_model" / "data" / "devices" / "sm_90", dev)
+
+    def lines():
+        with open(dev / "census.csv", newline="") as f:
+            return {(ln["kind"], ln["row"]): ln["cycles"] for ln in csv.DictReader(f) if ln["kind"] != "UNI"}
+
+    before = lines()
+    run = _sm90_run(tmp_path / "r20261017-000000-abcd" / "out", 0.05)
+    _rows(run / "mem", {"s_lde": {"0:LD.E*": 0.5}, "wgU_lde": {f"0:{WGI}": 128 / 4096, "1:LD.E*": 0.25}})
+    _gate(run / "mem", {"wgU_lde": [(8, {WGI: 4}), (20, {"LD.E*": 16})]})
+    assert census.main(["sm90", str(run), "--write", str(dev)]) == 0
+    after = lines()
+    ji = [r for k, r in after if k == "FFMA" and census.JI_ROW.fullmatch(r)]
+    assert ji and all(after["UNLISTED", r] == after["FFMA", r] == after["NOROW", r] == after["ATOMS32", r]
+                      == after["STS32", r] == after["STG32", r] for r in ji)
+    assert all(after[k, "issue"] == before[k, "issue"] for k in ("UNLISTED", "ATOMS32", "STS32", "STG32", "NOROW"))
+    assert census.analyze.lane_of("wgU_lds128_r32") == "lds128" and census.analyze.lane_of("wgmix_atome_r16") == "atome"
+
+
 def _a2u_out(root: Path, i64_trips: int) -> Path:
     """sm100_a2u's output for a2_tc_i0 and a2_tc_i64: each a fixed loop (4 UTCIMMA and its uniform chain) and an until loop
     (the lanes and the stop poll, an LDS), with an instruction outside either, at a 2^20-cycle stop that holds the tensor

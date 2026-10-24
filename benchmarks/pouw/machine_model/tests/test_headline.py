@@ -15,14 +15,14 @@ from verity_machine_model.model import DATA, device
 PINS = {
     "sheet": {
         "sm_120": (0.004207, 0.001506, 0.000139, 0.005852, 2.2831, "half", None),
-        "sm_90": (0.008583, 0.0, 0.000012, 0.008595, 2.4063, "half", None),
+        "sm_90": (0.008583, 0.0, 0.000015, 0.008598, 2.4063, "half", None),
         "sm_100": (0.006981, 0.0, 0.000001, 0.006982, 2.6251, "half", None),
         "sm_89": (0.001463, 0.006652, 0.000336, 0.008451, 2.9795, "half", None),
         "sm_80": (0.001463, 0.0, 0.0, 0.001463, 5.9347, "half", None),
     },
     "measured": {
         "sm_120": (0.003628, 0.001251, 0.000517, 0.005396, 2.1357, "issue", None),
-        "sm_90": (0.006051, 0.004460, 0.000987, 0.011498, 2.3435, "issue", None),
+        "sm_90": (0.005927, 0.003303, 0.000986, 0.010215, 2.3435, "issue", None),
         "sm_100": (0.008145, 0.0, 0.000002, 0.008147, 2.5611, "half", None),
         "sm_89": (0.001470, 0.001126, 0.000468, 0.003065, 3.0144, "issue", None),
         "sm_80": (0.001470, 0.0, 0.0, 0.001470, 4.2263, "half", None),
@@ -30,8 +30,8 @@ PINS = {
 }
 #: rows at or over 1%, each with its reason
 OVER_ONE: dict[tuple[str, str], str] = {
-    ("measured", "sm_90"): "ATOME32 at the issue row alone (RT4-SHEET-12): no run has timed ATOM.E, so the generic "
-                           "CP_RED8 loads only the issue row and undercuts ♭ on DC-90-ri's joint rows",
+    ("measured", "sm_90"): "♭ folds by the built routes alone and the cheater by li-bulk's counted trimmed W = ∞ member "
+                           "too, so ε_machine is 0.330% at q* = 1.22; ffill, which no check reads, is uncredited",
 }
 
 
@@ -99,7 +99,7 @@ def test_cli(capsys):
     assert out[0] == "## decision 89's measured reading (`measured`): q* = 1.22, operands free, credit ♭"
     head = next(x for x in out if x.startswith("| GPU"))
     assert all(H.TERMS[k] in head for k in ("skip", "mand", "machine", "luck", "gamma", "threshold"))
-    assert any(x.startswith("| H200 | dither-2s-licpw-redux-p1-l32 | DC-90-ri | 0.605% |") for x in out)
+    assert any(x.startswith("| H200 | dither-2s-licpw-redux-p1-l32 | DC-90-ri | 0.593% |") for x in out)
     assert any(x.startswith("- H200: the 1.22-slot issue floor") for x in out)
     assert f"- {H.spec()['scope']}" in out and "per node (ASK-65 = A)" in H.spec()["scope"]
     assert main(["headline", "--json"]) == 0

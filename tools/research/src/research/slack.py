@@ -365,7 +365,22 @@ def check_registry(reg: dict, path: str) -> dict:
                 raise SlackError(f"registry {path}: #{key}'s alias {alias!r} is malformed or names another channel")
             names.add(alias)
     check_collaborators(reg, path, handles)
+    ext = reg.get("external_posters", [])
+    if not isinstance(ext, list) or any(not isinstance(u, str) or not EXTERNAL_POSTER_RE.match(u) or u in handles
+                                        or u == "router" for u in ext):
+        raise SlackError(f"registry {path}: external_posters: the usernames under which something other than `research msg` "
+                         "posts through Verity's bot (Daniel's desktop agent, Codex), so the Slack events service delivers "
+                         "their posts; never a handle's or the router's")
     return reg
+
+
+EXTERNAL_POSTER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,39}$")   # lower-cased, it's a doorbell's author
+
+
+def external_post(msg: dict | None, reg: dict) -> bool:
+    """Posted through Verity's bot by something other than `research msg` (`external_posters`), so no sender delivered it:
+    the Slack events service does."""
+    return ours(msg, reg) and (msg or {}).get("username") in reg.get("external_posters", [])
 
 
 def check_collaborators(reg: dict, path: str, handles: set[str]) -> None:
@@ -1015,12 +1030,15 @@ def ours(msg: dict | None, reg: dict) -> bool:
 
 
 def poster(msg: dict | None, reg: dict) -> str | None:
-    """Who wrote `msg`, as a name: our bot's username, or `daniel`-style for a named human or a collaborator (first name,
-    lower case)."""
+    """Who wrote `msg`, as a name: our bot's username (an `external_posters` one in lower case, as a doorbell's author), or
+    `daniel`-style for a named human or a collaborator (first name, lower case)."""
     if not msg:
         return None
     if msg.get("bot_id"):
-        return (msg.get("username") or None) if ours(msg, reg) else None
+        if not ours(msg, reg):
+            return None
+        name = msg.get("username") or None
+        return name.lower() if name and external_post(msg, reg) else name
     return person_name(who[0]) if (who := person(msg, reg)) else None
 
 
@@ -2604,8 +2622,10 @@ def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=Non
             history = [x for x in threads.get(root["ts"], []) if t - HISTORY_S <= float(x["ts"]) < t]
             nums = {n for x in [m, *history] for n in named_prs(x.get("text") or "")[0]}
             branches = pr_branches(nums, log) if nums else {}
-        want = {e for n in route_targets(m, root, reg, inboxes, history, branches) if n not in humans and (e := expected(n, t))}
         got = rang.get(m["ts"], set())
+        own = author in got                                          # only a poster other than the holder rings its own inbox
+        want = {e for n in route_targets(m, root, reg, inboxes, history, branches, author_rings=own)
+                if n not in humans and (e := expected(n, t))}
         missed, extra = sorted(want - got - {author}), sorted(got - want)
         if missed or extra:
             out.append({"ts": m["ts"], "by": author, "missed": missed, "extra": extra,

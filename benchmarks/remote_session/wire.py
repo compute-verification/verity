@@ -185,17 +185,16 @@ def registration_of(d: dict) -> audit.Registration:
     return r
 
 
-def commitment_of(d: dict) -> coins.CoinCommitment:
-    return coins.CoinCommitment(bytes.fromhex(d["registration"]), d["session"], d["count"], bytes.fromhex(d["root"]))
+def commitment_of(d: dict) -> coins.LiveCommitment:
+    return coins.LiveCommitment.from_json(d)
 
 
-def coin_json(c: coins.CoinOpening) -> dict:
-    return {"index": c.index, "coin": c.coin.hex(), "salt": c.salt.hex(), "path": [x.hex() for x in c.path]}
+def coin_json(c: coins.LiveOpening) -> dict:
+    return c.to_json()
 
 
-def coin_of(d: dict) -> coins.CoinOpening:
-    return coins.CoinOpening(d["index"], bytes.fromhex(d["coin"]), bytes.fromhex(d["salt"]),
-                             tuple(bytes.fromhex(x) for x in d["path"]))
+def coin_of(d: dict) -> coins.LiveOpening:
+    return coins.LiveOpening.from_json(d)
 
 
 _OPEN_HEAD = struct.Struct(">IQ")

@@ -55,9 +55,7 @@ SKILL_SIZE_CAP = 16 * 1024
 #: Skills over SKILL_SIZE_CAP on 20 Oct, each capped at its size then (the largest at any open PR's head, rounded up, plus
 #: 1 KiB for PRs queued against it). An entry only shrinks, and goes once its skill is under SKILL_SIZE_CAP; its owner
 #: compacts it.
-OVERSIZE_SKILLS = {
-    ".agents/skills/lean-proofs/SKILL.md": 29 * 1024,
-}
+OVERSIZE_SKILLS: dict[str, int] = {}
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
@@ -162,7 +160,7 @@ def markdown_over_cap(path: str, size: int) -> str | None:
     return f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; move detail to {where}"
 
 
-def test_markdown_over_cap_says_by_how_much_and_where_detail_goes() -> None:
+def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -> None:
     soundness = "Security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
     assert markdown_over_cap("a/README.md", MD_SIZE_CAP + 100) == (
@@ -174,7 +172,8 @@ def test_markdown_over_cap_says_by_how_much_and_where_detail_goes() -> None:
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP) is None
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP + 5).startswith(
         ".agents/skills/x/SKILL.md: 16 KB > 16 KB, 5 bytes over; compact it")
-    big, cap = next(iter(OVERSIZE_SKILLS.items()))
+    big, cap = ".agents/skills/x/SKILL.md", SKILL_SIZE_CAP + 1024
+    monkeypatch.setitem(OVERSIZE_SKILLS, big, cap)
     assert markdown_over_cap(big, cap) is None and "1 bytes over" in markdown_over_cap(big, cap + 1)
 
 

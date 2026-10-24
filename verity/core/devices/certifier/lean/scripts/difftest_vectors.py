@@ -22,10 +22,12 @@ empty, with no timer, socket or thread in play), so each event's effects, and th
 actions its tasks take, are a function of the trace alone. An event the proxy isn't waiting for (bytes on a connection
 not open, a second `connected`) is dropped, as `step` drops it.
 
-**The traces.** Each run has an honest base: sessions on random streams, each a request of one or two frames written on
-the link inside an ingress bucket, released by the ingress grid's FIFO, its connection opened and its request delivered
+**The traces.** Each run has an honest base: sessions, the k-th on the link stream k, each a request of one or two
+frames (`active.request_frames`) written on the link inside an ingress bucket, released by the ingress grid's FIFO, its
+connection opened and its request delivered
 within the slack, and a server that answers with events numbered in the Program's canonical order (by ready bucket, or
-by request, so a frame may be read before the one ahead of it), its `id:` spelled one of several ways, each read inside
+by request, so a frame may be read before the one ahead of it), its `id:` spelled one of several ways (the Program's
+frame is what follows it, `active.event_body`), each read inside
 the egress bucket before the one it is due by, sometimes in two reads, under declared syncs that cover it; and every
 tick of both grids, each a little after its boundary. A path then perturbs it (`PATHS`): a late tick or a stall of
 several buckets, a link backlog at or over one or four buckets, a refused connection, a request forwarded late (past
@@ -55,7 +57,16 @@ from pathlib import Path
 
 import verity.core.protocols.certifier
 from verity.core.protocols.certifier import online
-from verity.core.protocols.certifier.active import DATA, LAST, PAD, InlineExecutor, Proxy, encode_frame
+from verity.core.protocols.certifier.active import (
+    CANONICAL_STREAM,
+    DATA,
+    PAD,
+    InlineExecutor,
+    Proxy,
+    encode_frame,
+    event_body,
+    request_frames,
+)
 from verity.core.protocols.certifier.grid import GridParams, Reason, Record
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
 
@@ -285,11 +296,11 @@ def python_results(inst: dict) -> dict:
 class Session:
     stream: int
     send: int  # the ingress bucket inside which its request is written on the link
-    parts: int  # 1: a LAST frame; 2: DATA, then LAST
+    parts: int  # its request's frames on the link: 1 or 2
     delays: list[int]  # each response frame's ready bucket after the anchor
     head: bool = False  # an HTTP response head before its first event
     ids: bytes = b"id: %d\n"  # how its events spell their position
-    data_only: bool = False  # its request has no LAST frame, so it is never released
+    data_only: bool = False  # its request's length is past its frames, so it is never released
     refused: bool = False
     trailing: bytes = b""  # bytes after its last event
     replace: dict[int, bytes] = field(default_factory=dict)  # a response frame's bytes by read time, in place of its own
@@ -367,15 +378,16 @@ class Trace:
     def build(self) -> None:
         rng = self.rng
         horizon_in = self.W * self.T_in
-        streams = rng.sample([1, 2, 3, 7, 9, 300, 65536, 2 ** 32 - 1], rng.randint(1, 5))
-        for s in streams:
+        for _ in range(rng.randint(1, 5)):
             n = rng.randint(1, 4)
             delays = sorted(rng.randint(1, 3) for _ in range(n))
             send = rng.randrange(max(1, horizon_in - 2 * self.T_in // self.W - 1))
             ids = rng.choice([b"id: %d\n", b"id: %d\n", b"id:%d\n", b"id:\t%d \r\n", b"data: -\nid: %d\n",
                               b"id: %d\nid: 9\n"])
-            self.sessions.append(Session(s, send, rng.choice([1, 1, 2]), delays, head=rng.random() < 0.3, ids=ids))
+            self.sessions.append(Session(0, send, rng.choice([1, 1, 2]), delays, head=rng.random() < 0.3, ids=ids))
         self.sessions.sort(key=lambda x: x.send)
+        for k, x in enumerate(self.sessions):  # the k-th request on the link is stream k
+            x.stream = k + 1
         self.ticks_in = self.tick_times("ingress")
         self.release()
         for x in self.sessions:
@@ -432,14 +444,16 @@ class Trace:
     # the events
 
     def request_frames(self, x: Session) -> list[bytes]:
-        body = f"GET /{x.stream}".encode()[: self.B_in - 9]
-        kinds = [DATA] * x.parts if x.data_only else [DATA, LAST] if x.parts == 2 else [LAST]
-        return [encode_frame(k, x.stream, body[: self.B_in - 9 - (j == 0)], self.B_in) for j, k in enumerate(kinds)]
+        """Its request's frames on the link: `parts` of them, or, data-only, the first `parts` of one more."""
+        room, n = self.B_in - 9, x.parts + x.data_only
+        body = b"GET /%d" % x.stream
+        wire = request_frames(body.ljust((n - 1) * room + 1, b"."), self.B_in)
+        return [wire[j * self.B_in : (j + 1) * self.B_in] for j in range(x.parts)]
 
     def response(self, x: Session, k: int) -> bytes:
         head = b"HTTP/1.1 200 OK\r\n\r\n" if x.head and k == 0 else b""
         event = head + x.ids % x.positions[k] + b"data: %d-%d\n\n" % (x.stream, k)
-        return event if 9 + len(event) <= self.B else b"id:%d\n\n" % x.positions[k]
+        return event if 9 + len(event_body(event)) <= self.B else b"id:%d\n\n" % x.positions[k]
 
     def events(self) -> list[list]:
         ev: list[tuple[int, int, list]] = list(self.extra)
@@ -486,7 +500,8 @@ class Trace:
         frames = []
         for _, _, _, k, i in self.sessions_order:
             x = self.sessions[i]
-            frames.append([encode_frame(DATA, x.stream, self.response(x, k), self.B).hex(), x.anchor, k])
+            frames.append([encode_frame(DATA, CANONICAL_STREAM, event_body(self.response(x, k)), self.B).hex(), x.anchor,
+                           k])
         return frames
 
     # the paths
@@ -536,11 +551,11 @@ class Trace:
                 x.times, x.end = [], self.at(self.boundary(self.tau, self.W * self.T) - 5 * MS)
         elif path == "overflow-egress":
             self.Q = rng.randint(1, 3)
-        elif path == "overflow-ingress":  # a burst of request frames inside one bucket, past Q and the allocation
+        elif path == "overflow-ingress":  # a burst of frames inside one bucket, past Q and the allocation
             self.Q_in = rng.randint(1, 2)
             b = rng.randrange(self.W * self.T_in - 1)
             t = self.within(self.tau_in, b, 0.5, 0.9)
-            burst = encode_frame(DATA, x.stream, b"more", self.B_in) * (self.Q_in + self.r_in + 1)
+            burst = encode_frame(7, CANONICAL_STREAM, b"more", self.B_in) * (self.Q_in + self.r_in + 1)
             self.extra.append((t, 0, ["link", t, burst.hex()]))
         elif path == "duplicate-at-capacity":  # a duplicate of a queued frame while the queue holds exactly Q
             reads = sorted((t, i, k) for i, y in enumerate(xs) for k, t in enumerate(y.times))
@@ -587,7 +602,8 @@ class Trace:
             else:
                 data = b"id: %d\ndata: " % x.positions[k] + b"x" * self.B + b"\n\n"
             x.replace = {x.times[k]: data}
-        elif path == "no-request":
+        elif path == "no-request":  # the last request on the link, so that it takes no other's frames
+            x = xs[-1]
             x.parts = 1 if rng.random() < 0.5 else 2
             x.data_only = True
         elif path == "trailing":
@@ -602,7 +618,7 @@ class Trace:
                 elif kind == 1:
                     data = encode_frame(7, rng.choice(xs).stream, b"junk", self.B_in)
                 elif kind == 2:
-                    frame = bytearray(encode_frame(LAST, rng.choice(xs).stream, b"GET /long", self.B_in))
+                    frame = bytearray(encode_frame(DATA, CANONICAL_STREAM, b"GET /long", self.B_in))
                     frame[5:9] = (self.B_in * 2).to_bytes(4, "big")
                     data = bytes(frame)
                 elif kind == 3:

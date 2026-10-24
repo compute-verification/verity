@@ -99,8 +99,8 @@ theorem rowsLinkLe : RowsLinkLe := by
     obtain ⟨p, hp, hne⟩ := h
     exact ⟨p, hp, fun h' => hne ((hcs R R' p).trans h')⟩
   by_cases hoff : rd.Off (reg σ)
-  · have hD := (Flock.SecurityProofs.EndToEndRegisteredDrawn n Reg I ht own c hc hU pub hpub hscope kd hdiv dj S₀ d₀
-      y₀ wr dg N Ω Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2).1
+  · have hD := (Flock.SecurityProofs.EndToEndRegisteredDrawnFlat n Reg I ht own c hc hU pub hpub hscope kd hdiv dj S₀
+      d₀ y₀ wr dg N Ω Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2).1
     refine (prob_mono (q := fun o => LiveAcceptsZKR I own o ∧ ∃ u ∈ o.2.1,
         u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv) ?_ G τ).trans
       (hD.trans (le_add_right le_rfl))
@@ -148,17 +148,17 @@ theorem rowsLinkLe : RowsLinkLe := by
 
 /-- **`EndToEndRegisteredRows` from the rows' extraction bound.** -/
 theorem EndToEndRegisteredRows_of_rowsLink (hL : RowsLinkLe) : Flock.Guarantees.EndToEndRegisteredRows := by
-  intro n Reg own I ht c hc hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ rd wr dg N Ω _ _ Lb src hTags hCust k Rw M hk hRw
-    hM ρ hρ hr t' ht' τ qF qS qR L G P vb wo σ hCR hA2 hRows hReg
-  have hD := Flock.SecurityProofs.EndToEndRegisteredDrawn n Reg I ht own c hc hU pub hpub hscope kd hdiv dj S₀ d₀ y₀
+  intro n Reg own I ht D hDesc hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ rd wr dg N Ω _ _ Lb src hTags hCust k Rw M hk
+    hRw hM ρ hρ hr t' ht' τ qF qS qR L G P vb wo σ hCR hA2 hRows hReg
+  have hD := Flock.SecurityProofs.EndToEndRegisteredDrawn n Reg I ht own D hDesc hU pub hpub hscope kd hdiv dj S₀ d₀ y₀
     wr dg N Ω Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2
-  have hLk := hL n Reg own I ht c hc hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ rd wr dg N Ω Lb src hTags hCust k Rw M hk
-    hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2 hRows
+  have hLk := hL n Reg own I ht D.unroll (Flock.Desc.parse_flat hDesc) hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ rd wr dg
+    N Ω Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2 hRows
   set Xv := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
   set own' := fun (o : Reg × Finset (Fin n) × Discharge.Exec.Transcript) =>
-    OwnReadsHJ I own c pub o.2.2 rd.isRead rd.port rd.readAt
+    OwnReadsHJ I own D.unroll pub o.2.2 rd.isRead rd.port rd.readAt
   have hReg' := rd.prob_off_le_at G τ (fun o => o.1) (fun o => LiveAcceptsZKR I own o ∧ own' o)
-    (fun o => regPathsHJ I c pub o.2.2 rd.port) (fun o ho => hD.2 o ho.1 rd ho.2) hReg
+    (fun o => regPathsHJ I D.unroll pub o.2.2 rd.port) (fun o ho => hD.2 o ho.1 rd ho.2) hReg
   have hsub : ∀ o : Reg × Finset (Fin n) × Discharge.Exec.Transcript,
       (LiveAcceptsZKR I own o ∧ ∃ u ∈ o.2.1,
         u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv ∨
@@ -176,7 +176,7 @@ theorem EndToEndRegisteredRows_of_rowsLink (hL : RowsLinkLe) : Flock.Guarantees.
     have hRR : RightRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv u := by
       by_contra h
       exact hW ((mem_wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb).2 h)
-    have heval := P.correct_eval (Discharge.Layout.keyProg_readsOwn c hU n _ u) hRR.1
+    have heval := P.correct_eval (Discharge.Layout.keyProg_readsOwn D.unroll hU n _ u) hRR.1
     obtain ⟨hOwn, g, hg, hrd, hne⟩ : own' o ∧
         ∃ g ∈ P.io u, rd.isRead (vb.pos g) ∧ Xv g ≠ vb.bit (vb.val (wo (vb.pos g))) g := by
       by_contra hno

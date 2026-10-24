@@ -1135,33 +1135,218 @@ def _spaces(r: Refs, out: set) -> None:
         out.add((r.space, r.idx))  # type: ignore[attr-defined]
 
 
+def _push(out: list, a: int, b: int, src: tuple, off: int) -> None:
+    """Append segment (a, b, src, off) to `out`, joined to the last one when it continues it."""
+    if out:
+        pa, pb, ps, po = out[-1]
+        if pb == a and ps == src and po + pb - pa == off:
+            out[-1] = (pa, b, ps, po)
+            return
+    out.append((a, b, src, off))
+
+
+class _Map:
+    """A collection's tracked leaves: segments (a, b, src, off), ascending and disjoint, its leaves [a, b) being leaves
+    [off, off + b - a) of source `src`."""
+
+    __slots__ = ("segs", "starts")
+
+    def __init__(self, segs: list) -> None:
+        self.segs, self.starts = segs, [s[0] for s in segs]
+
+    def over(self, lo: int, hi: int) -> Iterator[tuple[int, int, tuple, int]]:
+        """(u, w, src, off) for the tracked leaves [u, w) within [lo, hi), leaf u being leaf off of `src`."""
+        segs = self.segs
+        j = max(bisect.bisect_right(self.starts, lo) - 1, 0)
+        while j < len(segs):
+            a, b, src, off = segs[j]
+            if a >= hi:
+                return
+            if b > lo:
+                u = max(a, lo)
+                yield u, min(b, hi), src, off + u - a
+            j += 1
+
+    def cut(self, lo: int, hi: int, shift: int, out: list) -> None:
+        """Append the segments over leaves [lo, hi) to `out`, leaf x at x + shift."""
+        for u, w, src, off in self.over(lo, hi):
+            _push(out, u + shift, w + shift, src, off)
+
+    def pattern(self) -> tuple:
+        """The tracked leaves, as maximal intervals."""
+        out: list = []
+        for a, b, _s, _o in self.segs:
+            if out and out[-1][1] == a:
+                out[-1] = (out[-1][0], b)
+            else:
+                out.append((a, b))
+        return tuple(out)
+
+
+def _merge(ivs: Iterator | Sequence) -> tuple:
+    out: list = []
+    for a, b in sorted(ivs):
+        if out and a <= out[-1][1]:
+            out[-1] = (out[-1][0], max(b, out[-1][1]))
+        else:
+            out.append((a, b))
+    return tuple(out)
+
+
+def _folded(T: _Map, L: int) -> tuple:
+    """The leaves some member has tracked, `T` split into consecutive members of `L` leaves (a batch's axis 0, a scan's xs)."""
+    ivs = []
+    for a, b, _s, _o in T.segs:
+        if b - a >= L:
+            return ((0, L),)
+        m = a // L * L
+        ivs += [(a - m, b - m)] if b - m <= L else [(a - m, L), (0, b - m - L)]
+    return _merge(ivs)
+
+
+def _touched(T: _Map, L: int) -> list[int]:
+    """The members of `L` leaves holding a tracked leaf of `T`, ascending."""
+    out: list[int] = []
+    for a, b, _s, _o in T.segs:
+        out.extend(range(max(a // L, out[-1] + 1 if out else 0), (b - 1) // L + 1))
+    return out
+
+
+# A read state: how often a noise primitive, a receipt fold, a seed and any other primitive read a leaf, and, when the check
+# explains a refusal, the first two readers of the leaf and of each role. A reader is its path of frames (Definition, node,
+# member or step), outermost first; a frame with no node is the root's outputs.
+
+def _one(role: int, explain: bool) -> tuple:
+    counts = tuple(int(r == role) for r in _ROLES)
+    return counts + (((),),) + tuple(((),) if r == role else () for r in _ROLES) if explain else counts
+
+
+def _plus(x: tuple, y: tuple) -> tuple:
+    """Reads `x`, then reads `y`."""
+    counts = (x[0] + y[0], x[1] + y[1], x[2] + y[2], x[3] + y[3])
+    return counts if len(x) == 4 else counts + tuple((p + q)[:2] for p, q in zip(x[4:], y[4:]))
+
+
+def _framed(x: tuple, frame: tuple) -> tuple:
+    """A callee's reads `x`, read through `frame`."""
+    return x if len(x) == 4 else x[:4] + tuple(tuple((frame,) + r for r in rs) for rs in x[4:])
+
+
+def _total(x: tuple) -> int:
+    return x[0] + x[1] + x[2] + x[3]
+
+
+def _frame(f: tuple) -> str:
+    sp, k, idx = f
+    if k is None:
+        return f"{sp.id}'s outputs"
+    node = sp.body.nodes[k]
+    at = f"{sp.id} node {k} ({node.form} {node.fn.id})"
+    return at if idx is None else f"{at} {'member' if node.form == 'batch' else 'step'} {idx}"
+
+
+def _who(readers: Sequence[tuple]) -> list[str]:
+    return [": ".join(_frame(f) for f in r) for r in readers]
+
+
+def _made(rec: tuple | None, leaf: int) -> tuple[str, int]:
+    """Where leaf `leaf` of a noise source with record `rec` (`_Uses._nids`) is made: the frames from the body holding the
+    record down to the noise primitive's instance, and that instance's return leaf."""
+    frames = []
+    while rec is not None:
+        sp, k, unit, rec = rec
+        frames.append((sp, k, leaf // unit if sp.body.nodes[k].form in ("batch", "scan") else None))
+        leaf %= unit
+    return ": ".join(_frame(f) for f in frames), leaf
+
+
+class _Acc:
+    """How each leaf of one source is read: runs [lo[j], hi[j]) of read state st[j], ascending and disjoint. A read added
+    later comes after those before it (`_plus`), so the first readers stay first."""
+
+    __slots__ = ("lo", "hi", "st")
+
+    def __init__(self) -> None:
+        self.lo: list[int] = []
+        self.hi: list[int] = []
+        self.st: list[tuple] = []
+
+    def add(self, a: int, b: int, x: tuple) -> None:
+        lo, hi, st = self.lo, self.hi, self.st
+        if not lo or a >= hi[-1]:
+            if lo and a == hi[-1] and st[-1] == x:
+                hi[-1] = b
+            else:
+                lo.append(a)
+                hi.append(b)
+                st.append(x)
+            return
+        i = bisect.bisect_right(hi, a)
+        j = bisect.bisect_left(lo, b, i)
+        pieces = [(lo[i], a, st[i])] if i < j and lo[i] < a else []
+        pos = a
+        for t in range(i, j):
+            if pos < lo[t]:
+                pieces.append((pos, lo[t], x))
+            pos = min(hi[t], b)
+            pieces.append((max(lo[t], a), pos, _plus(st[t], x)))
+            if hi[t] > b:
+                pieces.append((b, hi[t], st[t]))
+        if pos < b:
+            pieces.append((pos, b, x))
+        if i and hi[i - 1] == pieces[0][0] and st[i - 1] == pieces[0][2]:
+            i -= 1
+            pieces[0] = (lo[i], pieces[0][1], st[i])
+        if j < len(lo) and lo[j] == pieces[-1][1] and st[j] == pieces[-1][2]:
+            pieces[-1] = (pieces[-1][0], hi[j], st[j])
+            j += 1
+        out: list = []
+        for p in pieces:
+            if out and out[-1][1] == p[0] and out[-1][2] == p[2]:
+                out[-1] = (out[-1][0], p[1], p[2])
+            else:
+                out.append(p)
+        lo[i:j], hi[i:j], st[i:j] = [p[0] for p in out], [p[1] for p in out], [p[2] for p in out]
+
+    def runs(self) -> list[tuple[int, int, tuple]]:
+        return list(zip(self.lo, self.hi, self.st))
+
+
 class _Summary:
-    """One activation of a composite whose parameters' tracked leaves are `pattern`: `reads[(i, leaf)]`, how often parameter
-    i's leaf is read by a noise primitive, a receipt fold, a seed and any other primitive, with the first readers; `ret[j]`,
-    what return leaf j is: ("p", i, leaf), that parameter leaf; or ("c", inst, leaf, count, readers), noise made inside and
-    read there `count` times."""
+    """The one-use view of every activation of a Definition whose parameters' tracked leaves are one pattern. `reads[i]`:
+    runs (lo, hi, state) of parameter i's leaves its body reads. `ret`: segments (a, b, src, off) of its return's tracked
+    leaves, return leaves [a, b) being leaves [off, off + b - a) of ``("p", i)``, a parameter passed through, or of
+    ``("c", e)``, noise made inside. `noise[e]`: that noise's record (`_Uses._nids`; None for a noise primitive's own), its
+    leaves, and runs of the reads its leaves already had inside."""
 
-    __slots__ = ("reads", "ret")
+    __slots__ = ("reads", "ret", "noise")
 
-    def __init__(self, reads: dict, ret: dict) -> None:
-        self.reads, self.ret = reads, ret
+    def __init__(self, reads: tuple, ret: tuple, noise: tuple) -> None:
+        self.reads, self.ret, self.noise = reads, ret, noise
+
+
+class _Recount(Exception):
+    """A refusal found while counting, which the check counts again with readers to name them."""
 
 
 class _Uses:
-    """The one-use and seed rules over the flattened Program: each tracked leaf (a root coin, ("coin", node, leaf); a root
-    position, ("pos", node, leaf); or a noise primitive instance's output, ("c", inst, leaf)) is counted at every primitive or
-    seed operand that reads it, once per member, step and instance, through every call. A composite's activation is
-    summarized once per pattern of tracked parameter leaves, so a batch or scan of one body costs one simulation and a count
-    per tracked leaf per member."""
+    """The one-use and seed rules over the flattened Program (every call, batch member and scan step counted), at the size of
+    its description. A tracked leaf is a root coin's (source ``("coin", node)``), a root position's (``("pos", node)``), a
+    parameter's (``("p", i)``) or noise made in the body (``("c", n)``); it is followed as runs of leaves through the
+    references (`_Map`), and its reads are counted by role in runs (`_Acc`). A Definition is simulated once per pattern of
+    tracked parameter leaves (`_Summary`), its internal reads checked there; what crosses its boundary is a count per tracked
+    parameter leaf, the parameter leaves and noise its return carries, and how often that noise was read inside. A primitive
+    or a seed is its own summary. A batch of n members applies one summary to its members, at once where they read alike (a
+    shared argument n times, or every leaf of their own), else member by member, never simulating again; a scan applies it
+    step by step, or with no tracked carry as a batch of its steps. Counting keeps no readers: a refusal is counted again
+    with them (`explain`), and its message names its first two readers by Definition, node, member and step."""
 
-    def __init__(self, root: Any, rpt: PortTypes) -> None:
-        self.root, self.rpt = root, rpt
-        self.memo: dict[tuple, _Summary] = {}
-        self.coins: dict[tuple, list] = {}
-        self.made: dict[tuple, list] = {}
-        self.labels: list[str] = []
-        self.keys: dict[int, tuple[dict, list]] = {}
+    def __init__(self, root: Any, rpt: PortTypes, explain: bool = False) -> None:
+        self.root, self.rpt, self.explain = root, rpt, explain
+        self.memo: dict[tuple, tuple[Any, _Summary]] = {}
         self.roles: dict[int, tuple[Any, int | None]] = {}
+        self.one = tuple(_one(r, explain) for r in _ROLES)
+        self.simulations = 0
 
     def _role(self, fn: Any) -> int | None:
         hit = self.roles.get(id(fn))
@@ -1170,179 +1355,346 @@ class _Uses:
         return hit[1]
 
     def check(self) -> None:
-        self._simulate(self.root, ())
+        try:
+            self._simulate(self.root, ())
+        except _Recount as r:
+            _Uses(self.root, self.rpt, explain=True).check()
+            raise PortError("E_COIN_REUSE", str(r)) from None
 
-    def _new(self, label: str) -> int:
-        self.labels.append(label)
-        return len(self.labels) - 1
+    def _refuse(self, message: str) -> None:
+        if self.explain:
+            raise PortError("E_COIN_REUSE", message)
+        raise _Recount(message)
 
-    def _sorted(self, d: dict) -> list:
-        hit = self.keys.get(id(d))
-        if hit is None or hit[0] is not d:
-            hit = self.keys[id(d)] = (d, sorted(d))
-        return hit[1]
+    def _readers(self, x: tuple, rule: str) -> str:
+        """The first two reads of a leaf with reads `x` that `rule` refuses, one of them of the role it refuses."""
+        if not self.explain:
+            return "readers not recorded"
+        first, roles = x[4], x[5:]
+        if rule == "noise-coin":
+            noisy = (roles[_NOISE] or roles[_OTHER])[0]
+            pair = first if noisy in first else (first[0], noisy)
+        elif rule == "seed-fold":
+            pair = (first[0], roles[_FOLD][0] if first[0] in roles[_SEED] else roles[_SEED][0])
+        else:
+            pair = roles[_SEED] if rule == "position" else first
+        a, b = _who(pair[:2])
+        return f"first by {a}; then by {b}"
 
-    def _gather(self, refs: Refs, env: dict) -> dict:
+    def _root_rules(self, src: tuple, A: _Acc) -> None:
+        kind, k = src
+        for lo, _hi, x in A.runs():
+            at = f"{self.root.id} input node {k} leaf {lo}"
+            if kind == "pos":
+                if x[_SEED] > 1:
+                    self._refuse(f"{at}: a position seeds one unit, but {x[_SEED]} seeds read it "
+                                 f"({self._readers(x, 'position')}): two seeds of one coin at one position are one seed, so "
+                                 f"the noise they derive is common to both. Give each seed a position of its own")
+                continue
+            if (x[_NOISE] or x[_OTHER]) and _total(x) > 1:
+                self._refuse(f"{at}: a coin that a noise primitive reads is read once, by that instance alone, but it is "
+                             f"read {_total(x)} times ({self._readers(x, 'noise-coin')}): a second noise or a receipt key "
+                             f"from a noise bit's coin puts the bit in the cheater's view. Draw a coin of its own for each "
+                             f"noise and for the receipt keys")
+            if x[_SEED] and x[_FOLD]:
+                self._refuse(f"{at}: a coin that a seed reads is read by seeds alone, but a receipt fold reads it too "
+                             f"({self._readers(x, 'seed-fold')}): only a seed binds the coin to a unit's position, so a "
+                             f"fold keyed by it computes a value no position separates. Key the folds from the unit's seed, "
+                             f"or from a coin of their own")
+
+    def _noise_rule(self, rec: tuple, A: _Acc) -> None:
+        for lo, _hi, x in A.runs():
+            if _total(x) > 1:
+                where, leaf = _made(rec, lo)
+                self._refuse(f"{where} return leaf {leaf}: noise is the noise of one operand of one instance and is read "
+                             f"at most once, but it is read {_total(x)} times ({self._readers(x, 'noise')}): two copies of "
+                             f"one noise cancel, and noise shared across rows, matmuls, batch members or scan steps is "
+                             f"fresh for none of them. Draw fresh coins for each use")
+
+    def _gather(self, refs: Refs, env: dict) -> _Map | None:
         spaces: set = set()
         _spaces(refs, spaces)
-        if not any(env.get(s) for s in spaces):
-            return {}
-        out, pos = {}, 0
+        if not any(s in env for s in spaces):
+            return None
+        out: list = []
+        pos = 0
         for s, i, lo, hi in ref_runs(refs):
-            d = env.get((s, i))
-            if d:
-                keys = self._sorted(d)
-                for leaf in keys[bisect.bisect_left(keys, lo):bisect.bisect_left(keys, hi)]:
-                    out[pos + leaf - lo] = d[leaf]
+            T = env.get((s, i))
+            if T is not None:
+                T.cut(lo, hi, pos - lo, out)
             pos += hi - lo
+        return _Map(out) if out else None
+
+    @staticmethod
+    def _add(acc: dict, src: tuple, lo: int, hi: int, x: tuple) -> None:
+        A = acc.get(src)
+        if A is None:
+            A = acc[src] = _Acc()
+        A.add(lo, hi, x)
+
+    def _read(self, acc: dict, T: _Map, lo: int, hi: int, x: tuple) -> None:
+        """Reads `x` of leaves [lo, hi) of a collection whose tracked leaves are `T`, counted on their sources."""
+        for u, w, src, off in T.over(lo, hi):
+            self._add(acc, src, off, off + w - u, x)
+
+    def _nids(self, sp: Any, k: int, S: _Summary, n: int, noise: dict) -> list[tuple[tuple, int]]:
+        """Sources for the noise each of node k's `n` instances of `S` returns: one per noise of `S`, instance m's leaves at
+        m * size; its record (sp, k, size, the noise's record inside) names where a leaf of it is made (`_made`)."""
+        out = []
+        for rec, size, _runs in S.noise:
+            src = ("c", len(noise))
+            noise[src] = ((sp, k, size, rec), n * size)
+            out.append((src, size))
         return out
 
-    def _read(self, s: tuple, role: int, n: int, at: list, reads: dict) -> None:
-        if s[0] == "pos" and role != _SEED:
-            return
-        if s[0] == "p":
-            e = reads.setdefault((s[1], s[2]), [0, 0, 0, 0, []])
-        elif s[0] in ("coin", "pos"):
-            e = self.coins.setdefault(s, [0, 0, 0, 0, []])
-        else:
-            e = self.made[(s[1], s[2])]
-        e[role] += n
-        e[4].extend(at[:2 - len(e[4])])
-        total = sum(e[:4])
-        if s[0] == "coin" and (e[_NOISE] or e[_OTHER]) and total > 1:
-            raise PortError("E_COIN_REUSE", f"{self.root.id} input node {s[1]} leaf {s[2]}: a coin that a noise primitive "
-                            f"reads is read once, by that instance alone, but it is read {total} times (first by "
-                            f"{e[4][0]}; then by {at[0]}): a second noise or a receipt key from a noise bit's coin puts the "
-                            f"bit in the cheater's view. Draw a coin of its own for each noise and for the receipt keys")
-        if s[0] == "coin" and e[_SEED] and e[_FOLD]:
-            raise PortError("E_COIN_REUSE", f"{self.root.id} input node {s[1]} leaf {s[2]}: a coin that a seed reads is read "
-                            f"by seeds alone, but a receipt fold reads it too (first by {e[4][0]}; then by {at[0]}): only a "
-                            f"seed binds the coin to a unit's position, so a fold keyed by it computes a value no position "
-                            f"separates. Key the folds from the unit's seed, or from a coin of their own")
-        if s[0] == "pos" and e[_SEED] > 1:
-            raise PortError("E_COIN_REUSE", f"{self.root.id} input node {s[1]} leaf {s[2]}: a position seeds one unit, but "
-                            f"{e[_SEED]} seeds read it (first by {'; then by '.join(e[4])}): two seeds of one coin at one "
-                            f"position are one seed, so the noise they derive is common to both. Give each seed a position "
-                            f"of its own")
-        if s[0] == "c" and total > 1:
-            raise PortError("E_COIN_REUSE", f"{self.labels[s[1]]} return leaf {s[2]}: noise is the noise of one operand of one "
-                            f"instance and is read at most once, but it is read {total} times (first by "
-                            f"{'; then by '.join(e[4])}): two copies of one noise cancel, and noise shared across rows, "
-                            f"matmuls, batch members or scan steps is fresh for none of them. Draw fresh coins for each use")
-
-    def _apply(self, fn: Any, args: list, at: str, reads: dict) -> dict:
-        """One instance of `fn` (a primitive or a composite) on arguments whose tracked leaves are `args` ({leaf: source}
-        per parameter): count its reads, and give its return's tracked leaves."""
+    def _summary(self, fn: Any, pattern: tuple) -> _Summary:
+        """`fn`'s summary for tracked parameter leaves `pattern` (per parameter, its tracked leaves as intervals)."""
+        hit = self.memo.get((id(fn), pattern))
+        if hit is not None and hit[0] is fn:
+            return hit[1]
         from .defs import PrimitiveDefinition
 
         role = self._role(fn)
         if role == _SEED or isinstance(fn, PrimitiveDefinition):
-            for d in args:
-                for s in d.values():
-                    self._read(s, _OTHER if role is None else role, 1, [at], reads)
-            if role != _NOISE:
-                return {}
-            leaves = fn.signature()[1].leaves
-            inst = self._new(at)
-            for j in range(leaves):
-                self.made[(inst, j)] = [0, 0, 0, 0, []]
-            return {j: ("c", inst, j) for j in range(leaves)}
-        pattern = tuple(tuple(sorted(d)) for d in args)
-        S = self.memo.get((id(fn), pattern))
-        if S is None:
-            S = self.memo[(id(fn), pattern)] = self._simulate(fn, pattern)
-        for (i, leaf), e in S.reads.items():
-            for role in _ROLES:
-                if e[role]:
-                    self._read(args[i][leaf], role, e[role], [f"{at}: {w}" for w in e[4]], reads)
-        out, fresh = {}, {}
-        for j, r in S.ret.items():
-            if r[0] == "p":
-                out[j] = args[r[1]][r[2]]
+            x = self.one[_OTHER if role is None else role]
+            reads = tuple(tuple((a, b, x) for a, b in iv) for iv in pattern)
+            if role == _NOISE:
+                R = fn.signature()[1].leaves
+                S = _Summary(reads, ((0, R, ("c", 0), 0),), ((None, R, ()),))
+            else:
+                S = _Summary(reads, (), ())
+        else:
+            S = self._simulate(fn, pattern)
+        self.memo[(id(fn), pattern)] = (fn, S)
+        return S
+
+    def _member(self, sp: Any, k: int, idx: int | None, m: int, S: _Summary, views: list, nids: list, acc: dict,
+                outs: tuple) -> None:
+        """Instance m of node k (member or step `idx`), its parameter i's tracked leaves `views[i]` (a map and the offset of
+        the instance's leaf 0 in it, or None): count its reads and the reads its noise had inside, and put its return
+        leaves [lo, hi) at lo + shift of `out`, for each (lo, hi, out, shift) of `outs`."""
+        frame = (sp, k, idx)
+        for v, rs in zip(views, S.reads):
+            if v is not None:
+                T, d = v
+                for lo, hi, x in rs:
+                    self._read(acc, T, lo + d, hi + d, _framed(x, frame))
+        for (src, size), (_rec, _size, runs) in zip(nids, S.noise):
+            for lo, hi, x in runs:
+                self._add(acc, src, m * size + lo, m * size + hi, _framed(x, frame))
+        for a, b, src, o in S.ret:
+            for lo, hi, out, shift in outs:
+                u, w = max(a, lo), min(b, hi)
+                if u >= w:
+                    continue
+                p = o + u - a
+                if src[0] == "c":
+                    made, size = nids[src[1]]
+                    _push(out, u + shift, w + shift, made, m * size + p)
+                elif views[src[1]] is not None:
+                    T, d = views[src[1]]
+                    T.cut(p + d, p + d + w - u, u + shift - p - d, out)
+
+    def _batch(self, sp: Any, k: int, node: Any, tracked: list, acc: dict, noise: dict, out: list) -> None:
+        n = node.n
+        if not n:
+            return
+        lay: list = []
+        pattern: list = []
+        for T, a, ax in zip(tracked, node.args, node.axes):
+            if T is None:
+                lay.append(None)
+                pattern.append(())
+            elif ax is None:
+                lay.append((T, None, 0, None))
+                pattern.append(T.pattern())
+            elif ax == 0:
+                L = a.type.leaves // n
+                lay.append((T, 0, L, None))
+                pattern.append(_folded(T, L))
+            else:
+                M = _split(T, a.type, ax, n)
+                lay.append((T, ax, 0, M))
+                pattern.append(_merge([iv for U in M.values() for iv in U.pattern()]))
+        S = self._summary(node.fn, tuple(pattern))
+        R = node.fn.signature()[1].leaves
+        self._members(sp, k, S, lay, n, R, 0, acc, noise, out)
+
+    def _members(self, sp: Any, k: int, S: _Summary, lay: list, n: int, stride: int, lo: int, acc: dict, noise: dict,
+                 out: list) -> None:
+        """Node k's `n` instances of `S`, parameter i laid out by `lay[i]`: None (untracked), (T, None, 0, None) (each
+        instance reads T), (T, 0, L, None) (instance m reads leaves [m L, (m + 1) L) of T) or (T, ax, 0, {m: map}); instance
+        m's return leaves [lo, lo + stride) go to lo + m stride of `out`. Instances whose parameters are untracked are
+        skipped; where every instance reads alike, the counts are added for all of them at once."""
+        nids = self._nids(sp, k, S, n, noise)
+        if any(v is not None and v[1] is None for v in lay):
+            members: Sequence[int] = range(n)
+        else:
+            got: set = set()
+            for v in lay:
+                if v is not None:
+                    got.update(_touched(v[0], v[2]) if v[1] == 0 else v[3])
+            members = sorted(got)
+        if not self.explain and (len(members) == n or not S.noise) and self._alike(S, lay, stride, lo):
+            for v, rs in zip(lay, S.reads):
+                for a, b, x in rs if v is not None else ():
+                    if v[1] is None:
+                        self._read(acc, v[0], a, b, tuple(c * n for c in x))
+                    else:
+                        self._read(acc, v[0], 0, n * v[2], x)
+            for (src, size), (_rec, _size, runs) in zip(nids, S.noise):
+                for _a, _b, x in runs:
+                    self._add(acc, src, 0, n * size, x)
+            for _a, _b, src, _o in S.ret:
+                _push(out, lo, lo + n * stride, nids[src[1]][0], 0)
+            return
+        for m in members:
+            views = [None if v is None else (v[0], 0) if v[1] is None else (v[0], m * v[2]) if v[1] == 0
+                     else (v[3][m], 0) if m in v[3] else None for v in lay]
+            self._member(sp, k, m, m, S, views, nids, acc, ((lo, lo + stride, out, m * stride),))
+
+    @staticmethod
+    def _alike(S: _Summary, lay: list, stride: int, lo: int) -> bool:
+        """Whether every instance reads and returns alike: each shared argument read whole or not at all by each, each split
+        one read along axis 0 whole and uniformly, its noise read inside whole and uniformly, and its return nothing tracked
+        or exactly one noise of `stride` leaves."""
+        for v, rs in zip(lay, S.reads):
+            if v is None or not rs or v[1] is None:
                 continue
-            inst = fresh.get(r[1])
-            if inst is None:
-                inst = fresh[r[1]] = self._new(f"{at}: {self.labels[r[1]]}")
-            self.made[(inst, r[2])] = [r[3], 0, 0, 0, [f"{at}: {w}" for w in r[4]]]
-            out[j] = ("c", inst, r[2])
-        return out
+            if v[1] != 0 or len(rs) != 1 or rs[0][:2] != (0, v[2]):
+                return False
+        if any(runs and (len(runs) != 1 or runs[0][:2] != (0, size)) for _rec, size, runs in S.noise):
+            return False
+        if not S.ret:
+            return True
+        if len(S.ret) != 1:
+            return False
+        a, b, src, o = S.ret[0]
+        return src[0] == "c" and (a, b, o) == (lo, lo + stride, 0) and S.noise[src[1]][1] == stride
 
-    def _members(self, d: dict, t: Type, ax: int, n: int) -> list[dict]:
-        """Tracked leaves {leaf: source} of an argument of type `t`, split into its `n` members along axis `ax`."""
-        out: list[dict] = [{} for _ in range(n)]
-        if not d:
-            return out
-        if ax == 0:
-            L = t.leaves // n
-            for p, s in d.items():
-                out[p // L][p % L] = s
-            return out
-        keys, pos = self._sorted(d), Coll(t, Affine("a", 0, 0, t.leaves))
-        for m in range(n):
-            q = 0
-            for _s, _i, lo, hi in ref_runs(pos.take(ax, m).refs):
-                for p in keys[bisect.bisect_left(keys, lo):bisect.bisect_left(keys, hi)]:
-                    out[m][q + p - lo] = d[p]
-                q += hi - lo
-        return out
+    def _scan(self, sp: Any, k: int, node: Any, tracked: list, acc: dict, noise: dict, out: list) -> None:
+        n, nx = node.n, node.n_xs
+        fret = node.fn.signature()[1]
+        R, c = fret.leaves, fret.fields[0].leaves
+        init = tracked[0]
+        if not n:
+            if init is not None:
+                init.cut(0, c, 0, out)
+            return
+        xs = [None if T is None else (T, a.type.leaves // n) for T, a in zip(tracked[1:1 + nx], node.args[1:1 + nx])]
+        shared = tracked[1 + nx:]
+        rest = tuple(() if v is None else _folded(*v) for v in xs) + tuple(() if T is None else T.pattern() for T in shared)
+        pc = () if init is None else init.pattern()
+        while True:
+            S = self._summary(node.fn, (pc,) + rest)
+            grown = _merge(pc + tuple((a, min(b, c)) for a, b, _s, _o in S.ret if a < c))
+            if grown == pc:
+                break
+            pc = grown
+        if not pc:
+            lay = ([None] + [None if v is None else (v[0], 0, v[1], None) for v in xs]
+                   + [None if T is None else (T, None, 0, None) for T in shared])
+            self._members(sp, k, S, lay, n, R - c, c, acc, noise, out)
+            return
+        nids = self._nids(sp, k, S, n, noise)
+        live = any(T is not None for T in shared)
+        carry, ys = init, []
+        for i in range(n):
+            views = [None if carry is None else (carry, 0)]
+            views += [None if v is None or next(v[0].over(i * v[1], (i + 1) * v[1]), None) is None else (v[0], i * v[1])
+                      for v in xs]
+            views += [None if T is None else (T, 0) for T in shared]
+            if not live and all(v is None for v in views):
+                carry = None
+                continue
+            nxt: list = []
+            self._member(sp, k, i, i, S, views, nids, acc, ((0, c, nxt, 0), (c, R, ys, i * (R - c))))
+            carry = _Map(nxt) if nxt else None
+        if carry is not None:
+            carry.cut(0, c, 0, out)
+        out.extend(ys)
 
-    def _simulate(self, sp: Any, pattern: tuple) -> _Summary:
+    def _simulate(self, sp: Any, pattern: tuple) -> _Summary | None:
+        """Count the reads in `sp`'s body, its parameter i's tracked leaves `pattern[i]`, refusing what breaks a rule there;
+        its summary, or None for the root."""
         from .program import is_input
 
+        self.simulations += 1
         root = sp is self.root
-        env: dict[tuple[str, int], dict] = {("p", i): {leaf: ("p", i, leaf) for leaf in leaves} for i, leaves in enumerate(pattern)}
+        env: dict[tuple[str, int], _Map] = {("p", i): _Map([(a, b, ("p", i), a) for a, b in iv])
+                                            for i, iv in enumerate(pattern) if iv}
         if root:
+            segs: dict[int, list] = {}
             for k, lo, hi, p, _w in self.rpt.inputs:
                 if p.kind in ("coin", "position"):
-                    tag = "coin" if p.kind == "coin" else "pos"
-                    env.setdefault(("n", k), {}).update({leaf: (tag, k, leaf) for leaf in range(lo, hi)})
-        reads: dict = {}
+                    segs.setdefault(k, []).append((lo, hi, ("coin" if p.kind == "coin" else "pos", k), lo))
+            for k, ss in segs.items():
+                joined: list = []
+                for s in sorted(ss):
+                    _push(joined, *s)
+                env[("n", k)] = _Map(joined)
+        acc: dict[tuple, _Acc] = {}
+        noise: dict[tuple, tuple] = {}
         for k, node in enumerate(sp.body.nodes):
-            fn = node.fn
-            if is_input(fn):
+            if is_input(node.fn):
                 continue
             tracked = [self._gather(a.refs, env) for a in node.args]
-            if not any(tracked):
+            if all(T is None for T in tracked):
                 continue
-            at = f"{sp.id} node {k} ({node.form} {fn.id})"
-            _, fret = fn.signature()
-            out: dict = {}
+            out: list = []
             if node.form == "batch":
-                R = fret.leaves
-                split = [[d] * node.n if ax is None else self._members(d, a.type, ax, node.n)
-                         for d, a, ax in zip(tracked, node.args, node.axes)]
-                for m in range(node.n):
-                    args = [ms[m] for ms in split]
-                    if any(args):
-                        out.update({m * R + j: s for j, s in self._apply(fn, args, f"{at} member {m}", reads).items()})
+                self._batch(sp, k, node, tracked, acc, noise, out)
             elif node.form == "scan":
-                c = fret.fields[0].leaves
-                ys = fret.leaves - c
-                carry, shared = tracked[0], tracked[1 + node.n_xs:]
-                xs = [self._members(d, a.type, 0, node.n) for d, a in zip(tracked[1:1 + node.n_xs], node.args[1:1 + node.n_xs])]
-                last = max((i for ms in xs for i, d in enumerate(ms) if d), default=-1)
-                for i in range(node.n):
-                    if not carry and not any(shared) and i > last:
-                        break
-                    args = [carry] + [ms[i] for ms in xs] + list(shared)
-                    got = self._apply(fn, args, f"{at} step {i}", reads) if any(args) else {}
-                    carry = {q: s for q, s in got.items() if q < c}
-                    out.update({c + i * ys + q - c: s for q, s in got.items() if q >= c})
-                out.update(carry)
+                self._scan(sp, k, node, tracked, acc, noise, out)
             else:
-                out = self._apply(fn, tracked, at, reads)
-            env[("n", k)] = out
-        R = self._gather(sp.body.ret, env)
-        ret: dict = {}
-        for j, s in R.items():
-            if root:
-                self._read(s, _OTHER, 1, [f"{sp.id}'s outputs"], reads)
-            elif s[0] == "p":
-                ret[j] = s
-            else:
-                e = self.made[(s[1], s[2])]
-                ret[j] = ("c", s[1], s[2], sum(e[:4]), tuple(e[4]))
-        return _Summary(reads, ret)
+                S = self._summary(node.fn, tuple(() if T is None else T.pattern() for T in tracked))
+                views = [None if T is None else (T, 0) for T in tracked]
+                R = node.fn.signature()[1].leaves
+                self._member(sp, k, None, 0, S, views, self._nids(sp, k, S, 1, noise), acc, ((0, R, out, 0),))
+            if out:
+                env[("n", k)] = _Map(out)
+        ret = self._gather(sp.body.ret, env)
+        if root and ret is not None:
+            x = _framed(self.one[_OTHER], (sp, None, None))
+            for a, b, src, off in ret.segs:
+                self._add(acc, src, off, off + b - a, x)
+        for src, (rec, _size) in noise.items():
+            if src in acc:
+                self._noise_rule(rec, acc[src])
+        if root:
+            for src in sorted((s for s in acc if s[0] in ("coin", "pos")), key=lambda s: (s[1], s[0])):
+                self._root_rules(src, acc[src])
+            return None
+        reads = tuple(tuple(acc[("p", i)].runs()) if ("p", i) in acc else () for i in range(len(pattern)))
+        segs_out: list = []
+        renum: dict[tuple, int] = {}
+        kept: list = []
+        for a, b, src, off in ret.segs if ret is not None else ():
+            if src[0] == "c":
+                e = renum.get(src)
+                if e is None:
+                    e = renum[src] = len(kept)
+                    rec, size = noise[src]
+                    kept.append((rec, size, tuple(acc[src].runs()) if src in acc else ()))
+                src = ("c", e)
+            segs_out.append((a, b, src, off))
+        return _Summary(reads, tuple(segs_out), tuple(kept))
+
+
+def _split(T: _Map, t: Type, ax: int, n: int) -> dict[int, _Map]:
+    """The tracked leaves `T` of a collection of type `t`, split into its `n` members along axis `ax` (members with none
+    left out)."""
+    pos = Coll(t, Affine("a", 0, 0, t.leaves))
+    out: dict[int, _Map] = {}
+    for m in range(n):
+        segs: list = []
+        q = 0
+        for _s, _i, lo, hi in ref_runs(pos.take(ax, m).refs):
+            T.cut(lo, hi, q - lo, segs)
+            q += hi - lo
+        if segs:
+            out[m] = _Map(segs)
+    return out
 
 
 def check(root: Any) -> Facts | None:

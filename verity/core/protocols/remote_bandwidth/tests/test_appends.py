@@ -81,14 +81,14 @@ class Run:
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
                  samples: int = 10**6, lifetime: int = audit.LIFETIME, registry: audit.Registry | None = None,
-                 deferred: bool = False) -> None:
+                 deferred: bool = False, appends: int = coins.APPENDS) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
                         window_ns=10, codec=reg.codec, lifetime=lifetime, deferred=deferred)
         self.clock = Clock()
         if registry is None:
-            self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
-                             not_before_ns=0, clock=self.clock)
+            self.s = Session(self.p, reg, None, coins.local(reg.digest, 0, self.p.windows, Entropy(b"coins"),
+                                                            appends=appends), not_before_ns=0, clock=self.clock)
         else:
             self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))
         self.store = store

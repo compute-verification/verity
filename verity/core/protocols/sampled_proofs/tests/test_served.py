@@ -1,5 +1,6 @@
 """Served trees as registered ports (`one_stage.served.register_served`): the registration it builds passes R7 and the file
-is `reads_file`'s, an earlier output keeps its port, and every malformed tree is refused."""
+is `reads_file`'s, an earlier output keeps its port, a reused tree its earlier entry, and every malformed tree is
+refused."""
 from __future__ import annotations
 
 import dataclasses
@@ -147,6 +148,39 @@ def test_an_earlier_outputs_tree_keeps_its_port():
         register_served(prog, Q, [dataclasses.replace(out, output=None)], log=[earlier])
 
 
+def test_a_reused_tree_takes_an_earlier_records_registered_value():
+    """A tree an earlier record registered as one of its values (H1's `a/<K>@<c>` as a Commit's AROW, say) registers under
+    that entry's domain and root with no tree of its own; R7 accepts it with the returned `outputs`, and a tree whose root,
+    domain or rows aren't the entry's, or which the log doesn't hold, is refused."""
+    prog = _program()
+    reg, _ = _tree(prog)
+    dom = "da" * 64
+    theirs = {**reg.entry(), "value": "a/16@0", "root": "cd" * 64, "domain": dom}
+    first, ports = _record(prog, [reg.entry()])
+    earlier = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[theirs])
+    tree = ServedTree("W", "cd" * 64, len(TABLE), 2, dom, reused=(R.digest(earlier), "a/16@0"))
+    sr = register_served(prog, Q, [tree], log=[earlier], window_root="a7" * 64)
+    assert sr.outputs == {"W": {"record": R.digest(earlier), "value": "a/16@0"}}
+    assert sr.registered == [{**reg.entry(), "root": "cd" * 64, "domain": dom}]
+    assert {e["domain"] for e in sr.ports.values()} == {dom} and {e["root"] for e in sr.ports.values()} == {"cd" * 64}
+    rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier),
+                   registered=sr.registered)
+    assert R.check(rec, prog, Q, LAW, SCHEME, ports, registered=sr.values, outputs=sr.outputs, log=[earlier],
+                   window_root="a7" * 64).ok
+    for bad, why in ((dataclasses.replace(tree, root="ce" * 64), "not value 'a/16@0'"),
+                     (dataclasses.replace(tree, domain="db" * 64), "not value 'a/16@0'"),
+                     (dataclasses.replace(tree, reused=("ee" * 64, "a/16@0")), "the log holds no record"),
+                     (dataclasses.replace(tree, reused=(R.digest(earlier), "nope")), "the log holds no record"),
+                     (dataclasses.replace(tree, reused=(R.digest(earlier), "a/16@0"), output=(R.digest(earlier), "x")),
+                      "not both"),
+                     (dataclasses.replace(tree, reused=("ab" * 64,)), "reused is")):
+        with pytest.raises(ValueError, match=why):
+            register_served(prog, Q, [bad], log=[earlier])
+    short = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[{**theirs, "words": 1}])
+    with pytest.raises(ValueError, match="the log holds no record"):
+        register_served(prog, Q, [dataclasses.replace(tree, reused=(R.digest(short), "a/16@0"))], log=[short])
+
+
 @pytest.mark.parametrize("change, why", [
     ({"root": "AB" * 64}, "root is not lowercase hex of 64 bytes"),
     ({"root": "ab" * 63}, "root is not lowercase hex of 64 bytes"),
@@ -163,8 +197,8 @@ def test_an_earlier_outputs_tree_keeps_its_port():
     ({"value": ""}, "names the parameter"),
     ({"value": "nope"}, "not a parameter of the program"),
     ({"output": ("ab" * 64,)}, "an output is"),
-    ({"row_schema": "hm96-sha512/row/v2"}, "the registered form reads hm96-sha512/row/v1 rows alone"),
-    ({"row_schema": "hm96-sha512/row-seg/v1"}, "the registered form reads hm96-sha512/row/v1 rows alone"),
+    ({"row_schema": "hm96-sha512/row/v2"}, r"10 leaves are not rows of 2 \(4 of its leaves in a hm96-sha512/row/v2 row\)"),
+    ({"row_schema": "hm96-sha512/row-seg/v1"}, r"not rows of 2 \(4 of its leaves in a hm96-sha512/row-seg/v1 row\)"),
     ({"row_schema": "u16"}, "not one of"),
 ])
 def test_a_malformed_tree_is_refused(change, why):
@@ -177,10 +211,103 @@ def test_a_malformed_tree_is_refused(change, why):
 def test_the_row_formats_are_the_commitment_layers():
     """`row_schema`'s values are the frame-v3-sha512 leaf schemas C-Flock's ports name (`Flock.HmRow.ROW_SCHEMA*`)."""
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
-    from verity.core.protocols.sampled_proofs.one_stage.served import READ, SCHEMAS
+    from verity.core.protocols.sampled_proofs.one_stage.served import SCHEMAS
 
-    assert SCHEMAS == (SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
-    assert READ == (SCHEMA_HM96_SHA512_ROW,)
+    assert SCHEMAS == G.SCHEMAS == (SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
+
+
+#: TABLE's rows packed as bit rows: each row's two 8-bit leaves in one u16 word, leaf 0 low (H1's A: K int8 codes, K/2 words)
+PACKED = [[a | b << 8] for a, b in TABLE]
+
+
+@pytest.mark.parametrize("schema", [G.SCHEMA_V2, G.SCHEMA_SEG])
+def test_a_bit_row_tree_registers_in_its_format(schema):
+    """A `row/v2` or `row-seg/v1` tree is a row of `words` u16 words holding as many of the parameter's leaves as their bits
+    do: W's rows of two 8-bit leaves are one word each, so the tree is 5 rows of 1 word, its port names the format, and
+    every read opens the served root under the format's leaves (`verify_read`), where the v1 file opens none."""
+    prog = _program()
+    reg = G.Registered.commit(P.program_digest(prog), "W", PACKED, schema=schema)
+    tree = ServedTree.of(reg)
+    assert (tree.row_schema, tree.leaves, tree.words) == (schema, 5, 1) and "row_schema" not in tree.entry()
+    sr = register_served(prog, Q, [tree])
+    assert sr.registered == [reg.entry()] and sr.values == {"W": 1} and sr.roots == {"W": reg.root.hex()}
+    assert sr.file == G.reads_file(prog, Q, {"W": 1}, {"W": reg.root.hex()}, schemas={"W": schema})
+    assert sr.ports == {"w": {"value": "W", "root": reg.root.hex(), "leaves": 5, "words": 1, "word_bits": 16,
+                              "domain": reg.domain.domain_id.hex(), "row_schema": schema, "reads": list(POS)}}
+    dom = G.domain(P.program_digest(prog), "W", 1, 5)
+    assert reg.domain.domain_id == dom.domain_id
+    for r in POS:
+        assert G.verify_read(dom, reg.root, r, reg.bcs[r], reg.path(r), schema)
+        assert not G.verify_read(dom, reg.root, r, reg.bcs[r], reg.path(r))
+
+
+@pytest.mark.parametrize("schema", [G.SCHEMA_V2, G.SCHEMA_SEG])
+@pytest.mark.parametrize("change, why", [
+    ({"words": 2}, r"10 leaves are not rows of 2 \(4 of its leaves"),
+    ({"words": 3}, r"10 leaves are not rows of 3 \(6 of its leaves"),
+    ({"word_bits": 32}, "5 rows of 1 32-bit leaves, and the program's parameter is 5 rows of 1 16-bit leaves"),
+    ({"leaves": 10}, "10 rows of 1 16-bit leaves, and the program's parameter is 5 rows"),
+])
+def test_a_bit_row_tree_whose_bits_are_not_the_parameters_rows_is_refused(schema, change, why):
+    """A bit row is exactly its `words * word_bits` bits: a tree whose words or width make its rows other than W's
+    two-leaf rows, or that counts its rows as v1 would (one 8-bit leaf a word), is refused."""
+    prog = _program()
+    tree = ServedTree.of(G.Registered.commit(P.program_digest(prog), "W", PACKED, schema=schema))
+    with pytest.raises(ValueError, match=why):
+        register_served(prog, Q, [dataclasses.replace(tree, **change)])
+
+
+def test_r7_counts_a_bit_row_trees_rows_in_its_format():
+    """The record's entry names no format: R7 counts a row's leaves in the format the verifier holds for the value (the
+    returned `schemas`). It holds W's packed `row/v2` and `row-seg/v1` rows with them, and without them counts W as 10
+    rows of one leaf (R7-leaves); a `row/v2` tree whose leaves are its words' width (32-bit leaves in 32-bit words) has
+    the same rows either way."""
+    prog = _program()
+    for schema in (G.SCHEMA_V2, G.SCHEMA_SEG):
+        sr = register_served(prog, Q, [ServedTree.of(G.Registered.commit(P.program_digest(prog), "W", PACKED, schema=schema))])
+        assert sr.schemas == {"W": schema}
+        rec, ports = _record(prog, sr.registered)
+        assert R.check(rec, prog, Q, LAW, SCHEME, ports, registered=sr.values, schemas=sr.schemas).ok
+        v = R.check(rec, prog, Q, LAW, SCHEME, ports, registered=sr.values)
+        assert not v.ok and v.detail["R7-leaves"] == {"value": "W", "registered": 5, "verifier": 10}
+        other = {G.SCHEMA_V2: G.SCHEMA_SEG, G.SCHEMA_SEG: G.SCHEMA_V2}[schema]
+        assert R.check(rec, prog, Q, LAW, SCHEME, ports, registered=sr.values, schemas={"W": other}).ok
+    _, tree = _tree(prog)
+    assert register_served(prog, Q, [tree]).schemas == {}
+
+    def sig(S):
+        return (("x", Array(len(POS), Array(2, Value(8)))), ("W", Array(len(TABLE), Array(2, Value(32))))), Array(len(POS), Value(8))
+
+    wide = Program(bind(CompositeDefinition("ServedTestWideV2", 0, (), sig,
+                                            lambda B, S, x, W: coll_concat(sig(S)[1], [B.call(MIX32, x[i], W[p]) for i, p in enumerate(POS)]),
+                                            register=False)))
+    q = P.template_instance_query(MIX32.id)
+    reg = G.Registered.commit(P.program_digest(wide), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32, schema=G.SCHEMA_V2)
+    sr = register_served(wide, q, [ServedTree.of(reg)])
+    assert {e["row_schema"] for e in sr.ports.values()} == {G.SCHEMA_V2}
+    part = P.partition(wide, q)
+    ports = {"x": {"leaves": len(POS), "domain": R.served_domain(part["program"], P.digest(part), "x", "hm96-sha512/row/v1",
+                                                                  len(POS), "r-served")}}
+    rec = R.record(wide, q, LAW, SCHEME, [{"port": "x", "root": "ab" * 64, **ports["x"]}], SERVED, registered=sr.registered)
+    assert R.check(rec, wide, q, LAW, SCHEME, ports, registered=sr.values).ok
+    assert R.check(rec, wide, q, LAW, SCHEME, ports, registered=sr.values, schemas=sr.schemas).ok
+
+
+@pytest.mark.parametrize("schemas, registered", [
+    ({"W": "u16"}, {"W": 1}),
+    ({"W": None}, {"W": 1}),
+    ({"V": G.SCHEMA_V2}, {"W": 1}),
+    ({"W": G.SCHEMA_V2}, None),
+    ({"W": G.SCHEMA_V2}, {}),
+    ([("W", G.SCHEMA_V2)], {"W": 1}),
+])
+def test_r7_refuses_a_row_format_of_another_form(schemas, registered):
+    """A row format names a value the verifier expects registered and doesn't fill, in one of `registered.SCHEMAS`, as
+    `OneStage.paramsOfJson` reads it."""
+    prog = _program()
+    rec, ports = _record(prog, [])
+    with pytest.raises(ValueError, match="row format"):
+        R.check(rec, prog, Q, LAW, SCHEME, ports, registered=registered, schemas=schemas)
 
 
 def test_a_value_twice_no_tree_or_one_no_unit_reads_is_refused():
@@ -200,12 +327,80 @@ def test_a_value_twice_no_tree_or_one_no_unit_reads_is_refused():
 
 
 def test_a_tree_the_log_registered_under_another_root_is_refused():
-    """R7-held: a value an earlier record of the log registered keeps that root, so a later window's tree under another root
-    is refused here, as R7 would refuse its record."""
+    """R7-held: a value the verifier holds across windows that an earlier record of the log registered keeps that root, so
+    a later window's tree under another root is refused here, as R7 would refuse its record."""
     prog = _program()
     reg, tree = _tree(prog)
     first, _ = _record(prog, [reg.entry()])
-    assert register_served(prog, Q, [tree], log=[first]).roots == {"W": reg.root.hex()}
+    assert register_served(prog, Q, [tree], log=[first], held=["W"]).roots == {"W": reg.root.hex()}
     _, other = _tree(prog)
     with pytest.raises(ValueError, match="R7-held"):
-        register_served(prog, Q, [other], log=[first])
+        register_served(prog, Q, [other], log=[first], held=["W"])
+
+
+def test_a_fixed_name_served_again_without_the_windows_root_is_refused():
+    """PRF-127, fail closed: without the window's open root every window's domain is the same, so a value the log
+    registered that the verifier doesn't hold is a fixed-name per-window value from its second window on, and both
+    `register_served` and R7's verifier refuse their inputs, naming `window_root` and `held`, whatever the root: the first
+    window's (a replay) or a fresh one. The first window, and a window whose values take fresh names, need no root."""
+    prog = _program()
+    reg, tree = _tree(prog)
+    sr = register_served(prog, Q, [tree])
+    first, ports = _record(prog, sr.registered)
+    assert R.check(first, prog, Q, LAW, SCHEME, ports, registered=sr.values).ok
+    _, fresh = _tree(prog)
+    for again in (tree, fresh):
+        with pytest.raises(ValueError, match=r"registered values \['W'\].*`window_root`.*`held`"):
+            register_served(prog, Q, [again], log=[first])
+    second, ports = _record(prog, sr.registered, window={**SERVED, "row": 8}, previous=R.digest(first))
+    with pytest.raises(ValueError, match=r"registered values \['W'\].*`window_root`"):
+        R.check(second, prog, Q, LAW, SCHEME, ports, log=[first], registered=sr.values)
+    assert R.check(second, prog, Q, LAW, SCHEME, ports, log=[first], registered=sr.values, held=["W"]).ok
+
+
+WINDOWS = ("a1" * 64, "b2" * 64)
+
+
+def test_each_window_registers_its_own_trees_under_its_root_and_the_weights_once():
+    """PRF-127: under the window's open root a window-independent program's per-window tree (x) is served afresh every
+    window under the same name, R7 accepts each window's record with the returned copies, and the weights (W, `held`)
+    keep their window-independent domain and first root. A second window that serves the first window's x tree is
+    refused: its domain is the first window's."""
+    prog = _program()
+    d = P.program_digest(prog)
+    w = G.Registered.commit(d, "W", TABLE)
+    xs = [G.Registered.commit(d, "x", [[i, i] for i in range(len(POS))], window=r) for r in WINDOWS]
+    log: list = []
+    for r, x in zip(WINDOWS, xs):
+        sr = register_served(prog, Q, [ServedTree.of(x), ServedTree.of(w)], log=log, window_root=r, held=["W"])
+        assert sr.window_root == r and sr.held == ["W"]
+        assert sr.ports["x"]["domain"] == x.entry()["domain"] and sr.ports["w"]["domain"] == w.entry()["domain"]
+        rec, ports = _record(prog, sr.registered, window={**SERVED, "row": 7 + len(log)},
+                             previous=R.digest(log[-1]) if log else None)
+        assert R.check(rec, prog, Q, LAW, SCHEME, ports, log=log, registered=sr.values, window_root=sr.window_root,
+                       held=sr.held).ok
+        log.append(rec)
+    with pytest.raises(ValueError, match="registered-value domain"):
+        register_served(prog, Q, [ServedTree.of(xs[0]), ServedTree.of(w)], log=log[:1], window_root=WINDOWS[1],
+                        held=["W"])
+    with pytest.raises(ValueError, match="R7-held"):
+        register_served(prog, Q, [ServedTree.of(xs[1]), ServedTree.of(G.Registered.commit(d, "W", TABLE))], log=log[:1],
+                        window_root=WINDOWS[1], held=["W"])
+    with pytest.raises(ValueError, match="held values"):
+        register_served(prog, Q, [ServedTree.of(xs[1])], window_root=WINDOWS[1], held=["W"])
+
+
+def test_a_served_tree_cannot_hold_itself_across_windows():
+    """PRF-127: which values are held across windows is the verifier's (`held`), never the served tree's. A per-window tree
+    committed under the window-independent domain, as if held, is refused under the window's root, and the `--registered`
+    file names each port's domain as the verifier derived it, with no window root or held values of its own."""
+    prog = _program()
+    d = P.program_digest(prog)
+    w = G.Registered.commit(d, "W", TABLE)
+    unwindowed = G.Registered.commit(d, "x", [[i, i] for i in range(len(POS))])
+    with pytest.raises(ValueError, match="registered-value domain"):
+        register_served(prog, Q, [ServedTree.of(unwindowed), ServedTree.of(w)], window_root=WINDOWS[0], held=["W"])
+    x = G.Registered.commit(d, "x", [[i, i] for i in range(len(POS))], window=WINDOWS[0])
+    sr = register_served(prog, Q, [ServedTree.of(x), ServedTree.of(w)], window_root=WINDOWS[0], held=["W"])
+    assert set(sr.file) == {"format", "ports"}
+    assert all("held" not in e and "window_root" not in e for e in sr.ports.values())

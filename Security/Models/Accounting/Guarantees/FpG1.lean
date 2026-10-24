@@ -34,11 +34,20 @@ checks H1's committed ranges, which g1's leaves meet (`Leaves.fp8_inH1`, `Leaves
 served window: its relation is H1's ranges, not a served Program's, its receipt game is the honest one, and its time
 is exactly the credit, so it shows only that every premise can hold at once.
 
+The measured twins are the same at `Sm120MeasuredHeadline` (H1 + fx1 on sm_120's measured vector VF3s-16,
+`1 − 0.591%` outside `2^-40`): its conclusion and every premise as they are but binding's, read the same way. Their
+0.591% rests on the measured record's premises, (I3) at `9/8` (`ScalarRoute`) among them, which is assumed and not
+proved, as it is for the record itself: at A6's proved `½` floor the same bound on the same vector is 7.791%
+(RT3-LOGIC-2, `Sm120MeasuredHeadline`'s docstring). Beside the g1 premise, which narrows the windows covered, they take
+no premise the measured record doesn't: binding at `δ_bind` is what the record's fork form gives at `√δ_fork`.
+`Proofs.Accounting.Headline.FpG1Measured` has their honest witnesses on the measured data and the off-grid twin.
+
 The statements:
 
 * `Sm120FpG1SheetHeadline`: FP8-g1, E4M3 activations to 120 and weights to 104.
 * `Sm120W4a8G1SheetHeadline`: W4A8-g1, the record's int8 activations beside doubled E2M1 weights under block scales
   to 9.
+* `Sm120FpG1MeasuredHeadline`, `Sm120W4a8G1MeasuredHeadline`: the same two on the measured vector, at `1 − 0.591%`.
 -/
 
 namespace Accounting.Guarantees.FpG1
@@ -95,5 +104,59 @@ def Sm120W4a8G1SheetHeadline : Prop :=
     pf.Of Pl → pf.BindingAt δbind → ProofSoundAt pf δzk → ProofsPin pf → RightFixed Pl pf Sm120.model.Nw →
     prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 5860 / 100000) ≤
       (1 / 2) ^ 40
+
+/-- **FP8-g1's headline on sm_120's measured vector**, under full checking with live coins. `Sm120MeasuredHeadline`,
+with binding at `δ_bind` (`ProofLayer.BindingAt`) in place of its fork form, at a window whose proofs, at least one a
+round (`n_π + 1`), open the round's operand leaves beside its other values (`Leaves × W`), every committed leaf an
+FP8-g1 level on H1's grids (`Leaves.Fp8 Grids.h1`): under the measured record's other premises, outside an event of
+probability at most `2^-40` every accepted window's time is at least `1 − 591/100000` (`1 − 0.591%`) of the credit
+`T_cred = B_♭/f_max` on VF3s-16. The 0.591% rests on those premises, (I3) at `9/8` (`ScalarRoute`) among them, which is
+assumed, as it is for the measured record: at A6's proved `½` floor the same bound is 7.791%. Beside the g1 premise,
+which does no work in the bound and narrows the windows covered, the statement takes no premise the measured record
+doesn't: binding at `δ_bind` is what the record's fork form gives at `√δ_fork`. The credit counts the int8 GEMM's MACs
+that carry the FP8 model's products; whether they are its useful work is open. -/
+def Sm120FpG1MeasuredHeadline : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
+    (Uf : Unfolded Ω Sm120.checks) {W : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks (nπ + 1) (Leaves × W))
+    (δbind δzk : ℝ),
+    (∀ x w i, (pf.committed x w i).1.Fp8 Grids.h1) →
+    (Sm120.checks : ℝ) * (δbind + ((nπ + 1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
+    (∀ x, FacetCeilings Sm120Measured.machine (Pl.run x).run) →
+    (∀ x, WordsWritten Sm120Measured.model (Pl.run x)) → (∀ x, ScalarRoute Sm120Measured.model (Pl.run x)) →
+    (∀ x, NoSum (Pl.run x)) →
+    (∀ x, FoldOptFoldedAt Sm120Measured.model (Pl.run x)
+      ((1 - Uf.share x / Sm120.checks) * Sm120Measured.model.Nw) (onFacet Sm120Measured.piStar)) →
+    Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
+    pf.Of Pl → pf.BindingAt δbind → ProofSoundAt pf δzk → ProofsPin pf →
+    RightFixed Pl pf Sm120Measured.model.Nw →
+    prob (fun x => Pl.accepts x ∧
+      (Pl.run x).run.time / Sm120Measured.model.credit Sm120Measured.flat < 1 - 591 / 100000) ≤ (1 / 2) ^ 40
+
+/-- **W4A8-g1's headline on sm_120's measured vector**, under full checking with live coins.
+`Sm120MeasuredHeadline`, with binding at `δ_bind` (`ProofLayer.BindingAt`) in place of its fork form, at a window whose
+proofs, at least one a round, open the round's operand leaves beside its other values, every committed leaf W4A8-g1's
+on H1's grids (`Leaves.W4a8 Grids.h1`): under the measured record's other premises, outside an event of probability at
+most `2^-40` every accepted window's time is at least `1 − 591/100000` of the credit `T_cred = B_♭/f_max` on VF3s-16.
+The 0.591% rests on those premises, (I3) at `9/8` (`ScalarRoute`) among them, which is assumed, as it is for the
+measured record: at A6's proved `½` floor the same bound is 7.791%. Beside the g1 premise, which does no work in the
+bound and narrows the windows covered, the statement takes no premise the measured record doesn't: binding at `δ_bind`
+is what the record's fork form gives at `√δ_fork`. The credit counts the int8 GEMM's MACs that carry the FP4 weights'
+products; whether they are the model's useful work is open. -/
+def Sm120W4a8G1MeasuredHeadline : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
+    (Uf : Unfolded Ω Sm120.checks) {W : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks (nπ + 1) (Leaves × W))
+    (δbind δzk : ℝ),
+    (∀ x w i, (pf.committed x w i).1.W4a8 Grids.h1) →
+    (Sm120.checks : ℝ) * (δbind + ((nπ + 1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
+    (∀ x, FacetCeilings Sm120Measured.machine (Pl.run x).run) →
+    (∀ x, WordsWritten Sm120Measured.model (Pl.run x)) → (∀ x, ScalarRoute Sm120Measured.model (Pl.run x)) →
+    (∀ x, NoSum (Pl.run x)) →
+    (∀ x, FoldOptFoldedAt Sm120Measured.model (Pl.run x)
+      ((1 - Uf.share x / Sm120.checks) * Sm120Measured.model.Nw) (onFacet Sm120Measured.piStar)) →
+    Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
+    pf.Of Pl → pf.BindingAt δbind → ProofSoundAt pf δzk → ProofsPin pf →
+    RightFixed Pl pf Sm120Measured.model.Nw →
+    prob (fun x => Pl.accepts x ∧
+      (Pl.run x).run.time / Sm120Measured.model.credit Sm120Measured.flat < 1 - 591 / 100000) ≤ (1 / 2) ^ 40
 
 end Accounting.Guarantees.FpG1

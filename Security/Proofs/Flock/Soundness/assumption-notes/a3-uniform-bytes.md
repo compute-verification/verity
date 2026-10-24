@@ -28,7 +28,14 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `execOS_subset_full_escape`), so `RecursiveSound`, `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditC3`
   are proved from their forms with no A3 premise (`…NoA3`). Those are fork forms and state no bits; the recursion's
   knowledge form, `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, about 65 bits per SHA-512 call at the
-  deployed shape, below the 100-bit floor and the 2^-128 target under every weight (ASK-73).
+  deployed shape, below the 100-bit floor and the 2^-128 target under every weight (ASK-73). Route 2C's bound λ₂
+  (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but
+  `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still
+  open: `PartChecksB`, `PartOpensB` (at staged V\* statements) and `DecompB` (`RecDeploy.ksLin2_deployed_full`, at
+  `recTr`, a model of the coin server's record that lists every inner round, and the last round's pieces at the parts
+  that commit the earlier rounds).
+  Holo statements are candidate 3's own model, and `BitsLin2` at the dense
+  statements follows from it (`bitsLin2On_of_ksLin2On`).
 - **The salts** (Daniel, 9 Oct, decisions 4(a) and 4(c)). C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
   from the operating system (`getrandom`, the kernel's `getrandom(2)`, which `/dev/urandom` also reads; under the
   firewall, from its tap), and the recursive audit's firewall and a registrant read theirs the same way (`os.urandom`).

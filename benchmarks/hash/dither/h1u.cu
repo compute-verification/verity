@@ -1,5 +1,5 @@
-// H1 + fx1's unit (pouw.circuit.h1tile, PouwH1Tile_v2) fused on sm_90a / sm_100a, bit for bit served_h1/receipts.py's
-// `call_receipts` (receipts_ca.py here): a served call's A [M, K] and B [N, K] s8, its units the full 32 x 32 tiles in
+// H1 + fx1's unit (pouw.circuit.h1tile) fused on sm_90a / sm_100a, bit for bit served_h1/receipts.py's
+// `call_receipts`: a served call's A [M, K] and B [N, K] s8, its units the full 32 x 32 tiles in
 // row-block-major order, unit u at position base + u.
 //
 //   h1_seeds   one thread a unit: seed_j and sigma_R (seeds.seed / receipt_seed, SHA-512 over 224 bytes, two
@@ -17,7 +17,7 @@
 //              packed from the accumulator layout in registers, no shuffle), folded as sets KS .. KS + m - 1.
 // The K order inside a segment is a bijection both operands share (lane q's 8 bytes 8q..8q+7 are its A/B fragment's
 // k = 4q..4q+3 and 16+4q..16+4q+3), so every product is the segment's; the tail's order is the accumulator columns'.
-// A dead row block (live[ri] == 0, PouwH1Tile_v2's all-zero tile) writes the zero receipt and derives no noise.
+// A dead row block (live[ri] == 0, PouwH1Tile_v4's dead tile) writes the zero receipt and derives no noise.
 // Requires K % 512 == 0 (KS % 16: each noise block is 16 segments' bits) and m in {2, 3} (K <= 16384).
 //
 // kh_unit_ws is the same receipts in two launches, for calls too small to fill the GPU one warp a unit:
@@ -25,8 +25,10 @@
 //              blocks t = lane RB + c, the columns' 32 RB + lane CB + c), its 16 words to the caller's workspace
 //   h1u<WS>    h1u reading those blocks instead of hashing them
 // Both forms load the A and B words H1U_PD segments ahead while the current segment is multiplied and folded (WS always,
-// the fused form with H1U_PF), in a ring of H1U_PD register sets; H1U_L2PF also prefetches into L2 the A and B lines 16
-// segments ahead and (WS) the next chunk's workspace blocks. H1U_WARPS is the warps a CTA (one a unit).
+// the fused form with H1U_PF), in a ring of H1U_PD register sets (H1U_RING = 1: H1U_PD + 1 sets, each segment's load
+// going to the set the segment before it read, so a load never waits on the copy out of its set); H1U_L2PF also
+// prefetches into L2 the A and B lines 16 segments ahead and (WS) the next chunk's workspace blocks. H1U_WARPS is the
+// warps a CTA (one a unit).
 // H1U_SPLIT builds h1p in h1u's place: a pair of warps a unit, for calls whose units leave most of the GPU idle (decode).
 // Warp p of the pair multiplies n-tiles p and p + 2 (T and Y), so it holds exactly the entries chains 4 p .. 4 p + 3 absorb
 // (key t = 2 i + p), and folds those; it hashes (or loads) one of the chunk's two blocks a lane, p = 0 the rows', p = 1 the
@@ -42,12 +44,21 @@
 //
 //   kh_seeds(data, base, U, seeds, stream)   data: SEED_TAG, RECEIPT_TAG (3 words each), salt, root_a, root_b (8 each)
 //   kh_unit(A, B, M, N, K, seeds, live, out, stream)   out: U x kh_words(K) u32 (live may be null: every unit live)
+//   kh_units_multi(calls, ncalls, units, M, live, stream)   kh_unit of ncalls calls (UCall) in one launch (h1um), for a
+//              step's units dispatched together, whose warps fill the GPU where one call's leave it idle
+//   kh_units_multi_sm(calls, ncalls, units, M, live, q, den, next, stream)   the same on the SMs whose id % den < q alone
+//              (h1um_sm)
 //   kh_unit_ws(A, B, M, N, K, seeds, live, out, ws, J, stream)   ws: kh_ws_bytes(M, N, K) bytes, the caller's
 //   kh_one(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream)   the one-stream form
 //              (OneOut, below): kh_unit_ws' receipts (kh_unit's if ws is null) and the served z and y from the same MMAs
 //   kh_one_peel(the same)   kh_one peeled (PL, below): z = A B^T, so y is today's
+//   kh_one_noise(the same), kh_one_units(the same)   kh_one's noise launch and its units launch, apart
 //   kh_one_j10(A, B, rows, N, K, seeds, cseed, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream)   kh_one's
 //              two-launch form on J10-R's call-scale noise (measured only; at the end of this file)
+//   kh_seeds_at(data, idx, pos, U, seeds, stream)   kh_seeds of U units anywhere: unit u's at position pos[u] from
+//              data's record idx[u] (kh_seeds' data, 30 words a record)
+//   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L drawn leaves on gathered operands: their receipts and lane records
+//              (option A's partials, partials.py; at the end of this file)
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
 #include "h1sha.cuh"
 #include <cuda_bf16.h>
@@ -66,11 +77,19 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1U_PD
 #define H1U_PD 1
 #endif
+#ifndef H1U_RING
+#define H1U_RING 0
+#endif
 #ifndef H1U_L2PF
 #define H1U_L2PF 0
 #endif
 #ifndef H1U_SPLIT
 #define H1U_SPLIT 0
+#endif
+// H1U_NB2 = 1: the fused form hashes a chunk's two blocks a lane (its row's and its column's, one stream) as one paired
+// compression (noise_block2), their rounds interleaved; the same blocks
+#ifndef H1U_NB2
+#define H1U_NB2 0
 #endif
 // H1U_KSPLIT = P (2 or 4): the one-stream two-launch call (kh_one, kh_one_peel) runs h1k, a CTA a unit, for calls whose
 // live units number at most H1K_MAXU (decode's qkv, o and down); larger calls keep h1u
@@ -85,8 +104,46 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1K_AUTO
 #define H1K_AUTO 0
 #endif
+// H1K_RONLY = 1 (with H1U_KSPLIT): kh_one writes its receipts only, for a caller whose served z and y come from another
+// kernel (dither-a): h1k skips the wrap words, Cw and every z, zo and y store, and calls past h1k take h1u's receipts-only
+// form (kh_unit_ws'); the receipts are the same words
+#ifndef H1K_RONLY
+#define H1K_RONLY 0
+#endif
+// H1K_PD = D >= 1: h1k's producers load their A and B words D rounds ahead in a ring of D + 1 register sets, round r's
+// load going to the set round r - 1 read; 0 keeps one set, copied out and reloaded a round ahead (h1k<4> runs one CTA an
+// SM and h1k<2> two, whatever their registers). H1K_NXD = 1: a chunk's noise blocks, loaded at its first round, are stored
+// at its second round's end rather than its first's, so a round hides their load. H1K_L2PF = S: the producer whose
+// segment is S segments before a 128-byte line's first prefetches that line of the unit's 32 B rows into L2 (A's rows,
+// every unit's of the row block, stay in L2)
+#ifndef H1K_PD
+#define H1K_PD 0
+#endif
+#ifndef H1K_NXD
+#define H1K_NXD 0
+#endif
+#ifndef H1K_L2PF
+#define H1K_L2PF 0
+#endif
+// H1K_CPA = S >= 2 (in H1K_PD's place): h1k's producers copy their A and B words with cp.async into a ring of S stages in
+// dynamic shared memory (S x 2 KiB a producer), round r + S - 1's issued at round r into the stage round r - 1 read
+// (behind that round's barrier), so S - 1 rounds of loads are in flight and none holds a register
+#ifndef H1K_CPA
+#define H1K_CPA 0
+#endif
+// H1U_CARVE = 1: kh_one's units kernels ask for the maximum shared-memory carveout, once a process each, before their
+// first launch (the driver's default on an RTX PRO 6000 holds one 42 KB h1u CTA an SM, where registers allow two)
+#ifndef H1U_CARVE
+#define H1U_CARVE 0
+#endif
 static_assert(!H1K_AUTO || H1U_KSPLIT == 4, "H1K_AUTO picks between h1k<4> and h1k<2>: build it with H1U_KSPLIT = 4");
-static_assert(16 % H1U_PD == 0, "a chunk's 16 segments are whole rings of H1U_PD");
+static_assert(!H1K_RONLY || H1U_KSPLIT, "H1K_RONLY is kh_one's K split without z and y: build it with H1U_KSPLIT");
+static_assert(16 % (H1U_PD + H1U_RING) == 0, "a chunk's 16 segments are whole rings of H1U_PD (+ 1 with H1U_RING) sets");
+static_assert(!H1U_RING || !H1U_SPLIT, "H1U_RING is h1u's ring; h1p keeps H1U_PD sets");
+static_assert(H1K_PD >= 0 && H1K_PD <= 3, "h1k's ring: 0 (one set) to 3 rounds ahead");
+static_assert(H1K_L2PF % 4 == 0, "h1k's L2 prefetch distance is whole 128-byte lines of segments");
+static_assert(H1K_CPA == 0 || (H1K_CPA >= 2 && H1K_CPA <= 8 && !H1K_PD && !H1K_L2PF),
+              "h1k's cp.async ring: 2 to 8 stages, in place of H1K_PD's register ring and H1K_L2PF");
 static_assert(H1U_KSPLIT == 0 || H1U_KSPLIT == 2 || H1U_KSPLIT == 4, "h1k's producers: 2 or 4");
 static_assert(!H1U_SPLIT || (WARPS % 2 == 0 && WARPS <= 4), "a split unit is a pair of warps; 2 pairs fill 48 KiB");
 
@@ -148,6 +205,140 @@ __device__ __forceinline__ u32 wrapw(u32 b, u32 v) {
 
 __device__ __forceinline__ void prefetch_l2(const void* p) { asm volatile("prefetch.global.L2 [%0];" ::"l"(p)); }
 
+// H1U_L2HINT = 64 | 128 | 256 (h1u's and h1k's A and B segment loads) and H1U_L2HINT_WS (their workspace loads): the
+// load's L2 prefetch size, so a miss brings the line the next segments (blocks) read instead of the one 32-byte sector
+#ifndef H1U_L2HINT
+#define H1U_L2HINT 0
+#endif
+#ifndef H1U_L2HINT_WS
+#define H1U_L2HINT_WS 0
+#endif
+template <int H>
+__device__ __forceinline__ uint2 ld2(const void* p) {
+  if constexpr (H == 0) {
+    return __ldg(reinterpret_cast<const uint2*>(p));
+  } else {
+    static_assert(H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+    uint2 v;
+    if constexpr (H == 64) asm("ld.global.nc.L2::64B.v2.u32 {%0, %1}, [%2];" : "=r"(v.x), "=r"(v.y) : "l"(p));
+    else if constexpr (H == 128) asm("ld.global.nc.L2::128B.v2.u32 {%0, %1}, [%2];" : "=r"(v.x), "=r"(v.y) : "l"(p));
+    else asm("ld.global.nc.L2::256B.v2.u32 {%0, %1}, [%2];" : "=r"(v.x), "=r"(v.y) : "l"(p));
+    return v;
+  }
+}
+template <int H>
+__device__ __forceinline__ uint4 ld4(const void* p) {
+  if constexpr (H == 0) {
+    return __ldg(reinterpret_cast<const uint4*>(p));
+  } else {
+    static_assert(H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+    uint4 v;
+    if constexpr (H == 64)
+      asm("ld.global.nc.L2::64B.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p));
+    else if constexpr (H == 128)
+      asm("ld.global.nc.L2::128B.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p));
+    else
+      asm("ld.global.nc.L2::256B.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p));
+    return v;
+  }
+}
+
+// L2 eviction priorities, the bytes unchanged: H1U_EVF = 1 h1u's and h1k's B (weight) and workspace loads evict first
+// (each is read once a step), H1S_EVL = 1 h1s_noise's workspace stores evict last (the units read them a few calls later)
+#ifndef H1U_EVF
+#define H1U_EVF 0
+#endif
+#ifndef H1S_EVL
+#define H1S_EVL 0
+#endif
+// H1U_EVFU = 0 (with H1U_EVF): h1u's B loads keep the normal policy, since a warp reads a row's 128-byte line over four
+// segments and an evict-first line can go before its last; h1k's producers read a line in one round
+#ifndef H1U_EVFU
+#define H1U_EVFU 1
+#endif
+template <int H, bool EF>
+__device__ __forceinline__ uint2 ld2e(const void* p) {
+  if constexpr (!EF) {
+    return ld2<H>(p);
+  } else {
+    static_assert(H == 0 || H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+    u64 pol;
+    asm("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
+    uint2 v;
+    if constexpr (H == 0)
+      asm("ld.global.nc.L2::cache_hint.v2.u32 {%0, %1}, [%2], %3;" : "=r"(v.x), "=r"(v.y) : "l"(p), "l"(pol));
+    else if constexpr (H == 64)
+      asm("ld.global.nc.L2::cache_hint.L2::64B.v2.u32 {%0, %1}, [%2], %3;" : "=r"(v.x), "=r"(v.y) : "l"(p), "l"(pol));
+    else if constexpr (H == 128)
+      asm("ld.global.nc.L2::cache_hint.L2::128B.v2.u32 {%0, %1}, [%2], %3;" : "=r"(v.x), "=r"(v.y) : "l"(p), "l"(pol));
+    else
+      asm("ld.global.nc.L2::cache_hint.L2::256B.v2.u32 {%0, %1}, [%2], %3;" : "=r"(v.x), "=r"(v.y) : "l"(p), "l"(pol));
+    return v;
+  }
+}
+template <int H, bool EF>
+__device__ __forceinline__ uint4 ld4e(const void* p) {
+  if constexpr (!EF) {
+    return ld4<H>(p);
+  } else {
+    static_assert(H == 0 || H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+    u64 pol;
+    asm("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
+    uint4 v;
+    if constexpr (H == 0)
+      asm("ld.global.nc.L2::cache_hint.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
+          : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(pol));
+    else if constexpr (H == 64)
+      asm("ld.global.nc.L2::cache_hint.L2::64B.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
+          : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(pol));
+    else if constexpr (H == 128)
+      asm("ld.global.nc.L2::cache_hint.L2::128B.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
+          : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(pol));
+    else
+      asm("ld.global.nc.L2::cache_hint.L2::256B.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
+          : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(pol));
+    return v;
+  }
+}
+template <bool EL>
+__device__ __forceinline__ void st4l(uint4* p, uint4 v) {
+  if constexpr (!EL) {
+    *p = v;
+  } else {
+    u64 pol;
+    asm("createpolicy.fractional.L2::evict_last.b64 %0, 1.0;" : "=l"(pol));
+    asm volatile("st.global.L2::cache_hint.v4.u32 [%0], {%1, %2, %3, %4}, %5;" ::"l"(p), "r"(v.x), "r"(v.y), "r"(v.z),
+                 "r"(v.w), "l"(pol)
+                 : "memory");
+  }
+}
+// 8 bytes global -> shared through cp.async (H1K_CPA), with ld2e's L2 prefetch size and eviction policy
+#define H1U_CP8(Q) asm volatile("cp.async.ca.shared.global" Q " [%0], [%1], 8;" ::"r"(d), "l"(p) : "memory")
+#define H1U_CP8P(Q) asm volatile("cp.async.ca.shared.global.L2::cache_hint" Q " [%0], [%1], 8, %2;" ::"r"(d), "l"(p), "l"(pol) : "memory")
+template <int H, bool EF>
+__device__ __forceinline__ void cp8e(void* s, const void* p) {
+  static_assert(H == 0 || H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+  const u32 d = (u32)__cvta_generic_to_shared(s);
+  if constexpr (!EF) {
+    if constexpr (H == 0) H1U_CP8("");
+    else if constexpr (H == 64) H1U_CP8(".L2::64B");
+    else if constexpr (H == 128) H1U_CP8(".L2::128B");
+    else H1U_CP8(".L2::256B");
+  } else {
+    u64 pol;
+    asm("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
+    if constexpr (H == 0) H1U_CP8P("");
+    else if constexpr (H == 64) H1U_CP8P(".L2::64B");
+    else if constexpr (H == 128) H1U_CP8P(".L2::128B");
+    else H1U_CP8P(".L2::256B");
+  }
+}
+#undef H1U_CP8
+#undef H1U_CP8P
+__device__ __forceinline__ void cp_commit() { asm volatile("cp.async.commit_group;" ::: "memory"); }
+template <int N>
+__device__ __forceinline__ void cp_wait() { asm volatile("cp.async.wait_group %0;" ::"n"(N) : "memory"); }
+
 __device__ __forceinline__ void mma_s8(int (&d)[4], const u32 (&a)[4], const u32 (&b)[2]) {
   asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
       : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
@@ -183,6 +374,24 @@ __device__ __forceinline__ u32 ring_xor(const Sm& S, u32 row) {
   return x;
 }
 
+// the lane records (DG, OneOut::lr): a chunk's 32 ring rows (receipt words at .. at + 31) as every lane's own, lane l's
+// at l W + at of the unit's record, thread r writing word at + r of each lane (row r, column l: no bank conflict)
+template <class Sm>
+__device__ __forceinline__ void lane_put(const Sm& S, u32* lw, u32 W, u32 at, u32 lane) {
+#pragma unroll 8
+  for (int l = 0; l < 32; ++l) lw[(u64)l * W + at + lane] = S.ring[lane][l];
+}
+
+// the tail's 2 MD ring rows (receipt words at .. at + 2 MD - 1) of every lane
+template <int MD, class Sm>
+__device__ __forceinline__ void lane_tail(const Sm& S, u32* lw, u32 W, u32 at, u32 lane) {
+#pragma unroll
+  for (int i = 0; i < 2 * MD; ++i) {
+    const u32 k = 32 * i + lane, l = k / (2 * MD), r = k % (2 * MD);
+    lw[(u64)l * W + at + r] = S.ring[r][l];
+  }
+}
+
 __global__ void __launch_bounds__(128) h1_seeds(const u64* __restrict__ data, u64 base, u32 U, u64* __restrict__ out) {
   const u32 u = blockIdx.x * blockDim.x + threadIdx.x;
   if (u >= U) return;
@@ -193,6 +402,30 @@ __global__ void __launch_bounds__(128) h1_seeds(const u64* __restrict__ data, u6
     msg[0] = pos;
 #pragma unroll
     for (int w = 0; w < 27; ++w) msg[1 + w] = (w < 3 ? data[3 * tag + w] : data[3 + w]) ^ pos;
+    msg[28] = 0x8000000000000000ULL;
+    msg[29] = 0;
+    msg[30] = 0;
+    msg[31] = 224 * 8;
+    u64 s[8];
+    sha512_words(msg, 2, s);
+#pragma unroll
+    for (int j = 0; j < 8; ++j) out[16 * (u64)u + 8 * tag + j] = s[j];
+  }
+}
+
+// h1_seeds of units anywhere (kh_seeds_at): unit u at position pos[u], from data's record idx[u]
+__global__ void __launch_bounds__(128) h1_seeds_at(const u64* __restrict__ data, const u32* __restrict__ idx,
+                                                   const u64* __restrict__ at, u32 U, u64* __restrict__ out) {
+  const u32 u = blockIdx.x * blockDim.x + threadIdx.x;
+  if (u >= U) return;
+  const u64 pos = at[u];
+  const u64* d = data + 30 * (u64)idx[u];
+#pragma unroll 1
+  for (int tag = 0; tag < 2; ++tag) {
+    u64 msg[32];
+    msg[0] = pos;
+#pragma unroll
+    for (int w = 0; w < 27; ++w) msg[1 + w] = (w < 3 ? d[3 * tag + w] : d[3 + w]) ^ pos;
     msg[28] = 0x8000000000000000ULL;
     msg[29] = 0;
     msg[30] = 0;
@@ -226,6 +459,37 @@ __global__ void __launch_bounds__(256) h1s_noise(const u64* __restrict__ seeds, 
     uint4* o = reinterpret_cast<uint4*>(ws + 16 * ((u64)u * nb + t));
 #pragma unroll
     for (int q = 0; q < 4; ++q)
+      st4l<H1S_EVL>(o + q, make_uint4((u32)(s[2 * q] >> 32), (u32)s[2 * q], (u32)(s[2 * q + 1] >> 32), (u32)s[2 * q + 1]));
+  }
+}
+
+// J10 banded (kh_one_band; measured only): h1s_noise's blocks with each band's row blocks hashed by its leader alone, unit
+// u = ri ncb + cj a leader where cj % band == 0 (rows_nb = 32 RB: a unit's row blocks come first)
+__global__ void __launch_bounds__(256) h1j_noise(const u64* __restrict__ seeds, u32 units, u32 ncb, u32 nb, u32 rows_nb,
+                                                 u32 J, u32 band, const uint8_t* __restrict__ live, u32* __restrict__ ws) {
+  const u32 lane = threadIdx.x & 31;
+  const u32 per = 32 * J, chunks = (nb + per - 1) / per;
+  const u64 item = ((u64)blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+  if (item >= (u64)units * chunks) return;
+  const u32 u = (u32)(item / chunks), chunk = (u32)(item % chunks);
+  if (live && !live[u / ncb]) return;
+  const u32 t0 = (u % ncb) % band ? rows_nb : 0;
+  if ((chunk + 1) * per <= t0) return;
+  u64 seed[8];
+#pragma unroll
+  for (int j = 0; j < 8; ++j) seed[j] = __ldg(seeds + 16 * (u64)u + j);
+  NoiseMid nm;
+  noise_mid(seed, nm);
+#pragma unroll 1
+  for (u32 j = 0; j < J; ++j) {
+    const u32 t = chunk * per + 32 * j + lane;
+    if (t >= nb) break;
+    if (t < t0) continue;
+    u64 s[8];
+    noise_block(nm, t, s);
+    uint4* o = reinterpret_cast<uint4*>(ws + 16 * ((u64)u * nb + t));
+#pragma unroll
+    for (int q = 0; q < 4; ++q)
       o[q] = make_uint4((u32)(s[2 * q] >> 32), (u32)s[2 * q], (u32)(s[2 * q + 1] >> 32), (u32)s[2 * q + 1]);
   }
 }
@@ -250,25 +514,31 @@ struct OneOut {
   const float* sw;      // s_w [N]
   const int* step;      // {parity, m, pad, flags}
   u32 M;
+  u32 band = 1;         // J10 banded (kh_one_band; measured only): unit (ri, cj)'s rows from its band leader
+                        // (ri, (cj / band) band)'s workspace region, its columns from its own
+  u32* lr = nullptr;    // DG (kh_lanes): unit u's record of its 32 lanes' words at lr + 32 u W (W = kh_words(K))
 };
 
 // PL (kh_one_peel; CA's peel, 11:02Z): z = A B^T, the served model's own product, from the same stream: with xa = [A = 127
 // and b = 1] (where the int8 X = A + b wraps, X = A + b - 256 xa), X (B + c)^T - X c^T - b B^T + 256 xa B^T = A B^T, so
 // z = O' - sum_d 128^d D_d + 256 (X WB^T + xa B^T) - (X c^T + b B^T): two more MMAs a fragment (X by the coins c, the
 // dither bits b by B) into a fourth accumulator, and xa by B into the wrap term's, in a segment where a lane has an xa.
-template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false>
-__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N,
-                                                  u32 K, const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
-                                                  u32* __restrict__ out, const u32* __restrict__ ws, OneOut oo) {
+// DG (kh_lanes): the units are the diagonal of gathered A [M, K] and B [M, K], unit u rows 32 u .. of both (N unused),
+// each writing its lane record (OneOut::lr) beside its receipt; no other instantiation writes one.
+// h1u_unit is one warp's unit u (u < units) with its shared memory S; h1u runs unit blockIdx.x WARPS + warp of one call,
+// h1um (kh_units_multi) unit u of the call its warp's index falls in.
+template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false>
+__device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
+                                         const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
+                                         u32* __restrict__ out, const u32* __restrict__ ws, const OneOut oo, const u32 u,
+                                         WarpSmem& S) {
+  static_assert(!DG || !(WS || OS || J10 || PL), "a gathered diagonal is the fused receipts-only form");
   constexpr bool PF = WS || H1U_PF;
-  constexpr int PD = H1U_PD;
-  __shared__ WarpSmem smem[WARPS];
-  const u32 lane = threadIdx.x & 31, wp = threadIdx.x >> 5;
+  constexpr int PD = H1U_PD, NS = H1U_PD + H1U_RING;
+  const u32 lane = threadIdx.x & 31;
   const u32 g = lane >> 2, q = lane & 3;
-  const u32 ncb = N / 32, units = (M / 32) * ncb;
-  const u32 u = blockIdx.x * WARPS + wp;
-  if (u >= units) return;
-  const u32 ri = u / ncb, cj = u % ncb;
+  const u32 ncb = DG ? 1 : N / 32;
+  const u32 ri = u / ncb, cj = DG ? u : u % ncb;
   const u32 ks = K / 32, chunks = ks / 16, rb = chunks + 1, cb = chunks + 1;
   const u32 nwords = 2 * (ks + MD);
   u32* o = out + (u64)u * nwords;
@@ -307,7 +577,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     }
     return;
   }
-  WarpSmem& S = smem[wp];
+  u32* const lw = DG ? oo.lr + (u64)u * 32 * nwords : nullptr;
   const u64* sd = seeds + 16 * (u64)u;
 
   u32 y[8], z[8];
@@ -340,6 +610,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
   }
   __syncwarp();
   const u32* wsu = WS ? (J10 ? ws : ws + 16ull * 32 * (rb + cb) * u) : nullptr;
+  const u32* wsr = WS && !J10 ? ws + 16ull * 32 * (rb + cb) * (ri * ncb + cj / oo.band * oo.band) : wsu;
 
   // P: column n of n-tile nt is rho = 8 nt + n; fragment k = 4 q' + i is segment byte 8 q' + i, k = 16 + 4 q' + i is
   // 8 q' + 4 + i
@@ -370,14 +641,14 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
 
   const int8_t* Ab = A + (u64)(32 * ri) * K;
   const int8_t* Bb = B + (u64)(32 * cj) * K;
-  // segment sg's A rows 16 mt + g + 8 h and B columns 8 nt + g, 8 bytes each at k = 32 sg + 8 q, in ring slot sg % PD
-  uint2 pa[PD][4], pb[PD][4];
+  // segment sg's A rows 16 mt + g + 8 h and B columns 8 nt + g, 8 bytes each at k = 32 sg + 8 q, in ring slot sg % NS
+  uint2 pa[NS][4], pb[NS][4];
   const auto load_seg = [&](u32 sg, uint2(&a)[4], uint2(&b)[4]) {
     const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
-      a[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
-      b[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+      a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
   if (PF) {
@@ -387,28 +658,40 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
 #pragma unroll 1
   for (u32 it = 0; it <= chunks; ++it) {
     const u32 blk = it == 0 ? chunks : it - 1;
+    if constexpr (!WS && !J10 && H1U_NB2) {
+      u64 sa[8], sb[8];
+      noise_block2(S.nm, (u64)lane * rb + blk, 32ull * rb + (u64)lane * cb + blk, sa, sb);
+#pragma unroll
+      for (int j = 0; j < 8; ++j) {
+        S.rowbits[lane][2 * j] = (u32)(sa[j] >> 32);
+        S.rowbits[lane][2 * j + 1] = (u32)sa[j];
+        S.colbits[lane][2 * j] = (u32)(sb[j] >> 32);
+        S.colbits[lane][2 * j + 1] = (u32)sb[j];
+      }
+    } else {
 #pragma unroll 1
-    for (int jb = 0; jb < 2; ++jb) {
-      const u64 t = J10 ? (jb == 0 ? (u64)(32 * ri + lane) * rb + blk : (u64)M * rb + (u64)(32 * cj + lane) * cb + blk)
-                        : (jb == 0 ? (u64)lane * rb + blk : 32ull * rb + (u64)lane * cb + blk);
-      u32* dst = jb == 0 ? S.rowbits[lane] : S.colbits[lane];
-      if (WS) {
-        const uint4* src = reinterpret_cast<const uint4*>(wsu + 16 * t);
+      for (int jb = 0; jb < 2; ++jb) {
+        const u64 t = J10 ? (jb == 0 ? (u64)(32 * ri + lane) * rb + blk : (u64)M * rb + (u64)(32 * cj + lane) * cb + blk)
+                          : (jb == 0 ? (u64)lane * rb + blk : 32ull * rb + (u64)lane * cb + blk);
+        u32* dst = jb == 0 ? S.rowbits[lane] : S.colbits[lane];
+        if (WS) {
+          const uint4* src = reinterpret_cast<const uint4*>((jb == 0 ? wsr : wsu) + 16 * t);
 #pragma unroll
-        for (int w = 0; w < 4; ++w) {
-          const uint4 v = __ldg(src + w);
-          dst[4 * w] = v.x;
-          dst[4 * w + 1] = v.y;
-          dst[4 * w + 2] = v.z;
-          dst[4 * w + 3] = v.w;
-        }
-      } else {
-        u64 s[8];
-        noise_block(S.nm, t, s);
+          for (int w = 0; w < 4; ++w) {
+            const uint4 v = ld4e<H1U_L2HINT_WS, H1U_EVF>(src + w);
+            dst[4 * w] = v.x;
+            dst[4 * w + 1] = v.y;
+            dst[4 * w + 2] = v.z;
+            dst[4 * w + 3] = v.w;
+          }
+        } else {
+          u64 s[8];
+          noise_block(S.nm, t, s);
 #pragma unroll
-        for (int j = 0; j < 8; ++j) {
-          dst[2 * j] = (u32)(s[j] >> 32);
-          dst[2 * j + 1] = (u32)s[j];
+          for (int j = 0; j < 8; ++j) {
+            dst[2 * j] = (u32)(s[j] >> 32);
+            dst[2 * j + 1] = (u32)s[j];
+          }
         }
       }
     }
@@ -417,7 +700,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
         prefetch_l2(wsu + 16 * ((u64)(32 * ri + lane) * rb + it));
         prefetch_l2(wsu + 16 * ((u64)M * rb + (u64)(32 * cj + lane) * cb + it));
       } else {
-        prefetch_l2(wsu + 16 * ((u64)lane * rb + it));
+        prefetch_l2(wsr + 16 * ((u64)lane * rb + it));
         prefetch_l2(wsu + 16 * (32ull * rb + (u64)lane * cb + it));
       }
     }
@@ -447,16 +730,23 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
     const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.colbits[0][0]);
 #pragma unroll 1
-    for (u32 j0 = 0; j0 < 16; j0 += PD) {
+    for (u32 j0 = 0; j0 < 16; j0 += NS) {
 #pragma unroll
-      for (int jj = 0; jj < PD; ++jj) {
+      for (int jj = 0; jj < NS; ++jj) {
         const u32 j = j0 + jj, sg = 16 * blk + j;
         uint2 ca[4], cw[4];
         if (H1U_L2PF && sg % 4 == 0 && sg + 16 < ks) {
           prefetch_l2(Ab + (u64)lane * K + 32 * (sg + 16));
           prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
         }
-        if (PF) {
+        if (PF && H1U_RING) {
+          if (sg + PD < ks) load_seg(sg + PD, pa[(jj + PD) % NS], pb[(jj + PD) % NS]);
+#pragma unroll
+          for (int r = 0; r < 4; ++r) {
+            ca[r] = pa[jj][r];
+            cw[r] = pb[jj][r];
+          }
+        } else if (PF) {
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
             ca[r] = pa[jj][r];
@@ -467,8 +757,8 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
           const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
-            ca[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
-            cw[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+            ca[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+            cw[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
           }
         }
         u32 af[2][4], bf[4][2];
@@ -552,6 +842,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     }
     __syncwarp();
     if (rcpt) o[32 * blk + lane] = ring_xor(S, lane);
+    if constexpr (DG) lane_put(S, lw, nwords, 32 * blk, lane);
     __syncwarp();
   }
 
@@ -631,6 +922,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
   }
   __syncwarp();
   if (rcpt && lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
+  if constexpr (DG) lane_tail<MD>(S, lw, nwords, 2 * ks, lane);
   if constexpr (OS) {
     // T[4 mt + nt][e] is cell (16 mt + g + 8 (e >> 1), 8 nt + 2 q + (e & 1)): z there, then y
 #pragma unroll
@@ -664,6 +956,84 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
   }
 }
 
+template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false>
+__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N,
+                                                  u32 K, const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
+                                                  u32* __restrict__ out, const u32* __restrict__ ws, OneOut oo) {
+  __shared__ WarpSmem smem[WARPS];
+  const u32 wp = threadIdx.x >> 5;
+  const u32 u = blockIdx.x * WARPS + wp;
+  if (u >= (M / 32) * (DG ? 1 : N / 32)) return;
+  h1u_unit<MD, WS, OS, J10, PL, DG>(A, B, M, N, K, seeds, live, out, ws, oo, u, smem[wp]);
+}
+
+// kh_units_multi's calls: call c's units are warps u0 .. u0 + (M / 32)(N / 32) - 1 of the launch, each h1u's fused
+// receipts-only unit (WS, OS false: its noise hashed by its own lanes, its midstate once) of A [M, K] and B [N, K]
+struct UCall {
+  const int8_t* A;
+  const int8_t* B;
+  const u64* seeds;  // the call's unit 0's 16 words
+  u32* out;          // the call's unit 0's receipt
+  u32 N, K, u0, md;  // md = n_digits(K / 32), 2 or 3
+};
+
+// every unit of ncalls calls in one launch (calls[ncalls].u0 the total), one warp a unit as h1u; live is every call's
+__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1um(const UCall* __restrict__ calls, u32 ncalls, u32 M,
+                                                   const uint8_t* __restrict__ live) {
+  __shared__ WarpSmem smem[WARPS];
+  const u32 wp = threadIdx.x >> 5;
+  const u32 gu = blockIdx.x * WARPS + wp;
+  if (gu >= calls[ncalls].u0) return;
+  u32 lo = 0, hi = ncalls;
+  while (hi - lo > 1) {
+    const u32 mid = (lo + hi) >> 1;
+    if (calls[mid].u0 <= gu) lo = mid;
+    else hi = mid;
+  }
+  const UCall c = calls[lo];
+  if (c.md == 3)
+    h1u_unit<3, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, smem[wp]);
+  else
+    h1u_unit<2, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, smem[wp]);
+}
+
+// h1um's unit gu, for h1um_sm (h1um keeps its own copy: calling this one changes h1um's register allocation)
+__device__ __forceinline__ void h1um_one(const UCall* __restrict__ calls, u32 ncalls, u32 M, const uint8_t* __restrict__ live,
+                                         u32 gu, WarpSmem& S) {
+  u32 lo = 0, hi = ncalls;
+  while (hi - lo > 1) {
+    const u32 mid = (lo + hi) >> 1;
+    if (calls[mid].u0 <= gu) lo = mid;
+    else hi = mid;
+  }
+  const UCall c = calls[lo];
+  if (c.md == 3)
+    h1u_unit<3, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, S);
+  else
+    h1u_unit<2, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, S);
+}
+
+// h1um on the SMs whose %smid % den < q alone: a CTA on any other SM exits at once, and the warps of the rest take units
+// from *next in turn (a unit's receipts are its own, whichever warp takes it), so every other SM stays whole to the
+// streams beside it (the next forward's kernels, which a freed h1um slot is too small for)
+__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1um_sm(const UCall* __restrict__ calls, u32 ncalls, u32 M,
+                                                      const uint8_t* __restrict__ live, u32 q, u32 den,
+                                                      u32* __restrict__ next) {
+  u32 smid;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
+  if (smid % den >= q) return;
+  __shared__ WarpSmem smem[WARPS];
+  const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
+  for (;;) {
+    u32 gu = 0;
+    if (lane == 0) gu = atomicAdd(next, 1u);
+    gu = __shfl_sync(0xffffffffu, gu, 0);
+    if (gu >= total) break;
+    h1um_one(calls, ncalls, M, live, gu, smem[wp]);
+    __syncwarp();
+  }
+}
+
 #if H1U_KSPLIT
 template <int KP>
 struct alignas(16) KSmem {
@@ -692,10 +1062,13 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
   const int4 st = *reinterpret_cast<const int4*>(oo.step);
   const int alive = st.y, flags = st.w;
   const bool rcpt = !(flags & F_NW_UNITS);
+  constexpr bool RO = H1K_RONLY;
+  static_assert(!(RO && PL), "H1K_RONLY has no peel");
   if (live && !live[ri]) {
     if (wp) return;
     if (rcpt)
       for (u32 w = lane; w < nwords; w += 32) o[w] = 0;
+    if constexpr (RO) return;
     const u32 row = 32 * ri + lane;
     if (!(flags & F_NW_TILES)) {
       uint4* zr = reinterpret_cast<uint4*>(oo.z + (u64)row * N + 32 * cj);
@@ -720,6 +1093,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     return;
   }
   const u32* wsu = ws + 16ull * 32 * (rb + cb) * u;
+  const u32* wsr = ws + 16ull * 32 * (rb + cb) * (ri * ncb + cj / oo.band * oo.band);
   const u32 pp = wp - 1, pi = 32 * pp + lane;
   // chunk blk's 64 blocks (rows' t = i RB + blk, columns' 32 RB + i CB + blk), uint4 w of block kb a load
   const auto load_noise = [&](u32 blk, uint4(&v)[KNI]) {
@@ -727,7 +1101,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     for (int m = 0; m < KNI; ++m) {
       const u32 k = pi + 32 * KP * m, kb = k >> 2, w = k & 3;
       const u64 t = kb < 32 ? (u64)kb * rb + blk : 32ull * rb + (u64)(kb - 32) * cb + blk;
-      v[m] = __ldg(reinterpret_cast<const uint4*>(wsu + 16 * t) + w);
+      v[m] = ld4e<H1U_L2HINT_WS, H1U_EVF>(reinterpret_cast<const uint4*>((kb < 32 ? wsr : wsu) + 16 * t) + w);
     }
   };
   const auto store_noise = [&](u32 bf, const uint4(&v)[KNI]) {
@@ -812,30 +1186,73 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
-      a[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
-      b[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+      a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      b[r] = ld2e<H1U_L2HINT, H1U_EVF>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
-  uint2 pa[4], pb[4];
-  if (wp) load_seg(pp, pa, pb);
+  // round r's segment in ring slot r % NS, loaded KD rounds ahead
+  constexpr int KD = H1K_PD ? H1K_PD : 1, NS = H1K_PD ? H1K_PD + 1 : 1;
+  uint2 pa[NS][4], pb[NS][4];
   const u32 R = ks / KP;
-#pragma unroll 1
-  for (u32 r = 0; r <= R; ++r) {
+#if H1K_CPA
+  // stage st's [0 A | 1 B][producer][r][lane]
+  extern __shared__ uint2 h1k_cp[];
+  constexpr u32 CS = H1K_CPA;
+  const auto cp_seg = [&](u32 sg, u32 st) {
+    const u32 kofs = 32 * sg + 8 * q;
+    uint2* sa = h1k_cp + (2 * st * KP + pp) * 128 + lane;
+#pragma unroll
+    for (int r = 0; r < 4; ++r) {
+      cp8e<H1U_L2HINT, false>(sa + 32 * r, Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      cp8e<H1U_L2HINT, H1U_EVF>(sa + KP * 128 + 32 * r, Bb + (u64)(8 * r + g) * K + kofs);
+    }
+  };
+  if (wp) {
+#pragma unroll
+    for (u32 d = 0; d + 1 < CS; ++d) {
+      if (d < R) cp_seg(KP * d + pp, d);
+      cp_commit();
+    }
+  }
+#else
+  if (wp) {
+#pragma unroll
+    for (int d = 0; d < KD; ++d)
+      if (KP * d + pp < ks) load_seg(KP * d + pp, pa[d], pb[d]);
+  }
+#endif
+  uint4 nv[KNI];
+  const auto run_round = [&](u32 r, uint2(&ra)[4], uint2(&rb4)[4], uint2(&na)[4], uint2(&nb)[4]) {
     if (wp) {
       if (r < R) {
         const u32 sg = KP * r + pp, blk = sg >> 4, j = sg & 15;
-        // the next chunk's blocks: loaded at a chunk's first round, stored at its end (its buffer's last reader, chunk
-        // blk - 1, finished before this round's barrier)
+        // the next chunk's blocks: loaded at a chunk's first round, stored at its end (H1K_NXD: its second round's; its
+        // buffer's last reader, chunk blk - 1, finished before this round's barrier, and its next is chunk blk + 1)
         const bool nx = ((KP * r) & 15) == 0 && blk + 1 < chunks;
-        uint4 nv[KNI];
+        const bool sx = H1K_NXD ? r >= 1 && ((KP * (r - 1)) & 15) == 0 && blk + 1 < chunks : nx;
         if (nx) load_noise(blk + 1, nv);
         uint2 ca[4], cw[4];
+#if H1K_CPA
+        if (r + CS - 1 < R) cp_seg(sg + KP * (CS - 1), (r + CS - 1) % CS);
+        cp_commit();
+        cp_wait<CS - 1>();
+        const uint2* sa = h1k_cp + (2 * (r % CS) * KP + pp) * 128 + lane;
 #pragma unroll
         for (int i = 0; i < 4; ++i) {
-          ca[i] = pa[i];
-          cw[i] = pb[i];
+          ca[i] = sa[32 * i];
+          cw[i] = sa[KP * 128 + 32 * i];
         }
-        if (sg + KP < ks) load_seg(sg + KP, pa, pb);
+#else
+        if (H1K_PD && sg + KP * KD < ks) load_seg(sg + KP * KD, na, nb);
+#pragma unroll
+        for (int i = 0; i < 4; ++i) {
+          ca[i] = ra[i];
+          cw[i] = rb4[i];
+        }
+        if (!H1K_PD && sg + KP < ks) load_seg(sg + KP, ra, rb4);
+#endif
+        if (H1K_L2PF && ((sg + H1K_L2PF) & 3) == 0 && sg + H1K_L2PF < ks)
+          prefetch_l2(Bb + (u64)lane * K + 32 * (sg + H1K_L2PF));
         const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.bits[blk & 1][0][0][0]);
         const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.bits[blk & 1][1][0][0]);
         u32 af[2][4], bf[4][2];
@@ -875,8 +1292,10 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
           const u32 v0 = ulo[nt] + c0, v1 = uhi[nt] + c1;
           bf[nt][0] = addw(b8.x, v0);
           bf[nt][1] = addw(b8.y, v1);
-          wbf[nt][0] = wrapw(b8.x, v0);
-          wbf[nt][1] = wrapw(b8.y, v1);
+          if constexpr (!RO) {
+            wbf[nt][0] = wrapw(b8.x, v0);
+            wbf[nt][1] = wrapw(b8.y, v1);
+          }
           if constexpr (PL) {
             cf[nt][0] = c0;
             cf[nt][1] = c1;
@@ -884,7 +1303,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
             b0[nt][1] = b8.y;
           }
         }
-        if ((flags & F_FAULT_WB) && u == 0 && lane == 0 && sg == 0)
+        if (!RO && (flags & F_FAULT_WB) && u == 0 && lane == 0 && sg == 0)
           wbf[0][0] = (wbf[0][0] & ~0xFFu) | ((wbf[0][0] & 0xFFu) == 0 ? 1u : 0u);
         int dT[8][4];
 #pragma unroll
@@ -897,7 +1316,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
           for (int nt = 0; nt < 4; ++nt) {
             mma_s8(dT[4 * mt + nt], af[mt], bf[nt]);
             mma_s8(Y[4 * mt + nt], af[mt], idr[nt]);
-            mma_s8(Cw[4 * mt + nt], af[mt], wbf[nt]);
+            if constexpr (!RO) mma_s8(Cw[4 * mt + nt], af[mt], wbf[nt]);
             if constexpr (PL) {
               mma_s8(Pz[4 * mt + nt], af[mt], cf[nt]);
               mma_s8(Pz[4 * mt + nt], bb[mt], b0[nt]);
@@ -913,7 +1332,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
         }
 #pragma unroll
         for (int t = 0; t < 8; ++t) S.dt[r & 1][pp][t][lane] = make_int4(dT[t][0], dT[t][1], dT[t][2], dT[t][3]);
-        if (nx) store_noise((blk + 1) & 1, nv);
+        if (sx) store_noise((blk + 1) & 1, nv);
       }
     } else if (r) {
       const u32 r1 = r - 1;
@@ -939,13 +1358,19 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
       }
     }
     __syncthreads();
+  };
+#pragma unroll 1
+  for (u32 r0 = 0; r0 <= R; r0 += NS) {
+#pragma unroll
+    for (int d = 0; d < NS; ++d)
+      if (r0 + d <= R) run_round(r0 + d, pa[d], pb[d], pa[(d + KD) % NS], pb[(d + KD) % NS]);
   }
   // the producers' Y, Cw and Pz to warp 0 as sums
   if (wp) {
 #pragma unroll
     for (int t = 0; t < 8; ++t) {
       S.dt[0][pp][t][lane] = make_int4(Y[t][0], Y[t][1], Y[t][2], Y[t][3]);
-      S.dt[1][pp][t][lane] = make_int4(Cw[t][0], Cw[t][1], Cw[t][2], Cw[t][3]);
+      if constexpr (!RO) S.dt[1][pp][t][lane] = make_int4(Cw[t][0], Cw[t][1], Cw[t][2], Cw[t][3]);
     }
   }
   __syncthreads();
@@ -954,11 +1379,13 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     for (int p = 0; p < KP; ++p)
 #pragma unroll
       for (int t = 0; t < 8; ++t) {
-        const int4 a = S.dt[0][p][t][lane], c = S.dt[1][p][t][lane];
+        const int4 a = S.dt[0][p][t][lane];
         Y[t][0] = (int)((u32)Y[t][0] + (u32)a.x);
         Y[t][1] = (int)((u32)Y[t][1] + (u32)a.y);
         Y[t][2] = (int)((u32)Y[t][2] + (u32)a.z);
         Y[t][3] = (int)((u32)Y[t][3] + (u32)a.w);
+        if constexpr (RO) continue;
+        const int4 c = S.dt[1][p][t][lane];
         Cw[t][0] = (int)((u32)Cw[t][0] + (u32)c.x);
         Cw[t][1] = (int)((u32)Cw[t][1] + (u32)c.y);
         Cw[t][2] = (int)((u32)Cw[t][2] + (u32)c.z);
@@ -1053,6 +1480,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
       for (int nt = 0; nt < 4; ++nt) mma_s8(Y[4 * mt + nt], ad[d][mt], uf[nt]);
     fold(Y, y, z);
     ring_put(S, d, lane, y, z);
+    if constexpr (RO) continue;
 #pragma unroll
     for (int t = 0; t < 8; ++t)
 #pragma unroll
@@ -1060,6 +1488,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
   }
   __syncwarp();
   if (rcpt && lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
+  if constexpr (RO) return;
 #pragma unroll
   for (int mt = 0; mt < 2; ++mt)
 #pragma unroll
@@ -1445,12 +1874,46 @@ static void launch_unit(unsigned units, cudaStream_t s, const void* A, const voi
 #endif
 }
 
+// H1U_CARVE's attribute for kernel F (a failure leaves the driver's default, and clears the error it set)
+template <auto F>
+static void carve() {
+#if H1U_CARVE
+  static const bool set = [] {
+    if (cudaFuncSetAttribute((const void*)F, cudaFuncAttributePreferredSharedMemoryCarveout,
+                             (int)cudaSharedmemCarveoutMaxShared) == cudaSuccess)
+      return true;
+    (void)cudaGetLastError();
+    return false;
+  }();
+  (void)set;
+#endif
+}
+
 #if H1U_KSPLIT
+// h1k<MD, PL, KP>'s dynamic shared memory (H1K_CPA's stages), its attributes set once a process before the first launch
+// or occupancy query (a failure surfaces as the launch's error)
+template <int MD, bool PL, int KP>
+static unsigned h1k_dyn() {
+  constexpr unsigned b = H1K_CPA * 2 * KP * 128 * sizeof(uint2);
+  if constexpr (b != 0) {
+    static const bool set = [] {
+      const void* f = (const void*)h1k<MD, PL, KP>;
+      return cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)b) == cudaSuccess
+             && cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout,
+                                     (int)cudaSharedmemCarveoutMaxShared) == cudaSuccess;
+    }();
+    (void)set;
+  }
+  return b;
+}
+
 template <int MD, bool PL, int KP>
 static void launch_k(unsigned units, cudaStream_t s, const void* A, const void* B, unsigned M, unsigned N, unsigned K,
                      const void* seeds, const void* live, void* out, const void* ws, const OneOut& oo) {
-  h1k<MD, PL, KP><<<units, 32 * (KP + 1), 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
-                                                  (const uint8_t*)live, (u32*)out, (const u32*)ws, oo);
+  carve<h1k<MD, PL, KP>>();
+  h1k<MD, PL, KP><<<units, 32 * (KP + 1), h1k_dyn<MD, PL, KP>(), s>>>((const int8_t*)A, (const int8_t*)B, M, N, K,
+                                                                       (const u64*)seeds, (const uint8_t*)live, (u32*)out,
+                                                                       (const u32*)ws, oo);
 }
 
 // h1k<MD, PL, KP>'s CTAs resident at once (SMs x the occupancy calculator's CTAs an SM; 0 if either query fails), read
@@ -1460,7 +1923,8 @@ static unsigned h1k_wave() {
   static const unsigned w = [] {
     int dev = 0, sms = 0, per = 0;
     if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess
-        || cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1k<MD, PL, KP>, 32 * (KP + 1), 0) != cudaSuccess)
+        || cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1k<MD, PL, KP>, 32 * (KP + 1), h1k_dyn<MD, PL, KP>())
+               != cudaSuccess)
       return 0u;
     return (unsigned)(sms * per);
   }();
@@ -1471,8 +1935,9 @@ static unsigned h1k_wave() {
 template <int MD, bool WS, bool J10 = false, bool PL = false>
 static void launch_one(unsigned units, cudaStream_t s, const void* A, const void* B, unsigned M, unsigned N, unsigned K,
                        const void* seeds, const void* live, void* out, const void* ws, const OneOut& oo) {
+  constexpr bool RO = H1K_RONLY && !J10 && !PL;
 #if H1U_KSPLIT
-  if constexpr (WS && !J10) {
+  if constexpr (WS && !J10 && (RO || !H1K_RONLY)) {
     const unsigned rows = oo.M < M ? oo.M : M, lu = (rows + 31) / 32 * (N / 32);
 #if H1K_AUTO
     if (lu <= h1k_wave<MD, PL, 4>()) {
@@ -1491,7 +1956,8 @@ static void launch_one(unsigned units, cudaStream_t s, const void* A, const void
 #endif
   }
 #endif
-  h1u<MD, WS, true, J10, PL><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N,
+  carve<h1u<MD, WS, !RO, J10, PL>>();
+  h1u<MD, WS, !RO, J10, PL><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N,
                                                                               K, (const u64*)seeds, (const uint8_t*)live,
                                                                               (u32*)out, (const u32*)ws, oo);
 }
@@ -1502,6 +1968,13 @@ extern "C" unsigned kh_words(unsigned K) { return 2 * (K / 32 + n_digits((int)(K
 extern "C" int kh_seeds(const void* data, unsigned long long base, unsigned U, void* seeds, void* stream) {
   if (!U) return 0;
   h1_seeds<<<(U + 127) / 128, 128, 0, (cudaStream_t)stream>>>((const u64*)data, base, U, (u64*)seeds);
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
+extern "C" int kh_seeds_at(const void* data, const void* idx, const void* pos, unsigned U, void* seeds, void* stream) {
+  if (!U) return 0;
+  h1_seeds_at<<<(U + 127) / 128, 128, 0, (cudaStream_t)stream>>>((const u64*)data, (const u32*)idx, (const u64*)pos, U,
+                                                                 (u64*)seeds);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
@@ -1518,6 +1991,38 @@ extern "C" int kh_unit(const void* A, const void* B, unsigned M, unsigned N, uns
     launch_unit<3, false>(units, s, A, B, M, N, K, seeds, live, out, nullptr);
   else
     return 2;
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
+// kh_unit's receipts of ncalls calls in one launch: calls a device array of ncalls + 1 UCall (kh_ucall_bytes() each, the
+// last's u0 the units in all, `units`), every call M rows with the same live row blocks
+extern "C" unsigned kh_ucall_bytes() { return sizeof(UCall); }
+
+extern "C" int kh_units_multi(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
+                              void* stream) {
+  if (!ncalls || M % 32) return 2;
+  if (!units) return 0;
+  carve<h1um>();
+  h1um<<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, (cudaStream_t)stream>>>((const UCall*)calls, ncalls, M,
+                                                                            (const uint8_t*)live);
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
+// kh_units_multi on q / den of the SMs (h1um_sm, 1 <= q <= den <= 64): next a device u32 the launch zeroes first, and
+// twice the CTAs that fit at once, so the SMs it keeps get theirs whatever else holds the GPU at the launch
+extern "C" int kh_units_multi_sm(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live, unsigned q,
+                                 unsigned den, void* next, void* stream) {
+  if (!ncalls || M % 32 || !q || q > den || den > 64 || !next) return 2;
+  if (!units) return 0;
+  carve<h1um_sm>();
+  int dev = 0, sms = 0, per = 0;
+  if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1um_sm, 32 * WARPS, 0) != cudaSuccess || per < 1)
+    return 3;
+  cudaStream_t s = (cudaStream_t)stream;
+  if (cudaMemsetAsync(next, 0, sizeof(u32), s) != cudaSuccess) return 3;
+  h1um_sm<<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCall*)calls, ncalls, M, (const uint8_t*)live, q,
+                                                                   den, (u32*)next);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
@@ -1548,28 +2053,38 @@ extern "C" int kh_unit_ws(const void* A, const void* B, unsigned M, unsigned N, 
 
 // the one-stream call: kh_unit's (or with ws, kh_unit_ws') receipts of A [rows, K] and B [N, K], and the cells' z and
 // y (OneOut) from the same MMAs; step on the device ({parity, m, pad, flags}), M the y rows. ws null: the fused form.
-template <bool PL>
+// PART: 0 both launches, 1 the noise only (h1s_noise into ws), 2 the units only (on a ws the noise already wrote)
+// band > 1 (kh_one_band; ws only): J10 banded noise (h1j_noise, OneOut::band); mode 1 the units alone (the workspace
+// the last mode 0 or 2 call wrote), 2 the noise alone
+template <bool PL, int PART = 0>
 static int one_call(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
                     const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
-                    const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
+                    const float* sa, const float* sw, const int* step, unsigned M, void* stream, unsigned band = 1,
+                    int mode = 0) {
 #if H1U_SPLIT
   return 2;
 #endif
-  if (K % 512 || rows % 32 || N % 32 || !z || !y || !step || (ws && !J)) return 2;
+  if (K % 512 || rows % 32 || N % 32 || !z || !y || !step || (ws && !J) || (H1K_RONLY && PL) || (PART && !ws)) return 2;
+  if (!band || mode < 0 || mode > 2 || (band > 1 || mode) && !ws) return 2;
   const int m = n_digits((int)(K / 32));
   if (m != 2 && m != 3) return 2;
   const unsigned units = (rows / 32) * (N / 32);
   if (!units) return 0;
   cudaStream_t s = (cudaStream_t)stream;
-  const OneOut oo{z, zo, (__nv_bfloat16*)y, (__nv_bfloat16*)ydump, sa, sw, step, M};
+  const OneOut oo{z, zo, (__nv_bfloat16*)y, (__nv_bfloat16*)ydump, sa, sw, step, M, band};
   if (ws) {
+    const bool noise = PART != 2 && mode != 1, run_units = PART != 1 && mode != 2;
     const unsigned nb = kh_noise_blocks(K);
     const unsigned long long items = (unsigned long long)units * ((nb + 32 * J - 1) / (32 * J));
-    h1s_noise<<<(unsigned)((items * 32 + 255) / 256), 256, 0, s>>>((const u64*)seeds, units, N / 32, nb, J,
-                                                                    (const uint8_t*)live, (u32*)ws);
-    if (m == 2)
+    const unsigned grid = (unsigned)((items * 32 + 255) / 256);
+    if (noise && band > 1)
+      h1j_noise<<<grid, 256, 0, s>>>((const u64*)seeds, units, N / 32, nb, 32 * (K / 512 + 1), J, band,
+                                     (const uint8_t*)live, (u32*)ws);
+    else if (noise)
+      h1s_noise<<<grid, 256, 0, s>>>((const u64*)seeds, units, N / 32, nb, J, (const uint8_t*)live, (u32*)ws);
+    if (run_units && m == 2)
       launch_one<2, true, false, PL>(units, s, A, B, rows, N, K, seeds, live, out, ws, oo);
-    else
+    else if (run_units)
       launch_one<3, true, false, PL>(units, s, A, B, rows, N, K, seeds, live, out, ws, oo);
   } else if (m == 2) {
     launch_one<2, false, false, PL>(units, s, A, B, rows, N, K, seeds, live, out, nullptr, oo);
@@ -1585,11 +2100,41 @@ extern "C" int kh_one(const void* A, const void* B, unsigned rows, unsigned N, u
   return one_call<false>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
 }
 
+// kh_one's two launches apart, for a caller that runs the noise on another stream (dither-a -aomn): kh_one_noise is
+// its h1s_noise into ws, kh_one_units its units on that ws once written; kh_one's arguments, the same to both
+extern "C" int kh_one_noise(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
+                            const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
+                            const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
+  return one_call<false, 1>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
+}
+
+extern "C" int kh_one_units(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
+                            const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
+                            const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
+  return one_call<false, 2>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
+}
+
 // kh_one with the peel (PL): z = A B^T and y = dequant(z), today's y, the receipts unchanged
 extern "C" int kh_one_peel(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
                            const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
                            const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
+}
+
+// J10 banded (measured only; noise=j10-banded, kernels' reading of SharedNoise.lean, j10b_ref.py): kh_one and
+// kh_one_peel on band-leader rows, band column tiles a band; mode 0 noise then units, 1 the units alone, 2 the noise alone
+extern "C" int kh_one_band(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
+                           const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
+                           const float* sa, const float* sw, const int* step, unsigned M, unsigned band, int mode,
+                           void* stream) {
+  return one_call<false>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream, band, mode);
+}
+
+extern "C" int kh_one_peel_band(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
+                                const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
+                                const float* sa, const float* sw, const int* step, unsigned M, unsigned band, int mode,
+                                void* stream) {
+  return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream, band, mode);
 }
 
 // J10-R (CA's RT-ALGO r3 at 3dc80591df; measured only, never served or credited until CA adopts J10 and the verifier
@@ -1626,3 +2171,33 @@ extern "C" int kh_one_j10(const void* A, const void* B, unsigned rows, unsigned 
 }
 
 extern "C" int kh_fault_shift() { return FAULT_SHIFT; }
+
+// Option A's prover side (partials.py): drawn leaves' lane partials after the draw. L units on gathered operands, unit u
+// A rows 32 u .. 32 u + 31 and B rows 32 u .. 32 u + 31 (A and B each [32 L, K] s8: leaf u's 32 A rows and 32 B rows),
+// seeds 16 a unit as kh_seeds writes them (seed_j's 8 big-endian words, then sigma_R's). out: L x kh_words(K) u32, the
+// leaves' receipts; lr: L x 32 x kh_words(K) u32, each leaf's record: lane l's 2 (KS + m) words at l kh_words(K), lanes
+// in order (lane 4 g + q holds rows g + 8 s and columns 2 q + 8 (s >> 1) + (s & 1)), word 2 s the XOR of its 8 chains' y
+// after set s and 2 s + 1 of their z, so the XOR over a record's lanes is its receipt. The fused h1u, every unit live.
+template <int MD>
+static void launch_lanes(unsigned L, cudaStream_t s, const void* A, const void* B, unsigned K, const void* seeds,
+                         void* out, const OneOut& oo) {
+  carve<h1u<MD, false, false, false, false, true>>();
+  h1u<MD, false, false, false, false, true><<<(L + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>(
+      (const int8_t*)A, (const int8_t*)B, 32 * L, 32, K, (const u64*)seeds, nullptr, (u32*)out, nullptr, oo);
+}
+
+extern "C" int kh_lanes(const void* A, const void* B, unsigned L, unsigned K, const void* seeds, void* out, void* lr,
+                        void* stream) {
+  if (K % 512 || !out || !lr || L > (1u << 26)) return 2;
+  const int m = n_digits((int)(K / 32));
+  if (m != 2 && m != 3) return 2;
+  if (!L) return 0;
+  OneOut oo{};
+  oo.lr = (u32*)lr;
+  cudaStream_t s = (cudaStream_t)stream;
+  if (m == 2)
+    launch_lanes<2>(L, s, A, B, K, seeds, out, oo);
+  else
+    launch_lanes<3>(L, s, A, B, K, seeds, out, oo);
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}

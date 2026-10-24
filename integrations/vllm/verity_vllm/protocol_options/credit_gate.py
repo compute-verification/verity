@@ -1,7 +1,9 @@
 """Compute accounting's credit rule for a served linear (Daniel, 19 Oct, after J11): a served call earns credit only if the y
 the linear hands back to vLLM is the credited kernel's own output, the same GEMM invocation that wrote the credited z, and
 no other GEMM ran for that linear.  Pearl-C's e2e gate holds served y to its own ``run.gemm``
-(`benchmarks/pouw/pearl_c_vllm/e2e.py`); this is the same rule for H1, read from the call's trace.
+(`benchmarks/pouw/pearl_c_vllm/e2e.py`); this is the same rule for H1, read from the call's trace.  H1 adds the value
+check of the z it commits (`pouw_h1_records.reason`, refused as ``credit: z-records: ...``): its z/y records'
+y is dq of their z and the served y is theirs.
 
 * **The trace** (`Trace`): a `TorchDispatchMode` around one linear call (its ``apply``).  Every op the dispatcher sees is
   an invocation of the call's trace, in order; a custom op made with ``torch.library.custom_op`` runs its Python
@@ -39,6 +41,8 @@ NOT_GEMMS: frozenset[str] = frozenset()
 UNTRACED, NONE = "<untraced>", "<none>"
 NOT_CREDITED = "served-output-not-credited-kernel"
 GEMM_COUNT = "gemm-count"
+#: H1's refusal of a call whose z isn't its committed z/y records or whose records aren't its served product's
+RECORDS = "z-records"
 
 
 @dataclass
@@ -180,5 +184,5 @@ def reasons(verdicts: Iterable[Mapping[str, Any]]) -> dict[str, int]:
     return dict(Counter(v["reason"] for v in verdicts if not v["credit"]))
 
 
-__all__ = ["GEMMS", "GEMM_COUNT", "Invocation", "KNOWN", "NONE", "NOT_CREDITED", "NOT_GEMMS", "Trace", "UNTRACED", "key",
-           "reasons", "verdict"]
+__all__ = ["GEMMS", "GEMM_COUNT", "Invocation", "KNOWN", "NONE", "NOT_CREDITED", "NOT_GEMMS", "RECORDS", "Trace", "UNTRACED",
+           "key", "reasons", "verdict"]

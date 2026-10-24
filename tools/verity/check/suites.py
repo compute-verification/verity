@@ -178,6 +178,10 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
         'export PATH="$HOME/.elan/bin:$PATH"; ')
+#: `lake build` in the verifier, one at a time per tree: on a node every run of a commit shares its source tree, and a train's
+#: check and its touched-suites run built `.lake` there at once (21 Oct: 4430e936c3d8's link of flock-verify found its output
+#: gone, and drive bisected a failure no PR caused; CI-147)
+LAKE_BUILD = ELAN + "mkdir -p .lake && exec flock .lake/verity-build.lock lake build"
 QUICK = ["-m", "not slow"]
 REGISTRY = "fixtures/artifacts.json"
 #: what a store fetch from inside the tree reads of it, which every suite may read: the registry, for repo replicas (indexing the
@@ -603,7 +607,7 @@ def lean_build(log: Path) -> str | None:
         return None
     print(f"suites: `lake build` in {lean.relative_to(ROOT)} (check's lean-build step) before {', '.join(AFTER_LEAN)}")
     with log.open("w") as out:
-        rc = subprocess.run(["bash", "-c", ELAN + "lake build"], cwd=lean, stdout=out, stderr=subprocess.STDOUT).returncode
+        rc = subprocess.run(["bash", "-c", LAKE_BUILD], cwd=lean, stdout=out, stderr=subprocess.STDOUT).returncode
     return None if rc == 0 else f"`lake build` in {lean.relative_to(ROOT)} exited {rc}"
 
 
@@ -650,6 +654,17 @@ def covered(path: str, paths: list[str], cut: list[str] = ()) -> bool:
     one of those only an input inside it covers it."""
     inner = [c for c in cut if _under(path, [c])]
     return _under(path, [p for p in paths if not inner or _under(p, inner)])
+
+
+def merge_base(rev: str) -> str:
+    """Where HEAD left ``rev``'s history, so `--changed origin/main` on a branch behind main is the branch's own change, not
+    everything main gained since; ``rev`` itself when HEAD descends from it or the two share no history."""
+    r = subprocess.run(["git", "merge-base", rev, "HEAD"], cwd=ROOT, capture_output=True, text=True)
+    base = r.stdout.strip()
+    if r.returncode != 0 or not base:
+        return rev
+    exact = subprocess.run(["git", "rev-parse", "--verify", "-q", f"{rev}^{{commit}}"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    return rev if base == exact else base
 
 
 def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock: dict[str, dict]) -> list[Suite]:
@@ -1863,8 +1878,10 @@ def main(argv: list[str] | None = None) -> int:
     args = (QUICK if a.quick else []) + extra
     tree = worktree()
     if a.changed:
-        chosen = touched(chosen, pkgs, a.changed, tree, locked())
-        print(f"suites: the change from {a.changed[:12]} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
+        base = merge_base(a.changed)
+        chosen = touched(chosen, pkgs, base, tree, locked())
+        since = f"{a.changed[:12]}" + (f" (its merge-base with HEAD, {base[:12]})" if base != a.changed else "")
+        print(f"suites: the change from {since} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
     build_lean = (not (a.list or a.explain or a.lean_built) and any(s.name in AFTER_LEAN for s in chosen)
                   and (flock_lean() / "lakefile.toml").exists())
     if build_lean:
@@ -1994,7 +2011,7 @@ def main(argv: list[str] | None = None) -> int:
             mem = memory_gb()
             print(f"        {'OOM-KILLED' if r.oom else 'killed by ' + r.signal}: pytest died by {r.signal} at a peak RSS of "
                   f"{r.peak_rss_gb:.1f} GB" + (f" on a machine with {mem:.0f} GB" if mem else "")
-                  + ("; run it in a check slot (`research queue ready N --on vy-nebius-1`, or `check.py --on`)" if r.oom else ""))
+                  + ("; run it in a check slot (`research queue ready N --on vy-nebius-2`, or `check.py --on`)" if r.oom else ""))
         if r.leftover:
             print(f"        killed {r.leftover} processes its tests left in the suite's process group")
         if r.child_reads:

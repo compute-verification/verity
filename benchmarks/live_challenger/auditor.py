@@ -1,0 +1,1363 @@
+"""The auditor host's challenger service (vy-challenger-1; RT4-INT-17, -18, -24, -25, -27, -29, -30): `serve.py` runs only as
+the `auditor` user, from a tree infra pinned, one session a window, each recorded in a signed append-only ledger before its
+first coin.
+
+    vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
+    vy-challenger-gate open --session S --root R
+    vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--model M | --weights-root W]
+                                   [--circuit-files JSON] [--lane LANE] | period-close --name P
+    vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
+    vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
+    vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra] [--requests N]
+                                          [--profile planned|served]
+    vy-challenger-gate status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN
+
+- **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-challenger-gate` (`command=`),
+  which is this file's `gate` as root through one sudoers line. A lane's own key is forced with the lane's name
+  (`vy-challenger-gate LANE`, from `/etc/vy/challenger-gate-keys`, `vy-challenger-setup`), and only such a key reserves and
+  opens a window: the reserve records that name as `by`, its prover. A key forced with no name (the shared lane key, which
+  the control pod's publisher holds) reads only: `status`, `ledger`, `pins`, `pubkey`, `fetch`. A lane names a window and gets a
+  session; it never names code. Infra's `vy-admin` runs the same gate (`sudo vy-challenger-gate VERB ...`, `by` vy-admin),
+  and it alone may reserve a window for a lane that has no key of its own (`--for LANE`: the reserve records `for` and
+  keeps `by` vy-admin, and the window's prover is LANE). Nothing else runs as `research` there, and nothing runs as
+  `auditor` but the session unit, `reserve`, `admit` and a certifier rehearsal's unit.
+- **What runs.** `/opt/vy-challenger/current` -> `/opt/vy-challenger/<commit>`, a root-owned `git archive` of that commit
+  (`pin.sh`); the commit is the directory's name, and every entry names it (`pinned`). pin.sh pins only a commit on
+  origin/main's first-parent history, which it fetches from GitHub itself, and appends `pin_line(commit, main, utc)` to
+  the pins log (`/opt/vy-challenger/pins.jsonl`, root's, `chattr +a`; `record_pin`) before it moves `current` (RT4-INT-40).
+  A reserve or an open is refused unless that log records this tree's pin (`pins_refusal`, the verifier's `pins_reason`),
+  and each open seals the log as it stands (`pins: {lines, sha512}`), so `pinned_session` can hold the session to a pin
+  the log records, and that pin to the auditor's own first-parent list of main. The key (`/var/lib/vy-challenger/key`,
+  serve.py's layout) and every session's `out/` are `auditor`'s, in a directory only `auditor` and root can enter.
+- **A window** is opened in two steps, each a signed entry appended under the ledger's lock (or refused) and fsynced.
+  `reserve` takes the request (peer, scheme, families, epoch, minutes) and appends the session's `reserve` entry with its
+  `started_utc` and `expires_utc` (start + minutes); nothing serves yet. From that entry on the window is one of its
+  lane's open period, counted toward the period's cap. `open --session S --root R` (R: 128 lowercase hex digits, for
+  SALT-WIRE's `window_open_root(weights' root, round-0 request table's root, S)`, which the verifier recomputes) is
+  refused unless S is reserved, not yet opened, unexpired, the opener's own (its reserve's `by` or `for`) and its
+  period still open, and R is no open's root yet (v1's `commit` and one-step v2 opens included): one session a root,
+  ever. `admit` appends the `open` entry, which binds S (`session`), R (`window.root`) and the reserve (`reserve`, its
+  `seq`), carries the reserve's request, names its opener (`opened_by`) and takes a port, before `serve.py` starts, so
+  before its first coin. A reserve not opened by its expiry is its period's refused window. Its `host` is the string the
+  challenger's own record signs (`<host>.<session>`), which ties `record.json` to it. A window's time is the auditor's,
+  never the requester's: its entries' `seq` and times. `serve.py` gets the root (`--root`: a salt opens only after it)
+  and the session's secret (`--secret-file`), which the gate returns to the opener alone and which the client's hello
+  must carry; the open entry keeps its SHA-512, `fetch` never ships it, and the session deletes it when it ends. The
+  open's answer also carries the session's coin commitment root (`commitment`, from the record serve.py signs before it
+  listens; `status` gives it too), so the serving side checks the hello's commitment against it before its first coin.
+  Before the first reserve the ledger held one-step v2 opens (`--commit`), which still verify; none follows a reserve.
+- **An `end` entry** follows when `serve.py` exits: its exit code, whether its client closed it, the SHA-512 of each file of
+  `out/` (which seals the release log), how many coins each family released (`released`, counted from the release log under
+  the signed record's commitment; `complete` when every family released all its coins, so a period can refuse a short
+  release), the leaf the challenger's record was signed at (`record_leaf`), its commitment root (`commitment`) and how
+  many hellos serve.py refused before it accepted one (`refused_hellos`, each in `out/hellos.jsonl`, which `files` seals). A session with an `open` and no `end` never
+  ended (its host stopped): a refused window to the verifier, like one whose `closed` or `complete` is false.
+- **A period** is a lane's span of windows between two signed entries, `period-open` and `period-close` (session null),
+  which the lane's own gate key writes for its lane (`--name P`), or vy-admin for any lane (`period-open --name P --lane
+  LANE`, `period-close --name P`). A period's name is used once, and a lane has one period open at a time. Its open
+  commits, before window 0's first coin, the most windows it may hold (`--cap`, a positive integer) and its circuit
+  (`--circuit`: the declared circuit's SHA-512, never a Program's id, which the gate records and CHAL1 checks each window
+  against), and with `--draw-k K` the draw K the proof service selects each window's units with (`draw_k`, a positive
+  integer at most 2^24, which PoUW's credit reads; an open without it commits none), and with `--model M` (or
+  `--weights-root W`, which must be a registered root) the served model's weights' root from the auditor's model registry
+  (`weights_root`, `credit.weights_root` of each K's b/<K> the auditor committed under its own salts, which PoUW's
+  credit holds every window's weights to, and `model: {name, checkpoint_sha512}`; a root the registry has no entry of
+  for the period's circuit is refused; a model it has none of there, a remote memory audit's whose circuit is its
+  verifier tree, is signed as `model` alone, its digest core's pin, `pouw/lean/check/models.json`, and refused when the
+  pin lacks it; an open without either commits none), and with `--circuit-files JSON` each K's circuit file (`circuit_files`, `{"k<K>": SHA-512}`:
+  the circuit file the auditor's lowering built for K's template, which PoUW's credit verifies each window's statements
+  on; an open without it commits none). Its windows are exactly the reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
+  lane between its open and its close, at most `cap` (the next reserve is refused); every one counts. The close is
+  refused while one of them is reserved and unexpired or still runs, and lists each, in order, as {root, session,
+  complete} (root null for a reserve never opened; complete when its end is in the ledger and complete), with `complete` true only when it lists at least one window and all are: an
+  incomplete window is the period's visible failure. Period entries are taken under the gate's lock, so no window is
+  admitted between a close's reading of the ledger and its entry.
+- **The ledger** (`/var/lib/vy-challenger/windows.jsonl`, `chattr +a`) is one JSON object a line: `schema`, `seq` (from 0),
+  `prev` (SHA-512 of the previous line's bytes, 128 zeros first), `kind`, `session`, `body` and `sig`, an LMS signature under
+  the challenger key over `entry_message(I, entry)`. Its entries' LMS leaves strictly increase (`append` refuses an entry
+  whose leaf isn't after the last one, as a restored key state would sign), and each record's leaf lies between its
+  session's open and end and is no entry's. v2 entries follow the host's v1 entries in one chain, and `verify_ledger`, the
+  reference check, reads both, and checks each window's reserve, open and end in that order, its expiry, and the periods
+  (`verify_periods` returns them). Infra publishes the ledger and each ended session to the store (`publish.sh`, the control
+  pod's watchers loop `challenger-publish`), each put an extension of the last   (`publish.sh` refuses any other head, and
+  `extends` is the check), labelled `challenger-ledger head` by infra, and the pins log the same way (`challenger-pins head`).
+
+- **The model registry** (`/var/lib/vy-challenger/models.jsonl`, auditor's, `chattr +a`; `models.py`) is one line a
+  registration, vy-admin's `model-register` run as `auditor`. It refuses a checkpoint whose
+  files aren't the pinned `checkpoints-int8.json` role's, or that root or auditor alone can't write, or whose digest
+  isn't core's pin (`verity/core/protocols/pouw/lean/check/models.json`), and a descriptor whose linears aren't the model's decoder
+  layers in order; it commits each K's b/<K> from the pinned shards alone under a fresh salt key it keeps
+  (`weights.weights_roots`), and appends the roots and their fold. `model-key` gives a lane the key (the openings of
+  public weights), and `models` reads the registry, which `publish.sh` publishes as `challenger-models/v1`.
+
+- **A certifier rehearsal** (`certifier-rehearse`, a lane's own gate key or vy-admin): the network certifier in front of
+  a served endpoint, `benchmarks/network_traces/certifier_serve.py rehearse`, run here, on the auditor's machine, as the
+  auditor's device would. The gate validates the request (`--peer` one of /etc/vy/peers, `--port` the endpoint's on the
+  peer's loopback, `--minutes` 1 to 120, `--tamper late|extra` for a tampering shim instead of an honest one,
+  `--requests` 4 to 400, `--profile planned|served` N2's profile, planned by default: the planned egress occupancy, or
+  NET-54's served profile, whose egress counts derive from the ingress head's), refuses while another rehearsal runs,
+  writes `certifier/<run>/request.json` and starts its unit
+  (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
+  (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the
+  rehearsal through it into `out/`, stopped at `--minutes`, then the tunnel closed and `end.json` written (its exit, why
+  it ended, the SHA-512 of each file of `out/`, and from `out/summary.json` each run's verdict, network verdict, audit,
+  salt and what a second reveal of window 0's salt got). `status RUN` and `fetch RUN` return it. The rehearsal's keys are made in a scratch directory and removed, and `out/` holds no salt. A rehearsal is
+  no window of the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
+  `verify_ledger`'s).
+
+Every signature of the key (`reserve`'s, `admit`'s, a period's, `end`'s, and `serve.py`'s record and close,
+`--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`, which
+refuses a second signer, never sees two, and sessions run side by side. The ledger's reference check, `verify_ledger`
+and `verify_periods`, is `verity.core.protocols.sampled_proofs.challenger`'s, the verifier's own.
+"""
+from __future__ import annotations
+
+import argparse
+import fcntl
+import hashlib
+import io
+import json
+import os
+import re
+import secrets
+import shlex
+import signal
+import subprocess
+import sys
+import tarfile
+import time
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Callable, Iterator
+
+HERE = Path(__file__).resolve().parent
+TREE = HERE.parents[1]
+sys.path.insert(0, str(TREE))
+
+from verity.core.protocols.sampled_proofs.challenger import (LEDGER_ROLE as ROLE, LEDGER_SCHEMA as SCHEMA,  # noqa: E402
+                                                             LEDGER_SCHEMA_V1 as SCHEMA_V1,
+                                                             LEDGER_TAGS as TAGS, PERIOD_KINDS, RESERVED,
+                                                             SESSION_KINDS, cap_of as _cap_of,
+                                                             circuit_of as _circuit_of, extends, lane_of, leaf_of,
+                                                             ledger_message as entry_message, ledger_text, pin_line,
+                                                             pins_reason, pins_seal, root_of, verify_ledger, verify_periods)
+
+ZERO = "0" * 128
+PORTS = range(7811, 7900)
+MINUTES = (1, 720)
+#: the most a period-open's draw K may be (PoUW's `credit.MAX_K`)
+MAX_DRAW_K = 1 << 24
+ROOT = re.compile(r"[0-9a-f]{128}")
+PINNED = re.compile(r"[0-9a-f]{40}")
+TEMPLATE = re.compile(r"k[1-9][0-9]{0,7}")
+NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
+SCHEME = re.compile(r"[a-z0-9][a-z0-9/._-]{0,127}")
+SESSION = re.compile(r"s\d{8}T\d{6}Z-[0-9a-f]{4}")
+CERTIFIER_RUN = re.compile(r"c\d{8}T\d{6}Z-[0-9a-f]{4}")
+CERTIFIER_MINUTES = (1, 120)
+CERTIFIER_REQUESTS = (4, 400)
+TAMPERS = ("late", "extra")
+CERTIFIER_PROFILES = ("planned", "served")
+TUNNEL_SSH = ["ssh", "-N", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15"]
+READ_ONLY = "-"
+HOST_ACCOUNTS = ("root", "vy-admin", "research", "auditor")
+SECRET = "secret"
+OPEN_REQUEST = "open.json"
+OUT_FILES = ("record.json", "key.json", "releases.jsonl", "hellos.jsonl", "challenger.json", "address.json", "tunnel.log",
+             "serve.log")
+
+
+class Refused(Exception):
+    """A request the gate or the session refuses, with why."""
+
+
+@dataclass(frozen=True)
+class Host:
+    """Where the service keeps its state, and the name its records give the host."""
+
+    root: Path = Path("/var/lib/vy-challenger")
+    peers: Path = Path("/etc/vy/peers")
+    name: str = "vy-challenger-1"
+    pins: Path = Path("/opt/vy-challenger/pins.jsonl")
+
+    @property
+    def ledger(self) -> Path:
+        return self.root / "windows.jsonl"
+
+    @property
+    def sessions(self) -> Path:
+        return self.root / "sessions"
+
+    @property
+    def key(self) -> Path:
+        return self.root / "key"
+
+    @property
+    def models(self) -> Path:
+        return self.root / "models.jsonl"
+
+    @property
+    def certifier(self) -> Path:
+        return self.root / "certifier"
+
+
+def utc(now: datetime) -> str:
+    return now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def later(t: str, minutes: int) -> str:
+    """`t` (`utc`'s form) plus `minutes`: a reserve's expiry."""
+    return utc(datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) + timedelta(minutes=minutes))
+
+
+def pinned_commit(tree: Path = TREE) -> str:
+    """The commit this tree was pinned at: its directory's name under /opt/vy-challenger."""
+    if not PINNED.fullmatch(tree.name):
+        raise Refused(f"{tree} is not a pinned tree (/opt/vy-challenger/<commit>, pin.sh): no session runs from it")
+    return tree.name
+
+
+def read_pins(path: Path) -> list[str]:
+    try:
+        return path.read_text().splitlines()
+    except FileNotFoundError:
+        return []
+
+
+def append_only(path: Path) -> None:
+    subprocess.run(["chattr", "+a", str(path)], check=True)
+
+
+def record_pin(log: Path, commit: str, main: str, now: datetime, *, seal: Callable[[Path], None] = append_only) -> str:
+    """pin.sh's last step before it moves `current`, as root: `pin_line(commit, main, now)` appended to the pins log `log`,
+    which is root's, 0644, and append-only (`chattr +a`, which only root can lift, as the ledger) before any line is
+    written. A failure here fails the pin, so `current` never names a tree the log doesn't."""
+    try:
+        line = pin_line(commit, main, utc(now))
+    except ValueError as e:
+        raise Refused(f"pin {commit!r} at main {main!r}: {e}") from None
+    if not log.exists():
+        log.touch()
+        log.chmod(0o644)
+    seal(log)
+    with open(log, "a") as f:
+        f.write(line + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    return line
+
+
+def pins_refusal(host: Host, session: str, pinned: str) -> tuple[dict, str | None]:
+    """The host's pins log sealed as it stands (`pins_seal`), and why a session at `pinned` wouldn't count under it: the
+    verifier's own check (`pins_reason`), so the gate refuses a window `pinned_session` would."""
+    pins = read_pins(host.pins)
+    if not pins:
+        return pins_seal(pins), (f"{host.pins} records no pin, so no session here would count: pin the tree with "
+                                 "vy-challenger-pin, which logs each pin")
+    seal = pins_seal(pins)
+    return seal, pins_reason(session, {"pinned": pinned, "pins": seal}, pins)
+
+
+# --- the ledger ---------------------------------------------------------------------------------------------------------------
+
+def read_ledger(path: Path) -> list[bytes]:
+    try:
+        return [ln for ln in path.read_bytes().split(b"\n") if ln]
+    except FileNotFoundError:
+        return []
+
+
+def entries(lines: list[bytes]) -> list[dict]:
+    return [json.loads(ln) for ln in lines]
+
+
+def sessions_of(lines: list[bytes]) -> dict[str, dict[str, dict]]:
+    """session -> {"reserve": entry, "open": entry, "end": entry} as far as the ledger has them."""
+    out: dict[str, dict[str, dict]] = {}
+    for e in entries(lines):
+        if e["kind"] in SESSION_KINDS:
+            out.setdefault(e["session"], {})[e["kind"]] = e
+    return out
+
+
+def circuit_of(s: str) -> str:
+    """A period's circuit as its open records it (`challenger.circuit_of`), or Refused."""
+    try:
+        return _circuit_of(s)
+    except ValueError as e:
+        raise Refused(str(e)) from None
+
+
+def cap_of(v: Any) -> int:
+    """A period's cap (`challenger.cap_of`), or Refused."""
+    try:
+        return _cap_of(v)
+    except ValueError as e:
+        raise Refused(str(e)) from None
+
+
+def draw_k_of(s: str) -> int:
+    """A period-open's draw K (`--draw-k`, written as `draw_k`): a positive integer at most 2^24, or Refused."""
+    if not re.fullmatch(r"[1-9][0-9]{0,7}", s) or int(s) > MAX_DRAW_K:
+        raise Refused(f"--draw-k {s!r}: the draw K the proof service selects each window's units with, 1 to 2^24")
+    return int(s)
+
+
+def weights_root_of(s: str) -> str:
+    """A period-open's weights' root (`--weights-root`, written as `weights_root`): a SHA-512 digest in lowercase hex, or
+    Refused."""
+    if not ROOT.fullmatch(s):
+        raise Refused(f"--weights-root {s!r}: the served model's registered weights' root (credit.weights_root), a "
+                      "SHA-512 digest in 128 lowercase hex")
+    return s
+
+
+def circuit_files_of(s: str) -> dict[str, str]:
+    """A period-open's circuit files (`--circuit-files`, written as `circuit_files`): a JSON object taking each K's
+    template (``k<K>``) to the SHA-512 of the circuit file the auditor's lowering built for it, in lowercase hex, as
+    PoUW's credit reads it (`committed_files`); or Refused."""
+    def pairs(items: list) -> dict | None:
+        return dict(items) if len({k for k, _ in items}) == len(items) else None
+
+    try:
+        files = json.loads(s, object_pairs_hook=pairs)
+    except (ValueError, RecursionError):
+        files = None
+    if not (isinstance(files, dict) and 0 < len(files) <= 64 and all(
+            TEMPLATE.fullmatch(k) and type(v) is str and ROOT.fullmatch(v) for k, v in files.items())):
+        raise Refused(f"--circuit-files {s[:200]!r}: each K's template to its circuit file's SHA-512, a JSON object "
+                      '{"k<K>": "<128 lowercase hex>", ...} of 1 to 64 distinct K')
+    return files
+
+
+def model_of(s: str) -> str:
+    """A period-open's model (`--model`): the int8 checkpoint role the model registry has it under, or Refused."""
+    if not NAME.fullmatch(s):
+        raise Refused(f"--model {s!r}: a role of the model registry (models), 1 to 64 of [A-Za-z0-9._:-]")
+    return s
+
+
+#: a period-open's optional fields, as the gate hands them to `period` (``FIELD=VALUE``) and its open records them; `model`
+#: and `weights_root` name a model registry entry, whose root and model the open signs (`models.resolve`)
+PERIOD_FIELDS = {"draw_k": draw_k_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of,
+                 "model": model_of}
+
+
+def field_text(v: Any) -> str:
+    """A period-open field's value as the gate hands it to `period`: a JSON object canonical, anything else as is."""
+    return json.dumps(v, sort_keys=True, separators=(",", ":")) if isinstance(v, dict) else str(v)
+
+
+def counts_at(e: dict) -> bool:
+    """Whether a window joins its lane's open period at this entry: at its reserve, or at a v2 open with no reserve (a
+    one-step open, before the first reserve)."""
+    return e["kind"] == "reserve" or (e["kind"] == "open" and e["schema"] == SCHEMA and "reserve" not in e["body"])
+
+
+def periods_of(lines: list[bytes]) -> dict[str, dict]:
+    """period -> {"lane", "open", "close" (None while open), "windows": [session, ...], "cap", "circuit"}: a period's
+    windows are exactly its lane's reserves (and one-step v2 opens) between its period-open and its period-close."""
+    periods: dict[str, dict] = {}
+    current: dict[str, dict] = {}
+    for e in entries(lines):
+        if e["kind"] == "period-open":
+            p = current[e["body"]["lane"]] = periods[e["body"]["period"]] = {
+                "lane": e["body"]["lane"], "open": e, "close": None, "windows": [], "cap": e["body"].get("cap"),
+                "circuit": e["body"].get("circuit")}
+        elif e["kind"] == "period-close":
+            p = periods[e["body"]["period"]]
+            p["close"] = e
+            current.pop(p["lane"], None)
+        elif counts_at(e) and (p := current.get(lane_of(e))) is not None:
+            p["windows"].append(e["session"])
+    return periods
+
+
+def window_outcomes(lines: list[bytes], windows: list[str]) -> list[dict]:
+    """Each window's outcome as a period-close records it: its root (None when it was never opened, as an expired reserve
+    isn't), complete only when its end is in the ledger and complete."""
+    sessions = sessions_of(lines)
+    return [{"root": root_of(sessions[s]["open"]) if "open" in sessions[s] else None, "session": s,
+             "complete": "end" in sessions[s] and sessions[s]["end"]["body"].get("complete") is True} for s in windows]
+
+
+def roots_of(lines: list[bytes]) -> dict[str, str]:
+    """root -> the session its open names, for every open in the ledger."""
+    return {root_of(s["open"]): sid for sid, s in sessions_of(lines).items() if "open" in s}
+
+
+@contextmanager
+def locked(path: Path) -> Iterator[None]:
+    with open(path, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def append(host: Host, kind: str, session: str, body_of: Callable[[list[bytes]], dict], I: bytes,
+           sign: Callable[[bytes], bytes]) -> dict:
+    """Append one signed entry, its body `body_of` the ledger as it stands (which may refuse), under the ledger's lock;
+    fsynced. Refused, unwritten, when the signature's leaf isn't after the ledger's last entry's (a restored key state)."""
+    with locked(host.root / "ledger.lock"):
+        lines = read_ledger(host.ledger)
+        entry = {"schema": SCHEMA, "seq": len(lines), "prev": hashlib.sha512(lines[-1]).hexdigest() if lines else ZERO,
+                 "kind": kind, "session": session, "body": body_of(lines)}
+        with locked(host.root / "sign.lock"):
+            entry["sig"] = sign(entry_message(I, entry)).hex()
+        if lines and leaf_of(entry["sig"]) <= leaf_of(json.loads(lines[-1])["sig"]):
+            raise Refused(f"the key signed at leaf {leaf_of(entry['sig'])}, not after the ledger's last entry's: its key state "
+                          "was restored or forked, and no entry is written under it")
+        fd = os.open(host.ledger, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+        try:
+            os.write(fd, ledger_text(entry).encode() + b"\n")
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    return entry
+
+
+# --- the key (serve.py's) -----------------------------------------------------------------------------------------------------
+
+def load_key(host: Host, params=None, workers: int | None = None):
+    """The challenger's key and leaf state in `host.key`, made there when absent (serve.py's `load_key`)."""
+    sys.path.insert(0, str(HERE))
+    import serve
+    from verity.ml.crypto import lms
+    return serve.load_key(host.key, params or lms.DEPLOYED, workers or len(os.sched_getaffinity(0)))
+
+
+def key_signer(host: Host, params=None, workers: int | None = None):
+    """(I, sign, key_sha512) for `append`; each signature opens the key's leaf state and closes it after."""
+    from verity.ml.crypto import lms
+    key, state = load_key(host, params, workers)
+    state.close()
+    public = lms.public_key(key)
+
+    def sign(message: bytes) -> bytes:
+        with lms.LeafState(host.key / "state.json", public, key.params.H) as st:
+            return lms.sign(key, st, message).encode()
+    return public[:16], sign, hashlib.sha512(public).hexdigest()
+
+
+# --- the model registry (models.py) -------------------------------------------------------------------------------------------
+
+def registry():
+    """`models`, imported only by the verbs that read the registry (it brings numpy and PoUW's credit)."""
+    sys.path.insert(0, str(HERE))
+    import models
+    return models
+
+
+def model_register(host: Host, args: list[str], *, pinned: str, now: datetime, key: bytes | None = None,
+                   tree: Path = TREE) -> dict:
+    """`model-register ROLE CIRCUIT DESCRIPTOR CHECKPOINT`, as `auditor`: `models.register` under a fresh salt key, the key
+    kept in `models.key_path` (0600) and the line appended to the registry under its lock; or Refused."""
+    M = registry()
+    if len(args) != 4:
+        raise Refused(f"model-register: {args}")
+    role, circuit, descriptor, checkpoint = model_of(args[0]), circuit_of(args[1]), Path(args[2]), Path(args[3])
+    key = key or secrets.token_bytes(32)
+    try:
+        line = M.register(tree, role, circuit, descriptor.read_bytes(), checkpoint, key, pinned=pinned, now=utc(now),
+                          log=lambda s: print(s, file=sys.stderr, flush=True))
+    except (M.Refused, OSError) as e:
+        raise Refused(str(e)) from None
+    kp = M.key_path(host.root, line)
+    kp.parent.mkdir(mode=0o700, exist_ok=True)
+    fd = os.open(kp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.write(fd, key)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    with locked(host.root / "models.lock"):
+        fd = os.open(host.models, os.O_WRONLY | os.O_APPEND)
+        try:
+            os.write(fd, (json.dumps(line, sort_keys=True, separators=(",", ":")) + "\n").encode())
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    return line
+
+
+def parse_model(verb: str, argv: list[str]) -> argparse.Namespace:
+    p = argparse.ArgumentParser(prog=f"vy-challenger-gate {verb}", exit_on_error=False, add_help=False, allow_abbrev=False)
+    p.add_argument("--model", required=True)
+    p.add_argument("--circuit", required=True)
+    if verb == "model-key":
+        p.add_argument("--weights-root", dest="weights_root", default=None)
+    if verb == "model-register":
+        p.add_argument("--descriptor", required=True)
+        p.add_argument("--checkpoint", required=True)
+
+    def refuse(why: object) -> None:
+        raise Refused(f"{verb}: {why}; {' '.join(p.format_usage().split())}")
+
+    p.error = refuse
+    try:
+        a = p.parse_args(argv)
+    except argparse.ArgumentError as e:
+        refuse(e)
+    a.model, a.circuit = model_of(a.model), circuit_of(a.circuit)
+    return a
+
+
+def gate_model_key(argv: list[str], host: Host) -> dict:
+    """The salt key of `--model`'s registration under `--circuit` whose root is `--weights-root` (the period's signed one;
+    required when the model is registered more than once there): the prover's openings of its b/<K>."""
+    M = registry()
+    a = parse_model("model-key", argv)
+    try:
+        e = M.resolve(M.read(host.models), a.circuit, a.model, a.weights_root and weights_root_of(a.weights_root),
+                      unique=True)
+    except M.Refused as x:
+        raise Refused(str(x)) from None
+    key = M.key_path(host.root, e).read_bytes()
+    return {"model": e["model"], "circuit": e["circuit"], "weights_root": e["weights_root"], "key": key.hex(),
+            "key_sha512": e["key_sha512"]}
+
+
+def seal_models(host: Host, *, own: Callable[[Path], None], seal: Callable[[Path], None] = append_only) -> None:
+    """The registry made auditor's and append-only (`chattr +a`, which only root lifts) before its first line."""
+    if not host.models.exists():
+        host.models.touch()
+        host.models.chmod(0o644)
+        own(host.models)
+    seal(host.models)
+
+
+def as_auditor_register(args: list[str]) -> dict:
+    p = subprocess.run(_auditor(["model-register", *args]), stdout=subprocess.PIPE, stderr=None, text=True)
+    if p.returncode:
+        raise Refused(f"model-register exited {p.returncode} (its reason is on stderr above)")
+    return json.loads(p.stdout)
+
+
+# --- the gate (root) ----------------------------------------------------------------------------------------------------------
+
+def peers(host: Host) -> list[str]:
+    names = [ln.split()[0] for ln in host.peers.read_text().splitlines() if ln.strip() and not ln.startswith("#")]
+    return [n for n in names if n != host.name]
+
+
+def parse_reserve(argv: list[str], host: Host, *, admin: bool = False) -> dict:
+    """A reserve's request; `--for LANE` (vy-admin's alone: a development window reserved for a lane without its own key)
+    names the window's prover."""
+    p = argparse.ArgumentParser(prog="vy-challenger-gate reserve", exit_on_error=False, add_help=False, allow_abbrev=False)
+    for flag in ("--peer", "--scheme", "--families"):
+        p.add_argument(flag, required=True)
+    p.add_argument("--epoch", type=int, default=0)
+    p.add_argument("--minutes", type=int, default=120)
+    if admin:
+        p.add_argument("--for", dest="lane", default=None)
+
+    def refuse(why: object) -> None:
+        raise Refused(f"reserve: {why}; {' '.join(p.format_usage().split())} (no --commit, --period or --lane: the "
+                      "window's root comes at its open, its time is the auditor's, its prover your gate key's lane)")
+
+    p.error = refuse
+    try:
+        a = p.parse_args(argv)
+    except argparse.ArgumentError as e:
+        refuse(e)
+    if a.peer not in peers(host):
+        raise Refused(f"--peer {a.peer!r}: one of {peers(host)} (/etc/vy/peers)")
+    if not SCHEME.fullmatch(a.scheme):
+        raise Refused(f"--scheme {a.scheme!r}: [a-z0-9/._-], up to 128")
+    try:
+        families = json.loads(a.families)
+    except json.JSONDecodeError:
+        families = None
+    if (not isinstance(families, list) or not families or len(a.families) > 4096
+            or not all(isinstance(f, list) and len(f) == 2 and isinstance(f[0], str) and SCHEME.fullmatch(f[0])
+                       and type(f[1]) is int and f[1] > 0 for f in families)
+            or len({f[0] for f in families}) != len(families)):
+        raise Refused("--families: a JSON list of [label, count], labels distinct, count >= 1, up to 4096 bytes")
+    if not 0 <= a.epoch < 2 ** 63:
+        raise Refused("--epoch: 0 <= E < 2^63")
+    if not MINUTES[0] <= a.minutes <= MINUTES[1]:
+        raise Refused(f"--minutes: {MINUTES[0]} to {MINUTES[1]}")
+    lane = getattr(a, "lane", None)
+    if lane is not None and (not NAME.fullmatch(lane) or lane in HOST_ACCOUNTS):
+        raise Refused(f"--for {lane!r}: a lane's name")
+    return {"peer": a.peer, "scheme": a.scheme, "families": families, "epoch": a.epoch, "minutes": a.minutes,
+            **({"for": lane} if lane else {})}
+
+
+def parse_open(argv: list[str]) -> tuple[str, str]:
+    """An open's (session, root): the reserved session and the window's root, 128 lowercase hex digits."""
+    p = argparse.ArgumentParser(prog="vy-challenger-gate open", exit_on_error=False, add_help=False, allow_abbrev=False)
+    p.add_argument("--session", required=True)
+    p.add_argument("--root", required=True)
+
+    def refuse(why: object) -> None:
+        raise Refused(f"open: {why}; {' '.join(p.format_usage().split())} (reserve first: its answer names the session)")
+
+    p.error = refuse
+    try:
+        a = p.parse_args(argv)
+    except argparse.ArgumentError as e:
+        refuse(e)
+    if not SESSION.fullmatch(a.session):
+        raise Refused(f"--session {a.session!r}: a reserve's session (sYYYYMMDDTHHMMSSZ-xxxx)")
+    if not ROOT.fullmatch(a.root):
+        raise Refused("--root: the window's root, 128 lowercase hex digits (a SHA-512)")
+    return a.session, a.root
+
+
+def free_port(lines: list[bytes], active: Callable[[str], bool]) -> int:
+    busy = {s["open"]["body"]["port"] for sid, s in sessions_of(lines).items()
+            if "open" in s and "end" not in s and active(sid)}
+    for port in PORTS:
+        if port not in busy:
+            return port
+    raise Refused(f"every port of {PORTS.start}..{PORTS.stop - 1} has a live session")
+
+
+def period_holding(lines: list[bytes], session: str) -> tuple[str, dict] | None:
+    return next(((n, p) for n, p in periods_of(lines).items() if session in p["windows"]), None)
+
+
+def cap_refusal(lines: list[bytes], lane: str) -> str | None:
+    """Why the lane's next window would be past its open period's cap, or None."""
+    for name, p in periods_of(lines).items():
+        if p["lane"] == lane and p["close"] is None and p["cap"] is not None and len(p["windows"]) >= p["cap"]:
+            return (f"period {name} holds its cap of {p['cap']} windows: close it (period-close --name {name}) and open "
+                    "another for more")
+    return None
+
+
+def open_refusal(lines: list[bytes], session: str, opener: str, root: str, now: datetime) -> str | None:
+    """Why `opener` may not open `session` at `root` now, or None: the session is reserved, not yet opened, unexpired,
+    the opener's own (its reserve's `by` or `for`), its period still open, and the root no open's yet (v1 and v2 too)."""
+    s = sessions_of(lines).get(session, {})
+    if "reserve" not in s:
+        return f"session {session} has no reserve in the ledger: reserve first"
+    if "open" in s:
+        return f"session {session} is opened already: a reserve opens once"
+    rb = s["reserve"]["body"]
+    if opener not in {rb["by"], rb.get("for")} - {None}:
+        return f"session {session} is {lane_of(s['reserve'])}'s reserve, not {opener}'s"
+    if utc(now) > rb["expires_utc"]:
+        return f"session {session}'s reserve expired at {rb['expires_utc']}: it is a refused window of its period"
+    if (held := period_holding(lines, session)) is not None and held[1]["close"] is not None:
+        return f"session {session}'s period {held[0]} has closed, listing it unopened"
+    if (sid := roots_of(lines).get(root)) is not None:
+        return f"root {root[:16]}… already has its session ({sid}) in the ledger: one session a root, ever"
+    return None
+
+
+def gate_reserve(argv: list[str], host: Host, *, by: str, admin: bool, now: datetime, token: str,
+                 reserve: Callable[[str], None], own: Callable[[Path], None]) -> dict:
+    """Validate a request and hand it to `reserve` (as `auditor`), which signs the session's reserve entry: the session
+    id, its expiry and the period it is a window of. Nothing serves until its open."""
+    req = parse_reserve(argv, host, admin=admin)
+    lines = read_ledger(host.ledger)
+    if (why := cap_refusal(lines, req.get("for") or by)) is not None:
+        raise Refused(why)
+    session = f"s{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}-{token}"
+    d = host.sessions / session
+    d.mkdir(mode=0o755)
+    req.update(session=session, by=by, requested_utc=utc(now))
+    (d / "request.json").write_text(json.dumps(req, indent=1, sort_keys=True) + "\n")
+    own(d)
+    with locked(host.root / "gate.lock"):
+        reserve(session)
+    lines = read_ledger(host.ledger)
+    entry = sessions_of(lines)[session]["reserve"]
+    held = period_holding(lines, session)
+    return {"session": session, "seq": entry["seq"], "peer": req["peer"], "by": by,
+            **({"for": req["for"]} if "for" in req else {}), "expires_utc": entry["body"]["expires_utc"],
+            "period": held and held[0]}
+
+
+def gate_open(argv: list[str], host: Host, *, by: str, now: datetime, admit: Callable[[str], None],
+              start: Callable[[str], None], own: Callable[[Path], None], secret: bytes,
+              ready: Callable[[str], str | None]) -> dict:
+    """Open a reserved session at its window's root: hand it to `admit` (as `auditor`), which signs the open entry
+    binding the session and the root, and `start` its unit (serve.py with --root, so the salt opens only after it): the
+    session's port on the peer, its secret, which only this answer carries, and its coin commitment's root once `ready`
+    has it (serve.py signs its record before it listens), so the serving side checks the hello's commitment against it
+    before its first coin."""
+    session, root = parse_open(argv)
+    d = host.sessions / session
+    with locked(host.root / "gate.lock"):
+        if (why := open_refusal(read_ledger(host.ledger), session, by, root, now)) is not None:
+            raise Refused(why)
+        fd = os.open(d / SECRET, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o400)
+        try:
+            os.write(fd, secret.hex().encode() + b"\n")
+        finally:
+            os.close(fd)
+        req = {"session": session, "root": root, "by": by, "requested_utc": utc(now),
+               "secret_sha512": hashlib.sha512(secret).hexdigest()}
+        (d / OPEN_REQUEST).write_text(json.dumps(req, indent=1, sort_keys=True) + "\n")
+        own(d / SECRET)
+        try:
+            admit(session)
+        except Refused:
+            for f in (SECRET, OPEN_REQUEST):
+                (d / f).unlink(missing_ok=True)
+            raise
+        start(session)
+    entry = sessions_of(read_ledger(host.ledger))[session]["open"]
+    b = entry["body"]
+    return {"session": session, "port": b["port"], "peer": b["peer"], "host": b["host"], "seq": entry["seq"],
+            "reserve": b["reserve"], "root": root, "by": b["by"], **({"for": b["for"]} if "for" in b else {}),
+            "opened_by": by, "secret": secret.hex(), "commitment": ready(session)}
+
+
+def gate_status(session: str, host: Host, active: Callable[[str], bool], now: datetime) -> dict:
+    if not SESSION.fullmatch(session):
+        raise Refused(f"no session {session!r}")
+    s = sessions_of(read_ledger(host.ledger)).get(session)
+    if s is None:
+        raise Refused(f"no session {session} in the ledger")
+    expired = "open" not in s and "reserve" in s and utc(now) > s["reserve"]["body"]["expires_utc"]
+    return {"session": session, "reserve": s.get("reserve"), "open": s.get("open"), "end": s.get("end"),
+            "active": "open" in s and "end" not in s and active(session), "expired": expired,
+            "commitment": commitment_of(host.sessions / session / "out")}
+
+
+def gate_fetch(session: str, host: Host) -> bytes:
+    """The session's directory (its request and out/, never its secret) as a gzipped tar."""
+    gate_status(session, host, lambda _: False, datetime.now(timezone.utc))
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        tar.add(host.sessions / session, arcname=session,
+                filter=lambda ti: None if ti.name == f"{session}/{SECRET}" else ti)
+    return buf.getvalue()
+
+
+def parse_certifier(argv: list[str], host: Host) -> dict:
+    """A certifier rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run, the
+    tampering shim if any, how many requests the plan sends, and N2's profile."""
+    p = argparse.ArgumentParser(prog="vy-challenger-gate certifier-rehearse", exit_on_error=False, add_help=False,
+                                allow_abbrev=False)
+    p.add_argument("--peer", required=True)
+    p.add_argument("--port", required=True)
+    p.add_argument("--minutes", required=True)
+    p.add_argument("--tamper", default=None)
+    p.add_argument("--requests", default=str(CERTIFIER_REQUESTS[1]))
+    p.add_argument("--profile", default=CERTIFIER_PROFILES[0])
+
+    def refuse(why: object) -> None:
+        raise Refused(f"certifier-rehearse: {why}; {' '.join(p.format_usage().split())}")
+
+    p.error = refuse
+    try:
+        a = p.parse_args(argv)
+    except argparse.ArgumentError as e:
+        refuse(e)
+    if a.peer not in peers(host):
+        raise Refused(f"--peer {a.peer!r}: one of {peers(host)} (/etc/vy/peers)")
+
+    def bounded(flag: str, v: str, lo: int, hi: int) -> int:
+        if not re.fullmatch(r"[1-9][0-9]{0,4}", v) or not lo <= int(v) <= hi:
+            raise Refused(f"{flag} {v!r}: {lo} to {hi}")
+        return int(v)
+
+    port = bounded("--port", a.port, 1024, 65535)
+    minutes = bounded("--minutes", a.minutes, *CERTIFIER_MINUTES)
+    requests = bounded("--requests", a.requests, *CERTIFIER_REQUESTS)
+    if a.tamper is not None and a.tamper not in TAMPERS:
+        raise Refused(f"--tamper {a.tamper!r}: one of {list(TAMPERS)}, or none for an honest shim")
+    if a.profile not in CERTIFIER_PROFILES:
+        raise Refused(f"--profile {a.profile!r}: one of {list(CERTIFIER_PROFILES)}")
+    return {"peer": a.peer, "port": port, "minutes": minutes, "tamper": a.tamper, "requests": requests,
+            "profile": a.profile}
+
+
+def certifier_runs(host: Host) -> list[str]:
+    return sorted(d.name for d in host.certifier.iterdir() if CERTIFIER_RUN.fullmatch(d.name)) \
+        if host.certifier.is_dir() else []
+
+
+def gate_certifier(argv: list[str], host: Host, *, by: str, now: datetime, token: str, start: Callable[[str], None],
+                   own: Callable[[Path], None], active: Callable[[str], bool]) -> dict:
+    """Validate a certifier rehearsal's request, refused while another runs (under the gate's lock), and `start` its
+    unit, which runs `certifier-run` as `auditor`. Returns at once: `status RUN` follows it."""
+    req = parse_certifier(argv, host)
+    with locked(host.root / "gate.lock"):
+        if (running := next((r for r in certifier_runs(host) if active(r)), None)) is not None:
+            raise Refused(f"certifier rehearsal {running} still runs: one at a time (status {running})")
+        if not host.certifier.is_dir():
+            host.certifier.mkdir(mode=0o755)
+            own(host.certifier)
+        run = f"c{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}-{token}"
+        d = host.certifier / run
+        d.mkdir(mode=0o755)
+        req.update(run=run, by=by, requested_utc=utc(now))
+        (d / "request.json").write_text(json.dumps(req, indent=1, sort_keys=True) + "\n")
+        own(d)
+        start(run)
+    return req | {"unit": f"vy-certifier@{run}.service"}
+
+
+def certifier_status(run: str, host: Host, active: Callable[[str], bool]) -> dict:
+    d = host.certifier / run
+    if not CERTIFIER_RUN.fullmatch(run) or not (d / "request.json").is_file():
+        raise Refused(f"no certifier rehearsal {run!r}")
+
+    def read(path: Path) -> dict | None:
+        return json.loads(path.read_text()) if path.is_file() else None
+    end = read(d / "end.json")
+    return {"run": run, "request": read(d / "request.json"), "end": end, "active": end is None and active(run)}
+
+
+def certifier_fetch(run: str, host: Host) -> bytes:
+    """The rehearsal's directory (its request, out/ and end) as a gzipped tar."""
+    certifier_status(run, host, lambda _: False)
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        tar.add(host.certifier / run, arcname=run)
+    return buf.getvalue()
+
+
+USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE: vy-admin's] "
+         "| open --session S --root R "
+         "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--model M | --weights-root W] [--circuit-files JSON] "
+         "[--lane LANE: vy-admin's] "
+         "| period-close --name P "
+         "(a lane's own gate key, or vy-admin) "
+         "| model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR (vy-admin's) "
+         "| model-key --model M --circuit SHA512 [--weights-root W] (a lane's own gate key, or vy-admin) "
+         "| certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra] [--requests N] "
+         "[--profile planned|served] (a lane's own gate key, or vy-admin) "
+         "| status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN")
+
+
+def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, str | None, list[str]]:
+    """(period, lane, [cap, circuit, then ``draw_k=K`` and ``weights_root=W`` when given] for a period-open) of a
+    period-open or period-close: a lane key's own lane, or vy-admin's `--lane` (period-open)."""
+    p = argparse.ArgumentParser(prog=f"vy-challenger-gate {verb}", exit_on_error=False, add_help=False, allow_abbrev=False)
+    p.add_argument("--name", required=True)
+    if lane is None and verb == "period-open":
+        p.add_argument("--lane", required=True)
+    if verb == "period-open":
+        p.add_argument("--cap", required=True)
+        p.add_argument("--circuit", required=True)
+        p.add_argument("--draw-k", dest="draw_k", default=None)
+        p.add_argument("--weights-root", dest="weights_root", default=None)
+        p.add_argument("--circuit-files", dest="circuit_files", default=None)
+        p.add_argument("--model", dest="model", default=None)
+
+    def refuse(why: object) -> None:
+        raise Refused(f"{verb}: {why}; {' '.join(p.format_usage().split())}")
+
+    p.error = refuse
+    try:
+        a = p.parse_args(argv)
+    except argparse.ArgumentError as e:
+        refuse(e)
+    named = getattr(a, "lane", None) or lane
+    for what, v in (("--name", a.name), ("--lane", named)):
+        if v is not None and (not NAME.fullmatch(v) or v in HOST_ACCOUNTS):
+            raise Refused(f"{verb}: {what} {v!r}: 1 to 64 of [A-Za-z0-9._:-], starting with a letter or digit")
+    if verb != "period-open":
+        return a.name, named, []
+    cap = cap_of(int(a.cap)) if re.fullmatch(r"[1-9][0-9]{0,8}", a.cap) else cap_of(a.cap)
+    return a.name, named, [str(cap), circuit_of(a.circuit)] + [f"{f}={field_text(check(getattr(a, f)))}" for f, check
+                                                               in PERIOD_FIELDS.items() if getattr(a, f) is not None]
+
+
+def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes]:
+    """The gate's verbs; (exit code, stdout). A refusal is exit 3 with {"refused": why}. Over ssh (`--ssh WORDS --key NAME`,
+    the forced command's) `by` is NAME, the lane the key was registered for, and a key registered with no lane (`-`) reads
+    only; run by root (vy-admin's sudo) `by` is the sudoer."""
+    def refused(why: str) -> tuple[int, bytes]:
+        return 3, json.dumps({"refused": why}).encode() + b"\n"
+
+    by = hooks.get("by") or os.environ.get("SUDO_USER") or "root"
+    admin = argv[:1] != ["--ssh"]
+    if argv[:1] == ["--ssh"]:
+        if len(argv) == 4 and argv[2] == "--key":
+            key = argv[3]
+        elif len(argv) == 2:
+            key = READ_ONLY
+        else:
+            return refused("the gate's forced command is --ssh WORDS --key NAME")
+        if key != READ_ONLY and not NAME.fullmatch(key):
+            return refused(f"gate key name {key!r}")
+        by = None if key == READ_ONLY else key
+        if len(argv[1]) > 8192:
+            return refused("the request is over 8192 bytes")
+        try:
+            argv = shlex.split(argv[1])
+        except ValueError as e:
+            return refused(f"the request doesn't parse as shell words: {e}")
+    verb, rest = (argv[0], argv[1:]) if argv else ("", [])
+    active = hooks.get("active") or unit_active
+    now = hooks.get("now") or datetime.now(timezone.utc)
+    try:
+        if verb in ("reserve", "open") and by is None:
+            raise Refused("this key reads only: a window is reserved and opened with its prover's own gate key, which "
+                          "infra registers for its lane (send infra the public half)")
+        if verb == "reserve":
+            doc = gate_reserve(rest, host, by=by, admin=admin, now=now, token=hooks.get("token") or secrets.token_hex(2),
+                               reserve=hooks.get("reserve") or (lambda s: as_auditor_step("reserve", s)),
+                               own=hooks.get("own") or own_by_auditor)
+        elif verb == "open":
+            doc = gate_open(rest, host, by=by, now=now, admit=hooks.get("admit") or (lambda s: as_auditor_step("admit", s)),
+                            start=hooks.get("start") or start_unit, own=hooks.get("own") or own_by_auditor,
+                            secret=hooks.get("secret") or secrets.token_bytes(32),
+                            ready=hooks.get("ready") or (lambda s: await_commitment(host, s, active)))
+        elif verb in PERIOD_KINDS:
+            if by is None:
+                raise Refused("this key reads only: a period is opened and closed with its lane's own gate key, or by vy-admin")
+            name, lane, extra = parse_period(verb, rest, lane=None if admin else by)
+            with locked(host.root / "gate.lock"):
+                e = (hooks.get("period") or as_auditor_period)([verb, name, lane or READ_ONLY, by, *extra])
+            doc = {"seq": e["seq"], "kind": e["kind"], "body": e["body"]}
+        elif verb == "model-register":
+            if not admin:
+                raise Refused("a model is registered by vy-admin alone (sudo vy-challenger-gate model-register ...)")
+            a = parse_model(verb, rest)
+            seal_models(host, own=hooks.get("own") or own_by_auditor, seal=hooks.get("seal") or append_only)
+            line = (hooks.get("register") or as_auditor_register)(
+                [a.model, a.circuit, str(Path(a.descriptor).resolve()), str(Path(a.checkpoint).resolve())])
+            doc = {k: line[k] for k in ("model", "circuit", "prefix", "checkpoint_sha512", "roots", "weights_root",
+                                        "key_sha512", "registered_utc")}
+        elif verb == "model-key":
+            if by is None:
+                raise Refused("this key reads only: a model's salt key goes to a lane's own gate key, or vy-admin")
+            doc = gate_model_key(rest, host)
+        elif verb == "certifier-rehearse":
+            if by is None:
+                raise Refused("this key reads only: a certifier rehearsal is started with a lane's own gate key, or by "
+                              "vy-admin")
+            doc = gate_certifier(rest, host, by=by, now=now, token=hooks.get("token") or secrets.token_hex(2),
+                                 start=hooks.get("start_certifier") or start_certifier_unit,
+                                 own=hooks.get("own") or own_by_auditor,
+                                 active=hooks.get("certifier_active") or certifier_unit_active)
+        elif verb == "models" and not rest:
+            return 0, host.models.read_bytes() if host.models.exists() else b""
+        elif verb == "status" and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
+            doc = certifier_status(rest[0], host, hooks.get("certifier_active") or certifier_unit_active)
+        elif verb == "fetch" and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
+            return 0, certifier_fetch(rest[0], host)
+        elif verb == "status" and len(rest) == 1:
+            doc = gate_status(rest[0], host, active, now)
+        elif verb == "ledger" and not rest:
+            return 0, host.ledger.read_bytes() if host.ledger.exists() else b""
+        elif verb == "pins" and not rest:
+            return 0, host.pins.read_bytes() if host.pins.exists() else b""
+        elif verb == "pubkey" and not rest:
+            doc = json.loads((host.root / "pubkey.json").read_text())
+        elif verb == "fetch" and len(rest) == 1:
+            return 0, gate_fetch(rest[0], host)
+        else:
+            raise Refused(USAGE)
+    except Refused as e:
+        return refused(str(e))
+    return 0, json.dumps(doc, sort_keys=True).encode() + b"\n"
+
+
+def _auditor(args: list[str]) -> list[str]:
+    return ["runuser", "-u", "auditor", "--", "/usr/bin/env", "-i", "PYTHONDONTWRITEBYTECODE=1", "HOME=/var/lib/vy-challenger",
+            "PATH=/usr/bin:/bin", "/usr/bin/python3", "-I", str(Path(__file__).resolve()), *args]
+
+
+def as_auditor_step(verb: str, session: str) -> None:
+    p = subprocess.run(_auditor([verb, session]), capture_output=True, text=True)
+    if p.returncode:
+        raise Refused(p.stderr.strip().splitlines()[-1].removeprefix("refused: ") if p.stderr.strip()
+                      else f"{verb} exited {p.returncode}")
+
+
+def as_auditor_period(args: list[str]) -> dict:
+    p = subprocess.run(_auditor(args), capture_output=True, text=True)
+    if p.returncode:
+        raise Refused(p.stderr.strip().splitlines()[-1].removeprefix("refused: ") if p.stderr.strip()
+                      else f"{args[0]} exited {p.returncode}")
+    return json.loads(p.stdout)
+
+
+def own_by_auditor(path: Path) -> None:
+    import pwd
+    pw = pwd.getpwnam("auditor")
+    os.chown(path, pw.pw_uid, pw.pw_gid)
+
+
+def start_unit(session: str) -> None:
+    """Blocks until the unit runs (Type=exec), so the next `admit`, under the gate's lock, sees it active."""
+    p = subprocess.run(["systemctl", "start", f"vy-challenger@{session}.service"], capture_output=True, text=True)
+    if p.returncode:
+        raise Refused(f"session {session} was admitted but its unit didn't start ({p.stderr.strip()}): its window is spent, "
+                      f"an open entry with no end")
+
+
+def unit_active(session: str) -> bool:
+    return subprocess.run(["systemctl", "is-active", "--quiet", f"vy-challenger@{session}.service"]).returncode == 0
+
+
+def start_certifier_unit(run: str) -> None:
+    p = subprocess.run(["systemctl", "start", f"vy-certifier@{run}.service"], capture_output=True, text=True)
+    if p.returncode:
+        raise Refused(f"certifier rehearsal {run}'s unit didn't start ({p.stderr.strip()})")
+
+
+def certifier_unit_active(run: str) -> bool:
+    return subprocess.run(["systemctl", "is-active", "--quiet", f"vy-certifier@{run}.service"]).returncode == 0
+
+
+# --- the session (auditor) ----------------------------------------------------------------------------------------------------
+
+def request_of(host: Host, session: str, name: str = "request.json") -> dict:
+    if not SESSION.fullmatch(session):
+        raise Refused(f"no session {session!r}")
+    return json.loads((host.sessions / session / name).read_text())
+
+
+def reserve(host: Host, session: str, *, signer, pinned: str, now: datetime) -> dict:
+    """The window's `reserve` entry, or Refused when the session is in the ledger or the lane's open period holds its
+    cap. From this entry on the window is one of that period's; it expires unopened `minutes` after `started_utc`."""
+    req = request_of(host, session)
+    I, sign, key_sha512 = signer
+
+    def body_of(lines: list[bytes]) -> dict:
+        if session in sessions_of(lines):
+            raise Refused(f"session {session} is in the ledger already")
+        if (why := pins_refusal(host, session, pinned)[1]) is not None:
+            raise Refused(why)
+        if (why := cap_refusal(lines, req.get("for") or req["by"])) is not None:
+            raise Refused(why)
+        return {"by": req["by"], **({"for": req["for"]} if "for" in req else {}), "peer": req["peer"],
+                "scheme": req["scheme"], "epoch": req["epoch"], "families": req["families"], "minutes": req["minutes"],
+                "pinned": pinned, "key_sha512": key_sha512, "host": f"{host.name}.{session}", "started_utc": utc(now),
+                "expires_utc": later(utc(now), req["minutes"])}
+    return append(host, "reserve", session, body_of, I, sign)
+
+
+def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, active: Callable[[str], bool]) -> dict:
+    """The window's `open` entry, binding the reserved session and its root, carrying its reserve's request and a port no
+    live session holds; or Refused (`open_refusal`, read under the ledger's lock)."""
+    req = request_of(host, session, OPEN_REQUEST)
+    I, sign, key_sha512 = signer
+
+    def body_of(lines: list[bytes]) -> dict:
+        if (why := open_refusal(lines, session, req["by"], req["root"], now)) is not None:
+            raise Refused(why)
+        seal, why = pins_refusal(host, session, pinned)
+        if why is not None:
+            raise Refused(why)
+        r = sessions_of(lines)[session]["reserve"]
+        return {"window": {"root": req["root"]}, "reserve": r["seq"],
+                **{k: r["body"][k] for k in RESERVED if k in r["body"]}, "opened_by": req["by"], "pinned": pinned,
+                "pins": seal, "key_sha512": key_sha512, "host": r["body"]["host"],
+                "port": free_port(lines, active), "secret_sha512": req["secret_sha512"], "started_utc": utc(now)}
+    return append(host, "open", session, body_of, I, sign)
+
+
+def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, active: Callable[[str], bool],
+           tree: Path = TREE) -> dict:
+    """`period-open NAME LANE BY CAP CIRCUIT [draw_k=K] [weights_root=W] [circuit_files=JSON]` or `period-close NAME LANE|- BY` (LANE - for
+    vy-admin's close of any lane's period): the signed entry, or Refused. A period's name is used once and a lane has one
+    period open at a time; its open commits the most windows it may hold (`cap`), its circuit and, when given, its draw
+    K (`draw_k`), its model (`models.opened`: the registry's weights' root and model for the circuit, or for a circuit
+    the registry has no entry of the model alone, from core's pin in `tree`) and each K's circuit file's SHA-512
+    (`circuit_files`); it closes once none of its windows
+    still runs, its close listing each window with its outcome."""
+    if len(args) not in (range(6, 6 + len(PERIOD_FIELDS) + 1) if args[:1] == ["period-open"] else (4,)):
+        raise Refused(f"period: {args}")
+    verb, name, lane, by = args[:4]
+    if verb == "period-open":
+        cap = cap_of(int(args[4])) if re.fullmatch(r"[1-9][0-9]{0,8}", args[4]) else cap_of(args[4])
+        circuit = circuit_of(args[5])
+        fields = dict(x.partition("=")[::2] for x in args[6:])
+        if len(fields) != len(args) - 6 or not set(fields) <= set(PERIOD_FIELDS):
+            raise Refused(f"period: {args}")
+        given = {f: PERIOD_FIELDS[f](fields[f]) for f in PERIOD_FIELDS if f in fields}
+        model, root = given.pop("model", None), given.pop("weights_root", None)
+        if model is not None or root is not None:
+            M = registry()
+            try:
+                given.update(M.opened(M.read(host.models), tree, circuit, model, root))
+            except M.Refused as e:
+                raise Refused(str(e)) from None
+    I, sign, key_sha512 = signer
+
+    def body_of(lines: list[bytes]) -> dict:
+        periods = periods_of(lines)
+        if verb == "period-open":
+            if name in periods:
+                raise Refused(f"period {name} is in the ledger already: a period's name is used once")
+            if (o := next((n for n, p in periods.items() if p["lane"] == lane and p["close"] is None), None)) is not None:
+                raise Refused(f"lane {lane} has period {o} open: close it first (periods of a lane never overlap)")
+            return {"period": name, "lane": lane, "by": by, "cap": cap, "circuit": circuit, **given, "pinned": pinned,
+                    "key_sha512": key_sha512, "opened_utc": utc(now)}
+        p = periods.get(name)
+        if p is None or p["close"] is not None:
+            raise Refused(f"no open period {name}")
+        if lane != READ_ONLY and p["lane"] != lane:
+            raise Refused(f"period {name} is lane {p['lane']}'s: only its lane's key or vy-admin closes it")
+        sessions = sessions_of(lines)
+        for w in p["windows"]:
+            s = sessions[w]
+            if "open" not in s and utc(now) <= s["reserve"]["body"]["expires_utc"]:
+                raise Refused(f"period {name}'s window {w} is reserved until {s['reserve']['body']['expires_utc']}: a "
+                              "period closes once each of its windows has ended or expired")
+            if "open" in s and "end" not in s and active(w):
+                raise Refused(f"period {name}'s window {w} still runs: a period closes once each of its windows has "
+                              "ended or expired")
+        outcomes = window_outcomes(lines, p["windows"])
+        return {"period": name, "lane": p["lane"], "by": by, "windows": outcomes,
+                "complete": bool(outcomes) and all(w["complete"] for w in outcomes), "closed_utc": utc(now)}
+
+    if verb not in PERIOD_KINDS or not NAME.fullmatch(name) or not (lane == READ_ONLY or NAME.fullmatch(lane)):
+        raise Refused(f"period: {args}")
+    return append(host, verb, None, body_of, I, sign)
+
+
+def serve_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> list[str]:
+    return [sys.executable, "-I", str(tree / "benchmarks" / "live_challenger" / "serve.py"),
+            "--out", str(host.sessions / session / "out"), "--port", str(open_body["port"]), "--scheme", open_body["scheme"],
+            "--families", json.dumps(open_body["families"]), "--epoch", str(open_body["epoch"]), "--peer", open_body["peer"],
+            "--peers", str(host.peers), "--key", str(host.key), "--host", open_body["host"],
+            "--root", open_body["window"]["root"], "--secret-file", str(host.sessions / session / SECRET),
+            "--session", session, "--sign-lock", str(host.root / "sign.lock")]
+
+
+def record_of(out: Path):
+    """The challenger record the session signed in `out` (`remote.RECORD`), with its JSON; (None, None) until it has one."""
+    from verity.core.protocols.sampled_proofs import challenger as C
+    from verity.core.protocols.sampled_proofs import remote
+    try:
+        doc = json.loads((out / remote.RECORD).read_text())
+        return C.ChallengerRecord.from_json(doc), doc
+    except (OSError, ValueError, KeyError, TypeError, C.CoinError):
+        return None, None
+
+
+def commitment_of(out: Path) -> str | None:
+    """The coin commitment's root (hex) of the record the session signed, None until it has one."""
+    record, _ = record_of(out)
+    return None if record is None else record.commitment.root.hex()
+
+
+def await_commitment(host: Host, session: str, active: Callable[[str], bool], seconds: float = 60.0) -> str | None:
+    """The session's commitment root once serve.py has signed its record (before it listens), or None if its unit stopped
+    first or `seconds` passed."""
+    deadline = time.monotonic() + seconds
+    while (root := commitment_of(host.sessions / session / "out")) is None and active(session) and time.monotonic() < deadline:
+        time.sleep(0.2)
+    return root
+
+
+def released_of(out: Path) -> tuple[dict[str, int] | None, int | None]:
+    """(coins released by family, counted from the release log under the commitment the record signs; the record's leaf),
+    each None when the session left no such file."""
+    from verity.core.protocols.sampled_proofs import challenger as C
+    from verity.core.protocols.sampled_proofs import remote
+    record, doc = record_of(out)
+    if record is None:
+        return None, None
+    try:
+        released = {label: len(r) for label, r in remote.released_roots(out / remote.RELEASES, record.commitment).items()}
+    except C.CoinError:
+        released = None
+    return released, leaf_of(doc["signature"])
+
+
+def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], datetime], argv: list[str] | None = None,
+        wait: Callable[[subprocess.Popen, float], int] | None = None) -> dict:
+    """Serve the admitted session (serve.py, which takes `sign.lock` for each of its signatures), then append its `end`
+    entry and delete its secret. Its client closed it when serve.py exited 0 and its signed close (`challenger.json`)
+    says so (`ended` null)."""
+    I, sign, _ = signer
+    s = sessions_of(read_ledger(host.ledger)).get(session, {})
+    if "open" not in s or "end" in s:
+        raise Refused(f"session {session} has no open entry, or has ended: nothing to serve")
+    body = s["open"]["body"]
+    out = host.sessions / session / "out"
+    rc, why = 2, None
+    if body["pinned"] != pinned:
+        why = f"admitted at {body['pinned']}, but this tree is {pinned}: the pin moved, so the session doesn't run"
+    else:
+        out.mkdir(mode=0o755, exist_ok=True)
+        with open(out / "serve.log", "wb") as log:
+            proc = subprocess.Popen(argv or serve_argv(host, session, body), stdout=subprocess.PIPE, stderr=log,
+                                    stdin=subprocess.DEVNULL, start_new_session=True)
+            first = proc.stdout.readline()
+        with open(out / "stdout.log", "wb") as f:
+            f.write(first)
+        rc = (wait or _wait)(proc, body["minutes"] * 60)
+        proc.stdout.close()
+    (host.sessions / session / SECRET).unlink(missing_ok=True)
+    summary = {}
+    try:
+        summary = json.loads((out / "challenger.json").read_text())
+    except (OSError, ValueError):
+        pass
+    if not isinstance(summary, dict):
+        summary = {}
+    files = {n: hashlib.sha512((out / n).read_bytes()).hexdigest() for n in OUT_FILES if (out / n).is_file()}
+    released, record_leaf = released_of(out)
+    hellos = (out / "hellos.jsonl").read_text().count("\n") if (out / "hellos.jsonl").is_file() else 0
+    complete = released is not None and all(released.get(label) == n for label, n in body["families"])
+    closed = rc == 0 and "ended" in summary and summary["ended"] is None
+    end = {"rc": rc, "closed": closed,
+           "ended": why or summary.get("ended") or ("closed by the client" if closed else f"serve.py exited {rc}"),
+           "files": files, "released": released,
+           "complete": complete, "record_leaf": record_leaf, "commitment": commitment_of(out), "refused_hellos": hellos,
+           "ended_utc": utc(now())}
+    return append(host, "end", session, lambda lines: end, I, sign)
+
+
+def _wait(proc: subprocess.Popen, seconds: float) -> int:
+    try:
+        return proc.wait(seconds)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGTERM)
+        return proc.wait()
+
+
+# --- the certifier rehearsal (auditor) ----------------------------------------------------------------------------------------
+
+def free_local_port() -> int:
+    import socket
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def tunnel_up(tunnel: subprocess.Popen, port: int, seconds: float = 60.0) -> bool:
+    """Whether the tunnel's local end listens on 127.0.0.1:`port` before it exits or `seconds` pass."""
+    import socket
+    deadline = time.monotonic() + seconds
+    while tunnel.poll() is None and time.monotonic() < deadline:
+        try:
+            socket.create_connection(("127.0.0.1", port), timeout=1).close()
+            return True
+        except OSError:
+            time.sleep(0.2)
+    return False
+
+
+def certifier_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list[str]:
+    """`certifier_serve.py rehearse` of the request, the endpoint at `url` (the tunnel's local end): the honest shim, or
+    the request's tamper, with N2 on the request's profile (planned for a request written before it had one)."""
+    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "certifier_serve.py"), "rehearse",
+            "--upstream", url, "--out", str(out), "--requests", str(req["requests"]),
+            "--profile", req.get("profile", CERTIFIER_PROFILES[0]), "--strategies", req["tamper"] or "honest"]
+
+
+def certifier_env(tree: Path = TREE) -> dict[str, str]:
+    """The rehearsal's environment: this unit's PATH (the pinned tree's Lean toolchain first, which builds
+    network-records on first use) and the pinned tree for `verity`, since the rehearsal's processes don't run
+    isolated (`-I`) as this one does."""
+    return {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/var/lib/vy-challenger"),
+            "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": str(tree)}
+
+
+def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], datetime],
+                  tunnel_argv: Callable[[list[str], int], list[str]] | None = None,
+                  up: Callable[[subprocess.Popen, int], bool] = tunnel_up,
+                  command: Callable[[dict, Path, str], list[str]] = certifier_command,
+                  wait: Callable[[subprocess.Popen, float], int] | None = None) -> dict:
+    """Run the requested rehearsal (the module docstring's "A certifier rehearsal"), as `auditor`: open the tunnel to
+    the peer's endpoint, run the rehearsal through it for at most the request's minutes, close the tunnel, and write
+    `end.json`."""
+    if not CERTIFIER_RUN.fullmatch(run):
+        raise Refused(f"no certifier rehearsal {run!r}")
+    d = host.certifier / run
+    req = json.loads((d / "request.json").read_text())
+    out = d / "out"
+    if out.exists():
+        raise Refused(f"certifier rehearsal {run} has run already")
+    out.mkdir(mode=0o755)
+    sys.path.insert(0, str(HERE))
+    import serve
+    local = free_local_port()
+    ssh = serve.peer_ssh(host.peers, req["peer"])
+    argv = (tunnel_argv or (lambda ssh, local: [*TUNNEL_SSH, "-L", f"127.0.0.1:{local}:127.0.0.1:{req['port']}", *ssh]))(
+        ssh, local)
+    rc, why = 2, None
+    with open(out / "tunnel.log", "wb") as log:
+        tunnel = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+    try:
+        if not up(tunnel, local):
+            why = f"the tunnel to {req['peer']}'s 127.0.0.1:{req['port']} didn't come up (tunnel.log)"
+        else:
+            with open(out / "rehearse.log", "wb") as log:
+                proc = subprocess.Popen(command(req, out, f"http://127.0.0.1:{local}"), stdin=subprocess.DEVNULL,
+                                        stdout=log, stderr=subprocess.STDOUT, env=certifier_env(),
+                                        start_new_session=True)
+            rc = (wait or _wait)(proc, req["minutes"] * 60)
+            if rc == -signal.SIGTERM:
+                why = f"stopped at --minutes {req['minutes']}"
+    finally:
+        tunnel.terminate()
+        tunnel.wait()
+    try:
+        summary = json.loads((out / "summary.json").read_text())
+    except (OSError, ValueError):
+        summary = {}
+    files = {str(p.relative_to(out)): hashlib.sha512(p.read_bytes()).hexdigest()
+             for p in sorted(out.rglob("*")) if p.is_file()}
+    runs = {s: {"verdict": r.get("verdict"), "network": (r.get("network_verdict") or {}).get("accepted"),
+                "audit": r.get("audit_accepted"), "salt": r.get("salt_accepted"), "salt_again": r.get("salt_again")}
+            for s, r in summary.get("runs", {}).items()}
+    end = {"run": run, "rc": rc, "ended": why or ("the rehearsal ended" if rc == 0 else f"the rehearsal exited {rc}"),
+           "pinned": pinned, "runs": runs, "files": files, "ended_utc": utc(now())}
+    (d / "end.json").write_text(json.dumps(end, indent=1, sort_keys=True) + "\n")
+    return end
+
+
+# --- main ---------------------------------------------------------------------------------------------------------------------
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    host = Host()
+    if argv[:1] == ["gate"]:
+        rc, out = gate(argv[1:], host)
+        sys.stdout.buffer.write(out)
+        return rc
+    try:
+        if argv[:1] == ["reserve"] and len(argv) == 2:
+            e = reserve(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(timezone.utc))
+            print(json.dumps({"seq": e["seq"], "session": e["session"]}))
+        elif argv[:1] == ["admit"] and len(argv) == 2:
+            e = admit(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(timezone.utc),
+                      active=unit_active)
+            print(json.dumps({"seq": e["seq"], "session": e["session"]}))
+        elif argv[:1] in (["period-open"], ["period-close"]):
+            e = period(host, argv, signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(timezone.utc),
+                       active=unit_active)
+            print(json.dumps(e))
+        elif argv[:1] == ["run"] and len(argv) == 2:
+            e = run(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
+            print(json.dumps({"seq": e["seq"], "session": e["session"], "rc": e["body"]["rc"]}))
+        elif argv[:1] == ["certifier-run"] and len(argv) == 2:
+            e = certifier_run(host, argv[1], pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
+            print(json.dumps({k: e[k] for k in ("run", "rc", "ended", "runs")}))
+        elif argv[:1] == ["model-register"] and len(argv) == 5:
+            line = model_register(host, argv[1:], pinned=pinned_commit(), now=datetime.now(timezone.utc))
+            print(json.dumps(line, sort_keys=True))
+        elif argv[:1] == ["pinned"] and len(argv) == 3:
+            print(record_pin(host.pins, argv[1], argv[2], datetime.now(timezone.utc)))
+        elif argv[:1] == ["keygen"] and len(argv) == 1:
+            from verity.ml.crypto import lms
+            key, state = load_key(host)
+            state.close()
+            public = lms.public_key(key)
+            doc = {"W": key.params.W, "H": key.params.H, "public": public.hex(),
+                   "public_sha512": hashlib.sha512(public).hexdigest()}
+            (host.root / "pubkey.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+            print(json.dumps(doc))
+        else:
+            print("usage: auditor.py gate VERB ... | reserve SESSION | admit SESSION | run SESSION | period-open NAME LANE BY CAP CIRCUIT [DRAW_K] "
+                  "| period-close NAME LANE|- BY | certifier-run RUN | pinned COMMIT MAIN | keygen", file=sys.stderr)
+            return 2
+    except Refused as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 3
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

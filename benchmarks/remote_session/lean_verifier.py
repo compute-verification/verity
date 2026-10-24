@@ -9,6 +9,7 @@ And the JSON the two verifiers are compared in: each event as the Lean reads it 
 back as the `audit.Record` the ledger reads (`record_of`)."""
 from __future__ import annotations
 
+import collections
 import fcntl
 import functools
 import hashlib
@@ -21,7 +22,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.remote_bandwidth import audit, codec, receipts
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 
 import wire
 
@@ -55,44 +56,82 @@ def build(package: Path = PACKAGE) -> Path:
 
 
 class Lean:
-    """One `remote-audit-verifier` process: `call` sends a request and returns its answer (`LeanError` for an error),
+    """One `remote-audit-verifier` process, its requests taken in the order they are made and written on a thread of
+    their own, so that whoever makes one never waits on the pipe: `send` hands a request over and has `answered` called
+    with its answer on the reader's thread, and `call` waits for the answer and returns it (`LeanError` for an error).
     `done({"done": id, "accepted": bool})` is called on the reader's thread as each window's check ends, and
-    `done({"done": None, ...})` once if the process ends: every check still running has no verdict."""
+    `done({"done": None, ...})` once if the process ends: every check still running has no verdict, and every request
+    not yet answered is answered with the error."""
 
     def __init__(self, exe: Path, done: Callable[[dict], None]) -> None:
         self.proc = subprocess.Popen([str(exe)], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        self.done, self.answers, self.lock = done, queue.Queue(), threading.Lock()
+        self.done, self.requests, self.lock = done, queue.SimpleQueue(), threading.Lock()
+        self.pending: collections.deque[Callable[[dict], None] | None] = collections.deque()
         self.ended: str | None = None
+        threading.Thread(target=self._write, daemon=True).start()
         threading.Thread(target=self._read, daemon=True).start()
+
+    def _end(self, why: str) -> None:
+        with self.lock:
+            self.ended = self.ended or why
+            pending, self.pending = list(self.pending), collections.deque()
+        for answered in pending:
+            if answered is not None:
+                answered({"error": self.ended})
+
+    def _write(self) -> None:
+        while (item := self.requests.get()) is not None:
+            data, answered = item
+            with self.lock:
+                ended = self.ended
+                if ended is None:
+                    self.pending.append(answered)
+            if ended is not None:
+                if answered is not None:
+                    answered({"error": ended})
+                continue
+            try:
+                self.proc.stdin.write(data)
+                self.proc.stdin.flush()
+            except (BrokenPipeError, ValueError, OSError) as e:
+                self._end(f"the process is gone: {e}")
+        try:
+            self.proc.stdin.close()
+        except (BrokenPipeError, OSError):
+            pass
 
     def _read(self) -> None:
         for line in self.proc.stdout:
             msg = json.loads(line)
             if "done" in msg:
                 self.done(msg)
-            else:
-                self.answers.put(msg)
-        self.ended = f"the process ended ({self.proc.wait()})"
+                continue
+            with self.lock:
+                answered = self.pending.popleft() if self.pending else None
+            if answered is not None:
+                answered(msg)
+        self._end(f"the process ended ({self.proc.wait()})")
         self.done({"done": None, "accepted": False})
-        self.answers.put({"error": self.ended})
+
+    def _put(self, request: dict, body: bytes, answered: Callable[[dict], None] | None) -> None:
+        self.requests.put((json.dumps(request, separators=(",", ":")).encode() + b"\n" + body, answered))
+
+    def send(self, request: dict, body: bytes = b"", answered: Callable[[Any], None] | None = None) -> None:
+        """`request` (with `body` after its line) to the process behind every request made before it; `answered`, if
+        given, called on the reader's thread with its answer, or `{"error": why}` where `call` would raise."""
+        self._put(request, body, None if answered is None else
+                  lambda msg: answered(msg["answer"] if "answer" in msg else {"error": msg["error"]}))
 
     def call(self, request: dict, body: bytes = b"") -> Any:
-        with self.lock:
-            if self.ended is not None:
-                raise LeanError(self.ended)
-            try:
-                self.proc.stdin.write(json.dumps(request, separators=(",", ":")).encode() + b"\n" + body)
-                self.proc.stdin.flush()
-            except (BrokenPipeError, ValueError) as e:
-                raise LeanError(f"the process is gone: {e}") from None
-            msg = self.answers.get()
+        box: queue.SimpleQueue = queue.SimpleQueue()
+        self._put(request, body, box.put)
+        msg = box.get()
         if "error" in msg:
             raise LeanError(msg["error"])
         return msg["answer"]
 
     def close(self) -> None:
-        if self.proc.stdin and not self.proc.stdin.closed:
-            self.proc.stdin.close()
+        self.requests.put(None)
         self.proc.wait()
 
 
@@ -206,41 +245,32 @@ def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: fl
         None if pace is None else audit.Pace(pace["k"], pace["window_ns"]))
 
 
-class Tape:
-    """The challenger's generator, drawing from `entropy` and keeping what it drew: a session's committed coins
-    (`coins`, each drawn before its salt) and its append coins (`appends`), as the Lean's session takes them."""
-
-    def __init__(self, count: int, entropy: Callable[[int], bytes]) -> None:
-        self.count, self.entropy, self.drawn = 2 * count, entropy, []
-
-    def __call__(self, n: int) -> bytes:
-        out = self.entropy(n)
-        self.drawn.append(out)
-        return out
-
-    @property
-    def coins(self) -> list[bytes]:
-        return self.drawn[:self.count:2]
-
-    @property
-    def appends(self) -> list[bytes]:
-        return self.drawn[self.count:]
+def released_coins(c: coins.Coins) -> tuple[list[bytes], list[bytes]]:
+    """The session's coins as the Lean's session takes them: its 2W committed coins (window t's challenge at t, its
+    openings coin at W + t), each one the challenger never released 32 zero bytes, which no event reads, and the append
+    coins in the order released."""
+    zero, w = bytes(coins.COIN_BYTES), c.windows
+    out = [coins.coin(o) for o in c.opened(coins.CHALLENGE)], [coins.coin(o) for o in c.opened(coins.OPENINGS)]
+    return ([*out[0], *[zero] * (w - len(out[0])), *out[1], *[zero] * (w - len(out[1]))],
+            [coins.coin(o) for o in c.opened(coins.APPEND)])
 
 
 class Transcript:
     """A session's difftest case (`ra_cases`: what `replay.py transcript` replays through both verifiers), written to
     `path` as the session runs, on a thread of its own so the session's loop never waits on the disk: its registration,
-    parameters, committed coins and `not_before_ns`, then each event in the order the verifiers took it (`event`, as
-    the Lean read it), a window's openings (`verify`, the wire's frames) where its verdict was set, and the append
-    coins drawn (`close`, which returns the file's path, bytes and sha256). A frame that doesn't decode adds no
-    openings. Every committed coin is kept, never its salt: the case replays each under a zero salt, and nothing a
-    verifier answers reads the commitment."""
+    parameters and `not_before_ns`, then each event in the order the verifiers took it (`event`, as the Lean read it),
+    a window's openings (`verify`, the wire's frames) where its verdict was set, and the coins the challenger released
+    (`close`, `released_coins`, which returns the file's path, bytes and sha256). A frame that doesn't decode adds no
+    openings. Every released coin is kept, never its salt: the case replays each under a zero salt, and nothing a
+    verifier answers reads the commitment. Openings are decoded and written only once the session's passes are over
+    (`passes_ended`, or the close): a 60 s window's are about 0.6 GB of JSON, and decoding them beside a timed pass
+    would take the verifier's process from the loop whose stamps the memory line reads."""
 
-    def __init__(self, path: Path, registration: audit.Registration, params: audit.Params, coins: list[bytes],
-                 not_before_ns: int) -> None:
+    def __init__(self, path: Path, registration: audit.Registration, params: audit.Params, not_before_ns: int) -> None:
         self.path, self.items, self.result = path, queue.Queue(), None
+        self.passes = threading.Event()
         head = {"registration": registration_json(registration), "params": params_json(params),
-                "coins": [c.hex() for c in coins], "not_before_ns": not_before_ns}
+                "not_before_ns": not_before_ns}
         self.thread = threading.Thread(target=self._write, args=(head,), daemon=True)
         self.thread.start()
 
@@ -250,8 +280,13 @@ class Transcript:
     def verify(self, t: int, frames: list[bytes]) -> None:
         self.items.put(("verify", t, frames))
 
-    def close(self, append_coins: list[bytes]) -> dict:
-        self.items.put(("close", append_coins))
+    def passes_ended(self) -> None:
+        """The session's passes are over: openings held back until now may be written."""
+        self.passes.set()
+
+    def close(self, released: tuple[list[bytes], list[bytes]]) -> dict:
+        self.passes.set()
+        self.items.put(("close", released))
         self.thread.join()
         return self.result
 
@@ -272,13 +307,15 @@ class Transcript:
                     item = self.items.get()
                     if item[0] == "close":
                         closed = True
-                        put('],"append_coins":' + json.dumps([c.hex() for c in item[1]]) + "}")
+                        put('],"coins":' + json.dumps([c.hex() for c in item[1][0]]) + ',"append_coins":'
+                            + json.dumps([c.hex() for c in item[1][1]]) + "}")
                         break
                     put("," if events else "")
                     events += 1
                     if item[0] == "event":
                         put(item[1])
                         continue
+                    self.passes.wait()
                     put(f'{{"kind":"verify","t":{item[1]},"openings":[')
                     first = True
                     for body in item[2]:

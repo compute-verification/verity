@@ -141,7 +141,7 @@ theorem circuit_wf : circuit.Wf := by
 
 theorem scope {δs : ℝ} (hδs : 0 < δs) : Scope scheme circuit δs :=
   ⟨circuit_wf, fun _ _ _ => rfl, hδs, fun _ => by norm_num [scheme, LuckForm.value],
-    fun _ _ => Nat.zero_le _⟩
+    fun _ _ => Or.inl (Nat.zero_le _)⟩
 
 /-- `SplitRateClosed` at `K_d = 1`, `ρ = 1`, `w_max = 1`, `p = p0 = ½`, `a = b = 1`: `Λ = 4`. -/
 theorem splitRate : SplitRate 1 1 (1 / 2) (1 / 2) 1 1 1 4 := by

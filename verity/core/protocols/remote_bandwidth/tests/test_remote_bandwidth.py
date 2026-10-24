@@ -23,6 +23,8 @@ NODE = b"node-under-test"
 SOURCE = b"the verifier's secret"
 SCHEDULE = timing.honest(1000, 3, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
 A = 20 + 30 + 2 * 5 + 300 + 10
+APPENDS = 8
+"""The append coins a test session's challenger commits to: these sessions append none, so a few keep it quick."""
 
 
 class Clock:
@@ -118,8 +120,8 @@ def params_of(st: audit.Store, **kw) -> Params:
     return params(receipt=st.registration.receipt, bind=st.registration.bind, rows=st.registration.rows, **kw)
 
 
-def challenger(store, p: Params, label: bytes = b"coins") -> coins.Challenger:
-    return coins.Challenger(store.registration.digest, 0, p.coins, entropy=Entropy(label))
+def challenger(store, p: Params, label: bytes = b"coins", session: int = 0) -> coins.Coins:
+    return coins.local(store.registration.digest, session, p.windows, Entropy(label), appends=APPENDS)
 
 
 def honest(prover, t, i, challenges, previous, plan):
@@ -127,14 +129,15 @@ def honest(prover, t, i, challenges, previous, plan):
 
 
 def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_tiles=None, run=honest, plan=None,
-          sent=None, label=b"coins"):
+          sent=None, label=b"coins", coins_=None):
     """Replay `schedule` against a session: `σ_0` released at 0 and each boundary message on time, each pass computed
     as its root arrives, chained from the pass before.  `plan(t, i)` is pass (t, i)'s plan (None: the whole store);
     `run(prover, t, i, challenges, previous, plan)` replaces the honest pass and `sent(ps)` the runs sent with its
-    root.  `tiles` is the stub of PoUW's tiles under a registration that binds z, and None under one that does not."""
+    root.  `tiles` is the stub of PoUW's tiles under a registration that binds z, and None under one that does not.
+    The session's coins are `coins_`, or a challenger in this process drawing under `label`."""
     tiles = tiles or (audit.NoiseTiles(96) if store.registration.bind else None)
     clock = Clock()
-    s = Session(p, store.registration, verifier_tiles or tiles, challenger(store, p, label), not_before_ns=0,
+    s = Session(p, store.registration, verifier_tiles or tiles, coins_ or challenger(store, p, label), not_before_ns=0,
                 clock=clock)
     prover = audit.Prover(store, tiles, s.commitment, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(schedule.boundaries)]
@@ -682,7 +685,7 @@ def test_an_honest_session_of_either_kind_is_accepted_and_names_it(stores, kind)
 def committed_with(receipter):
     """Passes on the chain, committed under its seeds, with the receipts `receipter(seed, prover)` makes."""
     def run(prover, t, i, challenges, previous, plan):
-        seed = receipts.seed(challenges[t].coin, i, previous)
+        seed = receipts.seed(coins.coin(challenges[t]), i, previous)
         plan = plan or receipts.Plan.whole(N)
         r, tiles = receipter(seed, prover), prover.tiles
         ys = tuple(r(j, prover.store.blocks[j], None if tiles is None else tiles.output(seed, j)) for j in plan)
@@ -720,22 +723,25 @@ def test_each_pass_is_seeded_by_the_chain_from_its_windows_coin(store) -> None:
     assert all(passes[t, i].seed == receipts.seed(s.windows[t].challenge, i, b) for (t, i), b in zip(order, previous))
     assert len({w.challenge for w in s.windows}) == 3
     c = challenger(store, params())
-    first = c.open(0)
-    assert coins.coin_reason(c.commitment, first, 0) is None and first.coin == s.windows[0].challenge
-    assert coins.coin_reason(c.commitment, first, 1) == "not coin 1"
+    first = c.challenge(0, c.window)
+    assert coins.coin_reason(c.commitment, first, coins.CHALLENGE, 0) is None
+    assert coins.coin(first) == s.windows[0].challenge
+    assert (coins.coin_reason(c.commitment, first, coins.CHALLENGE, 1)
+            == "coin is the epoch's challenge coin 0, not its challenge coin 1")
     forged = dataclasses.replace(first, coin=bytes([first.coin[0] ^ 1]) + first.coin[1:])
-    assert coins.coin_reason(c.commitment, forged, 0) == "the coin does not open against the session's coin commitment"
+    assert (coins.coin_reason(c.commitment, forged, coins.CHALLENGE, 0)
+            == "coin does not open against the epoch's coin commitment")
     with pytest.raises(ValueError, match="does not open"):
         prover.run(forged, 0, store.registration.digest)
     with pytest.raises(ValueError, match="openings coin"):
-        prover.run(c.open(3), 0, store.registration.digest)
+        prover.run(c.openings(0, first.after), 0, store.registration.digest)
     with pytest.raises(ValueError, match="already open"):
-        c.open(0)
+        c.challenger.open(coins.CHALLENGE, 0, c.window)
 
 
 def unchained(prover, t, i, challenges, previous, plan):
     """Every pass seeded after the registration, so a window's passes could all run at once off one read."""
-    return prover.pass_under(t, i, receipts.seed(challenges[t].coin, i, prover.store.registration.digest), plan)
+    return prover.pass_under(t, i, receipts.seed(coins.coin(challenges[t]), i, prover.store.registration.digest), plan)
 
 
 def detached(prover, t, i, challenges, previous, plan):
@@ -745,7 +751,7 @@ def detached(prover, t, i, challenges, previous, plan):
 
 def early(prover, t, i, challenges, previous, plan):
     """Window 1's passes under window 0's challenge, so they could start before window 1's challenge is out."""
-    return prover.pass_under(t, i, receipts.seed(challenges[0 if t == 1 else t].coin, i, previous), plan)
+    return prover.pass_under(t, i, receipts.seed(coins.coin(challenges[0 if t == 1 else t]), i, previous), plan)
 
 
 @pytest.mark.parametrize("run, verdicts", [
@@ -865,6 +871,29 @@ def test_draws_wait_for_the_windows_roots(store) -> None:
         s.close(0)
 
 
+def test_a_paced_windows_roots_are_final_at_its_k_th_root(store) -> None:
+    """A paced window takes at most k roots, so its k-th makes them final once its boundary has left: it is drawn then,
+    with no wait for the next window's first root or its deadline, and the openings coin's request names that root on
+    the challenger's log."""
+    clock = Clock()
+    p = params(pace=audit.Pace(2))
+    s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
+    s.start()
+    assert s.receive(0, 0, bytes(64), step=0) is None
+    with pytest.raises(SessionError, match="not final"):
+        s.close(0)
+    last = hashlib.sha512(b"window 0's last root").digest()
+    assert s.receive(0, 1, last, step=1) is None
+    with pytest.raises(SessionError, match="not final"):
+        s.close(0)
+    clock.now = 1000
+    s.boundary()
+    assert isinstance(s.close(0), tuple)
+    assert s.coins.afters(coins.OPENINGS) == (last,)
+    assert s.deadline(0) == 1000 + A
+    assert s.receive(0, 2, bytes(64), step=2) == audit.Verdict(0, False, "order")
+
+
 def test_a_boundary_waits_out_the_stated_window(store) -> None:
     """The window T is stated, 60 s with 33,273 openings at 2^-40 unless the params say otherwise: no boundary message
     leaves sooner than `window_ns` after its window's challenge, and a refused one leaves the window open."""
@@ -944,7 +973,8 @@ def test_openings_are_drawn_from_the_windows_live_coin(store) -> None:
         clock.now = s.deadline(2) + 1
         out = s.close(0)
         with pytest.raises(ValueError, match="already open"):
-            s.challenger.open(s.params.windows)            # window 0's openings coin, after the challenges
+            s.coins.challenger.open(coins.OPENINGS, 0, s.windows[0].roots[-1])
+        assert s.coins.afters(coins.OPENINGS) == (s.windows[0].roots[-1],)
         return out
     assert draws(b"coins") == draws(b"coins") != draws(b"other coins")
 
@@ -956,15 +986,14 @@ def test_a_session_over_the_store_starts_after_the_one_before_it_ends(store) -> 
     finish(s, prover, passes, clock)
     end = s.record().end_ns
     clock = Clock()
-    nxt = Session(params(), store.registration, None,
-                  coins.Challenger(store.registration.digest, 1, params().coins, entropy=Entropy(b"next")),
-                  clock=clock, not_before_ns=end)
+    nxt = Session(params(), store.registration, None, challenger(store, params(), b"next", 1), clock=clock,
+                  not_before_ns=end)
     clock.now = end - 1
     with pytest.raises(SessionError, match="may still be reading"):
         nxt.start()
     clock.now = end
     assert nxt.start().index == 0
-    later = coins.Challenger(store.registration.digest, 2, params().coins, entropy=Entropy(b"later"))
+    later = challenger(store, params(), b"later", 2)
     with pytest.raises(TypeError, match="not_before_ns"):           # every session names when it may start
         Session(params(), store.registration, None, later, clock=clock)
     for bad in (None, -1, 1.5, True):

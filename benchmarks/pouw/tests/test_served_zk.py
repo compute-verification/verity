@@ -823,6 +823,48 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
             dataclasses.replace(dep, **edit)
 
 
+def test_a_deployments_challenger_key_is_infras_published_pin(tmp_path):
+    """`Deployment.pinned` takes the challenger key from infra's published pin (`CHALLENGER_KEY_PIN`; the fixture is its
+    payload's bytes): vy-challenger-1's LMS key at W = 1, H = 20, whose SHA-512 is `CHALLENGER_KEY_SHA512`, stated whole.
+    A record of any other key is refused even when it names its own key's SHA-512: the key infra retired (RT4-INT-18), a
+    tampered public key, or the pinned key under another named SHA-512; so is a record of another schema or form."""
+    pin = Path(__file__).parent / "fixtures" / "challenger-key.json"
+    assert hashlib.sha256(pin.read_bytes()).hexdigest() == \
+        "8f7a5515c5f6c5e22db062ca378c6b6e907e25bad6fda7b301efe22b3829db32"
+    assert re.fullmatch(r"art:[0-9a-f]{64}", SC.CHALLENGER_KEY_PIN) and re.fullmatch(r"[0-9a-f]{128}",
+                                                                                     SC.CHALLENGER_KEY_SHA512)
+    doc = json.loads(pin.read_bytes())
+    ck = SC.pinned_challenger_key(pin)
+    assert (ck.W, ck.H, ck.public.hex()) == (1, 20, doc["pubkey"])
+    assert hashlib.sha512(ck.public).hexdigest() == doc["pubkey_sha512"] == SC.CHALLENGER_KEY_SHA512
+    certifier = _keys(tmp_path)[0].public_key()
+    dep = SC.Deployment.pinned(certifier, RUN_ID, pin)
+    assert (dep.certifier_key, dep.run_id, dep.challenger_key) == (certifier, RUN_ID, ck)
+
+    retired = doc["retired"][0]
+    flipped = ("0" if doc["pubkey"][0] != "0" else "1") + doc["pubkey"][1:]
+    other = {**doc, "pubkey": flipped, "pubkey_sha512": hashlib.sha512(bytes.fromhex(flipped)).hexdigest()}
+    for edit, why in (({"pubkey": retired["pubkey"], "pubkey_sha512": retired["pubkey_sha512"]}, SC.NOT_PINNED),
+                      (other, SC.NOT_PINNED), ({"pubkey": flipped}, SC.NOT_PINNED),
+                      ({"pubkey_sha512": retired["pubkey_sha512"]}, SC.NOT_PINNED),
+                      ({"schema": "challenger-key/v2"}, SC.CHALLENGER_KEY_FORM),
+                      ({"pubkey": doc["pubkey"].upper()}, SC.CHALLENGER_KEY_FORM),
+                      ({"pubkey": doc["pubkey"][:-1]}, SC.CHALLENGER_KEY_FORM),
+                      ({"pubkey": None}, SC.CHALLENGER_KEY_FORM), ({"W": 3}, SC.CHALLENGER_KEY_FORM),
+                      ({"H": True}, SC.CHALLENGER_KEY_FORM)):
+        f = tmp_path / "record.json"
+        f.write_text(json.dumps({**doc, **edit}))
+        with pytest.raises(ValueError, match=re.escape(why)):
+            SC.Deployment.pinned(certifier, RUN_ID, f)
+    for raw in (b"[]", b"not json", None):
+        f = tmp_path / "raw.json"
+        f.unlink(missing_ok=True)
+        if raw is not None:
+            f.write_bytes(raw)
+        with pytest.raises(ValueError, match=re.escape(SC.CHALLENGER_KEY_FORM)):
+            SC.pinned_challenger_key(f)
+
+
 @LEAN
 def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_refused(served):
     """The challenger re-starts the window's pass's epoch from its manifest under its own coin commitment: a salt coin of

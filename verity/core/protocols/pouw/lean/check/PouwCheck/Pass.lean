@@ -40,6 +40,7 @@ def WINDOW_SEGMENT : String := "pouw-window"
 def SALT_BYTES : Nat := 64
 def SALT_TAG : ByteArray := "verity/pouw-salt/v1".toUTF8
 def RECORD_TAG : ByteArray := "verity/pouw-record/v1".toUTF8
+def WINDOW_OPEN_TAG : ByteArray := "verity/pouw-window-open/v1".toUTF8
 def WEIGHTS_ROOT_BYTES : Nat := 64
 def STREAM_BYTES : Nat := 64
 def PROVER_BYTES : Nat := 64
@@ -134,7 +135,9 @@ def coinVersionAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteAr
 def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) : Except String (Option String) :=
   (·.1) <$> coinVersionAt c o label after false
 
-/-- `core_check.weights_root`: `audit.weights_root` under a scheme's version. -/
+/-- `tagged` of `tag` and each `(id, root)` by ascending id, its first `keep` bytes: `core_check.weights_root`
+(`audit.weights_root`, an epoch's, under a scheme's version) and `Credit.weightsRoot` (`weights.weights_root`, the
+weights' root a live H1 window's open root binds). -/
 def weightsRootAt (keep : Nat) (tag : String) (roots : List (Nat × ByteArray)) : ByteArray :=
   let sorted := roots.mergeSort fun a b => a.1 ≤ b.1
   (tagged tag (sorted.flatMap fun (w, r) => [.int w, .bytes r])).extract 0 keep
@@ -205,6 +208,18 @@ def pouwSalt (reveal : ByteArray) (p : Nat) (stream prover : ByteArray) : ByteAr
 SHA-512(`RECORD_TAG` ‖ weights' root ‖ stream ‖ prover), every part 64 bytes. -/
 def pouwRecord (weights stream prover : ByteArray) : ByteArray :=
   Flock.Sha512.hash (RECORD_TAG ++ weights ++ stream ++ prover)
+
+/-- `salt.SESSION`: a challenger session's id as the auditor's gate assigns it, 1 to 64 of `[A-Za-z0-9._:-]`, the first
+alphanumeric. -/
+def sessionId? (s : String) : Bool :=
+  let ok := fun (c : Char) => c.isAlphanum || c == '.' || c == '_' || c == ':' || c == '-'
+  1 ≤ s.length && s.length ≤ 64 && s.all ok && s.front.isAlphanum
+
+/-- `salt.window_open_root`: a live window's open root, what its session opens on and its salt coin opens after,
+SHA-512(`WINDOW_OPEN_TAG` ‖ weights' root ‖ round-0 request table's root ‖ SHA-512(the session's ASCII id)), every part
+64 bytes. -/
+def windowOpenRoot (weights requests : ByteArray) (session : String) : ByteArray :=
+  Flock.Sha512.hash (WINDOW_OPEN_TAG ++ weights ++ requests ++ Flock.Sha512.hash session.toUTF8)
 
 /-- `_certified_salt`: a certified window's pass under the window's `stream` and `prover`: `committed`, what the
 certifier recorded before it drew the window's salt, is `pouwRecord` of the pass's weights' root, the stream and the
@@ -368,5 +383,18 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
     | .arr us => us.toList.mapM PouwWindow.natOf? == some got.toList
     | _ => false
   if !same then throw ("draw", s!"the units are not the draw coin's subset:{k} over {n}")
+
+/-- `core_check.work_units`: `drawCheck`'s rule under the law `work:k`, the units the draw coin `coin` draws over the
+work strata `strata`, ascending. Stratum s is `Flock.Draw.subset` of its `k_s` over its units on the stream
+`["draw", template]` of the key the coin derives under the stream's digest, the registration and the receipt's
+(`receiptDigest`), its local index j its j-th unit (`Flock.Draw.stratified`); `none` when a stream runs out. -/
+def workUnits (coin : ByteArray) (stream registration : String) (receipt : List (String × String))
+    (strata : Array Flock.Draw.Stratum) : Except String (Option (Array Nat)) := do
+  let ctx := [("stream", FlockSoundness.Randomness.Part.str stream),
+    ("registration", FlockSoundness.Randomness.Part.str registration),
+    ("receipt", FlockSoundness.Randomness.Part.str (receiptDigest receipt))]
+  let key ← PouwCommit.key? coin DRAW_DOMAIN ctx
+  pure (Flock.Draw.stratified strata (strata.map fun s =>
+    FlockSoundness.Randomness.stream key [.str "draw", .str s.template] s.need))
 
 end PouwCheck

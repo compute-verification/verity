@@ -459,6 +459,126 @@ theorem foldlM_stepAt_off (c : Cfg) :
       rw [h2, data_append', ← sq_enc]
       simp [maskFrames, encs]
 
+/-! ### No free values past the algebraic phase
+
+`roundFree`'s free offsets are the values it absorbs in the algebraic phase. Outside a masked phase, and in a masked
+phase past the algebraic phase's values, a round's frames add none. -/
+
+theorem foldlM_absorb1_on_fr (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) :
+    ∀ (vs : List F128) (s : Masker) (o : ByteArray) (fr : Array ℕ) (q : ℕ) (r : Masker × ByteArray × Array ℕ × ℕ),
+      s.on = true → s.pos + vs.length ≤ c.order.size → c.nPiop ≤ s.pos →
+      vs.foldlM (absorb1 c) (s, o, fr, q) = .ok r → r.2.2.1 = fr
+  | [], s, o, fr, q, r, _, _, _, h => by cases h; rfl
+  | v :: vs, s, o, fr, q, r, hon, hp, hpi, h => by
+    simp only [List.length_cons] at hp
+    rw [List.foldlM_cons] at h
+    have ha : absorb1 c (s, o, fr, q) v = .ok ({ s with pos := s.pos + 1 },
+        F128.pushBytes o (maskVal c s.stopped s.pos v),
+        if (s.on && decide (s.pos < c.nPiop)) = true then fr.push q else fr, q + 16) := by
+      unfold absorb1
+      rw [absorb_on c s v hon (by omega) (hc _ (by omega))]
+      rfl
+    simp only [show decide (s.pos < c.nPiop) = false from decide_eq_false (by omega), Bool.and_false,
+      Bool.false_eq_true, ↓reduceIte] at ha
+    rw [ha] at h
+    exact foldlM_absorb1_on_fr c hc vs { s with pos := s.pos + 1 } _ fr (q + 16) r hon
+      (by show s.pos + 1 + vs.length ≤ _; omega) (by show c.nPiop ≤ s.pos + 1; omega) h
+
+theorem foldlM_absorb1_off_fr (c : Cfg) :
+    ∀ (vs : List F128) (s : Masker) (o : ByteArray) (fr : Array ℕ) (q : ℕ) (r : Masker × ByteArray × Array ℕ × ℕ),
+      s.on = false → vs.foldlM (absorb1 c) (s, o, fr, q) = .ok r → r.2.2.1 = fr
+  | [], s, o, fr, q, r, _, h => by cases h; rfl
+  | v :: vs, s, o, fr, q, r, hon, h => by
+    rw [List.foldlM_cons] at h
+    have ha : absorb1 c (s, o, fr, q) v = .ok (s, F128.pushBytes o v,
+        if (s.on && decide (s.pos < c.nPiop)) = true then fr.push q else fr, q + 16) := by
+      unfold absorb1
+      rw [absorb_off c s v hon]
+      rfl
+    simp only [hon, Bool.false_and, Bool.false_eq_true, ↓reduceIte] at ha
+    rw [ha] at h
+    exact foldlM_absorb1_off_fr c vs s _ fr (q + 16) r hon h
+
+theorem foldlM_stepAt_on_fr (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) :
+    ∀ (fs : List Frame) (s : Masker) (o : ByteArray) (fr : Array ℕ) (q : ℕ) (r : Masker × ByteArray × Array ℕ × ℕ),
+      s.on = true → (∀ f ∈ fs, plainFrame f) → s.pos + nAbs fs ≤ c.order.size → c.nPiop ≤ s.pos →
+      fs.foldlM (stepAt c) (s, o, fr, q) = .ok r → r.2.2.1 = fr
+  | [], s, o, fr, q, r, _, _, _, _, h => by cases h; rfl
+  | f :: fs, s, o, fr, q, r, hon, hp, hb, hpi, h => by
+    rw [List.foldlM_cons] at h
+    have hp' : ∀ g ∈ fs, plainFrame g := fun g hg => hp g (List.mem_cons_of_mem _ hg)
+    cases f with
+    | dom b => exact foldlM_stepAt_on_fr c hc fs s o fr _ r hon hp' (by simpa [nAbs] using hb) hpi h
+    | label b =>
+      have hl := label_plain c s b (hp _ List.mem_cons_self)
+      simp only [stepAt, hl] at h
+      exact foldlM_stepAt_on_fr c hc fs s (o ++ labelFrame b) fr _ r hon hp' (by simpa [nAbs] using hb) hpi h
+    | bytes b =>
+      exact foldlM_stepAt_on_fr c hc fs s (o ++ bytesFrame b) fr _ r hon hp' (by simpa [nAbs] using hb) hpi h
+    | one v =>
+      simp only [nAbs] at hb
+      obtain ⟨r₁, hr₁, h1₁, -⟩ := foldlM_absorb1_on c hc [v] s (o ++ header 3 1 1) fr (q + 16) hon
+        (by simp; omega)
+      have hf₁ := foldlM_absorb1_on_fr c hc [v] s (o ++ header 3 1 1) fr (q + 16) r₁ hon (by simp; omega) hpi hr₁
+      simp only [stepAt] at h
+      rw [hr₁] at h
+      obtain ⟨m, o₁, fr₁, q₁⟩ := r₁
+      simp only at h1₁ hf₁
+      subst h1₁ hf₁
+      exact foldlM_stepAt_on_fr c hc fs { s with pos := s.pos + 1 } o₁ _ q₁ r hon hp' (by simp; omega)
+        (by simp; omega) h
+    | vec vs =>
+      simp only [nAbs] at hb
+      obtain ⟨r₁, hr₁, h1₁, -⟩ := foldlM_absorb1_on c hc vs s (o ++ header 3 2 vs.length) fr (q + 16) hon
+        (by omega)
+      have hf₁ := foldlM_absorb1_on_fr c hc vs s (o ++ header 3 2 vs.length) fr (q + 16) r₁ hon (by omega) hpi hr₁
+      simp only [stepAt] at h
+      rw [hr₁] at h
+      obtain ⟨m, o₁, fr₁, q₁⟩ := r₁
+      simp only at h1₁ hf₁
+      subst h1₁ hf₁
+      exact foldlM_stepAt_on_fr c hc fs { s with pos := s.pos + vs.length } o₁ _ q₁ r hon hp' (by simp; omega)
+        (by simp; omega) h
+    | sq k n =>
+      obtain ⟨rfl, rfl⟩ : k = 2 ∧ n = 0 := hp _ List.mem_cons_self
+      exact foldlM_stepAt_on_fr c hc fs s (o ++ header 4 2 0) fr (q + 16) r hon hp' (by simpa [nAbs] using hb) hpi h
+
+theorem foldlM_stepAt_off_fr (c : Cfg) :
+    ∀ (fs : List Frame) (s : Masker) (o : ByteArray) (fr : Array ℕ) (q : ℕ) (r : Masker × ByteArray × Array ℕ × ℕ),
+      s.on = false → (∀ f ∈ fs, plainFrame f) → fs.foldlM (stepAt c) (s, o, fr, q) = .ok r → r.2.2.1 = fr
+  | [], s, o, fr, q, r, _, _, h => by cases h; rfl
+  | f :: fs, s, o, fr, q, r, hon, hp, h => by
+    rw [List.foldlM_cons] at h
+    have hp' : ∀ g ∈ fs, plainFrame g := fun g hg => hp g (List.mem_cons_of_mem _ hg)
+    cases f with
+    | dom b => exact foldlM_stepAt_off_fr c fs s o fr _ r hon hp' h
+    | label b =>
+      have hl := label_plain c s b (hp _ List.mem_cons_self)
+      simp only [stepAt, hl] at h
+      exact foldlM_stepAt_off_fr c fs s (o ++ labelFrame b) fr _ r hon hp' h
+    | bytes b => exact foldlM_stepAt_off_fr c fs s (o ++ bytesFrame b) fr _ r hon hp' h
+    | one v =>
+      obtain ⟨r₁, hr₁, h1₁, -⟩ := foldlM_absorb1_off c [v] s (o ++ header 3 1 1) fr (q + 16) hon
+      have hf₁ := foldlM_absorb1_off_fr c [v] s (o ++ header 3 1 1) fr (q + 16) r₁ hon hr₁
+      simp only [stepAt] at h
+      rw [hr₁] at h
+      obtain ⟨m, o₁, fr₁, q₁⟩ := r₁
+      simp only at h1₁ hf₁
+      subst h1₁ hf₁
+      exact foldlM_stepAt_off_fr c fs _ o₁ _ q₁ r hon hp' h
+    | vec vs =>
+      obtain ⟨r₁, hr₁, h1₁, -⟩ := foldlM_absorb1_off c vs s (o ++ header 3 2 vs.length) fr (q + 16) hon
+      have hf₁ := foldlM_absorb1_off_fr c vs s (o ++ header 3 2 vs.length) fr (q + 16) r₁ hon hr₁
+      simp only [stepAt] at h
+      rw [hr₁] at h
+      obtain ⟨m, o₁, fr₁, q₁⟩ := r₁
+      simp only at h1₁ hf₁
+      subst h1₁ hf₁
+      exact foldlM_stepAt_off_fr c fs _ o₁ _ q₁ r hon hp' h
+    | sq k n =>
+      obtain ⟨rfl, rfl⟩ : k = 2 ∧ n = 0 := hp _ List.mem_cons_self
+      exact foldlM_stepAt_off_fr c fs s (o ++ header 4 2 0) fr (q + 16) r hon hp' h
+
 /-- **The zerocheck's label starts the algebraic phase**: outside a masked phase and before the opening, the frame
 releases it, then the pads' label and their root. -/
 theorem label_zc (c : Cfg) (s : Masker) (hon : s.on = false) (hd : s.done = false) :
@@ -483,6 +603,26 @@ theorem roundFree_on (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : �
   simp only at h1 h2
   subst h1
   refine ⟨o ++ header 4 k n, fr, ?_, ?_⟩
+  · simp only [bind, Except.bind, hi]
+    rfl
+  · rw [data_append', h2, sq_enc]; simp
+
+/-- **A round inside a masked phase past the algebraic phase's values carries no free value**: `roundFree_on`, with no
+free offset. -/
+theorem roundFree_on_fr (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : ℕ)
+    (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hon : s.on = true) (hi : s.inner = none)
+    (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
+    (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) (hb : s.pos + nAbs fs ≤ c.order.size) (hpi : c.nPiop ≤ s.pos) :
+    ∃ out, roundFree c s (ByteArray.mk (encs fs ++ (Frame.sq k n).enc).toArray) n =
+        .ok (out, { s with pos := s.pos + nAbs fs, owed := some n }, #[]) ∧
+      out.data.toList = encs (maskFrames (maskVal c s.stopped) s.pos fs) ++ (Frame.sq k n).enc := by
+  obtain ⟨r, hr, h1, h2⟩ := foldlM_stepAt_on c hc fs s ByteArray.empty #[] 0 hon hp hb
+  have h3 := foldlM_stepAt_on_fr c hc fs s ByteArray.empty #[] 0 r hon hp hb hpi hr
+  rw [roundFree_encs c s fs k n (by rw [hi]; simp) hm hk h0 hn, hr]
+  obtain ⟨m, o, fr, q⟩ := r
+  simp only at h1 h2 h3
+  subst h1 h3
+  refine ⟨o ++ header 4 k n, ?_, ?_⟩
   · simp only [bind, Except.bind, hi]
     rfl
   · rw [data_append', h2, sq_enc]; simp

@@ -27,6 +27,11 @@ theorem mem_headStrings {h : RecordHead} {x : ByteArray} (hx : HeadString h x) :
   obtain ⟨enc, he, hx⟩ := hx
   simp [headStrings, he, hx, Except.toOption]
 
+theorem mem_saltedStrings {salt : ByteArray} {h : RecordHead} {x : ByteArray} (hx : SaltedString salt h x) :
+    x ∈ saltedStrings salt h := by
+  obtain ⟨dg, hd, rfl⟩ := hx
+  simp [saltedStrings, hd, Except.toOption]
+
 theorem mem_framesStrings {g : Grid} {fr : Array ByteArray} {x : ByteArray} (hx : FramesString g fr x) :
     x ∈ framesStrings g fr := by
   unfold framesStrings
@@ -53,8 +58,11 @@ theorem declared_eq {W : Nat} {link : Link} {syncs : Fin W → ClockSync} (h : D
 theorem mem_checkStrings {p : Params} {c : Commitment} {e : Evidence} {eg x : ByteArray}
     (hx : CheckString p c e eg x) : x ∈ checkStrings p c e eg := by
   unfold checkStrings
-  rcases hx with ⟨r, hr, hx | hx⟩ | ⟨l, link, hm, w, hw, syncs, hd, hx | ⟨h, hh, hx⟩⟩
-  · exact List.mem_append_left _ (List.mem_flatMap.mpr ⟨r, hr, List.mem_append_left _ (mem_headStrings hx)⟩)
+  rcases hx with ⟨r, hr, hx | hx | hx⟩ | ⟨l, link, hm, w, hw, syncs, hd, hx | ⟨h, hh, hx⟩⟩
+  · exact List.mem_append_left _ (List.mem_flatMap.mpr ⟨r, hr, List.mem_append_left _
+      (List.mem_append_left _ (mem_headStrings hx))⟩)
+  · exact List.mem_append_left _ (List.mem_flatMap.mpr ⟨r, hr, List.mem_append_left _
+      (List.mem_append_right _ (mem_saltedStrings hx))⟩)
   · refine List.mem_append_left _ (List.mem_flatMap.mpr ⟨r, hr, List.mem_append_right _ ?_⟩)
     rw [hx]
     exact List.mem_singleton_self _

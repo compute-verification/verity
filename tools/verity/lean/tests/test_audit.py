@@ -1243,6 +1243,16 @@ def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_depend
         "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
 
 
+def test_a_statement_whose_premises_could_not_be_read_fails():
+    """`Facts.lean` writes `premises: null` when `premisesOf` throws on a statement; read as no premises, every premise of it
+    would go unlisted, so it fails instead. Facts without the field (older documents) are not held to it."""
+    pin = fact() | {"premises": None}
+    fails, _ = A.judge(POLICY, facts(pins={"P.t": pin}), FILES, update=True)
+    assert fails == ["guarantees: P.t's premises could not be read (`Facts.lean`'s `premisesOf` failed on its statement), so "
+                     "the lock can't be held to them: make `premisesOf` read this statement's form"]
+    assert A.judge(POLICY, facts(), FILES, update=True)[0] == []
+
+
 def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its_parameter():
     """Daniel's checks (a) and (b) on the verifier's path (`verifier` in the policy): an `@[extern]` or `@[implemented_by]`
     constant its entries reach fails unless `allow` names it (a name prefix, or `module:` for a module), and so does each
@@ -2350,3 +2360,49 @@ def test_a_property_on_a_conjecture_lists_it_and_one_on_a_falsified_conjecture_c
         == [True] * 3, out
     bad["shape"]["conjectures"]["P.Conj"] = {"status": "maybe", "why": "x"}
     assert "has no status" in A.shape(bad, facts)[1]
+
+
+def test_a_dev_cache_run_restores_dependencies_and_is_never_a_verdict(monkeypatch):
+    """`--dev-cache` lets setup.sh and Lake restore the verified build cache (no `LEAN_CACHE=off`, no
+    `LAKE_ARTIFACT_CACHE=false`), so its reports carry the fast path's kind, which `check` and `research merge` refuse:
+    the gate's from-source build is the cache's root of trust and must never read it."""
+    monkeypatch.setattr(A, "ARTIFACTS", None)
+    monkeypatch.setattr(A, "DEV_CACHE", False)
+    env = A.lake_env()
+    assert env["LEAN_CACHE"] == "off" and env["LAKE_ARTIFACT_CACHE"] == "false"
+    monkeypatch.setenv("LEAN_CACHE", "off")
+    monkeypatch.setenv("LAKE_ARTIFACT_CACHE", "false")
+    monkeypatch.setattr(A, "DEV_CACHE", True)
+    env = A.lake_env()
+    assert "LEAN_CACHE" not in env and "LAKE_ARTIFACT_CACHE" not in env
+    spec = importlib.util.spec_from_file_location("lean_changed_under_test", HERE.parent / "lean_changed.py")
+    LC = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(LC)
+    assert A.DEV_KIND == LC.FAST_KIND
+
+
+def test_a_dev_cache_setup_restores_the_packages_required_by_path_too(monkeypatch, tmp_path):
+    """Security/Proofs at the published commit rebuilt 1,607 of its modules with `--dev-cache` (21 Oct), because only its
+    own build was restored: Security and Flock, which it requires by path, were built again, not byte-identically, and
+    everything above them compiled. With `--dev-cache`, setup restores each path dependency's build too, lending one with no fetched dependencies of its own the root's for the restore; without it, or
+    after a failed setup.sh, it restores nothing more."""
+    calls, seen = [], []
+    deps = [tmp_path / "Security", tmp_path / "flock"]
+    (tmp_path / "Proofs" / ".lake" / "packages" / "mathlib").mkdir(parents=True)
+    (tmp_path / "flock" / ".lake" / "packages").mkdir(parents=True)
+
+    def run(argv, cwd, log=None, timeout=0):
+        calls.append(argv)
+        seen.append({d.name: (d / ".lake" / "packages").is_symlink() for d in deps})
+        return 0, ""
+
+    monkeypatch.setattr(A, "run", run)
+    monkeypatch.setattr(A, "path_deps", lambda p: deps)
+    monkeypatch.setattr(A, "DEV_CACHE", True)
+    assert A.dev_restore(tmp_path / "Proofs", 0, "", tmp_path / "setup.log") == (0, "")
+    assert calls == [[A.sys.executable, str(A.TOOL / "cache.py"), "get", *map(str, deps)]]
+    assert seen == [{"Security": True, "flock": False}] and not (deps[0] / ".lake" / "packages").exists()
+    calls.clear()
+    assert A.dev_restore(tmp_path / "Proofs", 2, "x", tmp_path / "setup.log") == (2, "x") and calls == []
+    monkeypatch.setattr(A, "DEV_CACHE", False)
+    assert A.dev_restore(tmp_path / "Proofs", 0, "", tmp_path / "setup.log") == (0, "") and calls == []

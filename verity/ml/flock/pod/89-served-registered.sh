@@ -6,7 +6,8 @@
 # fixture (`research data put --kind fixture/v1 --preserve`), whose id `out/fixture.txt` names. Run from the verity tree
 # (research run --cwd source); CPU only. Outputs under out/: host.txt, stage.json, statement.txt, serve.log, prove.txt and
 # prove.err, live.json (the LIVE record), lean-honest.log and lean-root.log (each its VERDICT line), fixture.txt.
-# env: CPUS=16  K=16 (the subset draw's units, of the stage's 32)  FLOCK_WORK=/workspace, or /workspace/jobs/pc-read-gadget
+# env: CPUS=16  K=16 (the subset draw's units, of the stage's 32)  SCHEMA=v1 (the tree's row format: v1, v2 or seg,
+#      served_registered.py's --schema)  FLOCK_WORK=/workspace, or /workspace/jobs/pc-read-gadget
 #      where /workspace isn't writable (node 1) (the prover build and its venv, shared as 76-read-gadget.sh's)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -63,7 +64,7 @@ RESEARCH=$(command -v research || true)
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 
 D=$S/stage; N=32
-python3 verity/ml/flock/tests/served_registered.py --out $D > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
+python3 verity/ml/flock/tests/served_registered.py --out $D --schema ${SCHEMA:-v1} > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
 $B statement --zk --circuit $D/circuit.txt --instances $D/pub-$N.bin --tables $D/tables > $O/statement.txt 2>&1
 PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')

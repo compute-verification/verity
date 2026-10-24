@@ -24,7 +24,9 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `claims`: the ids of security claims.
     - The Lean in `primitives`, `devices`, `service` and `protocols`. `difftest` (`verity_difftest`, with its Lake
       package `verity_difftest`) holds the Python that mirrors each one to the Lean.
-    - `service/flock/`: C-Flock's executable verifier of record (no dependencies).
+    - `service/flock/`: C-Flock's executable verifier of record (no dependencies), and the ZK server's Lean
+      (`Flock.Firewall`, the `flock-firewall` binary). `service/firewall/` (`core_firewall`) is the ZK server's release
+      side and record.
   - `verity/ml/` (`verity.ml`): Python and CUDA: the provers, and Python that mirrors the Lean for the prover's speed.
     Until each protocol's verifier of record is Lean, these units are on the soundness path, because its Python verifier
     reads them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.kernels`, `ml.commitments`,
@@ -252,12 +254,14 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
   refuses (a conflict, a failed check) goes to the lander, who ejects the PR that caused it; its owner is told, and
   marks its fixed head ready.
 - A new head doesn't cancel a running train (top, 17 Oct): a train being checked runs on at the head its owner marked, and
-  lands that head if it passes; the new head rejoins `next` above once that train ends. Only when the PR's own train has
-  failed does the new head rebuild at once, since then the push is the fix.
+  lands that head if it passes, telling its owner; the new head rejoins `next` above once that train ends. Only when the
+  PR's own train has failed, or the head it checks has lost its ready mark, does the new head rebuild at once.
 - A landing that breaks `main` is reverted at once (`git revert -m 1`), and its owner relands with the fix.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
-  of the queue, since drive doesn't order it: the lander lands it with `research merge` on its own passing check, and
-  drive's next sync rebuilds `next` on it.
+  of the queue, since drive doesn't order it: the lander lands it with `research merge --push` on its own passing check, from
+  the control pod (`/data/infra/drive.sh merge ...`), and drive's next sync rebuilds `next` on it. Only drive's App pushes
+  `main` and `next` (GitHub's rulesets, 23 Oct): `research` refuses those pushes off the pod, and an eject run elsewhere only
+  withdraws the mark, for drive's next tick to rebuild `next`.
 
 ## Lean
 
@@ -267,10 +271,21 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
   and outputs are to use one canonical format, proved in general, so a new workload needs no verifier or proof change.
 - **Lean is either code or security analysis.**
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
-    (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/core/protocols/pous/lean/`) and
+    (`verity/core/service/flock/`, no dependencies), the ZK server (`Flock.Firewall` in that package, run as
+    `flock-firewall`, and its release side `core_firewall`, `verity/core/service/firewall/`, with its difftest), the
+    PoUS grader (`verity/core/protocols/pous/lean/`) and
     the certifier program (`verity/core/protocols/certifier/lean/`, `NetworkCertifier`, with its
     difftest), the NCI check (`verity/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest) and the remote
     bandwidth audit's verifier (`verity/core/protocols/remote_bandwidth/lean/`, `RemoteAudit`, with its difftest).
+  - The ZK server is Lean, and its Rust path is dropped: under `FC_FIREWALL=1` every round that leaves, level 0's
+    commitment, the opening, the inner proof and each rep's proof file are computed by `Flock.Firewall` (the session
+    loop, each rep's frame, `Level0`, the finish), and a recursive session's release (`--firewall-state`) by
+    `core_firewall`. `flock-circuit` (Rust) still
+    computes the prover workers' values (the host witness, the device's rounds, which the frame passes or fails against
+    the Lean's) and the algebraic phase's scheduled rounds. Its own checks can only refuse more, and it relays the
+    rounds, coins and proof files (live `PROTOCOL.md` §10.4). The ZK theorem (`Flock.zk_server_lean_loop`) reads the
+    released bytes only through named hypotheses not yet proved about the live path (`LiveRoundEq`, `FillRoundEq`,
+    `FinishIs`, `LinkRoundEq`, `ProgReads`), so the ZK server is not yet proved.
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for

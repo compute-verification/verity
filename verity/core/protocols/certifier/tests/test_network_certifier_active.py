@@ -11,16 +11,16 @@ import random
 import resource
 from collections import defaultdict
 from concurrent.futures import Executor, Future
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
 import signers
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import active, online
+from verity.core.protocols.certifier import active, online, served
 from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
 from verity.core.protocols.certifier.active import (
     DATA,
-    LAST,
     Bucketer,
     Events,
     Proxy,
@@ -46,11 +46,53 @@ from verity.core.protocols.sampled_proofs.service import Registration
 
 
 def test_frames_round_trip_and_padding_is_zero():
-    frame = active.encode_frame(LAST, 7, b"abc", 32)
-    assert len(frame) == 32 and active.decode_frame(frame) == (LAST, 7, b"abc")
+    frame = active.encode_frame(DATA, 7, b"abc", 32)
+    assert len(frame) == 32 and active.decode_frame(frame) == (DATA, 7, b"abc")
     assert active.decode_frame(bytes(32)) == (active.PAD, 0, b"")
     with pytest.raises(ValueError):
         active.encode_frame(DATA, 1, b"x" * 24, 32)
+
+
+@pytest.mark.parametrize("n", [0, 1, 2, 3, 63, 64, 65, 128, 200])
+def test_a_token_is_events_of_one_length_each_its_template(n):
+    """Every event is `EVENT_BYTES` long whatever it carries, its frame is the egress template's (the same bytes
+    before and after the text), and a token longer than `TOKEN_BYTES` is cut over events that give it back."""
+    token = bytes(random.Random(n).randrange(256) for _ in range(n))
+    evs = active.events(token)
+    assert len(evs) == max(1, -(-n // active.TOKEN_BYTES))
+    assert b"".join(active.event_data(e) for e in evs) == token
+    p, s, prefix, suffix = active.event_placement(B)
+    for e in evs:
+        frame = active.encode_frame(DATA, active.CANONICAL_STREAM, e, B)
+        assert len(e) == active.EVENT_BYTES and frame[:p] == prefix and frame[s : s + len(suffix)] == suffix
+        assert frame[s + len(suffix) :] == bytes(B - s - len(suffix))
+    with pytest.raises(ValueError):
+        active.event(bytes(active.TOKEN_BYTES + 1))
+    assert active.event_data(evs[0][:-1]) is None and active.event_data(evs[0].replace(b"verity", b"Verity")) is None
+
+
+@pytest.mark.parametrize("length", [0, 1, 499, 500, 503, 1536])  # B = 512: a frame holds 503 bytes after its header
+def test_requests_end_by_their_length_on_one_header(length):
+    """A request's frames all carry one header, its last is zero-filled, and `Requests` gives back each request's
+    bytes, numbering them by their order on the link."""
+    reqs = [bytes([k + 1]) * length for k in range(3)]
+    frames = [active.request_frames(r, B) for r in reqs]
+    assert [len(f) // B for f in frames] == [active.request_frame_count(length, B)] * 3
+    p, s, prefix, _ = active.request_placement(B)
+    wire, split, got = b"".join(frames), active.Requests(), {}
+    for f in (wire[i : i + B] for i in range(0, len(wire), B)):
+        assert f[:p] == prefix and s == B
+        k, data, last = split.feed(active.decode_frame(f)[2])
+        got.setdefault(k, []).append((data, last))
+    assert {k: b"".join(d for d, _ in v) for k, v in got.items()} == {k + 1: r for k, r in enumerate(reqs)}
+    assert all([last for _, last in v] == [False] * (len(v) - 1) + [True] for v in got.values())
+
+
+def test_an_event_body_is_what_follows_its_id_line():
+    """The proxy frames what follows the `id:` line: the position and an HTTP head before it aren't recorded."""
+    body = active.event(b"tok")
+    assert active.event_body(HEAD + b"id: 7\n" + body) == body == active.event_body(b"id:3\n" + body)
+    assert active.event_position(HEAD + b"id: 7\n" + body) == 7
 
 
 def test_events_are_cut_by_content_not_by_reads():
@@ -250,6 +292,52 @@ def test_the_bucketer_enqueues_its_own_frame_first_in_each_window():
     assert [own for _, own in out] == [{}, {}, {}, {}, {}, {}, {0: 2}, {}, {}]
 
 
+def test_the_bucketers_admission_admits_whole_requests_while_the_window_ends_idle():
+    """Requests of two frames, each answered by two, under δ = 0, ρ = 1 with one frame a bucket on both ends: a and b
+    complete a request at bucket 1, answered in buckets 1 and 2; c and d would complete one at bucket 3, answered past
+    the window's end, so they wait for window 1, and e and f for window 2. Over random arrivals, with and without the
+    certifier's own frame (the salt's) at each window's head, every window's released frames are that frame and whole
+    requests in arrival order, and every window derives (`served.derive`). A served link takes an own frame exactly
+    when its profile counts one, and its window holds that frame, one request and its response."""
+    P = GridParams(buckets=4, allocation=1, frame_bytes=1)
+    admission = served.Admission(served.ServedProfile(2, 2, 1), 1, lambda w: ClockSync(0, 1))
+    b = Bucketer(Certifier("requests", P), served=admission)
+    for frame, bucket in ((b"a", 0), (b"b", 0), (b"c", 1), (b"d", 2), (b"e", 5), (b"f", 6)):
+        b.arrive(frame, bucket)
+    rows = [b.tick()[0] for _ in range(12)]
+    assert rows == [(b"a",), (b"b",), (None,), (None,), (b"c",), (b"d",), (None,), (None,), (b"e",), (b"f",), (None,),
+                    (None,)]
+    with pytest.raises(ValueError, match="own frame exactly when"):
+        Bucketer(Certifier("requests", P), first=lambda w: b"s", served=admission)
+    with pytest.raises(ValueError, match="own frame exactly when"):
+        Bucketer(Certifier("requests", P), served=served.Admission(served.ServedProfile(2, 2, 1, 1), 1,
+                                                                   lambda w: ClockSync(0, 1)))
+    with pytest.raises(ValueError, match="holds that frame, one request and its response"):
+        Bucketer(Certifier("requests", P), served=served.Admission(served.ServedProfile(4, 2, 1), 1,
+                                                                   lambda w: ClockSync(0, 1)))
+
+    rng = random.Random(54)
+    for _ in range(200):
+        P = GridParams(buckets=rng.randint(3, 8), allocation=rng.randint(1, 3), frame_bytes=1)
+        n, r = rng.choice((1, 2, 4)), rng.randint(1, 3)
+        sync = ClockSync(rng.randint(0, 2), rng.choice((Fraction(1), Fraction(2), Fraction(1, 2))))
+        own = rng.randint(0, 1)
+        admission = served.Admission(served.ServedProfile(rng.randint(1, 3), n, 1, own), r, lambda w: sync)
+        try:
+            b = Bucketer(Certifier("requests", P), (lambda w: b"s") if own else None, served=admission)
+        except ValueError:
+            continue
+        sent = [bytes([k]) for k in range(n * rng.randint(0, 6))]
+        for frame, bucket in zip(sent, sorted(rng.randrange(3 * P.buckets) for _ in sent)):
+            b.arrive(frame, bucket)
+        records = [r for r in (b.tick()[1] for _ in range(20 * P.buckets)) if r is not None]
+        assert [f for r in records for row in r.grid for f in row if f not in (None, b"s")] == sent
+        for rec in records:
+            assert (rec.grid[0][0] == b"s") is bool(own)
+            counts = [row_count(row) for row in rec.grid]
+            assert served.derive(counts, sync, admission.profile, r) is not None
+
+
 def test_a_shaper_and_a_bucketer_back_from_maintenance_publish_the_full_runs_later_windows():
     """On random instances where nothing reaches window 1 and window 0 carries nothing into it: a shaper started at
     window 2, at the position of the first frame anchored there and fed only the frames from it on, hands them when
@@ -310,10 +398,13 @@ SESSIONS = [("a", 1, 0, (1, 1, 2, 3)), ("b", 2, 0, (2, 2, 3)), ("c", 3, 4, (1, 2
             ("e", 5, 12, (1, 1)), ("f", 6, 13, (2, 4, 4))]
 
 
+def body(session: str, index: int) -> bytes:
+    """Frame `index` of `session`'s response: the canonical event of its token."""
+    return active.event(f"{session} t{index}".encode())
+
+
 def event(session: str, index: int, n: int, position: int) -> bytes:
-    choice = {"index": 0, "text": f" t{index}", "finish_reason": "length" if index == n - 1 else None}
-    data = json.dumps({"id": session, "object": "text_completion", "choices": [choice]}, separators=(",", ":"))
-    return (HEAD if index == 0 else b"") + f"id: {position}\ndata: {data}\n\n".encode()
+    return (HEAD if index == 0 else b"") + b"id: %d\n" % position + body(session, index)
 
 
 def request(session: str, n: int) -> bytes:
@@ -327,8 +418,8 @@ def program(sessions=SESSIONS):
     middle of its send bucket a, so the ingress certifier releases it at a + 1, its anchor."""
     rows = [(a + 1 + d, a + 1, name, k, stream, len(ds)) for name, stream, a, ds in sessions for k, d in enumerate(ds)]
     rows.sort()
-    frames = [LogicalFrame(active.encode_frame(DATA, stream, event(name, k, n, p), B), anchor, k)
-              for p, (_, anchor, name, k, stream, n) in enumerate(rows)]
+    frames = [LogicalFrame(active.encode_frame(DATA, active.CANONICAL_STREAM, body(name, k), B), anchor, k)
+              for _, anchor, name, k, _, _ in rows]
     ready = [r[0] for r in rows]
     syncs, _, misses = choose_syncs([(frames, ready)], SYNC_SET, EGRESS.buckets)
     assert misses == 0
@@ -336,7 +427,7 @@ def program(sessions=SESSIONS):
 
 
 FRAMES, READY, SYNCS, ROWS = program()
-STREAM = [f.payload[1:5] for f in FRAMES]
+STREAM = [row[4] for row in ROWS]
 
 
 class Server:
@@ -433,11 +524,9 @@ async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt
         clock.advance(t * TAU + TAU / 2)
         for name, stream, a, ds in sessions:
             if a == t:
-                body = request(name, len(ds))
-                chunks = [body[i : i + B - active.HEADER.size] for i in range(0, len(body), B - active.HEADER.size)]
-                writer.write(b"".join(active.encode_frame(LAST if j == len(chunks) - 1 else DATA, stream, c, B)
-                                      for j, c in enumerate(chunks)))
-                sent += len(chunks)
+                request_wire = active.request_frames(request(name, len(ds)), B)
+                writer.write(request_wire)
+                sent += len(request_wire) // B
         await proxy.until(lambda p, n=sent: p.link_frames_read >= n)
         for p, (_, _, name, k, _, n) in enumerate(rows):
             if write_buckets[p] == t:
@@ -782,6 +871,25 @@ def test_the_weights_are_recorded_only_before_the_salt_and_given_on_reveals_cond
     with pytest.raises(RuntimeError, match="passed"):
         back.commit_weights(0, roots[0], signed(0, roots[0]))
     back.commit_weights(1, roots[1], signed(1, roots[1]))
+
+
+def test_a_served_proxy_counts_the_salt_frame_exactly_when_the_salt_is_on():
+    """A served link's profile counts the certifier's own frame (`own` 1) exactly when the salt is on, at a PoUW window
+    of one certifier window, so every window's first ingress frame is the salt's: the proxy refuses a profile without
+    it under the salt, one with it and no salt, and a longer PoUW window."""
+    def proxy(own: int, **kwargs) -> Proxy:
+        return Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                     clock=lambda: 0.0, served=served.ServedProfile(2, 1, WINDOWS, own), **kwargs)
+
+    p = proxy(1, salt=lambda w, n: bytes([w + 1]) * n)
+    for w in range(WINDOWS):
+        for t in range(INGRESS.buckets):
+            p.bucketer.tick()
+            assert p.bucketer.own == ({0: w} if t == 0 else {})
+    proxy(0)
+    for own, kwargs in ((0, {"salt": active.fresh_salt}), (1, {}), (1, {"salt": active.fresh_salt, "pouw_window": 3})):
+        with pytest.raises(ValueError, match="counts the salt frame"):
+            proxy(own, **kwargs)
 
 
 def test_reveal_gives_each_salt_once_and_only_until_its_deadline():
@@ -1263,6 +1371,69 @@ def test_a_late_tick_fails_closed_and_does_not_slip():
     assert len(writer.data) == WINDOWS * EGRESS.buckets * EGRESS.allocation * B
 
 
+def test_an_egress_tick_slow_to_write_its_bucket_leaves_the_ingress_tick_at_its_boundary_on_time():
+    """Both grids tick at every boundary, and the link takes twice the slack to take each egress bucket, as a loaded
+    host's loop can between a boundary and a tick's turn. The ingress tick due there runs first (`TICK_ORDER`) and
+    reads its link on time, so every window of both links is accepted; run after the egress tick, as it was, it read
+    its link twice the slack late and failed every ingress window closed."""
+
+    async def run():
+        clock = VirtualClock(0.0)
+        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                      clock=clock, sleep=clock.sleep)
+        running = asyncio.create_task(proxy.run(EmptyReader(), SlowLink(clock, 2 * proxy.slack)))
+        for t in range(WINDOWS * EGRESS.buckets):
+            clock.advance(t * TAU)
+            await proxy.until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
+        await running
+        return proxy
+
+    proxy = asyncio.run(run())
+    assert max(proxy.lateness["ingress"]) == max(proxy.lateness["egress"]) == 0
+    assert sorted((r.link, r.window, r.status.reason) for r in proxy.records) == \
+        sorted((link, w, None) for link in ("responses", "requests") for w in range(WINDOWS))
+
+
+class SlackClock(VirtualClock):
+    """A `VirtualClock` whose waits end as late as Linux lets an epoll wait of a niced process end: by 0.5 % of its
+    timeout, up to 100 ms (`select_estimate_accuracy`)."""
+
+    def __init__(self, now: float = 0.0) -> None:
+        super().__init__(now)
+        self.waits: list[float] = []
+
+    async def sleep(self, delay: float) -> None:
+        if delay > 0:
+            self.waits.append(delay)
+        await super().sleep(delay + min(delay / 200, 0.1) if delay > 0 else delay)
+
+
+def test_a_first_tick_10_s_after_the_proxy_is_up_is_on_time_in_a_niced_process():
+    """The proxy is up 10 s before its origin, as `certifier_serve` starts it. One wait for the first tick would end
+    50 ms late, past the slack, and fault window 0 on both links (`monitor-unavailable`), as it did on the first
+    rehearsals against vLLM at nice 19; waits of at most `MAX_WAIT_S` (`precise_sleep`, the proxy's own sleep) keep
+    every tick within the slack."""
+
+    async def run():
+        clock = SlackClock(0.0)
+        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=10.0, ingress_link="requests",
+                      clock=clock, sleep=lambda delay: active.wait_until(clock() + delay, clock, clock.sleep))
+        running = asyncio.create_task(proxy.run(EmptyReader(), NullWriter()))
+        while not running.done():
+            await clock.sleep(0)
+            clock.advance(clock.now + 1e-3)
+        await running
+        return proxy, clock
+
+    proxy, clock = asyncio.run(run())
+    assert max(proxy.lateness["egress"] + proxy.lateness["ingress"]) < proxy.slack
+    assert sorted((r.link, r.window, r.status.reason) for r in proxy.records) == \
+        sorted((link, w, None) for link in ("responses", "requests") for w in range(WINDOWS))
+    assert max(clock.waits) <= active.MAX_WAIT_S
+    assert Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=10.0,
+                 ingress_link="requests").sleep is active.precise_sleep
+
+
 def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
     """The ingress ticker wakes 0.3τ before bucket 2's boundary and releases a's request, read in bucket 1 and so
     anchored at 2; the server answers at once, so its event is ready at bucket 2, no later than its anchor. The online
@@ -1304,7 +1475,7 @@ def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
             await until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
             if t == early - 1:
                 clock.advance(t * TAU + TAU / 2)
-                link.chunks.put_nowait(active.encode_frame(LAST, 1, request("a", 1), B))
+                link.chunks.put_nowait(active.request_frames(request("a", 1), B))
                 await until(lambda p: p.link_frames_read == 1)
         await running
         server.writers["a"].close()
@@ -1355,7 +1526,7 @@ def test_a_server_that_refuses_a_stream_fails_ingress_closed():
         clock = VirtualClock(0.0)
         proxy = Proxy(upstream, EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests", clock=clock,
                       sleep=clock.sleep)
-        frame = active.encode_frame(LAST, 1, request("a", 1), B)
+        frame = active.request_frames(request("a", 1), B)
         running = asyncio.create_task(proxy.run(EmptyReader([frame]), NullWriter()))
         for t in range(WINDOWS * EGRESS.buckets):
             clock.advance(t * TAU)
@@ -1447,11 +1618,11 @@ async def replay_receipts(sessions, pause_at: int | None = None):
             continue
         await server.until(proxy.requests_released)
         clock.advance(t * TAU + TAU / 2)
-        for name, stream, a, ds in sessions:
+        for name, _, a, ds in sessions:
             if a == t:
-                body = request(name, len(ds))
-                writer.write(active.encode_frame(LAST, stream, body, B))
-                sent += 1
+                wire = active.request_frames(request(name, len(ds)), B)
+                writer.write(wire)
+                sent += len(wire) // B
         await proxy.until(lambda p, n=sent: p.link_frames_read >= n)
         written += server.write_due(t)
         await proxy.until(lambda p, n=written: len(p.frames) >= n)
@@ -1526,3 +1697,15 @@ class NullWriter:
 
     def close(self) -> None:
         pass
+
+
+class SlowLink(NullWriter):
+    """A link that takes `seconds` of the clock to take each write."""
+
+    def __init__(self, clock: VirtualClock, seconds: float) -> None:
+        super().__init__()
+        self.clock, self.seconds = clock, seconds
+
+    def writelines(self, chunks) -> None:
+        super().writelines(chunks)
+        self.clock.advance(self.clock.now + self.seconds)

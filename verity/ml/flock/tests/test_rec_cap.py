@@ -1,8 +1,9 @@
-"""RecCap (`verity_flock.rec_cap`), V*'s hold of the table's level-0 cap: on a held row (64 words) it outputs the words past
-the node's 32, then zeros, so its outputs, which V* registers as zero rows, are all zero iff the row is a node's (`rec_live.
-top_rows`: the node's 32 words, then 32 zero words). The unit through its M0 layout, and the Definition evaluated from its
-descriptor, are that reference; the unit has no AND; and staging refuses tops that are not level 0's one cap. The Lean
-verifier's side is `Flock.Test.RecCap` and `test_lean_rec_coins`."""
+"""RecCap (`verity_flock.rec_cap`), V*'s hold of each level's committed tops: on a held row (64 words) it outputs the words
+past the node's 32, then zeros, so its outputs, which V* registers as zero rows, are all zero iff the row is a node's
+(`rec_live.top_rows`: the node's 32 words, then 32 zero words). The unit through its M0 layout, and the Definition evaluated
+from its descriptor, are that reference; the unit has no AND; its name and directory say its level; and staging refuses
+tops that are not a level's (level 0's one cap, or a later level's rep 0 then rep 1). The Lean verifier's side is
+`Flock.Test.RecCap` and `test_lean_rec_coins`."""
 from __future__ import annotations
 
 import random
@@ -52,8 +53,21 @@ def test_the_definition_is_the_reference():
     assert [[word(w) for w in res[t]] for t in range(3)] == [RC.ref(r) for r in rows]
 
 
-def test_staging_refuses_tops_that_are_not_level_0s_one_cap(tmp_path):
-    for own, first in (({"value": "rec-top-L1", "leaves": 128}, {0: 0, 1: 0}), ({"value": RC.TOP_VALUE, "leaves": 128},
-                                                                               {0: 0, 1: 128})):
-        with pytest.raises(ValueError, match="RecCap holds level 0's one cap rec-top-L0"):
-            RC.stage(SimpleNamespace(own=own, first=first, reg=None), tmp_path / "cap")
+def test_a_later_levels_cap_is_named_and_placed_by_its_level():
+    assert RC.unit_name(128, 0) == "rec-cap/n128" and RC.unit_name(64, 3) == "rec-cap/n64-l3"
+    assert RC.lowering(64, 3).name == RC.subcircuit(64, 3).id == "rec-cap/n64-l3"
+    assert (RC.dir_name(0), RC.dir_name(3)) == ("cap", "cap/L3")
+    assert (RC.level_of("rec-top-L0"), RC.level_of("rec-top-L5")) == (0, 5)
+    for value in ("rec-top-stacked-L1", "rec-top-L", "rec-cap-zero"):
+        with pytest.raises(ValueError, match="RecCap holds a level's tops rec-top-L<l>"):
+            RC.level_of(value)
+
+
+def test_staging_refuses_tops_that_are_not_a_levels(tmp_path):
+    with pytest.raises(ValueError, match="RecCap at level 0 holds the reps' one cap rec-top-L0"):
+        RC.stage(SimpleNamespace(own={"value": RC.TOP_VALUE, "leaves": 128}, first={0: 0, 1: 128}, reg=None), tmp_path / "cap")
+    for first in ({0: 0, 1: 0}, {0: 0, 1: 128}, {0: 0}):
+        with pytest.raises(ValueError, match="RecCap at level 1 holds rep 0's top then rep 1's"):
+            RC.stage(SimpleNamespace(own={"value": "rec-top-L1", "leaves": 128}, first=first, reg=None), tmp_path / "cap")
+    with pytest.raises(ValueError, match="RecCap holds a level's tops"):
+        RC.stage(SimpleNamespace(own={"value": "rec-top-stacked-L1", "leaves": 128}, first={0: 0}, reg=None), tmp_path / "c")

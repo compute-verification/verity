@@ -12,8 +12,11 @@ a salted template's units (`Tile.salted`), under the 64-byte certified salt the 
 salt and no salted unit (`saltReason`). The registered entries root's domain is one-stage's served domain of the
 registered program and partition over the check's P entries (`windowDomain?`). The opening's entry, under its salt, is
 that root's leaf at its index (`verifyPath`). The unit is one of the entry's tiles (`tileIn?`). The proof's header names one
-instance, over the circuit the verifier pins for the check's template (`tile?`), whose first two rows, in key order (serde's,
-as C-Flock reads it), are an A row and a B row of the fp8-p schemas (`opened`). Each of those rows' b ‖ c, at the head of the body, is the entry's side tree's leaf at the unit's row.
+instance, over the circuit the verifier pins for the check's template (`tile?`), whose first two ports, `a0` and `b0`
+(`PC8_PORTS`), are an A row and a B row of the fp8-p schemas (`opened`), read by name. Each of those rows' b ‖ c, at the head of the body, is the entry's side tree's leaf at the unit's row.
+C-Flock reads port k's b ‖ c at the body's k-th place, in the circuit's port order, so the header's keys, in key order
+(serde's), must list the opened side rows first and in port order (`portsOf`): a header that orders them otherwise is
+refused, never read in its own order.
 A salted unit's tile (i, j) is A rows R·i + k and B rows C·j + k, each opened the same way, and the b ‖ c after them is
 its public row's, which must be `publicBc` of the window's context, the certified salt, the unit's position and the
 entry's side roots.
@@ -30,6 +33,13 @@ open PouwCommit (Domain)
 def SERVED_DOMAIN : String := "verity/one-stage/served-domain/v1"
 /-- A tile proof's first two rows: its A row and its B row, each side's fp8-p row schema. -/
 def opened : List (Side × String) := [(.a, Flock.HmRow.ROW_SCHEMA_SEG), (.b, Flock.HmRow.ROW_SCHEMA_V2)]
+/-- The ports of those rows, the pinned circuit's first two (`served_zk/stage_tile.py`'s `in_rows`). -/
+def PC8_PORTS : List String := ["a0", "b0"]
+
+/-- `_ports`: the side rows a tile proof opens, by port name in its circuit's port order: A rows, then B rows. -/
+def portsOf : Option Salted → List String
+  | Option.none => PC8_PORTS
+  | some l => (List.range l.r).map (s!"a{·}") ++ (List.range l.c).map (s!"b{·}")
 def saltBytes : Nat := 192
 def bcBytes : Nat := 128
 /-- `PUBLIC_ROW_BITS`: a salted unit's public row, the certified salt, the unit's position (a u64) and two roots. -/
@@ -128,11 +138,6 @@ def header? (pub : ByteArray) : Option (Json × ByteArray) := do
   | .obj _ => some (h, pub.extract (nl + 1) pub.size)
   | _ => Option.none
 
-/-- `[s[k] for k in sorted(s)[:2]]`. -/
-def firstTwo (s : Json) : Option (List Json) := do
-  let ks ← keys s
-  ks.take 2 |>.mapM (pyGet? s)
-
 /-- `opening`: none when the proof's public file `pub` opens unit `unit`'s rows under the registered window root, else
 why not, `core_check.opening`'s reason. `salt` is a certified window's salt (`certified_salt`). -/
 def opening (p : Params) (c : Registration) (units : Option (List Int)) (unit : Int) (pub : ByteArray) (op : Json)
@@ -175,19 +180,24 @@ def opening (p : Params) (c : Registration) (units : Option (List Int)) (unit : 
   unless t.any (fun t => pyGet? h "circuit_sha512" == some (.str t.circuit)) do
     return some "the proof's circuit is not the one the verifier pins for the check's template"
   let fv := (pyGet? h "frame_v3").bind (pyGet? · "schemas")
+  let ports := portsOf lay
   match lay with
   | Option.none =>
-    if fv.bind firstTwo != some (opened.map fun (_, s) => Json.str s) then
-      return some "the proof's first rows are not an A row and a B row of the registered schemas"
+    let ok : Bool := match fv with
+      | some s@(.obj _) => ports.map (pyGet? s) == opened.map fun (_, x) => some (Json.str x)
+      | _ => false
+    if !ok then return some "the proof's first rows are not an A row and a B row of the registered schemas"
     if body.size < 2 * bcBytes then return some "the proof's body holds no A row and B row"
   | some l =>
-    let names := (List.range l.r).map (s!"a{·}") ++ (List.range l.c).map (s!"b{·}") ++ ["pub"]
+    let names := ports ++ ["pub"]
     let bad : Bool := match fv with
       | some s@(.obj _) => names.any fun x => pyGet? s x != some (.str Flock.HmRow.ROW_SCHEMA_V2)
       | _ => true
     if bad then return some s!"the proof's rows {", ".intercalate names} are not {Flock.HmRow.ROW_SCHEMA_V2} rows"
     if body.size < (l.r + l.c + 1) * bcBytes then
       return some "the proof's body holds no A rows, B rows and public row"
+  if (fv.bind keys).map (·.take ports.length) != some ports then
+    return some s!"the proof's header does not list its rows {", ".intercalate ports} first, in its circuit's port order"
   let mut k := 0
   for ((side, schema), (wants, opens)) in opened.zip (wanted.zip rows) do
     let sdom ← sideDomain? dom.id side.name

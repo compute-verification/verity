@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.ZK.Refine
 import Flock.Firewall.SessionPlan
+import Flock.Firewall.Frames
 
 /-!
 # The release at the session loop (`flock-firewall session`)
@@ -19,9 +20,11 @@ statement `x`'s setup (`FlockDeploy.setupOf`), and here the transport's trusts o
   `refK x - 1` openings (`Loop.refK_plan`), and opening `j + 1`'s stream and round are `CoinLayer.slot`'s (`Loop.fst_plan`,
   `Loop.count_opened`).
 * `LeanRelease.loop_last`: `Finish` is round `refK x + 1`.
+* `LeanRelease.loop_coinsRead`: the coins a frame takes are the loop's reading of the auditor's last answer
+  (`Frames.feedOf`, which the loop feeds the round's frame, `Frames.coins`), the decoded coin's words (`Loop.readCoins`).
 
 **`Flock.zk_server_lean_loop`** is `Flock.zk_server_lean_coinLayer` at that release, with the transport's other trusts
-(`ReadsCoins`, `LinkRoundEq`, `FinalRoundEq`) and the tables' side as before. What it still reads of the loop is that it
+(`ProgReads`, `LinkRoundEq`, `FinalRoundEq`) and the tables' side as before. What it still reads of the loop is that it
 runs at `x`'s setup: the loop sets up from the auditor's draw (`Hello.Setup.setup`), which is `x`'s where `x` reads
 (`FlockDeploy.Ins.setup`).
 -/
@@ -511,6 +514,32 @@ def lastOf (x : Msg) : ℕ :=
     | none => refK x + 1
   | none => refK x + 1
 
+/-! ## The coins the loop feeds a frame -/
+
+/-- **The coins the loop feeds the frame** after `h`: `Frames.feedOf` of the last opening at its request's count. -/
+def coinsAt (x : Msg) (h : List (Msg × Msg)) : Array _root_.Flock.F128 :=
+  match h.tail.getLast? with
+  | some (_, a) => _root_.Flock.Firewall.Frames.feedOf (loopNr x (h.tail.length - 1)) a
+  | none => #[]
+
+/-- The coins `coinsAt` reads, from the decoded coins: the last one's words, as many as its request's count. -/
+def readCoins (x : Msg) (cs : List FlockDeploy.Coin) : Array _root_.Flock.F128 :=
+  match cs.getLast? with
+  | some c => c.vals (min (loopNr x (cs.length - 1)) _root_.Flock.Firewall.Frames.COIN_MAX)
+  | none => #[]
+
+/-- `feedOf` of an opening is its decoded coin's words. -/
+theorem feedOf_rd (n : ℕ) (m : Msg) :
+    _root_.Flock.Firewall.Frames.feedOf n m = (CoinLayer.rd m).vals (min n _root_.Flock.Firewall.Frames.COIN_MAX) := by
+  unfold _root_.Flock.Firewall.Frames.feedOf _root_.Flock.Firewall.Frame.words FlockDeploy.Coin.vals
+  apply Array.ext (by simp)
+  intro i h1 _
+  simp only [Array.size_map, Array.size_range] at h1
+  have hi : i < 65536 := by
+    have : min n _root_.Flock.Firewall.Frames.COIN_MAX ≤ 65536 := Nat.min_le_right _ _
+    omega
+  simp [FlockDeploy.Coin.at, hi, CoinLayer.rd, CoinLayer.coinOfD, FlockComplete.coinOf, Claims.ofMsg]
+
 theorem lastOf_eq (x : Msg) : lastOf x = refK x + 1 := by
   unfold lastOf
   rcases hs : FlockDeploy.setupOf true x with _ | ⟨s, spec, sts⟩
@@ -538,7 +567,21 @@ noncomputable def loop (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     hello := fun x ρ => CoinLayer.helloMsg x ρ.1
     helloChk := fun x ρ => Loop.helloChkAt x ρ.1
     req := Loop.reqOf
+    coinsOf := Loop.coinsAt
     last := Loop.lastOf }
+
+/-- **The coins the loop's frames take read the history only through the decoded coins**: `Loop.readCoins` of them. -/
+theorem loop_coinsRead (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
+    (x : Msg) :
+    CoinsRead (CoinLayer.session nr T) (loop nr T L₀) Loop.readCoins x := by
+  intro m₀ ρ₀ ops
+  show Loop.coinsAt x ((m₀, ρ₀) :: ops) = Loop.readCoins x (ops.map fun p => CoinLayer.rd p.2)
+  unfold Loop.coinsAt Loop.readCoins
+  simp only [List.tail_cons, List.getLast?_map, List.length_map]
+  rcases ops.getLast? with _ | ⟨a, b⟩
+  · rfl
+  · exact Loop.feedOf_rd _ b
 
 /-- **The loop's `Hello` is `flock-firewall hello`'s.** -/
 theorem loop_helloIs (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
@@ -584,9 +627,10 @@ end LeanRelease
 open FlockSoundness.Discharge
 
 /-- **`Flock.zk_server_lean_coinLayer` at the session loop** (`LeanRelease.loop`): its `Hello`, its coin check's reading
-of it, its requests and its `Finish`'s round are theorems (`loop_helloIs`, `loop_helloParses`, `loop_reqsFollow`,
-`loop_last`), at the coin counts the loop requests (`Loop.loopNr`); the transport's other trusts (`ReadsCoins`,
-`LinkRoundEq`, `FinalRoundEq`) and the tables' side are `Flock.zk_server_lean_coinLayer`'s. -/
+of it, its requests, the coins its frames take and its `Finish`'s round are theorems (`loop_helloIs`, `loop_helloParses`,
+`loop_reqsFollow`, `loop_coinsRead`, `loop_last`), at the coin counts the loop requests (`Loop.loopNr`) and the coins'
+reading `Loop.readCoins`; the transport's other trusts (`ProgReads`, `LinkRoundEq`, `FinalRoundEq`) and the tables'
+side are `Flock.zk_server_lean_coinLayer`'s. -/
 theorem Flock.zk_server_lean_loop
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (T : CoinLayer.TableData)
     (vs : (CoinLayer.session Loop.loopNr T).SwVals) (t : ℕ) (ht : 0 < t)
@@ -600,8 +644,8 @@ theorem Flock.zk_server_lean_loop
     (hL : L = LeanRelease.loop Loop.loopNr T L₀)
     (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
     (pc : Msg → List (CoinLayer.session Loop.loopNr T).Coin → Masker)
-    (cc : Msg → List (CoinLayer.session Loop.loopNr T).Coin → Array _root_.Flock.F128)
-    (hRd : LeanRelease.ReadsCoins (CoinLayer.session Loop.loopNr T) L pc cc x)
+    (fc : Msg → List (CoinLayer.session Loop.loopNr T).Coin → Except String Masker)
+    (hPr : LeanRelease.ProgReads (CoinLayer.session Loop.loopNr T) L pc fc x)
     (hLk : LeanRelease.LinkRoundEq (CoinLayer.session Loop.loopNr T) vs L x w)
     (hF : LeanRelease.FinalRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
     (hE : LeanRelease.LiveRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
@@ -613,26 +657,27 @@ theorem Flock.zk_server_lean_loop
           (runStar CoinOpen.shaH (L.toSrv.proverD L.fillOf (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk w) Vs x ω
             θ).msgs)) ≤
       2 * (Pr (fun c : (leaky1 ((((CoinLayer.session Loop.loopNr T).withStops
-                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc cc) L.stop).refP.withSim fun x _ c =>
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).refP.withSim fun x _ c =>
               ((CoinLayer.session Loop.loopNr T).withStops
-                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc cc) L.stop).coinModel x c).simulatorE t (t * 3 ^ t))
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).C x =>
           Ev (L.toSrv.timed x ((leaky1 ((((CoinLayer.session Loop.loopNr T).withStops
-                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc cc) L.stop).refP.withSim fun x _ c =>
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).refP.withSim fun x _ c =>
               ((CoinLayer.session Loop.loopNr T).withStops
-                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc cc) L.stop).coinModel x c).simulatorE t (t * 3 ^ t))
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).out CoinOpen.shaH Vs θ x c))) +
-          (8 * ((CoinLayer.session Loop.loopNr T).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc cc)
+          (8 * ((CoinLayer.session Loop.loopNr T).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins)
               L.stop).nLeaves x * δ₁.toReal +
-            8 * t * ((CoinLayer.session Loop.loopNr T).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc cc)
+            8 * t * ((CoinLayer.session Loop.loopNr T).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins)
               L.stop).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
           4 * t * 3 ^ t *
             (Fork CoinOpen.shaH ((((CoinLayer.session Loop.loopNr T).withStops
-                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc cc) L.stop).swP vs).prover w) Vs θ x).Pr
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).swP vs).prover w) Vs θ x).Pr
               CoinOpen.shaH) := by
   subst hL
   exact Flock.zk_server_lean_coinLayer rel Loop.loopNr T vs t ht hT1 hδ₁ hS hV hD hc hsc hT _ wk x w hR
-    (LeanRelease.loop_last Loop.loopNr T L₀ x) pc cc hRd (LeanRelease.loop_helloIs Loop.loopNr T L₀ x)
+    (LeanRelease.loop_last Loop.loopNr T L₀ x) pc fc Loop.readCoins ⟨hPr, LeanRelease.loop_coinsRead Loop.loopNr T L₀ x⟩
+    (LeanRelease.loop_helloIs Loop.loopNr T L₀ x)
     (LeanRelease.loop_helloParses Loop.loopNr T L₀ x) (LeanRelease.loop_reqsFollow T L₀ x) hLk hF hE hEf Vs θ hk Ev
 
 end Claims.ZKServer

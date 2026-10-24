@@ -1,0 +1,10 @@
+#!/bin/sh
+# vy-verifier-gate: the one way into the auditor host's verifier (benchmarks/live_verifier/host.py, INF-179). research's ssh keys
+# there are forced to this command (`vy-verifier-gate LANE`, or no LANE for a key that reads only; vy-verifier-setup), which takes
+# the request from SSH_ORIGINAL_COMMAND and runs the gate as root through sudoers' 60-vy-verifier, the key's lane the run's `by`;
+# vy-admin runs `sudo vy-verifier-gate VERB ...` itself. The gate is the pinned tree's.
+set -eu
+if [ "$(id -u)" != 0 ]; then
+  exec sudo -n /usr/local/sbin/vy-verifier-gate --ssh "${SSH_ORIGINAL_COMMAND:-}" --key "${1:--}"
+fi
+exec /usr/bin/python3 -I /opt/vy-verifier/current/benchmarks/live_verifier/host.py gate "$@"

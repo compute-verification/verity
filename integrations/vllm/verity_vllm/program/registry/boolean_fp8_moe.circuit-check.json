@@ -21,6 +21,12 @@
   "MoeExpertFp8BlockCoordinate_v4{K=64,G=32,KB=32,SWAP=False,DOT=HopperE4m3MmaV2Dot32_v2}": {
    "and": 31715
   },
+  "MoeExpertFp8CoordinateChunk_v2{E=3,K=64,G=32,KB=32,SWAP=False,DOT=HopperE4m3MmaV2Dot32_v2,FIRST=False,LAST=False}": {
+   "and": 51626
+  },
+  "MoeExpertFp8CoordinateChunk_v2{E=3,K=64,G=64,KB=32,SWAP=True,DOT=HopperE4m3MmaV2Dot32_v2,FIRST=False,LAST=True}": {
+   "and": 50636
+  },
   "SiluMulFp8BlockQuantResult_v2": {
    "and": 13334
   }

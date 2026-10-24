@@ -17,7 +17,8 @@ Nothing about its form is a hypothesis beyond `Declared.Wf` (call sites, rounds 
 one round; each coin input read in its own round; one unit's words of one kind).
 
 The live statements (`CircuitWork`, `CircuitCredit`) need every round that holds a credited tile live and the service
-committing by the IR's cuts (`Scope`'s `Declared.Live` and `LayerCommitted`), and describe the designed protocol.
+committing by the IR's cuts, a computed value only its own unit reads (a receipt) by the draw (`Scope`'s
+`Declared.Live` and `LayerCommitted`), and describe the designed protocol.
 PoUW's code today has one salt a window and derives every noise in the scheme, so every window it runs is seeded, and
 its credit is the seeded statements' (`CircuitWorkSeeded`, `CircuitCreditSeeded`), over the same circuit, at decision
 122's grinding premium per seed group. The certificate records which (`Certificate.coins`). Nothing yet builds a
@@ -34,7 +35,8 @@ Decision 113 splits the credit in two, and `CircuitCredit` is their composition:
   its fold clause at the run's modes (`tileMode`), with the templates' proved luck (`Scheme.LuckProved`), the service's commit order (`LayerCommitted`, in `Scope`), the
   service's draw and sampled (I8)'s pieces as #2466 states them on the window's proofs (`DrawnLayer.Of`, binding at
   `δ_bind`, joint proof soundness, `Pins`). The proofs' layer is the IR's (`Declared.layer`): its slots, writers, cuts, coins and draw are
-  defined from the circuit, so under `LayerCommitted` it is bound at the IR's cuts, reads each round's coin and has
+  defined from the circuit, so under `LayerCommitted` it is bound at the IR's cuts (a value only its own unit reads,
+  committed later, at its commit coin, which adds no late edge out of its unit), reads each round's coin and has
   every late edge the IR has (`StageCuts`, `StageCoins`, `StageSlots`, `StageComplete`, proved of it), and only its
   run-dependent half (`ProofRun`) is a parameter. No machine model. Its crypto half is #2466's `DrawnRightOff`, one
   event of probability `δ_bind + δ_ks` off which every drawn tile is right (RT-I8's `compose_sampled` shape).
@@ -149,9 +151,10 @@ service's at share `1` per unit of each skipped tile's late cone (`tileCone`, fr
 rounds' coins (`jointGame`; a split-stage window's `serviceGame` is one, at `SplitStages.joint`), and its proofs the
 IR's layer (`Declared.layer`, at any run-dependent half `pr`), committed as the layer says (`LayerCommitted`; at
 `Declared.atIR` always), the share covers the words of every tile that isn't good at the run's modes
-(`DrawnLayer.Covers` at `jointMode R`, the tiles' words and `N_w`). The layer is then bound at the IR's cuts, reads
-each round's coin and has its slots and writers inside the IR (`StageCuts`, `StageCoins`, `StageSlots`), so a late
-edge of the layer is one of the IR's, and a tile that isn't good is in the cone of a tile the run didn't pay for,
+(`DrawnLayer.Covers` at `jointMode R`, the tiles' words and `N_w`). The layer is then bound at the IR's cuts (a
+computed value only its own unit reads at its later commit coin), reads each round's coin and has its slots and
+writers inside the IR (`StageCuts`, `StageCoins`, `StageSlots`), so a late edge of the layer is one of the IR's or
+stays in its unit, and a tile that isn't good is in the cone of a tile the run didn't pay for,
 which the share charges that cone (`DrawnLayer.covers_of_cone`). It reads no committed value and no rightness, so the
 run's modes may read every round's coin. Tiles of no words are charged too: their cones are the bound's `D₀`. -/
 def ServiceCovers : Prop :=
@@ -213,8 +216,9 @@ are committed (one coin a round, decision 122), then the service's draw of `K_d`
 tiles, one a proof unit (`drawOf`, a uniform `K_d`-subset), with the proofs' coins `Ξ`, each drawn tile proved with its
 noise's generation. Under:
 * the logical ranges (`Scope`: every round holding a credited tile live, `Declared.Live`, and the service's commit
-  order, `LayerCommitted`: each value the prover writes committed under a root before its IR cut's coin; on the live
-  path each round's values and run inputs under its root before its coin, which today's code doesn't meet);
+  order, `LayerCommitted`: each value the prover writes committed under a root before its IR cut's coin, or, a
+  computed value only its own unit reads (a receipt), before the draw; on the live path each round's values and run
+  inputs under its root before its coin, which today's code doesn't meet);
 * every tile at least `ρ` times its detected weight's share of the `N_p` (`shareCone`: its late cone when it carries
   words, decision 119; `ρ = 1/(F·r)` at the padding's `r = (N_p/N)·(w_max/w̄)` and `F` the most tiles a late cone
   holds, per kind, `kindF`: `1` for every kind served), every round's detected weight at most `w_max`, and every tile

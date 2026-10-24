@@ -16,8 +16,9 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
 `BindingOfECR` and `WholeLuckOfEntropy` (steps 1–6, 9, 11 and 12, each in its own file under
 `Proofs/Accounting/Compose/`), and `CreditOfWork` (step 7), `CircuitCredit` (step 8) and `CircuitCreditSeeded`
 (step 10) below; note:compute-accounting/20261018T1758Z-draft-compose-r6 gives the order. What the window's proofs'
-layer meets is proved: its static half is defined from the IR (`Declared.layer`), so `StageCuts` (under
-`LayerCommitted`, which `Declared.atIR` meets), `StageCoins` (under `Declared.Wf`), `StageSlots`, `WriterReads` and
+layer meets is proved: its static half is defined from the IR (`Declared.layer`), so `StageCuts` (at every value
+committed by its IR cut, which every one is at `Declared.atIR`), `StageCoins` (under `Declared.Wf`), `StageSlots`,
+`WriterReads` and
 `StageComplete` (under `Declared.Wf` and `units ≤ N_p`) are lemmas below, not premises, as are the draw cut of
 `Declared.atDraw`'s layer and `serviceGame`, `tileMode` as `jointGame`, `jointMode` at a split-stage window's joint
 run.
@@ -42,8 +43,10 @@ run.
    deficiency is the not-paid tiles' `tileCone` (the three modes, at `1` and `1`), so it is enough that a tile's layer
    cone is at most `N_w` times its `tileCone`: a layer edge `DrawnLayer.Late u v` at slot `k` has its position a value
    the prover writes and a gate of `u`'s unit (`layer_stageSlots`), and either one of `v`'s own gates (`u = v`) or an
-   operand of one, read by a gate `j` of `v`'s, whose round is `v`'s (`Declared.Wf`, `layer_stageCoins`) and before the
-   position's cut (`layer_stageCuts`, under `LayerCommitted`), so `Declared.Late` and a `Declared.UnitLate` edge; along
+   operand of one, read by a gate `j` of `v`'s, whose round is `v`'s (`Declared.Wf`, `layer_stageCoins`). Under
+   `LayerCommitted` the position is committed by its IR cut, so `j`'s round is before that cut (`layer_stageCuts`),
+   `Declared.Late` and a `Declared.UnitLate` edge, or it is a computed value only its own unit reads, so `j`'s unit,
+   `v`, is `u` (a value committed late adds no edge out of its unit); along
    `ReflTransGen` the layer's cone lies in `Declared.Reaches`, and a tile's words are `N_w` times its weight (`0` when
    `N_w = 0`: a tile's words are among the circuit's).
 6. `CircuitWork` (proved, `Compose/CircuitWork.lean`): the luck first. At each stage, each credited tile's
@@ -53,8 +56,9 @@ run.
    `Scheme.LuckProved`), and `GuessLuckAt` on `tileGame … .whole` gives `Pr[whole ∧ same] ≤ guess·Pr[whole]`; a tile of
    no credited kind is held to `1`; so `SplitStages.LuckAt (tileLuck …) (tileLuck0 …)`. `LuckAt` and the per-stage
    games read the stages' coins as `SplitStages`' uniform ones; `Scope`'s `Declared.Live` is read by no step: it is the
-   protocol fact under which those are the service's coins, as `SeedNamed` is in step 9. Under `LayerCommitted` every
-   value's layer cut is its IR cut (`layer_stageCuts`), so a run input is bound before its first reader's coin. Then
+   protocol fact under which those are the service's coins, as `SeedNamed` is in step 9. Under `LayerCommitted` an
+   input's layer cut is its IR cut (`layer_stageCuts`: an input has no second case), so a run input is bound before its
+   first reader's coin. Then
    `Accounting.SecurityProofs.TS.DrawnRightOff` at `S = 1` (its draw the layer's, `drawOf`) gives one event of
    probability at most `δ_bind + δ_ks` off which every accepted drawn tile is right at its committed slots, so `Of`
    gives the share game's pass (RT-I8's `compose_sampled` shape); `ServiceBudget` on `serviceGame` at `a`, `b` and
@@ -171,12 +175,12 @@ theorem layer_pos_mem (w : Fin 1) (t : Fin Np) (k : ℕ) :
     | none => exact List.mem_cons_self
     | some b => exact List.mem_iff_getElem?.mpr ⟨k, hk⟩
 
-theorem layer_stageCuts (hc : LayerCommitted Cd) : StageCuts Cd (Cd.layer hr hK pr) := fun ℓ hℓ => by
+theorem layer_stageCuts : StageCuts Cd (Cd.layer hr hK pr) := fun ℓ _ hc => by
   show min (max (Cd.cutOf ℓ) (Cd.commitRound ℓ)) Cd.rounds = min (Cd.cutOf ℓ) Cd.rounds
-  rw [Nat.max_eq_left (hc ℓ hℓ)]
+  rw [Nat.max_eq_left hc]
 
 /-- The circuit cut at the IR commits by the IR's cuts. -/
-theorem layerCommitted_atIR : LayerCommitted Cd.atIR := fun _ _ => Nat.zero_le _
+theorem layerCommitted_atIR : LayerCommitted Cd.atIR := fun _ _ => Or.inl (Nat.zero_le _)
 
 /-- The layer of the circuit committed at the draw cuts every position at the draw. -/
 theorem layer_atDraw_cut (ℓ : ℕ) : (((Cd.atDraw.layer hr hK pr).cut ℓ).2 : ℕ) = Cd.rounds :=

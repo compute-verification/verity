@@ -71,6 +71,157 @@ structure Commit where
 /-- `Σ_{i < n} f(i)`. -/
 def sumF (n : Nat) (f : Nat → F128) : F128 := (List.range n).foldl (fun acc i => acc + f i) 0
 
+/-! ### What compiled code runs (`@[csimp]`: proofs see the definitions above and in `Finish`) -/
+
+namespace Fast
+
+/-- `f` folded from `acc` over `i, i + 1, …, i + k − 1`, with no list. -/
+@[specialize] def foldRange {α : Type} (f : α → Nat → α) : Nat → Nat → α → α
+  | _, 0, acc => acc
+  | i, k + 1, acc => foldRange f (i + 1) k (f acc i)
+
+theorem foldRange_eq {α : Type} (f : α → Nat → α) :
+    ∀ (i k : Nat) (acc : α), foldRange f i k acc = (List.range' i k).foldl f acc
+  | _, 0, _ => rfl
+  | i, k + 1, acc => by rw [foldRange, foldRange_eq f (i + 1) k, List.range'_succ, List.foldl_cons]
+
+theorem foldRange_succ {α : Type} (f : α → Nat → α) (n : Nat) (acc : α) :
+    foldRange f 0 (n + 1) acc = f (foldRange f 0 n acc) n := by
+  rw [foldRange_eq, foldRange_eq, ← List.range_eq_range', ← List.range_eq_range', List.range_succ, List.foldl_append]
+  rfl
+
+/-- `sumF` as compiled code computes it: the same additions in the same order, with no list. Each term comes first
+(`F128.add_comm`) so that the sum reuses the accumulator's cell: with the term second, compiled code takes a table entry
+`f i = t[i]!` as its own and counts a reference on it, which parallel tasks reading one table contend on. -/
+@[inline] def sumFFast (n : Nat) (f : Nat → F128) : F128 := foldRange (fun acc i => f i + acc) 0 n 0
+
+end Fast
+
+open Fast in
+@[csimp] theorem sumF_eq_sumFFast : @sumF = @sumFFast :=
+  funext fun n => funext fun f => by
+    rw [sumF, sumFFast, show (fun acc i => f i + acc) = fun acc i => acc + f i from
+      funext fun _ => funext fun _ => F128.add_comm _ _, foldRange_eq, List.range_eq_range']
+
+namespace Fast
+
+theorem sumF_zero (f : Nat → F128) : sumF 0 f = 0 := rfl
+
+theorem sumF_succ (n : Nat) (f : Nat → F128) : sumF (n + 1) f = sumF n f + f n := by
+  rw [sumF, sumF, List.range_succ, List.foldl_append]
+  rfl
+
+theorem sumF_congr {n : Nat} {f f' : Nat → F128} (h : ∀ i, i < n → f i = f' i) : sumF n f = sumF n f' := by
+  induction n with
+  | zero => rfl
+  | succ n ih => rw [sumF_succ, sumF_succ, ih fun i hi => h i (by omega), h n (by omega)]
+
+theorem sumF_eq_zero {n : Nat} {f : Nat → F128} (h : ∀ i, i < n → f i = 0) : sumF n f = 0 := by
+  induction n with
+  | zero => rfl
+  | succ n ih => rw [sumF_succ, ih fun i hi => h i (by omega), h n (by omega), F128.add_zero]
+
+/-- `Σ_{i < m + n} f(i) = Σ_{i < m} f(i) + Σ_{i < n} f(m + i)`. -/
+theorem sumF_add (m n : Nat) (f : Nat → F128) : sumF (m + n) f = sumF m f + sumF n fun i => f (m + i) := by
+  induction n with
+  | zero => rw [Nat.add_zero, sumF_zero, F128.add_zero]
+  | succ n ih => rw [← Nat.add_assoc, sumF_succ, sumF_succ, ih, F128.add_assoc]
+
+/-- `Σ_{i < b·a} f(i) = Σ_{j < a} Σ_{i < b} f(b·j + i)`. -/
+theorem sumF_blocks (a b : Nat) (f : Nat → F128) :
+    sumF (b * a) f = sumF a fun j => sumF b fun i => f (b * j + i) := by
+  induction a with
+  | zero => rfl
+  | succ a ih => rw [Nat.mul_succ, sumF_add, ih, sumF_succ]
+
+/-- Changing one term `f(k)`, `k < n`, by `d` changes the sum by `d` (`F128.add_comm`: the term's place doesn't matter). -/
+theorem sumF_update {n k : Nat} {f f' : Nat → F128} (d : F128) (hk : k < n) (hd : f' k = f k + d)
+    (h : ∀ i, i ≠ k → f' i = f i) : sumF n f' = sumF n f + d := by
+  induction n with
+  | zero => omega
+  | succ n ih =>
+    rw [sumF_succ, sumF_succ]
+    by_cases hkn : k = n
+    · subst hkn
+      rw [sumF_congr fun i hi => h i (by omega), hd, F128.add_assoc]
+    · rw [ih (by omega), h n (Ne.symm hkn), F128.add_assoc, F128.add_comm d, ← F128.add_assoc]
+
+theorem getElem!_eq {α : Type} [Inhabited α] (xs : Array α) {i : Nat} (h : i < xs.size) : xs[i]! = xs[i] := by
+  simp [h]
+
+theorem getElem!_range_map {α : Type} [Inhabited α] (f : Nat → α) {n i : Nat} (h : i < n) :
+    ((Array.range n).map f)[i]! = f i := by
+  rw [getElem!_eq _ (by simpa using h)]
+  simp
+
+theorem mul_sumF (g : F128) (n : Nat) (f : Nat → F128) : g * sumF n f = sumF n fun i => g * f i := by
+  induction n with
+  | zero => exact F128.mul_zero g
+  | succ n ih => rw [sumF_succ, sumF_succ, F128.mul_add, ih]
+
+theorem getElem!_map_mul (g : F128) (xs : Array F128) (i : Nat) : (xs.map (g * ·))[i]! = g * xs[i]! := by
+  by_cases h : i < xs.size
+  · rw [getElem!_eq _ (by simpa using h), getElem!_eq xs h, Array.getElem_map]
+  · rw [getElem!_neg _ i (by simpa using h), getElem!_neg xs i h]
+    exact (F128.mul_zero g).symm
+
+/-- **Byte `j`'s buckets**: entry `b < 256` is `Σ_{y < |e|, byte_j(g[y]) = b} e[y]` (`byteBuckets_go`). The term comes
+first for the reason `sumFFast`'s does: sixteen tasks read `e`. -/
+def byteBuckets (g e : Array F128) (j : Nat) : Array F128 :=
+  foldRange (fun B y => B.modify ((g[y]!).byte j) (e[y]! + ·)) 0 e.size (Array.replicate 256 0)
+
+/-- After the first `n` words, the buckets' sum over the bytes with bit `i` set is `Σ_{y < n} bit_{8j+i}(g[y])·e[y]`. -/
+theorem byteBuckets_go (g e : Array F128) (j : Nat) {i : Nat} (hj : j < 16) (hi : i < 8) : ∀ n : Nat,
+    (foldRange (fun B y => B.modify ((g[y]!).byte j) (e[y]! + ·)) 0 n (Array.replicate 256 0)).size = 256 ∧
+    (sumF 256 fun b => if b.testBit i then
+      (foldRange (fun B y => B.modify ((g[y]!).byte j) (e[y]! + ·)) 0 n (Array.replicate 256 0))[b]! else 0) =
+      sumF n fun y => if (g[y]!).bit (8 * j + i) then e[y]! else 0
+  | 0 => by
+    refine ⟨by simp [foldRange], ?_⟩
+    rw [sumF_zero]
+    apply sumF_eq_zero
+    intro b hb
+    simp only [foldRange]
+    split
+    · rw [getElem!_eq _ (by simpa using hb)]; simp
+    · rfl
+  | n + 1 => by
+    obtain ⟨hs, ih⟩ := byteBuckets_go g e j hj hi n
+    rw [foldRange_succ]
+    generalize foldRange (fun B y => B.modify ((g[y]!).byte j) (e[y]! + ·)) 0 n (Array.replicate 256 0) = B at hs ih ⊢
+    refine ⟨by rw [Array.size_modify, hs], ?_⟩
+    have hk := (g[n]!).byte_lt j
+    rw [sumF_succ n, ← ih, ← F128.testBit_byte _ hj hi]
+    apply sumF_update _ hk
+    · rw [getElem!_eq (B.modify _ _) (by rw [Array.size_modify, hs]; exact hk), getElem!_eq B (by rw [hs]; exact hk),
+        Array.getElem_modify_self]
+      split
+      · exact F128.add_comm _ _
+      · rw [F128.add_zero]
+    · intro b hb
+      by_cases hb256 : b < 256
+      · rw [getElem!_eq (B.modify _ _) (by rw [Array.size_modify, hs]; exact hb256),
+          getElem!_eq B (by rw [hs]; exact hb256), Array.getElem_modify_of_ne (Ne.symm hb)]
+      · simp [hs, hb256]
+
+/-- **A claim's byte tables** of `er`: entry `256·j + b` (`j < 16`, `b < 256`) is `Σ_{i < 8, bit_i(b)} er[8j + i]`. -/
+def byteTable (er : Array F128) : Array F128 :=
+  Array.ofFn (n := 4096) fun k => sumF 8 fun i => if (k.val % 256).testBit i then er[8 * (k.val / 256) + i]! else 0
+
+theorem byteTable_sum (er : Array F128) (v : F128) :
+    (sumF 128 fun u => if v.bit u then er[u]! else 0) = sumF 16 fun j => (byteTable er)[256 * j + v.byte j]! := by
+  rw [show 128 = 8 * 16 from rfl, sumF_blocks]
+  apply sumF_congr
+  intro j hj
+  have hb := v.byte_lt j
+  rw [byteTable, getElem!_eq _ (by rw [Array.size_ofFn]; omega), Array.getElem_ofFn]
+  simp only [show (256 * j + v.byte j) % 256 = v.byte j by omega, show (256 * j + v.byte j) / 256 = j by omega]
+  apply sumF_congr
+  intro i hi
+  rw [F128.testBit_byte v hj hi]
+
+end Fast
+
 /-- `X̂_c(ω_q)` for `c < 2^cols`: the products of `Ŵ_i(ω_q)` over the bits of `c`. -/
 def xhats (sv : Array F128) (q cols : Nat) : Array F128 :=
   let wh := whats sv q cols
@@ -334,17 +485,15 @@ def ligeritoPZk (io : Asks M) (commit : Level → Array F128 → (Nat → ByteAr
       let last := i + 1 == R
       let mut f : Array F256 := #[]
       for j in [0:4] do
-        if j + 1 == 4 && last then
-          -- upstream's final level sends the plain fold's message here, the unsplit table's round polynomial
-          let _ ← challengeP io false
-          f := (← get).tab
-        else if j + 1 == 4 then
+        if j + 1 == 4 then
           let r ← liftT (sampleKP io)
           modify fun st => { st with tab := foldK r st.tab, w := foldK r st.w }
-          f := (← get).tab
+          let d ← get
+          f := d.tab
           modify fun st => { st with tab := embedF (splitK st.tab), w := liftU st.w }
           let st ← get
-          sendMsg (roundPoly st.tab st.w)
+          -- nothing reads the last level's split: it sends upstream's plain fold message, of the unsplit table
+          sendMsg (if last then roundPoly d.tab d.w else roundPoly st.tab st.w)
         else
           let _ ← challengeP io false
       let ext := splitDim - 4

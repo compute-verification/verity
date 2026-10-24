@@ -1,0 +1,8 @@
+[Unit]
+Description=stop any research run that is not one of this auditor host's commands (pods/nebius/slot_only.py --auditor, /etc/vy/auditor)
+ConditionPathExists=/etc/vy/auditor
+
+[Service]
+Type=oneshot
+TimeoutStartSec=2min
+ExecStart=/usr/bin/python3 /usr/local/lib/vy-monitoring/slot_only.py --auditor --marker /etc/vy/auditor --log /workspace/monitoring/auditor-only.jsonl

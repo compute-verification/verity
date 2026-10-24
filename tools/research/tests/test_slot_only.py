@@ -158,3 +158,67 @@ def test_renice_moves_a_direct_runs_processes_to_nice_19_once_and_leaves_slot_ru
     rec = json.loads(log.read_text())
     assert rec["run"] == "r-off" and rec["reniced"] == [19, 20, 21] and rec["nice"] == 19
     assert S.main(argv) == 0 and len(log.read_text().splitlines()) == 1, "a run already at 19 isn't logged again"
+
+
+def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(tmp_path, monkeypatch):
+    """vy-challenger-1 (INF-154): a run launched from a tree older than the launcher's auditor refusal is stopped, unless its command
+    is exactly a line of /etc/vy/auditor; slot.py's runs get no pass there."""
+    runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "auditor", tmp_path / "auditor-only.jsonl"
+    ok = _run(runs, "r-ok", "running", ["bash", "benchmarks/live_challenger/run.sh"], pgid=10, runner=9)
+    slot = _run(runs, "r-slot", "running", ["python3", "tools/verity/check/slot.py", "--", "true"], pgid=20, runner=19)
+    extra = _run(runs, "r-extra", "running", ["bash", "benchmarks/live_challenger/run.sh", "x"], pgid=30, runner=29)
+    for pid, run in ((10, ok), (20, slot), (30, extra)):
+        _proc(proc, pid, pid, run)
+    marker.write_text("# comment\n\nbash benchmarks/live_challenger/run.sh\n")
+    assert S.auditor_commands(marker) == [["bash", "benchmarks/live_challenger/run.sh"]]
+    assert [o["run"] for o in S.offenders(runs, lambda c: S.auditor_allows(c, marker))] == ["r-extra", "r-slot"]
+    sent = []
+    monkeypatch.setattr(S.os, "kill", lambda pid, sig: sent.append(pid))
+    monkeypatch.setattr(S, "stop", lambda o, dry_run=False, why="", _stop=S.stop: _stop(o, proc=proc, kill=S.os.kill, dry_run=dry_run,
+                                                                                       why=why))
+    assert S.main(["--runs", str(runs), "--marker", str(marker), "--log", str(log), "--auditor"]) == 0
+    assert sent == [30, 20]
+    assert {json.loads(ln)["why"] for ln in log.read_text().splitlines()} == {f"not a command of the auditor host's {marker}"}
+    marker.write_text("")
+    assert S.auditor_commands(marker) == [] and not S.auditor_allows(["bash", "benchmarks/live_challenger/run.sh"], marker)
+    assert S.auditor_commands(tmp_path / "absent") == []
+
+
+def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_no_research_run():
+    """The deployed marker lists no command (the challenger runs only through vy-challenger-gate, the verifier through
+    vy-verifier-gate) and goes, with the timer that enforces it, to the two auditor hosts only, each host's gate and units to it
+    alone; the nodes' shared peers file and the cluster's description name neither host."""
+    import tomllib
+    from pathlib import Path
+
+    hosts = ["vy-challenger-1", "vy-auditor-1"]
+    nebius = Path(S.__file__).resolve().parent
+    assert (nebius / "auditor").read_text().startswith("#") and S.auditor_commands(nebius / "auditor") == []
+    rows = tomllib.loads((nebius / "deploy.toml").read_text())["file"]
+    on = {e["path"]: e["nodes"] for e in rows if e.get("src", "").endswith(("/auditor", "/vy-auditor-only.service",
+                                                                            "/vy-auditor-only.timer", "/11-vy-admin.conf"))}
+    assert on == {p: hosts for p in ("/etc/vy/auditor", "/etc/systemd/system/vy-auditor-only.service",
+                                     "/etc/systemd/system/vy-auditor-only.timer", "/etc/ssh/sshd_config.d/11-vy-admin.conf")}
+    assert {e["path"]: e["nodes"] for e in rows if e.get("src", "").endswith("/peers-challenger")} == {
+        "/etc/vy/peers": ["vy-challenger-1"]}
+    assert "--auditor --marker /etc/vy/auditor" in (nebius / "vy-auditor-only.service").read_text()
+    gate = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/challenger/" in e.get("src", "")
+            and not e["src"].endswith("/11-vy-admin.conf")}
+    assert gate == {p: ["vy-challenger-1"] for p in ("/usr/local/sbin/vy-challenger-gate", "/usr/local/sbin/vy-challenger-setup",
+                                                     "/usr/local/sbin/vy-challenger-pin", "/etc/systemd/system/vy-challenger@.service",
+                                                     "/etc/systemd/system/vy-certifier@.service")}
+    verifier = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/verifier/" in e.get("src", "")}
+    assert verifier == {p: ["vy-auditor-1"] for p in (
+        "/usr/local/sbin/vy-verifier-gate", "/usr/local/sbin/vy-verifier-setup", "/usr/local/sbin/vy-verifier-pin",
+        "/usr/local/sbin/vy-verifier-tunnel", "/etc/systemd/system/vy-verifier@.service",
+        "/etc/systemd/system/vy-verifier-replay@.service", "/etc/systemd/system/vy-verifier-publish@.service",
+        "/etc/ssh/sshd_config.d/12-vy-verifier.conf", "/etc/vy/verifier.json")}
+    for unit in ("vy-challenger@.service", "vy-certifier@.service"):
+        assert "User=auditor" in (nebius / "challenger" / unit).read_text()
+    for unit in ("vy-verifier@.service", "vy-verifier-replay@.service", "vy-verifier-publish@.service"):
+        assert "User=auditor" in (nebius / "verifier" / unit).read_text()
+    for host in hosts:
+        assert not [e["path"] for e in rows if e.get("src", "").endswith("/peers") and host in e["nodes"]]
+    for name in ("vy-challenger", "vy-auditor"):
+        assert name not in (nebius / "peers").read_text()
+        assert name not in (nebius.parents[5] / "infra/cluster/descriptions/nebius.toml").read_text()

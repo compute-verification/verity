@@ -42,7 +42,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, codec, receipts  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts  # noqa: E402
 from verity.ml.commitments import merkle_depth  # noqa: E402
 from verity.ml.randomness import derive  # noqa: E402
 
@@ -239,12 +239,12 @@ def main(argv: list[str] | None = None) -> int:
     register = {"request": lv.register_request(NODE, N, payload_root, cdc, receipts.DEFAULT, None, nonce),
                 "answer": {"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}}
     params = audit.Params(N, DEADLINE_NS, W, S, window_ns=T, codec=cdc, receipt=reg.receipt, rows=reg.rows)
-    tape = lv.Tape(params.coins, rng.randbytes)
     clock = [0]
-    s = registry.session(params, reg, None, not_before_ns=0, clock=lambda: clock[0], entropy=tape, index=0)
+    s = registry.session(params, reg, None, not_before_ns=0, clock=lambda: clock[0], entropy=rng.randbytes, index=0)
+    committed = [c[:coins.COIN_BYTES] for c, _ in s.coins.challenger._coins[:2 * W]]
     session = {"op": "session", "node": NODE.hex(), "params": lv.params_json(params),
-               "coins": [c.hex() for c in tape.coins], "append_coins": [], "not_before_ns": 0, "index": 0}
-    draws = _draws(tape.coins[W], reg.digest, 0, S, [N] * P)
+               "coins": [c.hex() for c in committed], "append_coins": [], "not_before_ns": 0, "index": 0}
+    draws = _draws(committed[W], reg.digest, 0, S, [N] * P)
     blocks_drawn = sorted({p for _, p in draws})
 
     t0 = time.perf_counter_ns()

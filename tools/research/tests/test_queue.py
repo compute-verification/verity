@@ -637,6 +637,20 @@ def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
     assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for Daniel's decision 10")
 
 
+def test_an_ejection_naming_a_head_refuses_once_its_owner_pushed_another(world):
+    """CI-134: an eject waiting for drive's tick withdrew the mark of a head pushed meanwhile (21 Oct: #3111 at its fix,
+    0422424ec7).  With `--sha` it acts only while that head is the PR's, and a newer head keeps its mark."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    q = world.queue()
+    old = next(p.head for p in world.gh.open_prs() if p.number == 1)
+    world.gh.put(1, world.change({"a.txt": "fixed\n"}))
+    new = next(p.head for p in world.gh.open_prs() if p.number == 1)
+    with pytest.raises(QueueError, match=f"#1 is at {new[:12]} now, not {old[:12]}"):
+        q.eject(1, "breaks a suite", "ci", sha=old)
+    assert "1" not in q.load_state()["ejected"] and not world.store.labels(label_target(1, new), key=vocab.READY)
+    assert q.eject(1, "breaks a suite", "ci", sha=new[:12]).head == new and q.load_state()["ejected"]["1"]["head"] == new
+
+
 def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_so_when_no_one_was_told(world, monkeypatch, capsys):
     """13 Oct: `research queue eject 1847` wrote its notice only as a handoff note on the ejecting VM, which syncs no notes, and
     logged that it told circuits, who heard through a relay."""
@@ -669,6 +683,27 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
     err = capsys.readouterr().err
     assert "#1 is ejected, but posting its notice as @ci failed, so no one was told" in err
     assert "research msg send --as HANDLE --thread" in err and "--to @ci @lane-1" in err
+
+
+def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, capsys):
+    """23 Oct: GitHub's rulesets let only drive's App move `main` and `next`, and verity-agents[bot] force-pushed `next` at 07:07Z
+    from a VM's `research queue eject`, which synced. Off drive an eject only withdraws the mark; sync and land refuse."""
+    import research.drive as D
+    import research.queue as Qm
+
+    monkeypatch.delenv("RESEARCH_DRIVE")
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    monkeypatch.setattr(D, "merge_thread_post", lambda *a, **k: True)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    base = ["--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
+            "--store", str(world.tmp / "queue-store")]
+    for verb in ("sync", "land"):
+        assert research_main(["queue", verb, *base]) == 1
+        assert f"/data/infra/drive.sh queue {verb}" in capsys.readouterr().err
+    refs = lambda: _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
+    before = refs()
+    research_main(["queue", "eject", "1", "--reason", "x", "--by", "ci", *base])
+    assert refs() == before and "drive's next tick rebuilds `next` without it" in capsys.readouterr().out
 
 
 def test_a_ready_mark_written_after_an_ejection_re_admits_the_same_head(world):
@@ -861,6 +896,8 @@ PREFLIGHT_FILES = {
     "tests/test_doc_paths.py": _invariant("BROKEN_DOC_PATH", 1),
     "tests/test_repository.py": _invariant("REPORT_GENRE_NAME", 1),
     "tools/research/tests/test_pythonpath.py": _invariant("BROKEN_REAL_ROOTS", 3),
+    "tests/test_no_wall_clock.py": _invariant("WALL_CLOCK", 1),
+    "integrations/vllm/tests/lint/test_p03_one_evaluator.py": _invariant("VLLM_LINT", 4),
     "tools/verity/check/suites.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "suites.py").read_text(),
     "tools/verity/check/pins.py": ("import sys\nfrom pathlib import Path\nif Path('STALE.txt').exists():\n"
                                    "    print('pkg/pins.json is stale (pkg/Main.lean): run `python3 regen.py`', file=sys.stderr)\n"
@@ -952,6 +989,13 @@ PREFLIGHT_REFUSALS = {
                          "`pytest --collect-only` in pkg fails on the merged tree: ERROR tests/test_rows.py - KeyError: 'r7'"),
     "stale lock": ({"LOCK_STALE.txt": ""}, "`uv sync --locked` on the merged tree: error: The lockfile at `uv.lock` needs to be "
                    "updated"),
+    # 22 Oct's #3151 (time.perf_counter in a test fixture) and #3130 (numpy's rng in vllm, P3) each cost a train its check
+    "wall-clock lint": ({"pkg/tests/test_slow.py": "def test_slow():\n    pass\n", "WALL_CLOCK": ""},
+                        "the invariant tests in tests/test_no_wall_clock.py fail on the merged tree: FAILED "
+                        "tests/test_no_wall_clock.py::test_wall_clock_absent"),
+    "vllm lint": ({"integrations/vllm/verity_vllm/kernels.py": "", "VLLM_LINT": ""},
+                  "the invariant tests in integrations/vllm/tests/lint fail on the merged tree: FAILED "
+                  "tests/lint/test_p03_one_evaluator.py::test_vllm_lint_absent"),
 }
 
 
@@ -968,6 +1012,17 @@ def test_the_preflight_refuses_a_head_whose_merge_onto_next_breaks_an_invariant_
     assert says in err, err
     assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [next(ln for ln in err.splitlines() if says in ln)]
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
+
+
+def test_the_preflight_runs_a_lint_only_on_a_change_that_reaches_what_it_judges(world, capsys):
+    """`PREFLIGHT_LINTS` add up to a minute, so a change outside their prefixes doesn't run them: a head breaking the vllm lint's
+    stand-in without touching integrations/vllm is marked, and the train's check runs the lint."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world)
+    world.gh.put(2, h2 := world.change({"pkg/notes.txt": "x\n", "VLLM_LINT": ""}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
 def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_and_names_it(world, capsys):
