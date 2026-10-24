@@ -68,7 +68,10 @@ python tools/verity/lean/check.py PKG  once, before pushing
   waits for another run's hold on a shared tree, and audits without the kernel replay. Where the slot file lists no `build`
   pool, or with `--dev-cache` (a slot tree whose dependencies are fetched cold), it takes the `--dev-cache` path instead:
   `check.py --dev-cache --build --no-replay` on the run's clone, its build restored from the published cache (Security:
-  about 40 minutes); it prints which path it took. Don't wrap it in `slot.py`: the pool's runner takes the check slot. The
+  about 40 minutes); it prints which path it took. In cpu-1's research pool the pool's runner takes the check slot, so don't wrap it in
+  `slot.py` there. On vy-nebius-1 a bare run is refused: wrap it in n1's Lean-record pool, `env
+  CHECK_SLOTS=/workspace/research/locks/leanrec/slots python3 tools/verity/check/slot.py --by LANE -- python3
+  tools/verity/lean/lean_changed.py --records PKG --update` (4 slots; the rest wait in slot.py's line). The
   record is in `lean-audit/audit-*/` and, when it changed, `lean-audit/record/` (with `review.txt`); commit it. It then checks every package whose
   guarantees read PKG's build (`lean-audit/requirer-<path>/`); when one fails, run `--records --update` on it too. Its
   result is `lean-fast/v1`, which no merge check accepts.
