@@ -35,7 +35,7 @@ theorem decodeWithK_ok (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Sess
       List.Forall₂ (RootField l) spec.tables.toList sess.rootB.toList ∧
       (∃ ps, Record.arr l "points" = .ok ps ∧ List.Forall₂ PointField ps.toList sess.points.toList) ∧
       List.Forall₂ DecStreamK recs.toList sess.streams.toList := by
-  unfold Record.decodeWithK at h
+  unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h
   split at h
   rotate_left
