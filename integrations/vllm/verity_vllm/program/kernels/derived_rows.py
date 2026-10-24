@@ -5,14 +5,14 @@ serving semantics that the commit store does not materialise (lane VU-ACQUIRE, G
 may select values that live *inside* the kernel-aligned leaves the adapter commits.  Replay can only serve
 such a plan if the interior value can be produced fast and bit-exactly from committed neighbours.  This
 module provides that production path for four derived classes, as numpy twins of the registered gate
-semantics (`verity_vllm.program.registry.b1` / `prims`) in the `rmsnorm_fused_sweep` pattern:
+semantics (`verity_vllm.program.registry.b1` / `prims`) in the `rmsnorm_fused` pattern:
 
   * ``rmsnorm_triton_rows``   — the batch-invariant Triton `_rms_norm_kernel` reduction tree; emits the
     per-row scalars ``(sum, mean_eps, rms, inv)`` — `inv` is the gate
     ``F32Mul(DivFullScaleA(1, rms), DivFullRcp(rms))`` of `RMSNormTriton_v1` (b1_authored.py line ~81).
   * ``rmsnorm_fused_v2_rows`` — the generic CUDA `fused_add_rms_norm_kernel` under batch-invariance
     (`RMSNormFusedCuda_v2`); emits ``(var, s)`` — `s` is the `RsqrtApprox` gate of the epilogue.
-    (Thin wrapper over the committed twin in `rmsnorm_fused_sweep`.)
+    (Thin wrapper over the committed twin in `rmsnorm_fused`.)
   * ``silu_mul_rows``         — `SiluMul_v1`; emits the per-element bf16 silu intermediate
     ``mid = bf16_rn(silu_f32(gate))`` (the value between the gate_up GEMM row and the act_mul row; interior
     to the `SiluMulBf16_v1` primitive, materialised through the registered `_silu_f32_bits` semantics as a
@@ -754,9 +754,9 @@ def rmsnorm_triton_rows(x: np.ndarray, w: np.ndarray, eps: float):
 def rmsnorm_fused_v2_rows(x: np.ndarray, res: np.ndarray, w: np.ndarray, eps: float):
     """`RMSNormFusedCuda_v2{N, EPS}` over rows (x, res, w: (R, N) bf16 words).  Returns dict with bf16
     ``normed``/``resid`` and the derived f32 words ``var`` (cub BlockReduce output) and ``s``
-    (`RsqrtApprox(var / N + eps)`).  Delegates to `rmsnorm_fused_sweep.fused_rows` (the twin that
+    (`RsqrtApprox(var / N + eps)`).  Delegates to `rmsnorm_fused.fused_rows` (the twin that
     reproduced 2,340/2,340 fused-norm rows of the B0 store) with the v2 variance tree."""
-    from verity_vllm.program.kernels.rmsnorm_fused_sweep import fused_rows, variance_v2
+    from verity_vllm.program.kernels.rmsnorm_fused import fused_rows, variance_v2
     R, N = np.asarray(x).shape
     w2 = np.ascontiguousarray(np.broadcast_to(np.asarray(w, dtype=np.uint16), (R, N)))
     out, rp, var, s = fused_rows(np.ascontiguousarray(x, dtype=np.uint16),

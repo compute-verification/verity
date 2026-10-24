@@ -28,6 +28,7 @@ Slots for W1/W3/W4: ``gemm``, ``rmsnorm``, ``rope``, ``attention``, ``silu_mul``
 
 from __future__ import annotations
 
+import sys
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -1271,3 +1272,10 @@ def ensure_adjacent_pair(
         if x not in sample:
             sample.append(x)
     return sample, [AdjacentPair(ref, cid, name)]
+
+
+# W4's GEMM and W11's FlashAttention-2 and RMSNorm models fill their slots (`register_with_w2`)
+from verity_vllm.program.kernels import fa2_relation, gemm_relation, rms_relation  # noqa: E402
+
+for _model in (gemm_relation, fa2_relation, rms_relation):
+    _model.register_with_w2(sys.modules[__name__])

@@ -37,7 +37,7 @@ from verity_vllm.config import option
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.query.compare import compare, summarize
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.program_view import from_instances, iter_instance_rows
 from verity_vllm.query.compose import compose_global, merge_ranks
 from verity_vllm.query.required import QUERIES, QUERY_OF_RECORD, Q_WORD_ID, request_manifest
 from verity_vllm.query import cross_call
@@ -126,7 +126,8 @@ def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None
 def cross_call_check(program_dir: str, *, strict: bool = True, log=None) -> dict[str, Any]:
     """Cross-Call recomputes (`cross_call.check_program`) over the Build's instance sequence; `strict` raises
     `cross_call.RecomputeViolation` naming every one.  The manifest is not touched."""
-    return cross_call.check_program(os.path.join(program_dir, "instances.json.gz"), strict=strict, log=log)
+    path = os.path.join(program_dir, "instances.json.gz")
+    return cross_call.check_program(lambda: iter_instance_rows(path), strict=strict, log=log)
 
 
 def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, rank: int = 0, ranks: int = 1,

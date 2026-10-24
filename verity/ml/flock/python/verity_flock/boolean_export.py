@@ -1364,7 +1364,7 @@ class _Encoded:
         self.ix: dict[str, dict] = {}
 
     def add(self, fn) -> str:
-        from verity_vllm.pipeline.program_graph import _encoded
+        from verity_vllm.program.encoding import _encoded
 
         top, defs = _encoded(fn)
         self.ix.update(defs)
@@ -1455,7 +1455,7 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
     """The Call's cut under the no-recompute partition: its record id (``commitment``), or per T (``commitment_by_T``) for a group
     whose T varies, at the program graph's partition points (every T up to a few hundred, else the key-block boundaries), each
     checked against the program graph's own ``q_word_v1`` summary where it has one."""
-    from verity_vllm.pipeline.program_graph import _word_values
+    from verity_vllm.program.encoding import _word_values
     from verity_vllm.query.word import specialization
 
     if g["template"].startswith(("Const32", "Const64")):

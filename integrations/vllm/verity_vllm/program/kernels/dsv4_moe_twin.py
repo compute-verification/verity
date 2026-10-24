@@ -14,7 +14,7 @@ import numpy as np
 from verity.ml.circuits.ops import mufu as MU
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels.act_rows import silu_mul_expf_rows
-from verity_vllm.program.kernels.libdevice_sampling import nv_logf
+from verity_vllm.program.kernels.libdevice import nv_logf
 from verity_vllm.program.registry import dsv4_moe as D
 from verity_vllm.program.registry import mla_check as MC
 

@@ -65,7 +65,7 @@ from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.boolean.forms import (NOT, ONE, OR, ZERO, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce,
                                               shl_window, sub)
 from verity.ml.circuits.boolean.trace import definition
-from verity.core.protocols.pouw.circuit.boolean import f32_sqrt_rn
+from verity.ml.circuits.ops.boolean.sqrt import f32_sqrt_rn
 from verity_vllm.program.registry import boolean_silu as BSL
 from verity_vllm.program.registry import dsv4_moe as D
 from verity_vllm.program.registry import moe as M

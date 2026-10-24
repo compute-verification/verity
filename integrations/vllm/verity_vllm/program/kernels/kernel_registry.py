@@ -29,7 +29,6 @@ import numpy as np
 
 from verity.ml.circuits.evaluation import Kernel, register_kernel, self_check
 from verity.ml.circuits.evaluation.reference import key_of, statics_of
-from verity_vllm.commit import challenge as CH
 
 __all__ = ["Declined", "Registered", "check", "covers", "instance", "prim_static", "register", "registered"]
 
@@ -143,7 +142,7 @@ def check(key: str, kernel: str, n: int = 6) -> list[str]:
     reg = _REGISTERED.get((key, kernel))
     if reg is None:
         return [f"no {kernel} kernel registered for {key}"]
-    targets = reg.check_targets(CH.generator(zlib.crc32(f"{key}/{kernel}".encode())))
+    targets = reg.check_targets(np.random.default_rng(zlib.crc32(f"{key}/{kernel}".encode())))
     if not targets:
         return [f"{key}: no check specialisations"]
     out = []

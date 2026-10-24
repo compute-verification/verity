@@ -26,7 +26,8 @@ from dataclasses import dataclass
 from verity_vllm.config import RowConfig, option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.pipeline import launch_context as LC
-from verity_vllm.program.boolean import derived, write_word
+from verity_vllm.program.boolean import write_word
+from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
                                                  _write_instances, _write_instances_file, write_instances)

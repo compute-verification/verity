@@ -33,7 +33,7 @@ from verity.ml.circuits.ops import mufu as MU
 from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
 from verity_vllm.program.kernels import dense_rows as DRW
 from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels.libdevice_sampling import nv_logf
+from verity_vllm.program.kernels.libdevice import nv_logf
 
 U32 = np.uint32
 LOG2E = U32(0x3FB8AA3B)

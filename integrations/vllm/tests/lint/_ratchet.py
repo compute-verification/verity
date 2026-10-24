@@ -264,9 +264,13 @@ def new_violations(name: str, violations: Iterable[Violation]) -> list[str]:
 
 
 def stale_entries(name: str, violations: Iterable[Violation]) -> list[str]:
+    """Entries no violation matches.  An entry whose file is outside the scanned package (one a layout move took out of
+    ``verity_vllm``) is the move's to delete, not stale here: a pure move rewrites its path but can't drop it."""
     found = Counter(v.key for v in violations)
     out = []
     for k, n in sorted(load_allowlist(name).items()):
+        if k[0] != PKG.name and not k[0].startswith(PKG.name + "/"):
+            continue
         have = found.get(k, 0)
         if have < n:
             out.append(("  delete " if have == 0 else f"  lower count to {have}: ") + entry_line(k, n))
