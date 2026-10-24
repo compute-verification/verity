@@ -746,6 +746,10 @@
    "owner": "@proofs",
    "digest": "39a998376610568bb4825338378d4b880a8a4bc958af68b35bb563d2f1715826"
   },
+  "Claims.Flock.Scope": {
+   "owner": "@proofs",
+   "digest": "ac5ae02c6359441e1602c332d0f07931a8f60474ae2ed0fd854fd80157314a15"
+  },
   "Claims.Hm96Hiding": {
    "owner": "@proofs",
    "digest": "6c8f345d2254fc1cff51121b293ab6364de0ff01476d75d7dddc94df14080cd2"
@@ -786,6 +790,9 @@
    "owner": "@proofs"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.Loop.LinkSrc": {
    "owner": "@proofs"
   },
   "Claims.ZKServer.Loop.Serves": {
@@ -1816,7 +1823,6 @@
    "Claims.Flock.InScope": "a helper the claims read: the forms Flock proves, which its scope reads",
    "Claims.Flock.ListWithin": "the list-decoding spec Flock's KS, Bits and Efficient ask of a decoder, proved of both deployed decoders (`FlockDeploy.listWithin_plain`, `listWithin_zk`)",
    "Claims.Flock.RelS": "a helper the claims read: a statement's relation, which `Flock.R` reads",
-   "Claims.Flock.Scope": "a helper the claims read: the scope Flock's claims read",
    "Claims.Recursion.Draw.Full": "a V* session's draw that takes every unit, a clause of the readable scope (`InScope`), no claim",
    "Claims.Recursion.InScope": "the readable scope's form, which the claims read through `Scope`, no claim",
    "Claims.Recursion.Scope": "the recursion's scope, which `ScopeMatches` and `Complete` read, no claim",
@@ -10244,7 +10250,7 @@
    "Accounting.SecurityProofs.TS.TileSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the tile layer (tileLayer: flock-verify --zk --registered with its known-content check, its relation CheckedRel and every drawn unit's decoded cells meeting PouwH1TileZy_v1's Definition, z = A·Bᵀ and y = dq(z), or OkColl) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses, which are not on the premises list, every circuit port a port of own (what Flock.Registered.checkComplete establishes), and its premise TileChecks (Proofs.Accounting.TS.Session.Tile.Assumptions), which is not on it either. Proved as HeldSessionSound is, from CheckedSessionSound's SoundAt and the ok tie (tie_ok), at delta.",
    "Nci.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Flock.SecurityProofs.SessionLoopZK": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release (ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), it takes the loop's obligation (Flock.Guarantees.LoopInnerRound0), the tables' obligation (Flock.Guarantees.TablesAdmitUnrefused), the transport's round trusts (LeanRelease.LinkRoundEq, FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
-   "Flock.SecurityProofs.SessionLoopZKDeployed": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release at the deployed tables (Masked.dataE, ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), it takes the loop's obligation (Flock.Guarantees.LoopInnerRound0), the transport's round trusts (LeanRelease.LinkRoundEq, FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves)."
+   "Flock.SecurityProofs.SessionLoopZKDeployed": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release at the deployed tables (Masked.dataE, ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), at the loop's own link (ofLoopLink: Loop.linkOf, the level-0 roots the loop draws), it takes the statement in scope (Claims.Flock.Scope, which the loop does not check and the verifier checks only at its verdict), the drawn level 0 being the tape's (Loop.LinkSrc, flock-firewall-level0-src), the loop's obligation (Flock.Guarantees.LoopInnerRound0), the transport's round trusts (LeanRelease.FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
