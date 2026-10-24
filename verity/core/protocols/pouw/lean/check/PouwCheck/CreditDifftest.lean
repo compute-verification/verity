@@ -12,8 +12,11 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
   `Credit.Internal.credited`): `{"credited": [indices]}`, or `{"refused": [code, why]}`.
 * `drawn` (`coin`, `stream`, `registration`, `receipt`, `layout`, as `credit.drawn` takes them): `{"drawn": [units]}`,
   or `{"refused": [code, why]}`.
-* `outcome` (`drawn`'s and `proofs`, as `credit._outcome` takes them) and `a-link` (`rounds`, `entries` and
-  `calls`, the window's call count, as `credit._a_link` takes them), `Credit.Internal`'s: null, or `{"refused": [code, why]}`.
+* `outcome` (`drawn`'s and `proofs`, as `credit._outcome` takes them) and `a-link` (`rounds`, `entries`, `calls`, the
+  window's call count, and `rows`, `{value: rows}` the layout gives or null for none, as `credit._a_link` takes them),
+  `Credit.Internal`'s: null, or `{"refused": [code, why]}`.
+* `chunks` (`k`): `{"chunks": n, "leaf_words": w}`, `Credit.chunks?` and `Credit.leafWords` (`weights.chunks` and
+  `weights.leaf_words`), or `{"chunks": null}` for a K they refuse.
 * `window` (`credit`'s, `descriptor` in hex, `entries`, `proofs` and `k`, as `credit._window_outcomes` takes them): `{"credited": [indices]}`,
   and `period` (`key`, `ledger`, `pins`, `main`, `name`, `windows`, as `credit._period_outcomes` takes them, each window's evidence
   `window`'s): `{"credited": …}`; or
@@ -62,7 +65,16 @@ def periodOf (j : Json) : Except String Json := do
 def aLinkOf (j : Json) : Except String Json := do
   PouwCheck.Difftest.refusal (fun _ => Json.null)
     (Credit.Internal.aLink (← PouwCheck.Difftest.get j "rounds") (← PouwCheck.Difftest.get j "entries")
-      ((PouwCheck.nat? (← PouwCheck.Difftest.get j "calls")).getD 0))
+      ((PouwCheck.nat? (← PouwCheck.Difftest.get j "calls")).getD 0)
+      (match PouwCheck.get j "rows" with
+        | .obj kvs => kvs.toArray.toList.filterMap fun (v, n) => (v, ·) <$> PouwCheck.nat? n
+        | _ => []))
+
+def chunksOf (j : Json) : Except String Json := do
+  let k ← PouwCheck.Difftest.get j "k"
+  pure (match (PouwCheck.nat? k).bind Credit.chunks? with
+    | some n => Json.mkObj [("chunks", toJson n), ("leaf_words", toJson (Credit.leafWords ((PouwCheck.nat? k).getD 0)))]
+    | none => Json.mkObj [("chunks", Json.null)])
 
 def weightsOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
@@ -93,7 +105,7 @@ def registeredFileOf (j : Json) : Except String Json := do
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("credit", creditOf), ("drawn", drawnOf), ("outcome", outcomeOf), ("window", windowOf), ("period", periodOf),
-  ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf)]
+  ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("chunks", chunksOf)]
 
 /-- `pouw-check-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
 def all (name : String) : Option _root_.Difftest.Fn := PouwCheck.Difftest.table name <|> table name

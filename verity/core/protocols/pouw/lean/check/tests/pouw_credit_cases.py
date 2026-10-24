@@ -489,13 +489,20 @@ def record(tiles: list, lay: dict, prefix: str = "") -> str:
     return Cr.WINDOW_FN + "{" + ",".join(f"{k}={_canon(vals[k])}" for k in Cr.RECORD) + "}"
 
 
+def _unit_fn(k: int, r: int, c: int) -> str:
+    """K's unit id in the descriptor: the tile's, wrapped in `h1zy.PouwH1TileZyChunks_v1` at a chunked K."""
+    tile, n = f"H1Tile_v1{{K={k},R={r},C={c}}}", Wt.chunks(k)
+    return tile if n == 1 else f"PouwH1TileZyChunks_v1{{UNIT={tile},CHUNKS={n}}}"
+
+
 def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None) -> dict:
     """A served window's circuit as `h1window.program(linears, calls, m, tile)` encodes it (`codec.encode_program`), as
     far as `credit.layout_of` reads it: its program function's record, each K's template, and the root's input batches,
     then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch; each
-    template returning a receipt of type `receipt` (`_template`) when one is given."""
+    template returning a receipt of type `receipt` (`_template`) when one is given. At a chunked K (`weights.chunks`
+    n > 1) the unit is `h1zy.PouwH1TileZyChunks_v1` {UNIT, CHUNKS = n} over the tile, as `h1window.program` wraps it."""
     (r, c), ks = lay["tile"], sorted({k for _name, k, _n in lay["linears"]})
-    units = {k: {"fn": f"H1Tile_v1{{K={k},R={r},C={c}}}"} for k in ks}
+    units = {k: {"fn": _unit_fn(k, r, c)} for k in ks}
     tids = {k: _template_id(k, units[k]) for k in ks}
     callees = ["Input16_v1", *(u["fn"] for u in units.values()), *tids.values()]
     defs = {u["fn"]: {"form": "primitive", "id": u["fn"], "params": [], "ret": ["Value", 16]} for u in units.values()}

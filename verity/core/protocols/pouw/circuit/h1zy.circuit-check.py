@@ -13,7 +13,9 @@ def _pouw_roots() -> list[Any]:
     key block, each counter picked by `PouwMuxBit_v2` over the index, its fx1 chain, z (v1's exact dots or v3's one-stream
     cells), its 32 record cells picked over the index, that check, the admit gate and the equality of its partials row (8
     words at KS = 2), and ok 0 where the index's 14 high bits are not all 0;
-    and `PouwH1Combine_v1` at that leaf, its 4 rows XORed and held to the receipt. Both are bound as Definitions, since
+    and `PouwH1Combine_v1` at that leaf, its 4 rows XORed and held to the receipt; and `PouwH1TileZyChunks_v1` over
+    the `PouwH1Tile_v1` unit at 2 chunks (K = 64 rows as 2 chunk rows of 32 codes each), the unit on its rebuilt rows
+    and each chunk row's scale held to its row's (`PouwEq32_v1`). Both leaf statements are bound as Definitions, since
     `h1zy.lane` and `h1zy.combine` stage only a leaf whose R is a multiple of 16, and the combine only at K >= 384
     (`h1zy.LEAST_K`). None where
     `circuit.segment` is not on the tree, which is where `PouwH1Tile` is registered. `PouwZyDequant`, `PouwZyCell`,
@@ -33,4 +35,5 @@ def _pouw_roots() -> list[Any]:
     tiles = (H.PouwH1Tile, H.PouwH1Tile3)
     return ([bind(Z.PouwZyCheck, R=4, C=8)] + [Z.unit(tile(d, 4, 8)) for d in tiles]
             + [bind(Z.PouwH1LaneZy, TILE=tile(d, 8, 16)) for d in tiles]
-            + [bind(Z.PouwH1Combine, TILE=tile(H.PouwH1Tile, 8, 16))])
+            + [bind(Z.PouwH1Combine, TILE=tile(H.PouwH1Tile, 8, 16))]
+            + [Z.chunk_unit(Z.unit(tile(H.PouwH1Tile, 4, 8)), 2)])

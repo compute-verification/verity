@@ -525,6 +525,56 @@ def test_a_table_the_served_commit_did_not_commit_refuses(seed):
             assert got is None and refused[0] == "arow" and "(ROOTS1)" in refused[1], (name, refused)
 
 
+def _no_pads(*_args, **_kwargs):
+    raise AssertionError("the verifier hashed a pad of a count it should have refused first")
+
+
+def test_a_hostile_leaf_count_is_refused_before_the_verifier_hashes_any_pad(monkeypatch):
+    """A registered A value's, round A table's or receipt table's leaf count other than the rows the window's layout
+    gives it (`table_rows`), 2^40 among them, and an unsized value's (an input-ids table's) past `MAX_ROWS`, are refused
+    by `_a_link` before `tree_root` hashes any pad: every entry's count is checked first, and a hostile count is never
+    padded to its tree. In a whole window too, where `_a_link` reads the layout's rows."""
+    monkeypatch.setattr(Cr, "tree_root", _no_pads)
+    for name in ("layout-rows", "leaves-cap"):
+        for seed in range(10):
+            d = cases.a_link_instance(random.Random(f"{name}/{seed}"), name)
+            refused = Cr._a_link(d["rounds"], d["entries"], d["calls"], d["rows"])
+            assert refused is not None and refused[0] == "a-link" and A_LINK_EXPECT[name] in refused[1], (seed, refused)
+    for seed in SEEDS:
+        d = cases.window_instance(random.Random(f"honest/{seed}"))
+        for pick, why in ((lambda v: Cr.a_value(v) and Cr.a_value(v)[1] is not None, "the window's layout gives it"),
+                          (lambda v: Cr.ids_step(v) is not None, f"is not from 1 to {Cr.MAX_ROWS}")):
+            e = json.loads(json.dumps(d))
+            next(x for x in e["entries"] if isinstance(x.get("value"), str) and pick(x["value"]))["leaves"] = 1 << 40
+            got, refused = Cr._window_outcomes(*cases.window_args(e))
+            assert got is None and refused[0] == "a-link" and why in refused[1], (seed, refused)
+
+
+def test_a_glm_window_at_k_6144_registers_its_b_rows_as_2_chunk_leaves_each_past_2_to_the_24():
+    """GLM's routed experts at K = 6144 (`weights.chunks` 2: each B row 2 leaves of `weights.leaf_words` (6144) = 1538
+    words): Σn = 9 900 032 rows are 19 800 064 leaves, above 2^24. `_weights` accepts b/6144 at those leaves under its
+    registered domain, since the layout fixes a weights' value's rows and no `MAX_ROWS` bounds them, and one-stage's
+    entry form (`_entry`) takes it; the whole-row registration (Σn leaves of `b_words` (6144)) is refused."""
+    sigma = 9_900_032
+    lay = {"calls": [["experts", 0]], "linears": [["experts", 6144, sigma]], "m": 32, "tile": [32, 32]}
+    digest, requests, session = "ef" * 64, "ab" * 64, "s-1"
+    x, w = Wt.chunks(6144), Wt.leaf_words(6144)
+    assert Cr.strata(lay)[1] is None and (x, w) == (2, 1538) and sigma < Cr.MAX_ROWS < x * sigma
+    root = hashlib.sha512(b"b/6144").digest()
+    entry = {"value": "b/6144", "root": root.hex(), "leaves": x * sigma, "words": w,
+             "domain": G.domain(digest, "b/6144", w, x * sigma).domain_id.hex()}
+    wr = Wt.weights_root({6144: root})
+    window = {"root": PS.window_open_root(wr, bytes.fromhex(requests), session).hex()}
+    assert Cr._entry(entry)
+    assert Cr._weights(window, lay, [entry], requests, session, digest, "") == (wr, None)
+    bw = Wt.b_words(6144)
+    whole = {**entry, "leaves": sigma, "words": bw, "domain": G.domain(digest, "b/6144", bw, sigma).domain_id.hex()}
+    assert Cr._weights(window, lay, [whole], requests, session, digest, "") == (
+        None, ("weights", Cr.other_weights_entry("b/6144", 6144, sigma)))
+    assert Cr._weights(window, {**lay, "linears": [["experts", 6200, sigma]]}, [entry], requests, session, digest,
+                       "")[1][0] == "layout"
+
+
 @pytest.mark.parametrize("seed", SEEDS)
 def test_round_0s_input_ids_are_inside_its_request_table(seed):
     """ROOTS1's ids@0: the window's open root binds round 0's request root, which is `requests_root` of the request
