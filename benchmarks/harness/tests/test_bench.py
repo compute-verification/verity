@@ -1025,6 +1025,10 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
     assert opts["enforce_eager"] is False and opts["execution"] == "compiled"
     assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True, "late_ends": True,
                                  "whole_stats_a": True} and whole.schedule == "serial"
+    monkeypatch.setenv("PEARLC_WHOLE_EAGER", "deferred-a")
+    assert type(whole)().run_options["whole_eager"] == "deferred-a"
+    monkeypatch.setenv("PEARLC_WHOLE_EAGER", "0")
+    assert "whole_eager" not in type(whole)().run_options
 
 
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():

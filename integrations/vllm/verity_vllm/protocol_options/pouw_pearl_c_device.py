@@ -313,13 +313,15 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                  coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
                  flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
-                 whole_stats_a: bool = False, whole_prefetch_b: bool = False, late_ends: bool = False):
+                 whole_stats_a: bool = False, whole_prefetch_b: bool = False, late_ends: bool = False,
+                 whole_eager: str | Schedule | None = None):
         """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
         root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's.
         `whole_defer_a` (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A
         tree within a whole capture (`pouw_pearl_c_graphs`); `whole_stats_a` and `whole_prefetch_b` (with `whole_defer`)
         fork each call's ``stats_a`` there, and B̃'s prefetch into L2 (`run.Pipeline.prefetch_b`), beside its per-row
-        keying.  With `late_ends` the executor's passes (`PearlCExecutor`'s, a `Stack`'s) `end` late."""
+        keying.  With `late_ends` the executor's passes (`PearlCExecutor`'s, a `Stack`'s) `end` late.  `whole_eager` is the
+        schedule a forward a whole-step arm runs eagerly takes (`eager_forward`)."""
         if whole_defer_a and not (whole_defer and splits(kernel)):
             raise ValueError(f"{entry}: whole_defer_a defers A's tree within a deferred whole capture (whole_defer), on a kernel "
                              f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
@@ -343,6 +345,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         self.salt = salt = self.epoch.salt
         self.device = next(iter(weights.values())).device
         self.schedule = schedule_of(schedule, scheme, kernel)
+        self.whole_eager = schedule_of(whole_eager, scheme, kernel) if whole_eager else None
+        self._eager_from: Schedule | None = None   # the open pass's own schedule, while an eager forward runs it under whole_eager
         self.main: _Lane | None = None      # the main lane, when the schedule runs it above the caller's priority
         self.sides: list[_Lane] = []         # the side lanes, as many as the schedule's ring, which calls take in turn
         self.fork: _Lane | None = None      # the lane graphs' fork beside the main lane's per-row keying, made at first use
@@ -388,7 +392,9 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             "graphs": (f"calls of at most {GRAPH_ROWS} rows: the serial schedule's one graph a call, a side lane's schedule's "
                        f"one a lane and ring set (A's tree its own where it is aside), replayed by the driver"
                        + (", a whole capture's tile hashing beside the next call" if whole_defer else "")
-                       + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")) if self.graphs else None,
+                       + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")
+                       + (f", an eager forward's pass under {self.whole_eager.name}" if self.whole_eager else ""))
+            if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
@@ -419,6 +425,16 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         stream = self.torch_stream(self.stream()) if stream is None else stream
         for lane in self.sides:
             stream.wait_stream(lane.stream)
+
+    def eager_forward(self) -> None:
+        """The open pass's forward runs eagerly under a whole-step arm (`pouw_pearl_c_whole.WholeStep`: a batch its graphs
+        lack, a prefill's or a mixed step's): with `whole_eager`, and before the pass's first call, the pass runs under that
+        schedule, so its calls' tile hashing and A trees go on side lanes beside their GEMMs, and the next `begin` puts the
+        pass's own schedule back.  The commitments are the pass's schedule's."""
+        if self.whole_eager is None or self.cur is None or self.cur.matmuls or self._eager_from is not None:
+            return
+        self._eager_from = self.schedule
+        self._use(self.whole_eager)
 
     # ---- the weight side --------------------------------------------------------------------------------------------
 
@@ -454,7 +470,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         key = (m16, n, k)
         if key not in self.shapes:
             R = self.kernel.run
-            mp = R.cdiv(m16, R.BM_D) * R.BM_D
+            tile = R.BM if m16 > getattr(R, "MAINLOOP_ROWS", m16) else R.BM_D
+            mp = R.cdiv(m16, tile) * tile
             size = R.Pipeline.sizes(mp, n, k, m16)
             sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in CALL_BUFFERS},
                         torch.zeros((mp, k), dtype=torch.float32, device=self.device), _zeros(self.nb + 104, self.device))
@@ -676,11 +693,12 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
 
     def begin(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None,
               stepped: bool = False) -> None:
-        """A new pass: its own transcript under the install's epoch, the call indices from 0, under `schedule` (the last one's
-        when None; a schedule changes only between passes).  With `retain`, the pass writes what the prover opens from into
+        """A new pass: its own transcript under the install's epoch, the call indices from 0, under `schedule` (the last
+        pass's own when None; a schedule changes only between passes, and before a pass's first call by `eager_forward`).  With `retain`, the pass writes what the prover opens from into
         that directory, from poisoned outputs, and its manifest names `run`.  `stepped`: an engine step's end begins it."""
         self.join_sides()                   # the last pass's side lanes are done before anything new
-        self._use(self.schedule if schedule is None else schedule_of(schedule, self.scheme, self.kernel))
+        last, self._eager_from = self._eager_from or self.schedule, None
+        self._use(last if schedule is None else schedule_of(schedule, self.scheme, self.kernel))
         self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped)
         if retain and self.hashing:
             self.poison()

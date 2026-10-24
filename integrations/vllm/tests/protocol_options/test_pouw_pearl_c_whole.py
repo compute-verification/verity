@@ -77,6 +77,10 @@ class Run:
         self.replayed: list = []
         self.begun: list = []
         self.details = {"passes": []}
+        self.eager = 0
+
+    def eager_forward(self):
+        self.eager += 1
 
     def whole_key(self, retained=None):
         retained = self.retain is not None if retained is None else retained
@@ -200,6 +204,31 @@ def test_enabled_off_graphs_off_and_forwards_outside_a_pass_run_eagerly():
     with stack.pass_():
         assert step(mgr).cg_mode == NONE
     assert mgr.replayed == [] and run.replays == [] and mgr._graphs_captured
+
+
+def test_the_run_hears_of_each_eager_forward_of_a_pearl_c_pass_and_of_nothing_else():
+    """`PearlCDeviceRun.eager_forward` (``whole_eager``'s switch) runs once per forward a Pearl-C pass runs eagerly: before
+    the arm's graphs exist, and for a batch they lack (a prefill's); never for a replayed step, vLLM's own eager steps, a
+    forward outside a pass or with `enabled` off, or while `prepare` captures."""
+    run, stack, whole, mgr = setup()
+    step(mgr, 8192, None)
+    stack.activate(Arm("pearlc", "bf16", "pouw:pearl-c", spec=PassSpec(hashing=True)))
+    with stack.pass_():
+        step(mgr)
+    assert run.eager == 1
+    whole.prepare()
+    assert run.eager == 1
+    with stack.pass_():
+        assert step(mgr).cg_mode == FULL and run.eager == 1
+        assert step(mgr, 640, None).cg_mode == NONE and run.eager == 2
+    step(mgr, 640, None)
+    whole.enabled = False
+    with stack.pass_():
+        step(mgr, 640, None)
+    whole.enabled, whole.preparing = True, True
+    with stack.pass_():
+        step(mgr, 640, None)
+    assert run.eager == 2 and whole.take()["eager"] == 6
 
 
 def test_whole_step_refuses_an_engine_without_decode_graphs_it_can_capture_whole():

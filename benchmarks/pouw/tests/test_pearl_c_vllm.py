@@ -203,9 +203,9 @@ def device_run():
     coins = salt_coin(roots)
     salt = Epoch.start(declared, roots, *coins).salt
 
-    def make(hashing=True, schedule="serial", flag_rows=PPD.FLAG_ROWS):
+    def make(hashing=True, schedule="serial", flag_rows=PPD.FLAG_ROWS, **kw):
         return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, hashing=hashing,
-                                   capacity=1 << 12, schedule=schedule, flag_rows=flag_rows, salt_key=SALT_KEY)
+                                   capacity=1 << 12, schedule=schedule, flag_rows=flag_rows, salt_key=SALT_KEY, **kw)
     return make, kernel, weights, roots, salt
 
 
@@ -2143,7 +2143,8 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
     with pytest.raises(ValueError, match="a side lane needs ring >= 2"):
         PPD.schedule_of(Schedule("one-set", frozenset({"tile_hash"}), ring=1), s)
     assert PPD.rotated(PPD.schedule_of("deferred", s)) == ("c", "segdig_t", "u") and PPD.rotated(PPD.SERIAL) == ()
-    assert PPD.rotated(PPD.SCHEDULES["deferred-a"]) == ("c", "keys", "line_a", "seed_a", "segdig_t", "tree_a", "u")
+    assert PPD.rotated(PPD.SCHEDULES["deferred-a"]) == ("c", "keys", "line_a", "rowdig_a", "seed_a", "segdig_t", "tree_a",
+                                                     "u")
     assert PPD.PearlCExecutor(sm90_run[0]()).schedules == {"serial", "deferred", "deferred-caller", "deferred-a"}
 
 
@@ -2187,7 +2188,7 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
         assert (tp[10], tp[11]) == (ptr(j, "seed_a"), ptr(j, "line_a"))
         assert cp[6] == tp[6] == ptr(j, "keys") and cp[5] == tp[5] == ptr(j, "keys") + nb
         assert by["gemm_pearlc_d"][c][0][2:4] == by["pd_tiles_851"][c][0][:2] == (ptr(j, "c"), ptr(j, "u"))
-    assert len({ptr(j, x) for j in (0, 1) for x in PPD.rotated(run.schedule)}) == 14
+    assert len({ptr(j, x) for j in (0, 1) for x in PPD.rotated(run.schedule)}) == 16
     for j, index in ((0, 2), (1, 1)):
         keys = sh.keys if j == 0 else sh.sets[j]["keys"]
         assert PPD._bytes(keys[:168]) == PPD.call_keys(F90, run.salt, roots[0], index, 32, run.tree_hash)
@@ -2234,6 +2235,62 @@ def test_deferred_a_runs_sm120s_split_on_the_lanes(device_run, tmp_path):
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
     assert [(n, st) for n, st, _, _ in pd] == [("pd_commit_851", 2), ("pd_tree_851", 1), ("pd_tiles_851", 1)]
     assert pd[0][3][2] == 1 and kept == [pd[1][2][2]] and pd[1][2][12] == 0
+
+
+def test_an_eager_forward_under_whole_eager_runs_a_prefills_calls_with_as_tree_and_tiles_aside(device_run):
+    """With ``whole_eager`` a forward a whole-step arm runs eagerly (`eager_forward`, before the pass's first call) runs under
+    that schedule.  Under ``deferred-a``, at a prefill's rows (m₁₆ = 304, outside pd), sm_120's pipeline splits A's
+    commitment over the generic kernels (`run.Pipeline.FUSED_GENERIC`): the main lane (handle 2) runs ``rows_a`` (A's pads,
+    the row digests, the row seeds and the real rows' E_A lines, keyed per row and reading no line_a), the forming and the
+    GEMMs, and never A's level 0; from a full tile of rows the side lane after the call's runs A's level 0 over the row
+    digests of the call's set, its levels and seed_A, and the call's side lane the tile leaves.  A second eager_forward,
+    after a call, changes nothing; the next pass is back on its own schedule, and without whole_eager nothing moves."""
+    make, kernel, weights, *_ = device_run
+    assert make().whole_eager is None and (r := make()) and (r.eager_forward() or r.schedule.name) == "serial"
+    run = make(whole_eager="deferred-a")
+    assert run.schedule.name == "serial" and run.whole_eager.name == "deferred-a"
+    run.eager_forward()
+    assert run.schedule.name == "deferred-a"
+    sh = run._shape(304, 256, 1024)
+    kernel.dev.log.clear()
+    for _ in range(2):
+        run.gemm(0, torch.randn(300, 1024).to(torch.bfloat16), weights[0], None)
+    run.eager_forward()
+    assert run.schedule.name == "deferred-a"
+    log = [(n, st, p, i) for n, st, p, i in kernel.dev.log if not n.endswith("_smem")]
+    sides = [lane.raw for lane in run.sides]
+    assert sides == [1, 3] and {st for _, st, _, _ in log if st not in sides} == {2}
+    main = [n for n, st, _, _ in log if st == 2]
+    rows_a = ["s512_pads", "s512_row_segs", "s512_folds", "s512_seeds", "lines"]
+    assert main[:5] == rows_a and main.count("lines") == 2 and "hm_leaves" not in main and "gemm_pearlc_d" in main
+    levels = (R.pow2(304) // R.S512_SMALL).bit_length() - 1        # s512_nodes down to S512_SMALL nodes, then tree_small
+    tree = ["hm_leaves", "s512_frame_leaves"] + ["s512_nodes"] * levels + ["s512_tree_small", "s512_seeds"]
+    on = lambda lane: [n for n, st, _, _ in log if st == lane]  # noqa: E731
+    assert on(3) == tree + ["s512_tile_segs", "s512_folds"] and on(1) == ["s512_tile_segs", "s512_folds"] + tree
+    ptr = lambda j, x: sh.sets[j][x].data_ptr()  # noqa: E731
+    lines = [(p, i) for n, st, p, i in log if n == "lines"]
+    assert all(i == (0, 0, 304, R.NORM_256, 304) and p[0] == 0 for p, i in lines)
+    folds = [p for n, st, p, i in log if n == "s512_folds" and st == 2]
+    leaves = [p for n, st, p, i in log if n == "hm_leaves"]
+    for c, j in enumerate((0, 1)):
+        assert folds[c][1] == leaves[c][0] == ptr(j, "rowdig_a") and leaves[c][1] == ptr(j, "tree_a")
+    assert run.end()["schedule"] == "deferred-a"
+    run.begin()
+    assert run.schedule.name == "serial" and run._eager_from is None
+
+
+def test_a_prefills_rows_past_mainloop_rows_pad_to_the_mainloop_tile(device_run):
+    """A call of more than `run.MAINLOOP_ROWS` rows pads to the 128-row tile, so its chain runs on the mainloop
+    (``gemm_pearlc``, its operands by tensor map); at fewer rows the 64-row tile and the 64 x 64 chain."""
+    make, kernel, weights, *_ = device_run
+    run = make()
+    assert run._shape(R.MAINLOOP_ROWS, 256, 1024).mp == R.MAINLOOP_ROWS and run._shape(304, 256, 1024).mp == 320
+    assert run._shape(R.MAINLOOP_ROWS + 16, 256, 1024).mp == R.MAINLOOP_ROWS + 128
+    for m, chain in ((600, "gemm_pearlc"), (300, "gemm_pearlc_d")):
+        kernel.dev.log.clear()
+        run.gemm(0, torch.randn(m, 1024).to(torch.bfloat16), weights[0], None)
+        names = [n for n, *_ in kernel.dev.log]
+        assert chain in names and {"gemm_pearlc", "gemm_pearlc_d"} - {chain} - set(names) == {"gemm_pearlc", "gemm_pearlc_d"} - {chain}
 
 
 def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_writes_no_padding_lines(sm90_run, tmp_path):

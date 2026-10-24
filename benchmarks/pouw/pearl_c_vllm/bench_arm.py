@@ -198,6 +198,8 @@ class PearlCWholeArm(PearlCArm):
     pass late (`PearlCDeviceRun.end`'s ``late``: the host waits for nothing, so vLLM schedules and launches the next step
     while the GPU runs this one); ``PEARLC_WHOLE_STATS_A`` forks each call's ``stats_a`` beside its per-row keying;
     ``PEARLC_WHOLE_PREFETCH_B`` prefetches its B̃ into L2 there (``PEARLC_PREFETCH_FORM``, ``_CTAS``, ``_MB``: run.py's).
+    ``PEARLC_WHOLE_EAGER`` names the schedule a step that runs eagerly (a prefill or mixed step) takes in place of the serial
+    one (`PearlCDeviceRun.eager_forward`; ``deferred-a``: its calls' tile hashing and A trees on side lanes), 0 none.
     A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
@@ -214,6 +216,11 @@ class PearlCWholeArm(PearlCArm):
                 opts.pop(name, None)
             elif os.environ.get(var) == "1":
                 opts[name] = True
+        eager = os.environ.get("PEARLC_WHOLE_EAGER")
+        if eager == "0":
+            opts.pop("whole_eager", None)
+        elif eager:
+            opts["whole_eager"] = eager
         self.run_options = opts
         self.schedule = "serial"
         self.execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
