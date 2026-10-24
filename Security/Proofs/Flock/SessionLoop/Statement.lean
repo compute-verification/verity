@@ -1,4 +1,6 @@
 import Proofs.Flock.Claims.ZK.FrameAdmits
+import Proofs.Flock.Claims.ZK.FrameTape
+import Proofs.Flock.Claims.ZK.PiopSrcVals
 
 /-!
 # C-Flock's zero knowledge at the session loop's own frames (trusted)
@@ -18,7 +20,13 @@ takes of the loop beyond the code is named, each an obligation:
   firewall sends that round, `check_self`, at the inner proof's label).
 * `TablesAdmitUnrefused`, on the tables `T` alone: where, at a `Live` statement, no coin fault shows (`Masked.Refused`),
   every table admits the coins. `SessionLoopZK` takes it; at the deployed tables it is proved
-  (`LeanRelease.tablesAdmitUnrefused_dataE`), so `SessionLoopZKDeployed` (`SessionLoopZKAt Masked.dataE`) does not.
+  (`LeanRelease.tablesAdmitUnrefused_dataE`), so `SessionLoopZKDeployed` does not.
+
+`SessionLoopZKDeployed` is `SessionLoopZKAt Masked.dataE` at the loop's own link (`LeanRelease.ofLoopLink`: `withLink`,
+the roots of the level 0 the loop drew, `Loop.linkOf`, as its `Commit` carries them). In place of `LinkRoundEq` it
+takes the masked verifier's scope (`Claims.Flock.Scope`) and `Loop.Src` (`flock-firewall-os-src`): every input the loop
+takes from its host and operating system is the tape's, its level-0 inputs (`Loop.Level0Src`) and its rep draws
+(`Loop.RepSrc`).
 
 The transport's other trusts (`LeanRelease.LinkRoundEq`, `FinishIs`, `LiveRoundEq`, `FillRoundEq`) and the tables' side
 (`CoinLayer` `Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausal`, `TapeOK`) are the statement's premises, with
@@ -52,6 +60,119 @@ def Loop.realOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F
     let t ← _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l
     pure (t, hi)
   | none => .error "no session"
+
+/-- **The level 0 the loop draws for table `j`** at the source `src`: `Level0.ofDraws` at table `j`'s `m` on the packed
+witness and drawn bytes `src` gives rep stream `2j` (one level 0 a table, as `Loop.realOf` reads it). -/
+def Loop.level0Of {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) (j : ℕ) : V _root_.Flock.Firewall.Level0.Level0 := do
+  let (g, d, _) ← src x w ρ (2 * j)
+  _root_.Flock.Firewall.Level0.ofDraws sts[j]!.m g d
+
+/-- **The loop's own link** at the source `src`: each table's drawn level-0 root, with no public words, as the loop's
+`Commit` carries them (`Session.relay`'s `commitFrame` of the roots `Level0.ofSession` bound); the empty root where the
+draw is refused, which the loop's `Commit` check refuses. -/
+def Loop.linkOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (x : Msg) (w : Flock.Wit) (ρ : R) : Msg :=
+  match FlockDeploy.setupOf true x with
+  | some (_, _, sts) =>
+    0 :: FlockDeploy.linkBody
+      (List.ofFn fun j : Fin sts.size => ((Loop.level0Of src x w ρ sts j.val).toOption.map (·.root)).getD .empty)
+      (List.replicate sts.size ByteArray.empty)
+  | none => []
+
+/-- `L₀` with the loop's own link at the source `src` (`Loop.linkOf`): the link the loop's `Commit` carries, which it
+builds itself from the level 0 it drew. -/
+def LeanRelease.withLink {R : Type} (L₀ : LeanRelease Flock.Wit R)
+    (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)) : LeanRelease Flock.Wit R :=
+  { L₀ with link := fun x w ρ _ => Loop.linkOf src x w ρ }
+
+/-- **The release at the session loop's own frames and link**, at the deployed tables: `ofLoop` at `withLink L₀ src`. -/
+noncomputable def LeanRelease.ofLoopLink
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) :
+    LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand) :=
+  LeanRelease.ofLoop Masked.dataE (LeanRelease.withLink L₀ src) real
+
+/-- **The level 0 the loop draws for rep stream `k`** at the source `src`: `Level0.ofDraws` at table `k / 2`'s `m` on the
+packed witness and drawn bytes `src` gives rep stream `k` (`Loop.realOf`'s). -/
+def Loop.level0At {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) (k : ℕ) : V _root_.Flock.Firewall.Level0.Level0 := do
+  let (g, d, _) ← src x w ρ k
+  _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.m g d
+
+/-- **The link's level 0 is the tape's** at `x`: at every nonce and tape, table `j`'s drawn level 0 (`Loop.level0Of`) has
+`Masked.linkIn`'s inputs. `Loop.Src`'s level-0 half gives it (`Loop.Src.linkLevel0`). -/
+def Loop.LinkLevel0 (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (x : Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
+    (j : Fin (Masked.jOf x)),
+    ∃ l, Loop.level0Of src x w (ν, t) (Masked.stsOf x) j.val = .ok l ∧ l.toIn = Masked.linkIn x w t j
+
+/-- **The level-0 inputs are the tape's** at `x`: at every nonce and tape, table `j`'s rep `r`'s drawn level 0
+(`Loop.level0At` at rep stream `2j + r`) has `Masked.linkIn`'s inputs: the witness's packed table at the tape's mask
+words (what the host hands the loop) and the tape's extra lanes, lane paddings and level-0 salts (the bytes
+`Level0.draw` reads from `IO.getRandomBytes`). It says nothing of how a root is committed: the root is `Link.root` of
+those inputs by the code (`Level0.ofDraws_ok`). -/
+def Loop.Level0Src (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (x : Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
+    (j : Fin (Masked.jOf x)) (r : Fin 2),
+    ∃ l, Loop.level0At src x w (ν, t) (Masked.stsOf x) (2 * j.val + r.val) = .ok l ∧ l.toIn = Masked.linkIn x w t j
+
+/-- **The rep draws are the tape's** at `x`: at every nonce and tape, table `j`'s rep `r`, rep stream `2j + r`, at the
+tape's layout (`Masked.layE`):
+* the frame's draws (`L₀.draws`, the bytes `Frames.startRep` reads from `IO.getRandomBytes`) are `drawBytes` long, and
+  read as `Draws.ofBytes`, their pads are the tape's (`padsOf`) and their pads tree's leaf salts the tape's (each of the
+  `codeLen` leaves, at the `192` bytes the masked prover fits it to);
+* where `src` hands the rep its salts for levels ≥ 1 (`hi`, the bytes `Finish.serve`'s `hiSaltsOf` reads from
+  `IO.getRandomBytes`), each leaf's salt at each such level of the table's schedule is the tape's. -/
+def Loop.RepSrc
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (x : Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
+    (j : Fin (Masked.jOf x)) (r : Fin 2),
+    (L₀.draws (ν, t) (2 * j.val + r.val)).size = _root_.Flock.Firewall.Frame.drawBytes (Masked.layE x j) ∧
+    FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j) =
+      drawsPads (_root_.Flock.Firewall.Frame.Draws.ofBytes (Masked.layE x j) (L₀.draws (ν, t) (2 * j.val + r.val))) ∧
+    (∀ q < _root_.Flock.Firewall.Frame.codeLen (Masked.layE x j),
+      FlockComplete.fitBytes 192 ((Masked.UE.tapeZk t).innerSalt j.val r.val q) =
+        (_root_.Flock.Firewall.Frame.Draws.ofBytes (Masked.layE x j) (L₀.draws (ν, t) (2 * j.val + r.val))).salts.extract
+          (_root_.Flock.Firewall.Frame.SALT * q) (_root_.Flock.Firewall.Frame.SALT * q + _root_.Flock.Firewall.Frame.SALT)) ∧
+    ∀ (g : Array F128) (d : ByteArray) (hi : Array ByteArray),
+      src x w (ν, t) (2 * j.val + r.val) = .ok (g, d, hi) →
+      ∀ l, 1 ≤ l → l < (Masked.zkTab x j).sch.levels.size →
+        ∀ p < 2 ^ ((Masked.zkTab x j).sch.levels.getD l default).d,
+          _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty) p = (Masked.UE.tapeZk t).salt j.val r.val l p
+
+/-- `flock-firewall-os-src` (a trust in the host's inputs and in the operating system's bytes, which the loop reads and
+does not check). **Every input the session loop takes from its host and its operating system is the tape's** at `x`, in
+two halves: the level-0 inputs (`Loop.Level0Src`: the packed witness the host hands it and the bytes `Level0.draw`
+reads) and the rep draws (`Loop.RepSrc`: the bytes `Frames.startRep` and `Finish.serve` read for each rep). Why it is
+reasonable: the loop runs on the auditor-trusted host (`trusted-nebius-host`), whose operating system's random bytes are
+the uniform draws the tape models, and which hands the loop the witness `w` the statement is served at. -/
+def Loop.Src
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (x : Msg) (w : Flock.Wit) : Prop :=
+  Loop.Level0Src src x w ∧ Loop.RepSrc L₀ src x w
 
 /-- Obligation (the inner proof's round 0): where history `h` stands at a rep stream `k`'s first round past its
 scheduled rounds `rsched` (the opening's, on `real`'s table and salts), `L₀`'s round there is the firewall's own at some
@@ -156,9 +277,75 @@ def _root_.Flock.Guarantees.SessionLoopZKAt (T : CoinLayer.TableData) : Prop :=
 def _root_.Flock.Guarantees.SessionLoopZK : Prop :=
   ∀ T : CoinLayer.TableData, _root_.Flock.Guarantees.TablesAdmitUnrefused T → _root_.Flock.Guarantees.SessionLoopZKAt T
 
-/-- **C-Flock's zero knowledge at the session loop's own frames, at the deployed tables** (`Masked.dataE`):
-`SessionLoopZKAt Masked.dataE`, with no premise on the tables beyond `SessionLoopZKAt`'s. -/
+/-- **C-Flock's zero knowledge at the session loop's own frames, at the deployed tables** (`Masked.dataE`), at the
+loop's own link: `SessionLoopZKAt Masked.dataE` at the release `withLink L₀ src`, whose link is the one the loop's
+`Commit` carries (`Loop.linkOf src`), with no premise on the tables beyond `SessionLoopZKAt`'s. In place of
+`LinkRoundEq` it takes that `x` is in the masked verifier's scope (`Claims.Flock.Scope`, the statement check
+`flock-verify verify --zk` runs, `ScopeMatches`) and that the loop's inputs from its host and operating system are the
+tape's (`Loop.Src`). The scope
+is a premise because the loop does not run that check, and cannot run all of it: the check reads the verifier's own
+`--public-inputs` and `--registered`, which the loop never sees. At a statement outside it the model's session has no
+tables, so its link carries no root while the loop's `Commit` carries each table's. -/
 def _root_.Flock.Guarantees.SessionLoopZKDeployed : Prop :=
-  _root_.Flock.Guarantees.SessionLoopZKAt Masked.dataE
+  ∀ (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (t : ℕ), 0 < t →
+    (CoinLayer.session Loop.loopNr Masked.dataE).Tables →
+    (CoinLayer.session Loop.loopNr Masked.dataE).Complete
+      (Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) →
+    (CoinLayer.session Loop.loopNr Masked.dataE).DummyReg → (CoinLayer.session Loop.loopNr Masked.dataE).Causal →
+    (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal vs → (CoinLayer.session Loop.loopNr Masked.dataE).TapeOK →
+    ∀ (L₀ : LeanRelease Flock.Wit
+        ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+      (src : Msg → Flock.Wit →
+        (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+        ℕ → V (Array F128 × ByteArray × Array ByteArray))
+      (real : Msg → Flock.Wit →
+        (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+        ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)),
+    real = Loop.realOf src →
+    ∀ (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit),
+    Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w → Loop.Serves x →
+    _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ real x w →
+    Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x → Loop.Src L₀ src x w →
+    LeanRelease.FinishIs (CoinLayer.session Loop.loopNr Masked.dataE) vs (LeanRelease.ofLoopLink L₀ src real) CoinOpen.shaH wk x w →
+    LeanRelease.LiveRoundEq (CoinLayer.session Loop.loopNr Masked.dataE) vs (LeanRelease.ofLoopLink L₀ src real) CoinOpen.shaH wk x w →
+    LeanRelease.FillRoundEq (CoinLayer.session Loop.loopNr Masked.dataE) vs (LeanRelease.ofLoopLink L₀ src real) CoinOpen.shaH wk x w →
+    ∀ {Θ : Type} (Vs : VStar Θ) (θ : Θ),
+    Vs.k x = (FlockDeploy.deployZk _root_.Flock.Readable.relation).V.k x + 1 →
+    ∀ (Ev : List ((Msg × Out) × ℕ) → Prop),
+    (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w ∧
+    Pr (fun ω : ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand) ×
+          (LeanRelease.ofLoopLink L₀ src real).toSrv.Chk =>
+        Ev ((LeanRelease.ofLoopLink L₀ src real).toSrv.timed x
+          (runStar CoinOpen.shaH ((LeanRelease.ofLoopLink L₀ src real).toSrv.proverD (LeanRelease.ofLoopLink L₀ src real).fillOf
+            (fun x => (FlockDeploy.deployZk _root_.Flock.Readable.relation).V.k x + 1) wk w) Vs x ω θ).msgs)) ≤
+      2 * (Pr (fun c : (leaky1 ((((CoinLayer.session Loop.loopNr Masked.dataE).withStops
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr Masked.dataE) (LeanRelease.ofLoopLink L₀ src real) Loop.progOf
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoopLink L₀ src real).stop).refP.withSim fun x _ c =>
+              ((CoinLayer.session Loop.loopNr Masked.dataE).withStops
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr Masked.dataE) (LeanRelease.ofLoopLink L₀ src real) Loop.progOf
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoopLink L₀ src real).stop).coinModel x c).simulatorE t (t * 3 ^ t))
+            (fun x => (FlockDeploy.deployZk _root_.Flock.Readable.relation).V.k x + 1)
+            (LeanRelease.ofLoopLink L₀ src real).toSrv.stop).C x =>
+          Ev ((LeanRelease.ofLoopLink L₀ src real).toSrv.timed x ((leaky1 ((((CoinLayer.session Loop.loopNr Masked.dataE).withStops
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr Masked.dataE) (LeanRelease.ofLoopLink L₀ src real) Loop.progOf
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoopLink L₀ src real).stop).refP.withSim fun x _ c =>
+              ((CoinLayer.session Loop.loopNr Masked.dataE).withStops
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr Masked.dataE) (LeanRelease.ofLoopLink L₀ src real) Loop.progOf
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoopLink L₀ src real).stop).coinModel x c).simulatorE t (t * 3 ^ t))
+            (fun x => (FlockDeploy.deployZk _root_.Flock.Readable.relation).V.k x + 1)
+            (LeanRelease.ofLoopLink L₀ src real).toSrv.stop).out CoinOpen.shaH Vs θ x c))) +
+          (8 * ((CoinLayer.session Loop.loopNr Masked.dataE).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr Masked.dataE)
+              (LeanRelease.ofLoopLink L₀ src real) Loop.progOf Loop.freshOf Loop.readCoins)
+              (LeanRelease.ofLoopLink L₀ src real).stop).nLeaves x *
+              FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash +
+            8 * t * ((CoinLayer.session Loop.loopNr Masked.dataE).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr Masked.dataE)
+              (LeanRelease.ofLoopLink L₀ src real) Loop.progOf Loop.freshOf Loop.readCoins)
+              (LeanRelease.ofLoopLink L₀ src real).stop).nLeaves x *
+              FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash + 2 * (1 / 3) ^ t) +
+          4 * t * 3 ^ t *
+            (Fork CoinOpen.shaH ((((CoinLayer.session Loop.loopNr Masked.dataE).withStops
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr Masked.dataE) (LeanRelease.ofLoopLink L₀ src real) Loop.progOf
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoopLink L₀ src real).stop).swP vs).prover w) Vs θ x).Pr
+              CoinOpen.shaH)
 
 end Claims.ZKServer

@@ -140,6 +140,24 @@ def test_a_passing_tip_fast_forwards_main_and_the_landing_post_names_its_check(w
     assert [ln.split(" ", 4)[-1] for ln in lines] == [f"#1; checked by {runs[tip]}", f"#2; checked by {runs[tip]}"]
 
 
+def test_a_landing_tick_launches_the_next_trains_before_the_landings_after_steps(world, monkeypatch):
+    """23 Oct: a landing's after-steps (`caught_up`: the spec DM, the mirror, post_train, posts and labels; 44 labels at 23:08Z)
+    ran inside the land step, and the tick's launches waited 20-30 min behind them."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 1
+    order = []
+    monkeypatch.setattr(merge, "caught_up", lambda *a, **k: order.append("after"))
+    plain = h.launch
+    h.d.launch = lambda *a: order.append("launch") or plain(*a)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    _check(world, monkeypatch, h.q.chain()[0].commit)
+    order.clear()
+    assert h.tick().startswith("landed #1")
+    assert order == ["launch", "after"], order
+
+
 def test_a_train_that_passes_while_a_tick_runs_lands_in_that_tick_not_the_next(world, monkeypatch):
     """23 Oct: a passed train waited for the next tick to land, verdict to landed median 0.24 h over 98 PRs. A check whose verdict
     comes in after the tick's land step (here: that step finds nothing) is landed before the tick ends."""

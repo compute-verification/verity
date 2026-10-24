@@ -21,8 +21,10 @@ N2 no longer compares the grid in the clear: `LinkWindows.verify` runs `check_li
 network claim is counts only until N3 is a proof-service unit on every window (ASK-70, counts-first). One gap keeps the
 count check from being zero-knowledge, and nothing may call it that until it is closed (the README states it too):
 - **N2's unit isn't proved yet:** its verifier of record runs `head_check.reference` on the host over the opening, the
-  heads and the certifier's salts. When it is proved, the head-check gate binds `NetworkHeadCheck_v2`'s circuit digest
-  and a proof of any other circuit is refused (NET-43).
+  heads and the certifier's salts.
+
+A proof of it is already held to its circuits: each gate names its Definition's pinned circuit digest, so the unit's
+Program binds them, and the verifier refuses a proof of any other Program ("The check" below).
 
 The certificate's signature no longer reads a hash of witness (NET-42). The certifier signs
 `D = SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R)`, R the head's record digest:
@@ -201,7 +203,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   service's `reject`; the violation's kind stays in the verifier. A registration with any other field, a second root,
   a root entry with another key, or anything more in `window` is refused. A served link has no egress profile, and its
   sizes and each window's declared sync are public instead (`PUBLIC_SERVED`, "A served link" below).
-- **The check** is `LinkWindows.unit`, `NetworkLinkWindow` v3{EGRESS, INGRESS}, over the two certificates' signed
+- **The check** is `LinkWindows.unit`, `NetworkLinkWindow` v4{EGRESS, INGRESS}, over the two certificates' signed
   digests: the AND of the certificates' check and each end's head check. The certificates' check is one opaque
   primitive over the two signed digests, with no gates: each certificate verifies under the certifier's key in its
   session (`LinkWindows.certifier_session`) over its public fields and its signed digest, and names the link-window,
@@ -213,9 +215,15 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   declared grid's (`NetworkHeadFields`), on an end with an occupancy profile its T counts are the profile's row for the
   window (`NetworkHeadCounts`; a window past the profile has no row and is a reject), and the head's record digest R
   (`NetworkRecordDigest`) under the witness `salt_c` is the signed digest (`NetworkSignedDigest`), so the certificate
-  signs the head the check opened. In the unit's Program each head check is one gate that names the Definition
-  (`head_check.gate`): the commitment gadgets' Boolean bodies encode to about 140 MB, and the service encodes the Program
-  on every registration. The Program's digest is the check's, so the spec, the stream and each registration bind to it.
+  signs the head the check opened. In the unit's Program each head check is one gate that names the Definition and
+  its circuit digest, `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2` (`head_check.gate`): the commitment gadgets'
+  Boolean bodies encode to about 140 MB, and the service encodes the Program on every registration. The digest is
+  core's `program_digest` of the Definition's Program (`head_check.circuit_digest`), the one a C-Flock statement names
+  a template by, read from `head_check.circuit-check.json`'s ``digests``, which circuit-check holds to the Definition
+  (a lowering pin). The Program's digest is the check's, so the spec, the stream and each registration bind to it, and
+  through the gates to the circuits: a proof of another circuit with the same interface names another Program. A size
+  class no sidecar pins has a gate naming no digest (`@unpinned`): its verdict of record is unchanged, and no proof of
+  its unit is accepted until a root of that class is pinned.
 - **Its sizes** (`head_check.size`, L = 9): the count check is an equality of 32·T bits, 32·T − 1 ANDs (19,199 at
   T = 600); the fields are 736 + 8·L − 1 (807); the opening is 775,077 at T = 4 and 1,876,070 at T = 600, nearly all
   of it the head row's hm96 digest; the signed digest is 290,246 at T = 4 and 1,333,292 at T = 600, the record digest's
@@ -244,6 +252,9 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   served link" below). A link whose egress end has neither an occupancy profile nor a served profile has no verdict
   (`ValueError`, failing closed), since nothing would hold its egress timing. The outcome passes the opening's root as the session's, which one-stage's audit holds to the registered one. An
   unset deadline bit is a `no-verdict` there, so a reject; a proof after `proof_deadline` is the service's `late`.
+  Given the findings of a proof of the unit (`verify(…, proved=…)`, the verifier of record's run over it,
+  `proofs.verify`), it also needs every gate of the unit to name a pinned digest and every session to accept and name
+  the link's registered Program, the partition object's `program` (`LinkWindows.proved`).
 - **The oracle** is `LinkWindows.stand_in`, the in-the-clear verdict: the audit with the Program's egress grid
   compared, and each head's counts the profile's (`LinkWindows.declares`). `verify` accepts every link-window it
   accepts, and differs only where the record's grid, at the profile's counts, isn't the Program's: in its frames, which
@@ -271,9 +282,10 @@ run and its egress end has no occupancy profile. Declared with
 holds the egress head's counts to the ones the ingress head's counts derive under the window's declared sync, with no
 public egress profile.
 
-- **The unit** is `NetworkServedLinkWindow` v2{EGRESS, INGRESS, SERVED}: `NetworkLinkWindow`'s certificates' check and
+- **The unit** is `NetworkServedLinkWindow` v3{EGRESS, INGRESS, SERVED}: `NetworkLinkWindow`'s certificates' check and
   two head checks (neither end with a count check unless its end declares a profile), and one gate (`served.gate`)
-  naming the Boolean Definition `served.NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}` over the two heads' counts,
+  naming the Boolean Definition `served.NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}` and its circuit digest
+  pinned in `served.circuit-check.json`, as the head check's gate names its own, over the two heads' counts,
   cut from the heads the head checks open (so witness), and the window's sync (δ, p, q), ρ = p/q. OWN is the ingress
   certifier's own frames at the head of every window's first bucket: 1 with its salt on, else 0. Its one output, the
   ok bit, is 1 when every ingress count is at most R_in, bucket 0's at least OWN, p and q are nonzero, and the egress
@@ -697,8 +709,9 @@ them.
     records and closes the link. A run whose window w is the outage is then `Proxy(windows=w)`, nothing for window w,
     and `Proxy(start=w + 1, position=p)`. Its later windows are the full run's if nothing crosses into window w.
   - **Its limits.** An online prover declares from window 0's frames on, so a proxy back from maintenance takes its
-    syncs. The certifier's Lean device port (`verity/core/devices/certifier/lean/`) models a proxy from window 0 with
-    the salt off.
+    syncs. The certifier's Lean device port (`verity/core/devices/certifier/lean/`) models the restart (`initAt`), the
+    salt and a served link's admission; the device's Lean properties (`Security/Properties/CertifierDevice.lean`) are
+    stated from window 0 (`init`), so they don't cover a proxy back from maintenance yet.
 - **Advice:** the declared syncs, one per window, are given before the run, or an online prover (`Proxy(prover=…)`,
   lag 1 … T − 1) declares each at its window's first tick, before anything is handed, from the frames the shaper has
   taken. The proxy never chooses on a tick: right after tick w·T − lag (window 0's before the first tick) it hands
@@ -736,6 +749,102 @@ them.
 The clock and the sleep are injected (`VirtualClock` serves a run driven event by event). `Shaper` and `Bucketer` do no
 I/O, so the tests drive real sockets without reading the wall clock. `benchmarks/network_traces/active_replay.py`
 replays recorded traces through the proxy in real time, and on an injected clock.
+
+## Sealed pair links (`active.Pair`, `verity.ml.crypto.aead`)
+
+The leaf and spine switches between blocks are the prover's, so they can copy every frame that crosses from one block's
+certifier to another's. On a sealed pair link (`Proxy(pair=active.Pair.of(…))`, off by default, and with it off every
+record, wire and verdict is as above) the two ends are both the auditor's certifiers, and every frame between them is
+sealed under an AEAD built from SHA-512 alone.
+
+- **Where it sits.** The sending certifier seals each egress slot after its egress certifier records it, and the
+  receiving certifier opens each unit before its ingress certifier takes it. Every slot is sealed, padding too, so the
+  link carries r units of B + 64 bytes a bucket whatever the occupancy. The records, the occupancy, the commitments and
+  the certificates are the unsealed run's, so N2, N3 and the timing bound read the same grids
+  (`test_a_sealed_pair_link_carries_only_ciphertext_and_every_record_is_the_unsealed_runs`).
+- **The construction** (`verity.ml.crypto.aead`, the standard library's SHA-512 with its whole output; no new hash).
+  H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104), and [x] is u16be len(x) ‖ x.
+  - Keys, by HKDF-Expand (RFC 5869) with one output block. S is 64 uniform bytes, so there is no extract step:
+    `K_enc = HMAC(S, "verity-network-certifier/pair/v1/enc" ‖ [σ] ‖ [ℓ] ‖ 0x01)`, and `K_mac` is the same under
+    `…/mac`. σ is the session id and ℓ the direction's name (`"a>b"`), so each direction of each pair in each session
+    has keys of its own, and a unit reflected back to its sender doesn't open.
+  - The nonce of slot j of bucket t of window w of the sender's egress grid is `N = u64be w ‖ u32be t ‖ u32be j`.
+  - A frame f is sealed as follows: `KS = H(K_enc ‖ N ‖ u64be 0) ‖ H(K_enc ‖ N ‖ u64be 1) ‖ …`, cut to B bytes;
+    `C = f ⊕ KS`; `tag = HMAC(K_mac, N ‖ C)`. The unit is `C ‖ tag`.
+  - A unit is opened by recomputing its tag, comparing it in constant time, and giving `C ⊕ KS`, or nothing.
+  - Why each piece is standard:
+    - Each keystream input is 88 bytes, inside one compression block, with the key in it. That is SHA-512's compression
+      function as a dual PRF keyed by the secret bytes of its first block: the claim `prf/sha-512`
+      (`verity.core.claims`), on which `verity.ml.randomness`'s keyed streams already rest. Every input has one
+      length, so length extension doesn't arise.
+    - Counter mode over a PRF is IND-CPA while no nonce repeats under a key (Bellare, Desai, Jokipii and Rogaway, 1997).
+    - HMAC-SHA512 is a PRF under the same assumption (Bellare, 2006; FIPS 198-1), so it is a strongly unforgeable MAC.
+    - Encrypt-then-MAC with the nonce under the tag is IND-CCA and INT-CTXT (Bellare and Namprempre, 2000; scheme N2 of
+      Namprempre, Rogaway and Shrimpton, 2014).
+    - Every unit under one key has one length, so `N ‖ C` needs no length field. No new claim id is needed.
+- **Keys.** There is one secret S per certifier pair per session: 64 bytes of one certifier host's own randomness
+  (`fresh_pair_secret`), drawn again for each new session σ.
+  - SHA-512 alone gives no key agreement, so S reaches the pair's other certifier host the way the certifier's keys and
+    run id reach their consumers: through the auditor's deployment channel.
+  - S and its keys live only in the two certifier processes and on their hosts, never in a record, a log or the
+    prover's configuration.
+  - They are protocol keys, which seal frames, not access keys.
+  - Their custody joins `trusted-nebius-host`, which now also covers each pair's secret on its two hosts and the
+    deployment channel that installs it.
+  - A leaked S opens that pair's link for that session. It changes no record and no verdict: the account only loses
+    the premise below, and the link is charged as an unsealed one.
+- **Randomness and leakage.** The only coins are S, and nonces are public structure. Each nonce is used once under its
+  key:
+  - the sender refuses a slot at or before the last it sealed (`Sealer`);
+  - a certifier back from maintenance keeps its sealer;
+  - each session and direction has keys of its own.
+
+  The leakage argument: a nonce is a function of the link, the window, the bucket and the slot, which the path sees
+  already, so it adds nothing. With each nonce used once under keys the path never holds, every unit is
+  indistinguishable from B + 64 uniform bytes (`prf/sha-512`). Since every slot is sealed, padding too, at r units a
+  bucket, what the path sees is a function of public parameters and time alone: neither the frames nor which slots
+  are padding.
+- **Fail closed.** The receiver opens the k-th unit it reads as slot k of its peer's grid, from the peer's start
+  window on (`Opener`). A unit that doesn't open (tampered, replayed, reordered, missing, which shifts every unit after
+  it, or sealed under another session's or direction's keys) faults its ingress window `malformed`. The opener stays
+  refused, so every later window is `malformed` too, until a new session. Nothing is retried or redrawn.
+- **The account.** Once every link between two blocks' certifiers is sealed, a crossing from one block to another is
+  ciphertext off the two certifiers. So the export charge (λ_out, #2780) applies at the facility boundary only. In
+  `benchmarks/datacenter` this switches at `Datacenter(sealed=True)` (off by default), which `Placement._exported`
+  reads to count only the crossings to a reader off every block.
+- **The analysis.** `Security/` doesn't change. WX's A1 (EgressMediated(s), `note:proofs/20261019T0125Z-report-wx-model`)
+  restated with encryption as its premise is a claim, not a proof:
+  - **The restatement (A1 at the facility boundary, sealed):** every bit that leaves the facility is an egress slot
+    value certified equal to the committed output at a certifier on the facility boundary, or one of s side-channel
+    bits per window.
+  - **The premise:** every link between two spatial units is a sealed pair link between two of the auditor's
+    certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-nebius-host`.
+  - **What it changes:** A1's units are then the facility, not each block.
+- **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on vy-nebius-cpu-2: an AMD
+  EPYC Genoa, 256 cores at a load of about 30, with `sha_ni` but no SHA-512 instructions, and OpenSSL 3.0.13).
+  Figures are bytes of frames a second on one core, on its CPU seconds. Line rate is 400 Gb/s, 50 GB/s, per uplink in
+  each direction; its column is the cores one direction takes at each end.
+
+  | Path | B | Seal | Open | Cores at line rate |
+  |---|---|---|---|---|
+  | Python, one process (`Sealer`, `Opener`) | 512 | 52.7 MB/s | 53.4 MB/s | 948 |
+  | Python, one process | 4096 | 81.5 MB/s | 81.5 MB/s | 614 |
+  | Python, certifier to certifier across the fabric | 512 | 52.2 MB/s | 50.0 MB/s | 999 |
+  | Python, certifier to certifier across the fabric | 4096 | 82.7 MB/s | 80.8 MB/s | 619 |
+  | C over OpenSSL's SHA-512 (`seal_fast.c`, the Python's units) | 512 | 195.5 MB/s | 194.8 MB/s | 257 |
+  | C over OpenSSL's SHA-512 | 4096 | 224.1 MB/s | 223.0 MB/s | 224 |
+
+  A 4096-byte frame costs 98 SHA-512 compressions: 64 for the keystream and 34 for the tag. The C path runs at about
+  5.4 million compressions a second, four fifths of OpenSSL's own rate on long inputs (847 MB/s). So no CPU path on this
+  node reaches line rate. One direction needs about 1.2 × 10⁹ compressions a second.
+  - The construction is parallel (its keystream blocks and its frames are independent), so cores scale it. But 224
+    cores at each end of each direction isn't a certifier.
+  - What would reach line rate:
+    - SHA-512 instructions (x86's SHA512 extension, ARMv8.2's SHA512), which this node lacks and which are unmeasured
+      here;
+    - a GPU kernel (C-Flock has SHA-512 in CUDA, `verity/ml/flock/cuda/sha512.cuh`);
+    - or a pipeline on the uplink's NIC, DPU or FPGA.
+  - The Python path is the reference and the tests' path, not a fast path.
 
 ## Tests
 
@@ -828,6 +937,14 @@ and seven lemmas, and three more proved lemmas:
     instances. A proxy can't start past its windows or with an online prover;
   - the served bucketer admits whole requests while the window ends idle, holds the rest for the next window, and
     every record it publishes derives; it refuses an own frame and a window that can't hold one request;
+  - on a sealed pair link, the records and every verdict are the unsealed run's. The wire is sealed units, padding
+    included, with no frame's bytes in it, and opened in order it is the unsealed wire. A unit with a ciphertext or tag
+    bit flipped, a replayed one, and one sealed at another slot, in another session, under another secret or under the
+    receiver's own direction each make their window and every later one `malformed`;
+- **`test_network_certifier_seal.py`:** the AEAD as the section "Sealed pair links" states it, recomputed from `hashlib`
+  and `hmac` alone and pinned; a unit opens only whole (every bit flip refused) at its own nonce under its own
+  direction's keys of its own session; the sender never seals a slot twice; and the receiver refuses a dropped,
+  replayed, swapped, cut or flipped unit and every unit after it;
 
 No test mirrors the other eight statements of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,

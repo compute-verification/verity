@@ -17,8 +17,9 @@
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
 #   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only; A5_JOBS=N
 #   audits up to N ranks at once (a GLM-5.3 rank, SiluMul_v2 at step 16: its window ~16 min and ~11.7 GB, its audit ~10 GB;
-#   the MoE w2 coordinates of one layer, glm53_moe_w2_tp8_step16.json: its window ~4 min and ~13.1 GB, then ~27 min of the
-#   verifier's window and staging its 768 chunks, then each drawn chunk's session ~8 min and ~32 GB, which a loaded machine
+#   the MoE w2 coordinates of one layer, glm53_moe_w2_tp8_step16.json: its window ~4 min and ~13.1 GB, then ~2.5 min of the
+#   verifier's window, ~5 min staging its 768 chunks' public files and ~2.5 min to the draw (a drawn chunk's prover file is
+#   staged after it), then each drawn chunk's session ~8 min and ~32 GB, which a loaded machine
 #   stretched past an hour; a5's --session-timeout, A5_SESSION_TIMEOUT, is each prover's limit).
 #   research run --on M --project verity --cwd clone --mem-gb 64 -- bash benchmarks/one_stage/a5_tp.sh
 # Kept in $OUT: a5's records and logs, the public files, the sessions (their proofs and records), the binaries' sha256 and the
@@ -31,6 +32,9 @@
 #   session, so A5_JOBS covers every audited rank. The session's files, the ledger and the host's pins log are kept in
 #   $OUT/<name>/challenger/. The verifier's own copy of main's first-parent history (a5.py --main) is A5_MAIN, else this
 #   clone's fetch of origin/main ($OUT/main.txt, as benchmarks/remote_session/auditor.sh writes it).
+# A5_COINS=verifier (instead of A5_CHALLENGER): each rank draws by its partition file's rule through its own service.Stream
+#   on the verifier's own live coins (a5.py --coins verifier: the Lean's IO.getRandomBytes, read once the stream received
+#   the rank's registration), no challenger session, so A5_JOBS takes any number of ranks. Its record says source: verifier.
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
@@ -79,7 +83,7 @@ audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION
   mkdir -p $O/$1
   $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 --workload $4 --windows $5 --partition $6 \
     ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$1 \
-    ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
+    ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_COINS:+--coins $A5_COINS} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
     ${MAIN:+--main $MAIN} > $O/$1/a5.log 2> $O/$1/a5.err
   local rc=$?
   grep '^A5' $O/$1/a5.log | cut -c1-4000; tail -25 $O/$1/a5.err
