@@ -8,7 +8,8 @@ last root of the draw's last window: the session's coins are its W challenges, t
 W + c. `close` is `Session.close` for a draw: only the draw's last window closes, once its roots are final, which makes
 every window of the draw final; each is rejected `few` in order; and the draw's `s` receipts are drawn over its passes
 in order (`draws`, under the key of window c), numbered across its windows, each window keeping its own share,
-(pass, position) in it, which `Session.verify` checks, possibly none.
+(pass, position) in it, which `Session.verify` checks. A window whose share is none has nothing to open: the close
+accepts it, and `Session.verify` refuses it, as it refuses any window with a verdict.
 
 `step g` and `run g` are `Session.step` and `Session.run` with that close, and at g = 1 they are `Session.step` and
 `Session.run` (`step_one`, `run_one`): every property of the code stated on `Session.run` is about the one-coin-a-window
@@ -45,7 +46,10 @@ def close (g : Nat) (s : State) (t : Int) (now : Nat) : Except String (Result ×
     if base ≤ i && i < base + n then some (i - base, p) else none
   let (windows, _) := group.foldl (fun (acc : Array Win × Nat) u =>
       let n := acc.1[u]!.plans.size
-      (acc.1.modify u ({· with drawn := some (share acc.2 n), openedNs := some now}), acc.2 + n)) (s.windows, 0)
+      let mine := share acc.2 n
+      (acc.1.modify u (fun w => { w with drawn := some mine, openedNs := some now,
+                                         verdict := if mine.isEmpty then some .accept else w.verdict }),
+       acc.2 + n)) (s.windows, 0)
   return (.drew drawn, { s with windows })
 
 def step (g : Nat) (s : State) (e : Event) : Except String (Result × State) :=

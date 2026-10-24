@@ -627,7 +627,7 @@ class Run:
 
     def finish(self, edit: Callable[[int, list[audit.Opening]], list[audit.Opening]] | None = None) -> None:
         """Every draw not yet drawn closed at its last window and its windows verified in order, their openings
-        through `edit`, until one fails."""
+        through `edit`, until one fails; a window its close accepted, its share none, isn't verified."""
         for t in range(len(self.s.windows)):
             if t in self.draws:
                 continue
@@ -636,6 +636,8 @@ class Run:
             if not isinstance(out, tuple):
                 return
             for u in group:
+                if self.s.windows[u].verdict is not None:
+                    continue
                 v = self.verify(u, None if edit is None else edit(u, self.openings(u)))
                 if not (isinstance(v, audit.Verdict) and v.accepted):
                     return
@@ -1059,8 +1061,8 @@ def honest_paced_drawn_at_k(r: Run) -> None:
 
 def honest_shared(r: Run) -> None:
     """One openings coin over g windows (`Params.groups_per_coin`): every window's passes, then each draw closed at its
-    last window and its windows verified on their shares, some of them none at a few samples. A close at a window
-    before its draw's last is refused."""
+    last window and its windows verified on their shares. A close at a window before its draw's last is refused, and
+    a window whose share is none, accepted at its close, is refused a verify."""
     r.start()
     for t in range(r.params.windows):
         r.run()
@@ -1069,6 +1071,9 @@ def honest_shared(r: Run) -> None:
         r.run(Plan(((1, 3), (0, 1)), r.store.extent))
         r.boundary()
     r.finish()
+    for u, w in enumerate(r.s.windows):
+        if w.draws == ():
+            r.verify(u, [])
 
 
 SKIPPED = Plan(((0, 3), (4, 2)), 6)

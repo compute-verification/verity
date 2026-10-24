@@ -27,7 +27,8 @@ def shared(store, g: int, windows: int = 8, **kw) -> tuple[audit.Params, coins.C
 
 def finish_draws(s: Session, prover: audit.Prover, passes, clock, open_=None) -> list[audit.Verdict]:
     """`finish` a draw at a time: past the last deadline, each draw closed at its last window, then each of its windows
-    verified on its own share of the draws, in order, up to the first rejection."""
+    verified on its own share of the draws, in order, up to the first rejection; a window whose share is none keeps
+    the verdict its close gave it."""
     clock.now = max(clock.now, s.deadline(len(s.windows) - 1) + 1)
     out = []
     for t in range(s.params.windows):
@@ -38,6 +39,9 @@ def finish_draws(s: Session, prover: audit.Prover, passes, clock, open_=None) ->
         if isinstance(drawn, audit.Verdict):
             return out + [drawn]
         for u in group:
+            if s.windows[u].verdict is not None:
+                out.append(s.windows[u].verdict)
+                continue
             out.append(s.verify(u, [(open_ or prover.open)(passes[u, i], p) for i, p in s.windows[u].draws]))
             if not out[-1].accepted:
                 return out
@@ -113,6 +117,28 @@ def test_an_honest_session_drawn_four_windows_a_coin_is_accepted(store) -> None:
     for t, u in enumerate(us):
         draw = sum(us[t // 4 * 4:t // 4 * 4 + 4])
         assert Fraction(floors[t]) >= min(Fraction(1), fs[t // 4] * draw / u) > fs[t // 4]
+
+
+def test_a_window_the_draw_misses_is_accepted_at_its_close_and_refused_a_verify(store) -> None:
+    """Three draws over four windows leave at least one window of each draw with none: its close accepts it, a verify
+    of it is refused, and its record counts none drawn, the reading of its own share."""
+    p, c = shared(store, 4, samples=3)
+    s, prover, passes, clock = drive(store, p, SCHEDULE8, coins_=c)
+    clock.now = s.deadline(7) + 1
+    s.close(3), s.close(7)
+    missed = [u for u in range(8) if s.windows[u].draws == ()]
+    assert {u // 4 for u in missed} == {0, 1} and all(s.windows[u].verdict == audit.Verdict(u, True) for u in missed)
+    for u in range(8):
+        if u in missed:
+            with pytest.raises(SessionError, match="no draws awaiting"):
+                s.verify(u, [])
+        else:
+            assert s.windows[u].verdict is None
+            assert s.verify(u, [prover.open(passes[u, i], q) for i, q in s.windows[u].draws]).accepted
+    assert s.outcome == "accepted"
+    r = s.record()
+    assert [w.profile.drawn["receipt"] for w in r.windows] == [len(w.draws) for w in s.windows]
+    assert audit.pooled_windows(r)[0] == [(sum(w.receipts for w in r.windows[a:a + 4]), 3) for a in (0, 4)]
 
 
 def test_the_last_draw_may_hold_fewer_windows(store) -> None:

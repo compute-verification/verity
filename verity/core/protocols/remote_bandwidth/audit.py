@@ -1060,7 +1060,8 @@ class Session:
         window closes, and that makes every window of the draw final (an earlier one's deadline is before t's), each
         rejected `few` in order; its `s` receipts are drawn over the draw's passes in order, numbered across its
         windows, under the key of window c, and each window keeps its own share, (pass, position) in it, which `verify`
-        checks, possibly none.  At g = 1 that is the window's own draw."""
+        checks.  A window whose share is none has nothing to open: the close accepts it, and `verify` refuses it.  At
+        g = 1 that is the window's own draw, never none."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is not None:
@@ -1093,9 +1094,11 @@ class Session:
             i = bisect.bisect_right(ends, u)
             draws.append((i, u - (ends[i - 1] if i else 0)))
         base = 0
-        for v in ws:
+        for u, v in zip(group, ws):
             n = len(v.plans)
             v.draws, v.opened_ns = tuple((i - base, p) for i, p in draws if base <= i < base + n), now
+            if not v.draws:
+                v.verdict = Verdict(u, True)
             base += n
         return tuple(draws)
 
