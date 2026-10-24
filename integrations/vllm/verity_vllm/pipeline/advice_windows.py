@@ -22,7 +22,8 @@ compiler), and only the root and the length are public.  The rows and their salt
   committed value.  The opening shows the verifier the advice: that is the named gap, until the wiring between the compiler's
   public units is proved in zero knowledge instead.
 
-A compiler is what the window path reads of it: ``name``, ``digest``, ``transfer_gates`` and ``load(rank, world, requests)``, the
+A compiler is what the window path reads of it: ``name``, ``digest``, ``transfer_gates`` (``()`` if it has none) and
+``load(rank, world, requests)``, the
 rank's `rank_replay.Loaded` for the requests the advice states (`requests_of`), each ``{"request_id", "arrive_step",
 "prompt_len", "max_tokens"}`` with its output length as ``max_tokens``.  `Traced` is today's stand-in: the Build's Programs of
 record, by the manifest's lookup of record.  The ahead-of-time compiler takes its place under its own registered digest.
@@ -261,6 +262,11 @@ def _loaded(commit_dir: str | os.PathLike, rank: int, compiler: Any, requests: S
     return rec, compiler.load(rank, int(rec["world"]), requests)
 
 
+def transfer_gates_of(compiler: Any) -> tuple[str, ...]:
+    """The templates ``compiler`` lists as holding transfer gates, ``()`` for a compiler that lists none."""
+    return tuple(getattr(compiler, "transfer_gates", ()))
+
+
 def window_of_advice(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, compiler: Any,
                      requests: Sequence[Mapping[str, Any]], bound: Mapping[str, Any]) -> tuple[Any, dict[str, Any]]:
     """The verifier's own window of rank ``rank`` of the TP Commit ``commit_dir``: the population over ``compiler``'s Programs for the
@@ -268,7 +274,7 @@ def window_of_advice(commit_dir: str | os.PathLike, rank: int, partition_file: s
     from verity_vllm.pipeline.tp import serving_rows as SRT
 
     rec, p = _loaded(commit_dir, rank, compiler, requests)
-    return SRT.window_of(rec, rank, partition_file, p, dict(bound), compiler.transfer_gates)
+    return SRT.window_of(rec, rank, partition_file, p, dict(bound), transfer_gates_of(compiler))
 
 
 def commit_window(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, out_dir: str | os.PathLike, compiler: Any,
@@ -279,7 +285,7 @@ def commit_window(commit_dir: str | os.PathLike, rank: int, partition_file: str 
 
     _rec, p = _loaded(commit_dir, rank, compiler, requests)
     return SRT.from_bundle(commit_dir, rank, partition_file, out_dir, programs=p, binding=dict(bound),
-                           transfer_gates=compiler.transfer_gates, **kw)
+                           transfer_gates=transfer_gates_of(compiler), **kw)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

@@ -1,5 +1,5 @@
-# Sourced by the rec-v0 jobs (80-rec-inner.sh, 81-rec-outer.sh) after their CPU pinning: the run's directories ($O out/,
-# $S scratch, $L cache), host.txt, /usr/bin/time, the Lean verifier ($LEAN_BIN, built in the background: wait $LP), the
+# Sourced by the rec-v0 jobs (80-rec-inner.sh, 87-rec-c3-open.sh, 88-rec-c3-inner.sh) after their CPU pinning: the run's
+# directories ($O out/, $S scratch, $L cache), host.txt, /usr/bin/time, the Lean verifier ($LEAN_BIN, built in the background: wait $LP), the
 # prover build ($B, 60-circuit.sh's, keyed by its sources) and the job's Python ($REPO's packages on PYTHONPATH).
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/rec-v0-job}/out; mkdir -p $O
 [ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ] && export FLOCK_WORK=/workspace/jobs/rec-v0

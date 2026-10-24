@@ -628,8 +628,9 @@ def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_
     ``--registered`` file is credit's, the verifier-built ok rows (o1) included, every pub row opening credit's root. A table with one row off, under the
     same salts, has another root, which `credit._verified` refuses a session for, and its row opens none of credit's.
     At close the window commits its ok rows (`Served.ok`, o1) at credit's root, in no entry: a window whose entries
-    name them is refused."""
-    run, _ws, _got = _window(W1, receipts=_Receipts())
+    name them is refused. Its linears' K are 32 and 64: credit's layout refuses a tile at a K its proof doesn't cover
+    (``tile-k``, K a multiple of 32)."""
+    run, _ws, _got = _window(W1, receipts=_Receipts(), shapes=[(64, 32), (32, 32), (32, 64)])
     served, pre = run.served, SV.PREFIX
     assert not served.refused and served.tables()[-2 * len(run.calls):-len(run.calls)] == [
         pre + f"pub@{c}" for c in range(len(run.calls))]
@@ -671,6 +672,46 @@ def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_
     assert [list(row) for row in served.ok.rows] == [list(CC.OK_ROW)] * served.ok.leaves
     assert CR.registered_file(program, lay, shape, 0, {**roots, served.ok.value: [served.ok.root.hex()]}, served.root,
                               served.steps, run._salt.hex())[1][0] == "registration"
+
+
+class _Prepared(_Receipts):
+    """The stand-in with a ``prepare``: each batch it was handed (with the asks made before it), and each ask's
+    arguments, by call."""
+
+    def __init__(self, fail=None):
+        super().__init__()
+        self.batches, self.asked, self.fail = [], {}, fail
+
+    def prepare(self, batch):
+        if self.fail:
+            raise ValueError(self.fail)
+        self.batches.append((len(self.order), batch))
+
+    def __call__(self, call, codes, s_a, w, s_w):
+        self.asked[call.index] = (call, codes, s_a, w, s_w)
+        return super().__call__(call, codes, s_a, w, s_w)
+
+
+def test_a_producer_with_prepare_is_handed_each_steps_calls_of_one_k_before_it_is_asked_them():
+    """A receipt producer with a ``prepare`` is handed each step's calls of one K together before any of them is asked:
+    the same calls with the same arguments, in the order they are then asked, so it may compute them in one launch; each
+    receipt table is still the producer's ask's words. A ``prepare`` that refuses refuses the window, naming the calls."""
+    made = _Prepared()
+    run, _ws, _got = _window(W1, receipts=made)
+    served, at = run.served, 0
+    assert not served.refused and made.batches
+    for asked_before, batch in made.batches:
+        calls = [args[0].index for args in batch]
+        assert asked_before == at and made.order[at:at + len(calls)] == calls == served.step_calls(calls[-1])
+        assert all(x is y for args in batch for x, y in zip(args, made.asked[args[0].index], strict=True))
+        at += len(calls)
+    assert at == len(run.calls)
+    for c in run.calls:
+        rc = served.registered[SV.PREFIX + f"receipt@{c.index}"]
+        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._key,
+                                      SV.RECEIPT_NONCE + c.index)
+    refused = _window(W1, receipts=_Prepared(fail="no launch"))[0].served.refused
+    assert any(r.startswith("calls [") and r.endswith("]: no launch") for r in refused), refused
 
 
 def test_receipts_off_the_units_receipt_width_are_refused():
