@@ -62,10 +62,12 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    rows (`with_row_tables`): the ``x`` table the chunk's distinct token rows, each a row of its
                                    row table (one per engine step and op_path), and the ``w`` table its own rows
   ``MoeExpertFp8Gemm(W)_v1{N=1,..}``  every coordinate n of the rows of that Definition at any N (the expert-indexed pair GEMMs,
-                                   and ``FlashInferFp8Linear_v1{K=..,N=1}``, ``COORDS``): ``in<g>`` per argument group, the
-                                   leading ones whole and the last two ``w[:, n, :]`` and ``ws[:, n // G, :]`` of every expert
-                                   (FlashInfer's linear: ``w[n]`` and ``ws[n // 128]``) -> ``out.<member>``, the row's output
-                                   word n (`_read_coord`); packed ports, one index entry per row; chunked (``chunk_cap``),
+                                   ``FlashInferFp8Linear_v1{K=..,N=1}`` and ``ScaledMmFp8BlockSharedScale_v1{K=..,N=1,G=..}``,
+                                   ``COORDS``): ``in<g>`` per argument group (a ``PARTS`` part's, the operands its entry
+                                   names), the leading ones whole and the last two ``w[:, n, :]`` and ``ws[:, n // G, :]`` of
+                                   every expert (FlashInfer's linear and the block-scaled GEMM: ``w[n]`` and ``ws[n // G]``)
+                                   -> ``out.<member>``, the row's output
+                                   word n (`part_rows.read_coord`); packed ports, one index entry per row; chunked (``chunk_cap``),
                                    v2 bit rows (`chunk_rows.unit_rows`) -> ``o0``
   ``MoeExpertFp8CoordinateChunk_v1{K=k,FIRST=..,LAST=..}``  chunk c of every coordinate n of the ``MoeExpertFp8Gemm_v1`` rows
                                    (``KCHUNKS``, `kchunk_rows`: FIRST c = 0, LAST c = K/k - 1, else the chunks between):
@@ -76,10 +78,17 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    a power of two (``COLS``): ``in<g>`` per argument group, each of its rows' columns [jw, jw + w)
                                    in order -> ``out.<member>``, the row's output columns [jw, jw + w); one index entry per row;
                                    chunked (``chunk_cap``), v2 bit rows (`chunk_rows.unit_rows`) -> ``o0``
+  ``AllReduceMultimem_v1{SIZE=w,..}``  likewise along SIZE, for a row whose owners' TREES are one tree and w whole 8-element
+                                   vectors (`cols_refused`); a member of blocks handed another row refuses it
   ``AllReduceResidualMnnvl_v1{N=w,..}``, ``RmsNormMnnvl_v1{..}``  the parts of every ``AllReduceRmsNormMnnvl_v1`` row (``PARTS``):
                                    its all-reduce and residual add in column blocks as ``COLS`` (``in0`` the partials, ``in1``
                                    the residual -> ``out.<member>``, the row's r), its norm whole (``in0`` the row's committed r,
                                    ``in1`` the weight -> ``out.<member>``, the row's normed output); one index entry per row
+  ``Fp8GroupQuantUe8m0_v1{..}``, ``ScaledMmFp8BlockSharedScale_v1{N=1,..}``  the parts of every ``DeepGemmFp8Linear_v1`` row
+                                   (``PARTS``, at G = 128, ``PART_STATICS``): its quantisation whole (``in0`` the row's x ->
+                                   ``out.<member>``, its q and s; packed ports, `part_rows.read_part`), its GEMM in coordinates as
+                                   ``COORDS`` (``in0``, ``in1`` the row's committed q and s, ``in2``, ``in3`` ``w[n]`` and
+                                   ``ws[n // 128]`` -> ``out.<member>``, its y word n); one index entry per row
   ``Gemm_v2{N=1,..}``, ``BatchedGemm_v1{B=1,N=1,..}``, ..  every slice of the rows of that Definition at any extents along its
                                    axes (``SLICES``): ``in<g>`` per argument group, its element along each axis it carries and
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
@@ -257,7 +266,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             rx, rw = sum(g["tokens"] for g in groups), sum(g["columns"] for g in groups)
             m = CS.Member(t, (("x", K), ("w", K)), (("y", 1),), sum(g["tokens"] * g["columns"] for g in groups), base,
                           tables=(("x", rx), ("w", rw)))
-        elif layout in ("coord", "cols", "part", "slice"):
+        elif layout in ("coord", "cols", "slice") or (layout == "part" and part(template(t).word, r["spec"]) is not None):
             params, ret = template(t).fn.signature()
             if layout == "part":
                 n = len(rs)
@@ -422,15 +431,20 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     from its first row (`members`); each index entry keeps the row's own member names.  A row whose input or output widths
     are not the member's is refused (a packed template's in u16 words).  A ``cols`` member's row is ``W / w`` units, each
     operand and output its rows' columns [jw, jw + w) in order, under one index entry.  A part of the row (``PARTS``) reads the
-    row's argument groups and committed outputs it names, in its order, and returns, and names in its entry, its outputs."""
+    row's argument groups and committed outputs it names, in its order, and returns, and names in its entry, its outputs.  A
+    ``cols`` row whose blocks are not its columns (`cols_refused`) is refused in blocks."""
+    from verity_vllm.pipeline import part_rows as PR
+    from verity_vllm.pipeline.serving_templates import cols_refused
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     tp = template(m.template)
     layout = tp.layout
+    if layout == "part" and tp.packed:
+        return PR.read_part(m, rows, store, weights, arrivals, _slices, _packed)
     if layout == "gemm":
         return _read_gemm(m, rows, store, weights, arrivals)
     if layout == "coord":
-        return _read_coord(m, rows, store, weights, arrivals)
+        return PR.read_coord(m, rows, store, weights, arrivals, _slices, _packed)
     if layout == "slice":
         return SL.read(m, rows, store, weights, arrivals, _slices)
     if layout == "kchunk":
@@ -467,6 +481,8 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
             if W % w:
                 raise ValueError(f"row {r['i']} ({d['op_path']}): {axis}={W} is no whole number of member {m.key}'s {axis}={w} columns")
             nh = W // w
+            if nh > 1 and (why := cols_refused(tp.word) or cols_refused(r["spec"])) is not None:
+                raise ValueError(f"row {r['i']} ({d['op_path']}): {nh} column blocks of {why}")
             got = [len(a) for a in ops + outs]
             if [g // nh for g in got] != [n for _, n in m.rows + m.outs] or any(g % W for g in got):
                 raise ValueError(f"row {r['i']} ({d['op_path']}): inputs and outputs of {got} words are not {nh} of member {m.key}'s "
@@ -539,75 +555,6 @@ def _read_gemm(m: CS.Member, rows: list[tuple[str, Any, dict, dict]], store: Any
         refs.append(np.stack([g["x_base"] + j // N, g["w_base"] + j % N], axis=1))
     data = {"rows": {"x": np.concatenate(xs), "w": np.concatenate(ws)}, "outs": {"y": np.concatenate(ys).reshape(-1, 1)},
             "refs": np.concatenate(refs)}
-    return data, entries
-
-
-def _read_coord(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
-                arrivals: dict[str, int] | None) -> tuple[dict[str, Any], list[list[Any]]]:
-    """A ``COORDS`` template's units (the ``coord`` layout), row by row, then coordinate: unit (row, n) reads the row's leading
-    operands whole and, for its last two, ``w`` ([E][N][K]) and ``ws`` ([E][cdiv(N, G)][K/G]), ``w[:, n, :]`` and
-    ``ws[:, n // G, :]`` of every expert, which are the template's ``w`` and ``ws`` at N = 1; its output is the row's output
-    word n.  A family whose statics have no E or G takes ``COORDS``' (FlashInfer's linear: one expert, 128-wide blocks).  Every
-    port is its elements' bytes (``Template.packed``).  One index entry per row, the range of its N units.  A weight stack is
-    read once per distinct slice group."""
-    from verity_vllm.query.program_view import spec_base
-
-    tp = template(m.template)
-    bits = tp.packed or (16,) * (len(m.rows) + 1)
-    cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
-    (port, _w), = m.outs
-    entries: list[list[Any]] = []
-    stacks: dict[str, np.ndarray] = {}
-
-    def stack(r: dict, pi: Any, rid: str, arrive: int, g: Sequence, b: int, n: int, what: str) -> np.ndarray:
-        key = json.dumps(g)
-        if key not in stacks:
-            parts = [np.asarray(a).reshape(-1) for a in _slices(pi, store, weights, rid, arrive, g)]
-            if any(a.dtype.itemsize * 8 != b for a in parts) or sum(a.size for a in parts) != n:
-                raise ValueError(f"row {r['i']} {what}: {[f'{a.size} {a.dtype}' for a in parts]} elements, not {n} of {b} bits")
-            le = np.concatenate([np.ascontiguousarray(a, dtype=a.dtype.newbyteorder("<")) for a in parts])
-            stacks[key] = le.view(np.uint8 if b == 8 else np.dtype(f"<u{b // 8}"))
-        return stacks[key]
-
-    lo = m.base
-    for rid, pi, r, d in rows:
-        arrive = int((arrivals or {}).get(rid, 0))
-        S = {**COORDS[spec_base(tp.word)], **d["statics"]}
-        E, K, N, G = (int(S[k]) for k in ("E", "K", "N", "G"))
-        NB, KG = -(-N // G), K // G
-        if len(r["args"]) != len(m.rows):
-            raise ValueError(f"row {r['i']} ({d['op_path']}): {len(r['args'])} argument groups, not member {m.key}'s {len(m.rows)} ports")
-        *lead, gw, gs = r["args"]
-        ops = [_packed(_slices(pi, store, weights, rid, arrive, g), b, f"row {r['i']} argument {k}") for k, (g, b) in enumerate(zip(lead, bits))]
-        W = stack(r, pi, rid, arrive, gw, bits[len(lead)], E * N * K, "w").reshape(E, N, K)
-        WS = stack(r, pi, rid, arrive, gs, bits[len(lead) + 1], E * NB * KG, "ws").reshape(E, NB, KG)
-        (member, width, _dt), = d["members"]
-        if int(width) != N:
-            raise ValueError(f"row {r['i']} ({d['op_path']}): member {member} of {width} elements, not its N = {N} coordinates")
-        y, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * N, (d["row"] + 1) * N)
-        if y is None:
-            raise LookupError(f"row {r['i']} output {member}: {why}")
-        y = _packed([np.asarray(y)], bits[-1], f"row {r['i']} output {member}").reshape(N, -1)
-        wcol = np.ascontiguousarray(W.transpose(1, 0, 2)).reshape(N, -1).view("<u2")
-        scol = np.ascontiguousarray(WS[:, np.arange(N) // G, :].transpose(1, 0, 2)).reshape(N, -1).view("<u2")
-        got = [a.size for a in ops] + [wcol.shape[1], scol.shape[1], y.shape[1]]
-        if got != [w for _, w in m.rows + m.outs]:
-            raise ValueError(f"row {r['i']} ({d['op_path']}): a coordinate's ports of {got} words, not member {m.key}'s "
-                             f"{list(m.rows)} and {list(m.outs)}")
-        for k, a in enumerate(ops):
-            cols[f"in{k}"].append(np.broadcast_to(a.reshape(1, -1), (N, a.size)))
-        cols[f"in{len(ops)}"].append(wcol)
-        cols[f"in{len(ops) + 1}"].append(scol)
-        cols[port].append(y)
-        layer = _LAYER.search(d["op_path"])
-        entries.append([lo, lo + N, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"], str(member),
-                        int(d["row"]), int(r["i"])])
-        lo += N
-    if lo - m.base != m.n:
-        raise ValueError(f"{m.key}: its rows hold {lo - m.base} units, not its {m.n} (a chunk is read with its template's others, "
-                         f"`read_all`)")
-    data = {"rows": {p: np.concatenate(cols[p]).astype(np.uint16, copy=False) for p, _ in m.rows},
-            "outs": {p: np.concatenate(cols[p]).astype(np.uint16, copy=False) for p, _ in m.outs}}
     return data, entries
 
 
