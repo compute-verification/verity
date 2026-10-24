@@ -12,12 +12,16 @@ context, bit) from the book's priors (`kt`) and each window's charge (`charge`).
 - `fields(trace)`: ENC-DERIVED's still-sent fields (`derived.residual`: the hits past the pool bound, the resumes, the
   order misses and async's lag bits), each field cut into windows of 64 values, under a book fit to them.
 
-    python3 arith_vectors.py [LABEL=DIR ...] [--steps] [--circuit] [--out OUT.json] [--fixture PATH]
+    python3 arith_vectors.py [LABEL=DIR ...] [--steps] [--circuit] [--cut N] [--out OUT.json] [--fixture PATH]
 
 checks `arith_encode`'s references against code.py on every stream (`check`), and with `--circuit` the Definitions too:
 the bit-checking step along each segment, the counting step's tally (each window's count is its segment's length, and
-its finish gives v1's charge), and the book's model (`BookKT_v1`) at each bit. `--steps` takes the
-replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows) and the TRACE-CORPUS fixture's
+its finish gives v1's charge), and the book's model (`BookKT_v1`) at each bit. On each decisions stream it holds
+`ChargeCount_v1`, one window's charge from its decisions alone, to `code_v1` (`check_charges`): its reference on each
+window's decisions and on the decisions cut again into windows of at most `--cut` slots with gaps, and with `--circuit`
+the Definition at that N on the cut. `--steps` takes the
+replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows, their decisions cut at the compile
+slice's P·A = 14 whatever `--cut` says) and the TRACE-CORPUS fixture's
 fields, and `--fixture PATH` writes them as the vectors the certifier's test reads
 (`verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are TRACE-CORPUS traces
 (`replay.read_corpus_trace`; `derived.load_corpus_trace`), each read twice: with the warden's ingress, where the
@@ -55,6 +59,8 @@ V, R, C, D, CV = _load("v1"), _load("replay"), _load("code"), _load("derived"), 
 
 #: the step's scaling slots (`arith_encode.K_MAX`), the binding the vectors are cut for
 K = 18
+#: `ChargeCount_v1`'s slots a window in the corpus difftest (`--cut`), and in the fixture's streams, the compile slice's P·A
+CUT, SLICE_CUT = 64, 14
 EOS = 2
 FIXTURE = HERE.parents[2] / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
 
@@ -117,8 +123,9 @@ def _stream(wins: Sequence[Any], book: Any) -> dict[str, Any]:
     return {"priors": priors, "kt": kt, "charge": list(enc.lens), "windows": windows}
 
 
-def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "batch") -> dict[str, Any]:
-    """Advice v1's stream for `trace` (the module's docstring)."""
+def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "batch", cut: int = CUT,
+              rng: random.Random | None = None) -> dict[str, Any]:
+    """Advice v1's stream for `trace` (the module's docstring), with its decisions' charges (`decision_charges`)."""
     rec = V.record_of(trace, stops)
     adv = V.advice_of(trace, rec)
     reg = V.Registered(trace.engine, tuple(stops), T=T, row_order=row_order)
@@ -130,7 +137,69 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
     s = _stream(wins, reg.book)
     if s["charge"] != charge:
         raise AssertionError("the charges aren't v1's")
+    s["decisions"] = decision_charges(wins, reg.book, cut, rng or random.Random(0))
     return s
+
+
+def decision_charges(wins: Sequence[Any], book: Any, N: int, rng: random.Random) -> dict[str, Any]:
+    """What `ChargeCount_v1` is held to: the book (`Book.to_json()`); each window's decisions alone
+    (`code_v1.Window(arrived=…)`), `code_v1`'s charge for them, and whether the window sends only decisions (then that
+    charge is v1's); and the run's decisions cut again into `code_v1` windows of at most N, each placed in N slots in
+    order with disabled slots between (`en`, a disabled slot's bit random), with `code_v1`'s charge for each. The cut's
+    sizes are 0, N and random, so its windows reach every bin."""
+    alone = [CV.Window(arrived=w.arrived) for w in wins]
+    flat = [b for w in wins for b in w.arrived]
+    sizes, at = [], 0
+    while at < len(flat):
+        sizes.append(min(rng.choice([0, N, rng.randrange(N + 1), rng.randrange(N + 1)]), len(flat) - at))
+        at += sizes[-1]
+    cut, at = [], 0
+    for n in sizes:
+        cut.append(CV.Window(arrived=tuple(flat[at:at + n])))
+        at += n
+    rows = []
+    for w, length in zip(cut, CV.encode(cut, book).lens, strict=True):
+        slots = set(rng.sample(range(N), len(w.arrived)))
+        it = iter(w.arrived)
+        en = [int(j in slots) for j in range(N)]
+        rows.append([_bits(en), _bits(int(next(it)) if e else rng.randrange(2) for e in en), length])
+    return {"book": book.to_json(),
+            "windows": [[_bits(w.arrived), n, w == a] for w, a, n in zip(wins, alone, CV.encode(alone, book).lens)],
+            "cut": {"N": N, "windows": rows}}
+
+
+def check_charges(dec: dict[str, Any], *, circuit: bool) -> dict[str, Any]:
+    """`ChargeCount_v1`'s reference against `code_v1` on `decision_charges`' windows, the carry passed along: each
+    window's decisions alone, at N its own count (all enabled), and the cut, at its N with its gaps; with `circuit`,
+    the Definition at the cut's N against the reference on every cut window, its carry the reference's."""
+    AE = _ae()
+    book = dec["book"]
+    bad = only = 0
+    carry = AE.charge_book(book, 1)[1]
+    for bits, length, alone in dec["windows"]:
+        n = max(len(bits), 1)
+        pad = [0] * (n - len(bits))
+        ok, got, carry = AE.reference_charge(n, AE.charge_book(book, n)[0], carry, [1] * len(bits) + pad,
+                                             [int(c) for c in bits] + pad)
+        bad += not ok or got != length
+        only += alone
+    N = dec["cut"]["N"]
+    cb, carry = AE.charge_book(book, N)
+    cases, want, cbad = [], [], 0
+    for en, bits, length in dec["cut"]["windows"]:
+        case = (cb, carry, [int(c) for c in en], [int(c) for c in bits])
+        w = AE.reference_charge(N, *case)
+        cbad += not w[0] or w[1] != length
+        cases.append(case)
+        want.append(w)
+        carry = w[2]
+    out = {"charge_windows": len(dec["windows"]), "charge_decisions": sum(len(w[0]) for w in dec["windows"]),
+           "decisions_only": only, "charge_mismatches": bad, "cut_N": N, "cut_windows": len(cases),
+           "cut_mismatches": cbad}
+    if circuit:
+        got = [g for chunk in _chunks(cases) for g in AE.evaluate_charges(N, chunk)]
+        out["charge_circuit_mismatches"] = sum(g != w for g, w in zip(got, want, strict=True))
+    return out
 
 
 def fields(trace: dict, per: int = 64) -> dict[str, Any] | None:
@@ -263,6 +332,8 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
                     cbad += (g[0] != 0) if w_[0] == 0 else g != w_
         out.update(circuit_cases=n_cases + len(fins) + len(cfins) + sum(map(len, kt_cases.values())),
                    circuit_mismatches=cbad)
+    if "decisions" in stream:
+        out.update(check_charges(stream["decisions"], circuit=circuit))
     return out
 
 
@@ -279,18 +350,20 @@ def step_trace(name: str) -> Any:
     return t
 
 
-def sources(corpus: Sequence[str], steps: bool, stops: Sequence[int], T: int) -> Iterator[tuple[str, Callable[[], dict | None]]]:
+def sources(corpus: Sequence[str], steps: bool, stops: Sequence[int], T: int,
+            cut: int = CUT) -> Iterator[tuple[str, Callable[[], dict | None]]]:
     if steps:
         for p in sorted(FIXTURES.glob("*.jsonl")):
-            yield f"{p.stem} (decisions, T=20)", lambda p=p: decisions(step_trace(p.stem), (EOS,), T=20,
-                                                                       row_order="scheduling")
+            yield f"{p.stem} (decisions, T=20)", lambda p=p: decisions(
+                step_trace(p.stem), (EOS,), T=20, row_order="scheduling", cut=SLICE_CUT, rng=random.Random(p.stem))
         yield "corpus-smallkv (fields)", lambda: fields(D.load_corpus_trace(
             FIXTURES / "corpus-smallkv", eos_token_id=128009, stop_token_ids=(128001, 128008)))
     for spec in corpus:
         label, d = spec.split("=", 1)
         for ingress in ("warden", "client"):
-            yield f"{label} (decisions, T={T}, {ingress})", lambda d=d, ingress=ingress: decisions(
-                R.read_corpus_trace(d, ingress=ingress), stops, T=T)
+            name = f"{label} (decisions, T={T}, {ingress})"
+            yield name, lambda d=d, ingress=ingress, name=name: decisions(
+                R.read_corpus_trace(d, ingress=ingress), stops, T=T, cut=cut, rng=random.Random(name))
         yield f"{label} (fields)", lambda d=d: fields(D.load_corpus_trace(d, eos_token_id=stops[0],
                                                                           stop_token_ids=tuple(stops[1:])))
 
@@ -303,6 +376,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--stops", default="128001", help="the corpus traces' stop ids, comma-separated, EOS first")
     ap.add_argument("--T", type=int, default=600, help="the corpus traces' window, in 100 ms buckets")
     ap.add_argument("--circuit", action="store_true", help="evaluate the Definitions too")
+    ap.add_argument("--cut", type=int, default=CUT, help="ChargeCount_v1's slots a window, the decisions cut to it")
     ap.add_argument("--out", type=Path, help="the report's JSON")
     ap.add_argument("--fixture", type=Path, help="write the streams as the certifier test's vectors")
     a = ap.parse_args(argv)
@@ -310,7 +384,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     report: dict[str, Any] = {"K": K, "streams": {}}
     kept = []
     ok = True
-    for name, make in sources(a.traces, a.steps, stops, a.T):
+    for name, make in sources(a.traces, a.steps, stops, a.T, a.cut):
         try:
             stream = make()
         except (ValueError, RuntimeError) as e:
@@ -324,7 +398,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             continue
         r = report["streams"][name] = check(stream, circuit=a.circuit, rng=random.Random(name))
         ok &= not (r["reference_mismatches"] or r["kt_mismatches"] or r["context_mismatches"]
-                   or r.get("circuit_mismatches"))
+                   or r.get("circuit_mismatches") or r.get("charge_mismatches") or r.get("cut_mismatches")
+                   or r.get("charge_circuit_mismatches"))
         print(f"{name}: {json.dumps(r)}", flush=True)
         kept.append({"source": name, **stream})
     if a.out:

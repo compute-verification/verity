@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import random
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -286,10 +287,10 @@ def _same_counts(K_, BIN, CW, cases):
     return got
 
 
-def _same_count_finishes(CW, cases, NB=0):
-    got = AE.evaluate_count_finishes(CW, cases, NB)
+def _same_count_finishes(CW, cases):
+    got = AE.evaluate_count_finishes(CW, cases)
     for c, g in zip(cases, got):
-        want = AE.reference_count_finish(CW, c[0], c[1], NB, *c[2:])
+        want = AE.reference_count_finish(CW, *c)
         assert (g[0] == 0) if want[0] == 0 else g == want, (c, g, want)
     return got
 
@@ -374,13 +375,8 @@ def test_counting_refusals():
     used, full = AE.Tally(used=1, bits=13), AE.Tally(used=1, bits=14)
     got = _same_count_finishes(4, [(st, 0), (used, 15), (used, 14), (full, 15)])
     assert got[:2] == [(1, 0), (1, 15)] and [g[0] for g in got[2:]] == [0, 0]
-    # NB ≥ 1, a pool header advice v1 no longer sends: Elias-gamma of the pool (1, 3 and 5 bits for pools 1, 2–3 and
-    # 4–7), a pool of 0 refused, and the header held to c with the segment
-    got = _same_count_finishes(AE.CW, [(st, 1, 1), (st, 3, 3), (used, 20, 7), (used, 19, 7), (st, 9, 0)], NB=3)
-    assert got[:3] == [(1, 1), (1, 3), (1, 20)] and [g[0] for g in got[3:]] == [0, 0]
-    assert _same_count_finishes(5, [(AE.Tally(bits=29), 31, 2)], NB=2)[0][0] == 0
     with pytest.raises(ValueError):
-        AE.size("count_finish", CW=4, NB=4)
+        AE.size("count_finish", CW=1)
 
 
 def test_book_kt_refusals():
@@ -397,6 +393,151 @@ def test_book_kt_refusals():
     assert _same_book_kt(1, [(edge, 1, 0, 0)])[0] == (1, (1 << 15) - 1, (1 << 15) + 1, ((1 << 13, 1 << 13),))
 
 
+def _ints(s):
+    return [int(c) for c in s]
+
+
+def _charge_streams():
+    return [s for s in _streams() if "decisions" in s]
+
+
+def _cut_cases(stream):
+    """The stream's cut windows as `ChargeCount_v1`'s cases at the cut's N, each carry the reference's, with
+    `code_v1`'s charge for each."""
+    dec = stream["decisions"]
+    N = dec["cut"]["N"]
+    book, carry = AE.charge_book(dec["book"], N)
+    for en, bits, length in dec["cut"]["windows"]:
+        case = (book, carry, _ints(en), _ints(bits))
+        want = AE.reference_charge(N, *case)
+        yield N, case, want, length
+        carry = want[2]
+
+
+def test_the_charge_is_code_v1s():
+    """`reference_charge` is `code_v1`'s charge: on each fixture window's decisions alone, the KT counts and the run
+    carried from window to window, and so v1's own charge where the window sends only decisions; and on the decisions
+    cut into windows of the compile slice's P·A = 14 slots with disabled slots between."""
+    seen = only = cut = 0
+    for stream in _charge_streams():
+        dec = stream["decisions"]
+        carry = AE.charge_book(dec["book"], 1)[1]
+        for w, (bits, length, alone) in enumerate(dec["windows"]):
+            n = max(len(bits), 1)
+            pad = [0] * (n - len(bits))
+            ok, got, carry = AE.reference_charge(n, AE.charge_book(dec["book"], n)[0], carry, [1] * len(bits) + pad,
+                                                 _ints(bits) + pad)
+            assert ok and got == length, f"{stream['source']} window {w}"
+            if alone:
+                assert got == stream["charge"][w], f"{stream['source']} window {w}"
+                only += 1
+            seen += len(bits)
+        for N, _case, (ok, got, _carry), length in _cut_cases(stream):
+            assert N == 14 and ok and got == length, stream["source"]
+            cut += 1
+    assert seen >= 300 and only >= 10 and cut >= 30
+
+
+def _random_charge(rng, N):
+    """A random `ChargeCount_v1{N}` case: a book with skewed bins, now and then one the coder refuses; a carry at the
+    halving edge, now and then run 3; slots enabled at a random density, all or none."""
+    nb = N.bit_length() + 1
+    arrived = [rng.choice([1, rng.randrange(1, 64), rng.randrange(1, 1 << 12)]) for _ in range(nb)]
+    total = min(sum(arrived) + rng.choice([0, 0, rng.randrange(1 << 12)]), AE.MAX_TOTAL)
+    zeros = []
+    for _ in AE.ZERO_COUNTS:
+        t = rng.choice([2, 1000, AE.MAX_TOTAL, rng.randrange(1, AE.MAX_TOTAL + 1)])
+        zeros.append((rng.choice([1, t, rng.randrange(1, t + 1)]), t))
+    if rng.random() < 0.05:
+        arrived[rng.randrange(nb)] = rng.choice([0, 1 << 16, (1 << 17) - 1])
+    if rng.random() < 0.05:
+        zeros[rng.randrange(len(zeros))] = rng.choice([(0, 5), (6, 5), (1, AE.MAX_TOTAL + 1)])
+    counts = []
+    for _ in range(AE.RUNS):
+        s = rng.choice([(1 << 15) - 1, (1 << 15) - 2, rng.randrange(1 << 15), rng.randrange(40)])
+        a = rng.randrange(s + 1)
+        counts.append((a, s - a))
+    run = rng.choice([0, 1, 2, 2, 3]) if rng.random() < 0.1 else rng.randrange(3)
+    p = rng.choice([0.0, 0.08, 0.3, 0.8, 1.0])
+    book = AE.ChargeBook(tuple(arrived), total, tuple(zeros))
+    return (book, AE.Carry(tuple(counts), run), [int(rng.random() < p) for _ in range(N)],
+            [int(rng.random() < 0.3) for _ in range(N)])
+
+
+def _same_charges(N, cases):
+    got = AE.evaluate_charges(N, cases)
+    for c, g in zip(cases, got):
+        want = AE.reference_charge(N, *c)
+        assert (g[0] == 0) if want[0] == 0 else g == want, (c, g, want)
+    return got
+
+
+def test_the_charge_circuit_is_the_reference():
+    """`ChargeCount_v1{14}`, the compile slice's class, against the reference: on the fixture's cut windows (so against
+    `code_v1`'s charges too, its carry passed along) and on random cases, which reach every bin of n_arrived, the KT
+    counts' halving and the refusals."""
+    rng = random.Random(14)
+    fixture = [(case, length) for s in _charge_streams() for N, case, _w, length in _cut_cases(s)]
+    got = _same_charges(14, [c for c, _l in fixture])
+    assert [(g[0], g[1]) for g in got] == [(1, length) for _c, length in fixture]
+    cases = [_random_charge(rng, 14) for _ in range(400)]
+    want = [AE.reference_charge(14, *c) for c in cases]
+    assert {sum(c[2]).bit_length() for c in cases} == set(range(5))
+    assert sum(not w[0] for w in want) > 20 and sum(w[0] for w in want) > 200
+    _same_charges(14, cases)
+
+
+def test_build_charge_inline():
+    """`build_charge`, the call a caller's circuit makes, is the unit: its public inputs split by `charge_fields`."""
+    from verity.ml.circuits.boolean.forms import Circuit
+    N, rng = 3, random.Random(3)
+    cases = [_random_charge(rng, N) for _ in range(40)]
+    C = Circuit(cse=True)
+    fields = AE.charge_fields(N)
+    pub, en, bits = C.input("pub", sum(n * w for _f, n, w in fields)), C.input("en", N), C.input("bits", N)
+    elems, at = [], 0
+    for _f, n, w in fields:
+        elems += [pub[at + k * w:at + (k + 1) * w] for k in range(n)]
+        at += n * w
+    ok, count, carry = AE.build_charge(C, N, elems, en, bits)
+    C.output("out", [ok] + count + [b for e in carry for b in e])
+
+    def sliced(rows):
+        return [sum(r[i] << t for t, r in enumerate(rows)) for i in range(len(rows[0]))]
+
+    pubs = [[b for name, n, w in fields for v in AE.charge_values(bk, cy)[name] for b in AE._bits(v, w)]
+            for bk, cy, _e, _b in cases]
+    outs, _fail = C.evaluate({"pub": sliced(pubs), "en": sliced([c[2] for c in cases]),
+                              "bits": sliced([c[3] for c in cases])}, len(cases))
+    for t, c in enumerate(cases):
+        row = [(v >> t) & 1 for v in outs["out"]]
+        f = AE._fields(AE._charge_out(SimpleNamespace(N=N)), row)
+        g = (f["ok"][0], f["bits"][0], AE.Carry(tuple(zip(f["n0"], f["n1"])), f["run"][0]))
+        want = AE.reference_charge(N, *c)
+        assert (g[0] == 0) if want[0] == 0 else g == want, (c, g, want)
+
+
+def test_charge_refusals():
+    """A carry's run past 2 with no decision to read it, an n_arrived bin whose cumulative frequency passes 2^16, and
+    the books `charge_book` refuses: a top bin the cap cuts short, a model that isn't Exp-Golomb, a table short of its
+    cap's bin."""
+    book = AE.ChargeBook((5, 5, 5, 5, 5), 25, ((3, 4),) * 4)
+    zero = [0] * 14
+    cases = [(book, AE.Carry(run=3), zero, zero), (book, AE.Carry(run=2), zero, zero),
+             (AE.ChargeBook((40000, 40000, 1, 1, 1), 65535, ((3, 4),) * 4), AE.Carry(), [1, 1] + zero[2:], zero)]
+    want = [AE.reference_charge(14, *c) for c in cases]
+    assert [w[0] for w in want] == [0, 1, 0]
+    _same_charges(14, cases)
+    good = _charge_streams()[0]["decisions"]["book"]
+    caps, short = {**good["caps"], "arrived": 15}, {"lo": 0, "freqs": [1, 2], "escape": 1}
+    freqs = good["models"]["n_arrived"]["binned"]["freqs"]
+    assert AE.charge_book({**good, "caps": caps}, 15)[0].arrived == tuple(freqs[:5])
+    for bad, N in [({**good, "caps": caps}, 16), ({**good, "models": {**good["models"], "n_hits": short}}, 4),
+                   ({**good, "models": {**good["models"], "n_lag": {"binned": short}}}, 4)]:
+        with pytest.raises(ValueError):
+            AE.charge_book(bad, N)
+
+
 def test_size_counts_the_gates():
     assert AE.size("step", K=K, BIN=1)["ands"] == ands(AE.step_unit(K, 1))
     assert AE.size("step", K=K, BIN=0)["ands"] == ands(AE.step_unit(K, 0))
@@ -404,7 +545,7 @@ def test_size_counts_the_gates():
     assert AE.size("kt", C=3, NW=24)["ands"] == ands(AE.kt_unit(3, 24))
     for BIN in (1, 0):
         assert AE.size("count", K=K, BIN=BIN, CW=AE.CW)["ands"] == ands(AE.count_unit(K, BIN, AE.CW))
-    for NB in (0, 21):
-        assert AE.size("count_finish", CW=AE.CW, NB=NB)["ands"] == ands(AE.count_finish_unit(AE.CW, NB))
+    assert AE.size("count_finish", CW=AE.CW)["ands"] == ands(AE.count_finish_unit(AE.CW))
     for C in (1, 3):
         assert AE.size("book_kt", C=C)["ands"] == ands(AE.book_kt_unit(C))
+    assert AE.size("charge", N=2)["ands"] == ands(AE.charge_unit(2))
