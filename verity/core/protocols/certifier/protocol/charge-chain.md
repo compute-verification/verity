@@ -34,16 +34,13 @@ and checks it in full at the window's start, before any decision is coded, so a 
 to leave a field unchecked and change its pins. A sibling value under the same carry rule gives the same guarantee and
 leaves the scan's chain as it is.
 
-**The compile slice's multi-window form.** `CompileSlice_v1` (#3661) codes each ask with `KTContext_v1` from a zero
-prior and `ArithEncodeStep_v1` against a witness codeword (its *model* and *counting encoder* stand-ins). Its
-multi-window form takes the chain in their place:
+**The compile slice takes the chain** ([compile-slice.md](compile-slice.md)):
 
-- `charge_in` and `charge_out` are the load's reads of `replay-charge` rows 0 and 1 (`charge_chain.reads()`), next to
-  the state and window rows it reads from `replay_chain`.
-- The call is `charge_chain.build_link(C, D, book, row_in, row_out, en, bits)` after `ReplayLoad`, over the decisions
-  it loads (next section). `book` is `book_fields(D)`, the public tables without the carry. Its ok goes into `code`,
-  and its bits into `charge`, held to c_w as now.
-- The verifier runs `charge_chain.check_chain` on the charge rows' openings beside `replay_chain.check_chain`.
+- ``cin`` and ``cout`` are the unit's reads of `replay-charge` rows 0 and 1 (`charge_chain.reads()`).
+- Its charge is `charge_chain.build_link(C, D, book, cin, cout, en, bits)`, `ChargeLink_v1{D}`, over the decisions
+  the window loads (next section). `book` is `book_fields(D)`, the public tables without the carry. `bits` are `adv`'s
+  D decisions, and en_i = i < its `count`. Its ok is the verdict's `code` bit, and its bits are held to c_w (`charge`).
+- The verifier runs `charge_chain.check_chain` on the charge rows' openings.
 - The prover commits each window with `commit_window(program, book, carry', registration, carry=previous)`.
 
 ## One carry for units and windows
@@ -56,9 +53,9 @@ a code position.
   loads: `adv`'s `dec`, en_i = i < `count`, bit_i = dec_i. Those are the window's own decisions, the ones A5 charges to
   it. The carried decisions at the front of window row 1's `dec` were charged by the window that loaded them.
   `code_v1` codes the decisions in session order, the order the loads append them, and a slot with en 0 changes
-  nothing (the tests check this on the fixture's 41 windows at D = 32). So the load's charge is `code_v1`'s, a per-ask
-  charge is the same only when no decision carries, and a per-ask one codes a carried decision in the window that reads
-  it, which is the compile slice's *one window* stand-in.
+  nothing (the tests check this on the fixture's 41 windows at D = 32). So the load's charge is `code_v1`'s. A per-ask
+  charge, the compile slice's before #3886, is the same only when no decision carries: it codes a carried decision in
+  the window that reads it.
 - **The carry, in order:** `n0[3]` and `n1[3]` (15 bits each, `code_v1.KT`'s counts, both halved once
   2·(n0 + n1) + 2 would pass 2^16), `run` (2 bits, min(run, 2)), then 4 zero bits: 96. `run` is `code_v1`'s context,
   the decisions since the last 1, over decisions only, so a forced admission doesn't reset it as it does the replay's
@@ -67,8 +64,8 @@ a code position.
 - **What resets.** The count's state (low 32, high 32, used 1, ok 1, bits 20) starts afresh in each window's unit:
   n_arrived (en's popcount) first, then each decision (`BookKT_v1{3}` under `run`, `ArithCountStep_v1{18, 1, 20}` on
   its frequencies, `run`'s update), then `ZERO_COUNTS`' four 0s and `ArithCountFinish_v1{20}`. None of it leaves the
-  unit. There is no segment and no position: `ArithCountStep` counts the bits a segment would hold, so the slice's
-  ``seg`` and its `ArithEncodeStep_v1` and `ArithEncodeFinish_v1` calls go.
+  unit. There is no segment and no position: `ArithCountStep` counts the bits a segment would hold, so the slice has
+  no ``seg`` and calls neither `ArithEncodeStep_v1` nor `ArithEncodeFinish_v1`.
 - **The end check** is in the same unit: its ok (each model's and the count's, the finish's, and carry' = row 1)
   joins ``code``, and bits ≤ c_w is ``charge``. `ReplayClose` checks no charge.
 - **The reference** is `charge_chain.reference_link` (`arith_encode.reference_charge` with carry' = row 1), and the

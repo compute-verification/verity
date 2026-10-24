@@ -78,9 +78,10 @@ A spec-level reference for network accounting's timing channel:
   cost at a shape is `size`;
 - the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `check` its reference, composes
   `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, `CacheStep_v1`'s calls on the certified tokens
-  checking the hits `ReplayStep_v1` reads, and the encoder over the scan's asks, for one window. It holds the coded
-  length to the declared charge and the step rows to its committed ``srv`` row, the served rows. The evictable and
-  returned counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
+  checking the hits `ReplayStep_v1` reads, and `ChargeLink_v1` over the decisions the window commits, from its
+  carry-in to its carry-out, for one window. It holds the charge to the declared one and the step rows to its committed
+  ``srv`` row, the served rows. The evictable and returned counts are a stand-in held at 0
+  (`protocol/compile-slice.md`), and
   `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits and their
   evaluator from `verity`;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
