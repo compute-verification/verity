@@ -43,7 +43,7 @@ HOLDS = SimpleNamespace(
     rows_levels=lambda domain_id, rows, salts: [[b""]], rows_root=lambda domain_id, rows, salts: b"",
     bucket_rows=lambda shape, cells: [], open_port=lambda levels, rows, salts, steps: ((), (), ()),
     Shape=lambda B, T, R, P, S, DS: SimpleNamespace(B=B, T=T, R=R, P=P, S=S, DS=DS),
-    MapEntry=lambda q, e: (q, e), Instance=lambda *fields: fields,
+    MapEntry=lambda q, e: (q, e), UNHELD=(0, 0xFFFF_FFFF), Instance=lambda *fields: fields,
     reference_parts=lambda inst: {"cells_root": True, "port": True, "content": True})
 
 
