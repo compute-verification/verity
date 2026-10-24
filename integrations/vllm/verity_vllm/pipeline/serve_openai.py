@@ -3,6 +3,7 @@
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
         [--protocol vllm|plain] [--no-commit] [--no-gpu-tree] [--window-steps 64] [--force-include-usage | --no-force-include-usage]
         [--scheme vllm-v1|rows-sha512 --required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
+        [--admit arrival|release-order [--admit-hold-ms 5000]]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -28,6 +29,8 @@ The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepp
 thread (`EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection.
+Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the warden's
+release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the warden sends).
 
 With the Commit on (the default), `NativeHostCommitter` commits every engine step exactly as it does a declared workload,
 values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
@@ -41,11 +44,13 @@ streamed ids, the seed it carried, and where its finish says the stream ends.
 
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds), ``requests.jsonl``
-(one line a request: the HTTP id, the engine id, the body's ``user``, the runner's ids, the prompt ids, the streamed ids, its
-ingress, its finish, its committed rows and seeds, and its check) and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512``
-commits as the bench row's declared Commit does, with its committer parts built from the row's ``--required-manifest`` and taps
-(the acquisition plan under ``acquisition/``), and ``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`). SIGTERM or SIGINT
-stops it: the open window is closed and its requests checked, and ``summary.json`` counts the requests and checks.
+(one line a request: the HTTP id, the engine id, the body's ``user``, its release and its place among the engine's adds,
+the runner's ids, the prompt ids, the streamed ids, its ingress, its finish, its committed rows and seeds, and its check)
+and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512`` commits as the bench row's declared Commit does, with its
+committer parts built from the row's ``--required-manifest`` and taps (the acquisition plan under ``acquisition/``), and
+``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`). SIGTERM or SIGINT stops it: the open
+window is closed and its requests checked, and ``summary.json`` counts the requests and checks, and the admissions' order
+(`ReleaseOrder.summary`).
 """
 from __future__ import annotations
 
@@ -56,7 +61,6 @@ import shutil
 import signal
 import threading
 import time
-import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,6 +69,7 @@ from typing import Any
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import serve_seal as SS
+from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, new_http_id
 from verity_vllm.pipeline.serve_commit import CommitWindows, advice_trace, ingress_of, param_of, user_of
 from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError, VllmProtocol,
                                                  error_body, framing_agrees, http_chunk, sse, usage_of)
@@ -127,45 +132,14 @@ class Options:
     force_include_usage: bool = option("--force-include-usage", action="boolean_optional", default=True,
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
+    admit: str = option("--admit", choices=ADMIT, default="arrival",
+                        help="arrival (default): each request to the engine once parsed; release-order: in the warden's release "
+                             "order (x-verity-release), each once every earlier-released one is in")
+    admit_hold_ms: int = option("--admit-hold-ms", type=int, default=5000,
+                                help="release-order: skip a missing earlier release once a later request has waited this long")
 
 
 # ---------------------------------------------------------------------------------------------------------------- engine loop
-
-@dataclass
-class Delta:
-    """One engine output of a request: the new token ids and text since the last, and its finish."""
-
-    token_ids: list[int]
-    text: str
-    finish_reason: str | None = None
-    stop_reason: Any = None
-    prompt_token_ids: list[int] | None = None
-    error: str | None = None
-
-    @property
-    def finished(self) -> bool:
-        return self.finish_reason is not None or self.error is not None
-
-
-@dataclass
-class Admission:
-    http_id: str
-    engine_id: str
-    prompt_ids: list[int]
-    params: Any
-    deliver: Callable[[Delta], None]
-    ingress: dict[str, Any]
-    user: str | None = None
-
-
-def engine_id_of(http_id: str) -> str:
-    """vLLM's engine request id of a completion's one prompt: ``f"{request_id}-{i}"``."""
-    return f"{http_id}-0"
-
-
-def new_http_id() -> str:
-    return f"cmpl-{uuid.uuid4().hex}"
-
 
 class EngineLoop:
     """The one thread that steps the engine: admissions come through `submit`, outputs go back through each admission's
@@ -273,9 +247,10 @@ class Server:
 
     def __init__(self, *, proto: PlainProtocol, served_name: str, max_model_len: int, tokenizer: Any, defaults: Mapping[str, Any],
                  submit: Callable[[Admission], None], abort: Callable[[str], None], model_root: str = "",
-                 clock: Callable[[], float] = time.time) -> None:
+                 clock: Callable[[], float] = time.time, order: ReleaseOrder | None = None) -> None:
         self.proto, self.served_name, self.max_model_len = proto, served_name, int(max_model_len)
-        self.tokenizer, self.defaults, self.submit, self.abort = tokenizer, dict(defaults), submit, abort
+        self.tokenizer, self.defaults, self.order = tokenizer, dict(defaults), order
+        self.submit, self.abort = (submit, abort) if order is None else (order.submit, order.abort)
         self.model_root, self.clock = model_root or served_name, clock
         self.served = 0
         self.streaming: set[asyncio.StreamWriter] = set()      # responses whose head is written
@@ -287,7 +262,7 @@ class Server:
             method, path, _ = lines[0].split(" ", 2)
             headers = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in lines[1:] if ln)}
             body = await reader.readexactly(int(headers.get("content-length") or 0))
-            await self.route(method, path.split("?", 1)[0], body, writer)
+            await self.route(method, path.split("?", 1)[0], body, writer, headers)
         except (asyncio.IncompleteReadError, ConnectionError, ValueError):
             pass
         finally:
@@ -307,7 +282,9 @@ class Server:
         writer.write(self._head(status, "application/json", len(payload)) + payload)
         await writer.drain()
 
-    async def route(self, method: str, path: str, body: bytes, writer: asyncio.StreamWriter) -> None:
+    async def route(self, method: str, path: str, body: bytes, writer: asyncio.StreamWriter,
+                    headers: Mapping[str, str] | None = None) -> None:
+        release = None
         try:
             if path == "/health":
                 return await self._json(writer, 200, b"")
@@ -318,7 +295,8 @@ class Server:
             if path == "/tokenize":
                 return await self._json(writer, 200, json.dumps(self.tokenize(self._body(body))).encode())
             if path == "/v1/completions":
-                return await self.completions(self._body(body), writer)
+                release = self._release(headers)
+                return await self.completions(self._body(body), writer, release)
             raise RequestError(f"no route {method} {path}", 404, "NotFoundError")
         except RequestError as e:
             await self._json(writer, e.status, error_body(str(e), e.status, e.kind, e.param))
@@ -329,6 +307,14 @@ class Server:
                 await self._json(writer, 500, error_body(f"{type(e).__name__}: {e}", 500, "InternalServerError"))
         finally:
             self.streaming.discard(writer)
+            if release is not None:
+                self.order.passed(release)
+
+    def _release(self, headers: Mapping[str, str]) -> tuple[str, int] | None:
+        try:
+            return None if self.order is None else self.order.key(headers or {})
+        except ValueError as e:
+            raise RequestError(str(e)) from e
 
     @staticmethod
     def _body(body: bytes) -> Any:
@@ -356,7 +342,7 @@ class Server:
         strs = self.tokenizer.convert_ids_to_tokens(ids) if b.get("return_token_strs") else None
         return {"count": len(ids), "max_model_len": self.max_model_len, "tokens": ids, "token_strs": strs}
 
-    def admit(self, b: Any, deliver: Callable[[Delta], None]) -> tuple[Completion, Admission]:
+    def admit(self, b: Any, deliver: Callable[[Delta], None], release: tuple[str, int] | None = None) -> tuple[Completion, Admission]:
         """Parse a completion request into the engine's admission (ids, sampling parameters)."""
         req = self.proto.parse(b)
         self._check_model(req.model)
@@ -374,12 +360,12 @@ class Server:
             raise RequestError(TOP_P_REFUSAL.format(top_p=top_p), param="top_p")
         http_id = new_http_id()
         return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(self.proto.brought(req), params),
-                              user_of(req.raw))
+                              user_of(req.raw), release)
 
-    async def completions(self, b: Any, writer: asyncio.StreamWriter) -> None:
+    async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None) -> None:
         loop = asyncio.get_running_loop()
         deltas: asyncio.Queue = asyncio.Queue()
-        req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d))
+        req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release)
         created, model = int(self.clock()), self.served_name
         self.submit(adm)
         self.served += 1
@@ -488,8 +474,8 @@ def register_int8(precision: str, register: Callable[[Sequence[str]], Any] | Non
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
     """What would fail after the model has loaded, refused before it."""
-    if opts.window_steps < 1:
-        raise UsageError("--window-steps is at least 1")
+    if opts.window_steps < 1 or opts.admit_hold_ms < 1:
+        raise UsageError("--window-steps and --admit-hold-ms are at least 1")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
     if opts.scheme == "rows-sha512" and not opts.gpu_tree:
@@ -544,8 +530,9 @@ def main(opts: Options) -> int:
                                 seal=SS.seal_of(opts) if opts.seal else None)
     loop = EngineLoop(engine, windows)
     served = opts.served_model_name or opts.model
+    order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000) if opts.admit == "release-order" else None
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
-                    defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model)
+                    defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order)
     http = HttpThread(server, opts.host, opts.port)
     http.start()
     http.ready.wait()
@@ -559,6 +546,7 @@ def main(opts: Options) -> int:
               "precision": opts.precision, "protocol": proto.name, "framing": framing, "defaults": dict(defaults),
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1 (CIR-87)", "committer": getattr(com, "name", None),
+              "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", "vllm-v1") if com is not None else None,
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
@@ -574,7 +562,7 @@ def main(opts: Options) -> int:
     finally:
         http.shutdown()
         summary = {"served": server.served, "engine_steps": loop.steps, "engine_error": loop.error,
-                   "commit": windows.summary() if windows is not None else None}
+                   "commit": windows.summary() if windows is not None else None, "admit": order and order.summary()}
         (out / "summary.json").write_text(json.dumps(summary, indent=1))
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
         trace.uninstall()
