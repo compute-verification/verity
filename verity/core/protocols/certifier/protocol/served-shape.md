@@ -68,28 +68,27 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
   proves every window at one class, padded with idle steps and empty slots, and that shows only the session's
   maximum: 8eb1's engine class in the table below.
 
-**Cost at the served shapes** (run r20261024-175929-6f49). A step unit is `ReplayStep_v1` and `ReplayAdvance`, and a
-window is P step units and one `ReplayLoad`. Under async scheduling a unit is a `schedule()` and the update of the
-step before it, so P counts units, a few more than the steps. The chain's rows don't carry AS or the walk entries yet
-(PROTOCOL.md, "Open"). The AS and EW rows count the chain with the fields that item names, checked equal to
-`ReplayStep_v1`'s own. EW = bitlen(NB): the walk entries matter only with prefix caching, and while the no-eviction
+**Cost at the served shapes** (`replay_step.size` and `replay_chain.size`). A step unit is `ReplayStep_v1` and
+`ReplayAdvance`, and a window is P step units and one `ReplayLoad`. Under async scheduling a unit is a `schedule()` and
+the update of the step before it, so P counts units, a few more than the steps. The AS and EW rows are the chain at
+those statics (`replay_chain.Shape`'s AS and EW), its rows `ReplayStep_v1`'s fields. EW = bitlen(NB): the walk entries matter only with prefix caching, and while the no-eviction
 bound holds the table has N = NB − 1 entries. 8eb1 serves without prefix caching, so its EW = 17 row is what it would
 cost with it.
 
 | shape | (R, W, A) | Q, D, P, K | AS, EW | ReplayStep_v1 | ReplayAdvance | step unit | ReplayLoad | window |
 |---|---|---|---|---|---|---|---|---|
-| w212 | (2, 1, 2) | 3, 14, 20, 3 | sync | 2,441 | 620 | 3,061 | 734 | 61,954 |
-| | | 3, 14, 22, 3 | 1, 0 | 2,522 | 627 | 3,149 | 746 | 70,024 |
-| | | | 1, 17 | 2,658 | 691 | 3,349 | 778 | 74,456 |
-| 8eb1's largest window | (4, 1, 5) | 4, 32, 54, 4 | sync | 5,478 | 1,199 | 6,677 | 1,352 | 361,910 |
-| | | | 1, 0 | 5,698 | 1,248 | 6,946 | 1,408 | 376,492 |
-| | | | 1, 17 | 6,089 | 1,376 | 7,465 | 1,472 | 404,582 |
-| 8eb1's engine class | (8, 1, 9) | 4, 32, 54, 4 | sync | 11,680 | 1,774 | 13,454 | 1,560 | 728,076 |
-| | | | 1, 0 | 12,373 | 1,827 | 14,200 | 1,616 | 768,416 |
-| | | | 1, 17 | 13,444 | 2,115 | 15,559 | 1,760 | 841,946 |
-| async heavy | (256, 1, 35) | 1000, 1000, 651, 1000 | sync | 524,296 | 80,959 | 605,255 | 769,234 | 394,790,239 |
-| | | | 1, 0 | 564,404 | 83,381 | 647,785 | 790,754 | 422,498,789 |
-| | | | 1, 18 | 647,330 | 92,597 | 739,927 | 795,362 | 482,487,839 |
+| w212 | (2, 1, 2) | 3, 14, 20, 3 | sync | 2,441 | 610 | 3,051 | 845 | 61,865 |
+| | | 3, 14, 22, 3 | 1, 0 | 2,522 | 617 | 3,139 | 857 | 69,915 |
+| | | | 1, 17 | 2,658 | 681 | 3,339 | 889 | 74,347 |
+| 8eb1's largest window | (4, 1, 5) | 4, 32, 54, 4 | sync | 5,478 | 1,186 | 6,664 | 1,736 | 361,592 |
+| | | | 1, 0 | 5,698 | 1,235 | 6,933 | 1,792 | 376,174 |
+| | | | 1, 17 | 6,089 | 1,363 | 7,452 | 1,856 | 404,264 |
+| 8eb1's engine class | (8, 1, 9) | 4, 32, 54, 4 | sync | 11,680 | 1,761 | 13,441 | 1,944 | 727,758 |
+| | | | 1, 0 | 12,373 | 1,814 | 14,187 | 2,000 | 768,098 |
+| | | | 1, 17 | 13,444 | 2,102 | 15,546 | 2,144 | 841,628 |
+| async heavy | (256, 1, 35) | 1000, 1000, 651, 1000 | sync | 524,296 | 80,938 | 605,234 | 789,234 | 394,796,568 |
+| | | | 1, 0 | 564,404 | 83,360 | 647,764 | 810,754 | 422,505,118 |
+| | | | 1, 18 | 647,330 | 92,576 | 739,906 | 815,362 | 482,494,168 |
 
 - *8eb1's largest window* is the maximum over its windows (w290 has the most units and decisions). *8eb1's engine
   class* holds any window of its engine: R = max_num_seqs, A = R + 1, and W = 1, since no 8eb1 window waits.
@@ -97,21 +96,22 @@ cost with it.
   (art:e86ec6d2d6b50e1469013dea2376897af1fcc329f8661c8efc06504f8ce99d3a, from run r20261024-064542-ae66): 1,000
   requests at 300 per second, 256 sequences, max_num_batched_tokens 8192, whole prefills, prefix caching, 172,615 KV
   blocks. Its corpus window is the whole trace. The replay reproduces its 649 steps in 651 units, every unit in class
-  (256, 1, 35). Its sync `ReplayAdvance`, 80,959 ANDs, is the corpus run's at sync heavy (r20261024-091809-297f).
+  (256, 1, 35).
 - Async scheduling adds 3–8% to a step, and the walk entries 5–15% more. At R = 256 about half the step is
   compacting the running list (341,241 of the heavy step's 647,330 ANDs).
-- On their own, w212's 20 step units and the load are 61,954 ANDs, under a third of the slice's 222,668. Most of the
+- On their own, w212's 20 step units and the load are 61,865 ANDs, under a third of the slice's 222,668. Most of the
   slice is the asks' coding, the charge and the served rows.
+- `ReplayClose`, once a session, is 8 ANDs at w212's shape and 11 at 8eb1's.
 - Not counted: `CacheStep_v1`'s calls with prefix caching, whose linear table at N = NB − 1 is far past any unit
   (PROTOCOL.md, "Scaling: offline memory checking"), and the coding, which goes with the decisions, not the steps.
 
 **Splitting a window into units.** The slice holds a whole window in one unit, its state rows wires between the steps.
-That works for 8eb1's windows: at its engine class a window's replay is at most 841,946 ANDs. The async heavy window
-is 651 step units of 739,927 ANDs, 4.8 × 10^8 in all, so it splits into the units `replay_chain` already defines,
+That works for 8eb1's windows: at its engine class a window's replay is at most 841,628 ANDs. The async heavy window
+is 651 step units of 739,906 ANDs, 4.8 × 10^8 in all, so it splits into the units `replay_chain` already defines,
 linked by its rows:
-- **Unit 0, the load:** `ReplayLoad`, 795,362 ANDs. It reads state rows 0 and 1 and window rows 0 and 1, and the
+- **Unit 0, the load:** `ReplayLoad`, 815,362 ANDs. It reads state rows 0 and 1 and window rows 0 and 1, and the
   window's K certified arrivals and D decisions at public positions.
-- **Unit u = 1 … P, one step:** `ReplayStep_v1` and `ReplayAdvance`, 739,927 ANDs (647,330 and 92,597). It reads
+- **Unit u = 1 … P, one step:** `ReplayStep_v1` and `ReplayAdvance`, 739,906 ANDs (647,330 and 92,576). It reads
   state rows u and u + 1 and window row 1. A step past the window's executed count is idle and costs the same.
 - **The links:** a window commits P + 2 state rows of 20,320 bits and two window rows of 37,024 bits, and makes
   3P + 4 = 1,957 reads, each a frame-v3 path of depth 10.
@@ -119,10 +119,13 @@ linked by its rows:
   row j + k, the k − 1 rows between them wires. That divides the state rows and reads by k at k step units a unit.
 - **What the split adds to the slice:** the asks' coding runs across steps, so a split slice also carries the encoder's
   state from unit to unit (its interval, the KT counts, the plain context and the codeword's position). That's a group
-  `replay_chain`'s state row doesn't have yet.
+  `replay_chain`'s state row doesn't have yet, and it is to be one carry with the charge's across windows.
 
-**For the 25 async windows.** The slice feeds `ReplayStep_v1` through its `_in_fields` and zeroes what its rows don't
-carry, and its engine has no `async_scheduling`. At AS = 1 the step also reads `run_fin R×1 | run_cap R×1 |
-wait_cap W×1` after `free` and `arr_cap A×1` after `arr_O`. In `replay_chain` that is PROTOCOL.md's Open item, which
-also puts `q_cap` in the window row and `a_cap` in the warden's slots. `slice_inputs` then takes the engine's mode as it
-is. The walk entries (`run_pfx`, `row_pfx`) come only with prefix caching, which 8eb1 doesn't serve.
+**For the 25 async windows.** At AS = 1 the step also reads `run_fin R×1 | run_cap R×1 | wait_cap W×1` after
+`free` and `arr_cap A×1` after `arr_O`. `replay_chain`'s rows carry them at its AS (PROTOCOL.md, "The rows'"), with
+an arrival's cap as `q_cap` in the window row and `a_cap` in the warden's slots. The slice takes its chain's shape
+from its statics (`compile_slice.chain`), so at an async engine its rows widen and its circuit hands the step these
+fields. Its reference is still sync: its scan replays under sync scheduling and refuses the window there, and its
+entries (`_row`, `_state`, the `cert` and `arr` decoding) are sync tuples where at AS = 1 they are
+`replay_chain.running_names`', `waiting_names`' and `arrival_names`'. With those, `slice_inputs` takes the engine's mode
+as it is. The walk entries (`run_pfx`, `row_pfx`) come only with prefix caching, which 8eb1 doesn't serve.
