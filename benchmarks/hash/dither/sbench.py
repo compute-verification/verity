@@ -254,10 +254,14 @@ def engine_args(gpu_mem: float, own_batch: bool = False) -> dict:
          "kernel_config": {"enable_flashinfer_autotune": False}}
     if own_batch:
         del a["max_num_seqs"], a["max_num_batched_tokens"]
+    if os.environ.get(ASYNC_SCHED_ENV) == "1":
+        a["async_scheduling"] = True
     return a
 
 
 OWN_BATCH_ENV = "SBENCH_STOCK_OWN_BATCH"
+# "1": vLLM's async scheduling (the host schedules step s + 1 while the GPU runs step s), per arm through SBENCH_ARM_ENV
+ASYNC_SCHED_ENV = "SBENCH_ASYNC_SCHED"
 
 
 def stock_args(gpu_mem: float) -> dict:
