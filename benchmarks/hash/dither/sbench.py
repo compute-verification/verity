@@ -85,7 +85,7 @@ Arms:
                  HB_H1U_KC, DITHER_H1C_KC and DITHER_ZY1_KC) in the statement's order (RT4-INT-12, `dither_so`): the
                  forward computes and commits a step's A, scales and z/y leaves, round s goes out before coin s, and step
                  s's seeds and units run after coin s on a ring of D steps' A slots, beside a later step's forward, their
-                 receipts under round s + D - 1: dither-a-{hbk,hbr,hbc}-zy-{aom,aomn,ab,abn}[-pt]-so<D> (D 2 to 8), -aom
+                 receipts under round s + D - 1: dither-a-{hbk,hbr,hbc}-zy-{aom,aomn,ab,abn}[-pt]-so<D> (D 2 to 10), -aom
                  the A tables per call on four streams in the forward, -aomn with each call's noise on four streams
                  beside the units, -ab and -abn the step's A tables in one build between steps (not ruled in by CA: a
                  separate arm); its gate adds the order's checks and two faults (fault_rearly, fault_zlate).  With
@@ -121,7 +121,8 @@ kernels inside the range only).  The decode gate compares each arm's
 tokens with its reference arm's (dither: exact; any other: the first arm); a dither arm's are a second GATE_TOKENS
 generation after its checks with nothing armed, since its fault steps move served values on purpose (fault_wb moves
 column 0 of every call's y at one step), the capture run's kept as tokens_capture.  A failed gate times nothing (exit 4); a worker
-that errs or dies ends the run (exit 5, its gates so far in gate.json).  Each dither arm's gate captures are freed once
+that errs or dies ends the run (exit 5, its gates so far in gate.json), except that under --time-passed one that errs in its
+warm or gate is dropped, its error in gate.json, and the rest timed (exit 5 still).  Each dither arm's gate captures are freed once
 checked, so N arms need N engines' memory plus one arm's captures.
 
 `prof` (an op, for any arm; under DITHER_NSYS=1 or prof): generates PROF_N[0] and then PROF_N[1] tokens for the 32 requests
@@ -137,6 +138,12 @@ dither_so window takes), else $POUW_CHALLENGER, $POUW_CHALLENGER_SESSION,
 $POUW_CHALLENGER_SECRET_FILE and $POUW_CHALLENGER_COMMITMENT), one session a window, opened at the window's build (its
 hello's commitment held to HEX) and closed at the arm's stop; without one they are in-process, and the arm's stats say
 ``coins: in-process (not certified)``.
+
+SBENCH_ARM_ENV (``{"ARM": {"NAME": "VALUE"}}``) sets an arm's own environment in its worker, so the arms of one lease can
+differ in a knob the worker reads; each arm's ready line says what it set (``arm_env``).  ``ARM@TAG`` in --arms is ARM
+built and timed under its own name (its own SBENCH_ARM_ENV, --arm-mem and DITHER_CHALLENGERS entries), so one arm is
+timed beside itself with a knob set.  SBENCH_TIME_AT=HH:MM (UTC) holds the reps until then (a booked window's start),
+the engines built and gated before it; sbench.sh's SBENCH_TIMED=1 takes the lease such a window grants (gpu-lease --timed).
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
@@ -269,12 +276,14 @@ def suffix_of(arm: str) -> str | None:
 
 
 def base_arm(arm: str) -> str:
+    arm = arm.split("@")[0]
     s = suffix_of(arm)
     return base_arm(arm[:-len(s)]) if s else arm
 
 
 def build(arm: str, scratch: Path, gpu_mem: float):
     from vllm import LLM
+    arm = arm.split("@")[0]
     s = suffix_of(arm)
     if s:
         SUFFIXES[s]()
@@ -415,7 +424,7 @@ DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
 # each step's A and z/y records held in pinned host memory until its draw (`dither_so.Spill`), -wea its A alone
 DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}{e}": (unit, ao, pt, d, r, sp, we, spill)
              for unit in ("hbk", "hbr", "hbc") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
-             for p, pt in (("", False), ("-pt", True)) for d in range(2, 9)
+             for p, pt in (("", False), ("-pt", True)) for d in range(2, 11)
              for v, r, sp in (("", 0, False), ("-ov", 2, False), ("-ov1", 1, False), ("-ovp", 2, True))
              for e, we, spill in (("", False, None), ("-we", True, "azy"), ("-wea", True, "a"))}
 
@@ -454,7 +463,31 @@ GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receip
 # challenger session off the node (its POUW_CHALLENGER, POUW_CHALLENGER_SESSION, POUW_CHALLENGER_SECRET_FILE and
 # POUW_CHALLENGER_COMMITMENT), since every arm's engine, and so its window, lives through the whole run
 CHALLENGERS_ENV = "DITHER_CHALLENGERS"
+# {arm: {NAME: VALUE}}: an arm's own environment, set in its worker before its engine is built, so one lease times arms
+# that differ in a knob the worker reads (not sbench.sh's builds, which read the run's)
+ARM_ENV_ENV = "SBENCH_ARM_ENV"
+# "HH:MM" (UTC): the reps start no earlier than then, at most TIME_AT_MAX_MIN minutes after the gates end, so the engines
+# build and gate before a booked window and only the reps run in it
+TIME_AT_ENV = "SBENCH_TIME_AT"
+TIME_AT_MAX_MIN = 20
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
+
+
+def wait_time_at() -> dict | None:
+    """$SBENCH_TIME_AT's wait before the reps: until that UTC time when it is at most TIME_AT_MAX_MIN minutes ahead."""
+    at = os.environ.get(TIME_AT_ENV)
+    if not at:
+        return None
+    import datetime as dt
+    now = dt.datetime.now(dt.timezone.utc)
+    h, m = (int(x) for x in at.split(":"))
+    wait = (now.replace(hour=h, minute=m, second=0, microsecond=0) - now).total_seconds()
+    if wait < -43200:
+        wait += 86400
+    waited = wait if 0 < wait <= 60 * TIME_AT_MAX_MIN else 0.0
+    time.sleep(waited)
+    return {"at": at, "ahead_s": round(wait, 1), "waited_s": round(waited, 1),
+            "reps_start_utc": dt.datetime.now(dt.timezone.utc).strftime("%H:%M:%SZ")}
 
 
 def close_coins() -> None:
@@ -495,6 +528,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             os.environ["POUW_CHALLENGER_COMMITMENT"] = at["commitment"]
         if at.get("rounds"):
             os.environ["DITHER_ROUNDS"] = str(at["rounds"])
+    arm_env = json.loads(os.environ.get(ARM_ENV_ENV) or "{}").get(arm) or {}
+    os.environ.update(arm_env)
     import torch
     from vllm import SamplingParams
     if arm.startswith("dither"):
@@ -510,7 +545,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         conn.send({"error": f"{type(e).__name__}: {e}"})
         return
     conn.send({"ready": True, "build_s": round(time.perf_counter() - t0, 1), "kernels": kernels_of(llm),
-               "disabled": os.environ.get("VLLM_DISABLED_KERNELS"), "scheduler": scheduler_of(llm)})
+               "disabled": os.environ.get("VLLM_DISABLED_KERNELS"), "scheduler": scheduler_of(llm),
+               "arm_env": arm_env or None})
     ps = prompts(B)
 
     def gen(reqs: list[str], n: int):
@@ -643,16 +679,18 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             return
 
 
-def recv(arm: str, conn, op: str) -> dict:
+def recv(arm: str, conn, op: str, keep: bool = False) -> dict:
     """ARM's next message.  A worker that reports an error or exits ends the run (exit 5, its result kept: the gates so
-    far in gate.json, the reps in reps.jsonl); sys.exit terminates the daemon workers, so no engine outlives it."""
+    far in gate.json, the reps in reps.jsonl); sys.exit terminates the daemon workers, so no engine outlives it.  With
+    KEEP the error is returned instead, the worker gone and the run going on without it."""
     try:
         msg = conn.recv()
     except EOFError:
         msg = {"error": f"{op}: the worker exited"}
     if "error" in msg:
         print(json.dumps({"arm": arm, "op": op, "error": msg["error"], "timed": False}), flush=True)
-        sys.exit(5)
+        if not keep:
+            sys.exit(5)
     return msg
 
 
@@ -702,9 +740,6 @@ def main() -> int:
         msg = recv(arm, here, "build")
         conns[arm], procs[arm], info[arm] = here, p, msg
         print(json.dumps({"arm": arm, **msg}), flush=True)
-    for arm in arms:
-        conns[arm].send({"op": "warm"})
-        recv(arm, conns[arm], "warm"), recv(arm, conns[arm], "warm")
     reps: list[dict] = []
     rc = 0
     ref_tokens: dict = {}
@@ -712,22 +747,34 @@ def main() -> int:
     vs_ref: dict = {}
     vs_rep0: dict = {}
     gate_doc: dict = {}
+    for arm in arms:
+        conns[arm].send({"op": "warm"})
+        res = recv(arm, conns[arm], "warm", a.time_passed)
+        if "error" not in res:
+            res = recv(arm, conns[arm], "warm", a.time_passed)
+        if "error" in res:
+            gate_doc[arm], rc = {"error": res["error"]}, 5
+    arms = [x for x in arms if x not in gate_doc]
     if a.gate:
-        for arm in arms:
+        for arm in list(arms):
             conns[arm].send({"op": "gate"})
-            res = recv(arm, conns[arm], "gate")
+            res = recv(arm, conns[arm], "gate", a.time_passed)
+            if "error" in res:
+                gate_doc[arm], rc = {"error": res["error"]}, 5
+                arms.remove(arm)
+                continue
             msg = recv(arm, conns[arm], "gate")
             res["stats"], res["picks_summary"] = msg["stats"], msg.get("picks")
             gate_doc[arm] = res
             (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
         for arm in arms:
             ref = REF_OF.get(arm, arms[0])
-            if ref in gate_doc and ref != arm:
+            if "tokens" in gate_doc.get(ref, {}) and ref != arm:
                 gate_doc[arm]["tokens_equal_" + ref] = gate_doc[arm]["tokens"] == gate_doc[ref]["tokens"]
                 if "tokens_capture" in gate_doc[arm]:
                     gate_doc[arm]["tokens_capture_requests_equal_" + ref] = sum(
                         x == y for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
-            if "stock" in gate_doc and arm != "stock":
+            if "tokens" in gate_doc.get("stock", {}) and arm != "stock":
                 gate_doc[arm]["tokens_equal_stock"] = gate_doc[arm]["tokens"] == gate_doc["stock"]["tokens"]
                 gate_doc[arm]["tokens_requests_equal_stock"] = sum(
                     x == y for x, y in zip(gate_doc[arm]["tokens"], gate_doc["stock"]["tokens"]))
@@ -750,7 +797,12 @@ def main() -> int:
             if not a.time_passed:
                 return 4
             arms = [x for x in arms if x not in failed]
-            rc = 4
+            rc = rc or 4
+    if not arms:
+        return rc
+    time_at = wait_time_at()
+    if time_at:
+        print(json.dumps({"time_at": time_at}), flush=True)
     for r in range(a.reps):
         for op in a.ops.split(","):
             for j in range(len(arms)):

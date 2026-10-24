@@ -161,6 +161,8 @@ SMI=$!
 MAX_MIN=${SBENCH_MAX_MIN:-40}
 # SBENCH_PREEMPTIBLE=1: the lease may be taken back by a non-preemptible one (which ends the run unfinished)
 PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
+# SBENCH_TIMED=1: a timed lease (gpu-lease --timed), the one a booked window grants, the node kept quiet while it's held
+[ "${SBENCH_TIMED:-}" = 1 ] && PRE+=(--timed)
 gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/hash/dither/numabind.py" "$OUT/numa.json" \
   bash -c '
   if [ "$KGATE" = 1 ]; then
