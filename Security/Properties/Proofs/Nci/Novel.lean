@@ -326,7 +326,8 @@ theorem novelExact_of (hR : ReadsExact) : NovelExact := by
   refine Finset.sum_congr rfl fun a _ => ?_
   cases dv.theta.contains a <;> simp
 
-/-- **`DescAgrees`, from the three open statements**: `Walk.OperandsResolve` and `Resolve.BodiesOk` give `GatesLocated`
+/-- **`DescAgrees`, from three statements** (`OperandsResolve.operandsResolve_of` proves the first from the second):
+`Walk.OperandsResolve` and `Resolve.BodiesOk` give `GatesLocated`
 (`Resolve.operandsEarlier_of`, `Walk.gatesLocated_of`), and `ReadsExact` gives `NovelExact` (`novelExact_of`). -/
 theorem descAgrees_of_open (hO : Walk.OperandsResolve) (hB : Resolve.BodiesOk) (hR : ReadsExact) :
     Properties.DescAgrees :=

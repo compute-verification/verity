@@ -11,9 +11,11 @@ import NciCheck.Desc
   `NciCheck.evaluate` gives the same verdict. So `Reports` and `Witnesses` (`Properties.Nci`) hold of
   `NciCheck.Desc.evaluate`'s verdict, on the expansion. The converse is not claimed: `NciCheck.Desc.evaluate` refuses
   some instances whose expansion `NciCheck.evaluate` accepts (its module docstring, "Refusals"), and its codes may differ.
-  It is not yet a guarantee: `descAgrees_of_open` (`Properties.Proofs.Nci.Novel`) proves it from three open
-  statements, `Walk.OperandsResolve`, `Resolve.BodiesOk` and `Novel.ReadsExact`. `Properties.NciDesc.Verdict` restates
-  `Reports`, `Witnesses` and the thread bounds of `NciCheck.Desc.evaluate` from it.
+  It is not yet a guarantee: `descAgrees_of_open` (`Properties.Proofs.Nci.Novel`) proves it from
+  `Walk.OperandsResolve`, `Resolve.BodiesOk` and `Novel.ReadsExact`, and `operandsResolve_of`
+  (`Properties.Proofs.Nci.OperandsResolve`) proves the first from the second, so two are open. `Properties.NciDesc.Verdict`
+  restates `Reports`, `Witnesses` and the thread bounds of `NciCheck.Desc.evaluate` from it, and `Properties.NciDesc.Cover`
+  states the cover theorem's factor of the check of record's verdict.
 -/
 
 namespace NciCheck.Properties
