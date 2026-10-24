@@ -23,6 +23,11 @@ negatives.
   yet: `integrations/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
   verifies each drawn chunk with its table's registered reads (`--registered`, `row_tables.registered_reads`).
+- `a5_warden.py` (`a5_tp.sh` with `STANDIN=warden` or `warden:altered`): A5 on a window with transfer gates, which no served
+  window has yet: two chunks of the warden's toy unit whose ports are one connection's ingress and egress cells, committed
+  under the warden's salts, proved whole (the work law's selection All) beside a drawn rest, on a local challenger's coins or
+  the verifier's own. Lean verifies each chunk with the verifier's own registered reads at the root the warden signed
+  (`warden_rows.port`, after `check_registration` under the warden's key); the altered run is refused there.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job (`research run --on
   vy-glm53-eu2 --cwd source -- bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
