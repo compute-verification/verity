@@ -43,7 +43,7 @@
 # memory; the source's, else one sent), or unbound with DITHER_NUMA=0 or without numactl, a node or numabind.py;
 # env/numa.json, the `numa:` line and summary.json's "numa" say which.
 # Env: HB_WHO (the lease owner, default kernels-dither-hb), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
-# range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
+# range, so the source must be dither-rtx's f2c0071c7c or later; HB_KEEP_SQLITE=1 keeps its sqlite, gzipped), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's),
 # POUW_CHALLENGER and POUW_CHALLENGER_SESSION, or DITHER_CHALLENGERS (the windows' coins off the node, sessions from
 # infra: sbench.py's "Coins"), J10R_SHA (a DITHER_SO_UNITS=j10r arm's J10R Definition: a sent j10r-SHA.tar.gz, else the
@@ -276,5 +276,6 @@ if [ -f "$S/gate.nsys-rep" ]; then
     && "$PY" "$ROOT/$DITHER/stepprof.py" --table "$OUT/stepprof.json" | tee "$OUT/stepprof.txt" \
     || echo "hb_served: stepprof.py rc $?"
   [ "$(stat -c %s "$S/gate.nsys-rep")" -lt 209715200 ] && cp "$S/gate.nsys-rep" "$OUT/"
+  [ "${HB_KEEP_SQLITE:-0}" = 1 ] && [ "$(stat -c %s "$S/gate.sqlite")" -lt 524288000 ] && gzip -c "$S/gate.sqlite" > "$OUT/gate.sqlite.gz"
 fi
 exit "$rc"
