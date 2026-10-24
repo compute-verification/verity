@@ -961,8 +961,9 @@ requests, whose frames are a function of the prompt's length alone), for every p
     and the registrations the verifier's tie source records, so a verdict on another link or ingress record isn't
     reused;
   - the framing, and each window's declared sync, which must be one of Σ_sync, the set the certified egress head's
-    parameters digest binds (outside it the advice is refused), and the sync the certifier ran that window under,
-    which the verifier takes only from its own clock source (`LinkWindows.clocks`, `advised.ClockSource`).
+    parameters digest binds (outside it the window is refused), and the sync the certifier ran that window under,
+    which every floor reads and the declared one must be, and which the verifier takes only from its own clock
+    source (`LinkWindows.clocks`, `advised.ClockSource`).
 - **The ingress ends are derived** (`advised.ends`), not advised: advice request j is the link's j-th request and its
   prompt length is the certified prompt's, which the tie holds (FCFS admission meets the order, since v0's first-row
   order is then the arrival order), so it ends at request frame `ends[j]` = Σ_{i ≤ j} `request_frames[prompt_len_i −
@@ -972,20 +973,24 @@ requests, whose frames are a function of the prompt's length alone), for every p
   v0's says
   where a request ends, so the ends cost nothing beside `advice.bits`.
 - **The window's view** (`advised.view`), computed by the verifier in the clear from the advice, the framing and the
-  declared syncs, is the unit's public input:
+  syncs the certifier ran, is the unit's public input:
   - `released[t]`, the frames the advice releases in bucket t, at most R (more refuses the advice);
   - `floor[t]`, the request frames the window's ingress must have released by bucket t, less B_w = Σ_{v<w}
     `received[v]`. Output λ of request j released at b is eligible no earlier than j's anchor + δ + ⌊λ/ρ⌋
-    (`schedule.eligible`) under the sync (δ, ρ) of the window that holds b, and is released no earlier: so the first
-    `ends[j]` request frames are released by bucket b − δ − ⌊λ/ρ⌋. A frame for which that bucket is before 0, or
-    released in a window with no declared sync, refuses the advice. Since δ ≥ 0, no declared sync lets a frame out
-    before the bucket that releases its request's last frame. A release in that bucket is a served clock's, an
-    engine's first output in its request's bucket (a served run's advice, `test_network_certifier_advised_served.py`);
-    on a certified path the proxy hands a frame read in bucket t on at t + 1, so its honest syncs have δ ≥ 1. A
-    window whose declared sync isn't the one the certifier ran it under refuses the advice: a δ below the traffic's
-    loosens the floor, and REDTEAM phase 11 accepted an output in its request's own bucket under δ = 0 declared for a
-    window run at δ = 1 (regressions in `test_network_certifier_advised_phase11_floor.py`). Until the certifier
-    reports its syncs to the verifier there is no clock source, and every advised link is refused;
+    (`schedule.eligible`) under the sync (δ, ρ) the certifier ran the window that holds b under, and is released no
+    earlier: so the first `ends[j]` request frames are released by bucket b − δ − ⌊λ/ρ⌋. A frame for which that
+    bucket is before 0, or released past the link's windows or in one the certifier reports no sync for, refuses the
+    advice. Since δ ≥ 0, no sync lets a frame out before the bucket that releases its request's last frame. A
+    release in that bucket is a served clock's, an engine's first output in its request's bucket (a served run's
+    advice, `test_network_certifier_advised_served.py`); on a certified path the proxy hands a frame read in bucket t
+    on at t + 1, so its honest syncs have δ ≥ 1. A window whose declared sync isn't the one the certifier ran it under
+    is refused: a δ below the traffic's would loosen the floor, and REDTEAM phase 11 accepted an output in its
+    request's own bucket under δ = 0 declared for a window run at δ = 1 (regressions in
+    `test_network_certifier_advised_phase11_floor.py`). The bucket b − δ − ⌊λ/ρ⌋ can fall in a window before the
+    one that releases the frame, so a floor that read a declaration would carry one window's word into another's
+    view. No floor reads one, so a wrong declaration refuses its own window and no other (REDTEAM phase 15), and the
+    link's verdict, the AND over its windows, refuses the link. Until the certifier reports its syncs to the verifier
+    there is no clock source, and every advised link is refused;
   - `received`, `received[w]`.
 - **The unit** is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: `NetworkLinkWindow`'s checks, and one gate
   (`advised.gate`) naming `advised.NetworkAdvisedCounts_v1{T, RIN, OWN}` and its circuit digest pinned in
