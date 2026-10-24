@@ -286,6 +286,19 @@ def test_a_point_refuses_a_local_checkpoint_whose_files_differ_from_the_spec_dig
     assert f"not the spec's model_digest {digest}" in capsys.readouterr().err
 
 
+def test_a_local_checkpoint_is_bound_by_the_files_a_loader_reads_not_the_hub_snapshots_metadata(tmp_path):
+    preset = load_spec("llama31-8b-fp8-1gpu").preset
+    checkpoint = tmp_path / "model"
+    checkpoint.mkdir()
+    (checkpoint / "config.json").write_text("{}")
+    digest = local_checkpoint(preset, checkpoint).model_digest
+    (checkpoint / ".gitattributes").write_text("*.safetensors filter=lfs\n")
+    (checkpoint / "README.md").write_text("# a model card\n")
+    assert local_checkpoint(preset, checkpoint).model_digest == digest
+    (checkpoint / "generation_config.json").write_text("{}")
+    assert local_checkpoint(preset, checkpoint).model_digest != digest
+
+
 def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
     root = Path(__file__).resolve().parents[3]
     setup = tmp_path / "setup.sh"
