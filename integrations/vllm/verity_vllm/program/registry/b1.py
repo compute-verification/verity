@@ -511,10 +511,13 @@ def ArgmaxStep(B, S, carry, x):
 
 @composite("TokenSelect", 1, ["V"], lambda S: ((("logits", Array(S.V, BF16)),), I32), conformance="model-untested")
 def TokenSelect(B, S, logits):
-    """Greedy sampling (temperature 0): argmax over the bf16 logits, lowest index on ties (torch.argmax)."""
+    """Greedy sampling (temperature 0): argmax over the bf16 logits, lowest index on ties (torch.argmax): `ArgmaxStep_v1`'s scan to
+    logits[V-2], then the last logit's step for its index alone (the scan's final best and i + 1 are read by nothing)."""
+    if S.V == 1:
+        return B.call(const(32, 0))
     init = tuple_of(logits[0], B.call(const(32, 0)), B.call(const(32, 1)))
-    step = B.scan(ArgmaxStep, init, xs=(logits[1:S.V],))
-    return step[0][1]
+    c = B.scan(ArgmaxStep, init, xs=(logits[1:S.V - 1],))[0] if S.V > 2 else init
+    return B.call(P.SelectI32, B.call(P.Bf16GtStrict, logits[S.V - 1], c[0]), c[2], c[1])
 
 
 #: bf16 -inf, the V-chunks' starting best: every logit but -inf and a NaN is strictly above it
