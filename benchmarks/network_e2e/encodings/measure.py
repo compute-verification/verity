@@ -238,6 +238,16 @@ def by_field(windows: list, cb, family: str) -> dict[str, float]:
 
 
 FIELDS = (("v0", "cond"), ("residual", "static"), ("residual", "cond"))
+#: The decomposition each code shares: gamma splits a window into static's symbols, cond+adapt into cond's.
+DECOMPOSITION = {"fixed": "fixed", "gamma": "static", "static": "static", "cond": "cond", "cond+adapt": "cond"}
+
+
+def _symbols(subj: str, fam: str, adv, pub, admit, res, rep, cb) -> list:
+    if subj == "v0":
+        return C.symbols_v0(adv, pub, cb, fam)
+    if subj == "admit":
+        return C.symbols_admit(admit, pub, cb, fam, rep)
+    return C.symbols_residual(res, pub, cb, fam, rep)
 
 
 def _timed(f, *args):
@@ -278,9 +288,13 @@ def measure(test: list[dict], cb) -> dict:
             if back != res:
                 raise SystemExit(f"{t['name']}: the residual under {fam} does not round-trip")
             entry["bits"][f"residual/{fam}"], entry["decode_seconds"][f"residual/{fam}"] = lens, dt
-        for subj, fam in FIELDS:
-            syms = C.symbols_v0(adv, pub, cb, fam) if subj == "v0" else C.symbols_residual(res, pub, cb, fam, rep)
-            entry["fields"][f"{subj}/{fam}"] = by_field(syms, cb, fam)
+        entry["symbols"] = {}
+        for subj in SUBJECTS:
+            for fam in sorted(set(DECOMPOSITION.values())):
+                syms = _symbols(subj, fam, adv, pub, admit, res, rep, cb)
+                entry["symbols"][f"{subj}/{fam}"] = [sum(hi > lo for _, _, lo, hi in win) for win in syms]
+                if (subj, fam) in FIELDS:
+                    entry["fields"][f"{subj}/{fam}"] = by_field(syms, cb, fam)
         if A is not None:
             by = A.bits_by_window(to_adv_spec(A, adv), pub.T)
             entry["reference"] = {"v0/adv-spec": [by.get(w, 0) for w in range(pub.W)]}
@@ -304,13 +318,15 @@ def summarize(result: dict, cb, T: int) -> dict:
         keys.append(("v0", "adv-spec"))
     for subj, fam in keys:
         key = f"{subj}/{fam}"
-        vals, arr, worst_pub = [], [], []
+        vals, arr, worst_pub, syms = [], [], [], []
         for t in result["traces"]:
             lens = t["bits"].get(key) or t["reference"][key]
             for w in _counted(t, key):
                 a, m = t["arrivals_per_window"][w], t["resumes_per_window"][w]
                 vals.append(lens[w])
                 arr.append(a)
+                if fam in DECOMPOSITION:
+                    syms.append(t["symbols"][f"{subj}/{DECOMPOSITION[fam]}"][w])
                 if fam != "adv-spec":
                     worst_pub.append(a * worst_admit_arrival(cb, T, fam) + tail[fam] if subj == "admit" else
                                      worst_residual_window(cb, T, fam, a, m) if subj == "residual" else
@@ -325,6 +341,7 @@ def summarize(result: dict, cb, T: int) -> dict:
             "mean_bits": statistics.fmean(vals), "p50_bits": statistics.median(vals), "max_bits": max(vals),
             "mean_bits_per_arrival": sum(vals) / max(sum(arr), 1),
             "decode_ms_per_window": 1000 * sum(decode) / sum(t["windows"] for t in result["traces"]) if decode else None,
+            "symbols_mean": statistics.fmean(syms) if syms else None, "symbols_max": max(syms) if syms else None,
             "worst_bits_public_counts_max": max(worst_pub) if worst_pub else None, "worst_bits_caps": caps_worst,
             "worst_bits_per_resume": _worst_hit(cb, fam, "rehit", cb.caps.prompt_max + cb.caps.output_max)
             if subj == "residual" else None})
@@ -349,16 +366,19 @@ def render(summary: dict, meta: dict) -> str:
              f"Codebook `{meta['codebook_digest'][:16]}…` (SHA-512), fit on {meta['train']}; measured on {meta['test']}. "
              f"T = {meta['T']} buckets of {meta['tau_us'] // 1000} ms. Step-time model {meta['steptime']}.", "",
              "| subject | code | windows | mean bits/window | p50 | max | bits/arrival | worst, public counts (max) | "
-             "worst, caps | decode ms/window (Python) |",
-             "|---|---|---|---|---|---|---|---|---|---|"]
+             "worst, caps | coded symbols/window (mean, max) | decode ms/window (Python) |",
+             "|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in summary["rows"]:
-        ms = r.get("decode_ms_per_window")
+        ms, sm, sx = r.get("decode_ms_per_window"), r.get("symbols_mean"), r.get("symbols_max")
         lines.append(f"| {r['subject']} | {r['code']} | {r['windows']} | {r['mean_bits']:,.0f} | {r['p50_bits']:,.0f} | "
                      f"{r['max_bits']:,} | {r['mean_bits_per_arrival']:,.2f} | {_num(r['worst_bits_public_counts_max'])} | "
-                     f"{_num(r['worst_bits_caps'])} | {'–' if ms is None else f'{ms:,.1f}'} |")
+                     f"{_num(r['worst_bits_caps'])} | {'–' if sm is None else f'{sm:,.0f}, {sx:,}'} | "
+                     f"{'–' if ms is None else f'{ms:,.1f}'} |")
     per_resume = {r["code"]: r["worst_bits_per_resume"] for r in summary["rows"] if r["subject"] == "residual"}
     lines += ["", "The residual's worst case at the caps counts no resume; each resume adds at most "
               + ", ".join(f"{_num(v)} ({k})" for k, v in per_resume.items()) + " bits.", "",
+              "A coded symbol is one with more than one feasible value: one step of the arithmetic decoder (an escape or a "
+              "bin's offset adds one more), one prefix read for gamma, and a slice of the row for fixed.", "",
               "Mean bits per window by field (the model's ideal lengths; each segment adds at most 2 bits):", "",
               "| field | " + " | ".join(summary["fields_mean_bits_per_window"]) + " |",
               "|---|" + "---|" * len(summary["fields_mean_bits_per_window"])]

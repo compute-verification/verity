@@ -288,6 +288,20 @@ def test_the_conditional_codes_shrink_the_advice(corpus):
     assert total["v0"]["fixed"] > 100 * total["v0"]["cond"]
 
 
+def test_the_table_counts_each_coded_symbol(corpus):
+    """The table's rows decode every code back, and a coded symbol costs fixed and gamma at least a bit."""
+    cb, t = corpus
+    result = M.measure([t], cb)
+    rows = {(r["subject"], r["code"]): r for r in M.summarize(result, cb, 600)["rows"]}
+    assert set(rows) >= {(s, f) for s in M.SUBJECTS for f in C.FAMILIES}
+    for s in M.SUBJECTS:
+        for f in ("fixed", "gamma"):
+            assert rows[s, f]["mean_bits"] >= rows[s, f]["symbols_mean"] > 0
+    md = M.render(M.summarize(result, cb, 600), {"corpus": "test", "codebook_digest": cb.digest(), "train": [], "test": [],
+                                                  "T": 600, "tau_us": 100_000, "steptime": {}, "steps_per_bucket": 32})
+    assert md.count("\n| v0 |") == len(C.FAMILIES) + ("reference" in result["traces"][0])
+
+
 def _general_advice():
     """I1 v0 in the forms the synthetic engine never makes: a resume after preemption reusing its own KV, a hit on
     another request's KV, and releases out of order across requests (in order within each)."""
