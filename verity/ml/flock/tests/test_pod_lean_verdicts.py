@@ -75,6 +75,29 @@ def test_a_forgery_passes_only_when_lean_refuses_it(tmp_path, capsys):
     assert _run(tmp_path, "L0", "forged-sum-L3", capsys=capsys)[0] == 1
 
 
+def test_a_forgery_over_several_parts_needs_one_refusal_and_every_verdict(tmp_path, capsys):
+    """V* accepts only when every part does: a forgery staged at several parts (``forged-KIND-PART``) is refused when one
+    part refuses it, the parts it leaves honest accepting; it fails when none refuses or a part has no VERDICT."""
+    for p in ("L0", "alg-p0", "alg-p1"):
+        _part(tmp_path, p, 0, True)
+    _part(tmp_path, "forged-comb-alg-p0", 1, False, why="rec-v row")
+    _part(tmp_path, "forged-comb-alg-p1", 0, True)
+    _part(tmp_path, "forged-inner-query-L0", 1, False, why="rec-dirs row")
+    _part(tmp_path, "forged-inner-query-alg-p0", 0, True)
+    parts = ("L0", "alg-p0", "alg-p1", "forged-comb-alg-p0", "forged-comb-alg-p1", "forged-inner-query-L0",
+             "forged-inner-query-alg-p0")
+    rc, out = _run(tmp_path, *parts, capsys=capsys)
+    assert rc == 0 and out[-1] == "lean: 3/3 accepted, 2/2 forgeries refused"
+    assert "lean forgery comb: refused by ['forged-comb-alg-p0'] of 2" in out
+    assert "lean forgery inner-query: refused by ['forged-inner-query-L0'] of 2" in out
+    _part(tmp_path, "forged-comb-alg-p0", 0, True)
+    rc, out = _run(tmp_path, *parts, capsys=capsys)
+    assert rc == 1 and "lean forgery comb: refused by no part of 2  <- FAILS" in out
+    _part(tmp_path, "forged-comb-alg-p0", 1, False, why="rec-v row")
+    (tmp_path / "forged-comb-alg-p1.log").unlink()
+    assert _run(tmp_path, *parts, capsys=capsys)[0] == 1
+
+
 def _statement(d: Path, rc: int, line: str) -> None:
     (d / "inner-statement.log").write_text(line + "\n")
     (d / "time-inner-statement.txt").write_text(f"\tExit status: {rc}\n")
