@@ -8,7 +8,7 @@ given.
 
 The analysis states its assumptions about the traces a `World` produces, not about these functions: to Lean's logic an
 `IO` action is opaque. Those are the verifier's coins (A3, `UniformRandomBytes`, and A5 for the window secret), the clock's
-drift against real time, and `trusted-nebius-host` for a signer's state (an LMS key's next leaf and the session ids it
+drift against real time, and `trusted-host` for a signer's state (an LMS key's next leaf and the session ids it
 has started), which is state the device keeps on its host. Everything else a `World` returns (link bytes, a refused
 connection, an unpublished record) is adversarial, and a device fails closed on it.
 -/

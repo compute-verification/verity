@@ -666,7 +666,7 @@ Every item below is normative. A policy choice is not a substitute for the corre
 ## 11. Remaining before deployment
 
 - Migrate the MVP to v4 as listed in §8.
-- Counter-mode SHA-512 key derivation on the deployment device, measured: on an NVIDIA RTX PRO 6000 Blackwell Server Edition (sm_120, vy-nebius-1 GPU 3), `p2-2054B` (n = 2,056) at B = 2^19, with `p2keys4.cuh` (`-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA`), every block's `K` and `t` are derived at 1.136 × 10^8 blocks/s (4.62 ms per store, the median of 10), and the setup's first derivation for the whole store takes 5.39 ms of wall time. All 2^19 blocks' `K` and `t` equal hashlib's, as do the 59 reference blocks and the pinned `p2-v4-keys.json` entry (`p2-v4/w16448/0`). Run r20261008-152508-ff34, art:07d65cea4534caaa8f92e364455fd4b998632b4e020302ce6f38525a50617dfa (`decode_bench.py --keys-all`).
+- Counter-mode SHA-512 key derivation on the deployment device, measured: on an NVIDIA RTX PRO 6000 Blackwell Server Edition (sm_120), `p2-2054B` (n = 2,056) at B = 2^19, with `p2keys4.cuh` (`-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA`), every block's `K` and `t` are derived at 1.136 × 10^8 blocks/s (4.62 ms per store, the median of 10), and the setup's first derivation for the whole store takes 5.39 ms of wall time. All 2^19 blocks' `K` and `t` equal hashlib's, as do the 59 reference blocks and the pinned `p2-v4-keys.json` entry (`p2-v4/w16448/0`). Run r20261008-152508-ff34, art:07d65cea4534caaa8f92e364455fd4b998632b4e020302ce6f38525a50617dfa (`decode_bench.py --keys-all`).
 - Accept P2–M1-SGI.
 - Synchronize the trusted-layer pins into the repository after PRs #162/#183.
 
@@ -787,9 +787,9 @@ everywhere; SHA-256 retires.
 the frame types and their field order, the failure codes and their precedence, and the state-isolation rules.
 
 **What v4 assumes in place of v1.** `cr/sha-512` (collision resistance of SHA-512) for the commitment and the tree, and
-SHA-512-CTR/P2-EXP-IO for the keys. Separately, the memory challenger's VM, the auditor's on a machine the prover doesn't control, runs on Nebius, which
-offers no attesting hardware, so the deployment cites core's `trusted-nebius-host` assumption (`verity.core.claims`; Lean
-`Verity.Assumptions.TrustedNebiusHost`, Daniel's answer of 2026-10-06). The help-accounted row ("Help accounting and
+SHA-512-CTR/P2-EXP-IO for the keys. Separately, the memory challenger's VM, the auditor's on a machine the prover doesn't control, runs on a host that
+offers no attesting hardware, so the deployment cites core's `trusted-host` assumption (`verity.core.claims`; Lean
+`Verity.Assumptions.TrustedHost`, Daniel's answer of 2026-10-06). The help-accounted row ("Help accounting and
 evidence") is about the prover; this is about the verifier's host, the auditor's hardware on a machine the prover
 doesn't control.
 
