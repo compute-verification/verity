@@ -7,10 +7,13 @@ arbitrary serving: what it can carry"), as the tie that opens every cell answers
   cell to a slot of its own request.
 - A variable-length response has its map: the cells' (request, position) come from the advice's outputs and release
   buckets, so interleaved responses of any lengths are accepted, and a count one off either way is refused.
+- The order within a bucket, which advice v0 leaves to the tie: the warden releases a bucket sorted by stream and the
+  tie accepts that order alone, so it says nothing the release buckets don't.
 - Attack 8, a covert payload in m cells: every cell is opened, so a payload of m = 1, 3 or 17 cells is refused. The
   K-draw tie this replaced passed it with probability (1 − m/N)^K, its price kept as the comparison.
 """
 
+import itertools
 import math
 import random
 
@@ -21,7 +24,7 @@ from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.core.protocols.certifier import head_check as HC, io_tie as IT
 from verity.core.protocols.certifier.active import DATA, HEADER
 
-from test_network_certifier_io_tie import BIG, V, WINDOW, commit, honest, serve
+from test_network_certifier_io_tie import BIG, V, WINDOW, _cell_tampers, commit, honest, serve
 
 B = BIG.B
 
@@ -53,13 +56,10 @@ def test_no_cell_field_but_the_id_is_the_servers():
     assert _cell_circuit([cell, *refused.values()]) == [(1, 1), (0, 0), (0, 0), (0, 0), (0, 1)]
 
     inst = honest(BIG, 11)
-    data = [i for i, c in enumerate(inst.cells) if IT.parse_cell(c).data]
-    streams = sorted({IT.parse_cell(inst.cells[i]).stream for i in data})
-    i = data[0]
-    p = IT.parse_cell(inst.cells[i])
-    moved = IT.data_cell(p.id, next(s for s in streams if s != p.stream), B)
-    assert IT.parse_cell(moved).data and _cell_circuit([moved]) == [(1, 1)]
-    cells = [*inst.cells[:i], moved, *inst.cells[i + 1:]]
+    cells = _cell_tampers(inst)["a cell on another request's stream"]
+    (i,) = [k for k, (a, b) in enumerate(zip(cells, inst.cells)) if a != b]
+    assert IT.parse_cell(cells[i]).stream != IT.parse_cell(inst.cells[i]).stream and _cell_circuit([cells[i]]) == [(1, 1)]
+    assert IT._bucket_order(BIG, [IT.parse_cell(c) for c in cells])
     assert IT.canonical_map(BIG, inst.base, cells, inst.rows) is None
 
 
@@ -76,12 +76,24 @@ def test_a_variable_length_response_has_its_map():
         if p.data:
             counts[p.stream] = counts.get(p.stream, 0) + 1
     assert counts == lengths
-    data = [i for i, c in enumerate(cells) if IT.parse_cell(c).data]
-    spot = next(i for i in range(data[0] + 1, BIG.N) if i not in data)
-    one_less = [*cells[:data[-1]], IT.pad_cell(B), *cells[data[-1] + 1:]]
-    one_more = [*cells[:spot], cells[data[0]], *cells[spot + 1:]]
-    for bad in (one_less, one_more):
+    tampers = _cell_tampers(inst)
+    for bad in (tampers["a dropped output"], tampers["a duplicated cell"]):
+        assert IT._bucket_order(BIG, [IT.parse_cell(c) for c in bad])
         assert IT.canonical_map(BIG, inst.base, bad, inst.rows) is None
+
+
+def test_a_buckets_order_carries_nothing():
+    """Advice v0's open item, the order within a bucket: of every order of a bucket's frames, the tie accepts one, so
+    the order is a function of which frames the bucket holds, which advice v0's release buckets say and charge."""
+    one = IT.Shape(B, 1, 8)
+    cells, outputs, release, ids = serve(one, {3: (0, [10, 11]), 8: (4, [12, 13]), 20: (0, [14])}, 14)
+    inst = commit(one, cells, IT.table_rows(IT.window_slots(outputs, release, ids, WINDOW, one.T), one.M))
+    assert IT.reference(inst) and [IT.parse_cell(c).stream for c in cells[:5]] == [3, 3, 8, 8, 20]
+    accepted = 0
+    for order in itertools.permutations(range(5)):
+        cells = [*(inst.cells[k] for k in order), *inst.cells[5:]]
+        accepted += IT.canonical_map(one, inst.base, cells, inst.rows) is not None
+    assert accepted == 1
 
 
 def test_a_payload_in_m_cells_is_refused_and_the_draws_price_is_the_comparison():

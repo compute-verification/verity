@@ -31,17 +31,27 @@ def _h(label: bytes) -> bytes:
 
 def serve(shape: IT.Shape, responses: dict[int, tuple[int, list[int]]], seed: int):
     """The warden's cells for request q's outputs j0, j0 + 1, … (`responses[q] = (j0, ids)`) released in window
-    `WINDOW`, interleaved at random cells in each request's order, pads elsewhere; and the outputs, release buckets
-    and ids advice v0 and the port list, with each request's outputs in the windows before and after."""
+    `WINDOW`: the requests' outputs interleaved at random in each request's order, cut into buckets of random
+    occupancy, each bucket released left-packed and sorted by stream; and the outputs, release buckets and ids advice
+    v0 and the port list, with each request's outputs in the windows before and after."""
     rng = random.Random(seed)
     order = [q for q, (_, xs) in responses.items() for _ in xs]
     rng.shuffle(order)
-    at = sorted(rng.sample(range(shape.N), len(order)))
+    occupancy = [0] * shape.T
+    for _ in order:
+        occupancy[rng.choice([t for t in range(shape.T) if occupancy[t] < shape.R])] += 1
+    nxt, placed, k = dict.fromkeys(responses, 0), [], 0
+    for t, n in enumerate(occupancy):
+        bucket = []
+        for q in order[k:k + n]:
+            bucket.append((q, nxt[q]))
+            nxt[q] += 1
+        placed += [(t * shape.R + s, q, j) for s, (q, j) in enumerate(sorted(bucket))]
+        k += n
     cells = [IT.pad_cell(shape.B)] * shape.N
-    outputs, release, ids, nxt = [], [], [], dict.fromkeys(responses, 0)
-    for i, q in zip(at, order):
+    outputs, release, ids = [], [], []
+    for i, q, k in placed:
         j0, xs = responses[q]
-        k, nxt[q] = nxt[q], nxt[q] + 1
         cells[i] = IT.data_cell(xs[k], q, shape.B)
         outputs.append((q, j0 + k))
         release.append(WINDOW * shape.T + shape.bucket(i))
@@ -137,32 +147,61 @@ def _set(cells, i, cell):
     return [*cells[:i], cell, *cells[i + 1:]]
 
 
+def _swap(cells, a, b):
+    out = list(cells)
+    out[a], out[b] = out[b], out[a]
+    return out
+
+
 def _cell_tampers(inst):
-    """Each way a prover can make the window's cells differ from the table, as a function of the cells."""
-    d, B, R = _data(inst), inst.shape.B, inst.shape.R
-    p = [i for i in range(inst.shape.N) if i not in d]
+    """Each way a prover can make the window's cells differ from the table, as a function of the cells; each keeps
+    every bucket in the canonical order but the two that break it. None where the window has no cells to do it with."""
+    sh, d = inst.shape, _data(inst)
+    B, R = sh.B, sh.R
+    p = [i for i in range(sh.N) if i not in d]
     parsed = {i: IT.parse_cell(inst.cells[i]) for i in d}
-    by_stream: dict[int, list[int]] = {}
-    for i in d:
-        by_stream.setdefault(parsed[i].stream, []).append(i)
-    same = next(ix[:2] for ix in by_stream.values() if len(ix) > 1 and parsed[ix[0]].id != parsed[ix[1]].id)
-    other = next(b for b in d if parsed[b].stream != parsed[d[0]].stream)
-    swapped = list(inst.cells)
-    swapped[same[0]], swapped[same[1]] = swapped[same[1]], swapped[same[0]]
-    # a data cell moved R cells later, past no cell of its own stream, so only its bucket changes
-    move = next(i for i in d if i + R < inst.shape.N and i + R in p
-                and not any(i < k <= i + R for k in by_stream[parsed[i].stream] if k != i))
-    moved = _set(_set(inst.cells, move, IT.pad_cell(B)), move + R, inst.cells[move])
+    streams = sorted({x.stream for x in parsed.values()})
+    occ = [sum(1 for i in d if sh.bucket(i) == t) for t in range(sh.T)]
+    last = {t: t * R + occ[t] - 1 for t in range(sh.T) if occ[t]}
+
+    def first(gen):
+        return next(gen, None)
+
+    def neighbours(i):
+        t = sh.bucket(i)
+        lo = parsed[i - 1].stream if i > t * R else -1
+        hi = parsed[i + 1].stream if i + 1 in parsed and sh.bucket(i + 1) == t else 1 << 32
+        return lo, hi
+
+    same = first((a, b) for a in d for b in d if a < b and parsed[a].stream == parsed[b].stream and parsed[a].id != parsed[b].id)
+    other = first((i, s) for i in d for s in streams if s != parsed[i].stream and neighbours(i)[0] <= s <= neighbours(i)[1])
+    roomy = first(t for t in last if occ[t] < R)
+    mover = first(t for t in last if t + 1 < sh.T and occ[t + 1] < R)
+    mixed = first(i for i in d if i + 1 in parsed and sh.bucket(i + 1) == sh.bucket(i) and parsed[i + 1].stream != parsed[i].stream)
+
+    def moved(t):
+        """bucket t's last data cell moved into bucket t + 1 at its place by stream, ahead of its own stream's cells"""
+        cells, x = list(inst.cells), inst.cells[last[t]]
+        cells[last[t]] = IT.pad_cell(B)
+        head = (t + 1) * R
+        rest = list(inst.cells[head:head + occ[t + 1]])
+        at = sum(IT.parse_cell(c).stream < parsed[last[t]].stream for c in rest)
+        cells[head:head + occ[t + 1] + 1] = [*rest[:at], x, *rest[at:]]
+        return cells
+
     return {
-        "a duplicated cell": _set(inst.cells, p[0], inst.cells[d[0]]),
-        "a dropped output": _set(inst.cells, d[3], IT.pad_cell(B)),
-        "a reorder within a response": swapped,
-        "a cell on another request's stream": _set(inst.cells, d[0], IT.data_cell(parsed[d[0]].id, parsed[other].stream, B)),
-        "a cell on a stream with no request": _set(inst.cells, d[0], IT.data_cell(parsed[d[0]].id, 77_777, B)),
+        "a duplicated cell": None if roomy is None else _set(inst.cells, last[roomy] + 1, inst.cells[last[roomy]]),
+        "a dropped output": _set(inst.cells, last[sh.bucket(d[-1])], IT.pad_cell(B)),
+        "a reorder within a response": None if same is None else _swap(inst.cells, *same),
+        "a cell on another request's stream": None if other is None else _set(
+            inst.cells, other[0], IT.data_cell(parsed[other[0]].id, other[1], B)),
+        "a cell on a stream with no request": _set(inst.cells, d[-1], IT.data_cell(parsed[d[-1]].id, 77_777, B)),
         "a wrong id": _set(inst.cells, d[1], IT.data_cell((parsed[d[1]].id + 1) % V, parsed[d[1]].stream, B)),
         "a covert byte in a pad": _set(inst.cells, p[1], IT.pad_cell(B)[:-1] + b"\x01"),
         "a covert byte in a data cell's fill": _set(inst.cells, d[2], inst.cells[d[2]][:-1] + b"\x01"),
-        "an output moved to the next bucket": moved,
+        "an output moved to the next bucket": None if mover is None else moved(mover),
+        "a data cell after a pad in its bucket": None if roomy is None else _swap(inst.cells, last[roomy], last[roomy] + 1),
+        "two streams out of order in a bucket": None if mixed is None else _swap(inst.cells, mixed, mixed + 1),
     }
 
 
@@ -190,9 +229,15 @@ def _table_tampers(inst):
     }
 
 
+ORDER = {"a data cell after a pad in its bucket", "two streams out of order in a bucket"}
+
+
 def test_each_way_the_cells_differ_from_the_table_is_refused(big):
     for name, cells in _cell_tampers(big).items():
-        assert IT.canonical_map(BIG, big.base, cells, big.rows) is None, name
+        assert cells is not None and IT.canonical_map(BIG, big.base, cells, big.rows) is None, name
+        parsed = [IT.parse_cell(c) for c in cells]
+        if None not in parsed:
+            assert IT._bucket_order(BIG, parsed) is (name not in ORDER), name
     for name, rows in _table_tampers(big).items():
         assert IT.canonical_map(BIG, big.base, big.cells, rows) is None, name
     assert IT.canonical_map(BIG, big.base + 1, big.cells, big.rows) is None
@@ -250,6 +295,20 @@ def test_the_cell_circuit_is_its_reference():
             assert (bool(o[1]), _int(o[2:34]), _int(o[34:66])) == tuple(p)
 
 
+def test_the_order_circuit_is_its_reference():
+    rng = random.Random(9)
+    T, R = 3, 4
+    cases = []
+    for _ in range(60):
+        cases.append([IT.Parsed(rng.random() < 0.6, rng.choice([1, 2, 3, 70_000]), 0) for _ in range(T * R)])
+    for t in range(T):
+        cases[t] = [IT.Parsed(True, 5, 0)] * (t * R) + [IT.Parsed(False, 0, 0)] * ((T - t) * R)
+    want = [int(IT._bucket_order(IT.Shape(256, T, R), c)) for c in cases]
+    assert 0 < sum(want) < len(want)
+    got = _eval(bind(IT.IoTieOrder, T=T, R=R), [[b for x in c for b in [int(x.data), *HC._int_bits(x.stream, 32)]] for c in cases])
+    assert got == want
+
+
 def test_the_route_circuit_is_its_reference():
     rng = random.Random(5)
     W, D = 9, 4
@@ -269,7 +328,7 @@ def test_the_route_circuit_is_its_reference():
 def test_the_content_circuit_is_its_reference():
     inst = honest(SMALL, 6)
     cases = [(inst.cells, inst.rows)]
-    cases += [(c, inst.rows) for c in _cell_tampers(inst).values()]
+    cases += [(c, inst.rows) for c in _cell_tampers(inst).values() if c is not None]
     cases += [(inst.cells, r) for r in _table_tampers(inst).values()]
     insts = [commit(SMALL, c, r) for c, r in cases]
     want = [int(IT.reference_parts(i)["content"]) for i in insts]
@@ -288,9 +347,11 @@ def test_the_parts_ands():
     a = lambda fn: HC.ands(fn, memo)  # noqa: E731
     route, cell = a(bind(IT.IoTieRoute, W=sh.W, D=sh.D)), a(bind(IT.IoTieCell, B=sh.B))
     assert route == sh.W * sh.switches
-    match = a(bind(IT.IoTieMatch, D=sh.D, DB=sh.DB))
-    assert a(bind(IT.IoTieContent, B=sh.B, T=sh.T, R=sh.R)) == sh.N * cell + route + match + sh.N
-    assert 3_600 < cell < 3_800 and 380 * sh.M < match < 400 * sh.M
+    match, order = a(bind(IT.IoTieMatch, D=sh.D, DB=sh.DB)), a(bind(IT.IoTieOrder, T=sh.T, R=sh.R))
+    assert match == sh.M * (389 + sh.DB) + (sh.M - 1) * sh.D - 133
+    assert order == 37 * sh.T * (sh.R - 1) - 1
+    assert a(bind(IT.IoTieContent, B=sh.B, T=sh.T, R=sh.R)) == sh.N * cell + order + route + match + sh.N + 1
+    assert cell == 3_678
 
 
 @pytest.mark.slow

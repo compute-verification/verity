@@ -6,8 +6,9 @@ has the warden commit them, one `hm96-sha512/row/v2` row a cell under a per-wind
 **The cells.** A link-window's egress is N = T·R cells of B bytes in the warden's schedule order, R a bucket, so cell
 i is in bucket ⌊i / R⌋ of the window. A cell is a pad (`pad_cell`, B zero bytes) or a data cell (`data_cell`): a
 `DATA` header whose stream is the request's ingress ordinal, which the warden writes from the connection it
-terminated, then one token id's event (`id_event`) and zero fill. The circuit routes M = 2^D ≥ N slots (`Shape`), the
-N cells and M − N pads of its own.
+terminated, then one token id's event (`id_event`) and zero fill. The warden releases a bucket's frames left-packed
+and sorted by stream, each stream's in its order, so the order within a bucket is a function of which frames it holds.
+The circuit routes M = 2^D ≥ N slots (`Shape`), the N cells and M − N pads of its own.
 
 **The window's table** is one value per link-window, committed before the tie runs: the window's outputs in (q, j)
 order, one 16-byte slot each (`Slot`: the request's ordinal q, the output's index j, its session-global egress bucket b
@@ -16,13 +17,14 @@ outputs and release buckets; the id is the token port's, the server's sampled id
 must equal).
 
 **What 1 means** (`reference`): both roots are their rows' (the cells' and the table's), every cell is a pad or a data
-cell, the table's full slots come first, sorted by (q, j) with each request's j consecutive, and the data cells are in
+cell, every bucket is in that order (its data cells first, their streams non-decreasing), the table's full slots come first, sorted by (q, j) with each request's j consecutive, and the data cells are in
 one-to-one correspondence with the full slots, each stream's data cells in schedule order to its request's slots in
 order, every slot's q, id and b its cell's stream, id and bucket (the window's first bucket plus ⌊i / R⌋). So a
 duplicated, dropped, reordered or altered cell, a covert byte in a pad, and a cell on another request's stream each
 make it 0.
 
     IoTieCell{B}(cell: Array<B, Byte>) -> Array<66>                  ok, data, stream (u32), id (u32), LSB first
+    IoTieOrder{T, R}(cells: Array<N, Array<33>>) -> Value<1>         each cell's data bit and stream
     IoTieRoute{W, D}(xs: Array<M, Array<W>>, switches: Array<S>) -> Array<M, Array<W>>
         a Beneš network of S = (2D − 1)·2^(D − 1) switches, W ANDs each
     IoTieMatch{D, DB}(routed: Array<M, Array<W>>, table: Array<M, Array<16, Byte>>, base: Array<32>) -> Value<1>
@@ -272,14 +274,27 @@ def _sorted_table(slots: Sequence[Slot], rows: Sequence[bytes]) -> int | None:
     return n
 
 
+def _bucket_order(shape: Shape, parsed: Sequence[Parsed]) -> bool:
+    """Each bucket's cells in the canonical order the warden releases them in: its data cells first (left-packed),
+    their streams non-decreasing (`IoTieOrder`'s reference)."""
+    for i in range(shape.N - 1):
+        a, b = parsed[i], parsed[i + 1]
+        if shape.bucket(i) == shape.bucket(i + 1) and (b.data and not a.data or a.data and b.data and b.stream < a.stream):
+            return False
+    return True
+
+
 def canonical_map(shape: Shape, base: int, cells: Sequence[bytes], rows: Sequence[bytes]) -> list[int] | None:
     """The map the tie admits, cell i to slot perm[i] over the M cells (the N cells, then the circuit's pads): each
     stream's data cells in schedule order to its request's slots in order, the pads to the empty slots (in order here;
-    any order of the pads is admitted too). None when there is none: a cell that is neither, an unsorted table, a
-    stream and a request with other counts, or a slot whose id or bucket isn't its cell's."""
+    any order of the pads is admitted too). None when there is none: a cell that is neither, a bucket out of the
+    canonical order, an unsorted table, a stream and a request with other counts, or a slot whose id or bucket isn't
+    its cell's."""
     parsed, slots = [parse_cell(c) for c in cells], table_slots(rows)
     n = _sorted_table(slots, rows)
     if n is None or any(p is None for p in parsed) or len(parsed) != shape.N or len(slots) != shape.M:
+        return None
+    if not _bucket_order(shape, parsed):
         return None
     parsed += [Parsed(False, 0, 0)] * (shape.M - shape.N)
     by_q: dict[int, list[int]] = {}
@@ -554,6 +569,28 @@ IoTieMatch = _part(
     "request at a larger q")
 
 
+def _sig_order(S):
+    for name in ("T", "R"):
+        if type(getattr(S, name)) is not int or getattr(S, name) < 1:
+            raise ValueError(f"{name} is a positive int, not {getattr(S, name)!r}")
+    return (("cells", Array(S.T * S.R, Array(33, BIT))),), BIT
+
+
+def _build_order(C, S, *cells):
+    oks = []
+    for i in range(S.T * S.R - 1):
+        if i // S.R == (i + 1) // S.R:
+            (da, qa), (db, qb) = (cells[i][0], cells[i][1:]), (cells[i + 1][0], cells[i + 1][1:])
+            oks += [C.AND(da.inv(), db).inv(), C.AND(C.AND(da, db), _lt(C, qb, qa)).inv()]
+    return [and_reduce(C, oks)]
+
+
+IoTieOrder = _part(
+    "IoTieOrder", ("T", "R"), _sig_order, _build_order,
+    "1 iff each bucket of R of the T·R cells (each its data bit and stream, LSB first) holds its data cells first and "
+    "their streams non-decreasing: the canonical order the warden releases a bucket in")
+
+
 def _sig_content(S):
     sh = Shape(S.B, S.T, S.R)
     return ((("cells", Array(sh.N, Array(S.B, BYTE))), ("table", Array(sh.M // SLOTS_A_ROW, Array(ROW_BYTES, BYTE))),
@@ -563,13 +600,15 @@ def _sig_content(S):
 def _body_content(B, S, cells, table, base, switches_):
     sh = Shape(S.B, S.T, S.R)
     K, cr = HC._Consts(B), HC._refs(cells)
-    oks, xs = [], []
+    oks, xs, order = [], [], []
     for i in range(sh.N):
         out = HC._refs(B.call(bind(IoTieCell, B=S.B), HC._coll(Array(S.B, BYTE), cr[8 * S.B * i:8 * S.B * (i + 1)])))
         oks.append(out[0])
+        order += out[1:34]
         xs += out[1:] + K.bits(sh.bucket(i), sh.DB) + K.bits(i, sh.D)
     for i in range(sh.N, sh.M):
         xs += K.bits(0, CELL_OUT - 1 + sh.DB) + K.bits(i, sh.D)
+    oks += HC._refs(B.call(bind(IoTieOrder, T=S.T, R=S.R), HC._coll(Array(sh.N, Array(33, BIT)), order)))
     routed = B.call(bind(IoTieRoute, W=sh.W, D=sh.D), HC._coll(Array(sh.M, Array(sh.W, BIT)), xs), switches_)
     slots = HC._coll(Array(sh.M, Array(SLOT.size, BYTE)), HC._refs(table))
     oks += HC._refs(B.call(bind(IoTieMatch, D=sh.D, DB=sh.DB), routed, slots, base))
@@ -578,9 +617,9 @@ def _body_content(B, S, cells, table, base, switches_):
 
 IoTieContent = CompositeDefinition(
     "IoTieContent", 1, ("B", "T", "R"), _sig_content, _body_content, conformance="exact-model-tested",
-    doc="1 iff every one of the window's N = T·R B-byte cells is a pad or a data cell (`IoTieCell`), and the cells, "
-        "each with its bucket ⌊i / R⌋ and index i, and M − N pads after them, routed by the switches (`IoTieRoute`), "
-        "match the table (`IoTieMatch`)")
+    doc="1 iff every one of the window's N = T·R B-byte cells is a pad or a data cell (`IoTieCell`), each bucket is in "
+        "the canonical order (`IoTieOrder`), and the cells, each with its bucket ⌊i / R⌋ and index i, and M − N pads "
+        "after them, routed by the switches (`IoTieRoute`), match the table (`IoTieMatch`)")
 
 
 def _sig_pad(S):
@@ -670,7 +709,7 @@ def window_arguments(inst: Instance, bits: Sequence[int]) -> list[list[int]]:
 
 
 __all__ = ["CELL_OUT", "CELL_USED", "EMPTY", "FrameV3Pad", "ID_AT", "ID_EVENT_BYTES", "Instance", "IoTieCell", "IoTieContent",
-           "IoTieMatch", "IoTieRoute", "IoTieWindow", "NetworkRowsRoot", "Parsed", "ROW_BYTES", "SLOT", "SLOTS_A_ROW",
+           "IoTieMatch", "IoTieOrder", "IoTieRoute", "IoTieWindow", "NetworkRowsRoot", "Parsed", "ROW_BYTES", "SLOT", "SLOTS_A_ROW",
            "Shape", "Slot", "benes", "benes_apply", "canonical_map", "content_arguments", "data_cell", "domain",
            "fake_salt", "id_event", "pad_cell", "parse_cell", "reference", "reference_parts", "rows_root", "switches",
            "table_rows", "table_slots", "window_arguments", "window_slots"]
