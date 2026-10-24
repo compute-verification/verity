@@ -40,6 +40,14 @@ A spec-level reference for network accounting's timing channel:
   to the earliest egress window that can show each record (`bits`);
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
+- the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
+  whole cached units, which checks the row's hit (the longest cached prefix while no block can have been evicted, a
+  cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
+  circuits and their evaluator from `verity`;
+- the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
+  direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
+  bucket a + D + ⌊i/r⌋. A miss fails the connection closed. It records and certifies exactly the cells it sends.
+  `PROTOCOL.md`'s "The active warden" has its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
