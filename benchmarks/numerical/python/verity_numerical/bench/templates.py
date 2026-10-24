@@ -856,6 +856,44 @@ def _embedding_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
     return embedding_row(rel["statics"]["V"], rel["statics"]["H"]) if rel.get("definition") == "Embedding_v1" else None
 
 
+def _ingress_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    from verity_vllm.program.registry import io_shell as X
+
+    MODEL, LP, V = sub.params["MODEL"], sub.params["LP"], sub.params["V"]
+    ids = [key.uniform(V, ("id", j, k)) for k in range(LP)]
+    m = 1 + key.uniform(10 ** X.MAX_TOKENS_WIDTH - 1, ("max_tokens", j))
+    return Draw({"body": np.frombuffer(X.encode(MODEL, ids, m, V), dtype=np.uint8).copy()}, {}, {})
+
+
+def ingress_prompt(MODEL: str, LP: int, V: int) -> Subcircuit:
+    """The I/O shell's ingress parse unit (``io_shell.IngressPrompt_v1{MODEL,LP,V}``): the attested request body of ingress v0,
+    whole SHA-512 blocks of bytes, to (ok, the prompt's LP token ids, max_tokens)."""
+    MODEL, LP, V = str(MODEL), int(LP), int(V)
+
+    def target(**_s: int) -> Any:
+        from verity.ml.circuits.defs import bind
+        from verity_vllm.program.registry import io_shell as X
+
+        return bind(X.IngressPrompt, MODEL=MODEL, LP=LP, V=V)
+
+    from verity_vllm.program.registry import io_shell as X
+
+    rel = {"subcircuit": "IngressPrompt_v1", "definition": "IngressPrompt_v1", "statics": {"MODEL": MODEL, "LP": LP, "V": V},
+           "rule": "io_shell.reference: ok = the body is ingress v0's layout at (MODEL, LP, V); ids and max_tokens its fields' sums"}
+    return Subcircuit(TEMPLATES["ingress-prompt"], {"MODEL": MODEL, "LP": LP, "V": V}, f"ingress-prompt/{MODEL}-lp{LP}-v{V}/v0",
+                      f"IngressPrompt_v1<{MODEL}, {LP}, {V}> · ingress v0", row_set_name("IngressPrompt_v1", {"MODEL": MODEL, "LP": LP, "V": V}), rel,
+                      (Port("body", "u8", X.length(MODEL, LP, V)),), (Port("ok", "u8", 1), Port("ids", "u32", LP), Port("max_tokens", "u32", 1)),
+                      target, target, sampler=_ingress_sample, admit=lambda out: np.array([int(o[0]) == 1 for o in out["ok"]]),
+                      recipe={"body": "io_shell.encode(MODEL, ids, max_tokens, V): ids key.uniform(V, ('id', j, k)), max_tokens "
+                                      "1 + key.uniform(10^6 - 1, ('max_tokens', j))"})
+
+
+def _ingress_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
+    if rel.get("definition") != "IngressPrompt_v1":
+        return None
+    return ingress_prompt(rel["statics"]["MODEL"], rel["statics"]["LP"], rel["statics"]["V"])
+
+
 def _expert_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
     E, K, tile = sub.params["E"], sub.params["K"], int(sub.recipe.get("tile", 32))
     t = j // tile
@@ -999,6 +1037,10 @@ for _r in ROWS.values():
 _add(Template("embedding-row", "Embedding_v1", "one row of the token embedding table, gathered by token id (Embedding_v1): an input "
               "stores the id and the row it opens", {"V": "int, vocabulary", "H": "int, hidden size"}, embedding_row, _embedding_identify,
               {"V": 32768, "H": 4096}))
+_add(Template("ingress-prompt", "IngressPrompt_v1", "the I/O shell's ingress parse unit (io_shell.IngressPrompt_v1): the attested request "
+              "body of ingress v0 to its ok bit, the prompt's token ids and max_tokens", {"MODEL": "str, the served model's name",
+              "LP": "int, prompt tokens", "V": "int, vocabulary"}, ingress_prompt, _ingress_identify,
+              {"MODEL": "served-model", "LP": 16, "V": 128256}))
 _add(Template("moe-expert-coordinate", "MoeExpertCoordinate<K>", "one output word of the routed expert's GEMM (MoeExpertCoordinate_v1): "
               "GemmCoordinate_v1 on expert e's row", {"E": "int, experts", "K": "int, a multiple of 16"},
               lambda **p: moe_expert_coordinate(**p), _expert_identify(False), {"E": 64, "K": 2048}))
@@ -1062,6 +1104,8 @@ def parse_subcircuit_id(sid: str) -> Subcircuit:
         return moe_expert_coordinate(int(m[1]), int(m[2]), weighted=tid.endswith("weighted"))
     elif tid == "scaled-mm-fp8-block-coordinate" and (m := re.fullmatch(r"k(\d+)-g(\d+)", params)) and sem == "sm90-wgmma-e4m3":
         return scaled_mm_fp8_block_coordinate(int(m[1]), int(m[2]))
+    elif tid == "ingress-prompt" and (m := re.fullmatch(r"(.+)-lp(\d+)-v(\d+)", params)) and sem == "v0":
+        return ingress_prompt(m[1], int(m[2]), int(m[3]))
     raise KeyError(f"not a subcircuit id this catalogue binds: {sid!r}")
 
 

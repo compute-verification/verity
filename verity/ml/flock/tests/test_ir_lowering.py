@@ -624,6 +624,30 @@ def test_the_pin_covers_the_leaf_maps():
     assert a.sha256 != b.sha256 and a.text.splitlines()[:-1] == b.text.splitlines()[:-1]
 
 
+INGRESS = {"MODEL": "m", "LP": 3, "V": 1000}
+
+
+def test_the_ingress_parse_is_one_unit_equal_to_its_definition(tmp_path):
+    """``ingress-prompt`` (the I/O shell's ``IngressPrompt_v1``) lowers as ONE unit (``ir_lower.whole``) whose input row is the
+    body, whole SHA-512 blocks: its rows equal the IR on a synthetic set of schema bodies, and give ``io_shell.reference``'s
+    (ok, ids, max_tokens) on the same bodies with one byte changed, which leaves the schema or moves a field."""
+    from verity_vllm.program.registry import io_shell as X
+
+    mod, sub = REG.module("ingress-prompt"), TM.subcircuit("ingress-prompt", **INGRESS)
+    s = InputSet.open(generate(sub, 4, 20261024, tmp_path)["path"])
+    assert _check_set(s) == 0
+    low = mod.lowering(sub)
+    assert low.units.n == 1 and sum(low.units.in_widths) % 1024 == 0 and low.sha256 == mod.PINS[tuple(INGRESS.values())]
+    rng, LP = random.Random(3), INGRESS["LP"]
+    fin = IL.flat_ports(s, sub.inputs, 0, s.n).copy()
+    for row in fin:
+        row[rng.randrange(len(row))] ^= 1 + rng.randrange(255)
+    got, _cuts, ok = low.evaluate(fin)
+    want = [X.reference(bytes(int(b) for b in row), *INGRESS.values()) for row in fin]
+    assert ok == (1 << s.n) - 1 and [(int(r[0]), [int(x) for x in r[1:1 + LP]], int(r[1 + LP])) for r in got] == want
+    assert any(w[0] == 0 for w in want)
+
+
 def test_supports_says_what_is_missing():
     for template, params in LOWERED.items():
         sub = TM.subcircuit(template, **params)
