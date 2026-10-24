@@ -65,7 +65,8 @@ to the engine as soon as the round is launched: a thread sends round s's root on
 inputs from pinned memory without a wait, so step s + 1's launch overlaps round s.  A captured step (and the steps whose
 rounds a capture reads) waits for its round on the host, as without it.  The end of step s + D - 2's `after`, where
 step s's units are dispatched, now comes a tree span and the host's lead on the GPU sooner after round s's root, so the
-served row wants one or two more ring slots (-so9, -so10) for coin s to be back there.
+served row wants one or two more ring slots (-so9, -so10) for coin s to be back there.  `=main` keeps the round on the
+serving stream (between forward s and lm_head) and drops only the host's waits.
 
 A window's open and end (RT4-INT-37; served_h1's window close, since dither-a has none).  Every window opens with the salt
 coin after its root (off the node the root the gate's open names, for development `coins.stand_in_root` of the session;
@@ -167,7 +168,9 @@ SPILL_MAX_GB = 128
 # "1": round s's tables and trees on a tree stream of their own once forward s is done, beside step s's sampling (the
 # engine's lm_head and sampler, which read none of round s's inputs), the serving stream waiting for them before step
 # s + 1's inputs and forward; round s's root sent by a thread once the GPU has it (`SoWindow._rs_send`), so the host
-# goes back to the engine without waiting on forward s or the trees.  The same round order and the same buffers
+# goes back to the engine without waiting on forward s or the trees.  The same round order and the same buffers.
+# "main": the same, the tables and trees on the serving stream (behind forward s, ahead of lm_head), so only the host's
+# waits go
 RS_ENV = "DITHER_SO_ROUND_STREAM"
 RS_EV = 4       # its per-step events and pinned roots, a ring of this many steps (the sender is never further behind)
 # the tree stream's priority (default 0, the units'): below the serving stream's, so step s's lm_head and sampler, which
@@ -241,7 +244,7 @@ class SoWindow(DO.Window):
         if self.a_step and (self.a_once or self.overlap):
             raise RuntimeError(f"{DO.A_STEP_ENV}=1 serves -aom/-aomn without -ov (its A tables after the forward, on "
                                f"the serving stream)")
-        self.rs = os.environ.get(RS_ENV) == "1"
+        self.rs = os.environ.get(RS_ENV) in ("1", "main")
         if self.rs and self.overlap:
             raise RuntimeError(f"{RS_ENV}=1 serves an -so arm without -ov (-ov builds its rounds from ring copies)")
         self.rs_last: int | None = None
@@ -293,7 +296,8 @@ class SoWindow(DO.Window):
         serving stream, "w0"/"w1" around the receipt leaf's wait, "t" the round's end on the tree stream, and "h" the
         serving stream at step s + 1, before it waits for round s, `rs_h_of` the step each "h" slot holds), pinned
         roots and served-y refusals, and the sender thread (`_rs_send`)."""
-        self.rs_stream = torch.cuda.Stream(device=self.dev, priority=int(os.environ.get(RS_PRIO_ENV, "0")))
+        self.rs_stream = None if os.environ.get(RS_ENV) == "main" else torch.cuda.Stream(
+            device=self.dev, priority=int(os.environ.get(RS_PRIO_ENV, "0")))
         self.rs_ev = {k: [torch.cuda.Event(enable_timing=True) for _ in range(RS_EV)]
                       for k in ("b", "f", "w0", "w1", "t", "h")}
         self.rs_h_of = [-1] * RS_EV
@@ -746,7 +750,8 @@ class SoWindow(DO.Window):
         self.phase("forward_wait")
         if rs:
             self.rs_ev["f"][e].record(main)
-            self.rs_stream.wait_event(self.rs_ev["f"][e])
+            if self.rs_stream is not None:
+                self.rs_stream.wait_event(self.rs_ev["f"][e])
             self._poll_deferred()
         else:
             if self.deferred is not None:
@@ -757,7 +762,7 @@ class SoWindow(DO.Window):
         if not rs and self.deferred is not None and self.coin_async == 1:
             t_late = self._late_dispatch()
         s, m, cap, pre, ev, kinds = self.s, self.m, self.cap, self.pre, self.ev, self.round_kinds
-        ts = self.rs_stream if rs else main
+        ts = self.rs_stream if rs and self.rs_stream is not None else main
         w0, w1 = (self.rs_ev["w0"][e], self.rs_ev["w1"][e]) if rs else self.ev_w
         with torch.cuda.stream(ts):
             if self.a_once or self.a_step:
@@ -1005,8 +1010,8 @@ class SoWindow(DO.Window):
                      "coins_back": len(pipe.openings), "rounds_sent": len(sent),
                      # the challenger's log holds these round roots in this order (its published session's record)
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
-                     "window_end": self.end_stats(), "round_stream": self.rs,
-                     "round_stream_priority": self.rs_stream.priority if self.rs else None,
+                     "window_end": self.end_stats(), "round_stream": os.environ.get(RS_ENV) if self.rs else None,
+                     "round_stream_priority": self.rs_stream.priority if self.rs and self.rs_stream else None,
                      "dead_once": self.dead_once, "a_dead_rows_x_once": self.a_live is not None,
                      "put_async": self.put_async,
                      "serving_stream_priority": torch.cuda.current_stream().priority,
