@@ -52,7 +52,7 @@ Two kinds of committed run:
   (`forged_row`).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, and what the digest names), the one
   ``verity-vllm advice --compiler-name N --compiler-digest D`` must register. Its digest names this tree's code
-  (`code_identity`: ``verity/`` and ``integrations/vllm/`` by content), so the audit runs on a tree whose two are the server's.
+  (`code_identity`: ``verity`` and ``verity_vllm`` by content), so the audit runs on a tree whose two are the server's.
 * **serve-standin**: a served run's dir laid out from a single-GPU Commit of record (one window, ``w0``, under the record's run
   root; the declared run's advice committed under the served compiler), a stand-in for serve-openai's until its sealed windows.
 
@@ -127,8 +127,8 @@ class I2Compiler:
     brings, never advice), under the registered φ (``registered``: the model, target, engine and ℓ, no workload). `load` reads
     each Program's body from the Build's files of the digest I2 compiled (a ``build_request*/`` under ``programs_root`` whose
     ``result.json`` names it), refused where no Build dir holds it: the Build's files are the bodies' cache, I2's digests are the
-    Programs. Its digest names I2's code (`source_identity.code_identity`: the integration's and core's files by content, as git
-    lists them, so a node's ignored build outputs, ``.lake`` under ``verity/``, don't move it), φ, the default seed and ℓ."""
+    Programs. Its digest names I2's code (`code_identity`: ``verity`` and ``verity_vllm`` as git lists them, so a node's ignored
+    build outputs don't move it), φ, the default seed and ℓ."""
 
     registered: Any
     ingress: Mapping[str, Mapping[str, Any]]
@@ -180,12 +180,29 @@ class I2Compiler:
                                digs=digs, arrivals={q["request_id"]: int(q["arrive_step"]) for q in requests})
 
 
+#: the two packages a predicted Program is built from (`score.code_version`'s), by repository path
+CODE_DIRS = ("verity", "integrations/vllm/verity_vllm")
+
+
 @functools.lru_cache(maxsize=1)
 def code_identity() -> str:
-    """The code the compiler runs, by content (`source_identity.code_identity` of this tree), once per process."""
-    from verity_vllm.pipeline import source_identity as SI
+    """The code the compiler runs, once per process: every file git lists under `CODE_DIRS` (tracked, or untracked and not
+    ignored, so a node's build outputs, ``.lake`` under ``verity/``, don't count; docs, ``*.md``, compute nothing), by path and
+    content. Refused where the tree isn't a git work tree: a listing without git's ignore rules is another identity."""
+    import subprocess
 
-    return SI.code_identity(SI.TREE)["sha256"]
+    import verity_vllm
+
+    root = Path(verity_vllm.__file__).resolve().parents[3]
+    p = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *CODE_DIRS], cwd=root,
+                       capture_output=True)
+    if p.returncode != 0:
+        raise ValueError(f"the compiler's code identity reads the tree's git listing, and {root} has none: "
+                         f"{p.stderr.decode(errors='replace').strip()[:200]}")
+    h = hashlib.sha256()
+    for rel in sorted({f for f in p.stdout.decode().split("\0") if f and not f.endswith(".md") and (root / f).is_file()}):
+        h.update(rel.encode() + b"\0" + hashlib.sha256((root / rel).read_bytes()).digest())
+    return h.hexdigest()
 
 
 def bodies_by_digest(programs_root: str) -> dict[str, str]:
