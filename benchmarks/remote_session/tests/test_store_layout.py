@@ -3,7 +3,8 @@ own tests are beside it). On a small synthetic checkpoint (`store_layout.synthet
 (`engine.pack`); a prover that registers the store the pin lays out under the verifier's payload key is accepted and
 bound, and one whose root is any other (its own salts, another checkpoint, another shape) is refused with the reason
 before the registry draws anything, under `lean` by the Lean verifier (`bind`, `hold`), a hello on which it and
-store.py differ refused as `disagreement`; `verifier.py --model` refuses a pin whose files aren't the checkpoint's before it
+store.py differ refused as `disagreement`, the two roots computed at once and the hello decided once both have
+answered, whichever is first; `verifier.py --model` refuses a pin whose files aren't the checkpoint's before it
 listens; `store_layout`'s pin is the one core reads, and its SHA-256s are the arena's; and the paced line reports weights
 held and filler held apart."""
 from __future__ import annotations
@@ -200,6 +201,78 @@ def test_a_hello_the_verifiers_bind_differently_is_refused_as_disagreement(ckpt,
     assert lean == {"bind": {"refused": f"the pin {ckpt / 'pin.json'} is other's, not --model {ROLE}'s"}}
     v, refused, heard = greet(honest(), b, "lean")
     assert refused is None and v.registry.drawn(NODE) == 1 and b.record()["bound"] is True
+
+
+@pytest.mark.parametrize("first", ["lean", "store.py"])
+def test_the_two_roots_are_computed_at_once_and_a_disagreement_refused_whichever_answers_first(ckpt, monkeypatch,
+                                                                                                first):
+    """At a hello the Lean's `hold` is asked before store.py's `Binding.hold` starts, so the two roots are computed at
+    once, and the hello is decided only once both have answered: with the Lean's answer in before store.py's and with
+    it held back until store.py's is in, a hello store.py refuses and the Lean binds, and one store.py binds and the
+    Lean refuses, are each refused as `disagreement` before the registry draws, and the honest hello is bound."""
+    b = binding(ckpt)
+    store = rstore.Store(b.arena, 2, 7, 2)
+    regions = [[x["kind"], x["tier"], x["first"], x["blocks"]] for x in store.regions()]
+    real_hold, put = b.hold, verifier.lv.Lean._put
+    seen: list[str] = []
+    lean_in, mine_in = threading.Event(), threading.Event()
+
+    def asked(self, request, body, answered):
+        if request.get("op") != "hold":
+            return put(self, request, body, answered)
+        seen.append("lean asked")
+
+        def answer(msg):
+            if first == "store.py":
+                mine_in.wait()
+            seen.append("lean answered")
+            lean_in.set()
+            answered(msg)
+
+        return put(self, request, body, answer)
+
+    def ordered(inner):
+        def hold(*args):
+            seen.append("store.py asked")
+            if first == "lean" and "lean asked" in seen:
+                lean_in.wait()
+            try:
+                return inner(*args)
+            finally:
+                seen.append("store.py answered")
+                mine_in.set()
+        return hold
+
+    def any_root(node, blocks, root, key, layout):
+        b.state.update(expected_root=root.hex(), bound=True)
+        return tuple(tuple(r) for r in regions)
+
+    def greeted(inner, **kw) -> tuple[ValueError | None, list[str], int]:
+        seen.clear()
+        lean_in.clear()
+        mine_in.clear()
+        monkeypatch.setattr(b, "hold", ordered(inner))
+        v, refused, heard = greet(prover.CpuBackend(16, random.Random(7), store=store), b, "lean", **kw)
+        answers = ["lean answered", "store.py answered"]
+        assert seen == ["lean asked", "store.py asked", *(answers if first == "lean" else answers[::-1])]
+        return refused, heard, v.registry.drawn(NODE)
+
+    def disagreement(inner, **kw) -> dict:
+        refused, heard, drawn = greeted(inner, **kw)
+        assert isinstance(refused, rstore.Refused) and str(refused).startswith(
+            "disagreement: the Lean verifier's binding is "), refused
+        assert heard == [f"refused: {refused}"] and drawn == 0 and b.record()["bound"] is False
+        return b.record()["lean"]
+
+    monkeypatch.setattr(verifier.lv.Lean, "_put", asked)
+    with monkeypatch.context() as m:
+        m.setattr(rstore, "expected_root", lambda *a, **kw: bytes(64))
+        assert disagreement(real_hold) == {"regions": regions, "expected_root": b.record()["payload_root"]}
+    lean = disagreement(any_root, seed_payload_key=True)
+    assert "under this verifier's payload key" in lean["refused"] and "regions" not in lean
+    refused, heard, drawn = greeted(real_hold)
+    assert refused is None and heard == [] and drawn == 1 and b.record()["bound"] is True
+    assert b.record()["lean"] == {"regions": regions, "expected_root": b.record()["expected_root"]}
 
 
 def test_verifier_py_refuses_a_pin_whose_files_arent_the_checkpoints_before_it_listens(ckpt, tmp_path):
