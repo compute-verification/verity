@@ -1,5 +1,6 @@
 import Proofs.Pouw.H1Zy.Combine
 import Proofs.Pouw.H1Zy.Lane
+import Proofs.Pouw.H1Zy.Tile
 
 /-!
 # H1's drawn-leaf statements: their Definitions on words mean what `LeafChecks` reads
@@ -11,4 +12,8 @@ import Proofs.Pouw.H1Zy.Lane
 every lane cell's record z as the exact dot of its rows' codes and its y as the dequant of it, and every partial word as
 the masked chain word (`Pouw.H1Zy.laneOk_spec`). `Proofs.Accounting.TS.Session.Lanes.Lane` reads it as `LeafChecks`'
 lane field.
+
+`Tile`: at the same `K`, `PouwH1TileZy_v1{TILE}`'s `ok = true` gives every cell's record z as the exact dot of its rows'
+codes and its y as the dequant of it, over `PouwH1Tile_v1` or `PouwH1Tile_v3` at any noise (`Pouw.H1Zy.tileOk_spec`).
+`Proofs.Accounting.TS.Session.Tile.Computes` reads it as `TileChecks`.
 -/
