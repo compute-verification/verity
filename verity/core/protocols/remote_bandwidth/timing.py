@@ -56,10 +56,13 @@ GPU_SHA512_PER_S = 7.0e9
 (#1916, art:dea3a309)."""
 SHA512_PER_S = GPUS * GPU_SHA512_PER_S
 """The node's SHA-512 compressions a second, its GPUs'.  The host's cores' rate is not measured and not in it."""
-SKETCH_OUTSIDE = 1
+SKETCH_OUTSIDE = 2 ** 20
 """F, the outside-compute factor: the SHA-512 compressions a prover makes over a session are at most F times the node's
 own over its span, Q = F·C (`sketch_failure`'s `outside`).  Grinding a sketch-sha512 key reads no block, so it can run
-on any hardware the prover reaches, not only the node's GPUs; F = 1 counts the node's alone (RD-5,
+on any hardware the prover reaches, not only the node's GPUs: 2^20 nodes' SHA-512, about 8.4M RTX PRO 6000s, past any
+one operator's fleet.  At 16 rows it costs a session's line 0.4 bits of error (2^-29.95 to 2^-29.55 at 2118 passes),
+since AuditRO's 2^-41 a pass dominates it; 64 rows would bring δs under 2^-50 at τ 1.226 a pass on the reader, the
+option if that slack is ever cut.  Provisional, under the sketch's random-oracle ask (memory-accounting, 24 Oct; RD-5,
 note:20261024T1350Z-report-sketch-named)."""
 GPU_READ_BYTES_PER_S = 1.539e12
 """One RTX PRO 6000's measured HBM read rate: the fastest bare read of an encoded store measured on it, 1,539.26 GB/s
@@ -547,11 +550,13 @@ def _grid() -> None:
             mark = " (r*)" if r == star else ""
             print(f"| {k} | {r}{mark} | {log2(sign_rank_at_most(k, r)):.2f} | {log2(sketch_rate(k, r)):.2f} |")
     print()
+    fl = SKETCH_OUTSIDE.bit_length() - 1
     for k, (star, rate) in readings.items():
+        q40, q64 = -40 - log2(rate), -64 - log2(rate)
         print(f"{k} rows: r* = {star}, 2^{log2(rate):.2f} a compression; a session's failure stays below 2^-40 up to "
-              f"C = 2^{-40 - log2(rate):.2f} compressions ({2 ** (-40 - log2(rate)) / SHA512_PER_S / 86400:.3g} days of "
-              f"{GPUS} GPUs at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s each), and below 2^-64 up to "
-              f"C = 2^{-64 - log2(rate):.2f} ({2 ** (-64 - log2(rate)) / SHA512_PER_S:.3g} s)")
+              f"Q = 2^{q40:.2f} compressions, the node's C = 2^{q40 - fl:.2f} at F = 2^{fl} "
+              f"({2 ** (q40 - fl) / SHA512_PER_S:.3g} s of {GPUS} GPUs at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s each), "
+              f"and below 2^-64 up to Q = 2^{q64:.2f}, C = 2^{q64 - fl:.2f}")
     print()
     print("# a grinding try reads no block: compressions to make a key straight (at least 5 with the constant "
           f"midstates kept), at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s on one GPU; seeing a sector's 16 × 32 signs is 16 "
@@ -563,13 +568,14 @@ def _grid() -> None:
         c = grind_compressions(n)
         print(f"| {name} | {n} | {c} | {c / GPU_SHA512_PER_S * 1e9:.2f} | {math.log2(SHA512_PER_S / c):.2f} |")
     print()
+    f = f"F = 2^{SKETCH_OUTSIDE.bit_length() - 1}"
     print(f"| a session of {GPUS} GPUs, every compression a guess or a key, 50 passes a second | C, log2 | failure at "
-          "r*, 16 rows | 64 rows |")
-    print("| --- | --- | --- | --- |")
+          f"r*, 16 rows, F = 1 | {f} | 64 rows, {f} |")
+    print("| --- | --- | --- | --- | --- |")
     for name, secs in (("1 s", 1), ("10 min", 600), ("1 hour", 3600), ("1 day", 86400), ("30 days", 30 * 86400)):
         c, p = round(SHA512_PER_S * secs), secs * 50
-        print(f"| {name} | {math.log2(c):.2f} | 2^{log2(sketch_failure(c, p)):.2f} | "
-              f"2^{log2(sketch_failure(c, p, rows=64)):.2f} |")
+        print(f"| {name} | {math.log2(c):.2f} | 2^{log2(sketch_failure(c, p, outside=1)):.2f} | "
+              f"2^{log2(sketch_failure(c, p)):.2f} | 2^{log2(sketch_failure(c, p, rows=64)):.2f} |")
 
 
 if __name__ == "__main__":

@@ -382,7 +382,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     assert json.loads(closed)["body"]["complete"] is defer_openings
     doc = line("lean")
     honest, dropper = doc["sessions"]
-    assert doc["sketch_outside"] == [1] and honest["sketch"]["outside"] == 1
+    assert doc["sketch_outside"] == [2 ** 20] and honest["sketch"]["outside"] == 2 ** 20
     assert honest["of_record"] and dropper["of_record"] and honest["credit"]["credited"]["ok"]
     assert dropper["credit"]["accepted"]["reason"] == "the Lean refused it (receipt)"
     for s in (honest, dropper):
