@@ -201,6 +201,9 @@ def evaluate_desc(inst) -> dict:
         raise Malformed("not-topological")
     if walk_bound(program) > FUEL // 2:
         raise Malformed("program")
+    if any(n.form == "scan" and n.n == 0 and n.out.leaves > 0
+           for fn in program.defs.values() if hasattr(fn, "body") for n in fn.body.nodes):
+        raise Malformed("program")
     inp, reg, spans = root_nodes(inst["program"])
     K = len(inp)
     seen: set[int] = set()
