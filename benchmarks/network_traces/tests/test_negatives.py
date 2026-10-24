@@ -466,11 +466,12 @@ def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_unit
     """Against N2-ADVICE's `advised` (skipped until it lands), on heads an honest run of the advice certifies: the
     honest advice is accepted; length, missing, extra and release are refused by the advised counts, each well formed;
     start and chunk are accepted, their frames honest's, so only the step unit can refuse them; a `received` that
-    isn't the requests' frames is refused by the view."""
+    isn't the requests' frames, and an extra request whose frames pass the egress allocation R in a bucket, are
+    refused by the view."""
     AD = pytest.importorskip(NG.ADVISED_MODULE)
     from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
-    T, R, RIN, OWN, syncs, sigma = 8, 4, 8, 0, [ClockSync(1, Fraction(1))], SyncSet((1,), (Fraction(1),))
+    T, R, RIN, OWN, syncs, sigma = 8, 8, 8, 0, [ClockSync(1, Fraction(1))], SyncSet((1,), (Fraction(1),))
     a = _advice()
     heads = NG.honest_heads(_n2(a), T, R, syncs, sigma, FRAMING)
     assert [e for _, e in heads] == [[0, 0, 0, 4, 0, 1, 0, 0]]
@@ -484,6 +485,8 @@ def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_unit
         if n.tampers == "advice":
             assert codes(_n2(n.make.edit(a))) == ([] if n.code.startswith("StepUnit") else [n.code]), name
     assert codes(AD.LinkAdvice(a, (4,))) == [f"{NG.ADVISED}.view"]
+    assert NG.advised_codes(_n2(NG.extra_request(a)), 0, syncs, sigma, FRAMING, T, 4, RIN, OWN,
+                            *heads[0]) == [f"{NG.ADVISED}.view"]
 
 
 def test_the_advice_suite_makes_each_advice_negative_and_names_n2s_codes_on_it():
@@ -495,7 +498,7 @@ def test_the_advice_suite_makes_each_advice_negative_and_names_n2s_codes_on_it()
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
     from verity.core.protocols.certifier.schedule import ClockSync
 
-    rows = NG.advice_suite(_advice(), T=8, R=4, syncs=[ClockSync(1, Fraction(1))], request_frames=FRAMING,
+    rows = NG.advice_suite(_advice(), T=8, R=8, syncs=[ClockSync(1, Fraction(1))], request_frames=FRAMING,
                            received=[3])
     assert rows["honest"] == {"bits": V.total_bits(_advice()), "codes": [], "ok": True}
     made = {k: r for k, r in rows.items() if k != "honest"}

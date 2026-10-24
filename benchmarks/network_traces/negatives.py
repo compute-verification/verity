@@ -596,7 +596,7 @@ def advice_suite(advice, *, T: int, R: int, syncs, request_frames, received: lis
     advice certifies (`honest_heads`, under the link's framing `request_frames` with each window's `received` and
     declared sync; Σ_sync by default the declared syncs' deltas and rhos, `RIN` their largest ingress count). `ok`: the
     codes are exactly the one it names, or none for a step-unit negative, which N2 must accept (its check is
-    pending)."""
+    pending). A negative that releases more than R frames in a bucket is refused by the view (``.view``) instead."""
     mod = advice_module()
     if mod is None:
         raise NotApplicable(f"no advice codec yet: {ADVICE_MODULE} (I1, ADV-SPEC) hasn't landed")
