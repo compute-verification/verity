@@ -202,7 +202,8 @@ SPILL_MAX_ENV = "DITHER_SPILL_MAX_GB"   # the pool's bound, past which a window'
 SPILL_MAX_GB = 128
 # "1": a step's GEMMs and y commits write a row past m's z/y records only where an earlier step left something else
 # (a live row, a captured step's poison, a control's unwritten records, a new window): the same bytes in every record,
-# without the dead rows' ~350 MB of stores a step at m = 32 of T = 64 (`dead_from`, S[2], dither_a._rows_written)
+# without the dead rows' ~350 MB of stores a step at m = 32 of T = 64 (`dead_from`, S[2], dither_a._rows_written); and
+# `after` clears the A slots' and scales' rows past m only below that row (the quantizer writes rows below m alone)
 DEAD_ONCE_ENV = "DITHER_DEAD_ONCE"
 # "1": a step's inputs written from pinned host memory without a wait (`_put`): the serving stream orders them after
 # step s - 1's trees, lm_head and sampler, so the host launches forward s while the sampler runs
@@ -307,6 +308,7 @@ class SoWindow(DO.Window):
         if self.dead_once and self.overlap:
             raise RuntimeError(f"{DEAD_ONCE_ENV}=1 serves an -so arm without -ov")
         self.clean_from: int | None = None
+        self.dead_c: int | None = None
         self.put_async = os.environ.get(PUT_ASYNC_ENV) == "1"
         super().__init__(*args, **kwargs)
         if self.a_step:
@@ -728,6 +730,7 @@ class SoWindow(DO.Window):
             return 0
         c = self.t if self.cap is not None or self.clean_from is None else self.clean_from
         self.clean_from = self.t if self.flags & DO.F_NW_TILES else m
+        self.dead_c = c
         return c
 
     def before(self, m: int) -> None:
@@ -793,10 +796,11 @@ class SoWindow(DO.Window):
                 self.ev_z[1].record(zs)
         if self.a_once or self.a_step:
             self.phase("a_tables")
-            if not self.flags & DO.F_NW_TILES:
+            top = self.t if self.dead_c is None else self.dead_c
+            if not self.flags & DO.F_NW_TILES and top > m:
                 for x in self.slot_groups.values():
-                    x[:, m:].zero_()
-                self.scale_all[:, m:].zero_()
+                    x[:, m:top].zero_()
+                self.scale_all[:, m:top].zero_()
             if self.a_step:
                 self.a_step_build()
             else:

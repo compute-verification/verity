@@ -43,6 +43,9 @@
 // its level's, and every node resumes from it: two compressions a node rather than three, as h1c_a_* already do.
 // H1C_MKN = 1 (H1C_MK): hb_mk folds M_key y a nibble at a time, a row of a nibble table each, not a column a bit.
 // H1C_TAILW = 1 (H1C_NMID): h1c_tail's nodes hash from their messages built as words in registers (tail_node).
+// H1C_SEGJ = 1 (H1C_HB): h1c_segs' thread t takes segment t / count of row t % count, not segment t % ns of row t / ns,
+// so a warp's lanes hash segments of one length (a receipt row's 64-byte last segment no longer idles the lanes beside
+// its 1024-byte first); each digest lands where it did.
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -85,6 +88,9 @@
 #ifndef H1C_TAILW
 #define H1C_TAILW 0
 #endif
+#ifndef H1C_SEGJ
+#define H1C_SEGJ 0
+#endif
 // unset, h1c_segs' bounds name no blocks an SM: __launch_bounds__(HT, 1) lets it take 136 registers on sm_90a, not 96
 #ifdef H1C_SMINB
 #define H1C_SEGS_BOUNDS __launch_bounds__(HT, H1C_SMINB)
@@ -96,6 +102,7 @@ static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK && !H1C_SEGMID &&
 static_assert(H1C_MK || !H1C_MID, "H1C_MID's snapshots are published at H1C_MK's barriers");
 static_assert(H1C_MK || !H1C_MKN, "H1C_MKN is H1C_MK's M_key a nibble at a time");
 static_assert(H1C_MK || !H1C_LVB, "H1C_LVB's subtrees are H1C_MK's leaves kernel's");
+static_assert(H1C_HB || !H1C_SEGJ, "H1C_SEGJ is H1C_HB's segments kernel's");
 
 namespace sh {
 typedef unsigned long long u64;
@@ -844,32 +851,53 @@ extern "C" __global__ void H1C_SEGS_BOUNDS h1c_segs(H1Tab* __restrict__ tabs, in
   const H1Tab& T = tabs[blockIdx.y - dom];
   if (!T.data) return;
   const int ns = nseg_of(T.len);
-  const long long t0 = (long long)blockIdx.x * blockDim.x, t = t0 + threadIdx.x;
+  const long long t0 = (long long)blockIdx.x * blockDim.x, t = t0 + threadIdx.x, total = (long long)T.count * ns;
 #if H1C_SEGMID
   // lane q < ns compresses segment (t0 + q) % ns's first block, which thread t0 + r starts from for r % ns = q
+  // (H1C_SEGJ: lane q < nj segment j0 + q's, the block's threads taking segments j0 to j0 + nj - 1, nj <= ns)
   __shared__ u64 shd[SEGMID_MAX][8];
   const bool sharedh = ns <= SEGMID_MAX;
-  if (t0 >= (long long)T.count * ns) return;
+  if (t0 >= total) return;
+#if H1C_SEGJ
+  const int j0 = (int)(t0 / T.count);
+  const int nh = (int)((min(t0 + (long long)blockDim.x, total) - 1) / T.count) - j0 + 1;
+#else
+  const int nh = ns;
+#endif
   if (sharedh) {
-    if ((int)threadIdx.x < ns) {
+    if ((int)threadIdx.x < nh) {
       Hb s;
       hb_init(s, bf + threadIdx.x * HB);
+#if H1C_SEGJ
+      seg_head(s, T, j0 + (int)threadIdx.x, ns);
+#else
       seg_head(s, T, (int)((t0 + threadIdx.x) % ns), ns);
+#endif
 #pragma unroll
       for (int k = 0; k < 8; ++k) shd[threadIdx.x][k] = s.h[k];
     }
     __syncthreads();
   }
 #endif
-  if (t >= (long long)T.count * ns) return;
+  if (t >= total) return;
+#if H1C_SEGJ
+  const long long i = t % T.count;
+  const int j = (int)(t / T.count);
+#else
   const long long i = t / ns;
+  const int j = (int)(t % ns);
+#endif
   if (row_dead(T, i)) return;
-  const int j = (int)(t % ns), off = 1024 * j, m = min(1024, T.len - off);
+  const int off = 1024 * j, m = min(1024, T.len - off);
   Hb s;
   hb_init(s, bf + threadIdx.x * HB);
 #if H1C_SEGMID
   if (sharedh) {
+#if H1C_SEGJ
+    const int q = j - j0;
+#else
     const int q = (int)((t - t0) % ns);
+#endif
 #pragma unroll
     for (int k = 0; k < 8; ++k) s.h[k] = shd[q][k];
     s.tot = 128;
@@ -877,7 +905,7 @@ extern "C" __global__ void H1C_SEGS_BOUNDS h1c_segs(H1Tab* __restrict__ tabs, in
 #endif
     seg_head(s, T, j, ns);
   hb_row(s, T, i, off, m);
-  hb_final(s, T.segs + t * 8);
+  hb_final(s, T.segs + (i * ns + j) * 8);
 }
 
 // H1C_MK: byte table p's row v is the XOR of M_key's columns 8p + s over v's set bits s, column 8p + s its row 1 << s,
