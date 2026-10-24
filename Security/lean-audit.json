@@ -7743,9 +7743,6 @@
    "assumptions": [],
    "type_hash": "1564cbcbef1db36b50e4f1da0cc1c7b6691134430a5d88f497954467812a4ada"
   },
-  "NetTiming.SecurityProofs.SampledAuditAcceptedStated": {
-   "owner": "@proofs"
-  },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
    "owner": "@network-accounting",
    "signature": [
@@ -7830,6 +7827,12 @@
    "signature": ["NetTiming.SecurityProofs.ExpectedRowCausal : NetTiming.Guarantees.ExpectedRowCausal"],
    "assumptions": [],
    "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89"
+  },
+  "NetTiming.SecurityProofs.SampledAuditAcceptedStated": {
+   "owner": "@proofs",
+   "signature": ["NetTiming.SecurityProofs.SampledAuditAcceptedStated : NetTiming.Guarantees.SampledAuditAcceptedStated"],
+   "assumptions": [],
+   "type_hash": "1fb09f103876fc19dab84dfdb55ad0b09ba815c3e67ccee7e53e04ad6ea9eb3f"
   },
   "Pous.SecurityProofs.BandMultiMeetsFamily": {
    "owner": "@memory-accounting",
@@ -13776,6 +13779,7 @@
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Hash.SecurityProofs.Stated",
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
@@ -14347,7 +14351,8 @@
     "Claims.Sampling.masked_meets_zk",
     "Claims.Sampling.scope_meets",
     "Claims.Sampling.universal_meets",
-    "Flock.SecurityProofs.SamplingClaimsStated"
+    "Flock.SecurityProofs.SamplingClaimsStated",
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated"
    ]
   },
   "Definitions.Core.Circuit": {
@@ -15287,8 +15292,17 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
-    "NetTiming.SecurityProofs.ExpectedRowCausal"
+    "NetTiming.SecurityProofs.ExpectedRowCausal",
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated"
    ]
+  },
+  "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
+   "digest": "3e714f9391fa9dfc51619b38590282c0e7e13766ed86776d397aaa6cbc6fbea8",
+   "definitions": {
+    "NetTiming.Guarantees.SampledAuditAccepted": "4964fe716db682025fb7993cfc4a758141d8c9f53f380911ce797c32d8858ef0",
+    "NetTiming.Guarantees.SampledAuditAcceptedStated": "9009d1c7c22120166c4aa4c882e7e18b18de3dc9633d6988c52ae4436b74a55b"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.SampledAuditAcceptedStated"]
   },
   "Definitions.NetworkCertifier.Ingress": {
    "digest": "3c3f9fa4cf192807b611a03f6164a25f5407f9f252110a4c4f827b0107065ffc",
@@ -15356,8 +15370,36 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
-    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
+    "NetTiming.SecurityProofs.SampledAuditAcceptedStated"
    ]
+  },
+  "Definitions.NetworkCertifier.SampledAudit": {
+   "digest": "d3b8e34f025162ea127d0995bf37c4b2c19da077ed4b172b559f06cfcd6d6be0",
+   "definitions": {
+    "NetTiming.Carries": "e7ac004752a175d793960824660f46b99d8fe3911fef93379ad2e7665d073f86",
+    "NetTiming.Covered": "ccee422986c657af27297ae2bc6396a375226194e77cac80a7e44f9a70e4814c",
+    "NetTiming.Depends": "f211d957c793800d99efe76d3fbd2afc44b357018a916000b6358941e750ac83",
+    "NetTiming.FaultyGate": "4f48cf5bca92bba73ee756048da872f5f53491ed43fbc79654bdcb5264cc7f62",
+    "NetTiming.KSAccepted": "db54ee54c4ea0bae4d062f50d980afb70ba3adbff86ba9df979b2b3e5bc5731c",
+    "NetTiming.Layout": "26a9ae100864386a6350d51b5b6511ead4b61a09a5355752b75f28b2f03e9181",
+    "NetTiming.Layout.Fits": "b5c00d137d48ec2bef002d2c9fa7bb36d831f9c1f44a3af803e835a5b86f8ca3",
+    "NetTiming.Layout.egress": "a0e95168b97f01529a65a69348753486689a46062a932d1f2dbbd90c62369a03",
+    "NetTiming.Layout.ingress": "1447b138bfb81ed0a928b0541b290f051e19d9e543e1eb3a2789041608cb6a45",
+    "NetTiming.Layout.inputOf": "7a78045a4090690a8548b0d4877ead2d00470b9b2a523ac287fbc6476c5c6cba",
+    "NetTiming.RAcc": "dd21d57fde097858338ecf54180d051a21c7c62bc63f41cf45f021306b1450df",
+    "NetTiming.ScopeAcc": "821308a64d5196398ada88bfa7ad6b76b9ce025d2b6e50a102be1b7ee8f3d285",
+    "NetTiming.allSlots": "1eb924389e5ffa3b1cce62cd754f9ed3b413f91286b038c394ab98209c426b56",
+    "NetTiming.allSlotsFrom": "f33b54b2f78e58e5b6c598b33e8e12f59e362b1e4a555dfe36ab7f2e9af3782b",
+    "NetTiming.allSlotsFrom._sparseCasesOn_1": "bcca8d9b059205db51b931ee670d3133083fe08379abd3f4d078670d8448fc4f",
+    "NetTiming.allSlotsFrom._sparseCasesOn_4": "5f47fc59eca3ea87c24247696303acec324803ca0c91cf3d5386cded3c7bf333",
+    "NetTiming.circuitProgram": "c3d48e42d46f5f3d33d11e95fb3b5683046f5162ced4db8a4e9c1522e59a1c26",
+    "NetTiming.rowOf": "72d1f1c69f134fc7b821df7d86191b279fdf73d5d412f7a072cd9dd5af40da0d",
+    "NetTiming.slotGates": "18b5cf00d01de76454aa5c83b4f78ecbfb92810ca9b0389aa74215a1d9372e0d",
+    "NetTiming.traceVal": "a0ec132a217fc9cd0dd90cf6b0494a435a3dac6a2b70c8f77ac23113a49c2f81",
+    "NetTiming.valOver": "e98e961a4e7a5d8dcb2b280a5cdc18ca8c87a546301aa91defbf4300ba44d7f2"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.SampledAuditAcceptedStated"]
   },
   "Definitions.NetworkCertifier.Schedule": {
    "digest": "7a2f8e4d2926bb4eda2b5fa8fff327d0feb7c3d96e804634c51e0925afa72fc2",
