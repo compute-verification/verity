@@ -662,9 +662,9 @@ class _DirectLLM:
     """The subset of ``verity_vllm.LLM`` needed for a content-bound local checkpoint."""
 
     def __init__(self, llm: Any, engine_overrides: Mapping[str, Any]) -> None:
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine import handle
 
-        runner = get_model_runner(llm)
+        runner = handle.model_runner(llm)
         self.vllm, self.model = llm, runner.get_model()
         # commit_arm.py still reads verity_vllm.LLM's private `_engine`: its committer takes the whole engine.
         self._engine = SimpleNamespace(llm=llm, model=self.model)
@@ -824,7 +824,7 @@ class _VllmEngine:
         import vllm
 
         from verity_vllm.engine.hooks import Hooks, live
-        from verity_vllm.llm import LLM
+        from verity_vllm import LLM
 
         self.arm, self.obj, self.installed, self.pearl_c, self.h1 = arm, plugin(arm), None, None, None
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
@@ -949,10 +949,10 @@ class _VllmEngine:
         """H1's window for one run of `point`: S its steps' bound (`window_steps`), and the epoch the window's index."""
 
         from verity_vllm import protocols as PO
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine import handle
 
         steps = window_steps(point, self.h1["rows"])
-        config = h1_window(self.h1["config"], get_model_runner(self.llm.vllm), steps, len(self.h1["windows"]))
+        config = h1_window(self.h1["config"], handle.model_runner(self.llm.vllm), steps, len(self.h1["windows"]))
         ctx = PO.Context(stage="serve", enabled=self.arm.protocols, world=1, enforce_eager=True,
                          settings=PO.load_settings(config))
         start = time.perf_counter()

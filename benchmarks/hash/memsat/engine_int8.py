@@ -169,7 +169,7 @@ def main() -> int:
     at, _ = where.parse_known_args(rest)
     sys.argv = [str(RS / "engine.py"), *rest]
 
-    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm import TargetProfile
     from vllm.v1.engine.llm_engine import LLMEngine
 
     profile = TargetProfile(int8_exact=mine.int8)

@@ -78,9 +78,9 @@ def host_memory(root: Path = CGROUP_ROOT, self_cgroup: Path = Path("/proc/self/c
 def committer_engine(llm: Any) -> SimpleNamespace:
     """The engine `NativeCollectCommitter` takes (as `verity_vllm.engine.build.Engine`), from ``verity_vllm.LLM``'s public
     names: the ``vllm.LLM``, its in-process model runner, the served model, and the pin's checkpoint (its geometry digest)."""
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
 
-    return SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model,
+    return SimpleNamespace(llm=llm.vllm, runner=handle.model_runner(llm.vllm), model=llm.model,
                            cp={"repo": llm.pin.model, "revision": llm.pin.revision})
 
 

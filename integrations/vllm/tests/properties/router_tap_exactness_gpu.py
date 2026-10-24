@@ -344,15 +344,14 @@ def check_live(so: str, pool, kind: str, tok_dir: str, work: str, max_tokens: in
 
     from verity_vllm.acquire.sources.moe_source import moe_layers_of
     from verity_vllm.acquire.sources.router_softmax_source import RouterSoftmaxSource
-    from verity_vllm.engine import engine_profile as prof
-    from verity_vllm.engine import hooks
+    from verity_vllm.engine import handle, hooks
 
     d = Path(work, f"tiny-{kind}")
     rec: dict[str, Any] = make_tiny(kind, tok_dir, str(d), 20260926)
     E, K, renorm = rec["experts"], rec["topk"], rec["renormalize"]
     llm = LLM(model=str(d), tokenizer=str(d), dtype="bfloat16", enforce_eager=True, max_model_len=512, gpu_memory_utilization=0.3,
               enable_prefix_caching=False, max_num_seqs=4, seed=0)
-    model = prof.get_model_runner(llm).get_model()
+    model = handle.model_runner(llm).get_model()
     sp = SamplingParams(temperature=0.0, max_tokens=max_tokens, ignore_eos=True)
 
     def generate():

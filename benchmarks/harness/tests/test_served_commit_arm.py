@@ -106,7 +106,7 @@ class _Runner:
 
 
 def _vllm(runner: _Runner, *, path: str = "/models/local"):
-    """A ``vllm.LLM`` as far as the arms and the committer read it: the in-process runner (`get_model_runner`'s path) and the
+    """A ``vllm.LLM`` as far as the arms and the committer read it: the in-process runner (`engine.handle.model_runner`'s path) and the
     config."""
     hf = SimpleNamespace(hidden_size=64, num_hidden_layers=2, num_attention_heads=4, num_key_value_heads=2, head_dim=16,
                          intermediate_size=128, vocab_size=1000, model_type="llama")
