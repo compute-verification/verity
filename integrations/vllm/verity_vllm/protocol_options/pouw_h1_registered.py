@@ -18,7 +18,7 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
 
 * **On the GPU** (VLLM-79): where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
   (`pouw_h1_registered_device`, `pouw_cuda/registered_rows.cu`), a thread a row and a node, and only the domain id and
-  the result's bytes touch the host (`path`, `PATH_ENV`), and `public_salts` derives a public table's salts there. The
+  the result's bytes touch the host (`path`, `MODE`), and `public_salts` derives a public table's salts there. The
   NumPy path above is the reference the device is held to
   (``tests/protocol_options/test_pouw_h1_registered_device.py``) and the fallback everywhere else.
 
@@ -48,8 +48,8 @@ from verity.ml.crypto import chacha20
 
 _INST = hm96.SHA512
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
-#: the variable that picks `commit`'s path (`path`)
-PATH_ENV = "VERITY_H1_REGISTER"
+#: `commit`'s path (`path`): ``"auto"``, ``"gpu"`` or ``"numpy"``, set by the caller that configures the run
+MODE = "auto"
 #: rows a salt pass, rows a digest task
 _SALTED, _ROWS = 1 << 16, 1 << 11
 
@@ -152,12 +152,12 @@ class Rows(Sequence):
 
 
 def path() -> str:
-    """Where `commit` hashes, `PATH_ENV`'s choice: ``"gpu"`` (`pouw_h1_registered_device`, refused where it can't run),
+    """Where `commit` hashes, `MODE`'s choice: ``"gpu"`` (`pouw_h1_registered_device`, refused where it can't run),
     ``"numpy"``, or by default ``"auto"``, the GPU where this process has CUDA through torch and the kernels build for its
     device, else NumPy. Both register the same bytes; NumPy is the reference."""
-    mode = os.environ.get(PATH_ENV, "auto")
+    mode = MODE
     if mode not in ("auto", "gpu", "numpy"):
-        raise ValueError(f"{PATH_ENV}={mode!r}: auto, gpu or numpy")
+        raise ValueError(f"MODE={mode!r}: auto, gpu or numpy")
     if mode != "auto":
         return mode
     from verity_vllm.protocol_options import pouw_h1_registered_device as D
@@ -227,4 +227,4 @@ def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None,
     return tuple(bcs), frame.levels(leaves)
 
 
-__all__ = ["PATH_ENV", "Rows", "Salts", "commit", "path", "public_salts", "row_digests", "salts"]
+__all__ = ["MODE", "Rows", "Salts", "commit", "path", "public_salts", "row_digests", "salts"]

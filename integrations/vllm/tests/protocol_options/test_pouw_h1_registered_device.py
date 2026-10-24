@@ -90,7 +90,7 @@ def test_public_salts_are_cores_on_the_cpu_twin_and_the_numpy_path(context, firs
     `hashlib`."""
     want = _public(context, first, n)
     assert D.host_public_salts(_head(context), first, n) == want
-    monkeypatch.setenv(NR.PATH_ENV, "numpy")
+    monkeypatch.setattr(NR, "MODE", "numpy")
     assert NR.public_salts(_head(context), first, n) == want
 
 
@@ -112,12 +112,12 @@ def test_the_layout_refuses_what_a_value_cant_be():
         D.table(1, 2, KEY, 1 << 64, False, bytes(64))
 
 
-def test_the_path_is_the_variables(monkeypatch):
-    monkeypatch.setenv(NR.PATH_ENV, "numpy")
+def test_the_path_is_the_modes(monkeypatch):
+    monkeypatch.setattr(NR, "MODE", "numpy")
     assert NR.path() == "numpy"
-    monkeypatch.setenv(NR.PATH_ENV, "gpu")
+    monkeypatch.setattr(NR, "MODE", "gpu")
     assert NR.path() == "gpu"
-    monkeypatch.setenv(NR.PATH_ENV, "cuda")
+    monkeypatch.setattr(NR, "MODE", "cuda")
     with pytest.raises(ValueError, match="auto, gpu or numpy"):
         NR.path()
 
@@ -128,9 +128,9 @@ def test_the_device_is_the_numpy_path_and_core(n, w, binding, nonce, monkeypatch
     paths, and a read of every row opens under core's `verify_read`."""
     _gpu()
     words = _words(n, w)
-    monkeypatch.setenv(NR.PATH_ENV, "gpu")
+    monkeypatch.setattr(NR, "MODE", "gpu")
     got = NR.commit(PROGRAM, "h1/v", words, KEY, nonce, True, **binding)
-    monkeypatch.setenv(NR.PATH_ENV, "numpy")
+    monkeypatch.setattr(NR, "MODE", "numpy")
     want = NR.commit(PROGRAM, "h1/v", words, KEY, nonce, True, **binding)
     ref = _core(words, nonce, **binding)
     assert got.entry() == want.entry() == ref.entry() and got.domain == ref.domain and got.leaves == ref.leaves == n
@@ -154,14 +154,14 @@ def test_the_device_takes_given_salts_chunks_and_wide_trees(monkeypatch):
 @pytest.mark.parametrize("context,first,n", [*PUBLIC, ("ab" * 64, 1 << 33, 70000)])
 def test_public_salts_on_the_device_are_cores(context, first, n, monkeypatch):
     _gpu()
-    monkeypatch.setenv(NR.PATH_ENV, "gpu")
+    monkeypatch.setattr(NR, "MODE", "gpu")
     assert NR.public_salts(_head(context), first, n) == D.device_public_salts(_head(context), first, n) == _public(
         context, first, n)
 
 
 def test_auto_takes_the_gpu_where_it_runs(monkeypatch):
     _gpu()
-    monkeypatch.delenv(NR.PATH_ENV, raising=False)
+    monkeypatch.setattr(NR, "MODE", "auto")
     assert D.available() and NR.path() == "gpu"
 
 
@@ -172,7 +172,7 @@ def test_a_served_window_registers_the_same_on_either_path(monkeypatch):
     from tests.protocol_options import test_pouw_h1_served as T
 
     def window(where):
-        monkeypatch.setenv(NR.PATH_ENV, where)
+        monkeypatch.setattr(NR, "MODE", where)
         torch.manual_seed(0)
         weights = T._period(T._weights())
         run, _ws, _got = T._window(T.W1, weights=weights, served=1)

@@ -8,17 +8,15 @@ digest, salt, hm96-sha512 string, tree leaf and frame leaf) and then the pads an
 returns the strings and levels as `Registered` holds them (64-byte nodes, 128-byte strings, as bytes). `host_commit` runs
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
-(`row_tables_device._build`, keyed by sources, flags and compiler); nvcc is the one on the path, else ``$CUDA_HOME``'s or
-``/usr/local/cuda``'s.
+(`row_tables_device._build`, keyed by sources, flags and compiler); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s,
+or the one on the path).
 """
 from __future__ import annotations
 
 import ctypes
-import os
 import shutil
 import warnings
 from functools import cache
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -81,12 +79,10 @@ def pub(head: bytes, first: int, n: int) -> Pub:
 
 
 def nvcc() -> str | None:
-    """nvcc on the path, else ``$CUDA_HOME/bin/nvcc`` or ``/usr/local/cuda/bin/nvcc``."""
-    found = shutil.which("nvcc")
-    if found:
-        return found
-    home = Path(os.environ.get("CUDA_HOME") or "/usr/local/cuda") / "bin" / "nvcc"
-    return str(home) if home.is_file() else None
+    """`pouw_device`'s nvcc: its configured `TOOLCHAIN`'s, or nvcc on the path."""
+    from verity_vllm.protocol_options import pouw_device
+
+    return pouw_device.nvcc()
 
 
 _vp, _u64 = ctypes.c_void_p, np.ctypeslib.ndpointer(np.uint64, flags="C_CONTIGUOUS")
@@ -111,7 +107,7 @@ def device_lib(arch: str) -> ctypes.CDLL:
     """`registered_rows.cu` built with nvcc for ``sm_<arch>`` (``"120"``: the RTX PRO 6000)."""
     tool = nvcc()
     if tool is None:
-        raise RuntimeError("no nvcc on the path, in $CUDA_HOME or in /usr/local/cuda")
+        raise RuntimeError("no nvcc (pouw_device.TOOLCHAIN, or on the path)")
     dll = RTD._build(tool, DEVICE_SOURCES, (*RTD.NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}"),
                      "libregistered_rows_cuda.so")
     dll.rr_midstates.argtypes = [_vp, _vp, _vp]
@@ -201,10 +197,8 @@ def _device(torch: Any) -> _Device:
 def available() -> bool:
     """Whether this process can hash on the GPU: torch with CUDA, and the kernels built for its current device (a warning
     says why not when CUDA is there)."""
-    try:
-        import torch
-    except ImportError:
-        return False
+    import torch
+
     if not torch.cuda.is_available():
         return False
     try:
