@@ -5,7 +5,7 @@ import Properties.Proofs.Nci.BodiesOk.Basic
 
 `parsePartsIn` checks a strided part's corners against its collection, so no reference of a parsed strided part steps
 below leaf 0 (`parsePartsIn_nonneg`), given none of an argument an alias may name does. `ReadsExact.PartNonneg` is the
-same predicate (`ForReads.partNonneg_iff`).
+same predicate (`partNonneg_iff`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
