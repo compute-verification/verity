@@ -3219,6 +3219,41 @@ def test_a_root_with_a_trailing_newline_is_refused(pieces):
         assert D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces) == ("output", D.canonical({"codes": codes}))
 
 
+def _many_ports(a: dict, n: int, seed: int = 0) -> dict:
+    """`a` with `n` more ports, a MoE window's shape (64 experts' tiles of 8), registered at roots in shuffled order."""
+    b = copy.deepcopy(a)
+    roots = []
+    for i in range(n):
+        p = f"w13/e{i // 8:04d}/t{i % 8}"
+        b["params"]["ports"][p] = {"domain": hashlib.sha512(p.encode()).hexdigest(), "leaves": 1 + i % 64}
+        roots.append({"port": p, "root": f"{i:0128x}", **b["params"]["ports"][p]})
+    random.Random(seed).shuffle(roots)
+    b["record"]["roots"] = [*b["record"]["roots"], *roots]
+    return b
+
+
+def test_a_many_port_registration_agrees(pieces):
+    """R3 over a window of 4096 ports, the shape whose quadratic walk `Registration.portIndex` replaced, Lean and Python
+    agreeing: accepted as registered, and each change to one port reaches its code and no other."""
+    a = _many_ports(_REGISTRATION_OF(_v1_audit("subset")), 4096)
+
+    def codes(change):
+        b = copy.deepcopy(a)
+        change(b["record"]["roots"])
+        kind, out = D.replay(REGISTRATION, _json(b), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    def bump(r, k):
+        r[k] = r[k] + 1 if k == "leaves" else "ab" * 64
+
+    assert codes(lambda rs: None) == []
+    assert codes(lambda rs: rs.append({**rs[1000], "root": "not hex"})) == ["R3-ports", "R3-root"]
+    assert codes(lambda rs: rs.pop(2000)) == ["R3-ports"]
+    assert codes(lambda rs: rs[3000].update(port=7)) == ["R3-ports"]
+    assert codes(lambda rs: bump(rs[123], "leaves")) == ["R3-leaves"]
+    assert codes(lambda rs: bump(rs[4000], "domain")) == ["R3-domain"]
+
+
 def test_every_public_items_code_is_reached(pieces):
     """Each change to the rule's input on a v1 audit and a v2 one, Lean and Python agreeing on each: together they reach
     every code of `check_public` and a reject, which the drawn runs only probably do, and the unchanged audits none."""
