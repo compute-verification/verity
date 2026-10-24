@@ -57,7 +57,9 @@
   "Properties.Accounting.Served",
   "Properties.Proofs.Accounting.Served",
   "Properties.RemoteAudit.Line",
-  "Properties.Proofs.RemoteAudit.Line"
+  "Properties.Proofs.RemoteAudit.Line",
+  "Properties.RemoteAudit.Live",
+  "Properties.Proofs.RemoteAudit.Live"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -1566,6 +1568,9 @@
    "assumptions": [],
    "type_hash": "a509370ffb2c6bc2f0bb6e80eabd220919f09ce302bef13de612d0e53c96a49d"
   },
+  "Properties.RemoteAudit.liveIsRun": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.openingsUnreadUntilDrawn": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.openingsUnreadUntilDrawn : Properties.RemoteAudit.OpeningsUnreadUntilDrawn"],
@@ -2562,6 +2567,10 @@
    "Properties.RemoteAudit.chunkedIsWhole": {
     "function": "RemoteAudit.checkWindowChunked",
     "outcome": "none"
+   },
+   "Properties.RemoteAudit.liveIsRun": {
+    "function": "Properties.RemoteAudit.Live.run",
+    "outcome": "accept"
    },
    "Properties.RemoteAudit.acceptedMinPasses": {
     "function": ["RemoteAudit.Session.run", "RemoteAudit.Session.State.outcome"],
