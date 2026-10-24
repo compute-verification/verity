@@ -263,6 +263,14 @@ theorem next_some {α : Type} (s : Subarray α) (h : s.start < s.stop) :
   · rfl
   · contradiction
 
+theorem next_at {α : Type} [Inhabited α] (s : Subarray α) (a : Array α) (i : ℕ) (ha : s.array = a)
+    (hst : s.start = i) (h : i < s.stop) :
+    ∃ s', Std.Stream.next? s = some (a[i]!, s') ∧ s'.array = a ∧ s'.start = i + 1 ∧ s'.stop = s.stop := by
+  subst ha hst
+  obtain ⟨s', hn, h1, h2, h3⟩ := next_some s h
+  refine ⟨s', ?_, h1, h2, h3⟩
+  rw [hn, getElem!_pos s.array s.start (Nat.lt_of_lt_of_le h s.stop_le_array_size)]
+
 theorem next_none {α : Type} (s : Subarray α) (h : ¬ s.start < s.stop) : Std.Stream.next? s = none := by
   show (if h : s.start < s.stop then _ else _) = _
   split
