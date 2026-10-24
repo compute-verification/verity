@@ -116,8 +116,8 @@ def prove_live(d: dict, to: Path, m: dict[int, int] | None = None) -> dict:
         (base / "circuit.txt").write_bytes(LIVE_CIRCUIT)
         (base / "pub.bin").write_bytes(json.dumps({"units": {"indices": [s]}}).encode() + b"\n")
         reg = live_reads(d, s, (m or {}).get(s))
-        _bind(base, [LIVE_CIRCUIT, base.joinpath("pub.bin").read_bytes(), raw, json.dumps(partition).encode(),
-                     json.dumps(reg).encode()], [0])
+        _bind(base, [LIVE_CIRCUIT, base.joinpath("pub.bin").read_bytes(), raw,
+                     json.dumps(partition, sort_keys=True).encode(), json.dumps(reg, sort_keys=True).encode()], [0])
         out.append({"round": s, "circuit": str(base / "circuit.txt"), "public": str(base / "pub.bin"),
                     "sessions": [str(base / "session")]})
     return {"descriptor": desc, "statements": out}
@@ -596,7 +596,8 @@ def test_live_evidence_carrying_outcomes_or_no_committed_file_is_refused(seed, t
     partition = {"format": Cr.PARTITION_FORMAT, "program": hashlib.sha512(raw).hexdigest(),
                  "query": {"name": Cr.QUERY[0], "version": Cr.QUERY[1],
                            "params": {"templates": [Cr.live_of(raw)[0]["unit"]]}}}
-    _bind(pub.parent, [LIVE_CIRCUIT, pub.read_bytes(), raw, json.dumps(partition).encode(), json.dumps(reg).encode()], [0])
+    _bind(pub.parent, [LIVE_CIRCUIT, pub.read_bytes(), raw, json.dumps(partition, sort_keys=True).encode(),
+                       json.dumps(reg, sort_keys=True).encode()], [0])
     got, refused = credit(d, statements)
     assert got is None and refused[0] == "live" and f"proved units [{steps}], not unit 0" in refused[1], refused
 
