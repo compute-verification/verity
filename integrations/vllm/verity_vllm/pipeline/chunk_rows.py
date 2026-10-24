@@ -1,8 +1,8 @@
 """A chunked serving-rows template's units (`serving_rows.CHUNKED`) on the bit rows C-Flock's `UnitStager` stages: their rows
-(`unit_rows`), the most of them one flock-circuit statement holds (`chunk_cap`, a partition file's ``chunk_cap``), and a
-template's units read once cut into its chunks (`split`).  The window's chunks (`serving_rows.members`) and the verifier's
-circuit (``benchmarks/one_stage/compose_circuit.py --template``) are both laid out by `unit_rows`.  Each function takes the
-template as `serving_rows.template` reads it."""
+(`unit_rows`) and table reads (`reads`), the most of them one flock-circuit statement holds (`chunk_cap`, a partition file's
+``chunk_cap``), and a template's units read once cut into its chunks (`split`).  The window's chunks (`serving_rows.members`)
+and the verifier's circuit (``benchmarks/one_stage/compose_circuit.py --template``) are both laid out by `unit_rows` and
+`reads`.  Each function takes the template as `serving_rows.template` reads it."""
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -21,14 +21,29 @@ def s8_words(K: int) -> int:
     return K // 2 + 2
 
 
+def fields(tp: Any) -> list[Any]:
+    """Template ``tp``'s return fields in order, `UnitStager`'s output ports ``o<j>``."""
+    ret = tp.fn.signature()[1]
+    return [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
+
+
+def reads(tp: Any) -> str:
+    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: in lookup slots for a ``SPLITS`` part or combine
+    (`read_slots`; a 64-key part's reads inline are 4.5 times the nonzeros), else inline."""
+    return "slots" if tp.layout == "split" else "inline"
+
+
 def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: a ``ScaledMmS8Coordinate``'s A6 rows,
     ``x``     (the token's s8 codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2); a ``COORDS``
     coordinate's, a ``COLS`` column block's, a ``SLICES`` slice's or a ``KCHUNKS`` K-chunk's ``in<g>``, one v2 row per parameter
-    (its port); then the one v2 output row ``o0``."""
+    (its port); then the one v2 output row ``o0``.  A ``SPLITS`` part's or combine's are `split_rows.unit_rows`."""
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity_vllm.pipeline import split_rows as SP
     from verity_vllm.query.program_view import spec_statics
 
+    if tp.layout == "split":
+        return SP.unit_rows(tp)
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
@@ -40,8 +55,9 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
 
 def chunk_cap(tp: Any) -> int:
     """The most instances of chunked template ``tp`` one flock-circuit statement holds, as ``benchmarks/one_stage/a6.py``'s
-    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`), then ``vus_per_block`` blocks of
-    ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes): a partition file pins it as ``chunk_cap``."""
+    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`) with its `reads`, then
+    ``vus_per_block`` blocks of ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes; a 64-key ``SparseMlaSplitPart``
+    about 36 min at 71 GB): a partition file pins it as ``chunk_cap``."""
     import tempfile
 
     from verity_flock.class_statement import UnitStager
@@ -49,7 +65,7 @@ def chunk_cap(tp: Any) -> int:
     in_rows, out_rows = unit_rows(tp)
     with tempfile.TemporaryDirectory() as d:
         st = UnitStager(tp.fn, "unit/serving-rows-cap", in_rows, out_rows, circuit=Path(d) / "circuit.txt",
-                        bind={"partition": "0" * 128, "program": "0" * 128})
+                        bind={"partition": "0" * 128, "program": "0" * 128}, reads=reads(tp))
     if M_MAX - st.meta["k_log"] < 3:
         raise ValueError(f"{tp.id}: k_log {st.meta['k_log']} leaves no statement inside the spec shape (m <= {M_MAX})")
     return int(st.meta["vus_per_block"]) << (M_MAX - int(st.meta["k_log"]))

@@ -113,13 +113,14 @@ from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import slice_rows as SL
+from verity_vllm.pipeline import split_rows as SP
 from verity_vllm.pipeline.chunk_rows import s8_words
-from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, SLICES, Template,  # noqa: F401
-                                                    _bind, part, template, unit_templates)
+from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, SLICES, SPLITS,  # noqa: F401
+                                                    Template, _bind, part, template, unit_templates)
 from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
-CHUNKED = ("s8", "coord", "cols", "slice", "kchunk")
+CHUNKED = ("s8", "coord", "cols", "slice", "kchunk", "split")
 #: the committed signed integer dtypes a narrower packed port reads by value (`_packed`): torch's int64 indices
 BY_VALUE = frozenset(("i64", "int64"))
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
@@ -190,9 +191,11 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
                 continue
             ps = [part(ts[k].word, r["spec"]) for k, _ in hits]
             chain = {KC.chain(ts[k])[0] if ts[k].layout == "kchunk" else None for k, _ in hits}
-            if len(hits) > 1 and (None in ps or len({p[0] for p in ps}) < len(ps)) and (None in chain or len(chain) > 1):
+            if (len(hits) > 1 and (None in ps or len({p[0] for p in ps}) < len(ps)) and (None in chain or len(chain) > 1)
+                    and any(ts[k].layout != "split" for k, _ in hits)):
                 raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _ in hits]}: one member reads a row, "
-                                 f"or one member per part of it (PARTS), or one per K-chunk template of one chain (KCHUNKS)")
+                                 f"or one member per part of it (PARTS), or one per K-chunk template of one chain (KCHUNKS), or one "
+                                 f"per split part and combine template of it (SPLITS)")
             for k, n in hits:
                 out[k].append((str(rid), pi, r, d))
                 counts[k] += n
@@ -227,11 +230,13 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             n = sum(int(x[3]["statics"][axis]) // int(spec_statics(template(t).word)[axis]) for x in rs)
         elif layout == "slice":
             n = sum(SL.extent(template(t), x[3]["statics"]) for x in rs)
+        elif layout == "split":
+            n = sum(SP.units(template(t), x[3]["statics"]) for x in rs)
         elif layout == "kchunk":
             n = sum(KC.units(template(t), x[3]["statics"]) for x in rs)
         elif layout in CHUNKED:
             n = sum(int(x[3]["statics"]["N"]) for x in rs)
-        if layout in CHUNKED and (layout in ("s8", "kchunk") or caps is not None):
+        if layout in CHUNKED and (layout in ("s8", "kchunk", "split") or caps is not None):
             cap = (caps or {}).get(t)
             if not isinstance(cap, int) or cap < 1:
                 raise ValueError(f"{t}: no chunk cap; a partition file names each chunked template's flock-circuit chunk cap as "
@@ -239,8 +244,9 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
             in_rows, _outs = CR.unit_rows(template(t))
-            outs = (("o0", 1 if layout == "s8" else sum(template(t).fn.signature()[1].leaf_widths()) // 16),)
-            schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + (("o0", CS.SCHEMA_HM96_SHA512_ROW_V2),)
+            outs = (("o0", 1),) if layout == "s8" else tuple((f"o{j}", -(-sum(f.leaf_widths()) // 16))
+                                                             for j, f in enumerate(CR.fields(template(t))))
+            schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, CS.SCHEMA_HM96_SHA512_ROW_V2) for p, _w in outs)
             out += [CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, min(cap, n - lo), base + lo, name=f"{t}/c{j}",
                               schemas=schemas)
                     for j, lo in enumerate(range(0, n, cap))]
@@ -361,7 +367,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")
     scope = partition.get("scope") or {}
     rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"), reuse)
-    ms = KC.wire(members(tmpls, rows, counts, partition.get("chunk_cap") or {}), tmpls, rows)
+    ms = SP.wire(KC.wire(members(tmpls, rows, counts, partition.get("chunk_cap") or {}), tmpls, rows), tmpls, rows)
     tables: tuple[CS.RowTable, ...] = ()
     if partition.get("row_tables"):
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
@@ -405,6 +411,8 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
         return SL.read(m, rows, store, weights, arrivals, _slices)
     if layout == "kchunk":
         return KC.read(m, rows, store, weights, arrivals, _slices)
+    if layout == "split":
+        return SP.read(m, rows, store, weights, arrivals, _slices)
     cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
     D = dict(m.rows).get("x", 0)
     entries: list[list[Any]] = []

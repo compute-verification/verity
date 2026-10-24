@@ -7,6 +7,7 @@ the statement binds the given partition and program digests. Run in the circuit 
 ``--template``: a serving-rows template whose units are bit rows (`verity_vllm.pipeline.serving_rows.CHUNKED`: a
 ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk), composed by C-Flock's `UnitStager` on the rows the window commits
 (`verity_vllm.pipeline.chunk_rows.unit_rows`), bound to the partition and program; no input set is read.
+A ``SPLITS`` part or combine (`verity_vllm.pipeline.split_rows`) reads its MUFU tables in lookup slots (`chunk_rows.reads`).
 """
 from __future__ import annotations
 
@@ -23,9 +24,10 @@ def template(a: argparse.Namespace) -> int:
 
     if not (a.partition and a.program):
         raise SystemExit("--template binds the statement: give --partition and --program")
-    in_rows, out_rows = CR.unit_rows(SRW.template(a.template))
-    st = UnitStager(SRW.template(a.template).fn, "unit/serving-rows", in_rows, out_rows, circuit=Path(a.out),
-                    bind={"partition": a.partition, "program": a.program})
+    tp = SRW.template(a.template)
+    in_rows, out_rows = CR.unit_rows(tp)
+    st = UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=Path(a.out),
+                    bind={"partition": a.partition, "program": a.program}, reads=CR.reads(tp))
     print(json.dumps({"subcircuit": st.meta.get("subcircuit"), "pin": st.pin, "class_sha512": st.class_sha512, "k_log": st.meta["k_log"]}))
     return 0
 
