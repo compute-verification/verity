@@ -288,6 +288,9 @@ def merge(dirs: list[Path], outdir: Path, names: list[str]) -> None:
         (outdir / f"{name}.json").write_text(json.dumps(merged, indent=1))
         if meta:
             (outdir / f"{name}.meta.json").write_text(json.dumps(meta, indent=1))
+    base = [r for d in dirs if (d / "inference.json").exists() for r in json.loads((d / "inference.json").read_text())]
+    if base:
+        (outdir / "inference.json").write_text(json.dumps(base, indent=1))
     (outdir / "table.md").write_text(table(outdir, names))
 
 
@@ -331,9 +334,11 @@ def flags(r: dict) -> list[str]:
 
 def table(outdir: Path, names: list[str]) -> str:
     lines = [
-        "| instance | k | s | n* | rho | n*/trivial | n*_V | \\|V\\|/k | cap_V | \\|M*\\| (D) | n*_M | Lean c_w=1 | c_w(s) | Lean c_w(s) | flags |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| instance | k | s | n* | rho | rho_inf | n*/trivial | n*_V | \\|V\\|/k | cap_V | \\|M*\\| (D) | n*_M | Lean c_w=1 | c_w(s) | Lean c_w(s) | flags |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
+    inf = outdir / "inference.json"
+    base = {(r["instance"], r["k"], r["s"]): r for r in (json.loads(inf.read_text()) if inf.exists() else [])}
     for name in names:
         p = outdir / f"{name}.json"
         if not p.exists():
@@ -342,13 +347,15 @@ def table(outdir: Path, names: list[str]) -> str:
             lean1 = r["lean_cw1"]
             lm = r.get("lean_measured")
             rho = f"{r['rho']:.2f}" if "rho" in r else "-"
+            b = base.get((name, r["k"], r["s"]))
+            rho_inf = (f"{b['rho']:.2f}" if b["optimal"] else f"[{b['rho_lb']:.2f}, {b['rho']:.2f}]") if b else "-"
             triv = f"{r['full']['n'] / r['trivial']:.1f}" if r["trivial"] and r.get("full") else "-"
             cw = f"{r['cw']['cw']:.2f}" if r.get("cw") else "-"
             lms = f"{lm['n_lb']:.2f} (D={lm['D']}, M*={lm['M_star']}, n*_M={_br(r.get('M_measured'))})" if lm else "-"
             capV = r["cap"]["V"]["ub"] if r["cap"].get("V") else "-"
             lines.append(
                 f"| {name} | {r['k']} | {r['s'] if r['s'] is not None else 'inf'} | {_br(r.get('full'))} | {rho} | "
-                f"{triv} | {_br(r.get('V'))} | {r['production_beta1']['n_lb']:.2f} | {capV} | "
+                f"{rho_inf} | {triv} | {_br(r.get('V'))} | {r['production_beta1']['n_lb']:.2f} | {capV} | "
                 f"{lean1['M_star']} ({lean1['D']}) | {_br(r['M'])} | {lean1['n_lb']:.2f} | {cw} | {lms} | "
                 f"{'; '.join(f.split(':')[0] for f in flags(r)) or '-'} |"
             )
@@ -379,6 +386,21 @@ def caps(name: str, ks: list[int], workers: int, cw: dict) -> list[dict]:
     return rows
 
 
+def inference_baseline(name: str, ks: list[int], budget: float, workers: int, tokens: int = 4) -> list[dict]:
+    """`rho` of honest inference with the instance's model on `tokens` tokens (`toygraph.inference`) at each `k`, with
+    `s` at `eta1`, which is the training instance's `eta1` too: what training's `rho` at the same `(s, k)` is read
+    against."""
+    G = TG.inference(tuple(INSTANCES[name]["dims"]), tokens)
+    rows = []
+    for k in ks:
+        s = BD.honest_block_size(G, k)
+        sol = solve(G, k, s, None, budget, workers)
+        rows.append({"instance": name, "tokens": tokens, "k": k, "s": s, "gates": G.N, "n": sol["n"], "lb": sol["lb"],
+                     "optimal": sol["optimal"], "rho": s * sol["n"] / G.N, "rho_lb": s * sol["lb"] / G.N})
+        print(json.dumps(rows[-1]), flush=True)
+    return rows
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, required=True)
@@ -392,6 +414,7 @@ def main() -> None:
     ap.add_argument("--problems", type=lambda t: set(t.split(",")), help="solve only these (full,V,M)")
     ap.add_argument("--caps", action="store_true", help="only the per-block cap test (`caps`), from OUT's meta files")
     ap.add_argument("--merge", type=Path, action="append", help="merge these sweeps' outputs into OUT (`merge`)")
+    ap.add_argument("--inference", action="store_true", help="only the inference baseline (`inference_baseline`)")
     a = ap.parse_args()
     names = a.instance or list(INSTANCES)
     if a.merge:
@@ -404,6 +427,11 @@ def main() -> None:
             KS[name] = a.ks
         if a.modes:
             MODE_OVERRIDE[name] = a.modes
+    if a.inference:
+        a.out.mkdir(parents=True, exist_ok=True)
+        rows = [r for name in names for r in inference_baseline(name, KS[name], a.budget, a.workers)]
+        (a.out / "inference.json").write_text(json.dumps(rows, indent=1))
+        return
     if a.caps:
         out = []
         for name in names:
