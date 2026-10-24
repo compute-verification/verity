@@ -1,8 +1,9 @@
 /-
 `String.splitOn s "\n"` (the legacy split every circuit parse starts from) as `List.splitOn '\n'` on `s.toList`
 (`splitOn_nl`), with the byte positions it walks: the model a parse that splits a file's lines elsewhere (in tasks, from
-byte offsets) is held to.
+byte offsets) is held to. `splitTasks` splits them so, reading each row's numbers in the same task (`Net.Row`).
 -/
+import Flock.Net
 
 namespace Flock.SplitNL
 
@@ -232,38 +233,52 @@ theorem chunks_eq_ranges (text : String) (qs : List Nat) : ∀ a,
   | nil => intro a; rfl
   | cons q qs ih => intro a; simp [chunks, ranges, ih]
 
-/-- `(text.splitOn "\n").toArray` with the pieces between the cuts `qs` split in tasks (`splitPar_eq`), when `qs` are
-`'\n'`s in order (`cutsOk`). -/
-def splitPar (text : String) (qs : List Nat) : Array String :=
-  if cutsOk text 0 qs then
-    ((ranges text.utf8ByteSize 0 qs).map fun r => Task.spawn fun _ =>
-        ((String.Pos.Raw.extract text ⟨r.1⟩ ⟨r.2⟩).splitOn "\n").toArray).foldl (fun acc t => acc ++ t.get) #[]
-  else (text.splitOn "\n").toArray
+/-- A piece's lines, each with its numbers when it is a row (`Net.Row.of`). -/
+def piece (s : String) : Array String × Array Net.Row :=
+  let ls := (s.splitOn "\n").toArray
+  (ls, ls.map Net.Row.of)
 
-theorem foldl_tasks {α : Type} (l : List α) (g : α → Array String) : ∀ acc : Array String,
-    (l.map fun x => Task.spawn fun _ => g x).foldl (fun acc t => acc ++ t.get) acc =
-      acc ++ (l.flatMap fun x => (g x).toList).toArray := by
+/-- The pieces of `text` between the cuts `qs`, split in tasks, when `qs` are `'\n'`s in order (`cutsOk`); else the
+whole text split in one piece, with no rows read. -/
+def splitTasks (text : String) (qs : List Nat) : List (Task (Array String × Array Net.Row)) :=
+  if cutsOk text 0 qs then
+    (ranges text.utf8ByteSize 0 qs).map fun r => Task.spawn fun _ => piece (String.Pos.Raw.extract text ⟨r.1⟩ ⟨r.2⟩)
+  else [Task.pure ((text.splitOn "\n").toArray, #[])]
+
+/-- The lines of the pieces, in order: `(text.splitOn "\n").toArray` (`linesOf_splitTasks`). -/
+def linesOf (ts : List (Task (Array String × Array Net.Row))) : Array String :=
+  ts.foldl (fun acc t => acc ++ t.get.1) #[]
+
+/-- The rows read beside them, line `k` of `linesOf ts` at `k` when every piece read its rows. Nothing rests on them:
+`Net.parseWith` reads a row's numbers from them only when its line is the same string (`Net.parseWith_eq`). -/
+def rowsOf (ts : List (Task (Array String × Array Net.Row))) : Array Net.Row :=
+  ts.foldl (fun acc t => acc ++ t.get.2) #[]
+
+theorem foldl_tasks {α β γ : Type} (l : List α) (g : α → β) (p : β → Array γ) : ∀ acc : Array γ,
+    (l.map fun x => Task.spawn fun _ => g x).foldl (fun acc t => acc ++ p t.get) acc =
+      acc ++ (l.flatMap fun x => (p (g x)).toList).toArray := by
   induction l with
   | nil => intro acc; simp
   | cons x xs ih =>
     intro acc; simp only [List.map_cons, List.foldl_cons, List.flatMap_cons, ih]; simp only [Task.spawn, Array.append_assoc]
     congr 1; apply Array.ext'; simp
 
-theorem splitPar_eq (text : String) (qs : List Nat) : splitPar text qs = (text.splitOn "\n").toArray := by
-  unfold splitPar
+theorem linesOf_splitTasks (text : String) (qs : List Nat) :
+    linesOf (splitTasks text qs) = (text.splitOn "\n").toArray := by
+  unfold linesOf splitTasks
   split
   · rename_i hok
-    rw [foldl_tasks]
+    rw [foldl_tasks _ _ Prod.fst]
     have h := chunks_split text qs [] text.toList 0 (by simp) rfl hok
     rw [chunks_eq_ranges] at h
-    simp only [Array.empty_append, splitOn_nl text]
+    simp only [piece, Array.empty_append, splitOn_nl text]
     congr 1
     rw [← h]
     simp only [List.map_map, List.flatMap, splitOn_nl, List.map_flatten]
     rfl
-  · rfl
+  · simp
 
-/-- Cuts for `splitPar`: about `pieces` `'\n'` positions in order, the first `'\n'` at or after each multiple of the step.
+/-- Cuts for `splitTasks`: about `pieces` `'\n'` positions in order, the first `'\n'` at or after each multiple of the step.
 Nothing rests on them: `splitPar` checks them (`cutsOk`) and splits the whole text in one piece when they fail. -/
 def cutsNear (text : String) (pieces : Nat) : List Nat := Id.run do
   let n := text.utf8ByteSize
