@@ -209,14 +209,14 @@ theorem nat_as {j : Json} {k : String} {n : Nat} (h : Record.nat j k = .ok n) :
     · cases h
 
 theorem strs_hex :
-    ∀ {l : List Json} {X : List F128}, l.mapM (fun x => match x.getStr? with
+    ∀ {l : List Json} {out : List F128}, l.mapM (fun x => match x.getStr? with
         | .ok s => f128OfHex s
-        | .error _ => .error "record: an F128 is not a hex string") = .ok X →
-      ∃ ss, l.mapM Json.getStr? = .ok ss ∧ ss.mapM f128OfHex = .ok X
-  | [], X, h => by
+        | .error _ => .error "record: an F128 is not a hex string") = .ok out →
+      ∃ ss, l.mapM Json.getStr? = .ok ss ∧ ss.mapM f128OfHex = .ok out
+  | [], out, h => by
     simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at h
     subst h; exact ⟨[], rfl, rfl⟩
-  | a :: l, X, h => by
+  | a :: l, out, h => by
     simp only [List.mapM_cons] at h
     obtain ⟨b, hb, h⟩ := tie_bind h
     obtain ⟨bs, hbs, h⟩ := tie_bind h
@@ -230,8 +230,8 @@ theorem strs_hex :
       · simp [List.mapM_cons, hb, h2, bind, Except.bind, pure, Except.pure]
     · cases hb
 
-theorem coins_hex {r : Json} {cj : Array Json} {X : Array F128} (ha : Record.arr r "coins" = .ok cj)
-    (h : Record.f128s cj = .ok X) : (RecVStar.coinsOf r).toList.mapM f128OfHex = .ok X.toList := by
+theorem coins_hex {r : Json} {cj : Array Json} {out : Array F128} (ha : Record.arr r "coins" = .ok cj)
+    (h : Record.f128s cj = .ok out) : (RecVStar.coinsOf r).toList.mapM f128OfHex = .ok out.toList := by
   unfold Record.arr Record.fld at ha
   cases hv : r.getObjVal? "coins" with
   | error e => simp [hv, bind, Except.bind] at ha
@@ -325,6 +325,8 @@ theorem load_rounds {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner} 
       obtain ⟨_, hx, -⟩ := tie_bind h
       cases hx
 
+-- `repCoins` matches on array literals, which get no equation lemmas, so the proof unfolds its matcher.
+set_option linter.auxLemma false in
 /-- **`repCoins` places each of the record's rounds at a transcript round**: the transcript's rounds of the stream are
 its rounds `0 … n-1`, `repCoins` gives one entry each, and the record's round `m` is the transcript's round `sp m`,
 which is `m` (no split) or skips the one round of no coins `j` (a holo session's z_partial split). -/
