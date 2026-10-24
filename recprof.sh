@@ -57,17 +57,16 @@ ls -la $BIN $L/lean-$LSHA $L/fold-$FSHA 2>&1 | tee -a "$OUT/keys.txt"
 PDIR=$(mktemp -d /workspace/research/cache/recfast/perf.XXXXXX)
 trap 'rm -rf "$PDIR"' EXIT
 rc=0
+# the proxy writes s<k> only for two sessions or more, so the inner step runs one warm and one timed session and every later
+# step reads the timed one (INNER); the outer statements one session each
+INNER=$FLOCK_WORK/data/$TAG/inner/s1
 for s in ${STEPS:-build inner vstage vcap oprove lean}; do
   t0=$(date +%s.%N)
   echo "STEP $s start $t0 load $(cut -d' ' -f1-3 /proc/loadavg)" | tee -a "$OUT/steps.txt"
-  if [[ " ${PERF:-} " == *" $s "* ]]; then
-    perf record -F ${PERF_FREQ:-5} -g -o $PDIR/perf-$s.data -- \
-      /usr/bin/time -v -o "$OUT/time-step-$s.txt" bash verity/ml/flock/pod/85-rec-reprice.sh STEP=$s GPU=0 K=$K N=$N WARM=0 RUNS=1 \
-      FORGE= NEG_INNER= PCPUS=${PCPUS:-16} JOBS=${JOBS:-4} > "$OUT/step-$s.log" 2>&1
-  else
-    /usr/bin/time -v -o "$OUT/time-step-$s.txt" bash verity/ml/flock/pod/85-rec-reprice.sh STEP=$s GPU=0 K=$K N=$N WARM=0 RUNS=1 \
-      FORGE= NEG_INNER= PCPUS=${PCPUS:-16} JOBS=${JOBS:-4} > "$OUT/step-$s.log" 2>&1
-  fi
+  ARGS=(STEP=$s GPU=0 K=$K N=$N FORGE= NEG_INNER= PCPUS=${PCPUS:-16} JOBS=${JOBS:-4})
+  if [ $s = inner ]; then ARGS+=(WARM=1 RUNS=1); else ARGS+=(WARM=0 RUNS=1 INNER=$INNER); fi
+  PRE=(); [[ " ${PERF:-} " == *" $s "* ]] && PRE=(perf record -F ${PERF_FREQ:-5} -g -o $PDIR/perf-$s.data --)
+  "${PRE[@]}" /usr/bin/time -v -o "$OUT/time-step-$s.txt" bash verity/ml/flock/pod/85-rec-reprice.sh "${ARGS[@]}" > "$OUT/step-$s.log" 2>&1
   r=$?
   echo "STEP $s exit $r wall $(python3 -c "import sys,time; print(round(time.time()-float(sys.argv[1]),1))" $t0)" | tee -a "$OUT/steps.txt"
   tail -15 "$OUT/step-$s.log"
