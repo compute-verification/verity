@@ -13,7 +13,8 @@
 # (benchmarks/hash/dither/numabind.py); NUMABIND names another copy, and without one the arms run unbound. The node's load
 # (loadavg and the leases) before and after each arm is OUT/load.txt. Scratch goes to one mktemp -d directory (TMPDIR),
 # removed at the end; everything kept is under OUT.
-# `served_step.sh post DIR` (no GPU) analyzes another run's OUT again with this tree's code, into this run's OUT.
+# `served_step.sh post DIR` (no GPU) analyzes another run's OUT again with this tree's code, into this run's OUT; ANALYZE=0
+# leaves the reports unanalyzed, for a node whose CPUs are for others (post them where nsys runs).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run}/out}; mkdir -p "$OUT"; export OUT
