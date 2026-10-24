@@ -147,5 +147,5 @@ def test_the_read_is_one_step_op_a_step_and_one_window_op_a_layer():
         for layer in range(2):
             _credited(read, cache, query, meta, ks, layer)
     seen = {k: n for k, n in ops.seen.items() if k.startswith("verity_int8.")}
-    assert seen == {"verity_int8.credited_step": 1, "verity_int8.credited_window": 2, "verity_int8.kv_quant_window": 4,
-                    "verity_int8.window_rows": 4}, seen
+    assert seen == {"verity_int8.credited_step": 1, "verity_int8.credited_window": 2, "verity_int8.kv_quant_window_batch": 2,
+                    "verity_int8.window_rows_batch": 2}, seen
