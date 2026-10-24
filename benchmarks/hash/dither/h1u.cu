@@ -2505,9 +2505,10 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
       __syncthreads();
       if (threadIdx.x == 0) claim = atomicAdd(next, (u32)WARPS);
       __syncthreads();
-      const u32 g0 = claim;
+      const u32 g0 = claim, gu = g0 + wp;
       if (g0 >= total) break;
-      if (g0 + wp < total) h1umj_one(calls, ncalls, M, live, g0 + wp, smem[wp]);
+      if (gu >= total) continue;
+      h1umj_one(calls, ncalls, M, live, gu, smem[wp]);
       __syncwarp();
     }
   } else {
