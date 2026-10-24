@@ -21,8 +21,10 @@ N2 no longer compares the grid in the clear: `LinkWindows.verify` runs `check_li
 network claim is counts only until N3 is a proof-service unit on every window (ASK-70, counts-first). One gap keeps the
 count check from being zero-knowledge, and nothing may call it that until it is closed (the README states it too):
 - **N2's unit isn't proved yet:** its verifier of record runs `head_check.reference` on the host over the opening, the
-  heads and the certifier's salts. When it is proved, the head-check gate binds `NetworkHeadCheck_v2`'s circuit digest
-  and a proof of any other circuit is refused (NET-43).
+  heads and the certifier's salts.
+
+A proof of it is already held to its circuits: each gate names its Definition's pinned circuit digest, so the unit's
+Program binds them, and the verifier refuses a proof of any other Program ("The check" below).
 
 The certificate's signature no longer reads a hash of witness (NET-42). The certifier signs
 `D = SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R)`, R the head's record digest:
@@ -201,7 +203,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   service's `reject`; the violation's kind stays in the verifier. A registration with any other field, a second root,
   a root entry with another key, or anything more in `window` is refused. A served link has no egress profile, and its
   sizes and each window's declared sync are public instead (`PUBLIC_SERVED`, "A served link" below).
-- **The check** is `LinkWindows.unit`, `NetworkLinkWindow` v3{EGRESS, INGRESS}, over the two certificates' signed
+- **The check** is `LinkWindows.unit`, `NetworkLinkWindow` v4{EGRESS, INGRESS}, over the two certificates' signed
   digests: the AND of the certificates' check and each end's head check. The certificates' check is one opaque
   primitive over the two signed digests, with no gates: each certificate verifies under the certifier's key in its
   session (`LinkWindows.certifier_session`) over its public fields and its signed digest, and names the link-window,
@@ -213,9 +215,15 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   declared grid's (`NetworkHeadFields`), on an end with an occupancy profile its T counts are the profile's row for the
   window (`NetworkHeadCounts`; a window past the profile has no row and is a reject), and the head's record digest R
   (`NetworkRecordDigest`) under the witness `salt_c` is the signed digest (`NetworkSignedDigest`), so the certificate
-  signs the head the check opened. In the unit's Program each head check is one gate that names the Definition
-  (`head_check.gate`): the commitment gadgets' Boolean bodies encode to about 140 MB, and the service encodes the Program
-  on every registration. The Program's digest is the check's, so the spec, the stream and each registration bind to it.
+  signs the head the check opened. In the unit's Program each head check is one gate that names the Definition and
+  its circuit digest, `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2` (`head_check.gate`): the commitment gadgets'
+  Boolean bodies encode to about 140 MB, and the service encodes the Program on every registration. The digest is
+  core's `program_digest` of the Definition's Program (`head_check.circuit_digest`), the one a C-Flock statement names
+  a template by, read from `head_check.circuit-check.json`'s ``digests``, which circuit-check holds to the Definition
+  (a lowering pin). The Program's digest is the check's, so the spec, the stream and each registration bind to it, and
+  through the gates to the circuits: a proof of another circuit with the same interface names another Program. A size
+  class no sidecar pins has a gate naming no digest (`@unpinned`): its verdict of record is unchanged, and no proof of
+  its unit is accepted until a root of that class is pinned.
 - **Its sizes** (`head_check.size`, L = 9): the count check is an equality of 32·T bits, 32·T − 1 ANDs (19,199 at
   T = 600); the fields are 736 + 8·L − 1 (807); the opening is 775,077 at T = 4 and 1,876,070 at T = 600, nearly all
   of it the head row's hm96 digest; the signed digest is 290,246 at T = 4 and 1,333,292 at T = 600, the record digest's
@@ -244,6 +252,9 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   served link" below). A link whose egress end has neither an occupancy profile nor a served profile has no verdict
   (`ValueError`, failing closed), since nothing would hold its egress timing. The outcome passes the opening's root as the session's, which one-stage's audit holds to the registered one. An
   unset deadline bit is a `no-verdict` there, so a reject; a proof after `proof_deadline` is the service's `late`.
+  Given the findings of a proof of the unit (`verify(…, proved=…)`, the verifier of record's run over it,
+  `proofs.verify`), it also needs every gate of the unit to name a pinned digest and every session to accept and name
+  the link's registered Program, the partition object's `program` (`LinkWindows.proved`).
 - **The oracle** is `LinkWindows.stand_in`, the in-the-clear verdict: the audit with the Program's egress grid
   compared, and each head's counts the profile's (`LinkWindows.declares`). `verify` accepts every link-window it
   accepts, and differs only where the record's grid, at the profile's counts, isn't the Program's: in its frames, which
@@ -271,9 +282,10 @@ run and its egress end has no occupancy profile. Declared with
 holds the egress head's counts to the ones the ingress head's counts derive under the window's declared sync, with no
 public egress profile.
 
-- **The unit** is `NetworkServedLinkWindow` v2{EGRESS, INGRESS, SERVED}: `NetworkLinkWindow`'s certificates' check and
+- **The unit** is `NetworkServedLinkWindow` v3{EGRESS, INGRESS, SERVED}: `NetworkLinkWindow`'s certificates' check and
   two head checks (neither end with a count check unless its end declares a profile), and one gate (`served.gate`)
-  naming the Boolean Definition `served.NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}` over the two heads' counts,
+  naming the Boolean Definition `served.NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}` and its circuit digest
+  pinned in `served.circuit-check.json`, as the head check's gate names its own, over the two heads' counts,
   cut from the heads the head checks open (so witness), and the window's sync (δ, p, q), ρ = p/q. OWN is the ingress
   certifier's own frames at the head of every window's first bucket: 1 with its salt on, else 0. Its one output, the
   ok bit, is 1 when every ingress count is at most R_in, bucket 0's at least OWN, p and q are nonzero, and the egress
