@@ -155,3 +155,13 @@ def test_summary_joins_and_counts(tmp_path, monkeypatch, mod):
     reqs = [json.loads(x) for x in (tmp_path / "t" / "requests.jsonl").read_text().splitlines()]
     assert [r["first_step"] for r in reqs] == [0, 0] and reqs[0]["prefix"] == 3 and reqs[0]["eos"] is True
     assert "| t | 1.0 | test | 2 of 2 |" in (tmp_path / "README.md").read_text()
+
+
+def test_summary_keeps_a_failed_trace_and_drops_a_cut_line(tmp_path, mod):
+    summary = mod("summary")
+    (tmp_path / "plan.jsonl").write_text('{"i": 0}\n{"i": 1')
+    assert summary.read_jsonl(tmp_path / "plan.jsonl") == [{"i": 0}]
+    (tmp_path / "meta.json").write_text(json.dumps({"traces": {"u": {"error": "RuntimeError: not ready"}}}))
+    out = summary.summarize(tmp_path)
+    assert out["traces"]["u"] == {"trace": "u", "error": "RuntimeError: not ready"}
+    assert "| u | None | None | failed: RuntimeError: not ready |" in (tmp_path / "README.md").read_text()

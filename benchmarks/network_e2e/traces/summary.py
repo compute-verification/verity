@@ -13,10 +13,11 @@ EOS = (128001,)
 
 
 def read_jsonl(path: Path) -> list[dict]:
+    """The file's records, less an unterminated last line (a writer killed mid-line)."""
     if not path.exists():
         return []
-    with open(path, encoding="utf-8") as f:
-        return [json.loads(line) for line in f if line.strip()]
+    lines = path.read_text(encoding="utf-8").split("\n")
+    return [json.loads(line) for line in lines[:-1] if line.strip()]
 
 
 def raw(d: Path, kind: str) -> list[dict]:
@@ -154,10 +155,12 @@ def summarize(root: Path) -> dict:
     plan = {r["i"]: r for r in read_jsonl(root / "plan.jsonl")}
     meta = json.loads((root / "meta.json").read_text())
     traces = {}
-    for name in meta.get("traces", {}):
+    for name, m in meta.get("traces", {}).items():
         d = root / name
         if (d / "raw").is_dir():
             traces[name] = join_trace(d, plan)
+        if m.get("error") or name not in traces:
+            traces.setdefault(name, {"trace": name})["error"] = m.get("error", "no records")
     out = {"model": meta.get("model"), "versions": meta.get("versions"), "host": meta.get("host"), "env": meta.get("env"),
            "requests_per_trace": meta.get("requests"), "seed": meta.get("seed"), "traffic": meta.get("traffic"),
            "traces": traces}
@@ -208,7 +211,8 @@ def readme(s: dict) -> str:
     v = s.get("versions") or {}
     lines = [
         "# vLLM V1 scheduler traces under varied traffic: Llama-3.1-8B INT8 (int8_exact linears)", "",
-        f"Model `{s.get('model')}` on {s.get('host')}, GPU `{(s.get('env') or {}).get('CUDA_VISIBLE_DEVICES')}`; vLLM "
+        f"Model `{s.get('model')}` on {s.get('host')}, GPU `{(s.get('env') or {}).get('CUDA_VISIBLE_DEVICES')}` "
+        f"(`{(s.get('env') or {}).get('GPU_LEASE_UUID')}`); vLLM "
         f"{v.get('vllm')}, torch {v.get('torch')}. Made by `benchmarks/network_e2e/traces/corpus.py` (its docstring and "
         "`traffic.py`'s say how): plain vLLM's OpenAI server, `--quantization verity_int8`, batch-invariant eager, async "
         "scheduling off, Model Runner V2, prefix caching on, vLLM's own attention; a scheduler hook "
@@ -216,19 +220,25 @@ def readme(s: dict) -> str:
         "temperature 0, `max_tokens` 64 or 256, no stop strings.", "",
         f"Every trace serves the same {s.get('requests_per_trace')} requests (`plan.jsonl`, seed {s.get('seed')}) on a "
         "fresh server, so each starts with a cold prefix cache.", "",
-        "| trace | rate (req/s) | what | requests freed | steps | rows/step p50 / p90 / max | tokens/step p50 / max | running p50 / max | EOS | length | prefix-hit requests | hit tokens | preemptions (requests) | partial prefill chunks | mixed steps |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+        "| trace | rate (req/s) | what | requests freed | steps | rows/step p50 / p90 / max | tokens/step p50 / max | running p50 / max | waiting p90 / max | EOS | length | prefix-hit requests | hit tokens (of prompt tokens) | preemptions (requests) | partial prefill chunks | mixed steps |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for name, t in s["traces"].items():
+        if "steps" not in t:
+            lines.append(f"| {name} | {t.get('rate')} | {t.get('why')} | failed: {t.get('error')} |" + " |" * 12)
+            continue
         st, rq, rw, pc, pe = t["steps"], t["requests"], t["rows"], t["prefix_cache"], t["preemption"]
-        r, k, run = st["rows_per_step"], st["tokens_per_step"], st["running"]
+        r, k, run, wait = st["rows_per_step"], st["tokens_per_step"], st["running"], st["waiting"]
         lines.append(
-            f"| {name} | {t['rate']} | {t['why']} | {rq['freed_by_engine']} of {rq['sent']} | {st['with_tokens']} | "
+            f"| {name} | {t['rate']} | {t['why']}{' (failed: ' + t['error'] + ')' if t.get('error') else ''} | "
+            f"{rq['freed_by_engine']} of {rq['sent']} | {st['with_tokens']} | "
             f"{r.get('p50')} / {r.get('p90')} / {r.get('max')} | {k.get('p50')} / {k.get('max')} | "
-            f"{run.get('p50')} / {run.get('max')} | {rq['finish'].get('eos', 0)} | {rq['finish'].get('length', 0)} | "
-            f"{pc['requests_with_hit']} | {pc['hit_fraction']} | {pe['events']} ({pe['requests_preempted']}) | "
-            f"{rw['partial_prefill_chunks']} | {st['mixed_prefill_decode']} |")
+            f"{run.get('p50')} / {run.get('max')} | {wait.get('p90')} / {wait.get('max')} | {rq['finish'].get('eos', 0)} | "
+            f"{rq['finish'].get('length', 0)} | {pc['requests_with_hit']} | {pc['hit_tokens']} ({pc['hit_fraction']:.1%}) | "
+            f"{pe['events']} ({pe['requests_preempted']}) | {rw['partial_prefill_chunks']} | {st['mixed_prefill_decode']} |")
     lines += ["", "## Lengths", ""]
     for name, t in s["traces"].items():
+        if "lengths" not in t:
+            continue
         ln = t["lengths"]
         p, o = ln["prompt"], ln["output"]
         by_cap = "; ".join(f"cap {c}: output p50 {x['output'].get('p50')}, EOS {x['eos']}, length {x['length']}"
