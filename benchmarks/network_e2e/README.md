@@ -83,8 +83,9 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   serve-openai` run's `out/serve` on the `--endpoint-peer` node (or a local copy). The endpoint records each request's
   `user`, which the shim forwards on a varied plan. After the rehearsal its records (`chain.ENDPOINT`: the scheduler
   trace `advice_trace.jsonl` with each Commit window's open and close, `requests.jsonl`, `windows.jsonl`, `serve.json`)
-  are copied into `DIR/endpoint`. `verity-vllm advice` (vllm's #3619, with its tree on `PYTHONPATH` until it lands)
-  then writes one I1 v0 advice for each closed Commit window: a public registration naming the window's Commit, with the
+  are copied into `DIR/endpoint`. `verity-vllm advice` (vllm's #3619; until it lands, its `verity_vllm` laid over the
+  checkout, as its `research_tools` looks for the workspace above its own file) then writes one I1 v0 advice for each
+  closed Commit window: a public registration naming the window's Commit, with the
   advice's hiding root, and the advice and its opening under `private/`. The honest run's Commit windows are those
   whose first step falls in its link-windows. The advice is bound to the run (`bits.bound`) when each of those windows'
   requests is a certified one, every certified request is in exactly one of them, and each window's opening opens its
@@ -105,10 +106,18 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   that ran must be refused by the code it names; the rest say what they wait on. It doesn't run on the advice profile.
 
 The report's `stubbed` list says what each run still stood on that isn't the chain's own: the advice of another run, a
-given serving config, a prove path of a declared workload, pending negatives, the certifier off the gate. Until the
-committing endpoint and ADVICE-SRC exist, the chain runs on a PROVE-PATH run of a declared workload as its fixture:
-r20261024-060515-0e35 (its CLI from 01ea29e10f on), with `prove_path.py advice --workload out/standin/workload.json` as
-`--advice` and its `out/` as `--prove-path`; before it, r20261024-052710-8932 (GLM-5.3 TP8 B1).
+given serving config, a prove path of a declared workload, pending negatives, the certifier off the gate. Before the
+committing endpoint, the chain ran on a PROVE-PATH run of a declared workload as its fixture: r20261024-060515-0e35
+(its CLI from 01ea29e10f on), with `prove_path.py advice --workload out/standin/workload.json` as `--advice` and its
+`out/` as `--prove-path`; before it, r20261024-052710-8932 (GLM-5.3 TP8 B1).
+
+G-A's run of record on the endpoint's own advice: r20261024-111424-88c9 (d5e3b1055d, vy-nebius-2), the varied chain
+against vllm's Llama-3.2-1B serving run r20261024-094558-6d6a on vy-nebius-1:18083 (40 requests at 0.5/s, max_tokens
+up to 32, EOS 128001, 16 link-windows), report OK. honest accepted (597 tokens, 38 ending at max_tokens and 2 at EOS);
+late, extra and drop refused by their own codes; token accepted (pending IO-TIE). Its advice is 6d6a's Commit windows
+w345-w375: 31 windows, 40 requests, 532 steps, every window opened, bound and rebuilt; 23,972 v0 bits, 4,021 derived
+(2,496 shaped, 334 forced). Its prove path is PROVE-PATH's Llama TP1 fixed workload (r20261024-072909-b53f's honest arm,
+r20261024-090358-218a's forged), labelled as such: 6d6a's Commit windows have no sealed replay bundle yet.
 
 ## Inputs: rehearsals and gate runs
 
