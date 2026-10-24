@@ -55,6 +55,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -357,15 +358,25 @@ def gate_rows(mine: CS.Window, regs: dict[int, dict]) -> list[dict]:
             for k, m in enumerate(chunks(mine))]
 
 
-def composer(defn, hidden: int):
+def composer(defn, hidden: int, cache: Path | None = None):
     """``a5.audit``'s composer of the transfer-gate template's circuit: C-Flock's `UnitStager` over its ports ``part0`` and
-    ``part1`` (16·H bits each) in and ``o0`` out, bound to the window's partition and program."""
+    ``part1`` (16·H bits each) in and ``o0`` out, bound to the window's partition and program. ``cache``: a directory of the
+    circuits composed so far, by template, partition and program, which both ranks' windows and every run share."""
     def compose(circuit: Path, partition: str, program: str) -> dict:
         from verity_flock.class_statement import UnitStager
 
+        key = hashlib.sha512(json.dumps([defn.id, partition, program]).encode()).hexdigest()[:32]
+        if cache is not None and (cache / f"{key}.json").exists():
+            shutil.copyfile(cache / f"{key}.txt", circuit)
+            return json.loads((cache / f"{key}.json").read_text())
         st = UnitStager(defn, "unit/a5-tp-gates", [(f"part{j}", V2, 16 * hidden, [f"part{j}"]) for j in RANKS], [(V2, (0,))],
                         circuit=circuit, bind={"partition": partition, "program": program})
-        return {"subcircuit": st.meta.get("subcircuit"), "pin": st.pin, "class_sha512": st.class_sha512, "k_log": st.meta["k_log"]}
+        made = {"subcircuit": st.meta.get("subcircuit"), "pin": st.pin, "class_sha512": st.class_sha512, "k_log": st.meta["k_log"]}
+        if cache is not None:
+            cache.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(circuit, cache / f"{key}.txt")
+            (cache / f"{key}.json").write_text(json.dumps(made))
+        return made
     return compose
 
 
@@ -399,6 +410,7 @@ def main(argv=None) -> int:
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=0, help="the sessions' first port (0: a free block)")
     ap.add_argument("--session-timeout", type=float, default=3600)
+    ap.add_argument("--compose-cache", type=Path, help="the transfer-gate circuits composed so far, shared by runs on this machine")
     a = ap.parse_args(argv)
     if a.altered and a.made_for:
         ap.error("one refused statement a run: --altered or --made-for")
@@ -412,7 +424,7 @@ def main(argv=None) -> int:
     regs = registrations(out / "window")
     tg, rid = mine[0].members[0].template, mine[0].members[-1].template
     defs = dict(zip((tg, rid), templates(a.hidden)))
-    sets = {tg: (composer(defs[tg], a.hidden), defs[tg]), rid: (row_composer(defs[rid], 8 * REST_BYTES), defs[rid])}
+    sets = {tg: (composer(defs[tg], a.hidden, a.compose_cache), defs[tg]), rid: (row_composer(defs[rid], 8 * REST_BYTES), defs[rid])}
     a.rule, a.window_root, a.compose_cache, a.transfer_gate = RULE, ROOT, None, [tg]
     a.verifier_coins, a.coins = True, None
     port = a.port or free_ports(a5.RANK_PORTS * len(RANKS))
