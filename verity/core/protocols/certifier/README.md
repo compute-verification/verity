@@ -37,6 +37,15 @@ A spec-level reference for network accounting's timing channel:
   start, n) and the next state, and refuses what its size class or the prefix layer's counts can't express. It is the
   compile unit's core, between advice validity and `compile_steps`' Programs, and is held step for step to the replay
   (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-service Spec yet;
+- the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
+  every cell of an egress link-window is opened, each a pad or the canonical event of one token id on the stream the
+  warden set, and each is the output the advice's map names at its place (`window_map`, from advice v0's outputs and
+  release buckets; the verifier computes it in the clear from the opened advice, the named gap, until the map is read
+  in the proof under the advice's hiding root), with the id the Commit sampled for it (the port: one hiding row of
+  ids a step, opened under the Commit's root). The warden commits each bucket's cells as one hiding row. It has the
+  reference and the unit's Boolean Definition (`IoTieWindow`: the cells' root by `NetworkRowsRoot`, the port's rows by
+  `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
+  `IoTieRoute`, `IoTieMatch`);
 - the capacity counts;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
@@ -54,12 +63,30 @@ A spec-level reference for network accounting's timing channel:
   each step and checks its arrivals and decision bits are the window row's at the heads; `ReplayLoad` runs once a
   window. The windows join by equal openings and the session starts from the empty rows under public salts
   (`check_chain`). Its cost at a shape is `size`;
+- the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `check` its reference, composes
+  `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, and the encoder over the scan's asks, for one
+  window. It holds the coded length to the declared charge and the step rows' salted SHA-512 to the public digest. The
+  cache counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
+  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits, their evaluator
+  and SHA-512's gadget from `verity`;
+- the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
+  draw under the run root (each window's salted digest and an hm96 row registration). The verifier's ``pub`` for the
+  slice is the declared charge and the published digest (`served_rows.pub`), never the prover's words, and `leaf_ok`
+  holds a committed row's b‖c to its registered leaf. It takes the advice registration's hm96 rows from `verity`;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
   whole cached units, which checks the row's hit (the longest cached prefix while no block can have been evicted, a
   cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
   circuits and their evaluator from `verity`;
+- advice v1's arithmetic encoder (`arith_encode`): `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
+  `KTContext_v1{C, NW}`, Boolean Definitions with `reference_step`, `reference_finish` and `reference_kt` their specs.
+  They run ENC-CODE's 32-bit coder forward one symbol at a time, checking each output bit against a segment in the
+  decoder's order, and return the bits it takes: a window's total is its charge, at most its declared c_w, and no
+  codeword is committed. The context and the frequencies are the circuit's, from the replay's position and the
+  registered book's counts, never witness. It is held symbol for symbol to `code.py` and `code_v1` on advice v1's
+  windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is in no
+  proof-service Spec yet (`PROTOCOL.md`, "Advice v1"). It takes the circuits and their evaluator from `verity`;
 - the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
   direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
   bucket a + D + ⌊i/r⌋. A miss fails the connection closed. It records and certifies exactly the cells it sends.
@@ -85,23 +112,7 @@ A spec-level reference for network accounting's timing channel:
   window) its ingress admits whole requests by the admission rule (`served.Admission`). On a sealed pair link
   (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
   sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
-  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed;
-- advice v1's arithmetic encoder (`arith_encode`): `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
-  `KTContext_v1{C, NW}`, Boolean Definitions with `reference_step`, `reference_finish` and `reference_kt` their specs.
-  They run ENC-CODE's 32-bit coder forward on one decision at its context's adaptive estimate, and check each output
-  bit against the window's committed segment in the decoder's order, so a window's segment is accepted exactly when it
-  is the coder's codeword. It is held symbol for symbol to `code.py` on the replay's decisions and on ENC-DERIVED's
-  still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is in no proof-service Spec yet
-  (`PROTOCOL.md`, "Advice v1");
-- the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `check` its reference, composes
-  `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, and the encoder over the scan's asks, for one
-  window. It holds the coded length to the declared charge and the step rows' salted SHA-512 to the public digest. The
-  cache counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
-  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge;
-- the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
-  draw under the run root (each window's salted digest and an hm96 row registration). The verifier's ``pub`` for the
-  slice is the declared charge and the published digest (`served_rows.pub`), never the prover's words, and `leaf_ok`
-  holds a committed row's b‖c to its registered leaf.
+  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
@@ -109,8 +120,7 @@ Definition, and in `active` the proof service's registration and receipt, which 
 AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` and
-`replay_step`, `arith_encode` and `compile_slice` the circuits and their evaluator (`compile_slice` also SHA-512's gadget),
-and `served_rows` the advice registration's hm96 rows.
+`replay_step` the circuits and their evaluator.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
