@@ -16,6 +16,7 @@ runs on a machine the prover doesn't control, and the serving process reaches it
 """
 from __future__ import annotations
 
+import time
 from typing import Any, Callable, Mapping
 
 from verity.core.protocols.pouw import salt as PS
@@ -126,6 +127,35 @@ def session(entry: str, at: str, steps: int, root: bytes,
     return client, c, opening, LiveRecord(client, Wd.ROUND), salt_of(c, opening.coin, root)
 
 
+def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, root: bytes, at: str = "127.0.0.1:0",
+                 tries: int = 120, wait: Callable[[float], Any] = time.sleep
+                 ) -> tuple[Any, LiveCommitment, LiveOpening, LiveRecord, bytes, dict[str, Any]]:
+    """Reserved session `sid` opened at infra's gate on the weights' root `root` (``gate("open", "--session", sid,
+    "--root", R)``, its ``commitment`` from ``gate("status", sid)`` when the open answers none: `commit_coins.Gate.call`),
+    reached at `at`'s host on the port the answer names (`at_port`; the auditor host's ``ssh -R`` to this machine, retried
+    while it refuses connections, at most `tries` times, `wait` between), and its salt coin opened after `root`
+    (`session`, ncp-v2's): the run whose salt follows the weights' root (Pearl-C's device run, `pouw_pearl_c_host.epoch_of`).
+    Returns `session`'s tuple and the gate's answer as a run carries it (`pouw_h1_challenger.carried`)."""
+    answer = dict(gate("open", "--session", sid, "--root", root.hex()))
+    if answer.get("commitment") is None:
+        answer["commitment"] = gate("status", sid).get("commitment")
+    try:
+        given = PHC.session_of({k: v for k, v in answer.items() if k in (*PHC.SESSION_FIELDS, *PHC.REPLY_FIELDS)})
+    except ValueError as e:
+        raise ValueError(f"{entry}: the gate's answer to opening session {sid}: {e}") from e
+    if given is None or (given["session"], given["root"]) != (sid, root.hex()):
+        raise ValueError(f"{entry}: the gate's answer is not session {sid} opened on the weights' root {root.hex()[:16]}...")
+    address = at_port(at, given.get("port"))
+    for i in range(tries):
+        try:
+            return (*session(entry, address, 0, root, given), PHC.carried(given))
+        except ConnectionRefusedError:
+            if i == tries - 1:
+                raise
+            wait(1.0)
+    raise AssertionError("unreachable")
+
+
 def at_port(at: str, port: Any) -> str:
     """The challenger's address for a session the gate opened on `port` (its open answer's ``port``, which the gate takes
     at the open as the first one no live session holds): `at`'s host at that port, else `at` when the answer names none."""
@@ -206,5 +236,5 @@ def finish(run: Any, client: Any) -> None:
             run.details["challenger"] = {"closed": why is None, **({"reason": why} if why else {})}
 
 
-__all__ = ["Gate", "RESERVE_FIELDS", "Window", "at_port", "connect", "finish", "refusals", "reserved_of", "session",
-           "session_setting"]
+__all__ = ["Gate", "RESERVE_FIELDS", "Window", "at_port", "connect", "finish", "open_session", "refusals", "reserved_of",
+           "session", "session_setting"]

@@ -66,6 +66,7 @@ from typing import Any
 
 from verity.core.protocols.pouw.audit import Epoch, Workload, rows_domain, transcript_domain
 from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
+from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, LiveOpening
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
@@ -103,6 +104,7 @@ from .pouw_pearl_c_host import (
     _write,
     _zeros,
     call_keys,  # noqa: F401 - kept importable here, as the tests read it
+    epoch_of,
     memmove,
     write_manifest,
 )
@@ -296,11 +298,12 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
     the passes the bench and the verifier need (`begin`, `end`, `end_pass`)."""
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
-                 coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
-                 time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
-                 flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None):
+                 coins: CoinCommitment | LiveCommitment, opening: CoinOpening | LiveOpening, hashing: bool = True,
+                 capacity: int = LEAF_CAPACITY, time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False,
+                 whole_defer: bool = False, flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None):
         """`coins` is the challenger's coin commitment of the epoch and `opening` its salt coin, opened after the weights'
-        root (`Epoch.start`, which raises `DomainError` for any other coin): the epoch's salt is the coin's."""
+        root: one held in this process or a live session's on the auditor host (`epoch_of`, which raises `DomainError` for
+        any other coin).  The epoch's salt is the coin's."""
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key = kernel.run.NB, salt_key
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
@@ -310,8 +313,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
         self.torch_stream = _TorchStream()
         self.roots, self.coins, self.opening = dict(roots), coins, opening
-        self.epoch = Epoch.start(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
-                                 self.roots, coins, opening)
+        self.epoch = epoch_of(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
+                              self.roots, coins, opening)
         self.salt = salt = self.epoch.salt
         self.device = next(iter(weights.values())).device
         self.schedule = schedule_of(schedule, scheme, kernel)

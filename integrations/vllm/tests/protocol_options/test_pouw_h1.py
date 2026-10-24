@@ -1102,6 +1102,43 @@ def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monk
         "round 0's request table is not the one the window's open root is over (its requests_root)")
 
 
+def test_a_reserved_session_opens_on_the_weights_root_and_its_salt_coin_after_it(tmp_path, monkeypatch):
+    """`pouw_h1_window.open_session`, Pearl-C's device run's live coins (VLLM-95): the gate opens the reserved session on
+    the weights' root, its commitment read from ``status`` when the open answers none, the challenger is reached on the
+    answer's port once it accepts connections (`wait` between refusals), and its salt coin opens after that root; the run
+    carries the answer without its secret. An answer naming another root or another session is refused before any coin."""
+    from verity.core.protocols.pouw.audit import salt_of
+    from verity_vllm.protocol_options import pouw_h1_window as PHW
+
+    host = _host(tmp_path, monkeypatch, rounds=1)
+    sid, root, calls, waits = CH.session_id(1), bytes(range(64)), [], []
+
+    def gate(*words):
+        calls.append(words)
+        if words[0] == "open":
+            return {**host.open(words[2], words[4]), "commitment": None, "port": 7811, "secret": "ab" * 32}
+        return {"commitment": host.challenger.commitment.root.hex()}
+    reached, refusals = R.RemoteChallenger.connect, iter((True, True))
+
+    def connect(cls, at, secret=None):
+        if next(refusals, False):
+            raise ConnectionRefusedError(at)
+        return reached(at, secret)
+    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(connect))
+    client, c, opening, _, salt, carried = PHW.open_session("pouw:test", gate, sid, root, at="vy-challenger-1:1",
+                                                            wait=waits.append)
+    client.close()
+    assert host.ended() is None and c == host.challenger.commitment
+    assert calls == [("open", "--session", sid, "--root", root.hex()), ("status", sid)] and waits == [1.0, 1.0]
+    assert LC.live_reason(c, opening, Wd.SALT, 0, root) is None and salt == salt_of(c, opening.coin, root)
+    assert R.released_roots(host.directory / R.RELEASES, c)[Wd.SALT] == (root,)
+    assert "secret" not in carried and (carried["session"], carried["root"], carried["port"]) == (sid, root.hex(), 7811)
+    for answer in ({"session": sid, "seq": 0, "root": "ee" * 64, "commitment": "c0" * 64},
+                   {"session": CH.session_id(2), "seq": 0, "root": root.hex(), "commitment": "c0" * 64}):
+        with pytest.raises(ValueError, match=f"not session {sid} opened on the weights' root"):
+            PHW.open_session("pouw:test", lambda *w, a=answer: a, sid, root, wait=waits.append)
+
+
 def test_a_session_the_ledger_opened_without_a_reserve_salts_no_window(tmp_path, monkeypatch):
     """VLLM-60: a window's open root binds the session the auditor's signed reserve entry names (S, `core_check.salt`), so
     a session the ledger opened on the window's own open root without reserving it first is refused, its salt and every
