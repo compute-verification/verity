@@ -14,6 +14,7 @@ from verity_vllm.predict.build import Unexpressible, build_program
 from verity_vllm.predict.phi import Phi
 from verity_vllm.predict.steps import (
     Registered,
+    RowRef,
     compare,
     compile_steps,
     dead_gates_of,
