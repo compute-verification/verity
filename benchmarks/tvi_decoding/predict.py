@@ -250,13 +250,15 @@ def learned(s, target, kind):
             idx = torch.randperm(n, device=DEV, generator=g)[:100_000]
             Xs.append(feats(k)[idx])
             ys.append(ytrue(k)[idx])
-        X, y = torch.cat(Xs), torch.cat(ys)
+        X, y = torch.nan_to_num(torch.cat(Xs)), torch.nan_to_num(torch.cat(ys))
         mu, sd = X.mean(0), X.std(0) + 1e-8
         ys_ = y.std() + 1e-12
         Xn, yn = (X - mu) / sd, y / ys_
         if kind == "lin":
             Xa = torch.cat([Xn, torch.ones(len(Xn), 1, device=DEV)], 1).double()
-            w = torch.linalg.lstsq(Xa, yn.double().unsqueeze(1)).solution.float()
+            G = Xa.T @ Xa
+            G += torch.eye(len(G), device=DEV, dtype=G.dtype) * (1e-9 * G.diagonal().mean())
+            w = torch.linalg.solve(G, Xa.T @ yn.double()).float().unsqueeze(1)
 
             def f(Z, w=w, mu=mu, sd=sd, ys_=ys_):
                 Zn = (Z - mu) / sd
