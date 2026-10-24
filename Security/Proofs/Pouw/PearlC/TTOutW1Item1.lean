@@ -1,6 +1,6 @@
 import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.HonestWords
-import Proofs.Pouw.Prob
+import Proofs.Pouw.Copy
 
 /-!
 # CMP-77 item 1 at W1: guessing a `1 × 1 × k` unit's two output words
@@ -119,11 +119,20 @@ theorem guess_fetched : (W1.final dv sl (guessProg t y) U act σ).fetched = [W1.
     | rfl
     | simp [W1.final, guessProg, W1.exec, W1.Instr.reads, W1.preSalt, W1.constAt]
 
+/-- A move is free. -/
+theorem price_mov (d a : W1.Addr) : W1.Instr.price dv false (.mov d a) = 0 := by
+  first
+    | simp [W1.Instr.price, W1.Instr.base, W1.Instr.dynamic]
+    | (unfold W1.Instr.price W1.Instr.base W1.Instr.dynamic; simp)
+    | (unfold W1.Instr.price W1.Instr.base W1.Instr.dynamic; norm_num)
+
 /-- The moves are free. -/
 theorem guess_cost0 : (W1.final dv sl (guessProg t y) U act σ).cost = 0 := by
   first
-    | simp [W1.final, guessProg, W1.exec, W1.Instr.price, W1.Instr.base, W1.Instr.dynamic]
-    | norm_num [W1.final, guessProg, W1.exec, W1.Instr.price, W1.Instr.base, W1.Instr.dynamic]
+    | (show (0 : ℚ) + W1.Instr.price dv false (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) +
+          W1.Instr.price dv false (.mov (W1.usefulAt 0 0 0) (W1.constAt 1)) = 0
+       rw [price_mov, price_mov]; norm_num)
+    | simp [W1.final, guessProg, W1.exec, price_mov]
 
 /-- Two distinct words fetched. -/
 theorem guess_read : W1.w1Read dv sl (guessProg t y) U act σ = 2 := by
@@ -313,31 +322,61 @@ theorem event_mem {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S
       Finset.mem_range.2 (show W1.w32 y < 2 ^ 32 from Nat.mod_lt _ (by norm_num))⟩,
     wins_of_event ha hact hcap hwt ((wordQ_w32 t).trans ht) ((wordQ_w32 y).trans hy) hθ⟩
 
+/-- At a step `⟨[32], wd, z⟩` with `wd ≥ 24`, the event is the rules, the cap and the credit bound: the reference words
+are always FP32 words' values (`HonestWords`), and within the cap the credit is at least `(1 − ρ)·creditDev`. -/
+theorem guessEvent_devAt {wd : ℕ} (hw : 24 ≤ wd) (z : ℤ) (G : ℕ) (pp : Prices) (sem : PearlCSem Q R S) (ρ : ℚ)
+    {k : ℕ} (hk : k ≤ 2 ^ 16) {w a : Codes} {θ : ℝ} (hop : sem.OperandOK 1 k a) (hrow : sem.RowOK 1 k w 0)
+    (hθ : θ < (((1 - ρ) * creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ : ℚ) : ℝ)) (x : (Q → R) × S)
+    (hx : (pearlCProtocolDev (devAt ⟨[32], wd, z⟩ G pp) sem ρ).capOK x.1 x.2 (oneUnit k w) 0 a) :
+    GuessEvent (pearlCProtocolDev (devAt ⟨[32], wd, z⟩ G pp) sem ρ) k w a θ x := by
+  have hk32 : ((oneUnit k w).layout.shape 0).k / 32 < 2 ^ 24 := by
+    show k / 32 < 2 ^ 24
+    exact lt_of_le_of_lt ((Nat.div_le_self k 32).trans hk) (by norm_num)
+  obtain ⟨ht, hy⟩ := HonestWords.honestWords_devRev1K hw z G pp sem ρ 0 x.1 x.2 (oneUnit k w) 0 a hk32 0 0
+  refine ⟨hop, hx, hrow, ht, hy, ?_⟩
+  have hc : debitDev (devAt ⟨[32], wd, z⟩ G pp) (sem.unitDebitDev (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a) ≤
+      ρ * creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ := hx
+  have hq : (1 - ρ) * creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ ≤ creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ -
+      debitDev (devAt ⟨[32], wd, z⟩ G pp) (sem.unitDebitDev (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a) := by
+    linarith
+  show θ < ((creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ -
+    debitDev (devAt ⟨[32], wd, z⟩ G pp) (sem.unitDebitDev (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a) : ℚ) : ℝ)
+  exact hθ.trans_le (by exact_mod_cast hq)
+
+/-- `guessEvent_devAt` under rev1. -/
+theorem guessEvent_devAtRev1 {wd : ℕ} (hw : 24 ≤ wd) (z : ℤ) (G : ℕ) (pp : Prices) (sem : PearlCSem Q R S) (ρ : ℚ)
+    {k : ℕ} (hk : k ≤ 2 ^ 16) {w a : Codes} {θ : ℝ} (hop : sem.OperandOK 1 k a) (hrow : sem.RowOK 1 k w 0)
+    (hθ : θ < (((1 - ρ) * creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ : ℚ) : ℝ)) (x : (Q → R) × S)
+    (hx : (pearlCProtocolDevRev1 (devAt ⟨[32], wd, z⟩ G pp) sem ρ).capOK x.1 x.2 (oneUnit k w) 0 a) :
+    GuessEvent (pearlCProtocolDevRev1 (devAt ⟨[32], wd, z⟩ G pp) sem ρ) k w a θ x := by
+  have hk32 : ((oneUnit k w).layout.shape 0).k / 32 < 2 ^ 24 := by
+    show k / 32 < 2 ^ 24
+    exact lt_of_le_of_lt ((Nat.div_le_self k 32).trans hk) (by norm_num)
+  obtain ⟨ht, hy⟩ := HonestWords.honestWords_devRev1K hw z G pp sem ρ 0 x.1 x.2 (oneUnit k w) 0 a hk32 0 0
+  refine ⟨hop, hx, hrow, ht, hy, ?_⟩
+  have hc : sem.unitDebitRev1 (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a ≤
+      ρ * creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ := hx
+  have hq : (1 - ρ) * creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ ≤
+      creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ -
+        sem.unitDebitRev1 (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a := by
+    linarith
+  show θ < ((creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ -
+    sem.unitDebitRev1 (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a : ℚ) : ℝ)
+  exact hθ.trans_le (by exact_mod_cast hq)
+
 /-! ## Its probability -/
 
 section Prob
 
 variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
-/-- The union bound over a finite index set. -/
-theorem pr_exists_le_sum {α ι : Type} [Fintype α] (s : Finset ι) (P : ι → α → Prop) :
-    pr (fun x => ∃ i ∈ s, P i x) ≤ ∑ i ∈ s, pr (P i) := by
-  classical
-  refine Finset.induction_on s ?_ ?_
-  · simp only [Finset.notMem_empty, false_and, exists_false, Finset.sum_empty]
-    exact le_of_eq (pr_eq_zero fun _ h => h)
-  · intro i s hi ih
-    rw [Finset.sum_insert hi]
-    calc pr (fun x => ∃ j ∈ insert i s, P j x) ≤ pr (fun x => P i x ∨ ∃ j ∈ s, P j x) := pr_mono fun x ⟨j, hj, h⟩ => by
-          rcases Finset.mem_insert.1 hj with rfl | hj
-          · exact Or.inl h
-          · exact Or.inr ⟨j, hj, h⟩
-      _ ≤ _ := (pr_or_le _ _).trans (add_le_add le_rfl ih)
-
 theorem pr_event_le_sum (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ)
     (ha : ∀ i l, a i l < 2 ^ 32) :
     pr (GuessEvent P k w a θ) ≤ ∑ p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32), pr (GuessWins dv salt P k w a θ p.1 p.2) :=
-  (pr_mono fun _ hx => event_mem ha hx).trans (pr_exists_le_sum _ _)
+  calc pr (GuessEvent P k w a θ)
+      ≤ pr (fun x => ∃ p ∈ range (2 ^ 32) ×ˢ range (2 ^ 32), GuessWins dv salt P k w a θ p.1 p.2 x) :=
+        pr_mono fun _ hx => event_mem ha hx
+    _ ≤ _ := Pouw.Proofs.pr_exists_le_sum _ _
 
 /-- **The success probability**: some constants `t, y < 2^32` win with probability at least `Pr[GuessEvent]/2^64`. -/
 theorem exists_guess_ge (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ)
@@ -417,48 +456,6 @@ theorem not_ttOutPearlCDevRev1W1_old {dv : W1.W1Device} {salt : S → List ℕ} 
       pr (GuessEvent (pearlCProtocolDevRev1 d sem ρ) k w a (2 * (dv.prices.fetch : ℝ) / (1 - 1 / 400)))) :
     ¬ TTOutW1 dv salt (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDevOld d) (1 / 400) εPearlC :=
   not_ttOutW1_of_guess (oneUnit_old w hk0 h128 hG hk) hf ha (eps_guess.trans_lt hE)
-
-/-- At a step `⟨[32], wd, z⟩` with `wd ≥ 24`, the event is the rules, the cap and the credit bound: the reference words
-are always FP32 words' values (`HonestWords`), and within the cap the credit is at least `(1 − ρ)·creditDev`. -/
-theorem guessEvent_devAt {wd : ℕ} (hw : 24 ≤ wd) (z : ℤ) (G : ℕ) (pp : Prices) (sem : PearlCSem Q R S) (ρ : ℚ)
-    {k : ℕ} (hk : k ≤ 2 ^ 16) {w a : Codes} {θ : ℝ} (hop : sem.OperandOK 1 k a) (hrow : sem.RowOK 1 k w 0)
-    (hθ : θ < (((1 - ρ) * creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ : ℚ) : ℝ)) (x : (Q → R) × S)
-    (hx : (pearlCProtocolDev (devAt ⟨[32], wd, z⟩ G pp) sem ρ).capOK x.1 x.2 (oneUnit k w) 0 a) :
-    GuessEvent (pearlCProtocolDev (devAt ⟨[32], wd, z⟩ G pp) sem ρ) k w a θ x := by
-  have hk32 : ((oneUnit k w).layout.shape 0).k / 32 < 2 ^ 24 := by
-    show k / 32 < 2 ^ 24
-    exact lt_of_le_of_lt ((Nat.div_le_self k 32).trans hk) (by norm_num)
-  obtain ⟨ht, hy⟩ := HonestWords.honestWords_devRev1K hw z G pp sem ρ 0 x.1 x.2 (oneUnit k w) 0 a hk32 0 0
-  refine ⟨hop, hx, hrow, ht, hy, ?_⟩
-  have hc : debitDev (devAt ⟨[32], wd, z⟩ G pp) (sem.unitDebitDev (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a) ≤
-      ρ * creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ := hx
-  have hq : (1 - ρ) * creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ ≤ creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ -
-      debitDev (devAt ⟨[32], wd, z⟩ G pp) (sem.unitDebitDev (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a) := by
-    linarith
-  show θ < ((creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ -
-    debitDev (devAt ⟨[32], wd, z⟩ G pp) (sem.unitDebitDev (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a) : ℚ) : ℝ)
-  exact hθ.trans_le (by exact_mod_cast hq)
-
-/-- `guessEvent_devAt` under rev1. -/
-theorem guessEvent_devAtRev1 {wd : ℕ} (hw : 24 ≤ wd) (z : ℤ) (G : ℕ) (pp : Prices) (sem : PearlCSem Q R S) (ρ : ℚ)
-    {k : ℕ} (hk : k ≤ 2 ^ 16) {w a : Codes} {θ : ℝ} (hop : sem.OperandOK 1 k a) (hrow : sem.RowOK 1 k w 0)
-    (hθ : θ < (((1 - ρ) * creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ : ℚ) : ℝ)) (x : (Q → R) × S)
-    (hx : (pearlCProtocolDevRev1 (devAt ⟨[32], wd, z⟩ G pp) sem ρ).capOK x.1 x.2 (oneUnit k w) 0 a) :
-    GuessEvent (pearlCProtocolDevRev1 (devAt ⟨[32], wd, z⟩ G pp) sem ρ) k w a θ x := by
-  have hk32 : ((oneUnit k w).layout.shape 0).k / 32 < 2 ^ 24 := by
-    show k / 32 < 2 ^ 24
-    exact lt_of_le_of_lt ((Nat.div_le_self k 32).trans hk) (by norm_num)
-  obtain ⟨ht, hy⟩ := HonestWords.honestWords_devRev1K hw z G pp sem ρ 0 x.1 x.2 (oneUnit k w) 0 a hk32 0 0
-  refine ⟨hop, hx, hrow, ht, hy, ?_⟩
-  have hc : sem.unitDebitRev1 (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a ≤
-      ρ * creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ := hx
-  have hq : (1 - ρ) * creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ ≤
-      creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ -
-        sem.unitDebitRev1 (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a := by
-    linarith
-  show θ < ((creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ -
-    sem.unitDebitRev1 (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a : ℚ) : ℝ)
-  exact hθ.trans_le (by exact_mod_cast hq)
 
 /-- **The refutation at a step `⟨[32], wd, z⟩` with `wd ≥ 24`**: activations and weights that pass the rules, a fetch
 price below `(1 − 1/400)·(1 − ρ)·creditDev/2`, and the cap holding with probability above `2^−64`. -/
