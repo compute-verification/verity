@@ -215,11 +215,19 @@ def served(preset: Preset, eager: bool) -> tuple[Preset, bool]:
     return replace(preset, engine_settings=settings), eager
 
 
+def checkpoint_files(root: Path) -> list[Path]:
+    """The files of a local checkpoint that bind it: all but a Hub snapshot's repository metadata (dot-files such as
+    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (vy-nebius-2's
+    llama-3.1-8b-instruct gained ``.gitattributes`` and ``README.md`` on 19 Oct with every weight unchanged)."""
+
+    return sorted(p for p in root.iterdir() if p.is_file() and not p.name.startswith(".") and p.suffix != ".md")
+
+
 def local_checkpoint(preset: Preset, path: str | Path) -> Preset:
-    """Bind a machine-local checkpoint to a preset by hashing all of its files."""
+    """Bind a machine-local checkpoint to a preset by hashing its files (`checkpoint_files`)."""
 
     root = Path(path)
-    files = sorted(p for p in root.iterdir() if p.is_file())
+    files = checkpoint_files(root)
     if not files:
         raise ValueError(f"benchmark checkpoint {root} has no files")
     digest = hashlib.sha256()
