@@ -44,11 +44,12 @@ GPU) instead of `--from`. Every option `e2e.py` doesn't take goes to `certifier_
 
 ## The chain: varied traffic, the advice, the prove path and the negatives
 
-**G-A's report of record: r20261024-163242-7e60.** It is OK with nothing pending, and every row is from vllm's sealed
+**G-A's report of record: r20261024-190804-7e4c.** It is OK with nothing pending, and every row is from vllm's sealed
 Llama-3.2-1B serving run r20261024-141912-8eb1. It re-makes GA-CLOSER's closer r20261024-150521-0551 (ded16ce22b,
-`--probes 40`, against vy-nebius-1:18084) from that run's outputs, on #3778's tree with #3566's `io_tie` merged, before
-the report held its prove path's advice by content. It reads 8eb1's records, whose sha256 equal 0551's copy, and drives
-no endpoint.
+`--probes 40`, against vy-nebius-1:18084) from that run's outputs, on this tree (ac3067386b) with #3566's `io_tie`
+merged, as r20261024-163242-7e60 did on #3778's tree before the report held its prove path's advice by content. It
+reads 8eb1's records, whose sha256 equal 0551's copy, from a copy of the inputs on the node that holds them
+(r20261024-190732-a08f, each file checked against its sha256 there), and drives no endpoint.
 
 - e2e: honest accepted (40 requests, 597 tokens, 38 ending at max_tokens and 2 at EOS); late, extra and drop refused
   by their own codes. The advice is 8eb1's Commit windows w191-w220: 30 windows, 40 requests, 527 steps, every window
@@ -62,14 +63,14 @@ no endpoint.
   no verdict; its own code refuses it.
 - prove path: GA-AUDIT's `--serve-run` audits of 8eb1's w212 (r20261024-154338-7679), one of the honest run's own
   Commit windows, and w5 (r20261024-143655-ccc8), adopted in place of the fixed workload. Every honest arm was accepted
-  and every forged arm refused by Lean. 7e60's tree held each arm to the report by its v0 bit count; its content tie is
-  the run's `out/advice-check.json`: w212's committed root is the lane's registration's, whose opening opens it to the
-  report's w212 advice, and w5's is vllm's registration's. This tree's OK makes that check itself for every arm
-  (`chain.held_to`): the registered root, the endpoint's Commit of the window, and the opening onto the report's
-  advice. Read off the registrations' own times, as this tree reads them (r20261024-173746-1bb0), both were registered
-  after serving: w212's by the lane from the run's records (r20261024-153328-5776), 25.1 min after its Commit window
-  closed and 14.2 min before the first draw, and w5's by vllm during the run, 11.3 s after its Commit window closed,
-  which 7e60's job stated as at serve time.
+  and every forged arm refused by Lean. Each arm's committed root is the one registered for its window, the
+  registration names the endpoint's Commit of that window, and its opening opens the root to the report's advice of
+  the window (`chain.held_to`), so the report's OK holds both arms by content (7e60's held them by v0 bit count, with
+  the content check apart in its `out/advice-check.json`). Read off the registrations' own times, both were
+  registered after serving: w212's by the lane from the run's records (r20261024-153328-5776), 25.1 min after its
+  Commit window closed and 14.2 min before the first draw, and w5's by vllm during the run, 11.3 s after its Commit
+  window closed, which 7e60's job stated as at serve time (r20261024-173746-1bb0, on the files in place; 7e4c's copies
+  kept their times to the second, so it reads 25.0 min and 10.4 s).
 
 The plan's target (G-A) is one command from serving to the Lean verdict: serve, certify, advice, compile, sampled ZKPs,
 Lean, with the advice's bits per link-window. `chain.py` holds the stages after N2 and the proofs, each on what exists now:
