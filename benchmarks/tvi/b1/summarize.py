@@ -192,7 +192,11 @@ def main():
     files = sorted({p for d in dirs for p in glob.glob(os.path.join(d, "counted_*.json"))})
     best = {}
     for p in files:
-        r = json.load(open(p))
+        try:
+            r = json.load(open(p))
+        except (OSError, json.JSONDecodeError) as exc:  # a run still writing it
+            print(f"skip {p}: {exc}")
+            continue
         if "summary" not in r:
             continue
         if r["name"] not in best or len(r.get("retention", {})) > len(best[r["name"]].get("retention", {})):
