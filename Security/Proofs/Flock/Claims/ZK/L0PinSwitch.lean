@@ -78,9 +78,9 @@ def pcsT (t : Transcript) : Transcript :=
 
 /-- The transcript of the switch's round `i` before its squeeze: the ring switch's label and `sv i` absorbed. -/
 def rsPre (sv : ℕ → Array F128) (i : ℕ) (t : Transcript) : Transcript :=
-  { t with pending := (sv i).foldl F128.pushBytes
-      (t.pending ++ header 2 0 "flock-ring-switch-v0".toUTF8.size ++ padded "flock-ring-switch-v0".toUTF8 ++
-        header 3 2 (sv i).size) }
+  let p := t.pending ++ header 2 0 "flock-ring-switch-v0".toUTF8.size ++ padded "flock-ring-switch-v0".toUTF8 ++
+    header 3 2 (sv i).size
+  { t with pending := (sv i).foldl F128.pushBytes p }
 
 /-- The transcript of the switch's loop from `t₀`: round `i` squeezes `7` coins at body `L + i`. -/
 def rsLoopT (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Transcript) : ℕ → Transcript
@@ -135,7 +135,7 @@ theorem ringSwitchCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ �
   unfold ringSwitchCut
   dsimp only
   rw [bind_go (liftTM_ok (_root_.Flock.RecAlgebra.label_eq _ _) _)]
-  dsimp only
+  try dsimp only
   refine forIn_bind_go _ (rsLoopT sv coin l.size (pcsT t)) (rsLoopB sv coin l.size (pcsT t)) l.size claims.size
     rfl ?hbody _ _ l rfl
     (fun r => ∃ res t' L', r = (.ok (res, t'), L') ∧
@@ -143,14 +143,14 @@ theorem ringSwitchCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ �
       t'.pending = ByteArray.empty) ?_
   case hbody =>
     intro i hi s l' hl'
-    dsimp only
+    try dsimp only
     rw [bind_go (liftTM_ok (_root_.Flock.RecAlgebra.label_eq _ _) _)]
     rw [bind_go (liftTM_ok (_root_.Flock.RecAlgebra.absorbSlice_eq _ _) _)]
     rw [bind_go (sampleVecP_cut_ok coin (by decide) _ (by omega))]
     rw [hl']
     exact ⟨_, rfl⟩
   intro s
-  dsimp only
+  try dsimp only
   rw [bind_go (sampleVecP_cut_ok coin hN _ (by simp; omega))]
   refine ⟨_, _, _, rfl, ?_, rfl⟩
   rw [Array.toList_push, Array.toList_append, List.toList_toArray, rsLoopB_map, List.range_succ, List.map_append,
@@ -193,19 +193,23 @@ theorem endE_ret {α β : Type} {p : TMW OpenM α} {g : α → TMW OpenM β} (hp
   subst e'
   exact hp t got x hx
 
+/-- The transcript after a squeeze of `n` coins of `kind` from `t`, answered by `coin`. -/
+def sqT (t : Transcript) (kind : UInt8) (n : ℕ) (coin : ℕ → F128) : Transcript :=
+  { t with
+    pending := ByteArray.empty
+    k := t.k + 1
+    rounds := t.rounds.push ⟨n, ByteArray.empty, (Array.range n).map coin, some (framed t kind n)⟩ }
+
 theorem endE_squeezeP (io : _root_.Flock.Firewall.Finish.Asks OpenM) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) :
     EndE (_root_.Flock.Firewall.Finish.squeezeP io kind n) := by
   intro t got r h
   have e : (_root_.Flock.Firewall.Finish.squeezeP io kind n).run t =
-      io.round (framed t kind n) >>= fun coin =>
-        pure ((Array.range n).map coin, { t with pending := ByteArray.empty, k := t.k + 1,
-          rounds := t.rounds.push ⟨n, ByteArray.empty, (Array.range n).map coin, some (framed t kind n)⟩ }) := by
-    simp only [_root_.Flock.Firewall.Finish.squeezeP, StateT.run, hn, ite_false]
+      io.round (framed t kind n) >>= fun coin => pure ((Array.range n).map coin, sqT t kind n coin) := by
+    simp only [_root_.Flock.Firewall.Finish.squeezeP, StateT.run, hn, ite_false, sqT] <;> rfl
   rw [e, StateT.run_bind] at h
   obtain ⟨x, -, hx⟩ := step_done_inv h
-  have e2 : (pure ((Array.range n).map x.1, { t with pending := ByteArray.empty, k := t.k + 1,
-      rounds := t.rounds.push ⟨n, ByteArray.empty, (Array.range n).map x.1, some (framed t kind n)⟩ }) :
-        OpenM (Array F128 × Transcript)).run x.2 = Step.done r := hx
+  have e2 : (pure ((Array.range n).map x.1, sqT t kind n x.1) : OpenM (Array F128 × Transcript)).run x.2 =
+      Step.done r := hx
   have e3 := Step.done.inj e2
   subst e3
   rfl
@@ -223,10 +227,12 @@ theorem endE_lincheckFw (io : _root_.Flock.Firewall.Finish.Asks OpenM) (c : _roo
   refine endE_bind fun _ => ?_
   refine endE_bind fun _ => ?_
   refine endE_bind fun _ => ?_
-  refine endE_bind fun _ => ?_
-  refine endE_bind fun _ => ?_
-  refine endE_bind fun _ => ?_
-  exact endE_ret (endE_sampleP io) fun _ => ⟨_, rfl⟩
+  split
+  all_goals
+    refine endE_bind fun _ => ?_
+    refine endE_bind fun _ => ?_
+    refine endE_bind fun _ => ?_
+    exact endE_ret (endE_sampleP io) fun _ => ⟨_, rfl⟩
 
 /-- **A rep's PIOP ends on the lincheck's last squeeze**, nothing pending. -/
 theorem endE_repPiop (io : _root_.Flock.Firewall.Finish.Asks OpenM) (st : _root_.Flock.Setup)
@@ -258,7 +264,7 @@ theorem plain_rs (sv : ℕ → Array F128) (i : ℕ) (hs : (sv i).size < 2 ^ 64)
 theorem pcsRound_rs (sv : ℕ → Array F128) {N : ℕ} (hN : N ≠ 0) (hs : (sv 0).size < 2 ^ 64) {c : ByteArray}
     (hc : c.data.toList = rsBody sv N [] 0) : Flags.PcsRound (c, 7) := by
   refine ⟨[.label "flock-ring-switch-v0".toUTF8, .vec (sv 0).toList], 2, ?_, plain_rs sv 0 hs, .inl rfl,
-    by decide, by decide⟩
+    show (7 : ℕ) ≠ 0 by decide, show (7 : ℕ) < 2 ^ 64 by decide⟩
   show c.data.toList = encs (.label LABEL_PCS.toUTF8 :: _) ++ (Frame.sq 2 7).enc
   rw [hc, rsBody, if_pos (Nat.pos_of_ne_zero hN), if_pos rfl]
   simp only [LABEL_PCS, encs, List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append,
@@ -268,14 +274,17 @@ theorem pcsRound_rs (sv : ℕ → Array F128) {N : ℕ} (hN : N ≠ 0) (hs : (sv
 theorem qRound_rs (sv : ℕ → Array F128) {N i : ℕ} (hi : i ≠ 0) (hiN : i < N) (hs : (sv i).size < 2 ^ 64)
     {c : ByteArray} (hc : c.data.toList = rsBody sv N [] i) : Quiet.QRound (c, 7) := by
   refine ⟨[.label "flock-ring-switch-v0".toUTF8, .vec (sv i).toList], 2, ?_, plain_rs sv i hs, .inl rfl,
-    by decide, by decide⟩
+    show (7 : ℕ) ≠ 0 by decide, show (7 : ℕ) < 2 ^ 64 by decide⟩
   show c.data.toList = encs _ ++ (Frame.sq 2 7).enc
   rw [hc, rsBody, if_pos hiN, if_neg hi, List.nil_append]
 
 /-- **`γ`'s squeeze is quiet.** -/
 theorem qRound_gamma (sv : ℕ → Array F128) {N : ℕ} (hN : N ≠ 0) (hN' : N < 2 ^ 64) {c : ByteArray}
     (hc : c.data.toList = rsBody sv N [] N) : Quiet.QRound (c, N) := by
-  refine ⟨[], 2, ?_, fun _ h => nomatch h, .inl rfl, hN, hN'⟩
+  refine ⟨[], 2, ?_, ?_, .inl rfl, hN, hN'⟩
+  swap
+  · intro f hf
+    cases hf
   show c.data.toList = [] ++ (Frame.sq 2 N).enc
   rw [hc, rsBody, if_neg (lt_irrefl _), List.nil_append]
 
