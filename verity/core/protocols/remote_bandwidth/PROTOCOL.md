@@ -932,7 +932,10 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   codec) and read from its own disks (their measured read ceiling), each at its rate over any interval plus one burst
   (`ledger.Node`: a maximal rebuild batch, \(S_{\text{chip}}\), and a maximal disk read, a second at the ceiling;
   link-charged, one link window as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
-  the sketch's (`timing.sketch_failure`).
+  the sketch's (`timing.sketch_failure`) plus the draw's rejection \(\sum_t k_t / 2^{64}\) (`ledger.rejection`, over
+  every window's draws). `LineHeld`'s error also carries the windows' PRF advantages,
+  \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no numeric value: the ledger names them by their claim
+  (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
 
   Every form, the link-charged one included, is conditional on `NoOutsideCompute`, statement C in full: no device
   outside the node computes on a registered block or a receipt during the session. Identity is only its links clause:

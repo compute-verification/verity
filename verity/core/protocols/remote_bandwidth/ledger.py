@@ -19,10 +19,11 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
   time-held is `Σ·(N − S) − 2L·(X·(Σ + 2L) + B) − fill` block-ns over Σ, where `fill` spreads W over the groups at
   v_g = (s_(g+1) − s_g)/n_g (L/n_C in C), highest first, at most n_g·N in group g.
 
-The memory line counts registered blocks only.  δ is the statements' error: the record's δ (δc), 2^-slack_log2 a pass
-(the allowance for `PooledDraw`'s draw terms: Σk_t/2^64 over the windows' k_t draws, and the PRFs' advantages
-Σadv_t), the coin commitment's
-hiding terms (`hiding`) and, under sketch-sha512, `timing.sketch_failure` over the session (δs)."""
+The memory line counts registered blocks only.  δ is the horizon's (the record's δ and AuditRO's 2^-slack_log2 a
+pass) plus the coin commitment's hiding terms (`hiding`), plus, under sketch-sha512, `timing.sketch_failure` over the
+session, plus the draw's rejection (`rejection`): the statements' δc and δs, and `LineHeld`'s Σ_t hide_t and
+Σ_t k_t/2^64.  `LineHeld`'s error also carries the windows' PRF advantages, which are named (`PRF_CLAIM`) and in no δ
+here."""
 from __future__ import annotations
 
 import math
@@ -37,6 +38,14 @@ from . import audit, receipts, timing
 SNAPSHOT, TIME_HELD, LINK_CHARGED = "snapshot", "time-held", "link-charged"
 FORMS = (SNAPSHOT, TIME_HELD, LINK_CHARGED)
 """The memory line's forms, in order: `Held`'s, `HeldOverTime`'s and `HeldOverTimeLinks`'s."""
+REJECTION_LOG2 = 64
+"""The draw's rejection a draw, in bits: a draw below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
+`Accounting.Remote.Draw.width`), so a uniform first word is rejected with probability below 2^-64."""
+DELTA_PARTS = ("profile", "slack", "hiding", "sketch", "rejection")
+"""The memory line's δ parts (`delta_parts`), in the order `memory` adds them."""
+PRF_CLAIM = "prf/sha-512"
+"""The claim that prices `LineHeld`'s Σ_t Adv(prf t), one oracle-access distinguisher a window reading its k_t first
+blocks: a term with no numeric value, so it is named beside δ and in no part of it."""
 
 
 def _rate(x: object, what: str) -> float:
@@ -137,7 +146,12 @@ def hiding(record: audit.Record) -> float:
     `Accounting.Guarantees.Remote.PooledDraw`): window t's two distances between coin t's hm96 leaf and a leaf
     committing zeros, each within 2^-192 under the pinned key, n·2^-191 in all (claims `statistical-hiding`,
     `common-reference-string`, `hash-derived-key`)."""
-    return 2 * 2.0 ** receipts.HM96.statistical_distance_log2(len(record.windows), key_failure_log2=64)
+    return hiding_over(len(record.windows))
+
+
+def hiding_over(windows: int) -> float:
+    """`hiding` over a session of `windows` windows."""
+    return 2 * 2.0 ** receipts.HM96.statistical_distance_log2(windows, key_failure_log2=64)
 
 
 def compressions(record: audit.Record, node: Node) -> int:
@@ -300,6 +314,21 @@ def _paced(record: audit.Record) -> str | None:
     return None
 
 
+def rejection(record: audit.Record) -> float:
+    """The draw's rejection, `LineHeld`'s Σ_t k_t/2^64: the chance some window's draw rejects a first word, below
+    2^-`REJECTION_LOG2` a draw, over every window's draws (`profile.drawn`, min(k_t, U_t): k_t in a window of more
+    receipts than draws, and U_t, at most k_t, in one that opens all of them).  Exact: the draws are an integer."""
+    return sum(w.profile.drawn["receipt"] for w in record.windows) * 2.0 ** -REJECTION_LOG2
+
+
+def delta_parts(record: audit.Record, node: Node) -> dict[str, float]:
+    """The memory line's δ (`memory`'s `Line.delta`, its parts added in `DELTA_PARTS`' order) in its five parts: the
+    windows' profile δ, AuditRO's 2^-SLACK_LOG2 a pass over the record's passes, the coin commitment's hiding terms
+    (`hiding`), SketchBound's δs (`sketch`) and the draw's rejection (`rejection`)."""
+    return {"profile": record.windows[0].profile.delta, "slack": record.passes * 2.0 ** -audit.SLACK_LOG2,
+            "hiding": hiding(record), "sketch": sketch(record, node), "rejection": rejection(record)}
+
+
 def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
     """The memory line's three forms (`FORMS`)."""
     N, b, P = record.blocks, record.block_bytes, record.passes
@@ -311,6 +340,7 @@ def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
     X_link = X + node.link_bytes_per_s / b / 1e9
     Br, Bd, Bl = node.rebuild_burst_bytes / b, node.disk_burst_bytes / b, node.link_burst_bytes / b
     planned = sum(sum(w.credited(False)) for w in record.windows)
+    delta += rejection(record)
     snapshot = Line(SNAPSHOT, N, b, delta, N - (planned - W - (X * record.span_ns + (Br + Bd)) - P * S) / P)
     if (why := _paced(record)) is not None:
         return snapshot, Line(TIME_HELD, N, b, delta, refused=why), Line(LINK_CHARGED, N, b, delta, refused=why)
