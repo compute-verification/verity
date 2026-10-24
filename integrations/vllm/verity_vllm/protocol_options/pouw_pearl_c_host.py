@@ -20,6 +20,8 @@ UPLOAD_SLOTS = 1024
 PRIORITY = {"least": 0, "caller": 0, "greatest": -(1 << 10)}
 #: the rows of the call the native keys are held to `call_keys` at, once (any row count of the domain does)
 CHECK_ROWS = 16
+#: the calls whose keys `_Keys` keeps (a pass's calls take the same weights, indices and row counts pass after pass)
+KEYS_KEPT = 1 << 14
 
 
 def torch_uint8() -> Any:
@@ -74,11 +76,14 @@ def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, ha
 class _Keys:
     """`call_keys` natively: dom_a is `merkle.domain_message` hashed by hashlib's SHA-512.  The native path is held to
     `call_keys` once at construction, so a tree hash whose domain id isn't that digest of that message fails there.
-    ``native`` set to None takes `call_keys` itself (the reference path)."""
+    A call's keys are a function of the salt, B's root, the call's index and its m₁₆, so the native path keeps the last
+    `KEYS_KEPT` calls' (``kept``), their framing being most of a call's host time before its first launch.  ``native`` set
+    to None takes `call_keys` itself (the reference path)."""
 
     def __init__(self, fixture: Any, salt: bytes, hash: str = HM96):
         self.native, self.fixture, self.salt, self.hash = hashlib.sha512, fixture, salt, hash
         self.positions: dict[int, bytes] = {}
+        self.kept: dict[tuple[bytes, int, int], bytes] = {}
         root = bytes(64)
         if self(root, 0, CHECK_ROWS) != call_keys(fixture, salt, root, 0, CHECK_ROWS, hash):
             raise ValueError(f"native keys don't frame tree hash {hash!r} as CommitmentDomain does")
@@ -86,11 +91,17 @@ class _Keys:
     def __call__(self, root_b: bytes, index: int, m16: int) -> bytes:
         if self.native is None:
             return call_keys(self.fixture, self.salt, root_b, index, m16, self.hash)
-        pos = self.positions.get(m16)
-        if pos is None:
-            pos = self.positions[m16] = RangeIndexedDomain(m16).identity_sha512()
-        msg = domain_message(activation_binding(self.salt, index), index, pos, m16, "sha512")
-        return self.native(msg).digest() + self.salt + root_b + index.to_bytes(8, "little")
+        got = self.kept.get((root_b, index, m16))
+        if got is None:
+            pos = self.positions.get(m16)
+            if pos is None:
+                pos = self.positions[m16] = RangeIndexedDomain(m16).identity_sha512()
+            msg = domain_message(activation_binding(self.salt, index), index, pos, m16, "sha512")
+            got = self.native(msg).digest() + self.salt + root_b + index.to_bytes(8, "little")
+            if len(self.kept) >= KEYS_KEPT:
+                self.kept.clear()
+            self.kept[root_b, index, m16] = got
+        return got
 
 
 def _event() -> Any:
@@ -141,8 +152,8 @@ class _Driver:
 class _Lane:
     """A stream the run owns, at a schedule's priority, and its handle; off the GPU a stand-in handle (``standin``) for the
     recording device's log.  ``priority`` is the one the device gave it.  Its events hand work over to it: from the lane
-    before it (``event``; for A's tree, the main lane's per-row keying) and, on a side lane, from the side lane that ran
-    the call's A tree, at its end (``tree_event``)."""
+    before it (``event``; for A's tree, the main lane's per-row keying) and, on a side lane, from the other side lane
+    where that ran the call's A tree, at its end (``tree_event``)."""
 
     def __init__(self, device: Any, priority: str, standin: int):
         import torch

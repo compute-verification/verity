@@ -8,7 +8,8 @@ Under a schedule with a side lane (`pouw_pearl_c_lanes`), a call of decode's row
 lane's steps as one graph (`_lane_graph`), one pair a pipeline and ring set: the main lane's, ending with a scatter of its
 flags (and A's root, where A's tree stays there), and the side lane's, ending with a scatter of the leaves; where the tree
 runs off the main lane, the main graph records an external event after the per-row keying, and the tree, ending with a
-scatter of A's root, is a graph of its own, which the side lane after the call's replays behind that event.  The main
+scatter of A's root, is a graph of its own, which the side lane running A's tree (`pouw_pearl_c_lanes.TREE_APART_ROWS`)
+replays behind that event.  The main
 graph runs ``stats_a`` (and the screen's scatter, where A's tree is aside) on a branch of its own beside the per-row
 keying, joined before the forming reads A's scales and at the graph's end.  Every graph reads
 the pair's own slot, the call's keys and offsets in one upload, which waits for the side steps of the set's last call, as
@@ -73,7 +74,7 @@ class _Graph:
     #: a lane graph's (`_lane_graph`): the side lane's graph and steps, and the slot both lanes read (dom_a ‖ unit, then the
     #: call's offsets at `SLOT_BYTES`, `offs`; its address `slot_ptr`).  Where A's tree is off the main lane, the main
     #: graph records `ev_tree` (an external event) before step `cut`, and the side steps before `side_cut` (A's tree and
-    #: its root's scatter) are a graph of their own, `tree`, for the side lane after the call's.  `execs` are the graphs'
+    #: its root's scatter) are a graph of their own, `tree`, for the side lane running A's tree.  `execs` are the graphs'
     #: executables the driver launches (main, tree or 0, side), once captured
     side: Any = None
     side_steps: list = field(default_factory=list)
@@ -299,7 +300,7 @@ class GraphCalls:
         main lane) one scatter of the flags and A's root; the side lane's steps, then one scatter of the leaves; each
         scatter at the offsets in the slot.  Where A's tree is off the main lane (`aside`), the main graph records an
         external event after the per-row keying, and the tree, then a scatter of A's root, is a graph of its own for the
-        side lane after the call's (the pipeline's ``lane_cuts``).  That call runs the steps eagerly, and `_capture_lanes`
+        side lane running A's tree (the pipeline's ``lane_cuts``).  That call runs the steps eagerly, and `_capture_lanes`
         captures them."""
         import torch
         rows = m if m == sh.m16 else 0

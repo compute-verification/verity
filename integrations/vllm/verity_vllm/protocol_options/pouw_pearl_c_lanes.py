@@ -15,12 +15,13 @@ A's levels, seed_A and line_a off it.  The padding rows (m₁₆ … the kernels
 matmul) are the GEMM's alone: no tile leaf reads them (the leaves stop at m₁₆ rows) and y is served to m, so the split
 pipeline writes none of their E_A lines (`run.Pipeline`'s ``fillers``), and the GEMM forms them from whatever lines the
 shape's buffer holds.  Every committed and served byte is the serial schedule's; the padding rows' products are not.  So
-A's tree runs on the run's next side lane after the call's (whose last work is the call before's tile hashing, done by
-then at decode) behind an event right after the main lane's per-row keying, beside the forming and the GEMM, which read
-nothing the tree writes, and copies A's root to the pass; the call's side lane runs the tile hashing behind the main
-lane's end, so it no longer waits for the tree, then waits for the tree, so its end is the call's side steps' end.
-No further stream: past the device's hardware queues (8 by default), a stream shares one with another, whose work it
-then waits behind.
+A's tree runs behind an event right after the main lane's per-row keying, beside the forming and the GEMM, which read
+nothing the tree writes, and copies A's root to the pass.  Below a full tile of rows (`TREE_APART_ROWS`) it runs on the
+call's side lane, whose tile hashing follows it behind the main lane's end; from a full tile, whose tile hashing takes
+longer than the tree, on the run's next side lane after the call's (whose last work is the call before's tile hashing),
+so the call's side lane starts the tile hashing at the main lane's end, then waits for the tree, so its end is the call's
+side steps' end.  No further stream: past the device's hardware queues (8 by default), a stream shares one with another,
+whose work it then waits behind.
 
 Each shape rotates `Schedule.ring` sets of the buffers the side lane touches (`rotated`, with the call's keys, dom_a ‖ unit,
 when A's tree moves), and the run has as many side lanes (``sides``), which its calls take in turn whatever their shape, so
@@ -57,6 +58,9 @@ STEP_GROUPS = {"pad_a": "row_seeds", "rowdig_a": "row_seeds", "hash_rows_a": "a_
 SIDE_IO = {"hash_leaf": StepIO("tile_hash", frozenset({"c", "u"}), frozenset({"segdig_t"})),
            "tree_seed_a": StepIO("a_tree", frozenset({"tree_a", "keys"}), frozenset({"tree_a", "seed_a", "line_a"}))}
 SIDE_GROUPS = frozenset(io.group for io in SIDE_IO.values())
+#: the rows (m₁₆) from which a call's A tree, where it is aside, runs on the side lane after the call's rather than on the
+#: call's own: on the H200 the own lane was the faster at m₁₆ 16 and the other at 64, at 7 of GLM-5.3's 8 dense shapes each
+TREE_APART_ROWS = 64
 
 
 @functools.cache
@@ -114,15 +118,15 @@ class LaneCalls:
                aside: bool, graph: tuple[int, int] | None = None) -> tuple[Any, bool]:
         """A call's steps launched on the schedule's lanes, over the ring's next set of its shape: the main lane (the caller's
         stream, or the run's own after an event on the caller's), then the run's next side lane (`sides`), which runs the
-        side steps behind an event after the main lane; where A's tree is aside (`aside`), the side lane after it runs the
-        tree behind an event after the main lane's per-row keying (the pipeline's ``lane_cuts``) and copies A's root to the
-        pass, and the call's side lane runs the rest behind the main lane's end, then waits for the tree.  The keys go to
-        the set's own when the ring rotates
-        them, once the side steps of the set's last call are done.  With `graph` (the call's m and tiles; `_lane_graphed`),
-        each lane replays its steps as graphs of the set's (`_lane_graph`: made, run eagerly here and captured at their
-        first call, replayed by the driver after, `_replay_lanes`), whose slot takes the keys and the call's offsets in one
-        copy, once the side steps of the set's last call are done; returns the graphs and whether they screened the call
-        ((None, False) without)."""
+        side steps behind an event after the main lane; where A's tree is aside (`aside`), the tree runs behind an event
+        after the main lane's per-row keying (the pipeline's ``lane_cuts``) and copies A's root to the pass, below
+        `TREE_APART_ROWS` on the call's side lane, before the rest, and from it on the side lane after the call's, while the
+        call's runs the rest behind the main lane's end, then waits for the tree.  The keys go to the set's own when the
+        ring rotates them, once the side steps of the set's last call are done.  With `graph` (the call's m and tiles;
+        `_lane_graphed`), each lane replays its steps as graphs of the set's (`_lane_graph`: made, run eagerly here and
+        captured at their first call, replayed by the driver after, `_replay_lanes`), whose slot takes the keys and the
+        call's offsets in one copy, once the side steps of the set's last call are done; returns the graphs and whether
+        they screened the call ((None, False) without)."""
         import torch
         cuda = self.device.type == "cuda"
         main = self.main if self.schedule.main_priority == "greatest" else None
@@ -132,8 +136,10 @@ class LaneCalls:
             j, rot = sh.turn % len(sh.sets), rotated(self.schedule)
             sh.turn += 1
             k = self._side_turn % len(self.sides)
-            to, tl = self.sides[k], self.sides[(k + 1) % len(self.sides)] if aside else None
+            to = self.sides[k]
+            tl = (self.sides[(k + 1) % len(self.sides)] if sh.m16 >= TREE_APART_ROWS else to) if aside else None
             self._side_turn += 1
+        apart = tl is not None and tl is not to
         sh.j, sh.rot = j, rot
         g, screened = None, False
         if graph is not None:
@@ -177,7 +183,7 @@ class LaneCalls:
                     size, nb = pipe.size["tree_a"], self.nb
                     with torch.cuda.stream(tl.stream) if cuda else nullcontext():
                         self.roots_buf[nb * index:nb * (index + 1)].copy_(sh.buf("tree_a")[size - nb:size])
-                if cuda:
+                if cuda and apart:
                     to.tree_event.record(tl.stream)
             if side:
                 self.kernel.dev.stream = to.raw
@@ -187,7 +193,7 @@ class LaneCalls:
                         to.stream.wait_event(to.event)
                     for f in side[side_cut:]:
                         f()
-                    if tl is not None and cuda:
+                    if apart and cuda:
                         to.stream.wait_event(to.tree_event)
                 if cuda:
                     sh.done[j] = sh.done[j] or _event()
@@ -208,30 +214,33 @@ class LaneCalls:
                 + struct.pack("<3q", *self._offsets(index, self.cur.tiles, self.cur.flag_rows)))
 
     def _replay_lanes(self, g: Any, sh: Any, j: int, to: Any, tl: Any, raw: int, main: Any, data: bytes) -> None:
-        """A call's lane graphs replayed by the driver (`_Driver`, on the streams' and events' handles), in `_lanes`'s order
-        and with its events: the caller waits for the side steps of set j's last call, uploads the slot and hands over to
-        the main lane, which replays its graph; where A's tree is aside, side lane `tl` (the one after `to`) replays the
-        tree graph after the main graph's own event past the per-row keying; side lane `to` replays the side graph after
-        the main graph, then waits for the tree; the caller waits for the main lane."""
+        """A call's lane graphs replayed by the driver (`_Driver`, on the streams' and events' handles), with `_lanes`'s
+        events: the main lane waits for the side steps of set j's last call and uploads the slot, which only the graphs
+        read, so the upload is off the chain from the caller's stream, then waits for the caller and replays its graph;
+        where A's tree is aside, side lane `tl` (`to`, or from `TREE_APART_ROWS` the one after it) replays the tree graph
+        after the main graph's own event past the per-row keying; side lane `to` replays the side graph after the main
+        graph, then waits for the tree where `tl` is another; the caller waits for the main lane."""
         D = self.driver
         lane = main.raw if main is not None else raw
         done = sh.done[j]
         if done is not None:
-            D.wait(raw, done)
-        self.uploads.put_raw(g.slot_ptr, data, raw, D)
+            D.wait(lane, done)
+        self.uploads.put_raw(g.slot_ptr, data, lane, D)
         if main is not None:
             D.record(main.event, raw)
             D.wait(lane, main.event)
         main_exec, tree_exec, side_exec = g.execs
+        apart = bool(tree_exec) and tl is not to
         D.launch(main_exec, lane)
         D.record(to.event, lane)
         if tree_exec:
             D.wait(tl.raw, g.ev_tree)
             D.launch(tree_exec, tl.raw)
-            D.record(to.tree_event, tl.raw)
+            if apart:
+                D.record(to.tree_event, tl.raw)
         D.wait(to.raw, to.event)
         D.launch(side_exec, to.raw)
-        if tree_exec:
+        if apart:
             D.wait(to.raw, to.tree_event)
         if done is None:
             done = sh.done[j] = _event()

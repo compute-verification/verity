@@ -1720,8 +1720,11 @@ def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_bac
 
 # ---- step 1 of the decode plan: the host path, byte for byte the reference's ---------------------------------------
 
-def test_native_keys_are_call_keys_byte_for_byte():
+def test_native_keys_are_call_keys_byte_for_byte(monkeypatch):
     import random
+
+    from verity_vllm.protocol_options import pouw_pearl_c_host as PPH
+
     tree_hash = HM96
     rng = random.Random(5)
     for _ in range(40):
@@ -1729,7 +1732,13 @@ def test_native_keys_are_call_keys_byte_for_byte():
         keys = PPD._Keys(F, salt, tree_hash)
         assert keys.native is not None
         for index, m16 in ((0, 16), (1, 32), (127, 8192), (rng.randrange(1 << 20), 16 * rng.randrange(1, 600)), ((1 << 40) + 3, 48)):
-            assert keys(root, index, m16) == PPD.call_keys(F, salt, root, index, m16, tree_hash)
+            want = PPD.call_keys(F, salt, root, index, m16, tree_hash)
+            assert keys(root, index, m16) == want and keys(root, index, m16) == want     # the second time, kept
+            assert keys.kept[root, index, m16] == want
+    monkeypatch.setattr(PPH, "KEYS_KEPT", 2)
+    keys = PPD._Keys(F, salt, tree_hash)
+    for index in range(5):
+        assert keys(root, index, 16) == PPD.call_keys(F, salt, root, index, 16, tree_hash) and len(keys.kept) <= 2
     keys.native = None
     assert keys(root, 9, 64) == PPD.call_keys(F, salt, root, 9, 64, tree_hash)
     with pytest.raises(ValueError, match="don't frame tree hash 'sha256'"):
@@ -1976,12 +1985,13 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
 
 def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm90_run):
     """Under ``deferred-a`` a decode call's main lane (the recording stand-in's handle 2) runs pd_commit in mode 1 (``rows_a``:
-    each real row's digest, leaf, seed, line key and E_A line), the forming and the GEMMs; the call's side lane (1) runs
-    the tile leaves and the side lane after it (3) pd_tree (A's levels, seed_A and line_a, and no padding rows' E_A
-    lines, though m₁₆ = 32 has them), on the run's side lanes in turn (tiles on 1, then 3; the tree on 3, then 1), no
-    further stream.  The lanes use the ring's set for the call: A's tree, seed_A, line_a, the keys, C~ and U; E_A's
-    lines are the shape's own, which only the main lane touches.  The call's keys are uploaded into its set's, and A's
-    root is copied to the pass from its set."""
+    each real row's digest, leaf, seed, line key and E_A line), the forming and the GEMMs; below a full tile of rows the
+    call's side lane runs pd_tree (A's levels, seed_A and line_a, and no padding rows' E_A lines, though m₁₆ = 32 has
+    them), then the tile leaves, on the run's side lanes in turn (1, then 3); from a full tile (64) the call's side lane
+    runs the tile leaves and the side lane after it pd_tree (tiles on 1, then 3; the tree on 3, then 1); no further
+    stream.  The lanes use the ring's set for the call: A's tree, seed_A, line_a, the keys, C~ and U; E_A's lines are the
+    shape's own, which only the main lane touches.  The call's keys are uploaded into its set's, and A's root is copied
+    to the pass from its set."""
     make, kernel, weights, roots = sm90_run
     run = make()
     sh = run._shape(32, 256, 1024)
@@ -1993,9 +2003,15 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
         run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     log = [(n, st, p, i) for n, st, p, i in kernel.dev.log if not n.endswith("_smem")]
     sides = [lane.raw for lane in run.sides]
-    assert [(n, st) for n, st, _, _ in log if st in sides] == [(n, st) for tree, tiles in ((3, 1), (1, 3), (3, 1))
-                                                               for n, st in (("pd_tree_851", tree), ("pd_tiles_851", tiles))]
+    assert [(n, st) for n, st, _, _ in log if st in sides] == [(n, st) for lane in (1, 3, 1)
+                                                               for n, st in (("pd_tree_851", lane), ("pd_tiles_851", lane))]
     assert sides == [1, 3] and {st for _, st, _, _ in log if st not in sides} == {2}
+    full = make()
+    kernel.dev.log.clear()
+    for _ in range(3):
+        full.gemm(0, torch.randn(64, 1024).to(torch.bfloat16), weights[0], None)
+    assert [(n, st) for n, st, *_ in kernel.dev.log if st in sides and n.startswith("pd_")] == [
+        (n, st) for tree, tiles in ((3, 1), (1, 3), (3, 1)) for n, st in (("pd_tree_979", tree), ("pd_tiles_979", tiles))]
     by = {name: [(p, i) for n, _, p, i in log if n == name] for name in ("pd_commit_851", "pd_tree_851", "eprime",
                                                                           "gemm_pearlc_d", "pd_tiles_851")}
     ptr = lambda j, x: (sh.keys if j == 0 and x == "keys" else sh.sets[j][x]).data_ptr()
@@ -2027,7 +2043,7 @@ def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_writes_no_padd
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
-    assert [(n, st) for n, st, _, _ in pd] == [("pd_commit_851", 2), ("pd_tree_851", 3), ("pd_tiles_851", 1)]
+    assert [(n, st) for n, st, _, _ in pd] == [("pd_commit_851", 2), ("pd_tree_851", 1), ("pd_tiles_851", 1)]
     assert pd[0][3][2] == 1 and kept == [pd[1][2][2]] and pd[1][2][12] == 0
     run.begin()
     kernel.dev.log.clear()
@@ -2122,10 +2138,11 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
 
 
 def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm90_run, monkeypatch):
-    """A replayed call (`_replay_lanes`) keeps `_lanes`'s order and events: the caller waits for the side steps of its set's
-    last call, uploads the slot and hands over to the main lane, which replays its graph; the side lane after the call's
-    replays A's tree behind the main graph's own event (where A's tree is aside), and the call's side lane the rest behind
-    the main lane's end, then waits for the tree; the caller waits for the main lane.  A set's first call waits for
+    """A replayed call (`_replay_lanes`) keeps `_lanes`'s events: the main lane waits for the side steps of its set's last
+    call and uploads the slot, then waits for the caller and replays its graph; the side lane after the call's replays
+    A's tree behind the main graph's own event (where A's tree is aside, from a full tile of rows), and the call's side
+    lane the rest behind the main lane's end, then waits for the tree; below a full tile the call's side lane replays the
+    tree, then the rest, with no event between them; the caller waits for the main lane.  A set's first call waits for
     nothing, and its side lane's end becomes the set's event."""
     from verity_vllm.protocol_options import pouw_pearl_c_host as PPH
     from verity_vllm.protocol_options import pouw_pearl_c_lanes as PPL
@@ -2150,13 +2167,18 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
                       b"k" * 200)
     run._replay_lanes(types.SimpleNamespace(execs=(20, 0, 22), slot_ptr=8192, ev_tree=None), sh, 0, side0, None, 0, None,
                       b"k" * 200)
+    run._replay_lanes(types.SimpleNamespace(execs=(30, 31, 32), slot_ptr=4096, ev_tree="cut2"), sh, 1, side0, side0, 0, main,
+                      b"k" * 200)
     assert calls == [
-        ("wait", 0, "done1"), ("copy_in", 4096, src(0), 200, 0), ("record", "slot", 0), ("record", "main", 0),
+        ("wait", 2, "done1"), ("copy_in", 4096, src(0), 200, 2), ("record", "slot", 2), ("record", "main", 0),
         ("wait", 2, "main"), ("launch", 10, 2), ("record", "side1", 2), ("wait", 1, "cut"), ("launch", 11, 1),
         ("record", "tree1", 1), ("wait", 3, "side1"), ("launch", 12, 3), ("wait", 3, "tree1"), ("record", "done1", 3),
         ("record", "main", 2), ("wait", 0, "main"),
         ("copy_in", 8192, src(1), 200, 0), ("record", "slot", 0), ("launch", 20, 0), ("record", "side0", 0),
-        ("wait", 1, "side0"), ("launch", 22, 1), ("record", "done0", 1)]
+        ("wait", 1, "side0"), ("launch", 22, 1), ("record", "done0", 1),
+        ("wait", 2, "done1"), ("copy_in", 4096, src(2), 200, 2), ("record", "slot", 2), ("record", "main", 0),
+        ("wait", 2, "main"), ("launch", 30, 2), ("record", "side0", 2), ("wait", 1, "cut2"), ("launch", 31, 1),
+        ("wait", 1, "side0"), ("launch", 32, 1), ("record", "done1", 1), ("record", "main", 2), ("wait", 0, "main")]
     assert sh.done == ["done0", "done1"] and bytes(up.view[i, :200]) == b"k" * 200
 
 
