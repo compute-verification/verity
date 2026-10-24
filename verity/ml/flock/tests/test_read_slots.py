@@ -4,8 +4,8 @@ compute what the flat circuit does on every lane, and a flipped unit row fails i
 input once, each from a port of its width, each stage reading only earlier stages and slots; a cap on a net's ANDs cuts the
 same unit into more stages, none past the cap, computing the same; `net_rows` is every net's laid-out rows, and `ands_cap` the
 most ANDs a slot holds (at the SparseMlaSplitPart T=64 unit's ports: 11,534,336 in 2^24); the automatic caps cut a unit whose
-AND chain overflows its slot into nets of the next slot down, and keep a split no cap shrinks; a unit reading no slot table
-isn't split. Through `UnitStager`, the composed statement names the slots and the last stage's returned outputs (slotted when
+AND chain overflows its slot into nets of the next slot down, taking no more cells than one cap from the unit's ports
+does, and keep a split no cap shrinks; a unit reading no slot table isn't split. Through `UnitStager`, the composed statement names the slots and the last stage's returned outputs (slotted when
 the output words aren't a power of two times 16 bits), and its staged outputs are the IR reference's."""
 from __future__ import annotations
 
@@ -175,6 +175,11 @@ def test_the_automatic_caps_cut_an_overflowing_unit_into_nets_of_the_next_slot_d
     assert RS.net_log(whole.layout.useful) == top and low.caps is not None and whole.caps is None
     assert all(RS.net_log(lay.useful) <= top - 1 for lay in _nets(low)) and _cells(low) < _cells(whole)
     assert sum(lay.counts["ands"] for lay in _nets(low)) == sum(lay.counts["ands"] for lay in _nets(whole))
+    L = RS.net_log(whole.layout.useful) - 1
+    lay = whole.layout
+    uniform = RS.split(C, IN, OUT, "unit/read-slots-chain", SimpleNamespace(id="toy"), _units(4, 3),
+                       stage_ands=RS.ands_cap(L, lay.counts["asserts"], sum(lay.in_bits), sum(lay.out_bits)))
+    assert _cells(low) <= _cells(uniform)
     _check_wires(low)
     rng = np.random.default_rng(13)
     xs = EDGES + [int(v) for v in rng.integers(0, 1 << 32, 22, dtype=np.uint64)]
