@@ -13,6 +13,7 @@
   "Properties.Nci.Threads",
   "Properties.Proofs.Nci",
   "Properties.Proofs.Nci.DescAgree",
+  "Properties.Proofs.Nci.ReadsExact",
   "Properties.Proofs.Nci.Walk",
   "Properties.Proofs.Nci.Novel",
   "Properties.NciDesc",
