@@ -72,6 +72,16 @@ case " $* " in *dither-a-hbc*)
     export DITHER_H1C_KC=$S/libh1c_kc.so
   fi ;;
 esac
+# --bw-passes (dbw.py): the remote bandwidth audit's prover libraries, as remote_session/run.sh builds them (BW_LIB, BW_KV)
+case " $* " in *" --bw-passes"*)
+  nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
+    -o "$S/session.so" benchmarks/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
+    || { echo "sbench: NVCC_FAIL session"; grep -v "^ptxas info" "$OUT/build-session.log" | tail -30; exit 11; }
+  nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=1024 \
+    -DKV_MASK=1 -o "$S/kv.so" benchmarks/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
+    || { echo "sbench: NVCC_FAIL kv"; grep -v "^ptxas info" "$OUT/build-kv.log" | tail -30; exit 11; }
+  export BW_LIB=$S/session.so BW_KV=$S/kv.so ;;
+esac
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
 # the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it,
 # under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o
@@ -79,6 +89,16 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 (cd verity/core/protocols/pouw/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
+# and with --bw-passes the remote audit's verifier of record, under the lock lean_verifier.build takes (BW_LEAN_EXE);
+# BW_PY runs the audit's side (verifier and prover), by default remote_session/run.sh's torch venv
+if [ -n "${BW_LIB:-}" ]; then
+  (mkdir -p verity/core/difftest/lean/.lake && cd verity/core/protocols/remote_bandwidth/lean \
+    && flock "$ROOT/verity/core/difftest/lean/.lake/harness-build.lock" lake build remote-audit-verifier) \
+    > "$OUT/lean-bw-build.log" 2>&1 || { echo "sbench: LEAN_BUILD_FAIL bw"; tail -20 "$OUT/lean-bw-build.log"; exit 13; }
+  export BW_LEAN_EXE=$ROOT/verity/core/protocols/remote_bandwidth/lean/.lake/build/bin/remote-audit-verifier
+  export BW_PY=${BW_PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
+  [ -x "$BW_PY" ] || { echo "sbench: no BW_PY at $BW_PY"; exit 3; }
+fi
 # coins off the node (sbench.py's "Coins"): every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
 # {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX, "rounds": R}}), each its own session
 # from infra's gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on
@@ -154,8 +174,13 @@ if [ -n "${SBENCH_ON:-}" ]; then
   gpu-lease() { command gpu-lease "$1" --on "$SBENCH_ON" "${@:2}"; }
 fi
 echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)${SBENCH_ON:+ on $SBENCH_ON}${GPU_LEASE_TIMED:+ (timed)}"
-nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 2 > "$OUT/smi.csv" 2>/dev/null &
+nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu,memory.used --format=csv -l 2 \
+  > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!
+# SBENCH_MPS=1: in the lease, after the kgate, an MPS control daemon of the run's own for the leased GPU (its pipe and
+# logs under the scratch, so no other process finds it), every process of the run its client, which names the GPU as
+# device 0 within the server's set; quit when the run ends (out/mps-*.log)
+export SBENCH_MPS=${SBENCH_MPS:-} MPS_DIR=$S/mps
 MAX_MIN=${SBENCH_MAX_MIN:-40}
 # SBENCH_PREEMPTIBLE=1: the lease may be taken back by a non-preemptible one (which ends the run unfinished)
 PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
@@ -168,7 +193,18 @@ gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/h
     tail -1 "$0/kgate.log"
     if [ $g -ne 0 ]; then echo "sbench: kgate rc $g, nothing timed"; exit 4; fi
   fi
-  exec timeout $((60 * '"$MAX_MIN"' - 50 - SECONDS)) "$@"' "$OUT" "${NSYS[@]}" "$PY" \
+  if [ "$SBENCH_MPS" = 1 ]; then
+    mkdir -p "$MPS_DIR/pipe" "$MPS_DIR/log"
+    export CUDA_MPS_PIPE_DIRECTORY=$MPS_DIR/pipe CUDA_MPS_LOG_DIRECTORY=$MPS_DIR/log
+    CUDA_VISIBLE_DEVICES=${GPU_LEASE_UUID:?} nvidia-cuda-mps-control -d || { echo "sbench: MPS_FAIL"; exit 16; }
+    export CUDA_VISIBLE_DEVICES=0
+    echo "sbench: MPS on $GPU_LEASE_UUID"
+  fi
+  [ "$SBENCH_MPS" = 1 ] || exec timeout $((60 * '"$MAX_MIN"' - 50 - SECONDS)) "$@"
+  timeout $((60 * '"$MAX_MIN"' - 50 - SECONDS)) "$@"; rc=$?
+  echo quit | nvidia-cuda-mps-control
+  for f in "$MPS_DIR"/log/*.log; do cp "$f" "$0/mps-$(basename "$f")"; done
+  exit $rc' "$OUT" "${NSYS[@]}" "$PY" \
   "$ROOT/benchmarks/hash/dither/${SBENCH_SCRIPT:-sbench.py}" --out "$OUT" --scratch "$S" "$@"
 rc=$?
 kill "$SMI" 2>/dev/null
