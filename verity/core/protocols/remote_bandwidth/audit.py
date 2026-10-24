@@ -686,7 +686,9 @@ class Record:
     (`RequirementLink.mapped`).  `public` is what acceptance makes public;
     `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`).  At `groups_per_coin` g > 1 a window's `profile` counts its share of its draw's openings,
-    and the law is the draw's: `samples` receipts uniform over its g windows' receipts together (`pooled_windows`)."""
+    and the law is the draw's: `samples` receipts uniform over its g windows' receipts together (`pooled_windows`).
+    Given how many land in a window, they are uniform over its receipts, so its own reading holds at its share's
+    count (none at a share of none)."""
 
     registration: bytes
     coins: bytes
