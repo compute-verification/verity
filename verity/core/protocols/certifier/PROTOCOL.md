@@ -587,15 +587,21 @@ them.
     and its salt is drawn at its first ingress tick, t_s. A source of coins handed to the certifier, such as the
     memory challenger's, takes the same place: a function from the PoUW window and the width in bytes to that many
     bytes. A proxy back from maintenance in the middle of a PoUW window has no salt for it.
-  - **Into the block only.** At that tick the certifier enqueues its own salt frame ahead of the bucket's arrivals, and
-    behind any queue carried from the window before (`Bucketer(first=…)`). It is kind `SALT` (3) on `SALT_STREAM`
-    (2^32 − 1), and its payload is u64be p ‖ `PLACEHOLDER`, 64 zero bytes (`SALT_FRAME_BYTES`, 81 bytes, the least
-    ingress frame a salted proxy takes). It takes one of the window's ingress slots like any crossing, so r_in carries
-    honest ingress plus one frame per PoUW window. The `Bucketer` follows it by its place in the queue, never by its
-    bytes (`Bucketer.own`), so a frame of kind `SALT` read from the link, even one of the same bytes, is never taken
-    for the certifier's, and one a fault drops is never released. When the ingress certifier releases it, the proxy
-    writes the frame's header, p and the salt (no fill; the header's length is 8 plus the salt's bytes) on a server
-    connection of its own. The proxy never reads that connection, so nothing the server writes there reaches egress.
+  - **Into the block only.** At that tick the certifier puts its own salt frame at the head of the queue, ahead of the
+    bucket's arrivals and of any queue carried from the window before (`Bucketer(first=…)`, `Certifier.enqueue(…,
+    first=True)`), so it leaves in slot 0 of that bucket, r_in ≥ 1, and every other frame keeps its FIFO order. It is
+    kind `SALT` (3) on `SALT_STREAM` (2^32 − 1), and its payload is u64be p ‖ `PLACEHOLDER`, 64 zero bytes
+    (`SALT_FRAME_BYTES`, 81 bytes, the least ingress frame a salted proxy takes). It takes one of the window's ingress
+    slots like any crossing, so r_in carries honest ingress plus one frame per PoUW window. Released first, it makes a
+    salted window's request frames in each bucket exactly its counts, less one in bucket 0, so where requests end,
+    derived from the signed counts and each request's frames (`id_request_frames`), is the bucket that releases its
+    last frame even when a carried queue fills bucket 0; queued behind that queue, the salt would leave a bucket or
+    more later and move those ends late by one. The head's counts don't read the order, so its encoding, `head_check`
+    and the Lean head model are unchanged. The `Bucketer` follows the salt frame by its place, never by its bytes
+    (`Bucketer.own`), so a frame of kind `SALT` read from the link, even one of the same bytes, is never taken for the
+    certifier's, and one a fault drops is never released. When the ingress certifier releases it, the proxy writes the
+    frame's header, p and the salt (no fill; the header's length is 8 plus the salt's bytes) on a server connection of
+    its own. The proxy never reads that connection, so nothing the server writes there reaches egress.
     The egress side never holds the salt or anything drawn from it: the egress grid, its padding and the wire are the
     unsalted run's.
   - **In the record: nothing of the salt.** The salt frame's bytes and its slot are fixed by the window and the traffic,
@@ -917,8 +923,10 @@ and seven lemmas, and three more proved lemmas:
     without its registration (none, another window's, a receipt or digest that isn't the record's, a provenance its
     reader doesn't read as the window), until its last ingress record is published, and for a salt never drawn;
     `check_salts` accepts the revealed salts and rejects a missing one, one of another width and a second salt frame.
-    The bucketer puts the certifier's own frame first in each window, behind the carried queue, and knows it by its
-    place: a link frame of the same bytes is never taken for it, and one a fault drops is never released;
+    The bucketer puts the certifier's own frame at the head of each window's queue, ahead of the carried queue, and
+    knows it by its place: a link frame of the same bytes is never taken for it, and one a fault drops is never
+    released. With a carried queue that fills a window's first bucket, the request ends derived from the signed counts
+    are the proxy's anchors, and with the salt queued behind that queue they would come out a bucket late;
   - back from maintenance at window 2 of a Program with nothing in window 1, a proxy publishes exactly the full run's
     window-2 records and wire, and hands each frame when the full run does; so do a shaper and a bucketer on random
     instances. A proxy can't start past its windows or with an online prover;
