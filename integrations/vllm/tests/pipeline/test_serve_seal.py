@@ -148,6 +148,76 @@ def test_a_committer_without_the_commit_of_records_parts_is_named():
     assert ss.parts_missing(SimpleNamespace(name="c+plan"), {"identities": []}, hidden_required=False) == []
 
 
+def test_a_steps_stream_starts_with_its_input_ids_then_positions_padded_to_the_token_budget():
+    """`served_record.StepInputPort` acquires the top model's ``input_ids`` and ``positions`` before any module of it commits,
+    each T i64s with zeros past the step's N tokens; a call outside a step (a dummy run) commits nothing."""
+    torch = pytest.importorskip("torch")
+    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
+
+    got: list[tuple[str, list[int]]] = []
+
+    class Model(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.embed_tokens = torch.nn.Embedding(64, 2)
+
+        def forward(self, input_ids, positions):
+            return self.embed_tokens(input_ids) + positions[:, None]
+
+    model = Model()
+    com = SimpleNamespace(model=model, chunk=64, _cur=None, _plan_shape=(3, 2), errors=[],
+                          _acquire=lambda name, t, job: got.append((name, t.dtype, t.tolist())))
+    model.embed_tokens.register_forward_pre_hook(lambda _m, a: com._cur and com._acquire("model.embed_tokens/in", a[0], com._cur))
+    port = StepInputPort(com, 16)
+    port.install()
+    ids, pos = torch.tensor([5, 6, 7, 9], dtype=torch.int32), torch.tensor([0, 1, 4, 0])
+    model(input_ids=ids, positions=pos)
+    assert got == [], "a forward outside a step (vLLM's dummy runs) commits no port"
+    com._cur = SimpleNamespace(step=0)
+    model(input_ids=ids, positions=pos)
+    assert [g[0] for g in got] == [*PORT_NAMES, "model.embed_tokens/in"] and com.errors == []
+    assert got[0][1:] == (torch.int64, [5, 6, 7] + [0] * 13) and got[1][1:] == (torch.int64, [0, 1, 4] + [0] * 13)
+    assert port.extra_step_bytes(None, None) == {"per_step_bytes": 256, "tensors_per_step": 2}
+    assert port.describe() == {"names": list(PORT_NAMES), "T": 16, "IB": 8, "PB": 8, "ids_bytes": [0, 128], "positions_bytes": [128, 256]}
+    port.uninstall()
+    with pytest.raises(ValueError, match="multiple of 8"):
+        StepInputPort(com, 12)
+
+
+def test_a_sealed_windows_context_carries_its_served_rows_and_the_port_its_streams_start_with(tmp_path):
+    torch = pytest.importorskip("torch")
+    from tests.check.opened import commit_steps
+    from verity_vllm.commit import step_rows
+    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
+    from verity_vllm.pipeline import deferred_rows as DR
+
+    def i64(xs, T):
+        return b"".join(int(x).to_bytes(8, "little") for x in [*xs, *[0] * (T - len(xs))])
+
+    com0, _ = commit_steps({0: [("x", b"\0")]}, commit_scheme=step_rows.NAME)
+    T = com0.chunk // 8
+    steps = {0: [(PORT_NAMES[0], i64([1, 2, 3, 4, 5], T), 0, "int64", (T,)), (PORT_NAMES[1], i64([0, 1, 2, 0, 1], T), 1, "int64", (T,)),
+                 ("model.embed_tokens/in", i64([1, 2, 3, 4, 5], 5), 2, "int64", (5,))],
+             1: [(PORT_NAMES[0], i64([7, 8], T), 0, "int64", (T,)), (PORT_NAMES[1], i64([3, 2], T), 1, "int64", (T,))]}
+    com, rc = commit_steps(steps, commit_scheme=step_rows.NAME)
+    com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
+    com.sources = [StepInputPort(com, T)]
+    served = {"digest": "ab" * 64, "statics": {"R": 4, "P": 2}}
+    leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
+            "b0-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
+    reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
+    d = tmp_path / "windows" / "w2"
+    s = ss.seal_window(com, rc, d, rec={"window": 2, "run_id": "t/w2", "steps": 2, "passed": True, "served_rows": served}, reqs=reqs,
+                       request_rows=rows, tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t")
+    r = DR.of_record(s["bundle"], str(d))
+    assert r.ctx["served_window"]["served_rows"] == served
+    assert r.ctx["served_window"]["step_input_port"] == {"names": list(PORT_NAMES), "T": T, "IB": 8, "PB": 8,
+                                                         "ids_bytes": [0, 8 * T], "positions_bytes": [8 * T, 16 * T]}
+    assert s["port_layout"] == {"steps": 2, "at_head": 2, "first_other": None}
+    com._layouts[1] = list(reversed(com._layouts[1]))
+    assert ss.port_layout(com, ss.port_of(com))["first_other"]["head"][0][0] == PORT_NAMES[1]
+
+
 def _other_root(d):
     p = d / "commit" / "runs.jsonl"
     row = json.loads(p.read_text())
