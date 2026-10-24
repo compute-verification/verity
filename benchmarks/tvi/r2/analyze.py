@@ -8,7 +8,8 @@ Each RUN_DIR is a fetched run (`research fetch RUN --all`) whose out/ holds grpo
 result must cover the same GSM8K test problems in the same order (grpo.py reads gsm8k_test.jsonl in file order), which is
 checked. Gains are greedy accuracy over the 1,319 problems; a seed-averaged arm averages per-problem correctness over its
 seeds before the bootstrap, so its interval is over problems only, and the seed spread is reported beside it. An arm with
-a collapsed seed (`collapse_ratio`) is reported twice: over all its seeds, and over the others as `ARM|ok`.
+a collapsed seed (`collapse_ratio`) is reported twice: over all its seeds, and over the others as `ARM|ok`; true minus
+random/format is reported over all seeds and over the `|ok` seeds of each side.
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ def load(run_dirs, task="gsm8k"):
                 method = f"{method}@lr{r['lr']:g}"
             key = (MODELS.get(r["model"], r["model"]), method, r.get("reward", "true"))
             out[key][r.get("seed", 0)] = {
-                "collapse": collapse_ratio(os.path.join(rd, "out", f"{r['label']}.jsonl")),
+                "collapse": collapse_ratio(os.path.join(rd, "out", f"{r['label']}.jsonl")), "reward": key[2],
                 "x": np.asarray(r["per_problem"], dtype=float), "run": os.path.basename(rd.rstrip("/")),
                 "f": np.asarray(r["per_problem_formatted"], dtype=float) if r.get("per_problem_formatted") else None,
                 "fmt": r.get("formatted"), "steps": r["steps"], "lr": r.get("lr"), "S_bits": r["S_bits"],
@@ -48,8 +49,9 @@ def load(run_dirs, task="gsm8k"):
 
 
 def collapse_ratio(path):
-    """Training accuracy on the run's own samples over its last 10 steps, over its best 10-step mean. A run below
-    COLLAPSED diverged: it learned (or began to) and then lost it, whatever its reward."""
+    """Training accuracy on the run's own samples over its last 10 steps, over its best 10-step mean. A true- or
+    format-reward run below COLLAPSED diverged: it learned (or began to) and then lost it. A random-reward run has no
+    objective to lose, so its accuracy only drifts and none of its seeds is set aside."""
     if not os.path.exists(path):
         return None
     a = np.asarray([d.get("acc_reward", d["reward"]) for d in map(json.loads, open(path)) if d.get("event") == "step"])
@@ -62,7 +64,7 @@ COLLAPSED = 0.5
 
 
 def healthy(seeds):
-    return {s: e for s, e in seeds.items() if e["collapse"] is None or e["collapse"] >= COLLAPSED}
+    return {s: e for s, e in seeds.items() if e["reward"] == "random" or e["collapse"] is None or e["collapse"] >= COLLAPSED}
 
 
 def boot(fn, arrays, B=10000, seed=0):
