@@ -4,7 +4,7 @@ import Definitions.Accounting.Gates.Model
 # The registry's primitives, each in one class (trusted)
 
 Every primitive of the registry in exactly one class of the model (`Model.lean`), as the 19:15Z ruling closes the free
-set (note:20261017T1859Z-report-property-redteam), 258 ids: the 194 of `verity/ml/circuits/ops/prims.py` at
+set (note:20261017T1859Z-report-property-redteam), 262 ids: the 194 of `verity/ml/circuits/ops/prims.py` at
 `615eabc13a`; S8-PORT's (`ops/s8.py` and `ops/boolean/s8.py` at `45351115eb`): the s8 family's two steps
 `BlackwellS8ImmaDot32` and `BlackwellU8S8ImmaDot32` and LimbSplit's four limb steps (`S32LowByte`, `S32ByteCarry`,
 `S32ClampS8`, `S32ClampRest`), each as its word Definition (`_v1`) and on bits (`_v2`); PIN's spot check
@@ -15,7 +15,8 @@ and the H1 + fx1 tile's (`verity/core/protocols/pouw/circuit/`'s `segment.py`, `
 `PouwUnitSeeds` and `PouwNoiseBlock`), its digits (`PouwDigitLo`, `PouwDigitHi`, `PouwDigitZ`, `PouwLow8`, `PouwSx8`,
 `PouwResAdd`), its fold (`PouwFx1Absorb`, `PouwXinFinal`, and `PouwXor32`'s `_v2` across lanes) and its one stream
 (`PouwOneStream2`, `PouwOneStream3`, `PouwWrapBits`, `PouwWrapSeg`, `PouwXWrap`, `PouwPeelSeg`), with v4's dead-tile
-mask (`PouwOrBit`, `PouwMask32`, #2902's `PouwH1Tile_v4`). Its exact accumulator
+mask (`PouwOrBit`, `PouwMask32`, #2902's `PouwH1Tile_v4`) and J10-R's call-scope noise (`PouwCallSeeds`, seed_c and
+σ_R a call, and `PouwAdd64`, a block's counter, #3403's `PouwH1Tile_v5` and `_v6`). Its exact accumulator
 `GemmAccumulatorS8_v2{K}` is a body of `BlackwellS8ImmaDot32_v2` steps, not a primitive, and isn't listed.
 
 * **free:** the s8-family steps (`family`, with their operand formats, `k` and clamp or wrap), each the exact dot mod
@@ -224,11 +225,15 @@ def registry : List (String × Class) := [
   ("NvLogf_v2", .budgeted .rounding),
   ("PouwAdd64Hi_v1", .budgeted .rounding),
   ("PouwAdd64Lo_v1", .budgeted .rounding),
+  ("PouwAdd64_v1", .budgeted .rounding),
+  ("PouwAdd64_v2", .budgeted .rounding),
   ("PouwAdd8_v1", .budgeted .rounding),
   ("PouwAddSub8_v1", .budgeted .rounding),
   ("PouwBf16Neg_v1", .budgeted .rounding),
   ("PouwBlackwellE4m3SaltDead_v1", .budgeted .compareSelect),
   ("PouwBlackwellE4m3Window_v1", .budgeted .rounding),
+  ("PouwCallSeeds_v1", .budgeted .rounding),
+  ("PouwCallSeeds_v2", .budgeted .rounding),
   ("PouwCh32_v1", .budgeted .rounding),
   ("PouwChi32_v1", .budgeted .rounding),
   ("PouwDigitHi_v1", .budgeted .rounding),
