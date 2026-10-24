@@ -296,7 +296,7 @@ def test_what_a_ranks_weights_view_holds_on_the_host_is_emptied_not_moved(lease)
     """`acquire.as_loaded`: a TP rank's MXFP4 Marlin experts are on the host as loaded, and every reader after the release reads them
     through the rank's weights view, so the release empties their served copies instead of moving a second one to the host
     (DeepSeek-V4-Pro: 103 of a rank's 110 GB, eight ranks on one node's host memory)."""
-    from verity_vllm.protocol_options import WeightsView
+    from verity_vllm.protocols import WeightsView
 
     lease.cuda.looks = [[], [], [0]]
     for r in lease.ranks:
