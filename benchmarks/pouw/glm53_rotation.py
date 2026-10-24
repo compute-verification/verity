@@ -83,6 +83,9 @@ ADMITTED = ("qa", "kva", "qb", "o", "wqb", "gate", "up", "down", "router", "sgat
 READS = ("qa", "kva", "wk", "wp", "gate", "up", "router", "sgate", "sup", "egate", "eup", "lm")
 WRITES = ("o", "down", "sdown", "edown")
 ROW_PARALLEL = ("o", "down", "sdown", "edown")
+#: each linear's `registration.check_linear` side; eh_proj reads the MTP layer's two rotated inputs and writes its stream
+SIDES = {**{n: REG.READS_RESIDUAL for n in READS + ("eh",)}, **{n: REG.WRITES_RESIDUAL for n in WRITES},
+         **{n: REG.OFF_RESIDUAL for n in ("qb", "kvb", "wqb")}}
 MAP_IDS = {"attn.fused_qkv_a (q_a + kv_a_mqa)": ("qa", "kva"), "attn.q_b": ("qb",), "attn.o": ("o",),
            "indexer.wq_b": ("wqb",), "dense.gate_up": ("gate", "up"), "dense.down": ("down",), "moe.router": ("router",),
            "shared.gate_up": ("sgate", "sup"), "routed.w13": ("egate", "eup"), "lm_head": ("lm",), "eh_proj": ("eh",)}
@@ -844,6 +847,15 @@ def registration() -> dict:
     return out
 
 
+def registered(name: str) -> bool:
+    """Whether `registration.check_linear` registers the linear under ROTATION_8."""
+    try:
+        REG.check_linear((REG.ROTATION_8,), SIDES[name])
+        return True
+    except DomainError:
+        return False
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--snapshot", default=SNAP)
@@ -897,7 +909,9 @@ def main() -> int:
         for n, v in c["reach"].items():
             reach[n] = reach.get(n, False) or v
     doc["reach"] = reach
-    unreached = {n for n in ADMITTED if n in reach and not reach[n]}
+    doc["registered"] = {n: registered(n) for n in SIDES}
+    doc["rule_agrees_with_reach"] = {n: reach[n] == doc["registered"][n] for n in reach}
+    unreached = {n for n in ADMITTED if not doc["registered"][n]}
     doc["admitted_unreached"] = sorted(unreached)
     if a.map:
         lm = doc["lm_head"]
@@ -915,12 +929,13 @@ def main() -> int:
     doc["verdict"] = {"function_worst_rel": worst, "topk_sets_equal": sets, "latent_worst_rel": lat_worst,
                       "vo_worst_rel": vo_worst, "rotated_rows_failing": rot_fail,
                       "exact_rule_agrees": not rows.mismatch,
+                      "check_linear_agrees_with_reach": all(doc["rule_agrees_with_reach"].values()),
                       "registration_accepts_rotation": doc["registration"][f"{[REG.ROTATION_8]} curated=False"] == "accepted",
                       "lm_head_padding_sound": doc["lm_head"]["padded_rows_fail"] and doc["lm_head"]["padded_rows_exact_fail"]
                       and all(doc["lm_head"][s]["credit_over_real_columns_honest"] <= 1 for s in SCHEMES)}
     v = doc["verdict"]
     ok = (worst < EXACT and sets and lat_worst < EXACT and vo_worst < EXACT and v["exact_rule_agrees"]
-          and v["registration_accepts_rotation"] and v["lm_head_padding_sound"])
+          and v["check_linear_agrees_with_reach"] and v["registration_accepts_rotation"] and v["lm_head_padding_sound"])
     doc["seconds"] = round(time.time() - t_start, 1)
     (out / "rotation.json").write_text(json.dumps(doc, indent=1, default=float) + "\n")
     log(json.dumps(doc["verdict"], default=float))
