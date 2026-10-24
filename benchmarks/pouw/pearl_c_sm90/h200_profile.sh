@@ -12,6 +12,8 @@
 #                                                      into $OUT/timing[-graphs]
 #   STAMPS  1 (default 0)                              glm53_profile.py stamps (every in-domain shape at m 16 and 64, serial
 #                                                      and deferred-a), into $OUT/stamps.json
+#   HOST    1 (default 0)                              glm53_profile.py host (a call's host time and its cProfile, at m 16
+#                                                      and 64, SCHEDULES' arms; GRAPHS=1: --graphs too), into $OUT/host[-graphs].json
 #   PASSES  SCHEDULE (default unset)                   glm53_passes.py capture --schedule SCHEDULE (every in-domain shape),
 #                                                      in scratch
 #   TILES   N:K ... (default 512:6144 3072:6144 6144:1536)  glm53_passes.py capture --shapes N:K, a shape at a time, in scratch
@@ -30,8 +32,9 @@ PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
 TIMING=${TIMING-2624:6144} TILES=${TILES-512:6144 3072:6144 6144:1536} PROFILE=${PROFILE:-1} GROUPED=${GROUPED:-0}
 SCHEDULES=${SCHEDULES:-serial} TIMING_M=${TIMING_M:-} GRAPHS=${GRAPHS:-} STAMPS=${STAMPS:-0} PASSES=${PASSES:-}
+HOST=${HOST:-0}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
-export O D PY S TIMING TILES PROFILE GROUPED SCHEDULES TIMING_M GRAPHS STAMPS PASSES
+export O D PY S TIMING TILES PROFILE GROUPED SCHEDULES TIMING_M GRAPHS STAMPS PASSES HOST
 : > "$O/rc.txt"
 mkdir -p "$S/ship" && tar -C "$S/ship" -xf "$IN/ship.tar" && (cd "$S/ship" && sha256sum -c --quiet MANIFEST.sha256)
 echo "ship rc $?" >> "$O/rc.txt"
@@ -57,6 +60,13 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
   if [ "$STAMPS" = 1 ]; then
     "$PY" "$D/glm53_profile.py" stamps --out "$O/stamps.json" > "$O/stamps.log" 2>&1
     echo "stamps rc $?" >> "$O/rc.txt"
+  fi
+  if [ "$HOST" = 1 ]; then
+    for g in "" ${GRAPHS:+-graphs}; do
+      # shellcheck disable=SC2086
+      "$PY" "$D/glm53_profile.py" host --out "$O/host$g.json" --schedule $SCHEDULES ${g:+--graphs} > "$O/host$g.log" 2>&1
+      echo "host$g rc $?" >> "$O/rc.txt"
+    done
   fi
   if [ -n "$PASSES" ]; then
     "$PY" "$D/glm53_passes.py" capture --out "$S/passes" --schedule "$PASSES" > "$O/capture.log" 2>&1
@@ -112,7 +122,7 @@ done
 cat "$O/rc.txt"
 tail -3 "$O/run.err" 2>/dev/null
 grep -E "slowdown|no stock" "$O"/timing*.log 2>/dev/null
-tail -n 40 "$O/stamps.log" "$O/capture.log" "$O/verify.log" "$O/full.log" 2>/dev/null
+tail -n 40 "$O/stamps.log" "$O"/host*.log "$O/capture.log" "$O/verify.log" "$O/full.log" 2>/dev/null
 tail -n 8 "$O"/tiles-*.log "$O/grouped.log" 2>/dev/null
 head -60 "$O/profile/report.txt" 2>/dev/null
 ! grep -qv " rc 0$" "$O/rc.txt"

@@ -28,6 +28,13 @@ each on the stamp twins (`run.Pipeline.stamps`: each phase's end, hash_decode.cu
 the SM's clock).  Per call: each phase's end since its CTA's start by the SM's clock (median and max over the rows' CTAs),
 the CTAs' start and end on the global timer since the first one's start, and the tail's (A's levels, seed_A, the padding
 rows' lines; pd_tree's entry when it runs apart).
+
+  python benchmarks/pouw/pearl_c_sm90/glm53_profile.py host --out DIR/host.json [--shapes N:K ...] [--m M ...] [--schedule S ...] [--graphs]
+
+``host`` (no nsys) reads where a call's host time goes: at each shape (default `HOST_SHAPES`), m (default `STAMP_M`) and
+schedule (default serial, deferred and deferred-a; with hashing, and serial's without), after `WARM` calls, `HOST_CALLS`
+calls back to back, timed by the host's clock (until the last returns) and the GPU's events (until its work ends), then
+as many again under cProfile: each function's own time a call, the `HOST_TOP` largest.
 """
 
 from __future__ import annotations
@@ -55,6 +62,8 @@ HASH_FAST = ("s512_row_segs", "s512_tile_segs", "s512_folds")
 HASH_DECODE = ("pd_commit_", "pd_tiles_", "pd_tree_", "pl_")
 FALLBACKS = ("s512_rows", "s512_tile_leaves")
 STAMP_M = (16, 64)
+HOST_SHAPES = ((512, 6144), (4096, 6144))
+HOST_CALLS, HOST_TOP = 200, 25
 #: hash_decode.cuh's stamp slots: a pd_commit CTA's phases (PS_*), and the tail's (PT_*: level l + 1 at PT_LEVEL + l)
 PS = ("start", "segs", "salt", "frame", "sync1", "fold", "sync2", "leaf", "seed")
 PT = {0: "start", **{1 + level: f"level{level + 1}" for level in range(8)}, 9: "seed_a", 10: "fillers", 11: "entry"}
@@ -221,6 +230,71 @@ def stamps_mode(a) -> int:
     return 0 if rows else 1
 
 
+def host_mode(a) -> int:
+    import cProfile
+    import pstats
+    import time
+
+    import torch
+    import glm53_timing as T
+
+    shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(HOST_SHAPES)
+    schedules = a.schedule or ["serial", "deferred", "deferred-a"]
+    run, weights, kernel, gen = T.device_run(shapes, a.scheme, a.cubin, schedules[0], a.graphs)
+    arms = [(sc, True) for sc in schedules] + [(schedules[0], False)]
+    rows = []
+
+    def calls(f, n):
+        s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        torch.cuda.synchronize()
+        s.record()
+        t = time.perf_counter()
+        for _ in range(n):
+            f()
+        host = (time.perf_counter() - t) * 1e6 / n
+        if run.side is not None and run.side.stream is not None:
+            torch.cuda.current_stream().wait_stream(run.side.stream)
+        e.record()
+        e.synchronize()
+        return host, s.elapsed_time(e) * 1e3 / n
+
+    for w, W in weights.items():
+        n, k = W.shape
+        for m in a.m or STAMP_M:
+            x = torch.randn(m, k, device=W.device, generator=gen).to(torch.bfloat16)
+            for sc, hashing in arms:
+                run.end_pass(schedule=sc)
+                run.hashing = hashing
+
+                def f():
+                    run.gemm(w, x, W, None)
+                for _ in range(WARM):
+                    f()
+                host_us, gpu_us = calls(f, HOST_CALLS)
+                prof = cProfile.Profile()
+                prof.enable()
+                prof_host_us, _ = calls(f, HOST_CALLS)
+                prof.disable()
+                st = pstats.Stats(prof)
+                top = sorted(((v[2], v[3], fn) for fn, v in st.stats.items()), reverse=True)[:HOST_TOP]
+                row = {"n": n, "k": k, "m": m, "schedule": sc, "hashing": hashing, "graphs": run._graphed(-(-m // 16) * 16),
+                       "host_us": host_us, "events_us": gpu_us, "profiled_host_us": prof_host_us,
+                       "own_us": [{"fn": f"{fn[0].rsplit('/', 2)[-1]}:{fn[1]}({fn[2]})", "own": tt * 1e6 / HOST_CALLS,
+                                   "cum": ct * 1e6 / HOST_CALLS} for tt, ct, fn in top]}
+                rows.append(row)
+                print(f"{n}:{k} m{m} {sc} {'hash' if hashing else 'nohash'}{' graphs' if row['graphs'] else ''}: host "
+                      f"{host_us:.1f} us a call, events {gpu_us:.1f} (profiled host {prof_host_us:.1f}); own: "
+                      + ", ".join(f"{t['fn']} {t['own']:.1f}" for t in row["own_us"][:12]), flush=True)
+            run.end_pass(schedule=schedules[0])
+            run.hashing = True
+    out = {"scheme": a.scheme, "device": torch.cuda.get_device_name(), "cubin_sha256": kernel.cubin_sha256,
+           "kernel_source_sha256": kernel.source_sha256, "warm": WARM, "calls": HOST_CALLS, "rows": rows}
+    if a.out:
+        Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.out).write_text(json.dumps(out, indent=1) + "\n")
+    return 0 if rows else 1
+
+
 def _columns(db, table: str) -> set[str]:
     return {r[1] for r in db.execute(f"PRAGMA table_info({table})")}
 
@@ -357,19 +431,23 @@ def print_report(out: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("mode", choices=("run", "report", "stamps"))
+    p.add_argument("mode", choices=("run", "report", "stamps", "host"))
     p.add_argument("sqlite", nargs="?", help="report: nsys's SQLite export")
-    p.add_argument("--out", help="report, stamps: the JSON to write")
+    p.add_argument("--out", help="report, stamps, host: the JSON to write")
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin")
     p.add_argument("--shapes", nargs="*", help="N:K (default run: the two expert shapes; stamps: every in-domain linear)")
     p.add_argument("--m", nargs="*", type=int)
-    p.add_argument("--schedule", nargs="*", help="stamps: the schedules (default serial and deferred-a)")
+    p.add_argument("--schedule", nargs="*", help="stamps: the schedules (default serial and deferred-a); host: (default "
+                                                  "serial, deferred and deferred-a)")
+    p.add_argument("--graphs", action="store_true", help="host: calls of up to 256 rows replayed as CUDA graphs")
     a = p.parse_args(argv)
     if a.mode == "run":
         return run_mode(a)
     if a.mode == "stamps":
         return stamps_mode(a)
+    if a.mode == "host":
+        return host_mode(a)
     out = report(*load(a.sqlite))
     print_report(out)
     if a.out:
