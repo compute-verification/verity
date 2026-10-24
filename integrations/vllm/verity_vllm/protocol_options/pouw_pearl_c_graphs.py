@@ -4,6 +4,13 @@ weight's device slot, which a forward's first call fills for the whole forward i
 uploads its own), and in its last launch screens its rows into the pass's flags and copies its leaves and A root there.  The same kernels write the same bytes as
 the eager steps, which the e2e's ``graphs`` gate holds.
 
+Under a schedule with a side lane (`pouw_pearl_c_lanes`), a call of decode's rows keeps its lanes and ring but replays each
+lane's steps as one graph (`_lane_graph`), one pair a pipeline and ring set: the main lane's, ending with a scatter of its
+flags (and A's root, where A's tree stays there), and the side lane's, ending with a scatter of the leaves (and A's root,
+where the tree runs there).  Both read the pair's own slot, the call's keys and offsets in one upload, which waits for the
+side lane's last use of the set, as the set's other buffers do.  So the call's host work is a few launches, and the next
+call's main lane runs beside this one's side lane, as eagerly.
+
 Inside vLLM's own capture of a whole decode forward (`pouw_pearl_c_whole`, between `whole_capture_begin` and
 `whole_capture_end`), a call launches the same steps into vLLM's capture instead, and is recorded; at each replay of that
 forward no call's Python runs, so the forward's host work is done at once, around vLLM's launch of the replay: before it,
@@ -39,6 +46,8 @@ GRAPH_ROWS = 256
 #: with ``graphs``, each weight's slot of per-call inputs its graph reads: dom_a ‖ unit (168 bytes, padded), and
 #: the byte offsets of the call's leaves, flags and A root in the pass's buffers (three int64)
 SLOT_BYTES = 176
+#: a lane graph's slot (`_lane_graph`): dom_a ‖ unit padded to `SLOT_BYTES`, then the call's three offsets
+LANE_SLOT_BYTES = SLOT_BYTES + 24
 
 
 def _capturing() -> bool:
@@ -56,6 +65,12 @@ class _Graph:
     steps: list = field(default_factory=list)
     #: where a deferred whole capture splits `steps` (`_call_cuts`): the end of A's tree, the start of the tile hashing
     cuts: tuple[int, int] = (0, 0)
+    #: a lane graph's (`_lane_graph`): the side lane's graph and steps, and the slot both lanes read (dom_a ‖ unit, then the
+    #: call's offsets at `SLOT_BYTES`, `offs`)
+    side: Any = None
+    side_steps: list = field(default_factory=list)
+    slot: Any = None
+    offs: Any = None
 
 
 @dataclass(frozen=True)
@@ -255,6 +270,64 @@ class GraphCalls:
         """Whether calls of m₁₆ rows replay as graphs (`graphs`, the serial schedule), reading their keys and offsets from
         their weight's slot."""
         return self.graphs and m16 <= GRAPH_ROWS and not self.schedule.side and self.schedule.main_priority != "greatest"
+
+    def _lane_graphed(self, sh: Any, side: list) -> bool:
+        """Whether a call of `sh` replays each lane's steps as a graph (`graphs`, a side lane, at most `GRAPH_ROWS` rows,
+        the GEMM untimed)."""
+        return self.graphs and bool(side) and sh.m16 <= GRAPH_ROWS and not self.time_gemm
+
+    def _lane_graph(self, w: int, sh: Any, pipe: Any, steps: list, side: list, m: int, tiles: int,
+                    aside: bool) -> tuple[_Graph, bool]:
+        """A call's lane graphs on the ring set it took (`sh.j`), and whether they screen it (`_graph_key`'s rule: no filler
+        rows).  Made at their first call, over buffers of their own for y, the leaves and the slot, with `pipe` pointed at
+        those (the caller has pointed it at the set's): the main lane's steps, then (when it screens, or A's tree stays on
+        the main lane) one scatter of the flags and A's root; the side lane's steps, then one scatter of the leaves (and A's
+        root when the tree is there); each scatter at the offsets in the slot.  That call runs the steps eagerly, and
+        `_capture_lanes` captures them."""
+        import torch
+        rows = m if m == sh.m16 else 0
+        key = ("lanes", w, sh.m16, self.omit, self.hashing, self.schedule.name, rows, aside, sh.j)
+        g = self._graphs.get(key)
+        if g is None:
+            g = _Graph(torch.empty((sh.mp, pipe.n), dtype=torch.bfloat16, device=self.device), _zeros(self.nb * tiles, self.device))
+            g.slot = _zeros(LANE_SLOT_BYTES, self.device)
+            g.offs = g.slot[SLOT_BYTES:LANE_SLOT_BYTES].view(torch.int64)
+            if self.cur.poison is not None:
+                g.y.view(torch.uint8).fill_(self.cur.poison)
+                g.leaves.fill_(self.cur.poison)
+            pipe.b["y"], pipe.b["leaves"] = g.y.data_ptr(), g.leaves.data_ptr()
+            size, nb = pipe.size["tree_a"], self.nb
+            root, flags, none, leaves = sh.buf("tree_a")[size - nb:size], self.flag_buf.view(-1), g.leaves[:0], g.leaves[:nb * tiles]
+            xa, alpha, aux = sh.xa, sh.b["alpha_a"], sh.b["aux_a"]
+            g.steps = list(steps)
+            if rows or not aside:
+                g.steps.append(lambda: scatter_into(xa, alpha, aux, rows, flags, none, self.leaves, none if aside else root,
+                                                    self.roots_buf, g.offs))
+            g.side_steps = [*side, lambda: scatter_into(xa, alpha, aux, 0, flags, leaves, self.leaves, root if aside else none,
+                                                        self.roots_buf, g.offs)]
+            self._graphs[key] = g
+        return g, rows > 0
+
+    def _capture_lanes(self, g: _Graph) -> None:
+        """`g`'s lanes' steps captured as its two graphs, after the call that made it ran them eagerly (their first use syncs:
+        the GEMMs' shared-memory probes)."""
+        import torch
+        capture = torch.cuda.Stream(device=self.device)
+        capture.wait_stream(torch.cuda.current_stream(self.device))
+        made = []
+        for steps in (g.steps, g.side_steps):
+            graph = torch.cuda.CUDAGraph()
+            with torch.cuda.stream(capture):
+                graph.capture_begin(capture_error_mode="thread_local")
+                self.kernel.dev.stream = capture.cuda_stream
+                try:
+                    for f in steps:
+                        f()
+                finally:
+                    graph.capture_end()
+            made.append(graph)
+        torch.cuda.current_stream(self.device).wait_stream(capture)
+        g.graph, g.side = made
 
     def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
         """A call's byte offsets in the pass's buffers: its leaves, its flags, its A root."""

@@ -1994,10 +1994,10 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
     assert run.end()["schedule"] == "deferred-a"
 
 
-def test_deferred_a_keeps_as_tree_on_the_main_lane_in_a_retained_pass_and_at_m64_has_no_padding_lines(sm90_run, tmp_path):
-    """A retained pass's record reads A's tree as the call ends, so there pd_commit runs whole (mode 0) on the main lane and
-    the call keeps its set's tree; only the tile leaves go aside.  At m₁₆ = 64, the kernels' tile, pd_tree writes no padding
-    rows' lines."""
+def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_at_m64_has_no_padding_lines(sm90_run, tmp_path):
+    """A retained pass's record reads A's tree once the side lane is done with it, so there too pd_commit runs in mode 1 on
+    the main lane and pd_tree on the side lane, and the record keeps the tree of the call's set.  At m₁₆ = 64, the kernels'
+    tile, pd_tree writes no padding rows' lines."""
     make, kernel, weights, _ = sm90_run
     run = make()
     run.begin(retain=str(tmp_path / "kept"), run=RUN)
@@ -2006,8 +2006,8 @@ def test_deferred_a_keeps_as_tree_on_the_main_lane_in_a_retained_pass_and_at_m64
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
-    assert [(n, st) for n, st, _, _ in pd] == [("pd_commit_851", 2), ("pd_tiles_851", 1)] and pd[0][3][2] == 0
-    assert kept == [pd[0][2][2]]
+    assert [(n, st) for n, st, _, _ in pd] == [("pd_commit_851", 2), ("pd_tree_851", 1), ("pd_tiles_851", 1)]
+    assert pd[0][3][2] == 1 and kept == [pd[1][2][2]]
     run.begin()
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(64, 1024).to(torch.bfloat16), weights[0], None)

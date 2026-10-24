@@ -355,7 +355,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
             "host": {"keys": "native sha512", "screen": "fused (Triton)" if self.fused_screen else "torch"},
             "schedule": None,
-            "graphs": (f"calls of at most {GRAPH_ROWS} rows, serial schedule"
+            "graphs": (f"calls of at most {GRAPH_ROWS} rows: the serial schedule's one graph a call, a side lane's schedule's "
+                       f"one a lane and ring set"
                        + (", a whole capture's tile hashing beside the next call" if whole_defer else "")) if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
@@ -557,9 +558,12 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
             sh.j, sh.rot = 0, ()
             y, screened = self._graph_call(w, sh, pipe, raw, tiles, m, index, caller)
             return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias, screened, scattered=self.hashing)
+        aside = "a_tree" in self._side_groups(sh)
+        if self._lane_graphed(sh, side):
+            g, screened = self._lanes(w, sh, pipe, steps, side, raw, caller, index, aside, graph=(m, tiles))
+            return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, g.y.clone(), lead, bias, screened, scattered=True)
         y = torch.empty((sh.mp, wt.n), dtype=torch.bfloat16, device=x.device)
         pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + self.nb * cur.tiles
-        aside = "a_tree" in self._side_groups(sh)
         self._lanes(w, sh, pipe, steps, side, raw, caller, index, aside)
         return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias,
                            rows=x2 if x2.is_contiguous() and x2.dtype == torch.bfloat16 else None, scattered=aside)
@@ -579,6 +583,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
                 screen_into(flags, sh.xa[:m] if rows is None else rows, sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)
             cur.flag_rows += m
             if cur.retain is not None:
+                if "a_tree" in self._side_groups(sh) and self.side.stream is not None:   # A's tree is the side lane's
+                    self.torch_stream(self.stream()).wait_stream(self.side.stream)
                 self._retained(cur, cur.matmuls[-1], m, flags, *self._kept(sh, pipe))
             cur.tiles += tiles
         out = y[:m] if bias is None else y[:m] + bias

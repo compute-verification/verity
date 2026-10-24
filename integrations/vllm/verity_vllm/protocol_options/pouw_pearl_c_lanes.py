@@ -8,8 +8,8 @@ calls go on, and the rest of the call runs on a main lane of the run's own at th
 stream by events on both sides (``deferred-caller`` leaves it on the caller's stream, #564's first cut).
 
 Under ``deferred-a`` A's tree goes beside the tile hashing too, where the kernel's pipeline splits A's commitment
-(`run.Pipeline`'s ``split_a``: ``rows_a``, pd_commit's mode 1, then ``tree_seed_a``, pd_tree), with hashing, outside a
-retained pass (its record reads the tree as the call ends; `LaneCalls._aside`).  The main lane keeps the per-row keying
+(`run.Pipeline`'s ``split_a``: ``rows_a``, pd_commit's mode 1, then ``tree_seed_a``, pd_tree), with hashing
+(`LaneCalls._aside`); a retained pass's record reads the tree once the side lane is done.  The main lane keeps the per-row keying
 forming reads (``row_seeds``: each real row's digest, seed, line key and E_A line), and the side lane builds A's levels,
 seed_A, line_a and the padding rows' E_A lines under it, then copies A's root to the pass.  The padding rows (m₁₆ … the
 kernels' tile, outside the matmul) are the GEMM's alone: no tile leaf reads them (the leaves stop at m₁₆ rows) and y is
@@ -24,10 +24,13 @@ format can't run is refused (`schedule_of`).
 """
 from __future__ import annotations
 
+import struct
 from contextlib import nullcontext
 from typing import Any
 
 from verity.core.protocols.pouw.serving import SCHEDULES, Schedule, StepIO, hash_format, schedule_refusals
+
+from .pouw_pearl_c_graphs import SLOT_BYTES
 
 #: each call step's group (`verity.core.protocols.pouw.serving.GROUPS`), which a schedule places on a lane.  The per-row
 #: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
@@ -77,14 +80,15 @@ def schedule_of(name: str | Schedule, scheme: Any, kernel: Any = None) -> Schedu
 
 class LaneCalls:
     """`PearlCDeviceRun`'s lanes, as its base class: the run's ``schedule``, ``main``, ``side``, ``hashing``, ``cur``,
-    ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``roots`` and ``roots_buf``."""
+    ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``roots`` and ``roots_buf``, and its graph path's lane graphs
+    (`GraphCalls._lane_graph`, ``_capture_lanes``, ``_offsets``)."""
 
     def _aside(self, sh: Any) -> bool:
         """Whether a call of `sh` runs A's tree on the side lane (the module's docstring): the schedule moves ``a_tree``,
-        hashing is on, the pass isn't retained, and the kernel's pipeline splits A's commitment at this shape (pd's)."""
+        hashing is on, and the kernel's pipeline splits A's commitment at this shape (pd's)."""
         R = self.kernel.run
-        return ("a_tree" in self.schedule.side and self.hashing and self.cur is not None and self.cur.retain is None
-                and splits(self.kernel) and R.pd_variant(sh.m16, sh.n, sh.k) is not None)
+        return ("a_tree" in self.schedule.side and self.hashing and splits(self.kernel)
+                and R.pd_variant(sh.m16, sh.n, sh.k) is not None)
 
     def _side_groups(self, sh: Any) -> frozenset[str]:
         """The groups a call of `sh` runs on the side lane, with hashing: the schedule's, but A's tree only `_aside`."""
@@ -93,11 +97,14 @@ class LaneCalls:
         return frozenset(g for g in self.schedule.side if g != "a_tree" or self._aside(sh))
 
     def _lanes(self, w: int, sh: Any, pipe: Any, steps: list, side: list, raw: int, caller: Any, index: int,
-               aside: bool) -> None:
-        """A call's steps launched eagerly on the schedule's lanes: the main lane (the caller's stream, or the run's own after
-        an event on the caller's), then, behind an event after it, the side lane on the ring's next set, which ends with A's
-        root copied to the pass when A's tree is there (`aside`).  The keys go to the set's own when the ring rotates them,
-        once the side lane is done with the set."""
+               aside: bool, graph: tuple[int, int] | None = None) -> tuple[Any, bool]:
+        """A call's steps launched on the schedule's lanes: the main lane (the caller's stream, or the run's own after an event
+        on the caller's), then, behind an event after it, the side lane on the ring's next set, which ends with A's root
+        copied to the pass when A's tree is there (`aside`).  The keys go to the set's own when the ring rotates them, once
+        the side lane is done with the set.  With `graph` (the call's m and tiles; `_lane_graphed`), each lane replays its
+        steps as one graph of the set's (`_lane_graph`, made, run eagerly and captured at its first call), whose slot takes
+        the keys and the call's offsets in one copy, once the side lane is done with the set; returns the graphs and whether
+        they screened the call ((None, False) without)."""
         import torch
         cuda = self.device.type == "cuda"
         main = self.main if self.schedule.main_priority == "greatest" else None
@@ -108,14 +115,21 @@ class LaneCalls:
             sh.turn += 1
             pipe.b.update({x: sh.sets[j][x].data_ptr() for x in rot if x != "keys"})
         sh.j, sh.rot = j, rot
-        keys = sh.buf("keys")
+        g, screened = None, False
+        if graph is not None:
+            g, screened = self._lane_graph(w, sh, pipe, steps, side, *graph, aside)
+            steps, side = g.steps, g.side_steps
+        keys = sh.buf("keys") if g is None else g.slot
         pipe.keys.update(dom_a=keys.data_ptr(), unit=keys.data_ptr() + self.nb)
         waited = False
         if self.hashing:
-            if cuda and "keys" in rot and sh.done[j] is not None:   # the side lane may still read set j's keys
+            if cuda and ("keys" in rot or g is not None) and sh.done[j] is not None:   # the side lane may still read set j's keys
                 caller.wait_event(sh.done[j])
                 waited = True
-            self.uploads.put(keys, self.keys(self.roots[w], index, sh.m16), caller if self.uploads.cuda else None)
+            data = self.keys(self.roots[w], index, sh.m16)
+            if g is not None:
+                data = data.ljust(SLOT_BYTES, b"\0") + struct.pack("<3q", *self._offsets(index, self.cur.tiles, self.cur.flag_rows))
+            self.uploads.put(keys, data, caller if self.uploads.cuda else None)
         if cuda and main is not None:               # the main lane starts after the caller's x, y and keys
             main.event.record(caller)
             lane.wait_event(main.event)
@@ -124,16 +138,24 @@ class LaneCalls:
         self._launching = lane
         self.kernel.dev.stream = lane_raw
         try:
-            for f in steps:
-                f()
+            with torch.cuda.stream(lane) if g is not None else nullcontext():
+                if g is not None and g.graph is not None:
+                    g.graph.replay()
+                else:
+                    for f in steps:
+                        f()
             if side:
                 if cuda:
                     self.side.event.record(lane)
                     self.side.stream.wait_event(self.side.event)
                 self.kernel.dev.stream = self.side.raw
-                for f in side:
-                    f()
-                if aside:
+                with torch.cuda.stream(self.side.stream) if g is not None else nullcontext():
+                    if g is not None and g.side is not None:
+                        g.side.replay()
+                    else:
+                        for f in side:
+                            f()
+                if aside and g is None:
                     size, nb = pipe.size["tree_a"], self.nb
                     with torch.cuda.stream(self.side.stream) if cuda else nullcontext():
                         self.roots_buf[nb * index:nb * (index + 1)].copy_(sh.buf("tree_a")[size - nb:size])
@@ -143,6 +165,9 @@ class LaneCalls:
             if cuda and main is not None:           # the caller reads y (and A's root, on the main lane) only after it
                 main.event.record(lane)
                 caller.wait_event(main.event)
+            if g is not None and g.graph is None:
+                self._capture_lanes(g)
         finally:
             self.kernel.dev.stream = None
             self._launching = None
+        return g, screened

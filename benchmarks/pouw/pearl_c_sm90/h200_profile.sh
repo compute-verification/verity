@@ -14,13 +14,14 @@
 #                                                      and deferred-a), into $OUT/stamps.json
 #   HOST    1 (default 0)                              glm53_profile.py host (a call's host time and its cProfile, at m 16
 #                                                      and 64, SCHEDULES' arms; GRAPHS=1: --graphs too), into $OUT/host[-graphs].json
-#   PASSES  SCHEDULE (default unset)                   glm53_passes.py capture --schedule SCHEDULE (every in-domain shape),
-#                                                      in scratch
+#   PASSES  SCHEDULE (default unset)                   glm53_passes.py capture --schedule SCHEDULE (every in-domain shape;
+#                                                      GRAPHS=1: --graphs), in scratch
 #   TILES   N:K ... (default 512:6144 3072:6144 6144:1536)  glm53_passes.py capture --shapes N:K, a shape at a time, in scratch
 #   PROFILE 1 (default)                                glm53_profile.py run under nsys (the expert shapes at m 16 and 2,048), into $OUT/profile
 #   GROUPED 1 (default 0; the ship's cubin must have the grouped kernels)  grouped_check.py, its passes in scratch
-# Then, the lease released: PASSES' replay (glm53_passes.py verify --fast) and full check (full: every tile and every served y
-# word; their JSON and manifests into $OUT/passes), each TILES shape's passes' scalar replay (glm53_passes.py verify without
+# Then, the lease released: PASSES' replay (glm53_passes.py verify --fast) and full check of FULL_PASSES (default decode; full:
+# every tile and every served y word; their JSON and manifests into $OUT/passes), both under nice with FULL_JOBS jobs (default
+# 8 of the VM's 16 CPUs, which a GPU session beside them shares), each TILES shape's passes' scalar replay (glm53_passes.py verify without
 # --fast: every drawn tile on the reference chain; their JSON and manifests into $OUT/tiles/NxK), the profile's SQLite export
 # and report, and the grouped passes' replay (--fast).  VERITY_BENCH_VENV and
 # CUDA as h200.sh.  Every step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.
@@ -69,7 +70,7 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
     done
   fi
   if [ -n "$PASSES" ]; then
-    "$PY" "$D/glm53_passes.py" capture --out "$S/passes" --schedule "$PASSES" > "$O/capture.log" 2>&1
+    "$PY" "$D/glm53_passes.py" capture --out "$S/passes" --schedule "$PASSES" ${GRAPHS:+--graphs} > "$O/capture.log" 2>&1
     echo "capture $PASSES rc $?" >> "$O/rc.txt"
   fi
   for sh in $TILES; do
@@ -87,9 +88,10 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
   fi'
 echo "lease rc $?" >> "$O/rc.txt"
 if [ -f "$S/passes/capture.json" ]; then
-  "$PY" "$D/glm53_passes.py" verify --out "$S/passes" --fast --jobs "$(nproc)" > "$O/verify.log" 2>&1
+  nice -n 19 "$PY" "$D/glm53_passes.py" verify --out "$S/passes" --fast --jobs "${FULL_JOBS:-8}" > "$O/verify.log" 2>&1
   echo "verify rc $?" >> "$O/rc.txt"
-  "$PY" "$D/glm53_passes.py" full --out "$S/passes" --jobs "$(nproc)" > "$O/full.log" 2>&1
+  # shellcheck disable=SC2086
+  nice -n 19 "$PY" "$D/glm53_passes.py" full --out "$S/passes" --jobs "${FULL_JOBS:-8}" --passes ${FULL_PASSES:-decode} > "$O/full.log" 2>&1
   echo "full rc $?" >> "$O/rc.txt"
   mkdir -p "$O/passes" && cp "$S"/passes/*.json "$O/passes/"
   for m in "$S"/passes/*/manifest.json; do

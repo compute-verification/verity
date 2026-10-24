@@ -110,7 +110,7 @@ class _Uploads:
     """Small host-to-device copies through a pinned ring allocated once: each is one copy on the current stream, and a slot is
     written again only once its last copy is done (its event)."""
 
-    def __init__(self, device: Any, slots: int = UPLOAD_SLOTS, width: int = 176):
+    def __init__(self, device: Any, slots: int = UPLOAD_SLOTS, width: int = 256):
         import torch
         self.cuda, self.slots, self.i = device.type == "cuda", slots, 0
         self.host = torch.zeros((slots, width), dtype=torch.uint8, pin_memory=self.cuda)

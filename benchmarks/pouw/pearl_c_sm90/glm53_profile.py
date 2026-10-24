@@ -266,7 +266,7 @@ def host_mode(a) -> int:
                 run.end_pass(schedule=sc)
                 run.hashing = hashing
 
-                def f():
+                def f(w=w, x=x, W=W):
                     run.gemm(w, x, W, None)
                 for _ in range(WARM):
                     f()

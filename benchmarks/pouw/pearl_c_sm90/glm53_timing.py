@@ -10,7 +10,9 @@ Arms, each one linear's call on a BF16 x of M rows:
 - ``pearlc``: `pouw_pearl_c_device.PearlCDeviceRun.gemm` (``pearl-c-h100-v1-h3`` on this directory's kernels, under
   ``--schedule``'s first, default serial, hashing on) inside an open pass, each sample closed only after any side lane's
   work; the pass's end (its tile tree) is timed apart, once per sample, as ``pass_end``;
-- ``pearlc-S``: the same under each further schedule S of ``--schedule``, each sample's pass begun under it;
+- ``pearlc-S``: the same under each further schedule S of ``--schedule``, each sample's pass begun under it (with
+  ``--graphs``, a schedule with a side lane replays each lane's steps as a graph, `pouw_pearl_c_graphs`);
+- ``pearlc-eager``: with ``--graphs``, ``pearlc`` with its calls launched eagerly, as without;
 - ``pearlc-nohash``: ``pearlc`` with hashing off (A's tree, E_A's lines, the leaves and the records skipped);
 - ``deepgemm``: vLLM's per-token-group FP8 quant (ue8m0 scales) and DeepGEMM ``fp8_gemm_nt`` on the weight's 128 x 128
   blocks, its scales ue8m0: what the pinned vLLM serves from 32 tokens (FlashInfer below 32 is not timed here);
@@ -339,7 +341,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--m", nargs="*", type=int, help="M (default decode's and prefill's; --whole: decode's)")
     p.add_argument("--schedule", nargs="+", default=["serial"],
                    help="pearlc's schedule, then each further arm's (verity.core.protocols.pouw.serving.SCHEDULES)")
-    p.add_argument("--graphs", action="store_true", help="pearlc's calls of up to 256 rows replayed as CUDA graphs (serial only)")
+    p.add_argument("--graphs", action="store_true", help="pearlc's calls of up to 256 rows replayed as CUDA graphs (a side lane's schedule: one a lane)")
     p.add_argument("--whole", action="store_true", help="decode's forward captured whole, serial and deferred (whole.json)")
     a = p.parse_args(argv)
     import torch
@@ -386,7 +388,9 @@ def main(argv: list[str] | None = None) -> int:
                   f"{'equal' if r['poisoned_equal'] else 'DIFFER'}", flush=True)
             (out / "whole.json").write_text(json.dumps({**head, "rows": rows}, indent=1) + "\n")
         return 0 if all(r["commitments_equal"] and r["poisoned_equal"] for r in rows) else 1
-    pearls = {("pearlc" if i == 0 else f"pearlc-{sc}"): sc for i, sc in enumerate(a.schedule)}
+    pearls = {("pearlc" if i == 0 else f"pearlc-{sc}"): (sc, a.graphs) for i, sc in enumerate(a.schedule)}
+    if a.graphs:
+        pearls["pearlc-eager"] = (a.schedule[0], False)
     for w, W in weights.items():
         n, k = W.shape
         arms, errors = stock_arms(W)
@@ -396,18 +400,19 @@ def main(argv: list[str] | None = None) -> int:
             x = torch.randn(m, k, device=dev, generator=gen).to(torch.bfloat16)
             ys = {}
 
-            def pearlc(nm: str, hashing: bool, schedule: str, x=x, w=w, W=W):
-                """The arm's call, and before it a fresh pass under `hashing` and `schedule` (the open pass ended)."""
+            def pearlc(nm: str, hashing: bool, schedule: str, graphs: bool, x=x, w=w, W=W):
+                """The arm's call, and before it a fresh pass under `hashing`, `schedule` and `graphs` (the open pass
+                ended)."""
                 def f():
                     ys[nm] = run.gemm(w, x, W, None)
 
                 def before():
                     run.end_pass(schedule=schedule)
-                    run.hashing = hashing
+                    run.hashing, run.graphs = hashing, graphs
                 return f, before, run.end_pass
 
-            calls = {**{nm: pearlc(nm, True, sc) for nm, sc in pearls.items()},
-                     "pearlc-nohash": pearlc("pearlc-nohash", False, a.schedule[0]),
+            calls = {**{nm: pearlc(nm, True, sc, g) for nm, (sc, g) in pearls.items()},
+                     "pearlc-nohash": pearlc("pearlc-nohash", False, a.schedule[0], a.graphs),
                      **{nm: ((lambda f=f, x=x: f(x)), None, None) for nm, f in arms.items()}}
             names = list(calls)
             for f, before, after in calls.values():       # warm-up: buffers, graphs of torch's allocator, autotuning
@@ -435,9 +440,9 @@ def main(argv: list[str] | None = None) -> int:
                         samples[nm].append(timed(f, before, after, host=host[nm]))
             want, y_want = ends["pearlc"][0], ys["pearlc"].clone()
             agree = {}
-            for nm, sc in pearls.items():
+            for nm, (sc, g) in pearls.items():
                 run.end_pass(schedule=sc)
-                run.hashing = True
+                run.hashing, run.graphs = True, g
                 run.poison()
                 for _ in range(INNER):
                     calls[nm][0]()
@@ -445,7 +450,7 @@ def main(argv: list[str] | None = None) -> int:
                 agree[nm] = {"commitment": all(c == want for c in ends[nm]), "y": y_equal[nm],
                              "poisoned": poisoned == want, "poisoned_y": same_bits(ys[nm], y_want)}
             run.end_pass(schedule=a.schedule[0])
-            run.hashing = True
+            run.hashing, run.graphs = True, a.graphs
             med = {nm: statistics.median(v) for nm, v in samples.items()}
             stock = {nm: med[nm] for nm in arms}
             best = min(stock, key=stock.get) if stock else None
@@ -454,7 +459,8 @@ def main(argv: list[str] | None = None) -> int:
                    "host_ms": {nm: statistics.median(v) for nm, v in host.items()},
                    "pass_end_ms": statistics.median(pass_end["pearlc"]),
                    "pass_end_ms_by_arm": {nm: statistics.median(v) for nm, v in pass_end.items()},
-                   "schedules": pearls, "stock_errors": errors, "fastest_stock": best,
+                   "schedules": {nm: sc for nm, (sc, _) in pearls.items()},
+                   "graphed": {nm: g for nm, (_, g) in pearls.items()}, "stock_errors": errors, "fastest_stock": best,
                    "slowdown": med["pearlc"] / stock[best] if best else None,
                    "slowdowns": {nm: med[nm] / stock[best] for nm in pearls} if best else None,
                    "slowdown_nohash": med["pearlc-nohash"] / stock[best] if best else None, "gamma": gam,
