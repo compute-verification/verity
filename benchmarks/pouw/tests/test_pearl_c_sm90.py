@@ -105,11 +105,30 @@ def test_a_persistent_gemm_leaves_a_launch_beside_it_the_sms_it_holds():
     grids = []
     dev = SimpleNamespace(sms=132, launch=lambda name, grid, *a, **k: grids.append(grid))
     pipe = SimpleNamespace(GEMM_SMEM={"gemm_pearlc_d": 1}, boxes={("at", "bt"): RUN.gemm_tile("gemm_pearlc_d")}, dev=dev, k=4096,
-                           b=dict.fromkeys(("at", "bt", "c", "tma"), 0))
+                           b=dict.fromkeys(("at", "bt", "c", "tma"), 0), m_real=16)
     for beside, n, grid in ((0, 28672, None), (1, 28672, None), (1, 28672, 64), (1, 4096, None)):
         pipe.beside = beside
         RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, n, grid=grid)
     assert grids == [132, 131, 64, 64] and RUN.Pipeline.beside == 0
+
+
+def test_a_64_by_64_gemm_stores_its_real_rows_alone(monkeypatch):
+    """A 64 x 64 GEMM's i4 (live) is m_real where filler rows follow it (LIVE), so the kernel stores no filler row's C~, U
+    or y; with no filler rows, at another tile, under PEARLC_LIVE=0 (LIVE false) it is 0, all M; a given live is taken."""
+    lives = []
+    dev = SimpleNamespace(sms=132, launch=lambda name, grid, *a, i, **k: lives.append(i[4]))
+    pipe = SimpleNamespace(GEMM_SMEM={"gemm_pearlc_d": 1, "gemm_words_d": 1}, dev=dev, k=4096, beside=0, m_real=16,
+                           boxes={("at", "bt"): RUN.gemm_tile("gemm_pearlc_d"), ("at", "fbT32"): RUN.gemm_tile("gemm_words_d")},
+                           b=dict.fromkeys(("at", "bt", "fbT32", "c", "af", "tma"), 0))
+    RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096)
+    RUN.Pipeline.gemm(pipe, "gemm_words_d", "at", "fbT32", 64, 32, out=("af",))
+    RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096, live=40)
+    pipe.m_real = 64
+    RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096)
+    pipe.m_real = 16
+    monkeypatch.setattr(RUN, "LIVE", False)
+    RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, 4096)
+    assert lives == [16, 0, 40, 0, 0]
 
 
 def test_operands_are_in_natural_order():

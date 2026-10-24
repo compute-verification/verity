@@ -171,7 +171,8 @@ template <int NA> DEV void acc_fence(float* d) {
 //   PEARLC_S  PEARLC without storing C~ or U (only y): the call without hashing
 // GR (the grouped calls, grouped.py): A's rows are many units' one after another, and p12 holds each 64-row block's expert e
 // (int32); a tile's B and P_B rows are its expert's, rows e N + tn BN of the experts' stacked B side, and its columns' scales
-// cs + e N.  C~, U and y are A's rows by N, as without it.
+// cs + e N.  C~, U and y are A's rows by N, as without it.  i4 (live, 0 for all M): rows from live on are filler, whose
+// C~, U and y are not stored (their products are still computed, as a wgmma tile's 64 rows are one instruction's).
 enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S };
 constexpr int BK = 128, PEEL_ROW = 128, SMEM_BUDGET = 200 * 1024, MAX_STAGES = 8;
 struct Maps { uint8_t a[128], b[128], pa[128], pb[128]; };
@@ -206,7 +207,7 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
   static_assert(!PEEL || BN >= 64, "the peel's wgmma is n64 or n128");
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (sa(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE;
-  const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3];
+  const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3], live = a.i[4] ? a.i[4] : M;
   const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KB = K / BK;
   const int tid = threadIdx.x, wg = tid / 128;
   const int* ex = reinterpret_cast<const int*>(a.p[12]);
@@ -304,6 +305,7 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
     }
 
     const int row = tm * TM + wg * 64 + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
+    const bool live0 = row < live, live1 = row + 8 < live;
     float* C = reinterpret_cast<float*>(a.p[2]);
     float* U = reinterpret_cast<float*>(a.p[3]);
     uint16_t* Y = reinterpret_cast<uint16_t*>(a.p[4]);
@@ -315,15 +317,15 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       for (int j = 0; j < NA / 4; j++) {
         const int col = col0 + 8 * j;
         const float c0 = cs[col], c1 = cs[col + 1];
-        store_y(Y + (size_t)row * N + col, total[4 * j], total[4 * j + 1], r0, c0, c1);
-        store_y(Y + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3], r1, c0, c1);
+        if (live0) store_y(Y + (size_t)row * N + col, total[4 * j], total[4 * j + 1], r0, c0, c1);
+        if (live1) store_y(Y + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3], r1, c0, c1);
       }
     } else if constexpr (STORE_C) {
 #pragma unroll
       for (int j = 0; j < NA / 4; j++) {
         const int col = col0 + 8 * j;
-        store2(C + (size_t)row * N + col, total[4 * j], total[4 * j + 1]);
-        store2(C + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3]);
+        if (live0) store2(C + (size_t)row * N + col, total[4 * j], total[4 * j + 1]);
+        if (live1) store2(C + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3]);
       }
     }
     if constexpr (PEEL) {
@@ -345,11 +347,11 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
         const int col = col0 + 8 * j;
         const float c0 = cs[col], c1 = cs[col + 1];
         if constexpr (STORE_U) {
-          store2(U + (size_t)row * N + col, total[4 * j], total[4 * j + 1]);
-          store2(U + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3]);
+          if (live0) store2(U + (size_t)row * N + col, total[4 * j], total[4 * j + 1]);
+          if (live1) store2(U + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3]);
         }
-        store_y(Y + (size_t)row * N + col, total[4 * j], total[4 * j + 1], r0, c0, c1);
-        store_y(Y + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3], r1, c0, c1);
+        if (live0) store_y(Y + (size_t)row * N + col, total[4 * j], total[4 * j + 1], r0, c0, c1);
+        if (live1) store_y(Y + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3], r1, c0, c1);
       }
     }
   }

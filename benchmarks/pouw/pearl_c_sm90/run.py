@@ -8,7 +8,8 @@ libcuda.so.1, stdlib only, nothing built on the card).
 1. The check.  At check.json's shape (fixture.py's), every kernel runs on the fixture's inputs and every buffer it writes is
    compared byte for byte with the fixture, for the variant `h100` (pearl-c-h100-v1-h3: G = 4, hashing format -h3, SHA-512
    throughout); the GEMMs, with gemm_pearlc_s (y alone), are re-run on all, 1 and 3 CTAs and compared again
-   (`<buffer>@<step>/<tile>/grid<n>`), at each of the three tiles (bm128: 128 x 128, n64: 128 x 64, bm64: 64 x 64).
+   (`<buffer>@<step>/<tile>/grid<n>`), at each of the three tiles (bm128: 128 x 128, n64: 128 x 64, bm64: 64 x 64), and
+   at 64 x 64 on LIVE_ROWS real rows (`check_live`): the real rows the fixture's, the rest as the memset left them.
    hash_decode.cuh's served launches (whole, split, and the whole's stamp twins: `check_pd`) write every output they own
    over a poison (0xA5) and must match; the no-write control must not.  So do A's commit launches past them under each chain (`check_chains`: "pl", hash_prefill.cuh's, and "h3"),
    and over each of CHAIN_WIDE_ROWS' rows (two-byte ranks and indices, prefill's M) "pl" must write "h3"'s bytes.  A
@@ -26,7 +27,7 @@ libcuda.so.1, stdlib only, nothing built on the card).
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="h100", PEARLC_CHAIN="pl",
-                                 PEARLC_LIBCUDA, PEARLC_LIBNVML)
+                                 PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_LIVE=0 for decode's 64 x 64 GEMMs storing all m rows)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -49,6 +50,9 @@ NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, a
 BM, BM_D, BN_N64, WORDS_N, RASTER = 128, 64, 64, 32, 8
 PEEL_ROW = 128                  # the peel factors' bytes a row (64 BF16 words)
 VARIANT_G = {"h100": 4}
+#: the 64 x 64 GEMMs store the real rows alone (i4 = m_real: a filler row's C~, U and y are left as the buffer holds them);
+#: PEARLC_LIVE=0 stores all m rows, the same real rows
+LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: every GEMM's operand pair, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + MAP_SET * slot: the chain's (P_A, P_B
 #: the peel's), the words' (A'F_B, B~F_A, G) and the baselines' (A and B again for the tail, which they don't load)
@@ -664,7 +668,8 @@ class Pipeline:
                 self.dev.free(p)
 
     def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0,
-             dg=0, key=0):
+             dg=0, key=0, live: int | None = None):
+        """`live`: the rows from 0 whose products are stored (i4; 0 all M), by default m_real at 64 x 64 tiles (LIVE)."""
         if name not in self.GEMM_SMEM:
             probe = self.dev.alloc(16)
             self.dev.launch(name + "_smem", 1, 1, p=(probe,))
@@ -676,12 +681,14 @@ class Pipeline:
         if self.boxes.get((a, b)) != (tm, bn):
             raise ValueError(f"{name} takes {tm} x {bn} tiles, and ({a}, {b})'s maps are {self.boxes.get((a, b))}")
         tiles = (M // tm) * (N // bn)
+        if live is None:
+            live = self.m_real if LIVE and (tm, bn) == (BM_D, BM_D) and self.m_real < M else 0
         ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0, dg, self.b["tma"] + MAP_SET * MAPS[(a, b)], key]
         for slot, x in zip((2, 3, 4), out):
             ptrs[slot] = self.b[x] if x else 0
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
         self.dev.launch(name, min(tiles, grid or self.dev.sms - self.beside), gemm_threads(name), self.GEMM_SMEM[name], p=ptrs,
-                        i=(M, N, self.k, RASTER))
+                        i=(M, N, self.k, RASTER, live))
 
     def extra(self) -> dict[str, object]:
         """The chain's launches by name, beside `steps`' choice: `gemm_pearlc_cu` (C~, U and y stored) and `gemm_pearlc_s`
@@ -935,6 +942,36 @@ def check_widen(dev: Dev, man: dict, load) -> dict:
     return res
 
 
+#: the real rows of `check_live`'s GEMMs: a row block with real rows past a warp's first eight, then whole filler blocks
+LIVE_ROWS, LIVE_FILL = 40, 0xAB
+
+
+def check_live(dev: Dev, pipe: Pipeline, want) -> dict:
+    """The A side's GEMMs of GEMM_RERUNS (all but bf, over B's rows) at 64 x 64 on LIVE_ROWS real rows (i4): each output's
+    real rows against the fixture's, and its filler rows as LIVE_FILL's memset left them."""
+    res = {}
+    p_ = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, bm=BM_D,
+                  bn=BM_D, weight=pipe.weight)
+    steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps()}}
+    real = p_.gemm
+    p_.gemm = lambda *a, **kw: real(*a, **{**kw, "live": LIVE_ROWS})
+    for step, outs in GEMM_RERUNS:
+        if step == "bf":
+            continue
+        for o in outs:
+            dev.ck("cuMemsetD8_v2", u64(pipe.b[o]), LIVE_FILL, pipe.size[o])
+        steps[step]()
+        dev.sync()
+        for o in outs:
+            w = want(ALIASES.get(o, o))
+            got, cut = dev.read(pipe.b[o], len(w)), LIVE_ROWS * (len(w) // pipe.m)
+            res[f"{o}@{step}/live{LIVE_ROWS}"] = {"ok": got[:cut] == w[:cut] and got[cut:] == bytes([LIVE_FILL]) * (len(w) - cut),
+                                                  "bytes": len(w)}
+    p_.gemm = real
+    p_.free()
+    return res
+
+
 def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
     m, n, k = man["shape"]
     load = lambda d, f: open(os.path.join(base, d, f["file"]), "rb").read()  # noqa: E731
@@ -981,6 +1018,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
                     for o in outs:
                         res[f"{o}@{step}/{tag}/grid{grid or 'all'}"] = compare(dev, pipe, o, want(ALIASES.get(o, o)))
             p_.free()
+        res.update(check_live(dev, pipe, want))
         pipe.free()
         dev.free(xa)
         dev.free(xb)
