@@ -24,7 +24,9 @@ discard rule). `FIELDS` is the table of every I1 field: its verdict, derivation,
   it is sent, forced by the certified id count;
 - `hits`: the prefix-cache hit of each request that hits, in blocks, forced by the prompts' history but not checked yet;
 - `resumes`: each resumed row's re-hit, unless the pool bound rules preemption out, which the verifier checks;
-- `finish_eos`: async mode only, a bit a request (`output_len` subtracts the decode the scheduler ran after the stop);
+- `lag`: async mode only, a bit for each request whose last two sampling rows are in consecutive steps: whether the last
+  one ran after the stop (the async scheduler schedules a request's next decode before it reads the sample, then drops
+  that decode's), which `output_len` subtracts; forced by the committed ids (a lag follows a stop id);
 - `ns`: n where the walk can't derive it: only when the rows aren't in scheduling order (the budget left is unknown);
 - `release`: each step's egress bucket on an unshaped egress, where its choices are the timing channel; none on a
   shaped one, where `served.derive` fixes them from the ingress anchors, the output lengths and the declared sync.
@@ -117,7 +119,7 @@ class Residual:
     prompt_len: tuple[int, ...]
     hits: dict[int, int] = field(default_factory=dict)
     resumes: dict[tuple[int, int], int] | None = None
-    finish_eos: tuple[bool, ...] | None = None
+    lag: tuple[bool, ...] | None = None
     ns: tuple[int, ...] = ()
     release: tuple[int, ...] | None = None
 
@@ -198,20 +200,25 @@ def pool_bound(rows: Sequence[Sequence[tuple[int, int, int]]], cfg: Config) -> b
 
 @dataclass(frozen=True)
 class Walk:
-    """What the walk gives back in the clear: every row's I1 fields, each request's output length, and the step of each
-    explicit n it read."""
+    """What the walk gives back in the clear: every row's I1 fields, each request's output length, the step of each
+    explicit n it read, and the requests it read a lag bit for."""
     rows: tuple[tuple[Row, ...], ...]
     output_len: tuple[int, ...]
     explicit_n: tuple[int, ...]
+    lag_requests: tuple[int, ...]
 
 
 def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], hits: dict[int, int],
-          resumes: dict[tuple[int, int], int] | None, finish_eos: Sequence[bool] | None, cfg: Config,
-          n_of: Callable[[int, int], int]) -> Walk:
-    """The one derivation (the module's docstring). `n_of(s, k)` gives n where the walk can't derive it."""
+          resumes: dict[tuple[int, int], int] | None, cfg: Config, n_of: Callable[[int, int], int],
+          lag_of: Callable[[int], bool]) -> Walk:
+    """The one derivation (the module's docstring). `n_of(s, k)` gives n where the walk can't derive it, and `lag_of(i)`
+    whether request i's last sampling row ran after its stop, asked in async mode only of a request whose last two
+    sampling rows are in consecutive steps (the async scheduler schedules a request's next decode before it reads the
+    sample, so only there can a dropped one follow the stop)."""
     resumed_at = resumes or {}
     end: dict[int, int] = {}
     samples: dict[int, int] = {}
+    sample_steps: dict[int, list[int]] = {}
     built, explicit = [], []
     for s, step in enumerate(rows):
         used, out = 0, []
@@ -237,17 +244,23 @@ def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], hits: dict[i
             used += n
             if start + n >= K:
                 samples[i] = samples.get(i, 0) + 1
+                sample_steps.setdefault(i, []).append(s)
             end[i] = start + n
             out.append(Row(i, "prefill" if start < P else "decode", start, n, start if first else 0, resumed))
         built.append(tuple(out))
-    output_len = []
+    output_len, lagged = [], []
     for i in range(len(prompt_len)):
         if i not in samples:
             raise ValueError(f"request {i} never sampled")
-        output_len.append(samples[i] - (1 if finish_eos is not None and finish_eos[i] else 0))
+        steps_i = sample_steps[i]
+        lag = False
+        if cfg.scheduler == "async" and len(steps_i) >= 2 and steps_i[-1] == steps_i[-2] + 1:
+            lag = lag_of(i)
+            lagged.append(i)
+        output_len.append(samples[i] - lag)
     if resumes is None and not pool_bound([[(r.request, r.start, r.n) for r in step] for step in built], cfg):
         raise ValueError("no resumes sent, but the rows don't keep within the KV pool")
-    return Walk(tuple(built), tuple(output_len), tuple(explicit))
+    return Walk(tuple(built), tuple(output_len), tuple(explicit), tuple(lagged))
 
 
 def residual(advice: Advice, cfg: Config, *, shaped: bool = False) -> Residual:
@@ -259,20 +272,36 @@ def residual(advice: Advice, cfg: Config, *, shaped: bool = False) -> Residual:
     hits = {r.request: r.cache_hit // cfg.block_size for st in advice.steps for r in st.rows if r.cache_hit}
     resumes = None if pool_bound([[(r.request, r.start, r.n) for r in st.rows] for st in advice.steps], cfg) else {
         (s, k): r.start for s, st in enumerate(advice.steps) for k, r in enumerate(st.rows) if r.preempted}
-    finish_eos = tuple(a.finish == "eos" for a in advice.requests) if cfg.scheduler == "async" else None
     ns: list[int] = []
+    lags: list[bool] = []
+    walk_rows = [[(r.request, r.start, r.n) for r in st.rows] for st in advice.steps]
 
     def n_of(s: int, k: int) -> int:
         ns.append(advice.steps[s].rows[k].n)
         return ns[-1]
 
-    _walk(rows, prompt_len, hits, resumes, finish_eos, cfg, n_of)
-    return Residual(rows, prompt_len, hits, resumes, finish_eos, tuple(ns), None if shaped else tuple(advice.release))
+    def lag_of(i: int) -> bool:
+        lags.append(_sampling_rows(walk_rows, i, advice.requests[i].prompt_len) - advice.requests[i].output_len == 1)
+        return lags[-1]
+
+    _walk(rows, prompt_len, hits, resumes, cfg, n_of, lag_of)
+    return Residual(rows, prompt_len, hits, resumes, tuple(lags) if cfg.scheduler == "async" else None, tuple(ns),
+                    None if shaped else tuple(advice.release))
+
+
+def _sampling_rows(rows: Sequence[Sequence[tuple[int, int, int]]], i: int, P: int) -> int:
+    k = 0
+    for step in rows:
+        for j, start, n in step:
+            if j == i and start + n >= P + k:
+                k += 1
+    return k
 
 
 def reconstruct(res: Residual, cfg: Config) -> Walk:
     """The public fields from the residual and the config alone: what the compiler and N2-ADVICE read."""
     ns = iter(res.ns)
+    lags = iter(res.lag or ())
 
     def n_of(s: int, k: int) -> int:
         n = next(ns, None)
@@ -280,9 +309,15 @@ def reconstruct(res: Residual, cfg: Config) -> Walk:
             raise ValueError("residual: fewer explicit n than rows that need one")
         return n
 
-    walk = _walk(res.rows, res.prompt_len, res.hits, res.resumes, res.finish_eos, cfg, n_of)
-    if next(ns, None) is not None:
-        raise ValueError("residual: more explicit n than rows that need one")
+    def lag_of(i: int) -> bool:
+        lag = next(lags, None)
+        if lag is None:
+            raise ValueError("residual: fewer lag bits than requests that need one")
+        return lag
+
+    walk = _walk(res.rows, res.prompt_len, res.hits, res.resumes, cfg, n_of, lag_of)
+    if next(ns, None) is not None or next(lags, None) is not None:
+        raise ValueError("residual: more explicit n or lag bits than the rows need")
     return walk
 
 
@@ -320,8 +355,9 @@ def rebuild(res: Residual, cfg: Config, held: Holdings, release: Sequence[int]) 
     read only on a shaped egress, where N2-ADVICE derives it."""
     walk = reconstruct(res, cfg)
     requests = tie_fields(walk, res.prompt_len, held, cfg)
-    if res.finish_eos is not None and [r.finish == "eos" for r in requests] != list(res.finish_eos):
-        raise ValueError("residual: a finish bit disagrees with the stop rule")
+    for i, lag in zip(walk.lag_requests, res.lag or (), strict=True):
+        if lag and requests[i].finish != "eos":
+            raise ValueError(f"request {i}: a decode after its last output, which no stop id ended")
     return Advice(tuple(requests), tuple(StepAdvice(rows) for rows in walk.rows),
                   tuple(res.release if res.release is not None else release))
 
@@ -333,7 +369,7 @@ V0 = {"id": "utf8", "prompt_len": 16, "output_len": 16, "finish": 1, "rows_in_st
 """The widths assumed for I1's fixed-width codec until ADV-SPEC's `bits` lands; `id` is its UTF-8 bytes and a length
 byte."""
 
-FORCED = ("prompt_len", "hits", "finish", "resumes")
+FORCED = ("prompt_len", "hits", "lag", "resumes")
 """The residual's fields that only witness fixes but a public consumer needs: sent, and forced once a check holds them."""
 
 
@@ -370,22 +406,23 @@ def v0_bits(advice: Advice, buckets: int, widths: dict = V0) -> dict[int, dict[s
 
 def derived_bits(res: Residual, advice: Advice, cfg: Config, buckets: int, widths: dict = V0) -> dict[int, dict[str, int]]:
     """The residual's bits per window, at v0's widths for what it keeps: rows (rows_in_step and request), prompt_len,
-    hits (a flag a request, a start-width block count each hit), finish (async), resumes (a count a window, then a row
-    index and a start each), ns and release."""
+    hits (a flag a request, a start-width block count each hit), lag (async: a bit each request that needs one), resumes
+    (a count a window, then a row index and a start each), ns and release."""
     wins, first = _windows(advice, buckets)
     out: dict[int, dict[str, int]] = {}
     for i in range(len(advice.requests)):
         _add(out, first[i], "prompt_len", widths["prompt_len"])
         _add(out, first[i], "hits", 1 + (widths["start"] if i in res.hits else 0))
-        if res.finish_eos is not None:
-            _add(out, first[i], "finish", widths["finish"])
     for s, step in enumerate(res.rows):
         _add(out, wins[s], "rows_in_step", widths["rows_in_step"])
         _add(out, wins[s], "request", widths["request"] * len(step))
         if res.release is not None:
             _add(out, wins[s], "release", widths["release"])
-    for s in reconstruct(res, cfg).explicit_n:
+    walk = reconstruct(res, cfg)
+    for s in walk.explicit_n:
         _add(out, wins[s], "n", widths["n"])
+    for i in walk.lag_requests:
+        _add(out, first[i], "lag", 1)
     if res.resumes is not None:
         for w in set(wins):
             _add(out, w, "resumes", 16)
@@ -437,12 +474,19 @@ FIELDS = [
      "chunk is P - start), so it is public", "checker": "tie",
      "cost": "a 16-bit equality of the certified count with a public value: 15 ANDs a request"},
     {"field": "output_len", "verdict": "derived", "bits": "0", "from": "rows (public); forced by the committed sampled ids",
-     "derivation": "the request's sampling rows (async: less 1 when finish is eos)", "checker": "compiler, N2-ADVICE; tie",
+     "derivation": "the request's sampling rows (async: less the lag bit)", "checker": "compiler, N2-ADVICE; tie",
      "cost": "0 in the clear; the tie's stop rule: is_stop on each committed id (3 stop ids of 17 bits: 3*16 + 2 = 50 ANDs), "
              "L <= max_tokens and L == max_tokens (16 + 15): 50 L + 31 ANDs a request"},
-    {"field": "finish", "verdict": "derived (sync); forced (async)", "bits": "0 (sync) / 1 a request (async)",
-     "from": "committed sampled ids, certified max_tokens", "derivation": "eos iff the last committed id is a stop id",
+    {"field": "finish", "verdict": "derived", "bits": "0", "from": "committed sampled ids, certified max_tokens",
+     "derivation": "eos iff the last committed id is a stop id, else length (max_tokens or the model's length)",
      "checker": "tie", "cost": "0 beyond the stop rule"},
+    {"field": "lag (new, async only)", "verdict": "forced", "bits": "1 a request whose last two sampling rows are in consecutive steps",
+     "from": "committed sampled ids", "derivation": "the last sampling row ran after the stop: its sample is dropped",
+     "checker": "tie (a lag follows a stop id)", "cost": "0 beyond the stop rule"},
+    {"field": "rows[k].request", "verdict": "stays", "bits": "16 a row, and 16 a step for its row count",
+     "from": "the scheduler's choices", "derivation": "none here: which requests each step runs, in scheduling order, "
+     "depends on the arrival times, the timing channel (ENC-REPLAY's piece)", "checker": "compiler (the Programs' shapes)",
+     "cost": "0"},
     {"field": "start", "verdict": "derived", "bits": "0", "from": "rows' history",
      "derivation": "the request's previous row's end; its first row's is its cache hit, a resumed row's its re-hit",
      "checker": "compiler", "cost": "0"},

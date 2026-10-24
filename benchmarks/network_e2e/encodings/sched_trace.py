@@ -120,7 +120,7 @@ def run(*, seed: int = 0, rate: float = 3.0, seconds: float = 150.0, num_blocks:
     produced = [0] * len(reqs)                    # samples the runner has returned (or will) for each request
     outputs: list[list[int]] = [[] for _ in reqs]
     steps: list[dict] = []
-    clock, admitted = 0.0, 0
+    clock, admitted, idle = 0.0, 0, 0
     inflight: list[tuple] = []
     depth = 2 if async_scheduling else 1
 
@@ -167,13 +167,22 @@ def run(*, seed: int = 0, rate: float = 3.0, seconds: float = 150.0, num_blocks:
         ids = list(so.num_scheduled_tokens)
         out = ModelRunnerOutput(req_ids=ids, req_id_to_index={r: k for k, r in enumerate(ids)}, sampled_token_ids=sampled,
                                 logprobs=None, prompt_logprobs_dict={}, pooler_output=[])
-        tokens = sum(r["n"] for r in rows)
-        if rows:
-            clock += (base_ms + per_token_ms * tokens) / 1000.0
+        if not rows:
+            while inflight:
+                finish_one()
+            sched.update_from_output(so, out)
+            idle += 1
+            if admitted < len(reqs):
+                clock = max(clock, reqs[admitted]["arrival_s"])
+            elif idle > 3 and not inflight:
+                raise RuntimeError("the scheduler schedules nothing with requests left")
+        else:
+            idle = 0
+            clock += (base_ms + per_token_ms * sum(r["n"] for r in rows)) / 1000.0
             steps.append({"t_end_s": round(clock, 6), "rows": rows})
-        inflight.append((so, rows, out))
-        if len(inflight) >= depth or not rows:
-            finish_one()
+            inflight.append((so, rows, out))
+            if len(inflight) >= depth:
+                finish_one()
         for rid, req in objs.items():
             i = index[rid]
             if req.is_finished() and "finish" not in reqs[i]:
