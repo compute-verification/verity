@@ -27,7 +27,7 @@ case "$MODE" in
       > "$OUT/keep.json"
     "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py serve --passes "$PASSES" --out "$OUT/served.json" "$@" ;;
   verify)
-    "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "${PASSES:?the serve run's passes directory}" \
+    "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "${PASSES:?set PASSES to the serve run passes directory}" \
       --out "$OUT/verify.json" "$@" ;;
   *) echo "served_passes.sh: serve or verify, not $MODE" >&2; exit 2 ;;
 esac
