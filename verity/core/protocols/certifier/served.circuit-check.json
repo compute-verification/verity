@@ -1,10 +1,13 @@
 {
  "definitions": {
   "NetworkServedCounts_v1{T=12,FOUT=3,FIN=2,R=2,RIN=2,OWN=1}": {
-   "and": 4932
+   "and": 4918
   },
   "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=0}": {
-   "and": 3476
+   "and": 3438
+  },
+  "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=1}": {
+   "and": 3502
   }
  },
  "digests": {
@@ -19,6 +22,9 @@
   },
   "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=0}": {
    "sha512": "c1a379d7110d5057d4e9c072eac2c9bd45d38647e8357309c2ac50c9ca0f959f397e4f0fc2f126e066a91c1b85a5ebb619c0c788d478e6ed4daffafd36ccb462"
+  },
+  "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=1}": {
+   "sha512": "dd9595b85dbf8dbca9e098bfdd30877f94cd9dc66622176d65098bc4bbbc2aced55d9f21068544a3820695e6cb57737b929047178a5c6a0fc68d547fb51cf247"
   }
  }
 }

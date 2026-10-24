@@ -3,9 +3,10 @@ schedule, so it rebuilds the framing of every connection it carries.
 
 The warden runs on an auditor host (`trusted-host`; co-located with the server for tonight's demo, a named
 assumption). It terminates each client's TCP connection, opens one to the server for it, and forwards each direction's
-bytes unchanged in content: no tokenizer, API, request or stop string is the warden's. What it decides is the framing
-and the timing, both public functions of the schedule (`WardenParams`), and it certifies every cell it sends with the
-certifier's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
+bytes unchanged in content: no tokenizer, API, request or stop string is the warden's. The one addition is the release
+order on the server's copy of an HTTP request (`release`): what the warden decides is the framing and the timing, both
+public functions of the schedule (`WardenParams`), and it certifies every cell it sends with the certifier's grid
+(`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
 
 **Cells.** Every cell is B = `cell_bytes` bytes, `active.encode_frame(kind, ordinal, payload)`: the header (kind u8,
 the connection's ordinal u32, the payload's length u32), at most P = B − 9 payload bytes, zero fill. `DATA` carries
@@ -15,8 +16,9 @@ the same way: byte k of a direction is in its cell ⌊k/P⌋, so a cell's conten
 they were read. The client speaks cells both ways through a thin, workload-blind shim (`cells`, `Shim`); the server
 gets the ingress payloads as bytes (co-located tonight; deployed, its own shim strips the cells as the client's does).
 
-**Admission.** The k-th connection to arrive has ordinal k. At most `lanes` connections are served at once; one that
-arrives with every lane taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell and is closed.
+**Admission.** The k-th connection to arrive, from 0, has ordinal k + 1, as the active certifier's `Requests` streams
+it: ordinal 0 is no connection's. At most `lanes` connections are served at once; one that arrives with every lane
+taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell, on ordinal 0, and is closed.
 The queue's head is admitted at the first bucket with a free lane, and holds that lane, r cells a bucket each way,
 until its last bucket. Nothing admitted is dropped or reordered.
 
@@ -25,9 +27,11 @@ each way from s on:
 - ingress: the client's bytes as `DATA` cells, as soon as a whole cell's bytes have arrived, then `END` once the
   client's `END` cell (or its end of stream) has arrived, `PAD` in a slot with neither; the bucket of the `END` is a,
   and ingress has no cells after it. Ingress must end within `ingress_buckets` buckets and `ingress_cells` cells. Its
-  release never waits on the server: what it releases before the server's connection opens is buffered for the server
-  (at most the `ingress_cells` cells' bytes the ingress bound allows; past them the connection fails closed) and
-  written once it opens;
+  release never waits on the server: the server gets a connection's ingress whole once its `END` is released, as
+  `release.with_release` puts it, N the count of `END`s the warden released before (so the order of the `END` cells
+  in the ingress records) and the run the warden's `run_id`; what it releases before then, or before the server's
+  connection opens, is held for the server (at most the `ingress_cells` cells' bytes the ingress bound allows; past
+  them the connection fails closed, and the server gets none of it);
 - egress: `PAD` in every slot of the buckets before s + D, D = `delay`; then egress cell i is in bucket
   s + D + ⌊i/r⌋, slot i mod r: `DATA` with the server's bytes iP … (i+1)P − 1 if it has sent them, else `END` with its
   remaining 0 … P bytes if it has ended, else `FAIL` (late): the cell's deadline passed. The rest of the bucket of
@@ -61,6 +65,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import math
+import secrets
 import time
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable, Sequence
@@ -69,8 +74,10 @@ from functools import cached_property
 from typing import Any
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
-from verity.core.protocols.certifier.active import DATA, HEADER, PAD, decode_frame, encode_frame, precise_sleep
+from verity.core.protocols.certifier.active import (DATA, HEADER, PAD, RUN_ID_BYTES, decode_frame, encode_frame,
+                                                   precise_sleep)
 from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, row_count
+from verity.core.protocols.certifier.release import with_release
 
 PARAMETERS_TAG = "verity-network-warden/parameters/v2"
 #: the warden's cell kinds, beside `active`'s PAD and DATA
@@ -215,7 +222,9 @@ class _Connection:
     admitted: int | None = None
     server: Any = None
     ingress: bytearray = field(default_factory=bytearray)  # received, not yet released
-    unsent: bytearray = field(default_factory=bytearray)  # released before the server's connection opened
+    held: bytearray = field(default_factory=bytearray)  # released, held for the server until the END's release
+    unsent: bytearray = field(default_factory=bytearray)  # released whole before the server's connection opened
+    release: int | None = None  # N: its END's place in the warden's release order
     ingress_ended: bool = False  # the client's END has been received
     ingress_end: int | None = None  # a: the bucket the warden released ingress's END
     ingress_cells: int = 0
@@ -243,6 +252,8 @@ class Warden:
     - `release(link, row)`, when given, receives each grid's row as it ticks, ingress, egress, then fails, before
       that tick's `publish`: a publisher in another process builds each record from them as it fills, so that the
       tick never hands it a whole window at once;
+    - `requests_released` counts the `END`s released, each connection's N its count before (`log`'s `release`), and
+      `run_id`, `RUN_ID_BYTES` drawn from `run_nonce` at construction, names the run on the server's side;
     - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
@@ -250,7 +261,12 @@ class Warden:
                  sleep: Callable[[float], Awaitable[None]] = precise_sleep,
                  publish: Callable[[Record, GridParams], None] | None = None,
                  release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
-                 egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails") -> None:
+                 egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
+                 run_nonce: Callable[[int], bytes] = secrets.token_bytes) -> None:
+        self.run_id = run_nonce(RUN_ID_BYTES)
+        if not (isinstance(self.run_id, bytes) and len(self.run_id) == RUN_ID_BYTES):
+            raise ValueError(f"a run id is {RUN_ID_BYTES} bytes")
+        self.requests_released = 0
         self.params, self.connect = params, connect
         self.origin, self.windows, self.clock, self.sleep, self.slack = origin, windows, clock, sleep, slack
         self.egress = Certifier(egress_link, params.grid)
@@ -283,7 +299,7 @@ class Warden:
             writer.close()
             self._changed.set()
             return
-        connection = _Connection(self.ordinals, reader, writer, asyncio.get_running_loop().create_future(),
+        connection = _Connection(self.ordinals + 1, reader, writer, asyncio.get_running_loop().create_future(),
                                  self._bucket())
         self.ordinals += 1
         self.queue.append(connection)
@@ -396,8 +412,9 @@ class Warden:
             self._changed.set()
 
     def _ingress(self, c: _Connection, t: int) -> list[bytes]:
-        """Connection c's r ingress cells at bucket t, their payloads written to the server, or buffered until its
-        connection opens (at most the ingress bound's bytes): the release never waits on the server."""
+        """Connection c's r ingress cells at bucket t, their payloads held for the server until the `END`'s release,
+        then written whole with the release order, or kept until its connection opens (at most the ingress bound's
+        bytes): the release never waits on the server."""
         B, p, r = self.params.cell_bytes, self.params.payload, self.params.slots
         out, sent = [], []
         for _ in range(r):
@@ -417,10 +434,15 @@ class Warden:
         c.ingress_cells += len(sent)
         if c.ingress_end is None and t - c.admitted + 1 >= self.params.ingress_buckets:
             c.problem = c.problem or "ingress"
-        if sent and c.server is None:
-            c.unsent += b"".join(sent)
-        elif sent and not c.server[1].is_closing():
-            c.server[1].write(b"".join(sent))
+        c.held += b"".join(sent)
+        if c.ingress_end == t:
+            c.release, self.requests_released = self.requests_released, self.requests_released + 1
+            whole = with_release(bytes(c.held), c.release, self.run_id)
+            c.held.clear()
+            if c.server is None:
+                c.unsent += whole
+            elif not c.server[1].is_closing():
+                c.server[1].write(whole)
         return out
 
     def _egress(self, c: _Connection, t: int) -> list[bytes]:
@@ -479,7 +501,8 @@ class Warden:
         if not c.done.done():
             c.done.set_result(None)
         self.log.append({"ordinal": c.ordinal, "arrived": c.arrived, "admitted": c.admitted,
-                         "ingress_end": c.ingress_end, "ended": c.ended, "ingress_cells": c.ingress_cells,
+                         "ingress_end": c.ingress_end, "release": c.release, "ended": c.ended,
+                         "ingress_cells": c.ingress_cells,
                          "egress_cells": c.egress_cells, "bytes_in": c.bytes_in, "bytes_out": c.bytes_out,
                          "failed": c.failed, "failed_at": c.failed_at, "upstream": c.upstream, "cut": cut})
 
@@ -531,7 +554,7 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
     for n, o in enumerate(sorted(per)):
         ing, eg = per[o]["ingress"], per[o]["egress"]
         s = min([*ing, *eg])
-        problems = [f"connection {o} where {n} is next"] if o != n else []
+        problems = [f"connection {o} where {n + 1} is next"] if o != n + 1 else []
         if s < last_admitted:
             problems.append(f"admitted at {s}, before connection {o - 1}")
         last_admitted = s
