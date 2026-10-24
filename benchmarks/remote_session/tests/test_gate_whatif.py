@@ -110,6 +110,23 @@ def test_a_record_replayed_at_faster_passes_is_the_loops_record_at_them_and_says
     assert l_max(gw.replay(rec, rec.r0, half)) > 100 * MS + 55 * MS > l_max(gw.replay(rec, 2 * MS, half))
 
 
+def test_a_beside_screens_passes_replay_in_order_repeated_over_the_groups(tmp_path):
+    """Each phase of a beside.json that ran passes is a trace, its intervals in order and repeated over the groups; an
+    alone phase, which ran none, is not, and the replay under a trace is the loop's record with those passes."""
+    d = tmp_path / "beside-mps50.50"
+    d.mkdir()
+    (d / "beside.json").write_text(json.dumps({"phases": [
+        {"arm": "idle", "intervals_ms": [50.0, 110.0, 70.0]}, {"arm": "scratch:kv", "alone": True},
+        {"arm": "scratch:kv", "intervals_ms": [40.0]}]}))
+    traces = gw.traces_of([d / "beside.json"])
+    assert traces == {"beside-mps50.50/idle#0": [50.0, 110.0, 70.0], "beside-mps50.50/scratch:kv#2": [40.0]}
+    rec, _ = recorded(100 * MS, PASSES)
+    got = gw.passes_of(rec, trace=traces["beside-mps50.50/idle#0"])
+    assert got == [[50 * MS, 110 * MS, 70 * MS][g % 3] for g in range(len(PASSES))]
+    assert gw.replay(rec, 2 * MS, got) == recorded(2 * MS, got)[1]
+    assert gw.pass_models((1.0,), (), tuple(traces))[-1] == {"trace": "beside-mps50.50/scratch:kv#2"}
+
+
 @pytest.mark.parametrize("broken", ["alone", "k3", "short"])
 def test_a_record_of_another_loop_is_refused_by_name(broken):
     """A σ_(g+2) asked on its own, a pace of k = 3 and a prover's record short of its groups are refused, each with

@@ -5,7 +5,8 @@
 # key (auditor.sh's out/ledger.jsonl and out/pins.jsonl), and the prover run PROVER_ART's out/prover.json. PERIOD and
 # PIN are the audit's period and challenger key, COMMIT the verifier run's recorded commit; the gate sessions' peer is
 # the record's (PEER overrides it), RTT_MS the round trips replayed, PASS_SCALE and PASS_MS the pass models (each pass
-# its own time times F, or every pass MS). Writes the line of record as auditor.sh does
+# its own time times F, or every pass MS), and BESIDE_ART a beside screen's run (fused.sh's), whose every
+# out/beside-*/beside.json phase is a pass model too (--pass-trace). Writes the line of record as auditor.sh does
 # ($OUT/auditor_line.json, $OUT/credit.md) and the replay ($OUT/gate_whatif.json, $OUT/whatif.md), and exits 1 when a
 # session replayed at its own round trip isn't its record.
 #
@@ -27,6 +28,11 @@ fetch "${RUN_ART:?}" --to "$S/run" --path "${SUB:?}/request.json" --path "$SUB/o
   --path "$SUB/out/challenger/*"
 fetch "${AUDITOR_ART:?}" --to "$S/aud" --path out/ledger.jsonl --path out/pins.jsonl
 fetch "${PROVER_ART:?}" --to "$S/prover" --path out/prover.json
+TRACES=()
+if [ -n "${BESIDE_ART:-}" ]; then
+  fetch "$BESIDE_ART" --to "$S/beside" --path "out/beside-*/beside.json"
+  TRACES=(--pass-trace "$S"/beside/out/beside-*/beside.json)
+fi
 MAIN=()
 # main's first-parent line, fetched as auditor.sh does, where this tree's auditor_line.py takes it (--main, CMP-74)
 if uv run python "$HERE/auditor_line.py" --help | grep -q -- '--main FILE'; then
@@ -47,7 +53,7 @@ uv run python "$HERE/auditor_line.py" "$S/run/$SUB/out" --host-bytes "${HOST_BYT
   2> "$OUT/auditor_line.err" || { cat "$OUT/fetch.log" "$OUT/auditor_line.err"; exit 3; }
 uv run python "$HERE/gate_whatif.py" "$S/run/$SUB/out" --line "$OUT/auditor_line.json" \
   --prover "$S/prover/out/prover.json" ${RTT_MS:+--rtt-ms $RTT_MS} ${PASS_SCALE:+--pass-scale $PASS_SCALE} \
-  ${PASS_MS:+--pass-ms $PASS_MS} --table "$OUT/whatif.md" \
+  ${PASS_MS:+--pass-ms $PASS_MS} "${TRACES[@]}" --table "$OUT/whatif.md" \
   > "$OUT/gate_whatif.json" 2> "$OUT/gate_whatif.err"
 W=$?
 cat "$OUT/fetch.log" "$OUT/credit.md" "$OUT/gate_whatif.err" "$OUT/whatif.md"

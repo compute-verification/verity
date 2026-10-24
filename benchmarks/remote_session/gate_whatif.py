@@ -33,14 +33,16 @@ with every exchange r0 − r faster: what else would move with the challenger ne
 openings, the verifier's other work, a later session's pace) is the record's, unreplayed.
 
 A row may also take the passes faster: each pass's own time (S_g − max(C_g, root g − 1 sent)) times F (`--pass-scale`),
-or every pass MS (`--pass-ms`), each coin's trip, root's send and verifier's step kept. Rows are every pass model at the
+or every pass MS (`--pass-ms`), or the passes a beside screen measured (`--pass-trace`: each phase of `fused_beside.py`'s
+beside.json, its root-to-root intervals in order, repeated over the session's groups), each coin's trip, root's send
+and verifier's step kept. Rows are every pass model at the
 session's own round trip and at each r. The replay keeps the session's groups, so a stretch of them spans less time at
 faster passes; at the stated T the verifier would pace more groups into a stretch (`--pace-pass-ms`), which this
 doesn't model. Each row counts the groups whose pass waited on its coin and the roots that waited on the verifier's
 boundary, so it says which side the line is waiting on.
 
     python gate_whatif.py OUT --line AUDITOR_LINE_JSON --prover PROVER_JSON [--rtt-ms MS ...] [--pass-scale F ...]
-        [--pass-ms MS ...] [--table FILE]
+        [--pass-ms MS ...] [--pass-trace BESIDE_JSON ...] [--table FILE]
 """
 from __future__ import annotations
 
@@ -173,9 +175,12 @@ def record(s: dict, lines: list[str], auditor: list[dict], prover: dict, tau: in
                   fetch0=R[1] - R[0] - (sigma0[4] - sigma0[3]))
 
 
-def passes_of(rec: Record, scale: float | None = None, ms: float | None = None) -> list[int]:
-    """Each group's pass time under a pass model: its own times `scale`, or `ms` for every pass, or (neither) its
-    own."""
+def passes_of(rec: Record, scale: float | None = None, ms: float | None = None,
+              trace: list[float] | None = None) -> list[int]:
+    """Each group's pass time under a pass model: its own times `scale`, or `ms` for every pass, or `trace`'s ms in
+    order, repeated, or (none) its own."""
+    if trace is not None:
+        return [round(trace[g % len(trace)] * 1e6) for g in range(rec.n)]
     if ms is not None:
         return [round(ms * 1e6)] * rec.n
     return list(rec.pure) if scale is None else [round(x * scale) for x in rec.pure]
@@ -244,17 +249,31 @@ def identity(rec: Record, at_r0: dict, row: dict) -> dict:
     return {"holds": not any(off.values()) and all(shares.values()), "groups_off": off, "shares_equal": shares}
 
 
-def pass_models(pass_scale: tuple[float, ...], pass_ms: tuple[float, ...]) -> list[dict]:
-    """The pass models a grid takes: {"scale": F} for each of `pass_scale`, then {"ms": MS} for each of `pass_ms`."""
-    return [{"scale": f} for f in pass_scale] + [{"ms": m} for m in pass_ms]
+def pass_models(pass_scale: tuple[float, ...], pass_ms: tuple[float, ...], traces: tuple[str, ...] = ()) -> list[dict]:
+    """The pass models a grid takes: {"scale": F} for each of `pass_scale`, then {"ms": MS} for each of `pass_ms`, then
+    {"trace": NAME} for each of `traces`."""
+    return [{"scale": f} for f in pass_scale] + [{"ms": m} for m in pass_ms] + [{"trace": t} for t in traces]
+
+
+def traces_of(paths: list[Path]) -> dict[str, list[float]]:
+    """Each phase that ran passes in each beside.json (`fused_beside.py`'s) as a trace named DIR/ARM#K (its parent
+    directory, its arm, its place among the file's phases): its root-to-root intervals, ms."""
+    out = {}
+    for p in paths:
+        for k, ph in enumerate(json.loads(p.read_text())["phases"]):
+            if ph.get("intervals_ms"):
+                out[f"{p.parent.name}/{ph['arm']}#{k}"] = ph["intervals_ms"]
+    return out
 
 
 def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RTT_MS,
-           pass_scale: tuple[float, ...] = (1.0,), pass_ms: tuple[float, ...] = ()) -> dict:
+           pass_scale: tuple[float, ...] = (1.0,), pass_ms: tuple[float, ...] = (),
+           traces: dict[str, list[float]] | None = None) -> dict:
     """The line of record `doc` (`auditor_line.analyse(out, ...)`'s, `auditor_line.py`'s output) with each of its
-    accepted paced sessions replayed under each pass model (`pass_models`) at its own round trip and at each of
-    `rtt_ms`, with `prover` the prover's record."""
-    grid = [(m, ms) for m in pass_models(pass_scale, pass_ms) for ms in (None, *rtt_ms)]
+    accepted paced sessions replayed under each pass model (`pass_models`, `traces` by name) at its own round trip and
+    at each of `rtt_ms`, with `prover` the prover's record."""
+    traces = traces or {}
+    grid = [(m, ms) for m in pass_models(pass_scale, pass_ms, tuple(traces)) for ms in (None, *rtt_ms)]
     host_bytes, ingress = doc["host_bytes"], tuple(doc["ingress"])
     v = json.loads((out / "verifier.json").read_text())
     reg, tau = v["registration"], v["rtt"]["median_ns"] // 2
@@ -285,7 +304,8 @@ def whatif(out: Path, prover: dict, doc: dict, *, rtt_ms: tuple[float, ...] = RT
                    rows=[{"pass": m, "own_rtt": ms is None, **{k: x for k, x in r.items() if k != "series"}}
                          for m, ms, r in ((m, ms, row_at(s, reg, rec, rec.r0 if ms is None else round(ms * 1e6),
                                                          host_bytes, ingress, passes_of(rec, m.get("scale"),
-                                                                                        m.get("ms"))))
+                                                                                        m.get("ms"),
+                                                                                        traces.get(m.get("trace")))))
                                           for m, ms in grid)])
         got["own"] = {k: x for k, x in own.items() if k != "series"}
     doc_line = {}
@@ -324,7 +344,8 @@ def table(doc: dict) -> str:
                 "| passes | r (ms) | line | L_max (ms) | waits: coin / verifier |", "|---|---|---|---|---|"]
         for x in line["rows"]:
             v = [y for k, y in x.items() if k not in ("pass", "rtt_ms")]
-            p = f"{x['pass']['scale']:g}× own" if "scale" in x["pass"] else f"{x['pass']['ms']:g} ms each"
+            p = (f"{x['pass']['scale']:g}× own" if "scale" in x["pass"] else f"{x['pass']['ms']:g} ms each"
+                 if "ms" in x["pass"] else f"measured: {x['pass']['trace']}")
             r = x["rtt_ms"] if x["rtt_ms"] == "own" else f"{x['rtt_ms']:g}"
             w = v[0].get("waits") or {}
             out.append(f"| {p} | {r} | " + " / ".join(f"{y['time']:.4%}" for y in v) +
@@ -343,10 +364,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pass-scale", type=float, nargs="+", default=[1.0], metavar="F",
                     help="replay with each pass's own time times F")
     ap.add_argument("--pass-ms", type=float, nargs="+", default=[], metavar="MS", help="replay with every pass MS")
+    ap.add_argument("--pass-trace", type=Path, nargs="+", default=[], metavar="BESIDE_JSON",
+                    help="replay with each phase's measured passes in each fused_beside.py beside.json (traces_of)")
     ap.add_argument("--table", type=Path, help="write each session's identity and the what-if line here, as Markdown")
     a = ap.parse_args(argv)
     doc = whatif(a.out, json.loads(a.prover.read_text()), json.loads(a.line.read_text()), rtt_ms=tuple(a.rtt_ms),
-                 pass_scale=tuple(a.pass_scale), pass_ms=tuple(a.pass_ms))
+                 pass_scale=tuple(a.pass_scale), pass_ms=tuple(a.pass_ms), traces=traces_of(a.pass_trace))
     print(json.dumps(doc, indent=1, default=str))
     if a.table is not None:
         a.table.write_text(table(doc))
