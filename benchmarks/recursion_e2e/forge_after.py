@@ -1,7 +1,10 @@
 """forge-after: V*'s three forgeries that the prover's firewall stops before release (coef, dirs, message), made after an
 honest firewalled prove instead, and put to the Lean verifier.
 
-    python3 benchmarks/recursion_e2e/forge_after.py --work FLOCK_WORK --tag TAG --run-out OUT_OF_THE_RUN [--bin NAME=PATH ...]
+    python3 benchmarks/recursion_e2e/forge_after.py --work FLOCK_WORK --tag TAG --run-out LEAN_OUT [--bin NAME=PATH ...] [--kinds K,..]
+
+``run.py``'s ``forge-after`` step runs it after the lean step (``--run-out``: that step's out/, whose ``lean/own-<stmt>.txt``
+it reuses) with 85's flock-verify; ``forge_after.sh`` runs it over an earlier run's data.
 
 A forgery staged before proving (`rec_vstage --forge`) puts a wrong row in the prover's ``inst.bin``, and the firewall refuses
 to release a proof of it, so Lean never sees a session. Here the session is an honest one pod 85 already proved behind the
@@ -204,7 +207,11 @@ def main() -> int:
     ap.add_argument("--run-out", required=True, type=Path, help="the out/ of the run whose lean step verified FLOCK_WORK")
     ap.add_argument("--bin", action="append", default=[], help="NAME=PATH: a flock-verify; NAME=run uses the run's own flags")
     ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--kinds", default=",".join(CASES), help=f"of {', '.join(CASES)} (comma or space separated)")
     a = ap.parse_args()
+    kinds = [k for k in CASES if k in a.kinds.replace(",", " ").split()]
+    if not kinds:
+        raise SystemExit(f"--kinds {a.kinds!r}: none of {', '.join(CASES)}")
     out = Path(os.environ.get("OUT", "out")) / "forge-after"
     out.mkdir(parents=True, exist_ok=True)
     dd = a.work / "data" / a.tag
@@ -215,11 +222,15 @@ def main() -> int:
                    "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os", "--rec-inner-draw",
                    str(dd / "stage/draw.json"), "--rec-inner-session", str(inner / "session"), "--rec-inner-transcript",
                    str(inner / "public.json")]
-    sess = {s: dd / "v-sess" / s for s in ("L0", "alg-p0")}
+    sess = {s: dd / "v-sess" / s for s in sorted({CASES[k][0] for k in kinds})}
+    missing = [s for s in sess if not (dd / "v-sess" / f"{s}.stmt").is_file()]
+    if missing:
+        raise SystemExit(f"{dd}/v-sess: no honest session of {', '.join(missing)} (STEP=oprove keeps one per statement)")
     stmts = {s: Path((dd / "v-sess" / f"{s}.stmt").read_text().strip()) for s in sess}
     before = {s: tree_sha(p) for s, p in {**{f"sess-{k}": v for k, v in sess.items()}, **{f"stmt-{k}": v for k, v in stmts.items()}}.items()}
     rec = {"work": str(a.work), "tag": a.tag, "inner": str(inner), "sessions_sha256": before, "forgeries": {}, "verify": {}}
-    for kind, (s, port) in CASES.items():
+    for kind in kinds:
+        s, port = CASES[kind]
         rec["forgeries"][kind] = forge(stmts[s], inner, port, out / "cases" / kind)
         print(kind, json.dumps(rec["forgeries"][kind]))
     jobs = []
@@ -231,7 +242,8 @@ def main() -> int:
             own = {s: (a.run_out / "lean" / f"own-{s}.txt").read_text().split() for s in stmts}
         else:
             own = own_flags(binary, dd, n, stmts, out / f"own-{name}")
-        for kind, (s, _) in CASES.items():
+        for kind in kinds:
+            s = CASES[kind][0]
             for case in ("honest", "bc", "stmt", "value"):
                 d = out / "cases" / kind / case
                 if d.is_dir():
