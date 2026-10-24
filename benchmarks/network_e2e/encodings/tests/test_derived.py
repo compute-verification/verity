@@ -145,7 +145,7 @@ def _mid_block(adv, fine, held, order):
             src = r.sources[:-1] + (I1.Source(r.sources[-1].request, r.sources[-1].n + half),)
             row = dataclasses.replace(r, start=r.start + half, n=r.n - half, cache_hit=r.cache_hit + half, sources=src)
             try:
-                moved = D.canonical_sources(_with_row(adv, s, k, row), tokens)
+                moved = D.canonical_sources(_with_row(adv, s, k, row), tokens, fine.unit)
                 D.residual(moved, fine, held, order=order)
                 return moved
             except ValueError:
@@ -289,11 +289,11 @@ def _derived_hits(adv, cfg, held, order):
 def _evicted(adv, cfg, tokens):
     """The steps of the admitting rows, in scheduling order, whose hit is shorter than the longest prefix rows before
     them computed: where vLLM had evicted."""
-    p, seen, samples, out = D.Prefixes(tokens), set(), {}, []
+    p, seen, samples, out = D.Prefixes(tokens, cfg.unit), set(), {}, []
     for s, st in enumerate(adv.steps):
         for r in st.rows:
             K = adv.requests[r.request].prompt_len + samples.get(r.request, 0)
-            if (r.request not in seen or r.preempted) and r.cache_hit < p.cached(r.request, K, cfg.unit):
+            if (r.request not in seen or r.preempted) and r.cache_hit < p.cached(r.request, K):
                 out.append(s)
             seen.add(r.request)
             p.add(r.request, r.start, r.start + r.n)
@@ -350,7 +350,7 @@ def test_a_source_is_the_earliest_admitted_request(case) -> None:
     any other request I1 would accept is refused."""
     _, cfg, adv, order, held, res = case
     tokens = _tokens(adv, held, order)
-    assert D.canonical_sources(adv, tokens) == adv
+    assert D.canonical_sources(adv, tokens, cfg.unit) == adv
     bad = _not_earliest(adv, tokens)
     assert bad is not None
     with pytest.raises(ValueError, match="sources"):
