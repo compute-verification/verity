@@ -282,7 +282,8 @@ class SoWindow(DO.Window):
             self._a_step_set()
         # the gate's generation runs past its last capture until that step's receipts are in a round
         self.gate_extra = self.depth + 8 + (1 if self.overlap else 0)
-        self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(2)]
+        # the serving stream's wait on the units (0 to 1), then its mid (to 2) and round (to 3) builds
+        self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
         self.ev_fwd = torch.cuda.Event()
         self.root_lag = int(os.environ.get(ROOT_LAG_ENV) or 0)
         if self.root_lag not in (0, 1, 2):
@@ -777,6 +778,7 @@ class SoWindow(DO.Window):
         if ads is not None:
             main.wait_event(ev[7])
         self.c.build(pre["mid"], self.stepv[0:1])
+        self.ev_w[2].record()
         rl = pre["round"].level
         zi, yi = kinds.index("z-step"), kinds.index("y-step")
         if cap == "fault_zlate":
@@ -788,6 +790,7 @@ class SoWindow(DO.Window):
             rl[8 * yi:8 * yi + 8].copy_(self.zlate[1])
             self.zlate = None
         self.c.build(pre["round"], self.stepv[0:1])
+        self.ev_w[3].record()
         prev = self.cap_of.get(s - 1)
         late = self.cap_of.pop(j, None) if j >= self.s0 else None
         held = (cap in self.caps) or (late in self.caps) or (prev == "fault_zlate" and prev in self.caps)
@@ -861,6 +864,8 @@ class SoWindow(DO.Window):
               "coin_late_ms": 1e3 * t_late}
         if units_wait is not None:
             ph["units_wait_ms"] = units_wait
+            ph["tail_mid_ms"] = self.ev_w[1].elapsed_time(self.ev_w[2])
+            ph["tail_round_ms"] = self.ev_w[2].elapsed_time(self.ev_w[3])
             ph["units_gpu_ms"] = sd.ev_u[p][0].elapsed_time(sd.ev_u[p][1])
             q = sd.prev_of.get(p)
             if q is not None:
