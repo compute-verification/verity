@@ -27,10 +27,12 @@
 # GATE_ON's /etc/vy/peers line), MAXMIN the prover's `gpu-lease --max-min` (a lease that would run into a booked window
 # of the node's waits it out), CHECKPOINT=0 skips step 1 and GATE_MEM=0 reserves no memory for the gate steps or whatif.
 # LEASE_ON names the GPUs the prover leases (`gpu-lease --on`, default any ENGINES free ones) and LEASE_MEM_GB its host
-# memory (default 32 GB an engine). PROVER_RUN names a prover already launched for PERIOD, which step 4 fires against
-# (step 3 launches none). A dry run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2 (with DRY=1: no request
-# reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1 against PROVER_RUN, any run id
-# (default none), whose lease it reads.
+# memory (default 32 GB an engine). LEASE_BY (a UTC time) is when the prover must hold its GPUs, or nothing runs: the
+# prover asks through gate_lease.sh (sent beside) from LEASE_FROM (default now) and gives up a minute before LEASE_BY,
+# and fire opens no period for a lease that began after it. PROVER_RUN names a prover already launched for PERIOD,
+# which step 4 fires against (step 3 launches none). A dry run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
+# (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1
+# against PROVER_RUN, any run id (default none), whose lease it reads.
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(git -C "$HERE" rev-parse --show-toplevel)
@@ -46,7 +48,7 @@ PROVER_SSH=${PROVER_SSH--o StrictHostKeyChecking=accept-new -i /home/research/.s
 MAXMIN=${MAXMIN:-90} CHECKPOINT=${CHECKPOINT:-1} GATE_MEM=${GATE_MEM:-1}
 WHATIF_ON=${WHATIF_ON:-vy-nebius-cpu-4}
 ROLE=${ROLE:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} PORT=${PORT:-7951}
-LEASE_ON=${LEASE_ON:-} LEASE_MEM_GB=${LEASE_MEM_GB:-$((32 * ENGINES))}
+LEASE_ON=${LEASE_ON:-} LEASE_MEM_GB=${LEASE_MEM_GB:-$((32 * ENGINES))} LEASE_BY=${LEASE_BY:-} LEASE_FROM=${LEASE_FROM:-}
 PLAN=${PLAN:-honest,skip:0.0625,honest,skip:0.0625}
 VERIFIER_SSH=${VERIFIER_SSH:--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-auditor-tunnel-prover prover@81.85.1.145}
 STATE=$HOME/.research/gate-runs/$PERIOD${DRY:+.dry}.env
@@ -92,7 +94,8 @@ launch() {
 
 GATE_ENV=(--env "COMMIT=$COMMIT" --env "PERIOD=$PERIOD" --env "PIN=$PIN" ${GATE_KEY:+--env "GATE_KEY=$GATE_KEY"}
   --env "MODEL=$ROLE" --env "ENGINES=$ENGINES" --env "PORT=$PORT" --env "PROVER_NODE=$PROVER_NODE"
-  ${PROVER_SSH:+--env "PROVER_SSH=$PROVER_SSH"} ${DRY:+--env DRY=1} ${CIRCUIT:+--env "CIRCUIT=$CIRCUIT"})
+  ${PROVER_SSH:+--env "PROVER_SSH=$PROVER_SSH"} ${DRY:+--env DRY=1} ${CIRCUIT:+--env "CIRCUIT=$CIRCUIT"}
+  ${LEASE_BY:+--env "LEASE_BY=$LEASE_BY"})
 gate_step() {
   # NAME VERB GB research-run-args...: gate.sh VERB on GATE_ON in GB of memory, waited for (a dry step, or GATE_MEM=0
   # where reservations are full and a fire queued behind them would outwait the prover's tunnel, reserves none)
@@ -140,10 +143,16 @@ PROVER=(--on "$PROVER_NODE" --cwd source --timeout 6h --custody-ttl 12h
   --env ROLE=prover --env "PORT=$PORT" --env SERVE=node --env "PLAN=$PLAN" --env "MODEL=$SNAP"
   --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib 62 --util 0.8"
   --env "NODE_ARGS=--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir $SNAP"
-  --env "VERIFIER_SSH=$VERIFIER_SSH" --env TUNNEL_WAIT_S=1800 --env "GPU_LEASE_WHO=memory-accounting-$PERIOD"
-  -- /workspace/pouw/infra/bin/gpu-lease "$ENGINES" --wait ${LEASE_ON:+--on "$LEASE_ON"} --max-min "$MAXMIN"
-  --mem-gb "$LEASE_MEM_GB"
-  -- bash benchmarks/remote_session/run.sh)
+  --env "VERIFIER_SSH=$VERIFIER_SSH" --env TUNNEL_WAIT_S=1800 --env "GPU_LEASE_WHO=memory-accounting-$PERIOD")
+LEASE_ARGS=(${LEASE_ON:+--on "$LEASE_ON"} --max-min "$MAXMIN" --mem-gb "$LEASE_MEM_GB")
+if [ -n "$LEASE_BY" ]; then
+  by=$(date -u -d "$LEASE_BY" +%s) || { echo "LEASE_BY $LEASE_BY isn't a time"; exit 3; }
+  PROVER+=(--send "$HERE/gate_lease.sh" --env "LEASE_BY=$(date -u -d "@$((by - 60))" +%FT%TZ)"
+    ${LEASE_FROM:+--env "LEASE_FROM=$LEASE_FROM"}
+    -- bash -c 'exec bash "$RESEARCH_RUN_DIR/inputs/gate_lease.sh" "$@"' gate_lease "$ENGINES" "${LEASE_ARGS[@]}")
+else
+  PROVER+=(-- /workspace/pouw/infra/bin/gpu-lease "$ENGINES" --wait "${LEASE_ARGS[@]}" -- bash benchmarks/remote_session/run.sh)
+fi
 if [ -n "$DRY" ]; then
   echo "DRY: research run --project verity --source <worktree of $COMMIT> ${PROVER[*]}"
   PROVER_RUN=${PROVER_RUN:-none}

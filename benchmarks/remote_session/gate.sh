@@ -17,7 +17,8 @@
 #   fire   wait until PROVER_RUN holds ENGINES GPUs on PROVER_NODE (its `gpu-lease status`, over that node's line of
 #          /etc/vy/peers, or PROVER_SSH's ssh arguments where that line's private address doesn't route, as from
 #          vy-nebius-cpu-4 and -cpu-5), then probe, open, host, close and audit. A host run that fails leaves the
-#          period open for a rerun in it and runs no auditor.
+#          period open for a rerun in it and runs no auditor. With LEASE_BY (a UTC time) it opens nothing for a lease
+#          that began after LEASE_BY, and stops waiting 2 minutes after it.
 #
 # With DRY=1 no request reaches either gate: each is written to gate.requests and printed, the key need not exist, and
 # what doesn't need it runs (the circuit, the peers line to PROVER_NODE and its lease status, vy-auditor-1's host key).
@@ -173,7 +174,8 @@ close_period() {
 }
 
 leased() {
-  # how many GPUs PROVER_RUN holds on PROVER_NODE, or "gone" when it neither holds nor waits for any
+  # how many GPUs PROVER_RUN holds on PROVER_NODE and when its newest began ("N SINCE", SINCE - when it holds none), or
+  # "gone" when it neither holds nor waits for any
   local to st
   read -ra to <<< "${PROVER_SSH:-$(grep "^$PROVER_NODE " /etc/vy/peers | cut -d' ' -f2-)}"
   [ ${#to[@]} -gt 0 ] || { echo "no $PROVER_NODE in /etc/vy/peers and no PROVER_SSH" >&2; return 3; }
@@ -183,25 +185,44 @@ leased() {
       python3 -c 'import json, sys; print(\"state=\" + json.load(open(sys.argv[1]))[\"state\"])' \
         /workspace/research/runs/${PROVER_RUN:?}/status.json 2> /dev/null; true; }" 2>&1) \
     || { tail -n 3 <<< "$st" >&2; return 3; }
-  local held
-  held=$(grep -E "^[0-9]+ held .* run=${PROVER_RUN:?}( |$)" <<< "$st" | grep -c .)
+  local lines held since
+  lines=$(grep -E "^[0-9]+ held .* run=${PROVER_RUN:?}( |$)" <<< "$st")
+  held=$(grep -c . <<< "$lines")
+  since=$(grep -o 'since=[^ ]*' <<< "$lines" | cut -d= -f2 | sort | tail -n 1)
   # a lease waiting unqueued (out of a booked window) writes no wait file, so a run still running counts as waiting
   if [ "$held" = 0 ] && ! grep -q "run=$PROVER_RUN\b" <<< "$st" && ! grep -qx "state=running" <<< "$st"; then
     echo gone
   else
-    echo "$held"
+    echo "$held ${since:--}"
   fi
 }
 
 fire() {
-  local n k
-  echo "fire $(date -u +%FT%TZ): waiting for $PROVER_RUN to hold $ENGINES GPUs on $PROVER_NODE"
+  local l n since k fails=0 by=
+  if [ -n "${LEASE_BY:-}" ]; then by=$(date -u -d "$LEASE_BY" +%s) || { echo "LEASE_BY $LEASE_BY isn't a time"; exit 2; }; fi
+  echo "fire $(date -u +%FT%TZ): waiting for $PROVER_RUN to hold $ENGINES GPUs on $PROVER_NODE${by:+, leased by $LEASE_BY}"
   for ((k = 0; ; k++)); do
-    n=$(leased) || { echo "can't read $PROVER_NODE's leases"; exit 3; }
-    [ $((k % 20)) = 0 ] && echo "$(date -u +%FT%TZ) $PROVER_RUN holds $n"
+    if ! l=$(leased); then
+      # one failed read waits for the next; ten running (five minutes) end the wait
+      fails=$((fails + 1))
+      [ $fails -lt 10 ] || { echo "can't read $PROVER_NODE's leases $fails times running: nothing opened"; exit 3; }
+      sleep 30
+      continue
+    fi
+    fails=0
+    read -r n since <<< "$l"
+    [ $((k % 20)) = 0 ] && echo "$(date -u +%FT%TZ) $PROVER_RUN holds $n${since:+ (since $since)}"
     [ -n "${DRY:-}" ] && { echo "DRY: $PROVER_RUN holds $n; would wait until it holds $ENGINES"; break; }
     [ "$n" = gone ] && { echo "$PROVER_RUN neither holds nor waits for a lease: nothing opened"; exit 3; }
-    [ "$n" -ge "$ENGINES" ] && break
+    if [ "$n" -ge "$ENGINES" ]; then
+      [ -z "$by" ] || [ "$(date -u -d "$since" +%s)" -le "$by" ] && break
+      echo "$PROVER_RUN's lease began at $since, after LEASE_BY $LEASE_BY: nothing opened"
+      exit 3
+    fi
+    if [ -n "$by" ] && [ "$(date -u +%s)" -gt $((by + 120)) ]; then
+      echo "$PROVER_RUN holds $n of $ENGINES GPUs, 2 minutes past LEASE_BY $LEASE_BY: nothing opened"
+      exit 3
+    fi
     sleep 30
   done
   echo "$(date -u +%FT%TZ) leased"
