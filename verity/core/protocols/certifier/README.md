@@ -69,6 +69,10 @@ A spec-level reference for network accounting's timing channel:
   cache counts are a stand-in held at 0 (`PROTOCOL.md`, "The compile slice"), and
   `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits, their evaluator
   and SHA-512's gadget from `verity`;
+- the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
+  draw under the run root (each window's salted digest and an hm96 row registration). The verifier's ``pub`` for the
+  slice is the declared charge and the published digest (`served_rows.pub`), never the prover's words, and `leaf_ok`
+  holds a committed row's b‖c to its registered leaf. It takes the advice registration's hm96 rows from `verity`;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
