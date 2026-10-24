@@ -289,9 +289,9 @@ class SoWindow(DO.Window):
                                f"D - 2 steps on, and -ov sends its rounds from a thread of its own)")
         self.units_lead = int(os.environ.get(UNITS_LEAD_ENV) or 1)
         if not 1 <= self.units_lead <= max(1, self.depth - 2) or (
-                self.units_lead > 1 and (self.overlap or self.root_lag or self.coin_async)):
+                self.units_lead > 1 and (self.overlap or self.root_lag)):
             raise RuntimeError(f"${UNITS_LEAD_ENV}={self.units_lead}: 1 <= k <= D - 2 = {self.depth - 2}, and k > 1 "
-                               f"without -ov, ${ROOT_LAG_ENV} or ${COIN_ASYNC_ENV}")
+                               f"without -ov or ${ROOT_LAG_ENV}")
         self.lag: dict | None = None
         self.lag_root = torch.empty(8, dtype=torch.int64).pin_memory() if self.root_lag else None
         self.lag_ybad: torch.Tensor | None = None
