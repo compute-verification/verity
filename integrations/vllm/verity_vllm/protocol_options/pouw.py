@@ -708,13 +708,13 @@ def install(scheme: str, target: Target) -> Option:
         salt = Epoch.start(declared, roots, commitment, opening).salt
     if scheme in PPD.SCHEMES:
         run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
-                                  {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening, schedule=settings.schedule,
-                                  salt_key=_SALT_KEYS.get(entry), retain_dir=settings.transcript_dir)
+                                  {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
+                                  schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry))
         run.commits["registration"] = weights_claim(s)
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
             h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
-        PP.hook_steps(h, run)
+        PP.hook_steps(h, run, settings.transcript_dir)
         return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish,
                       end_pass=run.end_pass)
     else:
