@@ -133,6 +133,38 @@ def live_verified_instance(rng: random.Random, name: str = "honest") -> dict:
     return case
 
 
+#: each way a period's open commits no circuit files of `credit.committed_files`' form: none, null, empty, a list, a key
+#: that is no template (``k0``, ``k064``, ``K64``, ``x``), or a digest that is none (upper case, short, a number)
+FILES_NAMES = ["honest", "files-none", "files-null", "files-empty", "files-list", "files-key", "files-digest"]
+
+
+def files_instance(rng: random.Random, name: str = "honest") -> dict:
+    """A `credit-committed-files` case: the ledger and name of `pouw_credit_cases.period_instance`, its open committing
+    each K's and the live template's circuit files, then mutation `name` of them."""
+    files = {**{f"k{k}": C._hex(rng) for k in rng.sample([1, 64, 128, 4096], rng.randint(1, 3))},
+             **({Cr.LIVE: C._hex(rng)} if rng.random() < 0.8 else {})}
+    key, v = rng.choice(sorted(files.items()))
+    match name:
+        case "honest":
+            committed = {Cr.CIRCUIT_FILES: files}
+        case "files-none":
+            committed = {}
+        case "files-null":
+            committed = {Cr.CIRCUIT_FILES: None}
+        case "files-empty":
+            committed = {Cr.CIRCUIT_FILES: {}}
+        case "files-list":
+            committed = {Cr.CIRCUIT_FILES: rng.choice([[v], v, 7])}
+        case "files-key":
+            committed = {Cr.CIRCUIT_FILES: {**files, rng.choice(["k0", "k064", "K64", "x", "lives", "k", "k1x"]): v}}
+        case "files-digest":
+            committed = {Cr.CIRCUIT_FILES: {**files, key: rng.choice([v.upper(), v[:-2], 7, None, [v]])}}
+        case _:
+            raise ValueError(name)
+    d = C.period_instance(rng, committed_too=committed)
+    return {"ledger": d["ledger"], "name": d["name"]}
+
+
 def reference_asks(case: dict) -> list[dict]:
     """The verifier runs `credit._live_asks` names for `case` (none when its live Program or tables are refused)."""
     raw = bytes.fromhex(case["descriptor"])

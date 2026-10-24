@@ -89,6 +89,30 @@ def test_live_verified(server):
         assert any(part in k for k in VERIFIED), part
 
 
+def committed_files(case: dict) -> dict:
+    files, why = Cr.committed_files(case["ledger"], case["name"])
+    VERIFIED["files: " + (why[0] if why else "accept")] += 1
+    return {"refused": list(why)} if why is not None else {"files": files}
+
+
+FILES_PORT = D.Port("pouw-check-difftest", "credit-committed-files", committed_files, package=LEAN,
+                    need_rejects=False, of_record=V.RECORD_VERDICT,
+                    inputs=st.builds(cases.files_instance, st.randoms(use_true_random=False),
+                                     st.sampled_from(cases.FILES_NAMES)))
+
+
+def test_committed_files(server):
+    """A period's open's circuit files read by the Lean of record as `credit.committed_files` reads them: honest, and
+    each form that commits none."""
+    VERIFIED.clear()
+    stats = D.run(FILES_PORT, examples=60, server=server)
+    for name in cases.FILES_NAMES:
+        for seed in range(3):
+            D.replay(FILES_PORT, cases.files_instance(random.Random(f"files/{name}/{seed}"), name), server)
+    print(f"pouw-check-difftest credit-committed-files: {stats}; by outcome: {dict(sorted(VERIFIED.items()))}")
+    assert set(VERIFIED) == {"files: accept", "files: circuit"}, VERIFIED
+
+
 def test_served_live_answers():
     """`credit._lean_live_verified`, the served path through `verifier.lean`, gives `credit._live_verified`'s verdict on
     every answered case, running the verifier on the Lean's asks only: the same statements, with the same inputs, in the

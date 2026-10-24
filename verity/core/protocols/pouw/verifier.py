@@ -5,7 +5,9 @@ verdicts `benchmarks/pouw/served_zk/of_record.py` publishes. The Python beside t
 as the reference, and the difftests hold it to the Lean: a disagreement fails with the Lean's verdict. A served H1
 window's statements are judged here too: `credit.window` and `credit.period_credit` take each drawn unit's outcome from
 `lean("credit-verified", …)` (`PouwCheck.Verified`), with `credit._verified` the reference, and each round's live
-outcome from `lean("credit-live-verified", …)` (`PouwCheck.LiveVerified`), with `credit._live_verified` the reference.
+outcome from `lean("credit-live-verified", …)` (`PouwCheck.LiveVerified`), with `credit._live_verified` the reference,
+on the circuit files its period's open committed, `lean("credit-committed-files", …)` (`PouwCheck.CommittedFiles`),
+with `credit.committed_files` the reference.
 
 `RECORD_VERDICT` is the switch, and setting it to ``"python"`` is the one line that undoes it.
 

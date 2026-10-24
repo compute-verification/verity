@@ -2096,7 +2096,8 @@ def committed_weights(ledger: list, name: str) -> tuple[str | None, tuple[str, s
 def committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, str] | None]:
     """The circuit files period `name`'s open committed (`CIRCUIT_FILES`, ``{k<K>: SHA-512}``: each K's template's
     circuit file, as the auditor's lowering built it) in the auditor's ledger `ledger`, one `period` has trusted, and
-    None; or None and the refusal (``circuit``)."""
+    None; or None and the refusal (``circuit``). The Python reference of the Lean's `PouwCheck.CommittedFiles`
+    (`_lean_committed_files`), which `period_credit` reads when `verifier.RECORD_VERDICT` is ``"lean"``."""
     body = next(e["body"] for e in map(json.loads, ledger)
                 if e["kind"] == "period-open" and e["body"]["period"] == name)
     files = body.get(CIRCUIT_FILES)
@@ -2108,6 +2109,17 @@ def committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, st
                                  "window's statements can be verified: commit them in the period-open, beside its "
                                  "circuit and K")
     return files, None
+
+
+def _lean_committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, str] | None]:
+    """`committed_files` from the Lean verifier of record (`PouwCheck.CommittedFiles.committedFiles`, `verifier.lean`).
+    A Lean that can't run leaves the period refused (``circuit``)."""
+    try:
+        got = V.lean("credit-committed-files", {"ledger": ledger, "name": name})
+    except V.LeanError as e:
+        return None, ("circuit", f"the Lean verifier of record could not read period {name}'s committed circuit files, "
+                                 f"so the period earns nothing: {e}")
+    return (None, tuple(got["refused"])) if "refused" in got else (got["files"], None)
 
 
 def committed_pin(ledger: list, name: str) -> str | None:
@@ -2214,7 +2226,7 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
     period_pin, floor = committed_pin(ledger, name), committed_floor(ledger, name)
     files = None
     if run is not None:
-        files, why = committed_files(ledger, name)
+        files, why = (_lean_committed_files if V.RECORD_VERDICT == "lean" else committed_files)(ledger, name)
         if why is not None:
             return None, why
     k = Ch.ChallengerKey.from_json(key)
