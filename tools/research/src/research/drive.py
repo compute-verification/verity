@@ -13,7 +13,10 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
    tip): `train.sh COMMIT MACHINE`, with `--agreement` when the train changes a `lean-audit.json` (the lander's rule; train.sh
    itself sends the build for C-Flock's paths), the lowest unchecked first, while fewer than `max_running` checks run, and
    none above a member whose failure drive is still settling, which it would hold; a tick's launches run at once
-   (`LAUNCH_JOBS`), each with its train's rank in the slot queue.  A former tip a re-cut left inside a train
+   (`LAUNCH_JOBS`), each with its train's rank in the slot queue.  `max_running` counts the checks that have started (a twin
+   holds a check slot) and at most `UNSTARTED_COUNTED` that wait in slot lines; past those, a train launches only onto a free
+   slot.  A check still waiting while a machine of `on` without a twin of it could start it now is cancelled and launched
+   again there (`move_waiting`).  A former tip a re-cut left inside a train
    runs on as a hedge outside the count, until a train above it passes its check (`drop_hedges`).
 
 What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns: a failed
@@ -110,6 +113,12 @@ NO_REPORT = "no failed suite's report reached drive"
 LEAN_INPUTS = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json", "lean-audit.json")
 #: states `research status` reports for a run that may still publish an attempt
 ACTIVE = ("submitted", "waiting", "running", "unknown")
+#: the states of a twin that holds no check slot yet: launched, or waiting in its machine's slot line (slot.py's RUN_SLOT); a
+#: launch all of whose live twins are in one of them hasn't started
+WAITS = ("submitted", "waiting")
+#: launches not yet started that `max_running` counts: beyond them a waiting train takes no room from one that would start (24 Oct
+#: 05:15Z: four trains waiting in full lines filled the count while two new nodes' slots stood empty)
+UNSTARTED_COUNTED = 2
 #: after a launched run ends, how long its attempt may take to reach the store before the launch counts as lost
 PUBLISH_GRACE_S = 1800
 #: check.py's exit for a twin that never took a slot
@@ -273,18 +282,19 @@ def failing(run_dir: Path) -> str | None:
     return "; ".join(out) or None
 
 
-def run_states(repo: Path, ids: list[str]) -> dict[str, tuple[str, int | None, str | None, str | None]]:
-    """Each run's (state, rc, ended_utc, what has failed so far while it runs: `failing`) from `research status RUN --json`, which
-    fetches `PROGRESS` with its records; a run it can't read is ("unknown", None, None, None)."""
+def run_states(repo: Path, ids: list[str]) -> dict[str, tuple]:
+    """Each run's (state, rc, ended_utc, what has failed so far while it runs: `failing`, the machine it runs on) from `research
+    status RUN --json`, which fetches `PROGRESS` with its records (a check waiting in its machine's slot line reads `waiting`); a run
+    it can't read is ("unknown", None, None, None)."""
     also = [x for n in PROGRESS for x in ("--also", n)]
 
-    def one(rid: str) -> tuple[str, int | None, str | None, str | None]:
+    def one(rid: str) -> tuple:
         r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
         try:
             run = json.loads(r.stdout)["runs"][0]
             state = run.get("state") or "unknown"
             return (state, run.get("rc"), run.get("ended_utc"),
-                    failing(Path(run["dir"])) if state in ACTIVE and run.get("dir") else None)
+                    failing(Path(run["dir"])) if state in ACTIVE and run.get("dir") else None, (run.get("remote") or {}).get("machine"))
         except (ValueError, KeyError, IndexError):
             return ("unknown", None, None, None)
 
@@ -318,6 +328,23 @@ def cancel_runs(repo: Path, ids: list[str], reason: str) -> dict[str, str]:
         if r.returncode:
             failed[rid] = (r.stderr or r.stdout).strip()[-300:] or f"exit {r.returncode}"
     return failed
+
+
+def free_slots(repo: Path, on: str) -> dict[str, int]:
+    """Each machine of ``on`` (`auto`, or `M1,M2`) with the train checks it could start now (check.py's `spare` of its
+    `read_slots`, with the queue's clone's check.py, as train.sh's `--on` places them), in ``on``'s order."""
+    import importlib.util
+
+    from .store import tools_registry
+
+    path = tools_registry.resolve("tools/verity/check/check.py", lambda p: (repo / p).is_file()) or "tools/verity/check/check.py"
+    s = importlib.util.spec_from_file_location("drive_check", repo / path)
+    check = importlib.util.module_from_spec(s)
+    sys.modules[s.name] = check
+    s.loader.exec_module(check)
+    names = list(check.AUTO) if on == "auto" else [n for n in on.split(",") if n]
+    docs = check.read_slots(names)
+    return {n: check.spare(docs[n], priority=True) if isinstance(docs.get(n), dict) else 0 for n in names}
 
 
 def merge_thread_post(text: str, to: tuple[str, ...] = (CI,), sender: str = "ci") -> bool:
@@ -604,8 +631,11 @@ class Driver:
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
                  now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], dict[str, str] | None] = cancel_runs,
                  evidence: Callable[[Path, list[str]], list[Path]] = evidence, defer: frozenset[str] = frozenset(),
-                 regenerate_locks: bool = False, per_pr_shadow: int = 0):
+                 regenerate_locks: bool = False, per_pr_shadow: int = 0,
+                 slots: Callable[[Path, str], dict[str, int]] = free_slots):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
+        #: each machine of `on` with the train checks it could start now (`free_slots`), read at most once a tick (`_spare`)
+        self.slots, self._free = slots, None
         #: the per-PR landing in shadow (`per_pr`): at most this many of its checks, and of its plans, at once; 0 is off
         self.per_pr_shadow = per_pr_shadow
         self.plan_launch: Callable[..., dict] = functools.partial(plan_launch, auth=q.auth)
@@ -1566,7 +1596,84 @@ class Driver:
         """The checks counted against `max_running`: drive's launches still running (`_counted`), and its pre-warms."""
         warm = sum(1 for r in drive.get("prewarm", {}).values() if not r.get("done") and r.get("ids")
                    and any(st in ACTIVE for st, *_ in self._states(r["ids"]).values()))
-        return warm + sum(self.verdict(c, main, drive).state == "running" for c in self._counted(drive, main))
+        return warm + self._load(drive, main)[0]
+
+    def _load(self, drive: dict, main: str) -> tuple[int, list[str]]:
+        """(how many of `_counted`'s running launches `max_running` counts: each that has started, and at most
+        `UNSTARTED_COUNTED` that haven't; those that haven't, `_waits`)."""
+        live = [c for c in self._counted(drive, main) if self.verdict(c, main, drive).state == "running"]
+        idle = [c for c in live if self._waits(drive, c)]
+        return len(live) - len(idle) + min(len(idle), UNSTARTED_COUNTED), idle
+
+    def _waits(self, drive: dict, commit: str) -> bool:
+        """Whether ``commit``'s launch hasn't started: it has a live twin and none holds a check slot (each in `WAITS`).  A twin
+        `research status` can't read (`unknown`) counts as started, so drive never moves its launch."""
+        launch = drive["launched"].get(commit) or drive.get("base", {}).get(commit) or {}
+        live = [s[0] for s in self._states(launch.get("ids") or []).values() if s[0] in ACTIVE]
+        return bool(live) and all(st in WAITS for st in live)
+
+    def _spare(self) -> dict[str, int]:
+        """`slots` of `on`, read once a tick; {} when they can't be read, so nothing moves on a guess."""
+        if self._free is None:
+            try:
+                self._free = dict(self.slots(self.repo, self.on))
+            except Exception as e:  # noqa: BLE001  (nothing moves; the launches wait where they are)
+                self.q.log(f"research queue drive: reading the check slots of {self.on} failed ({type(e).__name__}: {e})")
+                self._free = {}
+        return self._free
+
+    def move_waiting(self, drive: dict, members: list[Member], trains: list[int], main: str, top: int | None,
+                     idle: list[str]) -> list[str]:
+        """Move each train's check that hasn't started (``idle``), lowest first, onto a machine of `on` that could start it now
+        (`_spare`) and has no twin of it: cancel its twins, each still waiting for a slot (read again just before), and launch it
+        again with its rank, its touched suites kept, so `check.py --on` places it on that free slot (24 Oct 05:28Z: ci cancelled 23
+        twins by hand so drive would relaunch their trains onto two new nodes, after 1-4 h in lines whose memory gate admitted
+        none).  A free slot on a machine where a twin waits is that twin's to take; a twin that holds a slot is never cancelled.
+        Returns the commits moved."""
+        cands = sorted((c for c in idle if c in (self._tips or ()) and c in drive["launched"]), key=lambda c: self._pos[c])
+        free = self._spare() if cands else {}
+        moved: list[str] = []
+        for c in cands:
+            if not any(n > 0 for n in free.values()):
+                break
+            launch = drive["launched"][c]
+            live = {rid: s for rid, s in self._states(launch["ids"]).items() if s[0] in ACTIVE}
+            twins = {s[4] if len(s) > 4 else None for s in live.values()}
+            if None in twins:
+                continue                                    # where it waits is unknown
+            if near := next((t for t in twins if free.get(t, 0) > 0), None):
+                free[near] -= 1                             # its twin there takes that slot
+                continue
+            to = next(n for n, k in free.items() if k > 0)  # `choose`: the first machine of `on` with room
+            why = f"{c[:12]} waits in the slot lines of {', '.join(sorted(twins))} while {to} has a train slot free"
+            if self.dry_run or self.q.shadow:
+                self.q.log(f"research queue drive: would move {c[:12]}: {why}")
+                free[to] -= 1
+                continue
+            now = self.states(self.repo, list(live))
+            if not now or any(s[0] in ACTIVE and s[0] not in WAITS for s in now.values()):
+                continue                                    # a twin took a slot since: it runs where it is
+            waiting = [rid for rid, s in now.items() if s[0] in WAITS]
+            stuck = self.cancel(self.repo, waiting, f"drive: moved: {why}") or {}
+            self._seen.update({rid: ("cancelled", SIGTERM_RC, None, None) for rid in waiting if rid not in stuck})
+            if stuck:
+                self.q.log(f"research queue drive: not moving {c[:12]}: cancelling {' '.join(stuck)} failed; it waits where it is")
+                continue
+            floor = self._rank(members[trains[0]].commit) if top is not None else None
+            rank = floor + 1 if floor is not None and c == members[top].commit else self._rank(c)
+            with slot_rank(rank):
+                ids, tail = self.launch(self.repo, c, self.on, bool(launch.get("agreement")))
+            if not ids:
+                self.q.log(f"research queue drive: moving {c[:12]}: train.sh registered no run ({tail[-200:]}); it launches again "
+                           "as a train never launched")
+                continue
+            drive["launched"][c] = {**launch, "ids": ids, "at": self.now(), "moved": launch.get("moved", 0) + 1}
+            self._seen.update({rid: ("submitted", None, None, None) for rid in ids})
+            free[to] -= 1
+            moved.append(c)
+            self.q.log(f"research queue drive: moved {c[:12]} as {' '.join(ids)} (rank {rank}): {why}; cancelled "
+                       f"{' '.join(waiting)}")
+        return moved
 
     def _counted(self, drive: dict, main: str) -> list[str]:
         """The launches `max_running` counts: those of the commits `trains` checks now (every launch, before this tick's sync), the
@@ -2099,6 +2206,7 @@ class Driver:
         q = self.q
         self.dry_run, self._seen, self._prs, self._ev, self._relaunched, self._tips, self._pos = dry_run, {}, None, {}, set(), None, {}
         self._land_saw: str | None = None                   # the passed train this tick's land step tried, landed or held
+        self._free = None
         q._clone()
         q.fetch()
         if q.store is not None and q.store.remote is not None:
@@ -2184,7 +2292,7 @@ class Driver:
         trains = self.trains(len(members), self._cold(members))
         self._tips, self._pos = {members[i].commit for i in trains}, {m.commit: k for k, m in enumerate(members)}
         self.drop_hedges(drive, members, trains, main)
-        running = sum(self.verdict(c, main, drive).state == "running" for c in self._counted(drive, main))
+        running, idle = self._load(drive, main)
         running += self.prewarm(drive, running)
         self.start_postland(drive)                          # a slot of its own: `max_running` counts the trains' checks
         # a landing below a failed member shifts the trains' indices off it, and a check above it holds the failure drive is
@@ -2200,6 +2308,10 @@ class Driver:
         # still takes the first free slot (top, 24 Oct 04:44Z)
         top = trains[-1] if len(trains) > 1 and trains[-1] <= stop and self.max_running > 2 else None
         reserve = top is not None and self.verdict(members[top].commit, main, drive).state == "none"
+        if idle and (moved := self.move_waiting(drive, members, trains, main, top, idle)):
+            left = [c for c in idle if c not in moved]
+            running += len(moved) + min(len(left), UNSTARTED_COUNTED) - min(len(idle), UNSTARTED_COUNTED)
+            idle = left
         waited = False
         for i in trains:
             m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])
@@ -2219,14 +2331,21 @@ class Driver:
                 what.append(f"{m.commit[:12]} waits: {members[stop].commit[:12]} (#{members[stop].pr}) below it failed, and "
                             "its failure is settled first")
                 break
-            if running >= self.max_running - (reserve and i != top):
+            full = running >= self.max_running - (reserve and i != top)
+            # past `UNSTARTED_COUNTED` waiting, a train launches only onto a free slot (the top keeps its place in the lines)
+            queued = i != top and len(idle) >= UNSTARTED_COUNTED and not any(n > 0 for n in self._spare().values())
+            if full or queued:
                 if not waited:
-                    what.append(f"{m.commit[:12]} waits: {running} checks of `{q.branch}` running"
+                    what.append(f"{m.commit[:12]} waits: " + (
+                        f"{running} checks of `{q.branch}` running" if full else
+                        f"{len(idle)} checks of `{q.branch}` wait for a check slot, and no machine of {self.on} has one free")
                                 + (f", and one is kept for the top, {members[top].commit[:12]}" if reserve and i != top else ""))
                     waited = True
                 if reserve and i != top:
                     continue
                 break
+            if to := next((n for n, k in (self._free or {}).items() if k > 0), None):
+                self._free[to] -= 1                         # `check.py --on` places it there
             agreement = needs_agreement(self.repo, main, m.commit)
             if dry_run or q.shadow:
                 q.log(f"research queue drive: would launch train.sh {m.commit[:12]} {self.on}"
