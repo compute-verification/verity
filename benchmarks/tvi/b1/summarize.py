@@ -229,7 +229,8 @@ def main():
                        "nvfp4": "NVFP4 (E2M1, 16-blocks, E4M3 scales)"},
         "h_bits_per_token": H,
         "rho": "(2/3) * crossings * F / h at the cheapest boundary: rho_2x exact fwd twice, rho_fb exact fwd+bwd, "
-               "rho_apx rank-r correction keeping 90% of the shift, {min, mid}: [layer, rank, F, rho] (see summarize.py)",
+               "rho_apx rank-r correction keeping 90% of the shift, read at the cheapest probed layer (min) and at L/2 "
+               "(mid); per-entry ranks are in 'apx', the rho values in 'cliff', the retention curves in F_beta_layers.json",
         "beta_ranges": rng,
         "cliff": clf,
         "entry_format_columns": list(FMT_COLS),
