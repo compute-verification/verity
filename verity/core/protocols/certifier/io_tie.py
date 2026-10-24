@@ -1,7 +1,8 @@
 """The I/O tie (`PROTOCOL.md`, "The I/O tie"), a prototype on a fake upstream: the reference of one egress
 link-window's tie, a unit at selection `All` that opens every cell, and the Boolean Definitions it is built from.
 Nothing here is in a Spec or proved, and no warden writes these cells yet: the fake upstream commits them as the design
-has the warden commit them, one `hm96-sha512/row/v2` row a cell under a per-window `frame-v3-sha512` root.
+has the warden commit them, one `hm96-sha512/row/v2` row a bucket (its R cells) under a per-window `frame-v3-sha512`
+root.
 
 **The cells.** A link-window's egress is N = T·R cells of B bytes in the warden's schedule order, R a bucket, so cell
 i is in bucket ⌊i / R⌋ of the window. A cell is a pad (`pad_cell`, B zero bytes) or a data cell (`data_cell`): a
@@ -12,33 +13,34 @@ The circuit routes M = 2^D ≥ N slots (`Shape`), the N cells and M − N pads o
 
 **The window's table** is one value per link-window, committed before the tie runs: the window's outputs in (q, j)
 order, one 16-byte slot each (`Slot`: the request's ordinal q, the output's index j, its session-global egress bucket b
-and its token id, u32be each), then empty slots, all 0xFF, to M slots, eight a 128-byte row. q, j and b are advice v0's
-outputs and release buckets; the id is the token port's, the server's sampled id (`window_slots` says what the table
-must equal).
+and its token id, u32be each), then empty slots, all 0xFF, to M slots, TS a row (`Shape.TS`: 256, a 4,096-byte row,
+or M / 2 below M = 512). q, j and b are advice v0's outputs and release buckets; the id is the token port's, the
+server's sampled id (`window_slots` says what the table must equal).
 
 **What 1 means** (`reference`): both roots are their rows' (the cells' and the table's), every cell is a pad or a data
-cell, every bucket is in that order (its data cells first, their streams non-decreasing), the table's full slots come first, sorted by (q, j) with each request's j consecutive, and the data cells are in
-one-to-one correspondence with the full slots, each stream's data cells in schedule order to its request's slots in
-order, every slot's q, id and b its cell's stream, id and bucket (the window's first bucket plus ⌊i / R⌋). So a
-duplicated, dropped, reordered or altered cell, a covert byte in a pad, and a cell on another request's stream each
-make it 0.
+cell, every bucket is in that order (its data cells first, their streams non-decreasing), the table's full slots come
+first, sorted by (q, j) with each request's j consecutive, and the data cells are in one-to-one correspondence with
+the full slots, each stream's data cells in schedule order to its request's slots in order, every slot's q, id and b
+its cell's stream, id and bucket (the window's first bucket plus ⌊i / R⌋). So a duplicated, dropped, reordered or
+altered cell, a covert byte in a pad, and a cell on another request's stream each make it 0.
 
     IoTieCell{B}(cell: Array<B, Byte>) -> Array<66>                  ok, data, stream (u32), id (u32), LSB first
     IoTieOrder{T, R}(cells: Array<N, Array<33>>) -> Value<1>         each cell's data bit and stream
     IoTieRoute{W, D}(xs: Array<M, Array<W>>, switches: Array<S>) -> Array<M, Array<W>>
         a Beneš network of S = (2D − 1)·2^(D − 1) switches, W ANDs each
     IoTieMatch{D, DB}(routed: Array<M, Array<W>>, table: Array<M, Array<16, Byte>>, base: Array<32>) -> Value<1>
-    IoTieContent{B, T, R}(cells: Array<N, Array<B, Byte>>, table: Array<M / 8, Array<128, Byte>>, base: Array<32>,
+    IoTieContent{B, T, R}(cells: Array<N, Array<B, Byte>>, table: Array<M, Array<16, Byte>>, base: Array<32>,
         switches: Array<S>) -> Value<1>
     NetworkRowsRoot{N_BITS, COUNT}(rows: Array<COUNT, Array<N_BITS>>, salts: Array<COUNT, Salt>, root, domain) -> Value<1>
     IoTieWindow{B, T, R}(cells_root, cells_domain, cells, cell_salts, table_root, table_domain, table, table_salts,
         base, switches) -> Value<1>
         W = 65 + DB + D: a cell's data bit, stream and id, its bucket (DB = bitlen(T − 1) bits) and its index
 
-`IoTieWindow` is the unit: it recomputes both roots from every row and salt. `IoTieContent` is the same tie when the
-proof service opens the cells and the table as registered rows instead (the verifier opens every row under its root).
-The switches are the prover's (`switches`): any setting is a permutation of the slots, and `IoTieMatch` holds the
-routed cells to the table.
+`IoTieWindow` is the unit: it recomputes both roots from every row and salt, the cells' from T rows of R·B bytes and
+the table's from M / TS rows of 16·TS. A row's digest is most of its cost and grows with its bytes, its hm96 leaf and
+frame-v3 leaf and nodes don't, so rows this long hash every byte about once. `IoTieContent` is the tie without the
+roots. The switches are the prover's (`switches`): any setting is a permutation of the slots, and `IoTieMatch` holds
+the routed cells to the table.
 """
 from __future__ import annotations
 
@@ -74,8 +76,8 @@ CELL_USED = HEADER.size + ID_EVENT_BYTES
 #: `IoTieCell`'s output: ok, data, the stream and the id
 CELL_OUT = 2 + 32 + 32
 SLOT = struct.Struct(">IIII")
-SLOTS_A_ROW = 8
-ROW_BYTES = SLOT.size * SLOTS_A_ROW
+#: a table row's slots at M ≥ 512: 4,096 bytes
+TABLE_ROW_SLOTS = 256
 EMPTY = 0xFFFF_FFFF
 
 
@@ -133,8 +135,9 @@ def parse_cell(cell: bytes) -> Parsed | None:
 
 @dataclass(frozen=True)
 class Shape:
-    """A link-window's egress: T buckets of R cells of B bytes, N = T·R cells, routed and matched over M = 2^D ≥ N
-    slots (D ≥ 4, a table of at least two rows); the cells N … M − 1 are pads the circuit makes, not the warden."""
+    """A link-window's egress: T ≥ 2 buckets of R cells of B bytes, N = T·R cells, routed and matched over M = 2^D ≥ N
+    slots (D ≥ 4); the cells N … M − 1 are pads the circuit makes, not the warden. The warden's rows are the T
+    buckets, the table's M / TS rows of TS slots."""
 
     B: int
     T: int
@@ -142,9 +145,9 @@ class Shape:
 
     def __post_init__(self) -> None:
         _check_cell_bytes(self.B)
-        for name in ("T", "R"):
-            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
-                raise ValueError(f"{name} is a positive int, not {getattr(self, name)!r}")
+        for name, least in (("T", 2), ("R", 1)):
+            if type(getattr(self, name)) is not int or getattr(self, name) < least:
+                raise ValueError(f"{name} is an int of at least {least}, not {getattr(self, name)!r}")
         if self.N > 1 << 32:
             raise ValueError(f"a window of {self.N} cells has more than 2^32")
 
@@ -173,6 +176,15 @@ class Shape:
     def switches(self) -> int:
         return (2 * self.D - 1) << (self.D - 1)
 
+    @property
+    def TS(self) -> int:
+        """A table row's slots: two rows at least."""
+        return min(TABLE_ROW_SLOTS, self.M // 2)
+
+    @property
+    def table_rows(self) -> int:
+        return self.M // self.TS
+
     def bucket(self, i: int) -> int:
         return i // self.R
 
@@ -197,18 +209,26 @@ def window_slots(outputs: Sequence[tuple[int, int]], release: Sequence[int], ids
     return sorted(Slot(q, j, b, x) for (q, j), b, x in zip(outputs, release, ids) if b // T == window)
 
 
-def table_rows(slots: Sequence[Slot], M: int) -> list[bytes]:
-    """The table's rows: the slots, then empty slots (all 0xFF) to M, eight a 128-byte row."""
-    if len(slots) > M or M % SLOTS_A_ROW:
-        raise ValueError(f"{len(slots)} slots don't fit a table of {M}")
-    data = b"".join(SLOT.pack(*s) for s in slots) + b"\xff" * (SLOT.size * (M - len(slots)))
-    return [data[k:k + ROW_BYTES] for k in range(0, len(data), ROW_BYTES)]
+def table_rows(slots: Sequence[Slot], shape: Shape) -> list[bytes]:
+    """The table's rows: the slots, then empty slots (all 0xFF) to M, TS a row."""
+    if len(slots) > shape.M:
+        raise ValueError(f"{len(slots)} slots don't fit a table of {shape.M}")
+    data = b"".join(SLOT.pack(*s) for s in slots) + b"\xff" * (SLOT.size * (shape.M - len(slots)))
+    n = SLOT.size * shape.TS
+    return [data[k:k + n] for k in range(0, len(data), n)]
 
 
 def table_slots(rows: Sequence[bytes]) -> list[Slot]:
     """Every slot of the table's rows, empty ones included."""
     data = b"".join(rows)
     return [Slot(*SLOT.unpack_from(data, k)) for k in range(0, len(data), SLOT.size)]
+
+
+def bucket_rows(shape: Shape, cells: Sequence[bytes]) -> list[bytes]:
+    """The warden's rows: each bucket's R cells, R·B bytes."""
+    if len(cells) != shape.N:
+        raise ValueError(f"a window has {shape.N} cells, not {len(cells)}")
+    return [b"".join(cells[t * shape.R:(t + 1) * shape.R]) for t in range(shape.T)]
 
 
 def domain(binding: bytes, count: int) -> CommitmentDomain:
@@ -244,7 +264,8 @@ def fake_salt(seed: bytes, i: int) -> bytes:
 @dataclass(frozen=True)
 class Instance:
     """One egress link-window's tie: the shape, the window's first bucket `base` (w·T) and the two committed values,
-    each as its rows, salts, root and domain id (the roots and domain ids public, the rest witness)."""
+    the cells (with one salt a bucket row, `bucket_rows`) and the table's rows, each with its salts, root and domain id
+    (the roots and domain ids public, the rest witness)."""
 
     shape: Shape
     base: int
@@ -320,12 +341,12 @@ def canonical_map(shape: Shape, base: int, cells: Sequence[bytes], rows: Sequenc
 def reference_parts(inst: Instance) -> dict[str, bool]:
     """Each part's verdict in the clear: the cells' root, the table's root, and the content (`IoTieContent`'s)."""
     sh = inst.shape
-    if len(inst.cells) != sh.N or len(inst.rows) != sh.M // SLOTS_A_ROW:
+    if len(inst.cells) != sh.N or len(inst.rows) != sh.table_rows:
         raise ValueError(f"the instance has {len(inst.cells)} cells and {len(inst.rows)} table rows, the shape "
-                         f"{sh.N} and {sh.M // SLOTS_A_ROW}")
+                         f"{sh.N} and {sh.table_rows}")
     if type(inst.base) is not int or not 0 <= inst.base <= (1 << 32) - sh.T:
         raise ValueError(f"a window's first bucket is a u32 with T buckets after it, not {inst.base!r}")
-    cells = rows_root(inst.cells_domain, inst.cells, inst.cell_salts)
+    cells = rows_root(inst.cells_domain, bucket_rows(sh, inst.cells), inst.cell_salts)
     table = rows_root(inst.table_domain, inst.rows, inst.row_salts)
     return {"cells_root": cells == inst.cells_root, "table_root": table == inst.table_root,
             "content": all(len(c) == sh.B for c in inst.cells) and canonical_map(sh, inst.base, inst.cells, inst.rows) is not None}
@@ -593,7 +614,7 @@ IoTieOrder = _part(
 
 def _sig_content(S):
     sh = Shape(S.B, S.T, S.R)
-    return ((("cells", Array(sh.N, Array(S.B, BYTE))), ("table", Array(sh.M // SLOTS_A_ROW, Array(ROW_BYTES, BYTE))),
+    return ((("cells", Array(sh.N, Array(S.B, BYTE))), ("table", Array(sh.M, Array(SLOT.size, BYTE))),
              ("base", Array(32, BIT)), ("switches", Array(sh.switches, BIT))), BIT)
 
 
@@ -610,8 +631,7 @@ def _body_content(B, S, cells, table, base, switches_):
         xs += K.bits(0, CELL_OUT - 1 + sh.DB) + K.bits(i, sh.D)
     oks += HC._refs(B.call(bind(IoTieOrder, T=S.T, R=S.R), HC._coll(Array(sh.N, Array(33, BIT)), order)))
     routed = B.call(bind(IoTieRoute, W=sh.W, D=sh.D), HC._coll(Array(sh.M, Array(sh.W, BIT)), xs), switches_)
-    slots = HC._coll(Array(sh.M, Array(SLOT.size, BYTE)), HC._refs(table))
-    oks += HC._refs(B.call(bind(IoTieMatch, D=sh.D, DB=sh.DB), routed, slots, base))
+    oks += HC._refs(B.call(bind(IoTieMatch, D=sh.D, DB=sh.DB), routed, table, base))
     return B.call(BL.and_gate(len(oks)), HC._coll(Array(len(oks), BIT), oks))
 
 
@@ -666,30 +686,30 @@ NetworkRowsRoot = CompositeDefinition(
 
 def _sig_window(S):
     sh = Shape(S.B, S.T, S.R)
-    rows = sh.M // SLOTS_A_ROW
     return ((("cells_root", DIGEST), ("cells_domain", DIGEST), ("cells", Array(sh.N, Array(S.B, BYTE))),
-             ("cell_salts", Array(sh.N, SALT)), ("table_root", DIGEST), ("table_domain", DIGEST),
-             ("table", Array(rows, Array(ROW_BYTES, BYTE))), ("table_salts", Array(rows, SALT)), ("base", Array(32, BIT)),
-             ("switches", Array(sh.switches, BIT))), BIT)
+             ("cell_salts", Array(sh.T, SALT)), ("table_root", DIGEST), ("table_domain", DIGEST),
+             ("table", Array(sh.table_rows, Array(SLOT.size * sh.TS, BYTE))), ("table_salts", Array(sh.table_rows, SALT)),
+             ("base", Array(32, BIT)), ("switches", Array(sh.switches, BIT))), BIT)
 
 
 def _body_window(B, S, cells_root, cells_domain, cells, cell_salts, table_root, table_domain, table, table_salts, base,
                  switches_):
     sh = Shape(S.B, S.T, S.R)
-    rows = sh.M // SLOTS_A_ROW
-    oks = [B.call(bind(NetworkRowsRoot, N_BITS=8 * S.B, COUNT=sh.N), cells.reshape(Array(sh.N, Array(8 * S.B, BIT))),
+    cell_row, table_row = 8 * S.B * S.R, 8 * SLOT.size * sh.TS
+    oks = [B.call(bind(NetworkRowsRoot, N_BITS=cell_row, COUNT=sh.T), cells.reshape(Array(sh.T, Array(cell_row, BIT))),
                   cell_salts, cells_root, cells_domain),
-           B.call(bind(NetworkRowsRoot, N_BITS=8 * ROW_BYTES, COUNT=rows), table.reshape(Array(rows, Array(8 * ROW_BYTES, BIT))),
-                  table_salts, table_root, table_domain),
-           B.call(bind(IoTieContent, B=S.B, T=S.T, R=S.R), cells, table, base, switches_)]
+           B.call(bind(NetworkRowsRoot, N_BITS=table_row, COUNT=sh.table_rows),
+                  table.reshape(Array(sh.table_rows, Array(table_row, BIT))), table_salts, table_root, table_domain),
+           B.call(bind(IoTieContent, B=S.B, T=S.T, R=S.R), cells, table.reshape(Array(sh.M, Array(SLOT.size, BYTE))),
+                  base, switches_)]
     bits = [r for o in oks for r in HC._refs(o)]
     return B.call(BL.and_gate(3), HC._coll(Array(3, BIT), bits))
 
 
 IoTieWindow = CompositeDefinition(
     "IoTieWindow", 1, ("B", "T", "R"), _sig_window, _body_window, conformance="exact-model-tested",
-    doc="1 iff the cells' rows are the cells root's (`NetworkRowsRoot`), the table's rows the table root's, and the "
-        "cells match the table (`IoTieContent`): the I/O tie of one egress link-window, every cell opened")
+    doc="1 iff the cells' bucket rows are the cells root's (`NetworkRowsRoot`), the table's rows the table root's, and "
+        "the cells match the table (`IoTieContent`): the I/O tie of one egress link-window, every cell opened")
 
 
 # --- arguments -------------------------------------------------------------------------------------------------------
@@ -709,7 +729,7 @@ def window_arguments(inst: Instance, bits: Sequence[int]) -> list[list[int]]:
 
 
 __all__ = ["CELL_OUT", "CELL_USED", "EMPTY", "FrameV3Pad", "ID_AT", "ID_EVENT_BYTES", "Instance", "IoTieCell", "IoTieContent",
-           "IoTieMatch", "IoTieOrder", "IoTieRoute", "IoTieWindow", "NetworkRowsRoot", "Parsed", "ROW_BYTES", "SLOT", "SLOTS_A_ROW",
-           "Shape", "Slot", "benes", "benes_apply", "canonical_map", "content_arguments", "data_cell", "domain",
-           "fake_salt", "id_event", "pad_cell", "parse_cell", "reference", "reference_parts", "rows_root", "switches",
-           "table_rows", "table_slots", "window_arguments", "window_slots"]
+           "IoTieMatch", "IoTieOrder", "IoTieRoute", "IoTieWindow", "NetworkRowsRoot", "Parsed", "SLOT", "Shape", "Slot",
+           "TABLE_ROW_SLOTS", "benes", "benes_apply", "bucket_rows", "canonical_map", "content_arguments", "data_cell",
+           "domain", "fake_salt", "id_event", "pad_cell", "parse_cell", "reference", "reference_parts", "rows_root",
+           "switches", "table_rows", "table_slots", "window_arguments", "window_slots"]

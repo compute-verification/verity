@@ -17,8 +17,8 @@ from verity.ml.commitments.rowleaf import row_leaf
 from verity.core.protocols.certifier import head_check as HC, io_tie as IT
 from verity.core.protocols.certifier.active import DATA, HEADER
 
-#: the circuits' shape: N = 12 cells, M = 16 slots
-SMALL = IT.Shape(256, 4, 3)
+#: the circuits' shape: N = 12 cells in three bucket rows (and a pad in their tree), M = 16 slots in two table rows
+SMALL = IT.Shape(256, 3, 4)
 #: the reference's shape: N = 120 cells, M = 128 slots
 BIG = IT.Shape(256, 6, 20)
 WINDOW = 7
@@ -29,17 +29,18 @@ def _h(label: bytes) -> bytes:
     return hashlib.sha512(label).digest()
 
 
-def serve(shape: IT.Shape, responses: dict[int, tuple[int, list[int]]], seed: int):
+def serve(shape: IT.Shape, responses: dict[int, tuple[int, list[int]]], seed: int, occupancy: list[int] | None = None):
     """The warden's cells for request q's outputs j0, j0 + 1, … (`responses[q] = (j0, ids)`) released in window
     `WINDOW`: the requests' outputs interleaved at random in each request's order, cut into buckets of random
-    occupancy, each bucket released left-packed and sorted by stream; and the outputs, release buckets and ids advice
-    v0 and the port list, with each request's outputs in the windows before and after."""
+    occupancy (or `occupancy`), each bucket released left-packed and sorted by stream; and the outputs, release
+    buckets and ids advice v0 and the port list, with each request's outputs in the windows before and after."""
     rng = random.Random(seed)
     order = [q for q, (_, xs) in responses.items() for _ in xs]
     rng.shuffle(order)
-    occupancy = [0] * shape.T
-    for _ in order:
-        occupancy[rng.choice([t for t in range(shape.T) if occupancy[t] < shape.R])] += 1
+    if occupancy is None:
+        occupancy = [0] * shape.T
+        for _ in order:
+            occupancy[rng.choice([t for t in range(shape.T) if occupancy[t] < shape.R])] += 1
     nxt, placed, k = dict.fromkeys(responses, 0), [], 0
     for t, n in enumerate(occupancy):
         bucket = []
@@ -68,11 +69,11 @@ def serve(shape: IT.Shape, responses: dict[int, tuple[int, list[int]]], seed: in
 
 
 def commit(shape: IT.Shape, cells, rows, seed: bytes = b"w") -> IT.Instance:
-    """Both values committed as the warden (the cells) and the prover (the table) commit them."""
-    cd, td = IT.domain(_h(b"cells" + seed), shape.N), IT.domain(_h(b"table" + seed), shape.M // IT.SLOTS_A_ROW)
-    cs = [IT.fake_salt(seed + b"c", i) for i in range(len(cells))]
+    """Both values committed as the warden (the cells, a row a bucket) and the prover (the table) commit them."""
+    cd, td = IT.domain(_h(b"cells" + seed), shape.T), IT.domain(_h(b"table" + seed), shape.table_rows)
+    cs = [IT.fake_salt(seed + b"c", t) for t in range(shape.T)]
     ts = [IT.fake_salt(seed + b"t", i) for i in range(len(rows))]
-    return IT.Instance(shape, WINDOW * shape.T, tuple(cells), tuple(cs), IT.rows_root(cd.domain_id, cells, cs),
+    return IT.Instance(shape, WINDOW * shape.T, tuple(cells), tuple(cs), IT.rows_root(cd.domain_id, IT.bucket_rows(shape, cells), cs),
                        cd.domain_id, tuple(rows), tuple(ts), IT.rows_root(td.domain_id, rows, ts), td.domain_id)
 
 
@@ -88,7 +89,7 @@ def responses(seed: int, shape: IT.Shape, count: int = 4) -> dict[int, tuple[int
 
 def honest(shape: IT.Shape, seed: int = 1) -> IT.Instance:
     cells, outputs, release, ids = serve(shape, responses(seed, shape), seed)
-    return commit(shape, cells, IT.table_rows(IT.window_slots(outputs, release, ids, WINDOW, shape.T), shape.M))
+    return commit(shape, cells, IT.table_rows(IT.window_slots(outputs, release, ids, WINDOW, shape.T), shape))
 
 
 @pytest.fixture(scope="module")
@@ -115,11 +116,16 @@ def test_the_table_is_the_windows_outputs_in_request_order():
     outputs = [(5, 0), (2, 3), (5, 1), (2, 4), (9, 0)]
     slots = IT.window_slots(outputs, [70, 71, 75, 84, 69], [10, 20, 30, 40, 50], 7, 10)
     assert slots == [IT.Slot(2, 3, 71, 20), IT.Slot(5, 0, 70, 10), IT.Slot(5, 1, 75, 30)]
-    rows = IT.table_rows(slots, 16)
-    assert len(rows) == 2 and all(len(r) == IT.ROW_BYTES for r in rows)
+    rows = IT.table_rows(slots, SMALL)
+    assert len(rows) == 2 and all(len(r) == 128 for r in rows)
     assert IT.table_slots(rows)[:3] == slots and set(b"".join(rows)[3 * IT.SLOT.size:]) == {0xFF}
     with pytest.raises(ValueError, match="don't fit"):
-        IT.table_rows(slots * 6, 16)
+        IT.table_rows(slots * 6, SMALL)
+    served = IT.Shape(256, 600, 1_686)
+    assert (served.TS, served.table_rows, len(IT.table_rows(slots, served)[0])) == (256, 4_096, 4_096)
+    assert [len(r) for r in IT.bucket_rows(SMALL, [IT.pad_cell(256)] * SMALL.N)] == [1_024] * 3
+    with pytest.raises(ValueError, match="at least 2"):
+        IT.Shape(256, 1, 8)
 
 
 def test_a_rows_root_is_its_domains_tree():
@@ -133,10 +139,10 @@ def test_a_rows_root_is_its_domains_tree():
 def test_the_honest_window_is_accepted_and_so_are_an_empty_and_a_full_one(big):
     assert IT.reference_parts(big) == {"cells_root": True, "table_root": True, "content": True}
     assert len({IT.parse_cell(c).stream for c in big.cells if IT.parse_cell(c).data}) == 4
-    empty = commit(BIG, [IT.pad_cell(BIG.B)] * BIG.N, IT.table_rows([], BIG.M))
+    empty = commit(BIG, [IT.pad_cell(BIG.B)] * BIG.N, IT.table_rows([], BIG))
     assert IT.reference(empty)
     cells, outputs, release, ids = serve(BIG, {4: (0, list(range(BIG.N)))}, 2)
-    assert IT.reference(commit(BIG, cells, IT.table_rows(IT.window_slots(outputs, release, ids, WINDOW, BIG.T), BIG.M)))
+    assert IT.reference(commit(BIG, cells, IT.table_rows(IT.window_slots(outputs, release, ids, WINDOW, BIG.T), BIG)))
 
 
 def _data(inst):
@@ -215,7 +221,8 @@ def _table_tampers(inst):
     def rows(ss, pad=b""):
         data = b"".join(IT.SLOT.pack(*s) for s in ss)
         data = (data + pad + b"\xff" * (IT.SLOT.size * inst.shape.M))[:IT.SLOT.size * inst.shape.M]
-        return [data[k:k + IT.ROW_BYTES] for k in range(0, len(data), IT.ROW_BYTES)]
+        n = IT.SLOT.size * inst.shape.TS
+        return [data[k:k + n] for k in range(0, len(data), n)]
 
     full = slots[:n]
     return {
@@ -357,21 +364,21 @@ def test_the_parts_ands():
 @pytest.mark.slow
 def test_the_window_circuit_is_its_reference():
     """`IoTieWindow` on an honest window and on one wrong in a cell's salt, the table root or the content: what the
-    parts' tests can't reach is the wiring of every cell into both its root and the content, and the pads past N in
-    the cells' tree (`FrameV3Pad`). Building the hm96 and frame-v3 gadgets' Boolean bodies takes most of its time."""
+    parts' tests can't reach is the wiring of every cell into both its bucket's row and the content, and the pad past
+    the T rows in the cells' tree (`FrameV3Pad`). Building the hm96 and frame-v3 gadgets' Boolean bodies takes most of its time."""
     inst = honest(SMALL, 6)
     other = honest(SMALL, 8)
     cases = [inst, replace(inst, cell_salts=(IT.fake_salt(b"x", 0), *inst.cell_salts[1:])),
              replace(inst, table_root=other.table_root), commit(SMALL, _cell_tampers(inst)["a wrong id"], inst.rows)]
     want = [int(IT.reference(i)) for i in cases]
     assert want == [1, 0, 0, 0]
-    rows = [bytes([i]) * IT.ROW_BYTES for i in range(3)]
+    rows = [bytes([i]) * 128 for i in range(3)]
     salts = [IT.fake_salt(b"r", i) for i in range(3)]
     dom = IT.domain(_h(b"r"), 3)
     root = IT.rows_root(dom.domain_id, rows, salts)
     d = HC._digest_bits
     rargs = [[b for r in rows for b in HC._bytes_bits(r)], [b for s in salts for b in d(s)], d(root), d(dom.domain_id)]
-    assert _eval(bind(IT.NetworkRowsRoot, N_BITS=8 * IT.ROW_BYTES, COUNT=3),
+    assert _eval(bind(IT.NetworkRowsRoot, N_BITS=1024, COUNT=3),
                  *[[x, y] for x, y in zip(rargs, [*rargs[:2], d(other.table_root), rargs[3]])]) == [1, 0]
     args = [IT.window_arguments(i, IT.switches(i)) for i in cases]
     fn = bind(IT.IoTieWindow, B=SMALL.B, T=SMALL.T, R=SMALL.R)

@@ -36,7 +36,7 @@ A spec-level reference for network accounting's timing channel:
   every cell of an egress link-window is opened, each a pad or the canonical event of one token id on the stream the
   warden set, and the cells are one-to-one with the window's table (advice v0's request, index and release bucket of
   each output, and the token port's id). Each bucket's cells are in one canonical order, data first and sorted by
-  stream. It has the reference and the unit's Boolean Definition (`IoTieWindow`: both roots by `NetworkRowsRoot`, then
+  stream, and the warden commits them as one hiding row. It has the reference and the unit's Boolean Definition (`IoTieWindow`: both roots by `NetworkRowsRoot`, then
   `IoTieContent`: `IoTieCell` on every cell, `IoTieOrder`, the prover's Beneš routing `IoTieRoute`, `IoTieMatch`);
 - the capacity counts;
 - the calibration of honest runs;

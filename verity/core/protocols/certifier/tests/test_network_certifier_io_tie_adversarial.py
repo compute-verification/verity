@@ -35,7 +35,7 @@ def _cell_circuit(cells):
 
 
 def _table(outputs, release, ids):
-    return IT.table_rows(IT.window_slots(outputs, release, ids, WINDOW, BIG.T), BIG.M)
+    return IT.table_rows(IT.window_slots(outputs, release, ids, WINDOW, BIG.T), BIG)
 
 
 def test_no_cell_field_but_the_id_is_the_servers():
@@ -85,9 +85,9 @@ def test_a_variable_length_response_has_its_map():
 def test_a_buckets_order_carries_nothing():
     """Advice v0's open item, the order within a bucket: of every order of a bucket's frames, the tie accepts one, so
     the order is a function of which frames the bucket holds, which advice v0's release buckets say and charge."""
-    one = IT.Shape(B, 1, 8)
-    cells, outputs, release, ids = serve(one, {3: (0, [10, 11]), 8: (4, [12, 13]), 20: (0, [14])}, 14)
-    inst = commit(one, cells, IT.table_rows(IT.window_slots(outputs, release, ids, WINDOW, one.T), one.M))
+    one = IT.Shape(B, 2, 8)
+    cells, outputs, release, ids = serve(one, {3: (0, [10, 11]), 8: (4, [12, 13]), 20: (0, [14])}, 14, [5, 0])
+    inst = commit(one, cells, IT.table_rows(IT.window_slots(outputs, release, ids, WINDOW, one.T), one))
     assert IT.reference(inst) and [IT.parse_cell(c).stream for c in cells[:5]] == [3, 3, 8, 8, 20]
     accepted = 0
     for order in itertools.permutations(range(5)):

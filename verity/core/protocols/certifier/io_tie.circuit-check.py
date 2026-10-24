@@ -7,9 +7,9 @@ from typing import Any
 
 def _network_io_tie_roots() -> list[Any]:
     """The I/O tie's prototype (`verity.core.protocols.certifier.io_tie`) at the tests' size class: a link-window of
-    T = 4 buckets of R = 3 256-byte cells (N = 12 cells routed over M = 16 slots), which reaches the cell's parse, the
-    buckets' order, the Beneš routing, the match against the table, the frame-v3 pads past N in the cells' tree and
-    both rows roots at their smallest; and the cell's parse at B = 4,096."""
+    T = 3 buckets of R = 4 256-byte cells (N = 12 cells routed over M = 16 slots), which reaches the cell's parse, the
+    buckets' order, the Beneš routing, the match against the table, the frame-v3 pad past the three bucket rows in the
+    cells' tree and both rows roots at their smallest; and the cell's parse at B = 4,096."""
     from verity.ml.circuits.defs import bind
     from verity.core.protocols.certifier.io_tie import (FrameV3Pad, IoTieCell, IoTieContent, IoTieMatch, IoTieOrder,
                                                         IoTieRoute, IoTieWindow, NetworkRowsRoot)
@@ -17,11 +17,11 @@ def _network_io_tie_roots() -> list[Any]:
     return [
         bind(IoTieCell, B=256),
         bind(IoTieCell, B=4096),
-        bind(IoTieOrder, T=4, R=3),
+        bind(IoTieOrder, T=3, R=4),
         bind(IoTieRoute, W=71, D=4),
         bind(IoTieMatch, D=4, DB=2),
-        bind(IoTieContent, B=256, T=4, R=3),
+        bind(IoTieContent, B=256, T=3, R=4),
         bind(FrameV3Pad, B=1),
         bind(NetworkRowsRoot, N_BITS=1024, COUNT=3),
-        bind(IoTieWindow, B=256, T=4, R=3),
+        bind(IoTieWindow, B=256, T=3, R=4),
     ]
