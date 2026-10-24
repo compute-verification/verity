@@ -36,8 +36,6 @@ SLEEP_IN_SOURCE = re.compile(r"\bsleep\(")
 
 ALLOWED: dict[str, str] = {
     "benchmarks/numerical/tests/reference/exhaustive_driver.py": "the WP1 pod driver (a recorded run, not a test) reports its steps' wall time",
-    "integrations/vllm/tests/check/adversarial.py::run_checkers": "the mutation harness reports each run's seconds; no test reads them",
-    "integrations/vllm/tests/check/adversarial.py::run_one": "the mutation harness reports each fold's seconds; no test reads them",
     "integrations/vllm/tests/commit/test_commit_fail_closed.py::_WATCHDOG_PROG":
         "drives the native collector's dead-watchdog, a C++ timer with no injectable clock; CUDA only, never in check",
     "integrations/vllm/tests/engine/int8_decode_split_gpu.py":

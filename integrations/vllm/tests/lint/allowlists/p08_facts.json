@@ -293,10 +293,6 @@
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_80"},
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_89"},
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_90"},
-    {"file": "verity_vllm/properties/census.py", "kind": "sm-arch", "symbol": "Options", "detail": "sm_89"},
-    {"file": "verity_vllm/properties/protected.py", "kind": "model", "symbol": "<module>", "detail": "qwen"},
-    {"file": "verity_vllm/properties/protected.py", "kind": "model", "symbol": "new_patterns", "detail": "qwen"},
-    {"file": "verity_vllm/properties/protected.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_89", "count": 2},
-    {"file": "verity_vllm/properties/protected.py", "kind": "sm-arch", "symbol": "new_patterns", "detail": "sm_89", "count": 2}
+    {"file": "verity_vllm/properties/census.py", "kind": "sm-arch", "symbol": "Options", "detail": "sm_89"}
   ]
 }
