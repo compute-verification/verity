@@ -14,6 +14,10 @@
    "owner": "@memory-accounting",
    "digest": "3dee4687f0a5685366080d463e9353692d5143af24e7a7600de6e093a4e07d2d"
   },
+  "Accounting.Assumptions.CircuitCarriers": {
+   "owner": "@compute-accounting",
+   "digest": "86eefefedabfc6f9913256922f58342cd1e1e7afa87e9777317b9668dd15f48a"
+  },
   "Accounting.Assumptions.Compose.GuessLuckAt": {
    "owner": "@compute-accounting",
    "digest": "0793432daba184ac1d9937071bc9342335f5fc5d700b8a6ec6f21e1f51cbf5ae"
@@ -89,6 +93,10 @@
   "Accounting.Assumptions.SquaringCeiling": {
    "owner": "@memory-accounting",
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
+  },
+  "Accounting.Assumptions.SteeredLayout": {
+   "owner": "@compute-accounting",
+   "digest": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
   },
   "Accounting.Assumptions.TS.AcceptedLive": {
    "owner": "@proofs",
@@ -458,6 +466,10 @@
    "owner": "@memory-accounting",
    "digest": "805f881307461f7dbe6f9f8f08c97e96405c337a951d1ea058f46e16f615575b"
   },
+  "Accounting.RateSketch.LifetimeCapped": {
+   "owner": "@compute-accounting",
+   "digest": "27d307bce051e699aa03ae7de515da270bfbe86912958602ac0daa75628bce55"
+  },
   "Accounting.RateSketch.SectorsBind": {
    "owner": "@memory-accounting",
    "digest": "417918e593039c18b2d42cfbaa2ef5de213f132ba87e2f60673bf2e2bcf56ea5"
@@ -537,6 +549,10 @@
   "Accounting.Requirement.OneBlockEach": {
    "owner": "@memory-accounting",
    "digest": "ae57e960a411de7fccb71c709eff4393cb29c6902da95c1402dcabbd9f410dab"
+  },
+  "Accounting.Requirement.Placement.Deadlines": {
+   "owner": "@compute-accounting",
+   "digest": "813c1a3277f83608aa52114b44ce69ceac8fa573e3030f6e39517e028e5bd96e"
   },
   "Accounting.Requirement.Placement.Paced": {
    "owner": "@memory-accounting",
@@ -2851,6 +2867,14 @@
    ],
    "assumptions": [],
    "type_hash": "0620c0fb742047ca1143d4ed9d45e9c1a5197c2b1372bd430dcb20b53bb89167"
+  },
+  "Accounting.SecurityProofs.DeclaredCircuitRequirement": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement : Accounting.Guarantees.DeclaredCircuitRequirement"
+   ],
+   "assumptions": [],
+   "type_hash": "569af6c8280ed061c1dcf7fbb42d7a6af76c8f42a3809cef93fe0f83eb7ecc8f"
   },
   "Accounting.SecurityProofs.DerivedStateResidual": {
    "owner": "@memory-accounting",
@@ -11053,7 +11077,6 @@
    "Accounting.SecurityProofs.StackedSessionConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationRelay on a store, one for the session, made by the append-coin rule (Accounting.appendCoinBlocks: each append's blocks keyed by a live coin drawn after its root commits their digests, so the writers' choices are fixed before it), for pass devices that also read a carrier at odd side addresses (Accounting.Rate.PassProvenance, whose inputs may depend on the pass's stream and oracle), at side link L + C with C the carriers' input and encoded bits under the property's budgets, with delta once and no advice, under the named assumptions Accounting.Assumptions.EncodeChainHardness and Accounting.Assumptions.KeyBinding: abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
    "Accounting.SecurityProofs.StackedRequirementSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan hold W's credited blocks (one-sided: other blocks may be resident or planned) at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*32768 by RequirementHeld and RequirementMoved; abstract chip programs in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.SketchRank, SketchHashBudget, EncodeChainHardness and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
    "Accounting.SecurityProofs.StackedRequirementRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationRelay with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan hold W's credited blocks (one-sided: other blocks may be resident or planned) at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*b by RequirementHeld and RequirementMoved; abstract pass devices in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.WorkHardness, SquaringCeiling, EncodeChainHardness and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
-   "Accounting.Guarantees.DeclaredCircuitRequirement": "unstated: G, memory accounting's Milestone 2 composed statement (note:20261018T0230Z-report-declared-circuit-g), stated first: its theorem Accounting.SecurityProofs.DeclaredCircuitRequirement lands with its proof once the red team of the statement reports, and the named assumptions only it reads (Accounting.Assumptions.CircuitCarriers, SteeredLayout) return to `assumptions` with it. Its shape will be frozen (no-function,hash): the deployed sketch game on a steered per-pass store whose devices are told the steering summary, each append's blocks read within the lifetime cap L of the window it joined, a layer-1 bound on the prover system with carriers charged over L windows, with the circuit's credited reads in appended blocks linked pass by pass through the one-sided StoreMatches and PlanMatches, on the devices' clocks.",
    "Pous.SecurityProofs.StreamedWipe": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of streamed_wipe.verdict or any Lean function; it fits once the memory challenger's check has a Lean function to state it against.",
    "Pous.SecurityProofs.StreamedWipeMeets2600GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of streamed_wipe.verdict or any Lean function; it fits once the memory challenger's check has a Lean function to state it against.",
    "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (conjecture,no-function,world-unlisted): sm_120's headline at 5.860%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* 3564/3761 on issue and 197/3761 on shared memory (the least weight there at which the bulk-reduction floors cost N_w phi*, RT4-SHEET-1), p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches never give epsilon < 5.779% and give under 6% only from 17,460; Compose's live line is under 1% only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (5.859%; the folded one gives 5.805%); A1-A7 (A2 with A2u, a uniform-datapath instruction an issue slot, which no vendor document states and which alone holds this epsilon: RT-MACHINE-4; measured to hold at saturation, r20261019-120714-132b, RT2-120-4; A5 with A5b, a bulk or TMA instruction holding its size of bank bytes, which no vendor document states either and without which a fold on the bulk engine costs less than the menu's: RT4-SHEET-1), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at pi* and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, checked within a stated menu: the Lean menu, the bit-exact lane folds, the bulk-reduction floors and fold_bulk.cu's whole-block folds), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
@@ -11297,7 +11320,8 @@
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "Nci.Cover.SecurityProofs.CoverTrainingChained": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit, here as its bits made a declaration (bitDecl, Security/Definitions/Nci/BitDecl.lean) with its multiplication blocks and token computations (Nci.Covering.MulBlocks), and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named ParameterHardAt on those bits and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/CheckedChained.lean joins it to a verdict (coverTrainedChained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
-   "Nci.SecurityProofs.CoveringBoundPriced": "frozen (no-function): CoveringBoundTwoCosts's twin with a price per weight in place of one weight cost c_w, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardPricedAt (Security/Models/Nci/Assumptions/CoveringPriced.lean) and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
+   "Nci.SecurityProofs.CoveringBoundPriced": "frozen (no-function): CoveringBoundTwoCosts's twin with a price per weight in place of one weight cost c_w, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardPricedAt (Security/Models/Nci/Assumptions/CoveringPriced.lean) and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummarySession), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, EncodeChainHardness (at its floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -11697,7 +11721,7 @@
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
   "Definitions.Accounting.Carrier": {
-   "digest": "adc38ca4cb29744f904d9a951ebce2aefe085197c0b83bd2d1841ad491459025",
+   "digest": "3ad1293eeeecf14ee461aa300f485eb4adbd1d94341151ecd03bebee935fb5ba",
    "definitions": {
     "Accounting.Rate.PIChip.linkBitsEven": "664fdfcc22cb307c84e0dced36156f3512a82bd18bac34e67c7f1b1b3020dca6",
     "Accounting.Rate.PassProvenance": "ee44265e1c690be67eb25e35098885dc2a5c05ae23924c5202dbff4731579ede",
@@ -11715,7 +11739,10 @@
     "Accounting.RateSketch.Carrier": "959c9fa52081612967bc475abfb0112b80743b558b7330254d408762e8e2fdfa",
     "Accounting.RateSketch.Carrier.carried": "10f81ebb2467e3794edeb76d3fed9cf3936e3dbc6e271b22f256dd8593daeaeb",
     "Accounting.RateSketch.Carrier.provenance": "83fe2280f4e4a4cafcf9e61259f2d053aec04fb3fc65a15873296a8a3d6a0df4",
+    "Accounting.RateSketch.Chip.rebuildsIn": "b82fb553e10657675bf1cb590e7449d30004993e1ffea93a7df6dabad9a62dd5",
+    "Accounting.RateSketch.LifetimeCapped": "27d307bce051e699aa03ae7de515da270bfbe86912958602ac0daa75628bce55",
     "Accounting.RateSketch.Provenance": "e1c403ace5ce67331b8bc30903a25604bdb1c5587793475ffc4fd90c358bd839",
+    "Accounting.RateSketch.Provenance.OfCircuit": "9720606afac4619092f0e2efcf182e32bcd3177e20723733f6a8d25c6fc72304",
     "Accounting.RateSketch.Provenance.below": "4a48f157a7503f7554ee492f74fbecd0ceb6fc0bec60f0972ca47d597325c54b",
     "Accounting.RateSketch.Provenance.brecOn": "ff2bee70e358db270dc1f9003b9314e630160852d793ad5f482f796f4e21359f",
     "Accounting.RateSketch.Provenance.brecOn.go": "291335639b407bf01e1245cbca082ba4f9a9b58751242c79fe55b0d9ace72021",
@@ -11729,16 +11756,29 @@
     "Accounting.RateSketch.Provenance.rec": "29ef2b5e0697a74454072abd56c2e61301503db37e36fc206de6f1d1a32233df",
     "Accounting.RateSketch.Provenance.run": "f3927eefe53c708fe975d11873e6d296127a232b98f78b1746368901d89641bf",
     "Accounting.RateSketch.SketchDeployedWindow.correctOn": "dc50e94282b5a9924e9bad4abf22c547b80cf436b8914c64a5c36f8360f2dbc9",
+    "Accounting.RateSketch.SketchDeployedWindow.readsIn": "6363e10290c0cea321ee3be9786639c485ed6dfabc15d41c1a09070234e64c8c",
     "Accounting.RateSketch.SketchDeployedWindow.readsOn": "9582b9fe872e4468f07cb2ad4ebed9dbea2e8d589a9c747a597e04d40da92e82",
     "Accounting.RateSketch.SketchPrefix": "bc7d444025216fd652270044404eb72ef7443e4bb83aa38cc7b24fad18380e33",
+    "Accounting.RateSketch.SketchPrefix.j": "015df25a1a55e0fbd4fece1f474eb8af2d59a501dc4964f9be238f69b99be5b5",
     "Accounting.RateSketch.SketchPrefix.of": "47c5593dde0b838373447a801b4641585b2b445fb5b4c6aa64e9c2185ae2acd7",
+    "Accounting.RateSketch.SketchPrefix.passes": "efc0acae5d7f2367353005cb01f17fa5bb3c70bf33370124f461c20be2a6f9d6",
+    "Accounting.RateSketch.SketchPrefix.signs": "d48c75798df2d7289f00d378242c1a08f65733cafbe3b5377eab8c4fae9568b2",
+    "Accounting.RateSketch.SketchPrefix.w": "8408961df7d21814116585f74339e592e74a2ed81b1d4a4df9a24e0e808ab036",
+    "Accounting.RateSketch.SketchPrefix.windows": "30cea2590640885f02b0136a993ac931afa96bbc7bfc55b2bf2b58997eaa6921",
+    "Accounting.RateSketch.StackedCoins": "85592ae5eae40b5e3db0144242371c241acede632131dbde804f59cbb4590cd5",
+    "Accounting.RateSketch.appendedTiles": "0a8916fd0aca2e07686594f4045c3e40ebc81acabb478e6090cd091a3aa08dc5",
     "Accounting.RateSketch.coinStore": "d28d5837fcb7dbac5beea7b4c4fd18457ff07959f76a4102f144601eb11bdf0f",
     "Accounting.RateSketch.programmed": "085b9626b60659b90f27f2315c28c0b59e3a0a53f9ec4a7b4fd08f48890fd2df",
+    "Accounting.RateSketch.steeredStore": "33418186501154eb79c4c6e8ad5b0ea0ad8ce94ed0aed87b7e953fc7601250d7",
+    "Accounting.Requirement.Placement.Deadlines": "813c1a3277f83608aa52114b44ce69ceac8fa573e3030f6e39517e028e5bd96e",
+    "Accounting.Requirement.Placement.passTicks": "a275bc4a10df11ff2f39fee90206b4cae844c4682ce801e5c6848bbb3da1894f",
+    "Accounting.Requirement.Placement.windowTicks": "a5b0e5331b3ae497865352a31ee721b81ee277abe005b65cc76556cf1cd26ad1",
     "Accounting.appendCoinBlocks": "bc4317475084be00b2ce3d53a254399d6817a4f68ca2bb62363dd99a8fd79903",
     "Accounting.encodeBitsCost": "1808f6f6b51023f9cfefb8f7ec75fceaadc53a568568bb6e427dd1fd4cb7f64a"
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
@@ -12214,6 +12254,7 @@
     "Accounting.Gates.sparse": "7c1a17c12010cff703689a84ee595aa07cc738e98414387aca0b0db81c4ba6a1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.Gates.RhoPairs",
@@ -12247,7 +12288,7 @@
    ]
   },
   "Definitions.Accounting.Gates.Model": {
-   "digest": "25a56d21876c94e82763212c84efea5d362f7a8fbfcae738fe63114f4ebff092",
+   "digest": "24e85b2ffbae109cc74aed59ebda9dc4c62a4a4edbd2667a5d67b2acf408321c",
    "definitions": {
     "Accounting.Gates.Audit": "fe61c4f5697390b50450c728a1be07af859a208e40eb950dcabcb11d1ec58ce1",
     "Accounting.Gates.Audit.reads": "777cbb0f97dae2e1110f03d6eeaa958843d1e2c9b625cb1a1fcab1c386384c7e",
@@ -12278,6 +12319,7 @@
     "Accounting.Gates.Caps.runBytes": "05abd9abe93cd26c6ebb40d858cae0bfdf71f9cef71d76e97021add4d38d5339",
     "Accounting.Gates.Caps.total": "1f3a1226ba6a85a4db23c823457896014ccd7af3628864447de6689f3bcbb9ce",
     "Accounting.Gates.Census": "86d06c3962effe92d4d181104847b73e9fb55a49086fd48656621a85dd8996ba",
+    "Accounting.Gates.Census.budgeted": "4344ab37db3b0429b3dccb0cdfc837831094e6d415e51d8523fde3233c7cb486",
     "Accounting.Gates.Census.compareSelect": "f5c3b1014eaedcd3898a73d1533171313dcae62b3aff3911c03f02a06d5621df",
     "Accounting.Gates.Census.fold": "82a235967f9e6fdf9fff5919454679a5575eb7752dadee233d71489118395e4d",
     "Accounting.Gates.Census.gather": "c56b62b16e7467a7f97137ab8e5b8585a3bf1c138c7e71a986c418f5cc61d988",
@@ -12414,6 +12456,7 @@
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.Bf16ToF32Affine",
     "Accounting.SecurityProofs.Gates.ClampOrWrap",
     "Accounting.SecurityProofs.Gates.DeclaredWindow",
@@ -13410,6 +13453,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAuditSketch",
     "Accounting.SecurityProofs.RateAuditSketchInteractiveRO",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
@@ -13428,7 +13472,7 @@
    ]
   },
   "Definitions.Accounting.RateAuditSketchDeployed": {
-   "digest": "fd1c02f279c356f70faa725ccd9a83522beceb5e2be54201b7fc2824334252b9",
+   "digest": "f2466a29253743deae0375c803401f714912c0e34f200500aa6f12c79303fe5f",
    "definitions": {
     "Accounting.RateSketch.Data.ofParts": "a60b017a6780a68097308ef5ebf8e8f29470885faf50d90d39c9cd60471e390a",
     "Accounting.RateSketch.SketchDeployedSession": "a840924e954cd6cfc03b388148c9df8f4384e2814b1ef1e93f1f46bdd0eb53e5",
@@ -13445,6 +13489,9 @@
     "Accounting.RateSketch.SketchPassCoins": "371f4c1a0f16b2cbde2f4f192f39143871a4c1b09b6109ac354d76767e989702",
     "Accounting.RateSketch.SketchStore": "00773f858bbb7e05a6df4502dcf5b3ea2b7a613a465ce8947835a2bc95879959",
     "Accounting.RateSketch.SketchStream": "29266ed00efc5422dcdbe1740e6ce8bf08ddc1709078474088ff212adf03a4ab",
+    "Accounting.RateSketch.SketchSummarySession": "33a8f4a669f8005d7daebb73994e3298112be3d40c4752ab544e8f043452aa1b",
+    "Accounting.RateSketch.SketchSummarySession.session": "164adab63c15013427f713198fdd8864781753bc703577a574526d5c32507fec",
+    "Accounting.RateSketch.SketchSummarySession.win": "5963628a8e4cce68a298d71dc8ba6b1384b95dddac92e141fb979c95a32f8ba8",
     "Accounting.RateSketch.SketchWindowCoins": "d46e219fc4d46dc4953b7f2258d5239e8ff7ff2c147a5201dec86209f9d74a11",
     "Accounting.RateSketch.gammaSketch": "bccba307e6211c544c0929ed4e9d24c1e62555948bda6a68c1a6e25000b5d38e",
     "Accounting.RateSketch.instFintypeSketchPassCoins": "100ad544423e881509d9460993c9fcda72df07107a80a9f217a4fa735832a6ec",
@@ -13452,6 +13499,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RemoteSessionConservationSketch",
     "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
@@ -13742,6 +13790,7 @@
     "Accounting.Window.steps": "37b955a3ac78e48bbab5600c405890c73f0deef2ffc2472b6084e297dc4e922d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RequirementCredits",
     "Accounting.SecurityProofs.RequirementCreditsSteps",
     "Accounting.SecurityProofs.RequirementDense",
@@ -14557,6 +14606,7 @@
     "Accounting.Tag.unreadSum": "1f8e83f1fa0da60f295e0e8589e62dcd3099e7d20aac633bad80388bb962172d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
     "Accounting.SecurityProofs.RateAuditTensorSketchRank",
     "Accounting.SecurityProofs.RateTensorSketchTable",
@@ -17465,6 +17515,7 @@
     "Accounting.SecurityProofs.BoundReceiptLinkInteractive",
     "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.Colocation",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.HorizonSampling",
     "Accounting.SecurityProofs.LengthCode",
     "Accounting.SecurityProofs.Memory.Adds",
@@ -29701,6 +29752,7 @@
     "Accounting.Assumptions.EncodeChainHardness": "5498d5e7d18daccbeca6770254fcff11cf1f52a2e00a0e92c5f9fd897d84610d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.StackedRequirementRelay",
@@ -29756,6 +29808,7 @@
     "Accounting.Assumptions.SquaringCeiling": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionConservation",
@@ -29857,11 +29910,14 @@
    ]
   },
   "Models.Accounting.Assumptions.Stacking": {
-   "digest": "b589a81e2fee78e506a7f7166f7e811e70fd350706f1d22241fe43a3d89e005a",
+   "digest": "bf222b12845ea12e66df6757ffb2229d009250a6a0c3088d6910c2ad33c89027",
    "definitions": {
-    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
+    "Accounting.Assumptions.CircuitCarriers": "86eefefedabfc6f9913256922f58342cd1e1e7afa87e9777317b9668dd15f48a",
+    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
+    "Accounting.Assumptions.SteeredLayout": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
@@ -30214,6 +30270,13 @@
     "Accounting.Guarantees.Fit": "3dad2744dedc3335f643260612186bf5c3ce25104fde75630f3a0b405302b605"
    },
    "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
+  },
+  "Models.Accounting.Guarantees.DeclaredCircuit": {
+   "digest": "86adcdb25af4fde56e3ef3b6d8921a6e2105e82da737bdf158f0c4fbc6aeb4a7",
+   "definitions": {
+    "Accounting.Guarantees.DeclaredCircuitRequirement": "e150559da199b64cd22be96eafa8607e3328b3ff011e44ad4c0662863fa05564"
+   },
+   "guarantees": ["Accounting.SecurityProofs.DeclaredCircuitRequirement"]
   },
   "Models.Accounting.Guarantees.FillerLuck": {
    "digest": "d3cde4e711bc94a457e80fc73d8515d402260e5bf42307429c1415f56759a67b",
