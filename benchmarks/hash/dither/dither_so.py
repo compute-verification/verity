@@ -177,6 +177,10 @@ RS_PRIO_ENV = "DITHER_SO_ROUND_PRIO"
 # (a live row, a captured step's poison, a control's unwritten records, a new window): the same bytes in every record,
 # without the dead rows' ~350 MB of stores a step at m = 32 of T = 64 (`dead_from`, S[2], dither_a._rows_written)
 DEAD_ONCE_ENV = "DITHER_DEAD_ONCE"
+# "1" (with DO.A_STEP_ENV): the a-step tables' rows in a 32-row block past m (zero codes under scale +0, as `after`
+# leaves them each step) take their x from one hash of such a row and hash no segments, against the step's live flags
+# repeated a call (`a_live`, set in `before`); the same leaves and roots (dither_a's DITHER_ZDEAD for the A tables)
+ADEAD_ENV = "DITHER_SO_ADEAD"
 
 
 def end_steps(depth: int) -> int:
@@ -242,6 +246,9 @@ class SoWindow(DO.Window):
         if self.dead_once and self.overlap:
             raise RuntimeError(f"{DEAD_ONCE_ENV}=1 serves an -so arm without -ov")
         self.clean_from: int | None = None
+        self.a_live: torch.Tensor | None = None
+        if os.environ.get(ADEAD_ENV) == "1" and not self.a_step:
+            raise RuntimeError(f"{ADEAD_ENV}=1 needs {DO.A_STEP_ENV}=1")
         super().__init__(*args, **kwargs)
         if self.a_step:
             self._a_step_set()
@@ -258,11 +265,19 @@ class SoWindow(DO.Window):
         """DO.A_STEP_ENV's tables, pre["ak"]: a K's table over its slot group's rows and its scales' run of
         `scale_all`; `a_leaves` the a-step table's leaves, call w's its K's root (`a_gidx`)."""
         ks, t, tabs, at = sorted(self.a_calls), self.t, [], 0
+        nb = t // 32
+        if os.environ.get(ADEAD_ENV) == "1":
+            if t % 32:
+                raise RuntimeError(f"{ADEAD_ENV}=1: the window's live flags are 32-row blocks, T = {t}")
+            self.a_live = torch.zeros(self.L * nb, dtype=torch.uint8, device=self.dev)
         for k in ks:
             n = len(self.a_calls[k])
+            dead = {} if self.a_live is None else {"xd": H1CM.dead_x([bytes(k + 4)] * 32, self.dev), "rbw": 32,
+                                                   "rlive": self.a_live[at * nb:(at + n) * nb]}
             tabs.append(Tab(Dom("a-table", DO.a_step_fields(self, k, 0), n * t, {"step": (1, 0)}), n * t,
                             data=self.slot_groups[k].view(torch.uint8), stride=k, body=k, length=k + 4,
-                            tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, lab=(f"a/{k}@", "")))
+                            tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, lab=(f"a/{k}@", ""),
+                            **dead))
             at += n
         self.pre["ak"] = self.c.set(tabs)
         self.a_gidx = torch.tensor([ks.index(k) for _, k in self.nk], dtype=torch.long, device=self.dev)
@@ -687,6 +702,8 @@ class SoWindow(DO.Window):
         if not self.overlap and DA.SIDE and DA.SIDE[0].spill is not None:
             DA.SIDE[0].spill.wait_z(0)
         super().before(m)
+        if self.a_live is not None:
+            self.a_live.view(self.L, -1).copy_(self.live.expand(self.L, -1))
         if self.rs:
             self.rs_ev["b"][self.s % RS_EV].record()
         self.m_of[self.s] = self.m_last = m
@@ -986,7 +1003,7 @@ class SoWindow(DO.Window):
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
                      "window_end": self.end_stats(), "round_stream": self.rs,
                      "round_stream_priority": self.rs_stream.priority if self.rs else None,
-                     "dead_once": self.dead_once,
+                     "dead_once": self.dead_once, "a_dead_rows_x_once": self.a_live is not None,
                      "serving_stream_priority": torch.cuda.current_stream().priority,
                      "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None}
         if ov is not None:
