@@ -71,8 +71,9 @@ A spec-level reference for network accounting's timing channel:
   state rows of a produced value a window, with private heads into the window row every step reads: the certified
   arrivals not yet taken and the window's decisions, since the step's cursors are private. `ReplayAdvance` sits beside
   each step and checks its arrivals and decision bits are the window row's at the heads; `ReplayLoad` runs once a
-  window. The windows join by equal openings and the session starts from the empty rows under public salts
-  (`check_chain`). Its cost at a shape is `size`;
+  window and carries the decisions the last window left unread; `ReplayClose` ends the session with none unread. The
+  windows join by equal openings and the session starts from the empty rows under public salts (`check_chain`). Its
+  cost at a shape is `size`;
 - the compile slice (`compile_slice`): `CompileSlice_v1`, a Boolean Definition with `check` its reference, composes
   `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires, and the encoder over the scan's asks, for one
   window. It holds the coded length to the declared charge and the step rows to its committed ``srv`` row, the served

@@ -40,7 +40,7 @@ a prover's run (`scan`, with the choices REDTEAM's phase 9 found free in a piece
 and the heads' moves) against the served rows it puts in ``srv``, and `check`'s verdict on them. No witness field
 carries a context, a frequency, a cache count or a consumed count: the context is the plain counter's, the frequencies
 KTContext_v1's outputs, and the heads move by ReplayStep_v1's own ``taken`` and ``used``. On corpus-smallkv's first
-seven steps (60,574 ANDs) a context or frequencies of the prover's choosing are refused by ``code`` and ``charge``
+seven steps (60,519 ANDs) a context or frequencies of the prover's choosing are refused by ``code`` and ``charge``
 (0x13); a prefix hit, a decision read again and an arrival left queued by ``steps`` and ``rows`` (0x0D), the hit by the
 stand-in below until CacheStep_v1's derived hit is wired. A fabricated cache table and free returns aren't expressible
 on the slice: it has no table input and no stopping request. REDTEAM phase 10's six passes (advice that registers six
@@ -59,6 +59,9 @@ refuses ``srv``.
   codeword, whose consumed positions are the count (a symbol's scalings depend only on the interval);
 - *the still-sent fields*: ``adv`` holds only the decisions, the count and the step count;
 - *sync scheduling*: ReplayStep_v1 models no async step;
+- *one window*: the slice is a window mid-session from the empty rows, so the decisions its steps leave unread carry
+  (`replay_chain`'s load) and no `ReplayClose` follows it. It codes each ask at the step that reads it, so a carried
+  decision, which A5 charges to the window that loads it, is coded in the later window that reads it;
 - *the binding of ``adv``, ``cert`` and ``srv``*: their rows' b‖c, which the verifier checks natively against the
   advice registration's leaf, the certified record's commitment and the served rows' leaf; no gate hashes them. That
   the served rows are the rows the served compute ran is the step tree's to bind (`served_rows`).

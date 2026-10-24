@@ -1,7 +1,8 @@
-"""The replay's state chain (`replay_chain`): the rows' layout and their refusals, `ReplayAdvance` and `ReplayLoad`
-against `advance` and `load` on random and edge cases, the front's log shifter against slicing, the window's produced
-values opened at every unit's read, the carry and the empty start (`check_chain`), a two-window session through both
-parts, and the cost `size` reports."""
+"""The replay's state chain (`replay_chain`): the rows' layout and their refusals, `ReplayAdvance`, `ReplayLoad` and
+`ReplayClose` against `advance`, `load` and `close` on random and edge cases, the front's log shifter against slicing,
+the window's produced values opened at every unit's read, the carry and the empty start (`check_chain`), a two-window
+session through all three parts, decisions a window leaves unread carried to the next and refused only at the
+session's end, and the cost `size` reports."""
 from __future__ import annotations
 
 import random
@@ -237,7 +238,7 @@ def test_advance_refuses():
         "a decision bit that isn't the window's": (cur, True, arr, (0, 0, 1), 1, 2, False),
         "taken past what is left": (cur, True, arr, bits, 3, 2, False),
         "used past what is left": (at, True, *RC.front(S, win, at), 0, 2, False),
-        "the window's last step leaves a decision": (last, True, *RC.front(S, win, last), 0, 1, False),
+        "the window's last step leaves a decision, which carries": (last, True, *RC.front(S, win, last), 0, 1, True),
         "the window's last step reads the rest": (last, True, *RC.front(S, win, last), 0, 2, True),
         "an idle step leaves the row as it is": (idle, False, (), (0, 0, 0), 3, 3, True),
     }
@@ -268,9 +269,11 @@ def _load_case(S, rng, k):
     qh = rng.randint(0, len(last.queue))
     prev = RC.Row(prev.running, prev.waiting, prev.free, qh, len(last.decisions), 0)
     if k % 6 == 0:
-        prev = RC.Row(prev.running, prev.waiting, prev.free, qh, max(0, len(last.decisions) - 1), 0)
+        prev = RC.Row(prev.running, prev.waiting, prev.free, qh, rng.randint(0, len(last.decisions)), 0)
     elif k % 6 == 1:
         prev = RC.Row(prev.running, prev.waiting, prev.free, qh, len(last.decisions), 1)
+    elif k % 6 == 2 and len(last.decisions) < S.D:
+        prev = RC.Row(prev.running, prev.waiting, prev.free, qh, len(last.decisions) + 1, 0)
     arrivals = _rand_arrivals(rng, S, rng.randint(0, S.K))
     decisions = tuple(rng.randint(0, 1) for _ in range(rng.randint(0, S.D)))
     steps = rng.randint(0, (1 << RC.widths(S).PW) - 1)
@@ -306,12 +309,17 @@ def test_load_refuses():
     ok = RC.load(S, prev, last, arr, (1, 0), 2)
     assert ok == (RC.Row(prev.running, (), 11, 0, 0, 2), RC.Window(((4, 3, 3), (5, 2, 1), (6, 3, 2), (7, 1, 1)), (1, 0)))
     P2 = RC.Shape(**{**S.statics(), "P": 2})
+    carried = RC.Row(prev.running, (), 11, 1, 1, 0)
+    assert RC.load(S, carried, last, arr, (1, 0), 2) == (ok[0], RC.Window(ok[1].queue, (1, 1, 0))), "the unread carried"
+    assert RC.load(S, prev, last, arr, (1,), 0) == (RC.Row(prev.running, (), 11, 0, 0, 0), RC.Window(ok[1].queue, (1,))), (
+        "decisions in a window with no step, for the next to read")
     refused = {
-        "the last window left a decision": (S, RC.Row(prev.running, (), 11, 1, 1, 0), last, arr, (1, 0), 2),
         "the last window left a step": (S, RC.Row(prev.running, (), 11, 1, 2, 1), last, arr, (1, 0), 2),
+        "the last window read past its decisions": (S, RC.Row(prev.running, (), 11, 1, 3, 0), last, arr, (1, 0), 2),
         "the queue overflows Q": (S, RC.Row(prev.running, (), 11, 0, 2, 0), last, arr * 2, (), 1),
+        "the carried and the window's decisions overflow D": (S, RC.Row(prev.running, (), 11, 1, 0, 0), last, arr,
+                                                               (1, 0, 1, 1, 0), 2),
         "more steps than P": (P2, prev, last, arr, (), 3),
-        "decisions with no step": (S, prev, last, arr, (1,), 0),
     }
     for why, (shape, p, lw, a, d, s) in refused.items():
         assert RC.load(shape, p, lw, a, d, s) is None, why
@@ -324,10 +332,79 @@ def test_load_refuses():
     assert RC.evaluate_load(S, [past]) == [0], "a decision past the count"
     over = RC.load_arguments(S, prev, last, arr, (1, 0), 7, 2, nxt, win)
     assert RC.evaluate_load(S, [over]) == [0], "a count past D"
+    c0, c1 = RC.load(S, carried, last, arr, (1, 0), 2)
+    cargs = RC.load_arguments(S, carried, last, arr, (1, 0), 2, 2, RC.encode(c0, S), RC.encode_window(c1, S))
+    assert RC.evaluate_load(S, [cargs, list(args[:-1]) + [list(RC.encode_window(c1, S))]]) == [1, 0], (
+        "the carried decisions written before the window's, and only when the last window left them")
     gap = list(args)
     gap[2] = list(gap[2])
     gap[2][0], gap[2][2] = 0, 1
     assert RC.evaluate_load(S, [gap]) == [0], "the arrivals' valid slots not a prefix"
+
+
+def test_load_refuses_a_carry_it_cant_hold():
+    """The two refusals the carry adds, each against the rows the circuit writes when that check alone is skipped: the
+    carried and the window's decisions past D (2 + 5 of 6: the row cut to D, ``left`` 7), and a last window read past
+    its decisions (``dh`` 5 of 2, which wraps the carried count to 5 and writes the window's decision at 5)."""
+    S = SMALL
+    last = RC.Window(((3, 1, 1),), (1, 1))
+    over, past = RC.Row((), (), 11, 0, 0, 0), RC.Row((), (), 11, 0, 5, 0)
+    five = (1, 0, 1, 1, 0)
+    assert RC.load(S, over, last, (), five, 2) is None and RC.load(S, past, last, (), (1,), 1) is None
+    wfs = RC.window_fields(S)
+    cut = _bits_with(S, RC.encode_window(RC.Window(((3, 1, 1),), ((1, 1) + five)[:S.D]), S), wfs, "left", 0, 7)
+    wrapped = RC.encode_window(RC.Window(((3, 1, 1),), (0, 0, 0, 0, 0, 1)), S)
+    cases = [RC.load_arguments(S, over, last, (), five, len(five), 2, RC.encode(RC.Row((), (), 11, 0, 0, 2), S), cut),
+             RC.load_arguments(S, past, last, (), (1,), 1, 1, RC.encode(RC.Row((), (), 11, 0, 0, 1), S), wrapped)]
+    assert RC.evaluate_load(S, cases) == [0, 0]
+
+
+def _close_cases(S, rng, n):
+    cases, want = [], []
+    for k in range(n):
+        win, row = _rand_window(rng, S), _rand_row(rng, S)
+        dh = len(win.decisions) if k % 2 else rng.randint(0, S.D)
+        row = RC.Row(row.running, row.waiting, row.free, row.qh, dh, 0 if k % 3 else row.steps)
+        cases.append(RC.close_arguments(S, row, win))
+        want.append(int(RC.close(S, row, win)))
+    return cases, want
+
+
+@pytest.mark.parametrize("S", SHAPES)
+def test_close_circuit_is_its_specification(S):
+    cases, want = _close_cases(S, random.Random(7), 200)
+    assert RC.evaluate_close(S, cases) == want
+    assert 0 < sum(want) < len(want)
+
+
+def test_a_window_leaves_decisions_to_the_next_and_the_session_reads_them_all():
+    """A5 charges a decision up to two windows before its step's: window 0 brings three decisions and its one step reads
+    one, window 1 brings none and reads one, window 2 brings one and reads the last two. Each load writes the window's
+    decisions after the unread ones, each part's circuit accepts what its specification does, and `ReplayClose`
+    accepts the session; ended after window 0 or 1, with decisions unread, it is refused."""
+    S = SMALL
+    cur, last, ends = RC.empty(S), RC.Window(), []
+    for decisions, reads in (((1, 0, 1), [1]), ((), [1]), ((0,), [2])):
+        loaded = RC.load(S, cur, last, (), decisions, len(reads))
+        assert loaded is not None
+        args = RC.load_arguments(S, cur, last, (), decisions, len(decisions), len(reads), RC.encode(loaded[0], S),
+                                 RC.encode_window(loaded[1], S))
+        assert RC.evaluate_load(S, [args]) == [1]
+        cur, win = loaded
+        for u in range(S.P):
+            used = reads[u] if u < len(reads) else 0
+            arr, bits = RC.front(S, win, cur)
+            stepped = RC.Row(free=cur.free)
+            nxt = RC.advance(S, win, cur, True, stepped, arr, bits, 0, used)
+            assert nxt is not None
+            args = RC.advance_arguments(S, win, cur, True, stepped, arr, bits, 0, used, RC.encode(nxt, S))
+            assert RC.evaluate_advance(S, [args])[0][0] == 1
+            cur = nxt
+        ends.append((cur, win))
+        last = win
+    assert [w.decisions for _r, w in ends] == [(1, 0, 1), (0, 1), (1, 0)] and [r.dh for r, _w in ends] == [1, 1, 2]
+    assert [RC.close(S, r, w) for r, w in ends] == [False, False, True]
+    assert RC.evaluate_close(S, [RC.close_arguments(S, r, w) for r, w in ends]) == [0, 0, 1]
 
 
 def _session(S, rng):
@@ -386,6 +463,12 @@ def test_a_session_through_the_chain():
                 assert RC.evaluate_advance(S, [args])[0][0] == 1
         values.append(v)
         carry = v
+    end = {}
+    for value, at in ((v.state, RC.close_reads(S)[RC.VALUE]), (v.window, RC.close_reads(S)[RC.WINDOW])):
+        for name, p in at.items():
+            assert G.verify_read(value.domain, value.root, p, value.bcs[p], value.path(p), RC.SCHEMA)
+            end[name] = RC.unrow(value.rows[p])
+    assert RC.evaluate_close(S, [[list(end["row"]), list(end["window"])]]) == [1]
     ops = [RC.openings(v) for v in values]
     assert (ops[0][0][0], ops[0][1][0]) == RC.empty_openings(PROGRAM, S)
     assert ops[1][0][0] == ops[0][0][-1] and ops[1][1][0] == ops[0][1][-1]
@@ -438,6 +521,7 @@ def test_commit_window_refuses():
 def test_size(S):
     got = RC.size(S)
     assert got["ands_per_step"] == ands(RC.advance_unit(S)) and got["ands_load"] == ands(RC.load_unit(S))
+    assert got["ands_close"] == ands(RC.close_unit(S))
     assert got["ands_per_window"] == S.P * got["ands_per_step"] + got["ands_load"]
     assert got["width"] == S.width and got["window_width"] == S.window_width and got["rows_per_window"] == S.P + 2
     assert got["reads_per_window"] == 3 * S.P + 4 and got["record_bytes_per_window"] == 128 * (S.P + 4)

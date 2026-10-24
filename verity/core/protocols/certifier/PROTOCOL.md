@@ -1326,21 +1326,30 @@ window's and its own. Unit 0, `ReplayLoad`, reads state rows 0 and 1 and both wi
 ReplayStep_v1 on state row u, with `ReplayAdvance` checking the step's arrivals and bits against window row 1 and
 checking state row u + 1. Steps past the window's executed count are idle: the next row is the row, and
 `ReplayAdvance`'s `active` = 0 drops the unit's rows.
-- The load refuses a state row 0 that leaves decisions or steps unread, a queue past Q, more than D decisions or P
-  steps, and decisions with no step. A step refuses arrivals taken past what is left or past A, and decisions read
-  past what is left or past A. The window's last executed step must read its last decision.
+- The load refuses a state row 0 that leaves steps to run or has read past its window row's decisions, a queue past
+  Q, more than D decisions (the carried ones and the window's) or P steps. A step refuses arrivals taken past what is
+  left or past A, and decisions read past what is left or past A.
 - **The carry.** Window w's state row 0 is window w − 1's last state row, and its window row 0 is window w − 1's window
   row 1, each under the same salt (`commit_window(carry=…)`), so the verifier checks that their openings b‖c are equal
-  (`check_chain`, `C-carry`).
+  (`check_chain`, `C-carry`). Decisions a window leaves unread carry: the load writes the window's after the last
+  window row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a decision to the
+  earlier of its step's window and its arrival's ingress window, up to two windows before its step's: at T = 20, 5 of
+  async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries from window 0 to their
+  steps in windows 1 and 2 (`benchmarks/network_e2e/encodings/tests/test_v1.py`).
+- **The end.** `ReplayClose` reads the session's last state row and window row and refuses a session that ends with a
+  step to run or a decision unread (`close`). The compile unit codes each decision at the step that reads it, so a
+  carried decision is coded in the window that reads it, not in the one A5 charges it to; which window's segment codes
+  it is the coder's to settle when the chain composes it.
 - **The start.** The session's first rows are the empty engine (`empty`, with NB − 1 free blocks) and the empty
   window, under the public salts `empty_salts`, whose openings the verifier computes (`C-first`).
 
 **Cost** (`size`). A step costs `ReplayAdvance`'s ANDs: the two fronts, about (Q + A·QW)·(1 + IW + 2·LW) and
 D + A·DW, and about 2·width for the idle select and the equality. It also costs three reads and one state row. A
 window costs P steps and one `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3
-path of depth ⌈log2(P + 2)⌉, or 1 for a window row.
+path of depth ⌈log2(P + 2)⌉, or 1 for a window row. A session adds one `ReplayClose` (13 ANDs at the sync
+KV-pressure trace's shape) and its two reads.
 
-**On the corpus** (run `r20261024-091809-297f`): on all 15 of TRACE-CORPUS's sync traces, cut into the certifier's
+**On the corpus** (run `r20261024-091809-297f`, before the carry): on all 15 of TRACE-CORPUS's sync traces, cut into the certifier's
 60 s windows and walked from the empty rows, every state row and front is the replay's, and both circuits match
 their specifications on the sampled units. A step costs 16,569 ANDs (8B light: R = 19, A = 4, Q = 145) to 80,959
 (heavy: R = 256, A = 35, Q = 1000), against ReplayStep_v1's 521,358 at R = 256; moving the queue and the decisions
@@ -2237,13 +2246,15 @@ and seven lemmas, and three more proved lemmas:
     and a non-bit, and `decode_window` refuses a gap, an empty slot with a bit set, a decision past `left`, `left` past
     D, nonzero padding and a short row;
   - the front's pruned log shifter is a slice, at every shift its bits express;
-  - `ReplayAdvance` and `ReplayLoad` compute `advance` and `load` on random rows, each with its next rows right and
-    one bit wrong, and on each refusal. For `ReplayAdvance` these are the step's ok, an arrival or a decision bit
-    that isn't the window row's at the heads, an arrival left out, arrivals taken past what is left or past A,
-    decisions read past what is left or past A, or left at the window's last step, and the idle step. For
-    `ReplayLoad` they are the last window's decisions or steps left, a queue past Q, steps past P, decisions with no
-    step, a decision past the count, a count past D and a gap in the arrivals;
-  - a two-window session runs through both parts, with every unit's reads opened under the window's roots.
+  - `ReplayAdvance`, `ReplayLoad` and `ReplayClose` compute `advance`, `load` and `close` on random rows, each with
+    its next rows right and one bit wrong, and on each refusal. For `ReplayAdvance` these are the step's ok, an
+    arrival or a decision bit that isn't the window row's at the heads, an arrival left out, arrivals taken past what
+    is left or past A, decisions read past what is left or past A, and the idle step. For `ReplayLoad` they are the
+    last window's steps left or a head past its decisions, a queue past Q, steps past P, the carried and new decisions
+    past D, a decision past the count and a gap in the arrivals. A carried load and decisions in a window with no
+    step are taken, and the two window rows the circuit would take without its carry checks are refused;
+  - a three-window session carries decisions from window to window, and `ReplayClose` takes only its end;
+  - a two-window session runs through all three parts, with every unit's reads opened under the window's roots.
     `check_chain` accepts it, and refuses a short window, the empty state or window under a fresh salt or another
     program's, the carried state or window under a fresh salt, and another row of the last window;
   - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
