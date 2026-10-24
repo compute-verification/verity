@@ -252,9 +252,10 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
         "the_reports_root": False, "registration": str(lane), "the_registered_root": True, "names_the_commit": True,
         "opens": True, "tied": True, "tied_why": None,
         "registered": {"by": "the lane", "ref": "r-reg", "first_draw": registered["1"]["first_draw"],
-                       "at": chain._utc(closed[1] + 1503.6), "closed": chain._utc(closed[1]), "after_close_s": 1503.6,
-                       "next_closed": chain._utc(closed[2]), "before_next_close_s": -1502.9, "before_draw": True,
-                       "at_serve_time": False}}
+                       "at": chain._utc(closed[1] + 1503.6), "file_at": chain._utc(closed[1] + 1503.6),
+                       "attested": None, "closed": chain._utc(closed[1]), "after_close_s": 1503.6,
+                       "next_closed": chain._utc(closed[2]), "before_next_close_s": -1502.9, "session_end": None,
+                       "before_session_end_s": None, "before_draw": True, "at_serve_time": False}}
     w0c = got["arms"]["w0 served"]["commit"]
     assert w0c["the_endpoints"] is True and w0c["of_the_honest_run"] is False and w0c["the_reports_root"] is None
     assert w0c["tied"] is True and w0c["registration"] == str(ep / "advice" / "w0")
@@ -357,6 +358,71 @@ def test_at_serve_time_is_before_its_draw_and_no_later_than_the_next_windows_clo
     assert registered("last", 2, closed[2] + 0.5, True) == (
         None, f"by vllm at {chain._utc(closed[2] + 0.5)}, 0.5 s after its Commit window closed; whether at serve time "
               "is unknown: the next window's close isn't in the endpoint's records")
+
+
+def test_the_serving_runs_record_times_the_registration_and_its_end_bounds_the_last_window(tmp_path):
+    """Ahead of a registration's file time, the serving run's own record (`serve_record`, ``record`` in
+    --prove-path-registered): its advice loop stamps each window's registered root once the registration is in place,
+    to the second, so the rule reads it as registered no later than a second past the stamp; a stamp of another root
+    isn't this registration's. At the stamp's resolution a registration its file puts just before the next close is
+    unknown, not at serve time. The session's last window, with no next close in the endpoint's records, is bounded by
+    the session's end when the record says it ended with this window the last its loop logged, and stays unknown while
+    it serves or when the loop logged a later window."""
+    ep = _endpoint(tmp_path)
+    io = json.loads((ep / "io.json").read_text())["requests"]
+    recs = chain._jsonl(ep / "advice_trace.jsonl")
+    first, closed = chain._first_steps(recs), chain.closes(recs)
+    info, b = chain.served_advice(ep, ep / "advice", {"origin_unix": first[0] + 1.2, "windows": 2, "window_s": 6.0},
+                                  io, 60, [128001])
+    bits = {x["window"]: x["v0_bits"] for x in b["commit_windows"]}
+    root = {w: json.loads((ep / f"advice/w{w}/registration.json").read_text())["binding"]["advice"]["root"]
+            for w in (1, 2)}
+    rec = tmp_path / "record"
+    (rec / "out").mkdir(parents=True)
+    c1, c2, s2 = closed[1], closed[2], float(int(closed[2]))
+
+    def stamp(t: float) -> str:
+        return chain._utc(t)[11:19] + "Z"
+
+    def registered(name: str, w: int, file_at: float, stamps: list, ended: float | None = None):
+        (rec / "out" / "advice_windows.jsonl").write_text("".join(
+            json.dumps({"window": k, "at": stamp(t), "rc": 0, "root": r, "bits": 1, "refused": None}) + "\n"
+            for k, t, r in stamps))
+        (rec / "status.json").write_text(json.dumps({"ended_utc": None if ended is None else chain._utc(ended)}))
+        os.utime(ep / f"advice/w{w}/registration.json", (file_at,) * 2)
+        _serve_arm(tmp_path / name, "served", w, bits[w], before_draw=True)
+        p = chain.prove_path([tmp_path / name], info, b["bound"], b, ep, {str(w): {"by": "vllm", "record": str(rec)}})
+        g = p["arms"][f"w{w} served"]["commit"]["registered"]
+        assert g["file_at"] == chain._utc(file_at)
+        return g["at_serve_time"], g, chain._registered(g)
+
+    ok, g, label = registered("stamped", 1, c2 + 5.0, [(1, s2 - 1.0, root[1])])
+    assert ok is True and g["at"] == chain._utc(s2)
+    assert g["attested"] == {"stamp": stamp(s2 - 1.0), "record": str(rec), "within": True}
+    assert label == (f"by vllm at serve time, no later than {chain._lag(round(s2 - c1, 1))}, before its draw and at "
+                     f"least {round(c2 - s2, 1)} s before the next window closed (its run record's stamp, "
+                     f"{stamp(s2 - 1.0)} to the second)")
+    ok, g, label = registered("to-the-second", 1, c2 - 0.1, [(1, c2, root[1])])
+    assert ok is None and g["at"] == chain._utc(s2 + 1.0) and label == (
+        f"by vllm, no later than {chain._utc(s2 + 1.0)} ({chain._lag(round(s2 + 1.0 - c1, 1))}); "
+        f"whether at serve time is unknown: its run record's stamp, {stamp(c2)} to the second, puts it up to "
+        f"{abs(round(c2 - s2 - 1.0, 1))} s after the next window closed, though its file's time, {chain._utc(c2 - 0.1)}, "
+        "is before")
+    assert registered("both-late", 1, c2 + 3.0, [(1, c2 + 3.0, root[1])])[0] is False
+    ok, g, _ = registered("another-root", 1, c1 + 0.5, [(1, c2 + 3.0, root[2])])
+    assert ok is True and g["attested"] is None and g["at"] == chain._utc(c1 + 0.5)
+
+    last = [(1, c1 + 0.5, root[1]), (2, c2 + 2.0, root[2])]
+    assert registered("serving", 2, c2 + 1.5, last)[0] is None
+    ok, g, label = registered("ended", 2, c2 + 1.5, last, ended=c2 + 60.0)
+    end = float(int(c2 + 2.0)) + 1.0
+    assert ok is True and g["session_end"] == chain._utc(c2 + 60.0) and g["next_closed"] is None
+    assert label.endswith(f"before its draw and at least {round(c2 + 60.0 - end, 1)} s before its session ended, with "
+                          f"no window after it (its run record's stamp, {stamp(c2 + 2.0)} to the second)")
+    assert registered("later-window", 2, c2 + 1.5, last + [(3, c2 + 9.0, root[1])], ended=c2 + 60.0)[0] is None
+    ok, _, label = registered("after-the-end", 2, c2 + 5.0, [(1, c1 + 0.5, root[1]), (2, c2 + 5.0, root[2])],
+                              ended=c2 + 1.0)
+    assert ok is False and "s after its session ended, with no window after it" in label
 
 
 def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_and_rebuilt(tmp_path):
