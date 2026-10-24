@@ -233,7 +233,7 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Window, mem
     try:
         stream, counts = stream_of(a, mine, members, want, leaf_layer, coins)
         if a.coins is not None:
-            coins.plan(AC.need(a.rule, mine.program, mine.query, mine.population))
+            coins.plan(AC.need(a.rule, mine.program, mine.query, mine.population, mine.work_table))
         reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table)
         if a.coins is not None:
             coins.commit(bytes.fromhex(reg.digest))
