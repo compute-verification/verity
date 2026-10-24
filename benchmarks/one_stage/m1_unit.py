@@ -29,6 +29,8 @@ chunk_cap (`a6.chunk_cap`'s rule), then the stage, the session and Lean's verdic
 from __future__ import annotations
 
 import argparse
+import ctypes
+import gc
 import json
 import os
 import resource
@@ -48,6 +50,17 @@ M_MAX = 35
 def say(phase: str, **kw) -> None:
     print("M1U " + json.dumps({"phase": phase, "rss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2), **kw},
                               default=str), flush=True)
+
+
+def release() -> float:
+    """Free what the stager held before the prover starts beside this process (at served width its lowering is most of the
+    build's peak, which the two would otherwise hold at once), and return this process's resident GB after."""
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except OSError:
+        pass
+    return round(int(Path("/proc/self/statm").read_text().split()[1]) * os.sysconf("SC_PAGE_SIZE") / 2**30, 2)
 
 
 def bf16_rows(rng: np.random.Generator, n: int, words: int) -> np.ndarray:
@@ -431,9 +444,12 @@ def main() -> int:
         **({"outs_are_calls": calls} if a.call_n or a.chunk_k or a.call_w or a.row else {}))
     if calls is False:
         return 1
+    pin = st.pin
+    del st, got
+    say("released", rss_now_gb=release())
 
     t = time.time()
-    record, live = a0.session(a.bin, {"dir": d, "pin": st.pin}, a.n, f"subset:{a.n}", a.port, out / "session", zk=True)
+    record, live = a0.session(a.bin, {"dir": d, "pin": pin}, a.n, f"subset:{a.n}", a.port, out / "session", zk=True)
     say("proved", seconds=round(time.time() - t, 1), accepted=(live or {}).get("accepted"), why=(live or {}).get("why"),
         **{k: (live or {}).get(k) for k in ("k_log", "nbl", "dense_m", "prove_total_s", "witness_s", "proof_bytes", "units")},
         verdict=(record or {}).get("verdict"))
