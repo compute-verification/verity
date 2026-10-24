@@ -137,8 +137,12 @@ def warden_trace(root):
     (d / "client.jsonl").write_text("".join(json.dumps(
         {"id": f"r{k}", "i": k, "send_unix": 1000.0 + k / 100, "status": 200, "output_ids": [9], "chunks": [[1.5, 1]],
          "first_token_s": 1.5, "done_s": 1.6, "warden": {"ordinal": k, "outcome": "end"}}) + "\n" for k in range(4)))
-    (d / "meta.json").write_text(json.dumps({"rate": 300, "why": "w", "warden": {"where": "beside"},
-                                             "server_argv": ["--max-num-seqs", "256"]}))
+    (d / "meta.json").write_text(json.dumps({"rate": 300, "why": "w", "server_argv": ["--max-num-seqs", "256"],
+                                             "warden": {"where": "beside", "egress_base": "release a (the ingress end)"},
+                                             "cpus": {"server": [0, 1], "client": [2], "warden": [3]}}))
+    (d / "warden" / "ticks.json").write_text(json.dumps({"bucket_ms": 100, "window": 600, "slack_ms": 25.0,
+                                                         "lateness_ms": [0.2, 30.0], "tick_ms": [1.0, 2.0]}))
+    (d / "warden" / "client_loop.json").write_text(json.dumps({"cpus": [2], "lags": [], "max_lag_ms": None}))
     (d / "server.log").write_text("GPU KV cache size: 1,024 tokens\n")
     params = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "delay": 3, "window": 600}
     (d / "warden" / "deployment.json").write_text(json.dumps({"params": params, "origin_unix": 999.95, "windows": 1}))
@@ -183,3 +187,6 @@ def test_summary_orders_arrivals_along_the_wire_and_writes_the_wardens_views(tmp
         assert (tmp_path / f"w.{view}" / "steps.jsonl").read_text() == (d / "steps.jsonl").read_text()
     text = (tmp_path / "README.md").read_text()
     assert "## The warden" in text and "## Arrival order" in text and "| warden release | 4 | 0 | 3 |" in text
+    assert "D counted from the warden's release a (the ingress end)." in text
+    assert "| w | 0-1 / 2 / 3 | 2 | 1 / 0 / 0 / 0 / 1 / 0 / 0 / 0 | 1 | 2.0 / 2.0 | None | None |" in text
+    assert (w["ticks"]["over_slack"], w["client_loop"]["stalls"], w["egress_base"]) == (1, 0, "release a (the ingress end)")

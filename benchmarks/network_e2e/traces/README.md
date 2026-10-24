@@ -32,8 +32,12 @@ Poisson traffic. Plain vLLM's OpenAI server on one RTX PRO 6000, with the integr
   (`benchmarks/network_traces/warden_serve.py serve`, a process beside the server, not on the auditor host). The client
   speaks cells through the warden's shim. `summarize` checks what the warden published, and writes each warden trace
   twice more for ENC-REPLAY's replay (its `read_corpus_trace`): with the warden's admission order and with its release
-  order as the certified ingress (`summary.warden_views`).
-- `run.sh`: the job on a leased GPU of a node (its header has the command).
+  order as the certified ingress (`summary.warden_views`). The warden, the client and the server run on cores of their
+  own (`corpus.cpu_plan`), and three probes say where a late tick or a late cell read came from: `warden_probe.py` (the
+  warden's every tick, publish and collection), `host_sample.py` (the host's load every 100 ms) and the client's own
+  event loop record (`corpus.drive_warden`); the summary lays each late tick against them (`summary.late_ticks`).
+- `run.sh`: the job on a leased GPU of a node (its header has the command). `join.sh`: its summaries, comparison and
+  ENC-REPLAY's table on a CPU node, for a GPU job run with `JOIN=0`.
 
 For the 8B model, attention is vLLM's own, not the int8 attention: `verity_vllm.engine.int8_ops._requests` refuses a
 request whose query rows are neither its whole window nor one row. Every prefix-cache hit and every later prefill chunk is

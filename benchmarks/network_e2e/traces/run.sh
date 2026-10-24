@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # The trace corpus (corpus.py's docstring) on one leased GPU of a node, from the shipped tree's root, with the C4 shard
-# benchmarks/ppl/datasets.json pins (`research data fetch art:4f1d50db...`) sent along:
+# benchmarks/ppl/datasets.json pins (`research data fetch art:4f1d50db...`) sent along, in a slot of node 1's gpu pool:
 #   research run --on vy-nebius-1 --project verity --campaign glm-e2e-demo --source <tree> --cwd source \
 #     --send c4-validation.00000-of-00008.json.gz [--env "CORPORA=llama32_1b/seeded;llama32_1b/async-greedy:heavy,smallkv"] \
-#     [--env REQUESTS=1000] [--env MAX_MIN=45] -- bash benchmarks/network_e2e/traces/run.sh
+#     [--env REQUESTS=1000] [--env MAX_MIN=45] [--env JOIN=0] -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots \
+#     python3 tools/verity/check/slot.py --by LANE -- bash benchmarks/network_e2e/traces/run.sh
+# JOIN=0 leaves the summaries and the comparison to join.sh on a CPU node.
 # CORPORA's entries, apart by spaces or ";", are MODEL/VARIANT[:TRACE,...] (corpus.MODELS, corpus.VARIANTS, corpus.TRACES;
 # default llama32_1b/greedy, every trace). vLLM is the node's pinned venv (VENV, vLLM d9105ea80), as for
 # benchmarks/network_traces: the workspace's environment has torch but not vLLM (integrations/vllm/pyproject.toml).
@@ -25,6 +27,7 @@ export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 export CUDA_DEVICE_ORDER=PCI_BUS_ID FLASHINFER_CUDA_ARCH_LIST=${FLASHINFER_CUDA_ARCH_LIST:-12.0f}
 CORPORA=${CORPORA:-llama32_1b/greedy}
 MAX_MIN=${MAX_MIN:-45}
+JOIN=${JOIN:-1}
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 [ -f "$C4" ] || { echo "trace-corpus: no C4 shard (--send it, or C4=PATH)"; exit 2; }
 
@@ -56,8 +59,9 @@ declare -A made                                             # sampling -> the co
 for spec in ${CORPORA//;/ }; do
   mv=${spec%%:*}; v=${mv#*/}; dir=$OUT/corpus/${mv%%/*}-$v
   [ -f "$dir/meta.json" ] || continue
-  "$VENV/bin/python" benchmarks/network_e2e/traces/corpus.py summarize "$dir" || rc=1
   rm -rf "$dir/.site"
+  [ "$JOIN" = 0 ] && continue
+  "$VENV/bin/python" benchmarks/network_e2e/traces/corpus.py summarize "$dir" || rc=1
   made[${v#async-}]+="$dir "
 done
 for s in "${!made[@]}"; do

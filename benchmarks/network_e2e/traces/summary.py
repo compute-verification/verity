@@ -272,11 +272,83 @@ def warden_summary(d: Path) -> dict | None:
             "admission_wait_buckets": stats([c["admitted"] - c["arrived"] for c in conns if c["admitted"] is not None]),
             "ingress_buckets": stats([c["ingress_end"] - c["admitted"] + 1 for c in conns if c["ingress_end"] is not None]),
             "egress_cells": stats([c["egress_cells"] for c in conns]), "tick_lateness_ms": log.get("lateness_ms"),
-            "usage": log.get("usage"),
+            "usage": log.get("usage"), "egress_base": (meta.get("warden") or {}).get("egress_base"),
+            "cpus": meta.get("cpus"), "ticks": late_ticks(w, dep["origin_unix"], warden_cores(meta)),
+            "client_loop": client_loop(w),
             "check": None if chk is None else {"accepted": chk["accepted"], "problems": chk["problems"][:10],
                                                **{k: chk["summary"].get(k) for k in (
                                                    "requests", "ended", "refused", "failed", "certified_windows",
                                                    "cells_in_their_bucket", "arrival_lag_ms", "cells")}}}
+
+
+#: the warden's tick lateness histogram's bin edges, ms, and its bins
+LATE_EDGES = (1, 5, 10, 25, 50, 100, 250)
+LATE_LABELS = (f"<{LATE_EDGES[0]}", *(f"{a}-{b}" for a, b in zip(LATE_EDGES, LATE_EDGES[1:])), f">={LATE_EDGES[-1]}")
+#: late ticks `late_ticks` lays out one by one: the latest this many, in tick order
+LATE_SHOWN = 40
+#: `host_sample.PERIOD`: a host sample at t covers (t - this, t]
+HOST_PERIOD_S = 0.1
+
+
+def warden_cores(meta: dict) -> list[int]:
+    """The cores a warden trace pinned its warden to (`corpus.cpu_plan`), if it did."""
+    cpus = meta.get("cpus")
+    return cpus.get("warden", []) if isinstance(cpus, dict) else []
+
+
+def late_ticks(w: Path, origin_unix: float, cores: list[int]) -> dict | None:
+    """The warden's ticks from `warden_probe`'s ticks.json, laid against `host_sample`'s host.jsonl: the lateness
+    histogram (ms), what each tick's own work and each publish took, the collections, the host's load over the run, and
+    for each tick later than the slack (the `LATE_SHOWN` latest), what ran around it: the tick before's work, the
+    publishes and collections between that tick's deadline and this one's start, and the host samples whose period
+    overlaps it (the warden's and the client's CPU seconds and involuntary switches, the busy share of the warden's
+    `cores`, the host's load and CPU pressure).
+    Seconds count from the warden's origin. None for a trace without the probe."""
+    if not (w / "ticks.json").exists():
+        return None
+    t = json.loads((w / "ticks.json").read_text())
+    late, work, tau, n = t["lateness_ms"], t.get("tick_ms", []), t["bucket_ms"] / 1000, t["window"]
+    counts = Counter(sum(x >= e for e in LATE_EDGES) for x in late)
+    host = read_jsonl(w / "host.jsonl")
+    for h in host:
+        h["t"] = round(h["t"] - origin_unix, 3)
+
+    def around(i: int) -> dict:
+        start, ran = (i - 1) * tau, i * tau + late[i] / 1000
+        near = [h for h in host if h["t"] > start and h["t"] - HOST_PERIOD_S < ran]
+        return {"tick": i, "window": i // n, "bucket": i % n, "late_ms": late[i],
+                "tick_before_ms": work[i - 1] if 0 < i <= len(work) else None,
+                "publish": [p for p in t.get("publish", []) if p[0] < ran and p[0] + p[1] / 1000 > start],
+                "gc": [g for g in t.get("gc", []) if start <= g[0] <= ran],
+                "host": [{"t": h["t"], "load": h.get("load"), "busy": h.get("busy"), "psi_ms": h.get("psi"),
+                          "warden_cores_busy": {c: v for c, v in (h.get("cpus") or {}).items() if int(c) in cores},
+                          **{k: h["procs"].get(k) for k in ("warden", "client")}} for h in near]}
+
+    over = [i for i, x in enumerate(late) if x > t["slack_ms"]]
+    shown = sorted(sorted(over, key=lambda i: -late[i])[:LATE_SHOWN])
+
+    def series(f) -> dict:
+        return stats([v for h in host if (v := f(h)) is not None])
+
+    return {"ticks": len(late), "slack_ms": t["slack_ms"], "over_slack": len(over), "gc_enabled": t.get("gc_enabled"),
+            "switch_ms": t.get("switch_ms"), "lateness_ms": {b: counts.get(k, 0) for k, b in enumerate(LATE_LABELS)},
+            "lateness": stats(late), "tick_ms": stats(work), "publish_ms": stats([p[1] for p in t.get("publish", [])]),
+            "gc_counts": t.get("gc_counts"), "gc_ms": stats([g[2] for g in t.get("gc", [])]),
+            "host": {"samples": len(host), "load_1m": series(lambda h: (h.get("load") or [None])[0]),
+                     "busy": series(lambda h: (h.get("busy") or [None])[0]), "psi_ms": series(lambda h: h.get("psi")),
+                     "warden_cpu_s": series(lambda h: (h["procs"].get("warden") or {}).get("cpu_s")),
+                     "warden_invol": series(lambda h: (h["procs"].get("warden") or {}).get("invol")),
+                     "client_cpu_s": series(lambda h: (h["procs"].get("client") or {}).get("cpu_s"))},
+            "late": [around(i) for i in shown]}
+
+
+def client_loop(w: Path) -> dict | None:
+    """`corpus.drive_warden`'s record of its event loop (warden/client_loop.json): its cores, the stalls and collections."""
+    if not (w / "client_loop.json").exists():
+        return None
+    c = json.loads((w / "client_loop.json").read_text())
+    return {"cpus": c.get("cpus"), "stalls": len(c["lags"]), "lag_ms_at_least": c.get("lag_ms_at_least"),
+            "max_lag_ms": c.get("max_lag_ms"), "lags": c["lags"][:20], "gc_counts": c.get("gc_counts")}
 
 
 #: a warden trace's views for ENC-REPLAY, each with the warden's order as the certified ingress: view -> its record's field
@@ -695,10 +767,12 @@ FIELDS = """\
   (`vllm_accept_stamp`); `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings, adversary (seed and
   prefix-cache mode) and warden (its schedule, where it ran).
 - `<trace>/warden/`, a warden trace's: what the warden published (`deployment.json`, `requests.records`,
-  `responses.records`, `fails.records`, `certified.jsonl`, `warden.json` with every connection's buckets and outcome),
-  its `serve.log`, the client shim's record of every connection (`client.json`) and `warden_serve.py check`'s
-  `check.json` and `check.log`; `<trace>.admitted/`, `<trace>.released/`: the trace with the warden's order as its
-  certified ingress (`summary.warden_views`).
+  `responses.records`, #3553's warden's `fails.records`, `certified.jsonl`, `warden.json` with every connection's
+  buckets and outcome), its `serve.log`, the client shim's record of every connection (`client.json`) and
+  `warden_serve.py check`'s `check.json` and `check.log`; where the trace probed them, the warden's every tick,
+  publish and collection (`ticks.json`, `warden_probe.py`), the host's load every 100 ms (`host.jsonl`,
+  `host_sample.py`) and the client's event loop (`client_loop.json`, `corpus.drive_warden`); `<trace>.admitted/`,
+  `<trace>.released/`: the trace with the warden's order as its certified ingress (`summary.warden_views`).
 """
 
 
@@ -763,7 +837,8 @@ def readme(s: dict) -> str:
         lines += ["", "## The warden", "",
                   f"The warden traces reach the server only through the active warden ({', '.join(map(str, where))}): "
                   "`warden_serve.py serve`, one connection to the server per client connection, each direction in B-byte "
-                  "cells on its schedule, egress cell i at bucket s + D + i/r from the warden's admission s. Its records, "
+                  "cells on its schedule, D counted from the warden's "
+                  f"{'; '.join(sorted({w.get('egress_base') or 'base (not recorded)' for w in wardens.values()}))}. Its records, "
                   "certificates and connection log are in `<trace>/warden/`, and `check` is `warden_serve.py check` of "
                   "them against the client shim's record of every cell.", "",
                   "| trace | B / r / D (buckets of τ ms) | windows | connections | failed | refused | cut | buckets of "
@@ -776,6 +851,28 @@ def readme(s: dict) -> str:
                          f"{w['connections']} | {w['failed'] or 0} | {w['refused']} | {w['cut']} | {ing.get('p50')} / "
                          f"{ing.get('max')} | {eg.get('p50')} / {eg.get('max')} | {late.get('p99')} / {late.get('max')} "
                          f"({late.get('over_slack')}) | {verdict} |")
+        probed = {name: w for name, w in wardens.items() if w.get("ticks") or w.get("client_loop")}
+        if probed:
+            lines += ["", "Where the trace probed them (`warden_probe.py`, `host_sample.py`, `corpus.drive_warden`), the "
+                      "warden's ticks and the client's event loop: each tick's lateness in ms, its own work (`_tick`), the "
+                      "publisher thread's pack and sign of each record, the warden's collections, the host's 1-minute load "
+                      "and CPU pressure, and the client loop's stalls of 20 ms or more. The late ticks one by one, with what "
+                      "ran around each, are the trace's `warden.ticks.late` in summary.json.", "",
+                      "| trace | cores (server / client / warden) | ticks | lateness ms: " +
+                      " / ".join(LATE_LABELS) + " | over slack | tick work p99 / max ms | publish max ms | warden "
+                      "collections | load p50 / max | CPU pressure max ms per 100 ms | client stalls (max ms) |",
+                      "|---|---|---|---|---|---|---|---|---|---|---|"]
+            for name, w in probed.items():
+                t, c, cores = w.get("ticks") or {}, w.get("client_loop") or {}, w.get("cpus")
+                h = t.get("host") or {}
+                where = (" / ".join("-".join(map(str, sorted({min(cores[k]), max(cores[k])})))
+                                    for k in ("server", "client", "warden")) if isinstance(cores, dict) else str(cores))
+                lines.append(f"| {name} | {where} | {t.get('ticks')} | "
+                             f"{' / '.join(str(v) for v in (t.get('lateness_ms') or {}).values())} | {t.get('over_slack')} | "
+                             f"{(t.get('tick_ms') or {}).get('p99')} / {(t.get('tick_ms') or {}).get('max')} | "
+                             f"{(t.get('publish_ms') or {}).get('max')} | {t.get('gc_counts')} | "
+                             f"{(h.get('load_1m') or {}).get('p50')} / {(h.get('load_1m') or {}).get('max')} | "
+                             f"{(h.get('psi_ms') or {}).get('max')} | {c.get('stalls')} ({c.get('max_lag_ms')}) |")
     ordered = {name: t["arrival_order"] for name, t in s["traces"].items() if t.get("arrival_order")}
     if ordered:
         lines += ["", "## Arrival order", "",
