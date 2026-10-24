@@ -3820,7 +3820,8 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
         if ns.verb == "resolve":
             if not ns.choice:
                 raise SlackError("ask-daniel resolve needs --choice VALUE: the option Daniel chose in the thread")
-            body = {"choice": ns.choice, **({"note": ns.note} if ns.note else {})}
+            provisional = ns.provisional or (ns.note or "").startswith("Provisionally accepted")
+            body = {"choice": ns.choice, **({"note": ns.note} if ns.note else {}), **({"provisional": True} if provisional else {})}
             if ns.dry_run:
                 print(f"dry-run: POST {ASK_DANIEL}{path}/resolve {json.dumps(body, sort_keys=True)}", file=sys.stderr)
                 return 0
@@ -4072,6 +4073,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")
     p.add_argument("--choice", default=None, metavar="VALUE", help="resolve: the option Daniel chose in the thread")
     p.add_argument("--note", default=None, help="resolve: his words, or a link to them")
+    p.add_argument("--provisional", action="store_true",
+                   help="resolve: the lane decided it under the 19 Oct standing rule, so the card says the lane decided, not "
+                        "Daniel (implied by a --note starting 'Provisionally accepted')")
     p.add_argument("--json", action="store_true", help="status: the route's whole answer; pages: each page's fields")
     p = cmd("chat", "a person's private channel #chat-NAME: `open NAME` creates or reuses it, invites the person and Cursor's "
                     "bot, pins the welcome and publishes the person to the notes' people.d; `close NAME` archives it; `list`; "
