@@ -54,16 +54,18 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
     return rows, steps, runner, rounds, challenger, session, admission, gate, served
 
 
-def refusals(scheme: str, settings: Any, stage: str) -> list[str]:
-    """Why `scheme`'s parsed pouw `settings` at `stage` set H1's or the challenger's settings wrongly, one reason each."""
+def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = ()) -> list[str]:
+    """Why `scheme`'s parsed pouw `settings` at `stage` set H1's or the challenger's settings wrongly, one reason each;
+    `filled` names the settings the built engine will supply (`pouw.fills`), read as set."""
     out = []
     if scheme == PH.SCHEME and (settings.rows is None or settings.steps is None):
         out.append(f"{scheme}: the static layout's public parameters are the pouw settings 'rows' (T, vLLM's "
                    "max_num_batched_tokens) and 'steps' (S, the window's engine steps)")
     elif scheme != PH.SCHEME and (settings.rows is not None or settings.steps is not None):
         out.append(f"{scheme}: the pouw settings 'rows' and 'steps' are H1's ({PH.SCHEME})")
-    if scheme == PH.SCHEME and stage != "capture" and (
-            settings.runner is None or (settings.rounds is None and settings.challenger is None)):
+    runner = settings.runner is not None or "runner" in filled
+    rounds = settings.rounds is not None or "rounds" in filled
+    if scheme == PH.SCHEME and stage != "capture" and (not runner or (not rounds and settings.challenger is None)):
         out.append(f"{scheme}: each admitted request's entry goes under the root of the round that admits it, before "
                    "that round's coin: the pouw settings 'runner' (the engine's model runner, where its scheduler's "
                    "admissions arrive) and 'challenger' (the auditor host's, HOST:PORT) or, in tests, 'rounds' (the "

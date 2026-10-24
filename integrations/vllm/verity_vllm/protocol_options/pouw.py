@@ -243,11 +243,43 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
                 out.append(str(e))
         elif settings.schedule != "serial":
             out.append(f"{scheme}: the pouw setting 'schedule' is Pearl-C's; this executor runs serially")
-        out += PHS.refusals(scheme, settings, ctx.stage)
+        out += PHS.refusals(scheme, settings, ctx.stage, ctx.filled_of(NAME))
         if settings.start_forward and scheme not in pouw_circuit.SCHEMES:
             out.append(f"{scheme}: the pouw setting 'start_forward' anchors the circuit-backed executor's forward indices "
                        f"({', '.join(pouw_circuit.SCHEMES)}); this executor counts its own from 0")
     return tuple(out)
+
+
+def fills(scheme: str, settings: Mapping[str, Any]) -> tuple[str, ...]:
+    """The pouw settings `from_engine` supplies for ``scheme`` where ``settings`` leave them unset: H1's ``runner`` and,
+    without a ``challenger``, its in-process ``coins`` and ``rounds`` (``rounds`` only once ``steps`` is set); nothing
+    for any other scheme."""
+    if scheme != PH.SCHEME:
+        return ()
+    keys = [] if settings.get("runner") is not None else ["runner"]
+    if settings.get("challenger") is None:
+        keys += [k for k in ("coins", "rounds") if settings.get(k) is None]
+    steps = settings.get("steps")
+    if not (isinstance(steps, int) and not isinstance(steps, bool) and steps >= 1) and "rounds" in keys:
+        keys.remove("rounds")
+    return tuple(keys)
+
+
+def from_engine(scheme: str, settings: Mapping[str, Any], llm: Any, epoch: int = 0) -> dict[str, Any]:
+    """`fills`' settings from the built ``vllm.LLM`` ``llm``: its in-process model runner, where the scheduler's admissions
+    arrive (`engine_profile.get_model_runner`; RuntimeError on an engine without one), and epoch ``epoch``'s coins held in
+    this process, the Lean verifier of record's entropy (`verifier.coins`): its salt coin and ``steps`` round coins.
+    Coins held in the serving process credit nothing (`pouw_h1.IN_PROCESS`)."""
+    keys = fills(scheme, settings)
+    out: dict[str, Any] = {}
+    if "runner" in keys:
+        from verity_vllm.engine.engine_profile import get_model_runner
+        out["runner"] = get_model_runner(llm)
+    if "coins" in keys:
+        out["coins"] = Challenger(epoch, verifier.coins)
+    if "rounds" in keys:
+        out["rounds"] = LiveRecord(Wd.live_challenger(epoch, settings["steps"], verifier.coins), Wd.ROUND)
+    return out
 
 
 def requires_build(scheme: str, ctx: Context) -> bool:
