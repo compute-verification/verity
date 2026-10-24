@@ -49,9 +49,8 @@ def test_the_served_rows_are_the_replays(w212):
 
 def test_the_slice_accepts_w212(w212):
     """The honest unit is accepted (0x1F) with the served rows in ``srv``: the 14 decisions code in 13 bits. Each negative is
-    refused by its own checks: request 310 admitted a step early in the window row (its steps then leave the last
-    decision unread, which the chain carries, so ``steps`` holds), a charge one below the coded length, request 309's
-    prompt a token longer than certified, and step 7's served rows missing request 309's."""
+    refused by its own checks: request 310 admitted a step early in the window row, a charge one below the coded length,
+    request 309's prompt a token longer than certified, and step 7's served rows missing request 309's."""
     cases = _cases(w212)
     assert cases["honest"].verdict == CS.ACCEPT and cases["honest"].length == 13 and len(cases["honest"].symbols) == 14
     flags = {k: {f for f, ok in c.flags.items() if not ok} for k, c in cases.items()}
