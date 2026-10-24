@@ -8,6 +8,7 @@ testpaths = ["tests"]
 [tool.verity.tests]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs/__init__.py",
+          "verity/core/claims/__init__.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/core/protocols/sampled_proofs/one_stage", "verity/ml/__init__.py", "verity/ml/circuits",
           "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness", "verity/core/protocols/pouw",

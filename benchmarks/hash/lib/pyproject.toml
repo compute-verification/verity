@@ -17,6 +17,6 @@ inputs = [
   "verity/ml/randomness",
   "verity/core/__init__.py",
   "verity/core/protocols/__init__.py",
-  "verity/core/protocols/pouw",
+  "verity/core/claims/__init__.py", "verity/core/protocols/pouw",
   "benchmarks/pouw/commit_gpu/reference.py",
 ]
