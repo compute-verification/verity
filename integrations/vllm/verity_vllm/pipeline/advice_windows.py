@@ -62,16 +62,49 @@ def codec_of(codec: Any = None) -> Any:
     return codec if codec is not None else importlib.import_module(I1)
 
 
-def requests_of(advice: Any) -> list[dict[str, Any]]:
-    """The compiler's requests from I1 advice: each request's id, its arrival (the first step with a row of it), its prompt length
-    and its output length as ``max_tokens``.  A request with no row is refused: the advice names work it never scheduled."""
-    first: dict[int, int] = {}
+def _rows(advice: Any) -> dict[int, list[tuple[int, Any]]]:
+    rows: dict[int, list[tuple[int, Any]]] = {i: [] for i in range(len(advice.requests))}
     for s, step in enumerate(advice.steps):
         for row in step.rows:
-            first.setdefault(int(row.request), s)
-    if unscheduled := [q.id for i, q in enumerate(advice.requests) if i not in first]:
-        raise ValueError(f"the advice names requests no step schedules: {unscheduled}")
-    return [{"request_id": str(q.id), "arrive_step": first[i], "prompt_len": int(q.prompt_len), "max_tokens": int(q.output_len)}
+            rows.setdefault(int(row.request), []).append((s, row))
+    return rows
+
+
+def refusals(advice: Any) -> dict[int, str]:
+    """Why each request the stand-in can't compile is refused, by request index.  A request's Program of record runs its whole prompt
+    in one row from position 0, then one decode row a step until its last kept output; the one row async scheduling runs past that
+    output samples nothing kept and is no Program row.  So a request with no row, a prefix-cache hit, a chunked prefill, a
+    preemption or a gap is refused by name (COMPILER's v0 rules, `predict.steps.shape_of`)."""
+    out: dict[int, str] = {}
+    for i, rows in _rows(advice).items():
+        q = advice.requests[i]
+        lp, t = int(q.prompt_len), int(q.output_len)
+        if not rows:
+            out[i] = "no step schedules it"
+            continue
+        s0, first = rows[0]
+        if first.cache_hit or first.start:
+            out[i] = f"a prefix-cache hit of {first.cache_hit or first.start} tokens at step {s0}"
+        elif first.n != lp:
+            out[i] = f"a chunked prefill, {first.n} of its {lp} prompt tokens at step {s0}"
+        elif any(r.preempted for _, r in rows):
+            out[i] = "a preemption"
+        elif bad := next(((s, r) for k, (s, r) in enumerate(rows[1:], 1) if (s, r.start, r.n) != (s0 + k, lp + k - 1, 1)), None):
+            out[i] = f"its row at step {bad[0]} is (start, n) = ({bad[1].start}, {bad[1].n}), not the next decode"
+        elif not t <= len(rows) <= t + 1:
+            out[i] = f"{len(rows)} rows for {t} kept outputs"
+    return out
+
+
+def requests_of(advice: Any) -> list[dict[str, Any]]:
+    """The compiler's requests from I1 advice: each request's id, its arrival (the first step with a row of it), its prompt length
+    and its output length as ``max_tokens``.  A request the stand-in can't compile (`refusals`) refuses the advice."""
+    if refused := refusals(advice):
+        why = "; ".join(f"{advice.requests[i].id}: {w}" for i, w in sorted(refused.items())[:4])
+        raise ValueError(f"the stand-in compiles {len(advice.requests) - len(refused)} of the advice's {len(advice.requests)} "
+                         f"requests ({why}{'; …' if len(refused) > 4 else ''})")
+    rows = _rows(advice)
+    return [{"request_id": str(q.id), "arrive_step": rows[i][0][0], "prompt_len": int(q.prompt_len), "max_tokens": int(q.output_len)}
             for i, q in enumerate(advice.requests)]
 
 
@@ -103,6 +136,22 @@ def of_advice(compiler: Any, data: bytes, codec: Any = None,
         raise ValueError("the advice's bytes are not its canonical encoding")
     reg = commit_advice(compiler, data, salts)
     return requests_of(advice), binding(compiler, reg.root.hex(), int(c.total_bits(advice))), reg
+
+
+def report(compiler: Any, data: bytes, T: int, codec: Any = None) -> dict[str, Any]:
+    """Served advice through the advice side of the window path, for a run with no TP Commit to window: I1's round trip, the binding
+    a registration would carry (fresh salts), the advice's charge per egress window of ``T`` buckets (``codec.bits_by_window``),
+    and the requests the stand-in refuses (`refusals`), by id.  Nothing of the advice itself."""
+    c = codec_of(codec)
+    advice = c.decode(data)
+    if c.encode(advice) != data:
+        raise ValueError("the advice's bytes are not its canonical encoding")
+    reg, refused = commit_advice(compiler, data), refusals(advice)
+    return {"roundtrip": True, "bytes": len(data), "rows": len(reg.salts), "row_bits": ROW_BITS,
+            "binding": binding(compiler, reg.root.hex(), int(c.total_bits(advice))), "T": int(T),
+            "bits_by_window": {str(w): int(b) for w, b in sorted(c.bits_by_window(advice, int(T)).items())},
+            "requests": len(advice.requests), "compiled": len(advice.requests) - len(refused),
+            "refused": {str(advice.requests[i].id): why for i, why in sorted(refused.items())}}
 
 
 def opening(data: bytes, reg: AC.Registration) -> dict[str, Any]:

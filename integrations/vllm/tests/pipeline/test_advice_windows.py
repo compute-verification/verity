@@ -7,7 +7,6 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -233,10 +232,46 @@ def test_advice_is_read_only_from_its_canonical_encoding(advice_tp):
             AW.of_advice(c["compiler"], bad)
 
 
-def test_a_request_no_step_schedules_is_refused():
-    advice = SimpleNamespace(requests=(SimpleNamespace(id="r0", prompt_len=3, output_len=1), SimpleNamespace(id="r9", prompt_len=3, output_len=1)),
-                             steps=(SimpleNamespace(rows=(SimpleNamespace(request=0),)),))
-    with pytest.raises(ValueError, match=r"no step schedules: \['r9'\]"):
+def _served(*steps, release) -> A.Advice:
+    """I1 advice of q0 (3 prompt tokens, 2 kept outputs) and q1 (1 and 1), each step's rows given as (request, start, n)."""
+    reqs = (A.RequestAdvice("q0", 3, 2, "length"), A.RequestAdvice("q1", 1, 1, "length"))
+    rows = [[A.Row(q, "decode" if n == 1 and start >= reqs[q].prompt_len else "prefill", start, n) for q, start, n in step] for step in steps]
+    return A.Advice(reqs, tuple(A.StepAdvice(tuple(r)) for r in rows), release)
+
+
+def test_the_row_async_scheduling_runs_past_the_last_kept_output_is_no_program_row():
+    advice = _served([(0, 0, 3)], [(0, 3, 1), (1, 0, 1)], [(0, 4, 1)], release=(0, 1, 1))
+    assert AW.refusals(advice) == {}
+    assert AW.requests_of(advice) == [{"request_id": "q0", "arrive_step": 0, "prompt_len": 3, "max_tokens": 2},
+                                      {"request_id": "q1", "arrive_step": 1, "prompt_len": 1, "max_tokens": 1}]
+
+
+def test_the_report_on_served_advice_binds_it_and_names_what_the_stand_in_refuses(advice_tp):
+    """`report`: I1's round trip, the binding a registration would carry, the charge per window and the refused requests by id, with
+    none of the advice's bytes."""
+    c = advice_tp
+    advice = _served([(0, 0, 2)], [(0, 2, 1), (1, 0, 1)], [(0, 3, 1)], release=(1, 1, 2))
+    data = A.encode(advice)
+    got = AW.report(c["compiler"], data, 2)
+    assert got["binding"]["compiler"] == c["advice"]["A"][1]["compiler"] and got["binding"]["advice"]["bits"] == A.total_bits(advice)
+    assert got["binding"]["advice"]["root"] not in (AW.report(c["compiler"], data, 2)["binding"]["advice"]["root"], hashlib.sha512(data).hexdigest())
+    assert (got["bits_by_window"], got["requests"], got["compiled"], got["refused"]) == (
+        {str(w): b for w, b in A.bits_by_window(advice, 2).items()}, 2, 1, {"q0": "a chunked prefill, 2 of its 3 prompt tokens at step 0"})
+    assert sum(got["bits_by_window"].values()) == A.total_bits(advice) and data.hex() not in json.dumps(got)
+
+
+@pytest.mark.parametrize("steps, release, why", [
+    pytest.param(([(0, 0, 2)], [(0, 2, 1), (1, 0, 1)], [(0, 3, 1)]), (1, 1, 2), "a chunked prefill, 2 of its 3 prompt tokens at step 0",
+                 id="chunked-prefill"),
+    pytest.param(([(0, 0, 3)], [(1, 0, 1)], [(0, 3, 1)]), (0, 1, 2), r"its row at step 2 is \(start, n\) = \(3, 1\), not the next decode",
+                 id="a-gap"),
+])
+def test_a_request_the_stand_in_cannot_compile_refuses_the_advice_by_name(steps, release, why):
+    """Served advice the stand-in's Programs of record don't run (COMPILER's v0 refusals): refused naming the request and why, never
+    compiled as if its prompt ran whole."""
+    advice = _served(*steps, release=release)
+    assert list(AW.refusals(advice)) == [0]
+    with pytest.raises(ValueError, match=rf"compiles 1 of the advice's 2 requests \(q0: {why}\)"):
         AW.requests_of(advice)
 
 
