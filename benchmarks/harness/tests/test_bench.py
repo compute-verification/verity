@@ -785,6 +785,16 @@ def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_e
     assert runner.os.environ["TORCHINDUCTOR_CACHE_DIR"] == "/tmp/verity_bench_inductor_x"
 
 
+def test_the_full_sweep_compiled_spec_is_the_quick_one_over_the_full_sweep():
+    """`llama31-8b-fp8-1gpu-compiled-full` restates the quick spec's factor at every shape, so it must time the same
+    engines: only its id (and its preset's, which must match) and its sweep differ."""
+
+    quick, full = load_spec(SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled.toml"), load_spec(
+        SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled-full.toml")
+    assert (quick.sweep, full.sweep) == ("quick", "full")
+    assert replace(full, id=quick.id, sweep=quick.sweep, preset=replace(full.preset, id=quick.preset.id)) == quick
+
+
 def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
     source = (SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled.toml").read_text()
     path = tmp_path / "spec.toml"
