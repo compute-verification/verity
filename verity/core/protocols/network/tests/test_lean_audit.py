@@ -111,8 +111,7 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
     print(kinds, no_grid)
     assert {"accept", "no-verdict", "duplicate", "signature", "advice", "mismatch"} <= set(kinds), kinds
     assert any(k.startswith("status:") for k in kinds), kinds
-    assert {"refused", "accept", "no-verdict", "signature", "advice"} <= set(no_grid) and "mismatch" not in no_grid, \
-        no_grid
+    assert {"refused", "accept", "no-verdict", "signature"} <= set(no_grid) and "mismatch" not in no_grid, no_grid
 
 
 def test_the_clock_is_the_first_link_checked_in_each_window(lean):

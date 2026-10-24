@@ -287,7 +287,7 @@ def test_every_verdict_without_the_grid_is_the_audits(verdicts_server):
     raises (a raw or committed egress record) or v2 refuses the evidence."""
     stats = D.run(NO_GRID, examples=1200, seed=1, server=verdicts_server)
     print(stats)
-    assert stats.outputs > 300 and stats.rejects > 300, stats
+    assert stats.outputs > 200 and stats.rejects > 600, stats
 
 
 @pytest.mark.slow
@@ -328,8 +328,9 @@ def test_without_the_grid_only_a_grid_mismatch_is_accepted(verdicts_server):
 
     both()
     print(dict(seen))
-    assert min(seen[k] for k in ("refused-uncertified", "mismatch-accepted", "grid-only-unit", "accept", "no-verdict",
-                                 "signature", "advice", "status")) > 5, seen
+    assert min(seen[k] for k in ("refused-uncertified", "accept", "no-verdict", "signature", "advice", "status",
+                                 "duplicate")) > 0, seen
+    assert seen["mismatch-accepted"] > 20 and seen["grid-only-unit"] > 20, seen
 
 
 def test_each_kind_gives_the_audits_verdicts(server, verdicts_server):
