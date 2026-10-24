@@ -577,9 +577,7 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
 
     ``salt_key``: tests only; serving draws 32 fresh OS bytes.  ``row_salt_key``: the run's row key the serving loop's
     ``row_tables.step_roots`` salted under (32 bytes); fresh OS bytes when ``None``, which no recorded step root can match.
-    ``salts_of``: ports (``<member>/<port>``) whose rows are an outside registered value's rows (a warden's signed cells), each
-    port's salts, one per row in order: every such row is committed under that value's own salt, so its ``b || c`` is the
-    value's and its registered reads open against the value's root (`write`'s ``registered``)."""
+    ``salts_of``: by port, an outside registered value's salts, one a row, so its rows' ``b || c`` are the value's (`write`)."""
     t0 = time.perf_counter()
     ms = window.members
     if len(data) != len(ms) or sum(m.n for m in ms) != window.population:
@@ -611,13 +609,11 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
             refs[k] = np.concatenate([r, own], axis=1).astype(np.uint32)
     if step_roots is not None and row_salt_key is None:
         raise ValueError("step roots serving recorded are checked under its row key: give row_salt_key")
+    if any(p not in rows or len(s) != len(rows[p]) * SALT_BYTES for p, s in (salts_of or {}).items()):
+        raise ValueError(f"salts_of {sorted(salts_of)}: not one {SALT_BYTES}-byte salt for each row of one of the window's ports")
     key = os.urandom(32) if salt_key is None else bytes(salt_key)
-    ys = {p: salts(key, k, len(rows[p])) for k, p in enumerate(rows)}
+    ys = {p: (salts_of or {}).get(p) or salts(key, k, len(rows[p])) for k, p in enumerate(rows)}
     del key
-    for p, s in (salts_of or {}).items():
-        if p not in rows or len(s) != len(rows[p]) * SALT_BYTES:
-            raise ValueError(f"{p}: {len(s)} bytes of salts, not one {SALT_BYTES}-byte salt for each row of one of the window's ports")
-        ys[p] = bytes(s)
     domains = {p: window.domain(p, schemas[p], len(a)) for p, a in rows.items()}
     rk = os.urandom(32) if row_salt_key is None else bytes(row_salt_key)
     for k, (t, a) in enumerate(zip(window.row_tables, _table_rows(window, rows), strict=True)):
@@ -745,9 +741,7 @@ def registered_entry(c: Committed, m: Member, trees: dict[int, RT.RowTable] | No
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
           kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`); the window's provenance gets the index's SHA-512
-    (so the registration binds the unit -> identity map).  ``registered``: by member key, the header ``registered`` entry of a
-    member whose ports read an outside registered value (`commit`'s ``salts_of``), each row's position and path to that
-    value's root."""
+    (so the registration binds the unit -> identity map).  ``registered``: by member key, an outside value's reads (``salts_of``)."""
     d = Path(out_dir)
     d.mkdir(parents=True, exist_ok=True)
     ib = index_bytes(index)
