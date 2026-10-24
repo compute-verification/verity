@@ -17,12 +17,13 @@
 #     and combines, each combine slot wired to its part), run as the entry row-tables is.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
-#     The STANDIN entries warden and warden:altered are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
+#     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
 #     one connection's cells under the warden's signed roots, beside a drawn rest, on a warden run rehearsed here first (warden_serve.py
-#     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection of more than
-#     a5_warden.py's 16 cells each way; only its public deployment.json, cells.jsonl and check.json are kept), on a local
-#     challenger's coins (A5_CHALLENGER=local) or the verifier's own (A5_COINS=verifier); warden:altered reads one cell a bit
-#     off and is to be refused by Lean's registered reads.
+#     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection admitted in its
+#     link-window with a5_warden.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
+#     and check.json are kept), on a local challenger's coins (A5_CHALLENGER=local) or the verifier's own (A5_COINS=verifier);
+#     warden:altered reads one cell a bit off, and warden:pad, warden:pad-named and warden:swapped make the egress chunk's
+#     statement for another units' wiring (--made-for); each is to be refused by Lean's registered reads.
 #   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only; A5_JOBS=N
 #   audits up to N ranks at once (a GLM-5.3 rank, SiluMul_v2 at step 16: its window ~16 min and ~11.7 GB, its audit ~10 GB;
 #   the MoE w2 coordinates of one layer, glm53_moe_w2_tp8_step16.json: its window ~4 min and ~13.1 GB, then ~2.5 min of the
@@ -188,7 +189,9 @@ else
       keep $e
       continue
     fi
-    if [ "$e" = warden ] || [ "$e" = warden:altered ]; then
+    if [ "${e%%:*}" = warden ]; then
+      case $e in warden) REFUSE=();; warden:altered) REFUSE=(--altered);; warden:pad|warden:pad-named|warden:swapped) REFUSE=(--made-for ${e#warden:});;
+        *) echo "STANDIN $e: warden, warden:altered, warden:pad, warden:pad-named or warden:swapped"; exit 3;; esac
       if [ -n "${A5_COINS:-}" ]; then DRAW=(--coins $A5_COINS)
       elif [ "${A5_CHALLENGER:-}" = local ]; then DRAW=(--challenger local --main $MAIN)
       else echo "STANDIN $e draws through its stream: set A5_CHALLENGER=local or A5_COINS=verifier"; exit 3; fi
@@ -201,7 +204,7 @@ else
           $O/warden-run/check.json; exit 8; }
       fi
       $TIME $PY benchmarks/one_stage/a5_warden.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL \
-        "${DRAW[@]}" $([ $e = warden:altered ] && echo --altered) ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} \
+        "${DRAW[@]}" "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} \
         --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
       grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err
       keep $N
