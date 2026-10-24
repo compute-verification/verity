@@ -19,7 +19,10 @@ the bit-checking step along each segment, the counting step's tally (each window
 its finish gives v1's charge), and the book's model (`BookKT_v1`) at each bit. On each decisions stream it holds
 `ChargeCount_v1`, one window's charge from its decisions alone, to `code_v1` (`check_charges`): its reference on each
 window's decisions and on the decisions cut again into windows of at most `--cut` slots with gaps, and with `--circuit`
-the Definition at that N on the cut. `--steps` takes the
+the Definition at that N on the cut. It holds `ChargeCount_v2` (`window_charge`), the whole window's charge with its
+hits and order entries, to `code_v1` too (`check_windows`): its reference on each window at its own sizes (v1's
+charges), on the windows with `SEEDED` hits and order entries added, and on their cut into `WHOLE` slots, and with
+`--circuit` `ChargeLink_v2` on the cut's committed rows. `--steps` takes the
 replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows, their decisions cut at the compile
 slice's P·A = 14 whatever `--cut` says) and the TRACE-CORPUS fixture's
 fields, and `--fixture PATH` writes them as the vectors the certifier's test reads
@@ -62,7 +65,7 @@ K = 18
 #: `ChargeCount_v1`'s slots a window in the corpus difftest (`--cut`), and in the fixture's streams, the compile slice's P·A
 CUT, SLICE_CUT = 64, 14
 #: `ChargeCount_v2`'s slots a window (decisions, hits, order entries) in the whole windows' cut, and the hits and order
-#: entries seeded into the fixture's streams, whose traces send almost none
+#: entries seeded into each decisions stream, since the fixtures' traces send almost none
 WHOLE, SEEDED = (4, 2, 2), (12, 10)
 EOS = 2
 FIXTURE = HERE.parents[2] / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
@@ -480,7 +483,7 @@ def sources(corpus: Sequence[str], steps: bool, stops: Sequence[int], T: int,
         for ingress in ("warden", "client"):
             name = f"{label} (decisions, T={T}, {ingress})"
             yield name, lambda d=d, ingress=ingress, name=name: decisions(
-                R.read_corpus_trace(d, ingress=ingress), stops, T=T, cut=cut, rng=random.Random(name))
+                R.read_corpus_trace(d, ingress=ingress), stops, T=T, cut=cut, rng=random.Random(name), seeded=SEEDED)
         yield f"{label} (fields)", lambda d=d: fields(D.load_corpus_trace(d, eos_token_id=stops[0],
                                                                           stop_token_ids=tuple(stops[1:])))
 

@@ -1,0 +1,13 @@
+{
+ "definitions": {
+  "ChargeCount_v2{N=1,H=1,O=1}": {
+   "and": 53287
+  },
+  "ChargeCount_v2{N=2,H=2,O=0}": {
+   "and": 39803
+  },
+  "ChargeLink_v2{N=1,H=1,O=1}": {
+   "and": 53447
+  }
+ }
+}
