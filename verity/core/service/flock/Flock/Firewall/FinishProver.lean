@@ -299,7 +299,8 @@ namespace Fast
 /-- `(Array.range n).map f` in tasks of `b` entries (`parTab_eq`), for any entry type; `b = 1` is a task to an entry. -/
 @[specialize] def parTab {α : Type} (b : Nat) (f : Nat → α) (n : Nat) : Array α :=
   ((Array.range (n / b)).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
-    (fun acc t => acc ++ t.get) #[] ++ (Array.range (n - n / b * b)).map fun j => f (n / b * b + j)
+    (fun acc t => acc ++ t.get) (Array.emptyWithCapacity n) ++
+      (Array.range (n - n / b * b)).map fun j => f (n / b * b + j)
 
 theorem parTab_eq {α : Type} (b : Nat) (f : Nat → α) (n : Nat) : parTab b f n = (Array.range n).map f := by
   have hp : ∀ a, ((Array.range a).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
@@ -312,8 +313,9 @@ theorem parTab_eq {α : Type} (b : Nat) (f : Nat → α) (n : Nat) : parTab b f 
       simp only [Task.spawn, List.map_toArray, List.map_cons, List.map_nil, List.size_toArray, List.length_cons,
         List.length_nil, Nat.zero_add, List.foldl_toArray', List.foldl_cons, List.foldl_nil, Array.map_append,
         Array.map_map, Function.comp_def]
+  have he : (Array.emptyWithCapacity n : Array α) = #[] := rfl
   conv => rhs; rw [← Nat.add_sub_cancel' (Nat.div_mul_le_self n b)]
-  rw [Array.range_add, Array.map_append, Array.map_map, parTab, hp]
+  rw [Array.range_add, Array.map_append, Array.map_map, parTab, he, hp]
   rfl
 
 theorem range_map_get! {α β : Type} [Inhabited α] (f : α → β) (t : Array α) :
@@ -450,6 +452,13 @@ abbrev LP (M : Type → Type) := StateT LigState (TMW M)
 
 def liftT {α : Type} (x : TMW M α) : LP M α := StateT.lift x
 
+/-- `{ st with tab := f st.tab, w := g st.w }` with `f st.tab` on a thread of its own beside `g st.w`: the two tables'
+joins, each serial, run at once. -/
+@[inline] def Fast.both (f g : Array F256 → Array F256) (st : LigState) : LigState :=
+  let t := Task.spawn (prio := .dedicated) fun _ => f st.tab
+  let w := g st.w
+  { st with tab := t.get, w }
+
 /-- Send the next sumcheck message. -/
 def sendMsg (m : F256 × F256) : LP M Unit := do
   modify fun st => { st with msgs := st.msgs.push m }
@@ -478,6 +487,17 @@ def challengeP (io : Asks M) (split : Bool) : LP M F256 := do
   let st ← get
   sendMsg (roundPoly st.tab st.w)
   return r
+
+/-- `challengeP` with the table's and the weight's folds, and their splits, side by side (`Fast.both`). -/
+def challengePFast (io : Asks M) (split : Bool) : LP M F256 := do
+  let r ← liftT (sampleKP io)
+  modify (Fast.both (foldK r) (foldK r))
+  if split then modify (Fast.both (fun a => embedF (splitK a)) liftU)
+  let st ← get
+  sendMsg (roundPoly st.tab st.w)
+  return r
+
+@[csimp] theorem challengeP_eq_challengePFast : @challengeP = @challengePFast := rfl
 
 /-- An out-of-domain sample on the current F-table `g` with an intro message (levels ≥ 1). -/
 def oodIntroP (io : Asks M) (nonce : Nat → Nat → UInt64) (g : Array F128) (dim : Nat) : LP M Unit := do
@@ -686,6 +706,130 @@ def ligeritoPZk (io : Asks M) (commit : Level → Array F128 → (Nat → ByteAr
   return ({ initialCap := cm0.cap, initialProof := op0, recursiveCaps := caps, recursiveProofs := rproofs,
             finalProof := fin, messages := st.msgs, queryNonces := st.qn, oodValues := st.oods, claimNonces := st.cbn,
             consistencyNonces := st.cn }, zl, { target := T, ood := #[(b0, y)], challenges := initCh, rho })
+
+/-- `ligeritoPZk` with the table's and the weight's folds, and their splits, side by side (`Fast.both`), and level 0's
+`embedF (eqTable z)` in a task beside `mleF t z`. -/
+def ligeritoPZkFast (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (ms : MerkleScheme)
+    (sch : Schedule) (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128) (rep tPad : Nat)
+    (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) (nonce : Nat → Nat → UInt64) :
+    TMW M (LigeritoProof × Zk.Level0Msgs × Zk.L0Rec) := do
+  let n := sch.n
+  let R := sch.levels.size - 1
+  let lv := fun (i : Nat) => sch.levels.getD i default
+  let lanes := 2 ^ (lv 0).lanes
+  liftTM (label "flock-ligerito-basis-f256-split-v0")
+  liftTM (absorbF T)
+  liftTM (absorbBytes (flat cm0.cap))
+  liftTM (label Zk.LABEL_OPEN)
+  let prog : LP M (Array (Array ByteArray) × Array LevelProof × FinalProof × LevelProof × Zk.Level0Msgs ×
+      Array F256 × (F256 × F256) × F128 × F128) := do
+    -- level 0's out-of-domain sample (no message), its value masked
+    let z ← liftT (sampleVecP io n)
+    let ez := Task.spawn (prio := .dedicated) fun _ => embedF (eqTable z)
+    let y := mleF t z + h[lay.lgOod 0]!
+    modify fun st => { st with oods := st.oods.push y }
+    liftT (liftTM (absorbF y))
+    powP nonce 2
+    let b0 ← liftT (sampleP io)
+    modify fun st => { st with w := addScaled st.w ez.get b0 }
+    let st ← get
+    sendMsg (maskMsg lay h 0 (roundPoly st.tab st.w))
+    let mut initCh : Array F256 := #[]
+    let mut rho : F256 × F256 := (0, 0)
+    let mut zl : Zk.Level0Msgs := default
+    for j in [0:sch.k0] do
+      let r ← liftT (sampleKP io)
+      initCh := initCh.push r
+      modify (Fast.both (foldK r) (foldK r))
+      if j + 1 == sch.k0 then
+        -- the pair's sums, its coins, the blinded claim and the padding's combination
+        let st ← get
+        let r0 := (Array.range st.tab.size).map (extra (2 * rep))
+        let r1 := (Array.range st.tab.size).map (extra (2 * rep + 1))
+        let e0 := dotK st.w (embedF r0) + ⟨h[lay.lgE 0 0]!, h[lay.lgE 0 1]!⟩
+        let e1 := dotK st.w (embedF r1) + ⟨h[lay.lgE 1 0]!, h[lay.lgE 1 1]!⟩
+        liftT (liftTM (absorbK e0))
+        liftT (liftTM (absorbK e1))
+        let rh0 ← liftT (sampleKP io)
+        let rh1 ← liftT (sampleKP io)
+        rho := (rh0, rh1)
+        if !Zk.rhoIndependent rho then throw "PROVER-STOPPED: degenerate coins: rho_0, rho_1 dependent over F128"
+        liftT (liftTM (label Zk.LABEL_CLOSE))
+        let y1 := (Array.range st.tab.size).map fun c => st.tab[c]! + rh0.smul r0[c]! + rh1.smul r1[c]!
+        let tP := dotK st.w y1
+        liftT (liftTM (absorbK tP))
+        let ef := eqTableK initCh
+        let ybar := (Array.range tPad).map fun i =>
+          (List.range lanes).foldl (fun acc l => acc + (ef[l]!).smul (lanePad l i))
+            (rh0.smul (lanePad (lanes + 2 * rep) i) + rh1.smul (lanePad (lanes + 2 * rep + 1) i))
+        liftT (liftTM (absorbSlice (ybar.foldl (fun acc v => (acc.push v.c0).push v.c1) #[])))
+        zl := ⟨e0, e1, tP, ybar⟩
+        modify (Fast.both (fun _ => embedF (splitK y1)) liftU)
+        let st ← get
+        sendMsg (roundPoly st.tab st.w)
+      else
+        let st ← get
+        sendMsg (maskMsg lay h (j + 1) (roundPoly st.tab st.w))
+    let mut splitDim := n - sch.k0 + 1
+    let g1 := (← get).tab.map F256.c0
+    let cm1 ← liftT (StateT.lift (commit (lv 1) g1 (salt 1)))
+    liftT (liftTM (absorbBytes (flat cm1.cap)))
+    oodIntroP io nonce g1 splitDim
+    oodIntroP io nonce g1 splitDim
+    let (op0, v0) ← queryP io nonce ms (lv 0) cm0
+    sendMsg (roundPoly (embedF g1) (liftU (embedF v0)))
+    powP nonce 2
+    let bq ← liftT (sampleP io)
+    modify fun st => { st with w := addScaled st.w (liftU (embedF v0)) bq }
+    let mut prevCm := cm1
+    let mut caps : Array (Array ByteArray) := #[cm1.cap]
+    let mut rproofs : Array LevelProof := #[]
+    let mut fin : FinalProof := default
+    for i in [0:R] do
+      let last := i + 1 == R
+      let mut f : Array F256 := #[]
+      for j in [0:4] do
+        if j + 1 == 4 then
+          let r ← liftT (sampleKP io)
+          modify (Fast.both (foldK r) (foldK r))
+          let d ← get
+          f := d.tab
+          modify (Fast.both (fun a => embedF (splitK a)) liftU)
+          let st ← get
+          -- nothing reads the last level's split: it sends upstream's plain fold message, of the unsplit table
+          sendMsg (if last then roundPoly d.tab d.w else roundPoly st.tab st.w)
+        else
+          let _ ← challengeP io false
+      let ext := splitDim - 4
+      if !last then
+        splitDim := ext + 1
+        let g := splitK f
+        let cmN ← liftT (StateT.lift (commit (lv (i + 2)) g (salt (i + 2))))
+        liftT (liftTM (absorbBytes (flat cmN.cap)))
+        caps := caps.push cmN.cap
+        oodIntroP io nonce g splitDim
+        oodIntroP io nonce g splitDim
+        let (op, v) ← queryP io nonce ms (lv (i + 1)) prevCm
+        rproofs := rproofs.push op
+        sendMsg (roundPoly (embedF g) (liftU (embedF v)))
+        powP nonce 2
+        let bb ← liftT (sampleP io)
+        modify fun st => { st with w := addScaled st.w (liftU (embedF v)) bb }
+        prevCm := cmN
+      else
+        let yr := f.foldl (fun acc v => (acc.push v.c0).push v.c1) #[]
+        for x in yr do liftT (liftTM (absorbF x))
+        let (op, _) ← queryP io nonce ms (lv R) prevCm
+        fin := { yr, rows := op.rows, siblings := op.siblings, salts := op.salts }
+        powP nonce 2
+        let _ ← liftT (sampleP io)
+    return (caps, rproofs, fin, op0, zl, initCh, rho, b0, y)
+  let ((caps, rproofs, fin, op0, zl, initCh, rho, b0, y), st) ← prog.run { tab := embedF t, w := embedF b }
+  return ({ initialCap := cm0.cap, initialProof := op0, recursiveCaps := caps, recursiveProofs := rproofs,
+            finalProof := fin, messages := st.msgs, queryNonces := st.qn, oodValues := st.oods, claimNonces := st.cbn,
+            consistencyNonces := st.cn }, zl, { target := T, ood := #[(b0, y)], challenges := initCh, rho })
+
+@[csimp] theorem ligeritoPZk_eq_ligeritoPZkFast : @ligeritoPZk = @ligeritoPZkFast := rfl
 
 /-! ## The inner proof (`FlockComplete.PadsZk` to `FlockComplete.innerP`) -/
 
