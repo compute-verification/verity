@@ -490,15 +490,16 @@ def _relaid(steps: list[list], r: int, request, prompt_len: int) -> list[list]:
 
 def prompt_split(advice, request: int | None = None):
     """Request `request`'s and the next one's prompt lengths swapped, their total kept (REDTEAM phase 6's split: (338,
-    16) served, (16, 338) advised): by default the first request whose prompt is longer than the next one's, each
-    prefilled to the other's length and decoded on from there (`_relaid`), the rest as served, so every output is
-    honest's, released in its bucket. Where the two take different frames under the link's framing, the earlier one's
-    end moves down, and with it the advised floor (phase 6's acausal release); where they take the same,
-    `advised.ends` doesn't move. Either way the requests' frames are honest's, so only the tie of each request's
-    prompt length to the certified ingress (IoTieRequest) refuses it."""
-    qs, steps, why = advice.requests, _plain(advice), "no request's prompt is longer than the next one's"
+    16) served, (16, 338) advised): by default the first request whose prompt is longer than the next one's, else the
+    first whose prompt is shorter, each prefilled to the other's length and decoded on from there (`_relaid`), the
+    rest as served, so every output is honest's, released in its bucket. Where the two take different frames under
+    the link's framing, the earlier one's end moves (down, for a longer first: phase 6's acausal release); where they
+    take the same, `advised.ends` doesn't move. Either way the requests' frames are honest's, so only the tie of each
+    request's prompt length to the certified ingress (IoTieRequest) refuses it."""
+    qs, steps, why = advice.requests, _plain(advice), "no request's prompt length differs from the next one's"
     pairs = [range(len(qs) - 1)[request]] if request is not None else \
-        [j for j in range(len(qs) - 1) if qs[j].prompt_len > qs[j + 1].prompt_len]
+        sorted((j for j in range(len(qs) - 1) if qs[j].prompt_len != qs[j + 1].prompt_len),
+               key=lambda j: qs[j].prompt_len < qs[j + 1].prompt_len)
     for j in pairs:
         lens = {j: qs[j + 1].prompt_len, j + 1: qs[j].prompt_len}
         if lens[j] == lens[j + 1]:

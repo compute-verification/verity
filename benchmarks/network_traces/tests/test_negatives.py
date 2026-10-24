@@ -452,8 +452,9 @@ def test_advice_prompt_split_swaps_two_prompts_and_keeps_every_row_and_output_wh
     """REDTEAM phase 6's split on the stand-in: r0's prompt of 5 advised as 2, cut from the front of its two chunks
     (each keeping a token), r1's of 2 as 5, its one chunk longer, each decode moved with its prompt; every row stays in
     its step, so each output is kept where it was and released in its bucket. Under the tests' framing r0's end moves a
-    frame earlier and the frames' total stays. It needs a pair whose first prompt is the longer, rows that read no
-    cached KV, and as many tokens as the shorter prompt has chunks."""
+    frame earlier and the frames' total stays. Without a pair whose first prompt is the longer, the first whose
+    prompts differ. It needs two prompts of different lengths, rows that read no cached KV, and as many tokens as the
+    shorter prompt has chunks."""
     a = _advice()
     b = NG.prompt_split(a)
     assert [(q.id, q.prompt_len) for q in b.requests] == [("r0", 2), ("r1", 5)] and b.release == a.release
@@ -466,8 +467,11 @@ def test_advice_prompt_split_swaps_two_prompts_and_keeps_every_row_and_output_wh
         return [sum(FRAMING[q.prompt_len - 1] for q in x.requests[:k + 1]) for k in range(len(x.requests))]
 
     assert ends(a) == [2, 3] and ends(b) == [1, 3]
-    with pytest.raises(NG.NotApplicable, match="no request's prompt is longer"):
-        NG.prompt_split(b)
+    back = NG.prompt_split(b)
+    assert [q.prompt_len for q in back.requests] == [5, 2] and _check(back) == _check(a) and ends(back) == [2, 3]
+    one = V.Advice((V.RequestAdvice("x", 1, 1, "eos"),), (V.StepAdvice((V.Row(0, "prefill", 0, 1),)),), (0,))
+    with pytest.raises(NG.NotApplicable, match="no request's prompt length differs"):
+        NG.prompt_split(one)
     with pytest.raises(NG.NotApplicable, match="KV"):
         NG.prompt_split(NG.start_shifted(a))
     three = _advice([[(0, "prefill", 0, 2)], [(0, "prefill", 2, 2)], [(0, "prefill", 4, 1), (1, "prefill", 0, 2)],
