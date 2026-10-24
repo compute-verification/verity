@@ -442,7 +442,7 @@ def checkout(pkg: str, tree: Path, name: str) -> str | None:
 
 
 def git_head(d: Path) -> str | None:
-    r = subprocess.run(["git", "-C", str(d), "rev-parse", "HEAD"], capture_output=True, text=True)
+    r = subprocess.run(["git", "-c", "safe.directory=*", "-C", str(d), "rev-parse", "HEAD"], capture_output=True, text=True)
     return r.stdout.strip() if r.returncode == 0 else None
 
 
