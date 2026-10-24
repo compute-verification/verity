@@ -48,7 +48,7 @@ its own generation config to a request that omits them.
   cost (rows, row bytes, commit and sign ms), `cells.salts` the rows' salts and the wiring's (witness, the prover's,
   who holds the records the rows and the wiring are read off). All of that is done by a spawned process
   (`PublisherProcess`), which alone holds the key and gets each tick's rows as the warden releases them: a window's
-  commit takes seconds of CPU, and in the warden's own process, even on another thread, it holds the ticker's GIL and
+  commit can take seconds of CPU, and in the warden's own process, even on another thread, it holds the ticker's GIL and
   puts ticks past their slack.
 - `client` sends each request of the traffic at its time after the origin on a connection of its own, reads the cells
   to the warden's close, and writes `client.json`: per connection its ordinal, outcome, every cell's kind and arrival,
