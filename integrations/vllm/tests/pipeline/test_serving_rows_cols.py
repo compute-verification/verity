@@ -15,10 +15,10 @@ from verity.ml.circuits.evaluation import evaluate_batch
 
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
-from verity.ml.definitions.registry import boolean_moe as BMOE
-from verity.ml.definitions.registry import boolean_tp_allreduce as BTA
-from verity.ml.definitions.registry import moe as M
-from verity.ml.definitions.registry import tp_allreduce as TA
+from verity_vllm.program.registry import boolean_moe as BMOE
+from verity_vllm.program.registry import boolean_tp_allreduce as BTA
+from verity_vllm.program.registry import moe as M
+from verity_vllm.program.registry import tp_allreduce as TA
 
 TOPK, WORLD, W = 3, 4, 8
 OPS = {"MoeSum_v1": "model.layers.3.mlp.experts", "AllReduceMnnvl_v1": "model.layers.6.mlp"}

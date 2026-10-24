@@ -15,7 +15,7 @@ import pytest
 from verity.ml.circuits.codec import canonical_json
 
 pytest.importorskip("verity_numerical")
-pytest.importorskip("verity.ml.definitions.registry.prims")
+pytest.importorskip("verity_vllm.program.registry.prims")
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import typed_statement as TS  # noqa: E402
 from verity_numerical.bench import lowerings  # noqa: E402

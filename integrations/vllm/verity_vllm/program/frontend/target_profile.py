@@ -112,7 +112,7 @@ class TargetProfile:
                            None) = MOE-01 with the router stated in its selection order over one committed softmax
                            (`MoeRouterTopKOrdered_v1`).  `"padded"` = the
                            fixed-slot construction: ONE `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` call per token over ALL E experts on their own
-                           weights, the TOPK slot outputs selected by the router ids (`verity.ml.definitions.registry.moe_pad`; its lift of record is the
+                           weights, the TOPK slot outputs selected by the router ids (`verity_vllm.program.registry.moe_pad`; its lift of record is the
                            hand-authored `LMoeFfnL_v1` with the unselected slots DISABLED by the enable vector `a_{r,t,e}`).  Two Programs
                            of the same trace differ in digest by construction; GP-01 refuses a workload whose components were derived under
                            another construction than the declared one, and labels the workload (`moe_construction` block) so the row's

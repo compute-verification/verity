@@ -29,7 +29,7 @@ import pytest
 
 from verity_vllm.check.cublas_route_pin import route_pin_gate
 from verity_vllm.pipeline.tp.c2 import c2_and_pin_gates, replay_gates
-from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.program.registry import bf16_gemm_check as BC
 
 #: vLLM's batch-invariant cuBLAS configuration on cc 9.0 (determinism/batch_invariant.py), the capture's `split_k_off` variant
 SWITCH_ENV = {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"}

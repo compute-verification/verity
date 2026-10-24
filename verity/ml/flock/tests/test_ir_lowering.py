@@ -14,7 +14,7 @@ from verity.ml.circuits.defs import REGISTRY
 from verity_flock import fp, gf2
 from verity_flock import ir_lower as IL
 
-P = pytest.importorskip("verity.ml.definitions.registry.prims")
+P = pytest.importorskip("verity_vllm.program.registry.prims")
 from verity_numerical.bench import lowerings  # noqa: E402
 from verity_numerical.bench import templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
@@ -347,7 +347,7 @@ def test_the_gelu_piece_matches_the_ir_primitive_on_every_gate_word():
 
 def test_bit_at_selects_the_bit_or_zero():
     """``BitAtx{W}`` (a width family ``ir_lower.PIECES`` resolves): bit i of the word, 0 for i outside [0, W)."""
-    from verity.ml.definitions.registry.sampling import bit_at
+    from verity_vllm.program.registry.sampling import bit_at
     rng = random.Random(4)
     W = 1000
     vecs = [[rng.getrandbits(W), rng.choice([rng.randint(0, W - 1), 0, W - 1, W, 0xFFFFFFFF, 0x80000000])] for _ in range(64)]
@@ -631,7 +631,7 @@ def test_the_ingress_parse_is_one_unit_equal_to_its_definition(tmp_path):
     """``ingress-prompt`` (the I/O shell's ``IngressPrompt_v1``) lowers as ONE unit (``ir_lower.whole``) whose input row is the
     body, whole SHA-512 blocks: its rows equal the IR on a synthetic set of schema bodies, and give ``io_shell.reference``'s
     (ok, ids, max_tokens) on the same bodies with one byte changed, which leaves the schema or moves a field."""
-    from verity.ml.definitions.registry import io_shell as X
+    from verity_vllm.program.registry import io_shell as X
 
     mod, sub = REG.module("ingress-prompt"), TM.subcircuit("ingress-prompt", **INGRESS)
     s = InputSet.open(generate(sub, 4, 20261024, tmp_path)["path"])
@@ -655,7 +655,7 @@ def test_the_greedy_select_is_its_chunk_and_combine_units(tmp_path):
     chunk boundary, behind a NaN at a chunk's first logit, or alone in the last, short chunk."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.definitions.registry import b1
+    from verity_vllm.program.registry import b1
 
     V = 200
     lows = {}

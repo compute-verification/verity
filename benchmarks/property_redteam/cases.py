@@ -37,8 +37,8 @@ from verity.ml.circuits.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32, Int
 from verity.ml.circuits.types import Array, Tuple as TupleT, Value
 
 import verity.core.protocols.pouw.circuit.words  # noqa: F401  (PouwNoiseByte)
-from verity.ml.definitions.registry import dsa, dsv4_qnorm_insert, flashmla, marlin_moe, topp_word_gates  # noqa: F401
-from verity.ml.definitions.registry.ref_prims import gather_f32
+from verity_vllm.program.registry import dsa, dsv4_qnorm_insert, flashmla, marlin_moe, topp_word_gates  # noqa: F401
+from verity_vllm.program.registry.ref_prims import gather_f32
 
 try:
     FAMILY: Any = importlib.import_module("verity.ml.circuits.ops.s8")

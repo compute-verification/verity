@@ -1,7 +1,7 @@
 """verity_vllm/properties/quarantine_lint.py — PROTECTED (gate G4, admission rules 1–2).  Static purity + identity lint of the
 quarantine registry.
 
-    uv run verity-vllm quarantine-lint [--root verity_vllm/program/quarantine] [--out quarantine_lint.json]
+    uv run verity-vllm quarantine-lint [--root verity_vllm/program/registry/quarantine] [--out quarantine_lint.json]
 
 Rules (AST, no import of the checked modules):
   - forbidden imports: os, sys, time, datetime, random, secrets, pathlib, io, json, pickle, subprocess, socket, urllib,
@@ -26,7 +26,7 @@ from typing import Any
 
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import option
-from verity_vllm.program import quarantine as _quarantine
+from verity_vllm.program.registry import quarantine as _quarantine
 from verity_vllm.properties.record import seal
 
 ROOT = Path(_quarantine.__file__).parent

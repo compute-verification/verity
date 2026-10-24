@@ -37,7 +37,7 @@ from verity.ml.circuits.evaluate import MissingValue, evaluate_region
 from verity.ml.circuits.layout import Circuit, FunctionCall, resolve
 from verity.ml.circuits.program import Program
 from verity_vllm.config import UsageError, option
-from verity.ml.definitions.registry import b1
+from verity_vllm.program.registry import b1
 
 _ID_RE = re.compile(r"^p=(?P<p>[^/]+)/r=(?P<r>[^/]+)/t=(?P<t>\d+)/ph=(?P<ph>[^/]+)/l=(?P<l>[^/]+)/op=(?P<op>[^/]+)/port=(?P<output>\d+)$")
 

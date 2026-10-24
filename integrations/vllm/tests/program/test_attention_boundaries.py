@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
-PKG = "verity.ml.definitions.registry"
+PKG = "verity_vllm.program.registry"
 REGISTRY = Path(importlib.util.find_spec(PKG).origin).parent
 DEFINITION_MODULES = ["fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla", "dsa",
                       "boolean_dsa", "sparse_mla", "boolean_sparse_mla"]
@@ -132,10 +132,10 @@ def test_the_vocabulary_is_out_of_the_definition_modules():
 def test_the_checker_catches_a_frontend_import(monkeypatch, tmp_path):
     (tmp_path / "fa2_check_inf.py").write_text(
         "from verity.ml.circuits.defs import composite\n"
-        "from verity.ml.definitions.registry import prims as P, targets\n"
-        "from verity.ml.definitions.registry.b1 import ZERO16, fa2_kblock_n\n"
+        "from verity_vllm.program.registry import prims as P, targets\n"
+        "from verity_vllm.program.registry.b1 import ZERO16, fa2_kblock_n\n"
         "from verity_vllm.config import X\n\n\n"
-        "def f():\n    from verity.ml.definitions.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
+        "def f():\n    from verity_vllm.program.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
     monkeypatch.setattr(sys.modules[__name__], "REGISTRY", tmp_path)
     assert sorted(v.split(": ", 1)[1] for v in _violations("fa2_check_inf")) == sorted([
-        "imports verity_vllm.config", "imports verity.ml.definitions.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"])
+        "imports verity_vllm.config", "imports verity_vllm.program.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"])

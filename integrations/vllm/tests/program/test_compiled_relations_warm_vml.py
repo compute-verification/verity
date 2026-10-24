@@ -10,7 +10,7 @@ import sys
 
 import pytest
 
-from verity_vllm.program import compiled_relations as CR
+from verity_vllm.program.kernels import compiled_relations as CR
 
 
 def test_without_torch_it_does_nothing(monkeypatch):

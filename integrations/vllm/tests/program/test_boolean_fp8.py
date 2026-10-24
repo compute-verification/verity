@@ -16,8 +16,8 @@ from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.boolean import trace as TR
-from verity.ml.definitions import boolean as SW
-from verity.ml.definitions.registry import boolean_fp8 as BF
+from verity_vllm.program import boolean as SW
+from verity_vllm.program.registry import boolean_fp8 as BF
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

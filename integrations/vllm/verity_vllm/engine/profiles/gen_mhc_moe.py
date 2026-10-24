@@ -42,7 +42,7 @@ def mhc_weight_shapes(C: dict[str, Any]) -> dict[str, tuple[tuple[int, ...], int
     attention (an indexer at ratio 4, a compressor of the D-wide rows at every ratio, overlapping two windows at ratio 4), the router
     (its token table below HASH_LAYERS, else its correction bias), the shared expert and the MXFP4 routed experts in the checkpoint's
     [E][N][K/2] e2m1 bytes and [E][N][K/32] e8m0 scales (`program.frontend.marlin_moe_leaf`)."""
-    from verity.ml.definitions.registry import marlin_moe as MM
+    from verity_vllm.program.registry import marlin_moe as MM
     H, HC, V, D, DR, QL, NH, NHP, E, I, SI, IH, ID, OL, TOPK, G = (int(C[k]) for k in (
         "H", "HC_MULT", "V", "HEAD_DIM", "QK_ROPE", "Q_LORA", "NH", "PADDED_HEADS", "NUM_EXPERTS", "I", "SHARED_I", "INDEX_HEADS",
         "INDEX_HEAD_DIM", "O_LORA", "TOPK", "FP8_BLOCK"))

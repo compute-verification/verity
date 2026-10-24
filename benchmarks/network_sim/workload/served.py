@@ -54,7 +54,7 @@ class Config:
 
     def registry(self) -> dict:
         """The configuration `registry.b1` reads: B0's, with this size."""
-        from verity.ml.definitions.registry import b1
+        from verity_vllm.program.registry import b1
         c = dict(b1.B0_CONFIG)
         c.update(NL=self.layers, H=self.hidden, NH=self.heads, KVH=self.kv_heads, D=self.head_dim, I=self.intermediate,
                  V=self.vocab, MAX_POS=self.max_pos, QKV=(self.heads + 2 * self.kv_heads) * self.head_dim,

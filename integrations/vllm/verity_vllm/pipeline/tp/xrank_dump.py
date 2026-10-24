@@ -32,7 +32,7 @@ def route_of(settings: dict[str, Any], M: int, N: int, world: int, norm: Any = N
     launch (`call_spans`); over several requests the Build binds one call per request on the launch's route (`route_binding(.., rows)`,
     `vllm_bindings.AllReduceRule`), listed as "calls" [{lo, rows, spec, statics}]."""
     from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.registry import tp_allreduce as T
+    from verity_vllm.program.registry import tp_allreduce as T
 
     world = int(world)
     if world <= 2:

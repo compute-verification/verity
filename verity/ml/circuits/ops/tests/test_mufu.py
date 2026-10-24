@@ -1,6 +1,6 @@
 """The MUFU primitives of `verity.ml.circuits.ops.mufu`: ids, descriptor digests, outputs, and the tables they read.
 
-These primitives were registered by the vLLM integration (`verity.ml.definitions.registry.prims`) under the same ids, and its
+These primitives were registered by the vLLM integration (`verity_vllm.program.registry.prims`) under the same ids, and its
 stored Programs cite them. `PINNED` holds, per primitive, the digests recorded from that registration: the Definition's
 descriptor digest, the digest of a program making one call to it, and a fingerprint of its outputs over edge and seeded random
 encodings. A primitive whose digest or outputs change is a new version of it, not an edit.

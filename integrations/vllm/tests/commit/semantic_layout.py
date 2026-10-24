@@ -36,7 +36,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ml.definitions import dtypes
+from verity_vllm.program import dtypes
 from verity_vllm.commit import identity, scheme
 
 

@@ -22,8 +22,8 @@ from verity_vllm.engine.profiles.gen_ln_patterns import (GeluErfPattern, LayerNo
 
 pythia = importlib.import_module("verity_vllm.engine.profiles.derived_PYTHIA160M")
 from verity_vllm.observe.fold.patterns import BiasAdd, RotaryEmbedding
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.registry import act, gelu_erf_table, layer_norm
+from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import act, gelu_erf_table, layer_norm
 
 C = pythia.C
 

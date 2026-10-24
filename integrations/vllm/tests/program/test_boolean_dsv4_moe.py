@@ -1,4 +1,4 @@
-"""`verity.ml.definitions.registry.boolean_dsv4_moe`: DeepSeek-V4's routers and clamped SwiGLU on bits agree with their word
+"""`verity_vllm.program.registry.boolean_dsv4_moe`: DeepSeek-V4's routers and clamped SwiGLU on bits agree with their word
 Definitions (`trace.word_of`): MUFU.LG2 on all 2^23 mantissas (the SHA-256 of the words measured on the RTX PRO 6000) and on
 random words of every exponent and sign; ex2.approx, the hash weight and the sqrtsoftplus score on special, edge and random
 words; the clamped SwiGLU on every gate word and every up word against the clamp's edges, and on random pairs; the hash router
@@ -23,9 +23,9 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.definitions import boolean as SW
-from verity.ml.definitions.registry import boolean_dsv4_moe as BD
-from verity.ml.definitions.registry import dsv4_moe as D
+from verity_vllm.program import boolean as SW
+from verity_vllm.program.registry import boolean_dsv4_moe as BD
+from verity_vllm.program.registry import dsv4_moe as D
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

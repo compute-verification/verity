@@ -172,7 +172,7 @@ def request_component(r, canon: dict):
     `canon` (one dict a composition)."""
     from verity.ml.circuits.defs import REGISTRY
     from verity_vllm.program import workload as W
-    from verity.ml.definitions.registry.catalog import load as load_registry
+    from verity_vllm.program.registry.catalog import load as load_registry
     load_registry()
     params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
     return W.request_component(r.desc, REGISTRY, params, canon=canon, digest=r.digest)
@@ -262,7 +262,7 @@ def equivalence(pred_program, traced_desc: dict) -> dict:
     from verity.ml.circuits.codec import decode_program
     from verity.ml.circuits.defs import REGISTRY
     from verity_vllm.program import descriptor_equivalence as DE
-    from verity.ml.definitions.registry.catalog import load as load_registry
+    from verity_vllm.program.registry.catalog import load as load_registry
     load_registry()
     t0 = time.time()
     try:

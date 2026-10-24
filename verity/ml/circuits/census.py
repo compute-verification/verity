@@ -71,7 +71,7 @@ by family: Triton's MMAv2 e4m3 dot on sm_90 (`HopperE4m3MmaV2Dot32`) runs as f16
 `mac:fp8`.  Every other gate is `cuda:gate`.  A class's work includes
 its callees'.  The census counts work only when asked (`census(..., boolean=...)`; without it there is no `work`): for a Boolean
 Program, each root Call's own gates; for a word Program, each root Call through the Boolean version a resolver gives
-(`verity.ml.definitions.boolean.boolean_version`), named in its class's `boolean_version`, so a class under a word Call has no
+(`verity_vllm.program.boolean.boolean_version`), named in its class's `boolean_version`, so a class under a word Call has no
 `work`.  A root Call with no Boolean version, or whose Boolean body reaches a primitive other than a gate, a constant bit or an
 input, is refused by name (`NoBooleanWork`), and so is a `PRODUCTS` step bound to no silicon model (its module, which binds it,
 never imported).  A tensor-core step inlined into a traced body (a Definition compiled and traced again as one circuit) is no
@@ -1002,7 +1002,7 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
            boolean: bool | Callable[[Any], Any] = False) -> dict:
     """The census/v1 of `program` (a `Program` or a `DecodedProgram`) over the steps `ends` (default: one step), naming the
     Program by `digest` (`codec.program_digest`) when given.  With `boolean` it counts Boolean work (`work`): True counts each
-    root Call's own gates, a resolver (`verity.ml.definitions.boolean.boolean_version`) each root Call that is not Boolean through
+    root Call's own gates, a resolver (`verity_vllm.program.boolean.boolean_version`) each root Call that is not Boolean through
     the Boolean Definition it returns; either refuses (`NoBooleanWork`) every root Call it cannot count, by name."""
     root = program.root
     nodes = root.body.nodes

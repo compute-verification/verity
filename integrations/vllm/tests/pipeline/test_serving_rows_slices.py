@@ -23,10 +23,10 @@ from verity_flock.class_statement import UnitStager
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import slice_rows as SL
-from verity.ml.definitions.registry import b1_tp2 as T2
-from verity.ml.definitions.registry import cublas_bf16 as CB
-from verity.ml.definitions.registry import dsa as DSA
-from verity.ml.definitions.registry import ll_bf16 as LL
+from verity_vllm.program.registry import b1_tp2 as T2
+from verity_vllm.program.registry import cublas_bf16 as CB
+from verity_vllm.program.registry import dsa as DSA
+from verity_vllm.program.registry import ll_bf16 as LL
 
 H = HopperBF16WgmmaDot16
 #: each family at small statics; the token of the embedding shard inside it (2 <= 4 < 2 + 5)

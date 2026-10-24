@@ -1,7 +1,7 @@
 """padrev's adversarial tests for lane `pad`'s stage DENSE B1, Program side (lane/r16-pad fdebefec8) — **padded baseline
 (experimental)**.  Attack A5 (the 32-bit cap dropping the lifted bit) on the PAD-02 leaf layout, T-1 refusals, the exact-count
 arithmetic against the Program's own arity for EVERY `a_r`, and the PAD-03 deletion rule as a function — on the TINY shape (the
-laptop is at its memory/disk cap; pad's own suite measures the real B0 shape).  Skips on a tree without `verity.ml.definitions.registry.lifted`.
+laptop is at its memory/disk cap; pad's own suite measures the real B0 shape).  Skips on a tree without `verity_vllm.program.registry.lifted`.
 """
 
 from __future__ import annotations
@@ -14,11 +14,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-L = pytest.importorskip("verity.ml.definitions.registry.lifted")
-pytest.importorskip("verity.ml.definitions.registry.lifted", reason="pad's module").leaf_words  # DENSE B1 additions present?
+L = pytest.importorskip("verity_vllm.program.registry.lifted")
+pytest.importorskip("verity_vllm.program.registry.lifted", reason="pad's module").leaf_words  # DENSE B1 additions present?
 
 from verity.ml.circuits import Program  # noqa: E402
-from verity.ml.definitions.registry import b1  # noqa: E402
+from verity_vllm.program.registry import b1  # noqa: E402
 from tests.program.test_serve3 import LP, TINY  # noqa: E402
 
 RNG = np.random.default_rng(20260920)

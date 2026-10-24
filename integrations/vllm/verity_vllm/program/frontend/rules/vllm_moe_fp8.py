@@ -37,7 +37,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import active
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, MOE_GEMM_PINS, FusedMoeKernelRule, _flat_pairs, _not_owned
-from verity.ml.definitions.registry.fp8 import weight_blocks
+from verity_vllm.program.registry.fp8 import weight_blocks
 
 FP8_E4M3 = torch.float8_e4m3fn
 
@@ -181,7 +181,7 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         bc, bsc = ctx.coll(b), ctx.coll(b_s)
         naive = sc.get("naive_block_assignment") is True
         ids_node = launch_tensor(node, meta, "expert_ids_ptr") if naive else ctx.val(launch_tensor(node, meta, "sorted_token_ids_ptr")).ids_node
-        from verity.ml.definitions.registry.prims import F32, I32
+        from verity_vllm.program.registry.prims import F32, I32
         ids = _flat_pairs(ctx.coll(ids_node), nv, I32)
         ws = _flat_pairs(ctx.coll(launch_tensor(node, meta, "topk_weights_ptr")), nv, F32) if mrw else None
         role, dot = moe_expert_fp8_role(mrw, BM, BN, WARPS, SWAP)

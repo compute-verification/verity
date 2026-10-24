@@ -8,7 +8,7 @@ calls them). For each IR it measures:
   row's does. It records the bytes the Program digest hashes (`codec.descriptor_size`), the digest, and the largest Definitions
   and families.
 - `rules`: the `Q_word_v1{16,32}` unit rule of every Definition under them, scheduled as the manifest's prefetch schedules them
-  (`verity.ml.definitions.word.prefetch`, by depth, largest first), timed per Definition in its worker. It records the verdict and
+  (`verity_vllm.query.word.prefetch`, by depth, largest first), timed per Definition in its worker. It records the verdict and
   a digest of each rule.
 
 The root body of a row's Program, with its KV-cache references, is not in this Program. `rules-<ir>.jsonl` gets one line per

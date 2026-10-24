@@ -3,7 +3,7 @@
 what lets them move to the catalog, which imports only `verity`, once the other families' modules are Definitions only too.
 
 An import is any import statement in the module, a function-level one included, with a relative one resolved against the registry
-package; `from verity.ml.definitions.registry import m` imports the module `m`.
+package; `from verity_vllm.program.registry import m` imports the module `m`.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-REGISTRY = "verity.ml.definitions.registry"
+REGISTRY = "verity_vllm.program.registry"
 DIR = Path(importlib.util.find_spec(REGISTRY).origin).parent
 FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "fp8_moe_experts", "boolean_fp8", "boolean_fp8_moe", "nvfp4",
           "boolean_gather", "dsv4_moe", "boolean_dsv4_moe")
@@ -77,4 +77,4 @@ def test_the_rule_sees_what_it_forbids(tmp_path, monkeypatch):
                                    "    from . import fp8, targets\n")
     monkeypatch.setattr(sys.modules[__name__], "DIR", tmp_path)
     assert [(m, _allowed(m)) for m, _ in _imports("x")] == [
-        ("numpy", False), ("verity.ml.definitions.kernels", False), (f"{REGISTRY}.fp8", True), (f"{REGISTRY}.targets", False)]
+        ("numpy", False), ("verity_vllm.program.kernels", False), (f"{REGISTRY}.fp8", True), (f"{REGISTRY}.targets", False)]
