@@ -12,8 +12,11 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   step's rows out of request order, frames carried across a window and a response released in two windows) at
   `SHAPE`: T = 512 buckets on both ends, the default-budget root's size class (`advised.circuit-check.py`: T = 512,
   R_in = 4, salted), egress R = 3, four windows and a burst of requests across each of the 0/1 and 2/3 boundaries, the
-  certifier's own frame in every window. Its records are certified under a fresh LMS key and certifier session, and
-  every advice carries the link's certified prompt-length tie.
+  certifier's own frame in every window. Its records are certified under a fresh LMS key and certifier session. The
+  tie is IoTieRequest's verdict, which isn't in the proof service yet, so the verifier of record refuses every
+  advised link (`advised`, fail closed); here every advice carries the tests' stand-in for the verdict on the link's
+  certified prompts (`advised_traffic.tied`), as the verifier's own and never the prover's, so this prices the unit
+  and its proof, not IoTieRequest's.
 * **Members.** One stream each, over the link's four windows: ``honest``, the session's advice and records;
   ``moved``, one kept output's release bucket one later (`advised_traffic.moved`); ``short``, one request's output
   length one short (`advised_traffic.with_output_len`); ``extra``, one frame more handed to the egress certifier in its
@@ -28,9 +31,10 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   decides on the proof: the verifier's own Lean run, the ``pub`` row opened only to its own copy (its own view of the
   public advice) and the ``o0`` row read. Per window: prove (the session's wall time, the prover's ``prove_total_s``,
   proof bytes) and verify (the verifier of record's run, Lean included): the per-window price.
-* **What the verifier receives** is `n2_zk.RECEIVED` per window and the advice (``advice.json``), scanned for every
-  piece of both ends' heads, head salts, siblings and certifier salts but those the public circuit or a window's
-  ``pub`` row holds: on an advised link an accepted window's egress counts are its view's public ``released``.
+* **What the verifier receives** is `n2_zk.RECEIVED` per window and the advice (``advice.json``, with no tie),
+  scanned for every piece of both ends' heads, head salts, siblings and certifier salts but those the public circuit
+  or a window's ``pub`` row holds: on an advised link an accepted window's egress counts are its view's public
+  ``released``.
 """
 from __future__ import annotations
 
