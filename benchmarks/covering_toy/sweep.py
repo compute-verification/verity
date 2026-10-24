@@ -58,6 +58,8 @@ M_ONLY = {"mlp4444-b4-t2"}
 
 
 MODE_OVERRIDE: dict[str, tuple[str, ...]] = {}
+#: Which covering problems to solve (`full`, `V`, `M`); `--problems` narrows it.
+PROBLEMS = {"full", "V", "M"}
 
 
 def modes(name: str) -> tuple[str, ...]:
@@ -146,14 +148,16 @@ def point(args) -> dict:
     s = gate_budget(G, k, mode)
     out = {"instance": name, "k": k, "mode": mode, "s": s, "gates": G.N, "inner": len(G.inner())}
     if name not in M_ONLY:
-        out["full"] = solve(G, k, s, None, budget, workers)
-        out["V"] = solve(G, k, s, G.values, budget, workers)
+        if "full" in PROBLEMS:
+            out["full"] = solve(G, k, s, None, budget, workers)
+        if "V" in PROBLEMS:
+            out["V"] = solve(G, k, s, G.values, budget, workers)
     lean1 = BD.lean_two_costs(G, k, cw=1.0)
     mstar = BD.chained(G, lean1["D"])
     out["lean_cw1"] = lean1
     out["lean_add_cw1"] = BD.lean_additive(G, k, cw=1.0)
-    out["M"] = solve(G, k, s, mstar, budget, workers) if mstar else None
-    out["cap"] = {} if name in M_ONLY else {
+    out["M"] = solve(G, k, s, mstar, budget, workers) if mstar and "M" in PROBLEMS else None
+    out["cap"] = {} if name in M_ONLY or "V" not in PROBLEMS else {
         "inner": CV.block_capacity(G, k, s, G.inner(), time_limit=30.0, workers=workers),
         "V": CV.block_capacity(G, k, s, G.values, time_limit=30.0, workers=workers),
     }
@@ -165,7 +169,7 @@ def point(args) -> dict:
         out["cw"] = cw
         lm = BD.lean_two_costs(G, k, cw=cw["cw"]) if cw["cw"] > 0 else None
         out["lean_measured"] = lm
-        if lm and lm["M_star"]:
+        if lm and lm["M_star"] and "M" in PROBLEMS:
             ms = BD.chained(G, lm["D"])
             out["cap"]["M_measured"] = CV.block_capacity(G, k, s, ms, time_limit=30.0, workers=workers)
             out["M_measured"] = solve(G, k, s, ms, budget, workers)
@@ -308,9 +312,12 @@ def main() -> None:
     ap.add_argument("--cw", action="append", default=None, help="instances whose c_w(s) to measure (default: the smallest)")
     ap.add_argument("--ks", type=lambda t: [int(x) for x in t.split(",")], help="override every instance's k grid")
     ap.add_argument("--modes", type=lambda t: tuple(t.split(",")), help="override the gate budgets (eta1,eta2,inf)")
+    ap.add_argument("--problems", type=lambda t: set(t.split(",")), help="solve only these (full,V,M)")
     ap.add_argument("--caps", action="store_true", help="only the per-block cap test (`caps`), from OUT's meta files")
     a = ap.parse_args()
     names = a.instance or list(INSTANCES)
+    if a.problems:
+        PROBLEMS.intersection_update(a.problems)
     for name in names:
         if a.ks:
             KS[name] = a.ks
