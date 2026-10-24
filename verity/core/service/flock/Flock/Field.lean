@@ -494,6 +494,7 @@ theorem clmulK_eq_clmul (a b : UInt64) : clmulK a b = clmul a b := by
       · simp only [h2, show p ≥ 32 by omega, show p - 32 ≥ 32 by omega, b00 p (by omega), b01 (p - 32) (by omega),
           b10 (p - 32) (by omega), ↓reduceIte, decide_true, Bool.true_and, show 32 + (p - 64) = p - 32 by omega,
           show p - 32 - 32 = p - 64 by omega, Bool.false_xor, Bool.xor_false]
+
 /-- Compiled code runs `clmulK`; the kernel and every proof see `clmul`. `@[csimp]` rewrites only code compiled after
 it, so it stays above `mul`. -/
 @[csimp] theorem clmul_eq_clmulK : @clmul = @clmulK :=
@@ -513,6 +514,22 @@ def mul (a b : F128) : F128 :=
   let m1l := ml ^^^ p0l ^^^ p2l
   let m1h := mh ^^^ p0h ^^^ p2h
   reduce p0l (p0h ^^^ m1l) (p2l ^^^ m1h) p2h
+
+/-- `mul` on its arguments' words. Taking words, not cells, it can't reuse an argument's cell, so compiled code borrows
+both factors: a factor that tasks share (a challenge, a scalar) is never counted, which parallel tasks would contend
+on. -/
+@[noinline] def mulW (al ah bl bh : UInt64) : F128 :=
+  let (p0l, p0h) := clmul al bl
+  let (p2l, p2h) := clmul ah bh
+  let (ml, mh) := clmul (al ^^^ ah) (bl ^^^ bh)
+  let m1l := ml ^^^ p0l ^^^ p2l
+  let m1h := mh ^^^ p0h ^^^ p2h
+  reduce p0l (p0h ^^^ m1l) (p2l ^^^ m1h) p2h
+
+@[inline] def mulK (a b : F128) : F128 := mulW a.lo a.hi b.lo b.hi
+
+/-- Compiled code runs `mulK`; the kernel and every proof see `mul`. Above `instMul`, so every product compiles to it. -/
+@[csimp] theorem mul_eq_mulK : @mul = @mulK := rfl
 
 instance instMul : Mul F128 := ⟨mul⟩
 
