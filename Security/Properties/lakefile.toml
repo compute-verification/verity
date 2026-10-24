@@ -67,19 +67,11 @@ path = "../../verity/core/primitives/requirement"
 
 [[lean_lib]]
 name = "Properties"
-roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Proofs.Properties.Pouw",
-  "Proofs.Properties.Pouw.Check", "Proofs.Properties.Pouw.Commit", "Properties.Pouw.Strata",
-  "Proofs.Properties.Pouw.Strata", "Properties.Pouw.Credit", "Properties.Nci", "Properties.Nci.Threads", "Proofs.Properties.Nci",
-  "Properties.CertifierDevice", "Proofs.Properties.CertifierDevice", "Properties.Pous", "Proofs.Properties.Pous",
-  "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd", "Proofs.Properties.Pous.TimedAudit",
-  "Proofs.Properties.Pous.MemoryChallenger", "Proofs.Properties.Pous.Run", "Properties.NetworkCertifier", "Proofs.Properties.NetworkCertifier",
-  "Properties.CertifierNetwork", "Proofs.Properties.CertifierNetwork", "Properties.CertifierNetwork.Runs",
-  "Proofs.Properties.CertifierNetwork.Runs", "Properties.Identity", "Proofs.Properties.Identity",
-  "Properties.NciDesc", "Proofs.Properties.Nci.DescAgree", "Proofs.Properties.Nci.Walk",
-  "Proofs.Properties.Nci.Resolve", "Proofs.Properties.Nci.Width", "Proofs.Properties.Nci.Novel",
-  "Properties.SampledProofs", "Proofs.Properties.SampledProofs", "Properties.SampledProofs.Draw",
-  "Properties.SampledProofs.Halt", "Proofs.Properties.SampledProofs.Halt",
-  "Properties.Evaluate", "Proofs.Properties.Evaluate",
-  "Properties.NetworkRecords", "Proofs.Properties.NetworkRecords", "Properties.Accounting.Requirement",
-  "Proofs.Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
-  "Proofs.Properties.RemoteAudit", "Properties.Accounting.Served", "Proofs.Properties.Accounting.Served"]
+roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.Strata",
+  "Properties.Pouw.Credit", "Properties.Nci", "Properties.Nci.Threads", "Properties.CertifierDevice", "Properties.Pous",
+  "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd",
+  "Properties.NetworkCertifier", "Properties.CertifierNetwork", "Properties.CertifierNetwork.Runs",
+  "Properties.Identity", "Properties.NciDesc", "Properties.SampledProofs", "Properties.SampledProofs.Draw",
+  "Properties.SampledProofs.Halt", "Properties.Evaluate", "Properties.NetworkRecords",
+  "Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
+  "Properties.Accounting.Served"]
