@@ -10,8 +10,9 @@ Per map, at bf16, FP8 (E4M3, per-tensor scale from theta) and NVFP4:
   beta_x    bits to code theta''s quantized input given theta's input, per input coordinate;
   beta_w    bits to code theta''s quantized weights given theta's weights, per weight of an updated matrix.
 At every block boundary (a decoder layer's output h): the fresh residual h' - h, its effective rank at 90% and 99% energy and
-its compressed size per token (F), forward and backward (dL/dh), and on a few boundaries the share of the trained model's
-shift that survives when the receiving block gets only a rank-r correction h + Q(C) V_r (r = 0 is "send nothing").
+its compressed size per token (F), forward and backward (dL/dh), and on some boundaries (layers 1, 2, L/8, L/4, L/2, 3L/4
+and the fp8-cheapest) the share of the trained model's shift that survives when the receiving block gets only a rank-r
+correction h + Q(C) V_r (r = 0 is "send nothing").
 
 Every size is a minimum over compressors: console's context coder (residual given the predicted code's binade and cell
 position), a per-channel affine predictor, low-rank MDL (rank r factors at 16 or 8 bits, then the context coder), and lzma on
@@ -36,7 +37,7 @@ FMTS = ("bf16", "fp8t", "nvfp4")
 RANKS = (1, 4, 16, 64)
 WRANKS = (1, 4, 8, 16, 64, 256)
 FBITS = (16, 8)
-PATCH_RANKS = (0, 1, 4, 16, 64, 256)
+PATCH_RANKS = (0, 1, 4, 16, 64, 256, 512)
 LZMA_MAX = 1 << 22
 OUT = os.environ.get("OUT", ".")
 
@@ -387,7 +388,7 @@ def analyze(base_name, model0, ids, local, ckpt, name, extra):
     for i in range(nl):
         h0, h1 = a0["h"][i][rows_all], a1["h"][i][rows_all]
         T = h0.shape[0]
-        svd = top_svd(h1 - h0, max(RANKS + PATCH_RANKS))
+        svd = top_svd(h1 - h0, max(RANKS))
         r = {"r90": eff_rank(svd[2], 0.90), "r99": eff_rank(svd[2], 0.99),
              "rel_dnorm": float((h1 - h0).norm() / h0.norm()), "d": h0.shape[1], "T": T}
         f = fresh(h0, h1, h0.abs().max(), svd=svd, lz=i in lz_layers)
@@ -403,33 +404,38 @@ def analyze(base_name, model0, ids, local, ckpt, name, extra):
         r["bwd"] = {"r90": eff_rank(gs[2], 0.90), "r99": eff_rank(gs[2], 0.99),
                     "rel_dnorm": float((q1 - q0).norm() / q0.norm().clamp_min(1e-30)), **gf}
         res["boundary"][i] = r
-        # retention of the shift under a rank-r correction at this boundary
-        if i in (nl // 4, nl // 2, (3 * nl) // 4):
-            Vt = svd[1]
-            h0_full = a0["h"][i]
-            ret = {"ranks": [], "nll": {}, "kl": {}}
-            for rk in PATCH_RANKS:
-                if rk > Vt.shape[0]:
-                    break
-                ret["ranks"].append(rk)
-                for kind in ("exact", "fp8", "int4"):
-                    if rk == 0 and kind != "exact":
-                        continue
-                    V = Vt[:rk]
-
-                    def fn(o, V=V, kind=kind, rk=rk):
-                        if rk == 0:
-                            return h0_full
-                        C = (o.float() - h0_full) @ V.T
-                        return h0_full + qcoef(C, kind) @ V
-                    lp_, lpp = nll_and_logp(model1, ids, patch=(i, fn))
-                    ret["nll"].setdefault(kind, []).append(lp_)
-                    ret["kl"].setdefault(kind, []).append(kl(lp1, lpp))
-                    del lpp
-            res["retention"][i] = ret
         del svd, gs
     del g0, g1
     tick("boundaries")
+
+    # retention of the shift under a rank-r correction, on early and evenly spaced boundaries and the fp8-cheapest one
+    cheap = min(range(nl), key=lambda i: res["boundary"][i]["fwd"]["fp8t"]["per_token"])
+    for i in sorted({1, 2, nl // 8, nl // 4, nl // 2, (3 * nl) // 4, cheap} & set(range(nl))):
+        h0, h1 = a0["h"][i][rows_all], a1["h"][i][rows_all]
+        Vt = top_svd(h1 - h0, max(PATCH_RANKS))[1]
+        h0_full = a0["h"][i]
+        ret = {"ranks": [], "nll": {}, "kl": {}}
+        for rk in PATCH_RANKS:
+            if rk > Vt.shape[0]:
+                break
+            ret["ranks"].append(rk)
+            for kind in ("exact", "fp8", "int4"):
+                if rk == 0 and kind != "exact":
+                    continue
+                V = Vt[:rk]
+
+                def fn(o, V=V, kind=kind, rk=rk):
+                    if rk == 0:
+                        return h0_full
+                    C = (o.float() - h0_full) @ V.T
+                    return h0_full + qcoef(C, kind) @ V
+                lp_, lpp = nll_and_logp(model1, ids, patch=(i, fn))
+                ret["nll"].setdefault(kind, []).append(lp_)
+                ret["kl"].setdefault(kind, []).append(kl(lp1, lpp))
+                del lpp
+        res["retention"][i] = ret
+        del Vt
+    tick("retention")
 
     # counted values: maps on the sampled layers
     lin0 = {f"L{i}.{n}": mod for i, n, mod in linears(model0)}
