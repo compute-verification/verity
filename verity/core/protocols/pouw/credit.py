@@ -198,6 +198,9 @@ CHANGED = ("the draw root over the manifest (each call's credit bit among it), i
 K_FIELD = "draw_k"
 #: the most a committed K may be
 MAX_K = 1 << 24
+#: the period-open's field holding the served tables' leaf count T (the pouw setting ``rows``: each round's request and
+#: slot tables' leaves), committed before any draw; a window's A slot M is `h1window.slot` of it
+ROWS_FIELD = "rows"
 #: the δ the period's ε is reported at
 DELTA = Fraction(1, 1 << 40)
 #: the period-open's field holding the weights' root (`weights_root` of each K's registered ``b/<K>``, the gate's
@@ -416,10 +419,26 @@ def no_z(i: int) -> str:
             f"(`tables.z`), or its credit bit is false")
 
 
-def no_served(i: int, m: int) -> str:
-    return (f"manifest row {i} states no served rows m_s at most the window's A slot M = {m} (`{SERVED_ROWS}`, a "
+def no_served(i: int, t: int) -> str:
+    return (f"manifest row {i} states no served rows m_s at most the period's T = {t} table rows (`{SERVED_ROWS}`, a "
             "natural number): the serving process commits each call's served rows in its manifest row, under "
-            "calls_root, before the draw coin")
+            "calls_root, before the draw coin, and a step serves at most its tables' T rows")
+
+
+def no_rows(name: str) -> str:
+    return (f"period {name}'s open commits no table rows T ({ROWS_FIELD}, a positive integer: each round's request and "
+            "slot tables' leaves), so no window's served rows m_s are bounded by its tables: the proof service commits T "
+            "in the period-open, beside its draw K, before any draw")
+
+
+ROWS_FORM = (f"the period's table rows T are not a positive integer (the T its open committed as {ROWS_FIELD}: each "
+             "round's request and slot tables' leaves)")
+
+
+def other_slot(t: int, r: int, m: int) -> str:
+    return (f"the period's T = {t} table rows give an A slot of {max(r, 1 << (t - 1).bit_length())} rows, not the "
+            f"window's M = {m}: a window's slot is h1window.slot of its tables' T rows (the least power of two at or "
+            f"above T, at least the tile's R = {r}), so its slot rows past T are no table's")
 
 
 def other_served(i: int, first: int, s: int, got: int, want: int) -> str:
@@ -930,18 +949,20 @@ def call_work(layout: dict) -> list[tuple[int, int]]:
     return [((m // r) * (ks[lin][1] // c), r * c * ks[lin][0]) for lin, _blk in layout["calls"]]
 
 
-def served_rows(calls: list[dict], layout: dict, steps: int) -> tuple[list[int] | None, tuple[str, str] | None]:
+def served_rows(calls: list[dict], layout: dict, steps: int, t: int
+                ) -> tuple[list[int] | None, tuple[str, str] | None]:
     """Each call's served rows m_s, in call order, and None; or None and the refusal (``manifest``). Call c's m_s is
     its manifest row's `SERVED_ROWS` (`calls`, rows `_credited` accepted, one a call of `layout`, one `strata`
-    accepted), a natural number at most the A slot M; and call c is at step ``c // (C/S)`` of the window's `steps`
-    rounds, as `_arow` places it, so every dense call of a step states the step's one m_s. The rows are under
-    `calls_root`, which the draw root binds, so each m_s is fixed before the draw coin. Its cost is the calls."""
-    m, per = layout["m"], len(layout["calls"]) // steps
+    accepted), a natural number at most the period's T table rows `t` (`committed_rows`, whose `h1window.slot` is the
+    A slot M); and call c is at step ``c // (C/S)`` of the window's `steps` rounds, as `_arow` places it, so every
+    dense call of a step states the step's one m_s. The rows are under `calls_root`, which the draw root binds, so
+    each m_s is fixed before the draw coin. Its cost is the calls."""
+    per = len(layout["calls"]) // steps
     out: list[int] = []
     for i, row in enumerate(calls):
         got = row.get(SERVED_ROWS)
-        if not (_nat(got) and got <= m):
-            return None, ("manifest", no_served(i, m))
+        if not (_nat(got) and got <= t):
+            return None, ("manifest", no_served(i, t))
         first = i - i % per
         if i > first and got != out[first]:
             return None, ("manifest", other_served(i, first, i // per, got, out[first]))
@@ -1318,7 +1339,7 @@ Proved = Callable[[dict, bytes, list[int], int], tuple[Any, tuple[str, str] | No
 
 
 def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
-            commit: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, proved: Proved, k: Any,
+            commit: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, proved: Proved, k: Any, t: Any,
             verify: Ch.Verify) -> tuple[tuple[list[int], dict, list[int]] | None, tuple[str, str] | None]:
     got, why = _credited(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, verify)
     if why is not None:
@@ -1335,6 +1356,10 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
     layout, why = layout_of(bytes.fromhex(descriptor))
     if why is not None:
         return None, why
+    if not (_nat(t) and t >= 1):
+        return None, ("layout", ROWS_FORM)
+    if max(layout["tile"][0], 1 << (t - 1).bit_length()) != layout["m"]:
+        return None, ("layout", other_slot(t, layout["tile"][0], layout["m"]))
     program, prefix = hashlib.sha512(bytes.fromhex(descriptor)).hexdigest(), _prefix(bytes.fromhex(descriptor))
     sid, why = _period_weights(key, ledger, window, rounds, layout, entries, program, prefix, verify)
     if why is not None:
@@ -1346,7 +1371,7 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
     why = _arow(rounds, entries, commit_of(commit)[0][1], layout, prefix)
     if why is not None:
         return None, why
-    rows, why = served_rows(calls, layout, len(rounds))
+    rows, why = served_rows(calls, layout, len(rounds), t)
     if why is not None:
         return None, why
     units, why = _drawn(Ch.LiveOpening.from_json(draw["coin"]).coin, window["root"], draw["root"],
@@ -1416,7 +1441,7 @@ def _period_weights(key: Any, ledger: Any, window: dict, rounds: list, layout: d
 
 def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
            commit: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, statements: Any, circuit_files: Any,
-           k: Any, verify: Ch.Verify, run: Run = PF.verify) -> tuple[list[int] | None, tuple[str, str] | None]:
+           k: Any, rows: Any, verify: Ch.Verify, run: Run = PF.verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """A served H1 window's credited calls and None, or None and the refusal of the first step that refuses, every step
     over the same evidence and the one round log `rounds`: `_window_outcomes`' steps, each drawn unit's proof outcome
     the verifier of record's own run over the window's `statements` (`_verified`: each call's proof files, on the
@@ -1426,7 +1451,7 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
 
     `period_credit` ties `descriptor` to the circuit the window's period committed; a window counts only there."""
     got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, descriptor,
-                       entries, _runner(statements, circuit_files, entries, window, salt, run), k, verify)
+                       entries, _runner(statements, circuit_files, entries, window, salt, run), k, rows, verify)
     return (None, why) if got is None else (got[0], None)
 
 
@@ -1437,7 +1462,7 @@ def _runner(statements: Any, files: Any, entries: Any, window: Any, salt: Any, r
 
 def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any,
                      served: Any, commit: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, proofs: Any,
-                     k: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
+                     k: Any, rows: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """`window` on each drawn unit's proof outcome `proofs` in place of its statements: the form the Lean
     `PouwCheck.Credit.window` reads until it runs the verifier of record itself, which the difftest holds it to. A
     served H1 window's credited calls and None, or None and the refusal of the first step that refuses, every step
@@ -1451,7 +1476,8 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
     3. `_a_link`: each A value among the window's registered `entries` is the tree over the segments those round roots
        commit;
     4. the layout of its circuit (`layout_of` of `descriptor`, the bytes in hex of the circuit its proofs were verified
-       against);
+       against), whose A slot M is `h1window.slot` of the T table rows `rows` its period's open committed
+       (`committed_rows`, ``layout``);
     5. `_weights`, its period's: the window's registered ``<PREFIX>b/<K>`` (``PREFIX`` the descriptor's) are each K's
        B rows once, binding no window, and their `weights_root` is the one the open of the period holding the window
        signed (`committed_weights`), and with round 0's ``requests`` in `rounds` and the session the auditor's ledger
@@ -1460,7 +1486,7 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
        of one whose open signs no weights' root, is refused before any of its proofs is read;
     6. the manifest one row per call of the layout (``manifest``), `_arow` (each round's A tables and its
        input-ids table the Commit record `commit`'s value of the same rows), `served_rows` (each call's served rows
-       m_s at most the slot M, one m_s a step, ``manifest``; a credited call with m_s = 0 is no credit), and
+       m_s at most the period's T table rows `rows`, one m_s a step, ``manifest``; a credited call with m_s = 0 is no credit), and
        `_outcome`'s rule on the draw coin
        `_credited` read, at its period's committed K `k`, under the served window's
        arguments: the stream is the window's root (``window.root``, the root the auditor's ledger opens its session
@@ -1472,7 +1498,7 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
        that descriptor and opened its registered values at their registered roots, its K's A value and its K's
        ``<PREFIX>b/<K>`` among them."""
     got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, descriptor,
-                       entries, lambda *_: (proofs, None), k, verify)
+                       entries, lambda *_: (proofs, None), k, rows, verify)
     return (None, why) if got is None else (got[0], None)
 
 
@@ -1539,6 +1565,19 @@ def committed_k(ledger: list, name: str) -> tuple[int | None, tuple[str, str] | 
     return k, None
 
 
+def committed_rows(ledger: list, name: str) -> tuple[int | None, tuple[str, str] | None]:
+    """The table rows T period `name`'s open committed (`ROWS_FIELD`, a positive integer: each round's request and slot
+    tables' leaves, the pouw setting ``rows``) in the auditor's ledger `ledger`, one `period` has trusted, and None; or
+    None and the refusal (``layout``). Every window of the period has the A slot `h1window.slot` of it, and each of its
+    steps serves at most T rows (`served_rows`)."""
+    body = next(e["body"] for e in map(json.loads, ledger)
+                if e["kind"] == "period-open" and e["body"]["period"] == name)
+    t = body.get(ROWS_FIELD)
+    if not (_nat(t) and t >= 1):
+        return None, ("layout", no_rows(name))
+    return t, None
+
+
 def committed_weights(ledger: list, name: str) -> tuple[str | None, tuple[str, str] | None]:
     """The weights' root period `name`'s open signed (`WEIGHTS_FIELD`, a SHA-512 digest: `weights_root` of each K's
     registered ``b/<K>``) in the auditor's ledger `ledger`, one the challenger's checks have trusted, and None; or None
@@ -1592,7 +1631,7 @@ def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, win
     served work (`credited_work`, m_s·n·K a credited call, never its M slot rows'), the K the period's open committed
     (`committed_k`), the δ the ε is reported at (`DELTA`), and each window's ε, what its draw of K established over its
     credited work (`established`; null when it establishes no ε <= 1). The period's windows are exactly its close's (`period`), its open committed K
-    (``budget``) and signed the weights' root (`committed_weights`, ``weights``) every window's registered B rows fold
+    (``budget``) and the table rows T (`committed_rows`, ``layout``) and signed the weights' root (`committed_weights`, ``weights``) every window's registered B rows fold
     to, each window's session ran a commit the host's pins log `pins` records on the verifier's copy of main's
     first-parent history `main` and the window proves the circuit the period's open committed (``circuit``: the pin
     first, then its ``descriptor``, the bytes in hex of the circuit its proofs were verified against, hashing to it,
@@ -1613,6 +1652,8 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
     if why is not None:
         return None, why
     big_k, why = committed_k(ledger, name)
+    if why is None:
+        t, why = committed_rows(ledger, name)
     if why is None:
         _, why = committed_weights(ledger, name)
     if why is not None:
@@ -1635,7 +1676,7 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
         proved = ((lambda *_, p=w["proofs"]: (p, None)) if run is None
                   else _runner(w["statements"], files, w["entries"], w["window"], w["salt"], run))
         got, why = _window(key, ledger, pins, main, w["window"], w["session"], w["salt"], w["calls"], w["served"],
-                           w["commit"], w["rounds"], w["draw"], w["descriptor"], w["entries"], proved, big_k, verify)
+                           w["commit"], w["rounds"], w["draw"], w["descriptor"], w["entries"], proved, big_k, t, verify)
         if why is not None:
             return None, ("window", f"window {i} of period {name} is refused, so the period earns nothing: {why[0]}: "
                                     f"{why[1]}")
@@ -1940,10 +1981,10 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     return w, None
 
 
-__all__ = ["CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS",
+__all__ = ["CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "ROWS_FIELD", "LEVELS",
            "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REQUESTS_IDS_TAG", "ROUND_TAG",
            "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
-           "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_weights", "cover",
+           "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_rows", "committed_weights", "cover",
            "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_tied", "law", "layout_of",
            "merkle_depth", "partition_of", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "step_row", "step_tables", "strata", "tree_root", "window"]

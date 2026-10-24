@@ -40,8 +40,9 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
 * `Internal.servedRows` is `credit.served_rows`: credit counts served rows, not slots. Every call has the window's M
   slot rows, its step's m_s served rows first and empty rows after, and empty rows' units prove trivially, so no draw
   tells them from served ones. Each manifest row states its call's m_s (`SERVED_ROWS`), under `callsRoot`, which the
-  draw root binds, so m_s is fixed before the draw coin. A row whose m_s is not a natural at most M is refused, and so
-  is a step whose calls state different m_s (call c at step `c / (C/S)`, as `Internal.arow` places it). A credited call
+  draw root binds, so m_s is fixed before the draw coin. A row whose m_s is not a natural at most the period's T table
+  rows is refused (`committedRows`, the period-open's `ROWS_FIELD`, whose `slotOf` must be the window's M), and so is a
+  step whose calls state different m_s (call c at step `c / (C/S)`, as `Internal.arow` places it). A credited call
   is m_s·n·K of credited work (`servedWork`), and one with m_s = 0 is no credit; the draw's population stays the
   Program's units, padded slots included (`callWork`). That m_s is the count of the step's input-ids table's served
   slots is not yet proved: m_s is the serving process's statement, fixed before the draw coin.
@@ -123,6 +124,8 @@ def CHANGED : String :=
 def K_FIELD : String := "draw_k"
 def WEIGHTS_FIELD : String := "weights_root"
 def MAX_K : Nat := 2 ^ 24
+/-- The period-open's field holding the served tables' leaf count T (each round's request and slot tables' leaves). -/
+def ROWS_FIELD : String := "rows"
 def DELTA : Rat := mkRat 1 (2 ^ 40)
 def K_FORM : String :=
   s!"the draw's K is not a positive integer at most 2^24 (the K its period's open committed as {K_FIELD})"
@@ -182,10 +185,28 @@ def noZ (i : Nat) : String :=
 /-- Each manifest row's served rows m_s: its step's rows in slots `0 .. m_s - 1` of its call's M, the rest empty. -/
 def SERVED_ROWS : String := "served"
 
-def noServed (i m : Nat) : String :=
-  s!"manifest row {i} states no served rows m_s at most the window's A slot M = {m} (`{SERVED_ROWS}`, a " ++
+def noServed (i t : Nat) : String :=
+  s!"manifest row {i} states no served rows m_s at most the period's T = {t} table rows (`{SERVED_ROWS}`, a " ++
   "natural number): the serving process commits each call's served rows in its manifest row, under " ++
-  "calls_root, before the draw coin"
+  "calls_root, before the draw coin, and a step serves at most its tables' T rows"
+
+def noRows (name : String) : String :=
+  s!"period {name}'s open commits no table rows T ({ROWS_FIELD}, a positive integer: each round's request and " ++
+  "slot tables' leaves), so no window's served rows m_s are bounded by its tables: the proof service commits T " ++
+  "in the period-open, beside its draw K, before any draw"
+
+def ROWS_FORM : String :=
+  s!"the period's table rows T are not a positive integer (the T its open committed as {ROWS_FIELD}: each " ++
+  "round's request and slot tables' leaves)"
+
+/-- `h1window.slot`: the A slot of `t` table rows under a tile of `r` rows, the least power of two at or above `t`, at
+least `r`. -/
+def slotOf (t r : Nat) : Nat := max r t.nextPowerOfTwo
+
+def otherSlot (t r m : Nat) : String :=
+  s!"the period's T = {t} table rows give an A slot of {slotOf t r} rows, not the window's M = {m}: a window's slot " ++
+  s!"is h1window.slot of its tables' T rows (the least power of two at or above T, at least the tile's R = {r}), so " ++
+  "its slot rows past T are no table's"
 
 def otherServed (i first s got want : Nat) : String :=
   s!"call {i} states {got} served rows and call {first} {want}, both of step {s}: every dense call of a step " ++
@@ -533,11 +554,10 @@ def callWork (layout : Json) : List (Nat × Nat) := Id.run do
 
 /-- `credit.served_rows`: each call's served rows m_s, in call order, else the refusal (`manifest`). Call `c`'s m_s is
 its manifest row's `SERVED_ROWS` (`calls`, rows `Internal.credited` accepted, one a call of `layout`, one `strata`
-accepted), a natural number at most the A slot M; and call `c` is at step `c / (C/S)` of the window's `steps` rounds,
-as `Internal.arow` places it, so every dense call of a step states the step's one m_s. The rows are under `callsRoot`,
+accepted), a natural number at most the period's T table rows `t` (`committedRows`, whose `slotOf` is the A slot M);
+and call `c` is at step `c / (C/S)` of the window's `steps` rounds, as `Internal.arow` places it, so every dense call of a step states the step's one m_s. The rows are under `callsRoot`,
 which the draw root binds, so each m_s is fixed before the draw coin. Its cost is the calls. -/
-def Internal.servedRows (calls layout : Json) (steps : Nat) : R (List Nat) := do
-  let m := (nat? (get layout "m")).getD 0
+def Internal.servedRows (calls layout : Json) (steps t : Nat) : R (List Nat) := do
   let per := (match get layout "calls" with
     | .arr a => a.size
     | _ => 0) / steps
@@ -546,7 +566,7 @@ def Internal.servedRows (calls layout : Json) (steps : Nat) : R (List Nat) := do
     | _ => []
   let mut out : Array Nat := #[]
   for (row, i) in rows.zipIdx do
-    let some got := (nat? (get row SERVED_ROWS)).filter (· ≤ m) | throw ("manifest", noServed i m)
+    let some got := (nat? (get row SERVED_ROWS)).filter (· ≤ t) | throw ("manifest", noServed i t)
     let first := i - i % per
     if i > first && got != out[first]! then
       throw ("manifest", otherServed i first (i / per) got out[first]!)
@@ -1493,9 +1513,10 @@ def periodWeights (key ledger window rounds layout entries : Json) (program : St
   pure a.session
 
 /-- `credit._window`: `window`'s credited calls (a call with m_s = 0 served rows is none), the layout it read from
-the descriptor and its calls' served rows (`Internal.servedRows`). -/
+the descriptor and its calls' served rows (`Internal.servedRows`, at most the period's T table rows `rows`, whose
+`slotOf` is the layout's A slot). -/
 def windowLayout
-    (key ledger pins main window session salt calls served commit rounds draw descriptor entries proofs k : Json) :
+    (key ledger pins main window session salt calls served commit rounds draw descriptor entries proofs k rows : Json) :
     R (List Nat × Json × List Nat) := do
   let got ← Internal.credited key ledger pins main window session salt calls served commit rounds draw
   let log := match rounds with
@@ -1509,6 +1530,12 @@ def windowLayout
       | .str s => if isHexBytes s then hex? (.str s) else none
       | _ => none) | layoutRefuse DESCRIPTOR_HEX
   let layout ← layoutOf d
+  let some t := (nat? rows).filter (1 ≤ ·) | layoutRefuse ROWS_FORM
+  let r := (match get layout "tile" with
+    | .arr a => (nat? (a.getD 0 .null)).getD 0
+    | _ => 0)
+  let m := (nat? (get layout "m")).getD 0
+  unless slotOf t r == m do layoutRefuse (otherSlot t r m)
   let program := Flock.hexOf (Flock.Sha512.hash d)
   let sid ← periodWeights key ledger window rounds layout entries program (prefixOf d)
   let ss ← strata layout
@@ -1517,7 +1544,7 @@ def windowLayout
     throw ("manifest", s!"the manifest's {rows.size} rows are not the circuit's {lcalls.size} calls: each call of " ++
       "the window's Program is one manifest row, in order")
   Internal.arow log entries (((commitOf? commit).map (·.2)).getD #[]) layout ((str? (prefixOf d)).getD "")
-  let rows ← Internal.servedRows calls layout log.size
+  let rows ← Internal.servedRows calls layout log.size t
   let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the draw coin: {e}")
   proved (← drawnOf o.coin (get window "root") (get draw "root") (Json.mkObj [("receipts", get draw "receipts")]) ss
     k) proofs
@@ -1532,8 +1559,8 @@ root), `Internal.aLink` (each A value among the registered `entries` the tree ov
 the layout of its circuit (`layoutOf` of `descriptor`, the bytes in hex of the circuit its proofs were verified
 against), `periodWeights` (`Internal.weights`, its period's: the window's `<PREFIX>b/<K>` fold to the weights' root the
 open of the period holding it signed, `committedWeights`, and with round 0's `requests` and its session to its open
-root), its manifest one row per call of the layout, `Internal.servedRows` (each call's served rows m_s at most the slot
-M, one m_s a step; a credited call with m_s = 0 is no credit), and `Internal.outcome`'s rule on the draw coin `credited` read at
+root), its manifest one row per call of the layout, `Internal.servedRows` (each call's served rows m_s at most the
+period's T table rows `rows`, whose `slotOf` the layout's A slot M must be, one m_s a step; a credited call with m_s = 0 is no credit), and `Internal.outcome`'s rule on the draw coin `credited` read at
 its period's committed K `k`, the stream the window's root, the registration its draw root and the receipt
 `{"receipts": …}`, its last round's receipts, each of `proofs` the verifier of record's verdict for a drawn unit's
 session (`PROOF_KEYS`), and `Internal.registration` (the `entries` the window's own registration's, under its open root
@@ -1541,10 +1568,10 @@ and the descriptor's SHA-512, and each drawn unit's session verified against tha
 values at their registered roots, its K's A value and its K's `<PREFIX>b/<K>` among them). `periodCredit` ties
 `descriptor` to the circuit the window's period committed. -/
 def window
-    (key ledger pins main window session salt calls served commit rounds draw descriptor entries proofs k : Json) :
+    (key ledger pins main window session salt calls served commit rounds draw descriptor entries proofs k rows : Json) :
     R (List Nat) :=
   (·.1) <$> windowLayout key ledger pins main window session salt calls served commit rounds draw descriptor entries
-    proofs k
+    proofs k rows
 
 /-- `credit.period`: none when `roots` are exactly the windows the auditor's ledger lists in period `name`'s close, in
 its order, and that close is complete (`checked`, under the pinned key `key`); else the refusal (`coin`, `period`,
@@ -1606,6 +1633,16 @@ def committedK (ledger : Json) (name : String) : R Nat := do
         "and cap, before any draw")
   pure k
 
+/-- `credit.committed_rows`: the table rows T period `name`'s open committed (`ROWS_FIELD`, a positive integer: each
+round's request and slot tables' leaves) in the auditor's ledger, one `period` has trusted; else the refusal
+(`layout`). -/
+def committedRows (ledger : Json) (name : String) : R Nat := do
+  let .arr lines := ledger | throw ("period", "the period is not named")
+  let body := ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
+    e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
+  let some t := (body.bind fun b => nat? (get b ROWS_FIELD)).filter (1 ≤ ·) | layoutRefuse (noRows name)
+  pure t
+
 /-- `credit.period_credit`'s credit: each window's credited calls in the close's order, each window's credited served
 work (`creditedWork`), the committed K, the δ the ε is reported at and each window's ε. -/
 structure PeriodCredit where
@@ -1620,7 +1657,7 @@ def PeriodCredit.toJson (c : PeriodCredit) : Json :=
     ("eps", Json.arr (c.eps.map fun e => (e.map fun e => Json.str (toString e)).getD .null).toArray)]
 
 /-- `credit.period_credit`: period `name`'s credit: the period's windows are exactly its close's (`period`), its open
-committed K (`committedK`) and signed the weights' root every window's registered B rows fold to (`committedWeights`),
+committed K (`committedK`) and the table rows T (`committedRows`) and signed the weights' root every window's registered B rows fold to (`committedWeights`),
 each window's session ran a commit the host's pins log `pins` records on the verifier's copy of main's first-parent
 history `main` and the window proves the circuit the period's open committed (`circuit`: the pin first, then its
 descriptor hashing to it, `SampledProofs.Challenger.creditedSession`) and each window is credited (`window`) drawn at K,
@@ -1636,6 +1673,7 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
   period key ledger name roots
   let nm := (str? name).getD ""
   let bigK ← committedK ledger nm
+  let t ← committedRows ledger nm
   discard <| committedWeights ledger nm
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   let mut out : List (List Nat) := []
@@ -1649,7 +1687,7 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
     discard <| (SampledProofs.Challenger.creditedSession ledger (f "window") k pins main d).mapError fun e =>
       ("circuit", s!"window {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
     let (got, layout, rows) ← (windowLayout key ledger pins main (f "window") (f "session") (f "salt") (f "calls") (f "served")
-      (f "commit") (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs") (Lean.toJson bigK)).mapError
+      (f "commit") (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs") (Lean.toJson bigK) (Lean.toJson t)).mapError
       fun (c, why) => ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")
     out := out ++ [got]
     work := work ++ [creditedWork layout got rows]
