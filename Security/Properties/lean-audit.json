@@ -55,7 +55,9 @@
   "Properties.Proofs.RemoteAudit.Pooled",
   "Properties.Accounting.Compose",
   "Properties.Accounting.Served",
-  "Properties.Proofs.Accounting.Served"
+  "Properties.Proofs.Accounting.Served",
+  "Properties.RemoteAudit.Schedule",
+  "Properties.Proofs.RemoteAudit.Schedule"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -248,7 +250,7 @@
   },
   "Properties.RemoteAudit": {
    "imports": ["RemoteAudit", "Properties.RemoteAudit"],
-   "except": ["Properties.RemoteAudit.Pooled"],
+   "except": ["Properties.RemoteAudit.Pooled", "Properties.RemoteAudit.Schedule"],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Accounting": {
@@ -285,6 +287,11 @@
    "imports": ["Definitions.Accounting", "RemoteAudit"],
    "except": [],
    "why": "the pooled bound the verifier computes (`RemoteAudit.Pooled`) and the W the memory line reads (`RemoteAudit.Line`) are stated against the draw's model they cover (`Definitions.Accounting.Remote.Draw`), never a proof"
+  },
+  "Properties.RemoteAudit.Schedule": {
+   "imports": ["Definitions.Accounting", "RemoteAudit"],
+   "except": [],
+   "why": "the schedule check (`RemoteAudit.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
   }
  },
  "reads_exempt": {
@@ -1514,6 +1521,12 @@
    "assumptions": [],
    "type_hash": "4dea8a6ffab48be464b58e4001bb9086128588986c213b5fcc464b66dbca14b0"
   },
+  "Properties.RemoteAudit.scheduleChecked": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.scheduleFixesLayout": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.releasedStayOut": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.releasedStayOut : Properties.RemoteAudit.ReleasedStayOut"],
@@ -2665,6 +2678,14 @@
    },
    "Properties.RemoteAudit.recordKeptAfterDraw": {
     "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.scheduleChecked": {
+    "function": "RemoteAudit.Schedule.check",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.scheduleFixesLayout": {
+    "function": "RemoteAudit.Schedule.check",
     "outcome": "accept"
    }
   },
