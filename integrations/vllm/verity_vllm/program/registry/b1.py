@@ -524,6 +524,49 @@ def TokenSelect(B, S, logits):
     return step[0][1]
 
 
+#: bf16 -inf, the V-chunks' starting best: every logit but -inf and a NaN is strictly above it
+NEG_INF_BF16 = 0xFF80
+
+
+def chunks(V: int, C: int) -> list[tuple[int, int]]:
+    """The V-chunks of a logits row of V: ``[cC, min(cC + C, V))`` for c in 0 .. ceil(V / C) - 1."""
+    if not 1 <= C <= V:
+        raise ValueError(f"V-chunks of C = {C} logits of a row of V = {V} (1 <= C <= V)")
+    return [(lo, min(lo + C, V)) for lo in range(0, V, C)]
+
+
+@composite("TokenSelectChunk", 1, ["C"], lambda S: ((("x", Array(S.C, BF16)),), Tuple(BF16, I32)), conformance="model-untested")
+def TokenSelectChunk(B, S, x):
+    """A V-chunk of `TokenSelect_v1`'s scan: `ArgmaxStep_v1` over all C logits from (-inf, 0, 0), returning (best, its index in
+    the chunk): the chunk's first maximum above -inf, a NaN never taken, and (-inf, 0) when it has none.  Its partial is what
+    `TokenSelectCombine_v1` reduces."""
+    init = tuple_of(B.call(const(16, NEG_INF_BF16)), B.call(const(32, 0)), B.call(const(32, 0)))
+    step = B.scan(ArgmaxStep, init, xs=(x,))
+    return tuple_of(step[0][0], step[0][1])
+
+
+def _combine_type(S):
+    n = len(chunks(S.V, S.C))
+    return (("x0", BF16), ("best", Array(n, BF16)), ("idx", Array(n, I32))), I32
+
+
+@composite("TokenSelectCombine", 1, ["V", "C"], _combine_type, conformance="model-untested")
+def TokenSelectCombine(B, S, x0, best, idx):
+    """`TokenSelect_v1{V}` from logits[0] (``x0``) and its V-chunks' partials (`chunks`, each `TokenSelectChunk_v1` at the chunk's
+    width): from (x0, 0), chunk c's (best[c], cC + idx[c]) is taken iff ``Bf16GtStrict(best[c], best)``.  The scan's best after
+    the chunks before c is above or equal to every number in them, so the scan over chunk c takes its first maximum exactly when
+    that is above it; a NaN x0 is never left (the scan's index 0), and a chunk of no number above -inf never wins."""
+    n = len(chunks(S.V, S.C))
+    run, run_i = x0, B.call(const(32, 0))
+    for c in range(n):
+        gt = B.call(P.Bf16GtStrict, best[c], run)
+        at = idx[c] if c == 0 else B.call(P.I32Add, idx[c], B.call(const(32, c * S.C)))
+        run_i = B.call(P.SelectI32, gt, at, run_i)
+        if c < n - 1:
+            run = B.call(P.SelectBf16, gt, best[c], run)
+    return run_i
+
+
 # ---------------------------------------------------------------------------------------------------------
 # layer and model
 # ---------------------------------------------------------------------------------------------------------
