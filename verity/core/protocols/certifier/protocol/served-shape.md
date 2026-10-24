@@ -39,8 +39,9 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
 - Its keys: `R`, `W`, `A`, `IW`, `Q`, `D`, `P`, `K`, `SEG` and `engine` for `CS.statics`; `arrivals`, `decisions` and
   `steps` for `CS.Slice`; `rows`, the replay's step rows; `served`, the seal's runner rows a step, and `ids`, for
   `served_rows.step_rows(S, served[u], ids)`.
-- `CompileSlice_v1` accepts it with the seal's rows in ``srv`` (0x1F, a 13-bit code), at 222,877 ANDs. The circuit is
-  its reference on it and on four negatives: a decision flipped (``load``, ``steps``, ``rows``), a charge one bit short
+- `CompileSlice_v1` accepts it with the seal's rows in ``srv`` (0x3F, a 13-bit code), at 222,668 ANDs; 8eb1 serves
+  without prefix caching, so the slice makes no cache call and ``cache`` is 1. The circuit is its reference on it and on
+  four negatives: a decision flipped (``load`` and ``rows``; the decision it leaves unread carries), a charge one bit short
   (``charge``), an arrival's prompt length changed (``rows``), and a served row dropped (``rows``)
   (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w212.py`).
 - `ReplayStep_v1` at AS = 1 is w212's served scheduler on all 22 of its async units, circuit and reference
@@ -81,7 +82,7 @@ cost with it.
   (256, 1, 35). Its sync `ReplayAdvance`, 80,959 ANDs, is the corpus run's at sync heavy (r20261024-091809-297f).
 - Async scheduling adds 3–8% to a step, and the walk entries 5–15% more. At R = 256 about half the step is
   compacting the running list (341,241 of the heavy step's 647,330 ANDs).
-- On their own, w212's 20 step units and the load are 61,954 ANDs, under a third of the slice's 222,877. Most of the
+- On their own, w212's 20 step units and the load are 61,954 ANDs, under a third of the slice's 222,668. Most of the
   slice is the asks' coding, the charge and the served rows.
 - Not counted: `CacheStep_v1`'s calls with prefix caching, whose linear table at N = NB − 1 is far past any unit
   (PROTOCOL.md, "Scaling: offline memory checking"), and the coding, which goes with the decisions, not the steps.

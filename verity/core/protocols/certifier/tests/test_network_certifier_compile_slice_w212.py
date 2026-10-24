@@ -48,21 +48,22 @@ def test_the_served_rows_are_the_replays(w212):
 
 
 def test_the_slice_accepts_w212(w212):
-    """The honest unit is accepted (0x1F) with the served rows in ``srv``: the 14 decisions code in 13 bits. Each negative is
-    refused by its own checks: request 310 admitted a step early in the window row, a charge one below the coded length,
-    request 309's prompt a token longer than certified, and step 7's served rows missing request 309's."""
+    """The honest unit is accepted (0x3F) with the served rows in ``srv``: the 14 decisions code in 13 bits. Each negative is
+    refused by its own checks: request 310 admitted a step early in the window row (the decision it leaves unread
+    carries, so ``steps`` holds), a charge one below the coded length, request 309's prompt a token longer than
+    certified, and step 7's served rows missing request 309's."""
     cases = _cases(w212)
     assert cases["honest"].verdict == CS.ACCEPT and cases["honest"].length == 13 and len(cases["honest"].symbols) == 14
     flags = {k: {f for f, ok in c.flags.items() if not ok} for k, c in cases.items()}
-    assert flags == {"honest": set(), "early": {"load", "steps", "rows"}, "charge": {"charge"}, "arrival": {"rows"},
+    assert flags == {"honest": set(), "early": {"load", "rows"}, "charge": {"charge"}, "arrival": {"rows"},
                      "served": {"rows"}}
 
 
 @pytest.mark.slow
 def test_the_circuit_is_its_reference_on_w212(w212):
     """The unit's verdict word is the reference's on the honest window and each negative, and its size at w212's shape.
-    About a minute: it builds and evaluates the 222,877-AND unit at the served engine's widths (L = 512, NB = 101,626,
+    About a minute: it builds and evaluates the 222,668-AND unit at the served engine's widths (L = 512, NB = 101,626,
     P = 20), which the smallkv slice's test doesn't reach."""
     cases = _cases(w212)
     assert CS.evaluate(w212.st, list(cases.values())) == [c.verdict for c in cases.values()]
-    assert CS.size(**w212.st)["ands"] == 222877
+    assert CS.size(**w212.st)["ands"] == 222668
