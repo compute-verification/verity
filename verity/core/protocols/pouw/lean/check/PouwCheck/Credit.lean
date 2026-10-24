@@ -959,8 +959,10 @@ def partitionOf (program : String) (shape : Shape) : Json :=
       ("params", Json.mkObj [("templates",
         Json.arr ((shape.tiles.mergeSort (·.1 ≤ ·.1)).map (Json.str ·.2.fn)).toArray)])])]
 
-/-- `registered.READS`: a `--registered` file's format. -/
-def READS : String := "verity/registered-reads/v0"
+/-- `registered.READS_V1`: a `--registered` file's format, each port's reads from unit `reads_from` (`READS_FROM`). -/
+def READS : String := Flock.Registered.FORMAT
+/-- `registered.READS_FROM`: a port's first unit; every unit below it reads nothing (`Flock.Registered.Port.readAt`). -/
+def READS_FROM : String := Flock.Registered.READS_FROM_KEY
 def SCHEMA_KEY : String := "row_schema"
 
 /-- `credit.step_tables`: each round's A tables of a layout `strata` accepted, over its `steps` rounds (its calls the
@@ -1006,11 +1008,12 @@ each of the round's calls of K, o the call's first, `stepRow`), its B row j (`b_
 row b0 + C·tj + j of the weights' `<prefix>b/<K>` (b0 the call's linear's first row in it), and its record (`zy`) at row
 t of the call's z table `<prefix>zy@<call>`; and, when the window registers the call's receipt table
 `<prefix>receipt@<call>`, the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shapeOf`'s width) at its
-row t, so the receipts the round roots commit are the ones the units return; every other unit reads none of them, and
-the file lists no unit past the call's last (`Flock.Registered.badInstance` reads none past `reads`). Each value is a
+row t, so the receipts the round roots commit are the ones the units return; every other unit reads none of them: each
+port's reads start at the call's first unit u0 (`READS_FROM`) and end at its last (`Flock.Registered.Port.readAt` reads
+none below `reads_from` or past `reads`). Each value is a
 row/v2 value of 16-bit leaves under `SampledProofs.Registered.domainAt` of its name, rows and words, binding the
 window's open root `window` but for the weights' (`isHeld`), at the root `roots` (`{value: [root, ...]}`) gives it. Its
-cost is the window's units up to the call's last, once a port: the reads file's form. The statement's public row `pub`
+reads cost the call's units, once a port; only the ok rows' known content is the window's. The statement's public row `pub`
 (`PUB_PORT`) is the verifier's own: unit u0 + t reads row t of the call's public table `<prefix>pub@<call>`, which the
 file names at its known content (`known`, `Flock.Registered.checkKnownAll`), the window's Program salt `salt` (hex), the
 position u0 + t and the call's roots, root(`a/<K>@<s>`) and root(`b/<K>`) as the window registers them (`publicWords`),
@@ -1080,8 +1083,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     [("zy", zy, fun t => t)] ++ (if receipted then [(RECEIPT_PORT, rc, fun t => t)] else [])
   let mut out : List (String × Json) := []
   for (port, v, row) in ports do
-    let reads := (List.range (u0 + size)).map fun u =>
-      if u0 ≤ u && u < u0 + size then Lean.toJson (row (u - u0)) else Json.null
+    let reads := (List.range size).map fun t => Lean.toJson (row t)
     let lw : Nat × Nat := ((shapes.find? (·.1 == v)).map (·.2)).getD (0, 0)
     let (leaves, words) := lw
     let d ← (SampledProofs.Registered.domainAt program v words leaves 16
@@ -1089,7 +1091,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     out := out ++ [(port, Json.mkObj [("value", Json.str v), ("root", Json.str ((root.lookup v).getD "")),
       ("leaves", Lean.toJson leaves), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
       ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-      ("reads", Json.arr reads.toArray)])]
+      ("reads", Json.arr reads.toArray), (READS_FROM, Lean.toJson u0)])]
   let pv := s!"{shape.pre}pub@{call}"
   let words := PouwCheck.PUBLIC_ROW_BITS / 16
   let sb := (hex? (.str salt)).getD ByteArray.empty
@@ -1104,7 +1106,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   out := out ++ [(PUB_PORT, Json.mkObj [("value", Json.str pv), ("root", Json.str (Flock.hexOf pr)),
     ("leaves", Lean.toJson size), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
     ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-    ("reads", Json.arr ((List.range u0).map (fun _ => Json.null) ++ (List.range size).map Lean.toJson).toArray),
+    ("reads", Json.arr ((List.range size).map Lean.toJson).toArray), (READS_FROM, Lean.toJson u0),
     ("known", Json.mkObj [("rows", Lean.toJson (ks.map (·.1))),
       ("salts", Json.arr (ks.map fun k => Json.str (Flock.hexOf k.2)))])])]
   let population := sizes.foldl (· + ·) 0
@@ -1118,8 +1120,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   out := out ++ [(OK_PORT, Json.mkObj [("value", Json.str ov), ("root", Json.str (Flock.hexOf opr)),
     ("leaves", Lean.toJson population), ("words", Lean.toJson OK_ROW.size), ("word_bits", Lean.toJson (16 : Nat)),
     ("domain", Json.str (Flock.hexOf od)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-    ("reads", Json.arr ((List.range u0).map (fun _ => Json.null) ++
-      (List.range size).map (fun t => Lean.toJson (u0 + t))).toArray),
+    ("reads", Json.arr ((List.range size).map (fun t => Lean.toJson (u0 + t))).toArray), (READS_FROM, Lean.toJson u0),
     ("known", Json.mkObj [("rows", Lean.toJson (oks.map (·.1))),
       ("salts", Json.arr (oks.map fun k => Json.str (Flock.hexOf k.2)))])])]
   pure (Json.mkObj [("format", Json.str READS), ("ports", Json.mkObj out)])

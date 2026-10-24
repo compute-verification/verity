@@ -291,7 +291,8 @@ def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_anothe
         assert {f["ports"][f"a_k{k}_0"]["value"], f["ports"]["zy"]["value"], f["ports"][f"b_k{k}_0"]["value"]} == {
             HW.table(prog, "a", c, STEPS), HW.table(prog, "zy", c), SV.PREFIX + f"b/{k}"}
         at = HW.step_of(prog, c, STEPS)[2]
-        assert f["ports"][f"a_k{k}_0"]["reads"][u0] == at and at == T * served.step_calls(c).index(c)
+        assert f["format"] == G.READS_V1 and all(p[G.READS_FROM] == u0 and len(p["reads"]) == n for p in f["ports"].values())
+        assert f["ports"][f"a_k{k}_0"]["reads"][0] == at and at == T * served.step_calls(c).index(c)
         assert f["ports"][HW.OK_PORT]["value"] == SV.PREFIX + "ok" and SV.PREFIX + "ok" not in served.registered
         for port, p in f["ports"].items():
             if port == HW.OK_PORT:
@@ -302,7 +303,7 @@ def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_anothe
             if port == HW.PUB_PORT:
                 continue
             key = port if port == "zy" else f"{port.rsplit('_', 1)[0]}[{port.rsplit('_', 1)[1]}]"
-            for u, row in enumerate(p["reads"]):
+            for u, row in enumerate(CC.port_reads(p)):
                 if not u0 <= u < u0 + n:
                     assert row is None
                     continue
@@ -326,7 +327,7 @@ def test_a_tile_of_one_row_or_column_maps_its_lone_read_to_port_0(tile, lone):
     for c, (u0, n) in enumerate(HW.call_units(served.program)):
         k = run.shapes_[c][1]
         assert set(reg.files[c]["ports"]) == {f"{lone}_k{k}_0", "zy", HW.PUB_PORT, HW.OK_PORT} | {f"{other}_k{k}_{i}" for i in range(32)}
-        reads = reg.files[c]["ports"][f"{lone}_k{k}_0"]["reads"]
+        reads = CC.port_reads(reg.files[c]["ports"][f"{lone}_k{k}_0"])
         assert [u for u, r in enumerate(reads) if r is not None] == list(range(u0, u0 + n))
 
 
@@ -618,7 +619,7 @@ def test_each_calls_receipts_are_its_receipt_table_once_its_roots_are_registered
         p, rc = reg.files[c]["ports"][HW.RECEIPT_PORT], served.registered[pre + f"receipt@{c}"]
         assert (p["value"], p["root"], p["leaves"], p["words"], p["domain"], p["row_schema"]) == (
             rc.value, rc.root.hex(), rc.leaves, rc.words, rc.domain.domain_id.hex(), SV.V2)
-        assert [(u, row) for u, row in enumerate(p["reads"]) if row is not None] == [(u0 + t, t) for t in range(n)]
+        assert [(u, row) for u, row in enumerate(CC.port_reads(p)) if row is not None] == [(u0 + t, t) for t in range(n)]
         assert all(G.verify_read(rc.domain, rc.root, t, rc.bcs[t], rc.path(t), SV.V2) for t in range(n))
 
 

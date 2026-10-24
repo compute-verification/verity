@@ -487,7 +487,7 @@ def _shapes(program: Program, call: int, steps: int) -> dict[str, tuple[int, int
 def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str], ports: dict[str, str] | None = None,
                      prog: str | None = None, window: str | None = None, *, steps: int, salt: str | None = None
                      ) -> dict[str, Any]:
-    """The verifier's ``--registered`` file (`registered.reads_file`'s format) of a statement over call ``call``'s units:
+    """The verifier's ``--registered`` file (`registered.READS_V1`) of a statement over call ``call``'s units:
     each A row at its step's A table and each record at the call's z table (`table_reads`, the window's ``steps``), each
     B row at the weights' ``b/<K>``. ``roots`` ``{value: root}`` holds those two tables' roots, as its round's record names
     them before that round's coin, and the weights'; ``ports`` names a key's circuit port when they differ
@@ -497,8 +497,9 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     binds the two tables' domains, the window's own rows (PRF-127; `credit.domain_of`), and never the weights', which are
     held across windows. When ``roots`` holds the call's receipt table, its units' receipts are the statement's output
     row o0 (`RECEIPT_PORT`) at its rows, one a unit, under the z table's domain rule. A unit of another call reads none
-    of them (None, and no entry past a port's last read: the verifier reads none at a unit past ``reads``,
-    `Flock.Registered.badInstance`), so the file holds a statement to one call's units. With ``salt``, the window's Program salt (hex),
+    of them: each port's reads start at the call's first unit (``reads_from``, `core_check.call_reads`) and end at its
+    last (the verifier reads none below ``reads_from`` or past ``reads``, `Flock.Registered.Port.readAt`), so the file
+    holds a statement to one call's units and is as long as the call. With ``salt``, the window's Program salt (hex),
     the statement's public row ``pub`` (`PUB_PORT`) is the call's public table (`PUBS`, `public_table`) at its rows, one
     a unit, at its known content (``known``): the salt, the unit's position and its call's roots, root(a/<K>@<s>) and
     root(b/<K>) as ``roots`` holds them, so a unit seeded under another salt, position or roots opens no row of it; and
@@ -519,12 +520,9 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     for u in range(u0, u0 + n):
         for key, (value, row) in table_reads(program, tp, u, steps).items():
             if value in shape:
-                reads.setdefault(key, {"value": value, "rows": [None] * (u0 + n)})["rows"][u] = row
+                reads.setdefault(key, {"value": value, "rows": [None] * n})["rows"][u - u0] = row
         if rc in shape:
-            reads.setdefault(OUTPUTS[0], {"value": rc, "rows": [None] * (u0 + n)})["rows"][u] = u - u0
-    for r in reads.values():
-        while r["rows"][-1] is None:
-            r["rows"].pop()
+            reads.setdefault(OUTPUTS[0], {"value": rc, "rows": [None] * n})["rows"][u - u0] = u - u0
     prog = prog or P.program_digest(program)
     out = {}
     for key, r in reads.items():
@@ -532,8 +530,7 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
         out[{OUTPUTS[0]: RECEIPT_PORT, **(ports or {})}.get(key, key)] = {
             "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
             "domain": G.domain(prog, r["value"], words, leaves, window=None if r["value"] == b else window).domain_id.hex(),
-            **G.schema_entry(G.SCHEMA_V2),
-            "reads": r["rows"]}
+            **G.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, r["rows"])}
     if salt is not None:
         if window is None:
             raise ValueError("a call's public rows are committed under salts of the window's open root: give window")
@@ -541,14 +538,14 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
         rows, salts, reg = public_table(prog, pv, salt, window, u0, n, (roots[table(program, "a", call, steps)], roots[b]))
         out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": n, "words": len(rows[0]), "word_bits": G.WORD_BITS,
                          "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
-                         "reads": [None] * u0 + list(range(n)), "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
+                         **CC.call_reads(u0, list(range(n))), "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
         ov = f"{S.PREFIX}{OUTPUTS[1]}"
         rows, salts, reg = ok_table(prog, ov, window, tp.population)
         out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": tp.population, "words": len(CC.OK_ROW),
                         "word_bits": G.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
-                        "reads": [None] * u0 + list(range(u0, u0 + n)),
+                        **CC.call_reads(u0, list(range(u0, u0 + n))),
                         "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
-    return {"format": G.READS, "ports": out}
+    return {"format": G.READS_V1, "ports": out}
 
 
 def public_table(prog: str, value: str, salt: str, window: str, u0: int, n: int, roots: tuple[str, str]

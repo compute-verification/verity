@@ -801,7 +801,7 @@ def partition_of(program: str, shape: dict) -> dict:
 
 def registered_file(program: str, layout: dict, shape: dict, call: int, roots: dict, window: str, steps: int, salt: str
                     ) -> tuple[dict | None, tuple[str, str] | None]:
-    """The verifier's ``--registered`` file (`registered.READS`) of call `call`'s statement in the window `layout` (one
+    """The verifier's ``--registered`` file (`registered.READS_V1`) of call `call`'s statement in the window `layout` (one
     `strata` accepted, its circuit's descriptor of SHA-512 `program` and `shape_of` `shape`, its calls `steps` rounds'
     equal blocks), and None; or None and the refusal (``registration``: the window registers no root, or two, for a value
     the statement reads). It is `h1window.table_reads_file`'s, built from the descriptor alone: unit u, tile t =
@@ -811,12 +811,12 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     its rows each of K's linears' n in turn), and its record (``zy``) at row t of the call's z table ``<prefix>zy@<call>``
     (a row a unit of the call); and, when the window registers the call's receipt table ``<prefix>receipt@<call>``,
     the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shape_of`'s width) at its row t, so the
-    receipts the round roots commit are the ones the units return; every other unit reads none of them, and the file
-    lists no unit past the call's last (the verifier reads none past ``reads``). Each value is a row/v2 value of 16-bit
-    leaves
-    under `registered.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
+    receipts the round roots commit are the ones the units return; every other unit reads none of them: each port's
+    reads start at the call's first unit u0 (``reads_from``, `core_check.call_reads`) and end at its last (the verifier
+    reads none below ``reads_from`` or past ``reads``). Each value is a row/v2 value of 16-bit leaves under
+    `registered.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
     held across windows (`domain_of`), at the root `roots` (``{value: [root, ...]}``, each value's registered roots)
-    gives it. Its cost is the window's units up to the call's last, once a port: the reads file's form.
+    gives it. Its reads cost the call's units, once a port; only the ok rows' known content is the window's.
 
     The statement's public row ``pub`` (`PUB_PORT`), each unit's seed's inputs, is the verifier's own: unit u0 + t reads
     row t of the call's public table ``<prefix>pub@<call>`` (`h1window.public_table`), which the file names at its known
@@ -870,25 +870,22 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
         + [("zy", zy, lambda t: t)] + ([(RECEIPT_PORT, rc, lambda t: t)] if rc in rows_of else []))
     out = {}
     for port, v, row in ports:
-        reads: list[int | None] = [None] * (u0 + size)
-        for t in range(size):
-            reads[u0 + t] = row(t)
         leaves, words = rows_of[v]
         out[port] = {"value": v, "root": roots[v][0], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
                      "domain": G.domain(program, v, words, leaves,
                                         window=None if is_held(v) else window).domain_id.hex(),
-                     **G.schema_entry(G.SCHEMA_V2), "reads": reads}
+                     **G.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, [row(t) for t in range(size)])}
     pv = f"{prefix}pub@{call}"
     rows, salts, reg = public_table(program, pv, salt, window, u0, size, (roots[a][0], roots[b][0]))
     out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": size, "words": len(rows[0]), "word_bits": G.WORD_BITS,
                      "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
-                     "reads": [None] * u0 + list(range(size)), "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
+                     **CC.call_reads(u0, list(range(size))), "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
     rows, salts, reg = ok_table(program, ov, window, sum(sizes))
     out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": sum(sizes), "words": len(CC.OK_ROW),
                     "word_bits": G.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
-                    "reads": [None] * u0 + list(range(u0, u0 + size)),
+                    **CC.call_reads(u0, list(range(u0, u0 + size))),
                     "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
-    return {"format": G.READS, "ports": out}, None
+    return {"format": G.READS_V1, "ports": out}, None
 
 
 def public_table(program: str, value: str, salt: str, window: str, u0: int, n: int, roots: tuple[str, str]
