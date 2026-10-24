@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.KS.PlainLeafKSK
 /-!
 # The plain table bound at one tape at `VK keep`, each slot at the run's own level columns
 
-`PlainCapsDep`'s `plain_liveRow` and `mem_rdAt`, `PlainRawL`'s `plainOffL_le_rd` and `plain_accPr_le_rdL`, and
+`PlainCapsDep`'s `plain_liveRow` (its `mem_rdAtK` is `PlainCapsDep`'s own), `PlainRawL`'s `plainOffL_le_rd` and `plain_accPr_le_rdL`, and
 `PlainRdRun`'s `plainRel_of`, `plain_accPr_le_rdRun` and `plain_accPr_le_rdAll`, over the verifier `VK keep`: the
 simulator at `plainSimK keep` and the verdict at the draw `plainVerdictAtK keep`.
 -/
@@ -83,29 +83,6 @@ theorem plain_liveRowK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock
   intro ℓ h1 q v hqv
   rw [hent ℓ h1, plainLevelColsOf_congr _ _ _ (hco y₀ hr₀), ← getD_empty, ← hcols ℓ] at hqv
   exact hqv
-
-/-- `mem_rdAt` at `VK keep`. -/
-theorem mem_rdAtK (keepV : Bool → Bool) {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
-    {keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool} {r ℓ q lanes : ℕ} {ω : Ω}
-    {d : (Fin ((V false).k x) → Coin) × A} {u : Fin (2 ^ lanes) → 𝔽} :
-    u ∈ rdAtK keepV P x keep r ℓ q lanes ω d ↔ keep ω d.1 d.2 = true ∧
-      (Claims.run sha512 P (VK keepV) x ω d.1).out = .acc ∧
-      ∃ a, (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (VK keepV) x ω d.1).seen r (ℓ + 1) ∧
-        rowFin lanes a = u := by
-  unfold rdAtK
-  by_cases hacc : (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).out = .acc
-  · obtain ⟨hk, hr⟩ := Claims.Recursion.abortRun_acc_iff.1 hacc
-    rw [if_pos hacc, Claims.Recursion.abortRun_of_keep hk]
-    simp only [List.mem_toFinset, List.mem_map, List.mem_filter, decide_eq_true_eq]
-    constructor
-    · rintro ⟨⟨q', a⟩, ⟨hm, rfl⟩, rfl⟩
-      exact ⟨hk, hr, a, hm, rfl⟩
-    · rintro ⟨-, -, a, hm, rfl⟩
-      exact ⟨(q, a), ⟨hm, rfl⟩, rfl⟩
-  · rw [if_neg hacc]
-    simp only [Finset.notMem_empty, false_iff, not_and]
-    intro hk hr
-    exact absurd (Claims.Recursion.abortRun_acc_iff.2 ⟨hk, hr⟩) hacc
 
 end Caps
 
