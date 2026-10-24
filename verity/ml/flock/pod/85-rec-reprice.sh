@@ -50,7 +50,8 @@
 #      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
-#      FORGE="message sum comb top top-salt coef dirs" (vstage)  JOBS=4 (vstage, lean)  INNER_LOOPBACK=1 (inner)
+#      FORGE="message sum comb top top-salt coef dirs" (vstage)  JOBS=4 (vstage)  INNER_LOOPBACK=1 (inner)
+#      LEAN_JOBS= LEAN_MEM_GB=48 (lean: verifications at once, default LEAN_MEM_GB / 5 up to the job's cores)
 #      REC_CIRCUIT_CACHE=$FLOCK_WORK/rec-circuits (V*'s circuit texts kept per shape, rec_circuits.py; empty: none kept)
 #      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
 #      GPU_LEASE= (the lease command; default the queue's for this node)
@@ -700,6 +701,9 @@ oreplay)
 lean)
   [ -x $LEAN_BIN ] || lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
   mkdir -p $O/lean
+  # LEAN_JOBS verifications at once, the largest circuit first: one core each, at most 4.3 GB at K=64 N=64
+  # (r20261024-055050-962e), so by default one per 5 GB of LEAN_MEM_GB, at most the job's cores
+  JOBS=${LEAN_JOBS:-$(( ${LEAN_MEM_GB:-48} / 5 < NC ? ${LEAN_MEM_GB:-48} / 5 : NC ))}
   # V*'s values against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement and the inner
   # session STEP=vstage staged every statement from, a forgery's too, with the coin server's transcript of it, whose
   # root_B, later tops and link points every statement's tops and check 5 are held to (RecVStar.checkTopRows,
@@ -757,7 +761,7 @@ for s in sorted(p for p in vs.iterdir() if p.is_dir()):
     print(s.name, unit, " ".join(flags))
 EOF
   fi
-  for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | sort -V); do l=$(basename $S); C=$(cat $S.stmt)
+  for S in $(for s in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::'); do echo "$(stat -c %s $(cat $s.stmt)/circuit.txt) $s"; done | sort -k1,1nr -k2V | cut -d' ' -f2); do l=$(basename $S); C=$(cat $S.stmt)
     want $l || continue
     OWN=$(cat $O/lean/own-$l.txt)
     echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $OWN $REC_INNER --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
