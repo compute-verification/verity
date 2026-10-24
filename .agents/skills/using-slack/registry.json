@@ -129,7 +129,6 @@
         "benchmarks/sampling_plan/",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py",
         "Security/Definitions/Hash/",
-        "Security/Definitions/Hash/",
         "Security/Proofs/Hash/"
       ],
       "branch_suffixes": [
@@ -217,7 +216,6 @@
       "owns": [
         "verity/core/protocols/pouw/",
         "Security/Definitions/Pouw/",
-        "Security/Definitions/Pouw/",
         "Security/Proofs/Pouw/",
         "Security/Definitions/Nci.lean",
         "Security/Definitions/Nci/",
@@ -301,7 +299,6 @@
       ],
       "linear": "MEM",
       "owns": [
-        "Security/Definitions/Pous/",
         "Security/Definitions/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/bandwidth/",
@@ -414,7 +411,6 @@
       "owns": [
         "verity/core/protocols/certifier/",
         "verity/core/devices/certifier/",
-        "Security/Definitions/NetworkCertifier/",
         "Security/Definitions/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
