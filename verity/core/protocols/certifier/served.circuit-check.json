@@ -1,10 +1,13 @@
 {
  "definitions": {
   "NetworkServedCounts_v1{T=12,FOUT=3,FIN=2,R=2,RIN=2,OWN=1}": {
-   "and": 4932
+   "and": 4918
+  },
+  "NetworkServedCounts_v1{T=60,FOUT=16,FIN=1,R=98,RIN=2,OWN=1}": {
+   "and": 34980
   },
   "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=0}": {
-   "and": 3476
+   "and": 3438
   },
   "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=1}": {
    "and": 3502
@@ -13,6 +16,9 @@
  "digests": {
   "NetworkServedCounts_v1{T=12,FOUT=3,FIN=2,R=2,RIN=2,OWN=1}": {
    "sha512": "21e6c7d449479ca36ef63b85508b88a47f01ee86f36f864fecefea5c247ee42c8a48c8015b29f6d49b84527616daa9ce789c47f31b55235884092ccce27c1685"
+  },
+  "NetworkServedCounts_v1{T=60,FOUT=16,FIN=1,R=98,RIN=2,OWN=1}": {
+   "sha512": "9e88656a93260b879c5c57b25d164143fe959b44cd22cafe536a9a2ebd6d1e1fcce7d50ccc891973711c8ad06cc30a7e9a8047c7330cc6f45dd341a2ce277e05"
   },
   "NetworkServedCounts_v1{T=600,FOUT=1024,FIN=1,R=6,RIN=1,OWN=0}": {
    "sha512": "88515d489a24909b572537bcef4f8e42dc877115ae8f42d87ec4f52e2eb7c6662f5194fafa958d21a770ccbae8876bc9343115f1936b97f829f80ccf1566f676"
