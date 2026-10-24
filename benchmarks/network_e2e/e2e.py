@@ -51,11 +51,13 @@ then runs this. The README says what the report establishes and what it doesn't.
   (`endpoint_advice`, `chain.served_advice`), ``--prove-path`` (beside the endpoint's records, ``prove_path.py audit
   --serve-run``'s audits of its Commit windows, `chain.served_commit`), NEG's registry on the runs, and on the advice profile
   the I/O tie on each run (`chain.tie`, its sampled ids the endpoint's records' or ``--ids``'); each that ran must pass
-  for the report to be OK, the tie on the advice profile whether it ran or not (`chain.tie_gate`), and ``stubbed``
-  lists what is still a stand-in.
+  for the report to be OK, the tie on the advice profile whether it ran or not (`chain.tie_gate`), and every
+  ``--serve-run`` arm's advice held by content to the report's advice of its window whether its prove path binds or not
+  (`chain.held_to`); ``stubbed`` lists what is still a stand-in.
 
 Exit 0 when the honest run is accepted everywhere it was checked, each negative is refused, every chain stage that
-ran passed and, on the advice profile, the I/O tie accepted the honest run (`report["ok"]`).
+ran passed, every ``--serve-run`` arm's advice is the report's and, on the advice profile, the I/O tie accepted the
+honest run (`report["ok"]`).
 """
 from __future__ import annotations
 
@@ -562,6 +564,8 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
         + ([] if b is None or b.get("bound") is True else ["the advice isn't these runs'"]) \
         + ([] if b is None or b.get("rebuilt") is True else ["the advice wasn't rebuilt from the certified I/O"]) \
         + ([] if p is None or not p.get("bound") or p["ok"] else ["the prove path failed"]) \
+        + ([] if p is None or p.get("tied") is not False else
+           [f"the prove path's audited advice isn't the report's: {p['tied_why']}"]) \
         + ([] if ng is None or not ng.get("ran") or ng["ok"] else ["NEG's registry failed"]) \
         + tie_failed \
         + [f"no {s} run" for s in expected if s not in negatives] \
@@ -935,8 +939,9 @@ def main(argv=None) -> int:
                     help="adopt prove_path.py audit's output (its run.sh's $OUT, or a tarball of it); again for another "
                          "(each --serve-run audit one of the served run's Commit windows)")
     ap.add_argument("--prove-path-registered", metavar="FILE",
-                    help="who registered each --serve-run audit's window advice and when, by window: {K: {by, "
-                         "at_serve_time, at, first_draw, ref}}, the times ISO 8601 UTC")
+                    help="who registered each --serve-run audit's window advice, by window: {K: {by, registration, "
+                         "first_draw, ref}}, registration the verity-vllm advice directory it was registered in when "
+                         "not the report's own, first_draw ISO 8601 UTC; when is read off the registration")
     ap.add_argument("--ids", metavar="FILE", help="each request's sampled ids by its advice id (ADVICE-SRC's "
                                                   "requests.jsonl: user, output_ids), for the I/O tie's verdict on the "
                                                   "negatives it reads, and on the advice profile on every run in place "
