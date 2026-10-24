@@ -77,18 +77,18 @@ MAINLOOP = (HERE / "mainloop_sm120.cuh").read_text()
 ML_SMEM = 3 * (128 + 128) * 128 + 16 * 3
 
 
-def gemm_smem(mode: str, tm: int, bn: int, stages: int | None = None) -> int:
-    """gemm_body's dynamic shared memory (the 64 x 64 and 128 x 32 GEMMs) at `stages` deep (default STAGES)."""
-    bk, peel = const("BK"), const("PEEL_ROW")
-    return (stages or const("STAGES")) * (tm + bn) * bk + ((tm + bn) * peel if mode in ("M_PEARLC", "M_PEARLC_S") else 0)
+def gemm_smem(mode: str, tm: int, bn: int, rb: int | None = None) -> int:
+    """gemm_body's dynamic shared memory (the 64 x 64 and 128 x 32 GEMMs): STAGES stages `rb` bytes deep (default BK)."""
+    peel = const("PEEL_ROW")
+    return const("STAGES") * (tm + bn) * (rb or const("BK")) + ((tm + bn) * peel if mode in ("M_PEARLC", "M_PEARLC_S") else 0)
 
 
-def gemms() -> list[tuple[str, str, int, int, int, int]]:
-    """Every GEMM kernel (name, mode, tile, G, pipeline depth): the 128 x 128 ones on the mainloop (ML_GEMM, 3 deep), the
-    others on gemm_body (GEMM at STAGES, GEMM_S at its own)."""
-    return ([(n, m, 128, 128, int(g), 3) for n, m, g in re.findall(r"^ML_GEMM\((\w+), (M_\w+), (\d+)\)", SOURCE, re.M)]
-            + [(n, m, int(tm), int(bn), int(g), const(s or "STAGES")) for n, m, tm, bn, g, s in
-               re.findall(r"^GEMM(?:_S)?\((\w+), (M_\w+), (\d+), (\d+), (\d+)(?:, (\w+))?\)", SOURCE, re.M)])
+def gemms() -> list[tuple[str, str, int, int, int, int, int]]:
+    """Every GEMM kernel (name, mode, tile, G, stage depth in bytes, cp16p's L2 fetch, 0 for cp16's own): the 128 x 128 ones
+    on the mainloop (ML_GEMM, 128-deep TMA stages), the others on gemm_body (GEMM at BK and cp16, GEMM_X at its own)."""
+    return ([(n, m, 128, 128, int(g), 128, 0) for n, m, g in re.findall(r"^ML_GEMM\((\w+), (M_\w+), (\d+)\)", SOURCE, re.M)]
+            + [(n, m, int(tm), int(bn), int(g), const(rb or "BK"), const(pf) if pf else 0) for n, m, tm, bn, g, rb, pf in
+               re.findall(r"^GEMM(?:_X)?\((\w+), (M_\w+), (\d+), (\d+), (\d+)(?:, (\w+), (\w+))?\)", SOURCE, re.M)])
 
 
 def gemm_tile(name: str) -> tuple[int, int]:
@@ -100,21 +100,24 @@ def gemm_tile(name: str) -> tuple[int, int]:
 def test_gemms_fit_sm120_shared_memory():
     """gemm_body's GEMMs and the mainloop's (ML_GEMM, all at 128 x 128, each with its _smem probe the mainloop's SMEM) fit
     sm_120's 99 KB, and the gate knows every one."""
-    assert "template <int MODE, int TM, int BN, int S = STAGES> __host__ __device__ constexpr int gemm_smem()" in SOURCE
-    assert "S * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0)" in SOURCE
-    assert "gemm_body<MODE, TM, BN, G, S>(a); }" in SOURCE and "*out = gemm_smem<MODE, TM, BN, S>(); }" in SOURCE
+    assert "template <int MODE, int TM, int BN, int RB = BK> __host__ __device__ constexpr int gemm_smem()" in SOURCE
+    assert "STAGES * (TM + BN) * RB + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0)" in SOURCE
+    assert "gemm_body<MODE, TM, BN, G, RB, PF>(a); }" in SOURCE and "*out = gemm_smem<MODE, TM, BN, RB>(); }" in SOURCE
+    assert "#define GEMM(NAME, MODE, TM, BN, G) GEMM_X(NAME, MODE, TM, BN, G, BK, 0)" in SOURCE
     assert "SMEM = STAGES * STAGE + 16 * STAGES" in MAINLOOP and "STAGE = (TM + BN) * BK" in MAINLOOP
     assert "*out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM;" in SOURCE
     names = {n for n, *_ in gemms()}
     ml = {"gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_ct_u", "gemm_pearlc_u", "gemm_pearlc_s", "gemm_pearlc_s_u"}
     assert names == ml | {"gemm_ct_d", "gemm_pearlc_d", "gemm_pearlc4_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_pearlc4_d_u",
                           "gemm_words", "gemm_words_u"}
-    for name, mode, tm, bn, g, stages in gemms():
-        assert (ML_SMEM if name in ml else gemm_smem(mode, tm, bn, stages)) <= SM120_MAX_DYN, name
+    for name, mode, tm, bn, g, rb, pf in gemms():
+        assert (ML_SMEM if name in ml else gemm_smem(mode, tm, bn, rb)) <= SM120_MAX_DYN, name
         assert (tm, bn) == gemm_tile(name) and (name in ml) == ((tm, bn) == (128, 128))
         assert g in (0, 4) and (g == 0) == (name.endswith("_u") or name == "gemm_fast")
-        assert stages == (8 if name.startswith("gemm_pearlc_d") else 3 if name in ml else 4), name
-    assert ML_SMEM == 98352 and gemm_smem("M_PEARLC", 64, 64) == 49152 and gemm_smem("M_PEARLC", 64, 64, 8) == 81920
+        served = name.startswith("gemm_pearlc_d")
+        assert (rb, pf) == ((128, 256) if served else (128, 0) if name in ml else (64, 0)), name
+        assert g == 0 or 32 * g % rb == 0, name
+    assert ML_SMEM == 98352 and gemm_smem("M_PEARLC", 64, 64) == 49152 and gemm_smem("M_PEARLC", 64, 64, 128) == 81920
     assert form_kernels() == ["form_s5", "form_s5_r144", "form_s5_scalar", "form_rate", "form_rate_r144", "form_rate_scalar",
                               "form_rate_nocast", "form_rate_nocast_r144", "form_rate_atoms"]
     assert set(S.WANT) - {"words", "words_u", "words_k", *form_kernels()} == names
@@ -157,8 +160,9 @@ def test_kernel_constants_match_the_reference():
     assert "unit[24] | (uint64_t)unit[25] << 32" in HASH_SOURCE and 'keys["unit"] + 96' in (HERE / "run.py").read_text()
     variants = dict(re.findall(r'"([\w-]+)": (\d)', re.search(r"VARIANT_G = \{[^}]*\}", run).group(0)))
     assert {k: int(v) for k, v in variants.items()} == {SM120.name: SM120.g, SM120_UNPROMOTED.name: 0}
-    promoted = {g for *_, g, _ in gemms() if g}
-    assert promoted == {SM120.g} and SM120.window % const("BK") == 0 and SM120_UNPROMOTED.g is None
+    promoted = {g for _, _, _, _, g, *_ in gemms() if g}
+    assert promoted == {SM120.g} and SM120.window % const("BK_D") == SM120.window % const("BK") == 0
+    assert SM120_UNPROMOTED.g is None
     assert const("WK_G") == SM120.g and const("WK_WARPS") == RUN.WK_WARPS and const("SR_MAX_K") == RUN.SR_MAX_K
     assert RUN.SR_ROWS >= RUN.BM_D
 
@@ -503,7 +507,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     lines_ea = [ev for ev in launched if ev["name"] == "lines" and ev["i"][4]]
     assert lines_ea and all(ev["i"][2] == 1024 and ev["i"][4] == 1008 for ev in lines_ea)
 
-    # decode's 64 rows, 16 of them real: words_k, stats_r and the 8-deep chain on the real rows, timed beside the kernels
+    # decode's 64 rows, 16 of them real: words_k, stats_r and the 128-deep chain on the real rows, timed beside the kernels
     # they replace and held to their words
     log = tmp_path / "launches_decode.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
@@ -512,7 +516,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert r.returncode == 4, r.stderr
     (t,) = [x for x in map(json.loads, r.stdout.splitlines()) if x["kind"] == "timing"]
     assert t["shape"] == [64, 1024, 3072]
-    assert {"af", "af_warps", "stats_a", "stats_a_warps", "gemm_pearlc", "gemm_pearlc_full", "gemm_pearlc_4st"} <= set(t["ms"])
+    assert {"af", "af_warps", "stats_a", "stats_a_warps", "gemm_pearlc", "gemm_pearlc_full", "gemm_pearlc_bk64"} <= set(t["ms"])
     assert {f"{o}_{step}_vs_{ref}_words_differing" for step, ref, outs in RUN.SPLITS for o in outs} <= set(t["consistency"])
     allocs, launched, timed = {}, [], False
     for ev in map(json.loads, log.read_text().splitlines()):
@@ -529,7 +533,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert live == {16, 64}                  # the real rows, and gemm_pearlc_full's all of m
 
     # PEARLC_SPLIT=0, PEARLC_LIVE=0 and PEARLC_DEEP=0 (the A/B rows' before): decode on the kernels words_k and stats_r
-    # replace, its GEMMs over all m rows on the 4-deep chain, and none of the cuts timed beside them
+    # replace, its GEMMs over all m rows on the 64-deep chain, and none of the cuts timed beside them
     log = tmp_path / "launches_unsplit.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
                        env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="16x1024x3072", VARIANTS="sm120",
@@ -537,7 +541,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert r.returncode == 4, r.stderr
     (t,) = [x for x in map(json.loads, r.stdout.splitlines()) if x["kind"] == "timing"]
     assert {"af", "stats_a", "gemm_pearlc"} <= set(t["ms"])
-    assert not {"af_warps", "stats_a_warps", "gemm_pearlc_full", "gemm_pearlc_4st"} & set(t["ms"])
+    assert not {"af_warps", "stats_a_warps", "gemm_pearlc_full", "gemm_pearlc_bk64"} & set(t["ms"])
     launched, timed = [], False
     for ev in map(json.loads, log.read_text().splitlines()):
         timed = timed or ev.get("name") == "gen_f32"

@@ -9,17 +9,17 @@
    compared byte for byte with the fixture, for each variant (`sm120`, G = 4, and `sm120-unpromoted`), hashing format -h3
    (SHA-512 throughout); the GEMMs, with gemm_pearlc_s (y alone), are re-run on all, 1 and 3 CTAs and compared again
    (`<buffer>@<step>/<tile>/grid<n>`), and the chain's 64 x 64 kernels (decode's) too, with decode's split kernels (words_k,
-   stats_r), its 8-deep chain, and the ones they replace (`Pipeline.replaced`).  A variant is timed only if all of its
-   buffers match (C~ and U bit-exact against the CPU reference), the plain baselines only if theirs do.  Exit 4 if any check
-   fails.
+   stats_r), its chain on 128-deep stages, and the ones they replace (`Pipeline.replaced`).  A variant is timed only if all
+   of its buffers match (C~ and U bit-exact against the CPU reference), the plain baselines only if theirs do.  Exit 4 if
+   any check fails.
 2. Diagnostic timing (not the headline: GPU 6's harness times the arm against autotuned baselines), at each of SHAPES
    (default 8192, m = n = k; or MxNxK, m padded to 64 rows): each kernel REPS times after a warm-up, its median, the phases
    (the weight side; the call's commitment of A, forming, GEMM, clean-up and hashing), the call end to end with and without
    its hashes (commit and hashing; without, the chain is gemm_pearlc_s where it runs), and consistency checks (C~ of gemm_ct
    equals gemm_pearlc's; a second gemm_pearlc gives the same U; gemm_pearlc_s's y equals gemm_pearlc's; form_s5_scalar and
    form_s5_r144, timed beside form_s5, and the RATE kernels write form_s5's codes; at decode, words_k, stats_r and the
-   8-deep chain write the words of the kernels they replace, timed beside them as af_warps, stats_a_warps and
-   gemm_pearlc_4st, and the chain on the real rows writes their C~, U and y as it does over all m rows, timed beside it
+   chain on 128-deep stages write the words of the kernels they replace, timed beside them as af_warps, stats_a_warps
+   and gemm_pearlc_bk64, and the chain on the real rows writes their C~, U and y as it does over all m rows, timed beside it
    as gemm_pearlc_full; at decode every comparison is of the real rows, the only ones a consumer reads).
    `form_rates` prices the forming loop per code in the mix it runs in, in units of one dense E4M3 MAC, and the packed cast
    within it (form_rate less form_rate_nocast; at the 144-byte row stride, form_rate_r144 less form_rate_nocast_r144).
@@ -32,7 +32,7 @@ One JSON object per line on stdout as each part finishes, a summary on stderr.
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="sm120 sm120-unpromoted",
                                  PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_SPLIT=0 for decode on words and stats_s5,
                                  PEARLC_LIVE=0 for decode's 64 x 64 GEMMs over all m rows,
-                                 PEARLC_DEEP=0 for decode's chain on the 4-deep pipeline)
+                                 PEARLC_DEEP=0 for decode's chain on 64-deep stages)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -62,7 +62,8 @@ SPLIT = os.environ.get("PEARLC_SPLIT", "1") != "0"
 #: the 64 x 64 GEMMs on the real rows alone (i4 = m_real: a warp of filler rows skips its products, stores and A's loads);
 #: PEARLC_LIVE=0 runs them over all m rows, the same real rows
 LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
-#: decode's chain (gemm_pearlc_d) on the 8-deep pipeline; PEARLC_DEEP=0 runs the 4-deep one it replaces, the same words
+#: decode's chain (gemm_pearlc_d) on 128-deep stages with L2's 256-byte fetch; PEARLC_DEEP=0 runs the 64-deep one it
+#: replaces (gemm_pearlc4_d), the same words
 DEEP = os.environ.get("PEARLC_DEEP", "1") != "0"
 VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
@@ -636,8 +637,8 @@ class Pipeline:
     def replaced(self) -> dict[str, object]:
         """The kernels the split ones replace at decode, on the same buffers: `af_warps`, A'F_B on `words` (a warp a tile over
         all of K) where `af` runs words_k, `stats_a_warps`, stats_s5 (a warp a row) where `stats_a` runs stats_r, and
-        `gemm_pearlc_full`, the chain over all m rows where `gemm_pearlc` runs on the real ones (LIVE), and `gemm_pearlc_4st`,
-        the chain on the 4-deep pipeline (gemm_pearlc4_d) where `gemm_pearlc` runs the 8-deep one (DEEP)."""
+        `gemm_pearlc_full`, the chain over all m rows where `gemm_pearlc` runs on the real ones (LIVE), and `gemm_pearlc_bk64`,
+        the chain on 64-deep stages (gemm_pearlc4_d) where `gemm_pearlc` runs the 128-deep ones (DEEP)."""
         d, b, m, k, out = self.dev, self.b, self.m, self.k, {}
         if self.g and SPLIT:
             out["af_warps"] = lambda: d.launch("words", m // 16, 128, p=(b["at"], b["fbT32"], b["af"]), i=(m, 32, k))
@@ -647,7 +648,7 @@ class Pipeline:
         if LIVE and self.m_real < m:
             out["gemm_pearlc_full"] = lambda: self.gemm(chain, "at", "bt", m, self.n, out=("c", "u", "y"), live=m, **self.peel())
         if DEEP:
-            out["gemm_pearlc_4st"] = lambda: self.gemm("gemm_pearlc4_d" + self.suffix, "at", "bt", m, self.n,
+            out["gemm_pearlc_bk64"] = lambda: self.gemm("gemm_pearlc4_d" + self.suffix, "at", "bt", m, self.n,
                                                        out=("c", "u", "y"), **self.peel())
         return out
 
@@ -782,11 +783,11 @@ ALIASES = {"c2": "c"}
 STATS_A = ("alpha_a", "beta_a", "ia_a", "aux_a")
 #: the 64 x 64 pipeline's: the chain, A'F_B on words_k, and the kernels the split ones replace (`Pipeline.replaced`)
 SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)), ("af_warps", ("af",)), ("stats_a_warps", STATS_A),
-                                  ("gemm_pearlc_4st", ("c", "u", "y")))
+                                  ("gemm_pearlc_bk64", ("c", "u", "y")))
 #: each split kernel's step at decode, the step it replaces (`Pipeline.replaced`) and their outputs, held word for word (the
 #: chain's one output at a time: c2, where the replaced step's land, holds one m x n FP32 product)
 SPLITS = (("af", "af_warps", ("af",)), ("stats_a", "stats_a_warps", STATS_A),
-          *(("gemm_pearlc", alt, (o,)) for alt in ("gemm_pearlc_full", "gemm_pearlc_4st") for o in ("c", "u", "y")))
+          *(("gemm_pearlc", alt, (o,)) for alt in ("gemm_pearlc_full", "gemm_pearlc_bk64") for o in ("c", "u", "y")))
 
 
 def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None = None) -> dict:

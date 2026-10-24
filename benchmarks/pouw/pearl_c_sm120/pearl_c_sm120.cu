@@ -38,6 +38,15 @@ DEV uint32_t mix32(uint32_t x) {
 // ---------------------------------------------------------------- cp.async, ldmatrix, mma.sync
 DEV uint32_t sa(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
 DEV void cp16(void* s, const void* g) { asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" ::"r"(sa(s)), "l"(g) : "memory"); }
+// cp16 with L2 fetching PF (128 or 256) bytes around the line from DRAM; 0 is cp16
+template <int PF> DEV void cp16p(void* s, const void* g) {
+  if constexpr (PF == 128)
+    asm volatile("cp.async.cg.shared.global.L2::128B [%0], [%1], 16;" ::"r"(sa(s)), "l"(g) : "memory");
+  else if constexpr (PF == 256)
+    asm volatile("cp.async.cg.shared.global.L2::256B [%0], [%1], 16;" ::"r"(sa(s)), "l"(g) : "memory");
+  else
+    cp16(s, g);
+}
 DEV void cp_commit() { asm volatile("cp.async.commit_group;" ::: "memory"); }
 template <int N> DEV void cp_wait() { asm volatile("cp.async.wait_group %0;" ::"n"(N) : "memory"); }
 DEV void ldsm4(uint32_t* r, uint32_t addr) {
@@ -64,11 +73,12 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 // ml_body's, below): 64 x 64 (warp tile 16 x 32) for decode's few rows, where 128 x 128 tiles leave most SMs idle, or 128 x 32
 // (16 x 32) for the 32-column words
 // (A'F_B, B~F_A, G) at M a multiple of 128; persistent over tiles in groups of `i[3]` tile
-// rows; an S-deep cp.async pipeline of 64-byte stages (two atoms each): 4, or STAGES_D for the served decode chain
-// (gemm_pearlc_d): serving streams B from DRAM, not L2, and at n = 4096 and 6144 its 64 to 96 CTAs each wait on their own
-// loads, so each keeps 7 stages in flight (gemm_pearlc4_d is the 4-deep one it replaced).  G is the promotion period: every 32 G products (G / 2
-// stages) from +0, promoted by one FADD into the FP32 total; G = 0 is one accumulator over all of K (no promotion).  Every
-// output's chain is the same at either tile and any depth.  Rows from i[4] on (0: none) are filler, which nothing reads: a
+// rows; a 4-deep cp.async pipeline of RB-byte stages (RB / 32 atoms each): 64 bytes, or for the served decode chain
+// (gemm_pearlc_d) BK_D = 128 with L2 fetching PF_D = 256 bytes a request: serving streams B from DRAM, not L2, and the
+// wider stages halve the loads and barriers per byte while the hint widens each DRAM read (gemm_pearlc4_d is the 64-byte
+// one it replaced).  G is the promotion period: every 32 G products (32 G / RB stages) from +0, promoted by one FADD into
+// the FP32 total; G = 0 is one accumulator over all of K (no promotion).  Every output's chain is the same at either tile,
+// any depth, any stage width and either hint.  Rows from i[4] on (0: none) are filler, which nothing reads: a
 // warp whose rows are all filler (decode's padding to 64, past m16) skips its products and stores, and no stage or peel
 // loads its rows of A or P_A, so the tile does only the real rows' work; those rows of C~, U and y are left as they were.
 // Modes:
@@ -77,20 +87,22 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 //   PEARLC  stores C~, then four k16 BF16 mma of P_A P_B^T into the total, stores U and y = bf16(U ia ib)
 //   PEARLC_S  PEARLC without storing C~ or U (only y): the call without hashing
 enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S };
-constexpr int BK = 64, STAGES = 4, STAGES_D = 8, NT = 256, PEEL_ROW = 128;
-template <int MODE, int TM, int BN, int S = STAGES> __host__ __device__ constexpr int gemm_smem() {
-  return S * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0);
+constexpr int BK = 64, BK_D = 128, PF_D = 256, STAGES = 4, NT = 256, PEEL_ROW = 128;
+template <int MODE, int TM, int BN, int RB = BK> __host__ __device__ constexpr int gemm_smem() {
+  return STAGES * (TM + BN) * RB + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0);
 }
 
 DEV uint32_t swz64(int r, int c) { return r * 64 + ((c ^ ((r >> 1) & 3)) << 4); }
 DEV uint32_t swz128(int r, int c) { return r * 128 + ((c ^ (r & 7)) << 4); }
+template <int RB> DEV uint32_t swz(int r, int c) { return RB == 64 ? swz64(r, c) : swz128(r, c); }
 
-// the first `rows` (at most ROWS) rows of 64 bytes at g (row stride ld) into s
-template <int ROWS> DEV void stage_rows(uint8_t* s, const uint8_t* g, int ld, int tid, int rows = ROWS) {
+// the first `rows` (at most ROWS) rows of RB (64 or 128) bytes at g (row stride ld) into s, through cp16p<PF>
+template <int ROWS, int RB, int PF> DEV void stage_rows(uint8_t* s, const uint8_t* g, int ld, int tid, int rows = ROWS) {
+  constexpr int CH = RB / 16;
 #pragma unroll
-  for (int j = 0; j < (ROWS * 4 + NT - 1) / NT; j++) {
-    const int idx = tid + j * NT, r = idx >> 2, c = idx & 3;
-    if ((ROWS * 4 % NT == 0 || idx < ROWS * 4) && r < rows) cp16(s + swz64(r, c), g + (size_t)r * ld + 16 * c);
+  for (int j = 0; j < (ROWS * CH + NT - 1) / NT; j++) {
+    const int idx = tid + j * NT, r = idx >> (RB == 64 ? 2 : 3), c = idx & (CH - 1);
+    if ((ROWS * CH % NT == 0 || idx < ROWS * CH) && r < rows) cp16p<PF>(s + swz<RB>(r, c), g + (size_t)r * ld + 16 * c);
   }
 }
 // the first `rows` (at most ROWS) peel rows of 128 bytes at g into s
@@ -115,13 +127,13 @@ DEV void store_y(uint16_t* p, float a, float b, float sr, float sc0, float sc1) 
   *reinterpret_cast<uint32_t*>(p) = f2bf(__fmul_rn(__fmul_rn(a, sr), sc0)) | (uint32_t)f2bf(__fmul_rn(__fmul_rn(b, sr), sc1)) << 16;
 }
 
-template <int MODE, int TM, int BN, int G, int S = STAGES> DEV void gemm_body(const Args& a) {
-  constexpr int WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = TM / WARPS_M, MI = WM / 16, NI = WN / 8;
+template <int MODE, int TM, int BN, int G, int RB = BK, int PF = 0> DEV void gemm_body(const Args& a) {
+  constexpr int S = STAGES, WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = TM / WARPS_M, MI = WM / 16, NI = WN / 8;
   constexpr bool PEEL = MODE == M_PEARLC || MODE == M_PEARLC_S;
   constexpr bool STORE_CU = MODE == M_PEARLC || MODE == M_CT, PROMOTE = G > 0;
-  constexpr int PERIOD = PROMOTE ? G / 2 : 1;
-  static_assert(G == 0 || G % 2 == 0, "a promotion window is whole 64-byte stages");
-  constexpr uint32_t A_ST = TM * BK, B_ST = BN * BK;
+  constexpr int PERIOD = PROMOTE ? 32 * G / RB : 1;
+  static_assert(G == 0 || 32 * G % RB == 0, "a promotion window is whole stages");
+  constexpr uint32_t A_ST = TM * RB, B_ST = BN * RB;
   static_assert(WARPS_M * WARPS_N == 8 && MI >= 1 && NI % 2 == 0, "8 warps of 16k x 32 columns");
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t* sA = smem;
@@ -129,7 +141,7 @@ template <int MODE, int TM, int BN, int G, int S = STAGES> DEV void gemm_body(co
   uint8_t* sPA = sB + S * B_ST;
   uint8_t* sPB = sPA + TM * PEEL_ROW;
   const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3], live = a.i[4] ? a.i[4] : M;
-  const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KB = K / BK;
+  const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KB = K / RB;
   const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32, wm = warp / WARPS_N, wn = warp % WARPS_N;
   const uint8_t* A = reinterpret_cast<const uint8_t*>(a.p[0]);
   const uint8_t* B = reinterpret_cast<const uint8_t*>(a.p[1]);
@@ -158,8 +170,8 @@ template <int MODE, int TM, int BN, int G, int S = STAGES> DEV void gemm_body(co
 #pragma unroll
     for (int s = 0; s < S - 1; s++) {
       if (s < KB) {
-        stage_rows<TM>(sA + s * A_ST, ga + s * BK, K, tid, rows);
-        stage_rows<BN>(sB + s * B_ST, gb + s * BK, K, tid);
+        stage_rows<TM, RB, PF>(sA + s * A_ST, ga + s * RB, K, tid, rows);
+        stage_rows<BN, RB, PF>(sB + s * B_ST, gb + s * RB, K, tid);
       }
       cp_commit();
     }
@@ -177,8 +189,8 @@ template <int MODE, int TM, int BN, int G, int S = STAGES> DEV void gemm_body(co
       {
         const int nk = kb + S - 1, s = nk % S;
         if (nk < KB) {
-          stage_rows<TM>(sA + s * A_ST, ga + (size_t)nk * BK, K, tid, rows);
-          stage_rows<BN>(sB + s * B_ST, gb + (size_t)nk * BK, K, tid);
+          stage_rows<TM, RB, PF>(sA + s * A_ST, ga + (size_t)nk * RB, K, tid, rows);
+          stage_rows<BN, RB, PF>(sB + s * B_ST, gb + (size_t)nk * RB, K, tid);
         }
         cp_commit();
       }
@@ -193,14 +205,14 @@ template <int MODE, int TM, int BN, int G, int S = STAGES> DEV void gemm_body(co
       const uint32_t a0 = sa(sA + (kb % S) * A_ST), b0 = sa(sB + (kb % S) * B_ST);
       if (busy) {
 #pragma unroll
-        for (int kk = 0; kk < 2; kk++) {
+        for (int kk = 0; kk < RB / 32; kk++) {
           uint32_t fa[MI][4], fb[NI][2];
 #pragma unroll
-          for (int mi = 0; mi < MI; mi++) ldsm4(fa[mi], a0 + swz64(a_row + 16 * mi, 2 * kk + a_half));
+          for (int mi = 0; mi < MI; mi++) ldsm4(fa[mi], a0 + swz<RB>(a_row + 16 * mi, 2 * kk + a_half));
 #pragma unroll
           for (int nj = 0; nj < NI / 2; nj++) {
             uint32_t r[4];
-            ldsm4(r, b0 + swz64(b_row + 16 * nj, 2 * kk + b_half));
+            ldsm4(r, b0 + swz<RB>(b_row + 16 * nj, 2 * kk + b_half));
             fb[2 * nj][0] = r[0]; fb[2 * nj][1] = r[1]; fb[2 * nj + 1][0] = r[2]; fb[2 * nj + 1][1] = r[3];
           }
 #pragma unroll
@@ -397,10 +409,10 @@ template <int MODE, int G> DEV void ml_body(const Args& a) {
 #define ML_GEMM(NAME, MODE, G)                                                                                \
   extern "C" __global__ void __launch_bounds__(ML_NT, 1) NAME(const Args a) { ml_body<MODE, G>(a); } \
   extern "C" __global__ void NAME##_smem(int* out) { *out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM; }
-#define GEMM_S(NAME, MODE, TM, BN, G, S)                                                                               \
-  extern "C" __global__ void __launch_bounds__(NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G, S>(a); } \
-  extern "C" __global__ void NAME##_smem(int* out) { *out = gemm_smem<MODE, TM, BN, S>(); }
-#define GEMM(NAME, MODE, TM, BN, G) GEMM_S(NAME, MODE, TM, BN, G, STAGES)
+#define GEMM_X(NAME, MODE, TM, BN, G, RB, PF)                                                                           \
+  extern "C" __global__ void __launch_bounds__(NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G, RB, PF>(a); }     \
+  extern "C" __global__ void NAME##_smem(int* out) { *out = gemm_smem<MODE, TM, BN, RB>(); }
+#define GEMM(NAME, MODE, TM, BN, G) GEMM_X(NAME, MODE, TM, BN, G, BK, 0)
 ML_GEMM(gemm_plain, M_PLAIN, 4)
 ML_GEMM(gemm_fast, M_PLAIN, 0)
 ML_GEMM(gemm_ct, M_CT, 4)
@@ -410,10 +422,10 @@ ML_GEMM(gemm_pearlc_u, M_PEARLC, 0)
 ML_GEMM(gemm_pearlc_s, M_PEARLC_S, 4)
 ML_GEMM(gemm_pearlc_s_u, M_PEARLC_S, 0)
 GEMM(gemm_ct_d, M_CT, 64, 64, 4)
-GEMM_S(gemm_pearlc_d, M_PEARLC, 64, 64, 4, STAGES_D)
+GEMM_X(gemm_pearlc_d, M_PEARLC, 64, 64, 4, BK_D, PF_D)
 GEMM(gemm_pearlc4_d, M_PEARLC, 64, 64, 4)
 GEMM(gemm_ct_d_u, M_CT, 64, 64, 0)
-GEMM_S(gemm_pearlc_d_u, M_PEARLC, 64, 64, 0, STAGES_D)
+GEMM_X(gemm_pearlc_d_u, M_PEARLC, 64, 64, 0, BK_D, PF_D)
 GEMM(gemm_pearlc4_d_u, M_PEARLC, 64, 64, 0)
 GEMM(gemm_words, M_CT, 128, 32, 4)
 GEMM(gemm_words_u, M_CT, 128, 32, 0)
