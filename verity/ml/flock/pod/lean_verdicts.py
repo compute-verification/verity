@@ -6,15 +6,15 @@ kind): V* accepts only when every part does, so a forgery is refused when one of
 refusal, with a VERDICT and none accepting, and every other part of it has a VERDICT (a part the forgery leaves as the
 honest one is accepted). ``flock-verify statement``'s line is its part's VERDICT: accepted when Lean derived the units from
 the verifier's program (``partition_check``'s ``units`` ``derived``), refused as ``setup: …``. A part that never ran has
-neither file and fails, except a forgery's part the firewall held back: its prover's ``LIVE`` lines (``PART.live``, the
-session verdicts oprove kept) stop at ``FIREWALL-REFUSED: …``, so no session reached Lean, and the part counts as
-refused by the firewall. A forgery's part whose session Lean found missing its files (``session files: …``, as when the
-prover produced no proof for it) was never checked by the verifier: it is "no proof produced (not exercised)", never a
-refusal, and a forgery no part of which was refused but one was not exercised fails the step as not exercised. A forged
-inner session (``forged-inner-W-PART``, 85's NEG_INNER) is read only by the parts ``COVERS`` names for it: without one of
-them among the parts run, nothing could refuse it, and it is "not covered by the parts run", which fails the step like a
-forgery no part refused. One line per part, then the count; the exit is 0 only when there is a part, every honest part
-passes and every forgery is refused.
+neither file and fails. A forgery's part the verifier never checked is "no proof produced (not exercised)", never a
+refusal: one whose session Lean found missing its files (``session files: …``), and one the firewall held back (its
+prover's ``LIVE`` lines, ``PART.live``, the session verdicts oprove kept, stop at ``FIREWALL-REFUSED: …``, and no session
+reached Lean), since the firewall is the prover's own check, which a dishonest prover doesn't run. A forgery no part of
+which Lean refused, one of them not exercised, fails the step as not exercised. A forged inner session
+(``forged-inner-W-PART``, 85's NEG_INNER) is read only by the parts ``COVERS`` names for it: without one of them among the
+parts run, nothing could refuse it, and it is "not covered by the parts run", which fails the step like a forgery no part
+refused. One line per part, then the count; the exit is 0 only when there is a part, every honest part passes and every
+forgery is refused.
 
     python3 verity/ml/flock/pod/lean_verdicts.py DIR PART...
     python3 verity/ml/flock/pod/lean_verdicts.py --cover KIND PART...   # exit 0 when a PART covers the forgery KIND
@@ -89,15 +89,15 @@ def no_proof(v: dict) -> bool:
 
 
 def check(d: Path, part: str, kind: str | None = None) -> tuple[bool, bool, bool, str]:
-    """``part``'s (passes, refused, not exercised, line); a forgery's part (``kind``) passes when it has a VERDICT, and is
-    refused when it exited 1 with none accepting and Lean checked a session of it, or when no session reached Lean because
-    the firewall refused it. A part whose every session is missing its files is not exercised, never refused."""
+    """``part``'s (passes, refused, not exercised, line); a forgery's part (``kind``) passes when it has a VERDICT or the
+    firewall held it back, and is refused when it exited 1 with none accepting and Lean checked a session of it. A part
+    whose every session is missing its files, or that the firewall held back, is not exercised, never refused."""
     rc, vs = exit_status(d / f"time-{part}.txt"), verdicts(d / f"{part}.log")
     fw = None if vs or rc is not None else firewall_refusal(d / f"{part}.live")
     if fw:
         line = (f"lean {part}{f' (forgery {kind}: one of its parts must be refused)' if kind else ''}: refused by the "
-                f"firewall before Lean, why {fw[:300]!r}{'' if kind else '  <- FAILS'}")
-        return bool(kind), True, False, line
+                f"firewall before Lean, no proof produced (not exercised), why {fw[:300]!r}{'' if kind else '  <- FAILS'}")
+        return bool(kind), False, True, line
     accepted = [v.get("accepted") is True for v in vs]
     unexercised = bool(vs) and all(no_proof(v) for v in vs)
     refused = bool(vs) and rc == REFUSED and not any(accepted) and not unexercised

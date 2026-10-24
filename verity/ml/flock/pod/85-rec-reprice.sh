@@ -29,7 +29,9 @@
 #                beside the statements vstage staged, whose sessions stay valid (then oprove LEVELS=cap,cap-L1,..)
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
 #                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
-#                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
+#                FC_ZK_SELF_CHECK=skip, in each of MODES and last in dev, whose session Lean reads: a firewall holds a
+#                forgery back, which leaves the verifier nothing to check), and upstream's replay --zk of the last
+#                (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
 #                firewall's negative controls on that statement
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
@@ -39,7 +41,8 @@
 #                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
-#                each forgery refused by one of its parts (by Lean, or by the firewall before any session reached Lean),
+#                each forgery refused by Lean at one of its parts (a firewall's refusal, or a session with no proof, is
+#                "not exercised" and fails),
 #                and the inner statement's units were derived from the program (lean_verdicts.py; the inner's session is
 #                not checked)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
@@ -652,11 +655,13 @@ oprove)
   W0=$WARM R0=$RUNS
   for C in $(cd $V && find . -name inst.bin -printf '%h\n' | sed 's:^\./::' | sort -V); do
     l=${C//\//-}; want $l || continue
-    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
+    # a forgery's last mode is dev, so that Lean checks a proof of it: a firewall holds a forgery back
+    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip LM="$(printf '%s\n' $MODES | grep -vx dev | tr '\n' ' ')dev" ;;
+      *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop LM=$MODES ;; esac; NS=$((WARM + RUNS))
     hello_at $V/$C
-    for mode in $MODES; do
+    for mode in $LM; do
       case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; *) echo "MODES: dev host firewall"; exit 1 ;; esac
-      n=$l; [ "$MODES" = dev ] || n=$l-$mode
+      n=$l; [ "$LM" = dev ] || n=$l-$mode
       LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk
     done
     PENV=
