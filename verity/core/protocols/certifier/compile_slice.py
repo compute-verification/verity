@@ -70,14 +70,14 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array
 from verity.ml.commitments.gates.sha512 import IV, compress_gadget, pad_tail
-from verity.core.protocols.certifier import arith_encode as AE, replay_chain as RC, replay_step as RS
+from verity.core.protocols.certifier import arith_encode as AE, cache_step as CST, replay_chain as RC, replay_step as RS
 from verity.core.protocols.certifier.head_check import BIT, _part, _words as _sha_words
 
-STATICS = RS.STATICS + ("Q", "D", "P", "K", "SEG")
+STATICS = RS.STATICS + ("Q", "D", "P", "K", "SEG", "CN", "CTW", "CU")
 CW = 16
 SALT = 32
 EK, EC, ENW = AE.K_MAX, 3, 24
-FLAGS = ("load", "steps", "code", "charge", "rows")
+FLAGS = ("load", "steps", "code", "charge", "rows", "cache")
 ACCEPT = (1 << len(FLAGS)) - 1
 ROWS = ("pub", "adv", "cert", "wit")
 ROW_FIELDS = ("row_valid", "row_id", "row_kind", "row_start", "row_n")
@@ -109,10 +109,11 @@ def fields(S) -> dict[str, list[tuple[str, int, int]]]:
     Z = RC.widths(Sc)
     return {"pub": [("c", 1, CW), ("digest", 64, 8)],
             "adv": [("dec", S.D, 1), ("count", 1, Z.DW), ("steps", 1, Z.PW)],
-            "cert": RC.arrival_fields(Sc),
+            "cert": RC.arrival_fields(Sc) + [("tok", S.K * S.CU * S.B, S.CTW)],
             "wit": [("state", S.P + 1, RC.width(Sc)), ("window", 1, RC.window_width(Sc)),
-                    ("arr", S.P, RC._bits_of(RC.front_fields(Sc))), ("bits", S.P, S.A), ("seg", 1, S.SEG),
-                    ("salt", SALT, 8)]}
+                    ("arr", S.P, RC._bits_of(RC.front_fields(Sc))), ("bits", S.P, S.A),
+                    ("hit", S.P * (S.W + S.A), RS.widths(step_statics(S)).HW), ("cache", S.P + 1, CST.cache_width(S)),
+                    ("seg", 1, S.SEG), ("salt", SALT, 8)]}
 
 
 def row_bits(S) -> dict[str, int]:
@@ -143,8 +144,14 @@ def _build(C, S, pub, adv, cert, wit):
     p, a, c, w = (RC._split(x, F[r]) for x, r in zip((pub, adv, cert, wit), ROWS))
     states, win = w["state"], w["window"][0]
     load_ok = RC._build_load(C, Sc, _consts(RC.encode(RC.empty(Sc), Sc)), _consts(RC.encode_window(RC.Window(), Sc)),
-                             RC._flat(c, F["cert"]), [e[0] for e in a["dec"]], a["count"][0], a["steps"][0], states[0],
-                             win)[0]
+                             RC._flat(c, RC.arrival_fields(Sc)), [e[0] for e in a["dec"]], a["count"][0], a["steps"][0],
+                             states[0], win)[0]
+    tok, CA = c["tok"], S.W + S.A
+    cert = {"valid": [e[0] for e in c["a_valid"]], "id": c["a_id"],
+            "tok": [[[x for t in tok[(k * S.CU + j) * S.B:(k * S.CU + j + 1) * S.B] for x in t] for j in range(S.CU)]
+                    for k in range(S.K)]}
+    caches = w["cache"]
+    cache_ok = [RC._zero(C, caches[0])]
 
     fresh = AE.fresh()
     coder = [const_bits(fresh.low, 32), const_bits(fresh.high, 32), [ZERO], [ZERO], [ZERO], [ONE]]
@@ -156,6 +163,7 @@ def _build(C, S, pub, adv, cert, wit):
     for u in range(S.P):
         cur, nxt, arr, bits = states[u], states[u + 1], w["arr"][u], w["bits"][u]
         r, fa = RC._split(cur, RC.row_fields(Sc)), RC._split(arr, RC.front_fields(Sc))
+        hit = w["hit"][u * CA:(u + 1) * CA]
         elems = []
         for name, n, wd in RS._in_fields(St):
             if name in r:
@@ -164,6 +172,8 @@ def _build(C, S, pub, adv, cert, wit):
                 elems += fa[name]
             elif name == "bits":
                 elems += [[b] for b in bits]
+            elif name == "hit":
+                elems += hit
             else:
                 elems += [[ZERO] * wd for _ in range(n)]
         out = RS._split(RS._out_fields(St), RS._build(C, St, *elems))
@@ -176,6 +186,8 @@ def _build(C, S, pub, adv, cert, wit):
 
         quiet = C.AND(or_reduce(C, [e[0] for e in r["run_valid"]]).inv(), r["wait_valid"][0][0].inv())
         forced = C.AND(quiet, fa["arr_valid"][0][0])
+        c_ok, c_next = CST.build_scan_step(C, S, caches[u], r, fa, forced, out, hit, cert)
+        cache_ok += [C.AND(act, c_ok.inv()).inv(), RC._eq(C, mux(C, act, c_next, caches[u]), caches[u + 1])]
         for k in range(S.A):
             en = C.AND(act, RC._lt(C, const_bits(k, ZS.AC), used))
             ctx = [C.AND(x, forced.inv()) for x in pc] if k == 0 else [ZERO, ZERO]
@@ -208,7 +220,7 @@ def _build(C, S, pub, adv, cert, wit):
     digest = [x for k in range(8) for i in range(8) for x in cv[k][8 * (7 - i):8 * (8 - i)]]
     rows_ok = RC._eq(C, digest, [x for e in p["digest"] for x in e])
 
-    flags = [load_ok, and_reduce(C, steps_ok), and_reduce(C, code_ok), charge_ok, rows_ok]
+    flags = [load_ok, and_reduce(C, steps_ok), and_reduce(C, code_ok), charge_ok, rows_ok, and_reduce(C, cache_ok)]
     return [flags + [ZERO] * (16 - len(flags))]
 
 
@@ -226,8 +238,9 @@ CompileSlice = _part(
 CompileSlice.build = _build  # type: ignore[attr-defined]
 
 
-def statics(R: int, W: int, A: int, engine: dict, IW: int, Q: int, D: int, P: int, K: int, SEG: int) -> dict:
-    return {**RS.statics(R, W, A, engine, IW), "Q": Q, "D": D, "P": P, "K": K, "SEG": SEG}
+def statics(R: int, W: int, A: int, engine: dict, IW: int, Q: int, D: int, P: int, K: int, SEG: int, CN: int, CTW: int,
+            CU: int) -> dict:
+    return {**RS.statics(R, W, A, engine, IW), "Q": Q, "D": D, "P": P, "K": K, "SEG": SEG, "CN": CN, "CTW": CTW, "CU": CU}
 
 
 def unit(**st):
@@ -238,17 +251,20 @@ def unit(**st):
 
 @dataclass(frozen=True)
 class Slice:
-    """One window's inputs: its certified arrivals (id, P, O) in order, its decisions and its executed step count."""
+    """One window's inputs: its certified arrivals (id, P, O) in order, its decisions, its executed step count and
+    each arrival's certified tokens (its prompt, then its outputs)."""
 
     arrivals: tuple[RC.Arrival, ...]
     decisions: tuple[int, ...]
     steps: int
+    tokens: tuple[tuple[int, ...], ...] = ()
 
 
 @dataclass(frozen=True)
 class Case:
     """A unit's rows (bits each, `fields`' layouts) and the verdict `check` gives them (None where it leaves a flag
-    open), with the scan's rows (per step, `RS.Out.rows`), its symbols (bit, f0, f1) and the coded length."""
+    open), with the scan's rows (per step, `RS.Out.rows`), its symbols (bit, f0, f1), the coded length and the hits
+    each step's candidates take."""
 
     rows: dict
     verdict: int | None
@@ -256,6 +272,7 @@ class Case:
     steps: tuple
     symbols: tuple
     length: int
+    hits: tuple = ()
 
 
 def codeword(symbols: Sequence[tuple[int, int, int]]) -> list[int]:
@@ -345,40 +362,72 @@ def _forced(cur: RC.Row, arr: Sequence[RC.Arrival]) -> bool:
 
 
 def _inputs(S, arr: Sequence[RC.Arrival], bits: Sequence[int], hit: Sequence[int] | None = None) -> RS.Inputs:
-    """ReplayStep_v1's inputs at a step: the arrivals and bits, the cache counts 0 (the stand-in) unless `hit`."""
+    """ReplayStep_v1's inputs at a step: the arrivals, bits and hits (0 unless `hit`), the evictable and returned
+    counts 0 (the stand-in)."""
     zero = (0,) * (S.W + S.A)
     return RS.Inputs(tuple(RS.Req(*a) for a in arr), tuple(bits), tuple(hit) if hit is not None else zero, zero,
                      (0,) * S.R)
 
 
+def _fabricated(S, cache: CST.Cache, entries: Sequence[CST.Entry]) -> CST.Cache:
+    if len(cache.table) + len(entries) > S.CN:
+        raise ValueError("no room in the table for the made-up entries")
+    return replace(cache, table=cache.table + tuple(entries))
+
+
 def scan(S, sl: Slice, window: Sequence[int] | None = None, cert: Sequence[RC.Arrival] | None = None, *,
-         hits: dict[int, Sequence[int]] | None = None,
-         consume: dict[int, tuple[int, int]] | None = None) -> SimpleNamespace:
+         hits: dict[int, Sequence[int]] | None = None, consume: dict[int, tuple[int, int]] | None = None,
+         tokens: Sequence[Sequence[int]] | None = None,
+         fabricate: dict[int, Sequence[CST.Entry]] | None = None) -> SimpleNamespace:
     """The window as a prover runs it from `sl`: ReplayLoad's rows, then each step by `replay_step.reference` on the state
-    and the window row's arrivals and bits at the heads, the asks' symbols under the plain contexts. The prover's
-    choices: `window`, the decisions it puts in W_1 (default the advice's); `cert`, the arrivals it puts in ``cert``
-    (default `sl`'s); `hits`, step u -> the prefix hit its step u takes (`replay_step.Inputs.hit`; default none);
-    `consume`, step u -> the (taken, used) it moves the heads by at step u (default the step's own). Its next row is
-    the step's next state with the heads moved by those, and its symbols are the first ``used`` bits'."""
+    and the window row's arrivals and bits at the heads, the asks' symbols under the plain contexts, and the cache
+    through the step by `cache_step.scan_step` from the empty table, each candidate taking the hit it derives (its
+    longest cached prefix, at the table it is looked up at: run to a fixed point, at most one round a candidate). The
+    prover's choices: `window`, the decisions it puts in W_1 (default the advice's); `cert`, the arrivals it puts in
+    ``cert`` (default `sl`'s); `tokens`, their tokens (default `sl`'s); `hits`, step u -> the prefix hits its step u
+    takes in place of the derived ones (`replay_step.Inputs.hit`); `consume`, step u -> the (taken, used) it moves the
+    heads by at step u (default the step's own); `fabricate`, u -> entries it adds to the table step u reads (0: the
+    session's first, which is empty). Its next row is the step's next state with the heads moved by those, and its
+    symbols are the first ``used`` bits'."""
     Sc, St = chain(S), step_statics(S)
     arrivals = tuple(map(tuple, cert if cert is not None else sl.arrivals))
+    toks = {a[0]: tuple(t) for a, t in zip(arrivals, tokens if tokens is not None else sl.tokens)}
     loaded = RC.load(Sc, RC.empty(Sc), RC.Window(), arrivals, sl.decisions, sl.steps)
     if loaded is None:
         raise ValueError("the load refuses the slice")
     cur, win = loaded
     if window is not None:
         win = replace(win, decisions=tuple(window))
-    states, fronts, steps, symbols = [cur], [], [], []
+    fabricate = fabricate or {}
+    cache = _fabricated(S, CST.Cache(), fabricate.get(0, ()))
+    states, fronts, steps, symbols, caches, hit_rows = [cur], [], [], [], [cache], []
     pc, n = 0, ((0, 0),) * EC
     for u in range(S.P):
         arr, bits = RC.front(Sc, win, cur)
         fronts.append((arr, bits))
+        h = (0,) * (S.W + S.A)
         if not cur.steps:
             states.append(cur)
+            hit_rows.append(h)
+            cache = _fabricated(S, cache, fabricate.get(u + 1, ()))
+            caches.append(cache)
             continue
-        out = RS.reference(St, _state(cur), _inputs(S, arr, bits, (hits or {}).get(u)))
-        if not out.ok:
-            raise ValueError("the step refuses: the slice's class can't take it")
+        for _round in range(S.W + S.A + 2):
+            h = tuple((hits or {}).get(u, h))
+            out = RS.reference(St, _state(cur), _inputs(S, arr, bits, h))
+            if not out.ok:
+                raise ValueError("the step refuses: the slice's class can't take it")
+            got = CST.scan_step(S, cache, _state(cur), _inputs(S, arr, bits, h), out, toks, derive=True)
+            if got is None:
+                raise ValueError("the cache refuses: the slice's class can't take it")
+            if u in (hits or {}) or got.hits == h:
+                break
+            h = got.hits
+        else:
+            raise ValueError(f"step {u}'s hits don't settle")
+        cache = _fabricated(S, got.cache, fabricate.get(u + 1, ()))
+        caches.append(cache)
+        hit_rows.append(h)
         taken, used = (consume or {}).get(u, (out.taken, out.used))
         stepped = _row(out.state)
         nxt = RC.Row(stepped.running, stepped.waiting, stepped.free, cur.qh + taken, cur.dh + used, cur.steps - 1)
@@ -390,28 +439,44 @@ def scan(S, sl: Slice, window: Sequence[int] | None = None, cert: Sequence[RC.Ar
         steps.append(out.rows)
         states.append(nxt)
         cur = nxt
-    return SimpleNamespace(states=states, window=win, fronts=fronts, steps=steps, symbols=symbols, arrivals=arrivals)
+    return SimpleNamespace(states=states, window=win, fronts=fronts, steps=steps, symbols=symbols, arrivals=arrivals,
+                           tokens=toks, caches=caches, hits=hit_rows)
 
 
 def _int(bits: Sequence[int]) -> int:
     return sum(int(b) << j for j, b in enumerate(bits))
 
 
+def _cert_tokens(S, bits: Sequence[int]) -> dict[int, tuple[int, ...]]:
+    """The ``cert`` row's tokens by request, its valid slots'."""
+    f = RC._split(bits, fields(S)["cert"])
+    n = S.CU * S.B
+    return {_int(f["a_id"][k]): tuple(_int(t) for t in f["tok"][k * n:(k + 1) * n])
+            for k in range(S.K) if f["a_valid"][k][0]}
+
+
 def check(S, rows: dict) -> dict[str, bool | None]:
     """The circuit's flags on a unit's rows (`fields`' layouts), by its pieces' references: ReplayLoad's `load` from the
-    session's empty rows; per active step `replay_step.reference` on the witness state row with the witness arrivals and
-    bits (the cache counts 0) and `advance` with that step's own taken and used, against the next witness row, and an
-    idle step's row kept; the step's asks under the plain contexts (`reference_kt`) through `reference_step` against the
-    witness codeword; `reference_finish`, the count within SEG and c; SHA-512 over the salt and the active steps' rows.
+    session's empty rows; per active step `replay_step.reference` on the witness state row with the witness arrivals,
+    bits and hits (the evictable and returned counts 0) and `advance` with that step's own taken and used, against the
+    next witness row, and an idle step's row kept; the step's asks under the plain contexts (`reference_kt`) through
+    `reference_step` against the witness codeword; `reference_finish`, the count within SEG and c; SHA-512 over the salt
+    and the active steps' rows; the first cache row empty, and per active step `cache_step.scan_step` on the witness
+    cache row with the step's hits and rows and ``cert``'s tokens, against the next cache row (an idle step's kept).
 
-    For well-formed rows (`replay_chain.decode`'s, each field in range); `MalformedRow` otherwise. A flag is None where
-    a step's ReplayStep refuses and the circuit's later outputs are its own: ``steps`` is then False."""
+    For well-formed rows (`replay_chain.decode`'s, each field in range, and `cache_step.decode_cache`'s); `MalformedRow`
+    otherwise. A flag is None where a step's ReplayStep refuses and the circuit's later outputs are its own: ``steps``
+    is then False."""
     Sc, St = chain(S), step_statics(S)
     F = fields(S)
     p, a, w = (RC._split(rows[r], F[r]) for r in ("pub", "adv", "wit"))
     states = [RC.decode(e, Sc) for e in w["state"]]
     win = RC.decode_window(w["window"][0], Sc)
     cert = RC._items(RC._unflatten(rows["cert"], RC.arrival_fields(Sc))[0], "a", ("id", "P", "O"))
+    toks = _cert_tokens(S, rows["cert"])
+    crow = [[int(b) for b in e] for e in w["cache"]]
+    hit = [_int(e) for e in w["hit"]]
+    cache_ok = not any(crow[0])
     count = _int(a["count"][0])
     dec = [e[0] for e in a["dec"]]
     if count > S.D or any(dec[count:]):
@@ -426,13 +491,21 @@ def check(S, rows: dict) -> dict[str, bool | None]:
         bits = [int(b) for b in w["bits"][u]]
         if not cur.steps:
             steps_ok &= nxt == cur
+            cache_ok &= crow[u + 1] == crow[u]
             out_rows.append(None)
             continue
-        out = RS.reference(St, _state(cur), _inputs(S, arr, bits))
+        inp = _inputs(S, arr, bits, hit[u * (S.W + S.A):(u + 1) * (S.W + S.A)])
+        out = RS.reference(St, _state(cur), inp)
         if not out.ok:
-            return {**flags, "steps": False, "code": None, "charge": None, "rows": None}
+            return {**flags, "steps": False, "code": None, "charge": None, "rows": None, "cache": None}
         want = RC.advance(Sc, win, cur, True, _row(out.state), arr, bits, out.taken, out.used)
         steps_ok &= want is not None and want == nxt
+        try:
+            held = CST.decode_cache(S, crow[u], len(cur.running))
+        except ValueError as e:
+            raise RC.MalformedRow(str(e)) from None
+        got = CST.scan_step(S, held, _state(cur), inp, out, toks)
+        cache_ok &= got is not None and CST.encode_cache(S, got.cache) == crow[u + 1]
         forced = _forced(cur, arr)
         for k in range(out.used):
             ok, f0, f1, n = AE.reference_kt(EC, ENW, n, 1, pc if k == 0 and not forced else 0, bits[k])
@@ -445,7 +518,7 @@ def check(S, rows: dict) -> dict[str, bool | None]:
     length = pos + m
     salt = bytes(_int(e) for e in w["salt"])
     flags.update(steps=steps_ok, code=code_ok and bool(ok) and length <= S.SEG, charge=length <= _int(p["c"][0]),
-                 rows=rows_digest(S, out_rows, salt) == bytes(_int(e) for e in p["digest"]))
+                 rows=rows_digest(S, out_rows, salt) == bytes(_int(e) for e in p["digest"]), cache=cache_ok)
     return flags
 
 
@@ -459,14 +532,15 @@ def verdict(flags: dict[str, bool | None]) -> int | None:
 def case(S, sl: Slice, salt: bytes, *, digest: bytes | None = None, charge: int | None = None,
          window: Sequence[int] | None = None, cert: Sequence[RC.Arrival] | None = None,
          hits: dict[int, Sequence[int]] | None = None, consume: dict[int, tuple[int, int]] | None = None,
-         seg: Sequence[int] | None = None) -> Case:
-    """A unit's rows for the prover's run of `sl` (`scan`'s, with `window`, `cert`, `hits` and `consume`) and `check`'s
-    verdict on them. `digest` and `charge` are ``pub``'s (default the run's own: its rows' digest under `salt` and its
-    coded length); `seg` is the codeword it puts in ``wit`` (default its symbols' `codeword`). ``length`` is the
-    codeword's."""
+         seg: Sequence[int] | None = None, tokens: Sequence[Sequence[int]] | None = None,
+         fabricate: dict[int, Sequence[CST.Entry]] | None = None) -> Case:
+    """A unit's rows for the prover's run of `sl` (`scan`'s, with `window`, `cert`, `hits`, `consume`, `tokens` and
+    `fabricate`) and `check`'s verdict on them. `digest` and `charge` are ``pub``'s (default the run's own: its rows'
+    digest under `salt` and its coded length); `seg` is the codeword it puts in ``wit`` (default its symbols'
+    `codeword`). ``length`` is the codeword's."""
     Sc = chain(S)
     Z = RC.widths(Sc)
-    sc = scan(S, sl, window, cert, hits=hits, consume=consume)
+    sc = scan(S, sl, window, cert, hits=hits, consume=consume, tokens=tokens, fabricate=fabricate)
     seg = list(codeword(sc.symbols) if seg is None else seg)
     length = len(seg)
     digest = rows_digest(S, sc.steps, salt) if digest is None else bytes(digest)
@@ -479,15 +553,20 @@ def case(S, sl: Slice, salt: bytes, *, digest: bytes | None = None, charge: int 
                                     "count": [len(sl.decisions)], "steps": [sl.steps]})}
     cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.Window(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
                                   RC.encode(sc.states[0], Sc), RC.encode_window(sc.window, Sc))[2]
+    n = S.CU * S.B
+    held = [tuple(sc.tokens[x[0]])[:n] for x in sc.arrivals] + [()] * (S.K - len(sc.arrivals))
+    cert_bits += [b for t in held for v in list(t) + [0] * (n - len(t)) for b in _bits(v, S.CTW)]
     rows["cert"] = cert_bits + [0] * (width["cert"] - len(cert_bits))
     wit = [b for st in sc.states for b in RC.encode(st, Sc)] + list(RC.encode_window(sc.window, Sc))
     wit += [b for arr, _b in sc.fronts for b in RC.front_bits(Sc, arr)]
     wit += [b for _a, bits in sc.fronts for b in bits]
+    wit += [b for h in sc.hits for v in h for b in _bits(v, RS.widths(step_statics(S)).HW)]
+    wit += [b for c in sc.caches for b in CST.encode_cache(S, c)]
     wit += seg + [0] * (S.SEG - len(seg)) + [b for x in salt for b in _bits(x, 8)]
     rows["wit"] = wit + [0] * (width["wit"] - len(wit))
     assert Z.DW and all(len(rows[r]) == width[r] for r in ROWS)
     flags = check(S, rows)
-    return Case(rows, verdict(flags), flags, tuple(sc.steps), tuple(sc.symbols), length)
+    return Case(rows, verdict(flags), flags, tuple(sc.steps), tuple(sc.symbols), length, tuple(sc.hits))
 
 
 PHASE9 = ("context", "frequency", "hit", "reread", "untaken")
