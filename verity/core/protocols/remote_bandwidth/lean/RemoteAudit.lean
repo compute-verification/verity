@@ -4,6 +4,7 @@ import RemoteAudit.Plan
 import RemoteAudit.Receipts
 import RemoteAudit.Window
 import RemoteAudit.Session
+import RemoteAudit.Shared
 import RemoteAudit.Registry
 import RemoteAudit.Wire
 import RemoteAudit.Unboxed
