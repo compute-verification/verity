@@ -663,7 +663,11 @@ theorem topsPieces_opens {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.W
     refine (readSegs_topPiece fun t ht => ?_).symm
     have hm : j / rs.size * top.size + t < 2 * ((rs.getD (j % rs.size) default).2.1).getD e 0 := by
       rw [← hts]
-      rcases (by omega : j / rs.size = 0 ∨ j / rs.size = 1) with h | h <;> rw [h] <;> omega
+      have h01 : j / rs.size = 0 ∨ j / rs.size = 1 := by
+        rcases Nat.lt_or_ge (j / rs.size) 1 with h | h
+        · exact Or.inl (Nat.lt_one_iff.1 h)
+        · exact Or.inr (Nat.le_antisymm (Nat.lt_succ_iff.1 hrep) h)
+      rcases h01 with h | h <;> rw [h] <;> omega
     obtain ⟨wh, cc, htr, hb⟩ := hbytes _ hm
     rw [hb, topRow_rep h0 h1 hkt hrep (hs0.trans hts.symm) ht htr]
   · have hl := congrArg List.length hR
