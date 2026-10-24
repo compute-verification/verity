@@ -70,7 +70,8 @@ def table(by, rng):
             if full:
                 full_acc = sum(r["acc"] for r in full) / len(full)
                 g = full_acc - base_acc
-                row["frac_full_gain"] = (point - base_acc) / g if g else None
+                row["frac_full_gain"] = (point - base_acc) / g if g > 0 else None
+                row["full_gain_not_positive"] = g <= 0
                 fr = []
                 for b in range(B):
                     gb = accs["full"][b] - accs["base"][b]
@@ -237,7 +238,7 @@ def render(out):
                 accs = ", ".join(f"{a:.3f}" for a in r["acc_per_seed"])
                 a = f"{r['acc']:.3f} [{r['acc_ci'][0]:.3f}, {r['acc_ci'][1]:.3f}]"
                 g = f"{r['gain']:+.3f} [{r['gain_ci'][0]:+.3f}, {r['gain_ci'][1]:+.3f}]" if "gain_ci" in r else ""
-                f = ""
+                f = "n/a (full's gain is not positive)" if r.get("full_gain_not_positive") else ""
                 if r.get("frac_full_gain") is not None:
                     f = f"{r['frac_full_gain']:.2f}"
                     f += f" [{r['frac_ci'][0]:.2f}, {r['frac_ci'][1]:.2f}]" if r.get("frac_ci") else " [unbounded]"
