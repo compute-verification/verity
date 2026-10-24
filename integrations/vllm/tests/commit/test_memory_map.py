@@ -22,7 +22,7 @@ from verity.ml.circuits.census import step_of
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.requirement import from_census
 from verity_vllm.commit import memory_map as MM
-from verity_vllm.predict.build import build_program
+from verity_vllm.program.predict.build import build_program
 
 WIDE = TINY | {"hidden_size": 512, "num_key_value_heads": 4}
 LAYOUT = MM.Layout(block_size=4)

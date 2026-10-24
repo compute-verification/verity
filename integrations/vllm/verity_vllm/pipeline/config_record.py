@@ -55,7 +55,7 @@ INDEX_ABOUT = ("Per row of record: `record`, its config record's art: id (`verit
                "of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose "
                "re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.  A switched row's `aot` names the "
                "comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict compare`) and "
-               "that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.predict.aot`), its pins the "
+               "that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.program.predict.aot`), its pins the "
                "predicted Programs, and its rebuild the trace.")
 
 

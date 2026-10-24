@@ -28,7 +28,7 @@ from verity_vllm.commit import memory_map as MM
 from verity_vllm.pipeline import memory_map as PMM
 from verity_vllm.pipeline.build import _instance_rows
 from verity_vllm.pipeline.tp import rank_replay as RR
-from verity_vllm.predict.build import build_program
+from verity_vllm.program.predict.build import build_program
 
 WIDE = TINY | {"hidden_size": 512, "num_key_value_heads": 4}
 LAYERS = [f"model.layers.{i}.self_attn.attn" for i in range(2)]

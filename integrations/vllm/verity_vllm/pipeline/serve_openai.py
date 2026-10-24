@@ -653,7 +653,7 @@ def build(opts: Options) -> tuple[Any, Any]:
     if parts:
         from verity_vllm.engine import int8_ranks
         int8_ranks.register(parts)
-    from verity_vllm.pipeline.llm import LLM
+    from verity_vllm.llm import LLM
 
     llm = LLM(opts.model, revision=opts.revision, **engine_options(opts))
     if scope is not None:
