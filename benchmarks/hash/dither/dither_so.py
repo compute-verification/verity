@@ -711,7 +711,11 @@ class SoWindow(DO.Window):
             DA.SIDE[0].spill.wait_z(0)
         super().before(m)
         if self.a_live is not None:
-            self.a_live.view(self.L, -1).copy_(self.live.expand(self.L, -1))
+            if self.flags & DO.F_NW_TILES:
+                # `after` leaves this step's rows past m as they were, so every row is hashed
+                self.a_live.fill_(1)
+            else:
+                self.a_live.view(self.L, -1).copy_(self.live.expand(self.L, -1))
         if self.rs:
             self.rs_ev["b"][self.s % RS_EV].record()
         self.m_of[self.s] = self.m_last = m
