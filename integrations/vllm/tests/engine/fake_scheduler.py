@@ -6,7 +6,9 @@ then waiting ones in arrival order, within a token budget and a cap on running r
 chunked.  A request emits one token at the step that completes its prompt and at every decode, and finishes at its EOS (the
 scripted output reaches `eos`) or at `max_tokens`.  `preempt_at` = {step: request} preempts a running request at that schedule:
 its computed tokens are dropped and it waits again, resumed from position 0.  The model runner's order is Model Runner V2's
-`sort_batch_req_ids` (decodes first, then by chunk length, stably).
+`sort_batch_req_ids` (decodes first, then by chunk length, stably).  `prefix_block` = B turns prefix caching on: a request
+admitted (first, or resumed) starts at the longest whole-block prefix of its tokens that some request, itself included, has
+computed, short of its last token.
 """
 from __future__ import annotations
 
@@ -45,7 +47,8 @@ def runner_order(nst: dict[str, int]) -> list[str]:
 
 
 class FakeScheduler:
-    def __init__(self, budget: int = 16, max_seqs: int = 4, preempt_at: dict[int, str] | None = None) -> None:
+    def __init__(self, budget: int = 16, max_seqs: int = 4, preempt_at: dict[int, str] | None = None,
+                 prefix_block: int | None = None) -> None:
         self.requests: dict[str, FakeRequest] = {}
         self.waiting: list[str] = []
         self.running: list[str] = []
@@ -54,7 +57,9 @@ class FakeScheduler:
         self.step = 0
         self.scheduler_config = SimpleNamespace(max_num_batched_tokens=budget, max_num_seqs=max_seqs, enable_chunked_prefill=True,
                                                 policy="fcfs", async_scheduling=False)
-        self.cache_config = SimpleNamespace(block_size=16, enable_prefix_caching=False)
+        self.prefix_block = prefix_block
+        self.cache_config = SimpleNamespace(block_size=prefix_block or 16, enable_prefix_caching=prefix_block is not None)
+        self._cached: set[tuple[int, ...]] = set()      # the whole-block prefixes some request has computed
         self._seen: set[str] = set()
         self._resumed: set[str] = set()
 
@@ -88,6 +93,7 @@ class FakeScheduler:
                 break
             self.waiting.remove(rid)
             q = self.requests[rid]
+            q.num_computed_tokens = self._hit(q)
             n = min(q.num_tokens - q.num_computed_tokens, left)
             nst[rid], left = n, left - n
             self.running.append(rid)
@@ -102,9 +108,22 @@ class FakeScheduler:
         self._resumed -= set(cached)
         self._seen |= set(nst)
         for rid, n in nst.items():
-            self.requests[rid].num_computed_tokens += n
+            q = self.requests[rid]
+            q.num_computed_tokens += n
+            if self.prefix_block:
+                toks = q.prompt_token_ids + q.emitted
+                for k in range(1, q.num_computed_tokens // self.prefix_block + 1):
+                    self._cached.add(tuple(toks[:k * self.prefix_block]))
         self.step += 1
         return so
+
+    def _hit(self, q: FakeRequest) -> int:
+        if not self.prefix_block:
+            return 0
+        toks, b, k = q.prompt_token_ids + q.emitted, self.prefix_block, 0
+        while (k + 1) * b < len(toks) and tuple(toks[:(k + 1) * b]) in self._cached:
+            k += 1
+        return k * b
 
     def execute(self, so: Any) -> Any:
         """The model runner: one sampled token per request whose computed tokens reached its known tokens."""
