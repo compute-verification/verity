@@ -12,5 +12,6 @@ Nothing in `verity` reads this directory.
 | `toy.py` | the graph (two SGD steps of a one-layer model with an RMSNorm-like coupling, or a linear one) and the variants: `mono` (every value and dot product whole), `inner` (partial sums cross blocks), `shares` (additive weight shares), `+bits` (two bit-planes per word, carries between them); `check_equivalent` evaluates every variant against `mono` |
 | `cover.py` | the cheapest covering: a direct MILP (`min_blocks`, small cases only) and column generation (`colgen`): a set-cover LP priced by a one-block MILP, with Farley's bound as the certified lower bound |
 | `run.py` | the grid: `python run.py --out DIR [--workers N]`, writing `results.jsonl` and `summary.md` |
+| `price.py` | what a split value costs at its consumer, by brute force: one-way cost and log-rank bound of an exact norm, an elementwise nonlinearity and a linear map on the sum of two pieces, for each kind of split (`python price.py [--n 4] [--b 2]`) |
 
 Results go to the evidence store, not here.
