@@ -64,7 +64,8 @@ root, leaves, words, word bits, domain and row schema, and `reads`: unit `reads_
 and the schedule's (ordinals and first rows in admission order, r cells a row, at most `lanes` connections a row), and
 refuses a read of a connection it doesn't hold, of a cell past the connection's, or of a cell another read opens. So a
 read opens its own connection's cell and no other: never an empty slot, a foreign connection's cell or a cell twice.
-The unit's cell is at its slot's words of the row (`Wiring.place`).
+The unit's cell is at its slot's words of the row (`Wiring.place`). A population of one unit a bucket (IO-TIE's)
+reads whole rows instead (`bucket_port`): unit `reads_from + t` opens row t, every slot held or not, and no wiring.
 
 **The wiring is opened to the verifier tonight**, as the units' wiring is (the named gap, whose plan is in
 PROTOCOL.md): it gives away each connection's first row and cells. q is the cells' stream field, the warden's ordinal:
@@ -424,21 +425,36 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
     return head, dom
 
 
+def _schedules(head: CellsHead, params: WardenParams) -> None:
+    if (head.parameters, head.cell_bytes, head.slots, head.rows) != \
+            (params.digest, params.cell_bytes, params.grid.allocation, rows_of(params)):
+        raise ValueError("the head isn't of the schedule's rows")
+
+
+def _port(head: CellsHead, rows: Sequence[int], reads_from: int) -> dict[str, Any]:
+    e = {"leaves": head.rows, "words": head.slots * head.cell_bytes // 2, "word_bits": WORD_BITS,
+         "domain": head.domain.hex()}
+    return produced.port(head.value, e, head.root.hex(), rows, SCHEMA) | \
+        ({G.READS_FROM: int(reads_from)} if reads_from else {})
+
+
 def port(head: CellsHead, wiring_: Wiring, params: WardenParams, reads: Sequence[tuple[int, int]],
          reads_from: int = 0) -> dict[str, Any]:
     """The verifier's own `--registered` port of a unit population that opens the head's rows: unit `reads_from + i`
     opens the row of `reads[i]` = (q, k), connection q's cell k of the link-window, under the warden's wiring
     (`Wiring.place`, which refuses what no honest read is). ValueError for a wiring the head doesn't name."""
-    if (head.parameters, head.cell_bytes, head.slots, head.rows) != \
-            (params.digest, params.cell_bytes, params.grid.allocation, rows_of(params)):
-        raise ValueError("the head isn't of the schedule's rows")
+    _schedules(head, params)
     if wiring_.digest() != head.wiring:
         raise ValueError("the wiring isn't the one the warden signed")
-    rows = [t for t, _ in wiring_.place(params, reads)]
-    e = {"leaves": head.rows, "words": head.slots * head.cell_bytes // 2, "word_bits": WORD_BITS,
-         "domain": head.domain.hex()}
-    return produced.port(head.value, e, head.root.hex(), rows, SCHEMA) | \
-        ({G.READS_FROM: int(reads_from)} if reads_from else {})
+    return _port(head, [t for t, _ in wiring_.place(params, reads)], reads_from)
+
+
+def bucket_port(head: CellsHead, params: WardenParams, reads_from: int = 0) -> dict[str, Any]:
+    """The verifier's own `--registered` port of a population of one unit a bucket (IO-TIE's `IoTieBucket`): unit
+    `reads_from + t` opens row t, its bucket's every slot, held or not. It names no connection, so it reads no
+    wiring."""
+    _schedules(head, params)
+    return _port(head, list(range(head.rows)), reads_from)
 
 
 def reads_file(ports: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:

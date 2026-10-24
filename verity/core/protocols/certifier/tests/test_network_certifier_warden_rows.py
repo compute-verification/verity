@@ -228,6 +228,25 @@ def test_the_port_reads_the_rows_the_wardens_wiring_places_and_nothing_else(traf
             W.port(head, wiring, PARAMS, bad)
 
 
+def test_the_bucket_port_reads_every_row_whole(traffic, tmp_path):
+    """`bucket_port` (one unit a bucket, IO-TIE's) is `port`'s entry with unit `reads_from + t` reading row t, an idle
+    window's rows too, whose slots `port` can't name; a head of another schedule is refused."""
+    warden, _ = traffic
+    idle, _, _ = run([], {}, windows=1)
+    for record in (records(warden)[1][0], records(idle)[1][0]):
+        _, cells_, _ = _attest(tmp_path / str(id(record)), record)
+        p = W.bucket_port(cells_.head, PARAMS, reads_from=5)
+        q = cells_.wiring.connections[:1]
+        if q:
+            assert {k: v for k, v in p.items() if k not in ("reads", "reads_from")} == \
+                {k: v for k, v in W.port(cells_.head, cells_.wiring, PARAMS, [(q[0][0], 0)]).items() if k != "reads"}
+        assert p["reads"] == list(range(T)) and p["reads_from"] == 5 and p["root"] == cells_.root.hex()
+        assert "reads_from" not in W.bucket_port(cells_.head, PARAMS)
+    assert W.wiring(records(idle)[1][0], PARAMS).connections == ()
+    with pytest.raises(ValueError, match="schedule's rows"):
+        W.bucket_port(cells_.head, dataclasses.replace(PARAMS, delay=PARAMS.delay + 1))
+
+
 def test_the_issuers_sign_is_certifys_signature(tmp_path):
     """`certify` signs through `sign`: one leaf a certificate, both verifying under the key in the session."""
     idle, _, _ = run([], {}, windows=1)

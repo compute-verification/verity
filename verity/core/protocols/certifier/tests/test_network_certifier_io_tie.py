@@ -23,8 +23,9 @@ from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments.gates.frame_v3 import opens
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import row_leaf
-from verity.core.protocols.certifier import head_check as HC, io_tie as IT, warden as W
+from verity.core.protocols.certifier import head_check as HC, io_tie as IT, warden as W, warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD
+from verity.core.protocols.certifier.certificate import Direction
 from verity.core.protocols.certifier.grid import Certifier
 
 #: the circuits' shape: three bucket rows of 4 lanes of r = 2 slots, each bucket's 4 port rows of 4 ids from a session
@@ -48,8 +49,8 @@ def wardens(shape: IT.Shape, slots: int, delay: int) -> W.WardenParams:
 class Link(NamedTuple):
     """A fake upstream's link served through the warden: its schedule, its egress rows (bucket b's R cells, a slot no
     connection holds B zero bytes), advice v0's outputs and release buckets, each advice request's admission bucket
-    and arrival order (`order`), the Commit's rows of sampled ids (one a step of the session), and the warden's
-    `fails` frames."""
+    and arrival order (`order`), the Commit's rows of sampled ids (one a step of the session), the warden's
+    `fails` frames, and the egress records its grid closed, a window each."""
 
     params: W.WardenParams
     rows: list[list[bytes]]
@@ -59,6 +60,7 @@ class Link(NamedTuple):
     order: list[int]
     port: list[bytes]
     fails: list[bytes]
+    records: tuple = ()
 
 
 def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], responses: list[list[int]], buckets: int,
@@ -80,7 +82,7 @@ def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], response
             c.egress += IT.TRAILER
         c.egress_ended = k not in late
         conns.append(c)
-    queue, active, grid, rows = deque(conns), [], Certifier("responses", params.grid), []
+    queue, active, grid, rows, records = deque(conns), [], Certifier("responses", params.grid), [], []
     for t in range(buckets):
         while queue and queue[0].arrived <= t and len(active) < params.lanes:
             c = queue.popleft()
@@ -92,7 +94,7 @@ def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], response
         active = [c for c in active if c.ended is None]
         rows.append([bytes(B) if f is None else f for f in grid.tick()])
         if (t + 1) % params.window == 0:
-            grid.close_window()
+            records.append(grid.close_window())
     assert not queue and not active, "every connection ends within the link's buckets"
     engine = list(range(len(conns))) if engine is None else engine
     computed: dict[int, list[tuple[int, int, int]]] = {}
@@ -107,7 +109,7 @@ def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], response
             ids[step, row] = x
     assert max(computed, default=0) < 1 << shape.DS and all(len(b) <= shape.P for b in computed.values())
     port = [IT.port_row([ids.get((s, row), 0) for row in range(shape.P)], shape.P) for s in range(1 << shape.DS)]
-    return Link(params, rows, outputs, release, [conns[k].admitted for k in engine], engine, port, fails)
+    return Link(params, rows, outputs, release, [conns[k].admitted for k in engine], engine, port, fails, tuple(records))
 
 
 def commit(shape: IT.Shape, link: Link, window: int, seed: bytes = b"w", order: list[int] | None = None) -> IT.Instance:
@@ -267,6 +269,21 @@ def test_every_window_of_the_wardens_egress_is_accepted(link, big):
     assert all(m == IT.UNHELD for m in commit(BIG, link, 5).map)
     assert sum(not _marker(m) for m in big.map) >= 30 and len({m.q for m in big.map if not _marker(m)}) >= 4
     assert IT.reference(commit(SMALL, small(), 0)) and IT.reference(commit(SMALL, small(), 1))
+
+
+def test_each_buckets_row_is_the_wardens_registered_row(link):
+    """The units read the warden's registration v2 (`warden_rows`): bucket t's row is row t of the record the grid
+    closed (`window_rows`, its wiring read off it), it opens the warden's root at t, and the verifier's port
+    (`bucket_port`) has unit t read row t, an idle window's too."""
+    p = link.params
+    assert len(link.records) == 6
+    for w, record in enumerate(link.records):
+        cells = WR.Cells.of("responses", Direction.EGRESS, record, p, _h(b"session"))
+        assert cells.rows == tuple(IT.bucket_rows(BIG, commit(BIG, link, w).cells))
+        assert all(WR.opens(cells.domain, cells.root, t, cells.bcs[t], cells.path(t)) for t in range(BIG.T))
+        port = WR.bucket_port(cells.head, p)
+        assert (port["reads"], port["leaves"], port["words"]) == (list(range(BIG.T)), BIG.T, BIG.R * BIG.B // 2)
+    assert WR.wiring(link.records[5], p).connections == ()
 
 
 def _set(cells, i, cell):

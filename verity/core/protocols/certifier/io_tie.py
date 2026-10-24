@@ -54,13 +54,13 @@ byte, a cell on another stream or in another connection's slots, a fabricated ou
         E = S·P port entries a bucket, M = 2^D ≥ max(R, E)
 
 `IoTieBucket` is the unit, one a bucket row. Its `row` is the warden's registered row t, which the proof system reads
-(the Lean verifier's registered reads, `flock-verify --registered`, placed by `warden_rows.port`), so no gate of it
-hashes the row. It opens each port row at its step (`FrameV3Read`) and holds every cell to the map (`IoTieContent`):
-the port's E entries, each its id and its index e, routed to the slots by the prover's switches; any setting is a
-permutation, and `IoTieMatch` holds each `DATA` cell's id to the entry the map names, by its index. A link-window's
-tie is its T units. Public: the warden's root and domain id (its registration), the port's root and domain id, and,
-until the named gap closes, the steps and the map. Witness: the rows, the opened port rows, their salts and paths,
-and the switches. `NetworkRowsRoot` stays for the ingress (`io_request`), which recomputes its cells' root.
+(the Lean verifier's registered reads, `flock-verify --registered`, unit t row t by `warden_rows.bucket_port`), so no
+gate of it hashes the row. It opens each port row at its step (`FrameV3Read`) and holds every cell to the map
+(`IoTieContent`): the port's E entries, each its id and its index e, routed to the slots by the prover's switches; any
+setting is a permutation, and `IoTieMatch` holds each `DATA` cell's id to the entry the map names, by its index. A
+link-window's tie is its T units. Public: the warden's root and domain id (its registration), the port's root and domain
+id, and, until the named gap closes, the steps and the map. Witness: the rows, the opened port rows, their salts and
+paths, and the switches. `NetworkRowsRoot` stays for the ingress (`io_request`), which recomputes its cells' root.
 """
 from __future__ import annotations
 
