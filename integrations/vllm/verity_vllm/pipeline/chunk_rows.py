@@ -1,4 +1,4 @@
-"""A chunked serving-rows template's units (`serving_rows.CHUNKED`) on the bit rows C-Flock's `UnitStager` stages: their rows
+"""A chunked serving-rows template's units (`serving_rows.chunked`) on the bit rows C-Flock's `UnitStager` stages: their rows
 (`unit_rows`), the most of them one flock-circuit statement holds (`chunk_cap`, a partition file's ``chunk_cap``), and a
 template's units read once cut into its chunks (`split`).  The window's chunks (`serving_rows.members`) and the verifier's
 circuit (``benchmarks/one_stage/compose_circuit.py --template``) are both laid out by `unit_rows`.  Each function takes the
@@ -21,20 +21,28 @@ def s8_words(K: int) -> int:
     return K // 2 + 2
 
 
+def fields(tp: Any) -> list[Any]:
+    """Template ``tp``'s return fields in order, `UnitStager`'s output ports ``o<j>``."""
+    ret = tp.fn.signature()[1]
+    return [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
+
+
 def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: a ``ScaledMmS8Coordinate``'s A6 rows,
-    ``x`` (the token's s8 codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2); a ``COORDS``
-    coordinate's, a ``COLS`` column block's or a ``SLICES`` slice's ``in<g>``, one v2 row per parameter (its port); then the one
-    v2 output row ``o0``."""
+    ``x``     (the token's s8 codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2), then the v2 output row
+    ``o0``; a ``COORDS`` coordinate's, a ``COLS`` column block's, a ``SLICES`` slice's, a ``KCHUNKS`` K-chunk's or a chunked row
+    template's (`serving_rows.chunked`) ``in<g>``, one v2 row per parameter (its port), then one v2 output row ``o<j>`` per return
+    field."""
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_vllm.query.program_view import spec_statics
 
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
-    if tp.layout in ("coord", "cols", "slice"):
+    if tp.layout in ("coord", "cols", "slice", "kchunk", "row"):
         params, _ret = tp.fn.signature()
-        return [(f"in{g}", V2, sum(ty.leaf_widths()), [nm]) for g, (nm, ty) in enumerate(params)], [(V2, (0,))]
+        return ([(f"in{g}", V2, sum(ty.leaf_widths()), [nm]) for g, (nm, ty) in enumerate(params)],
+                [(V2, (j,)) for j in range(len(fields(tp)))])
     raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")
 
 
