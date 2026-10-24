@@ -177,10 +177,13 @@ def warden_frame(run: Path, at: int | None = None) -> dict:
         WR, WS = importlib.import_module(WARDEN_ROWS_MODULE), importlib.import_module("warden_serve")
     except ModuleNotFoundError as err:
         raise NotApplicable(f"no warden cells yet: {err.name} (WARDEN) hasn't landed") from None
+    link, direction = WS.CERTIFIED[WS.EGRESS]
+    if missing := [f for f in ("cells.salts", f"{WS.EGRESS}.records") if not (run / f).is_file()]:
+        raise NotApplicable(f"{run}: no {' or '.join(missing)}: the run kept its registrations only (public), so "
+                            "no unit can open its cells")
     dep = json.loads((run / "deployment.json").read_text())
     params = WS.WardenParams(**dep["params"])
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    link, direction = WS.CERTIFIED[WS.EGRESS]
     records = {r.window: r for r in WS.read_records(run, params)[WS.EGRESS]}
     regs = {r["window"]: (r, salts) for d, salts in WS.read_cells(run) if (r := d.get("registration"))
             and (r["link"], r["direction"]) == (link, direction.value)}
