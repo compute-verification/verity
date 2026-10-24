@@ -36,7 +36,11 @@ finish's, the code within SEG bits; bit 3 ``charge``, the coded length ≤ c; bi
 a prover's run (`scan`, with the choices REDTEAM's phase 9 found free in a piece alone: the codeword, the prefix hits
 and the heads' moves) and `check`'s verdict on them. No witness field carries a context, a frequency, a cache count or a
 consumed count: the context is the plain counter's, the frequencies KTContext_v1's outputs, and the heads move by
-ReplayStep_v1's own ``taken`` and ``used``.
+ReplayStep_v1's own ``taken`` and ``used``. On corpus-smallkv's first seven steps (140,090 ANDs) a context or
+frequencies of the prover's choosing are refused by ``code`` and ``charge`` (0x13); a prefix hit, a decision read again
+and an arrival left queued by ``steps`` and ``rows`` (0x0D), the hit by the stand-in below until CacheStep_v1's derived
+hit is wired. A fabricated cache table and free returns aren't expressible on the slice: it has no table input and no
+stopping request.
 
 **Stand-ins** (named, each a piece not ready):
 - *the cache counts*: ENC-DERIVED's hit, evictable and returned-block counts are held at 0 (ReplayStep_v1's ``hit``,
