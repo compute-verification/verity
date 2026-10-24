@@ -44,13 +44,15 @@ A spec-level reference for network accounting's timing channel:
   unit's Boolean Definition, one a bucket row (`IoTieBucket`: the row read as the warden's registered row, the port's
   rows by `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
   `IoTieRoute`, `IoTieMatch`);
-- the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on a fake upstream: an ingress link-window's
-  cells cut into CERT-VARLEN's id requests, each request's count of prompt fields held to the advice's prompt_len and
-  its ordinal to its place in the cut, which N2-ADVICE's advised verdict (`advised.IoTieVerdict`) is built from. It
-  has the reference, the verifier's per-window statements, chained from window 0 by each window's carry-out
-  (`statements`, `chained`), and the unit's Boolean Definition (`IoTieRequest`: the cells' root by
-  `NetworkRowsRoot`, the own frame by `IoTieRequestOwn`, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, the
-  prover's routing of the view's prompt lengths by `IoTieRoute`, the totals and the carry-out by `IoTieRequestEnd`);
+- the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on the warden's own ingress (`serve`): one unit a
+  registered bucket row (`warden_rows.bucket_port`), each live connection's lane of r slots read as the warden's cells
+  (a `PAD` on its ordinal, a `DATA` of exactly B − 9 bytes, its `END`), each request cell a cell of CERT-VARLEN's id
+  request, with its count of prompt fields carried across buckets from the lane's carry-in to its carry-out, which
+  hold each request's prompt_len to the advice's and which N2-ADVICE's advised verdict (`advised.IoTieVerdict`) is
+  built from. It has the reference, the lanes the verifier computes from the advice and the warden's release
+  (`lanes`, `Release`), and the unit's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and
+  `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) adds the
+  Commit's `c00.input/ids` rows to the same scan and holds every prompt id to them;
 - the capacity counts;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
