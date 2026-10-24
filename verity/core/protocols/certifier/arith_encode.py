@@ -2,26 +2,29 @@
 counting the bits it would write, which is what the composition charges, or checking them against a committed segment.
 
     ArithCountStep_v1{K, BIN, CW}  (tally, en, symbol) -> tally'
-    ArithCountFinish_v1{CW}        (tally, c) -> (ok, bits)
+    ArithCountFinish_v1{CW, NB}    (tally, pool[NB], c) -> (ok, bits)
     tally = (low[32], high[32], used, ok, bits[CW])
+    BookKT_v1{C}                   (counts[C], en, ctx, bit) -> (ok, f0, f1, counts')
 
     ArithEncodeStep_v1{K, BIN}     (coder, en, symbol, seg[K]) -> (coder', n)
     ArithEncodeFinish_v1           (coder, seg[2]) -> (ok, n)
     coder = (low[32], high[32], open, x, used, ok)
-
     KTContext_v1{C, NW}            (counts[C], en, ctx, bit) -> (ok, f0, f1, counts')
 
-Under advice v1 (the certifier PROTOCOL's "Advice v1") the replay's decisions are each one symbol of ENC-CODE's 32-bit
-Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`, `ArithEncoder`) at ENC-REPLAY's
-adaptive estimate for its context, one terminated segment per certifier window. The compile unit runs the encoder
-forward, since which request a decision is about, and so its context and window, is the replay's position.
+Under advice v1 (the certifier PROTOCOL's "Advice v1") each certifier window is one terminated segment of ENC-CODE's
+32-bit Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`, `ArithEncoder`), as `code_v1`
+codes it: the window's counts, then its values (the replay's decisions, each a bit at the registered book's KT estimate
+for its context, and the hits sent past the pool bound, integers). The compile unit runs the encoder forward, since
+which value is read next, and so its window, is the replay's position.
 
-**The counting variant** is what the PROTOCOL composes. The committed advice is the decisions themselves, which the
-replay scan reads, and the charge is their coded length: the encoder runs over the same decisions and counts the
+**The counting variant** is what the PROTOCOL composes. The committed advice is the values themselves, which the
+replay scan reads, and the charge is their coded length: the encoder runs over the same symbols and counts the
 segment bits it would write, and the window's finish refuses unless the count is at most the declared charge c. A
 segment is `shifts + 2` bits, or none when nothing was used (code.py's `ArithEncoder`): each scaling puts one bit in it
 (a resolved bit, or a pending one the next resolution or the finish writes), and the finish two more. So the step adds
-its scalings to `bits`, and the finish adds 2 when `used`, then outputs ok (`ok` and bits ≤ c) and bits. Within one
+its scalings to `bits`, and the finish adds 2 when `used`, then outputs ok (`ok` and bits ≤ c) and bits. With NB ≥ 1
+the finish also adds the header advice v1 charges to window 0, Elias-gamma of the pool it sends (`pool`, 1 ≤ pool <
+2^NB): 2·bitlen(pool) − 1, from the suffix ORs of pool's bits, a thermometer whose top is bitlen(pool). Within one
 symbol code.py's loop takes p resolutions (E1, E2: low and high agree on their top bit) and then u underflows (E3:
 low's top two bits 01 and high's 10), and never a resolution after an underflow, which leaves low's top bit 0 and
 high's 1. In
@@ -35,7 +38,7 @@ refused.
 **The bit-checking variant** (`ArithEncodeStep_v1`, `ArithEncodeFinish_v1`) is the alternative composition, where the
 advice is the coded segments: the encoder's output must be the window's committed segment. `code.ArithDecoder.finish`
 takes a segment only when it is the encoder's codeword for what it decodes to, so there the forward encoding is
-`decode`. The rest of this docstring is that variant's, with the model the two share.
+`decode`. The rest of this docstring is that variant's, then the two models.
 
 **The coder's state.** `low` and `high` are code.py's, 32 bits each. code.py also counts its pending bits (the
 underflow scalings not yet resolved); the circuit doesn't, because it never writes the output. A pending run's bits are
@@ -68,22 +71,32 @@ run. In positions, that is the run's first position (the open run's, or the firs
 positions get the rest. So it needs seg[0] = b_f ⊕ open and seg[1] = ¬b_f, and, if a run was open, x = b_f. It
 consumes n = 2 bits, or none when nothing was used. Its window's segment must end there: n positions after the reader's.
 
-**The model** (`KTContext_v1`) is ENC-REPLAY's estimate as advice v1 scales it. C contexts each count their 0s and 1s
-(`replay._KT`, from the registered priors, which are the scan's public starting counts). Context ctx gives f = 2n + 1
-for each count, halved with rounding up while f0 + f1 > 2^16 (v1's `_scaled`), and the decision then adds to its count.
+**The book's model** (`BookKT_v1`) is `code_v1.KT`, the estimate advice v1 codes its bits at. C contexts each count
+their 0s and 1s, in KW = 15 bits, from the registered book's priors (`Book.priors`, public). Context ctx gives
+f = 2n + 1 for each count, and the bit then raises its count; once 2·(n0 + n1) + 2 would pass 2^16, that is once
+n0 + n1 reaches 2^15, both are halved, rounding up. The book keeps n0 + n1 < 2^15, and the unit refuses counts past it
+and a context ≥ C. With `en` = 0 it passes the counts through. v1's decisions take context min(run, 2), with run the
+decisions since the last arrival, carried across windows (`code_v1._State.run`): a function of the bits alone, which the
+composition keeps as a 2-bit counter (C = 3). Async's lag bits take one context (C = 1).
+
+**ENC-REPLAY's model** (`KTContext_v1`) is the estimate advice v1 used before `code_v1`, kept for the bit-checking
+variant. C contexts each count their 0s and 1s (`replay._KT`, from the registered priors). Context ctx gives f = 2n + 1
+for each count, halved with rounding up while f0 + f1 > 2^16 (`scaled`), and the decision then adds to its count.
 After h ≥ 1 halvings f is ⌊n / 2^(h−1)⌋ + 1, so the circuit takes the first h whose two candidates fit. With `en` = 0 it
 passes the counts through. It refuses a context ≥ C and a count that would overflow NW bits. The context index is
 the replay's (plain: min(passes, 2), C = 3).
 
 **Statics** (public): K, the scalings a symbol may take (18 covers every symbol); BIN, binary (1) or general (0)
-symbols; CW, the count's width; C, the contexts; and NW, a count's width in the model. Fields are little-endian. Both
-steps are specified on the states a window reaches (low ≤ high), where code.py's loop is the one above.
+symbols; CW, the count's width; NB, the header's pool width (0: no header); C, the contexts; and NW, a count's width in
+ENC-REPLAY's model. Fields are little-endian. Both steps are specified on the states a window reaches (low ≤ high),
+where code.py's loop is the one above.
 
 **Cost** (`size`, ANDs): ArithCountStep_v1{K=18, BIN=1, CW=20} is 2,243: the interval (one 33 × 16-bit product, one
 non-restoring division with 32 quotient bits, and the two ends) 1,855, the scalings at once 366 and the count 22.
-{K=18, BIN=0, CW=20} is 3,963, and ArithCountFinish_v1{CW=20} 41. One decision under plain contexts, counted, is the step
-and the model: 3,445 ANDs. ArithEncodeStep_v1{K=18, BIN=1} is 3,244: the interval 1,855, the 18 scaling slots 1,188 and
-the segment check 201. {K=18, BIN=0} is 4,964, and ArithEncodeFinish_v1 6. KTContext_v1{C=3, NW=24} is 1,202.
+{K=18, BIN=0, CW=20} is 3,963. ArithCountFinish_v1{CW=20, NB=0} is 41, and {CW=20, NB=21} (v1's largest pool, 2^20
+blocks) 67. BookKT_v1{C=3} is 337 and {C=1} 210. One decision, counted, is the step and the book's model: 2,580 ANDs,
+and the context counter's few. ArithEncodeStep_v1{K=18, BIN=1} is 3,244: the interval 1,855, the 18 scaling slots 1,188
+and the segment check 201. {K=18, BIN=0} is 4,964, and ArithEncodeFinish_v1 6. KTContext_v1{C=3, NW=24} is 1,202.
 """
 from __future__ import annotations
 
@@ -262,11 +275,17 @@ def reference_count_step(K: int, BIN: int, CW: int, st: Tally, en: int, sym: Seq
     return Tally(low, high, used, st.ok, st.bits + n)
 
 
-def reference_count_finish(CW: int, st: Tally, c: int) -> tuple[int, int]:
-    """code.py's `finish` counted: (ok, bits), with bits the window's segment length (two more when `used`) and ok 0
-    unless it is at most the declared charge c."""
-    total = st.bits + 2 * st.used
-    return st.ok & int(total <= c and not total >> CW), total & ((1 << CW) - 1)
+def gamma_len(v: int) -> int:
+    """Elias-gamma's length, 2·bitlen(v) − 1, for v ≥ 1 (1 at v = 0, which the finish refuses)."""
+    return 2 * _bitlen(v) - 1
+
+
+def reference_count_finish(CW: int, st: Tally, c: int, NB: int = 0, pool: int = 0) -> tuple[int, int]:
+    """code.py's `finish` counted: (ok, bits), with bits the window's charge and ok 0 unless it is at most the declared
+    charge c. The charge is the segment's length (two more when `used`), and with NB ≥ 1 the header's too, Elias-gamma of
+    the pool 1 ≤ pool < 2^NB it sends (advice v1's window 0)."""
+    total = st.bits + 2 * st.used + (gamma_len(pool) if NB else 0)
+    return st.ok & int(total <= c and not total >> CW and (not NB or pool >= 1)), total & ((1 << CW) - 1)
 
 
 def count_window(K: int, BIN: int, symbols: Sequence[Sequence[int]], CW: int = CW) -> int | None:
@@ -276,6 +295,30 @@ def count_window(K: int, BIN: int, symbols: Sequence[Sequence[int]], CW: int = C
         st = reference_count_step(K, BIN, CW, st, 1, s)
     ok, bits = reference_count_finish(CW, st, (1 << CW) - 1)
     return bits if ok else None
+
+
+#: a count's width in `BookKT_v1`: the book keeps 2·(n0 + n1) + 2 ≤ 2^16, so n0 + n1 < 2^15
+KW = 15
+
+
+def reference_book_kt(C: int, counts: Sequence[tuple[int, int]], en: int, ctx: int,
+                      bit: int) -> tuple[int, int, int, tuple[tuple[int, int], ...]]:
+    """(ok, f0, f1, counts') of one bit under the registered book's KT model (`code_v1.KT`): f = 2n + 1 for each count
+    of context ctx, then the bit's count raised and, once 2·(n0 + n1) + 2 would pass 2^16, both halved, rounding up. A
+    refusal (ctx ≥ C, or counts the book can't hold) returns ok 0, and then only ok is specified."""
+    counts = tuple(tuple(c) for c in counts)
+    if not en:
+        return 1, 0, 0, counts
+    if ctx >= C:
+        return 0, 0, 0, counts
+    n0, n1 = counts[ctx]
+    if n0 + n1 >> KW:
+        return 0, 0, 0, counts
+    m = [n0, n1]
+    m[bool(bit)] += 1
+    if (m[0] + m[1]) >> KW:
+        m = [(m[0] + 1) >> 1, (m[1] + 1) >> 1]
+    return 1, 2 * n0 + 1, 2 * n1 + 1, counts[:ctx] + (tuple(m),) + counts[ctx + 1:]
 
 
 def check_window(K: int, BIN: int, symbols: Sequence[Sequence[int]], segment: Sequence[int]) -> bool:
@@ -331,11 +374,19 @@ def _count_out(S) -> list[tuple[str, int, int]]:
 
 
 def _count_fin_in(S) -> list[tuple[str, int, int]]:
-    return _tally(S) + [("c", 1, S.CW)]
+    return _tally(S) + ([("pool", 1, S.NB)] if S.NB else []) + [("c", 1, S.CW)]
 
 
 def _count_fin_out(S) -> list[tuple[str, int, int]]:
     return [("ok", 1, 1), ("bits", 1, S.CW)]
+
+
+def _bkt_in(S) -> list[tuple[str, int, int]]:
+    return [("n0", S.C, KW), ("n1", S.C, KW), ("en", 1, 1), ("ctx", 1, _bitlen(S.C - 1)), ("bit", 1, 1)]
+
+
+def _bkt_out(S) -> list[tuple[str, int, int]]:
+    return [("ok", 1, 1), ("f0", 1, KW + 1), ("f1", 1, KW + 1), ("n0", S.C, KW), ("n1", S.C, KW)]
 
 
 def _type(fields) -> Tuple:
@@ -522,27 +573,75 @@ def _build_finish(C, S, *elements):
     return _flat(_FIN_OUT, {"ok": [[ok]], "n": [[ZERO, used]]})
 
 
+def _gamma(C, v):
+    """Elias-gamma's length of v, 1 + 2·m with m = bitlen(v) − 1, and whether v ≥ 1. The suffix ORs t_k (v has a 1 at k
+    or above) are a thermometer, so its top 1 is at the k where t_k ⊕ t_(k+1) is 1, and m's bits are XORs of those."""
+    t = list(v)
+    for k in reversed(range(len(v) - 1)):
+        t[k] = _or(C, v[k], t[k + 1])
+    t.append(ZERO)
+    m = [ZERO] * _bitlen(len(v) - 1)
+    for k in range(1, len(v)):
+        for j in range(len(m)):
+            if (k >> j) & 1:
+                m[j] = m[j] ^ t[k] ^ t[k + 1]
+    return [ONE] + m, t[0]
+
+
 def _build_count_finish(C, S, *elements):
     f = _split(_count_fin_in(S), elements)
     used, ok, bits, c = f["used"][0][0], f["ok"][0][0], f["bits"][0], f["c"][0]
-    total = add(C, bits, [ZERO, used], width=S.CW + 1)
+    tail = [ZERO, used]
+    if S.NB:
+        C.phase = "header"
+        g, some = _gamma(C, f["pool"][0])
+        tail = add(C, g, tail, width=max(len(g), 2) + 1)
+        ok = C.AND(ok, some)
+    C.phase = "count"
+    total = add(C, bits, tail, width=S.CW + 1)
     over = _or(C, total[S.CW], sub(C, c, total[:S.CW], S.CW)[1])
     return _flat(_count_fin_out(S), {"ok": [[C.AND(ok, over.inv())]], "bits": [total[:S.CW]]})
+
+
+def _select(C, ctx, n0, n1, nc, w):
+    """The one-hot of ctx over nc contexts, whether ctx < nc, and context ctx's two counts."""
+    hot = [and_reduce(C, [b if (c >> k) & 1 else b.inv() for k, b in enumerate(ctx)]) for c in range(nc)]
+    in_range = or_reduce(C, hot)
+    a0, a1 = [ZERO] * w, [ZERO] * w
+    for c in range(nc):
+        a0 = [u ^ C.AND(hot[c], v) for u, v in zip(a0, n0[c])]
+        a1 = [u ^ C.AND(hot[c], v) for u, v in zip(a1, n1[c])]
+    return hot, in_range, a0, a1
+
+
+def _build_book_kt(C, S, *elements):
+    f = _split(_bkt_in(S), elements)
+    n0, n1, en, ctx, bit = f["n0"], f["n1"], f["en"][0][0], f["ctx"][0], f["bit"][0][0]
+    C.phase = "select"
+    hot, in_range, a0, a1 = _select(C, ctx, n0, n1, S.C, KW)
+    C.phase = "update"
+    s = add(C, a0, a1, width=KW + 1)
+    full = and_reduce(C, s[:KW])
+    m0 = add(C, a0, [bit.inv()], width=KW + 1)
+    m1 = add(C, a1, [bit], width=KW + 1)
+    o0 = mux(C, full, add(C, m0[1:], [m0[0]], width=KW), m0[:KW])
+    o1 = mux(C, full, add(C, m1[1:], [m1[0]], width=KW), m1[:KW])
+    ok = C.AND(en, _or(C, in_range.inv(), s[KW])).inv()
+    out0, out1 = [], []
+    for c in range(S.C):
+        w = C.AND(en, hot[c])
+        out0.append(mux(C, w, o0, n0[c]))
+        out1.append(mux(C, w, o1, n1[c]))
+    res = {"ok": [[ok]], "f0": [[en] + [C.AND(en, b) for b in a0]], "f1": [[en] + [C.AND(en, b) for b in a1]],
+           "n0": out0, "n1": out1}
+    return _flat(_bkt_out(S), res)
 
 
 def _build_kt(C, S, *elements):
     f = _split(_kt_in(S), elements)
     n0, n1, en, ctx, bit = f["n0"], f["n1"], f["en"][0][0], f["ctx"][0], f["bit"][0][0]
     C.phase = "select"
-    hot = []
-    for c in range(S.C):
-        hot.append(and_reduce(C, [b if (c >> k) & 1 else b.inv() for k, b in enumerate(ctx)]))
-    in_range = or_reduce(C, hot)
-    a0 = [ZERO] * S.NW
-    a1 = [ZERO] * S.NW
-    for c in range(S.C):
-        a0 = [u ^ C.AND(hot[c], v) for u, v in zip(a0, n0[c])]
-        a1 = [u ^ C.AND(hot[c], v) for u, v in zip(a1, n1[c])]
+    hot, in_range, a0, a1 = _select(C, ctx, n0, n1, S.C, S.NW)
     C.phase = "scale"
     H = max(0, S.NW - 13)
     cands, fits = [], []
@@ -605,9 +704,15 @@ def _sig_count(S):
 
 
 def _sig_count_finish(S):
-    if S.CW < 2:
-        raise ValueError(f"statics {dict(S.__dict__)}: CW ≥ 2")
+    if S.CW < 2 or not 0 <= S.NB <= 64 or (2 * S.NB + 1) >> (S.CW - 1):
+        raise ValueError(f"statics {dict(S.__dict__)}: CW ≥ 2, 0 ≤ NB ≤ 64 and 2·NB + 1 < 2^(CW − 1)")
     return tuple((name, Array(n, Array(w, BIT))) for name, n, w in _count_fin_in(S)), _type(_count_fin_out(S))
+
+
+def _sig_book_kt(S):
+    if S.C < 1:
+        raise ValueError(f"statics {dict(S.__dict__)}: C ≥ 1")
+    return tuple((name, Array(n, Array(w, BIT))) for name, n, w in _bkt_in(S)), _type(_bkt_out(S))
 
 
 ArithEncodeStep = _part(
@@ -631,9 +736,14 @@ ArithCountStep = _part(
     "window's count (`arith_encode.reference_count_step`)")
 
 ArithCountFinish = _part(
-    "ArithCountFinish", ("CW",), _sig_count_finish, _build_count_finish,
-    "ENC-CODE's arithmetic encoder's termination added to the window's count, held to the declared charge c "
-    "(`arith_encode.reference_count_finish`)")
+    "ArithCountFinish", ("CW", "NB"), _sig_count_finish, _build_count_finish,
+    "ENC-CODE's arithmetic encoder's termination added to the window's count, with NB ≥ 1 the Elias-gamma header of the "
+    "pool it sends too, held to the declared charge c (`arith_encode.reference_count_finish`)")
+
+BookKT = _part(
+    "BookKT", ("C",), _sig_book_kt, _build_book_kt,
+    "the registered book's KT estimate for one bit symbol's context (`code_v1.KT`): f = 2n + 1, and its count raised, "
+    "both halved once their estimate would pass 2^16 (`arith_encode.reference_book_kt`)")
 
 
 def step_unit(K: int = K_MAX, BIN: int = 1):
@@ -652,8 +762,12 @@ def count_unit(K: int = K_MAX, BIN: int = 1, CW: int = CW):
     return bind(ArithCountStep, K=K, BIN=BIN, CW=CW)
 
 
-def count_finish_unit(CW: int = CW):
-    return bind(ArithCountFinish, CW=CW)
+def count_finish_unit(CW: int = CW, NB: int = 0):
+    return bind(ArithCountFinish, CW=CW, NB=NB)
+
+
+def book_kt_unit(C: int = 3):
+    return bind(BookKT, C=C)
 
 
 # --- arguments and evaluation ----------------------------------------------------------------------------------------
@@ -726,12 +840,29 @@ def evaluate_counts(K: int, BIN: int, CW: int, cases: Sequence[tuple[Tally, int,
     return res
 
 
-def evaluate_count_finishes(CW: int, cases: Sequence[tuple[Tally, int]]) -> list[tuple[int, int]]:
-    S = SimpleNamespace(CW=CW)
-    args = [list(rows) for rows in zip(*(_args(_count_fin_in(S), {**_tally_vals(st), "c": c}) for st, c in cases))]
-    out = evaluate_bits(count_finish_unit(CW), *args)
+def evaluate_count_finishes(CW: int, cases: Sequence[tuple], NB: int = 0) -> list[tuple[int, int]]:
+    """The counting finish at (CW, NB) on each (state, c), or (state, c, pool) when NB ≥ 1, in one evaluation."""
+    S = SimpleNamespace(CW=CW, NB=NB)
+    args = [list(rows) for rows in zip(*(_args(_count_fin_in(S), {**_tally_vals(st), "c": c, "pool": p[0] if p else 0})
+                                         for st, c, *p in cases))]
+    out = evaluate_bits(count_finish_unit(CW, NB), *args)
     return [(f["ok"][0], f["bits"][0]) for f in (_fields(_count_fin_out(S), row)
                                                 for row in out.reshape(len(cases), -1).tolist())]
+
+
+def evaluate_book_kt(C: int, cases: Sequence[tuple[Sequence[tuple[int, int]], int, int, int]]
+                     ) -> list[tuple[int, int, int, tuple[tuple[int, int], ...]]]:
+    """`BookKT_v1{C}` on each (counts, en, ctx, bit), in one evaluation."""
+    S = SimpleNamespace(C=C)
+    args = [list(rows) for rows in zip(*(_args(_bkt_in(S), {"n0": [c[0] for c in counts], "n1": [c[1] for c in counts],
+                                                            "en": en, "ctx": ctx, "bit": bit})
+                                         for counts, en, ctx, bit in cases))]
+    out = evaluate_bits(book_kt_unit(C), *args)
+    res = []
+    for row in out.reshape(len(cases), -1).tolist():
+        f = _fields(_bkt_out(S), row)
+        res.append((f["ok"][0], f["f0"][0], f["f1"][0], tuple(zip(f["n0"], f["n1"]))))
+    return res
 
 
 def evaluate_kt(C: int, NW: int, cases: Sequence[tuple[Sequence[tuple[int, int]], int, int, int]]
@@ -759,7 +890,8 @@ def _staged(kind: str, key: tuple) -> dict[str, int]:
     sig, build, statics = {"step": (_sig_step, _build_step, ("K", "BIN")), "finish": (_sig_finish, _build_finish, ()),
                            "kt": (_sig_kt, _build_kt, ("C", "NW")),
                            "count": (_sig_count, _build_count_step, ("K", "BIN", "CW")),
-                           "count_finish": (_sig_count_finish, _build_count_finish, ("CW",))}[kind]
+                           "count_finish": (_sig_count_finish, _build_count_finish, ("CW", "NB")),
+                           "book_kt": (_sig_book_kt, _build_book_kt, ("C",))}[kind]
     S = SimpleNamespace(**dict(zip(statics, key)))
     C = Circuit(cse=True)
     params, _ = sig(S)
@@ -769,16 +901,18 @@ def _staged(kind: str, key: tuple) -> dict[str, int]:
 
 
 def size(kind: str = "step", **st) -> dict[str, int]:
-    """ANDs by stage of the step (K, BIN), the finish, the model (C, NW), the counting step (K, BIN, CW) or its finish
-    (CW), traced on a counting circuit."""
-    keys = {"step": ("K", "BIN"), "finish": (), "kt": ("C", "NW"), "count": ("K", "BIN", "CW"), "count_finish": ("CW",)}[kind]
+    """ANDs by stage of the step (K, BIN), the finish, the model (C, NW), the counting step (K, BIN, CW), its finish
+    (CW, NB) or the book's model (C), traced on a counting circuit."""
+    keys = {"step": ("K", "BIN"), "finish": (), "kt": ("C", "NW"), "count": ("K", "BIN", "CW"),
+            "count_finish": ("CW", "NB"), "book_kt": ("C",)}[kind]
     out = dict(_staged(kind, tuple(st[k] for k in keys)))
     out["ands"] = sum(out.values())
     return out
 
 
-__all__ = ["ArithCountFinish", "ArithCountStep", "ArithEncodeFinish", "ArithEncodeStep", "CW", "Coder", "HALF", "K_MAX",
-           "KTContext", "MAX_TOTAL", "Q1", "TOP", "Tally", "check_window", "count_finish_unit", "count_unit",
-           "count_window", "evaluate_count_finishes", "evaluate_counts", "evaluate_finishes", "evaluate_kt",
-           "evaluate_steps", "finish_unit", "fresh", "kt_unit", "reference_count_finish", "reference_count_step",
-           "reference_finish", "reference_kt", "reference_step", "scaled", "size", "step_arguments", "step_unit"]
+__all__ = ["ArithCountFinish", "ArithCountStep", "ArithEncodeFinish", "ArithEncodeStep", "BookKT", "CW", "Coder", "HALF",
+           "KW", "K_MAX", "KTContext", "MAX_TOTAL", "Q1", "TOP", "Tally", "book_kt_unit", "check_window",
+           "count_finish_unit", "count_unit", "count_window", "evaluate_book_kt", "evaluate_count_finishes",
+           "evaluate_counts", "evaluate_finishes", "evaluate_kt", "evaluate_steps", "finish_unit", "fresh", "gamma_len",
+           "kt_unit", "reference_book_kt", "reference_count_finish", "reference_count_step", "reference_finish",
+           "reference_kt", "reference_step", "scaled", "size", "step_arguments", "step_unit"]
