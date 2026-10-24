@@ -69,7 +69,7 @@ def rows(monkeypatch):
                 return np.concatenate(outs[member])[lo:hi], None
 
         monkeypatch.setattr(SRW, "index_of", lambda inst, _pool, **kw: Index(inst, **kw))
-        monkeypatch.setattr(SRW, "_slices", lambda _pi, _s, _w, _rid, _a, g: [ops[g[0][1] // 8][g[0][1] % 8]])
+        monkeypatch.setattr(SRW, "_slices", lambda _pi, _s, _w, _rid, _a, g, **_k: [ops[g[0][1] // 8][g[0][1] % 8]])
         return spec, Store(), ops, outs
     return make
 
