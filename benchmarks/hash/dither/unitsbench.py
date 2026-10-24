@@ -36,7 +36,9 @@ after its rows) is gated the same way under --j10r, its workspaces' column block
 seed_c, so its seed fault flips unit 0's sigma_R (unit 0 alone moves), and one bit of call 0's first column block moves
 exactly call 0's units of column block 0. It is timed as step_multi_j10rc and step_blocks_j10rc (its rows and columns).
 With --j10r-sm, a build with kh_units_multi_j10rc_sm too is gated the same way under it on every SM (its faults through
-kh_units_multi_j10rc's blocks and units alone) and timed as step_multi_j10rc_sm.
+kh_units_multi_j10rc's blocks and units alone) and timed as step_multi_j10rc_sm. --probe NAME (with --j10r): build NAME
+is a timing probe whose J10-R receipts are wrong by construction (h1u.cu's H1U_JPROBE): its J10-R gates are recorded,
+its J10-R arms timed anyway and marked probe, never a row.
 """
 from __future__ import annotations
 
@@ -424,6 +426,10 @@ def main() -> int:
     ap.add_argument("--j10r-sm", action="store_true",
                     help="with --j10r: also gate kh_units_multi_j10r_sm on every SM (the served launch, its warps taking "
                          "units from a counter) and time step_multi_j10r_sm")
+    ap.add_argument("--probe", action="append", default=[], metavar="NAME",
+                    help="with --j10r: build NAME (not the base) is a timing probe (h1u.cu's H1U_JPROBE), never a row: "
+                         "its J10-R gates are recorded and its J10-R arms timed whatever they say, its timing marked "
+                         "probe")
     ap.add_argument("--profile-multi", action="store_true",
                     help="with --multi: skip the timing and run each gated build's step_multi (and step_multi_j10r) "
                          "once between torch.cuda.profiler.start and stop, for ncu --profile-from-start off")
@@ -432,19 +438,23 @@ def main() -> int:
         ap.error("--j10r and --profile-multi run beside step_multi: give --multi too")
     if args.j10r_sm and not args.j10r:
         ap.error("--j10r-sm runs beside step_multi_j10r: give --j10r too")
+    if args.probe and not args.j10r:
+        ap.error("--probe times J10-R arms: give --j10r too")
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     doc_path = out / ("units-prof.json" if args.profile else "units.json")
     paths = dict(v.partition("=")[::2] for v in args.lib)
     libs = {name: Lib(p) for name, p in paths.items()}
     names = list(libs)
+    if names[0] in args.probe or set(args.probe) - set(names):
+        ap.error(f"--probe {args.probe}: builds of --lib other than the base {names[0]}")
     clock = Clock()
     props = torch.cuda.get_device_properties(0)
     sms = props.multi_processor_count
     rng = random.Random(0x55A17)
     doc = {"schema": "dither-a/units/v1", "device": clock.name, "sms": sms, "t": args.t, "m": args.m, "libs": paths,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "reference": "served_h1/receipts.py",
-           "linears": {}}
+           "probes": args.probe, "linears": {}}
     T, M = args.t, args.m
     linears = [x for x in ORDER if x in args.linears.split(",")]
     calls: dict = {}
@@ -513,7 +523,7 @@ def main() -> int:
             g = j10r_gate(libs[nm], [calls[x][nm] for x in linears], refs)
             doc["j10r_gates"][nm] = g
             print(json.dumps({"j10r": nm, "gate": g}), flush=True)
-            if g["ok"]:
+            if g["ok"] or nm in args.probe:
                 j10r_ok.add(nm)
             else:
                 failed.add(f"{nm}:j10r")
@@ -537,7 +547,7 @@ def main() -> int:
             g = j10r_gate(libs[nm], [calls[x][nm] for x in linears], refs, sm=True)
             doc["j10r_sm_gates"][nm] = g
             print(json.dumps({"j10r_sm": nm, "gate": g}), flush=True)
-            if g["ok"]:
+            if g["ok"] or nm in args.probe:
                 sm_ok.add(nm)
             else:
                 failed.add(f"{nm}:j10r_sm")
@@ -704,6 +714,8 @@ def main() -> int:
             r["sm_over_j10r"] = round(r["step_multi_j10r_sm"]["median_us"] / r["step_multi_j10r"]["median_us"], 4)
         if "step_multi_j10rc" in r and "step_multi_j10r" in r:
             r["j10rc_over_j10r"] = round(r["step_multi_j10rc"]["median_us"] / r["step_multi_j10r"]["median_us"], 4)
+        if nm in args.probe:
+            r["probe"] = True
         if "step_multi_j10rc_sm" in r and "step_multi_j10r_sm" in r:
             r["rcsm_over_j10r_sm"] = round(r["step_multi_j10rc_sm"]["median_us"] / r["step_multi_j10r_sm"]["median_us"], 4)
     b0 = res[names[0]]
