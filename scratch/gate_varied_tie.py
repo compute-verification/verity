@@ -63,8 +63,8 @@ def main() -> int:
     ready.wait()
     summary = {"stub_port": port[0], "runs": {}}
     for strategy, tamper in (("honest", None), ("token", "token")):
-        argv = ["certifier-rehearse", "--peer", "vy-nebius-1", "--port", "18084", "--minutes", "20", "--traffic",
-                "varied", "--requests", "16", "--tokens", "16", "--seed", "3"] + (["--tamper", tamper] if tamper else [])
+        argv = ["--peer", "vy-nebius-1", "--port", "18084", "--minutes", "20", "--traffic", "varied",
+                "--requests", "16", "--tokens", "16", "--seed", "3"] + (["--tamper", tamper] if tamper else [])
         req = A.gate_certifier(argv, host, by="network-accounting", now=datetime.now(timezone.utc),
                                token=secrets.token_hex(2), start=lambda r: None, own=lambda p: None,
                                active=lambda r: False)
