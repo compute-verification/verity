@@ -406,6 +406,23 @@ def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_no
     assert c["refused"] == {"calls": 1, "rows": 3, "macs": 3 * 32 * K, "reasons": {PH.IN_PROCESS: 1}}
 
 
+def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing(monkeypatch):
+    """CMP-52: a claim instance names where coins come from, not who holds them. The harness's coins, held in the
+    serving process, credit nothing (``coins-not-the-auditors``) even when the Lean verifier of record's claim instance
+    names their source; a window is credited only on the auditor host's session (the int8 arm's test above)."""
+    from verity.core.protocols.pouw import verifier
+    held, real = [], Challenger
+
+    def named(epoch, entropy):
+        held.append(real(epoch, LC.named(verifier.CLAIM, entropy)))
+        return held[-1]
+    monkeypatch.setitem(globals(), "Challenger", named)
+    _y, run = _serve(FusedArm())
+    (v,) = run.verdicts.values()
+    assert [c.claim for c in held] == [verifier.CLAIM] and v["credit"] and run.coin_source == "in-process"
+    assert "coins-not-the-auditors" in PH.IN_PROCESS and run.credit()["refused"]["reasons"] == {PH.IN_PROCESS: 1}
+
+
 def test_a_credited_call_in_a_window_serving_a_request_without_an_entry_credits_nothing():
     """Review item 3 on #2916: the call passes the gate, but its rows are a request's with no entry (prompt embeddings), so
     the window credits nothing and names why."""

@@ -1427,9 +1427,14 @@ def cmd_challenger(a) -> int:
             raise SystemExit(f"no challenger state at {a.state}")
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
         from e2e import state_entropy
-        coins = Coins(a.epoch, state_entropy(a.state))
+        entropy = state_entropy(a.state)
     else:
-        coins = Coins(a.epoch, PV.coins)
+        entropy = PV.coins
+    try:
+        Ch.served_claim(entropy)
+    except Ch.CoinError as e:
+        raise SystemExit(f"the challenger refused to start: {e}") from None
+    coins = Coins(a.epoch, entropy)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
                     record=OR.Record(lean=False if a.python_record else None))

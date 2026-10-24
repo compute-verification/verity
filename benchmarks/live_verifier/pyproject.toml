@@ -16,7 +16,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
           "verity/core/primitives/randomness", "verity/core/difftest/lean", "verity/core/difftest/python",
           # challengers.py's gate client, which verifier.py builds for --challenger gate
-          "verity/core/protocols/sampled_proofs",
+          "verity/core/claims/__init__.py", "verity/core/protocols/sampled_proofs",
           # verifier.py and its in-process harness, which the stub verifier runs
           "benchmarks/remote_session",
           # the challenger's tunnel client, whose forced pty the challenger's tunnel key allows

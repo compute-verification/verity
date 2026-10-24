@@ -322,6 +322,25 @@ def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served,
         SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log2", "--state", str(tmp_path / "none")])
 
 
+def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, monkeypatch):
+    """CMP-52: the serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
+    instance, the Lean verifier of record's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
+    it; a source no claim instance names, `os.urandom` among them, is refused before any coin is drawn or published."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
+    import e2e
+    for source in (os.urandom, random.Random(0).randbytes):
+        with pytest.raises(Ch.CoinError, match="coins-without-claim"):
+            e2e.Coins(0, source)
+    state = tmp_path / "state"
+    state.write_bytes(random.Random(1).randbytes(512))
+    assert e2e.Coins(0, e2e.state_entropy(str(state))).challenger.claim == SC.PV.CLAIM == "uniform/io-getrandombytes"
+    monkeypatch.setattr(SC.PV, "coins", random.Random(2).randbytes)
+    (tmp_path / "params.json").write_text("{}")
+    with pytest.raises(SystemExit, match="coins-without-claim"):
+        SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log"])
+    assert not (tmp_path / "log" / "coins.json").exists()
+
+
 @LEAN
 def test_the_challenger_holds_every_item_to_its_own(served):
     """The challenger's stream registers the honest record and its receipt names it.  An extra public key, a raised level
