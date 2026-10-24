@@ -31,6 +31,8 @@ from typing import Any, Sequence
 import numpy as np
 
 from verity.core.protocols.pouw.circuit import live as L
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.evaluation import evaluate
 from verity.ml.commitments import Commitment
 
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
@@ -107,14 +109,15 @@ def m_of(run: Any, s: int) -> int:
     return run.step_rows()[s]
 
 
-def statement(run: Any, s: int) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+def statement(run: Any, s: int, m: int | None = None) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
     """Round s's ``live@<s>``: its input rows, each port's u16 words (`live.statement_rows`' ports, one instance), and
-    its ``--registered`` file (`live.reads_file`) under the window Program's digest, the open root and the session."""
+    its ``--registered`` file (`live.reads_file`) under the window Program's digest, the open root and the session, at
+    m_s (or a claimed ``m``)."""
     served, T = run.served, run.rows
     if s >= len(run.round_log):
         raise ValueError(f"round {s} hasn't closed, so its slot table isn't committed")
     roots = {v: r.root.hex() for v, r in served.live.items()}
-    m = m_of(run, s)
+    m = m_of(run, s) if m is None else m
     rows = {f"slot_{i}": w for i, w in enumerate(slot_words(run.owners.get(s, []), T))}
     rows |= {f"req_{i}": w for i, w in enumerate(request_words(run.admitted.get(0, []), T))}
     rows["m"] = np.asarray(L.slot_words([m])[0], np.uint16)
@@ -123,10 +126,21 @@ def statement(run: Any, s: int) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
     return {p: np.asarray(w, np.uint16).reshape(1, -1) for p, w in rows.items()}, doc
 
 
+def evaluated(run: Any, s: int, m: int | None = None) -> int:
+    """``live@<s>``'s ok: `PouwLiveSlots_v1{T}` evaluated on its statement's rows (`statement`, at m_s or ``m``), each
+    row's u16 words low bit first."""
+    rows, _doc = statement(run, s, m)
+    bits = {p: [(int(w) >> j) & 1 for w in r[0] for j in range(16)] for p, r in rows.items()}
+    T = run.rows
+    (ok,) = evaluate(bind(L.PouwLiveSlots, T=T), sum((bits[f"slot_{i}"] for i in range(T)), []),
+                     sum((bits[f"req_{i}"] for i in range(T)), []), bits["m"])
+    return int(ok)
+
+
 def verdicts(run: Any) -> list[dict[str, Any]]:
     """Each round's ``live@<s>``: its slot table's root is the one round s's row commits (``slots``) and is listed whole
-    there, round 0's request headers' is round 0's ``request_table``, and `live.live_ok` of its rows at m_s; ``ok`` when
-    all hold, else ``reason``. Empty without live tables."""
+    there, round 0's request headers' is round 0's ``request_table``, and `live.live_ok` of its rows at m_s, as is its
+    unit's circuit (`evaluated`); ``ok`` when all hold, else ``reason``. Empty without live tables."""
     served = run.served
     if served is None or not served.live or served.refused:
         return []
@@ -142,11 +156,12 @@ def verdicts(run: Any) -> list[dict[str, Any]]:
                or slots.value not in row["a"]
                else "round 0's request headers aren't its request_table" if req is None
                or req.root.hex() != run.round_log[0].get("request_table")
-               else f"live_ok is 0 at m = {m}" if not L.live_ok(leaves, heads, m) else None)
+               else f"live_ok is 0 at m = {m}" if not L.live_ok(leaves, heads, m)
+               else f"its unit evaluates to 0 at m = {m}" if not evaluated(run, s) else None)
         out.append({"round": s, "m": m, "admitted": L.admitted(leaves, heads), "ok": why is None,
                     **({} if why is None else {"reason": f"live@{s}: {why}"})})
     return out
 
 
-__all__ = ["REQUESTS", "SLOTS", "Table", "headers", "m_of", "nonce", "request_words", "slot_leaves", "slot_words", "statement", "table", "value",
-           "verdicts"]
+__all__ = ["REQUESTS", "SLOTS", "Table", "evaluated", "headers", "m_of", "nonce", "request_words", "slot_leaves", "slot_words",
+           "statement", "table", "value", "verdicts"]

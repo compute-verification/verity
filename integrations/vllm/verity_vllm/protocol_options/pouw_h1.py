@@ -532,7 +532,8 @@ class H1Run:
                                     "table can't name each served row's request")
             salt = self.salt
             if r not in self._tables:
-                self._tables[r] = RQ.request_table(salt, r, self.rows, self.admitted.get(r, []), self._key)
+                self._tables[r] = ((r == 0 and self._live("requests", 0))
+                                   or RQ.request_table(salt, r, self.rows, self.admitted.get(r, []), self._key))
             table = self._tables[r]
             slots = self._slot_tables[r] = (self._live("slots", r)
                                             or RQ.slot_table(self.salt, r, self.rows, owners, self._key))
