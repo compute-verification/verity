@@ -6,7 +6,10 @@
 - `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), private: what serving decided that nothing registered predicts. Its
   canonical bytes, or an `Advice`, which is held to its encoding. Nothing else is advice.
 - `ingress`: each request's certified body by its id (I1's `RequestAdvice.id`, the body's `user`), the fixed ingress schema: an
-  OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice.
+  OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice. A body
+  given as the warden's attested bytes is ingress v0 (`program.registry.io_shell`, under `Registered.served_model`), and its
+  request gets the parse unit `IngressPrompt_v1{MODEL, LP, V}` (`RequestUnit.parse`): the unit that reads the ingress transfer
+  gates, whose ids output is the request Program's `prompt` input and whose ``ok`` proves the bytes are in the schema.
 
 - A request's Program is the Build's request wrapper at the shape the advice ran it at, `build.build_program(φ_r, "request", LP,
   T, C)`, under the policy its body names (`policy_of`): LP its prompt length, T its live decode rows, the ones whose sample it kept
@@ -51,7 +54,9 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
+from verity.ml.circuits.defs import bind
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.program.registry import io_shell as IO
 
 from .build import Unexpressible, build_program, model_shape
 from .phi import Phi
@@ -75,22 +80,26 @@ _TRANSPORT = ("prompt", "model", "user", "stream", "stream_options", "return_tok
 @dataclass(frozen=True)
 class Registered:
     """The registration's static part: φ without workload or sampling (the model, target, TP, engine, execution and profile), the
-    default seed a request without one is sampled under (the public rule, `engine.served_seed`), and ℓ, the cap on the advice's
-    length in bits."""
+    default seed a request without one is sampled under (the public rule, `engine.served_seed`), ℓ, the cap on the advice's
+    length in bits, and the served model name ingress v0's ``"model"`` carries (`io_shell`; None: no request's ingress is bytes)."""
 
     phi: Phi
     default_seed: int
     cap_bits: int = CAP_BITS
+    served_model: str | None = None
 
     def __post_init__(self) -> None:
         if self.phi.requests:
             raise ValueError("a registered φ carries no workload: the advice brings the requests")
         if type(self.cap_bits) is not int or self.cap_bits < 8:
             raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {self.cap_bits!r}")
+        if self.served_model is not None and (why := IO.refuse({"MODEL": self.served_model})):
+            raise ValueError(f"the served model name has no ingress v0 layout: {why}")
 
     @classmethod
-    def of(cls, phi: Phi, default_seed: int, cap_bits: int = CAP_BITS) -> Registered:
-        return cls(Phi.from_json({**phi.to_json(), "workload": {}, "sampling": {"kind": "greedy"}}), int(default_seed), cap_bits)
+    def of(cls, phi: Phi, default_seed: int, cap_bits: int = CAP_BITS, served_model: str | None = None) -> Registered:
+        return cls(Phi.from_json({**phi.to_json(), "workload": {}, "sampling": {"kind": "greedy"}}), int(default_seed), cap_bits,
+                   served_model)
 
 
 @dataclass(frozen=True)
@@ -119,6 +128,7 @@ class RequestUnit:
     id: str = ""
     C: int = 0
     producers: tuple[int, ...] = ()
+    parse: Any = None   # with byte ingress, its `IngressPrompt_v1` binding: the unit that reads the ingress transfer gates
 
     def key(self) -> str:
         return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else [])], sort_keys=True)
@@ -139,7 +149,8 @@ class Compiled:
         return {"schema": SCHEMA, "compiler": code_version(), "cap_bits": self.cap_bits, "workload_digest": self.workload.digest,
                 "lag": self.workload.lag, "programs": sorted(self.programs),
                 "requests": [None if u is None else {"request": u.request, "id": u.id, "digest": u.digest, "LP": u.LP, "T": u.T, "C": u.C,
-                                                     "policy": u.policy, "seed": u.seed, "first_step": u.first_step} for u in self.requests],
+                                                     "policy": u.policy, "seed": u.seed, "first_step": u.first_step,
+                                                     "parse": u.parse and u.parse.id} for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
                 "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())}}
 
@@ -190,6 +201,20 @@ def advice_of(registered: Registered, advice: Any) -> I1.Advice:
     except Exception as e:  # noqa: BLE001 -- I1's refusal is MalformedAdvice; any other failure on these bytes refuses them too
         raise Unexpressible(f"ill-formed advice: {e}" if isinstance(e, I1.MalformedAdvice) else
                             f"ill-formed advice: I1's decode failed ({type(e).__name__}: {e})") from None
+
+
+def ingress_body(i: int, q: I1.RequestAdvice, body: bytes, served: str | None, vocab: int) -> dict:
+    """Request `i`'s ingress bytes as the body ingress v0 reads them (`io_shell.reference`: its ids, max_tokens and temperature 0),
+    at the advice's `prompt_len`; refused unless they are in the schema, which `IngressPrompt_v1`'s ``ok`` then proves."""
+    if served is None:
+        raise Unexpressible(f"request {i}: its ingress is bytes, and the registration names no served model for ingress v0")
+    n = IO.length(served, q.prompt_len, vocab)
+    if len(body) != n:
+        raise Unexpressible(f"request {i}: its ingress is {len(body)} bytes, not ingress v0's {n} at {q.prompt_len} prompt tokens")
+    ok, ids, m = IO.reference(body, served, q.prompt_len, vocab)
+    if not ok:
+        raise Unexpressible(f"request {i}: its ingress bytes aren't in ingress schema v0 (`io_shell`)")
+    return {"prompt": ids, "max_tokens": m, "temperature": 0}
 
 
 def request_of(i: int, q: I1.RequestAdvice, body: Any, vocab: int) -> tuple[tuple[int, ...], dict]:
@@ -340,10 +365,14 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
             raise Unexpressible(why)
         refused.setdefault(i, why)
 
-    prompts, params = {}, {}
+    prompts, params, wired = {}, {}, set()
     for i, q in enumerate(adv.requests):
         try:
-            prompts[i], params[i] = request_of(i, q, ingress.get(q.id), shape.V)
+            body = ingress.get(q.id)
+            if type(body) is bytes:
+                body = ingress_body(i, q, body, registered.served_model, shape.V)
+                wired.add(i)
+            prompts[i], params[i] = request_of(i, q, body, shape.V)
         except Unexpressible as e:
             refuse(i, str(e))
     rows: dict[int, list[tuple[int, I1.Row]]] = {i: [] for i in range(len(adv.requests))}
@@ -373,7 +402,8 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
             except Unexpressible as e:
                 refuse(i, str(e))
             else:
-                units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C, producers))
+                parse = bind(IO.IngressPrompt, MODEL=registered.served_model, LP=LP, V=shape.V) if i in wired else None
+                units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C, producers, parse))
                 continue
         units.append(None)
     while partial and (lost := [(u.request, p) for u in units if u is not None for p in u.producers if units[p] is None][:1]):

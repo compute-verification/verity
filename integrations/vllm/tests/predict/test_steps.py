@@ -25,8 +25,10 @@ from verity_vllm.predict.steps import (
     trace_commands,
     trace_dir,
 )
+from verity_vllm.program.registry import io_shell as IO
 
 from verity.core.protocols.certifier import advice as I1
+from verity.ml.circuits.defs import bind
 
 FIX = Path(__file__).parent / "fixtures"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
@@ -36,6 +38,7 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 4}
 STOCH = {"temperature": 0.8, "top_p": 0.95, "top_k": 0, "seed": None, "max_tokens": 3, "min_p": 0.0, "repetition_penalty": 1.0}
 STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+SERVED = "served-model"
 
 
 def _registered(cfg: dict = TINY, **kw) -> Registered:
@@ -94,6 +97,35 @@ def test_requests_compile_to_the_builds_request_programs_at_the_shapes_they_ran(
     s = json.loads(json.dumps(c.summary()))
     assert s["workload_digest"] == wl.digest and s["steps"][1] == [[0, 8, 1, 1], [1, 0, 5, 1]] and s["cap_bits"] == reg.cap_bits
     assert compile_steps(reg, I1.encode(advice), ingress).summary() == c.summary()
+
+
+def _wired(ingress: dict, *ids: str) -> dict:
+    return {k: IO.encode(SERVED, b["prompt"], b["max_tokens"], TINY["vocab_size"]) if k in ids else b for k, b in ingress.items()}
+
+
+def test_byte_ingress_compiles_to_the_same_programs_with_a_parse_unit_each():
+    """r0 and r2 bring ingress v0's bytes: their Programs and rows are the ones their parsed bodies compile to, and each gets
+    `IngressPrompt_v1` at its LP, the unit that reads the ingress transfer gates; r1's parsed body gets none."""
+    reg, (advice, ingress) = Registered.of(_registered().phi, 7, served_model=SERVED), _mixed()
+    plain, wired = compile_steps(reg, advice, ingress), compile_steps(reg, advice, _wired(ingress, "q0", "q2"))
+    assert [u.digest for u in wired.requests] == [u.digest for u in plain.requests] and wired.steps == plain.steps
+    parse = bind(IO.IngressPrompt, MODEL=SERVED, LP=8, V=256)
+    assert [u.parse for u in wired.requests] == [parse, None, parse]
+    assert [u["parse"] for u in json.loads(json.dumps(wired.summary()))["requests"]] == [parse.id, None, parse.id]
+
+
+@pytest.mark.parametrize("edit, served, why", [
+    (lambda b: b, None, "names no served model"),
+    (lambda b: b.replace(b'"temperature":0', b'"temperature":1'), SERVED, "aren't in ingress schema v0"),
+    (lambda b: b[:-1] + b" }", SERVED, "not ingress v0's"),
+])
+def test_byte_ingress_without_a_served_model_or_out_of_the_schema_is_refused(edit, served, why):
+    advice, ingress = _mixed()
+    ingress = _wired(ingress, "q0")
+    ingress["q0"] = edit(ingress["q0"])
+    reg = Registered.of(_registered().phi, 7, served_model=served)
+    with pytest.raises(Unexpressible, match=why):
+        compile_steps(reg, advice, ingress)
 
 
 def test_a_requests_program_reads_its_own_fields_alone():
