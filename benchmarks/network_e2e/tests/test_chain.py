@@ -214,8 +214,8 @@ def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advic
     r = e2e.run(args, [], clock=lambda: 0.0)
     assert r["ok"] is True and r["profile"] == "advice" and r["claim"] == e2e.CLAIM_ADVICE
     assert list(r["runs"]) == ["honest", "late", "extra", "drop", "token"] and r["link_windows"] == []
-    assert r["pending"] == {"drop": {"waits": "N2-ADVICE's counts", "check": "refused", "n2": None},
-                            "token": {"waits": "IO-TIE", "check": "accepted", "n2": None}}
+    assert r["pending"] == {"drop": {"waits": "N2-ADVICE's counts", "check": "refused", "n2": None, "ran": True},
+                            "token": {"waits": "IO-TIE", "check": "accepted", "n2": None, "ran": True}}
     assert r["runs"]["honest"]["network"]["accepted"] is None and r["proofs"]["ran"] is False
     assert "N2-ADVICE" in r["proofs"]["why"] and r["chain"]["negatives"]["ran"] is False
     assert sorted(r["negatives"]) == ["extra", "late"] and r["negatives"]["late"]["by"] == ["the rehearsal's own check"]
@@ -235,3 +235,11 @@ def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advic
     _varied(tmp_path / "bad", virtual, {"honest": "accepted", "late": "accepted", "extra": "refused"})
     r = e2e.run(_args(tmp_path / "bad", tmp_path / "out2"), [], clock=lambda: 0.0)
     assert r["ok"] is False and r["negatives"]["late"]["refused"] is False
+    idle = _varied(tmp_path / "idle", virtual, {"honest": "accepted", "late": "refused", "extra": "refused",
+                                               "drop": "refused"})
+    for s in ("extra", "drop"):
+        (idle / s / "server.json").write_text(json.dumps({"requests": 0}))
+    r = e2e.run(_args(idle, tmp_path / "out3"), [], clock=lambda: 0.0)
+    assert r["ok"] is False and r["negatives"]["extra"]["refused"] is False and r["pending"]["drop"]["ran"] is False
+    assert "- **drop** (NEG's, pending N2-ADVICE's counts, which alone refuses it here): not run: its shim received " \
+           "no request" in (tmp_path / "out3" / "report.md").read_text()

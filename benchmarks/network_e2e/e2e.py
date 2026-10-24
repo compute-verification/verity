@@ -209,6 +209,7 @@ def collect(sources: list[Path], work: Path) -> dict[str, dict]:
                 raise SystemExit(f"{run}: no certified.jsonl")
             check = _check(_read(run / "check.json")) or _check((summary.get("runs") or {}).get(s))
             found[s] = {"dir": run, "source": str(src), "check": check,
+                        "shim_requests": (_read(run / "server.json") or {}).get("requests"),
                         "gate": None if gate is None else {"run": gate.get("run"), "rc": gate.get("rc"),
                                                            "ended": gate.get("ended"), "pinned": gate.get("pinned"),
                                                            **((gate.get("runs") or {}).get(s) or {})}}
@@ -427,7 +428,7 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
         ends = {e: _member(members[f"{name}-{e}"]) | {"units": members[f"{name}-{e}"]["units"]}
                 for e in n2_zk.ENDS if (members.get(f"{name}-{e}") or {}).get("units")}
         out_runs[name] = {"dir": str(given.get("dir", runs[HONEST]["dir"])), "check": given.get("check"),
-                          "gate": given.get("gate"),
+                          "gate": given.get("gate"), "shim_requests": given.get("shim_requests"),
                           "network": {k: (h["network"] or {}).get(k) for k in ("accepted", "windows", "refused", "digest")},
                           "issuer_refused": h.get("issuer_refused"),
                           "proofs": {e: {k: v for k, v in m.items() if k != "units"} for e, m in ends.items()} or None}
@@ -454,7 +455,8 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
     ok = (n2_ok and check_ok and proved_ok and stages_ok and len(negatives) == len(expected)
           and all(n["refused"] for n in negatives.values()))
     waiting = {name: {"waits": w, "check": (out_runs[name]["check"] or {}).get("verdict"),
-                      "n2": out_runs[name]["network"]["accepted"]} for name, w in pending.items()}
+                      "n2": out_runs[name]["network"]["accepted"], "ran": out_runs[name]["shim_requests"] != 0}
+               for name, w in pending.items()}
     return {"format": FORMAT, **meta, "claim": CLAIM_ADVICE if advised else CLAIM, "ok": ok, "runs": out_runs,
             "link_windows": rows, "negatives": negatives, "pending": waiting, "chain": stages,
             "proofs": {"ran": bool(proofs.get("ran")), "adopted": proofs.get("adopted"), "why": proofs.get("why"),
@@ -496,8 +498,11 @@ def negative(run: dict, rows: list[dict]) -> dict:
     held = all(p["held"] for p in (run["proofs"] or {}).values())
     if proved and held:
         by.append(f"the proved head checks (link-windows {proved})")
+    if run.get("shim_requests") == 0:
+        by = ["nothing: its shim received no request, so its tamper never ran"]
     refused = ((run["network"]["accepted"] is False and bool(n2) if decided else check is not None)
-               and (check is None or check["verdict"] == "refused") and (not run["proofs"] or (held and bool(proved))))
+               and (check is None or check["verdict"] == "refused") and (not run["proofs"] or (held and bool(proved)))
+               and run.get("shim_requests") != 0)
     return {"refused": refused, "by": by, "n2_refused_windows": n2, "proved_refused_windows": proved,
             "failed_parts": {r["window"]: r["failed_parts"] for r in rows if r["n2"] == "refuse"},
             "proved": bool(run["proofs"]), "proofs_held": held if run["proofs"] else None}
@@ -551,8 +556,9 @@ def markdown(r: dict) -> str:
                      f"{'; '.join(n['by']) or 'nothing'}{'' if n['proved'] else ' (not proved)'}")
     for name, n in (r.get("pending") or {}).items():
         n2 = n["n2"]
-        lines.append(f"- **{name}** (NEG's, pending {n['waits']}, which alone refuses it here): the rehearsal's check "
-                     f"{_cell(n['check'])}, N2 {'—' if n2 is None else 'accept' if n2 else 'refuse'}")
+        lines.append(f"- **{name}** (NEG's, pending {n['waits']}, which alone refuses it here): " + (
+            f"the rehearsal's check {_cell(n['check'])}, N2 {'—' if n2 is None else 'accept' if n2 else 'refuse'}"
+            if n["ran"] else "not run: its shim received no request, so its tamper never ran"))
     scanned = [(name, e, m) for name, x in r["runs"].items() for e, m in (x.get("proofs") or {}).items()]
     if scanned:
         lines += ["", "## Proving sessions", "",
