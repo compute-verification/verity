@@ -241,13 +241,12 @@ theorem eqTablePar_eq (r : Array F128) : eqTablePar r = eqTable r := by
 /-- `switchVec` as compiled code computes it: byte `j`'s buckets of the table (`byteBuckets`), one task to a byte, then
 `s[8j + i] = Σ_{b < 256, bit_i(b)} buckets_j[b]`. -/
 def switchVecFast (g : Array F128) (c : Claim) : Array F128 :=
-  let eY := eqTablePar (c.x.extract 1 c.x.size)
+  let eY := eqTable (c.x.extract 1 c.x.size)
   let bs := ((Array.range 16).map fun j => Task.spawn fun _ => byteBuckets g eY j).map Task.get
   (Array.range 128).map fun v => sumF 256 fun b => if b.testBit (v % 8) then (bs[v / 8]!)[b]! else 0
 
 theorem switchVec_eq_fast (g : Array F128) (c : Claim) : switchVec g c = switchVecFast g c := by
   unfold switchVec switchVecFast
-  rw [eqTablePar_eq]
   apply Array.map_congr_left
   intro v hv
   have hv := Array.mem_range.1 hv
