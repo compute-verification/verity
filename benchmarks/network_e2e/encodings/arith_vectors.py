@@ -49,11 +49,18 @@ def _load(name: str) -> Any:
 
 V, R, C, D, CV = _load("v1"), _load("replay"), _load("code"), _load("derived"), _load("code_v1")
 
-from verity.core.protocols.certifier import arith_encode as AE  # noqa: E402
-
-K = AE.K_MAX
+#: the step's scaling slots (`arith_encode.K_MAX`) and the model's count width, the bindings the vectors are cut for
+K = 18
 NW = 24
 EOS = 2
+FIXTURE = HERE.parents[2] / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
+
+
+def _ae() -> Any:
+    """`arith_encode`, for the checks only: the streams are code.py's and v1's alone."""
+    from verity.core.protocols.certifier import arith_encode as AE
+    assert AE.K_MAX == K
+    return AE
 
 
 @contextmanager
@@ -178,9 +185,10 @@ def _look(seg: Sequence[int], pos: int, k: int) -> list[int]:
     return (list(seg[pos:pos + k]) + [0] * k)[:k]
 
 
-def walk(stream: dict) -> Iterator[tuple[int, list[tuple[AE.Coder, list, list[int], tuple[AE.Coder, int]]], tuple]]:
+def walk(stream: dict) -> Iterator[tuple[int, list[tuple[Any, list, list[int], tuple[Any, int]]], tuple]]:
     """Each window's reference run along its segment: (window, [(state, symbol, seg, (next, n))], (state, last 2 bits,
     (ok, n), end))."""
+    AE = _ae()
     for w, win in enumerate(stream["windows"]):
         seg = [int(c) for c in win["segment"]]
         st, pos, steps = AE.fresh(), 0, []
@@ -199,6 +207,7 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
     single-bit flips, a trailing bit and a dropped bit are refused (`check_window`); the model's estimates are v1's.
     With `circuit`, the Definitions against the references on every step and finish, and on a flipped lookahead and a
     disabled step at each symbol."""
+    AE = _ae()
     rng = rng or random.Random(0)
     BIN, bad, n_sym, n_bits, scal = stream["BIN"], [], 0, [], []
     steps_all, fins_all = [], []

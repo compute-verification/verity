@@ -11,4 +11,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # derived.py builds and charges advice v0 with the certifier's I1 (verity.core.protocols.certifier.advice), which reads
 # the package inits on the way.
 inputs = ["verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/certifier/__init__.py", "verity/core/protocols/certifier/advice.py"]
+          "verity/core/protocols/certifier/__init__.py", "verity/core/protocols/certifier/advice.py",
+          # test_arith_vectors holds the certifier's arith_encode vectors to what this directory's coders code now
+          "verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json"]
