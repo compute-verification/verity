@@ -65,9 +65,10 @@ owner; nothing at or above a failed commit lands until it leaves `next`.  And ev
 (`py_compile`): the PR that last changed one that doesn't is ejected.  No train is checked.  Each landing awaits the
 after-landing run, the post-landing run above with every ci.toml job (`AFTER_LANDING`), `--no-cache` while
 `after_landing_no_cache`, and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
-itself passed (its baseline; `research queue baseline SHA --by ci` records one by hand).  A failure reverts what it implicates
-only when each failed step passed on the last verified `main` under the same flags; with several PRs implicated it bisects them,
-each step a run of one landing's commit with the failed steps alone, and nothing lands meanwhile.
+itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
+by hand).  A failure reverts what it implicates only when each failed step passed on the last verified `main` under the same
+flags; with several PRs implicated and no revert among their landings it bisects them, each step a run of one landing's commit
+with the failed steps alone, and nothing lands meanwhile.  A run with no readable state `LOST_AFTER_S` after its launch is lost.
 
 State (launches, refusals told) is the queue's `state.json`, under `drive`."""
 from __future__ import annotations
@@ -152,6 +153,8 @@ REVIEWED = "a land verdict at each head"
 AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
 #: the after-landing steps a run may skip by name: lean-agreement when nothing it checks changed, lean-changed under --no-cache
 AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
+#: how long a run may show no readable state (`unknown`) before drive takes it as lost (`Driver._lost`)
+LOST_AFTER_S = 3 * 3600
 #: the step a Lean change's Lean check before a review landing runs (`train.sh TOP MACHINES --deferred lean-audit`)
 LEAN_STEP = "lean-audit"
 #: a Lake package's lock, which a train's Lean check may regenerate (`merge.LOCK`)
@@ -1000,12 +1003,22 @@ class Driver:
         tip, signalled = run["tip"], False
         if (why := run.get("acting")) is None:
             states = self._states(run["ids"])
+            if self._lost(run, states):
+                if not run.get("resend"):
+                    pl["run"], pl["resend"] = None, True
+                    self.q.log(f"research queue drive: the post-landing run {' '.join(run['ids'])} of {tip[:12]} is lost (no "
+                               f"state read {LOST_AFTER_S // 3600} h after its launch): it launches again once")
+                    return
+                states = {r: ("lost", -1) for r in states}
             early = next((s[3] for s in states.values() if len(s) > 3 and s[0] in ACTIVE and s[3]), None)
             if not early and any(st in ACTIVE for st, *_ in states.values()):
                 return
             if not early and any(rc == 0 for _, rc, *_ in states.values()):
                 pl["run"] = None
                 if unrun := self._unrun(run["ids"], [s for s in pl.get("steps") or sorted(self.defer) if s not in run.get("skip", ())]):
+                    if run.get("baseline"):
+                        self._red_baseline(drive, pl, run, f"it passed without passing {', '.join(unrun)}")
+                        return
                     pl["failed"] = tip
                     self.refuse(drive, f"postland:{tip}", f"the post-landing run {' '.join(run['ids'])} of `main` {tip[:12]} "
                                                           f"passed without passing {', '.join(unrun)} (skipped, or absent from its "
@@ -1074,18 +1087,21 @@ class Driver:
         head = (f"the post-landing run {ids} of `main` {tip[:12]} ({', '.join(pl.get('steps') or ())}) failed ({why}); PRs "
                 f"landed since {base[:12]}, its last verified `main`: {since}")
         key = f"postland:{tip}"
+        if (signalled or what == KILLED) and not run.get("resend"):
+            pl["resend"] = True
+            self.q.log(f"research queue drive: {head}. It was killed, a machine's fault: it runs again once, on `main`'s tip")
+            return True
+        if run.get("baseline"):
+            self._red_baseline(drive, pl, run, why)
+            return True
         if signalled or what == KILLED:
-            if not run.get("resend"):
-                pl["resend"] = True
-                self.q.log(f"research queue drive: {head}. It was killed, a machine's fault: it runs again once, on `main`'s tip")
-                return True
             pl["failed"] = tip
             self.refuse(drive, key, f"{head}. Reverted nothing: it was killed again on its resend, a machine's fault")
             return True
         if "as" in run and (unsure := self._unconfirmed(pl, run)):
             pl["failed"] = tip
             self.refuse(drive, key, f"{head}. Reverted nothing: {unsure}, so `main` may have been red before them. Fix `main`, or "
-                                    "once it is green record it: `research queue baseline SHA --by ci`")
+                                    "once it is green record it: `/data/infra/drive.sh queue baseline SHA --by ci`")
             return True
         if not members or what == UNTOUCHED:
             pl["failed"] = tip
@@ -1094,6 +1110,12 @@ class Driver:
                                     "machine failed. Fix `main`; the next landing's run checks it again")
             return True
         if "as" in run and one is None and len(cands := hit or members) > 1:
+            if REVERTS_RE.search(_out(self.repo, "log", "--format=%B", f"{base}..{tip}")):
+                pl["failed"] = tip
+                self.refuse(drive, key, f"{head}. Reverted nothing: a revert lies in {base[:12]}..{tip[:12]}, so a landing's "
+                                        "commit there isn't what `main` ran, and bisecting could blame the wrong PR. Find the "
+                                        "culprit by hand")
+                return True
             pl["bisect"] = {"tip": tip, "base": base, "steps": self._failing(run), "why": why,
                             "no_cache": (run.get("as") or {}).get("no_cache", self.after_landing_no_cache),
                             "cands": [[x.pr, x.head, x.owner, x.commit] for x in cands], "good": -1,
@@ -1102,6 +1124,25 @@ class Driver:
                        f"{' '.join(f'#{x.pr}' for x in cands)} with {', '.join(pl['bisect']['steps'])} alone; nothing lands meanwhile")
             return True
         return self._revert_landed(drive, pl, tip, base, members, one, hit, what, head, key)
+
+    def _lost(self, run: dict, states: dict) -> bool:
+        """Whether every twin of ``run`` that hasn't ended has had no readable state (`unknown`) for `LOST_AFTER_S` since its
+        launch: it is taken as lost, as a killed run is, so a store or node that never answers doesn't hold drive forever."""
+        live = [st for st, *_ in states.values() if st in ACTIVE]
+        return bool(live) and all(st == "unknown" for st in live) and self.now() - run.get("at", self.now()) > LOST_AFTER_S
+
+    def _red_baseline(self, drive: dict, pl: dict, run: dict, why: str) -> None:
+        """The review landing's first run, of `main` itself, failed: `main` was red before any review landing.  It is verified
+        anyway with the steps it passed alone (`verified_as`), so landing goes on and a later failure reverts only on a step that
+        passed here (`_unconfirmed`); `CI` is told."""
+        tip, steps = run["tip"], (run.get("as") or {}).get("steps") or list(AFTER_LANDING)
+        unrun = self._unrun(run["ids"], steps)
+        pl["verified"], pl["verified_as"] = tip, {"steps": [s for s in steps if s not in unrun], "no_cache": run["as"]["no_cache"]}
+        pl["pending"] = [p for p in pl["pending"] if not self._ancestor(p, tip)]
+        self.refuse(drive, f"postland:{tip}", f"the baseline after-landing run {' '.join(run['ids'])} of `main` {tip[:12]} failed "
+                                              f"({why}): `main` was red before any review landing. Landing goes on, and until a "
+                                              f"run of `main` passes {', '.join(unrun) or 'them'}, their failure reverts nothing. "
+                                              "Fix `main`")
 
     def _failing(self, run: dict) -> list[str]:
         """The steps a post-landing run's steps.jsonl records as failed."""
@@ -1167,7 +1208,7 @@ class Driver:
         q, main = self.q, _out(self.repo, "rev-parse", "origin/main")
         pl["pending"] = [p for p in pl["pending"] if not self._ancestor(p, pl["verified"])]
         base = self.review and not self._baselined(pl)            # the review landing's first run: `main` itself (`_unbaselined`)
-        if (not pl["pending"] and not base) or main == pl.get("failed") or (main == pl["verified"] and not base):
+        if not base and (not pl["pending"] or main == pl.get("failed") or main == pl["verified"]):
             return
         if self.review:
             pl["steps"] = list(AFTER_LANDING)
@@ -1193,7 +1234,7 @@ class Driver:
                                                           f"run: {tail}")
             return
         pl["run"] = {"ids": ids, "tip": main, "at": self.now(), **({"resend": True} if pl.pop("resend", False) else {}),
-                     **({"skip": skip} if skip else {}),
+                     **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),
                      **({"as": {"steps": [s for s in AFTER_LANDING if s not in skip], "no_cache": extra["no_cache"]}}
                         if self.review else {})}
         q.log(f"research queue drive: post-landing run of `main` {main[:12]} ({steps}): {' '.join(ids)}; "
@@ -2361,17 +2402,17 @@ class Driver:
         return "; ".join(what)
 
     def _baselined(self, pl: dict) -> bool:
-        """Whether `verified` passed the after-landing run as the review landing runs it (`verified_as`: every step but those it
-        may skip by name, under `after_landing_no_cache`), or ci recorded it green (`research queue baseline`, either flag)."""
+        """Whether `verified` ran the after-landing run as the review landing runs it, under `after_landing_no_cache`
+        (`verified_as`: the steps it passed, every step when green, fewer when `main` was red then, `_red_baseline`), or ci
+        recorded it green (`research queue baseline`, either flag)."""
         vs = pl.get("verified_as")
-        return bool(vs) and vs.get("no_cache") in (None, self.after_landing_no_cache) and not (
-            set(AFTER_LANDING) - set(vs.get("steps") or ()) - set(AFTER_LANDING_OPTIONAL))
+        return bool(vs) and vs.get("no_cache") in (None, self.after_landing_no_cache)
 
     def _unbaselined(self, drive: dict) -> str | None:
         """Why no review landing happens now, or None: a bisection of a failed after-landing run is going (`_bisect_step`), or
         `main` has no baseline (`_baselined`), so a failure after a landing couldn't be told from one `main` had before it.  The
         review landing's first run is then of `main` itself (`start_postland`), once any post-landing run still going has ended
-        (check mode's last); ci records a green `main` by hand with `research queue baseline SHA --by ci`."""
+        (check mode's last); ci records a green `main` by hand with `/data/infra/drive.sh queue baseline SHA --by ci`."""
         main = _out(self.repo, "rev-parse", "origin/main")
         pl = drive.setdefault("postland", {"verified": main, "pending": [], "run": None})
         if b := pl.get("bisect"):
@@ -2381,18 +2422,17 @@ class Driver:
             return None
         if run := pl.get("run"):
             return (f"nothing lands before the post-landing run {' '.join(run['ids'])} of `main` {run['tip'][:12]} ends and an "
-                    "after-landing run of `main` passes every step (its baseline)")
-        if pl.get("failed") == main:
-            return (f"nothing lands: `main` {main[:12]} failed its baseline after-landing run (told above). Fix `main`, or once "
-                    "it is green record it: `research queue baseline SHA --by ci`")
-        return f"nothing lands before an after-landing run of `main` {main[:12]} itself passes every step (its baseline)"
+                    "after-landing run of `main` itself has run (its baseline)")
+        return f"nothing lands before an after-landing run of `main` {main[:12]} itself has run (its baseline)"
 
     def _bisect_step(self, drive: dict) -> None:
         """Bisect the landings a failed after-landing run implicates (`_postland_failed`, `postland["bisect"]`): check the commit
         of the middle one not yet judged with the failed steps alone (`--deferred STEPS`, the run's flags), each that passes
         clearing it and those below, each that fails blaming it and those above, until one fails and the one below it passes
         (or `verified` did): that PR is reverted (`_revert_landed`).  When even the newest passes, none of them broke it:
-        nothing is reverted, `CI` is told.  A run never started or stopped runs again; killed twice, it is a machine's fault."""
+        nothing is reverted, `CI` is told.  A run fails a landing only when it failed one of those steps; one never started or
+        stopped runs again, and one that ends otherwise (killed, lost, exit 0 without their records, a failure elsewhere) runs
+        once more, then ends the bisection with nothing reverted."""
         if not (pl := drive.get("postland")) or not (b := pl.get("bisect")):
             return
         cands, tip, base = [Member(*x) for x in b["cands"]], b["tip"], b["base"]
@@ -2401,23 +2441,26 @@ class Driver:
                 f"{' '.join(f'#{x.pr}' for x in cands)}, landed since {base[:12]}")
         if run := b.get("run"):
             states = self._states(run["ids"])
-            if any(st in ACTIVE for st, *_ in states.values()):
+            lost = self._lost(run, states)
+            if not lost and any(st in ACTIVE for st, *_ in states.values()):
                 return
             b["run"] = None
-            if any(rc == 0 for _, rc, *_ in states.values()) and not self._unrun(run["ids"], b["steps"]):
+            rcs = [rc for _, rc, *_ in states.values()]
+            if not lost and any(rc == 0 for rc in rcs) and not self._unrun(run["ids"], b["steps"]):
                 b["good"] = run["i"]
-            elif all(rc in (NOT_STARTED, SIGTERM_RC) for _, rc, *_ in states.values()):
+            elif not lost and all(rc in (NOT_STARTED, SIGTERM_RC) for rc in rcs):
                 pass
-            elif any(isinstance(rc, int) and (rc < 0 or rc > 128) for _, rc, *_ in states.values()) and not b.get("killed"):
-                b["killed"] = True
-            elif any(isinstance(rc, int) and (rc < 0 or rc > 128) for _, rc, *_ in states.values()):
+            elif not lost and not any(rc == 0 for rc in rcs) and set(self._failing(run)) & set(b["steps"]):
+                b["bad"] = run["i"]
+            elif not b.get("unclear"):
+                b["unclear"] = True                     # killed, lost, or no failed step of its own read: once more
+            else:
                 pl["failed"] = tip
                 del pl["bisect"]
-                self.refuse(drive, key, f"{head}: its run {' '.join(run['ids'])} of {cands[run['i']].commit[:12]} was killed "
-                                        "twice, a machine's fault. Reverted nothing; find the culprit by hand")
+                self.refuse(drive, key, f"{head}: its run {' '.join(run['ids'])} of {cands[run['i']].commit[:12]} ended twice "
+                                        f"neither passing nor failing {steps} ({'lost' if lost else ', '.join(map(str, rcs))}). "
+                                        "Reverted nothing; find the culprit by hand")
                 return
-            else:
-                b["bad"] = run["i"]
         if b["bad"] - b["good"] == 1:
             if b["bad"] == len(cands):
                 pl["failed"] = tip
@@ -2539,6 +2582,14 @@ class Driver:
             rid = run
         if bad < k and not self._lean_change(chain[bad]):
             c, rec = chain[bad].commit, lean[chain[bad].commit]
+            hi = max((j for j, m in enumerate(chain[:bad]) if self._lean_change(m)), default=-1)
+            if hi < 0 or any(hi <= pos[x] < bad for x, r in lean.items() if r.get("state") == "passed" and x in pos):
+                del lean[c]                 # every Lean change below it passed below it: what broke is the after-landing run's
+                self.refuse(drive, f"lean-dropped:{c}", f"the Lean check {' '.join(rec['ids'])} of `{self.q.branch}` {c[:12]} "
+                                                     f"(#{chain[bad].pr}'s merge, which changes no Lean) failed ({rec.get('why')}), "
+                                                     "and each Lean change below it passed a Lean check below it: drive drops it, "
+                                                     "and the after-landing run checks the rest")
+                return self._lean_gate(drive, chain, k, dry_run)
             self.refuse(drive, f"lean-next:{c}", f"the Lean check {' '.join(rec['ids'])} of `{self.q.branch}` {c[:12]} (#{chain[bad].pr}"
                                                  f"'s merge, which changes no Lean) failed ({rec.get('why')}), and each Lean change "
                                                  "below it has a passed Lean check: it and every PR above it wait until it leaves "
@@ -2551,7 +2602,8 @@ class Driver:
         ``chain[:k]``, the highest), then any recorded run in the store whose lean-audit passed on a commit of ``chain[i:k]`` (a
         full check, or a hand `train.sh COMMIT MACHINES --deferred lean-audit`).  A store that can't be read covers nothing."""
         pos = {m.commit: j for j, m in enumerate(chain)}
-        ok = sorted(((pos[c], c, rec["run"]) for c, rec in drive["lean"].items() if rec.get("state") == "passed" and pos.get(c, -1) >= i),
+        ok = sorted(((pos[c], c, rec["run"]) for c, rec in drive["lean"].items() if rec.get("state") == "passed" and pos.get(c, -1) >= i
+                     and not any(self._lean_change(m) for m in chain[k:pos[c] + 1])),      # what lands is the tree it checked
                     key=lambda x: (x[0] >= k, -x[0] if x[0] < k else x[0]))
         if ok:
             return ok[0][1], ok[0][2]
@@ -2638,9 +2690,25 @@ class Driver:
             if rec.get("state") is not None:
                 continue
             states = self._states(rec["ids"])
-            if any(st in ACTIVE for st, *_ in states.values()):
+            lost = self._lost(rec, states)
+            if not lost and any(st in ACTIVE for st, *_ in states.values()):
                 continue
-            if ran := [rid for rid, (_, rc, *_) in states.items() if rc == 0]:
+            rcs = [rc for _, rc, *_ in states.values()]
+            if (lost or (0 not in rcs and any(isinstance(rc, int) and (rc < 0 or (rc > 128 and rc != SIGTERM_RC)) for rc in rcs))) \
+                    and not rec.get("resend") and not (self.dry_run or self.q.shadow):
+                with slot_rank(None):
+                    ids, tail = self.launch_lean(self.repo, c, self.on)
+                if ids:                                 # killed or lost, a machine's fault: once more, as `follow_postland`
+                    rec.update(ids=ids, at=self.now(), resend=True)
+                    self.q.save_state({**self.q.load_state(), "drive": drive})
+                    self.q.log(f"research queue drive: the Lean check of {c[:12]} was {'lost' if lost else 'killed'}: again, "
+                               f"once: {' '.join(ids)}")
+                    continue
+                rec.update(state="failed", why=f"its resend registered no run: {tail}")
+                continue
+            if lost:
+                rec.update(state="failed", why=f"{' '.join(rec['ids'])} lost on its resend")
+            elif ran := [rid for rid, (_, rc, *_) in states.items() if rc == 0]:
                 if self._unrun(ran, [LEAN_STEP]):
                     rec.update(state="failed", why=f"{' '.join(ran)} exited 0 without passing {LEAN_STEP}")
                 else:

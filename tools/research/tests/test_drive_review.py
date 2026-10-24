@@ -210,10 +210,33 @@ def test_a_failed_lean_check_above_a_lean_change_checks_its_own_commit_before_bl
     assert h.launched[1] == (own, "m1", False) and not [p for p in h.posts if "@lane-1" in p]
     h.run_state[h.lean_ids()[1]] = ("done", 0, None)
     h.evidence = [_steps_run(world.tmp, h.lean_ids()[1], {LEAN_STEP: "passed"})]
-    assert h.tick().startswith("landed #1"), world.logs
-    assert _main(world) == own and _tip(world) == top
+    assert h.tick().startswith("landed #2"), world.logs                 # the failed top dropped: it wedged all above it
+    assert _main(world) == top and len(h.launched) == 2
     (post,) = [p for p in h.posts if "changes no Lean" in p]
-    assert post.startswith("@ci queue:") and "@lane-2" not in post, post
+    assert post.startswith("@ci queue:") and "@lane-2" not in post and "drive drops it" in post, post
+
+
+def test_a_killed_lean_check_runs_again_once_and_one_lost_past_the_bound_too(world, monkeypatch):
+    """A Lean check the machine killed (or whose state can't be read for hours) said nothing of the Lean change, yet counted as
+    failed for good, and an `unknown` one held `next` forever."""
+    from research.drive import LOST_AFTER_S
+
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    h.review(1)
+    h.tick()
+    top = _tip(world)
+    h.run_state[h.lean_ids()[0]] = ("done", 137, None)
+    assert not h.tick().startswith("landed")
+    assert h.launched == [(top, "m1", False)] * 2
+    h.run_state[h.lean_ids()[1]] = ("unknown", None, None)
+    h.tick()
+    assert len(h.launched) == 2                                          # within the bound it still waits
+    h.clock += LOST_AFTER_S + 1
+    out = h.tick()
+    assert len(h.launched) == 2 and not out.startswith("landed"), out   # resent once: lost again, it failed
+    (post,) = [p for p in h.posts if "of its own commit" in p]
+    assert "lost on its resend" in post, post
 
 
 def test_a_failed_lean_check_of_its_own_commit_tells_its_owner_and_runs_again_once_the_commit_leaves_next(world, monkeypatch):
@@ -235,26 +258,59 @@ def test_a_failed_lean_check_of_its_own_commit_tells_its_owner_and_runs_again_on
     assert len(h.launched) == 2 and h.launched[1][0] == _tip(world)
 
 
-def test_nothing_lands_before_the_after_landing_run_of_main_itself_passes_or_ci_records_a_baseline(world, monkeypatch):
+def test_nothing_lands_before_the_after_landing_run_of_main_itself_and_a_red_main_lands_reverting_nothing_on_its_red_step(
+        world, monkeypatch, tmp_path):
     """A first after-landing run fails on anything `main` already had: reverting the landings it follows would revert innocent
-    PRs.  So the review landing's first run is of `main` itself, and nothing lands until it passes; its failure reverts nothing."""
+    PRs.  So the review landing's first run is of `main` itself, and nothing lands until it ends.  Failed, `main` is verified
+    with the steps it passed alone: landing goes on (a red `main` cleared only by a false baseline wedged it), and a later
+    failure of a step red then reverts nothing."""
+    _registry(world, "lane-2")
     h = Review(world, monkeypatch, baseline=False)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}))
     h.review(1)
+    h.review(2)
     main = _main(world)
     out = h.tick()
     assert out.startswith("nothing lands before an after-landing run of `main`"), out
     assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": True, "no_cache": False, "no_regenerate": True})]
     h.run_state["r-post-0"] = ("done", 1, None)
-    h.evidence = [_steps_run(world.tmp, "r-post-0", {"pytest": "failed"})]
-    out = h.tick()
-    assert "failed its baseline" in out and _main(world) == main, out
+    h.evidence = [_steps_run(world.tmp, "r-post-0", {**{s: "passed" for s in AFTER_LANDING}, "lean-suites": "failed"})]
+    assert h.tick().startswith("landed #2"), world.logs
+    (post,) = [p for p in h.posts if "baseline after-landing run" in p]
+    assert "was red before any review landing" in post and "until a run of `main` passes lean-suites" in post, post
+    assert h.postland()["verified"] == main and "lean-suites" not in h.postland()["verified_as"]["steps"]
+    tip = _main(world)
+    h.run_state["r-post-1"] = ("done", 1, None)
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert _main(world) == tip
     (post,) = [p for p in h.posts if "Reverted nothing" in p]
-    assert "never passed on `main`" in post and "research queue baseline SHA --by ci" in post, post
+    assert "lean-suites didn't pass on `main`" in post and "@lane-2" not in post, post
+
+
+def test_ci_records_a_baseline_only_on_the_control_pod_and_it_clears_an_open_bisection(world, monkeypatch):
+    """Off the control pod `research queue baseline` wrote a state file there that drive never reads, and said nothing."""
+    from research.merge import DRIVE_ENV
+
+    h = Review(world, monkeypatch, baseline=False)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    main = _main(world)
+    h.q._clone()
+    state = h.q.load_state()
+    state["drive"] = {"launched": {}, "told": [], "postland": {"verified": main, "pending": [], "run": None, "bisect": {
+        "tip": main, "base": main, "steps": ["pytest"], "why": "x", "no_cache": False, "cands": [], "good": -1, "bad": 0,
+        "run": {"ids": ["r-gone"], "i": 0, "at": 0}}}}
+    h.q.save_state(state)
+    argv = ["baseline", main, "--by", "ci", "--workdir", str(h.q.workdir), "--remote", str(world.origin), "--repo", "o/r",
+            "--store", str(world.tmp / "store"), "--rules", str(world.dev / "ci" / "queue.toml")]
+    monkeypatch.delenv(DRIVE_ENV, raising=False)
+    assert Q.main(argv) == 1 and "bisect" in h.postland()
     with pytest.raises(QueueError, match="only ci"):
         Q.baseline(h.q, main, "lane-3")
-    assert Q.main(["baseline", main, "--by", "ci", "--workdir", str(h.q.workdir), "--remote", str(world.origin), "--repo", "o/r",
-                   "--store", str(world.tmp / "store"), "--rules", str(world.dev / "ci" / "queue.toml")]) == 0
+    monkeypatch.setenv(DRIVE_ENV, "1")
+    assert Q.main(argv) == 0 and "bisect" not in h.postland()
     assert h.tick().startswith("landed #1")
 
 
@@ -327,6 +383,7 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     h.tick()
     assert h.posted[2][0] == two and _main(world) == tip
     h.run_state["r-post-2"] = ("done", 1, None)
+    h.evidence = [_steps_run(world.tmp, "r-post-2", {"lean-suites": "failed"})]
     h.tick()
     main = _main(world)
     revert = _git(world.origin, "rev-list", "--first-parent", "--reverse", f"{tip}..main").split()[0]
@@ -336,6 +393,94 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     assert post.startswith("@ci @lane-2 queue: #2 reverted on `main`") and "passes on #1's landing" in post, post
     assert "#1 #3 stay on `main`" in post
     assert "bisect" not in h.postland() and h.posted[-1][0] == main
+
+
+def _bisecting(world, monkeypatch, tmp_path, revert: bool = False) -> tuple[Review, str]:
+    """#1 and #2 both change the failing test's file and land with #3; the after-landing run fails there, and drive bisects them
+    (its first run, `r-post-1`, of #1's landing).  With ``revert``, a hand revert lands on `main` first."""
+    _registry(world, "lane-1", "lane-2")
+    h = Review(world, monkeypatch)
+    if revert:
+        _git(world.dev, "fetch", "-q", "origin")
+        _git(world.dev, "checkout", "-q", "--detach", "origin/main")
+        _git(world.dev, "commit", "-q", "--allow-empty", "-m", f"Revert \"x\"\n\nThis reverts commit {_main(world)}.")
+        _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
+    world.gh.put(1, h1 := world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}))
+    world.gh.put(2, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}, base=h1))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    assert h.tick().startswith("landed #3"), world.logs
+    tip = _main(world)
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    return h, tip
+
+
+def test_a_bisection_run_lost_past_the_bound_runs_once_more_then_ends_reverting_nothing(world, monkeypatch, tmp_path):
+    """A run whose state can't be read counted as running for ever: while a bisection is open nothing lands, and ci's baseline
+    was refused, so `next` stopped until someone edited drive's state by hand."""
+    from research.drive import LOST_AFTER_S
+
+    h, tip = _bisecting(world, monkeypatch, tmp_path)
+    assert len(h.posted) == 2
+    h.run_state["r-post-1"] = ("unknown", None, None)
+    assert h.tick().startswith("nothing lands while drive bisects") and len(h.posted) == 2
+    h.clock += LOST_AFTER_S + 1
+    h.tick()
+    assert len(h.posted) == 3 and h.posted[2][0] == h.posted[1][0]       # the same landing once more
+    h.run_state["r-post-2"] = ("unknown", None, None)
+    h.clock += LOST_AFTER_S + 1
+    out = h.tick()
+    assert "bisect" not in h.postland() and _main(world) == tip, out
+    (post,) = [p for p in h.posts if "ended twice" in p]
+    assert post.startswith("@ci queue:") and "(lost)" in post and "Reverted nothing" in post, post
+
+
+def test_a_bisection_run_fails_a_landing_only_on_a_failed_step_it_bisects(world, monkeypatch, tmp_path):
+    """Any run that wasn't clean marked its landing bad, so an exit 0 whose records couldn't be read, or a failure in another
+    step (setup, an older tree's ci.toml), reverted an innocent PR."""
+    h, tip = _bisecting(world, monkeypatch, tmp_path)
+    h.run_state["r-post-1"] = ("done", 0, None)
+    h.evidence = []                                                         # exit 0, its steps.jsonl unread
+    h.tick()
+    assert len(h.posted) == 3 and h.posted[2][0] == h.posted[1][0] and h.postland()["bisect"]["bad"] == 2
+    h.run_state["r-post-2"] = ("done", 2, None)
+    h.evidence = [_steps_run(world.tmp, "r-post-2", {"setup": "failed"})]
+    h.tick()
+    assert "bisect" not in h.postland() and _main(world) == tip and not [p for p in h.posts if "reverted" in p]
+    (post,) = [p for p in h.posts if "ended twice" in p]
+    assert "neither passing nor failing lean-suites" in post, post
+
+
+def test_a_bisection_with_a_revert_among_its_landings_reverts_nothing(world, monkeypatch, tmp_path):
+    """A revert inside the range means a landing's commit isn't what `main` ran: bisecting it could blame the wrong PR."""
+    h, tip = _bisecting(world, monkeypatch, tmp_path, revert=True)
+    assert "bisect" not in h.postland() and len(h.posted) == 1 and _main(world) == tip
+    (post,) = [p for p in h.posts if "a revert lies in" in p]
+    assert "Reverted nothing" in post, post
+
+
+def test_a_lean_check_above_the_landing_top_covers_it_only_with_no_lean_change_between(world, monkeypatch):
+    """A passed check of a commit above what lands checked a tree with a Lean change the landing leaves out, which may fix what
+    the landed one breaks: the check runs again on the prefix's top."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(2, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
+    for n in (1, 2):
+        h.review(n)
+    h.tick()
+    one, top = (m.commit for m in h.q.chain())
+    assert h.launched == [(top, "m1", False)]
+    h.review(2, "hold", by="other", ref="not yet")
+    h.run_state[h.lean_ids()[0]] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, h.lean_ids()[0], {LEAN_STEP: "passed"})]
+    assert not h.tick().startswith("landed")
+    assert h.launched[1] == (one, "m1", False), h.launched
+    h.run_state[h.lean_ids()[1]] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, h.lean_ids()[1], {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #1") and _main(world) == one
 
 
 def test_a_landing_that_does_not_compile_lands_what_is_below_the_pr_that_broke_it(world, monkeypatch):

@@ -254,10 +254,10 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too.
 - After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
   --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
-  itself has passed (or ci records `main` green: `research queue baseline SHA --by ci`). A failure of a step that passed on the
-  last verified `main` reverts the one PR it implicates (`git revert -m 1`), bisecting among several, and its owner relands
-  with the fix; anything else reverts nothing and goes to ci. Citations and tables read only commits whose after-landing run
-  passed.
+  itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
+  --by ci`). A failure of a step that passed on the last verified `main` reverts the one PR it implicates (`git revert -m
+  1`), bisecting among several, and its owner relands with the fix; anything else reverts nothing and goes to ci. Citations
+  and tables read only commits whose after-landing run passed.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
   of the queue: the lander lands it with `research merge --push` on its own passing check, from the control pod
   (`/data/infra/drive.sh merge ...`), and drive's next sync rebuilds `next` on it. Only drive's App pushes `main` and `next`

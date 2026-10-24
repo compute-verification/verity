@@ -48,7 +48,8 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
                                                    counts unless LANE is the PR's owner, its handle or its ready mark's author,
                                                    refused here
     research queue baseline SHA --by ci             record `main` at SHA as green for the review landing, which otherwise first
-                                                   runs the after-landing run on `main` itself, and lands nothing until it passes
+                                                   runs the after-landing run on `main` itself, and lands nothing until it ends
+                                                   (on the control pod: `/data/infra/drive.sh queue baseline SHA --by ci`)
     research queue report --on MACHINE [--max-running N] [--dry-run]
                                                    one tick of the reporter for GitHub's merge queue (`research.mergequeue`): check
                                                    each merge group's head, post its `verity/check` status
@@ -1252,6 +1253,9 @@ SLOT_NOT_STARTED = 75
 SLOT = ("python3", "tools/verity/check/slot.py")
 #: `research queue ready`'s exit when the tier never started: nothing failed, and nothing is marked
 READY_NOT_STARTED = 3
+#: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
+LANE_RUN = ("`research run --on vy-nebius-cpu-K --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && "
+            "uv run tools/verity/check/suites.py --changed origin/main --quick'`")
 
 
 class NotStarted(str):
@@ -2031,7 +2035,8 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
         return waitcap.STILL_GOING
     if isinstance(failed, NotStarted):
         print(f"research queue {command}: #{pr.number} is not marked ready at {pr.head[:12]}: the quick tier never started: {failed}. "
-              f"Nothing failed: run it again (`--on auto` takes the machine with a free check slot)", file=sys.stderr)
+              f"Nothing failed: run it again (`--on auto` takes the machine with a free check slot). A PR lands on an eyeball review, "
+              f"and the quick tier isn't required: `ready N --mark --by LANE` marks it; to run its tests anyway: {LANE_RUN}", file=sys.stderr)
         return READY_NOT_STARTED
     if failed is not None:
         print(f"research queue {command}: #{pr.number} is not marked ready at {pr.head[:12]}: the quick tier failed: {failed}. Push a "
@@ -2101,8 +2106,9 @@ def review_owners(q: Queue, labels: StoreLabels, pr: int, head: str, owner: str 
 def baseline(q: Queue, sha: str, by: str) -> int:
     """`research queue baseline SHA --by ci`: record `main` at SHA as verified by the after-landing run (`drive["postland"]`),
     when ci knows it is green, so the review landing lands without first running the after-landing run on `main` itself
-    (`Driver._unbaselined`), and a later failure reverts only a landing above SHA.  Refused while a post-landing run or a
-    bisection of one runs, and for a SHA `main` doesn't hold."""
+    (`Driver._unbaselined`), and a later failure reverts only a landing above SHA.  It drops a bisection still open (it reverted
+    nothing), and is refused while a post-landing run runs, for a SHA `main` doesn't hold, and off drive (`/data/infra/drive.sh
+    queue baseline SHA --by ci` on the control pod)."""
     from .drive import AFTER_LANDING
 
     if _who(by) != "ci":
@@ -2114,10 +2120,11 @@ def baseline(q: Queue, sha: str, by: str) -> int:
         raise QueueError(f"baseline: {sha} is not a commit of `main`")
     state = q.load_state()
     pl = state.setdefault("drive", {}).setdefault("postland", {"verified": full, "pending": [], "run": None})
-    if pl.get("run") or pl.get("bisect"):
-        busy = pl.get("run") or pl["bisect"].get("run") or {}
-        raise QueueError(f"baseline: the post-landing run {' '.join(busy.get('ids') or ['(a bisection)'])} is running; its end "
-                         "verifies `main` or acts on it: record a baseline once it has ended")
+    if pl.get("run"):
+        raise QueueError(f"baseline: the post-landing run {' '.join(pl['run'].get('ids') or [])} is running; its end verifies "
+                         "`main` or acts on it (a lost one, in 3 h): record a baseline once it has ended")
+    if b := pl.pop("bisect", None):
+        print(f"research queue: dropped the bisection of `main` {b['tip'][:12]}'s failed after-landing run; it reverted nothing")
     on = lambda a, b: not _git(q.workdir, "merge-base", "--is-ancestor", a, b, check=False).returncode  # noqa: E731
     pl["verified"] = full
     pl["verified_as"] = {"steps": list(AFTER_LANDING), "no_cache": None, "by": by,
@@ -2419,9 +2426,13 @@ def main(argv: list[str]) -> int:
         if a.command == "review":
             return review(q, store, labels, a.pr, "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by,
                           sha=a.sha, as_json=a.json)
+        from .merge import DRIVE_ENV, off_drive, on_drive
+
         if a.command == "baseline":
+            if not on_drive():
+                raise QueueError(f"baseline: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): run "
+                                 f"`/data/infra/drive.sh queue baseline {a.pr} --by {a.by}` there")
             return baseline(q, a.pr, a.by)
-        from .merge import off_drive, on_drive
 
         if a.command in ("sync", "land") and not (a.dry_run or on_drive()):
             raise QueueError(off_drive(q.branch if a.command == "sync" else "main", f"queue {a.command}"))
