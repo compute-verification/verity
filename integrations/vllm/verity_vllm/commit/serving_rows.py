@@ -568,7 +568,7 @@ def _table_rows(window: Window, rows: Mapping[str, np.ndarray]) -> list[np.ndarr
 
 def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, salt_key: bytes | None = None,
            row_salt_key: bytes | None = None, step_roots: Mapping[int, bytes] | None = None, workers: int = 1,
-           chunk: int = CHUNK) -> Committed:
+           chunk: int = CHUNK, salts_of: Mapping[str, bytes] | None = None) -> Committed:
     """Commit every member's rows (``data[k]["rows"][port]``: (n, words) u16) and output words (``data[k]["outs"][port]``, each
     port's committed as its output row); and each row table, its rows read off its linked members' ``x`` tables, whose rows take
     their row table row's salt.  Salt nonces: the members' ports in order; a step's tables', ``step_salts`` under ``row_salt_key``.
@@ -576,7 +576,10 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
     serving recorded before each step's coin, by engine step), each must be the window's, or the commit is refused.
 
     ``salt_key``: tests only; serving draws 32 fresh OS bytes.  ``row_salt_key``: the run's row key the serving loop's
-    ``row_tables.step_roots`` salted under (32 bytes); fresh OS bytes when ``None``, which no recorded step root can match."""
+    ``row_tables.step_roots`` salted under (32 bytes); fresh OS bytes when ``None``, which no recorded step root can match.
+    ``salts_of``: ports (``<member>/<port>``) whose rows are an outside registered value's rows (a warden's signed cells), each
+    port's salts, one per row in order: every such row is committed under that value's own salt, so its ``b || c`` is the
+    value's and its registered reads open against the value's root (`write`'s ``registered``)."""
     t0 = time.perf_counter()
     ms = window.members
     if len(data) != len(ms) or sum(m.n for m in ms) != window.population:
@@ -611,6 +614,10 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
     key = os.urandom(32) if salt_key is None else bytes(salt_key)
     ys = {p: salts(key, k, len(rows[p])) for k, p in enumerate(rows)}
     del key
+    for p, s in (salts_of or {}).items():
+        if p not in rows or len(s) != len(rows[p]) * SALT_BYTES:
+            raise ValueError(f"{p}: {len(s)} bytes of salts, not one {SALT_BYTES}-byte salt for each row of one of the window's ports")
+        ys[p] = bytes(s)
     domains = {p: window.domain(p, schemas[p], len(a)) for p, a in rows.items()}
     rk = os.urandom(32) if row_salt_key is None else bytes(row_salt_key)
     for k, (t, a) in enumerate(zip(window.row_tables, _table_rows(window, rows), strict=True)):
@@ -736,9 +743,11 @@ def registered_entry(c: Committed, m: Member, trees: dict[int, RT.RowTable] | No
 
 
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
-          kind: str = "served") -> dict[str, Any]:
+          kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`); the window's provenance gets the index's SHA-512
-    (so the registration binds the unit -> identity map)."""
+    (so the registration binds the unit -> identity map).  ``registered``: by member key, the header ``registered`` entry of a
+    member whose ports read an outside registered value (`commit`'s ``salts_of``), each row's position and path to that
+    value's root."""
     d = Path(out_dir)
     d.mkdir(parents=True, exist_ok=True)
     ib = index_bytes(index)
@@ -748,6 +757,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     trees: dict[int, RT.RowTable] = {}
     members = []
     for k, m in enumerate(c.window.members):
+        reads = registered_entry(c, m, trees) if m.links else (registered or {}).get(m.key)
         pub = c.public_body(k)
         (d / f"m{k}-public.bin").write_bytes(pub)
         fd = os.open(d / f"m{k}-private.bin", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -760,7 +770,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                         "public_sha512": hashlib.sha512(pub).hexdigest(), "units": f"m{k}-units.json",
                         "units_sha512": hashlib.sha512(ub).hexdigest(),
                         **({"row_schemas": m.row_schemas} if m.schemas else {}),
-                        **({"registered": registered_entry(c, m, trees)} if m.links else {}),
+                        **({"registered": dict(reads)} if reads else {}),
                         **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {}),
                         **({"row_links": [list(x) for x in m.links]} if m.links else {})})
     tables = []
