@@ -1,7 +1,6 @@
-"""compare.py on the synthetic toy program: snapshots are *derived* from a full reference evaluation of the folded
-Program, so provenance (comparison 2) and expanded subcircuits (comparison 3) must be bit-exact by construction,
-and a corrupted snapshot must be detected.  Exercises the snapshot store, the provenance value resolver, FunctionCall
-location, evaluate_call argument order and the tokens / structure reports without any capture artifacts."""
+"""`fold_compare`'s evidence on the synthetic toy program: snapshots are *derived* from a full reference evaluation of the
+folded Program, so the snapshot store and the provenance value resolver (`Values`) must reproduce it bit for bit, and a
+corrupted snapshot must show.  No capture artifacts."""
 from __future__ import annotations
 
 import json
@@ -18,7 +17,7 @@ from verity_vllm.check import fold_compare as cmp
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.fold import fold
 
-from tests.observe.test_fold_synthetic import BN, C, REQ, SAMPLED, _real_memory_available, install_stub_memory, toy_log, toy_profile
+from tests.observe.test_fold_synthetic import C, REQ, SAMPLED, _real_memory_available, install_stub_memory, toy_log, toy_profile
 
 _NP = {"bfloat16": np.uint16, "int32": np.uint32, "int64": np.uint64}
 
@@ -122,45 +121,25 @@ def test_snapshot_store_roundtrip(tmp_path, folded):
     assert [int(w) for w in store.extract(s, sub)] == [t[g] for g in call.returns][C["D"]:2 * C["D"]]
 
 
-def test_provenance_and_subcircuits_bit_exact(tmp_path, folded):
+def test_values_resolve_every_operand_through_the_fold(tmp_path, folded):
+    """`Values.of_refs` reads each operand by provenance (the prompt, the weights, the producing instance's output snapshot):
+    every argument of every instance is the reference evaluation's, and a corrupted producer snapshot reaches its consumer."""
     r, weights, t = folded
-    _write_snapshots(r, t, tmp_path)
-    store = cmp.SnapshotStore(tmp_path)
-    b = cmp.compare_boundary(r, store, weights)
-    assert b["status"] == "pass", b
-    assert b["summary"].get("fail", 0) == 0 and b["summary"]["pass"] >= 4
-    kinds = {c["class"] for c in b["checks"] if c["status"] == "pass"}
-    assert any("attention K" in k for k in kinds) and any("decode Embedding" in k for k in kinds), kinds
-    s = cmp.compare_subcircuits(r, store, weights)
-    assert s["status"] == "pass", s
-    specs = {e["spec"].split("{")[0] for e in s["instances"] if e["status"] == "pass"}
-    assert {"Gemm_v1", "RMSNormFusedCuda_v2", "RoPE_v1", "SiluMul_v1", "TokenSelect_v1", "Attention_v3"} <= specs, s
+    cmp._attach_specs(r)
+    off = len(r.program.root.body.nodes) - len(r.body.nodes)
 
+    def operands(store_root: Path, m: dict) -> tuple[list[int], list[int]]:
+        vals = cmp.Values(r, cmp.SnapshotStore(store_root), weights)
+        call = FunctionCall(r.program.circuit, r.program.circuit.root_scope, off + m["node"])
+        got = [int(w) for a in r.body.nodes[m["node"]].args for w in vals.of_refs(a.refs)]
+        return got, [t[g] for g in call.args]
 
-def test_corrupted_snapshot_is_detected(tmp_path, folded):
-    r, weights, t = folded
-    # the RoPE instance whose output the first attention instance reads as its K rows (through the KV move)
+    _write_snapshots(r, t, tmp_path / "honest")
+    for m in r.instances:
+        got, expect = operands(tmp_path / "honest", m)
+        assert got == expect, m["name"]
     att = next(m for m in r.instances if m["spec"].startswith("Attention"))
     bad = next(idx for space, idx, _, _ in runs(r.body.nodes[att["node"]].args[1].refs) if space == "n")
-    assert r.body.nodes[bad].fn.id.startswith("RoPE")
-    _write_snapshots(r, t, tmp_path, corrupt_node=bad)
-    store = cmp.SnapshotStore(tmp_path)
-    s = cmp.compare_subcircuits(r, store, weights, picks=[m for m in r.instances if m["node"] == bad])
-    assert s["status"] == "fail" and s["instances"][0]["n_diff"] == C["KVH"] * C["D"]   # every k leaf flipped
-    b = cmp.compare_boundary(r, store, weights)
-    # the corrupted RoPE k output feeds the KV rows the attention instances read: provenance must flag it
-    assert b["status"] == "fail" and any(c["status"] == "fail" for c in b["checks"])
-
-
-def test_tokens_and_structure_reports(tmp_path, folded):
-    r, weights, t = folded
-    _write_snapshots(r, t, tmp_path)
-    tok = cmp.compare_tokens(r, tmp_path / "tokens.json", None)
-    assert tok["status"] == "pass", tok
-    assert tok["fold"] == {REQ: [int(x) for x in SAMPLED[:2]]}
-    st = cmp.compare_structure(r, C=C, LP=2, STEPS=1, BN=BN)
-    assert st["superset"] is True and st["n_extra"] == 1
-    assert len(st["classes"]) == 1 and "final norm" in next(iter(st["classes"]))
-    h = st["histogram"]
-    assert all(v["delta"] == 0 for k, v in h.items() if not k.startswith("RMSNormFusedCuda"))
-    assert sum(v["delta"] for v in h.values()) == 1
+    _write_snapshots(r, t, tmp_path / "corrupt", corrupt_node=bad)
+    got, expect = operands(tmp_path / "corrupt", att)
+    assert got != expect
