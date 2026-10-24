@@ -403,6 +403,10 @@ def addScaledFast (w v : Array F256) (b : F128) : Array F256 :=
 /-- `embedF` in tasks of `2^12` entries. -/
 def embedFFast (g : Array F128) : Array F256 := parTab 4096 (fun i => F256.ofF g[i]!) g.size
 
+/-- `liftU` with each entry's `(v, u·v)` in tasks of `2^12` entries, then the pairs pushed in order. -/
+def liftUFast (w : Array F256) : Array F256 :=
+  (parTab 4096 (fun i => (w[i]!, F256.u * w[i]!)) w.size).foldl (fun acc p => (acc.push p.1).push p.2) #[]
+
 /-- `consW` with a task to each query's `X̂` and its entries in tasks of `2^8`. -/
 def consWFast (cols : Nat) (pos : Array Nat) (alpha : Array F128) : Array F128 :=
   let ea := eqTable alpha
@@ -427,6 +431,11 @@ open Fast in
 open Fast in
 @[csimp] theorem embedF_eq_embedFFast : @embedF = @embedFFast :=
   funext fun g => by rw [embedF, embedFFast, parTab_eq, range_map_get!]
+
+open Fast in
+@[csimp] theorem liftU_eq_liftUFast : @liftU = @liftUFast :=
+  funext fun w => by
+    rw [liftU, liftUFast, parTab_eq, range_map_get! (fun v => (v, F256.u * v)) w, Array.foldl_map]
 
 open Fast in
 @[csimp] theorem consW_eq_consWFast : @consW = @consWFast :=
