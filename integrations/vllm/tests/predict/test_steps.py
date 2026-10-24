@@ -282,13 +282,12 @@ def test_a_forged_cache_hit_is_refused():
 
 def test_an_honest_cache_hit_compiles_to_the_cached_request_program():
     """r1's 16 cached rows are its Program's `prefix` input (the Build's `--cached 16`), r0 the producer of its one block; its
-    prefill computes rows 16..23 at positions 16.., and its decode rows are as without a hit. `predict.batch`'s R2 has no solo form
-    for a hit on another request's KV, so only a measurement (`partial`) compiles it, with that refusal as its `batch_rule`."""
+    prefill computes rows 16..23 at positions 16.., and its decode rows are as without a hit. `predict.batch`'s R2 keeps the hit,
+    whose source's tokens compile_steps checks equal to r1's own."""
     reg = _registered()
-    with pytest.raises(B.BatchDependent, match="request 1: step 1's cache hit reads KV another request computed"):
-        compile_steps(reg, *_hit(16))
-    c = compile_steps(reg, *_hit(16), partial=True)
-    assert "no solo form" in c.batch_rule and c.summary()["batch_rule"] == c.batch_rule and not c.refused
+    c = compile_steps(reg, *_hit(16))
+    assert c.batch_rule is None and c.summary()["batch_rule"] is None and not c.refused
+    assert compile_steps(reg, *_hit(16), partial=True).summary() == c.summary()
     u = c.requests[1]
     want = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=24, T=2, C=16)
     assert (u.LP, u.T, u.C, u.producers, u.digest) == (24, 2, 16, (0,), want.digest)
