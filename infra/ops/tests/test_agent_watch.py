@@ -1943,7 +1943,7 @@ def test_a_worker_idle_before_its_run_ended_rings_its_coordinator_then_is_relaun
         assert body["name"] == "vllm worker ZKS10 (relaunch of 1111)", "a worker's name, never a coordinator's `verity: LANE`"
         assert "You are a worker, not a coordinator" in text and "`research msg send --as vllm --thread " in text
         assert "stopped mid-step (its last message: \u201cThe lock didn't change. Committing the fix" in text
-        assert "the agent watch rings your coordinator's inbox (`research msg ring-run`)" in text
+        assert "the agent watch rings your coordinator's inbox if it failed (`research msg ring-run`)" in text
         assert relaunches[0]["new_agent"] == "bc-77777777-7777-7777-7777-777777777777"
         new = json.loads((d / "workers.d" / "vllm-bc-77777777-7777-7777-7777-777777777777.json").read_text())
         assert new == {"agent_id": "bc-77777777-7777-7777-7777-777777777777", "lane": "vllm", "launched_by": NEW,
