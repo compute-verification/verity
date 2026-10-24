@@ -45,11 +45,16 @@ KS = {
     "mlp222-b2-t2": [2, 3, 4, 6, 8, 12, 16],
     "mlp222-b1-t3": [2, 3, 4, 6, 8, 12, 16],
     "mlp2222-b1-t2": [2, 3, 4, 6, 8, 12],
-    "mlp333-b1-t2": [2, 3, 4, 6, 9, 12, 18],
-    "mlp444-b2-t2": [2, 4, 8, 16, 24, 32],
-    "mlp4444-b1-t2": [2, 3, 4, 6, 8, 12, 19],
+    "mlp333-b1-t2": [2, 3, 6, 12],
+    "mlp444-b2-t2": [2, 4, 8, 16],
+    "mlp4444-b1-t2": [2, 4, 8, 16],
 }
 MODES = ("eta1", "eta2", "inf")
+LARGE = {"mlp333-b1-t2", "mlp444-b2-t2", "mlp4444-b1-t2"}
+
+
+def modes(name: str) -> tuple[str, ...]:
+    return ("eta1", "inf") if name in LARGE else MODES
 
 
 def build(name: str) -> TG.Graph:
@@ -91,7 +96,8 @@ def describe(G: TG.Graph, B: CV.Block, targets: set[int]) -> dict:
 
 
 def solve(G: TG.Graph, k: int, s: int | None, targets: list[int] | None, budget: float, workers: int) -> dict:
-    h = CV.best_heuristic(G, k, s, targets=targets, restarts=4, iters=120)
+    large = G.N > 400
+    h = CV.best_heuristic(G, k, s, targets=targets, restarts=2 if large else 4, iters=40 if large else 120)
     cols = list(h["cover"] or [])
     cg = CV.colgen(G, k, s, cols, targets=targets, price_time=min(15.0, budget / 4), ip_time=min(120.0, budget / 2),
                    workers=workers, time_budget=budget)
@@ -111,17 +117,20 @@ def solve(G: TG.Graph, k: int, s: int | None, targets: list[int] | None, budget:
     }
 
 
-def cw_measured(G: TG.Graph, s: int | None, workers: int) -> dict:
-    """`c_w(s) = min_q f(q) / q`, `f(q)` the fewest unregistered inputs completing products of `q` slots (CP-SAT's
-    proven lower bound on `f`, so the ratio is a valid parameter-hardness constant)."""
-    slots = {key[0] for key in G.mul}
-    qs = range(1, len(slots) + 1)
+def cw_measured(G: TG.Graph, s: int | None, workers: int, qs: list[int] | None = None) -> dict:
+    """`c_w(s) = min_q f(q) / q`, `f(q)` the fewest unregistered inputs completing products of `q` slots. Uses CP-SAT's
+    proven lower bound on `f`, so the result is a valid parameter-hardness constant. On sampled `qs`, `f` being
+    nondecreasing gives `f(q) / q >= f(q_i) / q_{i+1}` for `q_i <= q <= q_{i+1}`, which is what `cw` takes; `cw_sampled`
+    is the plain minimum over the samples."""
+    Q = len({key[0] for key in G.mul})
+    qs = sorted(set(qs or range(1, Q + 1)) | {1, Q})
     pts = {}
     for q in qs:
         r = CV.min_inputs_for_slots(G, s, q, time_limit=20.0, workers=workers)
         pts[q] = {"f": r["n"], "f_lb": r["lb"], "optimal": r["optimal"]}
+    lows = [pts[a]["f_lb"] / b for a, b in zip(qs, qs[1:])] + [pts[Q]["f_lb"] / Q]
     q_best = min(pts, key=lambda q: pts[q]["f_lb"] / q)
-    return {"cw": pts[q_best]["f_lb"] / q_best, "q": q_best, "f": pts}
+    return {"cw": min(lows), "cw_sampled": pts[q_best]["f_lb"] / q_best, "q": q_best, "f": pts}
 
 
 def point(args) -> dict:
@@ -162,16 +171,19 @@ def run(names: list[str], outdir: Path, jobs: int, budget: float, workers: int, 
         G = build(name)
         cws = {}
         if name in cw_instances:
+            Q = len({key[0] for key in G.mul})
+            qs = None if Q <= 16 else sorted({1, 2, 4, 8, 12, 16, 24, 32, 40, Q} & set(range(1, Q + 1)))
             for k in KS[name]:
-                for mode in MODES:
+                for mode in modes(name):
                     s = gate_budget(G, k, mode)
                     if s not in cws:
-                        cws[s] = cw_measured(G, s, workers)
+                        cws[s] = cw_measured(G, s, workers, qs)
+                        print(f"{name} c_w(s={s}) = {cws[s]['cw']:.3f}", flush=True)
         meta = {"instance": name, **G.summary(), "upstream": sorted(BD.upstream(G).values()),
                 "cw": {str(s): v for s, v in cws.items()}}
         (outdir / f"{name}.meta.json").write_text(json.dumps(meta, indent=1))
         for k in KS[name]:
-            for mode in MODES:
+            for mode in modes(name):
                 tasks.append((name, k, mode, budget, workers, cws.get(gate_budget(G, k, mode))))
     results: dict[str, list] = {n: [] for n in names}
     with ProcessPoolExecutor(max_workers=jobs) as ex:
@@ -223,7 +235,7 @@ def main() -> None:
     ap.add_argument("--cw", action="append", default=None, help="instances whose c_w(s) to measure (default: the smallest)")
     a = ap.parse_args()
     names = a.instance or list(INSTANCES)
-    cw = set(a.cw) if a.cw else {"mlp222-b1-t2", "mlp2222-b1-t2"}
+    cw = set(a.cw) if a.cw else {"mlp222-b1-t2", "mlp2222-b1-t2", "mlp4444-b1-t2"}
     run(names, a.out, a.jobs, a.budget, a.workers, cw)
 
 
