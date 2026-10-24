@@ -124,7 +124,7 @@ non-restoring division with 32 quotient bits, and the two ends) 1,855, the scali
 decision, counted, is the step and the book's
 model: 2,580 ANDs, and the context counter's few. ChargeCount_v1{N} is about 2,553 a decision (the two, less what
 they share, and the run counter) and about 15,000 a window (n_arrived's two steps, the four zero counts and the
-finish): 19,536 at N = 2, 50,664 at N = 14 and 178,978 at N = 64. A lowering adds the copies, about 169 rows a
+finish): 19,536 at N = 2, 50,664 at N = 14 and 178,978 at N = 64. A lowering adds the copies, about 175 rows a
 decision (`size`'s ``carry``). ArithEncodeStep_v1{K=18, BIN=1} is 3,244: the
 interval 1,855, the 18 scaling slots 1,188 and the segment check 201. {K=18, BIN=0} is 4,964, and ArithEncodeFinish_v1
 6. KTContext_v1{C=3, NW=24} is 1,202.

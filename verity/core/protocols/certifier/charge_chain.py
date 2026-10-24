@@ -32,7 +32,7 @@ start, before any decision is coded, so a carry-out there would need ReplayLoad 
 its pins. A sibling value under the same carry rule gives the same guarantee and leaves the scan's chain as it is.
 
 **Cost** (`size`): `ChargeCount_v1{N}` and 96 ANDs, the equality of carry' with row 1 and the ok: 19,632 at N = 2 and
-50,760 at N = 14, and in a lowering ChargeCount's copies of its carry, about 169 rows a decision. Per window two rows
+50,760 at N = 14, and in a lowering ChargeCount's copies of its carry, about 175 rows a decision. Per window two rows
 and the charging unit's two reads, each a frame-v3 path of depth 1.
 """
 from __future__ import annotations

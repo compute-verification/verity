@@ -76,7 +76,7 @@ a code position.
   position 14) become 0 bits in the state row, and #3801's rows don't change.
 
 **Cost.** `ChargeCount_v1{N}` and 96 ANDs (the carry-out's equality and the ok): 19,632 at N = 2, 50,760 at N = 14
-(pinned) and 97,159 at the class's D = 32. In a lowering, `ChargeCount_v1` adds copies of the words it carries from one
-decision to the next, about 169 rows a decision (`size`'s ``carry``). Without them, each carried word's form, and so
+(pinned), 97,159 at the class's D = 32, and 1,256,873 per ask at its P·A = 486. In a lowering, `ChargeCount_v1` adds copies of the words it carries from one
+decision to the next, about 175 rows a decision (`size`'s ``carry``). Without them, each carried word's form, and so
 the build, grows with every decision before it. With them, no AND operand is wider than 2,166 terms at any N. Per
 window: two rows, the charging unit's two reads (each a frame-v3 path of depth 1) and 256 record bytes.
