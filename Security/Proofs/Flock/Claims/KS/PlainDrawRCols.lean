@@ -86,7 +86,7 @@ theorem decideR_sha512 {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as 
   obtain ⟨⟨⟩, hv, hc⟩ := FlockSoundness.Refine.ebind_ok
     ((decisionAtS_evalJ sha512 s spec sts x link c₁ mids (stmt := f.stmt) (j := f.j) (ps := f.ps)).symm.trans hd)
   have e : (_root_.Flock.Hashes.ofSha512 (Claims.hOf sha512) : _root_.Flock.Hashes _root_.Flock.V) = With.std := by
-    rw [hOf_sha512] <;> rfl
+    rw [hOf_sha512]
   rw [e, verifyJWithM_eq_verifyJWithMK] at hv
   exact ⟨hv, hc, hs, readOf_zk (x := x) (by simp [readOf, hins]), publicInputs_none_of_check (checksAtJ_scope hc)⟩
 
