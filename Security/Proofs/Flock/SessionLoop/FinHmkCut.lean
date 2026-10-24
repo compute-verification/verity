@@ -256,6 +256,7 @@ theorem runCut_cutPiop_of_ret {x : Msg} (hx : Live x) (c : Fin (refK x) → Floc
   obtain ⟨p, tr, l'', hrep, hsz⟩ := hprev k hk extras' hxe ic' hic' l' hl'
   refine ⟨p, tr, l'', hrep, hsz, fun h0 => ?_⟩
   have := r.isLt
+  have hj : j.val < (stsOf x).size := lt_of_jOf j
   exact repCut_points hx c (refK x) (i := k / 2) (by omega) _ _ _ _ _ _ _ _ _
     (by rw [show 2 * (k / 2) = k by omega]; exact hl') hrep
 
@@ -409,7 +410,7 @@ theorem piopCut_bodies {coin : ℕ → ℕ → F128} {n : ℕ} {st : _root_.Floc
   simp only [Prod.mk.injEq, Except.ok.injEq] at e₂
   obtain ⟨⟨-, rfl⟩, rfl⟩ := e₂
   obtain ⟨bs, hbs, -⟩ := FlockComplete.CutPrefix.go_of_shift
-    (FlockComplete.CutPrefix.ringSwitchCut_shift coin n _ _) rfl h₃
+    (FlockComplete.CutPrefix.ringSwitchCut_shift coin n _ _ _) rfl h₃
   have hL : l₃.toList = l.toList ++
       (List.range (piopNR st.m st.fold.kLog)).map
         (piopBody t₀.pending.data.toList st.m st.fold.kLog st.digest cap root lay src.masked) ++ bs.toList := by
@@ -478,10 +479,14 @@ theorem getElem!_absPos {lay : _root_.Flock.Zk.PadLayout} {M : Array F128} {mk :
   have hlen := congrArg List.length h
   simp only [Array.length_toList, List.length_append, List.length_map, List.length_range,
     List.length_range'] at hlen
-  have hlt : absPos lay i < M.size := by unfold absPos; split_ifs <;> omega
+  have hlt₀ : absPos lay i < lay.fa + 2 + (2 * lay.nLc + 64) := by unfold absPos; split_ifs <;> omega
+  have hlt : absPos lay i < M.size := by omega
+  have hlt₁ : absPos lay i <
+      ((List.range (lay.fa + 2) ++ List.range' (lay.fa + 3) (2 * lay.nLc + 64)).map mk).length := by
+    simp only [List.length_map, List.length_append, List.length_range, List.length_range']
+    exact hlt₀
   have e : M.toList[absPos lay i]? = some (mk i) := by
-    rw [h, List.getElem?_append_left (by simp only [List.length_map, List.length_append, List.length_range,
-      List.length_range']; unfold absPos; split_ifs <;> omega), List.getElem?_map]
+    rw [h, List.getElem?_append_left hlt₁, List.getElem?_map]
     unfold absPos
     split_ifs with h1
     · rw [List.getElem?_append_left (by simpa using h1), List.getElem?_range h1]
@@ -714,7 +719,7 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
     intro e he
     have h1' : loopNr x (Masked.repBase x (2 * j.val + r.val) + 1) = (Masked.stAt x j).m - 13 :=
       hNR 1 (by unfold piopNR; omega)
-    rw [words_slot hF.1 (by unfold piopNR at hl₁; omega) (by rw [h1']; exact he) (by omega)]
+    rw [words_slot hF.1 (by omega) (by rw [h1']; exact he) (by omega)]
     exact isZero_add_one (Masked.outer_ne_one hnr hsx j r (by omega) e he)
   -- the rounds the loop released
   have hrk : (roundsOf spec (Masked.stsOf x)).getD (2 * j.val + r.val) 0 =
@@ -727,8 +732,11 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
     rw [hrk, repRounds_true]
     simp only [hz]
     rw [hst]
-    unfold piopNR
-    omega
+    have hA : piopNR (Masked.stAt x j).m (Masked.stAt x j).c.kLog ≤
+        (Masked.stAt x j).m + ((Masked.stAt x j).c.kLog - 6) := by
+      unfold piopNR
+      omega
+    exact le_trans (le_trans (le_trans hA (Nat.le_add_right _ _)) (Nat.le_add_right _ _)) (Nat.le_add_right _ _)
   have hstream : streamAt (roundsOf spec (Masked.stsOf x)) (2 * j.val + r.val) + 1 =
       Masked.repBase x (2 * j.val + r.val) := by
     rw [Masked.repBase_eq hsx]
