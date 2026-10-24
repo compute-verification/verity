@@ -50,6 +50,9 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
   # Every client names this pipe directory, so with no daemon in it a client runs without MPS, whatever else runs on
   # the node.
   export CUDA_MPS_PIPE_DIRECTORY=$B/mps/pipe CUDA_MPS_LOG_DIRECTORY=$B/mps/log
+  # An MPS client names its GPU within the daemon visible set, where the lease index is invalid unless it is 0 (the
+  # client fails with CUDA error 100); the UUID names the same GPU everywhere.
+  export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID
   mkdir -p "$CUDA_MPS_PIPE_DIRECTORY" "$CUDA_MPS_LOG_DIRECTORY"
   # The daemon leaves its control socket behind when it quits, so it is found by its environment instead.
   mps_pids() {
