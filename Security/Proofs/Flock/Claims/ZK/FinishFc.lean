@@ -71,17 +71,12 @@ theorem zerocheckCut_fc (io : FlockComplete.Asks PS) (m : ℕ) (digest cap root 
 theorem lincheckCut_fc (io : FlockComplete.Asks PS) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout)
     {mk mk' : ℕ → F128} (zc : ZcOut) (hne : ∀ i, i ≠ lay.fc → mk' i = mk i) :
     FlockComplete.lincheckCut io c m lay mk' zc = FlockComplete.lincheckCut io c m lay mk zc := by
-  have e : ((Array.range 64).map fun i => mk' (lay.zp i)) = (Array.range 64).map fun i => mk (lay.zp i) :=
-    Array.map_congr_left fun i _ => hne _ (by simp only [Zk.PadLayout.zp, Zk.PadLayout.lc]; omega)
+  have hlc : ∀ j t, mk' (lay.lc j t) = mk (lay.lc j t) := fun j t =>
+    hne _ (by simp only [Zk.PadLayout.lc]; omega)
+  have hzp : ∀ i, mk' (lay.zp i) = mk (lay.zp i) := fun i =>
+    hne _ (by simp only [Zk.PadLayout.zp, Zk.PadLayout.lc]; omega)
   unfold FlockComplete.lincheckCut
-  simp only [e]
-  repeat (refine bind_congr fun _ => ?_)
-  split <;>
-  · repeat (refine bind_congr fun _ => ?_)
-    refine bind_congr₂ (forIn_range_congr _ _ fun j hj b => ?_) fun _ => rfl
-    try dsimp only
-    rw [hne (lay.lc j 0) (by simp only [Zk.PadLayout.lc]; omega),
-      hne (lay.lc j 1) (by simp only [Zk.PadLayout.lc]; omega)]
+  simp only [hlc, hzp]
 
 theorem map_run_go {α β : Type} (f : α → β) {x : TMW PS α} {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
     (h : (x.run t).go l = (.ok (a, t'), l')) : ((f <$> x).run t).go l = (.ok (f a, t'), l') := by
@@ -136,7 +131,7 @@ theorem replay_fc (st : Setup) (lay : Zk.PadLayout) (cap : Array ByteArray) (par
   unfold Zk.replay
   simp only [map_bind, map_pure]
   all_goals repeat (refine bind_congr fun _ => ?_)
-  all_goals (split <;> simp only [map_bind, map_pure])
+  all_goals (split <;> simp only [map_bind])
 
 /-- **The replay returns at zerocheck proofs that differ in `finalC` alone**, at the same transcript. -/
 theorem replay_ok_fc {st : Setup} {lay : Zk.PadLayout} {cap : Array ByteArray} {params : PcsParams}
@@ -290,13 +285,13 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
       else src.masked i }
     _ _ extras prior words hm14 (by exact Nat.le_refl _) (by rw [hkL]; exact Nat.le_refl _)
     (fun i hi => by
-      dsimp only
+      try dsimp only
       split_ifs with he
       · rw [he]
       · exact hmk i hi he)
     hn hpiop hP
   have hPC := piopCut_fc_go _ st _ src _ _ _ extras prior words (by exact Nat.le_refl _)
-    (fun i hi => by dsimp only; rw [if_neg hi]) hPC'
+    (fun i hi => by simp only [if_neg hi]) hPC'
   -- Ligerito: the source's opening is the firewall's
   have h₄' := h₄
   rw [← hm] at h₄'
