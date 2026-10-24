@@ -42,8 +42,7 @@ theorem map_range_eq {f g : ℕ → F128} (h : (Array.range 64).map f = (Array.r
   simpa [Array.getElem?_map, Array.getElem?_range, hj] using e
 
 theorem pushes_eq {f g : ℕ → F128 × F128} {N : ℕ} (h : pushes f N = pushes g N) {j : ℕ} (hj : j < N) : f j = g j := by
-  have e := congrArg (fun a : Array (F128 × F128) => a[j]!) h
-  simp only at e
+  have e : (pushes f N)[j]! = (pushes g N)[j]! := congrArg (fun a : Array (F128 × F128) => a[j]!) h
   rwa [pushes_get f N j hj, pushes_get g N j hj] at e
 
 /-- **The zerocheck's and lincheck's proofs fix the masked values below `zp 64`**: every index below it is one of
