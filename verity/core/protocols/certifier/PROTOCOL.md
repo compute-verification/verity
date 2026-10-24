@@ -1490,11 +1490,32 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 - `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's, whose `FAIL` cells
   and reasons don't match one for one, or in which a connection failed.
 - `benchmarks/network_traces/warden_serve.py` runs the warden live and checks that each client got exactly its egress
-  record's cells, each in its bucket.
+  record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`)
+  runs the same rehearsal on the auditor's host.
 
 **Named gaps:**
 - TLS isn't terminated: both legs are plain TCP.
-- The warden runs on the server's host, and the server gets the ingress bytes over loopback, with no shim on its side.
+- Every recorded run had the warden on the server's host, and the server gets the ingress bytes over loopback, with no
+  shim on its side. `warden-rehearse` puts the warden and its client on the auditor's host and reaches the server
+  through the gate's ssh tunnel to the peer's loopback. No run of it is recorded yet, and the tunnel's far end is still
+  loopback on the prover's host.
+- **The cells' wiring is open to the verifier (owner: network-accounting).** `reads`, the row each unit opens, is
+  connection q's rows (`connection_rows`), which give away its admission bucket s and its cell count n, both the
+  prover's. A permutation argument closes it, with no new verifier form. Before the window's coins, the prover
+  registers V′, a value of its own: the link-window's N rows as pairs (k, row k of V, the warden's value), reordered
+  into unit order, a fixed number of positions per consuming unit (its cells in wire order, then empty rows), so the
+  population's shape is public and its occupancy isn't. Under two live coins α and γ, a population reads row m of V and
+  row m of V′ through two registered ports, both in public order. It carries ∏(γ − f(m, V_m)) and ∏(γ − f(V′_m)) from
+  unit to unit as committed values, and the last unit's one output bit says whether they are equal. Here
+  f(k, x) = k + α·x(α), with x(α) the row's B/8 words of 64 bits as a polynomial over GF(2^64): at a public α it is XOR
+  gates alone, and each row costs one GF(2^64) product. Each consuming unit then reads its own positions of V′, which
+  are public, and checks in-circuit that its rows' k are its connection's schedule (bucket s + D + ⌊i/r⌋ for egress
+  cell i), that its cells' stream field is its ordinal and that its spare positions hold B zero bytes, so `reads`
+  becomes the identity. A wrong V′ passes with probability at most (N·B/8 + N)/2^64 (Schwartz–Zippel). An unproved
+  unit could forge its running product, so every unit of the permutation population is proved, not a sample. The
+  steps, each a PR: (1) V′'s commitment and registration in `warden_rows`; (2) the permutation unit's Definition, its
+  circuit-check sidecar and its cost at the served schedule; (3) the demonstration on `warden_zk.py`, with a wrong
+  wiring refused; (4) the consuming units read V′, `reads` is the identity, and this gap closes.
 - A record's certificate signs certificate v2's SHA-512 frame leaves, one per cell. The same cells are also committed
   as v3's hm96 rows, a cell a row (8·B transfer gates), under a root the warden signs ("The warden's cells as rows").
 - No Lean statement states the bound yet.
@@ -1542,7 +1563,7 @@ reads them as the sender's unit's output (its table is the instances' output row
 input. A port reads one row a unit, so a unit that reads k cells has k registered ports. Which unit reads which row is
 the wiring: connection q's rows (`connection_rows`) depend on which connections were live, so in the design they are
 private, proved by the wiring's permutation argument. Tonight `reads` opens them to the verifier, as the units' wiring
-is (the named gap).
+is: the warden's named gap "The cells' wiring is open to the verifier", which has the plan that closes it.
 
 **How the other readers of the certifier's rows differ:**
 - N2's head checks: the prover commits each record head as one row (`LinkWindows.commit`: one-stage's served domain,
