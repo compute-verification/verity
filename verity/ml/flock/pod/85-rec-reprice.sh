@@ -39,8 +39,9 @@
 #                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
-#                each forgery refused by one of its parts, and the inner statement's units were derived from the program (lean_verdicts.py; the
-#                inner's session is not checked)
+#                each forgery refused by one of its parts (by Lean, or by the firewall before any session reached Lean),
+#                and the inner statement's units were derived from the program (lean_verdicts.py; the inner's session is
+#                not checked)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
@@ -658,6 +659,8 @@ oprove)
       LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk
     done
     PENV=
+    # the last mode's LIVE verdicts, which STEP=lean reads for a FIREWALL-REFUSED stop when no session reached it
+    grep -h $'\tLIVE\t' $O/oprove/$n/prove.tsv 2>/dev/null | cut -f3- > $DD/v-sess/$l.live
     du -sb $V/$C/inst.bin $V/$C/pub.bin $V/$C/circuit.txt ${LAST:+$LAST/*.bin} > $O/oprove/$n/sizes.txt
     [ -n "${LAST:-}" ] || { echo "$n: no session"; continue; }
     # REPLAY=0: upstream's replay waits for STEP=oreplay (CPU), outside the GPU lease
@@ -792,7 +795,7 @@ EOF
   [ "${ZK_LEAN:-0}" = 1 ] && PARTS="$PARTS zk"
   [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
   if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
-  else python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $PARTS; LEAN_RC=$?; fi
+  else cp $DD/v-sess/*.live $O/lean/ 2>/dev/null; python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $PARTS; LEAN_RC=$?; fi
   ;;
 esac
 summary
