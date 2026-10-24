@@ -42,6 +42,7 @@
 // so h1c_levels' block takes each level's Snap once (a thread a level, before its first level) and h1c_level's block
 // its level's, and every node resumes from it: two compressions a node rather than three, as h1c_a_* already do.
 // H1C_MKN = 1 (H1C_MK): hb_mk folds M_key y a nibble at a time, a row of a nibble table each, not a column a bit.
+// H1C_TAILW = 1 (H1C_NMID): h1c_tail's nodes hash from their messages built as words in registers (tail_node).
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -80,6 +81,9 @@
 #endif
 #ifndef H1C_MKN
 #define H1C_MKN 0
+#endif
+#ifndef H1C_TAILW
+#define H1C_TAILW 0
 #endif
 // unset, h1c_segs' bounds name no blocks an SM: __launch_bounds__(HT, 1) lets it take 136 registers on sm_90a, not 96
 #ifdef H1C_SMINB
@@ -1304,10 +1308,59 @@ extern "C" __global__ void __launch_bounds__(LT) h1c_tail_pre_k(H1Tab* __restric
   }
   for (int q = threadIdx.x; q < T.depth; q += LT) node_snap(T, q, b, snaps + ((size_t)t * NMAXD + q) * NSNAP);
 }
+// H1C_TAILW = 1: a node whose Snap leaves one byte pending and whose idx is below 256 (its children at byte 3, as
+// h1c_a_call3_k's) hashes its two blocks from words built in registers, one inlined compression, not through Hb's
+// shared-memory block and hb_block's call; any other node through hb_node_snap
+__device__ __forceinline__ void tail_node(const H1Tab& T, uint8_t* b, int lv, long long idx, const u64* snap) {
+#if H1C_TAILW
+  if (idx < 256 && (snap[8] & 127) == 1) {
+    const long long width = 1LL << T.depth;
+    long long off = 0;
+    for (int e = 0; e < lv; ++e) off += width >> e;
+    const u64* in = T.level + 8 * (off + 2 * idx);
+    u64 c[16], h[8];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) c[i] = __ldcg(in + i);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) h[i] = snap[i];
+    const u64 bits = 8 * (snap[8] + 146);
+#pragma unroll 1
+    for (int q = 0; q < 2; ++q) {
+      u64 w[16];
+      if (q == 0) {
+        w[0] = (snap[9] & 0xFF) << 56 | 1ull << 48 | (u64)idx << 40;
+        w[1] = 64ull << 40 | c[0] >> 24;
+#pragma unroll
+        for (int i = 2; i < 9; ++i) w[i] = c[i - 2] << 40 | c[i - 1] >> 24;
+        w[9] = c[7] << 40;
+        w[10] = 64ull << 40 | c[8] >> 24;
+#pragma unroll
+        for (int i = 11; i < 16; ++i) w[i] = c[i - 3] << 40 | c[i - 2] >> 24;
+      } else {
+        w[0] = c[13] << 40 | c[14] >> 24;
+        w[1] = c[14] << 40 | c[15] >> 24;
+        w[2] = c[15] << 40 | 0x80ull << 32;
+#pragma unroll
+        for (int i = 3; i < 15; ++i) w[i] = 0;
+        w[15] = bits;
+      }
+      sh::sha512_compress(h, w);
+    }
+    u64* o = T.level + 8 * (off + (width >> lv) + idx);
+#pragma unroll
+    for (int k = 0; k < 8; ++k) o[k] = h[k];
+    if (lv == T.depth - 1)
+#pragma unroll
+      for (int k = 0; k < 8; ++k) T.root[k] = h[k];
+    return;
+  }
+#endif
+  hb_node_snap(T, b, lv, idx, snap);
+}
 __device__ __forceinline__ void tail_levels(const H1Tab& T, const u64* snaps, uint8_t* b) {
   for (int lv = 0; lv < T.depth; ++lv) {
     const long long nodes = (1LL << T.depth) >> (lv + 1);
-    for (long long idx = threadIdx.x; idx < nodes; idx += LT) hb_node_snap(T, b, lv, idx, snaps + lv * NSNAP);
+    for (long long idx = threadIdx.x; idx < nodes; idx += LT) tail_node(T, b, lv, idx, snaps + lv * NSNAP);
     __syncthreads();
   }
 }
