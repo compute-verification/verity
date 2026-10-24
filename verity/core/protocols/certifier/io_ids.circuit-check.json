@@ -6,6 +6,9 @@
   "IoTieIdsKeys_v1{NK=5,CB=3,D1=3}": {
    "and": 194
   },
+  "IoTieIdsPort_v1{P=3,IB=8,CB=3}": {
+   "and": 104
+  },
   "IoTieIdsSlots_v1{B=512}": {
    "and": 24670
   }
