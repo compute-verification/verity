@@ -7,6 +7,8 @@
 # HH:MM) or `touch $D/stop`.
 #   research run --on vy-nebius-1 --project verity --source TREE --cwd source --gpus 1 --mem-gb 64 --timeout 200m \
 #     --env PORT=18084 --env UNTIL=13:30 -- bash benchmarks/one_stage/llama1b_serve_seal.sh
+# READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under this tree's registered compiler, and window K's
+# request Programs and manifest.json.
 # Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf and CUDA (the collector's JIT build).
 # The serve dir D (row dirs, bundles) stays on the node under `research keep`; $OUT keeps the records and logs.
 set -uo pipefail
@@ -29,6 +31,15 @@ rs keep "$ROOT" --owner @vllm --expires 7d --priority high \
   --why "G-A (network accounting): LLAMA32_1B serve-openai windows sealed as rows-sha512 row dirs for PROVE-PATH" | tail -2
 cd "$TREE/integrations/vllm"
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
+
+if [ -n "${READVICE:-}" ]; then     # a served dir's advice again (every closed window), then WINDOW's Programs and manifest.json
+  K=${WINDOW:-5}
+  vv advice "$READVICE" --cap "$CAP" 2>&1 | tee "$OUT/advice.log"
+  "$PY" tools/advice_compile.py "$READVICE" --window "$K" > "$OUT/compile_w$K.log" 2>&1
+  echo "w$K compile rc=$?" | tee "$OUT/steps.txt"
+  cp "$READVICE/advice/w$K/registration.json" "$READVICE/windows/w$K/manifest.json" "$OUT/"
+  exit 0
+fi
 
 vv serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin --run-id "${RESEARCH_RUN_ID:-local}" \
   --scheme rows-sha512 --seal --gpu-tree --window-steps 256 > "$OUT/serve.log" 2>&1 &
