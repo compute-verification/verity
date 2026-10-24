@@ -14,8 +14,9 @@ only (`plainRepColsOf` reads the coins), so nothing below reads a round's digest
 
 * `AcceptsAtDK`, `RecordsLiveAtDK`, `TxNoOffAtK`, `wrPDK`: `AcceptsAtD`, `RecordsLiveAtD`, `TxNoOffAt` and `wrPD`
   through `keep`. At `keep := id` acceptance and the reader's premise are `PlainDraw`'s
-  (`acceptsAtD_iff_acceptsAtDK_id`, `txNoOffAt_iff_txNoOffAtK_id`), and a record of the outcome there is one here (`recordsLiveAtDK_id_of`); the
-  element-level acceptance holds wherever the shipped one does (`acceptsAtDK_true_of_acceptsAtD`).
+  (`acceptsAtD_iff_acceptsAtDK_id`, `txNoOffAt_iff_txNoOffAtK_id`), and a record of the outcome there is one here
+  (`recordsLiveAtDK_id_of`); the element-level acceptance holds wherever the shipped one does
+  (`acceptsAtDK_true_of_acceptsAtD`).
 * `recordsLiveAtDK_of_checks`, `acceptsAtDK_of_decide`: an accepting decision of `VK keep` at SHA-512 is accepted at the
   setup at its statement's draw and records its live outcome there up to the rounds' digests.
 * `cols_plainK`: `cols_plain` with the verdict read through `keep`.
