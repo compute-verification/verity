@@ -39,8 +39,9 @@ N2-ZK's driver proves N2's head checks.
   behind the firewall (``FC_FIREWALL=1``, ``FC_FIREWALL_LEAN``) and held by Lean `verify --zk --partition --program
   --registered`. ``sender`` and ``receiver`` are to be accepted, the others refused by Lean's registered reads.
 * **What the verifier receives**, scanned for every 16-byte piece of every opened row and every salt of the
-  statement (`a8.received`) but the pieces the public circuit holds and the empty slot's (zero bytes, the schedule's):
-  none is to be found; the prover's instance file, which holds them, is the control.
+  statement (`a8.received`) but the pieces the public circuit holds, the empty slot's (zero bytes, the schedule's)
+  and the pads' (`pad_cells`, (PAD, q) and zeros, the wiring's): none is to be found; the prover's instance file,
+  which holds them, is the control.
 """
 from __future__ import annotations
 
@@ -62,9 +63,9 @@ from verity.ml.circuits import boolean as BL  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.ml.circuits.types import Array  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
-from verity.core.protocols.certifier.active import DATA  # noqa: E402
+from verity.core.protocols.certifier.active import DATA, PAD  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
-from verity.core.protocols.certifier.warden import END, WardenParams  # noqa: E402
+from verity.core.protocols.certifier.warden import END, WardenParams, cell  # noqa: E402
 
 MEMBERS = {"sender": ("o0", True), "receiver": ("row", True), "unsigned": ("o0", False), "altered": ("o0", False),
            "pad": ("o0", False), "pad-named": ("o0", False), "swapped": ("o0", False)}
@@ -350,10 +351,16 @@ def blobs_of(m: dict) -> tuple[dict[str, bytes], set[str]]:
     return blobs, set(blobs)
 
 
+def pad_cells(at: SimpleNamespace) -> bytes:
+    """Each connection's pad as the warden writes it, (PAD, q) and zeros: fixed by the ordinal, which the wiring
+    (opened to the verifier) names, so a 16-byte piece of it matches any small integer among zeros."""
+    return b"".join(cell(PAD, q, b"", at.params.cell_bytes) for q, _, _ in at.opening.wiring.connections)
+
+
 def public_pieces(a8, blobs: dict[str, bytes], held: set[str], public: bytes) -> tuple[dict[str, bytes], set[str], list[str]]:
     """`blobs` cut into the scan's aligned pieces (`a8.needles`'s), each distinct piece once under its first name, less
-    the pieces `public` holds raw or as hex: the staged circuit, written from the Definition before any instance, and
-    the empty slot's zero bytes, which the schedule makes public."""
+    the pieces `public` holds raw or as hex: the staged circuit, written from the Definition before any instance, the
+    empty slot's zero bytes, which the schedule makes public, and the pads (`pad_cells`)."""
     pieces: dict[str, bytes] = {}
     seen: set[bytes] = set()
     for name, b in blobs.items():
@@ -428,8 +435,8 @@ def prove(a) -> int:
     ok = summary["unsigned_registration"].startswith("refused")
     for j, (name, m) in enumerate(staged.items()):
         res = audit_member(M, av, sg, m, at, out / name, a.port + j)
-        circuit = (m["dir"] / "circuit.txt").read_bytes() + bytes(WR.SALT_BYTES)
-        blobs, held, public = public_pieces(M.a8, *blobs_of(m), circuit)
+        known = (m["dir"] / "circuit.txt").read_bytes() + bytes(WR.SALT_BYTES) + pad_cells(at)
+        blobs, held, public = public_pieces(M.a8, *blobs_of(m), known)
         res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
                            "public_pieces": public}
         good = expected(name, res) and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"]

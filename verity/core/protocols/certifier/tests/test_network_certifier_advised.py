@@ -35,10 +35,11 @@ SALTS = [tuple(bytes([4 * w + k + 1]) * 192 for k in range(4)) for w in range(WI
 SEEDS = (1, 2, 3, 5, 7, 8)
 
 
-def _view(link, w, syncs=SYNCS, certified=None):
+def _view(link, w, syncs=SYNCS, certified=None, clocks=None):
     """`advised.view` under the stand-in tie on an ingress that certified the prompts `certified` (by default the
-    advice's own), on windows the certifier ran under the declared `syncs`."""
-    return AD.view(link, w, T, R, syncs, SYNC_SET, FRAMING, clocks=syncs, **held(link, certified))
+    advice's own), on windows the certifier ran under `clocks` (by default the declared `syncs`)."""
+    return AD.view(link, w, T, R, syncs, SYNC_SET, FRAMING, clocks=syncs if clocks is None else clocks,
+                   **held(link, certified))
 
 
 def check(session: Session, link=None, own=0, egress=None, ingress=None, certified=None) -> list[bool]:
@@ -438,9 +439,9 @@ def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
     verifier of record on the proof; a `LinkAdvice` takes no tie at all, and a `received` that isn't u32s and a
     verdict that doesn't name a link, registration digests and an advice digest with one bool a registration can't be
     built; and every window refuses an advice that releases more than R frames in a bucket (all in the last), a frame
-    before its request could be (the first in bucket 0), or one in a window with no declared sync (the last past the
-    link's), and a declared sync outside Σ_sync in any window the advice releases in, which the floor of an earlier
-    window may read and that window's audit doesn't check."""
+    before its request could be (the first in bucket 0), or one past the link's windows; and a window that declares no
+    sync, or one outside Σ_sync, is refused, and only that window: every other window's view is the honest one, since
+    every floor reads the sync the certifier ran (REDTEAM phase 15)."""
     session = serve(SEEDS[0])
     run = Run(tmp_path, ties=StandInTie(session.certified))
     opening = run.lw.commit(0, run.issuer.certify(session.egress[0], Direction.EGRESS, P,
@@ -488,21 +489,26 @@ def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
         out = Run(tmp_path / f"run-{k}", ties=ties).round(0, session.egress[0], session.ingress[0], bad)
         assert not out.accepted
     over, early, late = (WINDOWS * T - 1,) * len(a.release), (0,) + a.release[1:], a.release[:-1] + (WINDOWS * T,)
-    for release, why in ((over, "past the allocation"), (early, "before its request"), (late, "declares no sync")):
+    for release, why in ((over, "past the allocation"), (early, "before its request"), (late, "past the link's")):
         bad = AD.LinkAdvice(replace(a, release=release), got)
         for w in range(WINDOWS):
             with pytest.raises(ValueError, match=why):
                 _view(bad, w, certified=session.certified)
         assert not run.lw.advised_check(opening, SYNCS, bad)
-    windows = sorted({b // T for b in a.release})
-    assert windows[-1] > 0
-    for v in windows:
+    assert sorted({b // T for b in a.release})[-1] > 0
+    honest = [_view(link, w) for w in range(WINDOWS)]
+    for v in range(WINDOWS):
         for sync in (ClockSync(0, 2), ClockSync(1, 1), ClockSync(3, 4)):
             off = SYNCS[:v] + [sync] + SYNCS[v + 1:]
             for w in range(WINDOWS):
-                with pytest.raises(ValueError, match="Σ_sync"):
-                    _view(link, w, off)
-            assert not run.lw.advised_check(opening, off, link)
+                if w == v:
+                    with pytest.raises(ValueError, match="Σ_sync"):
+                        _view(link, w, off, clocks=SYNCS)
+                else:
+                    assert _view(link, w, off, clocks=SYNCS) == honest[w], (v, sync, w)
+            assert run.lw.advised_check(opening, off, link) is (v != 0)
+        with pytest.raises(ValueError, match="declares no sync"):
+            _view(link, v, SYNCS[:v], clocks=SYNCS)
     with pytest.raises(ValueError, match="receives in"):
         _view(link, WINDOWS)
 

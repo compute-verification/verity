@@ -3,8 +3,10 @@ served vLLM OpenAI endpoint, and the offline check of what it published.
 
 **Topology.** The client, outside the boundary, holds one link connection to the certifier's host. There the certifier
 (`active.Proxy` with its salt on, signing every record and every reveal) forwards each request it releases over
-loopback to the shim (`active_replay.LiveServer`, the canonical framer, which is the prover's side), and the shim sends
-it to the endpoint over HTTP or HTTPS and frames the stream it gets back as canonical events:
+loopback to the shim (`active_replay.LiveServer`, the canonical framer, which is the prover's side), with its place in
+the release order and the certifier's run id (`x-verity-release`, `x-verity-release-run`: `release`), and the shim
+sends it to the endpoint over HTTP or HTTPS with those two headers, so that `serve-openai --admit release-order` takes
+requests in the order the certifier released them, and frames the stream it gets back as canonical events:
 
     client ──link──▶ certifier host: [ Proxy ──loopback──▶ shim ] ──HTTP(S)──▶ endpoint
 
@@ -158,8 +160,10 @@ certified, the I/O, the audit and the salt accept.
 
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
 (`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
-certifier's salt for it and certificate, or the link-window the signer refused), `proxy.json.gz`, the shim's
-`server.json` and `server.events.gz`, the client's `peer.json`, `serve.json` and `check.json`. Records, certificates,
+certifier's salt for it and certificate, or the link-window the signer refused), `clocks.jsonl` (the certifier's clock
+certificate of each egress window's sync, public, which an advised link's verifier reads: `read_clocks`),
+`proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the client's `peer.json`, `serve.json` and
+`check.json`. Records, certificates,
 the certifier's salts and the shim's events are witness, kept behind the firewall in a deployment; a rehearsal
 publishes them so that its check can be replayed. No PoUW salt is written, only its SHA-512
 (`active_replay.fingerprint`). With `CERTIFIER_SERVE_TIMING` set, `serve` also writes `publisher_timing.json`: when
@@ -197,8 +201,8 @@ from verity.core.protocols.certifier import audit as host_audit, calibration
 from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, \
     Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
-from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, Direction, Issuer, LmsKey, \
-    LmsSigner, RecordHead, parameters_digest
+from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, ClockCertificate, Direction, \
+    Issuer, LmsKey, LmsSigner, RecordHead, parameters_digest
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
 from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.schedule import ClockSync, expected_grids, handing_buckets
@@ -337,6 +341,24 @@ def certified_from_json(doc: dict) -> CertifiedRecord:
                            Certificate(**{f: _dec(f, v) for f, v in doc["certificate"].items()}))
 
 
+def clock_json(clock: ClockCertificate) -> dict:
+    c = clock.certificate
+    return {"sync": [clock.sync.delta, str(clock.sync.rho)],
+            "certificate": {f: _enc(getattr(c, f)) for f in type(c).__slots__}}
+
+
+def clock_from_json(doc: dict) -> ClockCertificate:
+    delta, rho = doc["sync"]
+    return ClockCertificate(ClockSync(delta, Fraction(rho)),
+                            Certificate(**{f: _dec(f, v) for f, v in doc["certificate"].items()}))
+
+
+def read_clocks(path: Path) -> list[ClockCertificate]:
+    """`clocks.jsonl`: the certifier's clock certificates, one for each egress window it signed the sync of (a link's
+    clock source of record, `LinkWindows(clock_certificates=…)`); none for a run without the file."""
+    return [clock_from_json(json.loads(line)) for line in path.read_text().splitlines()] if path.exists() else []
+
+
 def read_certified(path: Path) -> tuple[dict[tuple[Direction, int], CertifiedRecord], list]:
     """`certified.jsonl`: the certified records by (direction, window), and the link-windows the signer refused."""
     got, refused = {}, []
@@ -354,7 +376,8 @@ class CertifyingPublisher(ar.Publisher):
     """The served proxy's `publish`: `Publisher`'s files, and each record certified by `issuer` as the network certifier
     hands it over, under the N2 link's name `link`, the one name both ends of a link-window share
     (`service.LinkWindows.link`): one line of `certified.jsonl` each, or the link-window under `refused` when the
-    signer refuses."""
+    signer refuses. An egress record handed with the sync the shaper ran its window under (`ServedProxy`) gets that
+    sync's clock certificate too (`Issuer.clock`), one line of `clocks.jsonl`, none when the signer refuses."""
 
     def __init__(self, out: Path, setup: ar.Setup, issuer: Issuer, link: str, threaded: bool = True) -> None:
         super().__init__(out, setup, threaded)
@@ -363,7 +386,13 @@ class CertifyingPublisher(ar.Publisher):
                      setup.ingress_link: (Direction.INGRESS, parameters_digest(setup.ingress_params))}
         self.timing: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
 
-    def keep(self, record, params) -> None:
+    def __call__(self, record, params, sync: ClockSync | None = None) -> None:
+        if self.executor is None:
+            self.keep(record, params, sync)
+        else:
+            self.futures.append(self.executor.submit(self.keep, record, params, sync))
+
+    def keep(self, record, params, sync: ClockSync | None = None) -> None:
         start = time.monotonic(), time.thread_time()
         super().keep(record, params)
         kept = time.monotonic(), time.thread_time()
@@ -373,6 +402,10 @@ class CertifyingPublisher(ar.Publisher):
                 else certified_json(certified))
         with open(self.out / "certified.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
+        if sync is not None and direction is Direction.EGRESS and \
+                (clock := self.issuer.clock(self.link, record.window, sync)) is not None:
+            with open(self.out / "clocks.jsonl", "a") as fh:
+                fh.write(json.dumps(clock_json(clock)) + "\n")
         if self.timing is not None:
             end = time.monotonic(), time.thread_time()
             self.timing.append({"link": record.link, "window": record.window, "start": start[0], "kept": kept[0],
@@ -426,10 +459,10 @@ class CertifierProcess:
     def sign(self, message: bytes) -> bytes:
         return self.pool.submit(_certifier_call, "sign", message).result()
 
-    def __call__(self, record, params) -> None:
+    def __call__(self, record, params, sync: ClockSync | None = None) -> None:
         if self.submits is not None:
             self.submits.append((record.link, record.window, time.monotonic()))
-        self.futures.append(self.pool.submit(_certifier_call, "keep", record, params))
+        self.futures.append(self.pool.submit(_certifier_call, "keep", record, params, sync))
 
     def close(self) -> None:
         for f in self.futures:
@@ -807,12 +840,24 @@ def varied_plan(probed: dict, requests: list[dict], *, name: str = "varied", see
 
 # The certifier.
 
-class ServedProxy(Proxy):
-    """`active.Proxy`, keeping the windows whose salt it has revealed, so that `serve` stops once every one is."""
+class ServedProxy(ar.ReleaseProxy):
+    """`active.Proxy` whose server gets each request with its place in the release order (`active_replay.ReleaseProxy`),
+    keeping the windows whose salt it has revealed, so that `serve` stops once every one is, and handing its `publish`,
+    with each egress record, the sync its own shaper ran the window under (`Shaper.syncs`), which the certifier signs
+    (`CertifyingPublisher`, `CertifierProcess`)."""
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.revealed: set[int] = set()
+        if kwargs.get("publish") is not None:
+            publish, shaper = self.publish, self.shaper
+
+            def clocked(record, params) -> None:
+                ran = shaper.syncs
+                egress = record.link == shaper.certifier.link and record.window < len(ran)
+                publish(record, params, ran[record.window] if egress else None)
+
+            self.publish = clocked
 
     def reveal(self, window, registration, request=None):
         out = super().reveal(window, registration, request)

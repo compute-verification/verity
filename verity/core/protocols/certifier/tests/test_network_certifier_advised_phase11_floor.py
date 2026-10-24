@@ -3,9 +3,10 @@ the Program's eligibility b − δ − ⌊λ/ρ⌋ with no `max(1, ·)`, so a re
 δ = 0, a served clock's (an engine's first output in its request's bucket). That is sound only for the δ the window's
 traffic was certified under: the floor read the declared δ, held to Σ_sync alone, so a prover declared δ = 0 for a
 window the certifier ran at δ = 1 and an output coincident with its request's last ingress frame was accepted. Now
-`advised.view` refuses a window whose declared sync isn't the one the certifier ran it under, which the verifier of
-record takes only from its own clock source (`LinkWindows.clocks`, here the stand-in `advised_traffic.StandInClocks`;
-none in the package).
+every floor reads the sync the certifier ran, which the verifier of record takes only from its own clock source
+(`LinkWindows.clock_source`, here the stand-in `advised_traffic.StandInClocks`; of record, the certifier's signed
+clock syncs, `test_network_certifier_advised_signed_clocks.py`), and `advised.view` refuses a window whose declared
+sync isn't that one (only that window: REDTEAM phase 15, `test_network_certifier_advised_phase15_window.py`).
 
 The rest of the phase's hunt stays closed: no release strictly before its request's last ingress frame passes under
 any δ ≥ 0, the phase-3 ingress-end forgery is refused by the tie, a sync outside Σ_sync is refused, bucket 0 holds
@@ -200,8 +201,8 @@ def test_the_ingress_end_forgery_is_closed_by_the_tie():
 
 
 def test_a_sync_outside_the_set_is_refused():
-    """A declared sync outside Σ_sync is refused in whichever window releases under it, even one the certifier ran:
-    the floor can't be relaxed by a value the Program didn't fix."""
+    """A declared sync outside Σ_sync is refused in the window that declares it, even one the certifier ran: the floor
+    can't be relaxed by a value the Program didn't fix."""
     with pytest.raises(ValueError, match="Σ_sync"):
         _view(_advice((3,)), (2,), ClockSync(0, 1), SyncSet((2,), (1,)))
 

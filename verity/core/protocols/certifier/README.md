@@ -81,6 +81,10 @@ A spec-level reference for network accounting's timing channel:
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
   reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
   `PROTOCOL.md`'s "The active warden" has its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
+- the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
+  0-based place in its run's release order) and `x-verity-release-run: ID` on the server's copy of each request it
+  releases, for `serve-openai --admit release-order`. The headers never appear in a cell or record, so nothing
+  certified changes;
 - the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a
   bucket, padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer,
   beside a salted digest of the window's wiring. The registration is what a proof unit's `--registered` port reads, so
@@ -113,16 +117,17 @@ A spec-level reference for network accounting's timing channel:
   served link under arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1`
   (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
   (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
-  each release eligible under its window's declared sync, one of Σ_sync and the one the certifier ran the window
-  under (the verifier's own clock source, `LinkWindows.clocks`), so never before the bucket of its request's last
-  frame (the request's end on the ingress link, which `advised.ends` derives from v0's prompt lengths and the link's
-  public framing), and each window's ingress total the advice's. Carry-over between windows is the advice's. With the
-  advice fixed the counts are determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An
-  advised link"). The prompt lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict
+  each release eligible under the sync the certifier ran its window under (the verifier's own clock source,
+  `LinkWindows.clock_source`: the certifier's clock certificates, `certificate.ClockCertificate`, which each window's
+  declared sync must match, one of Σ_sync, or that window is refused), so never before the bucket of its request's
+  last frame (the request's end on the ingress link, which `advised.ends` derives from v0's prompt lengths and the
+  link's public framing), and each window's ingress total the advice's. Carry-over between windows is the advice's.
+  With the advice fixed the counts are determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`,
+  "An advised link"). The prompt lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict
   (`advised.IoTieVerdict`, naming the link and its ingress registrations), which the verifier takes from its own tie
   source (`LinkWindows.ties`), never beside the advice: the tie service's (below). The served size class isn't
-  pinned, so there every advised link is refused (fail closed); and the certifier doesn't report its syncs to the
-  verifier yet, so there is no clock source (`LinkWindows.clocks`) and every advised link is refused;
+  pinned, so there every advised link is refused (fail closed), as is a link without the certifier's clock
+  certificates;
 - the ingress tie through the proof service (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
   units, one a bucket row of the warden's registered ingress cells, proved as `NetworkIngressTieBucket` (one gate
   naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root

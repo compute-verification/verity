@@ -1043,8 +1043,10 @@ requests, whose frames are a function of the prompt's length alone), for every p
     and the registrations the verifier's tie source records, so a verdict on another link or ingress record isn't
     reused;
   - the framing, and each window's declared sync, which must be one of Σ_sync, the set the certified egress head's
-    parameters digest binds (outside it the advice is refused), and the sync the certifier ran that window under,
-    which the verifier takes only from its own clock source (`LinkWindows.clocks`, `advised.ClockSource`).
+    parameters digest binds (outside it the window is refused), and the sync the certifier ran that window under,
+    which every floor reads and the declared one must be, and which the verifier takes only from its own clock
+    source (`LinkWindows.clock_source`, `advised.ClockSource`): the certifier's signed clock sync
+    ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
 - **The ingress ends are derived** (`advised.ends`), not advised: advice request j is the link's j-th request and its
   prompt length is the certified prompt's, which the tie holds (FCFS admission meets the order, since v0's first-row
   order is then the arrival order), so it ends at request frame `ends[j]` = Σ_{i ≤ j} `request_frames[prompt_len_i −
@@ -1054,20 +1056,26 @@ requests, whose frames are a function of the prompt's length alone), for every p
   v0's says
   where a request ends, so the ends cost nothing beside `advice.bits`.
 - **The window's view** (`advised.view`), computed by the verifier in the clear from the advice, the framing and the
-  declared syncs, is the unit's public input:
+  syncs the certifier ran, is the unit's public input:
   - `released[t]`, the frames the advice releases in bucket t, at most R (more refuses the advice);
   - `floor[t]`, the request frames the window's ingress must have released by bucket t, less B_w = Σ_{v<w}
     `received[v]`. Output λ of request j released at b is eligible no earlier than j's anchor + δ + ⌊λ/ρ⌋
-    (`schedule.eligible`) under the sync (δ, ρ) of the window that holds b, and is released no earlier: so the first
-    `ends[j]` request frames are released by bucket b − δ − ⌊λ/ρ⌋. A frame for which that bucket is before 0, or
-    released in a window with no declared sync, refuses the advice. Since δ ≥ 0, no declared sync lets a frame out
-    before the bucket that releases its request's last frame. A release in that bucket is a served clock's, an
-    engine's first output in its request's bucket (a served run's advice, `test_network_certifier_advised_served.py`);
-    on a certified path the proxy hands a frame read in bucket t on at t + 1, so its honest syncs have δ ≥ 1. A
-    window whose declared sync isn't the one the certifier ran it under refuses the advice: a δ below the traffic's
-    loosens the floor, and REDTEAM phase 11 accepted an output in its request's own bucket under δ = 0 declared for a
-    window run at δ = 1 (regressions in `test_network_certifier_advised_phase11_floor.py`). Until the certifier
-    reports its syncs to the verifier there is no clock source, and every advised link is refused;
+    (`schedule.eligible`) under the sync (δ, ρ) the certifier ran the window that holds b under, and is released no
+    earlier: so the first `ends[j]` request frames are released by bucket b − δ − ⌊λ/ρ⌋. A frame for which that
+    bucket is before 0, or released past the link's windows or in one without the certifier's signed sync, refuses
+    the advice. Since δ ≥ 0, no sync lets a frame out before the bucket that releases its request's last frame. A
+    release in that bucket is a served clock's, an engine's first output in its request's bucket (a served run's
+    advice, `test_network_certifier_advised_served.py`); on a certified path the proxy hands a frame read in bucket t
+    on at t + 1, so its honest syncs have δ ≥ 1. A window whose declared sync isn't the one the certifier ran it under
+    is refused: a δ below the traffic's would loosen the floor, and REDTEAM phase 11 accepted an output in its
+    request's own bucket under δ = 0 declared for a window run at δ = 1 (regressions in
+    `test_network_certifier_advised_phase11_floor.py`). The bucket b − δ − ⌊λ/ρ⌋ can fall in a window before the
+    one that releases the frame, so a floor that read a declaration would carry one window's word into another's
+    view. No floor reads one, so a wrong declaration refuses its own window and no other (REDTEAM phase 15), and the
+    link's verdict, the AND over its windows, refuses the link. The verifier takes the sync the certifier ran each
+    window under only from the certifier's clock certificate of the window, verified under its key and session, and
+    a window without a valid one is refused, and the link with it
+    ([protocol/clock-certificate.md](protocol/clock-certificate.md));
   - `received`, `received[w]`.
 - **The unit** is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: `NetworkLinkWindow`'s checks, and one gate
   (`advised.gate`) naming `advised.NetworkAdvisedCounts_v1{T, RIN, OWN}` and its circuit digest pinned in
@@ -1086,7 +1094,7 @@ requests, whose frames are a function of the prompt's length alone), for every p
   link: it computes `view(A, w)` itself, under the tie from its own tie source alone (`LinkWindows.ties`; no entry
   point takes one beside the advice), and opens the proof's public row only to its own copy, so a proof made on
   another advice's view of the window is refused. Without a `LinkAdvice`, a tie source or a clock source
-  (`LinkWindows.clocks`), or on an advice `view`
+  (`LinkWindows.clock_source`), or on an advice `view`
   refuses, the unit takes no instance and the window is refused. The in-the-clear check (`clear`, the debug comparison) runs `advised_check`:
   `advised.reference` over the opened heads' counts and `view(A, w)`. Each window reports a third public output,
   `advice`, the SHA-512 of A's canonical
@@ -1150,20 +1158,21 @@ requests, whose frames are a function of the prompt's length alone), for every p
   ingress head's signed counts, less one own frame a window, reach `ends[k]`, with `request_frames[n − 1]` CERT-VARLEN's
   `id_request_frames(n, B)`. The floor reads the same prefix sums, so it holds each output to the bucket the signed
   counts end its request in. The rule is exact, since each window's own frame leaves in its first bucket.
-- **Named gap: the record holds neither the prompt lengths nor the syncs the unit reads** (owned by network-accounting).
-  The unit takes v0's prompt lengths, held to the certified ones only by IoTieRequest's verdict (the tie above), and
-  each window's sync from its declaration, held to Σ_sync and to the sync the certifier reports it ran (the clock
-  source above), a trusted device's report rather than a signed record, because neither head signs them. Design: the
-  ingress head
-  signs each bucket's completed requests and the egress head the window's sync (`served.sync_words`), inside
-  `RecordHead.encode`, and the unit reads both from the heads it opens. It changes the head encoding that Lean pins, so it lands with the head check's and the Lean model's
-  change, not before. With CERT-VARLEN's FIFO change the completed requests follow from the signed counts and the
-  certified prompt lengths, so on ingress what's left is holding v0's prompt lengths to the certified bodies.
+- **Named gap: the record doesn't hold the prompt lengths the unit reads** (owned by network-accounting). The unit
+  takes v0's prompt lengths, held to the certified ones only by IoTieRequest's verdict (the tie above), because the
+  ingress head doesn't sign them. Design: the ingress head signs each bucket's completed requests inside
+  `RecordHead.encode`, and the unit reads them from the head it opens. It changes the head encoding that Lean pins, so
+  it lands with the head check's and the Lean model's change, not before. With CERT-VARLEN's FIFO change the
+  completed requests follow from the signed counts and the certified prompt lengths, so on ingress what's left is
+  holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's clock certificate
+  beside its egress record, which the verifier holds the public declared sync to in the clear, so it needs no head
+  change ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);
   - the releases fall in the link's windows, each of which declares a sync in Σ_sync, the one the certifier ran it
-    under, which the certifier reports to the verifier (until it does, no advised link is accepted);
+    under, whose clock certificate the certifier signed and the verifier holds (without it, no advised link is
+    accepted);
   - `received` is the ingress record's;
   - the link's j-th request is advice request j (FCFS admission: IoTieRequest's ordinals are the verifier's, so an
     advice numbered in another order, as a runner's batch order numbers v0 and ENC-DERIVED's `walk.order` maps back,
@@ -1477,339 +1486,27 @@ and the ingress terms, which stay the K charge's.
 
 ### Attacks
 
-The prices are estimates for one 60 s window at the llama8b-node1 calibration (T = 600, B = 4,096, r = 1,686, and
-16 × 8 sync values), under an assumed load of 3,000 output tokens a second. That is 180,000 decode rows, 3,000 engine
-steps and 900 requests a window, with Llama-3's V = 128,256 tokens (log2 V ≈ 17). Advice v0's size is measured on a
-synthetic schedule of that shape ("The parts as drafted"). Measurements from the trace corpus and the encodings' table
-replace the other estimates when they land.
-
-| # | Attack | Under the design | Cost to the prover | What closes it |
-|---|---|---|---|---|
-| 1 | A covert channel in the advice: batch compositions or chunk sizes chosen to encode weights | Charged: it is the channel `A_c` counts. v0 sends every row's fields at 48 bits a row: 10.6 Mbit a window, 3.5 times the 3.0 Mbit of token ids the window's egress itself carries, so v0's length bounds nothing the trivial bound doesn't | Nothing but throughput | An encoding that charges only departures from a public predictor: `compile` replaying a deterministic scheduler from the arrivals, or the trusted text's κ step clock and registered profiles (log2 N bits once). It is priced, never refused |
-| 2 | Scheduling choices the advice describes but that don't change the outputs | Charged. The registered Program digests are a function of the advice, so the choice is in the record whether or not the advice is published | Nothing | A canonical schedule: the advice must be the predictor's, and a departure is charged as in 1 |
-| 3 | Timing | Jitter is n·log2 D, which is 0 under J. The advice's `release` is timing advice, charged as advice. It replaces the sync's 7 bits with up to log2 C(S + T − 1, S) ≈ 2,330 bits a window at S = 3,000 steps (30,000 in a fixed-width field). Proposition 2 caps it at the envelope T·log2(r + 1) ≈ 6,430 bits a link-window, since once the frames and their order are fixed, the counts are all the timing the wire shows | Nothing | Release derived from the anchors, the declared sync and the schedule (zero-bit fields), which brings back the sync's 7 bits. The times at which registrations and proofs reach the challenger are a separate channel (A6) |
-| 4 | Token choice at temperature 0 | None, if A1, A2 and the tie hold: the argmax with its tie-break fixed, the decode input wired to the previous sample, and the streamed token tied | — | A2 refuses each of three breaks. (a) A decode input id not wired to the previous sampled token frees 17 bits a decode row, about 3 Mbit a window; the Commit holds `c00.input/ids` and `runner.sampler/sampled_token_ids` as separate values, so the wiring must be checked. (b) A prompt in another tokenization of the same text frees the choice among the tokenizations. (c) A request parameter read from the advice rather than the body is uncharged |
-| 5 | Sampling at temperature > 0: the seed and the RNG | Open. A seed the prover chooses is 64 bits a request, about 58 kbit a window. An RNG state shared across requests is advice. A `splits` input not derived from the schedule frees each event's draw | k usable bits a request cost about 2^k runs of the request | The seed from the request body, or from coins nobody inside chooses (the challenger's, or the certifier's salt, as D7 exempts them), with `splits` derived in the circuit. Otherwise, charge 64 bits a request |
-| 6 | Preemption or cache-hit claims that don't match the real cache | The real cache is never seen, so a claim is advice: charged (v0's `cache_hit` and `preempted`), and under batch-variant kernels it steers near-ties. The dangerous form is a hit whose KV has no checked writer. Fabricated KV makes the request's whole output free, and no draw catches it, since every step unit computes correctly from what it reads | Nothing | A2: a hit names its donor, the donor's token prefix equals the request's certified one, and the KV is the donor writer's output. `compile` refuses a read with no writer. A hit that an encoding derives from the prompt history is recomputed, never read |
-| 7 | Advice for a different but plausible schedule that computes the same outputs | Not refused. It costs its own encoding and no more, since acceptance is existential. Nothing the prover runs is trusted, so the Commit needn't be serving's, only registered by the deadline. The leak is log2 of the number of schedules that give the same tokens and release, at most the schedule fields' charge (v0: 8.7 Mbit a window); under a replay encoding, each departure is charged at its own encoding | Under batch-invariant kernels, nothing. Otherwise, a re-execution under the claimed schedule before the registration deadline. Under a replay encoding, sending the replay's own prediction costs 0 bits whatever serving did, but the streamed tokens and the release must then be the prediction's | Nothing needs to for the network bound, since the charge counts every explanation. It breaks any claim that the advice is serving's schedule: an account that credits work or live slots by the advice's rows credits work when it wasn't done. Closing that needs the schedule attested on a trusted clock, which the design doesn't have |
-| 8 | A frame let through by a wrong tie unit | Open under a sampled tie. The frame is witness that only the tie holds, so a missed frame frees all 8·B = 32,768 bits of it. At ε = 10^−3 that is 180 frames, about 5.9 Mbit a window, and the advice doesn't bound it. `io_tie`'s design draws K frames a link-window in a unit on `All`. With N3 on `All` holding every frame canonical, a missed frame frees only its id (log2 V ≈ 17 bits), and an accept at δ leaves fewer than N·ln(1/δ)/K wrong frames: about 49,000 a link-day, 844 kbit, at K = 20, δ = 2^−40 and the busiest served window's N = 35,386 | Nothing | The tie with Selection `All` over every frame. Or the sampled positions with N3 on `All`, and the term ε·N·log2 V added beside `A_c` (claim 2 below) |
-| 9 | The lengths of the windows' parts | If the parts aren't self-delimiting, how many bits each window gets is free: log2 C(c + W, W) over W windows. That is about 11 bits a window at 1 kbit a window, and 24 at 8 Mbit, more than the sync's 7 | Nothing | A5: each part self-delimiting, or a registered cap per window |
-| 10 | Encodings that decode alike: padding bits, trailing bytes, non-minimal integers, unused enumeration values, an arithmetic coder's several codewords for one message | The count is unaffected while the charge is a function of the decoded advice. Free wherever the prover's bytes reach the record: a digest the registration binds can be ground to any of the message's encodings, and a seed or coin derived from it chosen. v0's `decode` refuses them all; an arithmetic-coded advice has 2 to 4 codewords a segment and reads 32 bits past it | Nothing | A5: `decode` refuses them, or the record and every digest hold the re-encoding |
-| 11 | Two advices: N2, the tie and the compiler reading different strings, or a consumer reading a field from the Commit's metadata | Free: the counts, the frames' mapping and the circuits each follow a different explanation | Nothing | A4 and A5: one digest in the registration, and every consumer decodes those bytes |
-| 12 | Advice chosen after the draw | The error bound grows to #𝒜_c · δ | Nothing | A4 |
-| 13 | A field an encoding stops charging but a consumer still reads as sent (`finish`, `output_len`, `prompt_len`, `cache_hit`) | Free. `output_len` alone is log2 of the token cap per request, 10 bits at 1,024 | Nothing | The consumer recomputes a derived field (EOS from the sampled tokens, and `length` only at the body's cap) and never reads it |
-| 14 | A request with no certified ingress, or two requests with one `user` | A phantom request's prompt is free and steers the rows batched with it. A shared id lets the prover swap outputs. v0 refuses a shared `user`, so honest traffic that shares or omits one has no advice | Nothing | Refuse both: every request the advice names is a certified request, named once, by its certified ingress position rather than a body field |
-| 15 | Making `compile` or any check refuse | The window is rejected, which is visible, and a rejected window may carry up to its unbound capacity, as now | The run | The policy that already applies to rejected windows |
+Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md).
 
 ### Adversarial cases
 
-Each part's tests carry these cases, each refused or charged as stated. They are small and CPU-only, and each goes into
-its part's tests as the part lands. Those marked (written) run against the parts' drafts in
-`test_network_certifier_advice_adversarial`, `test_network_certifier_advised_adversarial` and
-`test_network_certifier_io_tie_adversarial`.
-- **The advice codec:**
-  - `decode(encode(a)) == a`, and `encode(decode(x)) == x` for every x that `decode` accepts: every one-bit flip, cut
-    and appended byte of 12 random schedules' encodings. A wider field, a longer length prefix, a set padding bit and
-    a trailing byte are refused (10, written);
-  - for every window prefix, the windows' charges cover the header, every step up to the last that samples a frame
-    released in it, every request first scheduled by then and those frames' release fields. The windows' charges sum
-    to the encoding's length (9, 13, written). The windows' parts, concatenated, parse one way (9);
-  - a skipped position, a recomputation without a resume, two rows of one request in a step, a hit on a running row,
-    a hit on KV no request computed by that step, a resume of a finished request, a second row past a stop and a
-    `kind` other than the derived one are refused (6, A2, written);
-  - a duplicate `id`, and requests out of their first rows' order, are refused (14, written);
-  - schedule choices that leave the outputs unchanged (a chunked prefill, a hit instead of a recomputation, a resume in
-    place) are distinct advices, each charged (2, 7, written).
-- **N2's advice mode:**
-  - N2's frames are advice v0's outputs, step, request and index, on every advice v0 accepts (11, written; fails today
-    on the row past a stop, below);
-  - a response handed before its request's anchor plus the window's δ and ⌊λ/ρ⌋ is refused, and with δ = 0 the
-    anchor's own bucket is admitted (written);
-  - egress counts one frame off in any bucket, a queued frame released early, and ingress over RIN, past or short of
-    the window's `received` or after the response, are refused (11, written);
-  - a response with one frame more than its `output_len` plus the framer's constant overhead is refused.
-- **The I/O tie:**
-  - a frame with the right token id and any other byte changed is refused: another stream, frame kind or payload
-    length, a finish reason, an id in the fill (8, written);
-  - a payload in m frames fails exactly those m positions, so it passes K draws with probability (1 − m/N)^K (8,
-    written);
-  - two frames mapped to one (request, position), and a position with no frame, are refused;
-  - a prompt whose committed ids are another tokenization of the certified text is refused (4);
-  - the tie and N2 read one advice digest (11).
-- **The compiler and the Commit:**
-  - a decode row whose input id is not the previous position's sampled token is refused (4);
-  - a cache hit with no donor of an equal prefix, and a KV read with no writer, are refused (6);
-  - a stochastic request's seed is the body's or the coins', never the advice's (5);
-  - `compile` under an unregistered pin either gives the same Programs or refuses (A1).
+Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md).
 
 ### The parts as drafted (24 Oct)
 
-- **Advice v0 (`advice`)** holds A5's canonical part and A2's position part. Every row continues at its request's
-  computed position, a hit or a resume reads only KV some request computed by that step, each request runs at most
-  once a step, `kind` is derived, and at most one row runs past a stop. So attack 6's dangerous form is refused at the
-  advice, and `compile` is left two checks: the donor's token prefix equals the request's, and which write a read takes
-  when a position was computed twice.
-  - Measured on a synthetic 60 s window at the llama8b shape (900 requests, 3,080 steps, 180,374 rows, 178,552
-    outputs), it is 10.6 Mbit, 59 bits an output: the steps 8.69 Mbit (48 bits a row), the release 1.79 Mbit (10 bits
-    an output) and the requests 0.11 Mbit. The egress's own token ids are 3.03 Mbit, so the charged length must be a
-    residual code (the encodings'), with v0 as the canonical form the record digests.
-  - `bits_by_window`'s parts are not self-delimiting. The bits charged to windows before m parse only given how many
-    requests and steps they hold, about 2·log2 of the total more a prefix (9). Which outputs fall before m is timing.
-  - It has no seed field, so a request at temperature > 0 with no seed in its body has no advice (5).
-  - It names a request by its body's `user` and orders requests by first row. N2 lists them in ingress order, and the
-    tie's canonical body has no `user`. Every consumer must map advice request r to one certified request by a rule
-    fixed before the run (11, 14).
-  - Its `release` is each output's egress bucket. N2 reads `release` as each step's hand bucket, and adds
-    `ingress_frames` and `received`, which v0 lacks: one name with two meanings (11). Per output it costs 10 bits a
-    frame (20 over a day's buckets), timing that D already pays.
-- **N2's advised counts (`advised`).** On 400 random schedules its frames are v0's outputs, except that `frames` refuses
-  the one row past a stop that async scheduling runs, which v0 accepts and discards. So N2 refuses honest
-  async-scheduled sessions, and the two read one advice differently (11, 15). It checks no position rule, which is
-  sound only if it reads an advice that v0 validated. Its floor takes the hand window's sync where `schedule.eligible`
-  says the anchor window's, a choice inside the declared set either way.
-- **The I/O tie (`io_tie`)** maps frame k to request ⌊k / F⌋'s output k mod F, which needs FIXLEN, request-major order
-  and windows that start and end at request boundaries. Under arbitrary serving the map must come from the advice.
-  Ordering the port by egress position and moving the advice's map into the port's binding to the Commit (compute's)
-  keeps the tie's position wiring. No frame field but the id is free, so concurrent responses need a stream field the
-  ingress fixes per request, and a response's last event (its finish reason, `[DONE]`) must be tied to the advice's
-  `finish` and `output_len`.
+Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md).
 
 ### For Daniel: what the guarantees would have to say
 
-These points change what a guarantee says or rests on, so they are claims, and this section changes nothing in
-`Security/`:
-1. **Sampled acceptance.** The accepted-runs bound is exact today (`Accepted`: every recorded row is the Program's).
-   Under sampled step and tie units it holds only except with probability δ_audit, and only with the influence term
-   I_ε added. The bridge from a sampled audit to `Accepted` for some (a, φ) composes `NetTiming` with the one-stage
-   audit's `audit_influence`. It is a new statement, and it rests on the verifier's coins (A3,
-   `uniform/io-getrandombytes`) and the proof system's knowledge soundness, besides what the certifier's bounds rest
-   on.
-2. **The tie's weight.** `audit_influence` prices a wrong unit by the width it adds to a separator, its exits. That is
-   right for a step unit and wrong for a tie unit, whose exit is one bit while it frees a whole frame. Either the tie is
-   `All`, or the network term weights each tie unit by its frame's free bits. `io_tie`'s design is the second: K
-   draws a link-window, with N3 on `All`, leave ε·N·log2 V bits at δ (844 kbit a link-day at its served numbers), a
-   term the accepted-runs bound doesn't have.
-3. **The length.** "The advice's length is the leak" holds only with A7: a cap registered before the run, or the
-   indexed form (for every c, the runs charged at most c), with each window's part self-delimiting.
-4. **Public advice.** The advice, or the compiled Programs' digests that determine it, is public in this design. That
-   is beyond the four kinds of public things, unless the advice counts as a protocol output. A hiding commitment to the
-   advice, with the universal unit (`private_circuits`) running each step, would keep it private. The network charge
-   would stay the same, since the egress still depends on the advice.
+Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md).
 
 ## Calibration (`calibration`)
 
-`network-certifier-calibrate TRACE [--ingress-bucket-ms 100]` reads honest timing traces (the format is in the module
-docstring) and sizes:
-
-- **Σ_sync:**
-  - δ from 0 up to the p99.99 first-frame latency, in 16 steps;
-  - ρ geometrically from the p0.01 production rate up to the p50 rate, in 8 values, each rounded down to a fraction
-    with denominator at most 1024 (rounding down keeps a value lenient). Both rates are taken per configuration first:
-    the low end is the p0.01 of the configurations' p0.01 rates, and the high end the median of their medians over
-    windows. A configuration's windows are the windows its egress frames span, 1 + its largest anchor // T, and the
-    high end is the least median rate t such that the configurations with a median rate at most t span at least
-    ⌈W/2⌉ of all W windows. So a run cut into more configurations, at a dropped window say, keeps its high end.
-- **The honest prover's choice:** one clock per spatial unit, so per window one value for every egress link of the
-  configuration: the value met on all of them with the least total hand time over the window's frames on every link
-  (their total shaping delay), with ties to the smaller δ, then the larger ρ. Taking the least δ first would pick a
-  slow ρ to save one bucket, and hold every later frame for seconds. Each link's frames are in the Program's canonical
-  order, which is step-major for a batching engine, so a long session interleaves with later windows' frames.
-  While a window is chosen, later windows take their most eager value; that only lowers hand times, so a window found
-  met stays met.
-- **The online prover** (`online.Prover`): that choice is in hindsight, from all of a window's frames. A live prover
-  declares window w's sync at its first bucket, w·T: the rule on the frames ready by w·T − lag (the canonical prefix
-  it has read, each anchored earlier) and the earlier declarations, and nothing else. A rule (`online.rule`) sees, for
-  each recent window, the least δ per ρ that would have met the frames seen of it with the other windows as declared.
-  `cover-K-M` takes the value of least estimated hand time whose δ is M buckets past every one of the last K windows'
-  least δ at its ρ, `-fallback` declares the envelope (the largest δ and smallest ρ the calibration's prover declared)
-  while one of them was late under its own declaration, `-rhoR` declares the chosen δ at the ρ R steps slower, and
-  `last` is `cover-1-0`. `sticky-K-M-N[-rhoR]` declares `cover-K-M[-rhoR]` only in windows 0, 1, 1+N, ...; in between
-  it keeps its value while that still has M buckets to spare, and otherwise escalates to a value fixed by the kept one.
-  A window with no history declares the envelope. A configuration cut from one run at a dropped window may start from
-  the previous one's history (`Prover(prior=…)`).
-- **The lag:** live, 1 … T − 1 buckets. It lets the choice be made off the proxy's tick, since from bucket w·T − lag on
-  nothing changes it, and a choice not ready at w·T is declared as the envelope. `online.declare(lag=…)` replays the
-  declarations with every choice ready, so it gives a live run's wherever its choices were ready; lag 0, the choice at
-  the tick itself, is the reference replay's.
-- **What the prover's choice changes:** the bound charges log2 #Σ_sync bits per window whatever chose the value, so it
-  holds under any rule, any lag, and an unready choice: the envelope is in Σ_sync, and the audit checks a
-  declaration, as advice, only for membership in Σ_sync. What changes is who can use those bits: a sync chosen before
-  the run, or from the trace's model, doesn't depend on the sender, but an online prover reads the sender's timing, so
-  the sender steers every declaration after its first (in the injected-clock replay, the burst, spread and bits
-  senders each move the declared δ, and the wire differs from honest's in every window but the first). Live, whether
-  a choice is ready by its tick depends on the proxy's load as well, which the sender can move too, and the same
-  bits are charged for it. `Rule.choices` bounds how many values a sender could make a rule declare in a window:
-  about #Σ_sync for `cover`, at most 2 between a `sticky` rule's free windows.
-- **The honest miss rate:** a window that no value meets on every egress link is a miss, which is a violation. A
-  larger δ or a smaller ρ only raises hand times, so a window misses exactly when the most lenient value misses on some
-  link. A window is the configuration's, so the rate is the configurations' missed windows over their windows
-  (1 + largest anchor // T each), and a link's `honest_windows` and `honest_misses` are those of its configurations.
-  One clock can miss where a choice per link would not: the value met on every link can hand one link's frames earlier
-  than that link's own choice, and a later window whose frames were met only behind them then misses. The target is
-  1e-4.
-- **The egress allocation r:** the least r at or above twice the p99.9 of per-bucket demand whose FIFO replay has no
-  overflow and a p99 queueing delay of at most one bucket. Both improve monotonically in r, so the search doubles and
-  then bisects. If one bucket's demand exceeds Q, every r overflows: the tool exits with an error naming the demand and
-  Q, for the egress and the ingress grid alike.
-- **The ingress grid:** the smallest r_in that carries honest ingress, at τ_in. τ_in is **100 ms**, decided on 29 Sep
-  2026 from a calibration of honest traces. The grid stays configurable, so `--ingress-bucket-ms` still compares
-  alternatives. With arrival times (`arrival_ms`), τ_in may be finer than the trace bucket, and the report adds the
-  delivery delay: a frame waits for the next ingress bucket boundary, then for its FIFO slot. The p99 FIFO delay is at
-  most one ingress bucket by default; `--ingress-max-delay-ms` sets the budget in ms instead, so different τ_in are
-  compared at the same latency.
-
-The report has the per-link bandwidth, the utilization and padding share, the clock-sync set and its bits, the (δ, ρ)
-range the honest prover declared, the first-frame latency it declared (the p50 and p99 of its declared δ, in ms), the
-shaping delay (hand time minus ready time, over every frame), the capacity per day, and the K charge by span.
+Moved to [protocol/calibration.md](protocol/calibration.md).
 
 ## Advice v0 (`advice`)
 
-Network accounting for arbitrary vLLM usage runs a precommitted AOT compiler. It takes an **advice** string, which
-encodes everything serving made unpredictable, and compiles each engine step's circuit from it. The certifier
-certifies the I/O, and sampled proofs hold the committed values to the compiled circuits and to the certified I/O. v0 is
-the interface the compiler, the encoders and the tie to the certified I/O code against; its schema id is
-`verity/advice/v0`. The module's docstring carries the same layout and its split by window.
-
-**The charge, and what is committed.** The content advice `A_c` of the accepted-runs bound, `A_c + W·log2 #Σ_sync +
-n·log2 D`, is the advice's length under ENC-CODE's compression, not v0's. v0 is the committed form, as hm96 hiding
-rows, and the form the compiler reads. The red team measured v0 at 10.6 Mbit for a 60 s llama8b-shape window, 3.5 times
-the egress token ids. The advice is private: a compile unit, always proved in zero knowledge, states that the committed
-Programs are compile(advice) under the advice's hiding root, with the compiler's digest registered (PRF-143). The
-advice's root is registered before the live draw, and the compiler refuses every ill-formed advice up to the public cap
-deterministically; v0's validity is that unit's first part (`advice_check`, below).
-
-**Interface.** The `Advice`, `RequestAdvice`, `StepAdvice`, `Row` and `Source` dataclasses are frozen, and construction
-refuses (`MalformedAdvice`) anything that isn't a schedule vLLM could have run. The module's functions are:
-- `encode(advice) -> bytes` and `decode(data) -> Advice`;
-- `total_bits(advice)`;
-- `bits(advice, window, T)` and `bits_by_window(advice, T)`, v0's bits by egress window;
-- `outputs(advice)`, the kept samples;
-- `to_json` and `from_json`, a strict JSON form for debugging.
-
-**What vLLM decides, and where the advice says it** (the pinned `0.28.1rc1.dev472`, v1's `Scheduler.schedule`):
-- v1 has no prefill or decode phase. Each step's `SchedulerOutput` gives each scheduled request
-  `num_scheduled_tokens` tokens from its `num_computed_tokens` on. That pair is a `Row`'s (`n`, `start`), and the
-  model runner's input batch order is the order of the step's `rows`.
-- `scheduled_new_reqs` is a request's first row. `scheduled_cached_reqs` holds the continuing rows, and the resumes
-  among them, `resumed_req_ids`, are `preempted`.
-- Preemption is recompute: `num_computed_tokens` goes back to 0, and the request returns to the front of the waiting
-  queue. `preempted_req_ids` isn't recorded as such: a preempted request has no row until its resume.
-- A waiting request with no computed tokens looks up the prefix cache, on admission and on a resume alike. A hit holds
-  at most `num_tokens − 1` tokens and may end mid-block, the partial tail being copy-on-write. Blocks are cached when
-  `allocate_slots` schedules them, so a hit can be on KV that another row of the same step computes. This is
-  `cache_hit`, `start = cache_hit` and `sources`.
-- A row's sample is kept exactly when the row reaches the request's known tokens, the prompt plus its kept outputs.
-  Otherwise it is discarded (the runner's `discard_request_mask`): a partial prefill chunk, or the one row
-  `async_scheduling` (on by default) runs past an EOS.
-- `finished_req_ids`, and the reason, are `finish` and `output_len`.
-
-**What I1's draft missed, and v0 adds:**
-- `Row.sources`. The compiler has to wire a hit's KV, and nothing public says whose KV it is: a run of positions
-  names the request that computed them, in this step or an earlier one.
-- `release` per kept output, not per step. A step's frames straddle buckets: streams interleave, and vLLM can merge
-  tokens into one chunk.
-- `bits` takes T: a window is T buckets of `release`.
-- `kind` is derived (decode exactly when n = 1 and start ≥ prompt_len) and checked.
-- At most one row past a request's last output, the async one. The position rules admit it and refuse a second.
-- `requests` are in order of first row, with unique ids.
-
-**Out of scope for v0**, so a deployment that uses one of them isn't described by v0: speculative decoding
-(`scheduled_spec_decode_tokens`), LoRA, structured output (the grammar bitmask), multimodal encoder inputs, KV
-connectors and external hits (`num_external_computed_tokens`), cascade attention (`num_common_prefix_blocks`; set
-`disable_cascade_attn`), pipeline and data parallelism (tensor parallelism is in scope, since every rank runs the same
-`SchedulerOutput`), n > 1 and best_of, stop strings (a finish other than `eos` or `length` is refused), aborts and
-client disconnects, unseeded stochastic sampling, CUDA-graph padding (the advice names the rows that ran, not padding,
-so either the runner is eager or the compiler models the padding), and Mamba or hybrid models.
-
-**Fields.** Each field's chooser and bit cost are below; w_req = bitlen(#requests − 1), and the widths w_len, w_rel and
-w_src are the least that hold their largest values. A **determined** field is fixed by the certified I/O, the
-committed values or the rest of the advice, and the encoders (ENC-*) remove it. The **free** fields are the real
-`A_c`: what the serving engine, which is the prover, chooses.
-
-| Field | Chosen by | Bits | Determined? |
-|---|---|---|---|
-| version | protocol | 8 | yes: structure |
-| #requests | clients | 6 + L | yes: certified ingress |
-| #steps | engine | 6 + L | free |
-| w_len, w_rel, w_src | (derived) | 18 | yes: the rest of the advice |
-| `id` | client (the body's `user`) | 6 + L + 8·bytes | yes: certified ingress |
-| `prompt_len` | client | w_len | yes: certified ingress (the precommitted tokenizer) |
-| `output_len` | model, or the client's `max_tokens` | w_len | yes: committed outputs, and the egress frame count |
-| `finish` | model (EOS), or the client's cap | 1 | yes: committed outputs (is the last kept token EOS) |
-| a step's rows − 1 | engine | w_req | free |
-| `Row.request` | engine | w_req per row | free: batch membership and order |
-| `Row.kind` | (derived) | 1 per row | yes: start, n, prompt_len |
-| `Row.start` | engine | w_len per row | yes: cache_hit on an admitting row, the previous row's end otherwise |
-| `Row.n` | engine (chunk size, token budget) | w_len per row | free on prefill chunks; 1 at known − 1 |
-| `Row.cache_hit` | engine (prefix cache state) | w_len per row | free on admitting rows; 0 otherwise |
-| `Row.preempted` | engine | 1 per row | free |
-| `Row.sources` | engine (prefix cache's block map) | w_src + #sources·(w_req + w_len), hit rows only | free; their sum is cache_hit |
-| `release` | engine's timing, inside the sync | w_rel per output | yes: certified egress records and committed frames |
-
-What's left free are the step count, which requests each step runs and in what order, the chunk sizes, the
-preemptions, the cache hits and their sources, and whether the row past an EOS ran. `release` is determined, and the
-timing term `W·log2 #Σ_sync + n·log2 D` charges it. The advice carries it only so that the compiler and the tie to the
-certified egress know which output each frame is.
-
-**Validity.** `Advice` replays the schedule, keeping for each request the positions computed (`num_computed_tokens`),
-the known tokens and the kept outputs, and refuses:
-- a request that is out of first-row order, has no row, or keeps more or fewer than `output_len` outputs;
-- a first row that resumes, or one that doesn't start at its hit;
-- a continuing row that doesn't start where the last one ended;
-- a row past the known tokens, or whose `kind` isn't the derived one;
-- a hit on a row that doesn't admit its request;
-- a resume of a finished request;
-- a source on positions its request hadn't computed by that step, or a request's own KV except on a resume;
-- per request, release buckets that aren't non-decreasing;
-- an empty step, or a request twice in one step;
-- types, ranges below 2^63, duplicate ids and ids that aren't UTF-8.
-
-**Canonical.** An advice has one encoding and a byte string at most one advice, because any second form would be a
-covert channel. The layout (MSB first, `uvar` a u6 width L then u(L), L the value's bit length) is:
-
-    header     version u8 (0) | n_requests uvar | n_steps uvar | w_len u6 | w_rel u6 | w_src u6
-    request    id_bytes uvar (≥ 1) | id, id_bytes × u8, UTF-8 | prompt_len u(w_len) | output_len u(w_len) | finish u1 (0 eos)
-    step       rows − 1 u(w_req) | rows × [ request u(w_req) | kind u1 (0 prefill) | start u(w_len) | n u(w_len)
-               | cache_hit u(w_len) | preempted u1 | when cache_hit > 0: sources − 1 u(w_src),
-               sources × (request u(w_req) | n u(w_len)) ]
-    release    Σ output_len × u(w_rel)
-    padding    zero bits to a whole byte, never charged
-
-`decode` refuses everything else: a non-minimal width or length prefix, nonzero padding, a trailing byte, truncation,
-a version other than 0, and every invalid advice. The tests' fixture of two requests and five steps is 207 bits (26
-bytes): a 43-bit header, 22 bits for each request, the steps at 13, 29, 25, 25 and 13, and 3 bits for each of five
-releases.
-
-**By window** (`bits_by_window`). v0's own bits, not the charge, split so that each record goes to the earliest
-egress window it can show in:
-- an output's release goes to its own window, bucket // T;
-- a step's bits go to the earliest window of an output at that step or later, and a step that no output follows goes
-  to the last window;
-- a request goes to the window of its first step, and the header to step 0's.
-
-So windows 0 … m − 1 hold every record their frames read, and the parts sum to `total_bits`. An advice with no outputs
-is wholly window 0's. A per-window charge over the first m windows covers at least these records. The charge itself
-is ENC-CODE's (above).
-
-**Left to the other workstreams**, which v0 doesn't settle:
-- **Per-window parts.** v0 is one string, and `bits_by_window` divides its records among windows by a rule computed
-  from the decoded advice, so the prover can't choose the split. But the header's counts and widths depend on later
-  windows, and the records a window holds aren't one contiguous, self-delimiting part. A per-window bound that
-  counts each window's part as its own string (the red team's A5 and attack 9, #3489) needs an encoding that sends
-  each window's part self-delimited (its step and request counts as `uvar`s, with widths registered or per part). That
-  costs a few bits a window, and it is ENC-CODE's and N2-ADVICE's to choose.
-- **The order within a bucket.** Several requests' frames released in one bucket can go out in any order, a channel of
-  up to log2 n_t! bits a bucket that neither the advice nor the timing term charges. The tie to the certified I/O
-  (IO-TIE) has to fix a canonical order, for example by id then output index.
-- **One frame per kept output.** Each kept output is to be one egress frame, the HTTP head folded into the first and
-  `[DONE]` into the last, and a chunk into which vLLM merged tokens split back per token (the variable-length served
-  link, CERT-VARLEN).
-- **The id.** The shim's `user` names the session today; it has to name the request, unique within a session
-  (CERT-VARLEN).
-- **Equal tokens at a source.** The compiler has to hold a source run's tokens equal to the hitting request's, or the
-  hit wires in another prompt's KV (circuits' COMPILER).
-- **Arrival before admission.** A request's first row has to follow its certified arrival, which the tie to the
-  certified ingress checks.
+Moved to [protocol/advice-v0.md](protocol/advice-v0.md).
 
 ## The replay's state chain (`replay_chain`)
 
@@ -2549,6 +2246,12 @@ and seven lemmas, and three more proved lemmas:
     the server's timing, chunking or content at the same n;
   - past the lanes, connections queue FIFO, then get one `REFUSED` cell;
   - every cell is B bytes, and `read_cell` refuses anything the warden wouldn't make, a `FAIL` with a payload too;
+  - the server gets each request whole at its `END`'s release with N its index among the signed `END` cells, in
+    release order rather than admission order, a client's own release header dropped and its cells unchanged; a
+    connection that fails before its `END` is unnumbered and its server gets nothing;
+- **`test_network_certifier_release.py`:** the release headers (`release`) go right after the request line, a client's
+  own are dropped whatever their case, bytes that aren't an HTTP/1 request with its whole head pass unchanged, and a
+  shim reads back the first of each;
 - **`test_network_certifier_warden_adversarial.py`:** REDTEAM's cases against the warden, each stating the bits it
   bounds: the server's connect delay doesn't move the egress base from s + D, and two accept delays give
   byte-identical client cells and records (regressions for 316f3292b6's open base); at one fail cell the reason isn't
@@ -2754,6 +2457,14 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 - `benchmarks/network_traces/warden_serve.py` runs the warden live and checks that each client got exactly its egress
   record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`)
   runs the same rehearsal on the auditor's host.
+- The server's copy of each request carries its release order (`release`, VLLM-89), so that `serve-openai --admit
+  release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
+  index among the ingress records' `END` cells, and `x-verity-release-run:` the warden's `run_id` (in
+  `deployment.json`). The server gets a request whole at its `END`'s release, and nothing of a connection that fails
+  before it. The headers are on the server's leg only. No cell or record holds them, so the cell counts, the prompt
+  lengths and the I/O tie's request frames are unchanged. They reach the server, never the client, so the leak bound
+  is unchanged. The active certifier's served proxy adds the same headers (`active_replay.ReleaseProxy`), with
+  N = s − 1 for request stream s.
 
 **Named gaps:**
 - TLS isn't terminated: both legs are plain TCP.
