@@ -220,8 +220,8 @@ def TileUnpredictableOfTT : Prop :=
     Pouw.Assumptions.TT CM P D γ₀ ε → TileUnpredictable CM P (fun sh => (sh.Wmm : ℝ)) D γ₀ ε
 
 /-- **NCP's `TT_NCP_U` gives `TileUnpredictable` on route U at the stacked product's work `3·m·k·n`.** For every bias
-`β`, cost model, NCP parameters, domain, target and error: `Pouw.NCP.Assumptions.TTNCP_U β CM P D γ₀ ε` implies
-`TileUnpredictable CM (P.toProtocolU β) (3·Wmm) D γ₀ ε`.
+`β`, cost model, NCP parameters, domain on which `γ₀ ≥ P.d/(3k)`, target and error:
+`Pouw.NCP.Assumptions.TTNCP_U β CM P D γ₀ ε` implies `TileUnpredictable CM (P.toProtocolU β) (3·Wmm) D γ₀ ε`.
 
 Proof: `Accounting.SecurityProofs.TileUnpredictableOfNCPU`.
 
@@ -229,6 +229,7 @@ Frozen (conjecture, no-function, hash): as `TileUnpredictableOfTT`, for NCP's na
 def TileUnpredictableOfNCPU : Prop :=
   ∀ (β : ℤ) (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
     (P : Pouw.NCP.Params Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
+    (∀ U : Pouw.Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
     Pouw.NCP.Assumptions.TTNCP_U β CM P D γ₀ ε →
       TileUnpredictable CM (P.toProtocolU β) (fun sh => 3 * (sh.Wmm : ℝ)) D γ₀ ε
 
