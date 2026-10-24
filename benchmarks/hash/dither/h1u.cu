@@ -565,7 +565,7 @@ struct OneOut {
 #endif
 static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JPD + H1U_JRING) == 0,
               "a chunk's 16 segments are whole rings of H1U_JPD (+ 1 with H1U_JRING) sets");
-// H1U_JPI = 1 (RW, with H1U_PF and a ring of 4 or 8 sets): the ring's loads and L2 prefetches at immediate
+// H1U_JPI = 1 (RW, with H1U_PF, H1U_JRING and a ring of 4 or 8 sets): the ring's loads and L2 prefetches at immediate
 // offsets from row pointers advanced once a ring (the segments run in order across the chunks), where 0 computes every
 // row's address each segment; the same loads
 #ifndef H1U_JPI
@@ -664,7 +664,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   constexpr bool RING = RW ? H1U_JRING : H1U_RING;
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
   constexpr bool PI = RW && H1U_JPI;
-  static_assert(!PI || (PF && NS % 4 == 0), "H1U_JPI is the prefetch ring's, in whole groups of 4 segments");
+  static_assert(!PI || (PF && RING && NS % 4 == 0), "H1U_JPI is the prefetch ring's, in whole groups of 4 segments");
   constexpr bool LE = RW && H1U_JLE;
   static_assert(!LE || PF, "H1U_JLE reorders the prefetch ring's loads, so it needs H1U_PF = 1");
   const u32 lane = threadIdx.x & 31;
