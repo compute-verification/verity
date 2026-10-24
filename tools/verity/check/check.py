@@ -8,6 +8,8 @@
     ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
                                                             post-landing run drive launches on `main`'s tip (`train.sh
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes
+    ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
+                                                            a regenerated record (drive's after-landing run)
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
@@ -671,11 +673,13 @@ def requires_outside(lean: Path) -> list[str]:
                    if (p := e.get("dir") or e.get("path")) is None or not (lean / p).resolve().is_relative_to(lean.resolve())})
 
 
-def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[tuple[str, list[str] | str, Path]]:
+def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
+               regenerate: bool = True) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ml.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
-    is skipped by name.  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
+    is skipped by name.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
+    drive's after-landing run, where a record difference fails).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
     `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
     directory (`requires_outside`)."""
     lean = FLOCK_LEAN
@@ -702,7 +706,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
                             sys.executable, str(LEAN_JOBS / "lean_audit.py"), "--out", str(out / "lean-audit"),
                             "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
                             *([] if cache else ["--fresh"]), *(["--urls", str(urls)] if urls else []),
-                            *(["--regenerate"] if lean_regenerates() else [])], ROOT),
+                            *(["--regenerate"] if regenerate and lean_regenerates() else [])], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
 
@@ -1121,7 +1125,7 @@ def grant_when_alone(path: Path, beside: list[threading.Event], gb: int) -> None
 
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
-           only: list[str] | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
+           only: list[str] | None = None, regenerate: bool = True) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
     shard's parts (`shard`), just the jobs those name, lean-audit on its packages there, and all the cores to pytest or to
     circuit-check when the other isn't among them."""
@@ -1140,7 +1144,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
     tail = ["--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
-    lean = lean_steps(out, cache, urls)
+    lean = lean_steps(out, cache, urls, regenerate)
     after_lean: list[str] = []
     if len(lean) > 1:
         after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
@@ -1783,7 +1787,8 @@ PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept Imp
 
 
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
-        only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None) -> tuple[bool, list[dict]]:
+        only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None,
+        regenerate: bool = True) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
     steps = Steps(out, keep_going, packs, reused)
@@ -1817,7 +1822,7 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
             if reused is not None:
                 reused.start()
-            gs = groups(out, n, cache, urls) if only is None else groups(out, n, cache, urls, only)
+            gs = groups(out, n, cache, urls, regenerate=regenerate) if only is None else groups(out, n, cache, urls, only, regenerate)
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
             beside = [ended[name] for g in gs if all(s[0] != "circuit-check" for s in g) for name, _, _ in g]
             grant = None
@@ -1977,7 +1982,8 @@ def main(argv: list[str]) -> int:
         return combine(argv[1:], Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None)
     cache = "--no-cache" not in argv
     keep_going = "--keep-going" in argv
-    rest = [a for a in argv if a not in ("--no-cache", "--keep-going")]
+    regenerate = "--no-regenerate" not in argv
+    rest = [a for a in argv if a not in ("--no-cache", "--keep-going", "--no-regenerate")]
     pack = None
     if "--verdicts-in" in rest and rest.index("--verdicts-in") + 1 < len(rest):
         i = rest.index("--verdicts-in")
@@ -2041,7 +2047,7 @@ def main(argv: list[str]) -> int:
     packs = Packs(run_dir / "verdicts.tar.gz", before) if before is not None else None
     reused = Reused(run_dir, before) if before is not None else None
     try:
-        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None, packs, reused)
+        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None, packs, reused, regenerate)
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)
