@@ -19,7 +19,9 @@ from verity_vllm.predict.steps import (
     compare,
     compile_steps,
     dead_gates_of,
+    plan_steps,
     policy_of,
+    request_program,
     trace_commands,
     trace_dir,
 )
@@ -78,6 +80,17 @@ def test_requests_compile_to_the_builds_request_programs_at_the_shapes_they_ran(
     s = json.loads(json.dumps(c.summary()))
     assert s["workload_digest"] == wl.digest and s["steps"][1] == [[0, 8, 1, 1], [1, 0, 5, 1]]
     assert compile_steps(reg, _mixed()).summary() == c.summary()
+
+
+def test_a_plan_is_the_compilation_before_its_programs_are_built():
+    """`plan_steps` fixes the shapes, rows and refusals; `request_program` builds one distinct Program, which a measurement can do
+    request by request in other processes."""
+    reg = _registered()
+    plan, c = plan_steps(reg, _mixed()), compile_steps(reg, _mixed())
+    assert [(u.request, u.LP, u.T) for u in plan.distinct()] == [(0, 8, 3), (1, 5, 2)]
+    assert [request_program(reg, u).digest for u in plan.distinct()] == [c.requests[0].digest, c.requests[1].digest]
+    assert plan.steps == [[(r.request, r.start, r.n, r.samples) for r in rows] for rows in c.steps]
+    assert all(u is None or u.digest == "" for u in plan.requests)
 
 
 def test_the_clients_seed_is_the_seed_input_and_the_policy_reads_temperature_and_top_p():

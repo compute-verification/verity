@@ -33,7 +33,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any
 
@@ -190,6 +190,32 @@ def shape_of(i: int, prompt_len: int, rows: list[tuple[int, Any]], output_len: i
     return LP, int(output_len) - 1, s0
 
 
+@dataclass
+class Plan:
+    """What the advice fixes before any Program is built: each request's unit (its digest unset), each step's live rows as
+    (request, start, n, samples), the discarded rows, and the refused requests."""
+
+    requests: list[RequestUnit | None]
+    steps: list[list[tuple[int, int, int, int]]]
+    discarded: list[tuple[int, int, int, int]]
+    refused: dict[int, str]
+
+    def distinct(self) -> list[RequestUnit]:
+        """The first request of each (LP, T, policy), in request order: one Program each."""
+        seen: set[str] = set()
+        out = []
+        for u in self.requests:
+            if u is not None and u.key() not in seen:
+                seen.add(u.key())
+                out.append(u)
+        return out
+
+
+def request_program(registered: Registered, unit: RequestUnit) -> Any:
+    """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy."""
+    return build_program(Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy}), "request", LP=unit.LP, T=unit.T)
+
+
 def compile_steps(registered: Registered, advice: Any, *, partial: bool = False) -> Compiled:
     """The Programs of `advice`'s run (module docstring): each request's at its (LP, T, policy), GP-01 over them, and each step's
     live rows as `RowRef`s.  Pure and deterministic: it reads `registered` and `advice` only.  `partial` refuses request by request
@@ -198,9 +224,26 @@ def compile_steps(registered: Registered, advice: Any, *, partial: bool = False)
     from verity_vllm.program import workload as W
 
     from .score import request_component
+    plan = plan_steps(registered, advice, partial=partial)
+    programs: dict[str, Any] = {}
+    comps: dict[str, Any] = {}
+    digests: dict[str, str] = {}
+    canon: dict = {}
+    for u in plan.distinct():
+        r = request_program(registered, u)
+        programs[r.digest], digests[u.key()] = r.program, r.digest
+        comps[u.key()] = request_component(r, canon)
+    units = [None if u is None else replace(u, digest=digests[u.key()]) for u in plan.requests]
+    wl = W.WorkloadProgram([W.WorkloadRequest(request_id_of(u.request), u.request, u.LP, u.T + 1, u.first_step, comps[u.key()], T=u.T)
+                            for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()))
+    steps = [[RowRef(r, units[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
+    return Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused)
+
+
+def plan_steps(registered: Registered, advice: Any, *, partial: bool = False) -> Plan:
+    """`compile_steps` up to building Programs: every refusal, each request's shape and policy, and each step's live rows."""
     phi0 = registered.phi
-    tp = phi0.target_profile()
-    if not tp.batch_invariant:
+    if not phi0.target_profile().batch_invariant:
         raise Unexpressible(f"a target without batch invariance ({phi0.execution!r}): its requests' launches would come from the advice (v1)")
     rows, refused = _rows_of(advice)
     if refused and not partial:
@@ -220,24 +263,10 @@ def compile_steps(registered: Registered, advice: Any, *, partial: bool = False)
             units.append(None)
             continue
         units.append(RequestUnit(i, "", LP, T, policy, seed, s0))
-    ran = [u for u in units if u is not None]
-    if not ran:
+    if not any(u is not None for u in units):
         raise Unexpressible(f"every request that ran is refused, request {min(refused)}: {refused[min(refused)]}" if refused
                             else "no request of the advice ran a row")
-    programs: dict[str, Any] = {}
-    comps: dict[str, Any] = {}
-    digests: dict[str, str] = {}
-    canon: dict = {}
-    for u in ran:
-        if (key := u.key()) not in comps:
-            phi = Phi.from_json({**phi0.to_json(), "sampling": u.policy})
-            r = build_program(phi, "request", LP=u.LP, T=u.T)
-            programs[r.digest], digests[key] = r.program, r.digest
-            comps[key] = request_component(r, canon)
-    units = [None if u is None else RequestUnit(u.request, digests[u.key()], u.LP, u.T, u.policy, u.seed, u.first_step) for u in units]
-    wl = W.WorkloadProgram([W.WorkloadRequest(request_id_of(u.request), u.request, u.LP, u.T + 1, u.first_step, comps[u.key()], T=u.T)
-                            for u in units if u is not None], manifest_digest=None, lag=int(tp.lag()))
-    steps: list[list[RowRef]] = []
+    steps: list[list[tuple[int, int, int, int]]] = []
     discarded: list[tuple[int, int, int, int]] = []
     for s, step in enumerate(advice.steps):
         live = []
@@ -248,10 +277,9 @@ def compile_steps(registered: Registered, advice: Any, *, partial: bool = False)
             if start >= u.LP + u.T:
                 discarded.append((s, r, start, n))
             else:
-                live.append(RowRef(r, u.digest, start, n, int(start + n >= u.LP)))
+                live.append((r, start, n, int(start + n >= u.LP)))
         steps.append(live)
-    return Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=discarded,
-                    refused=dict(sorted(refused.items())))
+    return Plan(units, steps, discarded, dict(sorted(refused.items())))
 
 
 def dead_gates_of(compiled: Compiled) -> dict:
