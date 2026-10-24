@@ -46,22 +46,24 @@ def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_pre
 
 
 def test_the_dead_free_form_binds_rmsnorm_and_token_select_to_their_versions_without_dead_gates():
-    """`swapped` binds each RMSNormTriton_v1 and TokenSelect_v1 node to v5 and v3 at the same statics (`registry.dead_free`): the
-    same arguments and outputs, fewer gates, none of them dead; every other node is the same object. The step wrapper, which isn't
-    the registered form, keeps the v1s."""
+    """`swapped` binds each RMSNormTriton_v1 and TokenSelect_v1 node to v5 and v4 at the same statics (`registry.dead_free`): the
+    same arguments and outputs, none of their gates dead, the RMSNorm's fewer (TokenSelect_v4 has a negation more a lane than v1, and
+    lowers linearly in V where v1 lowers quadratically); every other node is the same object. The step wrapper, which isn't the
+    registered form, keeps the v1s."""
     body = PB.build_program(PHI, "step", M=2, pos0=8).program.fn.body
     sw = swapped(body)
     assert Counter(n.fn.id for n in body.nodes if n.fn.name in ("RMSNormTriton", "TokenSelect")) == {
         "RMSNormTriton_v1{N=64,EPS=1e-05}": 2, "TokenSelect_v1{V=256}": 1}
     assert Counter(n.fn.id for n in sw.nodes if n.fn.name in ("RMSNormTriton", "TokenSelect")) == {
-        "RMSNormTriton_v5{N=64,EPS=1e-05}": 2, "TokenSelect_v3{V=256}": 1}
+        "RMSNormTriton_v5{N=64,EPS=1e-05}": 2, "TokenSelect_v4{V=256}": 1}
     for a, b in zip(body.nodes, sw.nodes):
         if a.fn.name in ("RMSNormTriton", "TokenSelect"):
-            assert (b.form, b.args, b.out, b.n, b.fn.bindings) == (a.form, a.args, a.out, a.n, a.fn.bindings) and b.gates < a.gates
+            assert (b.form, b.args, b.out, b.n, b.fn.bindings) == (a.form, a.args, a.out, a.n, a.fn.bindings)
+            assert b.gates < a.gates or a.fn.name == "TokenSelect"
             assert dead_gates(Program(b.fn), limit=0, transitive=True).computed == 0 < dead_gates(Program(a.fn), limit=0, transitive=True).computed
         else:
             assert b is a
-    assert sw.ret is body.ret and sw.offsets[-1] == sum(n.gates for n in sw.nodes) < body.offsets[-1]
+    assert sw.ret is body.ret and sw.offsets[-1] == sum(n.gates for n in sw.nodes)
     assert swapped(sw) is sw
 
 

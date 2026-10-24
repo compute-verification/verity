@@ -79,9 +79,9 @@ def test_request_and_workload_programs_equal_the_traced_build():
     phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
     r = build_program(phi, "request", LP=256, T=31)
-    assert r.digest == "51e08a6ba99f20ecb55383fa9401e9a419252cfc560f0aa8f7b181ac9527498212832d3b4ea685084d4a3b1ec8dfa77e33bca159871f17b5a0200fba64175243"
+    assert r.digest == "c72b96b9a407e23b35ffb4bcbf2cee6a014eb597389f5483b34dbe20ebaac04101230f43d82b8babf375b0edc06b3123166b78f754f79ffcac6e19c299404fee"
     assert r.n_root_nodes == 84698
-    assert S.predict_workload(phi)["digest"] == "53b37425e50d84ecd13f79bde85d8666098382e9a72de21c5b9326772814ed28c87dc4284cc01ec1171abf32618af05f5940d60da8097c68b3a9395a98ae886d"
+    assert S.predict_workload(phi)["digest"] == "2711625876058fd96315f1acf537e3aeada9ae7daa513a2fcad03f27e88739a9aa9e141c6e89d0e1f2ce3d30e6828d728266d32eed70f25ea0f348426e283c61"
 
 
 @pytest.mark.parametrize("model,function,rank,digest", [

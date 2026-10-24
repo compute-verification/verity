@@ -7,6 +7,10 @@ compiler emits, where no gate may be one no output depends on.  Rows of record k
   only what is read (its index, or its store).  v1's last iteration made a final best and an i + 1 that nothing reads.
 * `GumbelTopPTokenSelectSharedGreedy_v2`: `GumbelTopPTokenSelectSharedGreedy_v1` over `TopPMask_v3` and
   `GumbelSelectF32GivenGreedy_v2`.
+* `TokenSelect_v4`: `TokenSelect_v1` from its V-chunks of `CHUNK` logits, each one SHA-512 block of bf16 words: a chunk's
+  partial by `TokenSelectChunk_v2` (`b1.TokenSelectChunk_v1` with its last lane's unread index increment gone), reduced with
+  logits[0] by `TokenSelectCombine_v2` (`b1.TokenSelectCombine_v1` with each select's branches swapped, as the chunk step's
+  are).  Flat, v1 and v3 lower to circuits quadratic in V; this one is linear.
 
 Each computes its v1's function word for word, except at V = 1, where v1's zero-length scan returns a wrong carry and these return
 index 0 (`tests/program/test_dead_free.py`).
@@ -18,12 +22,14 @@ from verity.ml.circuits.ops.fp32 import F32AddFtz
 from verity.ml.circuits.ops.prims import ZERO32, const
 from verity.ml.circuits.ops.scalar import BIT, BitNot, F32, F32Eq, SelectF32, SelectI32
 from verity.ml.circuits.refs import Coll as _Coll, concat, tuple_of
-from verity.ml.circuits.types import Array
+from verity.ml.circuits.types import Array, Tuple
 from verity_vllm.program.registry import prims as P, ref_prims as RP, sampling as SA
-from verity_vllm.program.registry.b1 import ArgmaxStep, f32c
+from verity_vllm.program.registry.b1 import NEG_INF_BF16, ArgmaxStep, TokenSelectChunkStep, chunks, f32c
 from verity_vllm.program.registry.prims import BF16, I32
 
 I64 = SA.I64
+#: the logits `TokenSelect_v4` reads per chunk: 64 bf16 words, one SHA-512 block (1,024 bits)
+CHUNK = 64
 
 
 def lane0_butterfly(B, vals: list[Coll], masks: tuple[int, ...], add) -> Coll:
@@ -134,5 +140,49 @@ def GumbelTopPTokenSelectSharedGreedyV2(B, S, logits, top_p, seed, pos, temp, sp
     return B.call(bind(GumbelSelectF32GivenGreedyV2, V=S.V), masked, seed, pos, greedy)
 
 
-__all__ = ["GumbelSelectF32GivenGreedyV2", "GumbelTopPTokenSelectSharedGreedyV2", "RMSNormTritonV5", "TokenSelectV3", "TopPMaskV3",
-           "lane0_butterfly"]
+@composite("TokenSelectChunk", 2, ["C"], lambda S: ((("x", Array(S.C, BF16)),), Tuple(BF16, I32)), conformance="model-untested")
+def TokenSelectChunkV2(B, S, x):
+    """`b1.TokenSelectChunk_v1{C}`'s function: `TokenSelectChunkStep_v1`'s scan to x[C-2] from (-inf, 0, 0), then the last
+    logit's test for the best and its index alone."""
+    init = tuple_of(B.call(const(16, NEG_INF_BF16)), B.call(const(32, 0)), B.call(const(32, 0)))
+    c = B.scan(TokenSelectChunkStep, init, xs=(x[0:S.C - 1],))[0] if S.C > 1 else init
+    keep = B.call(BitNot, B.call(P.Bf16GtStrict, x[S.C - 1], c[0]))
+    return tuple_of(B.call(P.SelectBf16, keep, c[0], x[S.C - 1]), B.call(SelectI32, keep, c[1], c[2]))
+
+
+def _combine_type(S):
+    n = len(chunks(S.V, S.C))
+    return (("x0", BF16), ("best", Array(n, BF16)), ("idx", Array(n, I32))), I32
+
+
+@composite("TokenSelectCombine", 2, ["V", "C"], _combine_type, conformance="model-untested")
+def TokenSelectCombineV2(B, S, x0, best, idx):
+    """`b1.TokenSelectCombine_v1{V,C}`'s function with each select's condition negated and its branches swapped, as
+    `TokenSelectChunkStep_v1`'s are: a select's bits are its else branch's XOR one AND each, and that branch is chunk c's partial
+    here, never the running (best, index), so n chunks lower flat to a circuit linear in n."""
+    n = len(chunks(S.V, S.C))
+    run, run_i = x0, B.call(const(32, 0))
+    for c in range(n):
+        keep = B.call(BitNot, B.call(P.Bf16GtStrict, best[c], run))
+        at = idx[c] if c == 0 else B.call(P.I32Add, idx[c], B.call(const(32, c * S.C)))
+        run_i = B.call(SelectI32, keep, run_i, at)
+        if c < n - 1:
+            run = B.call(P.SelectBf16, keep, run, best[c])
+    return run_i
+
+
+@composite("TokenSelect", 4, ["V"], lambda S: ((("logits", Array(S.V, BF16)),), I32), conformance="model-untested")
+def TokenSelectV4(B, S, logits):
+    """`TokenSelect_v1{V}`'s function from its V-chunks of `CHUNK` logits (the whole row below that): each chunk's partial by
+    `TokenSelectChunk_v2`, then `TokenSelectCombine_v2` from logits[0] and the partials."""
+    if S.V == 1:
+        return B.call(const(32, 0))
+    C = min(CHUNK, S.V)
+    parts = [B.call(bind(TokenSelectChunkV2, C=hi - lo), logits[lo:hi]) for lo, hi in chunks(S.V, C)]
+    best = _Coll(Array(len(parts), BF16), concat([p[0].refs for p in parts]))
+    idx = _Coll(Array(len(parts), I32), concat([p[1].refs for p in parts]))
+    return B.call(bind(TokenSelectCombineV2, V=S.V, C=C), logits[0], best, idx)
+
+
+__all__ = ["CHUNK", "GumbelSelectF32GivenGreedyV2", "GumbelTopPTokenSelectSharedGreedyV2", "RMSNormTritonV5", "TokenSelectChunkV2",
+           "TokenSelectCombineV2", "TokenSelectV3", "TokenSelectV4", "TopPMaskV3", "lane0_butterfly"]

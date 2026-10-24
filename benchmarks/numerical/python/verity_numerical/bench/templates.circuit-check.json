@@ -93,6 +93,21 @@
    "not": 172,
    "type": "048c70fee63cce665e48f25d777294126b9abba6a6bf7fc63d8cdc126721742a19cc2995ed272981a8a736f9f74b547e95ba1ee689b0330491edaf4569847a2e",
    "xor": 54087
+  },
+  "token-select-chunk/c64/bf16": {
+   "and": 7347,
+   "not": 8524,
+   "xor": 60581
+  },
+  "token-select-combine/v128256-c64/bf16": {
+   "and": 332633,
+   "not": 281304,
+   "xor": 3209215
+  },
+  "token-select-combine/v200-c64/bf16": {
+   "and": 627,
+   "not": 526,
+   "xor": 5788
   }
  }
 }

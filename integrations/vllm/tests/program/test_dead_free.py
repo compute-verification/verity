@@ -13,6 +13,8 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.reference import evaluate
 from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.program import Program
+from verity_flock import ir_lower as IL
+from verity_flock.gf2 import Circuit
 from verity_vllm.program.registry import b1, dead_free as DF, sampling as SA
 
 RNG = np.random.default_rng(20261024)
@@ -87,6 +89,59 @@ def test_token_select_v3_equals_v1(V):
         _same(new, old, row)
 
 
+def _chunk_rows(V: int) -> list[list[int]]:
+    """Rows that turn on `TokenSelect_v4`'s chunks: a maximum tied across each chunk boundary, a NaN at each later chunk's first
+    logit ahead of the maximum, and the only number above -inf in the last chunk."""
+    rows = []
+    for lo, _hi in b1.chunks(V, min(DF.CHUNK, V))[1:]:
+        rows.append([0x3F80 if j in (lo - 1, lo) else 0xBF80 for j in range(V)])
+        rows.append([0x7FC0 if j == lo else 0x4000 if j == V - 1 else 0x3F80 for j in range(V)])
+    return rows + [[0xFF80] * (V - 1) + [0xBF80]]
+
+
+@pytest.mark.parametrize("V", [*VOCABS, 63, 64, 65, 130, 200])
+def test_token_select_v4_equals_v1(V):
+    new, old = bind(DF.TokenSelectV4, V=V), bind(b1.TokenSelect, V=V)
+    assert (_dead(new), _dead(old)) == (0, 3)
+    for row in _logit_rows(V) + _chunk_rows(V):
+        _same(new, old, row)
+
+
+@pytest.mark.parametrize("C", [1, 2, 8, 64])
+def test_token_select_chunk_v2_equals_v1(C):
+    new, old = bind(DF.TokenSelectChunkV2, C=C), bind(b1.TokenSelectChunk, C=C)
+    assert _dead(new) == 0
+    for row in _logit_rows(C):
+        _same(new, old, row)
+
+
+@pytest.mark.parametrize("V,C", [(2, 1), (130, 64), (200, 64), (64 * 9, 64)])
+def test_token_select_combine_v2_equals_v1(V, C):
+    """On partials of random and edge words, their indices anywhere in a chunk."""
+    new, old = bind(DF.TokenSelectCombineV2, V=V, C=C), bind(b1.TokenSelectCombine, V=V, C=C)
+    assert _dead(new) == 0
+    n = len(b1.chunks(V, C))
+    for row in _rows(n + 1, 3):
+        _same(new, old, row[0], row[1:], [int(i) for i in RNG.integers(0, C, n)])
+
+
+def _flat_ands(V: int) -> tuple[int, int]:
+    """``TokenSelect_v4{V}``'s flat lowering (`ir_lower`): its ANDs and its widest operand."""
+    Cc = Circuit()
+    IL.lower(Cc, bind(DF.TokenSelectV4, V=V), [Cc.input(f"x{j}", 16) for j in range(V)])
+    ops = [len(f.s) for k, d in zip(Cc.kind, Cc.data) if k == "and" for f in d]
+    return len(ops) // 2, max(ops)
+
+
+def test_token_select_v4_lowers_linearly_in_v():
+    """Every chunk's ANDs, the combine's included, are the same within 1% at 4, 8 and 16 chunks, and no operand widens: the
+    combine's selects keep the running best out of their XOR branch, as the chunk step's do (v1 and v3 lower quadratically)."""
+    (a1, w1), (a2, w2), (a3, w3) = (_flat_ands(DF.CHUNK * n) for n in (4, 8, 16))
+    assert w1 == w2 == w3
+    per = [a1 / 4, a2 / 8, a3 / 16]
+    assert max(per) - min(per) < 0.01 * min(per), per
+
+
 @pytest.mark.parametrize("V", [1, *VOCABS])
 def test_topp_mask_v3_equals_v1(V):
     new, old = bind(DF.TopPMaskV3, V=V), bind(SA.TopPMask, V=V)
@@ -114,11 +169,11 @@ def test_gumbel_top_p_shared_greedy_v2_equals_v1(V):
 
 
 def test_one_logit_selects_index_0():
-    for fn in (DF.TokenSelectV3, DF.GumbelSelectF32GivenGreedyV2, DF.GumbelTopPTokenSelectSharedGreedyV2):
+    for fn in (DF.TokenSelectV3, DF.TokenSelectV4, DF.GumbelSelectF32GivenGreedyV2, DF.GumbelTopPTokenSelectSharedGreedyV2):
         assert _dead(bind(fn, V=1)) == 0
     for (w,) in _logit_rows(1):
         seed, pos = int(RNG.integers(0, 1 << 63)), int(RNG.integers(0, 1 << 20))
-        assert evaluate(bind(DF.TokenSelectV3, V=1), [w]) == (0,)
+        assert evaluate(bind(DF.TokenSelectV3, V=1), [w]) == (0,) == evaluate(bind(DF.TokenSelectV4, V=1), [w])
         for greedy in (0, 1):
             assert evaluate(bind(DF.GumbelSelectF32GivenGreedyV2, V=1), [w << 16], seed, pos, greedy) == (0,)
         for temp in TEMPS:
