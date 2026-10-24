@@ -1,6 +1,6 @@
 # The vLLM integration's first layout move: what `tools/move/layout.py --map tools/move/vllm_map.toml` moves, renames and
 # rewrites (Daniel, 24 Oct 05:34Z, thread 1792820329.429599: "articulate a vision for how that part of the repository should
-# be structured"; the vision is note:20261024T1100Z-draft-verity-vllm-vision).
+# be structured"; the vision is note:20261024T0615Z-draft-verity-vllm-vision).
 #
 # Whole packages and modules move inside `integrations/vllm/`; nothing is split, edited or deleted, and no file is added:
 # - `protocols/` mirrors `verity.core.protocols`, one package per protocol, each the prover side of that verifier. The
