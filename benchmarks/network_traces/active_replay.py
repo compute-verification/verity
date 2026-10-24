@@ -829,7 +829,8 @@ async def _http_body(reader: asyncio.StreamReader, head: bytes):
 
 class LiveServer:
     """A live OpenAI endpoint inside the boundary, behind a shim: `handle` serves one stream's connection by sending its
-    request (less its padding and `user`, which names the session) to the endpoint at `upstream`, and writing back the
+    request (less its padding, and less `user`, which names the session, but on a varied plan) to the endpoint at
+    `upstream`, and writing back the
     text of each completion chunk of the response as canonical events (`canonical_events`), each with `id:` its
     position in write order, the HTTP head with the first. Every event
     written is logged as (position, session, k, the bucket it was written in, its bytes). From 1.5 buckets before the
@@ -848,7 +849,9 @@ class LiveServer:
     endpoint's are, so every response is F events long; one of more than F isn't cut. With `plan["token_ids"]` (a
     varied plan's, `certifier_serve.varied_plan`, whose proxy has `ordinals`) the shim reads each request's ingress
     ordinal from the header that opens its connection, asks the endpoint for each chunk's token ids (the plan's
-    `upstream_fields`, merged into every body it forwards) and writes one id event a sampled token (`id_events`)."""
+    `upstream_fields`, merged into every body it forwards) and writes one id event a sampled token (`id_events`). A
+    varied plan's request keeps its `user` upstream, so an endpoint that records it (serve-openai's ``requests.jsonl``)
+    names each request as the certified I/O does, which `verity-vllm advice` takes as the advice's request ids."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
         self.clock, self.sleep, self.notify = clock, sleep, notify
@@ -862,6 +865,7 @@ class LiveServer:
         self.token_ids, self.upstream_fields = bool(plan.get("token_ids")), plan.get("upstream_fields") or {}
         self.drop, self.token = plan.get("drop"), frozenset(plan.get("token") or ())
         self.eos = frozenset((plan.get("varied") or {}).get("eos_token_ids") or ())
+        self.forward_user = bool(plan.get("varied"))
         self.held: Counter = Counter()
         self.windows = plan["windows"]
         self.position, self.origin, self.open = 0, None, 0
@@ -964,7 +968,8 @@ class LiveServer:
         self.log["requests"] += 1
         self.log["receipt_late_ms"].append(round((received % self.tau) * 1000, 3))
         name = body.pop("user")
-        raw = json.dumps(body | self.upstream_fields, separators=(",", ":")).encode()
+        raw = json.dumps(body | ({"user": name} if self.forward_user else {}) | self.upstream_fields,
+                         separators=(",", ":")).encode()
         up_reader, up_writer = await asyncio.open_connection(*self.upstream[:2], limit=1 << 22, ssl=self.tls)
         try:
             up_writer.write(b"POST " + self.path + b" HTTP/1.1\r\nhost: %s:%d\r\ncontent-type: application/json\r\n"
