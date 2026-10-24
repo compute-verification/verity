@@ -9,8 +9,10 @@ first coin.
     vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
     vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
     vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra] [--requests N]
-                                          [--in-flight N] [--tokens N] [--profile planned|served]
-    vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N]
+                                          [--in-flight N] [--tokens N] [--profile planned|served] [--temperature T]
+                                          [--top-p P]
+    vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T]
+                                       [--top-p P]
     vy-challenger-gate status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-challenger-gate` (`command=`),
@@ -98,7 +100,8 @@ first coin.
   `--requests` 4 to 400, `--in-flight` 1 to 4 requests sent together and `--tokens` 16 to 64 tokens out of each, each
   recorded and passed on only when given (`certifier_serve.py`'s 4 and 64 otherwise), `--profile planned|served` N2's
   profile, planned by default: the planned egress occupancy, or NET-54's served profile, whose egress counts derive from
-  the ingress head's), refuses while another rehearsal runs, writes `certifier/<run>/request.json` and starts its unit
+  the ingress head's, and the sampling below), refuses while another rehearsal runs, writes
+  `certifier/<run>/request.json` and starts its unit
   (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
   (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the
   rehearsal through it into `out/`, stopped at `--minutes`, then the tunnel closed and `end.json` written (its exit, why
@@ -122,6 +125,12 @@ first coin.
   `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
   `WARDEN_COUNTS` names), each registration's root by value and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
+- **A rehearsal's sampling** (`sampling`, both verbs): `--temperature` 0 to 2 (0 by default) and `--top-p` above 0
+  and at most 1 (1 by default), each a plain decimal of at most 4 places, recorded in every request and passed on
+  every one (`sampling_argv`), so every request the rehearsal sends carries both: an endpoint applies its own
+  generation config (a committing LLAMA32_1B's: temperature 0.6, top_p 0.9) to a request that omits them. The gate
+  takes a top_p below 1, which tonight the compile unit refuses (CIR-87: the seeded top-p sampler's split count reads
+  the live row count).
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, `end`'s, and `serve.py`'s record and close,
 `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`, which
@@ -181,6 +190,9 @@ CERTIFIER_IN_FLIGHT = (1, 4)
 CERTIFIER_TOKENS = (16, 64)
 TAMPERS = ("late", "extra")
 CERTIFIER_PROFILES = ("planned", "served")
+#: a rehearsal's `--temperature` bounds; `--top-p` is above 0 and at most 1, and each is a plain decimal (`DECIMAL`)
+TEMPERATURE = (0.0, 2.0)
+DECIMAL = r"[0-9](\.[0-9]{1,4})?"
 WARDEN_REQUESTS = (4, 400)
 WARDEN_TOKENS = (16, 256)
 #: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
@@ -765,8 +777,8 @@ def gate_fetch(session: str, host: Host) -> bytes:
 
 def parse_certifier(argv: list[str], host: Host) -> dict:
     """A certifier rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run, the
-    tampering shim if any, how many requests the plan sends, how many in flight and how many tokens each when given, and
-    N2's profile."""
+    tampering shim if any, how many requests the plan sends, how many in flight and how many tokens each when given,
+    N2's profile, and the sampling (`sampling`)."""
     p = argparse.ArgumentParser(prog="vy-challenger-gate certifier-rehearse", exit_on_error=False, add_help=False,
                                 allow_abbrev=False)
     p.add_argument("--peer", required=True)
@@ -792,14 +804,17 @@ def parse_certifier(argv: list[str], host: Host) -> dict:
     if a.profile not in CERTIFIER_PROFILES:
         raise Refused(f"--profile {a.profile!r}: one of {list(CERTIFIER_PROFILES)}")
     return {"peer": a.peer, "port": port, "minutes": minutes, "tamper": a.tamper, "requests": requests,
-            "profile": a.profile} | given
+            "profile": a.profile} | a.sampling | given
 
 
 def _parse_rehearsal(p: argparse.ArgumentParser, argv: list[str], host: Host) -> argparse.Namespace:
-    """A rehearsal verb's arguments, refused (with the verb's usage) when they don't parse or `--peer` isn't a peer."""
+    """A rehearsal verb's arguments, with the two every rehearsal takes, `--temperature` and `--top-p` (`a.sampling`),
+    refused (with the verb's usage) when they don't parse, `--peer` isn't a peer or the sampling is out of its bounds."""
     def refuse(why: object) -> None:
         raise Refused(f"{p.prog.split()[-1]}: {why}; {' '.join(p.format_usage().split())}")
 
+    p.add_argument("--temperature", default="0")
+    p.add_argument("--top-p", default="1")
     p.error = refuse
     try:
         a = p.parse_args(argv)
@@ -807,7 +822,24 @@ def _parse_rehearsal(p: argparse.ArgumentParser, argv: list[str], host: Host) ->
         refuse(e)
     if a.peer not in peers(host):
         raise Refused(f"--peer {a.peer!r}: one of {peers(host)} (/etc/vy/peers)")
+    a.sampling = sampling(a.temperature, a.top_p)
     return a
+
+
+def sampling(temperature: str, top_p: str) -> dict:
+    """What every request of a rehearsal samples at: `--temperature` 0 to 2 and `--top-p` above 0 and at most 1, each
+    a plain decimal of at most 4 places."""
+    if not re.fullmatch(DECIMAL, temperature) or not TEMPERATURE[0] <= float(temperature) <= TEMPERATURE[1]:
+        raise Refused(f"--temperature {temperature!r}: {TEMPERATURE[0]:g} to {TEMPERATURE[1]:g}")
+    if not re.fullmatch(DECIMAL, top_p) or not 0 < float(top_p) <= 1:
+        raise Refused(f"--top-p {top_p!r}: above 0, at most 1")
+    return {"temperature": float(temperature), "top_p": float(top_p)}
+
+
+def sampling_argv(req: dict) -> list[str]:
+    """A rehearsal's `--temperature` and `--top-p`, always given, so that every request sends both (0 and 1 for a
+    request written before the gate took them)."""
+    return ["--temperature", str(req.get("temperature", 0.0)), "--top-p", str(req.get("top_p", 1.0))]
 
 
 def bounded(flag: str, v: str, lo: int, hi: int) -> int:
@@ -824,8 +856,8 @@ def warden_minutes(requests: int) -> int:
 
 def parse_warden(argv: list[str], host: Host) -> dict:
     """A warden rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run (at least
-    `warden_minutes` of its requests), how many requests its traffic sends and, when given, the most tokens a request
-    asks for (`warden_serve.py`'s 256 otherwise)."""
+    `warden_minutes` of its requests), how many requests its traffic sends, when given the most tokens a request asks
+    for (`warden_serve.py`'s 256 otherwise), and the sampling (`sampling`)."""
     p = argparse.ArgumentParser(prog="vy-challenger-gate warden-rehearse", exit_on_error=False, add_help=False,
                                 allow_abbrev=False)
     p.add_argument("--peer", required=True)
@@ -842,7 +874,8 @@ def parse_warden(argv: list[str], host: Host) -> dict:
         raise Refused(f"--minutes {minutes}: {requests} requests take {least} minutes (arrivals at {WARDEN_RATE} a "
                       f"second, a {WARDEN_TAIL_S} s tail, the window they end in and the check): give --minutes "
                       f"{least} or more, or fewer --requests")
-    return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "requests": requests} | given
+    return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "requests": requests} | \
+        a.sampling | given
 
 
 #: each rehearsal verb's request parser
@@ -912,9 +945,9 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "| model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR (vy-admin's) "
          "| model-key --model M --circuit SHA512 [--weights-root W] (a lane's own gate key, or vy-admin) "
          "| certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra] [--requests N] "
-         "[--in-flight N] [--tokens N] [--profile planned|served] "
-         "| warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] "
-         "(a lane's own gate key, or vy-admin) "
+         "[--in-flight N] [--tokens N] [--profile planned|served] [--temperature T] [--top-p P] "
+         "| warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T] "
+         "[--top-p P] (a lane's own gate key, or vy-admin) "
          "| status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN")
 
 
@@ -1328,12 +1361,12 @@ def tunnel_up(tunnel: subprocess.Popen, port: int, seconds: float = 60.0) -> boo
 
 def certifier_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list[str]:
     """`certifier_serve.py rehearse` of the request, the endpoint at `url` (the tunnel's local end): the honest shim, or
-    the request's tamper, with N2 on the request's profile (planned for a request written before it had one), and the
-    request's in-flight count and tokens only when it has them."""
+    the request's tamper, with N2 on the request's profile (planned for a request written before it had one), the
+    request's in-flight count and tokens only when it has them, and its sampling always (`sampling_argv`)."""
     given = [w for flag, key in (("--in-flight", "in_flight"), ("--tokens", "tokens")) if key in req
              for w in (flag, str(req[key]))]
     return [sys.executable, str(tree / "benchmarks" / "network_traces" / "certifier_serve.py"), "rehearse",
-            "--upstream", url, "--out", str(out), "--requests", str(req["requests"]), *given,
+            "--upstream", url, "--out", str(out), "--requests", str(req["requests"]), *given, *sampling_argv(req),
             "--profile", req.get("profile", CERTIFIER_PROFILES[0]), "--strategies", req["tamper"] or "honest"]
 
 
@@ -1348,11 +1381,13 @@ def certifier_env(tree: Path = TREE) -> dict[str, str]:
 def warden_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list[str]:
     """`warden_serve.py rehearse` of the request: the warden and its client here, the warden's upstream the endpoint
     at `url` (the tunnel's local end), the request's number of requests on the gate's traffic (`WARDEN_RATE`,
-    `WARDEN_SEED`, `WARDEN_TAIL_S`), and the most tokens a request asks for only when the request has it."""
+    `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`), and the most tokens a request asks for only when
+    the request has it."""
     given = ["--max-tokens", str(req["tokens"])] if "tokens" in req else []
     return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "rehearse",
             "--upstream", url.removeprefix("http://"), "--out", str(out), "--requests", str(req["requests"]),
-            "--rate", str(WARDEN_RATE), "--seed", str(WARDEN_SEED), "--tail", str(WARDEN_TAIL_S), *given]
+            "--rate", str(WARDEN_RATE), "--seed", str(WARDEN_SEED), "--tail", str(WARDEN_TAIL_S), *sampling_argv(req),
+            *given]
 
 
 #: the counts of `warden_serve.py check`'s summary a warden rehearsal's end carries: none is a cell's content or a
