@@ -6,10 +6,10 @@ units on live coins, proves them with C-Flock `--zk` behind the Lean firewall, a
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
 Commit window of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
 served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
-rank through the one-stage audit's per-rank `service.Stream` on its own coins (`benchmarks/one_stage/a5.py`). `run.sh` builds
-the prover and the Lean verifier and runs it on the CPU TP stand-in, on a deferred TP Commit (`PP_TP`), on a single-GPU
-Commit's row dir from the store (`PP_LLAMA`) or on a served window (`PP_SERVE_RUN`), with one forged run that must be refused.
-The docstrings say how.
+rank through the one-stage audit's per-rank `service.Stream` on its own coins or a challenger's (`--challenger local`,
+`benchmarks/one_stage/a5.py`). `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
+deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir from the store (`PP_LLAMA`) or on a served window
+(`PP_SERVE_RUN`), with one forged run that must be refused. The docstrings say how.
 
 ## What changes when Programs come from advice
 
@@ -57,9 +57,15 @@ hiding hm96 rows and never published.
      committed store holds no such value (`LookupError` at the prover).
    - A unit committed under other advice and spliced in fails R4.
    - Each of these fails `source` before any coin is read (`more_negatives`, as a5's `advice_negatives`): a registration naming
-     another compiler, another advice root, another cap, or none; the opening under another salt; another rank's registration.
+     another compiler, another advice root, another cap, or none; the opening under another salt; another rank's registration;
+     the registration under the compiler listing no transfer gates.
    - The advice can only choose among Programs the compiler emits. Every unit's values are still committed under hiding leaves
      and opened only inside the proof.
+7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose units hold
+   transfer gates (the I/O shell's), and its digest covers the list. The window's `work:K` law draws every unit of theirs beside
+   K of the rest, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
+   of them, a draw trading one away, and a registration drawing them as the rest. Until COMPILER lists the I/O shell's units, a
+   stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
 
 What doesn't change:
 - the draw: the service's rule, the partition file's law, on live coins read after the receipt, with ε surfaced at δ by the
