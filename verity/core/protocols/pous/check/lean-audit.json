@@ -13,7 +13,7 @@
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "1462"],
    "data": {
     "difftest/instances.jsonl": "cc5b6a0bb9648a036e6e72b3ec71c0aac2c96b80ccae5a124f1dab00f280cad8",
-    "difftest/python.jsonl": "a27240798f8180419a0e57ec14a8c012c90adb08c503155e1728906652b01a0b"
+    "difftest/python.jsonl": "1898e5f60afa10812e45673543b27bc56496cd4c2619196d59aa3559e72d5008"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
