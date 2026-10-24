@@ -1119,7 +1119,8 @@
    "digest": "fc90804727140bffc77562fb496823d54ad4f5f38d71d67124219bf95f0459a5"
   },
   "Nci.Assumptions.SampledDetection": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "digest": "343f2d282d4407a820a686cfc55f137e17a3b7edc6ffc42dc6cefca6b0409a2f"
   },
   "Nci.Assumptions.TerminalDetection": {
    "owner": "@lean",
@@ -15109,11 +15110,12 @@
    ]
   },
   "Definitions.Nci.Remote": {
-   "digest": "cfc18481689a37801a2643b0d4f164f41868198dafdf836f496ef9a68c1e2e86",
+   "digest": "f4b979d0a0db7f5923fb07d28fbd2890d51f8c6924a8dd4eababad70818c2579",
    "definitions": {
     "Nci.Dampener.escaped": "ae6331d000a7cd5eae92d7e526f9b6ee722ff9f3833ee6c0f29f76c656daf724",
     "Nci.Dampener.hardwareMultiple": "ac91025b05224ad18fbbb18a05bc186a5956a61b57e8f5b282c2a7fdc78c01a0",
     "Nci.Dampener.lagShare": "016ab8c8cc93e989e47d906d4a12618cbb199be782f16186d6490b2f40c4756d",
+    "Nci.Dampener.noDetectionBefore": "1f2b776654d47f72d5c222010904c35e2cc57e4e7948374fd6f2f52dc6cd1076",
     "Nci.Dampener.prob": "43d591d08a337ab2dd1faf7de9d660b97f07923ac3cb4806d353798f13e87eee",
     "Nci.Dampener.remoteDampener": "2c778f4218fe47446f462e0bdce81850edb784e88240459487af99b4484f6a12",
     "Nci.Dampener.wrongCapacity": "f561edf3f609baac913a6308e14142fd4ef5fdc88eedd5b6e8857aa4a7ff7767"
@@ -27523,10 +27525,10 @@
    ]
   },
   "Models.Nci.Assumptions.Remote": {
-   "digest": "e66662c674a812d0e0916c35d281a5c89c44ad40d478a385ffc1723d922d0602",
+   "digest": "a825f9cccd38d95ba0728f7771a4fbdf8ee6b4ac39792e565946bad4ca4174de",
    "definitions": {
     "Nci.Assumptions.PouwSound": "29d44de1ab5d74abaab44bf203879de9c6902fdeb239418a76492aafae28afd0",
-    "Nci.Assumptions.SampledEscape": "dd0702da7bd83688cd67a189b7ea9e975fef1ac789500194fceab64ba3936655",
+    "Nci.Assumptions.SampledDetection": "343f2d282d4407a820a686cfc55f137e17a3b7edc6ffc42dc6cefca6b0409a2f",
     "Nci.Assumptions.TerminalDetection": "8ed5bc6c9f877e1d994af693541c6e1be76f4708ae20468313c71f656cb2a0b8"
    },
    "guarantees": [
@@ -27759,10 +27761,10 @@
    "guarantees": ["Nci.SecurityProofs.UpdatedMatMulReads"]
   },
   "Models.Nci.Guarantees.Remote": {
-   "digest": "678ea408d9d0cb4bb5ff09294a8149f7203daf321957ae498f894208d689f4ca",
+   "digest": "7cf4bba6cad1e6c39d4ee786fd2989dcbad749e5139ea34298e799870e4ee458",
    "definitions": {
     "Nci.Guarantees.CertificateSlack": "bae784caa85319ad74e01d0f0b8594f2470ef7c09caf2dccaa021adf9605973b",
-    "Nci.Guarantees.DampenerRemote": "9af725c180c6c21a0a124d72097bcdf6c3adbd7ec79857819ffcc57c7ea3fda6",
+    "Nci.Guarantees.DampenerRemote": "5472aa8936c9ce4a1f548ea937e52a0591c63885f2c0971bad32d86f4f53dd00",
     "Nci.Guarantees.VerdictLag": "44fb4be0cee1807d457934dea23c74775a2e7d4f2df6aa5be058c1f79e539b4b"
    },
    "guarantees": [
