@@ -16,6 +16,8 @@
   "Properties.Proofs.Nci.ReadsExact",
   "Properties.Proofs.Nci.Walk",
   "Properties.Proofs.Nci.Novel",
+  "Properties.Proofs.Nci.BodiesOk",
+  "Properties.Proofs.Nci.BodiesOk.ReadsDecoded",
   "Properties.NciDesc",
   "Properties.CertifierDevice",
   "Properties.Proofs.CertifierDevice",
