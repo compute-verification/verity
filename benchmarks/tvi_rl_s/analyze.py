@@ -114,7 +114,9 @@ def load(dirs):
 
 def online(dirs, window=25):
     """Mean training reward over the last `window` steps of each run: every prompt is fresh in the first epoch, so this is the
-    policy's held-out accuracy at the sampling temperature (T = 1). Bootstrap over steps, then seeds."""
+    policy's held-out accuracy at the sampling temperature (T = 1). Runs with the same seed draw the same prompts at every step,
+    so the bootstrap is paired: each resample draws one multiset of seeds and, per seed, one multiset of window steps, shared by
+    every method (a method that lacks every drawn seed uses its own)."""
     runs = defaultdict(lambda: defaultdict(dict))
     for d in dirs:
         for p in sorted(glob.glob(f"{d}/**/*-seed*.jsonl", recursive=True)):
@@ -137,26 +139,30 @@ def online(dirs, window=25):
             prev = runs[task][method].get(seed)
             if prev and prev["last"] >= last:
                 continue
-            runs[task][method][seed] = {"last": last, "w": w, "S_bits": meta["S_bits"], "n_params": meta["n_params"],
-                                        "first": steps.get(1)}
+            runs[task][method][seed] = {"last": last, "w": w, "acc": sum(w) / len(w), "S_bits": meta["S_bits"],
+                                        "n_params": meta["n_params"], "first": steps.get(1)}
     rng = random.Random(1)
     out = {}
     for task, by in sorted(runs.items()):
+        seeds = sorted({s for rs in by.values() for s in rs})
+        draws = [([seeds[rng.randrange(len(seeds))] for _ in seeds],
+                  {s: [rng.randrange(window) for _ in range(window)] for s in seeds}) for _ in range(B)]
         rows = []
         boot = {}
         for m in ORDER:
             if m not in by:
                 continue
-            rs = list(by[m].values())
+            rs = by[m]
             bs = []
-            for _ in range(B):
-                picks = [rs[rng.randrange(len(rs))] for _ in rs]
-                bs.append(sum(sum(r["w"][rng.randrange(len(r["w"]))] for _ in r["w"]) / len(r["w"]) for r in picks) / len(picks))
+            for picks, idx in draws:
+                own = [s for s in picks if s in rs] or list(rs)
+                bs.append(sum(sum(rs[s]["w"][i % len(rs[s]["w"])] for i in idx[s]) / len(idx[s]) for s in own) / len(own))
             boot[m] = bs
-            rows.append({"method": m, "S_bits": rs[0]["S_bits"], "n_params": rs[0]["n_params"], "steps": rs[0]["last"],
-                         "acc_per_seed": [sum(r["w"]) / len(r["w"]) for r in rs],
-                         "acc": sum(sum(r["w"]) / len(r["w"]) for r in rs) / len(rs), "acc_ci": list(ci(bs)),
-                         "step1": [r["first"] for r in rs]})
+            r0 = next(iter(rs.values()))
+            rows.append({"method": m, "S_bits": r0["S_bits"], "n_params": r0["n_params"], "steps": r0["last"],
+                         "seeds": sorted(rs), "acc_per_seed": [rs[s]["acc"] for s in sorted(rs)],
+                         "acc": sum(r["acc"] for r in rs.values()) / len(rs), "acc_ci": list(ci(bs)),
+                         "step1": {s: r["first"] for s, r in rs.items()}})
         out[task] = {"rows": rows, "boot": boot, "window": window}
     return out
 
@@ -168,25 +174,34 @@ def main(dirs):
     on = online(dirs)
     for task, t in on.items():
         base_s = sampled.get(task, {}).get("base")
-        base = base_s[0]["acc"] if base_s else None
-        if base is None:
-            firsts = [x for r in t["rows"] for x in r["step1"] if x is not None]
-            base = sum(firsts) / len(firsts) if firsts else None
-            t["base_source"] = f"pooled step-1 training reward ({len(firsts)} runs, before any update)"
+        if base_s:
+            pp = base_s[0]["per_problem"]
+            base = base_s[0]["acc"]
+            base_boot = []
+            for _ in range(B):
+                base_boot.append(sum(pp[rng.randrange(len(pp))] for _ in pp) / len(pp))
+            t["base_source"] = f"base model on the test set at T = 1 ({len(pp)} problems x {base_s[0].get('n')} samples)"
         else:
-            t["base_source"] = "test set, T = 1"
+            firsts = {}
+            for r in t["rows"]:
+                firsts.update({s: x for s, x in r["step1"].items() if x is not None})
+            base = sum(firsts.values()) / len(firsts) if firsts else None
+            base_boot = [base] * B
+            t["base_source"] = (f"step-1 training reward, before any update ({len(firsts)} seeds x 32 prompts x 8 samples; "
+                                "its noise is not in the CIs)")
         full = [r for r in t["rows"] if r["method"] == "full"]
         for r in t["rows"]:
             if base is None:
                 continue
-            r["base_T1_test"] = base
+            r["base_T1"] = base
             r["gain"] = r["acc"] - base
+            r["gain_ci"] = list(ci([a - b for a, b in zip(t["boot"][r["method"]], base_boot)]))
             if full:
                 g = full[0]["acc"] - base
                 r["frac_full_gain"] = r["gain"] / g if g else None
-                fr = [(a - base) / (f - base) for a, f in zip(t["boot"][r["method"]], t["boot"]["full"]) if f - base > 1e-9]
+                fr = [(a - b) / (f - b) for a, f, b in zip(t["boot"][r["method"]], t["boot"]["full"], base_boot) if f - b > 1e-9]
                 r["frac_ci"] = list(ci(fr)) if len(fr) > B // 2 else None
-        out["online"][task] = {"rows": t["rows"], "window": t["window"], "base_T1_test": base, "base_source": t["base_source"]}
+        out["online"][task] = {"rows": t["rows"], "window": t["window"], "base_T1": base, "base_source": t["base_source"]}
     for task, by in sorted(greedy.items()):
         t = table(by, rng)
         if t:
@@ -219,17 +234,17 @@ def render(out):
                     f += f" [{r['frac_ci'][0]:.2f}, {r['frac_ci'][1]:.2f}]" if r.get("frac_ci") else " [unbounded]"
                 lines.append(f"| {r['method']} | {fmt_bits(r['S_bits'])} ({r['S_bits']:.3g}) | {r['n_params']:,} | {r['steps']} | {accs} | {a} | {g} | {f} |")
     for task, t in out["online"].items():
-        b = t["base_T1_test"]
+        b = t["base_T1"]
         lines.append(f"\n### {task}: online accuracy at T = 1 (mean training reward over the last {t['window']} steps, fresh prompts; "
                      f"base = {'%.3f' % b if b is not None else 'pending'}, {t['base_source']})\n")
-        lines.append("| S label | S (bits) | trainable values | steps | acc per seed | acc (95% CI) | gain over base | fraction of full gain (95% CI) |")
+        lines.append("| S label | S (bits) | trainable values | steps | acc per seed | acc (95% CI) | gain over base (95% CI) | fraction of full gain (95% CI) |")
         lines.append("|---|---|---|---|---|---|---|---|")
         for r in t["rows"]:
             accs = ", ".join(f"{a:.3f}" for a in r["acc_per_seed"])
             f = ""
             if r.get("frac_full_gain") is not None:
                 f = f"{r['frac_full_gain']:.2f}" + (f" [{r['frac_ci'][0]:.2f}, {r['frac_ci'][1]:.2f}]" if r.get("frac_ci") else "")
-            g = f"{r['gain']:+.3f}" if "gain" in r else ""
+            g = f"{r['gain']:+.3f} [{r['gain_ci'][0]:+.3f}, {r['gain_ci'][1]:+.3f}]" if "gain" in r else ""
             lines.append(f"| {r['method']} | {fmt_bits(r['S_bits'])} ({r['S_bits']:.3g}) | {r['n_params']:,} | {r['steps']} | {accs} | "
                          f"{r['acc']:.3f} [{r['acc_ci'][0]:.3f}, {r['acc_ci'][1]:.3f}] | {g} | {f} |")
     for name, pk in out["passk"].items():
