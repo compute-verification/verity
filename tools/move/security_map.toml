@@ -4,8 +4,8 @@
 # - `Models/<Area>/{Assumptions,Guarantees}` folds into `Definitions/<Area>/{Assumptions,Guarantees}`: module `Models.<Area>.X`
 #   becomes `Definitions.<Area>.X`. The aggregator `Models.lean` keeps its name and imports them until the follow-up folds
 #   it into `Definitions.lean`.
-# - The property proofs leave `Properties/Proofs/` for `Proofs/Properties/`, the package `security_property_proofs` inside
-#   `Proofs/` (no ArkLib): module `Properties.Proofs.X` becomes `Proofs.Properties.X`. `Properties/` keeps the statements.
+# - The property proofs leave `Properties/Proofs/` for `Proofs/Properties/`, roots of `security_proofs`: module
+#   `Properties.Proofs.X` becomes `Proofs.Properties.X`. `Properties/` keeps the statements.
 # Declarations and namespaces keep their names, so no guarantee changes.
 #
 # The 7 Oct move this file held before (`Specs` -> `Models`, commit 9fb0a83a0c) is done; its map is in git history.
@@ -29,6 +29,7 @@
 "Models/Pouw" = "Definitions/Pouw"
 "Properties.Proofs" = "Proofs.Properties"
 "Properties/Proofs" = "Proofs/Properties"
+"Security/Models/" = "Security/Definitions/"
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps and tests, changelogs, the rulings), the frozen
