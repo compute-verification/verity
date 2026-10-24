@@ -434,8 +434,8 @@ class IngressTie:
     def tie(self, stream: S.Stream, advice: AD.LinkAdvice, profile: AD.AdvisedProfile) -> AD.IoTieVerdict:
         """The tie of `advice` on this link (the module docstring), `advised.IoTieVerdict`: window w accepted when the
         stream's w-th registration is window w's and its outcome of record accepted, on the proof, naming `advice`'s
-        digest, and the link's statements (`io_request.statements` on the registered roots and domains) chain from
-        window 0; every window refused when they don't, when the stream has more or fewer registrations than `advice`
+        digest, and the link's statements (`io_request.statements` on its registrations, `io_request.Registration`:
+        this link, each registration's digest, root and domain id) chain from window 0; every window refused when they don't, when the stream has more or fewer registrations than `advice`
         has windows, or when `profile`'s framing isn't IoTieRequest's at B for `advice`'s prompt lengths or its OWN
         isn't the tie's. Raises `ValueError` on a stream that isn't this tie's, an advice that isn't an
         `advised.LinkAdvice` or a profile that isn't an `advised.AdvisedProfile`."""
@@ -454,7 +454,8 @@ class IngressTie:
             if reg is None or reg.get("window") != self.provenance(w):
                 break
             root = reg["roots"][0]
-            registered.append((bytes.fromhex(root["root"]), bytes.fromhex(root["domain"])))
+            registered.append(Q.Registration(self.link, bytes.fromhex(R.digest(reg)), bytes.fromhex(root["root"]),
+                                             bytes.fromhex(root["domain"])))
             body = outcomes.get(R.digest(reg))
             verdict = ((body or {}).get("audit") or {}).get("verdicts", {}).get(VERIFIER) or {}
             ok.append(body is not None and body["symbol"] == S.ACCEPT and body["public"].get("advice") == name
