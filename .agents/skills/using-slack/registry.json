@@ -420,7 +420,8 @@
         "benchmarks/network_traces/",
         "benchmarks/network_e2e/",
         "benchmarks/datacenter/",
-        "benchmarks/network_sim/"
+        "benchmarks/network_sim/",
+        "benchmarks/prove_path/"
       ],
       "branch_suffixes": [
         "728f",
