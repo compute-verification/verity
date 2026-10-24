@@ -72,11 +72,12 @@ A spec-level reference for network accounting's timing channel:
   nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed;
 - advice v1's arithmetic encoder (`arith_encode`): `ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1` and
   `KTContext_v1{C, NW}`, Boolean Definitions with `reference_step`, `reference_finish` and `reference_kt` their specs.
-  They run ENC-CODE's 32-bit coder forward on one decision at its context's adaptive estimate, and check each output
-  bit against the window's committed segment in the decoder's order, so a window's segment is accepted exactly when it
-  is the coder's codeword. It is held symbol for symbol to `code.py` on the replay's decisions and on ENC-DERIVED's
-  still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is in no proof-service Spec yet
-  (`PROTOCOL.md`, "Advice v1").
+  They run ENC-CODE's 32-bit coder forward one symbol at a time, checking each output bit against a segment in the
+  decoder's order, and return the bits it takes: a window's total is its charge, at most its declared c_w, and no
+  codeword is committed. The context and the frequencies are the circuit's, from the replay's position and the
+  registered book's counts, never witness. It is held symbol for symbol to `code.py` and `code_v1` on advice v1's
+  windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is in no
+  proof-service Spec yet (`PROTOCOL.md`, "Advice v1").
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
