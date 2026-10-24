@@ -83,6 +83,24 @@ def log(msg: str) -> None:
     print(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
 
+#: the verifier of record's own Lean runs (`proofs.verify`'s findings and refusal), by the proof's public file, so each
+#: window records what decided it: a rejected outcome's public outputs are the service's, which say nothing
+LEAN_RUNS: dict[str, tuple] = {}
+
+
+def _record_lean_runs(PF) -> None:
+    verify = PF.verify
+
+    def recorded(proof, **kw):
+        out = verify(proof, **kw)
+        LEAN_RUNS[str(proof.public)] = out
+        return out
+
+    if not hasattr(verify, "recorded"):
+        recorded.recorded = True
+        PF.verify = recorded
+
+
 # --- the run's link-windows -------------------------------------------------------------------------------------------
 
 def link(run: Path) -> tuple[LinkWindows, dict]:
@@ -420,6 +438,13 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
         verdict = (body.get("audit") or {}).get("verdicts", {}).get(SVC.VERIFIER) or {}
+        findings, refused = LEAN_RUNS.get(str(delivered.proof.public), (None, "no Lean run"))
+        args = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs)
+        proof = {"lean_accepted": refused is None and bool(findings) and all(f.accepted for f in findings),
+                 "refused": refused, "proved": refused is None and lw.proved(findings or [])
+                 and all(list(f.units) == [0] for f in findings),
+                 "opened_word": None if args is None else SVC._opened(delivered, 0, lw.row(args, "pub"), lw.bits("pub")),
+                 "certified": lw.certified(x.window, x.certificates)}
         files = {"registration.json": reg.record, "draw.json": dict(draw.draw),
                  "certificates.json": [_certificate(c) for c in x.certificates],
                  "syncs.json": [[s.delta, str(s.rho)] for s in rd.syncs], "outcome.json": body,
@@ -433,7 +458,8 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                 os.link(f, vdir / f"{pre}session-{f.parent.name}-{f.name}")
         proofs = live.get("proof_bytes") or []
         row = {"window": x.window, "registration": reg.digest, "accepted": outcome.accepted,
-               "public": dict(outcome.public), "late": late is not None, "decided_by": verdict.get("decided_by"),
+               "public": verdict.get("public"), "service_public": dict(outcome.public), "late": late is not None,
+               "decided_by": verdict.get("decided_by"), "proof": proof,
                "expect": x.expect, "word": x.word, "failed": x.failed,
                "prove": {"session_s": proc["wall_s"], "prove_total_s": live.get("prove_total_s"),
                          "e2e_s": live.get("e2e_s"), "proof_bytes": sum(proofs) if proofs else None,
@@ -442,10 +468,12 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                "verify_s": verify_s, "server_verdict": ((record or {}).get("verdict") or {}).get("accepted"),
                **({"clear": verdict["clear"]} if "clear" in verdict else {})}
         row["as_expected"] = (row["accepted"] == bool(x.expect) and not row["late"] and row["decided_by"] == "proof"
+                              and proof["proved"] and proof["opened_word"] == x.word and proof["certified"]
                               and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1})
         rows.append(row)
         log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
-            f"{' LATE' if late else ''}, prove {row['prove']['session_s']} s (prove_total {row['prove']['prove_total_s']}"
+            f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "
+            f"{proof['opened_word']}, prove {row['prove']['session_s']} s (prove_total {row['prove']['prove_total_s']}"
             f" s, {row['prove']['proof_bytes']} B), verify {verify_s} s; "
             f"{'as expected' if row['as_expected'] else 'UNEXPECTED'}")
     network = lw.network_verdict(stream, rd.plan["windows"])
@@ -499,6 +527,7 @@ def prove(a) -> int:
 
     M = _one_stage()
     M.PF.executable = lambda: Path(a.lean)
+    _record_lean_runs(M.PF)
     sg = stager(M, lw0, out / "stager")
     summary["stager"] = {"unit": lw0.proof_unit.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
                          "circuit_sha512": sg.circuit_sha512, "bits": {p: lw0.bits(p) for p in SVC.PORTS},
