@@ -279,19 +279,26 @@ One rule for every construction that serves a checkpoint: Pearl-C4 (`PearlC4.che
 - **The keyed V/O rotation plus the keyed head interleave are adopted inside it, applied after it** (Daniel,
   5:52 PM PDT). The V/O rotation acts on each KV head's v_proj rows and o_proj columns, and the interleave on o_proj's
   heads. They are never applied on an unrotated checkpoint, curated or not.
-- A registration declares its transforms in order, and only the two stacks pass: the rotation alone, or the rotation,
-  V/O and the interleave. V/O without the interleave, the interleave without V/O, and any other order are refused,
-  because the two were measured only together, after the rotation.
+- **The keyed latent rotation is adopted after either** (Daniel's card b50e7597, 24 Oct). Each MLA latent takes a keyed
+  8-block rotation of its own, built as the residual's is (its S unmixed, calibrated blocks): the q latent on q_a's
+  rows, with q_a_layernorm folded into q_b's and the DSA indexer's wq_b's columns; the kv latent on kv_a's first
+  kv_lora_rank rows (the RoPE key's rows are untouched), with kv_a_layernorm folded into kv_b's columns, and so into the
+  W_UK_T and W_UV the absorbed attention derives from kv_b. It is never applied on an unrotated checkpoint.
+- A registration declares its transforms in order, and only four stacks pass: the rotation alone, or the rotation, V/O
+  and the interleave, each optionally followed by the latent rotation. V/O without the interleave, the interleave
+  without V/O, and any other order are refused, because each was measured only so, after the rotation.
 - **A checkpoint that needs γ folded registers only with it**, as Llama-3.1-70B does under Pearl-C4: the cast moves its
   layer 0's update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded. The rotation folds γ, so
   its stacks pass as they are. An unrotated, curated checkpoint declares `gamma-fold` (every RMSNorm scale folded into
   the linears it feeds), and takes no V/O or interleave.
-- **The rotation reaches only the residual stream's linears** (`check_linear`). It mixes the residual stream alone: a
-  linear that reads it takes the rotation on its columns, one that writes it on its rows. A linear off the stream keeps
-  the checkpoint's weights, so under a rotated stack it is not registered and earns no credit, though it is still served
-  and bound. Those linears are MLA's q_b and kv_b (with the absorbed W_UK_T and W_UV) and the DSA indexer's wq_b, each
-  behind its latent's own RMSNorm. On GLM-5.3 at TP8, Pearl-C admits q_b and wq_b, and the rotation leaves both
-  uncredited (compute-accounting's `glm53_rotation` run). A curated unrotated checkpoint registers each of its linears.
+- **A linear registers only where the stack's rotations reach it** (`check_linear`). The 8-block rotation mixes the
+  residual stream: a linear that reads it takes the rotation on its columns, one that writes it on its rows. MLA's q_b
+  and kv_b (with the absorbed W_UK_T and W_UV) and the DSA indexer's wq_b read a latent behind its own RMSNorm, so only
+  the latent rotation reaches them: under a stack without it they keep the checkpoint's weights, are not registered and
+  earn no credit, though they are still served and bound. A linear off every rotated stream is refused under every
+  rotated stack. On GLM-5.3 at TP8, Pearl-C admits q_b and wq_b, so the latent rotation credits both again; kv_b
+  (k = 512) stays outside Pearl-C's domain (compute-accounting's `glm53_rotation` runs). A curated unrotated checkpoint
+  registers each of its linears.
 - **The keyed transforms are keyed after the weights' root is recorded**, by `rotation_key`:
   `derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`, over the salt of an epoch
   started from the challenger's salt coin (`Epoch.start`). It refuses any other salt: an `Epoch.unverified` one, a

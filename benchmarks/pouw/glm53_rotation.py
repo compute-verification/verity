@@ -1,7 +1,8 @@
-"""GLM-5.3 under Pearl-C's keyed 8-block rotation (`registration.ROTATION_8`) on its real weights: does the registration
-accept, does the rotated model compute the same function through every consumer of each rotated tensor (MLA's fused
-q_a/kv_a, q_b, kv_b as a linear and as the absorbed W_UK_T / W_UV BMMs, the DSA indexer, the router, the MoE, the MTP layer,
-lm_head), and which of the linears Pearl-C admits at TP8 the rotation never reaches.
+"""GLM-5.3 under Pearl-C's registered stack, the keyed 8-block rotation then the keyed latent rotation
+(`registration.ROTATION_8`, `LATENT_ROTATION`; Daniel's card b50e7597), on its real weights: does the registration accept,
+does the rotated model compute the same function through every consumer of each rotated tensor (MLA's fused q_a/kv_a,
+q_b, kv_b as a linear and as the absorbed W_UK_T / W_UV BMMs, the DSA indexer, the router, the MoE, the MTP layer,
+lm_head), and which of the linears Pearl-C admits at TP8 each registered stack never reaches.
 
 The rotation is rung 3 of the approved-weights lane (research store docs/pouw/approved-weights.md §8j; its code,
 ``aw_fold.block_rotation`` on the archived branch ``cursor/approved-weights-gpu-cc03``): an orthogonal Q on the residual
@@ -9,31 +10,34 @@ stream's d channels, the |S| <= d/1024 massive channels unmixed at keyed positio
 consecutive calibrated activation magnitude, each a keyed Haar rotation onto keyed positions.  Every linear that reads the
 residual stream takes W·diag(γ/γ_keep)·Q, every one that writes it Qᵀ·W, the embedding E·Q, and each RMSNorm keeps γ on S and
 one scale per block (γ_keep).  S leaves the chain: on a residual-reading linear its |S| columns are the uncredited side
-product (Pearl-C's `Split`), so the unit reads the kept channels in order, zero-padded to `k_unit`.
+product (Pearl-C's `Split`), so the unit reads the kept channels in order, zero-padded to `k_unit`.  The latent rotation
+is the same construction on each MLA latent, keyed per layer: the q latent on q_a's rows, q_a_layernorm folded into q_b's
+and wq_b's columns (its S their side product); the kv latent on kv_a's first kv_lora_rank rows, kv_a_layernorm folded into
+kv_b's columns, so into the absorbed W_UK_T and W_UV.
 
 The key is `registration.rotation_key` over an epoch started from a challenger's salt coin; the weights' root is a stand-in
 (SHA-512 over the checkpoint's index), since this measures the transform and not a commitment.  S and the blocks are
 calibrated on `--tokens` tokens of README.md through layers 0 … max(--layers) in FP64.
 
 Checked (all on the checkpoint's dequantized weights, `--layers` and the MTP layer, every TP8 rank's slice):
-  registration   `PearlC.check_registration` on the declared stacks
-  reach          per linear, whether the rotation changes its weights at all
+  registration   `PearlC.check_registration` on every adopted stack and the refused ones
+  reach          per linear and registered stack (`STACK`, and ROTATION_8 alone), whether it changes the weights at all,
+                 held to `registration.check_linear`
   rows           Pearl-C's per-row rules (noise floor ρ·α >= 1, `live_row`) on every registered B row, vectorized and held
                  to `clear_work.row_passes` (the exact FP32 rule) on sampled and near-threshold rows
-  function       FP64 forward, rotated against unrotated: every intermediate, both attention routes (dense-mha with kv_b
-                 as a linear; sparse-mqa's absorbed BMMs for the last token over the latent cache), the indexer's scores and
-                 top-k, the router's logits and top-k, the layer's output, the MTP layer and the logits
-  latent         a keyed rotation of MLA's q latent (q_a's rows, q_a_layernorm folded, q_b's and wq_b's columns) and kv
-                 latent (kv_a's 512 rows, kv_a_layernorm folded, kv_b's columns, so the absorbed BMMs too): the placement
-                 that would reach q_b and wq_b, checked for exactness and its rows
-  vo             the second adopted stack's V/O rotation and head interleave mapped onto MLA (kv_b's V rows and o_proj's
+  function       FP64 forward under `STACK` against unrotated: every intermediate (the latents back through their
+                 rotations), both attention routes (dense-mha with kv_b as a linear; sparse-mqa's absorbed BMMs for the last
+                 token over the latent cache), the indexer's scores and top-k, the router's logits and top-k, q and the
+                 attention per TP8 rank's heads, the layer's output, the MTP layer and the logits
+  r8_only        the attention under ROTATION_8 alone, the other registered stack (the latent rotation leaves the MLP)
+  vo             the V/O rotation and head interleave mapped onto MLA on top of `STACK` (kv_b's V rows and o_proj's
                  columns per head; heads permuted within a rank in q_b, kv_b and o_proj)
   cast           how far Pearl-C's v1 cast (e4m3(α·x) per row, both operands, per rank's k on row-parallel linears) moves
-                 each layer's update, unrotated and rotated (the measure registration's docstring states: 158% / 4%)
+                 each layer's update, unrotated and under `STACK` (the measure registration's docstring states: 158% / 4%)
   lm_head        n = 19360 padded to whole 64-column tiles with zero rows, the last tile's rows voluntary: the domain, that
                  no other tile goes undrawn, V-EX's cap, and the credit on the full tiles' real columns
-  shares         the credit map's shares (`--map`, glm53_credit_map's JSON) with the unreached linears uncredited under
-                 Pearl-C and lm_head padded
+  shares         the credit map's shares (`--map`, glm53_credit_map's JSON), then per registered stack with its unreached
+                 linears uncredited under Pearl-C and lm_head padded
 
   uv run --with tokenizers python benchmarks/pouw/glm53_rotation.py --out OUT [--layers 0,6] [--tokens 256] [--map MAP]
   python benchmarks/pouw/glm53_rotation.py --synthetic --out OUT     # a small random model, for the code path
@@ -86,7 +90,9 @@ WRITES = ("o", "down", "sdown", "edown")
 ROW_PARALLEL = ("o", "down", "sdown", "edown")
 #: each linear's `registration.check_linear` side; eh_proj reads the MTP layer's two rotated inputs and writes its stream
 SIDES = {**{n: REG.READS_RESIDUAL for n in READS + ("eh",)}, **{n: REG.WRITES_RESIDUAL for n in WRITES},
-         **{n: REG.OFF_RESIDUAL for n in ("qb", "kvb", "wqb")}}
+         **{n: REG.READS_LATENT for n in ("qb", "kvb", "wqb")}}
+#: the registered stack (Daniel's card b50e7597), and the one before it
+STACK, R8_ONLY = (REG.ROTATION_8, REG.LATENT_ROTATION), (REG.ROTATION_8,)
 MAP_IDS = {"attn.fused_qkv_a (q_a + kv_a_mqa)": ("qa", "kva"), "attn.q_b": ("qb",), "attn.o": ("o",),
            "indexer.wq_b": ("wqb",), "dense.gate_up": ("gate", "up"), "dense.down": ("down",), "moe.router": ("router",),
            "shared.gate_up": ("sgate", "sup"), "routed.w13": ("egate", "eup"), "lm_head": ("lm",), "eh_proj": ("eh",)}
@@ -279,7 +285,7 @@ class Run:
         ql = rms(qa, P["qa_g"], D.eps)
         cn = rms(kv[:, :D.kl], P["kva_g"], D.eps)
         kpe = rope(kv[:, D.kl:], pos, D.theta)
-        q = self.lin("qb", ql, P["qb"]).view(T, D.h, D.dn + D.dr)
+        q = self.lin("qb", ql, P["qb"], P.get("q_side")).view(T, D.h, D.dn + D.dr)
         qn, qp = q[..., :D.dn], rope(q[..., D.dn:], pos, D.theta)
         kvb = (cn @ P["kvb"].T).view(T, D.h, D.dn + D.dv)
         kn, v = kvb[..., :D.dn], kvb[..., D.dn:]
@@ -308,7 +314,7 @@ class Run:
 
     def indexer(self, P, x, ql, pos, trace, tag) -> torch.Tensor:
         D, T = self.D, x.shape[0]
-        qi = self.lin("wqb", ql, P["wqb"]).view(T, D.ih, D.idim)
+        qi = self.lin("wqb", ql, P["wqb"], P.get("q_side")).view(T, D.ih, D.idim)
         qi = torch.cat([rope(qi[..., :D.dr], pos, D.theta), qi[..., D.dr:]], -1)
         side = P.get("side")
         ki = self.lin("wk", x, P["wk"], side)
@@ -618,8 +624,14 @@ def calibrate(ck: Checkpoint, D: Dims, ids: torch.Tensor, upto: int, log, cap: i
     return out
 
 
-def compare(tr0: dict, tr1: dict, Q: Rotation | None, prefix: str) -> dict:
-    """Rotated (tr1) against unrotated (tr0): residual-basis values rotated back, the rest as they are, top-k sets equal."""
+def latent_back(y: torch.Tensor, R: Rotation, g: torch.Tensor) -> torch.Tensor:
+    """A rotated latent after its norm, back to the checkpoint's: y·Rᵀ, with γ_keep undone to γ."""
+    return unrotate(y, R) * (g / R.keep(g))
+
+
+def compare(tr0: dict, tr1: dict, Q: Rotation | None, prefix: str, latents: dict | None = None) -> dict:
+    """Rotated (tr1) against unrotated (tr0): residual-basis values rotated back, latents (`latents`: trace name ->
+    (rotation, norm scale)) back by `latent_back`, the rest as they are, top-k sets equal."""
     out = {}
     for name, a in tr0.items():
         if not name.startswith(prefix) or isinstance(a, float):
@@ -631,6 +643,8 @@ def compare(tr0: dict, tr1: dict, Q: Rotation | None, prefix: str) -> dict:
             continue
         if short == "update" and Q is not None:
             b = unrotate(b, Q)
+        if latents and short in latents:
+            b = latent_back(b, *latents[short])
         out[short] = {"rel": rel(b, a)}
     return out
 
@@ -652,46 +666,70 @@ def router_margin(tr: dict, tag: str, P: dict, k: int) -> float:
     return float((v[:, k - 1] - v[:, k]).min())
 
 
+def latents(D: Dims, L: int, cal: dict, key: bytes) -> tuple[Rotation, Rotation]:
+    """Layer L's q-latent and kv-latent rotations, keyed per layer, on the latents' calibrated S and profiles."""
+    return (Rotation(D.ql, cal["q"]["S"], cal["q"]["profile"], key, f"q-latent/{L}"),
+            Rotation(D.kl, cal["kv"]["S"], cal["kv"]["profile"], key, f"kv-latent/{L}"))
+
+
+def rotate_stack(P: dict, Q: Rotation, Rq: Rotation, Rkv: Rotation, D: Dims) -> dict:
+    """The registered stack (`STACK`) on one layer: ROTATION_8, then the latent rotation; q_b and wq_b read the q
+    latent's S as their side product."""
+    R = rotate_latent(rotate_layer(P, Q), Rq, Rkv, D)
+    R["q_side"] = Rq.ps
+    return R
+
+
+def reach(P: dict, R: dict, experts=None, rex=None) -> dict[str, bool]:
+    """Per linear, whether the variant changes its weights at all."""
+    out = {n: (not torch.equal(P[n], R[n])) for n in P if isinstance(P[n], torch.Tensor) and P[n].dim() == 2}
+    if experts:
+        for n, a, b in zip(("egate", "eup", "edown"), experts(0), rex(0)):
+            out[n] = not torch.equal(a, b)
+    return out
+
+
+def per_rank(tr0: dict, tr1: dict, D: Dims) -> dict:
+    """q and the attention output per TP8 rank's heads (h/8 each), the rotated against the unrotated."""
+    q0, q1 = tr0["q"].chunk(TP, 1), tr1["q"].chunk(TP, 1)
+    a0, a1 = tr0["attn"].chunk(TP, -1), tr1["attn"].chunk(TP, -1)
+    return {"q": [rel(b, a) for a, b in zip(q0, q1)], "attn": [rel(b, a) for a, b in zip(a0, a1)]}
+
+
 def check_layer(ck, D, L, h, pos, Q, key, cal, rows: Rows, log) -> dict:
     t0 = time.time()
     P = load_layer(ck, L, D)
     experts = expert_loader(ck, L) if "router" in P else None
-    R = rotate_layer(P, Q)
+    Rq, Rkv = latents(D, L, cal, key)
+    R8 = rotate_layer(P, Q)
+    R = rotate_stack(P, Q, Rq, Rkv, D)
     rex = rotate_experts(experts, Q, P["post_g"], rows) if experts else None
     hr = Q.right(h)
-    res: dict = {"layer": L}
+    lat_back = {"q_latent": (Rq, P["qa_g"]), "kv_latent": (Rkv, P["kva_g"])}
+    res: dict = {"layer": L, "q_S": Rq.s, "kv_S": Rkv.s}
     tr0, tr1 = {}, {}
     y0 = Run(D).layer(P, h, pos, tr0, "", experts)
     y1 = Run(D).layer(R, hr, pos, tr1, "", rex)
     if rex:
         rex.record_rest(D.e)
-    res["function"] = compare(tr0, tr1, Q, "")
+    res["function"] = compare(tr0, tr1, Q, "", lat_back)
     res["function"]["output"] = {"rel": rel(unrotate(y1, Q), y0)}
+    res["per_rank"] = per_rank(tr0, tr1, D)
     res["absorbed_vs_dense"] = tr0["absorbed_vs_dense"]
     if "router" in P:
         res["router_margin"] = router_margin(tr0, "", P, D.k)
-    res["reach"] = {n: (not torch.equal(P[n], R[n])) for n in P if isinstance(P[n], torch.Tensor) and P[n].dim() == 2}
-    if experts:
-        for n, a, b in zip(("egate", "eup", "edown"), experts(0), rex(0)):
-            res["reach"][n] = not torch.equal(a, b)
-    # the latent placement on top of ROTATION_8 (attention only: it leaves the MLP as ROTATION_8 has it)
-    x0, x1 = rms(h, P["in_g"], D.eps), rms(hr, R["in_g"], D.eps)
-    Rq = Rotation(D.ql, cal["q"]["S"], cal["q"]["profile"], key, f"q-latent/{L}")
-    Rkv = Rotation(D.kl, cal["kv"]["S"], cal["kv"]["profile"], key, f"kv-latent/{L}")
-    RL = rotate_latent(R, Rq, Rkv, D)
-    tr2: dict = {}
-    a2 = Run(D).attention(RL, x1, pos, tr2, "")
+    res["reach"] = {"stack": reach(P, R, experts, rex), "r8_only": reach(P, R8, experts, rex)}
+    # ROTATION_8 alone, the other registered stack (attention only: the latent rotation leaves the MLP as it has it)
+    x1 = rms(hr, R["in_g"], D.eps)
     a0 = P["o"] @ tr0["attn"].T
-    lat = {"attn_out": {"rel": rel(unrotate(a2, Q), a0.T)}, "attn": {"rel": rel(tr2["attn"], tr0["attn"])},
-           "attn_absorbed_last": {"rel": rel(tr2["attn_absorbed_last"], tr0["attn_absorbed_last"])},
-           "q": {"rel": rel(tr2["q"], tr0["q"])}}
+    tr2: dict = {}
+    a2 = Run(D).attention(R8, x1, pos, tr2, "")
+    r8 = {"attn_out": {"rel": rel(unrotate(a2, Q), a0.T)}, "q_latent": {"rel": rel(tr2["q_latent"], tr0["q_latent"])},
+          "kv_latent": {"rel": rel(tr2["kv_latent"], tr0["kv_latent"])}}
     if "index_sel" in tr0:
-        lat["index_scores"] = {"rel": rel(tr2["index_scores"], tr0["index_scores"])}
-        lat["index_sel"] = {"equal": bool(torch.equal(tr2["index_sel"], tr0["index_sel"]))}
-    lat["reach"] = {n: (not torch.equal(P[n], RL[n])) for n in ("qb", "wqb", "kvb") if P.get(n) is not None}
-    lat["q_S"], lat["kv_S"] = Rq.s, Rkv.s
-    res["latent"] = lat
-    # the V/O stack on MLA
+        r8["index_sel"] = {"equal": bool(torch.equal(tr2["index_sel"], tr0["index_sel"]))}
+    res["r8_only"] = r8
+    # the V/O stack with the latent rotation on MLA
     VO = vo_interleave(R, D, key)
     tr3: dict = {}
     a3 = Run(D).attention(VO, x1, pos, tr3, "")
@@ -709,16 +747,14 @@ def check_layer(ck, D, L, h, pos, Q, key, cal, rows: Rows, log) -> dict:
             continue
         rp = n in ROW_PARALLEL
         rows.add(f"{n}/unrotated", P[n], None, rp)
-        rows.add(f"{n}/rotated", R[n], R["side"] if n in READS else None, rp)
-        if n in ("qb", "wqb"):
-            rows.add(f"{n}/latent", RL[n], None, rp)
+        rows.add(f"{n}/rotated", R[n], R["side"] if n in READS else R["q_side"] if n in ("qb", "wqb") else None, rp)
     res["seconds"] = round(time.time() - t0, 1)
-    log(f"layer {L}: output rel {res['function']['output']['rel']:.2e}, latent {lat['attn_out']['rel']:.2e}, "
+    log(f"layer {L}: output rel {res['function']['output']['rel']:.2e}, r8 only {r8['attn_out']['rel']:.2e}, "
         f"vo {res['vo']['attn_out']['rel']:.2e}, cast {res['cast']}, {res['seconds']}s")
     return res
 
 
-def check_mtp(ck, D, L, h, ids, pos, Q, rows: Rows, log) -> dict:
+def check_mtp(ck, D, L, h, ids, pos, Q, key, cal, rows: Rows, log) -> dict:
     """The MTP layer: enorm(embed(next token)) ‖ hnorm(h) through eh_proj, its decoder layer, shared_head.norm and lm_head
     (rank 0's vocabulary slice).  `h` stands in for the last layer's output."""
     p = f"model.layers.{L}."
@@ -733,14 +769,17 @@ def check_mtp(ck, D, L, h, ids, pos, Q, rows: Rows, log) -> dict:
     out = {"eh_proj": {"rel": rel(unrotate(z1, Q), z0)}}
     P = load_layer(ck, L, D)
     experts = expert_loader(ck, L)
-    R = rotate_layer(P, Q)
+    Rq, Rkv = latents(D, L, cal, key)
+    R = rotate_stack(P, Q, Rq, Rkv, D)
     rex = rotate_experts(experts, Q, P["post_g"], rows, "mtp.")
     tr0, tr1 = {}, {}
     y0 = Run(D).layer(P, z0, pos, tr0, "", experts)
     y1 = Run(D).layer(R, z1, pos, tr1, "", rex)
     rex.record_rest(D.e)
-    out["layer"] = compare(tr0, tr1, Q, "")
+    out["layer"] = compare(tr0, tr1, Q, "", {"q_latent": (Rq, P["qa_g"]), "kv_latent": (Rkv, P["kva_g"])})
     out["layer"]["output"] = {"rel": rel(unrotate(y1, Q), y0)}
+    out["per_rank"] = per_rank(tr0, tr1, D)
+    out["reach"] = reach(P, R, experts, rex)
     lm = ck.get("lm_head.weight")[: D.vocab // TP].clone()
     l0 = rms(y0, gs, D.eps) @ lm.T
     l1 = rms(y1, Q.norm(gs), D.eps) @ Q.fold(lm, gs).T
@@ -750,7 +789,8 @@ def check_mtp(ck, D, L, h, ids, pos, Q, rows: Rows, log) -> dict:
     for n in ("qa", "kva", "qb", "o", "wqb", "router", "sgate", "sup"):
         if P.get(n) is not None:
             rows.add(f"mtp.{n}/unrotated", P[n], None, n in ROW_PARALLEL)
-            rows.add(f"mtp.{n}/rotated", R[n], R["side"] if n in READS else None, n in ROW_PARALLEL)
+            rows.add(f"mtp.{n}/rotated", R[n], R["side"] if n in READS else R["q_side"] if n in ("qb", "wqb") else None,
+                     n in ROW_PARALLEL)
     log(f"mtp layer {L}: eh_proj {out['eh_proj']['rel']:.2e}, output {out['layer']['output']['rel']:.2e}, logits {out['logits']['rel']:.2e}")
     return out
 
@@ -803,9 +843,10 @@ def check_lm_head(ck, D, h, Q, rows: Rows, log) -> dict:
     return out
 
 
-def shares(map_doc: dict, unreached: set[str], lm_padded: dict[str, float]) -> dict:
-    """The credit map's shares, then Pearl-C's with `unreached` uncredited and lm_head credited, where its padded shape is
-    admitted, on the share of its MACs its full tiles' real columns hold (`lm_padded`, by scheme), and the mixes."""
+def shares(map_doc: dict, unreached: dict[str, set[str]], lm_padded: dict[str, float]) -> dict:
+    """The credit map's shares, then, per registered stack (`unreached`: its label -> the admitted linears it leaves
+    unreached), Pearl-C's with those uncredited and lm_head credited, where its padded shape is admitted, on the share of
+    its MACs its full tiles' real columns hold (`lm_padded`, by scheme), and the mixes."""
     # glm53_credit_map's steps: prefill leaves lm_head out (one row per sequence)
     steps = {"decode": (("both", "decode"), ()), "prefill": (("both", "prefill"), ("lm_head",)),
              "decode+mtp": (("both", "decode", "mtp"), ())}
@@ -813,30 +854,30 @@ def shares(map_doc: dict, unreached: set[str], lm_padded: dict[str, float]) -> d
     mixes = {"mix H200": ("pearl-c-h100-v1-h3", "h1-sm_90"), "mix RTX PRO 6000": ("pearl-c-sm120-v1-h3", "h1-sm_120")}
     rows = map_doc["linears"]
 
-    def credited(r, scheme, new) -> float:
+    def credited(r, scheme, gone) -> float:
         """The share of the linear's MACs credited: lm_head padded earns on the real columns of its full tiles."""
         c = float(r["schemes"][scheme]["credited"])
-        if not new or scheme not in pearls:
+        if gone is None or scheme not in pearls:
             return c
         base = r["id"].removeprefix("mtp.")
         if base == "lm_head":
             return lm_padded[scheme]
         names = MAP_IDS.get(base, ())
-        return 0.0 if any(x in unreached for x in names) else c
+        return 0.0 if any(x in gone for x in names) else c
 
     out = {}
-    for new in (False, True):
+    for label, gone in (("the map as it stands", None), *((f"under {k}, lm_head padded", v) for k, v in unreached.items())):
         tab = {}
         for step, (routes, left_out) in steps.items():
             rs = [r for r in rows if r["route"] in routes and r["id"] not in left_out]
             tot = sum(r["macs"] for r in rs)
-            v = {s: sum(r["macs"] * credited(r, s, new) for r in rs) / tot for s in rows[0]["schemes"]}
+            v = {s: sum(r["macs"] * credited(r, s, gone) for r in rs) / tot for s in rows[0]["schemes"]}
             for m, (a, b) in mixes.items():
-                v[m] = sum(r["macs"] * max(credited(r, a, new), credited(r, b, new)) for r in rs) / tot
+                v[m] = sum(r["macs"] * max(credited(r, a, gone), credited(r, b, gone)) for r in rs) / tot
             v["uncredited by Pearl-C (H200)"] = [r["id"] for r in rs if r["schemes"]["pearl-c-h100-v1-h3"]["credited"]
-                                                 and credited(r, "pearl-c-h100-v1-h3", new) == 0]
+                                                 and credited(r, "pearl-c-h100-v1-h3", gone) == 0]
             tab[step] = v
-        out["with the rotation's reach and lm_head padded" if new else "the map as it stands"] = tab
+        out[label] = tab
     out["reproduces_the_map"] = all(
         abs(out["the map as it stands"][step][k] - map_doc["summary"][step][k]) < 1e-12 for step in steps
         for k in ("pearl-c-h100-v1-h3", "h1-sm_90", "pearl-c-sm120-v1-h3", "h1-sm_120", "mix H200", "mix RTX PRO 6000"))
@@ -846,7 +887,7 @@ def shares(map_doc: dict, unreached: set[str], lm_padded: dict[str, float]) -> d
 def registration() -> dict:
     s = SCHEMES["pearl-c-h100-v1-h3"]
     out = {}
-    for t, cur in (((REG.ROTATION_8,), False), ((REG.ROTATION_8, REG.VO_ROTATION, REG.HEAD_INTERLEAVE), False), ((), False), ((), True)):
+    for t, cur in (*((t, False) for t in REG.REGISTRATION_STACKS), ((REG.LATENT_ROTATION,), True), ((), False), ((), True)):
         try:
             s.check_registration(t, cur)
             out[f"{list(t)} curated={cur}"] = "accepted"
@@ -855,10 +896,10 @@ def registration() -> dict:
     return out
 
 
-def registered(name: str) -> bool:
-    """Whether `registration.check_linear` registers the linear under ROTATION_8."""
+def registered(name: str, stack: tuple[str, ...]) -> bool:
+    """Whether `registration.check_linear` registers the linear under `stack`."""
     try:
-        REG.check_linear((REG.ROTATION_8,), SIDES[name])
+        REG.check_linear(stack, SIDES[name])
         return True
     except DomainError:
         return False
@@ -908,44 +949,57 @@ def main() -> int:
                  "latent_S": {"q": cal["q"]["S"], "kv": cal["kv"]["S"]}, "registration": registration()}
     doc["checked"] = [check_layer(ck, D, L, cal["inputs"][L], pos, Q, key, cal, rows, log) for L in layers]
     last = cal["inputs"][max(layers) + 1]
-    doc["mtp"] = check_mtp(ck, D, D.L, last, ids, pos, Q, rows, log)
+    doc["mtp"] = check_mtp(ck, D, D.L, last, ids, pos, Q, key, cal, rows, log)
     doc["lm_head"] = check_lm_head(ck, D, last, Q, rows, log)
     doc["rows"] = rows.out
     doc["rows_exact_mismatch"] = rows.mismatch
-    reach: dict[str, bool] = {}
-    for c in doc["checked"]:
-        for n, v in c["reach"].items():
-            reach[n] = reach.get(n, False) or v
-    doc["reach"] = reach
-    doc["registered"] = {n: registered(n) for n in SIDES}
-    doc["rule_agrees_with_reach"] = {n: reach[n] == doc["registered"][n] for n in reach}
-    unreached = {n for n in ADMITTED if not doc["registered"][n]}
-    doc["admitted_unreached"] = sorted(unreached)
+    stacks = {"stack": STACK, "r8_only": R8_ONLY}
+    doc["stacks"] = {k_: list(t) for k_, t in stacks.items()}
+    doc["reach"], doc["registered"], doc["rule_agrees_with_reach"], doc["admitted_unreached"] = {}, {}, {}, {}
+    for k_, t in stacks.items():
+        got: dict[str, bool] = {}
+        for c in doc["checked"]:
+            for n, v in c["reach"][k_].items():
+                got[n] = got.get(n, False) or v
+        if k_ == "stack":
+            for n, v in doc["mtp"]["reach"].items():
+                got[n] = got.get(n, False) or v
+        reg = {n: registered(n, t) for n in SIDES}
+        doc["reach"][k_], doc["registered"][k_] = got, reg
+        doc["rule_agrees_with_reach"][k_] = {n: got[n] == reg[n] for n in got}
+        doc["admitted_unreached"][k_] = sorted(n for n in ADMITTED if not reg[n])
+    unreached = set(doc["admitted_unreached"]["stack"])
     if a.map:
         lm = doc["lm_head"]
-        doc["shares"] = shares(json.loads(Path(a.map).read_text()), unreached,
+        doc["shares"] = shares(json.loads(Path(a.map).read_text()),
+                               {"+".join(t): set(doc["admitted_unreached"][k_]) for k_, t in stacks.items()},
                                {s: lm[s]["credited_fraction"] if lm[s]["domain"][lm["n_padded"]] == "admitted" else 0.0
                                 for s in SCHEMES})
 
     worst = max([v["rel"] for c in doc["checked"] for v in c["function"].values() if "rel" in v]
-                + [doc["mtp"]["eh_proj"]["rel"], doc["mtp"]["layer"]["output"]["rel"], doc["mtp"]["logits"]["rel"],
-                   doc["lm_head"]["function"]["rel"]])
+                + [v for c in doc["checked"] for vs in c["per_rank"].values() for v in vs]
+                + [v for vs in doc["mtp"]["per_rank"].values() for v in vs]
+                + [v["rel"] for v in doc["mtp"]["layer"].values() if "rel" in v]
+                + [doc["mtp"]["eh_proj"]["rel"], doc["mtp"]["logits"]["rel"], doc["lm_head"]["function"]["rel"]])
     sets = all(v["equal"] for c in doc["checked"] for v in c["function"].values() if "equal" in v) and \
-        all(v["equal"] for v in doc["mtp"]["layer"].values() if "equal" in v)
-    lat_worst = max(v["rel"] for c in doc["checked"] for k_, v in c["latent"].items() if isinstance(v, dict) and "rel" in v)
+        all(v["equal"] for v in doc["mtp"]["layer"].values() if "equal" in v) and \
+        all(v["equal"] for c in doc["checked"] for v in c["r8_only"].values() if "equal" in v)
+    r8_worst = max(v["rel"] for c in doc["checked"] for v in c["r8_only"].values() if "rel" in v)
     vo_worst = max(v["rel"] for c in doc["checked"] for v in c["vo"].values())
     rot_fail = {k_: v["fail"] for k_, v in rows.out.items() if k_.endswith("/rotated") and v["fail"]}
-    doc["verdict"] = {"function_worst_rel": worst, "topk_sets_equal": sets, "latent_worst_rel": lat_worst,
+    doc["verdict"] = {"function_worst_rel": worst, "topk_sets_equal": sets, "r8_only_worst_rel": r8_worst,
                       "vo_worst_rel": vo_worst, "rotated_rows_failing": rot_fail,
                       "exact_rule_agrees": not rows.mismatch,
-                      "check_linear_agrees_with_reach": all(doc["rule_agrees_with_reach"].values()),
-                      "registration_accepts_rotation": doc["registration"][f"{[REG.ROTATION_8]} curated=False"] == "accepted",
+                      "check_linear_agrees_with_reach": all(v for t in doc["rule_agrees_with_reach"].values() for v in t.values()),
+                      "registration_accepts_stacks": all(doc["registration"][f"{list(t)} curated=False"] == "accepted"
+                                                         for t in stacks.values()),
+                      "admitted_unreached_under_stack": sorted(unreached),
                       "lm_head_padding_sound": all(doc["lm_head"][s]["credit_over_real_columns_honest"] <= 1
                                                    and doc["lm_head"][s]["undrawn_tiles_are_the_padded_one"]
                                                    and doc["lm_head"][s]["within_vex_cap"] for s in SCHEMES)}
     v = doc["verdict"]
-    ok = (worst < EXACT and sets and lat_worst < EXACT and vo_worst < EXACT and v["exact_rule_agrees"]
-          and v["check_linear_agrees_with_reach"] and v["registration_accepts_rotation"] and v["lm_head_padding_sound"])
+    ok = (worst < EXACT and sets and r8_worst < EXACT and vo_worst < EXACT and v["exact_rule_agrees"]
+          and v["check_linear_agrees_with_reach"] and v["registration_accepts_stacks"] and v["lm_head_padding_sound"])
     doc["seconds"] = round(time.time() - t_start, 1)
     (out / "rotation.json").write_text(json.dumps(doc, indent=1, default=float) + "\n")
     log(json.dumps(doc["verdict"], default=float))
@@ -955,12 +1009,12 @@ def main() -> int:
         for k_, tab in doc["shares"].items():
             if isinstance(tab, dict):
                 log(f"{k_}: " + json.dumps({s: {m: (round(x, 4) if isinstance(x, float) else x) for m, x in t.items()} for s, t in tab.items()}))
-    meas = [("function_worst_rel", worst, "1"), ("latent_worst_rel", lat_worst, "1"), ("vo_worst_rel", vo_worst, "1")]
+    meas = [("function_worst_rel", worst, "1"), ("r8_only_worst_rel", r8_worst, "1"), ("vo_worst_rel", vo_worst, "1")]
     for c in doc["checked"]:
         meas += [(f"cast_update_rel_L{c['layer']}_unrotated", c["cast"]["unrotated"], "1"),
                  (f"cast_update_rel_L{c['layer']}_rotated", c["cast"]["rotated"], "1")]
     run_result.write(out / "rotation.json", ok, "glm53_rotation",
-                     f"exact to {worst:.1e}; admitted but unreached: {doc['admitted_unreached']}", meas)
+                     f"{'+'.join(STACK)} exact to {worst:.1e}; admitted but unreached under it: {sorted(unreached)}", meas)
     return 0 if ok else 1
 
 
