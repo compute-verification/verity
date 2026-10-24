@@ -63,7 +63,7 @@ theorem opensLeaf_one (dom payload : ByteArray) :
     _root_.Flock.Registered.opensLeaf
       { name := "", value := "",
         root := _root_.Flock.Registered.climb dom (_root_.Flock.Registered.rowLeaf dom 0 payload) 0 0 (bytes []),
-        leaves := 1, words := none, wordBits := 16, domain := dom, reads := #[] } payload 0 (bytes []) = true := by
+        leaves := 1, words := none, wordBits := 16, domain := dom, readsRel := #[] } payload 0 (bytes []) = true := by
   have h1 : _root_.Flock.log2ceil 1 = 0 := rfl
   simp [_root_.Flock.Registered.opensLeaf, _root_.Flock.Registered.leafAs, _root_.Flock.Registered.rowLeaf, h1,
     size_bytes]
@@ -77,12 +77,12 @@ theorem Binding_meets_one (rel : _root_.Flock.Readable.Parsed → _root_.Flock.R
       (bytes (digBytes (H512 (hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o)))))) 0 0 (bytes []))
     (hown : c.own =
       #[{ name := "", value := "", root := bytes root, leaves := 1, words := none, wordBits := 16, domain := dom,
-          reads := #[] }]) :
+          readsRel := #[] }]) :
     (SamplingDeploy.deploy rel c).commit.Opens sha512Msg roots o = true := by
   refine (Binding_meets rel c roots o).2
     ⟨root, 0,
       { name := "", value := "", root := bytes root, leaves := 1, words := none, wordBits := 16, domain := dom,
-        reads := #[] }, hat, by rw [hown]; simp, ?_⟩
+        readsRel := #[] }, hat, by rw [hown]; simp, ?_⟩
   rw [hπ, hroot]
   exact opensLeaf_one dom _
 

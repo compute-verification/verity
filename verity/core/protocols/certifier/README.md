@@ -4,11 +4,13 @@ A spec-level reference for network accounting's timing channel:
 - the constant-rate, left-packed certifier;
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
 - the exact audit with record-and-reject, on raw records, records committed by hash (padding elided), or network
-  certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest, with the window's
-  frames in a fixed-depth SHA-512 tree), and the ingress links' status check;
+  certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest hidden under a
+  64-byte salt the certifier draws fresh for each record, with the window's frames in a fixed-depth SHA-512 tree), and
+  the ingress links' status check;
 - one link-window's certificates through the proof service (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
-  its fields and its counts against the public occupancy profile), with a host-side verifier of record (no proof of the
+  its fields, its counts against the public occupancy profile, and its record digest under the certifier's salt
+  against the digest its certificate signs), with a host-side verifier of record (no proof of the
   check yet) that compares no grid in the clear. Its claim is counts only: on every link-window the head check holds
   the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
   is at the profile. Holding the frames, the rest of the egress grid, is N3's, which is a design and the simulator's
@@ -102,17 +104,18 @@ window's per-bucket counts to the occupancy profile on every link-window (on a s
 counts derive under the declared sync), beside the proved timing bound, while N3, the
 content check, is the design (Daniel's provisional call on ASK-70, 19 Oct). N2 no longer compares the grid in the clear
 (`LinkWindows.verify` runs `check_link(grid=False)`, NET-38). Nothing may call the count check zero-knowledge until
-these are closed:
-- **The certificate's signature check.** The certificate signs an unsalted digest of the record head, which holds its
-  counts and an unsalted root of the raw frames. The host checks that signature, so it reads a hash of witness. The fix
-  is NET-42:
-  - the certifier signs `H("verity/net-cert/v1" ‖ salt_c ‖ R)`, with `salt_c` drawn by the certifier, 64 bytes, fresh
-    per record and handed to the prover as witness only;
-  - the head-check unit proves `R = H(head)` and that `H(salt_c ‖ R)` is the signed digest;
-  - the host's LMS check then reads only public fields and that hiding digest.
+this is closed:
 - **N2's unit isn't proved yet.** `LinkWindows.verify`, the verifier of record, runs `head_check.reference` (and on a
-  served link `served.reference`) on the host over the opening, so it reads the heads. When the unit is proved, its
-  head-check gate must bind `NetworkHeadCheck_v1`'s circuit digest (and its served gate `NetworkServedCounts_v1`'s),
-  and the verifier must refuse a proof of any other circuit (NET-43).
+  served link `served.reference`) on the host over the opening, so it reads the heads and the certifier's salts. When
+  the unit is proved, its head-check gate must bind `NetworkHeadCheck_v2`'s circuit digest (and its served gate
+  `NetworkServedCounts_v1`'s), and the verifier must refuse a proof of any other circuit (NET-43).
+
+The certificate no longer signs a hash of witness (NET-42). The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
+salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier draws fresh for each record
+(`certificate.Issuer`'s `coins`) and hands to the prover with the head, as witness only (`CertifiedRecord.salt`). D is
+a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only the certificate's public fields and D.
+Each end's head check holds R to the head it opens and D to R under `salt_c`, so once N2's unit is proved the
+certificates' check reads nothing of the heads; until then the verifier of record checks that link on the host too,
+over the opening (`CertifiedRecord.verify`).
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/certifier`.
