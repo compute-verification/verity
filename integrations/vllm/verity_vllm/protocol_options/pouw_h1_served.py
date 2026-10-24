@@ -354,8 +354,8 @@ class Served:
     #: each round's input-ids table and its words, with the tap
     ids: dict[int, G.Registered] = field(default_factory=dict)
     _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
-    #: each open step A table's words so far, one block a call recorded, in call order
-    _a: dict[str, list[np.ndarray]] = field(default_factory=dict)
+    #: each open step A table's words so far, one block a call recorded, by call (they may come out of call order)
+    _a: dict[str, dict[int, np.ndarray]] = field(default_factory=dict)
     #: each linear's weight, the tensor and its codes, taken once, and its scales
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
@@ -536,8 +536,9 @@ class Served:
                records: np.ndarray | None) -> dict[str, str]:
         """Register call ``call``'s z table (its z/y ``records`` over its T slots, `pouw_h1_records`', split back to z and
         y and laid out in the Program's tile), add its A rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
-        step's A table of K, registered whole at the step's last call of K, and take ``b/<K>`` once K's linears' weights
-        are all held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
+        step's A table of K at its rows in call order, registered whole once the step's calls of K are all in (in
+        whichever order its forward ran them: its last call of K), and take ``b/<K>`` once K's linears' weights are all
+        held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
         table, in call order (`_receipts` of the call's own codes and s_a): ``{value: root}``, what the call's manifest
         row commits under its round's root. Nothing once the window is refused."""
         if self.root is None and not self.refused:
@@ -557,11 +558,11 @@ class Served:
             codes, scales = PH.numpy_of(a).reshape(call.m, call.k), PH.numpy_of(s_a).reshape(-1)
             zv, yv = ZR.split(records, call.rows, call.n)
         out, value, mine = {}, self.a_table(call.index), self.step_calls(call.index)
-        rows = self._a.setdefault(value, [])
-        rows.append(self.a_words(call, codes, scales))
+        rows = self._a.setdefault(value, {})
+        rows[call.index] = self.a_words(call, codes, scales)
         whole = None
-        if call.index == mine[-1]:
-            whole = np.concatenate(self._a.pop(value))
+        if len(rows) == len(mine):
+            whole = np.concatenate([b for _c, b in sorted(self._a.pop(value).items())])
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
         zy = HW.table(self.program, "zy", call.index)
         out[zy] = self._register(run, zy, record_words(zv, yv, self.m, self.tile), nonce(call.index, "zy"), self.root)
@@ -575,7 +576,7 @@ class Served:
         if self.receipts is not None:
             self._held.setdefault(value, []).append((call, codes, scales))
             if whole is not None:
-                held = self._held.pop(value)
+                held = sorted(self._held.pop(value), key=lambda x: x[0].index)
                 if not self._prepare(held):
                     return {}
                 for c, cc, sc in held:
@@ -793,62 +794,7 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
     return Registration([t.entry() for t in got], served.root, files)
 
 
-def kept_row(directory: str | Path, state: Mapping[str, Any], calls: Sequence[Mapping[str, Any]], value: str, row: int
-             ) -> list[int]:
-    """Row `row`'s u16 words of the window's served value `value` (``<prefix>a/<K>@<s>``, ``<prefix>zy@<c>`` or
-    ``<prefix>b/<K>``), rebuilt from the prover's directory (`pouw_h1_prover`) and the saved window's `state`
-    (`pouw_h1_handoff.suspend`'s) as `Served.commit` laid it out, since the served trees a window saves keep no rows
-    (`pouw_h1_registered.Rows`): step s's A table of K is its calls of K's rows over the Program's M slots each
-    (`Served.a_words`), call c's z table its records over M slots (`record_words`), ``b/<K>`` K's linears' weight rows
-    in turn (the state's weights). An empty call kept nothing: zero codes of scale 0, zero records. `calls` are the
-    record's manifest rows. ValueError on a value of no such form."""
-    import re
-
-    from verity_vllm.protocol_options import pouw_h1_prover as PV
-
-    _kind, served, _layers = state["served"]
-    name = value[len(served["prefix"]):] if value.startswith(served["prefix"]) else ""
-    m, linears, order = int(served["m"]), served["linears"], served["calls"]
-    ks = {lin: (k, n) for lin, k, n in linears}
-    by = {int(c["index"]): c for c in calls}
-
-    def kept(c: int, k: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        served_rows = int(by[c]["served"])
-        if not served_rows:
-            return np.zeros((0, k), np.int8), np.zeros(0, "<f4"), np.zeros((0, 0), np.uint8)
-        with np.load(Path(directory) / PV.CALLS / f"{c}.npz") as x:
-            return x["a"].reshape(served_rows, k), x["s_a"].reshape(-1), x["records"]
-
-    if g := re.fullmatch(r"a/(\d+)@(\d+)", name):
-        k, s, per = int(g[1]), int(g[2]), len(linears)
-        mine = [d for d in range(s * per, min((s + 1) * per, len(order))) if ks[order[d][0]][0] == k]
-        c, at = mine[row // m], row % m
-        codes, scales, _records = kept(c, k)
-        full, sc = np.zeros((1, k), np.int8), np.zeros(1, "<f4")
-        if at < len(codes):
-            full[0], sc[0] = codes[at], scales[at]
-        return row_words(full, sc)[0].tolist()
-    if g := re.fullmatch(r"zy@(\d+)", name):
-        c = int(g[1])
-        k, n = ks[order[c][0]]
-        _a, _s, records = kept(c, k)
-        zv, yv = ZR.split(records, int(by[c]["rows"]), n) if records.size else (np.zeros((0, n), "<i4"),
-                                                                                 np.zeros((0, n), np.int16))
-        return record_words(zv, yv, m, tuple(served["tile"]))[row].tolist()
-    if g := re.fullmatch(r"b/(\d+)", name):
-        k, lo = int(g[1]), 0
-        for w, (_lin, kw, n) in enumerate(linears):
-            if kw != k:
-                continue
-            if row < lo + n:
-                codes, scales = state["weights"][w]
-                j = row - lo
-                return row_words(codes[j:j + 1], np.asarray(scales, "<f4").reshape(-1)[j:j + 1])[0].tolist()
-            lo += n
-    raise ValueError(f"{value} row {row}: no kept value rebuilds it (a/<K>@<s>, zy@<c> or b/<K> of the window)")
-
-
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Registration", "Served",
-           "V2", "Weights", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "kept_row",
-           "layout", "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
+           "V2", "Weights", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
+           "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
            "weights_of"]

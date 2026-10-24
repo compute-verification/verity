@@ -22,6 +22,7 @@ from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_handoff as HO  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_kept as KP  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_prover as PV  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_served as SV  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_window as PHW  # noqa: E402
@@ -192,7 +193,7 @@ def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
 
 
 def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(tmp_path, monkeypatch):
-    """PRF-131: the served trees a window saves keep no rows, and `pouw_h1_served.kept_row` rebuilds every row of each
+    """PRF-131: the served trees a window saves keep no rows, and `pouw_h1_kept.kept_row` rebuilds every row of each
     of its step A tables, z tables and its ``b/<K>`` from the prover's directory and the saved state, each committing to
     its tree's ``b || c`` under the tree's own salt; a kept A code changed afterwards rebuilds a row that isn't."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -218,16 +219,16 @@ def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(
             with pytest.raises(LookupError):
                 tree.rows[0]
             for j in range(tree.leaves):
-                assert bc(tree, j, SV.kept_row(prover, state, calls, v, j)) == tree.bcs[j], (v, j)
+                assert bc(tree, j, KP.kept_row(prover, state, calls, v, j)) == tree.bcs[j], (v, j)
         a = f"{state['served'][1]['prefix']}a/{K}@0"
         kept = prover / PV.CALLS / "0.npz"
         with np.load(kept) as f:
             codes, s_a, records = f["a"].copy(), f["s_a"], f["records"]
         codes.reshape(-1)[0] ^= 1
         PV.keep_call(prover, 0, codes, s_a, records)
-        assert bc(trees[a], 0, SV.kept_row(prover, state, calls, a, 0)) != trees[a].bcs[0]
+        assert bc(trees[a], 0, KP.kept_row(prover, state, calls, a, 0)) != trees[a].bcs[0]
         with pytest.raises(ValueError, match="no kept value rebuilds it"):
-            SV.kept_row(prover, state, calls, "h1/pub@0", 0)
+            KP.kept_row(prover, state, calls, "h1/pub@0", 0)
     finally:
         run.close()
         run.rounds.challenger._wire.sock.close()
