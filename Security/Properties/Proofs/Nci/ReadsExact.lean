@@ -3839,6 +3839,258 @@ theorem one_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hD : D
   simp only [Function.comp, den_refPos]
 
 
+theorem agree_mono {P : Prog} {sc : Flock.Program.Scope} {ys : List (Tgt × Int)} {α : Type} {xs : List α}
+    {f g : α → Except String Nat} (h : Agree P sc ys (xs.map f)) (hfg : ∀ x ∈ xs, ∀ a, g x = .ok a → f x = .ok a) :
+    Agree P sc ys (xs.map g) := by
+  induction xs generalizing ys with
+  | nil => cases h; exact List.Forall₂.nil
+  | cons x xs ih =>
+    rw [List.map_cons] at h ⊢
+    cases h with
+    | cons hy h' =>
+      exact List.Forall₂.cons (fun a ha => hy a (hfg x (by simp) a ha))
+        (ih h' (fun x hx => hfg x (by simp [hx])))
+
+/-- A node of a body `Resolve.BodyOk` holds reads its parameters' leaves in range. -/
+theorem upOk_of {c : Desc.Ctx} (hB : Resolve.BodyOk c.P c.d) {k : Nat} {node : Flock.Program.Node}
+    (hn : c.node k = .ok node) : Resolve.UpOk node (c.P.defs[node.fn]!) := by
+  have := (hB.1 k (node_lt hn)).2.2.1
+  have e : (c.P.defs[c.d]!).body.nodes[k]! = node := node_get hn
+  rwa [e] at this
+
+theorem pos_row (g : Piece) (r : Nat) :
+    pos (g.row r) = (List.range g.len).map fun (t : Nat) => (g.tgt, g.base + (r : Int) * g.rowStride + (t : Int) * g.stride) := by
+  simp [pos, Desc.Piece.row]
+
+/-- `throughArg`'s elements: `g`'s positions, a row's as one run where its stride is 1, else one by one. -/
+theorem elems_pos (g : Piece) (hg : ∀ x ∈ pos g, 0 ≤ x.2) :
+    spansPos (g.rowsOf.flatMap fun g =>
+      if (g.stride == 1) = true then #[(g.base.toNat, g.base.toNat + g.len)]
+      else (Array.range g.len).map fun t => ((g.at t).toNat, (g.at t).toNat + 1)) =
+    (pos g).map fun x => x.2.toNat := by
+  rw [← posAll_rowsOf] at hg ⊢
+  unfold spansPos posAll at *
+  rw [Array.toList_flatMap, List.flatMap_assoc, List.map_flatMap]
+  apply flatMap_congr
+  intro r hr
+  have hr' : ∀ x ∈ pos r, 0 ≤ x.2 := fun x hx => hg x (List.mem_flatMap.2 ⟨r, hr, hx⟩)
+  obtain ⟨j, -, rfl⟩ : ∃ j < g.rows, g.row j = r := by
+    simpa [Desc.Piece.rowsOf] using hr
+  rw [pos_row] at hr' ⊢
+  simp only [Desc.Piece.row, Desc.Piece.at] at hr' ⊢
+  by_cases hs : g.stride = 1
+  · simp only [hs, beq_self_eq_true, if_true, mul_one] at hr' ⊢
+    simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil, Nat.add_sub_cancel_left]
+    rw [List.range'_eq_map_range, List.map_map]
+    apply List.map_congr_left
+    intro t ht
+    rw [List.mem_range] at ht
+    have h0 := hr' _ (List.mem_map.2 ⟨0, List.mem_range.2 (by omega), rfl⟩)
+    simp only [Function.comp, Nat.cast_zero, add_zero] at h0 ⊢
+    omega
+  · simp only [hs, if_false, beq_iff_eq, Array.toList_map, Array.toList_range] at hr' ⊢
+    rw [List.flatMap_map, List.map_map]
+    simp only [Nat.add_sub_cancel_left, List.range'_one]
+    rw [List.map_eq_flatMap]
+    rfl
+
+/-- **`throughArg`'s step**: one step up, member `m`'s parameter leaves read through node `k`'s argument `i` keep the
+gates they resolve to in the member, wherever `down` and `fromCallee` do. -/
+theorem throughSpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
+    (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
+    (hL0 : ∀ k i d L : Nat, ((c.body.nodes[k]!).args[i]!).dims = some (d, L) → L = 0 →
+      ((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0)
+    (fuel : Nat) (hD : DownSpec c sc fuel) (hC : CalleeSpec c sc fuel) : ThroughSpec c sc (fuel + 1) := by
+  intro k m i g segs hm hg hx h
+  rw [Desc.throughArg.eq_2] at h
+  obtain ⟨node, hn, h⟩ := Walk.except_bind_ok h
+  rcases ha : node.args[i]? with _ | a
+  · rw [ha] at h; exact absurd h (by intro h; cases h)
+  rw [ha] at h
+  dsimp only at h
+  have h' := ok_bind_pure h
+  rw [← Array.forIn_toList] at h'
+  have hnode : c.body.nodes[k]! = node := node_get hn
+  have hk : k < c.body.nodes.size := node_lt hn
+  obtain ⟨hia, hai⟩ := Array.getElem?_eq_some_iff.1 ha
+  have hai' : node.args[i]! = a := by rw [getElem!_pos node.args i hia]; exact hai
+  have hnode' : (c.P.defs[sc.d]!).body.nodes[k]! = node := by rw [hd]; exact hnode
+  have hUp := upOk_of hB hn
+  have hAk : ArgOk c k i := hA k i hk (by rw [hnode]; exact hia)
+  have hRk : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
+      Resolve.RefOk c.P c.d k (((c.body.nodes[k]!).args[i]!).seq.get t) := (hB.1 k hk).2.1 i
+  have hone : ∀ lo hi v, (lo < hi → hi ≤ a.seq.count) → oneOf c fuel k i lo hi = .ok v →
+      Agree c.P sc (segsPos v) ((List.range' lo (hi - lo)).map fun t => Flock.Program.resolve c.P sc (a.seq.get t)) := by
+    intro lo hi v hb hv
+    have := one_agree c sc fuel hD hAk hRk (by rw [hnode, hai']; exact hb) hv
+    rwa [hnode, hai'] at this
+  rw [hnode] at hm hx
+  have hsp := elems_pos g (fun x hx' => (hx x hx').1)
+  have hj : ∀ x ∈ (g.rowsOf.flatMap fun g =>
+      if (g.stride == 1) = true then #[(g.base.toNat, g.base.toNat + g.len)]
+      else (Array.range g.len).map fun t => ((g.at t).toNat, (g.at t).toNat + 1)).toList, ∀ j, x.1 ≤ j → j < x.2 →
+      i < (c.P.defs[node.fn]!).body.params.size ∧ j < ((c.P.defs[node.fn]!).body.params[i]!).2.leaves := by
+    intro x hxm j h1 h2
+    have : j ∈ spansPos _ := List.mem_flatMap.2 ⟨x, hxm, List.mem_range'_1.2 ⟨h1, by omega⟩⟩
+    rw [hsp] at this
+    obtain ⟨y, hy, rfl⟩ := List.mem_map.1 this
+    have := hx y hy
+    exact ⟨this.2.1, by omega⟩
+  have hfin := forIn_ext (P := c.P) (sc := sc)
+    (fun x : Nat × Nat => (List.range' x.1 (x.2 - x.1)).map fun j =>
+      Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩) _ _ ?_ #[] segs h'
+  · obtain ⟨segs', rfl, hag⟩ := hfin
+    rw [Array.empty_append]
+    have e1 : ∀ E : Array (Nat × Nat), E.toList.flatMap (fun x : Nat × Nat => (List.range' x.1 (x.2 - x.1)).map fun j =>
+        Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩) =
+        (spansPos E).map fun j => Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ := by
+      intro E; unfold spansPos; rw [List.map_flatMap]
+    rw [e1, hsp, List.map_map] at hag
+    convert hag using 1
+    apply List.map_congr_left
+    intro x hxp
+    obtain ⟨t, j⟩ := x
+    have ht : t = .ref true i := by rw [← hg]; exact mem_pos_tgt hxp
+    subst ht
+    have := (hx _ hxp).1
+    simp only [den, Function.comp]
+    rw [if_neg (by omega)]
+  · intro x hxm r y hy
+    obtain ⟨lo, hi⟩ := x
+    have hjx := hj (lo, hi) hxm
+    have hchild := child_eq c sc hd hn m
+    rcases hf : node.form with _ | _ | _ | _
+    case prim | call =>
+      simp only [hf] at hy
+      obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      refine ⟨v, hy.symm, agree_mono (hone lo hi v (fun hlt => ?_) hv) ?_⟩
+      · obtain ⟨hi0, hjl⟩ := hjx (hi - 1) (by omega) (by omega)
+        have := hUp i hi0 (hi - 1) hjl m hm
+        simp only [hf, hai'] at this
+        omega
+      · intro t _ b hb
+        rw [hchild] at hb
+        have := den_up c.P sc hnode' (by simp [hf]) hb
+        rwa [hai'] at this
+    case batch =>
+      simp only [hf] at hy
+      obtain ⟨w, hw, hy⟩ := Walk.except_bind_ok hy
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      rw [← Array.forIn_toList] at hw
+      have hLz : ∀ d L, a.dims = some (d, L) → L = 0 → hi ≤ lo := by
+        intro d L hdl hL
+        by_contra hlt
+        have h1 := (hjx lo le_rfl (by omega)).2
+        have h2 := hL0 k i d L (by rw [hnode, hai']; exact hdl) hL
+        rw [hnode] at h2
+        omega
+      have hms := memberSpans_idx a m lo hi hLz
+      have hfin2 := forIn_ext (P := c.P) (sc := sc)
+        (fun x : Nat × Nat => (List.range' x.1 (x.2 - x.1)).map fun t => Flock.Program.resolve c.P sc (a.seq.get t))
+        _ _ ?_ r w hw
+      · obtain ⟨segs2, rfl, hag2⟩ := hfin2
+        refine ⟨segs2, hy.symm, ?_⟩
+        have e2 : (Desc.memberSpans a m lo hi).toList.flatMap (fun x : Nat × Nat => (List.range' x.1 (x.2 - x.1)).map
+            fun t => Flock.Program.resolve c.P sc (a.seq.get t)) =
+            (spansPos (Desc.memberSpans a m lo hi)).map fun t => Flock.Program.resolve c.P sc (a.seq.get t) := by
+          unfold spansPos; rw [List.map_flatMap]
+        rw [e2, hms, List.map_map] at hag2
+        refine agree_mono hag2 ?_
+        intro t _ b hb
+        rw [hchild] at hb
+        have := den_up_batch c.P sc hnode' hf hb
+        rw [hai', Resolve.memberRef_eq] at this
+        exact this
+      · intro x hxm2 r2 y2 hy2
+        obtain ⟨s, e⟩ := x
+        obtain ⟨v, hv, hy2⟩ := Walk.except_bind_ok hy2
+        simp only [pure, Except.pure, Except.ok.injEq] at hy2
+        refine ⟨v, hy2.symm, hone s e v (fun hlt => ?_) hv⟩
+        have hmem : e - 1 ∈ spansPos (Desc.memberSpans a m lo hi) :=
+          List.mem_flatMap.2 ⟨(s, e), hxm2, List.mem_range'_1.2 ⟨by omega, by omega⟩⟩
+        rw [hms] at hmem
+        obtain ⟨j, hjm, hje⟩ := List.mem_map.1 hmem
+        rw [List.mem_range'_1] at hjm
+        obtain ⟨hi0, hjl⟩ := hjx j hjm.1 (by omega)
+        have := hUp i hi0 j hjl m hm
+        simp only [hf, hai', hje] at this
+        omega
+    case scan =>
+      simp only [hf] at hy
+      by_cases hi0 : i = 0
+      · subst hi0
+        rw [if_pos (show ((0 : Nat) == 0) = true from rfl)] at hy
+        by_cases hm0 : m = 0
+        · subst hm0
+          rw [if_pos (show ((0 : Nat) == 0) = true from rfl)] at hy
+          obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          refine ⟨v, hy.symm, agree_mono (hone lo hi v (fun hlt => ?_) hv) ?_⟩
+          · obtain ⟨hi0, hjl⟩ := hjx (hi - 1) (by omega) (by omega)
+            have := hUp 0 hi0 (hi - 1) hjl 0 hm
+            simp only [hf, hai', ↓reduceIte] at this
+            omega
+          · intro t _ b hb
+            rw [hchild] at hb
+            have := den_up_scan0 c.P sc hnode' hf hb
+            rw [if_pos rfl, hai'] at this
+            exact this
+        · rw [if_neg (show ¬ ((m == 0) = true) by simpa using hm0)] at hy
+          obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          have hm1 : m - 1 < (c.body.nodes[k]!).members := by rw [hnode]; omega
+          have hc := hC k (m - 1) lo hi v hm1 (fun hlt => ?_) hv
+          · rw [hnode] at hc
+            refine ⟨v, hy.symm, agree_mono hc ?_⟩
+            intro t _ b hb
+            rw [hchild] at hb
+            have := den_up_scan0 c.P sc hnode' hf hb
+            rw [if_neg hm0] at this
+            rw [child_eq c sc hd hn (m - 1)]
+            obtain ⟨m', rfl⟩ : ∃ m', m = m' + 1 := ⟨m - 1, by omega⟩
+            have eo : ∀ X G : Nat, X + (m' + 1) * G - G = X + (m' + 1 - 1) * G := by
+              intro X G; rw [Nat.add_sub_cancel, Nat.add_mul, one_mul]; omega
+            rwa [eo] at this
+          · obtain ⟨hi0, hjl⟩ := hjx (hi - 1) (by omega) (by omega)
+            have := hUp 0 hi0 (hi - 1) hjl m hm
+            simp only [hf, hm0, ↓reduceIte] at this
+            rw [hnode]
+            omega
+      · rw [if_neg (show ¬ ((i == 0) = true) by simpa using hi0)] at hy
+        by_cases hx0 : i ≤ node.nxs
+        · rw [if_pos hx0] at hy
+          obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          generalize hL : (Option.map (fun x => x.2) a.dims).getD 0 = L at hv
+          have hc := hone (m * L + lo) (m * L + hi) v (fun hlt => ?_) hv
+          · refine ⟨v, hy.symm, ?_⟩
+            rw [show m * L + hi - (m * L + lo) = hi - lo by omega, ← List.map_add_range', List.map_map] at hc
+            refine agree_mono hc ?_
+            intro t _ b hb
+            rw [hchild] at hb
+            have := den_up_scan c.P sc hnode' hf hi0 hb
+            rw [if_pos hx0, hai', hL] at this
+            exact this
+          · obtain ⟨hi0', hjl⟩ := hjx (hi - 1) (by omega) (by omega)
+            have := hUp i hi0' (hi - 1) hjl m hm
+            simp only [hf, hi0, hx0, hai', hL, ↓reduceIte] at this
+            omega
+        · rw [if_neg hx0] at hy
+          obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          refine ⟨v, hy.symm, agree_mono (hone lo hi v (fun hlt => ?_) hv) ?_⟩
+          · obtain ⟨hi0', hjl⟩ := hjx (hi - 1) (by omega) (by omega)
+            have := hUp i hi0' (hi - 1) hjl m hm
+            simp only [hf, hi0, hx0, hai', ↓reduceIte] at this
+            omega
+          · intro t _ b hb
+            rw [hchild] at hb
+            have := den_up_scan c.P sc hnode' hf hi0 hb
+            rw [if_neg hx0, hai'] at this
+            exact this
+
+
 /-- **A batch member's spans** (`Desc.argSpans`) are its used parameter leaves' indices into the argument. -/
 theorem argSpans_batch (node : Flock.Program.Node) (i m : Nat) (used : Desc.Ivs) (hf : node.form = .batch)
     (hL : ∀ d L, (node.args[i]!).dims = some (d, L) → L = 0 → ∀ p ∈ used.toList, p.2 ≤ p.1) :
