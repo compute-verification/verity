@@ -34,6 +34,7 @@ import Models.NetworkCertifier.Assumptions.AdviceString
 import Models.NetworkCertifier.Guarantees.AdviceString
 import Models.NetworkCertifier.Guarantees.Warden
 import Models.Flock.Guarantees
+import Models.Accounting.Assumptions.Remote
 import Models.Accounting.Guarantees
 import Models.Hash.Guarantees
 

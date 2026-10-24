@@ -369,7 +369,6 @@
         "Security/Models/Accounting/Guarantees/RateAuditPartial.lean",
         "Security/Models/Accounting/Guarantees/RateAuditRemote.lean",
         "Security/Models/Accounting/Guarantees/RateAuditSketch.lean",
-        "Security/Models/Accounting/Guarantees/Remote.lean",
         "Security/Models/Accounting/Guarantees/Requirement.lean",
         "Security/Models/Accounting/Guarantees/Responder.lean",
         "Security/Proofs/Accounting/Bandwidth.lean",
