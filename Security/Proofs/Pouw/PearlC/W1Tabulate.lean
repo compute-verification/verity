@@ -60,7 +60,7 @@ theorem exec_tree (dv : W1Device) (leaf : List Bool → W1.Code) :
     ∀ (n : ℕ) (path : List Bool) (st : St),
       exec dv true (tree leaf n path) st =
         exec dv true (leaf (pathOf st.mem n path)) ⟨st.mem, st.fetched, st.cost + n * dv.prices.int32⟩
-  | 0, path, st => by simp [tree, pathOf]
+  | 0, path, st => by cases st; simp [tree, pathOf]
   | n + 1, path, st => by
       have hf : ([((10 : ℕ), n)] : List Addr).filter preSalt = [] := by simp [preSalt]
       have hc : st.cost + dv.prices.int32 + (n : ℚ) * dv.prices.int32 =
@@ -69,17 +69,17 @@ theorem exec_tree (dv : W1Device) (leaf : List Bool → W1.Code) :
       by_cases h : w32 (st.mem (10, n)) = 0
       · have e : exec dv true (tree leaf (n + 1) path) st =
             exec dv true (tree leaf n (false :: path)) ⟨st.mem, st.fetched, st.cost + dv.prices.int32⟩ := by
-          simp [tree, exec, h, hf]
+          simp [tree, exec, h, hf, preSalt]
         have hp : pathOf st.mem (n + 1) path = pathOf st.mem n (false :: path) := by simp [pathOf, h]
         rw [e, exec_tree dv leaf n]
-        dsimp only
+        try dsimp only
         rw [hc, hp]
       · have e : exec dv true (tree leaf (n + 1) path) st =
             exec dv true (tree leaf n (true :: path)) ⟨st.mem, st.fetched, st.cost + dv.prices.int32⟩ := by
-          simp [tree, exec, h, hf]
+          simp [tree, exec, h, hf, preSalt]
         have hp : pathOf st.mem (n + 1) path = pathOf st.mem n (true :: path) := by simp [pathOf, h]
         rw [e, exec_tree dv leaf n]
-        dsimp only
+        try dsimp only
         rw [hc, hp]
 
 /-- A tree run from an untainted start runs as from a tainted one: its root is an `ite`, which taints both branches,
@@ -169,8 +169,9 @@ theorem emptyAdv_correctSet (dv : W1Device) (H : Unit → Unit) (s : Unit) :
   rw [Finset.mem_singleton]
   constructor
   · intro hu
-    have h1 := Finset.mem_range.mp (Finset.mem_filter.mp hu).1
-    simpa [tabU] using h1
+    simp only [correctSet, Finset.mem_filter, Finset.mem_range] at hu
+    have h1 : u < 1 := hu.1
+    omega
   · rintro rfl
     exact emptyAdv_mem dv H s
 
@@ -185,7 +186,8 @@ theorem schema_not_ttOutW1 (dv : W1Device) (γ₀ : ℝ) {ε : ℕ → ℕ → �
   rw [pr_eq_one]
   · exact hε
   · intro x
-    simp [emptyAdv_correctSet, tabP]
+    simp only [emptyAdv_correctSet]
+    simp [tabP]
 
 /-- **The γ-gap property at W1, as a schema, fails** at `tabP`, at every `γ` and error with `η 0 1 < 1`. -/
 theorem schema_not_gγ (dv : W1Device) (γ : ℝ) {η : ℕ → ℕ → ℝ} (hη : η 0 1 < 1) :
@@ -194,7 +196,8 @@ theorem schema_not_gγ (dv : W1Device) (γ : ℝ) {η : ℕ → ℕ → ℝ} (h�
   rw [pr_eq_one]
   · exact hη
   · intro x
-    simp [Wins, emptyAdv_correctSet, tabP]
+    simp only [Wins, emptyAdv_correctSet]
+    simp [tabP]
 
 /-- **The γ-gap property per coin at W1, as a schema, fails** at `tabP`, at every `γ` and error with `η 0 1 < 1`. -/
 theorem schema_not_gγPerCoin (dv : W1Device) (γ : ℝ) {η : ℕ → ℕ → ℝ} (hη : η 0 1 < 1) :
@@ -206,6 +209,7 @@ theorem schema_not_gγPerCoin (dv : W1Device) (γ : ℝ) {η : ℕ → ℕ → �
     · exact hη
     · intro x
       refine ⟨(emptyAdv_cost dv x.1 x.2).le, ?_⟩
-      simp [Wins, emptyAdv_correctSet, tabP]
+      simp only [Wins, emptyAdv_correctSet]
+      simp [tabP]
 
 end Pouw.PearlC.W1Tabulate
