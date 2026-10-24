@@ -1,5 +1,5 @@
 import MemoryChallenger.Records
-import Proofs.Properties.NetworkRecords.Bytes
+import Proofs.Properties.NetworkCertifier.Records.Bytes
 import Proofs.Properties.Pous.MemoryChallenger.Sort
 
 /-!

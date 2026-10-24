@@ -12,7 +12,7 @@ the session's outcome and its record, the registry (`Registry`: one live registr
 `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec seed, codec, plans,
 receipts, openings, draws).
 Where the two differ, the Python is what is wrong. The properties of the Lean's verdicts are
-`Security/Properties/RemoteAudit.lean`.
+`Security/Properties/Accounting/Remote.lean`.
 
 `benchmarks/remote_session/verifier.py` runs both, by its one switch line `VERDICT` (`--verdict`). Under `lean`, the
 default, the Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`) is the verifier of record: it decides

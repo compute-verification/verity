@@ -11,7 +11,7 @@ import Definitions.NetworkCertifier
 import Definitions.NetworkCertifier.AdviceString
 import Definitions.Accounting.Sheets
 import Definitions.Accounting
-import Definitions.Population
+import Definitions.SampledProofs
 import Definitions.Claims
 import Definitions.Claims.IndexedTapes
 import Definitions.Claims.Recursion

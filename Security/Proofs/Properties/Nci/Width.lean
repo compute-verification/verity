@@ -1,4 +1,4 @@
-import Proofs.Properties.RemoteAudit.Sort
+import Proofs.Properties.Accounting.Remote.Sort
 import Proofs.Properties.Nci.Desc
 
 /-!
