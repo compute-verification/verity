@@ -590,6 +590,12 @@ static_assert(!H1U_JAY || H1U_JAP, "H1U_JAY sums A', which H1U_JAP writes");
 #define H1U_JM2 0
 #endif
 static_assert(!H1U_JM2 || (H1U_JRC && H1U_JAY), "H1U_JM2 pairs RC's H1U_JAY units");
+// H1U_JBW = 1 (with H1U_JM2): the pair's W' = B + c + U as ((B & 7F) + (U & 7F) + c) ^ (B & 80) ^ (~U & 80) bytewise,
+// U's two masks kept from the column block's first pass (4 ALU instructions a word where addw over U + c takes 6); the
+// same bytes
+#ifndef H1U_JBW
+#define H1U_JBW 0
+#endif
 // a call's A' (H1U_JAP: M rows of K bytes) in its workspace, in words: after its row blocks (h1umj's) or its row and
 // column blocks (rc, h1umjc's); then its Y (H1U_JAY: M rows of 32 int32)
 __host__ __device__ __forceinline__ u64 jap_words(u32 M, u32 N, u32 K, bool rc) {
@@ -2892,7 +2898,7 @@ __device__ __forceinline__ void h1u_pair(const int8_t* __restrict__ A, const int
     for (int t = 0; t < 8; ++t)
 #pragma unroll
       for (int e = 0; e < 4; ++e) T[p][t][e] = 0;
-  u32 ulo[4], uhi[4];
+  u32 ulo[4], uhi[4], ulo8[H1U_JBW ? 4 : 1], uhi8[H1U_JBW ? 4 : 1];  // H1U_JBW: ulo, uhi are U & 7F; these ~U & 80
   const int8_t* Ab = A + (u64)(32 * ri) * K;
   const int8_t* Bb = B + (u64)(32 * cj) * K;
   // segment sg's rows 32 p + 16 mt + g + 8 h and B columns 8 nt + g, 8 bytes each at k = 32 sg + 8 q
@@ -2951,6 +2957,12 @@ __device__ __forceinline__ void h1u_pair(const int8_t* __restrict__ A, const int
       for (int nt = 0; nt < 4; ++nt) {
         ulo[nt] = S0.utab[8 * nt + g][2 * q];
         uhi[nt] = S0.utab[8 * nt + g][2 * q + 1];
+        if constexpr (H1U_JBW) {
+          ulo8[nt] = ~ulo[nt] & 0x80808080u;
+          uhi8[nt] = ~uhi[nt] & 0x80808080u;
+          ulo[nt] &= 0x7F7F7F7Fu;
+          uhi[nt] &= 0x7F7F7F7Fu;
+        }
       }
       continue;
     }
@@ -2987,8 +2999,13 @@ __device__ __forceinline__ void h1u_pair(const int8_t* __restrict__ A, const int
 #pragma unroll
         for (int nt = 0; nt < 4; ++nt) {
           const u32 cb8 = cbits[(8 * nt + g) * 68 + 4 * j + q];
-          bf[nt][0] = addw(cw[nt].x, ulo[nt] + expand4(cb8 & 15u));
-          bf[nt][1] = addw(cw[nt].y, uhi[nt] + expand4(cb8 >> 4));
+          if constexpr (H1U_JBW) {
+            bf[nt][0] = (((cw[nt].x & 0x7F7F7F7Fu) + ulo[nt] + expand4(cb8 & 15u)) ^ (cw[nt].x & 0x80808080u)) ^ ulo8[nt];
+            bf[nt][1] = (((cw[nt].y & 0x7F7F7F7Fu) + uhi[nt] + expand4(cb8 >> 4)) ^ (cw[nt].y & 0x80808080u)) ^ uhi8[nt];
+          } else {
+            bf[nt][0] = addw(cw[nt].x, ulo[nt] + expand4(cb8 & 15u));
+            bf[nt][1] = addw(cw[nt].y, uhi[nt] + expand4(cb8 >> 4));
+          }
         }
 #pragma unroll
         for (int p = 0; p < 2; ++p)
