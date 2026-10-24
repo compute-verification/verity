@@ -1,9 +1,9 @@
 # Premises the lock lists by name
 
-The guarantees take these after a `let`. The Lean check reads premises through `let`, and each of these has its record
-in `Security/lean-audit.json`'s `assumptions`. Each is one of `ASSUMPTIONS.md`'s assumptions at the guarantee's own
-finders or inputs, or an obligation on our code. None adds a hash premise beyond `cr/sha-512` and `ecr/sha-512`. Each docstring
-states its record.
+The guarantees take these after a `let`, or packed in `∃` at a hypothesis. The Lean check reads premises through both,
+and each of these has its record in `Security/lean-audit.json`'s `assumptions`. Each is one of `ASSUMPTIONS.md`'s
+assumptions at the guarantee's own finders or inputs, an obligation on our code, or a scope condition on the statement.
+None adds a hash premise beyond `cr/sha-512` and `ecr/sha-512`. Each docstring states its record.
 
 | `Prop` | Claim id | Reduces to | Taken by |
 |---|---|---|---|
@@ -13,3 +13,4 @@ states its record.
 | `StrictCR.Finder.CR` | `cr/sha-512` | `SHA512CRStrict` at the constant cost `q` (`Claims.StrictBirthday`); the budget isn't checked (above) | as `LinkCRZC`, and `qR`'s registered-path finder |
 | `Recursion.StackedTopAt` | `registrant-holds-openings` | `TopOf`, the prover's held tree and salts; its other two conjuncts are the verifier's checks (`stackedTop_of_innerCommits`) | `RecursiveAuditC3` |
 | `Recursion.VStarParsesScoped` | none: an obligation (gap 4) | implied by `VStarParses` (`vstarParsesScoped_of`), a fact about our code | `PublicAudit`, `RecursiveAuditC3` |
+| `RecDeploy.PartIn` | none: a scope condition, as `FlockDeploy.PlainIn` | evaluating `setupO` at each staged V\* part (1–200 tables, at most two link points, `25 ≤ m ≤ 35`, `InRange`); a scope refusal would discharge it | `RecDeploy.lamLin2_deployed_ge`, `lamLin2_deployed_ge_dep` (`hO`) |
