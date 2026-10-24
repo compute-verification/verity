@@ -139,6 +139,9 @@ CHECK_BATCH = 1024
 GPU_HBM_BYTES = 96 * 2 ** 30
 """One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`)."""
 HBM_BYTES = timing.GPUS * GPU_HBM_BYTES
+DISK_BYTES_PER_S = 4.4e9
+"""The node's disks' read ceiling, each disk's highest second summed (4.311e9, r20261018-155556-0b37) and rounded up:
+how much of a paced line's ingress charge is its disks (`ingress_bursts`)."""
 KINDS = ("weights", "kv", "filler", "activations")
 TIERS = ("hbm", "host")
 
@@ -407,8 +410,19 @@ def pace_of(spec: str, pass_ms: float) -> dict:
             "draws": math.ceil(draws_t / groups), "pass_ms": pass_ms}
 
 
+def ingress_bursts(ingress_bytes_per_s: float, disk_bytes_per_s: float = DISK_BYTES_PER_S) -> float:
+    """B, the bytes the routes back into node memory bring at once beyond their rates at an ingress charge of
+    `ingress_bytes_per_s`, `ledger.Node.stated`'s bursts: one rebuild batch in flight (S_chip), one second at the disks'
+    ceiling (the charge up to `disk_bytes_per_s`), and one link window (`timing.LINK_WINDOW_BYTES`) when the charge is
+    above that, the boundary links charged too."""
+    disk = min(ingress_bytes_per_s, disk_bytes_per_s)
+    n = ledger.Node.stated(disk_bytes_per_s=disk, link_bytes_per_s=ingress_bytes_per_s - disk)
+    return n.rebuild_burst_bytes + n.disk_burst_bytes + n.link_burst_bytes
+
+
 def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks: int, rebuild_per_ns: float,
-               chip_bytes: int, block_bytes: int, node_bytes: int, ingress_per_ns: float = 0.0) -> dict:
+               chip_bytes: int, block_bytes: int, node_bytes: int, burst_bytes: float,
+               ingress_per_ns: float = 0.0) -> dict:
     """A paced session's memory line over each stretch of `groups` groups (all but the closing stretch), on the
     verifier's clock, in two forms.
 
@@ -434,12 +448,16 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
     A block also comes back into node memory, or onto the chip, without a rebuild from the node's own disks, which
     Identity leaves in (they are inside the node), and over its boundary links, which Identity takes as carrying no
     block.  `ingress_per_ns`, those routes' read ceiling in blocks a ns, counts as rebuilds in both forms: in the
-    time-held one each such block ends an absent stretch of up to 2·L_max, not the τ of the snapshot.
+    time-held one each such block ends an absent stretch of up to 2·L_max, not the τ of the snapshot.  Each route also
+    brings up to its burst at once beyond its rate (`burst_bytes`, B: `SquaringCeiling`, `Disks` and `Links` hold as
+    rate·length + burst, and a burst of 0 states the rate down to one nanosecond), so B/b more blocks come back over the
+    stretch in both forms, each ending an absent stretch of up to 2·L_max in the time-held one: `HeldOverTime`'s
+    2·L·(X·(Σ + 2·L) + B) and `Held`'s X·(e − s₀) + B.
 
     Both forms need every pass to read every registered block: a block a pass leaves out can be absent across that
     pass with neither a wrong read nor a rebuild.  A session any of whose passes leaves one out (a group's least pass,
     `memory`'s `held`, short of the store) is refused."""
-    b, N, chip = block_bytes, blocks, chip_bytes / block_bytes
+    b, N, chip, burst = block_bytes, blocks, chip_bytes / block_bytes, burst_bytes / block_bytes
     if len(mem["windows"]) != len(seen):
         raise ValueError(f"a memory window for each group: {len(mem['windows'])} for {len(seen)} groups")
     for g, x in enumerate(mem["windows"]):
@@ -468,12 +486,13 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
             if left <= 0:
                 break
         mean = {k: sum(h[k] * c for h, c in zip(held[lo:hi], n[lo:hi])) / P for k in ("weights", "hbm", "host")}
-        lost = {AVERAGE: wrong / P + rebuilds / P + chip,
-                TIME_HELD: chip + (2 * l_max * rebuilds + fill) / span}
+        lost = {AVERAGE: (wrong + rebuilds + burst) / P + chip,
+                TIME_HELD: chip + (2 * l_max * (rebuilds + burst) + fill) / span}
         stretches.append({"stretch": m, "groups": [lo, hi], "span_ns": span, "passes": P, "l_max_ns": l_max,
                           "l_mean_ns": sum(L[lo:hi]) / (hi - lo), "rebuild_blocks": rebuilds,
-                          "ingress_blocks": ingress_per_ns * (span + 2 * l_max),
-                          "rebuild_absent_blocks": 2 * l_max * rebuilds / span, "wrong_absent_blocks": fill / span,
+                          "ingress_blocks": ingress_per_ns * (span + 2 * l_max), "burst_blocks": burst,
+                          "rebuild_absent_blocks": 2 * l_max * rebuilds / span,
+                          "burst_absent_blocks": 2 * l_max * burst / span, "wrong_absent_blocks": fill / span,
                           "held": mean, **{form: {"lost_blocks": x, "credited": {
                               k: max(0.0, mean[k] - x * b) for k in ("weights", "hbm")} | {
                               "filler": max(0.0, mean["hbm"] - mean["weights"] + mean["host"] - x * b)}}
@@ -487,21 +506,21 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
                 "hbm_share": worst[form]["credited"]["hbm"] / node_bytes, "filler_bytes": filler,
                 "filler_share": filler / node_bytes}
 
-    return {"groups": groups, "wrong": wrong, "chip_blocks": chip, "node_bytes": node_bytes, "stretches": stretches,
-            "snapshot": line(AVERAGE), "time": line(TIME_HELD)}
+    return {"groups": groups, "wrong": wrong, "chip_blocks": chip, "burst_blocks": burst, "node_bytes": node_bytes,
+            "stretches": stretches, "snapshot": line(AVERAGE), "time": line(TIME_HELD)}
 
 
 def recorded_paced(session: dict, registration: dict, *, host_bytes: int, ingress_bytes_per_s: float = 0.0) -> dict:
     """An accepted paced session's line (`paced_line`) from its record in `verifier.json`, against its HBM and
-    `host_bytes`, with `ingress_bytes_per_s` of other routes into node memory charged; the pooled wrong receipts are
-    the recorded line's."""
+    `host_bytes`, with `ingress_bytes_per_s` of other routes into node memory charged, and their bursts
+    (`ingress_bursts`); the pooled wrong receipts are the recorded line's."""
     lg, mem = session["ledger"], session["ledger"]["memory"]
     b, codec = mem["block_bytes"], wire.codec_named(registration["codec"])
     return paced_line(mem, session["windows_seen"], groups=session["pace"]["groups"], wrong=lg["paced"]["wrong"],
                       blocks=registration["blocks"],
                       rebuild_per_ns=lg["inputs"]["squarings_per_s"] / codec.encode_squarings / 1e9,
                       chip_bytes=mem["chip_bytes"], block_bytes=b, node_bytes=mem["hbm_bytes"] + host_bytes,
-                      ingress_per_ns=ingress_bytes_per_s / b / 1e9)
+                      burst_bytes=ingress_bursts(ingress_bytes_per_s), ingress_per_ns=ingress_bytes_per_s / b / 1e9)
 
 
 class RealClock:
@@ -1342,6 +1361,7 @@ class Verifier:
                         rebuild_per_ns=rebuild.squarings_per_s / record.codec.encode_squarings / 1e9,
                         chip_bytes=timing.CHIP_BYTES, block_bytes=record.block_bytes,
                         node_bytes=self.hbm_bytes + self.host_bytes,
+                        burst_bytes=ingress_bursts(self.ingress_bytes_per_s),
                         ingress_per_ns=self.ingress_bytes_per_s / record.block_bytes / 1e9)
                 except ValueError as e:
                     out["ledger"]["paced"] = {"refused": str(e)}
