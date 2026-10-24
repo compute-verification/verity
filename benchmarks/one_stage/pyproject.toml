@@ -1,0 +1,12 @@
+# The one-stage audit runs (a0 ... a11). Not a package: the suite tests a5's coin sources (`a5_coins.py`) on a toy window
+# through `service.Stream` and the Lean verifier of record (`sampled-proofs-verifier`, built with lake on first use), and
+# M1's family census sizing split units and candidates (`m1_families.py --estimate`, on stand-ins: nothing is lowered).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from.
+# `benchmarks/live_challenger`: the challenger reserve's tests open a session on its local auditor host (auditor.py), whose
+# serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py).
+inputs = ["verity", "benchmarks/live_challenger"]

@@ -1,8 +1,14 @@
 """A registered store bound to a pinned model: what a pinned BF16 checkpoint alone fixes, so the verifier recomputes the
-payload root the prover's hello must carry and refuses any other (`Binding`). This is the code that decides a session's
-`bound`, in the tree whose git hash names the verifier a period's circuit commits to (`verity/remote-bandwidth/v0
-verifier tree <tree>`, `sampled_proofs.challenger.credited_session`). No Lean states it yet: its port is open
-(`README.md`, "Which side is the definition").
+payload root the prover's hello must carry and refuses any other (`Binding`), in the tree whose git hash names the
+verifier a period's circuit commits to (`verity/remote-bandwidth/v0 verifier tree <tree>`,
+`sampled_proofs.challenger.credited_session`). The decision from what the files hold is Lean's
+(`lean/RemoteAudit/Store.lean`), which decides a session's `bound`: the verifier's Lean process takes the pin's bytes
+and the weights blocks' digests at startup (`bind`) and decides each hello (`hold`), `Binding` beside it as the
+reference, a disagreement refusing the hello (`benchmarks/remote_session/verifier.py`). This is held to it by
+`lean/tests/test_binding.py`: the pin from its file's bytes (`pin_of`, `model_pin`), `checkpoint_sha512`, `store_salt`,
+`expected_root` from the weights blocks' digests, and `Binding`'s start and `hold`. Reading the files (`check`,
+`tensors`, `weight_digests`) and the arena's layout (`arena`) are Python only (`README.md`, "Which side is the
+definition").
 
 ~~~text
 pin        the checkpoint's files with their SHA-512s, in the auditor's model registry's shape (`benchmarks/
@@ -18,7 +24,8 @@ store      `engines` arenas of `arena_blocks` each, in GPU order, then `host_blo
            weights blocks labelled (weights, hbm) and its rest (filler, hbm), the host tier (filler, host)
 payload    `audit.payload_tree` over the store, block j salted with store_salt(key, PAYLOAD_LABEL, j) under the
            verifier's key (its payload-key message), so its root follows from the pin, the store's shape and that key
-           (`expected_root`, in worker processes: about an hour of one core at a whole node's 130M blocks)
+           (`expected_root`, in worker processes: at a whole node's 130M blocks 665 s on 11 cores, the Lean's
+           `Store.expectedRoot` 436 s on 11 threads, 23 Oct, `benchmarks/remote_session/binding_bench.py`)
 binding    at startup the pin read, every pinned file held to it, the arena laid out and its weights blocks' digests
            computed; at each hello (`Binding.hold`) the store its size makes and that store's payload root under the
            verifier's key, against the hello's, else Refused with why
@@ -83,32 +90,82 @@ def checkpoint_sha512(files: dict[str, str]) -> str:
     return hashlib.sha512(canonical_json(files)).hexdigest()
 
 
-def read_pin(path: Path, role: str | None = None) -> dict:
-    """A pin in the registry's shape, its `checkpoint_sha512` held to its files: {name, checkpoint, checkpoint_sha512}.
-    A registry line names its model `model`, which is read as `name`; a registry itself (`models.jsonl`, a line a
-    registration) is read as its lines of `role`, which must pin one checkpoint; core's pin (`verity/core/protocols/
-    pouw/lean/check/models.json`, {ROLE: {checkpoint_sha512, files: {file: SHA-512 hex}, ...}}) as its entry of `role`,
-    named `role`, its `files` the checkpoint."""
+_NUMBER = object()
+
+
+def _number(literal: str) -> object:
+    """A JSON number, which no pin holds, read as an opaque value; refused with an exponent past 2^64, as Lean's
+    parser refuses it."""
+    e = literal.lower().partition("e")[2].lstrip("+")
+    if e and not e.startswith("-") and (len(e.lstrip("0")) > 20 or int(e) > 2 ** 64):
+        raise ValueError(f"the number {literal[:32]} has an exponent past 2^64")
+    return _NUMBER
+
+
+def _constant(name: str) -> object:
+    raise ValueError(f"{name} is not JSON")
+
+
+def _loads(text: str):
+    """JSON as `RemoteAudit.Store.loads` reads it: numbers opaque (`_number`), no NaN or Infinity, and no string
+    holding a lone surrogate, which `json.loads` keeps and Lean's parser reads as U+FFFD (its encoding raises)."""
+    doc = json.loads(text, parse_int=_number, parse_float=_number, parse_constant=_constant)
+    json.dumps(doc, ensure_ascii=False, default=lambda _: None).encode()
+    return doc
+
+
+def _pinned(checkpoint) -> str | None:
+    """A registry line's checkpoint as its lines are compared: the canonical JSON of a map to strings, else None."""
+    if isinstance(checkpoint, dict) and all(type(h) is str for h in checkpoint.values()):
+        return canonical_json(checkpoint)
+    return None
+
+
+def pin_bytes(path: Path) -> bytes:
+    """The bytes of the pin file at `path`."""
     try:
-        text = Path(path).read_text()
+        return Path(path).read_bytes()
     except OSError as e:
         raise Refused(f"the pin {path} is not readable: {e}") from None
+
+
+def read_pin(path: Path, role: str | None = None, *, model: bool = False) -> dict:
+    """`pin_of` on the file at `path` (`model_pin` with `model`)."""
+    return (model_pin if model else pin_of)(pin_bytes(path), str(path), role)
+
+
+def pin_of(data: bytes, path: str, role: str | None = None) -> dict:
+    """A pin in the registry's shape from the bytes of the file at `path`, its `checkpoint_sha512` held to its files:
+    {name, checkpoint, checkpoint_sha512}. A registry line names its model `model`, which is read as `name`; a registry
+    itself (`models.jsonl`, a line a registration) is read as its lines of `role`, which must pin one checkpoint; core's
+    pin (`verity/core/protocols/pouw/lean/check/models.json`, {ROLE: {checkpoint_sha512, files: {file: SHA-512 hex},
+    ...}}) as its entry of `role`, named `role`, its `files` the checkpoint. `RemoteAudit.Store.pinOf` is its
+    definition, refusals word for word (`lean/tests/test_binding.py`)."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise Refused(f"the pin {path} is not UTF-8") from None
     form = "{name, checkpoint: {file: SHA-512 hex}, checkpoint_sha512}"
     try:
-        doc = json.loads(text)
+        doc = _loads(text)
     except ValueError:
-        try:
-            lines = [json.loads(x) for x in text.splitlines() if x.strip()]
-        except ValueError as e:
-            raise Refused(f"the pin {path} is neither JSON nor JSON lines: {e}") from None
+        lines = []
+        for k, x in enumerate(text.split("\n"), 1):
+            if x.strip(" \t\r"):
+                try:
+                    lines.append(_loads(x))
+                except ValueError:
+                    raise Refused(f"the pin {path} is neither JSON nor JSON lines: its line {k} is not JSON") from None
         mine = [x for x in lines if isinstance(x, dict) and role is not None and x.get("model", x.get("name")) == role]
-        if len({json.dumps(x.get("checkpoint"), sort_keys=True) for x in mine}) != 1:
-            raise Refused(f"the registry {path} has {len(mine)} lines of {role}, pinning "
-                          f"{len({x.get('checkpoint_sha512') for x in mine})} checkpoints: one is the pin")
+        checkpoints = {_pinned(x.get("checkpoint")) for x in mine}
+        if len(checkpoints) != 1:
+            raise Refused(f"the registry {path} has {len(mine)} lines of {role}, pinning {len(checkpoints)} "
+                          "checkpoints: one is the pin")
         doc = mine[-1]
     if isinstance(doc, dict) and doc and all(isinstance(v, dict) for v in doc.values()):
         if role not in doc:
-            raise Refused(f"the pin {path} pins no role {role!r}: its roles are {sorted(doc)}")
+            raise Refused(f"the pin {path} pins no role {canonical_json(role).decode()}: its roles are "
+                          f"{canonical_json(sorted(doc)).decode()}")
         entry, form = doc[role], "{ROLE: {checkpoint_sha512, files: {file: SHA-512 hex}, ...}}"
         doc = {"name": role, "checkpoint": entry.get("files"), "checkpoint_sha512": entry.get("checkpoint_sha512")}
     name = doc.get("name", doc.get("model")) if isinstance(doc, dict) else None
@@ -123,6 +180,14 @@ def read_pin(path: Path, role: str | None = None) -> dict:
     if "config.json" not in files or not any(f.endswith(".safetensors") for f in files):
         raise Refused(f"the pin {path} pins no config.json or no .safetensors file: the layout reads both")
     return {"name": name, "checkpoint": dict(files), "checkpoint_sha512": doc["checkpoint_sha512"]}
+
+
+def model_pin(data: bytes, path: str, role: str) -> dict:
+    """`pin_of` for the binding of `--model role`: the pin must be `role`'s (`RemoteAudit.Store.modelPin`)."""
+    pin = pin_of(data, path, role)
+    if pin["name"] != role:
+        raise Refused(f"the pin {path} is {pin['name']}'s, not --model {role}'s")
+    return pin
 
 
 def file_sha512(path: str) -> str:
@@ -397,17 +462,17 @@ def expected_root(store: Store, node: bytes, key: bytes, digests: Path, workers:
 
 class Binding:
     """The verifier's binding of a registered store to a pinned model (`verifier.py --model`): at startup the pin read
-    (`read_pin`, its name `role`), every pinned file held to it (`check`), the arena laid out (`arena`) and its weights
-    blocks' digests computed (`weight_digests`); at each hello (`hold`), the store the hello's size makes of `engines`
-    arenas of `arena_blocks` and the rest host filler, and its payload root under the verifier's key, against the
-    hello's. `record` is what `verifier.json` keeps of it."""
+    (`model_pin` of its file's bytes, `pin_data`, its name `role`), every pinned file held to it (`check`), the arena
+    laid out (`arena`) and its weights blocks' digests computed (`weight_digests`, the file `digests`); at each hello
+    (`hold`), the store the hello's size makes of `engines` arenas of `arena_blocks` and the rest host filler, and its
+    payload root under the verifier's key, against the hello's. The Lean's binding (`RemoteAudit.Store.bind`, `hold`)
+    takes `pin_data` and `digests`. `record` is what `verifier.json` keeps of it."""
 
     def __init__(self, role: str, directory: Path, pin_path: Path, engines: int, arena_blocks: int, *,
                  workers: int = 1, scratch: Path | None = None, log=print) -> None:
         t0 = time.monotonic()
-        pin = read_pin(pin_path, role)
-        if pin["name"] != role:
-            raise Refused(f"the pin {pin_path} is {pin['name']}'s, not --model {role}'s")
+        self.pin_data = pin_bytes(pin_path)
+        pin = model_pin(self.pin_data, str(pin_path), role)
         check(directory, pin, workers)
         self.role, self.pin, self.pin_path, self.directory = role, pin, Path(pin_path), Path(directory)
         self.arena = arena(directory, pin["checkpoint"])
@@ -426,6 +491,7 @@ class Binding:
         """The pinned model's regions (`verifier.regions_of`'s) when the hello's store is its store, its payload root
         `root` the store's under `key`; else Refused with why."""
         A, E = self.arena_blocks, self.engines
+        self.state.update(expected_root=None, bound=False)
         if type(blocks) is not int or blocks < E * A:
             raise Refused(f"the hello's store is {blocks} blocks, fewer than the pinned model's {E} arenas of {A}")
         store = self.store = Store(self.arena, E, A, blocks - E * A)
