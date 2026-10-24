@@ -19,7 +19,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tvi_common as C  # noqa: E402
 
-DEFAULT_LR = {"full": 1e-5, "lora": 1e-4, "tinylora": 5e-3}
+DEFAULT_LR = {"full": 1e-5, "lora": 1e-4, "tinylora": 2e-4}
 
 
 def main() -> None:
