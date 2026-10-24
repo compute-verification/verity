@@ -421,7 +421,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         if m.template in composed:      # a chunked template's chunks: one circuit, bound to the same partition and program
             circuit, made, circ = composed[m.template]
         else:
-            src = ["--template", m.template] if chunked else ["--input-set", str(sets[m.template][0])]
+            src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
+                ["--input-set", str(sets[m.template][0])]
             p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), *src, "--out", str(st_dir / "circuit.txt"),
                         "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath})
             if p.returncode != 0:
@@ -799,6 +800,8 @@ def main() -> int:
     ap.add_argument("--partition", required=True, help="the verifier's partition file: {templates, law, scope?}")
     ap.add_argument("--template-sets", required=True, help="one input set per member template, for the lowering")
     ap.add_argument("--m0-pythonpath", required=True)
+    ap.add_argument("--compose-cache", help="this machine's composed circuits (`compose_circuit.py --cache`): the ranks it audits "
+                    "compose each chunked template once, every later rank taking that circuit with its own binding")
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--firewall", required=True,
