@@ -34,8 +34,8 @@ use):
 uv run --extra torch-cpu verity bench network_e2e --from REHEARSAL --out DIR --no-prove
 ~~~
 
-When `n2_zk.sh` has already proved these runs, don't prove them again: pass its run's `out/n2zk` as `--proofs DIR` instead
-of `--no-prove`. The report adopts those proofs only if every proved unit's public row carries the certificate digest of
+When `n2_zk.sh` has already proved these runs, don't prove them again: pass its run's `out/n2zk` (or a tarball of it) as
+`--proofs DIR` instead of `--no-prove`. The report adopts those proofs only if every proved unit's public row carries the certificate digest of
 the `--from` runs' record for that end and link-window (`e2e.adopt`).
 
 To rehearse first, pass `--upstream URL` (an OpenAI streaming endpoint) or `--vllm MODEL` (vLLM started on this host's

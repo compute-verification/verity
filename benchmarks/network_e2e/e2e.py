@@ -488,7 +488,8 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
             proofs = {"ran": False, "why": f"not run: the {profile} profile's count check is NetworkServedCounts_v1, "
                                            "which n2_zk doesn't prove"}
         elif args.proofs:
-            proofs = adopt(Path(args.proofs), runs) | {"ran": True}
+            src = Path(args.proofs)
+            proofs = adopt(_unpack(src, work) if src.is_file() else src, runs) | {"ran": True, "adopted": str(src)}
             log(f"proofs: adopted from {args.proofs}{': ' + proofs['why'] if proofs['why'] else ''}")
         else:
             proofs = prove(runs, args, work) | {"ran": True}
@@ -533,8 +534,8 @@ def main(argv=None) -> int:
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     how = ap.add_mutually_exclusive_group()
     how.add_argument("--no-prove", action="store_true", help="N2's verdicts and the head checks' references only")
-    how.add_argument("--proofs", metavar="DIR", help="adopt n2_zk.prove's output of these runs (n2_zk.sh's $OUT/n2zk) "
-                                                     "instead of proving")
+    how.add_argument("--proofs", metavar="DIR", help="adopt n2_zk.prove's output of these runs (n2_zk.sh's $OUT/n2zk, or a "
+                                                     "tarball of it) instead of proving")
     args, rest = ap.parse_known_args(argv)
     if rest and args.sources:
         ap.error(f"unrecognized arguments: {' '.join(rest)}")

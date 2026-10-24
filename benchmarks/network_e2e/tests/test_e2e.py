@@ -167,6 +167,10 @@ def test_proofs_of_these_runs_are_adopted_and_another_runs_refused(rehearsal, tm
     assert r["ok"] is True and r["proofs"]["adopted"] == str(kept) and r["proofs"]["cost_per_link_window"]
     assert r["negatives"]["tampered"]["proved_refused_windows"] == [0] and r["negatives"]["extra"]["proofs_held"]
     assert "Proofs: adopted from" in (tmp_path / "out" / "report.md").read_text()
+    with tarfile.open(tmp_path / "n2zk.tgz", "w:gz") as tar:
+        tar.add(kept, arcname="n2zk")
+    args.proofs, args.out = str(tmp_path / "n2zk.tgz"), str(tmp_path / "out2")
+    assert e2e.run(args, [], clock=lambda: 0.0)["proofs"]["adopted"] == args.proofs
     n2 = kept / "honest-ingress" / "verifier" / "n2.json"
     sent = json.loads(n2.read_text())
     sent[1]["signed"] = sent[0]["signed"]
