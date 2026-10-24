@@ -139,7 +139,8 @@ requests in place of PROF_N's tokens.  The gate arms PF_CAPTURES at m = T (the d
 generate of len(PF_CAPTURES) + gate_extra requests, each capture copied to host memory (dither_so.CAP_HOST_ENV) and its
 leaves hashed in a pool (dither_a.CHECK_WORKERS_ENV, default PF_CHECK_WORKERS); its verdict `prefill_verdict`, and the
 token gate a generation of GATE_TOKENS tokens for PF_GATE_REQS prefill requests (chunked prefill, then decode), equal to
-the reference arm's.  Under -we the end gate is not run.
+the reference arm's.  Under -we the end gate is not run.  A Dither window at T = 2048 needs most of a 96 GB GPU, so a
+prefill row runs --serial: each arm's engine alone, built, gated, timed and stopped before the next (its reference first).
 
 Coins: a dither arm's window takes its round coins from the challenger off the node when its worker has a session
 (DITHER_CHALLENGERS' entry for the arm, ``{"ARM": {"session": ID, "address": "127.0.0.1:PORT", "secret_file": F,
@@ -150,7 +151,7 @@ hello's commitment held to HEX) and closed at the arm's stop; without one they a
 ``coins: in-process (not certified)``.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
-    python sbench.py --out OUT --prefill --t 2048 --arms exact,exact-fused,ARM --ops prefill --gate
+    python sbench.py --out OUT --prefill --serial --t 2048 --arms exact,exact-fused,ARM --ops prefill --gate
 """
 from __future__ import annotations
 
@@ -756,6 +757,10 @@ def main() -> int:
                     help="on a failed gate, stop the failed arms and time the rest (the exit is 4 still)")
     ap.add_argument("--prefill", action="store_true",
                     help="every request a T-token prompt with one output token: a step of m = T (the docstring's --prefill)")
+    ap.add_argument("--serial", action="store_true",
+                    help="one engine on the GPU at a time: each arm built, warmed, gated, timed and stopped before the next "
+                         "comes up, in --arms order (its reference arm first); for an arm that needs most of the GPU, as "
+                         "Dither's window does at --prefill's T = 2048")
     a = ap.parse_args()
     os.environ["SBENCH_T"] = str(a.t)
     if a.prefill:
@@ -780,17 +785,6 @@ def main() -> int:
         ap.error(f"a tokens-only arm's gate is its reference's tokens: add {','.join(missing)} to --arms")
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
-    for arm in arms:      # one engine at a time comes up, so their memory profiling doesn't race
-        here, there = ctx.Pipe()
-        p = ctx.Process(target=worker, args=(arm, there, str(scratch), a.arm_mem.get(arm, a.gpu_mem)), daemon=True)
-        p.start()
-        there.close()   # the worker's end, closed here so a dead worker's pipe reads EOF, not a wait
-        msg = recv(arm, here, "build")
-        conns[arm], procs[arm], info[arm] = here, p, msg
-        print(json.dumps({"arm": arm, **msg}), flush=True)
-    for arm in arms:
-        conns[arm].send({"op": "warm"})
-        recv(arm, conns[arm], "warm"), recv(arm, conns[arm], "warm")
     reps: list[dict] = []
     rc = 0
     ref_tokens: dict = {}
@@ -798,82 +792,107 @@ def main() -> int:
     vs_ref: dict = {}
     vs_rep0: dict = {}
     gate_doc: dict = {}
-    if a.gate:
-        for arm in arms:
-            conns[arm].send({"op": "gate"})
-            res = recv(arm, conns[arm], "gate")
-            msg = recv(arm, conns[arm], "gate")
-            res["stats"], res["picks_summary"] = msg["stats"], msg.get("picks")
-            gate_doc[arm] = res
-            (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
-        for arm in arms:
-            ref = REF_OF.get(arm, arms[0])
-            if ref in gate_doc and ref != arm:
-                gate_doc[arm]["tokens_equal_" + ref] = gate_doc[arm]["tokens"] == gate_doc[ref]["tokens"]
-                if "tokens_capture" in gate_doc[arm] and a.prefill:
-                    # the capture run's one token a request against the reference's first, request by request
-                    gate_doc[arm]["tokens_capture_first_equal_" + ref] = sum(
-                        x[:1] == y[:1] for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
-                elif "tokens_capture" in gate_doc[arm]:
-                    gate_doc[arm]["tokens_capture_requests_equal_" + ref] = sum(
-                        x == y for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
-            if "stock" in gate_doc and arm != "stock":
-                gate_doc[arm]["tokens_equal_stock"] = gate_doc[arm]["tokens"] == gate_doc["stock"]["tokens"]
-                gate_doc[arm]["tokens_requests_equal_stock"] = sum(
-                    x == y for x, y in zip(gate_doc[arm]["tokens"], gate_doc["stock"]["tokens"]))
-        for arm in arms:
-            print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items()
-                                               if k not in ("tokens", "tokens_capture", "picks")}}), flush=True)
-        (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
-        failed = [arm for arm in arms if "verdict" in gate_doc[arm] and not (
-            gate_doc[arm]["verdict"]["ok"] and (gate_doc[arm].get("tokens_equal_" + REF_OF.get(arm, arms[0]))
-                                                or not TOKENS_GATED.get(arm, True)))]
-        failed += [arm for arm in arms if arm in TOKENS_ONLY and gate_doc[arm].get("tokens_equal_" + REF_OF[arm]) is not True]
-        if failed:
-            timed_picks = [arm for arm in failed if gate_doc[arm].get("verdict", {}).get("ok") and pick_of(arm) is None]
-            hint = {"hint": f"{timed_picks}: verdict ok, tokens not exact's, under timed picks: the node's shared "
-                            "Inductor cache can hand an arm a reduction config exact never ran (VLLM-48); rerun with "
-                            f"{PICK_ENV}=first {PICK_ARMS_ENV}=exact,dither"} if timed_picks else {}
-            print(json.dumps({"gate_failed": failed, "timed": a.time_passed, **hint}), flush=True)
-            for arm in failed if a.time_passed else arms:
-                conns[arm].send({"op": "stop"})
-            if not a.time_passed:
-                return 4
-            arms = [x for x in arms if x not in failed]
-            rc = 4
-    for r in range(a.reps):
-        for op in a.ops.split(","):
-            for j in range(len(arms)):
-                arm = arms[(j + r) % len(arms)]
-                conns[arm].send({"op": op})
-                res = recv(arm, conns[arm], op)
-                msg = recv(arm, conns[arm], op)
-                toks = res.pop("tokens", None)
-                if toks is not None:
-                    ref_tokens.setdefault((r, arm), toks)
-                row = {"rep": r, "op": op, "arm": arm, **res, "stats": msg["stats"], "picks": msg.get("picks")}
-                reps.append(row)
-                print(json.dumps(row), flush=True)
-                with open(out / "reps.jsonl", "a") as f:
-                    f.write(json.dumps(row) + "\n")
-        for arm in arms:
-            if (r, arm) in ref_tokens:
-                ref = REF_OF.get(arm, arms[0])
-                gate.setdefault(arm, []).append(None if ref == arm else ref_tokens[(r, arm)] == ref_tokens.get((r, ref)))
-                if ref != arm and (r, ref) in ref_tokens:
-                    vs_ref.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(r, ref)]))
-                if r > 0:
-                    vs_rep0.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(0, arm)]))
-    for arm in arms:
-        conns[arm].send({"op": "stop"})
-    # each worker's stop: a -we arm's off-node window served to its end and checked, its session closed
     stops = {}
-    for arm in arms:
-        try:
-            stops[arm] = conns[arm].recv()
-        except EOFError:
-            stops[arm] = {"error": "stop: the worker exited"}
-        print(json.dumps({"stop": arm, **{k: v for k, v in stops[arm].items() if k != "stats"}}), flush=True)
+    first, timed = arms[0], []
+    # --serial: a group an arm, its engine stopped before the next one's comes up; else one group of every arm
+    groups = [[x] for x in arms] if a.serial else [arms]
+    for arms in groups:
+        for arm in arms:      # one engine at a time comes up, so their memory profiling doesn't race
+            here, there = ctx.Pipe()
+            p = ctx.Process(target=worker, args=(arm, there, str(scratch), a.arm_mem.get(arm, a.gpu_mem)), daemon=True)
+            p.start()
+            there.close()   # the worker's end, closed here so a dead worker's pipe reads EOF, not a wait
+            msg = recv(arm, here, "build")
+            conns[arm], procs[arm], info[arm] = here, p, msg
+            print(json.dumps({"arm": arm, **msg}), flush=True)
+        for arm in arms:
+            conns[arm].send({"op": "warm"})
+            recv(arm, conns[arm], "warm"), recv(arm, conns[arm], "warm")
+        if a.gate:
+            for arm in arms:
+                conns[arm].send({"op": "gate"})
+                res = recv(arm, conns[arm], "gate")
+                msg = recv(arm, conns[arm], "gate")
+                res["stats"], res["picks_summary"] = msg["stats"], msg.get("picks")
+                gate_doc[arm] = res
+                (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
+            for arm in arms:
+                ref = REF_OF.get(arm, first)
+                if ref in gate_doc and ref != arm:
+                    gate_doc[arm]["tokens_equal_" + ref] = gate_doc[arm]["tokens"] == gate_doc[ref]["tokens"]
+                    if "tokens_capture" in gate_doc[arm] and a.prefill:
+                        # the capture run's one token a request against the reference's first, request by request
+                        gate_doc[arm]["tokens_capture_first_equal_" + ref] = sum(
+                            x[:1] == y[:1] for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
+                    elif "tokens_capture" in gate_doc[arm]:
+                        gate_doc[arm]["tokens_capture_requests_equal_" + ref] = sum(
+                            x == y for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
+                if "stock" in gate_doc and arm != "stock":
+                    gate_doc[arm]["tokens_equal_stock"] = gate_doc[arm]["tokens"] == gate_doc["stock"]["tokens"]
+                    gate_doc[arm]["tokens_requests_equal_stock"] = sum(
+                        x == y for x, y in zip(gate_doc[arm]["tokens"], gate_doc["stock"]["tokens"]))
+            for arm in arms:
+                print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items()
+                                                   if k not in ("tokens", "tokens_capture", "picks")}}), flush=True)
+            (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
+            failed = [arm for arm in arms if "verdict" in gate_doc[arm] and not (
+                gate_doc[arm]["verdict"]["ok"] and (gate_doc[arm].get("tokens_equal_" + REF_OF.get(arm, first))
+                                                    or not TOKENS_GATED.get(arm, True)))]
+            failed += [arm for arm in arms if arm in TOKENS_ONLY and gate_doc[arm].get("tokens_equal_" + REF_OF[arm]) is not True]
+            if failed:
+                timed_picks = [arm for arm in failed if gate_doc[arm].get("verdict", {}).get("ok") and pick_of(arm) is None]
+                hint = {"hint": f"{timed_picks}: verdict ok, tokens not exact's, under timed picks: the node's shared "
+                                "Inductor cache can hand an arm a reduction config exact never ran (VLLM-48); rerun with "
+                                f"{PICK_ENV}=first {PICK_ARMS_ENV}=exact,dither"} if timed_picks else {}
+                print(json.dumps({"gate_failed": failed, "timed": a.time_passed, **hint}), flush=True)
+                for arm in failed if a.time_passed else arms:
+                    conns[arm].send({"op": "stop"})
+                if not a.time_passed:
+                    return 4
+                arms = [x for x in arms if x not in failed]
+                rc = 4
+                for arm in failed if a.serial else ():   # gone before the next arm's engine comes up
+                    try:
+                        stops[arm] = conns[arm].recv()
+                    except EOFError:
+                        stops[arm] = {"error": "stop: the worker exited"}
+                    procs[arm].join()
+        for r in range(a.reps):
+            for op in a.ops.split(","):
+                for j in range(len(arms)):
+                    arm = arms[(j + r) % len(arms)]
+                    conns[arm].send({"op": op})
+                    res = recv(arm, conns[arm], op)
+                    msg = recv(arm, conns[arm], op)
+                    toks = res.pop("tokens", None)
+                    if toks is not None:
+                        ref_tokens.setdefault((r, arm), toks)
+                    row = {"rep": r, "op": op, "arm": arm, **res, "stats": msg["stats"], "picks": msg.get("picks")}
+                    reps.append(row)
+                    print(json.dumps(row), flush=True)
+                    with open(out / "reps.jsonl", "a") as f:
+                        f.write(json.dumps(row) + "\n")
+            for arm in arms:
+                if (r, arm) in ref_tokens:
+                    ref = REF_OF.get(arm, first)
+                    gate.setdefault(arm, []).append(None if ref == arm else ref_tokens[(r, arm)] == ref_tokens.get((r, ref)))
+                    if ref != arm and (r, ref) in ref_tokens:
+                        vs_ref.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(r, ref)]))
+                    if r > 0:
+                        vs_rep0.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(0, arm)]))
+        for arm in arms:
+            conns[arm].send({"op": "stop"})
+        # each worker's stop: a -we arm's off-node window served to its end and checked, its session closed
+        for arm in arms:
+            try:
+                stops[arm] = conns[arm].recv()
+            except EOFError:
+                stops[arm] = {"error": "stop: the worker exited"}
+            print(json.dumps({"stop": arm, **{k: v for k, v in stops[arm].items() if k != "stats"}}), flush=True)
+            if a.serial:
+                procs[arm].join()   # its device memory free before the next engine's profiling reads what is
+        timed += arms
+    arms = timed
     (out / "stop.json").write_text(json.dumps(stops, indent=1, default=str) + "\n")
     summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
                "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
