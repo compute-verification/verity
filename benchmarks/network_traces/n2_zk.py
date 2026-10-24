@@ -6,17 +6,20 @@ verifier's own Lean `verify --zk` of the proof, the proof's public row opened to
 row read. No host check reads the opening; `--debug-clear` adds the in-the-clear comparison to each verdict, which
 decides nothing.
 
-    python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4]
+    python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4] [--profile served]
+      [--plan RUN]
     python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
       --lean flock-verify --out DIR [--jobs 4] [--debug-clear] [--dry]
 
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
   `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
-  against a stub endpoint that answers at once (certifier-serve's tests' run), honest, extra and late, with fresh keys.
+  against a stub endpoint that answers at once (certifier-serve's tests' run), honest, extra and late, with fresh keys,
+  on a plan probed from the stub or on another run's plan and calibration (`--plan`: a gate run's, its size class kept).
 * **Members.** One stream each, over all of the run's link-windows: ``honest``; ``tampered``, the honest records with
   window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates still
   the certifier's; with ``--extra``, certifier-serve's ``extra`` run (the shim wrote one event more and the certifier
-  certified it); with ``--late``, its ``late`` run. The prover's references (`head_check.reference_parts`, and the unit's
+  certified it: on a served link its head's fields and signed digest hold, and only the served counts fail); with
+  ``--late``, its ``late`` run. The prover's references (`head_check.reference_parts`, and the unit's
   output word by the gates' references, `LinkWindows.outputs`) say beforehand which windows each member's proofs refuse
   (`expected`).
 * **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_unit` lowered once (the registered unit with each
@@ -166,11 +169,12 @@ def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRec
 
 def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every unit takes an instance, and its verdict bit is 1 exactly
-    where no part fails (on a served link the served counts' check is the egress end's part ``served``); honest, none
-    fails and every window accepts; tampered, window 0's egress head fails its counts (on a served link, the served
-    counts) and its signed digest only; extra, egress heads fail their counts alone, on one window or more; late, egress heads
-    fail their fields and counts on one window or more, and their counts alone where the late frames left a window
-    short (the window before). The ingress heads fail nothing, and every negative member refuses one window or more."""
+    where no part fails (on a served link the served counts' check is the egress end's part ``served``, which stands
+    for the head's counts below, since a served head check has no counts part); honest, none fails and every window
+    accepts; tampered, window 0's egress head fails its counts and its signed digest only; extra, egress heads fail
+    their counts alone, on one window or more; late, egress heads fail their fields and counts on one window or more,
+    and their counts alone where the late frames left a window short (the window before). The ingress heads fail
+    nothing, and every negative member refuses one window or more."""
     xs = rd.windows
     if not xs or any(x.word is None for x in xs) or any(bool(x.word & 1) != (not x.failed["egress"] and not
                                                                             x.failed["ingress"]) for x in xs):
@@ -180,10 +184,11 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     eg = [x.failed["egress"] for x in xs]
     if name == "honest":
         return all(x.expect for x in xs)
+    c = "served" if rd.lw.served else "counts"
     if name == "tampered":
-        return eg[0] == (["signed", "served"] if rd.lw.served else ["counts", "signed"]) and not any(eg[1:])
-    allowed, needed = {"extra": (([], ["counts"]), ["counts"]),
-                       "late": (([], ["counts"], ["fields", "counts"]), ["fields", "counts"])}[name]
+        return sorted(eg[0]) == sorted([c, "signed"]) and not any(eg[1:])
+    allowed, needed = {"extra": (([], [c]), [c]),
+                       "late": (([], [c], ["fields", c]), ["fields", c])}[name]
     return all(f in allowed for f in eg) and needed in eg
 
 
@@ -254,13 +259,16 @@ def _virtual_run(run: Path, plan: dict, report: dict, url: str, upstream: tuple,
 
     publish = cs.CertifyingPublisher(run, setup, Issuer(certifier, session), cs.N2_LINK, threaded=False)
     cs.ar.run_virtual(shim, report, run, upstream, salt=True, publish=publish, after=after,
-                      proxy_args={"challenger_key": challenger.public_key(), "signer": certifier})
+                      proxy_args={"challenger_key": challenger.public_key(), "signer": certifier,
+                                  "served": cs.served_profile(plan)})
 
 
 def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest", "extra", "late"),
-            height: int = 6) -> dict:
+            height: int = 6, plan_of: Path | None = None, profile: str = "planned") -> dict:
     """certifier-serve's run on an injected clock against `_endpoint`, one per strategy under `out`, with fresh LMS keys
-    of `height` in a scratch directory that is removed. Returns the plan."""
+    of `height` in a scratch directory that is removed. The plan is the stub's, probed, on N2's `profile`, or with
+    `plan_of` that run's (its ``plan.json`` and ``calibration.json``: its profile, size class, syncs and requests),
+    served by the stub. Returns the plan."""
     keys = Path(tempfile.mkdtemp(prefix="n2-zk-keys-"))
     challenger = cs.signer(keys / "challenger", height)
     session = secrets.token_bytes(32)
@@ -269,8 +277,11 @@ def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest"
         endpoint = await asyncio.start_server(_endpoint, "127.0.0.1", 0)
         upstream = endpoint.sockets[0].getsockname()[:2]
         url = "http://%s:%d" % upstream
-        probed = await asyncio.to_thread(cs.probe, url, cs.request_body("stub", tokens), 2, clock=lambda: 0.0)
-        report, plan = cs.served_plan(probed, requests)
+        if plan_of is not None:
+            report, plan = (json.loads((plan_of / f).read_text()) for f in ("calibration.json", "plan.json"))
+        else:
+            probed = await asyncio.to_thread(cs.probe, url, cs.request_body("stub", tokens), 2, clock=lambda: 0.0)
+            report, plan = cs.served_plan(probed, requests, profile=profile)
         for strategy in strategies:
             certifier = cs.signer(keys / strategy, height)
             try:
@@ -585,6 +596,9 @@ def main(argv=None) -> int:
     v.add_argument("--out", required=True, type=Path)
     v.add_argument("--requests", type=int, default=40)
     v.add_argument("--tokens", type=int, default=4)
+    v.add_argument("--profile", choices=cs.PROFILES, default=cs.PROFILES[0], help="N2's profile of the probed plan")
+    v.add_argument("--plan", type=Path, help="a run's directory whose plan.json and calibration.json the stub serves, "
+                                             "in place of a probed plan (--requests, --tokens and --profile unused)")
     p = sub.add_parser("prove", help="each link-window's unit proved --zk and decided by N2's verifier of record")
     p.add_argument("--run", required=True, type=Path, help="the honest run's directory")
     p.add_argument("--extra", type=Path, help="certifier-serve's extra run of the same plan")
@@ -601,7 +615,7 @@ def main(argv=None) -> int:
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
     a = ap.parse_args(argv)
     if a.command == "virtual":
-        plan = virtual(a.out, a.requests, a.tokens)
+        plan = virtual(a.out, a.requests, a.tokens, plan_of=a.plan, profile=a.profile)
         log(f"virtual: {plan['windows']} windows, served {plan['served']}, under {a.out}")
         return 0
     a.rounds = tuple(x for x in a.rounds.split(",") if x)

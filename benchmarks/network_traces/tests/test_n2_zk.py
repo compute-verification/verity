@@ -1,10 +1,11 @@
 """n2_zk's link-windows on certifier-serve's runs on an injected clock (`n2_zk.virtual`, a stub endpoint): every honest
 link-window's output word is verdict 1 and deadline 1; window 0's egress head one count off, committed by the prover,
 fails on its counts and its signed digest; the extra run's egress heads fail on their counts alone, the late run's on
-their fields and counts. The verifier's own ``pub`` row, from public fields and the certificates alone, is the prover's,
-in whole u16 words. Each builder `n2_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's
-own gates. The scan of what the verifier received leaves out exactly the witness pieces the public circuit holds.
-Nothing here lowers or proves (`n2_zk.prove` does, on a node)."""
+their fields and counts; on a served plan, the extra run's fail on the served counts alone. The verifier's own ``pub``
+row, from public fields and the certificates alone, is the prover's, in whole u16 words. Each builder `n2_zk.builders`
+attaches, called as C-Flock's lowering calls it, traces to its part's own gates. The scan of what the verifier
+received leaves out exactly the witness pieces the public circuit holds. Nothing here lowers or proves (`n2_zk.prove`
+does, on a node)."""
 
 from __future__ import annotations
 
@@ -50,6 +51,28 @@ def test_each_round_refuses_what_its_references_say(runs):
     e0, t0 = honest.windows[0].opening.records[0].head, runs["tampered"].windows[0].opening.records[0].head
     assert sum(a != b for a, b in zip(e0.counts, t0.counts)) == 1 and sum(t0.counts) == sum(e0.counts) + 1
     assert runs["tampered"].windows[0].certificates == honest.windows[0].certificates
+
+
+@pytest.fixture(scope="module")
+def served(tmp_path_factory):
+    out, again = tmp_path_factory.mktemp("n2zk-served"), tmp_path_factory.mktemp("n2zk-served-again")
+    plan = n2.virtual(out, requests=8, tokens=4, profile="served")
+    replayed = n2.virtual(again, plan_of=out / "honest", strategies=("honest", "extra"))
+    return {"plan": plan, "replayed": replayed, "honest": n2.link_windows(again / "honest"),
+            "tampered": n2.link_windows(again / "honest", edit=n2.one_count), "extra": n2.link_windows(again / "extra")}
+
+
+def test_on_a_served_link_the_extra_run_fails_the_served_counts_alone(served):
+    """certifier-serve's extra run on the served profile (one event more, on time, logged and certified): its egress
+    head's fields and signed digest hold and only the served counts fail, so its verdict 0 is the served part's.
+    Replaying a run's plan (``plan_of``) serves that plan as it is."""
+    assert served["replayed"] == served["plan"] and served["plan"]["occupancy"]["kind"] == "served"
+    assert served["honest"].lw.served is not None
+    for name in ("honest", "tampered", "extra"):
+        assert n2.expected(name, served[name]), name
+    assert [x.failed["egress"] for x in served["extra"].windows][0] == ["served"]
+    assert sorted(served["tampered"].windows[0].failed["egress"]) == ["served", "signed"]
+    assert all(x.word == 0b11 for x in served["honest"].windows)
 
 
 def test_the_verifier_derives_the_provers_public_row(runs):

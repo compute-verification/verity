@@ -6,11 +6,13 @@
 #     --env N2_MEM_GB=96 --env N2_RUNS=n2-runs.tar.gz -- bash benchmarks/network_traces/n2_zk.sh
 # The runs: certifier-serve's honest, extra and late runs, from N2_RUNS (a tarball sent with `--send`, holding honest/,
 # extra/ and late/ as `certifier_serve.py rehearse` writes them) or else made here by `n2_zk.py virtual` (stub
-# endpoint, injected clock).
+# endpoint, injected clock), on N2_PLAN's plan if given.
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_RUNS (the tarball's name under the run's inputs/)
-#      N2_REQUESTS (virtual's --requests)  N2_JOBS (members proved at once, 4 by default)  N2_ROUNDS (n2_zk.py's
-#      --rounds)  N2_DEBUG_CLEAR=1 (each verdict also carries the in-the-clear comparison)  N2_CACHE (the build cache,
-#      kept across runs where writable)  N2_DRY=1 (the link-windows and their references only)
+#      N2_REQUESTS (virtual's --requests)  N2_PLAN (a tarball under inputs/ holding a run's plan.json and
+#      calibration.json, which virtual serves: its --plan)  N2_JOBS (members proved at once, 4 by default)
+#      N2_ROUNDS (n2_zk.py's --rounds)  N2_DEBUG_CLEAR=1 (each verdict also carries the in-the-clear comparison)
+#      N2_CACHE (the build cache, kept across runs where writable)  N2_DRY=1 (the link-windows and their references
+#      only)
 # Kept in $OUT/n2zk: n2_zk's records and logs, the public files and everything the verifier received; never a prover's
 # file (inst-*, prover-instances.bin) nor a circuit (its pin is kept). $OUT/runs: the runs' public files.
 set -uo pipefail
@@ -35,9 +37,16 @@ if [ -n "${N2_RUNS:-}" ]; then
   mkdir -p "$RUNS" && tar -xzf "${RESEARCH_RUN_DIR:?}/inputs/$N2_RUNS" -C "$RUNS" || { log "n2zk: no runs in $N2_RUNS"; exit 7; }
   log "n2zk: runs from $N2_RUNS: $(ls "$RUNS" | tr '\n' ' ')"
 else
-  log "n2zk: virtual runs (requests ${N2_REQUESTS:-40})"
-  "$PY" benchmarks/network_traces/n2_zk.py virtual --out "$RUNS" --requests "${N2_REQUESTS:-40}" 2>&1 | tee -a "$OUT/n2zk.log" \
-    || { log "n2zk: virtual FAILED"; exit 7; }
+  PLAN=
+  if [ -n "${N2_PLAN:-}" ]; then
+    PLAN=$W/plan
+    mkdir -p "$PLAN" && tar -xzf "${RESEARCH_RUN_DIR:?}/inputs/$N2_PLAN" -C "$PLAN" \
+      || { log "n2zk: no plan in $N2_PLAN"; exit 7; }
+  fi
+  log "n2zk: virtual runs, plan ${N2_PLAN:-probed (requests ${N2_REQUESTS:-40})}"
+  "$PY" benchmarks/network_traces/n2_zk.py virtual --out "$RUNS" --requests "${N2_REQUESTS:-40}" \
+    ${PLAN:+--plan "$PLAN"} 2>&1 | tee -a "$OUT/n2zk.log"
+  [ "${PIPESTATUS[0]}" = 0 ] || { log "n2zk: virtual FAILED"; exit 7; }
 fi
 mkdir -p "$OUT/runs"
 (cd "$RUNS" && find . -type f \( -name '*.json' -o -name 'certified.jsonl' \) -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/runs/")
