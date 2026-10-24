@@ -1,7 +1,8 @@
 """``verity bench recursion profile COMMAND``: the recursion pipeline's stages, profiled one by one (README.md).
 
     profile plan   [--K 4096] [--N 2] [--steps S,..] [--repeat 3]   the stages, and the job's launch command
-    profile run    [same] [--mem-gb 64] [--max-min 300] [--dry-run]   one recorded job on vy-nebius-1 (job.sh)
+    profile run    [same] [--mem-gb 64] [--max-min 300] [--dry-run]   one recorded job on vy-nebius-1 (job.sh); --env
+                   [--env KEY=VALUE ...]                              passes 85's own knobs through (LEVELS=L0, ...)
     profile result --dir OUT [--out FILE] [--md FILE]                 the profile from a job's out/ (the job runs it last)
     profile table  RESULT... [--json] [--put]                         the table from results: a profile.json or a run id
                                                                       (its out/profile.json fetched); --put stores the
@@ -48,7 +49,10 @@ def steps(arg: str) -> list[str]:
 
 
 def job_command(a: argparse.Namespace, root: Path) -> list[str]:
-    env = [f"K={a.K}", f"N={a.N}", f"STEPS={','.join(steps(a.steps))}", f"REPEAT={a.repeat}", f"MODES={a.modes}"]
+    bad = [e for e in a.env if not re.fullmatch(r"[A-Z_][A-Z0-9_]*=.*", e)]
+    if bad:
+        raise SystemExit(f"--env: {', '.join(bad)} is not KEY=VALUE")
+    env = [f"K={a.K}", f"N={a.N}", f"STEPS={','.join(steps(a.steps))}", f"REPEAT={a.repeat}", f"MODES={a.modes}", *a.env]
     return ["research", "run", "--queue", "--on", NODE, "--gpu-host", "--project", "verity", "--campaign", "recursion-profile",
             "--source", str(root), "--cwd", "source", "--mem-gb", str(a.mem_gb), "--cpus", str(a.cpus), "--max-min", str(a.max_min),
             "--question", f"recursion profile: 85-rec-reprice's stages at K = {a.K}, N = {a.N}, timed and repeated",
@@ -142,6 +146,8 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--mem-gb", type=int, default=64)
         p.add_argument("--cpus", type=int, default=32)
         p.add_argument("--max-min", type=int, default=300)
+        p.add_argument("--env", action="append", default=[], metavar="KEY=VALUE",
+                       help="passed to job.sh and on to 85 (LEVELS=L0, GPU_MAX_MIN=20, ...); repeatable")
 
     point(sub.add_parser("plan"))
     p = sub.add_parser("run"); point(p); p.add_argument("--dry-run", action="store_true")

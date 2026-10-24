@@ -180,8 +180,12 @@ def prover_row(d: Path, stage: str, step: str, what: str) -> Row:
     rows = [v for _, v in stamped]
     timed = [v for v in rows if not v.get("warm")]
     r = Row(stage, step, what, "gpu")
+    # 85's `again`: "<fn> <name>: lease preempted, try <t>" in the invocation's out/preempted.txt
+    preempted = sum(1 for ln in text(d.parent.parent / "preempted.txt").splitlines() if f" {d.name}: lease preempted" in ln)
     if not timed:
-        r.ok, r.note = False, ("no timed session: " + text(d / "prove.err")[-300:].strip().replace("\n", " ")) if d.exists() else "not run"
+        why = (f"lease preempted {preempted}x, no session finished in any try; " if preempted else "no timed session: ")
+        r.ok, r.note = False, (why + text(d / "prove.err")[-300:].strip().replace("\n", " ")) if d.exists() else "not run"
+        r.extra = {"preempted": preempted}
         return r
     r.wall_s = Stat.of(_num(v.get("prove_total_s", v.get("prove_s"))) for v in timed)
     r.e2e_s = Stat.of(v.get("e2e_s") for v in timed)
@@ -211,7 +215,7 @@ def prover_row(d: Path, stage: str, step: str, what: str) -> Row:
                "serve_verify_s": Stat.of(v.get("verify_s") for v in served[-len(timed):]) if served else None,
                "serve_handle_s": Stat.of(v.get("handle_s") for v in served[-len(timed):]) if served else None,
                "invocation_wall_s": tv["wall_s"] if tv else None, "prover_cpu_s": tv["cpu_s"] if tv else None,
-               "cores_busy_before": text(d / "bgload.txt").strip() or None, "sizes": text(d / "sizes.txt").strip() or None,
+               "cores_busy_before": text(d / "bgload.txt").strip() or None, "preempted": preempted, "sizes": text(d / "sizes.txt").strip() or None,
                "why": [v.get("why") for v in rows if v.get("accepted") is not True][:3],
                "lease": [ln for ln in text(d / "prove.err").splitlines() if ln.startswith("gpu-lease:")][:4]}
     r.extra = {k: (asdict(v) if isinstance(v, Stat) else v) for k, v in r.extra.items()}
@@ -289,7 +293,8 @@ def read(root: Path) -> dict[str, Any]:
                "inner fold": ("vstage/time-fold.txt", "InnerFold.lean as an executable: extra claims and comb")}
         for n in _names(vs, "vstage", r"time-(.+)\.txt"):
             if n not in ("points", "fold", "cap"):
-                rel[f"stage {n}"] = (f"vstage/time-{n}.txt", f"rec_vstage stage of V*'s statement {n}")
+                rel[f"stage {n}"] = (f"vstage/time-{n}.txt", "rec_vstage stage of the verifier's own values alone (no level, no "
+                                     "algebra)" if n == "verifier" else f"rec_vstage stage of V*'s statement {n}")
         rows += tool_rows(vs, "vstage", rel)
     rows += tool_rows(repeats(root, "vcap"), "vcap", {"stage cap": ("vstage/time-cap.txt", "RecCap at every level")})
     for o in repeats(root, "oprove")[:1]:

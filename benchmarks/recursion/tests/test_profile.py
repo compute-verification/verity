@@ -173,6 +173,16 @@ def test_a_step_that_never_ran_is_not_a_row_and_a_failed_prover_says_so(tmp_path
     assert l1["ok"] is False and "FIREWALL-REFUSED" in l1["note"]
 
 
+def test_a_preempted_statement_says_how_often(tmp_path: Path) -> None:
+    o = job(tmp_path)
+    out = o / "steps" / "oprove" / "r1" / "out"
+    (out / "oprove" / "L1-firewall").mkdir()
+    (out / "oprove" / "L1-firewall" / "prove.err").write_text("gpu-lease: GPU 1 (GPU-x) held 2m00s\n")
+    (out / "preempted.txt").write_text("".join(f"loopback L1-firewall: lease preempted, try {t}\n" for t in (1, 2, 3)))
+    l1 = row(RP.read(o), "outer L1")
+    assert l1["ok"] is False and l1["note"].startswith("lease preempted 3x") and l1["extra"]["preempted"] == 3
+
+
 def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
     doc = RP.read(job(tmp_path))
     md = RP.markdown(doc)
@@ -197,6 +207,14 @@ def test_job_command_is_a_gpu_host_job_on_node_1(capsys) -> None:
     assert "--gpus" not in cmd                              # 85 refuses a job holding a lease: each prove leases its own
     assert cmd[cmd.index("--") + 1:][:2] == ["bash", "benchmarks/recursion/job.sh"]
     assert "N=16" in cmd and "STEPS=build,lean" in cmd     # the pipeline's order, whatever order --steps gives
+
+
+def test_env_passes_through_and_must_be_key_value(capsys) -> None:
+    assert RUN.main(["profile", "run", "--dry-run", "--env", "LEVELS=L0", "--env", "GPU_PREEMPTIBLE="]) == 0
+    tail = capsys.readouterr().out.split(" -- ")[1].split()
+    assert tail[-2:] == ["LEVELS=L0", "GPU_PREEMPTIBLE="]
+    with pytest.raises(SystemExit, match="not KEY=VALUE"):
+        RUN.main(["profile", "run", "--dry-run", "--env", "levels"])
 
 
 def test_unknown_step_is_refused() -> None:

@@ -10,9 +10,14 @@
 #      STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean  REPEAT=3 (each CPU step)  WARM=1 RUNS=3 (each GPU step)
 #      MODES=firewall,dev (oprove's prover sides; the last one's sessions are what oreplay and lean read)
 #      LEAN_JOBS=4 (Lean verifies this many V* sessions at once)  FLOCK_WORK=/workspace/jobs/rec-bench
+#      and any of 85's own (LEVELS, GPU_MAX_MIN, GPU_PREEMPTIBLE, ...), passed through
 #      CUDA_TK, WARM_FROM: as 85 takes them (default: proofs' rec-reprice unpack and cargo tree where present, read only)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+# 85's leases are preemptible unless GPU_PREEMPTIBLE is empty: on node 1 a waiter stops one after about 2 min, a lost
+# measurement (85 retries the statement afresh, at most GPU_TRIES times), so the profile's are not; each still ends at
+# GPU_MAX_MIN (85's default 10)
+export GPU_PREEMPTIBLE=${GPU_PREEMPTIBLE-}
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/rec-bench-$$}/out}; mkdir -p "$O"
 export K=${K:-4096} N=${N:-2}; export TAG=${TAG:-bench-k$K-n$N} WARM=${WARM:-1} RUNS=${RUNS:-3}
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/rec-bench}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
