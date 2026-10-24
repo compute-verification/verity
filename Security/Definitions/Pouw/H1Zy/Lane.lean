@@ -27,7 +27,7 @@ position and roots, and its index, a 16-bit word, and returns `ok`. On its primi
 The dequant (`PouwZyDequant_v2`'s word view, `PouwZyDequant_v1`, three float roundings) is the parameter `dqW`, and the
 chain's words the parameter `chain`; everything else is stated here. Their own values are `dequantW`
 (`Definitions.Pouw.H1Zy.Dequant`) and `chainWords` (`Definitions.Pouw.H1Zy.Chain`). The leaf's `PouwH1Tile_v3` form computes z from the
-chain's words instead of EXACT, and is not stated here.
+chain's words instead of EXACT: `laneOkZ` at `laneZ3` (`Definitions.Pouw.H1Zy.Stream`).
 -/
 
 namespace Pouw.H1Zy

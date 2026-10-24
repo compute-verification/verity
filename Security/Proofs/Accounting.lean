@@ -56,6 +56,7 @@ import Proofs.Accounting.TS.Session.Lanes.KnownRead
 import Proofs.Accounting.TS.Session.Lanes.Combine
 import Proofs.Accounting.TS.Session.Lanes.Lane
 import Proofs.Accounting.TS.Session.Lanes.Chain
+import Proofs.Accounting.TS.Session.Lanes.Stream
 import Proofs.Accounting.TS.HeldSound
 import Proofs.Accounting.TS.TileSound
 import Proofs.Accounting.Actual

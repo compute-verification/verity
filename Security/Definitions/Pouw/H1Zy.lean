@@ -2,6 +2,7 @@ import Definitions.Pouw.H1Zy.Chain
 import Definitions.Pouw.H1Zy.Combine
 import Definitions.Pouw.H1Zy.Dequant
 import Definitions.Pouw.H1Zy.Lane
+import Definitions.Pouw.H1Zy.Stream
 
 /-!
 # H1's drawn-leaf statements on words (`verity/core/protocols/pouw/circuit/h1zy.py`)
@@ -16,4 +17,8 @@ dequant's and the chain's words as parameters. Proved in `Proofs.Pouw.H1Zy` to c
 
 `Chain`: a lane's chain words (`chainWords`), `h1zy.lane_partial`'s fold from the seeds, the noise and the fold keys,
 with the spec's SHA-512. `Proofs.Pouw.H1Zy.Vectors` holds both to the Python.
+
+`Stream`: `PouwH1Tile_v3`'s z of a cell (`streamZ`, `h1tile.stream_cell`: its lane's O' and D words recombined, its
+wrap correction and its dither peel) and of a lane's cell from the seed's noise (`laneZ3`), and the lane's `ok` at any
+tile's z (`laneOkZ`). Proved in `Proofs.Pouw.H1Zy` to be EXACT's z at every noise.
 -/

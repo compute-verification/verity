@@ -159,6 +159,9 @@ dequant's and the chain's words as parameters. `Proofs.Pouw.H1Zy` proves it the 
 `Dequant` and `Chain`: those parameters' own values, `h1zy.dequant` (`dequantW`, on `Verity.Fp32`) and
 `h1zy.lane_partial`'s fold (`chainWords`, with the spec's SHA-512), held to the Python by `Proofs.Pouw.H1Zy.Vectors`.
 
+`Stream`: `PouwH1Tile_v3`'s z (`streamZ`, `h1tile.stream_cell`; at a lane's cell from the seed's noise, `laneZ3`) and
+the lane's `ok` at any tile's z (`laneOkZ`). `Proofs.Pouw.H1Zy` proves v3's z EXACT's at every noise.
+
 ## `PearlC`: Pearl-C's Π and the statements about it
 
 Π's shared definitions (`Defs`): the parameters, the E4M3 encoder, the BF16 conversion and the FP32 encoder, the row
