@@ -164,6 +164,7 @@ def _log_inputs(rng, around: tuple[int, ...], n: int) -> np.ndarray:
                            rng.integers(0, 1 << 32, n, dtype=np.uint64)]).astype(np.uint32)
 
 
+@pytest.mark.slow
 def test_nv_logf_agrees_with_its_word_definition() -> None:
     """Around 1 (the result's zero), the binade selector's 0x3F2AAAAB and FLT_MIN (the subnormal rescale), and +inf."""
     target = bind(GB.NvLogf)

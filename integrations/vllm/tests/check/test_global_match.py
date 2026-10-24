@@ -759,6 +759,7 @@ def test_coscheduled_prefill_tgrouped_emission_passes_the_dag_criterion_with_the
     assert r0["within_step"]["permuted_instances"] == 0 and r0["within_step"]["sequence_also_equal"]
 
 
+@pytest.mark.slow
 def test_dag_criterion_negatives_wrong_arrival_swapped_outputs_wiring(memory, tmp_path):
     # wrong declared arrival (the Program says 0, the record ran it at 1) -> G6, whatever the within-step criterion
     gp, oracle = assemble([R0, RX_LATE], tmp_path / "a", tgrouped=True)
@@ -1353,6 +1354,7 @@ def test_a_single_request_constant_s_component_binds_only_in_a_single_request_wo
     assert bad["refusal"] and "S = 32 is the single-request constant" in bad["refusal"] and "3 requests" in bad["refusal"]
 
 
+@pytest.mark.slow
 def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_fields(memory, tmp_path):
     """rev-pm M-0570 (2): GM-01 was blind to the manifest's sampling fields -- seeds swapped or a seed deleted in the manifest (GP-01
     recomposed: digest unchanged, seeds are Inputs) passed G1 by ids/prompts/caps/arrivals. G1 now requires RunHeader.workload.sha256 ==
@@ -2077,6 +2079,7 @@ def test_g6_puts_the_scheduled_state_and_the_lag_row_on_the_record(memory, tmp_p
     assert res["verdict"] == "FAIL" and res["scheduled_live"]["requests"]["r1"]["established"] is False and res["scheduled_live"]["unestablished_steps"] == 3
 
 
+@pytest.mark.slow
 def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is_asked_for_and_labelled(memory, tmp_path):
     """[F-r17-01, rev M-0035] capture/tokens.json is part of the record: absent -> G6 FAILS by name (the output-association legs cannot run);
     tokens_optional=True (CLI --tokens-optional) accepts it LABELLED checks[G6].tokens_json=false -- mechanism/fixture runs only."""

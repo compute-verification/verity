@@ -211,6 +211,7 @@ def _router_rows(rng, n: int, E_: int) -> tuple[np.ndarray, np.ndarray]:
     return x, b
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("E_", [8, 6])
 def test_the_triton_router(E_) -> None:
     """At 8 experts and at 6 (every expert selected), 200 rows of each kind; about 30 s to trace (its MUFU.SQRT and logf)."""

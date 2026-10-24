@@ -12,6 +12,7 @@ REPO = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.skipif(not (REPO / "data" / "logs" / "m1.jsonl.gz").exists(), reason="corpus logs not present")
 
 
+@pytest.mark.slow
 def test_corpus_check_passes():
     rep = golden.check(only=["smollm2-135m-m1"])
     assert rep["status"] == "pass" and rep["n_pass"] == 1, rep

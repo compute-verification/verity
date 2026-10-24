@@ -293,6 +293,7 @@ def test_the_nccl_tree_coordinate_on_every_special_quadruple() -> None:
         _agree(bind(BA.AllReduceNcclTreeCoordinate, WORLD=4, CHAIN=chain), _rows(np.random.default_rng(50 + chain[0]), 3000, 4))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("shot", [1, 2])
 def test_mnnvl_coordinate_on_rows(shot: int) -> None:
     _agree(bind(BA.AllReduceMnnvlCoordinate, WORLD=8, SHOT=shot), _rows(np.random.default_rng(80 + shot), 5000, 8))
@@ -340,6 +341,7 @@ def test_pinned_counts_and_digests(target) -> None:
     assert back.gates == prog.gates and codec.program_digest(codec.encode_program(back)) == digest
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", [bind(BA.AllReduceMnnvl, WORLD=8, N=3, SHOT=1), bind(BA.AllReduceCustom, WORLD=4, SIZE=32, STAGE=2),
                                     bind(BA.AllReduceNcclTree, WORLD=4, SIZE=3, CHAIN=(2, 0, 3, 1))], ids=lambda t: t.id)
 def test_rows_pass_the_word_querys_cut_check(target) -> None:

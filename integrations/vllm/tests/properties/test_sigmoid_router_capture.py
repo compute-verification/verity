@@ -44,6 +44,7 @@ def test_sigmoid_words_is_the_sass_model():
     assert S.sigmoid_words(words).tolist() == [moe_twins.nv_sigmoid_bits(int(w)) for w in words]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("launch", S.LAUNCHES)
 def test_the_twin_is_the_program_at_16_experts(R, launch):
     """`twin` restates the Program at any width with 8 slots; at 16 experts the Program evaluates fast, on rows cut from every kind."""

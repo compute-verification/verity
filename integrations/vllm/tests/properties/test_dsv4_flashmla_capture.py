@@ -130,6 +130,7 @@ def _dequantised(cache: np.ndarray, table: np.ndarray, r: int, positions: np.nda
     return np.concatenate([(x * s).view(torch.int16).numpy().view(np.uint16), rope], axis=-1)
 
 
+@pytest.mark.slow
 def test_the_workspace_is_each_requests_rows_dequantised() -> None:
     """`workspace`, the two gathers' rows, restated in torch: request r's compressed positions 0.. and its last gather_len window
     positions through their block tables, each e4m3 byte as bf16 times its tile's UE8M0 byte shifted into a bf16's exponent, then
@@ -309,6 +310,7 @@ def test_the_edge_words_land_where_they_are_meant_to(tmp_path) -> None:
     assert not X.twin_out(a, 5, metas, nsl)[1][:X.NH].any()
 
 
+@pytest.mark.slow
 def test_the_twin_jobs_take_the_kernel_words(swa) -> None:
     ns, good, bad = swa
     jobs = [j for j in X.case_jobs("swa", good, ns, quick=True) if j["kind"] == "twin"]
@@ -344,6 +346,7 @@ def test_a_bad_planner_word_is_an_error_of_its_case(tmp_path) -> None:
     assert "do not tile" in r["error"]
 
 
+@pytest.mark.slow
 def test_the_prefill_jobs_take_the_gpus_words(pswa) -> None:
     """The workspace job over every word of the four requests' 144 rows and six `FlashMlaGatherRow_v1` references, the twin jobs
     over every output word; a flipped workspace word and a flipped output word each found where they are."""
@@ -410,6 +413,7 @@ def test_the_prefill_edge_words_land_where_they_are_meant_to() -> None:
     assert x["len"] == 1152 and valid.sum() == 1
 
 
+@pytest.mark.slow
 def test_the_prefill_edge_outputs() -> None:
     """The twin on `edge`: tokens 0 and 2 are finite on every head but the NaN-sink one (token 2's bad and past-length rows are
     masked and zero-filled), token 1's rows that overflow or are NaN make every head NaN, token 5 of length 0 is +0 on every

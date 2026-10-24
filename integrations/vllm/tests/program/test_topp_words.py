@@ -88,6 +88,7 @@ def test_the_keep_word_as_word_gates_is_topp_keep(V, S, n, monkeypatch):
         assert n != "halves" or (ref.any() and not ref.all())
 
 
+@pytest.mark.slow
 def test_the_select_at_a_constant_split_count_is_v1_there():
     V, rng = 64, np.random.default_rng(3)
     for i in range(3):
@@ -111,6 +112,7 @@ def test_the_codec_round_trips_it(fam, V, S):
     assert D.gates == P.gates and D.root.id == P.root.id
 
 
+@pytest.mark.slow
 def test_q_word_cuts_it_into_word_units():
     from verity_vllm.query import word as WQ
 

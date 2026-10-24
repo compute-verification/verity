@@ -139,6 +139,7 @@ def test_multimem_coordinate_is_the_kernels_sum(seed: int, tree, ftz: bool) -> N
     assert (got == want).all()
 
 
+@pytest.mark.slow
 def test_multimem_rows_are_the_kernels_sums() -> None:
     """SIZE = 136 at WORLD 8 is 32-element slices, the last owner's empty: each slice at its owner's tree."""
     rng = np.random.default_rng(3)

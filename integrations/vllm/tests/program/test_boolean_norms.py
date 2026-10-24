@@ -407,6 +407,7 @@ def _top(which: str, N: int, EPS: float):
         bind(BN.RMSNormTriton, N=N, EPS=EPS, **BN.TRITON_WORD)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("which", ["cuda", "triton"])
 def test_the_norm_recomputes_nothing_across_its_calls(which) -> None:
     r = members_check(_top(which, 16, 1e-5))

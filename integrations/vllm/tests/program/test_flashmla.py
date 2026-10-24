@@ -162,6 +162,7 @@ def _softmax_with_sink(q, nope, scale, rope, idx, lens, sink, NW: int) -> np.nda
     return (w @ k) / (w.sum(axis=1) + np.exp(sk - m))[:, None]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("seed", range(3))
 def test_the_decode_is_softmax_with_the_sink(seed):
     """A token's 16 heads over the 128-row window and 512 compressed rows, in one split and in the 10 a lone request gets: each

@@ -13,7 +13,7 @@ import pytest
 from verity.ml.circuits.parts import Limits, Part, Unsupported
 from tests.program import fixtures_query as FX
 
-SLOW_FIXTURES = ("attention", "attention_head_t72", "attention_head_v1")
+SLOW_FIXTURES = ("attention", "attention_head", "attention_head_t72", "attention_head_v1")
 
 # ---------------------------------------------------------------------------------------------------------
 # module access (skip, never fail, while a module or a constructor is missing)

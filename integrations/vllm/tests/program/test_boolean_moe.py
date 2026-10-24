@@ -371,6 +371,7 @@ def _selection_scores(rng, n: int, E_: int) -> tuple[np.ndarray, np.ndarray]:
     return s, rng.integers(0, 1 << 32, s.shape, dtype=np.uint64).astype(np.uint32)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
 def test_the_bias_slots(kernel) -> None:
     st = {"E": 6, "TOPK": 3, "SCALE": 2.5, "KERNEL": kernel}
@@ -395,6 +396,7 @@ def _router_rows(E_: int, n: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
     return np.array([x for x, _ in r], np.uint32), np.array([b for _, b in r], np.uint32)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
 def test_the_sigmoid_router(kernel) -> None:
     """`MoeRouterSigmoidBias_v2` at 8 experts and 2 slots on the kernel tests' rows (ties, a deciding bias, the sigmoid's ranges,

@@ -81,6 +81,7 @@ def test_each_new_boolean_leaf_computes_its_word_primitive(word):
     assert bits.name == word.name and bits.version > word.version
 
 
+@pytest.mark.slow
 def test_a_word_primitive_made_on_demand_has_a_boolean_version_made_on_demand():
     c = BB.boolean_version(MP.const(32, 0x3727C5AC))
     assert c.id == "Const32[0x3727c5ac]_v2" and BL.is_boolean(c)

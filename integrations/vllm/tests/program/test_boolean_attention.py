@@ -119,6 +119,7 @@ def _inputs(word, n: int, seed: int) -> list[np.ndarray]:
     return out
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id == SLOW_PIN else t for t in PINNED], ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
     ands, xors, nots, digest = PINS[target.id]
@@ -170,6 +171,7 @@ def test_zero_padding_is_the_zero_bit_broadcast(monkeypatch) -> None:
     assert len(codec.canonical_json(codec.definition_entry(old_head))) > 20 * size[17]
 
 
+@pytest.mark.slow
 def test_a_key_length_adds_no_more_to_the_boolean_descriptor_than_twice_the_word_one() -> None:
     """At Qwen3-0.6B's served statics (`benchmarks/bool_build_cost`'s small case: D = 128, BN = 64, rows of 1 and 65 keys), the
     Definitions a row has one of per key length (`Attention`, `AttentionHead`) or per block width (`AttnBlock`) take at most twice
@@ -200,6 +202,7 @@ def test_fa3_inv_sum_agrees_with_fa3_inv_sum_v1() -> None:
     assert np.array_equal(got, np.asarray(E.evaluate_batch(TR.word_of(target), words)).astype(np.uint64))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", PINNED, ids=lambda t: t.id)
 def test_the_switch_maps_its_word_view_to_it(target) -> None:
     """`boolean_version` of each word chain is the Boolean chain whose word view it is: `Attention_v4` (FA3's per-iteration

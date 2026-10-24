@@ -190,6 +190,7 @@ def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(
     assert [x["step"] for x in v] == [1] and routes_bad(v[0], {q8}, (1, 0)), "off the target a step that commits it fails"
 
 
+@pytest.mark.slow
 def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows(capsys):
     r = AttnRun()
     wrapped, G.fused_norm_rope = G.fused_norm_rope, NORM_ROPE
@@ -205,6 +206,7 @@ def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows(capsys):
     assert routes_bad(v[0], rows, (0, 1))
 
 
+@pytest.mark.slow
 def test_a_prefill_over_a_chunked_context_leaves_its_mha_output_unbound(capsys):
     md = metadata(prefill=True, dense=True)
     md.prefill.chunked_context = types.SimpleNamespace()
@@ -229,6 +231,7 @@ def test_the_arena_estimate_covers_what_each_step_binds(runs):
     assert runs[True].att.extra_step_bytes({}, None)["per_token_bytes"] > runs[False].att.extra_step_bytes({}, None)["per_token_bytes"]
 
 
+@pytest.mark.slow
 def test_install_wraps_each_call_and_uninstall_restores_them():
     model = glm_model()
     src = RS.RouteSource(None, model, CMAP, target=True)

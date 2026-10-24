@@ -10,7 +10,7 @@ from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.parts import Part, n_members
 from tests.program import fixtures_query as FX
 
-SLOW_FIXTURES = ("attention", "attention_head", "attention_head_t72", "attention_head_v1")
+SLOW_FIXTURES = ("attention", "attention_head", "attention_head_t72", "attention_head_v1", "attention_head_v2")
 
 
 @pytest.mark.parametrize("name", FX.FIXTURE_NAMES)

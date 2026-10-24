@@ -66,6 +66,7 @@ def _rows(rep) -> dict:
                      for k, n in enumerate(rep.program.fn.body.nodes)]}
 
 
+@pytest.mark.slow
 def test_unset_and_once_derive_the_same_program_and_per_forward_adds_per_forward():
     _m, unset = _derived(None)
     _m, once = _derived("once")

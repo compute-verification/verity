@@ -36,6 +36,9 @@ from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES
 from verity_vllm.commit.committer.plan_cache import PlanMetas
 from verity_vllm.query.manifest.bind import Binder
 
+#: nearly every test here builds and serves a DeepSeek-V4 stand-in, seconds to minutes each, so the whole module is slow
+pytestmark = pytest.mark.slow
+
 OTHERS = tuple(b for b in RS.BINDERS if b != DS.BINDER)
 TAPS_ = [t for t in CMAP["taps"] if (t.get("commit") or {}).get("binder") == DS.BINDER]
 #: committed name -> (role, layer)
@@ -168,7 +171,6 @@ def runs() -> dict[bool, AttnRun]:
     return out
 
 
-@pytest.mark.slow
 def test_the_source_wraps_every_attention_layer_and_its_globals():
     r = AttnRun()
     home = sys.modules["tests.acquire.dsv4_model"]
@@ -190,7 +192,6 @@ def test_the_source_wraps_every_attention_layer_and_its_globals():
         off.close()
 
 
-@pytest.mark.slow
 def test_every_step_binds_the_map_names_of_its_routes_once(runs, capsys):
     for target, r in runs.items():
         assert r.attn.empty == {NO_C128: compressed(HCA)}, target
@@ -208,7 +209,6 @@ def test_every_step_binds_the_map_names_of_its_routes_once(runs, capsys):
     assert on.attn.stats["unpaired"] == on.attn.stats["layout_refused"] == on.attn.stats["unattributed"] == 0
 
 
-@pytest.mark.slow
 def test_each_bound_value_is_the_value_it_names(runs):
     for r in runs.values():
         for k in range(len(STEPS)):
@@ -268,7 +268,6 @@ def test_a_cache_in_another_layout_is_not_bound_and_the_step_fails_by_its_name(c
         r.close()
 
 
-@pytest.mark.slow
 def test_the_top_k_buffer_is_flushed_after_each_csa_layer(runs):
     r = runs[True]
     topk = [j for j, (what, n) in enumerate(r.log) if what == "acquire" and n.endswith(("/topk", "/topk_short"))]
@@ -297,7 +296,6 @@ def committed(r: AttnRun, capsys) -> dict[int, list[str]]:
     return {k: map_names(capsys, routes, phase, binders=OTHERS) + r.names(k) for k, (_md, _f, routes, phase) in enumerate(STEPS)}
 
 
-@pytest.mark.slow
 def test_an_hca_decode_step_with_no_compressed_row_commits_without_its_nc128_names(runs, capsys):
     """The decode at positions 0..3 crosses no 128 boundary: the positions it committed give NC128 = 0, so the identity check holds
     it to the map's names less every HCA layer's compressed rows, which its compressors did not write, and admits it."""
@@ -335,7 +333,6 @@ def test_a_step_the_source_found_empty_where_the_positions_give_rows_fails(capsy
         r.close()
 
 
-@pytest.mark.slow
 def test_a_step_with_rows_the_positions_give_none_for_fails(runs, capsys):
     """The reverse: a name the step's positions give no row for is refused when present, whether the source bound it (its record
     then differs from the positions' too) or the commit holds it beside the source's record; and a step whose positions were not
@@ -360,7 +357,6 @@ def test_a_step_with_rows_the_positions_give_none_for_fails(runs, capsys):
         r.attn.positions[0] = saved
 
 
-@pytest.mark.slow
 def test_every_compressed_rows_name_holds_its_positions_row_count_and_the_prefill_commits(runs, capsys):
     """Each step binds under every compressed-rows name the rows its committed positions give (`CM.row_counts`), the rows the
     pinned kernels write: the prefill at 108..127 five CSA rows and one HCA row.  The identity check reads each name's committed
@@ -397,7 +393,6 @@ def test_a_prefill_one_row_short_under_its_compressed_rows_names_fails_by_layer_
         r.close()
 
 
-@pytest.mark.slow
 def test_a_compressed_rows_name_one_row_extra_or_with_no_leading_dimension_fails(runs, capsys):
     """A commit that holds one row more than the prefill's positions give under a CSA and an HCA name fails under
     `ROW_COUNT_DIFFERS`, by layer and name, (committed, count); and the commit side fails closed: `split_step_names` given no
@@ -420,7 +415,6 @@ def test_a_compressed_rows_name_one_row_extra_or_with_no_leading_dimension_fails
     assert r.src.split_step_names(Counter(steps[0]), 9, True)[1] == {}, "a padding-only step is held to step 0's set of names only"
 
 
-@pytest.mark.slow
 def test_a_chunked_prefill_whose_first_chunk_ends_mid_window_holds_the_rows_the_kernels_write(capsys):
     """A 158-token prefill in chunks within the stand-in's 32-token batch, positions 0..29, then 30..61, 62..93, 94..125 and
     126..157: the first ends mid-window of both ratios, so every later chunk starts on compressor state the one before left, which
@@ -534,7 +528,6 @@ def test_the_source_declares_the_ports_of_the_calls_it_binds_and_claims_their_ca
     assert DS.BINDER in taps.attached(man) and CB.unattached(man, taps.attached(man)) == []
 
 
-@pytest.mark.slow
 def test_a_layer_s_names_bind_the_identities_of_record(runs):
     """Layer 2's prefill commits bound against its rows as the manifest of record spells them (a Call of the attention's body at
     `<attn>/<fx node>`, a hinted value at `<attn>`): each row binds once, and the rest of what the layer commits is an extra."""

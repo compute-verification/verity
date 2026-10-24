@@ -21,6 +21,7 @@ def resolved():
     return header, results, roots
 
 
+@pytest.mark.slow
 def test_header_matches_profile(resolved):
     header, results, roots = resolved
     assert header is not None

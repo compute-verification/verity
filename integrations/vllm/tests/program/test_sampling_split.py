@@ -50,8 +50,8 @@ SERVED_VS = ((128256, 16), (128256, 32))
 #: Boolean Definitions whose served sizes take seconds each to trace: pinned at one served V
 ONE_SERVED_V = ("GumbelSelectF32_v2",)
 #: the pins that take over 5 s to trace: the lane's rounds 8-9, the uniform and the logs at circuit-check's statics, the noise
-#: group, and top-p's keep word and token select at the served (V, S) pairs
-SLOW_TRACE = ("GumbelLaneTail_v1", "GumbelNoiseGroup_v1{G=1}", *(f"{fam}{{V={v},S={s}}}" for fam in ("TopPKeepWord_v1", "GumbelTopPTokenSelect_v2") for v, s in SERVED_VS))
+#: group, NvLogf, the select at a served V, and top-p's keep word and token select at the served (V, S) pairs
+SLOW_TRACE = ("GumbelLaneTail_v1", "GumbelNoiseGroup_v1{G=1}", "NvLogf_v3", "GumbelSelectF32_v2{V=128256}", *(f"{fam}{{V={v},S={s}}}" for fam in ("TopPKeepWord_v1", "GumbelTopPTokenSelect_v2") for v, s in SERVED_VS))
 
 
 # --- the family's Definitions ------------------------------------------------------------------------------------------------
