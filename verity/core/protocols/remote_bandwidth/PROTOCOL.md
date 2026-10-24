@@ -1207,10 +1207,11 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of
   one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ in \(U_t\), and its draws are
   distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
-  size: `Accounting.Guarantees.Remote.PooledDraw` states it, on a model of the draw (`Accounting.Remote.Draw`, each
-  window's openings a uniform subset at its own size from a coin released after its roots), for windows the prover
-  sizes after the earlier windows' openings; that `pooled`'s greedy order reaches the bound's supremum is not in the
-  Lean. What this code supplies is the schedule (each window's challenge released
+  size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed draw (`Accounting.Remote.Draw`: `Key.subset`
+  on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each draw's first
+  word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, at δ plus
+  \(\sum_t s_t/2^{64}\) (a rejected first word) plus each window's PRF advantage against a window test, C3's term;
+  that `pooled`'s greedy order reaches the bound's supremum is not in the Lean. What this code supplies is the schedule (each window's challenge released
   at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile a receipt under a
   registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and the profile at δ.
   The chain's ordering is a random-oracle argument over a prover of bounded queries, which the statements must say.

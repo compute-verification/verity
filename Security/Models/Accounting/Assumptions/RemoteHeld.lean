@@ -30,9 +30,10 @@ completing.
   `timing.sketch_failure`).
 * `LiveCoins W δ`: except with probability `δ`, the credited passes' wrong receipts are at most `W`: each window's
   openings, from a live coin released after its roots, are uniform over its receipts, and pooled over the session they
-  bound the wrong ones (`audit.pooled`). It is derived from a model of the opening draw (`Accounting.Remote.Draw`) for
+  bound the wrong ones (`audit.pooled`). It is derived from the deployed opening draw (`Accounting.Remote.Draw`) for
   every `W` at least the record's pooled bound (`Accounting.Guarantees.Remote.LiveCoinsDrawn`), under the draw's own
-  premises (`Accounting.Remote.Draw.Assumptions`).
+  premises (`Accounting.Remote.Draw.Assumptions`), at `δ` plus the sampler's rejections plus the coin function's
+  advantage.
 -/
 
 namespace Accounting.Remote.Held.Assumptions
