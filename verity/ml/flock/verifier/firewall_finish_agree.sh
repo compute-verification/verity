@@ -3,8 +3,8 @@
 # FC_HOST_WITNESS=1, through the Lean session loop of this tree, whose finish reads each table's level 0 from the loop, draws
 # each rep's salts for levels ≥ 1 and holds the opening's and the inner proof's rounds itself) that dumps each table's roots
 # and requests and each rep's request and Lean proof file (FC_FINISH_DUMP), then `flock-firewall finish` on the requests;
-# the session's verifier and the Lean verifier (`flock-verify verify --zk`) on the session must both accept, every rep
-# passing. Run from the source tree's root:
+# the session's verifier must accept, every rep passing, and the Lean verifier (`flock-verify verify --zk`) pass every check
+# (refused only for the tile's want of a Program). Run from the source tree's root:
 #   research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'out/*' --cpus 16 --mem-gb 48 \
 #     -- bash verity/ml/flock/verifier/firewall_finish_agree.sh
 # Every round in a device round's place is the loop's own (`Flock.Firewall.Frames`: `Skeleton.rounds`, then `Drive.openStep`).
@@ -73,10 +73,13 @@ live=${PIPESTATUS[0]}
 VARGS=(verify --zk --circuit "$D/circuit.txt" --statement verity/flock-circuit --public "$D/pub.bin" --session "$S")
 [ -e "$D/partition.json" ] && VARGS+=(--partition "$D/partition.json")
 "$LEAN" "${VARGS[@]}" > "$O/lean-verify.out" 2> "$O/lean-verify.err"
+# a hidden_zk tile is no Program's, so the Lean verifier refuses its session for want of one (ProvedScope.NO_PROGRAM) once
+# every check has passed: that refusal alone passes here, as agree.py compares it
 "$PY" -c "import json, sys; v = [json.loads(l[8:]) for l in open(sys.argv[1]) if l.startswith('VERDICT ')]; \
-sys.exit(0 if v and v[0]['accepted'] else 1)" "$O/lean-verify.out"
+sys.exit(0 if v and (v[0]['accepted'] or v[0]['why'].startswith(sys.argv[2])) else 1)" "$O/lean-verify.out" \
+  "refused: a session without the verifier's program (--program)"
 lean=$?
 log "the session's verdict: $([ "$live" = 0 ] && echo ACCEPT || echo "NOT accepted"); the Lean verifier's: \
-$([ $lean = 0 ] && echo ACCEPT || echo "REJECT $(grep '^VERDICT ' "$O/lean-verify.out" | cut -c1-300)")"
+$([ $lean = 0 ] && echo "every check passed" || echo "REJECT") $(grep '^VERDICT ' "$O/lean-verify.out" | cut -c1-300)"
 [ "$role" = h1 ] || { [ "$live" = 0 ] && [ $lean = 0 ]; } || rc=1
 exit $rc

@@ -891,10 +891,13 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
         [(f"a_k{k}_{i}", a, lambda t, i=i: at + r * (t // per) + i) for i in range(r)]
         + [(f"b_k{k}_{j}", b, lambda t, j=j: b0 + c * (t % per) + j) for j in range(c)]
         + [("zy", zy, lambda t: t)] + ([(RECEIPT_PORT, rc, lambda t: t)] if rc in rows_of else []))
+    params = {f"{x}_k{k}_{i}": {G.PARAM_KEY: f"{x}_k{k}" if n == 1 else f"{x}_k{k}[{i}]"}
+              for x, n in (("a", r), ("b", c)) for i in range(n)}
     out = {}
     for port, v, row in ports:
         leaves, words = rows_of[v]
-        out[port] = {"value": v, "root": roots[v][0], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
+        out[port] = {**params.get(port, {}), "value": v, "root": roots[v][0], "leaves": leaves, "words": words,
+                     "word_bits": G.WORD_BITS,
                      "domain": G.domain(program, v, words, leaves,
                                         window=None if is_held(v) else window).domain_id.hex(),
                      **G.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, [row(t) for t in range(size)])}
