@@ -33,6 +33,9 @@ class Arm:
     #: a served variant's own checkpoint (`presets.ArmSettings`), `model` at `revision`; None loads the preset's
     model: str | None = None
     revision: str | None = None
+    #: an experimental arm's name for the engine its own ``engine_overrides`` build (its ``engine_label``), recorded in
+    #: its identity only: it never changes how the harness builds the engine, unlike ``execution``
+    engine_label: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -115,6 +118,7 @@ def experimental_arm(spec: str) -> Arm:
         experimental=True,
         resident=bool(get("resident", True)),
         execution=execution,
+        engine_label=get("engine_label") if isinstance(get("engine_label"), str) else None,
     )
 
 
