@@ -733,6 +733,17 @@ finished request, no request twice in a step, and exactly `output_len` kept outp
   which only the replay knows: matching them takes a second sort, by position, and up to five releases can end in one
   block.
 
+**Under advice v1 this isn't what the compile unit proves.** At 8.7 × 10^10 ANDs for a 60 s window's 10.6 Mbit, v0's
+validity is too costly to be the compile unit's proof. ENC-REPLAY replays vLLM's scheduler exactly on every corpus trace
+(#3555). ENC-DERIVED's advice v1 is what the certified record, the replay and the derived fields leave, a residual of a
+few hundred bits a window coded prefix-free, and `v1.decode(bytes, certified record)` gives I1 v0. So the compile unit
+takes v1 and produces v0 by replay, and most of v0's validity holds by construction. The three deferred rules are then:
+- unique ids are certified, by the warden's admission order and the request records;
+- a source's KV is ENC-DERIVED's canonical source rule, checked against the tokens;
+- release order is the warden's fixed schedule.
+
+`AdviceCheck` stays as v0's reference check, and as the fallback for advice that comes without a replay.
+
 **The circuit**, three stages:
 1. `AdviceParse` scans the bits five at a time through a bit-serial parser. Its state is the field being read, its bits
    left and value so far, the header's counts and widths, the counters of the records left, and the in-stream checks.
