@@ -14,6 +14,9 @@
 #                                                      and deferred-a), into $OUT/stamps.json
 #   HOST    1 (default 0)                              glm53_profile.py host (a call's host time and its cProfile, at m 16
 #                                                      and 64, SCHEDULES' arms; GRAPHS=1: --graphs too), into $OUT/host[-graphs].json
+#   LANES   SCHEDULE ... (default unset)               glm53_profile.py run under nsys with graphs' nodes traced, a schedule
+#                                                      at a time (12 calls at m 16 and 64 at LANES_SHAPES, default 512:6144
+#                                                      4096:6144; GRAPHS=1: --graphs), into $OUT/lanes/SCHEDULE
 #   PASSES  SCHEDULE (default unset)                   glm53_passes.py capture --schedule SCHEDULE (every in-domain shape;
 #                                                      GRAPHS=1: --graphs), in scratch
 #   TILES   N:K ... (default 512:6144 3072:6144 6144:1536)  glm53_passes.py capture --shapes N:K, a shape at a time, in scratch
@@ -24,7 +27,8 @@
 # 8 of the VM's 16 CPUs, which a GPU session beside them shares), each TILES shape's passes' scalar replay (glm53_passes.py verify without
 # --fast: every drawn tile on the reference chain; their JSON and manifests into $OUT/tiles/NxK), the profile's SQLite export
 # and report, and the grouped passes' replay (--fast).  VERITY_BENCH_VENV and
-# CUDA as h200.sh.  Every step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.
+# CUDA as h200.sh.  LANES' exports and lanes reports (glm53_profile.py lanes) run after the lease too, under nice.  Every
+# step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/pouw/pearl_c_sm90
@@ -33,9 +37,9 @@ PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
 TIMING=${TIMING-2624:6144} TILES=${TILES-512:6144 3072:6144 6144:1536} PROFILE=${PROFILE:-1} GROUPED=${GROUPED:-0}
 SCHEDULES=${SCHEDULES:-serial} TIMING_M=${TIMING_M:-} GRAPHS=${GRAPHS:-} STAMPS=${STAMPS:-0} PASSES=${PASSES:-}
-HOST=${HOST:-0}
+HOST=${HOST:-0} LANES=${LANES:-} LANES_SHAPES=${LANES_SHAPES:-512:6144 4096:6144}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
-export O D PY S TIMING TILES PROFILE GROUPED SCHEDULES TIMING_M GRAPHS STAMPS PASSES HOST
+export O D PY S TIMING TILES PROFILE GROUPED SCHEDULES TIMING_M GRAPHS STAMPS PASSES HOST LANES LANES_SHAPES
 : > "$O/rc.txt"
 mkdir -p "$S/ship" && tar -C "$S/ship" -xf "$IN/ship.tar" && (cd "$S/ship" && sha256sum -c --quiet MANIFEST.sha256)
 echo "ship rc $?" >> "$O/rc.txt"
@@ -69,6 +73,14 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
       echo "host$g rc $?" >> "$O/rc.txt"
     done
   fi
+  for sc in $LANES; do
+    mkdir -p "$O/lanes/$sc"
+    # shellcheck disable=SC2086
+    nsys profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none --force-overwrite true -o "$O/lanes/$sc/prof" \
+      "$PY" "$D/glm53_profile.py" run --schedule "$sc" ${GRAPHS:+--graphs} --calls 12 --shapes $LANES_SHAPES --m 16 64 \
+      > "$O/lanes/$sc/run.log" 2>&1
+    echo "lanes $sc rc $?" >> "$O/rc.txt"
+  done
   if [ -n "$PASSES" ]; then
     "$PY" "$D/glm53_passes.py" capture --out "$S/passes" --schedule "$PASSES" ${GRAPHS:+--graphs} > "$O/capture.log" 2>&1
     echo "capture $PASSES rc $?" >> "$O/rc.txt"
@@ -114,6 +126,13 @@ if [ -f "$O/profile/prof.nsys-rep" ]; then
     "$PY" "$D/glm53_profile.py" report "$S/prof.sqlite" --out "$O/profile/profile.json" > "$O/profile/report.txt" 2>&1
   echo "profile report rc $?" >> "$O/rc.txt"
 fi
+for r in "$O"/lanes/*/prof.nsys-rep; do
+  [ -f "$r" ] || continue
+  l=$(dirname "$r"); sc=$(basename "$l")
+  nice -n 19 nsys export -t sqlite --force-overwrite true -o "$S/lanes-$sc.sqlite" "$r" > "$l/export.log" 2>&1 &&
+    nice -n 19 "$PY" "$D/glm53_profile.py" lanes "$S/lanes-$sc.sqlite" --out "$l/lanes.json" > "$l/lanes.txt" 2>&1
+  echo "lanes report $sc rc $?" >> "$O/rc.txt"
+done
 for c in "$S"/grouped/*/capture.json; do
   [ -f "$c" ] || continue
   sh=$(basename "$(dirname "$c")")
@@ -127,4 +146,5 @@ grep -E "slowdown|no stock" "$O"/timing*.log 2>/dev/null
 tail -n 40 "$O/stamps.log" "$O"/host*.log "$O/capture.log" "$O/verify.log" "$O/full.log" 2>/dev/null
 tail -n 8 "$O"/tiles-*.log "$O/grouped.log" 2>/dev/null
 head -60 "$O/profile/report.txt" 2>/dev/null
+grep -hE "period|^  [a-z]" "$O"/lanes/*/lanes.txt 2>/dev/null
 ! grep -qv " rc 0$" "$O/rc.txt"

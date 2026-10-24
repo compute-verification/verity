@@ -95,7 +95,7 @@ def test_the_profile_gives_each_launch_to_the_step_that_launched_it():
             (t, 105, 6000, 6100, "memcpy", "memcpy"), (t, 115, 7000, 9000, "kernel", "pd_commit_851"),
             (t, 145, 9000, 10000, "kernel", "s512_tile_leaves"), (t, 250, 20000, 21000, "kernel", "stray"),
             (t + 1, 15, 21000, 22000, "kernel", "other thread"), (t, 315, 30000, 32000, "kernel", "pd_commit_851")]
-    out = P.report(sorted(ranges), acts)
+    out = P.report(sorted(ranges), [(*a, 7) for a in acts])
     assert set(out) == {label}
     r, steps = out[label], out[label]["steps"]
     assert r["calls"] == 2 and r["host_wall_us"] == 0.1 and r["pass_end_host_us"] == 0.4
@@ -105,6 +105,34 @@ def test_the_profile_gives_each_launch_to_the_step_that_launched_it():
     assert round(steps["host other"]["host_us"], 9) == 0.05 and steps["host screen"]["host_us"] == 0.01
     assert r["gpu_busy_us"] == 3.85 and r["gpu_span_us_per_call"] == 4.5 and r["solo_gpu_span_us"] == 2.0
     assert (r["hash_decode"], r["hash_fast"], r["fallbacks"]) == (["pd_commit_851"], [], ["s512_tile_leaves"])
+
+
+def test_the_lanes_report_gives_each_graph_node_to_its_launchs_call_and_each_stream_its_lane():
+    """glm53_profile's lanes: a graph's nodes go to the call whose range their launch is in, the stream that runs pd_commit
+    is the main lane and those that run pd_tiles the side lanes, numbered in their order; the period is a call's first
+    start to the next's, and each lane's start, span, busy and idle times are over the steady calls (all but the first and
+    the last), its idle time since the call before's last activity on the same lane."""
+    spec = importlib.util.spec_from_file_location("pearl_c_sm90_glm53_profile", HERE / "glm53_profile.py")
+    P = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(P)
+    t, label = 7, "4096:6144 m64 hash"
+    ranges = [(t, 100 * c, 100 * c + 50, f"call {label} #{c}") for c in range(4)]
+    acts = []
+    for c in range(4):                      # main on stream 5; side lanes 9 then 11; 10 µs a call apart
+        at, side = 10_000 * c, (9, 11)[c % 2]
+        acts += [(t, 100 * c + 1, at, at + 4000, "kernel", "pd_commit_979", 5),
+                 (t, 100 * c + 1, at + 4000, at + 9000, "kernel", "gemm_pearlc_d", 5),
+                 (t, 100 * c + 1, at + 4500, at + 6000, "kernel", "pd_tree_979", side),
+                 (t, 100 * c + 1, at + 9000, at + 15000, "kernel", "pd_tiles_979", side)]
+    acts.append((t, 450, 0, 1, "kernel", "stray", 5))
+    r = P.lanes(sorted(ranges), acts)[label]
+    assert r["calls"] == 4 and r["period_us"] == 10.0 and r["periods_us"] == [10.0] * 3
+    assert r["lanes"]["main"] == {"start_us": 0.0, "span_us": 9.0, "busy_us": 9.0, "idle_before_us": 1.0}
+    assert r["lanes"]["side0"] == {"start_us": 4.5, "span_us": 10.5, "busy_us": 7.5}
+    assert r["lanes"]["side1"] == {"start_us": 4.5, "span_us": 10.5, "busy_us": 7.5}
+    assert r["kernels"]["side0 pd_tree_979"] == {"count": 0.5, "mean_us": 1.5}
+    assert [(a["lane"], a["name"]) for a in r["timeline"]] == [
+        ("main", "pd_commit_979"), ("main", "gemm_pearlc_d"), ("side0", "pd_tree_979"), ("side0", "pd_tiles_979")]
 
 
 def test_the_stamps_give_each_phase_since_its_ctas_start_and_the_tail_since_the_first_start():
