@@ -84,6 +84,11 @@ class Capped:
         return hashlib.sha512(canonical_json({"name": self.name, "cap_bits": self.cap_bits,
                                               "compiler": {"name": str(self.inner.name), "digest": self.inner.digest}})).hexdigest()
 
+    @property
+    def transfer_gates(self) -> tuple[str, ...]:
+        """The templates the inner compiler lists as holding transfer gates (`advice_windows`), which its digest covers."""
+        return tuple(self.inner.transfer_gates)
+
     def load(self, rank: int, world: int, requests: Any) -> Any:
         return self.inner.load(rank, world, requests)
 
