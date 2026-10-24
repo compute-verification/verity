@@ -420,17 +420,17 @@ sound one.
   hidden position (`NetworkHidingRead{1024, DT}`, DT = log2(R_max·C)) and its column by a 32-way mux (`IoTieColumn`,
   992 ANDs). With F ≥ 32 and R_max = 2^(D − log2 F), the most requests the window's tree can hold, egress frame k's
   row and column are k's own bits, so the position is wiring; the rehearsal's F = 16 needs a small adder. The port
-  must equal the Commit:
-  its prompt slots `c00.input/ids`, its output slots `runner.sampler/sampled_token_ids` (int32 [num_reqs, 1] a step)
-  of the steps that served request g. That tie is compute's, in zero knowledge what `check/commit_tokens.py` does in
-  the clear by identity (step, op path, output member, invocation), and its share adds to this unit's.
+  must equal the Commit: its prompt slots `c00.input/ids`, its output slots `runner.sampler/sampled_token_ids` (int32
+  [num_reqs, 1] a step) of the steps that served request g. That tie is compute's, in zero knowledge what
+  `check/commit_tokens.py` does in the clear by identity (step, op path, output member, invocation), and its share adds
+  to this unit's.
 - **Variant H, the step rows directly.** The tie reads a committed token index at (g, s) for its step and offset, then
   the `rows-sha512` step row's 4,096-byte chunk that holds the id: about 10.4M ANDs more a draw than P, with no second
   unit.
 
 **The draw and the unit.**
 - **Selection `All`** over a link's windows, one unit per link-window and side, `NetworkIoTie_v1{SIDE, L, T, B, D, K,
-  F, FIN, OWN, P, DT, C}`, with K draw slots. Each slot is one 64-bit live coin u_i, drawn by the challenger after the
+  FOUT, FIN, OWN, P, C}` (FOUT is F, as in `served`), with K draw slots. Each slot is one 64-bit live coin u_i, drawn by the challenger after the
   link-window's N2 registration and the port's. The circuit takes frame k_i = ⌊u_i·N / 2^64⌋ with N from the head, a
   bias of at most N / 2^64 a draw. A window with N = 0, or OWN frames only on ingress, accepts.
 - **Public:** N2's `certificates` root and domain, the port's root and domain, the K coins and the statics.
@@ -458,7 +458,7 @@ beyond the committed ids, at δ.
 
 **Cost a draw** in ANDs, by part. The rehearsal is L = 6, T = 60, r = 98 (D = 13), with a port of R_max = 119 requests
 of P ≤ 48 and F = 16 (DT = 8). Served is `SERVED`'s shape, L = 9, T = 600, r = 1,686 (D = 20), with a port of R_max
-= 987 requests of P = 2,048 and F = 1,024 (DT = 17). B = 4,096 at both ends.
+= 1,024 requests of P = 2,048 and F = 1,024 (C = 128, DT = 17). B = 4,096 at both ends.
 
 | Part | Rehearsal | Served | From |
 |---|---|---|---|
@@ -506,9 +506,9 @@ head's opening inside the unit and the K draws' AND, and the ingress side (`IoTi
 - The ε form the integrity profile takes: the sum over windows, or the share of tokens on near-equal windows.
 - An egress B of 256 while ingress keeps 4,096.
 
-What this establishes, once built: on every accepted link-window, the wrong share of drawn positions is the stated ε
-at δ, so the bytes the user receives are `event(id)` of the committed ids, and its prompts the committed inputs, at
-that share; FIXLEN and the request-major order are checked at the draws. What it doesn't: the port's agreement with
+What this establishes, once built: on a link whose every window is accepted, the share of positions whose frame isn't
+`event(id)` of the committed id is below the stated ε at δ, and on ingress the share of prompt fields that aren't the
+committed inputs; FIXLEN and the request-major order are checked at the draws. What it doesn't: the port's agreement with
 the step rows (compute's, in variant P), any frame not drawn, and anything about the text a client shows beyond the
 public tokenizer's decode.
 
