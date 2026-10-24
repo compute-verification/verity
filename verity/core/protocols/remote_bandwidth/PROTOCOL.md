@@ -1189,11 +1189,11 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   its file's bytes (`pinOf`, `modelPin`), `checkpoint_sha512`, the payload salts, the expected payload root from the
   weights blocks' digests (`expectedRoot`) and `Binding.hold`'s decision (`hold`). Reading the files stays Python only:
   the pin's bytes, every pinned file's SHA-512 (`check`), the safetensors headers and config.json, the arena's layout
-  from them (`tensors`, `arena`) and the weights blocks' digests (`weight_digests`). The verifier still runs only the
-  Python `Binding`, so `bound` rests on it until the verifier asks the Lean's process too: the pin's bytes and role at
-  startup (`modelPin`), the weights digests, and each hello's decision (`hold`), a disagreement refusing the session as
-  the registry's does. The Lean's root is one thread over the whole tree, where `expected_root` spreads subtrees over
-  worker processes, so a whole node's store needs the Lean's root per subtree first.
+  from them (`tensors`, `arena`) and the weights blocks' digests (`weight_digests`). The verifier's Lean process
+  decides `bound`: it takes the pin's bytes and role and the weights digests at startup (`bind`: `modelPin`, then the
+  store's shape) and decides each hello (`hold`), `Binding` beside it as the reference, a disagreement refusing the
+  hello as the registry's does; the gate line credits `bound` only where the Lean held the root. The Lean's root is
+  per subtree of 2^16 leaves, the subtrees on `--layout-workers` threads, as `expected_root`'s are over processes.
 
 ## 9. Why the passes are chained
 

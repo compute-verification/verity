@@ -45,7 +45,8 @@ the auditor's.
 - *bound*: the registered store is the model's (`bound_check`, the run's, so every session's): the verifier bound it
   (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose payload root isn't that of the store the
   pinned checkpoint lays out (`remote_bandwidth.store`, in the tree *credited* names, so the period's circuit commits to
-  the code that decided it), the binding's root is the registration's, and its model, name and
+  the code that decided it), the Lean verifier deciding it (`hold`, the binding's `lean`), the binding's root is the
+  registration's, and its model, name and
   checkpoint_sha512, is the one the audit's period signs (its open's `model`), or with no period's, `--model-pin`'s.
   With neither, no session is bound.
 
@@ -194,11 +195,11 @@ def shares(session: dict, registration: dict, host_bytes: int, ingress: tuple[fl
 def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     """Whether the run's registered store is `model`'s ({name, checkpoint_sha512}, from `source`): the verifier's
     binding (verifier.json's `binding`, `remote_bandwidth.store.Binding.record`) held the hello's payload root to the root of the
-    store the pinned checkpoint lays out under the verifier's payload key, that root is the registration's, and the
-    binding's model is `model`."""
+    store the pinned checkpoint lays out under the verifier's payload key, the Lean verifier deciding it (`lean`, its
+    `hold`'s answer: bound, at that root), that root is the registration's, and the binding's model is `model`."""
     b, root = v.get("binding"), (v.get("registration") or {}).get("payload_root")
     out = {"model": model, "source": source, "binding": None if b is None else {
-        k: b.get(k) for k in ("name", "checkpoint_sha512", "payload_root", "expected_root", "bound")}}
+        k: b.get(k) for k in ("name", "checkpoint_sha512", "payload_root", "expected_root", "bound", "lean")}}
     if model is None:
         why = "no model to bind the store to: the audit's period signs none and no --model-pin names one"
     elif b is None:
@@ -208,6 +209,9 @@ def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
         why = f"the verifier didn't hold the hello's payload root to {b.get('name')}'s store"
     elif b.get("expected_root") != root or b.get("payload_root") != root:
         why = "the binding's payload root is not the registration's"
+    elif not isinstance(lean := b.get("lean"), dict) or "regions" not in lean or lean.get("expected_root") != root:
+        why = ("the Lean verifier didn't hold the hello's payload root to the store (`hold`): the binding is "
+               "store.py's alone")
     elif (b.get("name"), b.get("checkpoint_sha512")) != (model["name"], model["checkpoint_sha512"]):
         why = (f"the verifier bound the store to {b.get('name')} ({str(b.get('checkpoint_sha512'))[:16]}...), not "
                f"{model['name']} ({model['checkpoint_sha512'][:16]}...)")

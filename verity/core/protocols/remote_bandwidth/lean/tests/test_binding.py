@@ -7,7 +7,11 @@ config.json or no .safetensors file, another model's pin); canonical JSON and `c
 the expected root from the weights blocks' digests, held also to `audit.payload_tree` over the store's payloads; and
 `Binding.hold` on hellos of the pinned model's store and on each refusal (a store short of the arenas, another
 layout, a malformed node, the root under another key, of another checkpoint, of another size, or not a root), with
-the expected root its record keeps. The verifier runs the Python (`README.md`), so the Python is of record here."""
+the expected root its record keeps; and `binding`, the binding as the verifier's Lean process starts it (`bind`: the
+pin from its file's bytes, then the store's shape) and holds each hello to it (`hold`), on the honest binding and each
+refusal. The verifier decides `bound` with the Lean's `bind` and `hold` (`benchmarks/remote_session/verifier.py`), so
+the Lean is of record for the binding, the hello's decision and the expected root; the pin's other readers
+(`read_pin`) are Python's."""
 
 from __future__ import annotations
 
@@ -31,9 +35,12 @@ NODE = b"node-under-test"
 KEY = bytes(range(32))
 
 
+OF_RECORD = {"binding": "lean", "hold": "lean", "expected_root": "lean"}
+
+
 def port(fn, reference, inputs=st.nothing(), need_rejects: bool = True) -> D.Port:
-    return D.Port(M.EXE, fn, reference, inputs, package=M.PACKAGE, of_record="python", rejects=M.REFUSALS,
-                  need_rejects=need_rejects)
+    return D.Port(M.EXE, fn, reference, inputs, package=M.PACKAGE, of_record=OF_RECORD.get(fn, "python"),
+                  rejects=M.REFUSALS, need_rejects=need_rejects)
 
 
 server = D.server_fixture(port("pin", lambda v: v))
@@ -274,7 +281,7 @@ def store_salt(v) -> str:
 
 def test_store_salt(server) -> None:
     inputs = st.fixed_dictionaries({
-        "key": st.binary(max_size=40).map(bytes.hex) | st.just(KEY.hex()),
+        "key": st.binary(max_size=300).map(bytes.hex) | st.just(KEY.hex()),
         "label": st.just(store.PAYLOAD_LABEL.hex()) | st.binary(max_size=8).map(bytes.hex),
         "c": st.integers(0, 2 ** 64 - 1) | st.sampled_from([0, 2 ** 64, -1])})
     stats = D.run(port("store_salt", store_salt, inputs), examples=150, server=server)
@@ -301,12 +308,14 @@ def _write(tmp: Path, digests: list[bytes]) -> Path:
 
 
 def expected_root(tmp: Path):
+    """`store.expected_root` in this process, its subtrees of `2^chunk_log2` leaves (the Lean's on `workers` threads)."""
     def reference(v) -> str:
         digests = _digests(v)
         engines, arena_blocks, host = M.nat(v, "engines"), M.nat(v, "arena_blocks"), M.nat(v, "host_blocks")
-        node, key = M.hex_(v, "node"), M.hex_(v, "key")
+        node, key, chunk_log2 = M.hex_(v, "node"), M.hex_(v, "key"), M.nat(v, "chunk_log2")
+        M.nat(v, "workers")
         s = store.Store(_arena(digests), engines, arena_blocks, host)
-        return store.expected_root(s, node, key, _write(tmp, digests)).hex()
+        return store.expected_root(s, node, key, _write(tmp, digests), 1, chunk_log2).hex()
     return reference
 
 
@@ -320,7 +329,7 @@ def shapes(draw) -> dict:
 
 @st.composite
 def root_inputs(draw) -> dict:
-    v = draw(shapes())
+    v = draw(shapes()) | {"workers": draw(st.integers(0, 4)), "chunk_log2": draw(st.integers(0, 6))}
     f = draw(st.integers(0, 12))
     if f == 1:
         v["engines"] = 0
@@ -340,17 +349,20 @@ def test_expected_root(server, tmp_path) -> None:
     assert stats.outputs > 60, stats
 
 
-@pytest.mark.parametrize("engines, extra, host", [(1, 0, 0), (2, 3, 5), (3, 1, 2)])
-def test_the_expected_root_is_the_payload_trees_over_the_stores_payloads(server, engines, extra, host) -> None:
+@pytest.mark.parametrize("engines, extra, host, workers, chunk_log2",
+                         [(1, 0, 0, 1, 16), (2, 3, 5, 3, 1), (3, 1, 2, 2, 2), (3, 1, 2, 8, 0)])
+def test_the_expected_root_is_the_payload_trees_over_the_stores_payloads(server, engines, extra, host, workers,
+                                                                         chunk_log2) -> None:
     """Independently of `store.expected_root`: `audit.payload_tree` over the store's payloads, block j salted with
-    `store_salt(key, PAYLOAD_LABEL, j)`, is the Lean's root from the weights blocks' digests alone."""
+    `store_salt(key, PAYLOAD_LABEL, j)`, is the Lean's root from the weights blocks' digests alone, whole or as
+    subtrees of `2^chunk_log2` leaves on `workers` threads."""
     weights = [expand(b"weights %d" % u, codec.BLOCK_BYTES) for u in range(3)]
     arena = weights + [bytes(codec.BLOCK_BYTES)] * extra
     payloads = arena * engines + [bytes(codec.BLOCK_BYTES)] * host
     salts = [store.store_salt(KEY, store.PAYLOAD_LABEL, j) for j in range(len(payloads))]
     root = audit.payload_tree(NODE, payloads, salts).commitment.root
     v = {"digests": [codec.digest(w).hex() for w in weights], "engines": engines, "arena_blocks": len(arena),
-         "host_blocks": host, "node": NODE.hex(), "key": KEY.hex()}
+         "host_blocks": host, "node": NODE.hex(), "key": KEY.hex(), "workers": workers, "chunk_log2": chunk_log2}
     lean = D.replay(port("expected_root", lambda _v: root.hex()), v, server)
     assert lean == ("output", D.canonical(root.hex()))
 
@@ -364,27 +376,43 @@ def _region(r) -> tuple:
     return kind, tier, M._int(first, "first"), M._int(n, "blocks")
 
 
+def _hello(v) -> tuple:
+    """A hello's store as the Lean's `helloOf` reads it, in its order."""
+    layout = None if M._get(v, "layout") is None else tuple(_region(r) for r in M._list(v, "layout"))
+    return M.hex_(v, "node"), M.int_(v, "blocks"), M.hex_(v, "payload_root"), M.hex_(v, "key"), layout
+
+
+def _binding(tmp: Path, role: str, digests: list[bytes], engines: int, arena_blocks: int) -> store.Binding:
+    """A `Binding` of `role` over an arena of the weights blocks' digests `digests`, past what it reads of the files,
+    once `Store`'s check of its arenas passed."""
+    b = object.__new__(store.Binding)
+    b.role, b.arena, b.engines, b.arena_blocks, b.workers = role, _arena(digests), engines, arena_blocks, 1
+    b.digests, b.state = _write(tmp, digests), {}
+    return b
+
+
+def _held(b: store.Binding, hello: tuple) -> dict:
+    """`b.hold(hello)` as the Lean's `hold` answers it: the regions, or why not, and the expected root kept."""
+    node, blocks, root, key, layout = hello
+    try:
+        return {"regions": [list(r) for r in b.hold(node, blocks, root, key, layout)],
+                "expected_root": b.state["expected_root"]}
+    except ValueError as e:
+        return {"refused": str(e), "expected_root": b.state.get("expected_root")}
+
+
 def hold(tmp: Path):
     """`Binding.hold` of a binding of the input's role over an arena of its digests, as `Binding` starts it (`Store`'s
     check of its arenas) without reading a checkpoint."""
     def reference(v) -> dict:
         role, digests = M._str(v, "role"), _digests(v)
-        engines, arena_blocks, blocks = M.int_(v, "engines"), M.int_(v, "arena_blocks"), M.int_(v, "blocks")
-        node, root, key = M.hex_(v, "node"), M.hex_(v, "payload_root"), M.hex_(v, "key")
-        layout = None if M._get(v, "layout") is None else tuple(_region(r) for r in M._list(v, "layout"))
-        a = _arena(digests)
+        engines, arena_blocks = M.int_(v, "engines"), M.int_(v, "arena_blocks")
+        hello = _hello(v)
         try:
-            store.Store(a, engines, arena_blocks)
+            store.Store(_arena(digests), engines, arena_blocks)
         except store.Refused as e:
             return {"refused": str(e), "expected_root": None}
-        b = object.__new__(store.Binding)
-        b.role, b.arena, b.engines, b.arena_blocks, b.workers = role, a, engines, arena_blocks, 1
-        b.digests, b.state = _write(tmp, digests), {}
-        try:
-            return {"regions": [list(r) for r in b.hold(node, blocks, root, key, layout)],
-                    "expected_root": b.state["expected_root"]}
-        except ValueError as e:
-            return {"refused": str(e), "expected_root": b.state.get("expected_root")}
+        return _held(_binding(tmp, role, digests, engines, arena_blocks), hello)
     return reference
 
 
@@ -475,3 +503,98 @@ def test_each_decision_of_a_hello_is_the_leans_word_for_word(server, tmp_path) -
     for v, why, root in cases:
         assert D.replay(port("hold", hold(tmp_path)), v, server) == (
             "output", D.canonical({"refused": why, "expected_root": root})), why
+
+
+# --- the verifier's binding: `bind`, then `hold` of each hello ---------------------------------------------------------
+
+def binding(tmp: Path):
+    """The binding as `Binding` starts it, past what it reads of the files: the pin from its file's bytes (`model_pin`)
+    and `Store`'s check of the arenas, `{"pin", "weights_blocks"}` or why not (the Lean's `bind`); then, once bound,
+    `Binding.hold` of each hello (the Lean's `hold`)."""
+    def reference(v) -> dict:
+        data, path, role, digests = M.hex_(v, "data"), M._str(v, "path"), M._str(v, "role"), _digests(v)
+        engines, arena_blocks = M.int_(v, "engines"), M.int_(v, "arena_blocks")
+        M.nat(v, "workers")
+        hellos = M._list(v, "hellos")
+        try:
+            pin = store.model_pin(data, path, role)
+            store.Store(_arena(digests), engines, arena_blocks)
+        except store.Refused as e:
+            return {"bind": {"refused": str(e)}, "holds": []}
+        b = _binding(tmp, role, digests, engines, arena_blocks)
+        return {"bind": {"pin": pin, "weights_blocks": len(digests)}, "holds": [_held(b, _hello(h)) for h in hellos]}
+    return reference
+
+
+def binding_inputs(tmp: Path):
+    @st.composite
+    def inputs(draw) -> dict:
+        """`hold_inputs`' store and hello, then another hello of that store or not, and the role's pin as a pin file
+        holds it (a pin, a registry's line, core's `models.json`), as it is or with one fault."""
+        v = draw(hold_inputs(tmp))
+        hellos = [{k: v.pop(k) for k in ("node", "blocks", "payload_root", "key", "layout")}]
+        if draw(st.booleans()):
+            engines, arena_blocks, host = max(v["engines"], 1), max(v["arena_blocks"], len(v["digests"])), draw(
+                st.integers(0, 3))
+            root = _root(tmp, v | {"engines": engines, "arena_blocks": arena_blocks}, KEY, host)
+            hellos.append({"node": NODE.hex(), "blocks": engines * arena_blocks + host, "payload_root": root,
+                           "key": KEY.hex(), "layout": None})
+        role, files = v["role"], files_of(draw(st.binary(max_size=4)))
+        g = draw(st.integers(0, 9))
+        pin = a_pin(files, "other" if g == 1 else role)
+        if g == 2:
+            pin["checkpoint_sha512"] = "cd" * 64
+        text = {3: lines({"model": role} | pin), 4: json.dumps(core(files, (role, "OTHER_BF16"))),
+                5: json.dumps(core(files, ("OTHER_BF16", "X")))}.get(g, json.dumps(pin))
+        data = text.encode()
+        if g == 6:
+            data = b"\xff" + data
+        elif g == 7:
+            data = data[:len(data) // 2]
+        return v | {"data": data.hex(), "path": draw(st.sampled_from(["pin.json", "pins/é.json"])),
+                    "workers": draw(st.integers(0, 4)), "hellos": hellos}
+    return inputs()
+
+
+def test_binding(server, tmp_path) -> None:
+    stats = D.run(port("binding", binding(tmp_path), binding_inputs(tmp_path), need_rejects=False), examples=150,
+                  server=server)
+    assert stats.outputs > 120, stats
+
+
+def test_each_decision_of_the_verifiers_binding_is_the_leans_word_for_word(server, tmp_path) -> None:
+    """The binding the verifier starts, bound, holding hellos of its store with and without its layout and two it
+    refuses; then each refusal of `bind` (another model's pin, a pin that isn't its checkpoint's, a pin that isn't
+    UTF-8, too few arenas, an arena short of the weights, and a pin and a shape both refused: the pin's first), replayed
+    through both sides: the pin, the regions and every reason are the same text."""
+    digests = [expand(b"w%d" % u, 64).hex() for u in range(6)]
+    shape = {"digests": digests, "engines": 2, "arena_blocks": 7}
+    want, other = _root(tmp_path, shape, KEY, 2), _root(tmp_path, shape, bytes(32), 2)
+    regions = _regions(2, 7, 6, 2)
+    hello = {"node": NODE.hex(), "blocks": 16, "payload_root": want, "key": KEY.hex(), "layout": None}
+    good, p = a_pin(files_of(b"f")), "pins/pin.json"
+    v = shape | {"data": json.dumps(good).encode().hex(), "path": p, "role": ROLE, "workers": 3,
+                 "hellos": [hello, hello | {"layout": regions}, hello | {"payload_root": other}, hello | {"blocks": 13}]}
+    ok = {"regions": regions, "expected_root": want}
+    another = (f"the hello's payload root {other[:16]}... is not the pinned model {ROLE}'s store (2 arenas of 7 blocks, "
+               "6 of weights each, then 2 host filler blocks) under this verifier's payload key, whose root is "
+               f"{want[:16]}...: register the store `remote_bandwidth.store` lays out, salted with the key the verifier "
+               "sent")
+    short = "the hello's store is 13 blocks, fewer than the pinned model's 2 arenas of 7"
+    assert D.replay(port("binding", binding(tmp_path)), v, server) == ("output", D.canonical({
+        "bind": {"pin": good, "weights_blocks": 6},
+        "holds": [ok, ok, {"refused": another, "expected_root": want}, {"refused": short, "expected_root": None}]}))
+    others = json.dumps(a_pin(files_of(b"f"), "other")).encode().hex()
+    cases = [
+        (v | {"data": others}, f"the pin {p} is other's, not --model {ROLE}'s"),
+        (v | {"data": json.dumps(good | {"checkpoint_sha512": "cd" * 64}).encode().hex()},
+         f"the pin {p}'s checkpoint_sha512 is not the SHA-512 of its checkpoint's canonical JSON "
+         f"({good['checkpoint_sha512'][:16]}...)"),
+        (v | {"data": (b"\xff" + json.dumps(good).encode()).hex()}, f"the pin {p} is not UTF-8"),
+        (v | {"engines": 0}, "a store is one or more arenas and no fewer than zero host blocks, not 0 and 0"),
+        (v | {"arena_blocks": 5}, "the weights take 6 blocks, more than an arena's 5"),
+        (v | {"data": others, "engines": 0}, f"the pin {p} is other's, not --model {ROLE}'s"),
+    ]
+    for c, why in cases:
+        assert D.replay(port("binding", binding(tmp_path)), c, server) == (
+            "output", D.canonical({"bind": {"refused": why}, "holds": []})), why
