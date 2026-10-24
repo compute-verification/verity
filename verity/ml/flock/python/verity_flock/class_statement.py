@@ -856,7 +856,8 @@ def _leaf_bits(t) -> list[int]:
 
 
 def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
-                  public: Sequence[str] = (), structural: bool = False, reads: str = "inline") -> tuple[IL.Lowering, list[int]]:
+                  public: Sequence[str] = (), structural: bool = False, reads: str = "inline",
+                  stage_ands: int | None = None) -> tuple[IL.Lowering, list[int]]:
     """A unit Definition on named u16 row ports: input row ``(row, params)`` is the little-endian bit concatenation of those
     parameters' leaves, in order (PoUW's rows, `leaves.words_*`; ``p[r]`` is row ``r`` of parameter ``p``, as a tile reads
     it), of exactly its words (its bits a multiple of 16); output
@@ -867,7 +868,8 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), else `ir_lower`'s
     (`unit_circuit`), its circuit dropped once laid out (nothing reads it after `ir_lower.layout`). ``reads``: ``inline``, each
     table read laid out as rows of the unit (`ir_lower._Read`), or ``slots``, its reads of the pinned MUFU tables split out to
-    lookup slots (`read_slots.split`, a `read_slots.ReadSlots`; the flat unit's own when it reads none)."""
+    lookup slots (`read_slots.split`, a `read_slots.ReadSlots`, at most ``stage_ands`` ANDs a net; the flat unit's own when it
+    reads none)."""
     if reads not in ("inline", "slots") or (structural and reads != "inline"):
         raise ValueError(f"{name}: reads is inline or slots, and a structural unit's are inline")
     ports, out_words, row_words = unit_ports(definition, name, in_rows, public)
@@ -882,7 +884,7 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
         return TmplLowering(name, unit, units, None, _TmplLayout.of(t), t), out_words
     C = unit_circuit(definition, ports, _UnitCircuit)
     in_names, out_names = [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(W)]
-    if reads == "slots" and (low := RS.split(C, in_names, out_names, name, unit, units)) is not None:
+    if reads == "slots" and (low := RS.split(C, in_names, out_names, name, unit, units, stage_ands=stage_ands)) is not None:
         return low, out_words
     lay = IL.layout(C, in_names, out_names)
     return IL.Lowering(name, unit, units, None, lay), out_words
@@ -1054,11 +1056,12 @@ class UnitStager:
     that template `struct_lower`'s (`unit_lowering`'s ``structural``), the flat unit never built, the outputs the template's
     (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit. ``reads`` (``inline`` or ``slots``, flat statements only):
     `unit_lowering`'s; under ``slots`` a unit reading a pinned MUFU table is the unit, tail stages and lookup slots of
-    `read_slots`, the last stage returning the outputs."""
+    `read_slots`, the last stage returning the outputs, each net at most ``stage_ands`` ANDs."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
                  out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
-                 bind: dict | None = None, layout: str | None = None, structural: bool = False, reads: str = "inline"):
+                 bind: dict | None = None, layout: str | None = None, structural: bool = False, reads: str = "inline",
+                 stage_ands: int | None = None):
         from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 
         if bind is not None and set(bind) != {"partition", "program"}:
@@ -1071,7 +1074,7 @@ class UnitStager:
         if layout is not None and reads != "inline":
             raise ValueError(f"{name}: a templated statement's unit lays its reads out inline")
         self.low, self.out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs),
-                                                 structural, reads)
+                                                 structural, reads, stage_ands)
         if sorted(p for _s, ps in out_rows for p in ps) != list(range(len(self.out_words))):
             raise ValueError(f"{name}: the output rows {[list(ps) for _s, ps in out_rows]} are not the outputs, once each")
         oname = lambda ps: tuple(f"o{p}" for p in ps)  # noqa: E731

@@ -321,6 +321,8 @@ def main() -> int:
     ap.add_argument("--structural", default=None, metavar="LAYOUT", help="the structural stager at this layout mode (iv/hybrid/4)")
     ap.add_argument("--reads", choices=("inline", "slots"), default="inline",
                     help="a flat unit's MUFU table reads: inline rows of the unit, or C-Flock lookup slots (read_slots)")
+    ap.add_argument("--stage-ands", type=int, default=None, metavar="N",
+                    help="with --reads slots: at most N ANDs a net (read_slots.split's stage_ands)")
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
     ap.add_argument("--lean", default=None, help="the Lean verifier of record (flock-verify)")
     ap.add_argument("--n", type=int, default=1)
@@ -360,6 +362,7 @@ def main() -> int:
     t = time.time()
     with K.no_cyclic_gc():
         st = CS.UnitStager(fn, f"m1/{K.family(fn.id)}", rows, K.out_rows(n_out), circuit=d / "circuit.txt", reads=a.reads,
+                           stage_ands=a.stage_ands,
                            **({"layout": a.structural, "structural": True} if a.structural else {}))
     m, c = st.meta, getattr(st.low, "counts", None) or st.low.layout.counts
     cap = int(m["vus_per_block"]) << (M_MAX - int(m["k_log"])) if M_MAX - int(m["k_log"]) >= 3 else 0
