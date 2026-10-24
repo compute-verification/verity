@@ -675,11 +675,13 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  digests: Mapping[str, str] | None = None, committer: dict[str, Any] | None = None,
                  workers: int | None = None, stand_in: Mapping[str, Any] | None = None, tp: Mapping[str, Any] | None = None,
                  index: Mapping[str, Any] | None = None, row_tables: Mapping[str, Any] | None = None,
-                 reuse: Sequence[ProgramIndex] = ()) -> dict[str, Any]:
+                 reuse: Sequence[ProgramIndex] = (), binding: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
     under (``commitment``: the reader's committer's, vllm-v1 or a TP rank's rows-sha512), the research run ``run``, the row, the
-    committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
+    committer, the served Programs' ``digests`` and, for Programs a registered compiler made from advice, ``binding``: the
+    compiler's and the advice's digests, `pipeline.advice_windows.binding`), ``partition.json``, the index and M0's bodies.  The
+    window is ``served``;
     with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
     serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
     loaded its Programs with as ``reuse``.  A
@@ -700,7 +702,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                   workers=workers or min(16, os.cpu_count() or 1))
     prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
-            **({"tp": dict(tp)} if tp else {}), **(stand_in or {})}
+            **({"tp": dict(tp)} if tp else {}), **(stand_in or {}), **(binding or {})}
     prov["commitment"] = getattr(getattr(committed, "com", None), "commit_scheme", prov["commitment"])
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
