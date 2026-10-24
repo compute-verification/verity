@@ -14,7 +14,74 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 
+section Out
+
+open _root_.Flock (V)
+open _root_.Flock.Transcript (header)
+open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS roundFree)
+
+set_option maxHeartbeats 1000000 in
+/-- **A round the frame takes releases its squeeze last**: `roundFree`'s loop returns only at the squeeze of the `n`
+coins it was asked for, which it appends to the round's release. -/
+theorem roundFree_out {c : Cfg} {s : Masker} {xb : ByteArray} {n : ℕ} {q : ByteArray × Masker × Array ℕ}
+    (h : roundFree c s xb n = .ok q) : ∃ o k, q.1 = o ++ header 4 k n := by
+  by_cases hs : s.inner = some INNER_ROUNDS
+  · unfold roundFree at h
+    rw [if_pos (by simp [hs])] at h
+    cases h
+  unfold roundFree at h
+  simp only [show (s.inner == some INNER_ROUNDS) = false from by simpa using hs, Bool.false_eq_true, ↓reduceIte,
+    Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  obtain ⟨y, hy, hk⟩ := bindV_ok h
+  have hP := forIn_ok_inv (fun x => ∀ r, x.1 = some r → ∃ o k, r.1 = o ++ header 4 k n) _ ?hg _ _
+    (fun r hr => by cases hr) y hy
+  · clear h hy
+    revert hk hP
+    obtain ⟨o, rest⟩ := y
+    cases o with
+    | none => intro hk _; cases hk
+    | some r => intro hk hP; cases hk; exact hP _ rfl
+  · clear h hy hk
+    intro i x z hx hz r hr
+    beta_reduce at hz
+    by_cases h1 : x.2.2.2.2 + 16 > xb.size
+    · rw [ite_cond_eq_true _ _ (eq_true h1)] at hz
+      rw [ite_eq_iff] at hz
+      rcases hz with ⟨_, hz⟩ | ⟨_, hz⟩ <;> obtain ⟨_, h, _⟩ := bindV_ok hz <;> cases h
+    · rw [ite_cond_eq_false _ _ (eq_false h1)] at hz
+      split at hz
+      all_goals
+        repeat' (first
+          | (obtain ⟨_, _, hz⟩ := bindV_ok hz; try beta_reduce at hz)
+          | (rw [ite_eq_iff] at hz; rcases hz with ⟨_, hz⟩ | ⟨_, hz⟩)
+          | (split at hz))
+      all_goals first | (cases hz; cases hr; done) | (cases hz; done) | contradiction | skip
+      all_goals first
+        | (cases hz; cases hr; exact ⟨_, _, rfl⟩)
+        | (rename_i j hj hz0 _ hio
+           rw [hio] at hz0
+           cases hz0; cases hr
+           exact ⟨_, _, rfl⟩)
+
+end Out
+
 namespace LeanRelease
+
+/-- **A release the frame takes ends in the squeeze of its round's coins**: the frame's round returns its release with
+the squeeze of the `coins x h.length` it was asked for last. -/
+theorem release_out_of_takes {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (v : Msg)
+    (ht : L.takes x ρ h v = true) : ∃ o k, L.release x ρ h false v =
+      0 :: (o ++ _root_.Flock.Transcript.header 4 k (L.coins x h.length)).data.toList := by
+  unfold takes at ht
+  unfold release
+  cases hs : L.step x ρ h false v with
+  | error e => rw [hs] at ht; cases ht
+  | ok p =>
+    obtain ⟨out, m⟩ := p
+    obtain ⟨m₀, -, hr⟩ := bindV_ok hs
+    obtain ⟨fr, hf⟩ := roundFree_round hr
+    obtain ⟨o, k, ho⟩ := roundFree_out hf
+    exact ⟨o, k, by simp only at ho; rw [ho]⟩
 
 /-- **Each frame round of a `Finish` `FinishIs` reads is the session's switched message** at the coins the openings
 before it open, without its leading domain frame. -/
