@@ -150,6 +150,7 @@ import Proofs.Flock.Claims.ZK.FinishSwLigE
 import Proofs.Flock.Claims.ZK.L0Pin
 import Proofs.Flock.Claims.ZK.L0PinCoins
 import Proofs.Flock.Claims.ZK.L0PinFrame
+import Proofs.Flock.Claims.ZK.L0PinCut
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
@@ -701,6 +702,9 @@ import Proofs.Flock.Claims.ZK.CutPrefix
   is (`Fed.asksRel_feed`, `Fed.repOpening_feed`), and past its ring switch it sends level 0's bodies
   (`Fed.repOpening_cutL0`). Where `openStep` sends anything its PIOP returned, and its level-0 rounds are `l0BodyAt`
   at zero pads (**`Fed.openStep_l0`**), which reads only its rounds' coins (`Fed.l0BodyAt_congr`).
+* `L0PinCut`: the cut session in rep `2j + r`'s level 0 rounds. Where the reps before it return by the firewall's stop
+  and its PIOP returns, the session stopped at `n ∈ [ligP0, ligP0 + k₀ + 4)` sent `l0BodyAt`'s body `n − ligP0` at the
+  coins from `ligP0`, basis `ligBasis` and pads `padsL0` (**`Masked.runCut_cutL0`**).
 * `FinishSwInner`: `repCut_fw`'s `hinner` at that source. The switched view keeps `ρ_in`, `σ_in` (`padShift` moves
   `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
   switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
