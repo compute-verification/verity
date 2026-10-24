@@ -789,4 +789,293 @@ theorem of_ok (segs : Array Seg) (h : ∀ g ∈ segs.toList, SegOk g) :
     unfold psPos segsPos
     rw [segsPos_length _ (fun g hg => (hf g hg).1)]
 
+/-! ## Reference sequences as pieces -/
+
+open Flock.Program (Ref Part Seq)
+
+/-- A reference as a position: its collection's leaf. -/
+def refPos (r : Ref) : Tgt × Int := (.ref r.p r.i, (r.j : Int))
+
+/-- A part's references never step below leaf 0: a strided part's pattern (`parsePartsIn` checks its corners). -/
+def PartNonneg : Part → Prop
+  | .strided _ _ b inner os is c => ∀ k < c, 0 ≤ b + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is
+  | _ => True
+
+theorem pos_one (t : Tgt) (base stride : Int) (len : Nat) (rs : Int) :
+    pos ⟨t, base, stride, len, 1, rs⟩ = (List.range len).map fun (k : Nat) => (t, base + (k : Int) * stride) := by
+  simp [pos]
+
+theorem posAll_filter_count (ps : Array Piece) :
+    posAll (ps.filter fun q => decide (q.count > 0)) = posAll ps := by
+  unfold posAll
+  rw [Array.toList_filter]
+  generalize ps.toList = l
+  induction l with
+  | nil => rfl
+  | cons q qs ih =>
+    rw [List.filter_cons]
+    split
+    · rw [List.flatMap_cons, List.flatMap_cons, ih]
+    · rename_i hc
+      have h0 : q.count = 0 := by simpa using hc
+      have : pos q = [] := List.eq_nil_of_length_eq_zero (by rw [pos_length, h0])
+      rw [List.flatMap_cons, this, List.nil_append, ih]
+
+theorem posAll_pair (x y : Piece) : posAll #[x, y] = pos x ++ pos y := by simp [posAll]
+
+theorem range_split (a n : Nat) : List.range (a + n) = List.range a ++ List.range' a n := by
+  rw [List.range_eq_range', List.range_eq_range', show List.range' a n = List.range' (0 + a) n by rw [Nat.zero_add],
+    List.range'_append_1]
+
+theorem tgt_eq_of_beq {t : Tgt} {p : Bool} {i : Nat} (h : (t == Tgt.ref p i) = true) : t = Tgt.ref p i := by
+  cases t with
+  | gate w =>
+    have e : (Tgt.gate w == Tgt.ref p i) = false := rfl
+    rw [e] at h; cases h
+  | ref p' i' =>
+    have e : (Tgt.ref p' i' == Tgt.ref p i) = (p' == p && i' == i) := rfl
+    rw [e, Bool.and_eq_true, beq_iff_eq, beq_iff_eq] at h
+    rw [h.1, h.2]
+
+theorem ofPart_affine (p : Bool) (i b c : Nat) :
+    posAll (Desc.ofPart (.affine p i b c)) = (List.range c).map fun k => refPos ((Part.affine p i b c).get k) := by
+  simp only [Desc.ofPart, posAll_singleton, pos_one, Flock.Program.Part.get, refPos]
+  apply List.map_congr_left
+  intro k _
+  simp
+
+theorem ofPart_strided (p : Bool) (i : Nat) (b : Int) (inner : Nat) (os is : Int) (c : Nat)
+    (hq : PartNonneg (.strided p i b inner os is c)) :
+    posAll (Desc.ofPart (.strided p i b inner os is c)) =
+      (List.range c).map fun k => refPos ((Part.strided p i b inner os is c).get k) := by
+  have hget : ∀ k < c, refPos ((Part.strided p i b inner os is c).get k) =
+      (.ref p i, b + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is) := by
+    intro k hk
+    simp only [Flock.Program.Part.get, refPos]
+    rw [Int.toNat_of_nonneg (hq k hk)]
+  have hmap : ∀ (f : Nat → Tgt × Int), (∀ k < c, f k = (.ref p i,
+      b + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is)) →
+      (List.range c).map f = (List.range c).map fun k => refPos ((Part.strided p i b inner os is c).get k) := by
+    intro f hf
+    apply List.map_congr_left
+    intro k hk
+    have hk' := List.mem_range.1 hk
+    rw [hf k hk', hget k hk']
+  simp only [Desc.ofPart]
+  split
+  · rename_i h0
+    have : c = 0 := by simpa using h0
+    subst this; rfl
+  split
+  · rename_i h1
+    have : inner = 1 := by simpa using h1
+    subst this
+    rw [posAll_singleton, pos_one]
+    apply hmap
+    intro k _
+    simp
+  split
+  · rename_i h2
+    have h2' : os = (inner : Int) * is := by simpa using h2
+    rw [posAll_singleton, pos_one]
+    apply hmap
+    intro k _
+    have hk : (k : Int) = ((k / inner : Nat) : Int) * inner + ((k % inner : Nat) : Int) := by
+      have := Nat.div_add_mod k inner
+      rw [Nat.mul_comm] at this
+      exact_mod_cast this.symm
+    rw [h2', hk, Int.add_mul, ← Int.mul_assoc, Int.add_assoc]
+  · rw [posAll_filter_count, posAll_pair, pos_one, pos_eq_map]
+    simp only [Piece.count]
+    have hc : c = c / inner * inner + c % inner := by
+      have := Nat.div_add_mod c inner
+      rw [Nat.mul_comm] at this; omega
+    conv => rhs; rw [hc]
+    rw [range_split, List.map_append]
+    rw [← hc]
+    congr 1
+    · apply List.map_congr_left
+      intro k hk
+      have hk' := List.mem_range.1 hk
+      have hkc : k < c := by
+        have : c / inner * inner ≤ c := Nat.div_mul_le_self c inner
+        omega
+      rw [hget k hkc]
+      simp [ppt]
+    · rw [List.range'_eq_map_range, List.map_map]
+      apply List.map_congr_left
+      intro t ht
+      have ht' := List.mem_range.1 ht
+      have hkc : c / inner * inner + t < c := by omega
+      simp only [Function.comp]
+      rw [hget _ hkc]
+      by_cases hin : inner = 0
+      · subst hin
+        simp
+      · have hin' : 0 < inner := by omega
+        have hlt : t < inner := by
+          have := Nat.mod_lt c hin'
+          omega
+        rw [show c / inner * inner + t = t + inner * (c / inner) by rw [Nat.mul_comm]; omega,
+          Nat.add_mul_div_left _ _ hin', Nat.add_mul_mod_self_left, Nat.div_eq_of_lt hlt, Nat.mod_eq_of_lt hlt,
+          Nat.zero_add]
+
+/-- `ofPart`'s step over an explicit part's reference: extend the last piece when the reference is its next element. -/
+def exStep (acc : Array Piece) (r : Ref) : Array Piece :=
+  let one : Piece := { tgt := .ref r.p r.i, base := r.j, stride := 1, len := 1 }
+  match acc.back? with
+  | some q => if q.tgt == .ref r.p r.i && q.stride == 1 && q.at q.len == r.j then acc.pop.push { q with len := q.len + 1 }
+    else acc.push one
+  | none => acc.push one
+
+theorem posAll_push (acc : Array Piece) (q : Piece) : posAll (acc.push q) = posAll acc ++ pos q := by
+  simp [posAll]
+
+theorem exStep_spec (acc : Array Piece) (r : Ref) (h : ∀ q ∈ acc.toList, q.rows = 1) :
+    posAll (exStep acc r) = posAll acc ++ [refPos r] ∧ ∀ q ∈ (exStep acc r).toList, q.rows = 1 := by
+  have hone : pos { tgt := .ref r.p r.i, base := r.j, stride := 1, len := 1 } = [refPos r] := by
+    rw [pos_one]; simp [refPos]
+  unfold exStep
+  rcases hb : acc.back? with _ | q
+  · refine ⟨by rw [posAll_push, hone], ?_⟩
+    intro x hx
+    rw [Array.toList_push, List.mem_append] at hx
+    rcases hx with hx | hx
+    · exact h x hx
+    · simp at hx; rw [hx]
+  · obtain ⟨ys, rfl⟩ := Array.back?_eq_some_iff.1 hb
+    have hq : q.rows = 1 := h q (by simp)
+    have hys : ∀ x ∈ ys.toList, x.rows = 1 := fun x hx => h x (by simp [hx])
+    dsimp only
+    split
+    · rename_i hc
+      simp only [Bool.and_eq_true, beq_iff_eq] at hc
+      obtain ⟨⟨htgt, hst⟩, hat⟩ := hc
+      rw [Array.pop_push]
+      refine ⟨?_, ?_⟩
+      · rw [posAll_push, posAll_push, List.append_assoc]
+        congr 1
+        rcases q with ⟨t, base, stride, len, rows, rs⟩
+        simp only at hq hst hat htgt
+        subst hq hst
+        rw [pos_one, pos_one, List.range_succ, List.map_append]
+        simp only [Desc.Piece.at, Int.mul_one] at hat
+        rw [tgt_eq_of_beq htgt]
+        simp [refPos, hat]
+      · intro x hx
+        rw [Array.toList_push, List.mem_append] at hx
+        rcases hx with hx | hx
+        · exact hys x hx
+        · simp at hx; rw [hx]; exact hq
+    · refine ⟨by rw [posAll_push, hone], ?_⟩
+      intro x hx
+      rw [Array.toList_push, List.mem_append] at hx
+      rcases hx with hx | hx
+      · exact h x hx
+      · simp at hx; rw [hx]
+
+theorem exFold_spec : ∀ (l : List Ref) (acc : Array Piece), (∀ q ∈ acc.toList, q.rows = 1) →
+    posAll (l.foldl exStep acc) = posAll acc ++ l.map refPos
+  | [], acc, _ => by simp
+  | r :: l, acc, h => by
+    obtain ⟨h1, h2⟩ := exStep_spec acc r h
+    rw [List.foldl_cons, exFold_spec l _ h2, h1, List.map_cons, List.append_assoc, List.singleton_append]
+
+theorem ofPart_explicit (it : Array Ref) :
+    posAll (Desc.ofPart (.explicit it)) = (List.range it.size).map fun k => refPos ((Part.explicit it).get k) := by
+  have e : Desc.ofPart (.explicit it) = it.toList.foldl exStep #[] := by
+    simp only [Desc.ofPart]
+    rw [← Array.foldl_toList]
+    rfl
+  rw [e, exFold_spec _ _ (by simp), posAll_empty, List.nil_append]
+  apply List.ext_getElem?
+  intro k
+  rw [List.getElem?_map, List.getElem?_map]
+  by_cases hk : k < it.size
+  · rw [List.getElem?_range hk, Array.getElem?_toList, Array.getElem?_eq_getElem hk]
+    simp [Flock.Program.Part.get, getElem!_pos it k hk]
+  · rw [List.getElem?_eq_none (by simp; omega), List.getElem?_eq_none (by simp; omega)]; rfl
+
+/-- **A part as pieces** names its references, in order. -/
+theorem ofPart_pos (q : Part) (hq : PartNonneg q) :
+    posAll (Desc.ofPart q) = (List.range q.count).map fun k => refPos (q.get k) := by
+  cases q with
+  | affine p i b c => exact ofPart_affine p i b c
+  | strided p i b inner os is c => exact ofPart_strided p i b inner os is c hq
+  | explicit it => exact ofPart_explicit it
+
+/-- A sequence's references as positions, part by part. -/
+def partsPos (ps : Array Part) : List (Tgt × Int) :=
+  ps.toList.flatMap fun q => (List.range q.count).map fun k => refPos (q.get k)
+
+theorem partsFold_pos : ∀ (l : List Part) (acc : Array Piece), (∀ q ∈ l, PartNonneg q) →
+    posAll (l.foldl (fun acc q => acc ++ Desc.ofPart q) acc) =
+      posAll acc ++ l.flatMap fun q => (List.range q.count).map fun k => refPos (q.get k)
+  | [], acc, _ => by simp
+  | q :: l, acc, h => by
+    rw [List.foldl_cons, partsFold_pos l _ (fun q' hq' => h q' (by simp [hq'])), posAll_append,
+      ofPart_pos q (h q (by simp)), List.flatMap_cons, List.append_assoc]
+
+theorem segOk_one (q : Piece) : SegOk (Seg.one q) := by
+  show (posAll #[q]).length = q.count
+  rw [posAll_singleton, pos_length]
+
+/-- **A sequence as segments** (`Desc.ofSeq`) names its references, in order. -/
+theorem ofSeq_pos (s : Seq) (hq : ∀ q ∈ s.parts.toList, PartNonneg q) :
+    PSOk (Desc.ofSeq s) ∧ psPos (Desc.ofSeq s) = partsPos s.parts ∧
+      (Desc.ofSeq s).count = (partsPos s.parts).length := by
+  have hok : ∀ g ∈ ((s.parts.foldl (fun acc q => acc ++ Desc.ofPart q) #[]).map Seg.one).toList, SegOk g := by
+    intro g hg
+    rw [Array.toList_map, List.mem_map] at hg
+    obtain ⟨q, -, rfl⟩ := hg
+    exact segOk_one q
+  have hpos : segsPos ((s.parts.foldl (fun acc q => acc ++ Desc.ofPart q) #[]).map Seg.one) = partsPos s.parts := by
+    rw [segsPos_one, ← Array.foldl_toList, partsFold_pos _ _ hq, posAll_empty, List.nil_append]; rfl
+  obtain ⟨h1, h2, h3⟩ := of_ok _ hok
+  exact ⟨h1, h2.trans hpos, h3.trans (by rw [hpos])⟩
+
+/-- Block `i` of a list of blocks starts after the blocks before it. -/
+theorem flatMap_getElem?_block {α β : Type} (F : α → List β) :
+    ∀ (l : List α) (i t : Nat) (hi : i < l.length), t < (F l[i]).length →
+      (l.flatMap F)[((l.take i).map fun x => (F x).length).sum + t]? = (F l[i])[t]?
+  | [], _, _, hi, _ => absurd hi (by simp)
+  | x :: l, 0, t, _, ht => by
+    simp only [List.take_zero, List.map_nil, List.sum_nil, Nat.zero_add, List.flatMap_cons,
+      List.getElem_cons_zero] at ht ⊢
+    rw [List.getElem?_append_left ht]
+  | x :: l, i + 1, t, hi, ht => by
+    simp only [List.take_succ_cons, List.map_cons, List.sum_cons, List.flatMap_cons, List.getElem_cons_succ]
+    rw [List.getElem?_append_right (by omega), Nat.add_assoc, Nat.add_sub_cancel_left]
+    exact flatMap_getElem?_block F l i t (by simpa using hi) ht
+
+/-- **Reference `k` of a decoded sequence** is position `k` of its parts' (`Walk.seq_get`). -/
+theorem partsPos_get (ps : Array Part) :
+    (List.range (Seq.ofParts ps).count).map (fun k => refPos ((Seq.ofParts ps).get k)) = partsPos ps := by
+  obtain ⟨-, -, hst, hcnt⟩ := Walk.ofParts_spec ps
+  have hlen : (partsPos ps).length = (Seq.ofParts ps).count := by
+    unfold partsPos
+    rw [hcnt, List.length_flatMap]
+    simp
+  apply List.ext_getElem?
+  intro k
+  rw [List.getElem?_map]
+  by_cases hk : k < (Seq.ofParts ps).count
+  · obtain ⟨i, hi, h1, h2, hget⟩ := Walk.seq_get ps hk
+    have hi' : i < ps.toList.length := by simpa using hi
+    have hpi : ps.toList[i] = ps[i]! := by rw [Array.getElem_toList, getElem!_pos ps i hi]
+    have hblock := flatMap_getElem?_block (fun q : Part => (List.range q.count).map fun k => refPos (q.get k))
+      ps.toList i (k - (Seq.ofParts ps).starts[i]!) hi' (by simp only [List.length_map, List.length_range, hpi]; omega)
+    have hsum : ((ps.toList.take i).map fun x => ((List.range x.count).map fun k => refPos (x.get k)).length).sum =
+        (Seq.ofParts ps).starts[i]! := by
+      rw [hst i hi]; simp
+    rw [hsum, Nat.add_sub_cancel' h1] at hblock
+    unfold partsPos
+    rw [hblock, List.getElem?_range hk, Option.map_some, hget, hpi, List.getElem?_map,
+      List.getElem?_range (by omega)]
+    rfl
+  · rw [List.getElem?_eq_none (by simp; omega)]
+    symm
+    apply List.getElem?_eq_none
+    omega
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
