@@ -119,6 +119,39 @@ def test_rows_in_batch_order_take_vllms_scheduling_order_from_history(case) -> N
         assert res.ns == () and D.rebuild(res, batch, held, ()) == shuffled
 
 
+def _mid_block(adv, cfg):
+    """`adv` with one hit moved half a block on, as a hybrid model's finer hash lets it end inside a block: an admitting
+    row that finishes its prompt in a step the budget doesn't bind, so only its start, n and last source change."""
+    half = cfg.block_size // 2
+    for s, st in enumerate(adv.steps):
+        if sum(r.n for r in st.rows) + half > cfg.max_num_batched_tokens:
+            continue
+        for k, r in enumerate(st.rows):
+            if not r.cache_hit or r.start + r.n != adv.requests[r.request].prompt_len or r.n <= half + 1:
+                continue
+            src = r.sources[:-1] + (I1.Source(r.sources[-1].request, r.sources[-1].n + half),)
+            row = dataclasses.replace(r, start=r.start + half, n=r.n - half, cache_hit=r.cache_hit + half, sources=src)
+            steps = adv.steps[:s] + (I1.StepAdvice(st.rows[:k] + (row,) + st.rows[k + 1:]),) + adv.steps[s + 1:]
+            try:
+                return I1.Advice(adv.requests, steps, adv.release)
+            except I1.MalformedAdvice:
+                continue
+    raise AssertionError("no hit to move")
+
+
+def test_a_hit_unit_finer_than_a_block_takes_hits_inside_one(case) -> None:
+    """vLLM's hit lands on its hash_block_size: the block for one KV cache group, finer in a hybrid model (the tail
+    copied on write). The config's unit is public, so a hit inside a block costs a bit of width, not a refusal."""
+    _, cfg, adv, _, held, res = case
+    fine = dataclasses.replace(cfg, hit_unit=cfg.block_size // 2)
+    halves = D.residual(adv, fine)
+    assert halves.hits == tuple(2 * h for h in res.hits) and D.rebuild(halves, fine, held, ()) == adv
+    moved = _mid_block(adv, cfg)
+    with pytest.raises(ValueError, match="hit units"):
+        D.residual(moved, cfg)
+    assert D.rebuild(D.residual(moved, fine), fine, held, ()) == moved
+
+
 def test_a_resume_is_sent_and_checked(case) -> None:
     _, cfg, adv, _, held, res = case
     assert res.resumes is not None and len(res.resumes) == sum(r.preempted for st in adv.steps for r in st.rows) > 10

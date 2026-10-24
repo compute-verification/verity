@@ -24,8 +24,9 @@ its verdict, derivation, checker and cost.
 **The residual** (`Residual`): each step's requests in I1's row order (the scheduler's choice, ENC-REPLAY's), and
 - `prompt_len`, one a request: the compiled Programs' shapes read it (a request's final prefill chunk is P − start), so
   it is sent, forced by the certified id count;
-- `hits` and `sources`: each admitting row's prefix-cache hit, in blocks, and the requests that computed its KV, forced
-  by the prompts' history and vLLM's block pool but not checked yet;
+- `hits` and `sources`: each admitting row's prefix-cache hit, in hit units (`Config.unit`: the block, finer only in a
+  hybrid model, whose hit may end inside a block), and the requests that computed its KV, forced by the prompts' history
+  and vLLM's block pool but not checked yet;
 - `resumes`: which rows after their request's first resume it, by position among those rows, unless the pool bound rules
   preemption out, which the verifier checks;
 - `lag`: async mode only, a bit for each request whose last two sampling rows are in consecutive steps: whether the last
@@ -71,10 +72,17 @@ class Config:
     max_num_seqs: int = 256
     enable_prefix_caching: bool = True
     row_order: str = "scheduling"                    # I1's rows: "scheduling", "batch" (the runner's) or "explicit" (n sent)
+    hit_unit: int = 0                                # vLLM's hash_block_size (prefix_match_unit); 0: block_size
 
     @property
     def stops(self) -> frozenset[int]:
         return frozenset((self.eos_token_id, *self.stop_token_ids))
+
+    @property
+    def unit(self) -> int:
+        """The token boundary a cache hit lands on: the block, except in a hybrid model whose groups hash finer, where a
+        hit may end inside a block (its tail copied on write)."""
+        return self.hit_unit or self.block_size
 
 
 @dataclass(frozen=True)
@@ -98,7 +106,7 @@ class Residual:
     """The advice that remains (the module's docstring). Requests are I1's, numbered by first row."""
     rows: tuple[tuple[int, ...], ...]
     prompt_len: tuple[int, ...]
-    hits: tuple[int, ...]                               # each admitting row's, in blocks
+    hits: tuple[int, ...]                               # each admitting row's, in hit units
     sources: tuple[tuple[Source, ...], ...] = ()        # each nonzero hit's
     resumes: tuple[int, ...] | None = None              # positions among the rows after their request's first; None: the pool bound
     lag: tuple[bool, ...] | None = None
@@ -125,7 +133,8 @@ def config_of(trace: dict) -> Config:
                   max_model_len=c["max_model_len"], eos_token_id=c["eos_token_id"], stop_token_ids=tuple(c["stop_token_ids"]),
                   scheduler=c.get("scheduler", "sync"), long_prefill_token_threshold=c.get("long_prefill_token_threshold", 0),
                   max_num_seqs=c.get("max_num_seqs", 256), enable_prefix_caching=c.get("enable_prefix_caching", True),
-                  row_order=c.get("row_order", "scheduling" if c.get("rows_in_scheduling_order", True) else "explicit"))
+                  row_order=c.get("row_order", "scheduling" if c.get("rows_in_scheduling_order", True) else "explicit"),
+                  hit_unit=c.get("hit_unit", 0))
 
 
 def holdings_of(trace: dict) -> Holdings:
@@ -206,7 +215,7 @@ def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config,
           hit_of: Callable[[int, int], int], sources_of: Callable[[int, int], tuple[Source, ...]],
           resumed_of: Callable[[int, int], bool], n_of: Callable[[int, int], int], lag_of: Callable[[int], bool]) -> Walk:
     """The one derivation (the module's docstring). The callbacks give, for step s's row k, what the residual holds:
-    `hit_of` an admitting row's hit in blocks, `sources_of` a nonzero hit's sources, `resumed_of` whether a row after its
+    `hit_of` an admitting row's hit in hit units, `sources_of` a nonzero hit's sources, `resumed_of` whether a row after its
     request's first resumes it (read unless `pool`, which instead checks the pool bound), `n_of` n where the walk can't
     derive it; `lag_of(i)` whether request i's last sampling row ran after its stop, asked in async mode only of a request
     whose last two sampling rows are in consecutive steps (only there can the scheduler have run a decode past a stop).
@@ -235,7 +244,7 @@ def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config,
                 raise ValueError(f"step {s} row {k}: request {i} before request {len(opened)}: requests are numbered by first row")
             opened.add(i)
             resumed = not first and not pool and resumed_of(s, k)
-            hit = hit_of(s, k) * cfg.block_size if first or resumed else 0
+            hit = hit_of(s, k) * cfg.unit if first or resumed else 0
             adm.append((first, resumed, hit, sources_of(s, k) if hit else ()))
         order: Sequence[int] = range(len(step))
         if cfg.row_order == "batch":
@@ -311,9 +320,9 @@ def residual(advice: Advice, cfg: Config, *, order: Sequence[int] | None = None,
 
     def hit_of(s: int, k: int) -> int:
         h = advice.steps[s].rows[k].cache_hit
-        if h % cfg.block_size:
-            raise ValueError(f"step {s} row {k}: a cache hit of {h} isn't whole blocks")
-        hits.append(h // cfg.block_size)
+        if h % cfg.unit:
+            raise ValueError(f"step {s} row {k}: a cache hit of {h} isn't whole hit units ({cfg.unit})")
+        hits.append(h // cfg.unit)
         return hits[-1]
 
     def sources_of(s: int, k: int) -> tuple[Source, ...]:
@@ -446,12 +455,13 @@ def v0_records(adv: Advice) -> Records:
 
 
 def derived_records(res: Residual, walk: Walk, cfg: Config) -> Records:
-    """The residual's layout, by field, each at its least width as I1 does: the header (I1's, a width for hits in blocks,
-    a flag each for order, resumes and release being sent, and when resumes are, their width and count); a request's
-    prompt_len, its order (when sent) and its lag bit (when asked); a step's row count and requests, each resumed row's
-    position (when sent), a hit flag for each admitting row with the hit's blocks when nonzero and then its sources (I1's:
-    a count, and each a request and its blocks), and an explicit n where read; a kept output's release (when sent)."""
-    bs = cfg.block_size
+    """The residual's layout, by field, each at its least width as I1 does: the header (I1's, a width for hits in hit
+    units, a flag each for order, resumes and release being sent, and when resumes are, their width and count); a
+    request's prompt_len, its order (when sent) and its lag bit (when asked); a step's row count and requests, each
+    resumed row's position (when sent), a hit flag for each admitting row with the hit's units when nonzero and then its
+    sources (I1's: a count, and each a request and its units), and an explicit n where read; a kept output's release (when
+    sent). The hit unit is the registered config's, so it costs nothing here."""
+    bs = cfg.unit
     w_req = max(len(res.prompt_len) - 1, 0).bit_length()
     w_len = max((*res.prompt_len, *res.ns), default=0).bit_length()
     w_hit = max((*res.hits, *(s.n // bs for src in res.sources for s in src)), default=0).bit_length()
@@ -480,7 +490,7 @@ def derived_records(res: Residual, walk: Walk, cfg: Config) -> Records:
                 d["hits"] += 1 + (w_hit if r.cache_hit else 0)
                 if r.cache_hit:
                     if any(x.n % bs for x in r.sources):
-                        raise ValueError(f"step {s}: a source that isn't whole blocks")
+                        raise ValueError(f"step {s}: a source that isn't whole hit units ({bs})")
                     d["sources"] += w_src + len(r.sources) * (w_req + w_hit)
         steps.append(d)
     return Records(header, requests, steps,
@@ -618,12 +628,14 @@ FIELDS = [
     {"field": "kind", "verdict": "derived", "bits": "0", "from": "start, n, prompt_len",
      "derivation": "decode iff n = 1 and start >= prompt_len (I1's rule)", "checker": "compiler", "cost": "0"},
     {"field": "cache_hit", "verdict": "stays on admitting rows only, forced (not checked yet)",
-     "bits": "1 an admitting row + w_hit (blocks) a hit; 0 on every other row (I1: w_len every row)",
+     "bits": "1 an admitting row + w_hit (hit units) a hit; 0 on every other row (I1: w_len every row)",
      "from": "every earlier block's token ids (witness), the schedule, the pool's size, LRU eviction",
-     "derivation": "the longest resident block prefix, at most num_tokens - 1 rounded down to a block",
+     "derivation": "the longest resident prefix, at most num_tokens - 1 rounded down to the hit unit: the block, or in a "
+     "hybrid model vLLM's finer hash_block_size, where a hit may end inside a block and its tail is copied on write "
+     "(one KV cache group asserts hash_block_size == block_size)",
      "checker": "none yet: forcing it needs vLLM's block pool replayed over witness token ids",
      "cost": "unbuilt; until then a prover may report any shorter hit"},
-    {"field": "sources", "verdict": "stays, forced (not checked yet)", "bits": "I1's, with n in blocks (w_hit, not w_len)",
+    {"field": "sources", "verdict": "stays, forced (not checked yet)", "bits": "I1's, with n in hit units (w_hit, not w_len)",
      "from": "which request computed each hit block: the block pool's history over witness token ids",
      "derivation": "vLLM's block for a hash is the one the earliest still-cached computation filled",
      "checker": "none yet: the KV the circuit reads must be the named request's; with equal tokens computed twice, a "
