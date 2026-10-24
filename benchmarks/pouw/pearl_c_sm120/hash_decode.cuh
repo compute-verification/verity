@@ -1092,19 +1092,21 @@ template <int V> DEV void pd_tile_seg(const Args& a, int cols, int ti, int tj, i
 }
 // pd_tiles_V: the tile leaves (s512_tile_leaves' bytes), a CTA of 32 threads a tile (row-major; a last row block of R = 16,
 // 32 or 48 rows partial), lane j < s = R / 2 its segment j from the header table, then pd_fold.  With PD_GROUP (and
-// PD_PAIR) a CTA of 32 PD_G threads takes PD_G tiles of a row block (cdiv(cols / 64, PD_G) CTAs a row block, the last
-// partial), tile g's segment j on thread g s + j, and the tiles' folds run together on warp 0, lane g tile g's, paired with
-// warp 1 (8 PD_PAIR_WORDS bytes of dynamic shared memory): a fold's lone lane no longer holds a warp's issue to itself.
+// PD_PAIR) a CTA of 32 G threads takes G tiles of a row block (G = PD_G but where an instance says; cdiv(cols / 64, G)
+// CTAs a row block, the last partial), tile g's segment j on thread g s + j, and the tiles' folds run together on warp 0,
+// lane g tile g's, paired with warp 1 (8 PD_PAIR_WORDS bytes of dynamic shared memory): a fold's lone lane no longer holds
+// a warp's issue to itself.
 // p0 C~ (rows x cols), p1 U, p2 out (64 B a tile); i0 rows (a multiple of 16), i1 cols (a multiple of 64)
 constexpr int PD_G = 4, PD_GDIG = 32 * 8 + 1;   // a tile's digests, a word apart so the folds' lanes miss each other's banks
-template <int V> DEV void pd_tiles_t(const Args a) {
+template <int V, int G = PD_G> DEV void pd_tiles_t(const Args a) {
   const int cols = a.i[1], tn = cols / 64;
   if constexpr ((V & PD_GROUP) != 0) {
     static_assert((V & PD_PAIR) != 0, "PD_GROUP's folds are paired");
-    __shared__ uint64_t dig[PD_G * PD_GDIG];
-    if (blockDim.x != 32 * PD_G || pd_dyn_bytes() < 8u * PD_PAIR_WORDS) __trap();
-    const int gn = (tn + PD_G - 1) / PD_G, ti = blockIdx.x / gn, tj0 = PD_G * (blockIdx.x % gn);
-    const int R = min(64, a.i[0] - 64 * ti), s = R / 2, gs = min(PD_G, tn - tj0), tid = threadIdx.x, lane = tid % 32;
+    static_assert(G <= 32, "a tile's fold a lane of warp 0");
+    __shared__ uint64_t dig[G * PD_GDIG];
+    if (blockDim.x != 32 * G || pd_dyn_bytes() < 8u * PD_PAIR_WORDS) __trap();
+    const int gn = (tn + G - 1) / G, ti = blockIdx.x / gn, tj0 = G * (blockIdx.x % gn);
+    const int R = min(64, a.i[0] - 64 * ti), s = R / 2, gs = min(G, tn - tj0), tid = threadIdx.x, lane = tid % 32;
     if (tid < gs * s) pd_tile_seg<V>(a, cols, ti, tj0 + tid / s, tid % s, s, dig + PD_GDIG * (tid / s));
     __syncthreads();
     if (tid / 32 == 1) {

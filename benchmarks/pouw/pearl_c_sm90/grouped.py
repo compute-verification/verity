@@ -18,8 +18,8 @@ each 64-row block of A names its expert (``ex``).  The steps, one launch each (`
 * ``stats_a``, ``eprime_a``, ``pa``: stats_s5, eprime and pa over all of A's rows (a row at a time, no keys);
 * ``form_a``: form_s5_g, each 64-row block's F_A its expert's;
 * ``af``, ``gemm_pearlc``: gemm_words_g_d and gemm_pearlc_g_d over A, each 64-row block's B side its expert's;
-* ``hash_leaf``: pd_tiles_g, unit u's tile leaves on CTA row u, into the pass's leaves at its first tile, PD_G tiles of a row
-  block a CTA (`TILES_PD`).
+* ``hash_leaf``: pd_tiles_gw (or pd_tiles_g), unit u's tile leaves on CTA row u, into the pass's leaves at its first tile,
+  `tiles_g` tiles of a row block a CTA (`TILES_PD`).
 
 With ``split`` (`SPLIT_STEPS`, as `run.Pipeline`'s ``split_a`` without ``fillers``), A's commitment is two launches of the same
 bytes: ``rows_a``, pd_commit_gm in mode 1 (each unit's pads, row digests, leaves, seeds, line keys and E_A lines), then
@@ -43,7 +43,11 @@ PD = 851
 #: side by side on one warp, about a third of PD's issue at decode's partial row blocks, which a call's tile leaves share the
 #: SMs with the next call's pd_commit_gm on
 TILES_PD = 979
-#: PROBE: the older forms, "+"-joined, for an A/B in one session: tiles851 (the tile leaves at PD's), treewhole (pd_tree_g at
+#: the tiles of a row block a CTA of pd_tiles_gw (pearl_c_sm90.cu's PD_GW), where the cubin has it: a decode call's tile leaves
+#: on a quarter of PD_G's CTAs (32 for 4096 columns), so they leave the next call's pd_commit_gm the SMs it takes whole
+TILES_GW = 16
+#: PROBE: the older forms, "+"-joined, for an A/B in one session: tiles851 (the tile leaves at PD's), tiles4 (pd_tiles_g's
+#: PD_G tiles a CTA rather than pd_tiles_gw's TILES_GW), treewhole (pd_tree_g at
 #: a whole SM's shared memory), hashzero (pd_commit_gm hashes the filler rows: no zero row digest in the records), rows2d
 #: (pd_commit_g's grid, a unit's rows on its CTA row, rather than pd_commit_gm's), pairsmem (pd_commit_gm at an SM to a CTA
 #: only while every unit's m₁₆ rows fit the SMs, not its real rows: `commit_rows`)
@@ -177,6 +181,11 @@ def tiles_pd(dev) -> int:
     return PD if "tiles851" in PLACE or not has(dev, f"pd_tiles_g_{TILES_PD}") else TILES_PD
 
 
+def tiles_g(R, dev) -> int:
+    """TILES_PD's tiles a CTA: TILES_GW where the cubin has pd_tiles_gw, else PD_G (pd_tiles_g's)."""
+    return R.PD_G if "tiles4" in PLACE or not has(dev, f"pd_tiles_gw_{TILES_PD}") else TILES_GW
+
+
 def tree_setup(R, dev) -> None:
     """pd_tree_g's dynamic shared memory, at a split call's first use: PD_PAIR_SMEM, not PD_WHOLE's whole SM, since its CTAs
     run beside gemm_pearlc_g_d, whose CTA (129 KiB) fits beside one at that and would otherwise wait its chain out."""
@@ -301,8 +310,10 @@ class Grouped:
 
         def tiles():
             if tv & R.PD_GROUP:
-                grid = max(R.cdiv(u.m16, 64) * R.cdiv(n // 64, R.PD_G) for u in us)
-                d.launch(f"pd_tiles_g_{tv}", (grid, count), 32 * R.PD_G, R.PD_PAIR_SMEM // 2, p=(meta + TILES_AT,), i=(REC,))
+                tg = tiles_g(R, d)
+                grid = max(R.cdiv(u.m16, 64) * R.cdiv(n // 64, tg) for u in us)
+                d.launch(f"pd_tiles_g{'w' if tg == TILES_GW else ''}_{tv}", (grid, count), 32 * tg, R.PD_PAIR_SMEM // 2,
+                         p=(meta + TILES_AT,), i=(REC,))
             else:
                 d.launch(f"pd_tiles_g_{tv}", (max(u.tiles for u in us), count), 32, p=(meta + TILES_AT,), i=(REC,))
 

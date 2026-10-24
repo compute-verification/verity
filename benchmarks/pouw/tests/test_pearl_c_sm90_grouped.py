@@ -25,7 +25,7 @@ from verity_vllm.protocol_options import pouw_pearl_c_grouped as PG  # noqa: E40
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 SCHEME = "pearl-c-h100-v1-h3"
 SALT_KEY = bytes(range(100, 132))
-STEPS = ["pd_commit_gm_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_979"]
+STEPS = ["pd_commit_gm_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_gw_979"]
 
 
 def load(name: str, path: Path):
@@ -175,8 +175,8 @@ def test_each_units_record_is_its_own_calls_launches(split):
 def test_a_call_is_eight_launches_whatever_its_experts(counts):
     """One launch a step, in `grouped.STEPS`' order: pd_commit_gm on Σ m₁₆ CTAs, each an SM's whole shared memory
     while the units' real rows fit the 132 SMs ([40], and decode's 77 on 176 CTAs) and its least past them
-    ([3, 0, 300, 64, 17, 1]), and pd_tiles_g_979 on
-    (max row blocks x groups of PD_G tiles a row, units) of PD_G warps, each reading its records from the table; stats, E', P_A over all of A's rows; form_s5_g and both
+    ([3, 0, 300, 64, 17, 1]), and pd_tiles_gw_979 on
+    (max row blocks x groups of TILES_GW tiles a row, units) of TILES_GW warps, each reading its records from the table; stats, E', P_A over all of A's rows; form_s5_g and both
     GEMMs with the expert map, the GEMMs persistent at the H100's 132 SMs on A's rows and their map set."""
     n, k = 128, 1024
     g, dev, b, _ = grouped(n, k, experts=len(counts))
@@ -193,9 +193,9 @@ def test_a_call_is_eight_launches_whatever_its_experts(counts):
     assert G.commit_rows(dev, us) == sum(counts) and (sum(u.m16 for u in us) > 132) == (len(counts) != 1)
     assert by["pd_commit_gm_851"][1:4] == (sum(u.m16 for u in us), 32 * 4, smem)
     assert by["pd_commit_gm_851"][5:] == ((b["meta"], b["meta"] + G.Grouped.map_at(us)), (G.REC,))
-    groups = max(R.cdiv(u.m16, 64) * R.cdiv(n // 64, R.PD_G) for u in us)
-    assert by["pd_tiles_g_979"][1:4] == ((groups, len(us)), 32 * R.PD_G, R.PD_PAIR_SMEM // 2)
-    assert by["pd_tiles_g_979"][5:] == ((b["meta"] + G.TILES_AT,), (G.REC,))
+    groups = max(R.cdiv(u.m16, 64) * R.cdiv(n // 64, G.TILES_GW) for u in us)
+    assert by["pd_tiles_gw_979"][1:4] == ((groups, len(us)), 32 * G.TILES_GW, R.PD_PAIR_SMEM // 2)
+    assert by["pd_tiles_gw_979"][5:] == ((b["meta"] + G.TILES_AT,), (G.REC,))
     assert by["stats_s5"][6] == (rows, k) and by["eprime"][6] == (rows,) and by["pa"][6] == (rows,)
     assert by["form_s5_g"][1] == (k // 128, rows // 64) and by["form_s5_g"][5][3:] == (b["fa_codes"], b["at"], ex)
     for name, slot, cols in (("gemm_words_g_d", 1, R.WORDS_N), ("gemm_pearlc_g_d", 0, n)):
@@ -228,10 +228,10 @@ def test_a_split_call_runs_as_tree_from_its_record_after_the_per_row_keying():
 
 
 class OldCubinDev(RecordingDev):
-    """A cubin built before pd_tree_g, pd_tiles_g_979 and pd_commit_gm: looking them up fails as `run.Dev.fn`'s does."""
+    """A cubin built before pd_tree_g, pd_tiles_g_979, pd_tiles_gw_979 and pd_commit_gm: looking them up fails as `run.Dev.fn`'s does."""
 
     def fn(self, name):
-        if name.startswith("pd_tree_g_") or name in ("pd_tiles_g_979", "pd_commit_gm_851"):
+        if name.startswith("pd_tree_g_") or name in ("pd_tiles_g_979", "pd_tiles_gw_979", "pd_commit_gm_851"):
             raise RuntimeError("cuModuleGetFunction returned CUresult 500 (named symbol not found)")
         return name
 
@@ -311,13 +311,13 @@ def test_the_vllm_call_runs_on_the_schedules_lanes_from_rotating_sets(schedule):
     for _ in range(3):
         PG.gemm_grouped(run, ws, torch.randn(sum(counts), k).to(torch.bfloat16), counts)
     log = launches(dev)
-    side = ("pd_tree_g_851", "pd_tiles_g_979")
+    side = ("pd_tree_g_851", "pd_tiles_gw_979")
     assert [(x[0], x[4]) for x in log] == [(x, lane if x in side else main) for lane in (1, 3, 1) for x in lane_steps(split)]
     by = {name: [x[5] for x in log if x[0] == name] for name in lane_steps(True)}
     ptr = lambda j, x: g.sets[j][x].data_ptr()
     for c, j in enumerate((0, 1, 0)):
         assert by["pd_commit_gm_851"][c] == (ptr(j, "meta"), ptr(j, "meta") + G.Grouped.map_at(us))
-        assert by["pd_tiles_g_979"][c] == (ptr(j, "meta") + G.TILES_AT,)
+        assert by["pd_tiles_gw_979"][c] == (ptr(j, "meta") + G.TILES_AT,)
         assert by["gemm_pearlc_g_d"][c][2:4] == (ptr(j, "c"), ptr(j, "u"))
         assert by["pd_tree_g_851"][c:c + 1] == ([(ptr(j, "meta") + G.TREE_AT,)] if split else [])
     for j in (0, 1):
@@ -388,6 +388,7 @@ def test_the_vllm_call_runs_unsplit_on_a_cubin_without_pd_tree_g():
     assert launches(dev)[0][1] == (max(u.m16 for u in us), 2) and launches(dev)[0][5] == (run._groups[(1, 3)].b["meta"].data_ptr(),)
     assert not G.has_tree(dev) and G.has_tree(RecordingDev())
     assert (G.tiles_pd(dev), G.tiles_pd(RecordingDev())) == (G.PD, G.TILES_PD)
+    assert (G.tiles_g(R, dev), G.tiles_g(R, RecordingDev())) == (R.PD_G, G.TILES_GW)
     rec = np.frombuffer(PPD._bytes(run._groups[(1, 3)].b["meta"])[:2 * G.REC], np.uint8).reshape(2, G.REC)
     assert rec[:, :G.TILES_AT].copy().view(G.ARGS).ravel()["i"][:, 2].tolist() == [0, 0]
 
