@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
+import shutil
 from collections import Counter
 from pathlib import Path
 
@@ -289,8 +289,8 @@ def warden_views(root: Path, name: str, w: dict) -> list[str]:
     warden's tick for it (admission s, or release a: the bucket of the request's last ingress cell), plus 10 µs per
     request before it in that bucket in ordinal order, so that the order is the warden's (bucket, ordinal). The client's
     own send is in ``client_send_unix``, and ``chunks``, ``first_token_s`` and ``done_s`` are rebased on the new
-    ``send_unix``, so that every output keeps its time. ``steps.jsonl``, ``meta.json`` and ``server.log`` are the
-    trace's (hard links)."""
+    ``send_unix``, so that every output keeps its time. ``steps.jsonl``, ``meta.json`` and ``server.log`` are copies of
+    the trace's: a hard link stops `research fetch`'s tar stream."""
     tau = w["params"]["bucket_ms"] / 1000
     base = math.floor(w["origin_unix"] / tau)
     reqs = read_jsonl(root / name / "requests.jsonl")
@@ -315,8 +315,7 @@ def warden_views(root: Path, name: str, w: dict) -> list[str]:
                          **{k: round(r[k] + shift, 6) for k in ("first_token_s", "done_s") if r.get(k) is not None}}
                 f.write(json.dumps(r, separators=(",", ":")) + "\n")
         for f in ("steps.jsonl", "meta.json", "server.log"):
-            (d / f).unlink(missing_ok=True)
-            os.link(root / name / f, d / f)
+            shutil.copyfile(root / name / f, d / f)
         made.append(d.name)
     return made
 
