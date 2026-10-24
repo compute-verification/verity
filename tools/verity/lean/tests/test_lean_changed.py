@@ -134,6 +134,19 @@ def test_a_build_slot_takes_the_slot_path(fast, tmp_path, monkeypatch):
     assert any("taking the slot path" in s for s in said)
 
 
+def test_dev_cache_takes_that_path_even_where_a_build_slot_is_granted(fast, tmp_path, monkeypatch):
+    root, tree, calls = fast
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: pytest.fail("--dev-cache takes no build slot"))
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    said = []
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append, dev_cache=True) == 0
+    assert [a[-1] for a, _ in calls] == [str(root / "pkg"), str(root / "pkg/Req")]
+    assert all("--dev-cache" in a for a, _ in calls) and any("asks for it; taking the --dev-cache path" in s for s in said)
+    for argv in (["--dev-cache"], ["--records", "pkg", "--dev-cache", "--tree", str(tree)]):
+        with pytest.raises(SystemExit):
+            LC.main(argv)
+
+
 def test_the_dev_cache_path_never_builds_in_a_shipped_tree(fast, tmp_path, monkeypatch):
     root, _, calls = fast
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", refuse)

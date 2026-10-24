@@ -4,14 +4,15 @@ module that no longer compiles (two merges git combines cleanly that Lean doesn'
 the audit's cold build reaches it.
 
     python tools/verity/lean/lean_changed.py --cache DIR --deps DIR --tree DIR
-    python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR]   a lane's records, on a kept tree
+    python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR] [--dev-cache]   a lane's records
 
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a tree kept per slot, which prints what the audit prints,
 `--update`'s review included, after a build of only what changed since that slot's last run. It first waits for one of the
 node's Lean slots of pool `build` (`lean_slot.py`; pool `any` never stands in for it), never one of the `audit` pool's, where
 hour-long audits hold every slot, whatever slot (LEAN_SLOT) the process that started it holds. Where SLOTS lists no `build`
-pool, it takes the `--dev-cache` path instead (`dev_records`): `check.py --dev-cache --build --no-replay --no-runs` on this
+pool, or with `--dev-cache` (a slot tree whose dependencies are fetched cold builds them from source), it takes the `--dev-cache` path
+instead (`dev_records`): `check.py --dev-cache --build --no-replay --no-runs` on this
 checkout's PKG, then its requirers, each build restored from the published cache (Security: about 40 minutes), with the same
 reports, record keep and kind; that path builds in this checkout, so a run takes it only with `--cwd clone`. It says which
 path it took, and a recorded run's `result.json` names it (`path`: `slot` or `dev-cache`). Slot `build/I`'s tree is
@@ -374,10 +375,10 @@ def write_result(run_dir: Path, run_id: str, pkg: str, rc: int, out: Path, updat
 
 
 def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool = False, moved: Path | None = None,
-                  out: Path | None = None, log=print) -> int:
+                  out: Path | None = None, log=print, dev_cache: bool = False) -> int:
     """`--records`: `check.py --build --no-replay --no-runs` on the package ``name`` names, in ``tree`` (default: the tree of the
     `build` slot it takes; any other must be under `RECORDS`), or `dev_records` where the node's Lean slots grant no `build`
-    slot; check.py's exit status, or 2 when ``tree`` is not under `RECORDS`, ``name`` matches no single package or another run
+    slot or ``dev_cache`` asks for it; check.py's exit status, or 2 when ``tree`` is not under `RECORDS`, ``name`` matches no single package or another run
     holds the tree past `TREE_WAIT_S`."""
     base = (LA.COMMON.cache_dir() / RECORDS).resolve()
     if tree is not None and base not in tree.resolve().parents:
@@ -402,6 +403,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
     todo, rc = [pkg, *requirers(pkg, pkgs)], 0
+    if dev_cache:
+        return dev_records(pkg, todo, update, moved, out, "--dev-cache asks for it", log)
     os.environ.pop(LEAN_SLOT.HELD, None)
     try:
         slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
@@ -597,12 +600,17 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--update", action="store_true", help="with --records: check.py --update")
     ap.add_argument("--moved", type=Path, metavar="FILE", help="with --records --update: check.py --moved FILE")
     ap.add_argument("--out", type=Path, help="with --records: check.py --out DIR")
+    ap.add_argument("--dev-cache", action="store_true", help="with --records: take the check.py --dev-cache path even where "
+                    "a build slot is granted (its tree's dependencies are fetched cold, say)")
     a = ap.parse_args(argv)
     if not a.records:
-        if a.update or a.moved or a.out:
-            ap.error("--update, --moved and --out go with --records")
+        if a.update or a.moved or a.out or a.dev_cache:
+            ap.error("--update, --moved, --out and --dev-cache go with --records")
         return run(a.cache, a.deps, a.tree or LA.COMMON.cache_dir() / "lean-changed", log=lambda s: print(s, flush=True))
-    return audit_records(a.records, a.deps, a.tree, a.update, a.moved, a.out, log=lambda s: print(s, flush=True))
+    if a.dev_cache and a.tree:
+        ap.error("--dev-cache builds in this checkout, not in a --tree")
+    return audit_records(a.records, a.deps, a.tree, a.update, a.moved, a.out, log=lambda s: print(s, flush=True),
+                         dev_cache=a.dev_cache)
 
 
 if __name__ == "__main__":
