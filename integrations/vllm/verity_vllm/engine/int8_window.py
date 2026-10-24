@@ -23,8 +23,8 @@ The windows are the cache's plaintext K and V, so `int8_ops.window_attention`, r
 `int8_ops.paged_attention` gathers them from the pages, gives the same bits.  `int8_ops.credited_attention` runs the read as
 two named ops, ``verity_int8::credited_step`` (the offsets and buffers) and ``verity_int8::credited_window`` (a layer's
 flags and window), so a capture records the cache, block table and buffers each window read, and the int8 fold
-(`observe.fold.patterns.int8`) binds each request's ``verity_int8::kv_quant_window`` to its KV slots as it binds
-``verity_int8::kv_quant``.  The ops find their read by its ``handle``.
+(`observe.fold.patterns.int8`) binds each request's slice of ``verity_int8::kv_quant_window_batch`` to its KV slots as
+it binds ``verity_int8::kv_quant_batch``'s.  The ops find their read by its ``handle``.
 """
 from __future__ import annotations
 

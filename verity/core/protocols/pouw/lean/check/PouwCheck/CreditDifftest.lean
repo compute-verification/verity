@@ -14,7 +14,7 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
   or `{"refused": [code, why]}`.
 * `outcome` (`drawn`'s and `proofs`, as `credit._outcome` takes them) and `a-link` (`rounds`, `entries` and
   `calls`, the window's call count, as `credit._a_link` takes them), `Credit.Internal`'s: null, or `{"refused": [code, why]}`.
-* `window` (`credit`'s, `descriptor` in hex, `entries`, `proofs` and `k`, as `credit._window_outcomes` takes them): `{"credited": [indices]}`,
+* `window` (`credit`'s, `descriptor` in hex, `entries`, `proofs`, `k` and `rows`, as `credit._window_outcomes` takes them): `{"credited": [indices]}`,
   and `period` (`key`, `ledger`, `pins`, `main`, `name`, `windows`, as `credit._period_outcomes` takes them, each window's evidence
   `window`'s): `{"credited": …}`; or
   `{"refused": [code, why]}`.
@@ -52,7 +52,7 @@ def windowOf (j : Json) : Except String Json := do
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", toJson out)])
     (Credit.window (← f "key") (← f "ledger") (← f "pins") (← f "main") (← f "window") (← f "session") (← f "salt")
       (← f "calls") (← f "served") (← f "commit") (← f "rounds") (← f "draw") (← f "descriptor") (← f "entries")
-      (← f "proofs") (← f "k"))
+      (← f "proofs") (← f "k") (← f "rows"))
 
 def periodOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j

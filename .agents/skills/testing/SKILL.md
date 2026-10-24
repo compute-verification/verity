@@ -18,9 +18,9 @@ runs the same runner as its pytest step.
 
 ## Run tests
 
-Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --on auto` queues an `agent-test` job
-(4 CPUs, 16 GiB, 60 min) outside the check slots on vy-nebius-2, or runs it in a slot of vy-nebius-cpu-1's `research` pool
-when it starts sooner there (`research/auto.py`; it says which). Give it `--cwd source`, so the job runs in the shipped tree rather than
+Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --on auto` runs an `agent-test` job
+(4 CPUs, 16 GiB, 60 min) in a slot of vy-nebius-cpu-1's or vy-nebius-cpu-5's `research` pool, and queues it outside the check
+slots on vy-nebius-2, the GPU node, only when no pool slot fits it (`research/auto.py`; it says which). Give it `--cwd source`, so the job runs in the shipped tree rather than
 its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment. It returns
 once the job starts, and `research status RUN` checks back on it. `--wait` blocks until the job ends, so give it only
 to a run that ends within about 20 minutes (AGENTS.md "Lanes": no step waits long).

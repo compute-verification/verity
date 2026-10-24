@@ -67,6 +67,7 @@ def tanh_table():
     return words, lo
 
 
+@pytest.mark.slow
 def test_the_vectorised_tanh_is_mufu_tanh(tanh_table):
     from tests.properties import fa2_softcap_capture_gpu as S
 

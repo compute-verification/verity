@@ -49,7 +49,7 @@ theorem decodeK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec :
       sess.streams.size = spec.repStreams.size ∧
       ∀ x ∈ spec.repStreams.toList,
         ∃ s, sess.streams.find? (·.name == x.2.2) = some s ∧ 0 < s.rounds.size := by
-  unfold Record.decodeWithK
+  unfold Record.decodeWithK Record.decodeJWithK
   retl_walk [Record.check]
   all_goals
     subst_vars
