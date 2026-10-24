@@ -1076,7 +1076,9 @@ Each assumption, and what breaks without it:
 
   `compile` refuses a read with no writer. Without A2, a value nobody checks feeds the circuits, and every draw passes
   (attacks 4 and 6).
-- **A3, the tie and the step units are drawn at ε at δ, not all.** N2's units are `All`. The step units add I_ε at
+- **A3, the tie and the step units are drawn at ε at δ, not all.** N2's units are `All`, and so is the compile slice
+  on every advised window, never sampled: its carry chain binds only proved units and its scan pins `en`
+  ([protocol/compile-slice.md](protocol/compile-slice.md)). The step units add I_ε at
   probability δ_audit. A wrong tie unit adds 8·B bits unless the tie is `All` too (attack 8). The bound holds on
   accepted audits only, as every capacity bound here does: a rejected window may already have carried up to its unbound
   capacity.
@@ -1157,52 +1159,48 @@ cursor. So:
   log shifter that computes only the A entries it returns: about Q + A·bitlen(Q) muxes an element bit, where moving
   the whole queue would take Q·bitlen(A).
 
-**The rows** are each field's elements in turn, each least significant bit first, zero-padded to a whole 16-bit word:
-
-    state row    run_valid R×1 | run_id R×IW | run_P R×LW | run_O R×LW | run_out R×LW | run_comp R×LW
-                 | wait_valid W×1 | wait_id W×IW | wait_P W×LW | wait_O W×LW | wait_out W×LW | free 1×BW
-                 | qh 1×QW | dh 1×DW | steps 1×PW
-    window row   q_valid Q×1 | q_id Q×IW | q_P Q×LW | q_O Q×LW | dec D×1 | left 1×DW
-
-- The state row's first twelve fields are ReplayStep_v1's state input and next-state output, bit for bit. They hold
-  the running slots (id, prompt length, certified output length, outputs so far, tokens computed), the waiting slots,
-  and the free block count. A running request holds ⌈computed / B⌉ blocks, so the KV pool needs no count per request.
-  `steps` counts the window's executed steps still to come.
-- The step's `arr_*` are the window row's A arrivals at `qh`, and its `bits` the A decisions at `dh`, zeros past `left`.
-- The widths are LW = bitlen(L), BW = bitlen(NB), QW = bitlen(Q), DW = bitlen(D) and PW = bitlen(P).
-- In every row the valid elements of each group are a prefix and the rest are zero bits, as are the decisions past
-  `left`. `decode` and `decode_window` refuse any other row.
+**The rows'** layouts are `replay_chain`'s (`row_fields`, `window_fields`). The state row's state group is
+ReplayStep_v1's state input and next-state output, bit for bit, at the shape's AS and EW (`Shape`'s two statics):
+with EW, `run_pfx R×EW` after `run_comp`; with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`. It adds
+the heads `qh` and `dh` and `steps`, the window's executed steps still to come. The window row is the queue (at most
+Q) and the decisions ``dec`` (at most D) with ``left``. With AS an arrival carries its cap (O = max_tokens): `q_cap
+Q×1` after `q_O`, as the step's `arr_cap` and the warden slots' `a_cap`. In every row the valid elements of each
+group are a prefix and the rest are zero bits, and `decode` and `decode_window` refuse any other row.
 
 **A window** is the state rows S_0 … S_{P+1}, with P the public cap on its steps, and two window rows: the last
 window's and its own. Unit 0, `ReplayLoad`, reads state rows 0 and 1 and both window rows. Unit u ≥ 1 is step u:
 ReplayStep_v1 on state row u, with `ReplayAdvance` checking the step's arrivals and bits against window row 1 and
 checking state row u + 1. Steps past the window's executed count are idle: the next row is the row, and
 `ReplayAdvance`'s `active` = 0 drops the unit's rows.
-- The load refuses a state row 0 that leaves decisions or steps unread, a queue past Q, more than D decisions or P
-  steps, and decisions with no step. A step refuses arrivals taken past what is left or past A, and decisions read
-  past what is left or past A. The window's last executed step must read its last decision.
+- The load refuses a state row 0 that leaves steps to run or has read past its window row's decisions, a queue past
+  Q, more than D decisions (the carried ones and the window's) or P steps. A step refuses arrivals taken past what is
+  left or past A, and decisions read past what is left or past A.
 - **The carry.** Window w's state row 0 is window w − 1's last state row, and its window row 0 is window w − 1's window
   row 1, each under the same salt (`commit_window(carry=…)`), so the verifier checks that their openings b‖c are equal
-  (`check_chain`, `C-carry`).
+  (`check_chain`, `C-carry`). Decisions a window leaves unread carry: the load writes the window's after the last
+  window row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a decision to the
+  earlier of its step's window and its arrival's ingress window, up to two windows before its step's: at T = 20, 5 of
+  async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries from window 0 to their
+  steps in windows 1 and 2 (`benchmarks/network_e2e/encodings/tests/test_v1.py`).
+- **The end.** `ReplayClose` reads the session's last state row and window row and refuses a session that ends with a
+  step to run or a decision unread (`close`). The compile unit charges each decision in the window that commits it,
+  A5's, in commit order, which is the order the scan reads them in. So a carried decision is charged where it is
+  committed and read where its step is, and none is left uncharged or unread
+  ([protocol/compile-slice.md](protocol/compile-slice.md)).
 - **The start.** The session's first rows are the empty engine (`empty`, with NB − 1 free blocks) and the empty
   window, under the public salts `empty_salts`, whose openings the verifier computes (`C-first`).
 
 **Cost** (`size`). A step costs `ReplayAdvance`'s ANDs: the two fronts, about (Q + A·QW)·(1 + IW + 2·LW) and
 D + A·DW, and about 2·width for the idle select and the equality. It also costs three reads and one state row. A
 window costs P steps and one `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3
-path of depth ⌈log2(P + 2)⌉, or 1 for a window row.
+path of depth ⌈log2(P + 2)⌉, or 1 for a window row. A session adds one `ReplayClose` (13 ANDs at the sync
+KV-pressure trace's shape) and its two reads.
 
-**On the corpus** (run `r20261024-091809-297f`): TRACE-CORPUS's 15 sync traces of 1000 requests each, from Llama 3.2
-1B (greedy and seeded) and Llama 3.1 8B int8, each in five engine configurations, cut into the certifier's 60 s
-windows. Each trace is replayed with ENC-REPLAY's scheduler, and `load` and `advance` are walked from the empty rows.
-- On all 15 traces, every state row is the replay's, every front's arrivals are the replay's next, and its bits are
-  the replay's asks. Both circuits match their specifications on the sampled units.
-- A step costs 16,569 ANDs (8B light: R = 19, A = 4, Q = 145) to 80,959 (heavy: R = 256, A = 35, Q = 1000). The
-  queue's front is more than half of that at Q = 1000, which those traces reach because their 1000 requests arrive
-  within one window. A load costs 0.1M to 0.8M ANDs, and a window 3.5e7 to 1.9e8.
-- For scale, ReplayStep_v1 itself is 521,358 ANDs at R = 256.
-- Moving the queue and the decisions in every state row, instead of reading them at heads, cost 2.3 to 4 times as much
-  a step (run `r20261024-085627-c66d`).
+**On the corpus** (run `r20261024-091809-297f`, before the carry): on all 15 of TRACE-CORPUS's sync traces, cut into the certifier's
+60 s windows and walked from the empty rows, every state row and front is the replay's, and both circuits match
+their specifications on the sampled units. A step costs 16,569 ANDs (8B light: R = 19, A = 4, Q = 145) to 80,959
+(heavy: R = 256, A = 35, Q = 1000), against ReplayStep_v1's 521,358 at R = 256; moving the queue and the decisions
+in every state row instead cost 2.3 to 4 times as much a step (run `r20261024-085627-c66d`).
 
 ## Advice v0's validity (`advice_check`)
 
@@ -1250,25 +1248,10 @@ takes v1 and produces v0 by replay, and most of v0's validity holds by construct
 3. `AdviceReplay` scans the sorted events with one request's state, as `advice._replay` replays it: each request's
    record, then its rows in stream order.
 
-**Cost** (`size`): ANDs = (L / 5)·(parse + replay) + C(L / 5)·swap + the ends. C(n), the sort's comparators, is about
-n·log2(n)² / 4. A parse block costs 7,000 to 11,300 ANDs, a swap 160 to 250 and a replay step about 1,000, growing with
-log L, the width of the counters and positions:
-
-| L (bits) | ANDs | per bit | parse | sort | replay |
-|---|---|---|---|---|---|
-| 240 | 470,116 | 1,959 | 3.6 × 10^5 | 6.5 × 10^4 | 4.5 × 10^4 |
-| 1,520 | 3.75 × 10^6 | 2,466 | 2.5 × 10^6 | 1.0 × 10^6 | 2.9 × 10^5 |
-| 40,000 | 1.49 × 10^8 | 3,722 | 7.5 × 10^7 | 6.6 × 10^7 | 7.8 × 10^6 |
-| 10^6 | 5.78 × 10^9 | 5,775 | 2.1 × 10^9 | 3.5 × 10^9 | 2.0 × 10^8 |
-| 1.06 × 10^7 | 8.67 × 10^10 | 8,180 | 2.4 × 10^10 | 6.1 × 10^10 | 2.1 × 10^9 |
-
-The last row is the 60 s llama8b-shape window, whose v0 advice the red team measured at 10.6 Mbit: 86,704,366,964
-ANDs, 70% of them the sort, whose 2.4 × 10^8 comparators each carry a 201-bit event. Three levers would cut that,
-each a change to what the Definition states, so none is taken here:
-- a public cap on the rows, so a compaction of the L / 5 slots (n·log2 n switches) feeds a sort of the cap;
-- the sort's permutation as a private input: a permutation network's n·log2 n switches, which carry the event but
-  compare nothing, and an in-order check, in place of the comparators;
-- a public cap on w_len below 63 bits, which narrows the 126 value bits each event carries.
+**Cost** (`size`): ANDs = (L / 5)·(parse + replay) + C(L / 5)·swap + the ends, with C(n) ≈ n·log2(n)² / 4
+comparators: 470,116 at L = 240 and 1.49 × 10^8 at 40,000. The 60 s llama8b-shape window's v0 advice, 10.6 Mbit,
+would cost 8.67 × 10^10, 70% of it the sort. A public cap on the rows, the sort's permutation as a private input or a
+narrower w_len would each cut that, each a change to what the Definition states.
 
 ## Advice v1 (`benchmarks/network_e2e/encodings/v1.py`)
 
@@ -1371,9 +1354,14 @@ release order.
   (every hit, and every value's window) and its order is the one `arrival_order` recovers from the advice it decodes
   to.
 
+The compile unit commits the values themselves, not this string, and the string's segments are only their charge (the
+composition below): what the bound counts is the charge, not the committed length.
+
 - *The bound.* `code_v1`'s segments are prefix-free (#3591), so the strings are prefix-free for every W, and at most
   2^c strings are charged c bits or fewer. That is LEAK-LEAN's `BitsCount` by `bitsCount_of_prefixFree` (#3533).
-  Since `decode` takes only the canonical string, at most that many advices decode at that charge.
+  `code_v1.encode` is injective on the windows (`code_v1.decode` inverts it), and the order entries' inverse, the
+  replay and the walk give the advice from the windows, so at most 2^c residuals, and so at most that many advices,
+  are accepted at a charge of c or less.
 - *v0's per-window parts.* Each window's part is self-delimited, which settles this item of v0's list above.
 - *Measured* (art:0f5f23d498a7f042fcf2a638d9a1500afbc916a4498569666957754415428c30, run r20261024-111418-79a9). It
   covers the 14 corpus traces of 1,000 requests with the client's send standing for the release, and the two warden
@@ -1405,25 +1393,74 @@ release order.
   - These contexts read no release time: the warden's fixed schedule leaves the engine no timing to read.
 
 **Composition**, all in one ZK proof under the advice's hiding root:
-1. v1's windows: the committed string is at most ℓ bits, and parses into W windows by `code_v1`'s counts.
-2. The scan of ENC-REPLAY's `ReplayStep_v1` over the session's steps, from the empty engine. Its arrivals are the
-   certified requests in release order, each taken at its rank. The window row holds a queue of the next Q released
-   requests not yet arrived, in (a, ordinal) order, with Q a public cap like H. Arrival p takes the one at the rank its
-   order entry sends, 0 where none names p, and a rank of Q or more is refused. The rows gain the window's order
-   entries and the queue (ENC-REPLAY and ADV-SPEC). The largest rank on the warden traces is 75 (heavy, 300 requests
-   a second; p50 7) and 2 (small KV), so Q = 128 holds both. Its residual is the decisions, the order entries and the
-   sent shortfalls, which are witness.
-   The scan also carries one `code_v1` encoder and its model. Each window's counts are witness, coded first and checked
-   against the scan's tallies at the window's end. Each decision, order entry and sent shortfall is encoded as the
-   step reads it. At the end, each window's terminated codeword must equal its segment. Because `decode` takes only the canonical
-   string, this forward encoding is `decode`. The coder can't run ahead of the scan as a parser, since which value is
-   read next, and so which window it is coded in, is the replay's.
-3. ENC-DERIVED's walk over the rows, which gives I1 v0.
-4. ADV-SPEC's `AdviceCheck_v1{L}` (#3547) is the specification of what 1–3 give. The tests hold every advice v1 decodes,
-   from random and bit-flipped strings too, to I1's own `advice.decode`, whose refusals that circuit makes. So it holds
-   wherever 2 and 3 derive their rows rather than take them as witness, and needn't run at v0's length.
-5. `compile_steps(registered, advice, ingress)` (#3504) turns the advice into the Programs, with `ingress` the certified
+1. *The values are the committed advice.* The advice's hiding rows (#3507) hold each window's residual raw, as
+   `replay_chain`'s window row: its decisions as bits in the scan's order, at most D a window (4,391 on the corpus'
+   largest), in `dec` with their count `left`; its sent shortfalls, at most H, in `hits` with `hleft` ("The rows"
+   below); and its order entries (position, rank). No decoder runs in the circuit: the scan reads each field at a
+   private head of the chain's (`dh`, `hh`).
+2. The scan of `ReplayStep_v1` over the session's steps, from the empty engine. The window row holds a queue of the
+   next Q released requests not yet arrived, in (a, ordinal) order, Q a public cap like H, and arrival p takes the one
+   at its order entry's rank (0 where none names p; a rank of Q or more is refused). Q = 128 holds the warden traces'
+   largest, 75 (heavy; p50 7) and 2 (small KV). The chain fills the step's A arrival slots from the queue, each
+   `arr_id` its arrival ordinal, so `ReplayStep_v1` needs no change for the ranks. The decisions are the scan's bits,
+   and each lookup's hit is h* less the committed shortfall. The chain reads every committed value and none past
+   them, so the values are exactly the asks, the deviations and, past the bound, the lookups. Under async scheduling
+   (AS) the certified O forces each lag row, at no decision (`ReplayStep_v1`'s "Async scheduling").
+3. *The charge.* The registered code runs forward over the same values: per window, `code_v1`'s window (#3591) over
+   the values charged to it, in `code_v1._window`'s order, on ENC-CODE's encoder ("The encoder in the circuit"
+   below). A decision's context is min(run, 2), run the 0s since the last 1 in the decision stream, across windows:
+   a function of the committed decisions, which the encoder keeps in its own state. The window's coded length ℓ_w
+   (`code_v1.Encoded.lens`) must be at most its declared charge c_w, a protocol output. No codeword is committed, so
+   nothing reads a segment at a data-dependent cursor, no ask forks the replay, and the bound above holds as it is.
+   ADV-SPEC's `CompileSlice_v1` (#3661) is 1–3 for one window, proved in ZK, with its stand-ins (Open).
+4. ENC-DERIVED's walk over the rows, which gives I1 v0.
+5. ADV-SPEC's `AdviceCheck_v1{L}` (#3547) specifies what 1–4 give. The tests hold every advice v1 decodes, random and
+   bit-flipped strings' too, to I1's `advice.decode`, whose refusals that circuit makes. So it holds wherever 2 and 4
+   derive their rows rather than take them as witness, and needn't run at v0's length.
+6. `compile_steps(registered, advice, ingress)` (#3504) turns the advice into the Programs, with `ingress` the certified
    bodies by id.
+
+**The encoder in the circuit** (`arith_encode`: `ArithCountStep_v1{K, BIN, CW}`, `ArithCountFinish_v1{CW}` and
+`BookKT_v1{C}`, with their references as specs; its docstring has the mechanics).
+- *The charge is the coded length.* The scan reads the committed values (item 2). The encoder runs `code_v1`'s code
+  forward over them, once a window from `Tally()`, and counts the bits the window's segment would hold: each symbol's
+  scalings, taken at once, and the termination's 2 when used. The total must be at most c_w. No codeword is committed
+  and no segment is compared. `encode` is injective on the values and its strings are prefix-free, so at most 2^c value
+  lists are accepted at a charge of c or less ("The bound" above).
+- *A window's run*, in `code_v1._window`'s order: n_arrived = `left`; each decision slot j < D at context min(run, 2),
+  its (f0, f1) from `BookKT_v1{3}`, coded by `ArithCountStep_v1{18, 1, 20}`; n_hits = `hleft` and each shortfall;
+  n_resumes (0 under v1); n_order and each order entry's position gap and rank step; n_lag (0 under v1); then
+  `ArithCountFinish_v1{20}`. Slots past a count run with en = 0. A refusal (a symbol
+  code.py refuses, more than K scalings, a count past 2^20, a charge past c_w) fails the unit, and K = 18 never refuses
+  a symbol.
+- *The context and the frequencies are the circuit's, never witness.* The context is a 2-bit run counter carried from
+  the replay's position: an arrival resets it, and a 0 raises it, saturating. (f0, f1) come from counts that start at
+  the registered book's public priors and that each coded decision raises in the circuit, across windows. An integer's
+  (cum, freq, total) come from the book's public bin tables. A context or a frequency of the prover's choosing would
+  pick the code per value and charge any decisions next to nothing. ADV-SPEC's slice (#3661) computes both in the
+  circuit too, at its own model (Open), and charges the position after `ArithEncodeFinish_v1`, which counts the same
+  bits.
+- *Integers.* `code_v1` codes an integer as `code.Binned` does: a bin symbol from the book's table (or the escape and a
+  uniform one), then a uniform offset, each a general (cum, freq, total) that `ArithCountStep_v1{18, 0, 20}` counts.
+  `ChargeCount_v1{N}` lowers a decisions-only window's counts, the slice's one call (docstring); the rest is Open.
+- *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`): `code_v1` over v1's windows
+  (`v1.residual`, a book fit at `v1.TABLE_CAPS`) and ENC-DERIVED's still-sent fields. After every symbol the count's
+  interval and `used` are code.py's and its count is the bits consumed. Each window's finish gives v1's charge and
+  refuses one bit less, each bit's estimate is the book's model's at context min(run, 2), and the bit-checking variant
+  refuses every flipped or cut segment. On the 14 corpus traces at T = 600, read with the warden's ingress and with the
+  client's send as the release (order entries sent), and 6 traces' fields: 0 mismatches in 1,103,746 circuit cases
+  (art:903980ba78e15721babf9fd51b65befe7e298f4cc671052604dbad9599166040). The certifier's vectors (ENC-REPLAY's step
+  traces, the TRACE-CORPUS fixture) hold no order entry.
+- *Cost* (ANDs, pinned): a decision 2,580 (the step's 2,243 and `BookKT_v1{3}`'s 337), 2.8% of a
+  `ReplayStep_v1{16,64,16}` step's 92,146; an integer's symbol 3,963; a window's finish 41. A window pays for all its
+  fixed-width slots. The corpus's largest (the art's `shapes.json`): light's, 4,396 decisions, 11.4M; smallkv's, 1,466
+  decisions and 5,686 integer symbols, 26.3M before the integers' lowering; async heavy's with the client's send, 1,000
+  decisions and 1,761 integer symbols, 9.6M.
+- *The bit-checking variant* (`ArithEncodeStep_v1{K, BIN}`, `ArithEncodeFinish_v1`, `KTContext_v1{C, NW}`) is the
+  alternative, where the committed advice is the segments and the encoder's output must equal each, bit for bit. Its
+  decision step costs 3,244, and it needs a reader at a data-dependent cursor, which isn't built.
+
+**The charge's carry across windows** (`charge_chain`, `ChargeLink_v1{N}`): [protocol/charge-chain.md](protocol/charge-chain.md).
 
 **The prefix cache in the scan.** `CacheStep_v1` (`cache_step`) is ENC-DERIVED's prefix rules (`Prefixes`) as a Boolean
 Definition: one row's pass over a table of at most N cached units (a unit's U tokens, its parent entry and its owner,
@@ -1444,7 +1481,7 @@ in `ReplayStep_v1`'s scheduling order:
 - *The owner.* A call's r is the row's request id, the arrival ordinal `ReplayStep_v1` carries (RW = IW). FCFS admits
   new requests in arrival order, so the lowest id is the earliest-admitted request, the one I1 numbers lowest. A hit's
   canonical sources are its lookup's trail entries' owners in the table at the step's end (`cache_step.sources`), where
-  an owner may have dropped to a lower request later in the step. The walk (item 3) reads them as I1's `sources`.
+  an owner may have dropped to a lower request later in the step. The walk (item 4) reads them as I1's `sources`.
 - *The derive bit.* Each step takes one bit `sent`: 0 while the no-eviction bound holds, when every shortfall is 0;
   1 past it, when the step reads one sent shortfall per lookup. The bound counts the step's own admissions,
   ⌈(P + O)/B⌉ blocks per admitted request, while the lookups that size those admissions read the bit. So the bit is
@@ -1453,12 +1490,10 @@ in `ReplayStep_v1`'s scheduling order:
 - *The rows.* These are the exact fields the two owners add, each little-endian, with EW = bitlen(N),
   HW = bitlen(⌈L / B⌉) (`CacheStep_v1`'s), H the sent shortfalls a window (a public cap, like D) and
   HCW = bitlen(H).
-  - ENC-REPLAY: `ReplayStep_v1`'s state gains `run_pfx R×EW` after `run_comp`, one more running-slot field. Its
-    compaction and placement shifters move it with its slot, and `replay_chain`'s state group, being `_in_fields`,
-    carries it. An admitted row's slot takes its second call's `pfx`. A preempted request drops its own, since it
-    resumes as an admitting row from the root.
-  - ENC-REPLAY: the step also outputs `looked (W + A)×1`, the candidates whose lookup it read: the waiting slots its
-    loop reaches, and the arrival `would_admit` checks.
+  - ENC-REPLAY (`ReplayStep_v1`'s "Walk entries"): the state gains `run_pfx R×EW` after `run_comp`, the step's one
+    walk input is `row_pfx R×EW`, each row's entry after its last `CacheStep_v1` call, and it outputs
+    `looked (W + A)×1` after `used`, the candidates whose lookup it read, which `replay_vectors --EW` holds to the
+    replay's `_KV.hit` calls.
   - ADV-SPEC: `replay_chain`'s state row gains `hh 1×HCW` after its heads' `steps`, and then one group in
     `CacheStep_v1`'s `_in_fields` order:
 
@@ -1542,7 +1577,10 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   replay's.
 
 **Open.**
-- `ReplayStep_v1` is synchronous FCFS. Async scheduling's lag row is in v1's replay and walk, not yet in the circuit.
+- *The charge's pieces* (composition item 3, "The encoder in the circuit").
+  - ENC-CODE: the counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`,
+    #3660). Lowering an integer (the window's counts, each order entry and each shortfall) to its `Binned` symbols in
+    the book's public tables isn't built, so the circuit charges the decisions only.
 - `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
   The hits are fixed: `CacheStep_v1` derives them while the no-eviction bound holds, and past it each is the longest
   cached prefix less v1's sent, charged shortfall. The evictable counts and the returns stay bounded witness. A
@@ -1550,9 +1588,28 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   block pool in the circuit (offline memory checking's block pool, above), which also closes the hit's gap.
 - Past the bound the table holds the session's units, so the scan at a whole session's size needs offline memory
   checking (above).
+- *The order's floor.* A server that admitted in release order at the next bucket boundary, a change to vLLM's
+  serving, would send no order entries (`replay`'s `ingress="warden"` is that floor on the corpus).
 - The 14 corpus traces have no warden. The client's send stands in for each request's release (`replay`'s
   `ingress="client"`), and the release buckets are the engine's. The two warden traces' `.released` views carry the
   warden's (a, ordinal).
+
+## The compile slice (`compile_slice`)
+
+`CompileSlice_v1` is the compile unit's pieces ("Advice v1" above) composed whole for one window, each hit
+ReplayStep_v1 reads derived by `CacheStep_v1`'s calls on the certified tokens from the empty cache. Its circuit, verdict
+flags, reference (`check`), stand-ins and REDTEAM's phase 9 cases (`phase9`) are `compile_slice`'s docstring. Its step
+rows are held to the committed ``srv`` row, which the verifier holds by b‖c to the served rows the Commit side
+registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are refused. Its charge is
+`ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
+chain. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
+advised window is proved, the proof of record at vLLM 8eb1's engine class (w212, 857,866 ANDs), `--zk` through
+`benchmarks/network_traces/compile_slice_zk.py`, and the slice's earlier ZK runs with its coder.
+
+## The replay at the served shape
+
+In [protocol/served-shape.md](protocol/served-shape.md): a served window as the slice's input (vLLM 8eb1's w212), and
+the replay's cost at served shapes and its split into units.
 
 ## The active certifier (`active`)
 
@@ -1860,7 +1917,7 @@ sealed under an AEAD built from SHA-512 alone.
   - **The premise:** every link between two spatial units is a sealed pair link between two of the auditor's
     certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-nebius-host`.
   - **What it changes:** A1's units are then the facility, not each block.
-- **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on vy-nebius-cpu-2: an AMD
+- **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on a CPU node: an AMD
   EPYC Genoa, 256 cores at a load of about 30, with `sha_ni` but no SHA-512 instructions, and OpenSSL 3.0.13).
   Figures are bytes of frames a second on one core, on its CPU seconds. Line rate is 400 Gb/s, 50 GB/s, per uplink in
   each direction; its column is the cores one direction takes at each end.
@@ -2026,22 +2083,38 @@ and seven lemmas, and three more proved lemmas:
   - the pruned sort sorts every 0-1 input up to 12 events, `comparators` counts it, and `size` is the unit's count,
     pinned at L = 240 and at the 60 s window;
 - **`test_network_certifier_replay_chain.py`:** the replay's state chain:
-  - both rows' layouts are pinned field by field. The state row's state part is ReplayStep_v1's fields and bits, and
-    the front is its `arr_*` and `bits` (once `replay_step` is in the tree). The empty rows and random rows round-trip.
+  - both rows' layouts are pinned field by field, sync and with AS and EW. At each shape (8eb1's engine class at
+    AS = 1 among them) the state row's state part is ReplayStep_v1's `_state_fields` and its bits are `arguments`',
+    its circuit's next-state bits are the row's state of the next state it decodes, and the front is its `arr_*` and
+    `bits`. The empty rows and random rows round-trip, and an entry with the wrong fields for the shape is refused.
     `decode` refuses a gap, an empty slot with a bit set, a head past Q or D, steps past P, nonzero padding, a short row
     and a non-bit, and `decode_window` refuses a gap, an empty slot with a bit set, a decision past `left`, `left` past
     D, nonzero padding and a short row;
   - the front's pruned log shifter is a slice, at every shift its bits express;
-  - `ReplayAdvance` and `ReplayLoad` compute `advance` and `load` on random rows, each with its next rows right and
-    one bit wrong, and on each refusal. For `ReplayAdvance` these are the step's ok, an arrival or a decision bit
-    that isn't the window row's at the heads, an arrival left out, arrivals taken past what is left or past A,
-    decisions read past what is left or past A, or left at the window's last step, and the idle step. For
-    `ReplayLoad` they are the last window's decisions or steps left, a queue past Q, steps past P, decisions with no
-    step, a decision past the count, a count past D and a gap in the arrivals;
-  - a two-window session runs through both parts, with every unit's reads opened under the window's roots.
+  - `ReplayAdvance`, `ReplayLoad` and `ReplayClose` compute `advance`, `load` and `close` on random rows, each with
+    its next rows right and one bit wrong, and on each refusal. For `ReplayAdvance` these are the step's ok, an
+    arrival or a decision bit that isn't the window row's at the heads, an arrival left out, arrivals taken past what
+    is left or past A, decisions read past what is left or past A, and the idle step. For `ReplayLoad` they are the
+    last window's steps left or a head past its decisions, a queue past Q, steps past P, the carried and new decisions
+    past D, a decision past the count and a gap in the arrivals. A carried load and decisions in a window with no
+    step are taken, and the two window rows the circuit would take without its carry checks are refused;
+  - a three-window session carries decisions from window to window, and `ReplayClose` takes only its end;
+  - a two-window session runs through all three parts, with every unit's reads opened under the window's roots.
     `check_chain` accepts it, and refuses a short window, the empty state or window under a fresh salt or another
     program's, the carried state or window under a fresh salt, and another row of the last window;
-  - `size` is the parts' AND counts, which circuit-check pins at the tests' shape and at the sync KV-pressure trace's;
+  - with AS and EW the load writes the arrivals' caps into `q_cap`, the step's arrivals carry them, and the next
+    state's `fin`, `cap` and `pfx` are the next row's, each refusal the circuit's too;
+  - `size` is the parts' AND counts, which circuit-check pins at the tests' shape, at the sync KV-pressure trace's,
+    and at 8eb1's engine class at AS = 1 with and without walk entries;
+- **`test_network_certifier_compile_slice.py`:** the corpus slice's scan is the replay's (every hit 0), and its
+  negatives, a made-up table and tokens among them, fail exactly `check`'s checks; the circuit is `check` on the
+  demonstration slice with real hits, a cleared enable and a forged carry among the negatives; `size` is pinned;
+- **`test_network_certifier_compile_slice_w212.py`** and **`…_phase14.py`:** the slice on vLLM 8eb1's w212 at its own
+  statics and at the engine class, and REDTEAM phase 14 at the slice
+  ([protocol/compile-slice.md](protocol/compile-slice.md));
+- **`test_network_certifier_served_rows.py`:** the runner's rows are the slice's ``srv`` row, REDTEAM phase 10's six
+  passes are refused at ``rows`` with the registered row and their own row isn't its leaf, and the record is public only;
+- **`test_network_certifier_cache_step_phase9.py`:** REDTEAM's: `CacheStep_v1` alone leaves the table and tokens free;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;

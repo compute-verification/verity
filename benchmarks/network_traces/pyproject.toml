@@ -17,5 +17,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # record.py's mixes are workloads of the vLLM integration, which test_consistency loads; the auditor host's gate runs
-# warden_serve.py's rehearsal, which test_warden_serve holds it to.
-inputs = ["integrations/vllm/workloads", "benchmarks/live_challenger/auditor.py"]
+# warden_serve.py's rehearsal, which test_warden_serve holds it to; zk_scan reads C-Flock's proof format off its
+# verifier's layout, and test_zk_scan builds transcripts with its spec transcript.
+inputs = ["integrations/vllm/workloads", "benchmarks/live_challenger/auditor.py", "verity/ml/flock/verifier/redigest.py",
+          "verity/ml/flock/verifier/transcript_check.py"]
