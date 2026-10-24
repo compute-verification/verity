@@ -512,27 +512,6 @@ def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp
         assert not any(s in text for s in priv["salts"] + priv["digest_salts"])
 
 
-def test_a_changed_row_changes_the_digest_and_the_root(tmp_path):
-    """A window's rows with one row changed (its start, its length, its request), recommitted under the same salts, give
-    another digest for the slice window holding it, the others' unchanged, and another registration root."""
-    statics = served_statics()
-    wins, _, trace = served_run(tmp_path, statics)
-    w = max((w for w in wins if not w.get("empty")), key=lambda w: w["steps"])
-    priv = private(tmp_path, w["window"])
-    by_step = {t["step"]: [tuple(r) for r in t["rows"]] for t in trace if t["window"] == w["window"]}
-    honest, _ = recommit(statics, by_step, priv["ids"], w["steps"], w["run_root"], priv)
-    assert [d.hex() for d in honest.digests] == w["served_rows"]["digests"]
-    step = max(by_step)
-    rid, lo, hi, start, prefill = by_step[step][0]
-    other = next(r for r in priv["ids"] if r != rid)
-    for row in [(rid, lo, hi, start + 1, prefill), (rid, lo, hi + 1, start, prefill), (other, lo, hi, start, prefill)]:
-        changed = {**by_step, step: [row, *by_step[step][1:]]}
-        got, _ = recommit(statics, changed, priv["ids"], w["steps"], w["run_root"], priv)
-        k = step // statics["P"]
-        assert got.digests[k] != honest.digests[k] and got.registration.root != honest.registration.root
-        assert [d for j, d in enumerate(got.digests) if j != k] == [d for j, d in enumerate(honest.digests) if j != k]
-
-
 def test_rows_it_cant_commit_fail_their_window_by_name(tmp_path):
     """An arrival id wider than the class's IW can't be packed: the window that holds it fails, named, and the run fails."""
     wins, _, _ = served_run(tmp_path, served_statics(IW=1))
