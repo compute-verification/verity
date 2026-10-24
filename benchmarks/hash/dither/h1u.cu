@@ -353,6 +353,17 @@ __device__ __forceinline__ void mma_s8(int (&d)[4], const u32 (&a)[4], const u32
       : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));
 }
 
+// H1U_FROT = 1: the fold's rotation on the FMA pipe, rotl(uu, r) + y as the two halves of uu 2^r (one mul.wide.u32,
+// 2^r read from constant memory so ptxas can't turn it back into a shift) and y summed (one IADD3), where 0 takes a
+// funnel shift and an add on the ALU pipe; the same words
+#ifndef H1U_FROT
+#define H1U_FROT 0
+#endif
+#if H1U_FROT
+__constant__ u32 FOLD_P2[8] = {1u << KeysT{}.rot[0], 1u << KeysT{}.rot[1], 1u << KeysT{}.rot[2], 1u << KeysT{}.rot[3],
+                               1u << KeysT{}.rot[4], 1u << KeysT{}.rot[5], 1u << KeysT{}.rot[6], 1u << KeysT{}.rot[7]};
+#endif
+
 // one set: the lane's entry q = 4 t + e is acc[t][e]; chain c absorbs entry 8 i + c at step i, key t = 2 i + (c >= 4)
 __device__ __forceinline__ void fold(const int (&acc)[8][4], u32 (&y)[8], u32 (&z)[8]) {
 #pragma unroll
@@ -363,7 +374,13 @@ __device__ __forceinline__ void fold(const int (&acc)[8][4], u32 (&y)[8], u32 (&
       const u32 p = (u32)acc[t][e] * KEYS.fx1[8 * i + c];
       const u32 uu = y[c] ^ p ^ KEYS.kk[t];
       y[c] = uu * KEYS.ka[t] + z[c];
+#if H1U_FROT
+      u64 w;
+      asm("mul.wide.u32 %0, %1, %2;" : "=l"(w) : "r"(uu), "r"(FOLD_P2[t]));
+      z[c] = (u32)w + (u32)(w >> 32) + y[c];
+#else
       z[c] = __funnelshift_l(uu, uu, KEYS.rot[t]) + y[c];
+#endif
     }
   }
 }
@@ -568,6 +585,12 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #ifndef H1U_JBW
 #define H1U_JBW 0
 #endif
+// H1U_JN2 = 1 (with JX, which leaves rowbits free): two column blocks a pass (noise_block2, two independent SHA-512 chains
+// for a scheduler with two warps), the coins' block with block 0 and odd block b with b + 1, b + 1 into rowbits for the
+// next pass's segments; the same blocks
+#ifndef H1U_JN2
+#define H1U_JN2 0
+#endif
 constexpr u32 JX_AD_WORDS = 3 * 8 * 32;
 __host__ __device__ __forceinline__ u64 jx_x_off(u32 M, u32 K) { return 64ull * M * (K / 512 + 1); }
 __host__ __device__ __forceinline__ u64 jx_ad_off(u32 M, u32 K) { return jx_x_off(M, K) + (u64)M * K; }
@@ -613,6 +636,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   static_assert(!RC || RW, "RC is J10-R's units with their column blocks read");
   static_assert(!JX || (RW && !RC), "JX is J10-R's units reading their row block's X and A_d");
   constexpr bool BW = RW && H1U_JBW;
+  constexpr bool N2 = JX && H1U_JN2;
   constexpr bool PF = WS || H1U_PF;
   constexpr bool RING = RW ? H1U_JRING : H1U_RING;
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
@@ -741,7 +765,28 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll 1
   for (u32 it = 0; it <= chunks; ++it) {
     const u32 blk = it == 0 ? chunks : it - 1;
-    if constexpr (JX) {
+    if constexpr (N2) {
+      const u64 t0 = (u64)M * rb + (u64)(32 * cj + lane) * cb;
+      if (it == 0 || (blk % 2 == 1 && blk + 1 < chunks)) {
+        u64 sa[8], sb[8];
+        noise_block2(S.nm, t0 + blk, t0 + (it == 0 ? 0 : blk + 1), sa, sb);
+#pragma unroll
+        for (int j = 0; j < 8; ++j) {
+          S.colbits[lane][2 * j] = (u32)(sa[j] >> 32);
+          S.colbits[lane][2 * j + 1] = (u32)sa[j];
+          S.rowbits[lane][2 * j] = (u32)(sb[j] >> 32);
+          S.rowbits[lane][2 * j + 1] = (u32)sb[j];
+        }
+      } else if (blk % 2 == 1) {
+        u64 s[8];
+        noise_block(S.nm, t0 + blk, s);
+#pragma unroll
+        for (int j = 0; j < 8; ++j) {
+          S.colbits[lane][2 * j] = (u32)(s[j] >> 32);
+          S.colbits[lane][2 * j + 1] = (u32)s[j];
+        }
+      }
+    } else if constexpr (JX) {
       u64 s[8];
       noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
 #pragma unroll
@@ -865,7 +910,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       continue;
     }
     const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
-    const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.colbits[0][0]);
+    const uint8_t* cbits = reinterpret_cast<const uint8_t*>(N2 && blk % 2 == 0 ? &S.rowbits[0][0] : &S.colbits[0][0]);
 #pragma unroll 1
     for (u32 j0 = 0; j0 < 16; j0 += NS) {
 #pragma unroll
