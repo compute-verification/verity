@@ -2,11 +2,12 @@
 # The trace corpus (corpus.py's docstring) on one leased GPU of a node, from the shipped tree's root, with the C4 shard
 # benchmarks/ppl/datasets.json pins (`research data fetch art:4f1d50db...`) sent along:
 #   research run --on vy-nebius-1 --project verity --campaign glm-e2e-demo --source <tree> --cwd source \
-#     --send c4-validation.00000-of-00008.json.gz [--env CORPORA="llama32_1b/seeded llama32_1b/async-greedy:heavy,smallkv"] \
+#     --send c4-validation.00000-of-00008.json.gz [--env "CORPORA=llama32_1b/seeded;llama32_1b/async-greedy:heavy,smallkv"] \
 #     [--env REQUESTS=1000] [--env MAX_MIN=45] -- bash benchmarks/network_e2e/traces/run.sh
-# A CORPORA entry is MODEL/VARIANT[:TRACE,...] (corpus.MODELS, corpus.VARIANTS, corpus.TRACES; default llama32_1b/greedy,
-# every trace). vLLM is the node's pinned venv (VENV, vLLM d9105ea80), as for benchmarks/network_traces: the workspace's
-# environment has torch but not vLLM (integrations/vllm/pyproject.toml). MAX_MIN bounds the lease; each corpus runs in
+# CORPORA's entries, apart by spaces or ";", are MODEL/VARIANT[:TRACE,...] (corpus.MODELS, corpus.VARIANTS, corpus.TRACES;
+# default llama32_1b/greedy, every trace). vLLM is the node's pinned venv (VENV, vLLM d9105ea80), as for
+# benchmarks/network_traces: the workspace's environment has torch but not vLLM (integrations/vllm/pyproject.toml).
+# MAX_MIN bounds the lease; each corpus runs in
 # turn, into OUT/corpus/<model>-<variant>/, while more than a minute of it is left, and all stop 2 minutes before it ends.
 # After the lease each corpus is summarized, and OUT/compare/<sampling>/ compares the output ids of the corpora that sampled
 # alike (a variant and its async- twin).
@@ -26,7 +27,7 @@ if [ -n "${TRACE_CORPUS_END:-}" ]; then                     # inside the lease
   nvidia-smi -q -i "${CUDA_VISIBLE_DEVICES%%,*}" > "$OUT/nvidia-smi.txt" 2>&1
   echo "trace-corpus: GPU ${CUDA_VISIBLE_DEVICES} (${GPU_LEASE_UUID:-}) at $(date -u +%H:%M:%SZ)"
   rc=0
-  for spec in $CORPORA; do
+  for spec in ${CORPORA//;/ }; do
     mv=${spec%%:*}; traces=${spec#"$mv"}; traces=${traces#:}
     m=${mv%%/*}; v=${mv#*/}
     left=$(( TRACE_CORPUS_END - $(date +%s) ))
@@ -47,7 +48,7 @@ gpu-lease 1 --wait --max-min "$MAX_MIN" --mem-gb 64 -- \
 rc=$?
 echo "trace-corpus: lease over at $(date -u +%H:%M:%SZ)"
 declare -A made                                             # sampling -> the corpora made with it
-for spec in $CORPORA; do
+for spec in ${CORPORA//;/ }; do
   mv=${spec%%:*}; v=${mv#*/}; dir=$OUT/corpus/${mv%%/*}-$v
   [ -f "$dir/meta.json" ] || continue
   "$VENV/bin/python" benchmarks/network_e2e/traces/corpus.py summarize "$dir" || rc=1
