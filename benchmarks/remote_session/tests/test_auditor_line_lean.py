@@ -1,19 +1,22 @@
 """The line of record as the Lean verifier computes it (`auditor_line.line_of_record`: `remote-audit-verifier`'s `line`
 request), held exactly to `line.py`'s on the same inputs: a disagreement refuses the line, naming both values, whether
 the Lean's answer or line.py's is the one that moved, and on gate runs 5-7's credited sessions the Lean's line gives
-every share the recorded `auditor_line.json` holds, bit for bit, and so the line at each T.
+the line at each T the recorded `auditor_line.json` holds, every share bit for bit (gate run 7's all of them) but for
+four of gate runs 5 and 6's (`ULP`), where the record's float arithmetic is a float off the exact share's nearest.
 
 `fixtures/gate_run_<G>.json.gz` holds each credited session's line inputs on the auditor's clock, as this tree's
 `verifier.recorded_inputs` reads them from the run's record with no bursts (the reading of gate runs up to 7), its
-groups as rows in `line.GROUP`'s order, beside the recorded shares and line (r20261024-085637-16b0, which reran each
+groups as rows in `line.GROUP`'s order, beside the recorded shares and line (r20261024-090248-249f, which reran each
 run's `auditor_line.analyse` through the Lean)."""
 from __future__ import annotations
 
 import copy
 import gzip
 import json
+import math
 import re
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -118,23 +121,37 @@ def test_any_other_difference_refuses_the_line_too(change, at):
     assert at in str(e.value)
 
 
+ULP = {5: {(2, line.TIME_HELD, "time")},
+       6: {(0, line.TIME_HELD, "snapshot"), (0, line.LINK_CHARGED, "time"), (2, line.LINK_CHARGED, "snapshot")},
+       7: set()}
+"""The recorded shares (session, form, share) a float apart from the exact share's nearest float, the Lean's: gate runs
+5-7 were analysed in floats, before line.py, and these four came out the next float over, no nearer the exact share."""
+
+
 @pytest.mark.parametrize("g", [5, 6, 7])
 def test_the_leans_line_is_the_record_of_gate_runs_5_to_7(lean, g):
     """Each credited session's shares, both forms, over time and at the passes, weights and filler, with its worst
-    stretch, through the Lean's line are the recorded floats bit for bit, and the line at each T is the recorded one,
-    its session the record's."""
+    stretch, through the Lean's line are the recorded floats bit for bit, but for `ULP`'s, each the float beside the
+    Lean's and no nearer the exact share; and the line at each T is the recorded one, its session the record's."""
     run = json.loads(gzip.decompress((FIXTURES / f"gate_run_{g}.json.gz").read_bytes()))
     assert run["gate_run"] == g and run["rates"] == al.rates_at(bursts="none")
-    got = {}
+    got, off = {}, set()
     for s in run["sessions"]:
         inputs = {**s["inputs"], "groups": [dict(zip(line.GROUP, x)) for x in s["inputs"]["groups"]]}
         got[s["k"]] = al.shares_of(al.line_of_record(inputs, lean))
         for old, form in OLD.items():
-            want = s["recorded"][old]
-            assert {k: got[s["k"]][form][k] for k in want} == want, (s["k"], form)
+            mine, want = got[s["k"]][form], s["recorded"][old]
+            for x, w in want.items():
+                if mine[x] != w:
+                    off.add((s["k"], form, x))
+                    exact = line.number(mine["exact"][x])
+                    assert mine[x] == float(exact) and w == math.nextafter(mine[x], w), (s["k"], form, x)
+                    assert abs(Fraction(w) - exact) > abs(Fraction(mine[x]) - exact), (s["k"], form, x)
+    assert off == ULP[g]
     for t, row in run["line"].items():
-        at = [s["k"] for s in run["sessions"] if s["T"] == t]
-        assert row["credited_sessions"] == at
+        at = [s for s in run["sessions"] if s["T"] == t]
+        assert row["credited_sessions"] == [s["k"] for s in at]
         for old, form in OLD.items():
-            k = min(at, key=lambda k: line.number(got[k][form]["exact"]["time"]))
-            assert {"k": k, **{x: got[k][form][x] for x in row[old] if x != "k"}} == row[old], (t, form)
+            k = min((s["k"] for s in at), key=lambda k: line.number(got[k][form]["exact"]["time"]))
+            recorded = next(s["recorded"][old] for s in at if s["k"] == k)
+            assert row[old] == {"k": k, **{x: recorded[x] for x in row[old] if x != "k"}}, (t, form)
