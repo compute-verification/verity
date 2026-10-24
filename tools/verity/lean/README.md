@@ -4,7 +4,7 @@ One audit for every Lake package (`python tools/verity/lean/check.py --all --bui
 changed (`check.py --build PKG...`). Lean's jobs in `check` are here too: `lean_audit.py` (the lean-audit step: which
 packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, and a lane's fast path to its
 records) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
-toolchain's `lean`; nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
+toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
 `check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
