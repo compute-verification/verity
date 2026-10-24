@@ -35,6 +35,7 @@ import Flock.With.SimWalk
 import Flock.With.SimVerify
 import Flock.With.SimZk
 import Flock.With.Log
+import Flock.With.VerifyE
 import Flock.Partition
 import Flock.HmNets
 import Flock.RecOpen

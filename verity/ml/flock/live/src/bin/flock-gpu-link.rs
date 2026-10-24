@@ -601,6 +601,7 @@ fn selftest(st: Arc<ChunkStmt>, gpu: bool) {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let vus: usize = arg("--vus", "8").parse().unwrap();
     let k: usize = arg("--k", "1536").parse().unwrap();
