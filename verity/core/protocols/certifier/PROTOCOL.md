@@ -342,8 +342,8 @@ What this establishes: on every accepted link-window of a served link, the egres
 ingress head's counts under the declared sync, whatever the frames hold. So the egress timing adds nothing to what
 the ingress counts and the charged advice carry, and under the premises it is the Program's. The ingress counts are
 the record's own, at most r_in a bucket, as on any end without a profile. What it doesn't establish: the frames
-(N3's, the salt frame's place among them included: the counts see only that bucket 0 holds OWN frames more), and the
-premises, which nothing checks.
+(N3's; the salt frame's place among them is the salt audit's, which takes it only first in bucket 0, `check_salts`),
+and the premises, which nothing checks.
 
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
@@ -1131,7 +1131,47 @@ them.
 - **Egress:**
   - **Framing.** The server's bytes on a stream are cut after every `\n\n`, the end of a server-sent event, so a
     frame's content is fixed by the bytes and never by how they were read. Its `id:` is its position in the Program's
-    canonical order.
+    canonical order. An id event (`id_event`, 159 bytes, a 256-byte frame with its header) is one sampled token's
+    request ordinal and id in decimal fields of a fixed JSON template.
+  - **Compact records** (`Proxy(compact=True)`, which takes `ordinals`; experimental). After its HTTP response head
+    the server writes one 12-byte unit a sampled token (`compact_unit`, cut by `CompactUnits`): u32be its position in
+    the canonical order, then its 8-byte record (`compact_record`), u32be the request's ingress ordinal (≥ 1, its
+    stream on the link) and u32be the token field:
+
+    | token field | the output | finish |
+    |---|---|---|
+    | id, below 2^31 − 1 | a token, more follow | none |
+    | 2^31 + id (`COMPACT_LAST`) | the response's last, at `max_tokens` | `length` |
+    | 2^32 − 1 (`COMPACT_EOS`) | a sampled stop token, whichever of the model's EOS ids | `stop` |
+
+    The frame is the record zero-filled to B, with no header (`compact_cell`), so B can be 8. Its template
+    (`compact_placement`) is the record at bytes 0 … 8 and zero after it, and no record is padding, since the ordinal
+    is at least 1. The proxy faults the window `malformed` on a unit whose record isn't one (`compact_record_data`) or
+    names another request than its connection's, and on bytes left uncut at the stream's end. A cell's ordinal is
+    then fixed by the traffic, and its 32-bit token field is all the server chooses in it: under a K-draw tie an
+    unchecked cell carries at most 32 bits, against the 247 bytes after the header of a 256-byte event frame. The
+    certifier still sees only bytes. The client renders OpenAI's completions SSE from the cells with the registered
+    tokenizer (`benchmarks/network_traces/compact_render.py`: vLLM V1's incremental detokenization, byte-equal to
+    vLLM's stream text).
+    - **Numbering.** The ordinal is at least 1 on the wire, and the I/O tie reads advice v0's request q as ordinal
+      q + 1.
+    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_EOS` are well-formed records, and the certifier commits
+      whatever finish the server writes: one of three states (none, `length`, `stop`) at each response's end, where an
+      id event marks the end out of band. The check that refuses a wrong finish is the I/O tie's, against the advice:
+      request q's cells are its `output_len` outputs, none marked but the last, which is `stop` where the advice's
+      `finish` is `eos` and `length` where it is `length` (`compact_finish_violations`). A stop record stands for the
+      advice's EOS output, whose id it doesn't carry. IO-TIE's egress tie holds each compact cell's token field to
+      this rule as well as to its id. The rehearsal's certified I/O (`certifier_serve.certified_io`) has no advice and
+      checks the marks against `max_tokens` alone, so it can't tell a stop on the last token at `max_tokens` from a
+      `length` finish. It refuses any cell that carries one of the model's EOS ids, marked or not, since an honest
+      server writes a stop only as `COMPACT_EOS`; read as a token with more to follow, such a cell would let the server
+      decide where the client's text ends.
+    - **What covers it.** The Lean device port models ordinal headers and compact records (`CertifierDevice`'s
+      `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
+      compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
+      configuration, compact ones included. The head model takes a frame as B opaque bytes, which a compact cell is.
+      N3's templates, a design outside the protocol, don't model compact cells. The gate's rehearsal takes no compact
+      option yet, so no verdict of record runs on compact framing.
   - **Anchor, index and ready bucket.** A frame is anchored at the egress bucket in which ingress released its
     request's last frame. Its logical index is its position in its stream. Read at time s, it is ready at ⌊s/τ_b⌋ + 1.
   - **Handing.** `Shaper` hands it at `max(h(k), ready(k), last)`, `run_shaper`'s rule under the declared sync of its
@@ -1147,15 +1187,21 @@ them.
     and its salt is drawn at its first ingress tick, t_s. A source of coins handed to the certifier, such as the
     memory challenger's, takes the same place: a function from the PoUW window and the width in bytes to that many
     bytes. A proxy back from maintenance in the middle of a PoUW window has no salt for it.
-  - **Into the block only.** At that tick the certifier enqueues its own salt frame ahead of the bucket's arrivals, and
-    behind any queue carried from the window before (`Bucketer(first=…)`). It is kind `SALT` (3) on `SALT_STREAM`
-    (2^32 − 1), and its payload is u64be p ‖ `PLACEHOLDER`, 64 zero bytes (`SALT_FRAME_BYTES`, 81 bytes, the least
-    ingress frame a salted proxy takes). It takes one of the window's ingress slots like any crossing, so r_in carries
-    honest ingress plus one frame per PoUW window. The `Bucketer` follows it by its place in the queue, never by its
-    bytes (`Bucketer.own`), so a frame of kind `SALT` read from the link, even one of the same bytes, is never taken
-    for the certifier's, and one a fault drops is never released. When the ingress certifier releases it, the proxy
-    writes the frame's header, p and the salt (no fill; the header's length is 8 plus the salt's bytes) on a server
-    connection of its own. The proxy never reads that connection, so nothing the server writes there reaches egress.
+  - **Into the block only.** At that tick the certifier puts its own salt frame at the head of the queue, ahead of the
+    bucket's arrivals and of any queue carried from the window before (`Bucketer(first=…)`, `Certifier.enqueue(…,
+    first=True)`), so it leaves in slot 0 of that bucket, r_in ≥ 1, and every other frame keeps its FIFO order. It is
+    kind `SALT` (3) on `SALT_STREAM` (2^32 − 1), and its payload is u64be p ‖ `PLACEHOLDER`, 64 zero bytes
+    (`SALT_FRAME_BYTES`, 81 bytes, the least ingress frame a salted proxy takes). It takes one of the window's ingress
+    slots like any crossing, so r_in carries honest ingress plus one frame per PoUW window. Released first, it makes a
+    salted window's request frames in each bucket exactly its counts, less one in bucket 0, so where requests end,
+    derived from the signed counts and each request's frames (`id_request_frames`), is the bucket that releases its
+    last frame even when a carried queue fills bucket 0; queued behind that queue, the salt would leave a bucket or
+    more later and move those ends late by one. The head's counts don't read the order, so its encoding, `head_check`
+    and the Lean head model are unchanged. The `Bucketer` follows the salt frame by its place, never by its bytes
+    (`Bucketer.own`), so a frame of kind `SALT` read from the link, even one of the same bytes, is never taken for the
+    certifier's, and one a fault drops is never released. When the ingress certifier releases it, the proxy writes the
+    frame's header, p and the salt (no fill; the header's length is 8 plus the salt's bytes) on a server connection of
+    its own. The proxy never reads that connection, so nothing the server writes there reaches egress.
     The egress side never holds the salt or anything drawn from it: the egress grid, its padding and the wire are the
     unsalted run's.
   - **In the record: nothing of the salt.** The salt frame's bytes and its slot are fixed by the window and the traffic,
@@ -1239,6 +1285,11 @@ them.
     salt included, is a `salt` violation at w, recorded with the audit's verdicts. No record binds the salt: the
     revealed salt is the certifier's word, under `trusted-nebius-host`. A committed or certified record doesn't show
     its frames, so there a proof opens the salt frame.
+  - **Its place, pinned.** The audit takes the salt frame only as the first frame of w's bucket 0, slot 0, where the
+    proxy releases it ("Into the block only"); anywhere else it is a `salt` violation at w. The served counts
+    (`served.derive`, `NetworkServedCounts_v1`) take bucket 0's first OWN frames for the salt, so the same counts with
+    the salt in a later bucket would derive other request ends and still pass the circuit; the audit's pin is what
+    ties that premise to the record. A proof that opens the salt frame of a committed record opens it at that slot.
   - **What it costs.** The protocol fixes the salt frame's place in the queue and its bytes, so it adds nothing to the
     ingress count `(r_in + 1)^T`. Its release into the block carries the certifier's coins, which no outside party
     chooses and nothing X sends can change, so it costs 0 bits by the argument the trusted text makes for the
@@ -1258,7 +1309,7 @@ them.
     and `Proxy(start=w + 1, position=p)`. Its later windows are the full run's if nothing crosses into window w.
   - **Its limits.** An online prover declares from window 0's frames on, so a proxy back from maintenance takes its
     syncs. The certifier's Lean device port (`verity/core/devices/certifier/lean/`) models the restart (`initAt`), the
-    salt and a served link's admission; the device's Lean properties (`Security/Properties/CertifierDevice.lean`) are
+    salt, a served link's admission, ordinal headers and compact records; the device's Lean properties (`Security/Properties/CertifierDevice.lean`) are
     stated from window 0 (`init`), so they don't cover a proxy back from maintenance yet.
 - **Advice:** the declared syncs, one per window, are given before the run, or an online prover (`Proxy(prover=…)`,
   lag 1 … T − 1) declares each at its window's first tick, before anything is handed, from the frames the shaper has
@@ -1534,8 +1585,10 @@ and seven lemmas, and three more proved lemmas:
     without its registration (none, another window's, a receipt or digest that isn't the record's, a provenance its
     reader doesn't read as the window), until its last ingress record is published, and for a salt never drawn;
     `check_salts` accepts the revealed salts and rejects a missing one, one of another width and a second salt frame.
-    The bucketer puts the certifier's own frame first in each window, behind the carried queue, and knows it by its
-    place: a link frame of the same bytes is never taken for it, and one a fault drops is never released;
+    The bucketer puts the certifier's own frame at the head of each window's queue, ahead of the carried queue, and
+    knows it by its place: a link frame of the same bytes is never taken for it, and one a fault drops is never
+    released. With a carried queue that fills a window's first bucket, the request ends derived from the signed counts
+    are the proxy's anchors, and with the salt queued behind that queue they would come out a bucket late;
   - back from maintenance at window 2 of a Program with nothing in window 1, a proxy publishes exactly the full run's
     window-2 records and wire, and hands each frame when the full run does; so do a shaper and a bucketer on random
     instances. A proxy can't start past its windows or with an online prover;
