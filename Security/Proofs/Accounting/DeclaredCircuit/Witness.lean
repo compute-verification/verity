@@ -192,8 +192,7 @@ def kvAddr (n P N b : ℕ) : Fin (1 + n * P * (N + 2)) × Fin 1 :=
   if h : b < n * P * (N + 2) then (⟨1 + b, by omega⟩, 0) else (⟨0, by omega⟩, 0)
 
 theorem kvAddr_page {n P N b : ℕ} (hb : b < n * P * (N + 2)) : kvAddr n P N b = (⟨1 + b, by omega⟩, 0) := by
-  unfold kvAddr
-  rw [dif_pos hb]
+  simp [kvAddr, hb]
 
 /-- Pass `j` of window `w` certifies its request's pages `0 … N−1` at its `N` tiles. -/
 def slot (n P N : ℕ) (w : Fin n) (j : Fin P) : Fin N ↪ Fin (1 + n * P * (N + 2)) × Fin 1 where
@@ -666,20 +665,21 @@ theorem property (caps : Gates.Caps)
     (hc : 0 ≤ caps.rounding ∧ 0 ≤ caps.compareSelect ∧ 0 ≤ caps.gather ∧ 0 ≤ caps.fold) (Aud : Gates.Audit) :
     Gates.Property caps Aud ([] : Gates.Dag Unit) := by
   obtain ⟨h1, h2, h3, h4⟩ := hc
-  refine ⟨fun g hg => by cases hg, fun w _ => ?_, fun i h => absurd h (Nat.not_lt_zero i)⟩
+  refine ⟨fun g hg => (by cases hg), fun w _ => ?_, fun i h => absurd h (Nat.not_lt_zero i)⟩
   have hu : ∀ b, Gates.unitsAt ([] : Gates.Dag Unit) (fun t => Aud.win t = w) b = 0 := fun b => by
     simp [Gates.unitsAt]
   have hc0 : ∀ f, Gates.countAt ([] : Gates.Dag Unit) (fun t => Aud.win t = w) f = 0 := fun f => by
     simp [Gates.countAt]
-  simp only [Gates.census, hu, hc0, Nat.cast_zero]
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    first
-    | exact mul_nonneg h1 (Nat.cast_nonneg _)
-    | exact mul_nonneg h2 (Nat.cast_nonneg _)
-    | exact mul_nonneg h3 (Nat.cast_nonneg _)
-    | exact mul_nonneg h4 (Nat.cast_nonneg _)
-    | trivial
-    | omega
+  intro c
+  have e1 : c.rounding = 0 := hu .rounding
+  have e2 : c.compareSelect = 0 := hu .compareSelect
+  have e3 : c.gather = 0 := hu .gather
+  have e4 : c.fold = 0 := hu .fold
+  have e5 : c.neutral = 0 := hu .neutral
+  have e6 : c.runBits = 0 := hc0 _
+  rw [e1, e2, e3, e4, e5, e6, Nat.cast_zero]
+  exact ⟨mul_nonneg h1 (Nat.cast_nonneg _), mul_nonneg h2 (Nat.cast_nonneg _), mul_nonneg h3 (Nat.cast_nonneg _),
+    mul_nonneg h4 (Nat.cast_nonneg _), rfl, Nat.zero_le _⟩
 
 /-! ## The witness -/
 
@@ -831,5 +831,190 @@ theorem sum_ge {n P c : ℕ} (f : Fin n → Fin P → ℕ) (h : ∀ w j, c ≤ f
         simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
         ring
     _ ≤ ∑ w, ∑ j, f w j := Finset.sum_le_sum fun w _ => Finset.sum_le_sum fun j _ => h w j
+
+/-! ## Where `G` bounds something
+
+The run credits the whole store, so `G`'s session threshold `Σ credit − (0.0015 + γ)·n·P·N·32768` is positive while
+`0.0015 + γ < 1` (`threshold_pos`), and each window's while `0.01 + γ < 1` (`window_pos`). The carriers' share of `γ`
+is linear in the life `L`: `C/(N·32768) ≤ (8·L·R + 1)/(N·32768) + 128·L·P·c/E` (`carrier_le`), `R` a window's
+run-input bytes and `c` the caps' total. At DCR-RT's inputs (the 18 Oct numbers: `P = 984` passes a 60 s window,
+`E = 364,497`, 100 KB/s of run inputs, the pass's other resources `γ₀ ≤ 0.835%`, here `N ≥ 2^24` tiles) both thresholds
+are positive up to `L = 6` for 8B (`c = 0.442`, `bounds_8b`); for 70B TP8 (`c = 0.0918`) the session's up to `L = 31`
+and every window's up to `L = 30` (`bounds_70b`). -/
+
+/-- The run's credit at step `t`, as `G` reads it. -/
+def credit (n P N τ : ℕ) (val : ℕ → ℕ → ℕ) (t : ℕ) : ℕ :=
+  let e := (placement n P N τ val).toExecution
+  let owned := (Requirement.blocks (kvLayout n P N)
+    (Requirement.creditedReads (wiring N) e (kvLayout n P N) t)).filter fun b => ((kvAddr n P N b).1 : ℕ) ≠ 0
+  max (Requirement.bitsAt (wiring N) (kvLayout n P N) (Requirement.credited (wiring N) e (kvLayout n P N) t) owned)
+    (Requirement.bits (wiring N) ((Requirement.reads (wiring N) e t).filter
+        fun v => ((kvAddr n P N ((kvLayout n P N).block v)).1 : ℕ) ≠ 0) -
+      ((Requirement.reads (wiring N) e t \ Requirement.creditedReads (wiring N) e (kvLayout n P N) t).image
+        kvGrp).card * 32768)
+
+theorem credit_session {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) :
+    n * P * N * 32768 ≤ ∑ w : Fin n, ∑ j : Fin P, credit n P N τ val (passBind n P N w j) := by
+  rw [Nat.mul_assoc (n * P)]
+  exact sum_ge _ fun w j => credit_ge val w j
+
+theorem credit_window {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : Fin n) :
+    P * N * 32768 ≤ ∑ j : Fin P, credit n P N τ val (passBind n P N w j) := by
+  calc P * N * 32768 = ∑ _j : Fin P, N * 32768 := by
+        simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
+        ring
+    _ ≤ _ := Finset.sum_le_sum fun j _ => credit_ge val w j
+
+/-- **`G`'s session threshold is positive at the honest run** while `0.0015 + γ < 1`. -/
+theorem threshold_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (hn : 0 < n) (hP : 0 < P) (hN : 0 < N)
+    (hγ : 0.0015 + γ < 1) :
+    (0.0015 + γ) * (n * P * N * 32768) <
+      ((∑ w : Fin n, ∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) := by
+  have h1 : ((n * P * N * 32768 : ℕ) : ℝ) ≤
+      ((∑ w : Fin n, ∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) :=
+    Nat.cast_le.2 (credit_session val)
+  rw [show ((n * P * N * 32768 : ℕ) : ℝ) = (n : ℝ) * P * N * 32768 by norm_cast] at h1
+  have h2 : (0 : ℝ) < n * P * N * 32768 := by positivity
+  calc (0.0015 + γ) * (n * P * N * 32768) < 1 * (n * P * N * 32768) := mul_lt_mul_of_pos_right hγ h2
+    _ = (n * P * N * 32768 : ℝ) := one_mul _
+    _ ≤ _ := h1
+
+/-- **Each window's threshold is positive at the honest run** while `0.01 + γ < 1`. -/
+theorem window_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (w : Fin n) (hP : 0 < P) (hN : 0 < N)
+    (hγ : 0.01 + γ < 1) :
+    (0.01 + γ) * (P * N * 32768) < ((∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) := by
+  have h1 : ((P * N * 32768 : ℕ) : ℝ) ≤ ((∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) :=
+    Nat.cast_le.2 (credit_window val w)
+  rw [show ((P * N * 32768 : ℕ) : ℝ) = (P : ℝ) * N * 32768 by norm_cast] at h1
+  have h2 : (0 : ℝ) < P * N * 32768 := by positivity
+  calc (0.01 + γ) * (P * N * 32768) < 1 * (P * N * 32768) := mul_lt_mul_of_pos_right hγ h2
+    _ = (P * N * 32768 : ℝ) := one_mul _
+    _ ≤ _ := h1
+
+/-- The run-input bytes the caps allow a carrier's life: at most `L·R` when a window's are at most `R`. -/
+theorem runLife_le {L R : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit) (hR : ∀ v, caps.runBytes v ≤ R) :
+    ((Finset.range Aud.windows).powerset.filter fun I => I.card ≤ L).sup (fun I => ∑ v ∈ I, caps.runBytes v) ≤
+      L * R := by
+  refine Finset.sup_le fun I hI => ?_
+  have hI' := (Finset.mem_filter.1 hI).2
+  calc ∑ v ∈ I, caps.runBytes v ≤ ∑ _v ∈ I, R := Finset.sum_le_sum fun v _ => hR v
+    _ = I.card * R := by rw [Finset.sum_const, smul_eq_mul]
+    _ ≤ L * R := Nat.mul_le_mul_right R hI'
+
+/-- **The carriers' bits a pass, a share of its store**: `G`'s `C` over `N·32768` bits is at most
+`(8·L·R + 1)/(N·32768) + 128·L·P·c/E`. -/
+theorem carrier_le {N L P E R : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit) (hN : 0 < N) (hE : 0 < E)
+    (hc : 0 ≤ caps.total) (hR : ∀ v, caps.runBytes v ≤ R) :
+    ((8 * ((Finset.range Aud.windows).powerset.filter fun I => I.card ≤ L).sup
+        (fun I => ∑ v ∈ I, caps.runBytes v) + ⌈(1024 * L * (P * N * 4096) : ℚ) * caps.total / E⌉₊ : ℕ) : ℝ) /
+        (N * 32768) ≤
+      (8 * L * R + 1) / (N * 32768) + 128 * L * P * (caps.total : ℝ) / E := by
+  have hN' : (0 : ℝ) < N * 32768 := by positivity
+  have hs : ((((Finset.range Aud.windows).powerset.filter fun I => I.card ≤ L).sup
+      (fun I => ∑ v ∈ I, caps.runBytes v) : ℕ) : ℝ) ≤ L * R := by
+    exact_mod_cast runLife_le caps Aud hR
+  have hx : (0 : ℚ) ≤ (1024 * L * (P * N * 4096) : ℚ) * caps.total / E :=
+    div_nonneg (mul_nonneg (by positivity) hc) (by positivity)
+  have hq : ((⌈(1024 * L * (P * N * 4096) : ℚ) * caps.total / E⌉₊ : ℕ) : ℝ) ≤
+      (((1024 * L * (P * N * 4096) : ℚ) * caps.total / E : ℚ) : ℝ) + 1 := by
+    exact_mod_cast (Nat.ceil_lt_add_one hx).le
+  have hxr : (((1024 * L * (P * N * 4096) : ℚ) * caps.total / E : ℚ) : ℝ) =
+      128 * L * P * (caps.total : ℝ) / E * (N * 32768) := by
+    push_cast
+    ring
+  rw [hxr] at hq
+  rw [div_le_iff₀ hN', add_mul, div_mul_cancel₀ _ hN'.ne']
+  push_cast at hs hq ⊢
+  linarith
+
+/-- `γ` is the pass's other resources' share `γ₀` plus the carriers' bits a stored bit. -/
+theorem gamma_le {N ρ S Lr τ Xr k C : ℕ} (γ₀ : ℝ) (hN : 0 < N)
+    (h₀ : ((S + (Lr * τ - ρ * 256) + Xr * τ + k * 32768 : ℕ) : ℝ) ≤ γ₀ * (N * 32768)) :
+    RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768) ≤ γ₀ + (C : ℝ) / (N * 32768) := by
+  have hN' : (0 : ℝ) < N * 32768 := by positivity
+  have hsum : S + (Lr * τ - ρ * 256) + (Xr * τ + C + k * 32768) =
+      (S + (Lr * τ - ρ * 256) + Xr * τ + k * 32768) + C := by omega
+  have key : ((S + (Lr * τ - ρ * 256) + (Xr * τ + C + k * 32768) : ℕ) : ℝ) ≤
+      (γ₀ + (C : ℝ) / (N * 32768)) * (N * 32768) := by
+    rw [hsum, add_mul, div_mul_cancel₀ _ hN'.ne', Nat.cast_add]
+    linarith
+  unfold RateSketch.gammaSketch
+  rw [div_le_iff₀ (by positivity)]
+  calc _ ≤ (γ₀ + (C : ℝ) / (N * 32768)) * (N * 32768) := key
+    _ = _ := by push_cast; ring
+
+/-- **`γ` at a life of at most `L₀` windows**, at most `P₀` passes a window, at least `E₀` for `E`, at least `N₀`
+tiles, caps' total at most `c₀` and at most `R₀` run-input bytes a window. -/
+theorem gamma_bound {N ρ S Lr τ Xr k L P E L₀ P₀ E₀ N₀ R₀ : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit) (γ₀ c₀ : ℝ)
+    (hN₀ : 0 < N₀) (hN : N₀ ≤ N) (hL : L ≤ L₀) (hP : P ≤ P₀) (hE₀ : 0 < E₀) (hE : E₀ ≤ E) (hc : 0 ≤ caps.total)
+    (hc₀ : (caps.total : ℝ) ≤ c₀) (hR : ∀ v, caps.runBytes v ≤ R₀)
+    (h₀ : ((S + (Lr * τ - ρ * 256) + Xr * τ + k * 32768 : ℕ) : ℝ) ≤ γ₀ * (N * 32768)) :
+    let RL := ((Finset.range Aud.windows).powerset.filter fun I => I.card ≤ L).sup
+      fun I => ∑ v ∈ I, caps.runBytes v
+    let C := 8 * RL + ⌈(1024 * L * (P * N * 4096) : ℚ) * caps.total / E⌉₊
+    RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768) ≤
+      γ₀ + (8 * L₀ * R₀ + 1) / (N₀ * 32768) + 128 * L₀ * P₀ * c₀ / E₀ := by
+  intro RL C
+  have hN0 : 0 < N := lt_of_lt_of_le hN₀ hN
+  have hE0 : 0 < E := lt_of_lt_of_le hE₀ hE
+  have hg : RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768) ≤ γ₀ + (C : ℝ) / (N * 32768) :=
+    gamma_le γ₀ hN0 h₀
+  have hC : (C : ℝ) / (N * 32768) ≤ (8 * L * R₀ + 1) / (N * 32768) + 128 * L * P * (caps.total : ℝ) / E :=
+    carrier_le caps Aud hN0 hE0 hc hR
+  have hNr : (N₀ : ℝ) ≤ N := by exact_mod_cast hN
+  have hLr : (L : ℝ) ≤ L₀ := by exact_mod_cast hL
+  have hPr : (P : ℝ) ≤ P₀ := by exact_mod_cast hP
+  have hEr : (E₀ : ℝ) ≤ E := by exact_mod_cast hE
+  have hc0 : (0 : ℝ) ≤ caps.total := by exact_mod_cast hc
+  have h1 : (8 * (L : ℝ) * R₀ + 1) / (N * 32768) ≤ (8 * L₀ * R₀ + 1) / (N₀ * 32768) := by
+    have hLR := mul_le_mul_of_nonneg_right hLr (Nat.cast_nonneg (α := ℝ) R₀)
+    exact div_le_div₀ (by positivity) (by linarith) (by positivity) (by linarith)
+  have h2 : 128 * (L : ℝ) * P * caps.total / E ≤ 128 * L₀ * P₀ * c₀ / E₀ := by
+    have s1 : 128 * (L : ℝ) ≤ 128 * L₀ := mul_le_mul_of_nonneg_left hLr (by norm_num)
+    have s2 : 128 * (L : ℝ) * P ≤ 128 * L₀ * P₀ := mul_le_mul s1 hPr (Nat.cast_nonneg _) (by positivity)
+    have s3 : 128 * (L : ℝ) * P * caps.total ≤ 128 * L₀ * P₀ * c₀ := mul_le_mul s2 hc₀ hc0 (by positivity)
+    exact div_le_div₀ (mul_nonneg (by positivity) (hc0.trans hc₀)) s3 (by positivity) hEr
+  linarith
+
+/-- **8B**: at DCR-RT's inputs (`c ≤ 0.442`, at most 984 passes and 6,000,000 run-input bytes a 60 s window,
+`E ≥ 364,497`, `γ₀ ≤ 0.835%`, `N ≥ 2^24`), both of `G`'s thresholds are positive at a carrier life of `L ≤ 6`. -/
+theorem bounds_8b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit)
+    (hN : 16777216 ≤ N) (hL : L ≤ 6) (hP : P ≤ 984) (hE : 364497 ≤ E) (hc : 0 ≤ caps.total)
+    (hc₀ : caps.total ≤ 221 / 500) (hR : ∀ v, caps.runBytes v ≤ 6000000)
+    (h₀ : ((S + (Lr * τ - ρ * 256) + Xr * τ + k * 32768 : ℕ) : ℝ) ≤ 0.00835 * (N * 32768)) :
+    let RL := ((Finset.range Aud.windows).powerset.filter fun I => I.card ≤ L).sup
+      fun I => ∑ v ∈ I, caps.runBytes v
+    let C := 8 * RL + ⌈(1024 * L * (P * N * 4096) : ℚ) * caps.total / E⌉₊
+    let γ := RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768)
+    0.0015 + γ < 1 ∧ 0.01 + γ < 1 := by
+  intro RL C γ
+  have hc₀' : (caps.total : ℝ) ≤ 221 / 500 := by exact_mod_cast hc₀
+  have hγ : γ ≤ _ := gamma_bound (L₀ := 6) (P₀ := 984) (E₀ := 364497) (N₀ := 16777216) (R₀ := 6000000) caps Aud
+    0.00835 (221 / 500) (by norm_num) hN hL hP (by norm_num) hE hc hc₀' hR h₀
+  norm_num at hγ
+  constructor <;> linarith
+
+/-- **70B TP8**: at DCR-RT's inputs with `c ≤ 0.0918`, the session threshold is positive at a carrier life of `L ≤ 31`,
+and every window's at `L ≤ 30`. -/
+theorem bounds_70b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit)
+    (hN : 16777216 ≤ N) (hP : P ≤ 984) (hE : 364497 ≤ E) (hc : 0 ≤ caps.total)
+    (hc₀ : caps.total ≤ 459 / 5000) (hR : ∀ v, caps.runBytes v ≤ 6000000)
+    (h₀ : ((S + (Lr * τ - ρ * 256) + Xr * τ + k * 32768 : ℕ) : ℝ) ≤ 0.00835 * (N * 32768)) :
+    let RL := ((Finset.range Aud.windows).powerset.filter fun I => I.card ≤ L).sup
+      fun I => ∑ v ∈ I, caps.runBytes v
+    let C := 8 * RL + ⌈(1024 * L * (P * N * 4096) : ℚ) * caps.total / E⌉₊
+    let γ := RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768)
+    (L ≤ 31 → 0.0015 + γ < 1) ∧ (L ≤ 30 → 0.01 + γ < 1) := by
+  intro RL C γ
+  have hc₀' : (caps.total : ℝ) ≤ 459 / 5000 := by exact_mod_cast hc₀
+  refine ⟨fun hL => ?_, fun hL => ?_⟩
+  · have hγ : γ ≤ _ := gamma_bound (L₀ := 31) (P₀ := 984) (E₀ := 364497) (N₀ := 16777216) (R₀ := 6000000) caps Aud
+      0.00835 (459 / 5000) (by norm_num) hN hL hP (by norm_num) hE hc hc₀' hR h₀
+    norm_num at hγ
+    linarith
+  · have hγ : γ ≤ _ := gamma_bound (L₀ := 30) (P₀ := 984) (E₀ := 364497) (N₀ := 16777216) (R₀ := 6000000) caps Aud
+      0.00835 (459 / 5000) (by norm_num) hN hL hP (by norm_num) hE hc hc₀' hR h₀
+    norm_num at hγ
+    linarith
 
 end Accounting.SecurityProofs.DeclaredCircuitWitness
