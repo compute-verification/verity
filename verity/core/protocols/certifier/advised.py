@@ -100,14 +100,15 @@ a window ran, so the unit itself holds neither to the record, only the verifier'
 PROTOCOL.md's named gap, with its design.
 
 **Bucket 0** is capped at RIN, which holds the own frame: the ingress certifier releases min(queue, r_in) frames a
-bucket (`grid.Certifier`), its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head whose
+bucket (`grid.Certifier`), its own frame queued at the head of the queue, ahead of bucket 0's arrivals and of any
+request frames carried from the window before (`active.Bucketer`, `Certifier.enqueue(first=True)`), and a head whose
 count passes its allocation doesn't exist (`certificate.RecordHead`). With RIN request frames arriving in bucket 0,
-the certified count is RIN, one of them the own frame, and the last request frame is released in bucket 1.
+the certified count is RIN, one of them the own frame, and the last request frame is released in bucket 1; with RIN
+or more carried in, the own frame still leaves in bucket 0.
 
 **The ends are where the signed counts put them** (CERT-VARLEN's rule): request j ends in the first bucket where the
 ingress head's signed counts, less one own frame a window, reach `ends[j]`, the prefix sums the floor reads. That is
-the bucket that releases its last frame while each window's own frame leaves in its first bucket, always once the own
-frame is queued at the head of each window's queue, and otherwise one bucket late, never early.
+the bucket that releases its last frame, since each window's own frame leaves in its first bucket.
 
 **Premises** of "an honest advised link is accepted", which N2's claim doesn't rest on: `release` is the certified
 egress record's (each kept output one egress frame, in the link's canonical order, which IO-TIE fixes); the releases
@@ -115,10 +116,7 @@ fall in the link's windows, each with a declared sync in Σ_sync; `received` is 
 request is advice request j (FCFS admission, which IoTieRequest checks, its ordinals being the verifier's: v0
 numbered by a runner's batch order, which ENC-DERIVED's `walk.order` maps back, is refused), an id request of its
 prompt length (`request_frames`); each window's declared sync is the one the certifier ran it under, with a δ and
-ρ that every frame released in it meets (a small δ, a ρ at least a stream's rate); with the
-salt on, the own frame counts as bucket 0's, so a window that starts with RIN or more request frames carried in
-under-counts by one until the own frame is released, which only a release at its exact eligibility notices; and both
-ends share T and τ_b.
+ρ that every frame released in it meets (a small δ, a ρ at least a stream's rate); and both ends share T and τ_b.
 
 **Cost** (`size`): about 105 ANDs a bucket, the ingress floor and the egress equality: 63,031 at T = 600, RIN = 1,
 OWN = 0 and 64,894 at RIN = 4, OWN = 1, a fiftieth of one head check (3,229,371).

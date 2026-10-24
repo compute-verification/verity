@@ -1055,15 +1055,14 @@ requests, whose frames are a function of the prompt's length alone), for every p
   phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`). The advised tests stand in
   for the source with its reference in the clear (`tests/advised_traffic.py`, `StandInTie`).
 - **Bucket 0 is capped at R_in, which holds the own frame.** The ingress certifier releases min(queue, r_in) frames a
-  bucket (`grid.Certifier`) with its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head
-  with a count past its allocation doesn't exist (`certificate.RecordHead`): with R_in request frames arriving in
-  bucket 0 the certified count is R_in, one of them the own frame, and the last request frame goes out in bucket 1.
+  bucket (`grid.Certifier`) with its own frame queued at the head of the queue, ahead of bucket 0's arrivals and of any
+  request frames carried from the window before (`active.Bucketer`), and a head with a count past its allocation
+  doesn't exist (`certificate.RecordHead`): with R_in request frames arriving in bucket 0 the certified count is R_in,
+  one of them the own frame, and the last request frame goes out in bucket 1.
 - **The ends are where the signed counts put them** (CERT-VARLEN's rule): request k ends in the first bucket where the
   ingress head's signed counts, less one own frame a window, reach `ends[k]`, with `request_frames[n − 1]` CERT-VARLEN's
   `id_request_frames(n, B)`. The floor reads the same prefix sums, so it holds each output to the bucket the signed
-  counts end its request in. The rule is exact while each window's own frame leaves in its first bucket, and always
-  once CERT-VARLEN's FIFO change queues the own frame at the head of each window's queue; until then a window that
-  starts with R_in or more request frames carried in puts an end one bucket late, never early.
+  counts end its request in. The rule is exact, since each window's own frame leaves in its first bucket.
 - **Named gap: the record holds neither the prompt lengths nor the syncs the unit reads** (owned by network-accounting).
   The unit takes v0's prompt lengths, held to the certified ones only by IoTieRequest's verdict (the tie above), and
   each window's sync from its declaration, held to Σ_sync and to the sync the certifier reports it ran (the clock
@@ -1087,9 +1086,6 @@ requests, whose frames are a function of the prompt's length alone), for every p
   - each window's declared sync has a δ and ρ that every frame released in it meets: a small δ, and ρ at least a
     stream's frames a bucket (`schedule.eligible` reads the anchor's window's sync, the view the release's, which the
     verifier sees);
-  - with the salt on, a window's own frame counts as bucket 0's, so a window that starts with R_in or more request
-    frames carried in under-counts by one until it is released, which only a release at its exact eligibility
-    notices (CERT-VARLEN's FIFO change, the own frame first in each window's queue, removes this);
   - both ends share T and τ_b (checked by `LinkWindows`).
 
 What this establishes: on every accepted link-window of an advised link, the egress head's counts are the advice's
