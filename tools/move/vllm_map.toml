@@ -42,6 +42,8 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_ranks.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/ranks.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_records.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/records.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_registered.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/registered.py"
+# not on main yet: #3438's branch (cursor/vllm-h1-gpu-reg-2181) adds it, and its restack needs the row
+"integrations/vllm/verity_vllm/protocol_options/pouw_h1_registered_device.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/registered_device.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_requests.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/requests.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_served.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/served.py"
 "integrations/vllm/verity_vllm/protocol_options/pouw_h1_settings.py" = "integrations/vllm/verity_vllm/protocols/pouw/h1/settings.py"
@@ -127,6 +129,7 @@ paths = []
 "verity_vllm.protocol_options.pouw_h1_ranks" = "verity_vllm.protocols.pouw.h1.ranks"
 "verity_vllm.protocol_options.pouw_h1_records" = "verity_vllm.protocols.pouw.h1.records"
 "verity_vllm.protocol_options.pouw_h1_registered" = "verity_vllm.protocols.pouw.h1.registered"
+"verity_vllm.protocol_options.pouw_h1_registered_device" = "verity_vllm.protocols.pouw.h1.registered_device"
 "verity_vllm.protocol_options.pouw_h1_requests" = "verity_vllm.protocols.pouw.h1.requests"
 "verity_vllm.protocol_options.pouw_h1_served" = "verity_vllm.protocols.pouw.h1.served"
 "verity_vllm.protocol_options.pouw_h1_settings" = "verity_vllm.protocols.pouw.h1.settings"
