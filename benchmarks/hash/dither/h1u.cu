@@ -620,6 +620,25 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #if H1U_JXS && !H1U_JX
 #error "H1U_JXS swizzles JX's X, so it needs H1U_JX = 1"
 #endif
+// H1U_JSM = 1 (with JX, not JN2): h1umj's and h1umj_sm's warps hold WarpSmemJ, WarpSmem without the row blocks and
+// coins JX's unit never reads (7808 bytes a warp against 10240), so shared memory admits 12 warps an SM
+#ifndef H1U_JSM
+#define H1U_JSM 0
+#endif
+#if H1U_JSM && (!H1U_JX || H1U_JN2)
+#error "H1U_JSM drops rowbits, which only JX without JN2 leaves unread"
+#endif
+struct alignas(16) WarpSmemJ {
+  NoiseMid nm;
+  u32 colbits[32][17];
+  u32 utab[32][9];
+  u32 ring[32][33];
+};
+#if H1U_JSM
+using JSmem = WarpSmemJ;
+#else
+using JSmem = WarpSmem;
+#endif
 constexpr u32 JX_AD_WORDS = 3 * 8 * 32;
 __host__ __device__ __forceinline__ u64 jx_x_off(u32 M, u32 K) { return 64ull * M * (K / 512 + 1); }
 __host__ __device__ __forceinline__ u64 jx_ad_off(u32 M, u32 K) { return jx_x_off(M, K) + (u64)M * K; }
@@ -655,11 +674,11 @@ __device__ __forceinline__ void pack_digits(const int (&Y)[8][4], u32 g, u32 q, 
   }
 }
 template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false, bool RW = false, bool RC = false,
-          bool JX = false>
+          bool JX = false, class Sm = WarpSmem>
 __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                          u32* __restrict__ out, const u32* __restrict__ ws, const OneOut oo, const u32 u,
-                                         WarpSmem& S) {
+                                         Sm& S) {
   static_assert(!DG || !(WS || OS || J10 || PL), "a gathered diagonal is the fused receipts-only form");
   static_assert(!RW || !(WS || OS || J10 || PL || DG), "J10-R's units are the fused receipts-only form");
   static_assert(!RC || RW, "RC is J10-R's units with their column blocks read");
@@ -997,8 +1016,12 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       }
       continue;
     }
-    const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
-    const uint8_t* cbits = reinterpret_cast<const uint8_t*>(N2 && blk % 2 == 0 ? &S.rowbits[0][0] : &S.colbits[0][0]);
+    const uint8_t* rbits = nullptr;
+    const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.colbits[0][0]);
+    if constexpr (!JX || N2) {
+      rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
+      if (N2 && blk % 2 == 0) cbits = rbits;
+    }
 #pragma unroll 1
     for (u32 j0 = 0; j0 < 16; j0 += NS) {
 #pragma unroll
@@ -2692,7 +2715,7 @@ __global__ void __launch_bounds__(512) h1jr_x(const UCallR* __restrict__ calls, 
 
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                     const uint8_t* __restrict__ live) {
-  __shared__ WarpSmem smem[WARPS];
+  __shared__ JSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5;
   const u32 gu = blockIdx.x * WARPS + wp;
   if (gu >= calls[ncalls].u0) return;
@@ -2713,7 +2736,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __re
 
 // h1umj's unit gu, for h1umj_sm (h1umj keeps its own copy, as h1um does of h1um_one)
 __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
-                                          const uint8_t* __restrict__ live, u32 gu, WarpSmem& S) {
+                                          const uint8_t* __restrict__ live, u32 gu, JSmem& S) {
   u32 lo = 0, hi = ncalls;
   while (hi - lo > 1) {
     const u32 mid = (lo + hi) >> 1;
@@ -2744,7 +2767,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
   u32 smid;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
   if (!sm_keep<CAP>(smid, q, den, cap, next)) return;
-  __shared__ WarpSmem smem[WARPS];
+  __shared__ JSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
   if constexpr (H1U_JCTA) {
     __shared__ u32 claim;
