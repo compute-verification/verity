@@ -85,9 +85,16 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   token row's chunks agree on its scale. The carries are proof-layer values, committed after the draw like the partials,
   never outputs; the partials and the combine are the whole lane's, so such a leaf is 32 n + 1 statements. Over v1 only:
   v3's z corrects O' and the digits over every segment of K.
+* **The unit on chunk rows.** A window at such a K binds `PouwH1TileZyChunks_v1{UNIT, CHUNKS = n}` (`window_unit`), UNIT
+  the K's `PouwH1TileZy_v1` over `PouwH1Tile_v1`: the same parameters (``a``, ``b``, ``zy``, ``salt``, ``position``,
+  ``roots``) and outputs (``receipt``, ``ok``), its ``a`` the n R chunk rows of its R A rows (`ROW`(K_c), row i's chunk c
+  at n i + c, as its table commits them) and its ``b`` the n C of its B rows. It is UNIT on the whole rows, each its
+  chunks' codes in turn at chunk 0's scale, and its ok is UNIT's AND every later chunk's scale equal to chunk 0's (as a
+  lane's chunks hold each row's scale to the carried one), (n - 1)(R + C) `PouwEq32`s more. Its drawn leaf is UNIT's
+  leaf, proved as above, so a chunked K is refused over v3 and v4.
 
 `records` gives a unit's honest record on words (`scaled_mm_zy`'s for its rows and scales), `reference` the unit on words,
-``(receipt, ok)``, `lane_partial` a lane's honest partials row, and `lane_reference` and `combine_reference` a lane's and the
+``(receipt, ok)``, and `chunks_reference` the unit on chunk rows, `lane_partial` a lane's honest partials row, and `lane_reference` and `combine_reference` a lane's and the
 combine's ok; `lane_chunk_carries` a lane's honest carries in chunks, and `lane_chunk_reference` a chunk's ok.
 `statement_rows` is a lane's, a chunk's and the combine's input rows as `class_statement.unit_lowering` takes them, and
 `statement_ports` their C-Flock ports, each input's and the output's bits in its port's row, which Lean states as
@@ -108,6 +115,8 @@ from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.refs import Coll, Explicit, array_of, concat
 from verity.ml.circuits.types import Array, Record, Value
+
+from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks
 
 from . import h1tile as H
 from . import seeds as SD
@@ -487,28 +496,6 @@ def combine(tile: Any) -> Any:
 
 # -- a lane in chunks along K ---------------------------------------------------------------------------------------------------
 
-#: the largest K a lane is proved at whole, and a chunk's largest: K = 4096's lane fills C-Flock's 2^27 block
-CHUNK_MAX = 4096
-#: a chunk is whole blocks of its rows' and columns' noise streams
-CHUNK_ALIGN = SD.BLOCK_BITS
-
-
-def chunks(k: int) -> int:
-    """The chunks a lane at contraction ``k`` is proved in: 1, the whole lane (`PouwH1LaneZy`), at K <= `CHUNK_MAX`; past
-    it the least n >= 2 whose chunks K / n are at most `CHUNK_MAX` entries and a multiple of `CHUNK_ALIGN`. ValueError at a
-    K with no such n."""
-    k = int(k)
-    if k < 1:
-        raise ValueError(f"K = {k}: a lane is proved only at a positive K")
-    if k <= CHUNK_MAX:
-        return 1
-    for n in range(-(-k // CHUNK_MAX), k // CHUNK_ALIGN + 1):
-        if k % (n * CHUNK_ALIGN) == 0:
-            return n
-    raise ValueError(f"K = {k}: no n splits it into chunks of at most {CHUNK_MAX} entries that are whole {CHUNK_ALIGN}-bit "
-                     f"noise blocks")
-
-
 def chunk_leaves(row: bytes, k: int) -> list[bytes]:
     """A registered A or B row at contraction ``k`` (`ROW`(k)'s bytes: its k codes, then its f32 scale little-endian) as the
     `chunks`(k) = n leaves a table commits it as: leaf c is the codes [c K_c, (c + 1) K_c), K_c = k / n, then the row's
@@ -701,6 +688,82 @@ def lane_statements(tile: Any) -> list[Any]:
     return [lane(tile)] if n == 1 else [lane_chunk(tile, n, c) for c in range(n)]
 
 
+# -- the unit on chunk rows -------------------------------------------------------------------------------------------------------
+
+def _refuse_tile_chunks(b: dict) -> str | None:
+    u, n = b.get("UNIT"), b.get("CHUNKS")
+    if getattr(u, "defn", None) is not PouwH1TileZy:
+        return f"UNIT is h1zy's PouwH1TileZy_v1 over an H1 tile, not {getattr(u, 'id', u)!r}"
+    t = u.bindings["TILE"]
+    if t.defn.id != "PouwH1Tile_v1":
+        return (f"a unit on chunk rows is over PouwH1Tile_v1, not {t.defn.id}: its drawn leaf is proved as lanes in chunks "
+                "(PouwH1LaneZyChunk_v1), and v3's and v4's one-stream z starts from O' and the digits, which only a lane's "
+                "last chunk has")
+    if getattr(t.bindings["EXACT"], "defn", None) is not BG.GemmAccumulatorS8:
+        return "TILE's EXACT is GemmAccumulatorS8_v2, whose DOT steps a lane's chunks continue from the carried z"
+    if not (isinstance(n, int) and not isinstance(n, bool) and n >= 2):
+        return f"CHUNKS is an integer of at least 2 (one chunk is the unit itself, PouwH1TileZy_v1), not {n!r}"
+    k = t.signature()[0][0][1].elem.n
+    if k % (32 * n):
+        return f"K = {k} is {n} chunks of whole 32-entry segments only where 32 {n} divides it"
+    return None
+
+
+def _tile_chunks(S: Any) -> tuple[int, int, int, int]:
+    """A unit on chunk rows' R, C, K and n."""
+    r, c, k = _tile(S.UNIT.S())
+    return r, c, k, S.CHUNKS
+
+
+def _tile_chunks_signature(S: Any) -> tuple:
+    r, c, k, n = _tile_chunks(S)
+    params, ret = S.UNIT.signature()
+    return (("a", Array(n * r, ROW(k // n))), ("b", Array(n * c, ROW(k // n))), *params[2:]), ret
+
+
+def _whole_rows(rows: Coll, count: int, n: int, k: int) -> Coll:
+    """``count`` whole rows (`ROW`(k)) from their chunk rows, row i's chunk c at n i + c: its chunks' codes in turn, then
+    chunk 0's scale."""
+    refs = []
+    for i in range(count):
+        refs += [rows[n * i + c].field("codes").refs for c in range(n)] + [rows[n * i].field("scale").refs]
+    return Coll(Array(count, ROW(k)), concat(refs))
+
+
+def _tile_chunks_body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
+    r, c, k, n = _tile_chunks(S)
+    out = B.call(S.UNIT, _whole_rows(a, r, n, k), _whole_rows(b, c, n, k), zy, salt, position, roots)
+    later = [(rows, i, ch) for rows, m in ((a, r), (b, c)) for i in range(m) for ch in range(1, n)]
+    w = len(later)
+    eq = B.batch(SG.PouwEq32, Coll(Array(w, H.U32), concat([rows[n * i + ch].field("scale").refs for rows, i, ch in later])),
+                 Coll(Array(w, H.U32), concat([rows[n * i].field("scale").refs for rows, i, _ch in later])), axes=(0, 0))
+    ok = _and_all(B, [out.field("ok")] + [eq[x] for x in range(w)])
+    return Coll(_tile_chunks_signature(S)[1], concat([out.field("receipt").refs, ok.refs]))
+
+
+PouwH1TileZyChunks = CompositeDefinition(
+    "PouwH1TileZyChunks", 1, ("UNIT", "CHUNKS"), _tile_chunks_signature, _tile_chunks_body, conformance="protocol-defined",
+    refuse=_refuse_tile_chunks, register=H.SG is not None, ports=_unit_ports,
+    doc="UNIT (h1zy's PouwH1TileZy_v1 over an R × C PouwH1Tile_v1 at K) on its rows as CHUNKS = n chunk rows each "
+        "(`circuit.h1zy`): its n R A rows and n C B rows, row i's chunk c at n i + c its K / n codes from c K / n and the "
+        "row's f32 scale, then UNIT's record, salt, position and roots. Each whole row is its chunks' codes in turn and "
+        "chunk 0's scale; the unit returns UNIT's receipt on them, and ok, UNIT's ok AND every later chunk's scale equal "
+        "to chunk 0's.")
+
+
+def unit_chunks(tile: Any, n: int) -> Any:
+    """`PouwH1TileZyChunks` over `unit`(``tile``) on ``n`` chunk rows a row."""
+    return bind(PouwH1TileZyChunks, UNIT=unit(tile), CHUNKS=int(n))
+
+
+def window_unit(tile: Any) -> Any:
+    """The tile unit a window binds at ``tile``'s K, whose rows are the ones a table at K commits (`chunk_leaves`): `unit`
+    at `chunks`(K) = 1, else `unit_chunks` on its n = `chunks`(K) chunk rows. ValueError at a K `chunks` refuses, and past
+    `CHUNK_MAX` on any tile but PouwH1Tile_v1 over GemmAccumulatorS8_v2."""
+    n = chunks(tile.signature()[0][0][1].elem.n)
+    return unit(tile) if n == 1 else unit_chunks(tile, n)
+
+
 # -- the statements' ports ------------------------------------------------------------------------------------------------------
 
 #: a lane's public row ``pub``: the leaf's salt, position and roots and the lane's index, in that order (#3116's
@@ -788,6 +851,21 @@ def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequen
     ``zy`` (z s32 words, y bf16 encodings, row-major), the salt, position and roots; ``stream``: over v3 (`h1tile`)."""
     z, receipt = H.reference(a, b, salt, position, roots, stream=stream)
     return receipt, check(zy[0], zy[1], z, sa, sw)
+
+
+def chunks_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequence[int], sw: Sequence[int],
+                     zy: tuple[Sequence[int], Sequence[int]], salt: bytes, position: int, roots: tuple[bytes, bytes],
+                     n: int) -> tuple[list[int], int]:
+    """`PouwH1TileZyChunks` on words: (receipt, ok) for its n R A and n C B chunk rows (s8 encodings, row i's chunk c at
+    n i + c) and their scales (f32 encodings, one a chunk row), the record ``zy``, the salt, position and roots: `reference`
+    on the whole rows (each its chunks' codes in turn, at chunk 0's scale), its ok AND every chunk's scale its row's chunk
+    0's."""
+    def whole(rows: Sequence[Sequence[int]]) -> list[list[int]]:
+        return [[v for c in range(n) for v in rows[n * i + c]] for i in range(len(rows) // n)]
+
+    receipt, ok = reference(whole(a), whole(b), sa[::n], sw[::n], zy, salt, position, roots)
+    same = all(s[n * i + c] & M32 == s[n * i] & M32 for s in (sa, sw) for i in range(len(s) // n) for c in range(n))
+    return receipt, int(ok and same)
 
 
 def lane_partial(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], admit: Sequence[int], salt: bytes, position: int,
@@ -929,9 +1007,9 @@ def lane_chunk_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]],
 
 
 __all__ = ["BF16", "CARRY", "CHUNK_ALIGN", "CHUNK_MAX", "F32", "LANE", "LEAST_K", "PUBLIC", "S32", "S8", "PouwAndBit",
-           "PouwH1Combine", "PouwH1LaneZy", "PouwH1LaneZyChunk", "PouwH1TileZy", "PouwMuxBit", "PouwZyCell", "PouwZyCheck",
-           "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "TILES", "carry_words", "check", "chunk_leaves",
-           "chunk_words", "chunks", "combine",
-           "combine_reference", "dequant", "lane", "lane_bits", "lane_cells", "lane_chunk", "lane_chunk_carries",
-           "lane_chunk_reference", "lane_partial", "lane_reference", "lane_statements", "records", "reference",
-           "statement_ports", "statement_rows", "unit", "zy_cell"]
+           "PouwH1Combine", "PouwH1LaneZy", "PouwH1LaneZyChunk", "PouwH1TileZy", "PouwH1TileZyChunks", "PouwMuxBit",
+           "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "TILES", "carry_words",
+           "check", "chunk_leaves", "chunk_words", "chunks", "chunks_reference", "combine", "combine_reference", "dequant",
+           "lane", "lane_bits", "lane_cells", "lane_chunk", "lane_chunk_carries", "lane_chunk_reference", "lane_partial",
+           "lane_reference", "lane_statements", "records", "reference", "statement_ports", "statement_rows", "unit",
+           "unit_chunks", "window_unit", "zy_cell"]

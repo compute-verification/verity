@@ -21,6 +21,7 @@ from verity.ml.circuits.refs import runs
 from verity.ml.circuits.types import Array
 
 from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import h1zy as Z
 from verity.core.protocols.pouw.circuit import reference as REF
 from verity.core.protocols.pouw.circuit import seeds as SD
@@ -469,7 +470,7 @@ def test_a_lane_past_4096_is_proved_in_the_fewest_chunks_of_whole_noise_blocks()
     """`chunks`: the whole lane up to K = 4096, past it the least n whose K / n is at most 4096 and a multiple of 512, at
     every served K (6144: 2 × 3072, 12288: 3 × 4096, 14336: 4 × 3584, 16384: 4 × 4096); a K with no such n is refused."""
     assert [Z.chunks(k) for k in (32, 448, 4096, 6144, 12288, 14336, 16384)] == [1, 1, 1, 2, 3, 4, 4]
-    assert (Z.CHUNK_MAX, Z.CHUNK_ALIGN) == (4096, 512)
+    assert (Z.CHUNK_MAX, Z.CHUNK_ALIGN) == (4096, 512) and Z.CHUNK_ALIGN == SD.BLOCK_BITS
     for k in (6144, 12288, 14336, 16384):
         n = Z.chunks(k)
         assert k // n <= Z.CHUNK_MAX and (k // n) % 512 == 0
@@ -673,4 +674,118 @@ def test_a_lane_chunk_on_bits_is_its_word_reference():
         out = evaluate_bits(d, *[np.array([row[p] for row in inputs], np.uint8) for p in range(len(names))])
         got += [int(o) for o in out.reshape(len(cases))]
     assert want == [1, 1, 1, 1, 0, 0] + [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0] + [1, 1, 1, 1, 0, 0, 0, 0]
+    assert got == want
+
+
+# -- the unit on chunk rows ------------------------------------------------------------------------------------------------------
+
+def _split(rows, scales, n):
+    """Each row's n chunk rows and their scales, row i's chunk c at n i + c, each chunk row its row's scale."""
+    kc = len(rows[0]) // n
+    return [r[c * kc:c * kc + kc] for r in rows for c in range(n)], [s for s in scales for _c in range(n)]
+
+
+@pytest.mark.parametrize("r,c,k,n", [(4, 8, 64, 2), (32, 32, 6144, 2), (32, 32, 14336, 4)])
+def test_the_unit_on_chunk_rows_reads_the_tables_chunk_rows_and_returns_the_units_outputs(r, c, k, n):
+    """`PouwH1TileZyChunks` takes the window's tile parameters (`h1window.TILE_PARAMS`): n R A and n C B rows of `ROW`(K / n)
+    in place of UNIT's R and C of `ROW`(K), then UNIT's record, salt, position and roots, and returns UNIT's receipt and ok
+    with its ports (the salt a coin, the receipt a sink, so it is no seed); `window_unit` binds it at the served K past
+    4096 with n = `chunks`(K), and UNIT itself up to 4096."""
+    t = _tile(H.PouwH1Tile, r, c, k)
+    u = Z.unit_chunks(t, n)
+    params, ret = u.signature()
+    inner = Z.unit(t).signature()
+    assert [nm for nm, _t in params] == list(HW.TILE_PARAMS) and ret == inner[1]
+    assert [(nm, tp.n, tp.elem) for nm, tp in params[:2]] == [("a", n * r, Z.ROW(k // n)), ("b", n * c, Z.ROW(k // n))]
+    assert params[2:] == inner[0][2:]
+    decl = u.defn.ports(u.S())
+    assert {nm: p.kind for nm, p in decl.params.items()} == {"salt": "coin", "position": "position"}
+    assert set(decl.ret) == {"receipt"} and decl.ret["receipt"].sink and PT._coin_role(u) is None
+    if r == 32:
+        assert Z.window_unit(t) == u and Z.window_unit(_tile(H.PouwH1Tile, r, c, 4096)) == Z.unit(_tile(H.PouwH1Tile, r, c, 4096))
+
+
+@pytest.mark.parametrize("bindings,why", [
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile3, 4, 8)), CHUNKS=2), "over PouwH1Tile_v1, not PouwH1Tile_v3"),
+    (lambda: dict(UNIT=_tile(H.PouwH1Tile, 4, 8), CHUNKS=2), "PouwH1TileZy_v1 over an H1 tile"),
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile, 4, 8)), CHUNKS=1), "at least 2"),
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile, 4, 8, 96)), CHUNKS=2), "whole 32-entry segments"),
+])
+def test_a_unit_on_chunk_rows_of_another_unit_or_chunking_is_refused(bindings, why):
+    with pytest.raises(ValueError, match=why):
+        bind(Z.PouwH1TileZyChunks, **bindings())
+
+
+def test_a_window_unit_at_a_chunked_k_is_refused_over_v3_and_v4():
+    """Past `CHUNK_MAX` a drawn leaf is proved as lanes in chunks, which only v1 has: `window_unit` refuses v3 there (the
+    wrapper's refusal) and v4 anywhere (the zy unit's), and takes v3 at K <= 4096."""
+    for defn, why in ((H.PouwH1Tile3, "over PouwH1Tile_v1"), (H.PouwH1Tile4, "an H1 tile")):
+        with pytest.raises(ValueError, match=why):
+            Z.window_unit(_tile(defn, 32, 32, 6144))
+    assert Z.window_unit(_tile(H.PouwH1Tile3, 32, 32, 4096)) == Z.unit(_tile(H.PouwH1Tile3, 32, 32, 4096))
+
+
+def test_the_unit_on_chunk_rows_reads_the_bits_of_the_leaves_its_table_commits():
+    """A chunk row's bits are its `chunk_leaves` leaf's bytes, least significant bit first: its K / n codes, then its row's
+    scale, so the unit's ``a`` and ``b`` are its table's leaves n r + c in order."""
+    rng = random.Random(48)
+    for k, n in ((4096, 1), (6144, 2), (14336, 4)):
+        assert Z.chunks(k) == n
+        a, _b, sa, _sw = _unit_rows(rng, 3, 1, k)
+        raw = b"".join(leaf for row, s in zip(a, sa) for leaf in Z.chunk_leaves(bytes(row) + s.to_bytes(4, "little"), k))
+        rows, scales = _split(a, sa, n)
+        assert _row_bits(rows, scales) == [(byte >> i) & 1 for byte in raw for i in range(8)]
+
+
+def test_the_unit_on_chunk_rows_on_words_is_the_unit_on_its_whole_rows():
+    """`chunks_reference`: `reference` on each row's chunks joined, so the honest chunk rows give the whole unit's receipt
+    and ok; a later chunk's scale off its row's leaves the receipt and makes ok 0, and a code off in a later chunk moves
+    the receipt as it moves the whole row's."""
+    rng = random.Random(49)
+    a, b, sa, sw = _unit_rows(rng, 4, 8, 192)
+    zy = Z.records(a, b, sa, sw)
+    whole = Z.reference(a, b, sa, sw, zy, SALT, 5, ROOTS)
+    for n in (2, 3):
+        (ca, csa), (cb, csw) = _split(a, sa, n), _split(b, sw, n)
+        assert whole[1] == 1 and Z.chunks_reference(ca, cb, csa, csw, zy, SALT, 5, ROOTS, n) == whole
+        for at in (1, n * 2 + n - 1):
+            off = list(csa)
+            off[at] ^= 1 << 7
+            assert Z.chunks_reference(ca, cb, off, csw, zy, SALT, 5, ROOTS, n) == (whole[0], 0)
+        moved = [list(row) for row in cb]
+        moved[n * 3 + n - 1][5] ^= 0x40
+        b2 = [list(row) for row in b]
+        b2[3][(n - 1) * (192 // n) + 5] ^= 0x40
+        assert Z.chunks_reference(ca, moved, csa, csw, zy, SALT, 5, ROOTS, n)[0] == Z.reference(
+            a, b2, sa, sw, zy, SALT, 5, ROOTS)[0] != whole[0]
+
+
+@pytest.mark.slow
+def test_the_unit_on_chunk_rows_on_bits_is_its_word_reference():
+    """`PouwH1TileZyChunks` over the 4 × 8 unit at K = 64 in 2 chunk rows a row, on bits against `chunks_reference`, about
+    50 s: the honest chunk rows (ok 1), a later A chunk's scale off (0), a later B chunk's (0) and a record cell off (0),
+    each with the whole unit's receipt. It is the only test of the wrapper's gates: the whole rows it joins from the chunk
+    rows (the receipt and the record check see the row's codes in order and chunk 0's scale) and the scales' equality."""
+    rng = random.Random(47)
+    n = 2
+    a, b, sa, sw = _unit_rows(rng, 4, 8, 64)
+    (ca, csa), (cb, csw) = _split(a, sa, n), _split(b, sw, n)
+    zy = Z.records(a, b, sa, sw)
+    off_a, off_b = list(csa), list(csw)
+    off_a[3] ^= 1 << 5
+    off_b[2 * 5 + 1] ^= 1 << 30
+    cases = [(csa, csw, zy), (off_a, csw, zy), (csa, off_b, zy), (csa, csw, (zy[0], [zy[1][0] ^ 1, *zy[1][1:]]))]
+    u = Z.unit_chunks(_tile(H.PouwH1Tile, 4, 8, 64), n)
+    names = [p for p, _t in u.signature()[0]]
+    inputs, want = [], []
+    for xsa, xsw, rec in cases:
+        want.append(Z.chunks_reference(ca, cb, xsa, xsw, rec, SALT, 5, ROOTS, n))
+        v = {"a": _row_bits(ca, xsa), "b": _row_bits(cb, xsw), "zy": _word_bits(rec[0]) + [x for y in rec[1] for x in _bits(y, 16)],
+             "salt": SD.leaves(SALT, True), "position": SD.position_leaves(5, True),
+             "roots": SD.leaves(ROOTS[0], True) + SD.leaves(ROOTS[1], True)}
+        inputs.append([v[p] for p in names])
+    out = evaluate_bits(u, *[np.array([row[p] for row in inputs], np.uint8) for p in range(len(names))])
+    got = [([_int(o[32 * w:32 * w + 32]) for w in range((len(o) - 1) // 32)], int(o[-1])) for o in out]
+    receipt = Z.reference(a, b, sa, sw, zy, SALT, 5, ROOTS)[0]
+    assert want == [(receipt, 1), (receipt, 0), (receipt, 0), (receipt, 0)]
     assert got == want
