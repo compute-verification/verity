@@ -2,9 +2,10 @@
 (time-held and link-charged, each read held over time and at the passes, exact) with its groups' times read from what
 the auditor's host signed rather than from the verifier's stamps.
 
-**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line` request,
-`RemoteAudit.Line.line` with its W from `RemoteAudit.Pooled`) computes each session's line from the inputs
-`verifier.recorded_inputs` reads from the record, and `remote_bandwidth.line` computes it beside it from the same JSON:
+**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
+`RemoteAudit.Line.lineOfRecord` with its W from `RemoteAudit.Pooled`) computes each session's line off its record from
+the inputs `verifier.recorded_inputs` reads, and `remote_bandwidth.line` computes it beside it from the same JSON
+(`line.line_of_record`):
 the two are compared exactly, every rational as text in lowest terms and every integer, and a session where they
 differ refuses the run's line, naming both values (`Disagree`). Floats appear only as the exact shares correctly
 rounded for display. `--line-by python` computes it in `line.py` alone, a reading that is never of record: the
@@ -19,9 +20,11 @@ and whose close, record and refused hellos the auditor's ledger sealed at the se
 So L_g = max(A_g, s_(g+1)) − s_g on the challenger's clock holds group g's reads: they come after its coin, whose seed
 they take, and before its last root, which chains them.
 
-Beside the times the line reads the verifier's record of the session (`verifier.json`): its verdict, each group's
-passes and held bytes (`ledger.memory`), and its windows' receipts and draws, whose pooled bound
-(`remote_bandwidth.pooled`) is its wrong receipts. The verifier runs on the audit's machine, not
+Beside the times the line reads the Lean verifier's record of the session (`verifier.lean_record`, `verifier.json`'s
+`lean_record`): each group's passes, its windows' receipts and draws, whose pooled bound (`remote_bandwidth.pooled`)
+is its wrong receipts, and its registered blocks, the registration's; and the verifier's verdict, and each group's
+held bytes by kind (`ledger.memory`), which the record doesn't hold (they need each pass's plan and the store's
+regions). The verifier runs on the audit's machine, not
 the auditor's host, so these rest on its verdict, which the session's transcript (`verifier.py --transcript`) lets the
 auditor replay offline (the remote audit's `lean/tests/replay.py transcript`). The verifier's stamps are read only to
 cross-check the challenger's: each coin interval on both clocks, their rates, and each group's L on both.
@@ -67,6 +70,8 @@ reasons; beside each share of weights held is the same session's share of filler
 tier, `line`'s `filler`), which the line doesn't count as weights. Each form charges the node's rates (`RATES`) and
 their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7). What every accepted paced session
 measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
+Each session's `sketch` is its δs at the outside-compute factor F its verifier charged, Q = F·C (`verifier.sketch_at`),
+and `sketch_outside` every F the run's sessions were charged at.
 
 **Error.** Each accepted paced session's line fails, crediting more than the node held, with probability at most its
 `error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its four
@@ -78,9 +83,27 @@ line at each T, and the line of record over every T (`credit`'s `error`), fail w
 sessions' totals: the least share is read off whichever session the run made least, so the union bound holds where a
 maximum wouldn't.
 
+**Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) takes `NoOutsideCompute`,
+statement C in full, as a premise that no record of the run discharges, so every line says it is conditional on it,
+until certifiers cover the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
+the store and computes the receipts, breaks that premise alone.
+
+**The boundary** (`--boundary FILE --boundary-pin SHA512`, off by default; `boundary_check`). With it, a sixth check
+refuses a session's credit when the network certifiers' records of the gate node's boundary links over its credited
+span, from σ_0's release to its last root's arrival on the challenger's clock, show ingress other than the verifier's
+messages. It reads the certifier's `CertifiedRecord` of each boundary link's ingress window covering the span
+(`certifier.certificate`: the head's `counts` and `root`), each held to one record with a complete status, signed under
+the certifier's key in its session (`certifier.audit.Audit.check_ingress_link`), and compares its real frames with the
+verifier's own messages framed as the link frames them: their count and their root (`certificate.frames_root`), which
+must be equal. FILE names the links, the certifier's key (whose SHA-512 is `--boundary-pin`), its session and ingress
+grid, each window's span on the challenger's clock, the verifier's frames and the records (`read_boundary`). It reads the
+heads in the clear, a prototype; that the links are all of the node's boundary is `certifier-coverage`, which it doesn't
+check, so the line stays conditional on `NoOutsideCompute` with it on.
+
     python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG --main FILE]]
         [--ledger HEAD ...] [--peer NAME] [--model-pin FILE] [--disk-bytes-per-s B/S] [--link-bytes-per-s B/S]
         [--bursts stated|none] [--line-by lean|python] [--lean-exe PATH] [--table FILE]
+        [--boundary FILE --boundary-pin SHA512]
 """
 from __future__ import annotations
 
@@ -101,10 +124,14 @@ sys.path.insert(0, str(HERE.parents[1]))
 import challengers as CH  # noqa: E402
 import lean_verifier as lv  # noqa: E402
 import verifier as V  # noqa: E402
-from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, pooled, timing  # noqa: E402
+from verity.core.protocols.certifier import audit as caudit  # noqa: E402
+from verity.core.protocols.certifier import certificate as cert  # noqa: E402
+from verity.core.protocols.certifier.grid import GridParams, Reason, Status  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
+from verity.ml.crypto import lms  # noqa: E402
 
 RATES = {"disk_bytes_per_s": 4.4e9, "link_bytes_per_s": 5e10}
 """The node's ceilings a gate run's line is read at, bytes a second (`line.Rates`): the node's NICs into its memory,
@@ -129,6 +156,16 @@ NAMED_TERMS = {"prf_advantage": {"claim": ledger.PRF_CLAIM, "term": "Σ_t Adv(pr
                                  "in_total": False}}
 """`LineHeld`'s error beyond δ: each window's PRF advantage, one oracle-access distinguisher a window, which its claim
 prices and no number here does. Every error records it by name, outside its total."""
+CONDITIONAL_ON = {"NoOutsideCompute": (
+    "statement C in full (Accounting.Remote.Held.Assumptions.NoOutsideCompute, a premise of LineHeld): no device "
+    "outside the node computes on a registered block or a receipt during the session; assumed until certifiers cover "
+    "the gate node's boundary (certifier-coverage) and certify that nothing but the verifier's messages entered it over "
+    "the credited span")}
+"""The premises of the line's statement that no record of the run discharges, each with what it says: every line
+(`auditor_line.json`'s `conditional_on`, `credit.md`) is conditional on them, and the `memory-line-of-record` label
+requires the field."""
+BOUNDARY = "boundary"
+"""The check `--boundary` adds to `CHECKS` (`boundary_check`)."""
 
 
 class Disagree(ValueError):
@@ -273,13 +310,16 @@ def differ(lean: object, python: object, at: str = "") -> tuple[str, object, obj
 
 
 def line_of_record(inputs: dict, lean: lv.Lean | None) -> dict:
-    """The line of `inputs` (`line.inputs_json`'s form) as `line.run_json` writes it: with `lean`, the Lean verifier's
-    answer to `line`, held exactly to `line.py`'s on the same inputs (`differ`), or `Disagree` naming both values;
-    with none, `line.py`'s alone. A line both refuse, with the same reason, is `line.Refused`."""
-    python = line.run_json(inputs)
+    """The line of `inputs` as `line.run_json` writes it, read off the Lean verifier's record in the record form
+    (`line.record_inputs_json`'s, the Lean verifier's `line_record`), or of groups and windows given
+    (`line.inputs_json`'s, its `line`): with `lean`, the Lean verifier's answer, held exactly to `line.py`'s on the
+    same inputs (`differ`), or `Disagree` naming both values; with none, `line.py`'s alone. A line both refuse, with
+    the same reason, is `line.Refused`."""
+    op, run = ("line_record", line.record_run_json) if "record" in inputs else ("line", line.run_json)
+    python = run(inputs)
     got = python
     if lean is not None:
-        got = lean.call({"op": "line", **inputs})
+        got = lean.call({"op": op, **inputs})
         if not isinstance(got, dict) or ("refused" in got) != ("refused" in python):
             raise Disagree(f"the Lean's line and line.py's disagree: the Lean's {outcome(got)}, line.py's "
                            f"{outcome(python)}")
@@ -402,6 +442,97 @@ def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     else:
         why = None
     return {**out, "ok": why is None, "reason": why}
+
+
+def certified_record_json(r: cert.CertifiedRecord) -> dict:
+    """A network certifier's certified record as `read_boundary` reads it: every bytes field as hex, the status as its
+    reason (None: complete)."""
+    h, c = r.head, r.certificate
+    return {"head": {"link": h.link, "direction": h.direction.value, "window": h.window, "buckets": h.buckets,
+                     "allocation": h.allocation, "frame_bytes": h.frame_bytes, "bucket_ms": h.bucket_ms,
+                     "status": None if h.status.reason is None else h.status.reason.value, "deadline": h.deadline,
+                     "parameters": h.parameters.hex(), "counts": list(h.counts), "root": h.root.hex()},
+            "salt": r.salt.hex(),
+            "certificate": {"key_id": c.key_id.hex(), "link": c.link, "direction": c.direction.value,
+                            "window": c.window, "digest": c.digest.hex(), "signature": c.signature.hex()}}
+
+
+def certified_record(d: dict) -> cert.CertifiedRecord:
+    """The certified record `d` (`certified_record_json`'s form) is."""
+    h, c = d["head"], d["certificate"]
+    head = cert.RecordHead(h["link"], cert.Direction(h["direction"]), h["window"], h["buckets"], h["allocation"],
+                           h["frame_bytes"], h["bucket_ms"], Status(None if h["status"] is None else Reason(h["status"])),
+                           h["deadline"], bytes.fromhex(h["parameters"]), tuple(h["counts"]), bytes.fromhex(h["root"]))
+    return cert.CertifiedRecord(head, bytes.fromhex(d["salt"]), cert.Certificate(
+        bytes.fromhex(c["key_id"]), c["link"], cert.Direction(c["direction"]), c["window"], bytes.fromhex(c["digest"]),
+        bytes.fromhex(c["signature"])))
+
+
+def read_boundary(path: Path, pin: str) -> dict:
+    """The boundary file `--boundary` names (JSON), its certifier's key held to `pin`, the SHA-512 of the key's public
+    bytes: `links`, the gate node's boundary links; `key` ({N, W, H, public}) and `session`, the network certifier's LMS
+    key and its certifier session's id; `grid`, its ingress grid (`GridParams`'s fields); `windows`, each ingress
+    window's number and span `[start_ns, end_ns)` on the challenger's clock; `verifier_frames`, by link and window, the
+    frames that carried the verifier's messages, as the link frames them; and `records`, the certified records
+    (`certified_record_json`)."""
+    raw = path.read_bytes()
+    d = json.loads(raw)
+    k = d["key"]
+    key = cert.LmsKey(lms.Params(k["N"], k["W"], k["H"]), bytes.fromhex(k["public"]))
+    if hashlib.sha512(key.public).hexdigest() != pin:
+        raise SystemExit(f"auditor_line: {path}'s certifier key is not the one --boundary-pin names ({pin[:16]}...)")
+    if not d["links"]:
+        raise SystemExit(f"auditor_line: {path} names no boundary link")
+    params = GridParams(**d["grid"])
+    frames = {link: {int(w): [bytes.fromhex(f) for f in fs] for w, fs in by.items()}
+              for link, by in d.get("verifier_frames", {}).items()}
+    if any(len(f) != params.frame_bytes for by in frames.values() for fs in by.values() for f in fs):
+        raise SystemExit(f"auditor_line: {path}'s verifier frames are not all the grid's {params.frame_bytes} bytes")
+    return {"sha512": hashlib.sha512(raw).hexdigest(), "links": list(d["links"]), "key": key,
+            "session": bytes.fromhex(d["session"]), "params": params,
+            "windows": [(w["window"], w["start_ns"], w["end_ns"]) for w in d["windows"]], "frames": frames,
+            "records": [certified_record(r) for r in d["records"]]}
+
+
+def boundary_check(b: dict, seen: list[dict]) -> dict:
+    """Whether the gate node's boundary links let in nothing but the verifier's messages over a session's credited span,
+    from σ_0's release to its last root's arrival on the challenger's clock (`seen`, `auditor_seen`'s), by the network
+    certifiers' records `b` (`read_boundary`'s): the ingress windows that meet the span cover it, and each boundary
+    link's record of each is one record with a complete status, signed under the certifier's key in its session, on its
+    grid (`Audit.check_ingress_link`), whose real frames are as many as the verifier's messages framed for that
+    link-window, under the same root (`frames_root`)."""
+    lo = seen[0]["released_ns"]
+    hi = max([lo, *(t for w in seen for t in w["arrivals_ns"])])
+    meet = sorted(((s, e, w) for w, s, e in b["windows"] if s <= hi and lo < e))
+    at = lo
+    for s, e, _ in meet:
+        if s <= at:
+            at = max(at, e)
+    why = [] if at > hi else [f"the certifiers' windows cover its span [{lo}, {hi}] ns only to {at}"]
+    windows = sorted({w for _, _, w in meet})
+    for link in b["links"]:
+        verdicts = {v.window: v for v in caudit.Audit().check_ingress_link(
+            link, b["records"], max(windows, default=-1) + 1, b["key"], b["params"], b["session"])}
+        heads = {r.window: r.head for r in b["records"] if r.link == link and r.direction is cert.Direction.INGRESS}
+        for w in windows:
+            if not verdicts[w].accepted:
+                why.append(f"{link}'s ingress window {w} has no record to read ({verdicts[w].violation})")
+                continue
+            mine = b["frames"].get(link, {}).get(w, [])
+            n = sum(heads[w].counts)
+            if n != len(mine):
+                why.append(f"{link}'s ingress window {w} let in {n} frames, the verifier's messages {len(mine)}")
+            elif heads[w].root != cert.frames_root(mine, b["params"]):
+                why.append(f"{link}'s ingress window {w} let in frames other than the verifier's messages (its root "
+                           "is not theirs)")
+    return {"ok": not why, "reason": "; ".join(why) or None, "span_ns": [lo, hi], "windows": windows,
+            "links": b["links"]}
+
+
+def with_check(credit: dict, name: str, check: dict) -> dict:
+    """`credit` (`credit_check`'s) with one more check, which its credit then needs too."""
+    zero = [*credit["zero"], *([] if check["ok"] else [f"not {name}: {check['reason']}"])]
+    return {**credit, name: check, "ok": credit["ok"] and check["ok"], "zero": zero}
 
 
 def clock_rate_ppm(Rv: list[int], Ra: list[int]) -> float | None:
@@ -583,13 +714,16 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
 def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, heads: list[Path] | None,
             lane: str = LANE, peer: str | None = None, rates: dict | None = None,
             desc: bytes | None = None, commit: str | None = None, pins: list[str] | None = None,
-            main: list[str] | None = None, model: dict | None = None, lean: lv.Lean | None = None) -> dict:
+            main: list[str] | None = None, model: dict | None = None, lean: lv.Lean | None = None,
+            boundary: dict | None = None) -> dict:
     """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree, `commit`
     in full), `pins` the challenger host's pins log, its lines (None: the gate served none), `main` the auditor's first-parent list of
     main (None: none given), `model` the model the store must be bound to ({name, checkpoint_sha512},
     `--model-pin`'s) when the audit's period signs none, `peer` the gate sessions' peer (None: the record's,
-    `peer_of`), `rates` the node's (`rates_at`; None: its defaults), and `lean` the Lean verifier that computes every
-    session's line (`line_of_record`; None: `line.py` alone, `line_by` python)."""
+    `peer_of`), `rates` the node's (`rates_at`; None: its defaults), `lean` the Lean verifier that computes every
+    session's line (`line_of_record`; None: `line.py` alone, `line_by` python), and `boundary` the certifiers' records
+    of the gate node's boundary that each gate session's credit is then held to (`read_boundary`, `boundary_check`;
+    None: not checked)."""
     rates = rates_at() if rates is None else rates
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
@@ -599,7 +733,9 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
     key = windows = periods = None
     lines: list[str] = []
     doc: dict = {"registration": reg["digest"], "host_bytes": host_bytes, "rates": rates,
-                 "line_by": "python" if lean is None else "lean",
+                 "line_by": "python" if lean is None else "lean", "conditional_on": dict(CONDITIONAL_ON),
+                 "boundary": {"checked": False, "reason": "off by default (--boundary)"} if boundary is None else {
+                     "checked": True, "sha512": boundary["sha512"], "links": boundary["links"]},
                  "commit": commit, "descriptor": None if desc is None else desc.decode(),
                  "pins": None if pins is None else {"lines": len(pins), "sha512": Ch.log_digest(pins)},
                  "verifier_rtt_ms": {k: x / 1e6 for k, x in v.get("rtt", {}).items() if k.endswith("_ns")}}
@@ -633,7 +769,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         R = coins.window(D, k)["root"]
         row = {"k": k, "accepted": s["accepted"], "failure": s.get("failure"), "pace": s.get("pace"),
                "challenger": c.get("challenger"), "challenger_session": c.get("session"),
-               "verifier_coin_check": c.get("reason")}
+               "verifier_coin_check": c.get("reason"), "sketch": V.sketch_at(s, reg)}
         rows.append(row)
         if c.get("challenger") == "gate":
             row["ledger"] = session_check(s, k, R, windows, periods, period=period, lane=lane, peer=peer, pin=pin)
@@ -669,8 +805,10 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         if not s["accepted"]:
             continue
         seen, row["named"] = auditor_seen(log, s["windows_seen"])
+        if boundary is not None and c.get("challenger") == "gate":
+            row["credit"] = with_check(row["credit"], BOUNDARY, boundary_check(boundary, seen))
         a = copy.deepcopy(s)
-        a["windows_seen"] = seen
+        a["lean_record"], a["windows_seen"] = V.lean_record(s), seen
         row["groups"] = len(seen)
         row["shares_auditor_clock"] = shares(a, reg, host_bytes, rates, lean)
         row["shares_verifier_clock"] = shares(s, reg, host_bytes, rates, lean)
@@ -682,8 +820,13 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
                 if cur is None or x["time"] < cur["time"]:
                     measured[t][clock][f] = {"k": k, **{name: x[name] for name in SHARES},
                                              "of_record": row["of_record"], "credited": row["credit"]["ok"]}
+    for r in rows:
+        if boundary is not None and r["challenger"] == "gate" and BOUNDARY not in r["credit"]:
+            r["credit"] = with_check(r["credit"], BOUNDARY, {"ok": False, "reason": (
+                "no credited span to hold to the certifiers' records: not an accepted paced session read as signed")})
     doc["sessions"], doc["measured"] = rows, measured
     doc["line"], doc["credit"] = credited_line(rows)
+    doc["sketch_outside"] = sorted({r["sketch"]["outside"] for r in rows if r["sketch"]})
     return doc
 
 
@@ -730,10 +873,11 @@ def table(doc: dict) -> str:
     nothing the verifier checks establishes) / link-charged with the snapshot forms, weights and filler apart, and its
     error when it credits a session."""
     b = line.FORMS
-    out = ["| session | T | " + " | ".join(CHECKS) + " | credit |", "|---|---|" + "---|" * len(CHECKS) + "---|"]
+    checks = (*CHECKS, BOUNDARY) if doc["boundary"]["checked"] else CHECKS
+    out = ["| session | T | " + " | ".join(checks) + " | credit |", "|---|---|" + "---|" * len(checks) + "---|"]
     for s in doc["sessions"]:
         c = s["credit"]
-        cells = ["yes" if c[n]["ok"] else f"no: {c[n]['reason']}" for n in CHECKS]
+        cells = ["-" if n not in c else "yes" if c[n]["ok"] else f"no: {c[n]['reason']}" for n in checks]
         mine = {x: (s.get("shares_auditor_clock") or {}).get(x) for x in b}
         credit = ("credited: weights " + " / ".join(f"{mine[x]['time']:.4%}" for x in b) + ", filler "
                   + " / ".join(f"{mine[x]['filler_time']:.4%}" for x in b) if c["ok"] and all(mine.values())
@@ -752,6 +896,10 @@ def table(doc: dict) -> str:
                       "Σ_t Adv(prf t) (claim prf/sha-512), named and in no total"
                       if row["error"]["sessions"] else ""))
     out.append(f"line by {doc['line_by']}; {doc['credit']['summary']}")
+    out += [f"conditional on {name}: {what}" for name, what in doc["conditional_on"].items()]
+    out.append(f"boundary: held to the certifiers' records {doc['boundary']['sha512'][:16]}... of "
+               f"{', '.join(doc['boundary']['links'])}" if doc["boundary"]["checked"] else
+               f"boundary: not held to certifiers' records, {doc['boundary']['reason']}")
     return "\n".join(out) + "\n"
 
 
@@ -793,7 +941,16 @@ def main(argv: list[str] | None = None) -> int:
                          "line.py alone (a reading, not of record)")
     ap.add_argument("--lean-exe", type=Path, metavar="PATH",
                     help="the remote-audit-verifier executable (default: `lake build` it in the remote audit's package)")
+    ap.add_argument("--boundary", type=Path, metavar="FILE",
+                    help="the network certifiers' records of the gate node's boundary links (`read_boundary`): refuse "
+                         "a session's credit when they show ingress other than the verifier's messages over its span "
+                         "(off by default)")
+    ap.add_argument("--boundary-pin", metavar="SHA512", help="SHA-512 of the certifier's public key --boundary's "
+                    "records must verify under")
     a = ap.parse_args(argv)
+    if (a.boundary is None) != (a.boundary_pin is None):
+        ap.error("--boundary and --boundary-pin go together")
+    boundary = None if a.boundary is None else read_boundary(a.boundary, a.boundary_pin)
     commit, desc = None, None
     if a.commit is not None:
         commit, tree = verifier_tree(a.commit, a.repo)
@@ -817,7 +974,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane,
                       peer=a.peer, rates=rates_at(a.disk_bytes_per_s, a.link_bytes_per_s, a.bursts), desc=desc,
-                      commit=commit, pins=pins, main=first_parent, model=model, lean=lean)
+                      commit=commit, pins=pins, main=first_parent, model=model, lean=lean, boundary=boundary)
     except (Disagree, lv.LeanError) as e:
         raise SystemExit(f"auditor_line: no line: {e}") from None
     finally:
@@ -827,6 +984,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.table is not None:
         a.table.write_text(table(doc))
     print(f"auditor_line: line by {doc['line_by']}; {doc['credit']['summary']}", file=sys.stderr)
+    print(f"auditor_line: conditional on {', '.join(doc['conditional_on'])}", file=sys.stderr)
     bound = doc["bound"]
     print(f"auditor_line: bound: {'yes, to ' + bound['model']['name'] if bound['ok'] else 'no: ' + bound['reason']}",
           file=sys.stderr)
