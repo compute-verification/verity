@@ -18,7 +18,8 @@ useful word `(0, 0, 0)`. The adversary `guessAdv` has no preprocessing and suppl
 - `GuessEvent P k w a θ`: on `(H, s)`, unit `(1, 1, k)` with weights `w` and activations `a` passes `actOK`, `capOK`
   and `weightOK`, its two reference words are FP32 words' values, and its credit exceeds `θ`.
 - `wins_of_event`: on that event, the program whose constants are those two words wins TT_OUT's game at `θ`; so
-  `exists_guess_ge`: some constants `t, y < 2^32` win with probability at least `Pr[GuessEvent]/2^64`, and
+  `exists_guess_ge`: some constants `t, y < 2^32` win with probability at least `Pr[GuessEvent]/2^64`
+  (`exists_guess_gt_eps`: above `εPearlC 0 1 = 2^−128` once `Pr[GuessEvent] > 2^−64`), and
   `pr_guessEvent_le`: TT_OUT at W1 on any domain containing the unit gives `Pr[GuessEvent at 2·fetch/(1−γ₀)] ≤
   2^64·ε(0, 1)`.
 
@@ -398,6 +399,19 @@ theorem exists_guess_ge (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol
       | ring
       | (field_simp; ring)
   linarith
+
+/-- **The program beats `εPearlC`**: when `Pr[GuessEvent] > 2^−64`, some constants win with probability above
+`εPearlC 0 1 = 2^−128`. -/
+theorem exists_guess_gt_eps (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ)
+    (ha : ∀ i l, a i l < 2 ^ 32) (hE : 1 / 2 ^ 64 < pr (GuessEvent P k w a θ)) :
+    ∃ t < 2 ^ 32, ∃ y < 2 ^ 32, εPearlC 0 1 < pr (GuessWins dv salt P k w a θ t y) := by
+  obtain ⟨t, ht, y, hy, h⟩ := exists_guess_ge dv salt P k w a θ ha
+  refine ⟨t, ht, y, hy, lt_of_lt_of_le ?_ h⟩
+  have e : εPearlC 0 1 = 1 / 2 ^ 64 / 2 ^ 64 := by norm_num [εPearlC]
+  rw [e]
+  first
+    | exact div_lt_div_of_pos_right hE (by positivity)
+    | linarith
 
 /-- **TT_OUT at W1 bounds the event**: on any domain containing the unit, `Pr[GuessEvent at 2·fetch/(1−γ₀)]` is at most
 `2^64·ε(0, 1)`. -/
