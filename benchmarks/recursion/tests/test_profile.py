@@ -141,7 +141,7 @@ def test_outer_rows_by_mode_and_the_summary(tmp_path: Path) -> None:
     assert s["pipeline"]["outer prove (firewall) e2e_s"] == 6.5
     assert s["pipeline"]["V* staging_s (vstage + vcap steps)"] == 75.0     # the step's wall, not its parallel stages' sum
     assert s["pipeline"]["Lean step_s"] == 75.0
-    assert "outer alg-p0" in s["not_ok"] and "lean alg-p0" in s["not_ok"]
+    assert "outer alg-p0 (dev)" in s["not_ok"] and "lean alg-p0" in s["not_ok"]
 
 
 def test_cpu_steps_over_their_repeats(tmp_path: Path) -> None:
@@ -252,7 +252,17 @@ def test_merge_takes_a_later_runs_row_for_the_same_step_stage_and_mode(tmp_path:
         (tmp_path / name).write_text(json.dumps(d))
     assert RUN.main(["profile", "table", str(tmp_path / "a.json"), str(tmp_path / "b.json"), "--merge"]) == 0
     md = capsys.readouterr().out
-    assert " run |" in md and "| rB |" in md and "| rA |" in md
+    assert " run |" in md and "| rB |" in md and "| rA |" in md and "rA: commit abc123, 3 timed sessions" in md
+
+
+def test_a_run_id_is_read_from_its_records_not_its_profile_json(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: None)
+    out = tmp_path / ".research" / "runs" / "r20261024-000000-abcd"
+    job(out)
+    (out / "out" / "profile.json").write_text(json.dumps({"schema": RP.SCHEMA, "rows": [], "stale": True}))
+    doc = RUN.load("r20261024-000000-abcd")
+    assert "stale" not in doc and doc["run"] == "r20261024-000000-abcd" and row(doc, "inner M0")["ok"] is True
 
 
 def test_table_refuses_another_schema(tmp_path: Path) -> None:

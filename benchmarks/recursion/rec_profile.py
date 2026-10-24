@@ -190,7 +190,7 @@ def prover_row(d: Path, stage: str, step: str, what: str) -> Row:
     preempted = sum(1 for ln in text(d.parent.parent / "preempted.txt").splitlines() if f" {d.name}: lease preempted" in ln)
     if not timed:
         err = text(d / "prove.err")
-        held = re.findall(r"^gpu-lease: GPU .* held (\S+)", err, re.M)
+        held = re.findall(r"^gpu-lease: GPU .* held (\d+m\d+s)", err, re.M)
         stops = [ln for ln in err.splitlines() if ln.startswith(("FIREWALL-REFUSED", "PROVER-STOPPED")) or "panicked" in ln]
         why = ([f"lease preempted {preempted}x"] if preempted else []) + [
             f"no session finished in the lease's {held[-1]}" if held else "no session finished (stopped holding its lease)"]
@@ -412,7 +412,8 @@ def summary(rows: list[Row]) -> dict[str, Any]:
              f"outer prove ({mode}) e2e_s": outer[mode]["e2e_s"] if mode else None, "Lean step_s": whole.get("lean")}
     return {"outer": outer, "slowest": {"stage": slow.stage, "step": slow.step, "median_s": med(slow)} if slow else None,
             "pipeline": parts, "pipeline_sum_s": sum(v for v in parts.values() if v) if any(parts.values()) else None,
-            "not_ok": [r.stage for r in rows if r.ok is False]}
+            "not_ok": [r.stage + (f" ({r.extra['mode']})" if r.step == "oprove" and r.extra.get("mode") else "")
+                       for r in rows if r.ok is False]}
 
 
 def merge(docs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -427,6 +428,7 @@ def merge(docs: list[dict[str, Any]]) -> dict[str, Any]:
     order = {s: i for i, s in enumerate(("build", "inner", "icheck", "vstage", "vcap", "oprove", "oreplay", "lean"))}
     rows = sorted(by.values(), key=lambda r: order.get(r["step"], len(order)))
     return {"schema": SCHEMA, "params": docs[-1].get("params", {}), "runs": [d.get("ref") or d.get("run") for d in docs],
+            "run_params": {str(d.get("ref") or d.get("run")): d.get("params", {}) for d in docs},
             "rows": rows, "summary": summary([Row.from_json(r) for r in rows]),
             "steps": {f"{k} ({d.get('ref') or d.get('run')})": v for d in docs for k, v in d.get("steps", {}).items()}}
 
@@ -450,9 +452,14 @@ def _bytes(n: int | None) -> str:
 
 def markdown(doc: dict[str, Any]) -> str:
     p = doc.get("params", {})
-    lines = [f"Recursion profile: K = {p.get('K')}, N = {p.get('N')}, commit {str(p.get('commit'))[:12]}, "
-             f"{p.get('RUNS')} timed sessions after {p.get('WARM')} warm per GPU step, {p.get('REPEAT')} repeats per CPU step. "
-             "Seconds: median [min–max] (n)." + (f" Runs: {', '.join(map(str, doc['runs']))}." if doc.get("runs") else ""), "",
+
+    def each(q: dict[str, Any]) -> str:
+        return (f"commit {str(q.get('commit'))[:12]}, {q.get('RUNS')} timed sessions after {q.get('WARM')} warm per GPU step, "
+                f"{q.get('REPEAT')} repeats per CPU step")
+    runs = doc.get("run_params")
+    lines = [f"Recursion profile: K = {p.get('K')}, N = {p.get('N')}, "
+             + ("; ".join(f"{k}: {each(q)}" for k, q in runs.items()) if runs else each(p))
+             + ". Seconds: median [min–max] (n).", "",
              "| stage | step | what | time s | session e2e s | pace s | peak RSS GB | GPU peak MiB | proof | dominant phase | ok |"
              + (" run |" if doc.get("runs") else ""),
              "|---|---|---|---|---|---:|---:|---:|---:|---|---|" + ("---|" if doc.get("runs") else "")]

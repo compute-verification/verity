@@ -99,9 +99,10 @@ def load(ref: str) -> dict:
     if RUN_ID.fullmatch(ref):
         subprocess.run(["research", "fetch", "--all", ref], check=False, capture_output=True)
         out = Path.home() / ".research" / "runs" / ref / "out"
-        # a job stopped before its end (cancelled, out of time) wrote no profile.json; its steps' records are read as it would
-        doc = json.loads((out / "profile.json").read_text()) if (out / "profile.json").is_file() else (
-            RP.read(out) if (out / "steps").is_dir() else None)
+        # the records themselves, read by this reader (a job's own profile.json is its commit's reader's, and a job stopped
+        # before its end wrote none); profile.json only where the records weren't fetched
+        doc = RP.read(out) if (out / "steps").is_dir() else (
+            json.loads((out / "profile.json").read_text()) if (out / "profile.json").is_file() else None)
         if doc is None:
             raise SystemExit(f"{ref}: neither out/profile.json nor out/steps (research fetch --all {ref} found neither)")
         doc.setdefault("run", ref)
