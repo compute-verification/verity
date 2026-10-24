@@ -3,7 +3,8 @@
 # the decode row's units and table builds (HB_KC_FLAGS, HB_KC_H1C_FLAGS) and window flags (DITHER_SO_FUSED: a step's
 # units one h1um launch), except h1um's L2 prefetch: L2PF (0) is H1U_L2PF.  At prefill's m = 2048 every A and B line a
 # unit reads is L2's already, and the prefetches cost h1um 2.3 % (unitsbench --multi, step_multi 397.6 -> 388.6 ms;
-# at decode's m = 32 6.425 -> 6.414 ms).  KCX and KHX append to the two builds' flags, EXTRA to sbench.py's arguments.
+# at decode's m = 32 6.425 -> 6.414 ms).  KCX and KHX append to the two builds' flags (a KCX -DNAME=V in place of the
+# base's -DNAME), EXTRA to sbench.py's arguments.
 # A gate alone (REPS=0), a timed row alone (GATE=0 REPS=3), or both in one run (SPLIT=1); sbench.sh builds its
 # libraries with nvcc before each lease:
 #   research run --on vy-nebius-2 --mem-gb 8 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
@@ -27,7 +28,11 @@ mkdir -p "$D/out"
 FI=$(mktemp -d /workspace/pouw/tmp-prefill-fi.XXXXXX); trap 'rm -rf "$FI"' EXIT
 mkdir -p "$FI/.cache" && cp -a "$HOME/.cache/flashinfer" "$FI/.cache/" 2>/dev/null
 export FLASHINFER_WORKSPACE_BASE=$FI CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
-export HB_KC_FLAGS="-DH1U_L2HINT=128 -DH1U_WARPS=2 -DH1U_EVF=1 -DH1S_EVL=1 -DH1U_EVFU=0 -DH1K_CPA=3 -DH1U_PF=1 -DH1U_NB2=1 -DH1U_L2PF=${L2PF:-0} ${KCX:-}"
+KC=""
+for f in -DH1U_L2HINT=128 -DH1U_WARPS=2 -DH1U_EVF=1 -DH1S_EVL=1 -DH1U_EVFU=0 -DH1K_CPA=3 -DH1U_PF=1 -DH1U_NB2=1 -DH1U_L2PF=${L2PF:-0}; do
+  case " ${KCX:-} " in *" ${f%%=*}="*) ;; *) KC+="$f " ;; esac
+done
+export HB_KC_FLAGS="$KC${KCX:-}"
 export HB_KC_H1C_FLAGS="-DH1C_HB=1 -DH1C_MK=1 -DH1C_MID=1 -DH1C_DOMSEG=1 -DH1C_LVF=2 -DH1C_LMINB=4 -DH1C_APW=1 -DH1C_SEGMID=1 ${KHX:-}"
 export DITHER_SO_FUSED=1 DITHER_ZDEAD=1 DITHER_SO_RDEAD=${DITHER_SO_RDEAD:-1} DITHER_A_STEP=1 DITHER_SO_COIN_ASYNC=2 DITHER_SO_PRIO=1 DITHER_ZY1_KC=1
 export DITHER_SPILL_MAX_GB=${DITHER_SPILL_MAX_GB:-96} SBENCH_MAX_MIN=${SBENCH_MAX_MIN:-20}
