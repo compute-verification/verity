@@ -547,7 +547,10 @@ window. It outputs 1 exactly when:
   ingress window isn't accepted. Tonight the reference on the certified record stands in for each proof. That makes
   `advised.ends`' premise a check: the link's r-th arrival is an id request of `prompt_lens[r]` prompt ids. Advice
   request i is arrival order[i] (advice v1's order permutation; v0's is the identity), which the egress tie holds
-  through its map's stream. The advised unit itself doesn't change.
+  through its map's stream. The advised unit itself doesn't change. A proof of the tie names its circuit as
+  `io_request.gate(B, T, R, OWN)`, one gate carrying `IoTieRequest`'s circuit digest as `io_request.circuit-check.json`
+  pins it (circuit-check holds the pin to the Definition), as N2's head check and served counts are named; a size
+  class with no pin names `@unpinned`, and no proof is accepted for it. `{512, 4, 2, 1}` is pinned.
 - **The first negative** is REDTEAM phase 6's split (`test_redteam_phase6_split_is_refused`). At B = 4,096, prompts
   of 338 and 16 tokens take 2 frames and 1, released one a bucket. The forged advice swaps them, keeping the total,
   and `advised` accepts it with ends (1, 3) for (2, 3). The tie reads 338 fields in request 0's cells and refuses.

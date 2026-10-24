@@ -4,6 +4,7 @@ ingress cells, by the reference and by the Boolean Definitions. The first negati
 N2-ADVICE's advised floor accepts."""
 from __future__ import annotations
 
+import json
 import random
 
 import numpy as np
@@ -366,6 +367,17 @@ def test_redteam_phase6_frames_read_their_prompt_lengths():
     assert [g[1:] for g in _frames(4096, list(zip(frames, lefts)))] == [(1, 1, 0, lefts[1], 337), (1, 0, 1, 0, 1),
                                                                          (1, 1, 1, 0, 16)]
     assert HC.ands(bind(Q.IoTieRequestFrame, B=4096)) == 170_994
+
+
+def test_the_ingress_gate_names_its_pinned_circuit_digest():
+    """IoTieRequest's gate names the unit's circuit digest as `io_request.circuit-check.json` pins it, with the unit's
+    signature, and a size class no sidecar pins names `@unpinned`. That the pin is the Definition's own digest is
+    circuit-check's (`head_check.expand` traces the unit's commitment gadgets, minutes at this size)."""
+    d, g = bind(Q.IoTieRequest, B=512, T=4, R=2, OWN=1), Q.gate(512, 4, 2, 1)
+    pinned = json.loads(Q.PINS.read_text())["digests"][d.id]["sha512"]
+    assert g.id == f"Gate[{d.id}@{pinned}]_v2" and HC.pinned(g) and g.signature() == d.signature()
+    unpinned = Q.gate(512, 4, 2, 0)
+    assert not HC.pinned(unpinned) and unpinned.id.endswith("@unpinned]_v2")
 
 
 def test_the_end_holds_the_totals_and_the_carry_out():

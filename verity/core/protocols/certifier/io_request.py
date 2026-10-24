@@ -66,12 +66,14 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 from types import SimpleNamespace
 from typing import NamedTuple, Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import OR, ONE, ZERO, add, and_reduce, const_bits, mux, sub
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array
 from verity.ml.commitments.gates.frame_v3 import _part
 from verity.core.protocols.certifier import head_check as HC
@@ -755,6 +757,21 @@ IoTieRequest = CompositeDefinition(
         "tie of one link-window, every cell opened")
 
 
+IoTieRequest.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins (`gate`)
+#: the circuit digests circuit-check pins (`head_check.pinned_digest`)
+PINS = Path(__file__).with_name("io_request.circuit-check.json")
+
+
+@lru_cache(maxsize=None)
+def gate(B: int, T: int, R: int, OWN: int) -> PrimitiveDefinition:
+    """`IoTieRequest{B, T, R, OWN}` as one gate of a proof unit that names the Definition and its pinned circuit digest,
+    `Gate[IoTieRequest_v1{…}@<digest>]_v2`, as `head_check.gate` holds the head check: the Program a proof of the
+    ingress tie names binds this circuit, and a size class no sidecar pins names `@unpinned`, which no proof is
+    accepted for."""
+    d = bind(IoTieRequest, B=B, T=T, R=R, OWN=OWN)
+    return HC.gate_of(d, HC.pinned_digest(d, PINS), "the ingress tie")
+
+
 # --- arguments -------------------------------------------------------------------------------------------------------
 
 def frame_arguments(cells: Sequence[bytes], lefts: Sequence[int]) -> list[list[int]]:
@@ -777,6 +794,7 @@ def arguments(shape: Shape, inst: Instance, bits: Sequence[int]) -> list[list[in
 
 
 __all__ = ["BODY_AT", "Carry", "Cut", "END", "FRAME_OUT", "Frame", "Instance", "IoTieRequest", "IoTieRequestEnd",
-           "IoTieRequestFrame", "IoTieRequestOwn", "IoTieRequestStep", "Layout", "RequestStatement", "RequestView",
-           "STATE", "Shape", "arguments", "chained", "cut", "ends", "frame_arguments", "instance", "layout",
-           "own_frame", "parse_frame", "reference", "request_view", "rows", "statements", "switches", "windows_of"]
+           "IoTieRequestFrame", "IoTieRequestOwn", "IoTieRequestStep", "Layout", "PINS", "RequestStatement",
+           "RequestView", "STATE", "Shape", "arguments", "chained", "cut", "ends", "frame_arguments", "gate", "instance",
+           "layout", "own_frame", "parse_frame", "reference", "request_view", "rows", "statements", "switches",
+           "windows_of"]
