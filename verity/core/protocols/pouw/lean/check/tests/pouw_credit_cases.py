@@ -544,7 +544,7 @@ def _template(k: int, r: int, c: int, unit: dict, receipt: object = None) -> dic
     ``a_k<K>`` and ``b_k<K>`` (n·R and n·C chunk rows, `row_type` of K/n, n = `weights.chunks` (K): the zy unit's, or at
     n > 1 `h1zy.PouwH1TileZyChunks`'), then the unit's z/y record ``zy``, the salt, its position and the roots;
     returning ``{receipt, ok}`` with ``receipt`` the type `receipt` when one is given, else a word."""
-    word, n = ["Value", 16], Wt.chunks(k)
+    word, n = ["Value", 16], _n(k)
     params = [[f"a_k{k}", ["Array", n * r, row_type(k // n)]], [f"b_k{k}", ["Array", n * c, row_type(k // n)]],
               ["zy", ["Array", 3 * r * c, word]], ["salt", ["Array", 4, word]], ["position", word],
               ["roots", ["Array", 2, ["Array", 4, word]]]]
@@ -560,9 +560,18 @@ def record(tiles: list, lay: dict, prefix: str = "") -> str:
     return Cr.WINDOW_FN + "{" + ",".join(f"{k}={_canon(vals[k])}" for k in Cr.RECORD) + "}"
 
 
+def _n(k: int) -> int:
+    """`weights.chunks` (K), or 1 at a K it refuses: a ``tile-k`` case's, which `credit.layout_of` refuses before it
+    reads K's template."""
+    try:
+        return Wt.chunks(k)
+    except ValueError:
+        return 1
+
+
 def _unit_fn(k: int, r: int, c: int) -> str:
     """K's unit id in the descriptor: the tile's, wrapped in `h1zy.PouwH1TileZyChunks_v1` at a chunked K."""
-    tile, n = f"H1Tile_v1{{K={k},R={r},C={c}}}", Wt.chunks(k)
+    tile, n = f"H1Tile_v1{{K={k},R={r},C={c}}}", _n(k)
     return tile if n == 1 else f"PouwH1TileZyChunks_v1{{UNIT={tile},CHUNKS={n}}}"
 
 

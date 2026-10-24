@@ -372,10 +372,10 @@ def test_the_strata_are_the_compiled_programs():
         assert all(s["floor"] == 1 for s in ss)
 
 
-def _compiled(linears, calls, m, prefix: str = "") -> bytes:
-    """The descriptor bytes of the compiled `h1window.program` over the test tile, as the period's ``circuit`` hashes
-    them (`codec.program_digest`'s)."""
-    desc = codec.encode_program(h1.HW.program(linears, calls, m, h1.TILE, prefix=prefix, unit=h1.unit))
+def _compiled(linears, calls, m, prefix: str = "", unit=h1.unit) -> bytes:
+    """The descriptor bytes of the compiled `h1window.program` over the test tile `unit`, as the period's ``circuit``
+    hashes them (`codec.program_digest`'s)."""
+    desc = codec.encode_program(h1.HW.program(linears, calls, m, h1.TILE, prefix=prefix, unit=unit))
     return codec.canonical_json({k: v for k, v in desc.items() if k != "annotations"})
 
 
@@ -399,23 +399,33 @@ def test_the_layout_is_the_committed_circuits():
 
 def test_a_tile_at_a_k_its_proof_does_not_cover_refuses():
     """The tile's proof covers 32 | K and K < 2^17, the K its ``GemmAccumulatorS8`` binds: `credit.layout_of` on the
-    compiled `h1window.program`'s descriptor accepts a tile at K = 64, 4096 or 2^17 − 32, and refuses one at K = 2^17
-    or past or at a K no multiple of 32 (``tile-k``), the why naming the K to pad its linears to or the split. The
-    descriptors are the stand-in tile's (`test_circuit_h1window.unit`), which binds any K, and `credit.strata`, which
-    reads no tile, accepts their layouts."""
+    compiled `h1window.program`'s descriptor accepts a tile at K = 64, 4096 or 2^17 − 512 (51 chunk rows of 2560,
+    `weights.chunks`), and refuses one at K = 2^17 or past or at a K no multiple of 32 (``tile-k``), the why naming the
+    K to pad its linears to or the split. The descriptors are the chunk-row stand-in tile's
+    (`test_circuit_h1window.chunk_unit`), which binds any K, and `credit.strata`, which reads no tile, accepts their
+    layouts. At a K past 4096 that has no chunk rows (2^17 − 32, 2^17 + 32, 2^17 − 22, 4097) `h1window.program` builds
+    no window, and the Definition's bind refuses those it doesn't cover; the difftest's ``tile-k`` cases hold
+    `layout_of`'s refusal there."""
     assert (Cr.TILE_K_STEP, Cr.TILE_K_LIMIT) == (32, S8_K_LIMIT) == (32, 1 << 17)
     pad = "pad its linears' A and B rows with zero codes to K = {}".format
-    for k, fix in ((64, None), (4096, None), ((1 << 17) - 32, None), (1 << 17, SPLIT), ((1 << 17) + 32, SPLIT),
-                   ((1 << 17) - 22, SPLIT), (48, pad(64)), (100, pad(128)), (4097, pad(4128))):
-        linears, calls = (("q_proj", 32, 16), ("o_proj", k, 8)), (("q_proj", 0), ("o_proj", 0))
+    lay_of = lambda k: ((("q_proj", 32, 16), ("o_proj", k, 8)), (("q_proj", 0), ("o_proj", 0)))
+    for k, fix in ((64, None), (4096, None), ((1 << 17) - 512, None), (1 << 17, SPLIT), ((1 << 17) + 512, SPLIT),
+                   (48, pad(64)), (100, pad(128))):
+        linears, calls = lay_of(k)
         lay = {"calls": [list(c) for c in calls], "linears": [list(x) for x in linears], "m": 8, "tile": list(h1.TILE)}
         assert Cr.strata(lay)[1] is None, k
-        got = Cr.layout_of(_compiled(linears, calls, 8))
+        got = Cr.layout_of(_compiled(linears, calls, 8, unit=h1.chunk_unit))
         if fix is None:
             assert got == (lay, None), k
             bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
         else:
             assert got == (None, ("tile-k", f"the window's tile at K = {k} {TILE_K}{fix}")), k
+            with pytest.raises(ValueError, match="refuses this binding"):
+                bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
+    for k in ((1 << 17) - 32, (1 << 17) + 32, (1 << 17) - 22, 4097):
+        with pytest.raises(ValueError, match="no n splits it"):
+            h1.HW.program(*lay_of(k), 8, h1.TILE, unit=h1.chunk_unit)
+        if k % 32 or k >= 1 << 17:
             with pytest.raises(ValueError, match="refuses this binding"):
                 bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
 
