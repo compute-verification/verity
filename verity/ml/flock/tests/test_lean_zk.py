@@ -161,7 +161,7 @@ def test_another_table_count_is_refused(zk, tmp_path):
 
 #: one tampered copy per check that catches it (`zk_mutants.py`'s names)
 TAMPERED = ["zk-zc-final-a", "zk-lig-lane-message", "zk-l0-ybar", "zk-l0-missing", "zk-lig-row-extra-lane", "zk-pads-root",
-            "zk-tau", "zk-inner-opened", "zk-coin-tree-nonce", "zk-coin-tree-key", "zk-trailing-bytes"]
+            "zk-tau", "zk-inner-opened", "zk-coin-tree-nonce", "zk-coin-tree-key", "zk-trailing-bytes", "zk-lig-claim-nonce"]
 
 
 @pytest.mark.slow
