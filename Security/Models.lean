@@ -1,5 +1,3 @@
-import Definitions.NetworkCertifier.Assumptions.AdviceString
-import Definitions.NetworkCertifier.Guarantees.AdviceString
 import Definitions.Core.Assumptions
 import Definitions.Core.Guarantees
 import Definitions.Nci.Assumptions
@@ -27,6 +25,8 @@ import Definitions.Pouw.Assumptions
 import Definitions.Pouw.Guarantees
 import Definitions.NetworkCertifier.Assumptions
 import Definitions.NetworkCertifier.Guarantees
+import Definitions.NetworkCertifier.Assumptions.AdviceString
+import Definitions.NetworkCertifier.Guarantees.AdviceString
 import Definitions.Flock.Guarantees
 import Definitions.Accounting.Guarantees
 import Definitions.Hash.Guarantees

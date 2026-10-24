@@ -2122,6 +2122,14 @@
     "function": "NetworkCheck.Records.protocol.answer",
     "outcome": "accept"
    },
+   "Properties.NetworkRecords.noGridAcceptsMore": {
+    "function": "NetworkCheck.Records.evaluate",
+    "outcome": "accept"
+   },
+   "Properties.NetworkRecords.noGridMeans": {
+    "function": "NetworkCheck.Records.evaluateNoGrid",
+    "outcome": "accept"
+   },
    "Properties.Pouw.Check.acceptMeans": {
     "function": "PouwCheck.protocol.check",
     "outcome": "accept"
@@ -2562,14 +2570,6 @@
    },
    "Properties.Pouw.Strata.strataTile": {
     "function": "PouwCheck.Credit.strata",
-    "outcome": "accept"
-   },
-   "Properties.NetworkRecords.noGridAcceptsMore": {
-    "function": "NetworkCheck.Records.evaluate",
-    "outcome": "accept"
-   },
-   "Properties.NetworkRecords.noGridMeans": {
-    "function": "NetworkCheck.Records.evaluateNoGrid",
     "outcome": "accept"
    }
   },
