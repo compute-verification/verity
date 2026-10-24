@@ -46,6 +46,7 @@ import Proofs.Flock.Claims.Recursion.BoundDeployE
 import Proofs.Flock.Claims.Recursion.FlockKSDeployE
 import Proofs.Flock.Claims.Recursion.ConflictTiedE
 import Proofs.Flock.Claims.Recursion.RepErase
+import Proofs.Flock.Claims.Recursion.CallsBridgeE
 import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
 import Proofs.Flock.Claims.Recursion.BoundRun
 import Proofs.Flock.Claims.Recursion.BoundForks
