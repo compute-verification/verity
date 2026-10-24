@@ -10,8 +10,8 @@ at a small static (T = 40 keys in splits of 16, 16 and 8, two heads):
   slot, a row whose served words are not its splits' combine, and a partition that leaves out a part's template.
 
 `test_a_window_of_one_row_commits_and_its_wires_hold` takes about two minutes, all of it the window's population program
-lowering the three Boolean templates: it is the one test of the committed window and its public bodies, which the others reach
-only through the rows.  `benchmarks/one_stage/a5_sparse_mla.py` audits the same window (`window`, `Served`).
+lowering the three templates: it is the one test of the committed window and its public bodies, which the others reach only
+through the rows.  `benchmarks/one_stage/a5_sparse_mla.py` audits the same window (`window`, `Served`).
 """
 from __future__ import annotations
 
@@ -62,7 +62,9 @@ def comb(n: int, S: dict = TOY, boolean: bool = True) -> str:
                          else bind(W.SparseMlaCombine, NSPLIT=n, DV=S["DV"], INV=FA3["INV"]))
 
 
-P16, P8, C3 = part(16), part(8), comb(3)
+#: the row's own unit templates (`SRW.unit_templates`), as step 16's proofs of record are: their EX2 reads the pinned table, which
+#: a whole-block part reads in lookup slots, where a ``_v2`` body's EX2 is gates (`mufu.table_word`) and lowers flat either way
+P16, P8, C3 = part(16, boolean=False), part(8, boolean=False), comb(3, boolean=False)
 TMPLS = [P16, P8, C3]
 CAPS = {P16: 3, P8: 4, C3: 4}
 
@@ -149,8 +151,10 @@ def test_a_split_row_holds_a_part_at_each_split_s_keys_and_a_combine():
     assert SRW.unit_templates(SERVED) == ((SERVED, 1), (part(64, GLM, False), 32), (part(16, GLM, False), 8), (comb(5, GLM, False), 8))
     assert SRW.unit_templates(row(NS=1)) == ((row(NS=1), 1),)
     assert [(SRW.template(t).layout, SRW.template(t).word, CR.reads(SRW.template(t))) for t in TMPLS] == [
-        ("split", part(16, boolean=False), "slots"), ("split", part(8, boolean=False), "inline"), ("split", comb(3, boolean=False), "inline")]
-    assert [CR.reads(SRW.template(t)) for t in (part(64, GLM), part(16, GLM), comb(5, GLM))] == ["slots", "inline", "inline"]
+        ("split", P16, "slots"), ("split", P8, "inline"), ("split", C3, "inline")]
+    assert [CR.reads(SRW.template(t)) for t in (part(64, GLM, False), part(16, GLM, False), comb(5, GLM, False))] == [
+        "slots", "inline", "inline"]
+    assert [SRW.template(t).word for t in (part(16), comb(3))] == [P16, C3]
     DV, DR = TOY["DV"], TOY["DR"]
     assert CR.unit_rows(SRW.template(P16)) == ([("in0", V2, 16 * DV, ["q_nope"]), ("in1", V2, 16 * DR, ["q_rope"]),
                                                 ("in2", V2, 16 * 16 * (DV + DR), ["kv"])], [(V2, (0,)), (V2, (1,))])
@@ -217,9 +221,9 @@ def test_a_partition_without_a_part_s_template_is_refused():
 def test_a_row_at_the_served_statics_reads_and_wires_its_48_units():
     """One row of step 16's statics, its 48 units (32 64-key parts, 8 16-key parts, 8 five-split combines), each combine slot
     wired to its part and every wired row its writer's output; the window itself (its population program at these statics
-    lowers the 64-key part's Boolean body) is a5's."""
+    lowers the 64-key part) is a5's."""
     s = Served(SERVED, n=1, seed=16)
-    tmpls = [part(64, GLM), part(16, GLM), comb(5, GLM)]
+    tmpls = [part(64, GLM, False), part(16, GLM, False), comb(5, GLM, False)]
     ms = members(s, tmpls, {tmpls[0]: 256, tmpls[1]: 256, tmpls[2]: 256})
     assert [(m.template, m.n) for m in ms] == [(tmpls[0], 32), (tmpls[1], 8), (tmpls[2], 8)]
     unit = units(ms, tmpls, GLM)

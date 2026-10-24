@@ -29,9 +29,9 @@ def fields(tp: Any) -> list[Any]:
 
 def reads(tp: Any) -> str:
     """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: in lookup slots (`read_slots`, each table folded
-    once per statement) for a ``SPLITS`` part of at least one whole block (T >= BN: inline, step 16's 64-key part's reads are
-    4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots), else inline, as step 16's 16-key part and
-    five-split combine were proved (in slots the combine's build passes 60 GB, against 68 GB inline)."""
+    once per statement) for a ``SPLITS`` part of at least one whole block (T >= BN: inline, step 16's 64-key part's EX2 reads
+    are 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots), else inline, as step 16's 16-key part and
+    five-split combine were proved. A ``_v2`` body reads no table (its EX2 is gates), so it lowers flat either way."""
     from verity_vllm.pipeline import split_rows as SP
     from verity_vllm.query.program_view import spec_statics
 
