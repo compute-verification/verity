@@ -1,5 +1,5 @@
 """One-stage audit, run A5, on a row-table stand-in: `integrations/vllm/tests/pipeline/test_row_tables.py`'s window (40
-`ScaledMmS8Coordinate_v1{K=64}` units in six chunks whose ``x`` rows link four row tables, one per engine step and linear
+`ScaledMmS8Coordinate_v1{K=64}` units in eight chunks, each of whose ``x`` rows link one of four row tables, one per engine step and linear
 over two engine steps, under the stratified law), its run ``<ROOT>/rank0``, committed as serving commits it
 (`pipeline.serving_rows._read_s8` on the fixture's served values, `commit.serving_rows.commit` under the step roots
 serving records before each step's coin, `row_tables.step_roots`) and audited by `a5.audit` as rank 0 of a one-rank
@@ -8,8 +8,9 @@ Value a tree over roots of row-seg leaves), `row_tables.check_row_tables` agains
 `--zk` session of each drawn chunk behind the firewall, the Lean verifier of record, the stream's outcome and the
 negatives. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time context),
 so this window stands in for one. Each chunk's public file is a shared-row file, which Lean's verifier of record covers
-only with its own registered reads (`a5`'s module docstring), so the drawn chunks' sessions are refused and the run exits
-1 on a rejected outcome. ``--out`` holds the window serving wrote (``window/``, its private files too) and a5's records
+only with its own registered reads: a5 gives each drawn chunk's verify the reads of its one table (`a5`'s module
+docstring), and the run exits 0 only when the outcome is accepted and every negative refused. ``--out`` holds the window
+serving wrote (``window/``, its private files too) and a5's records
 (``rank0/``, ``challenger/``, ``summary.json``).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
