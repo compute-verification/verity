@@ -16,6 +16,8 @@ committed net exists without building it.
   (`posOf_input`).
 - `layoutM_facts`: what `layoutM` checked: the input rows' runs and calls at their columns, each output group at a
   multiple of its width with its columns in order, the constant last.
+- `unitNet_eq`: the net the verifier carries (`Tmpl.unitNet`, its header from the description and its rows built only
+  when read) is `unrollAt`'s, so a read templated unit's net is its template's committed net (`TmplUnit.unrolled`).
 -/
 
 open Flock Flock.Tmpl Flock.TmplApart
@@ -560,4 +562,88 @@ theorem unrollAt_ok {t : Tmpl} {mode : Mode} {lays : Array Lay} (hL : layoutM t 
     Bool.false_eq_true, ↓reduceIte]
   exact ⟨_, rfl⟩
 
+/-! ## The net the verifier carries -/
+
+/-- `ofRows` names its net as asked. -/
+theorem ofRows_name {name : String} {useful constPos : Nat} {ig og : Array Group} {ra rb : Array (Array Nat)} {n : Net}
+    (h : Net.ofRows name useful constPos ig og ra rb = .ok n) : n.name = name := by
+  unfold Net.ofRows at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  repeat' (first | split at h | (injection h with h; subst h))
+  all_goals first
+    | exact absurd h (by simp)
+    | rfl
+
+/-- Two nets with the same fields, their A and B read, are one. -/
+theorem net_ext {n m : Net} (h1 : n.name = m.name) (h2 : n.useful = m.useful) (h3 : n.constPos = m.constPos)
+    (h4 : n.inGroups = m.inGroups) (h5 : n.outGroups = m.outGroups) (h6 : n.inWords = m.inWords) (h7 : n.a = m.a)
+    (h8 : n.b = m.b) (h9 : n.unitLog = m.unitLog) (h10 : n.lookup = m.lookup) : n = m := by
+  have e7 : n.aT = m.aT := Thunk.ext h7
+  have e8 : n.bT = m.bT := Thunk.ext h8
+  cases n; cases m
+  simp only at h1 h2 h3 h4 h5 h6 h9 h10 e7 e8
+  subst h1 h2 h3 h4 h5 h6 h9 h10 e7 e8
+  rfl
+
+/-- **The net the verifier carries is the committed net**: wherever `unrollOk` passes at `layoutM`'s layouts,
+`Tmpl.unitNet`, its header from the description and its rows built only when read, is `unrollAt`'s net. -/
+theorem unitNet_eq {t : Tmpl} {mode : Mode} {lays : Array Lay} (hL : layoutM t mode = .ok lays)
+    (h : unrollOk t lays = true) : Tmpl.unrollAt t lays = .ok (unitNet t lays) := by
+  obtain ⟨n, hn⟩ := unrollAt_ok hL h
+  rw [hn]
+  congr 1
+  have hu := hn
+  unfold Tmpl.unrollAt at hu
+  obtain ⟨acc, -, hat⟩ := ebo hu
+  obtain ⟨n0, hn0, huse, hcp, hlog, -, -, hname, hig, hiw, hlk, hog, -⟩ := Net.ofRowsAt_ok hat
+  have h0 := Net.ofRows_ok hn0
+  unfold unrollOk at h
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨hwf, -⟩, -⟩, -⟩, hg⟩, -⟩, -⟩, hout⟩ := h
+  have hpos := layouts_defPos (layoutM_layouts hL) (wf_call hwf) (wf_small hwf)
+  have hroot := (wf_tmpl hwf).1
+  have hk := Flock.TmplUnroll.wf_cols hwf
+  obtain ⟨-, -, -, hlast⟩ := layoutM_facts hL
+  have hpeq : ∀ x < (t.defs.getD t.root default).cols, (posMap t lays).getD x 0 = posOf t lays x :=
+    fun x hx => posMap_getD hpos hroot hx
+  have hsize : (posMap t lays).getD t.constPos 0 + 1 = (lays.getD t.root default).size := by
+    rw [hpeq _ (by omega)]
+    rw [show t.constPos = (t.defs.getD t.root default).cols - 1 by omega]
+    exact hlast
+  have hfull : unitFull t lays = n := by unfold unitFull; rw [hn]
+  apply net_ext
+  · rw [hname, ofRows_name hn0]; rfl
+  · rw [huse, hsize]; rfl
+  · show n.constPos = (lays.getD t.root default).size - 1
+    omega
+  · rw [hig, h0.2.2.2.2.2.1]; rfl
+  · rw [hog]
+    show _ = t.outGroups.map fun g => { g with col := posOf t lays (g.col * WORD) / WORD }
+    apply Array.map_congr_left
+    intro g hm
+    unfold Tmpl.groupsOk at hg
+    simp only [Bool.and_eq_true, Bool.not_eq_true', Array.any_eq_false', Array.mem_append] at hg
+    have h1 := hg.1.1.1.1 g (Or.inr hm)
+    simp only [Bool.not_eq_false, Bool.and_eq_true, isPow2, decide_eq_true_eq] at h1
+    unfold outsAt at hout
+    simp only [Array.all_eq_true', Bool.and_eq_true, decide_eq_true_eq] at hout
+    have hW : 0 < g.words * WORD := Nat.mul_pos h1.1.1 (by decide)
+    simp only [Net.Group.at, hpeq (g.col * WORD) (by have := (hout g hm).1; omega)]
+  · rw [hiw, h0.2.2.2.2.2.2.2.2.2.2.2.2.2.1]; rfl
+  · show n.a = (unitFull t lays).a
+    rw [hfull]
+  · show n.b = (unitFull t lays).b
+    rw [hfull]
+  · rw [hlog, hsize]; rfl
+  · rw [hlk, h0.2.2.2.2.2.2.2.2.2.2.2.2.1]; rfl
+
 end FlockSoundness.TmplFold
+
+namespace Flock
+
+/-- **A read templated unit's net is its template's committed net** (`FlockSoundness.TmplFold.unitNet_eq`). -/
+theorem TmplUnit.unrolled (tu : TmplUnit) : Tmpl.unrollAt tu.t tu.lays = .ok tu.net := by
+  rw [tu.isNet]
+  exact FlockSoundness.TmplFold.unitNet_eq tu.laid tu.ok
+
+end Flock

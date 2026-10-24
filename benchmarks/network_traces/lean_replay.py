@@ -183,17 +183,17 @@ def _change_slot(record: Record, frame_bytes: int) -> Record:
 
 
 def _other_window_certificate(c: CertifiedRecord, signer: replay.ReplaySigner) -> CertifiedRecord:
-    h, w = c.head, c.head.window + 1
-    sig = signer.sign(certificate_message(signer.key_id, replay.REPLAY_SESSION, h.link, h.direction, w, h.digest()))
-    return CertifiedRecord(h, Certificate(signer.key_id, h.link, h.direction, w, h.digest(), sig))
+    h, w, d = c.head, c.head.window + 1, c.certificate.digest
+    sig = signer.sign(certificate_message(signer.key_id, replay.REPLAY_SESSION, h.link, h.direction, w, d))
+    return CertifiedRecord(h, c.salt, Certificate(signer.key_id, h.link, h.direction, w, d, sig))
 
 
 def _other_session_certificate(c: CertifiedRecord, signer: replay.ReplaySigner) -> CertifiedRecord:
     """The certificate the same key gives the same head in another of the certifier's sessions."""
-    h = c.head
+    h, d = c.head, c.certificate.digest
     other = bytes(b ^ 0xFF for b in replay.REPLAY_SESSION)
-    sig = signer.sign(certificate_message(signer.key_id, other, h.link, h.direction, h.window, h.digest()))
-    return CertifiedRecord(h, Certificate(signer.key_id, h.link, h.direction, h.window, h.digest(), sig))
+    sig = signer.sign(certificate_message(signer.key_id, other, h.link, h.direction, h.window, d))
+    return CertifiedRecord(h, c.salt, Certificate(signer.key_id, h.link, h.direction, h.window, d, sig))
 
 
 def _verdicts(cls: type, calls: Sequence[tuple[str, tuple]]) -> list[tuple[str, int, str | None]]:

@@ -143,7 +143,7 @@ and 7; at level 0 both reps read `root_B` from row 0. -/
 
 def port (name value : String) (reads : List Nat) : Registered.Port :=
   { name, value, root := .empty, leaves := 8, words := some 64, wordBits := 16, domain := .empty,
-    reads := (reads.map some).toArray }
+    readsRel := (reads.map some).toArray }
 def pos0 : Array Nat := #[5, 13, 6]
 def pos1 : Array Nat := #[1, 2, 15]
 def reads (own : Array Registered.Port) (l : Nat) : Option String :=

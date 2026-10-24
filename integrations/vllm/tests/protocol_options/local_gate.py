@@ -3,8 +3,9 @@ under a test key, for a rehearsal of a served window (`pouw_h1_rehearsal.py`); r
 
     python -I local_gate.py DIR init --tree TGZ --commit SHA [--params W,H] [--peer NAME] [--ports LO-HI] [--coins lean|stub]
     python -I local_gate.py DIR VERB ...   # the gate's verbs as the lane's key: reserve, open, status, ledger, pins,
-                                           # pubkey, fetch, period-open, period-close
+                                           # pubkey, fetch, period-open, period-close, model-key, models
                                            # (`auditor.gate(["--ssh", WORDS, "--key", LANE])`)
+    python -I local_gate.py DIR admin VERB ...   # vy-admin's (`auditor.gate([VERB, ...])`): model-register
     python -I local_gate.py DIR wait SESSION   # blocks until the session's unit has exited; its `run` answer
 
 ``init`` unpacks infra's tree (``git archive SHA verity benchmarks/live_challenger``) as ``DIR/tree/SHA``, so
@@ -14,10 +15,13 @@ its own main, since nothing here fetches main) and its LMS key at ``--params``
 (``--coins lean``; ``stub`` serves `stub_serve.py`'s seeded bytes instead, and ``init`` falls back to it, saying why, when
 the build fails). Every verb then runs infra's own code from that tree, which goes first on ``sys.path`` before any
 ``verity`` import: `auditor.gate` with its hooks as root and `auditor` would run them on vy-challenger-1 (`reserve`,
-`admit`, `period`, `await_commitment`), each in this process, and a session's unit (`auditor.run`, serve.py with ``--root``
-and the session's secret) a detached ``DIR run SESSION`` that holds ``DIR/units/SESSION.lock`` while it runs, which is
-the gate's ``active``. What differs from vy-challenger-1: one account runs everything (no ``auditor`` user, ``runuser``,
-sudoers or systemd unit, so ``own`` does nothing); the key is a test key of ``--params``, not ``lms.DEPLOYED``; serve.py
+`admit`, `period`, `await_commitment`, `model_register`), each in this process, and a session's unit (`auditor.run`,
+serve.py with ``--root`` and the session's secret) a detached ``DIR run SESSION`` that holds ``DIR/units/SESSION.lock``
+while it runs, which is the gate's ``active``. The model registry is infra's (`models.py` of the tree): ``admin
+model-register`` reads the checkpoint role's manifest and core's pin from the tree, so the archive carries
+``integrations/vllm/manifests/checkpoints-int8.json`` beside ``verity``. What differs from vy-challenger-1: one account
+runs everything (no ``auditor`` user, ``runuser``, sudoers or systemd unit, so ``own`` does nothing and the registry isn't
+made append-only); the key is a test key of ``--params``, not ``lms.DEPLOYED``; serve.py
 listens on the node itself (no ``--peer``, so no ``ssh -R`` tunnel), on ``--ports`` (default 27811-27899, off the live
 tunnels' 7811-7899); and with ``--coins stub`` its coins are seeded bytes, not the Lean verifier's.
 """
@@ -178,7 +182,7 @@ def wait(d: Path, session: str) -> int:
     return 0
 
 
-def gate(d: Path, argv: list[str]) -> int:
+def gate(d: Path, argv: list[str], admin: bool = False) -> int:
     cfg = _config(d)
     A = _auditor(d, cfg)
     host = _host(A, d, cfg)
@@ -198,8 +202,13 @@ def gate(d: Path, argv: list[str]) -> int:
         "start": _start(d, A),
         "ready": lambda s: A.await_commitment(host, s, active),
         "period": lambda args: A.period(host, args, signer=sign(), pinned=pinned, now=_now(), active=active),
+        "register": lambda args: A.model_register(host, args, pinned=pinned, now=_now()),
+        "seal": lambda path: None,
     }
-    rc, out = A.gate(["--ssh", shlex.join(argv), "--key", os.environ.get("LOCAL_GATE_LANE", "vllm")], host, **hooks)
+    if admin:
+        rc, out = A.gate(argv, host, by="vy-admin", **hooks)
+    else:
+        rc, out = A.gate(["--ssh", shlex.join(argv), "--key", os.environ.get("LOCAL_GATE_LANE", "vllm")], host, **hooks)
     sys.stdout.buffer.write(out)
     return rc
 
@@ -216,6 +225,8 @@ def main(argv: list[str] | None = None) -> int:
         return unit(d, rest[0])
     if verb == "wait" and len(rest) == 1:
         return wait(d, rest[0])
+    if verb == "admin":
+        return gate(d, rest, admin=True)
     return gate(d, argv[1:])
 
 

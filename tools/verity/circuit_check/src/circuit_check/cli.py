@@ -34,7 +34,8 @@ REPO = Path(__file__).resolve().parents[5]
 
 
 def _options(a: argparse.Namespace) -> CK.Options:
-    return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras, lower_max_ands=a.lower_max_ands)
+    return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras, lower_max_ands=a.lower_max_ands,
+                      struct_max_gates=a.struct_max_gates)
 
 
 _TASKS: list[tuple] = []
@@ -756,6 +757,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--extras", type=int, default=CK.Options.extras)
     ap.add_argument("--lower-max-ands", type=int, default=CK.Options.lower_max_ands,
                     help="lower a Definition whole when the piece pins estimate at most this many ANDs")
+    ap.add_argument("--struct-max-gates", type=int, default=CK.Options.struct_max_gates,
+                    help="realize a composite of at most this many IR gates by its structural lowering too "
+                         "(c-flock:struct_lower: verity_flock.struct_lower's template, evaluated from the template; 0: none)")
     ap.add_argument("--as-call", action="store_true", help="hold a Definition target to the partition invariant as a Call "
                     "(default: when its family is a Call of a served Program)")
     ap.add_argument("--strict", action="store_true", help="fail on the known failures too (circuit_check.known)")

@@ -12,9 +12,9 @@ transport (`LeanRelease.prog`) and the coins the stream answered (`coinsOf`). Th
   returns, whatever the device round and whether it passes, is the scheduled round's (`roundFree`'s), but for `stopped`.
   A device round that passes is the scheduled round byte for byte (`passes_eq`), and one that fails leaves as the
   scheduled round of a stopped rep (`check_some`).
-* **The transport's trust** (`LeanRelease.ProgChecks`): within a rep, the frame's state after a released round is the
-  state the frame's own `check` returned for a device round and a `stopped` that release those bytes, but for
-  `stopped`, which the release does not read.
+* **The transport's trust** (`LeanRelease.ProgChecks`): after a released frame round, the state of the frame of the
+  rep that released it is the state the frame's own `check` returned for a device round and a `stopped` that release
+  those bytes, but for `stopped`, which the release does not read.
 * **A round's state** (`LeanRelease.answered_of_check`, `answered_of_scheduled`): under it, where the frame's check of
   every device round returns the scheduled round's state and the transport's coin check passes the history with its
   release, the state after it is the frame's taking of the stream's coins at that state (`Masker.answer`).
@@ -148,20 +148,20 @@ def checkAt {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : L
     ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩ (L.coins x h.length)
 
 /-- **The transport's frame state is the frame's check's** at `x` and witness `w`: where the frame takes the coins
-after `h` at the state `m`, the next round is the same rep's and the frame's check of some device round releases `out`,
-the frame's state after the history with that release and the stream's answer `a` is the state the frame's check of a
-device round `v`, of a stopped rep or not, returned with that release, but for `stopped`, which the release does not
-read. A named hypothesis, one of the transport's trusts beside `ProgReads` and of its kind: `prog` is the state the
-session loop's requests leave the rep's frame in (`Flock.Firewall.Frames`, on the schedule `Drive.reqs` fixes), which
-a release takes as given. The frame's step (`Frame.step`) sets its state, at a round that leaves, to what `check`
-returns at the statement's scheduled round (`Place.sched`), to `round`'s of a stopped rep at the rep's stop
-(`Place.fail`: `check`'s of a stopped rep, where the loop sends the scheduled round) and to `round`'s at an inner
-proof's round (`Place.own`: `check`'s with the round in its own place, `check_self`, where the loop sends the
+after `h` at the state `m`, round `h.length` is a frame round and the frame's check of some device round releases `out`,
+the state of the frame of the rep that released it, after the history with that release and the stream's answer `a`,
+is the state the frame's check of a device round `v`, of a stopped rep or not, returned with that release, but for
+`stopped`, which the release does not read. A named hypothesis, one of the transport's trusts beside `ProgReads` and of
+its kind: `prog` is the state the session loop's requests leave the rep's frame in (`Flock.Firewall.Frames`, on the
+schedule `Drive.reqs` fixes), which a release takes as given. The frame's step (`Frame.step`) sets its state, at a round
+that leaves, to what `check` returns at the statement's scheduled round (`Place.sched`), to `round`'s of a stopped rep at
+the rep's stop (`Place.fail`: `check`'s of a stopped rep, where the loop sends the scheduled round) and to `round`'s at
+an inner proof's round (`Place.own`: `check`'s with the round in its own place, `check_self`, where the loop sends the
 firewall's own round); the Prop adds that the loop's requests are those. The frame's own code is `check_l0`, proved. At
 the loop's own frames (`LeanRelease.ofLoop`) the Prop is a theorem (`ofLoop_progChecks`). -/
 def ProgChecks {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) : Prop :=
   ∀ (ρ : R) (h : List (Msg × Msg)) (a : Msg) (m : Masker) (out : ByteArray),
-    L.answered x ρ h = .ok m → L.rep x (h.length + 1) = L.rep x h.length →
+    L.answered x ρ h = .ok m → L.kindAt x h.length = .masked →
     (∃ v s' why, L.checkAt x w ρ h m false v = .ok (out, s', why)) →
     ∃ v st s' why, L.checkAt x w ρ h m st v = .ok (out, s', why) ∧
       L.prog x (h ++ [(0 :: out.data.toList, a)]) =
@@ -173,28 +173,38 @@ theorem cfg_snoc {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List
   unfold cfg
   rw [List.length_append, List.length_singleton, hrep]
 
-/-- **A round's state**: where the frame takes the coins after `h` at the state `m`, the next round is the same rep's,
+/-- **A round's state**: where the frame takes the coins after `h` at the state `m`, round `h.length` is a frame
+round, the next round is the same rep's,
 the frame's check of some device round releases `out`, every check that does returns `t`'s state but for `stopped`, and
 the transport's coin check passes the history with the release and the answer `a`, the frame's state after that history
 is its taking of the stream's coins at `t`, at some `stopped`. -/
 theorem answered_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
     (a : Msg) {m : Masker} (t : Masker) {out : ByteArray} (hP : L.ProgChecks x w) (hA : L.answered x ρ h = .ok m)
-    (hrep : L.rep x (h.length + 1) = L.rep x h.length)
+    (hkd : L.kindAt x h.length = .masked) (hrep : L.rep x (h.length + 1) = L.rep x h.length)
     (ho : L.opens x ρ (h ++ [(0 :: out.data.toList, a)]) = true)
     (hex : ∃ v s' why, L.checkAt x w ρ h m false v = .ok (out, s', why))
     (hst : ∀ v st s' why, L.checkAt x w ρ h m st v = .ok (out, s', why) → ∃ b, s' = { t with stopped := b }) :
     ∃ b, L.answered x ρ (h ++ [(0 :: out.data.toList, a)]) =
       { t with stopped := b }.answer (L.cfg x ρ h) (L.coinsOf x (h ++ [(0 :: out.data.toList, a)])) := by
-  obtain ⟨v, st, s', why, hc, hp⟩ := hP ρ h a m out hA hrep hex
+  obtain ⟨v, st, s', why, hc, hp⟩ := hP ρ h a m out hA hkd hex
   obtain ⟨b, rfl⟩ := hst v st s' why hc
   refine ⟨(L.prog x (h ++ [(0 :: out.data.toList, a)])).stopped, ?_⟩
   have hp' : L.prog x (h ++ [(0 :: out.data.toList, a)]) =
       { t with stopped := (L.prog x (h ++ [(0 :: out.data.toList, a)])).stopped } := hp
+  have hm := kindAt_masked hkd
+  have hn : ¬ (h ++ [(0 :: out.data.toList, a)]).length ≤ 2 := by
+    rw [List.length_append, List.length_singleton]
+    omega
+  have hs : decide (L.rep x (h ++ [(0 :: out.data.toList, a)]).length =
+      L.rep x ((h ++ [(0 :: out.data.toList, a)]).length - 1)) = true := by
+    rw [List.length_append, List.length_singleton, Nat.add_sub_cancel]
+    exact decide_eq_true hrep
   rw [L.answered_of_opens x ρ _ ho]
   unfold frameAnswer
   rw [show (h ++ [(0 :: out.data.toList, a)]).getLast? = some (0 :: out.data.toList, a) by simp]
   dsimp only
-  rw [L.cfg_snoc x ρ h _ hrep]
+  unfold takeAt
+  rw [if_neg hn, hs, if_pos rfl, L.cfg_snoc x ρ h _ hrep]
   exact congrArg (fun s => s.answer (L.cfg x ρ h) (L.coinsOf x (h ++ [(0 :: out.data.toList, a)]))) hp'
 
 /-- **A round's state at level 0**: where the firewall's scheduled round after `h` carries no free value at any
@@ -202,7 +212,7 @@ theorem answered_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
 with that release and the stream's answer is its taking of the stream's coins at `t`, at some `stopped`. -/
 theorem answered_of_scheduled {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
     (a : Msg) {m : Masker} (t : Masker) {out : ByteArray} (hP : L.ProgChecks x w) (hA : L.answered x ρ h = .ok m)
-    (hrep : L.rep x (h.length + 1) = L.rep x h.length)
+    (hkd : L.kindAt x h.length = .masked) (hrep : L.rep x (h.length + 1) = L.rep x h.length)
     (ho : L.opens x ρ (h ++ [(0 :: out.data.toList, a)]) = true)
     (hr : ∀ b, ∃ o, roundFree (L.cfg x ρ h) { m with stopped := b }
       ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩ (L.coins x h.length) =
@@ -212,7 +222,7 @@ theorem answered_of_scheduled {W R : Type} (L : LeanRelease W R) (x : Msg) (w : 
         .ok (out, { t with stopped := false }, #[])) :
     ∃ b, L.answered x ρ (h ++ [(0 :: out.data.toList, a)]) =
       { t with stopped := b }.answer (L.cfg x ρ h) (L.coinsOf x (h ++ [(0 :: out.data.toList, a)])) :=
-  L.answered_of_check x w ρ h a t hP hA hrep ho
+  L.answered_of_check x w ρ h a t hP hA hkd hrep ho
     ⟨L.scheduled x w ρ h (computedOf (L.computed x w ρ h)), _, none, check_self rfl (round_of_roundFree h0)⟩
     fun _ _ _ _ hc => check_l0 hr hc
 
@@ -230,7 +240,7 @@ theorem answered_openBind {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
     (hon : m.on = false) (hd : m.done = true) (hlig : (L.cfg x ρ h).lig = true) (hl0 : m.doneL0 = false)
     (hi : m.inner = none) (hcap : cap.size < 2 ^ 64) (hn0 : L.coins x h.length ≠ 0)
     (hn : L.coins x h.length < 2 ^ 64) (hp : m.pos ≠ (L.cfg x ρ h).order.size)
-    (hrep : L.rep x (h.length + 1) = L.rep x h.length)
+    (hkd : L.kindAt x h.length = .masked) (hrep : L.rep x (h.length + 1) = L.rep x h.length)
     (ho : L.opens x ρ (h ++ [(0 :: (encs (openBind T cap) ++ (Frame.sq 2 (L.coins x h.length)).enc), a)]) = true)
     (hcs : (L.coinsOf x (h ++ [(0 :: (encs (openBind T cap) ++ (Frame.sq 2 (L.coins x h.length)).enc), a)])).size =
       L.coins x h.length) :
@@ -247,7 +257,7 @@ theorem answered_openBind {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
     exact ⟨o, hr, hout⟩
   obtain ⟨out, hr0, hout⟩ := hr false
   obtain ⟨b, hb⟩ := L.answered_of_scheduled x w ρ h a
-    { m with on := true, l0 := true, owed := some (L.coins x h.length) } hP hA hrep (by rw [hout]; exact ho)
+    { m with on := true, l0 := true, owed := some (L.coins x h.length) } hP hA hkd hrep (by rw [hout]; exact ho)
     (fun b => (hr b).imp fun _ hb => hb.1) hr0
   rw [hout] at hb
   exact ⟨b, hb.trans (answer_l0_mid _ _ _ (by rw [hcs]; try rfl) (by exact hi) (by rfl) (by exact hp))⟩
@@ -264,7 +274,7 @@ theorem answered_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R
     (hon : m.on = true) (hi : m.inner = none) (hl0 : m.l0 = true) (hpos : m.pos = p)
     (hk : k = 2 ∨ (k = 1 ∧ L.coins x h.length = 1)) (h0 : ¬ (L.coins x h.length = 0 ∧ k = 2))
     (hn : L.coins x h.length < 2 ^ 64) (hb : p + n < (L.cfg x ρ h).order.size)
-    (hrep : L.rep x (h.length + 1) = L.rep x h.length)
+    (hkd : L.kindAt x h.length = .masked) (hrep : L.rep x (h.length + 1) = L.rep x h.length)
     (ho : L.opens x ρ (h ++ [(0 :: (encs H ++ (Frame.sq k (L.coins x h.length)).enc), a)]) = true)
     (hcs : (L.coinsOf x (h ++ [(0 :: (encs H ++ (Frame.sq k (L.coins x h.length)).enc), a)])).size =
       L.coins x h.length) :
@@ -287,7 +297,7 @@ theorem answered_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R
     rw [hR.maskFrames_eq b]
   obtain ⟨out, hr0, hout⟩ := hr false
   obtain ⟨b, hb'⟩ := L.answered_of_scheduled x w ρ h a
-    { m with pos := m.pos + nAbs G, owed := some (L.coins x h.length) } hP hA hrep (by rw [hout]; exact ho)
+    { m with pos := m.pos + nAbs G, owed := some (L.coins x h.length) } hP hA hkd hrep (by rw [hout]; exact ho)
     (fun b => (hr b).imp fun _ hb => hb.1) hr0
   rw [hout] at hb'
   exact ⟨b, hb'.trans (answer_l0_mid _ _ _ (by rw [hcs]; try rfl) (by exact hi) (by exact hl0)
@@ -305,7 +315,7 @@ theorem answered_l0_last {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (�
     (hc : ∀ q, q < (L.cfg x ρ h).order.size → (L.cfg x ρ h).order[q]! < (L.cfg x ρ h).h.size)
     (hon : m.on = true) (hi : m.inner = none) (hl0 : m.l0 = true) (hpos : m.pos = p) (hrho : m.rho = #[])
     (hn2 : L.coins x h.length = 2) (hb : p + n = (L.cfg x ρ h).order.size)
-    (hrep : L.rep x (h.length + 1) = L.rep x h.length)
+    (hkd : L.kindAt x h.length = .masked) (hrep : L.rep x (h.length + 1) = L.rep x h.length)
     (ho : L.opens x ρ (h ++ [(0 :: (encs H ++ (Frame.sq 2 (L.coins x h.length)).enc), a)]) = true)
     (hcs : L.coinsOf x (h ++ [(0 :: (encs H ++ (Frame.sq 2 (L.coins x h.length)).enc), a)]) = #[r0, r1]) :
     ∃ b, L.answered x ρ (h ++ [(0 :: (encs H ++ (Frame.sq 2 (L.coins x h.length)).enc), a)]) =
@@ -328,7 +338,7 @@ theorem answered_l0_last {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (�
     rw [hR.maskFrames_eq b]
   obtain ⟨out, hr0, hout⟩ := hr false
   obtain ⟨b, hb'⟩ := L.answered_of_scheduled x w ρ h a
-    { m with pos := m.pos + nAbs G, owed := some (L.coins x h.length) } hP hA hrep (by rw [hout]; exact ho)
+    { m with pos := m.pos + nAbs G, owed := some (L.coins x h.length) } hP hA hkd hrep (by rw [hout]; exact ho)
     (fun b => (hr b).imp fun _ hb => hb.1) hr0
   rw [hout, hcs] at hb'
   exact ⟨b, hb'.trans (answer_rho_first _ _ r0 r1 (by show some (L.coins x h.length) = _; rw [hn2])
@@ -345,7 +355,8 @@ theorem answered_rho1 {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ :
     (hc : ∀ q, q < (L.cfg x ρ h).order.size → (L.cfg x ρ h).order[q]! < (L.cfg x ρ h).h.size)
     (hon : m.on = true) (hi : m.inner = none) (hl0 : m.l0 = true) (hpos : m.pos = (L.cfg x ρ h).order.size)
     (hpi : (L.cfg x ρ h).nPiop ≤ m.pos)
-    (hrho : m.rho = #[r0, r1]) (hn2 : L.coins x h.length = 2) (hrep : L.rep x (h.length + 1) = L.rep x h.length)
+    (hrho : m.rho = #[r0, r1]) (hn2 : L.coins x h.length = 2) (hkd : L.kindAt x h.length = .masked)
+    (hrep : L.rep x (h.length + 1) = L.rep x h.length)
     (ho : L.opens x ρ (h ++ [(0 :: (Frame.sq 2 (L.coins x h.length)).enc, a)]) = true)
     (hcs : L.coinsOf x (h ++ [(0 :: (Frame.sq 2 (L.coins x h.length)).enc, a)]) = #[a0, a1])
     (hd : _root_.Flock.Zk.rhoIndependent (⟨r0, r1⟩, ⟨a0, a1⟩) = true) :
@@ -365,7 +376,7 @@ theorem answered_rho1 {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ :
     simp only [maskFrames, encs, List.flatMap_nil, List.nil_append]
   obtain ⟨out, hr0, hout⟩ := hr false
   obtain ⟨b, hb'⟩ := L.answered_of_scheduled x w ρ h a
-    { m with pos := m.pos + nAbs [], owed := some (L.coins x h.length) } hP hA hrep (by rw [hout]; exact ho)
+    { m with pos := m.pos + nAbs [], owed := some (L.coins x h.length) } hP hA hkd hrep (by rw [hout]; exact ho)
     (fun b => (hr b).imp fun _ hb => hb.1) hr0
   rw [hout, hcs] at hb'
   exact ⟨b, hb'.trans (_root_.Claims.ZKServer.answer_rho_independent _ _ r0 r1 a0 a1
