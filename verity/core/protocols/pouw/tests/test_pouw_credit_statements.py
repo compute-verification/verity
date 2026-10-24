@@ -89,14 +89,21 @@ def _bind(base: Path, files: list[bytes], drew: list[int]) -> None:
         {"unit_draw": {"units": drew}, "proof": hashlib.sha512(bound + json.dumps(drew).encode()).hexdigest()}))
 
 
+def _max_tokens(d: dict) -> list[int] | None:
+    """The max_tokens the window's period's open committed (`credit.committed_length`), None when it commits none."""
+    opens = [e["body"] for e in map(json.loads, d["ledger"]) if e["kind"] == "period-open"]
+    length = opens[0].get(Cr.LENGTH_FIELD) if opens else None
+    return length.get("max_tokens") if isinstance(length, dict) else None
+
+
 def live_reads(d: dict, s: int, m: int | None = None) -> dict:
-    """Round s's live@<s> ``--registered`` file (`live_reads.reads_file`) at the window's tables, its session, and the
-    manifest's m_s (or `m`)."""
+    """Round s's live@<s> ``--registered`` file (`live_reads.reads_file`) at the window's tables, its session, the
+    manifest's m_s (or `m`) and the max_tokens its period's open committed."""
     raw, live = bytes.fromhex(d["descriptor"]), Cr.live_of(bytes.fromhex(d["live"]["descriptor"]))[0]
     program, prefix, steps = hashlib.sha512(raw).hexdigest(), Cr._prefix(raw), len(d["rounds"])
     roots = {e["value"]: e["root"] for e in d["entries"]}
     ms = m if m is not None else d["calls"][s * (len(d["calls"]) // steps)][Cr.SERVED_ROWS]
-    return LR.reads_file(program, live["T"], steps, s, roots, d["window"]["root"], _session(d), ms, prefix)
+    return LR.reads_file(program, live["T"], steps, s, roots, d["window"]["root"], _session(d), ms, prefix, _max_tokens(d))
 
 
 def prove_live(d: dict, to: Path, m: dict[int, int] | None = None) -> dict:
