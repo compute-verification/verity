@@ -146,8 +146,9 @@ COIN_ASYNC_ENV = "DITHER_SO_COIN_ASYNC"
 # "q" or "q/den" (den 8 without it): that launch on the SMs whose id % den < q alone (kh_units_multi_sm), each warp
 # taking the next unit in turn, so the rest of the SMs stay whole to the next forward's kernels; "q/den/cap" with at
 # most cap of its CTAs on each of those SMs (kh_units_multi_smc; "1/1/cap" every SM), so each keeps the rest of its slots
-# to them; the same receipts
+# to them; the same receipts.  den at most SMQ_DEN_MAX (h1u.cu's), past every %smid, so q/256 keeps the SMs below q
 UNITS_SMQ_ENV = "DITHER_SO_UNITS_SMQ"
+SMQ_DEN_MAX = 256
 # "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
 # the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
 RDEAD_ENV = "DITHER_SO_RDEAD"
@@ -158,6 +159,13 @@ RDEAD_ENV = "DITHER_SO_RDEAD"
 # to j10r_so's references (h1r's J10-R version 1 on every capture and the window's end, J10R's Definition on the gate step)
 UNITS_ENV = "DITHER_SO_UNITS"
 UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each call's seed_c stream at call scale"}
+# R (with $DITHER_SO_UNITS=j10r, $DITHER_SO_FUSED=1 and no $DITHER_SO_UNITS_SMQ): a step whose units compute at least R
+# rows (the layout's M, its live rows under $DITHER_UNITS_SKIP_DEAD=1) hashes each call's column blocks once too, beside
+# its rows, and its units read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace
+# kh_j10r_ws_bytes at T rows); the same receipts.  Unset, never: J10-R's units hash a column block once in each row tile
+# they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference (unitsbench
+# --j10r, H1U_JSWZ 32: T 2048 step 287.1 -> 233.1 ms, T 512 71.9 -> 59.8 ms; T 64 M 32 5.11 -> 7.16 ms unswizzled)
+J10RC_MIN_T_ENV = "DITHER_SO_J10RC_MIN_T"
 # J10-R's layout rows of a call (h1tile.j10r_blocks' m; j10r_so.M_MODES), open until J10R rules: "slot" (default) or "live"
 J10R_M_ENV = "DITHER_SO_J10R_M"
 # "1" (with $DITHER_SO_UNITS=j10r): a row block wholly past the step's live rows is skipped, h1tile's canonical dead tile
@@ -1204,8 +1212,12 @@ class SoSide(DA.Side):
         self.units_form = os.environ.get(UNITS_ENV) or "today"
         self.j10r = self.units_form == "j10r"
         self.j10r_m = os.environ.get(J10R_M_ENV) or "slot"
+        self.j10rc_min_t = int(os.environ.get(J10RC_MIN_T_ENV) or 0)
         if self.units_form not in UNITS_FORMS:
             raise ValueError(f"${UNITS_ENV}={self.units_form}: one of {tuple(UNITS_FORMS)}")
+        if self.j10rc_min_t and (not self.j10r or self.units_smq):
+            raise ValueError(f"${J10RC_MIN_T_ENV}: needs ${UNITS_ENV}=j10r and no ${UNITS_SMQ_ENV} (kh_units_multi_j10rc "
+                             "has every SM)")
         self._check_smq(self.units_smq, self.units_smd, f"${UNITS_SMQ_ENV}={os.environ.get(UNITS_SMQ_ENV)}",
                         self.units_cap)
         self.skip_dead = not self.j10r or os.environ.get(SKIP_DEAD_ENV) == "1"
@@ -1226,7 +1238,8 @@ class SoSide(DA.Side):
             import j10r_so as JS
             JS.rows(self.j10r_m, win.t, win.t)
             fns = ("kh_seeds_j10r_h1r", "kh_units_multi_j10r", "kh_ucallr_bytes", "kh_j10r_rows_bytes", "kh_h1rcall_bytes",
-                   *(("kh_units_multi_j10r_sm",) if self.units_smq else ()))
+                   *(("kh_units_multi_j10r_sm",) if self.units_smq else ()),
+                   *(("kh_units_multi_j10rc", "kh_j10r_ws_bytes") if self.j10rc_min_t else ()))
             missing = [f for f in fns if not hasattr(self.h, f)]
             if not self.fused or missing or os.environ.get(DA.LANE_REFS_ENV) or not os.environ.get(JS.TREE_ENV):
                 raise ValueError(f"${UNITS_ENV}=j10r: needs ${FUSED_ENV}=1, J10R's tree at ${JS.TREE_ENV} (sbench.sh's "
@@ -1239,6 +1252,8 @@ class SoSide(DA.Side):
             vp, u32 = C.c_void_p, C.c_uint
             self.h.kh_seeds_j10r_h1r.argtypes = [vp, C.c_int, C.c_int, vp, vp, vp, vp]
             self.h.kh_units_multi_j10r.argtypes = [vp, u32, u32, u32, vp, C.c_int, vp]
+            if self.j10rc_min_t:
+                self.h.kh_units_multi_j10rc.argtypes = [vp, u32, u32, u32, vp, C.c_int, vp]
         if self.fused:
             self.mtab, self.m_units = self._multi_tables()
             vp, u32 = C.c_void_p, C.c_uint
@@ -1273,8 +1288,9 @@ class SoSide(DA.Side):
 
     def _check_smq(self, q: int, den: int, what: str, cap: int = 0) -> None:
         f = ("kh_units_multi_j10r_sm" if self.j10r else "kh_units_multi_sm") + ("c" if cap else "")
-        if q and not (self.fused and 1 <= q <= den <= 64 and 0 <= cap <= 64 and hasattr(self.h, f)):
-            raise ValueError(f"{what}: needs ${FUSED_ENV}=1, 1 <= q <= den <= 64, cap <= 64 and an h1u build with {f}")
+        if q and not (self.fused and 1 <= q <= den <= SMQ_DEN_MAX and 0 <= cap <= 64 and hasattr(self.h, f)):
+            raise ValueError(f"{what}: needs ${FUSED_ENV}=1, 1 <= q <= den <= {SMQ_DEN_MAX}, cap <= 64 and an h1u build "
+                             f"with {f}")
 
     def set_units_smq(self, q: int, den: int = 8, cap: int = 0) -> None:
         """The units launch on the SMs whose id % den < q, at most cap CTAs on each (0: no cap), from the next dispatch
@@ -1358,6 +1374,9 @@ class SoSide(DA.Side):
             # units run on the units stream after the step before's
             h.kh_j10r_rows_bytes.argtypes, h.kh_j10r_rows_bytes.restype = [u32, u32], C.c_ulonglong
             nbytes = [int(h.kh_j10r_rows_bytes(win.t, k)) for _, k in win.nk]
+            if self.j10rc_min_t:
+                h.kh_j10r_ws_bytes.argtypes, h.kh_j10r_ws_bytes.restype = [u32, u32, u32], C.c_ulonglong
+                nbytes = [int(h.kh_j10r_ws_bytes(win.t, n, k)) for n, k in win.nk]
             self.j10r_ws = torch.empty(sum(nbytes), dtype=torch.uint8, device=win.dev)
             rws = [self.j10r_ws.data_ptr() + sum(nbytes[:w]) for w in range(win.L)]
         tabs = []
@@ -1406,7 +1425,10 @@ class SoSide(DA.Side):
         if self.j10r:
             import j10r_so as JS
             M = JS.rows(self.j10r_m, win.t, m)
-            if self.units_cap:
+            if self.j10rc_min_t and (min(m, M) if self.skip_dead else M) >= self.j10rc_min_t:
+                rc = rc or self.h.kh_units_multi_j10rc(self.mtab[p].data_ptr(), L, self.m_units, M,
+                                                       self.units_live[p].data_ptr(), 0, st.cuda_stream)
+            elif self.units_cap:
                 rc = rc or self.h.kh_units_multi_j10r_smc(self.mtab[p].data_ptr(), L, self.m_units, M,
                                                           self.units_live[p].data_ptr(), self.units_smq, self.units_smd,
                                                           self.units_cap, self.unit_next.data_ptr(), st.cuda_stream)
@@ -1548,7 +1570,7 @@ class SoSide(DA.Side):
         import j10r_so as JS
         return {"label": JS.LABEL, "rows_mode": self.j10r_m, "rows": JS.M_MODES[self.j10r_m],
                 "slot_rows": self.win.t, "rows_workspace_bytes": self.j10r_ws.numel(),
-                "dead_tiles": JS.DEAD[self.skip_dead]}
+                "dead_tiles": JS.DEAD[self.skip_dead], "j10rc_min_t": self.j10rc_min_t or None}
 
     def info(self) -> dict:
         return {**super().info(), "order": ORDER, "depth": self.win.depth, "a_tables": AO[self.so_ao],
