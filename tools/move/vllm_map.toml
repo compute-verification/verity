@@ -173,4 +173,7 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
            "tools/research/src/research/store/moves.json",
            "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py"]
 keep_dotted = ["verity_pouw.ncp_linear"]
+# registered.py's docstring names the kernel as `pouw_cuda/registered_rows.cu`; moved a level deeper, the file-relative
+# rewrite (`../pouw_cuda/...`) is not one move_check reads in prose, so the name stays as written
+keep_in = { "integrations/vllm/verity_vllm/proto*/**registered.py" = ["integrations/vllm/verity_vllm/protocol_options/pouw_cuda/registered_rows.cu"] }
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/lake-manifest.json"]
