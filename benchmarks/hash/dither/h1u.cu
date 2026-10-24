@@ -66,7 +66,8 @@
 //              kh_units_multi_j10r_sm and a served step's seeds from h1r's call table, kh_seeds_j10r_h1r
 //   kh_units_multi_j10rc(calls, ncalls, units, M, live, mode, stream)   (H1U_JRC) kh_units_multi_j10r's receipts with
 //              each call's column blocks hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K), its units
-//              H1U_JSWZ row blocks at a time
+//              H1U_JSWZ row blocks at a time; kh_units_multi_j10rc_sm(calls, ncalls, units, M, live, q, den, next,
+//              stream) its blocks, then its units on q / den of the SMs (as kh_units_multi_j10r_sm)
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
 #include "h1sha.cuh"
 #include <cuda_bf16.h>
@@ -555,6 +556,16 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #ifndef H1U_JRC
 #define H1U_JRC 0
 #endif
+// H1U_JRCPF = 1 (with RC): each iteration's L2 prefetch of the next one's row and column blocks, which RC's unit reads
+// with no hash to wait behind
+#ifndef H1U_JRCPF
+#define H1U_JRCPF 0
+#endif
+// H1U_JPROBE = 1 (RW without RC): a timing probe, never a receipt: the column blocks are the row block's words, not
+// hashed, so a unit's time less its column hash bounds what sharing the column blocks can save (unitsbench --probe)
+#ifndef H1U_JPROBE
+#define H1U_JPROBE 0
+#endif
 template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false, bool RW = false, bool RC = false>
 __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
@@ -700,6 +711,10 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         uint4 cv[4];
 #pragma unroll
         for (int w = 0; w < 4; ++w) cv[w] = ld4<H1U_L2HINT_WS>(csrc + w);
+        if (H1U_JRCPF && it < chunks) {
+          prefetch_l2(ws + 16 * ((u64)(32 * ri + lane) * rb + it));
+          prefetch_l2(ws + 16 * ((u64)M * rb + (u64)(32 * cj + lane) * cb + it));
+        }
 #pragma unroll
         for (int w = 0; w < 4; ++w) {
           S.rowbits[lane][4 * w] = rv[w].x;
@@ -713,7 +728,13 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         }
       } else {
         u64 s[8];
-        noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
+        if constexpr (H1U_JPROBE) {
+#pragma unroll
+          for (int j = 0; j < 8; ++j)
+            s[j] = ((u64)(j & 1 ? rv[j >> 1].z : rv[j >> 1].x) << 32 | (j & 1 ? rv[j >> 1].w : rv[j >> 1].y)) ^ (blk + cj);
+        } else {
+          noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
+        }
 #pragma unroll
         for (int w = 0; w < 4; ++w) {
           S.rowbits[lane][4 * w] = rv[w].x;
@@ -2622,17 +2643,26 @@ extern "C" int kh_units_multi_j10r_smc(const void* calls, unsigned ncalls, unsig
 
 #if H1U_JRC
 // call blockIdx.y's column blocks M RB + t (t < N CB: column j's block c at t = j CB + c) of its seed_c stream, into its
-// workspace at those stream positions, the grid's x threads striding over t
+// workspace at those stream positions, the grid's x threads striding over t; the stream's midstate made once a CTA, in
+// shared memory.  H1U_JCOLX is the grid's x a call: a call's blocks are 1.1 (o) to 8 (gate_up) a thread at 128 and
+// T = 64, where the calls' CTAs run beside each other, so a larger x evens their work out
+#ifndef H1U_JCOLX
+#define H1U_JCOLX 128
+#endif
 __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ calls, u32 M) {
   const UCallR c = calls[blockIdx.y];
   const u32 rb = c.K / 512 + 1, nb = c.N * rb;
+  if (blockIdx.x * blockDim.x >= nb) return;
   const u32 t0 = blockIdx.x * blockDim.x + threadIdx.x;
-  if (t0 >= nb) return;
-  u64 seed[8];
+  __shared__ NoiseMid nm;
+  if (threadIdx.x == 0) {
+    u64 seed[8];
 #pragma unroll
-  for (int j = 0; j < 8; ++j) seed[j] = __ldg(c.seeds + j);
-  NoiseMid nm;
-  noise_mid(seed, nm);
+    for (int j = 0; j < 8; ++j) seed[j] = __ldg(c.seeds + j);
+    noise_mid(seed, nm);
+  }
+  __syncthreads();
+  if (t0 >= nb) return;
 #pragma unroll 1
   for (u32 t = t0; t < nb; t += gridDim.x * blockDim.x) {
     const u64 p = (u64)M * rb + t;
@@ -2656,6 +2686,61 @@ __device__ __forceinline__ u32 jswz_unit(const UCallR& c, u32 w, u32 M) {
   const u32 ncb = c.N / 32, band = (u32)H1U_JSWZ * ncb, r0 = w / band * (u32)H1U_JSWZ, r = w % band;
   const u32 rn = min((u32)H1U_JSWZ, M / 32 - r0);
   return (r0 + r % rn) * ncb + r / rn;
+}
+
+// unit gu of h1umjc's order, under RC
+__device__ __forceinline__ void h1umjc_one(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
+                                           const uint8_t* __restrict__ live, u32 gu, WarpSmem& S) {
+  u32 lo = 0, hi = ncalls;
+  while (hi - lo > 1) {
+    const u32 mid = (lo + hi) >> 1;
+    if (calls[mid].u0 <= gu) lo = mid;
+    else hi = mid;
+  }
+  const UCallR c = calls[lo];
+  const u32 u = jswz_unit(c, gu - c.u0, M);
+  if (c.md == 3)
+    h1u_unit<3, false, false, false, false, false, true, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
+                                                               OneOut{}, u, S);
+  else
+    h1u_unit<2, false, false, false, false, false, true, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
+                                                               OneOut{}, u, S);
+}
+
+// h1umjc on the SMs whose %smid % den < q alone, its warps taking units from *next in turn (h1umj_sm's partition, its
+// last CTA's fallback, its CAP and its H1U_JCTA: a CTA's warps take neighbouring units of jswz_unit's order, the row
+// blocks of one column block at decode, so they read its column blocks and B's lines through one SM's L1)
+template <bool CAP>
+__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc_sm(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
+                                                        const uint8_t* __restrict__ live, u32 q, u32 den,
+                                                        u32* __restrict__ next, u32 cap) {
+  u32 smid;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
+  if (!sm_keep<CAP>(smid, q, den, cap, next)) return;
+  __shared__ WarpSmem smem[WARPS];
+  const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
+  if constexpr (H1U_JCTA) {
+    __shared__ u32 claim;
+    for (;;) {
+      __syncthreads();
+      if (threadIdx.x == 0) claim = atomicAdd(next, (u32)WARPS);
+      __syncthreads();
+      const u32 g0 = claim, gu = g0 + wp;
+      if (g0 >= total) break;
+      if (gu >= total) continue;
+      h1umjc_one(calls, ncalls, M, live, gu, smem[wp]);
+      __syncwarp();
+    }
+  } else {
+    for (;;) {
+      u32 gu = 0;
+      if (lane == 0) gu = atomicAdd(next, 1u);
+      gu = __shfl_sync(0xffffffffu, gu, 0);
+      if (gu >= total) break;
+      h1umjc_one(calls, ncalls, M, live, gu, smem[wp]);
+      __syncwarp();
+    }
+  }
 }
 
 // h1umj with its units' column blocks read (RC)
@@ -2696,12 +2781,32 @@ extern "C" int kh_units_multi_j10rc(const void* calls, unsigned ncalls, unsigned
   cudaStream_t s = (cudaStream_t)stream;
   if (mode != 2) {
     h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
-    h1jr_cols<<<dim3(128, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
+    h1jr_cols<<<dim3(H1U_JCOLX, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
   }
   if (mode != 1) {
     carve<h1umjc>();
     h1umjc<<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M, (const uint8_t*)live);
   }
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
+// kh_units_multi_j10rc's blocks, then its units on q / den of the SMs (h1umjc_sm; kh_units_multi_j10r_sm's grid and
+// counter): the blocks' launches take any SM, as kh_units_multi_j10r_sm's rows do
+extern "C" int kh_units_multi_j10rc_sm(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
+                                       unsigned q, unsigned den, void* next, void* stream) {
+  if (!ncalls || ncalls > 65535 || M % 32 || !q || q > den || den > SMQ_DEN_MAX || !next) return 2;
+  if (!units) return 0;
+  carve<h1umjc_sm<false>>();
+  int dev = 0, sms = 0, per = 0;
+  if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1umjc_sm<false>, 32 * WARPS, 0) != cudaSuccess || per < 1)
+    return 3;
+  cudaStream_t s = (cudaStream_t)stream;
+  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
+  h1jr_cols<<<dim3(H1U_JCOLX, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
+  if (cudaMemsetAsync(next, 0, sizeof(u32), s) != cudaSuccess) return 3;
+  h1umjc_sm<false><<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
+                                                                            (const uint8_t*)live, q, den, (u32*)next, 0);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 #endif
