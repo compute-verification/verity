@@ -1216,9 +1216,8 @@ class SoSide(DA.Side):
         self.j10rc_min_t = int(os.environ.get(J10RC_MIN_T_ENV) or 0)
         if self.units_form not in UNITS_FORMS:
             raise ValueError(f"${UNITS_ENV}={self.units_form}: one of {tuple(UNITS_FORMS)}")
-        if self.j10rc_min_t and (not self.j10r or self.units_cap):
-            raise ValueError(f"${J10RC_MIN_T_ENV}: needs ${UNITS_ENV}=j10r and no cap in ${UNITS_SMQ_ENV} "
-                             "(kh_units_multi_j10rc has no capped form)")
+        if self.j10rc_min_t and not self.j10r:
+            raise ValueError(f"${J10RC_MIN_T_ENV}: needs ${UNITS_ENV}=j10r")
         self._check_smq(self.units_smq, self.units_smd, f"${UNITS_SMQ_ENV}={os.environ.get(UNITS_SMQ_ENV)}",
                         self.units_cap)
         self.skip_dead = not self.j10r or os.environ.get(SKIP_DEAD_ENV) == "1"
@@ -1240,8 +1239,7 @@ class SoSide(DA.Side):
             JS.rows(self.j10r_m, win.t, win.t)
             fns = ("kh_seeds_j10r_h1r", "kh_units_multi_j10r", "kh_ucallr_bytes", "kh_j10r_rows_bytes", "kh_h1rcall_bytes",
                    *(("kh_units_multi_j10r_sm",) if self.units_smq else ()),
-                   *(("kh_units_multi_j10rc", "kh_j10r_ws_bytes") if self.j10rc_min_t else ()),
-                   *(("kh_units_multi_j10rc_sm",) if self.j10rc_min_t and self.units_smq else ()))
+                   *(("kh_units_multi_j10rc", "kh_j10r_ws_bytes") if self.j10rc_min_t else ()))
             missing = [f for f in fns if not hasattr(self.h, f)]
             if not self.fused or missing or os.environ.get(DA.LANE_REFS_ENV) or not os.environ.get(JS.TREE_ENV):
                 raise ValueError(f"${UNITS_ENV}=j10r: needs ${FUSED_ENV}=1, J10R's tree at ${JS.TREE_ENV} (sbench.sh's "
@@ -1293,6 +1291,9 @@ class SoSide(DA.Side):
         if q and not (self.fused and 1 <= q <= den <= SMQ_DEN_MAX and 0 <= cap <= 64 and hasattr(self.h, f)):
             raise ValueError(f"{what}: needs ${FUSED_ENV}=1, 1 <= q <= den <= {SMQ_DEN_MAX}, cap <= 64 and an h1u build "
                              f"with {f}")
+        if q and self.j10rc_min_t and (cap or not hasattr(self.h, "kh_units_multi_j10rc_sm")):
+            raise ValueError(f"{what} with ${J10RC_MIN_T_ENV}: needs no cap (kh_units_multi_j10rc has no capped form) "
+                             "and an h1u build with kh_units_multi_j10rc_sm")
 
     def set_units_smq(self, q: int, den: int = 8, cap: int = 0) -> None:
         """The units launch on the SMs whose id % den < q, at most cap CTAs on each (0: no cap), from the next dispatch
