@@ -64,7 +64,8 @@ A spec-level reference for network accounting's timing channel:
   variant, which the composition takes: `ArithCountStep_v1{K, BIN, CW}` runs ENC-CODE's 32-bit coder forward on one
   symbol and counts the bits it puts in the window's segment, `ArithCountFinish_v1{CW, NB}` adds the termination
   (NB = 0 under v1) and holds the window to its declared charge, and `BookKT_v1{C}` is `code_v1`'s KT estimate
-  for a bit's context. The context and the frequencies are the circuit's, from the replay's position and the
+  for a bit's context. `ChargeCount_v1{N}` composes them into one window's charge from its decisions, the compile
+  unit's one call a window. The context and the frequencies are the circuit's, from the replay's position and the
   registered book's counts, never witness. The bit-checking variant, the alternative: `ArithEncodeStep_v1{K, BIN}` and
   `ArithEncodeFinish_v1` check each output bit against a committed segment in the decoder's order, with
   `KTContext_v1{C, NW}` ENC-REPLAY's scaled estimate. It is held symbol for symbol to `code.py` and `code_v1` on advice

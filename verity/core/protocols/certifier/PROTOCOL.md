@@ -1595,7 +1595,7 @@ composition below): what the bound counts is the charge, not the committed lengt
   bits.
 - *Integers.* `code_v1` codes an integer as `code.Binned` does: a bin symbol from the book's table (or the escape and a
   uniform one), then a uniform offset, each a general (cum, freq, total) that `ArithCountStep_v1{18, 0, 20}` counts.
-  Lowering a value to them isn't built (Open).
+  `ChargeCount_v1{N}` lowers a decisions-only window's counts, the slice's one call (docstring); the rest is Open.
 - *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`): `code_v1` over v1's windows
   (`v1.residual`, a book fit at `v1.TABLE_CAPS`) and ENC-DERIVED's still-sent fields. After every symbol the count's
   interval and `used` are code.py's and its count is the bits consumed. Each window's finish gives v1's charge and
