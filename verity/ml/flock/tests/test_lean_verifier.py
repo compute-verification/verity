@@ -52,9 +52,9 @@ def test_no_escape_hatches():
 
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
-AUDIT_STATEMENTS = PROOFS.parent / "Models" / "Flock" / "Guarantees" / "Audit.lean"
+AUDIT_STATEMENTS = PROOFS.parent / "Definitions" / "Flock" / "Guarantees" / "Audit.lean"
 AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Proofs\.Flock\.Soundness\.Game\.|Proofs\.Flock\.Soundness\.Audit\.|"
-                           r"Models\.Flock\.Guarantees\.Audit$)")
+                           r"Definitions\.Flock\.Guarantees\.Audit$)")
 
 
 def test_audit_layer_is_abstract():

@@ -192,7 +192,7 @@ def lean_dc(path: Path, pricings: dict) -> dict:
     DC_ = _load("lean_headline_dc_probe", path)
     DC_.LH._eps_budget = lambda: eb
     stated = {ns: int(k) for ns, k in DC_STATED.findall(
-        (Path.cwd() / "Security" / "Models" / "Accounting" / "Guarantees" / "HeadlineDc.lean").read_text())}
+        (Path.cwd() / "Security" / "Definitions" / "Accounting" / "Guarantees" / "HeadlineDc.lean").read_text())}
     out = {}
     for title, ts in pricings.items():
         eb.TS_EPS["co32c"] = ts
