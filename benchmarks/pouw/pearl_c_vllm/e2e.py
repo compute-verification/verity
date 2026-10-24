@@ -558,7 +558,7 @@ def serve(conn, args, group: str, coins: dict) -> None:
                 *_, outs = timed(chat, SamplingParams(temperature=0.0, max_tokens=48))
                 zk = run.statement.take() if run is not None and run.statement is not None and run.statement.enabled else None
                 conn.send({"tokens": [list(o.outputs[0].token_ids) for o in outs], "texts": [o.outputs[0].text for o in outs[:4]],
-                           **({"statement": zk} if zk else {})})
+                           **({"statement": zk} if zk else {}), **({"whole_step": whole.take()} if whole is not None else {})})
             elif op == "prefill":
                 dt, gemm, commit, _ = timed([{"prompt_token_ids": cmd["prompt"]}], one)
                 conn.send({"s": dt, "gemm_s": gemm, "commitment": commit})
@@ -607,13 +607,16 @@ def serve(conn, args, group: str, coins: dict) -> None:
                 stack.activate(arm_of("pearlc", run, args))
                 sp = SamplingParams(temperature=0.0, max_tokens=SERVED_TOKENS, ignore_eos=True)
                 out = {}
+                if whole is not None:
+                    whole.take()
                 for name, i in SERVED.items():
                     _, _, got, outs = timed([chat[i]], sp, retain=str(Path(args.retain) / name))
                     tokens = list(outs[0].outputs[0].token_ids)
                     length = {"ignore_eos": sp.ignore_eos, "max_tokens": [sp.max_tokens], "served": [len(tokens)]}
                     (Path(args.retain) / name / SERVED_RECORD).write_text(json.dumps(length, sort_keys=True) + "\n")
                     out[name] = {"prompt": PROMPTS[i], "tokens": tokens, "length": length,
-                                 "text": outs[0].outputs[0].text, "manifest": got.get("manifest"), "commitment": got}
+                                 "text": outs[0].outputs[0].text, "manifest": got.get("manifest"), "commitment": got,
+                                 **({"whole_step": whole.take()} if whole is not None else {})}
                 conn.send(out)
             else:
                 raise ValueError(f"unknown command {op!r}")
