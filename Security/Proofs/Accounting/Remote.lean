@@ -33,10 +33,12 @@ arithmetic. The correct receipts' `(1 − ε) · C` bits were paid by the node's
 `μ_link` and `μ_out`. A fleet audited at once, or an NVLink domain, is a node (`Accounting.Remote.Node.fleet`), whose
 μ_link counts only the whole's boundary.
 
-These are lemmas, not guarantees. The guarantees that read them are the deployed session's and window's
-(`Accounting.Guarantees.RemoteSessionRunConservation`, `RemoteWindowRunConservation` and their `Relay` forms, which
-prove the routes for the runs the rate audit realizes and apply `Conservation`) and the memory line's
-(`Accounting.Guarantees.Remote.Held`, `HeldOverTime`, `HeldOverTimeLinks`).
+These are lemmas, not guarantees. The deployed session's and window's guarantees
+(`Accounting.Guarantees.RemoteSessionRunConservation`, `RemoteWindowRunConservation` and their `Relay` forms) prove
+`Conservation`'s routes for the runs the rate audit realizes and apply it; their tier-read bound, at no location, is
+the node-level reading that is listed. The memory a session shows held is the memory line's
+(`Accounting.Guarantees.Remote.Held` and its time-held forms), and Mbw is the bandwidth game's
+(`Bandwidth.Guarantees.Mbw`).
 -/
 
 namespace Accounting.SecurityProofs.Remote
