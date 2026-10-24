@@ -333,4 +333,221 @@ theorem slicePieces_pos (ps : Array Piece) (a b : Nat) :
     posAll (Desc.slicePieces ps a b) = sl (posAll ps) a b := by
   rw [slicePieces_go, slGo_pos, posAll_empty, List.nil_append, Nat.sub_zero, Nat.sub_zero]; rfl
 
+/-! ## Copies and segments -/
+
+/-- A position moved by `δ` when it is a gate's. -/
+def shiftPos (δ : Int) (x : Tgt × Int) : Tgt × Int :=
+  match x.1 with
+  | .gate _ => (x.1, x.2 + δ)
+  | .ref _ _ => x
+
+theorem shiftPos_zero : shiftPos 0 = id := by
+  funext x
+  unfold shiftPos
+  split <;> simp
+
+theorem shiftPos_shiftPos (δ ε : Int) : shiftPos ε ∘ shiftPos δ = shiftPos (δ + ε) := by
+  funext x
+  rcases x with ⟨t, v⟩
+  cases t <;> simp [shiftPos, Int.add_assoc]
+
+theorem pos_shiftGate (δ : Int) (q : Piece) :
+    pos (match q.tgt with
+      | .gate _ => { q with base := q.base + δ }
+      | _ => q) = (pos q).map (shiftPos δ) := by
+  rcases q with ⟨t, base, stride, len, rows, rowStride⟩
+  cases t with
+  | gate w =>
+    simp only [pos, List.map_flatMap, List.map_map]
+    congr 1; funext r; congr 1; funext t
+    simp only [Function.comp, shiftPos]
+    congr 1; omega
+  | ref p i =>
+    simp only [pos, List.map_flatMap, List.map_map]
+    congr 1
+
+/-- **Moving the gates by `δ`** moves each gate's position by `δ`. -/
+theorem shiftGates_pos (δ : Int) (ps : Array Piece) :
+    posAll (Desc.shiftGates δ ps) = (posAll ps).map (shiftPos δ) := by
+  unfold Desc.shiftGates posAll
+  rw [Array.toList_map, List.flatMap_map, List.map_flatMap]
+  congr 1; funext q
+  exact pos_shiftGate δ q
+
+theorem shiftGates_length (δ : Int) (ps : Array Piece) :
+    (posAll (Desc.shiftGates δ ps)).length = (posAll ps).length := by
+  rw [shiftGates_pos, List.length_map]
+
+/-- A segment's positions: its copies' in order. -/
+def segPos (s : Seg) : List (Tgt × Int) := (List.range s.reps).flatMap fun m => posAll (s.copy m)
+
+def segsPos (ss : Array Seg) : List (Tgt × Int) := ss.toList.flatMap segPos
+
+theorem segsPos_append (a b : Array Seg) : segsPos (a ++ b) = segsPos a ++ segsPos b := by
+  simp [segsPos, List.flatMap_append]
+
+theorem segsPos_empty : segsPos #[] = [] := rfl
+
+theorem segsPos_singleton (s : Seg) : segsPos #[s] = segPos s := by simp [segsPos]
+
+theorem copy_pos (s : Seg) (m : Nat) : posAll (s.copy m) = (posAll s.ps).map (shiftPos ((m : Int) * s.shift)) :=
+  shiftGates_pos _ _
+
+theorem segPos_one (q : Piece) : segPos (Seg.one q) = pos q := by
+  simp only [segPos, Seg.one, Desc.Seg.copy, List.range_one, List.flatMap_singleton, shiftGates_pos,
+    Int.mul_zero, shiftPos_zero, List.map_id, posAll_singleton]
+
+theorem segsPos_one (ps : Array Piece) : segsPos (ps.map Seg.one) = posAll ps := by
+  simp only [segsPos, posAll, Array.toList_map, List.flatMap_map, segPos_one]
+
+/-- A list of blocks of one length `L`, as the map of its positions. -/
+theorem blocks_eq_map {α : Type} (F : Nat → List α) (L : Nat) (hF : ∀ m, (F m).length = L) (d : α) (n : Nat) :
+    (List.range n).flatMap F = (List.range (n * L)).map fun t => (F (t / L)).getD (t % L) d := by
+  apply List.ext_getElem?
+  intro t
+  rw [flatMap_range_getElem? F L hF, List.getElem?_map]
+  by_cases h : t < n * L
+  · have hL : 0 < L := by
+      rcases Nat.eq_zero_or_pos L with h0 | h0
+      · rw [h0, Nat.mul_zero] at h; omega
+      · exact h0
+    have hm : t % L < (F (t / L)).length := by rw [hF]; exact Nat.mod_lt t hL
+    rw [if_pos h, List.getElem?_range h]
+    simp only [Option.map_some, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hm, Option.getD_some]
+  · rw [if_neg h, List.getElem?_eq_none (by simp; omega)]; rfl
+
+theorem list_eq_map {α : Type} (l : List α) (d : α) : l = (List.range l.length).map fun t => l.getD t d := by
+  apply List.ext_getElem?
+  intro t
+  rw [List.getElem?_map]
+  by_cases h : t < l.length
+  · rw [List.getElem?_range h, List.getElem?_eq_getElem h]
+    simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h]
+  · rw [List.getElem?_eq_none (by omega), List.getElem?_eq_none (by simp; omega)]; rfl
+
+theorem copy_length (s : Seg) (m : Nat) : (posAll (s.copy m)).length = (posAll s.ps).length := by
+  rw [copy_pos, List.length_map]
+
+theorem copy_zero (s : Seg) : posAll (s.copy 0) = posAll s.ps := by
+  rw [copy_pos, show ((0 : Nat) : Int) * s.shift = 0 by simp, shiftPos_zero, List.map_id]
+
+theorem copy_copy (s : Seg) (lo m : Nat) :
+    posAll (Desc.shiftGates ((m : Int) * s.shift) (s.copy lo)) = posAll (s.copy (lo + m)) := by
+  rw [shiftGates_pos, copy_pos, copy_pos, List.map_map, shiftPos_shiftPos, Int.natCast_add, Int.add_mul]
+
+/-- Position `t` of a segment whose pieces name `s.len` positions: position `t % len` of copy `t / len`. -/
+def spt (s : Seg) (t : Nat) : Tgt × Int := (posAll (s.copy (t / s.len))).getD (t % s.len) default
+
+theorem segPos_eq_map (s : Seg) (hlen : (posAll s.ps).length = s.len) :
+    segPos s = (List.range s.count).map (spt s) :=
+  blocks_eq_map (fun m => posAll (s.copy m)) s.len (fun m => by rw [copy_length, hlen]) default s.reps
+
+theorem spt_add (s : Seg) (m t : Nat) (ht : t < s.len) :
+    spt s (m * s.len + t) = (posAll (s.copy m)).getD t default := by
+  have hL : 0 < s.len := by omega
+  unfold spt
+  rw [show m * s.len + t = t + s.len * m by rw [Nat.mul_comm]; omega, Nat.add_mul_div_left _ _ hL,
+    Nat.add_mul_mod_self_left, Nat.div_eq_of_lt ht, Nat.mod_eq_of_lt ht, Nat.zero_add]
+
+/-- **A slice of a segment** is its positions `[a, b)`. -/
+theorem segSlice_pos (s : Seg) (hlen : (posAll s.ps).length = s.len) (a b : Nat) (hb : b ≤ s.count) :
+    segsPos (s.slice a b) = sl (segPos s) a b := by
+  rw [segPos_eq_map s hlen, sl_map_range _ _ _ _ hb]
+  unfold Desc.Seg.slice
+  by_cases hab : b ≤ a
+  · rw [if_pos hab, segsPos_empty, show b - a = 0 by omega]; rfl
+  rw [if_neg hab]
+  have hcnt : s.count = s.reps * s.len := rfl
+  have hL : 0 < s.len := by
+    rcases Nat.eq_zero_or_pos s.len with h0 | h0
+    · rw [hcnt, h0, Nat.mul_zero] at hb; omega
+    · exact h0
+  by_cases hr : s.reps ≤ 1
+  · rw [if_pos hr, segsPos_one, slicePieces_pos]
+    have hr1 : s.reps = 1 := by
+      rcases Nat.lt_or_ge s.reps 1 with h | h
+      · rw [hcnt, show s.reps = 0 by omega, Nat.zero_mul] at hb; omega
+      · omega
+    have e : segPos s = posAll s.ps := by
+      simp only [segPos, hr1, List.range_one, List.flatMap_singleton, copy_zero]
+    rw [← e, segPos_eq_map s hlen, sl_map_range _ _ _ _ hb]
+  rw [if_neg hr]
+  dsimp only
+  have hpart : ∀ m x y : Nat, x ≤ y → y ≤ s.len →
+      segsPos ((Desc.slicePieces (s.copy m) x y).map Seg.one) =
+        (List.range' (m * s.len + x) (y - x)).map (spt s) := by
+    intro m x y hxy hy
+    have hl : (posAll (s.copy m)).length = s.len := by rw [copy_length, hlen]
+    rw [segsPos_one, slicePieces_pos]
+    conv => lhs; rw [list_eq_map (posAll (s.copy m)) default]
+    rw [hl, sl_map_range _ _ _ _ hy, ← List.map_add_range', List.map_map]
+    apply List.map_congr_left
+    intro t ht
+    obtain ⟨i, hi, rfl⟩ := List.mem_range'.1 ht
+    simp only [Function.comp, Nat.one_mul]
+    rw [spt_add s m _ (by omega)]
+  have hmid : ∀ lo m1 : Nat, lo ≤ m1 →
+      segsPos (if lo < m1 then #[{ s with ps := s.copy lo, reps := m1 - lo }] else #[]) =
+        (List.range' (lo * s.len) (m1 * s.len - lo * s.len)).map (spt s) := by
+    intro lo m1 hlo
+    split
+    · rw [segsPos_singleton]
+      have e : segPos { s with ps := s.copy lo, reps := m1 - lo } =
+          (List.range (m1 - lo)).flatMap fun m => posAll (s.copy (lo + m)) := by
+        unfold segPos
+        congr 1; funext m
+        exact copy_copy s lo m
+      rw [e, blocks_eq_map (fun m => posAll (s.copy (lo + m))) s.len (fun m => by rw [copy_length, hlen]) default,
+        List.range'_eq_map_range, List.map_map, Nat.sub_mul]
+      apply List.map_congr_left
+      intro t _
+      simp only [Function.comp, spt]
+      rw [show lo * s.len + t = t + s.len * lo by rw [Nat.mul_comm]; omega, Nat.add_mul_div_left _ _ hL,
+        Nat.add_mul_mod_self_left, Nat.add_comm (t / s.len) lo]
+    · rw [segsPos_empty, show m1 * s.len - lo * s.len = 0 by
+        have : m1 = lo := by omega
+        subst this; omega]
+      rfl
+  have ha := Nat.div_add_mod a s.len
+  have hb' := Nat.div_add_mod b s.len
+  have ha2 := Nat.mod_lt a hL
+  have hb2 := Nat.mod_lt b hL
+  have hdiv : a / s.len ≤ b / s.len := Nat.div_le_div_right (by omega)
+  rw [Nat.mul_comm] at ha hb'
+  generalize a / s.len = r0 at *
+  generalize a % s.len = t0 at *
+  generalize b / s.len = r1 at *
+  generalize b % s.len = t1 at *
+  split
+  · rename_i heq
+    have heq' : r0 = r1 := by simpa using heq
+    subst heq'
+    rw [hpart _ _ _ (by omega) (by omega)]
+    congr 2; omega
+  · rename_i hne
+    have hne' : r0 < r1 := by
+      have : r0 ≠ r1 := by simpa using hne
+      omega
+    have hlast := hpart r1 0 t1 (by omega) (by omega)
+    rw [segsPos_append, segsPos_append, hlast, Nat.add_zero, Nat.sub_zero]
+    have hend : r1 * s.len + (b - r1 * s.len) = b := by omega
+    by_cases h0 : t0 = 0
+    · subst h0
+      simp only [show ((0 : Nat) == 0) = true from rfl, if_true, segsPos_empty, List.nil_append]
+      rw [hmid r0 r1 (by omega), ← List.map_append, Nat.add_zero,
+        range'_join _ _ _ (Nat.mul_le_mul_right _ (by omega))]
+      congr 2; omega
+    · have h0' : (t0 == 0) = false := by simpa using h0
+      simp only [h0', Bool.false_eq_true, if_false]
+      rw [hpart r0 t0 s.len (by omega) (Nat.le_refl _), hmid (r0 + 1) r1 (by omega),
+        ← List.map_append, ← List.map_append]
+      have e1 : r0 * s.len + t0 + (s.len - t0) = (r0 + 1) * s.len := by rw [Nat.succ_mul]; omega
+      have e2 : (r0 + 1) * s.len ≤ r1 * s.len := Nat.mul_le_mul_right _ (by omega)
+      rw [show s.len - t0 = (r0 + 1) * s.len - (r0 * s.len + t0) by omega,
+        range'_join _ _ _ (by omega), show (r0 + 1) * s.len + (r1 * s.len - (r0 + 1) * s.len) - (r0 * s.len + t0) =
+          r1 * s.len - (r0 * s.len + t0) by omega]
+      simp only [Nat.add_zero]
+      rw [range'_join _ _ _ (by omega)]
+      congr 2; omega
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
