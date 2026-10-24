@@ -440,8 +440,13 @@ class NativeCollectCommitter(NativeHostCommitter):
                     try:
                         so = res[0] if isinstance(res, tuple) else res
                         st = getattr(so, "sampled_token_ids", None)
+                        ib = a[1] if len(a) > 1 else kw.get("input_batch")
+                        draw_srcs = [s for s in me.sources if hasattr(s, "on_sample")]      # a source of the draw's inputs (served_record)
+                        owned = {n for s in draw_srcs for n in getattr(s, "own_names", ())}
                         if isinstance(st, torch.Tensor) and st.device.type == "cuda":
                             me._acquire("runner.sampler/sampled_token_ids", st, job)
+                            for s in draw_srcs:
+                                s.on_sample(ib, int(st.shape[0]), job)
                             # launched S, or (a derived-S Program's step on which vLLM skipped top-p) the prescribed S -- once per sampled row
                             S, why, counter = step_splits(list(me._split_launches), int(st.shape[0]), me.prescribe_idle_splits, lambda: batch_top_p(runner, a, kw),
                                                           lambda: torch.cuda.get_device_properties(st.device).multi_processor_count)
@@ -456,9 +461,8 @@ class NativeCollectCommitter(NativeHostCommitter):
                         # `runner.sampler/seed`, one i64 per sequence): `sampling_states.seeds.gpu[input_batch.idx_mapping]` -- the very buffer
                         # `_gumbel_sample_kernel` reads (`seeds_ptr + req_state_idx`), gathered in the step's row order.  Bound only when the
                         # batch carries explicit seeds (a stochastic Program's registered runtime input); a greedy / unseeded step binds nothing.
-                        ib = a[1] if len(a) > 1 else kw.get("input_batch")
                         ss = getattr(getattr(runner, "sampler", None), "sampling_states", None)
-                        if ib is not None and ss is not None and hasattr(ss, "seeds") and hasattr(ib, "idx_mapping"):
+                        if "runner.sampler/seed" not in owned and ib is not None and ss is not None and hasattr(ss, "seeds") and hasattr(ib, "idx_mapping"):
                             idx_np = getattr(ib, "idx_mapping_np", None)
                             explicit = bool(ss.any_explicit_seed(idx_np)) if (idx_np is not None and hasattr(ss, "any_explicit_seed")) else False
                             if explicit:
