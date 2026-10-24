@@ -204,7 +204,7 @@ theorem invOn_push {P R AC ws filling stp extent appends drawnN head} (h : InvOn
     · simp only [g t ht hl, hh] at hi; simp at hi
   · by_cases hl : t < ws.size
     · simp only [k t ht hl]; exact h.receipts t hl
-    · simp [g t ht hl, Win.receipts, hp, RECEIPT_LIMIT]
+    · simp only [g t ht hl, Win.receipts, hp]; simp [RECEIPT_LIMIT]
 
 theorem inv_boundaryNs {s : State} (h : Inv s) (u now : Nat) :
     Inv { s with windows := s.windows.modify u ({· with boundaryNs := some now}) } :=
