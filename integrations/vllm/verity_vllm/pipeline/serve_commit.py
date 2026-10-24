@@ -232,7 +232,8 @@ class CommitWindows:
                        "prompt_ids": led.prompt_ids, "streamed_ids": led.streamed, "ingress": led.ingress, "finish": led.finish,
                        "windows": sorted({r[0] for r in rr.rows}) if rr else [], "rows": rr.rows if rr else [],
                        "committed_seeds": sorted(rr.seeds) if rr else [], "check": self.check(led)}
-                self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"]})
+                self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"],
+                                     "cache_hit": int(rec["check"].get("cache_hit") or 0)})
                 fh.write(json.dumps(rec) + "\n")
 
     def summary(self) -> dict[str, Any]:
@@ -240,4 +241,6 @@ class CommitWindows:
         bad_win = [r["window"] for r in self.records if not r["passed"]]
         return {"windows": len(self.records), "windows_failed": bad_win, "steps": sum(r["steps"] for r in self.records),
                 "requests_checked": len(self.checked), "requests_failed": [c["http_id"] for c in bad_req][:20],
+                "cache_hits": sum(1 for c in self.checked if c.get("cache_hit")),
+                "cached_positions": sum(int(c.get("cache_hit") or 0) for c in self.checked),
                 "unchecked": sorted(self.ledgers), "passed": bool(self.checked) and not bad_req and not bad_win and not self.ledgers}

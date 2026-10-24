@@ -40,7 +40,8 @@ reopens before the next step): each window is one Commit, with its own run root.
 window back from the committed bytes into the served record (`commit.served_record.Record`, COMMIT-ARB's): each request's
 committed input ids (``c00.input/ids`` on the compiled path, ``model.embed_tokens/in`` on the eager one), sampled ids and
 seeds, by position. Once a request has finished, `Record.check` holds them to what was served: its prompt ids and
-streamed ids, the seed it carried, and where its finish says the stream ends.
+streamed ids, the seed it carried, and where its finish says the stream ends. ``--prefix-caching``: vLLM's prefix cache
+(off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`).
 
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds), ``requests.jsonl``
@@ -101,9 +102,8 @@ class Options:
                                  "CUSTOM); pin: the pin's engine profile")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     max_model_len: int = option("--max-model-len", type=int, default=512)
-    max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048,
-                                         help="tokens a step schedules; int8_exact refuses a chunked prefill's later chunk, so keep "
-                                              "whole prompts in one step")
+    max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048, help="tokens a step schedules")
+    prefix_caching: bool = option("--prefix-caching", action="boolean_optional", default=False, help="serve with vLLM's prefix cache")
     gpu_memory_utilization: float = option("--gpu-memory-utilization", type=float, default=0.55)
     seed: int = option("--seed", type=int, default=0)
     commit: bool = option("--commit", action="boolean_optional", default=True, help="commit every engine step (default on)")
@@ -453,7 +453,7 @@ class HttpThread(threading.Thread):
 def engine_options(opts: Options) -> dict[str, Any]:
     kw: dict[str, Any] = {"max_num_seqs": opts.max_num_seqs, "max_model_len": opts.max_model_len,
                           "max_num_batched_tokens": opts.max_num_batched_tokens, "gpu_memory_utilization": float(opts.gpu_memory_utilization),
-                          "enforce_eager": True, "seed": opts.seed}
+                          "enforce_eager": True, "seed": opts.seed, **({"enable_prefix_caching": True} if opts.prefix_caching else {})}
     if opts.precision == "int8_exact":
         kw.update(quantization="verity_int8", attention_backend="CUSTOM")
     elif opts.precision == "verity_int8":
