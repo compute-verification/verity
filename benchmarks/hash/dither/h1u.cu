@@ -662,9 +662,22 @@ struct alignas(16) WarpSmemJC {
   u32 utab[32][9];
   u32 ring[32][33];
 };
+// immediate barrier ids and counts: a register id has ptxas reserve all 16 of the CTA's barriers
+static_assert(WARPS <= 8, "js_sync names barriers 1 .. WARPS / 2");
 __device__ __forceinline__ void js_sync(const JShare& js) {
-  if (js.lr == 0) __syncwarp();
-  else asm volatile("bar.sync %0, %1;" ::"r"(js.bar), "r"(32u << js.lr) : "memory");
+  if (js.lr == 0) {
+    __syncwarp();
+  } else if (js.lr == 2) {
+    if (js.bar == 1) asm volatile("bar.sync 1, 128;" ::: "memory");
+    else asm volatile("bar.sync 2, 128;" ::: "memory");
+  } else {
+    switch (js.bar) {
+      case 1: asm volatile("bar.sync 1, 64;" ::: "memory"); break;
+      case 2: asm volatile("bar.sync 2, 64;" ::: "memory"); break;
+      case 3: asm volatile("bar.sync 3, 64;" ::: "memory"); break;
+      default: asm volatile("bar.sync 4, 64;" ::: "memory"); break;
+    }
+  }
 }
 constexpr u32 JX_AD_WORDS = 3 * 8 * 32;
 __host__ __device__ __forceinline__ u64 jx_x_off(u32 M, u32 K) { return 64ull * M * (K / 512 + 1); }
