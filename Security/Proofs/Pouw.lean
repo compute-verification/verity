@@ -54,9 +54,9 @@ import Proofs.Pouw.Fp8Atom.Proofs
 import Proofs.Pouw.FpG1
 import Proofs.Pouw.FpG1.H1
 import Proofs.Pouw.Game
-import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.HiddenCredit
 import Proofs.Pouw.H1Zy
+import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
 import Proofs.Pouw.Milestone
 import Proofs.Pouw.NCP
