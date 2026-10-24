@@ -21,6 +21,14 @@
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
 #   only; PP_FORGE=MEMBER:UNIT the forged unit (default 0:1); PP_ONLY=honest|forged that run alone; PP_FLOCK_WORK=DIR keeps M0's
 #   build across runs. The Llama honest audit peaks at ~20 GB (one process), its forged one well under.
+#   PP_TRANSFER_GATES="T ..." the templates the registered compiler lists as holding transfer gates (--transfer-gate, both
+#   sides), every unit of theirs proved beside the partition's work:K of the rest; PP_SETS="SPEC ..." more input sets, a
+#   subcircuit spec each (rope-head/d64/bf16); PP_FORGED_PARTITION the forged run's partition. E.g. Llama TP1 with layer 0's
+#   160 RoPE heads at step 1 as the stand-in transfer gates: PP_PARTITION=benchmarks/prove_path/llama32_1b_tg_l0_step1.json
+#   PP_TRANSFER_GATES='RoPEHead_v1{D=64}' PP_SETS=rope-head/d64/bf16, its forged run PP_FORGED_PARTITION=benchmarks/prove_path/
+#   llama32_1b_tg_l0_step24.json PP_FORGE=0:0 (a RoPE head, drawn because every one is).
+#   PP_CHALLENGER=local: each window drawn on a local challenger session's coins (--challenger local, a5_coins), not the
+#   verifier's own, pinned on main's first-parent history fetched from the clone's origin.
 #   research run --on vy-nebius-cpu-2 --project verity --source . --cwd clone --mem-gb 64 --mem-wait 3600 \
 #     --env PP_LLAMA=art:f74282995892011346dbf7ec656b3651ca35b48e8c26cea4d4796b36afadce7f -- bash benchmarks/prove_path/run.sh
 # Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records), the binaries' sha256; never the
@@ -62,9 +70,19 @@ LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 
-for I in 256 1536 8192; do   # the verifier's lowering: a synthetic input set per template (its values are never read)
-  $PY -m verity_numerical.bench.generate --subcircuit silu-mul-v2/i$I/bf16 --n 4 --seed 1 --out $W/sets/i$I > $O/sets-i$I.log 2>&1 || exit 9
+for I in 256 1536 8192 ${PP_SETS:-}; do   # the verifier's lowering: a synthetic input set per template (its values are never read)
+  case $I in */*) SUB=$I D=${I//\//_};; *) SUB=silu-mul-v2/i$I/bf16 D=i$I;; esac
+  $PY -m verity_numerical.bench.generate --subcircuit $SUB --n 4 --seed 1 --out $W/sets/$D > $O/sets-$D.log 2>&1 || exit 9
 done
+TG=(); for t in ${PP_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); done
+CH=()
+if [ -n "${PP_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first-parent history, which the session's pin must be on
+  UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
+  git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > $O/fetch-main.log 2>&1 \
+    || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> $O/fetch-main.log 2>&1 \
+    && git rev-list --first-parent refs/remotes/origin/main > $O/main.txt || { tail -5 $O/fetch-main.log; exit 4; }
+  CH=(--challenger $PP_CHALLENGER --main $O/main.txt)
+fi
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
@@ -85,14 +103,14 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   case "${PP_ONLY:-}:${forged:+forged}" in honest:forged|forged:) return 0;; esac
   mkdir -p $O/$name
   $TIME $PP commit $src --advice $advice --opening $W/$name-opening.json --partition $part \
-    ${ranks:+--ranks $ranks} \
+    ${ranks:+--ranks $ranks} "${TG[@]}" \
     --jobs ${PP_JOBS:-1} --out $W/$name-windows "$@" > $O/$name/commit.log 2>&1 || { tail -30 $O/$name/commit.log; return 1; }
   for d in $W/$name-windows/rank*; do   # serving's public files, never a private body
     mkdir -p $O/$name/windows/$(basename $d) && cp $d/{registration,window,partition,index}.json $d/m*-public.bin $O/$name/windows/$(basename $d)/
   done
   cp $W/$name-windows/commit.json $O/$name/windows/
   $TIME $PP audit $src --opening $W/$name-opening.json --windows $W/$name-windows --partition $part \
-    ${ranks:+--ranks $ranks} --jobs ${PP_JOBS:-1} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged \
+    ${ranks:+--ranks $ranks} --jobs ${PP_JOBS:-1} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" \
     --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
   local rc=$?
   grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
@@ -116,7 +134,7 @@ elif [ -n "${PP_LLAMA:-}" ]; then
   LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload integrations/vllm/workloads/$LROW.json"
   $PP advice --workload integrations/vllm/workloads/$LROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
   run llama "$LLAMA" $W/advice.bin ${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json} "" || rc=1
-  run llama-forged "$LLAMA" $W/advice.bin benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24.json "" \
+  run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24.json} "" \
     --forge ${PP_FORGE:-0:0} || rc=1
 else
   S=$W/served

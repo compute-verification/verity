@@ -14,16 +14,19 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.ml.circuits.codec import canonical_json
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
@@ -144,6 +147,91 @@ def test_the_advice_must_be_in_the_registration_the_draw_followed():
     assert PP.advice_before_draw(drawn, rec, _bound(late))["codes"] == ["advice"]
     other = _rec("11" * 64, compiler="ef" * 64)
     assert PP.advice_before_draw(drawn, rec, _bound(other))["codes"] == ["compiler"]
+
+
+def test_on_the_challengers_coins_the_advice_must_be_in_the_registration_the_challengers_stream_drew_after():
+    rec = _rec("11" * 64)
+    theirs, ours = R.receipt(rec, A5.CHALLENGER, received="0"), R.receipt(rec, A5.VERIFIER, received="0")
+    assert PP.advice_before_draw(theirs, rec, _bound(rec), "challenger")["ok"]
+    assert PP.advice_before_draw(ours, rec, _bound(rec), "challenger")["codes"] == ["after-the-draw"]
+    assert PP.advice_before_draw(theirs, rec, _bound(rec))["codes"] == ["after-the-draw"]
+    late = _rec("22" * 64)
+    assert PP.advice_before_draw(theirs, late, _bound(late), "challenger")["codes"] == ["after-the-draw"]
+
+
+@dataclass(frozen=True)
+class Listing:
+    """A compiler listing ``transfer_gates``, which its digest covers, for the advice side alone."""
+
+    name: str = "test-compiler"
+    transfer_gates: tuple[str, ...] = ()
+
+    @property
+    def digest(self) -> str:
+        return hashlib.sha512(canonical_json({"name": self.name, "transfer_gates": sorted(self.transfer_gates)})).hexdigest()
+
+
+def test_the_transfer_gates_are_in_the_compilers_registered_digest():
+    """I2's digest covers the templates it lists as holding transfer gates, and `Capped` passes the list and its digest on, so a
+    registration under a compiler proving other units whole names another compiler."""
+    r = SimpleNamespace(phi=SimpleNamespace(to_json=lambda: {"model": "m"}), default_seed=0, cap_bits=PP.CAP_BITS)
+    bare, listing = (PP.I2Compiler(r, {}, "/nonexistent", transfer_gates=tg) for tg in ((), ("RoPEHead_v1{D=64}",)))
+    assert bare.digest != listing.digest and len(listing.digest) == 128
+    assert PP.Capped(listing).transfer_gates == ("RoPEHead_v1{D=64}",) and PP.Capped(bare).transfer_gates == ()
+    assert PP.Capped(listing).digest != PP.Capped(bare).digest
+    assert PP.Capped(Inner()).transfer_gates == ()
+
+
+def test_a_registration_under_the_compiler_listing_no_transfer_gates_is_refused(tmp_path):
+    """Where the registered compiler lists transfer gates, the same window under its twin listing none (which would sample them)
+    is refused by `source1` on ``compiler``; a compiler listing none has no such case."""
+    data = _advice(tmp_path)
+    for gates, has in ((("RoPEHead_v1{D=64}",), True), ((), False)):
+        compiler = PP.Capped(Listing(transfer_gates=gates))
+        opening = AW.opening(data, AW.commit_advice(compiler, data))
+        _reqs, bound = PP.open_advice(compiler, opening)
+        w, mine, held = _single()
+        w, held = {**w, **bound}, {**held, **bound}
+        served = tmp_path / ("listing" if has else "bare")
+        served.mkdir()
+        (served / "registration.json").write_text(json.dumps({"window": w}))
+        assert PP.source1(w, mine, held)["ok"]
+        got = PP.more_negatives(argparse.Namespace(bundle="b"), 0, 1, compiler, mine, held, served, opening)
+        assert all(v["refused"] for v in got.values()), got
+        key = "registration-under-the-compiler-listing-no-transfer-gates (source)"
+        assert (got[key]["codes"] if has else key not in got) == (["compiler"] if has else True)
+
+
+def test_a_single_gpu_window_proves_the_templates_its_compiler_lists_whole(monkeypatch):
+    """`window1` hands the registered compiler's transfer gates to the window (`serving_rows.population`), which proves them
+    whole under the work law."""
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    got = {}
+    rec = SimpleNamespace(run=SimpleNamespace(run_root=bytes(64)), store=SimpleNamespace(commit_scheme=SRT.ROWS_SCHEME),
+                          bundle={"manifest_sha256": "bb" * 32})
+    monkeypatch.setattr(PP, "record1", lambda bundle, row_dir: rec)
+    monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, arrivals=None, transfer_gates=():
+                        got.update(transfer_gates=transfer_gates) or ("window", []))
+
+    class Loads(Listing):
+        def load(self, rank, world, requests):
+            return SimpleNamespace(progs={}, dirs={}, digs={"r0": "cc" * 64}, arrivals={"r0": 0})
+
+    compiler = PP.Capped(Loads(transfer_gates=("RoPEHead_v1{D=64}",)))
+    part = Path(__file__).parents[1] / "llama32_1b_tg_l0_step1.json"
+    window, held = PP.window1(argparse.Namespace(bundle="b", row_dir="d", partition=str(part)), compiler, [], {})
+    assert window == "window" and got == {"transfer_gates": ("RoPEHead_v1{D=64}",)}
+    assert held["served_programs"] == {"r0": "cc" * 64}
+
+
+def test_the_challengers_coins_need_main():
+    run = ["--bundle", "b", "--row-dir", "d", "--workload", "f", "--opening", "o", "--windows", "w", "--partition", "p",
+           "--template-sets", "s", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", "o"]
+    with pytest.raises(SystemExit):
+        PP.main(["audit", *run, "--challenger", "local"])
+    with pytest.raises(SystemExit):
+        PP.main(["audit", *run, "--challenger", "gate:research@vy-challenger-1", "--main", "m.txt"])
 
 
 def _summary(drawn: list[int], accepted: bool | None, lean: bool, before: bool = True) -> dict:

@@ -21,10 +21,12 @@ Two kinds of committed run:
 
     prove_path.py advice --workload F --out FILE
     prove_path.py commit (--tp-commit DIR --build-root DIR | --bundle DIR --row-dir DIR --workload F [--hf-config F]) \\
-        --advice FILE --opening FILE --partition F --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT]
+        --advice FILE --opening FILE --partition F --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] \\
+        [--transfer-gate T ...]
     prove_path.py audit (--tp-commit DIR --build-root DIR | --bundle DIR --row-dir DIR --workload F [--hf-config F]) \\
         --opening FILE --windows WINDOWS --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit \\
-        --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] [--ranks 0,1] [--jobs N] [--forged]
+        --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] [--ranks 0,1] [--jobs N] [--forged] \\
+        [--transfer-gate T ...] [--challenger local --main FILE]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -41,6 +43,18 @@ Two kinds of committed run:
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
+
+**Transfer gates** (``--transfer-gate T``, repeatable, the same on both sides): the templates the registered compiler lists as
+holding transfer gates (`advice_windows`: the I/O shell's units, proved with selection All, never sampled), which its digest
+covers (`I2Compiler`, `advice_windows.Traced`). The window's ``work:K`` law then draws every unit of theirs beside K of the rest
+(`serving_rows.work_table_of`), and the stream registers with that work table. Until COMPILER lists the I/O shell's units, the
+run names a stand-in template, at TP1 ``RoPEHead_v1{D=64}`` (``llama32_1b_tg_*.json``). Their negatives are a5's
+`transfer_gate_negatives` and the registration under the compiler listing none (`more_negatives`).
+
+**Coins**: each window's `service.Stream` draws on the verifier's own coins, or with ``--challenger local --main FILE`` on the
+auditor's challenger's (`a5_coins`: the run root's one session, committed to each registration before any coin is read;
+``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent history).
+`advice_before_draw` holds the advice to the receipt of the stream that drew.
 """
 from __future__ import annotations
 
@@ -53,9 +67,9 @@ import multiprocessing
 import os
 import sys
 import time
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -84,7 +98,8 @@ BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
 @dataclass(frozen=True)
 class Capped:
     """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
-    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` is the inner compiler's."""
+    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` and ``transfer_gates`` are the inner
+    compiler's."""
 
     inner: Any
     cap_bits: int = CAP_BITS
@@ -99,6 +114,10 @@ class Capped:
         return hashlib.sha512(canonical_json({"name": self.name, "cap_bits": self.cap_bits,
                                               "compiler": {"name": str(self.inner.name), "digest": self.inner.digest}})).hexdigest()
 
+    @property
+    def transfer_gates(self) -> tuple[str, ...]:
+        return tuple(getattr(self.inner, "transfer_gates", ()))
+
     def load(self, rank: int, world: int, requests: Any) -> Any:
         return self.inner.load(rank, world, requests)
 
@@ -110,12 +129,14 @@ class I2Compiler:
     brings, never advice), under the registered φ (``registered``: the model, target, engine and ℓ, no workload). `load` reads
     each Program's body from the Build's files of the digest I2 compiled (a ``build_request*/`` under ``programs_root`` whose
     ``result.json`` names it), refused where no Build dir holds it: the Build's files are the bodies' cache, I2's digests are the
-    Programs. Its digest names I2's code (`score.code_version`), φ, the default seed and ℓ."""
+    Programs. ``transfer_gates`` are the templates it lists as holding transfer gates (module docstring), the run's stand-in until
+    I2 lists the I/O shell's own. Its digest names I2's code (`score.code_version`), φ, the default seed, ℓ and that list."""
 
     registered: Any
     ingress: Mapping[str, Mapping[str, Any]]
     programs_root: str
     name: str = I2
+    transfer_gates: tuple[str, ...] = ()
     compiled: dict = field(default_factory=dict, compare=False, repr=False)
 
     @functools.cached_property
@@ -124,7 +145,8 @@ class I2Compiler:
 
         r = self.registered
         return hashlib.sha512(canonical_json({"name": self.name, "code": code_version(), "phi": r.phi.to_json(),
-                                              "default_seed": r.default_seed, "cap_bits": r.cap_bits})).hexdigest()
+                                              "default_seed": r.default_seed, "cap_bits": r.cap_bits,
+                                              "transfer_gates": sorted(self.transfer_gates)})).hexdigest()
 
     def requests(self, data: bytes) -> list[dict]:
         """I2's requests for the advice ``data``: each request's id, first step, prompt length, ``max_tokens`` (its kept outputs)
@@ -190,9 +212,11 @@ def ingress_of(ctx: Mapping[str, Any]) -> dict[str, dict]:
                                             **{k: sampling.get(k) for k in BODY_SAMPLING if k in sampling}} for q in ctx["requests"]}
 
 
-def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None, cap_bits: int = CAP_BITS) -> I2Compiler:
+def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None, cap_bits: int = CAP_BITS,
+                 transfer_gates: Sequence[str] = ()) -> I2Compiler:
     """I2 over a single-GPU Commit: φ from the row's declared inputs (`score.phi_of`: its row id, the workload file the record
-    served, refused unless its digest is the record's, and the checkpoint's ``config.json``), the bodies from the record."""
+    served, refused unless its digest is the record's, and the checkpoint's ``config.json``), the bodies from the record, listing
+    ``transfer_gates``."""
     from verity_vllm.predict.score import phi_of
     from verity_vllm.predict.steps import Registered
 
@@ -202,17 +226,19 @@ def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None
     if got != r.row.get("workload_sha256"):
         raise ValueError(f"{workload}: workload sha256 {got[:16]} is not the record's {str(r.row.get('workload_sha256'))[:16]}")
     phi = phi_of({"row": r.row["label"], "workload": doc}, config=str(hf_config or LLAMA32_1B_CONFIG))
-    return I2Compiler(Registered.of(phi, int(doc.get("seed") or 0), cap_bits), ingress_of(r.ctx), str(row_dir))
+    return I2Compiler(Registered.of(phi, int(doc.get("seed") or 0), cap_bits), ingress_of(r.ctx), str(row_dir),
+                      transfer_gates=tuple(dict.fromkeys(map(str, transfer_gates))))
 
 
-def compiler_of(tp_commit: str, build_root: str, cap_bits: int = CAP_BITS) -> Capped:
-    return Capped(AW.Traced.for_commit(tp_commit, build_root), cap_bits)
+def compiler_of(tp_commit: str, build_root: str, cap_bits: int = CAP_BITS, transfer_gates: Sequence[str] = ()) -> Capped:
+    return Capped(AW.Traced.for_commit(tp_commit, build_root, transfer_gates), cap_bits)
 
 
 def compiler_of_args(a: argparse.Namespace) -> Capped:
+    gates = getattr(a, "transfer_gate", None) or ()
     if single(a):
-        return Capped(i2_of_record(a.bundle, a.row_dir, a.workload, a.hf_config, a.cap_bits), a.cap_bits)
-    return compiler_of(a.tp_commit, a.build_root, a.cap_bits)
+        return Capped(i2_of_record(a.bundle, a.row_dir, a.workload, a.hf_config, a.cap_bits, gates), a.cap_bits)
+    return compiler_of(a.tp_commit, a.build_root, a.cap_bits, gates)
 
 
 def single(a: argparse.Namespace) -> bool:
@@ -284,7 +310,7 @@ def window1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound
     r = record1(str(a.bundle), str(a.row_dir))
     p = compiler.load(0, 1, requests)
     window, _rows = SRW.population(p.progs, json.loads(Path(a.partition).read_text()), bytes(r.run.run_root).hex(), p.dirs,
-                                   arrivals=p.arrivals)
+                                   arrivals=p.arrivals, transfer_gates=compiler.transfer_gates)
     return window, {"commitment": r.store.commit_scheme, "served_programs": {str(k): str(x) for k, x in sorted(p.digs.items())},
                     "stand_in": stand_in1(r), **{k: dict(bound).get(k) for k in SRT.BINDING}}
 
@@ -334,7 +360,7 @@ def commit1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound
                            manifest=r.manifest if isinstance(r.manifest, dict) else None, run_root=r.run.run_root,
                            row=r.row.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": r.pair, "source": r.ctx.get("code")}, workers=a.workers,
-                           stand_in=stand_in1(r), binding=dict(bound))
+                           stand_in=stand_in1(r), binding=dict(bound), transfer_gates=compiler.transfer_gates)
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
@@ -432,7 +458,8 @@ def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, 
                    opening: dict) -> dict[str, dict]:
     """What the verifier refuses before any draw about the advice: a registration naming another compiler or another advice root,
     the advice's opening under another salt (which opens no registered root), a registration binding no compiler or advice (a
-    window over Programs of record passed off as the advice's), one whose compiler names another cap ℓ, and another rank's."""
+    window over Programs of record passed off as the advice's), one whose compiler names another cap ℓ, one under the compiler
+    listing no transfer gates (where it lists some: a window sampling them, as another compiler's), and another rank's."""
     src = source_of(a)
     w = json.loads((served / "registration.json").read_text())["window"]
     cases = {f"registration-naming-another-{key} (source)": {**w, key: {**(w.get(key) or {}), fld: "00" * 64}}
@@ -440,6 +467,10 @@ def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, 
     cases["registration-binds-no-compiler-or-advice (source)"] = {k: v for k, v in w.items() if k not in SRT.BINDING}
     cases["registration-names-another-cap (source)"] = {**w, "compiler": {"name": CAPPED,
                                                                           "digest": Capped(compiler.inner, 2 * compiler.cap_bits).digest}}
+    if compiler.transfer_gates:
+        bare = Capped(replace(compiler.inner, transfer_gates=()), compiler.cap_bits)
+        cases["registration-under-the-compiler-listing-no-transfer-gates (source)"] = {**w, "compiler": {"name": CAPPED,
+                                                                                                         "digest": bare.digest}}
     theirs = served.parent / f"rank{(r + 1) % world}" / "registration.json"
     if world > 1 and theirs.exists():
         cases["registration-of-another-rank (source)"] = json.loads(theirs.read_text())["window"]
@@ -455,25 +486,27 @@ def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, 
     return neg
 
 
-def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any]) -> dict:
+def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any], coins: str = "verifier") -> dict:
     """That the advice was fixed before the coins, checked rather than assumed, as `pouw.credit.draw_root` checks the credit bits:
     the digest of the registration the verifier holds the opening to (`registration.digest`, which covers the window's
     ``compiler`` and ``advice`` root) must be the one the draw's receipt names, the receipt the stream wrote when it received the
     registration and before its select read any coin (a5's ``verifier-coins-before-the-registration``: a select on a
-    registration the stream never received reads none); and that registration must bind the compiler and the root the verifier
-    opened. -> {ok, codes, detail}: ``after-the-draw`` where the draw followed another registration, ``compiler`` or ``advice``
-    where the registration binds another."""
+    registration the stream never received reads none; on the challenger's coins, ``coins="challenger"``, the coins are also
+    committed to that digest before any is read); and that registration must bind the compiler and the root the verifier
+    opened. -> {ok, codes, detail}: ``after-the-draw`` where the draw followed another registration, or another stream's,
+    ``compiler`` or ``advice`` where the registration binds another."""
     import a5 as A5
 
     w = rec.get("window") or {}
-    ok = {"after-the-draw": receipt.get("registration") == R.digest(rec) and receipt.get("verifier") == A5.VERIFIER,
+    drew = {"verifier": A5.VERIFIER, "challenger": A5.CHALLENGER}[coins]
+    ok = {"after-the-draw": receipt.get("registration") == R.digest(rec) and receipt.get("verifier") == drew,
           "compiler": w.get("compiler") == bound["compiler"], "advice": w.get("advice") == bound["advice"]}
     return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
             "detail": {"drawn_after": receipt.get("registration"), "registration": R.digest(rec), "received": receipt.get("received")}}
 
 
 def advice_after_draw(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping[str, Any], opening: Mapping[str, Any], mine: Any,
-                      held: dict, source: Callable[[dict | None, Any, dict], dict] = SRT.source) -> dict:
+                      held: dict, source: Callable[[dict | None, Any, dict], dict] = SRT.source, coins: str = "verifier") -> dict:
     """The negative: once the coins are read, the prover commits the same advice again (fresh salts, so a fresh root) and hands
     in a registration binding that root, with its opening. Every check before the draw passes on it (``source`` against the new
     opening: the root is a true commitment of the advice), and `advice_before_draw` refuses it (``after-the-draw``): the draw
@@ -483,7 +516,7 @@ def advice_after_draw(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping
     _reqs, bound = open_advice(compiler, late)
     late_rec = {**rec, "window": {**rec["window"], "advice": bound["advice"]}}
     src = source(late_rec["window"], mine, {**held, **bound})
-    v = advice_before_draw(receipt, late_rec, bound)
+    v = advice_before_draw(receipt, late_rec, bound, coins)
     return {"refused": not v["ok"], "codes": v["codes"], "before_draw_checks_pass": src["ok"]}
 
 
@@ -518,9 +551,19 @@ def per_unit(s: dict) -> dict[str, dict]:
 
 
 def audit_rank(job: tuple[argparse.Namespace, int, int]) -> dict:
+    """Rank ``r``'s audit (`rank_audit`). On the challenger's coins, a rank that ends without its draw says so, so the run root's
+    one session closes once every other rank has drawn."""
+    a, world, r = job
+    try:
+        return rank_audit(a, world, r)
+    finally:
+        if a.coins is not None:
+            a.coins.skip(r)
+
+
+def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
     import a5 as A5
 
-    a, world, r = job
     t0 = time.time()
     compiler, requests, bound, opening = compiled(a)
     mine, held = window_of(a, r, compiler, requests, bound)
@@ -535,10 +578,11 @@ def audit_rank(job: tuple[argparse.Namespace, int, int]) -> dict:
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "coins", "timing")}}
     if s.get("draw") is not None:
+        coins = "challenger" if a.coins is not None else "verifier"
         rec, receipt = (json.loads((out / f).read_text()) for f in ("registration.json", "receipt.json"))
-        row["advice_before_draw"] = advice_before_draw(receipt, rec, bound)
+        row["advice_before_draw"] = advice_before_draw(receipt, rec, bound, coins)
         row["negatives"] = {**(row["negatives"] or {}),
-                            "advice-root-after-the-draw": advice_after_draw(compiler, receipt, rec, opening, mine, held, src)}
+                            "advice-root-after-the-draw": advice_after_draw(compiler, receipt, rec, opening, mine, held, src, coins)}
         ordered = row["advice_before_draw"]["ok"] and row["negatives"]["advice-root-after-the-draw"]["refused"]
     else:
         ordered = False
@@ -550,13 +594,28 @@ def audit_rank(job: tuple[argparse.Namespace, int, int]) -> dict:
     return row
 
 
+def coins_of(a: argparse.Namespace) -> dict[str, Any]:
+    """The summary's account of the coins every window's stream draws on (module docstring)."""
+    if a.challenger:
+        return {"source": "challenger", "challenger": a.challenger,
+                "what": "each window's service.Stream on the auditor's challenger's coins (a5_coins: the run root's one session, "
+                        f"{a.challenger}), committed to the window's registration before any is read"}
+    return {"source": "verifier", "what": "each window's service.Stream on the verifier's own live coins (the Lean's "
+                                          "IO.getRandomBytes), read once the stream received its registration"}
+
+
 def audit(a: argparse.Namespace) -> int:
+    import a5_coins as AC
+
     world, ranks = ranks_of(a)
     root = run_root_of(a)
-    a.coins, a.verifier_coins, a.window_root = None, True, root
+    a.coins, a.verifier_coins, a.window_root = None, not a.challenger, root
     a.rule = json.loads(Path(a.partition).read_text()).get("law")
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
+    if a.challenger and len(ranks) > 1 and a.jobs < len(ranks):
+        raise SystemExit(f"--challenger draws every rank from the run root's one session, which ends once every rank has drawn: "
+                         f"audit the {len(ranks)} ranks at once (--jobs {len(ranks)}), or fewer ranks (--ranks)")
     t0 = time.time()
     compiler, requests, bound, _opening = compiled(a)
     compile_s = round(time.time() - t0, 1)
@@ -565,17 +624,26 @@ def audit(a: argparse.Namespace) -> int:
     summary: dict = {**({"run_root": root} if single(a) else {"tp_run_root": root}), "world": world, "compiler": bound["compiler"],
                      "advice": bound["advice"], "cap_bits": compiler.cap_bits,
                      "inner_compiler": {"name": compiler.inner.name, "digest": compiler.inner.digest}, "compile_s": compile_s,
+                     "transfer_gates": list(compiler.transfer_gates),
                      "gap": "the advice is opened to the verifier until the compile unit exists (README.md)",
                      **({"i2": i2_against_record(a, requests)} if single(a) else {}),
-                     "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged,
-                     "coins": {"source": "verifier", "what": "each window's service.Stream on the verifier's own live coins (the "
-                                                             "Lean's IO.getRandomBytes), read once the stream received its "
-                                                             "registration"},
-                     "ranks": {}}
-    for (_a, _w, r), row in in_processes(audit_rank, a.jobs, [(a, world, r) for r in ranks]):
-        summary["ranks"][str(r)] = row
-        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    summary["ok"] = sorted(summary["ranks"]) == sorted(map(str, ranks)) and all(x["ok"] for x in summary["ranks"].values())
+                     "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {}}
+    if a.challenger:
+        manager, a.coins, finisher = AC.start(a.challenger, root, ranks, out / "challenger", a.main)
+    try:
+        for (_a, _w, r), row in in_processes(audit_rank, a.jobs, [(a, world, r) for r in ranks]):
+            summary["ranks"][str(r)] = row
+            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    finally:
+        if a.coins is not None:
+            for r in ranks:
+                a.coins.skip(r)
+            finisher.join()
+            published = a.coins.evidence()
+            summary["coins"].update(trusted=published.get("trusted"), error=published.get("error"), **(published.get("plan") or {}))
+            manager.shutdown()
+    summary["ok"] = sorted(summary["ranks"]) == sorted(map(str, ranks)) and all(x["ok"] for x in summary["ranks"].values()) \
+        and not summary["coins"].get("error")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     shown = {r: {x: s.get(x) for x in ("ok", "population", "draw", "draw_counts", "seconds", "per_unit")}
              | {"advice_before_draw": (s.get("advice_before_draw") or {}).get("ok")}
@@ -583,6 +651,7 @@ def audit(a: argparse.Namespace) -> int:
                                                          "negatives_refused": all((s.get("negatives") or {"none": False}).values())})
              for r, s in summary["ranks"].items()}
     print("PROVE-PATH " + json.dumps({"run_root" if single(a) else "tp_run_root": root, "forged": a.forged, "ok": summary["ok"],
+                                      "coins": summary["coins"]["source"], "transfer_gates": summary["transfer_gates"],
                                       **({"i2_equal": summary["i2"]["equal"]} if single(a) else {}), "ranks": shown},
                                      sort_keys=True, default=str))
     return 0 if summary["ok"] else 1
@@ -610,6 +679,8 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--partition", required=True, help="the verifier's partition file: {templates, law, scope?}")
         p.add_argument("--ranks", default=None, help="comma-separated (default every rank)")
         p.add_argument("--jobs", type=int, default=1, help="ranks at once, each in its own process")
+        p.add_argument("--transfer-gate", action="append", default=[], help="a template the registered compiler lists as holding "
+                       "transfer gates, in its digest, every unit of which is proved (repeatable; the partition's law is work:K)")
         p.add_argument("--out", required=True)
     p = sub.choices["commit"]
     p.add_argument("--advice", required=True, help="the advice's file: I1's canonical encoding (the prover's, private)")
@@ -626,6 +697,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=7651)
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every window must be refused")
+    p.add_argument("--challenger", choices=["local"], help="draw each window on the auditor's challenger's coins, the run root's one "
+                   "session (a5_coins; local: a development session on this machine), not the verifier's own")
+    p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git rev-list "
+                   "--first-parent origin/main), which must hold the commit the session's host pins")
     a = ap.parse_args(argv)
     if a.cmd == "advice":
         c = AW.codec_of()
@@ -638,6 +713,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if single(a) == bool(a.tp_commit) or (a.tp_commit and not a.build_root) or (single(a) and not (a.row_dir and a.workload)):
         ap.error("one committed run: --tp-commit DIR --build-root DIR, or --bundle DIR --row-dir DIR --workload F")
+    if a.cmd == "audit" and a.challenger and not a.main:
+        ap.error("--challenger needs --main: the verifier's `git rev-list --first-parent origin/main`, which must hold the commit "
+                 "the session's host pins")
     return commit(a) if a.cmd == "commit" else audit(a)
 
 
