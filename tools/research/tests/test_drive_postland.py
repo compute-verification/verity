@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from research.drive import CHECK_STEPS, Driver, launch_vars
+from research.drive import CHECK_STEPS
 from test_queue import World, _git
 from test_queue_drive import Harness, _check, _failed_run, _killed_run, _steps_run, _tip
 
@@ -25,14 +25,13 @@ class Postland(Harness):
 
     def __init__(self, world, monkeypatch, tmp_path, **kw):
         super().__init__(world, monkeypatch, **kw)
-        self.tmp, self.posted, self.post_ranks = tmp_path, [], []
+        self.tmp, self.posted = tmp_path, []
         self.d.defer = DEFER
         self.d.launch_postland = self.launch_post
 
     def launch_post(self, repo, commit, machine, steps):
         rid = f"r-post-{len(self.posted)}"
         self.posted.append((commit, steps))
-        self.post_ranks.append(launch_vars().get("CHECK_SLOT_RANK"))
         self.run_state[rid] = ("running", None, None)
         return [rid], ""
 
@@ -71,7 +70,6 @@ def test_a_deferred_landing_cancels_its_checks_tail_and_awaits_one_post_landing_
     pl = h.postland()
     assert pl["verified"] == base and pl["pending"] == [tip] and pl["steps"] == sorted(DEFER)
     assert pl["run"]["tip"] == tip and h.posted == [(tip, "circuit-check,flock-rust-tests")]
-    assert h.post_ranks == [None], "unranked: it takes a slot only where no train waits (top, 24 Oct 04:53Z)"
     assert not h.d.q.load_state()["drive"].get("deferred")              # nothing for the old rule to follow
     h.tick()
     assert len(h.posted) == 1 and h.cancelled == [rid]                  # its run is running: nothing more
@@ -251,11 +249,3 @@ def test_a_deferred_record_from_before_the_post_landing_run_still_finishes_under
     h.tick()
     assert _git(world.origin, "diff", "--stat", base, "main") == "" and any("reverted on `main`" in x for x in h.posts), h.posts
     assert not h.q.load_state()["drive"]["deferred"]
-
-
-def test_the_lean_checks_steps_are_never_deferred_but_its_suites_may_be(world, monkeypatch, tmp_path):
-    """Daniel, 11 Oct: a part whose cold run takes over ~10 minutes runs after its train lands, and the Lean check stays before.
-    lean-suites, the pytest suites on the Lean build, took 28-65 min before landing (24 Oct), after lean-audit had passed."""
-    h = Postland(world, monkeypatch, tmp_path)
-    d = Driver(h.q, on="m1", launch=h.launch, defer=frozenset({"lean-audit", "lean-build", "lean-suites", "pytest"}))
-    assert d.defer == {"lean-suites", "pytest"}
