@@ -87,12 +87,16 @@ theorem FlockSoundness.Discharge.ZkView.Coined.swExe_padCols {K W Hi VL : Type} 
       ((FlockSoundness.ZK.Table.Hm96.swViewR_eq T.hm96.onVals (w, v) (w, T.tab.vals) ω ys).trans (ite_eq_left hr))
   have e2 : T.viewExe w ω ys = T.tab.toBase (T.hm96.onVals.viewR (w, T.tab.vals) ω ys) :=
     ((T.hm96.toBase_viewR w ω ys).trans (FlockSoundness.Discharge.ZkView.Coined.viewExe_eq T w ω ys).symm).symm
+  obtain ⟨g1, g2, g3⟩ := FlockSoundness.ZK.Table.Hm96.viewR_padCols T.hm96.onVals (w, v) (w, T.tab.vals) ω ys
   have h1 : (T.tab.toBase (T.hm96.onVals.viewR (w, v) ω ys)).ch =
-      (T.tab.toBase (T.hm96.onVals.viewR (w, T.tab.vals) ω ys)).ch := rfl
+      (T.tab.toBase (T.hm96.onVals.viewR (w, T.tab.vals) ω ys)).ch :=
+    (T.tab.toBase_ch _).trans (g1.trans (T.tab.toBase_ch _).symm)
   have h2 : (T.tab.toBase (T.hm96.onVals.viewR (w, v) ω ys)).cm =
-      (T.tab.toBase (T.hm96.onVals.viewR (w, T.tab.vals) ω ys)).cm := rfl
+      (T.tab.toBase (T.hm96.onVals.viewR (w, T.tab.vals) ω ys)).cm :=
+    (T.tab.toBase_cm _).trans (g2.trans (T.tab.toBase_cm _).symm)
   have h3 : (T.tab.toBase (T.hm96.onVals.viewR (w, v) ω ys)).saltsP =
-      (T.tab.toBase (T.hm96.onVals.viewR (w, T.tab.vals) ω ys)).saltsP := rfl
+      (T.tab.toBase (T.hm96.onVals.viewR (w, T.tab.vals) ω ys)).saltsP :=
+    (T.tab.toBase_saltsP _).trans (g3.trans (T.tab.toBase_saltsP _).symm)
   exact ⟨(congrArg (fun V : T.tab.View => V.ch) e1).trans (h1.trans (congrArg (fun V : T.tab.View => V.ch) e2).symm),
     (congrArg (fun V : T.tab.View => V.cm) e1).trans (h2.trans (congrArg (fun V : T.tab.View => V.cm) e2).symm),
     (congrArg (fun V : T.tab.View => V.saltsP) e1).trans
