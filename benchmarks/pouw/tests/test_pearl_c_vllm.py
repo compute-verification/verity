@@ -1615,6 +1615,19 @@ def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tm
     assert not got["resident"] and "OutOfMemoryError" in got["error"] and len(got["steps"]) == 2 and not Fake.live
 
 
+def test_the_whole_step_arm_captures_vllms_graphs_at_the_decode_batch_or_captures_sizes(monkeypatch):
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(LLM=lambda **kw: kw))
+    args = types.SimpleNamespace(model="m", revision=None, mem_base=0.2, mem_arm=0.3, whole_step=True, capture=None)
+    got = E2E.engine(args, "arm")
+    assert not got["enforce_eager"] and got["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                                                      "cudagraph_capture_sizes": [E2E.BATCH]}
+    args.capture = [8, 32]
+    assert E2E.engine(args, "arm")["compilation_config"]["cudagraph_capture_sizes"] == [8, 32]
+    args.whole_step = False
+    assert E2E.engine(args, "arm")["compilation_config"] == {"mode": 0}
+
+
 # ---- the decode profile -------------------------------------------------------------------------------------------
 
 def test_the_profile_maps_gpu_1s_kernels_to_their_categories(tmp_path):
