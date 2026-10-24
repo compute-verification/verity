@@ -17,10 +17,8 @@ open Nci.Dampener
 
 /-- The outcomes' weights sum to 1. -/
 theorem sum_toReal {Ω : Type} [Fintype Ω] (μ : PMF Ω) : ∑ ω, (μ ω).toReal = 1 := by
-  have h0 : ∑ ω, μ ω = 1 := by
-    first
-      | exact (tsum_fintype (L := SummationFilter.unconditional Ω) (fun ω => μ ω)).symm.trans μ.tsum_coe
-      | simpa using μ.tsum_coe
+  have h0 : ∑ ω, μ ω = 1 :=
+    (tsum_fintype (L := SummationFilter.unconditional Ω) (fun ω => μ ω)).symm.trans μ.tsum_coe
   have h := congrArg ENNReal.toReal h0
   rwa [ENNReal.toReal_sum fun ω _ => μ.apply_ne_top ω, ENNReal.toReal_one] at h
 
@@ -127,7 +125,7 @@ theorem sampled_escape {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF
     rw [expected_filter μ bad U hU, expected_filter μ bad U hU, Finset.mul_sum]
     refine Finset.sum_le_sum fun b _ => ?_
     by_cases hj : ident b = j
-    · simp only [hj, eq_self_iff_true, true_and]
+    · simp only [hj, true_and]
       calc w b * prob μ (fun ω => b ∈ bad ω ∧ b ∉ detected ω ∧ noDetectionBefore (bad ω) (detected ω) ident τ b)
           ≤ w b * ((1 - q) * prob μ (fun ω => b ∈ bad ω ∧ noDetectionBefore (bad ω) (detected ω) ident τ b)) :=
             mul_le_mul_of_nonneg_left (hS b) (hw b)
