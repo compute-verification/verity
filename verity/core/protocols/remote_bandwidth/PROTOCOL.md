@@ -1210,9 +1210,13 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of
   one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ in \(U_t\), and its draws are
   distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
-  size: `Accounting.Guarantees.Remote.PooledDraw` states it, on a model of the draw (`Accounting.Remote.Draw`, each
-  window's openings a uniform subset at its own size from a coin released after its roots), for windows the prover
-  sizes after the earlier windows' openings. `pooled` is computed in exact rationals in the verifier's Lean
+  size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed draw (`Accounting.Remote.Draw`: `Key.subset`
+  on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each draw's first
+  word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, at δ plus
+  \(\sum_t s_t/2^{64}\) (a rejected first word) plus each window's PRF advantage, C3's term, against one
+  distinguisher a window that the session fixes (`Session.distinguisher`: it runs the session through window \(t\)
+  and reads at most \(s_t\) first blocks of the stream it is given).
+  `pooled` is computed in exact rationals in the verifier's Lean
   (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
   certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledDraw`
   reads (the greedy by \(U_t/s_t\) is the fractional knapsack's optimum); the memory line reads that W from the

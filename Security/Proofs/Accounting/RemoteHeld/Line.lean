@@ -236,11 +236,9 @@ theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : �
 /-- Where the record's windows' receipts are the draw's sizes, the trace's wrong receipts below the session's pooled
 bound at the line's `δ` are below the W every line of the record reads (`LineCoversSession`): the line reads each
 window's draws off the record and refuses any but `min(s, U_t)`, the draw's at the session's `samples`. -/
-theorem wrong_le_line {node : Node} {n m : ℕ} {X : Fin n → Type} {D : Session n m (fun _ => node.params.samples) X}
-    {T : Trace (Coins n m (fun _ => node.params.samples) X)}
-    {rec : Coins n m (fun _ => node.params.samples) X → Record} (hU : SizesOfRecord D T node rec)
-    {ω : Coins n m (fun _ => node.params.samples) X} (ha : T.accepts ω)
-    (hw : (T.wrong ω : ℝ) ≤ D.pooled node.delta ω) :
+theorem wrong_le_line {node : Node} {n m κ : ℕ} {X : Type} {D : Session n m (fun _ => node.params.samples) κ X}
+    {T : Trace (Coins n κ X)} {rec : Coins n κ X → Record} (hU : SizesOfRecord D T node rec) {ω : Coins n κ X}
+    (ha : T.accepts ω) (hw : (T.wrong ω : ℝ) ≤ D.pooled node.delta ω) :
     ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong := fun l hline => by
   obtain ⟨sm, gs, ws, hsm, hs, -, hl⟩ := lineOf_ok hline
   have hR := hU ω ha
@@ -252,7 +250,7 @@ theorem wrong_le_line {node : Node} {n m : ℕ} {X : Fin n → Type} {D : Sessio
       Array.ofFn fun t => ((D.size t ω : ℕ), D.draws t ω) :=
     Array.map_ofFn (f := fun t => (D.size t ω : ℕ)) (g := fun u => (u, min node.params.samples u))
   rw [(ofSummary_ok hs).2, e1, hR, e2] at hl
-  have hc := Properties.RemoteAudit.lineCoversSession n m _ X D ω node.delta _ _ _ _ _ _ _ l hl
+  have hc := Properties.RemoteAudit.lineCoversSession n m _ κ X D ω node.delta _ _ _ _ _ _ _ l hl
   rw [Rat.cast_nnratCast] at hc
   exact hw.trans hc
 
@@ -261,8 +259,8 @@ theorem delta_nonneg (node : Node) : (0 : ℝ) ≤ (node.delta : ℝ) := NNRat.c
 
 /-- **The memory line of record, link-charged** (`LineHeld`), proved. -/
 theorem lineHeld : LineHeld := by
-  intro node n m X _ D T rec δs hl hsq hd hS hr hp hcov hk hL hR hC hN hU
-  have hH := holdsAnd hk (Draw.pooledDraw D (ofRecord T node rec) (delta_nonneg node) hL hR hC)
+  intro node n m κ X _ prf rest D T rec δs hl hsq hd hS hr hp hcov hk hm hL hR hC hN hU
+  have hH := holdsAnd hk (Draw.pooledDraw prf rest D (ofRecord T node rec) (delta_nonneg node) hm hL hR hC)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
   have ha : (ofRecord T node rec).accepts ω := hω.1
   have hc := charge_units node
@@ -276,8 +274,8 @@ theorem lineHeld : LineHeld := by
 
 /-- **The memory line of record, time-held, under Identity** (`LineHeldIdentity`), proved. -/
 theorem lineHeldIdentity : LineHeldIdentity := by
-  intro node n m X _ D T rec δs hI hsq hd hS hr hp hcov hk hL hR hC hN hU
-  have hH := holdsAnd hk (Draw.pooledDraw D (ofRecord T node rec) (delta_nonneg node) hL hR hC)
+  intro node n m κ X _ prf rest D T rec δs hI hsq hd hS hr hp hcov hk hm hL hR hC hN hU
+  have hH := holdsAnd hk (Draw.pooledDraw prf rest D (ofRecord T node rec) (delta_nonneg node) hm hL hR hC)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
   have ha : (ofRecord T node rec).accepts ω := hω.1
   have hc := charge_units node

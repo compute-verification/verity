@@ -23,6 +23,9 @@ equality between a model object and the record, and says what would close it.
   model's `Draw.Session.draws` at `s = Node.params.samples`, so `Properties.RemoteAudit.LineCoversSession` gives the
   line's W at least the session's pooled bound. It closes once the draw's sizes are the record's (`size t ω` the record
   at `ω`'s, which needs a bound `m` on an accepted window's receipts and `Live` read at those sizes).
+* `DrawFits`: the session's windows have fewer than `2^448` receipts (`m`, the draw's bound on `U_t`), so each draw's
+  sampler word is the top bits of its stream's first SHA-512 block (`Accounting.Remote.Draw.width`). No code bounds a
+  window's receipts yet; gate run 7's windows have 130,023,424.
 
 That the line has one group for each of the session's windows is no premise: an accepted session has its parameters'
 `windows` windows (`Properties.RemoteAudit.AcceptedMinPasses`), and the line's groups are its record's windows
@@ -39,8 +42,12 @@ def Registered {Ω : Type} (T : Trace Ω) (node : Node) : Prop := T.blocks = nod
 
 /-- **The record's windows are the draw's**: on every accepting outcome each window's receipts in the Lean verifier's
 record are the draw's size of that window. -/
-def SizesOfRecord {n m : ℕ} {s : Fin n → ℕ} {X : Fin n → Type} (D : Session n m s X) (T : Trace (Coins n m s X))
-    (node : Node) (rec : Coins n m s X → Record) : Prop :=
+def SizesOfRecord {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X) (T : Trace (Coins n κ X))
+    (node : Node) (rec : Coins n κ X → Record) : Prop :=
   ∀ ω, T.accepts ω → (rec ω).receipts node = Array.ofFn fun t => (D.size t ω : ℕ)
+
+/-- **The draw's word fits a block**: a window has fewer than `2^448` receipts, so each draw's sampler word lies in its
+stream's first SHA-512 block. -/
+def DrawFits (m : ℕ) : Prop := m < 2 ^ 448
 
 end Properties.RemoteAudit.Line
