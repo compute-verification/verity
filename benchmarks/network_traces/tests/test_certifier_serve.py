@@ -823,7 +823,8 @@ class _Varied:
             await writer.drain()
             writer.close()
             return
-        assert body["return_token_ids"] is True and not {"user", "ignore_eos", "min_tokens"} & set(body)
+        assert body["return_token_ids"] is True and not {"ignore_eos", "min_tokens"} & set(body)
+        assert isinstance(body.get("user", ""), str)
         assert body["temperature"] == 0 and body["top_p"] == 1 and body["stop"] == [] and type(body["seed"]) is int
         self.bodies.append(body)
         me, self.arrived = self.arrived, self.arrived + 1
@@ -932,7 +933,8 @@ def test_the_varied_plan_sends_poisson_arrivals_of_varied_prompts_and_plans_no_e
     """No served-profile premise holds of the plan: its requests' prompts (ids), lengths in frames, `max_tokens` and
     seeds vary, nothing asks for exactly its tokens, the canonical order isn't request-major and no response is padded;
     each request is sent mid-bucket in the bucket before its arrival's, as the id request of its fields, in
-    `id_request_frames` of its prompt's length, and its stream is its place in the plan, its ingress ordinal. N2's
+    `id_request_frames` of its prompt's length, and its stream is its place in the plan, its ingress ordinal; the shim
+    forwards it with its `user`, its session, for an endpoint that records it. N2's
     profile is the advice: no egress counts are planned. The EOS is the one the probed responses stopped at."""
     _, probed, report, plan, runs, endpoint = varied
     T, tau = cs.WINDOW_BUCKETS, cs.BUCKET_MS
@@ -957,8 +959,9 @@ def test_the_varied_plan_sends_poisson_arrivals_of_varied_prompts_and_plans_no_e
         return json.dumps({k: v for k, v in body.items() if k != "return_token_ids"}, sort_keys=True)
 
     bodies = [key(f | {"stop": [], "stream": True}) for f in fields]
+    live = [key(f | {"stop": [], "stream": True, "user": q["session"]}) for f, q in zip(fields, plan["requests"])]
     sent = [key(b) for b in endpoint.bodies]
-    assert sorted(sent[:4]) == sorted(bodies[:4]) and all(b in sent[4:] for b in bodies)
+    assert sorted(sent[:4]) == sorted(bodies[:4]) and all(b in sent[4:] for b in live)
     setup = ar.Setup(report)
     assert plan["syncs"] == [[setup.envelope.delta, str(setup.envelope.rho)]] * plan["windows"]
     assert runs["honest"]["check"]["comparisons"]["releases_off_model"] == 0
