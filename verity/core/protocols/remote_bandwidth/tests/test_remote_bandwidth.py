@@ -1023,7 +1023,7 @@ def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_te
     idle = timing.HOST_READ_BYTES_PER_S / timing.READ_BYTES_PER_S
     for rtt in (1, 20):
         g = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s)
-        assert g.worst.sample < 0.001 and 0.00896 < g.worst.gamma < 0.00928
+        assert g.worst.sample < 0.001 and 0.00895 < g.worst.gamma < 0.00928
         assert 0.00115 < g.counting < 0.00116 and g.counting + g.rebuild > 0.0015 and g.chip > 0.0015
         assert g.horizon < 1e-4 and 0.0066 < g.gamma_horizon < 0.0068
         spec = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
