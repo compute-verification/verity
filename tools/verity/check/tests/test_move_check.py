@@ -532,6 +532,16 @@ def test_a_moves_record_of_a_path_that_did_not_move_whole_is_refused(tmp_path):
     assert "S/ -> T/" in f["reason"]
 
 
+def test_a_lock_field_the_writer_wraps_anew_is_still_a_move(tmp_path):
+    """`check.py --update` wraps a list a renamed module lengthened past its line: the same value, laid out anew."""
+    lock = _lock(roots=["Models"], layers={"Definitions.Core": {"imports": ["Definitions.Core"]}},
+                 reads={"Definitions.Core.B": {"digest": "dd", "definitions": {"x": "ee"}}}, dependencies={"m": "2"})
+    wrapped = lock.replace('[\n        "Definitions.Core"\n      ]', '["Definitions.Core"]')
+    assert wrapped != lock
+    r = _worded(tmp_path, **{"S/lean-audit.json": wrapped})
+    assert r["certified"], r["refusals"]
+
+
 def test_a_reads_record_that_changes_with_its_key_is_refused(tmp_path):
     lock = _lock(roots=["Models"], layers={"Definitions.Core": {"imports": ["Definitions.Core"]}},
                  reads={"Definitions.Core.B": {"digest": "de", "definitions": {"x": "ee"}}}, dependencies={"m": "2"})
