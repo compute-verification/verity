@@ -8,7 +8,6 @@ import Definitions.Pouw.Eps1.M3
 import Definitions.Pouw.Dimension.Causal
 import Definitions.Pouw.Dimension.Defs
 import Definitions.Pouw.Dimension.Lift
-import Definitions.Pouw.FiatShamir
 import Definitions.Pouw.Fp8Atom.Atom
 import Definitions.Pouw.Fp8Atom.E4M3
 import Definitions.Pouw.Fp8Atom.Fp32
@@ -93,7 +92,6 @@ import Definitions.Pouw.Receipt.Li
 import Definitions.Pouw.Receipt.Fx1
 import Definitions.Pouw.RelativeSecurity
 import Definitions.Pouw.RelativeSecurityJ10R
-import Definitions.Pouw.RelativeSecurityCall
 import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs

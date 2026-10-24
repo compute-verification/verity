@@ -70,8 +70,7 @@ def test_kernel_tile_visits_a_fully_masked_block_that_the_definition_does_not_ha
     assert kd.skipped_blocks == 2
 
 
-@pytest.mark.parametrize("name", ["p0_1x169_h3kv1.npz", "p0_16x32_h1kv1.npz"])
-@pytest.mark.slow
+@pytest.mark.parametrize("name", [pytest.param("p0_1x169_h3kv1.npz", marks=pytest.mark.slow), "p0_16x32_h1kv1.npz"])
 def test_commit_the_kernel_words_open_with_the_definition_replay(name: str) -> None:
     """Commit what the GPU held in registers (kernel replay at commit time), discard, then open with the oracle replay
     against the ORIGINAL root under both layouts; a numpy replay does not open it."""
