@@ -23,7 +23,9 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
 * `argSpans` is a member's used leaves' indices into its argument (`argSpans_batch`, `argSpans_xs`, `argSpans_other`);
 * `Array.qsort` by a key sorts by it (`qsort_sorted`), so `Desc.Ivs.norm` keeps exactly its intervals' leaves
   (`norm_mem`), and `Desc.Ivs.covers` checks every leaf is in an interval (`covers_mem`);
-* a segment's gates (`Width.segGates`) are its gate positions (`segGates_pos`).
+* a segment's gates (`Width.segGates`) are its gate positions (`segGates_pos`);
+* on the circuit's side, a gate's operands are its node's references resolved (`operands_mem`), and a gate of a
+  primitive root node reads its member's operands in the root activation (`reads_rootPrim`).
 
 So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
 (`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here,
@@ -2181,6 +2183,159 @@ theorem rootReads_of (hS : RootSegs) (hE : RootSet) : RootReads := by
       refine ⟨s, hs', fun h0 => ?_, w, hw⟩
       rw [(hgood s hs').1 h0] at hw
       simp at hw
+
+
+/-! ## A gate's operands
+
+`Flock.Program.operands` resolves each reference of each of a node's arguments (a batch member's slice of a mapped one), so
+a gate's operands are exactly those resolutions (`operands_mem`). -/
+
+/-- A loop pushing `f x`'s value for each element `x`: what it ends with is what it started with and those values. -/
+theorem forIn_push_mem {α β ε : Type} (f : β → Except ε α) :
+    ∀ (l : List β) (acc out : Array α),
+      forIn l acc (fun x (r : Array α) => do let v ← f x; pure (ForInStep.yield (r.push v))) = .ok out →
+      ∀ a, a ∈ out ↔ a ∈ acc ∨ ∃ x ∈ l, f x = .ok a
+  | [], acc, out, h, a => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp
+  | x :: l, acc, out, h, a => by
+    rw [List.forIn_cons] at h
+    obtain ⟨st, hst, h⟩ := Walk.except_bind_ok h
+    obtain ⟨v, hv, hst⟩ := Walk.except_bind_ok hst
+    simp only [pure, Except.pure, Except.ok.injEq] at hst
+    subst hst
+    rw [forIn_push_mem f l (acc.push v) out h a, Array.mem_push]
+    constructor
+    · rintro ((h1 | rfl) | ⟨y, hy, hfy⟩)
+      · exact Or.inl h1
+      · exact Or.inr ⟨x, List.mem_cons_self, hv⟩
+      · exact Or.inr ⟨y, List.mem_cons_of_mem _ hy, hfy⟩
+    · rintro (h1 | ⟨y, hy, hfy⟩)
+      · exact Or.inl (Or.inl h1)
+      · rcases List.mem_cons.1 hy with rfl | hy
+        · rw [hv] at hfy
+          cases hfy
+          exact Or.inl (Or.inr rfl)
+        · exact Or.inr ⟨y, hy, hfy⟩
+
+/-- Two nested loops pushing `f i t`'s value for each `t` of `L i`, for each `i`. -/
+theorem forIn_nest_mem {α β γ ε : Type} (L : β → List γ) (f : β → γ → Except ε α) :
+    ∀ (l : List β) (acc out : Array α),
+      forIn l acc (fun i (r : Array α) => do
+          let r' ← forIn (L i) r (fun t (s : Array α) => do let v ← f i t; pure (ForInStep.yield (s.push v)))
+          pure (ForInStep.yield r')) = .ok out →
+      ∀ a, a ∈ out ↔ a ∈ acc ∨ ∃ i ∈ l, ∃ t ∈ L i, f i t = .ok a
+  | [], acc, out, h, a => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp
+  | i :: l, acc, out, h, a => by
+    rw [List.forIn_cons] at h
+    obtain ⟨st, hst, h⟩ := Walk.except_bind_ok h
+    obtain ⟨r', hx, hst⟩ := Walk.except_bind_ok hst
+    simp only [pure, Except.pure, Except.ok.injEq] at hst
+    subst hst
+    rw [forIn_nest_mem L f l r' out h a, forIn_push_mem (f i) (L i) acc r' hx a]
+    constructor
+    · rintro ((h1 | ⟨t, ht, hf⟩) | ⟨j, hj, t, ht, hf⟩)
+      · exact Or.inl h1
+      · exact Or.inr ⟨i, List.mem_cons_self, t, ht, hf⟩
+      · exact Or.inr ⟨j, List.mem_cons_of_mem _ hj, t, ht, hf⟩
+    · rintro (h1 | ⟨j, hj, t, ht, hf⟩)
+      · exact Or.inl (Or.inl h1)
+      · rcases List.mem_cons.1 hj with rfl | hj
+        · exact Or.inl (Or.inr ⟨t, ht, hf⟩)
+        · exact Or.inr ⟨j, hj, t, ht, hf⟩
+
+/-- **A gate's operands are exactly its node's references resolved**: for each argument `i`, each of its references
+(a batch member's `memberRef` of a mapped one), resolved in the activation. -/
+theorem operands_mem (P : Prog) (sc : Flock.Program.Scope) (node : Flock.Program.Node) (m : Nat) (ops : Array Nat)
+    (h : Flock.Program.operands P sc node m = .ok ops) (a : Nat) :
+    a ∈ ops ↔ ∃ i < node.args.size,
+      ∃ t < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
+        ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
+      Flock.Program.resolve P sc (if (node.form == .batch) = true then (node.args[i]!).memberRef m t
+        else (node.args[i]!).seq.get t) = .ok a := by
+  unfold Flock.Program.operands at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range'] at h
+  have h' := ok_bind_pure h
+  rw [forIn_nest_mem _ _ _ _ _ h' a]
+  simp only [List.mem_range'_1, Std.Legacy.Range.size, Nat.add_sub_cancel, Nat.div_one, Nat.sub_zero, Nat.zero_add,
+    Array.not_mem_empty, false_or, zero_le, true_and]
+
+
+/-- `gateStep` from activation `sc`, the node holding `g` found: a primitive node's member's operands, else that member's
+activation. -/
+theorem gateStep_at (P : Prog) (g : Nat) (sc : Flock.Program.Scope) (k : Nat)
+    (hf : (Array.range (P.defs[sc.d]!).body.nodes.size).find? (fun k => (P.defs[sc.d]!).body.offsets[k]! ≤ g - sc.off &&
+      g - sc.off < (P.defs[sc.d]!).body.offsets[k + 1]!) = some k) :
+    Flock.Program.gateStep P g sc =
+      let node := (P.defs[sc.d]!).body.nodes[k]!
+      let m := if (node.form == .prim || node.form == .call) = true then 0
+        else (g - sc.off - (P.defs[sc.d]!).body.offsets[k]!) / (P.defs[node.fn]!).gates
+      if (P.defs[node.fn]!).prim = true then
+        (Flock.Program.operands P sc node m >>= fun ops => pure (.inl (node.fn, ops, sc)))
+      else pure (.inr (P.child sc k m)) := by
+  unfold Flock.Program.gateStep
+  simp only [bind, Except.bind, hf]
+
+/-- Root node `k` is the one `gateStep`'s search finds for a gate of it. -/
+theorem find_root (P : Prog) (hl : Desc.rootLaidOut P = true) {k g : Nat} (hk : k < nodeCount P)
+    (hg : g ∈ nodeGates P k) :
+    (Array.range (P.defs[P.rootScope.d]!).body.nodes.size).find? (fun k =>
+      (P.defs[P.rootScope.d]!).body.offsets[k]! ≤ g - P.rootScope.off &&
+        g - P.rootScope.off < (P.defs[P.rootScope.d]!).body.offsets[k + 1]!) = some k := by
+  obtain ⟨-, -, -, hmono⟩ := DescAgree.rootLaidOut_spec P hl
+  have hgk := (DescAgree.mem_nodeGates P k g).1 hg
+  have hd : P.rootScope.d = P.root := rfl
+  have ho : P.rootScope.off = 0 := rfl
+  simp only [hd, ho, Nat.sub_zero]
+  rcases h : (Array.range (P.defs[P.root]!).body.nodes.size).find? (fun k =>
+      (P.defs[P.root]!).body.offsets[k]! ≤ g && g < (P.defs[P.root]!).body.offsets[k + 1]!) with _ | k'
+  · exfalso
+    have := Array.find?_eq_none.1 h k (Array.mem_range.2 hk)
+    simp only [Bool.and_eq_true, decide_eq_true_eq, not_and, not_lt] at this
+    have := this hgk.1
+    exact absurd hgk.2 (by unfold rootOffs DescAgree.rootBody at *; omega)
+  · obtain ⟨hk', hp⟩ := DescAgree.find?_range_some h
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
+    rw [DescAgree.node_unique (rootOffs P) (nodeCount P) hmono hk' hk hp hgk]
+
+/-- **A gate of a primitive root node reads its member's operands in the root activation**: member `0` of a primitive
+or Call node, else the one `(g - offset) / gates` holds. -/
+theorem reads_rootPrim (P : Prog) (c : Circuit) (hc : circuitOf P = .ok c) (hl : Desc.rootLaidOut P = true)
+    {k : Nat} (hk : k < nodeCount P) (hp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = true) {g : Nat}
+    (hg : g ∈ nodeGates P k) :
+    Flock.Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!)
+      (if (((P.defs[P.root]!).body.nodes[k]!).form == .prim ||
+          ((P.defs[P.root]!).body.nodes[k]!).form == .call) = true then 0
+        else (g - (rootOffs P)[k]!) / (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates) = .ok c.reads[g]! := by
+  obtain ⟨-, -, hK, hmono⟩ := DescAgree.rootLaidOut_spec P hl
+  have hgk := (DescAgree.mem_nodeGates P k g).1 hg
+  have hgG : g < gates P := by
+    have := DescAgree.offs_mono (rootOffs P) (nodeCount P) hmono (k + 1) (nodeCount P) (by omega) le_rfl
+    omega
+  obtain ⟨p, sc, hgate, -⟩ := circuitOf_gate hc hgG
+  unfold Flock.Program.Prog.gate at hgate
+  rw [if_neg (by unfold gates at hgG; omega)] at hgate
+  have hF : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega
+  rw [hF, Flock.Steps.run.eq_2, gateStep_at P g P.rootScope k (find_root P hl hk hg)] at hgate
+  have hd : P.rootScope.d = P.root := rfl
+  have ho : P.rootScope.off = 0 := rfl
+  simp only [hd, ho, Nat.sub_zero, hp, ite_true] at hgate
+  rcases hops : Flock.Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!)
+      (if (((P.defs[P.root]!).body.nodes[k]!).form == .prim ||
+          ((P.defs[P.root]!).body.nodes[k]!).form == .call) = true then 0
+        else (g - (P.defs[P.root]!).body.offsets[k]!) / (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates)
+    with e | ops
+  · rw [show rootOffs P = (P.defs[P.root]!).body.offsets from rfl, hops]
+    rw [hops] at hgate
+    exact absurd hgate (by simp [bind, Except.bind])
+  · rw [show rootOffs P = (P.defs[P.root]!).body.offsets from rfl, hops]
+    rw [hops] at hgate
+    simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hgate
+    rw [hgate.2.1]
 
 
 /-- **A batch member's spans** (`Desc.argSpans`) are its used parameter leaves' indices into the argument. -/
