@@ -18,7 +18,8 @@ The reduction reads four conditions, all definitions here, each for the statemen
 - **(C2) the per-row cap:** `pearlCProtocolDevRev1RowCap` and `pearlCTilesDevRev1RowCap` are rev1's protocol and tiles
   with the cap checked for every row (every credited row, per tile). An aggregate cap doesn't transfer: a row over its
   own cap is excluded in the split game but would be credited in the row-seeded one. The per-row cap implies the
-  aggregate one.
+  aggregate one. At a census k the served check caps each row at `ρr = 4ρ` and the tile at `ρ`
+  (`pearlCProtocolDevRev1RowCapAt`, `pearlCTilesDevRev1RowCapAt`), which (C2) at `ρr` bounds (`RowCapAtGamma.lean`).
 - **(C3) `CostModel.SplitClosed CM`:** regrouping rows into units doesn't change what a program costs or queries.
   `CostModel` is abstract, so this is a hypothesis on `CM`, a property of W1 (which charges instructions, not which rows
   form a unit), and no cryptographic assumption.
@@ -144,6 +145,25 @@ noncomputable def pearlCTilesDevRev1RowCap (d : PearlCDevice) (sem : PearlCSem Q
       ∀ i ∈ sem.passRows sh act (tl.rows g),
         sem.tileDebitRev1 d H s U (tl.unit g) {i} (tl.cols g) act ≤
           ρ * creditDevRev1 d sh * tileShare sh {i} (tl.cols g) }
+
+/-- **(C2) at a wider row cap:** `pearlCProtocolDevRev1` at the cap `ρ`, whose unit is within the cap when its debit is
+at most `ρ` times its credit and every row's is at most `ρr` times its share (`pearlCProtocolDevRev1RowCap` at `ρr`).
+The credit, `W_ref`, words and rules are rev1's at `ρ`. -/
+noncomputable def pearlCProtocolDevRev1RowCapAt (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ) :
+    Protocol Q R S :=
+  { pearlCProtocolDevRev1 d sem ρ with
+    capOK := fun H s U u act =>
+      (pearlCProtocolDevRev1 d sem ρ).capOK H s U u act ∧ (pearlCProtocolDevRev1RowCap d sem ρr).capOK H s U u act }
+
+/-- **(C2)'s tiles at a wider row cap** (card a6872606, option (a)): `pearlCTilesDevRev1` at the cap `ρ`, whose tile is
+within the cap when its debit is at most `ρ` times its credited rows' credit and every credited row's is at most `ρr`
+times that row's share (`pearlCTilesDevRev1RowCap` at `ρr`). The credit is rev1's at `ρ`, `(1 − ρ)·C` times the
+credited rows' share. -/
+noncomputable def pearlCTilesDevRev1RowCapAt (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ) :
+    TileRules Q R S :=
+  { pearlCTilesDevRev1 d sem ρ with
+    capOK := fun H s U g act =>
+      (pearlCTilesDevRev1 d sem ρ).capOK H s U g act ∧ (pearlCTilesDevRev1RowCap d sem ρr).capOK H s U g act }
 
 /-- **(C3) The cost model is closed under splitting rows into units:** every program on a workload has a program on its
 split workload whose transcript is the original's relabelled row by row (`splitTranscript`), at no more cost and no
