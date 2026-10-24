@@ -11,7 +11,7 @@ those like any other caller. This file is the harness's contract: how a point is
 ~~~text
 verity-bench plan SPEC       # expand a spec; each point's identity and its passing run, if any
 verity-bench run SPEC        # one recorded `research run --queue` per point without a passing run
-verity-bench check SPEC      # exit 0 only when every point has a passing run
+verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
@@ -165,8 +165,11 @@ which the dispatcher forwards. `benchmarks` is on its path, so a spec names an e
 the commit, `uv.lock`, the vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it
 as the run's key param, and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation
 passed, exit code 0 and a clean source tree. A requeued point first deletes its run's old `result.json`. The lookup
-reads the dispatching machine's catalog, so a machine that never pulled other machines' runs sees them as missing
-(BENCH-10).
+reads the machine's catalog, and when a point isn't there, the store's remote: once per commit it fetches and indexes
+the attempts this store lacks among those started since a day before the commit's committer date (a point's runs
+can't start before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points
+other machines ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the
+catalog alone.
 
 ## Out of scope here
 
