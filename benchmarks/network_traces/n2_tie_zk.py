@@ -1,8 +1,9 @@
 """The ingress tie in zero knowledge: each ingress link-window's IoTieRequest (`tie_service.IngressTie`, its unit
 `NetworkIngressTieWindow_v1{B=512,T=4,R=2,OWN=1}`) committed by the warden, registered on the link's own stream, proved
 by C-Flock `prove --zk` behind the Lean firewall, delivered, decided by the tie's verifier of record on its own
-statement from the advice (`IngressTie.outcome(advice=…)`), and `advised.IoTieVerdict` built from the stream's outcomes
-of record alone (`IngressTie.tie`).
+statement from the advice (`IngressTie.outcome(advice=…)`), and `advised.IoTieVerdict` on the link and the stream's
+registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read through `tie_service.Ties`, the
+advised link's tie source).
 
     python benchmarks/network_traces/n2_tie_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--jobs 2] [--debug-clear] [--dry]
@@ -284,8 +285,9 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
             f"{proof['opened_word']}, prove {row['prove']['session_s']} s (prove_total {row['prove']['prove_total_s']}"
             f" s, {row['prove']['proof_bytes']} B), verify {verify_s} s; "
             f"{'as expected' if row['as_expected'] else 'UNEXPECTED'}")
-    tied = tie.tie(stream, rd.advice, PROFILE)
-    return {"windows": rows, "tie": {"advice": tied.advice, "accepted": list(tied.accepted)}}
+    tied = TS.Ties(tie, stream).verdict(tie.link, rd.advice, PROFILE)
+    return {"windows": rows, "tie": {"link": tied.link, "registrations": list(tied.registrations),
+                                     "advice": tied.advice, "accepted": list(tied.accepted)}}
 
 
 def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
@@ -367,7 +369,8 @@ def prove(a) -> int:
     for name, res in done.items():
         rec = res["received"]
         good = (all(r["as_expected"] for r in res["windows"]) and tuple(res["tie"]["accepted"]) == EXPECT[name]
-                and res["tie"]["advice"] == AD.digest(rounds[name].advice)
+                and res["tie"]["advice"] == AD.digest(rounds[name].advice) and res["tie"]["link"] == LINK
+                and len(res["tie"]["registrations"]) == len(rounds[name].windows)
                 and not rec["verifier_found"] and rec["control"]["holds_all"])
         ok &= good
         summary["members"][name].update(res, ok=good)

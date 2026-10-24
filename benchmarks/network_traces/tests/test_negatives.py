@@ -489,9 +489,10 @@ def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_unit
             b = n.make.edit(a)
             assert codes(_n2(b, certified=a)) == ([] if n.code.startswith("StepUnit") else [n.code]), name
             assert codes(_n2(b)) == ([] if n.code.startswith("StepUnit") else [NG.ADVISED]), name
-    assert codes(AD.LinkAdvice(a, (3,))) == [f"{NG.ADVISED}.view"]
+    assert codes((AD.LinkAdvice(a, (3,)), None)) == [f"{NG.ADVISED}.view"]
     four = AD.LinkAdvice(a, (4,))
-    assert codes(dataclasses.replace(four, tie=AD.IoTieVerdict(AD.digest(four), (True,)))) == [f"{NG.ADVISED}.view"]
+    assert codes((four, AD.IoTieVerdict(NG.N2_LINK, NG.n2_registrations(1), AD.digest(four), (True,)))) == \
+        [f"{NG.ADVISED}.view"]
     assert NG.advised_codes(_n2(NG.extra_request(a)), 0, syncs, sigma, FRAMING, T, 4, RIN, OWN,
                             *heads[0]) == [f"{NG.ADVISED}.view"]
 

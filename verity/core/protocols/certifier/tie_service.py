@@ -33,7 +33,8 @@ drawn unit, and the proof's ``pub`` row opens, under the salt delivered, to the 
 to 1. Its public outputs are `verdict` and `advice`, A's `advised.digest`. A proof on another advice's view, another
 carry or another window's statement opens to another ``pub`` row and is refused.
 
-**The tie** (`IngressTie.tie`) is `advised.IoTieVerdict(advised.digest(A), accepted)`, one bit an ingress window, read
+**The tie** (`IngressTie.tie`) is `advised.IoTieVerdict(link, registrations, advised.digest(A), accepted)`: the link,
+the stream's registrations (each one's `registration.digest`, in order), A's digest and one bit a registration, read
 from the stream's outcomes of record alone. Window w is accepted when the stream's w-th registration is window w's, its
 outcome of record accepted, decided on the proof, naming A's digest, and when the link's statements chain from window
 0 (`io_request.chained`: window 0's carry-in is (0, 0, 0), each carry-out the next window's carry-in, the last between
@@ -42,7 +43,10 @@ one, and when the advised profile's framing isn't IoTieRequest's for A's prompt 
 at B, which `framing` gives) or its OWN isn't the tie's. So an accepted verdict on every window says what IoTieRequest's
 statements say together: each window's cells take the request in progress from its carry-in to its carry-out, so the
 link's j-th certified request is advice request j and its prompt v0's `prompt_len` prompt fields long (REDTEAM phase 9
-(b): a carried field count is held by the previous window's carry-out). That is the premise `advised.ends` reads.
+(b): a carried field count is held by the previous window's carry-out). That is the premise `advised.ends` reads, from
+the verifier's own tie source alone (`Ties`, the tie and its stream as `service.LinkWindows.ties`), never from what
+the prover delivers (REDTEAM phase 10), and `advised.view` holds the verdict to the link and the registrations the
+source records, so a verdict on another link or another ingress record isn't reused.
 
 **What it doesn't establish.** The prompt ids' values (the ingress-ids tie to the Commit's `c00.input/ids`,
 PROTOCOL.md, not built). That the warden's cells are the frames the ingress certifier counted is the device's: both are
@@ -432,7 +436,8 @@ class IngressTie:
                               session_roots={VALUE: draw.registration.record["roots"][0]["root"]})
 
     def tie(self, stream: S.Stream, advice: AD.LinkAdvice, profile: AD.AdvisedProfile) -> AD.IoTieVerdict:
-        """The tie of `advice` on this link (the module docstring), `advised.IoTieVerdict`: window w accepted when the
+        """The tie of `advice` on this link (the module docstring), `advised.IoTieVerdict` on this link and the stream's
+        registrations (each one's `registration.digest`, in order), one bit a registration: window w accepted when the
         stream's w-th registration is window w's and its outcome of record accepted, on the proof, naming `advice`'s
         digest, and the link's statements (`io_request.statements` on the registered roots and domains) chain from
         window 0; every window refused when they don't, when the stream has more or fewer registrations than `advice`
@@ -465,8 +470,38 @@ class IngressTie:
         except ValueError:
             chained = False
         held = chained and framed
-        return AD.IoTieVerdict(name, tuple(held and x for x in ok) + (False,) * (n - len(ok)))
+        accepted = tuple(held and x for x in ok) + (False,) * (len(log) - len(ok))
+        return AD.IoTieVerdict(self.link, tuple(R.digest(r) for r in log), name, accepted)
 
 
-__all__ = ["Cells", "IngressTie", "OUTPUTS", "PORTS", "PUBLIC", "ROWS", "VALUE", "VERIFIER", "WITNESS", "framing",
-           "gate", "prompt_lens"]
+@dataclass(frozen=True)
+class Ties:
+    """The verifier's own tie source on one link (`advised.TieSource`, `service.LinkWindows.ties`): the ingress tie and
+    its stream of record, the challenger's and the verifier of record's, never the prover's. `registrations` is the
+    stream's registrations (each one's `registration.digest`, in order) and `verdict` is `IngressTie.tie` on the
+    stream, so the advised link reads IoTieRequest's verdict only from outcomes the verifier of record decided on
+    proofs. Each raises `ValueError` on another link than the tie's, which the advised link reads as a refusal."""
+
+    ingress: IngressTie
+    stream: S.Stream
+
+    def __post_init__(self) -> None:
+        if type(self.ingress) is not IngressTie or type(self.stream) is not S.Stream or \
+                self.stream.spec.digest() != self.ingress.spec.digest():
+            raise ValueError("a tie source is an IngressTie and its own stream")
+
+    def _on(self, link: str) -> None:
+        if link != self.ingress.link:
+            raise ValueError(f"the tie source is on link {self.ingress.link!r:.80}, not {link!r:.80}")
+
+    def registrations(self, link: str) -> tuple[str, ...]:
+        self._on(link)
+        return tuple(R.digest(r) for r in self.stream.log)
+
+    def verdict(self, link: str, advice: AD.LinkAdvice, profile: AD.AdvisedProfile) -> AD.IoTieVerdict:
+        self._on(link)
+        return self.ingress.tie(self.stream, advice, profile)
+
+
+__all__ = ["Cells", "IngressTie", "OUTPUTS", "PORTS", "PUBLIC", "ROWS", "Ties", "VALUE", "VERIFIER", "WITNESS",
+           "framing", "gate", "prompt_lens"]

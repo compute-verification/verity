@@ -23,7 +23,7 @@ from verity.core.protocols.certifier.active import request_frame_count
 from verity.core.protocols.certifier.grid import Certifier, GridParams, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
-from advised_traffic import tied
+from advised_traffic import held
 
 DOC = json.loads((Path(__file__).parent / "fixtures" / "served_window.json").read_text())
 ADVICE = A.from_json(DOC["advice"])
@@ -52,7 +52,8 @@ def _ingress(rin, own=0, late=0):
 
 
 def _view(adv, sync):
-    return AD.view(tied(AD.LinkAdvice(adv, (sum(FRAMES),))), 0, T, R, [sync], SERVED, FRAMING)
+    link = AD.LinkAdvice(adv, (sum(FRAMES),))
+    return AD.view(link, 0, T, R, [sync], SERVED, FRAMING, **held(link))
 
 
 def _egress(adv):
@@ -113,7 +114,8 @@ def test_no_served_release_passes_before_its_requests_last_ingress_frame():
         assert not _accepts(ADVICE, _ingress(16, late=1), sync, 16)
     spread = _ingress(4)
     assert spread == [4, 4, 1, 0, 0, 0, 0, 0]
-    assert AD.ends(tied(AD.LinkAdvice(ADVICE, (9,))), FRAMING) == (1, 4, 6, 9)
+    link = AD.LinkAdvice(ADVICE, (9,))
+    assert AD.ends(link, FRAMING, **held(link)) == (1, 4, 6, 9)
     assert not _accepts(ADVICE, spread, INSTANT, 4)
     moved = _shifted(ADVICE, [0, 0, 1, 2])
     assert _accepts(moved, spread, INSTANT, 4)

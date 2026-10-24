@@ -1,6 +1,7 @@
 """The ingress tie through the proof service (`tie_service`): each ingress link-window's IoTieRequest proved (a
 stand-in proof, `standin.prove_tie`, decided by the verifier of record on its own statement), and `advised.IoTieVerdict`
-built from the stream's outcomes of record alone. An honest link is tied and `advised.ends` reads the tie; REDTEAM
+built from the stream's outcomes of record alone. An honest link is tied, `advised.ends` reads the tie, and the advised
+link takes it only from `Ties`, the tie and its stream as its source of record; REDTEAM
 phase 9's carried field count, its forged advice and phase 6's split are refused, as are an outcome on another advice,
 in the clear or late, a stream short of the advice's windows, out of order or past them, a profile that frames
 requests otherwise than the tie cuts them, and an unpinned size class. Nothing in `verity` but the tie service builds
@@ -18,8 +19,12 @@ from verity.ml.circuits.defs import bind
 from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC, io_request as Q, \
     io_tie as IT, service as SVC, tie_service as TS
 from verity.core.protocols.certifier.active import id_request
+from verity.core.protocols.certifier.grid import GridParams
+from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
+import signers
 import standin
 
 B = 512
@@ -97,16 +102,57 @@ class Run:
     def link(self, windows, advice) -> list[bool]:
         return [self.round(w, cells, advice).accepted for w, cells in enumerate(windows)]
 
+    def held(self, verdict):
+        """`advised.ends`' keyword arguments under `verdict`: it, the link and the source's registrations."""
+        return {"tie": verdict, "link_name": LINK, "registrations": TS.Ties(self.tie, self.stream).registrations(LINK)}
+
 
 def test_an_honest_link_is_tied_and_advised_ends_reads_the_tie(tmp_path):
     run, advice = Run(tmp_path), _advice(SPAN, RECEIVED)
     assert run.tie.layout["wit"] == ("cells", "salts", "switches", "pad") and run.tie.pad == 12
     assert run.link(HONEST, advice) == [True, True]
     verdict = run.tie.tie(run.stream, advice, PROFILE)
-    assert verdict == AD.IoTieVerdict(AD.digest(advice), (True, True))
-    assert AD.ends(replace(advice, tie=verdict), PROFILE.request_frames) == Q.ends(SPAN, B) == (1, 3, 4)
+    regs = tuple(R.digest(r) for r in run.stream.log)
+    assert verdict == AD.IoTieVerdict(LINK, regs, AD.digest(advice), (True, True))
+    assert AD.ends(advice, PROFILE.request_frames, **run.held(verdict)) == Q.ends(SPAN, B) == (1, 3, 4)
     public = run.stream.records[-1]["public"]
     assert public == {"verdict": 1, "advice": AD.digest(advice)}
+
+
+def test_the_advised_link_reads_the_tie_only_from_its_source_of_record(tmp_path):
+    """`Ties`, the tie and its stream as `LinkWindows.ties`: the advised link of the tie's name takes each window's view
+    under the verdict it gives; a link of another name takes none (the source refuses another link), as with no
+    source, and so does the link under the source of a stream whose outcomes are on a forged advice (REDTEAM phase 9)
+    or of another link's tie."""
+    advice = _advice(SPAN, RECEIVED, release=(1, 3, 5))
+    run = Run(tmp_path / "honest")
+    assert run.link(HONEST, advice) == [True, True]
+    ties = TS.Ties(run.tie, run.stream)
+    assert ties.registrations(LINK) == tuple(R.digest(r) for r in run.stream.log)
+    with pytest.raises(ValueError, match="not 'another'"):
+        ties.verdict("another", advice, PROFILE)
+    forged = Run(tmp_path / "forged")
+    assert forged.link(HONEST, _advice((5, 45, 5), RECEIVED, release=(1, 3, 5))) == [False, False]
+    elsewhere = Run(tmp_path / "elsewhere")
+    elsewhere.tie = TS.IngressTie("another", SHAPE, RUN, proof_deadline=60.0)
+    elsewhere.stream = elsewhere.tie.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test",
+                                            coins=lambda n: b"\x07" * n, clock=lambda: 0.0)
+    assert elsewhere.link(HONEST, advice) == [True, True]
+    with pytest.raises(ValueError, match="its own stream"):
+        TS.Ties(run.tie, elsewhere.stream)
+    key = signers.signer(tmp_path).public_key()
+    egress, ingress = GridParams(SHAPE.T, 3, 1), GridParams(SHAPE.T, SHAPE.R, 1)
+    sync_set, syncs = SyncSet((1, 2), (2, 4)), [ClockSync(1, 2)] * 2
+
+    def views(name, source):
+        lw = SVC.LinkWindows(name, egress, sync_set, key, RUN, signers.SESSION, ingress=ingress, proof_deadline=60.0,
+                             advised=PROFILE, ties=source)
+        return [lw._view(w, syncs, advice) for w in range(2)]
+
+    assert None not in views(LINK, ties)
+    assert views("another", ties) == views(LINK, None) == [None, None]
+    assert views(LINK, TS.Ties(forged.tie, forged.stream)) == [None, None]
+    assert views(LINK, TS.Ties(elsewhere.tie, elsewhere.stream)) == [None, None]
 
 
 @pytest.mark.parametrize("delta", [1, 5, 100])
@@ -140,7 +186,7 @@ def test_a_forged_advice_is_refused_from_window_0(tmp_path):
     verdict = run.tie.tie(run.stream, forged, PROFILE)
     assert verdict.accepted == (False, False)
     with pytest.raises(ValueError, match="doesn't accept each"):
-        AD.ends(replace(forged, tie=verdict), PROFILE.request_frames)
+        AD.ends(forged, PROFILE.request_frames, **run.held(verdict))
 
 
 def test_redteam_phase6_split_is_refused(tmp_path):
@@ -159,7 +205,7 @@ def test_redteam_phase6_split_is_refused(tmp_path):
     verdict = run.tie.tie(run.stream, split, PROFILE)
     assert verdict.accepted == (False, True)
     with pytest.raises(ValueError):
-        AD.ends(replace(split, tie=verdict), PROFILE.request_frames)
+        AD.ends(split, PROFILE.request_frames, **run.held(verdict))
 
 
 def test_an_outcome_on_another_advice_in_the_clear_or_late_is_refused(tmp_path):
@@ -196,10 +242,13 @@ def test_an_outcome_on_another_advice_in_the_clear_or_late_is_refused(tmp_path):
 
 
 def test_a_short_stream_one_out_of_order_or_one_past_the_advice_refuses_every_window(tmp_path):
+    """The verdict is one bit a registration of the stream, each refused, and `advised.ends` refuses it."""
     advice = _advice(SPAN, RECEIVED)
     run = Run(tmp_path / "short")
     assert run.round(0, HONEST[0], advice).accepted
-    assert run.tie.tie(run.stream, advice, PROFILE).accepted == (False, False)
+    assert run.tie.tie(run.stream, advice, PROFILE).accepted == (False,)
+    with pytest.raises(ValueError, match="doesn't accept each"):
+        AD.ends(advice, PROFILE.request_frames, **run.held(run.tie.tie(run.stream, advice, PROFILE)))
 
     run = Run(tmp_path / "order")
     c = run.tie.commit(1, HONEST[1])
@@ -207,13 +256,13 @@ def test_a_short_stream_one_out_of_order_or_one_past_the_advice_refuses_every_wi
     assert reg.record["window"] == run.tie.provenance(1)
     with pytest.raises(S.Refused):
         run.tie.register(run.stream, run.tie.registration(run.tie.commit(0, HONEST[0]), reg.digest))
-    assert run.tie.tie(run.stream, advice, PROFILE).accepted == (False, False)
+    assert run.tie.tie(run.stream, advice, PROFILE).accepted == (False,)
 
     run = Run(tmp_path / "past")
     assert run.link(HONEST, advice) == [True, True]
     own = [Q.own_frame(2, B)] + [IT.pad_cell(B)] * (SHAPE.N - 1)
     assert not run.round(2, own, advice).accepted
-    assert run.tie.tie(run.stream, advice, PROFILE).accepted == (False, False)
+    assert run.tie.tie(run.stream, advice, PROFILE).accepted == (False, False, False)
 
 
 @pytest.mark.parametrize("profile", [AD.AdvisedProfile(2, tuple(n + 1 for n in FRAMING), 1),

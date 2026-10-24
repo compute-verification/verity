@@ -32,9 +32,9 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
 - pending checks, by the names their drafts give them: ``NetworkAdvisedCounts_v1`` (N2-ADVICE's advised counts on an
   advised link, `LinkWindows.advised_check`: the egress head's counts the release of the advice's frames, the ingress
   head's the request frames the advice needs; ``.view`` when the advice is malformed, doesn't cover the window or its
-  requests aren't the certified ingress's (the tie, IoTieRequest's verdict, `advised.IoTieVerdict`), which refuses
-  every window), ``NetworkIoTie_v1`` (IO-TIE's tie of a drawn frame's token id to the Commit's at its (request,
-  position)) and ``NetworkFrameRead`` (its read of a frame under the record's frames root); and, until their owners
+  requests aren't the certified ingress's (the tie, IoTieRequest's verdict, `advised.IoTieVerdict`, from the
+  verifier's own tie source), which refuses every window), ``NetworkIoTie_v1`` (IO-TIE's tie of a drawn frame's
+  token id to the Commit's at its (request, position)) and ``NetworkFrameRead`` (its read of a frame under the record's frames root); and, until their owners
   name them, ``IoUnit.render`` (under the attested-edge design, the egress unit rendering committed outputs to bytes),
   ``StepUnit`` (PROVE-PATH: the compiled step Program's digest against the committed trace's, and the committed values
   passing it) and ``Commit`` (the Commit's opening under its registered root).
@@ -44,6 +44,7 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import json
 import shutil
@@ -550,45 +551,63 @@ def link_received(advice, request_frames, received: list[int]) -> list[int]:
     return got
 
 
+#: the advised link `n2_advice`'s stand-in tie names
+N2_LINK = "responses"
+
+
+def n2_registrations(windows: int) -> tuple[str, ...]:
+    """The stand-in tie source's record of `N2_LINK`'s ingress registrations: a stand-in digest a window."""
+    return tuple(hashlib.sha512(f"negatives ingress registration {N2_LINK}/{w}".encode()).hexdigest()
+                 for w in range(windows))
+
+
 def n2_advice(advice, request_frames, received: list[int], certified=None):
-    """I1 v0 advice as N2-ADVICE's `advised` reads it (`advised.LinkAdvice`: the advice, each window's `received`,
-    `link_received`'s, and the tie, IoTieRequest's verdict on the link, `advised.IoTieVerdict`). The verifier of
-    record takes the verdict only from IoTieRequest proofs it verified, so until IoTieRequest runs here this is its
-    stand-in, its reference in the clear on the prompt lengths: every ingress window accepted when the advice's prompt
-    lengths are `certified`'s requests', in arrival order, else every one refused. A tampering of the advice leaves the
-    certified ingress, so `certified` is the honest advice; by default `advice` itself. Raises ModuleNotFoundError
-    until N2-ADVICE lands."""
+    """I1 v0 advice as N2-ADVICE's `advised` reads it, (link, tie): `advised.LinkAdvice` (the advice and each window's
+    `received`, `link_received`'s) and the tie, IoTieRequest's verdict on `N2_LINK` (`advised.IoTieVerdict`), which
+    the verifier of record takes only from its own tie source, never beside the advice. Until IoTieRequest runs here
+    this is that source's stand-in, its reference in the clear on the prompt lengths: every ingress window accepted
+    when the advice's prompt lengths are `certified`'s requests', in arrival order, else every one refused. A
+    tampering of the advice leaves the certified ingress, so `certified` is the honest advice; by default `advice`
+    itself. Raises ModuleNotFoundError until N2-ADVICE lands."""
     AD = importlib.import_module(ADVISED_MODULE)
     link = AD.LinkAdvice(advice, tuple(link_received(advice, request_frames, received)))
     ok = certified is None or [q.prompt_len for q in advice.requests] == [q.prompt_len for q in certified.requests]
-    return replace(link, tie=AD.IoTieVerdict(AD.digest(link), (ok,) * len(link.received)))
+    regs = n2_registrations(len(link.received))
+    return link, AD.IoTieVerdict(N2_LINK, regs, AD.digest(link), (ok,) * len(regs))
 
 
-def advised_codes(link, window: int, syncs, sync_set, request_frames, T: int, R: int, RIN: int, OWN: int, ingress,
+def _n2_view(AD, advised, window: int, T: int, R: int, syncs, sync_set, request_frames):
+    """`advised.view` of the (link, tie) `n2_advice` gives, held to `N2_LINK` and its stand-in registrations."""
+    link, tie = advised
+    return AD.view(link, window, T, R, syncs, sync_set, request_frames, tie=tie, link_name=N2_LINK,
+                   registrations=n2_registrations(len(link.received)))
+
+
+def advised_codes(advised, window: int, syncs, sync_set, request_frames, T: int, R: int, RIN: int, OWN: int, ingress,
                   egress) -> list[str]:
     """N2-ADVICE's code on one advised link-window with heads of counts `ingress` and `egress`, as
     `LinkWindows.advised_check` decides it (`advised.view` under the declared `syncs`, Σ_sync and the link's framing,
-    then `advised.reference`), on the advice as N2 reads it (`n2_advice`): ``.view`` when the advice is malformed or
-    doesn't cover the window, the advised counts' when they refuse, else none. Raises ModuleNotFoundError until
-    N2-ADVICE lands."""
+    then `advised.reference`), on the advice as N2 reads it and its tie (`n2_advice`'s (link, tie)): ``.view`` when
+    the advice is malformed, isn't tied or doesn't cover the window, the advised counts' when they refuse, else none.
+    Raises ModuleNotFoundError until N2-ADVICE lands."""
     AD = importlib.import_module(ADVISED_MODULE)
     try:
-        v = AD.view(link, window, T, R, syncs, sync_set, request_frames)
+        v = _n2_view(AD, advised, window, T, R, syncs, sync_set, request_frames)
     except ValueError:
         return [f"{ADVISED}.view"]
     ok = AD.reference(T, RIN, OWN, ingress, egress, v.released, v.floor, v.received)
     return [] if ok else [ADVISED]
 
 
-def honest_heads(link, T: int, R: int, syncs, sync_set, request_frames,
+def honest_heads(advised, T: int, R: int, syncs, sync_set, request_frames,
                  own: int = 0) -> list[tuple[list[int], list[int]]]:
-    """Each window's (ingress, egress) head counts that an honest advised run of `link` (`n2_advice`) certifies under
-    N2-ADVICE's rule: the egress the advice's releases, the ingress the request frames its floor needs by each bucket,
-    the rest of the window's in its last bucket."""
+    """Each window's (ingress, egress) head counts that an honest advised run of `advised` (`n2_advice`'s (link,
+    tie)) certifies under N2-ADVICE's rule: the egress the advice's releases, the ingress the request frames its floor
+    needs by each bucket, the rest of the window's in its last bucket."""
     AD = importlib.import_module(ADVISED_MODULE)
     out = []
-    for w in range(len(link.received)):
-        v = AD.view(link, w, T, R, syncs, sync_set, request_frames)
+    for w in range(len(advised[0].received)):
+        v = _n2_view(AD, advised, w, T, R, syncs, sync_set, request_frames)
         ingress, prev = [], 0
         for t, f in enumerate(v.floor):
             ingress.append(f - prev + (own if t == 0 else 0))
