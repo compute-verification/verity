@@ -93,7 +93,8 @@ class Refs:
             ncb = self.win.nk[w][0] // 32
             units = (self.win.t // 32) * ncb
             live = [u for u in range(units) if not self.skip or 32 * (u // ncb) < self.g["m"]]
-            rec = JU.call_receipts(self.g["a"][w][:self.M], self.win.wt[w], salt, self.base(w), root_a, root_b, only=live)
+            b = self.win.wt[w]
+            rec = JU.call_receipts(self.g["a"][w][:self.M].to(b.device), b, salt, self.base(w), root_a, root_b, only=live)
             out = np.zeros((units, rec.shape[1]), dtype=np.uint32)
             out[live] = rec
             self.cache[key] = out
