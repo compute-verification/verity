@@ -25,6 +25,7 @@ time    a --arena-gib arena laid out as gate run 7's engine (`engine.pack`: embe
           plain          F.linear over the arena's bytes as bf16 (plain serving)
           scratch:LIB    kv_decode of each weight into scratch, then F.linear (engine.Hooks: the embedding whole)
           fused:LIB:NT   kv_gemm (the embedding's M rows decoded alone)
+          ARM*F          ARM's step with F times the layers (a step of another length, for the pass beside it)
         each op's and each step's GPU time (CUDA events), median over --reps steps; and each library's
         read-and-decode rate over the whole arena (kv_decode's checksum mode) beside the bare read (kv_read)
 ncu     layer 0's linears and the LM head, each arm at each M, every op behind a one-cycle kv_spin marker, for
@@ -424,16 +425,24 @@ class Model:
         lib.call("kv_read", self.kv.data_ptr() + layer * KV_LAYER_BYTES, KV_LAYER_BYTES, self.xr.data_ptr(),
                  4 * self.sms, stream(self.torch))
 
+    def scaled(self, f: float) -> list:
+        """The entries with round(f x layers) layers, the model's taken in turn (a longer or shorter step)."""
+        head, *body, tail = self.entries
+        per = len(body) // self.layers
+        groups = [body[i * per:(i + 1) * per] for i in range(self.layers)]
+        return [head] + [e for i in range(round(f * self.layers)) for e in groups[i % self.layers]] + [tail]
+
     def ops(self, arm: str, m: int):
-        """The step's ops in order: (kind, thunk)."""
+        """The step's ops in order: (kind, thunk). ARM*F: the step with F times the layers."""
+        arm, _, f = arm.partition("*")
         layer = -1
-        for name, off, N, Kd in self.entries:
+        for name, off, N, Kd in self.scaled(float(f)) if f else self.entries:
             if name == "embed":
                 yield "embed", lambda off=off: self.embed(arm, off, m)
                 continue
             if name.endswith(".qkv"):
                 layer += 1
-                yield "attention", lambda layer=layer: self.attention(layer)
+                yield "attention", lambda layer=layer % self.layers: self.attention(layer)
             yield name.split(".")[-1], lambda name=name, off=off, N=N, Kd=Kd: self.linear(arm, name, off, N, Kd, m)
 
     def step(self, arm: str, m: int, per_op: bool = False) -> tuple[float, dict]:
