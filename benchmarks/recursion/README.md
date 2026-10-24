@@ -54,12 +54,18 @@ The e2e run (proofs' lane) is to replace stages 4 to 6's loopback with the firew
 `--repeat` times (default 3) and every GPU step once with `WARM=1 RUNS=3` sessions inside it. Each invocation of 85 runs
 under its own `RESEARCH_RUN_DIR` (`out/steps/<step>/r<i>/`), so every record 85 writes is kept. `profile result` reads them:
 
-- **Prover wall** (`inner`, `oprove`): each timed session's `prove_total_s` from the prover's `LIVE` line (both reps and
-  the witness, the device's phases), and `e2e_s` (the session's wall, coin waits on the live verifier included). The
-  warm session is left out. Median and [min, max] over the timed sessions.
-- **Dominant phase**: the largest of the prover's own phase buckets (`t.*` of both reps' buckets, summed: `t.witness`,
-  `t.encoding_commitment`, `t.zerocheck`, `t.lincheck`, `t.ring_switch`, `t.ligerito`, `t.link`, and under the firewall
-  `t.firewall_recheck`, `t.lean_finish`, `t.zk_inner`), in the median session.
+- **Prover time** (`inner`, `oprove`; the table's "time s"): each timed session's `prove_total_s` from the prover's
+  `LIVE` line (both reps' `prove_s` summed: the device's phases, not the host witness). **Session e2e**: its `e2e_s`, from
+  the session's start to its verdict, the host witness and every wait on the live verifier (coins, `Finish`, the verdict)
+  included. The warm session is left out. Median and [min, max] over the timed sessions.
+- **Pace** (`session_s`, as 85's summary computes it): the time from the last warm session's verdict to the last timed
+  one's, over the timed sessions. Up to `FC_VERIFY_AHEAD` sessions overlap (one proving, the others waiting on verdicts),
+  so pace, not e2e, is the stage's throughput, and e2e is one session's latency.
+- **Dominant phase**: the largest part of the median session's `e2e_s`, among the prover's own phase buckets (`t.*` of both
+  reps' buckets, summed: `t.witness`, `t.encoding_commitment`, `t.zerocheck`, `t.lincheck`, `t.ring_switch`, `t.ligerito`,
+  `t.link`, and under the firewall `t.firewall_recheck`, `t.lean_finish`, `t.zk_inner`), the host witness (`h.witness`,
+  `witness_s`) and `wait.verifier`, what is left of `e2e_s` (the session waiting on its verifier: the `rec_live` proxy, or
+  `serve`, whose own `verify_s` and `handle_s` per session are in the row's `extra`).
 - **Peak memory**: the prover process's peak RSS (`/usr/bin/time -v` over the invocation, every session) and the leased GPU's
   memory in use, sampled every half second (`gpu-mib.txt`, a lower bound on the device peak). For CPU steps, each tool's
   `/usr/bin/time -v` peak RSS.

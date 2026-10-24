@@ -209,6 +209,7 @@ def prover_row(d: Path, stage: str, step: str, what: str) -> Row:
                "instances": med.get("instances"), "session_s": session_s, "verify_ahead": med.get("verify_ahead"),
                "witness_s": Stat.of(v.get("witness_s") for v in timed), "tp_s": Stat.of(v.get("tp_s") for v in timed),
                "serve_verify_s": Stat.of(v.get("verify_s") for v in served[-len(timed):]) if served else None,
+               "serve_handle_s": Stat.of(v.get("handle_s") for v in served[-len(timed):]) if served else None,
                "invocation_wall_s": tv["wall_s"] if tv else None, "prover_cpu_s": tv["cpu_s"] if tv else None,
                "cores_busy_before": text(d / "bgload.txt").strip() or None, "sizes": text(d / "sizes.txt").strip() or None,
                "why": [v.get("why") for v in rows if v.get("accepted") is not True][:3],
