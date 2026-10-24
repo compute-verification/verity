@@ -7,19 +7,25 @@ import Properties.RemoteAudit.Line.Record
 The code-to-model premises of `Properties.RemoteAudit.Line.LineHeld`, each a named `Prop` taken as a hypothesis: what
 ties the record a gate run's line reads (`Record`) to the trace (`Accounting.Remote.Held.Trace`) and the opening draw
 (`Accounting.Remote.Draw.Session`) the memory model states its guarantees over. Each is a gap the code does not close
-yet, and says which code would close it.
+yet, and says which code would close it. `LineHeld` reads them, like the model's premises, at the trace of record
+(`ofRecord`), whose verdict is the Lean verifier's on the record, so on every outcome where `Verified` holds.
 
-* `VerdictOfRecord`: the trace accepts wherever the Lean verifier accepts the record's session. The model's verdict is
-  the verifier's.
 * `Registered`: the trace's registered blocks are the node's.
-* `WindowsOfRecord`: on an accepting outcome the record has one group for each of the session's windows. The groups
-  are built from the verifier's summary by the line's Python glue (`benchmarks/remote_session/auditor_line.py`), not by
-  Lean.
-* `DrawsOfRecord`: on an accepting outcome the windows the line computes its pooled bound from
+* `WindowsOfRecord`: on an accepted record the line has one group for each of the session's windows. The groups are
+  built by the line's Python glue (`benchmarks/remote_session/auditor_line.py`'s `auditor_seen` and `verifier.py`'s
+  `paced_groups`: one group a window of `verifier.json`'s `windows_seen`), not by Lean. The Lean verifier's half is proved: an accepted session has its
+  parameters' `windows` windows (`Properties.RemoteAudit.AcceptedMinPasses`). It closes once the line's groups are
+  indexed by the windows of the record the Lean verifier returns (its `outcome` request's `record`,
+  `Session.State.summary`), with the auditor's times beside each, and `Node.windows` is the session's `params.windows`.
+* `DrawsOfRecord`: on an accepted record the windows the line computes its pooled bound from
   (`RemoteAudit.Pooled.pooled`) are the session's, each window's receipts and its draws (`Draw.Session.size`,
-  `Draw.Session.draws`). The record's windows are the verifier's record's (`audit.Record`), read by Python. With it,
-  `Properties.RemoteAudit.LineCoversSession` gives the line's W at least the session's pooled bound.
-* `DeltaOfNode`: the δ the line reads its pooled bound at is nonnegative, as a probability's bound is.
+  `Draw.Session.draws`). The line reads them through Python: `verifier.py`'s `recorded_windows` takes window `t` as
+  `(Σ lengths_t, profile.drawn.receipt)` of `verifier.json`'s record, whose profile `audit.Record.profile`
+  (`window_profile`) computes from the record. It closes once the line reads window `t` as the Lean record's
+  `(Σ lengths_t, drawn_t)` (`Session.WindowSummary`) and the draw's `size t` is that window's receipts:
+  `Properties.RemoteAudit.DrawIsSubset` gives the code's draws as `min(s, U)` of them, the model's
+  `Draw.Session.draws`. With it, `Properties.RemoteAudit.LineCoversSession` gives the line's W at least the session's
+  pooled bound.
 * `DrawFits`: the session's windows have fewer than `2^448` receipts (`m`, the draw's bound on `U_t`), so each draw's
   sampler word is the top bits of its stream's first SHA-512 block (`Accounting.Remote.Draw.width`). No code bounds a
   window's receipts yet; gate run 7's windows have 130,023,424.
@@ -31,9 +37,6 @@ model's own `Paced` premise read at `recordPace`.
 namespace Properties.RemoteAudit.Line
 
 open Accounting.Remote.Held Accounting.Remote.Draw
-
-/-- **The verdict of record**: the trace accepts on every outcome whose record's session the Lean verifier accepts. -/
-def VerdictOfRecord {Ω : Type} (T : Trace Ω) (rec : Ω → Record) : Prop := ∀ ω, Verified (rec ω) → T.accepts ω
 
 /-- **The registered store**: the trace's registered blocks are the node's. -/
 def Registered {Ω : Type} (T : Trace Ω) (node : Node) : Prop := T.blocks = node.blocks
@@ -47,9 +50,6 @@ bound from are the session's, each window's receipts and its draws. -/
 def DrawsOfRecord {n m : ℕ} {k : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m k κ X) (T : Trace (Coins n κ X))
     (rec : Coins n κ X → Record) : Prop :=
   ∀ ω, T.accepts ω → (rec ω).windows = Array.ofFn fun t => ((D.size t ω : ℕ), D.draws t ω)
-
-/-- **The line's δ**: the δ the line reads its pooled bound at is nonnegative. -/
-def DeltaOfNode (node : Node) : Prop := 0 ≤ node.delta
 
 /-- **The draw's word fits a block**: a window has fewer than `2^448` receipts, so each draw's sampler word lies in its
 stream's first SHA-512 block. -/

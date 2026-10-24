@@ -294,6 +294,31 @@ theorem check_ok {gs : Array Group} {per blocks blockBytes nodeBytes : ℕ} {wro
   exact ⟨Nat.not_lt.1 h1, Nat.not_lt.1 h4, not_lt.1 h5, not_lt.1 h6, not_lt.1 h7,
     not_lt.1 h8, not_lt.1 h9, not_lt.1 h10, not_lt.1 h11⟩
 
+/-- The pooled bound is read only at a `δ` above 0 and below 1. -/
+theorem pooled_delta {ws : Array (ℕ × ℕ)} {δ : ℚ} {b : _root_.RemoteAudit.Pooled.Bound}
+    (h : _root_.RemoteAudit.Pooled.pooled ws δ = .ok b) : 0 < δ ∧ δ < 1 := by
+  by_contra hc
+  have hδ : δ ≤ 0 ∨ 1 ≤ δ := by
+    rcases le_or_gt δ 0 with h0 | h0
+    · exact Or.inl h0
+    · exact Or.inr (not_lt.1 fun h1 => hc ⟨h0, h1⟩)
+  simp only [_root_.RemoteAudit.Pooled.pooled, hδ, if_true] at h
+  by_cases hs : ws.size = 0
+  · simp only [hs, if_true] at h
+    cases h
+  · simp only [hs, if_false] at h
+    cases h
+
+/-- A line the code computes read its pooled bound at a `δ` above 0 and below 1 (`Pooled.pooled` refuses any other), so
+a node whose `δ` is a nonnegative rational (`Node.delta`) leaves out no line the code computes. -/
+theorem line_delta {gs : Array Group} {per blocks blockBytes chipBytes nodeBytes : ℕ} {ws : Array (ℕ × ℕ)} {δ : ℚ}
+    {rates : Rates} {l : Line} (h : line gs per blocks blockBytes chipBytes nodeBytes ws δ rates = .ok l) :
+    0 < δ ∧ δ < 1 := by
+  unfold line at h
+  cases hp : _root_.RemoteAudit.Pooled.pooled ws δ with
+  | error e => rw [hp] at h; cases h
+  | ok bd => exact pooled_delta hp
+
 /-- A line `line` computes: `check` accepted the wrong receipts' bound it read (`l.wrong`), and its forms are
 `stretches` at each form's charge and that bound. -/
 theorem line_spec {gs : Array Group} {per blocks blockBytes chipBytes nodeBytes : ℕ} {ws : Array (ℕ × ℕ)} {δ : ℚ}
