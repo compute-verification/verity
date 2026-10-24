@@ -582,16 +582,21 @@ theorem calls_holds {defs : Array Def} {k : Nat} {vals : Nat → Bool} {fuel : N
     unfold RowHolds at this ⊢
     rw [this, s.1, s.2.1]
 
+/-- A copy's columns and bound inputs, as `place` writes them and as `Holds` reads them. -/
+theorem calls_form {df : Def} {c : Call} {o j k : Nat} {inp : List Nat} {vals : Nat → Bool} :
+    (fun y => vals (o + c.base + j * c.stride + y)) = (fun y => vals (o + (c.base + j * c.stride + y))) ∧
+      (c.bound (df.ref o inp k) j).map vals = c.boundV (df.refV (fun y => vals (o + y)) (inp.map vals) (vals k)) j := by
+  refine ⟨funext fun y => by congr 1; omega, ?_⟩
+  rw [bound_val]
+  exact congrArg (c.boundV · j) (funext fun x => ref_val df o inp k vals x)
+
 theorem holds_calls_form {defs : Array Def} {kv : Bool} {fuel : Nat} {df : Def} {c : Call} {o j k : Nat}
     {inp : List Nat} {vals : Nat → Bool} (hk : kv = vals k)
     (h : Holds defs kv fuel c.def_ (fun y => vals (o + c.base + j * c.stride + y)) ((c.bound (df.ref o inp k) j).map vals)) :
     Holds defs kv fuel c.def_ (fun y => vals (o + (c.base + j * c.stride + y)))
       (c.boundV (df.refV (fun y => vals (o + y)) (inp.map vals) kv) j) := by
-  have e1 : (fun y => vals (o + c.base + j * c.stride + y)) = (fun y => vals (o + (c.base + j * c.stride + y))) :=
-    funext fun y => by congr 1; omega
-  have e2 : (c.bound (df.ref o inp k) j).map vals = c.boundV (df.refV (fun y => vals (o + y)) (inp.map vals) kv) j := by
-    rw [bound_val, hk]
-    exact congrArg (c.boundV · j) (funext fun x => ref_val df o inp k vals x)
+  obtain ⟨e1, e2⟩ := calls_form (df := df) (c := c) (o := o) (j := j) (k := k) (inp := inp) (vals := vals)
+  subst hk
   rw [← e1, ← e2]
   exact h
 
@@ -679,5 +684,174 @@ theorem place_holds {defs : Array Def} {k : Nat} (vals : Nat → Bool)
         unfold RowHolds at this
         rw [this, he.1, he.2]
         rfl
+
+/-! ## Down the copies -/
+
+/-- **`Holds` passes to every copy inside**: a copy that satisfies its Definition has each copy `place` writes inside it
+satisfy its own, at the values of its columns and bound inputs. -/
+theorem holds_within {defs : Array Def} {k : Nat} {vals : Nat → Bool} {f d o : Nat} {inp : List Nat} {f' e o' : Nat}
+    {inp' : List Nat} (hw : Within defs k f d o inp f' e o' inp')
+    (h : Holds defs (vals k) f d (fun y => vals (o + y)) (inp.map vals)) :
+    Holds defs (vals k) f' e (fun y => vals (o' + y)) (inp'.map vals) := by
+  induction hw with
+  | refl => exact h
+  | call c j hc hj _ ih =>
+    simp only [Holds] at h
+    apply ih
+    obtain ⟨e1, e2⟩ := calls_form (df := _) (c := c) (o := _) (j := j) (k := k) (inp := _) (vals := vals)
+    rw [e1, e2]
+    exact h.2.1 c hc j hj
+
+/-- Down the copies, a Definition stays one the flags mark ordered, or one with no columns. -/
+theorem within_ordered {defs : Array Def} {k : Nat} {F : Array Bool}
+    (hF : ∀ d, F.getD d false = true → (defs.getD d default).ordered F = true)
+    (hfits : ∀ d, (defs.getD d default).fits defs = true) {f d o : Nat} {inp : List Nat} {f' e o' : Nat}
+    {inp' : List Nat} (hw : Within defs k f d o inp f' e o' inp') :
+    (F.getD d false = true ∨ (defs.getD d default).cols = 0) → (F.getD e false = true ∨ (defs.getD e default).cols = 0) := by
+  induction hw with
+  | refl => exact id
+  | @call f d o inp f' e o' inp' c j hc hj _ ih =>
+    intro h
+    apply ih
+    rcases h with h | h
+    · have ho := hF d h
+      unfold Def.ordered at ho
+      simp only [Bool.and_eq_true, List.all_eq_true] at ho
+      exact Or.inl (ho.2 c hc).1
+    · have hf := hfits d
+      unfold Def.fits at hf
+      simp only [Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq] at hf
+      have := hf.2 c hc
+      exact Or.inr (by omega)
+
+/-- Down the copies, each Definition is below the fuel left and the template's size. -/
+theorem within_lt {defs : Array Def} {k : Nat}
+    (hwf : ∀ d, d < defs.size → (defs.getD d default).wellFormed defs d = true) {f d o : Nat} {inp : List Nat}
+    {f' e o' : Nat} {inp' : List Nat} (hw : Within defs k f d o inp f' e o' inp') :
+    d < f → d < defs.size → e < f' ∧ e < defs.size := by
+  induction hw with
+  | refl => exact fun h1 h2 => ⟨h1, h2⟩
+  | @call f d o inp f' e o' inp' c j hc hj _ ih =>
+    intro h1 h2
+    have hw := hwf d h2
+    unfold Def.wellFormed at hw
+    simp only [Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq, beq_iff_eq] at hw
+    have := (hw.2 c hc).1.1
+    exact ih (by omega) (by omega)
+
+/-! ## The unit -/
+
+/-- **Every copy of the root's calls satisfies its Definition**, at column values that satisfy the unrolled rows. -/
+theorem rows_holds {t : Tmpl} {acc : Acc} (hwf : t.wellFormed = true) (ha : t.apart = true) (hr : t.rows = .ok acc)
+    (vals : Nat → Bool) (hsat : ∀ x < (t.defs.getD t.root default).cols, RowHolds vals acc x) :
+    ∀ c ∈ (t.defs.getD t.root default).calls.toList, ∀ j < c.count,
+      Holds t.defs (vals t.constPos) t.defs.size c.def_ (fun y => vals (c.base + j * c.stride + y))
+        ((c.bound ((t.defs.getD t.root default).ref 0 [] t.constPos) j).map vals) := by
+  unfold Tmpl.wellFormed at hwf
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range, decide_eq_true_eq, beq_iff_eq] at hwf
+  obtain ⟨⟨⟨hroot, -⟩, -⟩, -⟩ := hwf
+  have ha' := ha
+  unfold Tmpl.apart at ha'
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range, decide_eq_true_eq] at ha'
+  obtain ⟨hd, hk⟩ := ha'
+  have hfits : ∀ (d : Nat) (df : Def), t.defs[d]? = some df → df.fits t.defs = true := fun d df hdf => by
+    obtain ⟨h1, e⟩ := getD_of_some hdf; rw [← e]; exact (hd d h1).1
+  have hapart : ∀ (d : Nat) (df : Def), t.defs[d]? = some df → df.apart t.defs = true := fun d df hdf => by
+    obtain ⟨h1, e⟩ := getD_of_some hdf; rw [← e]; exact (hd d h1).2
+  unfold Tmpl.rows at hr
+  obtain ⟨acc1, h1, h2⟩ := bind_ok hr
+  have hdf : t.defs[t.root]? = some (t.defs.getD t.root default) := by
+    simp [Array.getD_eq_getD_getElem?, hroot]
+  have hfit := hfits _ _ hdf
+  have hap := hapart _ _ hdf
+  generalize hdfe : t.defs.getD t.root default = df at hdf hsat hk h1 hfit hap ⊢
+  simp only [place, hdf] at h1
+  obtain ⟨acc2, h3, h4⟩ := bind_ok h1
+  unfold Def.fits at hfit
+  simp only [Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq] at hfit
+  have hp := spans_pairwise hap
+  unfold Def.spans at hp
+  rw [List.pairwise_filter, List.pairwise_append, List.pairwise_map, List.pairwise_map] at hp
+  obtain ⟨-, -, hprc⟩ := hp
+  let fr := fun (acc : Acc) (r : Nat × Array Nat × Array Nat) =>
+    write acc (0 + r.1) (Flock.Tmpl.canon (r.2.1.map (df.ref 0 [] t.constPos)))
+      (Flock.Tmpl.canon (r.2.2.map (df.ref 0 [] t.constPos)))
+  have hs2 : Sized acc2 := foldlM_inv (f := fr) Sized (fun _ _ u u' hu hw => write_sized hw hu) (sized_empty _) h3
+  have hc2 : Clean acc2 := foldlM_inv (f := fr) Clean (fun _ _ u u' hu hw => write_clean hw hu) (clean_empty _) h3
+  have this := calls_holds (vals := vals) hfits (fun hp hs hc hf hsat' => place_holds vals hfits hapart _ hp hs hc hf hsat')
+    hap h4 hs2 hc2 (fun c hc j hj y hy1 hy2 => ?_) (fun c hc j hj y hy1 hy2 => ?_)
+  · intro c hc j hj
+    have h := this c hc j hj
+    simp only [Nat.zero_add] at h
+    exact h
+  · obtain ⟨s1, s2⟩ := copy_in_span hj hy1 hy2
+    have hcf := hfit.2 c hc
+    have hfree : Free (0 + y) (Acc.empty df.cols) := by
+      simp only [Free, Acc.empty, Array.getD_eq_getD_getElem?, Array.getElem?_replicate]
+      rw [ite_eq_left (by omega)]; rfl
+    refine free_of_same3 (foldlM_inv (f := fr) (fun a => Same3 (0 + y) a (Acc.empty df.cols))
+      (fun r hr u u' hu hw => same3_trans (write_same3 hw fun e => ?_) hu) ⟨rfl, rfl, rfl⟩ h3) hfree
+    have := hprc _ (List.mem_map.2 ⟨r, hr, rfl⟩) _ (List.mem_map.2 ⟨c, hc, rfl⟩) (by simp)
+      (by simp only [decide_eq_true_eq]; omega)
+    simp only [Apart] at this
+    omega
+  · obtain ⟨s1, s2⟩ := copy_in_span hj hy1 hy2
+    have hcf := hfit.2 c hc
+    have hlt := hk _ (List.mem_filter.2 ⟨List.mem_append.2 (Or.inr (List.mem_map.2 ⟨c, hc, rfl⟩)),
+      by simp only [decide_eq_true_eq]; omega⟩)
+    simp only at hlt
+    have s := write_same3 h2 (x := 0 + y) (by omega)
+    have := hsat (0 + y) (by omega)
+    unfold RowHolds at this ⊢
+    rw [← s.1, ← s.2.1]
+    exact this
+
+/-- **The eval composition**: column values that satisfy a templated unit's unrolled rows take, at every copy placed
+under one of the root's calls past the input rows, at any depth, the value of that copy's Definition on the values of
+its bound inputs, the constant at its column's value. -/
+theorem rows_eval {t : Tmpl} {acc : Acc} (hwf : t.wellFormed = true) (ha : t.apart = true) (ho : t.ordered = true)
+    (hr : t.rows = .ok acc) (vals : Nat → Bool) (hsat : ∀ x < (t.defs.getD t.root default).cols, RowHolds vals acc x)
+    {c : Call} {j f e o : Nat} {inp : List Nat} (hc : c ∈ (t.defs.getD t.root default).calls.toList)
+    (hb : t.inCols ≤ c.base) (hj : j < c.count)
+    (hw : Within t.defs t.constPos t.defs.size c.def_ (c.base + j * c.stride)
+      (c.bound ((t.defs.getD t.root default).ref 0 [] t.constPos) j) f e o inp) :
+    ∀ y < (t.defs.getD e default).cols, vals (o + y) = t.evalDef e (inp.map vals) (vals t.constPos) y := by
+  have hH := holds_within hw (rows_holds hwf ha hr vals hsat c hc j hj)
+  have hwf' := hwf
+  unfold Tmpl.wellFormed at hwf'
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range, decide_eq_true_eq, beq_iff_eq] at hwf'
+  obtain ⟨⟨⟨hroot, -⟩, -⟩, hdefs⟩ := hwf'
+  have hcroot : c.def_ < t.root := by
+    have hw0 := hdefs t.root hroot
+    unfold Def.wellFormed at hw0
+    simp only [Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq, beq_iff_eq] at hw0
+    exact (hw0.2 c hc).1.1
+  obtain ⟨hef, hes⟩ := within_lt hdefs hw (by omega) (by omega)
+  unfold Tmpl.ordered at ho
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at ho
+  obtain ⟨hord, hroot'⟩ := ho
+  have hF : ∀ d, (flags t.defs).getD d false = true → (t.defs.getD d default).ordered (flags t.defs) = true := by
+    intro d hd
+    by_cases h : d < t.defs.size
+    · exact imp_of_or (hord d h).2 hd
+    · rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega)]; rfl
+  have hfitsAll : ∀ d, (t.defs.getD d default).fits t.defs = true := by
+    intro d
+    by_cases h : d < t.defs.size
+    · exact (hord d h).1
+    · rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega)]; rfl
+  unfold Tmpl.rootOrdered at hroot'
+  simp only [Bool.and_eq_true, Bool.or_eq_true, List.all_eq_true, decide_eq_true_eq, beq_iff_eq,
+    List.mem_append] at hroot'
+  have h0 : (flags t.defs).getD c.def_ false = true ∨ (t.defs.getD c.def_ default).cols = 0 := by
+    rcases hroot'.2 c hc with hin | ⟨⟨-, hFc⟩, -⟩
+    · exact Or.inr (by omega)
+    · exact Or.inl hFc
+  intro y hy
+  rcases within_ordered hF hfitsAll hw h0 with hFe | hz
+  · rw [holds_eval hF f hFe hH y hy]
+    unfold Tmpl.evalDef
+    rw [eval_fuel hdefs f t.defs.size e hef hes hes]
+  · omega
 
 end Flock.TmplEval
