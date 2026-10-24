@@ -1,8 +1,8 @@
 """`compose_circuit.py --cache`: the ranks a machine audits compose each template once. A circuit composed bound to one partition
 and program, kept, and taken bound to another (`restamp`) is byte for byte, with compose's line, the circuit composed bound to
-that one, its caller never composing, whatever the reads' chunks split; a cache key moves with the template and with any
-composing file, and with nothing else; and a kept circuit that changed, a binding not in the file once, or a binding that is
-not two SHA-512 digests is refused, writing nothing. A toy unit Definition."""
+that one, its caller never composing, whatever the reads' chunks split; a cache key moves with the template, the reads' layout
+and any composing file, compose_circuit's own among them, and with nothing else; and a kept circuit that changed, a binding
+not in the file once, or a binding that is not two SHA-512 digests is refused, writing nothing. A toy unit Definition."""
 
 from __future__ import annotations
 
@@ -63,22 +63,33 @@ def test_a_kept_circuit_taken_with_another_binding_is_the_circuit_composed_bound
 
 
 def test_a_cache_key_moves_with_the_template_and_with_any_composing_file(tmp_path, monkeypatch):
-    """The key is the template's and every ``.py`` file's of the packages: another template or a changed file moves it; a file
-    that is not Python, or one in ``__pycache__``, does not."""
+    """The key is the template's, the reads', compose_circuit's own bytes' and every ``.py`` file's of the packages: another
+    template, the reads in slots, a changed composer or a changed file moves it; a file that is not Python, or one in
+    ``__pycache__``, does not. ``--reads slots`` is refused without ``--template``."""
     pkg = tmp_path / "composecachekeypkg"
     (pkg / "sub").mkdir(parents=True)
     (pkg / "__pycache__").mkdir()
     (pkg / "__init__.py").write_text("")
     (pkg / "sub" / "lower.py").write_text("X = 1\n")
+    composer = tmp_path / "compose_circuit.py"
+    composer.write_bytes(Path(CC.__file__).read_bytes())
     monkeypatch.syspath_prepend(str(tmp_path))
-    key = lambda t="T{N=1}": CC.cache_key(t, ("composecachekeypkg",))  # noqa: E731
+    key = lambda t="T{N=1}", reads="inline": CC.cache_key(t, reads, ("composecachekeypkg",), composer)  # noqa: E731
     k = key()
-    assert key() == k != key("T{N=2}")
+    assert key() == k != key("T{N=2}") and key(reads="slots") not in (k, key("T{N=2}"))
     (pkg / "notes.txt").write_text("not code")
     (pkg / "__pycache__" / "lower.py").write_text("X = 3\n")
     assert key() == k
     (pkg / "sub" / "lower.py").write_text("X = 2\n")
-    assert key() != k
+    k2 = key()
+    assert k2 != k
+    composer.write_bytes(composer.read_bytes() + b"\n")
+    assert key() != k2
+    monkeypatch.setattr(sys, "argv", ["compose_circuit.py", "--input-set", str(tmp_path), "--out", str(tmp_path / "c.txt"),
+                                      "--reads", "slots"])
+    with pytest.raises(SystemExit) as e:
+        CC.main()
+    assert e.value.code == 2
 
 
 @pytest.mark.slow
