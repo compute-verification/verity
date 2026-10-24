@@ -51,7 +51,6 @@ def virtual(rehearsal, tmp_path_factory):
                            report=e2e.run(_args(rehearsal.runs, out), [], clock=lambda: 0.0))
 
 
-@pytest.mark.slow
 def test_the_honest_run_is_accepted_and_each_negative_refused_for_its_own_reason(virtual):
     r = virtual.report
     windows = virtual.plan["windows"]
@@ -71,7 +70,6 @@ def test_the_honest_run_is_accepted_and_each_negative_refused_for_its_own_reason
     assert r["proofs"]["ran"] is False and r["proofs"]["cost_per_link_window"] is None
 
 
-@pytest.mark.slow
 def test_every_negative_of_the_harness_is_in_the_report_by_its_code(virtual):
     """negatives.suite's rows: the shim's late, extra, drop and the head refused by their codes, token passing N2 (only
     the I/O tie, pending, may refuse it), and the advice and Commit negatives not run until their artifacts exist."""
@@ -83,7 +81,6 @@ def test_every_negative_of_the_harness_is_in_the_report_by_its_code(virtual):
     assert virtual.report["ok"] is True
 
 
-@pytest.mark.slow
 def test_the_claim_is_in_both_files(virtual):
     doc = json.loads((virtual.out / "report.json").read_text())
     md = (virtual.out / "report.md").read_text()
@@ -165,7 +162,6 @@ def _kept(d: Path, runs: dict) -> Path:
     return d
 
 
-@pytest.mark.slow
 def test_proofs_of_these_runs_are_adopted_and_another_runs_refused(rehearsal, tmp_path):
     runs = e2e.collect([rehearsal.runs], tmp_path)
     kept = _kept(tmp_path / "n2zk", runs)
@@ -178,7 +174,8 @@ def test_proofs_of_these_runs_are_adopted_and_another_runs_refused(rehearsal, tm
     r = e2e.run(args, [], clock=lambda: 0.0)
     assert r["ok"] is True and r["proofs"]["adopted"] == str(kept) and r["proofs"]["cost_per_link_window"]
     assert r["negatives"]["tampered"]["proved_refused_windows"] == [0] and r["negatives"]["extra"]["proofs_held"]
-    assert "Proofs: adopted from" in (tmp_path / "out" / "report.md").read_text()
+    md = (tmp_path / "out" / "report.md").read_text()
+    assert "Proofs: adopted from" in md and "- honest ingress: 10 bytes; witness pieces found: none" in md
     with tarfile.open(tmp_path / "n2zk.tgz", "w:gz") as tar:
         tar.add(kept, arcname="n2zk")
     args.proofs, args.out = str(tmp_path / "n2zk.tgz"), str(tmp_path / "out2")

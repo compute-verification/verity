@@ -3,7 +3,8 @@ honest head check passes its reference; window 0's egress head one count off, co
 counts and its signed digest; the extra run's egress heads fail on their counts alone. The adapter's rows carry the head
 check's arguments in its signature's order: around an identity of the head check's signature it returns them. The
 verifier's own ``pub`` row is the prover's. Each builder `n2_zk.builders` attaches, called as C-Flock's lowering calls
-it, traces to its part's own gates. Nothing here lowers or proves (`n2_zk.prove` does, on a node)."""
+it, traces to its part's own gates. The scan of what the verifier received leaves out exactly the witness pieces the
+public circuit holds. Nothing here lowers or proves (`n2_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -106,3 +107,24 @@ def test_the_rows_hold_the_head_checks_arguments_and_the_verifier_derives_the_pu
                 mine = n2.public_words(rd.lw, x.window, d, bytes.fromhex(x.root), x.opening.records[d].certificate.digest)
                 assert mine == got["pub"], (name, x.window, d)
     assert HC.Shape(*runs["honest"].lw.head_key(0)[:2]).HL % 2 == 1
+
+
+def _needles(blobs: dict[str, bytes]) -> dict[bytes, str]:
+    out: dict[bytes, str] = {}
+    for name, b in blobs.items():
+        for o in range(0, len(b) - 15, 16):
+            x = b[o:o + 16]
+            for nd in (x, x.hex().encode(), x.hex().upper().encode()):
+                out.setdefault(nd, name)
+    return out
+
+
+def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
+    scan = SimpleNamespace(PIECE=16, needles=_needles, find=lambda data, t: {n: 1 for nd, n in t.items() if nd in data})
+    blobs, held = n2.blobs_of(runs["honest"], 0)
+    every = {b[o:o + 16] for b in blobs.values() for o in range(0, len(b) - 15, 16)}
+    head = blobs["head 0"][16:32]
+    kept, held_kept, out = n2.public_pieces(scan, blobs, held, b"g 1 2\n" + bytes(16).hex().encode() + b"\n" + head)
+    assert out == sorted(x.hex() for x in every & {bytes(16), head})
+    assert set(kept.values()) == every - {bytes(16), head} and len(kept) == len(set(kept.values()))
+    assert held_kept == {k for k in kept if k.split(" @")[0] in held} and held_kept
