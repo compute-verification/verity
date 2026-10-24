@@ -6,3 +6,4 @@ import RemoteAudit.Window
 import RemoteAudit.Session
 import RemoteAudit.Registry
 import RemoteAudit.Wire
+import RemoteAudit.Store

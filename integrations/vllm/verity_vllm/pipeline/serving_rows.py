@@ -711,11 +711,12 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
     under (``commitment``: the reader's committer's, vllm-v1 or a TP rank's rows-sha512), the research run ``run``, the row, the
     committer, the served Programs' ``digests`` and, for Programs a registered compiler made from advice, ``binding``: the
-    compiler's digest and the advice's hiding root, `pipeline.advice_windows.binding`, and ``transfer_gates``, the templates it lists
-    as holding transfer gates, `population`), ``partition.json``, the index and M0's bodies.  The window is ``served``;
+    compiler's digest and the advice's hiding root, `pipeline.advice_windows.binding`), ``partition.json``, the index and M0's bodies.  The
+    window is ``served``;
     with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
     serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
-    loaded its Programs with as ``reuse``.  A
+    loaded its Programs with as ``reuse``.  ``transfer_gates`` are the templates the registered compiler lists as holding transfer
+    gates, which the window's law proves whole (`population`).  A
     row-table layout takes the serving loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots":
     {engine step: root}}`` (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values
     and writes only ``out_dir``."""
