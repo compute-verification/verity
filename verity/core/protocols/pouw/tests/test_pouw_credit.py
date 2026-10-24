@@ -140,6 +140,7 @@ PERIOD_EXPECT = {
     "other-model": ("weights", "which is no checkpoint role credit pins: " + Cr.MODEL_FIX),
     "other-sw": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
     "zero-codes": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
+    "stale-pin": ("pin", "past its freshness floor"),
 }
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
@@ -698,6 +699,29 @@ def test_a_window_whose_session_ran_a_branch_commit_refuses_the_period(seed):
     on_main = {**d, "main": [rc.BRANCH, *d["main"]]}
     got, refused = Cr._period_outcomes(*(on_main[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     assert refused is None and len(got["windows"]) == len(d["windows"])
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_the_freshness_floor_counts_from_the_open_pin_not_mains_head(seed):
+    """CMP74-FOLLOW: a period's open records the commit it opened under (`credit.committed_pin`) and a freshness floor
+    (`credit.committed_floor`, first-parent commits, default 0 when the open records no floor). A window counts only when
+    its pin is at most the floor behind the open pin on main's line, counted from that pin and never from main's head
+    (`credit._pin_hygiene`): a window past the open pin plus the floor is refused, but a window within it stays credited
+    after main moves on, since nothing reads main's head. The honest period, whose open pin is older than every window,
+    earns."""
+    got, refused = _period("stale-pin", seed)
+    assert got is None and refused[0] == "pin" and "past its freshness floor" in refused[1], refused
+    # fresh at open (MAIN[4] is four first-parent commits behind the open pin MAIN[0], within a floor of four), and still
+    # fresh after main gains five commits, since the floor counts from the open pin and nothing reads main's head.
+    d = cases.period_instance(random.Random(f"floor/{seed}"), period_pin=rc.MAIN[0], pin_floor=4, stale_window=0)
+    assert Cr.committed_pin(d["ledger"], d["name"]) == rc.MAIN[0] and Cr.committed_floor(d["ledger"], d["name"]) == 4
+    assert Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)[1] is None
+    ahead = [hashlib.sha1(b"ahead %d" % j).hexdigest() for j in range(5)]
+    moved = {**d, "main": [*ahead, *d["main"]]}
+    assert Cr._period_outcomes(*(moved[k] for k in cases.PERIOD_KEYS), rc.lms_verify)[1] is None
+    h = cases.period_instance(random.Random(f"honest/{seed}"))
+    assert Cr.committed_pin(h["ledger"], h["name"]) == rc.MAIN[-1] and Cr.committed_floor(h["ledger"], h["name"]) is None
+    assert Cr._period_outcomes(*(h[k] for k in cases.PERIOD_KEYS), rc.lms_verify)[1] is None
 
 
 def _work(layout: dict) -> int:
