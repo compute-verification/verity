@@ -40,7 +40,8 @@
 #     --send BUILD_RUN/out/lib/sm_90a/h1u.so --send ... --send BUILD_RUN/out/lib/sm_90a/BUILD.txt \
 #     -- bash benchmarks/hash/dither/job.sh sm_90a h1u
 #
-# Env: VARIANTS (default below), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default kernels-dither-hb), LEASE (gpu-lease flags, default
+# Env: VARIANTS (default below), BUILDS (the base libraries a build makes, default "kb h1noise h1u h1zref h1c" and
+# kb_pg on sm_100a; set empty, only the variants), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default kernels-dither-hb), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
@@ -79,8 +80,8 @@ if [ "$BENCH" = build ]; then
   for arch in ${ARCH//,/ }; do
     dir="$OUT/lib/$arch"
     mkdir -p "$dir"
-    builds=(kb h1noise h1u h1zref h1c)
-    [ "$arch" = sm_100a ] && builds+=(kb_pg)
+    read -r -a builds <<< "${BUILDS-kb h1noise h1u h1zref h1c}"
+    [ "$arch" = sm_100a ] && [ -z "${BUILDS+set}" ] && builds+=(kb_pg)
     # h1c.cu's variants in $H1C_VARIANTS (NAME=FLAGS: h1c_NAME.so), for z|zprof
     for v in ${H1C_VARIANTS:-}; do builds+=("h1c_${v%%=*}:h1c:${v#*=}"); done
     # h1u.cu's knobs: H1U_MINB (CTAs an SM the registers leave room for), H1U_PF (the fused form prefetches too), H1U_PD
