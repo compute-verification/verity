@@ -35,7 +35,10 @@
 // (stag, j, ns, 8 m_j) is the same in every row of its table, so where a table has at most SEGMID_MAX segments a row, a
 // segments block compresses each of its segments' first blocks once (one lane each) and its threads start from them.
 // H1C_SMINB = B: the segments kernel's registers leave room for B blocks an SM (with H1C_SEGMID it holds 120 registers
-// on sm_120a, 4 blocks, against 96 without; 96 on sm_90a and sm_100a).
+// on sm_120a, 4 blocks, against 96 without; 96 on sm_90a and sm_100a).  H1C_NMID = 1 (H1C_HB): a node's first 129 bytes
+// (frame, "node", the table's domain, uint(lv) and seven of uint(idx)'s length's eight bytes) are its (table, level)'s,
+// so h1c_levels' block takes each level's Snap once (a thread a level, before its first level) and h1c_level's block
+// its level's, and every node resumes from it: two compressions a node rather than three, as h1c_a_* already do.
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -69,14 +72,17 @@
 #ifndef H1C_SEGMID
 #define H1C_SEGMID 0
 #endif
+#ifndef H1C_NMID
+#define H1C_NMID 0
+#endif
 // unset, h1c_segs' bounds name no blocks an SM: __launch_bounds__(HT, 1) lets it take 136 registers on sm_90a, not 96
 #ifdef H1C_SMINB
 #define H1C_SEGS_BOUNDS __launch_bounds__(HT, H1C_SMINB)
 #else
 #define H1C_SEGS_BOUNDS __launch_bounds__(HT)
 #endif
-static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK && !H1C_SEGMID),
-              "H1C_LVF, H1C_DOMSEG, H1C_MK and H1C_SEGMID are H1C_HB's");
+static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK && !H1C_SEGMID && !H1C_NMID),
+              "H1C_LVF, H1C_DOMSEG, H1C_MK, H1C_SEGMID and H1C_NMID are H1C_HB's");
 static_assert(H1C_MK || !H1C_MID, "H1C_MID's snapshots are published at H1C_MK's barriers");
 static_assert(H1C_MK || !H1C_LVB, "H1C_LVB's subtrees are H1C_MK's leaves kernel's");
 
@@ -1134,13 +1140,64 @@ __device__ __forceinline__ void hb_node(const H1Tab& T, uint8_t* b, int lv, long
     for (int k = 0; k < 8; ++k) T.root[k] = out[k];
 }
 
+#if H1C_NMID
+// a level's node Snap: h, tot and the one byte past the first block (NSNAP words); levels from a launch's first up to
+// NMAXD of them have one in h1c_levels, the rest hash through hb_node
+constexpr int NSNAP = 10, NMAXD = 32;
+__device__ __forceinline__ void node_snap(const H1Tab& T, int lv, uint8_t* b, u64* o) {
+  Hb s;
+  hb_init(s, b);
+  hb_frame(s, "node", 4);
+  hb_be(s, 64, 8);
+  hb_words(s, T.dom, 8);
+  hb_uint(s, (u64)lv);
+  hb_zeros(s, 7);
+  hb_save(s, o);
+}
+// hb_node's message from its level's Snap
+__device__ __forceinline__ void hb_node_snap(const H1Tab& T, uint8_t* b, int lv, long long idx, const u64* snap) {
+  const long long width = 1LL << T.depth;
+  long long off = 0;
+  for (int e = 0; e < lv; ++e) off += width >> e;
+  const u64* in = T.level + 8 * (off + 2 * idx);
+  u64* o = T.level + 8 * (off + (width >> lv) + idx);
+  Hb s;
+  hb_load(s, snap, b);
+  int l = 1;
+  while (l < 8 && (idx >> (8 * l))) ++l;
+  hb_u8(s, (u32)l);  // uint(idx)'s length's low byte: the Snap holds its other seven
+  hb_be(s, (u64)idx, l);
+  hb_put8(s, 64);
+  hb_words(s, in, 8);
+  hb_put8(s, 64);
+  hb_words(s, in + 8, 8);
+  u64 out[8];
+  hb_final(s, out);
+#pragma unroll
+  for (int k = 0; k < 8; ++k) o[k] = out[k];
+  if (lv == T.depth - 1)
+#pragma unroll
+    for (int k = 0; k < 8; ++k) T.root[k] = out[k];
+}
+#endif
+
 extern "C" __global__ void __launch_bounds__(HT) h1c_level(const H1Tab* __restrict__ tabs, int ntab, int lv) {
   __shared__ __align__(16) uint8_t bf[HT * HB];
   const H1Tab& T = tabs[blockIdx.y];
   if (lv >= T.depth) return;
   const long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+#if H1C_NMID
+  __shared__ __align__(16) u64 ns[NSNAP];
+  const long long nodes = (1LL << T.depth) >> (lv + 1);
+  if ((long long)blockIdx.x * blockDim.x >= nodes) return;
+  if (threadIdx.x == 0) node_snap(T, lv, bf, ns);
+  __syncthreads();
+  if (idx >= nodes) return;
+  hb_node_snap(T, bf + threadIdx.x * HB, lv, idx, ns);
+#else
   if (idx >= (1LL << T.depth) >> (lv + 1)) return;
   hb_node(T, bf + threadIdx.x * HB, lv, idx);
+#endif
 }
 
 // H1C_LVF = L >= 0: a table's levels from L up in one block (LT threads), a barrier between levels, so the levels whose
@@ -1150,8 +1207,20 @@ static_assert(LT >= 32 && LT <= 1024 && LT % 32 == 0, "H1C_LT: whole warps, at m
 extern "C" __global__ void __launch_bounds__(LT) h1c_levels(const H1Tab* __restrict__ tabs, int ntab, int lv0) {
   __shared__ __align__(16) uint8_t bf[LT * HB];
   const H1Tab& T = tabs[blockIdx.x];
+#if H1C_NMID
+  __shared__ __align__(16) u64 ns[NMAXD][NSNAP];
+  for (int q = threadIdx.x; q < NMAXD && lv0 + q < T.depth; q += LT) node_snap(T, lv0 + q, bf + threadIdx.x * HB, ns[q]);
+  __syncthreads();
+#endif
   for (int lv = lv0; lv < T.depth; ++lv) {
     const long long nodes = (1LL << T.depth) >> (lv + 1);
+#if H1C_NMID
+    if (lv - lv0 < NMAXD) {
+      for (long long idx = threadIdx.x; idx < nodes; idx += LT) hb_node_snap(T, bf + threadIdx.x * HB, lv, idx, ns[lv - lv0]);
+      __syncthreads();
+      continue;
+    }
+#endif
     for (long long idx = threadIdx.x; idx < nodes; idx += LT) hb_node(T, bf + threadIdx.x * HB, lv, idx);
     __syncthreads();
   }
