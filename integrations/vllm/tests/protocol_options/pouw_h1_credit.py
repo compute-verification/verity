@@ -179,8 +179,7 @@ def _fields(words: Any) -> tuple[bytes, int, tuple[bytes, bytes]]:
     blocks after them dropped)."""
     x = b"".join(int(v).to_bytes(2, "little") for v in words)
     x = b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
-    if len(x) * 8 == CC.PUBLIC_ROW_J10R_BITS:
-        x = x[:-24]
+    x = x[:CC.PUBLIC_ROW_BITS // 8]
     s = len(x) - 8 - 128
     return x[:s], int.from_bytes(x[s:s + 8], "big"), (x[s + 8:s + 72], x[s + 72:])
 
