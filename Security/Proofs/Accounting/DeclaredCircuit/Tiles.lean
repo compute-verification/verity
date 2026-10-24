@@ -1,4 +1,5 @@
 import Mathlib
+import Definitions.Accounting.Carrier
 import Proofs.Accounting.RateAudit.DeployedSketchSum
 
 /-!
@@ -31,11 +32,11 @@ def tilePos {N : ℕ} (U : Finset (Fin N)) (m ρ : ℕ) : Finset (Pos N m ρ) :=
 theorem card_insert_inter_le {β : Type} [DecidableEq β] (a : β) (s t : Finset β) :
     (insert a s ∩ t).card ≤ (s ∩ t).card + if a ∈ t then 1 else 0 := by
   by_cases ha : a ∈ t
-  · simp only [ha, if_true]
+  · simp only [ha, ↓reduceIte]
     refine (Finset.card_le_card fun x hx => ?_).trans (Finset.card_insert_le a (s ∩ t))
     simp only [Finset.mem_inter, Finset.mem_insert] at hx ⊢
     tauto
-  · simp only [ha, if_false, add_zero]
+  · simp only [ha, ↓reduceIte, add_zero]
     refine Finset.card_le_card fun x hx => ?_
     simp only [Finset.mem_inter, Finset.mem_insert] at hx ⊢
     rcases hx with ⟨rfl | hx, hz⟩
@@ -85,6 +86,29 @@ theorem card_reads_tiles_le (O : Oracle N ρ h X Dg) (D : Data N m ρ X) (U : Fi
       ((k (D (.inl p))).reads O D ∪ M.map Function.Embedding.inl) (tilePos U m ρ)
     simp only [inl_mem_tilePos] at h2
     omega
+
+/-- Rebuilds in more tiles are more. -/
+theorem rebuildsIn_mono {U V : Finset (Fin N)} (hUV : U ⊆ V) (O : Oracle N ρ h X Dg) (D : Data N m ρ X)
+    (c : Chip N m ρ h X Dg α) : c.rebuildsIn U O D ≤ c.rebuildsIn V O D := by
+  induction c with
+  | done a => simp only [rebuildsIn, le_refl]
+  | tag x k ih =>
+    simp only [rebuildsIn]
+    exact ih (O x)
+  | mem p k ih =>
+    simp only [rebuildsIn]
+    exact ih (D (.inl p))
+  | link p k ih =>
+    simp only [rebuildsIn]
+    exact ih (D p)
+  | rebuild p k ih =>
+    have h1 := ih (D (.inl p))
+    simp only [rebuildsIn]
+    by_cases hp : p.1 ∈ U
+    · simp only [hp, hUV hp, ↓reduceIte]
+      omega
+    · simp only [hp, ↓reduceIte, add_zero]
+      split <;> omega
 
 end Chip
 
@@ -217,7 +241,7 @@ theorem Device.unpaid_tiles_split [Fintype X] [DecidableEq X] [Fintype Dg] [Deci
   have huf : ∀ t ∈ Tm, (Sum.inl (t, uf t) : Pos N m ρ) ∈ Mis := by
     intro t ht
     have hu : ∃ u, (Sum.inl (t, u) : Pos N m ρ) ∈ Mis := (Finset.mem_filter.mp ht).2
-    simp only [uf, hu, dif_pos]
+    simp only [uf, hu, ↓reduceDIte]
     exact hu.choose_spec
   set Ps : Finset (Pos N m ρ) := (Tm.image fun t => (t, uf t)).disjSum Sm with hPs
   have hPsCard : Ps.card = Tm.card + Sm.card := by
