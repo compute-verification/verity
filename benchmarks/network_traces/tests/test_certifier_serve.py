@@ -14,7 +14,8 @@ body's tokens, and a token of more than 64 bytes needs F declared (`--response-f
 EOS) the shim writes one id event a sampled token, tagged with its request's ingress ordinal and interleaved as the
 endpoint streams them, and the certified I/O read from the records alone gives back every request's fields and every
 response's token ids: honest traffic is certified on every window and its I/O accepted, the late shim is refused by
-the audit and the extra token by the I/O's finish rule."""
+the audit and the extra token by the I/O's finish rule. The I/O tie on those runs (`negatives.py tie-run`), given the
+endpoint's sampled ids, accepts honest traffic and refuses the token shim by its content."""
 
 from __future__ import annotations
 
@@ -28,7 +29,9 @@ import math
 import re
 import shutil
 import sys
+import tarfile
 from collections import defaultdict
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -915,13 +918,13 @@ def _varied_runs(tmp: Path, endpoint: _Varied, plan_of, strategies) -> tuple:
 @pytest.fixture(scope="module")
 def varied(tmp_path_factory):
     """`plan --traffic varied` against `_Varied`: 16 requests, Poisson at 2 a second, prompts of 16 … 1024 ids, at most
-    8 tokens out, 4 probed, every other response's last two tokens in one chunk; honest, late, extra and token, each
-    checked."""
+    8 tokens out, 4 probed, every other response's last two tokens in one chunk; honest, late, extra, drop and token,
+    each checked."""
     endpoint = _Varied(merges=lambda request: request % 2 == 1)
     args = argparse.Namespace(model=None, api_key_env=None, traffic="varied", requests=16, rate=2.0,
                               prompt_range="16:1024", tokens=VARIED_TOKENS, seed=3, probes=4, eos_ids=None)
     out = _varied_runs(tmp_path_factory.mktemp("varied"), endpoint,
-                       lambda url: cs.plan_of(args, url, lambda: 0.0, _no_sleep), (*cs.STRATEGIES, "token"))
+                       lambda url: cs.plan_of(args, url, lambda: 0.0, _no_sleep), (*cs.STRATEGIES, "drop", "token"))
     return (*out, endpoint)
 
 
@@ -1091,6 +1094,105 @@ def test_a_token_shim_on_varied_traffic_changes_window_0s_ids_and_nothing_the_ch
         assert len(t["output"]) == len(r["output"]) and t["finish"] == r["finish"]
         assert [a != b for a, b in zip(r["output"], t["output"])] == [name in window0 and a != EOS for a in r["output"]]
         assert EOS not in t["output"][:-1]
+
+
+@pytest.fixture(scope="module")
+def negatives():
+    spec = importlib.util.spec_from_file_location("network_traces_negatives", HERE / "negatives.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod  # its dataclasses look their module up
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _ids(out: Path, plan: dict) -> Path:
+    """The endpoint's sampled ids of the plan's requests (`_answer`'s), by user, as `negatives.read_ids` reads them."""
+    path = out / "ids.jsonl"
+    path.write_text("".join(json.dumps({"user": q["session"], "output_ids": _answer(
+        q["id_request"]["prompt"], q["id_request"]["max_tokens"])[0]}) + "\n" for q in plan["requests"]))
+    return path
+
+
+def test_the_io_tie_accepts_honest_varied_traffic_and_refuses_the_token_shims_ids_by_its_content(varied, negatives):
+    """`negatives.tie_run` on each varied run, given the endpoint's sampled ids: every window's frames hold to their
+    certified heads, both ends, and every id event is a data cell placed on a committed output. Honest's ids are their
+    port entries' (accepted); the token shim's are not in exactly the windows its changed ids fall in, each refused by
+    IoTieWindow.content alone; so is the extra shim's token past a response's end, which no committed output is, and
+    the drop shim's response without its first token, whose later ids each sit one output early and whose last
+    committed output no cell carries. The late shim's held frames never reach a certified record. A committed output no
+    cell carries is refused by content at window -1, since no advice places it in a window."""
+    pytest.importorskip(negatives.IO_TIE_MODULE)
+    tmp, _, _, plan, runs, _ = varied
+    ids = negatives.read_ids(_ids(tmp, plan))
+    got = {s: negatives.tie_run(tmp / s, ids) for s in runs}
+    tokens, W = sum(map(len, ids.values())), plan["windows"]
+    for row in got.values():
+        assert row["held"] == {"egress": W, "ingress": W} and row["missing"] == {} and row["outputs"] == tokens
+    honest, token, extra = got["honest"], got["token"], got["extra"]
+    assert honest["verdict"] == "accepted" and honest["failing"] == {} and honest["codes"] == []
+    assert honest["id_events"] == honest["placed"] == tokens and honest["unplaced"] == 0
+    h, t = _io(tmp / "honest"), _io(tmp / "token")
+    changed = {b // cs.WINDOW_BUCKETS for name, r in t.items()
+               for (_, b), x, y in zip(r["frames"], r["output"], h[name]["output"]) if x != y}
+    assert changed and token["verdict"] == "refused" and token["codes"] == ["IoTieWindow.content"]
+    assert token["failing"] == {w: ["content"] for w in changed} and token["placed"] == tokens
+    assert extra["verdict"] == "refused" and extra["codes"] == ["IoTieWindow.content"]
+    assert extra["id_events"] == tokens + 1 and extra["placed"] == tokens and len(extra["failing"]) == 1
+    drop = got["drop"]
+    assert drop["verdict"] == "refused" and drop["codes"] == ["IoTieWindow.content"] and -1 in drop["failing"]
+    assert drop["id_events"] == drop["placed"] == tokens - 1 and drop["unplaced"] == 1
+    late = got["late"]
+    assert late["verdict"] == "refused" and late["failing"] == {-1: ["content"]}
+    assert 0 < late["unplaced"] == tokens - late["id_events"] and runs["late"]["events"] == tokens
+    assert all(negatives.tie_ok(s, got[s]) for s in ("honest", "token", "drop"))
+
+
+def test_a_frame_other_than_the_certified_one_is_refused_by_the_tie_on_the_cells_root(varied, negatives, tmp_path):
+    """The honest run with one id event in the prover's copy of the frames carrying another id, the certified heads
+    kept: that window's frames no longer hold to its certified head (IoTieWindow.cells_root), and the cell no longer
+    carries its port entry's id (content); every other window is accepted."""
+    pytest.importorskip(negatives.IO_TIE_MODULE)
+    tmp, _, report, plan, _, _ = varied
+    run, e = shutil.copytree(tmp / "honest", tmp_path / "frame"), ar.Setup(report).egress_params
+    records = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    k = next(k for k, r in enumerate(records) if any(row[0] is not None for row in r.grid))
+    t = next(t for t, row in enumerate(records[k].grid) if row[0] is not None)
+    q, x = active.id_event_data(active.decode_frame(records[k].grid[t][0])[2])
+    row = (active.encode_frame(active.DATA, active.CANONICAL_STREAM, active.id_event(q, x ^ 1), e.frame_bytes),
+           *records[k].grid[t][1:])
+    records[k] = replace(records[k], grid=records[k].grid[:t] + (row,) + records[k].grid[t + 1:])
+    (run / "responses.records").unlink()
+    for r in records:
+        ar.write_blobs(run / "responses.records", ar.pack_record(r))
+    got = negatives.tie_run(run, negatives.read_ids(_ids(tmp_path, plan)))
+    w = records[k].window
+    assert got["held"] == {"egress": plan["windows"] - 1, "ingress": plan["windows"]}
+    assert got["verdict"] == "refused" and got["failing"] == {w: ["cells_root", "content"]}
+    assert negatives.tie_ok("frame", got)
+
+
+def test_tie_run_prints_each_runs_verdict_from_a_gate_runs_tarball(varied, negatives, tmp_path, capsys):
+    """`negatives.py tie-run --run TARBALL --ids FILE` on a tarball laid out as the gate preserves a run
+    (`c…/out/STRATEGY/`) prints its document: each strategy's verdict, `ok` and codes, exit 0. Without the ids each run
+    has no verdict, the Commit's rows missing, exit 1."""
+    pytest.importorskip(negatives.IO_TIE_MODULE)
+    tmp, _, _, plan, _, _ = varied
+    gate = tmp_path / "c20261024T000000Z-tie"
+    for s in ("honest", "token"):
+        shutil.copytree(tmp / s, gate / "out" / s)
+    tgz = tmp_path / f"{gate.name}.tgz"
+    with tarfile.open(tgz, "w:gz") as tf:
+        tf.add(gate, arcname=gate.name)
+    assert negatives.main(["tie-run", "--run", str(tgz), "--ids", str(_ids(tmp_path, plan))]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["format"] == negatives.TIE_RUN and doc["check"] == "IoTieWindow" and doc["source"] == str(tgz)
+    assert set(doc["stand_ins"]) == {"cells_root", "cells", "port", "map"}
+    assert {s: (r["verdict"], r["ok"], r["codes"]) for s, r in doc["runs"].items()} == {
+        "honest": ("accepted", True, []), "token": ("refused", True, ["IoTieWindow.content"])}
+    assert negatives.main(["tie-run", "--run", str(tgz)]) == 1
+    doc = json.loads(capsys.readouterr().out)
+    assert {s: (r["verdict"], r["ok"], list(r["missing"])) for s, r in doc["runs"].items()} == {
+        s: ("not-applicable", None, ["commit"]) for s in ("honest", "token")}
 
 
 def test_the_certified_io_reads_each_response_by_its_ordinal_wherever_its_frames_fall(varied):
