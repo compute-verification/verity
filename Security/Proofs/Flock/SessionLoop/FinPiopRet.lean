@@ -2,6 +2,7 @@ import Proofs.Flock.SessionLoop.FinRepErasedCut
 import Proofs.Flock.SessionLoop.FinRepXs
 import Proofs.Flock.SessionLoop.FinRepView
 import Proofs.Flock.Claims.ZK.PiopFree
+import Proofs.Flock.Claims.ZK.Round1Root
 
 /-!
 # The views' cut PIOP returns where the firewall's rep did
@@ -85,7 +86,7 @@ theorem padsTreeCut_root (n : ℕ) (src : RepSrc) (hn : 1 ≤ Nat.log2 n) :
   · rw [getElem!_pos C 0 hc, hI hn _ (Array.getElem_mem hc)]
     norm_num
   · rw [getElem!_neg C 0 hc]
-    first | decide | (show 0 < 2 ^ 64; positivity) | simp
+    decide
 
 /-- **A rep's pads root through the cut's hashes is under `2^64` bytes**, at a tree of at least two leaves. -/
 theorem padsTreeCut_root_go {N : ℕ} {src : RepSrc} {ic : InnerCommit} (hN : 2 ≤ N)
@@ -224,8 +225,8 @@ theorem finPiop (vs : finS.SwVals)
     rw [getElem!_pos cms _ hjc]
     exact hall' j.val hjc
   have hstj : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hj
-  have hst' : Masked.stAt x j = (Masked.stsOf x)[j.val] := by
-    rw [← hstj, getElem!_pos _ _ hj]
+  have hst' : Masked.stAt x j = (Masked.stsOf x)[j.val] :=
+    hstj.symm.trans (getElem!_pos (Masked.stsOf x) j.val hj)
   have hmk : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by
     rw [Masked.tabsOf_stAt, hst']
     exact (hall j.val hj).2.2
