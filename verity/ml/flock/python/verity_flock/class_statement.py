@@ -1043,7 +1043,8 @@ class UnitStager:
     (`circuit.class_digest`) is the unbound stager's. ``layout`` (a layout mode, ``iv/hybrid/4``): the templated statement
     (`circuit.compose`'s ``layout``), its unit the unit's template; else the flat statement. ``structural`` (with ``layout``):
     that template `struct_lower`'s (`unit_lowering`'s ``structural``), the flat unit never built, the outputs the template's
-    (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit."""
+    (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit. The proof's own leaves are `LEAF_SCHEME`'s
+    (FLOCK_PLAIN_LEAVES=1: plain SHA-512, a recursive session's inner statement)."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
                  out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
@@ -1077,7 +1078,8 @@ class UnitStager:
         self.text = FC.compose(self.low, self.sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
                                seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
                                seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
-                               partition=bind and bind["partition"], program=bind and bind["program"], layout=layout)
+                               partition=bind and bind["partition"], program=bind and bind["program"], layout=layout,
+                               leaf_scheme=LEAF_SCHEME)
         self.bound = bind is not None
         self.meta = FC.meta_of(self.text)
         self.ports = FC._meta_ports(self.meta)
