@@ -125,23 +125,26 @@ def ordinalHeader (s : Nat) : ByteArray := ⟨#[kindOrdinal.toUInt8]⟩ ++ be32 
 /-- `COMPACT_RECORD.size`: a compact record is its request's ingress ordinal (u32be) and its token field (u32be). -/
 def compactRecordSize : Nat := 8
 
-/-- `COMPACT_LAST`: the token field's flag on the response's last output at `max_tokens`. -/
+/-- `COMPACT_LAST`: the token field's flag on the response's last output (finish `length`, or `stop` with
+`compactStop`). -/
 def compactLast : Nat := 2 ^ 31
 
-/-- `COMPACT_EOS`: the token field of a sampled stop token. -/
-def compactEos : Nat := 0xFFFFFFFF
+/-- `COMPACT_STOP`: the token field's flag, beside `compactLast`, on a sampled stop token, whose id the field still
+carries. -/
+def compactStop : Nat := 2 ^ 30
 
 /-- `COMPACT_UNIT_BYTES`: what the server writes for each record, its canonical position (u32be), then the record. -/
 def compactUnitBytes : Nat := 4 + compactRecordSize
 
 /-- `compact_record_data`'s request ordinal: a compact cell or record is `compactRecordSize` bytes, zero after them, of
-an ordinal ≥ 1 and a token field that is `compactEos` or an id below `compactLast` − 1, with `compactLast` set or not;
-none for bytes that aren't one. The device reads only the ordinal: the token field, finish included, is the server's. -/
+an ordinal ≥ 1 and a token field that is an id below `compactStop` with no flag, `compactLast`, or `compactLast` and
+`compactStop`, so a field with `compactStop` and not `compactLast` is no record's; none for bytes that aren't one. The
+device reads only the ordinal: the token field, finish included, is the server's. -/
 def compactOrdinal (cell : ByteArray) : Option Nat :=
   if cell.size < compactRecordSize || (cell.toList.drop compactRecordSize).any (· != 0) then none else
   let request := be32At cell 0
   let field := be32At cell 4
-  if request == 0 || (field != compactEos && field % compactLast == compactLast - 1) then none else some request
+  if request == 0 || field / compactStop == 1 then none else some request
 
 /-- `compact_cell`: a compact record's egress frame, the record zero-filled to `B` bytes; none where Python raises (the
 record doesn't fit). -/

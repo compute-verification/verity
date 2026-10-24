@@ -2,11 +2,12 @@
 registered tokenizer, so that a stock OpenAI client reads the text vLLM would have streamed.
 
 Under `active.Proxy(compact=True)` the server sends each sampled token as a compact record (`active.compact_record`:
-the request's ingress ordinal and its token field, the finish in reserved fields), and the link carries each as a
+the request's ingress ordinal and its token field, the finish in the field's flags), and the link carries each as a
 B-byte cell. The client knows each request's prompt ids (it sent them) and the registered tokenizer, and renders the
 records back (`Renderer`): one completion chunk a record, its text the token's, `finish_reason` "length" on a record
-marked `COMPACT_LAST` and "stop" with no text on `COMPACT_EOS`, then `data: [DONE]`. It refuses, with ValueError, a
-record of another request, one after the finish, an id outside the vocab, and an end before the finish.
+marked `COMPACT_LAST` alone and "stop" with no text on one marked `COMPACT_STOP` too (its id the stop token's), then
+`data: [DONE]`. It refuses, with ValueError, a record of another request, one after the finish, an id outside the
+vocab, and an end before the finish.
 
 **Detokenization** is vLLM V1's (`FastIncrementalDetokenizer`, `Detokenizer`), so each chunk's text is the bytes vLLM
 streams for that token: a stream (`tokenizers.decoders.DecodeStream`) primed with the prompt's shortest suffix of 4 …
@@ -137,7 +138,7 @@ class Renderer:
         if self.finished is not None:
             raise ValueError(f"a record after the response's finish ({self.finished})")
         _, token_id, finish = got
-        if finish != "stop" and token_id not in self.detokenizer.vocab.bytes:
+        if token_id not in self.detokenizer.vocab.bytes:
             raise ValueError(f"a token id outside the vocab: {token_id}")
         self.finished = finish
         return ("" if finish == "stop" else self.detokenizer.step(token_id)), finish
@@ -150,7 +151,7 @@ class Renderer:
         return b"data: " + json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode() + b"\n\n"
 
     def done(self) -> bytes:
-        """`data: [DONE]`, once a record marked `COMPACT_LAST` or `COMPACT_EOS` has been rendered; ValueError before."""
+        """`data: [DONE]`, once a record marked `COMPACT_LAST` has been rendered; ValueError before."""
         if self.finished is None:
-            raise ValueError("the stream ends before its finish: no record marked COMPACT_LAST or COMPACT_EOS")
+            raise ValueError("the stream ends before its finish: no record marked COMPACT_LAST")
         return DONE

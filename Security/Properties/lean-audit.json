@@ -2988,7 +2988,7 @@
    ]
   },
   "CertifierDevice.Frame": {
-   "digest": "c1f8818a60eea283029cca84cde7ba38c26e94f8513f181aefed456cc616f5d1",
+   "digest": "cd125f4a5241c19589f10b7607029be3181bf4408b4f2691b6e446efd8b681f6",
    "definitions": {
     "CertifierDevice.CompactUnits": "efaa3c32d4f47d1404f9fa762029613bd2285a9d71e4b289143354ddaff81b2d",
     "CertifierDevice.CompactUnits.buffer": "c87a3d6fabbb50f188f659a63c52a78d09acc93128246c2d1ef84cde5035c5d9",
@@ -3006,10 +3006,9 @@
     "CertifierDevice.bitsOf": "9ca775fb867d936f8b45ae1da8ce0b46ebfb430525895d3e89ed883a5b27be03",
     "CertifierDevice.canonicalStream": "b11d6a74918860bcf285872082aa8e590d41d293aca33ee65bda4db8b99aa47b",
     "CertifierDevice.compactCell": "07f0ecbed237b5c69fbb357cdf25231afddbe737b5362c0c7315cd2efcec4dfc",
-    "CertifierDevice.compactEos": "436d30b0f4f441d9d93892f88c634635842bf392f4795fb7af33adb05157cf66",
-    "CertifierDevice.compactLast": "ebaa72a71aa0a4587729cb377527bd5f4f58dc55a4b04018a989f7eeefdfabc1",
-    "CertifierDevice.compactOrdinal": "c527d71e9b5381404fa84ed0210a9bda9846d8d3ee47b5dd06c65061067b81ed",
+    "CertifierDevice.compactOrdinal": "98bcf269c2330353b95a7c4a4a74b21c0739fdc1f15123b7eef3b15760b583f4",
     "CertifierDevice.compactRecordSize": "19bc1e578646f67f32492e87a0b18cd9adfe4756a2b6416540a464192689b759",
+    "CertifierDevice.compactStop": "bfe4344ca23d5bf7fcf233cd4a0fd8346a7e05afcc5ce7ed4a4f025cf223f427",
     "CertifierDevice.compactUnitBytes": "a25ee75fe76e4023c074809a3329486a40ef76de39b0da77e830db1a29cbca15",
     "CertifierDevice.decodeFrame": "d1e606c5fa62d7ef860d48581b5ba4fd25b403b3651ec7e66c722237c63b841a",
     "CertifierDevice.encodeFrame": "7e75198ed4a134f9f6c0844d83a009db575ea5a8115204d44905c3de44548a4e",

@@ -44,6 +44,24 @@ GPU) instead of `--from`. Every option `e2e.py` doesn't take goes to `certifier_
 
 ## The chain: varied traffic, the advice, the prove path and the negatives
 
+**G-A's report of record: r20261024-163242-7e60.** It is OK with nothing pending, and every row is from vllm's sealed
+Llama-3.2-1B serving run r20261024-141912-8eb1. It re-makes GA-CLOSER's closer r20261024-150521-0551 (ded16ce22b,
+`--probes 40`, against vy-nebius-1:18084) from that run's outputs, on this tree with #3566's `io_tie` merged. It reads
+8eb1's records, whose sha256 equal 0551's copy, and drives no endpoint.
+
+- e2e: honest accepted (40 requests, 597 tokens, 38 ending at max_tokens and 2 at EOS); late, extra and drop refused
+  by their own codes. The advice is 8eb1's Commit windows w191-w220: 30 windows, 40 requests, 527 steps, every window
+  opened, bound and rebuilt; 23,690 v0 bits (3,851 derived, 2,412 shaped, 340 forced).
+- token: refused by the I/O tie, `IoTieWindow.content` at link-windows 1 and 2, the two its 23 changed ids fall in.
+  The tie accepted honest: 597 outputs placed, frames held on all 17 windows at both ends. NEG's `tie-run` on each
+  member, with the ids of 8eb1's requests that arrived in its link-windows, agrees (the run's `out/tie-run/`).
+- prove path: GA-AUDIT's `--serve-run` audits of 8eb1's w212 (r20261024-154338-7679), one of the honest run's own
+  Commit windows, and w5 (r20261024-143655-ccc8), adopted in place of the fixed workload. Every honest arm was accepted
+  and every forged arm refused by Lean. w212's advice was registered after serving, by the lane from the run's records
+  (r20261024-153328-5776), 14.2 min before the first draw. w5's was registered by vllm at serve time. 7679 committed its
+  own registration of w212's advice, whose opening opens it to the report's w212 advice (the run's
+  `out/advice-check.json`).
+
 The plan's target (G-A) is one command from serving to the Lean verdict: serve, certify, advice, compile, sampled ZKPs,
 Lean, with the advice's bits per link-window. `chain.py` holds the stages after N2 and the proofs, each on what exists now:
 
@@ -63,10 +81,12 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
 - NEG's live tampers (`--strategies ...,drop,token`): drop is a negative, refused by N2's counts on the planned and
   served profiles and by the rehearsal's own check on the advice profile. There the certified I/O's finish rule refuses
   it when the response it cuts ran to its max_tokens (short of it without EOS); one that ended at EOS stays well formed
-  one token shorter, which only N2-ADVICE's counts will refuse. Token is refused only by the I/O tie (IO-TIE). Where
-  the tie ran (below), token is a negative it must refuse by content at exactly the link-windows its changed ids fall
-  in. Elsewhere it's a row pending the tie, with the verdicts it got and why the tie didn't run. A tamper whose shim
-  received no request, or with no `server.json` to say it did, is reported as not run, never as refused.
+  one token shorter, which only N2-ADVICE's counts will refuse. Token is refused only by the I/O tie (IO-TIE). On the
+  advice profile, where the tie is required (below), token is a negative it must refuse by content at exactly the
+  link-windows its changed ids fall in, and the tie's refusal is its verdict whatever the tie gave the honest run. On
+  the planned and served profiles, where the tie doesn't run, it's a row pending the tie, with the verdicts it got. A
+  tamper whose shim received no request, or with no `server.json` to say it did, is reported as not run, never as
+  refused.
 - On the advice profile a negative is refused only when the rehearsal's own check names its own violation
   (`e2e.OWN_CODE`, as NEG's `judge` requires its code): late's window's coverage fault
   (`audit.status:coverage-never-established`), extra's response longer than its max_tokens, drop's short of it without
@@ -100,9 +120,16 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   bits only where it committed a hiding root (from 01ea29e10f on, whose opening is the prover's). That isn't these runs':
   the prove path is `bound` to them only once the file is their advice and the Commit it proves is held to theirs, which
   no input carries yet (`bound_why`), and only a bound prove path's verdict counts in the OK. Beside the endpoint's own
-  advice there is no file to hold an arm to: its arms prove their own fixed workload, not this run. Each rank's time
-  is reported per drawn unit, its prover's and Lean's seconds over the units its statement proves (PROVE-PATH's
-  `per_unit`, 92e4e50ca5).
+  advice there is no file to hold an arm to: a fixed workload's arms prove their own Commit, not this run's. An arm of
+  `prove_path.py audit --serve-run` names the served run's Commit window it proves (`chain.served_commit`, the arm named
+  `w<k> <arm>`), and `--prove-path` may be given once for each such audit. The prove path is then bound to these runs
+  when every arm's Commit is the endpoint's (its `windows.jsonl` has that window's run id and root), its root the one
+  sealed while serving (the audit's `serve` check), and an honest arm's Commit is one of the honest run's own windows.
+  That arm's committed advice must be the report's registration of its window, by root or, registered apart under its
+  own salt and compiler, by its v0 bits. `--prove-path-registered FILE` says, by window, who registered each audited
+  window's advice and when (`{K: {by, at_serve_time, at, first_draw, ref}}`); the report shows it, and `stubbed` lists
+  a window registered after serving. Each rank's time is reported per drawn unit, its prover's and Lean's seconds over
+  the units its statement proves (PROVE-PATH's `per_unit`, 92e4e50ca5).
 - NEG's registry (`benchmarks/network_traces/negatives.py`'s `suite`) runs on the runs unless `--no-negatives`. Each row
   that ran must be refused by the code it names; the rest say what they wait on. It doesn't run on the advice profile.
   With `--advice` and `--ids FILE` (each request's sampled ids by its advice id, ADVICE-SRC's `requests.jsonl`: `user`,
@@ -114,10 +141,15 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   committed under fake salts in place of the warden's cells. The sampled ids stand in for the Commit's port, one map
   for every run from `--ids`, or else from the `--endpoint-run` records (`chain.served_ids`). Every strategy sends the
   same users, so a run's ids are those of the requests whose `arrive` falls in its own link-windows, matched to
-  `requests.jsonl` by engine id. The tie must accept honest (else the report isn't OK) and refuse token by content at
-  exactly the link-windows its changed ids fall in (`chain.changed_windows`, from its `server.json`'s `tampered`).
-  Drop's refusal by content is listed beside its own code. Without IO-TIE in the tree (`io_tie.py`, #3566), or without
-  the ids, the report says why and token stays pending.
+  `requests.jsonl` by engine id. The ids must cover each run's certified requests (its `io.json`'s users,
+  `chain.uncovered`), or the run gets no verdict. The tie must refuse token by content at exactly the link-windows its
+  changed ids fall in (`chain.changed_windows`, from its `server.json`'s `tampered`). Drop's refusal by content is
+  listed beside its own code. The tie is the only check of the served content on the advice profile, so it's a required
+  gate there (`chain.tie_gate`, REDTEAM phase 12 target 2): the report isn't OK, and says why, when the tie didn't run
+  (no IO-TIE in the tree, `io_tie.py` in #3566, or no ids), gave the honest run no verdict (its tie raised, or its ids
+  don't cover its requests) or didn't accept it. A part the tie must establish beside its verdict goes in
+  `chain.TIE_REQUIRED` and fails the report the same way: CERT-VARLEN's compact finish (REDTEAM phase 12 target 3), if
+  the tie reports it as a key of its own.
 
 The report's `stubbed` list says what each run still stood on that isn't the chain's own: the advice of another run, a
 given serving config, a prove path of a declared workload, pending negatives, the certifier off the gate. Before the
@@ -125,7 +157,7 @@ committing endpoint, the chain ran on a PROVE-PATH run of a declared workload as
 (its CLI from 01ea29e10f on), with `prove_path.py advice --workload out/standin/workload.json` as `--advice` and its
 `out/` as `--prove-path`; before it, r20261024-052710-8932 (GLM-5.3 TP8 B1).
 
-G-A's run of record on the endpoint's own advice: r20261024-111424-88c9 (d5e3b1055d, vy-nebius-2), the varied chain
+Before r20261024-163242-7e60, G-A's run of record on the endpoint's own advice was r20261024-111424-88c9 (d5e3b1055d, vy-nebius-2), the varied chain
 against vllm's Llama-3.2-1B serving run r20261024-094558-6d6a on vy-nebius-1:18083 (40 requests at 0.5/s, max_tokens
 up to 32, EOS 128001, 16 link-windows), report OK. honest accepted (597 tokens, 38 ending at max_tokens and 2 at EOS);
 late, extra and drop refused by their own codes. Token, which the rehearsal's check accepted, is refused by the I/O tie
@@ -223,12 +255,16 @@ It does not cover:
 - **The model's size.** The report names the model as the plan does. The plan doesn't say whether the model was cut:
   GLM-M4's endpoint (r20261024-021333-0ca6) is GLM-5.3 INT8 cut to 5 of 78 layers, at 16 tokens a response.
 
-Zero-knowledge gaps, from `verity/core/protocols/certifier/README.md` ("Not yet zero-knowledge"):
+Zero-knowledge gaps, from `verity/core/protocols/certifier/README.md` ("Zero knowledge: what N2's verdict reads, and
+what's open"):
 
-- N2's verdict of record is still `LinkWindows.verify` on the host, which reads the heads and the certifier's salts. The
-  proofs run beside it, on the roots it registered.
-- The proofs are of `n2_zk`'s row adapter, not of N2's registered unit, so `LinkWindows.proved` (which refuses a proof
-  of any other Program, NET-43) doesn't take them. Lean holds each proof to the program and partition that `n2_zk` wrote.
+- N2's verdicts here are decided in the clear (`LinkWindows.unproved_outcome`, as for any run that proves nothing),
+  which reads the heads and the certifier's salts. `n2_zk` now decides each link-window on a `--zk` proof of N2's
+  registered unit, one member a round; this report doesn't read that summary yet, so it proves nothing itself and
+  refuses to adopt such a run (``--no-prove`` takes N2's verdicts only).
+- The proofs an adopted earlier `n2_zk` summary holds are of its row adapter, not of N2's registered unit, so
+  `LinkWindows.proved` (which refuses a proof of any other Program, NET-43) doesn't take them. Lean holds each proof to
+  the program and partition that `n2_zk` wrote.
 - NET-42: the certificate's link to its head is checked on the host (`CertifiedRecord.verify`).
 
 ## Cost

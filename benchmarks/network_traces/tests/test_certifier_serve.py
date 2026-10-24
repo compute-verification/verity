@@ -974,7 +974,7 @@ def compact(request, tmp_path_factory):
 def test_compact_varied_traffic_is_certified_its_io_the_endpoints_and_its_egress_b_bytes_a_frame(compact, varied):
     """On compact records in B-byte cells the honest run is accepted as on id events: every link-window certified, its
     salt revealed, the audit accepting raw and committed. The certified I/O read from the cells is the id-event run's,
-    request for request (the same fields, ordinals, releases and token ids, a stop as `COMPACT_EOS`, and the same
+    request for request (the same fields, ordinals, releases and token ids, each stop's EOS id too, and the same
     finishes, the merged responses' `length` by their count), and its ingress records are the id-event run's. Its
     egress carries the same frames a window, each B bytes: the link's bytes a window are B/4096 of the id-event
     run's."""
@@ -992,8 +992,7 @@ def test_compact_varied_traffic_is_certified_its_io_the_endpoints_and_its_egress
     assert ours.keys() == theirs.keys()
     for name, r in ours.items():
         v = theirs[name]
-        assert {k: r[k] for k in r if k != "frames"} == {k: v[k] for k in v if k != "frames"} | {
-            "output": [active.COMPACT_EOS if t == EOS else t for t in v["output"]]}
+        assert {k: r[k] for k in r if k != "frames"} == {k: v[k] for k in v if k != "frames"}
     egress = check["egress_bytes"]
     assert egress["frame_bytes"] == B and egress["frames_per_window"] == \
         vruns["honest"]["check"]["egress_bytes"]["frames_per_window"]
@@ -1355,21 +1354,23 @@ def gate_compact(tmp_path_factory):
         runs_dir, _, _, plan, runs = _varied_runs(
             tmp / f"{run}.runs", endpoint, lambda url, a=args: cs.plan_of(a, url, lambda: 0.0, _no_sleep),
             args.strategies.split(","))
-        got[strategy] = {"args": args, "plan": plan, "check": runs[strategy]["check"], "io": _io(runs_dir / strategy)}
+        got[strategy] = {"args": args, "plan": plan, "check": runs[strategy]["check"], "io": _io(runs_dir / strategy),
+                         "dir": runs_dir / strategy}
     return got, endpoint
 
 
 def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them_as_on_id_events(gate_compact):
     """`certifier-rehearse --traffic varied --compact 8`'s command is a compact varied `rehearse` this parser takes,
     named for its run, and the gate's bounds on B are a compact record's bytes and an id event's frame. Its runs are
-    on 8-byte cells: the honest run accepted, its certified I/O the endpoint's ids (a stop as `COMPACT_EOS`), and the
-    token run accepted by `check` too, its ids differing in window 0's alone, which only the I/O tie refuses."""
+    on 8-byte cells: the honest run accepted, its certified I/O the endpoint's ids (each stop's EOS id too), and the
+    token run accepted by `check` too, its ids differing in window 0's alone, which only the I/O tie refuses. The
+    tie's compact rule (`active.compact_finish_violations`), with the endpoint's ids as the Commit's, finds nothing
+    in the honest run's cells and refuses exactly window 0's responses in the token run's."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
     assert A.CERTIFIER_COMPACT == (active.COMPACT_RECORD.size, cs.FRAME_BYTES)
     got, endpoint = gate_compact
-    recorded = {r["user"]: [active.COMPACT_EOS if t == EOS else t for t in r["streamed_ids"]]
-                for r in endpoint.served if r["user"] is not None}
+    recorded = {r["user"]: r["streamed_ids"] for r in endpoint.served if r["user"] is not None}
     for strategy, (run, tamper) in GATE_RUNS.items():
         g = got[strategy]
         assert (g["args"].compact, g["args"].name, g["args"].strategies) == (8, run, tamper or "honest")
@@ -1379,9 +1380,46 @@ def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them
         window0 = {q["session"] for q in g["plan"]["requests"] if q["enqueue"] // cs.WINDOW_BUCKETS == 0}
         differs = {u for u, r in g["io"].items() if r["output"] != recorded[u]}
         assert differs == (set() if tamper is None else window0) and (tamper is None or differs)
+        e = ar.Setup(json.loads((g["dir"] / "calibration.json").read_text())).egress_params
+        outs = sorted((ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(g["dir"] / "responses.records")),
+                      key=lambda r: r.window)
+        cells = [s for r in outs for row in r.grid for s in row[:active.row_count(row)]]
+        sampled = {r["stream"]: recorded[u] for u, r in g["io"].items()}
+        bad = active.compact_finish_violations(sampled, g["plan"]["varied"]["eos_token_ids"], cells)
+        assert {o for o, _ in bad} == {g["io"][u]["stream"] for u in differs}, bad
     plain = cs.parser().parse_args(A.certifier_command(
         {"run": "c20261024T120000Z-ab12", "requests": 16, "tamper": None, "traffic": "varied"}, Path("o"), "u")[2:])
     assert plain.compact is None
+
+
+def test_tie_run_on_the_gates_compact_runs_reads_their_records_as_data_cells_and_holds_their_finish(
+        gate_compact, negatives, tmp_path):
+    """`negatives.tie_run` on the gate's compact runs, the endpoint's `requests.jsonl` the Commit's ids: each compact
+    record is the data cell of its id, so neither run lacks id events, and the tie holds the link's records to the
+    ids (`finish`, `active.compact_finish_violations`). Honest's finish holds; token's fails on exactly window 0's
+    responses, which refuses it. With IO-TIE in the tree honest is accepted and token refused by content too, at
+    window 0; without it neither has a verdict, only IO-TIE missing."""
+    got, endpoint = gate_compact
+    path = tmp_path / "requests.jsonl"
+    path.write_text("".join(json.dumps(r) + "\n" for r in endpoint.served))
+    ids, IT = negatives.read_ids(path), negatives.io_tie_module()
+    rows = {}
+    for strategy, g in got.items():
+        row = rows[strategy] = negatives.tie_run(g["dir"], ids)
+        window0 = {g["io"][q["session"]]["stream"] for q in g["plan"]["requests"]
+                   if q["enqueue"] // cs.WINDOW_BUCKETS == 0}
+        assert row["id_events"] == sum(len(r["output"]) for r in g["io"].values()) > 0
+        assert list(row["missing"]) == ([] if IT else ["io-tie"])
+        assert {o for o, _ in row["finish_violations"]} == (window0 if strategy == "token" else set()) and window0
+        assert row["finish"] is (strategy != "token")
+    if IT is None:
+        assert {s: r["verdict"] for s, r in rows.items()} == {s: negatives.NOT_APPLICABLE for s in got}
+        return
+    honest, token = rows["honest"], rows["token"]
+    assert (honest["verdict"], honest["codes"], honest["unplaced"]) == ("accepted", [], 0)
+    assert (token["verdict"], token["codes"]) == ("refused", ["IoTieWindow.content"])
+    assert token["failing"] == {0: ["content"]}
+    assert negatives.tie_ok("honest", honest) and negatives.tie_ok("token", token)
 
 
 def test_tie_run_on_the_gates_varied_runs_with_the_endpoints_ids_accepts_honest_and_refuses_token(gate_varied,

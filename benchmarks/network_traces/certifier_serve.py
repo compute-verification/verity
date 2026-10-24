@@ -71,8 +71,8 @@ reads requests from outside).
   fit goes to the next window's first bucket, which admission takes behind the salt frame. The plan's `model_release`
   is the admission's (`active_replay.model_releases(admission=…)`), and a D at which admission would hold one of the
   plan's requests past the window it was sent in doesn't fit. The check reads each window's served counts in the clear
-  too (`served_counts`, the rehearsal's read of the witness, beside the audit's); N2's verdict of record shows only
-  accept or reject.
+  too (`served_counts`, the rehearsal's read of the witness, beside the audit's); N2's verdict shows only accept or
+  reject.
 
 **The varied plan** (`plan --traffic varied`, `varied_plan`) drops every premise of the served plan's on the traffic:
 no fixed response length, no fixed request size, no request-major order, no window that must end idle, no min_tokens
@@ -141,8 +141,9 @@ certified, the I/O, the audit and the salt accept.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`).
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
-  and committed records, N2's verdict of record through `LinkWindows` (commit, register, select, deliver, outcome) on
-  the certified records, each window's salt asked of the certifier through a `RemoteCertifier` signed with the
+  and committed records, N2's in-the-clear verdict through `LinkWindows` (commit, register, select, deliver,
+  `unproved_outcome`: the check proves nothing, so the verdict reads the opening; `n2_zk.py` proves it) on the certified
+  records, each window's salt asked of the certifier through a `RemoteCertifier` signed with the
   challenger's key (window 0's asked twice: the second is refused), then `network_verdict` and the salt audit
   (`active_replay.audit_salt`: the salt frames, and that the shim received each revealed salt). It must run while
   `serve` serves reveals.
@@ -193,7 +194,7 @@ from pathlib import Path
 import active_replay as ar
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit as host_audit, calibration
-from verity.core.protocols.certifier.active import COMPACT_EOS, COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, \
+from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, \
     Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, Direction, Issuer, LmsKey, \
@@ -942,9 +943,10 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
     events that name its ordinal. `accepted` when every request is an id request whose `user` no other request has,
     every egress frame is an id event of a request released no later than the frame's bucket, and every response keeps
     the finish rule: at most `max_tokens` tokens, ending at its first EOS (`eos_token_ids`) or at `max_tokens`. On a
-    compact plan each egress frame is a compact cell (`active.compact_record_data`), a stop's id in `output` is
-    `COMPACT_EOS`, and the finish is the records' own: only the last is marked, a stop at any length up to `max_tokens`,
-    `COMPACT_LAST` at `max_tokens` exactly, and no record carries an EOS id, since a stop is only ever `COMPACT_EOS`."""
+    compact plan each egress frame is a compact cell (`active.compact_record_data`), and the finish is the records'
+    too: only the last is marked, a stop on an EOS id, `COMPACT_LAST` alone at `max_tokens` exactly, and no other
+    record carries an EOS id. Where a response stops is the server's word here, as an EOS id event's is: only the I/O
+    tie holds it to the ids the model sampled (`active.compact_finish_violations`)."""
     e, i = setup.egress_params, setup.ingress_params
     compact = bool(plan.get("compact"))
     marks: dict[int, list] = defaultdict(list)
@@ -973,8 +975,7 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
         for t, row in enumerate(rec.grid):
             for slot in row[:row_count(row)]:
                 if compact:
-                    c = compact_record_data(slot)
-                    got = None if c is None else (c[0], COMPACT_EOS if c[2] == "stop" else c[1], c[2])
+                    got = compact_record_data(slot)
                 else:
                     kind, _, payload = decode_frame(slot)
                     d = id_event_data(payload) if kind == DATA else None
@@ -1001,8 +1002,10 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
             r["finish"] = "longer than max_tokens"
         elif compact and any(ends[:-1]):
             r["finish"] = "a token after its finish"
-        elif compact and stops:
-            r["finish"] = "an EOS id in a compact response"
+        elif compact and any(ends[k] != "stop" for k in stops):
+            r["finish"] = "an EOS id outside a stop record"
+        elif compact and ends[-1] == "stop" and not stops:
+            r["finish"] = "a stop on an id that isn't EOS"
         elif compact:
             short = "a length finish short of max_tokens"
             r["finish"] = {"stop": "eos", "length": "length" if len(out) == m else short, None: "no finish"}[ends[-1]]
@@ -1020,12 +1023,12 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records) -> dict:
 
 def _shim_ids(run: Path, compact: bool = False) -> dict[tuple[str, int], list[int]]:
     """The token ids the shim wrote (`server.events.gz`), in its order, by each event's session and the ordinal it
-    names; its compact records' under `compact`, a stop as `COMPACT_EOS`."""
+    names; its compact records' under `compact`."""
     out: dict[tuple[str, int], list[int]] = defaultdict(list)
     for _, name, _, _, e in sorted(ar.read_events(run / "server.events.gz")):
         if compact:
             if (c := compact_record_data(e[-COMPACT_RECORD.size :])) is not None:
-                out[name, c[0]].append(COMPACT_EOS if c[2] == "stop" else c[1])
+                out[name, c[0]].append(c[1])
         elif (got := id_event_data(event_body(e))) is not None:
             out[name, got[0]].append(got[1])
     return dict(out)
@@ -1123,7 +1126,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
         draw = stream.select(registration)
         try:
             outcome = (stream.deliver(draw, [lw.session(opening, draw)])
-                       or lw.outcome(stream, draw, opening, syncs))
+                       or lw.unproved_outcome(stream, draw, opening, syncs))
         except ValueError as err:
             row["n2"] = f"no verdict: {err}"
             break

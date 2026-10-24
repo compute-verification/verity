@@ -6,7 +6,8 @@ writes a tampered copy, and each naming the check that refuses it by its refusal
     python benchmarks/network_traces/negatives.py make NAME --run DIR --out DIR [--advice FILE] [--commit FILE]
     python benchmarks/network_traces/negatives.py n2 --run DIR
     python benchmarks/network_traces/negatives.py judge NAME --run DIR
-    python benchmarks/network_traces/negatives.py advice --advice FILE [--ids REQUESTS.jsonl]
+    python benchmarks/network_traces/negatives.py advice --advice FILE [--ids REQUESTS.jsonl] [--frame-bytes B]
+        [--model M] [--T 50] [--R 32] [--delta 0] [--rho 1000] [--shift 0]
     python benchmarks/network_traces/negatives.py warden --run DIR
     python benchmarks/network_traces/negatives.py tie-run --run TARBALL|DIR [--ids REQUESTS.jsonl]
 
@@ -34,8 +35,13 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
 - ``audit.VIOLATION``: N2's audit of both records (`audit.Audit`, the Python reference of the Lean check of record);
 - pending checks, by the names their drafts give them: ``NetworkAdvisedCounts_v1`` (N2-ADVICE's advised counts on an
   advised link, `LinkWindows.advised_check`: the egress head's counts the release of the advice's frames, the ingress
-  head's the request frames the advice needs; ``.view`` when the advice is malformed, doesn't cover the window or
-  isn't tied to the certified ingress's requests (`advised.PromptTie`), which refuses every window),
+  head's the request frames the advice needs; ``.view`` when the advice is malformed, doesn't cover the window or its
+  requests aren't the certified ingress's (the tie, IoTieRequest's verdict, `advised.IoTieVerdict`, from the
+  verifier's own tie source), which refuses every window), ``IoTieRequest`` (IO-TIE's ingress tie, a unit at
+  selection All over one ingress link-window, `io_request.reference`: the warden's ingress cells open under their root
+  and the cut from the window's carry-in ends the requests the verifier's statement from the advice names, each with
+  its prompt length, in its request frames, leaving its carry-out; its verdict on every window, under the advice's
+  digest, is the tie N2's advised view needs),
   ``IoTieWindow.{cells_root,port,content}`` (IO-TIE's I/O tie, a unit at selection All over one egress link-window,
   `io_tie.reference_parts`: the warden's cells open under their root, the Commit's port rows of sampled ids open at
   the map's steps under the Commit's root, and every cell is the verifier's map's, computed from advice v0: a pad, or
@@ -54,9 +60,18 @@ verifier computes), and `io_tie.reference_parts` names the part that refuses it 
 directory of runs), each egress window's certified frames held to its certified head, as one JSON document
 (`TIE_RUN`): `runs`, by strategy, each with its `verdict` (``accepted``, ``refused``, or ``not-applicable`` when the run
 lacks what the tie opens, which `missing` names by `TIE_MISSING`'s keys), its `codes` (``IoTieWindow.PART``), the
-failing parts by window, and `ok` (`tie_ok`: honest accepted, a negative the tie reads refused by its part); and
+failing parts by window, its `finish` (on a compact plan its records held to the sampled ids,
+`active.compact_finish_violations`, which refuses it when they aren't), and `ok` (`tie_ok`: honest accepted, a
+negative the tie reads refused by its part); and
 `stand_ins`, what the tie takes for what the run doesn't keep (`TIE_STAND_INS`). It exits 0 when every run has a
 verdict and none is `ok` false, else 1.
+
+**The ingress tie on a fake upstream** (`advice_suite` with a frame size): the ingress cells a certifier certifies of
+the advice's requests, CERT-VARLEN's id requests at that frame size (each from its record, `--ids` as serve-openai
+writes it: prompt ids, user and what it brought), released as the honest heads count them and committed under fake
+salts (`certified_ingress`). Each advice negative is the verifier's statements from its advice over those cells
+(`request_tie`), whose verdict is the tie source's for `N2_LINK` (`n2_advice`). Without a frame size, the tie is the
+stand-in on the prompt lengths.
 
 `Negative.waits` names the interfaces a negative waits on; one with none runs today. `table` renders the registry.
 """
@@ -75,7 +90,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -83,8 +98,9 @@ sys.path.insert(0, str(HERE))
 import active_replay as ar  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 from verity.core.protocols.certifier import audit as host_audit, head_check as HC  # noqa: E402
-from verity.core.protocols.certifier.active import (CANONICAL_STREAM, DATA, HEADER, decode_frame,  # noqa: E402
-                                                     encode_frame, id_event_data)
+from verity.core.protocols.certifier.active import (CANONICAL_STREAM, DATA, HEADER, ID_NAME_BYTES,  # noqa: E402
+                                                     compact_finish_violations, compact_record_data, decode_frame,
+                                                     encode_frame, id_event_data, id_request, id_request_frames)
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, frames_root,  # noqa: E402
                                                           real_frames)
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet  # noqa: E402
@@ -94,12 +110,14 @@ FORMAT = "verity-network-negatives/v1"
 ADVICE_MODULE = "verity.core.protocols.certifier.advice"
 ADVISED_MODULE = "verity.core.protocols.certifier.advised"
 IO_TIE_MODULE = "verity.core.protocols.certifier.io_tie"
+IO_REQUEST_MODULE = "verity.core.protocols.certifier.io_request"
 WARDEN_ROWS_MODULE = "verity.core.protocols.certifier.warden_rows"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
 ADVISED = "NetworkAdvisedCounts_v1"
 TIE = "IoTieWindow"
+REQUEST_TIE = "IoTieRequest"
 #: the verifier's registered read of a warden cell at its position under the warden's signed root (`warden_rows.opens`,
 #: the Lean verifier's check of a unit's registered port)
 WARDEN_READ = "Flock.Registered.checkPort"
@@ -107,7 +125,7 @@ WARDEN_READ = "Flock.Registered.checkPort"
 #: honest's (each one's step, batch row, request, index and bucket), which content refuses once the edit moves them
 TIE_PARTS = {"drop": "content", "token": "content", "frame": "cells_root", "advice-length": "content",
              "advice-missing": "content", "advice-extra": "content", "advice-release": "content", "advice-start": None,
-             "wrong-token": "port", "advice-chunk": None}
+             "wrong-token": "port", "advice-chunk": None, "prompt-split": None}
 CHECKS_TODAY = (HEAD, SERVED, "audit")  # the checks `n2` runs; every other code's check is pending
 ENDS = ("egress", "ingress")
 
@@ -448,6 +466,65 @@ def chunk_split(advice):
     raise NotApplicable("no prefill row of two tokens or more to split")
 
 
+def _relaid(steps: list[list], r: int, request, prompt_len: int) -> list[list]:
+    """`steps` with request `r`'s rows for a prompt of `prompt_len` tokens: a shorter one cut from the front of its
+    prefill, each chunk keeping a token, a longer one's last chunk longer, and every row after the prompt moved with
+    it, so every row stays in its step and the chunk that ends the prompt ends the new one: each kept output stays
+    where it was. Raises NotApplicable for a request whose rows read cached KV (a cache hit, a resume, another
+    request's KV), or whose prompt has more chunks than `prompt_len` tokens."""
+    by, end = prompt_len - request.prompt_len, request.prompt_len
+    chunks = sum(row.request == r and row.start < end for rows in steps for row in rows)
+    if prompt_len < chunks:
+        raise NotApplicable(f"request {r}'s prompt is prefilled in {chunks} chunks: a {prompt_len}-token one can't be")
+    cut, at, out = max(0, -by), 0, []
+    for rows in steps:
+        out.append([])
+        for row in rows:
+            if row.request != r:
+                out[-1].append(row)
+                continue
+            if row.cache_hit or row.preempted or row.sources:
+                raise NotApplicable(f"request {r}'s rows read cached KV: its prompt can't move alone")
+            if row.start >= end:
+                out[-1].append(replace(row, start=row.start + by))
+                continue
+            take = min(cut, row.n - 1)
+            n, cut = row.n - take + max(0, by) * (row.start + row.n == end), cut - take
+            out[-1].append(replace(row, start=at, n=n))
+            at += n
+    return out
+
+
+def prompt_split(advice, request: int | None = None):
+    """Request `request`'s and the next one's prompt lengths swapped, their total kept (REDTEAM phase 6's split: (338,
+    16) served, (16, 338) advised): by default the first request whose prompt is longer than the next one's, else the
+    first whose prompt is shorter, each prefilled to the other's length and decoded on from there (`_relaid`), the
+    rest as served, so every output is honest's, released in its bucket. Where the two take different frames under
+    the link's framing, the earlier one's end moves (down, for a longer first: phase 6's acausal release); where they
+    take the same, `advised.ends` doesn't move. Either way the requests' frames are honest's, so only the tie of each
+    request's prompt length to the certified ingress (IoTieRequest) refuses it."""
+    qs, steps, why = advice.requests, _plain(advice), "no request's prompt length differs from the next one's"
+    pairs = [range(len(qs) - 1)[request]] if request is not None else \
+        sorted((j for j in range(len(qs) - 1) if qs[j].prompt_len != qs[j + 1].prompt_len),
+               key=lambda j: qs[j].prompt_len < qs[j + 1].prompt_len)
+    for j in pairs:
+        lens = {j: qs[j + 1].prompt_len, j + 1: qs[j].prompt_len}
+        if lens[j] == lens[j + 1]:
+            why = f"requests {j} and {j + 1} have one prompt length"
+            continue
+        if any(src.request in lens for rows in steps for row in rows for src in row.sources):
+            why = f"a row reads request {j}'s or {j + 1}'s KV"
+            continue
+        try:
+            moved = _relaid(_relaid(steps, j, qs[j], lens[j]), j + 1, qs[j + 1], lens[j + 1])
+        except NotApplicable as err:
+            why = str(err)
+            continue
+        requests = [replace(q, prompt_len=lens[k]) if k in lens else q for k, q in enumerate(qs)]
+        return _build(advice, requests, moved, _buckets(advice))
+    raise NotApplicable(why)
+
+
 def advice_module():
     """I1's module (ADV-SPEC), or None until it lands."""
     try:
@@ -542,11 +619,16 @@ NEGATIVES = {n.name: n for n in [
              "its next row keeping the sample", "N2's advised counts", ADVISED, advice_edit(output_length),
              waits=("ADV-SPEC", "N2-ADVICE"), also=(f"{TIE}.content",)),
     Negative("advice-missing", "advice", "advice", "a certified request missing from the advice, with its rows",
-             "N2's advised view (its tie to the certified ingress, advised.PromptTie)", f"{ADVISED}.view",
-             advice_edit(missing_request), waits=("ADV-SPEC", "N2-ADVICE"), also=(f"{TIE}.content",)),
+             "N2's advised view (the tie, IoTieRequest's verdict)", f"{ADVISED}.view", advice_edit(missing_request),
+             waits=("ADV-SPEC", "N2-ADVICE"), also=(REQUEST_TIE, f"{TIE}.content")),
     Negative("advice-extra", "advice", "advice", "a request in the advice that the ingress didn't certify",
-             "N2's advised view (its tie to the certified ingress, advised.PromptTie)", f"{ADVISED}.view",
-             advice_edit(extra_request), waits=("ADV-SPEC", "N2-ADVICE"), also=(f"{TIE}.content",)),
+             "N2's advised view (the tie, IoTieRequest's verdict)", f"{ADVISED}.view", advice_edit(extra_request),
+             waits=("ADV-SPEC", "N2-ADVICE"), also=(REQUEST_TIE, f"{TIE}.content")),
+    Negative("prompt-split", "advice", "advice", "two requests' prompt lengths swapped, their total kept (REDTEAM "
+             "phase 6: (338, 16) served, (16, 338) advised), every output and frame honest's",
+             "IoTieRequest (each request's prompt length against the certified ingress cells), whose verdict N2's "
+             "advised view needs", REQUEST_TIE, advice_edit(prompt_split), waits=("ADV-SPEC", "N2-ADVICE", "IO-TIE"),
+             also=(f"{ADVISED}.view",)),
     Negative("advice-release", "advice", "advice", "a kept output released one bucket later than certified",
              "N2's advised counts", ADVISED, advice_edit(release_moved), waits=("ADV-SPEC", "N2-ADVICE"),
              also=(f"{TIE}.content",)),
@@ -627,8 +709,8 @@ def link_received(advice, request_frames, received: list[int]) -> list[int]:
     """`received` as a prover declares it beside `advice`: the request frames the advice's requests take under the
     link's framing (`request_frames[prompt_len − 1]` each) that `received` doesn't sum to go to its first window that
     receives any, as a prover that serves other requests than were received would declare them, so the advice's frames
-    are the windows' (`advised.ends`) and only its tie to the certified ingress (`prompt_tie`) or the counts can refuse
-    it."""
+    are the windows' (`advised.ends`) and only its tie to the certified ingress (`n2_advice`'s) or the counts can
+    refuse it."""
     got = list(received)
     w = next((w for w, g in enumerate(got) if g > 0), 0)
     got[w] += sum(request_frames[q.prompt_len - 1] for q in advice.requests
@@ -636,47 +718,163 @@ def link_received(advice, request_frames, received: list[int]) -> list[int]:
     return got
 
 
-def prompt_tie(advice):
-    """The tie of an honest run's advice to its certified ingress (`advised.PromptTie`): each certified request's
-    prompt length in arrival order, and advice request i the i-th of them. A tampered advice keeps its honest run's,
-    which the host derives from the certified I/O. Raises ModuleNotFoundError until N2-ADVICE lands."""
+#: the advised link `n2_advice`'s stand-in tie names
+N2_LINK = "responses"
+
+
+def n2_registrations(windows: int) -> tuple[str, ...]:
+    """The stand-in tie source's record of `N2_LINK`'s ingress registrations: a stand-in digest a window."""
+    return tuple(hashlib.sha512(f"negatives ingress registration {N2_LINK}/{w}".encode()).hexdigest()
+                 for w in range(windows))
+
+
+def io_request_module():
+    """IoTieRequest's module (IO-TIE's `io_request`), or None until it lands."""
+    try:
+        return importlib.import_module(IO_REQUEST_MODULE)
+    except ModuleNotFoundError:
+        return None
+
+
+def link_framing(frame_bytes: int, longest: int) -> tuple[int, ...]:
+    """The link's public framing at `frame_bytes`-byte frames (`advised.AdvisedProfile.request_frames`): entry n − 1
+    the frames CERT-VARLEN's id request of an n-token prompt takes, for prompts of 1 to `longest` tokens."""
+    return tuple(id_request_frames(n, frame_bytes) for n in range(1, max(1, longest) + 1))
+
+
+def read_requests(path: Path) -> dict[str, dict]:
+    """Each request's record by the advice's request id: serve-openai's `requests.jsonl` rows that carry the prompt
+    (`prompt_ids`), by the request's `user` (its http id without one), with what it brought (`ingress.brought`)."""
+    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    return {r.get("user") or r["http_id"]: r for r in rows if "prompt_ids" in r}
+
+
+def id_requests(advice, records: dict[str, dict] | None, frame_bytes: int, model: str = "") -> list[bytes]:
+    """The id requests (CERT-VARLEN's `active.id_request` at `frame_bytes`-byte frames) of the advice's requests in
+    its order, the ingress a certifier certified: each from its record (`read_requests`: its prompt ids, user, and the
+    max_tokens, temperature, top_p and seed it brought, a seed it brought none of 0, id requests' default), or, for a
+    request without one, a prompt of its length of id 0 under its own id. Raises NotApplicable for a record whose
+    prompt isn't the advice's length or that no id request carries."""
+    out = []
+    for q in advice.requests:
+        r = (records or {}).get(q.id)
+        if r is None:
+            named = len(q.id) <= ID_NAME_BYTES - 2 and all(" " <= c <= "~" and c not in '"\\' for c in q.id)
+            fields = {"user": q.id if named else "", "prompt": [0] * q.prompt_len, "max_tokens": q.output_len}
+        else:
+            got = (r.get("ingress") or {}).get("brought") or {}
+            if len(r["prompt_ids"]) != q.prompt_len:
+                raise NotApplicable(f"request {q.id}'s record has a {len(r['prompt_ids'])}-token prompt, the advice "
+                                    f"{q.prompt_len}")
+            fields = {"user": r.get("user") or "", "prompt": r["prompt_ids"], "max_tokens": got.get("max_tokens", 0),
+                      "temperature": got.get("temperature", 0.0), "top_p": got.get("top_p", 1.0),
+                      "seed": got.get("seed", 0)}
+        try:
+            out.append(id_request(model=model, frame_bytes=frame_bytes, **fields))
+        except ValueError as err:
+            raise NotApplicable(f"request {q.id} isn't an id request: {err}") from None
+    return out
+
+
+class Ingress(NamedTuple):
+    """A link's certified ingress on a fake upstream, as IoTieRequest reads it: its shape (`io_request.Shape`), each
+    window's cells and their salts (witness), and the warden's registration of each window, (root, domain id)."""
+
+    shape: Any
+    opened: tuple[tuple[tuple[bytes, ...], tuple[bytes, ...]], ...]
+    registered: tuple[tuple[bytes, bytes], ...]
+
+
+def certified_ingress(Q, requests: list[bytes], counts: list[int], *, T: int, frame_bytes: int,
+                      seed: bytes = b"negatives") -> Ingress:
+    """The ingress a certifier certifies of `requests` (id requests, in arrival order) released `counts[b]` request
+    frames in session bucket b, T buckets a window of R cells, R the most a bucket releases, no own frame: each
+    window's cells (`io_request.windows_of`), committed under fake salts (`io_request.instance`)."""
+    shape = Q.Shape(frame_bytes, T, max([1, *counts]), 0)
+    none = Q.RequestView(Q.Carry(0, 0, 0), (), 0, Q.Carry(0, 0, 0))
+    insts = [Q.instance(shape, cells, none, w, seed) for w, cells in enumerate(Q.windows_of(shape, requests, counts))]
+    return Ingress(shape, tuple((i.cells, i.salts) for i in insts), tuple((i.root, i.domain) for i in insts))
+
+
+def request_tie(Q, cells: Ingress, link) -> tuple[bool, ...]:
+    """IoTieRequest's verdict on each ingress window of `link` (`advised.LinkAdvice`): its reference on the certified
+    `cells` against the verifier's statement of the window from the link's advice (`io_request.statements`: the
+    advice's prompt lengths in order, `received`, and the warden's registration), the statements chained from window
+    0; every window refused where the advice can't be stated (its requests' frames aren't the windows' total) or the
+    statements don't chain. The verifier of record takes the verdict from IoTieRequest proofs it verified; this is
+    their reference in the clear."""
+    refused = (False,) * len(link.received)
+    try:
+        stmts = Q.statements(cells.shape, [q.prompt_len for q in link.advice.requests], link.received,
+                             cells.registered)
+    except ValueError:
+        return refused
+    if not Q.chained(stmts):
+        return refused
+    return tuple(bool(Q.reference(cells.shape, Q.Instance(c, salts, s.root, s.domain, s.view, s.window)))
+                 for s, (c, salts) in zip(stmts, cells.opened, strict=True))
+
+
+def n2_advice(advice, request_frames, received: list[int], certified=None, cells: Ingress | None = None):
+    """I1 v0 advice as N2-ADVICE's `advised` reads it, (link, tie): `advised.LinkAdvice` (the advice and each window's
+    `received`, `link_received`'s) and the tie, IoTieRequest's verdict on `N2_LINK` (`advised.IoTieVerdict`), which
+    the verifier of record takes only from its own tie source, never beside the advice. Until IoTieRequest runs here
+    this is that source's stand-in: with the certified ingress `cells`, IoTieRequest's reference on them
+    (`request_tie`); without, its reference in the clear on the prompt lengths, every ingress window accepted when the
+    advice's prompt lengths are `certified`'s requests', in arrival order, else every one refused. A tampering of the
+    advice leaves the certified ingress, so `certified` is the honest advice; by default `advice` itself. Raises
+    ModuleNotFoundError until N2-ADVICE lands, and with `cells` until IoTieRequest does."""
     AD = importlib.import_module(ADVISED_MODULE)
-    return AD.PromptTie(tuple(q.prompt_len for q in advice.requests), tuple(range(len(advice.requests))))
+    link = AD.LinkAdvice(advice, tuple(link_received(advice, request_frames, received)))
+    regs = n2_registrations(len(link.received))
+    if cells is not None:
+        accepted = request_tie(importlib.import_module(IO_REQUEST_MODULE), cells, link)
+    else:
+        ok = certified is None or [q.prompt_len for q in advice.requests] == [q.prompt_len for q in certified.requests]
+        accepted = (ok,) * len(regs)
+    return link, AD.IoTieVerdict(N2_LINK, regs, AD.digest(link), accepted)
 
 
-def n2_advice(advice, request_frames, received: list[int], tie=None):
-    """I1 v0 advice as N2-ADVICE's `advised` reads it (`advised.LinkAdvice`: the advice, each window's `received`,
-    `link_received`'s, and the tie to the certified ingress, `prompt_tie` of the honest advice, by default this one).
-    Raises ModuleNotFoundError until N2-ADVICE lands."""
-    AD = importlib.import_module(ADVISED_MODULE)
-    return AD.LinkAdvice(advice, tuple(link_received(advice, request_frames, received)), tie or prompt_tie(advice))
+def stated(advised):
+    """`n2_advice`'s (link, tie) under a tie the prover states, every ingress window accepted on its own advice: what
+    N2-ADVICE's counts decide without IoTieRequest (REDTEAM phase 7)."""
+    link, tie = advised
+    return link, replace(tie, accepted=(True,) * len(tie.accepted))
 
 
-def advised_codes(link, window: int, syncs, sync_set, request_frames, T: int, R: int, RIN: int, OWN: int, ingress,
+def _n2_view(AD, advised, window: int, T: int, R: int, syncs, sync_set, request_frames):
+    """`advised.view` of the (link, tie) `n2_advice` gives, held to `N2_LINK` and its stand-in registrations, on
+    windows the certifier ran under the declared `syncs`."""
+    link, tie = advised
+    return AD.view(link, window, T, R, syncs, sync_set, request_frames, tie=tie, link_name=N2_LINK,
+                   registrations=n2_registrations(len(link.received)), clocks=syncs)
+
+
+def advised_codes(advised, window: int, syncs, sync_set, request_frames, T: int, R: int, RIN: int, OWN: int, ingress,
                   egress) -> list[str]:
     """N2-ADVICE's code on one advised link-window with heads of counts `ingress` and `egress`, as
     `LinkWindows.advised_check` decides it (`advised.view` under the declared `syncs`, Σ_sync and the link's framing,
-    then `advised.reference`), on the advice as N2 reads it (`n2_advice`): ``.view`` when the advice is malformed or
-    doesn't cover the window, the advised counts' when they refuse, else none. Raises ModuleNotFoundError until
-    N2-ADVICE lands."""
+    then `advised.reference`), on the advice as N2 reads it and its tie (`n2_advice`'s (link, tie)): ``.view`` when
+    the advice is malformed, isn't tied or doesn't cover the window, the advised counts' when they refuse, else none.
+    Raises ModuleNotFoundError until N2-ADVICE lands."""
     AD = importlib.import_module(ADVISED_MODULE)
     try:
-        v = AD.view(link, window, T, R, syncs, sync_set, request_frames)
+        v = _n2_view(AD, advised, window, T, R, syncs, sync_set, request_frames)
     except ValueError:
         return [f"{ADVISED}.view"]
     ok = AD.reference(T, RIN, OWN, ingress, egress, v.released, v.floor, v.received)
     return [] if ok else [ADVISED]
 
 
-def honest_heads(link, T: int, R: int, syncs, sync_set, request_frames,
+def honest_heads(advised, T: int, R: int, syncs, sync_set, request_frames,
                  own: int = 0) -> list[tuple[list[int], list[int]]]:
-    """Each window's (ingress, egress) head counts that an honest advised run of `link` (`n2_advice`) certifies under
-    N2-ADVICE's rule: the egress the advice's releases, the ingress the request frames its floor needs by each bucket,
-    the rest of the window's in its last bucket."""
+    """Each window's (ingress, egress) head counts that an honest advised run of `advised` (`n2_advice`'s (link,
+    tie)) certifies under N2-ADVICE's rule: the egress the advice's releases, the ingress the request frames its floor
+    needs by each bucket, the rest of the window's in its last bucket."""
     AD = importlib.import_module(ADVISED_MODULE)
     out = []
-    for w in range(len(link.received)):
-        v = AD.view(link, w, T, R, syncs, sync_set, request_frames)
+    for w in range(len(advised[0].received)):
+        v = _n2_view(AD, advised, w, T, R, syncs, sync_set, request_frames)
         ingress, prev = [], 0
         for t, f in enumerate(v.floor):
             ingress.append(f - prev + (own if t == 0 else 0))
@@ -687,17 +885,25 @@ def honest_heads(link, T: int, R: int, syncs, sync_set, request_frames,
 
 
 def advice_suite(advice, *, T: int, R: int, syncs, request_frames, received: list[int], sync_set=None,
-                 RIN: int | None = None) -> dict[str, dict]:
+                 RIN: int | None = None, frame_bytes: int | None = None, records: dict[str, dict] | None = None,
+                 model: str = "") -> dict[str, dict]:
     """Every advice negative made from a run's `advice` (I1's): whether it applies to it, whether it's valid advice that
-    round-trips through I1's codec, its bits, and N2-ADVICE's codes (`advised_codes`) on the heads an honest run of the
-    advice certifies (`honest_heads`, under the link's framing `request_frames` with each window's `received` and
-    declared sync; Σ_sync by default the declared syncs' deltas and rhos, `RIN` their largest ingress count). `ok`: the
-    codes are exactly the one it names, or none for a step-unit negative, which N2 must accept (its check is
-    pending). A negative that releases more than R frames in a bucket is refused by the view (``.view``) instead. An
-    honest advice the view refuses has no honest heads, so its row says why and no negative runs."""
+    round-trips through I1's codec, its bits, and N2-ADVICE's codes (`advised_codes`, tied to the certified ingress,
+    `n2_advice`) on the heads an honest run of the advice certifies (`honest_heads`, under the link's framing
+    `request_frames` with each window's `received` and declared sync; Σ_sync by default the declared syncs' deltas and
+    rhos, `RIN` their largest ingress count). The tie: with `frame_bytes`, whose id requests' framing `request_frames`
+    must be (`link_framing`), IoTieRequest's reference (`request_tie`) on the ingress cells of the advice's id requests
+    (`id_requests`, from `records` and `model`) released as the honest heads count them (`certified_ingress`), each
+    row with its verdict by window (`request_tie`) and ``IoTieRequest`` among its codes when it refuses; else the
+    stand-in on the prompt lengths. `untied`: N2-ADVICE's codes under a tie the prover states (`stated`), what N2
+    refuses without IoTieRequest. `ok`: the codes are exactly the checks the suite reads among the ones it names, its
+    code and `also` (none for a step-unit negative, which N2 must accept: its check is pending). A negative that
+    releases more than R frames in a bucket is refused by the view (``.view``) instead. An honest advice the view
+    refuses has no honest heads, so its row says why and no negative runs."""
     mod = advice_module()
     if mod is None:
         raise NotApplicable(f"no advice codec yet: {ADVICE_MODULE} (I1, ADV-SPEC) hasn't landed")
+    Q = io_request_module() if frame_bytes is not None else None
     sync_set = sync_set or SyncSet(tuple(sorted({s.delta for s in syncs})), tuple(sorted({s.rho for s in syncs})))
 
     def codes(link) -> list[str]:
@@ -712,8 +918,19 @@ def advice_suite(advice, *, T: int, R: int, syncs, request_frames, received: lis
             name: {"code": n.code, "check": n.check, "waits": list(n.waits), "ran": False, "why": why}
             for name, n in NEGATIVES.items() if n.tampers == "advice"}
     RIN = RIN or max(1, *(c for i, _ in heads for c in i))
-    out = {"honest": {"bits": mod.total_bits(advice), "codes": codes(n2_advice(advice, request_frames, received))}}
-    out["honest"]["ok"] = out["honest"]["codes"] == []
+    cells = None if Q is None else certified_ingress(Q, id_requests(advice, records, frame_bytes, model),
+                                                     [c for i, _ in heads for c in i], T=T, frame_bytes=frame_bytes)
+    read = {ADVISED, f"{ADVISED}.view"} | ({REQUEST_TIE} if cells is not None else set())
+
+    def judged(b, certified=None) -> tuple[dict, Any]:
+        advised = n2_advice(b, request_frames, received, certified, cells)
+        if cells is None:
+            return {"codes": codes(advised)}, advised
+        tie = list(advised[1].accepted)
+        return {"codes": sorted(codes(advised) + ([] if all(tie) else [REQUEST_TIE])), "request_tie": tie}, advised
+
+    honest, _ = judged(advice)
+    out = {"honest": {"bits": mod.total_bits(advice)} | honest | {"ok": honest["codes"] == []}}
     for name, n in NEGATIVES.items():
         if n.tampers != "advice":
             continue
@@ -723,20 +940,26 @@ def advice_suite(advice, *, T: int, R: int, syncs, request_frames, received: lis
         except NotApplicable as err:
             out[name] = row | {"ran": False, "why": str(err)}
             continue
-        got = codes(n2_advice(b, request_frames, received, prompt_tie(advice)))
-        want = [] if n.code.startswith("StepUnit") else [n.code]
+        got, advised = judged(b, advice)
+        want = sorted(c for c in {n.code, *n.also} if c in read)
+        moved = {j: [p.prompt_len, q.prompt_len] for j, (p, q) in enumerate(zip(advice.requests, b.requests))
+                 if len(b.requests) == len(advice.requests) and p.prompt_len != q.prompt_len}
         out[name] = row | {"ran": True, "valid": mod.decode(mod.encode(b)) == b, "bits": mod.total_bits(b),
-                           "steps": len(b.steps), "outputs": len(b.release), "codes": got, "ok": got == want}
+                           "steps": len(b.steps), "outputs": len(b.release)} | got | \
+            ({"prompt_lens": moved} if moved else {}) | {"untied": codes(stated(advised)), "ok": got["codes"] == want}
     return out
 
 
-def advice_run(path: Path, *, T: int = 50, R: int = 32, frames: int = 1, delta: int = 0, rho: int = 1000,
-               shift: int = 0, ids: Path | None = None) -> dict:
-    """`advice_suite` on the advice at `path` (I1's encode bytes), each request `frames` ingress frames whatever its
-    prompt's length, all received in window 0, every window's sync (δ, ρ): its shape and the rows (`negatives`, or why
-    not). With `shift`, every release `shift` buckets later, for an advice whose clock put an output in its request's
-    own bucket, which N2-ADVICE's floor refuses. With the run's sampled `ids` (`read_ids`), `tie_suite` on it at T
-    buckets of R cells (`tie`)."""
+def advice_run(path: Path, *, T: int = 50, R: int = 32, frame_bytes: int = cs.FRAME_BYTES, delta: int = 0,
+               rho: int = 1000, shift: int = 0, ids: Path | None = None, model: str = "") -> dict:
+    """`advice_suite` on the advice at `path` (I1's encode bytes) under the link's framing at `frame_bytes`-byte
+    frames (`link_framing`), all its requests' frames received in window 0, every window's sync (δ, ρ): its shape and
+    the rows (`negatives`, or why not), each tied by IoTieRequest's reference once `io_request` is importable, on the
+    id requests of the run's records (`ids`, `read_requests`; `model` the name they were sent under). With `shift`,
+    every release `shift` buckets later, for an advice whose clock put an output earlier than a declared δ allows,
+    which N2-ADVICE's floor refuses. Under δ = 0 an output in its request's own bucket (a served first token, the
+    engine's clock with no certifier on the path) is accepted. With the run's sampled `ids` (`read_ids`), `tie_suite`
+    on it at T buckets of R cells (`tie`)."""
     mod = advice_module()
     if mod is None:
         raise NotApplicable(f"no advice codec yet: {ADVICE_MODULE} (I1, ADV-SPEC) hasn't landed")
@@ -744,14 +967,19 @@ def advice_run(path: Path, *, T: int = 50, R: int = 32, frames: int = 1, delta: 
     if shift:
         adv = replace(adv, release=tuple(b + shift for b in adv.release))
     windows = max(adv.release, default=0) // T + 1
-    framing = (frames,) * max((q.prompt_len for q in adv.requests), default=1)
+    framing = link_framing(frame_bytes, max((q.prompt_len for q in adv.requests), default=1))
+    received = [sum(framing[q.prompt_len - 1] for q in adv.requests)] + [0] * (windows - 1)
     try:
         rows = advice_suite(adv, T=T, R=R, syncs=[ClockSync(delta, Fraction(rho))] * windows, request_frames=framing,
-                            received=[frames * len(adv.requests)] + [0] * (windows - 1))
+                            received=received, frame_bytes=frame_bytes, records=read_requests(ids) if ids else None,
+                            model=model)
     except ModuleNotFoundError as err:
         rows = {"why": f"N2-ADVICE's advised check hasn't landed ({err.name})"}
+    except NotApplicable as err:
+        rows = {"why": str(err)}
     doc = {"format": FORMAT, "advice": str(path), "requests": len(adv.requests), "steps": len(adv.steps),
-           "outputs": len(adv.release), "windows": windows, "T": T, "R": R, "shift": shift, "negatives": rows}
+           "outputs": len(adv.release), "windows": windows, "T": T, "R": R, "frame_bytes": frame_bytes,
+           "received": received, "shift": shift, "negatives": rows}
     if ids is not None:
         try:
             doc["tie"] = tie_suite(adv, read_ids(ids), T=T, R=R)
@@ -976,9 +1204,10 @@ TIE_RUN = "verity-network-tie-run/v1"
 #: what a run must keep for the tie to open it, by the key `tie_run`'s `missing` names it by
 TIE_MISSING = {
     "io-tie": f"the I/O tie: {IO_TIE_MODULE} (IO-TIE) isn't in this tree",
-    "id-events": "token-id events: no egress frame is an id event (`active.id_event`), so none is a data cell the tie "
-                 "reads an id from; a fixed plan's frames are text events, and only a varied plan "
-                 "(`certifier_serve.py plan --traffic varied`) writes id events",
+    "id-events": "token-id events: no egress frame is an id event (`active.id_event`), or on a compact plan a compact "
+                 "record (`active.compact_record`), so none is a data cell the tie reads an id from; a fixed plan's "
+                 "frames are text events, and only a varied plan (`certifier_serve.py plan --traffic varied`, with "
+                 "`--compact B` its records) writes them",
     "commit": "the Commit's rows: the endpoint's sampled ids of the run's requests, by each id request's user (--ids), "
               "which the run doesn't keep (the shim drops `user` before it forwards a request)",
 }
@@ -986,7 +1215,9 @@ TIE_MISSING = {
 TIE_STAND_INS = {
     "cells_root": "each window's frames held to its certified egress head (record v2's frames root, under its "
                   "certificate), then committed under fake salts in place of the warden's bucket rows",
-    "cells": "each certified id event as v4's data cell on the stream its ordinal names; any other frame as it is",
+    "cells": "each certified id event as v4's data cell on the stream its ordinal names, and on a compact plan each "
+             "compact record (`active.compact_record_data`) as the data cell of its id, in an id event's frame "
+             "(`certifier_serve.FRAME_BYTES`); any other frame as it is",
     "port": "the Commit's port from --ids: one row a certified request's output, in (stream, index) order, under fake "
             "salts",
     "map": "the certified placement, each data cell its stream's next output, since no advice says where an output "
@@ -999,11 +1230,14 @@ TIE_ORDER = ("map", "cells_root", "port", "content")
 NOT_APPLICABLE = "not-applicable"
 
 
-def tie_cell(IT, slot: bytes | None, B: int) -> bytes:
-    """A certified egress slot as the tie's cell: padding a pad, an id event's canonical frame the v4 data cell of its
-    id on the stream its ordinal names, any other frame as it is."""
+def tie_cell(IT, slot: bytes | None, B: int, compact: bool = False) -> bytes:
+    """A certified egress slot as the tie's B-byte cell: padding a pad, an id event's canonical frame (or under
+    `compact` a compact record) the v4 data cell of its id on the stream its ordinal names, any other frame as it is."""
     if slot is None:
         return IT.pad_cell(B)
+    if compact:
+        got = compact_record_data(slot)
+        return slot if got is None else IT.data_cell(got[1], got[0], B)
     kind, stream, payload = decode_frame(slot)
     got = id_event_data(payload) if (kind, stream) == (DATA, CANONICAL_STREAM) else None
     if got is None or slot != encode_frame(DATA, CANONICAL_STREAM, payload, B):
@@ -1037,10 +1271,13 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
     """The I/O tie on each egress window of the certifier-serve run `run`, `ids` the endpoint's sampled ids by request
     user (`read_ids`; None when not given), with `TIE_STAND_INS` for what the run doesn't keep. `verdict`: refused
     when a window's parts fail (`failing`, by window, in `TIE_ORDER`; window -1 the committed outputs no cell carries;
-    `codes` their ``IoTieWindow.PART``), accepted when none does, `NOT_APPLICABLE` when the run lacks what the tie
-    opens (`missing`, by `TIE_MISSING`'s keys). The windows whose frames are `held` to their certified heads, at each
-    end; the run's `id_events`, its certified requests' committed `outputs`, the data cells `placed` on one, and the
-    committed outputs no cell carries (`unplaced`)."""
+    `codes` their ``IoTieWindow.PART``) or the finish doesn't hold (`finish`), accepted when neither,
+    `NOT_APPLICABLE` when the run lacks what the tie opens (`missing`, by `TIE_MISSING`'s keys). `finish`: whether
+    each response's length and finish are the Commit's; on a compact plan the link's records held to the sampled ids
+    (`active.compact_finish_violations`, each (ordinal, why) in `finish_violations`), on id events true, their finish
+    being their ids'; None without the ids or the events. The windows whose frames are `held` to their certified
+    heads, at each end; the run's `id_events` (a compact plan's records), its certified requests' committed
+    `outputs`, the data cells `placed` on one, and the committed outputs no cell carries (`unplaced`)."""
     IT = io_tie_module()
     plan, report, dep = (json.loads((run / f).read_text())
                          for f in ("plan.json", "calibration.json", "deployment.json"))
@@ -1055,14 +1292,20 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
     held = {d.value: [w for w in range(windows)
                       if frames_held(certified.get((d, w)), recs.get(w), p, key, session, link)]
             for d, (recs, p) in ends.items()}
-    events = sum(_is_id_event(s) for r in outs for row in r.grid for s in row if s is not None)
+    compact = bool(plan.get("compact"))
+    real = [s for r in sorted(outs, key=lambda r: r.window) for row in r.grid for s in row if s is not None]
+    events = sum((compact_record_data(s) is not None) if compact else _is_id_event(s) for s in real)
     missing = {k: TIE_MISSING[k] for k, lacks in (("io-tie", IT is None), ("id-events", not events),
                                                   ("commit", ids is None)) if lacks}
+    users = ({r["stream"]: r["user"] for r in cs.certified_io(plan, setup, ins, outs)["records"]}
+             if events and ids is not None else None)
+    finish = compact_finish_violations({q: ids.get(u, ()) for q, u in users.items()}, plan["varied"]["eos_token_ids"],
+                                       real) if compact and users is not None else []
     out = {"verdict": NOT_APPLICABLE, "codes": [], "failing": {}, "windows": windows,
-           "held": {end: len(ws) for end, ws in held.items()}, "id_events": events, "missing": missing}
+           "held": {end: len(ws) for end, ws in held.items()}, "id_events": events, "missing": missing,
+           "finish": None if users is None else not finish, "finish_violations": [list(v) for v in finish]}
     if missing:
         return out
-    users = {r["stream"]: r["user"] for r in cs.certified_io(plan, setup, ins, outs)["records"]}
     step, rows = {}, []
     for q in sorted(users):
         for k, x in enumerate(ids.get(users[q], ())):
@@ -1075,9 +1318,10 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
     port = rows, salts, IT.rows_levels(pd.domain_id, rows, salts), pd.domain_id
     nxt: dict[int, int] = defaultdict(int)
     placed: dict[int, tuple[list[bytes], list]] = {}
+    B = cs.FRAME_BYTES if compact else e.frame_bytes
     for w in range(windows):
         grid = egress[w].grid if w in egress else [(None,) * e.allocation] * e.buckets
-        cells, at = [tie_cell(IT, s, e.frame_bytes) for row in grid for s in row], []
+        cells, at = [tie_cell(IT, s, B, compact) for row in grid for s in row], []
         for c in cells:
             p = IT.parse_cell(c)
             if p is not None and p.data:
@@ -1087,7 +1331,7 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
                 at.append(None)
         placed[w] = cells, at
     S = max([1, *(len({x[1] for x in at if x and x[1] is not None}) for _, at in placed.values())])
-    shape = IT.Shape(e.frame_bytes, e.buckets, e.allocation, P=1, S=S, DS=DS)
+    shape = IT.Shape(B, e.buckets, e.allocation, P=1, S=S, DS=DS)
     ingress_held = len(held[Direction.INGRESS.value]) == windows
     for w, (cells, at) in placed.items():
         steps = sorted({x[1] for x in at if x and x[1] is not None})
@@ -1105,7 +1349,7 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
     if unplaced:
         out["failing"][-1] = ["content"]
     out["codes"] = sorted({f"{TIE}.{p}" for parts in out["failing"].values() for p in parts})
-    out["verdict"] = "refused" if out["failing"] else "accepted"
+    out["verdict"] = "refused" if out["failing"] or out["finish"] is False else "accepted"
     return out | {"outputs": sum(committed.values()),
                   "placed": sum(1 for _, at in placed.values() for x in at if x and x[1] is not None),
                   "unplaced": unplaced}
@@ -1151,9 +1395,10 @@ def tie_runs(src: Path, ids: Path | None = None) -> dict:
 
 
 def n2(run: Path, clock=time.monotonic) -> dict:
-    """N2's verdict of record on every link-window of the run's `certified.jsonl`, through the proof service's stream
-    as `certifier_serve.check` takes it (Selection All, the Lean audit) without asking the certifier's salts, and the
-    link's network verdict; each refused link-window's codes (`codes`), and their union."""
+    """N2's verdict on every link-window of the run's `certified.jsonl`, through the proof service's stream as
+    `certifier_serve.check` takes it (Selection All, the Lean audit, `unproved_outcome`: nothing is proved, so the
+    verdict reads the opening) without asking the certifier's salts, and the link's network verdict; each refused
+    link-window's codes (`codes`), and their union."""
     lw, plan = link(run)
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="negatives", coins=cs._no_coins, clock=clock)
@@ -1168,7 +1413,7 @@ def n2(run: Path, clock=time.monotonic) -> dict:
         reg = lw.register(st, lw.registration(opening, previous))
         previous = reg.digest
         draw = st.select(reg)
-        outcome = st.deliver(draw, [lw.session(opening, draw)]) or lw.outcome(st, draw, opening, syncs)
+        outcome = st.deliver(draw, [lw.session(opening, draw)]) or lw.unproved_outcome(st, draw, opening, syncs)
         found = codes(lw, opening, bytes.fromhex(reg.record["roots"][0]["root"]), syncs)
         rows.append({"window": w, "accepted": outcome.accepted, "symbols": list(outcome.verdict.codes),
                      "codes": found if not outcome.accepted else []})
@@ -1277,11 +1522,14 @@ def main(argv=None) -> int:
     a.add_argument("--advice", required=True, type=Path, help="the run's advice (I1's encode bytes)")
     a.add_argument("--T", type=int, default=50, help="buckets a window (the advice's release buckets')")
     a.add_argument("--R", type=int, default=32, help="egress frames a bucket")
-    a.add_argument("--frames", type=int, default=1, help="ingress frames a request")
+    a.add_argument("--frame-bytes", type=int, default=cs.FRAME_BYTES,
+                   help="the link's frame size: each request's frames are its id request's at this size")
+    a.add_argument("--model", default="", help="the model the run's requests named, in their id requests")
     a.add_argument("--delta", type=int, default=0, help="each window's declared sync: δ buckets ...")
     a.add_argument("--rho", type=int, default=1000, help="... and ρ frames a bucket")
     a.add_argument("--shift", type=int, default=0, help="every release this many buckets later")
-    a.add_argument("--ids", type=Path, help="the run's sampled ids (ADVICE-SRC's requests.jsonl), for the I/O tie")
+    a.add_argument("--ids", type=Path, help="the run's records (serve-openai's requests.jsonl): each request's prompt "
+                   "and what it brought, for IoTieRequest's ingress, and its sampled ids, for the I/O tie")
     r = sub.add_parser("tie-run", help="the I/O tie's verdict on each run of a gate run's tarball or a run directory")
     r.add_argument("--run", required=True, type=Path,
                    help="a gate run's tarball (c…/out/STRATEGY/), a directory of runs, or one run's directory")
@@ -1297,8 +1545,8 @@ def main(argv=None) -> int:
         return 0 if all(r["verdict"] != NOT_APPLICABLE and r["ok"] is not False for r in doc["runs"].values()) else 1
     if args.command == "advice":
         try:
-            doc = advice_run(args.advice, T=args.T, R=args.R, frames=args.frames, delta=args.delta, rho=args.rho,
-                             shift=args.shift, ids=args.ids)
+            doc = advice_run(args.advice, T=args.T, R=args.R, frame_bytes=args.frame_bytes, delta=args.delta,
+                             rho=args.rho, shift=args.shift, ids=args.ids, model=args.model)
         except NotApplicable as err:
             raise SystemExit(str(err))
         print(json.dumps(doc, indent=1))
