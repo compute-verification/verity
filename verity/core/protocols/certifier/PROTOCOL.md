@@ -1071,8 +1071,10 @@ are sent as 0, which is `ChargeCount_v1`'s scope. Which slots ask (`en`) is not 
 compile slice, its charge included, is proved on every advised window and never sampled, so `en` is pinned by that
 slice's scan, and the carry across windows is chained from the book's priors (#3801, `charge_chain.check_chain`). The
 one hypothesis left is that `ChargeCount_v1`'s circuit computes Lean's `window`. circuit-check holds the circuit to the
-Python reference, and the Lean is held to that reference by a comparison on random cases (1,200 windows and 400
-sessions, with no mismatch); it is not proved in Lean.
+Python reference, and the Lean is held to that reference by the charge difftest: the certifier program's
+`NetworkCertifier.AdviceV1`, proved equal to the definitions (`CodeChargesV1`), gives what `reference_charge` gives on
+4,000 random instances (`runs` in `lean/lean-audit.json`, its data checked by
+`verity/core/protocols/certifier/tests/test_network_certifier_charge_lean_difftest.py`); it is not proved in Lean.
 
 The bound charges the caps `b_w`, not the realized lengths, since a run counts if any advice within the caps explains
 it. The compiler must be registered before the run (`CompilerPrecommitted`), and its frames must read only the advice

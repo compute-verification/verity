@@ -12,7 +12,7 @@ are the wire's (W2, J) and the compiler's (precommitted, deterministic).
 The scope and the one hypothesis left are `EncardChargedLe`'s: the windows are decision-only (their four counts sent as
 0), with the asks (`en`) pinned by the always-proved compile slice's scan; and that `ChargeCount_v1`'s circuit computes
 `AdviceV1.window` is not proved in Lean (circuit-check holds the circuit to the Python reference, and the Lean
-definitions are held to that reference by a comparison on random cases).
+definitions are held to that reference by the charge difftest and `CodeChargesV1`).
 -/
 
 namespace NetTiming.Guarantees

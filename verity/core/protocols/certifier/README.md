@@ -160,7 +160,8 @@ and their evaluator.
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
 package to them (`lake exe certifier-difftest INSTANCES PYTHON N` on what `lean/scripts/difftest_vectors.py` writes; the audit runs it
-from `lean/lean-audit.json`).
+from `lean/lean-audit.json`). Advice v1's charge has its own: `lake exe certifier-charge-difftest INSTANCES PYTHON N` on
+what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`.
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
 `Security/Models/NetworkCertifier/Guarantees.lean`'s documentation:
