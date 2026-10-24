@@ -1,5 +1,6 @@
 import Proofs.Accounting.TS.Session.Lanes.Assumptions
 import Proofs.Pouw.H1Zy.Combine
+import Proofs.Pouw.H1Zy.CombineBits
 
 /-!
 # The combine's part of `LeafChecks` from its Definition
@@ -13,6 +14,11 @@ Definition's on its own partials and receipt meets `CombineOk` wherever `ok = 1`
 What stays of the field is the first two claims, `CombineComputes`: on every wire assignment the session's evaluation
 agrees with, the decoded `ok` is the Definition's on the decoded partials and receipt. `leafChecks_of_combineComputes`
 gives `LeafChecks` from it and the lanes' field.
+
+`CombineComputes` is in turn split at the combine's pieces: `CombineLowers` says the circuit computes the body on bits,
+its pieces (`PouwXor32_v2`, `PouwEq32_v2`, `PouwAndBit_v2`) at their lowerings (`Pouw.H1Zy.combineBits`), and that each
+piece's lowering computes its word view, and so their composition the body on words, is proved
+(`Pouw.H1Zy.combineBits_bitsOf`). The two are equivalent (`combineLowers_iff`).
 -/
 
 namespace Accounting.TS.Lanes
@@ -43,6 +49,33 @@ def CombineComputes {nw : ℕ} (sess : Option (Fin 32) → RowsSession)
     (decC (sess none) (portRead (sess none) vals)).ok =
       Pouw.H1Zy.combineOk (decC (sess none) (portRead (sess none) vals)).parts
         (decC (sess none) (portRead (sess none) vals)).receipt
+
+/-- **The combine's circuit computes its pieces' composition at its port rows**: at the combine's session `sess none`, on
+every wire assignment the key program's evaluation agrees with on every unit's wires, the `ok` word `decC` reads from the
+port rows is `PouwH1Combine_v1`'s body on bits (`Pouw.H1Zy.combineBits`: `PouwXor32_v2`, `PouwEq32_v2` and
+`PouwAndBit_v2` at their lowerings) on the bits of the partials and receipt `decC` reads. What it rests on is
+circuit-check's lowering of `PouwH1Combine_v1`, which composes those three pieces. -/
+def CombineLowers {nw : ℕ} (sess : Option (Fin 32) → RowsSession)
+    (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw) : Prop :=
+  ∀ vals : Fin (sess none).Circ.N → Bool,
+    (∀ u, ∀ g ∈ (sess none).P.io u, (sess none).Circ.eval vals g = vals g) →
+    (decC (sess none) (portRead (sess none) vals)).ok =
+      Pouw.H1Zy.combineBits (fun l w => Pouw.H1Zy.bitsOf ((decC (sess none) (portRead (sess none) vals)).parts l w))
+        (fun w => Pouw.H1Zy.bitsOf ((decC (sess none) (portRead (sess none) vals)).receipt w))
+
+/-- **`CombineComputes` is `CombineLowers`**: the pieces' lowerings compose to the body on words
+(`Pouw.H1Zy.combineBits_bitsOf`). -/
+theorem combineLowers_iff {nw : ℕ} (sess : Option (Fin 32) → RowsSession)
+    (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw) :
+    CombineLowers sess decC ↔ CombineComputes sess decC := by
+  unfold CombineLowers CombineComputes
+  simp only [Pouw.H1Zy.combineBits_bitsOf]
+
+/-- **`CombineComputes` from `CombineLowers`.** -/
+theorem combineComputes_of_lowers {nw : ℕ} {sess : Option (Fin 32) → RowsSession}
+    {decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw} (h : CombineLowers sess decC) :
+    CombineComputes sess decC :=
+  (combineLowers_iff sess decC).1 h
 
 /-- **`LeafChecks` from the lanes' field and `CombineComputes`**: the combine's field of
 `Accounting.Assumptions.TS.LeafChecks` needs only that its circuit computes its Definition at its port rows; that the
