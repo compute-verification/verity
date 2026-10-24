@@ -243,6 +243,18 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
             ok_, f0, f1, counts = AE.reference_kt(stream["C"], stream["NW"], counts, 1, ctx, bit)
             kbad += not ok_ or (f0, f1) != fs
         out.update(kt_mismatches=kbad)
+        out.update(forced_contexts=_forced(stream["kt"]))
+    count_cases, count_fins, cbad_ref = [], [], 0
+    for w, win in enumerate(stream["windows"]):
+        t = AE.Tally()
+        for sym, (lo, hi, _pend, used) in zip(win["symbols"], win["states"], strict=True):
+            count_cases.append((t, 1, sym))
+            t = AE.reference_count_step(K, BIN, AE.CW, t, 1, sym)
+            cbad_ref += (t.ok, t.low, t.high, t.used) != (1, lo, hi, used)
+        n = len(win["segment"])
+        cbad_ref += AE.reference_count_finish(AE.CW, t, n) != (1, n) or (n and AE.reference_count_finish(AE.CW, t, n - 1)[0])
+        count_fins += [(t, n), (t, max(n - 1, 0))]
+    out.update(counted=sum(f[1] for f in count_fins[::2]), count_mismatches=cbad_ref)
     if circuit:
         cases, want = [], []
         for st, sym, look, nxt in steps_all:
@@ -265,8 +277,30 @@ def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flip
                 for g, c in zip(got, chunk):
                     w_ = AE.reference_kt(stream["C"], stream["NW"], *c)
                     cbad += (g[0] != 0) if w_[0] == 0 else g != w_
-        out.update(circuit_cases=len(cases) + len(fins_all) + len(kt_cases), circuit_mismatches=cbad)
+        count_cases += [(t, 0, sym) for t, _en, sym in count_cases]
+        for at in range(0, len(count_cases), 4096):
+            chunk = count_cases[at:at + 4096]
+            for g, c in zip(AE.evaluate_counts(K, BIN, AE.CW, chunk), chunk):
+                w_ = AE.reference_count_step(K, BIN, AE.CW, *c)
+                cbad += (g.ok != 0) if w_.ok == 0 else g != w_
+        got = AE.evaluate_count_finishes(AE.CW, count_fins) if count_fins else []
+        cbad += sum(g != AE.reference_count_finish(AE.CW, *f) for g, f in zip(got, count_fins))
+        out.update(circuit_cases=len(cases) + len(fins_all) + len(kt_cases) + len(count_cases) + len(count_fins),
+                   circuit_mismatches=cbad)
     return out
+
+
+def _forced(kt: Sequence[Sequence[int]]) -> int:
+    """The decisions whose plain context the bits alone don't give: after a 0 the next decision is about the same
+    request, one pass on, unless the replay took that request without asking (forced, when the engine went quiet)."""
+    run, prev, n = 0, 1, 0
+    for ctx, bit in kt:
+        run = 0 if prev else run + 1
+        n += ctx != min(run, 2)
+        if ctx == 0:
+            run = 0
+        prev = bit
+    return n
 
 
 # --- the sources ---------------------------------------------------------------------------------------------------------
