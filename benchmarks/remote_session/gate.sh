@@ -15,15 +15,16 @@
 #   audit  `auditor.sh` over the host run HOST_RUN (default the one `host` fetched), into $OUT itself: ledger.jsonl,
 #          pins.jsonl, auditor_line.json, credit.md, which `gate_whatif.sh` reads.
 #   fire   wait until PROVER_RUN holds ENGINES GPUs on PROVER_NODE (its `gpu-lease status`, over that node's line of
-#          /etc/vy/peers), then probe, open, host, close and audit. A host run that fails leaves the period open for a
-#          rerun in it and runs no auditor.
+#          /etc/vy/peers, or PROVER_SSH's ssh arguments where that line's private address doesn't route, as from
+#          vy-nebius-cpu-4 and -cpu-5), then probe, open, host, close and audit. A host run that fails leaves the
+#          period open for a rerun in it and runs no auditor.
 #
 # With DRY=1 no request reaches either gate: each is written to gate.requests and printed, the key need not exist, and
 # what doesn't need it runs (the circuit, the peers line to PROVER_NODE and its lease status, vy-auditor-1's host key).
 set -u
 : "${OUT:?}"
 VERB=${1:?probe, open, host, close, audit or fire}
-GATE_KEY=${GATE_KEY:-$HOME/.ssh/vy-challenger-gate-memory-accounting}
+GATE_KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-memory-accounting}
 CHALLENGER=${CHALLENGER:-research@204.12.178.84}
 AUDITOR=${AUDITOR:-research@81.85.1.145}
 AUDITOR_FP=${AUDITOR_FP:-SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs}
@@ -174,8 +175,8 @@ close_period() {
 leased() {
   # how many GPUs PROVER_RUN holds on PROVER_NODE, or "gone" when it neither holds nor waits for any
   local to st
-  read -ra to <<< "$(grep "^$PROVER_NODE " /etc/vy/peers | cut -d' ' -f2-)"
-  [ ${#to[@]} -gt 0 ] || { echo "no $PROVER_NODE in /etc/vy/peers" >&2; return 3; }
+  read -ra to <<< "${PROVER_SSH:-$(grep "^$PROVER_NODE " /etc/vy/peers | cut -d' ' -f2-)}"
+  [ ${#to[@]} -gt 0 ] || { echo "no $PROVER_NODE in /etc/vy/peers and no PROVER_SSH" >&2; return 3; }
   st=$(ssh -o BatchMode=yes -o ConnectTimeout=20 "${to[@]}" \
     "/workspace/pouw/infra/bin/gpu-lease status; cat /run/gpu-lease/wait.* 2> /dev/null" 2>&1) || return 3
   local held
