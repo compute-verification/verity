@@ -186,7 +186,6 @@ theorem egressFrame_config (st : State) (s position : Nat) (bytes : ByteArray) (
 theorem egressEvent_config (st : State) (s : Nat) (event : ByteArray) (ready : Int) :
     (st.egressEvent s event ready).config = st.config := by
   unfold State.egressEvent
-  dsimp only
   split
   · exact egressFrame_config _ _ _ _ _
   · rfl
@@ -194,7 +193,6 @@ theorem egressEvent_config (st : State) (s : Nat) (event : ByteArray) (ready : I
 theorem egressRecord_config (st : State) (s position : Nat) (record : ByteArray) (ready : Int) :
     (st.egressRecord s position record ready).config = st.config := by
   unfold State.egressRecord
-  dsimp only
   split
   · exact egressFrame_config _ _ _ _ _
   · rfl
@@ -211,7 +209,6 @@ theorem egressFrame_sized {st : State} (h : Sized st.config.egress.frameBytes st
 theorem egressEvent_sized {st : State} (h : Sized st.config.egress.frameBytes st.shaper) (s : Nat) (event : ByteArray)
     (ready : Int) : Sized st.config.egress.frameBytes (st.egressEvent s event ready).shaper := by
   unfold State.egressEvent
-  dsimp only
   split
   · rename_i position bytes _ hb
     exact egressFrame_sized h s position (encodeFrame_size hb) ready
@@ -221,7 +218,6 @@ theorem egressRecord_sized {st : State} (h : Sized st.config.egress.frameBytes s
     (record : ByteArray) (ready : Int) :
     Sized st.config.egress.frameBytes (st.egressRecord s position record ready).shaper := by
   unfold State.egressRecord
-  dsimp only
   split
   · rename_i bytes _ hb
     exact egressFrame_sized h s position (compactCell_size hb) ready

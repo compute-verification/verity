@@ -245,7 +245,6 @@ theorem egressFrame_quiet (st : State) (s position : Nat) (bytes : ByteArray) (r
 theorem egressEvent_quiet (st : State) (s : Nat) (event : ByteArray) (ready : Int) :
     Quiet st (st.egressEvent s event ready) := by
   unfold State.egressEvent
-  dsimp only
   split
   · exact egressFrame_quiet _ _ _ _ _
   · exact Quiet.shaper (ShRel.fault _ _)
@@ -253,7 +252,6 @@ theorem egressEvent_quiet (st : State) (s : Nat) (event : ByteArray) (ready : In
 theorem egressRecord_quiet (st : State) (s position : Nat) (record : ByteArray) (ready : Int) :
     Quiet st (st.egressRecord s position record ready) := by
   unfold State.egressRecord
-  dsimp only
   split
   · exact egressFrame_quiet _ _ _ _ _
   · exact Quiet.shaper (ShRel.fault _ _)

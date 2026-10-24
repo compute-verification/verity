@@ -104,7 +104,6 @@ theorem egressFrame_bucketer (st : State) (s position : Nat) (bytes : ByteArray)
 theorem egressEvent_bucketer (st : State) (s : Nat) (event : ByteArray) (ready : Int) :
     (st.egressEvent s event ready).bucketer = st.bucketer := by
   unfold State.egressEvent
-  dsimp only
   split
   · exact egressFrame_bucketer _ _ _ _ _
   · rfl
@@ -112,7 +111,6 @@ theorem egressEvent_bucketer (st : State) (s : Nat) (event : ByteArray) (ready :
 theorem egressRecord_bucketer (st : State) (s position : Nat) (record : ByteArray) (ready : Int) :
     (st.egressRecord s position record ready).bucketer = st.bucketer := by
   unfold State.egressRecord
-  dsimp only
   split
   · exact egressFrame_bucketer _ _ _ _ _
   · rfl
