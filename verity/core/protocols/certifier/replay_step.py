@@ -1,6 +1,7 @@
 """One vLLM v1 scheduler step as a Boolean Definition: the compile unit's core, between advice validity and the Programs.
 
-    ReplayStep_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW} (state, arrivals, bits, prefix) -> (ok, rows, state')
+    ReplayStep_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW} (state, arrivals, bits, prefix[, walk])
+        -> (ok, rows, state'[, walk'])
 
 The precommitted compiler (PRF-143: committed Programs = compile(advice) under the advice's hiding root, total, refusing
 every ill-formed advice up to the cap ℓ) need not read the schedule from the advice: ENC-REPLAY replays vLLM's
@@ -9,7 +10,7 @@ scheduler step for step from the certified I/O and a residual of a few bits per 
 specification in Python, and the replay's own steps are its difftest (`benchmarks/network_e2e/encodings/replay_vectors.py`).
 
 **What it models.** vLLM v1's `Scheduler.schedule` and `update_from_output` (the pinned 0.28.1rc1.dev472) under
-synchronous scheduling, FCFS, one full-attention KV group, as `replay._Sched` runs them with `decide`:
+synchronous or async scheduling, FCFS, one full-attention KV group, as `replay._Sched` runs them with `decide`:
 - *Arrivals.* Requests reach the engine in their certified order. When the engine is quiet (nothing running or
   waiting) the next arrival enters the waiting queue unasked. Otherwise an arrival enters only where the waiting loop
   reaches the queue's end with room for it (an *open* step: budget left, fewer than M running, and the request would
@@ -23,11 +24,23 @@ synchronous scheduling, FCFS, one full-attention KV group, as `replay._Sched` ru
   the watermark (WM, when something runs); the first that doesn't ends the loop.
 - *Close and update.* A row samples iff it reaches the request's known tokens; a request stops at its certified
   output length O and frees its blocks. A row's kind is decode iff n = 1 and start ≥ P (I1 v0's rule).
+- *Async scheduling* (AS = 1; `AsyncScheduler`, whose update of a step runs after the next schedule). One step here is
+  one `schedule()` and the update of the step before it, so a running request's out counts the output in flight. A
+  request whose last output was sampled the step before is `fin`: at this schedule it still runs, holds its blocks and
+  counts toward M and the watermark, and gets its lag row (n as above, sampling nothing) unless it is `cap` (O is its
+  max_tokens: the scheduler skips a request whose tokens in flight reach it). At this step's update it leaves and
+  frees its blocks. A request reaching O sets `fin` and keeps its slot. A `fin` victim frees its blocks at preemption
+  and isn't requeued, but the step still preempted, so its waiting loop doesn't run. The certified O forces every lag
+  row, so async costs no decision.
+- *Walk entries* (EW ≥ 1, `CacheStep_v1`'s entry width): each running slot's `pfx` moves with its request through the
+  compaction and placement. A slot with a row takes that row's entry after its `CacheStep_v1` calls, a kept slot
+  without one keeps its own, and a preempted or stopped request drops its own.
 
 **Statics** (all public): the size class R running slots, W waiting slots and A arrivals looked ahead; the engine's
 max_num_seqs M, max_num_batched_tokens T, max_model_len L, block_size B (a power of 2), long_prefill_token_threshold
 H (0 for none), enable_chunked_prefill CH, watermark blocks WM, scheduler_reserve_full_isl FULL, enable_prefix_caching
-PC and num_gpu_blocks NB; IW, a request id's width. Widths: LW = bitlen(L), TW = bitlen(T), BW = bitlen(NB),
+PC and num_gpu_blocks NB; IW, a request id's width; async_scheduling AS; EW, the walk entries' width (0 for none).
+Widths: LW = bitlen(L), TW = bitlen(T), BW = bitlen(NB),
 HW = bitlen(⌈L / B⌉), AC = bitlen(A). Every field is little-endian.
 
 **Inputs.**
@@ -35,17 +48,20 @@ HW = bitlen(⌈L / B⌉), AC = bitlen(A). Every field is little-endian.
   waiting request has computed nothing) and the free block count. A request holds ⌈computed / B⌉ blocks, so the
   state carries no block counts per request. The scan starts from the empty engine with NB − 1 free blocks (block 0
   is vLLM's null block), so the state's own invariants (valid slots a prefix, computed < P + out ≤ L, out < O) hold
-  by induction and the step doesn't recheck them;
-- the next A certified arrivals (valid, id, P, O), in order from the scan's cursor;
+  by induction and the step doesn't recheck them. With AS the state ends with its async group: each running slot's
+  `fin` and `cap`, then each waiting slot's `cap`;
+- the next A certified arrivals (valid, id, P, O, and with AS cap), in order from the scan's cursor;
 - A residual bits: the a-th open arrival's decision is bit a;
 - the prefix layer's counts, read only with PC: per candidate (W waiting slots, then A arrivals) its hit h and how
   many of those blocks are evictable (cached, unreferenced: taking them shrinks the free count), and per running slot
   how many blocks it returns when it is preempted or stops (its blocks whose last reference it drops). Without PC
-  there are no hits and a request returns all it holds, and these inputs are unread.
+  there are no hits and a request returns all it holds, and these inputs are unread;
+- with EW, the walk entries: `run_pfx`, each running slot's (the state row's cache group holds it), and `row_pfx`, each
+  row's entry after its `CacheStep_v1` calls, by the row's slot.
 
 **Outputs.** ok; taken, the arrivals consumed (the scan's cursor moves by it); used, the residual bits read; R rows
 (valid, request, kind, start, n), in the scheduler's order (running first, then the admitted, in order) at the slots
-of the running list before the step's stopped requests leave it; and the next state.
+of the running list before the step's leaving requests leave it; the next state; and with EW the next `run_pfx`.
 
 **ok = 0 refuses** what this size class can't express or the inputs make meaningless:
 - an admission into a full running list (R slots, fewer than M), a waiting list past W after preemption, or a step
@@ -56,30 +72,27 @@ of the running list before the step's stopped requests leave it; and the next st
 
 **Not modeled.** The prefix-hash state (which blocks hold which tokens, the free queue's order, eviction):
 ENC-DERIVED's canonical source and hit rules carry it and supply h, the evictable count and the returns, which this
-circuit bounds but doesn't derive. Also async scheduling (placeholders, a step in flight), priority scheduling,
-speculative decoding, LoRA, structured output, encoder inputs and KV connectors.
+circuit bounds but doesn't derive. Also priority scheduling, speculative decoding, LoRA, structured output, encoder
+inputs and KV connectors.
 
-**Composition** (the compile unit, all inside one ZK proof under the advice's hiding root):
-1. advice validity (`advice_check.AdviceCheck`'s parser, the residual's code instead of I1 v0's grammar): the committed
-   residual is at most ℓ bits and decodes to the decision bits, one per open-step ask;
+**Composition** (the compile unit, all inside one ZK proof under the advice's hiding root; the certifier's PROTOCOL.md,
+"Advice v1"):
+1. the committed advice is the decision bits themselves, one per open-step ask in the scan's order, read directly;
 2. a scan of this step over the session's steps, from the empty engine, the arrivals' cursor moving by `taken` and
-   the decisions' by `used`; the certified request records (P, O) are the arrivals;
-3. `compile_steps` (`integrations/vllm/verity_vllm/predict/steps.py`): each row (request, start, n) becomes a `RowRef`
+   the decisions' by `used`; the certified request records (P, O) are the arrivals, in the warden's release order;
+3. the charge: advice v1's arithmetic code run forward over the same decisions (`arith_encode`), each window's coded
+   length at most its declared charge, so no decoder runs in the circuit;
+4. `compile_steps` (`integrations/vllm/verity_vllm/predict/steps.py`): each row (request, start, n) becomes a `RowRef`
    into its request's Program, the rows being exactly I1 v0's `steps`, which v0 carried in the advice.
-
-What step 1 decodes is open. The decision bits themselves can be the advice (one bit per ask, up to 4,391 in a 60 s
-window on the corpus), and then step 1 is only the length check. The replay's clocked code (up to 2,598 bits a window)
-needs an arithmetic decoder whose contexts read the certified buckets around the step. Its egress code (7 to 213 bits a
-window) also reads, per ask, the replay forked and run on with the request arriving now or a step later, so in the
-circuit each ask costs two more scans to the request's outputs.
 
 **The circuit**, traced whole (`_build`): the running loop over static slots, each slot's n read off the budget the
 slots before it leave, and a slot kept iff the free blocks plus the returns of the slots after it cover the needs up to
 it (the victims are a suffix and no need or return is negative, so that is the scheduler's pops); a scan of the
 candidates (W waiting slots, then A arrivals); the admitted placed after the running list by two right shifts; close
-and update per slot; the stopped compacted out by a log-depth shifter (each slot moves left by the stopped before it,
-low bit first, which never collides); the waiting list rebuilt by shifting left by the admitted and right by the
-preempted. `size` counts its ANDs by stage.
+and update per slot; the leaving (stopped, or with AS the `fin`) compacted out by a log-depth shifter (each slot moves
+left by the leaving before it, low bit first, which never collides); the waiting list rebuilt by shifting left by the
+admitted and right by the preempted (with AS, the victims not `fin`, compacted first). `size` counts its ANDs by
+stage.
 
 **Cost** (`size`, on the smallkv engine: T = 2048, NB = 512, chunked prefill and prefix caching): 12,235 ANDs at
 (R, W, A) = (4, 8, 4), 92,146 at (16, 64, 16), 123,611 at (64, 4, 8), 250,544 at (128, 4, 8) and 521,358 at
@@ -87,7 +100,9 @@ preempted. `size` counts its ANDs by stage.
 (256, 4, 8) the compaction is 259k ANDs (about 124·R·bitlen(R)), the placing 82k, the running loop 75k (292·R), the
 requeue 55k (about 131·W·bitlen(R) + 215·R) and the update 43k (168·R); the candidates' scan is about 210·W + 245·A.
 The replay's own waiting list holds only the preempted and the forced arrival (at most 5 on the corpus), since the
-arrivals not yet scheduled stay in the certified stream, so W stays small.
+arrivals not yet scheduled stay in the certified stream, so W stays small. Async adds 132 ANDs at (4, 8, 4), 3,108
+at (16, 64, 16), 15,640 at (64, 4, 8) and 33,326 at (128, 4, 8) (1.1% to 13%), most of it the requeue's compaction of
+the victims not `fin`. Walk entries of 9 bits add 207, 1,431 and 8,055 at the first three.
 """
 from __future__ import annotations
 

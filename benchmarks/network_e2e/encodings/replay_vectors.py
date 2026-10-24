@@ -1,7 +1,8 @@
 """The difftest of the replay step circuit (`verity.core.protocols.certifier.replay_step`) against the replay itself.
 
-`vectors(trace, R=, W=, A=)` replays a trace (`replay.replay` with the trace's own decisions, sync scheduling) with its
-scheduler instrumented, and returns each executed step as the step circuit sees it: the state after the step before
+`vectors(trace, R=, W=, A=)` replays a trace (`replay.replay` with the trace's own decisions, sync or async scheduling)
+with its scheduler instrumented, and returns each executed step as the step circuit sees it (under async scheduling a
+step is one schedule and the update of the step before it): the state after the step before
 (running, waiting, free blocks), the next A arrivals, the step's decisions, the prefix layer's counts (each candidate's
 hit and evictable blocks, as `_KV.hit` found them; each leaving request's returned blocks, as `_KV.free_request`
 freed them) and what the replay did (rows, next state, arrivals taken, decisions read). It also checks the one fact the

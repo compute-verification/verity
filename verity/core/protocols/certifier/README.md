@@ -33,9 +33,10 @@ A spec-level reference for network accounting's timing channel:
   an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
   closed);
 - one vLLM v1 scheduler step (`replay_step`): `ReplayStep_v1`, a Boolean Definition with `reference` its spec, takes the
-  committed queue state, the certified arrivals and the residual's decision bits to the step's rows (request, kind,
-  start, n) and the next state, and refuses what its size class or the prefix layer's counts can't express. It is the
-  compile unit's core, between advice validity and `compile_steps`' Programs, and is held step for step to the replay
+  committed queue state, the certified arrivals and the committed decision bits to the step's rows (request, kind,
+  start, n) and the next state, under sync or async scheduling and with `CacheStep_v1`'s walk entries, and refuses
+  what its size class or the prefix layer's counts can't express. It is the compile unit's core, between the committed
+  decisions and `compile_steps`' Programs, and is held step for step to the replay
   (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-service Spec yet;
 - the capacity counts;
 - the calibration of honest runs;
