@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # The falsification search on a node, from the checkout's root:
 #
-#   research run --on auto --cpus 16 --mem-gb 32 --cwd clone -- \
+#   research run --on auto --cwd clone -- \
 #     bash verity/core/protocols/network/nci/fuzz/run.sh [RANDOM] [CHAIN] [EXTRA] [SEED] [COPIES]
 #
 # builds `nci-desc-fuzz`, writes the Programs (`gen/`: the hand family, the NCI difftest vectors with EXTRA more seeds of
 # each of their generators, RANDOM random descriptors, CHAIN deep chains and COPIES batches read as segment copies from
 # seed SEED, with mutants), checks them,
-# and writes to $OUT `summary.json` (`gen/summarize.py`), `failures.jsonl` (each result where a statement fails, with
+# and writes to $OUT `summary.json` (`gen/summarize.py`), `failures.jsonl.gz` (each result where a statement fails, with
 # its Program) and every result, gzipped, per family. With EXTRA negative, no hand family and no vectors: a run beside
 # one that has them, on other seeds.
 set -euo pipefail
@@ -60,4 +60,5 @@ for f in $FAMILIES; do
   grep '"program"' "$S/$f.out.jsonl" >> "$OUT/failures.jsonl" || true
   gzip -c "$S/$f.out.jsonl" > "$OUT/$f.out.jsonl.gz"
 done
+gzip "$OUT/failures.jsonl"
 python3 "$FUZZ/gen/summarize.py" "$S"/*.out.jsonl --json "$OUT/summary.json"

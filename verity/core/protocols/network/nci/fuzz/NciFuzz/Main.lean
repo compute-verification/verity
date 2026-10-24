@@ -29,14 +29,22 @@ def checkLine (line : String) : String :=
 
 def main (args : List String) : IO UInt32 := do
   let [inp, out] := args | IO.eprintln "usage: nci-desc-fuzz IN OUT"; return 2
-  let lines := ((← IO.FS.readFile inp).splitOn "\n").filter (!·.isEmpty) |>.toArray
+  let hin ← IO.FS.Handle.mk inp .read
   let h ← IO.FS.Handle.mk out .write
   let block := 256
-  let mut i := 0
-  while i < lines.size do
-    let tasks := (lines.extract i (i + block)).map fun l => Task.spawn fun _ => checkLine l
+  let mut n := 0
+  let mut eof := false
+  while !eof do
+    let mut lines : Array String := #[]
+    while !eof && lines.size < block do
+      let l ← hin.getLine
+      if l.isEmpty then
+        eof := true
+      else if l != "\n" then
+        lines := lines.push (if l.endsWith "\n" then (l.dropEnd 1).toString else l)
+    let tasks := lines.map fun l => Task.spawn fun _ => checkLine l
     for t in tasks do h.putStrLn t.get
     h.flush
-    i := i + block
-  IO.println s!"nci-desc-fuzz: {lines.size} programs checked"
+    n := n + lines.size
+  IO.println s!"nci-desc-fuzz: {n} programs checked"
   return 0
