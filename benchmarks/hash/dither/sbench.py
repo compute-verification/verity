@@ -138,6 +138,9 @@ $POUW_CHALLENGER_SECRET_FILE and $POUW_CHALLENGER_COMMITMENT), one session a win
 hello's commitment held to HEX) and closed at the arm's stop; without one they are in-process, and the arm's stats say
 ``coins: in-process (not certified)``.
 
+SBENCH_ARM_ENV (``{"ARM": {"NAME": "VALUE"}}``) sets an arm's own environment in its worker, so the arms of one lease can
+differ in a knob the worker reads; each arm's ready line says what it set (``arm_env``).
+
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
 from __future__ import annotations
@@ -454,6 +457,9 @@ GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receip
 # challenger session off the node (its POUW_CHALLENGER, POUW_CHALLENGER_SESSION, POUW_CHALLENGER_SECRET_FILE and
 # POUW_CHALLENGER_COMMITMENT), since every arm's engine, and so its window, lives through the whole run
 CHALLENGERS_ENV = "DITHER_CHALLENGERS"
+# {arm: {NAME: VALUE}}: an arm's own environment, set in its worker before its engine is built, so one lease times arms
+# that differ in a knob the worker reads (not sbench.sh's builds, which read the run's)
+ARM_ENV_ENV = "SBENCH_ARM_ENV"
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
 
 
@@ -495,6 +501,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             os.environ["POUW_CHALLENGER_COMMITMENT"] = at["commitment"]
         if at.get("rounds"):
             os.environ["DITHER_ROUNDS"] = str(at["rounds"])
+    arm_env = json.loads(os.environ.get(ARM_ENV_ENV) or "{}").get(arm) or {}
+    os.environ.update(arm_env)
     import torch
     from vllm import SamplingParams
     if arm.startswith("dither"):
@@ -510,7 +518,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         conn.send({"error": f"{type(e).__name__}: {e}"})
         return
     conn.send({"ready": True, "build_s": round(time.perf_counter() - t0, 1), "kernels": kernels_of(llm),
-               "disabled": os.environ.get("VLLM_DISABLED_KERNELS"), "scheduler": scheduler_of(llm)})
+               "disabled": os.environ.get("VLLM_DISABLED_KERNELS"), "scheduler": scheduler_of(llm),
+               "arm_env": arm_env or None})
     ps = prompts(B)
 
     def gen(reqs: list[str], n: int):
