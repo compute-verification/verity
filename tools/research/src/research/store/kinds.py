@@ -111,6 +111,12 @@ KINDS: dict[str, str] = {
                             "README.md + summary.json + meta.json + plan.jsonl + one <trace>/ a traffic setting (steps.jsonl, "
                             "requests.jsonl, client.jsonl, meta.json, server.log, raw/ the hook's files), and optionally "
                             "compare/ (compare.json, COMPARE.md: output ids against other corpora of the same plan)",
+    "vllm-adversarial-schedule/v1": "batch invariance against a hostile vLLM scheduler (benchmarks/network_e2e/traces, "
+                                    "vllm_adversarial_plugin): payload tree = corpus/<model>-<variant>/, each a "
+                                    "vllm-trace-corpus/v1 tree of corpus.HOSTILE's traces (honest and hostile schedulers, the "
+                                    "adversary's choices in raw/adversary.*.jsonl), and compare/<sampling>/ (compare.json, "
+                                    "COMPARE.md: whether every request's output ids match the honest trace's, bits per "
+                                    "request, the first divergence)",
     "challenger-ledger/v1": "the auditor host's challenger ledger (benchmarks/live_challenger/auditor.py, publish.sh): payload "
                             "windows.jsonl, one signed open entry a window and one end entry a session; meta {host, entries, sha512, "
                             "key_sha512}",
