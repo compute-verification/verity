@@ -1376,11 +1376,11 @@
   },
   "Pouw.NCP.Assumptions.TTNCP": {
    "owner": "@compute-accounting",
-   "digest": "f57ea45f32f4773a7572663c546adeb5c05461712de223326efd3afb73a813fb"
+   "digest": "4eb0c540b2c1b9612ab68cec531e7b471fcbbb63dc534a4f23587d276c176193"
   },
   "Pouw.NCP.Assumptions.TTNCP_U": {
    "owner": "@compute-accounting",
-   "digest": "8a747ab5b169a0aebbead909c55f11867690c76654bffe5a2a0125164a2a1305"
+   "digest": "8a556256609f886598bfa29ac2ee4d6c58146565483faa43f1b89b6a54497e95"
   },
   "Pouw.NCP.InNoise6": {
    "owner": "@compute-accounting",
@@ -17703,7 +17703,7 @@
    ]
   },
   "Definitions.Pouw.PearlC.Device": {
-   "digest": "9aa55079d9549a5b2b25c49ddb1d4cdf643f8efcbe30bbeb20b20aaeb1ab5e07",
+   "digest": "f2d4db8f153dee7be9465c49feccbf808ff4c112aa89ad3a9a7757c8c5a7eff6",
    "definitions": {
     "Pouw.PearlC.PearlCDevice": "49b0746e634512b0ba15501dae4a8e1e7f5a92906eccf6db5291f7ed68f2dfd0",
     "Pouw.PearlC.PearlCDevice.G": "dbfc86330607b7c4760f02bf16a71635ec8b1b7775a76ee3bb4ebfcdf645e58b",
@@ -17727,7 +17727,7 @@
     "Pouw.PearlC.devSm120v1": "e8683e11423332331304d0a3f6ed4662ea00f45d4231727cd607dcd9712e8d34",
     "Pouw.PearlC.devSm120v2": "4f59d45fd7215c5db0568e89746297fc170061906445f41b418d7022ac26153a",
     "Pouw.PearlC.llama31_8bLinears": "33576ad425f7422cc95800869f043984dd86cf55d803af807f76e2b00f4a6ed3",
-    "Pouw.PearlC.pearlCDomainDev": "efca9d83927acd176828923127fb955d5745e704f51b995db882f7e654426508",
+    "Pouw.PearlC.pearlCDomainDev": "8aa8d7fbf9e707296ef265f32fbd981bf9fdc5a949d52d223224ac6ddb375cac",
     "Pouw.PearlC.pearlCDomainDevAt": "402ff5676e5550b47d1280a8f49978fa59d12520c6d93eceb5d2a4b3eb81c6c9",
     "Pouw.PearlC.pearlCDomainDevNK": "2653a120d87aafb7cd768ecc73e0d63a375fe6e07544f2c8a4c4acd087981bbf",
     "Pouw.PearlC.pearlCDomainDevShapes": "78adc7a7c4a1a04f003481193b6567586db39739f903d0da828e54908278bcfe",
@@ -26874,7 +26874,7 @@
    "guarantees": ["Accounting.SecurityProofs.BandwidthOfAudit"]
   },
   "Models.Accounting.Guarantees.BoundReceipt": {
-   "digest": "8d772a25bc4628d4eb1807365d6509ae367b36baed228035079aa9a683a59fb7",
+   "digest": "68266a4a88f70326ace7a9d30d47dbdce81ad51c33d7be3be9dffc3944902e95",
    "definitions": {
     "Accounting.Guarantees.BoundReceiptLink": "8af8cf34ac0c51cf351be6a8a8cfbb18eac7745e7e5fad766f3d1ad84abd2f2f",
     "Accounting.Guarantees.BoundReceiptLinkInteractive": "228d2b8ff7fab32eea69415e24f5b2be094f7b7b147c8ffd3fd8d21355001c6b",
@@ -26882,7 +26882,7 @@
     "Accounting.Guarantees.Colocation": "92f0649ed2bd185f79d665a2259e51d9a6a2dd6798836b7d55b1d19d4ded04e2",
     "Accounting.Guarantees.TileUnpredictable": "22ad23ed5598959023cdd1241a68982ace543482d1ab8a7cb358a7ab9f147fe1",
     "Accounting.Guarantees.TileUnpredictableMono": "1afa0247bb259025f232bcfa1595ddd30eccf50acf4c92870c3ca47a3f260db9",
-    "Accounting.Guarantees.TileUnpredictableOfNCPU": "9631831a6703ad58d57314d8eef6219f3647cfc12772faeb65b23c607a432927",
+    "Accounting.Guarantees.TileUnpredictableOfNCPU": "d04832b14efbece2bc986a767a5ce3d781d3051af3bcd21e6a618b3fc4f8e079",
     "Accounting.Guarantees.TileUnpredictableOfTT": "91df48861310d961344ba8740e89a033669f8585a967cba17707b99d18f4c25f",
     "Accounting.Guarantees.TileUnpredictablePearlC": "a5a5ae33f1fb918e6c0c037d44ab82dd9820f80465232a1e2ddc42a7cb086482",
     "Accounting.Guarantees.TileUnpredictablePearlCOfTTOut": "ad839c2df0f60442d1a0989db18c0c085ae21f47c9e564c321682299dbbe41f8"
@@ -28529,23 +28529,23 @@
    ]
   },
   "Models.Pouw.Assumptions.NCP.Assumptions": {
-   "digest": "9a12ed69cd26eb69cee7d01f81dd6439d834165f3fb2ef9089fe4a0fddd837af",
+   "digest": "1648a0e4552adfbe6da437464897c0093495e0d86088a6ebfc7c64bef73378bc",
    "definitions": {
-    "Pouw.NCP.Assumptions.TTNCP": "f57ea45f32f4773a7572663c546adeb5c05461712de223326efd3afb73a813fb"
+    "Pouw.NCP.Assumptions.TTNCP": "4eb0c540b2c1b9612ab68cec531e7b471fcbbb63dc534a4f23587d276c176193"
    },
    "guarantees": ["Pouw.NCP.GameProofs.gammaFromTTNCP", "Pouw.SecurityProofs.NCP.TTNCPUIff"]
   },
   "Models.Pouw.Assumptions.NCP.GamePinned": {
-   "digest": "f37d842b3aba67d38a908f78824ef9525a3d420740f81bd3b8e931dc6952e989",
+   "digest": "a4961b2d72c7cd46a2da973499b4c87ecee0027477eb0e657fc65e0f12ae4860",
    "definitions": {
-    "Pouw.NCP.GamePinned.GammaFromTTNCP": "ec090eef3e8dfa435d00d7f88802691ff4b998f6a02295e77a7dcdf52d73f201"
+    "Pouw.NCP.GamePinned.GammaFromTTNCP": "3ecaf0a7c70ee810d01b4f32294f8f46dfd99b00ed6d0c597e673860ed4f0871"
    },
    "guarantees": ["Pouw.NCP.GameProofs.gammaFromTTNCP"]
   },
   "Models.Pouw.Assumptions.NCP.RouteUAssumptions": {
-   "digest": "0011ba99f4f54f4c6cb78a9164747ec481bede3781e469a76cb4e876d7067e59",
+   "digest": "a4a4a796f1670ca7d4f69c36de55ccfa631b0417e421055bb6f2d4e10ec9e49c",
    "definitions": {
-    "Pouw.NCP.Assumptions.TTNCP_U": "8a747ab5b169a0aebbead909c55f11867690c76654bffe5a2a0125164a2a1305"
+    "Pouw.NCP.Assumptions.TTNCP_U": "8a556256609f886598bfa29ac2ee4d6c58146565483faa43f1b89b6a54497e95"
    },
    "guarantees": [
     "Accounting.SecurityProofs.TileUnpredictableOfNCPU",
@@ -28940,14 +28940,14 @@
    ]
   },
   "Models.Pouw.Guarantees.NCP": {
-   "digest": "6b4bdb6135edeae5070cea859e5b95d15bdd337e01ea62f67ea41fd6e171206c",
+   "digest": "5d5d568fb3060970c93dc473f35499300bd6c8c55161308bf257341686ecf8c9",
    "definitions": {
     "Pouw.Guarantees.NCP.BiasU8Iff": "151516e1e4ee87903f8f14ac1c567a5e551c88a0c5b90f9319f383faf2e09389",
     "Pouw.Guarantees.NCP.Cancel": "f94583533f0111a6bbcaa3c9623947cab329b9b707c7584f6ecd2e552f8c578b",
     "Pouw.Guarantees.NCP.CheckedUEq": "cec4285cc6c3356b2a23bf86124b656ca750186359021b2c904eac98a699eae1",
     "Pouw.Guarantees.NCP.CheckedUFinal": "3aa0308b31f68bde20e92aef42943c30c7851ea5916141e624e530d7f57e95ad",
-    "Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2": "91381b6af66e1988a22bb78349b9208c3b804a5f92e3f7697d031a4ca1741cfa",
-    "Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1": "bb7b1d69f2982273e5b146c11f7d4a86d11472eaa59e464a98e905e07423fb54",
+    "Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2": "a6c2b6444f74b566c7e25ed307a1eb90a9bf09682769d5253e5c44d3499c0e24",
+    "Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1": "1fc13627931d69c84a08d627d761aa484af35b4bf042e396763397502fe05fd6",
     "Pouw.Guarantees.NCP.IndependentWitness": "fffbf79427e4f9135959ad4e505c32953fa5ab1521cd33c283335fb539adbac3",
     "Pouw.Guarantees.NCP.Int7Int32UPos": "c94618bd014850aecb0a6e4d226b9ce336d0a5a6314a54d659161218a60f196a",
     "Pouw.Guarantees.NCP.MmWUExact": "be476faa1497b2a80f77d2ce48799efd668f4d8412ff27c2027d5a524207014f",
@@ -28956,7 +28956,7 @@
     "Pouw.Guarantees.NCP.RangeU": "50d942f10ccae0732bb8083d486599f94eb606ad593194527048583137746756",
     "Pouw.Guarantees.NCP.ShiftBy24Admissible": "78da322e2c5e07fa873f5e260c69e0c6a2864d48637c5c81a1810079e68696df",
     "Pouw.Guarantees.NCP.Stacked": "02b66d25dc44f44196c5eb4ee1d490ccb41b7e8cece81a47c64f0afb2415fae6",
-    "Pouw.Guarantees.NCP.TTNCPUIff": "2fe0085464b9ad5c66424a9710842259438e14b94dd3ebedec293f200e1f2188",
+    "Pouw.Guarantees.NCP.TTNCPUIff": "367e4d775677d7332775bcbb1b7b4098e3366daa9fac12904e19aa12a9a7d0a7",
     "Pouw.Guarantees.NCP.TTNCPUWitness": "a0c9af8d21778ce0c6de58401518dccc4173d251594cf8e4d37798bfd3a41cf7",
     "Pouw.Guarantees.NCP.WrapFinalOnlyIndU": "cc7a0f435ecd4a059382d982f6063b1245867e20cf96149d61e455fe812f8b9a",
     "Pouw.Guarantees.NCP.WrapU": "a90fc27845cfe2e8e13559319ff9fa97f28a89a14efc4597f588f68bfa5064dc",
