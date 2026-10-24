@@ -594,9 +594,9 @@ TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp":
 # names start with one are pinned (exact,dither: the arms held to exact's tokens), the rest keep their timed picks
 PICK_ENV = "SBENCH_PICK"
 PICK_ARMS_ENV = "SBENCH_PICK_ARMS"
-# SBENCH_SMQ_SWEEP=V[,V]: after the gate, each dither-a-so arm's decode TPOT (--prefill: its prefill op's step) and
-# phases at each units SM share V (q, q/den or q/den/cap, 0 every SM; `dither_so.SoSide.set_units_smq`), in one engine,
-# then back to its own share for the reps: a screen (smq_sweep.json), never a row
+# SBENCH_SMQ_SWEEP=V[,V]: after the gate, each dither-a-so arm's decode TPOT and phases at each units SM share V (q,
+# q/den or q/den/cap, 0 every SM; `dither_so.SoSide.set_units_smq`), in one engine, then back to its own share for the
+# reps: a screen (smq_sweep.json), never a row
 SMQ_SWEEP_ENV = "SBENCH_SMQ_SWEEP"
 
 
@@ -845,25 +845,14 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             rows = []
             for v in cmd["values"]:
                 sd.set_units_smq(*smq_of(v))
-                if pf:
-                    # the warm op's, every ring slot's graph captured again at m = T before the prefill op's two
-                    gen(pp[:4], 1)
-                    llm.dither_stats()
-                    t1, _ = gen(pp[:PF[0]], 1)
-                    t2, _ = gen(pp[:PF[1]], 1)
-                    step = {"prefill_step_ms": round(1e3 * (t2 - t1) / (PF[1] - PF[0]), 4)}
-                else:
-                    gen(ps, 8)
-                    llm.dither_stats()
-                    t1, _ = gen(ps, N1)
-                    t2, _ = gen(ps, N2)
-                    step = {"tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4)}
-                rows.append({"smq": v, **step, "phases_by_m": llm.dither_stats().get("phases_by_m")})
-            sd.set_units_smq(q0, d0, c0)
-            if pf:
-                gen(pp[:4], 1)
-            else:
                 gen(ps, 8)
+                llm.dither_stats()
+                t1, _ = gen(ps, N1)
+                t2, _ = gen(ps, N2)
+                rows.append({"smq": v, "tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4),
+                             "phases_by_m": llm.dither_stats().get("phases_by_m")})
+            sd.set_units_smq(q0, d0, c0)
+            gen(ps, 8)
             conn.send({"sweep": rows})
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
@@ -1107,8 +1096,8 @@ def main() -> int:
                 conns[arm].send({"op": "smq_sweep", "values": smq_sweep})
                 sweep[arm] = recv(arm, conns[arm], "smq_sweep")["sweep"]
                 recv(arm, conns[arm], "smq_sweep")
-                sk = "prefill_step_ms" if a.prefill else "tpot_b32_ms"
-                print(json.dumps({"smq_sweep": arm, sk: {x["smq"]: x[sk] for x in sweep[arm]}}), flush=True)
+                print(json.dumps({"smq_sweep": arm, "tpot_b32_ms": {x["smq"]: x["tpot_b32_ms"] for x in sweep[arm]}}),
+                      flush=True)
                 (out / "smq_sweep.json").write_text(json.dumps(sweep, indent=1) + "\n")
         time_at = wait_time_at()
         if time_at:
@@ -1221,8 +1210,7 @@ def main() -> int:
             p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
     summary["gate_failed"] = [x for x in gate_doc if x not in arms]
     if sweep:
-        sk = "prefill_step_ms" if a.prefill else "tpot_b32_ms"
-        summary["smq_sweep"] = {arm: {x["smq"]: x[sk] for x in rows} for arm, rows in sweep.items()}
+        summary["smq_sweep"] = {arm: {x["smq"]: x["tpot_b32_ms"] for x in rows} for arm, rows in sweep.items()}
     summary["stop"] = {arm: {"error": x.get("error"), "close_error": x.get("close_error"), "fill_steps": x.get("fill_steps"),
                              "end_verdict": (x.get("end") or {}).get("verdict")} for arm, x in stops.items()}
     summary["host_mem_peak_gib"] = mem_peak_gib()
