@@ -1,4 +1,4 @@
-"""P14: one way to build a vLLM engine, and one module that knows vLLM's object graph.
+"""P14: one way to do each thing: build a vLLM engine, reach into it, and refuse.
 
 Checked against ``allowlists/p14_one_way.json``, keyed ``(file, kind, symbol, detail)``:
 
@@ -7,20 +7,25 @@ Checked against ``allowlists/p14_one_way.json``, keyed ``(file, kind, symbol, de
 * ``vllm-internals``: a read or write of vLLM's engine internals, the attributes in `INTERNALS` (as ``x.llm_engine`` or as
   the name a ``getattr``/``hasattr``/``setattr``/``delattr`` call is given), outside `HANDLE`, the one module that walks
   from an ``LLM`` to its scheduler, model runner, config and workers; detail the attribute.
+* ``refusal-class``: a class named for a refusal (``...Refused``, ``...Refuse``, ``...Refusal``) outside `ERRORS`, whose
+  one ``Refused`` every refusal raises; detail the class's name.
 """
 from __future__ import annotations
 
 import ast
+import re
 from functools import lru_cache
 
 from . import _ratchet as R
 
 NAME = "p14_one_way"
-RULE = "P14 (one way to build and reach the vLLM engine)"
+RULE = "P14 (one way to build and reach the vLLM engine, and to refuse)"
 BUILD = "verity_vllm/engine/build.py"
 HANDLE = "verity_vllm/engine/handle.py"
+ERRORS = "verity_vllm/errors.py"
 VLLM_LLM = frozenset({"vllm.LLM", "vllm.entrypoints.llm.LLM"})
 INTERNALS = frozenset({"llm_engine", "engine_core", "model_executor"})
+REFUSAL = re.compile(r"(?:Refused|Refuse|Refusal)$")
 _ATTR_FUNCS = frozenset({"getattr", "hasattr", "setattr", "delattr"})
 
 
@@ -31,6 +36,8 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
     for node, symbol in R.walk(tree):
         if rel != BUILD and isinstance(node, ast.Call) and names.resolve(node.func) in VLLM_LLM:
             out.append(R.Violation(rel, "vllm-LLM", symbol, "vllm.LLM", node.lineno))
+        if rel != ERRORS and isinstance(node, ast.ClassDef) and REFUSAL.search(node.name):
+            out.append(R.Violation(rel, "refusal-class", symbol, node.name, node.lineno))
         if rel == HANDLE:
             continue
         if isinstance(node, ast.Attribute) and node.attr in INTERNALS:
@@ -51,9 +58,10 @@ def scan() -> tuple[R.Violation, ...]:
 
 def test_no_new_violations() -> None:
     R.assert_no_new(NAME, scan(), RULE,
-                    f"Build a vLLM engine only in {BUILD} (`build_engine`, or `verity_vllm.LLM` on top of it), and reach "
-                    f"its scheduler, model runner, config or workers only through {HANDLE}'s accessors: add the accessor "
-                    "there if it is missing, rather than walking `llm_engine`/`engine_core`/`model_executor` here.")
+                    f"Build a vLLM engine only in {BUILD} (`build_engine`, or `verity_vllm.LLM` on top of it); reach "
+                    f"its scheduler, model runner, config or workers only through {HANDLE}'s accessors (add the accessor "
+                    "there if it is missing, rather than walking `llm_engine`/`engine_core`/`model_executor` here); and "
+                    f"raise {ERRORS}'s `Refused` rather than declaring another refusal class.")
 
 
 def test_allowlist_has_no_stale_entries() -> None:
@@ -78,3 +86,6 @@ def test_detectors_on_examples() -> None:
     assert [v.kind for v in file_violations(bad, HANDLE)] == ["vllm-LLM"] * 2
     good = "from verity_vllm.llm import LLM\ndef f(m):\n    return LLM(m).generate(['x'])\n"
     assert file_violations(good, "verity_vllm/pipeline/x.py") == []
+    refusals = "class Refused(ValueError):\n    pass\nclass _SkipRefused(Exception):\n    pass\nclass Refusals:\n    pass\n"
+    assert [v.detail for v in file_violations(refusals, "verity_vllm/pipeline/x.py")] == ["Refused", "_SkipRefused"]
+    assert file_violations(refusals, ERRORS) == []
