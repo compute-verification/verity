@@ -1,4 +1,4 @@
-"""Versions of `RMSNormTriton_v1`, `TokenSelect_v1` and the shared-greedy top-p select without dead gates: the forms the registered
+"""Versions of `RMSNormTriton_v1`, `TokenSelect_v1`, the top-p selects and FA2's attention without dead gates: the forms the registered
 compiler emits, where no gate may be one no output depends on.  Rows of record keep the v1s their pins were made from.
 
 * `RMSNormTriton_v5`: `RMSNormTriton_v1` with each warp reduced by the adds lane 0's sum depends on (`lane0_butterfly`).  On the GPU
@@ -16,9 +16,12 @@ compiler emits, where no gate may be one no output depends on.  Rows of record k
 * `TopPMask_v4{V,S}` and `GumbelTopPTokenSelect_v3{V,S}`: `TopPMask_v2{V,S}` and `GumbelTopPTokenSelect_v2{V,S}` over
   `TopPKeepWord_v2` and `GumbelSelectF32_v3`.
 * `GumbelSelectF32_v3`: `GumbelSelectF32_v1`'s scan stops one lane early, as `GumbelSelectF32GivenGreedy_v2`'s does.
+* `AttentionHead_v18` and `Attention_v18`: FA2's per-iteration `Check_inf` head and attention (`fa2_check_inf`'s v5) with the first
+  visited block's zero padding only where it is read.  v5 pads that block's K and V rows to BN with a zero row and fills P's
+  k-steps with a zero word; when its key count is a multiple of 16 below BN neither is read, 2 dead gates a head.
 
 Each computes its v1's function word for word, except at V = 1, where v1's zero-length scan returns a wrong carry and these return
-index 0 (`tests/program/test_dead_free.py`).
+index 0 (`tests/program/test_dead_free.py`); the attention versions compute v5's at every binding.
 """
 from __future__ import annotations
 
@@ -34,7 +37,7 @@ from verity.ml.circuits.ops.prims import ZERO32, const
 from verity.ml.circuits.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32Eq, SelectF32, SelectI32
 from verity.ml.circuits.refs import Affine, Coll as _Coll, Concat, Explicit, Refs, Strided, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
-from verity_vllm.program.registry import prims as P, ref_prims as RP, sampling as SA, topp_words as TW
+from verity_vllm.program.registry import fa2_check_inf as F2, prims as P, ref_prims as RP, sampling as SA, topp_words as TW
 from verity_vllm.program.registry.b1 import NEG_INF_BF16, ArgmaxStep, TokenSelectChunkStep, chunks, f32c
 from verity_vllm.program.registry.prims import BF16, I32
 
@@ -316,6 +319,27 @@ def GumbelTopPTokenSelectV3(B, st, logits, top_p, seed, pos, temp, splits):
     return B.call(bind(GumbelSelectF32V3, V=st.V), masked, seed, pos, temp)
 
 
-__all__ = ["CHUNK", "GumbelSelectF32GivenGreedyV2", "GumbelSelectF32V3", "GumbelTopPTokenSelectSharedGreedyV2", "GumbelTopPTokenSelectV3",
-           "RMSNormTritonV5", "TokenSelectChunkV2", "TokenSelectCombineV2", "TokenSelectV3", "TokenSelectV4", "TopPKeepWordV2",
+@composite("AttentionHead", 18, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"],
+           lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.T, Array(S.D, BF16))), ("v", Array(S.T, Array(S.D, BF16)))),
+                      Array(S.D, BF16)),
+           conformance="not-yet-established: AttentionHead_v5's function")
+def AttentionHeadV18(B, S, q, k, v):
+    """`AttentionHead_v5{T, D, BN, DOT, INV, MASKED_FROM}` with the first visited block's padding only where read: its V rows to the
+    last k-step it runs, a zero word in P only for that step, and no K rows (it reads none past its key count)."""
+    return F2._check_inf_head(B, S, q, k, v, F2.AttnBlockV5, (), read_pads_only=True)
+
+
+@composite("Attention", 18, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"],
+           lambda S: ((("q", Array(S.NH, Array(S.D, BF16))),
+                       ("kc", Array(S.T, Array(S.KVH, Array(S.D, BF16)))),
+                       ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))),
+                      Array(S.NH, Array(S.D, BF16))),
+           conformance="not-yet-established: Attention_v5's function")
+def AttentionV18(B, S, q, kc, vc):
+    """`Attention_v5{T, NH, KVH, D, BN, DOT, INV, MASKED_FROM}` over `AttentionHead_v18`."""
+    return F2._check_inf_attention(B, S, q, kc, vc, AttentionHeadV18, ())
+
+
+__all__ = ["AttentionHeadV18", "AttentionV18", "CHUNK", "GumbelSelectF32GivenGreedyV2", "GumbelSelectF32V3",
+           "GumbelTopPTokenSelectSharedGreedyV2", "GumbelTopPTokenSelectV3", "RMSNormTritonV5", "TokenSelectChunkV2", "TokenSelectCombineV2", "TokenSelectV3", "TokenSelectV4", "TopPKeepWordV2",
            "TopPMaskV3", "TopPMaskV4", "lane0_butterfly", "live_replay"]

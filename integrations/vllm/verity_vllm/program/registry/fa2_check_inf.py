@@ -39,7 +39,7 @@ def AttnBlockV5(B, S, q, k, v, m_prev, l_prev, o_prev):
     return _check_inf_block(B, S, q, k, v, m_prev, l_prev, o_prev, None)
 
 
-def _check_inf_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
+def _check_inf_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2, *, read_pads_only=False):
     D, NVIS, FIRST, BN, DOT, CHECK = S.D, S.NVIS, S.FIRST, S.BN, S.DOT, S.CHECK
     if FIRST and not CHECK:
         raise ValueError("AttnBlock_v5: the first iteration runs Check_inf (FIRST needs CHECK)")
@@ -69,7 +69,7 @@ def _check_inf_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
         lanes.append(acc)
     # B5 + C: P -> bf16, O = (O * scale) + P V in BN/16 ascending k-steps of 16 keys
     pb = [B.call(P.F2fpBf16, x) for x in p]
-    zero16 = B.call(ZERO16) if NVIS < BN else None
+    zero16 = B.call(ZERO16) if (NVIS % 16 if read_pads_only else NVIS < BN) else None
     o = [B.call(ZERO32) for _ in range(D)] if FIRST else [B.call(P.F32MulFtz, o_prev[d], scores_scale) for d in range(D)]
     for ks in range(BN // 16):
         k0 = 16 * ks
@@ -96,7 +96,9 @@ def AttentionHeadV5(B, S, q, k, v):
     return _check_inf_head(B, S, q, k, v, AttnBlockV5, ())
 
 
-def _check_inf_head(B, S, q, k, v, block, extra):
+def _check_inf_head(B, S, q, k, v, block, extra, *, read_pads_only=False):
+    """`read_pads_only`: pad the first visited block's V rows only to the k-steps it reads, and its K rows not at all (it reads no key
+    past `nvis`), so that no zero padding goes unread when `nvis` is a multiple of 16 below `BN`."""
     T, D, BN, DOT, INV, MF = S.T, S.D, S.BN, S.DOT, S.INV, S.MASKED_FROM
     nb = (T + BN - 1) // BN
     if not 0 <= MF <= nb - 1:
@@ -107,7 +109,11 @@ def _check_inf_head(B, S, q, k, v, block, extra):
         lo, hi = b * BN, min(T, (b + 1) * BN)
         nvis = hi - lo
         kb, vb = k[lo:hi], v[lo:hi]
-        if nvis < BN:  # pad the block's K/V rows with zeros (Clear_OOB_MN); masked columns are never read
+        if nvis < BN and read_pads_only:
+            if nvis % 16:  # the last k-step's V rows past nvis meet P's zero words
+                zero_row = _Coll(Array(D, BF16), concat([B.call(ZERO16).refs] * D))
+                vb = _Coll(Array(nvis + -nvis % 16, Array(D, BF16)), concat([vb.refs] + [zero_row.refs] * (-nvis % 16)))
+        elif nvis < BN:  # pad the block's K/V rows with zeros (Clear_OOB_MN); masked columns are never read
             if zero_row is None:
                 zero_row = _Coll(Array(D, BF16), concat([B.call(ZERO16).refs] * D))
             pad = [zero_row.refs] * (BN - nvis)
@@ -115,7 +121,7 @@ def _check_inf_head(B, S, q, k, v, block, extra):
             vb = _Coll(Array(BN, Array(D, BF16)), concat([vb.refs] + pad))
         if b == nb - 1:  # a Call of AttnBlock{FIRST=True} would pass it a running state it ignores, so its steps are written here
             first = SimpleNamespace(D=D, NVIS=nvis, FIRST=True, BN=BN, DOT=DOT, CHECK=True)
-            st = _check_inf_block(B, first, q, kb, vb, None, None, None, extra[0] if extra else None)
+            st = _check_inf_block(B, first, q, kb, vb, None, None, None, extra[0] if extra else None, read_pads_only=read_pads_only)
         else:
             st = B.call(bind(block, D=D, NVIS=nvis, FIRST=False, BN=BN, DOT=DOT, CHECK=b >= MF), q, kb, vb, m, l, o, *extra)
         m, l, o = st[0], st[1], st[2]

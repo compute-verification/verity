@@ -73,6 +73,8 @@ EVALUATORS = {
     "Attention_v5": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v5{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}: Attention_v2's evaluator "
                     "with block b guarding the rescale's running max of -inf only when b >= MASKED_FROM, max * scale in every block -- FA2's "
                     "per-iteration Check_inf, registry.fa2_check_inf; targets.fa2_check_inf)",
+    "Attention_v18": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v18 = Attention_v5 word for word, registry.dead_free; "
+                     "the registered compiler's request)",
     "RMSNormTriton_v1": "verity_vllm.program.kernels.derived_rows.rmsnorm_triton_rows",
     "RMSNormTriton_v5": "verity_vllm.program.kernels.derived_rows.rmsnorm_triton_rows (RMSNormTriton_v5 = RMSNormTriton_v1 word for word)",
     "RMSNormFusedCuda_v2": "verity_vllm.program.kernels.derived_rows.rmsnorm_fused_v2_rows",
@@ -304,11 +306,11 @@ def attention(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -
     arity = 4 if family in VR.SCALE_INPUT else 3
     if len(ops) != arity:                                                    # [R17-14] the Definition's arity (q, kc, vc[, scale_log2]): a row wiring another is by name
         raise Declined(f"{family}: the row wires {len(ops)} args, the registered Definition takes {arity} (q, K history, V history{', scale_log2' * (arity == 4)})")
-    if family in ("Attention_v2", "Attention_v4", "Attention_v5", "Attention_v11"):
+    if family in ("Attention_v2", "Attention_v4", "Attention_v5", "Attention_v11", "Attention_v18"):
         dot_id, inv_id = prim_static(statics, "DOT", family), prim_static(statics, "INV", family)
     else:
         dot_id, inv_id = "AmpereBF16TcDot16_v2", "Fa2InvSum_v1"
-    masked_from = int(statics["MASKED_FROM"]) if family in ("Attention_v4", "Attention_v5", "Attention_v11") else None
+    masked_from = int(statics["MASKED_FROM"]) if family in ("Attention_v4", "Attention_v5", "Attention_v11", "Attention_v18") else None
     scale_bits = VR.word32(ops[3], family, "scale_log2") if arity == 4 else None
     if dot_id not in D.TC_DOT16_BY_PRIM or inv_id not in D.INV_SUM_BY_PRIM:
         raise Declined(f"no registered evaluator for {family} with DOT={dot_id}, INV={inv_id} "
@@ -320,7 +322,8 @@ def attention(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -
         raise Declined(f"{family}: K history {kc.size} / V history {vc.size} words != T*KVH*D = {T}*{KVH}*{Dh}")
     try:
         out, nonfin = D.attention_rows(q, kc.reshape(T, KVH, Dh), vc.reshape(T, KVH, Dh), BN, dot_prim=dot_id, inv_prim=inv_id,
-                                       masked_from=masked_from, rescale_only=family in ("Attention_v5", "Attention_v11"), scale_bits=scale_bits)
+                                       masked_from=masked_from, rescale_only=family in ("Attention_v5", "Attention_v11", "Attention_v18"),
+                                       scale_bits=scale_bits)
     except ValueError as e:                                                  # a geometry outside the registered relation: by name
         raise Declined(f"{family}: {e}") from None
     if nonfin.any():
@@ -687,6 +690,9 @@ def _check_targets() -> dict[str, list]:
         "Attention_v4": [bind(fa3_check_inf.AttentionV4, **dict(attn, T=40), **fa3, MASKED_FROM=m) for m in (2, 0)],
         "Attention_v5": [bind(fa2_check_inf.AttentionV5, **dict(attn, T=40), DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum, MASKED_FROM=m)
                          for m in (2, 0)],
+        # T = 48, BN = 32: the first block's 16 keys are where v18 leaves out v5's unread padding
+        "Attention_v18": [bind(dead_free.AttentionV18, **dict(attn, T=t, BN=bn), DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum, MASKED_FROM=m)
+                          for t, bn, m in ((40, 16, 2), (48, 32, 1), (48, 32, 0))],
         "RMSNormTriton_v1": [bind(b1.RMSNormTriton, N=16, EPS=1e-6)],
         "RMSNormTriton_v5": [bind(dead_free.RMSNormTritonV5, N=16, EPS=1e-6)],
         "RMSNormFusedCuda_v2": [bind(b1.RMSNormFusedCuda, N=16, EPS=1e-6)],
@@ -732,6 +738,7 @@ _row("Attention_v3", partial(attention, "Attention_v3"), ("out",))
 _row("Attention_v2", partial(attention, "Attention_v2"), ("out",))
 _row("Attention_v4", partial(attention, "Attention_v4"), ("out",))
 _row("Attention_v5", partial(attention, "Attention_v5"), ("out",))
+_row("Attention_v18", partial(attention, "Attention_v18"), ("out",))
 _row("RMSNormTriton_v1", rmsnorm_triton, ("out",))
 _row("RMSNormTriton_v5", partial(rmsnorm_triton, family="RMSNormTriton_v5"), ("out",))
 _row("RMSNormFusedCuda_v2", rmsnorm_fused, ("0", "1"))

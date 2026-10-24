@@ -99,7 +99,8 @@ def without_dead_units(body: Body) -> tuple[Body, list[int]]:
 def dead_free_versions() -> dict[str, Any]:
     """`Name_vN` of each Definition with dead gates the registered compiler emits -> its version without them."""
     from verity_vllm.program.registry import dead_free as DF
-    return {"RMSNormTriton_v1": DF.RMSNormTritonV5, "TokenSelect_v1": DF.TokenSelectV4, "GumbelTopPTokenSelect_v2": DF.GumbelTopPTokenSelectV3}
+    return {"RMSNormTriton_v1": DF.RMSNormTritonV5, "TokenSelect_v1": DF.TokenSelectV4, "GumbelTopPTokenSelect_v2": DF.GumbelTopPTokenSelectV3,
+            "Attention_v5": DF.AttentionV18}
 
 
 def swapped(body: Body) -> Body:

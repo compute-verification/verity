@@ -446,24 +446,25 @@ def test_partial_refuses_request_by_request():
 
 
 def test_dead_gates_are_counted_as_circuit_check_counts_them():
-    """The request wrapper is in the dead-free form (`program.prune.dead_free`: no dead unit, RMSNormTriton, TokenSelect and the
-    top-p select at a constant split count at their versions without dead gates, and the last layer's fused qkv on the prompt rows
-    before the last narrowed to its keys and values), but gates inside Attention_v5 still reach no sample, so today's request
-    Programs have dead gates: `dead_gates_of` counts them as circuit-check does and says under which definitions."""
+    """The request wrapper is in the dead-free form (`program.prune.dead_free`: no dead unit, RMSNormTriton, TokenSelect, the top-p
+    select at a constant split count and FA2's attention at their versions without dead gates, and the last layer's fused qkv on the
+    prompt rows before the last narrowed to its keys and values), so a request Program's only dead gates are inputs no gate reads:
+    `dead_gates_of` counts them as circuit-check does and says under which definitions. The second session's prefill has a row of
+    16 keys, where `Attention_v5` has 2 dead gates a head."""
     from verity.ml.circuits.liveness import dead_gates
     from verity_vllm.program.prune import dead_units
-    c = compile_steps(_registered(), *_mixed())
-    got = dead_gates_of(c)
-    assert sorted(got["programs"]) == sorted(c.programs)
-    for d, p in c.programs.items():
-        rep = dead_gates(p, limit=0, transitive=True)
-        rec = got["programs"][d]
-        assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and not dead_units(p.fn.body)
-        assert sum(rec["by_definition"].values()) == rep.computed + rep.input
-        by = rec["by_definition"]
-        assert sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
-        assert {k for k in by if not k.startswith("Input")} <= {"Attention_v5"}
-    assert got["dead_computed"] == sum(r["dead_computed"] for r in got["programs"].values())
+    sixteen = _session([(16, 2, {**GREEDY, "max_tokens": 2})], [[(0, 0, 16)], [(0, 16, 1)]])
+    for advice, ingress in (_mixed(), sixteen):
+        c = compile_steps(_registered(), advice, ingress)
+        got = dead_gates_of(c)
+        assert sorted(got["programs"]) == sorted(c.programs)
+        for d, p in c.programs.items():
+            rep = dead_gates(p, limit=0, transitive=True)
+            rec = got["programs"][d]
+            assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and not dead_units(p.fn.body)
+            assert rep.computed == 0 and all(k.startswith("Input") for k in rec["by_definition"])
+            assert sum(rec["by_definition"].values()) == rep.input
+        assert got["dead_computed"] == 0
 
 
 def test_a_program_with_a_dead_unit_is_refused(monkeypatch):

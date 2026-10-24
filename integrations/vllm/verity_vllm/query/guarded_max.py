@@ -25,7 +25,7 @@ POLICY_TEXT = ("guarded max: in every attention Call, GuardNegInfZero(m) of each
 
 def _attention_calls(P: Any) -> Iterable[tuple[str, int, int, int, int]]:
     """(family, NH, T, BN, MASKED_FROM) of every attention Call (`BN` = 64 where the Definition has no such static; `MASKED_FROM` = 0,
-    every block guarded, except the per-iteration Check_inf chains, FA3's `Attention_v4` and FA2's `Attention_v5`)."""
+    every block guarded, except the per-iteration Check_inf chains, FA3's `Attention_v4` and FA2's `Attention_v5` / `_v18`)."""
     from verity_vllm.query.required import FLASH_ATTENTION_LAUNCHES
 
     for c in P.calls:
