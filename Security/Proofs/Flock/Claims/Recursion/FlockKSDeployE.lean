@@ -87,7 +87,7 @@ theorem decideFree_VE (H : Claims.Msg → Claims.Msg) : DecideFree H VE := by
 element-level verdict's rep streams have their tables' rounds (`streams_size_plainK`), as the shipped verdict's do. -/
 theorem nextE_acc_length_setup (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
     {cs : List Coin} (hcs : cs.length = as.length) (h : ((nextE x as cs).eval H).1 = .acc) :
-    ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (spec' : SessionSpec) (sts' : Array Stmt),
+    ∃ (s : Ins) (spec : SessionSpec) (sts : Array Flock.Stmt) (spec' : SessionSpec) (sts' : Array Flock.Stmt),
       setupOf false x = some (s, spec, sts) ∧ setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
         as.length = 2 + rounds false spec' sts' := by
   cases ha : act false x as cs with
@@ -114,6 +114,7 @@ theorem accLast_VE : AccLast sha512 VE := fun x as cs hcs h => by
   cases hsu
   show as.length = (match setupOf false x with | some (_, spec, sts) => 2 + rounds false spec sts | none => 1)
   rw [hso]
+  dsimp only
   exact hl
 
 /-- **The plain record at the element-level verifier**: `deployPlain rel` with `VE` as its verifier. -/
@@ -144,13 +145,13 @@ theorem verifyWithMK_pos (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Se
 
 /-- **The element-level verdict accepts only served tables**: the session sets up a table, and `fast100` serves every
 table's `m` (`served_plain`'s, at the element-level verdict). -/
-theorem servedE {h : ByteArray → ByteArray} {spec : SessionSpec} {sts : Array Stmt} {record : String}
+theorem servedE {h : ByteArray → ByteArray} {spec : SessionSpec} {sts : Array Flock.Stmt} {record : String}
     {proofs : Array ByteArray} (hv : verifyWithE h spec (tabsOf sts) record proofs = .ok ()) :
     0 < sts.size ∧ ∀ (i : ℕ) (hi : i < sts.size), 22 ≤ sts[i].m ∧ sts[i].m ≤ 35 := by
   have hsz : (tabsOf sts).size = sts.size := Array.size_map ..
   obtain ⟨_, schs, -, -, -, hall⟩ := verifyWithMK_tables (fun _ => true) (Hashes.ofSha512 h) hv
   refine ⟨hsz ▸ verifyWithMK_pos (fun _ => true) (Hashes.ofSha512 h) hv, fun i hi => ?_⟩
-  obtain ⟨-, -, -, hf, -⟩ := hall i (hsz ▸ hi)
+  obtain ⟨_, _, _, hf, -⟩ := hall i (hsz ▸ hi)
   have hm : (tabsOf sts)[i].m = sts[i].m := by simp [tabsOf, Setup.ofCircuit]
   exact hm ▸ fast100_range hf
 
