@@ -1,20 +1,22 @@
 """N2's advised counts (`advised`): the circuit held to its reference, and advised link-windows through the proof
-service on simulated vLLM serving (varied prompt, request and output lengths, chunked prefill, a prefix-cache hit, a
-preemption and its recompute, trailing rows after a finish, responses spanning windows): honest traffic accepted in
-every window, salted or not, and an advice whose output length is one off, which misses a request or moves a release
-bucket, a response handed before its request, a window's ingress total off, and extra egress each refused."""
+service on simulated vLLM serving written as I1's advice v0 (varied prompt, request and output lengths, chunked
+prefill, prefix-cache hits and their sources, a preemption and its resume, the async row past a finish, requests first
+scheduled out of their arrival order, frames released after they're handed and responses spanning windows): honest
+traffic accepted in every window, salted or not, and an advice whose output length is one off, which misses a request
+or moves a release bucket, a response released before its request, a window's ingress total off, and extra egress
+each refused."""
 
 import itertools
 import json
 import random
-from collections import deque
+from collections import Counter, deque
 from dataclasses import dataclass, replace
 
 import pytest
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
-from verity.core.protocols.certifier import advised as AD, head_check as HC, served as SV
+from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC, served as SV
 from verity.core.protocols.certifier.certificate import Direction, Issuer, parameters_digest
 from verity.core.protocols.certifier.grid import Certifier, GridParams, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
@@ -32,53 +34,22 @@ SYNC_SET = SyncSet((1, 2), (2, 4))
 SYNCS = [ClockSync(1, 2), ClockSync(2, 4), ClockSync(2, 2), ClockSync(1, 4)]
 SALTS = [tuple(bytes([4 * w + k + 1]) * 192 for k in range(4)) for w in range(WINDOWS)]
 BUDGET, SEQS = 6, 4
-SEEDS = (1, 2, 3, 5, 8)
-
-
-# I1's dataclasses until ADV-SPEC's `advice.py` lands, with N2's `ingress_frames` and `received`
-
-@dataclass(frozen=True)
-class RequestAdvice:
-    id: str
-    prompt_len: int
-    output_len: int
-    finish: str
-    ingress_frames: int
-
-
-@dataclass(frozen=True)
-class Row:
-    request: int
-    kind: str
-    start: int
-    n: int
-    cache_hit: int = 0
-
-
-@dataclass(frozen=True)
-class StepAdvice:
-    rows: tuple[Row, ...]
-    preempted: tuple[int, ...] = ()
-
-
-@dataclass(frozen=True)
-class Advice:
-    requests: tuple[RequestAdvice, ...]
-    steps: tuple[StepAdvice, ...]
-    release: tuple[int, ...]
-    received: tuple[int, ...]
+SEEDS = (1, 2, 3, 5, 7, 8)
 
 
 @dataclass(frozen=True)
 class Session:
-    """A simulated session on the link: the advice, each end's records, each request's ingress arrival bucket and each
-    step's released frames."""
+    """A simulated session on the link: its advice, each end's records, each request's ingress arrival bucket (in
+    arrival order), each advice request's place in that order, each kept output's hand bucket (in `advice.outputs`
+    order) and the frames handed in each bucket."""
 
-    advice: Advice
+    link: AD.LinkAdvice
     egress: list
     ingress: list
     arrive: list[int]
-    step_frames: list[int]
+    ordinal: list[int]
+    hand: list[int]
+    handed: list[int]
 
 
 def ingress_records(arrive, frames_in, own):
@@ -112,28 +83,49 @@ def egress_records(handed):
     return records
 
 
+def counts(records):
+    return [list(occupancy(r.grid)) for r in records]
+
+
+def _hit(made, j, want, resume):
+    """The longest prefix of `want` positions whose KV some request computed (request j itself only on a resume), and
+    its sources, each run's request the first that holds it."""
+    runs = []
+    for p in range(want):
+        have = [i for i in range(len(made)) if p in made[i] and (i != j or resume)]
+        if not have:
+            break
+        if runs and runs[-1][0] in have:
+            runs[-1][1] += 1
+        else:
+            runs.append([have[0], 1])
+    return sum(n for _, n in runs), [tuple(r) for r in runs]
+
+
 def serve(seed: int, own: int = 0) -> Session:
     """A vLLM-like session: 5 … 8 requests of 1 … 3 ingress frames arriving over the first two windows, and a scheduler
     of two steps a bucket, a token budget of 6 and 4 sequences, which admits a request the bucket after its last
-    ingress frame is released, prefills it in chunks (some from a prefix-cache hit), decodes it, preempts one running
-    request and recomputes it on resume (from a fresh cache hit), and schedules a trailing row after some finishes.
-    Rows are in Model Runner V2's order (n = 1 first). Each step's released tokens are handed to the egress certifier
-    the bucket after the step runs, one frame each, so the egress queue carries across windows."""
+    ingress frame is released, prefills it in chunks (from a prefix-cache hit on another request's KV, where one is
+    wanted and computed), decodes it, preempts one running request and recomputes it on resume (from a hit on its own
+    and others' KV), and runs the async row past some finishes. Rows are in Model Runner V2's order (n = 1 first), so
+    two requests first scheduled in one step can be listed out of their arrival order. Each step's kept outputs are
+    handed to the egress certifier the bucket after the step runs, one frame each, and released FIFO at R, so frames
+    released after they're handed carry across windows; `release` is the certified egress record's."""
     rng = random.Random(seed)
     n = rng.randint(5, 8)
     arrive = sorted(rng.randrange(2 * T) for _ in range(n))
     frames_in = [rng.randint(1, 3) for _ in range(n)]
     prompt = [rng.randint(2, 9) for _ in range(n)]
     out = [rng.randint(1, 10) for _ in range(n)]
-    hit = [rng.randrange(p) if rng.random() < 0.3 else 0 for p in prompt]
+    want = [rng.randrange(p) if rng.random() < 0.5 else 0 for p in prompt]
     trailing = [rng.random() < 0.4 for _ in range(n)]
+    finish = [rng.choice(ADV.FINISHES) for _ in range(n)]
     ingress, anchor = ingress_records(arrive, frames_in, own)
 
-    c, sampled = [0] * n, [0] * n
+    c, sampled, made, admit = [0] * n, [0] * n, [set() for _ in range(n)], [None] * n
     admitted, waiting, running, done = set(), deque(), [], set()
     preempt_at, preempted_once = rng.randrange(6, 20), False
-    steps, release, step_frames = [], [], []
-    handed = [0] * (WINDOWS * T)
+    steps, hand = [], []
     for s in itertools.count():
         if len(done) == n:
             break
@@ -143,62 +135,70 @@ def serve(seed: int, own: int = 0) -> Session:
             if j not in admitted and anchor[j] < b:
                 admitted.add(j)
                 waiting.append(j)
-                c[j] = hit[j]
+                c[j], sources = _hit(made, j, want[j], False)
+                admit[j] = (c[j], False, sources)
         while waiting and len(running) < SEQS:
             running.append(waiting.popleft())
-        preempted = ()
         victims = [j for j in running if 0 < sampled[j] < out[j]]
         if s >= preempt_at and not preempted_once and victims:
             j = victims[0]
             running.remove(j)
             waiting.appendleft(j)
-            c[j] = rng.randrange(prompt[j] + sampled[j])
-            preempted, preempted_once = (j,), True
+            c[j], sources = _hit(made, j, rng.randrange(prompt[j] + sampled[j]), True)
+            admit[j], preempted_once = (c[j], True, sources), True
         budget, rows = BUDGET, []
         for j in running:
             k = min(prompt[j] + sampled[j] - c[j], budget)
             if k == 0:
                 break
-            rows.append(Row(j, "decode" if k == 1 and sampled[j] else "prefill", c[j], k, hit[j]))
+            hit, resumed, sources = admit[j] or (0, False, [])
+            admit[j] = None
+            rows.append((j, "decode" if k == 1 and c[j] >= prompt[j] else "prefill", c[j], k, hit, resumed, sources))
+            made[j].update(range(c[j], c[j] + k))
             c[j] += k
             budget -= k
         if not rows:
             continue
-        rows.sort(key=lambda r: (r.n != 1, r.n))
-        frames = 0
-        for row in rows:
-            j = row.request
-            if row.start + row.n == prompt[j] + sampled[j]:
-                frames += sampled[j] < out[j]
+        rows.sort(key=lambda r: (r[3] != 1, r[3]))
+        for j, _, start, k, *_ in rows:
+            if start + k == prompt[j] + sampled[j]:
+                if sampled[j] < out[j]:
+                    hand.append(b + 1)
                 sampled[j] += 1
                 if sampled[j] > out[j] or (sampled[j] == out[j] and not trailing[j]):
                     running.remove(j)
                     done.add(j)
-        steps.append(StepAdvice(tuple(rows), preempted))
-        release.append(b + 1)
-        step_frames.append(frames)
-        handed[b + 1] += frames
+        steps.append(rows)
+    first = list(dict.fromkeys(r[0] for rows in steps for r in rows))
+    new = {j: i for i, j in enumerate(first)}
+    handed = [0] * (WINDOWS * T)
+    for h in hand:
+        handed[h] += 1
+    egress = egress_records(handed)
+    release = tuple(t for t, k in enumerate(c for row in counts(egress) for c in row) for _ in range(k))
+    advice = ADV.Advice(
+        tuple(ADV.RequestAdvice(f"u{j}", prompt[j], out[j], finish[j]) for j in first),
+        tuple(ADV.StepAdvice(tuple(ADV.Row(new[j], kind, start, k, hit, resumed,
+                                           tuple(ADV.Source(new[i], m) for i, m in sources))
+                                   for j, kind, start, k, hit, resumed, sources in rows)) for rows in steps),
+        release)
+    need = list(itertools.accumulate(frames_in))
     received = tuple(sum(row.count(b"q") for row in r.grid) for r in ingress)
-    requests = tuple(RequestAdvice(f"u{j}", prompt[j], out[j], "length", frames_in[j]) for j in range(n))
-    return Session(Advice(requests, tuple(steps), tuple(release), received), egress_records(handed), ingress, arrive,
-                   step_frames)
+    link = AD.LinkAdvice(advice, tuple(need[j] for j in first), received)
+    return Session(link, egress, ingress, arrive, first, hand, handed)
 
 
-def counts(records):
-    return [list(occupancy(r.grid)) for r in records]
-
-
-def check(session: Session, advice=None, own=0, egress=None, ingress=None) -> list[bool]:
+def check(session: Session, link=None, own=0, egress=None, ingress=None) -> list[bool]:
     """`advised.reference` on every window's heads' counts and its view of the advice, False where `view` refuses."""
-    advice = session.advice if advice is None else advice
+    link = session.link if link is None else link
     out = []
     for w, (e, i) in enumerate(zip(counts(egress or session.egress), counts(ingress or session.ingress))):
         try:
-            v = AD.view(advice, w, T, R, SYNCS)
+            v = AD.view(link, w, T, R, SYNCS)
         except ValueError:
             out.append(False)
             continue
-        out.append(AD.reference(T, R, RIN, own, i, e, v.handed, v.floor, v.queued, v.received))
+        out.append(AD.reference(T, RIN, own, i, e, v.released, v.floor, v.received))
     return out
 
 
@@ -214,7 +214,7 @@ class Run:
                                      coins=lambda n: b"\x07" * n, clock=lambda: 0.0)
         self.previous = None
 
-    def round(self, w, egress, ingress, advice) -> S.Outcome:
+    def round(self, w, egress, ingress, link) -> S.Outcome:
         opening = self.lw.commit(w, self.issuer.certify(egress, Direction.EGRESS, P, parameters_digest(P, SYNC_SET)),
                                  self.issuer.certify(ingress, Direction.INGRESS, PIN, parameters_digest(PIN)),
                                  SALTS[w])
@@ -222,56 +222,135 @@ class Run:
         self.previous = reg.digest
         draw = self.stream.select(reg)
         assert self.stream.deliver(draw, [self.lw.session(opening, draw)]) is None
-        return self.lw.outcome(self.stream, draw, opening, SYNCS, advice=advice)
+        return self.lw.outcome(self.stream, draw, opening, SYNCS, advice=link)
 
-    def link(self, session: Session, advice=None, egress=None, ingress=None) -> list[bool]:
+    def link(self, session: Session, link=None, egress=None, ingress=None) -> list[bool]:
         """Every window's outcome of record, in order, and the network verdict's agreement with their AND."""
-        advice = session.advice if advice is None else advice
+        link = session.link if link is None else link
         egress, ingress = egress or session.egress, ingress or session.ingress
-        accepted = [self.round(w, egress[w], ingress[w], advice).accepted for w in range(WINDOWS)]
+        accepted = [self.round(w, egress[w], ingress[w], link).accepted for w in range(WINDOWS)]
         verdict = self.lw.network_verdict(self.stream)
         assert verdict["accepted"] is all(accepted) and verdict["windows"] == WINDOWS
         assert verdict["refused"] == [w for w, a in enumerate(accepted) if not a]
-        assert verdict["advice"] == (AD.digest(advice) if any(accepted) else None)
+        assert verdict["advice"] == (AD.digest(link) if any(accepted) else None)
         return accepted
 
 
-def _trailing(advice) -> int:
-    """The rows that sample past their request's `output_len`."""
-    sampled, out = [0] * len(advice.requests), 0
+def _past(advice) -> int:
+    """The rows past a request's last kept output: the async row after a finish."""
+    known, kept, out = [q.prompt_len for q in advice.requests], [0] * len(advice.requests), 0
     for st in advice.steps:
         for r in st.rows:
-            if r.start + r.n == advice.requests[r.request].prompt_len + sampled[r.request]:
-                out += sampled[r.request] >= advice.requests[r.request].output_len
-                sampled[r.request] += 1
+            if r.start + r.n == known[r.request]:
+                if kept[r.request] < advice.requests[r.request].output_len:
+                    kept[r.request] += 1
+                    known[r.request] += 1
+                else:
+                    out += 1
     return out
+
+
+def _rebuilt(link, requests, steps, extra=(), ingress_end=None, received=None):
+    """`link` with the advice's requests and steps replaced, each kept output released where `link` releases the same
+    request's (by id) same output, or where `extra`'s (id, index, bucket) says."""
+    a = link.advice
+    at = {(a.requests[o.request].id, o.index): b for o, b in zip(ADV.outputs(a), a.release)}
+    at |= {(i, k): b for i, k, b in extra}
+    probe = ADV.Advice(requests, steps, (0,) * sum(q.output_len for q in requests))
+    release = tuple(at[(requests[o.request].id, o.index)] for o in ADV.outputs(probe))
+    return AD.LinkAdvice(ADV.Advice(requests, steps, release),
+                         link.ingress_end if ingress_end is None else ingress_end,
+                         link.received if received is None else received)
+
+
+def _room(link, j, frm=None):
+    """The first bucket from request j's last release on (or from `frm`) that releases fewer than R frames."""
+    a, per = link.advice, Counter(link.advice.release)
+    last = max((b for o, b in zip(ADV.outputs(a), a.release) if o.request == j), default=0) if frm is None else frm
+    return next(t for t in range(last, WINDOWS * T) if per[t] < R)
+
+
+def _with_output_len(link, j, d):
+    """The advice with request j's output length d off, as an advice v0 accepts: one short, its last kept output's row
+    becomes the row past its finish (and the one there was is dropped); one long, the row past its finish keeps its
+    sample (or a decode row is added at the end), released at the first bucket from its last with room."""
+    a = link.advice
+    q = a.requests[j]
+    requests = a.requests[:j] + (replace(q, output_len=q.output_len + d),) + a.requests[j + 1:]
+    past = q.prompt_len + q.output_len
+    steps = [st.rows for st in a.steps]
+    extra = ()
+    if d < 0:
+        steps = [tuple(r for r in rows if not (r.request == j and r.start + r.n == past)) for rows in steps]
+    else:
+        if not any(r.request == j and r.start + r.n == past for rows in steps for r in rows):
+            steps.append((ADV.Row(j, "decode", past - 1, 1),))
+        extra = ((q.id, q.output_len, _room(link, j)),)
+    return _rebuilt(link, requests, tuple(ADV.StepAdvice(rows) for rows in steps if rows), extra)
+
+
+def _without_request(link, j, ingress):
+    """The advice with request j dropped, its rows with it, and, with `ingress`, its ingress frames off the link: the
+    later requests' ends lowered by them, and `received` lowered in the last windows that released any."""
+    a = link.advice
+    index = {k: k - (k > j) for k in range(len(a.requests)) if k != j}
+    steps = []
+    for st in a.steps:
+        rows = tuple(replace(r, request=index[r.request],
+                             sources=tuple(replace(s, request=index[s.request]) for s in r.sources))
+                     for r in st.rows if r.request != j)
+        if rows:
+            steps.append(ADV.StepAdvice(rows))
+    requests = a.requests[:j] + a.requests[j + 1:]
+    ends, received = list(link.ingress_end), list(link.received)
+    end = ends.pop(j)
+    if ingress:
+        size = end - max([e for e in ends if e < end], default=0)
+        ends = [e - size if e > end else e for e in ends]
+        for w in reversed(range(len(received))):
+            take = min(size, received[w])
+            received[w] -= take
+            size -= take
+    return _rebuilt(link, requests, tuple(steps), ingress_end=tuple(ends), received=tuple(received))
+
+
+def _moved(link, k, d):
+    release = list(link.advice.release)
+    release[k] += d
+    return AD.LinkAdvice(replace(link.advice, release=tuple(release)), link.ingress_end, link.received)
 
 
 def test_the_simulated_sessions_are_varied():
     """The sessions the tests run hold what makes traffic arbitrary: requests of different sizes and output lengths,
-    chunked prefill, a prefix-cache hit, a preemption, trailing rows, egress queued across a window's start and a
-    response whose frames are handed in two windows."""
+    chunked prefill, prefix-cache hits on other requests' KV, a preemption resumed from a hit, the async row past a
+    finish, requests first scheduled out of their arrival order, frames released after they're handed (across a
+    window's start too) and a response released in two windows."""
     sessions = [serve(seed) for seed in SEEDS]
     for s in sessions:
-        assert sum(s.step_frames) == sum(r.output_len for r in s.advice.requests) == len(AD.frames(s.advice))
-    requests = [r for s in sessions for r in s.advice.requests]
-    assert len({r.output_len for r in requests}) > 3 and len({r.ingress_frames for r in requests}) == 3
-    rows = [(s, r) for s in sessions for st in s.advice.steps for r in st.rows]
-    assert any(r.kind == "prefill" and r.start + r.n < s.advice.requests[r.request].prompt_len for s, r in rows)
-    assert any(r.cache_hit for _, r in rows)
-    assert any(st.preempted for s in sessions for st in s.advice.steps)
-    assert any(_trailing(s.advice) for s in sessions)
-    assert any(AD.view(s.advice, w, T, R, SYNCS).queued for s in sessions for w in range(1, WINDOWS))
-    spans = [len({h // T for f, h in zip(AD.frames(s.advice), AD.hands(s.advice)) if f.request == j})
-             for s in sessions for j in range(len(s.advice.requests))]
+        assert len(ADV.outputs(s.link.advice)) == len(s.link.advice.release) == len(s.hand) == \
+            sum(q.output_len for q in s.link.advice.requests)
+    requests = [q for s in sessions for q in s.link.advice.requests]
+    assert len({q.output_len for q in requests}) > 3
+    sizes = {e - p for s in sessions for p, e in zip([0] + sorted(s.link.ingress_end), sorted(s.link.ingress_end))}
+    assert sizes == {1, 2, 3}
+    rows = [(s, r) for s in sessions for st in s.link.advice.steps for r in st.rows]
+    assert any(r.kind == "prefill" and r.start + r.n < s.link.advice.requests[r.request].prompt_len for s, r in rows)
+    assert any(r.cache_hit and not r.preempted for _, r in rows)
+    assert any(r.preempted and r.cache_hit for _, r in rows)
+    assert any(_past(s.link.advice) for s in sessions)
+    assert any(s.ordinal != sorted(s.ordinal) for s in sessions)
+    pairs = [(h, b) for s in sessions for h, b in zip(s.hand, s.link.advice.release)]
+    assert all(b >= h for h, b in pairs) and any(b // T > h // T for h, b in pairs)
+    spans = [len({b // T for o, b in zip(ADV.outputs(s.link.advice), s.link.advice.release) if o.request == j})
+             for s in sessions for j in range(len(s.link.advice.requests))]
     assert max(spans) > 1
 
 
 @pytest.mark.parametrize("own", [0, 1])
 def test_honest_advised_traffic_is_accepted_in_every_window(tmp_path, own):
-    """No egress profile and no FIXLEN: each window's egress counts are the release of the advice's frames from the
-    queue the advice carries in, its ingress counts release every hand's request in time, and every window of every
-    session is accepted through the proof service, salted (the certifier's own frame in each window) or not."""
+    """No egress profile and no FIXLEN: each window's egress counts are the advice's releases in its buckets, its
+    ingress counts release every output's request in time, and every window of every session is accepted through the
+    proof service, salted (the certifier's own frame in each window) or not."""
     for seed in SEEDS:
         session = serve(seed, own)
         assert check(session, own=own) == [True] * WINDOWS
@@ -280,21 +359,29 @@ def test_honest_advised_traffic_is_accepted_in_every_window(tmp_path, own):
 
 
 def test_every_window_is_held_to_one_advice(tmp_path):
-    """Each window reports the advice it read (`advised.digest`, its `advice` output): a window checked against another
-    advice that agrees with the link's on that window's view (one more request, received in the last window) is
-    accepted alone, but the network verdict refuses it, so the link's counts are one advice's."""
+    """Each window reports the advice it read (`advised.digest`, its `advice` output, of the whole advice's encoding):
+    a window checked against another advice that agrees with the link's on that window's view (one more request,
+    released and received in the last window) is accepted alone, but the network verdict refuses it, so the link's
+    counts are one advice's."""
     session = serve(SEEDS[0])
-    a = session.advice
-    other = replace(a, requests=a.requests + (RequestAdvice("u-extra", 2, 0, "length", 1),),
-                    received=a.received[:-1] + (a.received[-1] + 1,))
-    assert AD.digest(other) != AD.digest(a)
-    assert [AD.view(other, w, T, R, SYNCS) == AD.view(a, w, T, R, SYNCS) for w in range(WINDOWS)] == \
+    link, a = session.link, session.link.advice
+    b = next(t for t in range(WINDOWS * T - 1, (WINDOWS - 1) * T + 1, -1) if Counter(a.release)[t] < R)
+    other = AD.LinkAdvice(ADV.Advice(a.requests + (ADV.RequestAdvice("u-extra", 2, 1, "eos"),),
+                                     a.steps + (ADV.StepAdvice((ADV.Row(len(a.requests), "prefill", 0, 2),)),),
+                                     a.release + (b,)),
+                          link.ingress_end + (sum(link.received) + 1,),
+                          link.received[:-1] + (link.received[-1] + 1,))
+    assert AD.digest(other) != AD.digest(link)
+    assert [AD.view(other, w, T, R, SYNCS) == AD.view(link, w, T, R, SYNCS) for w in range(WINDOWS)] == \
         [True] * (WINDOWS - 1) + [False]
+    finished = replace(a.requests[0], finish="length" if a.requests[0].finish == "eos" else "eos")
+    renamed = AD.LinkAdvice(replace(a, requests=(finished,) + a.requests[1:]), link.ingress_end, link.received)
+    assert AD.digest(renamed) != AD.digest(link)
     run = Run(tmp_path)
-    outs = [run.round(w, session.egress[w], session.ingress[w], other if w == 2 else a) for w in range(WINDOWS)]
+    outs = [run.round(w, session.egress[w], session.ingress[w], other if w == 2 else link) for w in range(WINDOWS)]
     assert [o.accepted for o in outs] == [True] * WINDOWS
     verdict = run.lw.network_verdict(run.stream)
-    assert not verdict["accepted"] and verdict["refused"] == [2] and verdict["advice"] == AD.digest(a)
+    assert not verdict["accepted"] and verdict["refused"] == [2] and verdict["advice"] == AD.digest(link)
 
 
 def test_a_salted_session_under_an_unsalted_profile_is_refused(tmp_path):
@@ -305,121 +392,107 @@ def test_a_salted_session_under_an_unsalted_profile_is_refused(tmp_path):
     assert Run(tmp_path, 0).link(salted) != [True] * WINDOWS
 
 
-def _with_output_len(advice, j, d):
-    reqs = list(advice.requests)
-    reqs[j] = replace(reqs[j], output_len=reqs[j].output_len + d)
-    return replace(advice, requests=tuple(reqs))
-
-
-def _without_request(advice, j, adjust):
-    """The advice with request j dropped, its rows with it, and, with `adjust`, its ingress frames off `received` in
-    the windows that released them, so its frames are simply missing."""
-    keep = [k for k in range(len(advice.requests)) if k != j]
-    index = {k: i for i, k in enumerate(keep)}
-    steps, release = [], []
-    for st, rel in zip(advice.steps, advice.release):
-        rows = tuple(replace(r, request=index[r.request]) for r in st.rows if r.request != j)
-        if rows:
-            steps.append(StepAdvice(rows, tuple(index[k] for k in st.preempted if k != j)))
-            release.append(rel)
-    received = list(advice.received)
-    if adjust:
-        left = advice.requests[j].ingress_frames
-        for w in reversed(range(len(received))):
-            take = min(left, received[w])
-            received[w] -= take
-            left -= take
-    return replace(advice, requests=tuple(advice.requests[k] for k in keep), steps=tuple(steps),
-                   release=tuple(release), received=tuple(received))
-
-
-def _moved(advice, s, d):
-    release = list(advice.release)
-    release[s] += d
-    return replace(advice, release=tuple(release))
-
-
 @pytest.mark.parametrize("d", [-1, 1])
 def test_an_output_length_one_off_is_refused(tmp_path, d):
-    """Each request's output length one short (its last frame becomes a trailing row's, handed nowhere) or one long
-    (the advice samples too few, or its trailing row's sample becomes a frame): the advice's frames aren't the
-    certified egress, and a window is refused."""
+    """Each request's output length one short (its last frame unreleased) or one long (one frame more), each as an
+    advice v0 accepts, in every session (one short: of the requests none of whose KV another's hit reads, since the row
+    past its finish goes): the advice's releases aren't the certified egress, and a window is refused."""
+    tried = 0
+    for seed in SEEDS:
+        session = serve(seed)
+        a = session.link.advice
+        for j, q in enumerate(a.requests):
+            if q.output_len + d >= 1 and not (d < 0 and any(s.request == j for st in a.steps for r in st.rows
+                                                              for s in r.sources)):
+                assert not all(check(session, _with_output_len(session.link, j, d)))
+                tried += 1
+    assert tried > 20
     session = serve(SEEDS[0])
-    for j in range(len(session.advice.requests)):
-        if session.advice.requests[j].output_len + d >= 0:
-            assert not all(check(session, _with_output_len(session.advice, j, d)))
-    assert not all(Run(tmp_path).link(session, _with_output_len(session.advice, 0, d)))
+    j = next(j for j, q in enumerate(session.link.advice.requests) if q.output_len + d >= 1)
+    assert not all(Run(tmp_path).link(session, _with_output_len(session.link, j, d)))
 
 
-@pytest.mark.parametrize("adjust", [False, True])
-def test_a_missing_request_is_refused(tmp_path, adjust):
-    """The advice without one request: its ingress frames are then more than the advice's requests, which is malformed,
-    or, with the windows' `received` lowered to match, the request's frames are missing from the advice's egress and
-    the floors of the requests behind it are lower than their ingress, and a window is refused."""
+@pytest.mark.parametrize("ingress", [False, True])
+def test_a_missing_request_is_refused(tmp_path, ingress):
+    """The advice without one request (none of whose KV another's hit reads), in every session: its frames are missing
+    from the advice's releases, and, with its ingress frames taken off too, the windows' `received` aren't the
+    ingress's; the last request on the ingress dropped alone leaves the ends short of the windows' total, which the
+    advice refuses."""
+    tried = 0
+    for seed in SEEDS:
+        session = serve(seed)
+        a = session.link.advice
+        for j in range(len(a.requests)):
+            if any(s.request == j for st in a.steps for r in st.rows for s in r.sources):
+                continue
+            try:
+                off = _without_request(session.link, j, ingress)
+            except ADV.MalformedAdvice:
+                assert not ingress and session.link.ingress_end[j] == max(session.link.ingress_end)
+                continue
+            assert not all(check(session, off))
+            tried += 1
+    assert tried > 20
     session = serve(SEEDS[1])
-    for j in range(len(session.advice.requests)):
-        assert not all(check(session, _without_request(session.advice, j, adjust)))
-    assert not all(Run(tmp_path).link(session, _without_request(session.advice, 0, adjust)))
+    a = session.link.advice
+    j = next(j for j in range(len(a.requests)) if session.link.ingress_end[j] < max(session.link.ingress_end)
+             and not any(s.request == j for st in a.steps for r in st.rows for s in r.sources))
+    assert not all(Run(tmp_path).link(session, _without_request(session.link, j, ingress)))
 
 
 def test_a_moved_release_bucket_is_refused(tmp_path):
-    """A step's release bucket moved one later or earlier in the advice (non-decreasing still): wherever that changes
-    the egress certifier's release, the advice's counts aren't the certified ones and a window is refused."""
+    """Each kept output's release bucket moved one later or earlier, as an advice v0 accepts (its request's releases
+    still non-decreasing): one bucket releases a frame fewer and its neighbour one more than the certified egress, and
+    a window is refused."""
     session = serve(SEEDS[2])
-    a, moved = session.advice, []
-    certified = [c for row in counts(session.egress) for c in row]
-    for s, d in itertools.product(range(len(a.steps)), (-1, 1)):
-        b = a.release[s] + d
-        if b < 0 or (s and b < a.release[s - 1]) or (s + 1 < len(a.steps) and b > a.release[s + 1]) or \
-                not session.step_frames[s]:
+    moved = []
+    for k, d in itertools.product(range(len(session.link.advice.release)), (-1, 1)):
+        try:
+            off = _moved(session.link, k, d)
+        except ADV.MalformedAdvice:
             continue
-        hands = AD.hands(_moved(a, s, d))
-        if AD.derive([sum(h == t for h in hands) for t in range(WINDOWS * T)], 0, R) != certified:
-            assert not all(check(session, _moved(a, s, d)))
-            moved.append((s, d))
+        assert not all(check(session, off))
+        moved.append((k, d))
     assert {d for _, d in moved} == {-1, 1}
-    s, d = moved[0]
-    assert not all(Run(tmp_path).link(session, _moved(a, s, d)))
+    assert not all(Run(tmp_path).link(session, _moved(session.link, *moved[0])))
 
 
-def test_a_response_handed_before_its_request_is_refused(tmp_path):
-    """The same advice and egress, with a request's ingress arriving later than its response's first frames are handed:
-    the counts are the advice's, but the ingress head hasn't released the request by its frames' eligibility, so the
-    floor refuses the window."""
+def test_a_response_released_before_its_request_is_refused(tmp_path):
+    """The same advice and egress, with the first request's ingress, and every request's before it, arriving when its
+    response's first frame is released: the counts are the advice's, but the ingress head hasn't released the request
+    by that frame's eligibility, so the floor refuses the window."""
     session = serve(SEEDS[0])
-    arrive = list(session.arrive)
-    first = min(h for f, h in zip(AD.frames(session.advice), AD.hands(session.advice)) if f.request == 0)
-    arrive[0] = first
-    late, _ = ingress_records(arrive, [r.ingress_frames for r in session.advice.requests], 0)
-    advice = replace(session.advice, received=tuple(sum(row.count(b"q") for row in r.grid) for r in late))
+    a, j = session.link.advice, session.ordinal.index(0)
+    first = min(b for o, b in zip(ADV.outputs(a), a.release) if o.request == j)
+    sizes = [e - p for p, e in zip([0] + sorted(session.link.ingress_end), sorted(session.link.ingress_end))]
+    late, _ = ingress_records([max(t, first) for t in session.arrive], sizes, 0)
+    link = AD.LinkAdvice(a, session.link.ingress_end, tuple(sum(row.count(b"q") for row in r.grid) for r in late))
     assert counts(late) != counts(session.ingress)
-    w = first // T
-    v = AD.view(advice, w, T, R, SYNCS)
-    assert AD.derive(v.handed, v.queued, R) == counts(session.egress)[w]
-    assert not check(session, advice, ingress=late)[w]
-    assert not Run(tmp_path).link(session, advice, ingress=late)[w]
+    assert [list(AD.view(link, w, T, R, SYNCS).released) for w in range(WINDOWS)] == counts(session.egress)
+    w = (first - SYNCS[first // T].delta) // T
+    assert not check(session, link, ingress=late)[w]
+    assert not Run(tmp_path).link(session, link, ingress=late)[w]
 
 
 def test_a_windows_ingress_total_off_is_refused(tmp_path):
     """`received` with one request frame moved to the next window: the totals still match the requests', but each of
     the two windows' ingress counts sums to one off its `received`."""
     session = serve(SEEDS[0])
-    got = list(session.advice.received)
+    got = list(session.link.received)
     w = next(k for k in range(WINDOWS - 1) if got[k])
     got[w] -= 1
     got[w + 1] += 1
-    advice = replace(session.advice, received=tuple(got))
-    assert check(session, advice)[w:w + 2] == [False, False]
-    assert Run(tmp_path).link(session, advice)[w:w + 2] == [False, False]
+    link = AD.LinkAdvice(session.link.advice, session.link.ingress_end, tuple(got))
+    assert check(session, link)[w:w + 2] == [False, False]
+    assert Run(tmp_path).link(session, link)[w:w + 2] == [False, False]
 
 
 @pytest.mark.parametrize("where", ["busy", "idle"])
 def test_extra_egress_is_refused(tmp_path, where):
-    """One frame more on the egress link than the advice hands, in a bucket with frames or in an idle one: the
-    certificate verifies and the audit accepts, but the counts aren't the release of the advice's frames."""
+    """One frame more on the egress link than the advice releases, handed in a bucket with frames or in an idle one:
+    the certificate verifies and the audit accepts, but the counts aren't the advice's releases."""
     session = serve(SEEDS[3])
-    hands = AD.hands(session.advice)
-    handed = [sum(h == t for h in hands) for t in range(WINDOWS * T)]
+    handed = list(session.handed)
     t = next(t for t in range(WINDOWS * T) if (handed[t] > 0) == (where == "busy"))
     handed[t] += 1
     extra = egress_records(handed)
@@ -429,49 +502,45 @@ def test_extra_egress_is_refused(tmp_path, where):
 
 
 def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
-    """An advised window with no advice is refused, and so is every window of an advice that samples past a row's known
-    tokens, names no request, or releases steps out of order."""
+    """An advised window with no advice, or I1's advice without N2's ingress part, is refused; an ingress part that
+    isn't one can't be built; and every window refuses an advice that releases more than R frames in a bucket (all in
+    the last), a frame before its request could be (the first in bucket 0), or one in a window with no declared sync
+    (the last past the link's)."""
     session = serve(SEEDS[0])
     run = Run(tmp_path)
     opening = run.lw.commit(0, run.issuer.certify(session.egress[0], Direction.EGRESS, P,
                                                   parameters_digest(P, SYNC_SET)),
                             run.issuer.certify(session.ingress[0], Direction.INGRESS, PIN, parameters_digest(PIN)),
                             SALTS[0])
-    assert run.lw.advised_check(opening, SYNCS, session.advice)
-    assert not run.lw.advised_check(opening, SYNCS, None)
-    a = session.advice
-    row = a.steps[0].rows[0]
-    far = replace(a, steps=(StepAdvice((replace(row, start=a.requests[row.request].prompt_len),)),) + a.steps[1:])
-    stray = replace(a, steps=(StepAdvice((replace(row, request=len(a.requests)),)),) + a.steps[1:])
-    order = replace(a, release=(a.release[1] + 1,) + a.release[1:])
-    for bad in (far, stray, order):
-        with pytest.raises(ValueError):
-            AD.view(bad, 0, T, R, SYNCS)
+    link, a = session.link, session.link.advice
+    assert run.lw.advised_check(opening, SYNCS, link)
+    assert not run.lw.advised_check(opening, SYNCS, None) and not run.lw.advised_check(opening, SYNCS, a)
+    ends, got = link.ingress_end, link.received
+    for advice, end, received in ((ADV.to_json(a), ends, got), (a, ends[:-1], got), (a, (ends[1],) + ends[1:], got),
+                                  (a, (0,) + ends[1:], got), (a, ends, got[:-1] + (got[-1] + 1,)),
+                                  (a, ends, (-1,) + got[1:])):
+        with pytest.raises(ADV.MalformedAdvice):
+            AD.LinkAdvice(advice, end, received)
+    over, early, late = (WINDOWS * T - 1,) * len(a.release), (0,) + a.release[1:], a.release[:-1] + (WINDOWS * T,)
+    for release, why in ((over, "past the allocation"), (early, "before its request"), (late, "declares no sync")):
+        bad = AD.LinkAdvice(replace(a, release=release), ends, got)
+        for w in range(WINDOWS):
+            with pytest.raises(ValueError, match=why):
+                AD.view(bad, w, T, R, SYNCS)
         assert not run.lw.advised_check(opening, SYNCS, bad)
-    assert check(session, order) == [False] * WINDOWS
+    with pytest.raises(ValueError, match="receives in"):
+        AD.view(link, WINDOWS, T, R, SYNCS)
 
 
-def test_releases_reproduce_the_certified_counts():
-    """The advice can take each step's release from the certified egress record (`releases`, the bucket that releases
-    the step's first frame): when each step's frames were handed together, the advice's counts are the record's."""
-    for seed in SEEDS:
-        session = serve(seed)
-        flat = [c for row in counts(session.egress) for c in row]
-        rel = AD.releases(session.step_frames, flat)
-        assert all(r >= h for r, h, n in zip(rel, session.advice.release, session.step_frames) if n)
-        assert check(session, replace(session.advice, release=tuple(rel))) == [True] * WINDOWS
-
-
-KEYS = [(8, 3, 2, 0), (8, 3, 2, 1), (5, 1, 1, 1), (1, 2, 3, 0), (1, 2, 3, 1)]
+KEYS = [(8, 2, 0), (8, 2, 1), (5, 1, 1), (1, 3, 0), (1, 3, 1)]
 
 
 def _cases(key, rng, n):
-    T_, R_, RIN_, OWN = key
+    T_, RIN_, OWN = key
     cases = []
     for _ in range(n):
-        handed = [rng.choice((0, 0, 1, 2, 5, R_)) for _ in range(T_)]
-        queued = rng.choice((0, 0, 1, R_, 7, AD.U32_MAX))
-        egress = AD.derive(handed, queued, R_)
+        released = [rng.choice((0, 0, 1, 2, 5, 1 << 20, AD.U32_MAX)) for _ in range(T_)]
+        egress = list(released)
         ingress = [rng.randint(0, RIN_) for _ in range(T_)]
         if rng.random() < 0.8:
             ingress[0] = max(ingress[0], OWN)
@@ -482,33 +551,31 @@ def _cases(key, rng, n):
         roll = rng.random()
         if roll < 0.15:
             k = rng.randrange(T_)
-            egress[k] = max(0, egress[k] + rng.choice((-1, 1, 1 << 20)))
+            egress[k] ^= 1 << rng.randrange(32)
         elif roll < 0.25:
             floor[rng.randrange(T_)] += rng.choice((1, 1 << 31))
         elif roll < 0.35:
             received += rng.choice((-1, 1))
-        elif roll < 0.4:
-            ingress[rng.randrange(T_)] = RIN_ + rng.choice((1, 1 << 24))
         elif roll < 0.45:
-            handed[rng.randrange(T_)] = AD.U32_MAX
-        cases.append((ingress, egress, AD.WindowView(tuple(handed), tuple(floor), queued, max(0, received))))
+            ingress[rng.randrange(T_)] = RIN_ + rng.choice((1, 1 << 24))
+        cases.append((ingress, egress, AD.WindowView(tuple(released), tuple(floor), max(0, received))))
     return cases
 
 
 @pytest.mark.parametrize("key", KEYS)
 def test_the_circuit_is_its_reference(key):
-    """Random windows of each size class, salted and not, with derived counts and counts one off or past a u32's
-    range, floors met and missed, queues from empty to u32's top, ingress past R_in and bucket 0 without its own frame,
-    and every honest session's windows: the circuit's bit is `advised.reference`'s."""
+    """Random windows of each size class, salted and not, with egress counts equal to the releases or one bit off
+    anywhere in a u32, floors met and missed, ingress past R_in and bucket 0 without its own frame, and every honest
+    session's windows: the circuit's bit is `advised.reference`'s."""
     rng = random.Random(sum(key))
     cases = _cases(key, rng, 300)
-    if key[:3] == (T, R, RIN):
+    if key[:2] == (T, RIN):
         for seed in SEEDS:
-            session = serve(seed, key[3])
+            session = serve(seed, key[2])
             for w in range(WINDOWS):
                 cases.append((counts(session.ingress)[w], counts(session.egress)[w],
-                              AD.view(session.advice, w, T, R, SYNCS)))
-    want = [int(AD.reference(*key, i, e, *(v.handed, v.floor, v.queued, v.received))) for i, e, v in cases]
+                              AD.view(session.link, w, T, R, SYNCS)))
+    want = [int(AD.reference(*key, i, e, v.released, v.floor, v.received)) for i, e, v in cases]
     assert AD.evaluate(key, cases) == want and 0 < sum(want) < len(want)
 
 
@@ -517,13 +584,13 @@ def test_the_advised_unit_is_n2s_beside_the_advised_counts(tmp_path):
     advised sizes public, and an advised link has no egress occupancy profile or served profile, and one T and τ_b on
     both ends."""
     lw = Run(tmp_path).lw
-    assert lw.unit.id == "NetworkAdvisedLinkWindow_v1{EGRESS=(9,8,0),INGRESS=(9,8,0),ADVISED=(8,3,2,0)}"
+    assert lw.unit.id == "NetworkAdvisedLinkWindow_v1{EGRESS=(9,8,0),INGRESS=(9,8,0),ADVISED=(8,2,0)}"
     assert lw.spec.public == PUBLIC_ADVISED and {"advice", "advised", "sync"} <= {p.item for p in lw.spec.public}
     assert lw.spec.check.public_outputs == OUTPUTS_ADVISED == ("verdict", "deadline", "advice")
     assert "served" not in {p.item for p in lw.spec.public} and lw.windows == WINDOWS
     assert lw.spec.digest() != replace(lw, advised=AD.AdvisedProfile(WINDOWS + 1)).spec.digest()
-    assert replace(lw, advised=AD.AdvisedProfile(WINDOWS, 1)).unit.id.endswith("ADVISED=(8,3,2,1)}")
-    assert lw.gates()[-1] is AD.gate(T, R, RIN, 0)
+    assert replace(lw, advised=AD.AdvisedProfile(WINDOWS, 1)).unit.id.endswith("ADVISED=(8,2,1)}")
+    assert lw.gates()[-1] is AD.gate(T, RIN, 0)
     with pytest.raises(ValueError, match="served .* or advised"):
         replace(lw, served=SV.ServedProfile(3, 1, WINDOWS))
     with pytest.raises(ValueError, match="no egress occupancy"):
@@ -538,7 +605,7 @@ def _accepts_any_counts(B, S_, *args):
     return B.call(BL.constant(1))
 
 
-@pytest.mark.parametrize("key", [(8, 3, 2, 0), (8, 3, 2, 1)])
+@pytest.mark.parametrize("key", [(8, 2, 0), (8, 2, 1)])
 def test_the_advised_gate_names_its_pinned_circuit_digest(key):
     """The advised counts' gate names its Definition's circuit digest as `advised.circuit-check.json` pins it, which is
     the Definition's own (`head_check.expand`), and advised counts with the same id and signature that accept any

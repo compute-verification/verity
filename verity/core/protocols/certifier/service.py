@@ -93,17 +93,17 @@ sizes, and the window's declared sync, the advice `charge` already counts, which
 of record runs `served_check` too.
 
 **An advised link** (`LinkWindows(advised=advised.AdvisedProfile(…))`) is a served link under arbitrary traffic:
-responses of any length, batched and timed as serving chose, carried across windows. The prover's advice (one per
-certifier session, after serving, charged by `advice.bits`) states what serving chose, and its unit is
-`NetworkAdvisedLinkWindow` v1{EGRESS, INGRESS, ADVISED}: the checks above, and one gate naming
-`advised.NetworkAdvisedCounts_v1` and its pinned circuit digest (`advised.gate`, pinned in
-`advised.circuit-check.json`), which holds the egress head's counts to the release of the advice's frames and the
-ingress head's counts to the advice (`advised`'s docstring has the fields it reads, the soundness argument and the
-premises). Its public inputs are the window's view of the advice (`advised.view`), which the verifier computes from the
-public advice and the declared syncs; the heads' counts stay witness. Its public items are `PUBLIC_ADVISED`. Its
-verifier of record runs `advised_check` on the delivered advice (`verify(advice=…)`), refusing a window without one,
-and reports the advice it read as a third public output, `advice` (`advised.digest`); the network verdict refuses a
-window that names another advice than the first accepted window's, so every window's counts are one advice's.
+responses of any length, batched and timed as serving chose, carried across windows. The prover's advice
+(`advised.LinkAdvice`: I1's `advice.Advice`, one per certifier session, after serving, charged by `advice.bits`, and
+N2's ingress part) states what serving chose, and its unit is `NetworkAdvisedLinkWindow` v1{EGRESS, INGRESS, ADVISED}:
+the checks above, and one gate naming `advised.NetworkAdvisedCounts_v1` and its pinned circuit digest (`advised.gate`,
+pinned in `advised.circuit-check.json`), which holds the egress head's counts to the advice's releases and the ingress
+head's counts to the advice (`advised`'s docstring has the fields it reads, the soundness argument and the premises).
+Its public inputs are the window's view of the advice (`advised.view`), which the verifier computes from the public
+advice and the declared syncs; the heads' counts stay witness. Its public items are `PUBLIC_ADVISED`. Its verifier of
+record runs `advised_check` on the delivered advice (`verify(advice=…)`), refusing a window without one, and reports
+the advice it read as a third public output, `advice` (`advised.digest`); the network verdict refuses a window that
+names another advice than the first accepted window's, so every window's counts are one advice's.
 
 A link whose egress end has no occupancy profile and is neither served nor advised has no verdict (`ValueError`,
 failing closed): nothing would hold its egress timing.
@@ -234,12 +234,12 @@ _SERVED_UNIT = CompositeDefinition(
         "counts derived from the ingress head's under the declared sync (`served.NetworkServedCounts`, SERVED its "
         "(T, FOUT, FIN, R, RIN))", register=False)
 #: the window's view of the advice (`advised.view`), the advised counts' public inputs
-ADVICE = ("handed", "floor", "queued", "received")
+ADVICE = ("released", "floor", "received")
 
 
 def _advice(S_) -> tuple[tuple[str, Any], ...]:
     counts = Array(S_.ADVISED[0], AD.COUNT)
-    return (("handed", counts), ("floor", counts), ("queued", AD.COUNT), ("received", AD.COUNT))
+    return (("released", counts), ("floor", counts), ("received", AD.COUNT))
 
 
 def _body_advised(B, S_, *args):
@@ -252,15 +252,15 @@ _ADVISED_UNIT = CompositeDefinition(
     "NetworkAdvisedLinkWindow", 1, ("EGRESS", "INGRESS", "ADVISED"),
     lambda S_: (_SIGNED + _heads(S_) + _advice(S_), Bits(1)), _body_advised,
     doc="the proof unit of network accounting on an advised link: `NetworkLinkWindow`'s checks, and the egress head's "
-        "counts held to the release of the advice's frames, and the advice to the ingress head's counts "
-        "(`advised.NetworkAdvisedCounts`, ADVISED its (T, R, RIN, OWN))", register=False)
+        "counts held to the advice's releases, and the advice to the ingress head's counts "
+        "(`advised.NetworkAdvisedCounts`, ADVISED its (T, RIN, OWN))", register=False)
 
 
 def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], served: tuple[int, ...] | None = None,
-         advised: tuple[int, int, int, int] | None = None):
+         advised: tuple[int, int, int] | None = None):
     """N2's proof unit for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
     and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN, OWN) (`served.unit`), or on an
-    advised link the advised counts' `advised`, (T, R, RIN, OWN) (`advised.unit`)."""
+    advised link the advised counts' `advised`, (T, RIN, OWN) (`advised.unit`)."""
     if served is not None and advised is not None:
         raise ValueError("a link is served or advised, not both")
     if advised is not None:
@@ -298,10 +298,11 @@ PUBLIC_ADVISED = tuple(p for p in PUBLIC_SERVED if p.item not in ("served", "syn
              "windows and the certifier's own frames a window (its salt's), fixed before the run"),
     S.Public("sync", "output", "each window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
              "`charge` already counts, whose δ and ρ the unit's ingress floor reads"),
-    S.Public("advice", "output", "the advice (one per certifier session, after serving), charged by `advice.bits`: the "
-             "unit reads its window view, `advised.view` of its requests' prompt and output lengths and ingress "
-             "frames, its steps' rows, its release buckets and its windows' received request frames; each window "
-             "reports the SHA-512 of those fields (`advised.digest`), which the network verdict holds to one advice"),
+    S.Public("advice", "output", "the advice (`advised.LinkAdvice`, one per certifier session, after serving): I1's, "
+             "charged by `advice.bits`, and N2's ingress part. The unit reads its window view, `advised.view` of its "
+             "kept outputs' release buckets, its requests' ingress ends and its windows' received request frames; "
+             "each window reports the SHA-512 of the advice's encoding and that part (`advised.digest`), which the "
+             "network verdict holds to one advice"),
 )
 OUTPUTS = ("verdict", "deadline")
 #: an advised link's: and the advice its window read (`advised.digest`)
@@ -426,11 +427,11 @@ class LinkWindows:
         return (self.params.buckets, self.served.response_frames, self.served.request_frames, self.params.allocation,
                 self.ingress_params.allocation, self.served.own)
 
-    def advised_key(self) -> tuple[int, int, int, int] | None:
-        """The advised counts' size class (T, R, RIN, OWN) on an advised link, else None."""
+    def advised_key(self) -> tuple[int, int, int] | None:
+        """The advised counts' size class (T, RIN, OWN) on an advised link, else None."""
         if self.advised is None:
             return None
-        return self.params.buckets, self.params.allocation, self.ingress_params.allocation, self.advised.own
+        return self.params.buckets, self.ingress_params.allocation, self.advised.own
 
     @property
     def windows(self) -> int:
@@ -605,7 +606,7 @@ class LinkWindows:
         """The verdict of record on the delivered opening: accepted when it reproduces the registered root under the
         link-window's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
         docstring). `syncs` are the declared clock syncs of windows 0 … w (on an advised link, of every window the
-        advice hands a frame in). The verdict reports the public outputs and never the violation's kind. On a served
+        advice releases a frame in). The verdict reports the public outputs and never the violation's kind. On a served
         link it also runs the served counts' check (`served_check`), and on an advised link the advised counts' on
         `advice`, the link's advice (`advised_check`), and reports the advice it read as the `advice` output. Given
         `proved`, the findings of a proof of the unit, it accepts only when they prove this link's unit (`proved`).
@@ -624,7 +625,7 @@ class LinkWindows:
         accepted = sealed and headed and _accepts(out, inn, w)
         public = {"verdict": int(accepted), "deadline": int(egress.head.deadline and ingress.head.deadline)}
         if self.advised is not None:
-            public["advice"] = None if advice is None else AD.digest(advice)
+            public["advice"] = AD.digest(advice) if type(advice) is AD.LinkAdvice else None
         sessions = [self.session(opening, draw)]
         digest = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": sessions,
                           "accepted": accepted, "public": public})
@@ -651,18 +652,19 @@ class LinkWindows:
 
     def advised_check(self, opening: Opening, syncs: Sequence[ClockSync], advice: Any) -> bool:
         """The advised counts' check on the link-window (`advised.reference`, which the tests hold to the circuit): the
-        egress head's counts are the release of the advice's frames in the window's view of it (`advised.view`, under
-        the declared syncs), and the ingress head's counts release the request frames that view needs by each bucket
-        and the window's `received`. False with no advice, or an advice `view` refuses: malformed, not covering the
-        window, or handing a frame in a window with no declared sync or before any request frame."""
-        if advice is None:
+        egress head's counts are the advice's releases in the window's buckets (`advised.view`), and the ingress head's
+        counts release the request frames that view needs by each bucket, under the declared syncs, and the window's
+        `received`. False without an `advised.LinkAdvice`, or on one `view` refuses: not covering the window,
+        releasing more than R frames in a bucket, or releasing a frame in a window with no declared sync or before its
+        request."""
+        if type(advice) is not AD.LinkAdvice:
             return False
         w, (egress, ingress) = opening.window, opening.records
         try:
             v = AD.view(advice, w, self.params.buckets, self.params.allocation, syncs)
         except ValueError:
             return False
-        return AD.reference(*self.advised_key(), ingress.head.counts, egress.head.counts, v.handed, v.floor, v.queued,
+        return AD.reference(*self.advised_key(), ingress.head.counts, egress.head.counts, v.released, v.floor,
                             v.received)
 
     def stand_in(self, opening: Opening, draw: S.Draw, frames: Sequence[LogicalFrame],

@@ -32,13 +32,13 @@ A spec-level reference for network accounting's timing channel:
   link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
   an honest served link is accepted;
 - an advised link's counts (`advised`, `LinkWindows(advised=AdvisedProfile(windows, own))`), a served link under
-  arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1` (137,990 ANDs at
-  T = 600, R = 6, R_in = 1), which holds the egress head's counts to the release of the prover's advice's frames, handed
-  in its release buckets, and the ingress head's counts to the advice: each hand eligible under the declared sync after
-  its request's frames, and each window's ingress total the advice's. Carry-over between windows is the advice's. With
-  the advice fixed the counts are determined, so the egress timing carries at most the advice's bits (`PROTOCOL.md`,
-  "An advised link"). An egress end with no profile that is neither served nor advised gets no verdict (`ValueError`,
-  failing closed);
+  arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1` (63,031 ANDs at
+  T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice (`LinkAdvice`: I1's
+  `advice.Advice` and N2's ingress part, each request's end on the ingress link and each window's request frames), and
+  the ingress head's counts to the advice: each release eligible under the declared sync after its request's frames,
+  and each window's ingress total the advice's. Carry-over between windows is the advice's. With the advice fixed the
+  counts are determined, so the egress timing carries at most the advice's bits (`PROTOCOL.md`, "An advised link").
+  An egress end with no profile that is neither served nor advised gets no verdict (`ValueError`, failing closed);
 - the capacity counts;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
