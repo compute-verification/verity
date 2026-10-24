@@ -1119,7 +1119,8 @@
    "digest": "d777f337d5fdcbc5d7ea6d48f614a284b764038886ca18ec4b5a0f892056c342"
   },
   "Nci.Assumptions.ParameterHardPricedAt": {
-   "owner": "@training"
+   "owner": "@training",
+   "digest": "733baecc853f27cbcc97a8c248eb55e55b7b7756e83b678869381bf78100cbb7"
   },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
@@ -7708,7 +7709,10 @@
    "type_hash": "d3f79b9bf0b40f087a3ff732e52168c9d455850f506d37f97e9d327daae4af5c"
   },
   "Nci.SecurityProofs.CoveringBoundPriced": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.CoveringBoundPriced : Nci.Guarantees.CoveringBoundPriced"],
+   "assumptions": [],
+   "type_hash": "5136ccf244c834b3c555ffb5f0397740f4acca21e2fba5d1b11ff0869dc461e9"
   },
   "Nci.SecurityProofs.CoveringBoundTwoCosts": {
    "owner": "@compute-accounting",
@@ -15423,6 +15427,7 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.CoveringBound",
+    "Nci.SecurityProofs.CoveringBoundPriced",
     "Nci.SecurityProofs.CoveringBoundTwoCosts",
     "Nci.SecurityProofs.DampenerRemote",
     "Nci.SecurityProofs.DampenerThreaded",
@@ -15516,6 +15521,7 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.CoveringBound",
+    "Nci.SecurityProofs.CoveringBoundPriced",
     "Nci.SecurityProofs.CoveringBoundTwoCosts",
     "Nci.SecurityProofs.DampenerRemote",
     "Nci.SecurityProofs.DampenerThreaded",
@@ -16391,6 +16397,7 @@
    "guarantees": [
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
     "Nci.SecurityProofs.CoveringBound",
+    "Nci.SecurityProofs.CoveringBoundPriced",
     "Nci.SecurityProofs.CoveringBoundTwoCosts"
    ]
   },
@@ -30171,6 +30178,13 @@
    },
    "guarantees": ["Nci.SecurityProofs.CoveringBound"]
   },
+  "Models.Nci.Assumptions.CoveringPriced": {
+   "digest": "1226a4e3466977791d2f8c18fdd5952b8fab64b0e9ae1e858447b652338595c8",
+   "definitions": {
+    "Nci.Assumptions.ParameterHardPricedAt": "733baecc853f27cbcc97a8c248eb55e55b7b7756e83b678869381bf78100cbb7"
+   },
+   "guarantees": ["Nci.SecurityProofs.CoveringBoundPriced"]
+  },
   "Models.Nci.Assumptions.CoveringTwoCosts": {
    "digest": "4965f5ecb57ad599d5c56c135d6eedd25d98b72a6a27361aa523c8b97eac0372",
    "definitions": {
@@ -30178,7 +30192,11 @@
     "Nci.Assumptions.ParameterHardAt": "d777f337d5fdcbc5d7ea6d48f614a284b764038886ca18ec4b5a0f892056c342",
     "Nci.Assumptions.chainedBlocksAt": "3b0afb53886322999c7c5f243a6a134c42c4c8831e2249a577ffaf92f1ff962b"
    },
-   "guarantees": ["Nci.Cover.SecurityProofs.CoveringBoundAdditive", "Nci.SecurityProofs.CoveringBoundTwoCosts"]
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
+    "Nci.SecurityProofs.CoveringBoundPriced",
+    "Nci.SecurityProofs.CoveringBoundTwoCosts"
+   ]
   },
   "Models.Nci.Assumptions.Fit": {
    "digest": "ae61196a0d5e168b94fb5aebf54519f2cec0fb925e5ce7e396f1f02a82637eaa",
@@ -30423,6 +30441,13 @@
     "Nci.Guarantees.CoveringBound": "19a82c84031d0920c7145a871632219c5322dcbc559eee7f27930db159628318"
    },
    "guarantees": ["Nci.SecurityProofs.CoveringBound"]
+  },
+  "Models.Nci.Guarantees.CoveringPriced": {
+   "digest": "07859826589d14104bb013de9ea1722f255057c7ac09f99da9264704d4df889a",
+   "definitions": {
+    "Nci.Guarantees.CoveringBoundPriced": "4b53795ba482410463b9393a10e3c80c52c07b868adf2636645ccf96bada892d"
+   },
+   "guarantees": ["Nci.SecurityProofs.CoveringBoundPriced"]
   },
   "Models.Nci.Guarantees.CoveringTwoCosts": {
    "digest": "3316e5210f167499e011334c1b2e192a25a4ae988f7daea6fe61bfbee9d11a64",
