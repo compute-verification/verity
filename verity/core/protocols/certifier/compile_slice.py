@@ -2,22 +2,31 @@
 PROTOCOL's "Advice v1") composed whole for one window of a few steps, so the composition is proved end to end before the
 chain splits it into one unit a step.
 
-    CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, Q, D, P, K, SEG} (pub, adv, cert, wit) -> verdict[16]
+    CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, Q, D, P, K, SEG, CN, CTW, CU}
+        (pub, adv, cert, wit) -> verdict[16]
 
 **The rows**, each a field list (elements least significant bit first) zero-padded to whole 16-bit words:
 - ``pub``, the public inputs: the declared charge ``c`` (16 bits) and ``digest``, the step rows' hiding digest
   SHA-512(salt ‖ rows) (64 bytes), which the clear recompile gives (`rows_digest`);
 - ``adv``, the committed advice, a row under the advice's hiding root (`verity.ml.commitments.advice`): the window's raw
   decision bits ``dec`` (D), their ``count`` and the window's executed step count ``steps``;
-- ``cert``, the window's certified arrivals (`replay_chain.arrival_fields`: K slots of valid, id, P, O), a row the
-  verifier holds to the certified record's commitment (its b‖c);
+- ``cert``, the window's certified arrivals (`replay_chain.arrival_fields`: K slots of valid, id, P, O) and ``tok``,
+  each slot's first CU·B certified token ids (its prompt, then its outputs; zero past them), a row the verifier holds to
+  the certified record's commitment (its b‖c);
 - ``wit``, the witness: the state rows S_1 … S_{P+1} and the window row W_1 (`replay_chain`'s layouts), each step's
-  arrivals ``arr`` and decision bits ``bits``, the window's codeword ``seg`` (SEG bits) and the digest's salt (32 bytes).
+  arrivals ``arr`` and decision bits ``bits``, each step's prefix hits ``hit`` (its W + A candidates'), the cache rows
+  C_0 … C_P (`cache_step.cache_fields`: the table and each running slot's walk entry), the window's codeword ``seg``
+  (SEG bits) and the digest's salt (32 bytes).
 
 **The circuit.** `replay_chain.ReplayLoad` from the session's empty rows (S_0 and W_0, constants) to S_1 and W_1 with
 ``cert``'s arrivals and ``adv``'s decisions. Then per step u = 1 … P: `replay_step.ReplayStep_v1` on S_u's state with
-``arr[u]`` and ``bits[u]``, and `replay_chain.ReplayAdvance` on the same ``arr``/``bits`` wires, which holds them to W_1 at
-S_u's heads and S_{u+1} to the step's next state. The step's asks (the first ``used`` of its bits) are coded in the scan's
+``arr[u]``, ``bits[u]`` and ``hit[u]``, and `replay_chain.ReplayAdvance` on the same ``arr``/``bits`` wires, which holds
+them to W_1 at S_u's heads and S_{u+1} to the step's next state. The step's `cache_step.CacheStep_v1` calls
+(`cache_step.build_scan_step`) run on C_u from the same wires: per row slot that admits, a lookup from ROOT whose hit is
+``hit[u]``'s at the candidate's index, then the units the row completes from that lookup's entry or the slot's; then a
+lookup of the first candidate left waiting. Each call's units are its request's tokens in ``cert``, selected by the
+request's id, so neither the table's tokens nor a hit's are witness; C_0 is all zero and C_{u+1} is the calls' table and
+next slots (C_u on an idle step). The step's asks (the first ``used`` of its bits) are coded in the scan's
 order: per ask `arith_encode.KTContext_v1{C=3, NW=24}` under the plain context (the asked request's passes so far,
 min(passes, 2): the queue head's ``pc`` for the first ask of a step that forced nothing, else 0) and
 `arith_encode.ArithEncodeStep_v1{K=18, BIN=1}` against ``seg`` at the code's position; then
@@ -27,22 +36,23 @@ the salt with one SHA-512 per 128 bytes. ``pc`` moves as `replay.encode`'s ``pas
 a 0 it is min(pc + 1, 2) when that was the step's one ask and nothing was forced (the head passed once more), else 1 (a
 new head passed once); otherwise it is 0 when the step took an arrival and unchanged when it took none.
 
-**The verdict** (16 bits, the unit's one output; `ACCEPT` = 0x1F): bit 0 ``load``, ReplayLoad's ok; bit 1 ``steps``,
+**The verdict** (16 bits, the unit's one output; `ACCEPT` = 0x3F): bit 0 ``load``, ReplayLoad's ok; bit 1 ``steps``,
 every ReplayAdvance's ok (with each active step's ReplayStep ok); bit 2 ``code``, every model's and coder's ok and the
 finish's, the code within SEG bits; bit 3 ``charge``, the coded length ≤ c; bit 4 ``rows``, the rows' digest is
-``pub``'s. The rest are 0.
+``pub``'s; bit 5 ``cache``, C_0 empty and every active step's calls ok with C_{u+1} their output. The rest are 0.
 
 **The reference** is `check`, the flags the circuit's pieces' references give any unit's rows; `case` builds the rows of
 a prover's run (`scan`, with the choices REDTEAM's phase 9 found free in a piece alone: the codeword, the prefix hits
-and the heads' moves) and `check`'s verdict on them. No witness field carries a context, a frequency, a cache count or a
-consumed count: the context is the plain counter's, the frequencies KTContext_v1's outputs, and the heads move by
-ReplayStep_v1's own ``taken`` and ``used``.
+and the heads' moves, and a made-up table or made-up tokens) and `check`'s verdict on them. No witness field carries a
+context, a frequency or a consumed count, and the hits are the cache's: the context is the plain counter's, the
+frequencies KTContext_v1's outputs, the heads move by ReplayStep_v1's own ``taken`` and ``used``, and each hit
+ReplayStep_v1 reads is the one its lookup checks as the longest cached prefix of the request's certified tokens at the
+table the step reads, which chains from the empty one.
 
 **Stand-ins** (named, each a piece not ready):
-- *the cache counts*: ENC-DERIVED's hit, evictable and returned-block counts are held at 0 (ReplayStep_v1's ``hit``,
-  ``evict`` and ``ret``), true of a slice that hits no prefix and stops or preempts nothing; `cache_step.CacheStep_v1`
-  isn't wired, so a claimed hit is refused by the 0 and an honest one can't be taken: on any slice that hits, the rows
-  differ from the clear recompile's and ``rows`` refuses;
+- *the evictable and returned counts*: ENC-DERIVED's evictable and returned-block counts are held at 0 (ReplayStep_v1's
+  ``evict`` and ``ret``), true of a slice that stops or preempts nothing; on one that does, the rows differ from the
+  clear recompile's and ``rows`` refuses;
 - *the model*: KT counts from a zero prior at each window's start, the per-window counts not coded (advice v1 under
   #3642 starts from the registered book's prior and codes them first);
 - *the counting encoder*: ENC-CODE's encoder that counts its emitted bits is ArithEncodeStep_v1 checking a witness
@@ -53,7 +63,16 @@ ReplayStep_v1's own ``taken`` and ``used``.
   registration's leaf and the certified record's commitment; no gate hashes them.
 
 **Statics**: ReplayStep_v1's (R, W, A and the engine's M, T, L, B, H, CH, WM, FULL, PC, NB, and IW), the chain's Q, D,
-P, K (`replay_chain.Shape`) and SEG, the codeword's cap in bits.
+P, K (`replay_chain.Shape`), SEG, the codeword's cap in bits, and the cache's CN entries, CTW a token id's width and CU
+the units of each arrival's tokens ``cert`` holds (`cache_step.scan_widths`). A row past CU units, or a table past CN
+entries, is refused: the slice's size class.
+
+**Cost** (`size`): the cache calls dominate. A unit walked costs about CN·(2·(B·CTW + EW) + 2·IW) ANDs (`cache_step`'s
+cost; a lookup, which writes nothing, about half), and each step's three lookups walk min(CN + 1, CU) units and its
+two computes ⌊(B − 1 + T) / B⌋. On corpus-smallkv's class (CN 24, CU 25, B 16) a step's calls are 1.06M ANDs and the
+unit about 7.6M, past circuit-check's lowering: its circuit = reference tests and sidecar are at a synthetic class
+(127,800 ANDs), and the corpus unit is held to its reference by its ZK run
+(`benchmarks/network_traces/compile_slice_zk.py`, the staged verdict words).
 """
 from __future__ import annotations
 
@@ -232,9 +251,10 @@ def _sig(S):
 CompileSlice = _part(
     "CompileSlice", STATICS, _sig, _build,
     "a slice of the compile unit, one window whole: ReplayLoad, then per step ReplayStep_v1 and ReplayAdvance on the "
-    "same arrival and decision wires, the asks coded under the plain contexts against the window's codeword, the coded "
-    "length held to the declared charge and the step rows' salted SHA-512 to the public digest (verdict bits load, "
-    "steps, code, charge, rows)")
+    "same arrival and decision wires, CacheStep_v1's calls on the same wires and the certified tokens checking the hits "
+    "ReplayStep_v1 reads, the asks coded under the plain contexts against the window's codeword, the coded length held "
+    "to the declared charge and the step rows' salted SHA-512 to the public digest (verdict bits load, steps, code, "
+    "charge, rows, cache)")
 CompileSlice.build = _build  # type: ignore[attr-defined]
 
 

@@ -43,9 +43,10 @@ is little-endian.
 
 **Composition** (PROTOCOL.md, "Advice v1"): the calls follow `ReplayStep_v1`'s scheduling order, the running rows first.
 An admitting candidate's call (nins = 0) checks the hit `ReplayStep_v1` reads, and a second call, from that call's pfx,
-computes the units the row completes. r is the row's I1 request number. The replay's state chain (`replay_chain`)
-carries the table and each running slot's pfx in its state row, and N = num_gpu_blocks − 1 holds every unit computed
-while the bound holds.
+computes the units the row completes. r is the row's I1 request number. An engine step's calls are `scan_step` (and
+`build_scan_step` as a circuit, which `compile_slice` runs on ReplayStep_v1's wires): the units are the request's
+certified tokens, and a cache row (`cache_fields`: the table and each running slot's pfx) is carried from step to step
+beside the state row, from the empty one. N = num_gpu_blocks − 1 holds every unit computed while the bound holds.
 
 **Cost** (`size`): a unit costs about N·(2·(U·TW + EW) + 2·RW) ANDs. That is a comparison against every entry and a
 masked write to every entry. A call costs KU units plus its range checks: 5,856 ANDs at (N, U, TW, RW, L) =
