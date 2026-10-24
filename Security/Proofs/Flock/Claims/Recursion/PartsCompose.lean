@@ -736,7 +736,8 @@ theorem stmtFixes_deploy (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed �
           (deploySplit H rel nextE colsE wE join rowIn final w hcoin LS) (Claims.Recursion.xI (recBound rel' b L IV) x),
         ownHolders (recBound rel' b L IV) L (ownDeploy ownR) x q = none →
         (∀ r, q = .elem r → ∃ r', r = .last r') →
-        ∀ c ws, ws.length = (recBound rel' b L IV).nS x → (∀ e ∈ L.allCalls x ws, H e.1 = e.2) →
+        ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), ws.length = (recBound rel' b L IV).nS x →
+          (∀ e ∈ L.allCalls x ws, H e.1 = e.2) →
           q.Holds H (bdDeployed rel nextE colsE wE join rowIn final w)
             (deploySplit H rel nextE colsE wE join rowIn final w hcoin LS) (Claims.Recursion.xI (recBound rel' b L IV) x)
             c (L.msgs x ws)) :
