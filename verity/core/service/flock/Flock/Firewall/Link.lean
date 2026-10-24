@@ -84,6 +84,31 @@ def fft (tw : Array (Array F128)) (d : Nat) : (s n : Nat) → (Nat → F128) →
     let t := tw[s]!
     (Array.range (2 ^ (d - s))).map fun r => e[r / 2]! + t[r]! * o[r / 2]!
 
+theorem spawn_or_pure_get {α : Type} (c : Prop) [Decidable c] (x : α) :
+    (if c then Task.spawn fun _ => x else Task.pure x).get = x := by
+  split <;> rfl
+
+/-- `fft` with the even half in its own task on the top four levels, so that a lane's FFT takes up to 16 cores
+(`fftPar_eq`). -/
+def fftPar (tw : Array (Array F128)) (d : Nat) : (s n : Nat) → (Nat → F128) → Array F128
+  | s, 0, u => Array.replicate (2 ^ (d - s)) (u 0)
+  | s, n + 1, u =>
+    let eT := if s < 4 ∧ 4 ≤ n then Task.spawn fun _ => fftPar tw d (s + 1) n (fun c => u (2 * c))
+      else Task.pure (fftPar tw d (s + 1) n (fun c => u (2 * c)))
+    let o := fftPar tw d (s + 1) n (fun c => u (2 * c + 1))
+    let e := eT.get
+    let t := tw[s]!
+    (Array.range (2 ^ (d - s))).map fun r => e[r / 2]! + t[r]! * o[r / 2]!
+
+theorem fftPar_eq (tw : Array (Array F128)) (d : Nat) :
+    ∀ n s u, fftPar tw d s n u = fft tw d s n u
+  | 0, s, u => by simp only [fftPar, fft]
+  | n + 1, s, u => by simp only [fftPar, fft, fftPar_eq tw d n, spawn_or_pure_get]
+
+@[csimp] theorem fft_eq_fftPar : @fft = @fftPar := by
+  funext tw d s n u
+  exact (fftPar_eq tw d n s u).symm
+
 /-- Entry `i` of `mu`, 0 past its end. -/
 def muAt (mu : Array F128) (i : Nat) : F128 := if i < mu.size then mu[i]! else 0
 

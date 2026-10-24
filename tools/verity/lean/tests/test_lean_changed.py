@@ -5,7 +5,7 @@ In a recorded run the fast path never writes ROOT (the commit's shared source tr
 updated `lean-audit.json` is restored to the committed bytes by the next requirer iteration's `sync`, so without an
 explicit keep the record a lane must commit survives nowhere the run keeps. These tests stub the slot, the tree sync
 and check.py itself, and check the keep under `out/record/` (recorded and not), the ROOT write-back (unrecorded
-only), and which path a refused `build` slot takes."""
+only), which path a refused `build` slot takes, and how a run finds and repairs a tree another run left mid-way."""
 from __future__ import annotations
 
 import importlib.util
@@ -154,3 +154,78 @@ def test_the_dev_cache_path_never_builds_in_a_shipped_tree(fast, tmp_path, monke
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 2
     assert not calls and any("--cwd clone" in s for s in said)
+
+
+def module(lib: Path, name: str, olean: bytes = b"olean\x02rest", trace: str | None = None, hashed: str = "aa") -> Path:
+    """A module's outputs under ``lib`` as Lake leaves them: `.olean`, `.ilean`, their `.hash` files and the trace."""
+    base = lib / name
+    base.parent.mkdir(parents=True, exist_ok=True)
+    base.with_suffix(".olean").write_bytes(olean)
+    base.with_suffix(".ilean").write_text("{}")
+    base.with_name(f"{base.name}.olean.hash").write_text(hashed)
+    base.with_name(f"{base.name}.ilean.hash").write_text("bb")
+    t = base.with_suffix(".trace")
+    t.write_text(trace if trace is not None else json.dumps({"outputs": {"o": ["aa.olean"], "i": "bb.ilean", "c": "cc.c"}}))
+    return t
+
+
+def test_damaged_finds_each_module_an_interrupted_build_left_half_written(tmp_path):
+    lib = tmp_path / "lib"
+    module(lib, "P/Good")
+    bad = [module(lib, "P/NoOlean"), module(lib, "P/NotOlean", olean=b"\0\0\0"), module(lib, "P/Stale", hashed="zz"),
+           module(lib, "P/Cut", trace='{"outputs": {"o": ["aa.ol')]
+    (lib / "P" / "NoOlean.olean").unlink()
+    assert LC.damaged(lib) == sorted(bad)
+    assert LC.damaged(tmp_path / "none") == []
+
+
+def test_a_tree_left_mid_way_is_repaired_and_said_so_and_a_clean_run_clears_the_mark(fast, tmp_path, monkeypatch):
+    _, tree, _ = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    (tree / LC.DIRTY).write_text(json.dumps({"run": "r-old", "pid": 7, "package": "pkg", "phase": "deps", "at": "T"}))
+    lib = tree / "pkg" / ".lake" / "build" / "lib" / "lean"
+    module(lib, "P/Good")
+    half = module(lib, "P/Half")
+    (lib / "P" / "Half.olean").unlink()
+    (tree / "pkg" / ".lake" / "packages" / "dep").mkdir(parents=True)
+    dropped, said = [], []
+    monkeypatch.setattr(LC, "unlink", lambda p, t, links: dropped.append(p))
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
+    assert any("left mid-way by r-old (pid 7, pkg in phase deps, T)" in s for s in said)
+    assert any("1 module(s) half-written by an earlier build, rebuilt: P/Half" in s for s in said)
+    assert not half.exists() and (lib / "P" / "Good.trace").exists(), "only the half-written module loses its trace"
+    assert dropped == ["pkg"], "the dependencies the run was taking are taken again"
+    assert not (tree / LC.DIRTY).exists(), "a run that ends without a killed check.py clears the mark"
+
+
+def test_a_killed_check_leaves_the_mark_for_the_next_run(fast, tmp_path, monkeypatch):
+    _, tree, calls = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-killed")
+
+    def run(argv, **_):
+        return type("P", (), {"returncode": -9 if argv[-1].endswith("Req") else 0})()
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    said = []
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == -9
+    left = json.loads((tree / LC.DIRTY).read_text())
+    assert (left["run"], left["package"], left["phase"], left["killed"]) == ("r-killed", "pkg/Req", "check", -9)
+    monkeypatch.setattr(LC.subprocess, "run", lambda argv, **_: type("P", (), {"returncode": 0})())
+    said.clear()
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
+    assert any("left mid-way by r-killed" in s and "check.py exit -9" in s for s in said)
+    assert not (tree / LC.DIRTY).exists()
+
+
+def test_after_a_run_left_mid_way_dependencies_off_their_pinned_checkout_are_taken_again(tmp_path, monkeypatch):
+    tree = tmp_path / "tree"
+    (tree / "pkg" / ".lake" / "packages" / "dep" / ".git").mkdir(parents=True)
+    (tree / "pkg" / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "git", "name": "dep", "rev": "abc"}]}))
+    monkeypatch.setattr(LC, "git_head", lambda d: "def")
+    links, said = {"pkg": "k"}, []
+    LC.repair(tree, ["pkg"], links, None, said.append)
+    assert links == {"pkg": "k"} and not said, "a tree no run left mid-way keeps its dependencies"
+    LC.repair(tree, ["pkg"], links, {"run": "r-old", "package": "other", "phase": "check"}, said.append)
+    assert links == {} and not (tree / "pkg" / ".lake" / "packages").exists()
+    assert any("dep is not the checkout its manifest pins (abc)" in s for s in said)

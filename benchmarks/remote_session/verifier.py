@@ -1426,7 +1426,8 @@ class Verifier:
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         `delta` is the memory line's δ in its three parts (`ledger.delta_parts`), whose sum `declared`'s forms carry.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
-        there are some (`checks.Checks.bounds`)."""
+        there are some (`checks.Checks.bounds`).  `inputs` carries the AuditRO slack γ and δ were charged at
+        (`slack_log2`); a record without it was charged 41 bits a pass."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
         stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
@@ -1446,7 +1447,7 @@ class Verifier:
                           "chip_bytes": stated.chip_bytes, "encode_bytes_per_s": cal["encode_bytes_per_s"],
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
-                          "reads_bytes": record.receipts * record.block_bytes,
+                          "slack_log2": audit.SLACK_LOG2, "reads_bytes": record.receipts * record.block_bytes,
                           "post_seed_receipts": sum(sum(w.post_seed) for w in record.windows),
                           "post_seed_credited": False}}
         tiers = cal.get("read_tiers")

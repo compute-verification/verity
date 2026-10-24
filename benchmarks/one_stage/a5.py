@@ -51,7 +51,7 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   window is the population program and partition over the served Programs, the law and the run of record. The verifier composes
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
   are never used), or, for a template whose units are bit rows in chunks (`serving_rows.CHUNKED`: a MoE pair GEMM's coordinate,
-  `COORDS`, or a MoeSum or all-reduce column block, `COLS`), by C-Flock's `UnitStager` on the rows the window lays out
+  `COORDS`, a MoeSum or all-reduce column block, `COLS`, or a w13 coordinate's K-chunk, `KCHUNKS`), by C-Flock's `UnitStager` on the rows the window lays out
   (`compose_circuit.py --template`, once per template, every chunk on that circuit, read and hashed once,
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
@@ -122,6 +122,11 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   when they are one. Negatives on one drawn chunk: no registered reads, another root, its units reading another row
   (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
   context); `a5_row_tables.py` is their stand-in.
+* **Wiring across statements** (`commit.wiring`, verifier PROTOCOL §16.13 ``Wiring``): a w13 coordinate's K-chunks
+  (`pipeline.kchunk_rows`) are three templates, each chunk's ``acc`` row the output row of the chunk before it, committed under
+  that row's salt. Lean's links hold only inside a statement, so before the draw every wire is held on the public bodies the leaf
+  layer binds (`wiring.check`: the two rows' strings are one), and a drawn chunk's ``acc`` is then the committed output of the
+  chunk that wrote it, drawn or not. The negative wires a chunk to another unit.
 """
 from __future__ import annotations
 
@@ -156,6 +161,7 @@ from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
+from verity_vllm.commit import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
 
@@ -469,6 +475,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     if mine.row_tables:
         bad = RTB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
+    if any(m.wired for m in mine.members):
+        bad = WI.check(mine.members, publics)
+        checks["wiring"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
     w = rec.get("window", {})
     checks["source"] = source(w)
     summary["source"], summary["commitment"] = w.get("kind"), w.get("commitment")
@@ -585,7 +594,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     for mm in members:
         by_template.setdefault(mm["m"].template, [mm["defn"], 0])[1] += mm["m"].n
     defs = [tuple(x) for x in by_template.values()]
-    fewer = P.mixed_population_program([(d, n - (1 if i == 0 else 0)) for i, (d, n) in enumerate(defs)]) if len(defs) > 1 \
+    fewer = resized_program(defs) if len(defs) > 1 or defs[0][1] == 1 \
         else P.population_program(defs[0][0], defs[0][1] - 1)
     v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -598,6 +607,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
     neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
+    if (k := next((k for k, m in enumerate(mine.members) if m.wired), None)) is not None:
+        p_name, o, ws = mine.members[k].wired
+        rewired = [replace(m, wired=(p_name, o, ws[1:] + ws[:1])) if j == k else m for j, m in enumerate(mine.members)]
+        neg["chunk-wired-to-another-unit (§16.13)"] = {"refused": bool(WI.check(rewired, publics))}
     if proved:
         v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
         neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -660,6 +673,13 @@ def streamed(a: argparse.Namespace) -> bool:
     return a.coins is not None or a.verifier_coins
 
 
+def resized_program(defs: list[tuple]) -> Program:
+    """R2's other partition: the window's population, `(template, n)` per template, with its first template one instance
+    short, or one over where it has a single instance (a population has at least one)."""
+    resized = [(d, (n - 1 if n > 1 else 2) if i == 0 else n) for i, (d, n) in enumerate(defs)]
+    return P.mixed_population_program(resized) if len(resized) > 1 else P.population_program(*resized[0])
+
+
 def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     t0 = time.time()
     r = DRW.of_record(a.bundle, a.row_dir)
@@ -688,7 +708,7 @@ def advice_negatives(a: argparse.Namespace, r: int, compiler: AW.Traced, mine: C
     for key, field in (("compiler", "digest"), ("advice", "root")):
         v = SRT.source({**w, key: {**(w.get(key) or {}), field: "00" * 64}}, mine, held)
         neg[f"registration-naming-another-{key} (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
-    if compiler.transfer_gates:
+    if AW.transfer_gates_of(compiler):
         bare = replace(compiler, transfer_gates=())
         v = SRT.source({**w, "compiler": {**(w.get("compiler") or {}), "digest": bare.digest}}, mine, held)
         neg["registration-under-the-compiler-listing-no-transfer-gates (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
