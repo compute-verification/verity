@@ -28,9 +28,9 @@
 #                level's tops under the firewall's salts, no running sums) into data/$TAG/v/cap (level 0) and v/cap/L<l>,
 #                beside the statements vstage staged, whose sessions stay valid (then oprove LEVELS=cap,cap-L1,..)
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
-#                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
-#                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
-#                firewall's negative controls on that statement; OPROVE_JOBS=4 statements at once while their estimated
+#                firewall; a forgery's: one, in dev mode whatever MODES says, by a prover that sends its proofs though the
+#                witness fails, FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's);
+#                CONTROLS=DIR: the firewall's negative controls on that statement; OPROVE_JOBS=4 statements at once while their estimated
 #                peaks sum to at most OPROVE_MEM_GB=48. MODES=firewall alone, WARM=0 RUNS=1: each statement fixed before
 #                any session starts gets exactly one independent session, never drawn again, every exit recorded
 #                (out/oprove/statements.sha512, exits.tsv)
@@ -670,10 +670,12 @@ oprove)
   : > $O/oprove/exits.tsv
   W0=$WARM R0=$RUNS
   oprove_one() {
-    local C=$1 l=${1//\//-} n mode rc=0
-    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
+    local C=$1 l=${1//\//-} n mode rc=0 LM=$MODES
+    # a forgery's one session is the dev prover's, a dishonest prover running no firewall: a firewall would hold it back,
+    # leaving Lean nothing to check (lean_verdicts.py: "not exercised")
+    case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip LM=dev ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
     hello_at $V/$C
-    for mode in $MODES; do
+    for mode in $LM; do
       case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
       LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk || rc=$?
