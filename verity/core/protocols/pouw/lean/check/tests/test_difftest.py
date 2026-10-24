@@ -290,7 +290,7 @@ def registered_file(case: dict) -> dict:
     if refused is None:
         program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
         got, refused = Cr.registered_file(program, lay, shape, case["call"], case["roots"], case["window"],
-                                          case["steps"])
+                                          case["steps"], case["salt"])
     _counted(refused, "registered-file")
     return {"refused": list(refused)} if refused is not None else {"file": got,
                                                                    "partition": Cr.partition_of(program, shape)}
@@ -413,11 +413,18 @@ def test_credit(pass_server):
                  "window registration: registered value ", "ids@#'s domain is not the one the window's registration",
                  "or receipt table of the window", "'s receipt table, its round #'s, which only round # commits",
                  "a-link a-link: registered receipt table ", "registered-file registration: the window registers ",
-                 "'s template returns no receipt of whole #-bit words"):
+                 "'s template returns no receipt of whole #-bit words", "'s seed reads the roots of ",
+                 "its units' ok rows, which are the verifier's own"):
         assert any(part in k for k in CREDITED), part
 
 
 ROUNDED: Counter[str] = Counter()
+#: the refusals of the session's pin, `rounds`' and `salt`'s alike
+PIN_PARTS = ("which the host's pins log doesn't record as a commit of main's history",
+             "which the host's pins log records but which is not on main's first-parent line",
+             "seals no pins log (pins: {lines, sha#})", "not trusted: no pins log: ",
+             "not trusted: the verifier holds no copy of main's history",
+             "not trusted: the verifier's copy of main's history is malformed")
 
 
 def rounds(case: dict) -> dict | None:
@@ -454,7 +461,7 @@ def test_rounds(pass_server):
                  "under verity/challenger-auditor/v#, which names no prover", "'s end of session s# is malformed: ",
                  "not trusted: the challenger's record is signed at leaf ",
                  "not trusted: the challenger's refused hellos are not the ",
-                 "the challenger's log shows it received"):
+                 "the challenger's log shows it received", *PIN_PARTS):
         assert any(part in k for k in ROUNDED), part
 
 
@@ -489,5 +496,5 @@ def test_salt(pass_server):
                  "not trusted: no auditor's ledger", "not trusted: the challenger record's signature does not verify",
                  "the coin commitment's ", "the salt's a live coin opening is", "the salt's coin was not opened after",
                  "not its pouw/salt coin #", "the salt's coin does not open", "the salt's coin is epoch #",
-                 "the salt's coin opening is malformed"):
+                 "the salt's coin opening is malformed", *PIN_PARTS):
         assert any(_template(part) in k for k in SALTED), part

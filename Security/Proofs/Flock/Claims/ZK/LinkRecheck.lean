@@ -11,9 +11,9 @@ level-0 root, committed again from the host's witness, the table's level-0 hidin
 record, which the session's link carries and `Firewall::new` holds the device's root to (live `PROTOCOL.md` §10.2; Rust
 commits nothing of level 0 that leaves). Here that function is held to the session's link.
 
-* `Flock.Firewall.Link.root_eq`, `cap_eq`, `leaves_getElem!`, `layer_eq`, `parRange_eq`: the recheck's root is
+* `Flock.Firewall.Link.root_eq`, `cap_eq`, `leaves_getElem!`, `layer_eq`: the recheck's root is
   `FlockComplete.flat` of `FlockComplete.layerOf`'s cap over `hm96-sha512/v1`'s leaves of `encodeRowsZk`'s rows under the
-  salts (`rows_eq`, `LinkFft`: the FFT's rows are those rows); its tasks (`parRange`) split one map.
+  salts (`rows_eq`, `LinkFft`: the FFT's rows are those rows); its tasks (`parRange`) split one map (`Link.parRange_eq`).
 * `Coined.swContent_inl`, `swExeOf_inl`, `Masked.leafAt_swCutAt`: the switched prover's level-0 leaves are the honest
   prover's, whatever values the workers supply: level 0 reads neither the values nor the moved pads.
 * `Masked.linkIn`, `Masked.linkMsg`: what the firewall hands `Flock.Firewall.Link` for table `j` at the tape (the packed
@@ -42,17 +42,6 @@ theorem layerOf_congr (nd : ByteArray → ByteArray → ByteArray) (d : Nat) {lf
     simp only [FlockComplete.layerOf]
     exact Array.map_congr_left fun q hq => hl q (Array.mem_range.1 hq)
   | h + 1 => by rw [FlockComplete.layerOf, FlockComplete.layerOf, layerOf_congr nd d hl h]
-
-/-- **`a` tasks of `b` each are one map** over `a·b`. -/
-theorem parRange_eq {α : Type} (f : Nat → α) (a b : Nat) : parRange f a b = (Array.range (a * b)).map f := by
-  unfold parRange
-  induction a with
-  | zero => simp only [Nat.zero_mul, Array.range_eq_empty_iff.mpr rfl, Array.map_empty, Array.foldl_empty]
-  | succ a ih =>
-    rw [Array.range_succ, Array.map_append, Array.foldl_append, ih, Nat.succ_mul, Array.range_add]
-    simp only [Task.spawn, List.map_toArray, List.map_cons, List.map_nil, List.size_toArray, List.length_cons,
-      List.length_nil, Nat.zero_add, List.foldl_toArray', List.foldl_cons, List.foldl_nil, Array.map_append,
-      Array.map_map, Function.comp_def]
 
 /-- **Leaf `q` of the recheck** is row `q`'s `hm96-sha512/v1` leaf under salt `q`. -/
 theorem leaves_getElem! (lv : Level) (tPad : Nat) (i : In) {q : Nat} (hq : q < 2 ^ lv.d) :

@@ -165,16 +165,18 @@ def _requests(query: torch.Tensor, query_start_loc: torch.Tensor, seq_lens: torc
         q0, q1 = qsl[r], qsl[r + 1]
         if q1 == q0:
             continue
-        if q1 - q0 not in (1, s):
-            raise ValueError(f"int8 attention: request {r} brings {q1 - q0} rows of a {s}-token window (a chunked prefill)")
+        if not 0 < q1 - q0 <= s:
+            raise ValueError(f"int8 attention: request {r} brings {q1 - q0} rows of a {s}-token window; its rows are the window's last "
+                             f"1 .. {s}")
         output[q0:q1] = window_rows(query[q0:q1], *kv_of(r, s), k_scales, float(scale))
 
 
 def paged_attention(query: torch.Tensor, key_cache: torch.Tensor, value_cache: torch.Tensor, query_start_loc: torch.Tensor,
                     seq_lens: torch.Tensor, block_table: torch.Tensor, k_scales: torch.Tensor, scale: float, output: torch.Tensor) -> None:
     """Every request of a batch, one window each, into output [T, H, d]: request r's query rows query[qsl[r]:qsl[r+1]] are its
-    window's last rows, its window its first seq_lens[r] tokens in the caches (vLLM's FlashAttention metadata and layout), one
-    ``verity_int8::kv_quant`` and one ``verity_int8::window_rows`` call each.  A request whose rows are neither its whole window nor one row (a chunked prefill's later chunk) is refused."""
+    window's last rows, its     window its first seq_lens[r] tokens in the caches (vLLM's FlashAttention metadata and layout), one
+    ``verity_int8::kv_quant`` and one ``verity_int8::window_rows`` call each.  Its m rows are positions s - m .. s - 1: one for a
+    decode step, s for a whole prompt, and a chunked prefill's chunk in between; a request with more rows than keys is refused."""
     _requests(query, query_start_loc, seq_lens, lambda r, s: kv_quant(key_cache, value_cache, block_table[r], s, k_scales), k_scales,
               scale, output)
 

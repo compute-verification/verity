@@ -156,11 +156,11 @@ def stand_in(set_dir: str) -> dict:
 
 
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
-            zk: bool = False, env: dict | None = None) -> tuple[dict | None, dict | None]:
+            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the draw, coins, the verdict) and `prove`.
     `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`), the only one under which the Lean verifier accepts a subset draw. `env`: added to
-    both sides' environment (a firewalled prover's, `firewall_env`)."""
+    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
     tables = d / "tables"
@@ -177,7 +177,8 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
                 break
             time.sleep(0.5)
         p = run([bin_, "prove", *zf, "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
-                 "--circuit", str(d / "circuit.txt"), "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log", env=env)
+                 "--circuit", str(d / "circuit.txt"), "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log", env=env,
+                timeout=prove_timeout)
         live = next((json.loads(line[5:]) for line in p.stdout.splitlines() if line.startswith("LIVE\t")), None)
         if live is None:
             refused = next((line for line in p.stdout.splitlines() if line.startswith("REFUSED\t")), "")
@@ -205,10 +206,11 @@ def firewall_env(st: dict) -> dict:
     return {"FC_FIREWALL_STATEMENT": STATEMENT_ID, "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
 
 
-def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False) -> dict:
+def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify") -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
-    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's."""
+    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
+    `out` (a negative's own, beside the honest verdict's)."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -218,7 +220,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False) -> dic
     prog = [str(st["program_file"])] if st.get("program_file") else []
     reads = [str(st["registered_file"])] if st.get("registered_file") else []
     p = run([lean, "archive-put", str(archive), str(st["dir"] / "circuit.txt"), str(st["dir"] / f"pub-{n}.bin"), *tables, *part, *prog,
-             *reads], out / "archive-put.log")
+             *reads], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
     keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
     bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
     bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
@@ -226,7 +228,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False) -> dic
     t = time.time()
     p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
              "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), "--session", str(sessions[-1].parent)],
-            out / "lean-verify.log")
+            out / f"{log}.log")
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),

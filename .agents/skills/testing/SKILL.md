@@ -107,6 +107,8 @@ a `sys.path` entry another test file added: every suite runs alone.
   reachable`. Under a recorded `check` (`VERITY_STORE_REQUIRED=1`) the guard fails that skip instead, so `check` never passes
   without it. Inside `check` the store is reachable only through the run's custody key (`$CHECK_STORE_CUSTODY`), so fetch
   through a helper that hands it to the store CLI: integrations/vllm's `store_io`, or C-Flock's `verifier/ci.py` `fetch`.
+  `suites.py` inside a `research run --on` does the same with that run's custody key (`store_custody`): the runner drops
+  `RESEARCH_*`, the machine's store among them, so a bare `pytest` there reaches the store where the runner otherwise wouldn't.
 - A suite's quick tier should finish in about a minute. When it doesn't, make the slow tests smaller before marking more.
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`. The runner then spreads its tests over
   the `--jobs` slots with pytest-xdist (`--dist worksteal`), one parallel suite at a time, beside the other suites on the few

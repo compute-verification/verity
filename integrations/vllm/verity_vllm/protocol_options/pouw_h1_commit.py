@@ -1,23 +1,25 @@
-"""ROOTS1 (VLLM-73) on vllm's side: the Commit in H1's serving engine, whose record registers each call's A table
-``a/<K>@<c>`` as its AROW of the call's (round, linear) and each round's input-ids table ``ids@<s>`` as its step's input
-token ids, layer 0's input. Core's credit holds each to the Commit's value of the same rows (`credit._arow`).
+"""ROOTS1 (VLLM-73) on vllm's side: the Commit in H1's serving engine, whose record registers each step's A table of K
+``a/<K>@<s>`` as its AROW of the step's calls of K (VLLM-77) and each round's input-ids table ``ids@<s>`` as its step's
+input token ids, layer 0's input. Core's credit holds each to the Commit's value of the same rows (`credit._arow`).
 
-* **The Commit** (`attach`): the committer (`commit.committer.native_host.NativeHostCommitter`, with no Build, so not a
-  Commit of record) with the int8 source (`acquire.sources.int8_source.Int8Source`) at each linear H1 records, at the
-  linear's Int8RowQuant_v1 site `site(module)` at every engine step (`Sites`: no Build names its fx node), and the
+* **The Commit** (`acquire.h1_commit.attach`): the committer (`commit.committer.native_host.NativeHostCommitter`, with no Build, so not a
+  Commit of record) with the int8 source (`acquire.h1_commit.H1Source`) at each linear H1 records, at the linear's
+  Int8RowQuant_v1 site `site(module)` at every engine step (`Sites`: no Build names its fx node), a routed expert's by
+  its H1 name (VLLM-80: under its call, an idle expert's zero rows too), and the
   embedding's input, which the committer acquires as ``<embed>/in``, the step's input token ids. `CommitTap` wraps the
   committer's acquire and keeps a host copy of what the Commit acquired at each engine step: each site's x_q (``/0``)
   and s_a (``/1``), and the ids.
-* **Its values** (`CommitTap.arow`, `CommitTap.input_ids`): call c = (s, w)'s AROW is the Commit's x_q and s_a of linear
-  w's site at the engine step H1's step s maps to, in H1's table form (`pouw_h1_served.Served.a_words`), registered as
-  `credit.commit_rows` of (s, linear); round s's input ids are the Commit's ``<embed>/in`` at that engine step
+* **Its values** (`CommitTap.arow`, `CommitTap.input_ids`): call c = (s, w)'s rows are the Commit's x_q and s_a of
+  linear w's site at the engine step H1's step s maps to, in H1's table form (`pouw_h1_served.Served.a_words`), and its
+  AROW of step s and K is those of step s's calls of K, call after call in call order (`Served.step_calls`), registered
+  as `credit.commit_rows` of (s, K); round s's input ids are the Commit's ``<embed>/in`` at that engine step
   (`pouw_h1_served.ids_words`), registered as `credit.commit_ids` of s. Layer 0's call maps s to the next engine step
   the Commit acquired (an empty call's to none). When the rows are the window's, the Commit registers the window's own
   tree, one commitment; rows off them make a tree of the Commit's own under the same domain and salts, at another root.
 * **The record** (`CommitTap.record`, the commitment's ``commit``, `CommitTap.hex`): a ``verity/registration/v2`` record
   (one-stage's `registration`) of those values, with what the tap refused, its canonical JSON in hex as
   `credit.commit_of` reads it. `pouw_h1.calls_root` binds its digest (`credit.calls_root`), so the draw coin follows it.
-* **The serving process's own check** (`roots1`, at the window's close): each call's A table and each round's
+* **The serving process's own check** (`roots1`, at the window's close): each step's A table of each K and each round's
   input-ids table is the Commit's value of the same rows (`credit._arow`'s rule), the tap refused nothing, and each
   prefill row's input id is its request's prompt token (`ids_reason`, until Served.lean's layer-0 tie holds it in core).
   A window that fails credits nothing (`UNTIED`, `pouw_h1.H1Run.gated`).
@@ -29,7 +31,6 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity.ml.circuits.codec import canonical_json
 
@@ -88,6 +89,9 @@ class CommitTap:
     _x: dict[str, list[Any]] = field(default_factory=dict)
     _ids: dict[int, np.ndarray] = field(default_factory=dict)
     _steps: dict[int, int | None] = field(default_factory=dict)
+    #: each open step A table's rows as the Commit acquired them so far (one block a call, in call order) and where
+    _rows: dict[str, list[np.ndarray]] = field(default_factory=dict)
+    _at: dict[str, list[tuple[int, int | None, str, int]]] = field(default_factory=dict)
     _last: int = -1
     _com: Any = None
 
@@ -116,7 +120,7 @@ class CommitTap:
             return
         if port == "0":
             x = _host(t)
-            self._x[op] = [step, x.reshape(len(x), -1).astype(np.int8), None]
+            self._x[op] = [step, x.reshape(len(x), int(np.prod(x.shape[1:]))).astype(np.int8), None]
         elif op in self._x and self._x[op][0] == step:
             self._x[op][2] = _host(t).reshape(-1).astype("<f4")
         else:
@@ -138,9 +142,10 @@ class CommitTap:
         self.values[name], self.where[name] = {**reg.entry(), "value": name}, dict(where)
 
     def arow(self, run: Any, served: Any, call: Any, value: str, words: np.ndarray | None) -> None:
-        """Call ``call``'s AROW: the Commit's rows of its site at its step as its value `credit.commit_rows` of the call's
-        round and linear; the window's tree of its A table ``value`` when its rows (``words``) are the same, else the
-        Commit's own."""
+        """Call ``call``'s rows of the Commit's AROW of its step and K: the Commit's rows of its site at its step. At the
+        step's last call of K (``words``, the window's step A table ``value`` whole, else None) its value
+        `credit.commit_rows` of (step, K) is the step's calls' rows call after call: the window's tree of ``value`` when
+        they are its ``words``, else the Commit's own."""
         j, s = self._engine_step(call), site(call.module)
         got = self._x.get(s)
         codes, scales = np.zeros((0, call.k), np.int8), np.zeros(0, "<f4")
@@ -154,11 +159,15 @@ class CommitTap:
         if len(codes) > served.m:
             self.refused.append(f"call {call.index}: the Commit's {len(codes)} rows are past its {served.m} slots")
             codes, scales = codes[:served.m], scales[:served.m]
-        mine = served.a_words(call, codes, scales)
+        self._rows.setdefault(value, []).append(served.a_words(call, codes, scales))
+        self._at.setdefault(value, []).append((call.index, j, s, len(codes)))
+        if call.index != served.step_calls(call.index)[-1]:
+            return
+        mine, at = np.concatenate(self._rows.pop(value)), self._at.pop(value)
         same = words is not None and np.array_equal(mine, words) and value in served.registered
         reg = served.registered[value] if same else served.a_tree(run, call, mine)
-        self._put(CR.commit_rows(call.step, served.calls[call.index][0]), reg, same,
-                  {"call": call.index, "step": j, "site": s, "rows": len(codes)})
+        self._put(CR.commit_rows(call.step, call.k), reg, same,
+                  {"round": call.step, **{f: [x[i] for x in at] for i, f in enumerate(("calls", "steps", "sites", "rows"))}})
 
     def ids_at(self, r: int) -> list[int]:
         """Round r's input ids: the Commit's ids of the engine step H1's step r maps to (none for a step it acquired
@@ -205,20 +214,21 @@ def digest(commit: str) -> bytes:
 
 def untied(run: Any) -> str | None:
     """Why the window's tables aren't the Commit's values (`credit._arow`'s rule, on the serving process's own trees): a
-    tap that refused, a call's A table that isn't the Commit's `credit.commit_rows` of its round and linear, or a round's
+    tap that refused, a step's A table of K that isn't the Commit's `credit.commit_rows` of its round and K, or a round's
     input-ids table that isn't its `credit.commit_ids`, in root, domain and leaf count. None when each is."""
     served, tap = run.served, run.served.tap
     if tap.refused:
         return f"roots1: the Commit's tap refused: {'; '.join(tap.refused[:4])}"
     if served.refused or served.program is None:
         return "roots1: the window's served trees were refused, so no table is the Commit's"
-    for call in run.calls:
-        v, name = HW.table(served.program, "a", call.index), CR.commit_rows(call.step, served.calls[call.index][0])
+    layout = {"calls": served.calls, "linears": served.linears, "m": served.m}
+    for s, k, calls in CR.step_tables(layout, served.steps):
+        v, name = served.a_table(calls[0]), CR.commit_rows(s, k)
         mine, got = served.registered.get(v), tap.values.get(name)
         if mine is None or got is None or not _same(mine.entry(), got):
             at = tap.where.get(name, {})
-            return (f"roots1: call {call.index}'s A table {v} is not the Commit's {name} ({at.get('site')} at engine step "
-                    f"{at.get('step')}): its rows are not the ones the Commit acquired")
+            return (f"roots1: round {s}'s A table {v} of calls {calls} is not the Commit's {name} ({at.get('sites')} at "
+                    f"engine steps {at.get('steps')}): its rows are not the ones the Commit acquired")
     for s in range(run.steps):
         mine, got = served.ids.get(s), tap.values.get(CR.commit_ids(s))
         if mine is None or got is None or not _same(mine.entry(), got):
@@ -253,6 +263,13 @@ def ids_reason(run: Any, tap: CommitTap) -> str | None:
     return None
 
 
+def record_of(run: Any) -> str | None:
+    """With the Commit in ``run``'s engine (its ``served``'s tap), the Commit's record in hex (`CommitTap.hex`)."""
+    if run.served is None or run.served.tap is None:
+        return None
+    return run.served.tap.hex(run.served)
+
+
 def roots1(run: Any) -> dict[str, Any]:
     """The window's ROOTS1 outcome at its close (``details.roots1``): `untied`, then `ids_reason`, and what the tap
     built."""
@@ -262,35 +279,4 @@ def roots1(run: Any) -> dict[str, Any]:
             "steps": {str(s): j for s, j in sorted(tap._steps.items())}}
 
 
-def source(com: Any, model: Any, layers: Sequence[Any]) -> Any:
-    """The int8 source (`Int8Source`) on committer ``com``, at the Int8RowQuant_v1 site of each of ``layers`` (H1's
-    linears, `pouw_h1_hooks.layers`, by their names in ``model``, as `pouw.install` names them) at every engine step."""
-    from verity_vllm.acquire.sources.int8_source import Int8Source
-
-    ids = {id(m) for m in layers}
-    sites = Sites([name for name, m in model.named_modules() if id(m) in ids])
-    if len(sites.modules) != len(ids):
-        raise ValueError(f"{len(ids) - len(sites.modules)} of H1's linears are not named modules of the model")
-    src = Int8Source(com, model, sites, [])
-    src.quant, src._at = sites, _EveryStep(src._at)
-    return src
-
-
-def attach(engine: Any, layers: Sequence[Any], **committer: Any) -> tuple[Any, Any, CommitTap]:
-    """The Commit on ``engine`` (`engine.build.build_engine`'s), installed: a `NativeHostCommitter` (``committer`` its
-    keywords), the int8 source (`source`) and its `CommitTap`. Returns the committer, the source and the tap;
-    ``committer.close()`` and ``tap.untap()`` remove them."""
-    from verity_vllm.commit.committer.native_host import NativeHostCommitter
-
-    com = NativeHostCommitter(engine, **committer)
-    src = source(com, com.model, layers)
-    com.attach_source(src)
-    tap = CommitTap(next((n for n, m in com._modules if com._acquires_input(n, m)), None))
-    if tap.embed is None:
-        raise ValueError("the committer acquires no module's input: no embedding gives the step's token ids")
-    tap.tap(com)
-    com.install()
-    return com, src, tap
-
-
-__all__ = ["CommitTap", "Sites", "UNTIED", "attach", "digest", "ids_reason", "roots1", "site", "source", "untied"]
+__all__ = ["CommitTap", "Sites", "UNTIED", "digest", "ids_reason", "record_of", "roots1", "site", "untied"]
