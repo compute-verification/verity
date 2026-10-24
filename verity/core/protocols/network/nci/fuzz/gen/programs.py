@@ -607,8 +607,39 @@ def minimal() -> str:
     return P.text("R_v1")
 
 
+def unwalkable(read: bool) -> str:
+    """A walk past `Steps.FUEL` with two gates: `Z1`, a batch of `2^53 - 1` members of `Z0`, both with no gates, nodes
+    or return, run `2^53 - 1` times at the root, and a primitive reading an input, directly or (`read`) through a call of
+    `W`, which passes it through. `Desc.walkable` refuses it, and `ReadsExact`'s hypotheses hold. (A batch that passes
+    its argument through member by member is no shape here: `Desc.analyze` resolves a read of it member by member.)"""
+    N = WIDE
+    P = Program(random.Random(0))
+    x = P.input(8, True)
+    op = P.prim([V(8)], V(8), "Op8_v1")
+    z0 = P.composite(Body(P, [], 0), Tup(), {"concat": []}, "Z0_v1")
+    b1 = Body(P, [], 0)
+    b1.push({"args": [], "axes": [], "fn": P.fn(z0), "form": "batch", "n": N, "out": P.ty(A(N, Tup()))},
+            A(N, Tup()), [], 0, "batch")
+    z1 = P.composite(b1, Tup(), {"concat": []}, "Z1_v1")
+    w = P.composite(Body(P, [V(8)], 0), V(8), {"affine": ["p", 0, 0, 1]}, "W_v1")
+    root = Body(P, [], 10)
+    root.push({"args": [], "fn": P.fn(x), "form": "primitive", "out": P.ty(V(8))}, V(8), [], 1, "input")
+    root.push({"args": [], "axes": [], "fn": P.fn(z1), "form": "batch", "n": N, "out": P.ty(A(N, Tup()))},
+              A(N, Tup()), [], 0, "batch")
+    root.push({"args": [{"refs": {"affine": ["n", 0, 0, 1]}, "type": P.ty(V(8))}], "fn": P.fn(w), "form": "call",
+               "out": P.ty(V(8))}, V(8), [1], 0, "call")
+    src = ["n", 2, 0, 1] if read else ["n", 0, 0, 1]
+    root.push({"args": [{"refs": {"affine": src}, "type": P.ty(V(8))}], "fn": P.fn(op), "form": "primitive",
+               "out": P.ty(V(8))}, V(8), [1], 1, "prim")
+    P.composite(root, V(8), {"affine": ["n", 3, 0, 1]}, "R_v1")
+    return P.text("R_v1")
+
+
 def hand() -> list[dict]:
     out = [{"id": "hand-scan0-minimal", "family": "hand", "program": minimal()}]
+    for read in (False, True):
+        out.append({"id": f"hand-unwalkable-{'read' if read else 'input'}", "family": "hand", "force": True,
+                    "program": unwalkable(read)})
     for where in ("root", "callee", "shared", "batch"):
         for read in (False, True):
             out.append({"id": f"hand-scan0-{where}-{'read' if read else 'unread'}", "family": "hand",

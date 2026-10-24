@@ -23,7 +23,7 @@ def summarize(paths: list[str]) -> dict:
     refusals = collections.Counter()
     mx = collections.Counter()
     anyc = collections.Counter()
-    s = {k: collections.Counter() for k in ("s1", "s1prim", "s2", "s3", "agree")}
+    s = {k: collections.Counter() for k in ("s1", "s1prim", "s2", "s3", "s3_unwalkable", "agree")}
     fails = collections.defaultdict(list)
     most_vs_bound = 0.0
     for p in paths:
@@ -33,6 +33,12 @@ def summarize(paths: list[str]) -> dict:
             by_family[r["family"]][r["pre"]] += 1
             if r["pre"] in ("decode", "analyze"):
                 refusals[f"{r['pre']}: {r['why'][:90]}"] += 1
+            if r["pre"] == "walkable" and "s3" in r:
+                s3 = r["s3"]
+                key = "hold" if "segs" in s3 and s3.get("fail") is None else "fail" if s3.get("fail") else "other"
+                s["s3_unwalkable"][key] += 1
+                if key == "fail":
+                    fails["s3_unwalkable"].append({"id": r["id"], "fail": s3["fail"]})
             if r["pre"] != "ok":
                 continue
             sh = r["shape"]

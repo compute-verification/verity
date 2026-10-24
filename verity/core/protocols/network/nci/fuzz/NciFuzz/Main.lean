@@ -2,8 +2,9 @@ import NciFuzz.Check
 
 /-!
 `lake exe nci-desc-fuzz IN OUT`: `IN` has one JSON object per line, `{"id": …, "program": TEXT}` (any other fields are
-copied through), and `OUT` gets `NciCheck.Fuzz.check`'s result on each, with its `id`, one line each, in order, and the
-program's text where a statement fails.
+copied through; `"force": true` checks `ReadsExact` on it even where `Desc.walkable` refuses it), and `OUT` gets
+`NciCheck.Fuzz.check`'s result on each, with its `id`, one line each, in order, and the program's text where a
+statement fails.
 -/
 
 open Lean (Json)
@@ -18,7 +19,7 @@ def checkLine (line : String) : String :=
     let text := match j.getObjValD "program" with
       | .str s => s
       | _ => ""
-    let r := NciCheck.Fuzz.check {} text
+    let r := NciCheck.Fuzz.check {} text (force := j.getObjValD "force" == Json.bool true)
     let tag := match j with
       | .obj kvs => kvs.toList.filter fun kv => kv.1 != "program" || failed r
       | _ => []

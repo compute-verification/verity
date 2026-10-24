@@ -163,6 +163,29 @@ partial def visit (P : Prog) (caps : Caps) (sc : Scope) (st : S1) : S1 := Id.run
         if st.anomaly.isNone then st := { st with anomaly := some (at_ P sc k m s!"gateStep refused: {e}") }
   return st
 
+/-- `Prog.gate`'s walk for each of the root's gates, its operands resolved under the step cap: `none` when every walk ends
+within the caps (so `circuitOf` runs no resolution past them), else why not. For a Program `visit` can't cover, one
+`Desc.walkable` refuses. -/
+def gateWalk (P : Prog) (caps : Caps) : Option String := Id.run do
+  for g in [0:(P.defs[P.root]!).gates] do
+    let mut sc := P.rootScope
+    let mut done := false
+    for _ in [0:10000] do
+      let body := (P.defs[sc.d]!).body
+      let rel := g - sc.off
+      let some k := (Array.range body.nodes.size).find? fun k => body.offsets[k]! ≤ rel && rel < body.offsets[k + 1]!
+        | return some s!"gate {g}: no node holds it"
+      let node := body.nodes[k]!
+      let callee := P.defs[node.fn]!
+      let m := if node.form == .prim || node.form == .call then 0 else (rel - body.offsets[k]!) / callee.gates
+      if callee.prim then
+        match operandsCount P sc node m caps.steps with
+        | .ok _ | .error (some _) => done := true; break
+        | .error none => return some s!"gate {g}: a resolution past the step cap"
+      sc := P.child sc k m
+    if !done then return some s!"gate {g}: a walk past 10000 steps"
+  return none
+
 /-! ## `BodiesOk` -/
 
 def memberIdx (a : Arg) (m t : Nat) : Nat := match a.dims with
@@ -459,17 +482,35 @@ def shapeOf (P : Prog) (sums := true) : Json := Id.run do
 
 def opt (o : Option Json) : Json := o.getD Json.null
 
-/-- The six preconditions, then each statement's conclusion, on one descriptor's text. -/
-def check (caps : Caps) (text : String) : Json :=
+/-- `ReadsExact` on a Program `Desc.walkable` refuses, which its hypotheses don't exclude: `Desc.analyze`, then
+`circuitOf` where every gate's walk ends within the caps (`gateWalk`). Only on request (`force`): `Desc.analyze` itself
+may then not end, or overflow the stack, on a Program whose walk is past `Steps.FUEL`. -/
+def unwalkable (P : Prog) (caps : Caps) : Json :=
+  match Desc.analyze P with
+  | .error e => Json.mkObj [("pre", Json.str "analyze"), ("why", Json.str e)]
+  | .ok reads =>
+    if (P.defs[P.root]!).gates > caps.gates then Json.mkObj [("skipped", Json.str "gates past the cap")]
+    else match gateWalk P caps with
+    | some why => Json.mkObj [("skipped", Json.str why)]
+    | none => match circuitOf P with
+      | .error e => Json.mkObj [("pre", Json.str "circuitOf"), ("why", Json.str e)]
+      | .ok c => match readsExact P reads c caps.gates with
+        | .ok st => Json.mkObj [("fail", Json.null), ("segs", toJson st.segs), ("fan_in", toJson st.fanIn),
+            ("outside_reads", toJson st.outside)]
+        | .error j => if (j.getObjVal? "skipped").isOk then j else Json.mkObj [("fail", j)]
+
+/-- The six preconditions, then each statement's conclusion, on one descriptor's text; with `force`, `ReadsExact` on a
+Program `Desc.walkable` refuses too (`unwalkable`). -/
+def check (caps : Caps) (text : String) (force := false) : Json :=
   match decode text.toUTF8 with
   | .error e => Json.mkObj [("pre", Json.str "decode"), ("why", Json.str (e.take 200).toString)]
   | .ok P =>
     if P.orderViolation.isSome then Json.mkObj [("pre", Json.str "orderViolation")]
     else if !Desc.rootLaidOut P then Json.mkObj [("pre", Json.str "rootLaidOut")]
     else if !Desc.inputsAtRoot P then Json.mkObj [("pre", Json.str "inputsAtRoot")]
-    else if !Desc.walkable P then Json.mkObj [("pre", Json.str "walkable"),
+    else if !Desc.walkable P then Json.mkObj ([("pre", Json.str "walkable"),
       ("calleesFirst", Json.bool (Desc.calleesFirst P)), ("bodiesLaidOut", Json.bool (Desc.bodiesLaidOut P)),
-      ("shape", shapeOf P (sums := false))]
+      ("shape", shapeOf P (sums := false))] ++ if force then [("s3", unwalkable P caps)] else [])
     else match Desc.analyze P with
     | .error e => Json.mkObj [("pre", Json.str "analyze"), ("why", Json.str e), ("shape", shapeOf P)]
     | .ok reads =>
