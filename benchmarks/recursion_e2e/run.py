@@ -103,7 +103,8 @@ def job_env(a: argparse.Namespace) -> list[str]:
 
 def job_command(a: argparse.Namespace, root: Path) -> list[str]:
     env = job_env(a)
-    return ["research", "run", "--queue", "--on", a.node, *([] if a.cpu else ["--gpu-host"]), "--project", "verity",
+    return ["research", "run", "--queue", "--on", a.node, *([] if a.cpu else ["--gpu-host"]),
+            *(["--preemptible"] if a.preemptible else []), "--project", "verity",
             "--campaign", "recursion-e2e", "--source", str(root), "--cwd", "source", "--mem-gb", str(a.mem_gb),
             "--cpus", str(a.cpus), "--max-min", str(a.max_min or max_min(a)),
             "--question", f"recursion_e2e: 85-rec-reprice's stages at K = {a.K}, N = {a.N}, oprove {a.modes}, timed and repeated",
@@ -236,6 +237,8 @@ def main(argv: list[str] | None = None) -> int:
                        help="V*'s prover: 0 the CPU prover (auto under the firewall: node 1's lease pool stops a lease whose "
                             "GPU idles about 10 min, as a firewalled session's does), 1 the GPU one under a lease")
         p.add_argument("--node", default=NODE)
+        p.add_argument("--preemptible", action="store_true",
+                       help="queue the run preemptible (a guest on another lane's node, vy-nebius-2's rule)")
         p.add_argument("--mem-gb", type=int, default=64)
         p.add_argument("--cpus", type=int, default=32)
         p.add_argument("--max-min", type=int, default=0, help="the run's limit (default from the lease model: max_min)")

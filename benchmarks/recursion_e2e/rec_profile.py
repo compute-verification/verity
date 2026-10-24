@@ -211,7 +211,7 @@ def prover_row(d: Path, stage: str, step: str, what: str) -> Row:
         held = re.findall(r"^gpu-lease: GPU .* held (\d+m\d+s)", err, re.M)
         stops = [ln for ln in err.splitlines() if ln.startswith(("FIREWALL-REFUSED", "PROVER-STOPPED")) or "panicked" in ln]
         why = ([f"lease preempted {preempted}x"] if preempted else []) + [
-            f"no session finished in the lease's {held[-1]}" if held else "no session finished (stopped holding its lease)"]
+            f"no session finished in the lease's {held[-1]}" if held else "no session finished before the step stopped"]
         r.ok, r.note = False, "; ".join(why + stops[:1])[:300] if d.exists() else "not run"
         r.extra = {"preempted": preempted, "lease_held": held}
         return r

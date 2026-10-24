@@ -238,6 +238,10 @@ def test_job_command_is_a_gpu_host_job_on_node_1(capsys) -> None:
     assert "--gpus" not in cmd                              # 85 refuses a job holding a lease: each prove leases its own
     assert cmd[cmd.index("--") + 1:][:2] == ["bash", "benchmarks/recursion_e2e/job.sh"]
     assert "N=16" in cmd and "STEPS=build,lean" in cmd     # the pipeline's order, whatever order --steps gives
+    assert "--preemptible" not in cmd
+    assert RUN.main(["run", "--dry-run", "--node", "vy-nebius-2", "--preemptible"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert cmd[4] == "vy-nebius-2" and "--preemptible" in cmd[:cmd.index("--")]
 
 
 def test_env_passes_through_and_must_be_key_value(capsys) -> None:

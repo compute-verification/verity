@@ -91,7 +91,7 @@ result() {
   [ "${KEEP_DATA:-0}" = 1 ] || rm -rf "$FLOCK_WORK/data/$TAG"
   return $r
 }
-# a cancel or the run's --max-min (SIGTERM) still writes the result from the records so far
+# the run's --max-min (SIGTERM) writes the result so far; `research cancel` ends the scope first (`run.py table RUN`)
 trap 'log "SIGTERM: the result so far"; result; exit 143' TERM
 
 # reps STEP: REPEAT_<STEP> (REPEAT_VSTAGE=1, ...) else REPEAT

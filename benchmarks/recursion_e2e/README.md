@@ -16,8 +16,10 @@ verity bench recursion_e2e table RESULT... [--merge] [--json]     the table from
                                                                    records are fetched and read with this reader)
 verity bench recursion_e2e store RESULT... [--merge]              the results and their table as one art: id
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 --lease-min M --neg challenge,query
-       --cpu --node N --mem-gb 64 --cpus 32 --max-min M --env KEY=VALUE ...
+       --cpu --node N [--preemptible] --mem-gb 64 --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
+
+`--preemptible` is for a guest on another lane's node: vy-nebius-2 admits guests only as preemptible jobs.
 
 - **Firewall on by default.** `--modes firewall`: AGENTS.md has outer proofs go through the firewall one at a time, and 85
   proves V*'s statements one after another. `dev` and `host` are there to compare against, never the default. A run never
@@ -85,7 +87,9 @@ What the recursive audit has that 85 doesn't run, so no number here covers it:
 Each GPU step runs once, with its sessions inside it: the inner's `WARM=1 RUNS=3`, each V* statement's
 `--oprove-warm 0 --oprove-runs 1`. Each invocation of 85 runs under its own `RESEARCH_RUN_DIR`
 (`out/steps/<step>/r<i>/`), so every record 85 writes is kept. `result` reads them into `out/recursion_e2e.json` and
-`out/table.md`, and still does so when a run is cancelled or hits `--max-min`.
+`out/table.md`. `job.sh` tries to write them on SIGTERM too, but `research cancel` ends the run's scope within a second,
+which leaves only the records. `table RUN` rebuilds the result from a fresh fetch of them, so a cancelled run's rows
+are still read.
 
 - **Prover time** (`inner`, `oprove`; the table's "time s"): each timed session's `prove_total_s` from the prover's `LIVE`
   line (both reps' `prove_s` summed). This covers the device's phases, not the host witness.
