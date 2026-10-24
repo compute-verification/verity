@@ -173,22 +173,15 @@ def main(dirs):
     out = {"greedy": {}, "sampled": {}, "passk": passk, "online": {}}
     on = online(dirs)
     for task, t in on.items():
-        base_s = sampled.get(task, {}).get("base")
-        if base_s:
-            pp = base_s[0]["per_problem"]
-            base = base_s[0]["acc"]
-            base_boot = []
-            for _ in range(B):
-                base_boot.append(sum(pp[rng.randrange(len(pp))] for _ in pp) / len(pp))
-            t["base_source"] = f"base model on the test set at T = 1 ({len(pp)} problems x {base_s[0].get('n')} samples)"
-        else:
-            firsts = {}
-            for r in t["rows"]:
-                firsts.update({s: x for s, x in r["step1"].items() if x is not None})
-            base = sum(firsts.values()) / len(firsts) if firsts else None
-            base_boot = [base] * B
-            t["base_source"] = (f"step-1 training reward, before any update ({len(firsts)} seeds x 32 prompts x 8 samples; "
-                                "its noise is not in the CIs)")
+        # The base must be read on training prompts: the Instruct model scores higher on the train splits than on the test
+        # sets (0.71 vs 0.65 on GSM8K at T = 1), so the test-set base would inflate every online gain.
+        firsts = {}
+        for r in t["rows"]:
+            firsts.update({s: x for s, x in r["step1"].items() if x is not None})
+        base = sum(firsts.values()) / len(firsts) if firsts else None
+        base_boot = [base] * B
+        t["base_source"] = (f"step-1 training reward, before any update ({len(firsts)} seeds x 32 prompts x 8 samples; "
+                            "its noise is not in the CIs)")
         full = [r for r in t["rows"] if r["method"] == "full"]
         for r in t["rows"]:
             if base is None:
