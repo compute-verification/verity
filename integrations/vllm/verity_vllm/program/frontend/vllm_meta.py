@@ -348,7 +348,7 @@ class StochasticEngineStep(nn.Module):
     INPUT (the request's `SamplingParams.seed`: a runtime value of the Program); temperature / top_p are the declared policy (structural
     inputs, constants of the Program); `pos` = the sampled logits row's position (pos0 + M - 1).  [R16 stoch, coord M-0169] `splits`
     (int32 [1]) is a forward INPUT too: the event's split count S = SplitsFor_v1(|live|, num_SMs), a DERIVED value of the workload.
-    In a single-request workload `S` is the constant SplitsFor_v1(1, num_SMs) and the forward takes no `splits`."""
+    With `S` given (the registered split count, `topp_geometry.registered_splits`) the forward takes no `splits`."""
 
     DERIVE_SOURCE = "verity-vllm/stochastic-engine-step/v1"
 
@@ -380,8 +380,8 @@ class StochasticRequest(nn.Module):
     (GM-01 G6 'sampler geometry').  The Program carries no S schedule: the forward reads `splits[s:s+1]` per event (a static view of
     the Input).  Parameter order [prompt, seed, splits] so the workload Program's layout stays [prompts, seeds, splits, weights...].
 
-    [single-request workloads] With `S` given (the workload's one request: S = SplitsFor_v1(1, num_SMs) at
-    every event) the forward takes [prompt, seed] and every select's split count is that constant (`Const32[S]` in the Program)."""
+    [registered S] With `S` given (`topp_geometry.registered_splits(num_SMs)` = SplitsFor_v1(1, num_SMs), every event of every
+    workload) the forward takes [prompt, seed] and every select's split count is that constant (`Const32[S]` in the Program)."""
 
     DERIVE_SOURCE = "verity-vllm/stochastic-request/v1"
 
