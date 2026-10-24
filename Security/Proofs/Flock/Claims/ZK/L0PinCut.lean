@@ -35,11 +35,12 @@ namespace Masked
 /-- The stopped log's body at `|l₁| + j` is the `j`-th body sent after `l₁`. -/
 theorem getElem!_of_toList {L l₁ : Array Msg} {f : ℕ → Msg} {j : ℕ}
     (h : L.toList = l₁.toList ++ (List.range (j + 1)).map f) : L[l₁.size + j]! = f j := by
-  have hs : L.size = l₁.size + (j + 1) := by
-    have e := congrArg List.length h
-    simpa using e
-  rw [getElem!_pos L _ (by omega), ← Array.getElem_toList, List.getElem_of_eq h,
-    List.getElem_append_right (by simp)]
+  have hL : L = l₁ ++ ((List.range (j + 1)).map f).toArray := Array.ext' (by simpa using h)
+  subst hL
+  have hs : l₁.size + j < (l₁ ++ ((List.range (j + 1)).map f).toArray).size := by
+    simp only [Array.size_append, List.size_toArray, List.length_map, List.length_range]
+    omega
+  rw [getElem!_pos _ (l₁.size + j) hs, Array.getElem_append_right (Nat.le_add_right _ _)]
   simp
 
 /-- A pads commitment returns, sending nothing, from every history (`padsTreeCut_ok`, `padsTreeCut_quiet`). -/
@@ -119,8 +120,8 @@ theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
     have := r.isLt
     omega
   obtain ⟨schs', hs', hschs⟩ := schedsPZk_live hx
-  obtain rfl : schs' = schs := Except.ok.inj (hs'.symm.trans hs)
-  have esch : schs[j.val]! = ((zkTab x j).sch, (zkTab x j).tPad) := hschs j
+  have es : schs' = schs := Except.ok.inj (hs'.symm.trans hs)
+  have esch : schs[j.val]! = ((zkTab x j).sch, (zkTab x j).tPad) := es ▸ hschs j
   obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, hlv, -⟩, -⟩ :=
     FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
   have hsn : (zkTab x j).sch.n ≠ 0 := by
@@ -131,7 +132,8 @@ theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
   obtain ⟨bs₀, hbs₀, -⟩ := FlockComplete.CutPrefix.go_of_shift
     (FlockComplete.CutPrefix.piopCut_shift _ _ _ _ _ _ _ _ _ _ _) rfl hpiop
   have hbase : repBase x (2 * j.val + r.val) ≤ ligP0 x j r := by
-    rw [← hl₁, hbs₀, Array.size_append, hl]
+    have e := congrArg Array.size hbs₀
+    rw [Array.size_append, hl₁, hl] at e
     omega
   have h1 : 1 ≤ repBase x (2 * j.val + r.val) := by
     rw [repBase_eq hsx]
@@ -145,10 +147,10 @@ theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
     rw [tabsOf_stAt]
     rfl
   -- rep `k`'s earlier claim points, read from the streams so far
-  have hpri : ∀ (k : ℕ) (b : Array (Array _root_.Flock.Round) × Array ByteArray),
+  have hpri : ∀ (k : ℕ) (streams : Array (Array _root_.Flock.Round)),
       (k % 2 = 1 → FlockComplete.MaskRank.roundPoints (FlockDeploy.tabsOf (stsOf x))[k / 2]!.m
-        (FlockDeploy.tabsOf (stsOf x))[k / 2]!.kLog b.1.back! = ptsOpen c (stsOf x)[k / 2]! (2 * (k / 2))) →
-      FlockComplete.priorOf (FlockDeploy.tabsOf (stsOf x))[k / 2]! b.1 (k % 2) = priorE c (k / 2) (k % 2) := by
+        (FlockDeploy.tabsOf (stsOf x))[k / 2]!.kLog streams.back! = ptsOpen c (stsOf x)[k / 2]! (2 * (k / 2))) →
+      FlockComplete.priorOf (FlockDeploy.tabsOf (stsOf x))[k / 2]! streams (k % 2) = priorE c (k / 2) (k % 2) := by
     intro k b hb
     unfold FlockComplete.priorOf priorE
     by_cases h1 : k % 2 = 1
@@ -185,7 +187,7 @@ theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
     have hle' : repBase x k ≤ repBase x (k + 1) := hmono _ _ (by omega)
     have hcutn := FlockComplete.CutPrefix.eq_of_agree
       (FlockComplete.CutPrefix.repCut_cut_agree _ hnN _ _ _ _ _ _ _ _ _ _ _) (by omega) hrep (by omega)
-    have hp := hpri k (streams, proofs) hpts
+    have hp := hpri k streams hpts
     unfold ptsE at hxe'
     refine ⟨?_, l'', ?_, hsz, ?_⟩
     rotate_left
@@ -210,7 +212,7 @@ theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
     simp [FlockComplete.repStartZk]
   · -- rep `2j + r` stops at `n` in level 0's opening
     rintro ⟨streams, proofs⟩ l₀ ⟨hl₀, hpts⟩
-    have hp := hpri (2 * j.val + r.val) (streams, proofs) hpts
+    have hp := hpri (2 * j.val + r.val) streams hpts
     have e2 : (2 * j.val + r.val) / 2 = j.val := by omega
     have e3 : (2 * j.val + r.val) % 2 = r.val := by omega
     simp only [e2, e3] at hp
@@ -224,13 +226,14 @@ theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
       (zkTab x j).sch r.val (spec.domain spec.tables[j.val]! r.val).toUTF8 cms[j.val]! extras ic
       ((src j.val).rep r.val) (priorE c j.val r.val) (FlockComplete.MaskRank.masksOf (stsOf x))[j.val]! t r.val
       extra (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[j.val]! r.val).toUTF8) l₀
-      (j := n - ligP0 x j r) (by omega) hk0 hsn hlv (by rw [hstop]; exact hpn)
+      (j := n - ligP0 x j r) (by omega) hk0 hsn hlv (res := (zp, lp, ss, T, sws)) (tr₁ := tr₁) (l₁ := l₀ ++ bs)
+      (by rw [hstop]; exact hpn)
     obtain ⟨L, hL, hQ⟩ := hcs
     have hidx := getElem!_of_toList hQ
     rw [hstop] at hL hidx
     dsimp only at hidx
     rw [hsz1, hbasis, hlay] at hidx
-    refine ⟨_, L, ?_, hidx⟩
+    refine ⟨"past the openings", L, ?_, hidx⟩
     simp only [List.getElem_map, List.getElem_range]
     simp only [e2, e3]
     try dsimp only
