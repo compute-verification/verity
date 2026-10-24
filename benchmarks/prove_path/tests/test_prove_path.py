@@ -8,18 +8,26 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
   one the draw's receipt names, and refuses the advice re-committed after the coins.
 * On the stand-in: each rank's window over the compiler's Programs for the advice is held to the verifier's own from the
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
-  changed, every check before the draw passing), so only the proof can refuse it."""
+  changed, every check before the draw passing), so only the proof can refuse it.
+* A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
+  the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
+* a5's R2 negative registers another population, one instance over where a template has a single one, so a one-unit window
+  (the forged TP1 case at step 24) is audited through its negatives."""
 from __future__ import annotations
 
+import argparse
 import json
 import random
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.types import Array, Value as Bits
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
@@ -183,7 +191,6 @@ def tp(tmp_path_factory):
 
 
 def SimpleArgs(c: dict, opening: Path):
-    import argparse
     return argparse.Namespace(tp_commit=c["commit"], build_root=c["build"], opening=str(opening), cap_bits=PP.CAP_BITS,
                               partition=str(c["all"]))
 
@@ -232,7 +239,6 @@ def test_each_ranks_window_is_held_to_the_verifiers_window_from_the_opening(tp):
 @pytest.mark.slow
 def test_the_advices_negatives_are_each_refused_by_name(tp):
     compiler, _bound, opening, mine, held = _mine(tp, "honest", 0)
-    import argparse
     a = argparse.Namespace(**vars(tp["args"]["honest"]))
     got = PP.more_negatives(a, 0, 2, compiler, mine, held, tp["honest"] / "rank0", opening)
     assert {k: v["codes"] for k, v in got.items() if k != "registration-of-another-rank (source)"} == {
@@ -269,3 +275,105 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
     honest, forged = _rows(tp["honest"] / "rank0"), _rows(d)
     assert len(honest) == len(forged) and sum(bin(x ^ y).count("1") for x, y in zip(honest, forged, strict=True)) == 1
     assert json.loads((tp["forged"] / "commit.json").read_text())["ranks"]["0"]["forged"] == {"member": 0, "unit": 1}
+
+
+def test_i2s_requests_are_its_compiled_units_once_per_advice_and_its_refusal_is_named(monkeypatch):
+    from verity_vllm.predict import steps as ST
+    from verity_vllm.predict.common import Unexpressible
+
+    calls = []
+
+    def compile_steps(registered, data, ingress):
+        calls.append(data)
+        if data == b"no":
+            raise Unexpressible("a chunked prefill")
+        return SimpleNamespace(requests=[ST.RequestUnit(0, "d0" * 64, 5, 2, {}, None, 0, "r0"),
+                                         ST.RequestUnit(1, "d1" * 64, 3, 1, {}, None, 2, "r1")])
+
+    monkeypatch.setattr(ST, "compile_steps", compile_steps)
+    i2 = PP.I2Compiler(registered=None, ingress={}, programs_root="/nonexistent")
+    want = [{"request_id": "r0", "arrive_step": 0, "prompt_len": 5, "max_tokens": 3, "digest": "d0" * 64},
+            {"request_id": "r1", "arrive_step": 2, "prompt_len": 3, "max_tokens": 2, "digest": "d1" * 64}]
+    assert i2.requests(b"ok") == want and i2.requests(b"ok") == want and calls == [b"ok"]
+    with pytest.raises(ValueError, match="I2 refuses the advice: a chunked prefill"):
+        i2.requests(b"no")
+
+
+def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(tmp_path):
+    for name, ok, digest in (("build_request_LP5_T2", True, "d0" * 64), ("build_request_LP3_T1", False, "d1" * 64),
+                             ("build_step", True, "d2" * 64)):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "result.json").write_text(json.dumps({"ok": ok, "program": {"digest": digest}}))
+    assert PP.bodies_by_digest(str(tmp_path)) == {"d0" * 64: str(tmp_path / "build_request_LP5_T2")}
+    i2 = PP.I2Compiler(registered=None, ingress={}, programs_root=str(tmp_path))
+    for rank, world in ((1, 2), (0, 2), (1, 1)):
+        with pytest.raises(ValueError, match="I2 compiles a single-GPU session"):
+            i2.load(rank, world, [])
+    with pytest.raises(ValueError, match="request r1: no Build dir under .* holds I2's Program d1d1"):
+        i2.load(0, 1, [{"request_id": "r1", "arrive_step": 0, "digest": "d1" * 64}])
+
+
+def test_each_requests_body_is_its_prompt_cap_and_sampling_by_its_i1_id():
+    ctx = {"requests": [{"request_id": "x", "prompt_token_ids": [1, 2], "max_tokens": 3},
+                        {"request_id": "y", "prompt_token_ids": [4], "max_tokens": 2}],
+           "sampling": {"temperature": 0.0, "top_p": 1.0, "logprobs": 5}}
+    assert PP.ingress_of(ctx) == {"r0": {"prompt": [1, 2], "max_tokens": 3, "temperature": 0.0, "top_p": 1.0},
+                                  "r1": {"prompt": [4], "max_tokens": 2, "temperature": 0.0, "top_p": 1.0}}
+
+
+def _single(root: str = "aa" * 64) -> tuple[dict, SimpleNamespace, dict]:
+    r = SimpleNamespace(store=SimpleNamespace(commit_scheme=SRT.ROWS_SCHEME), run=SimpleNamespace(run_root=bytes.fromhex(root)),
+                        bundle={"manifest_sha256": "bb" * 32})
+    si = PP.stand_in1(r)
+    held = {"commitment": SRT.ROWS_SCHEME, "served_programs": {"r0": "cc" * 64}, "stand_in": si,
+            "compiler": {"name": PP.CAPPED, "digest": "dd" * 64}, "advice": {"root": "ee" * 64, "bits": 120}}
+    w = {"kind": "stand-in", "run": root, "commitment": SRT.ROWS_SCHEME, "of": si["of"], "link": si["link"],
+         "served_programs": held["served_programs"], "compiler": held["compiler"], "advice": held["advice"]}
+    return w, SimpleNamespace(run=root), held
+
+
+def test_a_single_gpu_window_is_a_stand_in_of_the_records_sha512_run_root():
+    w, mine, held = _single()
+    assert held["stand_in"]["of"] == {"commitment": "rows-sha512", "run_root": "aa" * 64, "bundle_manifest_sha256": "bb" * 32,
+                                      "rows": PP.ROWS1}
+    assert "provenance, not proof" in held["stand_in"]["link"]
+    assert PP.source1(w, mine, held)["ok"]
+    for key, other in (("kind", "tp-stand-in"), ("run", "ff" * 64), ("commitment", "vllm-v1"), ("of", {**w["of"], "run_root": "ff" * 64}),
+                       ("link", "proof"), ("served_programs", {"r0": "ff" * 64}), ("compiler", {**w["compiler"], "digest": "ff" * 64}),
+                       ("advice", {**w["advice"], "root": "ff" * 64})):
+        assert PP.source1({**w, key: other}, mine, held)["codes"] == [key], key
+    assert set(PP.source1(None, mine, held)["codes"]) == {"kind", "run", "commitment", "of", "link", "served_programs", "compiler", "advice"}
+    w32, mine32, held32 = _single("aa" * 32)
+    assert PP.source1(w32, mine32, held32)["codes"] == ["sha512"]
+
+
+def test_a_run_is_one_committed_run_and_a_single_gpu_runs_one_window_is_rank_0():
+    tail = ["--advice", "a.bin", "--opening", "o.json", "--partition", "p.json", "--out", "w"]
+    for run in ([], ["--tp-commit", "c"], ["--bundle", "b", "--row-dir", "d"], ["--bundle", "b", "--workload", "f"],
+                ["--tp-commit", "c", "--build-root", "b", "--bundle", "b", "--row-dir", "d", "--workload", "f"]):
+        with pytest.raises(SystemExit):
+            PP.main(["commit", *run, *tail])
+    assert PP.ranks_of(argparse.Namespace(bundle="b", ranks=None)) == (1, [0])
+    with pytest.raises(SystemExit, match=r"ranks \[1\] are not ranks of the world of 1"):
+        PP.ranks_of(argparse.Namespace(bundle="b", ranks="0,1"))
+
+
+def test_per_unit_timing_is_over_the_members_drawn_units_not_c_flocks_virtual_units():
+    s = {"draw_counts": {"T": 2}, "timing": {"T": {"session_s": 501.2, "verify_s": 6.2, "lean_verify_s": 47.0,
+                                                   "timing": {"prove_total_s": 428.9, "units": 16384, "k_log": 26,
+                                                              "proof_bytes": [830330, 830330]}}}}
+    assert PP.per_unit(s) == {"T": {"units": 2, "k_log": 26, "proof_bytes": 1660660, "prove_s_per_unit": 214.45,
+                                    "session_s_per_unit": 250.6, "verify_s_per_unit": 3.1, "lean_verify_s_per_unit": 23.5}}
+
+
+def test_a5s_r2_partition_is_another_population_even_of_a_one_unit_window():
+    xor8 = PrimitiveDefinition("ProvePathTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
+                               register=False)
+    pair = bind(CompositeDefinition("ProvePathTestPair", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
+                                    lambda B, S_, x: B.call(xor8, x[0], x[1]), register=False))
+    triple = bind(CompositeDefinition("ProvePathTestTriple", 0, (), lambda S_: ((("x", Array(3, Bits(8))),), Bits(8)),
+                                      lambda B, S_, x: B.call(xor8, B.call(xor8, x[0], x[1]), x[2]), register=False))
+    for defs, want in (([(pair, 1)], P.population_program(pair, 2)), ([(pair, 4)], P.population_program(pair, 3)),
+                       ([(pair, 1), (triple, 1)], P.mixed_population_program([(pair, 2), (triple, 1)])),
+                       ([(pair, 3), (triple, 1)], P.mixed_population_program([(pair, 2), (triple, 1)]))):
+        assert P.program_digest(A5.resized_program(defs)) == P.program_digest(want)
