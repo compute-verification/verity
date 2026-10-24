@@ -208,16 +208,17 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "hb_served: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
 # coins off the node: every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
-# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX}}), each its own session from
+# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX, "rounds": R}}), each its own session from
 # infra's gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on this
-# node, HEX the root of the coin commitment its challenger signed, which its hello must answer), waited for with ss -ltn
+# node, HEX the root of the coin commitment its challenger signed, which its hello must answer, R its --rounds when not
+# 16384), waited for with ss -ltn
 # before the lease (never a probe connect: a challenger serves the first connection whose hello it accepts); none: in-process
 # (not certified)
 if [ -n "${POUW_CHALLENGER:-}${POUW_CHALLENGER_SESSION:-}" ] && { [ -z "${POUW_CHALLENGER:-}" ] || [ -z "${POUW_CHALLENGER_SESSION:-}" ]; }; then
   echo "hb_served: NO_CHALLENGER: a challenger session is POUW_CHALLENGER and POUW_CHALLENGER_SESSION together"; exit 15
 fi
-ats=$(python3 -c 'import json, os; m = json.loads(os.environ.get("DITHER_CHALLENGERS") or "{}"); ok = isinstance(m, dict) and all(isinstance(v, dict) and {"address", "session"} <= set(v) <= {"address", "commitment", "secret_file", "session"} and all(isinstance(x, str) and x for x in v.values()) for v in m.values()); print(*(v["address"] for v in m.values())) if ok else exit(1)') \
-  || { echo "hb_served: NO_CHALLENGER: DITHER_CHALLENGERS is not {arm: {\"session\": ID, \"address\": HOST:PORT[, \"secret_file\": F][, \"commitment\": HEX]}}"; exit 15; }
+ats=$(python3 -c 'import json, os; m = json.loads(os.environ.get("DITHER_CHALLENGERS") or "{}"); ok = isinstance(m, dict) and all(isinstance(v, dict) and {"address", "session"} <= set(v) <= {"address", "commitment", "rounds", "secret_file", "session"} and all(isinstance(x, str) and x for k, x in v.items() if k != "rounds") and type(v.get("rounds", 1)) is int and v.get("rounds", 1) > 0 for v in m.values()); print(*(v["address"] for v in m.values())) if ok else exit(1)') \
+  || { echo "hb_served: NO_CHALLENGER: DITHER_CHALLENGERS is not {arm: {\"session\": ID, \"address\": HOST:PORT[, \"secret_file\": F][, \"commitment\": HEX][, \"rounds\": R]}}"; exit 15; }
 ats=$(echo ${POUW_CHALLENGER:-} $ats)
 for at in $ats; do
   for _ in $(seq $((${CHALLENGER_WAIT_S:-900} * 20))); do ss -Hltn "sport = :${at##*:}" | grep -q . && break; sleep 0.05; done
