@@ -64,8 +64,18 @@ A spec-level reference for network accounting's timing channel:
   exactly when the committed bits (at most L) decode to a v0 advice, up to the three refusals of `decode` it defers
   (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`. From
   `verity` it takes the circuits and their evaluator;
+- the replay's state chain (`replay_chain`): ReplayStep_v1's state handed from one step unit to the next as the
+  state rows of a produced value a window, with private heads into the window row every step reads: the certified
+  arrivals not yet taken and the window's decisions, since the step's cursors are private. `ReplayAdvance` sits beside
+  each step and checks its arrivals and decision bits are the window row's at the heads; `ReplayLoad` runs once a
+  window. The windows join by equal openings and the session starts from the empty rows under public salts
+  (`check_chain`). Its cost at a shape is `size`;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
+- the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
+  whole cached units, which checks the row's hit (the longest cached prefix while no block can have been evicted, a
+  cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
+  circuits and their evaluator from `verity`;
 - the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
   direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
@@ -110,9 +120,15 @@ A spec-level reference for network accounting's timing channel:
   advice fixed the counts are determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`, "An
   advised link"). The prompt lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict
   (`advised.IoTieVerdict`, naming the link and its ingress registrations), which the verifier takes from its own tie
-  source (`LinkWindows.ties`), never beside the advice; IoTieRequest isn't in the proof service yet, and the
-  certifier doesn't report its syncs to the verifier yet, so there is no source of either and every advised link is
-  refused (fail closed).
+  source (`LinkWindows.ties`), never beside the advice: the tie service's (below). The served size class isn't
+  pinned, so there every advised link is refused (fail closed); and the certifier doesn't report its syncs to the
+  verifier yet, so there is no clock source (`LinkWindows.clocks`) and every advised link is refused;
+- the ingress tie through the proof service (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
+  proved as `NetworkIngressTieWindow` (one gate naming its pinned circuit digest, `io_request.circuit-check.json`, and
+  a zero pad to whole u16 words) on the cells the warden committed and registered, decided by the verifier of record
+  on its own statement from the advice, and `IngressTie.tie`, which builds `advised.IoTieVerdict` on the link and the
+  stream's registrations from the stream's outcomes of record alone; `Ties`, the tie and its stream as the
+  `LinkWindows.ties` the advised link reads. A size class no sidecar pins has no accepted proof.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's

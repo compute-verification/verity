@@ -210,26 +210,24 @@ def _signed_end(counts, own, end):
 @pytest.mark.parametrize("own", [0, 1])
 def test_the_ingress_ends_are_where_the_signed_counts_put_them(own):
     """CERT-VARLEN's rule: request k ends in the first bucket where the ingress head's signed counts, less one own frame
-    a window, reach `advised.ends`'s k-th, Σ_{i ≤ k} request_frames[prompt_len_i − 1]. In every session that is the
-    bucket that releases request k's last frame: under today's queueing wherever each window's own frame leaves in its
-    first bucket (and never earlier elsewhere), and always once the own frame goes to the head of each window's queue
-    (CERT-VARLEN's FIFO change), under which every window is accepted. Salted, today's queueing puts some end late."""
-    late = 0
-    for salt_first in (False, True):
-        for seed in SEEDS:
-            s = serve(seed, own, salt_first=salt_first)
-            sizes = [e - p for p, e in zip((0,) + s.ends, s.ends)]
-            records, anchor = ingress_records(s.arrive, sizes, own, salt_first=salt_first)
-            assert counts(records) == counts(s.ingress)
-            got = [_signed_end([n for row in counts(records) for n in row], own, e)
-                   for e in AD.ends(s.link, FRAMING, **held(s.link, s.certified))]
-            assert all(g >= a for g, a in zip(got, anchor))
-            if salt_first or all(not own or b"s" in r.grid[0] for r in records):
-                assert got == anchor
-            if salt_first:
-                assert check(s, own=own) == [True] * WINDOWS
-            late += got != anchor
-    assert bool(late) is bool(own)
+    a window, reach `advised.ends`'s k-th, Σ_{i ≤ k} request_frames[prompt_len_i − 1]. With each window's own frame at
+    the head of its queue, ahead of carried request frames (`active.Bucketer`), that is the bucket that releases
+    request k's last frame in every session, salted sessions whose windows start with frames carried in among them, and
+    every window is accepted."""
+    carried = 0
+    for seed in SEEDS:
+        s = serve(seed, own)
+        sizes = [e - p for p, e in zip((0,) + s.ends, s.ends)]
+        records, anchor = ingress_records(s.arrive, sizes, own)
+        assert counts(records) == counts(s.ingress)
+        got = [_signed_end([n for row in counts(records) for n in row], own, e)
+               for e in AD.ends(s.link, FRAMING, **held(s.link, s.certified))]
+        assert got == anchor
+        assert check(s, own=own) == [True] * WINDOWS
+        released = list(itertools.accumulate(sum(row.count(b"q") for row in r.grid) for r in records))
+        arrived = [sum(n for a, n in zip(s.arrive, sizes) if a < w * T) for w in range(1, WINDOWS)]
+        carried += any(a > r for a, r in zip(arrived, released))
+    assert carried
 
 
 def _one_more(link):
@@ -463,7 +461,8 @@ def test_no_advice_or_a_malformed_one_is_refused(tmp_path):
     d, regs, every = good.advice, good.registrations, good.accepted
     for name, registrations, advice, accepted in (
             ("", regs, d, every), (b"x", regs, d, every), (LINK, regs[0], d, every),
-            (LINK, (d[:-1],) * WINDOWS, d, every), (LINK, regs, d.upper(), every), (LINK, regs, bytes.fromhex(d), every), (LINK, regs, d, (1,) * WINDOWS),
+            (LINK, (d[:-1],) * WINDOWS, d, every), (LINK, regs, d.upper(), every),
+            (LINK, regs, bytes.fromhex(d), every), (LINK, regs, d, (1,) * WINDOWS),
             (LINK, regs, d, "yes"), (LINK, regs, d, every[:-1]), (LINK, regs[:-1], d, every)):
         with pytest.raises(ADV.MalformedAdvice):
             AD.IoTieVerdict(name, registrations, advice, accepted)

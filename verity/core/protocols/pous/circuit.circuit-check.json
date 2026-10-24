@@ -1,7 +1,8 @@
 {
  "definitions": {
   "PousModSquare_v1{W=128,C0=21065}": {
-   "and": 10601
+   "and": 10601,
+   "type": "c01f70725614ec6f95bf7bb92255bffd8bd261d738fb58f893fbd23efee93805175b450fc1ce70336f5fa9a54cc22a59c857a4921d014848f8bc4b4968d5b2a0"
   }
  }
 }

@@ -121,9 +121,11 @@ takes as its ``sync`` parameter. The in-the-clear check runs `served_check` too.
 responses of any length, batched and timed as serving chose, carried across windows. The prover's advice
 (`advised.LinkAdvice`: I1's `advice.Advice`, one per certifier session, after serving, charged by `advice.bits`, and
 each window's request frames) states what serving chose, the profile's public framing says where each request ends on
-the ingress link (`advised.ends`, which refuses a link without the tie of its requests to the certified ingress), and
-its unit is
-`NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: the checks above, and one gate naming
+the ingress link (`advised.ends`, which refuses a link without the tie of its requests to the certified ingress,
+`advised.IoTieVerdict`, which the verifier takes only from its own tie source, `ties`: `tie_service.Ties`, from the
+IoTieRequest proofs it verified, refusing every window of a size class with no pinned IoTieRequest digest, the served
+one among them), and its unit is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: the checks above, and one
+gate naming
 `advised.NetworkAdvisedCounts_v1` and its pinned circuit digest (`advised.gate`, pinned in
 `advised.circuit-check.json`), in its verdict bit, which holds the egress head's counts to the advice's releases and
 the ingress head's counts to the advice (`advised`'s docstring has the fields it reads, the soundness argument and the
@@ -502,10 +504,9 @@ class LinkWindows:
     occupancy profile: for each end (egress, ingress), each window's counts, or None for an end without one. A served
     link (`served`, FIXLEN) or an advised one (`advised`, arbitrary traffic under the advice) has no egress profile.
     `ties` is no public field but the verifier's own source of an advised link's tie (`advised.TieSource`), the only
-    place `_view` takes IoTieRequest's verdict from: None, as nothing in this package is one until IoTieRequest runs
-    in the proof service, refuses every advised link. `clocks` is the same for the syncs the certifier ran the link's
-    windows under (`advised.ClockSource`), which an advised window's declared sync must be: None refuses every
-    advised link."""
+    place `_view` takes IoTieRequest's verdict from (`tie_service.Ties`, on the ingress tie's stream of record): None
+    refuses every advised link. `clocks` is the same for the syncs the certifier ran the link's windows under
+    (`advised.ClockSource`), which an advised window's declared sync must be: None refuses every advised link."""
 
     link: str
     params: GridParams

@@ -26,7 +26,7 @@ position and roots, and its index, a 16-bit word, and returns `ok`. On its primi
 
 The dequant (`PouwZyDequant_v2`'s word view, `PouwZyDequant_v1`, three float roundings; `Pouw.H1Zy.zyDequant`, which
 `Accounting.Guarantees.TS.LeafLanesSound` reads) is the parameter `dqW`, and the
-chain's words the parameter `chain`; everything else is stated here. The leaf's `PouwH1Tile_v3` form computes z from the
+chain's words the parameter `chain` (`chainOf (h1Chain K)` in `LeafLanesSound`); everything else is stated here. The leaf's `PouwH1Tile_v3` form computes z from the
 chain's words instead of EXACT, and is not stated here.
 -/
 

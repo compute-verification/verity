@@ -35,7 +35,7 @@ The seeded statements (`CircuitWorkSeeded`, `CircuitCreditSeeded`) take GRIND's 
 luck halves, over the whole window's oracle answers (a `JointRun`, no stage order: a cheater may choose round `r`'s
 operands and skips after querying later rounds' seeds):
 
-* `SeedExtractedAt`: the random-oracle premise, proofs' `Pouw.Assumptions.SeedExtraction` at the window's seeds: the
+* `SeedExtractedAt`: the random-oracle premise at the window's seeds: the
   seed each round's accepted proofs derive is the oracle's answer to one of the cheater's queries at the input its
   commitment names, except on one event of probability `ε_id(T, |J|)`, per prover, `T` the window's SHA-512 calls
   and `|J|` the seeds the proofs name;
@@ -74,8 +74,8 @@ word, or a coin read before the skip, determines. -/
 def GuessLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame Ω S) : Prop :=
   Accounting.TS.RoundGame.LuckAt p0 G.game
 
-/-- `random-oracle` (the random-oracle card, 9cd57182: PoUW only, each use a named premise; proofs'
-`Pouw.Assumptions.SeedExtraction` at the window's seeds). **The seed each round's accepted proofs derive is the
+/-- `random-oracle` (the random-oracle card, 9cd57182: PoUW only, each use a named premise; this one at the window's
+seeds). **The seed each round's accepted proofs derive is the
 oracle's answer at a committed input**: on the window's oracle answers `a` (round `r`'s `T_q` seed queries' answers its
 `r`-th coin, `Fin T_q → B`, all uniform and independent), `sq a r` is the query of round `r` whose answer its drawn
 units derive their seed from in-circuit (decision 105), at the input `SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B))`

@@ -86,26 +86,29 @@ same certified record: REDTEAM phase 6's case. The certified prompts are witness
 tie from them on the host, and a tie the prover states is no tie (REDTEAM phase 7: one stating the swapped split
 reopens phase 6's acausal release), nor is a verdict it delivers (REDTEAM phase 10: a verdict built from its own
 advice's digest, every window accepted, reopened it through the verifier of record), so `LinkAdvice` carries none. The
-tie is only IoTieRequest's verdict from the verifier's own tie source, on the link and the ingress registrations it
-holds, so a verdict on another link or ingress record isn't reused; until IoTieRequest runs in the proof service there
-is no such source: every advised link is refused (PROTOCOL.md, fail closed). The floor's syncs are held the same way:
-a δ below the one the window's traffic was certified under loosens the floor (REDTEAM phase 11: δ = 0 declared for a
-window the certifier ran at δ = 1 accepted an output in its request's own bucket), so `view` refuses a window whose
-declared sync isn't the one the certifier ran it under, which the verifier takes only from its own clock source
-(`ClockSource`, `service.LinkWindows.clocks`: the certifier's report of the syncs its shaper ran), never from the
-prover; until the certifier reports them to the verifier there is no such source, and every advised link is refused.
-Neither head signs the prompt lengths or the sync a window ran, so the unit itself holds neither to the record, only
-the verifier's tie and clock sources do: PROTOCOL.md's named gap, with its design.
+tie is only IoTieRequest's verdict from the verifier's own tie source (`tie_service.Ties`), on the link and the
+ingress registrations it holds, so a verdict on another link or ingress record isn't reused, built from the
+IoTieRequest proofs the verifier of record verified on its own statements (`tie_service.IngressTie.tie`). No proof of
+an unpinned size class is accepted, and the served size isn't pinned, so there every advised link is refused
+(PROTOCOL.md, fail closed). The floor's syncs are held the same way: a δ below the one the window's traffic was
+certified under loosens the floor (REDTEAM phase 11: δ = 0 declared for a window the certifier ran at δ = 1 accepted
+an output in its request's own bucket), so `view` refuses a window whose declared sync isn't the one the certifier ran
+it under, which the verifier takes only from its own clock source (`ClockSource`, `service.LinkWindows.clocks`: the
+certifier's report of the syncs its shaper ran), never from the prover; until the certifier reports them to the
+verifier there is no such source, and every advised link is refused. Neither head signs the prompt lengths or the sync
+a window ran, so the unit itself holds neither to the record, only the verifier's tie and clock sources do:
+PROTOCOL.md's named gap, with its design.
 
 **Bucket 0** is capped at RIN, which holds the own frame: the ingress certifier releases min(queue, r_in) frames a
-bucket (`grid.Certifier`), its own frame queued ahead of bucket 0's arrivals (`active.Bucketer`), and a head whose
+bucket (`grid.Certifier`), its own frame queued at the head of the queue, ahead of bucket 0's arrivals and of any
+request frames carried from the window before (`active.Bucketer`, `Certifier.enqueue(first=True)`), and a head whose
 count passes its allocation doesn't exist (`certificate.RecordHead`). With RIN request frames arriving in bucket 0,
-the certified count is RIN, one of them the own frame, and the last request frame is released in bucket 1.
+the certified count is RIN, one of them the own frame, and the last request frame is released in bucket 1; with RIN
+or more carried in, the own frame still leaves in bucket 0.
 
 **The ends are where the signed counts put them** (CERT-VARLEN's rule): request j ends in the first bucket where the
 ingress head's signed counts, less one own frame a window, reach `ends[j]`, the prefix sums the floor reads. That is
-the bucket that releases its last frame while each window's own frame leaves in its first bucket, always once the own
-frame is queued at the head of each window's queue, and otherwise one bucket late, never early.
+the bucket that releases its last frame, since each window's own frame leaves in its first bucket.
 
 **Premises** of "an honest advised link is accepted", which N2's claim doesn't rest on: `release` is the certified
 egress record's (each kept output one egress frame, in the link's canonical order, which IO-TIE fixes); the releases
@@ -113,10 +116,7 @@ fall in the link's windows, each with a declared sync in Σ_sync; `received` is 
 request is advice request j (FCFS admission, which IoTieRequest checks, its ordinals being the verifier's: v0
 numbered by a runner's batch order, which ENC-DERIVED's `walk.order` maps back, is refused), an id request of its
 prompt length (`request_frames`); each window's declared sync is the one the certifier ran it under, with a δ and
-ρ that every frame released in it meets (a small δ, a ρ at least a stream's rate); with the
-salt on, the own frame counts as bucket 0's, so a window that starts with RIN or more request frames carried in
-under-counts by one until the own frame is released, which only a release at its exact eligibility notices; and both
-ends share T and τ_b.
+ρ that every frame released in it meets (a small δ, a ρ at least a stream's rate); and both ends share T and τ_b.
 
 **Cost** (`size`): about 105 ANDs a bucket, the ingress floor and the egress equality: 63,031 at T = 600, RIN = 1,
 OWN = 0 and 64,894 at RIN = 4, OWN = 1, a fiftieth of one head check (3,229,371).
@@ -188,11 +188,13 @@ class IoTieVerdict:
     (`service.LinkWindows.link`), whose ingress windows the challenger registered as `registrations` (each one's
     `registration.digest`, in window order), on the request view the verifier computed from the advice whose `digest`
     is `advice`. An accepted verdict on every window says the link's j-th certified request is advice request j and
-    its prompt is v0's `prompt_len` ids long. Only the verifier's own tie source (`TieSource`) gives one, from
-    IoTieRequest proofs it verified itself, and `view` holds it to the link and the registrations the verifier
-    expects, so a verdict on another link or another ingress record isn't this one's. Construction refuses
-    (`advice.MalformedAdvice`) a `link` that isn't a non-empty string, `registrations` and an `advice` that aren't
-    SHA-512 hex digests, and verdicts that aren't one bool a registration."""
+    its prompt is v0's `prompt_len` ids long. Only the verifier's own tie source (`TieSource`, `tie_service.Ties`)
+    gives one, from IoTieRequest proofs it verified itself (`tie_service.IngressTie.tie`), and `view` holds it to the
+    link and the registrations the verifier expects, so a verdict on another link or another ingress record isn't
+    this one's. At a size class with no pinned IoTieRequest digest, the served one among them, every window is
+    refused (PROTOCOL.md, fail closed). Construction refuses (`advice.MalformedAdvice`) a `link` that isn't a
+    non-empty string, `registrations` and an `advice` that aren't SHA-512 hex digests, and verdicts that aren't one
+    bool a registration."""
 
     link: str
     registrations: tuple[str, ...]
@@ -220,9 +222,8 @@ class TieSource(Protocol):
     """The verifier's own source of the tie (`service.LinkWindows.ties`), never what the prover delivers:
     `registrations(link)` is the verifier's record of the link's ingress windows' registrations with the challenger
     (each one's `registration.digest`, in window order), and `verdict(link, advice, profile)` IoTieRequest's verdict
-    (`IoTieVerdict`) for `advice` under `profile`, built only from IoTieRequest proofs the verifier verified itself.
-    Nothing in this package is one until IoTieRequest runs in the proof service, so every advised link is refused
-    (PROTOCOL.md, fail closed)."""
+    (`IoTieVerdict`) for `advice` under `profile`, built only from IoTieRequest proofs the verifier verified itself:
+    `tie_service.Ties`. Without one every advised link is refused (PROTOCOL.md, fail closed)."""
 
     def registrations(self, link: str) -> Sequence[str]: ...
 
