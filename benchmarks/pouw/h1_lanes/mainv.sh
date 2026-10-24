@@ -14,7 +14,8 @@
 # Two more forms of a share in SHARES: `RUN~KEEPER[@USER@HOST]=TAGS` reads RUN's tags as keep.sh's run KEEPER kept them
 # (KEEP/RUN.TAG, removed after its verify), and `?AFTER[@HOSTS]=TAGS` (HOSTS: `USER@HOST` or `-` for this node, joined
 # by `+`) finds, per tag, the earliest share started after AFTER (YYYYMMDD-HHMMSS) whose plan checks that tag; its rows'
-# key is found.TAG.
+# key is found.TAG. `RUN%SRC[@USER@HOST]=TAGS` reads RUN's tags from SRC's out/ (TAG/sessions, ready at its sessions.du or
+# a harvester's "kept TAG's sessions" log line, and verifier/), with SRC's plan.json or share-plan.json as RUN's plan.
 set -uo pipefail
 OUT=${RESEARCH_RUN_DIR:?}/out
 mkdir -p "$OUT/v" "$OUT/plans" "$OUT/share-lean"
@@ -32,7 +33,7 @@ alive() {   # alive HOST RUN
   [ "$(on "$1" "python3 -c 'import json; print(json.load(open(\"$RUNS/$2/status.json\"))[\"state\"])'")" = running ]
 }
 KEEP=${KEEP:-/workspace/research/proofs-mainv/keep}
-pfx() { case $1 in \?*) echo found ;; *) local r=${1%%@*}; echo "${r%%~*}" ;; esac; }   # pfx SPEC: its keys' prefix
+pfx() { case $1 in \?*) echo found ;; *) local r=${1%%@*}; r=${r%%~*}; echo "${r%%%*}" ;; esac; }   # pfx SPEC: its keys' prefix
 KEYS=()   # PREFIX.TAG, in SHARES' order
 for s in $SHARES; do
   IFS=, read -ra tags <<< "${s#*=}"
@@ -150,6 +151,47 @@ collect_kept() {   # collect_kept HOST RUN KEEPER TAG...: RUN's tags as keep.sh'
     sleep "$POLL"
   done
 }
+collect_out() {   # collect_out HOST RUN SRC TAG...: RUN's tags from SRC's out/ (a split share's own, or a harvester's):
+  local h=$1 run=$2 src=$3 S=$RUNS/$3/out tag k P pending dead plan ready   # TAG/sessions and verifier/
+  shift 3
+  pending=" $* "
+  until plan=$(on "$h" "ls $S/plan.json $S/share-plan.json 2>/dev/null | head -1") && [ -n "$plan" ]; do
+    if ! alive "$h" "$src"; then
+      for tag in $pending; do echo "$src ended without a plan" > "$T/in/$run.$tag.missing"; done
+      log "collector $run%$src: no plan; no session for:$pending"; return 0
+    fi
+    sleep $(( POLL * 2 ))
+  done
+  read_plan "$h" "$run" "$run" "$plan"
+  log "collector $run%$src: plan read ($plan); waiting on:$pending"
+  while :; do
+    alive "$h" "$src" && dead=0 || dead=1   # read before the pass: SRC marks each tag before it exits
+    ready=$(on "$h" "ls $S/*/sessions.du 2>/dev/null; grep -o \"kept [^ ]*'s sessions\" $S/job.log 2>/dev/null")
+    for tag in $pending; do
+      grep -qx -e "$S/$tag/sessions.du" -e "kept $tag's sessions" <<< "$ready" || continue
+      k=$run.$tag P=$T/in/$run.$tag.partial
+      rm -rf "$P" && mkdir -p "$P"
+      if on "$h" "cd $S && tar -cf - $tag/sessions verifier/$(basename "$(field "$run" "$tag" pub)") \
+            verifier/$(basename "$(field "$run" "$tag" registered)") verifier/$(basename "$(field "$run" "$tag" program)") \
+            verifier/$(basename "$(field "$run" "$tag" partition)")" | tar -xf - -C "$P" \
+          && mv "$P/$tag/sessions" "$P/sessions" \
+          && mv "$P/verifier/$(basename "$(field "$run" "$tag" pub)")" "$P/pub.bin" \
+          && mv "$P/verifier/$(basename "$(field "$run" "$tag" registered)")" "$P/registered.json" \
+          && mv "$P/verifier/$(basename "$(field "$run" "$tag" program)")" "$P/program.json" \
+          && mv "$P/verifier/$(basename "$(field "$run" "$tag" partition)")" "$P/partition.json" \
+          && rmdir "$P/$tag" "$P/verifier"; then
+        (cd "$P" && find . -type f | sort | xargs sha256sum) > "$OUT/v/$k.inputs.sha256" && mv "$P" "$T/in/$k"
+        log "snapshot $run $tag (from $src's out): $(ls "$T/in/$k/sessions" | tr '\n' ' ')"; pending=${pending/ $tag / }
+      else log "snapshot $run $tag (from $src's out) FAILED; retrying"; fi
+    done
+    [ -z "${pending// /}" ] && return 0
+    if [ $dead = 1 ]; then
+      for tag in $pending; do echo "$src ended without the tag's sessions" > "$T/in/$run.$tag.missing"; done
+      log "collector $run%$src: $src ended; no session for:$pending"; return 0
+    fi
+    sleep "$POLL"
+  done
+}
 FINDPY='import json, os, sys
 R, after, tag = sys.argv[1:4]
 for r in sorted(os.listdir(R)):
@@ -188,6 +230,7 @@ for s in $SHARES; do
     *)   run=${spec%%@*}
          [ "$spec" != "$run" ] && h=${spec#*@}
          if [ "$run" != "${run%%~*}" ]; then collect_kept "$h" "${run%%~*}" "${run#*~}" ${tl//,/ } &
+         elif [ "$run" != "${run%%%*}" ]; then collect_out "$h" "${run%%%*}" "${run#*%}" ${tl//,/ } &
          else collect "$h" "$run" "$run" ${tl//,/ } & fi
          CPIDS+=($!) ;;
   esac
