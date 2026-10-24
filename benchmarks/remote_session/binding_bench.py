@@ -13,9 +13,9 @@ split       `verifier.hold_store` on the bound hello with the cores split: store
             --workers) processes, a second Lean process's on the rest of `--workers` as threads
 ~~~
 
-A phase whose verifiers disagree, or that decides otherwise than its row says, fails the bench. Writes
-OUT/binding_bench.json after each phase (the cores, the load average before and after each); exits 1 unless every phase
-decided as it should.
+A phase may be listed again, so that on a shared machine the orders bracket a drift in its load. A phase whose verifiers
+disagree, or that decides otherwise than its row says, fails the bench. Writes OUT/binding_bench.json after each phase
+(the cores, the load average before and after each); exits 1 unless every phase decided as it should.
 
     python binding_bench.py --out OUT [--engines 8 --arena-blocks 16250000 --weights 4000000 --host 0 --workers N]
                             [--phases sequential,concurrent,bound,split] [--python-share 0.6]
@@ -77,17 +77,18 @@ def main() -> int:
     ap.add_argument("--weights", type=int, default=4_000_000)
     ap.add_argument("--host", type=int, default=0)
     ap.add_argument("--workers", type=int, default=len(os.sched_getaffinity(0)))
-    ap.add_argument("--phases", default=",".join(PHASES), help=f"a comma-separated subset of {PHASES}, in order")
+    ap.add_argument("--phases", default=",".join(PHASES),
+                    help=f"a comma-separated list of {PHASES}, run in that order, any of them again")
     ap.add_argument("--python-share", type=float, default=PYTHON_SHARE)
     a = ap.parse_args()
     phases = a.phases.split(",")
     if any(p not in PHASES for p in phases) or phases[0] not in ("sequential", "concurrent"):
-        ap.error(f"--phases is a subset of {PHASES}, the first sequential or concurrent (the others take its root)")
+        ap.error(f"--phases lists {PHASES}, the first sequential or concurrent (the others take its root)")
     a.out.mkdir(parents=True, exist_ok=True)
     blocks = a.engines * a.arena_blocks + a.host
     out: dict = {"engines": a.engines, "arena_blocks": a.arena_blocks, "weights_blocks": a.weights, "host_blocks": a.host,
                  "blocks": blocks, "workers": a.workers, "chunk_log2": store.CHUNK_LOG2,
-                 "cpus": len(os.sched_getaffinity(0)), "cpu_count": os.cpu_count(), "phases": {}}
+                 "cpus": len(os.sched_getaffinity(0)), "cpu_count": os.cpu_count(), "nice": os.nice(0), "phases": []}
 
     def write() -> None:
         (a.out / "binding_bench.json").write_text(json.dumps(out, indent=1) + "\n")
@@ -160,7 +161,7 @@ def main() -> int:
                 r, want = (hello(lean, bound, b, root) if phase == "bound" else split(root)), "bound"
             r["ok"] = r["decided"] == want and r["expected_root"] == root.hex()
             ok = ok and r["ok"]
-            out["phases"][phase] = r
+            out["phases"].append({"phase": phase} | r)
             write()
         lean.close()
     return 0 if ok else 1
