@@ -370,6 +370,23 @@ def memory_error(ledgers: dict) -> float | None:
     return None
 
 
+def sketch_at(session: dict, registration: dict, outside: int | None = None) -> dict | None:
+    """A session's SketchBound δs from its record (`Verifier.ledgers`' `sketch_failure`) against Q = F·C queries, C the
+    compressions the verifier charged the node over the span and F the outside-compute factor: the record's (one
+    written before F charged `timing.SKETCH_OUTSIDE`), or `outside` to read it at another; with the memory line's
+    error there, the horizon's plus δs (`memory_error` at F).  None for a session whose record has no sketch term."""
+    lg = session.get("ledger") or {}
+    sf, inputs = lg.get("sketch_failure"), lg.get("inputs") or {}
+    if not sf or not inputs.get("rows"):
+        return None
+    f = sf.get("outside", timing.SKETCH_OUTSIDE) if outside is None else outside
+    c = sf["compressions"]
+    d = timing.sketch_failure(c, inputs["passes"], inputs["rows"], blocks=registration["blocks"], outside=f)
+    horizon = next((lg[n]["error"]["horizon"] for n in ("spec", "measured") if "error" in lg.get(n, {})), None)
+    return {"outside": f, "compressions": c, "queries": f * c, "log2": timing.log2(d),
+            "error": None if horizon is None else horizon + float(d)}
+
+
 def node_line(mem: dict, *, host_bytes: int) -> dict:
     """`memory`'s line against the node's whole memory, its HBM and `host_bytes` of host DRAM, by kind: each window's
     held weights (HBM), the rest of its held HBM (filler) and its held host tier, each less the window's lost blocks
