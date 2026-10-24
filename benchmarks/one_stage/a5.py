@@ -51,7 +51,7 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   window is the population program and partition over the served Programs, the law and the run of record. The verifier composes
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
   are never used), or, for a template whose units are bit rows in chunks (`serving_rows.CHUNKED`: a MoE pair GEMM's coordinate,
-  `COORDS`, or a MoeSum or all-reduce column block, `COLS`), by C-Flock's `UnitStager` on the rows the window lays out
+  `COORDS`, a MoeSum or all-reduce column block, `COLS`, or a w13 coordinate's K-chunk, `KCHUNKS`), by C-Flock's `UnitStager` on the rows the window lays out
   (`compose_circuit.py --template`, once per template, every chunk on that circuit, read and hashed once,
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
@@ -118,6 +118,13 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   when they are one. Negatives on one drawn chunk: no registered reads, another root, its units reading another row
   (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
   context); `a5_row_tables.py` is their stand-in.
+* **Wiring across statements** (`commit.wiring`, verifier PROTOCOL §16.13 ``Wiring``): a w13 coordinate's K-chunks
+  (`pipeline.kchunk_rows`) are three templates, each chunk's ``acc`` row the output row of the chunk before it, committed under
+  that row's salt. Lean's links hold only inside a statement, so before the draw every wire is held on the public bodies the leaf
+  layer binds (`wiring.check`: the two rows' strings are one), and a drawn chunk's ``acc`` is then the committed output of the
+  chunk that wrote it, drawn or not. A sparse-MLA row's combine reads its splits' partials and lses the same way
+  (`pipeline.split_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
+  two of a combine's slots, and flip a wired row's string in its reader's public body.
 """
 from __future__ import annotations
 
@@ -152,6 +159,7 @@ from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
+from verity_vllm.commit import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
 
@@ -340,6 +348,35 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     return result, neg, record
 
 
+def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) -> dict[str, dict]:
+    """The verifier's wiring check (§16.13) on altered wires: the first wire's writers rotated (each unit reading another unit's
+    row), two wires of one output swapped (a split's partial read into another combine slot), and a wired row's string flipped
+    in its reader's public body (a partial that is not the one its writer committed)."""
+    neg: dict[str, dict] = {}
+    k = next((k for k, m in enumerate(members) if m.wired), None)
+    if k is None:
+        return neg
+
+    def rewired(j: int, wired: tuple) -> list[CS.Member]:
+        return [replace(m, wired=wired) if i == j else m for i, m in enumerate(members)]
+
+    (p, o, ws), *rest = members[k].wired
+    neg["chunk-wired-to-another-unit (§16.13)"] = {"refused": bool(WI.check(rewired(k, ((p, o, ws[1:] + ws[:1]), *rest)), publics))}
+    swap = next(((j, a, b) for j, m in enumerate(members) for a in range(len(m.wired)) for b in range(a + 1, len(m.wired))
+                 if m.wired[a][1] == m.wired[b][1] and m.wired[a][2] != m.wired[b][2]), None)
+    if swap is not None:
+        j, a, b = swap
+        w = list(members[j].wired)
+        w[a], w[b] = (w[a][0], w[a][1], w[b][2]), (w[b][0], w[b][1], w[a][2])
+        neg["partial-wired-to-another-combine-slot (§16.13)"] = {"refused": bool(WI.check(rewired(j, tuple(w)), publics))}
+    m = members[k]
+    names = [q for q, _ in m.all_rows]
+    body = bytearray(publics[m.key])
+    body[names.index(p) * WI.BC_BYTES] ^= 1
+    neg["wired-row-not-its-writer-s-output (§16.13)"] = {"refused": bool(WI.check(members, {**publics, m.key: bytes(body)}))}
+    return neg
+
+
 def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[str, dict]:
     """A drawn row-table chunk's honest session re-verified by Lean against registered reads it must refuse: none (its header
     names registered reads the verifier holds no root for), its table's root replaced, and (a table of more than one row)
@@ -368,6 +405,9 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
     m, st_dir = mm["m"], mm["st"]["dir"]
     if mm["circuit"] != st_dir / "circuit.txt":
         link(mm["circuit"], st_dir / "circuit.txt")
+        for f in sorted((mm["circuit"].parent / "tables").glob("*.u32")):    # a circuit with lookups reads the MUFU tables
+            (st_dir / "tables").mkdir(exist_ok=True)
+            link(f, st_dir / "tables" / f.name)
     got = FI.flock_input_files(served, mm["k"], mm["circ"], st_dir / "prover", write=("inst",), files=files)
     link(Path(got["inst"]), st_dir / f"inst-{m.n}.bin")
     with open(got["inst"], "rb") as f:
@@ -421,7 +461,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         if m.template in composed:      # a chunked template's chunks: one circuit, bound to the same partition and program
             circuit, made, circ = composed[m.template]
         else:
-            src = ["--template", m.template] if chunked else ["--input-set", str(sets[m.template][0])]
+            src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
+                ["--input-set", str(sets[m.template][0])]
             p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), *src, "--out", str(st_dir / "circuit.txt"),
                         "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath})
             if p.returncode != 0:
@@ -463,6 +504,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     if mine.row_tables:
         bad = RTB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
+    if any(m.wired for m in mine.members):
+        bad = WI.check(mine.members, publics)
+        checks["wiring"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
     w = rec.get("window", {})
     checks["source"] = source(w)
     summary["source"], summary["commitment"] = w.get("kind"), w.get("commitment")
@@ -592,6 +636,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
     neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
+    neg.update(wiring_negatives(mine.members, publics))
     if proved:
         v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
         neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -799,6 +844,8 @@ def main() -> int:
     ap.add_argument("--partition", required=True, help="the verifier's partition file: {templates, law, scope?}")
     ap.add_argument("--template-sets", required=True, help="one input set per member template, for the lowering")
     ap.add_argument("--m0-pythonpath", required=True)
+    ap.add_argument("--compose-cache", help="this machine's composed circuits (`compose_circuit.py --cache`): the ranks it audits "
+                    "compose each chunked template once, every later rank taking that circuit with its own binding")
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--firewall", required=True,
