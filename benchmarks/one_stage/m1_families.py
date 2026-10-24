@@ -7,11 +7,13 @@ batched members), whether it is a template the rows commit (`serving_rows.templa
 Definition lowered once on its own (`ir_lower.lower` on fresh inputs), its ANDs, table reads and assertions times how many
 times the Definition holds it. Constants folded and ANDs shared across leaves are not taken off, so it is an upper bound.
 With it, M0's block for the unit (`block`): the in-circuit hashing of its rows alone bounds it from below, so a family whose
-``rows_log`` passes `K_MAX` is refused whatever its ANDs.
+``rows_log`` passes `K_MAX` is refused whatever its ANDs.  The same is computed for each family's split units (its unit
+templates past the row itself: ``units``), and for each ``--also`` Definition (``candidates``: a split's unit main lacks).
 
     PYTHONPATH=... python benchmarks/one_stage/m1_families.py --commit ROW/commit --build-root ROW/build \\
       --workload integrations/vllm/workloads/ROW.json --rank 0 --steps 16 --out families.json
-    PYTHONPATH=...:<tree>/verity/ml/flock/python python benchmarks/one_stage/m1_families.py --estimate families.json --out sized.json
+    PYTHONPATH=...:<tree>/verity/ml/flock/python python benchmarks/one_stage/m1_families.py --estimate families.json --out sized.json \\
+      [--also 'CublasSplitKGemmF32Out_v1{K=6144,N=1,..}' ...] [--also-file SPECS.txt]
 """
 from __future__ import annotations
 
@@ -97,33 +99,56 @@ def block(fn, ands: int | None) -> dict:
             "est_log": None if ands is None else log(ands + sum(bits))}
 
 
-def sizes(census: str, out: str) -> int:
+def sized(spec: str, memo: dict) -> dict:
+    """`estimate` and `block` of the Definition ``spec`` binds to (`serving_rows._bind`), or the reason it has none."""
     import math
-    import sys
 
     from verity_vllm.pipeline import serving_rows as SRW
+
+    t = time.time()
+    try:
+        sp = SRW._bind(spec)
+        e = estimate(sp, memo, {}) if sp is not None else {"error": "does not bind"}
+    except Exception as ex:  # noqa: BLE001 -- reported, not fatal
+        e = {"error": f"{type(ex).__name__}: {ex}"[:300]}
+    if "ands" in e:
+        e["log2_ands"] = round(math.log2(e["ands"]), 2) if e["ands"] else None
+        e["under_2^26"] = e["ands"] < 2**LIMIT_LOG
+        e["block"] = b = block(sp, e["ands"])
+        e["fits_block"] = b["est_log"] <= K_MAX
+        e["refused_block"] = b["rows_log"] > K_MAX
+    e["seconds"] = round(time.time() - t, 1)
+    return e
+
+
+def _say(rid: str, rows: int | str, spec: str, e: dict) -> None:
+    print(f"M1S {rid} {rows:>5} {spec[:90]:90s} ands={e.get('ands')} log2={e.get('log2_ands')} reads={e.get('reads')} "
+          f"asserts={e.get('asserts')} unpieced={e.get('unpieced')} block={e.get('block')} {e.get('error', '')}", flush=True)
+
+
+def sizes(census: str, out: str, also: list[str] = ()) -> int:
+    """Each family's estimate, each of its split units' (its `unit_templates` past the row itself, ``units``: per row ``n``
+    of them), and with ``also`` each of those Definitions' (``candidates``: the units of a split main doesn't have)."""
+    import sys
 
     sys.setrecursionlimit(100000)
     doc = json.loads(Path(census).read_text())
     memo: dict = {}
+    seen: dict[str, dict] = {}
     for rid, req in doc["requests"].items():
         for spec, f in req["families"].items():
-            t = time.time()
-            try:
-                sp = SRW._bind(spec)
-                e = estimate(sp, memo, {}) if sp is not None else {"error": "does not bind"}
-            except Exception as ex:  # noqa: BLE001 -- reported, not fatal
-                e = {"error": f"{type(ex).__name__}: {ex}"[:300]}
-            if "ands" in e:
-                e["log2_ands"] = round(math.log2(e["ands"]), 2) if e["ands"] else None
-                e["under_2^26"] = e["ands"] < 2**LIMIT_LOG
-                e["block"] = b = block(sp, e["ands"])
-                e["fits_block"] = b["est_log"] <= K_MAX
-                e["refused_block"] = b["rows_log"] > K_MAX
-            e["seconds"] = round(time.time() - t, 1)
-            f["estimate"] = e
-            print(f"M1S {rid} {f['rows']:5d} {spec[:90]:90s} ands={e.get('ands')} log2={e.get('log2_ands')} reads={e.get('reads')} "
-                  f"asserts={e.get('asserts')} unpieced={e.get('unpieced')} block={e.get('block')} {e.get('error', '')}", flush=True)
+            f["estimate"] = e = sized(spec, memo)
+            _say(rid, f["rows"], spec, e)
+            e["units"] = []
+            for u, n in f.get("unit_templates", [])[1:]:
+                if u not in seen:
+                    seen[u] = sized(u, memo)
+                    _say(rid, f"x{n}", u, seen[u])
+                e["units"].append({"spec": u, "n": n, **seen[u]})
+    doc["candidates"] = {}
+    for s in also:
+        doc["candidates"][s] = sized(s, memo)
+        _say("candidate", "-", s, doc["candidates"][s])
     Path(out).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     return 0
 
@@ -131,6 +156,9 @@ def sizes(census: str, out: str) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--estimate", default=None, metavar="CENSUS", help="add each family's estimated size to this census's output")
+    ap.add_argument("--also", action="append", default=[], metavar="SPEC",
+                    help="with --estimate: also size this Definition (a split's unit that main doesn't have); repeatable")
+    ap.add_argument("--also-file", default=None, metavar="PATH", help="with --estimate: --also for each line of this file")
     ap.add_argument("--commit", help="the deferred TP Commit's --out (runs.jsonl, versions.json)")
     ap.add_argument("--build-root", help="each rank's Programs of record in rank<r>/")
     ap.add_argument("--workload")
@@ -139,7 +167,8 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     if a.estimate:
-        return sizes(a.estimate, a.out)
+        also = a.also + ([s for s in Path(a.also_file).read_text().splitlines() if s.strip()] if a.also_file else [])
+        return sizes(a.estimate, a.out, also)
     if not (a.commit and a.build_root and a.workload):
         ap.error("--commit, --build-root and --workload, or --estimate")
 

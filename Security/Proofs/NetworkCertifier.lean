@@ -1,4 +1,5 @@
 import Models.NetworkCertifier.Guarantees
+import Models.NetworkCertifier.Guarantees.AdviceString
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting
@@ -9,14 +10,15 @@ import Proofs.NetworkCertifier.PerWindow
 import Proofs.NetworkCertifier.Sanity
 import Proofs.NetworkCertifier.Code
 import Proofs.NetworkCertifier.Accepted
+import Proofs.NetworkCertifier.AdviceString
 
 /-!
 # Proofs of the network certifier's guarantees
 
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the theorem of the same statement
 in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3), `Schedule` (Theorem 3 for the
-constant-rate Program), `Ingress` (the ingress bound) or `PerWindow` (the last two over whole windows), and every lemma
-behind them. `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program (`certifier_program`,
+constant-rate Program), `Ingress` (the ingress bound), `PerWindow` (the last two over whole windows) or `AdviceString`
+(the leak bound: the advice string's charge), and every lemma behind them. `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program (`certifier_program`,
 `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions. `Accepted` proves
 `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate check accepts is a run
 of the constant-rate Program under the declared advice, so the guarantees here count it.
@@ -81,5 +83,15 @@ theorem EncardIngressObsDecodableLePerWindow : NetTiming.Guarantees.EncardIngres
 theorem EncardIngressObsDecodableLeContentsPerWindow :
     NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow :=
   @NetTiming.encard_ingress_obsDecodable_le_contents_perWindow
+
+theorem EncardAccSeqsWithinLeConstantRate : NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRate :=
+  fun bits hbits b T ss frames op n D m _ hm =>
+    NetTiming.encard_accSeqsWithin_le_constantRate bits hbits b T ss frames op n D m hm
+theorem EncardDecodableWithinLeCompiled : NetTiming.Guarantees.EncardDecodableWithinLeCompiled :=
+  fun I T ss bits hbits b compilerOf env hpre hdet n D m _ hm =>
+    NetTiming.encard_decodableWithin_le_compiled I T ss bits hbits b compilerOf env hpre hdet n D m hm
+theorem EncardDecodableWithinLeCompiledPerWindow : NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindow :=
+  fun I T ss bits hbits b compilerOf env hpre hdet D =>
+    NetTiming.encard_decodableWithin_le_compiled_perWindow I T ss bits hbits b compilerOf env hpre hdet D
 
 end NetTiming.SecurityProofs

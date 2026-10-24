@@ -378,10 +378,11 @@ def test_a_retained_kinds_capture_copies_each_calls_a_words_and_tree_to_the_stag
     for name in ("_into", "_replay", "_slot"):
         monkeypatch.setattr(run, name, lambda *a: ("y", True))
     sh = SimpleNamespace(m16=32, k=8, n=16, xa=torch.zeros(48, 8), b={"tree_a": torch.zeros(100, dtype=torch.uint8)})
+    sh.buf = sh.b.__getitem__
     pipe = SimpleNamespace(size={"tree_a": 64})
     run.whole_capture_begin(run.whole_key(True))
     run._graph_call(7, sh, pipe, 0, 4, 32, 0, None)          # vLLM's warm-up, outside the capture
-    xa, tree = run._stages[7]
+    xa, tree = run._stages[7, 32]
     assert xa.shape == (32, 8) and tree.shape == (64,)
     sh.xa[:32], sh.b["tree_a"][:64] = 1.5, 7
     capturing[0] = True
@@ -409,6 +410,7 @@ def test_an_enabled_statement_is_in_the_key_stages_each_captured_call_and_commit
     name = run.schedule.name
     assert run.whole_key() == (True, frozenset(), name, False, False, "statement")
     sh = SimpleNamespace(m16=32, k=8, n=16, xa=torch.zeros(48, 8), b={"tree_a": torch.zeros(100, dtype=torch.uint8)})
+    sh.buf = sh.b.__getitem__
     run.whole_capture_begin(run.whole_key())
     run._graph_call(7, sh, "pipe", 0, 4, 32, 0, None)          # vLLM's warm-up, outside the capture
     capturing[0] = True
@@ -436,8 +438,8 @@ def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_m
     run = Calls(torch)
     run.weights = {7: SimpleNamespace(excluded=(3,)), 9: SimpleNamespace(excluded=())}
     run.cur = PPD._Pass(tmp_path)
-    run._stages = {9: (torch.full((32, 4), 2.0), torch.full((16,), 4, dtype=torch.uint8)),
-                   7: (torch.full((32, 8), 1.0), torch.full((64,), 3, dtype=torch.uint8))}
+    run._stages = {(9, 32): (torch.full((32, 4), 2.0), torch.full((16,), 4, dtype=torch.uint8)),
+                   (7, 32): (torch.full((32, 8), 1.0), torch.full((64,), 3, dtype=torch.uint8))}
     calls = (PG.WholeCall(9, 32, 4, 16, 32, 2), PG.WholeCall(7, 32, 8, 16, 32, 4))
     run.flag_buf[32 + 5, 0] = 1                               # weight 7's call: row 5 fails the screen
     run.whole_capture_begin(run.whole_key(True))              # replays follow a capture, which leaves its state behind
@@ -455,6 +457,55 @@ def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_m
     run.whole_replay(calls)
     run.whole_replayed(calls)                                 # an unretained pass keeps nothing
     assert run.cur.records == [] and run.cur.files == []
+
+
+def test_a_retained_kinds_capture_at_two_sizes_keeps_each_calls_stage_at_its_m16(monkeypatch, tmp_path):
+    """vLLM's ``capture_model`` captures a forward at each of its batch sizes, the largest first, each after a warm-up outside
+    the capture.  A call's A words and tree are sized by its m₁₆ (a shape's buffers and a pipeline per m₁₆), so the second
+    size's capture copies into a stage of its own (r20261024-023642-dc8a: one stage a weight, sized at 128 tokens, refused
+    the 32-token capture's copy), and each size's replay keeps the records and files its calls keep made alone."""
+    torch = pytest.importorskip("torch")
+    run, capturing = Calls(torch), [False]
+    run.weights = {7: SimpleNamespace(k=8, excluded=(1,)), 8: SimpleNamespace(k=4, excluded=())}
+    monkeypatch.setattr(PG, "_capturing", lambda: capturing[0])
+    for name in ("_into", "_replay", "_slot"):
+        monkeypatch.setattr(run, name, lambda *a: ("y", True))
+    sizes = ((64, 64), (16, 8))                               # (m₁₆, m): the larger size first, the smaller with filler rows
+    sh = {(w, m16): SimpleNamespace(m16=m16, k=wt.k, n=16, xa=torch.zeros(m16 + 16, wt.k),
+                                    b={"tree_a": torch.zeros(4 * m16, dtype=torch.uint8)})
+          for w, wt in run.weights.items() for m16, _ in sizes}
+    for s in sh.values():
+        s.buf = s.b.__getitem__
+    pipe = {m16: SimpleNamespace(size={"tree_a": 2 * m16}) for m16, _ in sizes}
+    calls = {}
+    run.whole_capture_begin(run.whole_key(True))
+    for m16, m in sizes:
+        for i, w in enumerate(run.weights):                   # vLLM's warm-up forward, outside the capture
+            run._graph_call(w, sh[w, m16], pipe[m16], 0, m16 // 4, m, i, None)
+        capturing[0] = True
+        for i, w in enumerate(run.weights):                   # each call's A words and tree as its steps leave them
+            s = sh[w, m16]
+            s.xa[:m16] = torch.arange(m16 * s.k, dtype=torch.float32).reshape(m16, s.k) + 1000 * w + m16
+            s.b["tree_a"][:] = (w + m16) % 251
+            run._graph_call(w, s, pipe[m16], 0, m16 // 4, m, i, None)
+        capturing[0] = False
+        calls[m16] = run.whole_capture_end()                  # vLLM stores the size's graph: the next one's calls begin
+        run.whole_capture_begin(run.whole_key(True))
+    run.whole_capture_end()
+    assert {k: tuple(t.shape for t in v) for k, v in run._stages.items()} == {
+        (7, 64): ((64, 8), (128,)), (8, 64): ((64, 4), (128,)), (7, 16): ((16, 8), (32,)), (8, 16): ((16, 4), (32,))}
+    run.flag_buf[3, 0] = 1                                    # the first call's row 3 fails the screen
+    for m16, m in sizes:
+        assert calls[m16] == tuple(PG.WholeCall(w, m, wt.k, 16, m16, m16 // 4) for w, wt in run.weights.items())
+        run.cur, alone = PPD._Pass(tmp_path / f"whole-{m16}"), PPD._Pass(tmp_path / f"alone-{m16}")
+        run.whole_replay(calls[m16])
+        run.whole_replayed(calls[m16])
+        for i, (mm, w) in enumerate(zip(run.cur.matmuls, run.weights, strict=True)):
+            run._retained(alone, mm, m, run.flag_buf[i * m:(i + 1) * m], *run._kept(sh[w, m16], pipe[m16]))
+        assert run.cur.records == alone.records and run.cur.records[0].excluded_a == (3,)
+        assert run.cur.files == alone.files and len(alone.files) == 2
+        for f in (p for x in alone.files for p in (x["rows"]["path"], x["tree"]["path"])):
+            assert (tmp_path / f"whole-{m16}" / f).read_bytes() == (tmp_path / f"alone-{m16}" / f).read_bytes()
 
 
 class Lane:
