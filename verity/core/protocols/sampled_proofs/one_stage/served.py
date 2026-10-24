@@ -25,7 +25,7 @@ is one of three, and no other:
   the log's record with that digest names the port, its root and its leaf count, and the tree is that port's;
 * an earlier record's registered value's domain, when the tree is that value (`reused`: `(record digest, value)`): the
   log's record with that digest registered the value with its root, domain, rows, words and word bits, and the tree is
-  that entry, registered under no domain of its own (H1's `a/<K>@<c>` as a Commit's AROW, say).
+  that entry, registered under no domain of its own (H1's `a/<K>@<s>` as a Commit's AROW, say).
 
 Each tree names its row format (`row_schema`, the `--registered` port's key for it, one of `SCHEMAS`): the
 frame-v3-sha512 leaf schema its leaves were hashed under, which must be the format of the circuit port that reads it
