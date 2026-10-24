@@ -597,7 +597,9 @@ def test_a_verifier_address_is_host_port_and_a_store_serves_one_session():
     reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
     b.encode(reg)
     b.begin_session()
-    b.serving(reg, 1)
+    with pytest.raises(ValueError, match="at least 2 windows"):
+        b.serving(reg, 1)
+    b.serving(reg, 2)
     with pytest.raises(RuntimeError, match="one session"):
         b.begin_session()
 
@@ -629,6 +631,34 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
     (e,) = raised
     assert e.why == f"refused: {refused.value}" and address in str(e) and e.why in str(e)
     assert registry.refused == {b"test-node": 1} and registry.drawn(b"test-node") == 1
+
+
+def test_a_serving_store_defers_residency_so_a_lifetime_of_one_window_is_refused():
+    """The store's appended blocks are resident once their encodes land, and its map re-keys a window ahead, so at
+    L = 1 every line would re-key every live block: its hello says `deferred`, and a verifier of lifetime 1 answers it
+    `bye` before drawing a registration."""
+    registry, s = audit.Registry(), store()
+    b = remote.StoreBackend(s, engine(s))
+    lsock = wire.listen("127.0.0.1", 0)
+    address = f"127.0.0.1:{lsock.getsockname()[1]}"
+    raised = []
+
+    def prover() -> None:
+        try:
+            remote.prove(b, address, node=b"test-node", codec=P512, log=lambda m: None)
+        except remote.Refused as e:
+            raised.append(e)
+
+    th = threading.Thread(target=prover, daemon=True)
+    th.start()
+    sock, _ = lsock.accept()
+    lsock.close()
+    with verifying(sock, PassClock(), windows=1, window_ns=5, samples=64, registry=registry, lifetime=1) as v:
+        with pytest.raises(ValueError, match="at least 2 windows"):
+            v.register()
+        th.join()
+    (e,) = raised
+    assert "at least 2 windows" in e.why and registry.drawn(b"test-node") == 0
 
 
 FAILING = '''
