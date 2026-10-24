@@ -11,7 +11,9 @@ lowers or proves (`n2_advised_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
+import gzip
 import importlib.util
+import json
 import sys
 from functools import cache
 from pathlib import Path
@@ -30,6 +32,7 @@ def _load():
     sys.path.insert(0, str(HERE))
     spec = importlib.util.spec_from_file_location("network_traces_n2_advised_zk", HERE / "n2_advised_zk.py")
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
     return mod
 
@@ -72,6 +75,45 @@ def test_honest_passes_and_each_negative_fails_on_the_advised_counts_alone():
     assert all(x.word == 0b11 for x in rounds["honest"].windows)
     assert not n2.expected("moved", [[]] * n2.WINDOWS)
     assert not n2.expected("extra", [["egress/signed", "advised"]] + [[]] * (n2.WINDOWS - 1))
+
+
+def test_a_head_the_prover_changed_fails_its_signed_digest_in_window_0_alone():
+    """The served link's ``tampered`` (`n2_zk.one_count` on the honest records, its certificate the original's), here
+    on the simulated link: window 0's egress head fails its signed digest, the advised counts maybe the count it
+    changed, and no other window fails; `expected` holds tampered to that and no other member to it. The tie the
+    summary names is the stand-in, since the link's ingress isn't IoTieRequest's pinned size class."""
+    sim, _ = _link(n2.T)
+    lw = sim.lw
+    link, pairs, _ = sim.members["honest"]
+    rd = n2.link_windows(lw, link, [n2.Z.one_count(lw, w, p) for w, p in enumerate(pairs)])
+    fails = [n2.failed(x) for x in rd.windows]
+    assert n2.expected("tampered", fails) and "egress/signed" in fails[0], fails
+    assert [x.expect for x in rd.windows] == [0] + [1] * (n2.WINDOWS - 1)
+    assert not n2.expected("tampered", [[]] * n2.WINDOWS)
+    assert not n2.expected("tampered", [["advised"]] + [[]] * (n2.WINDOWS - 1))
+    assert not n2.expected("tampered", [["egress/signed"]] * n2.WINDOWS)
+    assert not n2.expected("moved", fails) and not n2.expected("honest", fails)
+    assert sim.tie["source"] == "stand-in" and tuple(sim.tie["ingress"]) != n2.TIE_PINNED
+
+
+def test_a_served_runs_clock_source_is_its_certifiers_log_and_a_sync_it_didnt_run_has_no_view(tmp_path):
+    """`CertifierClocks`, the --e2e link's clock source, reads the syncs the run's certifier logged (``proxy.json.gz``)
+    for its link alone and refuses a run without that log. On the simulated link at T = 8, every window has its view
+    under the logged syncs, and none has one when one window's logged sync isn't the one it declares: each window's
+    floor reads every release's window's sync (`advised._floor_buckets`)."""
+    sim, _ = _link(AT.T)
+    lw, (link, pairs, _) = sim.lw, sim.members["honest"]
+    with gzip.open(tmp_path / "proxy.json.gz", "wt") as fh:
+        json.dump({"syncs": [[s.delta, str(s.rho)] for s in AT.SYNCS]}, fh)
+    clocks = n2.CertifierClocks.of(tmp_path, lw.link)
+    assert list(clocks.syncs(lw.link)) == list(AT.SYNCS) and clocks.syncs("another") == ()
+    assert clocks.label(AT.SYNCS)["as_declared"] and not clocks.label(AT.SYNCS[::-1])["as_declared"]
+    with pytest.raises(SystemExit, match="no clock source"):
+        n2.CertifierClocks.of(tmp_path / "none", lw.link)
+    egress, ingress = ([list(p[d].head.counts) for p in pairs] for d in (0, 1))
+    assert None not in n2.advised_refs(n2.replace(lw, clocks=clocks), link, egress, ingress)
+    off = n2.CertifierClocks(lw.link, (n2.replace(AT.SYNCS[0], delta=AT.SYNCS[0].delta + 1), *AT.SYNCS[1:]))
+    assert n2.advised_refs(n2.replace(lw, clocks=off), link, egress, ingress) == [None] * len(pairs)
 
 
 def test_joined_advice_numbers_each_windows_requests_after_the_windows_before_and_releases_by_id():
