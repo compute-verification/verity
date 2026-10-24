@@ -53,7 +53,6 @@ KNOWN = {
     ("tools/research/src/research/pods/nebius/keeper.py", "--by"): 1,
     ("tools/research/src/research/pods/nebius/lean_sandbox.py", "--by"): 1,
     ("tools/research/src/research/pods/nebius/lockout/lockout.py", "--node"): 1,
-    ("tools/research/src/research/pods/nebius/n1_alerts.py", "--node"): 1,
     ("tools/research/src/research/pods/nebius/resource_probe.py", "--node"): 1,
     ("tools/research/src/research/pods/nebius/write_probe.py", "--handle"): 1,
     ("tools/research/src/research/pods/nebius/write_probe.py", "--node"): 1,
