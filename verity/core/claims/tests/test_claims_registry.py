@@ -160,9 +160,9 @@ def test_the_registrant_premise_is_a_model_of_the_provers_covered() -> None:
 def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
     e = get("trusted-host")
     assert (e.kind, e.standing) == ("assumption", "standard")
-    assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware "
-                      "on a machine its host provider runs and the prover doesn't control; it runs its stated code on its "
-                      "Nebius host, and its host never restores an earlier copy of the state the device keeps there")
+    assert e.name == ("The auditor's device runs its stated code, timing included, on a host the prover doesn't control, "
+                      "with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier "
+                      "state")
 
 
 def test_the_latency_ceiling_is_a_measured_device_claim() -> None:

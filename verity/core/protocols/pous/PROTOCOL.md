@@ -523,7 +523,7 @@ an efficient prover. The physical premises are the game's shape, and the deploym
 - C5, *no side channel*: no label leaves except through that egress, and nothing reaches the server during the
   challenges but the indices and what the outside sends.
 
-**Measured** (`r20261019-061002-ee6b`, vy-nebius-2, one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
+**Measured** (`r20261019-061002-ee6b`, one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
 `benchmarks/pous/streamed_wipe/run.sh`; every gate passed, 76 vectors against `streamed_wipe.label`):
 
 | | |
@@ -945,10 +945,9 @@ Two gaps stood between these statements and the deployed verifier:
   so a session that never runs has used its id too. A used id is refused, a log that is missing or unreadable refuses
   every session, and nothing rewrites, truncates or remakes a log. A file cannot see its host restore an earlier copy of
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
-  `trusted-host` (`verity.core.claims`) as network-accounting widens it, in Daniel's words: "An auditor-trusted
-  device (a network certifier, the memory challenger) runs its stated code on its Nebius host, and its host never
-  restores an earlier copy of the state the device keeps there"
-  (pending network-accounting's widening, Daniel decision 2). This log is part of that state, as is the LMS leaf state.
+  `trusted-host` (`verity.core.claims`; Daniel decision 2): "the auditor's device runs its stated code, timing
+  included, on a host the prover doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
+  host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
   audit has at most one session it can accept. The Lean states the check's side (`RunCheckAccepts`: an accepted session
