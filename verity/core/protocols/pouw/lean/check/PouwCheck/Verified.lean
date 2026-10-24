@@ -60,11 +60,14 @@ def call? (s : Json) : Option Nat :=
     if ks == STATEMENT_KEYS && !xs.isEmpty && xs.all (str? · |>.isSome) then some c else none
   | _, _, _, _, _ => none
 
+/-- A list's items, none for anything else. -/
+def arrOf : Json → List Json
+  | .arr a => a.toList
+  | _ => []
+
 /-- `{value: [root, ...]}` over the window's entries, each in order (`credit._verified`'s `roots`). -/
 def rootsOf (entries : Json) : Json := Id.run do
-  let es := match entries with
-    | .arr a => a.toList
-    | _ => []
+  let es := arrOf entries
   let mut acc : Array (String × Array Json) := #[]
   for e in es do
     if let .str v := get e "value" then
@@ -101,18 +104,11 @@ def asks (statements files : Json) (descriptor : ByteArray) (layout entries : Js
   let program := Flock.hexOf (Flock.Sha512.hash descriptor)
   let shape := shapeOf descriptor
   let roots := rootsOf entries
-  let lins : List (String × Nat) := (match get layout "linears" with
-    | .arr a => a.toList
-    | _ => []).filterMap fun x => (match x with
-      | .arr b => (match b.toList with
-        | [.str s, k, _] => (s, ·) <$> nat? k
-        | _ => none)
-      | _ => none)
-  let callLin : List String := (match get layout "calls" with
-    | .arr a => a.toList
-    | _ => []).map fun x => (match x with
-      | .arr b => (str? (b.getD 0 .null)).getD ""
-      | _ => "")
+  let lins : List (String × Nat) := (arrOf (get layout "linears")).filterMap fun x =>
+    match arrOf x with
+    | [.str s, k, _] => (s, ·) <$> nat? k
+    | _ => none
+  let callLin : List String := (arrOf (get layout "calls")).map fun x => ((arrOf x).head?.bind str?).getD ""
   let mut seen : List Nat := []
   let mut out : Array Ask := #[]
   let mut i := 0
@@ -134,7 +130,7 @@ def asks (statements files : Json) (descriptor : ByteArray) (layout entries : Js
 
 /-- A run's input as the caller reads it: `{statement, circuit_sha512, registered, partition}`. -/
 def Ask.toJson (a : Ask) (partition : Json) : Json :=
-  Json.mkObj [("statement", toJson a.statement), ("circuit_sha512", Json.str a.circuit),
+  Json.mkObj [("statement", Lean.toJson a.statement), ("circuit_sha512", Json.str a.circuit),
     ("registered", a.registered), ("partition", partition)]
 
 /-- One session's finding from the verifier's run (`proofs.Finding`). -/
