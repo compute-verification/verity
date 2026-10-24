@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 
 def utilization(step_rows: Sequence[int], rows: int, steps: int) -> Fraction:
@@ -63,8 +63,24 @@ class Static:
                 for s, (m, d) in enumerate(zip(got, want)) if m != d]
 
 
+def bind_all(calls: Sequence[Any], bound: Mapping[int, Mapping[str, Any]]) -> list[tuple[bytes, bytes] | None]:
+    """Each call's (root(A), root(B)) from what its listeners bound (``root_a``, ``root_b``, hex), None where either is missing."""
+    out: list[tuple[bytes, bytes] | None] = []
+    for c in calls:
+        b = bound.get(c.index, {})
+        out.append((bytes.fromhex(b["root_a"]), bytes.fromhex(b["root_b"])) if "root_a" in b and "root_b" in b else None)
+    return out
+
+
+def graph_pad(m: int, batch: int, sizes: Sequence[int]) -> int:
+    """The rows a CUDA graph pads a step of ``batch`` scheduled rows with, when the call ran ``m``: m - batch when m is the
+    smallest capture size (``sizes``) at least the batch, vLLM's padding, else 0, so any other mismatch stays a gap."""
+    fit = [z for z in sorted(sizes) if z >= batch]
+    return m - batch if batch < m and fit and fit[0] == m else 0
+
+
 #: PERIOD-PATH's ask 1: 64 one-token prompts at cap 16, every row of SERVE-H1's 16 served steps filled (u = 16/18)
 FILL = Static((1,) * 64, 16, 64, 18)
 
 
-__all__ = ["FILL", "Static", "utilization"]
+__all__ = ["FILL", "Static", "bind_all", "graph_pad", "utilization"]

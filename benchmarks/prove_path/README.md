@@ -3,12 +3,13 @@
 Network accounting under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
 the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof service draws
 units on live coins, proves them with C-Flock `--zk` behind the Lean firewall, and the Lean verifier accepts or refuses them.
-`prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`) or a single-GPU one (`--bundle`, TP1): the prover
-commits the advice under hiding rows and each rank's window over the compiler's Programs for it, and the verifier audits each
+`prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
+Commit window of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
+served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
 rank through the one-stage audit's per-rank `service.Stream` on its own coins or a challenger's (`--challenger local`,
-`benchmarks/one_stage/a5.py`). `run.sh` builds
-the prover and the Lean verifier and runs it on the CPU TP stand-in, on a deferred TP Commit (`PP_TP`) or on a single-GPU
-Commit's row dir from the store (`PP_LLAMA`), with one forged run that must be refused. The docstrings say how.
+`benchmarks/one_stage/a5.py`). `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
+deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir from the store (`PP_LLAMA`) or on a served window
+(`PP_SERVE_RUN`), with one forged run that must be refused. The docstrings say how.
 
 ## What changes when Programs come from advice
 
@@ -162,9 +163,25 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
   - on a single-GPU Commit, `Capped` over `I2Compiler`: I2's `predict.steps.compile_steps` (v0) on the advice, under φ from the
     row's declared inputs (`score.phi_of`: the row id, the served workload file, refused unless its digest is the record's, and
     the checkpoint's `config.json`), with each request's prompt and sampling from the record. Its digest names I2's code
-    (`score.code_version`), φ, the seed and ℓ. A Program's body is read from the Build dir whose `result.json` names I2's
-    digest, refused where none does. On Llama-3.2-1B's TP1 Commit r20261024-055630-5377, I2's four Programs equal the Build's
-    `build_request_LP*` digests (`commit.json`'s and the audit summary's `i2`).
+    (`code_identity`: `verity` and `verity_vllm` as git lists them, docs and ignored build outputs aside), φ, the seed and ℓ.
+    A Program's body is read from the Build dir whose `result.json` names I2's digest, refused where none does. On
+    Llama-3.2-1B's TP1 Commit r20261024-055630-5377, I2's four Programs equal the Build's `build_request_LP*` digests
+    (`commit.json`'s and the audit summary's `i2`).
+  - on a served window, the same over φ of the served engine as vllm's advice compiler (#3619) compiles under (`phi_of_serve`:
+    `serve.json`'s model, revision, target profile and execution label, the checkpoint's `config.json`), the server's default
+    seed, and each request's body as that compiler gives it (`serve_ingress`: the sampling fields its ingress record says it
+    brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named as `verity-vllm advice` registers it
+    (`served_identity`: `compile_steps` by module path, its digest over `source_identity.code_identity`, which covers
+    `integrations/vllm` and `verity`), so the audit runs on a tree whose two are the server's. `prove_path.py compiler
+    --serve-run DIR` prints the binding's compiler. I2's Programs are held to the ones vllm's advice compiler wrote into the
+    row dir (`manifest.json`, by I1 id).
+- **A served window** binds the root serve-openai published: the advice is committed once, by the server, and the prover
+  commits the window under the published binding. Before any commit and before the draw (folded into the source check a5
+  gates the draw on), `serve_check` holds the published records to the verifier's own and refuses by name: another window
+  (`window`), a compiler whose digest carries no cap (`cap`) or isn't the verifier's (`compiler`), another advice root
+  (`advice`), a published root that isn't 64 bytes of a `rows-sha512` store (`sha512`) or isn't the row dir's run root
+  (`run_root`), and a registration naming another Commit (`commit`). Its negatives run beside the audit's. `serve-standin`
+  lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its windows.
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
   Programs come from `--row-dir`, and the Build manifest falls back to `<row dir>/manifest.json`, checked against the record's

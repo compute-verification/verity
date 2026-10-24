@@ -561,6 +561,17 @@ def test_int64_token_buffers_are_admitted(memory):
     assert list(r.body.nodes[emb1].args[0].refs) == [("n", ts0, 0)]
 
 
+def test_a_served_id_with_a_nonzero_high_word_is_refused(memory):
+    """vLLM serves int64 ids and the circuit's id is a 32-bit word, which each served id must be zero-extended
+    (`sampling_event.circuit_token_id`): the Match's fold refuses the sample, not only the hook."""
+    import dataclasses
+
+    bad = SAMPLED[0] + (1 << 32)
+    evs = [dataclasses.replace(e, sampled_token_ids=[bad]) if isinstance(e, SampleEnd) and e.step == 0 else e for e in toy_log(ids_dtype=I64D)]
+    with pytest.raises(FoldError, match=f"step 0: sampled row 0 of .*: token id {bad} has a nonzero high word"):
+        fold(evs, toy_profile(), strict=True, with_program=False)
+
+
 def test_unresolved_read_before_write(memory):
     # without the layer-0 norm launch the qkv GEMM reads a buffer nobody wrote
     with pytest.raises(Unresolved):

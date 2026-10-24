@@ -27,7 +27,15 @@ stood on; `stubs` lists what is still a stand-in.
   committed is held to ``--advice``'s: the stand-in's codec committed the file's bytes (its SHA-512), v0's commitment is
   hiding, so there only its ``total_bits``. That holds it to the file, not to these runs: the prove path is bound to them
   only when the file is their advice and the Commit it proves is theirs, and only a bound prove path counts in the OK.
-* **The negatives** (`negatives`): NEG's `suite` on the runs, handed the advice's v0 bytes for its advice negatives.
+* **The negatives** (`negatives`): NEG's `suite` on the runs, handed the advice's v0 bytes for its advice negatives and,
+  given each request's sampled ids (``--ids``), the I/O tie's verdict on every negative it reads (IO-TIE's reference on
+  a fake upstream's cells and Commit port of the advice and those ids, under the map the verifier computes from the
+  advice).
+* **The I/O tie on the runs** (`tie`, on the advice profile, where NEG's registry doesn't run): NEG's `tie_run` on each
+  run, IO-TIE's reference in the clear on its stand-ins (each window's certified frames held to their head, the sampled
+  ids as the Commit's port), with each run's ids from the endpoint's records (`served_ids`, the requests that arrived in
+  its link-windows) or ``--ids``. Honest owes acceptance, and token, whose certified ids aren't the endpoint's, a
+  refusal by content at exactly the link-windows its changed ids fall in (`changed_windows`).
 """
 from __future__ import annotations
 
@@ -36,6 +44,7 @@ import importlib.util
 import json
 import math
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -374,8 +383,9 @@ def prove_path(src: Path, info: dict | None, advice_bound: bool | None = None) -
 
 # --- the negatives ----------------------------------------------------------------------------------------------------
 
-def negatives(runs: dict[str, Path], work: Path, adv, clock) -> dict:
-    """NEG's `suite` on ``runs`` (by strategy), its advice negatives made from ``adv``'s v0 bytes. ``ok`` unless a row
+def negatives(runs: dict[str, Path], work: Path, adv, clock, ids: Path | None = None) -> dict:
+    """NEG's `suite` on ``runs`` (by strategy), its advice negatives made from ``adv``'s v0 bytes, and with ``ids`` (each
+    request's sampled ids, `negatives.read_ids`) the I/O tie's verdict on the negatives it reads. ``ok`` unless a row
     that ran says otherwise: a pending check's row (``ok`` None) or one that didn't run is the report's to list, not a
     failure."""
     path = None
@@ -383,9 +393,98 @@ def negatives(runs: dict[str, Path], work: Path, adv, clock) -> dict:
         work.mkdir(parents=True, exist_ok=True)
         path = work / "advice.bin"
         path.write_bytes(I1.encode(adv))
-    rows = NG.suite(runs, work / "negatives", advice=path, clock=clock)
+    rows = NG.suite(runs, work / "negatives", advice=path, ids=ids, clock=clock)
     return {"ran": True, "format": NG.FORMAT, "rows": rows,
             "ok": all(r.get("ok") is not False for r in rows.values() if r.get("ran"))}
+
+
+# --- the I/O tie on the runs ------------------------------------------------------------------------------------------
+
+#: the live tampers only the I/O tie refuses, each owed a refusal by content at exactly the link-windows it changed
+TIE_OWED = ("token",)
+
+
+def _read_json(path: Path):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def served_ids(ep: Path, deployment: dict) -> dict[str, list[int]]:
+    """Each request's sampled ids by its ``user``, of the requests that reached the endpoint in a run's link-windows
+    (``deployment``'s origin and span, `SLACK_S`): its scheduler trace's ``arrive`` records by engine id, and
+    ``requests.jsonl``'s ``streamed_ids`` by the same. Every strategy of a rehearsal sends the same users, so a run's
+    ids are the ones that arrived in its own span; a user arriving twice in it is refused."""
+    origin, span = deployment["origin_unix"], deployment["windows"] * deployment["window_s"]
+    arrived = {r["request"] for r in _jsonl(ep / "advice_trace.jsonl")
+               if r["kind"] == "arrive" and origin - SLACK_S <= r["t"] < origin + span}
+    out: dict[str, list[int]] = {}
+    for r in _jsonl(ep / "requests.jsonl"):
+        if r["engine_id"] in arrived and r.get("user"):
+            if r["user"] in out:
+                raise ValueError(f"{r['user']} reached the endpoint twice in the run's link-windows")
+            out[r["user"]] = list(r["streamed_ids"])
+    return out
+
+
+def changed_windows(run: Path) -> list[int] | None:
+    """The link-windows a token run's changed ids fall in: each output its shim logged as changed (``server.json``'s
+    ``tampered``, (session, index)), placed as `negatives.tie_run` places the certified egress's id events, each its
+    stream's next output and the stream's user the certified I/O's. None when the shim logged none."""
+    changed = (_read_json(run / "server.json") or {}).get("tampered")
+    if not changed:
+        return None
+    plan, report = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json"))
+    setup = ar.Setup(report)
+    e, i = setup.egress_params, setup.ingress_params
+    ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
+    outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    users = {r["stream"]: r["user"] for r in NG.cs.certified_io(plan, setup, ins, outs)["records"]}
+    at, nxt = {}, defaultdict(int)
+    for rec in sorted(outs, key=lambda r: r.window):
+        for s in (s for row in rec.grid for s in row if s is not None and NG._is_id_event(s)):
+            q = NG.id_event_data(NG.decode_frame(s)[2])[0]
+            at[users.get(q), nxt[q]] = rec.window
+            nxt[q] += 1
+    return sorted({at[u, k] for u, k in changed if (u, k) in at})
+
+
+def tie(runs: dict[str, Path], ep: Path | None, ids: Path | None, why: str | None = None) -> dict:
+    """The I/O tie's verdict on each run (NEG's `tie_run`: IO-TIE's reference in the clear, on
+    `negatives.TIE_STAND_INS`), each run's sampled ids ``ids``' (`negatives.read_ids`, one map for every run) or else
+    the endpoint's records' ``ep`` for its own link-windows (`served_ids`), and whether it is the verdict the run owes
+    (`negatives.tie_ok`): honest's accepted, a negative's it reads refused by its part, and token's (`TIE_OWED`) at
+    exactly the link-windows its changed ids fall in (`changed_windows`). Not run without IO-TIE in the tree, without the
+    ids (``why``: why the endpoint's records aren't here), or when the honest run has no verdict."""
+    if NG.io_tie_module() is None:
+        return {"ran": False, "why": NG.TIE_MISSING["io-tie"]}
+    if ids is None and ep is None:
+        return {"ran": False, "why": f"no sampled ids ({why or 'neither --endpoint-run nor --ids given'})"}
+    given, rows = None if ids is None else NG.read_ids(ids), {}
+    for name, d in runs.items():
+        row = {"verdict": NG.NOT_APPLICABLE, "ok": None, "codes": [], "failing": {}, "windows": [], "unplaced": None,
+               "changed": None, "requests": None, "outputs": None, "placed": None, "held": None, "missing": {},
+               "why": None}
+        try:
+            got = given if given is not None else served_ids(ep, json.loads((d / "deployment.json").read_text()))
+            t = NG.tie_run(d, got)
+            changed = changed_windows(d) if name in TIE_OWED else None
+        except (OSError, KeyError, ValueError) as err:
+            rows[name] = row | {"why": repr(err)}
+            continue
+        ok = NG.tie_ok(name, t)
+        if name in TIE_OWED and ok:
+            ok = changed is not None and sorted(t["failing"]) == changed
+        rows[name] = row | {k: t.get(k) for k in ("verdict", "codes", "failing", "unplaced", "held", "missing",
+                                                  "outputs", "placed")} | {
+            "ok": ok, "windows": sorted(w for w in t["failing"] if w >= 0), "changed": changed, "requests": len(got),
+            "why": "; ".join(t["missing"].values()) or None}
+    honest = rows.get("honest") or {}
+    ran = honest.get("verdict") in ("accepted", "refused")
+    return {"ran": ran, "why": None if ran else f"no verdict on the honest run: {honest.get('why') or 'no honest run'}",
+            "from": "the endpoint's records (each run's requests by their arrival in its link-windows)" if given is None
+            else str(ids), "stand_ins": NG.TIE_STAND_INS, "runs": rows}
 
 
 # --- what's still a stand-in ------------------------------------------------------------------------------------------
@@ -441,6 +540,23 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
         pending = sorted(k for k, x in n["rows"].items() if not x.get("ran") or x.get("ok") is None)
         if pending:
             out.append(f"Negatives pending or not run here: {', '.join(pending)} (each row says what it waits on).")
+        ties = [x["tie"] for x in n["rows"].values() if "tie" in x]
+        if not ties:
+            out.append("I/O tie: no sampled ids given (--ids), so no negative has the tie's verdict.")
+        elif not all(t["ran"] for t in ties):
+            out.append(f"I/O tie: {next(t['why'] for t in ties if not t['ran'])}.")
+        else:
+            out.append("I/O tie: IO-TIE's reference in the clear on a fake upstream's cells and Commit port of the advice "
+                       "and the given ids, not the warden's cells under its root (WARDEN) and vllm's Commit proved in an "
+                       "IoTieWindow unit.")
+    t = c.get("tie")
+    if t is not None and not t["ran"]:
+        out.append(f"I/O tie: not run ({t['why']}), so token waits on it.")
+    elif t is not None:
+        out.append(f"I/O tie: IO-TIE's reference in the clear on NEG's stand-ins (each window's certified frames held to "
+                   f"their head and committed under fake salts in place of the warden's cells, the sampled ids from "
+                   f"{t['from']} under fake salts in place of the Commit's port), not vllm's Commit and the warden's "
+                   "cells in an IoTieWindow unit.")
     where = str(r.get("where") or "")
     if where.startswith("off the prover's node"):
         out.append("Auditor host: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
@@ -529,11 +645,41 @@ def markdown(c: dict) -> list[str]:
         else:
             lines += ["Each tampering, the check that must refuse it and its code; ok: refused by that code (a pending "
                       "check's row, ok —, says what it waits on).", "",
-                      "| negative | family | tampers | code | ran | N2 accepted | refused windows | codes | ok | waits on, "
-                      "or why not run |", "|---|---|---|---|---|---|---|---|---|---|"]
+                      "| negative | family | tampers | code | ran | N2 accepted | refused windows | codes | I/O tie | ok | "
+                      "waits on, or why not run |", "|---|---|---|---|---|---|---|---|---|---|---|"]
             for name, x in n["rows"].items():
                 lines.append(f"| {name} | {x['family']} | {x['tampers']} | `{x['code']}` | {x.get('ran')} | "
                              f"{_cell(x.get('n2_accepted'))} | {_cell(x.get('refused_windows'))} | "
-                             f"{_cell(', '.join(x['codes']) if x.get('codes') else None)} | {_cell(x.get('ok'))} | "
-                             f"{_cell(x.get('why') or ', '.join(x['waits']) or None)} |")
+                             f"{_cell(', '.join(x['codes']) if x.get('codes') else None)} | {_tie(x.get('tie'))} | "
+                             f"{_cell(x.get('ok'))} | {_cell(x.get('why') or ', '.join(x['waits']) or None)} |")
+    t = c.get("tie")
+    if t is not None:
+        lines += ["", "## I/O tie", ""]
+        if not t["ran"]:
+            lines.append(f"Not run: {t['why']}.")
+        else:
+            lines += [f"NEG's `tie_run` on each run: IO-TIE's reference in the clear, the sampled ids from {t['from']}. "
+                      "Owed: honest accepted, token refused by content at exactly the link-windows its changed ids fall "
+                      "in, drop refused by content; late and extra owe nothing here. Window -1: committed outputs no "
+                      "certified cell carries.", "",
+                      "| run | verdict | ok | codes | refused link-windows (parts) | changed ids' link-windows | requests "
+                      "| outputs | placed | unplaced | frames held egress/ingress | why |",
+                      "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+            for name, x in t["runs"].items():
+                failing = "; ".join(f"{w}: {'+'.join(p)}" for w, p in sorted(x["failing"].items(), key=lambda i: int(i[0])))
+                held = x["held"] or {}
+                lines.append(f"| {name} | {x['verdict']} | {_cell(x['ok'])} | "
+                             f"{_cell(', '.join(f'`{c}`' for c in x['codes']) or None)} | {_cell(failing or None)} | "
+                             f"{_cell(x['changed'])} | {_cell(x['requests'])} | {_cell(x['outputs'])} | "
+                             f"{_cell(x['placed'])} | {_cell(x['unplaced'])} | "
+                             f"{_cell(held.get('egress'))}/{_cell(held.get('ingress'))} | {_cell(x['why'])} |")
     return lines
+
+
+def _tie(t: dict | None) -> str:
+    """A negative's I/O tie cell: the parts that refused it, ``accepts``, or why it didn't run."""
+    if t is None:
+        return "—"
+    if not t["ran"]:
+        return f"not run: {t['why']}"
+    return ", ".join(f"`{c}`" for c in t["codes"]) or "accepts"
