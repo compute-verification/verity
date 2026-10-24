@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import struct
 import sys
 from pathlib import Path
 
@@ -307,6 +308,27 @@ def test_the_vllm_call_runs_on_the_schedules_lanes_from_rotating_sets(schedule):
     assert len({ptr(j, x) for j in (0, 1) for x in PG.ROTATED}) == 2 * len(PG.ROTATED)
     assert [set(PPD._bytes(run.roots_buf[nb * i:nb * (i + 1)])) for i in range(3 * len(us))] == [
         {0x11 * (j + 1)} for j in (0, 1, 0) for _ in us]
+
+
+@pytest.mark.parametrize("schedule", ["serial", "deferred-a"])
+def test_each_calls_table_is_its_layouts_with_its_keys_leaves_and_pass_offsets(schedule):
+    """A call's table, uploaded into its ring set's, is `grouped.Grouped.meta` of its units, its keys and its first tile
+    leaf's address, then its byte offsets in the pass for its scatter: its A roots at its first matmul's, its flags at its
+    first row's.  Its layout (the template the table is filled from, and the steps) is made once a ring set."""
+    ws, counts, n, k = (1, 3, 0), [3, 300, 20], 128, 1024
+    run, _ = device_run(4, n, k, schedule=schedule)
+    us, split = G.units(counts, n, R.PD_MAX_ROWS), schedule == "deferred-a"
+    for call in range(3):
+        index, tiles, flag_rows = len(run.cur.matmuls), run.cur.tiles, run.cur.flag_rows
+        PG.gemm_grouped(run, ws, torch.randn(sum(counts), k).to(torch.bfloat16), counts)
+        g = run._groups[ws]
+        j = call % len(g.sets)
+        keys = b"".join(run.keys(run.roots[ws[u.pos]], index + i, u.m16) for i, u in enumerate(us))
+        g.grouped.b.update({x: t.data_ptr() for x, t in g.sets[j].items()})
+        want = (g.grouped.meta(us, keys, run.leaves.data_ptr() + run.nb * tiles, split)
+                + struct.pack("<3q", run.nb * index, 2 * flag_rows, 0))
+        assert PPD._bytes(g.sets[j]["meta"])[:len(want)] == want, call
+    assert len(g.calls) == len(g.sets) == (2 if split else 1)
 
 
 def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_path):

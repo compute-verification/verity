@@ -8,7 +8,9 @@ A shape is one install (`glm53_timing.device_run`) of `EXPERTS` experts, ``pearl
 retained passes from outputs poisoned 0xA5, in SCRATCH/NxK: ``dense-P``, each unit's rows (`grouped.units`: an expert's rows in
 blocks of at most 256) through `PearlCDeviceRun.gemm` in unit order under the serial schedule (the first pattern's before the
 experts are grouped), then one `pouw_pearl_c_grouped.gemm_grouped` call under each schedule of ``--schedule`` (default serial,
-deferred and deferred-a): ``grouped-P`` under serial, ``grouped-S-P`` under S.  Each grouped pass must agree with the dense one
+deferred and deferred-a): ``grouped-P`` under serial, ``grouped-S-P`` under S, run eagerly; and with ``--graphs`` (the default)
+each again with the run's graphs, ``grouped[-S]-graph-P``, after `WARM_GRAPHS` calls in a pass of its own, so the retained call
+replays its layout's lane graphs (it must have).  Each grouped pass must agree with the dense one
 byte for byte: y, and the manifests less their run name (the transcript and records roots, every A root, record and file
 digest), with every call's A rows file read and compared.  Then the arms are timed interleaved, rep by rep (the order rotated),
 the pearl arms in fresh unretained passes under their schedule, each sample closed only after the side lanes
@@ -37,6 +39,9 @@ SHAPES = ((4096, 6144), (6144, 2048))
 #: expert of 2,048).  No expert is idle: a pass calls every weight its epoch commits (`audit.Epoch`), and verify reads these
 COUNTS = {"decode": (3, 1, 17, 1, 40, 8, 2, 5), "prefill": (300, 256, 1000, 64, 17, 512, 2048, 128)}
 SCHEDULES = ("serial", "deferred", "deferred-a")
+#: calls a graphed arm makes before its retained pass: a layout's graphs are captured at its second call on a ring set, and
+#: the ring has at most two
+WARM_GRAPHS = 4
 
 
 def _same(a: Path, b: Path) -> list[str]:
@@ -164,18 +169,22 @@ def check_shape(a, n: int, k: int) -> dict:
     import glm53_timing as T
     from verity_vllm.protocol_options import pouw_pearl_c_grouped as PG
 
-    run, weights, kernel, gen = T.device_run([(n, k)] * EXPERTS, a.scheme, a.cubin)
+    run, weights, kernel, gen = T.device_run([(n, k)] * EXPERTS, a.scheme, a.cubin, graphs=a.graphs)
     R, G = run.kernel.run, PG.module(run)
     d = Path(a.passes) / f"{n}x{k}"
     d.mkdir(parents=True, exist_ok=True)
     (d / "coins.json").write_text(json.dumps(run.coins.to_json()) + "\n")
     ws = tuple(sorted(weights))
     out = {"n": n, "k": k, "experts": EXPERTS, "cubin_sha256": kernel.cubin_sha256, "schedules": list(a.schedule),
-           "has_pd_tree_g": bool(G.has_tree(kernel.dev))}
+           "has_pd_tree_g": bool(G.has_tree(kernel.dev)), "graphs": a.graphs}
     passes, dense_stock = {}, [T.stock_arms(weights[w]) for w in ws]
 
     def join():
         run.join_sides(torch.cuda.current_stream())
+
+    def begin(sc: str, graphed: bool, **kw):
+        run.end_pass(schedule=sc, **kw)
+        run.graphs = graphed
     for pat, counts in COUNTS.items():
         x = torch.randn(sum(counts), k, device="cuda", generator=gen).to(torch.bfloat16)
         us = G.units(counts, n, R.PD_MAX_ROWS)
@@ -186,19 +195,28 @@ def check_shape(a, n: int, k: int) -> dict:
         def grouped():
             return PG.gemm_grouped(run, ws, x, counts)
 
-        pearls = {"dense": ("serial", dense),
-                  **{("grouped" if sc == "serial" else f"grouped-{sc}"): (sc, grouped) for sc in a.schedule}}
-        ys, ends = {}, {}
-        for name, (sc, f) in pearls.items():
-            run.end_pass(retain=str(d / f"{name}-{pat}"), run=f"grouped-check {n}x{k} {pat}", schedule=sc)
+        pearls = {"dense": ("serial", False, dense),
+                  **{("grouped" if sc == "serial" else f"grouped-{sc}") + ("-graph" if gr else ""): (sc, gr, grouped)
+                     for gr in ((False, True) if a.graphs else (False,)) for sc in a.schedule}}
+        ys, ends, replayed = {}, {}, {}
+        for name, (sc, gr, f) in pearls.items():
+            if gr:                                       # its layout's graphs made on every ring set, so the pass replays them
+                begin(sc, gr)
+                for _ in range(WARM_GRAPHS):
+                    f()
+                done = PG.group(run, ws).replays
+            begin(sc, gr, retain=str(d / f"{name}-{pat}"), run=f"grouped-check {n}x{k} {pat}")
             ys[name] = f()
+            if gr:
+                replayed[name] = PG.group(run, ws).replays > done
             ends[name] = {kk: v for kk, v in run.end_pass(schedule="serial").items() if kk != "manifest"}
             passes[f"{name}-{pat}"] = ends[name]
+        run.graphs = False
         grouped_arms = [nm for nm in pearls if nm != "dense"]
         differ = {nm: _same(d / f"dense-{pat}", d / f"{nm}-{pat}") for nm in grouped_arms}
         same_y = {nm: torch.equal(ys["dense"], ys[nm]) for nm in grouped_arms}
         stock, errors = stock_arms([weights[w] for w in ws], dense_stock, counts, x)
-        arms = {**{nm: (f, (lambda sc=sc: run.end_pass(schedule=sc)), run.end_pass, join) for nm, (sc, f) in pearls.items()},
+        arms = {**{nm: (f, (lambda sc=sc, gr=gr: begin(sc, gr)), run.end_pass, join) for nm, (sc, gr, f) in pearls.items()},
                 **{nm: (f, None, None, None) for nm, f in stock.items()}}
         for f, before, after, j in arms.values():          # warm-up: buffers, autotuning
             T.timed(f, before, after, join=j)
@@ -213,20 +231,24 @@ def check_shape(a, n: int, k: int) -> dict:
         best = min(eager, key=med.get) if eager else None
         gbest = min((nm for nm in stock if nm.endswith("-graph")), key=med.get, default=None)
         out[pat] = {"counts": list(counts), "units": len(us), "tiles": sum(u.tiles for u in us), "y_equal": same_y,
-                    "manifests_differ": differ, "transcript_roots": {nm: ends[nm]["transcript_root"] for nm in pearls},
+                    "manifests_differ": differ, "replayed": replayed,
+                    "transcript_roots": {nm: ends[nm]["transcript_root"] for nm in pearls},
                     "ms": med, "runs": samples, "stock_errors": errors, "fastest_stock": best,
                     "fastest_stock_graphed": gbest, "speedup": {nm: med["dense"] / med[nm] for nm in grouped_arms},
                     "slowdowns": {nm: med[nm] / med[best] for nm in pearls} if best else None,
                     "slowdowns_graphed": {nm: med[nm] / med[gbest] for nm in pearls} if gbest else None}
         print(f"{n}x{k} {pat}: {len(us)} units; " + "; ".join(
             f"{nm} y {'equal' if same_y[nm] else 'DIFFERS'}, manifests "
-            f"{'equal' if not differ[nm] else 'differ in ' + ', '.join(differ[nm])}" for nm in grouped_arms), flush=True)
+            f"{'equal' if not differ[nm] else 'differ in ' + ', '.join(differ[nm])}"
+            + ("" if nm not in replayed else ", replayed" if replayed[nm] else ", NOT REPLAYED") for nm in grouped_arms),
+            flush=True)
         print(f"{n}x{k} {pat}: " + ", ".join(f"{nm} {v:.3f} ms" for nm, v in med.items())
               + "".join(f"; slowdown over {b}: " + ", ".join(f"{nm} {med[nm] / med[b]:.2f}x" for nm in pearls)
                         for b in (best, gbest) if b)
               + ("" if best else "; no stock arm") + (f"; stock errors: {errors}" if errors else ""), flush=True)
     (d / "capture.json").write_text(json.dumps({"scheme": a.scheme, "shape": [n, k], "passes": passes}, indent=1) + "\n")
-    out["ok"] = all(all(out[p]["y_equal"].values()) and not any(out[p]["manifests_differ"].values()) for p in COUNTS)
+    out["ok"] = all(all(out[p]["y_equal"].values()) and not any(out[p]["manifests_differ"].values())
+                    and all(out[p]["replayed"].values()) for p in COUNTS)
     run.finish()
     return out
 
@@ -240,6 +262,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--reps", type=int, default=10)
     p.add_argument("--schedule", nargs="+", default=list(SCHEDULES),
                    help="the grouped call's schedules, each its own arm (verity.core.protocols.pouw.serving.SCHEDULES)")
+    p.add_argument("--graphs", action=argparse.BooleanOptionalAction, default=True,
+                   help="each schedule's grouped arm a second time with the run's graphs (its layout's lane graphs replayed)")
     a = p.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

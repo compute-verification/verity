@@ -21,9 +21,10 @@
 #                                                      GRAPHS=1: --graphs), in scratch
 #   TILES   N:K ... (default 512:6144 3072:6144 6144:1536)  glm53_passes.py capture --shapes N:K, a shape at a time, in scratch
 #   PROFILE 1 (default)                                glm53_profile.py run under nsys (the expert shapes at m 16 and 2,048), into $OUT/profile
-#   GROUPED 1 (default 0; the ship's cubin must have the grouped kernels)  grouped_check.py, its passes in scratch
-#   GPROF   1 (default 0; as GROUPED)                  glm53_profile.py grouped (host and events, cProfile) into $OUT/gprof/host.json,
-#                                                      then its --nvtx calls under nsys into $OUT/gprof/prof
+#   GROUPED 1 (default 0; the ship's cubin must have the grouped kernels)  grouped_check.py (its graphed arms too), its passes
+#                                                      in scratch
+#   GPROF   1 (default 0; as GROUPED)                  glm53_profile.py grouped --graphs (host and events, cProfile) into
+#                                                      $OUT/gprof/host.json, then its --nvtx calls under nsys into $OUT/gprof/prof
 # Then, the lease released: PASSES' replay (glm53_passes.py verify --fast) and full check of FULL_PASSES (default decode; full:
 # every tile and every served y word; their JSON and manifests into $OUT/passes), both under nice with FULL_JOBS jobs (default
 # 8 of the VM's 16 CPUs, which a GPU session beside them shares), each TILES shape's passes' scalar replay (glm53_passes.py verify without
@@ -102,10 +103,10 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
   fi
   if [ "$GPROF" = 1 ]; then
     mkdir -p "$O/gprof"
-    "$PY" "$D/glm53_profile.py" grouped --out "$O/gprof/host.json" > "$O/gprof/host.log" 2>&1
+    "$PY" "$D/glm53_profile.py" grouped --graphs --out "$O/gprof/host.json" > "$O/gprof/host.log" 2>&1
     echo "gprof host rc $?" >> "$O/rc.txt"
-    nsys profile -t cuda,nvtx --sample=none --cpuctxsw=none --force-overwrite true -o "$O/gprof/prof" \
-      "$PY" "$D/glm53_profile.py" grouped --nvtx --calls 12 > "$O/gprof/run.log" 2>&1
+    nsys profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none --force-overwrite true -o "$O/gprof/prof" \
+      "$PY" "$D/glm53_profile.py" grouped --graphs --nvtx --calls 12 > "$O/gprof/run.log" 2>&1
     echo "gprof nsys rc $?" >> "$O/rc.txt"
   fi'
 echo "lease rc $?" >> "$O/rc.txt"

@@ -47,13 +47,14 @@ schedule (default serial, deferred and deferred-a; with hashing, and serial's wi
 calls back to back, timed by the host's clock (until the last returns) and the GPU's events (until its work ends), then
 as many again under cProfile: each function's own time a call, the `HOST_TOP` largest.
 
-  python benchmarks/pouw/pearl_c_sm90/glm53_profile.py grouped --out DIR/grouped.json [--shapes N:K ...] [--pattern P ...] [--schedule S ...]
-  nsys profile -t cuda,nvtx -o DIR/prof python benchmarks/pouw/pearl_c_sm90/glm53_profile.py grouped --nvtx --calls 12
+  python benchmarks/pouw/pearl_c_sm90/glm53_profile.py grouped --out DIR/grouped.json [--shapes N:K ...] [--pattern P ...] [--schedule S ...] [--graphs]
+  nsys profile -t cuda,nvtx --cuda-graph-trace=node -o DIR/prof python benchmarks/pouw/pearl_c_sm90/glm53_profile.py grouped --nvtx --calls 12 [--graphs]
 
 ``grouped`` is ``host`` for the grouped MoE call (`pouw_pearl_c_grouped.gemm_grouped`) as grouped_check.py makes it: its
 experts at each of its shapes, its routed rows (``--pattern``, default decode), under each schedule (default grouped_check's)
-with hashing and the first's without, beside grouped_check's stock arms.  With ``--nvtx`` it makes `CALLS` (``--calls``)
-NVTX-ranged calls an arm back to back instead, for ``lanes`` (labels ``grouped N:K PATTERN ARM``).
+with hashing, with ``--graphs`` each again with the run's graphs (after grouped_check's `WARM_GRAPHS` calls, so the layout's
+lane graphs replay), and the first's without hashing, beside grouped_check's stock arms.  With ``--nvtx`` it makes `CALLS`
+(``--calls``) NVTX-ranged calls an arm back to back instead, for ``lanes`` (labels ``grouped N:K PATTERN ARM``).
 """
 
 from __future__ import annotations
@@ -338,22 +339,24 @@ def grouped_mode(a) -> int:
     schedules = a.schedule or list(GC.SCHEDULES)
     rows, cubin = [], None
     for n, k in shapes:
-        run, weights, kernel, gen = T.device_run([(n, k)] * GC.EXPERTS, a.scheme, a.cubin)
+        run, weights, kernel, gen = T.device_run([(n, k)] * GC.EXPERTS, a.scheme, a.cubin, graphs=a.graphs)
         cubin, ws = kernel.cubin_sha256, tuple(sorted(weights))
         dense_stock = [T.stock_arms(weights[w]) for w in ws]
         for pat in a.pattern:
             counts = GC.COUNTS[pat]
             x = torch.randn(sum(counts), k, device="cuda", generator=gen).to(torch.bfloat16)
             stock, errors = GC.stock_arms([weights[w] for w in ws], dense_stock, counts, x)
-            arms = [(sc, True, lambda run=run, ws=ws, x=x, counts=counts: PG.gemm_grouped(run, ws, x, counts))
-                    for sc in schedules]
-            arms += [(schedules[0], False, arms[0][2]), *((nm, None, f) for nm, f in stock.items())]
-            for name, hashing, f in arms:
+
+            def call(run=run, ws=ws, x=x, counts=counts):
+                return PG.gemm_grouped(run, ws, x, counts)
+            arms = [(sc, True, gr, call) for gr in ((False, True) if a.graphs else (False,)) for sc in schedules]
+            arms += [(schedules[0], False, False, call), *((nm, None, False, g) for nm, g in stock.items())]
+            for name, hashing, graphed, f in arms:
                 if hashing is not None:
                     run.end_pass(schedule=name)
-                    run.hashing = hashing
-                label = f"grouped {n}:{k} {pat} {name}{'' if hashing is not False else ' nohash'}"
-                for _ in range(WARM):
+                    run.hashing, run.graphs = hashing, graphed
+                label = f"grouped {n}:{k} {pat} {name}{' graph' if graphed else ''}{'' if hashing is not False else ' nohash'}"
+                for _ in range(GC.WARM_GRAPHS if graphed else WARM):
                     f()
                 if a.nvtx:
                     torch.cuda.synchronize()
@@ -600,7 +603,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--m", nargs="*", type=int)
     p.add_argument("--schedule", nargs="*", help="stamps: the schedules (default serial and deferred-a); host: (default "
                                                   "serial, deferred and deferred-a); run: the first (default serial)")
-    p.add_argument("--graphs", action="store_true", help="host, run: calls of up to 256 rows replayed as CUDA graphs")
+    p.add_argument("--graphs", action="store_true", help="host, run: calls of up to 256 rows replayed as CUDA graphs; "
+                                                         "grouped: each schedule's arm again with the run's graphs")
     a = p.parse_args(argv)
     if a.mode == "run":
         return run_mode(a)
