@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The top-p split pin (engine.topp_pin, CIR-87 (1)) on one RTX PRO 6000: vLLM's split kernel pinned and unpinned at every drain batch
 # (topp_pin_check kernel), Llama-3.2-1B serving seeded top_p=0.95 requests together and alone (topp_pin_check served), then the
-# B8 and B1 stochastic rows' Build, Match and Commit (ROWS).
+# B8 and B1 stochastic rows' Build, Match and Commit (ROWS; CHECKS=0 runs only the rows).
 #   research run --on vy-nebius-1 --project verity --cwd source --mem-gb 128 --timeout 3h \
 #     --env GPU_LEASE_WHO=vllm-topp-pin -- bash integrations/vllm/tools/topp_pin_gpu.sh
 # Needs on the node what benchmarks/one_stage/llama1b_tp1_commit.sh needs: vLLM's venv, the checkpoint in /workspace/hf and gpu-lease.
@@ -37,10 +37,17 @@ step() {  # NAME CMD...: its output in $OUT/NAME.out
 }
 lease() { "$GPU_LEASE" 1 --wait --max-min "$1" --mem-gb 0 -- "${@:2}"; }
 
+# the sampler Call at V = 128256 is one Q_word unit over the default gate limit, as on every top-p row (the gate-limit decision of
+# 30 Sep, note:20260930T1020Z-decision-from-vllm-coordinator-topp-option3-and-queue)
+G=GumbelTopPTokenSelect_v2=113000000
+export VERITY_QWORD_MAX_GATES=${VERITY_QWORD_MAX_GATES:-$G} VERITY_QWORD_MAX_GATES_ALLOWED=${VERITY_QWORD_MAX_GATES_ALLOWED:-$G}
+
 rc=0
-step kernel lease 15 "$PY" -m verity_vllm.pipeline.topp_pin_check kernel --out "$OUT" || rc=1
-step served lease 20 "$PY" -m verity_vllm.pipeline.topp_pin_check served --out "$OUT" \
-  --workload "workloads/${ROWS%% *}.json" || rc=1
+if [ "${CHECKS:-1}" = 1 ]; then
+  step kernel lease 15 "$PY" -m verity_vllm.pipeline.topp_pin_check kernel --out "$OUT" || rc=1
+  step served lease 20 "$PY" -m verity_vllm.pipeline.topp_pin_check served --out "$OUT" \
+    --workload "workloads/${ROWS%% *}.json" || rc=1
+fi
 for ROW in $ROWS; do
   B=$(sed 's/.*__b\([0-9]*\)__.*/\1/' <<<"$ROW")
   step "row-b$B" "$PY" -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" || rc=1
