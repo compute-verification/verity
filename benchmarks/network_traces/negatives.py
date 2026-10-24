@@ -394,16 +394,16 @@ def make(name: str, src: Path, dst: Path, *, advice: Path | None = None, commit:
 
 def table(markdown: bool = True) -> str:
     """The registry, one row per negative: what it tampers, the check that refuses it, its code, and its status."""
+    q = "`" if markdown else ""
     rows = [("negative", "family", "tampers", "check", "code", "status")]
     for n in NEGATIVES.values():
-        code = n.code + (f" (served: {n.served})" if n.served else "")
-        rows.append((n.name, n.family, n.tampers, n.check, code,
+        code = f"{q}{n.code}{q}" + (f" (served: {q}{n.served}{q})" if n.served else "")
+        rows.append((f"{q}{n.name}{q}", n.family, n.tampers, n.check, code,
                      f"pending: {', '.join(n.waits)}" if n.waits else "runs today"))
     if not markdown:
         return "\n".join("\t".join(r) for r in rows)
     out = ["| " + " | ".join(rows[0]) + " |", "|" + "---|" * len(rows[0])]
-    return "\n".join(out + ["| " + " | ".join(f"`{c}`" if k in (0, 4) else c for k, c in enumerate(r)) + " |"
-                            for r in rows[1:]])
+    return "\n".join(out + ["| " + " | ".join(r) + " |" for r in rows[1:]])
 
 
 # --- N2's refusal codes ------------------------------------------------------------------------------------------------
