@@ -744,7 +744,7 @@ EOF
   if [ "${ZK_LEAN:-0}" = 1 ]; then
     ZS=$(ls -d $DD/inner-zk/sessions/l* | sort | tail -1)
     /usr/bin/time -v -o $O/lean/time-zk.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $DD/stage-zk/circuit.txt \
-      --public $DD/stage-zk/pub-$N.bin --partition $DD/stage/partition.json --session $ZS > $O/lean/zk.log 2> $O/lean/zk.err
+      --public $DD/stage-zk/pub-$N.bin --partition $DD/stage/partition.json --program $DD/stage/program.json --session $ZS > $O/lean/zk.log 2> $O/lean/zk.err
     echo "zk lean exit $?"
   fi
   # the inner statement with the verifier's partition object and program (the setup AcceptsPublic states): Lean derives its

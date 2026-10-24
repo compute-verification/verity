@@ -321,7 +321,8 @@ def test_a_parameter_of_several_rows_reads_each_at_its_own_port():
                        schemas={"A": G.SCHEMA_V2})
     port = {"value": "A", "root": reg.root.hex(), "leaves": 4, "words": K // 2, "word_bits": 16,
             "domain": reg.domain.domain_id.hex(), "row_schema": G.SCHEMA_V2}
-    assert doc == {"format": G.READS, "ports": {"a0": {**port, "reads": [0, 2]}, "a1": {**port, "reads": [1, 3]}}}
+    assert doc == {"format": G.READS, "ports": {"a0": {**port, "reads": [0, 2], "param": "a[0]"},
+                                                "a1": {**port, "reads": [1, 3], "param": "a[1]"}}}
     for p, reads in (("a0", [0, 2]), ("a1", [1, 3])):
         for u, r in enumerate(reads):
             assert G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r), G.SCHEMA_V2)
@@ -1002,7 +1003,7 @@ def test_r7_reuses_an_earlier_outputs_commitment():
 
 
 def test_r7_reuses_an_earlier_records_registered_value():
-    """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<c>` as
+    """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<s>` as
     a Commit's AROW, say): its entry takes that entry's domain and root, with no tree of its own, under another name or the
     same. A record entry of another root is `R7-held`, of another domain `R7-domain` too; a record or value the log
     doesn't hold, or an earlier entry of other leaves, words or word bits, is `R7-output`; and a malformed `outputs` is

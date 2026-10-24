@@ -6,8 +6,13 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
+import sys
+import tempfile
+import time
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -91,22 +96,99 @@ def point_identity(spec_sha256: str, pins: Toolchain, point: SweepPoint) -> str:
     })
 
 
-def store_completion(identity: str, commit: str) -> str | None:
-    """Newest passing attempt with this exact point identity, from the evidence index."""
+# A point's runs start after its commit exists, and run ids begin with their UTC start; a day's margin covers clocks that
+# disagree.
+COMMIT_MARGIN_S = 86_400
+PULL_JOBS = 64
 
-    if not re.fullmatch(r"[0-9a-f]{64}", identity) or not re.fullmatch(r"[0-9a-f]{7,64}", commit):
-        raise ValueError("benchmark completion lookup requires hexadecimal identities")
-    query = PASS_QUERY.format(identity=identity, commit=commit)
-    process = subprocess.run(
-        ["research", "data", "sql", query, "--json"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+
+def commit_time(root: Path, commit: str) -> int:
+    process = subprocess.run(["git", "show", "-s", "--format=%ct", commit], cwd=root, capture_output=True, text=True)
     if process.returncode != 0:
-        raise RuntimeError(f"could not query benchmark completion: {process.stderr.strip()}")
-    rows = json.loads(process.stdout)
-    return str(rows[0]["id"]) if rows else None
+        raise ValueError(f"git doesn't know commit {commit} here, so its runs can't be looked up on the store's remote: "
+                         "fetch it, or pass --local-only to read this machine's catalog alone")
+    return int(process.stdout.strip())
+
+
+class StoreCompletion:
+    """The newest passing attempt with a point's identity: from this machine's catalog, else, unless `local_only`, from
+    the store's remote. The remote is read once per commit by pulling the attempts this store lacks among those started
+    since the commit (`COMMIT_MARGIN_S` before it), and indexing them; never a reindex."""
+
+    def __init__(self, store: Any = None, *, root: Path | None = None, local_only: bool = False,
+                 commit_time: Callable[[str], int] | None = None, log: Callable[[str], None] | None = None):
+        self._store, self.root, self.local_only = store, root, local_only
+        self._commit_time = commit_time
+        self._log = log or (lambda message: print(f"verity-bench: {message}", file=sys.stderr))
+        self._pulled: set[str] = set()
+
+    @property
+    def store(self) -> Any:
+        if self._store is None:
+            from research.store.local import LocalStore  # noqa: PLC0415
+
+            self._store = LocalStore()
+        return self._store
+
+    def __call__(self, identity: str, commit: str) -> str | None:
+        if not re.fullmatch(r"[0-9a-f]{64}", identity) or not re.fullmatch(r"[0-9a-f]{7,64}", commit):
+            raise ValueError("benchmark completion lookup requires hexadecimal identities")
+        found = self._local(identity, commit)
+        if found is None and not self.local_only and commit not in self._pulled:
+            self.pull(commit)
+            found = self._local(identity, commit)
+        return found
+
+    def _local(self, identity: str, commit: str) -> str | None:
+        rows = self.store.index.sql(PASS_QUERY.format(identity=identity, commit=commit))
+        return str(rows[0][0]) if rows else None
+
+    def pull(self, commit: str) -> int:
+        """Fetch and index the remote's attempts started since `commit` that this store lacks; how many it indexed."""
+
+        from research.store import ids  # noqa: PLC0415
+        from research.store.local import StoreError  # noqa: PLC0415
+
+        store = self.store
+        remote = store.remote
+        if remote is None:
+            why = getattr(store, "remote_error", None) or "no remote is configured"
+            raise RuntimeError(f"the evidence store has no remote here ({why}): a point another machine ran would read as "
+                               "missing; pass --local-only to read this machine's catalog alone")
+        started = (self._commit_time or (lambda c: commit_time(self.root or repository_root(), c)))(commit)
+        since = time.strftime("r%Y%m%d", time.gmtime(started - COMMIT_MARGIN_S))
+        listed = [key[len("attempts/"):-len(".json")]
+                  for key, _ in remote.list_times("attempts/", start_after=f"attempts/{since}")]
+        missing = [run for run in listed if ids.is_run_id(run) and not store.attempt_path(run).exists()]
+        scratch = Path(tempfile.mkdtemp(prefix=".verity-bench-pull-", dir=store.root / "scratch"))
+
+        def get(run: str) -> tuple[str, bytes | None]:
+            target = scratch / f"{run}.json"
+            try:
+                remote.get(f"attempts/{run}.json", target)
+            except KeyError:
+                return run, None
+            return run, target.read_bytes()
+
+        indexed, skipped = 0, []
+        try:
+            with ThreadPoolExecutor(max_workers=PULL_JOBS) as pool:
+                for run, data in pool.map(get, missing):
+                    try:
+                        if data is None:
+                            raise ValueError("vanished from the remote")
+                        store.put_attempt(json.loads(data))
+                        indexed += 1
+                    except (ValueError, StoreError) as error:
+                        skipped.append(f"{run}: {error}")
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+        self._pulled.add(commit)
+        self._log(f"pulled {indexed} attempts started since {since} from {remote.describe()} "
+                  f"({len(listed) - len(missing)} of {len(listed)} were here)")
+        for line in skipped[:5]:
+            self._log(f"skipped attempt {line}")
+        return indexed
 
 
 def make_plan(
@@ -114,9 +196,10 @@ def make_plan(
     *,
     root: Path | None = None,
     commit: str | None = None,
-    lookup: CompletionLookup = store_completion,
+    lookup: CompletionLookup | None = None,
 ) -> Plan:
     root = root or repository_root()
+    lookup = lookup or StoreCompletion(root=root)
     spec = resolve_spec(source)
     pins = toolchain(root, spec, commit=commit)
     digest = spec.config_sha256

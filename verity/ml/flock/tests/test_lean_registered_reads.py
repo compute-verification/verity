@@ -98,9 +98,10 @@ def staged(tmp_path_factory):
                            bound=["--partition", str(d / "partition.json"), "--program", str(d / "program.json")])
 
 
-def _stage(s, name: str, registered=True, salts=None, entry=None, extra=None, outs=None, out_salts=None) -> Path:
+def _stage(s, name: str, registered=True, salts=None, entry=None, extra=None, outs=None, out_salts=None, cs=None) -> Path:
     positions, refs = G.table(POSITIONS)
     rows, reg_salts, e = s.reg.statement(positions)
+    rows = rows if cs is None else cs
     sub = json.loads(s.text.split("\n", 2)[1][5:]).get("subcircuit", "rope-head/d64/neox-bf16")
     inputs = SimpleNamespace(name="rope-registered", subcircuit=SimpleNamespace(id=sub))
     reg = {"cs": entry or e, **(extra or {})} if registered else extra
@@ -177,6 +178,24 @@ def test_each_table_row_opens_the_registered_root_at_its_position(staged):
                               ("short", short, "table row 0 does not open"), ("value", {**e, "value": "rope.other"}, f"reads {VALUE}, not")):
         code, out = _statement(staged, _stage(staged, name, entry=entry), staged.dir / "own.json")
         assert code == 1 and want in out, (name, out)
+
+
+def test_a_table_of_two_registrations_rows_opens_no_one_root(staged):
+    """A table whose rows are two registrations' of the value (two row tables of a window, each row under its own salt with
+    a true path to its own root) is refused whichever one root the verifier holds: a port is read against one registered
+    root, so a prover that builds a chunk over two row tables can't have it verified (`row_tables.registered_reads`)."""
+    positions, _ = G.table(POSITIONS)
+    other = G.Registered.commit(P.program_digest(staged.program), VALUE,
+                                np.random.default_rng(20261024).integers(0, 1 << 16, (TABLE_ROWS, 64)).tolist())
+    (rows_a, salts_a, e_a), (rows_b, salts_b, e_b) = staged.reg.statement(positions), other.statement(positions)
+    half = len(positions) // 2
+    mix = lambda a, b: list(a[:half]) + list(b[half:])  # noqa: E731
+    public = _stage(staged, "two-tables", cs=mix(rows_a, rows_b), salts=mix(salts_a, salts_b),
+                    entry={**e_a, "paths": mix(e_a["paths"], e_b["paths"])})
+    code, out = _statement(staged, public, staged.dir / "own.json")
+    assert code == 1 and f"table row {half} does not open {VALUE}'s registered root at position {positions[half]}" in out, out
+    code, out = _statement(staged, public, _own(staged, "own-other-root", lambda ps: ps["cs"].__setitem__("root", other.root.hex())))
+    assert code == 1 and f"table row 0 does not open {VALUE}'s registered root at position {positions[0]}" in out, out
 
 
 def test_each_instance_reads_the_position_its_unit_reads_in_the_verifiers_program(staged):
