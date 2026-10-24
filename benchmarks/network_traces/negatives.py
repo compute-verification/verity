@@ -51,7 +51,6 @@ import time
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Callable
 
 HERE = Path(__file__).resolve().parent
@@ -61,7 +60,7 @@ import active_replay as ar  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 from verity.core.protocols.certifier import audit as host_audit, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction  # noqa: E402
-from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
+from verity.core.protocols.certifier.schedule import ClockSync, SyncSet  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
 
 FORMAT = "verity-network-negatives/v1"
@@ -538,77 +537,86 @@ def codes(lw: LinkWindows, opening, root: bytes, syncs: list[ClockSync]) -> list
     return sorted(set(out))
 
 
-def n2_advice(advice, ingress_frames: dict[str, int], received: list[int]) -> SimpleNamespace:
-    """I1 v0 advice as N2-ADVICE's `advised` reads it as drafted: one release bucket a step (the last of the step's kept
-    outputs', at least the step before's), and N2's additions, which v0 doesn't carry: each request's `ingress_frames`
-    (by id) and each window's `received`. The requests' frames that `received` doesn't sum to go to its first window
-    that receives any, as a prover that serves other requests than were received would declare them, so the advice
-    stays well formed."""
-    kept, last = _kept(advice.requests, _plain(advice)), {}
-    for (s, *_), b in zip(kept, advice.release):
-        last[s] = b
-    per_step, at = [], min(advice.release, default=0)
-    for s in range(len(advice.steps)):
-        at = max(at, last.get(s, at))
-        per_step.append(at)
+def link_received(advice, request_frames, received: list[int]) -> list[int]:
+    """`received` as a prover declares it beside `advice`: the request frames the advice's requests take under the
+    link's framing (`request_frames[prompt_len − 1]` each) that `received` doesn't sum to go to its first window that
+    receives any, as a prover that serves other requests than were received would declare them, so the advice stays
+    well formed (`advised.ends`) and only the counts can refuse it."""
     got = list(received)
     w = next((w for w, g in enumerate(got) if g > 0), 0)
-    got[w] += sum(ingress_frames[q.id] for q in advice.requests) - sum(got)
-    requests = [SimpleNamespace(id=q.id, prompt_len=q.prompt_len, output_len=q.output_len,
-                                ingress_frames=ingress_frames[q.id]) for q in advice.requests]
-    return SimpleNamespace(requests=requests, steps=advice.steps, release=per_step, received=got)
+    got[w] += sum(request_frames[q.prompt_len - 1] for q in advice.requests
+                  if q.prompt_len <= len(request_frames)) - sum(got)
+    return got
 
 
-def advised_codes(advice, window: int, syncs, T: int, R: int, RIN: int, OWN: int, ingress, egress) -> list[str]:
+def n2_advice(advice, request_frames, received: list[int]):
+    """I1 v0 advice as N2-ADVICE's `advised` reads it (`advised.LinkAdvice`: the advice and each window's `received`,
+    `link_received`'s). Raises ModuleNotFoundError until N2-ADVICE lands."""
+    AD = importlib.import_module(ADVISED_MODULE)
+    return AD.LinkAdvice(advice, tuple(link_received(advice, request_frames, received)))
+
+
+def advised_codes(link, window: int, syncs, sync_set, request_frames, T: int, R: int, RIN: int, OWN: int, ingress,
+                  egress) -> list[str]:
     """N2-ADVICE's code on one advised link-window with heads of counts `ingress` and `egress`, as
-    `LinkWindows.advised_check` decides it (`advised.view`, then `advised.reference`), on the advice as N2 reads it
-    (`n2_advice`): ``.view`` when the advice is malformed or doesn't cover the window, the advised counts' when they
-    refuse, else none. Raises ModuleNotFoundError until N2-ADVICE lands."""
+    `LinkWindows.advised_check` decides it (`advised.view` under the declared `syncs`, Σ_sync and the link's framing,
+    then `advised.reference`), on the advice as N2 reads it (`n2_advice`): ``.view`` when the advice is malformed or
+    doesn't cover the window, the advised counts' when they refuse, else none. Raises ModuleNotFoundError until
+    N2-ADVICE lands."""
     AD = importlib.import_module(ADVISED_MODULE)
     try:
-        v = AD.view(advice, window, T, R, syncs)
+        v = AD.view(link, window, T, R, syncs, sync_set, request_frames)
     except ValueError:
         return [f"{ADVISED}.view"]
-    ok = AD.reference(T, R, RIN, OWN, ingress, egress, v.handed, v.floor, v.queued, v.received)
+    ok = AD.reference(T, RIN, OWN, ingress, egress, v.released, v.floor, v.received)
     return [] if ok else [ADVISED]
 
 
-def honest_heads(view, T: int, R: int, syncs, own: int = 0) -> list[tuple[list[int], list[int]]]:
-    """Each window's (ingress, egress) head counts that an honest advised run of `view` (`n2_advice`) certifies under
-    N2-ADVICE's rule: the egress the FIFO release of the advice's frames at R a bucket, the ingress the request frames
-    its floor needs by each bucket, the rest of the window's in its last bucket."""
+def honest_heads(link, T: int, R: int, syncs, sync_set, request_frames,
+                 own: int = 0) -> list[tuple[list[int], list[int]]]:
+    """Each window's (ingress, egress) head counts that an honest advised run of `link` (`n2_advice`) certifies under
+    N2-ADVICE's rule: the egress the advice's releases, the ingress the request frames its floor needs by each bucket,
+    the rest of the window's in its last bucket."""
     AD = importlib.import_module(ADVISED_MODULE)
     out = []
-    for w in range(len(view.received)):
-        v = AD.view(view, w, T, R, syncs)
+    for w in range(len(link.received)):
+        v = AD.view(link, w, T, R, syncs, sync_set, request_frames)
         ingress, prev = [], 0
         for t, f in enumerate(v.floor):
             ingress.append(f - prev + (own if t == 0 else 0))
             prev = f
         ingress[-1] += v.received - prev
-        out.append((ingress, AD.derive(v.handed, v.queued, R)))
+        out.append((ingress, list(v.released)))
     return out
 
 
-def advice_suite(advice, *, T: int, R: int, syncs, ingress_frames: dict[str, int], received: list[int],
+def advice_suite(advice, *, T: int, R: int, syncs, request_frames, received: list[int], sync_set=None,
                  RIN: int | None = None) -> dict[str, dict]:
     """Every advice negative made from a run's `advice` (I1's): whether it applies to it, whether it's valid advice that
     round-trips through I1's codec, its bits, and N2-ADVICE's codes (`advised_codes`) on the heads an honest run of the
-    advice certifies (`honest_heads`, with each request's `ingress_frames` and each window's `received`; `RIN` by
-    default their largest ingress count). `ok`: the codes are exactly the one it names, or none for a step-unit
-    negative, which N2 must accept (its check is pending)."""
+    advice certifies (`honest_heads`, under the link's framing `request_frames` with each window's `received` and
+    declared sync; Σ_sync by default the declared syncs' deltas and rhos, `RIN` their largest ingress count). `ok`: the
+    codes are exactly the one it names, or none for a step-unit negative, which N2 must accept (its check is
+    pending). A negative that releases more than R frames in a bucket is refused by the view (``.view``) instead. An
+    honest advice the view refuses has no honest heads, so its row says why and no negative runs."""
     mod = advice_module()
     if mod is None:
         raise NotApplicable(f"no advice codec yet: {ADVICE_MODULE} (I1, ADV-SPEC) hasn't landed")
+    sync_set = sync_set or SyncSet(tuple(sorted({s.delta for s in syncs})), tuple(sorted({s.rho for s in syncs})))
 
-    def codes(view) -> list[str]:
+    def codes(link) -> list[str]:
         return sorted({c for w, (i, e) in enumerate(heads)
-                       for c in advised_codes(view, w, syncs, T, R, RIN, 0, i, e)})
+                       for c in advised_codes(link, w, syncs, sync_set, request_frames, T, R, RIN, 0, i, e)})
 
-    heads = honest_heads(n2_advice(advice, ingress_frames, received), T, R, syncs)
+    try:
+        heads = honest_heads(n2_advice(advice, request_frames, received), T, R, syncs, sync_set, request_frames)
+    except ValueError as err:
+        why = f"N2-ADVICE's view refuses the honest advice: {err}"
+        return {"honest": {"bits": mod.total_bits(advice), "codes": [f"{ADVISED}.view"], "ok": False, "why": why}} | {
+            name: {"code": n.code, "check": n.check, "waits": list(n.waits), "ran": False, "why": why}
+            for name, n in NEGATIVES.items() if n.tampers == "advice"}
     RIN = RIN or max(1, *(c for i, _ in heads for c in i))
-    copies = {f"{k}~extra": v for k, v in ingress_frames.items()}
-    out = {"honest": {"bits": mod.total_bits(advice), "codes": codes(n2_advice(advice, ingress_frames, received))}}
+    out = {"honest": {"bits": mod.total_bits(advice), "codes": codes(n2_advice(advice, request_frames, received))}}
     out["honest"]["ok"] = out["honest"]["codes"] == []
     for name, n in NEGATIVES.items():
         if n.tampers != "advice":
@@ -619,26 +627,31 @@ def advice_suite(advice, *, T: int, R: int, syncs, ingress_frames: dict[str, int
         except NotApplicable as err:
             out[name] = row | {"ran": False, "why": str(err)}
             continue
-        got = codes(n2_advice(b, ingress_frames | copies, received))
+        got = codes(n2_advice(b, request_frames, received))
         want = [] if n.code.startswith("StepUnit") else [n.code]
         out[name] = row | {"ran": True, "valid": mod.decode(mod.encode(b)) == b, "bits": mod.total_bits(b),
                            "steps": len(b.steps), "outputs": len(b.release), "codes": got, "ok": got == want}
     return out
 
 
-def advice_run(path: Path, *, T: int = 50, R: int = 32, frames: int = 1, delta: int = 0, rho: int = 1000) -> dict:
-    """`advice_suite` on the advice at `path` (I1's encode bytes), each request `frames` ingress frames, all received in
-    window 0, every window's sync (δ, ρ): its shape and the rows (`negatives`)."""
+def advice_run(path: Path, *, T: int = 50, R: int = 32, frames: int = 1, delta: int = 0, rho: int = 1000,
+               shift: int = 0) -> dict:
+    """`advice_suite` on the advice at `path` (I1's encode bytes), each request `frames` ingress frames whatever its
+    prompt's length, all received in window 0, every window's sync (δ, ρ): its shape and the rows (`negatives`). With
+    `shift`, every release `shift` buckets later, for an advice whose clock put an output in its request's own bucket,
+    which N2-ADVICE's floor refuses."""
     mod = advice_module()
     if mod is None:
         raise NotApplicable(f"no advice codec yet: {ADVICE_MODULE} (I1, ADV-SPEC) hasn't landed")
     adv = mod.decode(path.read_bytes())
+    if shift:
+        adv = replace(adv, release=tuple(b + shift for b in adv.release))
     windows = max(adv.release, default=0) // T + 1
-    per = {q.id: frames for q in adv.requests}
-    rows = advice_suite(adv, T=T, R=R, syncs=[ClockSync(delta, Fraction(rho))] * windows, ingress_frames=per,
-                        received=[sum(per.values())] + [0] * (windows - 1))
+    framing = (frames,) * max((q.prompt_len for q in adv.requests), default=1)
+    rows = advice_suite(adv, T=T, R=R, syncs=[ClockSync(delta, Fraction(rho))] * windows, request_frames=framing,
+                        received=[frames * len(adv.requests)] + [0] * (windows - 1))
     return {"format": FORMAT, "advice": str(path), "requests": len(adv.requests), "steps": len(adv.steps),
-            "outputs": len(adv.release), "windows": windows, "T": T, "R": R, "negatives": rows}
+            "outputs": len(adv.release), "windows": windows, "T": T, "R": R, "shift": shift, "negatives": rows}
 
 
 def n2(run: Path, clock=time.monotonic) -> dict:
@@ -757,10 +770,12 @@ def main(argv=None) -> int:
     a.add_argument("--frames", type=int, default=1, help="ingress frames a request")
     a.add_argument("--delta", type=int, default=0, help="each window's declared sync: δ buckets ...")
     a.add_argument("--rho", type=int, default=1000, help="... and ρ frames a bucket")
+    a.add_argument("--shift", type=int, default=0, help="every release this many buckets later")
     args = ap.parse_args(argv)
     if args.command == "advice":
         try:
-            doc = advice_run(args.advice, T=args.T, R=args.R, frames=args.frames, delta=args.delta, rho=args.rho)
+            doc = advice_run(args.advice, T=args.T, R=args.R, frames=args.frames, delta=args.delta, rho=args.rho,
+                             shift=args.shift)
         except NotApplicable as err:
             raise SystemExit(str(err))
         print(json.dumps(doc, indent=1))
