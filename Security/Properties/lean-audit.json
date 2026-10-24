@@ -15,6 +15,7 @@
   "Properties.Proofs.Nci.DescAgree",
   "Properties.Proofs.Nci.Walk",
   "Properties.Proofs.Nci.Novel",
+  "Properties.Proofs.Nci.BodiesOk",
   "Properties.NciDesc",
   "Properties.CertifierDevice",
   "Properties.Proofs.CertifierDevice",
