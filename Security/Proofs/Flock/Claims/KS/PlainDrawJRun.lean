@@ -314,8 +314,8 @@ theorem nextJ_acc (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option Fi
     (h : actJ rd x as cs = .decide s spec sts link c₁ mids f) :
     ((nextJ rd x as cs).eval H).1 = .acc ↔
       ∃ spec' sts', setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
-        verifyJWithM (Hashes.ofSha512 (Claims.hOf H)) spec' (tabsOf sts') (coinSubJ spec' c₁ mids f.j) f.proofs =
-          .ok () ∧
+        verifyJWithM (M := Flock.V) (Hashes.ofSha512 (Claims.hOf H)) spec' (tabsOf sts') (coinSubJ spec' c₁ mids f.j)
+          f.proofs = .ok () ∧
         checksAtJ s spec' x link c₁ mids f (coinSubJ spec' c₁ mids f.j) = .ok () := by
   have he := decisionJF_eval H s x link c₁ mids f
   rw [nextJ_decide h]
@@ -325,8 +325,8 @@ theorem nextJ_acc (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option Fi
   | error e => simp [bind, Except.bind]
   | ok p =>
     obtain ⟨spec', sts'⟩ := p
-    cases hv : verifyJWithM (Hashes.ofSha512 (Claims.hOf H)) spec' (tabsOf sts') (coinSubJ spec' c₁ mids f.j)
-        f.proofs with
+    cases hv : verifyJWithM (M := Flock.V) (Hashes.ofSha512 (Claims.hOf H)) spec' (tabsOf sts')
+        (coinSubJ spec' c₁ mids f.j) f.proofs with
     | error e => simp [bind, Except.bind, hv]
     | ok u =>
       cases hc : checksAtJ s spec' x link c₁ mids f (coinSubJ spec' c₁ mids f.j) with
