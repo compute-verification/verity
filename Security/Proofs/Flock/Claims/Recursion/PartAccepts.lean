@@ -122,15 +122,15 @@ theorem ksLin2_deployed_partAccepts (b : Brings) (aux : Msg → ℕ → Flock.Re
     let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
     let D := recBound _root_.Flock.Readable.relation bR L Bd.IVStar
-    let bL : Brings := { bR with rd := L.readers }
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape
         (Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
           shape (showsPart recRead bR) (cmtTr recRead))) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D bL hD
-  exact ksLin2_deployed_recRead bR rest wE join final w (readsBack_recTr _ _ bL _ aux nOf hd recRest rfl)
+  intro bR L Bd D hD
+  exact ksLin2_deployed_recRead bR rest wE join final w
+    (readsBack_recTr _ _ { bR with rd := L.readers } _ aux nOf hd recRest rfl)
     (fun shape hsh => (Claims.Recursion.VStarB.exists_chk_iff _ _ _ _ _ _ _ _).2 (hD shape hsh))
     (readersTrue_layoutBTops (finOpen rest) Bd.IVStar bR _ hmSlotsCommit_of_full)
 
@@ -148,15 +148,15 @@ theorem bitsLin2_deployed_partAccepts (b : Brings) (aux : Msg → ℕ → Flock.
     let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
     let D := recBound _root_.Flock.Readable.relation bR L Bd.IVStar
-    let bL : Brings := { bR with rd := L.readers }
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape
         (Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
           shape (showsPart recRead bR) (cmtTr recRead))) →
     Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D bL hD
-  exact bitsLin2_deployed_recRead bR rest wE join final w (readsBack_recTr _ _ bL _ aux nOf hd recRest rfl)
+  intro bR L Bd D hD
+  exact bitsLin2_deployed_recRead bR rest wE join final w
+    (readsBack_recTr _ _ { bR with rd := L.readers } _ aux nOf hd recRest rfl)
     (fun shape hsh => (Claims.Recursion.VStarB.exists_chk_iff _ _ _ _ _ _ _ _).2 (hD shape hsh))
     (readersTrue_layoutBTops (finOpen rest) Bd.IVStar bR _ hmSlotsCommit_of_full)
 
