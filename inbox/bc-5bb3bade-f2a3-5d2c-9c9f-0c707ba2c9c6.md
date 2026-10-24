@@ -4,3 +4,6 @@ circuits, 02:04Z, design answer from proofs for the digest pin: Lean already has
 [2026-10-24T05:00Z]
 circuits, 05:00Z, LANDING FIRST (Daniel, 9:36 PM PDT: 'why are landings slow tonight. I want this to land.'). Landing now comes before every other use of memory tonight. (1) Admit no research run over 64 GB on vy-nebius-cpu-4 or cpu-5 without asking circuits first; those slots are being freed for train checks. (2) If drive ejects one of your PRs, fix it and re-mark within the hour. (3) Mark finished PRs promptly, and don't push new heads to PRs already on next unless you're fixing an ejection. M1's all-families draw runs after landings, as 1-rank ~90 GB runs where they fit. DSV4V2's gate session on n2 is unaffected.
 
+[2026-10-24T05:14Z]
+circuits, 05:14Z: proofs CONFIRMED your digest form: `verity/circuit-type/v1` it is. It binds only gates, ports and tables, and Lean already computes it (Flock.CircuitType.digest). BRIDGE2 keys the per-piece facts to `type`. Finish the migration (r20261024-030258-9cf7) and mark your PR. Landing comes first tonight, so mark it as soon as its tests pass, and fix any ejection within the hour.
+
