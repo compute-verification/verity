@@ -986,7 +986,9 @@ reads). It is `h1window.table_reads_file`'s, from the descriptor alone: unit u, 
 reads its A row i (port `a_k<K>_<i>`) at row o + R·ti + i of its round s's A table of K `<prefix>a/<K>@<s>` (M rows for
 each of the round's calls of K, o the call's first, `stepRow`), its B row j (`b_k<K>_<j>`) at
 row b0 + C·tj + j of the weights' `<prefix>b/<K>` (b0 the call's linear's first row in it), and its record (`zy`) at row
-t of the call's z table `<prefix>zy@<call>`; and, when the window registers the call's receipt table
+t of the call's z table `<prefix>zy@<call>`, each A and B row port naming the template parameter it reads
+(`Flock.Registered.PARAM_KEY`: `a_k<K>[i]`, or `a_k<K>` when R = 1, and likewise B); and, when the window registers the
+call's receipt table
 `<prefix>receipt@<call>`, the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shapeOf`'s width) at its
 row t, so the receipts the round roots commit are the ones the units return; every other unit reads none of them, and
 the file lists no unit past the call's last (`Flock.Registered.badInstance` reads none past `reads`). Each value is a
@@ -1056,12 +1058,14 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   let (some ra, some rb) := (digest? (.str ((root.lookup a).getD "")), digest? (.str ((root.lookup bv).getD "")))
     | throw ("registration", s!"call {call}'s seed reads the roots of {a} and {bv}, which are not both SHA-512 " ++
         "digests (128 lowercase hex): register each table at its tree's root")
-  let ports : List (String × String × (Nat → Nat)) :=
-    (List.range r).map (fun i => (s!"a_k{k}_{i}", a, fun t => at_ + r * (t / per) + i)) ++
-    (List.range c).map (fun j => (s!"b_k{k}_{j}", bv, fun t => b0 + c * (t % per) + j)) ++
-    [("zy", zy, fun t => t)] ++ (if receipted then [(RECEIPT_PORT, rc, fun t => t)] else [])
+  let param := fun (name : String) (rows i : Nat) =>
+    [(Flock.Registered.PARAM_KEY, Json.str (if rows == 1 then name else s!"{name}[{i}]"))]
+  let ports : List (String × String × (Nat → Nat) × List (String × Json)) :=
+    (List.range r).map (fun i => (s!"a_k{k}_{i}", a, fun t => at_ + r * (t / per) + i, param s!"a_k{k}" r i)) ++
+    (List.range c).map (fun j => (s!"b_k{k}_{j}", bv, fun t => b0 + c * (t % per) + j, param s!"b_k{k}" c j)) ++
+    [("zy", zy, fun t => t, [])] ++ (if receipted then [(RECEIPT_PORT, rc, fun t => t, [])] else [])
   let mut out : List (String × Json) := []
-  for (port, v, row) in ports do
+  for (port, v, row, named) in ports do
     let reads := (List.range (u0 + size)).map fun u =>
       if u0 ≤ u && u < u0 + size then Lean.toJson (row (u - u0)) else Json.null
     let lw : Nat × Nat := ((shapes.find? (·.1 == v)).map (·.2)).getD (0, 0)
@@ -1071,7 +1075,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     out := out ++ [(port, Json.mkObj [("value", Json.str v), ("root", Json.str ((root.lookup v).getD "")),
       ("leaves", Lean.toJson leaves), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
       ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
-      ("reads", Json.arr reads.toArray)])]
+      ("reads", Json.arr reads.toArray)] ++ named)]
   let pv := s!"{shape.pre}pub@{call}"
   let words := PouwCheck.PUBLIC_ROW_BITS / 16
   let sb := (hex? (.str salt)).getD ByteArray.empty
