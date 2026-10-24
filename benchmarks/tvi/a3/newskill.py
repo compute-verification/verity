@@ -361,6 +361,8 @@ def sft(model, st, task, steps, lr, seed, amp, bs=64, val=None, log=None, every=
                 model.train()
             if log is not None:
                 log.append(entry)
+            if step % 1000 == 0:
+                print(f"  sft {st.spec} lr={lr:g} {entry}", flush=True)
             if entry.get("val_exact", 0.0) >= TARGET:
                 break
     opt.zero_grad(set_to_none=True)

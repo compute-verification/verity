@@ -34,6 +34,7 @@ import json, os
 tasks = [t.split(":") for t in os.environ.get("TASKS", "A:0:1000:200:0/1/2,B:1:1000:200:0/1/2").split(",") if t]
 specs = os.environ.get("SPECS", "full,lora16,xs:48552,hl:50000,xs:5000,hl:5000,xs:625,hl:625,xs:13,hl:13").split(",")
 skip = set(os.environ.get("SKIP", "").split(","))
+lr_from = dict(kv.split("=") for kv in os.environ.get("LR_FROM", "").split(",") if kv)  # task -> task whose seed 0 sets the LR
 jid = lambda name, spec, seed: f"{name}-{spec.replace(':', '')}-s{seed}"
 jobs = []
 for seed in sorted({int(s) for t in tasks for s in t[4].split("/")}):
@@ -45,7 +46,9 @@ for seed in sorted({int(s) for t in tasks for s in t[4].split("/")}):
                 continue
             j = {"id": jid(name, spec, seed), "task": name, "order": int(order), "spec": spec, "seed": seed,
                  "sft_steps": int(sft), "rl_steps": int(rl)}
-            if seed > 0 and "0" in seeds.split("/"):
+            if name in lr_from:
+                j["lr_from"] = jid(lr_from[name], spec, 0)
+            elif seed > 0 and "0" in seeds.split("/"):
                 j["lr_from"] = jid(name, spec, 0)
             jobs.append(j)
 json.dump(jobs, open("jobs.json", "w"), indent=1)
