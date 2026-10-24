@@ -10,6 +10,9 @@
 # An ARMS entry ID+VAR=VALUE[+VAR=VALUE] runs arm ID with those variables set, in its own directory (ID_VAR_VALUE): A/B
 # rows in one lease, e.g. pouw-pearl-c-whole,pouw-pearl-c-whole+PEARLC_SPLIT=0; @IN@ in a value is the run's inputs, so
 # pouw-pearl-c-whole+PEARLC_CUBIN=@IN@/before.cubin runs another sent cubin.
+# PEARLC_KERNEL: the kernel directory (default benchmarks/pouw/pearl_c_sm120, on an RTX PRO 6000;
+# benchmarks/pouw/pearl_c_sm90 on an H100 or H200, its cubin sent as pearl_c_sm90.cubin, SPEC's default
+# llama31-8b-1gpu-pearl-c-whole-served-h200 and ARMS' stock-fp8@compiled,pouw-pearl-c-whole); the leased GPU must be its.
 # GPUS: the GPUs the lease may take (gpu-lease --on), SPEC (default llama31-8b-1gpu-pearl-c-whole-served), POINT,
 # WARMUPS (2), REPS (3), MAX_MIN (the lease, 20), MEM_GB (the lease's host memory, 16);
 # GPU_LEASE_TIMED=1 for rows taken inside a booked clean window
@@ -24,10 +27,16 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run}/out}; mkdir -p "$OUT"; export OUT
 . benchmarks/harness/env.sh
 IN=${RESEARCH_RUN_DIR:-.}/inputs
-export PEARLC_CUBIN=${PEARLC_CUBIN:-$IN/pearl_c_sm120.cubin}
-ARMS=${ARMS:-stock-fp8@compiled,stock-fp8,pouw:pearl-c-sm120-v1-h3}
-SPEC=${SPEC:-llama31-8b-1gpu-pearl-c-whole-served}; POINT=${POINT:-b8-p512-mixed}; NSYS=${NSYS:-1}
-export ARMS SPEC POINT NSYS
+KERNEL=$(cd "${PEARLC_KERNEL:-benchmarks/pouw/pearl_c_sm120}" && pwd); K=$(basename "$KERNEL")
+export PEARLC_KERNEL=$KERNEL PEARLC_CUBIN=${PEARLC_CUBIN:-$IN/$K.cubin}
+case $K in
+  pearl_c_sm90) GPU_NAME="H100|H200"; GPU_CC=9.0
+    ARMS=${ARMS:-stock-fp8@compiled,pouw-pearl-c-whole}; SPEC=${SPEC:-llama31-8b-1gpu-pearl-c-whole-served-h200} ;;
+  *) GPU_NAME="RTX PRO 6000 Blackwell"; GPU_CC=12.0
+    ARMS=${ARMS:-stock-fp8@compiled,stock-fp8,pouw:pearl-c-sm120-v1-h3}; SPEC=${SPEC:-llama31-8b-1gpu-pearl-c-whole-served} ;;
+esac
+POINT=${POINT:-b8-p512-mixed}; NSYS=${NSYS:-1}
+export ARMS SPEC POINT NSYS GPU_NAME GPU_CC
 LEASE=$(command -v gpu-lease || echo /workspace/pouw/infra/bin/gpu-lease)
 load() { { echo "== $1 $(date -u +%FT%TZ) loadavg $(cat /proc/loadavg)"; "$LEASE" status 2>&1 || true; } >> "$OUT/load.txt"; }
 
@@ -56,8 +65,8 @@ if [ "${1:-}" != gpu ]; then
   [ -f "$PEARLC_CUBIN" ] || { echo "served_step: no cubin at $PEARLC_CUBIN" >&2; exit 2; }
   # scratch (Inductor's per-process caches, nsys's temporaries) in one directory, removed when the run ends
   TMPDIR=$(mktemp -d); export TMPDIR; trap 'rm -rf "$TMPDIR"' EXIT
-  sha256sum "$PEARLC_CUBIN" benchmarks/pouw/pearl_c_sm120/pearl_c_sm120.cu benchmarks/pouw/pearl_c_sm120/*.cuh \
-    benchmarks/pouw/pearl_c_sm120/run.py > "$OUT/cubin.sha256"
+  SHARED=(); [ "$K" = pearl_c_sm120 ] || SHARED=(benchmarks/pouw/pearl_c_sm120/*.cuh)
+  sha256sum "$PEARLC_CUBIN" "$KERNEL/$K.cu" "$KERNEL"/*.cuh "${SHARED[@]}" "$KERNEL/run.py" > "$OUT/cubin.sha256"
   NUMABIND=${NUMABIND:-$IN/numabind.py}
   BIND=(); [ -f "$NUMABIND" ] && BIND=("$VENV/bin/python" "$NUMABIND" "$OUT/numa.json")
   ON=(); [ -n "${GPUS:-}" ] && ON=(--on "$GPUS")
@@ -71,7 +80,7 @@ fi
 UUID=${GPU_LEASE_UUID:?run under gpu-lease}; UUID=${UUID%%,*}
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" \
   > "$OUT/identity.csv"
-grep -q "RTX PRO 6000 Blackwell" "$OUT/identity.csv" && grep -q ", 12.0," "$OUT/identity.csv" || { echo "identity" >&2; exit 3; }
+grep -Eq "$GPU_NAME" "$OUT/identity.csv" && grep -q ", $GPU_CC," "$OUT/identity.csv" || { echo "identity: not $K's GPU" >&2; exit 3; }
 rc=0
 for entry in ${ARMS//,/ }; do
   arm=${entry%%+*}; SET=(); [ "$arm" = "$entry" ] || IFS=+ read -ra SET <<< "${entry#*+}"
