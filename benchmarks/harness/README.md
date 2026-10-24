@@ -54,7 +54,13 @@ engine's numerics like a greedy one's.
 The engine settings `serving_defaults = true` build every engine as vLLM serves (torch.compile, its CUDA-graph mode and
 capture sizes, no batch invariance: the execution label `compiled` of `verity_vllm.engine.served`), with one Inductor
 cache directory for all arms' processes, so they run the kernel configurations the first one autotuned. Without it a
-graph engine replays decode-only CUDA graphs at `capture_sizes`.
+graph engine replays decode-only CUDA graphs at `capture_sizes`, and `verity_vllm.LLM` builds every engine batch
+invariant (`bi-eager`, `bi-compiled`).
+
+A served variant `BUILTIN@eager` or `BUILTIN@compiled` (`stock-fp8@compiled`) is a built-in arm's engine at vLLM's
+serving defaults in that execution, whatever the spec's `eager` and the preset's `serving_defaults` say for the other
+arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compiled`). Its control is the built-in
+unless its `[arm_settings."ARM"]` names another arm or `"none"`, and its `execution` is in the arm's identity.
 
 An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
 names, string values, none of the dispatcher's, queue's or launcher's own) and its `setup`, a script in the source tree
