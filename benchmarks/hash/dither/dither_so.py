@@ -281,6 +281,7 @@ class SoWindow(DO.Window):
         self.lag: dict | None = None
         self.lag_root = torch.empty(8, dtype=torch.int64).pin_memory() if self.root_lag else None
         self.lag_ybad: torch.Tensor | None = None
+        self.ybad_pin: torch.Tensor | None = None
         self.ev_lag = torch.cuda.Event()
         self.lag_n, self.lag_waits = 0, []
         # the engine's own host time a step (from one `after`'s end to the next `before`), and `before`'s
@@ -790,6 +791,10 @@ class SoWindow(DO.Window):
             t_root = t_sent = time.perf_counter()
         else:
             self.phase("root_read")
+            # ybad rides the root read's sync rather than a nonzero's own
+            if self.ybad_pin is None:
+                self.ybad_pin = torch.empty(sd.ybad.shape, dtype=sd.ybad.dtype).pin_memory()
+            self.ybad_pin.copy_(sd.ybad, non_blocking=True)
             root = unwords(pre["round"].root(0))
             t_root = time.perf_counter()
             self.phase("record_host")
@@ -797,7 +802,7 @@ class SoWindow(DO.Window):
             if i != self.ix(s):
                 raise RuntimeError(f"step {s}'s round went out as round {i}, not {self.ix(s)}")
             t_sent = time.perf_counter()
-            bad = sd.ybad.nonzero().flatten().tolist()
+            bad = self.ybad_pin.nonzero().flatten().tolist()
             if bad:
                 sd.y_refused.append({"s": s, "capture": cap, "calls": len(bad)})
         if held:
