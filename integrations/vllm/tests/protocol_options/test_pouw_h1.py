@@ -92,6 +92,7 @@ def _entry():
     return f"pouw:{PH.SCHEME}"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("k,n,m", SHAPES, ids=["decode-1", "partial-5", "rows-33-cols-40"])
 def test_every_served_shape_compiles_to_full_warp_tiles(k, n, m):
     """Decode's one row, a partial block and a column count off the tile: every unit is a full 32 x 32 grid, the call one
@@ -104,6 +105,7 @@ def test_every_served_shape_compiles_to_full_warp_tiles(k, n, m):
     assert {u.defn.base_id for u in c.units} == {"PouwH1Tile_v1"}
 
 
+@pytest.mark.slow
 def test_the_site_rows_are_the_tap_rows_then_distinct_pad_rows():
     """A's first m rows are the call's s8 rows (parameter x) in order and its B rows the weight's (parameter w); each pad row
     reads a constant of its own, so the 32 rows are distinct and the tile a grid."""
@@ -134,6 +136,7 @@ def _run(steps=3, rows=32):
     return PH.H1Run("t", SALT, {0: "q", 1: "o"}, [(32, K), (40, K)], rows, steps)
 
 
+@pytest.mark.slow
 def test_calls_sit_at_public_positions_and_empty_steps_close_the_window():
     """Call (s, w) is at s U + off(w) whatever its served rows; the steps past the last served one are empty calls, so the
     window is every (step, linear) in order; given each call's (root(A), root(B)), every unit's seed is its own."""
@@ -266,6 +269,7 @@ def test_listeners_get_the_served_tensors_and_bind_the_calls_roots():
     assert run.calls_root() != before
 
 
+@pytest.mark.slow
 def test_units_are_in_row_block_then_column_block_order():
     """Unit u of a call covers row block u // (N' / 32) and column block u % (N' / 32), so position base + u names a tile."""
     c = PH.compiled(K, 40, 33)
@@ -274,6 +278,7 @@ def test_units_are_in_row_block_then_column_block_order():
     assert all(list(u.rows) == list(range(u.rows[0], u.rows[0] + 32)) for u in c.units)
 
 
+@pytest.mark.slow
 def test_z_is_the_exact_product_on_each_units_cells():
     rng = np.random.default_rng(5)
     xq = rng.integers(-127, 128, (33, K), dtype=np.int8)
@@ -349,6 +354,7 @@ def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
         pouw.Settings.of({"runner": SimpleNamespace(execute_model=lambda so: None)})
 
 
+@pytest.mark.slow
 def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
     """Installed on int8_exact layers, each apply serves the arm's own y bit for bit and the option's observe records the call
     at its public position, its exact Y retained; closing the window adds the empty step, and the record compiles at T."""
@@ -1180,6 +1186,7 @@ def test_a_second_session_under_the_same_key_for_one_window_is_refused(tmp_path,
             f"{w['root'][:16]}… or session s-3")
 
 
+@pytest.mark.slow
 def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
     """``challenger`` is HOST:PORT, H1's only, never beside in-process ``coins`` or ``rounds`` and never at capture; a pipeline
     that is its own auditor adds no in-process coins beside it; a challenger whose layout isn't a live window of at least S
