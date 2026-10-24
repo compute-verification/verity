@@ -358,6 +358,23 @@ def test_honest_advised_traffic_is_accepted_in_every_window(tmp_path, own):
         assert Run(tmp_path / str(seed), own).link(session) == [True] * WINDOWS
 
 
+def test_the_row_past_a_stop_is_accepted_and_hands_no_frame():
+    """The red team's case: async scheduling runs one decode past the stopping EOS (the third step samples past a
+    request of 4 prompt and 2 kept tokens). Advice v0 accepts it and discards that sample, and N2 reads v0's outputs, so
+    the window counts the 2 kept frames and is accepted, and a frame for the discarded sample is extra egress."""
+    a = ADV.Advice((ADV.RequestAdvice("a", 4, 2, "eos"),),
+                   (ADV.StepAdvice((ADV.Row(0, "prefill", 0, 4),)), ADV.StepAdvice((ADV.Row(0, "decode", 4, 1),)),
+                    ADV.StepAdvice((ADV.Row(0, "decode", 5, 1),))), (0, 1))
+    assert _past(a) == 1 and len(ADV.outputs(a)) == 2
+    v = AD.view(AD.LinkAdvice(a, (2,), (2,)), 0, T, R, [ClockSync(0, 1)])
+    ingress = [2] + [0] * (T - 1)
+    assert v.released == (1, 1) + (0,) * (T - 2)
+    assert AD.reference(T, RIN, 0, ingress, v.released, v.released, v.floor, v.received)
+    for t in range(T):
+        extra = [n + (u == t) for u, n in enumerate(v.released)]
+        assert not AD.reference(T, RIN, 0, ingress, extra, v.released, v.floor, v.received)
+
+
 def test_every_window_is_held_to_one_advice(tmp_path):
     """Each window reports the advice it read (`advised.digest`, its `advice` output, of the whole advice's encoding):
     a window checked against another advice that agrees with the link's on that window's view (one more request,
