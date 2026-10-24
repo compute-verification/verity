@@ -118,7 +118,7 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 - [`benchmarks/census/`](benchmarks/census/README.md): data only: hardware, datatypes, networks, subcircuits, input sets and workloads
 - `benchmarks/tc_probe/`, `benchmarks/tc_probe_fp4/`, `benchmarks/native_peak/`: GPU probes that compare tensor-core instructions bit for bit with the primitive circuits' models, and measure native peak throughput
 - `tools/verity/`: the `verity` command (`tools/verity/cli/`) and the tools it runs:
-  - [`tools/verity/check/`](tools/verity/check/check.py): `check`, the one check a merge requires, and `suites.py`, which runs the test suites; `rename_merge.py` merges a PR onto a train tip that moved files it edits, applying its changes at the new paths or refusing with the paths
+  - [`tools/verity/check/`](tools/verity/check/check.py): `check`, the one check, run on `main` after each landing, and `suites.py`, which runs the test suites; `rename_merge.py` merges a PR onto a train tip that moved files it edits, applying its changes at the new paths or refusing with the paths
   - `tools/verity/circuit_check/`: `circuit-check`, the property checks every circuit passes ([rules](AGENTS.md#circuits))
   - [`tools/verity/lean/`](tools/verity/lean/README.md): the Lean check every Lean package passes
 - [`tools/research/`](tools/research/README.md): the research harness, for recorded runs on remote pods and the evidence store that keeps their results; it treats every workload as opaque and imports nothing from Verity
@@ -133,7 +133,7 @@ Install the workspace with [uv](https://docs.astral.sh/uv/), then run the tests 
 uv sync --all-packages --extra torch-cpu   # the workspace, every package editable, with CPU-only torch (GPU work: a member's `torch` extra)
 uv run tools/verity/check/suites.py        # every test suite whose inputs changed since it last passed; --quick skips slow tests
 uv run circuit-check --all                 # the property checks on every registered circuit
-uv run --extra torch-cpu verity check      # the one check a merge requires; its Lean steps need lake
+uv run --extra torch-cpu verity check      # the one check; its Lean steps need lake
 ~~~
 
 Each package's tests live in its own `tests/` and run as their own suite; the [testing skill](.agents/skills/testing/SKILL.md) has the rules. Serving, proving and hardware probes run on GPU pods through the research harness (`research run --on ...`), never on a laptop.
@@ -168,7 +168,7 @@ ml.randomness, ml.crypto, core.claims: import no other module of verity
 
 `tests/test_boundaries.py` enforces these rules. Import each object from the module that owns it (`from verity.ml.circuits import Program`); `verity` itself re-exports nothing.
 
-There is no GitHub Actions CI. `check` is the one check, and `main` always passes it, kept fast by reusing a part's verdict while its declared inputs are unchanged. PRs land in trains whose `check` passed, and a landing that breaks `main` is reverted at once. [AGENTS.md](AGENTS.md) has the full rules for contributors and agents: commands, circuits, checking and merging, Lean, and where writing goes.
+There is no GitHub Actions CI. `check` is the one check, kept fast by reusing a part's verdict while its declared inputs are unchanged. PRs land on a reviewer's verdict (a Lean change once its Lean check passed), `check` runs on `main` after each landing, and a landing it fails is reverted at once. [AGENTS.md](AGENTS.md) has the full rules for contributors and agents: commands, circuits, checking and merging, Lean, and where writing goes.
 
 ## Documentation
 
@@ -217,7 +217,7 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Commit-and-prove argument**: what proves the sample. The developer commits the trace, the verifier draws, and the argument proves that each drawn unit computes its committed outputs from its committed inputs. Its errors are knowledge soundness ε_ks, binding ε_bind (that an accepted extraction disagrees with the committed values; the Lean's `LinkSound` and `δlink`) and zero knowledge ε_zk. C-Flock instantiates it.
 - **Proof service**: what lets the auditor check what the developer's AI servers did, under PoUW, PoUS and network accounting, while learning nothing about the weights or data beyond each protocol's stated public outputs. The protocols describe their checks; the service handles commitments, coins, proving and verifying. On the developer's side it is the workers behind a firewall; on the auditor's, a challenger and a verifier, with network certifiers and memory challengers placed in the developer's site. A protocol states only a `Spec` (`verity.core.protocols.sampled_proofs.service`): what it commits, its selection rule, its check as a public Program, and its public items, each with its reason.
 - **Workers**: the developer's servers and GPUs. They run the computation and nearly all proving, with zero knowledge off, trusted by neither party, and reach the auditor only through the firewall.
-- **Firewall**: the developer-trusted only path from the workers to the auditor. It commits every outbound message under a fresh salt, masks and checks or fixes everything else, and releases outer proofs, which are zero-knowledge, one at a time on a fixed schedule; only outer proofs reach the auditor. The prover is the workers behind it (P = F ∘ W).
+- **Firewall**: the developer-trusted only path from the workers to the auditor. It commits every outbound message under a fresh salt, masks and checks or fixes everything else, and releases outer proofs, which are zero-knowledge, as independent sessions, one per statement, on a fixed schedule; only outer proofs reach the auditor. The prover is the workers behind it (P = F ∘ W).
 - **Network certifier**: an auditor-trusted device on each node's uplink, untrusted by the developer (`verity.core.protocols.certifier`). It attests the contents of the traffic it carries in network certificates and scrubs its timing, which backs the auditor's network bound; every node uplink passes through one.
 - **Network certificate**: a network certifier's record of what crossed a link (`grid.Record`, committed as a `CommittedRecord`), signed under the certifier's key over its SHA-512 record digest (`certificate.CertifiedRecord`). Certificates never reach the auditor in the clear: they are witness, and the developer proves that its committed circuits are consistent with them.
 - **Memory challenger**: an auditor-trusted device beside a network certifier, the auditor's hardware on a machine the developer doesn't control at the developer's site (never a process on the prover's node), that runs PoUS's timed rounds and signs each one (`verity.core.protocols.pous.memory_challenger`'s `MemoryChallenger`). The per-round on-time bits stay in its signed record; PoUS publishes the audit's verdict.

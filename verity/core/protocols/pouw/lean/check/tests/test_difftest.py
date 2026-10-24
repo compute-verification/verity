@@ -289,7 +289,8 @@ def registered_file(case: dict) -> dict:
     lay, refused = Cr.layout_of(raw)
     if refused is None:
         program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
-        got, refused = Cr.registered_file(program, lay, shape, case["call"], case["roots"], case["window"])
+        got, refused = Cr.registered_file(program, lay, shape, case["call"], case["roots"], case["window"],
+                                          case["steps"], case["salt"])
     _counted(refused, "registered-file")
     return {"refused": list(refused)} if refused is not None else {"file": got,
                                                                    "partition": Cr.partition_of(program, shape)}
@@ -314,15 +315,18 @@ REGISTERED_FILE = _port("registered-file", registered_file, credit_cases.registe
 
 def test_credit(pass_server):
     """Generated served windows' credited sets, drawn units and their outcomes, whole windows and periods, and A rows,
-    then each mutation over a few seeds (`replay`): a credit bit flipped after the draw coin, units the prover chose, a
-    drawn unit failed or missing, a period unclosed or a window of it missing or out of order, an A tree the round roots
+    then each mutation over a few seeds (`replay`): a window's tile at a K its proof doesn't cover (2^17 or past, or no
+    multiple of 32), a credit bit flipped after the draw coin, units the prover chose, a drawn unit failed or missing,
+    a period unclosed or a window of it missing or out of order, an A tree the round roots
     didn't commit, a window's round log the challenger never received, entries or a drawn unit's proof of another
     registration than the window's or an entry whose root is not its sessions', B rows other than the ones a window's
     open root binds or registered under another domain, name or rows, a window whose B rows (one row's s_w, or every
     code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
-    model `models.json` pins (none, malformed, another checkpoint, another role), a call's A table or a round's
-    input-ids table other than the served Commit's or a Commit record the draw root doesn't bind, round 0's input-ids
-    table outside round 0's request table or bound to another session, and every other
+    model `models.json` pins (none, malformed, another checkpoint, another role), a round's A table of a K (a row off,
+    its calls' rows offset by one call, a call missing) or a round's input-ids table other than the served Commit's or a
+    Commit record the draw root doesn't bind, round 0's input-ids table outside round 0's request table or bound to
+    another session, a call's served rows m_s past the A slot M, other than its step's or malformed (an honest window's
+    empty step credits none of its calls), and every other
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
@@ -351,7 +355,13 @@ def test_credit(pass_server):
                  "outcome outcome: unit # has two", "outcome outcome: unit # has a proof outcome and was not drawn",
                  "drawn layout: linear ", "drawn layout: the A slot #", "drawn layout: the A blocks of K = #",
                  "drawn layout: a call of lm_head", "drawn draw: the draw coin is not", "drawn draw: the draw's stream",
+                 "window tile-k: the window's tile at K = # is outside the K its proof covers, multiples of # below #",
+                 "so the period earns nothing: tile-k: the window's tile at K = #",
+                 "pad its linears' A and B rows with zero codes to K = #",
+                 "split its linears' k range into linears of at most K = # each",
                  "window manifest: the manifest's # rows", "window outcome: unit # has a proof outcome and was not",
+                 "window manifest: manifest row # states no served rows m_s at most the window's A slot M = #",
+                 "window manifest: call # states # served rows and call # #, both of step #",
                  "period period: period ", "period missing: window #", "period order: window #",
                  "period period: the windows presented run past", "period period: window ", "period window: window #",
                  "period coin: the auditor's ledger is not trusted", "period circuit: window # of period ",
@@ -380,7 +390,7 @@ def test_credit(pass_server):
                  "window registration: drawn unit #'s proof opened port ",
                  "against another root than the one the window registered for",
                  "window registration: drawn unit #'s proof was verified against another circuit",
-                 "opened no A value …/a/# or …/a/#@# (its call's) of the window", "'s proof opened no weights ",
+                 "opened no A value …/a/# or …/a/#@# (its call's round's) of the window", "'s proof opened no weights ",
                  "which the window registers not",
                  "which the window registers twice", "'s entry is not one-stage's {value, root, leaves, words, domain}",
                  "so the period earns nothing: registration: drawn unit #",
@@ -401,13 +411,18 @@ def test_credit(pass_server):
                  "credit commit: the window's Commit record is not the bytes in lowercase hex",
                  "window commit: the window's Commit record is not the bytes in lowercase hex",
                  "window draw: the window's draw root is not over its manifest (each call's credit bit among it), its "
-                 "Commit record", "window arow: call #'s A table ", "is not the Commit's row-table/#/",
+                 "Commit record", "window arow: round #'s A table of K = # ", "is not the Commit's row-table/#/k#",
+                 "rows, not #: it holds the M rows of each of the round's calls of K",
                  "window arow: round #'s input-ids table ", "is not the Commit's input-ids/#",
                  "window arow: the window registers no round #'s input-ids table",
-                 "window arow: the Commit record registers row-table/#/", "twice, so the Commit's row-table/#/",
+                 "window arow: the Commit record registers row-table/#/k#",
                  "which only round # commits",
                  "window arow: round #'s request root (requests, the one the window's open root binds) is not",
-                 "window registration: registered value ", "ids@#'s domain is not the one the window's registration"):
+                 "window registration: registered value ", "ids@#'s domain is not the one the window's registration",
+                 "or receipt table of the window", "'s receipt table, its round #'s, which only round # commits",
+                 "a-link a-link: registered receipt table ", "registered-file registration: the window registers ",
+                 "'s template returns no receipt of whole #-bit words", "'s seed reads the roots of ",
+                 "its units' ok rows, which are the verifier's own"):
         assert any(part in k for k in CREDITED), part
 
 
