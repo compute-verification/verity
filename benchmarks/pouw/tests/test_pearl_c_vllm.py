@@ -47,6 +47,7 @@ from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+from verity_vllm.protocol_options import pouw_pearl_c_passes as PPS
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
@@ -1712,7 +1713,7 @@ def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_bac
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD2
     PF = load("pearl_c_vllm_profile", KERNEL.parent / "pearl_c_vllm" / "profile_decode.py")
     make, _, weights, *_ = device_run
-    before = (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm)
+    before = (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm, PPD2.PearlCDeviceRun.end)
     prof = PF.Profile()
     undo = PF.instrument(prof)
     try:
@@ -1726,7 +1727,7 @@ def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_bac
         prof.end()
     finally:
         undo()
-    assert (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm) == before
+    assert (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm, PPD2.PearlCDeviceRun.end) == before
     rep = prof.report()["pearlc-steady"]
     assert rep["prefill"]["forwards"] == 1 and rep["decode"]["forwards"] == 2 and rep["decode"]["pearlc_calls"] == 4
     host = rep["decode"]["host_ms"]
@@ -2050,11 +2051,11 @@ def test_work_on_another_stream_than_a_late_ends_copies_waits_for_them(monkeypat
     for raw, capturing, waited in ((6, False, ["copies"]), (5, False, []), (6, True, [])):
         waits.clear()
         run.stream = lambda raw=raw: raw
-        monkeypatch.setattr(PPD, "_capturing", lambda capturing=capturing: capturing)
+        monkeypatch.setattr(PPS, "_capturing", lambda capturing=capturing: capturing)
         PPD.PearlCDeviceRun._after_late(run)
         assert waits == waited
     waits.clear()
-    monkeypatch.setattr(PPD, "_capturing", lambda: False)
+    monkeypatch.setattr(PPS, "_capturing", lambda: False)
     run._late.event = None
     run.stream = lambda: 6
     PPD.PearlCDeviceRun._after_late(run)
