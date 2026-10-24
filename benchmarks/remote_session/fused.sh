@@ -51,11 +51,20 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
   # the node.
   export CUDA_MPS_PIPE_DIRECTORY=$B/mps/pipe CUDA_MPS_LOG_DIRECTORY=$B/mps/log
   mkdir -p "$CUDA_MPS_PIPE_DIRECTORY" "$CUDA_MPS_LOG_DIRECTORY"
+  # The daemon leaves its control socket behind when it quits, so it is found by its environment instead.
+  mps_pids() {
+    for p in /proc/[0-9]*; do
+      case $(cat "$p/comm" 2> /dev/null) in nvidia-cuda-mps*)
+        tr "\0" "\n" < "$p/environ" 2> /dev/null | grep -qx "CUDA_MPS_PIPE_DIRECTORY=$CUDA_MPS_PIPE_DIRECTORY" &&
+          echo "${p#/proc/}" ;;
+      esac
+    done
+  }
   mps_stop() {
-    [ -e "$CUDA_MPS_PIPE_DIRECTORY/control" ] || return 0
+    [ -n "$(mps_pids)" ] || return 0
     echo quit | nvidia-cuda-mps-control
-    for _ in $(seq 150); do [ -e "$CUDA_MPS_PIPE_DIRECTORY/control" ] || return 0; sleep 0.2; done
-    echo "the MPS daemon of $CUDA_MPS_PIPE_DIRECTORY did not quit"; return 1
+    for _ in $(seq 150); do [ -n "$(mps_pids)" ] || return 0; sleep 0.2; done
+    echo "the MPS daemon of $CUDA_MPS_PIPE_DIRECTORY did not quit: killing $(mps_pids)"; kill $(mps_pids); return 1
   }
   trap mps_stop EXIT
   trap "mps_stop; exit 143" TERM
@@ -64,7 +73,7 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
     for CFG in ${BESIDE//,/ }; do
       case $CFG in
         nomps) mps_stop; EP=; PP= ;;
-        mps*) [ -e "$CUDA_MPS_PIPE_DIRECTORY/control" ] || nvidia-cuda-mps-control -d || { R=6; break; }
+        mps*) [ -n "$(mps_pids)" ] || nvidia-cuda-mps-control -d || { R=6; break; }
               P=${CFG#mps}; EP=${P%.*}; PP=${P#*.} ;;
         *) echo "BESIDE: $CFG is not nomps, mps or mpsE.P"; R=6; break ;;
       esac
@@ -80,6 +89,7 @@ sha256sum "$B"/*.so > "$O/libs.sha256"
       cp "$CUDA_MPS_LOG_DIRECTORY"/*.log "$D/" 2> /dev/null
     done
     mps_stop || R=6
+    cp "$CUDA_MPS_LOG_DIRECTORY"/*.log "$O/" 2> /dev/null
   fi
   if [[ ,$SECTIONS, == *,ncu,* ]]; then
     ncu --target-processes all --clock-control none --cache-control all --print-units base --csv \
