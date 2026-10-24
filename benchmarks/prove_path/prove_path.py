@@ -69,7 +69,8 @@ CAP_BITS = 1 << 23
 @dataclass(frozen=True)
 class Capped:
     """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
-    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` is the inner compiler's."""
+    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` and ``transfer_gates`` are the inner
+    compiler's."""
 
     inner: Any
     cap_bits: int = CAP_BITS
@@ -86,8 +87,7 @@ class Capped:
 
     @property
     def transfer_gates(self) -> tuple[str, ...]:
-        """The templates the inner compiler lists as holding transfer gates (`advice_windows`), which its digest covers."""
-        return tuple(self.inner.transfer_gates)
+        return tuple(getattr(self.inner, "transfer_gates", ()))
 
     def load(self, rank: int, world: int, requests: Any) -> Any:
         return self.inner.load(rank, world, requests)
