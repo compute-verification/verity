@@ -45,15 +45,27 @@ def case(request):
     return cfg, adv, order, held, D.residual(adv, cfg, held, order=order)
 
 
-def _collide(self, i, u):
-    """A `Prefixes._key` whose collision structure differs from the real one: it chains over each token's low bit, so
+REAL_KEY = D.unit_key
+
+
+def _collide(parent, tokens):
+    """A `unit_key` whose collision structure differs from the real one: it keys each unit by its tokens' low bits, so
     distinct prefixes SHA-512 separates key alike. Stands in for a collision, or for a verifier computing another key."""
-    ks, ts, U = self.keys[i], self.tokens[i], self.unit
-    if (u + 1) * U > len(ts):
-        raise ValueError(f"request {i} has {len(ts)} tokens, not {u + 1} whole units of {U}")
-    while len(ks) <= u:
-        ks.append(D.unit_key(ks[-1] if ks else D.PREFIX_ROOT, [t & 1 for t in ts[len(ks) * U:(len(ks) + 1) * U]]))
-    return ks[u]
+    return REAL_KEY(parent, [t & 1 for t in tokens])
+
+
+def _collisions(adv, cfg, held, order):
+    """How many keys name requests whose tokens through the key's prefix differ, over every row of `adv`."""
+    tokens = D.tokens_of(held, order, [q.prompt_len for q in adv.requests])
+    p = D.Prefixes(tokens, cfg.unit)
+    for st in adv.steps:
+        for r in st.rows:
+            p.add(r.request, r.start, r.start + r.n)
+    n = 0
+    for key, reqs in p.by.items():
+        u = next(u for u, k in enumerate(p.keys[min(reqs)]) if k == key)
+        n += len({tokens[a][:(u + 1) * cfg.unit] for a in reqs}) > 1
+    return n
 
 
 def test_the_key_is_sha512_over_canonical_token_bytes() -> None:
@@ -71,27 +83,20 @@ def test_the_key_is_sha512_over_canonical_token_bytes() -> None:
             D.unit_key(D.PREFIX_ROOT, bad)
 
 
-def test_a_collision_in_the_key_derives_the_same_advice(case) -> None:
+def test_a_collision_in_the_key_derives_the_same_advice(case, monkeypatch) -> None:
     """Under a key with a different collision structure the prover's residual is the same, and it rebuilds the honest
     advice: a spurious key match names a request only if its tokens match, so it can't lengthen a hit or move a source."""
     cfg, adv, order, held, res = case
     assert D.rebuild(res, cfg, held, ()) == adv
-    real = D.Prefixes._key
-    D.Prefixes._key = _collide
-    try:
-        assert D.residual(adv, cfg, held, order=order) == res
-    finally:
-        D.Prefixes._key = real
+    monkeypatch.setattr(D, "unit_key", _collide)
+    assert _collisions(adv, cfg, held, order) > 0
+    assert D.residual(adv, cfg, held, order=order) == res
 
 
-def test_a_verifier_on_a_different_key_accepts_the_provers_residual(case) -> None:
+def test_a_verifier_on_a_different_key_accepts_the_provers_residual(case, monkeypatch) -> None:
     """The prover (`residual`) and the compile unit (`reconstruct`, through `rebuild`) both look prefixes up by the key.
     A verifier whose key collides differently still rebuilds the prover's residual into the same advice: what is
     derived depends on the tokens, never on the key's collisions."""
     cfg, adv, order, held, res = case
-    real = D.Prefixes._key
-    D.Prefixes._key = _collide
-    try:
-        assert D.rebuild(res, cfg, held, ()) == adv
-    finally:
-        D.Prefixes._key = real
+    monkeypatch.setattr(D, "unit_key", _collide)
+    assert D.rebuild(res, cfg, held, ()) == adv

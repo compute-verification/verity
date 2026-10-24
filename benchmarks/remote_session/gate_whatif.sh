@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The what-if line beside a gate run's line of record (gate_whatif.py), read from recorded artifacts only, so on any
 # node and with no gate key: the host run SUB (its directory as vy-auditor-1 ships it, out/ beside request.json) inside
-# the verifier run's artifact RUN_ART, the ledger head and pins log the auditor run AUDITOR_ART read through the gate
-# key (auditor.sh's out/ledger.jsonl and out/pins.jsonl), and the prover run PROVER_ART's out/prover.json. PERIOD and
+# the verifier run's artifact RUN_ART (SUB unset: out/ at the artifact's root, as a gate run before host runs ships it),
+# the ledger head and pins log the auditor run AUDITOR_ART read through the gate key (auditor.sh's out/ledger.jsonl and
+# out/pins.jsonl), and the prover run PROVER_ART's out/prover.json. PERIOD and
 # PIN are the audit's period and challenger key, COMMIT the verifier run's recorded commit; the gate sessions' peer is
 # the record's (PEER overrides it), RTT_MS the round trips replayed, PASS_SCALE and PASS_MS the pass models (each pass
 # its own time times F, or every pass MS). Writes the line of record as auditor.sh does
@@ -23,8 +24,9 @@ fetch() {
   echo "fetch $1 rc $rc" >> "$OUT/fetch.log"
   [ $rc = 0 ] || { cat "$OUT/fetch.log"; exit 3; }
 }
-fetch "${RUN_ART:?}" --to "$S/run" --path "${SUB:?}/request.json" --path "$SUB/out/verifier.json" \
-  --path "$SUB/out/challenger/*"
+P=${SUB:+$SUB/}
+fetch "${RUN_ART:?}" --to "$S/run" --path "${P}request.json" --path "${P}out/verifier.json" \
+  --path "${P}out/challenger/*"
 fetch "${AUDITOR_ART:?}" --to "$S/aud" --path out/ledger.jsonl --path out/pins.jsonl
 fetch "${PROVER_ART:?}" --to "$S/prover" --path out/prover.json
 MAIN=()
@@ -41,11 +43,11 @@ if uv run python "$HERE/auditor_line.py" --help | grep -q -- '--main FILE'; then
     echo "main: can't fetch origin/main's first-parent history, so no session is pinned" >> "$OUT/fetch.log"
   fi
 fi
-uv run python "$HERE/auditor_line.py" "$S/run/$SUB/out" --host-bytes "${HOST_BYTES:-1843153879040}" --pin "${PIN:?}" \
+uv run python "$HERE/auditor_line.py" "$S/run/${P}out" --host-bytes "${HOST_BYTES:-1843153879040}" --pin "${PIN:?}" \
   --period "${PERIOD:?}" --commit "${COMMIT:?}" ${PEER:+--peer "$PEER"} --ledger "$S/aud/out/ledger.jsonl" \
   --pins "$S/aud/out/pins.jsonl" "${MAIN[@]}" --table "$OUT/credit.md" > "$OUT/auditor_line.json" \
   2> "$OUT/auditor_line.err" || { cat "$OUT/fetch.log" "$OUT/auditor_line.err"; exit 3; }
-uv run python "$HERE/gate_whatif.py" "$S/run/$SUB/out" --line "$OUT/auditor_line.json" \
+uv run python "$HERE/gate_whatif.py" "$S/run/${P}out" --line "$OUT/auditor_line.json" \
   --prover "$S/prover/out/prover.json" ${RTT_MS:+--rtt-ms $RTT_MS} ${PASS_SCALE:+--pass-scale $PASS_SCALE} \
   ${PASS_MS:+--pass-ms $PASS_MS} --table "$OUT/whatif.md" \
   > "$OUT/gate_whatif.json" 2> "$OUT/gate_whatif.err"
