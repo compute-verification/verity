@@ -17,7 +17,9 @@
 # progress to end, `drive.sh start` removes it once a dry-run push of next shows the token can push, `drive.sh status` says
 # which and shows the log's tail, and `drive.sh once [FLAGS]` runs one tick here in the foreground, after the one in progress,
 # with FLAGS added (`--dry-run`). `drive.sh queue ARGS` runs `research queue ARGS` the same way, between ticks, against drive's
-# state (the lander's `queue eject N --by ci --reason ...`, which edits verity.state.json and syncs next).
+# state (the lander's `queue eject N --by ci --reason ...`, which edits verity.state.json and syncs next), and `drive.sh merge
+# ARGS` runs `research merge ARGS` (a pure move's `--push`). All of it runs with RESEARCH_DRIVE=1: GitHub's rulesets let only
+# the verity-drive App move main and next (23 Oct), and `research` refuses those pushes anywhere else.
 # Log: /data/drive/drive.log
 DIR=/data/drive
 LOG=$DIR/drive.log
@@ -36,9 +38,9 @@ locked() {
   [ -n "${RESEARCH_AGENT_URL:-}" ] || RESEARCH_AGENT_URL=$(cat $DIR/agent-url 2>/dev/null); export RESEARCH_AGENT_URL
   GH_TOKEN=$(/data/infra/gh_app_token.sh) || exit 1; export GH_TOKEN
   git -C "$REPO" fetch -q origin main && git -C "$REPO" checkout -q -f --detach FETCH_HEAD || exit 1
-  cd "$REPO" && PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research queue "$@"
+  cd "$REPO" && RESEARCH_DRIVE=1 PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research "$@"
 }
-tick() { locked drive --config tools/verity/check/drive.toml $(grep -v '^#' $DIR/args 2>/dev/null) "$@"; }
+tick() { locked queue drive --config tools/verity/check/drive.toml $(grep -v '^#' $DIR/args 2>/dev/null) "$@"; }
 case ${1:-} in
   start) (GH_TOKEN=$(/data/infra/gh_app_token.sh) || exit 1; export GH_TOKEN
           git -C "$REPO" fetch -q origin +refs/heads/next:refs/remotes/origin/next \
@@ -53,9 +55,9 @@ case ${1:-} in
           flock -n "$TICK" true && echo "drive: no tick running" || echo "drive: a tick is running"
           tail -n 5 "$LOG" 2>/dev/null; exit 0 ;;
   once) shift; (tick "$@"); exit $? ;;
-  queue) shift; (locked "$@"); exit $? ;;
+  queue|merge) (locked "$@"); exit $? ;;
   '') ;;
-  *) echo "drive.sh [start|stop|status|once [FLAGS]|queue ARGS]: with no argument, the loop" >&2; exit 2 ;;
+  *) echo "drive.sh [start|stop|status|once [FLAGS]|queue ARGS|merge ARGS]: with no argument, the loop" >&2; exit 2 ;;
 esac
 mkdir -p "$DIR"
 exec 9> /root/drive.lock

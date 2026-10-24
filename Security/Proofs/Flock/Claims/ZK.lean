@@ -129,6 +129,12 @@ import Proofs.Flock.Claims.ZK.FinishRep
 import Proofs.Flock.Claims.ZK.FinishRank
 import Proofs.Flock.Claims.ZK.AdmitsOf
 import Proofs.Flock.Claims.ZK.FrameAdmits
+import Proofs.Flock.Claims.ZK.FrameBeta
+import Proofs.Flock.Claims.ZK.FrameOuter
+import Proofs.Flock.Claims.ZK.FrameRanked
+import Proofs.Flock.Claims.ZK.FrameRankFault
+import Proofs.Flock.Claims.ZK.FrameRho
+import Proofs.Flock.Claims.ZK.FrameUnrefused
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishLive
@@ -601,9 +607,40 @@ import Proofs.Flock.Claims.ZK.SessionLean
   fault `Refused` names at its round.
 * `FrameAdmits`: `LeanRelease.FrameAdmits` split at `Refused`, into the tables' obligation
   `Flock.Guarantees.TablesAdmitUnrefused` (no fault shown, every table admits; proved at the deployed tables,
-  **`LeanRelease.tablesAdmitUnrefused_dataE`**) and the frames' trust `LeanRelease.FrameUnrefused` (a live history the
-  frame takes shows no fault), so `FinalRoundEq` at `ofLoop` is theirs and `FinishIs`'
+  **`LeanRelease.tablesAdmitUnrefused_dataE`**) and the frames' side `LeanRelease.FrameUnrefused` (at a `Live`
+  statement, a live history the frame takes shows no fault), so `FinalRoundEq` at `ofLoop` is theirs and `FinishIs`'
   (**`LeanRelease.finalRoundEq_ofLoop`**).
+* `FrameBeta`: `FrameUnrefused`' `β` fault. At a `Live` statement the loop serves, on a live history of `refK x` openings
+  whose last coins the frame takes, each rep's opening at `betaSlot` is its inner proof's round 2 (the rep's round
+  position, `Loop.locate_take_sum` with `Loop.repStartZk_eq`, and its schedule so far complete,
+  `Count.schedSoFar_size`), whose frame takes only one nonzero `β` (`Loop.answer_beta`), so the opened `β` is nonzero
+  (**`LeanRelease.beta_unrefused`**).
+* `FrameOuter`: `FrameUnrefused`' outer-coin fault. The algebraic phase's first two scheduled rounds are the
+  zero-check's head and the outer round (`Sched.rounds_two`); the frame takes the head (`roundFree_zcHead`) and owes the
+  outer round `m - 13` coins (`Loop.run_outer`), each of which it takes only when its `+ 1` is nonzero
+  (`Loop.answer_outer`), so at each rep's `outerSlot` the opened outer coin is never `1`
+  (**`LeanRelease.outer_unrefused`**).
+* `FrameRanked`: `FrameUnrefused`' rank fault, at the frame. Before the opening's label the frame stays in the
+  algebraic phase, and past it the rank check held at its coins (`Ranked.Good`): every label, round and answer keeps
+  that (`Ranked.label_good`, `Ranked.step_round`, `Ranked.answer_keep`). Along a rep's requests the coins it holds are
+  the rounds' answers up to the label, each the round's count (`Ranked.run_head`), so where the requests up to an inner
+  proof's round run on, the rank check held at the rounds' coins after the earlier rep's claim points
+  (**`Ranked.ownReqs_rank`**).
+* `FrameRankFault`: `FrameUnrefused`' rank fault. At a `Live` statement the loop serves, on a live history of `refK x`
+  openings whose last coins the frame takes, each rep's opening at `betaSlot` finds the frame at its inner proof's round
+  2, where the rank check held on the rounds' coins after the earlier rep's claim points (`Ranked.repState_rank`).
+  Those coins are the opened ones (`Loop.wordsAt_slot`), at the algebraic phase's counts (`Ranked.alg_cnt`,
+  `Loop.loopNr_rep`), and the frame's claim points on them are the session's (`Ranked.frame_points`), so no rep's rank
+  check refuses (**`LeanRelease.rank_unrefused`**).
+* `FrameRho`: `FrameUnrefused`' `ρ` fault. The firewall's masked Ligerito stops at dependent `ρ₀, ρ₁` right after
+  `ρ₁`'s squeeze, so a rep's schedule that ran its opening to its end was answered independent ones at Ligerito's rounds
+  `k₀ + 2` and `k₀ + 3` (**`Count.openStep_rho`**, through `SPW`, a step program's answers so far). At the rep's inner
+  round 2 its schedule so far is complete (**`Count.schedSoFar_rho`**), and those answers are the opened coins at
+  `rhoSlot` and the next, so no rep's pair coins are dependent (**`LeanRelease.rho_unrefused`**).
+* `FrameUnrefused`: the four faults together. Each fault `Refused` shows by `refK x` at a `Live` statement the loop
+  serves is one a rep frame refuses at its round, below `refK x` (`LeanRelease.slots_lt`), so the session loop's own
+  frames refuse every coin fault (**`LeanRelease.frameUnrefused_ofLoop`**), and `SessionLoopZK` takes no
+  `FrameUnrefused`.
 * `FinishStop`: the firewall's stop at a worker's values. At constraints whose forms are rep `r`'s first seven rows on
   the masked values, none fails on the drawn pads exactly where those rows vanish at the clear values at zero pads
   (**`Composed.noFail_iff_rows`**, by `rows_padFree`), so the stop bit reads no pad; and where they vanish for both

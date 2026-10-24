@@ -71,6 +71,11 @@ MIX_FORMS = {"mix": ("block2", "split")}
 PEEL_ENV = "DITHER_PEEL"
 # ASK-64's perCall, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
 PERCALL_ENV = "DITHER_PERCALL"
+# "1" (dither_so's -aom/-aomn without -ov; CA's ruling of 23 Oct, core's form not yet landed): one A table a K a step,
+# a/<K>@<s> (`a_step_fields`), its rows every call of that K's slots in call order (call c's slot r at row c T + r: the K
+# slots' buffer and their scales' rows of `scale_all`), built once after the forward; the a-step leaf of call w is the
+# root of its K's table
+A_STEP_ENV = "DITHER_A_STEP"
 LIB = "dither1"
 REG = DF.REG
 CFG: dict = {}
@@ -89,6 +94,7 @@ class Window:
     forward reads its slots); the h1c sets (B tables once; the A, admit and z tables, the step trees and the round); one
     call table for the seeds and receipts; the `h1o` table and step struct; the epoch salt."""
     group_slots = False     # `slot_groups` and `scale_all` (dither_so's ring copies a step's slots from them)
+    a_step = False          # A_STEP_ENV's tables (dither_so sets it, with group_slots)
 
     def __init__(self, t: int, key: bytes, h1c_path: str, h1o_path: str, gate: bool, dev):
         self.t, self.key, self.dev = t, key, dev
@@ -111,10 +117,15 @@ class Window:
                 self.slot.append(self.slot_groups[k][at[k]])
                 at[k] += 1
             self.scale_all = torch.zeros(L, t, dtype=torch.float32, device=dev)
-            self.scale = list(self.scale_all.unbind(0))
+            # under a_step the scales' rows a K in call order (`a_calls`), K by K, so a K's run is its table's tails
+            self.a_calls = {k: [w for w, (_, kk) in enumerate(self.nk) if kk == k] for k in ks}
+            order = [w for k in ks for w in self.a_calls[k]] if self.a_step else list(range(L))
+            self.spos = [order.index(w) for w in range(L)]
+            self.scale = [self.scale_all[self.spos[w]] for w in range(L)]
         else:
             self.slot = [torch.zeros(t, k, dtype=torch.int8, device=dev) for _, k in self.nk]
             self.scale = [torch.zeros(t, dtype=torch.float32, device=dev) for _ in self.nk]
+            self.spos = list(range(L))
         self.z = [torch.zeros(t, n, dtype=torch.int32, device=dev) for n, _ in self.nk]
         self.live = torch.zeros(t // 32, dtype=torch.uint8, device=dev)
         self.admit = torch.zeros(t // 16 * 2, dtype=torch.uint8, device=dev)
@@ -680,6 +691,32 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
     rows, _ = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
     d = 1 - 2 * int(int(a[0, 0]) == 127 and int(rows[0][0][0]) == 1)
     return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]
+
+
+def a_step_fields(win: Window, k: int, s: int) -> dict:
+    """A_STEP_ENV's table a/<k>@<s>: its domain's fields (kind "a-table", count len(linears) T)."""
+    return {"window": win.window, "step": s, "k": k, "linears": win.a_calls[k], "slots": win.t, "schema": CM.SCHEMA}
+
+
+def a_roots_cpu(win: Window, s: int, calls, q_of, sc_of) -> dict[int, bytes]:
+    """commit.py's A root of each call in `calls` at step s from its slot rows q_of(w) ([T, k] int8) and scales sc_of(w)
+    ([T] float32): its own table a/<s>/<w>, or under a_step its K's a/<K>@<s> (the K's calls' rows in call order)."""
+    calls, out = list(calls), {}
+    for w in calls:
+        k = win.nk[w][1]
+        if not win.a_step:
+            fa = {"window": win.window, "step": s, "linear": w, "module": win.names[w], "slots": win.t, "k": k,
+                  "schema": CM.SCHEMA}
+            out[w] = CM.s8_table(CM.domain(fa, win.t, "a-table"), win.key, f"a/{s}/{w}", q_of(w), sc_of(w)).root
+            continue
+        if w in out:
+            continue
+        cs = win.a_calls[k]
+        q = np.concatenate([q_of(v) for v in cs])
+        sc = np.concatenate([sc_of(v) for v in cs])
+        r = CM.s8_table(CM.domain(a_step_fields(win, k, s), len(cs) * win.t, "a-table"), win.key, f"a/{k}@{s}", q, sc).root
+        out.update(dict.fromkeys(cs, r))
+    return {w: out[w] for w in calls}
 
 
 def a_bad_diag(g: dict, bad: list[int]) -> list[dict]:

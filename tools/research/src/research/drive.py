@@ -1373,8 +1373,10 @@ class Driver:
         - A lower check that passed with `--defer`'s steps still running clears nobody of a failure in one of them.
         - A kill that points at nothing, or a failure nothing in the train reaches, a machine's fault, is checked again once,
           on ``on``'s machines (`resend`); a kill again, or a failure with no report, is told to `CI`.
-        A member a lower running check covers is left to that check (18 Oct 01:55Z: ejecting it cancelled that train, and were
-        it the cause, that check fails too), and a lower failed check acts first (10:30Z)."""
+        A member a lower running check covers is ejected all the same when the failure names a file only such members change:
+        that check carries the same change, and every train above waits on it while it runs (23 Oct 12:05-12:48Z: #3266's
+        read-guard failure held the queue behind a lower check whose deferred pytest would have failed it after landing). A
+        lower failed check acts first (18 Oct 10:30Z)."""
         key, prs = f"failed:{m.commit}", " ".join(f"#{x.pr}" for x in members)
         if key in drive["told"]:
             return
@@ -1412,11 +1414,9 @@ class Driver:
             self._eject(drive, key, head, m, prs, v, above, f"it is the only PR above {low}; {on}")
             return
         hit = [x for x in hit if members.index(x) > passed]
-        if hit and all(members.index(x) < floor for x in hit):
-            self.q.log(f"research queue drive: {m.commit[:12]} failed on {what}, which only members the check of "
-                       f"{members[floor - 1].commit[:12]} covers change: waiting on that check")
-            return
-        if hit := [x for x in hit if members.index(x) >= floor]:
+        if upper := [x for x in hit if members.index(x) >= floor]:
+            hit = upper
+        if hit:
             self._eject(drive, key, head, m, prs, v, hit, f"{'its' if len(hit) == 1 else 'their'} change touches {what}")
             return
         if known:
@@ -2189,6 +2189,12 @@ class Driver:
         stop = next((k for k, x in enumerate(members) if x.commit in settling), len(members))
         passed_now = False                                  # a check whose verdict came in since the land step at the start
         todo: list[tuple[int, Member, str, bool]] = []          # (its place in `what`, the train's tip, its PRs, agreement)
+        # the top tip keeps a check of its own, ranked first in the slot queues: one pass of it lands all of `next`, while the
+        # trains below it still land what they can (23 Oct 19:20Z: the five checks were nested prefixes of the bottom 15 of 50,
+        # cut at their cold-circuit-check boundaries, and nothing checked the 35 above them)
+        top = trains[-1] if len(trains) > 1 and trains[-1] <= stop and self.max_running > 2 else None
+        reserve = top is not None and self.verdict(members[top].commit, main, drive).state == "none"
+        waited = False
         for i in trains:
             m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])
             v = self.verdict(m.commit, main, drive)
@@ -2207,8 +2213,13 @@ class Driver:
                 what.append(f"{m.commit[:12]} waits: {members[stop].commit[:12]} (#{members[stop].pr}) below it failed, and "
                             "its failure is settled first")
                 break
-            if running >= self.max_running:
-                what.append(f"{m.commit[:12]} waits: {running} checks of `{q.branch}` running")
+            if running >= self.max_running - (reserve and i != top):
+                if not waited:
+                    what.append(f"{m.commit[:12]} waits: {running} checks of `{q.branch}` running"
+                                + (f", and one is kept for the top, {members[top].commit[:12]}" if reserve and i != top else ""))
+                    waited = True
+                if reserve and i != top:
+                    continue
                 break
             agreement = needs_agreement(self.repo, main, m.commit)
             if dry_run or q.shadow:
@@ -2221,7 +2232,8 @@ class Driver:
             what.append("")
             running += 1
         chain = q.chain() if todo else []
-        started = _each(lambda t: self._start(t[1], main, t[3], self._rank(t[1].commit, chain)), todo, LAUNCH_JOBS)
+        started = _each(lambda t: self._start(t[1], main, t[3], 1 if top is not None and t[1] is members[top] else
+                                              self._rank(t[1].commit, chain)), todo, LAUNCH_JOBS)
         for (k, m, prs, agreement), (ids, tail, *rest) in zip(todo, started):
             self._record(drive, m, agreement, (ids, tail, *rest))
             if not ids:
