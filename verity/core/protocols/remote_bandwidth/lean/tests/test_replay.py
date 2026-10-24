@@ -5,6 +5,8 @@ contradicts (an accepted session with a window that drew another count) is caugh
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import shutil
 
@@ -33,11 +35,13 @@ def verifier_json(r: M.Run) -> dict:
             arrivals.setdefault(e["t"], []).append(e["now"])
     drawn_at = {e["t"]: e["now"] for e in r.events if e["kind"] == "close"}
     v = s.failed
+    pace = r.params.pace
     session = {
         "k": 0, "accepted": s.outcome == "accepted",
         "failure": None if v is None else {"t": v.window, "failure": v.failure, "at": None if v.at is None else list(v.at)},
         "allowance_ns": r.params.deadline_ns, "samples": r.params.samples, "window_ns": r.params.window_ns,
         "windows": r.params.windows, "registration": reg.digest.hex(),
+        "pace": None if pace is None else {"k": pace.k, "t_ms": pace.window_ns / 1e6},
         "draws": {str(t): [list(d) for d in w.draws] for t, w in enumerate(s.windows) if w.draws},
         "windows_seen": [{"t": t, "released_ns": w.released_ns, "boundary_ns": w.boundary_ns,
                           "deadline_ns": s.deadline(t) if w.boundary_ns is not None else None,
@@ -68,7 +72,8 @@ def zero_passes(r: M.Run) -> None:
     r.finish()
 
 
-@pytest.mark.parametrize("name", ["honest", "drop-registered", "unchained-head", "late"])
+@pytest.mark.parametrize("name", ["honest", "drop-registered", "unchained-head", "late", "honest-paced",
+                                  "order-past-pace"])
 def test_a_transcript_replays_to_the_definitions_verdict(server, tmp_path, name) -> None:
     case, outcome = M.recorded(name)
     path = tmp_path / "case.json"
@@ -78,7 +83,28 @@ def test_a_transcript_replays_to_the_definitions_verdict(server, tmp_path, name)
     assert row["lean"]["outcome"] == M.SCENARIOS[name][3] == outcome
 
 
-@pytest.mark.parametrize("name", ["honest", "honest-subset", "honest-by-root", "drop-registered", "stale-challenge"])
+def test_a_transcript_that_names_no_pace_replays_only_with_the_pace_its_verifier_json_gives(server, tmp_path) -> None:
+    """A transcript written before it named its session's pace: replayed unpaced, a paced session's windows would be
+    held to no cap on their roots, so it replays only with the pace its `verifier.json` recorded, and its bytes the
+    ones recorded there; and its outcome is held to the one recorded there."""
+    case = copy.deepcopy(M.recorded("order-past-pace")[0])
+    del case["params"]["pace"]
+    path = tmp_path / "case.json"
+    path.write_text(json.dumps(case))
+    row, = R.replay_transcript(path, server)
+    assert row["agree"] is None and row["held"] is False and "pace" in row["why"], row
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    paced = {"pace": {"k": 2, "window_ns": 10}, "sha256": digest, "outcome": "order"}
+    row, = R.replay_transcript(path, server, {path.name: paced})
+    assert row["agree"] and row["held"] and row["lean"]["rejected"]["failure"] == "order", row
+    row, = R.replay_transcript(path, server, {path.name: paced | {"outcome": "accepted"}})
+    assert row["agree"] and row["held"] is False and row["why"] == "replayed order, the record accepted", row
+    row, = R.replay_transcript(path, server, {path.name: paced | {"sha256": "00" * 32}})
+    assert row["held"] is False and "sha256" in row["why"], row
+
+
+@pytest.mark.parametrize("name", ["honest", "honest-subset", "honest-by-root", "drop-registered", "stale-challenge",
+                                  "honest-paced"])
 def test_a_verifier_json_replays_to_its_recorded_verdict(server, tmp_path, name) -> None:
     path = tmp_path / "verifier.json"
     path.write_text(json.dumps(verifier_json(run(name))))
@@ -211,9 +237,36 @@ def test_case_of_keeps_the_recorded_parameters_and_clock() -> None:
     case, made = R.case_of(v["registration"], s)
     assert case["params"] == {
         "deadline_ns": s["allowance_ns"], "deferred": False, "lifetime": s["record"]["public"]["lifetime"],
-        "min_passes": 1, "samples": s["samples"], "window_ns": s["window_ns"], "windows": s["windows"]}
+        "min_passes": 1, "pace": None, "samples": s["samples"], "window_ns": s["window_ns"], "windows": s["windows"]}
     assert s["record"]["public"]["lifetime"] == audit.LIFETIME
     receives = [e for e in case["events"] if e["kind"] == "receive"]
     assert [e["now"] for e in receives] == [x for w in s["windows_seen"] for x in w["arrivals_ns"]]
     assert [e["step"] for e in receives] == [x for w in s["record"]["profile"]["windows"] for x in w["steps"]]
     assert made == {"plans": "recorded lengths", "steps": "recorded"}
+
+
+@pytest.mark.parametrize("name", ["honest-paced", "order-past-pace"])
+def test_case_of_keeps_a_paced_sessions_pace(server, tmp_path, name) -> None:
+    """A paced session's pace, from its record (accepted) or the pace it ran under (`pace_of`'s k and T), so the case
+    holds each window to its k roots."""
+    v = verifier_json(run(name))
+    case, _ = R.case_of(v["registration"], v["sessions"][0])
+    assert case["params"]["pace"] == {"k": 2, "window_ns": 10}
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["agree"] and row["held"], row
+
+
+def test_case_of_reads_the_pace_the_pace_k_driver_wrote(server, tmp_path) -> None:
+    """The `--pace K` driver wrote a session's pace as its `audit.Pace` (`{k, window_ns}`, r20261019-035339-7f27), not
+    `pace_of`'s k and T: a rejected session, with no record to read it from, replays under it. Its `order` isn't in
+    what the record keeps (the books keep no refused root), so the replay holds without reaching it."""
+    v = verifier_json(run("order-past-pace"))
+    v["sessions"][0]["pace"] = {"k": 2, "window_ns": 10}
+    case, _ = R.case_of(v["registration"], v["sessions"][0])
+    assert case["params"]["pace"] == {"k": 2, "window_ns": 10}
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["agree"] and row["held"], row

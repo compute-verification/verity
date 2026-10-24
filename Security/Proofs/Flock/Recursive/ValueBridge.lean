@@ -33,7 +33,6 @@ variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : La
 table leaves', the held salts' or the held top's finder finds a collision, or `zk_sessions_recursive_fork_on`'s
 conclusion. -/
 theorem zk_sessions_recursive_fork_onV
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig)
     (salt : ℕ → ByteArray) (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
@@ -113,7 +112,7 @@ theorem zk_sessions_recursive_fork_onV
         ((prob_or_le _ _ _ _).trans (add_le_add (prob_leafColl_le zs dg N σ (Finder.cr_of_not_finds hl 0))
           ((prob_or_le _ _ _ _).trans (add_le_add (prob_saltColl_le lv cap salt zs σ (Finder.cr_of_not_finds hsa 0))
             (prob_topCollAt_le wr st reg bcs' lv cap salt hstk zs σ (Finder.cr_of_not_finds hto 0)))))))))
-  refine (zk_sessions_recursive_full_on hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg
+  refine (zk_sessions_recursive_full_on zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg
     (fun R ω t R₂ => RegColl zs R ω t R₂ ∨ ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂ ∨
       SaltColl lv cap salt zs R ω t R₂ ∨ TopColl wr st reg bcs' t) hbr hX same rd hrd Sk cmt msg hcmt hdec hfull
     (fun _ => 0) (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0) hin).trans
@@ -130,7 +129,6 @@ given**: `zk_sessions_recursive_fork_innerL` with V*'s bridge as
 `Flock.Assumptions.VBridgeCOff (ValueColl zs vsrc ∨ LeafColl zs ∨ SaltColl lv cap salt zs ∨ TopColl wr st reg bcs')`,
 the value, the table leaves', the held salts' and the held top's finders finding a collision four more forks. -/
 theorem zk_sessions_recursive_fork_innerLV
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig)
     (salt : ℕ → ByteArray) (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
@@ -170,7 +168,7 @@ theorem zk_sessions_recursive_fork_innerLV
       simp only [ne_eq, Option.map_eq_none_iff, List.getElem?_eq_none_iff, Nat.not_le]; omega)
     exact ⟨m, zip_eq_relabelL (ref ω) m t l hm fun k hk =>
       option_eq_of_rel (R := fun a b => k + 1 < I.r → a = b) (fun _ _ hab => hab (by omega)) (h k (by omega))⟩
-  rcases zk_sessions_recursive_fork_onV hA3 zs vsrc lv cap salt wr st reg bcs' hstk dg N hk hRw hM hρ hr σ x wmsg hbr.1
+  rcases zk_sessions_recursive_fork_onV zs vsrc lv cap salt wr st reg bcs' hstk dg N hk hRw hM hρ hr σ x wmsg hbr.1
       (fun i _ a b => i + 1 < I.r → a = b) (fun ref ω t u => ∃ m, u = relabelL (ref ω) m t) hrd
       (fun i j => if i + 1 < I.r then Sk i j else ∅) cmt msg hbr.2.1 hbr.2.2.1 hbr.2.2.2
       (fun ref => InnerAtLeavesL.toZ (hleaf hf ref)) with h | h | h | h | h | h | h | h

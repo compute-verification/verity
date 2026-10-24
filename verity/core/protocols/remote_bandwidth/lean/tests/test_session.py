@@ -20,7 +20,7 @@ from verity.core.protocols.remote_bandwidth import audit
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-PORT = D.Port(M.EXE, "session", M.session, st.nothing(), package=M.PACKAGE)
+PORT = D.Port(M.EXE, "session", M.session, st.nothing(), package=M.PACKAGE, of_record=M.OF_RECORD)
 server = D.server_fixture(PORT)
 
 

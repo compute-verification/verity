@@ -11,7 +11,7 @@
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/ovg}; mkdir -p $R/out
-DEFS=$REPO/${DEFS:-backends/flock/pod/gemm-coordinates.defs.json}
+DEFS=$REPO/${DEFS:-verity/ml/flock/pod/gemm-coordinates.defs.json}
 if [ -d /run/gpu-lease ] && [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
   for i in ${GPUS:-4 5 6 7}; do
     exec 9>>/run/gpu-lease/$i.lock

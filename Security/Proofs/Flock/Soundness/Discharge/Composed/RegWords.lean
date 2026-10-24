@@ -8,9 +8,10 @@ import Proofs.Flock.Soundness.LinkSound
 # A valid witness's registered values are the public ones
 
 A region is whole-word when its free bits include the in-word bits 0–6 (`WholeWord`). Then each word `x` of a region
-claim either lies on the region, where a valid witness's bits are the region's public ones (`wordBit_eq_regionBit`), or
-off it, where the region fixes a word bit that `x` lacks and the claim's `eq` weight vanishes (`eqWord_off`). So at a
-valid witness every region claim's message is the public one (`coinedOf_reg`). Every region of a `setupHidden`
+claim either lies on the region, where the bits of a witness holding the regions (`RegionsHold`, `Satisfies`' region
+conjunct) are the region's public ones (`wordBit_eq_regionBit`), or off it, where the region fixes a word bit that `x`
+lacks and the claim's `eq` weight vanishes (`eqWord_off`). So at such a witness every region claim's message is the
+public one (`coinedOf_reg_of`), at a valid witness in particular (`coinedOf_reg`). Every region of a `setupHidden`
 statement is whole-word (`setupHidden_whole`), and of a `setupH` statement whose output is the unit's and whose circuit
 is untyped (`setupH_whole`).
 -/
@@ -117,12 +118,21 @@ theorem testBit_foldl (P : ℕ → Bool) (N t : ℕ) :
 theorem zmod2_of_bit {a : ZMod 2} {b : Bool} (h : FlockSoundness.bit a = b) : a = if b = true then 1 else 0 := by
   subst h; revert a; decide
 
-/-- **On a whole-word region, a valid witness's bit is the region's**: word `x`'s bit `v`, where `x` has the region's
-fixed bits above the word, is bit `128·x + v` of the region's bytes (`regionBit`), by `Satisfies`' region conjunct
-(`Layout.region_read`) at the block `(128·x + v) / 2^k_log` and region bit `k` whose in-block address is the rest. -/
+/-- **The witness holds the statement's regions**: `Satisfies`' region conjunct alone. -/
+def RegionsHold (S : Statement) (z : Witness S.m) : Prop :=
+  ∀ R ∈ S.regions, ∀ (o : Fin (2 ^ S.nbl)) (i : ℕ) (_hi : i < 2 ^ R.free.length),
+    ∀ h : R.inBlock i < 2 ^ S.kLog, S.block z o ⟨R.inBlock i, h⟩ = R.bits o i
+
+theorem RegionsHold.of_satisfies {S : Statement} {z : Witness S.m} (h : S.Satisfies z) : RegionsHold S z :=
+  h.2.2
+
+/-- **On a whole-word region, a witness holding the regions has the region's bit**: word `x`'s bit `v`, where `x` has
+the region's fixed bits above the word, is bit `128·x + v` of the region's bytes (`regionBit`), by the region conjunct
+(`RegionsHold`, as `Layout.region_read` reads it) at the block `(128·x + v) / 2^k_log` and region bit `k` whose
+in-block address is the rest. -/
 theorem wordBit_eq_regionBit {st : Stmt} (hwf : StmtWF st) (hm : st.m = st.c.kLog + st.nbl)
     {reg : Flock.Region} (hreg : reg ∈ st.regions.toList) (hw : RegionWF st.c.kLog reg) (hW : WholeWord reg)
-    {z : Witness st.m} (hz : (stmtOf st hwf (regionsOf st)).Satisfies z) {x v : ℕ} (hx : x < 2 ^ (st.m - 7))
+    {z : Witness st.m} (hz : RegionsHold (stmtOf st hwf (regionsOf st)) z) {x v : ℕ} (hx : x < 2 ^ (st.m - 7))
     (hv : v < 128)
     (hfix : ∀ i, i + 7 < st.c.kLog → i + 7 ∉ reg.free.toList →
       x.testBit i = ((reg.mask >>> (i + 7)) % 2 == 1 && (reg.fixed >>> (i + 7)) % 2 == 1)) :
@@ -185,7 +195,8 @@ theorem wordBit_eq_regionBit {st : Stmt} (hwf : StmtWF st) (hm : st.m = st.c.kLo
     rw [hin]; exact Nat.mod_lt _ (Nat.two_pow_pos _)
   have hdiv : (128 * x + v) / 2 ^ st.c.kLog < 2 ^ (st.m - st.c.kLog) := by
     rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), ← pow_add, Nat.sub_add_cancel hkm]; exact hidx
-  have hread := Layout.region_read hz (reg := reg) (List.mem_map_of_mem hreg) ⟨_, hdiv⟩ k hklt ha
+  have hread := (congrArg bit (hz _ (List.mem_map_of_mem hreg) ⟨_, hdiv⟩ k hklt ha)).trans
+    (Layout.regionOf_bit _ _ reg _ k)
   have hz_eq : (stmtOf st hwf (regionsOf st)).block z ⟨_, hdiv⟩ ⟨_, ha⟩ = z ⟨128 * x + v, hidx⟩ := by
     refine congrArg z (Fin.ext ?_)
     show (128 * x + v) / 2 ^ st.c.kLog * 2 ^ st.c.kLog + (regionOf st.c.kLog (st.m - st.c.kLog) reg).inBlock k =
@@ -218,10 +229,10 @@ theorem eqWord_off (st : Stmt) (link : Fin 2 → Fin st.mPts → F128) (j : Fin 
   revert hne
   cases bv <;> cases x.testBit i <;> simp [one_add_one']
 
-/-- **A region claim's message at a valid witness is the public one**, word by word: on the region by
+/-- **A region claim's message at a witness holding the regions is the public one**, word by word: on the region by
 `wordBit_eq_regionBit`, off it by `eqWord_off`. -/
-theorem sum_reg {S : Statement} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtOf st hwf (regionsOf st))
-    (hr : RegionsWF st) (hW : WholeWords st) {z : Witness S.m} (hz : S.Satisfies z)
+theorem sum_reg_of {S : Statement} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtOf st hwf (regionsOf st))
+    (hr : RegionsWF st) (hW : WholeWords st) {z : Witness S.m} (hz : RegionsHold S z)
     (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) (v : Fin 128) :
     ∑ x : Fin (2 ^ (S.m - 7)), fOf (eqWord (regionPtOf st link j) x.val) *
       ZK.Table.castF (F := 𝔽) (wordBit z x.val v.val) = pubRegOf st link j v := by
@@ -240,6 +251,14 @@ theorem sum_reg {S : Statement} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtOf s
     obtain ⟨i, hi, hnf, hne⟩ := hfix
     rw [eqWord_off st link j hi (by have := hwf.hk; omega) hnf hne, fOf_zero, zero_mul, zero_mul]
 
+/-- **A region claim's message at a valid witness is the public one** (`sum_reg_of`). -/
+theorem sum_reg {S : Statement} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtOf st hwf (regionsOf st))
+    (hr : RegionsWF st) (hW : WholeWords st) {z : Witness S.m} (hz : S.Satisfies z)
+    (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) (v : Fin 128) :
+    ∑ x : Fin (2 ^ (S.m - 7)), fOf (eqWord (regionPtOf st link j) x.val) *
+      ZK.Table.castF (F := 𝔽) (wordBit z x.val v.val) = pubRegOf st link j v :=
+  sum_reg_of hwf hS hr hW (RegionsHold.of_satisfies hz) link j v
+
 variable {mPts : ℕ} (P : LigProver)
 
 /-- **`H_reg` at a valid witness** of `coinedOf`'s tables, once the statement's regions are whole-word: every region
@@ -248,5 +267,13 @@ theorem coinedOf_reg (Tz : TabZK 𝔽 mPts) (st : Stmt) (hwf : StmtWF st) (hr : 
     (hS : Tz.S = stmtOf st hwf (regionsOf st)) (hW : WholeWords st) :
     ∀ c w, (coinedOf P Tz st).Valid w → ((coinedOf P Tz st).T c).tab.sReg w = ((coinedOf P Tz st).T c).tab.pubReg :=
   fun c _ hv => funext fun j => funext fun v => sum_reg hwf hS hr hW hv c.rest.link j v
+
+/-- **`H_reg` at a witness holding the regions** of `coinedOf`'s tables, once the statement's regions are whole-word:
+`coinedOf_reg` from the region conjunct alone, at every coin. -/
+theorem coinedOf_reg_of (Tz : TabZK 𝔽 mPts) (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st)
+    (hS : Tz.S = stmtOf st hwf (regionsOf st)) (hW : WholeWords st) :
+    ∀ c w, RegionsHold (coinedOf P Tz st).S w →
+      ((coinedOf P Tz st).T c).tab.sReg w = ((coinedOf P Tz st).T c).tab.pubReg :=
+  fun c _ hv => funext fun j => funext fun v => sum_reg_of hwf hS hr hW hv c.rest.link j v
 
 end FlockSoundness.Discharge.Composed

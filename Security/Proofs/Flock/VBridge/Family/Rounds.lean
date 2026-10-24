@@ -134,16 +134,16 @@ theorem selRounds_selOf (n₀ : ℕ) (kc : ℕ → ℕ) : VStarFamily.SelRounds 
 `skOf` and U4 do not read are the empty file's). -/
 def mPort (name : String) (k : ℕ) : Registered.Port :=
   { name, value := s!"rec-c{k}", root := ByteArray.empty, leaves := 2, words := none, wordBits := 16,
-    domain := ByteArray.empty, reads := #[some 0, some 1] }
+    domain := ByteArray.empty, readsRel := #[some 0, some 1] }
 
 /-- `m<k>`'s `k`. -/
 def mIndex (nm : String) : Option ℕ := if nm.startsWith "m" then (nm.drop 1).toString.toNat? else none
 
 /-- **A statement's message-round ports**: an algebra part's ports `m<k>`, none of a RecOpen's, nor of candidate 3's
-statements, which no session of the circuit table's family is. -/
+statements or RecCap, which no session of the circuit table's family is. -/
 def ownOf : VStar.Stmt → Array Registered.Port
   | .inner _ _ p => (p.S.ports.filterMap fun (nm, _) => (mIndex nm).map (mPort nm)).toArray
-  | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. => #[]
+  | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. | .cap .. => #[]
 
 /-- A message-round port: one named `m<k>` or registering a `rec-c<k>`. -/
 def isMsg (p : Registered.Port) : Bool := (mIndex p.name).isSome || (cIndex p.value).isSome
@@ -162,7 +162,7 @@ def SameMsg (own own' : Array Registered.Port) : Prop := ∀ q, q ∈ msgPorts o
 
 theorem isMsg_ownOf {st : VStar.Stmt} {p : Registered.Port} (hp : p ∈ ownOf st) : isMsg p = true := by
   cases st with
-  | recOpen | recOpenStacked | sparse | opening => simp [ownOf] at hp
+  | recOpen | recOpenStacked | sparse | opening | cap => simp [ownOf] at hp
   | inner _ _ part =>
     simp only [ownOf, List.mem_toArray, List.mem_filterMap, Option.map_eq_some_iff] at hp
     obtain ⟨⟨nm, _⟩, -, k, hk, rfl⟩ := hp

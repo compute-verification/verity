@@ -3,10 +3,11 @@ name: authoring-skills
 description: >
   Conventions for creating or modifying agent skills in .agents/skills/:
   SKILL.md structure, frontmatter, writing descriptions that activate
-  reliably, naming, where detail beyond SKILL.md goes, and routing from
-  AGENTS.md. Use
-  when adding a skill, editing an existing SKILL.md, or deciding whether
-  guidance belongs in a skill, in AGENTS.md, or in code.
+  reliably, naming, where detail beyond SKILL.md goes, the 16 KB cap and
+  compacting a skill to current rules without their history, and routing from
+  AGENTS.md. Use when adding a skill, editing an existing SKILL.md, a skill is
+  over its cap or too long, or deciding whether guidance belongs in a skill,
+  in AGENTS.md, or in code.
 ---
 
 # Authoring Skills
@@ -57,7 +58,9 @@ preserves substantial computational work) is repo-level. `proof-benchmark`
     └── SKILL.md        # Required: frontmatter + workflow
 ~~~
 
-A skill is one `SKILL.md`, at most 48 KB. `tests/test_repository.py` admits
+A skill is one `SKILL.md`, at most 16 KB (`SKILL_SIZE_CAP` in
+`tests/test_repository.py`; the skills over it on 20 Oct are held at their
+size then, in `OVERSIZE_SKILLS`, and only shrink). `tests/test_repository.py` admits
 tracked markdown only under the maintained basenames (`AGENTS.md`, "Where
 writing goes"), so a `workflow.md` or `examples.md` beside it fails the suite.
 A script or a `*.template.md` the skill uses may sit beside it.
@@ -137,6 +140,21 @@ Prefer:
 
 If the skill becomes large, keep the workflow in `SKILL.md` and point at the
 detail where it is maintained anyway (see Detail Beyond SKILL.md).
+
+### Current Truth, Not History
+
+An agent loads a skill whole, so every line costs context (Daniel, 20 Oct:
+skills stay short, not a database of what went wrong). A skill states the
+procedure and the rules as they are now:
+
+- a ruling is one present-tense line for its class of case; its date, source
+  and story go in Daniel's decisions log in Notion, or a note;
+- a rule `AGENTS.md` or another skill already states is cited, not repeated;
+- a rule code enforces is deleted, since the check's failure message says it;
+- a superseded rule is rewritten in place, never kept beside its replacement.
+
+When an edit would push a skill past its cap, compact it in the same PR:
+drop what the list above says to drop until it fits.
 
 ### Relationship to AGENTS.md
 

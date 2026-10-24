@@ -9,7 +9,7 @@ import pytest
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
 
-from test_service import (DELTA, PAIR, QUERY, RUN, SESSION, Clock, _lean, _ports, _refused, _spec, _two_spec)
+from test_service import (DELTA, PAIR, QUERY, RUN, SESSION, Clock, _lean, _ports, _refused, _spec)
 
 N = 6
 
@@ -180,8 +180,6 @@ def test_a_stream_of_rounds_states_them_and_runs_one_round_as_before():
     for rounds in (0, 5, 2.0, True):
         with pytest.raises(ValueError, match="rounds"):
             _stream(rounds=rounds)
-    with pytest.raises(ValueError, match="two-stage"):
-        _stream(rounds=2, spec=_two_spec())
     one = S.Stream(_spec(), PAIR, budget=4, delta=DELTA, challenger="challenger-test")
     assert one.digest == S._sha512({"format": S.STREAM, "spec": _spec().digest(), "budget": 4, "delta": DELTA,
                                     "challenger": "challenger-test"})
@@ -206,4 +204,3 @@ def test_a_session_is_the_streams_own():
                    S.Session(stream.digest, (d0,))):
         assert _refused(lambda: stream.deliver(forged, [SESSION])) == ("not-session",)
     assert _refused(lambda: stream.deliver(session, [])) == ("sessions",)
-    assert _refused(lambda: S.Stream(_two_spec(), PAIR, budget=1, delta=DELTA, challenger="c").session([d0])) == ("rule",)

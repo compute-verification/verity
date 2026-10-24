@@ -11,13 +11,15 @@ trusted clock:
   freedom was `bits` of timing advice.
 - `Entered(input, bits)`: a run input's bits entered the computation from outside the blocks or from a device in one
   (registered inputs open the registration instead, and a trusted device's are the verifier's coins).
-- `Scheduled(bits)`: the occupancy profile was one of several registered ones: advice, once.
+- `Scheduled(bits)`: the occupancy profile was one of several registered ones: advice, once. A declared occupancy
+  that isn't one of them is refused, and so is a plan whose number of profiles isn't the one the registration commits;
+  with none registered, the one profile is the placement's own.
 - `Held(store, bits)`: the system held `bits` of a registered store on average over `during` (`bits` × the length in
   bit-ticks: PoUS's S_cert·T; a wipe's labels too).
 - `Read(store, bits)`: the system read so many bits of a registered store within `during`: a read window's output,
   certified by its receipts (the bandwidth audits).
 - `Refused(on, why)`: something didn't check, and `on` says what: a port's window, a store, a part, an input (a
-  registered one whose bytes aren't the registration's).
+  registered one whose bytes aren't the registration's), the occupancy profile.
 
 A record must exist for every certifier port and every window of the epoch: a missing one is refused, never silence.
 The one exception is a block the verifier's plan has out for maintenance, whose ports owe no records then; the account
@@ -30,7 +32,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .binding import Profile, traffic
-from .logical import REGISTRATION, commit, evaluate, parameters, register
+from .logical import REGISTRATION, commit, evaluate, parameters, profile_digest, register
 from .memory import Challenge, ReadWindow, Wipe
 from .observe import Record, Trace, digest
 from .physical import Cadence, Port
@@ -89,9 +91,10 @@ class Read:
 
 @dataclass(frozen=True)
 class On:
-    """What a refusal is about: a certifier port during a window, a store, a part of the circuit, or an input."""
+    """What a refusal is about: a certifier port during a window, a store, a part of the circuit, an input, or the
+    occupancy profile."""
 
-    kind: Literal["port", "store", "part", "input"]
+    kind: Literal["port", "store", "part", "input", "profile"]
     name: str
     during: Interval | None = None
 
@@ -143,10 +146,15 @@ def audit(trace: Trace, profile: Profile) -> list[Claim]:
                 if profile.credit(b)]
     opening = trace.registration
     opens = (opening is not None and profile.registered is not None
-             and register(program, opening.values, opening.salts).root == profile.registered)
+             and register(program, opening.values, opening.salts, opening.profiles).root == profile.registered)
     for name, when in parameters(program):
         if when == REGISTRATION and not (opens and _same(trace.inputs[name], opening.values[name])):
             out.append(Refused(On("input", name), "its bytes differ from the registration"))
+    listed = opening.profiles if opens else ()
+    if opens and plan.profiles != max(len(listed), 1):
+        out.append(Refused(On("profile", "occupancy"), "the plan's number of profiles is not the registration's"))
+    if listed and profile_digest(profile.occupancy, plan.epoch.start // g.bucket_ticks) not in listed:
+        out.append(Refused(On("profile", "occupancy"), "the declared occupancy is not one of the registered profiles"))
     for k in sorted(p.device):
         if (source := p.source(k)) in ("outside", "inside"):
             out.append(Entered(p.names[k], sum(v.bits for v in p.values if v.node == k), source))

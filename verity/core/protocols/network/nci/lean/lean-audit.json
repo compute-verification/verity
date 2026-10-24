@@ -1,29 +1,50 @@
 {
  "roots": ["NciCheck"],
  "exempt": {
-  "NciCheck.CheckMain": "the nci-check exe: reads an instance file and prints NciCheck.Desc.check (or, with --unrolled, NciCheck.check) on it; IO around the audited check, not a proof",
+  "NciCheck.CheckMain": "the nci-check exe: reads an instance file and the service's trusted input and prints NciCheck.Baseline.check (or, with --unrolled, NciCheck.Baseline.checkUnrolled) on them, or with --policy NciCheck.Desc.check (NciCheck.check) on the instance alone; IO around the audited check, not a proof",
   "NciCheck.DescDifftestMain": "the description-sized check's difftest, under `runs`: compiled evaluation of NciCheck.DescDifftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof"
+  "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof",
+  "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof"
  },
  "runs": {
   "NciCheck.DescDifftestMain": {
-   "why": "3,648 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, and 24 on each distinct descriptor of the circuits fixtures) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
-   "args": ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}", "{desc_difftest/python.jsonl}", "3648"],
+   "why": "3,658 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, and 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+   "args": [
+    "{desc_difftest/instances.jsonl}",
+    "{desc_difftest/expanded.jsonl}",
+    "{desc_difftest/python.jsonl}",
+    "3658"
+   ],
    "data": {
-    "desc_difftest/expanded.jsonl": "f0e6e107db1f62d872c072876639968333d708cb2a559503b01102fdb85fb8e4",
-    "desc_difftest/instances.jsonl": "52b9ba4f1559315c079551306951ce82a53503c26578f17fd7766cccca7f30f6",
-    "desc_difftest/python.jsonl": "6f93fa5a9145b0f0c14f2102073008f4126c8d034dd98ba73502cd92972ede5b"
+    "desc_difftest/expanded.jsonl": "2c7095c72510098d6500cfddb2b344408d9f1b1a8a49bc003b3c470126ce1102",
+    "desc_difftest/instances.jsonl": "a74e847c5496abd9acd931bc9f6e6bdf44dd745dfe8ff86d71a82357dfc715aa",
+    "desc_difftest/python.jsonl": "2905caf60da672551533de861ae83f5e116b0c3ff8d6ce7ba98e3847c0e24eeb"
    },
    "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NciCheck.DifftestMain": {
-   "why": "4,000 random declarations and divisions on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
-   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4000"],
+   "why": "4,000 random declarations and divisions, and two pinned ones (θ with an input bound per run, refused theta-not-registered, and θ the registered input, accepted), on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4002"],
    "data": {
-    "difftest/instances.jsonl": "1534ec02c129a19d6b9086d905499ed9a1604009b68bb05ca906cb3ab7525fa3",
-    "difftest/python.jsonl": "8e64d14792f4a82e0f43801f625d781637dfdb37cf4a27f022a33ed63242e369"
+    "difftest/instances.jsonl": "e730205a6b5e7e48666c132a81ae2746b3f09b6864cd54f9bbd215816b22877a",
+    "difftest/python.jsonl": "61ecdd5542bdeabd85836ed8e2fd7dca22767f016a77b941d5563e74d9f60666"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "NciCheck.BaselineDifftestMain": {
+   "why": "1,211 declarations with θ, θ's provenance and the service's trusted input (the deployment's registration log in R6's chain, the run's digest and its parameters): 1,200 random, just under half of them broken in one way, and 11 pinned on a declaration worked by hand (two accepted, citing the log's first record from the deployment's first run and from its third, one negative per refusal code, theta-not-at-deployment-start citing a record registered mid-deployment, an entry of the output kind θ no longer takes, refused theta-provenance as any unknown kind is, and theta-not-registered), on which NciCheck.Baseline.check gives what scripts/nci_reference.py's check_baseline computes, and, on each one the policy check gives a verdict on, what NciCheck.Baseline.checkUnrolled gives on the case expanded gate by gate",
+   "args": [
+    "{baseline_difftest/cases.jsonl}",
+    "{baseline_difftest/expanded.jsonl}",
+    "{baseline_difftest/python.jsonl}",
+    "1211"
+   ],
+   "data": {
+    "baseline_difftest/cases.jsonl": "93c1bc1cd1f75038f6745282d4ab5cba45cd0cab9551c41280ba113156fe4560",
+    "baseline_difftest/expanded.jsonl": "04e7377c14f721f8ecd205fb86b021e1b35963df94fbe96990bd69734acefaad",
+    "baseline_difftest/python.jsonl": "2bcea153a2af0595349922c515d3bd7e337271f3561af6d482c3f2aee0e4a1af"
+   },
+   "generate": ["python3", "scripts/baseline_difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
  "layers": {
@@ -36,6 +57,11 @@
    "imports": ["Std", "Flock.Program", "NciCheck.Check"],
    "except": [],
    "why": "the description-sized check is code, as NciCheck.Check is: Lean core, C-Flock's program decoder and the check's instance format and verdict"
+  },
+  "NciCheck.Baseline": {
+   "imports": ["Std", "Flock.Program", "NciCheck.Check", "NciCheck.Desc"],
+   "except": [],
+   "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports) and the policy check it runs first"
   }
  },
  "guarantees": {},

@@ -10,7 +10,8 @@ attaches the route source (`route_source`) when a capture map describes its mode
 (`attention_source`, which binds the sparse-MLA call boundaries of the rank's rows to its `attn` tap, and `dsv4_attention_source`,
 which binds DeepSeek-V4's attention body); when the rank's rows name
 `DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`); when they name the MoE align
-Definitions, the Marlin experts' align schedule (`moe_align_source`); and under tp-commit ``--memory-map`` the KV-slots source
+Definitions, the Marlin experts' align schedule (`moe_align_source`); the rank worker attaches the MoE block source (`moe_source`,
+which claims the Marlin block's call boundaries when the manifest names no plane); and under tp-commit ``--memory-map`` the KV-slots source
 (`kv_slots_source`, for the rank's memory map, never the record).  The route, linear quant and align sources: once one rank has
 one, every rank must have it.  The single-rank `attach` also attaches the call-boundary source (`call_boundary_source`) whenever the
 manifest names `call_boundaries` identities; `attached` names what it attaches for a row's manifest, constructing nothing (the CPU
@@ -28,6 +29,7 @@ from verity_vllm.acquire.sources import (attention_source, call_boundary_source,
                                          kv_slots_source, linear_quant_source, moe_align_source, norm_scale_source, route_source,
                                          router_softmax_source, scale_products_source, vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
+from verity_vllm.acquire.sources import moe_source
 from verity_vllm.config import option
 from verity_vllm.program.registry.topp_geometry import splits_for_v1
 from verity_vllm.query import norm_scales as NS
@@ -103,9 +105,11 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
     manifest of other tap policies) and, on one rank, the call-boundary source when the manifest names call boundaries no other source
     claims and the scale-products source when it names scale products (a TP Commit attaches neither); on several ranks, each attention
     source (`attention_source`, `dsv4_attention_source`) when a capture map that binds through it describes the manifest's model at its
-    ranks (`route_source.manifest_map`: every rank attaches it, `attach_rank`), and the MoE align source when the manifest names the
-    align Definitions."""
-    fams = {r.get("family") for r in (manifest or {}).get("identities") or []}
+    ranks (`route_source.manifest_map`: every rank attaches it, `attach_rank`), the MoE align source when the manifest names the
+    align Definitions, and the MoE block source when the manifest names a call boundary it claims and no `moe_block_stream` plane (every
+    rank attaches it, binding at the block's Calls: `engine.rank_worker`, `moe_source.at_calls`)."""
+    ids = (manifest or {}).get("identities") or []
+    fams = {r.get("family") for r in ids}
     one = int((manifest or {}).get("ranks") or 1) == 1
     cmap = None if one else route_source.manifest_map(manifest)
     return [*(cls.short_name for _f, _key, _mod, fam, cls in SOURCES if fam in fams),
@@ -115,7 +119,9 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
             *(src.short_name for mod, src in ((attention_source, attention_source.AttentionSource),
                                               (dsv4_attention_source, dsv4_attention_source.Dsv4AttentionSource))
               if cmap is not None and mod.binds(cmap)),
-            *([moe_align_source.MoeAlignSource.short_name] if not one and moe_align_source.manifest_names_it(manifest) else [])]
+            *([moe_align_source.MoeAlignSource.short_name] if not one and moe_align_source.manifest_names_it(manifest) else []),
+            *([moe_source.MoeBlockSource.short_name]
+              if not one and not moe_source.binds_planes(manifest) and any(moe_source.claims(r) for r in ids) else [])]
 
 
 def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, *, kv_slots: bool = False, **given: Any) -> dict[str, Any]:

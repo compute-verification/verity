@@ -158,10 +158,11 @@ def rows(data: Path = DATA) -> dict[str, Row]:
 
 def census_files(m: Model, data: Path = DATA) -> list[Path]:
     """`data/census/EPOCH.csv`: a file for each epoch that brought census lines, in model.toml's order, each line's `since`
-    its file's epoch. A device directory with one epoch (`data/devices/sm_NN/`) keeps a single `census.csv`."""
-    if not (data / "census").is_dir():
-        return [p] if (p := data / "census.csv").is_file() else []
-    return [p for e in m.epochs if (p := data / "census" / f"{e}.csv").is_file()]
+    its file's epoch. A device directory (`data/devices/sm_NN/`) keeps its measured census in one `census.csv`, which
+    its writer rewrites whole, and any other epoch's lines (sm_90's and sm_100's data sheet, `census/DS-NN.csv`) after
+    it."""
+    out = [p] if (p := data / "census.csv").is_file() else []
+    return out + [p for e in m.epochs if (p := data / "census" / f"{e}.csv").is_file()]
 
 
 def run_lists(data: Path = DATA) -> dict[str, tuple[str, ...]]:

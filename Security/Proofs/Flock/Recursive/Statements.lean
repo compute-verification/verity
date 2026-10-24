@@ -92,11 +92,48 @@ with the salt a free witness wire, so a commitment to a wrong row under a fresh 
 with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
 cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and the bound bounds it, not a wrong
 computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40); `EndToEndHidden` avoids
-this by extraction. -/
+this by extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`: about
+65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target under every weight
+(ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
+candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form
+states no bits. -/
 def RecursiveSound : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     -- V*'s laws: A3
     (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
+    -- V*'s sessions at each history and registration `R₂`
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the count curve's parameters
+    {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
+    (_hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    -- the recursive prover
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
+    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the firewall's
+    -- commitments and the messages they open to, and V*'s bridge
+    (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
+    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
+    (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
+    -- the inner protocol
+    {εin : ℝ≥0∞} (_hin : InnerSound I εin),
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+      prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
+          (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+        expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+          (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
+
+/-- **`RecursiveSound` with no A3**: `RecursiveSound` without its A3 premise, at the same bound. V*'s laws are the full
+draw (`--draw subset:<units>`), which draws every unit at every value of the operating system's bytes
+(`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
+def RecursiveSoundNoA3 : Prop :=
+  ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     -- V*'s sessions at each history and registration `R₂`
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -178,9 +215,9 @@ inputs only, nothing of the inner proof. One-sided at every event, so both ways 
 Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and
 that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512.
 
-The salts are drawn uniformly here; the firewall reads them from the operating system, and under A3
-(`uniform/io-getrandombytes`) the same bound holds at those bytes (`Flock.SecurityProofs.recursiveZK_os_gap`), so no
-premise on a stream generator enters. -/
+The salts are drawn uniformly here; the firewall reads them from the operating system, and under A3 per test
+(`UniformRandomBytesTest`, `uniform/io-getrandombytes`) the same bound plus the source's slack `η` on the event's test
+holds at those bytes (`Flock.SecurityProofs.recursiveZK_os_gap`), so no premise on a stream generator enters. -/
 def RecursiveZK : Prop :=
   ∀ {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo]
     [Fintype Ωs] [Nonempty Ωs] (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
@@ -391,10 +428,55 @@ hm96 commit string `b ‖ c`, with the salt a free witness wire, so a commitment
 opens to the right row except with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`,
 `shift_reachable`, on cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and the bound bounds
 it, not a wrong computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40);
-`EndToEndHidden` avoids this by extraction. -/
+`EndToEndHidden` avoids this by extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level
+`Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128`
+target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
+candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form
+states no bits. -/
 def RecursiveRanRegistered : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
+    (_hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
+    (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
+    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
+    (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
+    {εin : ℝ≥0∞} (_hin : InnerSound I εin)
+    -- the registration's commitment at each row position, the registered private circuit, and the developer's openings
+    {Root Pos Row Op : Type} (com : Pos → PrivateCircuit.Commit Root Row Op) (_hbind : ∀ i, (com i).Binding)
+    (rt : Root) (p : Pos → Row) (op₀ : Pos → Op) (_hreg : ∀ i, (com i).Opens rt (p i) (op₀ i))
+    -- a private circuit's statement at a draw; the rows an accepted run read, and the rows and openings of `rt` it carries
+    (stmt : (Pos → Row) → L.Ω → I.Stmt)
+    (reads : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Prop)
+    (row : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Row)
+    (op : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Op)
+    (_hop : ∀ o, AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ i, reads o i → (com i).Opens rt (row o i) (op o i))
+    (_hx : ∀ o, AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ q : Pos → Row, (∀ i, reads o i → q i = row o i) →
+      x o.1 o.2.1 = stmt q o.2.1),
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+      (∃ o, FlockSoundness.Game.Outcome (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
+        AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
+        ∃ i, reads o i ∧ row o i ≠ p i ∧ FlockSoundness.Binding.Collides ((com i).ext (op o i) (op₀ i))) ∨
+      prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (stmt p o.2.1))
+          (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+        expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+          (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
+
+/-- **`RecursiveRanRegistered` with no A3**: `RecursiveRanRegistered` without its A3 premise, at the same bound. V*'s
+laws are the full draw (`--draw subset:<units>`), which draws every unit at every value of the operating system's bytes
+(`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
+def RecursiveRanRegisteredNoA3 : Prop :=
+  ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)

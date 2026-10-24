@@ -36,22 +36,26 @@ struct BlockClk {
   long long cyc;
   int smid;
   int pad;
+  long long role[2];  // k_spec: the MMA warps' and the lane warps' own cycles (each role's slowest warp); else 0
 };
 
 #define CLK_BEGIN \
   __syncthreads(); \
   long long _t0 = clock64();
-#define CLK_END(rec)                                   \
+#define CLK_END_ROLES(rec, r0, r1)                     \
   __syncthreads();                                     \
   if (threadIdx.x == 0) {                              \
     rec[blockIdx.x].cyc = clock64() - _t0;             \
     int s_;                                            \
     asm volatile("mov.u32 %0, %%smid;" : "=r"(s_));    \
     rec[blockIdx.x].smid = s_;                         \
+    rec[blockIdx.x].role[0] = (r0);                    \
+    rec[blockIdx.x].role[1] = (r1);                    \
   }
+#define CLK_END(rec) CLK_END_ROLES(rec, 0, 0)
 
 struct Timing {
-  double ms = 0, cyc_med = 0, cyc_min = 0, cyc_max = 0, mhz = 0;
+  double ms = 0, cyc_med = 0, cyc_min = 0, cyc_max = 0, mhz = 0, role_med[2] = {0, 0};
   int blocks = 0, distinct_sms = 0;
 };
 
@@ -88,6 +92,12 @@ Timing run_timed(F launch, int nblocks, BlockClk* d_rec, int reps = 5) {
     t.cyc_med = c[c.size() / 2];
     t.cyc_min = c.front();
     t.cyc_max = c.back();
+    for (int k = 0; k < 2; k++) {
+      std::vector<double> rc;
+      for (auto& b : h) rc.push_back((double)b.role[k]);
+      std::sort(rc.begin(), rc.end());
+      t.role_med[k] = rc[rc.size() / 2];
+    }
     t.mhz = ms > 0 ? t.cyc_max / (ms * 1e3) : 0;
     if (t.cyc_med < best.cyc_med) best = t;
   }
@@ -96,8 +106,12 @@ Timing run_timed(F launch, int nblocks, BlockClk* d_rec, int reps = 5) {
   return best;
 }
 
-// Dynamic shared memory that keeps a second block off an SM (sm_120: 100 KB a SM).
+// Dynamic shared memory that keeps a second block off an SM (sm_120 and sm_89: 100 KB a SM; sm_100: 228 KB).
+#if TK_SM == 100
+constexpr int ONE_BLOCK_SMEM = 120 * 1024;
+#else
 constexpr int ONE_BLOCK_SMEM = 60 * 1024;
+#endif
 
 // ---- the forms ----------------------------------------------------------------------------------------------------
 // Each form: its accumulator type and register count, its MACs and output slots a warp instruction, and the asm.
@@ -663,10 +677,13 @@ __global__ void __launch_bounds__(512) k_alone4(int iters, uint32_t* sink, Block
 }
 
 // Warp-specialized: with 16 warps a SM, SMSP r hosts warps {r, r+4} (MMA) and {r+8, r+12} (lane); R/8 ops a MMA.
+// Each warp also records its own cycles, so each role's rate is its work over its own time, not over the block's
+// (the faster role's rate over the block time is only a lower bound: RT-BLACKWELL-17).
 template <class F, int R, int X>
 __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
   const bool mma_role = warp < (blockDim.x >> 6);
+  __shared__ long long warp_cyc[16];
   uint32_t a[4], b[4], e;
   init_ops<F>(lane, iters, a, b, e);
   typename F::Acc d[8][4] = {};
@@ -686,7 +703,19 @@ __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockCl
       for (int q = 0; q < R; q++) lane_op<X>(r, q);
     }
   }
-  CLK_END(rec)
+  const long long mine = clock64() - _t0;
+  if (lane == 0) warp_cyc[warp] = mine;
+  __syncthreads();
+  long long rm = 0, ro = 0;
+  if (threadIdx.x == 0) {
+    const int nw = blockDim.x >> 5;
+#pragma unroll
+    for (int w = 0; w < 16; w++) {
+      if (w < nw / 2) rm = warp_cyc[w] > rm ? warp_cyc[w] : rm;
+      else if (w < nw) ro = warp_cyc[w] > ro ? warp_cyc[w] : ro;
+    }
+  }
+  CLK_END_ROLES(rec, rm, ro)
   uint32_t x = lane;
   if (mma_role) x ^= fold_acc<F>(d);
   else x += consume(r);
@@ -745,9 +774,10 @@ static void emit(const char* mode, const char* form, double macs, double slots, 
   printf("{\"probe\":\"tensor_kinds\",\"mode\":\"%s\",\"form\":\"%s\",\"macs\":%.0f,\"slots\":%.0f,\"ops_per_mma\":%.3f,"
          "\"mma_warps\":%d,\"op_warps\":%d,\"iters\":%d,\"cyc_med\":%.0f,\"cyc_min\":%.0f,\"cyc_max\":%.0f,"
          "\"distinct_sms\":%d,\"mhz\":%.1f,\"mmas_per_sm\":%.0f,\"ops_per_sm\":%.0f,"
-         "\"smsp_cycles_per_mma\":%.4f}\n",
+         "\"smsp_cycles_per_mma\":%.4f,\"mma_cyc_med\":%.0f,\"op_cyc_med\":%.0f}\n",
          mode, form, macs, slots, mmas_sm > 0 ? ops_sm / mmas_sm : 0.0, mma_warps, op_warps, iters, t.cyc_med, t.cyc_min,
-         t.cyc_max, t.distinct_sms, t.mhz, mmas_sm, ops_sm, mmas_sm > 0 ? 4.0 * t.cyc_med / mmas_sm : 0.0);
+         t.cyc_max, t.distinct_sms, t.mhz, mmas_sm, ops_sm, mmas_sm > 0 ? 4.0 * t.cyc_med / mmas_sm : 0.0, t.role_med[0],
+         t.role_med[1]);
   fflush(stdout);
 }
 
@@ -851,6 +881,34 @@ int main() {
   form<HmmaSpF16k16>();
   form<HmmaSpF16k32>();
   form<HmmaSpTf32k16>();
+  form<QmmaSpE4m3k64Ada>();
+  form<ImmaS8k32>();
+#endif
+#elif TK_SM == 100
+  // B200: the legacy mma.sync forms, premise (M′) of SLOT-LEMMA (note:20261019T0745Z-draft-fp-joint): a shallow shape
+  // holds no less of the tensor pipe a slot than its kind's full-depth step. Group 0 is int8 and its 2:4 shapes, the
+  // reference first and last; group 1 the other shallow shapes.
+#if TK_IN(0)
+  opalone<LANE_IADD3>("iadd3");
+  opalone<LANE_FFMA>("ffma");
+  opalone<LANE_MIX>("iadd3_ffma");
+  form<ImmaS8k32>();
+  form<ImmaSpS8k32>();
+  form<ImmaSpS8k64>();
+  form<ImmaS8k16>();
+  form<ImmaS8m8k16>();
+  form<ImmaS8k32>();
+#endif
+#if TK_IN(1)
+  form<HmmaF16k16F32>();
+  form<HmmaF16k8F32>();
+  form<HmmaSpF16k16>();
+  form<HmmaSpF16k32>();
+  form<HmmaTf32k8>();
+  form<HmmaTf32k4>();
+  form<HmmaSpTf32k16>();
+  form<QmmaE4m3k32>();
+  form<QmmaE4m3k16F32>();
   form<QmmaSpE4m3k64Ada>();
   form<ImmaS8k32>();
 #endif

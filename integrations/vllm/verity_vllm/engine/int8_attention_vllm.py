@@ -16,8 +16,8 @@ per-channel scale reads the whole window, so an int8 V would have to be requanti
 `Int8AttentionImpl.forward` runs `engine.int8_ops.paged_attention` on the cache (or, once the store's session installs a credited
 read, `install_credited_read`, `engine.int8_window`'s windows decoded from the encoded cache by pg_window and
 `int8_ops.window_attention` on them, the same bits), with its layer's K scales (the served
-checkpoint's `engine.int8_k_scales` table, looked up by the model's revision when the impl is built and by the layer's name in each
-call), and counts its calls (`int8_arm` and `calls`, read back by `kernel_readback.int8_exact_of` and `int8_attention.applied_record`).  It refuses what the step does not define:
+checkpoint's `engine.int8_k_scales` table, looked up by the model's revision when the impl is built, cut to its tensor-parallel rank's
+KV heads, and by the layer's name in each call), and counts its calls (`int8_arm` and `calls`, read back by `kernel_readback.int8_exact_of` and `int8_attention.applied_record`).  It refuses what the step does not define:
 ALiBi, a sliding window, a logit soft cap, sinks, non-decoder attention, a quantized KV cache, cascade attention, decode context
 parallelism, non-causal metadata, fused output quantization, and queries that are not bf16.
 """
@@ -60,9 +60,7 @@ class Int8AttentionImpl(FlashAttentionImpl):
                                     (f"KV cache {self.kv_cache_dtype}", is_quantized_kv_cache(self.kv_cache_dtype))) if hit]
         if bad:
             raise ValueError(f"int8 attention does not define {', '.join(bad)}")
-        self.k_table = torch.from_numpy(K.table(served_revision()))
-        if self.k_table.shape[1] != self.num_kv_heads:
-            raise ValueError(f"int8 attention: K scales for {self.k_table.shape[1]} KV heads, the layer has {self.num_kv_heads}")
+        self.k_table = torch.from_numpy(K.rank_table(K.table(served_revision()), self.num_kv_heads, *tp_rank()))
         self._k_on: dict[tuple[str, int], torch.Tensor] = {}
 
     def k_scales(self, layer_name: str, device: torch.device) -> torch.Tensor:
@@ -100,6 +98,12 @@ class Int8AttentionImpl(FlashAttentionImpl):
         int8_ops.paged_attention(query[:n], key_cache, value_cache, md.query_start_loc, md.seq_lens, md.block_table, ks, self.scale,
                                  output[:n])
         return output
+
+
+def tp_rank() -> tuple[int, int]:
+    """(rank, world) of this process's tensor-parallel group."""
+    from vllm.distributed import get_tensor_model_parallel_rank, get_tensor_model_parallel_world_size
+    return int(get_tensor_model_parallel_rank()), int(get_tensor_model_parallel_world_size())
 
 
 def served_revision() -> str:

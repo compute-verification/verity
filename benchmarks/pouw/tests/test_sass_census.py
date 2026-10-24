@@ -111,20 +111,20 @@ def buckets(family: str) -> dict[str, set[str]]:
 
 def test_diff_sm90_gaps():
     """On the Hopper side: DMMA f64 has no tensor peak in the device census, so A3 prices it at 0 (GAP-TENSOR); the
-    priced MMA forms (HGMMA/IGMMA/IMMA) land in PRICED-TENSOR; a warp reduce writes a word with no product (GAP-WORD)."""
+    priced MMA forms (HGMMA/IGMMA/IMMA) land in PRICED-TENSOR; a warp reduce is census class REDUX, priced on issue."""
     b = buckets("sm_90")
     assert "DMMA.8" in b["GAP-TENSOR"]
     assert {"HGMMA.64x128x16.F32", "IGMMA.64x256x32.S8", "IMMA.16832.S8.S8"} <= b["PRICED-TENSOR"]
-    assert "REDUX.ADD.S32" in b["GAP-WORD"]
+    assert "REDUX.ADD.S32" in b["PRICED-LANE"]
 
 
 def test_diff_sm100_gaps_and_underpricing():
     """On the Blackwell side: DMMA is a tensor gap again; the paired FFMA2/FMUL2 (two FMAs at two issue slots) are native
-    but the census counts each as one FMA (UNDERPRICED); a packed SIMD add is a word with no product (GAP-WORD)."""
+    but the census counts each as one FMA (UNDERPRICED); VIADD is census class VIADD, priced on issue."""
     b = buckets("sm_100")
     assert "DMMA.8" in b["GAP-TENSOR"]
     assert {"FFMA2", "FMUL2"} <= b["UNDERPRICED"]
-    assert "VIADD" in b["GAP-WORD"]
+    assert "VIADD" in b["PRICED-LANE"]
 
 
 def test_diff_flags_the_lane_classifiers_uniform_mis_map():

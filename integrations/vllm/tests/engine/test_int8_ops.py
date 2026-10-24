@@ -2,12 +2,15 @@
 quantization and its rows), with the values of the plain torch they wrap."""
 from __future__ import annotations
 
+import pytest
 import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from verity_vllm.engine import int8_attention as A
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops as OPS
+
+cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 
 
 class _Ops(TorchDispatchMode):
@@ -61,3 +64,21 @@ def test_a_capture_sees_one_op_per_call():
     with _Ops() as mode:
         OPS.linear(x, w, sw)
     assert mode.seen == ["verity_int8.row_quant.default", "verity_int8.scaled_mm.default"]
+
+
+@cuda
+@pytest.mark.parametrize("m,k,n", [(1, 4096, 6144), (16, 4096, 4096), (17, 14336, 1024), (256, 4096, 1024)])
+def test_the_cuda_kernels_are_the_torch_bodies(m, k, n):
+    """On CUDA the two ops run `engine.int8_fused`'s kernels (Llama-3.1-8B's K, M on both sides of int8_exact's padding): xq,
+    s_a and y bit for bit the torch bodies' on the CPU, and a capture still sees the two ops, one per call."""
+    x, w, sw = _linear_args(m, k, n, seed=m)
+    on_gpu = x.cuda(), w.cuda(), sw.cuda()
+    with _Ops() as mode:
+        got = OPS.linear(*on_gpu)
+    assert mode.seen == ["verity_int8.row_quant.default", "verity_int8.scaled_mm.default"]
+    xq, sa, y = (t.cpu() for t in got)
+    wq, ws = E.quantize_rows(x)
+    assert torch.equal(xq, wq) and torch.equal(sa, ws)
+    assert torch.equal(y.view(torch.int16), E.plain_linear(x, w, sw).view(torch.int16))
+    torch.library.opcheck(OPS.row_quant, (x.cuda(),))
+    torch.library.opcheck(OPS.scaled_mm, (xq.cuda(), sa.cuda(), w.cuda(), sw.cuda()))

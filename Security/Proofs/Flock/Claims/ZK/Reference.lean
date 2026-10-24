@@ -25,8 +25,8 @@ session sets up, which `setupTable_planZHJ` proves of the hidden-output plan's),
 witnesses valid, the lowering's completeness; `DummyReg`: the dummy's carry the public region data; `Causal`: round `i`'s
 encoding reads the coins before `i` only; `TapeOK`: the tape read with fibers of one size). `Flock.zkAt_deployZk_ref` is
 `Claims.Flock.ZKAt` at `refP`'s prover; `Flock.zk_zkD_ref` is `Claims.Flock.ZK` at the masked record
-`RefSession.zkD`, whose reference prover is `ZkTables.honestP` behind `refP`'s `Hello` and coin-tree checks, where `refP`'s
-messages are `ZkTables.honestP`'s (`RefSession.HonestMsgs`, a named Prop until it is proved). `Flock.zk_deployZk_ref` is its case
+`RefSession.zkD`, whose reference prover is `ZkTables.honestPR` behind `refP`'s `Hello` and coin-tree checks, where `refP`'s
+messages are `ZkTables.honestPR`'s (`RefSession.HonestMsgs`, a named Prop until it is proved). `Flock.zk_deployZk_ref` is its case
 at the deployed coin layer (`ZK.CoinLayer`).
 -/
 
@@ -491,21 +491,21 @@ theorem Flock.zkAt_deployZk_ref_gap (H : Msg → Msg)
 /-! ## At the masked record -/
 
 /-- **`refP`'s messages are the reference prover's** within its rounds, at `H`: after the openings `ops`, at most
-`refK x` of them, `refP`'s message (`msgAt` at the coins they open) is `ZkTables.honestP`'s at the history with each opening
+`refK x` of them, `refP`'s message (`msgAt` at the coins they open) is `ZkTables.honestPR`'s at the history with each opening
 read as its coin (`coinOf`), at the tape `tapeOf (ν, t)`. `refP` makes no call, so this is `Proto.Honest`
 (`RefSession.honest_of_msgs`). -/
 def RefSession.HonestMsgs (S : RefSession) (H : Msg → Msg) (coinOf : Msg → Msg)
     (tapeOf : S.refP.Nonce × S.refP.Rand → FlockComplete.TapeZk) : Prop :=
   ∀ x w ν t (ops : List (Msg × Msg)), ops.length ≤ refK x →
     S.msgAt x (S.wt x w) t (ops.map fun p => S.decOf p.2) =
-      (((FlockComplete.ZkTables.honestP w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf (ν, t))).eval H).1
+      (((FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf (ν, t))).eval H).1
 
 theorem RefSession.honest_of_msgs (S : RefSession) (H : Msg → Msg) (coinOf : Msg → Msg)
     (tapeOf : S.refP.Nonce × S.refP.Rand → FlockComplete.TapeZk) (h : S.HonestMsgs H coinOf tapeOf) :
-    S.refP.Honest H FlockComplete.ZkTables.honestP coinOf tapeOf :=
+    S.refP.Honest H FlockComplete.ZkTables.honestPR coinOf tapeOf :=
   fun x w ν t ops hops => ⟨h x w ν t ops hops, List.nil_subset _⟩
 
-/-- **The masked record at the reference session**: `zkOf` at `refP`, the record's reference prover `ZkTables.honestP` behind
+/-- **The masked record at the reference session**: `zkOf` at `refP`, the record's reference prover `ZkTables.honestPR` behind
 `refP`'s `Hello` and coin-tree checks, its simulator the models' Goldreich–Kahan simulator at threshold `t`. -/
 noncomputable def RefSession.zkD (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (S : RefSession) (coinOf : Msg → Msg) (tapeOf : S.refP.Nonce × S.refP.Rand → FlockComplete.TapeZk) (t : ℕ) :
@@ -513,10 +513,10 @@ noncomputable def RefSession.zkD (rel : _root_.Flock.Readable.Parsed → _root_.
   zkOf rel S.refP coinOf tapeOf ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
 
 /-- **Flock's zero knowledge against a malicious verifier at the reference session's masked record**:
-`Claims.Flock.ZK` at `RefSession.zkD`, whose reference prover is `ZkTables.honestP`, at
+`Claims.Flock.ZK` at `RefSession.zkD`, whose reference prover is `ZkTables.honestPR`, at
 `ε_zk = 8·n_L·δ₁ + 8t·n_L·δ₁ + 2·3^{-t}` with `n_L` the session's pre-final leaves, under `Claims.Hm96Hiding` at the
 pinned key, the session's five Props (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`) and `HonestMsgs`: `refP`'s
-messages are `ZkTables.honestP`'s. -/
+messages are `ZkTables.honestPR`'s. -/
 theorem Flock.zk_zkD_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (S : RefSession) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁)
     (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables) (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg)

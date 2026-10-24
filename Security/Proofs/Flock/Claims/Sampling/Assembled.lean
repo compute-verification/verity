@@ -31,7 +31,10 @@ import Proofs.Flock.SamplingBoundary
 
 ## What remains: the hypotheses
 
-* `hKS : Claims.Flock.KS H (deployZk rel)`: E4 (`cursor/claims-ks-c7a9`), the hypothesis `flock_zk_assembled` takes.
+* `hKS : Claims.Flock.KS H (deployZk rel)`: E4 at the untrimmed instance. At SHA-512 at the deployed relation it holds
+  with no premise (`FlockDeploy.KS.zk_KS_untrim`: `ExtendJ` at full-width columns, `FlockDeploy.KS.zk_extendJ`, through
+  `FlockDeploy.KS.zk_KS_untrim_of_extendJ`), as does the trimmed record's, which `flock_zk_assembled` takes
+  (`FlockDeploy.KS.zk_KS`) but which does not give it (`Flock.TrimBridge.hole_agree`).
 * `hflock : D.flock = deployZk rel`, `hε : ∀ x, 0 ≤ D.εtable x`: facts about the deployed record
   (`SamplingDeploy.deploy_flock`, `SamplingDeploy.deploy_εtable_nonneg`): its sessions are C-Flock's masked proofs,
   and its inner `ε_table`, which bounds each session's (`InnerNumbers`), is the tables' count times their bound.

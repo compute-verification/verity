@@ -351,8 +351,11 @@ theorem HRuns.initChals (resp : ℕ → Claims.Msg) (k0 N : ℕ) (sm : LState) (
     (fun _ _ _ _ _ _ _ _ => trivial) _ trivial).mono (fun _ _ => trivial) (fun _ _ _ => trivial) (fun _ h => h)
     fun _ _ _ _ h => h
 
-/-- **A level's four challenges**, with the table and weight: three folds, then a fold whose table is kept, split. -/
-theorem HRuns.levelChals (resp : ℕ → Claims.Msg) (sm : LState) (tm : Transcript) (A W : Array F256) (M : ℕ) :
+/-- **A level's four challenges**, with the table and weight: three folds, then a fold whose table is kept, split. The
+claim is the kept table's sum against the folded weight, and in step with the split table and weight except at the
+last level (`last`), whose message is the unsplit table's. -/
+theorem HRuns.levelChals (resp : ℕ → Claims.Msg) (last : Bool) (sm : LState) (tm : Transcript) (A W : Array F256)
+    (M : ℕ) :
     HRuns p L (forIn [:4] (#[] : Array F256) fun i (f : Array F256) =>
         if (i + 1 == 4) = true then do
           let r ← liftT (sampleKP (asksS resp))
@@ -364,7 +367,7 @@ theorem HRuns.levelChals (resp : ℕ → Claims.Msg) (sm : LState) (tm : Transcr
             { tab := embedF (splitK st.tab), w := liftU st.w, msgs := st.msgs, oods := st.oods, qn := st.qn,
               cn := st.cn, cbn := st.cbn }
           let st ← MonadState.get
-          FlockComplete.sendMsg (roundPoly st.tab st.w)
+          FlockComplete.sendMsg (if last = true then roundPoly d.tab d.w else roundPoly st.tab st.w)
           Pure.pure (ForInStep.yield d.tab)
         else do
           let _ ← challengeP (asksS resp) false
@@ -373,14 +376,23 @@ theorem HRuns.levelChals (resp : ℕ → Claims.Msg) (sm : LState) (tm : Transcr
       (fun _ => True) (fun _ => True) (fun y => y = (A, W) ∧ Sync sm.s sm.q A W (M + 3))
       fun f y => f = foldKs (chals p (cfOf resp L) #[] sm tm 4).1.toList A ∧
         y = splitTW (f, foldKs (chals p (cfOf resp L) #[] sm tm 4).1.toList W) ∧
-        Sync (chals p (cfOf resp L) #[] sm tm 4).2.1.s (chals p (cfOf resp L) #[] sm tm 4).2.1.q y.1 y.2 M := by
+        (last = false →
+          Sync (chals p (cfOf resp L) #[] sm tm 4).2.1.s (chals p (cfOf resp L) #[] sm tm 4).2.1.q y.1 y.2 M) ∧
+        gOf (chals p (cfOf resp L) #[] sm tm 4).2.1.s =
+          ∑ x ∈ Finset.range (2 ^ M), gv f x * gv (foldKs (chals p (cfOf resp L) #[] sm tm 4).1.toList W) x := by
   refine (HRuns.loop _ (fun i => cur (chals p (cfOf resp L) #[] sm tm i).2.1)
     (fun i => (chals p (cfOf resp L) #[] sm tm i).2.2) (fun _ _ => True) (fun _ _ => True) (fun _ => trivial)
     (fun _ _ _ _ _ => trivial) (fun _ _ => True) (fun _ => True)
-    (fun j f y => JC p (cfOf resp L) sm tm 4 M A W j y ∧
-      (j = 4 → f = foldKs (chals p (cfOf resp L) #[] sm tm 4).1.toList A)) 4 (fun j hj f _ => ?_)
-    (fun _ _ _ _ _ _ _ _ => trivial) _ trivial).mono (fun _ _ => trivial) (fun _ _ _ => trivial)
-    (fun y ⟨hy, h⟩ => hy ▸ ⟨jc_zero (by omega) (by simpa using h), fun h0 => absurd h0 (by omega)⟩) ?_
+    (fun j f y => (j < 4 → JC p (cfOf resp L) sm tm 4 M A W j y) ∧
+      (j = 4 → f = foldKs (chals p (cfOf resp L) #[] sm tm 4).1.toList A ∧
+        y = splitTW (f, foldKs (chals p (cfOf resp L) #[] sm tm 4).1.toList W) ∧
+        (last = false →
+          Sync (chals p (cfOf resp L) #[] sm tm 4).2.1.s (chals p (cfOf resp L) #[] sm tm 4).2.1.q y.1 y.2 M) ∧
+        gOf (chals p (cfOf resp L) #[] sm tm 4).2.1.s =
+          ∑ x ∈ Finset.range (2 ^ M), gv f x * gv (foldKs (chals p (cfOf resp L) #[] sm tm 4).1.toList W) x))
+    4 (fun j hj f _ => ?_) (fun _ _ _ _ _ _ _ _ => trivial) _ trivial).mono (fun _ _ => trivial)
+    (fun _ _ _ => trivial)
+    (fun y ⟨hy, h⟩ => hy ▸ ⟨fun _ => jc_zero (by omega) (by simpa using h), fun h0 => absurd h0 (by omega)⟩) ?_
   · refine HRuns.ite (fun hc => ?_) fun hc => ?_
     · have hj3 : j = 3 := by have := beq_iff_eq.mp hc; omega
       subst hj3
@@ -398,14 +410,33 @@ theorem HRuns.levelChals (resp : ℕ → Claims.Msg) (sm : LState) (tm : Transcr
         have h1 : s₂.tab = foldK r s₁.tab := congrArg Prod.fst hs₁
         have h2 : s₂.w = foldK r s₁.w := congrArg Prod.snd hs₁
         have hd' : d.tab = s₂.tab := congrArg Prod.fst hd
+        have hdw : d.w = s₂.w := congrArg Prod.snd hd
         have hy' : y = splitTW (foldTW r (tw s₁)) := by
           rw [hy]
           simp only [tw, splitTW, foldTW, h1, h2]
-        obtain ⟨h3, -⟩ := hJ.1.1 (by omega)
-        refine ⟨jc_step (by omega) hJ.1 true rfl (by rw [hy', hr]; rfl) (by rw [← hst]; exact hm), fun _ => ?_⟩
-        rw [hd', h1, show s₁.tab = (tw s₁).1 from rfl, h3, hr]
-        simp only [chals, foldKs_push]
-        rfl
+        have hJ3 := hJ.1 (by omega)
+        obtain ⟨h3, hs3⟩ := hJ3.1 (by omega)
+        have hf : d.tab = foldKs (chals p (cfOf resp L) #[] sm tm 4).1.toList A := by
+          rw [hd', h1, show s₁.tab = (tw s₁).1 from rfl, h3, hr]
+          simp only [chals, foldKs_push]
+          rfl
+        have hfw : d.w = foldKs (chals p (cfOf resp L) #[] sm tm 4).1.toList W := by
+          rw [hdw, h2, show s₁.w = (tw s₁).2 from rfl, h3, hr]
+          simp only [chals, foldKs_push]
+          rfl
+        rw [show M + 4 - 1 - 3 = M by omega] at hs3
+        have he : gOf ((chals p (cfOf resp L) #[] sm tm 3).2.1.q.eval r) =
+            ∑ x ∈ Finset.range (2 ^ M), gv (foldK r s₁.tab) x * gv (foldK r s₁.w) x := hs3.eval r
+        have hs4 : (chals p (cfOf resp L) #[] sm tm 4).2.1.s = (chals p (cfOf resp L) #[] sm tm 3).2.1.q.eval r := by
+          rw [hr]
+          rfl
+        refine ⟨fun h => absurd h (by omega), fun _ => ⟨hf, ?_, fun hl => ?_, ?_⟩⟩
+        · rw [hy', ← hfw]
+          show splitTW (foldK r s₁.tab, foldK r s₁.w) = splitTW (d.tab, d.w)
+          rw [hd', hdw, h1, h2]
+        · simp only [hl, Bool.false_eq_true, ↓reduceIte] at hm
+          exact ((jc_step (by omega) hJ3 true rfl (by rw [hy', hr]; rfl) (by rw [← hst]; exact hm)).2 rfl).2
+        · rw [hs4, he, ← hfw, hd', hdw, h1, h2]
     · apply HRuns.post
       · exact (HRuns.challenge resp false _ _ _).bind fun _ _ =>
           HRuns.pure (b := ForInStep.yield f) (Q := fun r => ∃ s', r = ForInStep.yield s' ∧ True ∧ True)
@@ -413,10 +444,9 @@ theorem HRuns.levelChals (resp : ℕ → Claims.Msg) (sm : LState) (tm : Transcr
       · rintro b y - - ⟨_, rfl, hr, ⟨x, hx, hy⟩, hm⟩ s' hs'
         obtain rfl := ForInStep.yield.inj hs'
         have hj3 : j + 1 ≠ 4 := by simpa using hc
-        exact ⟨jc_step hj hx.1 false (by simpa using hj3) (hr ▸ hy) hm, fun h => absurd h hj3⟩
-  · intro f y _ _ ⟨hJ, hf⟩
-    obtain ⟨hy, hs⟩ := hJ.2 rfl
-    exact ⟨hf rfl, by rw [← hf rfl] at hy; exact hy, hs⟩
+        exact ⟨fun _ => jc_step hj (hx.1 hj) false (by simpa using hj3) (hr ▸ hy) hm, fun h => absurd h hj3⟩
+  · rintro f y _ _ ⟨-, hf⟩
+    exact hf rfl
 
 /-! ## Between levels -/
 
@@ -646,7 +676,7 @@ theorem goal_last {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Trans
       gOf (basisAt q e)[y]! = Model.bHat execArith sch.n (bOf b) (q.toList.map gOf ++ Model.bitsK e y))
     {C : Array F256 × LState × Transcript} (hC : C = chals P cf #[] x.2.1 x.2.2 4)
     {F : Array F256} (hF : F = foldKs C.1.toList (embedF g))
-    (hsync₁ : Sync C.2.1.s C.2.1.q (embedF (splitK F)) (liftU (foldKs C.1.toList w)) (x.1.1 - 4))
+    (hsum : gOf C.2.1.s = ∑ y ∈ Finset.range (2 ^ (x.1.1 - 4)), gv F y * gv (foldKs C.1.toList w) y)
     (hyr : P.finalProof.yr = splitK F)
     (hfin : P.finalProof.rows = (positions (sch.levels.getD (sch.levels.size - 1) default)
       (queryCoins P cf (sch.levels.getD (sch.levels.size - 1) default) C.2.1
@@ -691,8 +721,6 @@ theorem goal_last {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Trans
     rw [pow_add, Nat.mul_div_cancel _ (by positivity)]
   have hFs : (foldKs (chals P cf #[] x.2.1 x.2.2 4).1.toList (embedF g)).size = 2 ^ (x.1.1 - 4) := by
     rw [foldKs_size, embedF_size, hg, Array.length_toList, hch, hlanes, hcols, Nat.add_comm, h16]
-  have hWs : (foldKs (chals P cf #[] x.2.1 x.2.2 4).1.toList w).size = 2 ^ (x.1.1 - 4) := by
-    rw [foldKs_size, hw4, Array.length_toList, hCf.2.2.2.2.2.2.1, Array.size_empty, Nat.zero_add, h16]
   have hrows' : P.finalProof.rows = (positions (sch.levels.getD (sch.levels.size - 1) default)
       (queryCoins P cf (sch.levels.getD (sch.levels.size - 1) default) (chals P cf #[] x.2.1 x.2.2 4).2.1
         (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2))).map
@@ -726,8 +754,7 @@ theorem goal_last {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Trans
       (chals P cf #[] x.2.1 x.2.2 4).2.1
       (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2)).1.2.1))
     _ _ _ _ _ hFs ?_ ?_ fun y hy => ?_
-  · rw [← sum_split _ _ _ hFs hWs]
-    exact hsync₁.sum
+  · exact hsum
   · rw [show (query P cf (sch.levels.getD (sch.levels.size - 1) default) P.finalProof.rows
         (chals P cf #[] x.2.1 x.2.2 4).1 (chals P cf #[] x.2.1 x.2.2 4).2.1
         (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2)).1.2.2 =

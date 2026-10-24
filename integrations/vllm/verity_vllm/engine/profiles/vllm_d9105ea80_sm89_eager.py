@@ -146,6 +146,8 @@ def make_weight_field(C: dict[str, Any]) -> Callable[[str], tuple[str | int, ...
             # tied checkpoints (SmolLM2, Qwen2.5 ≤ 3B): lm_head.weight aliases embed (a fact, DESIGN §3);
             # untied ones (TinyLlama, Qwen2.5-7B, Llama-3.1-8B): a field of its own (`analytic.weights_type`)
             return ("embed",) if tied else ("lm_head",)
+        if name == "lm_head.weight_scale" and C.get("INT8_LM_HEAD") and not tied:
+            return ("lm_head_ws",)
         if name == "model.norm.weight":
             return ("norm",)
         m = _LAYER_RE.match(name)

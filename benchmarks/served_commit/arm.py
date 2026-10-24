@@ -8,6 +8,10 @@ captured into the graph and drained at the logits), and the native collector (`N
 staging) hashes them into one root per step. Its control is ``stock`` token for token: committing must not change what
 is served.
 
+These arms commit ``vllm-v1`` by name (``commit_scheme``), as does every `prof_arm` arm that doesn't name ``rows-sha512``: they
+measure the record as it was before the Commit's default became ``rows-sha512``. The default Commit is what `prof_arm`'s rows arms
+and the harness's ``commit`` arms (`verity_bench.vllm.commit_arm`) measure.
+
 Each of the harness's runs is one Commit. ``begin_run`` resets the committer and installs it (before the clock),
 ``end_run`` finalizes the run's commitment (inside the timed window, so a run's time includes the hashing backlog), and
 the run's checks happen after the window, before the next run or when the harness reads ``extras`` or ``gate``: the
@@ -29,9 +33,24 @@ without a root fails it. The harness reads the gate before timing (``arm``) and 
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 from typing import Any
 
 WARMUPS = ("gate", "warmup")
+
+
+def committer_engine(llm: Any) -> SimpleNamespace:
+    """The engine `NativeCollectCommitter` takes (as `verity_vllm.engine.build.Engine`), from the public surface of the
+    harness's ``target.engine``: ``verity_vllm.LLM``, or for a local checkpoint the harness's stand-in, which has no pin.
+    The committer reads four things of it: the ``vllm.LLM``, its in-process model runner, the served model, and the
+    checkpoint's repo and revision (into its geometry digest), which are the pin's, or for a local checkpoint vLLM's model
+    path with no revision."""
+    from verity_vllm.engine.engine_profile import get_model_runner
+
+    pin = getattr(llm, "pin", None)
+    mc = llm.vllm.llm_engine.vllm_config.model_config
+    cp = {"repo": pin.model, "revision": pin.revision} if pin is not None else {"repo": mc.model, "revision": mc.revision}
+    return SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model, cp=cp)
 
 
 class ServedCommitArm:
@@ -39,7 +58,7 @@ class ServedCommitArm:
     precision = "bfloat16"
     control = "stock"
     resident = True
-    commit_scheme: str | None = None
+    commit_scheme = "vllm-v1"
     batch_copies = True
 
     def __init__(self, id: str, retain: str) -> None:
@@ -62,12 +81,12 @@ class ServedCommitArm:
         from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
         os.environ["VERITY_RETAIN"] = self.retain
-        engine = target.engine._engine
-        self.source.note_engine(engine.model)
-        com = NativeCollectCommitter(engine, run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True,
+        llm = target.engine
+        self.source.note_engine(llm.model)
+        com = NativeCollectCommitter(committer_engine(llm), run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True,
                                      native_hooks=True, auto_blocks=True, native_worker=True, commit_scheme=self.commit_scheme)
         self.source.attach(com)
-        vc = engine.llm.llm_engine.vllm_config
+        vc = llm.vllm.llm_engine.vllm_config
         tokens = int(vc.scheduler_config.max_num_batched_tokens)
         sizing = com.size_arena({"batch": int(vc.scheduler_config.max_num_seqs), "max_prompt": tokens, "max_new": 1,
                                  "max_num_batched_tokens": tokens, "max_model_len": int(vc.model_config.max_model_len)})

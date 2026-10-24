@@ -43,11 +43,15 @@ def run_failing(com, sched):
     return rc
 
 
-@pytest.mark.parametrize("scheme,retain", [(None, "none"), (R.NAME, "host")], ids=["vllm-v1", "rows-sha512"])
-def test_a_step_past_the_learn_budget_fails_the_run_by_name(monkeypatch, scheme, retain):
-    """Under rows-sha512 a learning step that keeps no bytes copies nothing to host (each window is hashed in place to its h), so it
-    has no budget to outgrow and is committed (test_windowed_rows_sha512); one that keeps its bytes is copied to transient blocks."""
+@pytest.mark.parametrize("scheme,retain,hold", [(None, "none", None), (R.NAME, "host", None), (R.NAME, "none", 0)],
+                         ids=["vllm-v1", "rows-sha512", "rows-sha512-past-hold"])
+def test_a_step_past_the_learn_budget_fails_the_run_by_name(monkeypatch, scheme, retain, hold):
+    """Under rows-sha512 a learning step that keeps no bytes copies nothing to host up to `rows_hold_bytes` of its rows' h (each
+    window hashed in place to its h), so within the hold it has no budget to outgrow and is committed (test_windowed_rows_sha512);
+    past it (0 here), like one that keeps its bytes, it is copied to transient blocks."""
     com = WR.committer(monkeypatch, retain=retain, retain_levels=False, bounded=True, commit_scheme=scheme)
+    if hold is not None:
+        com.rows_hold_bytes = hold
     try:
         com.learn_only = False                     # a record run whose plans were never pre-learned
         rc = run_failing(com, WR.SCHED)

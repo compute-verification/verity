@@ -1,0 +1,208 @@
+# DS-90 as a data sheet (note:20261019T0511Z-draft-mm-sheets, G1): each constant the data-sheet machine
+# (`Accounting.TS.Sheet.machine`) reads on the H200, its value, the vendor document that states it and its grade, and
+# each DS-90 class's tensor form or pipe. `machine-model sheet --device sm_90` derives every DS-90 line from it and
+# checks them against census/DS-90.csv; `--lean` prints the Lean module `lean` names, which the tests hold to it.
+# Scope: one GPU's own SMs. A peer GPU's work over NVLink or NVSwitch is outside the sheet, and Device.lean's side
+# channels don't list it (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).
+name = "H200"
+gpu = "H200 SXM (sm_90a)"
+vector = "DS-90"
+lean = "Security/Definitions/Accounting/Sheets/H200.lean"
+
+[fmax]
+mhz = 1980
+grade = "whitepaper (H100 SXM5), and measured"
+source = "H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the H200 data sheet states no clock; the driver's maximum on vy-dc-h200 is 1980 MHz (EPS1 DC, note:20261017T0452Z-draft-eps1-dc)"
+
+[sms]
+value = 132
+grade = "whitepaper (H100 SXM5), and measured"
+source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'SMs 132'; the H200 data sheet states none (its peaks equal H100 SXM5's); the device reports 132"
+
+# A2: a SMSP issues at most one warp instruction a SMSP-cycle, so every class holds DS_issue for 1. A2u: a uniform
+# datapath instruction (UNI) takes that slot as a lane instruction does. `slots` is 1 for both, as `Sheet.machine`'s issue
+# row is.
+[issue]
+slots = 1
+grade = "Programming Guide"
+source = "CUDA C++ Programming Guide 12.9 §18.8.1 (CC 9.0): '4 warp schedulers ... at every instruction issue time, each scheduler issues one instruction for one of its assigned warps'"
+
+[uniform_issue]
+slots = 1
+grade = "measured only (no vendor document states it)"
+source = "no vendor document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the uniform pipe with no rate, and CUDA Binary Utilities §4.3 lists the Hopper uniform opcodes (integer only); measured at saturation beside an async wgmma: each uniform instruction costs 1.08 to 1.19 SMSP-cycles at issue 0.87 with no dual issue (RT-H200-EMP, dc/probes/sm90_emp.cu emp_pack3, r20261019-064443-0ae6, note:20261019T0533Z-draft-rt-h200-emp), and 0.984 of a slot beside a saturated lane stream (the census's UNI issue line, DC-90)"
+
+[clocks.tensor]
+label = "tensor boost clock"
+mhz = 1830
+grade = "whitepaper (H100 SXM5)"
+source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops: 1830 MHz'; the clock the tensor peaks are quoted at, 150 MHz under f_max"
+
+[clocks.fp64]
+label = "FP64 tensor boost clock"
+mhz = 1980
+grade = "whitepaper (H100 SXM5)"
+source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz'; f_max itself"
+
+# Each operand type's dense MACs an SM clock (A3). `sheet` is the data sheet's figure as printed (TOPS or TFLOPS),
+# `sparse` whether it is with sparsity (the dense figure half of it), `tol` half its last printed digit, and `clock`
+# the clock at which the per-clock peak reproduces it: 2 · macs · SMs · clock is the figure to within tol.
+[peaks.s8]
+macs = 4096
+sheet = 3958
+sparse = true
+tol = 0.5
+clock = "tensor"
+grade = "data sheet and whitepaper; per clock derived (figure over SMs and the tensor clock)"
+source = "H200 data sheet (nvidia.com/en-us/data-center/h200, Technical Specifications, H200 SXM): 'INT8 Tensor Core 3,958', footnote 2 'With sparsity', footnote 1 'Preliminary specifications'; H100 whitepaper V1.04 Table 3 'Peak INT8 Tensor TOPS 1978.9/3957.8'; 'H100 SM Architecture': twice A100's MMA rate a SM on equivalent data types"
+
+[peaks.e4m3]
+macs = 4096
+sheet = 3958
+sparse = true
+tol = 0.5
+clock = "tensor"
+grade = "data sheet and whitepaper; per clock derived"
+source = "H200 data sheet, H200 SXM: 'FP8 Tensor Core 3,958' with sparsity; H100 whitepaper V1.04 Table 3 'Peak FP8 Tensor TFLOPS with FP32 Accumulate 1978.9/3957.8'"
+
+[peaks.e5m2]
+macs = 4096
+sheet = 3958
+sparse = true
+tol = 0.5
+clock = "tensor"
+grade = "data sheet and whitepaper; per clock derived"
+source = "H200 data sheet, H200 SXM: 'FP8 Tensor Core 3,958' with sparsity, for both FP8 formats (CUDA C++ Programming Guide 12.9 §18.8.1: FP8 'in either E4M3 or E5M2')"
+
+[peaks.f16]
+macs = 2048
+sheet = 1979
+sparse = true
+tol = 0.5
+clock = "tensor"
+grade = "data sheet and whitepaper; per clock derived"
+source = "H200 data sheet, H200 SXM: 'FP16 Tensor Core 1,979' with sparsity; H100 whitepaper V1.04 Table 3 'Peak FP16 Tensor TFLOPS with FP32 Accumulate 989.4/1978.9'"
+
+[peaks.bf16]
+macs = 2048
+sheet = 1979
+sparse = true
+tol = 0.5
+clock = "tensor"
+grade = "data sheet and whitepaper; per clock derived"
+source = "H200 data sheet, H200 SXM: 'BFLOAT16 Tensor Core 1,979' with sparsity; H100 whitepaper V1.04 Table 3 'Peak BF16 Tensor TFLOPS with FP32 Accumulate 989.4/1978.9'"
+
+[peaks.tf32]
+macs = 1024
+sheet = 989
+sparse = true
+tol = 0.5
+clock = "tensor"
+grade = "data sheet and whitepaper; per clock derived"
+source = "H200 data sheet, H200 SXM: 'TF32 Tensor Core 989' with sparsity; H100 whitepaper V1.04 Table 3 'Peak TF32 Tensor TFLOPS 494.7/989.4'"
+
+# DMMA (`mma.sync .f64`): an int8 × int8 product is exact in f64, so it heads exact int8 words, and it has its row
+# here, not 0 (RT-ISA-1). `element_words`: an f64 accumulator element takes two registers (A6-WIDE).
+[peaks.f64]
+macs = 128
+sheet = 67
+sparse = false
+tol = 0.5
+clock = "fp64"
+element_words = 2
+grade = "data sheet and whitepaper; per clock derived (figure over SMs and the FP64 clock) and measured"
+source = "H200 data sheet, H200 SXM: 'FP64 Tensor Core 67 TFLOPS' (no sparsity footnote); measured alone, DMMA.16x8x16 128 MACs an SM clock and DMMA.8x8x4 64, and beside a saturated wgmma s8 form t + s = 0.935 to 0.958, so f64 shares the tensor pipe's time with the other types (RT-ISA-1, unpriced90.cu, r20261019-085210-4776, note:20261019T0520Z-draft-rt-isa)"
+
+# A6's ω for each tensor class (`omega` in sheet.py), read off the PTX accumulator fragments.
+[omega]
+grade = "PTX ISA"
+source = "PTX ISA 9.4, the accumulator (D) fragments: mma.sync m16n8k32 .s32 four registers a lane (128 a warp instruction), m16n8k16 .f32 the same, .f64 m8n8k4 two f64 a lane (four registers, 128) and m16n8k4, k8 and k16 four (eight, 256); wgmma m64nNk32 .s32 N/2 registers a thread of its warpgroup (4,096 a warp at N256)"
+
+# Each Nsight Compute pipe's results an SM clock (A4).
+[pipes.alu]
+width = 64
+grade = "Programming Guide and Nsight Compute"
+source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 32-bit integer add 64, compare/minimum/maximum 64, bitwise AND/OR/XOR 64, shift 64 (results a clock a multiprocessor); Nsight Compute Kernel Profiling Guide §2.3.6: alu executes 'most bit manipulation and logic instructions ... integer instructions, excluding IMAD and IMUL'"
+
+[pipes.imad]
+width = 64
+grade = "Programming Guide"
+source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: '32-bit integer multiply, multiply-add, extended-precision multiply-add' 64; Nsight Compute §2.3.6: IMUL and IMAD on FMA Heavy"
+
+[pipes.shfl]
+width = 32
+grade = "Programming Guide"
+source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 'warp shuffle' 32; Nsight Compute §2.3.6: lsu issues shuffles"
+
+# The uniform datapath has no rate in any document (RT-MACHINE-4), so its width is the census's measured UP line:
+# 128 over 1.96110716 SMSP-cycles a uniform instruction.
+[pipes.uniform]
+width = "3200000000/49027679"
+grade = "measured only (no vendor document states the uniform datapath's rate)"
+source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest of 11 forms alone (uz_128i) at 0.4999 uniform instructions a SMSP-cycle, at decision 76's 2% margin 1.96110716 SMSP-cycles each (r20261017-095350-02ff, r20261017-103944-a0bf, r20261017-112709-e43e, r20261017-113207-6aa4, r20261017-113541-675b); the width counts a uniform instruction as a warp instruction's 32 results, as the pipe row reads a width"
+
+# Each DS-90 class: a tensor form (operand type, m, n, k, and the warps that issue one MMA: a wgmma's warpgroup is 4,
+# each warp's instruction a quarter of it; PTX ISA 9.4 §9.7.17), a pipe, or neither (issue only: FFMA at 128 results a
+# clock is the issue ceiling; b1 has no peak on any sheet). `sparse` marks a 2:4 sparse form, k its logical k and its
+# dense MACs half m · n · k: each `wgmma.mma_async.sp` N256 form is a class at its dense twin's demand (RT-H200-EMP-2,
+# note:20261019T0533Z-draft-rt-h200-emp: wgsprs_s8 runs at its dense twin's instruction rate with A from registers,
+# 4095.6 physical MACs a SM-clock, and the shared-memory forms at 0.889 of it; r20261019-063344-f650,
+# r20261019-062628-43df). The census has no measured line for them. Each `mma.sync .f64` shape is a DMMA class at the
+# f64 peak (RT-ISA-1): DMMA.16x8x16 runs at it, DMMA.8x8x4 at half (its line here is half the time it takes), and
+# m16n8k4 and m16n8k8 are untimed.
+# The census's memory, atomic and control classes (ATOMS32, ATOME32, LDS128, STS32, STS128, STG32, STG128, REDUX,
+# REDG32, ISETP, NOROW and the catch-all UNLISTED) are issue only: no document gives them a line on a row of the
+# sheet, so A2 prices each at its issue slot alone (DC-CENSUS-1, note:20261019T2245Z-draft-dc-census). On DC-90-ri
+# the ones a run timed beside the IGMMA, the catch-all among them, carry the census's JI90 lines too
+# (r20261021-070616-d06c, r20261021-074303-da7f).
+[kinds]
+ALU = { pipe = "alu" }
+ATOME32 = {}
+ATOMS32 = {}
+BGMMA_B1_N256 = {}
+BMMA168256_B1 = {}
+DMMA1684 = { type = "f64", m = 16, n = 8, k = 4, warps = 1 }
+DMMA1688 = { type = "f64", m = 16, n = 8, k = 8, warps = 1 }
+DMMA16816 = { type = "f64", m = 16, n = 8, k = 16, warps = 1 }
+DMMA884 = { type = "f64", m = 8, n = 8, k = 4, warps = 1 }
+FFMA = {}
+HGMMA_BF16_N128 = { type = "bf16", m = 64, n = 128, k = 16, warps = 4 }
+HGMMA_BF16_N256 = { type = "bf16", m = 64, n = 256, k = 16, warps = 4 }
+HGMMA_BF16_N256_SP = { type = "bf16", m = 64, n = 256, k = 32, warps = 4, sparse = true }
+HGMMA_F16_N256 = { type = "f16", m = 64, n = 256, k = 16, warps = 4 }
+HGMMA_F16_N256_SP = { type = "f16", m = 64, n = 256, k = 32, warps = 4, sparse = true }
+HGMMA_TF32_N256 = { type = "tf32", m = 64, n = 256, k = 8, warps = 4 }
+HGMMA_TF32_N256_SP = { type = "tf32", m = 64, n = 256, k = 16, warps = 4, sparse = true }
+HMMA16816_BF16 = { type = "bf16", m = 16, n = 8, k = 16, warps = 1 }
+HMMA16816_F16 = { type = "f16", m = 16, n = 8, k = 16, warps = 1 }
+HMMA1688_TF32 = { type = "tf32", m = 16, n = 8, k = 8, warps = 1 }
+IGMMA_S8_N128 = { type = "s8", m = 64, n = 128, k = 32, warps = 4 }
+IGMMA_S8_N16 = { type = "s8", m = 64, n = 16, k = 32, warps = 4 }
+IGMMA_S8_N192 = { type = "s8", m = 64, n = 192, k = 32, warps = 4 }
+IGMMA_S8_N256 = { type = "s8", m = 64, n = 256, k = 32, warps = 4 }
+IGMMA_S8_N256_RS = { type = "s8", m = 64, n = 256, k = 32, warps = 4 }
+IGMMA_S8_N256_SP = { type = "s8", m = 64, n = 256, k = 64, warps = 4, sparse = true }
+IGMMA_S8_N32 = { type = "s8", m = 64, n = 32, k = 32, warps = 4 }
+IGMMA_S8_N64 = { type = "s8", m = 64, n = 64, k = 32, warps = 4 }
+IGMMA_S8_N8 = { type = "s8", m = 64, n = 8, k = 32, warps = 4 }
+IGMMA_U8S8_N256 = { type = "s8", m = 64, n = 256, k = 32, warps = 4 }
+IMAD = { pipe = "imad" }
+IMMA16816_S8 = { type = "s8", m = 16, n = 8, k = 16, warps = 1 }
+IMMA16832_S8 = { type = "s8", m = 16, n = 8, k = 32, warps = 1 }
+ISETP = {}
+LDS128 = {}
+NOROW = {}
+QGMMA_E4M3_N128 = { type = "e4m3", m = 64, n = 128, k = 32, warps = 4 }
+QGMMA_E4M3_N256 = { type = "e4m3", m = 64, n = 256, k = 32, warps = 4 }
+QGMMA_E4M3_N256_SP = { type = "e4m3", m = 64, n = 256, k = 64, warps = 4, sparse = true }
+QGMMA_E5M2_N256 = { type = "e5m2", m = 64, n = 256, k = 32, warps = 4 }
+QGMMA_E5M2_N256_SP = { type = "e5m2", m = 64, n = 256, k = 64, warps = 4, sparse = true }
+REDG32 = {}
+REDUX = {}
+SHFL = { pipe = "shfl" }
+STG128 = {}
+STG32 = {}
+STS128 = {}
+STS32 = {}
+UNI = { pipe = "uniform" }
+UNLISTED = {}

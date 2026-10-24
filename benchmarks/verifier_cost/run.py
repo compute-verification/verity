@@ -3,8 +3,9 @@ the size of the circuit that description unrolls to (README.md).
 
   measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       Serve_v1 at each config, word-level and on bits (`lift.on_bits`), as an NCI instance (θ its registered inputs, one
-      IU per Call), checked by `nci-check` (`NciCheck.Desc`) and, where the unrolled circuit has at most GATES gates, by
-      `nci-check --unrolled` (`NciCheck.check`) on the instance expanded gate by gate; DIR/results.json.
+      IU per Call), checked by `nci-check --policy` (`NciCheck.Desc`) and, where the unrolled circuit has at most GATES
+      gates, by `nci-check --policy --unrolled` (`NciCheck.check`) on the instance expanded gate by gate;
+      DIR/results.json.
   partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       the one-stage verifier's partition (`sampled-proofs-difftest`'s `partition`: `Partition.units`, `strata`, the law
       and the digest) on Serve_v1 under the template query of its Calls, and under `Q_word` v1 and `Q_call` v1 at X = 16
@@ -90,10 +91,10 @@ def program(name: str, ir: str) -> str:
 def instance(ref, text: str) -> tuple[dict, dict]:
     """`NciCheck.Desc`'s instance (θ the registered inputs, one IU per Call, a gate-less node in none) and the
     description's sizes."""
-    inp, spans = ref.root_nodes(text)
+    inp, reg, spans = ref.root_nodes(text)
     desc = json.loads(text)
     nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
-    theta = [k for k, n in enumerate(nodes) if desc["callees"][n["fn"]].startswith("RegisteredInput")]
+    theta = [k for k in range(len(nodes)) if reg[k]]
     owner, u = [], 0
     for k, (lo, hi) in enumerate(spans):
         if inp[k] or hi == lo:
@@ -159,7 +160,7 @@ def measure(args) -> int:
                 row = {"config": name, "ir": ir, "build_seconds": round(time.perf_counter() - t, 3), **row}
                 path = Path(tmp) / f"{name}-{ir}.json"
                 path.write_text(json.dumps(inst))
-                runs = [timed([str(args.exe), str(path)]) for _ in range(args.repeat)]
+                runs = [timed([str(args.exe), "--policy", str(path)]) for _ in range(args.repeat)]
                 d = min(runs, key=lambda r: r["seconds"])
                 row["desc"] = {k: v for k, v in d.items() if k != "verdict"} | {"verdict_sha256": _digest(d.get("verdict"))}
                 row["verdict"] = d.get("verdict")
@@ -168,7 +169,7 @@ def measure(args) -> int:
                     t = time.perf_counter()
                     upath.write_text(json.dumps(ref.expand(inst)))
                     expand_s = time.perf_counter() - t
-                    u = timed([str(args.exe), "--unrolled", str(upath)])
+                    u = timed([str(args.exe), "--policy", "--unrolled", str(upath)])
                     upath.unlink()
                     row["unrolled"] = {k: v for k, v in u.items() if k != "verdict"} | {
                         "expand_seconds": round(expand_s, 3), "agrees": u.get("verdict") == d.get("verdict")}

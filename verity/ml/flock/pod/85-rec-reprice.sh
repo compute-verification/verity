@@ -4,7 +4,8 @@
 # --cwd source); the big files stay under $FLOCK_WORK/data/$TAG for the next step, out/ gets the records:
 #   STEP=build   (CPU) the GPU prover (60-circuit.sh's build, keyed by its sources as 70-class-sweep.sh keys it), Lean's
 #                flock-verify (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
-#                --definitions DEFS --stage-only, BATCH=fixed N) twice: with plain SHA-512 leaves (FLOCK_PLAIN_LEAVES=1, the
+#                --program-module rec_reprice.py:program --partition q-template-instance --stage-only, BATCH=fixed N,
+#                untiled, every instance's own rows: FLOCK_OWN_ROWS=1) twice: with plain SHA-512 leaves (FLOCK_PLAIN_LEAVES=1, the
 #                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
 #                (STAGE_FROM=DIR: another job's data/$TAG, both stagings)
 #   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy
@@ -23,6 +24,9 @@
 #                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
 #                InnerRepCheck and the forgeries (FORGE="message sum comb top top-salt coef dirs", each under forged-<kind>/),
 #                JOBS at once; the job fails if one does not stage
+#   STEP=vcap    (CPU) RecCap alone at every level over the inner's last proxied session (rec_vstage.stage_cap: each
+#                level's tops under the firewall's salts, no running sums) into data/$TAG/v/cap (level 0) and v/cap/L<l>,
+#                beside the statements vstage staged, whose sessions stay valid (then oprove LEVELS=cap,cap-L1,..)
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
 #                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
 #                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
@@ -40,7 +44,8 @@
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
-# env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (the Gemm_v2 contraction: DEFS is Gemm_v2{K,N})  N=2048 (instances: the Call's every unit)
+# env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (GemmCoordinate_v2's contraction)  N=2048 (instances: the
+#      population program's every unit, rec_reprice.py)
 #      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
@@ -51,7 +56,7 @@
 #      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a --zk loopback's draw: every unit; none: no draw)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-STEP=${STEP:?STEP=build|inner|icheck|vstage|oprove|oreplay|lean}
+STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
 [ -z "${GPU_LEASE_UUID:-}" ] || { echo "REFUSED: the job holds a GPU lease (launched with --gpus): launch it without, each prove leases its own"; exit 2; }
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/rec-reprice-job}/out; mkdir -p $O
 FW=${FLOCK_WORK:-/workspace/jobs/rec-reprice}; W=$FW/flock-circuit; L=$FW/cache; TAG=${TAG:-k4096}; DD=$FW/data/$TAG
@@ -202,6 +207,15 @@ loopback() {
   return $rc
 }
 
+# hello_at DIR: a firewalled prover's Lean Hello sets each session up at the statement STEP=lean verifies (live PROTOCOL.md
+# §10.4), verity/flock-circuit with DIR's partition and program; read only under FC_FIREWALL=1
+hello_at() {
+  export FC_FIREWALL_STATEMENT=verity/flock-circuit
+  FC_FIREWALL_HELLO_ARGS=; local k
+  for k in partition program; do [ -f $1/$k.json ] && FC_FIREWALL_HELLO_ARGS+="--$k $1/$k.json "; done
+  export FC_FIREWALL_HELLO_ARGS
+}
+
 # proxied: the rec proxy (WARM + RUNS sessions, each to $DD/inner/s<k>, held to $O/inner/schedule.json, Register answered
 # with $DD/stage/draw.json) and prove_live against it; the prover's status
 proxied() {
@@ -256,7 +270,7 @@ def live(d):
     rank_s = [sum(ranks[i * per:(i + 1) * per]) for i in range(len(rows))][warm:] if per else []
     # the prover process's CPU seconds over all its sessions, the firewall's per-session timings (both reps summed), its refusals
     cpu = [float(tv(d / "time-prove.txt", k) or "nan") for k in (r"User time \(seconds\)", r"System time \(seconds\)")]
-    firewall = {k: med(lambda v: sum(b.get(k) or 0 for b in v.get("buckets") or [])) for k in ("t.firewall_recheck", "cpu.firewall_recheck", "t.firewall_shadow", "t.firewall_wait")}
+    firewall = {k: med(lambda v: sum(b.get(k) or 0 for b in v.get("buckets") or [])) for k in ("t.firewall_recheck", "cpu.firewall_recheck")}
     stops = [l for l in text(d / "prove.err").splitlines() if l.startswith(("FIREWALL-REFUSED", "PROVER-STOPPED"))]
     return {"sessions": len(rows), "timed": len(timed), "accepted": [v.get("accepted") for _, v in rows],
             "env": text(d / "prove-env.txt").strip(), "prover_cpu_s": sum(cpu), "firewall": firewall, "refusals": stops[:8],
@@ -374,15 +388,19 @@ lean_build() {
   )
 }
 
-# stage_inner NAME PLAIN: the inner statement (one Call of Gemm_v2{K, N}, its GemmCoordinate_v2 shape at N instances: the
-# Call's every unit, so the full draw over its partition proves every unit of the statement, which check 5 requires)
-# staged into $DD/NAME from its cache $DD/NAME-cache, its trees' leaves plain SHA-512 when PLAIN is 1; its records in $O/NAME
+# stage_inner NAME PLAIN: the inner statement (N instances of GemmCoordinate_v2{K}, the population program of that template
+# under Q_template_instance, rec_reprice.py: the partition's every unit, so the full draw over it proves every unit of the
+# statement, which check 5 requires) staged into $DD/NAME from its cache $DD/NAME-cache, its trees' leaves plain SHA-512 when
+# PLAIN is 1; its records in $O/NAME. Never tiled (FLOCK_GEMM_TILE): a tile's circuit names its unit class as its template,
+# which no template query lists, and at K = 4096 a 4x4 tile does not fit a block anyway. Every instance's own rows
+# (FLOCK_OWN_ROWS): Lean covers a shared-row public file only in a registered --zk session (ProvedScope.sharedRowsOk), and
+# the population program's instances share no row, so the rows committed are the same
 stage_inner() {
   local o=$O/$1 c=$DD/$1-cache
   mkdir -p $o
-  python3 -c "import json, sys; json.dump({'Gemm_v2{K=%s,N=%s,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}' % (sys.argv[1], sys.argv[2]): 1151}, open(sys.argv[3], 'w'))" $K $N $o/defs.json
-  FLOCK_STAGE_CACHE=$c FLOCK_PLAIN_LEAVES=$2 FLOCK_GEMM_TILE=${FLOCK_GEMM_TILE:-4x4} /usr/bin/time -v -o $o/time-stage.txt \
-    python3 -m verity_flock.class_statement --definitions $o/defs.json --partition q-word --out $o --stage-only --batch fixed --n $N \
+  K=$K N=$N FLOCK_STAGE_CACHE=$c FLOCK_PLAIN_LEAVES=$2 FLOCK_GEMM_TILE= FLOCK_OWN_ROWS=1 /usr/bin/time -v -o $o/time-stage.txt \
+    python3 -m verity_flock.class_statement --program-module $REPO/verity/ml/flock/pod/rec_reprice.py:program \
+    --partition q-template-instance --out $o --stage-only --batch fixed --n $N \
     --max-statement-bits $((1 << 35)) --batch-ands $((1 << 35)) --selftest 0 > $o/stage.log 2>&1
   echo "stage $1 exit $?"; tail -5 $o/stage.log
   local C=$(ls -td $c/*/ 2>/dev/null | head -1)
@@ -391,35 +409,12 @@ stage_inner() {
   du -sb $DD/$1/* | tee $o/sizes.txt
 }
 
-# inner_partition: the verifier's copies of what the inner statement binds, into $DD/stage: the partition object (q-word over
-# the one-Call program, partition.json) and that program (program.json), which STEP=lean's statement check reads, and the
-# full draw over them (rec_live.full_draw: the stratified law at K = the population, every unit; draw.json), which the rec
-# proxy answers Register with
+# inner_partition: the verifier's copies of what the inner statement binds, into $DD/stage (rec_reprice.py partition): the
+# partition object (Q_template_instance over the population program, partition.json) and that program (program.json), which
+# STEP=lean's statement check reads, and the full draw over them (rec_live.full_draw: the stratified law at K = the
+# population, every unit; draw.json), which the rec proxy answers Register with
 inner_partition() {
-  python3 - $K $N $DD/stage <<'EOF'
-import json, sys
-from pathlib import Path
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity_flock import class_statement as CS, partition_units as PU, rec_live as RL
-d = Path(sys.argv[3])
-defs = {'Gemm_v2{K=%s,N=%s,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % (sys.argv[1], sys.argv[2]): 1151}
-program, _calls, _prov = CS.distinct_calls(None, None, defs, None)
-units = PU.partition_units(program, "q-word")
-obj = PO.build(units.program, units.query)
-with open(d / "circuit.txt") as f:
-    f.readline()
-    meta = json.loads(f.readline()[5:])
-assert (meta["partition"]["digest"], meta["program_sha512"]) == (PO.digest(obj), obj["program"]), "not the circuit's partition"
-(d / "partition.json").write_text(json.dumps(obj, sort_keys=True))
-desc = encode_program(units.program)
-assert program_digest(desc) == obj["program"], "the program file is not the partition's program"
-(d / "program.json").write_bytes(canonical_json(desc))
-draw = RL.full_draw(units.program, obj["query"])
-assert draw["population"] == int(sys.argv[2]), f"the partition's population is {draw['population']}, not the statement's {sys.argv[2]} units"
-(d / "draw.json").write_text(json.dumps(draw))
-print("partition", PO.digest(obj), "program", obj["program"], "template", *meta["program_digests"], "population", draw["population"])
-EOF
+  K=$K N=$N python3 $REPO/verity/ml/flock/pod/rec_reprice.py partition $DD/stage
 }
 
 case $STEP in
@@ -612,8 +607,22 @@ pub, priv, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) fo
   [ ${PIPESTATUS[1]} = 0 ] || { echo "vstage: a statement did not stage (out/vstage/<name>.err)"; exit 1; }
   (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage/sizes.txt
   ;;
+vcap)
+  INNER=${INNER:-$DD/inner/s$((NS - 1))}
+  [ -f $INNER/public.json ] && [ -f $INNER/private.json ] || { echo "INNER=$INNER: no public.json and private.json (run STEP=inner first)"; exit 1; }
+  [ -f $DD/v/L0/registered.json ] || { echo "run STEP=vstage first: RecCap is staged beside V*'s other statements"; exit 1; }
+  mkdir -p $O/vstage; rm -rf $DD/v/cap
+  /usr/bin/time -v -o $O/vstage/time-cap.txt python3 -c '
+import json, sys; from pathlib import Path; from verity_flock import rec_vstage as S
+print(json.dumps(S.stage_cap(Path(sys.argv[1]), Path(sys.argv[2]))))' $INNER $DD/v/cap > $O/vstage/cap.json 2> $O/vstage/cap.err \
+    || { tail -20 $O/vstage/cap.err; exit 1; }
+  python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); sys.exit(0 if r and all(c["unit_agrees"] and all(c["unit_agrees"]) for c in r.values()) else "RecCap: a level'"'"'s unit disagrees with its reference")' \
+    $O/vstage/cap.json || exit 1
+  cp $DD/v/cap/registered.json $O/vstage/cap-registered.json
+  for d in $DD/v/cap/L*/; do [ -d "$d" ] && cp $d/registered.json $O/vstage/cap-$(basename $d)-registered.json; done
+  ;;
 oprove)
-  V=$DD/v; [ -f $V/acc-salts.bin ] || { echo "run STEP=vstage first"; exit 1; }
+  V=$DD/v; [ -n "$(find $V -name inst.bin -print -quit 2>/dev/null)" ] || { echo "run STEP=vstage (or vcap) first"; exit 1; }
   # every staged statement (each level's, each of the algebra's parts, each forgery's: L3, alg-p0, forged-sum-L6, ..), proved with --zk on
   # loopback, a forgery's once; upstream's replay --zk of the last session, which (accepted or not) is kept under $DD/v-sess
   # beside the statement directory Lean reads it with. MODES names the prover's sides, WARM + RUNS sessions each per
@@ -626,6 +635,7 @@ oprove)
   for C in $(cd $V && find . -name inst.bin -printf '%h\n' | sed 's:^\./::' | sort -V); do
     l=${C//\//-}; want $l || continue
     case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
+    hello_at $V/$C
     for mode in $MODES; do
       case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; *) echo "MODES: dev host firewall"; exit 1 ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
@@ -647,7 +657,7 @@ oprove)
   # FC_FIREWALL_TAMPER control (the device's side dishonest in one named way), each of which the firewall must refuse by name
   # without the tampered message leaving, the session stopping at its Finish (live PROTOCOL.md §10.1)
   if [ -n "${CONTROLS:-}" ]; then
-    C=$V/$CONTROLS
+    C=$V/$CONTROLS; hello_at $C
     for w in root witness label opening algebra algebra-proof shape; do
       PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_TAMPER=$w" WARM=0 RUNS=1 NS=1 again loopback neg-${CONTROLS//\//-}-$w $C/pub.bin $C/inst.bin $C/circuit.txt --zk
     done
@@ -674,11 +684,12 @@ lean)
   # root_B, later tops and link points every statement's tops and check 5 are held to (RecVStar.checkTopRows,
   # RecCoins.checkLink) and whose c_k its rec-c<k> rows are (RecVStar.checkPubRows)
   INNER=${INNER:-$DD/inner/s$((NS - 1))}
-  REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-session $INNER/session --rec-inner-transcript $INNER/public.json"
+  REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os --rec-inner-draw $DD/stage/draw.json --rec-inner-session $INNER/session --rec-inner-transcript $INNER/public.json"
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
   # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
   # partition object and program), and the shared rows (rec_vstage.shared_rows: the honest algebra's row ports but v and
-  # out, and R's levels' tops; without the algebra, the level's acc as acc0)
+  # out, R's levels' tops, and each level's tops rec-top-L<l> as L<l> and its cap read them; without the algebra, the
+  # level's acc as acc0)
   if [ -d $DD/v-sess ]; then
     $LEAN_BIN rec-inner --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
       --program $DD/stage/program.json > $O/lean/rec-inner.json 2> $O/lean/rec-inner.err || { tail -5 $O/lean/rec-inner.err; exit 1; }
@@ -692,7 +703,9 @@ o, v, vs = map(Path, sys.argv[1:])
 (line,) = [json.loads(ln[9:]) for ln in (o / "rec-statements.txt").read_text().splitlines() if ln.startswith("RECVSTAR ")]
 names = [s[0] for s in line["statements"]]
 try:
-    shared = VS.shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")))["ports"]
+    shared = VS.shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")),
+                            [d for d in [*sorted(v.glob("L[0-9]*")), v / "cap", *sorted(v.glob("cap/L*"))]
+                             if (d / "registered.json").is_file()])["ports"]
 except ValueError as e:
     sys.exit(str(e))
 for s in sorted(p for p in vs.iterdir() if p.is_dir()):

@@ -45,6 +45,20 @@ def test_layer_index_refuses_a_name_without_one():
         K.layer_index("lm_head")
 
 
+def test_a_tensor_parallel_rank_serves_its_consecutive_kv_heads_columns():
+    s = np.arange(80 * 8, dtype=np.float32).reshape(80, 8)
+    assert K.rank_table(s, 8).tobytes() == s.tobytes()
+    parts = [K.rank_table(s, 2, r, 4) for r in range(4)]
+    assert all(p.shape == (80, 2) and p.flags.c_contiguous for p in parts)
+    assert np.concatenate(parts, axis=1).tobytes() == s.tobytes() and parts[3][5].tolist() == [46.0, 47.0]
+
+
+@pytest.mark.parametrize("kv_heads, rank, world", [(2, 0, 1), (8, 0, 4), (3, 0, 3), (1, 4, 4), (4, 0, 0)])
+def test_a_rank_table_refuses_a_split_vllm_does_not_make(kv_heads, rank, world):
+    with pytest.raises(ValueError, match=f"K scales for 8 KV heads, rank {rank} of {world} has {kv_heads}"):
+        K.rank_table(np.ones((4, 8), dtype=np.float32), kv_heads, rank, world)
+
+
 def test_the_calibrator_keeps_the_amax_of_every_handed_key():
     class Impl:
         num_kv_heads = 2

@@ -35,6 +35,7 @@ def test_a_token_layer_is_one_block_of_its_layers_region():
         for j in (0, 1, SLOTS + 3, PAGES * SLOTS - 1):
             page, slot = divmod(j, SLOTS)
             assert b.read(j * BLOCK, BLOCK) == t.transpose(1, 2)[page, slot].contiguous().view(torch.uint8).numpy().tobytes()
+    assert store_bases(s.layout(), word_bytes=128) == {li: regions[f"kv/{li}"].first * 32 for li in (0, 1)}
     keys = layer_keys(bases, plain=lambda li: f"flags{li}")(1)
     assert (keys.store_base, keys.bj, keys.plain) == (bases[1], None, "flags1")
 

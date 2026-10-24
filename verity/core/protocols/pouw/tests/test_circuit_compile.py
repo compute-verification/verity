@@ -227,7 +227,7 @@ UNIT_REFUSED = [
     ("E_PORT_KIND" if SEEDS else "position", "own-position", _own_position),
     ("position", "own-roots", _own_roots),
     ("E_COIN_FLOW" if SEEDS else "salt-flow", "salt-leak", _salt_leak),
-    ("E_COIN_FLOW" if SEEDS else "noise-in-z", "noised-z", _noised_z),
+    ("noise-in-z", "noised-z", _noised_z),
 ]
 UNIT_REFUSED = [pytest.param(code, _bad(name, body), id=name) for code, name, body in UNIT_REFUSED]
 
@@ -890,6 +890,10 @@ def test_positions_and_inputs():
     assert salt == SD.halves(SALT) and pos == [0, 6, 0, 7] and roots == SD.halves(b"".join(_roots(c)[0]))
     with pytest.raises(ValueError):
         c.inputs(SALT, _roots(c) * 2)
+    for short in (SALT[:32], SALT + b"\0", SALT.hex()):
+        for f in (c.inputs, c.seeds):
+            with pytest.raises(ValueError, match="64-byte salt"):
+                f(short, _roots(c))
 
 
 def test_seed_reads_every_field():

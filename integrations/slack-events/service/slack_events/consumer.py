@@ -8,6 +8,8 @@ It keeps no state of its own.  The queue's lease keeps a message invisible while
   first: finding the line, it rings the names the line gives, with no second pick; `deliver`'s once-per-post check skips
   the lanes already rung.  Where the bot can't read the channel, a redelivery picks again and may post a second line.
 - A post routed by the names it starts with needs no line: its doorbells are its record.
+- A post through Verity's bot by an `external_posters` name (no `research msg` sender delivered it), in
+  `#agent-coordination` too, rings by the rule alone: no routing line, and nothing when it names no one.
 - A `team_join` of someone `chat expect` published opens their chat (`newcomer`)."""
 from __future__ import annotations
 
@@ -16,7 +18,7 @@ import re
 from typing import Any
 
 from . import router
-from .deps import DEAD, DEAD_TOPIC, LAST_SUCCESS, Deps, error
+from .deps import DEAD, DEAD_TOPIC, LAST_DONE, LAST_SUCCESS, Deps, error
 
 MAX_DELIVERIES = 5
 ASK_CHANNELS = ("ask-the-team", "resource-accounting")          # a registry channel by these keys routes as #ask-the-team
@@ -71,8 +73,10 @@ def consume(deps: Deps, payload: dict, delivery_count: int) -> str:
         if delivery_count < MAX_DELIVERIES:
             raise Retry(backoff(delivery_count), error(e)) from e
         dead_letter(deps, payload, delivery_count, e)
+        deps.write(LAST_DONE, deps.clock())
         return "dead-lettered"
     deps.write(LAST_SUCCESS, deps.clock())
+    deps.write(LAST_DONE, deps.clock())
     deps.log("done", event_id=eid, decision=decision)
     return decision
 
@@ -88,7 +92,8 @@ def process(deps: Deps, payload: dict) -> str:
     ev = payload.get("event") or {}
     if ev.get("type") == "team_join":
         return newcomer(deps, ev)
-    if ev.get("type") != "message" or ev.get("subtype") not in PERSON_SUBTYPES or not ev.get("channel") or not ev.get("ts"):
+    subtypes = (*PERSON_SUBTYPES, "bot_message") if deps.rs.external_post(ev, deps.registry) else PERSON_SUBTYPES
+    if ev.get("type") != "message" or ev.get("subtype") not in subtypes or not ev.get("channel") or not ev.get("ts"):
         return f"ignored: {ev.get('type')}/{ev.get('subtype')}"
     return route(deps, payload["event_id"], ev)
 
@@ -160,17 +165,20 @@ def route(deps: Deps, eid: str, ev: dict) -> str:
     reg = registry_for(deps, ch)
     key = rs.key_of(reg, ch)
     chat = key in rs.chat_channels(reg)
-    if key == rs.FRONT_DOOR:
-        return "front door: the sender delivers"
-    if not chat and key not in ASK_CHANNELS:
-        return f"not routed here: {key or ch}"
     msg = message(ev)
-    if rs.person(msg, reg) is None:
+    external = rs.external_post(msg, reg)                          # no sender delivered it: it rings by the rule alone
+    if key == rs.FRONT_DOOR and not external:
+        return "front door: the sender delivers"
+    if not chat and key not in ASK_CHANNELS and key != rs.FRONT_DOOR:
+        return f"not routed here: {key or ch}"
+    if rs.person(msg, reg) is None and not external:
         return "not a person's post"
     thread = msg.get("thread_ts") if msg.get("thread_ts") not in (None, msg["ts"]) else None
     text = msg.get("text") or ""
     replies: list[dict] = []
-    if chat:
+    if external:
+        unaddressed = False
+    elif chat:
         replies = api.paged("conversations.replies", "messages", channel=ch, ts=thread) if thread else []
         unaddressed = rs.chat_targets(msg, replies, reg) == [rs.CHAT_WATCHER] and rs.CHAT_WATCHER not in rs.lead_names(text, reg)
     else:

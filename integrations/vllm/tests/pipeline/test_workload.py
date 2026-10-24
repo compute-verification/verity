@@ -175,6 +175,23 @@ def test_a_reason_is_written_for_a_served_switch_and_refused_for_anything_else(t
         _generate(tmp_path, row, rc=2, reason=bad)
 
 
+def test_a_target_serving_the_int8_attention_states_why_its_backend_is_custom(tmp_path):
+    from verity_vllm.engine import served
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+
+    row = "x__int8__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+    t = {"int8_exact": "all", "compute_capability": [12, 0], "num_sms": 188, "async_scheduling": False}
+    doc = _generate(tmp_path, row, target=json.dumps(t))
+    assert doc["engine"]["args"]["attention_backend"] == "CUSTOM"
+    assert doc["engine"]["reasons"] == {"attention_backend": W.INT8_ATTENTION_REASON}
+    target = TargetProfile.from_json({**TargetProfile.default().to_json(), **t})
+    assert served.declared({"engine": doc["engine"]}, target)["attention_backend"]["reason"] == W.INT8_ATTENTION_REASON
+    own = _generate(tmp_path, row, target=json.dumps(t), reason=["attention_backend=the row's own"])
+    assert own["engine"]["reasons"] == {"attention_backend": "the row's own"}
+    linears = _generate(tmp_path, row, target=json.dumps({**t, "int8_exact": "linears"}))
+    assert "reasons" not in linears["engine"] and "attention_backend" not in linears["engine"]["args"]
+
+
 @pytest.mark.parametrize("target", sorted(TARGETS))
 def test_a_tp_workload_states_disable_custom_all_reduce_for_every_target(tmp_path, target):
     args = _generate(tmp_path, f"x__bf16__{target}__tp2__b1__i256__o32__mixed__greedy__bi-eager")["engine"]["args"]

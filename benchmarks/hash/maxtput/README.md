@@ -13,9 +13,8 @@ native compiled vLLM at saturation on one GPU, against the Commit's arms on the 
 - `row.py`: the run's result, one result per arm (`arm=maxtput:<arm>`) for `benchmarks/hash/loop/plot.py`, and `--table`, a
   row's published arms from the store.
 - `launch.sh`: the three cards from the pushed HEAD through `research run`, then the per-arm results published and labeled.
-  The arms are circuits' committer (`served_commit`'s arms, `harness/env.sh` and the committer's GPU tests), which lands
-  separately, so a run goes from a branch that merges its iterations (`cursor/hash-commit-loop-15ad`) with this directory;
-  `launch.sh` refuses a tree without them.
+  The arms are circuits' committer on main (`served_commit`'s arms, `harness/env.sh` and the committer's GPU tests) with the
+  hash loop's iterations; `launch.sh` refuses a tree whose committer predates them.
 - `build_job.sh`: `served-match` alone, for a Build of record on a model that has none (run it from a tree whose `served-match`
   accepts the card).
 

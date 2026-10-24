@@ -65,6 +65,12 @@ structure Tags where
   `--zk` identity's `hooks` name (`Flock.Zk.hooks`); before, the pads and every table's draws were ChaCha20 streams of the
   prover's seed -/
   osMasks : Bool := false
+  /-- the plain proof files are upstream's form, which end after `consistency_batch_grinding_nonces` (`flock-verify
+  --upstream-plain`: the agreement corpus's sessions, from upstream's builds); by default they are the deployed prover's,
+  the zk patch's build (`pod/60-circuit.sh`), with its `zk_level0 = None` tag after, the one form `decodeProof` accepts;
+  the verifier decodes upstream's as the file then that tag, and S17 hashes the file (`verifyFiles (plainBytes true)`;
+  PROTOCOL.md §8.1, D17) -/
+  upstreamPlain : Bool := false
   deriving Inhabited
 
 namespace Tags
@@ -415,6 +421,19 @@ def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit6315
   circuit, circuitSelftest, circuitTypes, circuitTypesSelftest, circuitPlainLeaves]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
+
+/-- `verity/flock-circuit/tmpl` (PRF-133): `verity/flock-circuit`'s statement with its unit a `flock-ir-tmpl/v2` template
+and a layout mode in META (`HmOut.parseTmpl`), which the verifier unrolls and folds from the template
+(`Stmt.partialRangesT`). The identity and the statement digest's leading tag name it, with its own Σ tag and domain. -/
+def circuitTmpl : Tags :=
+  { circuit with
+    name := "verity/flock-circuit/tmpl", statement := "verity/flock-circuit/tmpl", fileFormat := "flock-circuit/tmpl",
+    sigmaTag := "verity/flock-circuit/tmpl/sigma", domainPrefix := "flock-circuit-tmpl/fast100x2/rep",
+    identity := identityHidden false "verity/flock-circuit/tmpl" (leafScheme := leafSchemeHm96Os) }
+
+/-- The templated statements, which no soundness theorem covers yet: `verify` runs every check of a session and then
+refuses it, so they are outside `all` and `find?`, which the proofs read. -/
+def templated : List Tags := [circuitTmpl]
 
 end Tags
 

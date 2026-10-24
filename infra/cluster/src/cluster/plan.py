@@ -39,7 +39,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Iterable, Union
 
-from .model import GUEST, OWNER, Allocation, Cluster, Job, Node
+from .model import GUEST, OWNER, Allocation, Cluster, Job, Node, iso
 
 
 @dataclass(frozen=True)
@@ -116,7 +116,7 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
         if share.max_job_memory_gib is not None and job.memory_gib > share.max_job_memory_gib:
             return f"{job.project}'s jobs on {node} get at most {share.max_job_memory_gib} GiB each"
         if share.until is not None and (now >= share.until or (length is not None and now + length > share.until)):
-            return f"{job.project}'s share on {node} ends at {share.until}"
+            return f"{job.project}'s share on {node} ends at {iso(share.until)}, from the description"
     if job.workstream is not None:
         w = cluster.workstream(job.workstream, node)
         if w is None or standing != OWNER:
@@ -125,7 +125,8 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
             return f"larger than workstream {w.name} may hold on {node} ({w.gpus} GPUs + {w.borrow_gpus} borrowed)"
     ends = n.admission_ends
     if ends is not None and (now >= ends or (length is not None and now + length > ends)):
-        return f"would run past {node}'s admission end {ends}"
+        return (f"would run past {node}'s admission end {iso(ends)}: its stop {iso(n.stops_at)}, from {n.stops_at_source}, "
+                f"less its {n.drain_s} s drain")
     if job.pool is not None and job.pool not in n.pools:
         return f"{node} has no CPU pool {job.pool!r}"
     allowed = allowed_cpus(cluster, n, job)

@@ -1,5 +1,4 @@
-"""`cli.parallel`, the per-target processes behind `circuit-check --jobs`, on its own: `test_circuit_check` builds every target at
-collection, which this needs none of."""
+"""`cli.parallel`, the per-target processes behind `circuit-check --jobs`, on its own, without circuit-check's catalog."""
 from __future__ import annotations
 
 import os
@@ -76,6 +75,32 @@ def _pid(_: int) -> int:
     return os.getpid()
 
 
+def test_a_budget_granted_mid_run_admits_what_now_fits(monkeypatch, tmp_path):
+    """b103 (r20261019-015150-b103): pytest ended 83 minutes into circuit-check's 125, and the four SHA-512 targets still ran
+    one at a time under the share it left beside pytest.  `parallel` asks a callable budget again at each admission, so once
+    check.py grants the slot (`granted_gb`, ``--mem-gb-file``) the targets still queued start together."""
+    asked, picked, admit = [], [], cli.admit
+
+    def budget() -> float:
+        asked.append(len(asked))
+        return 4 if cli.granted_gb(grant) is None else 9
+
+    def recorded(queued, running, jobs, budget):
+        picked.append((budget, len(admit(queued, running, jobs, budget))))
+        if len(picked) == 1:
+            grant.write_text("9\n")
+        return admit(queued, running, jobs, budget)
+
+    grant = tmp_path / "circuit-check.mem-gb"
+    assert cli.granted_gb(grant) is None and cli.granted_gb(None) is None
+    monkeypatch.setattr(cli, "admit", recorded)
+    got = list(cli.parallel(_pid, [1, 2, 3], jobs=3, weight=lambda _: 3, budget=budget))
+    assert sorted(x for x, *_ in got) == [1, 2, 3]
+    assert picked[:2] == [(4, 1), (9, 2)] and len(asked) == len(picked)
+    grant.write_text("not yet")
+    assert cli.granted_gb(grant) is None
+
+
 def test_jobs_0_takes_one_worker_per_160_gb_the_tightest_cgroup_leaves(tmp_path, monkeypatch):
     monkeypatch.delenv(cli.SLOT_MEM_ENV, raising=False)
     (tmp_path / "proc").mkdir()
@@ -91,6 +116,30 @@ def test_jobs_0_takes_one_worker_per_160_gb_the_tightest_cgroup_leaves(tmp_path,
     assert cli.auto_jobs(tmp_path) == min(2, len(os.sched_getaffinity(0)))
     (scope.parent / "memory.current").write_text(str(1590 << 30))
     assert cli.auto_jobs(tmp_path) == 1
+
+
+def test_a_cgroups_inactive_page_cache_counts_as_left(tmp_path):
+    """r20261021-101535-85fb on vy-nebius-cpu-3: a user slice at 462 of its 463 GiB, 278 GiB of it page cache, left a budget of
+    ~0, and the targets ran one at a time at 0.06 a second. The kernel reclaims inactive_file at the limit; active_file it may
+    still need, and without a memory.stat nothing is taken off."""
+    (tmp_path / "proc").mkdir()
+    (tmp_path / "proc/meminfo").write_text(f"MemAvailable: {380 << 20} kB\n")
+    (tmp_path / "proc/self").mkdir()
+    (tmp_path / "proc/self/cgroup").write_text("0::/user.slice\n")
+    cg = tmp_path / "sys/fs/cgroup/user.slice"
+    cg.mkdir(parents=True)
+    (cg / "memory.max").write_text(f"{463 << 30}\n")
+    (cg / "memory.current").write_text(f"{462 << 30}\n")
+    assert cli.memory_gb(tmp_path) == 1
+    (cg / "memory.stat").write_text(f"anon {184 << 30}\nfile {278 << 30}\nactive_file {20 << 30}\ninactive_file {258 << 30}\n")
+    assert cli.memory_gb(tmp_path) == 259, "the limit less the anonymous memory and the active cache"
+    (cg / "memory.stat").write_text(f"inactive_file {500 << 30}\n")
+    assert cli.memory_gb(tmp_path) == 380, "never more than the limit (nor MemAvailable)"
+    (tmp_path / "proc/meminfo").write_text("")
+    assert cli.memory_gb(tmp_path) == 463
+    (cg / "memory.current").write_text(f"{600 << 30}\n")
+    (cg / "memory.stat").write_text("inactive_file 0\n")
+    assert cli.memory_gb(tmp_path) == 0
 
 
 def test_the_budget_reserves_this_process_s_own_task_list(monkeypatch):

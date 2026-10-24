@@ -293,14 +293,17 @@ theorem width_ok (e : Json) (want : Registered.Entry) :
       · rintro ⟨rfl, h⟩; exact ⟨rfl, h⟩
       · rintro ⟨rfl, h⟩; exact ⟨rfl, h⟩
 
-theorem checkRegistered_nil (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
-    (held : Array (String × String)) :
-    Registration.checkRegistered c got mine held = #[] ↔ c = #[] ∧ ∃ mine' es, mine = .ok mine' ∧ got = .arr es ∧
+theorem checkRegistered_nil_supplied (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
+    (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
+    (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String) :
+    Registration.checkRegistered c got mine held supplied rootOf = #[] ↔ c = #[] ∧ ∃ mine' es, mine = .ok mine' ∧
+      got = .arr es ∧
       (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
         keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
       ValuesAre es mine' ∧
-      ∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
-        EntryIs e want held := by
+      (∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+        EntryIs e want (heldFor supplied held want.value)) ∧
+      SuppliedIs es mine' supplied rootOf := by
   unfold Registration.checkRegistered
   extract_lets widthKeys
   rcases mine with err | mine
@@ -327,38 +330,97 @@ theorem checkRegistered_nil (c : Array String) (got : Json) (mine : Flock.V (Arr
   extract_lets values names distinct jp
   simp (config := {zeta := false, failIfUnchanged := false}) only [↓jp_ite, ↓jp_ite']
   simp (config := {zeta := false}) only [jp]
-  show (forIn mine _ _ : Id (Array String)).run = #[] ↔ _
-  refine (forIn_codes_nil _ _ _ (fun want => ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
-    EntryIs e want held) ?_).trans ?_
+  show (forIn supplied (forIn mine _ _ : Id (Array String)).run _ : Id (Array String)).run = #[] ↔ _
+  refine (forIn_codes_nil _ _ _ (fun x => ∃ want, mine.find? (·.value == x.1) = some want ∧
+    ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str x.1)) = some e →
+      ∃ r, rootOf x.1 x.2 want = .ok r ∧ jeq (getD e "root") (.str r)) ?_).trans ?_
+  · intro x c
+    rcases x with ⟨v, rs⟩
+    dsimp only []
+    split
+    · rename_i hm
+      refine ⟨rfl, ?_⟩
+      show addCode c "R7-supplied" = #[] ↔ _
+      simp only [addCode_ne_nil, false_iff, not_and, not_exists]
+      intro _ want hw
+      rw [hm] at hw
+      cases hw
+    · rename_i want hm
+      split
+      · rename_i e hfe
+        split
+        · rename_i err hr
+          refine ⟨rfl, ?_⟩
+          show addCode c "R7-supplied" = #[] ↔ _
+          simp only [addCode_ne_nil, false_iff, not_and, not_exists]
+          intro _ want' hw h
+          rw [hm] at hw
+          cases hw
+          obtain ⟨r, hr', _⟩ := h e hfe
+          rw [hr] at hr'
+          cases hr'
+        · rename_i r hr
+          have hQ : (∃ want', mine.find? (·.value == v) = some want' ∧
+              ∀ e', es.reverse.find? (fun e => jeq (getD e "value") (.str v)) = some e' →
+                ∃ r', rootOf v rs want' = .ok r' ∧ jeq (getD e' "root") (.str r') = true) ↔
+              jeq (getD e "root") (.str r) = true := by
+            constructor
+            · rintro ⟨want', hw, h⟩
+              rw [hm] at hw
+              cases hw
+              obtain ⟨r', hr', hj⟩ := h e hfe
+              rw [hr] at hr'
+              cases hr'
+              exact hj
+            · intro hj
+              exact ⟨want, hm, fun e' he' => by rw [hfe] at he'; cases he'; exact ⟨r, hr, hj⟩⟩
+          rw [hQ]
+          cases hj : jeq (getD e "root") (.str r)
+          · refine ⟨rfl, ?_⟩
+            show addCode c "R7-supplied" = #[] ↔ _
+            simp [addCode_ne_nil]
+          · refine ⟨rfl, ?_⟩
+            show c = #[] ↔ _
+            simp
+      · rename_i hfe
+        refine ⟨rfl, ?_⟩
+        show c = #[] ↔ _
+        exact ⟨fun h => ⟨h, want, hm, fun e he => (hfe e he).elim⟩, fun h => h.1⟩
+  refine (and_congr (forIn_codes_nil _ _ _ (fun (want : Registered.Entry) => ∀ e,
+    es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+      EntryIs e want (heldFor supplied held want.value)) ?_) Iff.rfl).trans ?_
   · intro want c
     split
     · rename_i e hfe
       extract_lets c1 bw jh jw jd jwo jl cr
       have hH : ∀ c, yields (jh () c) = true ∧ (codesOf (jh () c) = #[] ↔ c = #[] ∧
-          ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
+          ∀ x ∈ (heldFor supplied held want.value).find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
         intro c
-        simp only [jh]
-        cases hf : held.find? (·.1 == want.value) with
-        | none => simp [step_pure]
-        | some x =>
-          rcases x with ⟨fst, r⟩
-          simp only []
-          cases hj : jeq (getD e "root") (.str r) <;> simp [step_pure, hj, addCode_ne_nil]
+        simp only [jh, heldFor]
+        cases hs : supplied.any (·.1 == want.value)
+        · simp only [Bool.not_false, ↓reduceIte, Bool.false_eq_true]
+          cases hf : held.find? (·.1 == want.value) with
+          | none => simp [step_pure]
+          | some x =>
+            rcases x with ⟨fst, r⟩
+            simp only []
+            cases hj : jeq (getD e "root") (.str r) <;> simp [step_pure, hj, addCode_ne_nil]
+        · simp [step_pure]
       have hW : ∀ c, yields (jw () c) = true ∧ (codesOf (jw () c) = #[] ↔ c = #[] ∧ bw = false ∧
-          ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
+          ∀ x ∈ (heldFor supplied held want.value).find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
         intro c
         simp only [jw]
         by_cases hb : bw = true <;> simp [hb, hH, addCode_ne_nil]
       have hD : ∀ c, yields (jd () c) = true ∧ (codesOf (jd () c) = #[] ↔ c = #[] ∧
           jeq (getD e "domain") (.str want.domain) = true ∧ bw = false ∧
-          ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
+          ∀ x ∈ (heldFor supplied held want.value).find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
         intro c
         simp only [jd]
         by_cases hb : jeq (getD e "domain") (.str want.domain) = true <;> simp [hb, hW, addCode_ne_nil]
       have hWo : ∀ c, yields (jwo () c) = true ∧ (codesOf (jwo () c) = #[] ↔ c = #[] ∧
           int? (getD e "words") = some (want.words : Int) ∧
           jeq (getD e "domain") (.str want.domain) = true ∧ bw = false ∧
-          ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
+          ∀ x ∈ (heldFor supplied held want.value).find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
         intro c
         simp only [jwo]
         by_cases hb : int? (getD e "words") = some (want.words : Int) <;> simp [hb, hD, addCode_ne_nil]
@@ -366,14 +428,14 @@ theorem checkRegistered_nil (c : Array String) (got : Json) (mine : Flock.V (Arr
           int? (getD e "leaves") = some (want.leaves : Int) ∧
           int? (getD e "words") = some (want.words : Int) ∧
           jeq (getD e "domain") (.str want.domain) = true ∧ bw = false ∧
-          ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
+          ∀ x ∈ (heldFor supplied held want.value).find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
         intro c
         simp only [jl]
         by_cases hb : int? (getD e "leaves") = some (want.leaves : Int) <;> simp [hb, hWo, addCode_ne_nil]
       have hR := root_ok (getD e "root")
       have hBw : bw = false ↔ _ := width_ok e want
       have hQ : (∀ e', Array.find? (fun e => jeq (getD e "value") (Json.str want.value)) es.reverse = some e' →
-          EntryIs e' want held) ↔ EntryIs e want held := by
+          EntryIs e' want (heldFor supplied held want.value)) ↔ EntryIs e want (heldFor supplied held want.value) := by
         rw [hfe]
         constructor
         · intro h; exact h e rfl
@@ -389,7 +451,7 @@ theorem checkRegistered_nil (c : Array String) (got : Json) (mine : Flock.V (Arr
             (match field? e Registered.WIDTH_KEY with
               | none => want.wordBits = Registered.WORD_BITS
               | some j => int? j = some (want.wordBits : Int) ∧ (want.wordBits : Int) ≠ Registered.WORD_BITS) ∧
-            ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
+            ∀ x ∈ (heldFor supplied held want.value).find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
         intro b hb
         cases b
         · have hr' := hb.1 rfl
@@ -423,28 +485,235 @@ theorem checkRegistered_nil (c : Array String) (got : Json) (mine : Flock.V (Arr
       simp only [Bool.or_eq_true, beq_iff_eq] at this
       exact this
     have key : ∀ (b : Bool) (u v : Array String), v = c → u ≠ #[] → (b = false ↔ ValuesAre es mine) →
-        (((if b = true then u else v) = #[] ∧ ∀ x ∈ mine, ∀ e,
-          es.reverse.find? (fun e => jeq (getD e "value") (.str x.value)) = some e → EntryIs e x held) ↔
+        ((((if b = true then u else v) = #[] ∧ ∀ x ∈ mine, ∀ e,
+          es.reverse.find? (fun e => jeq (getD e "value") (.str x.value)) = some e →
+            EntryIs e x (heldFor supplied held x.value)) ∧ SuppliedIs es mine supplied rootOf) ↔
         c = #[] ∧ ∃ mine' es', (Except.ok mine : Flock.V (Array Registered.Entry)) = .ok mine' ∧ Json.arr es = .arr es' ∧
           (∀ e ∈ es', keys? e = some Registered.ENTRY_KEYS ∨
             keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
           ValuesAre es' mine' ∧
-          ∀ want ∈ mine', ∀ e, es'.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
-            EntryIs e want held) := by
+          (∀ want ∈ mine', ∀ e, es'.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+            EntryIs e want (heldFor supplied held want.value)) ∧
+          SuppliedIs es' mine' supplied rootOf) := by
       intro b u v hv hu hb
       subst hv
       constructor
-      · rintro ⟨h1, h2⟩
+      · rintro ⟨⟨h1, h2⟩, h3⟩
         cases b
-        · exact ⟨h1, mine, es, rfl, rfl, hkeys, hb.1 rfl, h2⟩
+        · exact ⟨h1, mine, es, rfl, rfl, hkeys, hb.1 rfl, h2, h3⟩
         · exact (hu h1).elim
-      · rintro ⟨hc, mine', es', hm, he, _, hv, h2⟩
+      · rintro ⟨hc, mine', es', hm, he, _, hv, h2, h3⟩
         cases hm
         cases he
-        refine ⟨?_, h2⟩
+        refine ⟨⟨?_, h2⟩, h3⟩
         rw [hb.2 hv]
         exact hc
     exact key _ _ _ rfl (addCode_ne_nil _ _) hValues
+
+/-- `checkRegistered` with nothing supplied: every value held to `held`, and `rootOf` never read. -/
+theorem checkRegistered_nil (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
+    (held : Array (String × String)) (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String) :
+    Registration.checkRegistered c got mine held #[] rootOf = #[] ↔ c = #[] ∧ ∃ mine' es, mine = .ok mine' ∧
+      got = .arr es ∧
+      (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
+        keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
+      ValuesAre es mine' ∧
+      ∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+        EntryIs e want held := by
+  have hh : ∀ v, heldFor (#[] : Array (String × Supplied.Rows)) held v = held := fun _ => by simp [heldFor]
+  have hs : ∀ es mine', SuppliedIs es mine' #[] rootOf := fun _ _ x hx => absurd hx (Array.not_mem_empty x)
+  simp only [checkRegistered_nil_supplied, hh, hs, and_true]
+
+/-- R7-supplied: `checkRegistered` holds each value it fills to the root `rootOf` recomputes, and to no root `held`
+names: an entry with any other root, or a supplied value whose root doesn't compute, is refused. -/
+theorem checkRegistered_supplied (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
+    (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
+    (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String)
+    (h : Registration.checkRegistered c got mine held supplied rootOf = #[]) :
+    ∃ mine' es, mine = .ok mine' ∧ got = .arr es ∧ SuppliedIs es mine' supplied rootOf ∧
+      ∀ x ∈ supplied, heldFor supplied held x.1 = #[] := by
+  obtain ⟨-, mine', es, hm, hg, -, -, -, hs⟩ := (checkRegistered_nil_supplied _ _ _ _ _ _).1 h
+  refine ⟨mine', es, hm, hg, hs, fun x hx => ?_⟩
+  have : supplied.any (·.1 == x.1) = true := Array.any_eq_true'.2 ⟨x, hx, by simp⟩
+  simp [heldFor, this]
+
+theorem outputRoot_some (log : Array Json) (n : Nat) (d p : String) :
+    (∃ x, Registration.outputRoot log n d p = some x) ↔ OutputPortIs log n d p := by
+  unfold Registration.outputRoot OutputPortIs
+  cases Registration.outputPort log d p with
+  | none => simp
+  | some r =>
+    simp only [Option.bind_some, Option.some.injEq, exists_eq_left']
+    have hb : (int? (getD r "leaves") == some (n : Int)) = true ↔ int? (getD r "leaves") = some (n : Int) :=
+      beq_iff_eq
+    rw [← hb]
+    cases (int? (getD r "leaves") == some (n : Int)) <;> cases (getD r "domain") <;> cases (getD r "root") <;> simp
+
+theorem valueRoot_some (log : Array Json) (n w b : Nat) (d u : String) :
+    (∃ x, Registration.valueRoot log n w b d u = some x) ↔ OutputValueIs log n w b d u := by
+  unfold Registration.valueRoot OutputValueIs
+  cases Registration.outputValue log d u with
+  | none => simp
+  | some r =>
+    simp only [Option.bind_some, Option.some.injEq, exists_eq_left']
+    have hb : (int? (getD r "leaves") == some (n : Int) && int? (getD r "words") == some (w : Int)
+        && Registration.widthOf r == some (b : Int)) = true ↔
+        int? (getD r "leaves") = some (n : Int) ∧ int? (getD r "words") = some (w : Int) ∧
+          Registration.widthOf r = some (b : Int) := by
+      simp only [Bool.and_eq_true, beq_iff_eq, and_assoc]
+    rw [← hb]
+    generalize (int? (getD r "leaves") == some (n : Int) && int? (getD r "words") == some (w : Int)
+        && Registration.widthOf r == some (b : Int)) = t
+    cases t <;> cases (getD r "domain") <;> cases (getD r "root") <;> simp
+
+theorem earlierRoot_some (log : Array Json) (want : Registered.Entry) (d : String) (e : Registration.Earlier) :
+    (∃ x, Registration.earlierRoot log want d e = some x) ↔
+      EarlierIs log want.leaves want.words want.wordBits d e := by
+  cases e with
+  | port p => exact outputRoot_some log want.leaves d p
+  | value u => exact valueRoot_some log want.leaves want.words want.wordBits d u
+
+/-- An entry's shape: its leaf count, words and word bits, all an output value's earlier entry is held to. -/
+abbrev shape (e : Registered.Entry) : Nat × Nat × Nat := (e.leaves, e.words, e.wordBits)
+
+/-- Rewriting the domain of `v`'s entries keeps every value's entry and its shape. -/
+theorem find_map_domain (mine : Array Registered.Entry) (v dom u : String) :
+    ((mine.map fun e => if e.value == v then { e with domain := dom } else e).find? (·.value == u)).map shape =
+      (mine.find? (·.value == u)).map shape := by
+  have hv : ((fun x : Registered.Entry => x.value == u) ∘
+      fun e => if e.value == v then { e with domain := dom } else e) = fun x => x.value == u := by
+    funext e; simp only [Function.comp]; split <;> rfl
+  have hl : (shape ∘ fun e => if e.value == v then { e with domain := dom } else e) = shape := by
+    funext e; simp only [Function.comp]; split <;> rfl
+  rw [Array.find?_map, hv, Option.map_map, hl]
+
+theorem find_leaves_congr {m m' : Array Registered.Entry} {u : String}
+    (h : (m'.find? (·.value == u)).map shape = (m.find? (·.value == u)).map shape) (P : Nat → Nat → Nat → Prop) :
+    (∀ want, m'.find? (·.value == u) = some want → P want.leaves want.words want.wordBits) ↔
+      ∀ want, m.find? (·.value == u) = some want → P want.leaves want.words want.wordBits := by
+  revert h
+  cases h1 : m'.find? (·.value == u) with
+  | none =>
+    cases h2 : m.find? (·.value == u) with
+    | none => intro _; exact Iff.rfl
+    | some b => intro h; simp at h
+  | some a =>
+    cases h2 : m.find? (·.value == u) with
+    | none => intro h; simp at h
+    | some b =>
+      intro h
+      obtain ⟨h1, h2, h3⟩ : a.leaves = b.leaves ∧ a.words = b.words ∧ a.wordBits = b.wordBits := by
+        simpa [shape] using h
+      constructor
+      · intro H w hw; cases hw; rw [← h1, ← h2, ← h3]; exact H a rfl
+      · intro H w hw; cases hw; rw [h1, h2, h3]; exact H b rfl
+
+theorem applyOutput_step (log : Array Json) (c : Array String) (mine : Array Registered.Entry)
+    (held : Array (String × String)) (v d : String) (p : Registration.Earlier) :
+    ((Registration.applyOutput log (c, mine, held) (v, d, p)).1 = #[] ↔ c = #[] ∧
+      ∀ want, mine.find? (·.value == v) = some want → EarlierIs log want.leaves want.words want.wordBits d p) ∧
+    ∀ u, ((Registration.applyOutput log (c, mine, held) (v, d, p)).2.1.find? (·.value == u)).map shape =
+      (mine.find? (·.value == u)).map shape := by
+  simp only [Registration.applyOutput]
+  cases hf : mine.find? (·.value == v) with
+  | none => simp
+  | some want =>
+    dsimp only
+    cases ho : Registration.earlierRoot log want d p with
+    | none =>
+      dsimp only
+      refine ⟨?_, fun _ => rfl⟩
+      simp only [addCode_ne_nil, false_iff, not_and]
+      intro _ h
+      obtain ⟨x, hx⟩ := (earlierRoot_some log want d p).2 (h want rfl)
+      rw [ho] at hx
+      cases hx
+    | some dr =>
+      rcases dr with ⟨dom, root⟩
+      dsimp only
+      refine ⟨⟨fun hc => ⟨hc, fun w hw => ?_⟩, fun h => h.1⟩, fun u => find_map_domain mine v dom u⟩
+      cases hw
+      exact (earlierRoot_some log want d p).1 ⟨_, ho⟩
+
+/-- `applyOutputs` adds no code exactly when each output value with an entry has its earlier port or value. -/
+theorem applyOutputs_nil (log : Array Json) (outputs : Array (String × String × Registration.Earlier))
+    (c : Array String) (mine : Array Registered.Entry) (held : Array (String × String)) :
+    (Registration.applyOutputs c mine held outputs log).1 = #[] ↔ c = #[] ∧
+      ∀ o ∈ outputs, ∀ want, mine.find? (·.value == o.1) = some want →
+        EarlierIs log want.leaves want.words want.wordBits o.2.1 o.2.2 := by
+  unfold Registration.applyOutputs
+  rw [← Array.foldl_toList]
+  have hm : ∀ o, o ∈ outputs ↔ o ∈ outputs.toList := fun o => Array.mem_toList_iff.symm
+  simp only [hm]
+  generalize outputs.toList = l
+  induction l generalizing c mine held with
+  | nil => simp
+  | cons o os ih =>
+    rcases o with ⟨v, d, p⟩
+    rw [List.foldl_cons]
+    obtain ⟨h1, h2⟩ := applyOutput_step log c mine held v d p
+    revert h1 h2
+    generalize Registration.applyOutput log (c, mine, held) (v, d, p) = r
+    rcases r with ⟨c', mine', held'⟩
+    intro h1 h2
+    dsimp only at h1 h2
+    refine (ih c' mine' held').trans ?_
+    rw [h1]
+    simp only [List.mem_cons, forall_eq_or_imp, and_assoc]
+    exact and_congr Iff.rfl (and_congr Iff.rfl (forall_congr' fun o => forall_congr' fun _ =>
+      find_leaves_congr (h2 o.1) (fun n w b => EarlierIs log n w b o.2.1 o.2.2)))
+
+/-- R7 with output values (`checkOutputs`): every output value with an entry has its earlier port or value, and the rest of R7
+holds against the entries and held roots `applyOutputs` leaves. -/
+theorem checkOutputs_nil (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
+    (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
+    (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String)
+    (outputs : Array (String × String × Registration.Earlier)) (log : Array Json) :
+    Registration.checkOutputs c got mine held supplied rootOf outputs log = #[] ↔ c = #[] ∧
+      ∃ mine0 es mine' held', mine = .ok mine0 ∧ got = .arr es ∧
+      (∀ o ∈ outputs, ∀ want, mine0.find? (·.value == o.1) = some want →
+        EarlierIs log want.leaves want.words want.wordBits o.2.1 o.2.2) ∧
+      (Registration.applyOutputs #[] mine0 held outputs log).2 = (mine', held') ∧
+      (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
+        keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
+      ValuesAre es mine' ∧
+      (∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+        EntryIs e want (heldFor supplied held' want.value)) ∧
+      SuppliedIs es mine' supplied rootOf := by
+  unfold Registration.checkOutputs
+  rcases mine with err | mine0
+  · simp [addCode_ne_nil]
+  dsimp only
+  by_cases h0 : c = #[]
+  · subst h0
+    have hc := applyOutputs_nil log outputs #[] mine0 held
+    revert hc
+    generalize hr : Registration.applyOutputs #[] mine0 held outputs log = r
+    rcases r with ⟨c', mine', held'⟩
+    intro hc
+    dsimp only at hc ⊢
+    rw [checkRegistered_nil_supplied]
+    constructor
+    · rintro ⟨hc', mine'', es, hm, hg, hk, hv, he, hsu⟩
+      cases hm
+      exact ⟨rfl, mine0, es, mine', held', rfl, hg, (hc.1 hc').2, by rw [hr], hk, hv, he, hsu⟩
+    · rintro ⟨-, m0, es, m, h, hm0, hg, hf, hmh, hk, hv, he, hsu⟩
+      cases hm0
+      rw [hr] at hmh
+      simp only [Prod.mk.injEq] at hmh
+      obtain ⟨rfl, rfl⟩ := hmh
+      exact ⟨hc.2 ⟨rfl, hf⟩, _, es, rfl, hg, hk, hv, he, hsu⟩
+  · have hc := applyOutputs_nil log outputs c mine0 held
+    revert hc
+    generalize Registration.applyOutputs c mine0 held outputs log = r
+    rcases r with ⟨c', mine', held'⟩
+    intro hc
+    dsimp only at hc ⊢
+    rw [checkRegistered_nil_supplied]
+    constructor
+    · rintro ⟨hc', -⟩; exact absurd (hc.1 hc').1 h0
+    · rintro ⟨h, -⟩; exact absurd h h0
+
 theorem step_ite {P : Prop} (Q : Prop) (j' j : Unit → Array String → Id (Array String)) (b : Bool) (x : String)
     (hj : ∀ c, j () c = #[] ↔ c = #[] ∧ P)
     (hdef : ∀ c, j' () c = if b = true then j () (addCode c x) else j () c)
@@ -527,18 +796,30 @@ theorem id_bind {α β : Type} (x : Id α) (f : α → Id β) : x >>= f = f x :=
 
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
-  unfold Registration.check
-  extract_lets v2 get c0 w program part partDigest mine roots previous j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 j4 j3 j2 j1 j0 c1
-  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
-  have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (v2 = true → R7 rec v) ∧ True := by
+  rw [Registration.check_eq_checkRef]
+  unfold Registration.checkRef
+  extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 j4 j3 j2 j1 j0
+    c1
+  have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
+  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ (v2 = true → R7 rec v) ∧ True := by
     intro c
-    simp only [j12]
+    simp only [j13]
     by_cases hv : v2 = true
     · simp only [hv, ↓reduceIte, true_implies]
-      rw [h13, checkRegistered_nil]
+      rw [h14, checkOutputs_nil]
       exact ⟨fun ⟨⟨a, b⟩, _⟩ => ⟨a, b, trivial⟩, fun ⟨a, b, _⟩ => ⟨⟨a, b⟩, trivial⟩⟩
-    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h13]
+    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14]
       exact ⟨fun ⟨a, _⟩ => ⟨a, trivial, trivial⟩, fun ⟨a, _⟩ => ⟨a, trivial⟩⟩
+  have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
+      jeq (getD (get "window") "stream") (.str sp.1) = true ∧
+      jeq (getD (get "window") "prover") (.str sp.2) = true) ∧ ((v2 = true → R7 rec v) ∧ True) := by
+    intro c
+    simp only [j12]
+    rcases hb : v.binding with _ | ⟨stream, prover⟩
+    · simp [h13]
+    · by_cases hs : jeq (getD (get "window") "stream") (.str stream) = true <;>
+        by_cases hp : jeq (getD (get "window") "prover") (.str prover) = true <;>
+        simp [hs, hp, h13, addCode_ne_nil]
   have h11 := step_ite (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) j11 j12 _ _ h12
     (fun _ => rfl) (any_false_iff _ _)
   have h10 := step_ite (jeq (getD rec "previous") previous = true) j10 j11 _ _ h11 (fun _ => rfl) (not_false_iff' _)
@@ -703,15 +984,15 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   rw [ek, ef, e7]
   constructor
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports, h7',
-      h4', h5', h6a, h6b, h7r, _⟩
+      h4', h5', h6a, h6b, h6c, h7r, _⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
     exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
-      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b⟩, h7r⟩
+      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩
   · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b⟩, h7r⟩
+      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4', h5',
-      h6a, h6b, h7r, trivial⟩
+      h6a, h6b, h6c, h7r, trivial⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3

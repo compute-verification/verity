@@ -47,7 +47,7 @@ leaf's and the payload's salts (192 bytes each) and their paths, each padded wit
 
 Check 1 is the unit's shape: every port has its fixed size, and the public row is the verifier's. The verdict word is bit 0
 the four checks' AND (accepted) and bits 1-4 each check's failure in that order (`VERDICT`), bits 5-15 zero, within the 16-bit
-output limit; `verdict` reads it as §6's names, None for accepted or the first check that failed. A field's name is kv/v0's
+size class, the least public one; `verdict` reads it as §6's names, None for accepted or the first check that failed. A field's name is kv/v0's
 (p512 = 2^512 - 569, p1024 = 2^1024 - 105); ``toy32`` (2^32 - 5) is circuit-check's and the tests' binding with a short block
 (``BYTES`` below 4,096), the same circuit on small words, never deployed.
 

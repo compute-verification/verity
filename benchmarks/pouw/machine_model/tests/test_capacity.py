@@ -8,6 +8,7 @@ import pytest
 from verity_machine_model import capacity as C
 from verity_machine_model import eps as E
 from verity_machine_model.cli import main
+from verity_machine_model.model import device
 
 VEC = "VF3n-16"
 
@@ -22,6 +23,24 @@ def test_the_empty_gpu_certifies_nothing_and_offers_a_full_tensor_pipe(pi):
     assert x.sigma() == pytest.approx(0.0) and x.credit() == 0.0
     assert x.pooled.mix[C.MMA] == pytest.approx(1 / C.TENSOR_CYCLES)
     assert x.empty > 1 / C.TENSOR_CYCLES  # the scalar pipes add useful work beside the tensor pipe
+
+
+@pytest.mark.parametrize("dev", ["sm_80", "sm_89", "sm_90", "sm_100"])
+def test_every_devices_empty_gpu_offers_its_own_tensor_pipe(dev):
+    """USEFUL names sm_120's MMA only: on another device the hidden program must still find that device's tensor class,
+    or σ ignores the tensor pipe (sm_100's empty GPU read 0.0195 slots a SMSP-cycle, its lanes, against 0.52)."""
+    data = device(dev)
+    pi_d = E.machine("", data)
+    cls = {E.honest(p, data).cls for p in E.profiles(data)}
+    assert C.MMA not in cls
+    u = C.useful_of(data)
+    x = C.window(pi_d, [(1.0, C.Work("empty", {}))], u)
+    tensor = sum(u[k] * v for k, v in x.pooled.mix.items() if k in cls)
+    assert tensor > 0.75 * x.empty and x.empty > 3 * C.hidden(pi_d, C.Work("empty", {})).hidden
+
+
+def test_useful_of_sm120_is_useful():
+    assert C.useful_of() == C.USEFUL
 
 
 def test_the_tensor_pipe_alone_leaves_the_scalar_pipes_open(pi):

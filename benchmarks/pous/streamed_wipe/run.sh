@@ -4,14 +4,16 @@
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign streamed-wipe -- \
 #     bash benchmarks/pous/streamed_wipe/run.sh
 #
-# Outside the lease: build `wipelabels` (refused on a register spill).  Under `gpu-lease 1 --wait --max-min 20`:
-# `bench.py all` (its docstring lists the steps; a failed gate times nothing).  Scratch (the round-trip test's 16 GiB
-# table) is a `mktemp -d` under /dev/shm when it has room, else under /tmp, removed on exit.
+# Outside the lease: build `wipelabels` (refused on a register spill) and the Lean verdict `streamed-wipe-verdict`, which
+# judges the session step.  Under `gpu-lease 1 --wait --max-min 20`: `bench.py all` (its docstring lists the steps; a
+# failed gate times nothing).  Scratch (the round-trip test's 16 GiB table) is a `mktemp -d` under /dev/shm when it has
+# room, else under /tmp, removed on exit.
 # Outputs under $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, env.txt, timing.json.
 set -euo pipefail
 cd "$(dirname "$0")"
 export O=${RESEARCH_RUN_DIR:-$PWD}/out; mkdir -p "$O"
-export PYTHONPATH=$(cd ../../.. && pwd)${PYTHONPATH:+:$PYTHONPATH}
+ROOT=$(cd ../../.. && pwd)
+export PYTHONPATH=$ROOT:$ROOT/verity/core/difftest/python${PYTHONPATH:+:$PYTHONPATH}
 PY=${PY:-python3}
 
 if [ "${1:-}" = leased ]; then
@@ -38,6 +40,8 @@ FLAGS=(-O3 -std=c++17 -arch=sm_120 -Xptxas -v)
 "$NVCC" "${FLAGS[@]}" labels.cu -o "$S/wipelabels" >> "$O/build.txt" 2>&1 || { tail -30 "$O/build.txt"; exit 3; }
 if grep -E "[1-9][0-9]* bytes spill" "$O/build.txt"; then echo "REFUSED: a kernel spills"; exit 3; fi
 sha256sum labels.cu bench.py "$S/wipelabels" >> "$O/build.txt"
+(cd "$ROOT/verity/core/devices/memory_challenger/lean" && lake build streamed-wipe-verdict) >> "$O/build.txt" 2>&1 \
+  || { tail -30 "$O/build.txt"; echo "REFUSED: the Lean verdict doesn't build"; exit 3; }
 
 rc=0
 GPU_LEASE_WHO=memory-accounting gpu-lease 1 --wait --max-min 20 -- bash "$PWD/run.sh" leased "$S" || rc=$?

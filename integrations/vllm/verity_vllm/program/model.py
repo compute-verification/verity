@@ -57,6 +57,9 @@ FP8_BLOCK_QUANT = {"quant_method": "fp8", "fmt": "e4m3", "activation_scheme": "d
 #: the exact-int8 profile's checkpoint (`engine.int8_checkpoint`): every linear int8 [N, K] with per-row f32 scales, lm_head bf16;
 #: `config_of` records it as `C["INT8_EXACT"] = weight_max`
 INT8_EXACT_QUANT = {"quant_method": "verity_int8", "weight_max": 127, "modules_to_not_convert": ["lm_head"]}
+#: the same with the LM head int8 too (`engine.int8_checkpoint`'s v2: `lm_head` s8 [V, H] with f32 row scales); `config_of` records
+#: it as `C["INT8_LM_HEAD"] = True`
+INT8_EXACT_LMHEAD_QUANT = {**INT8_EXACT_QUANT, "modules_to_not_convert": []}
 
 
 def is_int8_exact(qc: dict[str, Any] | None) -> bool:
@@ -78,10 +81,12 @@ def quant_refusal(qc: dict[str, Any] | None, cfg: dict[str, Any] | None = None) 
     if not qc:
         return None
     if is_int8_exact(qc):
-        if dict(qc) != INT8_EXACT_QUANT:
-            return f"quantization_config {dict(qc)!r} is not the exact-int8 profile's {INT8_EXACT_QUANT!r}"
+        if dict(qc) not in (INT8_EXACT_QUANT, INT8_EXACT_LMHEAD_QUANT):
+            return f"quantization_config {dict(qc)!r} is not the exact-int8 profile's {INT8_EXACT_QUANT!r} or {INT8_EXACT_LMHEAD_QUANT!r}"
         if any((cfg or {}).get(k) for k in ("num_experts", "num_local_experts", "n_routed_experts")):
             return "an exact-int8 MoE checkpoint: the int8 profile states dense linears only"
+        if dict(qc) == INT8_EXACT_LMHEAD_QUANT and cfg is not None and cfg.get("tie_word_embeddings", True) is not False:
+            return "an int8 LM head on tied embeddings (tie_word_embeddings): the embedding would be the int8 head's tensor"
         return None
     for k, v in FP8_BLOCK_QUANT.items():
         if str(qc.get(k, "")).lower() != v:
@@ -184,6 +189,8 @@ def config_of(hf_config: str | Path | dict, *, model: str | None = None, revisio
             raise ValueError(why)
         if is_int8_exact(qc):
             C["INT8_EXACT"], prov["INT8_EXACT"] = int(qc["weight_max"]), "hf-config"
+            if not qc["modules_to_not_convert"]:
+                C["INT8_LM_HEAD"], prov["INT8_LM_HEAD"] = True, "hf-config"
         else:
             C["FP8_BLOCK"], prov["FP8_BLOCK"] = int(qc["weight_block_size"][0]), "hf-config"
         C["quantization_config"], prov["quantization_config"] = dict(qc), "hf-config"
@@ -450,6 +457,11 @@ def weights_type(C: dict[str, Any]) -> Record:
         fields[i] = ("layers", Array(C["NL"], Record(*layer.fields, *[(n, Array(C["H"], BF16)) for n in extra])))
     if not C.get("tie_word_embeddings", True) and "lm_head" not in dict(fields):
         fields.append(("lm_head", Array(C["V"], Array(C["H"], BF16))))   # guard: b1.weights_type may carry the untied field itself
+    if C.get("INT8_LM_HEAD"):
+        # the int8 LM head (`INT8_EXACT_LMHEAD_QUANT`): s8 `[V][H]` and its f32 per-row scale `[V][1]`, as `_int8_fields` states a linear
+        from verity_vllm.program.registry.prims import F32
+        i = next(k for k, (n, _) in enumerate(fields) if n == "lm_head")
+        fields[i:i + 1] = [("lm_head", Array(C["V"], Array(C["H"], Value(8)))), ("lm_head_ws", Array(C["V"], Array(1, F32)))]
     if C.get("embed_normalizer") is not None:
         # [ADAPTER lane cov-dense, 2026-09-17] Gemma-2 scales the embedding by `model.normalizer`, a 0-d bf16 *buffer* vLLM's
         # `Gemma2Model.__init__` registers as `torch.tensor(hidden_size ** 0.5)` at the model dtype — a root with no checkpoint

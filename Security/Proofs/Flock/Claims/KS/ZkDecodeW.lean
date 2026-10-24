@@ -330,4 +330,49 @@ theorem decodesTableW_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
     exact decodesTableHW_zkTabs ht ⟨hh, hrr, hl⟩ hc (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay j₀
       rootB₀ C
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The deployed `--zk` decoders are right at `zkTabs` at the witness-lane verdict at a masked statement in
+scope**: `decodesTable_deploy` at `OkOffWJ` on the outcomes of `AccTxJ` (`decodesTableW_zkTabs` at public outputs,
+`decodesTableHW_zkTabs` at hidden outputs). -/
+theorem decodesTableW_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {d : Lean.Json} (hd : ins.read.draw = some d) (j₀ : ℕ) (rootB₀ : Array ByteArray) {N : ℕ} (C : Fin N → List 𝔽)
+    (i : Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) :
+    DecodesTable (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (OkOffWJ (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)) j₀ rootB₀ C)
+      (AccTxJ ins.read.I d j₀ rootB₀ C)
+      (opnD sts (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (decD (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) (fun _ _ => true) (fun _ _ _ => [])
+      (fun rs j => Exec.capOfRoot rs[j.val]!)
+      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) i := by
+  have hlen : (tables true x).length = sts.size := by
+    unfold tables
+    rw [hset]
+    simp
+  revert i
+  rw [hlen]
+  obtain ⟨hzk, hsA⟩ := setupAt_of_setupOf hs hin hset
+  rw [hd] at hsA
+  obtain ⟨ht, hrr, hl⟩ := tags_of_inScope hs hin hset
+  cases hh : ins.read.I.tags.hiddenOutputs
+  · exact decodesTableW_zkTabs ht ⟨hh, hrr, hl⟩ (fun _ : Finset (Fin 0) => d) hsA h0 L hz hk hlay j₀ rootB₀ C
+  · have hshape := Claims.Bridge.Custody.setup_shapeOk (setupOf_some hset).2 hzk
+    obtain ⟨-, hstJ⟩ := setupAt_tableJH hh hsA
+    have hp := (Hidden.setupHidden_spec' (hstJ 0 h0)).parse
+    have hc : HmOut.parse (ZkExec.zkTags ins.read.I) ins.read.I.circuitFile ins.read.I.tables = .ok sts[0].c :=
+      (ZkHidden.parseH_tagsAt ((ZkExec.zkTags_typed _).trans ht) _ _ _ _).symm.trans hp
+    exact decodesTableHW_zkTabs ht ⟨hh, hrr, hl⟩ hc (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay j₀
+      rootB₀ C
+
+end Gen
+
 end FlockDeploy.KS

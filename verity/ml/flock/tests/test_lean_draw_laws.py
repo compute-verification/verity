@@ -7,8 +7,10 @@ and partition a work draw's law derives from, so a work draw sets up there, wher
 before its law is read. A draw that passes the law check sets up and meets the session's checks, which the edited record
 fails at S2: its Hello is the undrawn session's, and under `--zk` not a `--zk` session's. Its public file has shared rows,
 which the form check refuses, so the session as recorded, without a draw and without `--zk`, passes every check and meets
-that refusal. Each draw is its own setup (about 10 s), so the module is slow; it is the only test that reaches the law check
-with a work draw."""
+that refusal. Upstream's seed-injection build proved it, with no zk patch, so its plain files are upstream's form, without
+the `zk_level0 = None` tag the deployed prover writes, and the run without `--zk` reads them under `--upstream-plain`
+(PROTOCOL.md §8.1). Each draw is its own setup (about 10 s), so the module is slow; it is the only test that reaches the law
+check with a work draw."""
 from __future__ import annotations
 
 import json
@@ -74,7 +76,7 @@ def verdicts(tmp_path_factory):
 
     def verify(zk: bool, names: list[str]) -> dict:
         p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(root / "stage" / "circuit.txt"),
-                            "--public", str(root / "registered" / "pub-8.bin"), *flags, *(["--zk"] if zk else []),
+                            "--public", str(root / "registered" / "pub-8.bin"), *flags, "--zk" if zk else "--upstream-plain",
                             "--session", *(str(sessions[n]) for n in names)], capture_output=True, text=True, check=False)
         lines = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
         assert len(lines) == len(names) and p.returncode == 1, p.stderr

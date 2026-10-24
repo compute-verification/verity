@@ -1,7 +1,7 @@
 """The pod registry every machine can update: one file per machine under `machines.d/` (cloud migration step g).
 
-    research pods register NAME --pod-id ID --project P [--root DIR] [--python PY] [--guard N|true] [--replace] [--any-name]
-    research pods register NAME --host ADDR --project P [--port N] [--user U] [--rate USD_PER_HOUR] [--root DIR] [--nebius-instance-id ID] [--replace]
+    research pods register NAME --pod-id ID --project P [--lane L] [--root DIR] [--python PY] [--guard N|true] [--replace] [--any-name]
+    research pods register NAME --host ADDR --project P [--lane L] [--port N] [--user U] [--rate USD_PER_HOUR] [--root DIR] [--nebius-instance-id ID] [--replace]
     research pods unregister NAME
     research pods registry [--json]                          # every machine `research run --on` accepts, and where it comes from
     research pods registry import [--apply] [--all]          # seed machines.d from machines.toml (running pods only unless --all)
@@ -9,7 +9,9 @@
 
 `~/.research/machines.toml` is one hand-edited file on the laptop; every lane that creates a pod had to merge an entry into it.
 The registry is a directory with one TOML file per machine, `<dir>/<name>.toml`, holding that machine's table (`provider`,
-`pod_id`, `project` or `projects`, and optionally `root`, `python`, `guard`, `ramlock`) plus who registered it and when.  Two
+`pod_id`, `project` or `projects`, and optionally `root`, `python`, `guard`, `ramlock`; a Nebius VM's `nebius_instance_id`, and the
+`deadline` fleet.py's sampler copies from its /etc/research/deadline; `lane`, the lane whose budget line pays for it, infra when
+unset) plus who registered it and when.  Two
 agents registering two pods write two files, so nothing is ever hand-merged; in the notes repo, `research notes sync` carries
 them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
 
@@ -50,7 +52,9 @@ FAMILIES_FILE = "_families.toml"
 NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 POD_ID_RE = re.compile(r"[a-z0-9]{8,32}")
 KNOWN_KEYS = ("provider", "pod_id", "host", "port", "user", "rate_usd_per_hour", "project", "projects", "root", "python", "guard", "ramlock",
-              "nebius_instance_id")
+              "nebius_instance_id", "lane", "deadline")
+KEPT_KEYS = ("lane", "deadline")   # a re-registration of the same binding that doesn't set them keeps the old file's
+OWNER_DEFAULT = "infra"            # a machine that names no lane is infra's (fleet.py's idle report rings its lane)
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.:-]{0,252}")
 OFF = ("", "none", "off", "0")
 
@@ -100,6 +104,8 @@ def validate(name: str, entry: Any) -> str | None:
         return f"provider {entry.get('provider')!r} (runpod or ssh)"
     elif not isinstance(entry.get("pod_id"), str) or not POD_ID_RE.fullmatch(entry["pod_id"]):
         return f"pod_id {entry.get('pod_id')!r} is not a pod id"
+    if entry.get("lane") is not None and not (isinstance(entry["lane"], str) and NAME_RE.fullmatch(entry["lane"])):
+        return f"lane {entry['lane']!r} is not a lane's handle (circuits, proofs, ...)"
     projects = entry.get("projects") or ([entry["project"]] if entry.get("project") else [])
     if not projects or not all(isinstance(p, str) and p for p in projects):
         return "no project (project = \"...\" or projects = [...])"
@@ -233,7 +239,7 @@ def _guard(v: str | None) -> bool | float | None:
 
 def register(name: str, pod_id: str, project: str, *, root: str | None = None, python: str | None = None, guard: str | None = None,
              replace: bool = False, any_name: bool = False, machines_toml: Path | None = None, environ: dict | None = None,
-             get_pod: Callable[[str], dict] = _pod, now: dt.datetime | None = None) -> tuple[Path, str]:
+             get_pod: Callable[[str], dict] = _pod, now: dt.datetime | None = None, lane: str | None = None) -> tuple[Path, str]:
     """Check, then write `<dir>/<name>.toml` (module docstring).  -> (path, 'registered' | 'updated' | 'unchanged').
     Raises remote.Refused with the reason; nothing is written then."""
     from .. import remote
@@ -241,7 +247,7 @@ def register(name: str, pod_id: str, project: str, *, root: str | None = None, p
 
     mt = machines_toml or remote.machines_path()
     entry: dict[str, Any] = {"provider": "runpod", "pod_id": pod_id, "project": project, "root": root, "python": python,
-                             "guard": _guard(guard)}
+                             "guard": _guard(guard), "lane": lane}
     if why := validate(name, entry):
         raise remote.Refused(f"register {name}: {why}")
     try:
@@ -270,6 +276,8 @@ def _write_checked(name: str, entry: dict[str, Any], mt: Path, *, replace: bool,
     old = load_dir(d)[0].get(name) if p.exists() else None
     if old is not None and binding(old) != binding(entry) and not replace:
         raise remote.Refused(f"register {name}: {p} binds it to {_bound(old)}; --replace rebinds the name")
+    if old is not None and binding(old) == binding(entry):
+        entry.update({k: old[k] for k in KEPT_KEYS if entry.get(k) is None and k in old})
     same = old is not None and all(old.get(k) == entry.get(k) for k in KNOWN_KEYS)
     if same:
         return p, "unchanged"
@@ -295,14 +303,15 @@ def _probe_ssh(entry: dict[str, Any]) -> str | None:
 def register_ssh(name: str, host: str, project: str, *, port: int | None = None, user: str | None = None, rate: float | None = None,
                  root: str | None = None, python: str | None = None, replace: bool = False, machines_toml: Path | None = None,
                  environ: dict | None = None, probe: Callable[[dict], str | None] = _probe_ssh,
-                 now: dt.datetime | None = None, nebius_instance_id: str | None = None) -> tuple[Path, str]:
+                 now: dt.datetime | None = None, nebius_instance_id: str | None = None, lane: str | None = None) -> tuple[Path, str]:
     """`register` for a `provider = "ssh"` machine: refused unless `hostname` answers over ssh with the research key. A Nebius VM's
-    `nebius_instance_id` lets `research run --on` start it when it is stopped (remote.wake)."""
+    `nebius_instance_id` lets `research run --on` start it when it is stopped (remote.wake). `lane` is the lane whose budget line
+    pays for the machine, which stops it when its work there ends (fleet.py's daily report rings it with the machine's idle hours)."""
     from .. import remote
 
     mt = machines_toml or remote.machines_path()
     entry: dict[str, Any] = {"provider": "ssh", "host": host, "port": port, "user": user, "rate_usd_per_hour": rate, "project": project,
-                             "root": root, "python": python, "nebius_instance_id": nebius_instance_id}
+                             "root": root, "python": python, "nebius_instance_id": nebius_instance_id, "lane": lane}
     entry = {k: v for k, v in entry.items() if v is not None}
     if why := validate(name, entry):
         raise remote.Refused(f"register {name}: {why}")
@@ -384,6 +393,7 @@ def main(argv: list[str]) -> int:
     rg.add_argument("--rate", type=float, default=None, metavar="USD_PER_HOUR", help="--host: the machine's hourly rate, for the attempts' cost")
     rg.add_argument("--nebius-instance-id", default=None, metavar="ID",
                     help="--host: the Nebius VM behind it, so `research run --on` starts it when it is stopped")
+    rg.add_argument("--lane", default=None, help=f"the lane whose budget line pays for it and who stops it (default {OWNER_DEFAULT})")
     rg.add_argument("--project", required=True)
     rg.add_argument("--root", default=None, help="the machine's research root (default /workspace/research)")
     rg.add_argument("--python", default=None, help="default python3")
@@ -402,12 +412,12 @@ def main(argv: list[str]) -> int:
     try:
         if ns.cmd == "register" and ns.host:
             p, what = register_ssh(ns.name, ns.host, ns.project, port=ns.port, user=ns.user, rate=ns.rate, root=ns.root, python=ns.python,
-                                   replace=ns.replace, nebius_instance_id=ns.nebius_instance_id)
+                                   replace=ns.replace, nebius_instance_id=ns.nebius_instance_id, lane=ns.lane)
             print(f"{what.upper()} {ns.name} -> host {ns.host} ({p})")
             written = [p] if what != "unchanged" else []
         elif ns.cmd == "register":
             p, what = register(ns.name, ns.pod_id, ns.project, root=ns.root, python=ns.python, guard=ns.guard, replace=ns.replace,
-                               any_name=ns.any_name)
+                               any_name=ns.any_name, lane=ns.lane)
             print(f"{what.upper()} {ns.name} -> pod {ns.pod_id} ({p})")
             written = [p] if what != "unchanged" else []
         elif ns.cmd == "unregister":

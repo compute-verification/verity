@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Witnesses.Sampling
+import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Each claim fails somewhere, stated over the spec

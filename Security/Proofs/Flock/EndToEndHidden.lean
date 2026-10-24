@@ -6,7 +6,9 @@ import Proofs.Flock.EndToEndHidden.Statement
 `Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden` is `zk_session_soundHJ_custody_reg` with its
 first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s (`Audit.Law.subset_miss`, and
 `linkBoundZC` at A2). `Flock.SecurityProofs.EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn` is
-`zk_session_soundHJ_custody_drawn_reg` with its last term in closed form.
+`zk_session_soundHJ_custody_drawn_reg` with its last term in closed form. Each reads the circuit the descriptor
+unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `EndToEndHiddenFlat` and
+`EndToEndHiddenDrawnFlat` are the two at the flat descriptor `Desc.single c` (`Flock.Desc.parse_single`).
 
 `EndToEndHidden_refSetup` shows the hidden-output statements' reference setup `y₀` (theirs and `EndToEndRegistered`'s)
 is no extra condition: every draw flock-verify accepts gives one, at any number of tables.
@@ -18,21 +20,37 @@ open FlockSoundness FlockSoundness.Audit
 
 /-- **C-Flock's one-stage audit, end to end, under hidden outputs.** -/
 theorem EndToEndHidden : Flock.Guarantees.EndToEndHidden := by
-  intro n Reg I ht c hc hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk
+  intro n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk
     hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ hCR hA2
-  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_reg I ht hc hU hpub hpt hscope kd hkd hdiv dj y₀ wr dg N Lb
+  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_reg I ht (Flock.Desc.parse_flat hD) hU hpub hpt hscope kd hkd hdiv dj y₀ wr dg N Lb
     src hA3 hTags hCust hk hRw hM hρ hr ht' K₀ τ (qF := qF) (qS := qS) hCR
   rw [Law.subset_miss hkd hK₀, Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
   exact h
 
 /-- **C-Flock's one-stage audit, end to end, under hidden outputs, at the drawn units.** -/
 theorem EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn := by
-  intro n Reg I ht c hc hU pub hpub hpt hscope kd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags hCust k Rw M hk hRw hM ρ
+  intro n Reg I ht D hD hU pub hpub hpt hscope kd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags hCust k Rw M hk hRw hM ρ
     hρ hr t' ht' τ qF qS L P vb σ hCR hA2
-  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_drawn_reg I ht hc hU hpub hpt hscope kd hdiv dj y₀ wr dg N
+  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_drawn_reg I ht (Flock.Desc.parse_flat hD) hU hpub hpt hscope kd hdiv dj y₀ wr dg N
     Lb src hTags hCust hk hRw hM hρ hr ht' τ (qF := qF) (qS := qS) hCR
   rw [Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
   exact h
+
+/-- **C-Flock's one-stage audit, end to end, under hidden outputs, at a flat circuit file.** -/
+theorem EndToEndHiddenFlat : Flock.Guarantees.EndToEndHiddenFlat := by
+  intro n Reg I ht c hc
+  exact EndToEndHidden n Reg I ht (.single c) (Flock.Desc.parse_single hc)
+
+/-- **C-Flock's one-stage audit, end to end, under hidden outputs, at the drawn units, at a flat circuit file.** -/
+theorem EndToEndHiddenDrawnFlat : Flock.Guarantees.EndToEndHiddenDrawnFlat := by
+  intro n Reg I ht c hc
+  exact EndToEndHiddenDrawn n Reg I ht (.single c) (Flock.Desc.parse_single hc)
+
+/-- `EndToEndHiddenPerTest` gives its flat form, at `Desc.single c`. -/
+theorem EndToEndHiddenPerTestFlat_of (h : Flock.Guarantees.EndToEndHiddenPerTest) :
+    Flock.Guarantees.EndToEndHiddenPerTestFlat := by
+  intro n Reg I ht c hc
+  exact h n Reg I ht (.single c) (Flock.Desc.parse_single hc)
 
 open FlockSoundness.Discharge FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden in

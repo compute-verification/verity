@@ -57,6 +57,89 @@ def test_weights_record_carries_s8_weights_and_row_scales_and_the_map_names_them
     assert wf("model.layers.5.mlp.down_proj.weight_scale") == ("layers", 5, "down_ws")
     assert wf("lm_head.weight") == ("lm_head",)
     assert profile_for_case("LLAMA31_8B").weight_field("model.layers.5.mlp.down_proj.weight_scale") is None
+    assert "INT8_LM_HEAD" not in p.config and wf("lm_head.weight_scale") is None
+
+
+def test_the_v2_role_carries_an_s8_lm_head_and_its_row_scales():
+    role = "LLAMA31_8B_INT8_V2"
+    entry = dg.checkpoint_entry(role)
+    assert entry is not None and entry["recipe"]["id"] == "verity-int8-channel127/v2"
+    assert hashlib.sha256((dg.HF_CONFIG_DIR / f"{role}.config.json").read_bytes()).hexdigest() == entry["config_sha256"]
+    p = profile_for_case(role)
+    assert p.config["INT8_EXACT"] == 127 and p.config["INT8_LM_HEAD"]
+    fields = analytic.weights_type(p.config).fields
+    names = [n for n, _ in fields]
+    assert names[names.index("lm_head") + 1] == "lm_head_ws"
+    f = dict(fields)
+    assert str(f["lm_head"]) == "Array<128256,Array<4096,Value<8>>>" and str(f["lm_head_ws"]) == "Array<128256,Array<1,Value<32>>>"
+    assert str(f["embed"]) == str(dict(analytic.weights_type(profile_for_case(ROLE).config).fields)["embed"])
+    assert dict(fields)["layers"].elem == dict(analytic.weights_type(profile_for_case(ROLE).config).fields)["layers"].elem
+    wf = p.weight_field
+    assert wf("lm_head.weight") == ("lm_head",) and wf("lm_head.weight_scale") == ("lm_head_ws",)
+
+
+def test_int8_exact_config_reads_whether_the_lm_head_is_kept():
+    pytest.importorskip("vllm")
+    from verity_vllm.engine.int8_vllm import Int8ExactConfig
+    base = {"quant_method": "verity_int8", "weight_max": 127}
+    assert not Int8ExactConfig.from_config({**base, "modules_to_not_convert": ["lm_head"]}).lm_head
+    assert not Int8ExactConfig.from_config(base).lm_head
+    assert Int8ExactConfig.from_config({**base, "modules_to_not_convert": []}).lm_head
+    assert Int8ExactConfig.from_config({**base, "modules_to_not_convert": ["model.norm"]}).lm_head
+    with pytest.raises(ValueError, match="weight_max"):
+        Int8ExactConfig.from_config({**base, "weight_max": 63})
+
+
+def test_int8_exact_config_keeps_the_linears_its_list_names_bf16():
+    """A base's ``modules_to_not_convert`` (GLM-5.3's keeps kv_b_proj, the indexer's wk, its routers and norms bf16): each
+    linear it names, a fused one by all its shards, is vLLM's unquantized method marked kept, which the readback and H1 leave
+    out; every other linear is the plain arm; a fused layer with some shards kept, or kept experts, are refused."""
+    pytest.importorskip("vllm")
+    torch = pytest.importorskip("torch")
+    from vllm.model_executor.layers.fused_moe import RoutedExperts
+    from vllm.model_executor.layers.linear import LinearBase, UnquantizedLinearMethod
+    from verity_vllm.engine.int8_vllm import Int8ExactConfig, Int8KeptLinearMethod, Int8PlainLinearMethod
+    from verity_vllm.program.frontend.kernel_readback import int8_exact_of, kept
+
+    class Linear(LinearBase):
+        def __init__(self):
+            torch.nn.Module.__init__(self)
+
+    class Experts(RoutedExperts):
+        def __init__(self):
+            torch.nn.Module.__init__(self)
+
+    cfg = Int8ExactConfig.from_config({"quant_method": "verity_int8", "weight_max": 127, "modules_to_not_convert": [
+        "lm_head", "model.norm", "model.layers.0.self_attn.kv_b_proj", "model.layers.0.self_attn.indexer.wk",
+        "model.layers.0.mlp.gate", "model.layers.1.self_attn.q_proj", "model.layers.1.self_attn.k_proj",
+        "model.layers.1.self_attn.v_proj", "model.layers.2.self_attn.q_proj", "model.layers.3.mlp.experts"]})
+    cfg.packed_modules_mapping = {"qkv_proj": ["q_proj", "k_proj", "v_proj"]}
+    assert not cfg.lm_head
+    method = {p: cfg.get_quant_method(Linear(), p) for p in (
+        "model.layers.0.self_attn.kv_b_proj", "model.layers.0.self_attn.indexer.wk", "model.layers.0.mlp.gate",
+        "model.layers.1.self_attn.qkv_proj", "model.layers.0.self_attn.qkv_proj", "model.layers.0.self_attn.o_proj",
+        "model.layers.0.self_attn.kv_a_proj")}
+    assert {p for p, m in method.items() if isinstance(m, Int8KeptLinearMethod)} == {
+        "model.layers.0.self_attn.kv_b_proj", "model.layers.0.self_attn.indexer.wk", "model.layers.0.mlp.gate",
+        "model.layers.1.self_attn.qkv_proj"}
+    assert all(isinstance(m, Int8PlainLinearMethod) for p, m in method.items() if not isinstance(m, Int8KeptLinearMethod))
+    assert isinstance(method["model.layers.0.mlp.gate"], UnquantizedLinearMethod)
+    with pytest.raises(ValueError, match="some but not all shards"):
+        cfg.get_quant_method(Linear(), "model.layers.2.self_attn.qkv_proj")
+    with pytest.raises(ValueError, match="no bf16 variant"):
+        cfg.get_quant_method(Experts(), "model.layers.3.mlp.experts")
+
+    class Model:
+        def __init__(self, *methods):
+            self.mods = [type("M", (), {"quant_method": m})() for m in methods]
+
+        def modules(self):
+            return iter(self.mods)
+
+    plain, kept_bf16 = method["model.layers.0.self_attn.o_proj"], method["model.layers.0.self_attn.kv_b_proj"]
+    model = Model(plain, kept_bf16)
+    assert kept(model) == {id(model.mods[1])} and int8_exact_of(model) == "linears"
+    assert int8_exact_of(Model(plain, UnquantizedLinearMethod())) == "<mixed>"
 
 
 # ---------------------------------------------------------------- patterns

@@ -16,9 +16,16 @@
   carries that kind's noise form; `Scheme.plug` sets one), self-contained (decision 106): ``(a: its A rows, b: its B rows,
   salt, position, roots) -> {z: its cells' exact products, receipt}``. The unit derives its seed in its own proof from the
   salt, its position and its seed group's roots (`seeds.PouwSeed`, decision 105, or `seeds.PouwUnitSeeds` for a unit whose
-  receipt folds take keys: seed_j and σ_R, decision 121), and its noise from the seed; nothing else reads the salt. The salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree);
-  `pouw.positions` and `pouw.roots` are inputs bound before the draw, unit u reading position slot u (`Compiled.positions`)
-  and its seed group's (root(A), root(B)). A seed group is the calls committed together (`groups`; by default a site, one
+  receipt folds take keys: seed_j and σ_R, decision 121), and its noise from the seed; nothing else reads the salt. The
+  salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree); unit u reads position slot
+  u (`Compiled.positions`) and its seed group's (root(A), root(B)). The three seed inputs are registered values the
+  one-stage verifier fills itself, so the prover chooses none of them (`sampled_proofs.one_stage.registered`'s
+  `supplied_rows` and `supplied_root`): `pouw.roots` from the roots the record names for each group's operands (a served
+  port's, an AROW row table's included, and the registered weights', which the verifier holds to the root it pinned
+  before the salt, `one_stage.registration.check`'s `pinned`), `pouw.positions` after every unit of the log's earlier records
+  (`registered.log_base`, so no two records of a log share a position), and `pouw.salt` per window, filled by the
+  verifier. R7 refuses a record that registers any other commitment of them (`R7-supplied`); `Compiled.inputs` gives the
+  leaves the verifier fills. A seed group is the calls committed together (`groups`; by default a site, one
   call: a batched call over a layer's heads and the batch is one site, decision 122): one commitment fixes the noise of
   every unit it covers, so the units a group covers are the grinding premium's divisor (decision 112), at least the
   scheme's `cover`, and its dots of each attention kind carry a grind term of at most 0.1% (decision 122: `grind`'s premium
@@ -35,8 +42,10 @@
   the salt reaches only the seed, through the units' salt port (``salt-flow``); each unit's seed reads the unit's own position
   and roots parameters whole, and at the root each unit batch reads its own slots of `pouw.positions` and its site's of
   `pouw.roots` (its group's), so no unit chooses its position and no two units share one (``position``); a unit derives one seed
-  (``seed``) and its z reads none of it (``noise-in-z``); served values reach a unit only through its z (``separator``);
-  every node outside the units meets `cut.WIDTH_RULE` (``width``). `Compiled.check_gates` adds the gate-level cut (no value
+  (``seed``) and its z reads none of it (``noise-in-z``), or under a one-stream scheme (`Scheme.stream`) each z leaf is
+  recombined from words its receipt folds (``stream``: z reads the seed through the recombination, the wrap correction and
+  the dither peel); served values reach a unit only through its z (``separator``); every node outside the units meets
+  `cut.WIDTH_RULE` (``width``). `Compiled.check_gates` adds the gate-level cut (no value
   computed in two units), the separator and the width rule by reachability, for a Program small enough to flatten.
 
 The Program is the verifier's, rebuilt from (served Program, scheme, groups): `rebuild`, `Compiled.check_descriptor`
@@ -241,11 +250,18 @@ class Scheme:
     (`seeds.seed_call`), or `seeds.PouwUnitSeeds` (`seeds.unit_seeds_call`) where its receipt folds take keys, which come
     from σ_R, never from seed_j (decision 121). It derives its noise from seed_j (`seeds.noise_blocks`), holds the noised
     arm, the receipt fold and the spot check, and returns its cells' exact products as z. A factory may raise
-    `CompileError` ("scheme") for a dot or tile it doesn't take."""
+    `CompileError` ("scheme") for a dot or tile it doesn't take.
+
+    `stream`, for a one-stream scheme (`h1tile.SCHEME_V3`): the Definitions that make a cell's z from the words its receipt
+    folds (`h1tile.STREAM`: the recombinations, the wrap correction and the dither peel). Such a unit's z is made from the
+    noised words, so it reads the seed by design, and the unit check's ``noise-in-z`` rule gives way to ``stream``: every
+    z leaf is the output of a call of one of them, and every leaf such a call reads is either another such call's output or
+    read by the receipt's own cone. That z is the Call's value is the stream Definitions' arithmetic, not this check's."""
 
     name: str
     tile: tuple[int, int]
     units: Mapping[str, Callable[[Dot, Tile], Any]]
+    stream: tuple[Any, ...] = field(default=(), kw_only=True)
     cover: int = 1
     rows: Mapping[str, RowNoise] = field(default_factory=lambda: dict(ROWS))
     noise: Mapping[str, RowNoise] = field(default_factory=dict)
@@ -916,6 +932,11 @@ def _check_roots(roots: Sequence[tuple[bytes, bytes]], n: int) -> None:
         raise ValueError(f"one (root_a, root_b) per seed group: {n}, not {len(roots)}")
 
 
+def _check_salt(salt: bytes) -> None:
+    if not isinstance(salt, (bytes, bytearray)) or len(salt) != 64:
+        raise ValueError(f"`{SALT}` is the epoch's 64-byte salt")
+
+
 def _sites(plan: _Plan) -> tuple[Site, ...]:
     return tuple(Site(s, sp.node, sp.dot, sp.a_rows, sp.b_rows, sp.pairs) for s, sp in enumerate(plan.sites))
 
@@ -1068,19 +1089,25 @@ class Compiled:
 
     def positions(self, base: int = 0) -> list[int]:
         """`pouw.positions`' values: unit u's is ``base + u``. A salt seeds each (salt, position) once, so a verifier that runs
-        the Program more than once under one salt gives each run its own range (``base``, a multiple of ``len(units)``)."""
+        the Program more than once under one salt gives each run its own range (``base``); the one-stage verifier's is
+        every unit of the log's earlier records (`sampled_proofs.one_stage.registered.log_base`)."""
         if base < 0 or base + len(self.units) > 1 << 64:
             raise ValueError(f"positions {base} .. {base + len(self.units) - 1} are no u64s")
         return [base + u.slot for u in self.units]
 
     def seeds(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[bytes]:
-        """Each unit's seed_j, as its proof derives it (`seeds.seed`), from its seed group's operand roots ``roots[group]``."""
+        """Each unit's seed_j, as its proof derives it (`seeds.seed`), from its seed group's operand roots ``roots[group]``,
+        under the epoch's 64-byte `salt` (a certified epoch's, `audit.Epoch.certified`)."""
+        _check_salt(salt)
         _check_roots(roots, len(self.groups))
         return [SD.seed(salt, p, *roots[self.group_of[u.site]]) for u, p in zip(self.units, self.positions(base))]
 
     def inputs(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[list[int]]:
-        """The leaves of `pouw.salt`, `pouw.positions` and `pouw.roots` (a pair per seed group), the arguments after the
-        served ones."""
+        """The leaves of `pouw.salt` (the epoch's 64-byte salt, a certified epoch's), `pouw.positions` and `pouw.roots`
+        (a pair per seed group), the arguments after the served ones: the rows the one-stage verifier fills
+        (`sampled_proofs.one_stage.registered.supplied_rows`) from the window's salt, the log's ``base`` and the roots
+        the record names."""
+        _check_salt(salt)
         _check_roots(roots, len(self.groups))
         b = self.boolean
         return [SD.leaves(salt, b), [v for p in self.positions(base) for v in SD.position_leaves(p, b)],
@@ -1207,9 +1234,10 @@ def _reads(r: Refs, space: str, idx: int) -> bool:
 
 
 @lru_cache(maxsize=None)
-def _check_unit(U: Any, boolean: bool) -> None:
+def _check_unit(U: Any, boolean: bool, stream: tuple[Any, ...] = ()) -> None:
     """One unit Definition: one seed, on its salt, position and roots parameters whole; the salt read by nothing else; and its
-    z reached from no node the seed reaches."""
+    z reached from no node the seed reaches, or for a one-stream scheme (`stream`) recombined from words its receipt folds
+    (`_check_stream`)."""
     body = U.body
     at = [k for k, nd in enumerate(body.nodes) if SD.is_seed(nd.fn)]
     if len(at) != 1 or body.nodes[at[0]].form != "call":
@@ -1231,6 +1259,9 @@ def _check_unit(U: Any, boolean: bool) -> None:
                                                 f"the seed")
     if _reads(body.ret, "p", 2):
         raise CompileError("salt-flow", f"{U.id} returns a leaf of the salt")
+    if stream:
+        _check_stream(U, stream)
+        return
     tainted: set[int] = set()
     for k, nd in enumerate(body.nodes):
         if k == ks or any(s == "n" and i in tainted for a in nd.args for s, i, _lo, _hi in runs(a.refs)):
@@ -1240,6 +1271,54 @@ def _check_unit(U: Any, boolean: bool) -> None:
     if hit:
         raise CompileError("noise-in-z", f"{U.id}'s z reads node {hit[0]} ({body.nodes[hit[0]].fn.id}), which the seed reaches: "
                                          f"z is the exact product")
+
+
+def _check_stream(U: Any, stream: tuple[Any, ...]) -> None:
+    """A one-stream unit's z: each leaf an output of a call of a `stream` Definition, and every leaf such a call reads either
+    another such call's output or a leaf a node in the receipt's cone reads (a parameter's included), so z is a function of
+    the words the receipt folds and of what they are made from, and of nothing else."""
+    body = U.body
+    lz = U.signature()[1].fields[0][1].leaves
+    cone, todo = set(), [i for s, i, _lo, _hi in runs(body.ret.slice(lz, body.ret.count)) if s == "n"]
+    while todo:
+        k = todo.pop()
+        if k not in cone:
+            cone.add(k)
+            todo += [i for a in body.nodes[k].args for s, i, _lo, _hi in runs(a.refs) if s == "n"]
+    folded: dict[tuple[str, int], bytearray] = {}
+    for k in cone:
+        for a in body.nodes[k].args:
+            for s, i, lo, hi in runs(a.refs):
+                f = folded.setdefault((s, i), bytearray())
+                if len(f) < hi:
+                    f.extend(bytes(hi - len(f)))
+                f[lo:hi] = b"\x01" * (hi - lo)
+    ids = {id(f) for f in stream}
+    names = ", ".join(f.id for f in stream)
+
+    def made(nd: Any) -> bool:
+        return id(getattr(nd.fn, "defn", nd.fn)) in ids
+
+    for s, i, _lo, _hi in runs(body.ret.slice(0, lz)):
+        nd = body.nodes[i] if s == "n" else None
+        if nd is None or not made(nd):
+            raise CompileError("stream", f"{U.id}'s z reads {s}{i} ({nd.fn.id if nd else 'a parameter'}), not a recombination "
+                                         f"of the words its receipt folds ({names})")
+    seen: set[int] = set()
+    todo = [i for s, i, _lo, _hi in runs(body.ret.slice(0, lz)) if s == "n"]
+    while todo:
+        i = todo.pop()
+        if i in seen:
+            continue
+        seen.add(i)
+        nd = body.nodes[i]
+        for a in nd.args:
+            for s2, j, lo, hi in runs(a.refs):
+                if s2 == "n" and made(body.nodes[j]):
+                    todo.append(j)
+                elif len(f := folded.get((s2, j), b"")) < hi or not all(f[lo:hi]):
+                    raise CompileError("stream", f"{U.id}'s z at node {i} ({nd.fn.id}) reads {s2}{j} [{lo}, {hi}), which the "
+                                                 f"receipt doesn't fold: z is the one stream's served output")
 
 
 def _check(c: Compiled) -> None:
@@ -1296,7 +1375,7 @@ def _check(c: Compiled) -> None:
         if s != "n" or i not in period or lo % period[i][1] < period[i][0]:
             raise CompileError("separator", f"the receipts read {s}{i} [{lo}, {hi}), not a unit's receipt")
     for g in plan.groups:
-        _check_unit(g.unit, plan.boolean)
+        _check_unit(g.unit, plan.boolean, c.scheme.stream)
     read = {k: bytearray(nd.out.leaves) for k, nd in enumerate(body.nodes) if k not in period}
     for r in [a.refs for nd in body.nodes for a in nd.args] + [body.ret]:
         for s, i, lo, hi in runs(r):

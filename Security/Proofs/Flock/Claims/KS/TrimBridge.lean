@@ -217,3 +217,41 @@ theorem zk_KS_untrim_of_kinds
   (zk_KS_both_of_kinds hct hp hpads).2 hext
 
 end FlockDeploy.KS.TrimBridge
+
+namespace FlockDeploy.KS.Gen
+
+open Flock
+
+variable [S : ZkSetup]
+
+/-- **KS at both masked records from `ZkXferWJ`** at the statements some run accepts, the untrimmed with `ExtendJ`. -/
+theorem TrimBridge.zk_KS_both_of_xferWJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkXferWJ x) :
+    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) ∧
+      (Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true) →
+        Claims.Flock.KS sha512 (deployZk Readable.relation)) :=
+  ⟨zk_KS_trim_of_xferWJ hx, zk_KS_of_xferWJ hx⟩
+
+/-- **KS at both masked records from the cap/`τ` and pads fork bounds and the view's pads clash**, the premises
+`zk_KS_of_kinds` takes: the trimmed record's is `zk_KS_of_kinds`'s, and the untrimmed instance's needs `ExtendJ` at
+full-width columns besides. -/
+theorem TrimBridge.zk_KS_both_of_kinds
+    (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsCapTauZ i)
+    (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i)
+    (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
+    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) ∧
+      (Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true) →
+        Claims.Flock.KS sha512 (deployZk Readable.relation)) :=
+  zk_KS_both_of_xferWJ fun x hno => zkXferWJ_of_simWJ (zkSimWJ_of_parts (zkSimRunAt x) (zkSimAbortAt x)
+    (zkSimForkLe_of_kinds (hct x hno) (hp x hno)) (zkViewClash_of_Q (zkViewClashQ₀ x) (zkViewClashQL x) (hpads x hno)))
+
+/-- **KS at the untrimmed masked instance** at SHA-512 at the deployed relation, from `zk_KS_of_kinds`'s premises and
+`ExtendJ` at full-width columns. -/
+theorem TrimBridge.zk_KS_untrim_of_kinds
+    (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsCapTauZ i)
+    (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i)
+    (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ)
+    (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
+    Claims.Flock.KS sha512 (deployZk Readable.relation) :=
+  (zk_KS_both_of_kinds hct hp hpads).2 hext
+
+end FlockDeploy.KS.Gen

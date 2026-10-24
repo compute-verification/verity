@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from conftest import BOT, CHAT, LUKE, SIGNING, T0
 from slack_events import app as app_mod
-from slack_events.deps import DEAD, LAST_SUCCESS, OLDEST, TOPIC
+from slack_events.deps import DEAD, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, TOPIC
 
 
 def client(world) -> TestClient:
@@ -40,6 +40,7 @@ def test_a_signed_event_is_published_keyed_on_its_event_id_and_answered_200(worl
     assert r.status_code == 200 and r.json() == {"ok": True}
     [(topic, payload, key)] = world.deps.queue.sent
     assert (topic, key) == (TOPIC, "Ev1") and payload["kind"] == "event" and payload["event"]["channel"] == CHAT
+    assert world.deps.cache.get(LAST_ENQUEUED) == T0                         # the watchdog's stall check reads it
 
 
 def test_url_verification_answers_the_challenge_and_publishes_nothing(world):
@@ -78,6 +79,8 @@ def test_a_signature_over_another_body_is_refused(world):
 def test_our_own_bot_posts_are_dropped_before_the_queue(world):
     r = post_event(client(world), world, callback(bot_id=BOT, username="circuits", user=None))
     assert r.status_code == 200 and r.json()["ignored"] == "our bot's post" and world.deps.queue.sent == []
+    r = post_event(client(world), world, callback(bot_id=BOT, username="Codex", user=None, subtype="bot_message"))
+    assert r.status_code == 200 and "ignored" not in r.json() and len(world.deps.queue.sent) == 1   # no sender delivered it
 
 
 def test_a_failed_publish_answers_503_so_slack_retries(world):
@@ -121,8 +124,11 @@ def test_health_reports_what_the_cache_holds_with_its_bearer_and_refuses_without
     cache.set(OLDEST, {"ts": f"{T0 - 30:.6f}", "at": T0 - 5})
     cache.set(DEAD, {"count": 1, "since": T0 - 86400})
     cache.set(LAST_SUCCESS, T0 - 2)
+    cache.set(LAST_DONE, T0 - 600)
+    cache.set(LAST_ENQUEUED, T0 - 60)
     assert health(c) == {"oldest_unprocessed_age_s": 30.0, "dead_letter_count": 1, "dead_letter_since": T0 - 86400,
-                         "last_success_at": T0 - 2, "queue": "slack-events", "dead_letter": "slack-events-dead"}
+                         "last_success_at": T0 - 2, "last_done_at": T0 - 600, "last_enqueued_at": T0 - 60,
+                         "queue": "slack-events", "dead_letter": "slack-events-dead"}
     cache.set(OLDEST, {"ts": None, "at": T0})
     assert health(c)["oldest_unprocessed_age_s"] == 0.0
     assert c.get("/api/slack/health").status_code == 401
@@ -133,7 +139,8 @@ def test_health_reports_what_the_cache_holds_with_its_bearer_and_refuses_without
 
 def test_a_cold_or_unreachable_cache_reads_as_unknown_not_as_down(world):
     unknown = {"oldest_unprocessed_age_s": None, "dead_letter_count": None, "dead_letter_since": None,
-               "last_success_at": None, "queue": "slack-events", "dead_letter": "slack-events-dead"}
+               "last_success_at": None, "last_done_at": None, "last_enqueued_at": None, "queue": "slack-events",
+               "dead_letter": "slack-events-dead"}
     assert health(client(world)) == unknown
     world.deps.cache.set(LAST_SUCCESS, T0)
     world.deps.cache.fail = True
@@ -150,3 +157,15 @@ def test_the_crons_run_only_with_vercels_cron_secret(world, name):
     assert c.get(f"/api/cron/{name}").status_code == 401
     r = c.get(f"/api/cron/{name}", headers={"Authorization": "Bearer dummy-cron"})
     assert r.status_code == 200 and world.deps.cache.get(LAST_SUCCESS) == T0
+
+
+def test_the_drain_runs_only_with_vercels_cron_secret_and_reports_what_it_handled(world, monkeypatch):
+    from slack_events import subscriber
+
+    async def drain(d):
+        return {"handled": 2, "failed": 0}
+    monkeypatch.setattr(subscriber, "drain", drain)
+    c = client(world)
+    assert c.get("/api/cron/drain").status_code == 401
+    r = c.get("/api/cron/drain", headers={"Authorization": "Bearer dummy-cron"})
+    assert r.status_code == 200 and r.json() == {"handled": 2, "failed": 0}

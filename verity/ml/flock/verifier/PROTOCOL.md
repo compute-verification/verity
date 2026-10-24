@@ -457,9 +457,17 @@ struct                  its fields in the order below, no tags
 
 Decoding is a total function `decode : Bytes → Except Reason Proof`. It rejects a truncated input, an enum index out of
 range and an `Option` tag other than 0 or 1. Every `Vec` length is compared with the expected length of §8.3 before the
-elements are read; `matrix_evals` (unused) is read with the length it declares, bounded by the input. Bytes after the pair
-are ignored, as upstream's `bincode::deserialize` ignores them; the record's `proof_sha256` (S17) binds the whole file
-anyway.
+elements are read; `matrix_evals`, which no check reads, must be empty (D18). A plain file is the pair, then the zk
+patch's `zk_level0: Option<…>`, which it puts last in `LigeritoProof` and writes as one byte 0 (`None`) on every plain
+proof: every deployed prover is that build (`pod/60-circuit.sh` applies `flock-zk-b684b12.patch`, which has carried the
+field since it was added). The decoder accepts that form alone, and a file only if it is the one encoding of the proof it
+decodes to (`decodeProof` compares it with `Wire.proofFile`): S17 hashes the whole file, so a byte the decoder doesn't
+read, or a second encoding of one proof, would be one the record's digest binds and nothing else does. Upstream's builds
+end the file after `consistency_batch_grinding_nonces`; a statement takes that form only when it says so
+(`Tags.upstreamPlain`, `flock-verify verify --upstream-plain`: the agreement corpus's sessions from upstream's binaries,
+D17), and the verifier then decodes each plain file as the file then the tag (`verifyFiles (plainBytes true)`), while
+S17 still hashes the file as the server received it. Under either pin, and at each
+`--zk` statement, a proof thus has one file (`Flock.decodeProof_canonical`, `Flock.plainBytes_canonical`).
 
 ### 8.2 Layout
 
@@ -479,6 +487,7 @@ LigeritoProof       = initial_cap: Vec<H> ‖ initial_proof: LevelProof ‖ recu
                       ‖ sumcheck_transcript: Vec<(F, F)> ‖ sumcheck_transcript_f256: Vec<(K, K)>
                       ‖ grinding_nonces: Vec<u64> ‖ ood_values: Vec<F> ‖ fold_grinding_nonces: Vec<u64>
                       ‖ claim_batch_grinding_nonces: Vec<u64> ‖ consistency_batch_grinding_nonces: Vec<u64>
+                      ‖ zk_level0: Option<Level0ZkProof>, = None (absent under --upstream-plain)
 LevelProof          = opened_rows: Vec<Vec<F>> ‖ merkle_proof: Vec<H>
 FinalProof          = yr: Vec<F> ‖ opened_rows: Vec<Vec<F>> ‖ merkle_proof: Vec<H>
 ~~~
@@ -598,8 +607,8 @@ No per-round check. Final: `claim = final_a_eval · final_b_eval` (`SumcheckFina
 
 Inputs: `x_ab = (z, ρ[0 … k_log−7], ρ[k_log−6 … m−7])`, i.e. skip point `z`, inner rest `ρ_in` (`k_log − 6` values) and
 outer `ρ_out` (`n_log` values); `v_a`, `v_b`. Shape checks: `|rounds| = k_log − 6`, `|z_partial| = 64`,
-`grinding_nonces = []`, and the circuit has `2^{k_log}` columns. `matrix_evals` is not read: every honest proof sends it
-empty, and upstream ignores it, as does the spec.
+`grinding_nonces = []`, and the circuit has `2^{k_log}` columns. `matrix_evals` must be empty (§8.1, D18): every honest
+proof sends it empty, and upstream ignores it.
 
 | step | operation | value |
 |---|---|---|
@@ -1257,6 +1266,15 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   must be `rec-open-stacked/l<LANES>-h<H>`, and the same three rules hold at those parameters, the net being the same
   builder's under the unit's own name.
 
+  Under `--rec-inner`, a unit named `rec-cap/n<N>` (V*'s hold of the table's level-0 cap, `VStar.capUnit`,
+  `rec_cap.lowering`) is V*'s last statement, at `N = 2^cap₀` of `fast100(m)`'s level 0, and its file must be V*'s byte
+  for byte: one input port `top` and one output port `out` of 64 u16 words each, `out` being `top`'s words 32 to 63
+  then 32 zero words, with no AND. Instance `i` reads node `i` of `rec-top-L0`, at the registration the shared rows
+  hold, and `out` the verifier's zero rows `rec-cap-zero` (D19), so every node of `root_B` is held at a fixed row
+  whatever the query coins draw. Each later level `l ≥ 1` is held the same way by `rec-cap/n<N>-l<l>`, the statements
+  just before level 0's in level order, at `N = 2 · 2^cap_l` (both reps' level-`l` tops): instance `i` reads row `i` of
+  `rec-top-L<l>`, rep 0's top then rep 1's.
+
   So must a unit net whose name starts with `rec-residuals/` (a part of V*'s algebra, `rec_residuals.lowering`):
   - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and
     `claims ≥ 2`, and neither `k_log` nor `claims` above the unit's input bits, compared before the verifier computes
@@ -1417,13 +1435,29 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   failing cut refuses the partition, naming the Call and its codes. For any other query, or without `--program`, `units`
   is `as stated`, with the reason in `note`, which an audit reports as a gap.
 - **Registered reads**. A shared-row header may name `registered`, `{port: {value, positions, paths}}`: registered rows.
-  The verifier needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, root, leaves, domain,
-  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows); the port's rows must be
-  `sha512/row/v1` rows of their u16 words, padded. A port is any row of the circuit: an input port's, or (§16.13) an
+  The verifier needs its own `--registered F` (`verity/registered-reads/v1`: per port the value, root, leaves, domain,
+  read positions `reads` from unit `reads_from` (default 0: unit `reads_from + i` reads `reads[i]`, every other unit
+  nothing), `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows, and `row_schema`, the rows'
+  format: `hm96-sha512/row/v1`, the default when absent, `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1`, the last two
+  with `words`; a key beside the file's and a port's own refuses. `verity/registered-reads/v0` is still read: no
+  `reads_from`, and other keys ignored). Each port is checked in its own format: the port's row schema must be the one `F` names, a `row/v1`
+  port's rows `sha512/row/v1` rows of their u16 words, padded to whole SHA-512 blocks, and a bit row (`row/v2`,
+  `row-seg/v1`) exactly `words · word_bits` bits. A port is any row of the circuit: an input port's, or (§16.13) an
   output port's row, whose table is the instances' output rows, instance `i`'s ref `i`, so instance `i`'s output is the
-  registered row at `positions[i]`. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its
-  position, each instance's ref name its unit's read position in the verifier's program (units `derived`). A port on
-  one side only refuses; verdicts report `registered`. A recursive statement reads the inner session's round commitments
+  registered row at `positions[i]`. Each table row's leaf, the frame-v3-sha512 leaf under the port's row schema, must
+  climb its path to the root at its position, each instance's ref name its unit's read position in the verifier's
+  program (units `derived`). A port on
+  one side only refuses; verdicts report `registered`, and `openings`, each port's table rows `[position, b ‖ c]`. An `F`
+  with `"complete": true` names every port of the statement: a circuit port, input or output row, that is no port of `F`
+  refuses (`Registered.checkComplete`, `checkComplete_ok`), so no output's cone reads a row the public file states
+  (PoUW's leaf lanes, the lane index among them). It reads the circuit's ports, never its gates. A port `F` names at
+  known content (`known`: each row's u16 words and its salt) refuses unless its root is the frame-v3-sha512 root of
+  those rows (`Registered.checkKnownAll`), and, in the statement (`KnownRead.check`), unless the circuit names each of
+  its ports once and has a port of each known name (`namesOk`), and its row is a `sha512/row/v2` row without segments of the known rows' words and each bit of its row is on a wire of the unit: at an
+  input row, a computed row of the unit reads the bit at some copy (the copy is below `upv`, `readIns` marks the column,
+  and Δ copies that bit into it); at an output row, some copy below `upv` returns the bit's output word at a computed
+  column of the unit's output group. So the known content binds every bit the statement could depend on. It costs the
+  known bits times the unit's ports, and the ports' squared count for their names. A recursive statement reads the inner session's round commitments
   as registered values, round `i`'s as `rec-c<i>` and level `l`'s committed tops as `rec-top-L<l>`; a drawn statement
   must draw in full every unit the verifier's reads of such a value name (U4, `Registered.checkFull`, D14), so that no
   stage's message is read off a sample. The registered opening (`RecOpening`) reads its rounds as registered values too:
@@ -1643,8 +1677,9 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    of its slots (`out_net_ports` of `[slot, port]` pairs, §16.10; rule 7 orders them); the unit
    of at most `2^32` rows reading only port bits as above, and every
    row a `sha512/row/v1` row as above, or every row, in any mix, either an unsegmented `sha512/row/v2` row (§16.14) of
-   `16 · words` bits whose last bytes and SHA-512's 17 bytes of padding fit its `hm96` slot's block
-   (`128 · chunks ≤ 2 · words` and `2 · words + 17 ≤ 128 · (chunks + 1)`, `ProvedScope.v2Row`) or a `sha512/row-seg/v1`
+   `16 · words` bits whose bytes and SHA-512's 17 bytes of padding end in its `hm96` slot's block, the last
+   compression's block holding the bytes' end and the padding's start when `2 · words mod 128 ≥ 112`
+   (`128 · chunks ≤ 2 · words + 16` and `2 · words + 17 ≤ 128 · (chunks + 1)`, `ProvedScope.v2Row`) or a `sha512/row-seg/v1`
    row of `16 · words` bits segmented as `HmRow.segShape` cuts it, in its segments' and its outer message's compressions,
    each segment's bytes and SHA-512's 17 bytes of padding ending in its last block (`ProvedScope.segRow`: a segment of
    `b` bytes in `c` compressions has `128 · (c - 1) ≤ b`), the output rows unsegmented and each holding one output port
@@ -1680,6 +1715,13 @@ point, whatever its draw (`RecSetup.noInner`), since V*'s checks and the full-dr
 shape: `refused: a recursive session (--rec-part, --rec-bindings or --rec-rows) without the verifier's own inner shape
 (--rec-inner F): V*'s checks and its full-draw refusal run under that shape, and the recursion's proof covers no session
 without it` (one line).
+
+Under `--rec-inner`, setup also refuses a session of more than one table, or one whose table holds fewer instances than
+its population (a table drawn short), since V*'s slots are read at the one table's addresses and RecCap reads every
+instance's (`RecSetup.oneFull`): `setup: refused: a V* session of <k> tables: a V* session is one table, the only form
+the recursion's proof covers`, or `setup: <unit>: refused: a table of <n> of its population's <N> instances: a V*
+session's table holds every instance, the only form the recursion's proof covers`. An honest V* session, one table
+drawn in full, passes both.
 
 The soundness package proves `scopeOk` and `scopeOkH` the computable checks (`FailClosed.scopeOk_eq`, `scopeOkH_eq`), and `FailClosed.*`'s headlines
 are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. Under hidden outputs a circuit
@@ -1730,8 +1772,8 @@ table rows' position and path (`verity_flock.inner_registered`). The verifier th
 --registered F` on a plain-leaves statement; V*'s native side, `InnerFold.lean --registered F`) refuses the statement
 unless, for each port of `F` (`Registered.checkDescription`):
 
-1. the header's `registered` names exactly `F`'s ports, each a row of the circuit, `hm96-sha512/row/v1` rows of the
-   registered width (`Port.fits`), and a table of a shared-row file;
+1. the header's `registered` names exactly `F`'s ports, each a row of the circuit, rows of the row schema and the width `F`
+   names (`Registered.portSchema`, `Port.fits`), and a table of a shared-row file;
 2. the port's table is the registration in order: as many rows as the registration's leaves, table row `r` at position
    `r`, its `b ‖ c` opening the registered root there through its path;
 3. every instance's ref names a row of the table; and
@@ -1835,12 +1877,37 @@ expectation):
   the unit. V*'s populations are their units `0..n-1`, so its honest statements pass. Upstream reads no inner shape; the
   spec refuses at setup. No vector exercises it; `Flock.Test.Labels` runs it on synthetic draws and labels, and
   `test_the_honest_level_passes_setup_at_the_honest_inner_session` passes it on an honest V* level.
+- **D19:** V*'s list holds the table's level-0 cap (`RecCap`, `rec-cap/n<N>`, `N = 2^cap₀`, its last statement) and,
+  just before it, one cap per later level `l` (`rec-cap/n<N>-l<l>`, `N = 2 · 2^cap_l`, the rep schedule's tops rounds
+  in order, `RecVStar.checkTopsListed`). A session of level `l`'s cap must read row `i` of `rec-top-L<l>` in instance
+  `i`, at the registration the verifier's shared rows (`--rec-rows`) hold, every row the node the coin server
+  committed, its outputs the verifier's zero rows `rec-cap-zero` (`RecVStar.checkCapListed`, `RecCoins.checkCap`,
+  `RecVStar.checkShared`, `checkTopRows`); a session whose port reads a `rec-top-L<l>` without that shared row is
+  refused, at every level. Upstream reads no inner shape
+  and verifies such a session as any flock-circuit; the spec refuses at setup. No vector exercises it;
+  `Flock.Test.RecCap` runs the list's and `checkCap`'s refusals, and `test_lean_rec_coins`' RecCap tests the honest cap
+  and its refusals on the Lean verifier.
+
+- **D17:** a plain file in the form its statement doesn't pin (§8.1: the zk patch's `zk_level0 = None` tag after the
+  pair, by default, as every deployed prover writes it, or none under `--upstream-plain`), a tag other than 0 there, a
+  byte after it, or a byte after a `--zk` file's inner proof (`Zk.decode`). Upstream's `bincode::deserialize` ignores
+  them; the spec refuses the file (`zk_level0: the file ends without the None tag …` by default, `proof: the file has N
+  bytes and its encoding ends at byte M` for a tagged file under `--upstream-plain` or any byte after the end,
+  `zk_level0: tag T, want 0: …`, `zk proof: …` under `--zk`). S17 hashes the whole file, and the recursion's binding of a session's last message needs
+  every byte S17 hashes to be one the transcript absorbs, a Merkle path hashes or a check pins, so a proof has one file
+  at a statement (`Flock.decodeProof_canonical`). The agreement job runs upstream's binaries' sessions under
+  `--upstream-plain` (`agree.py`) and the live sets' (the zk patch's builds) without it. No plain vector exercises a
+  file in the other form; `Flock.Test.ProofCanon` runs each under each pin on the Lean verifier, and `zk_mutants.py`'s
+  `zk-trailing-bytes` a trailing byte on a `--zk` session (`upstream_accepted`).
+- **D18:** a non-empty `matrix_evals` (§8.1, §10). Upstream reads and ignores it; the spec refuses it
+  (`matrix_evals: length N, want 0`), for D17's reason: no check reads it. Every honest prover writes it empty. No vector
+  exercises it; `Flock.Test.ProofCanon` runs it on the Lean verifier.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
 
 Elsewhere the spec follows upstream, even where upstream is lenient without soundness cost: record keys for unconfigured
-tables, `matrix_evals` and bytes after the proof pair are ignored, nonces at proof-of-work sites are accepted as
+tables are ignored, nonces at proof-of-work sites are accepted as
 messages, and `r_eq = 1` in a zerocheck round gives `G(0) = 0`. Where upstream panics (`m` without a schedule,
 `|s_hat_v| ≠ 128`), its statement verifier catches the panic as a rejection; the spec rejects explicitly.
 
@@ -1997,7 +2064,7 @@ Each item is a point where the paper is silent, or differs, and the spec follows
 | A4 | `v†` | the verifier computes `P_z(λ)` | the prover sends `final_c_eval`; the verifier compares it with its interpolation; not absorbed |
 | A5 | residual sumcheck encoding | unspecified | `(G(1), G(∞))` of the eq-stripped quadratic, `G(0)` derived, no eq factor in the final check; `inv(0) = 0` |
 | A6 | pinned coordinates | `r_i = x^{2^{i−1}}/(1+x^{2^{i−1}})`, 3 in F8 and 4 in F, order unspecified | address bits 6–8 (F8 via φ8), 9–12 (F) |
-| A7 | lincheck | `(m_0 − k_s + 1)`-round sumcheck, then claims on `Â_0`, `B̂_0` | the verifier computes `α·A_0ᵀe + B_0ᵀe`; `k_log − 6` rounds, top bit first; the prover sends 64 skip values; fresh φ8 coin; `matrix_evals` unused and ignored |
+| A7 | lincheck | `(m_0 − k_s + 1)`-round sumcheck, then claims on `Â_0`, `B̂_0` | the verifier computes `α·A_0ᵀe + B_0ᵀe`; `k_log − 6` rounds, top bit first; the prover sends 64 skip values; fresh φ8 coin; `matrix_evals` empty (D18) |
 | A8 | constant wire | absent | extra coin `β`; `comb[pin] += β`, target `+ β`; needs the pin to be 1 in every block |
 | A9 | ring switching | one claim, own `(m−7)`-round sumcheck, B̂ via MBP | each claim switched with its own 7 coins, then one independent coin per claim; no standalone sumcheck: Ligerito's F256 folding sumcheck replaces it; B̂ at K points |
 | A10 | packing | `(r_hi, r_lo)` generic | the 7 low address bits; `b_v = x^v` |

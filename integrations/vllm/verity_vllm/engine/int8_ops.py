@@ -7,9 +7,15 @@ product, and each request's int8 attention as two, its KV quantization and its r
     verity_int8::scaled_mm(Tensor xq, Tensor s_a, Tensor w, Tensor s_w) -> Tensor y
         w int8 [N, K], s_w f32 [N, 1] (or [N]): the plain linear's product of row_quant's results, y bf16 [M, N]
         (`registry.int8_exact.ScaledMmS8_v1{K,N}` per row)
+    verity_int8::scaled_mm_zy(Tensor xq, Tensor s_a, Tensor w, Tensor s_w, int rows) -> (Tensor y, Tensor zy)
+        scaled_mm's y, and from the same product (on CUDA the same accumulator) the call's z/y records over `rows` slots
+        (T), zy uint8 [units, `int8_exact.ZY_BYTES`]: a 32 x 32 unit's exact s32 z, then its y = dq(z) (`int8_exact.zy_records`,
+        CA's layout of 21 Oct 04:32Z), what H1 commits as one hiding leaf a unit
 
 The quantizer's results are a separate node's, read only by the product inside the linear's body, so a Program cuts them as
 values the linear's two Calls exchange (`call_boundaries`), never as a second return of the linear.  `linear` runs the two.
+On CUDA each of the two is one Triton kernel (`engine.int8_fused`) with int8_exact's values bit for bit; the torch bodies
+serve every other device and stay the reference.
     verity_int8::kv_quant(Tensor key_cache, Tensor value_cache, Tensor blocks, int s, Tensor k_scales)
             -> (Tensor kq, Tensor vq, Tensor sv, Tensor v0)
         one request's first s tokens in the paged caches [num_blocks, block_size, G, d] under its block-table row `blocks`, with the
@@ -62,10 +68,57 @@ def _scaled_mm_fake(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: t
     return xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16)
 
 
+@row_quant.register_kernel("cuda")
+def _row_quant_cuda(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    from verity_vllm.engine import int8_fused
+    return int8_fused.row_quant(x)
+
+
+@scaled_mm.register_kernel("cuda")
+def _scaled_mm_cuda(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
+    from verity_vllm.engine import int8_fused
+    return int8_fused.product(xq, s_a, w, s_w)
+
+
+# Defined through a Library, not `custom_op`: `protocol_options.credit_gate`'s trace runs a custom op's Python body inside
+# itself, where the CUDA body's Triton GEMM is no dispatcher op and would count as no GEMM; an op with no Python
+# implementation it sees is one GEMM, whose outputs (y and zy) it wrote.
+_LIB = torch.library.Library(LIBRARY, "FRAGMENT")
+_LIB.define("scaled_mm_zy(Tensor xq, Tensor s_a, Tensor w, Tensor s_w, int rows) -> (Tensor y, Tensor zy)")
+
+
+def _scaled_mm_zy_cuda(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor,
+                       rows: int) -> tuple[torch.Tensor, torch.Tensor]:
+    from verity_vllm.engine import int8_fused
+    return int8_fused.product_zy(xq, s_a, w, s_w, rows)
+
+
+_LIB.impl("scaled_mm_zy", E.scaled_mm_zy, "CPU")
+_LIB.impl("scaled_mm_zy", _scaled_mm_zy_cuda, "CUDA")
+
+
+@torch.library.register_fake(f"{LIBRARY}::scaled_mm_zy", lib=_LIB)
+def _scaled_mm_zy_fake(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor,
+                       rows: int) -> tuple[torch.Tensor, torch.Tensor]:
+    m, n = xq.shape[0], w.shape[0]
+    return xq.new_empty((m, n), dtype=torch.bfloat16), xq.new_empty((E.zy_units(m, n, rows), E.ZY_BYTES), dtype=torch.uint8)
+
+
+scaled_mm_zy = torch.ops.verity_int8.scaled_mm_zy.default
+
+
 def linear(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """The plain linear as its two ops: (xq, s_a, y)."""
     xq, s_a = row_quant(x)
     return xq, s_a, scaled_mm(xq, s_a, w, s_w)
+
+
+def linear_zy(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor,
+              rows: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """The plain linear as ``row_quant`` then ``scaled_mm_zy`` over `rows` slots: (xq, s_a, y, zy), y bit for bit `linear`'s."""
+    xq, s_a = row_quant(x)
+    y, zy = scaled_mm_zy(xq, s_a, w, s_w, rows)
+    return xq, s_a, y, zy
 
 
 @torch.library.custom_op(f"{LIBRARY}::kv_quant", mutates_args=())
@@ -112,16 +165,18 @@ def _requests(query: torch.Tensor, query_start_loc: torch.Tensor, seq_lens: torc
         q0, q1 = qsl[r], qsl[r + 1]
         if q1 == q0:
             continue
-        if q1 - q0 not in (1, s):
-            raise ValueError(f"int8 attention: request {r} brings {q1 - q0} rows of a {s}-token window (a chunked prefill)")
+        if not 0 < q1 - q0 <= s:
+            raise ValueError(f"int8 attention: request {r} brings {q1 - q0} rows of a {s}-token window; its rows are the window's last "
+                             f"1 .. {s}")
         output[q0:q1] = window_rows(query[q0:q1], *kv_of(r, s), k_scales, float(scale))
 
 
 def paged_attention(query: torch.Tensor, key_cache: torch.Tensor, value_cache: torch.Tensor, query_start_loc: torch.Tensor,
                     seq_lens: torch.Tensor, block_table: torch.Tensor, k_scales: torch.Tensor, scale: float, output: torch.Tensor) -> None:
     """Every request of a batch, one window each, into output [T, H, d]: request r's query rows query[qsl[r]:qsl[r+1]] are its
-    window's last rows, its window its first seq_lens[r] tokens in the caches (vLLM's FlashAttention metadata and layout), one
-    ``verity_int8::kv_quant`` and one ``verity_int8::window_rows`` call each.  A request whose rows are neither its whole window nor one row (a chunked prefill's later chunk) is refused."""
+    window's last rows, its     window its first seq_lens[r] tokens in the caches (vLLM's FlashAttention metadata and layout), one
+    ``verity_int8::kv_quant`` and one ``verity_int8::window_rows`` call each.  Its m rows are positions s - m .. s - 1: one for a
+    decode step, s for a whole prompt, and a chunked prefill's chunk in between; a request with more rows than keys is refused."""
     _requests(query, query_start_loc, seq_lens, lambda r, s: kv_quant(key_cache, value_cache, block_table[r], s, k_scales), k_scales,
               scale, output)
 

@@ -148,17 +148,17 @@ theorem lifeOn_filling {N L ws appends joined filling} (h : LifeOn N L ws append
     (hf : filling ≤ f') : LifeOn N L ws appends joined f' :=
   { h with le := fun k hk => Nat.le_trans (h.le k hk) hf }
 
-theorem lifeOn_add {N L ws appends joined filling} (h : LifeOn N L ws appends joined filling) (root : ByteArray)
-    (plan : Plan) (post : Nat) (st : Int) (head : Option ByteArray)
+theorem lifeOn_add {N L ws appends joined filling} {below now : Nat} (h : LifeOn N L ws appends joined filling)
+    (root : ByteArray) (plan : Plan) (post : Nat) (st : Int) (head : Option ByteArray)
     (hav : ∀ p, p < plan.length → N ≤ plan.block p → ∃ k, ∃ hk : k < joined.size, ∃ hk' : k < appends.size,
       appends[k].first ≤ plan.block p ∧ plan.block p < appends[k].first + appends[k].count ∧
       joined[k] ≤ filling ∧ filling < joined[k] + L) :
-    LifeOn N L (ws.modify filling (addPass root plan post st head)) appends joined filling := by
-  have get : ∀ t (ht : t < (ws.modify filling (addPass root plan post st head)).size),
-      (ws.modify filling (addPass root plan post st head))[t] =
-        if filling = t then addPass root plan post st head (ws[t]'(by simpa using ht)) else ws[t]'(by simpa using ht) :=
+    LifeOn N L (ws.modify filling (addPass root plan post st head below now)) appends joined filling := by
+  have get : ∀ t (ht : t < (ws.modify filling (addPass root plan post st head below now)).size),
+      (ws.modify filling (addPass root plan post st head below now))[t] =
+        if filling = t then addPass root plan post st head below now (ws[t]'(by simpa using ht)) else ws[t]'(by simpa using ht) :=
     fun t ht => Array.getElem_modify ht
-  have hsz : (ws.modify filling (addPass root plan post st head)).size = ws.size := Array.size_modify
+  have hsz : (ws.modify filling (addPass root plan post st head below now)).size = ws.size := Array.size_modify
   refine ⟨h.size, h.le, h.mono, fun t ht i hi => ?_⟩
   revert hi
   rw [get t ht]

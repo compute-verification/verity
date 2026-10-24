@@ -27,20 +27,25 @@ its other two rounds only `final_c'` and `τ`'s commitment are the firewall's.
 The frame makes the pass decision on each device round (`check`, `passes`): the firewall hands it the device round with
 the statement's scheduled round in its place, the skeleton's round with every value zero in the algebraic phase and the
 firewall's own opening round in the opening, and the device round passes when it is the scheduled round byte for byte but
-for the values the algebraic phase masks. Rust's checks (`firewall::Checker`, `ShadowLink::check`) run first and can only
-fail a round more: a round they fail reaches the frame as the scheduled round alone (`round N LEN fail`).
+for the values the algebraic phase masks. Rust keeps no round check of its own (live PROTOCOL.md §10.1): what fails a
+rep outside the frame (its worker, the end check on its proof, Rust's masking cross-checks) can only fail a round more,
+the rep's rounds then reaching the frame as no device round, which it fails.
 
 Any other stop comes at `Finish`, never before (§10.1): once a round fails, or `round` refuses one, the rep is `stopped`.
 The scheduled round then leaves in the device's place, and every value of the algebraic phase leaves as its pad alone
 (`0 + h_i`), whatever value the round carries, so what leaves before `Finish` has the same form and distribution as an
 honest rep's. A stopped rep's `finish` is `stop`.
 
-`flock-firewall frame` serves this to the firewall (`cmd`), which releases only what it returns. Rust's `zk_veil::Masking`
+`flock-firewall frame` serves this to the firewall (`cmd`), which releases only what it returns, and the session loop
+serves it on connections of its own (`serveWith`, `Session.frames`), where the coins a frame takes are the ones the loop
+opened (`Frames`). Each request is one pure step of the rep's state (`step`, folded by `run`); `serveWith` only reads the
+request's bytes, runs the host's hooks and writes the answer. Rust's `zk_veil::Masking`
 and `zk_veil::Pads` are its speed references: the firewall holds Rust's masked rounds to this release byte for byte, and
 Rust's tree over these draws to `padsRoot`.
 -/
 import Flock.Zk
 import Flock.ZkLigerito
+import Flock.Firewall.Coins
 
 namespace Flock.Firewall.Frame
 
@@ -120,6 +125,16 @@ def Draws.ofBytes (l : Zk.PadLayout) (b : ByteArray) : Draws :=
   { h, mu := words b (16 * s) s, padH := words b (32 * s) Zk.K_PAD, padMu := words b (32 * s + 16 * Zk.K_PAD) Zk.K_PAD,
     tauSalt := b.extract o (o + Zk.TAU_SALT_BYTES),
     salts := b.extract (o + Zk.TAU_SALT_BYTES) (o + Zk.TAU_SALT_BYTES + SALT * codeLen l) }
+
+/-- The draws in the bytes `b` one read returned, refused unless there are exactly `drawBytes l` of them: `Draws.ofBytes`
+reads past a short input as zeros, which would be pads no one drew. -/
+def Draws.ofRead (l : Zk.PadLayout) (b : ByteArray) : Except String Draws :=
+  if b.size = drawBytes l then .ok (Draws.ofBytes l b)
+  else .error s!"{b.size} bytes where the draws take {drawBytes l}"
+
+/-- The rep's draws from a byte source, in one read of `drawBytes l` bytes from `get` (`cmd`'s is `IO.getRandomBytes`). -/
+def drawsWith {m : Type → Type} [Monad m] (get : USize → m ByteArray) (l : Zk.PadLayout) : m (Except String Draws) :=
+  Draws.ofRead l <$> get (drawBytes l).toUSize
 
 /-- The root over leaves `l` (a power of two of them): each node `SHA-512(left ‖ right)`, a level at a time. -/
 def treeRoot (l : Array ByteArray) : ByteArray := go l l.size
@@ -459,9 +474,9 @@ def firstDiff (v r : ByteArray) (free : Array Nat) : Option Nat :=
 /-- **The pass decision** on the device round `v` against the statement's scheduled round `r` in its place (`n` coins), at
 the rep's state `s`: why `v` fails, if it does. `v` passes when it is `r` byte for byte but for the values `r` absorbs in
 the algebraic phase (`roundFree`), which may be any, since each leaves masked: in the algebraic phase `r` is the skeleton's
-round with every value zero, so `v` must have its frames, labels, bytes, kinds, lengths, padding and coin count
-(`firewall::Checker`); in the opening `r` is the firewall's own opening round, which `v` must equal byte for byte
-(`ShadowLink::check`), level 0's masked values included. The frame's refusal of `r` itself, or a stop the coins decide at
+round with every value zero, so `v` must have its frames, labels, bytes, kinds, lengths, padding and coin count; in the
+opening `r` is the firewall's own opening round (`Drive.openStep`), which `v` must equal byte for byte, level 0's masked
+values included. The frame's refusal of `r` itself, or a stop the coins decide at
 it, is an error. -/
 def passes (c : Cfg) (s : Masker) (v r : ByteArray) (n : Nat) : V (Option String) := do
   let (_, _, free) ← roundFree c s r n
@@ -505,132 +520,227 @@ def start (j : Json) : V (Zk.PadLayout × Option MaskSlot) := do
     | .error _ => pure none
   return (l, mask)
 
-/-- `n` bytes of `h`. Each read that returns nothing ends the input, so `n` reads that each return a byte or more
-suffice. -/
-def readExact (h : IO.FS.Stream) (n : Nat) : IO ByteArray := go n .empty
-where
-  go : Nat → ByteArray → IO ByteArray
-    | 0, acc =>
-      if acc.size ≥ n then pure acc
-      else throw (IO.userError s!"frame: {acc.size} bytes after {n} reads of a {n}-byte round")
-    | fuel + 1, acc => do
-      if acc.size ≥ n then return acc
-      let b ← h.read (n - acc.size).toUSize
-      if b.isEmpty then throw (IO.userError s!"frame: input closed {acc.size} bytes into a {n}-byte round")
-      go fuel (acc ++ b)
+/-- `n` bytes of `h` (`Coins.readExact`). -/
+def readExact (h : IO.FS.Stream) (n : Nat) : IO ByteArray := Coins.readExact "frame" h n
 
-/-- `flock-firewall frame`: one rep's draws, refusals and release, served on stdin and stdout. The first line starts the
-rep (`start`): the frame draws `drawBytes` OS bytes, commits them (`padsRoot`), and answers `ok LEN` followed by the
+/-- Where a frame is served: its requests, a line or `n` bytes at a time, and its answers. -/
+structure Chan where
+  getLine : IO String
+  readExact : Nat → IO ByteArray
+  write : ByteArray → IO Unit
+  flush : IO Unit
+
+/-- Standard input and output. -/
+def stdio : IO Chan := do
+  let stdin ← IO.getStdin
+  let stdout ← IO.getStdout
+  return { getLine := stdin.getLine, readExact := readExact stdin, write := stdout.write, flush := stdout.flush }
+
+/-- What the frame's host does beside it: `released out n` runs before the round `out`, which squeezes `n` coins, leaves;
+`coins k b` is the coins the frame takes for `coins k` followed by the bytes `b`, or why it takes none. On its own
+(`cmdWith`) a frame takes the coins in `b`; the session loop's frames (`Session.frames`) take the ones the loop opened. -/
+structure Hooks where
+  released : ByteArray → Nat → IO Unit := fun _ _ => pure ()
+  coins : Nat → ByteArray → IO (Except String (Array F128)) := fun k b => pure (.ok (words b 0 k))
+
+/-- What stands in a round's place: the statement's scheduled round (`round N LEN REFLEN`), the rep's stop (`round N LEN
+fail`), or nothing, at the inner proof's own rounds (`round N LEN`). -/
+inductive Place where
+  | sched (r : ByteArray)
+  | fail
+  | own
+
+/-- One request to a rep's frame after its start, as `serveWith` reads it: a round `round N LEN …` squeezing `n` coins,
+its `LEN` bytes and what stands in its place; `coins N` at what the host's `coins` gave for its `16 N` bytes; an earlier
+rep's coins `prior N` with its `16 N` bytes; or `finish`. -/
+inductive Req where
+  | round (n : Nat) (content : ByteArray) (place : Place)
+  | coins (cs : Except String (Array F128))
+  | prior (k : Nat) (b : ByteArray)
+  | finish
+
+/-- The frame's answer to a request: a round that leaves (`ok LEN'` with its verdict, then its bytes), `ok`, a round it
+refuses (`err WHY`, the rep stopping), `finish`'s `ok` or `stop` (`done`), or the rep's end at a refusal (`err WHY`, exit
+1) or at a stop (`stop WHY`, exit 0). -/
+inductive Reply where
+  | round (out : ByteArray) (verdict : String)
+  | ok
+  | err (why : String)
+  | done (stopped : Bool)
+  | refuse (why : String)
+  | stop (why : String)
+
+/-- Whether the rep ends at the answer. -/
+def Reply.ends : Reply → Bool
+  | .refuse _ | .stop _ => true
+  | _ => false
+
+/-- A rep's frame between requests: its masking state, and whether a round came yet, after which `prior` is refused. -/
+structure State where
+  m : Masker := {}
+  begun : Bool := false
+  deriving Inhabited
+
+/-- The verdict a round's answer carries: `pass`, or `fail WHY`, where the scheduled round stands in its place. -/
+def verdict : Place → Option String → String
+  | .sched _, none => " pass"
+  | .sched _, some w => s!" fail {w.replace "\n" " "}"
+  | _, _ => ""
+
+/-- **The frame's step**: its answer to the request `q` at the rep's configuration `c` and state `st`, and the state
+after it. A round before the last one's coins is refused. A round with its scheduled round is the pass decision (`check`);
+one at the rep's stop stops the rep first (`round` of a stopped rep); one alone must be the inner proof's (`round`).
+A round `round` refuses stops the rep, and a stop the coins decide ends it. Coins are the frame's taking of them
+(`Masker.answer`); an earlier rep's coins add their claim points before the first round (`claimPoints`); `finish` reads
+`Masker.unfinished`. -/
+def step (c : Cfg) (st : State) : Req → Reply × State
+  | .round n content place =>
+    match st.m.owed with
+    | some k => (.refuse s!"a round before the {k} coins of the last one", st)
+    | none =>
+      let s := st.m
+      let res : V (ByteArray × Masker × Option String) := match place with
+        | .sched r => check c s content r n
+        | .fail => do
+          let (out, s') ← round c { s with stopped := true } content n
+          return (out, s', none)
+        | .own => do
+          let (out, s') ← round c s content n
+          if s'.inner.isNone then throw "a round with no scheduled round in its place, outside the inner proof"
+          return (out, s', none)
+      match res with
+      | .ok (out, s', why) => (.round out (verdict place why), { m := s', begun := true })
+      | .error e =>
+        if e.startsWith STOP then (.stop e, { st with begun := true })
+        else (.err e, { m := { s with stopped := true }, begun := true })
+  | .coins (.error e) => (.refuse e, st)
+  | .coins (.ok cs) =>
+    match st.m.answer c cs with
+    | .ok s' => (.ok, { st with m := s' })
+    | .error e => (if e.startsWith STOP then .stop e else .refuse e, st)
+  | .prior k b =>
+    if st.begun then (.refuse "an earlier rep's coins after the rep's first round", st)
+    else match claimPoints c.lay (words b 0 k) with
+      | .ok p => (.ok, { st with m := { st.m with prior := st.m.prior ++ p } })
+      | .error e => (.refuse s!"an earlier rep's coins: {e}", st)
+  | .finish =>
+    match st.m.unfinished c with
+    | some why => (.refuse why, st)
+    | none => (.done st.m.stopped, st)
+
+/-- The rep's state after the requests `qs` from `st`, and whether it ended: `step` over them in order, up to the first
+whose answer ends the rep. -/
+def run (c : Cfg) : State → List Req → State × Bool
+  | st, [] => (st, false)
+  | st, q :: qs =>
+    let (a, st') := step c st q
+    if a.ends then (st', true) else run c st' qs
+
+/-- One rep's draws, refusals and release, served on `ch` beside the host's hooks `hk`, its draws read from `get`.
+The first line starts the rep (`start`): the frame draws `drawBytes` bytes from `get` in one read (`drawsWith`, refusing
+any other count), commits them (`padsRoot`), and answers `ok LEN` followed by the
 `LEN` bytes of `Draws.toBytes`, the draws then the root. `prior N` followed by `16 N` bytes, before the first round, is an
 earlier rep of the table's algebraic-phase coins, whose claim points the rank check covers too; it is answered `ok`.
 
 `round N LEN REFLEN` followed by the device round's `LEN` bytes, then the `REFLEN` bytes of the statement's scheduled round
 in its place, is the pass decision (`check`): `ok LEN' pass` followed by the `LEN'` bytes that leave, the device round's
-release, or `ok LEN' fail WHY` followed by the scheduled round's release as a stopped rep's, the rep stopping. Then
-`coins N` followed by the `16 N` bytes of the coins the stream answered it is answered `ok`; no round is taken before the
-last one's coins. `round N LEN fail` is the scheduled round where no device round passed the firewall's own check (a
+release, or `ok LEN' fail WHY` followed by the scheduled round's release as a stopped rep's, the rep stopping. Each
+round that leaves goes to `hk.released` first. Then `coins N` followed by the `16 N` bytes of the coins the stream
+answered it is answered `ok`, at the coins `hk.coins` gives for them; no round is taken before the last one's coins. `round N LEN fail` is the scheduled round where no device round passed the firewall's own check (a
 worker that failed, or one Rust's checks fail): it stops the rep first, and is answered `ok LEN'`. `round N LEN` alone is
 one of the inner proof's `INNER_ROUNDS` rounds, the firewall's own, after the opening's: answered `ok LEN'` when it is the
 round `innerOwn` fixes, and refused anywhere else. A round `round` refuses is answered `err WHY`, releases nothing and stops the rep. A round or coins the
 refusals stop are answered `stop WHY` (`STOP`), nothing of the round leaving, and end the rep. `finish` is answered `ok`,
 or `stop` for a stopped rep, when every masked phase closed with every pad used and the inner proof's rounds all left.
-Anything else is answered `err WHY` and ends the rep: nothing after it leaves. -/
-def cmd (_ : List String) : IO UInt32 := do
-  let stdin ← IO.getStdin
-  let stdout ← IO.getStdout
+Anything else, and coins `hk.coins` refuses, is answered `err WHY` and ends the rep: nothing after it leaves. Past the
+start, the answers and the state are `step`'s: this loop only reads each request's bytes, runs the hooks and writes the
+answer. -/
+def serveWith (get : USize → IO ByteArray) (ch : Chan) (hk : Hooks) : IO UInt32 := do
   let stderr ← IO.getStderr
+  let say := fun (line : String) => ch.write (line ++ "\n").toUTF8
   let refuse := fun (why : String) => do
-    stdout.putStrLn s!"err {why.replace "\n" " "}"
-    stdout.flush
+    say s!"err {why.replace "\n" " "}"
+    ch.flush
     return (1 : UInt32)
   let stop := fun (why : String) => do
-    stdout.putStrLn s!"stop {why.replace "\n" " "}"
-    stdout.flush
+    say s!"stop {why.replace "\n" " "}"
+    ch.flush
     return (0 : UInt32)
-  let first ← stdin.getLine
+  let first ← ch.getLine
   let (l, mask) ← match Json.parse first >>= start with
     | .ok x => pure x
     | .error e => return (← refuse s!"the rep's start: {e}")
-  let d := Draws.ofBytes l (← IO.getRandomBytes (drawBytes l).toUSize)
+  let d ← match ← drawsWith get l with
+    | .ok d => pure d
+    | .error e => return (← refuse s!"the rep's start: {e}")
   let c := Cfg.ofDraws l d mask
   if let .error e := c.check then return (← refuse s!"the rep's start: {e}")
-  let mut s : Masker := {}
+  let mut st : State := {}
   let drawn := d.toBytes c.root
-  stdout.putStrLn s!"ok {drawn.size}"
-  stdout.write drawn
-  stdout.flush
-  let mut begun := false
+  say s!"ok {drawn.size}"
+  ch.write drawn
+  ch.flush
   repeat
-    let line := (← stdin.getLine).replace "\n" ""
+    let line := (← ch.getLine).replace "\n" ""
     if line.isEmpty then break
-    match line.splitOn " " with
-    | "round" :: n :: len :: flag =>
-      let (some n, some len) := (n.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
-      let ref? : Option (Option Nat) ← match flag with
-        | [] => pure none
-        | ["fail"] => pure (some none)
-        | [r] => match r.toNat? with
-          | some r => pure (some (some r))
-          | none => return (← refuse s!"a request `{line}`")
-        | _ => return (← refuse s!"a request `{line}`")
-      let content ← readExact stdin len
-      let sched ← match ref? with
-        | some (some r) => readExact stdin r
-        | _ => pure .empty
-      if let some k := s.owed then return (← refuse s!"a round before the {k} coins of the last one")
-      begun := true
-      let res : V (ByteArray × Masker × Option String) := match ref? with
-        | some (some _) => check c s content sched n
-        | some none => do
-          let (out, s') ← round c { s with stopped := true } content n
-          return (out, s', none)
-        | none => do
-          let (out, s') ← round c s content n
-          if s'.inner.isNone then throw "a round with no scheduled round in its place, outside the inner proof"
-          return (out, s', none)
-      match res with
-      | .ok (out, s', why) =>
-        if let (none, some (p, w, r)) := (s.rank, s'.rank) then
-          stderr.putStrLn s!"FRAMERANK\t\{\"points\": {p}, \"mask_words\": {w}, \"rank\": {r}}"
-          stderr.flush
-        s := s'
-        let verdict := match ref?, why with
-          | some (some _), none => " pass"
-          | some (some _), some w => s!" fail {w.replace "\n" " "}"
-          | _, _ => ""
-        stdout.putStrLn s!"ok {out.size}{verdict}"
-        stdout.write out
-        stdout.flush
-      | .error e =>
-        if e.startsWith STOP then return (← stop e)
-        s := { s with stopped := true }
-        stdout.putStrLn s!"err {e.replace "\n" " "}"
-        stdout.flush
-    | ["coins", k] =>
-      let some k := k.toNat? | return (← refuse s!"a request `{line}`")
-      let b ← readExact stdin (16 * k)
-      match s.answer c (words b 0 k) with
-      | .ok s' =>
-        s := s'
-        stdout.putStrLn "ok"
-        stdout.flush
-      | .error e => return (← if e.startsWith STOP then stop e else refuse e)
-    | ["prior", k] =>
-      let some k := k.toNat? | return (← refuse s!"a request `{line}`")
-      let b ← readExact stdin (16 * k)
-      if begun then return (← refuse "an earlier rep's coins after the rep's first round")
-      match claimPoints c.lay (words b 0 k) with
-      | .ok p =>
-        s := { s with prior := s.prior ++ p }
-        stdout.putStrLn "ok"
-        stdout.flush
-      | .error e => return (← refuse s!"an earlier rep's coins: {e}")
-    | ["finish"] =>
-      if let some why := s.unfinished c then return (← refuse why)
-      stdout.putStrLn (if s.stopped then "stop" else "ok")
-      stdout.flush
-    | _ => return (← refuse s!"a request `{line}`")
+    let q : Req ← match line.splitOn " " with
+      | "round" :: n :: len :: flag =>
+        let (some n, some len) := (n.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
+        let ref? : Option (Option Nat) ← match flag with
+          | [] => pure none
+          | ["fail"] => pure (some none)
+          | [r] => match r.toNat? with
+            | some r => pure (some (some r))
+            | none => return (← refuse s!"a request `{line}`")
+          | _ => return (← refuse s!"a request `{line}`")
+        let content ← ch.readExact len
+        let place ← match ref? with
+          | some (some r) => pure (Place.sched (← ch.readExact r))
+          | some none => pure Place.fail
+          | none => pure Place.own
+        pure (Req.round n content place)
+      | ["coins", k] =>
+        let some k := k.toNat? | return (← refuse s!"a request `{line}`")
+        let b ← ch.readExact (16 * k)
+        pure (Req.coins (← hk.coins k b))
+      | ["prior", k] =>
+        let some k := k.toNat? | return (← refuse s!"a request `{line}`")
+        pure (Req.prior k (← ch.readExact (16 * k)))
+      | ["finish"] => pure Req.finish
+      | _ => return (← refuse s!"a request `{line}`")
+    let (a, st') := step c st q
+    match a with
+    | .round out v =>
+      if let (none, some (p, w, r)) := (st.m.rank, st'.m.rank) then
+        stderr.putStrLn s!"FRAMERANK\t\{\"points\": {p}, \"mask_words\": {w}, \"rank\": {r}}"
+        stderr.flush
+      st := st'
+      if let .round n _ _ := q then hk.released out n
+      say s!"ok {out.size}{v}"
+      ch.write out
+      ch.flush
+    | .ok =>
+      st := st'
+      say "ok"
+      ch.flush
+    | .err e =>
+      st := st'
+      say s!"err {e.replace "\n" " "}"
+      ch.flush
+    | .done stopped =>
+      st := st'
+      say (if stopped then "stop" else "ok")
+      ch.flush
+    | .refuse why => return (← refuse why)
+    | .stop why => return (← stop why)
   return 0
+
+/-- `flock-firewall frame`: `serveWith` on standard input and output, taking the coins `coins N` carries. -/
+def cmdWith (get : USize → IO ByteArray) (_ : List String) : IO UInt32 := do
+  serveWith get (← stdio) {}
+
+/-- `flock-firewall frame` at the operating system's bytes: `cmdWith`, the rep's draws read from `IO.getRandomBytes`. -/
+def cmd : List String → IO UInt32 := cmdWith IO.getRandomBytes
 
 /-- The most bytes one `tap` request takes. -/
 def TAP_MAX : Nat := 2 ^ 24

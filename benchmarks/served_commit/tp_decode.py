@@ -4,7 +4,7 @@ run by run interleaved, batch by batch (B1, B8, B32: a Commit run follows the pl
 (`engine.rank_worker.tp2_commit_make`, the native collector on windowed staging) and its root read as the rank's: no root
 combination, openings or verdict. Measurement only.
 
-    bash benchmarks/served_commit/tp_decode.sh      (ARM, BATCHES, PAIRS; its header has the rest)
+    bash benchmarks/served_commit/tp_decode.sh      (ARM, RETAIN, BATCHES, PAIRS; its header has the rest)
 
 One engine process per arm (``--arm``), since the row size is a module constant set on each rank before its committer is built
 (`prof_arm.Rows4kArm`):
@@ -23,8 +23,9 @@ and cap, all arriving at once; every request decodes to its cap (``ignore_eos``)
 `runs.jsonl` has the step walls and outputs, and `phases` reads TTFT (the mean over the requests, and the time to the batch's last
 first token) and the decode TPOT (the mean step wall once every request decodes) from them. A Commit run passes its gate when its
 tokens equal the batch's first control run's, every rank has a 64-byte root, no collector error and no step that bounded staging
-left without a root, and, on the arms with `tp-commit`'s acquisition, every rank's identity check passed. `summary.json` has, per
-batch, each arm's median TPOT and TTFT and the paired ratios.
+left without a root, and, on the arms with `tp-commit`'s acquisition, every rank's identity check passed. `summary.json` has the
+committer's value retention as it took it (``retain``: ``RETAIN``, none by default) and, per batch, each arm's median TPOT and TTFT
+and the paired ratios.
 """
 from __future__ import annotations
 
@@ -161,7 +162,7 @@ def make(worker: Any, *, arm: str, **kw: Any) -> dict[str, Any]:
     st = worker._tp2_commit
     if layer:
         res["per_layer"] = per_layer(st["com"], st["eng"].model)
-    res.update(committer=st["com"].name, commit_scheme=st["com"].commit_scheme, row_bytes=step_rows.ROW_BYTES,
+    res.update(committer=st["com"].name, commit_scheme=st["com"].commit_scheme, row_bytes=step_rows.ROW_BYTES, retain=st["com"].retain,
                sources=[getattr(s, "short_name", type(s).__name__) for s in st["com"].sources], modules=len(st["com"]._modules))
     return res
 
@@ -304,7 +305,8 @@ def main() -> None:
         raise SystemExit(f"fail-closed: committer made on {len(made)}/{world} ranks")
     (out / "committer_make.json").write_text(json.dumps(made, indent=1, default=str) + "\n")
     m0 = min(made, key=lambda m: int(m["rank"]))
-    print(f"[tp-decode] {a.arm}: {m0['committer']} scheme {m0['commit_scheme']} rows {m0['row_bytes']} B, {m0['modules']} modules, sources "
+    print(f"[tp-decode] {a.arm}: {m0['committer']} scheme {m0['commit_scheme']} rows {m0['row_bytes']} B, retain {m0['retain']}, "
+          f"{m0['modules']} modules, sources "
           f"{m0['sources']}{' ' + json.dumps(m0['per_layer']) if layer else ''}; made in {time.perf_counter() - t0:.1f}s", flush=True)
     rows: list[dict[str, Any]] = []
     ref: dict[int, Any] = {}
@@ -338,8 +340,8 @@ def main() -> None:
                           f"{1e3 * (ph['ttft_mean_s'] or 0):.1f} ms, prefill {1e3 * (ph['prefill_s'] or 0):.1f} ms, wall {r['wall_s']:.2f}s"
                           + (f"; finalize {row['finalize_wall_s']}s, gate {row['gate']}" if arm != "control" else
                              f"; tokens equal {row['tokens_equal_ref']}"), flush=True)
-    summary = {"arm": a.arm, "committer": m0["committer"], "row_bytes": m0["row_bytes"], "world": world, "batches": summarize(rows, a.arm, batches),
-               "gates_passed": all(r["gate"]["passed"] for r in rows if r["arm"] != "control")}
+    summary = {"arm": a.arm, "committer": m0["committer"], "row_bytes": m0["row_bytes"], "retain": m0["retain"], "world": world,
+               "batches": summarize(rows, a.arm, batches), "gates_passed": all(r["gate"]["passed"] for r in rows if r["arm"] != "control")}
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     for b, d in summary["batches"].items():
         print(f"[tp-decode] B{b}: TPOT control {1e3 * (d['control']['tpot_s'] or 0):.2f} ms, {a.arm} {1e3 * (d[a.arm]['tpot_s'] or 0):.2f} ms, "

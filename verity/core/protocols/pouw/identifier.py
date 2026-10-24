@@ -24,6 +24,8 @@ from .schemes import SCHEMES
 
 FORMAT = "verity/pouw/identifier/v1"
 SALT_BYTES = 32
+#: a certified epoch's salt (`audit.Epoch.certified`)
+CERTIFIED_SALT_BYTES = 64
 
 
 def workload_json(epoch: Epoch) -> dict[str, Any]:
@@ -62,8 +64,8 @@ def _name(scheme: PoUWScheme | str) -> str:
 def identifier_v1(scheme: PoUWScheme | str, epoch: Epoch) -> dict[str, str]:
     """The identifier of a proof for `epoch` under `scheme` (a registered name, or a scheme whose ``name`` is one)."""
     name = _name(scheme)
-    if not isinstance(epoch.salt, bytes) or len(epoch.salt) != SALT_BYTES:
-        raise DomainError(f"the salt is {SALT_BYTES} bytes")
+    if not isinstance(epoch.salt, bytes) or len(epoch.salt) not in (SALT_BYTES, CERTIFIED_SALT_BYTES):
+        raise DomainError(f"the salt is {SALT_BYTES} bytes, or a certified epoch's {CERTIFIED_SALT_BYTES}")
     return {"format": FORMAT, "scheme": name, "salt": epoch.salt.hex(), "workload": workload_digest(epoch).hex()}
 
 
@@ -72,4 +74,4 @@ def identifier_bytes(scheme: PoUWScheme | str, epoch: Epoch) -> bytes:
     return _canonical(identifier_v1(scheme, epoch))
 
 
-__all__ = ["FORMAT", "SALT_BYTES", "identifier_bytes", "identifier_v1", "workload_bytes", "workload_digest", "workload_json"]
+__all__ = ["CERTIFIED_SALT_BYTES", "FORMAT", "SALT_BYTES", "identifier_bytes", "identifier_v1", "workload_bytes", "workload_digest", "workload_json"]

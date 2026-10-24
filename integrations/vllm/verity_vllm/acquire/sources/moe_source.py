@@ -71,7 +71,9 @@ act at `SiluMulClamp_v1`'s, sum at `MoeSum_v1`'s, router_w and router_ids at `ds
 `MoeRouterHash_v1`'s (a module without router rows of `format.MOE_PLANE_FAMILIES` has no planes: `format.moe_plane_modules`).  A hash
 layer's ids are the module's `GatherI32x{V}` rows, committed as `ids`, and the token ids those gathers read as `in`
 (`hash_router_input`); router_ids and ids are committed as their 32-bit words, as those rows are (`f32`).  `layer_of` tells
-`identity_check` the source's names, a hash layer holding one more.
+`identity_check` the source's names, a hash layer holding one more.  The call boundaries at those ports are this source's (`claims`,
+one of `call_boundary_source.CLAIMS`): every TP rank attaches it (`engine.rank_worker`), and the CPU gate counts them as the MoE
+source's on several ranks when the manifest names no `moe_block_stream` plane (`taps.attached`).
 
 `<k>` is the layer index of the MoE module whose forward is executing (forward pre-hooks on every `MoERunner`-family module set it, and
 forward hooks clear it).  Exactly `planes` tensors per MoE layer per step are expected (six bf16, seven on Marlin with a scaled
@@ -91,6 +93,7 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
+from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.partial_source import _moe_reduces
 from verity_vllm.engine import hooks
 from verity_vllm.program.registry.moe import router_kernel
@@ -123,6 +126,8 @@ PORTS = {"router_w": _call("MoeRouterSqrtSoftplus_v1", "0"), "router_ids": _call
          "act": _call("SiluMulClamp_v1", "out"), "down": _call("MarlinMoeExpertGemmW_v1", "out"), "sum": _call("MoeSum_v1", "out")}
 #: every label the source commits at calls under a MoE module
 LABELS = frozenset({*MOE_FP8_PLANES, *PORTS, "ids", "in"})
+#: (Definition, port) of every call boundary a label of `PORTS` binds
+CALL_PORTS = frozenset((f, p.port) for p in PORTS.values() for f in p.families)
 
 
 PLANE_NAME = re.compile(r"moe/L(\d+)/")
@@ -131,6 +136,16 @@ PLANE_NAME = re.compile(r"moe/L(\d+)/")
 def binds_planes(manifest: Mapping[str, Any] | None) -> bool:
     """Whether the source binds the `moe_block_stream` planes (`moe/L<k>/<plane>`): with no manifest, or one that names them."""
     return manifest is None or any(r.get("family") == "moe_block_stream" for r in manifest.get("identities") or ())
+
+
+def claims(r: Mapping[str, Any]) -> str | None:
+    """`call_boundary_source.CLAIMS`: a call boundary at a port `PORTS` declares is this source's."""
+    return (MoeBlockSource.short_name if r.get("family") == CB.FAMILY and
+            (str(r.get("spec") or "").split("{", 1)[0], str(r.get("port") or r.get("output_member"))) in CALL_PORTS else None)
+
+
+if claims not in CB.CLAIMS:
+    CB.CLAIMS.append(claims)
 
 
 def plane_layer(name: str) -> int | None:
@@ -523,5 +538,5 @@ class MoeBlockSource:
                               f"registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]
 
 
-__all__ = ["MoeBlockSource", "moe_layers_of", "router_kernel", "grouped_topk_args", "binds_planes", "hash_router_input", "MOE_MODULE_CLASSES",
-           "TENSORS_PER_LAYER", "COVERS_FAMILIES", "GROUP_QUANT_OP", "HASH_KERNEL", "LABELS", "PORTS"]
+__all__ = ["MoeBlockSource", "moe_layers_of", "router_kernel", "grouped_topk_args", "binds_planes", "claims", "hash_router_input",
+           "MOE_MODULE_CLASSES", "TENSORS_PER_LAYER", "COVERS_FAMILIES", "GROUP_QUANT_OP", "HASH_KERNEL", "LABELS", "PORTS", "CALL_PORTS"]

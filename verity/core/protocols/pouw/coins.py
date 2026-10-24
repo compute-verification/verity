@@ -2,7 +2,7 @@
 against that commitment (``PROTOCOL.md``, "Epoch coins").
 
 The challenger is the auditor's service that issues coins.  Before epoch e it draws one 32-byte coin per label of `LABELS`
-from its own generator and publishes a coin commitment:
+from its entropy (a served one's: the Lean verifier of record's, `verifier.coins`) and publishes a coin commitment:
 
     x_l     = SHA-512("verity/pouw/epoch-coin/v1\\0" || coin_l)                      the coin's unsalted digest
     value_l = hm96-sha512 tree_leaf(key, commit_string(key, x_l, salt_l))           salt_l: 192 fresh bytes, key pinned
@@ -12,8 +12,10 @@ from its own generator and publishes a coin commitment:
 The hm96 leaves keep every unopened coin statistically hidden (``hm96/PROTOCOL.md``); binding rests on SHA-512's collision
 resistance.  The challenger opens a coin only once the verifier has recorded what the coin must follow (`CoinOpening.after`:
 the weights' root for the salt coin, the transcript's commitment for the draw coin), and never twice, so a retry never
-redraws.  `coin_reason` is the verifier's check of an opening: the epoch, the label, the record it followed, and the opening
-against the published root.  A coin that doesn't open against the epoch's commitment is refused.
+redraws.  These are a seeded epoch's coins; a live window's salt coin follows its own open root instead
+(`salt.window_open_root`, `core_check.salt`), since the weights' root is the same in every window of a model.
+`coin_reason` is the verifier's check of an opening: the epoch, the label, the record it followed, and the opening against
+the published root.  A coin that doesn't open against the epoch's commitment is refused.
 
 The coins are live and the verifier designated: an outcome convinces the auditor, who trusts its own challenger, and no
 third party.  There is no public beacon and no Fiat–Shamir over a prover's commitment.
@@ -22,7 +24,6 @@ third party.  There is no public beacon and no Fiat–Shamir over a prover's com
 from __future__ import annotations
 
 import hashlib
-import os
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -118,11 +119,12 @@ def coin_reason(commitment: CoinCommitment, opening: CoinOpening, label: str, af
 
 
 class Challenger:
-    """The challenger's side of one epoch.  It draws every coin and hm96 salt of the epoch from `entropy` (the operating
-    system's generator by default) and commits to them at construction, before the epoch starts; `open` releases one
-    coin, once, after the verifier has recorded `after`."""
+    """The challenger's side of one epoch.  It draws every coin and hm96 salt of the epoch from `entropy` and commits to
+    them at construction, before the epoch starts; `open` releases one coin, once, after the verifier has recorded
+    `after`.  `entropy` has no default, so nothing here reads the operating system: a served challenger's is the Lean
+    verifier of record's read of it (`verifier.coins`, `IO.getRandomBytes`, A3)."""
 
-    def __init__(self, epoch: int, entropy: Callable[[int], bytes] = os.urandom):
+    def __init__(self, epoch: int, entropy: Callable[[int], bytes]):
         def draw(n: int) -> bytes:
             out = entropy(n)
             if type(out) is not bytes or len(out) != n:

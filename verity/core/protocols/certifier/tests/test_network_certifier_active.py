@@ -4,22 +4,28 @@ while a sender that times its writes to signal either leaves the wire byte-ident
 
 import asyncio
 import dataclasses
+import itertools
 import json
 import math
 import random
 import resource
 from collections import defaultdict
 from concurrent.futures import Executor, Future
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
-from verity.core.protocols.certifier import active, online
+import signers
+from verity.ml.crypto import aead, lms
+from verity.core.protocols.certifier import active, online, served
+from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
 from verity.core.protocols.certifier.active import (
     DATA,
-    LAST,
     Bucketer,
     Events,
     Proxy,
+    RemoteCertifier,
+    Revealed,
     Shaper,
     VirtualClock,
 )
@@ -40,11 +46,53 @@ from verity.core.protocols.sampled_proofs.service import Registration
 
 
 def test_frames_round_trip_and_padding_is_zero():
-    frame = active.encode_frame(LAST, 7, b"abc", 32)
-    assert len(frame) == 32 and active.decode_frame(frame) == (LAST, 7, b"abc")
+    frame = active.encode_frame(DATA, 7, b"abc", 32)
+    assert len(frame) == 32 and active.decode_frame(frame) == (DATA, 7, b"abc")
     assert active.decode_frame(bytes(32)) == (active.PAD, 0, b"")
     with pytest.raises(ValueError):
         active.encode_frame(DATA, 1, b"x" * 24, 32)
+
+
+@pytest.mark.parametrize("n", [0, 1, 2, 3, 63, 64, 65, 128, 200])
+def test_a_token_is_events_of_one_length_each_its_template(n):
+    """Every event is `EVENT_BYTES` long whatever it carries, its frame is the egress template's (the same bytes
+    before and after the text), and a token longer than `TOKEN_BYTES` is cut over events that give it back."""
+    token = bytes(random.Random(n).randrange(256) for _ in range(n))
+    evs = active.events(token)
+    assert len(evs) == max(1, -(-n // active.TOKEN_BYTES))
+    assert b"".join(active.event_data(e) for e in evs) == token
+    p, s, prefix, suffix = active.event_placement(B)
+    for e in evs:
+        frame = active.encode_frame(DATA, active.CANONICAL_STREAM, e, B)
+        assert len(e) == active.EVENT_BYTES and frame[:p] == prefix and frame[s : s + len(suffix)] == suffix
+        assert frame[s + len(suffix) :] == bytes(B - s - len(suffix))
+    with pytest.raises(ValueError):
+        active.event(bytes(active.TOKEN_BYTES + 1))
+    assert active.event_data(evs[0][:-1]) is None and active.event_data(evs[0].replace(b"verity", b"Verity")) is None
+
+
+@pytest.mark.parametrize("length", [0, 1, 499, 500, 503, 1536])  # B = 512: a frame holds 503 bytes after its header
+def test_requests_end_by_their_length_on_one_header(length):
+    """A request's frames all carry one header, its last is zero-filled, and `Requests` gives back each request's
+    bytes, numbering them by their order on the link."""
+    reqs = [bytes([k + 1]) * length for k in range(3)]
+    frames = [active.request_frames(r, B) for r in reqs]
+    assert [len(f) // B for f in frames] == [active.request_frame_count(length, B)] * 3
+    p, s, prefix, _ = active.request_placement(B)
+    wire, split, got = b"".join(frames), active.Requests(), {}
+    for f in (wire[i : i + B] for i in range(0, len(wire), B)):
+        assert f[:p] == prefix and s == B
+        k, data, last = split.feed(active.decode_frame(f)[2])
+        got.setdefault(k, []).append((data, last))
+    assert {k: b"".join(d for d, _ in v) for k, v in got.items()} == {k + 1: r for k, r in enumerate(reqs)}
+    assert all([last for _, last in v] == [False] * (len(v) - 1) + [True] for v in got.values())
+
+
+def test_an_event_body_is_what_follows_its_id_line():
+    """The proxy frames what follows the `id:` line: the position and an HTTP head before it aren't recorded."""
+    body = active.event(b"tok")
+    assert active.event_body(HEAD + b"id: 7\n" + body) == body == active.event_body(b"id:3\n" + body)
+    assert active.event_position(HEAD + b"id: 7\n" + body) == 7
 
 
 def test_events_are_cut_by_content_not_by_reads():
@@ -244,6 +292,52 @@ def test_the_bucketer_enqueues_its_own_frame_first_in_each_window():
     assert [own for _, own in out] == [{}, {}, {}, {}, {}, {}, {0: 2}, {}, {}]
 
 
+def test_the_bucketers_admission_admits_whole_requests_while_the_window_ends_idle():
+    """Requests of two frames, each answered by two, under δ = 0, ρ = 1 with one frame a bucket on both ends: a and b
+    complete a request at bucket 1, answered in buckets 1 and 2; c and d would complete one at bucket 3, answered past
+    the window's end, so they wait for window 1, and e and f for window 2. Over random arrivals, with and without the
+    certifier's own frame (the salt's) at each window's head, every window's released frames are that frame and whole
+    requests in arrival order, and every window derives (`served.derive`). A served link takes an own frame exactly
+    when its profile counts one, and its window holds that frame, one request and its response."""
+    P = GridParams(buckets=4, allocation=1, frame_bytes=1)
+    admission = served.Admission(served.ServedProfile(2, 2, 1), 1, lambda w: ClockSync(0, 1))
+    b = Bucketer(Certifier("requests", P), served=admission)
+    for frame, bucket in ((b"a", 0), (b"b", 0), (b"c", 1), (b"d", 2), (b"e", 5), (b"f", 6)):
+        b.arrive(frame, bucket)
+    rows = [b.tick()[0] for _ in range(12)]
+    assert rows == [(b"a",), (b"b",), (None,), (None,), (b"c",), (b"d",), (None,), (None,), (b"e",), (b"f",), (None,),
+                    (None,)]
+    with pytest.raises(ValueError, match="own frame exactly when"):
+        Bucketer(Certifier("requests", P), first=lambda w: b"s", served=admission)
+    with pytest.raises(ValueError, match="own frame exactly when"):
+        Bucketer(Certifier("requests", P), served=served.Admission(served.ServedProfile(2, 2, 1, 1), 1,
+                                                                   lambda w: ClockSync(0, 1)))
+    with pytest.raises(ValueError, match="holds that frame, one request and its response"):
+        Bucketer(Certifier("requests", P), served=served.Admission(served.ServedProfile(4, 2, 1), 1,
+                                                                   lambda w: ClockSync(0, 1)))
+
+    rng = random.Random(54)
+    for _ in range(200):
+        P = GridParams(buckets=rng.randint(3, 8), allocation=rng.randint(1, 3), frame_bytes=1)
+        n, r = rng.choice((1, 2, 4)), rng.randint(1, 3)
+        sync = ClockSync(rng.randint(0, 2), rng.choice((Fraction(1), Fraction(2), Fraction(1, 2))))
+        own = rng.randint(0, 1)
+        admission = served.Admission(served.ServedProfile(rng.randint(1, 3), n, 1, own), r, lambda w: sync)
+        try:
+            b = Bucketer(Certifier("requests", P), (lambda w: b"s") if own else None, served=admission)
+        except ValueError:
+            continue
+        sent = [bytes([k]) for k in range(n * rng.randint(0, 6))]
+        for frame, bucket in zip(sent, sorted(rng.randrange(3 * P.buckets) for _ in sent)):
+            b.arrive(frame, bucket)
+        records = [r for r in (b.tick()[1] for _ in range(20 * P.buckets)) if r is not None]
+        assert [f for r in records for row in r.grid for f in row if f not in (None, b"s")] == sent
+        for rec in records:
+            assert (rec.grid[0][0] == b"s") is bool(own)
+            counts = [row_count(row) for row in rec.grid]
+            assert served.derive(counts, sync, admission.profile, r) is not None
+
+
 def test_a_shaper_and_a_bucketer_back_from_maintenance_publish_the_full_runs_later_windows():
     """On random instances where nothing reaches window 1 and window 0 carries nothing into it: a shaper started at
     window 2, at the position of the first frame anchored there and fed only the frames from it on, hands them when
@@ -304,10 +398,13 @@ SESSIONS = [("a", 1, 0, (1, 1, 2, 3)), ("b", 2, 0, (2, 2, 3)), ("c", 3, 4, (1, 2
             ("e", 5, 12, (1, 1)), ("f", 6, 13, (2, 4, 4))]
 
 
+def body(session: str, index: int) -> bytes:
+    """Frame `index` of `session`'s response: the canonical event of its token."""
+    return active.event(f"{session} t{index}".encode())
+
+
 def event(session: str, index: int, n: int, position: int) -> bytes:
-    choice = {"index": 0, "text": f" t{index}", "finish_reason": "length" if index == n - 1 else None}
-    data = json.dumps({"id": session, "object": "text_completion", "choices": [choice]}, separators=(",", ":"))
-    return (HEAD if index == 0 else b"") + f"id: {position}\ndata: {data}\n\n".encode()
+    return (HEAD if index == 0 else b"") + b"id: %d\n" % position + body(session, index)
 
 
 def request(session: str, n: int) -> bytes:
@@ -321,8 +418,8 @@ def program(sessions=SESSIONS):
     middle of its send bucket a, so the ingress certifier releases it at a + 1, its anchor."""
     rows = [(a + 1 + d, a + 1, name, k, stream, len(ds)) for name, stream, a, ds in sessions for k, d in enumerate(ds)]
     rows.sort()
-    frames = [LogicalFrame(active.encode_frame(DATA, stream, event(name, k, n, p), B), anchor, k)
-              for p, (_, anchor, name, k, stream, n) in enumerate(rows)]
+    frames = [LogicalFrame(active.encode_frame(DATA, active.CANONICAL_STREAM, body(name, k), B), anchor, k)
+              for _, anchor, name, k, _, _ in rows]
     ready = [r[0] for r in rows]
     syncs, _, misses = choose_syncs([(frames, ready)], SYNC_SET, EGRESS.buckets)
     assert misses == 0
@@ -330,7 +427,7 @@ def program(sessions=SESSIONS):
 
 
 FRAMES, READY, SYNCS, ROWS = program()
-STREAM = [f.payload[1:5] for f in FRAMES]
+STREAM = [row[4] for row in ROWS]
 
 
 class Server:
@@ -379,14 +476,24 @@ def honest() -> dict[int, int]:
     return {p: r - 1 for p, r in enumerate(READY)}
 
 
+def seal_frames(sealer: active.Sealer, data: bytes, start: int) -> bytes:
+    """`data`'s B-byte frames as the pair's other certifier seals them: the (start + i)-th unit it sends is slot
+    start + i of its grid, counted from its window 0."""
+    return b"".join(sealer.seal(*divmod(start + i // B, sealer.params.allocation), data[i : i + B])
+                    for i in range(0, len(data), B))
+
+
 async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt=None, server=None, probe=None,
-                 sessions=SESSIONS, start: int = 0, **salting):
+                 sessions=SESSIONS, start: int = 0, pair: active.Pair | None = None,
+                 sealer: active.Sealer | None = None, **salting):
     """One run of the Program through a proxy on real sockets, its clock injected: the peer sends each request in the
     middle of its send bucket, and the server writes frame p in the middle of bucket `write_buckets[p]`. The syncs are
     the honest prover's, or an online `prover`'s on `executor`. With `salt`, the proxy's salt source (and `salting`,
     its `salt_bits` and `pouw_window`), each PoUW window's salt is delivered before the run goes on. `probe(proxy, t)`
-    runs once tick t is done. With `start`, the proxy is back from maintenance at that window, and only what comes from
-    there on is sent and written. Returns the proxy and the wire's bytes as the peer read them."""
+    runs once tick t is done, and the run waits on it if it is a coroutine. With `start`, the proxy is back from maintenance at that window, and only what comes from
+    there on is sent and written. With `pair`, the link is a sealed pair link, and the peer stands in for the pair's
+    other certifier: `sealer` seals the k-th frame it sends as slot k of its grid (`seal_frames`). Returns the proxy
+    and the wire's bytes as the peer read them."""
     _, _, syncs, rows = (FRAMES, READY, SYNCS, ROWS) if sessions is SESSIONS else program(sessions)
     first = start * EGRESS.buckets
     advice = {"syncs": syncs} if prover is None else {"syncs": [], "prover": prover, "windows": WINDOWS,
@@ -395,8 +502,8 @@ async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt
     server = server or Server()
     srv = await asyncio.start_server(server.handle, "127.0.0.1", 0)
     proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, advice.pop("syncs"), origin=0.0,
-                  clock=clock, sleep=clock.sleep, salt=salt, start=start,
-                  position=sum(anchor < first for _, anchor, *_ in rows), **advice, **salting)
+                  ingress_link="requests", clock=clock, sleep=clock.sleep, salt=salt, start=start,
+                  position=sum(anchor < first for _, anchor, *_ in rows), pair=pair, **advice, **salting)
     k = salting.get("pouw_window", 1)
     accepted: asyncio.Future = asyncio.get_running_loop().create_future()
     link = await asyncio.start_server(lambda r, w: accepted.set_result(asyncio.create_task(proxy.run(r, w))),
@@ -418,18 +525,20 @@ async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt
         if salt is not None:
             await proxy.until(lambda p, t=t: p.salts_delivered > t // (k * INGRESS.buckets) - start)
         if probe is not None:
-            probe(proxy, t)
+            probed = probe(proxy, t)
+            if asyncio.iscoroutine(probed):
+                await probed
         if t == horizon - 1:
             break  # the run ends at its last tick: what is written after it is ready past the horizon
         await server.until(proxy.requests_released)
         clock.advance(t * TAU + TAU / 2)
         for name, stream, a, ds in sessions:
             if a == t:
-                body = request(name, len(ds))
-                chunks = [body[i : i + B - active.HEADER.size] for i in range(0, len(body), B - active.HEADER.size)]
-                writer.write(b"".join(active.encode_frame(LAST if j == len(chunks) - 1 else DATA, stream, c, B)
-                                      for j, c in enumerate(chunks)))
-                sent += len(chunks)
+                request_wire = active.request_frames(request(name, len(ds)), B)
+                if sealer is not None:
+                    request_wire = seal_frames(sealer, request_wire, sent)
+                writer.write(request_wire)
+                sent += len(request_wire) // (B if sealer is None else B + aead.TAG_BYTES)
         await proxy.until(lambda p, n=sent: p.link_frames_read >= n)
         for p, (_, _, name, k, _, n) in enumerate(rows):
             if write_buckets[p] == t:
@@ -537,6 +646,125 @@ def test_a_frame_late_past_every_sync_is_rejected(honest_run):
     assert late_wire != wire
 
 
+SECRET, SESSION = bytes(range(aead.SECRET_BYTES)), b"session 1"
+
+
+def pair_halves(secret: bytes = SECRET, session: bytes = SESSION) -> tuple[active.Pair, active.Sealer]:
+    """This certifier's half of a sealed pair link, sealing its egress as direction "a>b" and opening the other
+    certifier's "b>a", and the other certifier's sealer, whose egress grid is this one's ingress grid."""
+    return (active.Pair.of(secret, session, "a>b", "b>a", EGRESS, INGRESS),
+            active.Sealer(aead.keys(secret, session, "b>a"), INGRESS))
+
+
+def test_a_sealed_pair_link_carries_only_ciphertext_and_every_record_is_the_unsealed_runs(honest_run):
+    """With the link sealed between two of the auditor's certifiers (`Proxy(pair=…)`), each direction under its own
+    keys, the proxy publishes the unsealed run's records, egress and ingress, so every verdict, raw and committed, is
+    the unsealed run's: N2, N3 and the timing bound read the same grids. The wire is r sealed units of B + 64 bytes a
+    bucket, padding sealed too, so it holds no frame's bytes and no run of zeros, and opened in order under the
+    egress direction's keys it is the unsealed run's wire, byte for byte. The same secret seals the run to the same
+    wire, and another secret to another wire with the same records. Without a pair (the default) the proxy is
+    today's."""
+    plain, plain_wire = honest_run
+    pair, sealer = pair_halves()
+    proxy, wire = asyncio.run(replay(honest(), pair=pair, sealer=sealer))
+    assert proxy.records == plain.records
+    assert audit(proxy, FRAMES, SYNCS) == audit(plain, FRAMES, SYNCS)
+    assert (proxy.requests_released, proxy.link_frames_read) == (plain.requests_released, plain.link_frames_read)
+    unit = B + aead.TAG_BYTES
+    assert len(wire) == WINDOWS * EGRESS.buckets * EGRESS.allocation * unit
+    opener = active.Opener(aead.keys(SECRET, SESSION, "a>b"), EGRESS)
+    assert b"".join(opener.open(wire[i : i + unit]) for i in range(0, len(wire), unit)) == plain_wire
+    assert not opener.refused
+    bodies = [body(name, k) for _, _, name, k, _, _ in ROWS]
+    assert bytes(64) in plain_wire and any(b in plain_wire for b in bodies)
+    assert bytes(64) not in wire and not any(b in wire for b in bodies)
+
+    pair, sealer = pair_halves()
+    _, again = asyncio.run(replay(honest(), pair=pair, sealer=sealer))
+    pair, sealer = pair_halves(bytes(aead.SECRET_BYTES))
+    other, other_wire = asyncio.run(replay(honest(), pair=pair, sealer=sealer))
+    assert again == wire and other_wire != wire and len(other_wire) == len(wire)
+    assert other.records == plain.records
+    assert plain.pair is None and plain_wire == expected_wire(FRAMES, SYNCS)
+
+
+def sealed_ingress(second: bytes | None) -> Proxy:
+    """A proxy on a sealed pair link, its upstream a `Server`, whose peer sends two sealed units: a's request in the
+    middle of bucket 0, and `second` (the other certifier's next unit, b's request, when None) in the middle of
+    bucket 7, in ingress window 1."""
+
+    async def run() -> Proxy:
+        clock = VirtualClock(-TAU / 2)
+        server = Server()
+        srv = await asyncio.start_server(server.handle, "127.0.0.1", 0)
+        pair, sealer = pair_halves()
+        first = seal_frames(sealer, active.request_frames(request("a", 1), B), 0)
+        units = {0: first, 7: seal_frames(sealer, active.request_frames(request("b", 1), B), 1) if second is None
+                 else second}
+        proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0,
+                      ingress_link="requests", clock=clock, sleep=clock.sleep, pair=pair)
+        link = LinkReader()
+        running = asyncio.create_task(proxy.run(link, NullWriter()))
+        sent = 0
+        for t in range(WINDOWS * EGRESS.buckets):
+            clock.advance(t * TAU)
+            await proxy.until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
+            await server.until(proxy.requests_released)
+            if t in units:
+                clock.advance(t * TAU + TAU / 2)
+                link.chunks.put_nowait(units[t])
+                sent += 1
+                await proxy.until(lambda p, n=sent: p.link_frames_read >= n)
+        await running
+        for w in server.writers.values():
+            w.close()
+        srv.close()
+        return proxy
+
+    return asyncio.run(run())
+
+
+def test_a_sealed_unit_tampered_replayed_or_sealed_at_another_nonce_fails_the_link_closed():
+    """The peer's second unit is b's request sealed as its next slot, or that unit with a ciphertext or a tag bit
+    flipped, the first unit replayed, b's request sealed at another slot, in another session, under another secret,
+    or under this certifier's own egress direction (a reflection). Honest, every ingress window is accepted and both
+    requests are released; otherwise the unit doesn't open, nothing of it is released, and its window and every one
+    after it are `malformed`, while window 0, before it, is complete."""
+    def sealed(keys: aead.Keys, t: int, slot: int, session: str = "b") -> bytes:
+        return active.Sealer(keys, INGRESS).seal(t, slot, active.request_frames(request(session, 1), B))
+
+    def flipped(i: int) -> bytes:
+        return honest_unit[:i] + bytes([honest_unit[i] ^ 1]) + honest_unit[i + 1 :]
+
+    peer = aead.keys(SECRET, SESSION, "b>a")
+    honest_unit = sealed(peer, 0, 1)
+    bad = {"ciphertext": flipped(5), "tag": flipped(len(honest_unit) - 1), "replayed": sealed(peer, 0, 0, "a"),
+           "slot": sealed(peer, 1, 0),
+           "session": sealed(aead.keys(SECRET, b"session 2", "b>a"), 0, 1),
+           "secret": sealed(aead.keys(bytes(64), SESSION, "b>a"), 0, 1),
+           "reflected": sealed(aead.keys(SECRET, SESSION, "a>b"), 0, 1)}
+    proxy = sealed_ingress(None)
+    assert [r.status.reason for r in proxy.records if r.link == "requests"] == [None] * WINDOWS
+    assert proxy.requests_released == 2 and not proxy.pair.opener.refused
+    assert sealed_ingress(honest_unit).records == proxy.records
+    for name, unit in bad.items():
+        refused = sealed_ingress(unit)
+        assert [r.status.reason for r in refused.records if r.link == "requests"] == \
+            [None, Reason.MALFORMED, Reason.MALFORMED], name
+        assert refused.requests_released == 1 and refused.link_frames_read == 2 and refused.pair.opener.refused, name
+
+
+def test_a_pair_seals_its_own_egress_grid_and_opens_frames_of_its_ingress_size():
+    """The proxy refuses a pair whose sealer is of another grid than its egress, or whose opener's frames aren't its
+    ingress frames; a pair's two directions are two names."""
+    for egress, peer in ((INGRESS, INGRESS), (EGRESS, GridParams(6, 2, B // 2))):
+        with pytest.raises(ValueError, match="pair link seals"):
+            Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                  pair=active.Pair.of(SECRET, SESSION, "a>b", "b>a", egress, peer))
+    with pytest.raises(ValueError, match="two directions"):
+        active.Pair.of(SECRET, SESSION, "a>b", "a>b", EGRESS, INGRESS)
+
+
 def registration(window: int, provenance: dict | None = None) -> Registration:
     """A stand-in for the proof service's registration of PoUW window `window` (`Stream.register`'s): a record whose
     provenance names the window, with its receipt and digest."""
@@ -547,7 +775,7 @@ def registration(window: int, provenance: dict | None = None) -> Registration:
 def salted_run(seed: int, **salting):
     """The honest run with the salt on, each salt drawn from `random.Random(seed)`. Returns the proxy, the wire, the
     salts drawn by PoUW window, the server, and at each tick, for each of PoUW windows 0 … WINDOWS − 1, whether `reveal`
-    gave its salt on its registration (True) or refused (None)."""
+    gave its salt on its registration (True) or refused (None), so each window's True is the one tick it is revealed."""
     rng, drawn, revealable = random.Random(seed), {}, []
 
     def source(window: int, n: int) -> bytes:
@@ -573,7 +801,8 @@ def test_the_salt_reaches_only_the_blocks_side_and_no_record_depends_on_it(hones
     it: the wire the peer reads and the egress records are the unsalted run's, byte for byte. Each window's ingress
     record holds one salt frame at its first bucket, carrying the placeholder, and is otherwise the unsalted run's, so
     every verdict is too, and two runs on different salts publish the same records. `reveal` refuses a window until its
-    ingress record is published and gives the salt on its registration after; `check_salts` accepts the revealed
+    ingress record is published, gives the salt on its registration at that tick, and refuses it after; `check_salts`
+    accepts the revealed
     salts and rejects a missing one, one of another width, a record with a second salt frame and the unsalted run."""
     plain, plain_wire = honest_run
     proxy, wire, drawn, server, revealable = salted_run(7)
@@ -596,7 +825,7 @@ def test_the_salt_reaches_only_the_blocks_side_and_no_record_depends_on_it(hones
     assert audit(proxy, FRAMES, SYNCS) == audit(plain, FRAMES, SYNCS)
 
     T = INGRESS.buckets
-    assert revealable == [[True if w < (t + 1) // T else None for w in range(WINDOWS)] for t in range(WINDOWS * T)]
+    assert revealable == [[True if t == (w + 1) * T - 1 else None for w in range(WINDOWS)] for t in range(WINDOWS * T)]
     with pytest.raises(RuntimeError):
         proxy.reveal(WINDOWS, registration(WINDOWS))
     with pytest.raises(ValueError):
@@ -617,14 +846,14 @@ def test_the_salt_reaches_only_the_blocks_side_and_no_record_depends_on_it(hones
         active.check_salts(Audit(), "requests", [commit(r, INGRESS) for r in ingress], WINDOWS, drawn)
     with pytest.raises(ValueError):
         Proxy(("127.0.0.1", 9), EGRESS, GridParams(6, 2, active.SALT_FRAME_BYTES - 1), SYNC_SET, SYNCS, origin=0.0,
-              salt=active.fresh_salt)
+              ingress_link="requests", salt=active.fresh_salt)
 
 
 def test_one_salt_per_pouw_window_of_its_width(honest_run):
     """With PoUW windows of two certifier windows and 256-bit salts, the proxy draws one 256-bit salt per PoUW window,
     at its first bucket: PoUW window 0's at certifier window 0, 1's at window 2. Window 1's ingress record is the
-    unsalted run's, and the server receives each salt once. `reveal` gives PoUW window 0's salt once windows 0 and 1 are
-    published (t_d), and never PoUW window 1's, whose window 3 the run doesn't reach. `check_salts` reads the salt
+    unsalted run's, and the server receives each salt once. `reveal` gives PoUW window 0's salt at the tick windows 0 and
+    1 are published (t_d), and only then, and never PoUW window 1's, whose window 3 the run doesn't reach. `check_salts` reads the salt
     frames at windows 0 and 2, of salts of that width."""
     plain, _ = honest_run
     proxy, _, drawn, server, revealable = salted_run(9, pouw_window=2, salt_bits=256)
@@ -637,7 +866,7 @@ def test_one_salt_per_pouw_window_of_its_width(honest_run):
         assert ingress[w].grid[0][0] == active.salt_frame(p, active.PLACEHOLDER, B)
         assert ingress[w].grid[1:] == unsalted[w].grid[1:]
     T = INGRESS.buckets
-    assert revealable == [[True if p == 0 and t >= 2 * T - 1 else None for p in range(WINDOWS)]
+    assert revealable == [[True if p == 0 and t == 2 * T - 1 else None for p in range(WINDOWS)]
                           for t in range(WINDOWS * T)]
     records = list(ingress.values())
     assert active.check_salts(Audit(), "requests", records, WINDOWS, drawn, pouw_window=2, salt_bits=256) == \
@@ -648,7 +877,8 @@ def test_one_salt_per_pouw_window_of_its_width(honest_run):
         [None, "salt", "salt"]
     for bad in ({"salt_bits": 0}, {"salt_bits": 100}, {"pouw_window": 0}, {"pouw_window": 1.0}):
         with pytest.raises(ValueError):
-            Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, salt=active.fresh_salt, **bad)
+            Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                  salt=active.fresh_salt, **bad)
 
 
 def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
@@ -664,7 +894,8 @@ def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
             drawn.append(w)
             return bytes([w + 1]) * n
 
-        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, salt=source, **kwargs)
+        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                  clock=lambda: 0.0, salt=source, **kwargs)
         for _ in range(windows * INGRESS.buckets):
             p.bucketer.tick()
         return p
@@ -697,6 +928,438 @@ def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
         back.reveal(1, registration(1))
 
 
+def prover_signer(seed: bytes = b"prover"):
+    """The prover's LMS key as the certifier registers it (`LmsKey`), and a signer of `weights_message`s at one-time
+    keys 0, 1, ... in turn."""
+    k, leaves = signers.key(seed), itertools.count()
+    public = LmsKey(signers.SMALL, lms.public_key(k))
+    return public, lambda message: lms.sign_at(k, next(leaves), message).encode()
+
+
+def test_the_weights_are_recorded_only_before_the_salt_and_given_on_reveals_conditions():
+    """`commit_weights(p, root, signature)` records PoUW window p's 64-byte weights' root once, while p's first ingress
+    tick, the salt's draw, is still ahead, and only the registered prover's: the signature verifies under `prover_key`
+    over `weights_message`, which binds the ingress link, p, the root and the prover's context. It refuses a root after
+    that tick, a second root, a root of another length or type, a window the proxy doesn't serve, a proxy without the
+    salt or without a prover key, a signature by anyone else, and one over another window, root or context; a proxy back
+    from maintenance past p's first tick refuses p. `committed(p, registration)` gives the root on `reveal`'s conditions,
+    as often as asked, and refuses a window whose weights weren't recorded."""
+    key, sign = prover_signer()
+    _, forge = prover_signer(b"someone else")
+
+    def proxy(**kwargs) -> Proxy:
+        return Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                     clock=lambda: 0.0, salt=lambda w, n: bytes([w + 1]) * n, prover_key=key, prover_context=b"epoch 7",
+                     **kwargs)
+
+    def signed(w: int, root: bytes, link: str = "requests", context: bytes = b"epoch 7") -> bytes:
+        return sign(active.weights_message(link, w, root, context))
+
+    T, roots = INGRESS.buckets, [bytes([w]) * active.WEIGHTS_ROOT_BYTES for w in range(WINDOWS)]
+    p = proxy()
+    for bad in (forge(active.weights_message("requests", 0, roots[0], b"epoch 7")), signed(1, roots[0]),
+                signed(0, roots[1]), signed(0, roots[0], context=b"epoch 8"), signed(0, roots[0], link="responses"),
+                b"", None):
+        with pytest.raises(RuntimeError, match="isn't signed by the registered prover"):
+            p.commit_weights(0, roots[0], bad)
+    p.commit_weights(0, roots[0], signed(0, roots[0]))
+    for bad in (roots[0][:32], roots[0].hex(), None):
+        with pytest.raises(ValueError, match="64 bytes"):
+            p.commit_weights(1, bad, b"")
+    for w in (-1, WINDOWS, True):
+        with pytest.raises(ValueError, match="serves"):
+            p.commit_weights(w, roots[0], b"")
+    with pytest.raises(ValueError, match="salt is off"):
+        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0,
+              ingress_link="requests").commit_weights(0, roots[0], b"")
+    keyless = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                    salt=active.fresh_salt)
+    with pytest.raises(RuntimeError, match="no prover key"):
+        keyless.commit_weights(0, roots[0], signed(0, roots[0]))
+    p.bucketer.tick()
+    with pytest.raises(RuntimeError, match="drawn"):
+        p.commit_weights(0, roots[1], signed(0, roots[1]))
+    for _ in range(T - 1):
+        p.bucketer.tick()
+    p.commit_weights(1, roots[1], signed(1, roots[1]))
+    with pytest.raises(RuntimeError, match="already recorded"):
+        p.commit_weights(1, roots[2], signed(1, roots[2]))
+    with pytest.raises(RuntimeError, match="published"):
+        p.committed(1, registration(1))
+    for _ in range((WINDOWS - 1) * T):
+        p.bucketer.tick()
+    with pytest.raises(RuntimeError, match="drawn"):
+        p.commit_weights(2, roots[2], signed(2, roots[2]))
+    assert [p.committed(w, registration(w)) for w in (0, 1, 0)] == [roots[0], roots[1], roots[0]]
+    assert p.reveal(0, registration(0)) == bytes([1]) * active.SALT_BYTES
+    assert p.committed(0, registration(0)) == roots[0]
+    with pytest.raises(RuntimeError, match="no weights"):
+        p.committed(2, registration(2))
+    with pytest.raises(RuntimeError, match="no registration"):
+        p.committed(0, registration(1))
+
+    back = proxy(start=1)
+    with pytest.raises(RuntimeError, match="passed"):
+        back.commit_weights(0, roots[0], signed(0, roots[0]))
+    back.commit_weights(1, roots[1], signed(1, roots[1]))
+
+
+def test_a_served_proxy_counts_the_salt_frame_exactly_when_the_salt_is_on():
+    """A served link's profile counts the certifier's own frame (`own` 1) exactly when the salt is on, at a PoUW window
+    of one certifier window, so every window's first ingress frame is the salt's: the proxy refuses a profile without
+    it under the salt, one with it and no salt, and a longer PoUW window."""
+    def proxy(own: int, **kwargs) -> Proxy:
+        return Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                     clock=lambda: 0.0, served=served.ServedProfile(2, 1, WINDOWS, own), **kwargs)
+
+    p = proxy(1, salt=lambda w, n: bytes([w + 1]) * n)
+    for w in range(WINDOWS):
+        for t in range(INGRESS.buckets):
+            p.bucketer.tick()
+            assert p.bucketer.own == ({0: w} if t == 0 else {})
+    proxy(0)
+    for own, kwargs in ((0, {"salt": active.fresh_salt}), (1, {}), (1, {"salt": active.fresh_salt, "pouw_window": 3})):
+        with pytest.raises(ValueError, match="counts the salt frame"):
+            proxy(own, **kwargs)
+
+
+def test_reveal_gives_each_salt_once_and_only_until_its_deadline():
+    """`reveal` gives a PoUW window's salt once: a second registration naming the window, or the same one again, gets
+    none. It refuses once the certifier's clock is more than `reveal_deadline` past the window's end (one PoUW window by
+    default), so a registration made after the window's work gets no salt; `committed` keeps that deadline. A deadline
+    that isn't a positive number of seconds is refused."""
+    T, now = INGRESS.buckets, [0.0]
+    window_s = T * INGRESS.bucket_ms / 1000
+
+    def proxy(**kwargs) -> Proxy:
+        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                  clock=lambda: now[0], salt=lambda w, n: bytes([w + 1]) * n, **kwargs)
+        for _ in range(WINDOWS * T):
+            p.bucketer.tick()
+        return p
+
+    p = proxy()
+    assert p.reveal_deadline == window_s
+    now[0] = 1 * window_s + window_s
+    assert p.reveal(0, registration(0)) == bytes([1]) * active.SALT_BYTES
+    with pytest.raises(RuntimeError, match="revealed already"):
+        p.reveal(0, registration(0))
+    now[0] = 2 * window_s + window_s + 1e-3
+    with pytest.raises(RuntimeError, match="ended more than"):
+        p.reveal(1, registration(1))
+    with pytest.raises(RuntimeError, match="ended more than"):
+        p.committed(1, registration(1))
+    assert p.reveal(2, registration(2)) == bytes([3]) * active.SALT_BYTES
+    late = proxy(reveal_deadline=10 * window_s)
+    assert [late.reveal(w, registration(w)) for w in range(WINDOWS)] == \
+        [bytes([w + 1]) * active.SALT_BYTES for w in range(WINDOWS)]
+    for bad in (0, -1.0, "1", float("nan")):
+        with pytest.raises(ValueError, match="deadline"):
+            Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                  salt=active.fresh_salt, reveal_deadline=bad)
+
+
+def lms_key(seed: bytes) -> LmsKey:
+    return LmsKey(signers.SMALL, lms.public_key(signers.key(seed)))
+
+
+#: a proxy's run id in the tests that fix it (`Proxy(run_nonce=…)`), and another run's
+RUN, OTHER_RUN = bytes([9]) * active.RUN_ID_BYTES, bytes([10]) * active.RUN_ID_BYTES
+
+
+def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_the_certifiers_key(tmp_path):
+    """With a challenger key and a signer, `reveal(p, registration, request)` and `committed` take only a request the
+    registered challenger signed over `reveal_request_message`, which binds the certifier's key id and run id, the
+    ingress link, p, the registration's digest and the kind. They refuse none (the two-argument call), one signed by
+    anyone else, and one for another certifier, run, window, registration, kind or link, and a refusal spends nothing.
+    A registration made up whole, receipt and all, which a keyless proxy takes, is refused unless the challenger signs
+    it. They answer a `Revealed` that names the certifier's key id and run and verifies under the certifier's key over
+    `reveal_response_message`, and under no other key, run, window, value, kind, registration or link. The once rule
+    and the published condition are `reveal`'s. A signer that refuses spends the reveal and gives nothing. A proxy
+    takes both keys or neither; a keyless one takes no request and serves no endpoint. Each proxy draws its own
+    32-byte run id unless given a source. A deployed signature (`lms.DEPLOYED`), in hex, fits a request line with room
+    for the registration."""
+    challenger_key, sign = prover_signer(b"challenger")
+    _, forge = prover_signer(b"someone else")
+    prover_key, prove = prover_signer()
+    certifier = signers.signer(tmp_path)
+    key, root = certifier.public_key(), bytes([7]) * active.WEIGHTS_ROOT_BYTES
+    stranger = lms_key(b"someone else")
+
+    def proxy(**keys) -> Proxy:
+        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: 0.0,
+                  ingress_link="requests", salt=lambda w, n: bytes([w + 1]) * n, prover_key=prover_key,
+                  **({"run_nonce": lambda n: RUN} | keys))
+        p.commit_weights(0, root, prove(active.weights_message("requests", 0, root)))
+        for _ in range(2 * INGRESS.buckets):
+            p.bucketer.tick()
+        return p
+
+    def asks(w: int, reg: Registration, what: bytes = active.SALT_KIND, link: str = "requests", by=sign,
+             key_id: bytes = key.key_id, run_id: bytes = RUN) -> bytes:
+        return by(active.reveal_request_message(key_id, run_id, link, w, reg.digest, what))
+
+    p, reg = proxy(challenger_key=challenger_key, signer=certifier), registration(0)
+    assert p.run_id == RUN
+    record = {"window": {"kind": "served", "window": 1}, "made": "up"}
+    made_up = Registration(record, R.receipt(record, "anyone"), R.digest(record), 1)
+    for w, r, request in ((0, reg, None), (0, reg, b""), (0, reg, asks(0, reg, by=forge)), (0, reg, asks(1, reg)),
+                          (0, reg, asks(0, registration(1))), (0, reg, asks(0, reg, active.WEIGHTS_KIND)),
+                          (0, reg, asks(0, reg, link="responses")), (0, reg, asks(0, reg, run_id=OTHER_RUN)),
+                          (0, reg, asks(0, reg, key_id=stranger.key_id)), (0, None, asks(0, reg)),
+                          (1, made_up, asks(1, made_up, by=forge))):
+        with pytest.raises(RuntimeError, match="isn't signed by the registered challenger for this certifier's run"):
+            p.reveal(w, r, request)
+    with pytest.raises(RuntimeError, match="isn't signed by the registered challenger"):
+        p.committed(0, reg, asks(0, reg))
+    with pytest.raises(RuntimeError, match="published"):
+        p.reveal(2, registration(2), asks(2, registration(2)))
+
+    salt = p.reveal(0, reg, asks(0, reg))
+    assert isinstance(salt, Revealed) and (salt.window, salt.value) == (0, bytes([1]) * active.SALT_BYTES)
+    assert (salt.key_id, salt.run_id) == (key.key_id, RUN)
+    assert salt.verify(key, RUN, "requests", reg.digest, active.SALT_KIND)
+    for k, answer, run, link, digest, what in (
+            (stranger, salt, RUN, "requests", reg.digest, active.SALT_KIND),
+            (stranger, dataclasses.replace(salt, key_id=stranger.key_id), RUN, "requests", reg.digest,
+             active.SALT_KIND),
+            (key, salt, OTHER_RUN, "requests", reg.digest, active.SALT_KIND),
+            (key, dataclasses.replace(salt, run_id=OTHER_RUN), OTHER_RUN, "requests", reg.digest, active.SALT_KIND),
+            (key, dataclasses.replace(salt, run_id=b"short"), b"short", "requests", reg.digest, active.SALT_KIND),
+            (key, dataclasses.replace(salt, window=1), RUN, "requests", reg.digest, active.SALT_KIND),
+            (key, dataclasses.replace(salt, value=bytes(active.SALT_BYTES)), RUN, "requests", reg.digest,
+             active.SALT_KIND),
+            (key, salt, RUN, "requests", reg.digest, active.WEIGHTS_KIND),
+            (key, salt, RUN, "requests", registration(1).digest, active.SALT_KIND),
+            (key, salt, RUN, "responses", reg.digest, active.SALT_KIND)):
+        assert not answer.verify(k, run, link, digest, what)
+    with pytest.raises(RuntimeError, match="revealed already"):
+        p.reveal(0, reg, asks(0, reg))
+    weights = p.committed(0, reg, asks(0, reg, active.WEIGHTS_KIND))
+    assert weights.value == root and weights.verify(key, RUN, "requests", reg.digest, active.WEIGHTS_KIND)
+    assert not weights.verify(key, RUN, "requests", reg.digest, active.SALT_KIND)
+    with pytest.raises(RuntimeError, match="no weights"):
+        p.committed(1, registration(1), asks(1, registration(1), active.WEIGHTS_KIND))
+    assert p.reveal(1, made_up, asks(1, made_up)).value == bytes([2]) * active.SALT_BYTES
+    with pytest.raises(ValueError, match="a reveal is of"):
+        active.reveal_request_message(key.key_id, RUN, "requests", 0, reg.digest, b"other")
+    with pytest.raises(ValueError, match="run id is 32 bytes"):
+        active.reveal_request_message(key.key_id, RUN[1:], "requests", 0, reg.digest, active.SALT_KIND)
+    assert 2 * lms.DEPLOYED.signature_bytes() < active.REVEAL_LINE_BYTES // 8
+
+    drawn = [Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests").run_id
+             for _ in range(2)]
+    assert [len(r) for r in drawn] == [active.RUN_ID_BYTES] * 2 and drawn[0] != drawn[1]
+    for bad in (lambda n: RUN[1:], lambda n: RUN.hex()):
+        with pytest.raises(ValueError, match="run id is 32 bytes"):
+            proxy(run_nonce=bad)
+
+    held = proxy(challenger_key=challenger_key, signer=LmsSigner(certifier.key, certifier.state))
+    with pytest.raises(RuntimeError, match="signer refused"):
+        held.reveal(0, reg, asks(0, reg))
+    with pytest.raises(RuntimeError, match="revealed already"):
+        held.reveal(0, reg, asks(0, reg))
+
+    for keys in ({"challenger_key": challenger_key}, {"signer": certifier}):
+        with pytest.raises(ValueError, match="neither"):
+            proxy(**keys)
+    keyless = proxy()
+    with pytest.raises(RuntimeError, match="takes no signed request"):
+        keyless.reveal(0, reg, asks(0, reg))
+    assert keyless.reveal(1, made_up) == bytes([2]) * active.SALT_BYTES
+    with pytest.raises(ValueError, match="challenger key and a signer"):
+        asyncio.run(active.serve_reveals(keyless, "127.0.0.1", 0))
+
+
+def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_once(tmp_path):
+    """The endpoint (`serve_reveals`) beside a salted proxy's run, on its loop, over real localhost sockets on the
+    injected clock, with the challenger's `RemoteCertifier` in a thread: at each PoUW window's t_d the client gets the
+    window's salt and the weights' root the prover recorded, each verified under the certifier's key, as plain bytes;
+    one tick before, the certifier refuses (unpublished) and the client raises its reason. A second reveal of the
+    window is refused, the once rule over the network; a request by anyone but the registered challenger is refused
+    and spends nothing; a window with no weights recorded is refused; a client holding another certifier's key, or
+    another run's id, asks for that certifier's run and is refused; and a line that isn't a request, or is longer than
+    `REVEAL_LINE_BYTES`, is refused. The run's records are the salted run's, and the audit accepts them and the salts
+    the client got."""
+    T, horizon = INGRESS.buckets, WINDOWS * EGRESS.buckets
+    rng, drawn = random.Random(7), {}
+
+    def source(window: int, n: int) -> bytes:
+        drawn[window] = rng.randbytes(n)
+        return drawn[window]
+
+    for name in ("certifier", "challenger", "forger"):
+        (tmp_path / name).mkdir()
+    certifier = signers.signer(tmp_path / "certifier")
+    challenger = signers.signer(tmp_path / "challenger", b"challenger")
+    forger = signers.signer(tmp_path / "forger", b"someone else")
+    prover_key, prove = prover_signer()
+    roots = {w: bytes([w]) * active.WEIGHTS_ROOT_BYTES for w in range(1, WINDOWS)}
+    got: dict[int, list] = defaultdict(list)
+    endpoint: dict = {}
+
+    async def ask(client: RemoteCertifier, call: str, w: int) -> tuple[str, bytes | str]:
+        try:
+            return "gave", await asyncio.to_thread(getattr(client, call), w, registration(w))
+        except RuntimeError as e:
+            return "refused", str(e)
+
+    async def raw(line: bytes) -> dict:
+        reader, writer = await asyncio.open_connection(*endpoint["at"])
+        writer.write(line)
+        writer.write_eof()
+        answer = json.loads(await reader.readline())
+        writer.close()
+        return answer
+
+    async def probe(proxy: Proxy, t: int) -> None:
+        if t == 0:
+            endpoint["server"] = await active.serve_reveals(proxy, "127.0.0.1", 0)
+            at = endpoint["at"] = endpoint["server"].sockets[0].getsockname()[:2]
+            key, run = certifier.public_key(), proxy.run_id
+            endpoint["challenger"] = RemoteCertifier(*at, key, challenger, "requests", run)
+            endpoint["forger"] = RemoteCertifier(*at, key, forger, "requests", run)
+            endpoint["misled"] = RemoteCertifier(*at, lms_key(b"someone else"), challenger, "requests", run)
+            endpoint["stale"] = RemoteCertifier(*at, key, challenger, "requests", OTHER_RUN)
+            endpoint["raw"] = [await raw(line) for line in (b"not json\n", b'{"window": 0, "kind": "salt"}\n', b"[1]\n",
+                                                             b"x" * (active.REVEAL_LINE_BYTES + 1))]
+        for w in range(WINDOWS):
+            published = (w + 1) * T - 1
+            if t == published - 1:
+                got[w].append(await ask(endpoint["challenger"], "reveal", w))
+            if t == published:
+                for client, call in (("forger", "reveal"), ("challenger", "committed"), ("misled", "committed"),
+                                     ("stale", "reveal"), ("challenger", "reveal"), ("challenger", "reveal")):
+                    got[w].append(await ask(endpoint[client], call, w))
+            if w and t == w * T - 1:
+                proxy.commit_weights(w, roots[w], prove(active.weights_message("requests", w, roots[w])))
+        if t == horizon - 1:
+            endpoint["server"].close()
+            await endpoint["server"].wait_closed()
+
+    proxy, _ = asyncio.run(replay(honest(), salt=source, probe=probe, prover_key=prover_key,
+                                  challenger_key=challenger.public_key(), signer=certifier))
+    for w in range(WINDOWS):
+        early, forged, weights, misled, stale, salt, again = got[w]
+        assert early == ("refused", f"the certifier refused window {w}'s salt: window {w}'s ingress records aren't all "
+                                    "published, so its salt isn't revealed")
+        unsigned = [("refused", f"the certifier refused window {w}'s {kind}: the request for window {w}'s {kind} isn't "
+                                "signed by the registered challenger for this certifier's run") for kind in ("salt",
+                                                                                                         "weights")]
+        assert forged == stale == unsigned[0] and misled == unsigned[1]
+        nothing = ("refused", "the certifier refused window 0's weights: no weights were recorded before PoUW window 0's "
+                              "salt")
+        assert weights == (("gave", roots[w]) if w else nothing)
+        assert salt == ("gave", drawn[w])
+        assert again == ("refused", f"the certifier refused window {w}'s salt: window {w}'s salt is revealed already")
+    assert [list(a) for a in endpoint["raw"]] == [["refused"]] * 4
+    assert endpoint["raw"][0] == endpoint["raw"][1] == endpoint["raw"][2] != endpoint["raw"][3]
+    assert "one line of at most" in endpoint["raw"][3]["refused"]
+
+    assert proxy.records == salted_run(7)[0].records
+    assert audit(proxy, FRAMES, SYNCS)[0] == [("responses", w, None) for w in range(WINDOWS)] + \
+        [("requests", w, None) for w in range(WINDOWS)]
+    assert [v.violation for v in active.check_salts(Audit(), "requests", proxy.records, WINDOWS,
+                                                    {w: got[w][5][1] for w in range(WINDOWS)})] == [None] * WINDOWS
+
+
+def test_two_runs_on_one_link_name_neither_take_nor_give_each_others_reveals(tmp_path):
+    """Two proxies with the same ingress link name, certifier key (one signer, as a certifier restarted on its host
+    holds it) and PoUW window, in runs `RUN` and `OTHER_RUN` (RT4-INT-3: their p's collide): a request the challenger
+    signed for one run is refused by the other and spends nothing there, and each answer names its own run and
+    verifies for it and not for the other, so a consumer keying on (key id, run id, p) never takes one for the other.
+    A `RemoteCertifier` refuses another run's answer that an endpoint replays whole, or relabels with its run, and
+    takes the same answer for its own run."""
+    (tmp_path / "challenger").mkdir()
+    certifier = signers.signer(tmp_path)
+    challenger = signers.signer(tmp_path / "challenger", b"challenger")
+    key, reg = certifier.public_key(), registration(0)
+
+    def proxy(run: bytes, fill: int) -> Proxy:
+        p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: 0.0,
+                  ingress_link="requests", salt=lambda w, n: bytes([fill]) * n,
+                  challenger_key=challenger.public_key(), signer=certifier, run_nonce=lambda n: run)
+        for _ in range(2 * INGRESS.buckets):
+            p.bucketer.tick()
+        return p
+
+    def asks(run: bytes) -> bytes:
+        return challenger.sign(active.reveal_request_message(key.key_id, run, "requests", 0, reg.digest,
+                                                             active.SALT_KIND))
+
+    runs = {RUN: proxy(RUN, 1), OTHER_RUN: proxy(OTHER_RUN, 2)}
+    other = {RUN: OTHER_RUN, OTHER_RUN: RUN}
+    for run, p in runs.items():
+        with pytest.raises(RuntimeError, match="isn't signed by the registered challenger for this certifier's run"):
+            p.reveal(0, reg, asks(other[run]))
+    answers = {run: p.reveal(0, reg, asks(run)) for run, p in runs.items()}
+    assert {(a.key_id, a.run_id, a.window): a.value for a in answers.values()} == {
+        (key.key_id, RUN, 0): bytes([1]) * active.SALT_BYTES,
+        (key.key_id, OTHER_RUN, 0): bytes([2]) * active.SALT_BYTES}
+    for run, answer in answers.items():
+        assert answer.verify(key, run, "requests", reg.digest, active.SALT_KIND)
+        assert not answer.verify(key, other[run], "requests", reg.digest, active.SALT_KIND)
+        assert not dataclasses.replace(answer, run_id=other[run]).verify(key, other[run], "requests", reg.digest,
+                                                                         active.SALT_KIND)
+
+    async def replaying(answer: Revealed, client_runs: tuple[bytes, ...]) -> list[bytes | str]:
+        line = json.dumps({"window": answer.window} | {f: getattr(answer, f).hex() for f in (
+            "value", "signature", "key_id", "run_id")}).encode() + b"\n"
+
+        async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            await reader.readline()
+            writer.write(line)
+            await writer.drain()
+            writer.close()
+
+        server = await asyncio.start_server(handle, "127.0.0.1", 0, limit=active.REVEAL_LINE_BYTES)
+        at, out = server.sockets[0].getsockname()[:2], []
+        for run in client_runs:
+            try:
+                out.append(await asyncio.to_thread(RemoteCertifier(*at, key, challenger, "requests", run).reveal, 0,
+                                                   reg))
+            except RuntimeError as e:
+                out.append(str(e))
+        server.close()
+        await server.wait_closed()
+        return out
+
+    assert asyncio.run(replaying(answers[RUN], (OTHER_RUN, RUN))) == [
+        f"the answer for window 0's salt is another run's, not run {OTHER_RUN.hex()[:16]}…'s",
+        bytes([1]) * active.SALT_BYTES]
+    assert asyncio.run(replaying(dataclasses.replace(answers[RUN], run_id=OTHER_RUN), (OTHER_RUN,))) == [
+        "the answer for window 0's salt isn't signed by the certifier's key"]
+    with pytest.raises(ValueError, match="run id is 32 bytes"):
+        RemoteCertifier("127.0.0.1", 9, key, challenger, "requests", RUN[1:])
+
+
+def test_a_proxy_and_its_client_name_one_certifier_run_which_its_answers_bind(tmp_path):
+    """`certifier_run`, (key id, run id, link), is one identity on both sides: a proxy's (its signer's key id, `run_id`
+    and the ingress link the reveal messages bind, not the egress one) equals a `RemoteCertifier` client's of it, and
+    a `Revealed` answer's key id and run id, with the link it verifies for, are it. A proxy without a signer has
+    none."""
+    (tmp_path / "challenger").mkdir()
+    certifier = signers.signer(tmp_path)
+    challenger = signers.signer(tmp_path / "challenger", b"challenger")
+    key, reg = certifier.public_key(), registration(0)
+    p = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=lambda: 0.0,
+              salt=lambda w, n: bytes([w + 1]) * n, egress_link="out-3", ingress_link="in-7",
+              challenger_key=challenger.public_key(), signer=certifier)
+    for _ in range(2 * INGRESS.buckets):
+        p.bucketer.tick()
+    client = RemoteCertifier("127.0.0.1", 9, key, challenger, "in-7", p.run_id)
+    assert p.certifier_run == client.certifier_run == (key.key_id, p.run_id, "in-7")
+    assert client.key_id == key.key_id
+    key_id, run_id, link = client.certifier_run
+    answer = p.reveal(0, reg, challenger.sign(active.reveal_request_message(key_id, run_id, link, 0, reg.digest,
+                                                                            active.SALT_KIND)))
+    assert (answer.key_id, answer.run_id, link) == p.certifier_run
+    assert answer.verify(key, run_id, link, reg.digest, active.SALT_KIND)
+    assert not answer.verify(key, run_id, "out-3", reg.digest, active.SALT_KIND)
+    with pytest.raises(ValueError, match="no key id"):
+        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="in-7").certifier_run
+
+
 ENVELOPE = ClockSync(max(SYNC_SET.deltas), min(SYNC_SET.rhos))
 
 
@@ -726,10 +1389,11 @@ def test_a_proxy_back_from_maintenance_publishes_the_full_runs_later_windows():
     window_bytes = EGRESS.buckets * EGRESS.allocation * B
     assert wire == full_wire[2 * window_bytes :] and len(wire) == window_bytes
     with pytest.raises(ValueError, match="starts at one of windows"):
-        Proxy(("127.0.0.1", 1), EGRESS, INGRESS, SYNC_SET, syncs, origin=0.0, start=WINDOWS + 1)
+        Proxy(("127.0.0.1", 1), EGRESS, INGRESS, SYNC_SET, syncs, origin=0.0, ingress_link="requests",
+              start=WINDOWS + 1)
     with pytest.raises(ValueError, match="online prover"):
-        Proxy(("127.0.0.1", 1), EGRESS, INGRESS, SYNC_SET, [], origin=0.0, start=1, windows=WINDOWS,
-              prover=online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ClockSync(4, 1 / 2)))
+        Proxy(("127.0.0.1", 1), EGRESS, INGRESS, SYNC_SET, [], origin=0.0, ingress_link="requests", start=1,
+              windows=WINDOWS, prover=online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ClockSync(4, 1 / 2)))
 
 
 class Held(Executor):
@@ -765,7 +1429,7 @@ def test_a_choice_not_ready_at_its_window_declares_the_envelope():
     raw, committed = audit(proxy, FRAMES, ready.syncs)
     assert raw == committed == [(link, w, None) for link in ("responses", "requests") for w in range(WINDOWS)]
     with pytest.raises(ValueError, match="off its tick"):
-        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, [], origin=0.0, windows=WINDOWS,
+        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, [], origin=0.0, ingress_link="requests", windows=WINDOWS,
               prover=online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ENVELOPE), executor=held)
 
 
@@ -820,8 +1484,8 @@ def test_a_late_tick_fails_closed_and_does_not_slip():
 
     async def run():
         clock = VirtualClock(0.0)
-        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=clock,
-                      sleep=clock.sleep)
+        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                      clock=clock, sleep=clock.sleep)
         writer = NullWriter()
         running = asyncio.create_task(proxy.run(EmptyReader(), writer))
         for t in range(WINDOWS * EGRESS.buckets):
@@ -836,6 +1500,69 @@ def test_a_late_tick_fails_closed_and_does_not_slip():
                                        for link in ("responses", "requests") for w in range(WINDOWS)])
     assert all(len(r.grid) == EGRESS.buckets for r in proxy.records)
     assert len(writer.data) == WINDOWS * EGRESS.buckets * EGRESS.allocation * B
+
+
+def test_an_egress_tick_slow_to_write_its_bucket_leaves_the_ingress_tick_at_its_boundary_on_time():
+    """Both grids tick at every boundary, and the link takes twice the slack to take each egress bucket, as a loaded
+    host's loop can between a boundary and a tick's turn. The ingress tick due there runs first (`TICK_ORDER`) and
+    reads its link on time, so every window of both links is accepted; run after the egress tick, as it was, it read
+    its link twice the slack late and failed every ingress window closed."""
+
+    async def run():
+        clock = VirtualClock(0.0)
+        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                      clock=clock, sleep=clock.sleep)
+        running = asyncio.create_task(proxy.run(EmptyReader(), SlowLink(clock, 2 * proxy.slack)))
+        for t in range(WINDOWS * EGRESS.buckets):
+            clock.advance(t * TAU)
+            await proxy.until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
+        await running
+        return proxy
+
+    proxy = asyncio.run(run())
+    assert max(proxy.lateness["ingress"]) == max(proxy.lateness["egress"]) == 0
+    assert sorted((r.link, r.window, r.status.reason) for r in proxy.records) == \
+        sorted((link, w, None) for link in ("responses", "requests") for w in range(WINDOWS))
+
+
+class SlackClock(VirtualClock):
+    """A `VirtualClock` whose waits end as late as Linux lets an epoll wait of a niced process end: by 0.5 % of its
+    timeout, up to 100 ms (`select_estimate_accuracy`)."""
+
+    def __init__(self, now: float = 0.0) -> None:
+        super().__init__(now)
+        self.waits: list[float] = []
+
+    async def sleep(self, delay: float) -> None:
+        if delay > 0:
+            self.waits.append(delay)
+        await super().sleep(delay + min(delay / 200, 0.1) if delay > 0 else delay)
+
+
+def test_a_first_tick_10_s_after_the_proxy_is_up_is_on_time_in_a_niced_process():
+    """The proxy is up 10 s before its origin, as `certifier_serve` starts it. One wait for the first tick would end
+    50 ms late, past the slack, and fault window 0 on both links (`monitor-unavailable`), as it did on the first
+    rehearsals against vLLM at nice 19; waits of at most `MAX_WAIT_S` (`precise_sleep`, the proxy's own sleep) keep
+    every tick within the slack."""
+
+    async def run():
+        clock = SlackClock(0.0)
+        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=10.0, ingress_link="requests",
+                      clock=clock, sleep=lambda delay: active.wait_until(clock() + delay, clock, clock.sleep))
+        running = asyncio.create_task(proxy.run(EmptyReader(), NullWriter()))
+        while not running.done():
+            await clock.sleep(0)
+            clock.advance(clock.now + 1e-3)
+        await running
+        return proxy, clock
+
+    proxy, clock = asyncio.run(run())
+    assert max(proxy.lateness["egress"] + proxy.lateness["ingress"]) < proxy.slack
+    assert sorted((r.link, r.window, r.status.reason) for r in proxy.records) == \
+        sorted((link, w, None) for link in ("responses", "requests") for w in range(WINDOWS))
+    assert max(clock.waits) <= active.MAX_WAIT_S
+    assert Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=10.0,
+                 ingress_link="requests").sleep is active.precise_sleep
 
 
 def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
@@ -856,8 +1583,8 @@ def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
             await clock.sleep(delay - (0.3 * TAU if ingress and abs(clock() + delay - early * TAU) < 1e-9 else 0))
 
         prover = online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ClockSync(1, 1), lag=1)
-        proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, [], origin=0.0, clock=clock,
-                      sleep=sleep, prover=prover, windows=WINDOWS, executor=active.InlineExecutor())
+        proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, [], origin=0.0,
+                      ingress_link="requests", clock=clock, sleep=sleep, prover=prover, windows=WINDOWS, executor=active.InlineExecutor())
         link, writer = LinkReader(), NullWriter()
         running = asyncio.create_task(proxy.run(link, writer))
 
@@ -879,7 +1606,7 @@ def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
             await until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
             if t == early - 1:
                 clock.advance(t * TAU + TAU / 2)
-                link.chunks.put_nowait(active.encode_frame(LAST, 1, request("a", 1), B))
+                link.chunks.put_nowait(active.request_frames(request("a", 1), B))
                 await until(lambda p: p.link_frames_read == 1)
         await running
         server.writers["a"].close()
@@ -904,8 +1631,8 @@ def test_an_overrun_link_fails_closed():
 
     async def run():
         clock = VirtualClock(0.0)
-        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=clock,
-                      sleep=clock.sleep)
+        proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                      clock=clock, sleep=clock.sleep)
         writer = NullWriter(backlog={7: EGRESS.allocation * B + 1})
         running = asyncio.create_task(proxy.run(EmptyReader(), writer))
         for t in range(WINDOWS * EGRESS.buckets):
@@ -928,8 +1655,9 @@ def test_a_server_that_refuses_a_stream_fails_ingress_closed():
         closed.close()
         await closed.wait_closed()
         clock = VirtualClock(0.0)
-        proxy = Proxy(upstream, EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=clock, sleep=clock.sleep)
-        frame = active.encode_frame(LAST, 1, request("a", 1), B)
+        proxy = Proxy(upstream, EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests", clock=clock,
+                      sleep=clock.sleep)
+        frame = active.request_frames(request("a", 1), B)
         running = asyncio.create_task(proxy.run(EmptyReader([frame]), NullWriter()))
         for t in range(WINDOWS * EGRESS.buckets):
             clock.advance(t * TAU)
@@ -994,8 +1722,8 @@ async def replay_receipts(sessions, pause_at: int | None = None):
     clock = VirtualClock(-TAU / 2)
     server = ReceiptServer(clock, sessions)
     srv = await asyncio.start_server(server.handle, "127.0.0.1", 0)
-    proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, syncs, origin=0.0, clock=clock,
-                  sleep=clock.sleep)
+    proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, syncs, origin=0.0,
+                  ingress_link="requests", clock=clock, sleep=clock.sleep)
     accepted: asyncio.Future = asyncio.get_running_loop().create_future()
     link = await asyncio.start_server(lambda r, w: accepted.set_result(asyncio.create_task(proxy.run(r, w))),
                                       "127.0.0.1", 0)
@@ -1021,11 +1749,11 @@ async def replay_receipts(sessions, pause_at: int | None = None):
             continue
         await server.until(proxy.requests_released)
         clock.advance(t * TAU + TAU / 2)
-        for name, stream, a, ds in sessions:
+        for name, _, a, ds in sessions:
             if a == t:
-                body = request(name, len(ds))
-                writer.write(active.encode_frame(LAST, stream, body, B))
-                sent += 1
+                wire = active.request_frames(request(name, len(ds)), B)
+                writer.write(wire)
+                sent += len(wire) // B
         await proxy.until(lambda p, n=sent: p.link_frames_read >= n)
         written += server.write_due(t)
         await proxy.until(lambda p, n=written: len(p.frames) >= n)
@@ -1100,3 +1828,15 @@ class NullWriter:
 
     def close(self) -> None:
         pass
+
+
+class SlowLink(NullWriter):
+    """A link that takes `seconds` of the clock to take each write."""
+
+    def __init__(self, clock: VirtualClock, seconds: float) -> None:
+        super().__init__()
+        self.clock, self.seconds = clock, seconds
+
+    def writelines(self, chunks) -> None:
+        super().writelines(chunks)
+        self.clock.advance(self.clock.now + self.seconds)

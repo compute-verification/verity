@@ -25,7 +25,7 @@ import re
 import sys
 import zlib
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Iterator
 
 import numpy as np
 
@@ -582,15 +582,16 @@ def word_call_families() -> set[str]:
     return _SHORT["words"]
 
 
-def call_families() -> set[str]:
+def call_families(found: dict[str, Any] | None = None) -> set[str]:
     """The Definition families a served Program calls, where the partition invariant applies: the word Call families
     (`word_call_families`: the replay's row families, every frontend vocabulary kind, every template's Definition), and the
     Boolean version of each of those (`boolean_call_families`: the Program on bits calls them in their place).  Any other
-    Definition's gates are partitioned inside the Call that contains them.  It builds the whole catalog; `is_call` asks whether
-    one family is among them, mostly without."""
+    Definition's gates are partitioned inside the Call that contains them.  It builds the whole catalog, or takes ``found``, a
+    `suite` built already (`cli._tasks`'s: a later one would also hold what building its bodies registered); `is_call` asks
+    whether one family is among them, mostly without."""
     if not _CALLS:
         words = word_call_families()
-        _CALLS.update(words | boolean_call_families(set(words)))
+        _CALLS.update(words | boolean_call_families(set(words), found))
     return _CALLS
 
 
@@ -684,23 +685,65 @@ def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) 
     return out
 
 
-def boolean_call_families(word_calls: set[str]) -> set[str]:
+def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = None) -> set[str]:
     """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.program.boolean.boolean_version` (the
     switch's table of `word=` links) of each catalog specialization of a word Call family that has one, and of each word Call
     family made on demand (`on_demand_boolean_families`)."""
     from verity.ml.circuits.evaluation import ScalarReference
     from verity.ml.circuits import boolean as BL
-    from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
-
     out: set[str] = on_demand_boolean_families(word_calls)
-    for fn in suite().values():
+    for fn in (suite() if found is None else found).values():
         if family(fn) not in word_calls or isinstance(fn, ScalarReference) or BL.is_boolean(fn):
             continue
-        try:
-            out.add(family(boolean_version(fn)))
-        except NoBooleanVersion:
-            continue
+        if (f := boolean_family(fn)) is not None:
+            out.add(f)
     return out
+
+
+def boolean_family(fn: Any) -> str | None:
+    """The family of ``fn``'s Boolean version (`verity_vllm.program.boolean.boolean_version`), or None when it has none."""
+    from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
+
+    try:
+        return family(boolean_version(fn))
+    except NoBooleanVersion:
+        return None
+
+
+def boolean_links() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """The Boolean table's two lookups (`verity_vllm.program.boolean._load`) as families: each word Definition's descriptor id
+    with the Boolean families linked to it exactly, and each name with the Boolean families whose word is a function of their
+    bindings.  `boolean_family` of a Definition is among those of its descriptor id and of its name, or None."""
+    from verity_vllm.program.boolean import _load
+
+    exact, by_name, _errors = _load()
+    return ({k: {f"{d.name}_v{d.version}" for d in ds} for k, ds in exact.items()},
+            {k: {f"{d.name}_v{d.version}" for d in ds} for k, ds in by_name.items()})
+
+
+def catalog_units() -> Iterator[tuple[tuple[str, ...], Callable[[], list[Any]], str, str]]:
+    """``(units, make, kind, label)`` of each binding, in catalog order: each root function's (``kind`` its name), each
+    `_model_roots` entry's (``model``: ``make`` makes the model's root, unbuilt) and each template's (``template``: its
+    Definition and target at each of its instance statics).  A generator, so each binding runs before the next is made."""
+    for name in root_functions():
+        for units, make in _root_bindings(name):
+            yield units, make, name, name
+    for prefix, ns in binding_files():
+        for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
+            yield (f"{prefix}_model_roots:{label}",), lambda make=make: [make()], "model", label
+    for label, sub, sts in templates():
+        yield ((_template_unit(sub.template.id),),
+               lambda sub=sub, sts=sts: [x for st in sts for x in (sub.definition(**st), sub.target(**st))], "template", label)
+
+
+def pouw_bindings() -> list[tuple[tuple[str, ...], Callable[[], list[Any]]]]:
+    """The PoUW root functions `suite` keeps whatever their size."""
+    return _root_bindings("_pouw_roots")
+
+
+#: each `catalog` call, in turn: its registered roots (`_registered`: a binding or a body build can register more) and each
+#: binding's (units, kind, label, roots) (`circuit_check.units`)
+CATALOGS: list[tuple[list[Any], list[tuple[tuple[str, ...], str, str, list[Any]]]]] = []
 
 
 def catalog(by_unit: list | None = None) -> list[Any]:
@@ -708,23 +751,24 @@ def catalog(by_unit: list | None = None) -> list[Any]:
     (units, roots) appended to it."""
     load_registries()
     roots = _registered()
+    made: list[tuple[tuple[str, ...], str, str, list[Any]]] = []
+    CATALOGS.append((list(roots), made))
     ROOT_ERRORS.clear()
-    for name in root_functions():
-        for units, make in _root_bindings(name):
-            roots += _produce(units, make, by_unit)
-    for prefix, ns in binding_files():
-        for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
+    for units, make, kind, label in catalog_units():
+        if kind != "model":
+            got = _produce(units, make, by_unit)
+        else:
             def built(make=make):
-                fn = make()
+                fn, = make()
                 _ = fn.body
                 return [fn]
             try:
-                roots += _produce((f"{prefix}_model_roots:{label}",), built, by_unit)
+                got = _produce(units, built, by_unit)
             except Exception as e:  # noqa: BLE001  (named, and the suite fails on it)
                 ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
-    for _label, sub, sts in templates():
-        roots += _produce((_template_unit(sub.template.id),),
-                          lambda sub=sub, sts=sts: [x for st in sts for x in (sub.definition(**st), sub.target(**st))], by_unit)
+                continue
+        made.append((units, kind, label, got))
+        roots += got
     return roots
 
 
@@ -787,7 +831,7 @@ def suite() -> dict[str, Any]:
     REACHED.clear()
     REACHED.update(reachable(catalog(by_unit)))
     out = select(REACHED)
-    for units, make in _root_bindings("_pouw_roots"):
+    for units, make in pouw_bindings():
         out.update({fn.id: fn for fn in _produce(units, make, by_unit)})
     for units, roots in by_unit:
         for fid in reachable(roots):
@@ -796,8 +840,8 @@ def suite() -> dict[str, Any]:
     return dict(sorted(out.items()))
 
 
-__all__ = ["MAX_GATES", "REACHED", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY",
-           "binding_files", "binding_roots", "boolean_call_candidates", "boolean_call_families", "call_families", "catalog",
-           "certified_boolean_calls", "definition", "family", "instance_statics", "is_call", "kind_of", "load_registries",
-           "reachable", "root_functions", "select", "subcircuit", "suite", "table_probe", "template_params", "templates",
-           "word_call_families"]
+__all__ = ["CATALOGS", "MAX_GATES", "REACHED", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY",
+           "binding_files", "binding_roots", "boolean_call_candidates", "boolean_call_families", "boolean_family",
+           "boolean_links", "call_families", "catalog", "catalog_units", "certified_boolean_calls", "definition", "family",
+           "instance_statics", "is_call", "kind_of", "load_registries", "pouw_bindings", "reachable", "root_functions",
+           "select", "subcircuit", "suite", "table_probe", "template_params", "templates", "word_call_families"]

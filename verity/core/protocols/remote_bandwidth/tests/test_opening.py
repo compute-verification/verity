@@ -66,7 +66,7 @@ def window(store: O.Store) -> SimpleNamespace:
     reg = store.registration
     p = audit.Params(blocks=N, deadline_ns=10**6, windows=1, samples=4, delta=1e-3, window_ns=10, codec=P512)
     clock = Clock()
-    s = O.Session(p, reg, None, coins.Challenger(reg.digest, 0, p.coins, entropy=Entropy(b"coins")), not_before_ns=0,
+    s = O.Session(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1), not_before_ns=0,
                   clock=clock)
     prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
     challenge, previous, passes = s.start(), reg.digest, {}

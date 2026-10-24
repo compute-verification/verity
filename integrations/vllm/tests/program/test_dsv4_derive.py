@@ -26,11 +26,11 @@
 * `DeepGemmFp8EinsumRule`: the o-projection's `fp8_einsum` over that quant's words and scales derives per token word for word the
   grouped DeepGEMM twin (`kernels.deepgemm_twins`), and another expression or recipe refuses by name;
 * `SiluAndMulWithClampRule`: the shared expert's clamped SwiGLU derives per row word for word the twin the capture holds to the
-  served kernel (`dsv4_moe_capture_gpu.clamp_twin`), and SwiGLU-OAI's alpha and beta or a limit that is no bf16 value refuses by name;
+  served kernel (`dsv4_moe_twin.clamp_twin`), and SwiGLU-OAI's alpha and beta or a limit that is no bf16 value refuses by name;
 * `TopkSoftplusSqrtHashRule`: a hash layer's router derives per token word for word the capture's twin over the table's ids
-  (`dsv4_moe_capture_gpu.hash_twin`), and the kernel's scored path or another normalisation refuses by name;
+  (`dsv4_moe_twin.hash_twin`), and the kernel's scored path or another normalisation refuses by name;
 * `Dsv4TopkRule`: a scored layer's `_dsv4_topk_kernel` launch derives per token word for word the capture's twin
-  (`dsv4_moe_capture_gpu.router_twin`), and another kernel body or specialization refuses by name;
+  (`dsv4_moe_twin.router_twin`), and another kernel body or specialization refuses by name;
 * `rules/vllm_marlin_moe.py`: the Marlin MoE's align derives as `moe_align_block_size` with each expert's pairs in key order, and
   its two expert GEMMs per pair word for word the twin (`kernels.marlin_moe_rows.launch`) at the config the capture gives, and
   a batch, block or shape the capture does not give, or a launch that also routes other requests' tokens, refuses by name;
@@ -74,12 +74,12 @@ from verity_vllm.program.kernels import flashmla_prefill_twin as FP
 from verity_vllm.program.kernels import flashmla_twin as FT
 from verity_vllm.program.kernels import marlin_moe_rows as MR
 from verity_vllm.program.kernels import mhc_twin as W
+from verity_vllm.program.kernels.dsv4_moe_twin import clamp_twin, hash_twin, router_twin
 from verity_vllm.program.kernels.serve3_reference import materialize
 from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.program.registry import hopper
 from tests.program.test_dsa_norm import ptx_block_model
 from tests.program.test_dsv4_indexer import head as inv_rope_head
-from tests.properties.dsv4_moe_capture_gpu import clamp_twin, hash_twin, router_twin
 
 
 class _Overlapped(nn.Module):

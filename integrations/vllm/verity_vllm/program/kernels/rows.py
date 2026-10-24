@@ -762,7 +762,8 @@ _row("MoeSum_v1", moe_sum, ("sum",))
 
 from verity_vllm.program.kernels import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
 from verity_vllm.program.kernels import (  # noqa: E402
-    act_rows, batched_gemm_rows, cublas_gemm_rows, deepgemm_rows, dsa_norm_rows, glm53_rows, int8_rows, moe_align_rows, softcap_rows,
+    act_rows, batched_gemm_rows, cublas_gemm_rows, deepgemm_rows, dsa_norm_rows, dsv4_rows, glm53_rows, int8_rows, moe_align_rows,
+    softcap_rows,
 )
 
 
@@ -784,6 +785,7 @@ deepgemm_rows.register_rows(EVALUATORS, _row)
 moe_align_rows.register_rows(EVALUATORS, _row)
 glm53_rows.register_rows(EVALUATORS, _row, _sample, EVALUATOR_PROVENANCE)
 cublas_gemm_rows.register_rows(EVALUATORS, _row, EVALUATOR_PROVENANCE)
+dsv4_rows.register_rows(EVALUATORS, _row, EVALUATOR_PROVENANCE)
 from verity_vllm.program.kernels import ir_rows  # noqa: E402
 
 for _f in ir_rows.FAMILIES:

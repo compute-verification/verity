@@ -220,8 +220,8 @@ theorem incomplete_eq (t : ℕ) :
     (i.incomplete t).toFinset = Accounting.Requirement.incomplete (wiring i) (execution i) (layout i) t := by
   ext j
   simp only [Instance.incomplete, List.mem_toFinset, mem_distinct, List.mem_map, List.mem_filter, Bool.and_eq_true,
-    not_contains_iff, decide_eq_true_eq, Accounting.Requirement.incomplete, Finset.mem_image, Finset.mem_filter,
-    wiring, execution, layout]
+    Bool.or_eq_true, not_contains_iff, decide_eq_true_eq, Accounting.Requirement.incomplete, Finset.mem_image,
+    Finset.mem_filter, wiring, execution, layout]
 
 theorem mem_complete {S : List ℕ} {t v : ℕ} : v ∈ i.complete S t ↔ v ∈ S ∧ i.blockOf v ∉ i.incomplete t := by
   simp only [Instance.complete, List.mem_filter, not_contains_iff]

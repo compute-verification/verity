@@ -30,6 +30,7 @@ members = [
     "research",
     "verity",
     "verity-bench",
+    "verity-bench-specs",
     "verity-check",
     "verity-circuit-check",
     "verity-cli",
@@ -47,6 +48,7 @@ members = [
     "verity-lean-audit",
     "verity-machine-model",
     "verity-native-peak",
+    "verity-network-e2e",
     "verity-network-sim",
     "verity-network-traces",
     "verity-numerical",
@@ -2157,6 +2159,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-bench-specs"
+version = "0.0.0"
+source = { virtual = "benchmarks/specs" }
+dependencies = [
+    { name = "verity-vllm" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-vllm", editable = "integrations/vllm" }]
+
+[[package]]
 name = "verity-check"
 version = "0.0.0"
 source = { virtual = "tools/verity/check" }
@@ -2419,6 +2432,17 @@ requires-dist = [
 provides-extras = ["torch"]
 
 [[package]]
+name = "verity-network-e2e"
+version = "0.0.0"
+source = { virtual = "benchmarks/network_e2e" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "." }]
+
+[[package]]
 name = "verity-network-sim"
 version = "0.0.0"
 source = { virtual = "benchmarks/network_sim" }
@@ -2485,6 +2509,7 @@ dependencies = [
     { name = "verity-difftest" },
     { name = "verity-exact-kit" },
     { name = "verity-vllm" },
+    { name = "z3-solver" },
 ]
 
 [package.metadata]
@@ -2497,6 +2522,7 @@ requires-dist = [
     { name = "verity-difftest", editable = "verity/core/difftest" },
     { name = "verity-exact-kit", editable = "benchmarks/pouw/exact_kit" },
     { name = "verity-vllm", editable = "integrations/vllm" },
+    { name = "z3-solver", specifier = ">=4.13" },
 ]
 
 [[package]]

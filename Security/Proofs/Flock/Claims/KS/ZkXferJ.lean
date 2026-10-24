@@ -200,7 +200,7 @@ theorem zkLiveAccJ_of_xferJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512
   obtain ⟨rd, hrd, ev, ev₁, tied, tied₁, hacc, hacc₁, hω⟩ := hx s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P
   refine ⟨rd, hrd, ev, ev₁, tied, tied₁, hacc, hacc₁, fun ω j hj C hC => ?_⟩
   obtain ⟨dg, N, rootB₀, τ, _, _, σL, hσ, htr, hadv, hP, hTau, hsc⟩ := hω ω j hj C hC
-  exact ⟨_, _, _, dg, _, _, _, _, N, rootB₀, fun _ h => ⟨h.1, h.2 rfl⟩,
+  exact ⟨_, _, _, dg, _, _, _, _, N, rootB₀, fun _ h => ⟨h.1, h.2 rfl⟩, fun _ _ h => h.1,
     decodesOff_deploy hs hin hset h0 L hz hk hlay hd hj rootB₀ (Claims.Flock.oracleOf C), τ, inferInstance,
     inferInstance, σL, hσ, htr, hadv, hP, hTau, hsc⟩
 

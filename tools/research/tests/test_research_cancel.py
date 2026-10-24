@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from research import cli, remote
+from research.telemetry.procs import stat_fields
 
 TOOL = Path(remote.__file__).resolve().parents[1]
 
@@ -36,7 +37,9 @@ def _run(tmp_path: Path, monkeypatch, state: str = "running"):
     d = root / "runs" / "r-x"
     d.mkdir(parents=True)
     workload, runner = _workload(d), subprocess.Popen(["cat"], stdin=subprocess.PIPE, start_new_session=True)
-    (d / "status.json").write_text(json.dumps({"state": state, "pid": workload.pid, "pgid": workload.pid}))
+    stream = f"h:{runner.pid}:{stat_fields(runner.pid)['starttime_ticks']}"
+    (d / "status.json").write_text(json.dumps({"state": state, "pid": workload.pid, "pgid": workload.pid, "transitions": [
+        {"state": "running", "stream": stream, "pid": workload.pid, "pgid": workload.pid}]}))
     (d / "events.jsonl").write_text("")
     local = tmp_path / "local" / "r-x"
     local.mkdir(parents=True)
@@ -166,6 +169,42 @@ def test_a_cancel_is_reported_delivered_when_the_runner_records_the_exit_right_a
         _end(workload, runner)
 
 
+def test_a_run_held_for_disk_before_it_starts_is_withdrawn_and_recorded_so(tmp_path, monkeypatch, capsys):
+    """A queued run waiting in its machine's `research disk-hold` has no status.json, and the cancel refused it (`not running
+    yet`): on 19 Oct infra ended 20 such holds by hand. Here a real disk-hold holds it (at 0%, so the disk never has room)."""
+    root = tmp_path / "machine"
+    d, req = root / "runs" / "r-x", root / "requests" / "r-x"
+    d.mkdir(parents=True)
+    req.mkdir(parents=True)
+    (req / "request.json").write_text("{}")
+    hold = subprocess.Popen([sys.executable, "-m", "research", "disk-hold", "--gb", "1", "--path", str(tmp_path), "--ack",
+                             str(req / remote.LAUNCH_ACK), "--", "true"], stderr=subprocess.PIPE, start_new_session=True,
+                            env={**os.environ, "PYTHONPATH": str(TOOL), "RESEARCH_DISK_HOLD_PCT": "0"})
+    try:
+        assert b"research disk-hold: holding" in hold.stderr.readline()
+        (d / "launch.json").write_text(json.dumps({"run_id": "r-x", "runner_pid": hold.pid, "request": str(req / "request.json")}))
+        local = tmp_path / "local" / "r-x"
+        local.mkdir(parents=True)
+        (local / "remote.json").write_text(json.dumps({"run_id": "r-x", "phase": "launched", "host": "h", "port": 22, "remote_run_dir": str(d),
+                                                       "root": str(root), "tool": _snapshot(root)}))
+        monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **k: ["sh", "-c"])
+        assert cli.main(["cancel", str(local), "--reason", "superseded", "--by", "infra", "--runs-dir", str(local.parent)]) == 0
+        assert hold.wait() == -signal.SIGTERM
+        assert f"withdrawn before it started: SIGTERM to its hold (research disk-hold pid {hold.pid})" in capsys.readouterr().out
+        for where in (d, local):
+            refused = json.loads((where / "refused.json").read_text())
+            assert (refused["fault"], refused["reason"], refused["by"]) == ("Withdrawn", "superseded", "infra")
+        intent, result = [json.loads(x) for x in (local / "events.jsonl").read_text().splitlines()]
+        assert (intent["kind"], intent["actor"], intent["target"]["pids"]) == ("cancel_intent", "manual", [hold.pid])
+        assert result["kind"] == "cancel_result" and result["target_still_present"] == []
+        assert cli.main(["cancel", str(local), "--reason", "x", "--runs-dir", str(local.parent)]) == 1
+        assert "r-x was refused on its machine (Withdrawn: superseded), so there is nothing to cancel" in capsys.readouterr().err
+    finally:
+        if hold.poll() is None:
+            hold.kill()
+            hold.wait()
+
+
 def test_a_run_that_is_not_running_is_refused_and_nothing_is_signalled(tmp_path, monkeypatch, capsys):
     local, d, workload, runner = _run(tmp_path, monkeypatch, state="done")
     try:
@@ -174,6 +213,78 @@ def test_a_run_that_is_not_running_is_refused_and_nothing_is_signalled(tmp_path,
         assert (d / "events.jsonl").read_text() == "" and workload.poll() is None
     finally:
         _end(workload, runner)
+
+
+def _held(tmp_path: Path, monkeypatch):
+    """A run its machine holds for disk ahead of its runner, as remote._launch_request starts one: launch.json names the hold's pid
+    and argv, `research disk-hold --gb <more than any disk> --ack <root>/requests/r-x/.launch-ack -- <runner argv>`, and no
+    status.json.  The test returns once the hold acknowledged the launch on the FIFO, so it is holding."""
+    local, d, workload, runner = _run(tmp_path, monkeypatch)
+    _end(workload, runner)
+    (d / "status.json").unlink()
+    root, req = tmp_path / "machine", tmp_path / "machine" / "requests" / "r-x"
+    (req / "custody").mkdir(parents=True)
+    (req / "custody" / "cred.json").write_text("{}")
+    (tmp_path / "ramlock").mkdir()
+    (mem := tmp_path / "ramlock" / "r-x.json").write_text(json.dumps({"run_id": "r-x", "gb": 40}))
+    (req / "request.json").write_text(json.dumps({"run_id": "r-x", "runs_root": str(root / "runs"), "custody": True}))
+    ack = req / ".launch-ack"
+    os.mkfifo(ack)
+    fd = os.open(ack, os.O_RDONLY | os.O_NONBLOCK)
+    keep = os.open(ack, os.O_WRONLY)                 # a writer held open, so the read below waits for the hold's line, not EOF
+    argv = [sys.executable, "-m", "research", "disk-hold", "--gb", "1e12", "--path", str(root), "--ack", str(ack), "--",
+            sys.executable, "-m", "research", "run", "--id", "r-x", "--remote-json", json.dumps({"mem": {"reservation": str(mem)}}), "--", "true"]
+    hold = subprocess.Popen(argv, env={**os.environ, "PYTHONPATH": str(TOOL)}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            start_new_session=True)
+    os.set_blocking(fd, True)
+    assert os.read(fd, 64) == b"disk-hold\n"
+    os.close(fd)
+    os.close(keep)
+    (d / "launch.json").write_text(json.dumps({"run_id": "r-x", "runner_pid": hold.pid, "argv": argv}))
+    return local, d, req, mem, hold
+
+
+def test_cancel_of_a_run_held_for_disk_ends_the_hold_and_records_it_withdrawn(tmp_path, monkeypatch, capsys):
+    """INF-101: `research cancel` of a run in `research disk-hold` said "not running yet", so a held run could only wait."""
+    local, d, req, mem, hold = _held(tmp_path, monkeypatch)
+    try:
+        assert cli.main(["cancel", str(local), "--reason", "superseded", "--by", "ci", "--runs-dir", str(local.parent)]) == 0
+        assert hold.wait() == -signal.SIGTERM
+        refused = json.loads((d / "refused.json").read_text())
+        assert (refused["fault"], refused["reason"], refused["by"]) == ("Withdrawn", "superseded", "ci")
+        assert [(h["hold"], h["pid"]) for h in refused["holds"]] == [("disk-hold", hold.pid)]
+        assert not mem.exists() and not (req / "custody" / "cred.json").exists(), "what the launch took goes"
+        assert json.loads((local / "refused.json").read_text())["fault"] == "Withdrawn", "fetched back"
+        assert cli.R.summarize(local)["state"] == "refused"
+        out = capsys.readouterr().out
+        assert f"withdrawn before it started: SIGTERM to its hold (research disk-hold pid {hold.pid})" in out
+        assert f"removed what its launch staged: " in out and str(mem) in out
+        assert f"research cancel: withdrawn from its disk-hold (pid {hold.pid}): superseded" in (d / "launcher.log").read_text()
+
+        assert cli.main(["cancel", str(local), "--reason", "again", "--runs-dir", str(local.parent)]) == 1
+        assert "r-x was refused on its machine (Withdrawn: superseded), so there is nothing to cancel" in capsys.readouterr().err
+    finally:
+        if hold.poll() is None:
+            hold.kill()
+            hold.wait()
+
+
+def test_a_held_runs_pid_that_is_no_longer_its_hold_is_not_signalled(tmp_path, monkeypatch, capsys):
+    """The hold execs the runner in place, so its pid is the runner's once it releases; and a pid may be reused after it exits.
+    The hold is found by its argv naming the run's ack FIFO, never by launch.json's pid."""
+    local, d, _req, mem, hold = _held(tmp_path, monkeypatch)
+    other = subprocess.Popen(["cat"], stdin=subprocess.PIPE, start_new_session=True)
+    try:
+        launch = json.loads((d / "launch.json").read_text())
+        (d / "launch.json").write_text(json.dumps({**launch, "runner_pid": other.pid}))
+        assert cli.main(["cancel", str(local), "--reason", "x", "--runs-dir", str(local.parent)]) == 0
+        assert hold.wait() == -signal.SIGTERM and other.poll() is None, "the hold ends, the pid launch.json names is left alone"
+        assert [h["pid"] for h in json.loads((d / "refused.json").read_text())["holds"]] == [hold.pid]
+    finally:
+        _end(other)
+        if hold.poll() is None:
+            hold.kill()
+            hold.wait()
 
 
 def test_a_stale_running_status_whose_pgid_is_another_jobs_group_is_refused(tmp_path, monkeypatch, capsys):

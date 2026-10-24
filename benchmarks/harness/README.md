@@ -11,7 +11,7 @@ those like any other caller. This file is the harness's contract: how a point is
 ~~~text
 verity-bench plan SPEC       # expand a spec; each point's identity and its passing run, if any
 verity-bench run SPEC        # one recorded `research run --queue` per point without a passing run
-verity-bench check SPEC      # exit 0 only when every point has a passing run
+verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
@@ -22,8 +22,30 @@ vLLM pin, engine settings), its arms and the modules of its experimental arms, i
 `benchmarks/specs/`, `verity-bench/vllm-sweep/v0`), reps, eager or CUDA graphs, and admission (`max_minutes` and friends,
 which never enter identity). Loading is strict: an unknown key, a wrong type or an unknown GPU id is an error before
 anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or a node-local directory with its
-`model_digest` (`presets.local_checkpoint`'s hash of its files), which a dispatched point recomputes and refuses to run on
-when it differs.
+`model_digest` (`presets.local_checkpoint`'s hash of its files but a Hub snapshot's dot-files and Markdown, which no loader
+reads), which a dispatched point recomputes and refuses to run on when it differs.
+
+A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, `sampled-proofs:SCHEME`) runs the preset's precision with stock FP8 as its
+control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
+checkpoint and quantizes it itself), its `control` (another arm of the spec, or `"none"`), and its `protocols_config`,
+which `verity_vllm.LLM` takes as it is, `{protocol: {...}}`, except that a string `"$NAME"` is the point's environment
+variable NAME (the cubin the spec's setup builds, say). The harness gives an arm with PoUW an in-process challenger as
+its `coins` (`pouw.challenged`). The adapter ends one Pearl-C pass per model forward itself; the passes'
+counts (`passes`, `units`, `tiles`, screened, failing and unsure rows) are each timed rep's `pearl_c` spans, and the
+experimental arm's call check on the installed run is the arm's own gate. Pearl-C's y carries the epoch's live salt, so
+no stock arm is its token control (`llama31-8b-1gpu-pouw-protocol` has `"none"`). The table is part of the resolved spec
+and so of every point's identity, and the arm's cubin digest is its `kernel_digest`.
+
+The precision `int8_exact` is the eager exact-int8 engine of an int8 pin (every linear and attention layer on the plain
+exact-int8 arm, read back from the layers), and `stock-int8` is that engine without a protocol. PoUW's H1 + fx1
+(`pouw:eps1-sm120-h1fx1`) runs on it with `stock-int8` as its token control, since its arm serves its own y. Its settings
+take the built engine's model runner, which `verity_vllm.LLM` refuses to go without before it builds, so the harness
+installs it on the built engine itself (`protocol_options.install`), one window a run: its `steps` (S) the run's step
+bound (`arms.window_steps`), its `rows` (T) the spec's, which must be the engine's `max_num_batched_tokens`, and its
+coins a fresh in-process salt coin and S round coins, so it credits nothing and measures cost only. The window opens
+before the clock starts and closes after it stops; each timed rep's `extras.h1_window` says what it served, and the
+arm's own gate is every window static, every served call passing the credit gate and every request entered
+(`llama31-8b-1gpu-pouw-h1`).
 
 A sweep is the product of its batches, prompt lengths, traffic shapes and samplings: `greedy`, or `stochastic`
 (temperature 0.8, top-p 0.95). Every request carries its own seed, so a stochastic point's tokens are a function of the
@@ -32,13 +54,25 @@ engine's numerics like a greedy one's.
 The engine settings `serving_defaults = true` build every engine as vLLM serves (torch.compile, its CUDA-graph mode and
 capture sizes, no batch invariance: the execution label `compiled` of `verity_vllm.engine.served`), with one Inductor
 cache directory for all arms' processes, so they run the kernel configurations the first one autotuned. Without it a
-graph engine replays decode-only CUDA graphs at `capture_sizes`.
+graph engine replays decode-only CUDA graphs at `capture_sizes`, and `verity_vllm.LLM` builds every engine batch
+invariant (`bi-eager`, `bi-compiled`).
+
+A served variant `BUILTIN@eager` or `BUILTIN@compiled` (`stock-fp8@compiled`) is a built-in arm's engine at vLLM's
+serving defaults in that execution, whatever the spec's `eager` and the preset's `serving_defaults` say for the other
+arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compiled`). Its control is the built-in
+unless its `[arm_settings."ARM"]` names another arm or `"none"`, and its `execution` is in the arm's identity. An
+experimental arm may name its own `execution` the same way: `commit@compiled` (`verity_bench.vllm.commit_arm`) is the
+Commit on vLLM's compiled serving, token-controlled by `stock-fp8@compiled` (`llama31-8b-fp8-1gpu-commit-served`).
 
 An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
 names, string values, none of the dispatcher's, queue's or launcher's own) and its `setup`, a script in the source tree
 that `run_point.sh` sources before the point's Python starts (to build the arm's libraries from the dispatched commit and
 export their paths, say), are part of the resolved spec and so of every point's identity. The dispatcher forwards both
 (`--env`, the setup as `VERITY_BENCH_SETUP`), and a point refuses to run under any other.
+
+A served variant's `[arm_settings."ARM"]` may also name its own checkpoint, `model` at `revision`, when its precision
+can't load the preset's: in `llama31-8b-1gpu-pouw-h1-served`, H1's served ratio, `stock-fp8@compiled` loads the int8
+pin's BF16 base.
 
 ## How a point is timed
 
@@ -50,20 +84,26 @@ export their paths, say), are part of the resolved spec and so of every point's 
      `resident_kv_cache_memory_bytes` and `block_kv_cache_memory_bytes`. An engine that doesn't report its pool fails it.
    - `arm`: the arm's own gate, when it provides one.
 
-   An arm can't be its own control. An arm without a control (the stock references, or an experimental arm such as
-   Pearl-C's that computes different tokens) has only its own gate, and the table names it. Tokens are compared, not
+   An arm can't be its own control. An arm without a control (the stock references, an experimental arm such as
+   Pearl-C's that computes different tokens, or a protocol arm whose `control` is `"none"`) has only its own gate, and
+   the table names it. Tokens are compared, not
    logits. One failed gate times nothing: the result keeps its gates and has no points. Three gates run after timing,
    and a failure there keeps the gates and drops the points:
    - `timed-tokens`: each timed rep of an arm with a control produces the control's tokens in that rep, so an arm can't
-     compute something else only when timed.
+     compute something else only when timed. In `resident`, each timed rep of an arm without a control produces the
+     tokens its own gate saw from the same engine (`"against": "gate"`).
    - `engine-identity`: in `blocks`, each timed engine reports the gated engine's KV pool, kernel digest, versions,
      GPU and overrides.
    - `arm-closing`: after an engine's warm-up and timed runs, before it closes, the runner reads the arm's own gate again
      (in `blocks`, one per engine lifetime, with its `cycle`), so an arm that judges every run it saw judges those too.
 2. **Resident interleaving, else alternating blocks.** When every arm's engine fits on the GPU at once (`resident`), each
-   point is warmed once per arm (discarded), then each rep runs every arm once. The baseline alternates between the first
+   point is warmed per arm (discarded), then each rep runs every arm once. The baseline alternates between the first
    and last slot (`interleave_order`). An arm that needs its own engine lifetime makes the whole run `blocks`: each arm
-   gets its own engine for two cycles, the second in reverse arm order, with a discarded warm-up per point in each.
+   gets its own engine for two cycles, the second in reverse arm order, with discarded warm-ups per point in each. The
+   spec's `warmups` (default 1) is how many discarded runs each engine makes of a point before timing it; with
+   `max_warmups` above it, the engine keeps warming, up to that many runs, until two consecutive runs' wall times agree
+   within 5% (`WARMUP_AGREEMENT`), and an engine that never settles is marked `settled: false` in the schedule. Both
+   are part of the identity. The schedule keeps each warm-up's wall time, time to first token and host counters.
    Either way each arm's mean timed position is the same over an even number of reps, so drift over the run (clocks,
    heat) cancels in the means; with odd reps it doesn't quite. `execution` records the mode, why resident failed, and the
    full warm-up and timed schedule. Prefix caching is off, so no run reuses an earlier run's KV.
@@ -97,6 +137,12 @@ An optional metric is recorded for an arm's point only when every rep and every 
 scheduler is reachable; the requests generate more than one token), and the table shows the row only where every arm has
 it.
 
+Each timed rep also keeps where its time went: `trace` (every `step()` iteration's host time and its prefill and decode
+tokens, every request's arrival and first output from the run's start, and the seconds since its engine became ready) and
+`host` (the process's CPU time, the engine thread's, context switches, page faults and garbage-collection time over the
+run, the 1-minute load average when it began, and under `device` the caching allocator's device allocations, frees,
+out-of-memory retries and all-stream synchronizations).
+
 Every metric is reported as a mean, and as a ratio to the baseline (`stock-fp8`, else `stock`) paired by rep, each with
 `n` and, from two reps, a 95% Student-t interval (`ci95`, the quantile of the largest tabulated degrees of freedom at
 or below n − 1). A zero baseline rep leaves the ratio empty rather than averaging the others; the table shows `n` where
@@ -125,8 +171,11 @@ which the dispatcher forwards. `benchmarks` is on its path, so a spec names an e
 the commit, `uv.lock`, the vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it
 as the run's key param, and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation
 passed, exit code 0 and a clean source tree. A requeued point first deletes its run's old `result.json`. The lookup
-reads the dispatching machine's catalog, so a machine that never pulled other machines' runs sees them as missing
-(BENCH-10).
+reads the machine's catalog, and when a point isn't there, the store's remote: once per commit it fetches and indexes
+the attempts this store lacks among those started since a day before the commit's committer date (a point's runs
+can't start before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points
+other machines ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the
+catalog alone.
 
 ## Out of scope here
 

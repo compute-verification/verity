@@ -2,8 +2,9 @@
 a clock that advances by one tick per pass with both sides settled around each tick, so a session runs one schedule:
 an honest session is accepted and its γ terms computed, a prover that dropped blocks is rejected at its openings, a
 second session waits out the first's deadline, and KV pages appended and released mid-session (a memory map's steps)
-are audited, accepted when held and rejected when dropped. Sessions run under the verifier's default verdict, `both`:
-the Lean verifier decides, `audit.Session` runs beside it, and the two must agree at every event and window."""
+are audited, accepted when held and rejected when dropped. Sessions run under the verifier's default verdict, `lean`:
+the Lean verifier decides, `audit.Session` keeps the books beside it, and the two must agree at every event, window
+verdict and record field."""
 from __future__ import annotations
 
 import os
@@ -20,7 +21,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.core.protocols.remote_bandwidth import audit, receipts as rb, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins, ledger, receipts as rb, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
@@ -136,7 +137,7 @@ class TickingBackend(prover.CpuBackend):
         self.clock, self.tiers, self._layout = clock, tiers, layout
 
     def layout(self) -> list | None:
-        return self._layout
+        return self._layout if self._layout is not None else super().layout()
 
     def calibrate(self) -> dict:
         return {**super().calibrate(), **({"read_tiers": self.tiers} if self.tiers else {})}
@@ -150,13 +151,17 @@ class TickingBackend(prover.CpuBackend):
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, verdict: str = verifier.VERDICT,
-        then=None, **kv):
+        then=None, transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
+        binding=None, **kv):
     """The verifier's sessions and the prover's over one registration, under `verdict`, each paced by its entry in
-    `paces` if given; `then(v)` once they end."""
+    `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
+    (by default as the prover's hello says, `Verifier.appends_of`); `then(v)` once they end. With `store` (a
+    `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `binding` the verifier binds the registration
+    to its pinned model."""
     clock = PassClock()
     vconn, pconn = clock.conns()
-    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
-                             layout=layout)
+    backend = TickingBackend(clock, store.blocks if store else blocks, random.Random(7),
+                             read_bytes_per_s=read_bytes_per_s, tiers=tiers, layout=layout, store=store)
     p = prover.ProverSide(pconn, backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None, **kv)
     results = []
 
@@ -170,7 +175,8 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          checks=checks, lifetime=lifetime, host_bytes=host_bytes, verdict=verdict)
+                          checks=checks, lifetime=lifetime, host_bytes=host_bytes, verdict=verdict,
+                          transcript=transcript, challenger=challenger, appends=appends, binding=binding)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))
@@ -274,6 +280,55 @@ def test_a_sessions_ledgers_carry_the_timing_parts_when_its_calibration_reads_ea
         assert "timing_parts" not in r["ledger"]["measured"] and "timing_parts" not in r["ledger"]["inputs"]
 
 
+def test_an_unpaced_session_declares_its_snapshot_line_and_no_time_held_line(monkeypatch):
+    """The declared outputs are the protocol's (`ledger.declared`): γ at both R, as the readings beside them, and the
+    snapshot line; an unpaced session's coins come a stated window apart, so it has no time-held line."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), _ = run("honest")
+    lg = r["ledger"]
+    d = lg["declared"]
+    assert d["accepted"] and d["windows"] == 3
+    assert d["gamma"]["spec"]["gamma"] == lg["spec"]["gamma"] and d["gamma"]["measured"]["gamma"] == lg["measured"]["gamma"]
+    assert [w["window"] for w in d["gamma"]["spec"]["windows"]] == [0, 1, 2]
+    assert 0 <= d["memory"][ledger.SNAPSHOT]["epsilon"] <= 1 and d["memory"][ledger.SNAPSHOT]["delta"] > 0
+    assert "unpaced" in d["memory"][ledger.TIME_HELD]["refused"]
+
+
+@pytest.mark.parametrize("k, schedule", [
+    (1, [(0, 1, [1]), (1, 2, [2]), (2, 3, [3]), (3, 4, [4]), (4, 5, [5]), (5, 6, [6])]),
+    (3, [(0, 2, [1, 2, 3]), (2, 5, [4, 5, 6]), (5, 8, [7, 8, 9]), (8, 11, [10, 11, 12]), (11, 14, [13, 14, 15]),
+         (14, 17, [16, 17, 18])]),
+])
+def test_a_paced_session_runs_k_passes_a_coin_and_declares_its_time_held_line(monkeypatch, k, schedule):
+    """Paced (`pace_of`, `audit.Pace(k, T)`: two stretches of two windows and the closing stretch), the prover runs k
+    passes under each coin and waits for the next, and the verifier sends each boundary as the window's (k − 1)-th
+    root arrives (`Session.next_boundary_ns`; k = 1: as the window before's root does), so on the pass clock window t
+    holds k passes, none discarded; γ is declared over the fixed windows of T from the first challenge to the last
+    deadline, and the session declares all three memory forms."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    T = 10**9
+    pace = verifier.pace_of(f"{k}:{T // 10**6}:12:2", 500 / k)
+    assert pace["groups"] == 2 and pace["draws"] == 6
+    (r,), (pr,) = run("honest", paces=[pace])
+    assert r["accepted"] and pr["accepted"] and r["windows"] == 6 and r["pace"] == pace
+    assert r["record"]["public"]["pace"] == {"k": k, "window_ns": T}
+    assert pr["passes"] == [k] * 6 and pr["discarded"] == 0
+    assert [(w["released_ns"], w["boundary_ns"], w["arrivals_ns"]) for w in r["windows_seen"]] == [
+        (s, b, list(a)) for s, b, a in schedule]
+    ws = r["ledger"]["declared"]["gamma"]["spec"]["windows"]
+    span = r["windows_seen"][-1]["deadline_ns"] - schedule[0][0]
+    assert [w["window"] for w in ws] == list(range(-(-span // T)))
+    assert [w["span_ns"] for w in ws] == [T] * (len(ws) - 1) + [span - (len(ws) - 1) * T]
+    d = r["ledger"]["declared"]
+    for form in ledger.FORMS:
+        assert 0 <= d["memory"][form]["epsilon"] <= 1 and d["memory"][form]["delta"] > 0, form
+
+
+def test_a_paced_prover_that_dropped_blocks_is_rejected():
+    (r,), (pr,) = run("skip:0.5", paces=[verifier.pace_of("2:1000:12:2", 250.0)])
+    assert not r["accepted"] and not pr["accepted"] and "declared" not in r.get("ledger", {})
+
+
 def test_a_second_session_waits_out_the_first_and_is_accepted():
     rs, prs = run("honest,honest", sessions=2)
     assert [r["accepted"] for r in rs] == [True, True]
@@ -310,6 +365,38 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
     assert not dropping["accepted"] and not pd["accepted"]
     assert dropping["failure"]["failure"] == "receipt" and pd["failure_on_dropped"] is True
     assert pd["kv"]["appended"] > 0 and min(pd["dropped"]) == 16 and dropping["appended"] > 0
+
+
+def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_append_past_them_is_refused(monkeypatch):
+    """Each session's coins are W challenges, W openings coins and its append coins: none, and no append family, under
+    a plan of honest sessions (the hello says so), and `coins.APPENDS` under one with a kv session, on which both are
+    accepted.  At `appends=0` the kv session's first append has no coin and is its `coin` rejection, the honest one
+    accepted (on the books; `python`, since the Lean takes only the append coins released)."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    import challengers
+
+    layouts, local = [], challengers.Local.open
+
+    def opened(self, registration, k, windows, appends):
+        c = local(self, registration, k, windows, appends)
+        layouts.append(c.commitment.families)
+        return c
+
+    monkeypatch.setattr(challengers.Local, "open", opened)
+    pair = ((coins.CHALLENGE, 3), (coins.OPENINGS, 3))
+    (r,), (p,) = run("honest", samples=8, verdict="python")
+    assert r["accepted"] and p["accepted"] and layouts == [pair]
+    layouts.clear()
+    (honest, kv), (ph, pk) = run("honest,kv:2", sessions=2, samples=8, kv_every=4, kv_pool=8, verdict="python")
+    assert honest["accepted"] and kv["accepted"] and ph["accepted"] and pk["accepted"] and kv["appended"] > 0
+    assert layouts == [pair + ((coins.APPEND, coins.APPENDS),)] * 2
+    layouts.clear()
+    (honest, kv), (ph, pk) = run("honest,kv:2", sessions=2, samples=8, kv_every=4, kv_pool=8, appends=0,
+                                 verdict="python")
+    assert layouts == [pair] * 2
+    assert honest["accepted"] and ph["accepted"] and honest["challenger"]["reason"] is None
+    assert not kv["accepted"] and kv["failure"]["failure"] == "coin" and kv["appended"] == 0
+    assert kv["challenger"]["reason"] is None and not pk["accepted"]
 
 
 def test_kv_pages_are_checked_by_worker_processes_under_seeds_that_bind_the_appends(monkeypatch):
@@ -686,11 +773,131 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
     assert not r2["accepted"] and r2["failure"]["failure"] == "receipt" and pr2["failure_on_dropped"]
 
 
+@pytest.mark.parametrize("k", [1, 3])
+def test_a_paced_group_is_drawn_as_its_k_th_root_arrives(k):
+    """A paced window takes at most k roots, so its k-th makes them final once its boundary has left
+    (`audit.Session.close`), which the loop sends before that root: each group's draws go out as that root arrives, the
+    last group's too, so the openings coin's request on the challenger's log names the group's last root when it came,
+    not one root or a deadline later."""
+    (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)])
+    assert r["accepted"]
+    assert [w["draws_sent_ns"] for w in r["windows_seen"]] == [w["arrivals_ns"][-1] for w in r["windows_seen"]]
+
+
+@pytest.mark.parametrize("k", [1, 3])
+def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_trip(tmp_path, monkeypatch, k):
+    """At k = 1 a group's root closes it and the next boundary is due at once, so the group's openings coin and the
+    challenge the boundary releases, σ_(g+2), go to the challenger in one round trip, in that order, both after that
+    root (`coins.Coins.ahead`); the last two groups' boundaries release no coin, so their openings coins go alone. At
+    k = 3 a coin leaves at the following group's second root, so every coin goes alone. The session's transcript
+    replays to its verdict through both verifiers. The clock ticks as each pass starts as well as when it ends, so
+    time passes between a coin leaving and the root after it, as on the verifier's own clock: at one tick a pass, a
+    paced window's 1 ns is a whole pass and each boundary waits for the tick its next root comes at."""
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/core/protocols/remote_bandwidth/lean/tests"))
+    ticking = TickingBackend.run_pass
+
+    def run_pass(self, seed: bytes, plan=None):
+        self.clock.tick()
+        return ticking(self, seed, plan)
+
+    monkeypatch.setattr(TickingBackend, "run_pass", run_pass)
+    import json
+
+    import challengers
+    import replay
+    from verity.core.protocols.sampled_proofs import challenger as C
+
+    asked = []
+
+    class Asked(C.LiveChallenger):
+        def open(self, label, index, after):
+            return self.open_many([(label, index, after)])[0]
+
+        def open_many(self, requests):
+            asked.append([(label, index, bytes(after)) for label, index, after in requests])
+            return [C.LiveChallenger.open(self, *r) for r in requests]
+
+    monkeypatch.setattr(challengers.Local, "open", lambda self, registration, e, windows, appends: Asked(
+        coins.SCHEME, e, coins.families(windows, appends), os.urandom))
+    (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)], transcript=tmp_path)
+    assert r["accepted"] and r["challenger"]["reason"] is None
+    case = json.loads(Path(r["transcript"]["path"]).read_bytes())
+    roots = [bytes.fromhex(e["root"]) for e in case["events"] if e["kind"] == "receive"]
+    n, last = r["windows"], [roots[k * g + k - 1] for g in range(r["windows"])]
+    window = asked[0][0][2]
+    if k == 1:
+        assert asked == ([[("challenge", 0, window)], [("challenge", 1, window)]]
+                         + [[("openings", g, last[g]), ("challenge", g + 2, last[g])] for g in range(n - 2)]
+                         + [[("openings", g, last[g])] for g in (n - 2, n - 1)])
+    else:
+        assert all(len(b) == 1 for b in asked) and len(asked) == 2 * n
+        assert [b[0][2] for b in asked if b[0][0] == "openings"] == last
+    with replay.server() as s:
+        row = replay.replay(case, s)
+    assert row["agree"] and row["lean"]["outcome"] == "accepted" and row["lean"]["refused"] == 0, row
+
+
+def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challengers_log():
+    """`auditor_line.auditor_seen`: group g's coin at challenge coin g's release, and its last root at the first request
+    on the challenger's log that names the root openings coin g was asked after. On a log that is the verifier's stamps
+    shifted, the line's groups are the verifier's; a later openings request lengthens them by as much; and an earlier
+    request naming that root, σ_(g+2)'s at k = 1, is the one read."""
+    import json
+
+    import auditor_line as al
+
+    got = {}
+    (r,), _ = run("honest", paces=[verifier.pace_of("1:4:40:2", 1.0)],
+                  then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    seen = r["windows_seen"]
+    n, R, A = len(seen), [w["released_ns"] for w in seen], [w["arrivals_ns"][-1] for w in seen]
+
+    def log(late: int, named: bool) -> list[str]:
+        lines = [json.dumps({"event": "commitment", "root": "0" * 128})]
+        for g in range(n):
+            for label, after, at in (("challenge", f"{g - 2:0128x}" if named and g >= 2 else "f" * 128, R[g] - 1),
+                                     ("openings", f"{g:0128x}", A[g] + late)):
+                lines.append(json.dumps({"event": "root", "label": label, "index": g, "root": after,
+                                         "received_at": at + 100}))
+                lines.append(json.dumps({"event": "release", "label": label, "index": g, "after": after,
+                                         "released_at": at + 101}))
+        return lines
+
+    def lmax(s: dict) -> list[int]:
+        return [x["l_max_ns"] for x in verifier.recorded_paced(s, got["reg"], host_bytes=0)["stretches"]]
+
+    shifted, how = al.auditor_seen(log(0, False), seen)
+    assert [w["released_ns"] for w in shifted] == [x + 100 for x in R]
+    assert [w["arrivals_ns"] for w in shifted] == [[x + 100] for x in A]
+    assert how == {"last_root_first_named_by": {"openings": n}}
+    assert al.group_l(shifted) == al.group_l(seen) and lmax({**r, "windows_seen": shifted}) == lmax(r)
+    late, _ = al.auditor_seen(log(3, False), seen)
+    assert al.group_l(late) == [max(A[g] + 103, R[g + 1] + 100) - R[g] - 100 for g in range(n - 1)]
+    named, how = al.auditor_seen(log(3, True), seen)
+    assert [w["arrivals_ns"] for w in named] == ([[R[g + 2] + 99] for g in range(n - 2)]
+                                                 + [[A[g] + 103] for g in (n - 2, n - 1)])
+    assert how == {"last_root_first_named_by": {"challenge": n - 2, "openings": 2}}
+    with pytest.raises(ValueError, match="not one of each for each of"):
+        al.auditor_seen(log(0, False)[:-4], seen)
+
+
+def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_verdicts_from_both_verifiers():
+    """`node.py --overlap-openings`: the prover opens each window as its draws arrive instead of after its last pass,
+    so both verifiers take openings between a paced session's roots and coins; the honest session is still accepted
+    and the dropper rejected, with no disagreement."""
+    pace = verifier.pace_of("1:4:40:2", 1.0)
+    (r, r2), (pr, pr2) = run("honest,skip:0.25", paces=[pace, pace], defer_openings=False, verdict="both")
+    assert r["verdict"] == "both" and r["disagreement"] is None and r2["disagreement"] is None
+    assert r["accepted"] and pr["accepted"] and len(r["lean_check_ns"]) == r["windows"] == 12
+    assert not r2["accepted"] and r2["failure"]["failure"] == "receipt" and pr2["failure_on_dropped"]
+
+
 def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_snapshot_does_not():
     """Two stretches of four groups of two passes over N blocks, every pass reading all of them: stretching one
     group's interval (a burst then idle until its deadline) lowers the time-held credit by its absent block-time,
     rebuilds at 2·L_max each and the wrong receipts at Δ_g/n_g (L_max/n in the group after the stretch), and the
-    snapshot's only by the rebuilds its longer reads allow; a block in from the disks or a link counts as a rebuild."""
+    snapshot's only by the rebuilds its longer reads allow; a block in from the disks or a link counts as a rebuild,
+    and so does each block of the routes' burst."""
     N, b = 1000, 4096
     held = {"weights": 600 * b, "hbm": N * b, "host": 0}
     mem = {"windows": [{"held": held, "average": {"held": held}} for _ in range(12)]}
@@ -703,9 +910,11 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
             t += span
         return out
 
-    def line(stretch: int, rebuild_per_ns: float = 0.0, wrong: float = 0.0, ingress_per_ns: float = 0.0) -> dict:
+    def line(stretch: int, rebuild_per_ns: float = 0.0, wrong: float = 0.0, ingress_per_ns: float = 0.0,
+             burst: float = 0.0) -> dict:
         return verifier.paced_line(mem, seen(stretch), groups=4, wrong=wrong, blocks=N, rebuild_per_ns=rebuild_per_ns,
-                                   chip_bytes=0, block_bytes=b, node_bytes=10 * N * b, ingress_per_ns=ingress_per_ns)
+                                   chip_bytes=0, block_bytes=b, node_bytes=10 * N * b, burst_bytes=burst * b,
+                                   ingress_per_ns=ingress_per_ns)
 
     even, burst = line(1, 1e-3, 50.0), line(9, 1e-3, 50.0)
     assert even["snapshot"]["lost_blocks"] == pytest.approx(burst["snapshot"]["lost_blocks"] - 1e-3 * (80 + 2 * 80) / 8)
@@ -719,6 +928,18 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
     assert linked["ingress_blocks"] == pytest.approx(2e-3 * (120 + 180))
     assert linked["rebuild_absent_blocks"] == pytest.approx(2 * 90 * 3e-3 * (120 + 180) / 120)
     assert linked[verifier.AVERAGE]["lost_blocks"] == pytest.approx((50 + 3e-3 * 300) / 8)
+    bursty, T, A = line(9, 1e-3, 50.0, burst=7.0)["stretches"][1], verifier.TIME_HELD, verifier.AVERAGE
+    assert bursty["burst_absent_blocks"] == pytest.approx(2 * 90 * 7 / 120)
+    assert bursty[T]["lost_blocks"] == pytest.approx(s[T]["lost_blocks"] + 2 * 90 * 7 / 120)
+    assert bursty[A]["lost_blocks"] == pytest.approx(s[A]["lost_blocks"] + 7 / 8)
+
+
+def test_a_paced_lines_ingress_charge_brings_the_bursts_the_ledger_states_for_its_routes():
+    """`ingress_bursts` is `ledger.Node.stated`'s B: the rebuild batch in flight always, one second at the disks'
+    ceiling for the charge up to it, and a link window once the charge passes the disks (the link-charged line)."""
+    assert verifier.ingress_bursts(0.0) == timing.CHIP_BYTES
+    assert verifier.ingress_bursts(4.4e9) == timing.CHIP_BYTES + 4.4e9
+    assert verifier.ingress_bursts(54.4e9) == timing.CHIP_BYTES + 4.4e9 + timing.LINK_WINDOW_BYTES
 
 
 def test_the_paced_line_refuses_a_session_any_of_whose_passes_leaves_a_registered_block_out():
@@ -734,7 +955,7 @@ def test_the_paced_line_refuses_a_session_any_of_whose_passes_leaves_a_registere
         held = [whole | (short or {}) if g == at else whole for g in range(groups)]
         return verifier.paced_line({"windows": [{"held": h, "average": {"held": h}} for h in held]}, seen, groups=4,
                                    wrong=0.0, blocks=N, rebuild_per_ns=0.0, chip_bytes=0, block_bytes=b,
-                                   node_bytes=10 * N * b)
+                                   node_bytes=10 * N * b, burst_bytes=0.0)
 
     assert line()["time"]["weights_bytes"] == line()["snapshot"]["weights_bytes"] == 600 * b
     with pytest.raises(ValueError, match="group 2's least pass read 990 of the 1000 registered blocks"):
@@ -781,13 +1002,22 @@ def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
         verifier.regions_of(layout, 16)
 
 
-def greeted(lifetime: int, deferred: bool) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
-    """A prover whose backend says `deferred` greeting a verifier of lifetime cap `lifetime`: the verifier, its refusal
-    if it refused, and the reason the prover read in its `bye`."""
+def greeted(lifetime: int, deferred: bool, *, hello: dict | None = None, drop: tuple[str, ...] = (),
+            plan: str = "honest", verdict: str = verifier.VERDICT
+            ) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
+    """A prover of `plan` whose backend says `deferred` greeting a verifier of lifetime cap `lifetime`, its hello with
+    `hello`'s fields too and without `drop`'s: the verifier, its refusal if it refused, and the reason the prover read
+    in its `bye`."""
     a, b = socket.socketpair()
     backend = prover.CpuBackend(16, random.Random(7))
     backend.deferred = deferred
-    p = prover.ProverSide(wire.Conn(b), backend, b"test-node", prover.parse_plan("honest"), seed=11, log=lambda m: None)
+    p = prover.ProverSide(wire.Conn(b), backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None)
+    send = p.conn.send
+
+    def greet(head: dict) -> dict:
+        return {k: x for k, x in (head | (hello or {})).items() if k not in drop}
+
+    p.conn.send = lambda head, body=b"": send(greet(head) if head["type"] == "hello" else head, body)
     heard = []
 
     def prove() -> None:
@@ -799,7 +1029,7 @@ def greeted(lifetime: int, deferred: bool) -> tuple[verifier.Verifier, ValueErro
     th = threading.Thread(target=prove, daemon=True)
     th.start()
     v = verifier.Verifier(wire.Conn(a), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
-                          jitter_ns=10 ** 9, log=lambda m: None, lifetime=lifetime)
+                          jitter_ns=10 ** 9, log=lambda m: None, lifetime=lifetime, verdict=verdict)
     refused = None
     try:
         v.register()
@@ -820,6 +1050,32 @@ def test_a_prover_that_defers_residency_is_refused_under_a_lifetime_of_one_windo
     for lifetime, deferred in ((2, True), (1, False)):
         v, refused, heard = greeted(lifetime, deferred)
         assert refused is None and heard == [] and v.deferred is deferred and v.registry.drawn(b"test-node") == 1
+
+
+def test_only_a_hello_whose_plan_appends_nothing_reserves_no_append_coins():
+    """The hello says whether any session of the prover's plan appends: a plan of honest and skip sessions says not,
+    and its sessions reserve no append coins; any other plan, or a hello that doesn't say, keeps `coins.APPENDS`, and
+    a verifier given `appends` keeps its own.  A hello whose `appends` isn't a bool is refused with `bye`."""
+    for plan, drop, appends in (("honest,skip:0.25", (), 0), ("honest,kv:2", (), coins.APPENDS),
+                                ("serve", (), coins.APPENDS), ("honest", ("appends",), coins.APPENDS)):
+        v, refused, heard = greeted(audit.LIFETIME, False, plan=plan, drop=drop)
+        assert refused is None and heard == [] and v.appends_of() == appends, plan
+    v, refused, _ = greeted(audit.LIFETIME, False, plan="honest")
+    v.appends = 8
+    assert v.appends_of() == 8
+    v, refused, heard = greeted(audit.LIFETIME, False, hello={"appends": "no"})
+    assert refused is not None and "true or false" in str(refused) and heard == [f"refused: {refused}"]
+    assert v.registry.drawn(b"test-node") == 0
+
+
+@pytest.mark.parametrize("verdict", verifier.VERDICTS)
+def test_a_hello_asking_for_receipts_that_bind_tiles_is_refused_under_each_verdict(verdict):
+    """A hello asking that its receipts bind PoUW's tile outputs (`bind`): the Lean covers receipts of blocks alone, so
+    both registries refuse it before drawing a registration (`audit.Registry.register` as `Registry.register` does),
+    and the prover reads why in its `bye`."""
+    v, refused, heard = greeted(audit.LIFETIME, False, hello={"bind": True}, verdict=verdict)
+    assert refused is not None and "tile outputs" in str(refused)
+    assert heard == [f"refused: {refused}"] and v.registry.drawn(b"test-node") == 0
 
 
 def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp_path, monkeypatch, capsys):
@@ -868,11 +1124,15 @@ def test_a_window_the_verifiers_judge_differently_is_refused_as_disagreement(mon
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     settle = verifier.Pair.settle
 
-    def wrong(self, check):
-        res = settle(self, check)
+    def changed(res):
         if res.get("accepted") != 1:
             return res
         return {"failure": "receipt", "window": 1, "at": [0, 0], "openings": res["openings"], "ns": res["ns"]}
+
+    def wrong(self, check, answered=None):
+        if answered is None:
+            return changed(settle(self, check))
+        return settle(self, check, lambda res: answered(changed(res)))
 
     monkeypatch.setattr(verifier.Pair, "settle", wrong)
     closed = []
@@ -882,10 +1142,163 @@ def test_a_window_the_verifiers_judge_differently_is_refused_as_disagreement(mon
     assert closed[0]["sessions"] == ["disagreement"] and "python" not in closed[0]
 
 
-def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch):
+@pytest.mark.parametrize("verdict", ["both", "python"])
+def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers(tmp_path, monkeypatch, verdict):
+    """`--transcript DIR`: each session's difftest case, written as it runs, which `replay.py transcript` replays
+    through `RemoteAudit.Session` and `audit.Session` alike: the honest session accepted, every window verified, and
+    the prover that dropped half its blocks rejected at the window and draw it was rejected at live, at a receipt,
+    which only a transcript's openings can show. The file is the path, bytes and sha256 verifier.json gives it."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/core/protocols/remote_bandwidth/lean/tests"))
+    import hashlib
+    import json
+
+    import replay
+
+    (honest, dropping), _ = run("honest,skip:0.5", sessions=2, verdict=verdict, transcript=tmp_path)
+    assert honest["accepted"] and dropping["failure"]["failure"] == "receipt"
+    f = dropping["failure"]
+    rows, verified = [], []
+    with replay.server() as s:
+        for r in (honest, dropping):
+            t = r["transcript"]
+            raw = Path(t["path"]).read_bytes()
+            assert Path(t["path"]).parent == tmp_path and t["bytes"] == len(raw)
+            assert t["sha256"] == hashlib.sha256(raw).hexdigest()
+            case = json.loads(raw)
+            verified.append([e["t"] for e in case["events"] if e["kind"] == "verify"])
+            rows.append(replay.replay(case, s))
+    assert all(row["agree"] for row in rows), rows
+    assert sorted(verified[0]) == [0, 1, 2] and verified[1][-1] == f["t"]
+    assert rows[0]["lean"]["outcome"] == "accepted" and rows[0]["lean"]["rejected"] is None
+    assert rows[1]["lean"]["rejected"] == {"failure": "receipt", "window": f["t"], "at": list(f["at"])}
+
+
+def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, monkeypatch):
+    """A paced session's transcript names its pace (`audit.Pace`'s k and T), which both verifiers hold each window's
+    roots to, so its replay is the paced session's: accepted, with its record's pace."""
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/core/protocols/remote_bandwidth/lean/tests"))
+    import json
+
+    import replay
+
+    (r,), _ = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=tmp_path)
+    assert r["accepted"] and [w["passes"] for w in r["windows_seen"]] == [2] * 12
+    case = json.loads(Path(r["transcript"]["path"]).read_bytes())
+    assert case["params"]["pace"] == {"k": 2, "window_ns": 8_000_000} == r["record"]["public"]["pace"]
+    with replay.server() as s:
+        row = replay.replay(case, s)
+    assert row["agree"] and row["lean"]["outcome"] == "accepted" and row["lean"]["refused"] == 0, row
+
+
+def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(monkeypatch):
+    """An accepted session's record is held to the Lean's whole, each pass's arrival, head and stale bound among what
+    the ledger reads: books whose record has another stale bound refuse the session at its end as `disagreement`."""
+    import dataclasses
+
+    record = audit.Session.record
+
+    def stale(self):
+        rec = record(self)
+        w = rec.windows[0]
+        return dataclasses.replace(rec, windows=(dataclasses.replace(w, stale=tuple(b + 1 for b in w.stale)),
+                                                 *rec.windows[1:]))
+
+    monkeypatch.setattr(audit.Session, "record", stale)
+    (r,), _ = run("honest", verdict="both")
+    assert not r["accepted"] and r["failure"]["failure"] == "disagreement", r["failure"]
+    assert r["disagreement"]["event"] == "record"
+
+
+LEAN = verifier.lv.Lean
+
+
+class HeldLean(LEAN):
+    """The Lean process with every request from its first event on held back until `release` (the test calls it as
+    the prover's passes end): a Lean as slow to answer and to check as can be. A request the driver waits on while
+    they're held is noted in `waited`, and releases them."""
+
+    made: list[HeldLean] = []
+
+    def __init__(self, exe, done) -> None:
+        self.hold, self.held, self.waited, self.holding, self.released = threading.Lock(), [], [], False, False
+        super().__init__(exe, done)
+        HeldLean.made.append(self)
+
+    def _put(self, request, body, answered) -> None:
+        with self.hold:
+            self.holding = self.holding or request["op"] == "event"
+            if self.holding and not self.released:
+                self.held.append((request, body, answered))
+                return
+        super()._put(request, body, answered)
+
+    def call(self, request, body=b""):
+        with self.hold:
+            waiting = self.holding and not self.released
+            if waiting:
+                self.waited.append(request["op"])
+        if waiting:
+            self.release()
+        return super().call(request, body)
+
+    def release(self) -> None:
+        with self.hold:
+            self.released = True
+            for item in self.held:
+                super()._put(*item)
+            self.held.clear()
+
+
+@pytest.fixture
+def held_lean(monkeypatch):
+    """Every Lean process the test starts is a `HeldLean`, released as the prover says its passes are done."""
+    HeldLean.made = []
+    idle = PassClock.idle
+
+    def released(self) -> None:
+        for lean in HeldLean.made:
+            lean.release()
+        idle(self)
+
+    monkeypatch.setattr(verifier.lv, "Lean", HeldLean)
+    monkeypatch.setattr(PassClock, "idle", released)
+    return HeldLean.made
+
+
+SCHEDULE = ("released_ns", "boundary_ns", "deadline_ns", "passes", "arrivals_ns", "slack_ns", "draws_sent_ns")
+
+
+@pytest.mark.parametrize("defer_openings", [True, False])
+def test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or_draw(monkeypatch, held_lean,
+                                                                                     defer_openings):
+    """The driver waits on no Lean answer while a session runs: with every request to the Lean from the session's
+    first event held back until the prover's passes are done (`HeldLean`), with its openings after its passes or
+    beside them (`--overlap-openings`), a paced session runs the schedule it runs with a Lean that answers at once,
+    every coin, boundary, root and draw at the same tick, and is still accepted only on the Lean's verdict of each of
+    its windows and its record."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    pace = verifier.pace_of("1:4:40:2", 1.0)
+    monkeypatch.setattr(verifier.lv, "Lean", LEAN)
+    (plain,), _ = run("honest", paces=[pace], defer_openings=defer_openings)
+    monkeypatch.setattr(verifier.lv, "Lean", HeldLean)
+    (r,), (pr,) = run("honest", paces=[pace], defer_openings=defer_openings)
+    assert len(held_lean) == 1 and held_lean[0].waited == [] and held_lean[0].released
+    assert r["accepted"] and pr["accepted"] and r["disagreement"] is None and r["verdict"] == "lean"
+    assert len(r["lean_check_ns"]) == r["windows"] == 12 and all(type(x) is int and x > 0
+                                                                for x in r["lean_check_ns"].values())
+    assert [{k: w[k] for k in SCHEDULE} for w in r["windows_seen"]] == \
+        [{k: w[k] for k in SCHEDULE} for w in plain["windows_seen"]]
+    assert r["record"]["public"]["pace"] == plain["record"]["public"]["pace"]
+
+
+@pytest.mark.parametrize("held", [False, True])
+def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch, held_lean, held):
     """Each event goes to both verifiers at one reading of the clock, and their results are compared: a root the Lean
     reads without its step is its `step` rejection where `audit.Session` takes the root, and the session is refused
-    at that window as `disagreement`."""
+    at that window as `disagreement`, also when the Lean's answer comes only after the prover's last pass."""
+    if not held:
+        monkeypatch.setattr(verifier.lv, "Lean", LEAN)
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     event = verifier.lv.receive_event
 
@@ -913,9 +1326,7 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
     params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows)
 
     def session():
-        from verity.core.protocols.remote_bandwidth import coins
-
-        s = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: 0,
+        s = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
                           not_before_ns=0)
         s.start()
         return s
@@ -933,7 +1344,7 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
     assert [p.runs for p in s.windows[0].plans] == [((0, 3), (4, 6))] and s.released == 1 and s.extent == 10
     assert s.windows[0].steps == [5]
     assert verifier.Verifier.root(s, {"t": 0, "i": 1, "root": root, "change": [[], []], "step": 9}) is None
-    assert appended(s) == audit.Verdict(0, False, "coin") and s.challenger.appends == 1
+    assert appended(s) == audit.Verdict(0, False, "coin") and s.coins.appends == 1
     for step in (5, 4):
         s = session()
         appended(s)
@@ -973,15 +1384,13 @@ def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
     """`Verifier.root` hands a message's withdrawn runs to its release (`Session.release(released, withdrawn)`): an
     appended block no plan held, freed before its encode landed, is withdrawn; one a plan held, a registered one, or a
     withdrawal outside the message's releases is the session's `release` rejection."""
-    from verity.core.protocols.remote_bandwidth import coins
-
     reg = audit.register(os.urandom(32), b"test-node", 8, bytes(64), P512)
     params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows,
                           lifetime=2, deferred=True)
     root = (b"\7" * 64).hex()
 
     def session():
-        s = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: 0,
+        s = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
                           not_before_ns=0)
         s.start()
         verifier.Verifier.append(s, {"type": "append", "root": root, "count": 3})
@@ -1021,6 +1430,44 @@ def test_openings_round_trip_on_the_wire_and_a_short_body_is_none():
     with pytest.raises(ValueError):
         wire.encode_openings([audit.Opening(3, 17, o.block, o.leaf, o.leaf_salt, o.receipt_path, o.payload_salt,
                                             o.payload_path, b"", b"\6" * 63)])
+
+
+def test_a_reader_apart_hands_on_each_frame_in_order_and_ends_with_the_stream_or_the_prover():
+    """The prover's reader in its own process: frames come through its pipe as sent, each with its stamp; a frame over
+    the limits is refused as on a reader thread; the stream's close is `Closed`; and the reader exits once the
+    prover's end of its pipe closes, so it never holds the stream open past the prover."""
+    a, b = socket.socketpair()
+    side, apart = wire.Conn(a), wire.Conn(b)
+    apart.read_apart()
+    sent = [({"type": "coin", "t": 1}, b""), ({"type": "draws", "t": 1}, os.urandom(1 << 20)),
+            ({"type": "close"}, b"x")]
+    for head, body in sent:
+        side.send(head, body)
+    got = [apart.recv() for _ in sent]
+    assert [(h, body) for h, body, _ in got] == sent and all(type(s) is int for _, _, s in got)
+    assert apart.received == side.sent
+    a.sendall(wire.HEADER.pack(wire.MAX_HEAD + 1, 0))
+    with pytest.raises(ValueError, match="over the limit"):
+        apart.recv()
+    assert apart.reader.wait() == 0
+
+    a, b = socket.socketpair()
+    side, apart = wire.Conn(a), wire.Conn(b)
+    apart.read_apart()
+    a.close()
+    with pytest.raises(wire.Closed):
+        apart.recv()
+    assert apart.reader.wait() == 0
+
+    a, b = socket.socketpair()
+    apart = wire.Conn(b)
+    apart.read_apart()
+    os.close(apart._pipe)
+    assert apart.reader.wait() == 0
+    with pytest.raises(ValueError, match="monotonic"):
+        wire.Conn(a, clock=lambda: 0).read_apart()
+    a.close()
+    b.close()
 
 
 @pytest.mark.parametrize("name", ["p1024/k3/masked", "p1024/k2/masked", "p512/k2"])

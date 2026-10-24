@@ -45,6 +45,7 @@ from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Sh
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.core.protocols.pouw.serving import SchemeId
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
@@ -86,6 +87,8 @@ R = load("pearl_c_sm120_run", KERNEL / "run.py")
 F = load("pearl_c_sm120_fixture", KERNEL / "fixture.py")
 VR = load("pearl_c_vllm_verify_run", KERNEL.parent / "pearl_c_vllm" / "verify_run.py")
 SD = load("pearl_c_vllm_served_debit", KERNEL.parent / "pearl_c_vllm" / "served_debit.py")
+#: the device path's schemes whose device record is a variant of KERNEL's pipeline (pearl_c_sm90 runs h100's)
+KERNEL_SCHEMES = sorted(s for s in PPD.SCHEMES if SchemeId.parse(s).device in R.VARIANT_G)
 
 
 def bf16_words(rng, rows: int, k: int, scale: float = 1.0) -> np.ndarray:
@@ -137,7 +140,7 @@ def test_an_unsure_row_is_decided_exactly():
 
 # ---- the per-call keys --------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
+@pytest.mark.parametrize("scheme", KERNEL_SCHEMES)
 def test_call_keys_are_the_fixtures_keys_of(scheme):
     s = PPD.scheme_of(scheme)
     roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
@@ -206,8 +209,9 @@ def device_run():
     return make, kernel, weights, roots, salt
 
 
-#: a decode call's launches (m₁₆ = 32 of 64 rows: run.pd_variant's 851): A's commitment and E_A's lines in one, the tile leaves
-PER_CALL = ["pd_commit_851", "stats_s5", "eprime", "form_s5", "words", "pa", "gemm_pearlc_d", "pd_tiles_851"]
+#: a decode call's launches (m₁₆ = 32 of 64 rows: run.pd_variant's 851): A's commitment and E_A's lines in one, decode's split
+#: stats and words kernels, the tile leaves
+PER_CALL = ["pd_commit_851", "stats_r", "eprime", "form_s5", "words_k", "pa", "gemm_pearlc_d", "pd_tiles_851"]
 
 
 def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_run):
@@ -258,7 +262,7 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
     run = make(hashing=False)
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(16, 1024).to(torch.bfloat16), weights[0], None)
-    assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == ["stats_s5", "eprime", "form_s5", "words", "pa",
+    assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == ["stats_r", "eprime", "form_s5", "words_k", "pa",
                                                                           "gemm_pearlc_d"]
     assert run.end() == {"units": 1, "tiles": 0, "hashing": False, "schedule": "serial"}
 
@@ -320,6 +324,280 @@ def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
     assert check["ok"] and check["flags_equal"] and check["screen"] == "torch"
 
 
+# ---- one pass per engine step, through the PoUW option (`Option.end_pass`) ---------------------------------------------
+
+class _Linear:
+    """A stand-in for vLLM's ``LinearBase``: its weight and its own ``quant_method``, which the PoUW option executes."""
+
+    def __init__(self, weight):
+        self.weight, self.quant_method = weight, types.SimpleNamespace(apply=None)
+
+
+class _Model:
+    def __init__(self, weights):
+        self.layers = [_Linear(weights[w]) for w in sorted(weights)]
+
+    def modules(self):
+        return iter(self.layers)
+
+
+class _Engine:
+    """A stand-in for vLLM's ``llm_engine``: each `step` runs its step's calls, (weight, rows), through the model's linears,
+    as the step's forward does, on rows drawn from `seed`."""
+
+    def __init__(self, model, steps, seed=0):
+        self.model, self.steps, self.rng, self.at = model, steps, np.random.default_rng(seed), 0
+
+    def step(self):
+        for w, m in self.steps[self.at]:
+            layer = self.model.layers[w]
+            x = torch.from_numpy(bf16_words(self.rng, m, layer.weight.shape[1]).view(np.float32).copy()).to(torch.bfloat16)
+            layer.quant_method.apply(layer, x)
+        self.at += 1
+        return []
+
+
+def _served(monkeypatch, kernel, weights, **run):
+    """`weights` served under the PoUW option as `verity_vllm.LLM` installs it (`protocol_options.install`), on `kernel`,
+    with the epoch's coins from a seeded challenger; `run` overrides the device run's buffer sizes."""
+    import functools
+
+    from verity_vllm import protocol_options as PO
+    from verity_vllm.protocol_options import pouw
+    monkeypatch.setattr(pouw, "linear_types", lambda: (_Linear,))
+    monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
+    if run:
+        monkeypatch.setattr(PPD, "PearlCDeviceRun", functools.partial(PPD.PearlCDeviceRun, **run))
+    model = _Model(weights)
+    settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k"}}
+    comp = PO.install(model, PO.Context(stage="serve", enabled=(f"pouw:{SCHEME}",), settings=settings))
+    return model, comp, comp.get("pouw")
+
+
+def _per_step(engine, end):
+    """`engine.step` wrapped so that `end` closes each step's pass; each step's commitment, with the bytes it commits (the
+    tile leaves, A's roots and the screen's flags), in order."""
+    from verity_vllm.engine.hooks import Hooks
+    hooks, out = Hooks(), []
+
+    def make(original):
+        def step(*a, **kw):
+            run, got, served = end(original, a, kw)
+            out.append({**got, "leaves": PPD._bytes(run.leaves[:run.nb * got["tiles"]]),
+                        "roots_a": PPD._bytes(run.roots_buf[:run.nb * got["units"]]),
+                        "flags": PPD._bytes(run.flag_buf[:got.get("screened_rows", 0)].contiguous().view(-1))})
+            return served
+        return step
+    hooks.wrap(engine, "step", make)
+    return hooks, out
+
+
+def _reach_in(option):
+    """The per-step pass as benchmarks' harness made it before `Option.end_pass` (`verity_bench`'s ``_pass_per_step``): the
+    device run found through the option's private ``release``, a pass begun before each engine step and ended after it."""
+    run = option.release.__self__
+
+    def end(original, a, kw):
+        run.begin()
+        served = original(*a, **kw)
+        return run, run.end(), served
+    return end
+
+
+def _end_pass(option):
+    def end(original, a, kw):
+        served = original(*a, **kw)
+        return option.end_pass.__self__, option.end_pass(), served
+    return end
+
+
+#: engine steps, each its calls (weight, rows): prefill chunks, decodes, a step with no forward, a call over 128 rows
+SERVED_STEPS = [[(0, 40), (1, 40)], [(0, 3), (1, 3)], [], [(1, 130), (0, 17), (1, 17)], [(0, 1), (1, 1)], [(0, 64)]]
+
+
+@pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
+    pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
+def test_end_pass_commits_each_engine_step_as_the_per_step_reach_in_did(monkeypatch, tmp_path, dev):
+    """The PoUW option's `end_pass` at each engine step's end commits what the harness's reach-in (begin before the step, end
+    after it) committed: per step, the same pass commitment (transcript root, A roots' digest, units, tiles, screened,
+    failing and unsure rows), the same tile leaves, A roots and screen flags.  On ``twin`` the hash kernels run on the host
+    (`TwinDev`), so the roots are real; on ``recording`` nothing is written and only the counts and the flags differ by
+    step.  After close the passes are the steps' own: `end_pass` leaves the next pass open and empty, so `finish` ends
+    nothing twice."""
+    rng = np.random.default_rng(13)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    got, pd = {}, HD.build(tmp_path) if dev == "twin" else None
+    for name, end in (("reach-in", _reach_in), ("end_pass", _end_pass)):
+        kernel = PPD.Kernel(R, F, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)
+        model, comp, option = _served(monkeypatch, kernel, weights)
+        engine = _Engine(model, SERVED_STEPS)
+        hooks, out = _per_step(engine, end(option))
+        for _ in SERVED_STEPS:
+            engine.step()
+        hooks.uninstall()
+        got[name] = out, [dict(p) for p in option.details["passes"]], dict(option.commitment())
+        comp.close()
+        if name == "end_pass":
+            assert len(option.details["passes"]) == len(SERVED_STEPS)
+    (a, a_passes, a_commits), (b, b_passes, b_commits) = got["reach-in"], got["end_pass"]
+    assert [(p["units"], p["tiles"], p.get("screened_rows", 0)) for p in b] == [
+        (2, 6, 80), (2, 6, 6), (0, 0, 0), (3, 6 + 4 + 2, 164), (2, 6, 2), (1, 4, 64)]
+    assert a == b and a_passes == b_passes and a_commits == b_commits
+    if dev == "twin":
+        assert len({p["activation_roots"] for p in b if p["units"]}) == 5
+
+
+def test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows(monkeypatch):
+    """A pass holds 32 tiles and 512 screened rows, and each step takes 24 tiles and 400 rows: with `end_pass` at each step's
+    end, 256 steps (6,144 tiles) each commit in a pass of their own; without it, the install's one pass overflows at the
+    second step, as served Pearl-C did within a few prefill steps (the default buffers hold 8M tiles and 4M rows)."""
+    rng = np.random.default_rng(17)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    steps = [[(0, 200), (1, 200)]] * 256
+    kernel = PPD.Kernel(R, F, RecordingDev(), "0" * 64)
+    model, comp, option = _served(monkeypatch, kernel, weights, capacity=32, flag_rows=512)
+    engine = _Engine(model, steps)
+    hooks, out = _per_step(engine, _end_pass(option))
+    for _ in steps:
+        engine.step()
+    hooks.uninstall()
+    comp.close()
+    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in out] == [(2, 24, 400)] * len(steps)
+    assert len(option.details["passes"]) == len(steps)
+    model, comp, option = _served(monkeypatch, kernel, weights, capacity=32, flag_rows=512)
+    engine = _Engine(model, steps)
+    engine.step()
+    with pytest.raises(RuntimeError, match="over its capacity"):
+        engine.step()
+    comp.close()
+
+
+# ---- one pass per engine step, ended by the PoUW option itself at the model runner's step ----------------------------
+
+class _Runner:
+    """A stand-in for vLLM's ``GPUModelRunner``: ``execute_model`` runs one step's forward, `_Engine.step`'s calls."""
+
+    engine: ClassVar[_Engine | None] = None
+
+    def execute_model(self, scheduler_output=None):
+        return type(self).engine.step()
+
+
+def _runners(monkeypatch, *modules):
+    """vLLM's model runner modules as this process holds them once an engine is built (`pouw_pass.MODEL_RUNNERS`), each
+    with a fresh `_Runner` subclass, each module's a subclass of the one before; the classes, in order."""
+    out, base = [], _Runner
+    for mod in modules or ("vllm.v1.worker.gpu.model_runner",):
+        base = type("GPUModelRunner", (base,), {})
+        monkeypatch.setitem(sys.modules, mod, types.SimpleNamespace(GPUModelRunner=base))
+        out.append(base)
+    return out
+
+
+class _Core:
+    """A stand-in for vLLM's in-process engine core: each `step` schedules and calls the runner's ``execute_model`` once,
+    and nothing else touches the PoUW option (no harness wrapper, no ``end_pass``)."""
+
+    def __init__(self, runner, engine):
+        self.runner = runner
+        type(runner).engine = engine
+
+    def step(self):
+        return self.runner.execute_model(object())
+
+
+def _hooked(option):
+    def end(original, a, kw):
+        served = original(*a, **kw)
+        return option.end_pass.__self__, option.details["passes"][-1], served
+    return end
+
+
+@pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
+    pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
+def test_the_model_runner_hook_commits_each_engine_step_as_end_pass_did(monkeypatch, tmp_path, dev):
+    """Served with a model runner in the process, the PoUW option ends its pass when ``execute_model`` returns, so plain
+    serving commits per step exactly what `Option.end_pass` at each step's end committed without one: per step the same
+    commitment, tile leaves, A roots and screen flags, the same passes and the same commitment after close.  A caller that
+    still calls ``end_pass`` after each hooked step (benchmarks' harness) ends nothing: it gets the step's commitment back
+    and the passes stay the steps' own."""
+    rng = np.random.default_rng(13)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    got, pd = {}, HD.build(tmp_path) if dev == "twin" else None
+    for name in ("end_pass", "hook", "hook and end_pass"):
+        with monkeypatch.context() as mp:
+            kernel = PPD.Kernel(R, F, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)
+            runners = _runners(mp) if name != "end_pass" else []
+            model, comp, option = _served(mp, kernel, weights)
+            engine = _Engine(model, SERVED_STEPS)
+            stepper = _Core(runners[0](), engine) if runners else engine
+            hooks, out = _per_step(stepper, _hooked(option) if name == "hook" else _end_pass(option))
+            for _ in SERVED_STEPS:
+                stepper.step()
+            hooks.uninstall()
+            got[name] = out, [dict(p) for p in option.details["passes"]], dict(option.commitment())
+            assert option.details["pass_ends"].startswith("the caller's end_pass" if name == "end_pass" else "each engine step")
+            comp.close()
+            assert not runners or "execute_model" not in vars(runners[0])
+            assert len(option.details["passes"]) == len(SERVED_STEPS)
+    assert [(p["units"], p["tiles"], p.get("screened_rows", 0)) for p in got["hook"][0]] == [
+        (2, 6, 80), (2, 6, 6), (0, 0, 0), (3, 6 + 4 + 2, 164), (2, 6, 2), (1, 4, 64)]
+    assert got["end_pass"] == got["hook"] == got["hook and end_pass"]
+    if dev == "twin":
+        assert len({p["activation_roots"] for p in got["hook"][1] if p["units"]}) == 5
+
+
+def test_plain_serving_with_a_model_runner_never_overflows(monkeypatch):
+    """`test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows` with nothing but the engine core's steps:
+    256 steps of 24 tiles and 400 rows, under a pass of 32 tiles and 512 rows, each commit in a pass of their own."""
+    rng = np.random.default_rng(17)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    steps = [[(0, 200), (1, 200)]] * 256
+    (runner,) = _runners(monkeypatch)
+    model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights, capacity=32, flag_rows=512)
+    core = _Core(runner(), _Engine(model, steps))
+    for _ in steps:
+        core.step()
+    comp.close()
+    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in option.details["passes"]] == [(2, 24, 400)] * len(steps)
+
+
+def test_a_manual_end_pass_ends_only_what_no_engine_step_ended(monkeypatch):
+    """The two ways a pass ends can't end one twice.  After a hooked step, ``end_pass`` returns that step's commitment and
+    ends nothing, however often it is called, and arguments it is given apply to the open pass.  A call made outside any
+    step is the caller's to end: ``end_pass`` ends it.  With V1's and V2's runner modules both loaded, V2's class a
+    subclass of V1's, each step still ends one pass, and a forward that raises leaves its calls in the open pass."""
+    rng = np.random.default_rng(19)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    v1, v2 = _runners(monkeypatch, "vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
+    model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights)
+    run, passes = option.end_pass.__self__, option.details["passes"]
+    engine = _Engine(model, [[(0, 40)], [(1, 3)], [(0, 5), (1, 5)], [(0, 7)]])
+    core = _Core(v2(), engine)
+    core.step()
+    assert [(p["units"], p["tiles"]) for p in passes] == [(1, 4)]
+    assert option.end_pass() is passes[-1] and option.end_pass() is passes[-1] and len(passes) == 1
+    assert run.end_pass(run="r-next") is passes[-1] and (run.cur.run, run.cur.stepped, len(passes)) == ("r-next", True, 1)
+    core.step()
+    layer = model.layers[0]
+    layer.quant_method.apply(layer, torch.zeros(16, 1024, dtype=torch.bfloat16))
+    assert option.end_pass()["units"] == 1 and len(passes) == 3
+    engine.steps[2] = [(0, 5), (1, 5), (2, 5)]
+    with pytest.raises(IndexError):
+        core.step()
+    assert (len(passes), len(run.cur.matmuls)) == (3, 2)
+    engine.at = 3
+    core.step()
+    comp.close()
+    assert [p["units"] for p in passes] == [1, 1, 1, 3]
+    assert "execute_model" not in vars(v1) and "execute_model" not in vars(v2)
+
+
 # ---- the trees, their hash kernels run on the host ----------------------------------------------------------------
 
 TWIN = load("simt_twin", KERNEL.parent / "pearl_c" / "simt_twin.py")
@@ -353,7 +631,7 @@ class TwinDev(RecordingDev):
             assert self.pd.pd_run(name.encode(), grid, block, ctypes.byref(a)) == 0, name
 
 
-@pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
+@pytest.mark.parametrize("scheme", KERNEL_SCHEMES)
 def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
     """The constants the pipeline reads (the prover's salt key, then `audit.hm96_kernel_constants`) and a run's tree hash are
     the scheme's: hm96-sha512's.  Without the prover's 32-byte key the constants are refused."""
@@ -374,7 +652,7 @@ def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
 
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
-@pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
+@pytest.mark.parametrize("scheme", KERNEL_SCHEMES)
 def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_path):
     """B's roots, each call's A root over its m₁₆ rows (filler zero), and the pass's tile tree over the leaves the calls wrote,
     their kernels run by `simt_twin` and hash_decode.cuh's host build: each is `MerkleTree`'s root in hm96-sha512
@@ -454,9 +732,12 @@ def honest_pass(tmp_path, request):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
-    audit it).  The key is fixed: -h3's row seeds follow A's salted roots, and under some keys
-    (about 2 in 15) a credited row of a drawn tile is over its own cap, which the law and verify_run both reject."""
+    audit it).  The key is fixed per scheme: -h3's row seeds follow A's salted roots, and under some keys
+    (about 2 in 15) a credited row of a drawn tile is over its own cap, which the law and verify_run both reject.  On the
+    h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits
+    one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap)."""
     scheme = request.param
+    key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
     rng, k = np.random.default_rng(11), 128
     wrows = {0: bf16_words(rng, 16, k), 1: bf16_words(rng, 32, k)}
@@ -466,7 +747,7 @@ def honest_pass(tmp_path, request):
     acts = {0: a0, 1: bf16_words(rng, 16, k)}
     rows = lambda x: [r.tobytes() for r in x]
     work = Workload((Matmul(0, Shape(32, k, 16), 0), Matmul(1, Shape(16, k, 32), 1)))
-    prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=bytes(32))
+    prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=key)
     salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)  # noqa: E731
     coins = salt_coin(prover.weight_roots)
     epoch = Epoch.start(work, prover.weight_roots, *coins)
@@ -1334,13 +1615,28 @@ def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tm
     assert not got["resident"] and "OutOfMemoryError" in got["error"] and len(got["steps"]) == 2 and not Fake.live
 
 
+def test_the_whole_step_arm_captures_vllms_graphs_at_the_decode_batch_or_captures_sizes(monkeypatch):
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(LLM=lambda **kw: kw))
+    args = types.SimpleNamespace(model="m", revision=None, mem_base=0.2, mem_arm=0.3, whole_step=True, capture=None)
+    got = E2E.engine(args, "arm")
+    assert not got["enforce_eager"] and got["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
+                                                                      "cudagraph_capture_sizes": [E2E.BATCH]}
+    args.capture = [8, 32]
+    assert E2E.engine(args, "arm")["compilation_config"]["cudagraph_capture_sizes"] == [8, 32]
+    args.whole_step = False
+    assert E2E.engine(args, "arm")["compilation_config"] == {"mode": 0}
+
+
 # ---- the decode profile -------------------------------------------------------------------------------------------
 
 def test_the_profile_maps_gpu_1s_kernels_to_their_categories(tmp_path):
     PF = load("pearl_c_vllm_profile", KERNEL.parent / "pearl_c_vllm" / "profile_decode.py")
-    assert [PF.kernel_category(k) for k in ("gemm_pearlc", "gemm_pearlc_d", "form_s5", "stats_s5", "gemm_words", "s512_rows",
-                                            "hm_leaves", "pd_commit_851", "pd_tiles_979", "flash_fwd_kernel", "paged_attention")] == [
-        "gemm", "gemm", "forming", "forming", "forming", "hashing", "hashing", "hashing", "hashing", "other", "other"]
+    assert [PF.kernel_category(k) for k in ("gemm_pearlc", "gemm_pearlc_d", "form_s5", "stats_s5", "stats_r", "words_k", "gemm_words",
+                                            "s512_rows", "hm_leaves", "pd_commit_851", "pd_tiles_979", "flash_fwd_kernel",
+                                            "paged_attention")] == [
+        "gemm", "gemm", "forming", "forming", "forming", "forming", "forming", "hashing", "hashing", "hashing", "hashing", "other",
+        "other"]
     csvf = tmp_path / "k.csv"
     csvf.write_text('"Time (%)","Total Time (ns)","Instances","Avg (ns)","Name"\n'
                     '50,2000000,10,200000,"gemm_pearlc"\n30,1200000,40,30000,"s512_tile_leaves"\n20,800000,5,160000,"flash_fwd"\n')
@@ -1352,9 +1648,9 @@ def test_the_served_profile_counts_stock_fp8s_cutlass_3_kernel_as_gemm(monkeypat
     """vLLM's FP8 linear on sm_120 is CUTLASS 3's `device_kernel`, the stock arm's matmul, not `other`."""
     monkeypatch.setenv("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
     SP = load("pearl_c_vllm_served_profile", KERNEL.parent / "pearl_c_vllm" / "served_profile.py")
-    assert [SP.category(k) for k in ("device_kernel", "Kernel2", "gemm_pearlc_d", "words", "s512_tile_leaves", "flash_fwd_splitkv_kernel",
-                                     "some_device_kernel_x")] == [
-        "gemm", "gemm", "pearlc:gemm", "pearlc:forming", "pearlc:tile_hash", "attention", "other"]
+    assert [SP.category(k) for k in ("device_kernel", "Kernel2", "gemm_pearlc_d", "words", "words_k", "stats_r", "s512_tile_leaves",
+                                     "flash_fwd_splitkv_kernel", "some_device_kernel_x")] == [
+        "gemm", "gemm", "pearlc:gemm", "pearlc:forming", "pearlc:forming", "pearlc:forming", "pearlc:tile_hash", "attention", "other"]
 
 
 def test_the_served_profile_names_hash_fasts_kernels_and_gives_a_fold_its_segment_launchs_step(monkeypatch):
@@ -1613,6 +1909,18 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
         PPD.scheme_of("pearl-c-sm120-v1-h0")
 
 
+def test_each_device_records_kernels_refuse_their_own_grain():
+    """pearl_c_sm120's kernels take k a multiple of 1,024 and n of 128, pearl_c_sm90's (h100's) k of 256 and n of 64, inside
+    the scheme's domain: an n = 2,624, k = 1,536 linear (GLM-5.3's at TP 8) runs on sm_90a and not on sm_120, n = 160 on
+    neither, and k = 256 is under both schemes' k_min."""
+    shapes = {0: (2624, 1536), 1: (160, 6144), 2: (7168, 256), 3: (4096, 4096)}
+    sm90 = PPD.refusals("pearl-c-h100-v1-h3", shapes)
+    assert [r.split(":")[0] for r in sm90] == ["linear 1", "linear 2"] and "k a multiple of 256 and n of 64" in sm90[0]
+    sm120 = PPD.refusals(SCHEME, shapes)
+    assert [r.split(":")[0] for r in sm120] == ["linear 0", "linear 1", "linear 2"]
+    assert "k a multiple of 1,024 and n of 128" in sm120[0]
+
+
 # ---- the schedule as data ---------------------------------------------------------------------------------------------
 
 def test_a_schedule_this_path_or_the_format_cannot_run_is_refused():
@@ -1800,3 +2108,118 @@ def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_ru
     assert not names & {"s512_tile_segs", "s512_row_segs", "s512_tile_leaves", "s512_rows", "pd_commit_851", "pd_tiles_851"}
     assert run.omit == frozenset()
     assert all(c <= set(PPD.CALL_STEPS) for c in E2E.CONTROLS.values())
+
+
+# ---- the served step's breakdown ----------------------------------------------------------------------------------
+
+def _served_step_profile(path: Path) -> Path:
+    """An nsys SQLite export's tables as `served_step.analyze` reads them: a prefill step and three decode steps of 8
+    requests, each with three Pearl-C calls (pd_commit, the GEMM, and the tile leaves on a stream of their own, each its
+    own launch inside the call), an attention kernel launched between calls and a pass end whose transcript tree is
+    ``s512_nodes``; 10 ms cycles, each step 9 ms."""
+    import sqlite3
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE StringIds (id INTEGER, value TEXT)")
+    con.execute("CREATE TABLE NVTX_EVENTS (start INT, end INT, text TEXT, globalTid INT, textId INT)")
+    con.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL (start INT, end INT, shortName INT, globalPid INT, streamId INT, "
+                "correlationId INT)")
+    con.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_RUNTIME (start INT, end INT, nameId INT, globalTid INT, correlationId INT)")
+    names = {1: "pd_commit_851", 2: "gemm_pearlc_d", 3: "flash_fwd", 4: "cudaLaunchKernel", 5: "pd_tiles_851", 6: "s512_nodes"}
+    con.executemany("INSERT INTO StringIds VALUES (?, ?)", names.items())
+    tid, ms, corr = 7, 1_000_000, iter(range(1, 1000))
+
+    def kernel(at, start, end, name, stream=7):
+        k = next(corr)
+        con.execute("INSERT INTO CUPTI_ACTIVITY_KIND_RUNTIME VALUES (?, ?, 4, ?, ?)", (at, at + 10_000, tid, k))
+        con.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, ?, 0, ?, ?)", (start, end, name, stream, k))
+    for i in range(4):
+        s = i * 10 * ms
+        con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 'step', ?, NULL)", (s, s + 9 * ms, tid))
+        con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, ?, ?, NULL)", (s + ms, s + 8 * ms, f"exec|{8 if i else 40}|8", tid))
+        for j in range(3):
+            c = s + ms + j * 2 * ms
+            con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 'pc', ?, NULL)", (c, c + ms, tid))
+            kernel(c, c + 100_000, c + 400_000, 1)
+            kernel(c + 20_000, c + 400_000, c + 500_000, 2)
+            kernel(c + 40_000, c + 450_000, c + 600_000, 5, 9)
+        kernel(s + 6_500_000, s + 7 * ms, s + 7 * ms + 200_000, 3)
+        con.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 'pend', ?, NULL)", (s + 7 * ms, s + 8 * ms, tid))
+        kernel(s + 7_100_000, s + 7_500_000, s + 7_600_000, 6)
+    con.commit()
+    return path
+
+
+def test_the_served_step_profile_splits_each_decode_step_into_kernels_and_host_ranges(tmp_path):
+    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    doc = S.analyze(_served_step_profile(tmp_path / "served.sqlite"), 8)
+    assert (doc["batch"], doc["steps"], doc["decode_steps"], doc["full"]["n"], doc["other"]["n"]) == (8, 4, 3, 3, 1)
+    f = doc["full"]
+    got = {k: round(f[k], 6) for k in ("cycle_ms", "step_ms", "gpu_busy_ms", "kernel_sum_ms", "pc_ms", "pc_n", "pend_ms",
+                                        "exec_ms", "launches", "api_ms", "streams", "pc_api_ms", "pc_launches",
+                                        "pend_launches")}
+    assert got == {"cycle_ms": 10.0, "step_ms": 9.0, "gpu_busy_ms": 1.8, "kernel_sum_ms": 1.95, "pc_ms": 3.0, "pc_n": 3,
+                   "pend_ms": 1.0, "exec_ms": 7.0, "launches": 11, "api_ms": 0.11, "streams": 2, "pc_api_ms": 0.09,
+                   "pc_launches": 9, "pend_launches": 1}
+    assert {c: round(v, 6) for c, v in f["by_category_ms"].items()} == {
+        "pearlc:a_commit": 0.9, "pearlc:gemm": 0.3, "pearlc:tile_hash": 0.45, "attention": 0.2, "pearlc:a_tree": 0.1}
+    assert {k: {c: round(v, 6) for c, v in cs.items()} for k, cs in f["by_source_ms"].items()} == {
+        "pc": {"pearlc:a_commit": 0.9, "pearlc:gemm": 0.3, "pearlc:tile_hash": 0.45}, "vllm": {"attention": 0.2},
+        "pend": {"pearlc:a_tree": 0.1}}
+    assert [(k["kernel"], k["per_step"]) for k in doc["top_kernels_full"][:2]] == [("pd_commit_851", 3), ("pd_tiles_851", 3)]
+
+
+def test_the_served_steps_breakdown_puts_each_arms_kernels_and_host_time_in_its_rows(tmp_path):
+    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    pearl, base = tmp_path / "pouw_pearl-c-sm120-v1-h3", tmp_path / "stock-fp8_compiled"
+    for d in (pearl, base):
+        d.mkdir()
+    (pearl / "step-profile.json").write_text(json.dumps(S.analyze(_served_step_profile(tmp_path / "served.sqlite"), 8)))
+    (pearl / "reps.json").write_text(json.dumps({"gate": {"passed": True}, "reps": [
+        {"metrics": {"inter_token_latency_p50_s": 0.010}}, {"metrics": {"inter_token_latency_p50_s": 0.012}}]}))
+    (base / "step-profile.json").write_text(json.dumps({"full": {"n": 3, "cycle_ms": 2.0, "gpu_busy_ms": 1.5,
+                                                                 "by_category_ms": {"gemm": 1.0, "attention": 0.4}}}))
+    (base / "reps.json").write_text(json.dumps({"gate": {"passed": True}, "reps": [
+        {"metrics": {"inter_token_latency_p50_s": 0.002}}]}))
+    doc, md = S.table([pearl, base], "stock-fp8_compiled")
+    p = doc["arms"][pearl.name]
+    assert {k: round(v, 6) for k, v in p["kernels"].items()} == {
+        "stock forward (vLLM's kernels)": 0.2, "Pearl-C GEMM kernels": 0.3, "Pearl-C forming kernels": 0.0,
+        "hashing and A's trees": 1.35, "pass end (transcript tree, coins)": 0.1}
+    assert (round(p["host_gap_ms"], 6), round(p["host"]["Pearl-C calls' Python"], 6), p["gate"]) == (8.2, 2.91, True)
+    assert p["harness_ms"] == {"inter_token_latency_p50_s": 11.0}
+    assert doc["arms"][base.name]["kernels"]["stock forward (vLLM's kernels)"] == 1.4
+    assert "| cycle / stock-fp8_compiled | 5.00 | 1.00 |" in md
+    assert "| inter_token_latency_p50_s / stock-fp8_compiled | 5.50 | 1.00 |" in md
+
+
+def test_an_arm_whose_profile_has_no_nvtx_ranges_is_listed_as_missing_not_tabled(tmp_path):
+    import sqlite3
+    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    db = tmp_path / "eager.sqlite"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE StringIds (id INTEGER, value TEXT)")
+    con.commit()
+    bare = S.analyze(db, 8)
+    assert bare["error"] == "no NVTX ranges in the profile" and "full" not in bare
+    pearl, eager = tmp_path / "pouw_pearl-c-sm120-v1-h3", tmp_path / "stock-fp8_eager"
+    for d in (pearl, eager):
+        d.mkdir()
+    (pearl / "step-profile.json").write_text(json.dumps(S.analyze(_served_step_profile(tmp_path / "served.sqlite"), 8)))
+    (eager / "step-profile.json").write_text(json.dumps(bare))
+    doc, md = S.table([pearl, eager], pearl.name)
+    assert list(doc["arms"]) == [pearl.name]
+    assert doc["missing"] == {eager.name: "no NVTX ranges in the profile"}
+    assert f"{eager.name}: no NVTX ranges in the profile" in md
+
+
+def test_the_served_steps_host_records_are_the_timed_reps_decode_steps():
+    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    ms = 1_000_000
+    steps = [{"phase": "measure", "rep": 0, "t0": 0, "t1": 9 * ms, "tokens": 8, "reqs": 8, "pc_ns": 3 * ms, "pc_n": 3},
+             {"phase": "measure", "rep": 0, "t0": 0, "t1": 4 * ms, "tokens": 5, "reqs": 5, "pc_ns": ms, "pc_n": 3},
+             {"phase": "measure", "rep": 0, "t0": 0, "t1": 20 * ms, "tokens": 40, "reqs": 8},
+             {"phase": "warmup", "rep": 0, "t0": 0, "t1": 9 * ms, "tokens": 8, "reqs": 8}]
+    got = S.summarize_host(steps, 8)
+    assert got["full"] == {"n": 1, "step_ms": 9.0, "pc_ms": 3.0, "pc_n": 3}
+    assert got["decode"]["n"] == 2 and got["decode"]["pc_ms"] == 2.0
+    assert got["steps"] == {"measured": 3, "decode": 2, "total_ms": 33.0, "decode_ms": 13.0}

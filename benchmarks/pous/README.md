@@ -19,6 +19,8 @@ scheme's certified parameters.
     - `certificate`: the scheme's certificate covers the audit's k and deadline.
   - Each run reports the storage profile the certificate gives the accepted audit, gaps included.
 - `pod.sh` runs it on a pod as a research Attempt.
+- `lateness/` measures how late honest answers to timed challenges arrive, on-node and from another machine, quiet and
+  under load, and the wire's floor, with the tree's only UDP challenger and responder (its README).
 - `explorer.py` builds the average-memory explorer's data file (`pous-explorer/v1`): the certified average-ε bound's
   reference math, the honest-latency presets as survival curves, the schemes' serving overhead, ε_proof by in-degree, and
   test vectors the console page reproduces. `--histograms` pools the vLLM e2e series' `verify-honest.json` histograms
@@ -131,7 +133,8 @@ fingerprint say `timed: false` and `audits: skipped (untimed placement)`, so no 
 `streamed_wipe/` times the streamed-label wipe (`verity/core/protocols/pous/PROTOCOL.md`, "The streamed-label wipe")
 on one node: the labels one GPU derives (`labels.cu`, gated against `streamed_wipe.label`), what reaches pinned host
 memory, the NIC's line rate and RDMA loopback, and 74,000-challenge round trips at batch sizes from 1 to 74,000, plus one
-whole reference session. `bench.py`'s docstring lists the steps; `run.sh` builds for sm_120, takes one GPU through
+whole reference session, judged by the Lean verdict (`--verdict lean|both|python`, `wipe_verdict.py`'s `VERDICT` by
+default). `bench.py`'s docstring lists the steps; `run.sh` builds for sm_120, takes one GPU through
 `gpu-lease` and writes `timing.json`:
 
 ~~~bash

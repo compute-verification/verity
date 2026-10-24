@@ -78,7 +78,7 @@ theorem chain_digestP {n : ℕ} (hn : 0 < n) {data : List UInt8} (h1 : 128 * (n 
         (fun q hq => ?_) (hmsgW _ hk) q hq).trans (by rw [chainV_succ P (k + 1 + 1)])
       rw [hchain k hk q hq, ih (by omega) q hq]
   have hlast : P.size / 128 - 1 = n := by
-    have := lastIdx_rowMsgP hpre (n := n - 1) h1 (by omega)
+    have := lastIdx_rowMsgP hpre (n := n - 1) (data := data) (by omega) (by omega)
     rw [← hP] at this
     omega
   intro t ht

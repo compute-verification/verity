@@ -36,6 +36,9 @@ from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.engine import int8_attention as A
 from verity_vllm.program.registry import int8_exact as X
 
+#: fattn_ref.py reads 128-wide rows (fattn.cu's head dimension); at any other the oracle and the Definitions are the checks
+FATTN_REF_HEAD_DIM = 128
+
 
 def _words(t: torch.Tensor) -> torch.Tensor:
     return t.contiguous().view(torch.int16)
@@ -113,10 +116,10 @@ class AttnTaps:
 
 
 def fattn_ref_row(q: torch.Tensor, k: torch.Tensor, ks: torch.Tensor, scale: float) -> bool | None:
-    """fattn_ref.check on the GPU's softmax of the window's last row of query head 0 (KV head 0); None off head dimension 128."""
+    """fattn_ref.check on the GPU's softmax of the window's last row of query head 0 (KV head 0); None off FATTN_REF_HEAD_DIM."""
     n, _, d = q.shape
     s = k.shape[0]
-    if d != 128:
+    if d != FATTN_REF_HEAD_DIM:
         return None
     qi, sq = A.quant(q[-1:, 0].float().cuda(), -1)
     ki = A.quant_static(k[:, 0].float().cuda(), ks[0])
@@ -139,7 +142,7 @@ def compare(rec: dict[str, Any]) -> dict[str, Any]:
     oracle = O.attention(q, k, v, ks, scale)
     kv_gpu, kv_cpu = A.kv_quant(k.cuda(), v.cuda(), ks.cuda()), A.kv_quant(k, v, ks)
     ow = _words(out)
-    got = {"s": s, "n": n, "words": int(ow.numel()), "rerun_mismatch": int((_words(rerun) != ow).sum()),
+    got = {"s": s, "n": n, "head_dim": int(q.shape[-1]), "words": int(ow.numel()), "rerun_mismatch": int((_words(rerun) != ow).sum()),
            "cpu_mismatch": int((_words(cpu) != ow).sum()), "oracle_mismatch": int((_words(oracle) != ow).sum()),
            "kv_mismatch": sum(int((a.cpu().view(torch.uint8) != b.view(torch.uint8)).sum()) for a, b in zip(kv_gpu, kv_cpu)),
            "fattn_ref": fattn_ref_row(q, k, ks, scale), "scale_is_head_dim": scale == q.shape[-1] ** -0.5,

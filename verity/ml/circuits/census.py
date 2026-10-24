@@ -107,17 +107,17 @@ import hashlib
 from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Iterator
 
 from . import boolean as BL
 from . import ports
 from .codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
 from .defs import CompositeDefinition, Node, PrimitiveDefinition, bind
-from .intervals import Intervals, complement, contains, full, isect, norm, ref_intervals, total
+from .intervals import Intervals, contains, full, norm, ref_intervals, total
 from .layout import resolve
 from .liveness import _MEMBER_LIMIT
 from .program import input_id, is_input
-from .refs import Affine, Concat, Explicit, Refs, concat
+from .refs import Affine, Concat, Explicit, Refs, Strided, concat
 from .types import Array, Record, Tuple as TupleT, Type, Value
 
 SCHEMA = "verity/census/v1"
@@ -223,13 +223,57 @@ def silicon_step(fn: Any, model: Any) -> Any:
     return fn
 
 
+_PIECE = 1 << 16
+_SCALARS = {int, str, bool, type(None)}
+
+
+def _canonical_pieces(x: Any) -> Iterator[bytes]:
+    """`canonical_json(x)` in pieces: objects key by key, lists of scalars `_PIECE` items at a time, other lists their items in
+    runs of about `_PIECE` leaves (a DeepSeek-V4-Pro request census is 5 GB of canonical JSON, hashed without holding it)."""
+    if isinstance(x, dict):
+        yield b"{"
+        for i, k in enumerate(sorted(x)):
+            yield (b"," if i else b"") + canonical_json(k) + b":"
+            yield from _canonical_pieces(x[k])
+        yield b"}"
+    elif isinstance(x, (list, tuple)) and set(map(type, x)) <= _SCALARS:
+        yield b"["
+        for i in range(0, len(x), _PIECE):
+            yield (b"," if i else b"") + canonical_json(x[i:i + _PIECE])[1:-1]
+        yield b"]"
+    elif isinstance(x, (list, tuple)):
+        yield b"["
+        run: list = []
+        n, sep = 0, b""
+        for y in x:
+            w = len(y) if isinstance(y, (list, tuple)) else 1
+            if run and (isinstance(y, dict) or w > _PIECE or n + w > _PIECE):
+                yield sep + canonical_json(run)[1:-1]
+                run, n, sep = [], 0, b","
+            if isinstance(y, dict) or w > _PIECE:
+                yield sep
+                yield from _canonical_pieces(y)
+                sep = b","
+            else:
+                run.append(y)
+                n += w
+        if run:
+            yield sep + canonical_json(run)[1:-1]
+        yield b"]"
+    else:
+        yield canonical_json(x)
+
+
 def seal(doc: dict) -> dict:
     """`doc` with its `digest`: the SHA-512 of the canonical JSON of every other field (refused outside that JSON's domain)."""
     body = {k: v for k, v in doc.items() if k != "digest"}
     err = jcs_domain_error(body)
     if err is not None:
         raise ValueError(f"{doc.get('schema')}: outside the canonical JSON domain: {err}")
-    return body | {"digest": hashlib.sha512(canonical_json(body)).hexdigest()}
+    h = hashlib.sha512()
+    for piece in _canonical_pieces(body):
+        h.update(piece)
+    return body | {"digest": h.hexdigest()}
 
 
 def step_ends(program: Any, families: Iterable[str]) -> list[int]:
@@ -256,11 +300,38 @@ class _Reads:
     approximate: bool
 
 
-class _Marks:
-    """Leaf intervals one body's nodes read, in one space of that body (`p` inside a Definition, `n` at the root)."""
+class _Shared:
+    """The `Intervals` of large strided views, one tuple per view (by its fields), the least recently used dropped past `budget`
+    intervals: a table column every token reads (no interval structure) is enumerated once, and every read of it holds that
+    one tuple, which `_segments` cuts by once however many read it."""
 
-    def __init__(self, space: str) -> None:
-        self.space = space
+    MIN = 1 << 10  # a strided view of fewer leaves is enumerated where it is read
+
+    def __init__(self, budget: int = 1 << 22) -> None:
+        self._ivs: dict[tuple, Intervals] = {}
+        self._size, self._budget = 0, budget
+
+    def get(self, r: Strided) -> Intervals:
+        key = (r.space, r.idx, r.base, r.inner, r.outer_stride, r.inner_stride, r.count)
+        iv = self._ivs.pop(key, None)
+        if iv is None:
+            t: dict = {}
+            ref_intervals(r, t)
+            iv = norm(t[(r.space, r.idx)])
+            self._size += len(iv)
+        self._ivs[key] = iv
+        while self._size > self._budget and len(self._ivs) > 1:
+            self._size -= len(self._ivs.pop(next(iter(self._ivs))))
+        return iv
+
+
+class _Marks:
+    """Leaf intervals one body's nodes read, in one space of that body (`p` inside a Definition, `n` at the root). With `shared`,
+    a node read only through one large strided view is marked with that view's `Intervals` (a tuple, normalised) instead of a
+    list of intervals."""
+
+    def __init__(self, space: str, shared: _Shared | None = None) -> None:
+        self.space, self.shared = space, shared
         self.direct: dict[int, list] = {}
         self.pool: dict[int, list] = {}
         self.select_gates = self.select_bits = 0
@@ -273,11 +344,25 @@ class _Marks:
         elif isinstance(refs, Explicit):
             for s, i, leaf in refs.items:
                 if s == self.space:
-                    into.setdefault(i, []).append((leaf, leaf + 1))
+                    got = into.get(i)
+                    if type(got) is not list:
+                        got = into[i] = list(got or ())
+                    got.append((leaf, leaf + 1))
         elif refs.count and refs.space == self.space:
-            t: dict = {}
-            ref_intervals(refs, t)
-            into.setdefault(refs.idx, []).extend(t[(refs.space, refs.idx)])
+            if self.shared is not None and isinstance(refs, Strided) and refs.count >= _Shared.MIN:
+                iv = self.shared.get(refs)
+                got = into.get(refs.idx)
+                if got is None:
+                    into[refs.idx] = iv
+                    return
+            else:
+                t: dict = {}
+                ref_intervals(refs, t)
+                iv = t[(refs.space, refs.idx)]
+                got = into.get(refs.idx)
+            if type(got) is not list:
+                got = into[refs.idx] = list(got or ())
+            got.extend(iv)
 
     def mark(self, refs: Refs, sub: Intervals | None, into: dict) -> None:
         if sub is None or total(sub) == refs.count:
@@ -327,13 +412,28 @@ def _through(r: Refs, args) -> Refs:
     return concat(parts)
 
 
+def _sources(r: Refs) -> set[int]:
+    """The body nodes `r` names."""
+    out: set[int] = set()
+    for p in _flat(r):
+        if isinstance(p, Explicit):
+            out.update(i for s, i, _leaf in p.items if s == "n")
+        elif p.count and p.space == "n":
+            out.add(p.idx)
+    return out
+
+
 class _Aliases:
     """The output leaves of one body's nodes that are leaves of something else passed through (a callee returning its argument,
-    a scan's carry), and what refs resolve to once every pass-through is followed."""
+    a scan's carry), and what refs resolve to once every pass-through is followed.
+
+    Each node's runs are resolved once (`resolved`), through its sources' resolved runs, so following a pass-through is one
+    step however long the chain of nodes passing it on: the work is the runs' size, never the chains' length times it."""
 
     def __init__(self, an: "_Analysis", body: Any) -> None:
         self.an, self.body = an, body
         self._nodes: dict[int, list[tuple[int, int, Refs]]] = {}
+        self._res: dict[int, tuple[list[int], list[tuple[int, int, Refs, bool]]]] = {}
 
     def node(self, k: int) -> list[tuple[int, int, Refs]]:
         """Runs `[lo, hi)` of node `k`'s output leaves that pass through the refs (in this body's spaces) given with each, by `lo`."""
@@ -371,9 +471,38 @@ class _Aliases:
         self._nodes[k] = runs
         return runs
 
+    def resolved(self, k: int) -> tuple[list[int], list[tuple[int, int, Refs, bool]]]:
+        """Node `k`'s runs (`node`) with every pass-through followed, as runs `[lo, hi)` of its output leaves with what they
+        resolve to and whether that is the body's parameters (`resolve`'s pieces at their leaves), by `lo`, and their `lo`s."""
+        todo = [k]
+        while todo:  # a node's sources are earlier nodes: resolve them first, without recursing down a chain
+            q = todo[-1]
+            if q in self._res:
+                todo.pop()
+                continue
+            need = [p for lo, hi, s in self.node(q) for p in _sources(s) if p not in self._res and self.node(p)]
+            if need:
+                todo.extend(need)
+                continue
+            todo.pop()
+            runs = [(lo + q2, lo + q2 + x.count, x, f) for lo, _hi, s in self.node(q) for q2, x, f in self._hop(s, True)]
+            self._res[q] = ([r[0] for r in runs], runs)
+        return self._res[k]
+
+    def release(self, k: int) -> None:
+        """Forget node `k`'s resolved runs (a caller that resolves nothing naming `k` again)."""
+        self._res.pop(k, None)
+
     def resolve(self, r: Refs, own: bool) -> list[tuple[int, Refs, bool]]:
         """`r` with every pass-through followed, as pieces `(position, refs, passed)`: `passed` pieces are the body's parameters,
         the others leaves its nodes produce (listed only when `own`)."""
+        for p in _sources(r):
+            if self.node(p):
+                self.resolved(p)
+        return self._hop(r, own)
+
+    def _hop(self, r: Refs, own: bool) -> list[tuple[int, Refs, bool]]:
+        """`resolve`, its sources' runs already resolved."""
         out: list[tuple[int, Refs, bool]] = []
         pos = 0
         for p in _flat(r):
@@ -384,19 +513,24 @@ class _Aliases:
             elif p.space == "p":
                 if n:
                     out.append((pos, p, True))
-            elif not (runs := self.node(p.idx)):
+            elif not self.node(p.idx):
                 if own and n:
                     out.append((pos, p, False))
             elif isinstance(p, Affine):
+                los, runs = self._res[p.idx]
                 b, e, cur = p.base, p.base + n, p.base
-                for lo, hi, s in runs:
-                    if hi <= cur or lo >= e:
-                        continue
+                i = bisect.bisect_right(los, b) - 1
+                if i < 0 or runs[i][1] <= b:
+                    i += 1
+                while i < len(runs) and runs[i][0] < e:
+                    lo, hi, x, f = runs[i]
                     if lo > cur and own:
                         out.append((pos + cur - b, Affine("n", p.idx, cur, lo - cur), False))
                     a0, a1 = max(lo, cur), min(hi, e)
-                    out.extend((pos + a0 - b + q, x, f) for q, x, f in self.resolve(s.slice(a0 - lo, a1 - lo), own))
+                    if own or f:
+                        out.append((pos + a0 - b, x if (a0, a1) == (lo, hi) else x.slice(a0 - lo, a1 - lo), f))
                     cur = a1
+                    i += 1
                 if cur < e and own:
                     out.append((pos + cur - b, Affine("n", p.idx, cur, e - cur), False))
             else:
@@ -409,12 +543,15 @@ class _Aliases:
         if s == "p":
             out.append((pos, Affine(s, i, leaf, 1), True))
             return
-        runs = self.node(i)
-        j = bisect.bisect_right(runs, leaf, key=lambda x: x[0]) - 1
-        if j >= 0 and runs[j][0] <= leaf < runs[j][1]:
-            lo, _, r = runs[j]
-            out.extend((pos + q, x, f) for q, x, f in self.resolve(r.slice(leaf - lo, leaf - lo + 1), own))
-        elif own:
+        if self.node(i):
+            los, runs = self._res[i]
+            j = bisect.bisect_right(los, leaf) - 1
+            if j >= 0 and leaf < runs[j][1]:
+                lo, _, x, f = runs[j]
+                if own or f:
+                    out.append((pos, x.slice(leaf - lo, leaf - lo + 1), f))
+                return
+        if own:
             out.append((pos, Affine(s, i, leaf, 1), False))
 
 
@@ -787,30 +924,63 @@ def _bits(t: Type, lo: int, hi: int) -> int:
     return out
 
 
-def _minus(a: Intervals, b: list[tuple[int, int]]) -> Intervals:
-    n = max((hi for _, hi in a), default=0)
-    return isect(a, tuple(complement(norm((max(lo, 0), min(hi, n)) for lo, hi in b), n)))
+_UNIONS = 1 << 12  # the joined tag sets `_segments` keeps for one node; past it, it starts again
 
 
-def _segments(L: int, spans: list[tuple[int, int, tuple]]) -> Iterable[tuple[int, int, frozenset]]:
-    """`[0, L)` cut into maximal runs over which the set of tags of the spans covering a leaf is the same."""
-    ev: list[tuple[int, int, tuple]] = []
-    for lo, hi, tag in spans:
-        ev.append((lo, 1, tag))
-        ev.append((hi, 0, tag))
+def _spans(spans: list[tuple]) -> Iterable[tuple[int, int, tuple]]:
+    """Each span as `(lo, hi, tag)`: a shared view's `(intervals, tag)` (`_Shared`) as one span per interval."""
+    for s in spans:
+        if len(s) == 3:
+            yield s
+        else:
+            for lo, hi in s[0]:
+                yield lo, hi, s[1]
+
+
+def _segments(L: int, spans: list[tuple]) -> Iterable[tuple[int, int, frozenset]]:
+    """`[0, L)` cut into maximal runs over which the set of tags of the spans covering a leaf is the same. A span is `(lo, hi,
+    tag)`, or `(intervals, tag)` (`_Shared`): the spans of one shared view are cut by its intervals once, their tags joined."""
+    ev: list[tuple[int, int, Any]] = []
+    views: dict[int, tuple[Intervals, set]] = {}
+    for s in spans:
+        if len(s) == 3:
+            lo, hi, tag = s
+            ev.append((lo, 1, tag))
+            ev.append((hi, 0, tag))
+        elif id(s[0]) in views:
+            views[id(s[0])][1].add(s[1])
+        else:
+            views[id(s[0])] = (s[0], {s[1]})
+    joined: dict[int, frozenset] = {}
+    for p, (iv, ts) in views.items():  # a view's key is an int, a tag a tuple
+        joined[p] = frozenset(ts)
+        for lo, hi in iv:
+            ev.append((lo, 1, p))
+            ev.append((hi, 0, p))
     ev.sort(key=lambda e: (e[0], e[1]))
     active: Counter = Counter()
+    on: Counter = Counter()
+    union: dict[tuple[frozenset, frozenset], frozenset] = {}
     pos, i, run = 0, 0, None
     while pos < L:
         while i < len(ev) and ev[i][0] <= pos:
-            _, start, tag = ev[i]
-            active[tag] += 1 if start else -1
-            if not active[tag]:
-                del active[tag]
+            _, start, key = ev[i]
+            c = on if type(key) is int else active
+            c[key] += 1 if start else -1
+            if not c[key]:
+                del c[key]
             i += 1
         nxt = min(ev[i][0] if i < len(ev) else L, L)
-        tags = frozenset(active)
-        if run is not None and run[2] == tags:
+        if on:
+            u = (frozenset(active), frozenset(on))
+            tags = union.get(u)
+            if tags is None:
+                if len(union) >= _UNIONS:
+                    union.clear()
+                tags = union[u] = u[0].union(*(joined[p] for p in u[1]))
+        else:
+            tags = frozenset(active)
+        if run is not None and (run[2] is tags or run[2] == tags):
             run = (run[0], nxt, tags)
         else:
             if run is not None:
@@ -856,16 +1026,21 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
             classes[cid]["boolean_version"] = v
 
     an = _Analysis()
-    spans: list[list[tuple[int, int, tuple]]] = [[] for _ in nodes]
+    spans: list[list[tuple]] = [[] for _ in nodes]  # (lo, hi, tag), or (intervals, tag) for a shared view (`_segments`)
     sel: dict[int, tuple[int, int]] = {}
     approximate = False
+    shared = _Shared()
     for k in range(I, len(nodes)):
-        m = _Marks("n")
+        m = _Marks("n", shared)
         an.node(nodes[k], m)
         approximate |= m.approximate
         for tag, got in ((0, m.direct), (1, m.pool)):
             for j, ivs in got.items():
-                spans[j].extend((lo, hi, (tag, k)) for lo, hi in norm(ivs))
+                tg = (tag, k)
+                if type(ivs) is tuple:
+                    spans[j].append((ivs, tg))
+                else:
+                    spans[j].extend((lo, hi, tg) for lo, hi in norm(ivs))
         if m.select_gates:
             sel[k] = (m.select_gates, m.select_bits)
     out = _Marks("n")
@@ -873,27 +1048,53 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
     for j, ivs in out.direct.items():
         spans[j].extend((lo, hi, (2, 0)) for lo, hi in norm(ivs))
     al = _Aliases(an, root.body)
+    # which of a node's own leaves name one gate is its Definition's: the same at every node of one form and length calling it
+    # with the same leaves passed through. (t, g, k, s): leaf t + i names the gate leaf g + i * s names first, for i < k (a
+    # broadcast is s = 0)
+    twins: dict[tuple, list[tuple[int, int, int, int]]] = {}
     for j in range(len(nodes) - 1, I - 1, -1):  # a leaf a node passes through is its producer's value: its readers read that
-        runs = [(lo + q, lo + q + x.count, x) for lo, _hi, s in al.node(j) for q, x, _ in al.resolve(s, True)]
+        runs = [(lo, hi, x) for lo, hi, x, _ in al.resolved(j)[1]] if al.node(j) else []
+        al.release(j)  # only later nodes name j, and they are done
         if an.repeats(nodes[j].fn):  # and a leaf naming the gate an earlier one names is that one
+            nd = nodes[j]
             passed = norm((lo, hi) for lo, hi, _ in runs)
-            first: dict[int, int] = {}
-            for t in range(nodes[j].out.leaves):
-                if not contains(passed, t):
-                    g = first.setdefault(resolve(program.circuit.root_scope, ("n", j, t)), t)
-                    if g != t:
-                        runs.append((t, t + 1, Affine("n", j, g, 1)))
+            key = (id(nd.fn), nd.form, mult[j], passed)
+            same = twins.get(key)
+            if same is None:
+                first: dict[int, int] = {}
+                same = twins[key] = []
+                for t in range(nd.out.leaves):
+                    if contains(passed, t) or (g := first.setdefault(resolve(program.circuit.root_scope, ("n", j, t)), t)) == t:
+                        continue
+                    if same and same[-1][0] + same[-1][2] == t:
+                        t0, g0, k, s = same[-1]
+                        if g == g0 + k * s or (k == 1 and g >= g0):
+                            same[-1] = (t0, g0, k + 1, g - g0 if k == 1 else s)
+                            continue
+                    same.append((t, g, 1, 1))
+            runs.extend((t, t + k, Affine("n", j, g, k) if s == 1 else Strided("n", j, g, 1, s, 0, k)) for t, g, k, s in same)
+            runs.sort(key=lambda x: x[0])
         if not runs:
             continue
+        los = [lo for lo, _, _ in runs]
         kept, moved = [], []
-        for a, b, tag in spans[j]:
-            for lo, hi, x in runs:
-                if lo < b and hi > a:
-                    m = _Marks("n")
-                    m.walk(x.slice(max(a, lo) - lo, min(b, hi) - lo), m.direct)
-                    moved.extend((p, u, v, tag) for p, ivs in m.direct.items() for u, v in norm(ivs))
-            kept.extend((u + a, v + a, tag) for u, v in _minus(((0, b - a),), [(lo - a, hi - a) for lo, hi, _ in runs]))
-        spans[j] = kept + [(lo, hi, (3, 0)) for lo, hi, _ in runs]
+        for a, b, tag in _spans(spans[j]):  # the runs are disjoint and sorted: those a span meets are consecutive
+            i = bisect.bisect_right(los, a) - 1
+            if i < 0 or runs[i][1] <= a:
+                i += 1
+            m = _Marks("n")
+            cur = a
+            while i < len(runs) and runs[i][0] < b:
+                lo, hi, x = runs[i]
+                if lo > cur:
+                    kept.append((cur, lo, tag))
+                m.walk(x.slice(max(a, lo) - lo, min(b, hi) - lo), m.direct)
+                cur = min(hi, b)
+                i += 1
+            if cur < b:
+                kept.append((cur, b, tag))
+            moved.extend((p, u, v, tag) for p, ivs in m.direct.items() for u, v in norm(ivs))
+        spans[j] = kept + [(lo, hi, (3, 0)) for lo, hi in norm((lo, hi) for lo, hi, _ in runs)]
         for p, u, v, tag in moved:  # an earlier node's, or this one's own first naming of a gate
             spans[p].append((u, v, tag))
 
@@ -902,20 +1103,27 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
     values: dict[str, list] = {"producer": [], "lo": [], "hi": [], "bits": [], "reads": [], "output": [], "fact": []}
     pools: dict[int, list[int]] = {k: [] for k in sel}
     for j, nd in enumerate(nodes):
+        seen: dict[frozenset, tuple] = {}  # a tag set -> its reads, output, fact and the pools a value of it joins
         for lo, hi, tags in _segments(nd.out.leaves, spans[j] + [(a, b, (4, f)) for a, b, f in fx.node(j).segments()]):
             if (3, 0) in tags:
                 continue
+            got = seen.get(tags)
+            if got is None:
+                if len(seen) >= _UNIONS:
+                    seen.clear()
+                got = seen[tags] = (sorted(k for t, k in tags if t == 0), (2, 0) in tags, next(f for t, f in tags if t == 4),
+                                    [pools.setdefault(k, []).append for t, k in tags if t == 1])
             v = len(values["producer"])
             values["producer"].append(j)
             values["lo"].append(lo)
             values["hi"].append(hi)
             values["bits"].append(_bits(nd.out, lo, hi))
-            values["reads"].append(sorted(k for t, k in tags if t == 0))
-            values["output"].append((2, 0) in tags)
-            values["fact"].append(facts.setdefault(next(f for t, f in tags if t == 4), len(facts)))
-            for t, k in tags:
-                if t == 1:
-                    pools.setdefault(k, []).append(v)
+            values["reads"].append(list(got[0]))
+            values["output"].append(got[1])
+            values["fact"].append(facts.setdefault(got[2], len(facts)))
+            for join in got[3]:
+                join(v)
+        spans[j] = []
     ks = sorted(pools)
     selects = {"call": ks, "gates": [sel.get(k, (0, 0))[0] for k in ks], "bits": [sel.get(k, (0, 0))[1] for k in ks],
                "values": [pools[k] for k in ks]}

@@ -41,9 +41,13 @@ without `--rec-inner` (`Flock.RecSetup.fullDraw`, PROTOCOL.md).
 
 ~~~text
 cd verity/core/service/flock && lake build          # .lake/build/bin/flock-verify
-flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os] --session DIR...
+flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os] [--upstream-plain] --session DIR...
 flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os]   # digest, Σ, Hello
 ~~~
+
+Each plain proof file is taken in one form (PROTOCOL.md §8.1): by default the deployed prover's, the zk patch's build,
+which writes a `zk_level0 = None` byte after the pair; `--upstream-plain` takes upstream's builds' form, without it, as
+the agreement job's sessions from upstream's binaries are. Each refuses the other.
 
 `ID` names a version:
 - `verity/flock-circuit`: the default, and the statement M0 stages today: `@967b8d06`'s with every output a hidden row
@@ -196,21 +200,22 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
 - Template queries (§16.10): `template_query_agree.py` checks the decoding against #131's
   `template_instance_vectors.json` (16 of 16: the population, the ranges, every unit's node, member and gates, the
   refusals word for word, the malformed parameters).
-- The outer firewall's release (`Flock.Firewall.Frame`, `flock-firewall frame`, live PROTOCOL.md §10.4): every round a
-  firewalled rep sends is the Lean frame's, with the masking challenger held to it byte for byte, the rep's pads and the
-  pads tree's salts are the frame's own OS draws, with the root it computes, and the coins' four refusals (an outer coin 1,
-  the mask slot's rank, level 0's `ρ_0, ρ_1` dependent over F128, the inner proof's `β = 0`) are the frame's; the inner
-  proof's rounds leave through it too, in the form it fixes, with `(ρ, σ)` and `Y` its own from its draws and the coins
-  (`innerOwn`), so of the inner proof's rounds only `final_c'` and `τ`'s commitment are Rust's. The pass decision on each device round is the frame's (`check`, against the
-  statement's scheduled round in its place), and Rust's checks can only fail a round more. `flock-firewall tap` serves the
-  prover's every other OS read (`test_firewall_frame.py` on hand-made reps: the draws, the release, the pass decision,
-  the refusals, the inner proof's rounds against `zk_veil::prove_inner`'s formulas, the coin and prior protocol, the tap;
-  the ρ and β stops on `live/src/coin_stop_vectors.json`, which
+- The outer firewall (`Flock.Firewall.Session`, `flock-firewall session`, live PROTOCOL.md §10): the Lean session loop
+  owns the auditor's connection and drives each firewalled rep's frame (`Flock.Firewall.Frames` over
+  `Flock.Firewall.Frame`). It places every round (the algebraic phase's scheduled round, `Skeleton.rounds`; the
+  opening's, `Drive.openStep`; or the inner proof's, the firewall's own), takes the device's round unmasked from the
+  prover (`firewall::Gate`), makes the pass decision against the round in its place (`check`), masks what passes and
+  releases the scheduled round in place of one that fails. The rep's pads and the pads tree's salts are the frame's own
+  OS draws, with the root it computes, and the coins' four refusals (an outer coin 1, the mask slot's rank, level 0's
+  `ρ_0, ρ_1` dependent over F128, the inner proof's `β = 0`) are the frame's; the inner proof's rounds leave through it
+  too, in the form it fixes, with `(ρ, σ)` and `Y` its own from its draws and the coins (`innerOwn`), so of the inner
+  proof's rounds only `final_c'` and `τ`'s commitment are Rust's. A rep the frame stops ends the session at `Finish`, not
+  accepted. `flock-firewall tap` serves the prover's every other OS read (`test_firewall_frame.py` on hand-made reps: the
+  draws, the release, the pass decision, the refusals, the inner proof's rounds against `zk_veil::prove_inner`'s
+  formulas, the coin and prior protocol, the tap; the ρ and β stops on `live/src/coin_stop_vectors.json`, which
   `zk_veil`'s `rust_coin_stops_agree_with_the_lean_frames_vectors` holds Rust's `rho_independent` and `prove_inner` to;
-  the pass decision on `live/src/pass_vectors.json`, which `firewall.rs`'s
-  `rusts_checks_pass_the_device_rounds_the_lean_frame_passes` holds Rust's `Checker` and `ShadowLink::check` to). On RoPE d64 at m = 25 (`art:edc7c50b`), 3 honest firewalled CPU sessions were accepted and each of the
-  7 `FC_FIREWALL_TAMPER` controls was refused or stopped as before; `firewall_outer_agree.py` found 10 of 10 transcripts as
-  expected, with the same public input and the same 1,454-item sequence as `r20261006-134729-fddc` before the Lean release.
+  the pass decision on `live/src/pass_vectors.json`). `firewall_controls.sh` runs an honest firewalled session and each
+  `FC_FIREWALL_TAMPER` control through the loop, and holds each control to a visible refusal.
 - The firewall's contract (`Flock.Firewall.Contract`, `flock-firewall contract`), the property every firewall's sessions
   must have, beside the inner phase's program (`Flock.Firewall.run`, which `test_firewall_agreement.py` holds the proxy
   to): `firewall_agree.py` runs the inner phase's firewall (`rec_live.Proxy`) and the contract on the same transcript
@@ -225,18 +230,8 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   replays recorded sessions from their coins and salts. The K = 4096 sessions it replayed before (`r20261006-070620-e02d`'s,
   4 of 4 accepted by both) are `rec/inner-transcript/v0`'s, from before rec-step3's tops and level0, and today's firewall
   refuses their schedule. A v1 session at that size has been recorded since (`r20261006-021550-4e4b`, rec-reprice's
-  `85-rec-reprice.sh STEP=inner K=4096`), but its outputs keep no `private.json`, whose salts the replay needs. The
-  outer phase: `firewall_outer_agree.py` runs the contract on the outer firewall's transcripts (`FC_FIREWALL_TRANSCRIPT`,
-  `live/PROTOCOL.md` §10.4), each honest one accepted and each `FC_FIREWALL_TAMPER` control cut where the firewall stopped, for its
-  control's reason, with every check's outcome recomputed from its affine form over the tape's pads, all under one public
-  input: the honest sessions' (`public-<k>.json`, the same in each), which every control's agrees with. The contract doesn't
-  yet hold the outer phase's order and count: with no schedule it decides each outer item alone. The harness holds them
-  against the honest sessions instead. Every honest session's item sequence is one and the same, and each control's is the
-  same up to its cut, with its held-back candidate where those items leave in an honest session. A public input that
-  carries the outer sequence, for the contract to hold, is not written yet. On RoPE d64 at m = 25, CPU gated sessions,
-  60 of 60 as expected (`r20261006-134729-fddc`: 10 relations, 265 statement values, 383 values of the firewall's own
-  computation, and one item sequence of 1,454 items), and each of 21 of its sessions with items dropped, swapped,
-  duplicated or moved, or with an early `finish`, a miss at the item it moves (12 of them accepted by the contract).
+  `85-rec-reprice.sh STEP=inner K=4096`), but its outputs keep no `private.json`, whose salts the replay needs. The outer phase's rounds are the Lean session loop's
+  own (the bullet above), not a transcript the contract decides after the fact.
 - Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agreed 27 of 27, and set 14 (a shared-row RoPE file whose six
   instances repeat three rows) 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included, before
   §16.15; both are D12 now (a unit reading two input groups, a shared-row file), so the Lean verifier refuses every

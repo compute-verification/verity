@@ -41,6 +41,7 @@ Notes are records, never messages.
                           --default V --deadline '3:00 PM'|ISO (--page FILE.md --area AREA | --link NOTION_URL) [--wait]
                           # the ask's page in the Asks for Daniel database, and a card in #ask-daniel linking it; prints `<id> <ts> <permalink>`
   research msg ask-daniel status ID [--wait] [--json] | resolve ID --choice V [--note T]
+                          # --wait polls for at most 20 min: a card still pending then exits 79 with the status command (research/waitcap.py)
   research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]  # asks' pages edited lately: Status, Decision, newest comment
 
 An ask lives in one record, by its target: a handle's ask is an issue in its Linear team, and Daniel's is a page in the Asks
@@ -95,6 +96,7 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 try:
+    from . import waitcap
     from .timefmt import both, slack_dates
 except ImportError:                                                 # run as a single file: `python3 slack.py ...`
     def both(t: Any) -> str:
@@ -102,6 +104,14 @@ except ImportError:                                                 # run as a s
 
     def slack_dates(text: str, now: Any = None) -> str:
         return text
+
+    class waitcap:  # noqa: N801  research/waitcap.py's cap, which a single file carries itself
+        WAIT_CAP_S, STILL_GOING = 1200, 79
+
+        @staticmethod
+        def still_going(what: str, check: str, waited_s: float, end: str) -> str:
+            return (f"research: {what} is still going; stopped waiting after {waited_s:g} s (no tool call may block more than 20 "
+                    f"minutes, Daniel, 19 Oct). Nothing was cancelled. Check back with `{check}`. {end}")
 
 SCHEMA = "verity/slack-registry/v1"
 REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
@@ -140,6 +150,8 @@ SAFE_POINT = "Apply at your next safe point; don't interrupt running jobs."
 EXPIRES_S = 2592000                                              # 30 days; a lapsed subscription wakes no one and says nothing
 PAGE = 200
 RATE_RETRIES, RATE_WAIT_MAX_S = 3, 30                         # a 429: retry this often, waiting at most this long each time
+TRANSIENT_RETRIES, TRANSIENT_WAIT_S = 3, 2.0                  # a read cut short, reset, timed out or a 5xx: 2, 4, then 8 s
+READ_VERBS = ("get", "list", "history", "replies", "info", "members", "lookup", "test")
 ASK_DANIEL = "https://website-docs-sage.vercel.app/api/agent-approvals"   # the cards' route, and its OIDC token's audience
 ASK_CHANNEL = "ask-daniel"
 DANIEL = "daniel"                                                # whose asks are pages: `traffic`'s lane for the cards
@@ -244,12 +256,20 @@ def origin_registry(path: Path, fetch: bool = True) -> dict | None:
     return reg if isinstance(reg, dict) else None
 
 
+GROUP_ID_RE = re.compile(r"^S[0-9A-Z]{8,}$")
+
+
+def group_ids(h: dict) -> set[str]:
+    """A handle's user-group ids: its current group and the ones it retired (a retired group still names it in old posts)."""
+    return ({h["usergroup"]} if h.get("usergroup") else set()) | set(h.get("retired_usergroups", []))
+
+
 def origin_groups(path: Path) -> set[str]:
     """The user-group ids in origin/main's registry: an analysis checkout older than a sender's must not report the
     sender's group mentions as dropped (three false DROPPED lines on 14 Oct). Empty when git can't answer, which keeps
     `traffic`'s old behavior."""
     try:
-        return {h["usergroup"] for h in (origin_registry(path) or {}).get("handles", []) if h.get("usergroup")}
+        return {g for h in (origin_registry(path) or {}).get("handles", []) for g in group_ids(h)}
     except (AttributeError, KeyError, TypeError):
         return set()
 
@@ -326,6 +346,12 @@ def check_registry(reg: dict, path: str) -> dict:
         if not isinstance(ex, list) or len(ex) > EXAMPLES_MAX or not all(isinstance(q, str) and 0 < len(q) <= EXAMPLE_CHARS for q in ex):
             raise SlackError(f"registry {path}: @{name}'s examples: at most {EXAMPLES_MAX} questions, each one line of at most "
                              f"{EXAMPLE_CHARS} characters, in a newcomer's words (what the chat router matches a post against)")
+        old = h.get("retired_usergroups", [])
+        current = {o.get("usergroup") for o in reg["handles"]}
+        if not isinstance(old, list) or any(not isinstance(g, str) or not GROUP_ID_RE.match(g) or g in current
+                                            or any(g in o.get("retired_usergroups", []) for o in reg["handles"] if o is not h) for g in old):
+            raise SlackError(f"registry {path}: @{name}'s retired_usergroups: Slack group ids (S...) that no handle has now and "
+                             f"no other handle retired; mentions of them still route to @{name}, and groups sync never re-enables them")
     chans = reg.get("channels") or {}
     if FRONT_DOOR not in chans:
         raise SlackError(f"registry {path}: no #{FRONT_DOOR}")
@@ -339,7 +365,22 @@ def check_registry(reg: dict, path: str) -> dict:
                 raise SlackError(f"registry {path}: #{key}'s alias {alias!r} is malformed or names another channel")
             names.add(alias)
     check_collaborators(reg, path, handles)
+    ext = reg.get("external_posters", [])
+    if not isinstance(ext, list) or any(not isinstance(u, str) or not EXTERNAL_POSTER_RE.match(u) or u in handles
+                                        or u == "router" for u in ext):
+        raise SlackError(f"registry {path}: external_posters: the usernames under which something other than `research msg` "
+                         "posts through Verity's bot (Daniel's desktop agent, Codex), so the Slack events service delivers "
+                         "their posts; never a handle's or the router's")
     return reg
+
+
+EXTERNAL_POSTER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,39}$")   # lower-cased, it's a doorbell's author
+
+
+def external_post(msg: dict | None, reg: dict) -> bool:
+    """Posted through Verity's bot by something other than `research msg` (`external_posters`), so no sender delivered it:
+    the Slack events service does."""
+    return ours(msg, reg) and (msg or {}).get("username") in reg.get("external_posters", [])
 
 
 def check_collaborators(reg: dict, path: str, handles: set[str]) -> None:
@@ -572,6 +613,24 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise urllib.error.URLError("redirected; refusing to forward the bearer token")
 
 
+def transient(e: BaseException) -> bool:
+    """A failure that a second identical request may not meet: a 5xx, a response cut short (IncompleteRead, a dropped
+    connection), a reset or a timeout. A refusal (4xx), a DNS failure or an unparseable answer is not."""
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code >= 500
+    if isinstance(e, http.client.HTTPException):
+        return True
+    if isinstance(e, urllib.error.URLError):
+        e = e.reason if isinstance(e.reason, BaseException) else e
+    return isinstance(e, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, TimeoutError, http.client.HTTPException))
+
+
+def idempotent(method: str) -> bool:
+    """A read (`conversations.replies`, `users.list`, `chat.getPermalink`), which a retry can't repeat. A write cut short or timed
+    out may already have been taken (a post would appear twice), so only reads are retried after a transient failure."""
+    return method.rsplit(".", 1)[-1].startswith(READ_VERBS)
+
+
 def post(url: str, data: bytes, headers: dict[str, str], timeout: float = 30) -> dict:
     """The one HTTP exchange: POST `data`, parse the JSON answer. Raises urllib's errors for the caller to map."""
     req = urllib.request.Request(url, data=data, method="POST", headers=headers)
@@ -704,24 +763,31 @@ class Slack:
                   file=self.log or sys.stderr)
             return {"ok": True, "dry_run": True}
         args = {k: json.dumps(v) if isinstance(v, (dict, list)) else str(v) for k, v in params.items()}
-        for attempt in range(RATE_RETRIES + 1):
+        rate = flaky = 0
+        while True:
             try:
                 out = self._broker(method, args) if self.via == "broker" else self.transport(
                     self.base + method, urllib.parse.urlencode(args).encode(),
                     {**({"Authorization": f"Bearer {self.token}"} if self.token else {}),
                      "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"})
                 break
-            except urllib.error.HTTPError as e:
-                if e.code == 429 and attempt < RATE_RETRIES:                 # a burst of doorbells: wait as asked, then again
+            except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as e:
+                if isinstance(e, urllib.error.HTTPError) and e.code == 429 and rate < RATE_RETRIES:   # a burst of doorbells
+                    rate += 1
                     _sleep(min(float(e.headers.get("Retry-After") or 1), RATE_WAIT_MAX_S))
                     continue
-                if self.via == "broker":
-                    raise SlackError(broker_error(method, e)) from None
-                hint = f" (rate limited; retry after {e.headers.get('Retry-After')} s)" if e.code == 429 else ""
-                raise SlackError(f"{method}: HTTP {e.code}{hint}") from None
-            except (urllib.error.URLError, OSError, ValueError) as e:
+                if transient(e) and idempotent(method) and flaky < TRANSIENT_RETRIES:
+                    flaky += 1
+                    _sleep(TRANSIENT_WAIT_S * 2 ** (flaky - 1))
+                    continue
+                if isinstance(e, urllib.error.HTTPError):
+                    if self.via == "broker":
+                        raise SlackError(broker_error(method, e)) from None
+                    hint = f" (rate limited; retry after {e.headers.get('Retry-After')} s)" if e.code == 429 else ""
+                    raise SlackError(f"{method}: HTTP {e.code}{hint}") from None
                 where = "the Slack broker is unreachable" if self.via == "broker" else type(e).__name__
-                raise SlackError(f"{method}: {where}: {getattr(e, 'reason', e)}") from None
+                tries = f" (after {flaky + 1} tries)" if flaky else ""
+                raise SlackError(f"{method}: {where}: {getattr(e, 'reason', e)}{tries}") from None
         if not isinstance(out, dict):
             raise SlackError(f"{method}: the answer is not a JSON object")
         if not out.get("ok"):
@@ -848,7 +914,7 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
     if route and route[1] is not None and not api.dry_run:
         msg = {"text": text, "ts": ts, "thread_ts": thread, "bot_id": route[0].get("bot_id"), "username": handle}
         try:
-            deliver(api, route[0], route[1], ch, msg)
+            deliver(api, route[0], route[1], ch, msg, sender=self_agent_id)
         except SlackError as e:
             print(f"route: posted, but delivery stopped ({e}); the post itself stands: `research msg deliver --ts {ts}"
                   + (f" --thread {thread}" if thread else "") + "` rings what it missed", file=sys.stderr)
@@ -884,9 +950,9 @@ def mentions(text: str, h: dict, reg: dict) -> str | None:
     """Why `text` names the registry entry `h`, or None.  A user-group mention names its id's group, which Slack shows and
     notifies whatever the label says; the label counts only for an id no handle has (`lead_names` reads it so too)."""
     for gid, label in SUBTEAM_RE.findall(text or ""):
-        if h.get("usergroup") and gid == h["usergroup"]:
+        if gid in group_ids(h):
             return f"user-group mention <!subteam^{gid}>"
-        if label.lstrip("@") == h["handle"] and not any(o.get("usergroup") == gid for o in reg["handles"]):
+        if label.lstrip("@") == h["handle"] and not any(gid in group_ids(o) for o in reg["handles"]):
             return f"user-group mention labelled @{h['handle']}"
     if re.search(rf"(?<![\w@./-])@{re.escape(h['handle'])}(?![\w-])", SUBTEAM_RE.sub(" ", text or "")):
         return f"plain-text @{h['handle']}"
@@ -964,12 +1030,15 @@ def ours(msg: dict | None, reg: dict) -> bool:
 
 
 def poster(msg: dict | None, reg: dict) -> str | None:
-    """Who wrote `msg`, as a name: our bot's username, or `daniel`-style for a named human or a collaborator (first name,
-    lower case)."""
+    """Who wrote `msg`, as a name: our bot's username (an `external_posters` one in lower case, as a doorbell's author), or
+    `daniel`-style for a named human or a collaborator (first name, lower case)."""
     if not msg:
         return None
     if msg.get("bot_id"):
-        return (msg.get("username") or None) if ours(msg, reg) else None
+        if not ours(msg, reg):
+            return None
+        name = msg.get("username") or None
+        return name.lower() if name and external_post(msg, reg) else name
     return person_name(who[0]) if (who := person(msg, reg)) else None
 
 
@@ -981,7 +1050,7 @@ def lead_names(text: str, reg: dict) -> list[str]:
         return [bare[1]]
     names: list[str] = []
     for at, gid, label in NAME_TOKEN_RE.findall(m.group(1) if m else ""):
-        known = next((h["handle"] for h in reg["handles"] if gid and h.get("usergroup") == gid), "")
+        known = next((h["handle"] for h in reg["handles"] if gid and gid in group_ids(h)), "")
         n = at.rstrip("._-") if at else known or (label or "").lstrip("@")     # Slack shows and notifies the id's group
         if n and n not in names:
             names.append(n)
@@ -1112,14 +1181,17 @@ def pr_watchers(msg: dict, reg: dict, history: list[dict] | tuple = (), branches
 
 
 def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | frozenset = frozenset(),
-                  history: list[dict] | tuple = (), branches: dict[str, str] | None = None) -> list[str]:
+                  history: list[dict] | tuple = (), branches: dict[str, str] | None = None,
+                  author_rings: bool = False) -> list[str]:
     """The names a post in #agent-coordination wakes, in order.  `msg` and `root` (its thread's root, None for a top-level
     post) are Slack messages; `inboxes` is every inbox thread's ts.  Nothing in an inbox thread routes; a status line wakes
     only the root's poster; otherwise the names at the start, an announcement's audience (every handle when it names
     none), and on a reply that names no one the root's poster or, when the poster replies, the names the root addressed.
     A quiet post wakes only the names at its start.  A reply under an announcement that names no one but its author, quiet
     or not, also wakes its `pr_watchers` that are handles (with `history` and `branches`, as there); one that names
-    someone wakes only them, whatever PRs and runs its body mentions.  The author is never a target."""
+    someone wakes only them, whatever PRs and runs its body mentions.  The author is never a target, unless
+    `author_rings` (`rings_own_inbox`: another agent posting as the author's handle, such as the outgoing generation of a
+    handover), when a post naming the author's handle is for it like a post naming anyone else."""
     text, ts, thread = msg.get("text") or "", msg.get("ts"), msg.get("thread_ts")
     reply = bool(thread) and thread != ts
     if (thread or ts) in inboxes or text.startswith(INBOX_HEAD) or \
@@ -1128,6 +1200,7 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
     author, by = poster(msg, reg), poster(root, reg) if reply else None
     if author is None:
         return []                                                    # only our bot and the named people route
+    me = set() if author_rings else {author}
     if is_quiet(text):
         out = [] if is_status(text) else lead_names(text, reg)       # people write (quiet) for "no reply needed"
     elif reply and is_status(text):
@@ -1136,19 +1209,19 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
         out = lead_names(text, reg)
         if not reply and is_announcement(msg):
             out += [h["handle"] for h in reg["handles"]] if to_every_handle(text) else header_names(text, reg)
-        if reply and set(out) - {author}:
+        if reply and set(out) - me:
             pass                                                     # a reply that names someone else is for them alone
         elif reply and by and by != author:
             out.append(by)
         elif reply and by:
             rt = (root or {}).get("text") or ""
             out += lead_names(rt, reg) + (header_names(rt, reg) if is_announcement(root) else [])
-    if reply and is_announcement(root) and not is_status(text) and not set(lead_names(text, reg)) - {author}:
+    if reply and is_announcement(root) and not is_status(text) and not set(lead_names(text, reg)) - me:
         handles = {h["handle"] for h in reg["handles"]}
         out += [n for n in pr_watchers(msg, reg, history, branches) if n in handles]
     seen: list[str] = []
     for n in out:
-        if n and n != author and n not in seen:
+        if n and n not in me and n not in seen:
             seen.append(n)
     return seen
 
@@ -1352,6 +1425,20 @@ def self_agent_id() -> str | None:
     return m[0] if m else None
 
 
+def same_agent(a: str, b: str) -> bool:
+    """Two agent ids name one agent: equal, or one the short form (`bc-8ece7cde`) of the other."""
+    short, full = sorted((a, b), key=len)
+    return bool(short) and full.startswith(short)
+
+
+def rings_own_inbox(routes: Routes | None, handle: str, sender: str | None) -> bool:
+    """Whether a post as `handle` by the agent `sender` may ring `handle`'s own inbox: only when its open route's holder is
+    another agent.  So the outgoing generation of a handover (`names open --succeeds`, which keeps it as a poster) or any
+    other poster reaches the holder, and the holder is never woken by its own posts.  No sender, no route: never."""
+    r = routes.current(handle) if routes is not None and sender else None
+    return bool(r and not r.get("closed") and r.get("holder")) and not same_agent(r["holder"], sender or "")
+
+
 _CHANNEL = r"#[A-Za-z0-9][A-Za-z0-9._-]*"
 #: groups: author, urgent, thread, reply; a post outside the front door names its channel before `thread` (`doorbell_channel`)
 DOORBELL_RE = re.compile(rf"^from ([a-z0-9][a-z0-9._-]*)( \(URGENT\))?, (?:{_CHANNEL} )?thread (\d+\.\d+)(?:, reply (\d+\.\d+))?: ")
@@ -1454,7 +1541,8 @@ def watch_context(api: Slack, ch: str, msg: dict, root: dict | None, now: float,
 
 
 def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent: bool = False,
-            now: float | None = None, log=None, names: list[str] | None = None, reminder: str | None = None) -> list[str]:
+            now: float | None = None, log=None, names: list[str] | None = None, reminder: str | None = None,
+            sender: Callable[[], str | None] | None = None) -> list[str]:
     """Deliver the post `msg`: ring the doorbell of each name it wakes.  One line per name saying
     what happened.  Every handle's published route and every name's the post starts with is read first, so a clone not
     pulled since a name opened, reopened, closed or changed holder rings what the published table says (`_newer`).  A post
@@ -1463,7 +1551,9 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
     rings by `chat_targets`, and its doorbells, like those of a channel the registry doesn't know, carry no text.
     `names`, when given, are rung in place of the rule's: the Slack events service's decision for a post that named no one.
     A `reminder` (its watchdog's) rings again a name this post already rang, once per reason: only a doorbell for this post
-    carrying the same reminder keeps it from ringing."""
+    carrying the same reminder keeps it from ringing.  `sender` tells the agent that posted `msg` (`_post` passes
+    `self_agent_id`), asked only for a post that would ring its author's own inbox, which it does when another agent
+    holds it (`rings_own_inbox`)."""
     log = log or sys.stderr
     front = channel_id_for(reg, FRONT_DOOR) or ch
     where = None if ch == front else (key_of(reg, ch) or ch)
@@ -1496,8 +1586,15 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
         lines.append("no doorbells: " + ("another app's bot posted it, not Verity's" if reg.get("bot_id") else
                                          "the registry records no bot_id (`research msg groups sync --apply` writes it)"))
     humans = people_names(reg)
-    targets = names if names is not None else \
-        chat_targets(msg, replies, reg) if chat else route_targets(msg, root, reg, inboxes, history, branches)
+    own = False
+    if names is not None:
+        targets = names
+    elif chat:
+        targets = chat_targets(msg, replies, reg)
+    else:
+        targets = route_targets(msg, root, reg, inboxes, history, branches, author_rings=True)
+        own = author in targets and sender is not None and ours(msg, reg) and rings_own_inbox(routes, author, sender())
+        targets = targets if own else route_targets(msg, root, reg, inboxes, history, branches)
     for name in targets:
         if name in humans:
             continue                                                 # people read Slack itself
@@ -1512,7 +1609,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
                          " -- nobody will see this; check the name (`research msg names list`)") if not r and to == name
                          else f"@{name}: {why}")
             continue
-        if to == author:
+        if to == author and not own:
             continue
         try:
             try:
@@ -1682,7 +1779,7 @@ def acting_as(ns: argparse.Namespace, reg: dict, name: str) -> dict:
     short id such as `bc-8ece7cde` matches the full one) may use it, and an agent that can't tell its own id may not."""
     h = name_entry(ns, reg, name)
     ids, me = holder_ids(ns, reg, h["handle"]), self_agent_id()
-    if me and any(me == a or (len(a) < len(me) and me.startswith(a)) for a in ids):
+    if me and any(same_agent(a, me) for a in ids):
         return h
     if not me and ns.dry_run:
         print(f"dry-run: no agent id (set RESEARCH_AGENT_URL), so a real --as {h['handle']} would be refused", file=sys.stderr)
@@ -1866,16 +1963,19 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     kind = (ns.kind or ("ask" if to and not ns.thread else "")).strip().lower()
     if kind and not NAME_RE.match(kind) or kind in FLAGS:
         raise SlackError(f"--kind {ns.kind!r}: one lower-case word")
-    if any(t["handle"] == h["handle"] for t in to):
-        raise SlackError("--to names someone else")
+    def own() -> bool:
+        return rings_own_inbox(routes_of(ns), h["handle"], self_agent_id())
+    if any(t["handle"] == h["handle"] for t in to) and not own():
+        raise SlackError(f"--to names someone else (@{h['handle']}'s inbox is this agent's own)")
     body = _body(ns)
     if kind != "announce" and not ns.thread and not to and is_announcement({"text": body}):
         raise SlackError(f"it starts with {ANNOUNCE}, which makes a top-level post an announcement to every handle: send it "
                          "with --kind announce (which checks its pins), or start it with something else")
     if to or kind != "announce":                                     # an announcement with no --to reaches every handle
         refuse_unrouted(body, reg, h["handle"], tuple(t["handle"] for t in to))
-    if not to and (lead := lead_names(body, reg)) and set(lead) == {h["handle"]}:
-        raise SlackError(f"it starts with @{h['handle']} only, and a post never wakes its author: name its addressee with --to")
+    if not to and (lead := lead_names(body, reg)) and set(lead) == {h["handle"]} and not own():
+        raise SlackError(f"it starts with @{h['handle']} only, and a post never wakes its own inbox's holder: name its "
+                         "addressee with --to")
     if kind == "announce":
         if ns.thread:
             raise SlackError("an announcement starts its own thread: drop --thread")
@@ -2364,6 +2464,9 @@ def comment_by(c: dict) -> str | None:
     return (c.get("user") or {}).get("name")
 
 
+RECORD_UNREADABLE = "unreadable"                                     # the record of an ask's answer (Linear, Notion) couldn't be read
+
+
 def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]]) -> tuple[bool, str]:
     """Whether the Linear issue `ident` was taken up there: it left Backlog (accepted, started, done or canceled), or
     someone other than `asker` commented on it; and the state that says so.  Not taken when Linear can't say, so a doubtful
@@ -2381,7 +2484,7 @@ def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]
             else:
                 cache[ident] = (False, "in Backlog, no comment but the asker's")
         except (linear.LinearError, OSError, KeyError, TypeError, ValueError) as e:
-            cache[ident] = (False, f"unreadable ({e})")
+            cache[ident] = (False, f"{RECORD_UNREADABLE} ({e})")
     return cache[ident]
 
 
@@ -2491,11 +2594,11 @@ def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=Non
     reg = with_routes(reg, routes)
     book, inboxes = routes.all(), routes.inboxes()
     by_inbox = {r["inbox_ts"]: n for n, r in sorted(book.items(), key=lambda kv: not kv[1].get("closed"))}
-    rang: dict[str, set[str]] = {}
+    rang: dict[tuple[str | None, str], set[str]] = {}                # (the channel a doorbell names, the post's ts)
     for its, name in by_inbox.items():
         for m in api.paged("conversations.replies", "messages", channel=ch, ts=its, oldest=f"{since:.6f}"):
             if m.get("ts") != its and is_doorbell(m, reg) and (d := DOORBELL_RE.match(m.get("text") or "")):
-                rang.setdefault(d[4] or d[3], set()).add(name)
+                rang.setdefault((doorbell_channel(m.get("text") or ""), d[4] or d[3]), set()).add(name)
     posts = [(m, root) for m, root in posts if (root or m)["ts"] not in inboxes and m["ts"] not in inboxes]
     humans = people_names(reg)
 
@@ -2511,19 +2614,75 @@ def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=Non
 
     out = []
     for m, root in posts:
+        if PIECE_RE.match(m.get("text") or "") and is_quiet(m.get("text") or ""):
+            continue                                                 # a long post's later piece wakes nobody, by design
         t, author = float(m["ts"]), poster(m, reg)
         history, branches = [], {}
         if root and is_announcement(root):
             history = [x for x in threads.get(root["ts"], []) if t - HISTORY_S <= float(x["ts"]) < t]
             nums = {n for x in [m, *history] for n in named_prs(x.get("text") or "")[0]}
             branches = pr_branches(nums, log) if nums else {}
-        want = {e for n in route_targets(m, root, reg, inboxes, history, branches) if n not in humans and (e := expected(n, t))}
-        got = rang.get(m["ts"], set())
+        got = rang.get((None, m["ts"]), set())
+        own = author in got                                          # only a poster other than the holder rings its own inbox
+        want = {e for n in route_targets(m, root, reg, inboxes, history, branches, author_rings=own)
+                if n not in humans and (e := expected(n, t))}
         missed, extra = sorted(want - got - {author}), sorted(got - want)
         if missed or extra:
             out.append({"ts": m["ts"], "by": author, "missed": missed, "extra": extra,
                         "first": " ".join(plain(m.get("text") or "").split())[:80]})
+    return out + replay_people(api, reg, rang, inboxes, humans, expected, since, log)
+
+
+ASK_CHANNELS = ("ask-the-team", "resource-accounting")          # people's questions, routed by the Slack events service
+SETTLE_S = 120                                                  # a person's post younger than this is still in flight
+
+
+def replay_people(api: Slack, reg: dict, rang: dict, inboxes: set[str], humans: set[str],
+                  expected: Callable[[str, float], str | None], since: float, log=None) -> list[dict]:
+    """The people's channels (ASK_CHANNELS and each open chat), which the Slack events service routes: each person's post
+    since `since` whose doorbells differ from the rule's names.  A post that names no one is a miss only when nothing
+    rang for it (the service sends it to its routing line's lanes, @top without the model).  A chat post's text is
+    private, so its line carries none.  A channel the bot can't read is said and skipped."""
+    log = log or sys.stderr
+    chats = chat_channels(reg)
+    keys = {k: c["id"] for k, c in reg["channels"].items() if k in ASK_CHANNELS and c.get("id")}
+    keys.update({k: c["id"] for k, c in chats.items()})
+    settled, out = _now().timestamp() - SETTLE_S, []
+    for key, cid in sorted(keys.items()):
+        try:
+            roots = api.paged("conversations.history", "messages", channel=cid, oldest=f"{since - HISTORY_S:.6f}")
+            threads = [api.paged("conversations.replies", "messages", channel=cid, ts=r["ts"], oldest=f"{since - HISTORY_S:.6f}")
+                       if r.get("reply_count") else [r] for r in roots]
+        except SlackError as e:
+            if not _unreadable(e):
+                raise
+            log.write(f"replay: #{key} unreadable ({e}), skipped\n")
+            continue
+        for thread in threads:
+            root = thread[0] if thread and thread[0].get("ts") == (thread[0].get("thread_ts") or thread[0].get("ts")) else None
+            for m in thread:
+                t, text = float(m["ts"]), m.get("text") or ""
+                if not since < t <= settled or person(m, reg) is None:
+                    continue
+                if key in chats:
+                    rule = chat_targets(m, [x for x in thread if x.get("ts") != m["ts"]], reg)
+                    unaddressed = rule == [CHAT_WATCHER] and CHAT_WATCHER not in lead_names(text, reg)
+                else:
+                    rule = route_targets(m, root if root is not m else None, reg, inboxes)
+                    unaddressed = not rule and not is_quiet(text)
+                got, author = rang.get((key, m["ts"]), set()), poster(m, reg)
+                if unaddressed:
+                    missed, extra = ([] if got else [CHAT_WATCHER]), []
+                else:
+                    want = {e for n in rule if n not in humans and (e := expected(n, t))}
+                    missed, extra = sorted(want - got - {author}), sorted(got - want)
+                if missed or extra:
+                    out.append({"ts": m["ts"], "by": author, "channel": key, "missed": missed, "extra": extra,
+                                "first": "" if key in chats else " ".join(plain(text).split())[:80]})
     return out
+
+
+PIECE_RE = re.compile(r"^\(\d+/\d+\) ")                          # `_post`'s later pieces: `(2/3) ...`, quiet
 
 
 def is_ask(m: dict) -> bool:
@@ -2571,18 +2730,19 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
     """Each ask posted in (since, now] that rang a lane's inbox, and each #ask-daniel card linking its page, and how long its
     first answer took, as the ask's record shows it (`record`, `ref`):
     - an ask linked to a Linear issue: the issue's first move out of Backlog or first comment by anyone but the asker
-      (`issue_answer`), with who gave it (`answer_by`); the thread doesn't count.  An issue Linear can't read leaves the ask
-      to Slack (`linear_errors`).
+      (`issue_answer`), with who gave it (`answer_by`), or the addressed lane's own reply in the thread, whichever came first.
+      An issue Linear can't read leaves the ask to Slack (`linear_errors`).
     - Daniel's card (lane `daniel`): its page's Status leaving PAGE_WAITING, at the page's last edit (`page_state`); `state`
       is the Status.  A page Notion can't read leaves the card unanswered (`notion_errors`).
     - any other ask: the first reply in its thread under a name of the lane's inbox (its own, or one it was renamed from).
       One with no reply that carries 👀, ✅ or ❌ and rang only this lane counts as answered but untimed: Slack keeps no time
       for a reaction, and every handle reacts as one bot.
-    Answers after `now` don't count.  Per lane: asks, answered (by Slack, Linear, Notion or untimed), the nearest-rank
+    Only a lane or a named person asks: a machine's alert (`vy-monitors`) isn't an ask.  Answers after `now` don't count.  Per lane: asks, answered (by Slack, Linear, Notion or untimed), the nearest-rank
     median and p90 of the timed answers in minutes, the unanswered, and those unanswered for longer than `stale_s`."""
     tops: dict[str, dict[str, dict]] = {}                            # channel -> ts -> top-level post
     replies: dict[tuple[str, str], list[dict]] = {}
     asks, counted, names = [], set(), {}
+    askers = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
     for r in routes.all().values():
         names.setdefault(r.get("inbox_ts"), set()).add(r["name"])  # a renamed lane answers under its old name too
     for r in sorted(routes.all().values(), key=lambda r: (bool(r.get("closed")), r["name"])):
@@ -2599,7 +2759,7 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
             if not d or (d[4] and d[4] != d[3]) or d[3] in seen:
                 continue                                             # a reply's doorbell, or one `deliver` rang again
             root = tops[rch].get(d[3])
-            if root and is_ask(root) and poster(root, reg) not in names[r["inbox_ts"]]:
+            if root and is_ask(root) and poster(root, reg) in askers and poster(root, reg) not in names[r["inbox_ts"]]:
                 seen.add(d[3])
                 asks.append({"lane": r["name"], "names": names[r["inbox_ts"]], "channel": rch, "root": root})
     rang: dict[tuple[str, str], int] = {}
@@ -2623,11 +2783,10 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
             if (read := issues[(link[1], asker)]) is not None:
                 record, ref = "linear", link[1]
                 found = [ans] if (ans := read["answer"]) and ans["at"] <= now else []
-        if found is None:                                            # no record to read: the thread and its reactions
-            if root.get("reply_count") and key not in replies:
-                replies[key] = api.paged("conversations.replies", "messages", channel=a["channel"], ts=root["ts"], oldest=root["ts"])
-            found = [{"at": float(m["ts"]), "how": "slack-reply", "by": poster(m, reg)} for m in replies.get(key, [])
-                     if m.get("ts") != root["ts"] and poster(m, reg) in a["names"] and t0 < float(m["ts"]) <= now]
+        if root.get("reply_count") and key not in replies:          # the addressee's own reply answers too, record or not
+            replies[key] = api.paged("conversations.replies", "messages", channel=a["channel"], ts=root["ts"], oldest=root["ts"])
+        found = (found or []) + [{"at": float(m["ts"]), "how": "slack-reply", "by": poster(m, reg)} for m in replies.get(key, [])
+                                 if m.get("ts") != root["ts"] and poster(m, reg) in a["names"] and t0 < float(m["ts"]) <= now]
         first = min(found, key=lambda x: x["at"], default=None)
         untimed = (record == "slack" and first is None and rang[key] == 1
                    and any(x.get("name") in ANSWER_REACTIONS for x in root.get("reactions", [])))
@@ -2677,8 +2836,9 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     """Doorbells per inbox (the most in any one hour), pauses, `@name`s nobody owns (dropped), and each ask with the record
     that says whether it was answered, over the last --hours: a handle's ask linked to a Linear issue by the issue
     (`issue_state`), Daniel's #ask-daniel card by its page's Status (`page_state`), and only an ask with neither by Slack (a
-    reply, or 👀, ✅ or ❌).  An ask unanswered after --stale-h hours is listed with its record's state.  With --latency, how
-    fast each lane first answered its asks instead (`ask_latency`)."""
+    reply, or 👀, ✅ or ❌).  An ask unanswered after --stale-h hours is listed with its record's state; one whose record can't
+    be read (no Linear or Notion credentials) is listed apart as unchecked, so a missing key is one finding, not a false alert
+    per ask (INF-150).  With --latency, how fast each lane first answered its asks instead (`ask_latency`)."""
     api, ch, routes = client(ns), channel_id(ns, reg, FRONT_DOOR), routes_of(ns)
     now = time.time() if ns.now is None else float(ns.now)
     since = now - ns.hours * 3600
@@ -2700,7 +2860,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
                      "paused": sum(_from(m.get("text") or "", "router") for m in bells)})
     posts = api.paged("conversations.history", "messages", channel=ch, oldest=f"{since:.6f}")
     handles = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
-    dropped, asks, groups = [], [], {h.get("usergroup") for h in reg["handles"]}
+    dropped, asks, groups = [], [], {g for h in reg["handles"] for g in group_ids(h)}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
     taken: dict[str, tuple[bool, str]] = {}                          # Linear issue -> (taken, its state)
     for m in posts:
@@ -2719,6 +2879,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         x = {"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)}
         if link := LINEAR_LINK_RE.search(m.get("text") or ""):
             answered, state = issue_state(link[1], x["by"], taken)
+            answered = None if not answered and state.startswith(RECORD_UNREADABLE) else answered
             x.update(record="linear", ref=link[1], state=state)
         else:
             answered = bool(m.get("reply_count")) or any(r.get("name") in ANSWER_REACTIONS for r in m.get("reactions", []))
@@ -2728,12 +2889,15 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     for c in daniel_cards(api, reg, since, now):
         st = pages.state(c["page"])
         asks.append(({"ts": c["ts"], "by": c["by"], "to": [DANIEL], "record": "notion", "ref": c["url"],
-                      "state": f"Status {st['status']}" if st["status"] else f"unreadable ({st['error']})"}, st["answered"]))
+                      "state": f"{RECORD_UNREADABLE} ({st['error']})" if st.get("error") else f"Status {st['status']}"},
+                     None if st.get("error") else st["answered"]))
     answered_by = [x for x, ok in asks if ok]
-    stale = [x for x, ok in asks if not ok and now - float(x["ts"]) > ns.stale_h * 3600]
+    old_enough = [(x, ok) for x, ok in asks if now - float(x["ts"]) > ns.stale_h * 3600]
+    stale = [x for x, ok in old_enough if ok is False]
+    unchecked = [x for x, ok in old_enough if ok is None]
     replayed = replay(api, reg, routes, ch, since) if ns.replay else None
     if ns.json:
-        print(json.dumps({"inboxes": rows, "dropped": dropped, "answered": answered_by, "unanswered": stale,
+        print(json.dumps({"inboxes": rows, "dropped": dropped, "answered": answered_by, "unanswered": stale, "unchecked": unchecked,
                           **({"replay": replayed} if replayed is not None else {})}, indent=2))
         return 0
     print(f"traffic over the last {ns.hours:g} h (to {both(now)})")
@@ -2750,9 +2914,13 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         print(f"  UNANSWERED {s['ts']} by @{s['by']} to {' '.join('@' + t for t in s['to']) or 'no one it can ring'} ({both(s['ts'])}): "
               + {"linear": f"Linear {s['ref']} {s['state']}", "notion": f"Notion page {s['ref']} {s['state']}",
                  "slack": f"Slack, no record: {s['state']}"}[s["record"]])
+    if unchecked:
+        print(f"  UNCHECKED: {len(unchecked)} ask(s) whose record can't be read: {unchecked[0]['state']}")
     for x in replayed or []:
         what = "; ".join(f"{k} {' '.join('@' + n for n in x[k])}" for k in ("missed", "extra") if x[k])
-        print(f"  REPLAY {x['ts']} by @{x['by']}: {what}: {x['first']}")
+        where = f"#{x['channel']} " if x.get("channel") else ""
+        print(f"  REPLAY {where}{x['ts']} by @{x['by']}: {what}"
+              + (f": {x['first']}" if x["first"] else " (private)" if x.get("channel") else ""))
     if replayed is not None:
         print(f"  replayed: {len(replayed)} post(s) whose doorbells differ from route_targets")
     return 0
@@ -2772,7 +2940,9 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     if bot and reg.get("bot_id") != bot:
         print(f"record  bot {bot} in {path}")
         reg["bot_id"], changed = bot, True
-    groups = api.call("usergroups.list", include_disabled="true").get("usergroups", [])
+    groups = api.call("usergroups.list", include_disabled="true", include_users="true").get("usergroups", [])
+    retired = {g for h in reg["handles"] for g in h.get("retired_usergroups", [])}
+    groups = [g for g in groups if g.get("id") not in retired]         # a retired group is never matched or touched again
     live, by_id = {g.get("handle"): g for g in groups}, {g.get("id"): g for g in groups}
     for h in reg["handles"]:
         name, desc = h["handle"], h["remit"][:250]
@@ -2782,6 +2952,10 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
             gid = (api.call("usergroups.create", name=name, handle=name, description=desc).get("usergroup") or {}).get("id") if write else None
         else:
             gid = g["id"]
+            if g.get("date_delete") and g.get("users"):                 # enabling it would notify its members again
+                print(f"refuse  @{name} ({gid}): disabled with {len(g['users'])} member(s); a tag would notify them. Create an "
+                      "empty group instead: rename this one aside and add it to the handle's retired_usergroups")
+                continue
             if g.get("date_delete"):
                 print(f"enable  @{name} ({gid})")
                 if write:
@@ -3167,9 +3341,13 @@ def _leaves(v: Any, at: str = ""):
 
 def manifest_diff(repo: dict, live: dict) -> list[str]:
     """The live manifest against the repo's, one line per key path: `+` only the repo has it, `-` only the live app, `~` both
-    with different values (live -> repo). A set's member is `path: member`."""
+    with different values (live -> repo). A set's member is `path: member`.  A key one side lacks and the other sets to
+    false is no difference: Slack exports its false defaults (pkce_enabled, is_mcp_enabled, ...), and the file omits them."""
     a = {(p, m): v for p, m, v in _leaves(live)}
     b = {(p, m): v for p, m, v in _leaves(repo)}
+    for x, y in ((a, b), (b, a)):
+        for k in [k for k, v in x.items() if v is False and k not in y]:
+            del x[k]
     show = lambda k, v: f"{k[0]}: {k[1]}" if k[1] is not None else f"{k[0]}: {json.dumps(v, ensure_ascii=False)}"  # noqa: E731
     out = []
     for k in sorted(a.keys() | b.keys(), key=lambda k: (k[0], k[1] or "")):
@@ -3241,6 +3419,10 @@ def _now() -> datetime:
 
 def _sleep(seconds: float) -> None:
     time.sleep(seconds)
+
+
+def _clock() -> float:
+    return time.monotonic()
 
 
 def pacific(t: datetime) -> str:
@@ -3547,14 +3729,34 @@ class AskDaniel:
         return out
 
 
-def wait_for(get: Callable[[], dict], *, sleep: Callable[[float], None], every: float, polls: int) -> dict:
-    """GET a card until it leaves `pending` (decided, or a blocking card overdue), at most `polls` times, `every` s apart."""
+def wait_for(get: Callable[[], dict], *, sleep: Callable[[float], None], every: float, polls: int,
+             max_s: float = math.inf, clock: Callable[[], float] = time.monotonic) -> tuple[dict, bool]:
+    """GET a card until it leaves `pending` (decided, or a blocking card overdue), at most `polls` times, `every` s apart, for at
+    most `max_s` of `clock` time; and whether it stopped at `max_s` with the card still pending."""
+    start = clock()
     for i in range(max(1, polls)):
         out = get()
         if out.get("status") != "pending" or i == polls - 1:
-            return out
-        sleep(every)
-    return out
+            return out, False
+        if (left := max_s - (clock() - start)) <= 0:
+            return out, True
+        sleep(min(every, left))
+    return out, False
+
+
+def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str, polls: int) -> int:
+    """`ask-daniel ... --wait`: poll card `cid` until it is decided, `polls` polls or WAIT_CAP_S run out; a card still pending at
+    the cap exits STILL_GOING with the command that reads it later (research.waitcap)."""
+    out, capped = wait_for(lambda: route.call("GET", "/" + urllib.parse.quote(cid, safe="")), sleep=_sleep, every=ns.every,
+                           polls=polls, max_s=waitcap.WAIT_CAP_S, clock=_clock)
+    ring_decision(ns, reg, cid, out)
+    rc = _show(out, ns.json)
+    if not capped:
+        return rc
+    print(waitcap.still_going(f"card {cid} (pending)", f"research msg ask-daniel status {cid}", waitcap.WAIT_CAP_S,
+                              end="End your turn now; a subscription to the card's thread (subscribe_slack_thread) wakes you "
+                                  "when Daniel answers."), file=sys.stderr)
+    return waitcap.STILL_GOING
 
 
 def ring_decision(ns: argparse.Namespace, reg: dict, cid: str, out: dict) -> None:
@@ -3633,12 +3835,9 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
         if ns.dry_run:
             print(f"dry-run: GET {ASK_DANIEL}{path}", file=sys.stderr)
             return 0
-        route = AskDaniel()
         polls = math.ceil((DEADLINE_MAX + WAIT_GRACE).total_seconds() / ns.every) if ns.wait else 1
         try:
-            out = wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls)
-            ring_decision(ns, reg, str(ns.id), out)
-            return _show(out, ns.json)
+            return _await_card(ns, reg, AskDaniel(), str(ns.id), polls)
         except RouteError as e:
             if e.status == 404:
                 raise SlackError(no_such_card("status", ns.id)) from None
@@ -3707,9 +3906,7 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     if not ns.wait:
         return 0
     polls = math.ceil((datetime.fromisoformat(body["deadline"]) - now + WAIT_GRACE).total_seconds() / ns.every)
-    out = wait_for(lambda: route.call("GET", f"/{urllib.parse.quote(str(cid), safe='')}"), sleep=_sleep, every=ns.every, polls=polls)
-    ring_decision(ns, reg, str(cid), out)
-    return _show(out, ns.json)
+    return _await_card(ns, reg, route, str(cid), polls)
 
 
 def main(argv: list[str], prog: str = "research msg") -> int:
@@ -3810,7 +4007,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--stale-h", type=float, default=2,
                    help="an ask its record doesn't show answered after this many hours is unanswered: its Linear issue still "
                         "in Backlog with no comment but the asker's, Daniel's page still Waiting on Daniel, or (no record) no "
-                        "👀, ✅, ❌ or reply")
+                        "👀, ✅, ❌ or reply; one whose record can't be read is unchecked")
     p.add_argument("--replay", action="store_true", help="also compare each post's doorbells with what route_targets says it rings")
     p.add_argument("--latency", action="store_true", help="instead: per lane (and @daniel), its asks, how many its record shows "
                                                          "answered (Linear, Notion, or Slack where there's no record), and the "
@@ -3868,7 +4065,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     card_flags(p)
     p.add_argument("--link", default=None, metavar="NOTION_URL", help="the ask's page, made with the Notion MCP, in place of --page")
     p.add_argument("--hours", type=float, default=24, metavar="H", help="pages: edited in the last H hours (default 24)")
-    p.add_argument("--wait", action="store_true", help="poll until the card is decided (or overdue); exit 0 once decided")
+    p.add_argument("--wait", action="store_true",
+                   help=f"poll until the card is decided (or overdue); exit 0 once decided, for at most {waitcap.WAIT_CAP_S} s (no tool "
+                        f"call blocks longer than 20 minutes, Daniel, 19 Oct): a card still pending then exits {waitcap.STILL_GOING}, "
+                        "naming `ask-daniel status ID` to check back")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")
     p.add_argument("--choice", default=None, metavar="VALUE", help="resolve: the option Daniel chose in the thread")
     p.add_argument("--note", default=None, help="resolve: his words, or a link to them")

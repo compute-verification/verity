@@ -1,4 +1,4 @@
-"""Port types (PROTOCOL.md §12, `verity.ml.circuits.ports`): each of the four rules accepts what it should and refuses, by name,
+"""Port types (PROTOCOL.md §12, `verity.ml.circuits.ports`): each rule accepts what it should and refuses, by name,
 what it must, in a built Program and in a decoded descriptor; an undeclared Definition's entry and digest are what they were."""
 
 from __future__ import annotations
@@ -81,6 +81,24 @@ def Tag():
 def Noise(key, tag):
     """A noise derivation: a coin and a static only."""
     return hashlib.sha512(key.to_bytes(4, "big") + bytes([tag])).digest()[0]
+
+
+@primitive("PortsTestDither", 1, (("x", V8), ("key", V32)), V8, ports=Ports(params={"key": In(kind="coin")}))
+def Dither(x, key):
+    """A noise injection: adds a coin's bit to the operand it takes."""
+    return (x + (key & 1)) & 0xFF
+
+
+@primitive("PortsTestKeyFold", 1, (("x", V32), ("key", V32)), V32,
+           ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
+def KeyFold(x, key):
+    """A receipt fold keyed by a coin."""
+    return ((x ^ key) * 0x9E3779B1) & 0xFFFFFFFF
+
+
+@primitive("PortsTestAdd8", 1, (("a", V8), ("b", V8)), V8)
+def Add8(a, b):
+    return (a + b) & 0xFF
 
 
 @primitive("PortsTestAcc", 1, (("a", V32),), V32, ports=Ports(ret=Out(word="s32")))
@@ -443,7 +461,8 @@ def test_the_noise_derivation_takes_a_coin_and_statics():
 def test_the_noise_derivation_refuses_anything_else():
     plain = comp("PortsTestNoiseIn", [("key", V32)], V8, lambda B, S, key: B.call(Noise, key, B.call(Tag)))
     refused("E_PORT_KIND", lambda: Program(plain), "parameter 'key' leaf 0: takes kind=coin", "but reads a run input")
-    mixed = comp("PortsTestNoiseGate", [("key", V32)], V8, lambda B, S, key: B.call(Noise, B.call(Add32, key, key), B.call(Tag)), ports=COIN)
+    mixed = comp("PortsTestNoiseGate", [("key", V32), ("x", V32)], V8,
+                 lambda B, S, key, x: B.call(Noise, B.call(Add32, x, x), B.call(Tag)), ports=COIN)
     refused("E_PORT_KIND", lambda: Program(mixed), "but reads a computed value")
     tag_in = comp("PortsTestNoiseTag", [("key", V32), ("t", V8)], V8, lambda B, S, key, t: B.call(Noise, key, t), ports=COIN)
     refused("E_PORT_KIND", lambda: Program(tag_in), "parameter 'tag' leaf 0: takes kind=static, a constant, but reads a run input")
@@ -750,6 +769,232 @@ def test_a_composite_keeps_the_words_it_returns():
     fix = comp("PortsTestFix", [("x", V32)], V32, lambda B, S, x: B.call(Acc, x), ports=Ports(ret=Out(word="s8x4")))
     refused("E_PORT_WORD", lambda: Program(comp("PortsTestFixUse", [("x", V32)], V32, lambda B, S, x: B.call(fix, x))),
             "a composite keeps the type its words' producer fixed, and never fixes one")
+
+
+# --- rules 6 and 7: coin flow and one use -------------------------------------------------------------------------------------
+
+KEY_X = [("key", V32), ("x", V8)]
+KEYS = Ports(params={"keys": In(kind="coin")})
+
+
+def test_a_coin_reaches_only_a_coin_port():
+    derive = comp("PortsTestCoinDerive", KEY_X, V8, lambda B, S, key, x: B.call(Add8, x, B.call(Noise, key, B.call(Tag))), ports=COIN)
+    roundtrip(Program(derive))
+    inject = comp("PortsTestCoinInject", KEY_X, V8, lambda B, S, key, x: B.call(Dither, x, key), ports=COIN)
+    roundtrip(Program(inject))
+    keyed = comp("PortsTestCoinKeyed", [("key", V32), ("x", V32)], V32, lambda B, S, key, x: B.call(KeyFold, x, key), ports=COIN)
+    roundtrip(Program(keyed))
+    direct = comp("PortsTestCoinAdd", [("key", V32), ("x", V32)], V32, lambda B, S, key, x: B.call(Add32, key, x), ports=COIN)
+    refused("E_COIN_FLOW", lambda: Program(direct), "(primitive PortsTestAdd32_v1) parameter 'a' leaf 0: reads a coin",
+            "re-derive the noise")
+    unwind = comp("PortsTestCoinUnwind", KEY_X, V8,
+                  lambda B, S, key, x: B.call(Add8, B.call(Dither, x, key), B.call(Noise, B.call(Add32, key, key), B.call(Tag))),
+                  ports=COIN)
+    refused("E_COIN_FLOW", lambda: Program(unwind), "PortsTestAdd32_v1) parameter 'a' leaf 0: reads a coin")
+    inner = comp("PortsTestCoinChainIn", [("k", V32)], V32, lambda B, S, k: B.call(Add32, k, k))
+    refused("E_COIN_FLOW", lambda: Program(comp("PortsTestCoinChain", [("key", V32)], V32, lambda B, S, key: B.call(inner, key), ports=COIN)),
+            "PortsTestCoinChainIn_v1 node 0", "reads a coin")
+
+
+def test_a_coin_never_leaves_through_a_return():
+    passing = comp("PortsTestCoinPass", [("k", V32)], V32, lambda B, S, k: k)
+    refused("E_COIN_FLOW", lambda: Program(comp("PortsTestCoinLaunder", [("key", V32), ("x", V32)], V32,
+                                                lambda B, S, key, x: B.call(Add32, B.call(passing, key), x), ports=COIN)),
+            "PortsTestCoinPass_v1 returns a coin at return leaf 0", "never its return")
+    refused("E_COIN_FLOW", lambda: Program(comp("PortsTestCoinOut", [("key", V32)], V32, lambda B, S, key: key, ports=COIN)),
+            "returns a coin at return leaf 0", "never the program's outputs")
+
+
+def test_a_noise_coin_is_read_once():
+    def twice(B, S, key, x):
+        return B.call(Add8, B.call(Dither, x, key), B.call(Noise, key, B.call(Tag)))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestCoinTwice", KEY_X, V8, twice, ports=COIN)),
+            "input node 0 leaf 0: a coin that a noise primitive reads is read once", "read 2 times",
+            "PortsTestDither_v1", "PortsTestNoise_v1")
+
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestCoinKeyNoise", [("key", V32), ("x", V8), ("y", V32)], TupleT(V8, V32),
+                                                lambda B, S, key, x, y: tuple_of(B.call(Dither, x, key), B.call(KeyFold, y, key)),
+                                                ports=COIN)),
+            "a receipt key from a noise bit's coin", "PortsTestDither_v1", "PortsTestKeyFold_v1")
+    block = comp("PortsTestCoinBlock", KEY_X, V8, lambda B, S, key, x: B.call(Dither, x, key))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestCoinCalls", KEY_X, V8,
+                                                lambda B, S, key, x: B.call(Add8, B.call(block, key, x), B.call(block, key, x)),
+                                                ports=COIN)), "read 2 times", "PortsTestCoinBlock_v1 node 0")
+    shared = comp("PortsTestCoinBatchShared", [("key", V32), ("x", Array(2, V8))], Array(2, V8),
+                  lambda B, S, key, x: B.batch(Dither, x, key, axes=(0, None)), ports=COIN)
+    refused("E_COIN_REUSE", lambda: Program(shared), "member 0", "member 1")
+    step = comp("PortsTestCoinStep", [("c", V8), ("x", V8), ("key", V32)], TupleT(V8, V8),
+                lambda B, S, c, x, key: tuple_of(B.call(Add8, c, x), B.call(Dither, x, key)))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestCoinScan", [("key", V32), ("x", Array(3, V8))], TupleT(V8, Array(3, V8)),
+                                                lambda B, S, key, x: B.scan(step, x[0], xs=(x,), shared=(key,)), ports=COIN)),
+            "step 0", "step 1")
+    own = comp("PortsTestCoinOwn", [("keys", Array(2, V32)), ("x", Array(2, V8))], Array(2, V8),
+               lambda B, S, keys, x: B.batch(Dither, x, keys, axes=(0, 0)), ports=KEYS)
+    roundtrip(Program(own))
+    roundtrip(Program(comp("PortsTestCoinScanOwn", [("keys", Array(3, V32)), ("x", Array(3, V8))], TupleT(V8, Array(3, V8)),
+                           lambda B, S, keys, x: B.scan(step, x[0], xs=(x, keys)), ports=KEYS)))
+
+
+def test_a_receipt_key_may_key_many_folds():
+    many = comp("PortsTestCoinKeys", [("key", V32), ("x", Array(3, V32))], TupleT(Array(3, V32), V32),
+                lambda B, S, key, x: tuple_of(B.batch(KeyFold, x, key, axes=(0, None)), B.call(KeyFold, x[0], key)), ports=COIN)
+    roundtrip(Program(many))
+    split = comp("PortsTestCoinSplit", [("keys", Array(2, V32)), ("x", V8), ("y", V32)], TupleT(V8, V32),
+                 lambda B, S, keys, x, y: tuple_of(B.call(Dither, x, keys[0]), B.call(KeyFold, y, keys[1])), ports=KEYS)
+    roundtrip(Program(split))
+
+
+def test_noise_is_read_at_most_once():
+    def copies(B, S, key, x):
+        n = B.call(Noise, key, B.call(Tag))
+        return tuple_of(B.call(Add8, x, n), B.call(Add8, x, n))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestNoiseCopies", KEY_X, TupleT(V8, V8), copies, ports=COIN)),
+            "PortsTestNoise_v1) return leaf 0: noise is the noise of one operand of one instance", "read 2 times")
+    made = comp("PortsTestNoiseMade", [("key", V32)], V8, lambda B, S, key: B.call(Noise, key, B.call(Tag)))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestNoiseReturned", KEY_X, V8,
+                                                lambda B, S, key, x: (lambda n: B.call(Add8, n, n))(B.call(made, key)), ports=COIN)),
+            "read 2 times")
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestNoiseRows", [("key", V32), ("x", Array(2, V8))], Array(2, V8),
+                                                lambda B, S, key, x: B.batch(Add8, x, B.call(made, key), axes=(0, None)),
+                                                ports=COIN)), "member 0", "member 1")
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestNoiseOperands", KEY_X, TupleT(V8, V8),
+                                                lambda B, S, key, x: (lambda d: tuple_of(B.call(Add8, d, x), d))(B.call(Dither, x, key)),
+                                                ports=COIN)), "PortsTestDither_v1) return leaf 0", "outputs")
+
+    def downstream(B, S, key, x):
+        y = B.call(Add8, B.call(Dither, x, key), x)
+        return tuple_of(B.call(Add8, y, y), y)
+    roundtrip(Program(comp("PortsTestNoiseOnce", KEY_X, TupleT(V8, V8), downstream, ports=COIN)))
+    passed = comp("PortsTestNoisePassed", [("n", V8), ("x", V8)], TupleT(V8, V8), lambda B, S, n, x: tuple_of(n, B.call(Add8, x, x)))
+    roundtrip(Program(comp("PortsTestNoiseThrough", KEY_X, V8,
+                           lambda B, S, key, x: B.call(Add8, B.call(passed, B.call(made, key), x)[0], x), ports=COIN)))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestNoiseThroughTwice", KEY_X, V8,
+                                                lambda B, S, key, x: (lambda r: B.call(Add8, r[0], r[0]))(B.call(passed, B.call(made, key), x)),
+                                                ports=COIN)), "PortsTestNoiseMade_v1 node 1")
+
+
+def test_the_decoder_holds_a_descriptor_to_the_coin_rules():
+    desc = encode_program(Program(comp("PortsTestNoiseDecoded", KEY_X, TupleT(V8, V8),
+                                       lambda B, S, key, x: tuple_of(B.call(Dither, x, key), x), ports=COIN)))
+    dup = copy.deepcopy(desc)
+    ret = dup["definitions"][desc["root"]]["body"]["ret"]["concat"]
+    ret[1] = ret[0]
+    refused("E_COIN_REUSE", lambda: decode_program(dup, REGISTRY), "PortsTestDither_v1) return leaf 0", "read 2 times")
+
+
+# --- rule 8: seeds ------------------------------------------------------------------------------------------------------------
+
+@primitive("PortsTestByte", 1, (("w", V32),), V8)
+def Byte(w):
+    return w & 0xFF
+
+
+@primitive("PortsTestWiden", 1, (("x", V8),), V32)
+def Widen(x):
+    return x
+
+
+@primitive("PortsTestNeg8", 1, (("x", V8),), V8)
+def Neg8(x):
+    return -x & 0xFF
+
+
+SEED = Ports(params={"salt": In(kind="coin"), "position": In(kind="position")})
+COIN_SALT = Ports(params={"salt": In(kind="coin")})
+#: a seed whose body computes on the salt: refused as coin flow without the position port that makes it a seed
+Seed = comp("PortsTestSeed", [("salt", V32), ("position", V32)], V32, lambda B, S, salt, position: B.call(Add32, salt, position),
+            ports=SEED)
+UNIT_IN = [("a", V8), ("b", V8), ("salt", V32), ("position", V32)]
+#: a unit takes the coin and its position, and returns a sink: no seed
+UNIT_PORTS = Ports(params={"salt": In(kind="coin"), "position": In(kind="position")}, ret=(None, Out(sink=True)))
+#: a unit's noise from its seed, computed in a callee of the unit
+noise_of = comp("PortsTestNoiseOf", [("s", V32)], V8, lambda B, S, s: B.call(Byte, s))
+
+
+def unit(name: str, z) -> CompositeDefinition:
+    """A unit: its seed, the noised operand x = a + noise, z = `z`(B, a, b, s, x), and a receipt folding the seed (read twice)
+    and x."""
+    def body(B, S, a, b, salt, position):
+        s = B.call(Seed, salt, position)
+        x = B.call(Add8, a, B.call(noise_of, s))
+        return tuple_of(z(B, a, b, s, x), B.call(Fold, B.call(Add32, B.call(Add32, s, s), B.call(Widen, x))))
+    return comp(name, UNIT_IN, TupleT(V8, V32), body, ports=UNIT_PORTS)
+
+
+Unit = unit("PortsTestUnit", lambda B, a, b, s, x: B.call(Add8, a, b))
+UNITS_IN = [("a", Array(3, V8)), ("b", Array(3, V8)), ("salt", V32), ("positions", Array(3, V32))]
+SALTED = Ports(params={"salt": In(kind="coin"), "positions": In(kind="position")})
+
+
+def units(name: str, fn=Unit, axes=(0, 0, None, 0)) -> CompositeDefinition:
+    return comp(name, UNITS_IN, Array(3, TupleT(V8, V32)),
+                lambda B, S, a, b, salt, positions: B.batch(fn, a, b, salt, positions, axes=axes), ports=SALTED)
+
+
+def test_a_seed_takes_the_coin_and_a_position():
+    desc, dec = roundtrip(Program(units("PortsTestUnits")))
+    assert P.facts(dec.root).node(3).one.kind == "position"
+    assert desc["definitions"][desc["root"]]["ports"] == {"inputs": [[2, 0, 1, {"kind": "coin"}], [3, 0, 3, {"kind": "position"}]]}
+    unkeyed = comp("PortsTestSeedUnkeyed", [("salt", V32), ("position", V32)], V32,
+                   lambda B, S, salt, position: B.call(Add32, salt, position), ports=COIN_SALT)
+    refused("E_COIN_FLOW", lambda: Program(comp("PortsTestSeedNoPosition", [("salt", V32), ("position", V32)], V32,
+                                                lambda B, S, salt, position: B.call(unkeyed, salt, position), ports=COIN_SALT)),
+            "PortsTestSeedUnkeyed_v1 node 0", "reads a coin")
+
+
+def test_a_position_is_a_run_input_passed_through():
+    one = [("a", V8), ("b", V8), ("salt", V32), ("position", V32)]
+    computed = comp("PortsTestPositionComputed", one, TupleT(V8, V32),
+                    lambda B, S, a, b, salt, position: B.call(Unit, a, b, salt, B.call(Add32, position, position)),
+                    ports=Ports(params={"salt": In(kind="coin"), "position": In(kind="position")}))
+    refused("E_PORT_KIND", lambda: Program(computed), "parameter 'position' leaf 0: takes kind=position",
+            "but reads a computed value", "never computes its position")
+    undeclared = comp("PortsTestPositionInput", one, TupleT(V8, V32),
+                      lambda B, S, a, b, salt, position: B.call(Unit, a, b, salt, position), ports=COIN_SALT)
+    refused("E_PORT_KIND", lambda: Program(undeclared), "takes kind=position", "but reads a run input")
+
+
+def test_many_seeds_read_one_coin_at_distinct_positions():
+    roundtrip(Program(units("PortsTestUnitsOwn")))
+    shared = comp("PortsTestUnitsShared", [*UNITS_IN[:3], ("position", V32)], Array(3, TupleT(V8, V32)),
+                  lambda B, S, a, b, salt, position: B.batch(Unit, a, b, salt, position, axes=(0, 0, None, None)), ports=SEED)
+    refused("E_COIN_REUSE", lambda: Program(shared), "input node 3 leaf 0: a position seeds one unit, but 3 seeds read it",
+            "member 0", "member 1", "PortsTestSeed_v1")
+    twice = comp("PortsTestUnitsTwice", [("a", V8), ("b", V8), ("salt", V32), ("position", V32)], TupleT(TupleT(V8, V32), TupleT(V8, V32)),
+                 lambda B, S, a, b, salt, position: tuple_of(B.call(Unit, a, b, salt, position), B.call(Unit, b, a, salt, position)),
+                 ports=SEED)
+    refused("E_COIN_REUSE", lambda: Program(twice), "a position seeds one unit")
+
+
+def test_a_seed_coin_is_read_by_seeds_alone():
+    def keyed(B, S, a, b, salt, positions):
+        return tuple_of(B.batch(Unit, a, b, salt, positions, axes=(0, 0, None, 0)), B.call(KeyFold, positions[0], salt))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestSeedKeyed", UNITS_IN, TupleT(Array(3, TupleT(V8, V32)), V32), keyed,
+                                                ports=SALTED)),
+            "input node 2 leaf 0: a coin that a seed reads is read by seeds alone", "PortsTestKeyFold_v1")
+
+    def dithered(B, S, a, b, salt, positions):
+        return tuple_of(B.batch(Unit, a, b, salt, positions, axes=(0, 0, None, 0)), B.call(Dither, a[0], salt))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestSeedDithered", UNITS_IN, TupleT(Array(3, TupleT(V8, V32)), V8),
+                                                dithered, ports=SALTED)),
+            "a coin that a noise primitive reads is read once", "PortsTestDither_v1")
+
+
+def test_no_port_rule_follows_a_seeds_noise():
+    """A unit's z that peels its noise back out (x - noise = a, as PoUW's one-stream tile does) and one that doesn't are one
+    dataflow, so the port rules admit both and the unit's own check (PoUW's `noise-in-z` and `stream`) tells them apart."""
+    peeled = unit("PortsTestUnitPeelZ", lambda B, a, b, s, x: B.call(Add8, x, B.call(Neg8, B.call(noise_of, s))))
+    assert [evaluate(bind(peeled), a, 2, 5, 7)[0] for a in (0, 1, 200, 255)] == [0, 1, 200, 255]
+    for name, z in (("PeelZ", None), ("NoisyZ", lambda B, a, b, s, x: x), ("SeedZ", lambda B, a, b, s, x: B.call(Byte, s)),
+                    ("NoiseZ", lambda B, a, b, s, x: B.call(noise_of, s))):
+        roundtrip(Program(units(f"PortsTestUnits{name}", peeled if z is None else unit(f"PortsTestUnit{name}", z))))
+    roundtrip(Program(comp("PortsTestSeedOut", [("salt", V32), ("position", V32)], V32,
+                           lambda B, S, salt, position: B.call(Seed, salt, position), ports=SEED)))
+
+
+def test_a_harness_evaluates_a_seed():
+    assert evaluate(bind(Seed), 5, 7) == (12,)
+    assert evaluate(bind(Unit), 1, 2, 5, 7) == (3, Fold.evaluate((24 + 13) & 0xFFFFFFFF))
 
 
 # --- the descriptor -----------------------------------------------------------------------------------------------------------

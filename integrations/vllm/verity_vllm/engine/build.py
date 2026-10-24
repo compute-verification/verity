@@ -148,13 +148,10 @@ prepare_compiled_process_cache = engine_env.prepare_compiled_process_cache
 
 def register_int8_parts(target: Any) -> None:
     """Register what the target's `int8_exact` serves in vLLM's own registries, in this process, before vLLM resolves its config:
-    the int8 linear method (`quantization`) and the int8 attention backend (the CUSTOM slot)."""
-    if "linears" in getattr(target, "int8_parts", ()):
-        from verity_vllm.engine import int8_vllm
-        int8_vllm.register()
-    if "attention" in getattr(target, "int8_parts", ()):
-        from verity_vllm.engine import int8_attention_vllm
-        int8_attention_vllm.register()
+    the int8 linear method (`quantization`) and the int8 attention backend (the CUSTOM slot); a tensor-parallel engine's ranks
+    register them from the environment (`engine.int8_ranks`)."""
+    from verity_vllm.engine import int8_ranks
+    int8_ranks.register(getattr(target, "int8_parts", ()))
 
 
 def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8, case: str = CASE,
@@ -211,8 +208,9 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     kw, env_flags, cp = engine_kwargs_for(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=target, execution=execution)
     from vllm import LLM  # noqa: E402  (after apply_env)
 
-    from verity_vllm.engine import sparse_mla
+    from verity_vllm.engine import sparse_mla, topp_pin
     sparse_mla.arm()
+    topp_pin.arm()
 
     if verify_weights:
         prof.verify_local_weights(cp)

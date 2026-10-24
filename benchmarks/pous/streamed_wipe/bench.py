@@ -13,13 +13,16 @@ stack, and the challenge round trips, so the fill time and the challenger's GPU 
 - `rtt`: a prover process holding `2^28` labels (16 GiB, dumped by the GPU) in memory answers `k = 74,000` challenges
   over loopback TCP at batch sizes 1 (the sequential reveal the guarantee covers) to 74,000, every answer checked.
 - `session`: one whole session of the reference (`streamed_wipe.Challenger`, test signer) against the honest prover in its
-  own process over TCP: a `2^20`-label fill streamed, then 74,000 sequential challenges, signed and verified.
+  own process over TCP: a `2^20`-label fill streamed, then 74,000 sequential challenges, signed, and judged by
+  `wipe_verdict.judge` (the Lean verdict, `streamed-wipe-verdict`, unless `--verdict` says otherwise), each side's verdict
+  recorded.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import mmap
 import multiprocessing as mp
@@ -30,6 +33,7 @@ import statistics
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -38,6 +42,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "verity/core/protocols/pous/tests")]
 
 from verity.core.protocols.pous import streamed_wipe as sw  # noqa: E402
 
+WIPE_VERDICT = ROOT / "verity/core/devices/memory_challenger/lean/wipe_verdict.py"
 SECRET, SERVER = b"streamed-wipe bench secret", b"vy-nebius-2/bench"
 SESSION = hashlib.sha512(b"streamed-wipe bench session").digest()[:32]
 TABLE_LABELS = 1 << 28
@@ -275,30 +280,44 @@ def rtt(binary: str, key: bytes, scratch: Path, port: int) -> dict:
     return out
 
 
-def session(port: int) -> dict:
+def _wipe_verdict():
+    spec = importlib.util.spec_from_file_location("streamed_wipe_lean_verdict", WIPE_VERDICT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def session(port: int, verdict: str) -> dict:
     import pous_test_signer as ts
 
+    wv = _wipe_verdict()
+    if verdict != "python":
+        wv.server()  # the Lean verdict built before the session: where it can't be, the step stops here
     k, n = sw.DEPLOYED_K, SESSION_LABELS
     params = sw.WipeParams(n, k, 1, 50_000_000, (("host-dram", n * sw.LABEL_BYTES),))
-    signer = ts.TestSigner(b"streamed-wipe bench", height=2)
-    c = sw.Challenger(SECRET, SERVER, SESSION, params, signer, log=ts.session_log())
-    prover = _spawn_prover(port, labels=n)
-    s = _connect(port)
-    try:
-        t0 = time.perf_counter_ns()
-        for start, data in c.fill(1 << 14):
-            s.sendall(b"F" + struct.pack(">QI", start, len(data) // sw.LABEL_BYTES) + data)
-        t1 = time.perf_counter_ns()
-        c.run(lambda idx: _ask(s, idx))
-        t2 = time.perf_counter_ns()
-        s.sendall(b"Q")
-    finally:
-        s.close()
-        prover.wait(timeout=60)
-    signed = c.close(egress_bits=0)
-    v = sw.verdict(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES)
+    with tempfile.TemporaryDirectory(prefix="streamed-wipe-bench-") as scratch:
+        signer = ts.TestSigner(b"streamed-wipe bench", height=2, directory=scratch)
+        c = sw.Challenger(SECRET, SERVER, SESSION, params, signer, log=ts.session_log(scratch))
+        prover = _spawn_prover(port, labels=n)
+        s = _connect(port)
+        try:
+            t0 = time.perf_counter_ns()
+            for start, data in c.fill(1 << 14):
+                s.sendall(b"F" + struct.pack(">QI", start, len(data) // sw.LABEL_BYTES) + data)
+            t1 = time.perf_counter_ns()
+            c.run(lambda idx: _ask(s, idx))
+            t2 = time.perf_counter_ns()
+            s.sendall(b"Q")
+        finally:
+            s.close()
+            prover.wait(timeout=60)
+        signed = c.close(egress_bits=0)
+    t3 = time.perf_counter_ns()
+    v, sides = wv.judge(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES, decide=verdict)
+    t4 = time.perf_counter_ns()
     per = [r.elapsed_ns for r in signed.batches]
     return {"labels": n, "k": k, "ended": signed.ended, "accepted": v.accepted, "reasons": list(v.reasons),
+            "verdict": verdict, "verdicts": sides, "verdict_s": (t4 - t3) / 1e9,
             "fill_s": (t1 - t0) / 1e9, "challenges_s": (t2 - t1) / 1e9, "per_round": _stats(per),
             "limit_ns": params.limit_ns}
 
@@ -311,6 +330,8 @@ def main() -> None:
     a.add_argument("--scratch", required=True, type=Path)
     a.add_argument("--out", required=True, type=Path)
     a.add_argument("--port", type=int, default=47100)
+    a.add_argument("--verdict", choices=("lean", "both", "python"), default=None,
+                   help="who decides the session's verdict (wipe_verdict.py; its VERDICT by default)")
     p = sub.add_parser("prover")
     p.add_argument("--port", type=int, required=True)
     p.add_argument("--table")
@@ -329,7 +350,8 @@ def main() -> None:
 
     for name, step in (("gates", lambda: gates(args.bin, key)), ("gpu", lambda: gpu(args.bin, key)),
                        ("rtt", lambda: rtt(args.bin, key, args.scratch, args.port)),
-                       ("session", lambda: session(args.port + 1)), ("link", lambda: link(args.port + 2))):
+                       ("session", lambda: session(args.port + 1, args.verdict or _wipe_verdict().VERDICT)),
+                       ("link", lambda: link(args.port + 2))):
         t = time.perf_counter()
         res[name] = step()
         res[name + "_wall_s"] = time.perf_counter() - t

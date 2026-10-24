@@ -2,6 +2,9 @@
 gates' operands, its classes from the activations), served MACs and family rules, steps, and the digest."""
 from __future__ import annotations
 
+import hashlib
+import sys
+import tracemalloc
 from collections import Counter, defaultdict
 from types import SimpleNamespace
 
@@ -10,7 +13,7 @@ import pytest
 import test_ports as TP
 from test_ir_liveness import Add16, Add32, Coord, Embedding, Gemm, Mul16, comp, prim, programs as liveness_programs
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import census as CE, ports
+from verity.ml.circuits import census as CE, intervals as IV, ports, refs as RF
 from verity.ml.circuits.census import NoBooleanWork, census, seal, silicon_step, step_ends
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.codec import canonical_json, descriptor_id
@@ -80,10 +83,108 @@ def _passes(Bd, S, x):
 Col = comp("TCol", [("x", Array(3, V32))], V32, lambda Bd, S, x: Bd.call(Add32, x[0], x[2]))
 
 
+def relay(n: int) -> Program:
+    """A state passed through n Calls unchanged, each also computing a word from it: the last Call's state is n hops from the
+    root's."""
+    St = Array(4, V32)
+    Pass = comp("TPass", [("s", St)], Tuple(St, V32), lambda Bd, S, s: tuple_of(s, Bd.call(Add32, s[0], s[3])))
+
+    def body(Bd, S, s):
+        ys = []
+        for _ in range(n):
+            r = Bd.call(Pass, s)
+            s = r[0]
+            ys.append(r[1])
+        return tuple_of(s, array_of(ys))
+
+    return Program(comp("TRelay", [("s", St)], Tuple(St, Array(n, V32)), body))
+
+
+def fan(n: int) -> Program:
+    """n Calls' words gathered into an array one Call passes through whole, each word of which a Call reads: n runs, read in n
+    spans."""
+    A = Array(n, V32)
+    Keep = comp("TKeep", [("a", A)], A, lambda Bd, S, a: a)
+    One = comp("TOne", [("x", V32)], V32, lambda Bd, S, x: Bd.call(Add32, x, x))
+
+    def body(Bd, S, xs):
+        a = Bd.call(Keep, array_of([Bd.call(One, xs[i]) for i in range(n)]))
+        return array_of([Bd.call(One, a[i]) for i in range(n)])
+
+    return Program(comp("TFan", [("xs", A)], A, body))
+
+
+R = 1 << 10  # rows of `hashed`'s table: a column is a strided view large enough that the census holds it once (`census._Shared`)
+Pick = prim("TPick", [("i", V32), ("xs", Array(R, V16))], V16, lambda i, *xs: xs[i % R])
+Pick.evaluate_lazy = lambda get: get(1 + get(0) % R)  # type: ignore[attr-defined]
+Fold = prim("TFold", [("xs", Array(R, V16))], V16, lambda *xs: sum(xs) & 0xFFFF)
+
+
+def hashed(n: int) -> Program:
+    """n tokens each selecting a row of each of a table's three columns, as hash routing does: a selection's candidates are a
+    column, a strided view of the table. A Call selects in two columns, another twice in one, one reads a column whole, and a
+    column of the table passed through a Call is selected in."""
+    T, C = Array(R, Array(3, V16)), Array(R, V16)
+    Keep = comp("TKeepTable", [("t", T)], T, lambda Bd, S, t: t)
+    Two = comp("TTwo", [("i", V32), ("a", C), ("b", C)], V16,
+               lambda Bd, S, i, a, b: Bd.call(Add16, Bd.call(Pick, i, a), Bd.call(Pick, i, b)))
+
+    def body(Bd, S, toks, t):
+        col = lambda t, c: Coll(C, strided_view(t, c, 1, 3, 0, R))
+        out = [Bd.call(Pick, toks[i], col(t, c)) for i in range(n) for c in range(3)]
+        out += [Bd.call(Two, toks[0], col(t, 0), col(t, 2)), Bd.call(Two, toks[1], col(t, 1), col(t, 1)), Bd.call(Fold, col(t, 2)),
+                Bd.call(Pick, toks[0], col(Bd.call(Keep, t), 1)), Bd.call(Add16, t[0][0], t[R - 1][1])]
+        return tuple_of(array_of(out), t[3])
+
+    return Program(comp("THashed", [("toks", Array(n, V32)), ("t", T)], Tuple(Array(3 * n + 5, V16), Array(3, V16)), body))
+
+
+def _write(Bd, S, c, x):
+    y = [Bd.call(Add32, x, c[1]), Bd.call(Add32, x, c[2])]
+    return tuple_of(array_of([c[0], *y, c[3]]), array_of(y))
+
+
+def _spread(Bd, S, x):
+    a = Bd.call(Add32, x, x)
+    b = Bd.call(Add32, a, x)
+    c = Bd.call(Add32, b, x)
+    return array_of([a, c, b, a, b, a, a])
+
+
+def twice(n: int) -> Program:
+    """A cache written n times, by a Call returning the cache with two words its own and those words again, as a KV write
+    returns its row; two batches, of n and 2 members, of a Definition returning its word twice; and two Calls of one returning
+    words a, c, b, a, b, a, a (a run of first namings two apart, then a broadcast): every node names gates twice."""
+    C = Array(4, V32)
+    Write = comp("TWrite", [("c", C), ("x", V32)], Tuple(C, Array(2, V32)), _write)
+    Pair = comp("TPair", [("x", V32)], Tuple(V32, V32), lambda Bd, S, x: (lambda y: tuple_of(y, y))(Bd.call(Add32, x, x)))
+    Spread = comp("TSpread", [("x", V32)], Array(7, V32), _spread)
+
+    def body(Bd, S, c, xs):
+        ys = []
+        for i in range(n):
+            r = Bd.call(Write, c, xs[i])
+            c = r[0]
+            ys.append(r[1][i % 2])
+        s = Bd.call(Add32, ys[0], c[1])
+        w = [Bd.call(Spread, xs[i]) for i in range(2)]
+        v = Bd.call(Add32, w[0][4], w[1][6])
+        return tuple_of(c, array_of(ys + [s, v, w[0][3], w[1][5]]), Bd.batch(Pair, xs, axes=(0,)),
+                        Bd.batch(Pair, array_of(ys[:2]), axes=(0,)))
+
+    P2 = Array(2, Tuple(V32, V32))
+    return Program(comp("TTwice", [("c", C), ("xs", Array(n, V32))],
+                        Tuple(C, Array(n + 4, V32), Array(n, Tuple(V32, V32)), P2), body))
+
+
 def programs():
     yield from liveness_programs()
     yield "request", request()
     yield "pass-through", Program(comp("TPasses", [("x", Array(2, V32))], V32, _passes))
+    yield "relay", relay(5)
+    yield "fan", fan(5)
+    yield "hashed", hashed(3)
+    yield "twice", twice(4)
     yield "columns", Program(comp("TColumns", [("M", Array(3, Array(4, V32)))], Array(4, V32),
                                   lambda Bd, S, M: Bd.batch(Col, M, axes=(1,))))
 
@@ -269,11 +370,21 @@ def test_step_ends_and_their_refusals():
 def test_the_digest_is_of_the_canonical_json():
     P = request()
     a, b = census(P, digest="ab" * 64), census(request())
-    assert a["digest"] == seal({k: v for k, v in a.items() if k != "digest"})["digest"]
+    body = {k: v for k, v in a.items() if k != "digest"}
+    assert a["digest"] == seal(body)["digest"] == hashlib.sha512(canonical_json(body)).hexdigest()
     assert a["program"] == "ab" * 64 and b["program"] is None and a["digest"] != b["digest"]
     assert census(request())["digest"] == b["digest"] != census(request(2))["digest"]
     with pytest.raises(ValueError, match="canonical JSON domain"):
         seal({"schema": "x", "n": 2 ** 53})
+
+
+@pytest.mark.parametrize("piece", [1, 2, 3, 1 << 16])
+def test_the_digest_hashes_the_canonical_json_in_pieces(monkeypatch, piece):
+    monkeypatch.setattr(CE, "_PIECE", piece)
+    mixed = {"b": [[], [1, [2, {"z": 1, "a": [3] * 5}]], (4, 5), [6] * 7, {"y": None}, "s", True], "": {}, "a": [[8, 9]] * 3,
+             "t": (), "u": [{"k": [1, 2]}, {}], "n": 2 ** 53 - 1}
+    for doc in [census(P) for _, P in programs()] + [mixed, [], {}, [[]], 7, "x"]:
+        assert b"".join(CE._canonical_pieces(doc)) == canonical_json(doc)
 
 
 def test_a_batch_too_large_to_enumerate_is_marked_approximate(monkeypatch):
@@ -287,6 +398,61 @@ def test_embedding_without_evaluate_lazy_reads_its_table():
     c = census(Program(bind(Embedding)))
     assert c["selects"] == {"call": [], "gates": [], "bits": [], "values": []}
     assert c["values"]["reads"][:2] == [[2], [2]]
+
+
+def _lines(P: Program) -> int:
+    """The lines of census.py, intervals.py and refs.py that `P`'s census executes: its work, counted rather than timed."""
+    files, n = {CE.__file__, IV.__file__, RF.__file__}, 0
+
+    def line(frame, event, arg):
+        nonlocal n
+        n += event == "line"
+        return line
+
+    was = sys.gettrace()
+    sys.settrace(lambda frame, event, arg: line if frame.f_code.co_filename in files else None)
+    try:
+        census(P)
+    finally:
+        sys.settrace(was)
+    return n
+
+
+@pytest.mark.parametrize("shape", [relay, fan])
+def test_the_census_is_linear_in_its_pass_throughs(shape):
+    """A pass-through chain 200 Calls deep, and 200 runs read in 200 spans, cost the census at most 4.5 times what a quarter of
+    each costs (linear is 4). Walking the chain again from each Call, or every run for each span, costs 11 and 7.7 times."""
+    assert _lines(shape(200)) <= 4.5 * _lines(shape(50))
+
+
+def test_which_leaves_name_one_gate_is_resolved_once_per_definition(monkeypatch):
+    """Which of a Call's own leaves name one gate is resolved through the layout once per Definition, form and length, not at
+    every node calling it (DeepSeek-V4-Pro's request Program writes its KV cache in 1952 such Calls): `TWrite`'s four own
+    leaves once, `TSpread`'s seven once, and each batch of `TPair`'s leaves at its length once."""
+    n = 0
+    real = CE.resolve
+
+    def counted(*a):
+        nonlocal n
+        n += 1
+        return real(*a)
+
+    monkeypatch.setattr(CE, "resolve", counted)
+    census(twice(8))
+    assert n == 4 + 7 + 2 * 8 + 2 * 2
+
+
+def test_a_column_every_token_selects_in_is_held_once():
+    """A table's columns 64 tokens each select in cost the census at most 64 bytes of memory per candidate it lists (about 26),
+    not a span per token and leaf held until the table's values are cut (480)."""
+    P = hashed(64)
+    tracemalloc.start()
+    try:
+        c = census(P)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert peak <= 64 * sum(map(len, c["selects"]["values"]))
 
 
 Wide64 = prim("TWide64", [], V64, lambda: 1 << 60)

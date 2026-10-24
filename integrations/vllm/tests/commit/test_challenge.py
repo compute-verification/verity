@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from verity.ml.randomness import derive
+from verity_vllm.acquire.committer_api import RunCommitment, StepCommitment
 from verity_vllm.check.replay import sample as SR
 from verity_vllm.commit import binding as B
 from verity_vllm.commit import challenge as CH
@@ -57,6 +58,32 @@ def test_legacy_identities_are_byte_identical():
         assert (run.run_root.hex(), bmap["digest"]) == (case["run_root"], case["map_digest"]), "the fixture commit changed, not the challenge"
         picks = B.challenge_identities(pop, bmap, run.run_root, case["k"], salt=bytes.fromhex(case["salt"]))
         assert [[ident, leaf] for ident, _e, leaf in picks] == [[_ident(i), leaf] for i, leaf in case["picks"]]
+
+
+def _run(roots: list[bytes], errors: tuple[str, ...] = ()) -> RunCommitment:
+    steps = [StepCommitment(i, r, r, 4, 64, 1, b"", 0.0, 0.0, 0) for i, r in enumerate(roots)]
+    width = {len(r) for r in roots}
+    root = (ROOT if width == {32} else hashlib.sha512(ROOT).digest()) if width in ({32}, {64}) else b""
+    return RunCommitment(root, steps, {}, 0.0, 0.0, 0, 0, extra={"errors": list(errors)})
+
+
+def test_a_run_with_an_uncommitted_step_has_no_root_to_draw_from():
+    """The Commit's opening draw (`pipeline.commit`, the config run's ``--bounded-staging``) takes the root through
+    `run_root_of`: rows-sha512's 64-byte root or vllm-v1's 32; a step the committer refused is a placeholder root and the
+    run has none, refused by its steps and first error, not by the root's length."""
+    step = hashlib.sha256(b"step").digest()
+    assert CH.run_root_of(_run([step, step])) == ROOT
+    rows = hashlib.sha512(b"step").digest()
+    assert CH.run_root_of(_run([rows, rows])) == hashlib.sha512(ROOT).digest()
+    with pytest.raises(CH.NoRunRoot, match=r"1 of 2 steps not committed \(steps \[1\]\)"):
+        CH.run_root_of(_run([rows, b""]))
+    err = "bounded staging: hit step 0 ran 6434560 bytes against a plan of 23539456"
+    with pytest.raises(CH.NoRunRoot, match=r"2 of 3 steps not committed \(steps \[0, 2\]\); first error: bounded staging: hit step 0"):
+        CH.run_root_of(_run([b"", step, b""], (err,)))
+    with pytest.raises(CH.NoRunRoot, match="first error: none recorded"):
+        CH.run_root_of(_run([b""]))
+    with pytest.raises(ValueError, match=r"a run root is 32 bytes \(vllm-v1\) or 64 \(SHA-512\), not 0"):
+        CH.challenge_positions(b"", [4], 1)
 
 
 def test_non_legacy_needs_a_source_and_legacy_refuses_one():

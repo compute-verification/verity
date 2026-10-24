@@ -1,0 +1,11 @@
+#!/bin/sh
+# vy-challenger-gate: the one way into the auditor host's challenger (benchmarks/live_challenger/auditor.py, RT4-INT-18).
+# research's ssh keys there are forced to this command (`vy-challenger-gate LANE`, or no LANE for a key that reads only;
+# vy-challenger-setup), which takes the request from SSH_ORIGINAL_COMMAND and runs the gate as root through sudoers'
+# 60-vy-challenger, the key's lane the opener (`by`, RT4-INT-24); vy-admin runs `sudo vy-challenger-gate VERB ...` itself. The gate
+# is the pinned tree's.
+set -eu
+if [ "$(id -u)" != 0 ]; then
+  exec sudo -n /usr/local/sbin/vy-challenger-gate --ssh "${SSH_ORIGINAL_COMMAND:-}" --key "${1:--}"
+fi
+exec /usr/bin/python3 -I /opt/vy-challenger/current/benchmarks/live_challenger/auditor.py gate "$@"

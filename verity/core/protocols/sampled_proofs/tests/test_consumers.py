@@ -135,8 +135,8 @@ def test_the_lean_vectors_were_generated_from_this_tree():
 
 
 def test_compute_is_the_work_weighted_bound():
-    """Sampled proofs' TOY profile, over replay units of at most 4 VUs: 64 VUs of skipped work, exactly `worst_case` with
-    utility 4m; under a stratified law, the work-weighted `harm_bound`."""
+    """A TOY profile over units of 4 VUs each: 64 VUs of skipped work, exactly `worst_case` with utility 4m; over two
+    levels, `worst_case` too; under a stratified law, the work-weighted `harm_bound`."""
     toy = IntegrityProfile(("replay",), (512,), {"replay": Bernoulli(Fraction(1, 4))}, 0.01)
     assert compute_bound(toy, 4) == toy.worst_case(lambda m: 4 * m) and round(compute_bound(toy, 4), 1) == 64.0
     two = IntegrityProfile(("replay", "check"), (512, 4), {"replay": Bernoulli(Fraction(1, 2)), "check": Subset(2)}, 0.01)

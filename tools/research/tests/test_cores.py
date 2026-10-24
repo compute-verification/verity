@@ -112,6 +112,27 @@ def test_the_oldest_live_waiter_goes_first_and_a_dead_ones_ticket_is_dropped(nod
         cores.hold(50, SHARE, "huge", d=d, root=root, sleep=lambda s: pytest.fail("never waits"), log=lambda s: None)
 
 
+def test_a_higher_class_goes_ahead_of_older_waiters_and_an_unranked_waiter_agrees_on_who_is_first(node):
+    """Drive's gates waited behind 25 lane jobs queued before them on node 2 (INF-147). The line is by class, then oldest; a
+    default-class ticket keeps the unranked name, so a waiter whose cpu-hold predates ranks (line[0] by name) sees the same line."""
+    d, root = node
+    names = [cores.ticket_name(r, ns, w) for r, ns, w in [(0, 5, "old"), (150, 9, "gate"), (100, 7, "capture"), (100, 8, "capture2"),
+                                                           (-490, 1, "fill"), (-200, 2, "bench")]]
+    assert [n.rsplit(".", 1)[1] for n in sorted(names)] == ["gate", "capture", "capture2", "old", "bench", "fill"]
+    assert cores.ticket_name(0, 5, "old") == "wait.00000000000000000005.old"
+    _, fa = cores.take(48, SHARE, "all", d, root)
+    older = cores.locked(d / cores.ticket_name(0, 1, "lane"), "4\n")
+    seen = []
+
+    def sleep(s):
+        seen.append([p.name.rsplit(".", 1)[1] for p in cores.live(d, "wait.*")])
+        os.close(fa)
+
+    got, fd = cores.hold(4, SHARE, "gate", rank=150, d=d, root=root, sleep=sleep, clock_ns=lambda: 2, log=lambda s: None)
+    assert seen == [["gate", "lane"]] and cores.fmt(got) == "48-51", "it took cores while an older default-class run still waited"
+    os.close(fd), os.close(older)
+
+
 def test_cpu_hold_puts_the_claimed_cores_in_the_wrapper_alone_and_leaves_the_claim_to_it(node):
     d, _ = node
     ran = []
@@ -140,23 +161,25 @@ def open_files() -> list[tuple[int, str]]:
     return out
 
 
-def _queued(tmp_path, run_id, record):
+def _queued(tmp_path, run_id, record, rank=0):
     """A launch request whose queue wrapper records the arguments it was given up to `--`, then runs the rest."""
     code = "import os, sys; i = sys.argv.index('--'); open(sys.argv[1], 'w').write(repr(sys.argv[2:i])); os.execvp(sys.argv[i + 1], sys.argv[i + 1:])"
     req, runs_root = _request(tmp_path, run_id, [PY, "-c", "print('ran')"])
     doc = json.loads(req.read_text())
     doc[remote.QUEUE_WRAP] = [PY, "-c", code, str(record), "AllowedCPUs=48-95", "48-95", "--"]
-    doc["queue"] = {"cores": {"cpus": "48-95", "n": 4}}
+    doc["queue"] = {"cores": {"cpus": "48-95", "n": 4, **({"rank": rank} if rank else {})}}
     req.write_text(json.dumps(doc))
     return req, runs_root
 
 
 def test_a_queued_run_launches_on_cores_of_its_own_and_one_that_must_wait_counts_as_launched(tmp_path, node):
     d, root = node
-    req, runs_root = _queued(tmp_path, "q1", tmp_path / "q1.args")
+    req, runs_root = _queued(tmp_path, "q1", tmp_path / "q1.args", rank=150)
     out = remote.launch_request(req)
     assert out["started"] and out["first_record"] == "job.json"
     wait_runner(runs_root / "q1")
+    argv = json.loads((runs_root / "q1" / "launch.json").read_text())["argv"]
+    assert argv[argv.index("--rank") + 1] == "150", "the placement's class rank orders cpu-hold's line"
     assert (tmp_path / "q1.args").read_text() == repr(["AllowedCPUs=48-51", "48-51"])
     assert "research cpu-hold: run q1 on CPUs 48-51" in (runs_root / "q1" / "launcher.log").read_text()
 

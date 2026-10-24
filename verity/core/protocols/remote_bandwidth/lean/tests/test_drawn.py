@@ -19,7 +19,7 @@ from verity.core.protocols.remote_bandwidth.receipts import Plan
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-server = D.server_fixture(D.Port(M.EXE, "session", M.session, st.nothing(), package=M.PACKAGE))
+server = D.server_fixture(D.Port(M.EXE, "session", M.session, st.nothing(), package=M.PACKAGE, of_record=M.OF_RECORD))
 HEX = frozenset("0123456789abcdef")
 
 
@@ -136,21 +136,23 @@ def shaped(draw) -> dict:
 
 BASES = ("honest", "honest-appends", "honest-by-root", "honest-rekey", "honest-subset", "honest-block-sha512",
          "drop-appended", "stale-append-coin", "lifetime", "refusals", "release-adjacent", "plan-change-removes-missing",
-         "honest-withdraw", "honest-deferred-rekey", "withdraw-planned")
+         "honest-withdraw", "honest-deferred-rekey", "withdraw-planned", "honest-paced")
 
 
 def test_drawn_honest_sessions_agree(server) -> None:
-    stats = D.run(D.Port(M.EXE, "session", M.session, shaped(), package=M.PACKAGE, need_rejects=False), examples=25,
-                  server=server)
+    stats = D.run(D.Port(M.EXE, "session", M.session, shaped(), package=M.PACKAGE, of_record=M.OF_RECORD,
+                         need_rejects=False), examples=25, server=server)
     assert stats.outputs == 25, stats
 
 
 def test_drawn_edits_of_recorded_sessions_agree(server) -> None:
     base = st.sampled_from(BASES).map(lambda name: M.recorded(name)[0])
-    stats = D.run(D.Port(M.EXE, "session", M.session, edited(base), package=M.PACKAGE), examples=400, server=server)
+    stats = D.run(D.Port(M.EXE, "session", M.session, edited(base), package=M.PACKAGE, of_record=M.OF_RECORD),
+                  examples=400, server=server)
     assert stats.outputs > 150 and stats.rejects > 40, stats
 
 
 def test_drawn_edits_of_drawn_sessions_agree(server) -> None:
-    stats = D.run(D.Port(M.EXE, "session", M.session, edited(shaped()), package=M.PACKAGE), examples=20, server=server)
+    stats = D.run(D.Port(M.EXE, "session", M.session, edited(shaped()), package=M.PACKAGE, of_record=M.OF_RECORD),
+                  examples=20, server=server)
     assert stats.outputs > 5, stats

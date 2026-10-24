@@ -499,14 +499,6 @@ def test_evaluator_selftest_views_only():
     assert s["one_input_per_distinct_leaf"] and not s["sharing_lost"]
 
 
-def test_transfer_summary_written():
-    assert os.path.exists(OUT_PATH), OUT_PATH
-    rows = [json.loads(l) for l in open(OUT_PATH) if l.strip()]
-    ids = {r["case"] for r in rows}
-    missing = {c.id for c in CASES} - ids
-    assert not missing, f"cases without a record: {sorted(missing)}"
-
-
 # ---------------------------------------------------------------------------------------------------------
 # support-matrix audit probes (heavy: ~8 s / 0.5 GB; run with XFER_HEAVY=1, on the pod)
 # ---------------------------------------------------------------------------------------------------------

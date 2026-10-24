@@ -38,11 +38,11 @@ def test_all_clear_under_every_watermark():
     assert P.evaluate(reading("n2", ws_pct=40.0), None, lim("n2")) == []
 
 
-def test_workspace_watermarks_differ_by_node():
-    assert P.evaluate(reading("n1", ws_pct=60.0), None, lim("n1")) == []
-    assert P.evaluate(reading("n2", ws_pct=60.0), None, lim("n2"))[0].startswith("HARD /workspace")
-    assert P.evaluate(reading("n1", ws_pct=81.0), None, lim("n1"))[0].startswith("/workspace 81.0%")
-    assert P.evaluate(reading("n1", ws_pct=86.0), None, lim("n1"))[0].startswith("HARD /workspace")
+def test_workspace_watermarks_warn_at_80_and_stop_checks_at_85():
+    for node in ("n1", "n2"):
+        assert P.evaluate(reading(node, ws_pct=60.0), None, lim(node)) == []
+        assert P.evaluate(reading(node, ws_pct=81.0), None, lim(node))[0].startswith("/workspace 81.0%")
+        assert P.evaluate(reading(node, ws_pct=86.0), None, lim(node))[0].startswith("HARD /workspace")
 
 
 def test_root_free_alert_and_hard_stop():
@@ -97,6 +97,19 @@ def test_the_inode_line_names_the_directories_that_grew_most(tmp_path):
     line = P.evaluate(r, reading(iused=14_000_000, t=T0), lim("n1"))[0]
     assert line.endswith("(growing a/y +900, b +500, c/new +9 in 60 min)")
     assert P.inode_dirs(tmp_path / "none", ws, T0, 3600, walk=False) is None
+
+
+def test_the_inode_line_finds_leaves_by_path_not_by_prefix_and_in_one_sorted_pass(tmp_path):
+    """`a-b` sorts between `a` and `a/c` as text, so leaves are found over path components; and node 2's du keeps ~120k
+    directories, which the old any()-per-directory scan took minutes over, starving node 2's other monitor parts."""
+    ws = "/workspace"
+    big = "".join(f"1\t{ws}/runs/r{i:06d}\n" for i in range(100_000))
+    (tmp_path / "inode-dirs.prev.txt").write_text(f"1\t{ws}/a/c\n1\t{ws}/a\n1\t{ws}/a-b\n{big}")
+    (tmp_path / "inode-dirs.txt").write_text(f"1\t{ws}/a/c\n50\t{ws}/a\n30\t{ws}/a-b\n{big}5\t{ws}/runs\n")
+    for f, age in (("inode-dirs.prev.txt", 3700), ("inode-dirs.txt", 100)):
+        os.utime(tmp_path / f, (T0 - age, T0 - age))
+    g = P.inode_dirs(tmp_path, ws, T0, 3600, walk=False)
+    assert g["top"] == [{"dir": "a-b", "gained": 29}]
 
 
 def test_replay_queue_against_half_of_available_ram_after_reservations():

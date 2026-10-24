@@ -116,7 +116,7 @@ theorem openingParams_sparse (sh : RecSparse.Shape) : RecOpening.params (RecSpar
   | none => rfl
   | some p =>
     obtain ⟨m, cl, j⟩ := p
-    exact (((FlockC3.PubRows.sparse_ne_names sh).2.2.2 m cl j) (openingName_params hq).symm).elim
+    exact (((FlockC3.PubRows.sparse_ne_names sh).2.2.2.1 m cl j) (openingName_params hq).symm).elim
 
 theorem startsWith_sparseName (sh : RecSparse.Shape) : (RecSparse.unitName sh).startsWith "rec-sparse/" = true := by
   have : RecSparse.unitName sh = "rec-sparse/" ++ s!"n{sh.nu}-e{sh.ell}-s{sh.sLog}-t{sh.tLog}" := by

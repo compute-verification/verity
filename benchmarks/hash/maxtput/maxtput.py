@@ -2,7 +2,7 @@
 
 verity_bench's runner measures a fixed batch (max_num_seqs 128, three to five engines resident at 10 GiB of KV each), so it can't
 saturate the card. This driver keeps its engine (`verity_vllm.LLM`, execution ``compiled``: torch.compile with vLLM's own CUDA-graph
-mode, prefix caching off) and circuits' arms unchanged (`served_commit.prof_arm`, the loop's `hash.loop.arms`), and changes the load
+mode, prefix caching off) and circuits' arms unchanged (`served_commit.prof_arm`), and changes the load
 and the engine's scheduler and memory settings to vLLM's defaults for the card:
 
 - max_num_seqs 1024 and max_num_batched_tokens unset (vLLM's ``LLM``-class defaults on a 70-160 GiB GPU: 1024 and 16384),
@@ -56,7 +56,6 @@ ARMS = {
     "stock": None,
     "sha512": "served_commit.prof_arm:SERVED_COMMIT_ROWS",
     "sha512-layer": "served_commit.prof_arm:SERVED_COMMIT_ROWS_LAYER",
-    "blake3": "hash.loop.arms:SERVED_COMMIT_ROWS_BLAKE3",
 }
 MAX_NUM_SEQS = 1024
 

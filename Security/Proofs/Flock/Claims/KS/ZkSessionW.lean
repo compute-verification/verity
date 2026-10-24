@@ -88,14 +88,14 @@ theorem op₀Z_count (Hs : Hashes F D Sl) (T : TabZK F mPts) (cap₀ : Cap D) (o
 
 open Classical in
 /-- **Compiled soundness of a `--zk` table in a batched session, off the table on a witness lane.** For every event
-`Acc` of the session's outputs that implies the table accepts, every session strategy after `Commit` and every
+`Acc` of the session's outputs that implies the table and every table before it accept, every session strategy after `Commit` and every
 level-0 oracle `C`: `Acc` holds with `C` uncommitted with probability at most `ε_c⁻`, plus the level-0 term
 `√(2^{d₀}·2Q₀·Adv₀)`, plus the probability that `Acc` holds in a run that does not self-clash and opens a level-0
 position off `C` on a witness lane. -/
 theorem session_sound_of_table_accZ_w [Inhabited D] [Inhabited Sl] (A : Arith F K) (hA : A.Correct)
     (Hs : Hashes F D Sl) (T : TabZK F mPts) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl)))
     (cap₀ : Cap D) (Acc : List (OutZC F D Sl) → Prop)
-    (hAcc : ∀ outs, Acc outs → (outs.getD pre.length dfltOutZC).accepted = true) (C : Oracle F)
+    (hAcc : ∀ outs, Acc outs → AccUpTo pre.length outs) (C : Oracle F)
     (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) :
     expect (ind fun outs : List (OutZC F D Sl) => Acc outs ∧ ¬ T.Committed A C)
         (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ ≤

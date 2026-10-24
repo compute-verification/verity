@@ -30,7 +30,7 @@ from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.program import Program
 from verity_numerical.bench.input_sets import InputSet
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, verifier as V
+from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
 HERE = Path(__file__).resolve().parent
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -78,6 +78,15 @@ def hold_bound(st: dict, program, query) -> None:
     (st["dir"] / "partition.json").write_text(json.dumps(P.partition(program, query), sort_keys=True))
     (st["dir"] / "program.json").write_bytes(canonical_json(encode_program(program)))
     st["partition_file"], st["program_file"] = st["dir"] / "partition.json", st["dir"] / "program.json"
+
+
+def hold_registered(st: dict, program, query, served, log=(), ports=None) -> SV.ServedRegistration:
+    """The verifier's own `--registered` file beside a bound stage (`served.register_served`: each served tree a port, the
+    form every served path registers in), which `lean_verify` passes to `verify --zk`. The returned registration's
+    `registered` entries go into the record (`R.record(..., registered=)`), and its `values` and `outputs` into R7."""
+    sr = SV.register_served(program, query, served, log=log, ports=ports)
+    st["registered_file"] = sr.write(st["dir"] / "registered.json")
+    return sr
 
 
 def unit_class(set_dir: str, m0_path: str, out: Path) -> str:
@@ -147,10 +156,11 @@ def stand_in(set_dir: str) -> dict:
 
 
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
-            zk: bool = False) -> tuple[dict | None, dict | None]:
+            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the draw, coins, the verdict) and `prove`.
     `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: both
-    sides run the masked protocol (`--zk`), the only one under which the Lean verifier accepts a subset draw."""
+    sides run the masked protocol (`--zk`), the only one under which the Lean verifier accepts a subset draw. `env`: added to
+    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
     tables = d / "tables"
@@ -160,14 +170,15 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
                               *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1"],
-                             stdout=serve_log, stderr=subprocess.STDOUT, text=True)
+                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env={**os.environ, **(env or {})})
     try:
         for _ in range(1800):
             if "SERVING" in (out / "serve.log").read_text() or serve.poll() is not None:
                 break
             time.sleep(0.5)
         p = run([bin_, "prove", *zf, "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
-                 "--circuit", str(d / "circuit.txt"), "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log")
+                 "--circuit", str(d / "circuit.txt"), "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log", env=env,
+                timeout=prove_timeout)
         live = next((json.loads(line[5:]) for line in p.stdout.splitlines() if line.startswith("LIVE\t")), None)
         if live is None:
             refused = next((line for line in p.stdout.splitlines() if line.startswith("REFUSED\t")), "")
@@ -188,10 +199,18 @@ def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[d
     return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("DRAWCHECK")]
 
 
-def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False) -> dict:
+def firewall_env(st: dict) -> dict:
+    """What a firewalled prover (`FC_FIREWALL=1`) sets its Lean `Hello` up on (live PROTOCOL.md §10.4): the statement
+    `lean_verify` verifies under, and the statement's partition and program."""
+    args = [x for k in ("partition", "program") if st.get(f"{k}_file") for x in (f"--{k}", str(st[f"{k}_file"]))]
+    return {"FC_FIREWALL_STATEMENT": STATEMENT_ID, "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
+
+
+def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify") -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
-    `registered.reads_file`) when the statement reads registered values; `zk`, a `--zk` session's."""
+    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
+    `out` (a negative's own, beside the honest verdict's)."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -201,7 +220,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False) -> dic
     prog = [str(st["program_file"])] if st.get("program_file") else []
     reads = [str(st["registered_file"])] if st.get("registered_file") else []
     p = run([lean, "archive-put", str(archive), str(st["dir"] / "circuit.txt"), str(st["dir"] / f"pub-{n}.bin"), *tables, *part, *prog,
-             *reads], out / "archive-put.log")
+             *reads], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
     keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
     bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
     bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
@@ -209,7 +228,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False) -> dic
     t = time.time()
     p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
              "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), "--session", str(sessions[-1].parent)],
-            out / "lean-verify.log")
+            out / f"{log}.log")
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),

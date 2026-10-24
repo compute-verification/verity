@@ -150,7 +150,9 @@ class StockProfArm:
         return self
 
     def ready(self, target: Any) -> None:
-        runner = target.engine._engine.runner
+        from verity_vllm.engine.engine_profile import get_model_runner
+
+        runner = get_model_runner(target.engine.vllm)
         _ranged(runner, "execute_model",
                 lambda a, k: f"exec:{getattr(a[0] if a else k.get('scheduler_output'), 'total_num_scheduled_tokens', -1)}")
         if hasattr(runner, "sample"):

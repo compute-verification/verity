@@ -7,20 +7,20 @@
  },
  "runs": {
   "CertifierDevice.DifftestMain": {
-   "why": "1,500 traces on which step, replayed from init, does what the checkout's active.Proxy does driven event by event: every link write, server connection, server write and its drain, and published record with its grid's parameters, in order, and at the end the declared syncs, the shaper's hand times, the egress frames read and both counts; honest traces accepted with egress grids equal to NetworkCertifier.expectedRow's, and every fault reason (late ticks and stalls, backlogs, refused and late forwards, overflow on either grid, a duplicate while the queue holds exactly Q, advice outside Σ_sync, frames handed after their h(k), which fault the window they are handed in coverage-never-established, the malformed inputs), the online prover choosing each window's sync at lags of 1 to T − 1 buckets, with frames read before the choosing tick but ready after it, and its refusal of a frame ready before its anchor, which faults the declaring egress window monitor-unavailable",
+   "why": "1,500 traces on which step, replayed from init (or, for a proxy back from maintenance, initAt at its start window and first egress position), does what the checkout's active.Proxy does driven event by event: every link write, server connection, server write and its drain, salt connection and salt write, and published record with its grid's parameters, in order, and at the end the declared syncs, the shaper's hand times, the egress frames read and the four counts; honest traces accepted with egress grids equal to NetworkCertifier.expectedRow's, plain, salted (1 to 3 certifier windows per PoUW window), restarted and served (whole requests admitted by Served.admits, the rest held to a later window), and every fault reason (late ticks and stalls, backlogs, refused and late forwards, a refused salt connection, overflow on either grid, a duplicate while the queue holds exactly Q, advice outside Σ_sync, frames handed after their h(k), which fault the window they are handed in coverage-never-established, the malformed inputs, a position before a restart's), a salt drained late or never, the online prover choosing each window's sync at lags of 1 to T − 1 buckets, with frames read before the choosing tick but ready after it, and its refusal of a frame ready before its anchor, which faults the declaring egress window monitor-unavailable",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "1500"],
    "data": {
-    "difftest/instances.jsonl": "7f3dc54a64c7032250fa91ce05592d9240b54cc06fb60ab6f934003e70ef396c",
-    "difftest/python.jsonl": "9d657249b942362ae3f50b7e06ca428cd0353ed953e861a801d7e725dec6b3ef"
+    "difftest/instances.jsonl": "ee64301bc9923166e895df891f6b448c542e504accbcc5d0a289f85ccfd94b2c",
+    "difftest/python.jsonl": "76ce51694a619234c317efb8805ec4e11c9c4553b89934cdb9d85ed8b2cd96c8"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "CertifierDevice.IssuerDifftestMain": {
-   "why": "160 LMS keys (N = 64, W = 1 at height 1, and the toy N at W = 1, 2, 4) and calls to one issuer on each, in a certifier session of 32 bytes or of 31 or 33, on which Issuer.certify, threaded through the calls, does what the checkout's certificate.Issuer does, its signer at the host's leaf: each parameters digest, the record head's encoding and digest, the certificate's fields and signature, verify under the key and after each tamper (a changed signature, field, deadline bit, public key or session, and a changed link-window or key identifier signed again), the records it refuses (no head, a leaf past 2^H, a session id not 32 bytes) and the reservations the host refuses, listed in refused",
+   "why": "160 LMS keys (N = 64, W = 1 at height 1, and the toy N at W = 1, 2, 4) and calls to one issuer on each, in a certifier session of 32 bytes or of 31 or 33, on which Issuer.certify, threaded through the calls, does what the checkout's certificate.Issuer does, its coins giving each call's salt and its signer at the host's leaf: each parameters digest, the record head's encoding and digest, the salt, the certificate's fields and signature over the salted digest, verify under the key and after each tamper (a changed signature, field, deadline bit, salt, public key or session, and a changed link-window or key identifier signed again), the records it refuses (no head, a salt not 64 bytes, a leaf past 2^H, a session id not 32 bytes) and the reservations the host refuses, listed in refused",
    "args": ["{issuer/instances.jsonl}", "{issuer/python.jsonl}", "160"],
    "data": {
-    "issuer/instances.jsonl": "b4574a82f0fc8d2be3ef5a2f9377e7302bcef5bc5ee4433717346ebf0d021b4a",
-    "issuer/python.jsonl": "62219be879c69c5f8ee53ad335bfaacd23cdc72352c94c65c41a43935fa66769"
+    "issuer/instances.jsonl": "5dab5c3717dc06ec89af3b922899d26a68455dd01c2077101918cd35786b4f7d",
+    "issuer/python.jsonl": "fdd02d3ab8a00b0ad32166123abd71bf1edb440fe084da8cbeab30340b0a4ad4"
    },
    "generate": ["python3", "scripts/issuer_vectors.py", "{repo}", "--out", "{out}"]
   }
@@ -41,8 +41,13 @@
    "except": [],
    "why": "the device is code: Lean core, C-Flock's bytes, certifier_program and network_check only, no Mathlib and nothing of Security"
   },
+  "CertifierDevice.Served": {
+   "imports": ["NetworkCertifier.Schedule"],
+   "except": [],
+   "why": "the device is code: Lean core, C-Flock's bytes, certifier_program and network_check only, no Mathlib and nothing of Security"
+  },
   "CertifierDevice.Shaper": {
-   "imports": ["CertifierDevice.Certifier", "CertifierDevice.Online"],
+   "imports": ["CertifierDevice.Certifier", "CertifierDevice.Online", "CertifierDevice.Served"],
    "except": [],
    "why": "the device is code: Lean core, C-Flock's bytes, certifier_program and network_check only, no Mathlib and nothing of Security"
   },

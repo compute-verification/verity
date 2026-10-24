@@ -115,9 +115,10 @@ def test_a_definition_valued_static_parses_to_the_definition_it_names_recursivel
     assert TG.definition(mid.id) is mid and TG.definition(exact.id) is exact
 
 
-def test_the_pouw_h1_tile_root_parses_from_its_id(monkeypatch):
-    """CIR-42: `PouwH1Tile`'s root (its sidecar's binding: ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=...}`` and the tile's cells)
-    could not be targeted by id; it parses to the very Definition the sidecar binds, without building it or the catalog."""
+def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
+    """CIR-42: `PouwH1Tile`'s roots (its sidecar's bindings of each version: ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=...}`` and
+    the tile's cells) could not be targeted by id; each parses to the very Definition the sidecar binds, without building it
+    or the catalog."""
     TG.load_registries()
     _no_catalog(monkeypatch)
     (make,) = [make for units, make in TG._root_bindings("_pouw_roots") if units[0].startswith(
@@ -125,9 +126,10 @@ def test_the_pouw_h1_tile_root_parses_from_its_id(monkeypatch):
     roots = make()
     if not roots:
         pytest.skip("PouwH1Tile is not registered on this tree (no circuit.segment)")
-    (root,) = roots
-    assert root.id.startswith("PouwH1Tile_v") and "{EXACT=GemmAccumulatorS8_v2{K=64," in root.id
-    assert TG.definition(root.id) is root
+    assert len({root.id for root in roots}) == len(roots)
+    for root in roots:
+        assert root.id.startswith("PouwH1Tile_v") and "{EXACT=GemmAccumulatorS8_v2{K=64," in root.id
+        assert TG.definition(root.id) is root
 
 
 def test_a_record_static_a_catalog_root_binds_parses_without_the_catalog(monkeypatch):

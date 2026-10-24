@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 from verity.core.protocols.certifier import calibration
-from verity.core.protocols.certifier.active import DATA, LAST, encode_frame
+from verity.core.protocols.certifier import active
+from verity.core.protocols.certifier.active import DATA, encode_frame
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, Record, Status, Certifier
 
 HERE = Path(__file__).resolve().parents[1]
@@ -71,12 +72,15 @@ def runs(setup, tmp_path_factory):
 
 
 def test_requests_take_the_frames_the_trace_gives_them():
+    header = active.request_placement(4096)[2]
     for n in (1, 2, 3):
         body = ar.request_bytes("s", n, 4096)
-        frames = ar.request_frames(7, body, 4096)
+        frames = ar.request_frames(body, 4096)
         assert len(frames) == n * 4096
-        kinds = [frames[k * 4096] for k in range(n)]
-        assert kinds == [DATA] * (n - 1) + [LAST]
+        assert {frames[k * 4096 : k * 4096 + active.HEADER.size] for k in range(n)} == {header}
+        split = active.Requests()
+        cut = [split.feed(frames[k * 4096 + active.HEADER.size : (k + 1) * 4096]) for k in range(n)]
+        assert b"".join(d for _, d, _ in cut) == body and [e for *_, e in cut] == [False] * (n - 1) + [True]
 
 
 def test_records_round_trip_through_their_packing():
@@ -324,12 +328,14 @@ def test_the_command_line_parses_a_sync_rule(tmp_path, capsys):
 @pytest.mark.parametrize("ms, responses, requests", [
     (15, None, None),
     (110, "status:delivery-refused", "status:delivery-refused"),
-    (300, "status:monitor-unavailable", "status:delivery-refused"),
+    (300, "status:monitor-unavailable", "status:monitor-unavailable"),
 ])
 def test_a_stalled_proxy_fails_its_window_closed(setup, runs, tmp_path, ms, responses, requests):
     """The proxy stopped right after window 1's first release (`--stall`): under the slack nothing faults; 110 ms,
     between two ticks, forwards the request late (`delivery-refused`), though no tick is late enough to fault; 300 ms
-    also makes the egress tick late. Only window 1 fails, both links, and nowhere is there a mismatch."""
+    also makes the next boundary's ticks late, and its ingress tick, first (`active.TICK_ORDER`), names its window's
+    reason before the egress tick finds the late forward. Only window 1 fails, both links, and nowhere is there a
+    mismatch."""
     _, report, _ = setup
     plan, _ = runs
     run = tmp_path / "stalled"
@@ -407,12 +413,12 @@ def test_a_live_server_behind_the_shim_is_accepted(live, setup):
     c = audit["comparisons"]
     assert c["records_are_run_shapers"] and c["hands_are_the_rules"] and c["frames_log_is_the_programs"]
     assert c["wire_is_the_records"]
-    # every request's TOKENS events and its [DONE], numbered in write order
-    assert c["frames_read"] == c["frames_meant"] == len(plan["requests"]) * (TOKENS + 1)
+    # every request's TOKENS chunks, one canonical event each and none for [DONE], numbered in write order
+    assert c["frames_read"] == c["frames_meant"] == len(plan["requests"]) * TOKENS
     events = ar.read_events(run / "server.events.gz")
     assert [p for p, *_ in events] == list(range(len(events)))
-    assert [e for p, _, _, _, e in events if e.endswith(b"data: [DONE]\n\n")] == \
-        [b"id: %d\ndata: [DONE]\n\n" % p for p, _, k, _, _ in events if k == TOKENS]
+    assert [active.event_data(active.event_body(e)) for *_, e in events] == \
+        [b" t%d" % k for *_, k, _, _ in events]
     assert audit["timing"]["server_failed"] == 0 and audit["timing"]["server_cut_at_horizon"] == 0
     assert c["hindsight"]["misses"] == 0
 
@@ -535,10 +541,10 @@ def test_a_live_request_asks_for_no_token_ids():
 def test_a_live_request_takes_the_frames_asked_for():
     body = {"model": "served", "prompt": list(range(1000, 3000)), "max_tokens": 128}
     fewest = ar.live_request_bytes("b64.3.7", body, None, 4096)
-    n = -(-len(fewest) // (4096 - 9))
+    n = active.request_frame_count(len(fewest), 4096)
     for frames in (n, n + 1):
         out = ar.live_request_bytes("b64.3.7", body, frames, 4096)
-        assert -(-len(out) // (4096 - 9)) == frames
+        assert len(ar.request_frames(out, 4096)) == frames * 4096
         head, _, raw = out.partition(b"\r\n\r\n")
         assert int(head.split(b"content-length: ")[1]) == len(raw)
         assert __import__("json").loads(raw) == body | {"user": "b64.3.7"}

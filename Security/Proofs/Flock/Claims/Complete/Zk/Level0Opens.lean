@@ -310,7 +310,7 @@ theorem ligeritoPZk_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArr
       rw [ite_eq_left hj]
       by_cases hj1 : j + 1 < R
       · rw [ite_eq_left hj1]
-        refine (levelChalsK resp _).bind fun f _ => ?_
+        refine (levelChalsK resp _ _).bind fun f _ => ?_
         refine KRuns.ite (fun _ => ?_) fun hne => absurd (by simp; omega) hne
         refine (KRuns.commit h ms _ _ _ _).bind fun cmN hcmN => ?_
         refine (KRuns.absorb _ (pBytes _) (fun t => Flock.RecAlgebra.absorbBytes_eq _ t) _).bind fun _ _ => ?_
@@ -338,7 +338,7 @@ theorem ligeritoPZk_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArr
           · exact hop
       · rw [ite_eq_right hj1]
         have hjR : j + 1 = R := by omega
-        refine (levelChalsK resp _).bind fun f _ => ?_
+        refine (levelChalsK resp _ _).bind fun f _ => ?_
         refine KRuns.ite (fun hc => absurd hc (by simp [hjR])) fun _ => ?_
         refine (KRuns.absorbAll _ _).bind fun _ _ => ?_
         refine (KRuns.query resp nonce ms _ s.2.1 (hq _ (by omega)) _).bind fun q hq' => ?_

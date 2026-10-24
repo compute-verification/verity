@@ -62,6 +62,9 @@ NOMINAL_STEP_S = 0.010          # a decode step of the 1–2B models on L40S (R1
 ARRIVE_STEP_RULE = ("realized_arrive_steps of round(offset_s / nominal_step_s): an arrival after every earlier request has finished "
                     "is declared at the forward after the last of them, where the serving loop admits it")
 MIN_CAP = 2                     # the "very short" output cap (prefill + one decode step)
+#: the row file's reason for the switch a target with the int8 attention in scope sets (`TargetProfile.engine_args`)
+INT8_ATTENTION_REASON = ("TargetProfile.int8_exact serves the exact-int8 attention (engine.int8_attention_vllm.Int8AttentionImpl), "
+                         "registered as vLLM's CUSTOM backend")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -460,6 +463,10 @@ def main(a: Options) -> int:
             return 2
         tok = Tok(tp)
     doc = workload_doc(p, hf_repo=a.hf_repo, revision=a.revision, case=case_for(a.hf_repo, a.revision, a.case), tok=tok)
+    reasons = dict(r.partition("=")[::2] for r in a.reason)
+    if unknown := sorted(set(reasons) - set(served.DEFAULTS)) or [k for k, v in reasons.items() if not v]:
+        print(f"[error] --reason {unknown}: a reason is SWITCH=TEXT for a switch of {sorted(served.DEFAULTS)}", file=sys.stderr)
+        return 2
     if a.target:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         t = json.loads(a.target)
@@ -473,10 +480,8 @@ def main(a: Options) -> int:
         if exec_suffix != tp.execution_label:
             print(f"[error] row id execution suffix {exec_suffix!r} != the target's execution label {tp.execution_label!r}", file=sys.stderr)
             return 3
-    reasons = dict(r.partition("=")[::2] for r in a.reason)
-    if unknown := sorted(set(reasons) - set(served.DEFAULTS)) or [k for k, v in reasons.items() if not v]:
-        print(f"[error] --reason {unknown}: a reason is SWITCH=TEXT for a switch of {sorted(served.DEFAULTS)}", file=sys.stderr)
-        return 2
+        if "attention" in tp.int8_parts:
+            reasons.setdefault("attention_backend", INT8_ATTENTION_REASON)
     if reasons:
         doc["engine"]["reasons"] = reasons
     if tok is not None:

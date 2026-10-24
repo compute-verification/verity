@@ -51,8 +51,8 @@ ALLOWED = {
     "ml.private_circuits": {"ml.circuits"},
     "core.claims": set(),
     "core.protocols.profile": {"ml.circuits"},
-    # The two-stage law samples the verifier's own bytes as the Lean verifier does (`two_stage`), and the proof
-    # service's challenger draws with it (`service.Stream.select`).
+    # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
+    # draws with them (`service.Stream.select`).
     "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness", "core.protocols.profile"},
     "core.protocols.pous": {"core.claims", "ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
@@ -60,8 +60,10 @@ ALLOWED = {
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # 2026-10-12 (memory accounting's remote bandwidth program): the remote audit commits receipts in frame-v3-sha512
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  A KV pass's plan of
-    # 10^5 runs is checked and encoded in numpy (`ml.kernels.plans`), which a protocol can't import itself.
-    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.kernels", "ml.randomness", "core.protocols.profile"},
+    # 10^5 runs is checked and encoded in numpy (`ml.kernels.plans`), which a protocol can't import itself.  Its coins
+    # are the proof service's one challenger's (`sampled_proofs.challenger`, MEM-43).
+    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.kernels", "ml.randomness", "core.protocols.profile",
+                                        "core.protocols.sampled_proofs"},
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
@@ -103,6 +105,8 @@ ML_IMPORTS_CORE = {
                                              "core imports them from there, and this entry goes",
     "ml/flock/pod/rec_inner.py": "stages the inner statement over sampled proofs' `one_stage.partition`, as V*'s builders "
                                   "do (the rec_* entry), and moves with them in the follow-up to T2",
+    "ml/flock/pod/rec_reprice.py": "builds the inner statement's population program and partition with sampled proofs' "
+                                    "`one_stage.partition`, as rec_inner does, and moves with it in the follow-up to T2",
     "ml/flock/python/verity_flock/inner_registered.py": "registers a staged inner statement's description rows with sampled "
                                                         "proofs' `one_stage.registered`, as V*'s builders do (the rec_* "
                                                         "entry), and moves with them in the follow-up to T2",

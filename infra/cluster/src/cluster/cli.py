@@ -12,7 +12,7 @@
   cluster shadow replay DESCRIPTION.toml --sampler UTIL.jsonl[.gz] --preempted LOG[.gz] --out DIR
   cluster shadow evaluate DIR [--quiet-log QUIET.jsonl[.gz]] [--sampler UTIL.jsonl[.gz]...]  # the pass bar: exit 0 or 2
   cluster submit DESCRIPTION.toml --run-id R --now T --project P --submitter W [--kind K] [--max-s S] [--gpus N ...]
-                                                        # the node, wrappers and kind as JSON; exit 3 with {"refused"}
+                 [--stop NODE=EPOCH ...]                # the node, wrappers and kind as JSON; exit 3 with {"refused"}
   cluster status [--on nebius-1|nebius-2|all] [--owner OWNER] [--json]   # each node's jobs, GPU-h ready, holds, disk,
                                                         # bundles, read over SSH (status.py); exit 1 if a node can't be read
   cluster usage hourly [--on nebius-1|nebius-2|all] [--hours H] [--json] [--file PATH]   # per node and UTC hour: busy
@@ -114,6 +114,8 @@ def main(argv: list[str] | None = None) -> int:
     ag.add_argument("--tick-s", type=float, default=1.0)
     ag.add_argument("--roll", action="store_true", help="--out is a root of segments, a new one each run and UTC day")
     ag.add_argument("--roll-mb", type=int, default=256, help="with --roll, also a new segment once the ledger passes M MiB")
+    ag.add_argument("--deadline-file", default=str(model.DEADLINE_FILE),
+                    help="the node's live stop, read every tick in place of the description's stops_at while it exists")
     sh = sub.add_parser("shadow")
     ssub = sh.add_subparsers(dest="scmd", required=True)
     sr = ssub.add_parser("replay")
@@ -148,6 +150,8 @@ def main(argv: list[str] | None = None) -> int:
     sb.add_argument("--gpu-ids", default="", help="comma-separated GPU indices the job must get")
     sb.add_argument("--gpu-host", action="store_true", help="a job without --gpus that takes its GPUs with gpu-lease itself: its scope runs "
                                                                "at a GPU job's CPU weight (node 1: not idle)")
+    sb.add_argument("--stop", action="append", default=[], metavar="NODE=EPOCH",
+                    help=f"NODE's stop as the node reports it ({model.DEADLINE_FILE}), in place of the description's stops_at")
     st = sub.add_parser("status", help="each node's running, queued and held jobs, GPU-h ready, holds, disk and bundles")
     st.add_argument("--on", dest="node", choices=("nebius-1", "nebius-2", "all"), default="all")
     st.add_argument("--owner", help="only this owner's jobs (verity.dev/owner, else the workstream; a submitter on node 2)")
@@ -209,6 +213,9 @@ def main(argv: list[str] | None = None) -> int:
         from . import kinds, submit
         c = model.load(a.description)
         try:
+            for stop in a.stop:
+                name, _, epoch = stop.partition("=")
+                c = model.with_stop(c, name, int(epoch))
             out = submit.submit(c, kinds.load(kinds.kinds_dir(a.description)), run_id=a.run_id, now=a.now, kind=a.kind,
                                 question=a.question, gpus=a.gpus, cpus=a.cpus, memory_gib=a.mem_gb, max_s=a.max_s,
                                 quiet=a.quiet, preempt=a.preempt, disk_gb=a.disk_gb, project=a.project, submitter=a.submitter,
@@ -231,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
         summary = agent.run(c, Path(a.out), mode=a.mode, clock=time.time, sleep=time.sleep, lease_dir=Path(a.lease_dir),
                             status=Path(a.status), stop_file=Path(a.stop_file) if a.stop_file else None,
                             until=start + 3600 * a.hours if a.hours else None, tick_s=a.tick_s, footprint=fp,
-                            roll=a.roll, roll_bytes=a.roll_mb << 20)
+                            roll=a.roll, roll_bytes=a.roll_mb << 20, deadline_file=Path(a.deadline_file))
         if a.copy_to:
             shutil.copytree(a.out, a.copy_to, dirs_exist_ok=True)
         print(json.dumps(summary, sort_keys=True))

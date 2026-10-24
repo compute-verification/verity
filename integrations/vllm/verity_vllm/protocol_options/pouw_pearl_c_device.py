@@ -1,11 +1,11 @@
 """Pearl-C on the RTX PRO 6000 (sm_120) at the linears' ``quant_method.apply``: every call computed and committed on the device
 by GPU 1's kernel pipeline, one epoch per install over every linear weight, one transcript per pass over every call.
 
-The kernel is a directory (setting ``kernel``): the run tree's ``benchmarks/pouw/pearl_c_sm120``, whose ``run.py`` has the
-`Pipeline` (its kernels in order, each a named step of a phase, over buffers the caller may own) and whose ``fixture.py`` has
-the keys (`keys_of`, `unit_block`).  The cubin is build.sh's (setting ``cubin``, default the directory's
-cubin).  This module owns the buffers and runs the pipeline's steps on torch's current stream, in the
-device's primary context:
+The kernel is a directory (setting ``kernel``): the run tree's ``benchmarks/pouw/pearl_c_sm120``, or ``pearl_c_sm90`` for the
+``h100`` record (an H100 or H200, sm_90a), whose ``run.py`` has the `Pipeline` (its kernels in order, each a named step of a
+phase, over buffers the caller may own) and whose ``fixture.py`` has the keys (`keys_of`, `unit_block`).  The cubin is
+build.sh's (setting ``cubin``, default the directory's cubin).  This module owns the buffers and runs the pipeline's steps on
+torch's current stream, in the device's primary context:
 
 * **The trees** are -h3's (`SCHEMES`): `audit.HM96`, frame-v3-sha512 over hm96-sha512 leaves (64-byte nodes), each leaf
   over a row's SHA-512 row digest, salted by the prover's hm96 salt key (the install's, `weight_roots`' and the run's
@@ -32,10 +32,11 @@ device's primary context:
   (`clear_work.row_passes`).  The noise floor comes from the kernel's own ρ and α, whose product is exact as a double.
   The liveness is screened in FP32 with a 2⁻¹⁰ band (`screen`), and a row inside the band is decided exactly by
   `pearl_c.live_row` from its retained words.
-* **Each pass** (`begin`, `end`): the transcript is every call's A root and one tile tree over every leaf, in call order,
-  under `audit.transcript_domain` (the audit `Prover`'s layout).  With a retain directory, the pass also writes what the
-  prover opens from: A's rows (BF16, exact) and tree levels per call, B's rows and tree levels per weight, the leaves, the
-  tile tree and the manifest (`write_manifest`) that the reference verifier reads
+* **Each pass** (`begin`, `end`; `end_pass` ends one and begins the next, which the PoUW option's model runner hook does at
+  each engine step's end, since one pass's buffers hold a few prefill steps at most): the transcript is every call's A root
+  and one tile tree over every leaf, in call order, under `audit.transcript_domain` (the audit `Prover`'s layout).  With a
+  retain directory, the pass also writes what the prover opens from: A's rows (BF16, exact) and tree levels per call, B's
+  rows and tree levels per weight, the leaves, the tile tree and the manifest (`write_manifest`) that the reference verifier reads
   (``benchmarks/pouw/pearl_c_vllm/verify_run.py``).  A retained pass starts from poisoned outputs (`poison`): a replay of an
   earlier pass's calls finds that pass's bytes still in the buffers, and they would be right for it, so a skipped write
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
@@ -45,22 +46,20 @@ the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), their upload th
 screen as one fused kernel (`screen_into`, Triton; `screen` where Triton can't run), A's roots copied into a pass buffer,
 and the stream read from torch's raw accessor.
 
-The schedule (`verity.core.protocols.pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2, bc-b139c29c's) places each
-call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile hashing (`SIDE_IO`: the
-tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
+The schedule (`verity.core.protocols.pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2,
+bc-b139c29c's) places each call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile
+hashing (`SIDE_IO`: the tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
 calls go on, and the rest of the call runs on a main lane of the run's own at the greatest priority, joined to the caller's
 stream by events on both sides (``deferred-caller`` leaves it on the caller's stream, #564's first cut).  A's commitment stays
 on the main lane: forming reads each row's digest and seed (``row_seeds``), and under -h3 as implemented the filler rows'
 lines read ``line_a`` from A's root, so ``deferred-a`` (A's tree beside the tile hashing) is refused until the filler keying
-changes (card 448a9d2d).  Each shape rotates `Schedule.ring` sets of the buffers the side lane touches
-(`rotated`), and a call reuses a set only once the side lane has finished with it; the pass's end, and the next pass's begin,
-wait for the side lane.  The same kernels read and write the same bytes, so the commitments are the serial schedule's.  A
-schedule changes only between passes (`begin`), and one whose placement this path or the scheme's format can't run is refused
-(`schedule_of`).
+changes (card 448a9d2d).  Each shape rotates `Schedule.ring` sets of the buffers the side lane touches (`rotated`), and a call
+reuses a set only once the side lane has finished with it; the pass's end, and the next pass's begin, wait for the side lane.
+The same kernels read and write the same bytes, so the commitments are the serial schedule's.  A schedule changes only between
+passes (`begin`), and one whose placement this path or the scheme's format can't run is refused (`schedule_of`).
 
 With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the leaves and the records.  What
-is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between
-passes, never within one.
+is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between passes, never within.
 """
 from __future__ import annotations
 
@@ -75,7 +74,7 @@ from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+from verity.core.protocols.pouw.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
 from verity.core.protocols.pouw.serving import (
     SCHEDULES,
     SERIAL,
@@ -119,11 +118,13 @@ from .pouw_pearl_c_screen import (
 
 #: the Pearl-C schemes this device path runs, by name (`verity.core.protocols.pouw.serving.SchemeId`: forming, device record, hashing format);
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
-#: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it).  The format is
-#: -h3, SHA-512 throughout (its seeds, lines, tile leaves and HM96 trees; Daniel's 2026-10-06 ruling), each row's E_A line
-#: from its own seed (the work law capping each credited row too); its tree hash comes from
-#: `verity.core.protocols.pouw.serving.HASH_FORMATS` through the scheme.
-SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED))
+#: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it); ``h100`` (G = 4,
+#: GLM-5.3's FP8 form on the H200, Daniel 22 Oct) is pearl_c_sm90's.  The format is -h3, SHA-512 throughout (its seeds, lines,
+#: tile leaves and HM96 trees; Daniel's 2026-10-06 ruling), each row's E_A line from its own seed (the work law capping each
+#: credited row too); its tree hash comes from `verity.core.protocols.pouw.serving.HASH_FORMATS` through the scheme.
+SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED, H100))
+#: each record's kernels' (k, n) grain past its domain: pearl_c_sm120's (1,024, 128); pearl_c_sm90's (256, 64), 1 KiB row segments, 64-wide tiles
+KERNEL_GRAIN = {SM120.name: (1024, 128), SM120_UNPROMOTED.name: (1024, 128), H100.name: (256, 64)}
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
 ROW_ALIGN = 16
 #: tiles one pass's leaf buffer holds (256 MiB)
@@ -188,11 +189,12 @@ def scheme_of(name: str, **instance: Any) -> C.PearlC:
 
 
 def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
-    """Every linear outside the scheme's domain or the kernels' (k a multiple of 1,024, n of 128), by weight id."""
+    """Every linear outside the scheme's domain or its kernels' (`KERNEL_GRAIN`), by weight id."""
     s, out = scheme_of(name), []
+    gk, gn = KERNEL_GRAIN[s.device.name]
     for w, (n, k) in sorted(shapes.items()):
-        if k % 1024 or n % 128:
-            out.append(f"linear {w}: (n, k) = ({n}, {k}), and the kernels take k a multiple of 1,024 and n of 128")
+        if k % gk or n % gn:
+            out.append(f"linear {w}: (n, k) = ({n}, {k}), and the kernels take k a multiple of {gk:,} and n of {gn}")
             continue
         try:
             s.check(Matmul(0, Shape(ROW_ALIGN, k, n), w))
@@ -238,6 +240,7 @@ class _Pass:
     files: list[dict] = field(default_factory=list)
     tiles: int = 0
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
+    stepped: bool = False            # begun by an engine step's end (`PearlCDeviceRun.end_pass`'s ``step``)
 
 
 def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[0], salt_key: bytes | None = None) -> dict[int, bytes]:
@@ -318,7 +321,7 @@ def _run(kernel: Kernel, pipe: Any, names: tuple[str, ...], stream: int) -> None
 
 class PearlCDeviceRun(GraphCalls):
     """One install's Pearl-C workload on the device, with `pouw._Run`'s interface (`gemm`, `finish`, `commits`, `details`) and
-    the passes the bench and the verifier need (`begin`, `end`)."""
+    the passes the bench and the verifier need (`begin`, `end`, `end_pass`)."""
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
@@ -634,14 +637,15 @@ class PearlCDeviceRun(GraphCalls):
 
     # ---- passes -----------------------------------------------------------------------------------------------------
 
-    def begin(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None) -> None:
+    def begin(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None,
+              stepped: bool = False) -> None:
         """A new pass: its own transcript under the install's epoch, the call indices from 0, under `schedule` (the last one's
         when None; a schedule changes only between passes).  With `retain`, the pass writes what the prover opens from into
-        that directory, from poisoned outputs, and its manifest names `run`."""
+        that directory, from poisoned outputs, and its manifest names `run`.  `stepped`: an engine step's end begins it."""
         if self.side is not None and self.side.stream is not None:     # the last pass's side lane is done before anything new
             self.torch_stream(self.stream()).wait_stream(self.side.stream)
         self._use(self.schedule if schedule is None else schedule_of(schedule, self.scheme))
-        self.cur = _Pass(Path(retain) if retain else None, run)
+        self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped)
         if retain and self.hashing:
             self.poison()
 
@@ -692,6 +696,20 @@ class PearlCDeviceRun(GraphCalls):
                 out["manifest"] = str(self._write_retained(cur, epoch, roots_a, tree, count))
             self.commits.update(transcript_root=out["transcript_root"], units=len(cur.matmuls), tiles=count)
         self.details["passes"].append(out)
+        return out
+
+    def end_pass(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None, *,
+                 step: bool = False) -> dict[str, Any]:
+        """`end` the open pass and `begin` the next (with `begin`'s arguments), so a pass is never left ended: a call after
+        this lands in the next pass, and `finish` doesn't end this one twice.  Returns the ended pass's commitment.  `step`:
+        an engine step's forward has returned (the PoUW option's hook, `pouw.install`).  Without it, a pass a step began that
+        has no call yet is that step's, already ended: nothing ends, the step's commitment is returned, and arguments apply."""
+        if not step and self.cur.stepped and not self.cur.matmuls:
+            if retain or run or schedule:
+                self.begin(retain, run, schedule, stepped=True)
+            return self.details["passes"][-1]
+        out = self.end()
+        self.begin(retain, run, schedule, stepped=step)
         return out
 
     def _write_retained(self, cur: _Pass, epoch: Epoch, roots_a: bytes, tree: Any, count: int) -> Path:

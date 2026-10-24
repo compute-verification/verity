@@ -129,6 +129,22 @@ def test_k_prime_at_the_cap_and_at_2_to_the_60():
     assert Wd.k_prime(eps, delta, 1, 1 << 60, 1) == 1 << 60
 
 
+def test_eps_at_inverts_k_prime():
+    """`eps_at` is the least grid ε whose K′ is at most K: K′ at it is at most K, and at the grid point below more."""
+    grid, delta = Fraction(1, 1 << Wd.EPS_BITS), Fraction(1, 2 ** 40)
+    for k, credited, n, w in ((27_713, 10**9, 10**9, 1), (1, 5, 5, 1), (200, 100, 400, 1), (4, 1 << 20, 1 << 20, 1),
+                              (10**6, 1 << 40, 1 << 40, 1), (30, 7, 8, 1)):
+        eps = Wd.eps_at(k, delta, credited, n, w)
+        assert Wd.k_prime(eps, delta, credited, n, w) <= k
+        assert eps == grid or Wd.k_prime(eps - grid, delta, credited, n, w) > k
+    assert Wd.eps_at(1, delta, 5, 5, 1) == 1
+    for bad in ((0, delta, 1, 1, 1), (True, delta, 1, 1, 1), (3, Fraction(1), 1, 1, 1), (3, delta, 9, 4, 2)):
+        with pytest.raises(ValueError):
+            Wd.eps_at(*bad)
+    with pytest.raises(ValueError, match="establishes no"):
+        Wd.eps_at(2, delta, 1, 100, 1)
+
+
 def _d(n: int) -> bytes:
     return bytes([n]) * 64
 
@@ -283,7 +299,7 @@ def test_the_window_statement_refuses_each_departure_from_the_layout():
     assert Wd.window_problem(_rows([es[0], replace(es[1], tile0=9)] + es[2:]), w, 5, H3) is None
     with pytest.raises(ValueError, match="64 bytes"):
         Wd.window_problem(_rows(es), w, 5, H3[:32])
-    assert {p[0] for p in Wd.PUBLIC} == {"verdict", "work", "check", "sampling", "drawn", "root_W"}
+    assert {p[0] for p in Wd.PUBLIC} == {"verdict", "work", "check", "sampling", "length", "drawn", "root_W"}
     assert set(Wd.REGISTERED) == {p[0] for p in Wd.PUBLIC if p[2] != "outcome"}
 
 

@@ -1,5 +1,5 @@
-"""`lean_audit`: Lean's audit job, which `check` runs as its lean-audit step. `tools/verity/lean/check.py --build` on the packages
-whose passes can't be reused, with dependencies kept warm.
+"""`lean_audit`: Lean's audit job, which `check` runs as its lean-audit step. `tools/verity/lean/check.py --build --closure` on the
+packages whose passes can't be reused, with dependencies kept warm.
 
     python tools/verity/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR] [--package PKG]...
                                                       (only those packages: a shard's share, `check.py --shard`)
@@ -8,7 +8,7 @@ whose passes can't be reused, with dependencies kept warm.
     python tools/verity/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/verity/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/verity/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
-    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT`, `REPLAYS_KEPT`, artifacts)
+    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT`, `REPLAYS_KEPT`, `RECORDS_KEPT`, artifacts)
 
 A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
 each file under its path relative to its package (a module's is its name), never the package's own path:
@@ -51,10 +51,12 @@ they're dropped, so a run's compile-time code cannot leave the next run a cache 
 earlier passing run. The package's own `.lake/build` is kept the same way (`WarmBuilds`), under its toolchain, manifest and
 lakefile less the paths to what it requires (`build_key`), not under its path: Lake decides what is up to date by content
 hashes, not paths or mtimes, so a moved package rebuilds nothing. The audit's `dependencies` check still compares their
-`.olean` files with the package's record, and the kernel replay still covers the package's own modules: each one whose
-`.olean` files, and those of every module it imports, transitively, passed an earlier replay here is reused
-(`check.py --replay-cache`, `lean-replay/` beside the passes; not with `--fresh`), so a change to a few modules replays
-those and what imports them. Lean gets this
+`.olean` files with the package's record, and the kernel replay still covers the package's own modules and their whole import
+closure, the toolchain's, Mathlib's and ArkLib's modules included (`check.py --closure`): each module whose `.olean` files, and
+those of every module it imports, transitively, passed an earlier replay here is reused (`check.py --replay-cache`,
+`lean-replay/` beside the passes), so a change to a few modules replays those and what imports them, and a dependency's
+modules go through the kernel once per change of their `.olean` files on this machine. With `--fresh` the replay cache is
+the scratch tree's, so the packages of one run share it and nothing outlives the run. Lean gets this
 machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
 
 A machine without a package's dependencies restores them from the evidence store instead of cloning them from GitHub, which
@@ -142,7 +144,7 @@ def provers(pkg: str) -> list[str]:
 
 
 #: How the audit runs, and so part of every key
-FLAGS = ["--build"]
+FLAGS = ["--build", "--closure"]
 
 
 #: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and of the scratch tree, where a
@@ -609,6 +611,39 @@ def evict_lru(store: Path, kept: int) -> int:
     return n
 
 
+#: the fast path's (`lean_changed.py --records`) trees a node keeps, its most recently used: each is a checkout with its own
+#: builds, about 40 GB and 490k inodes (vy-nebius-cpu-2 reached 95% of its inodes on 21 Oct with nine)
+RECORDS_KEPT = 3
+
+
+def prune_records(store: Path, kept: int | None = None) -> int:
+    """Remove all but the ``kept`` (`RECORDS_KEPT`) trees of ``store`` (`lean-records/`) last used, by the newest of their
+    `.who`, `links.json` and `.lock`, each only when its `.lock` is free: a run holding or waiting on it keeps it. A link
+    to a tree elsewhere goes with its target. The number removed."""
+    kept = RECORDS_KEPT if kept is None else kept
+    used = []
+    for tree in store.iterdir() if store.is_dir() else ():
+        try:
+            if tree.is_dir():
+                stamps = [p.stat().st_mtime for p in (tree / ".who", tree / "links.json", tree / ".lock") if p.exists()]
+                used.append((max(stamps, default=tree.stat().st_mtime), tree))
+        except OSError:
+            pass
+    n = 0
+    for _, tree in sorted(used, reverse=True)[kept:]:
+        try:
+            with open(tree / ".lock", "a") as f:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                target = tree.resolve()
+                shutil.rmtree(target, ignore_errors=True)
+                if tree.is_symlink():
+                    tree.unlink()
+                n += 1
+        except (BlockingIOError, OSError):
+            continue
+    return n
+
+
 def prune_replays(cache: Path, kept: int | None = None) -> int:
     """Remove all but the ``kept`` (`REPLAYS_KEPT`) newest replay entries of ``cache`` (`check.py --replay-cache`): each is
     one module's pass under its key, so one dropped costs that module one replay. The number removed."""
@@ -977,8 +1012,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
-                            *([] if fresh else ["--replay-cache", str(cache.parent / "lean-replay"),
-                                                "--artifacts", str(artifacts.store)]),
+                            "--replay-cache", str((work if fresh else cache.parent) / "lean-replay"),
+                            *([] if fresh else ["--artifacts", str(artifacts.store)]),
                             *(["--regenerate"] if regenerate else []), "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["check.py"]}
@@ -1065,6 +1100,8 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     regenerated = {p: reports[p]["regenerated"] for p in pkgs if reports.get(p, {}).get("settled")}
     for p, f in regenerated.items():
         log(f"lean-audit: {p}: passed on its regenerated record ({f}), which the train commits over {p}/lean-audit.json")
+    for rep in reports.values():                        # a pass cached before check.py reported codes has none to list
+        rep.setdefault("failure_codes", [None] * len(rep.get("failures", [])))
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "cached": cached,
                                                 "packages": [reports[p] for p in pkgs if p in reports],
                                                 "regenerated": regenerated}, indent=1) + "\n")
@@ -1210,7 +1247,7 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--prune"]:
         root = Path(argv[argv.index("--cache") + 1]).parent if "--cache" in argv else COMMON.cache_dir()
         got = {"lean-deps": WarmDeps(root / "lean-deps").evict(), "lean-builds": WarmBuilds(root / "lean-builds").evict(),
-               "lean-replay": prune_replays(root / "lean-replay"),
+               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records"),
                "lean-artifacts": LakeArtifacts(root / "lean-artifacts").prune()}
         print("lean-audit --prune: removed " + ", ".join(f"{v} from {k}" for k, v in got.items()) + f" (under {root})")
         return 0

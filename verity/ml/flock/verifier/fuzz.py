@@ -4,7 +4,7 @@
 
 Each case edits one thing, chosen with `random.Random(seed)`:
 - `proof-byte`: a bit of one rep's proof file, with its `proof_sha256` updated (so S17 passes) and nothing else. The
-  transcript (R2) or the decoder must reject, unless the bit lies past the proof pair (§8.1: ignored).
+  transcript (R2) or the decoder must reject (past the pair in its statement's pinned form, §8.1 refuses every byte: D17).
 - `proof-value`: one field element or hash of one rep's proof, with that rep's round digests rebuilt (`redigest.py`). It must
   be rejected, unless the field is a proof-of-work nonce, which is a message that no check reads (§6.1).
 - `coin`: one bit of one recorded coin. No expectation: an unused coin (§19 A1) or the high bits of a query coin (§13.5)

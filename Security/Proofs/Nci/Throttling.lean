@@ -92,6 +92,34 @@ theorem card_products_le (R : Finset (Fin D.N)) :
   exact h
 
 open Classical in
+/-- **The products of an IU, by columns**: `R` computes at most `p τ` products at its full positions (Lemma 1) and, at
+the others, at most `E` for each input entry it uses there, one for each row of its multiplication, when every output
+dimension is at most `E`. -/
+theorem card_products_le_columns (R : Finset (Fin D.N)) {E : ℕ} (hE : ∀ ℓ, c.e ℓ ≤ E) :
+    (univ.filter fun g : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ) × Fin (c.d ℓ) =>
+        c.prod g.1 g.2.1 g.2.2.1 g.2.2.2 ∈ R).card ≤
+      (c.weightsUsed R).card * (univ.filter (c.Full R)).card +
+        E * ((c.inputsUsed R).filter fun x => ¬ c.Full R x.2.1).card := by
+  rw [← card_filter_add_card_filter_not fun g : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ) × Fin (c.d ℓ) =>
+    c.Full R g.2.1, filter_filter, filter_filter]
+  refine Nat.add_le_add (full_positions c R 0 fun _ => Nat.zero_le _).1 ?_
+  rw [mul_comm, ← card_range E, ← card_product]
+  refine card_le_card_of_injOn
+    (fun g => ((⟨g.1, g.2.1, g.2.2.2⟩ : (ℓ : Fin c.L) × Fin c.N × Fin (c.d ℓ)), g.2.2.1.val))
+    (fun g hg => ?_) (fun g _ g' _ h => ?_)
+  · simp only [mem_coe, mem_filter, mem_univ, true_and] at hg
+    simp only [mem_coe, mem_product, Chain.inputsUsed, mem_filter, mem_univ, true_and, mem_range]
+    exact ⟨⟨⟨g.2.2.1, hg.1⟩, hg.2⟩, g.2.2.1.isLt.trans_le (hE _)⟩
+  · obtain ⟨ℓ, t, i, j⟩ := g
+    obtain ⟨ℓ', t', i', j'⟩ := g'
+    simp only [Prod.mk.injEq, Sigma.mk.inj_iff] at h
+    obtain ⟨⟨rfl, h⟩, hi⟩ := h
+    simp only [heq_eq_eq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    obtain rfl := Fin.ext hi
+    rfl
+
+open Classical in
 /-- **The split entries' contributions** (the draft's proof of its theorem): every output entry an IU contributes to at a
 position that is not full for it is split (Lemma 2), so its products lie in at least two IUs, and the IUs' `Y`s add up
 to at most `2 ∑ (spread − 1)`. -/

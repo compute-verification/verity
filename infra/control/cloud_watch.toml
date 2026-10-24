@@ -8,7 +8,7 @@ digest_hour_utc = 15                 # 08:00 PDT, the hour fleet.py's daily comp
 unreadable_passes = 3                # a check that fails this many passes in a row opens `<check>|unreadable`
 clear_passes = 2                     # an anomaly clears once it has been gone this many passes in a row
 channel = "C0C5Q30MCNA"              # #agent-alerts (.agents/skills/using-slack/registry.json)
-mention = "S0C5APDSYF9"              # @infra's user group, named in each anomaly's post
+mention = "S0CA15YVA0P"              # @infra's user group, named in each anomaly's post
 username = "infra"
 
 # Each loop post_start.sh starts, and its success marker: a log line whose first group is its time (`pattern`), a JSON file's
@@ -57,6 +57,13 @@ pattern = '^(\S+Z) pass rc=0 '
 period_s = 360
 
 [[loop]]
+name = "Drive"
+started_by = "/data/infra/drive.sh"
+file = "/data/drive/drive.log"
+pattern = '^(\S+Z) (?:tick rc=0 |stopped: )'   # a tick, then 2 min of sleep; stopped, a line every 10 min
+period_s = 1800                      # a tick that launches several trains waits on each launch (train.sh: up to 10 min)
+
+[[loop]]
 name = "Agent watch"
 started_by = "/data/infra/agent_watch.sh"
 file = "/data/agent-watch/status.json"
@@ -65,8 +72,15 @@ period_s = 300
 
 [[loop]]
 name = "Control disk relay"
-started_by = "/data/infra/control-disk/run.sh, by hand: post_start.sh doesn't start it, so a pod reset stops it"
+started_by = "/data/infra/control-disk/run.sh (control_disk.sh)"
 file = "/data/infra/control-disk/seen.json"
+period_s = 300
+
+[[loop]]
+name = "Watchers"
+started_by = "/data/watchers/run.sh (watchers.sh: the watchers supervisor, watchers.py)"
+file = "/data/watchers/status.json"
+json = "all_up_t"                    # the last minute every loop was up (running 2 min, waiting on a need, or done)
 period_s = 300
 
 [r2]
@@ -98,7 +112,7 @@ endpoint_env = ["LEAN_CACHE_R2_ENDPOINT", "R2_ENDPOINT"]
 key_env = "AWS_ACCESS_KEY_ID"
 secret_env = "AWS_SECRET_ACCESS_KEY"
 stale_after_h = 36                   # vy-lean-cache-daily publishes at 06:15Z each day
-writer = "Publisher: `vy-lean-cache-daily` on vy-nebius-1 (lean)."
+writer = "Publisher: `vy-lean-cache-daily` on vy-nebius-cpu-4 (lean)."
 
 [neon]
 url_env = "STORE_INDEXER_DATABASE_URL"

@@ -13,10 +13,14 @@ every expansion: the description-sized check against the unrolled one, on the sa
 Instance `seed`'s program, for the first `COUNT`, is one of `difftest_vectors.program`'s or (a quarter of them) one read
 across its arrays' rows (`transposed`), then each distinct descriptor
 the circuits fixtures hold (`verity/ml/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
-composites, root batches and scans) for `PER_FIXTURE` instances each. θ is no input node, every one, the registered ones or a
-random set. A division puts every Call in one IU, each in its own, runs of consecutive Calls or a random assignment, and
-a Call without gates in any IU or none. `Γ` and `α` are set as `difftest_vectors` sets them, at, below or above the
-division's largest IU and NCI. About a third of the instances are malformed, each in one way `NciCheck.Desc` refuses.
+composites, root batches and scans) for `PER_FIXTURE` instances each, then six on a composite keyed with an input id
+(`decoys`), which is no input node, then two on a gate reading a nested scan's carry (`walks`), one past
+`NciCheck.Desc.walkBound`'s limit, then `difftest_vectors.pinned()`'s two (θ every
+input, refused, and θ the registered one, accepted). θ is no input node, every one (refused, `theta-not-registered`,
+where one is bound per run), the registered ones or a random set of them. A division puts every Call in one IU, each in
+its own, runs of consecutive Calls or a random assignment, and a Call without gates in any IU or none. `Γ` and `α` are
+set as `difftest_vectors` sets them, at, below or above the division's largest IU and NCI. About a third of the
+instances are malformed, each in one way `NciCheck.Desc` refuses.
 """
 from __future__ import annotations
 
@@ -52,14 +56,7 @@ COUNT = 3000
 PER_FIXTURE = 24
 TRANSPOSED = 0.25
 FIXTURES = Path(verity.ml.circuits.__file__).resolve().parent / "tests"
-MALFORMED = ["instance", "params", "program", "not-topological", "theta-unknown", "theta-not-input", "theta-duplicate",
-             "owner-length", "owner-entry", "input-in-iu", "gate-in-no-iu", "empty-iu"]
-
-
-def _registered_nodes(text: str) -> list[int]:
-    desc = json.loads(text)
-    nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
-    return [k for k, n in enumerate(nodes) if desc["callees"][n["fn"]].startswith("RegisteredInput")]
+MALFORMED = vectors.MALFORMED
 
 
 def division(rng, calls: list[int]) -> tuple[str, list[int]]:
@@ -164,10 +161,82 @@ def _probe_type(params, body) -> "Type":
     return body(B, None, *colls).type
 
 
+def decoy(batch: bool) -> str:
+    """A declaration whose root Calls (or batches, `batch`) a composite keyed with an input id, `Input16_v1`: its gates
+    are computed, so its root node is no input node, though its callee's key reads as one."""
+    w = 8
+    op = vectors.prim((w, w), w)
+    Decoy = bind(CompositeDefinition("Input16", 1, (), lambda S: ((("x", Value(w)),), Value(w)),
+                                     lambda B, S, x: B.call(op, x, x), register=False))
+    xt = Array(2, Value(w)) if batch else Value(w)
+
+    def body(B, S, x):
+        d = B.batch(Decoy, x, axes=(0,)) if batch else B.call(Decoy, x)
+        return B.call(op, d[0], d[1]) if batch else B.call(op, d, x)
+    fn = bind(CompositeDefinition(f"NciDecoy{int(batch)}", 1, (), lambda S: ((("x", xt),), Value(w)), body,
+                                  register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+
+
+def decoys() -> list[dict]:
+    """Instances on `decoy`'s declarations: the decoy node in θ and in no IU, in no IU, and in an IU. Their inputs are
+    bound per run, so θ holds no input node."""
+    out = []
+    for batch in (False, True):
+        text = decoy(batch)
+        inp, _, spans = reference.root_nodes(text)
+        dk = next(k for k in range(len(inp)) if not inp[k])
+        for theta, at in (([dk], "input"), ([], "input"), ([], 0)):
+            owner = ["input" if inp[k] else 0 for k in range(len(inp))]
+            owner[dk] = at
+            out.append({"program": text, "theta": theta, "owner": owner, "gamma": spans[-1][1], "alpha": [16, 1]})
+    return out
+
+
+def walk(n: int) -> str:
+    """A declaration whose one gate reads the carry of a scan of `n` iterations, each a scan of `n` identity steps: no
+    other gate, and about `n²` activations, so as many steps to locate the gate's operand. At `n = 2^32` that is past
+    what `Prog.gate` walks (`Steps.FUEL`), and `NciCheck.Desc` refuses it (`walkBound`)."""
+    w = 8
+    op = vectors.prim((w,), w)
+    ret = Tuple(Value(w), Tuple())
+    Step = bind(CompositeDefinition(f"NciWalkStep{n}", 1, (), lambda S: ((("c", Value(w)),), ret),
+                                    lambda B, S, c: tuple_of(c, tuple_of()), register=False))
+    Mid = bind(CompositeDefinition(f"NciWalkMid{n}", 1, (), lambda S: ((("c", Value(w)),), ret),
+                                   lambda B, S, c: tuple_of(B.scan(Step, c, n=n)[0], tuple_of()), register=False))
+    fn = bind(CompositeDefinition(f"NciWalk{n}", 1, (), lambda S: ((("x", Value(w)),), Value(w)),
+                                  lambda B, S, x: B.call(op, B.scan(Mid, x, n=n)[0]), register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+
+
+WALKS = (3, 2 ** 32)
+
+
+def walks() -> list[dict]:
+    """Instances on `walk`'s declarations, θ their registered inputs (none) and the Call in IU 0: one `NciCheck.Desc`
+    gives a verdict on, and one past `walkBound`'s limit, which it refuses."""
+    out = []
+    for n in WALKS:
+        text = walk(n)
+        inp, reg, spans = reference.root_nodes(text)
+        out.append({"program": text, "theta": [k for k in range(len(inp)) if inp[k] and reg[k]],
+                    "owner": ["input" if inp[k] else 0 for k in range(len(inp))], "gamma": spans[-1][1],
+                    "alpha": [16, 1]})
+    return out
+
+
 def instance(seed: int) -> dict:
     """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`): below `COUNT` a random
-    declaration, then `PER_FIXTURE` instances on each of `fixtures()`."""
+    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, then `walks()`."""
     rng = random.Random(seed)
+    first_decoy = COUNT + PER_FIXTURE * len(fixtures())
+    first_walk = first_decoy + len(decoys())
+    if seed >= first_walk:
+        return {"instance": walks()[seed - first_walk], "shape": "walk", "theta_kind": None, "division": None,
+                "malformed": None}
+    if seed >= first_decoy:
+        return {"instance": decoys()[seed - first_decoy], "shape": "decoy", "theta_kind": None, "division": None,
+                "malformed": None}
     if seed < COUNT and rng.random() < TRANSPOSED:
         text, kind = transposed(rng, seed), "transposed"
     elif seed < COUNT:
@@ -175,14 +244,15 @@ def instance(seed: int) -> dict:
     else:
         name, text = fixtures()[(seed - COUNT) // PER_FIXTURE]
         kind = f"fixture:{name}"
-    inp, spans = reference.root_nodes(text)
+    inp, reg, spans = reference.root_nodes(text)
     K = len(inp)
     inputs = [k for k in range(K) if inp[k]]
+    registered = [k for k in inputs if reg[k]]
     calls = [k for k in range(K) if not inp[k] and spans[k][1] > spans[k][0]]
     empty = [k for k in range(K) if not inp[k] and spans[k][1] == spans[k][0]]
     theta_kind = rng.choice(["none", "all", "registered", "random"])
-    theta = {"none": [], "all": inputs, "registered": _registered_nodes(text),
-             "random": [k for k in inputs if rng.random() < 0.5]}[theta_kind]
+    theta = {"none": [], "all": inputs, "registered": registered,
+             "random": [k for k in registered if rng.random() < 0.5]}[theta_kind]
     theta = rng.sample(theta, len(theta))
     how, labels = division(rng, calls)
     owner: list = ["input"] * K
@@ -192,8 +262,8 @@ def instance(seed: int) -> dict:
         owner[k] = rng.choice(["input", rng.randint(0, max(labels, default=0))])
     inst = {"program": text, "theta": theta, "owner": owner, "gamma": 0, "alpha": [0, 1]}
     N = spans[-1][1] if spans else 0
-    w, _, _ = reference.circuit(text)
-    probe = reference.check_desc(inst | {"gamma": N, "alpha": [sum(w) + 1, 1]})
+    w, _, _, _ = reference.circuit(text)
+    probe = reference.check_desc(inst | {"theta": [k for k in theta if reg[k]], "gamma": N, "alpha": [sum(w) + 1, 1]})
     ius = probe["ius"]
     biggest = max((s for s, _ in ius), default=0)
     crit = max((Fraction(r, s) for s, r in ius), default=Fraction(0))
@@ -201,24 +271,28 @@ def instance(seed: int) -> dict:
     inst["alpha"] = vectors._alpha(rng, crit)
     bad = rng.choice(MALFORMED) if rng.random() < 0.35 else None
     if bad:
-        _break(rng, inst, bad, inp, spans)
+        _break(rng, inst, bad, inp, reg, spans)
     return {"instance": inst, "shape": kind, "theta_kind": theta_kind, "division": how, "malformed": bad}
 
 
-def _break(rng, inst: dict, bad: str, inp: list[bool], spans: list[tuple[int, int]]) -> None:
+def _break(rng, inst: dict, bad: str, inp: list[bool], reg: list[bool], spans: list[tuple[int, int]]) -> None:
     """Make `inst` malformed in the way `bad` names."""
     K = len(inp)
     owner, theta = inst["owner"], inst["theta"]
     calls = [k for k in range(K) if not inp[k] and spans[k][1] > spans[k][0]]
     inputs = [k for k in range(K) if inp[k] and spans[k][1] > spans[k][0]]
+    registered = [k for k in inputs if reg[k]]
+    per_run = [k for k in range(K) if inp[k] and not reg[k]]
     if bad in ("instance", "params", "program", "not-topological"):
-        vectors._break(rng, inst, bad, [])
+        vectors._break(rng, inst, bad, [], [])
     elif bad == "theta-unknown":
         theta.insert(rng.randint(0, len(theta)), rng.choice([K, K + rng.randint(1, 5), -1, "0", None, 1.5]))
     elif bad == "theta-not-input" and calls:
         theta.insert(rng.randint(0, len(theta)), rng.choice(calls))
-    elif bad == "theta-duplicate" and inputs:
-        k = rng.choice(theta or inputs)
+    elif bad == "theta-not-registered" and per_run:
+        theta.insert(rng.randint(0, len(theta)), rng.choice(per_run))
+    elif bad == "theta-duplicate" and registered:
+        k = rng.choice(theta or registered)
         if not theta:
             theta.append(k)
         theta.insert(rng.randint(0, len(theta)), k)
@@ -251,20 +325,22 @@ NAMES = ("instances", "expanded", "python")
 
 
 def total() -> int:
-    """How many instances the audit's data has: the random ones and every fixture's."""
-    return COUNT + PER_FIXTURE * len(fixtures())
+    """How many instances the audit's data has: the random ones, every fixture's, the decoys,
+    `difftest_vectors.pinned()`'s and the walks."""
+    return COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(walks())
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:
-    """The three files for instances 0 … count − 1 (all of them, `total()`, by default) under ``out/desc_difftest``."""
-    count = total() if count is None else count
+    """The three files for instances 0 … count − 1, then `difftest_vectors.pinned()`'s (all of them, `total()`, by
+    default) under ``out/desc_difftest``."""
+    pins = [p["instance"] for p in vectors.pinned()]
+    count = total() - len(pins) if count is None else count
     d = out / "desc_difftest"
     d.mkdir(parents=True, exist_ok=True)
     paths = {f"desc_difftest/{n}.jsonl": d / f"{n}.jsonl" for n in NAMES}
     files = [open(paths[f"desc_difftest/{n}.jsonl"], "w") for n in NAMES]
     try:
-        for seed in range(count):
-            inst = instance(seed)["instance"]
+        for inst in [*(instance(seed)["instance"] for seed in range(count)), *pins]:
             res = reference.check_desc(inst)
             for f, obj in zip(files, (inst, expanded(inst, res), res), strict=True):
                 f.write(line(obj))

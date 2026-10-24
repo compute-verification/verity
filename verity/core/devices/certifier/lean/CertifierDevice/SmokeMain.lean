@@ -34,7 +34,11 @@ def main : IO UInt32 := do
   let link ← Std.Channel.new (α := ByteArray)
   let link := link.sync
   for s in [1, 2] do
-    let frame := (encodeFrame kindLast s s!"GET /{s}".toUTF8 ingressParams.frameBytes).getD ByteArray.empty
+    let request := s!"GET /{s}".toUTF8
+    let room := ingressParams.frameBytes - headerSize
+    let data := Flock.be32 request.size.toUInt32 ++ request
+    let frame := (encodeFrame kindData canonicalStream (data ++ ⟨Array.replicate (room - data.size) 0⟩)
+      ingressParams.frameBytes).getD ByteArray.empty
     link.send frame
   let wrote ← IO.mkRef ByteArray.empty
   let records ← IO.mkRef (#[] : Array Record)

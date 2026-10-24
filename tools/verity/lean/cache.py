@@ -123,6 +123,13 @@ def sign(method: str, host: str, path: str, query: dict[str, str], headers: dict
             f"Signature={hmac.new(k, to_sign.encode(), hashlib.sha256).hexdigest()}")
 
 
+#: R2's transient answers, which a call retries after each of `RETRY_S` seconds in turn: an HTTP 500 on one package ended
+#: the first publish with a working key (21 Oct)
+TRANSIENT = frozenset({500, 502, 503, 504})
+RETRY_S = (2, 8, 30)
+_sleep = time.sleep
+
+
 class S3:
     """The few S3 calls the cache makes, path-style against one bucket."""
 
@@ -136,16 +143,28 @@ class S3:
 
     def open(self, method: str, key: str = "", query: dict[str, str] | None = None, body: bytes | None = None,
              headers: dict[str, str] | None = None, timeout: float = 120):
+        """The response; a transient answer (`TRANSIENT`, or no connection) is retried after each of `RETRY_S`, signed
+        anew, and any other error is raised at once."""
         query = query or {}
         path = f"{self.base}/{self.bucket}" + (f"/{key}" if key else "")
-        h = {"x-amz-date": self.now().strftime("%Y%m%dT%H%M%SZ"),
-             "x-amz-content-sha256": hashlib.sha256(body).hexdigest() if body is not None else EMPTY_SHA, **(headers or {})}
-        auth = sign(method, self.host, path, query, h, self.key_id, self.secret, self.region)
         url = f"{self.scheme}://{self.host}{_enc(path, '/')}" + (f"?{_query(query)}" if query else "")
-        req = urllib.request.Request(url, data=body, method=method, headers={**h, "Authorization": auth})
-        if body is not None:
-            req.add_header("Content-Type", "application/octet-stream")
-        return urllib.request.urlopen(req, timeout=timeout)
+        for wait in (*RETRY_S, None):
+            h = {"x-amz-date": self.now().strftime("%Y%m%dT%H%M%SZ"),
+                 "x-amz-content-sha256": hashlib.sha256(body).hexdigest() if body is not None else EMPTY_SHA,
+                 **(headers or {})}
+            auth = sign(method, self.host, path, query, h, self.key_id, self.secret, self.region)
+            req = urllib.request.Request(url, data=body, method=method, headers={**h, "Authorization": auth})
+            if body is not None:
+                req.add_header("Content-Type", "application/octet-stream")
+            try:
+                return urllib.request.urlopen(req, timeout=timeout)
+            except urllib.error.HTTPError as e:
+                if e.code not in TRANSIENT or wait is None:
+                    raise
+            except (urllib.error.URLError, TimeoutError, ConnectionError):
+                if wait is None:
+                    raise
+            _sleep(wait)
 
     def get(self, key: str) -> bytes | None:
         try:
@@ -707,7 +726,10 @@ def publish_one(tree: Path, rev: str, pkg: str, out: Path, s3: S3, log=print, pl
         old = s3.get(key)
         if old is not None:
             if old != rec:
-                raise CacheError(f"{key} is already published with other contents")
+                # a rerun of one commit (vy-nebius-1, 21 Oct): its first build stays, every blob of it checked on `get`
+                log(f"lean-cache: {pkg}: {key} is already published, from a build whose artifacts differ from this one's; "
+                    f"kept it")
+                return "kept"
             return "already published"
         t0 = time.monotonic()
         with ThreadPoolExecutor(THREADS) as ex:
