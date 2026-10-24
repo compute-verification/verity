@@ -223,7 +223,7 @@ theorem masked_of_eraseZ (coin coin' : ℕ → ℕ → F128) (n n' : ℕ) (hs hs
     {salt : ℕ → ℕ → ByteArray} {src : FlockComplete.RepSrc} {prior : Array (List F128)} {words : List ℕ}
     {t₀ t₀' : Transcript} {l l₀ : Array Claims.Msg} {p p' : _root_.Flock.Zk.ZkProof} {t t' : Transcript}
     {l' l₀' : Array Claims.Msg}
-    (hF : ((_root_.Flock.Firewall.Finish.repFwC (asksCut coin n) hs st sch tPad rep dom g cm0 extras pads ic vals extra
+    (hF : (((_root_.Flock.Firewall.Finish.repFwC (asksCut coin n) hs st sch tPad rep dom g cm0 extras pads ic vals extra
       lanePad salt).run t₀).go l).1 = .ok (p, t))
     (hC : ((FlockComplete.repCut (asksCut coin' n') hs' st' sch' rep' dom' cm0' extras' ic' src prior words).run
       t₀').go l₀ = (.ok (p', t'), l₀'))
