@@ -13452,7 +13452,7 @@
    ]
   },
   "Definitions.Claims": {
-   "digest": "888246ecb1f54c817ff95a2af0e6d4784afe42efae3efbb9fd0936e9276ed1c9",
+   "digest": "6f9be4942981378bb47a6c29a7033c6adf050f58a867e40a6cd92e044a829e67",
    "definitions": {
     "Claims.B": "fb3801991ccf043f813b846a36059903571dff8141ca0f402abb8a11582fa105",
     "Claims.BCoins": "dfd5aa495abff4c66b0bfe023034e60f7c9119d9087c0c2f068e5fc89defd0e3",
@@ -13670,7 +13670,7 @@
     "Claims.run": "2ba785854da4b812a030ee1d2a767f08c2880c9632891a1810d0ffd2b2742c5f",
     "Claims.runStar": "3a577125ddd331d3fd7ad8f460dc8b8f15982f01a371562139d5b5f122adb107",
     "Claims.stepWith": "530977e19848dbb40e78746a5c30960924c320f3492d4c9199c2dad7083c268f",
-    "Claims.trustedBase": "2c10155b92ea40c2db8cbc59c86da559ccc3cadb792781fb7ca5b527c692c84a",
+    "Claims.trustedBase": "556bfbde87e5628245b3360e3dbeff759b0c0fffb82449a439504593c2d293b6",
     "Claims.waitAcc": "85b751a4e882d0ce61736041f2349297297bc4eb996b472d6a6191513053bca7"
    },
    "guarantees": [
