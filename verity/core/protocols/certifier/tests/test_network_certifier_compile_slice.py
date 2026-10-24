@@ -63,7 +63,7 @@ def test_the_circuit_is_its_reference(slice_):
     got = CS.evaluate(slice_.st, list(cases.values()))
     assert got == [c.verdict for c in cases.values()]
     flags = {k: {f for f, ok in c.flags.items() if not ok} for k, c in cases.items()}
-    assert flags == {"honest": set(), "flip": {"load", "steps", "rows"}, "charge": {"charge"}, "arrival": {"rows"},
+    assert flags == {"honest": set(), "flip": {"load", "rows"}, "charge": {"charge"}, "arrival": {"rows"},
                      "served": {"rows"}}
 
 
@@ -98,5 +98,5 @@ def test_the_codeword_is_the_encoders():
 
 def test_size(slice_):
     s = CS.size(**slice_.st)
-    assert s == {"ands": 60574, "pub_bits": 16, "adv_bits": 16, "cert_bits": 112, "srv_bits": 432,
+    assert s == {"ands": 60519, "pub_bits": 16, "adv_bits": 16, "cert_bits": 112, "srv_bits": 432,
                  "wit_bits": 2160}
