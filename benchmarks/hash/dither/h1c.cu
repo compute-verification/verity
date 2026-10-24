@@ -1397,6 +1397,7 @@ extern "C" __global__ void __launch_bounds__(LT) h1c_tail_k(const H1Tab* __restr
     if (threadIdx.x == 0) *reinterpret_cast<volatile u64*>(host_root + 8 * nrnd) = seq;
   }
 }
+#if H1C_TAILP
 // H1C_TAILP = 1: h1c_tail_k in 128 threads, consumer warps 0 and 1 a node a lane (64 a pass, a warp's lanes past a
 // level's nodes hashing its last node unwritten, since every lane of a pair takes part in every compression) and
 // producer warps 2 and 3 (ap_serve); h1c_tail_pre refuses a table deeper than 9 (a level of more than 256 nodes)
@@ -1465,6 +1466,7 @@ extern "C" __global__ void __launch_bounds__(128) h1c_tail2_k(const H1Tab* __res
   }
   ap_stop();
 }
+#endif
 #endif
 #endif
 
