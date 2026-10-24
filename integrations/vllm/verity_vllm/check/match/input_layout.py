@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from verity_vllm.check.match import program_compare as C
+    from verity_vllm.check.match import instance_sequence as SEQ
 
 
-def weights_input_nodes(B: "C.Prog", n_request_params: int, n_seed_params: int = 0, n_peer_params: int = 0,
+def weights_input_nodes(B: "SEQ.Prog", n_request_params: int, n_seed_params: int = 0, n_peer_params: int = 0,
                         n_witness_params: int = 0) -> set[int]:
     """The fold's shared WEIGHTS parameter as a SET of Input nodes: every Input node of the oracle
     Prog that no request owns.  The fold's root parameters are `prompt_<r>` (one per request, header order), then `seed_<i>` (one per
@@ -54,7 +54,7 @@ def weights_input_nodes(B: "C.Prog", n_request_params: int, n_seed_params: int =
     return w
 
 
-def request_inputs(B: "C.Prog", reqs: list[dict]) -> tuple[dict[str, int], dict[str, int], list[tuple[str, int]], set[int]]:
+def request_inputs(B: "SEQ.Prog", reqs: list[dict]) -> tuple[dict[str, int], dict[str, int], list[tuple[str, int]], set[int]]:
     """(seed node of request, peers node of request, (request, witness node) pairs, weights input nodes): the fold's request-owned
     parameters by request id, from `compare.Prog.seed_index`, `peer_index` and `witness_index` (node -> header request index), and the
     weights after them.  Refused by name when the Program has a parameter for a request the header does not have, or a TP rank fold's

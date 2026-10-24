@@ -9,7 +9,7 @@ from __future__ import annotations
 
 
 class PeerReads:
-    """`Prog`'s reads of peers Input nodes (`program_compare.Prog`, and through it `batch_decomp.Projection`)."""
+    """`Prog`'s reads of peers Input nodes (`instance_sequence.Prog`, and through it `batch_decomp.Projection`)."""
 
     def _peer_src(self, idx: int, lo: int, hi: int):
         """("PEER", k, lo', hi') for a read of leaf range [lo, hi) of peers Input node `idx`; None when the range is not inside one field."""

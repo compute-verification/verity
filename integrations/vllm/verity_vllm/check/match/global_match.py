@@ -86,8 +86,9 @@ from dataclasses import dataclass
 
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.config import UsageError, option
-from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import global_match_fast as GMF  # [R17 mprof] MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
+from verity_vllm.check.match import instance_sequence as SEQ
+from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.check.match.attribution import attribute_instances, requests_observed
 from verity_vllm.check.match.chronology import chronology
 from verity_vllm.check.match.declaration import GP_SCHEMA, from_gprog, mock_global_program, requests_declared, sha256_file
@@ -107,7 +108,7 @@ def match_ops(fast: bool) -> BD.Ops:
     return dataclasses.replace(ops, load_derived=lambda d, label: _load_component(ops, d, label))
 
 
-def _load_component(ops: BD.Ops, d: str, label: str) -> C.Prog:
+def _load_component(ops: BD.Ops, d: str, label: str) -> SEQ.Prog:
     if os.path.exists(os.path.join(d, "program.json")):
         return ops.load_oracle(d, label)  # a fold record standing in for a derived component (tests)
     return ops.load_derived(d, label)
@@ -122,7 +123,7 @@ DEFAULT_WITHIN_STEP = BD.DEFAULT_WITHIN_STEP   # [COORD ruling M-0177, 20:49Z] "
 def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: str | None = None, run_x09: bool = True,
           within_step: str = DEFAULT_WITHIN_STEP, record_alternate: bool = True,
           _loaded: dict | None = None, tokens_optional: bool = False) -> dict:
-    """`_loaded` = {"oracle": C.Prog, "components": {dir: C.Prog}} decoded once by this process and shared with the X-09 run and
+    """`_loaded` = {"oracle": SEQ.Prog, "components": {dir: SEQ.Prog}} decoded once by this process and shared with the X-09 run and
     the alternate-criterion run ([R15 global, GM-01 memory]: the fold Prog is read-only after load; decoding it three times per
     invocation -- check, X-09, alternate -- put GM-01's peak RSS at 87 GB on the B16 1024/128 record). The criteria are unchanged.
 
@@ -328,14 +329,14 @@ def impl_info(mod) -> dict:
             # [F2, rev M-0500 (2) / S-r17-30 n1] EVERY document -- the record checker's as much as the fast one's -- states, per fold directory
             # it loaded, the source (the record files, nothing beside them -- F-r17-12) and the STORED form read (instances.jsonl schema +
             # operand_refs_form), so a record document of a v1 store and one of a v2 store of the same capture are distinguishable by content
-            "fold_load": dict(C.LOAD_NOTES)}
+            "fold_load": dict(PL.LOAD_NOTES)}
     if getattr(mod, "IMPL_NAME", "record") == "fast":   # memo hit/miss counters + worker count: telemetry beside the verdict
         # [rev F-r17-09] after check() returned its caches are released (unit 4) -- the outermost run's counters live in last_stats
         info["stats"] = dict(GMF.last_stats) if GMF.last_stats else {k: int(v) for k, v in sorted(GMF.stats.items())}
         # [rev S-r17-17 condition] the DECLARED configuration (workers cap, operand form, switches as read), beside the counters
         info["config"] = dict(GMF.config)
         # the same fold_load under the DECLARED configuration too: the fast documents of record (int-2..int-5) named it there; readers keep working
-        info["config"]["fold_load"] = dict(C.LOAD_NOTES)
+        info["config"]["fold_load"] = dict(PL.LOAD_NOTES)
     return info
 
 
