@@ -39,6 +39,7 @@ INSTANCES = {
     "mlp333-b1-t2": dict(dims=(3, 3, 3), batch=1, steps=2),
     "mlp444-b2-t2": dict(dims=(4, 4, 4), batch=2, steps=2),
     "mlp4444-b1-t2": dict(dims=(4, 4, 4, 4), batch=1, steps=2),
+    "mlp4444-b4-t2": dict(dims=(4, 4, 4, 4), batch=4, steps=2),
 }
 KS = {
     "mlp222-b1-t2": [2, 3, 4, 5, 6, 8, 10, 12],
@@ -48,9 +49,12 @@ KS = {
     "mlp333-b1-t2": [2, 3, 6, 12],
     "mlp444-b2-t2": [2, 4, 8, 16],
     "mlp4444-b1-t2": [2, 4, 8, 16],
+    "mlp4444-b4-t2": [2, 3, 4, 6, 8],
 }
 MODES = ("eta1", "eta2", "inf")
-LARGE = {"mlp333-b1-t2", "mlp444-b2-t2", "mlp4444-b1-t2"}
+LARGE = {"mlp333-b1-t2", "mlp444-b2-t2", "mlp4444-b1-t2", "mlp4444-b4-t2"}
+#: Instances solved only for `M*` and the per-block caps: the Lean bound's own object, where it is not vacuous.
+M_ONLY = {"mlp4444-b4-t2"}
 
 
 def modes(name: str) -> tuple[str, ...]:
@@ -138,16 +142,20 @@ def point(args) -> dict:
     G = build(name)
     s = gate_budget(G, k, mode)
     out = {"instance": name, "k": k, "mode": mode, "s": s, "gates": G.N, "inner": len(G.inner())}
-    out["full"] = solve(G, k, s, None, budget, workers)
-    out["V"] = solve(G, k, s, G.values, budget, workers)
+    if name not in M_ONLY:
+        out["full"] = solve(G, k, s, None, budget, workers)
+        out["V"] = solve(G, k, s, G.values, budget, workers)
     lean1 = BD.lean_two_costs(G, k, cw=1.0)
     mstar = BD.chained(G, lean1["D"])
     out["lean_cw1"] = lean1
+    out["lean_add_cw1"] = BD.lean_additive(G, k, cw=1.0)
     out["M"] = solve(G, k, s, mstar, budget, workers) if mstar else None
-    out["cap"] = {
+    out["cap"] = {} if name in M_ONLY else {
         "inner": CV.block_capacity(G, k, s, G.inner(), time_limit=30.0, workers=workers),
         "V": CV.block_capacity(G, k, s, G.values, time_limit=30.0, workers=workers),
     }
+    if mstar:
+        out["cap"]["M"] = CV.block_capacity(G, k, s, mstar, time_limit=60.0, workers=workers)
     out["production_beta1"] = BD.production(G, k, 1.0)
     out["trivial"] = BD.trivial(G, s)
     if cw is not None:
@@ -158,7 +166,7 @@ def point(args) -> dict:
             ms = BD.chained(G, lm["D"])
             out["cap"]["M_measured"] = CV.block_capacity(G, k, s, ms, time_limit=30.0, workers=workers)
             out["M_measured"] = solve(G, k, s, ms, budget, workers)
-    if s is not None:
+    if s is not None and "full" in out:
         out["rho"] = s * out["full"]["n"] / G.N
         out["rho_lb"] = s * out["full"]["lb"] / G.N
     return out
@@ -189,8 +197,8 @@ def run(names: list[str], outdir: Path, jobs: int, budget: float, workers: int, 
     with ProcessPoolExecutor(max_workers=jobs) as ex:
         for r in ex.map(point, tasks):
             results[r["instance"]].append(r)
-            print(f"{r['instance']} k={r['k']} {r['mode']} s={r['s']}: n={r['full']['n']} lb={r['full']['lb']}",
-                  flush=True)
+            sol = r.get("full") or r.get("M") or {"n": None, "lb": None}
+            print(f"{r['instance']} k={r['k']} {r['mode']} s={r['s']}: n={sol['n']} lb={sol['lb']}", flush=True)
             (outdir / f"{r['instance']}.json").write_text(json.dumps(results[r["instance"]], indent=1))
     (outdir / "table.md").write_text(table(outdir, names))
 

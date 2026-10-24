@@ -6,6 +6,7 @@
   is one gate, so it is its own cut and `c_a = 1` exactly; a block is `(D, 1)`-chained iff at least `D` weight slots'
   products at its token reach the activation it reads inside the token's computation (`upstream`). The bound is
   evaluated at the smallest admissible `D`, `floor(k / c_w) + 1`, which maximizes `|M*|`.
+- `lean_additive`: `CoveringBoundAdditive`, the same count at `(k/c_w)(k/c_a)/4 + k` a block.
 - `production`: the finding note's section-4 theorem (note:console/20261024T1810Z-finding-production-bound-red-team),
   `n >= w(V) / k` with `w(V) = beta |V|`, `V` the forward pre-activations (outputs of parameterized maps; the toy's
   maps are square, so `min(d_in, d_out)` per token per map is every output).
@@ -55,6 +56,16 @@ def lean_two_costs(G: Graph, k: int, cw: float, ca: float = 1.0) -> dict:
     D = math.floor(k / cw) + 1
     m = len(chained(G, D))
     per_block = (k / cw) * (k / ca) + k
+    return {"D": D, "M_star": m, "per_block": per_block, "n_lb": m / per_block if per_block else math.inf}
+
+
+def lean_additive(G: Graph, k: int, cw: float, ca: float = 1.0) -> dict:
+    """`Nci.Cover.Guarantees.CoveringBoundAdditive` (`Security/Models/Nci/Guarantees/CoverAdditive.lean`): the same
+    count with `(k/c_w)(k/c_a)/4 + k` a block, under conditional parameter-hardness (a weight's `c_w` paid outside the
+    token computations)."""
+    D = math.floor(k / cw) + 1
+    m = len(chained(G, D))
+    per_block = (k / cw) * (k / ca) / 4 + k
     return {"D": D, "M_star": m, "per_block": per_block, "n_lb": m / per_block if per_block else math.inf}
 
 

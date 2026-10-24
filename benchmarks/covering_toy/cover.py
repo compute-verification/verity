@@ -607,8 +607,14 @@ def block_capacity(G: Graph, k: int, s: int | None, targets: list[int], *, time_
     model.Maximize(sum(x[g] for g in targets))
     solver, st, _ = _solve(model, time_limit, workers)
     ok = st in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+    block = None
+    if ok:
+        B = trim(G, Block(frozenset(g for g, v in x.items() if solver.Value(v)),
+                          frozenset(g for g, v in z.items() if solver.Value(v))))
+        validate(G, [B], k, s, [])
+        block = [sorted(B.computed), sorted(B.inputs)]
     return {"n": int(solver.ObjectiveValue()) if ok else None, "ub": math.floor(solver.BestObjectiveBound() + 1e-6),
-            "optimal": st == cp_model.OPTIMAL, "status": solver.StatusName(st)}
+            "optimal": st == cp_model.OPTIMAL, "status": solver.StatusName(st), "block": block}
 
 
 def min_inputs_for_slots(G: Graph, s: int | None, q: int, *, time_limit: float = 30.0, workers: int = 8) -> dict:
