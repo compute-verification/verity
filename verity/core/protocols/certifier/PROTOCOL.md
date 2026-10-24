@@ -1388,6 +1388,22 @@ CPU prover): one template of four units, the honest one and the three negatives.
   proof is two repetitions of 873,386 bytes. The four-unit session costs the same, 27.6 s and 15.8 s, because the
   shape, not the units, sets the cost.
 
+**The served rows** (`served_rows`). ``rows`` binds the replay only to the digest in ``pub``. With that digest the
+prover's own word, a prover who served user-1's admission at the sixth ask can register six passes, and the slice accepts
+them at 0x1F with a 5-bit code against the honest 8 (REDTEAM phase 10, finding 2). The digest is therefore the Commit
+side's:
+- When a window closes, the server commits the rows it ran, from its kept rows (request, lo, hi, start, prefill), in the
+  slice's form: (slot, request, kind, start, n) in batch order, with the request its certified arrival id. Each
+  window's digest SHA-512(salt ‖ rows) goes under a fresh 32-byte salt, the slice witness's ``salt``, and the window is
+  a row of one hm96 registration bound to the run root.
+- The root and the digests are published with the run root before the advice check and the draw.
+- The verifier's ``pub`` is the declared charge and window w's published digest (`served_rows.pub`).
+
+Under it, the six passes are refused at ``rows`` (0x0F). A slice that reads the window as a committed row, its b‖c held
+to the registration's leaf (`served_rows.leaf_ok`, as ``adv`` is held), would need no SHA-512 in the circuit. That the
+served rows are the ones the served compute ran is the step tree's to bind: each row's start and n against the step's
+committed positions and input ids. That tie isn't built yet.
+
 ## The active certifier (`active`)
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell
@@ -1803,6 +1819,12 @@ and seven lemmas, and three more proved lemmas:
     queue) are refused by the circuit's verdict, `check`'s, and no witness field carries any of them;
   - `codeword` is the segment `arith_encode` accepts, and a flipped bit of it is refused;
   - `size` is the unit's AND count, which circuit-check pins;
+- **`test_network_certifier_served_rows.py`:** the served rows on the same window:
+  - the runner's rows (request, lo, hi, start, prefill) give the slice's rows, and the published digest is theirs;
+  - under the verifier's ``pub`` (the published digest), the honest run is accepted and REDTEAM's six passes are
+    refused at ``rows``, under the Commit's salt or another;
+  - a row's b‖c is its leaf's only at its index and its run root, and the cheap rows' b‖c isn't;
+  - the record holds no row or salt, and a row wider than its field, over R or of an unknown request is refused;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
   - `Shaper` is `run_shaper`'s rule on random instances;
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
