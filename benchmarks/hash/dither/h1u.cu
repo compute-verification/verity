@@ -1039,14 +1039,16 @@ struct UCall {
   u32 N, K, u0, md;  // md = n_digits(K / 32), 2 or 3
 };
 
-// H1U_SWZ = G (h1um): a call's warps take its units G row blocks at a time, column block by column block, so the G row
-// blocks of one column block read its B lines from L2 together, where row-block-major order (0) reads all of B once a row
-// block (prefill's M = 2048: 64 times a step, and gate_up's B is about L2's size). Each unit is still written at its own
-// position: only which warp computes it moves.
+// H1U_SWZ = G (h1um, and J10-R's h1umj and h1umj_sm): a call's warps take its units G row blocks at a time, column block
+// by column block, so the G row blocks of one column block read its B lines from L2 together, where row-block-major
+// order (0) reads all of B once a row block (prefill's M = 2048: 64 times a step, and gate_up's B is about L2's size;
+// J10-R at T = 64 with the dead tiles computed: twice). Each unit is still written at its own position: only which warp
+// computes it moves.
 #ifndef H1U_SWZ
 #define H1U_SWZ 0
 #endif
-__device__ __forceinline__ u32 swz_unit(const UCall& c, u32 gu, u32 M) {
+template <class C>
+__device__ __forceinline__ u32 swz_unit(const C& c, u32 gu, u32 M) {
   const u32 w = gu - c.u0;
   if (!H1U_SWZ) return w;
   const u32 ncb = c.N / 32, band = (u32)H1U_SWZ * ncb, r0 = w / band * (u32)H1U_SWZ, r = w % band;
@@ -2414,10 +2416,10 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __re
   const UCallR c = calls[lo];
   if (c.md == 3)
     h1u_unit<3, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
-                                                         gu - c.u0, smem[wp]);
+                                                         swz_unit(c, gu, M), smem[wp]);
   else
     h1u_unit<2, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
-                                                         gu - c.u0, smem[wp]);
+                                                         swz_unit(c, gu, M), smem[wp]);
 }
 
 // h1umj's unit gu, for h1umj_sm and (JC) h1umjc_sm (h1umj keeps its own copy, as h1um does of h1um_one)
@@ -2433,10 +2435,10 @@ __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 
   const UCallR c = calls[lo];
   if (c.md == 3)
     h1u_unit<3, false, false, false, false, false, true, JC>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
-                                                             OneOut{}, gu - c.u0, S);
+                                                             OneOut{}, swz_unit(c, gu, M), S);
   else
     h1u_unit<2, false, false, false, false, false, true, JC>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
-                                                             OneOut{}, gu - c.u0, S);
+                                                             OneOut{}, swz_unit(c, gu, M), S);
 }
 
 // kh_units_multi_j10r_cols's column blocks: work item i is call i / H1JC_ITEMS's blocks t = M RB + x for its x < N CB
