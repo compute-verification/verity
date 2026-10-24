@@ -47,7 +47,10 @@ and the heads' moves, and a made-up table or made-up tokens) and `check`'s verdi
 context, a frequency or a consumed count, and the hits are the cache's: the context is the plain counter's, the
 frequencies KTContext_v1's outputs, the heads move by ReplayStep_v1's own ``taken`` and ``used``, and each hit
 ReplayStep_v1 reads is the one its lookup checks as the longest cached prefix of the request's certified tokens at the
-table the step reads, which chains from the empty one.
+table the step reads, which chains from the empty one. On corpus-smallkv's first seven steps a context or frequencies of
+the prover's choosing are refused by ``code`` and ``charge`` (0x33); a prefix hit by ``cache`` and ``rows`` (0x0F); a
+made-up table by ``cache`` (0x1F) and made-up tokens by ``rows`` (0x2F); a decision read again and an arrival left
+queued by ``steps`` and ``rows`` (0x2D). Free returns aren't expressible on the slice: it has no stopping request.
 
 **Stand-ins** (named, each a piece not ready):
 - *the evictable and returned counts*: ENC-DERIVED's evictable and returned-block counts are held at 0 (ReplayStep_v1's

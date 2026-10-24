@@ -1433,21 +1433,11 @@ cursor. So:
   log shifter that computes only the A entries it returns: about Q + A·bitlen(Q) muxes an element bit, where moving
   the whole queue would take Q·bitlen(A).
 
-**The rows** are each field's elements in turn, each least significant bit first, zero-padded to a whole 16-bit word:
-
-    state row    run_valid R×1 | run_id R×IW | run_P R×LW | run_O R×LW | run_out R×LW | run_comp R×LW
-                 | wait_valid W×1 | wait_id W×IW | wait_P W×LW | wait_O W×LW | wait_out W×LW | free 1×BW
-                 | qh 1×QW | dh 1×DW | steps 1×PW
-    window row   q_valid Q×1 | q_id Q×IW | q_P Q×LW | q_O Q×LW | dec D×1 | left 1×DW
-
-- The state row's first twelve fields are ReplayStep_v1's state input and next-state output, bit for bit. They hold
-  the running slots (id, prompt length, certified output length, outputs so far, tokens computed), the waiting slots,
-  and the free block count. A running request holds ⌈computed / B⌉ blocks, so the KV pool needs no count per request.
-  `steps` counts the window's executed steps still to come.
-- The step's `arr_*` are the window row's A arrivals at `qh`, and its `bits` the A decisions at `dh`, zeros past `left`.
-- The widths are LW = bitlen(L), BW = bitlen(NB), QW = bitlen(Q), DW = bitlen(D) and PW = bitlen(P).
-- In every row the valid elements of each group are a prefix and the rest are zero bits, as are the decisions past
-  `left`. `decode` and `decode_window` refuse any other row.
+**The rows'** layouts are `replay_chain`'s (`row_fields`, `window_fields`). The state row's first twelve fields are
+ReplayStep_v1's state input and next-state output, bit for bit; it adds the heads `qh` and `dh` and `steps`, the
+window's executed steps still to come. The window row is the queue (at most Q) and the decisions ``dec`` (at most D)
+with ``left``. In every row the valid elements of each group are a prefix and the rest are zero bits, and `decode`
+and `decode_window` refuse any other row.
 
 **A window** is the state rows S_0 … S_{P+1}, with P the public cap on its steps, and two window rows: the last
 window's and its own. Unit 0, `ReplayLoad`, reads state rows 0 and 1 and both window rows. Unit u ≥ 1 is step u:
@@ -1468,17 +1458,11 @@ D + A·DW, and about 2·width for the idle select and the equality. It also cost
 window costs P steps and one `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3
 path of depth ⌈log2(P + 2)⌉, or 1 for a window row.
 
-**On the corpus** (run `r20261024-091809-297f`): TRACE-CORPUS's 15 sync traces of 1000 requests each, from Llama 3.2
-1B (greedy and seeded) and Llama 3.1 8B int8, each in five engine configurations, cut into the certifier's 60 s
-windows. Each trace is replayed with ENC-REPLAY's scheduler, and `load` and `advance` are walked from the empty rows.
-- On all 15 traces, every state row is the replay's, every front's arrivals are the replay's next, and its bits are
-  the replay's asks. Both circuits match their specifications on the sampled units.
-- A step costs 16,569 ANDs (8B light: R = 19, A = 4, Q = 145) to 80,959 (heavy: R = 256, A = 35, Q = 1000). The
-  queue's front is more than half of that at Q = 1000, which those traces reach because their 1000 requests arrive
-  within one window. A load costs 0.1M to 0.8M ANDs, and a window 3.5e7 to 1.9e8.
-- For scale, ReplayStep_v1 itself is 521,358 ANDs at R = 256.
-- Moving the queue and the decisions in every state row, instead of reading them at heads, cost 2.3 to 4 times as much
-  a step (run `r20261024-085627-c66d`).
+**On the corpus** (run `r20261024-091809-297f`): on all 15 of TRACE-CORPUS's sync traces, cut into the certifier's
+60 s windows and walked from the empty rows, every state row and front is the replay's, and both circuits match
+their specifications on the sampled units. A step costs 16,569 ANDs (8B light: R = 19, A = 4, Q = 145) to 80,959
+(heavy: R = 256, A = 35, Q = 1000), against ReplayStep_v1's 521,358 at R = 256; moving the queue and the decisions
+in every state row instead cost 2.3 to 4 times as much a step (run `r20261024-085627-c66d`).
 
 ## Advice v0's validity (`advice_check`)
 
@@ -1526,25 +1510,10 @@ takes v1 and produces v0 by replay, and most of v0's validity holds by construct
 3. `AdviceReplay` scans the sorted events with one request's state, as `advice._replay` replays it: each request's
    record, then its rows in stream order.
 
-**Cost** (`size`): ANDs = (L / 5)·(parse + replay) + C(L / 5)·swap + the ends. C(n), the sort's comparators, is about
-n·log2(n)² / 4. A parse block costs 7,000 to 11,300 ANDs, a swap 160 to 250 and a replay step about 1,000, growing with
-log L, the width of the counters and positions:
-
-| L (bits) | ANDs | per bit | parse | sort | replay |
-|---|---|---|---|---|---|
-| 240 | 470,116 | 1,959 | 3.6 × 10^5 | 6.5 × 10^4 | 4.5 × 10^4 |
-| 1,520 | 3.75 × 10^6 | 2,466 | 2.5 × 10^6 | 1.0 × 10^6 | 2.9 × 10^5 |
-| 40,000 | 1.49 × 10^8 | 3,722 | 7.5 × 10^7 | 6.6 × 10^7 | 7.8 × 10^6 |
-| 10^6 | 5.78 × 10^9 | 5,775 | 2.1 × 10^9 | 3.5 × 10^9 | 2.0 × 10^8 |
-| 1.06 × 10^7 | 8.67 × 10^10 | 8,180 | 2.4 × 10^10 | 6.1 × 10^10 | 2.1 × 10^9 |
-
-The last row is the 60 s llama8b-shape window, whose v0 advice the red team measured at 10.6 Mbit: 86,704,366,964
-ANDs, 70% of them the sort, whose 2.4 × 10^8 comparators each carry a 201-bit event. Three levers would cut that,
-each a change to what the Definition states, so none is taken here:
-- a public cap on the rows, so a compaction of the L / 5 slots (n·log2 n switches) feeds a sort of the cap;
-- the sort's permutation as a private input: a permutation network's n·log2 n switches, which carry the event but
-  compare nothing, and an in-order check, in place of the comparators;
-- a public cap on w_len below 63 bits, which narrows the 126 value bits each event carries.
+**Cost** (`size`): ANDs = (L / 5)·(parse + replay) + C(L / 5)·swap + the ends, with C(n) ≈ n·log2(n)² / 4
+comparators: 470,116 at L = 240 and 1.49 × 10^8 at 40,000. The 60 s llama8b-shape window's v0 advice, 10.6 Mbit,
+would cost 8.67 × 10^10, 70% of it the sort. A public cap on the rows, the sort's permutation as a private input or a
+narrower w_len would each cut that, each a change to what the Definition states.
 
 ## Advice v1 (`benchmarks/network_e2e/encodings/v1.py`)
 
@@ -1743,9 +1712,10 @@ release order.
     end, and every flipped or cut segment is refused.
   - Each bit symbol is one the book's model coded, and each decision's context is min(run, 2) of the decisions before
     it, a function of the bits.
-  - On all 14 corpus traces at T = 600, and the 6 of them that send ENC-DERIVED's fields: 0 mismatches
-    (art:ff4b26d8b4f6a796af9a33734c0a47fae8b50e15c2dee26525d51fece681a2c0, #3660's check, which adds its counting
-    form's cases to these). On ENC-REPLAY's step traces and the TRACE-CORPUS fixture (the certifier's vectors) too.
+  - On ENC-REPLAY's step traces and the TRACE-CORPUS fixture (the certifier's vectors): 0 mismatches. On all 14
+    corpus traces at T = 600, and the 6 of them that send ENC-DERIVED's fields, under v1 before its order entries
+    (#3642's): 0 mismatches (art:ff4b26d8b4f6a796af9a33734c0a47fae8b50e15c2dee26525d51fece681a2c0, #3660's check,
+    which adds its counting form's cases to these).
 - *Cost* (`arith_encode.size`, ANDs, pinned in its circuit-check sidecar).
   - `ArithEncodeStep_v1{18, 1}` costs 3,244: the interval 1,855 (one 33 × 16-bit product and one division to 32
     quotient bits), the scalings 1,188 and the segment check 201. `ArithEncodeStep_v1{18, 0}` costs 4,964,
@@ -1890,19 +1860,12 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
 
 ## The compile slice (`compile_slice`)
 
-`CompileSlice_v1` is the compile unit's pieces (PRF-143's statement, "Advice v1" above) composed whole for one window:
-`ReplayLoad`, then per step `ReplayStep_v1`, `ReplayAdvance` and `CacheStep_v1`'s calls on shared wires and the encoder
-over the step's asks, at the circuit's own context and frequencies. Each hit ReplayStep_v1 reads is its lookup's, on
-the certified tokens, from the empty cache. The coded length is held to the public charge, and the step rows' salted
-SHA-512 to the public digest. Its rows, verdict flags, reference (`check`) and stand-ins are `compile_slice`'s docstring.
-- *The slice.* Corpus-smallkv's first seven steps, every hit 0: about 7.6M ANDs.
-- *REDTEAM's phase 9* (`phase9`). The prover's context or frequencies are refused by ``code`` and ``charge``; a prefix
-  hit, a made-up table or made-up tokens by ``cache`` or ``rows``; a decision read again or an arrival left queued by
-  ``steps`` and ``rows``. Free returns aren't expressible on the slice.
-- *In zero knowledge* (`benchmarks/network_traces/compile_slice_zk.py`, run r20261024-140227-8995, before the cache
-  was wired). Nine units (the honest one, three negatives and phase 9's five) are proved `--zk` behind the Lean
-  firewall and held by Lean `verify --zk`. Each opens to its verdict, and no witness piece is in what the verifier
-  received. At m = 26 it proves in 40.4 s, and Lean verifies in 15.4 s.
+`CompileSlice_v1` is the compile unit's pieces ("Advice v1" above) composed whole for one window, each hit
+ReplayStep_v1 reads derived by `CacheStep_v1`'s calls on the certified tokens from the empty cache. Its circuit, verdict
+flags, reference (`check`), stand-ins and REDTEAM's phase 9 cases (`phase9`) are `compile_slice`'s docstring.
+`benchmarks/network_traces/compile_slice_zk.py` proves nine units of corpus-smallkv's first seven steps `--zk`, held
+by Lean `verify --zk` (run r20261024-140227-8995, before the cache was wired): the honest one, three negatives and
+phase 9's five, each opening to its verdict, with no witness piece in what the verifier received.
 
 ## The active certifier (`active`)
 
