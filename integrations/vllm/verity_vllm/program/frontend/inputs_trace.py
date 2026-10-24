@@ -12,8 +12,9 @@ import os
 import sys
 import threading
 
+#: the predictor's directory is a literal so that a layout move rewrites it with the package
 _FORBIDDEN_MARKERS = ("program.json", "instances.jsonl", "experimental/aot/build.py", "experimental/aot/",
-                      os.path.join(__package__.split(".")[0], "predict", ""), "/vol/corpus", "census/B0-", "log.jsonl")
+                      "verity_vllm/predict/", "/vol/corpus", "census/B0-", "log.jsonl")
 
 
 class InputsTrace:
