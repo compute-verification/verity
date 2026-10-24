@@ -58,7 +58,7 @@ if [ "${1:-}" != gpu ]; then
   ON=(); [ -n "${GPUS:-}" ] && ON=(--on "$GPUS")
   rc=0
   "$LEASE" 1 --wait "${ON[@]}" --max-min "${MAX_MIN:-20}" --mem-gb 64 -- "${BIND[@]}" bash "$0" gpu || rc=$?
-  if [ "$NSYS" = 1 ]; then
+  if [ "$NSYS" = 1 ] && [ "${ANALYZE:-1}" = 1 ]; then
     a=0; analyze_all "$OUT" || a=$?; [ "$rc" != 0 ] || rc=$a
   fi
   exit "$rc"
