@@ -22,7 +22,8 @@ stood on; `stubs` lists what is still a stand-in.
   hiding, so there only its ``total_bits``.
 * **The negatives** (`negatives`): NEG's `suite` on the runs, handed the advice's v0 bytes for its advice negatives and,
   given each request's sampled ids (``--ids``), the I/O tie's verdict on every negative it reads (IO-TIE's reference on
-  a fake upstream's cells and table of the advice and those ids).
+  a fake upstream's cells and Commit port of the advice and those ids, under the map the verifier computes from the
+  advice).
 """
 from __future__ import annotations
 
@@ -254,8 +255,9 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
         elif not all(t["ran"] for t in ties):
             out.append(f"I/O tie: {next(t['why'] for t in ties if not t['ran'])}.")
         else:
-            out.append("I/O tie: IO-TIE's reference in the clear on a fake upstream's cells and table of the advice and "
-                       "the given ids, not the warden's cells under its root (WARDEN) proved in an IoTieWindow unit.")
+            out.append("I/O tie: IO-TIE's reference in the clear on a fake upstream's cells and Commit port of the advice "
+                       "and the given ids, not the warden's cells under its root (WARDEN) and vllm's Commit proved in an "
+                       "IoTieWindow unit.")
     where = str(r.get("where") or "")
     if where.startswith("off the prover's node"):
         out.append("Auditor host: the certifier ran on another node than the endpoint's, through an ssh forward, not on "

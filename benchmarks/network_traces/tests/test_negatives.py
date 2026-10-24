@@ -8,8 +8,8 @@ a served link) and the head by its signed digest; it accepts token, whose counts
 only the I/O tie (IO-TIE, pending) reads. The advice's tamperings run on I1 v0 (ADV-SPEC's classes when they're
 importable, a stand-in of their fields until then): each changes exactly what its check reads and leaves the advice
 valid under v0's schedule rules (`_check`; the real classes refuse invalid advice on construction). The Commit's runs on
-a stand-in of I3 as drafted. The I/O tie's (IO-TIE's `io_tie`, when importable) run on a fake upstream's cells and table
-of the advice."""
+a stand-in of I3 as drafted. The I/O tie's (IO-TIE's `io_tie`, when importable) run on a fake upstream's cells and
+Commit port of the advice, under the map the verifier computes from it."""
 
 from __future__ import annotations
 
@@ -604,35 +604,55 @@ def test_the_tie_reads_each_requests_sampled_ids_by_its_advice_id(tmp_path):
     assert NG.read_ids(tmp_path / "requests.jsonl") == IDS
 
 
-def test_the_ties_view_of_the_advice_is_each_kept_outputs_ordinal_index_bucket_and_id():
-    """Each kept output's (ingress ordinal, index), release bucket and sampled id, in the advice's release order; a
-    request the ingress didn't certify takes the next ordinal, and an output past a request's ids the id 0."""
-    a, ordinals = _advice(), {"r0": 0, "r1": 1}
-    assert NG.tie_outputs(a, IDS, ordinals) == ([(0, 0), (1, 0), (0, 1), (1, 1), (0, 2)], [3, 3, 3, 3, 5],
-                                                [11, 21, 12, 22, 13])
-    outputs, _, ids = NG.tie_outputs(NG.extra_request(a), IDS, ordinals)
-    assert [(o, x) for o, x in zip(outputs, ids) if o[0] == 2] == [((2, 0), 0), ((2, 1), 0), ((2, 2), 0)]
-    _, _, ids = NG.tie_outputs(NG.output_length(a), IDS, ordinals)
+def test_the_ties_view_of_the_advice_is_each_kept_outputs_step_row_request_index_bucket_and_id():
+    """Each kept output as advice v0 has it (step, batch row, request, index), its release bucket and its sampled id, in
+    the advice's order; an output past its request's ids (a request the run never served) has the id 0."""
+    IT = pytest.importorskip(NG.IO_TIE_MODULE)
+    a = _advice()
+    assert NG.tie_outputs(IT, a, IDS) == ([IT.Output(1, 0, 0, 0), IT.Output(1, 1, 1, 0), IT.Output(2, 0, 0, 1),
+                                           IT.Output(2, 1, 1, 1), IT.Output(3, 0, 0, 2)], [3, 3, 3, 3, 5],
+                                          [11, 21, 12, 22, 13])
+    outputs, _, ids = NG.tie_outputs(IT, NG.extra_request(a), IDS)
+    assert [(o, x) for o, x in zip(outputs, ids) if o.request == 1] == [
+        (IT.Output(1, 1, 1, 0), 0), (IT.Output(2, 1, 1, 1), 0), (IT.Output(3, 1, 1, 2), 0)]
+    _, _, ids = NG.tie_outputs(IT, NG.output_length(a), IDS)
     assert ids[-1] == 0 and len(ids) == 6
 
 
 def test_the_io_tie_refuses_each_negative_it_reads_by_its_part():
-    """IO-TIE's reference (`io_tie.reference_parts`, skipped until it's importable) on a fake upstream's cells and table
-    of the advice: the honest window passes; the changed cell under the kept root fails the cells' root, the changed
-    table slot under its kept root the table's; a certified cell of another id, a dropped cell, and the table of every
-    advice negative that disagrees with the I/O fail the content; start and chunk, whose outputs and buckets are
-    honest's, pass, leaving them to the step unit."""
+    """IO-TIE's reference (`io_tie.reference_parts`, skipped until it's importable) on a fake upstream's cells and
+    Commit port of the advice, one shape for every advice: the honest window passes; the changed cell under the kept
+    root fails the cells' root, the changed port id under the Commit's kept root the port's; a certified cell of
+    another id, a dropped cell, and the map of every advice negative that disagrees with the I/O fail the content;
+    start and chunk, whose outputs and buckets are honest's, pass, leaving them to the step unit."""
     pytest.importorskip(NG.IO_TIE_MODULE)
     rows = NG.tie_suite(_advice(), IDS, T=8)
-    assert rows["honest"]["ok"] and rows["honest"]["shape"] == {"B": 256, "T": 8, "R": 4, "N": 32, "M": 32}
+    assert rows["honest"]["ok"] and rows["honest"]["shape"] == {"B": 256, "T": 8, "R": 6, "P": 3, "S": 4, "DS": 3,
+                                                                 "N": 48, "M": 64}
     assert set(rows) == {"honest", *NG.TIE_PARTS}
-    assert all(r["ran"] and r["ok"] for k, r in rows.items() if k != "honest"), rows
+    assert all(r["ran"] and r["ok"] and "moved" not in r for k, r in rows.items() if k != "honest"), rows
     want = {k: [f"{NG.TIE}.{p}"] if p else [] for k, p in NG.TIE_PARTS.items()}
     want["frame"] = [f"{NG.TIE}.cells_root", f"{NG.TIE}.content"]
-    want["wrong-token"] = [f"{NG.TIE}.content", f"{NG.TIE}.table_root"]
+    want["wrong-token"] = [f"{NG.TIE}.content", f"{NG.TIE}.port"]
     assert {k: r["codes"] for k, r in rows.items() if k != "honest"} == want
     with pytest.raises(NG.NotApplicable, match="more than R = 2"):
         NG.tie_suite(_advice(), IDS, T=8, R=2)
+
+
+def test_a_chunk_split_that_moves_outputs_to_later_steps_is_refused_by_the_ties_content():
+    """With no chunked prefill, chunk splits a prefill row in two, so every later step moves one on: the map the
+    verifier computes from that advice names port entries of other steps than the Commit sampled each output in, and the
+    content refuses it; a map the verifier can't compute (a bucket past R) refuses every window, by `map`."""
+    pytest.importorskip(NG.IO_TIE_MODULE)
+    a = _advice([[(0, "prefill", 0, 5), (1, "prefill", 0, 2)], [(0, "decode", 5, 1), (1, "decode", 2, 1)],
+                 [(0, "decode", 6, 1)]])
+    rows = NG.tie_suite(a, IDS, T=8)
+    assert rows["honest"]["ok"] and rows["advice-start"]["ran"] and rows["advice-start"]["codes"] == []
+    assert rows["advice-chunk"] | {"failing": None} == {"code": f"{NG.TIE}.content", "moved": True, "ran": True,
+                                                       "failing": None, "codes": [f"{NG.TIE}.content"], "ok": True}
+    rows = NG.tie_suite(a, IDS, T=8, R=4)
+    assert rows["advice-extra"]["codes"] == [f"{NG.TIE}.map"] and "R = 4" in rows["advice-extra"]["why"]
+    assert not rows["advice-extra"]["ok"]
 
 
 def test_the_suite_carries_the_ties_verdict_on_each_negative_it_reads(runs, tmp_path, monkeypatch):

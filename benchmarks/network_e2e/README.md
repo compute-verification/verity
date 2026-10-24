@@ -76,7 +76,7 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   that ran must be refused by the code it names; the rest say what they wait on. It doesn't run on the advice profile.
   With `--advice` and `--ids FILE` (each request's sampled ids by its advice id, ADVICE-SRC's `requests.jsonl`: `user`,
   `output_ids`), each negative the I/O tie reads also carries the tie's verdict (IO-TIE's reference in the clear, on a
-  fake upstream's cells and table of the advice and those ids), and its row passes only when the tie refuses it by the
+  fake upstream's cells and Commit port of the advice and those ids), and its row passes only when the tie refuses it by the
   part it names and accepts the honest windows. Until IO-TIE lands, those rows say so.
 
 The report's `stubbed` list says what each run still stood on that isn't the chain's own: the advice of another run, a
