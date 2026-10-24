@@ -362,6 +362,26 @@ the record's own, at most r_in a bucket, as on any end without a profile. What i
 (N3's, the salt frame's place among them included: the counts see only that bucket 0 holds OWN frames more), and the
 premises, which nothing checks.
 
+## The Program's logical schedule and the clock-sync advice (`schedule`)
+
+The Program fixes each real frame's content, its **anchor** and its **logical index** λ. The anchor is the recorded
+bucket of the request it answers. λ is its position within its session, from the canonical gate order, so it is never
+negative: `LogicalFrame` rejects a negative index, as Lean's ℕ does. With one, a frame anchored in window 1 could be
+eligible in window 0, and window 0's grid would read window 1's sync.
+
+A window declares one clock-sync value `ClockSync(δ, ρ)`, from the protocol's set `SyncSet`: for example 16 offsets ×
+8 rates, which is 7 bits. δ is a whole number of buckets. ρ is a positive fraction of frames per bucket, below 1 for a
+session slower than one frame per bucket (a POUS band forward takes about 13 buckets). A frame then moves through three
+steps:
+- it is **eligible** at `anchor + δ + ⌊λ/ρ⌋`, using the sync of its anchor's window;
+- the shaper **hands** it to the certifier in canonical order, at `h(k) = max(eligible(k), h(k−1))`;
+- the certifier's own rule then **releases** it.
+
+`expected_grids` is the Program's grid, and `run_shaper` drives a certifier as an honest sender does. Lean's
+`NetTiming.Protocol.Schedule` defines the same objects (`eligible`, `handingBuckets`, `expectedRow`), and the Program
+`constantRate` whose advice is the content advice and one in-set sync per window (`Security/Proofs/NetworkCertifier/README.md`,
+modelling choices 13–17).
+
 ## An advised link (`advised`)
 
 An advised link is a served link under arbitrary traffic: responses of any length, batched, chunked, preempted and
@@ -492,26 +512,6 @@ releases, and the advice's releases are eligible after the ingress head's releas
 doesn't: the frames (N3's and IO-TIE's), that the advice is the computation's (the compiler's and PoUW's), the
 tie itself (IoTieRequest's, which isn't in the proof service yet, so today no advised link is accepted), and the
 premises.
-
-## The Program's logical schedule and the clock-sync advice (`schedule`)
-
-The Program fixes each real frame's content, its **anchor** and its **logical index** λ. The anchor is the recorded
-bucket of the request it answers. λ is its position within its session, from the canonical gate order, so it is never
-negative: `LogicalFrame` rejects a negative index, as Lean's ℕ does. With one, a frame anchored in window 1 could be
-eligible in window 0, and window 0's grid would read window 1's sync.
-
-A window declares one clock-sync value `ClockSync(δ, ρ)`, from the protocol's set `SyncSet`: for example 16 offsets ×
-8 rates, which is 7 bits. δ is a whole number of buckets. ρ is a positive fraction of frames per bucket, below 1 for a
-session slower than one frame per bucket (a POUS band forward takes about 13 buckets). A frame then moves through three
-steps:
-- it is **eligible** at `anchor + δ + ⌊λ/ρ⌋`, using the sync of its anchor's window;
-- the shaper **hands** it to the certifier in canonical order, at `h(k) = max(eligible(k), h(k−1))`;
-- the certifier's own rule then **releases** it.
-
-`expected_grids` is the Program's grid, and `run_shaper` drives a certifier as an honest sender does. Lean's
-`NetTiming.Protocol.Schedule` defines the same objects (`eligible`, `handingBuckets`, `expectedRow`), and the Program
-`constantRate` whose advice is the content advice and one in-set sync per window (`Security/Proofs/NetworkCertifier/README.md`,
-modelling choices 13–17).
 
 ## The audit (`audit`)
 
