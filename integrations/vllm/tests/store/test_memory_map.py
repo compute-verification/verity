@@ -446,9 +446,10 @@ def test_a_completed_blocks_write_is_recorded_in_the_line_open_when_its_encode_l
 
 
 def test_a_block_freed_before_its_encode_lands_is_written_when_it_lands_and_freed_a_step_later():
-    """Page 1, completed at step 0, is freed after step 1's forward, its last read, before its encode lands in step
-    2's line: its write is recorded at step 2 all the same (its indices are the session's, and the record takes them
-    in order), and its free in step 3's line.  Its slots are dirty meanwhile, so no write's reach frees them again."""
+    """Page 1, completed at step 0, is freed after step 1's forward, its last structural reader, before its encode lands
+    in step 2's line: its write is recorded at step 2 all the same (its indices are the session's, and the record takes
+    them in order), and its free in step 3's line, past that reader (memory-map/v1 would withdraw it, which the map
+    doesn't emit yet).  Its slots are dirty meanwhile, so no write's reach frees them again."""
     s, _ = store()
     m, _ = deferred(s)
     s.kv_alloc([1])

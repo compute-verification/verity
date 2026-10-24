@@ -4,24 +4,56 @@ A spec-level reference for network accounting's timing channel:
 - the constant-rate, left-packed certifier;
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
 - the exact audit with record-and-reject, on raw records, records committed by hash (padding elided), or network
-  certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest, with the window's
-  frames in a fixed-depth SHA-512 tree), and the ingress links' status check;
+  certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest hidden under a
+  64-byte salt the certifier draws fresh for each record, with the window's frames in a fixed-depth SHA-512 tree), and
+  the ingress links' status check;
 - one link-window's certificates through the proof service (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
-  its fields and its counts against the public occupancy profile), with a host-side verifier of record (no proof of the
+  its fields, its counts against the public occupancy profile, and its record digest under the certifier's salt
+  against the digest its certificate signs), with a host-side verifier of record (no proof of the
   check yet) that compares no grid in the clear. Its claim is counts only: on every link-window the head check holds
   the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
   is at the profile. Holding the frames, the rest of the egress grid, is N3's, which is a design and the simulator's
   behaviour (`benchmarks/network_sim`), not a protocol: a prototype in the clear, in no proof-service Spec, so the claim
-  stays counts only until N3 is a proof-service unit with Selection `All`. It covers no lab or served link yet: an
-  egress end without an occupancy profile gets no verdict (`ValueError`, failing closed). The network verdict of
-  record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share credit: every window
-  of the egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order
-  window rejects the link;
+  stays counts only until N3 is a proof-service unit with Selection `All`. The network verdict of record is
+  `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share credit: every window of the
+  egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
+  rejects the link;
+- a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
+  occupancy profile: N2's served unit, `NetworkServedLinkWindow`, adds a Boolean Definition,
+  `NetworkServedCounts_v1` (678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1), that holds the egress
+  head's counts to the ones its ingress head's counts derive under the window's declared sync, the advice the audit
+  already charges at log2 #Σ_sync bits a window. Each window starts empty and must end idle, so nothing carries
+  between windows, and a request whose frames or response straddle a window's end refuses the window. The claim is
+  counts only and rests on no premise. That the derived counts are the Program's grid rests on four: FIXLEN (every
+  response F frames), a fixed request size (every request F_in frames, every ingress frame a request's but the
+  certifier's salt frame heading each window, which `own` counts), a
+  request-major canonical order, and one T, τ_b and declared sync for a window's anchors (`PROTOCOL.md`, "A served
+  link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
+  an honest served link is accepted. An egress end with neither profile gets no verdict (`ValueError`, failing
+  closed);
 - the capacity counts;
 - the calibration of honest runs;
+- advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
+  rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
+  canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits split by
+  the earliest egress window that can show each record (`bits`). v0 is the committed form; the charge is ENC-CODE's
+  compressed length of the advice;
+- advice v0's validity (`advice_check`): `AdviceCheck_v1{L}`, the compile unit's first part as a Boolean Definition, 1
+  exactly when the committed bits (at most L) decode to a v0 advice, up to the three refusals of `decode` it defers
+  (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`. From
+  `verity` it takes the circuits and their evaluator;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
+- the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
+  direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
+  bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
+  reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
+  `PROTOCOL.md`'s "The active warden" has its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
+- the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a cell,
+  padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer. The
+  registration is what a proof unit's `--registered` port reads, so the sender's unit opens a cell as its output and
+  the receiver's as its input (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
@@ -38,13 +70,20 @@ A spec-level reference for network accounting's timing channel:
   to the challenger's `active.RemoteCertifier`, given the run id by the deployment record, which returns the value
   once it verifies for that run. Without the keys they are the in-process calls, for the auditor's side only. A proxy
   back from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame
-  the Program's at position p, and carries nothing from before: a window it was down for has no record.
+  the Program's at position p, and carries nothing from before: a window it was down for has no record. On a served
+  link (`Proxy(served=ServedProfile(…))`, off by default; with the salt, `own` 1 at a PoUW window of one certifier
+  window) its ingress admits whole requests by the admission rule (`served.Admission`). On a sealed pair link
+  (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
+  sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
+  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
-Definition, and in `active` the proof service's registration and receipt, which `reveal` reads. The certificate's signature scheme is a parameter: the certifier's
+Definition, and in `active` the proof service's registration and receipt, which `reveal` reads, and the pair link's
+AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
-From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets.
+From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
+and their evaluator.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
@@ -83,19 +122,26 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 ## Not yet zero-knowledge
 
 Every protocol is to be zero-knowledge, and the network audit isn't yet. Its claim today is counts only: N2 holds each
-window's per-bucket counts to the occupancy profile on every link-window, beside the proved timing bound, while N3, the
+window's per-bucket counts to the occupancy profile on every link-window (on a served link, to the ones its ingress
+counts derive under the declared sync), beside the proved timing bound, while N3, the
 content check, is the design (Daniel's provisional call on ASK-70, 19 Oct). N2 no longer compares the grid in the clear
 (`LinkWindows.verify` runs `check_link(grid=False)`, NET-38). Nothing may call the count check zero-knowledge until
-these are closed:
-- **The certificate's signature check.** The certificate signs an unsalted digest of the record head, which holds its
-  counts and an unsalted root of the raw frames. The host checks that signature, so it reads a hash of witness. The fix
-  is NET-42:
-  - the certifier signs `H("verity/net-cert/v1" ‖ salt_c ‖ R)`, with `salt_c` drawn by the certifier, 64 bytes, fresh
-    per record and handed to the prover as witness only;
-  - the head-check unit proves `R = H(head)` and that `H(salt_c ‖ R)` is the signed digest;
-  - the host's LMS check then reads only public fields and that hiding digest.
-- **N2's unit isn't proved yet.** `LinkWindows.verify`, the verifier of record, runs `head_check.reference` on the
-  host over the opening, so it reads the heads. When the unit is proved, its head-check gate must bind
-  `NetworkHeadCheck_v1`'s circuit digest, and the verifier must refuse a proof of any other circuit (NET-43).
+this is closed:
+- **N2's unit isn't proved yet.** `LinkWindows.verify`, the verifier of record, runs `head_check.reference` (and on a
+  served link `served.reference`) on the host over the opening, so it reads the heads and the certifier's salts.
+
+A proof of the unit is held to its circuit already. Each gate names its Definition's circuit digest
+(`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`, `served.gate` likewise), as `head_check.circuit-check.json` and
+`served.circuit-check.json` pin it and circuit-check holds the pin to the Definition. So the unit's Program, which the
+spec and each registration bind, binds both circuits, and `LinkWindows.verify`, given a proof's findings, refuses one
+that names any other Program, or a unit of a size class no sidecar pins (`LinkWindows.proved`).
+
+The certificate no longer signs a hash of witness (NET-42). The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
+salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier draws fresh for each record
+(`certificate.Issuer`'s `coins`) and hands to the prover with the head, as witness only (`CertifiedRecord.salt`). D is
+a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only the certificate's public fields and D.
+Each end's head check holds R to the head it opens and D to R under `salt_c`, so once N2's unit is proved the
+certificates' check reads nothing of the heads; until then the verifier of record checks that link on the host too,
+over the opening (`CertifiedRecord.verify`).
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/certifier`.

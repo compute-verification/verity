@@ -45,8 +45,11 @@ vLLM tests' tiny configuration and `b1.RMSNormFusedCudaV1` at N = 64.
 Call), and memory-map/v1 as the Commit's builder (`verity_vllm.commit.memory_map`) records it, a session's KV rows in the
 blocks it wrote under the free convention of 21:52Z (step s's record takes effect after step s's reads). The audit
 credits the live rows in complete blocks, and those it doesn't, a page's first rows until its last is born, lie in one
-block per request, layer and plane (`OneBlockEach`). The builder frees each block in the record of its rows' last read
-and leaves out a block no step reads while it is resident (one whose last read is the step that completes it), and the
-link holds at every step. The link allows a dead block resident, so the tests check separately that the map holds none.
+block per request, layer and plane (`OneBlockEach`). The builder frees each block in the record of its rows' last
+structural reader, a gather that may select one included, and leaves out a block no step reads while it is resident
+(one whose last structural reader is the step that completes it), and the link holds at every step. With r0's last step
+selecting its first page's rows instead of reading them (a stand-in census), the builder's free is unchanged and the
+link holds, and the same map freeing the page at the rows' last use fails `StoreMatches` at that step alone. The link
+allows a dead block resident, so the tests check separately that the map holds none.
 With the session's coins back two steps late (`deferred`), each block is credited from its first encoded read, two are
 withdrawn, and the uncredited rows lie in one block per request, layer, plane and page parity.

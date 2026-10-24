@@ -49,7 +49,7 @@ from verity_vllm.correspondence.runtime import SCHEMA, CallCorrespondence, Runti
 
 from verity_vllm.query.program_view import ProgramView, param_reads
 
-__all__ = ["CallName", "parse_call_name", "Correspondence", "implementation_prefix", "held_module_paths", "SOURCES"]
+__all__ = ["CallName", "parse_call_name", "recorded_names", "Correspondence", "implementation_prefix", "held_module_paths", "SOURCES"]
 
 SOURCES = ("correspondence", "v1_annotations")
 _ROW_RE = re.compile(r"\[([^\[\]]*)\]$")
@@ -97,6 +97,36 @@ def call_name_of(rec: CallCorrespondence) -> CallName:
     if rec.collective is not None and rec.member == rec.collective.kind:
         return CallName(rec.module, rec.node or "", "", row, rec.member)
     return CallName(rec.module, rec.node or "", rec.member or "", row, "")
+
+
+def recorded_names(doc: Mapping[str, Any]) -> tuple[dict[int, CallName], list[int]]:
+    """`call_name_of` of each Call record of a `runtime-correspondence/v1` document, and the tensorless Calls (every return slot neither
+    an fx output nor a written argument), read off the fields `RuntimeCorrespondence.records` reads them from without building the
+    records: their argument slots and tensor views (a request Program's are millions) are read by neither."""
+    if doc.get("schema") != SCHEMA:
+        raise ValueError(f"not a {SCHEMA} document (schema={doc.get('schema')!r})")
+    occs = doc["occurrences"]
+    names: dict[int, CallName] = {}
+    tensorless: list[int] = []
+    for k, c in enumerate(doc["calls"]):
+        o = (occs[c["occ"]] if c.get("occ") is not None else None) or {}
+        module, member, hint = o.get("module", ""), c.get("member"), c.get("hint")
+        coll = o.get("collective")
+        kind = coll["kind"] if coll else None
+        if hint:
+            n = parse_call_name(hint)
+            names[k] = CallName(module, n.node, n.hint, n.row, n.suffix)
+        else:
+            row = c.get("row")
+            row = str(row) if row is not None else None
+            if coll and member == kind:
+                names[k] = CallName(module, o.get("node") or "", "", row, member)
+            else:
+                names[k] = CallName(module, o.get("node") or "", member or "", row, "")
+        rets = c.get("returns")
+        if rets and all(r.get("output") is None and r.get("written_arg") is None for r in rets):
+            tensorless.append(k)
+    return names, tensorless
 
 
 def implementation_prefix(program_modules: Iterable[str], implementation_paths: Iterable[str]) -> str:
@@ -176,9 +206,9 @@ def held_module_paths(P: ProgramView, names: Mapping[int, CallName]) -> tuple[di
 class Correspondence:
     """The correspondence table of one ProgramView: Call id -> CallName (module first), plus the implementation-path map.
 
-    `table`: the Program's `runtime-correspondence/v1` record (`source = correspondence`), or its `document`, whose Call records are
-    read one at a time and not held (what `of` gives: a request Program's table is GBs); neither = the v1-annotation fallback (the
-    Calls' names).  `Correspondence.of(P, program_dir)` reads the Build dir and picks."""
+    `table`: the Program's `runtime-correspondence/v1` record (`source = correspondence`), or its `document`, whose Calls' names are
+    read off its fields and no record is built (`recorded_names`; what `of` gives: a request Program's table is GBs); neither = the
+    v1-annotation fallback (the Calls' names).  `Correspondence.of(P, program_dir)` reads the Build dir and picks."""
 
     def __init__(self, P: ProgramView, *, implementation_paths: Iterable[str] = (), table: RuntimeCorrespondence | None = None,
                  digest: str | None = None, problem: str | None = None, document: dict | None = None) -> None:
@@ -190,12 +220,14 @@ class Correspondence:
         #: internal to its occurrence's lowering, `runtime.ReturnSlot`); empty under the fallback, which records no return slots
         self.tensorless: frozenset[int] = frozenset()
         if table is not None or document is not None:
-            records = iter(table) if table is not None else RuntimeCorrespondence.records(document)
-            recorded, tensorless = {}, []
-            for rec in records:
-                recorded[rec.call] = call_name_of(rec)
-                if rec.returns and all(r.output is None and r.written_arg is None for r in rec.returns):
-                    tensorless.append(rec.call)
+            if table is None:
+                recorded, tensorless = recorded_names(document)
+            else:
+                recorded, tensorless = {}, []
+                for rec in table:
+                    recorded[rec.call] = call_name_of(rec)
+                    if rec.returns and all(r.output is None and r.written_arg is None for r in rec.returns):
+                        tensorless.append(rec.call)
             if len(recorded) != len(P.calls):
                 raise ValueError(f"correspondence record has {len(recorded)} Calls, the Program {len(P.calls)}: the record is of another Program")
             self.names: dict[int, CallName] = {c.id: recorded[c.id] for c in P.calls}

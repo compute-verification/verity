@@ -255,4 +255,15 @@ def foldSplit (t : Tmpl) (lays : Array Lay) (alpha : F128) (lw rho r : Array F12
   let p := o.PC.fold (fun p (cx, s) v => p.modify s (· + v * eqTail pt.rhoT lo cx)) p
   return (addAt p qc ((alpha + 1) * pt.e qc * pt.g qc), o.work + st.tableWork, st.tables, st.tableWork)
 
+/-- **A templated unit slot's fold** at a slot of `2^sl` bits: `foldSplit`, refused unless the point is the slot's
+(`|lw| = 64`, `|ρ| + 6 = sl = |r| + 6`, `sl ≤ 32`) and the root is one chunk of at least 64 and at most `2^sl` columns,
+the bounds under which it is `project (baseOf α (lw ⊗ eq(ρ, ·)) A B none sl) (eqTable r)` on `unrollAt`'s net. -/
+def foldUnit (t : Tmpl) (lays : Array Lay) (sl : Nat) (alpha : F128) (lw rho r : Array F128) : V (Array F128) := do
+  if lw.size != 64 || rho.size + 6 != sl || r.size != rho.size || 32 < sl then
+    throw "template fold: the point is not the slot's"
+  let al := log2ceil (lays.getD t.root default).size
+  if al < 6 || sl < al then throw "template fold: the root is not one chunk of 64 to 2^sl columns"
+  let (p, _) ← foldSplit t lays alpha lw rho r
+  return p
+
 end Flock.Tmpl

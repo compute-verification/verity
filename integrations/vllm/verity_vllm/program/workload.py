@@ -430,7 +430,10 @@ def served_lengths_rule(lag: int) -> dict:
 
 class WorkloadProgram:
     def __init__(self, requests: list[WorkloadRequest], shared: str = "weights", manifest_digest: str | None = None,
-                 ordering: str = "manifest", *, lag: int) -> None:
+                 ordering: str = "manifest", *, lag: int, theta_registered: bool = False) -> None:
+        """`theta_registered`: bind the model's weights (`theta`) at registration, as `RegisteredInput<w>_v1`, whatever the
+        components bind them as. NCI's baseline reads only registered inputs as θ (nci-check's `theta-not-registered`). Off, the
+        weights are bound as the components bind them, so every workload digest built before it stands."""
         if not requests:
             raise ValueError("a workload needs at least one request")
         # [R17-1] LAG is REQUIRED (a keyword with no default: omitting it is a TypeError, never a silent 0 or 1) and in {0, 1}
@@ -466,8 +469,10 @@ class WorkloadProgram:
                                  "cap, never from a served length")
         self.requests = list(requests)
         self.shared_group = shared
+        self.theta_registered = bool(theta_registered)
         self.registered = tuple(f"shared.{requests[0].component.params[j][0]}" for j in shared_idx
-                                if requests[0].component.groups[j] in reg[0])   # the root parameters bound at registration
+                                if requests[0].component.groups[j] in reg[0]
+                                or self.theta_registered and requests[0].component.groups[j] == shared)   # the root parameters bound at registration
         self.theta = tuple(f"shared.{requests[0].component.params[j][0]}" for j in shared_idx
                            if requests[0].component.groups[j] == shared)        # the model's weights (`Program(theta=)`)
         self.shared = shared_idx                       # request 0's positions = the shared Input batches' order
@@ -642,6 +647,7 @@ class WorkloadProgram:
                 "input_gates": self.program.input_gates, "n_root_nodes": len(self.program.root.body.nodes), "manifest_digest": self.manifest_digest,
                 "shared": {"group": self.shared_group, "component_params": list(self.shared),
                            **({"registered": list(self.registered)} if self.registered else {}),
+                           **({"theta_registered": True} if self.theta_registered else {}),
                            **({} if self.shared_positions_uniform else {"component_params_by_request": [list(x) for x in self.shared_by_request]})},
                 "shared_param_index": list(self.shared),  # (compat: gmatch's from_gprog labels the shared parameter with it)
                 "shared_param_index_by_request": None if self.shared_positions_uniform else [list(x) for x in self.shared_by_request],

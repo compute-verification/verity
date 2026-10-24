@@ -16,7 +16,9 @@ one `F2fpBf16`:
     GemmCoordinateMxf4_v1{K, DOT}   (x, wrow: e2m1[K], sx, sw: ue8m0[K/32]) -> bf16; k = 64   GEMM_SM120_MXF4: BlackwellMxf4OmmaDot64_v1
 
 and over the sm_120 s8 step (`GEMM_SM120_S8`: `BlackwellS8ImmaDot32_v1`), whose sum is exact while it stays in s32, so the
-word does not depend on the order the k steps run in:
+word does not depend on the order the k steps run in. `s8_gemm` gives another card's binding from its s8 step: the
+registered step when the card's step is its function (`GEMM_SM90_S8`, the H200's `integer.HOPPER_SM90_S8_K32`), so a circuit
+over it names no architecture (`prims`), and a refusal for any other step:
 
     GemmAccumulatorS8_v1{K, DOT}      (x, wrow: s8[K]) -> s32: K/32 `DOT` steps from a zero accumulator
     ScaledMmS8Coordinate_v1{K, DOT}   (x: s8[K], sx: f32, wrow: s8[K], sw: f32) -> bf16: the accumulator scaled as
@@ -43,16 +45,16 @@ from collections.abc import Callable
 
 from verity.ml.circuits.census import FAMILY_COUNTS, serves_none
 from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.silicon.integer import exact_k_limit
+from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32, IntegerMma, exact_k_limit
 from verity.ml.circuits.types import Array, Value
 
 from . import fp32 as F
 from . import prims as P
 from .prims import BF16, E2M1, E4M3, F32, S8, S32, ZERO32
 
-__all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8", "Gemm",
-           "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "S8_K_LIMIT",
-           "ScaledMmS8", "ScaledMmS8Coordinate"]
+__all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8",
+           "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4",
+           "GemmCoordinateNvf4", "S8_K_LIMIT", "ScaledMmS8", "ScaledMmS8Coordinate", "s8_gemm"]
 
 _SCALE = Value(8)
 
@@ -188,6 +190,22 @@ GEMM_SM120_E4M3: dict = {"DOT": P.BlackwellE4m3QmmaDot32}
 GEMM_SM120_NVF4: dict = {"DOT": P.BlackwellNvf4OmmaDot64}
 GEMM_SM120_MXF4: dict = {"DOT": P.BlackwellMxf4OmmaDot64}
 GEMM_SM120_S8: dict = {"DOT": P.BlackwellS8ImmaDot32}
+
+
+def s8_gemm(model: IntegerMma) -> dict:
+    """The s8 binding of a card whose s8 tensor-core step is ``model``: `GEMM_SM120_S8`'s step when ``model`` computes its
+    function, s8 x s8 at k = 32 clamped once at D (the fields `IntegerMma.step` reads), whatever the card. Refused
+    (ValueError) for any other step: a wrapping or u8 step is another function, with no registered Definition of its own here."""
+    ref = BLACKWELL_SM120_S8_M16N8K32
+    got, want = ((m.dtype, m.b_dtype, m.k, m.satfinite) for m in (model, ref))
+    if got != want:
+        raise ValueError(f"{model.name} ({model.arch}) computes {got} (dtype, b_dtype, k, satfinite), not {ref.name}'s {want}: "
+                         f"BlackwellS8ImmaDot32_v1 is not its step, and no s8 binding here is")
+    return dict(GEMM_SM120_S8)
+
+
+#: sm_90's (the H200's `wgmma` m64nNk32 and `mma.sync` m16n8k32, PINNED as `silicon.instructions` sm90.*.s8)
+GEMM_SM90_S8: dict = s8_gemm(HOPPER_SM90_S8_K32)
 
 
 def _register_kernels() -> None:

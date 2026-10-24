@@ -359,6 +359,29 @@ def test_the_export_is_reported_by_port_and_charged_only_when_certifiers_cover_e
     assert leaf.covert_bits == covered.covert_bits == 4 * 4 * 7 + 512
 
 
+def test_with_every_pair_link_sealed_the_export_is_charged_at_the_facility_boundary_only(setup):
+    """NET-47: with the certifiers' pair links sealed (`Datacenter(sealed=True)`, off by default), h's crossing from a
+    to b is ciphertext between a.cert and b.cert, which only they open, so it leaves the export; y, which b delivers to
+    the world, stays, at b.cert's egress. The rest of the account is the unsealed one's. A fleet's pair links are
+    sealed when every site's are, and a site renamed into a fleet keeps its own."""
+    dc, p = setup
+    assert not dc.sealed and p.public(Plan(EPOCH)).exported == {Port("a.cert", "egress"): 512.0,
+                                                                Port("b.cert", "egress"): 512.0}
+    accounts = {}
+    for sealed in (False, True):
+        q = staged(replace(certified(), sealed=sealed))
+        profile = q.public(Plan(EPOCH))
+        accounts[sealed] = account(audit(run(q, INPUTS, Plan(EPOCH)), profile), profile)
+    plain, sealed = accounts[False], accounts[True]
+    assert sealed.sound and sealed.export_charged and sealed.exported == {Port("b.cert", "egress"): 512.0}
+    assert sealed.export_bits == 512 and plain.export_bits == 1024
+    assert sealed.covert_bits == plain.covert_bits and sealed.credits == plain.credits
+    assert replace(dc, sealed=True).prefixed("s").sealed
+    one, other = dc.prefixed("s1"), replace(dc, sealed=True).prefixed("s2")
+    assert not Fleet([one, other]).merged().sealed
+    assert Fleet([replace(one, sealed=True), other]).merged().sealed
+
+
 @pytest.mark.parametrize("deviate, why", [
     (lambda: Deviation(extra={(Port("a.cert", "egress"), 2): 1}), "occupancy differs"),
     (lambda: Deviation(hold={(Port("b.cert", "egress"), 7): 9}), "occupancy differs"),
