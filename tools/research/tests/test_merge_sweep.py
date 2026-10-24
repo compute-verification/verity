@@ -210,6 +210,17 @@ def _checked_c(tmp_path, monkeypatch, gh, repo):
     _git(repo, "checkout", "-q", "main")
 
 
+def test_a_merge_push_of_main_off_drive_is_refused_and_pushes_nothing(tmp_path, monkeypatch, capsys):
+    """23 Oct: GitHub's rulesets let only drive's App move `main`; a pure move lands from the control pod (`drive.sh merge`)."""
+    repo, gh, _tips, _merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    monkeypatch.delenv("RESEARCH_DRIVE")
+    before = _git(repo, "ls-remote", "origin", "refs/heads/main")
+    assert M.main(["C", "--push", "-m", "Merge train TC (c)"]) == 1
+    assert "/data/infra/drive.sh merge" in capsys.readouterr().err
+    assert _git(repo, "ls-remote", "origin", "refs/heads/main") == before
+
+
 def test_a_merge_with_push_lands_on_the_remote_then_sweeps(tmp_path, monkeypatch, capsys):
     """Trains landed through `research merge` and a push by hand, so the sweep ran before the push and closed nothing: with --push
     the merge is on the remote before the sweep reads it, and what the tool runs after a landing starts on the commit pushed."""

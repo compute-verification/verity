@@ -685,6 +685,27 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
     assert "research msg send --as HANDLE --thread" in err and "--to @ci @lane-1" in err
 
 
+def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, capsys):
+    """23 Oct: GitHub's rulesets let only drive's App move `main` and `next`, and verity-agents[bot] force-pushed `next` at 07:07Z
+    from a VM's `research queue eject`, which synced. Off drive an eject only withdraws the mark; sync and land refuse."""
+    import research.drive as D
+    import research.queue as Qm
+
+    monkeypatch.delenv("RESEARCH_DRIVE")
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    monkeypatch.setattr(D, "merge_thread_post", lambda *a, **k: True)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    base = ["--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
+            "--store", str(world.tmp / "queue-store")]
+    for verb in ("sync", "land"):
+        assert research_main(["queue", verb, *base]) == 1
+        assert f"/data/infra/drive.sh queue {verb}" in capsys.readouterr().err
+    refs = lambda: _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
+    before = refs()
+    research_main(["queue", "eject", "1", "--reason", "x", "--by", "ci", *base])
+    assert refs() == before and "drive's next tick rebuilds `next` without it" in capsys.readouterr().out
+
+
 def test_a_ready_mark_written_after_an_ejection_re_admits_the_same_head(world):
     """12 Oct: #1736, ejected at 2e050d8b and re-marked there by its owner, stayed off `next` on the ejecting VM's queue alone:
     the queue state's record of the ejection held it whatever the store's newest mark said."""
