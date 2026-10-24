@@ -354,8 +354,8 @@ class Served:
     #: each round's input-ids table and its words, with the tap
     ids: dict[int, G.Registered] = field(default_factory=dict)
     _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
-    #: each open step A table's words so far, one block a call recorded, in call order
-    _a: dict[str, list[np.ndarray]] = field(default_factory=dict)
+    #: each open step A table's words so far, one block a call recorded, by call (they may come out of call order)
+    _a: dict[str, dict[int, np.ndarray]] = field(default_factory=dict)
     #: each linear's weight, the tensor and its codes, taken once, and its scales
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
@@ -536,8 +536,9 @@ class Served:
                records: np.ndarray | None) -> dict[str, str]:
         """Register call ``call``'s z table (its z/y ``records`` over its T slots, `pouw_h1_records`', split back to z and
         y and laid out in the Program's tile), add its A rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
-        step's A table of K, registered whole at the step's last call of K, and take ``b/<K>`` once K's linears' weights
-        are all held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
+        step's A table of K at its rows in call order, registered whole once the step's calls of K are all in (in
+        whichever order its forward ran them: its last call of K), and take ``b/<K>`` once K's linears' weights are all
+        held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
         table, in call order (`_receipts` of the call's own codes and s_a): ``{value: root}``, what the call's manifest
         row commits under its round's root. Nothing once the window is refused."""
         if self.root is None and not self.refused:
@@ -557,11 +558,11 @@ class Served:
             codes, scales = PH.numpy_of(a).reshape(call.m, call.k), PH.numpy_of(s_a).reshape(-1)
             zv, yv = ZR.split(records, call.rows, call.n)
         out, value, mine = {}, self.a_table(call.index), self.step_calls(call.index)
-        rows = self._a.setdefault(value, [])
-        rows.append(self.a_words(call, codes, scales))
+        rows = self._a.setdefault(value, {})
+        rows[call.index] = self.a_words(call, codes, scales)
         whole = None
-        if call.index == mine[-1]:
-            whole = np.concatenate(self._a.pop(value))
+        if len(rows) == len(mine):
+            whole = np.concatenate([b for _c, b in sorted(self._a.pop(value).items())])
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
         zy = HW.table(self.program, "zy", call.index)
         out[zy] = self._register(run, zy, record_words(zv, yv, self.m, self.tile), nonce(call.index, "zy"), self.root)
@@ -575,7 +576,7 @@ class Served:
         if self.receipts is not None:
             self._held.setdefault(value, []).append((call, codes, scales))
             if whole is not None:
-                held = self._held.pop(value)
+                held = sorted(self._held.pop(value), key=lambda x: x[0].index)
                 if not self._prepare(held):
                     return {}
                 for c, cc, sc in held:
