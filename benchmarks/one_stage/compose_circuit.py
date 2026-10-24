@@ -5,12 +5,13 @@ the statement binds the given partition and program digests. Run in the circuit 
     python compose_circuit.py --template ID --out FILE --partition H --program H [--reads slots] [--cache DIR]
 
 ``--template``: a serving-rows template whose units are bit rows (`verity_vllm.pipeline.serving_rows.chunked`: a
-``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, or a row
-or ``PARTS`` part template the partition's ``chunk_cap`` names), composed by C-Flock's `UnitStager` on the rows the window commits
-(`verity_vllm.pipeline.chunk_rows.unit_rows`), bound to the partition and program; no input set is read. ``--reads slots``:
-`UnitStager`'s ``reads``, a unit reading a pinned MUFU table laid out in lookup slots (``MoeRouterSigmoidBias``'s sigmoid
-inline is about 5e10 nonzeros), with the MUFU tables the prover reads written beside the circuit (``tables/``); a unit reading
-none keeps its flat circuit. The default, ``inline``, is the circuit a5 composes.
+``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, a
+``SPLITS`` split part or combine, or a row template the partition's ``chunk_cap`` names), composed by C-Flock's `UnitStager` on
+the rows the window commits (`verity_vllm.pipeline.chunk_rows.unit_rows`), bound to the partition and program; no input set is
+read. ``--reads slots``: `UnitStager`'s ``reads``, a unit reading a pinned MUFU table laid out in lookup slots
+(``MoeRouterSigmoidBias``'s sigmoid inline is about 5e10 nonzeros), with the MUFU tables the prover reads written beside the
+circuit (``tables/``); a unit reading none keeps its flat circuit. The default is the template's own (`chunk_rows.reads`), the
+circuit a5 composes: slots for a ``SPLITS`` part of whole blocks (`verity_vllm.pipeline.split_rows`), else inline.
 """
 from __future__ import annotations
 
@@ -150,15 +151,16 @@ def template(a: argparse.Namespace) -> int:
     if not (a.partition and a.program):
         raise SystemExit("--template binds the statement: give --partition and --program")
     bind = {"partition": a.partition, "program": a.program}
+    tp = SRW.template(a.template)
+    reads = a.reads or CR.reads(tp)
 
     def compose() -> dict:
-        in_rows, out_rows = CR.unit_rows(SRW.template(a.template))
-        st = UnitStager(SRW.template(a.template).fn, "unit/serving-rows", in_rows, out_rows, circuit=Path(a.out), bind=bind,
-                        reads=a.reads)
+        in_rows, out_rows = CR.unit_rows(tp)
+        st = UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=Path(a.out), bind=bind, reads=reads)
         return {"subcircuit": st.meta.get("subcircuit"), "pin": st.pin, "class_sha512": st.class_sha512, "k_log": st.meta["k_log"]}
 
-    made = cached(Path(a.cache), cache_key(a.template, a.reads), Path(a.out), bind, compose) if a.cache else compose()
-    if a.reads == "slots":  # on a restamp too, which copies circuit.txt alone
+    made = cached(Path(a.cache), cache_key(a.template, reads), Path(a.out), bind, compose) if a.cache else compose()
+    if reads == "slots":  # on a restamp too, which copies circuit.txt alone
         FC.IL.write_tables(Path(a.out).parent / "tables")
     print(json.dumps(made))
     return 0
@@ -173,14 +175,14 @@ def main() -> int:
     ap.add_argument("--program", default=None)
     ap.add_argument("--cache", default=None, help="with --template: this machine's composed circuits (`cached`), one entry per "
                     "template and tree, so that its ranks compose each template once")
-    ap.add_argument("--reads", choices=("inline", "slots"), default="inline", help="with --template: UnitStager's reads, a "
-                    "pinned MUFU table's reads inline or in lookup slots")
+    ap.add_argument("--reads", choices=("inline", "slots"), default=None, help="with --template: UnitStager's reads, a "
+                    "pinned MUFU table's reads inline or in lookup slots (default: the template's own, chunk_rows.reads)")
     a = ap.parse_args()
     if bool(a.input_set) == bool(a.template):
         ap.error("give either --input-set or --template")
     if a.cache and not a.template:
         ap.error("--cache keeps --template circuits only")
-    if a.reads != "inline" and not a.template:
+    if a.reads and not a.template:
         ap.error("--reads lays out a --template unit's reads; an input set's lowering is its own")
     if a.template:
         return template(a)

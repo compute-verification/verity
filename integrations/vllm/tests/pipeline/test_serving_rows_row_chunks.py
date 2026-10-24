@@ -1,8 +1,7 @@
 """A row template in chunks (`pipeline.serving_rows.chunked`): a row Definition the partition file's ``chunk_cap`` names is staged
 by C-Flock's `UnitStager` on its own ports, one v2 bit row per parameter (``in<g>``) and one per return field (``o<j>``), each
-chunk a member of at most its cap of the template's rows, read once; with no cap it stays the word-row member it was.  A row
-Definition that is also a ``PARTS`` part (``Fp8GroupQuantUe8m0``, DeepGEMM's quantisation) is the ``part`` layout, and its own
-rows chunk the same way.  And a scope of several op_path prefixes takes the rows under any of them."""
+chunk a member of at most its cap of the template's rows, read once; with no cap it stays the word-row member it was.  And a scope
+of several op_path prefixes takes the rows under any of them."""
 from __future__ import annotations
 
 import numpy as np
@@ -10,7 +9,6 @@ import pytest
 from verity_flock.class_statement import UnitStager
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.pipeline.serving_templates import PART_OF
 from verity_vllm.program.registry import b1 as B1
 from verity_vllm.program.registry import deepgemm as DG
 
@@ -19,7 +17,8 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
-#: one plain row template, and one packed with two return fields; each row's committed members and their element dtypes
+#: one plain row template, and one packed with two return fields (a whole ``PARTS`` part, DeepGEMM's linear's quantisation, here
+#: on rows of its own family); each row's committed members and their element dtypes
 ROWS = {"ResidualAdd_v1": (B1.ResidualAdd, {"N": 8}, [("out", "bf16")]),
         "Fp8GroupQuantUe8m0_v1": (DG.Fp8GroupQuantUe8m0, {"K": 256, "G": 128}, [("q", "fp8"), ("s", "f32")])}
 OPS = ["model.layers.3.mlp.experts", "moe/L3", "model.layers.4.mlp.experts", "moe/L4", "model.layers.3.mlp.experts"]
@@ -81,7 +80,7 @@ def test_a_row_template_the_caps_name_is_chunks_of_the_stager_s_bit_rows_on_its_
     tp = SRW.template(T)
     params, _ret = tp.fn.signature()
     fields = CR.fields(tp)
-    assert tp.layout == ("part" if family in PART_OF else "row") and len(fields) == len(ROWS[family][2])
+    assert tp.layout == ("part" if family in SRW.PART_OF else "row") and len(fields) == len(ROWS[family][2])
     assert not SRW.chunked(T, None) and not SRW.chunked(T, {}) and SRW.chunked(T, {T: CAP})
     in_rows, out_rows = CR.unit_rows(tp)
     assert in_rows == [(f"in{g}", V2, sum(ty.leaf_widths()), [nm]) for g, (nm, ty) in enumerate(params)]
