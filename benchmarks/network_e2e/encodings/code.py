@@ -22,11 +22,12 @@ The codes:
   are first come, first served), and a step's first release from a release clock (the registered step-time model run
   over the decoded rows, from the previous step's end or an idle engine's next delivery); for admit, the step count
   between two arrivals is predicted from their certified arrival buckets and the step-time model run over the replayed
-  schedule, or, where a window's flag says the prediction would cost more, coded as a plain gap (the residual's other fields have no public conditioning on a served link, whose requests and responses are
-  padded to fixed frame counts, so they keep their static tables). In both, a cache hit is keyed on the advice already
-  decoded: its first source is a pick among the earlier sources, most recently used first (a resume's own first source
-  and itself ahead of them), and its length a flag for that source's latest hit (vLLM's shared prefixes). `cond+adapt` also rescales the step-time model online from the
-  decoded past (a public, adaptive model).
+  schedule, or, where a window's flag says the prediction would cost more, coded as a plain gap (the residual's other
+  fields have no public conditioning on a served link, whose requests and responses are padded to fixed frame counts,
+  so they keep their static tables). In both, a cache hit is keyed on the advice already decoded: its first source is a
+  pick among the earlier sources, most recently used first (a resume's own first source and itself ahead of them), and
+  its length a flag for that source's latest hit (vLLM's shared prefixes). `cond+adapt` also rescales the step-time
+  model online from the decoded past (a public, adaptive model).
 
 **What a window is charged.** Window w's segment codes the requests whose certified arrival bucket is in w and the steps
 charged to w (ADV-SPEC's charge: the earliest window of an output at that step or later) with their outputs' releases,
