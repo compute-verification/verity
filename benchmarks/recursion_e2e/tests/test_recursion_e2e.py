@@ -1,9 +1,10 @@
-"""The recursion profile's reader (`rec_profile`) and CLI (`run.py`) on records written in 85-rec-reprice.sh's formats: the
+"""The recursion bench's reader (`rec_profile`) and CLI (`run.py`) on records written in 85-rec-reprice.sh's formats: the
 timed sessions' LIVE lines, `/usr/bin/time -v` files, serve's SESSION lines, the replay's UPSTREAM line and Lean's VERDICT.
 No GPU, node or store: the job's own records are made here."""
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -225,31 +226,31 @@ def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
 
 def test_result_command_writes_both_files(tmp_path: Path) -> None:
     o = job(tmp_path)
-    assert RUN.main(["profile", "result", "--dir", str(o), "--out", str(tmp_path / "p.json"), "--md", str(tmp_path / "t.md")]) == 0
+    assert RUN.main(["result", "--dir", str(o), "--out", str(tmp_path / "p.json"), "--md", str(tmp_path / "t.md")]) == 0
     doc = json.loads((tmp_path / "p.json").read_text())
-    assert doc["schema"] == RP.SCHEMA and (tmp_path / "t.md").read_text().startswith("Recursion profile: K = 4096")
+    assert doc["schema"] == RP.SCHEMA and (tmp_path / "t.md").read_text().startswith("Recursion bench: K = 4096")
 
 
 def test_job_command_is_a_gpu_host_job_on_node_1(capsys) -> None:
-    assert RUN.main(["profile", "run", "--dry-run", "--N", "16", "--steps", "lean,build"]) == 0
+    assert RUN.main(["run", "--dry-run", "--N", "16", "--steps", "lean,build"]) == 0
     cmd = capsys.readouterr().out.split()
     assert cmd[:6] == ["research", "run", "--queue", "--on", "vy-nebius-1", "--gpu-host"]
     assert "--gpus" not in cmd                              # 85 refuses a job holding a lease: each prove leases its own
-    assert cmd[cmd.index("--") + 1:][:2] == ["bash", "benchmarks/recursion/job.sh"]
+    assert cmd[cmd.index("--") + 1:][:2] == ["bash", "benchmarks/recursion_e2e/job.sh"]
     assert "N=16" in cmd and "STEPS=build,lean" in cmd     # the pipeline's order, whatever order --steps gives
 
 
 def test_env_passes_through_and_must_be_key_value(capsys) -> None:
-    assert RUN.main(["profile", "run", "--dry-run", "--env", "LEVELS=L0", "--env", "GPU_PREEMPTIBLE="]) == 0
+    assert RUN.main(["run", "--dry-run", "--env", "LEVELS=L0", "--env", "GPU_PREEMPTIBLE="]) == 0
     tail = capsys.readouterr().out.split(" -- ")[1].split()
     assert tail[-2:] == ["LEVELS=L0", "GPU_PREEMPTIBLE="]
     with pytest.raises(SystemExit, match="not KEY=VALUE"):
-        RUN.main(["profile", "run", "--dry-run", "--env", "levels"])
+        RUN.main(["run", "--dry-run", "--env", "levels"])
 
 
 def test_unknown_step_is_refused() -> None:
     with pytest.raises(SystemExit, match="ostage"):
-        RUN.main(["profile", "plan", "--steps", "build,ostage"])
+        RUN.main(["plan", "--steps", "build,ostage"])
 
 
 def test_merge_takes_a_later_runs_row_for_the_same_step_stage_and_mode(tmp_path: Path, capsys) -> None:
@@ -266,22 +267,109 @@ def test_merge_takes_a_later_runs_row_for_the_same_step_stage_and_mode(tmp_path:
     assert m["summary"]["outer"]["dev"]["prove_s"] == 6.0          # rB's L0 4.0 and alg-p0's 2.0
     for name, d in (("a.json", a), ("b.json", b)):
         (tmp_path / name).write_text(json.dumps(d))
-    assert RUN.main(["profile", "table", str(tmp_path / "a.json"), str(tmp_path / "b.json"), "--merge"]) == 0
+    assert RUN.main(["table", str(tmp_path / "a.json"), str(tmp_path / "b.json"), "--merge"]) == 0
     md = capsys.readouterr().out
-    assert " run |" in md and "| rB |" in md and "| rA |" in md and "rA: commit abc123, 3 timed sessions" in md
+    assert " run |" in md and "| rB |" in md and "| rA |" in md and "rA: commit abc123, the inner's 3 timed sessions" in md
 
 
-def test_a_run_id_is_read_from_its_records_not_its_profile_json(tmp_path: Path, monkeypatch) -> None:
+def test_a_run_id_is_read_from_its_records_not_its_result_file(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: None)
     out = tmp_path / ".research" / "runs" / "r20261024-000000-abcd"
     job(out)
-    (out / "out" / "profile.json").write_text(json.dumps({"schema": RP.SCHEMA, "rows": [], "stale": True}))
+    (out / "out" / "recursion_e2e.json").write_text(json.dumps({"schema": RP.SCHEMA, "rows": [], "stale": True}))
     doc = RUN.load("r20261024-000000-abcd")
     assert "stale" not in doc and doc["run"] == "r20261024-000000-abcd" and row(doc, "inner M0")["ok"] is True
 
 
 def test_table_refuses_another_schema(tmp_path: Path) -> None:
     (tmp_path / "x.json").write_text(json.dumps({"schema": "proof-throughput/v1"}))
-    with pytest.raises(SystemExit, match="not recursion-profile/v1"):
-        RUN.main(["profile", "table", str(tmp_path / "x.json")])
+    with pytest.raises(SystemExit, match="not recursion-e2e/v1"):
+        RUN.main(["table", str(tmp_path / "x.json")])
+
+
+def negative(o: Path, refusals: dict[str, dict[str, bool | None]]) -> None:
+    """The negative step's lean records: each honest statement, then each coin's forged copy of it (85's
+    ``forged-inner-COIN-STATEMENT``); a refusal exits 1 with a refusing VERDICT, None leaves no VERDICT."""
+    r = o / "steps" / "negative" / "r1"
+    d = r / "out" / "lean"
+    d.mkdir(parents=True)
+    (r / "rc").write_text("0\n")
+    (r / "time-step.txt").write_text(timev("9:00.00"))
+    for coin, by in refusals.items():
+        for stmt, refused in by.items():
+            (d / f"time-{stmt}.txt").write_text(timev("1:00.00") + "\tExit status: 0\n")
+            (d / f"{stmt}.log").write_text('VERDICT {"accepted": true}\n')
+            n = f"forged-inner-{coin}-{stmt}"
+            (d / f"time-{n}.txt").write_text(timev("1:05.00") + f"\tExit status: {1 if refused else 0}\n")
+            if refused is not None:
+                (d / f"{n}.log").write_text('VERDICT {"accepted": %s, "why": "%s"}\n'
+                                            % (("false", "rec: v disagrees") if refused else ("true", "")))
+
+
+def test_a_flipped_coin_is_refused_when_one_statement_refuses_it_and_every_one_has_a_verdict(tmp_path: Path) -> None:
+    o = job(tmp_path)
+    negative(o, {"challenge": {"L0": False, "alg-p0": True}, "query": {"L0": True, "alg-p0": None}})
+    doc = RP.read(o)
+    ch, q = row(doc, "negative inner-challenge"), row(doc, "negative inner-query")
+    assert ch["ok"] is True and ch["extra"]["refused_by"] == ["alg-p0"] and ch["extra"]["accepted_by"] == ["L0"]
+    assert ch["note"] == "refused by alg-p0; accepted by L0 (reads no flipped coin)" and ch["extra"]["why"] == ["rec: v disagrees"]
+    assert q["ok"] is False and q["extra"]["no_verdict"] == ["alg-p0"]   # a statement that never judged it: not refused
+    assert doc["headline"]["negative_refused"] == {"challenge": True, "query": False} and doc["headline"]["ok"] is False
+
+
+def test_headline_is_a_whole_session_only_when_every_step_ran(tmp_path: Path) -> None:
+    o = job(tmp_path)
+    doc = RP.read(o)
+    assert doc["headline"]["complete"] is True and doc["headline"]["ok"] is False      # every step ran; alg-p0 is refused
+    assert "Verdict: one whole recursive session, **not accepted**" in RP.markdown(doc)
+    h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS})
+    assert h["complete"] is True and h["ok"] is True
+    h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS if s != "lean"})
+    assert h["complete"] is False and h["ok"] is False
+    h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS} | {"lean": ["0", "1"]})
+    assert h["complete"] is True and h["ok"] is False
+    shutil.rmtree(o / "steps" / "oprove")
+    assert "Verdict: **not a whole recursive session**" in RP.markdown(RP.read(o))
+
+
+def test_vstage_rows_carry_what_rec_vstage_staged(tmp_path: Path) -> None:
+    o = job(tmp_path)
+    summ = {"statements": {"alg": {"stage": {"algebra": [{"part": 0, "template": "InnerRepCheck", "build_s": 3.5,
+                                                            "circuit_bytes": 99}]}},
+                           "L0": {"stage": {"levels": {"L0": {"template": "RecOpen", "k_log": 20}}}}}}
+    (o / "steps" / "vstage" / "r1" / "out" / "summary-vstage.json").write_text(json.dumps(summ))
+    assert RP.staged_units(o / "steps" / "vstage" / "r1" / "out" / "summary-vstage.json")["alg-p0"]["circuit_bytes"] == 99
+    assert row(RP.read(o), "stage L0")["extra"]["units"]["template"] == "RecOpen"
+
+
+def test_the_lease_is_sized_from_the_firewalls_l3_session(capsys) -> None:
+    assert RUN.lease_min(1) == 74 and RUN.lease_min(2) == 148 and RUN.lease_min(1, firewall=False) == 10
+    assert RUN.main(["run", "--dry-run"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert "MODES=firewall" in cmd and "GPU_MAX_MIN=74" in cmd and "OPROVE_RUNS=1" in cmd
+    assert int(cmd[cmd.index("--max-min") + 1]) > 9850 * 1.5 / 60       # every statement's firewalled session, one at a time
+    assert RUN.main(["run", "--dry-run", "--lease-min", "30", "--modes", "dev"]) == 0
+    assert "GPU_MAX_MIN=30" in capsys.readouterr().out.split()
+
+
+def test_e2e_is_one_pass_with_its_negative(capsys) -> None:
+    assert RUN.main(["run", "--dry-run", "--e2e", "--cpu", "--K", "64", "--N", "16", "--node", "vy-nebius-cpu-3"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert "--gpu-host" not in cmd and cmd[4] == "vy-nebius-cpu-3"
+    assert "STEPS=build,inner,vstage,oprove,lean,negative" in cmd and "REPEAT=1" in cmd and "GPU=0" in cmd
+    assert "WARM=0" in cmd and "RUNS=1" in cmd and "NEG=challenge,query" in cmd
+
+
+def test_store_puts_each_result_the_merge_and_the_table(tmp_path: Path, monkeypatch, capsys) -> None:
+    (tmp_path / "a.json").write_text(json.dumps(RP.read(job(tmp_path / "a")) | {"ref": "rA"}))
+    seen = {}
+
+    def put(cmd, **k):
+        t = Path(cmd[cmd.index("--tree") + 1])
+        seen["files"], seen["meta"] = sorted(p.name for p in t.iterdir()), json.loads(cmd[cmd.index("--meta") + 1])
+        return RUN.subprocess.CompletedProcess(cmd, 0, json.dumps({"id": "art:x"}), "")
+    monkeypatch.setattr(RUN.subprocess, "run", put)
+    assert RUN.main(["store", str(tmp_path / "a.json"), "--merge"]) == 0
+    assert capsys.readouterr().out.strip() == "art:x"
+    assert seen["files"] == ["merged.json", "rA.json", "table.md"] and seen["meta"]["benchmark"] == "recursion_e2e"

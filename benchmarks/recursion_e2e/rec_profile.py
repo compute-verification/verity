@@ -1,10 +1,12 @@
-"""The recursion profile's result (``recursion-profile/v1``) from a job's ``out/`` (``job.sh``), and its table (README.md).
+"""The recursion bench's result (``recursion-e2e/v1``) from a job's ``out/`` (``job.sh``), and its table (README.md).
 
 ``read(OUT)`` walks ``OUT/steps/<step>/r<i>/out/``, the records 85-rec-reprice.sh wrote for each invocation, and returns one
 row per timed thing: a prover's sessions (``inner``, ``oprove``: the timed sessions' ``LIVE`` lines), or a tool's
-``/usr/bin/time -v`` over the repeats (``icheck``, ``vstage``, ``vcap``, ``oreplay``, ``lean``), or the build once. Every time is
-a ``Stat`` (median, min, max and the values); nothing is averaged across different things. Stdlib only: the job runs it on
-the node's ``python3``.
+``/usr/bin/time -v`` over the repeats (``icheck``, ``vstage``, ``vcap``, ``oreplay``, ``lean``), or the build once, and one row
+per flipped inner coin (``negative``). Every time is a ``Stat`` (median, min, max and the values); nothing is averaged across
+different things. ``headline`` says whether the run is a whole recursive session (every step ran) and was accepted (every
+step exited 0, every honest verdict accepted, every flipped coin refused). Stdlib only: the job runs it on the node's
+``python3``.
 """
 from __future__ import annotations
 
@@ -15,8 +17,23 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
-SCHEMA = "recursion-profile/v1"
+SCHEMA = "recursion-e2e/v1"
 GPU_STEPS = ("inner", "oprove")
+#: the steps one recursive session needs, in order (``negative`` checks it, ``icheck``, ``vcap`` and ``oreplay`` time more of it)
+E2E_STEPS = ("build", "inner", "vstage", "oprove", "lean")
+ORDER = ("build", "inner", "icheck", "vstage", "vcap", "oprove", "oreplay", "lean", "negative")
+#: what each part of the recursive session is (RECBENCH's draft's descriptions), recorded in the result's ``inputs``
+STATEMENTS = {
+    "inner": "N x GemmCoordinate_v2{K,DOT=HopperBF16WgmmaDot16_v1} under Q_template_instance (rec_reprice.py), "
+             "verity/flock-circuit+plain-leaves, M0 (no --zk), FC_COINS=os, through rec_live's proxy",
+    "vstar": "V*'s statements over the inner's last proxied session: each Ligerito level's RecOpen and RecCap, the algebra's "
+             "InnerRepCheck parts (rec_vstage)",
+    "outer": "each V* statement with --zk on loopback, every unit drawn, one at a time, in each of MODES",
+    "verify": "flock-verify verify --zk --rec-inner-session --rec-inner-transcript on each V* session (the last mode's), "
+              "and flock-verify statement on the inner statement",
+    "negative": "each V* session verified again over a copy of the inner session with rep 0's coin flipped "
+                "(rec_inner.py forge), which some statement must refuse",
+}
 #: the prover's phase buckets (``flock-circuit``'s ``gpu_buckets``, both reps) a dominant phase is chosen among; the
 #: aggregates (``t.arithmetic``, ``t.total``) and host-side ``h.*`` stay out
 PHASES = ("t.witness", "t.encoding_commitment", "t.link", "t.zerocheck", "t.lincheck", "t.ring_switch", "t.ligerito",
@@ -315,6 +332,10 @@ def read(root: Path) -> dict[str, Any]:
                                      "algebra)" if n == "verifier" else f"rec_vstage stage of V*'s statement {n}")
         rows.append(step_row(vs, "vstage", "85 STEP=vstage whole (its statements staged JOBS at a time)"))
         rows += tool_rows(vs, "vstage", rel)
+        units = staged_units(vs[0] / "summary-vstage.json")
+        for r in rows:
+            if r.step == "vstage" and r.stage.startswith("stage ") and units.get(r.stage[6:]):
+                r.extra["units"] = units[r.stage[6:]]
     vc = repeats(root, "vcap")
     if vc:
         rows.append(step_row(vc, "vcap", "85 STEP=vcap whole"))
@@ -369,12 +390,94 @@ def read(root: Path) -> dict[str, Any]:
                 r.note = next((w for w in why if w and w != "None"), text(ln[0] / "lean" / f"{name}.log")[-200:].strip())
         rows.append(step_row(ln, "lean", "85 STEP=lean whole (JOBS sessions at once), as an auditor waits"))
         rows += lrows
+    ng = repeats(root, "negative")
+    if ng:
+        rows.append(step_row(ng, "negative", "85 STEP=lean with NEG_INNER: every V* session again, over each flipped coin"))
+        rows += negative_rows(ng[0] / "lean")
     s = summary(rows)
     fw = processes(root.parent / "resources.jsonl", "flock-firewall")
     if fw:
         s["flock_firewall"] = fw
-    return {"schema": SCHEMA, "params": params(root), "rows": [r.to_json() for r in rows], "summary": s,
-            "steps": step_status(root)}
+    steps = step_status(root)
+    return {"schema": SCHEMA, "params": params(root), "inputs": STATEMENTS, "rows": [r.to_json() for r in rows], "summary": s,
+            "steps": steps, "headline": headline(rows, s, steps)}
+
+
+def staged_units(p: Path) -> dict[str, dict[str, Any]]:
+    """What `rec_vstage.stage` printed of each unit it staged (85's ``summary-vstage.json``): its template, instances, rows,
+    k_log, seconds and (the algebra's parts) its lowering's seconds and circuit bytes, by statement name."""
+    try:
+        st = json.loads(text(p) or "{}").get("statements") or {}
+    except ValueError:
+        return {}
+    keep = ("template", "instances", "unit_rows", "unit_log", "k_log", "stage_s", "build_s", "circuit_bytes")
+    out: dict[str, dict[str, Any]] = {}
+    for s in st.values():
+        u = s.get("stage") if isinstance(s, dict) else None
+        if not isinstance(u, dict):
+            continue
+        for name, x in (u.get("levels") or {}).items():
+            out[name] = {k: x.get(k) for k in keep}
+        if isinstance(u.get("cap"), dict) and "template" in u["cap"]:
+            out["cap"] = {k: u["cap"].get(k) for k in keep}
+        for name, x in (u.get("caps") or {}).items():
+            out[f"cap-{name}"] = {k: x.get(k) for k in keep}
+        for x in u.get("algebra") or []:
+            out[f"alg-p{x.get('part')}"] = {k: x.get(k) for k in keep}
+    return out
+
+
+_FORGED = re.compile(r"forged-inner-([a-z]+)-(.+)")
+
+
+def exit_status(p: Path) -> int | None:
+    m = re.search(r"^\s*Exit status: (\d+)\s*$", text(p), re.M)
+    return int(m.group(1)) if m else None
+
+
+def negative_rows(d: Path) -> list[Row]:
+    """One row per flipped coin (85's ``forged-inner-COIN-STATEMENT`` parts, read as ``lean_verdicts.py`` reads them): a
+    statement refuses it when flock-verify exited 1 with a VERDICT and none accepting; the coin is refused when one statement
+    refuses it and every honest statement has a verdict over it (a statement that reads no flipped coin rightly accepts)."""
+    honest = sorted(m.group(1) for f in d.glob("time-*.txt") if (m := re.fullmatch(r"time-(.+)\.txt", f.name))
+                    and not m.group(1).startswith(("forged-", "inner")))
+    coins: dict[str, dict[str, dict[str, Any]]] = {}
+    for f in sorted(d.glob("time-forged-inner-*.txt")):
+        m = _FORGED.fullmatch(f.name[5:-4])
+        if not m:
+            continue
+        v = lean_verdict(d / f"{m.group(0)}.log")
+        tv = timev(f)
+        coins.setdefault(m.group(1), {})[m.group(2)] = {
+            "exit": exit_status(f), "accepted": v.get("accepted") if v else None, "why": str((v or {}).get("why") or "")[:200],
+            "wall_s": tv["wall_s"] if tv else None, "peak_rss_gb": tv["peak_rss_gb"] if tv else None}
+    rows = []
+    for coin, parts in coins.items():
+        refused_by = sorted(n for n, x in parts.items() if x["exit"] == 1 and x["accepted"] is False)
+        accepted_by = sorted(n for n, x in parts.items() if x["accepted"] is True)
+        silent = sorted(set(honest) - {n for n, x in parts.items() if x["accepted"] is not None})
+        r = Row(f"negative inner-{coin}", "negative", f"rep 0's {coin} coin flipped in the inner session, under every V* statement",
+                "cpu", peak_rss_gb=max((x["peak_rss_gb"] for x in parts.values() if x["peak_rss_gb"] is not None), default=None))
+        r.ok = bool(refused_by) and not silent
+        r.note = (f"refused by {', '.join(refused_by) or 'no statement'}"
+                  + (f"; accepted by {', '.join(accepted_by)} (reads no flipped coin)" if accepted_by else "")
+                  + (f"; no verdict from {', '.join(silent)}" if silent else ""))
+        r.extra = {"refused_by": refused_by, "accepted_by": accepted_by, "no_verdict": silent,
+                   "why": sorted({parts[n]["why"] for n in refused_by})[:4], "parts": parts}
+        rows.append(r)
+    return rows
+
+
+def headline(rows: list[Row], s: dict[str, Any], steps: dict[str, list[str]]) -> dict[str, Any]:
+    """Whether the run is one whole recursive session (every step of ``E2E_STEPS`` ran) and accepted (every invocation exited
+    0, no row refused or unrun, and every flipped coin refused), with the numbers a reader looks for first."""
+    complete = all(steps.get(x) for x in E2E_STEPS)
+    neg = {r.stage[len("negative inner-"):]: r.ok for r in rows if r.step == "negative" and r.stage.startswith("negative inner-")}
+    ok = (complete and all(rc == "0" for v in steps.values() for rc in v) and not s.get("not_ok")
+          and all(v is True for v in neg.values()))
+    mode = next(iter(k for k in s.get("pipeline", {}) if k.startswith("outer prove")), None)
+    return {"complete": complete, "ok": ok, "pipeline_sum_s": s.get("pipeline_sum_s"), "pipeline": s.get("pipeline"),
+            "outer": s.get("outer"), "outer_mode": mode, "slowest": s.get("slowest"), "negative_refused": neg or None}
 
 
 def processes(p: Path, comm: str) -> list[dict[str, Any]]:
@@ -454,15 +557,21 @@ def merge(docs: list[dict[str, Any]]) -> dict[str, Any]:
         for r in d["rows"]:
             r = {**r, "extra": {**r.get("extra", {}), "run": d.get("ref") or d.get("run")}}
             by[(r["step"], r["stage"], r["extra"].get("mode", ""))] = r
-    order = {s: i for i, s in enumerate(("build", "inner", "icheck", "vstage", "vcap", "oprove", "oreplay", "lean"))}
+    order = {s: i for i, s in enumerate(ORDER)}
     rows = sorted(by.values(), key=lambda r: order.get(r["step"], len(order)))
-    s = summary([Row.from_json(r) for r in rows])
+    objs = [Row.from_json(r) for r in rows]
+    s = summary(objs)
     fw = [e | {"run": d.get("ref") or d.get("run")} for d in docs for e in d.get("summary", {}).get("flock_firewall", [])]
     if fw:
         s["flock_firewall"] = fw
-    return {"schema": SCHEMA, "params": docs[-1].get("params", {}), "runs": [d.get("ref") or d.get("run") for d in docs],
+    # a merged result is one recursive session only as far as its runs' steps are: each step's exits, from the last run with it
+    last: dict[str, list[str]] = {}
+    for d in docs:
+        last |= d.get("steps", {})
+    return {"schema": SCHEMA, "params": docs[-1].get("params", {}), "inputs": STATEMENTS,
+            "runs": [d.get("ref") or d.get("run") for d in docs],
             "run_params": {str(d.get("ref") or d.get("run")): d.get("params", {}) for d in docs},
-            "rows": rows, "summary": s,
+            "rows": rows, "summary": s, "headline": headline(objs, s, last) | {"merged": True},
             "steps": {f"{k} ({d.get('ref') or d.get('run')})": v for d in docs for k, v in d.get("steps", {}).items()}}
 
 
@@ -487,12 +596,18 @@ def markdown(doc: dict[str, Any]) -> str:
     p = doc.get("params", {})
 
     def each(q: dict[str, Any]) -> str:
-        return (f"commit {str(q.get('commit'))[:12]}, {q.get('RUNS')} timed sessions after {q.get('WARM')} warm per GPU step, "
-                f"{q.get('REPEAT')} repeats per CPU step")
+        return (f"commit {str(q.get('commit'))[:12]}, the inner's {q.get('RUNS')} timed sessions after {q.get('WARM')} warm, "
+                f"each V* statement's {q.get('OPROVE_RUNS', q.get('RUNS'))} after {q.get('OPROVE_WARM', q.get('WARM'))} "
+                f"(lease {q.get('GPU_MAX_MIN', '?')} min), {q.get('REPEAT')} repeats per CPU step")
     runs = doc.get("run_params")
-    lines = [f"Recursion profile: K = {p.get('K')}, N = {p.get('N')}, "
+    h = doc.get("headline") or {}
+    verdict = ("one whole recursive session, accepted" if h.get("ok") else
+               "one whole recursive session, **not accepted** (see ok and the steps' exits)" if h.get("complete") else
+               "**not a whole recursive session**: some of " + ", ".join(E2E_STEPS) + " did not run")
+    lines = [f"Recursion bench: K = {p.get('K')}, N = {p.get('N')}, oprove modes {p.get('modes', '?')}, "
              + ("; ".join(f"{k}: {each(q)}" for k, q in runs.items()) if runs else each(p))
-             + ". Seconds: median [min–max] (n).", "",
+             + f". Seconds: median [min–max] (n). Verdict: {verdict}"
+             + (" (merged runs)" if h.get("merged") else "") + ".", "",
              "| stage | step | what | time s | session e2e s | pace s | peak RSS GB | GPU peak MiB | proof | dominant phase | ok |"
              + (" run |" if doc.get("runs") else ""),
              "|---|---|---|---|---|---:|---:|---:|---:|---|---|" + ("---|" if doc.get("runs") else "")]

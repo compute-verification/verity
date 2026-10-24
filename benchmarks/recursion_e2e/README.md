@@ -6,11 +6,11 @@ This benchmark times each stage of that pipeline as it runs on `main` today, on 
 has numbers before the whole recursive session runs end to end.
 
 ~~~text
-verity bench recursion profile plan  [--K 4096] [--N 2] [--steps S,..]         the stages, their commands and the launch
-verity bench recursion profile run   [--K 4096] [--N 2] [--steps S,..] [--repeat 3] [--modes M,..] [--env K=V ..] [--dry-run]
+verity bench recursion_e2e plan  [--K 4096] [--N 2] [--steps S,..]         the stages, their commands and the launch
+verity bench recursion_e2e run   [--K 4096] [--N 2] [--steps S,..] [--repeat 3] [--modes M,..] [--env K=V ..] [--dry-run]
                                                                                 one recorded job on vy-nebius-1
-verity bench recursion profile result --dir OUT [--out FILE]                    the profile's result from a job's out/
-verity bench recursion profile table RESULT... [--merge] [--json] [--put]       the table, from results (a file or a run id;
+verity bench recursion_e2e result --dir OUT [--out FILE]                    the profile's result from a job's out/
+verity bench recursion_e2e table RESULT... [--merge] [--json] [--put]       the table, from results (a file or a run id;
                                                                                 --merge: one table, a later run's row replacing
                                                                                 an earlier one's for the same stage and mode)
 ~~~
