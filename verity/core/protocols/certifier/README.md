@@ -44,11 +44,11 @@ A spec-level reference for network accounting's timing channel:
   `IoTieRoute`, `IoTieMatch`);
 - the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on a fake upstream: an ingress link-window's
   cells cut into CERT-VARLEN's id requests, each request's count of prompt fields held to the advice's prompt_len and
-  its ordinal to its place in the cut, which N2-ADVICE's advised verdict is to require. It has the reference and the
-  unit's Boolean Definition (`IoTieRequest`: the cells' root by `NetworkRowsRoot`, the own frame by
-  `IoTieRequestOwn`, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, the prover's routing of the view's prompt
-  lengths by `IoTieRoute`, `IoTieRequestEnd`), and the verdict an advised link's ends take (`RequestTie`, made only
-  by `verify_link`);
+  its ordinal to its place in the cut, which N2-ADVICE's advised verdict (`advised.IoTieVerdict`) is built from. It
+  has the reference, the verifier's per-window statements, chained from window 0 by each window's carry-out
+  (`statements`, `chained`), and the unit's Boolean Definition (`IoTieRequest`: the cells' root by
+  `NetworkRowsRoot`, the own frame by `IoTieRequestOwn`, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, the
+  prover's routing of the view's prompt lengths by `IoTieRoute`, the totals and the carry-out by `IoTieRequestEnd`);
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
