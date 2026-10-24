@@ -248,6 +248,21 @@ def test_the_gates_certifier_rehearsal_parses_here_with_its_sampling(tmp_path):
     assert {k: cs.request_body("m", 16)[k] for k in ("temperature", "top_p")} == {"temperature": 0.0, "top_p": 1.0}
 
 
+def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_parser_takes(tmp_path):
+    """The gate's tampers are `serve`'s `--tamper` choices, so the auditor host runs every shim this file has, and
+    each reaches `serve` (which alone checks it, after the tunnel is up) as one strategy of `rehearse`."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token")
+    for t in A.TAMPERS:
+        args = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": t}, tmp_path, "u")[2:])
+        assert args.strategies.split(",") == [t]
+        served = cs.parser().parse_args(["serve", "--plan", "p", "--calibration", "c", "--upstream", "u", "--out", "o",
+                                         "--link", "127.0.0.1:1", "--reveal", "127.0.0.1:2", "--key", "k",
+                                         "--challenger-key", "k.json", "--session", "00", "--tamper", t])
+        assert served.tamper == t
+
+
 def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_major(tmp_path):
     """The plan sends the endpoint's shape (its one model, a prompt of exactly 128 of its tokens, `min_tokens` =
     `max_tokens`, `ignore_eos`, streamed, the given temperature and top_p on every request, the probes' and the run's
