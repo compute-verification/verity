@@ -30,30 +30,48 @@ from verity.core.protocols.certifier import replay_step as RS  # noqa: E402
 
 
 class _Recorder:
+    """What the scan's units saw. A unit is one `schedule()` and, under async scheduling, the update of the step before it
+    (vLLM updates a step after scheduling the next); sync, the update of its own step."""
+
     def __init__(self) -> None:
         self.adds = 0
         self.asked_pending = False
+        self.in_schedule = False
+        self.open: dict[str, Any] | None = None             # the unit not yet closed
         self.hits: list[tuple[int, int, int]] = []          # (request, hit blocks, evictable) per `_KV.hit`
         self.frees: dict[int, int] = {}                      # request -> blocks returned
         self.asked: list[int] = []                           # the step's decisions, in order
-        self.update_running: list[int] = []                  # the running list as the step's update saw it
-        self.snaps: list[RS.State] = []
-        self.steps: list[dict[str, Any]] = []
+        self.units: list[dict[str, Any]] = []
+
+    def close(self, s: RP._Sched) -> None:
+        if self.open is not None:
+            self.units.append({**self.open, "frees": dict(self.frees), "hits": list(self.hits), "adds": self.adds,
+                               "next": _snap(s)})
+            self.open = None
 
 
 def _snap(s: RP._Sched) -> RS.State:
-    B = s.e.block_size
+    """The scheduler's state as the step circuit carries it. Under async scheduling a running request's outputs count
+    its placeholder (the output its last row samples, which vLLM appends at that step's update), `fin` says that output
+    is its last, and `cap` that its output length is its max_tokens."""
+    B, asy = s.e.block_size, s.e.async_scheduling
     if s.skipped:
-        raise ValueError("a skipped request: async scheduling, which the step circuit doesn't model")
+        raise ValueError("a skipped request (a stale output still in flight), which the step circuit doesn't model")
     for r in s.running:
         held = len(s.kv.req_blocks.get(r.i, ()))
-        if r.placeholders or held != RS.cdiv(r.num_computed, B):
-            raise AssertionError(f"request {r.i}: holds {held} blocks at {r.num_computed} computed")
+        if r.placeholders > int(asy) or held != RS.cdiv(r.num_computed, B):
+            raise AssertionError(f"request {r.i}: holds {held} blocks at {r.num_computed} computed, "
+                                 f"{r.placeholders} placeholders")
     for r in s.waiting:
-        if r.num_computed or s.kv.req_blocks.get(r.i):
+        if r.num_computed or s.kv.req_blocks.get(r.i) or r.placeholders or r.stale:
             raise AssertionError(f"waiting request {r.i}: {r.num_computed} computed")
-    return RS.State(tuple(RS.Req(r.i, r.P, r.io.output_len, r.n_out, r.num_computed) for r in s.running),
-                    tuple(RS.Req(r.i, r.P, r.io.output_len, r.n_out, 0) for r in s.waiting), len(s.kv.free))
+
+    def cap(r: RP._R) -> int:
+        return int(asy and r.io.output_len >= r.io.max_tokens)
+
+    return RS.State(tuple(RS.Req(r.i, r.P, r.io.output_len, r.n_out + r.placeholders, r.num_computed, cap(r),
+                                 int(asy and r.n_out + r.placeholders == r.io.output_len)) for r in s.running),
+                    tuple(RS.Req(r.i, r.P, r.io.output_len, r.n_out, 0, cap(r)) for r in s.waiting), len(s.kv.free))
 
 
 @contextmanager
@@ -62,10 +80,14 @@ def _instrumented(rec: _Recorder):
     orig = {"add": S.add, "schedule": S.schedule, "update": S.update, "hit": K.hit, "free_request": K.free_request}
 
     def add(self, i):
+        if not rec.in_schedule:
+            rec.close(self)
         rec.adds += 1
         return orig["add"](self, i)
 
     def schedule(self, on_open=None):
+        rec.close(self)
+        before = [r.i for r in self.running]
         rec.hits, rec.frees, rec.asked = [], {}, []
 
         def asked(p):
@@ -75,16 +97,17 @@ def _instrumented(rec: _Recorder):
                 rec.asked.append(int(got))
             return got
 
-        step, samples = orig["schedule"](self, asked if on_open is not None else None)
-        rec.step = step
+        rec.in_schedule = True
+        try:
+            step, samples = orig["schedule"](self, asked if on_open is not None else None)
+        finally:
+            rec.in_schedule = False
+        rec.open = {"step": step, "before": before, "running": [r.i for r in self.running], "asked": list(rec.asked)}
         return step, samples
 
     def update(self, step, samples):
-        rec.update_running = [r.i for r in self.running]
         out = orig["update"](self, step, samples)
-        rec.steps.append({"step": step, "frees": dict(rec.frees), "hits": list(rec.hits), "asked": list(rec.asked),
-                          "running": list(rec.update_running), "adds": rec.adds})
-        rec.snaps.append(_snap(self))
+        rec.close(self)
         return out
 
     def hit(self, r):
@@ -93,7 +116,7 @@ def _instrumented(rec: _Recorder):
         return out
 
     def free_request(self, r):
-        rec.frees[r.i] = sum(1 for b in self.req_blocks.get(r.i, ()) if self.ref[b] == 1)
+        rec.frees[r.i] = rec.frees.get(r.i, 0) + sum(1 for b in self.req_blocks.get(r.i, ()) if self.ref[b] == 1)
         return orig["free_request"](self, r)
 
     S.add, S.schedule, S.update, K.hit, K.free_request = add, schedule, update, hit, free_request
@@ -105,10 +128,9 @@ def _instrumented(rec: _Recorder):
 
 
 def vectors(trace: RP.Trace, *, R: int, W: int, A: int) -> tuple[dict, list[tuple[RS.State, RS.Inputs, RS.Out]]]:
-    """The binding for `trace`'s engine at (R, W, A), and every executed step as (state, inputs, the replay's outputs)."""
+    """The binding for `trace`'s engine at (R, W, A), and every unit of the scan as (state, inputs, the replay's
+    outputs): each `schedule()`, empty ones included, since under async scheduling one still updates the step before."""
     e = trace.engine
-    if e.async_scheduling:
-        raise ValueError("async scheduling: the step circuit models sync scheduling")
     n = len(trace.requests)
     st = RS.statics(R, W, A, dict(e.__dict__), max(n - 1, 1).bit_length())
     first = trace.first_scheduled()
@@ -120,13 +142,19 @@ def vectors(trace: RP.Trace, *, R: int, W: int, A: int) -> tuple[dict, list[tupl
 
     with _instrumented(rec):
         rp = RP.replay(e, trace.requests, decide=decide)
+        if rec.open is not None:
+            raise AssertionError("the replay ended on a schedule with no update after it")
     m = RP.compare(rp.steps, trace.steps)
     if m.first_mismatch is not None:
         raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch}")
     reqs = trace.requests
+
+    def cap(i: int) -> int:
+        return int(e.async_scheduling and reqs[i].output_len >= reqs[i].max_tokens)
+
     out = []
     prev, adds_before = RS.State((), (), e.num_gpu_blocks - 1), 0
-    for k, (sr, nxt) in enumerate(zip(rec.steps, rec.snaps)):
+    for sr in rec.units:
         step: RP.Step = sr["step"]
         quiet = not prev.running and not prev.waiting
         forced = int(quiet and adds_before < n)
@@ -138,18 +166,20 @@ def vectors(trace: RP.Trace, *, R: int, W: int, A: int) -> tuple[dict, list[tupl
             if 0 <= c < W + A:
                 hit[c], evict[c] = h, ev
         ret = [0] * R
-        pos_before = [r.id for r in prev.running]
+        if [r.id for r in prev.running] != sr["before"]:
+            raise AssertionError("a unit's running list isn't the one the unit before it left")
         for i, back in sr["frees"].items():
-            p = sr["running"].index(i) if i in sr["running"] else pos_before.index(i)
+            p = sr["running"].index(i) if i in sr["running"] else sr["before"].index(i)
             if p < R:
                 ret[p] = back
-        arrivals = tuple(RS.Req(i, reqs[i].prompt_len, reqs[i].output_len) for i in range(adds_before, min(adds_before + A, n)))
+        arrivals = tuple(RS.Req(i, reqs[i].prompt_len, reqs[i].output_len, cap=cap(i))
+                         for i in range(adds_before, min(adds_before + A, n)))
         inp = RS.Inputs(arrivals, tuple(sr["asked"]) + (0,) * (A - len(sr["asked"])), tuple(hit), tuple(evict), tuple(ret))
         rows = tuple((sr["running"].index(i), i, int(nn == 1 and start >= reqs[i].prompt_len), start, nn)
                      for i, start, nn in step.rows)
-        want = RS.Out(True, rows, nxt, sr["adds"] - adds_before, len(sr["asked"]))
+        want = RS.Out(True, rows, sr["next"], sr["adds"] - adds_before, len(sr["asked"]))
         out.append((prev, inp, want))
-        prev, adds_before = nxt, sr["adds"]
+        prev, adds_before = sr["next"], sr["adds"]
     return st, out
 
 

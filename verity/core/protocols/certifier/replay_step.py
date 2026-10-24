@@ -102,7 +102,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.types import Array, Tuple
 from verity.core.protocols.certifier.head_check import BIT, _part, ands
 
-STATICS = ("R", "W", "A", "M", "T", "L", "B", "H", "CH", "WM", "FULL", "PC", "NB", "IW")
+STATICS = ("R", "W", "A", "M", "T", "L", "B", "H", "CH", "WM", "FULL", "PC", "NB", "IW", "AS", "EW")
 
 
 def cdiv(a: int, b: int) -> int:
@@ -116,28 +116,39 @@ def _bitlen(v: int) -> int:
 def widths(S) -> SimpleNamespace:
     if S.B < 1 or S.B & (S.B - 1):
         raise ValueError(f"block size {S.B}: a power of 2")
-    if min(S.R, S.W, S.A, S.M, S.T, S.L, S.NB, S.IW) < 1 or min(S.H, S.WM) < 0 or {S.CH, S.FULL, S.PC} - {0, 1}:
-        raise ValueError(f"statics {dict(S.__dict__)}: sizes ≥ 1, H and WM ≥ 0, CH, FULL and PC bits")
+    if (min(S.R, S.W, S.A, S.M, S.T, S.L, S.NB, S.IW) < 1 or min(S.H, S.WM, S.EW) < 0
+            or {S.CH, S.FULL, S.PC, S.AS} - {0, 1}):
+        raise ValueError(f"statics {dict(S.__dict__)}: sizes ≥ 1, H, WM and EW ≥ 0, CH, FULL, PC and AS bits")
     return SimpleNamespace(LW=_bitlen(S.L), TW=_bitlen(S.T), BW=_bitlen(S.NB), HW=_bitlen(cdiv(S.L, S.B)),
                            AC=_bitlen(S.A), RC=_bitlen(S.R), WC=_bitlen(S.W), LB=S.B.bit_length() - 1)
+
+
+def _state_fields(S) -> list[tuple[str, int, int]]:
+    """The committed state, as the step reads and writes it: the sync step's part, then async's group (AS)."""
+    Z = widths(S)
+    R, W = S.R, S.W
+    return ([("run_valid", R, 1), ("run_id", R, S.IW), ("run_P", R, Z.LW), ("run_O", R, Z.LW), ("run_out", R, Z.LW),
+             ("run_comp", R, Z.LW), ("wait_valid", W, 1), ("wait_id", W, S.IW), ("wait_P", W, Z.LW), ("wait_O", W, Z.LW),
+             ("wait_out", W, Z.LW), ("free", 1, Z.BW)]
+            + ([("run_fin", R, 1), ("run_cap", R, 1), ("wait_cap", W, 1)] if S.AS else []))
 
 
 def _in_fields(S) -> list[tuple[str, int, int]]:
     Z = widths(S)
     R, W, A = S.R, S.W, S.A
-    return [("run_valid", R, 1), ("run_id", R, S.IW), ("run_P", R, Z.LW), ("run_O", R, Z.LW), ("run_out", R, Z.LW),
-            ("run_comp", R, Z.LW), ("wait_valid", W, 1), ("wait_id", W, S.IW), ("wait_P", W, Z.LW), ("wait_O", W, Z.LW),
-            ("wait_out", W, Z.LW), ("free", 1, Z.BW), ("arr_valid", A, 1), ("arr_id", A, S.IW), ("arr_P", A, Z.LW),
-            ("arr_O", A, Z.LW), ("bits", A, 1), ("hit", W + A, Z.HW), ("evict", W + A, Z.HW), ("ret", R, Z.HW)]
+    return (_state_fields(S)
+            + [("arr_valid", A, 1), ("arr_id", A, S.IW), ("arr_P", A, Z.LW), ("arr_O", A, Z.LW)]
+            + ([("arr_cap", A, 1)] if S.AS else [])
+            + [("bits", A, 1), ("hit", W + A, Z.HW), ("evict", W + A, Z.HW), ("ret", R, Z.HW)]
+            + ([("run_pfx", R, S.EW), ("row_pfx", R, S.EW)] if S.EW else []))
 
 
 def _out_fields(S) -> list[tuple[str, int, int]]:
     Z = widths(S)
-    R, W = S.R, S.W
-    return [("ok", 1, 1), ("taken", 1, Z.AC), ("used", 1, Z.AC), ("row_valid", R, 1), ("row_id", R, S.IW),
-            ("row_kind", R, 1), ("row_start", R, Z.LW), ("row_n", R, Z.TW), ("run_valid", R, 1), ("run_id", R, S.IW),
-            ("run_P", R, Z.LW), ("run_O", R, Z.LW), ("run_out", R, Z.LW), ("run_comp", R, Z.LW), ("wait_valid", W, 1),
-            ("wait_id", W, S.IW), ("wait_P", W, Z.LW), ("wait_O", W, Z.LW), ("wait_out", W, Z.LW), ("free", 1, Z.BW)]
+    R = S.R
+    return ([("ok", 1, 1), ("taken", 1, Z.AC), ("used", 1, Z.AC), ("row_valid", R, 1), ("row_id", R, S.IW),
+             ("row_kind", R, 1), ("row_start", R, Z.LW), ("row_n", R, Z.TW)]
+            + _state_fields(S) + ([("run_pfx", R, S.EW)] if S.EW else []))
 
 
 def _type(fields) -> Tuple:
@@ -149,13 +160,18 @@ def _type(fields) -> Tuple:
 
 @dataclass(frozen=True)
 class Req:
-    """A request in the engine: its id, certified prompt and output lengths, outputs so far and tokens computed."""
+    """A request in the engine: its id, certified prompt and output lengths, outputs so far and tokens computed. With
+    AS, `cap` (O is its max_tokens) and, running, `fin` (its last output was sampled the step before); with EW, a
+    running request's walk entry `pfx`."""
 
     id: int
     P: int
     O: int
     out: int = 0
     comp: int = 0
+    cap: int = 0
+    fin: int = 0
+    pfx: int = 0
 
 
 @dataclass(frozen=True)
@@ -172,6 +188,7 @@ class Inputs:
     hit: tuple[int, ...] = ()               # per candidate (W waiting slots, then A arrivals): hit blocks
     evict: tuple[int, ...] = ()             # per candidate: of those, the evictable
     ret: tuple[int, ...] = ()               # per running slot: blocks returned when it leaves
+    row_pfx: tuple[int, ...] = ()           # per slot (the rows' slots): the walk entry after its row's CacheStep call
 
 
 @dataclass(frozen=True)
@@ -192,11 +209,18 @@ def _at(xs: Sequence[int], k: int) -> int:
 
 
 def reference(S, st: State, inp: Inputs) -> Out:
-    """One step as `replay._Sched` schedules and updates it (sync, FCFS), on the size class `S`; `Out(False)` refuses."""
+    """One step as `replay._Sched` schedules and updates it (FCFS; with AS, one schedule and the update of the step
+    before it), on the size class `S`; `Out(False)` refuses."""
     if len(st.running) > S.R or len(st.waiting) > S.W or len(inp.arrivals) > S.A:
         raise ValueError("the state or the arrivals exceed the size class")
-    run = [dict(r.__dict__) for r in st.running]
-    wait = [dict(r.__dict__) for r in st.waiting]
+    AS, EW = S.AS, S.EW
+
+    def norm(r: Req, running: bool) -> dict:
+        return {**r.__dict__, "cap": r.cap if AS else 0, "fin": r.fin if AS and running else 0,
+                "pfx": r.pfx if EW and running else 0}
+
+    run = [norm(r, True) for r in st.running]
+    wait = [norm(r, False) for r in st.waiting]
     arr = list(inp.arrivals)
     free, taken, used, budget = st.free, 0, 0, S.T
 
@@ -213,7 +237,7 @@ def reference(S, st: State, inp: Inputs) -> Out:
         return a.P >= 1 and a.O >= 1 and a.P + a.O <= S.L
 
     def as_req(a: Req) -> dict:
-        return {"id": a.id, "P": a.P, "O": a.O, "out": 0, "comp": 0}
+        return {"id": a.id, "P": a.P, "O": a.O, "out": 0, "comp": 0, "cap": a.cap if AS else 0, "fin": 0, "pfx": 0}
 
     shift = 0
     if not run and not wait and arr:
@@ -230,6 +254,8 @@ def reference(S, st: State, inp: Inputs) -> Out:
         if 0 < S.H < n:
             n = S.H
         n = min(n, budget, S.L - r["comp"] - 1)
+        if r["fin"] and r["cap"]:
+            n = 0
         if n <= 0:
             i += 1
             continue
@@ -241,7 +267,8 @@ def reference(S, st: State, inp: Inputs) -> Out:
             if back is None:
                 return Out(False)
             free += back
-            victims.insert(0, {**v, "comp": 0})
+            if not v["fin"]:
+                victims.insert(0, {**v, "comp": 0, "pfx": 0})
             if j == i:
                 break
         if i >= len(run):
@@ -314,18 +341,24 @@ def reference(S, st: State, inp: Inputs) -> Out:
     rows = []
     keep = []
     for p, r in enumerate(run):
+        lag = r["fin"]
+        stop = False
         if p in sched:
             n = sched[p]
             rows.append((p, r["id"], int(n == 1 and r["comp"] >= r["P"]), r["comp"], n))
             r["comp"] += n
-            if r["comp"] >= r["P"] + r["out"]:
+            if EW:
+                r["pfx"] = _at(inp.row_pfx, p)
+            if not lag and r["comp"] >= r["P"] + r["out"]:
                 r["out"] += 1
-                if r["out"] == r["O"]:
-                    back = returned(p, r)
-                    if back is None:
-                        return Out(False)
-                    free += back
-                    continue
+                stop = r["out"] == r["O"]
+        if lag or (stop and not AS):
+            back = returned(p, r)
+            if back is None:
+                return Out(False)
+            free += back
+            continue
+        r["fin"] = int(stop)
         keep.append(r)
     waiting = victims + wait[k:]
     if len(waiting) > S.W:
@@ -461,6 +494,7 @@ def _build(C, S, *elements):
     LW, TW, BW, HW, RC, AC, LB = Z.LW, Z.TW, Z.BW, Z.HW, Z.RC, Z.AC, Z.LB
     NW = max(LW, TW) + 1
     R, W, A = S.R, S.W, S.A
+    AS, EW = S.AS, S.EW
     I = _split(_in_fields(S), elements)
     bad = []
     phase = getattr(C, "phase", None) is not None
@@ -472,7 +506,9 @@ def _build(C, S, *elements):
     def rec(kind, p):
         return {"valid": I[f"{kind}_valid"][p][0], "id": I[f"{kind}_id"][p], "P": I[f"{kind}_P"][p], "O": I[f"{kind}_O"][p],
                 "out": I[f"{kind}_out"][p] if kind != "arr" else [ZERO] * LW,
-                "comp": I[f"{kind}_comp"][p] if kind == "run" else [ZERO] * LW}
+                "comp": I[f"{kind}_comp"][p] if kind == "run" else [ZERO] * LW,
+                "cap": I[f"{kind}_cap"][p][0] if AS else ZERO,
+                "fin": I["run_fin"][p][0] if AS and kind == "run" else ZERO}
 
     def arrival_bad(r):
         po = _add(C, r["P"], r["O"], LW + 1)
@@ -485,11 +521,12 @@ def _build(C, S, *elements):
     quiet = C.AND(or_reduce(C, [r["valid"] for r in run]).inv(), wait[0]["valid"].inv())
     forced = C.AND(quiet, arr[0]["valid"])
     bad.append(C.AND(forced, arrival_bad(arr[0])))
-    keys = ("valid", "id", "P", "O", "out", "comp")
-    wait[0] = {k: (mux(C, forced, [arr[0][k]], [wait[0][k]])[0] if k == "valid" else mux(C, forced, arr[0][k], wait[0][k]))
+    keys = ("valid", "id", "P", "O", "out", "comp") + (("cap", "fin") if AS else ())
+    one_bit = {"valid", "cap", "fin"}
+    wait[0] = {k: (mux(C, forced, [arr[0][k]], [wait[0][k]])[0] if k in one_bit else mux(C, forced, arr[0][k], wait[0][k]))
                for k in keys}
-    zero = {k: (ZERO if k == "valid" else [ZERO] * len(arr[0][k])) for k in keys}
-    arr = [{k: (mux(C, forced, [nxt[k]], [cur[k]])[0] if k == "valid" else mux(C, forced, nxt[k], cur[k])) for k in keys}
+    zero = {k: (ZERO if k in one_bit else [ZERO] * len(arr[0][k])) for k in keys}
+    arr = [{k: (mux(C, forced, [nxt[k]], [cur[k]])[0] if k in one_bit else mux(C, forced, nxt[k], cur[k])) for k in keys}
            for cur, nxt in zip(arr, arr[1:] + [zero])]
     free = I["free"][0]
 
@@ -510,7 +547,8 @@ def _build(C, S, *elements):
         ntok = _add(C, r["P"], r["out"], LW)
         n = _clamp(C, _sub(C, ntok, r["comp"], NW), S.H, NW)
         n = _min(C, n, budget, NW)
-        n = _sel(C, r["valid"], _min(C, n, _sub(C, const_bits(S.L - 1, LW), r["comp"], LW), NW))
+        live = C.AND(r["valid"], C.AND(r["fin"], r["cap"]).inv()) if AS else r["valid"]
+        n = _sel(C, live, _min(C, n, _sub(C, const_bits(S.L - 1, LW), r["comp"], LW), NW))
         held = _cdiv(C, r["comp"], LB, HW + 1)
         needs.append(_sub(C, _cdiv(C, _add(C, r["comp"], n, LW + 1), LB, HW + 1), held, HW + 1))
         budget = _sub(C, budget, n, TW)
@@ -589,17 +627,19 @@ def _build(C, S, *elements):
     # the admitted after the running list
     stage("place")
 
+    tail = (("cap", 1), ("fin", 1)) if AS else ()
+
     def full_rec(r, valid, comp, n):
-        return [valid] + r["id"] + r["P"] + r["O"] + r["out"] + _pad(comp, LW) + n
+        return [valid] + r["id"] + r["P"] + r["O"] + r["out"] + _pad(comp, LW) + n + [r[k] for k, _w in tail]
 
     def from_rec(x):
         at, out = 0, {}
-        for k, w in (("valid", 1), ("id", S.IW), ("P", LW), ("O", LW), ("out", LW), ("comp", LW), ("n", TW)):
+        for k, w in (("valid", 1), ("id", S.IW), ("P", LW), ("O", LW), ("out", LW), ("comp", LW), ("n", TW)) + tail:
             out[k] = x[at:at + w]
             at += w
         return out
 
-    width = 1 + S.IW + 4 * LW + TW
+    width = 1 + S.IW + 4 * LW + TW + len(tail)
     wslots = [_sel(C, adm[w][0], full_rec(wait[w], ONE, adm[w][1], adm[w][2])) for w in range(min(W, R))]
     aslots = [_sel(C, adm[W + a][0], full_rec(arr[a], ONE, adm[W + a][1], adm[W + a][2])) for a in range(A)]
     zs = _shift_right(C, aslots, k_wait[:RC], R) if aslots else [[ZERO] * width for _ in range(R)]
@@ -625,42 +665,61 @@ def _build(C, S, *elements):
         O["row_n"].append(_sel(C, on, n))
         comp = _add(C, s["comp"], n, LW)
         sample = C.AND(on, _lt(C, comp, _add(C, s["P"], s["out"], LW)).inv())
+        if AS:
+            sample = C.AND(sample, s["fin"][0].inv())
         out = _add(C, s["out"], [sample], LW)
         stop = C.AND(sample, _eq(C, out, s["O"]))
+        # with AS a request stopping here runs on (vLLM updates this step after scheduling the next), and the one that
+        # stopped the step before leaves
+        leave = C.AND(s["valid"][0], s["fin"][0]) if AS else stop
         held = _cdiv(C, comp, LB, HW + 1)
         back = ret_of(p, _pad(held, HW))
         if S.PC:
-            bad.append(C.AND(stop, _lt(C, held, back)))
-        free = _add(C, free, _sel(C, stop, back), BW)
-        keep.append(C.AND(s["valid"][0], stop.inv()))
-        nxt.append(s["valid"] + s["id"] + s["P"] + s["O"] + out + comp)
+            bad.append(C.AND(leave, _lt(C, held, back)))
+        free = _add(C, free, _sel(C, leave, back), BW)
+        keep.append(C.AND(s["valid"][0], leave.inv()))
+        pfx = []
+        if EW:
+            pfx = mux(C, on, I["row_pfx"][p], _sel(C, kept[p], I["run_pfx"][p]))
+        nxt.append(s["valid"] + s["id"] + s["P"] + s["O"] + out + comp + (s["cap"] + [stop] if AS else []) + pfx)
 
     stage("compact")
-    rw = 1 + S.IW + 4 * LW
+    rw = 1 + S.IW + 4 * LW + 2 * AS + EW
     run_next = _compact(C, nxt, keep, RC + 1)
 
     # the waiting list: the preempted, in order, then the waiting not admitted
     stage("requeue")
-    ww = 1 + S.IW + 3 * LW
-    wrec = [[wait[w]["valid"]] + wait[w]["id"] + wait[w]["P"] + wait[w]["O"] + wait[w]["out"] for w in range(W)]
+    ww = 1 + S.IW + 3 * LW + AS
+
+    def wfields(r, valid):
+        return [valid] + r["id"] + r["P"] + r["O"] + r["out"] + ([r["cap"]] if AS else [])
+
+    wrec = [wfields(wait[w], wait[w]["valid"]) for w in range(W)]
     rest = _shift_left(C, wrec, k_wait)
-    n_pre = _popcount(C, popped, RC + 1)
+    # a victim that stopped the step before leaves at this step's update instead of waiting
+    vic = [C.AND(popped[p], run[p]["fin"].inv()) for p in range(R)] if AS else popped
+    n_pre = _popcount(C, vic, RC + 1)
     n_wait = _popcount(C, [x[0] for x in rest], _bitlen(W) + 1)
     bad.append(_lt(C, const_bits(W, _bitlen(W) + RC + 2), _add(C, n_wait, n_pre, _bitlen(W) + RC + 2)))
     rest = _shift_right(C, rest, n_pre, W)
-    vrec = [_sel(C, popped[p], [ONE] + run[p]["id"] + run[p]["P"] + run[p]["O"] + run[p]["out"]) for p in range(R)]
-    n_kept = _popcount(C, kept, RC + 1)
-    front = _shift_left(C, vrec, n_kept)
+    vrec = [_sel(C, vic[p], wfields(run[p], ONE)) for p in range(R)]
+    if AS:
+        front = _compact(C, vrec, vic, RC + 1)
+    else:
+        front = _shift_left(C, vrec, _popcount(C, kept, RC + 1))
     wait_next = [[x ^ y for x, y in zip(rest[q], front[q])] if q < R else rest[q] for q in range(W)]
 
     stage("out")
     res = {"ok": [[or_reduce(C, bad).inv()]], "taken": [taken], "used": [used], **O}
-    for k, at, w in (("run_valid", 0, 1), ("run_id", 1, S.IW), ("run_P", 1 + S.IW, LW), ("run_O", 1 + S.IW + LW, LW),
-                     ("run_out", 1 + S.IW + 2 * LW, LW), ("run_comp", 1 + S.IW + 3 * LW, LW)):
+    at = 0
+    for k, w in (("run_valid", 1), ("run_id", S.IW), ("run_P", LW), ("run_O", LW), ("run_out", LW), ("run_comp", LW),
+                 ("run_cap", AS), ("run_fin", AS), ("run_pfx", EW)):
         res[k] = [x[at:at + w] for x in run_next]
-    for k, at, w in (("wait_valid", 0, 1), ("wait_id", 1, S.IW), ("wait_P", 1 + S.IW, LW), ("wait_O", 1 + S.IW + LW, LW),
-                     ("wait_out", 1 + S.IW + 2 * LW, LW)):
+        at += w
+    at = 0
+    for k, w in (("wait_valid", 1), ("wait_id", S.IW), ("wait_P", LW), ("wait_O", LW), ("wait_out", LW), ("wait_cap", AS)):
         res[k] = [x[at:at + w] for x in wait_next]
+        at += w
     res["free"] = [free]
     assert rw == len(run_next[0]) and ww == len(wait_next[0])
     return [e for name, _n, _w in _out_fields(S) for e in res[name]]
@@ -681,15 +740,16 @@ ReplayStep = _part(
     "counts can't express (`replay_step.reference`)")
 
 
-def statics(R: int, W: int, A: int, engine: dict, IW: int) -> dict:
-    """The binding for size class (R, W, A) of an engine configuration (`replay.Engine`'s fields)."""
+def statics(R: int, W: int, A: int, engine: dict, IW: int, EW: int = 0) -> dict:
+    """The binding for size class (R, W, A) of an engine configuration (`replay.Engine`'s fields), with EW the walk
+    entries' width when the scan carries `CacheStep_v1`'s table (0 for none)."""
     e = engine
     return {"R": R, "W": W, "A": A, "M": int(e["max_num_seqs"]), "T": int(e["max_num_batched_tokens"]),
             "L": int(e["max_model_len"]), "B": int(e.get("block_size", 16)),
             "H": int(e.get("long_prefill_token_threshold") or 0), "CH": int(bool(e.get("enable_chunked_prefill", True))),
             "WM": int(float(e.get("watermark", 0.0) or 0.0) * int(e["num_gpu_blocks"])),
             "FULL": int(bool(e.get("scheduler_reserve_full_isl", True))), "PC": int(bool(e.get("enable_prefix_caching"))),
-            "NB": int(e["num_gpu_blocks"]), "IW": IW}
+            "NB": int(e["num_gpu_blocks"]), "IW": IW, "AS": int(bool(e.get("async_scheduling"))), "EW": EW}
 
 
 def unit(**st):
@@ -710,16 +770,16 @@ def arguments(S, st: State, inp: Inputs) -> list[list[int]]:
     Z = widths(S)
     vals: dict[str, list[int]] = {}
 
-    def slots(kind, reqs, n, comp):
+    def slots(kind, reqs, n, ks):
         vals[f"{kind}_valid"] = [1] * len(reqs) + [0] * (n - len(reqs))
-        for k in ("id", "P", "O") + (("out",) if kind != "arr" else ()) + (("comp",) if comp else ()):
+        for k in ks:
             vals[f"{kind}_{k}"] = [getattr(r, k) for r in reqs] + [0] * (n - len(reqs))
 
-    slots("run", st.running, S.R, True)
-    slots("wait", st.waiting, S.W, False)
-    slots("arr", inp.arrivals, S.A, False)
+    slots("run", st.running, S.R, ("id", "P", "O", "out", "comp", "cap", "fin", "pfx"))
+    slots("wait", st.waiting, S.W, ("id", "P", "O", "out", "cap"))
+    slots("arr", inp.arrivals, S.A, ("id", "P", "O", "cap"))
     vals["free"] = [st.free]
-    for k, n in (("bits", S.A), ("hit", S.W + S.A), ("evict", S.W + S.A), ("ret", S.R)):
+    for k, n in (("bits", S.A), ("hit", S.W + S.A), ("evict", S.W + S.A), ("ret", S.R), ("row_pfx", S.R)):
         xs = list(getattr(inp, k))[:n]
         vals[k] = xs + [0] * (n - len(xs))
     del Z
@@ -734,8 +794,11 @@ def decode(S, flat: Sequence[int]) -> Out:
         at += n * w
 
     def reqs(kind, comp):
-        return tuple(Req(f[f"{kind}_id"][p], f[f"{kind}_P"][p], f[f"{kind}_O"][p], f[f"{kind}_out"][p],
-                         f[f"{kind}_comp"][p] if comp else 0) for p in range(len(f[f"{kind}_valid"])) if f[f"{kind}_valid"][p])
+        def get(k, p):
+            return f[f"{kind}_{k}"][p] if f"{kind}_{k}" in f else 0
+        return tuple(Req(get("id", p), get("P", p), get("O", p), get("out", p), get("comp", p) if comp else 0,
+                         get("cap", p), get("fin", p), get("pfx", p))
+                     for p in range(len(f[f"{kind}_valid"])) if f[f"{kind}_valid"][p])
 
     if not f["ok"][0]:
         return Out(False)
@@ -752,7 +815,11 @@ def evaluate(st_: dict, cases: Sequence[tuple[State, Inputs]]) -> list[Out]:
 
 
 def _req(r: Req) -> list[int]:
-    return [r.id, r.P, r.O, r.out, r.comp]
+    """(id, P, O, out, comp), then (cap, fin, pfx) up to the last nonzero."""
+    x = [r.id, r.P, r.O, r.out, r.comp, r.cap, r.fin, r.pfx]
+    while len(x) > 5 and not x[-1]:
+        x.pop()
+    return x
 
 
 def to_json(state: State, inp: Inputs, want: Out) -> list:
@@ -762,13 +829,14 @@ def to_json(state: State, inp: Inputs, want: Out) -> list:
 
     assert want.ok and want.state is not None
     return [[[_req(r) for r in state.running], [_req(r) for r in state.waiting], state.free],
-            [[_req(r)[:3] for r in inp.arrivals], [k for k, b in enumerate(inp.bits) if b], nz(inp.hit), nz(inp.evict), nz(inp.ret)],
+            [[_req(r) if r.cap else _req(r)[:3] for r in inp.arrivals], [k for k, b in enumerate(inp.bits) if b], nz(inp.hit),
+             nz(inp.evict), nz(inp.ret)] + ([nz(inp.row_pfx)] if any(inp.row_pfx) else []),
             [[list(r) for r in want.rows], [[_req(r) for r in want.state.running], [_req(r) for r in want.state.waiting],
                                             want.state.free], want.taken, want.used]]
 
 
 def from_json(st_: dict, v: list) -> tuple[State, Inputs, Out]:
-    (run, wait, free), (arr, ones, hit, evict, ret), (rows, (nrun, nwait, nfree), taken, used) = v
+    (run, wait, free), (arr, ones, hit, evict, ret, *pfx), (rows, (nrun, nwait, nfree), taken, used) = v
 
     def dense(pairs, n):
         out = [0] * n
@@ -781,7 +849,8 @@ def from_json(st_: dict, v: list) -> tuple[State, Inputs, Out]:
 
     A, W, R = st_["A"], st_["W"], st_["R"]
     return (State(reqs(run), reqs(wait), free),
-            Inputs(reqs(arr), dense([(k, 1) for k in ones], A), dense(hit, W + A), dense(evict, W + A), dense(ret, R)),
+            Inputs(reqs(arr), dense([(k, 1) for k in ones], A), dense(hit, W + A), dense(evict, W + A), dense(ret, R),
+                   dense(pfx[0], R) if pfx else ()),
             Out(True, tuple(tuple(r) for r in rows), State(reqs(nrun), reqs(nwait), nfree), taken, used))
 
 
