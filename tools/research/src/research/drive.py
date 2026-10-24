@@ -163,7 +163,8 @@ def auth_env(auth: tuple[str, ...]) -> dict[str, str]:
 
 
 #: what train.sh's check.py passes on as `slot.py --rank`: a train's first-parent depth (`Driver._rank`, the lowest train's the
-#: least), 0 for the post-landing run, so the train that lands next takes a node's next free check slot (CI-110)
+#: least), so the train that lands next takes a node's next free check slot (CI-110); the post-landing run has none, so it takes
+#: a slot only where no train waits (top, 24 Oct 04:53Z: trains come first)
 SLOT_RANK = "CHECK_SLOT_RANK"
 #: the per-PR shadow's checks' train.sh: an ordinary job, no `--priority` or rank, behind every priority check and in turn with
 #: lane checks, so it never takes a lane's or a train's slot; and quiet, posting nothing when a launch registers nothing (ci, 21 Oct)
@@ -1052,7 +1053,7 @@ class Driver:
         if self.dry_run or q.shadow:
             q.log(f"research queue drive: would launch train.sh {main[:12]} {self.on} --deferred {steps}")
             return
-        with slot_rank(0):
+        with slot_rank(None):
             ids, tail = self.launch_postland(self.repo, main, self.on, steps)
         if not ids:
             self.refuse(drive, f"launch:postland:{main}", f"train.sh {main[:12]} {self.on} --deferred {steps} registered no run: {tail}")

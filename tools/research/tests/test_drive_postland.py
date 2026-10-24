@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from research.drive import CHECK_STEPS
+from research.drive import CHECK_STEPS, launch_vars
 from test_queue import World, _git
 from test_queue_drive import Harness, _check, _failed_run, _killed_run, _steps_run, _tip
 
@@ -25,13 +25,14 @@ class Postland(Harness):
 
     def __init__(self, world, monkeypatch, tmp_path, **kw):
         super().__init__(world, monkeypatch, **kw)
-        self.tmp, self.posted = tmp_path, []
+        self.tmp, self.posted, self.post_ranks = tmp_path, [], []
         self.d.defer = DEFER
         self.d.launch_postland = self.launch_post
 
     def launch_post(self, repo, commit, machine, steps):
         rid = f"r-post-{len(self.posted)}"
         self.posted.append((commit, steps))
+        self.post_ranks.append(launch_vars().get("CHECK_SLOT_RANK"))
         self.run_state[rid] = ("running", None, None)
         return [rid], ""
 
@@ -70,6 +71,7 @@ def test_a_deferred_landing_cancels_its_checks_tail_and_awaits_one_post_landing_
     pl = h.postland()
     assert pl["verified"] == base and pl["pending"] == [tip] and pl["steps"] == sorted(DEFER)
     assert pl["run"]["tip"] == tip and h.posted == [(tip, "circuit-check,flock-rust-tests")]
+    assert h.post_ranks == [None], "unranked: it takes a slot only where no train waits (top, 24 Oct 04:53Z)"
     assert not h.d.q.load_state()["drive"].get("deferred")              # nothing for the old rule to follow
     h.tick()
     assert len(h.posted) == 1 and h.cancelled == [rid]                  # its run is running: nothing more
