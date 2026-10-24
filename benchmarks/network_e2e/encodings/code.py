@@ -837,12 +837,14 @@ def _rows_delta(st: Stream, caps: Caps, x: StepAdvice | None, s: _V0State) -> tu
 
 
 def _step_cond(st: Stream, caps: Caps, x: StepAdvice | None, s: _V0State, prev: Sequence[int], waiting: int) -> tuple[Row, ...]:
-    """A step predicted from the public schedule: the previous step's unfinished rows continue in order, each at its
-    next position, a decode one token and a prefill chunk as much of its prompt as the token budget leaves (a flag says
-    whether each is present, and a chunk's shortfall is coded); then new rows, each a pick among the started requests
-    not running (in request order) and the first `CANDIDATES` not yet started (first come, first served is pick 0), at
-    its next position or, not yet started, at its cache hit. Raises ValueError for a step outside this form."""
-    cont = [r for r in prev if not s.done(r)]
+    """A step predicted from the public schedule: the previous step's unfinished rows continue in request order (vLLM
+    keeps its running requests in arrival order, a resumed one included), each at its next position, a decode one token
+    and a prefill chunk as much of its prompt as the token budget leaves (a flag says whether each is present, and a
+    chunk's shortfall is coded); then new rows, each a pick among the started requests not running (in request order)
+    and the first `CANDIDATES` not yet started (first come, first served is pick 0). A request not yet started runs from
+    its cache hit; a started one from its next position or, resumed after a preemption (a flag), from its re-hit,
+    recomputing up to its known tokens. Raises ValueError for a step outside this form."""
+    cont = sorted(r for r in prev if not s.done(r))
     running = set(cont)
     by_req = {y.request: y for y in x.rows} if x else {}
     rows: list[Row] = []
@@ -871,18 +873,24 @@ def _step_cond(st: Stream, caps: Caps, x: StepAdvice | None, s: _V0State, prev: 
             raise ValueError("a new row outside the candidates")
         r = cands.pop(st.sym("new_request", cands.index(y.request) if x else None, 0, len(cands) - 1))
         q = s.requests[r]
-        c, src = 0, ()
+        known = q.prompt_len + s.kept[r]
+        c, src, pre = 0, (), False
         if s.started[r]:
-            start = s.pos[r]
+            pre = bool(st.sym("resumed", int(y.preempted) if x else None, 0, 1))
+            if pre:
+                b = caps.block_size
+                c = b * st.sym("rehit_new", y.cache_hit // b if x else None, 0, (known - 1) // b)
+                src = _sources(st, False, caps, c, y, s)
+            start = c if pre else s.pos[r]
         else:
             c = st.sym("cache_hit_new", y.cache_hit if x else None, 0, q.prompt_len - 1)
             src = _sources(st, False, caps, c, y, s)
             start = c
-        prefill, n = start < q.prompt_len, 1
-        if prefill:
-            room = min(q.prompt_len - start, budget)
+        n = 1
+        if pre or start < q.prompt_len:
+            room = min((known if pre else q.prompt_len) - start, budget)
             n = room + st.sym("chunk_new", y.n - room if x else None, 1 - room, 0)
-        rows.append(Row(r, PREFILL if prefill else DECODE, start, n, c, False, src))
+        rows.append(Row(r, DECODE if n == 1 and start >= q.prompt_len else PREFILL, start, n, c, pre, src))
         budget -= n
     if x is not None and tuple(rows) != tuple(x.rows):
         raise ValueError("the step is not in the predicted form")
@@ -1363,7 +1371,8 @@ def schema(caps: Caps, T: int) -> dict[str, tuple]:
             "canon": ("table", 0, 1), "cont_prefill": ("table", 0, 1), "cont_decode": ("table", 0, 1),
             "chunk_cont": ("table", -64, 0), "chunk_new": ("table", -64, 0), "new_rows_0": ("table", 0, 16),
             "new_rows_1": ("table", 0, 16), "new_rows_2": ("table", 0, 16), "new_request": ("table", 0, 16),
-            "cache_hit_new": ("binned", caps.prompt_max), "release_same": ("table", -2, 2),
+            "cache_hit_new": ("binned", caps.prompt_max), "resumed": ("table", 0, 1), "rehit_new": ("binned", span),
+            "release_same": ("table", -2, 2),
             **{f"release_res_{q}": ("table", -8, 8) for q in range(PHASES + 1)}}
     out.update({f"c:{k}": v for k, v in cond.items()})
     residual = {"prompt_len": reqs["prompt_len"], "output_len": reqs["output_len"], "hit": ("table", 0, 64),

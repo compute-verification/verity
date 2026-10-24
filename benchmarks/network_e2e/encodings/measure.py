@@ -1,7 +1,10 @@
 """Bits per window of each code on a corpus of traces: fit on a training split, measured on a test split.
 
     python measure.py synth --out DIR [--rates 0.5,2,6] [--windows 5] [--train 2] [--test 2]
-    python measure.py corpus TRACE.jsonl ... --out DIR [--train-share 0.5]
+    python measure.py corpus MODEL_DIR ... --out DIR [--folds 2]
+
+`synth` fits on synthetic traces of other seeds; `corpus` reads TRACE-CORPUS's traces (`trace_corpus.py`, each under
+its server's own caps) and measures each fold under a codebook fit on the other folds (`codebooks/`).
 
 Each run fits the codebook on the training traces (the step-time model, its phase, and every table), registers it
 (`codebook.json`, with its SHA-512 digest), and on every test trace encodes each subject (v0's fields, the admission
@@ -18,6 +21,7 @@ arrivals too).
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import importlib.util
 import json
 import math
@@ -106,9 +110,15 @@ def steptime_samples(trace: dict) -> list[tuple[float, float, float, float]]:
 # ---------------------------------------------------------------------------------------------------- fitting
 
 
+def _cb_for(cb, t: dict):
+    """The codebook under a trace's own serving caps (its server's registered config), where the trace has them."""
+    return dataclasses.replace(cb, caps=t["caps"]) if t.get("caps") else cb
+
+
 def v0_symbols(traces: list[dict], cb) -> dict[str, list]:
     """Each family's windows of v0's symbols on the training traces (they read no step-time phase)."""
-    return {fam: [w for t in traces for w in C.symbols_v0(t["advice"], t["public"], cb, fam)] for fam in ("static", "cond")}
+    return {fam: [w for t in traces for w in C.symbols_v0(t["advice"], t["public"], _cb_for(cb, t), fam)]
+            for fam in ("static", "cond")}
 
 
 def residual_symbols(traces: list[dict], cb) -> dict[str, list]:
@@ -120,7 +130,7 @@ def residual_symbols(traces: list[dict], cb) -> dict[str, list]:
         rep = C.TraceReplay(t["advice"], t["public"])
         res = C.residual_of(t["advice"], t["admit"])
         for fam in out:
-            wins = C.symbols_residual(res, t["public"], cb, fam, rep)
+            wins = C.symbols_residual(res, t["public"], _cb_for(cb, t), fam, rep)
             if fam != "cond+adapt":
                 wins = [[x for x in win if not x[0].startswith(("prompt_len", "output_len", "source"))] for win in wins]
             out[fam] += wins
@@ -206,9 +216,10 @@ def worst_v0_window(cb, T: int, family: str, arrivals: int) -> float:
         sources = seg([("sources_more", 0, 0, G - 1)]) + G * seg([("source_delta", 0, -Q, Q), ("source_n", 0, 0, H - 1)])
         if fam == "cond":
             per_step = seg([("canon", 0, 0, 1), ("rows", 0, 0, R)])
+            new = [("new_rows_0", 0, 0, R), ("new_request", 0, 0, Q), ("chunk_new", 0, -caps.tokens_max, 0)]
             per_row = max(per_row, seg([("cont_prefill", 0, 0, 1), ("chunk_cont", 0, -caps.tokens_max, 0)]),
-                          seg([("new_rows_0", 0, 0, R), ("new_request", 0, 0, Q), ("cache_hit_new", 0, 0, H),
-                               ("chunk_new", 0, -caps.tokens_max, 0)])) + sources
+                          seg(new + [("cache_hit_new", 0, 0, H)]),
+                          seg(new + [("resumed", 0, 0, 1), ("rehit_new", 0, 0, span // caps.block_size)])) + sources
             per_row += max(seg([(name, 0, -g, rel - g)]) for name in [f"release_res_{q}" for q in range(C.PHASES + 1)]
                            + ["release_same"] for g in (0, rel // 2, rel))
         else:
@@ -262,7 +273,7 @@ def measure(test: list[dict], cb) -> dict:
     A = adv_spec()
     rows = []
     for t in test:
-        adv, pub, admit = t["advice"], t["public"], t["admit"]
+        adv, pub, admit, cbt = t["advice"], t["public"], t["admit"], _cb_for(cb, t)
         rep = C.TraceReplay(adv, pub)
         res = C.residual_of(adv, admit)
         entry = {"name": t["name"], "windows": pub.W, "requests": len(adv.requests), "steps": len(adv.steps),
@@ -271,30 +282,30 @@ def measure(test: list[dict], cb) -> dict:
                  "resumes_per_window": [len(rep.resumes_in(w)) for w in range(pub.W)], "bits": {}, "fields": {},
                  "decode_seconds": {}}
         for fam in C.FAMILIES:
-            bits, lens = C.encode_v0(adv, pub, cb, fam)
-            back, dt = _timed(C.decode_v0, C.BitReader(bits.bits), pub, cb, fam)
+            bits, lens = C.encode_v0(adv, pub, cbt, fam)
+            back, dt = _timed(C.decode_v0, C.BitReader(bits.bits), pub, cbt, fam)
             if back.steps != adv.steps or back.release != adv.release or \
                     [(r.prompt_len, r.output_len, r.finish) for r in back.requests] != \
                     [(r.prompt_len, r.output_len, r.finish) for r in adv.requests]:
                 raise SystemExit(f"{t['name']}: v0 under {fam} does not round-trip")
             entry["bits"][f"v0/{fam}"], entry["decode_seconds"][f"v0/{fam}"] = lens, dt
-            bits, lens = C.encode_admit(admit, pub, cb, fam, rep)
-            back, dt = _timed(C.decode_admit, C.BitReader(bits.bits), pub, cb, fam, rep)
+            bits, lens = C.encode_admit(admit, pub, cbt, fam, rep)
+            back, dt = _timed(C.decode_admit, C.BitReader(bits.bits), pub, cbt, fam, rep)
             if back != list(admit):
                 raise SystemExit(f"{t['name']}: admit under {fam} does not round-trip")
             entry["bits"][f"admit/{fam}"], entry["decode_seconds"][f"admit/{fam}"] = lens, dt
-            bits, lens = C.encode_residual(res, pub, cb, fam, rep)
-            back, dt = _timed(C.decode_residual, C.BitReader(bits.bits), pub, cb, fam, rep)
+            bits, lens = C.encode_residual(res, pub, cbt, fam, rep)
+            back, dt = _timed(C.decode_residual, C.BitReader(bits.bits), pub, cbt, fam, rep)
             if back != res:
                 raise SystemExit(f"{t['name']}: the residual under {fam} does not round-trip")
             entry["bits"][f"residual/{fam}"], entry["decode_seconds"][f"residual/{fam}"] = lens, dt
         entry["symbols"] = {}
         for subj in SUBJECTS:
             for fam in sorted(set(DECOMPOSITION.values())):
-                syms = _symbols(subj, fam, adv, pub, admit, res, rep, cb)
+                syms = _symbols(subj, fam, adv, pub, admit, res, rep, cbt)
                 entry["symbols"][f"{subj}/{fam}"] = [sum(hi > lo for _, _, lo, hi in win) for win in syms]
                 if (subj, fam) in FIELDS:
-                    entry["fields"][f"{subj}/{fam}"] = by_field(syms, cb, fam)
+                    entry["fields"][f"{subj}/{fam}"] = by_field(syms, cbt, fam)
         if A is not None:
             by = A.bits_by_window(to_adv_spec(A, adv), pub.T)
             entry["reference"] = {"v0/adv-spec": [by.get(w, 0) for w in range(pub.W)]}
@@ -362,9 +373,13 @@ def _num(v) -> str:
 
 
 def render(summary: dict, meta: dict) -> str:
+    folds = meta.get("folds")
+    fitted = (f"Codebook `{meta['codebook_digest'][:16]}…` (SHA-512) fit on every trace, which bounds the worst cases; "
+              f"each trace's bits are under the codebook of its fold, fit on the other folds "
+              f"({'; '.join(f'`{f['codebook_digest'][:16]}…` measures {f['test']}' for f in folds)}). ") if folds else (
+              f"Codebook `{meta['codebook_digest'][:16]}…` (SHA-512), fit on {meta['train']}; measured on {meta['test']}. ")
     lines = [f"# Advice bits per window ({meta['corpus']})", "",
-             f"Codebook `{meta['codebook_digest'][:16]}…` (SHA-512), fit on {meta['train']}; measured on {meta['test']}. "
-             f"T = {meta['T']} buckets of {meta['tau_us'] // 1000} ms. Step-time model {meta['steptime']}.", "",
+             fitted + f"T = {meta['T']} buckets of {meta['tau_us'] // 1000} ms. Step-time model {meta['steptime']}.", "",
              "| subject | code | windows | mean bits/window | p50 | max | bits/arrival | worst, public counts (max) | "
              "worst, caps | coded symbols/window (mean, max) | decode ms/window (Python) |",
              "|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -392,16 +407,32 @@ def render(summary: dict, meta: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run(train: list[dict], test: list[dict], caps, T: int, tau_us: int, out: Path, corpus: str) -> dict:
+def run(train: list[dict], test: list[dict], caps, T: int, tau_us: int, out: Path, corpus: str, folds: int = 0) -> dict:
+    """Fit on `train` and measure `test`; or with `folds`, measure each of `test`'s folds under a codebook fit on the
+    others (written to `codebooks/`), with `codebook.json` fit on all of `train` and bounding the worst cases."""
     t0 = time.perf_counter()
     cb = fit(train, caps, T, tau_us)
     out.mkdir(parents=True, exist_ok=True)
     (out / "codebook.json").write_text(json.dumps(cb.to_json(), sort_keys=True) + "\n")
-    result = measure(test, cb)
+    held = []
+    if folds:
+        result = {"traces": []}
+        (out / "codebooks").mkdir(exist_ok=True)
+        for k in range(folds):
+            ids = range(k, len(test), folds)
+            fcb = fit([t for j, t in enumerate(test) if j not in ids], caps, T, tau_us)
+            (out / "codebooks" / f"fold-{k}.json").write_text(json.dumps(fcb.to_json(), sort_keys=True) + "\n")
+            held.append({"codebook_digest": fcb.digest(), "test": [test[j]["name"] for j in ids]})
+            result["traces"] += measure([test[j] for j in ids], fcb)["traces"]
+    else:
+        result = measure(test, cb)
     summary = summarize(result, cb, T)
-    meta = {"corpus": corpus, "codebook_digest": cb.digest(), "train": [t["name"] for t in train],
-            "test": [t["name"] for t in test], "T": T, "tau_us": tau_us, "steptime": vars(cb.steptime),
-            "steps_per_bucket": caps.steps_per_bucket, "caps": vars(caps), "seconds": round(time.perf_counter() - t0, 1)}
+    meta = {"corpus": corpus, "codebook_digest": cb.digest(),
+            "train": f"held out: each fold under a codebook fit on the other {folds - 1}" if folds else
+            [t["name"] for t in train], "test": [t["name"] for t in test], "folds": held, "T": T, "tau_us": tau_us,
+            "steptime": vars(cb.steptime), "steps_per_bucket": caps.steps_per_bucket, "caps": vars(caps),
+            "trace_caps": {t["name"]: vars(t["caps"]) for t in test if t.get("caps")},
+            "seconds": round(time.perf_counter() - t0, 1)}
     (out / "table.json").write_text(json.dumps({"meta": meta, "summary": summary, **result}, indent=1) + "\n")
     (out / "table.md").write_text(render(summary, meta))
     return {"meta": meta, "summary": summary}
@@ -431,7 +462,22 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--windows", type=int, default=5)
     s.add_argument("--train", type=int, default=2)
     s.add_argument("--test", type=int, default=2)
+    c = sub.add_parser("corpus", help="TRACE-CORPUS's traces (trace_corpus.py): each model directory's traces")
+    c.add_argument("roots", type=Path, nargs="+", help="a corpus run's model directory, <out>/corpus/<model>")
+    c.add_argument("--out", type=Path, required=True)
+    c.add_argument("--folds", type=int, default=2)
     a = ap.parse_args(argv)
+    if a.cmd == "corpus":
+        TC = _load("trace_corpus")
+        traces = [t for r in a.roots for t in TC.load_corpus(C, r)]
+        if len(traces) < max(a.folds, 2):
+            raise SystemExit(f"{len(traces)} traces: need at least {max(a.folds, 2)} for {a.folds} folds")
+        caps = dataclasses.replace(traces[0]["caps"], **{f.name: max(getattr(t["caps"], f.name) for t in traces)
+                                                         for f in dataclasses.fields(traces[0]["caps"])})
+        names = ", ".join(r.name for r in a.roots)
+        res = run(traces, traces, caps, 600, 100_000, a.out, f"TRACE-CORPUS vLLM traces ({names})", folds=a.folds)
+        print((a.out / "table.md").read_text())
+        print(f"{res['meta']['seconds']} s")
     if a.cmd == "synth":
         S = _load("synth")
         rates = [float(x) for x in a.rates.split(",")]
