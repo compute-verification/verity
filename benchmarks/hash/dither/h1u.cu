@@ -571,13 +571,6 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #ifndef H1U_JPI
 #define H1U_JPI 0
 #endif
-// H1U_JLE = 1 (RW, with H1U_PF): a segment's load of segment sg + H1U_JPD issued after its MMAs have read its own set,
-// where 0 issues it first. The ring's loads share one scoreboard, whose wait is for all of them, so a set's first reader
-// waits for every load issued before it: issued first, the load of the segment whose set it reads lands with no time to
-// spare once a ring; issued last, every wait's newest load is a segment's fold old. The same loads
-#ifndef H1U_JLE
-#define H1U_JLE 0
-#endif
 // RC (with RW; kh_units_multi_j10rc, built with H1U_JRC = 1): the column blocks come from the call's workspace too, at
 // their stream positions M RB + (32 cj + lane) CB + c (h1jr_cols hashes each once a call), so the unit hashes no block
 // and reads no seed_c. At prefill's m a column block is every row tile's (64 at M = 2048), and RW hashes it in each of
@@ -665,8 +658,6 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
   constexpr bool PI = RW && H1U_JPI;
   static_assert(!PI || (PF && RING && NS % 4 == 0), "H1U_JPI is the prefetch ring's, in whole groups of 4 segments");
-  constexpr bool LE = RW && H1U_JLE;
-  static_assert(!LE || PF, "H1U_JLE reorders the prefetch ring's loads, so it needs H1U_PF = 1");
   const u32 lane = threadIdx.x & 31;
   const u32 g = lane >> 2, q = lane & 3;
   const u32 ncb = DG ? 1 : N / 32;
@@ -992,15 +983,11 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
             prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
           }
         }
-        // segment sg + PD's load, into set (jj + PD) % NS (jj itself without RING)
-        const auto ahead = [&]() {
+        if (PF && RING) {
           if (sg + PD < ks) {
             if constexpr (PI) load_at(jj, pa[(jj + PD) % NS], pb[(jj + PD) % NS]);
             else load_seg(sg + PD, pa[(jj + PD) % NS], pb[(jj + PD) % NS]);
           }
-        };
-        if (PF && RING) {
-          if constexpr (!LE) ahead();
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
             ca[r] = pa[jj][r];
@@ -1012,7 +999,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
             ca[r] = pa[jj][r];
             cw[r] = pb[jj][r];
           }
-          if constexpr (!LE) ahead();
+          if (sg + PD < ks) load_seg(sg + PD, pa[jj], pb[jj]);
         } else {
           load_seg(sg, ca, cw);
         }
@@ -1101,7 +1088,6 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         if constexpr (OS) {
           if ((flags & F_FAULT) && u == 0 && lane == 0 && sg == 0) T[0][0] = (int)((u32)T[0][0] + (1u << FAULT_SHIFT));
         }
-        if constexpr (LE) ahead();
         fold(T, y, z);
         ring_put(S, j, lane, y, z);
       }
