@@ -996,6 +996,31 @@ and seven lemmas, and three more proved lemmas:
   direction, window, parameters digest or status: the fields; another profile row or edited counts: the counts; another
   root, salt or path: the opening), and the deadline byte and frames root are left free; the whole Definition equals its
   reference (slow);
+- **`test_network_certifier_warden.py`:** the active warden on an injected clock, with in-memory clients and a server
+  whose bytes the test schedules:
+  - honest traffic goes out exactly on its schedule, both directions' bytes pass unchanged, the records are the wire,
+    and the audit accepts them;
+  - each of these fails its connection closed at its egress cell, and the audit refuses the window: a late byte, a
+    server that never answers or whose connection is refused, a response past `egress_cells`, a client cell of another
+    kind, and ingress past its bounds. Each `FAIL` is the same bytes, its reason only in the `fails` record. A
+    response's bytes past its last cell never reach the client. A late tick faults every window;
+  - a server slow to accept its connection moves nothing (egress starts at s + D), and the wire is identical whatever
+    the server's timing, chunking or content at the same n;
+  - past the lanes, connections queue FIFO, then get one `REFUSED` cell;
+  - every cell is B bytes, and `read_cell` refuses anything the warden wouldn't make, a `FAIL` with a payload too;
+- **`test_network_certifier_warden_adversarial.py`:** REDTEAM's cases against the warden, each stating the bits it
+  bounds: the server's connect delay doesn't move the egress base from s + D, and two accept delays give
+  byte-identical client cells and records (regressions for 316f3292b6's open base); at one fail cell the reason isn't
+  on the wire; the server picks the fail cell (the charged term); the cell kinds and buckets don't move with the
+  server's send timing; two contents of one length give one wire shape (content is the tie's); a fail frees its lane
+  early (coupled, within the charged term);
+- **`test_network_certifier_warden_rows.py`:** the warden's cells as rows (`warden_rows`), on the warden's own runs:
+  - every slot of a link-window is a row, loaded or idle, and a connection's rows are the cells its client got;
+  - every row opens the signed root at its position, and not at another, with a changed bit, another salt or root;
+  - salts are fresh and never shared;
+  - the registration reads back, and any changed field, extra key, root, key, session, link-window or the record's
+    own certificate is refused;
+  - `port` is a `verity/registered-reads/v1` port, and `Issuer.sign` is `certify`'s signature;
 - **`test_network_certifier_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
   brute force, on one link and on several under one clock;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
@@ -1042,3 +1067,154 @@ audit runs `lean/NetworkCertifier/DifftestMain.lean` on them (`runs` in `lean/le
 definitions are List forms of `NetTiming`'s `Finset` ones, and four guarantees prove them equal on everything the
 difftest compares (`NetTiming.SecurityProofs.Code`): `CodeExpectedRow`, `CodeAcceptedConstantRate`,
 `CodeStatusComplete` and `CodeSyncSet`.
+
+## The active warden (`warden`)
+
+Daniel (23 Oct, 10:08 PM PDT) wants client ↔ warden ↔ server, with the warden "just responsible for limiting network
+steganography and certifying exactly the bits it sees". So the warden knows bytes only: nothing in it belongs to vLLM
+or to any workload. `warden.py`'s docstring has its cells, admission, schedule and failures. This section says what
+its wire can carry.
+
+**The schedule's public parameters** are `WardenParams`, fixed before the run:
+- B (`cell_bytes`), r (`slots`), τ (`bucket_ms`), D (`delay`), the lanes, the queue and the window T;
+- the bounds `ingress_cells`, `ingress_buckets` and `egress_cells`.
+
+`WardenParams.digest` binds them, and every record head's `parameters` is that digest. The ticker's slack is the active
+certifier's.
+
+**What the wire is a function of.** On connection q the warden sends r cells of B bytes each way in every bucket, from
+q's admission s to its last bucket. The kinds and buckets of q's egress cells are a function of the parameters and
+three numbers, and its ingress cells of s and the client's bytes:
+- s: the bucket the warden admits q in, on its own schedule: of the arrivals, which are the client's, and of the
+  admission rule. The rule is FIFO over the lanes, and a lane frees when an earlier connection ends, so s also depends
+  on the earlier connections' n and f below.
+- n: q's egress cells, max(1, ⌈L/P⌉) for a response of L bytes.
+- f: the egress cell at which q failed, if it did.
+
+**Egress is based on admission, never on response completion.** Egress cell i is in bucket s + D + ⌊i/r⌋. Nothing
+else moves that base: not the bucket the client's ingress ends in (a), not when the server accepts its connection,
+and not when its response starts or completes. Ingress is released on the client's bytes whether or not the server's
+connection has opened, and what it releases before then is buffered for the server, at most the ingress bound's
+`ingress_cells` cells (past them the connection fails closed). A server that hasn't sent cell i's bytes by its bucket
+fails q there, which is f. (Before this, egress started at a + D, and at 316f3292b6 a waited on the server's connect,
+so a server that delayed its accept moved the whole egress schedule, about log2(`ingress_buckets`) bits a connection;
+`test_network_certifier_warden_adversarial.py` pins it closed.)
+
+Every `DATA` and `END` cell's content is the bytes, cut at fixed offsets (byte k is in cell ⌊k/P⌋), never by when or
+how they were read.
+
+**The leak bound** is what a server can signal on the wire beyond the response it sends:
+- **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).
+- **0 timing bits, at bucket resolution.**
+  - Given n, every cell's bucket is fixed. When the server writes and how it chunks its bytes reach the wire only by
+    failing the connection.
+  - Within a bucket the jitter is the ticker's, bounded by the slack as for the active certifier (its J). A tick past
+    the slack faults every record's window.
+- **The advice is not on the wire.** The warden sends no advice. Whatever the proofs need beyond the committed values
+  travels on the proof side and is charged there (`A_c`).
+- **log2 of the schedule's public parameters**, once per deployment: log2 of the number of parameter sets it may
+  choose from, which is 0 when one set is registered.
+- **log2(cells + 1) per failed connection.**
+  - A server that fails connection q picks the egress cell it fails at, or not to fail: at most n + 1 ≤
+    `egress_cells` + 1 outcomes.
+  - Every failure sends the same `FAIL` cell, with no payload: a missed deadline, a stream that hasn't ended by the
+    last cell, a broken server connection, and the client's own two. The reason is a frame of the warden's `fails`
+    record, in the bucket of the `FAIL`: witness, certified with the others and never on the wire. (At 316f3292b6 the
+    `FAIL` cell carried a reason byte, so at one fail cell a server still chose late or upstream, a bit a failure this
+    term didn't charge.)
+  - A failure the client causes (`ingress`, `malformed`) fails at once, and only returns the client's own bits to it.
+  - A failed connection frees its lane at its `FAIL`'s bucket, so f also moves later connections' s. That carries no
+    bits beyond f's, which this term charges, though they reach another client.
+
+n is content, not transport: it is the length of the protocol's output, which the proofs bind. It is charged with the
+content, at ε times the output bits of unproved units at δ. So on a run in which no connection failed, the transport
+leaks log2 of the schedule's parameters, and each failed connection adds log2(cells + 1). This is an argument over
+`warden.py`'s schedule, not a Lean statement.
+
+**Deployment requirement (`trusted-host`).** The bound holds only on a host that gives the warden's process:
+- CPU isolation from every co-tenant (its own cores), so that no co-resident process, the prover's above all, can
+  make a tick late and so choose which windows fault (about 1 bit a window otherwise);
+- a monotonic clock that nothing the prover runs can step or slew by more than the slack: buckets are read from it.
+
+Both are part of the named assumption `trusted-host` (the auditor's host and its provider are trusted). Neither is
+checked here, and tonight's runs, on a shared node, meet neither.
+
+**What it attests.** Each direction's records hold exactly the cells sent that way, padding included, so |T| is the
+wire's bits. The third record, `fails`, holds one reason a failed connection.
+- Each window's three records are certified as the certifier's are (record v2 and `certificate.Issuer`), with the
+  warden's parameters digest in the head. A head is witness, so no reason reaches the client.
+- `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's, whose `FAIL` cells
+  and reasons don't match one for one, or in which a connection failed.
+- `benchmarks/network_traces/warden_serve.py` runs the warden live and checks that each client got exactly its egress
+  record's cells, each in its bucket.
+
+**Named gaps:**
+- TLS isn't terminated: both legs are plain TCP.
+- The warden runs on the server's host, and the server gets the ingress bytes over loopback, with no shim on its side.
+- A record's certificate signs certificate v2's SHA-512 frame leaves, one per cell. The same cells are also committed
+  as v3's hm96 rows, a cell a row (8·B transfer gates), under a root the warden signs ("The warden's cells as rows").
+- No Lean statement states the bound yet.
+
+## The warden's cells as rows (`warden_rows`)
+
+Design v3 makes the transfer gates the cells' bits: the sender's proof unit opens a cell as an output and the
+receiver's opens the same cell as an input, under a root the warden signs, through the Lean verifier's registered
+reads (`Flock.Registered.checkPort`, `--registered`), with no new verifier form. `warden_rows.py`'s docstring has the
+encodings; this section says what is committed, signed and read.
+
+**The rows.** Each link-window of the wire's two records (link, direction, window w) is N = T·S rows, S = lanes·r, one
+per slot of its grid whatever the load:
+- row (t − w·T)·S + j is slot j of bucket t, in the grid's order (a bucket's cells in ordinal order, a connection's r
+  together);
+- a padding cell is a row, and so is an empty slot, as B zero bytes, so N is the schedule's;
+- a row is `hm96-sha512/row/v2` of the cell's 8·B bits, bit 8k + i being bit i of byte k: B/2 little-endian u16 words
+  at 16 bits, which is how a C-Flock port of 8·B bits lays out the cell.
+
+**The commitment** is a registered value's: row k's `b‖c` is hm96's commit string of its `sha512/row/v2` digest under
+salt k, 192 bytes the warden draws from the operating system for that row alone, and the leaves form a
+frame-v3-sha512 tree. Its domain is the warden's own, binding the parameters digest, the certifier session, the link,
+direction and window, B, N and the row format, so a root opens under one link-window of one session's schedule. The
+rows and salts are witness, handed to the prover alone.
+
+**The signed head** names the root: link, direction, window, the parameters digest, B, N, the domain and the root,
+under its own tag (`CellsHead`). The warden signs it with the certifier's signer (`Issuer.sign`: the certifier message
+for the key, the session and the link-window, one LMS leaf). The record's own certificate of that link-window signs its
+salted record digest, so neither verifies as the other.
+
+**The registration** (`registration`, `verity-network-warden/registration/v1`) is the head, the rows' format and order
+(`layout`: T, S and the first bucket w·T) and the certificate, as one public JSON object. `check_registration` is the
+verifier's read of it: every field but the root is the one the schedule and the link-window give, and the certificate
+verifies over the head under the warden's key in the session.
+
+**How a unit reads it.** The verifier's own `--registered` port (`port`, `verity/registered-reads/v1`) names the value
+`<link>/<direction>/<window>`, the root, N leaves of B/2 words of 16 bits, the domain, the row format and `reads`, the
+row each unit of the population opens. The statement is a shared-row file whose port's table rows are those rows under
+the warden's salts, its header's `registered` entry their positions and paths (`Cells.statement`). An output port
+reads them as the sender's unit's output (its table is the instances' output rows), an input port as the receiver's
+input. A port reads one row a unit, so a unit that reads k cells has k registered ports. Which unit reads which row is
+the wiring: connection q's rows (`connection_rows`) depend on which connections were live, so in the design they are
+private, proved by the wiring's permutation argument. Tonight `reads` opens them to the verifier, as the units' wiring
+is (the named gap).
+
+**How the other readers of the certifier's rows differ:**
+- N2's head checks: the prover commits each record head as one row (`LinkWindows.commit`: one-stage's served domain,
+  fresh salts). The unit opens it in-circuit (`FrameV3Read`) and recomputes the certificate's salted digest in-circuit.
+- IO-TIE's prototype (`io_tie.py`): one v2 row per bucket of R cells under `domain(binding, count)`, committed by a
+  fake upstream and signed by nobody. The unit recomputes the root in-circuit from every row and salt
+  (`NetworkRowsRoot`), and its cells are token events.
+- Here the warden commits one row per byte cell under its own domain and signs the head, so the certificate names the
+  root in the clear. The opening is the verifier's registered-read check, and no gate of the unit hashes.
+
+**Cost, per window** (`warden-serve`'s `cells.jsonl`). At the served schedule (T = 600, lanes = 8, r = 2, B = 256),
+N = 9,600 rows. The commitment, the tree included, takes 0.3 to 0.4 s in Python on the publisher's thread, never the
+ticker's. The signature takes 4 to 7 ms (LMS H = 10).
+
+**Demonstration** (`benchmarks/network_traces/warden_zk.py`). A toy unit, `WardenCellIdentity{B}`, takes one cell's
+8·B bits through two NOTs. Its port is registered against the warden's egress root of a warden-serve run, proved by
+C-Flock `prove --zk` behind the firewall, and held by Lean `verify --zk --registered`. The members:
+- the sender's output and the receiver's input are accepted;
+- rows under the prover's own root are refused, and so is the prover's registration of it under the warden's
+  certificate;
+- a cell one bit off the warden's is refused.
+
+No salt and no cell content reaches the verifier.
