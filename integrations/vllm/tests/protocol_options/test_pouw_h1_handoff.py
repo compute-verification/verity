@@ -119,6 +119,7 @@ def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_r
     assert host.ended() is not None
 
 
+@pytest.mark.slow
 def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --close-from` on a handed-off window and the record its serving stage left: the window closed,
     measured and released on the session's stream, and the record (``pouw_h1_gpu.json``) completed with its commitment,

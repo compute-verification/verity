@@ -404,6 +404,7 @@ def test_b2_unequal_requests_pass_globally(memory, tmp_path):
     assert not res["eos_truncated_requests"]
 
 
+@pytest.mark.slow
 def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, tmp_path, monkeypatch):
     """[R17 mprof unit 4, rev F-r17-06] MATCH_IMPL=fast memoises per Prog / Projection for the duration of ONE check() -- including its
     nested alternate-criterion run -- and holds nothing afterwards, so a process that checks several records does not grow by one
@@ -444,6 +445,7 @@ def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, 
     assert json.dumps(strip(res), sort_keys=True, default=str) == json.dumps(strip(ref), sort_keys=True, default=str)
 
 
+@pytest.mark.slow
 def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, monkeypatch):
     """MATCH_IMPL=fast hands GM-01 and its X-09 run `global_match_fast.ops()` explicitly: after a fast check() every Verity core and
     checker-of-record function is the object it was before, the fast run's Programs are its own (MemoProg, progressions), and a record
@@ -517,6 +519,7 @@ def test_eos_truncated_request_is_compared_over_its_executed_prefix_and_labelled
     assert r1["eos_verified"] is True and r1["eos_token"] == EOS and _check(res, "G6")["stop_rule"]["eos_token_ids"] == [EOS]
 
 
+@pytest.mark.slow
 def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memory, tmp_path):
     """rev-pm ALERT M-0537 (F-pm-24): a request that stopped before its cap on a NON-EOS token -- an engine that dropped or aborted it, a
     stop string, or a prover that skipped the tail -- was accepted as 'eos-truncated' on the strength of finish_reason alone. The EOS is
@@ -756,6 +759,7 @@ def test_coscheduled_prefill_tgrouped_emission_passes_the_dag_criterion_with_the
     assert r0["within_step"]["permuted_instances"] == 0 and r0["within_step"]["sequence_also_equal"]
 
 
+@pytest.mark.slow
 def test_dag_criterion_negatives_wrong_arrival_swapped_outputs_wiring(memory, tmp_path):
     # wrong declared arrival (the Program says 0, the record ran it at 1) -> G6, whatever the within-step criterion
     gp, oracle = assemble([R0, RX_LATE], tmp_path / "a", tgrouped=True)
@@ -1349,6 +1353,7 @@ def test_a_registered_s_component_binds_by_shape_in_any_workload(tmp_path):
     assert G.sampler_schedule_binding(three, {(8, 3): str(d), (5, 1): str(d)})["refusal"] is None
 
 
+@pytest.mark.slow
 def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_fields(memory, tmp_path):
     """rev-pm M-0570 (2): GM-01 was blind to the manifest's sampling fields -- seeds swapped or a seed deleted in the manifest (GP-01
     recomposed: digest unchanged, seeds are Inputs) passed G1 by ids/prompts/caps/arrivals. G1 now requires RunHeader.workload.sha256 ==
@@ -1532,6 +1537,7 @@ def test_served_past_the_first_eos_fails_g6_by_name_f_r17_14(memory, tmp_path):
     assert not e["ok"] and "served past an EOS at index 0" in e["problems"][0] and "F-r17-14" in e["problems"][0]
 
 
+@pytest.mark.slow
 def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_same_scheduler(memory, tmp_path):
     """R17-1 / DP-pad-02 (b) (Daniel, BRIEF s4; supersedes the ruling-21 reader): LAG is the workload Program's DECLARED specialization
     parameter (mock: `lag=`; GP-01: the Workload_v1 `lag` static from TargetProfile.lag()).  vLLM's async scheduling computes ONE more row
@@ -2074,6 +2080,7 @@ def test_g6_puts_the_scheduled_state_and_the_lag_row_on_the_record(memory, tmp_p
     assert res["verdict"] == "FAIL" and res["scheduled_live"]["requests"]["r1"]["established"] is False and res["scheduled_live"]["unestablished_steps"] == 3
 
 
+@pytest.mark.slow
 def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is_asked_for_and_labelled(memory, tmp_path):
     """[F-r17-01, rev M-0035] capture/tokens.json is part of the record: absent -> G6 FAILS by name (the output-association legs cannot run);
     tokens_optional=True (CLI --tokens-optional) accepts it LABELLED checks[G6].tokens_json=false -- mechanism/fixture runs only."""
@@ -2290,8 +2297,7 @@ def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a
 # ------------------------------------------------------------------------------------------- COORD R17-28 P1: one X-09 per row
 
 
-@pytest.mark.parametrize("impl,workers", [("record", "1"), ("fast", "1"), ("fast", "3")])
-@pytest.mark.slow
+@pytest.mark.parametrize("impl,workers", [("record", "1"), ("fast", "1"), pytest.param("fast", "3", marks=pytest.mark.slow)])
 def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path, monkeypatch, impl, workers):
     """[COORD R17-28, mprof P1] row_pod runs cb_a.batch_decomp in its own process (match.compare) and GM-01 runs the same decompose()
     again inside check() (the x09 block) -- 365 s twice at B8 1024/128.  `--decomp-out` writes the document GM-01's own X-09 run
