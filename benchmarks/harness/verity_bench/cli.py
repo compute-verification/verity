@@ -46,7 +46,7 @@ def _check(args: Any) -> int:
 
 
 def _run(args: Any) -> int:
-    return jobs.dispatch(_make_plan(args), args.spec, on=args.on, by=args.by)
+    return jobs.dispatch(_make_plan(args), args.spec, on=args.on, by=args.as_)
 
 
 def _point(args: Any) -> int:
@@ -143,7 +143,8 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--on", default=None, metavar="NODE",
                      help="run each point on NODE through its GPU slot pool under gpu-lease, not through the queue: the "
                           "form a node behind slots (/etc/vy/runs-via-slot) takes")
-    run.add_argument("--by", default="verity-bench", metavar="LANE", help="who asks, in the slot pool's line (with --on)")
+    run.add_argument("--as", dest="as_", default="verity-bench", metavar="LANE",
+                     help="who asks, in the slot pool's line (with --on)")
     run.set_defaults(run=_run, command_parser=run)
 
     check = commands.add_parser("check", help="report whether every point has a passing result")
