@@ -1,250 +1,195 @@
-import Definitions.Pouw.H1Zy.Lane
+import Definitions.Pouw.H1Zy.LaneChunk
+import Definitions.Pouw.H1Zy.Tile
 import Definitions.Pouw.PearlC.Sha512
 
 /-!
-# A lane's chain words (trusted)
+# A lane's fx1 chain on words: `h1tile._chain` at a 32 × 32 leaf (trusted)
 
-`h1zy.lane_partial`'s fold, ungated (`verity/core/protocols/pouw/circuit/h1zy.py`, `h1tile.py`, `seeds.py`,
-`segment.py`): lane `l` of a 32 × 32 H1 leaf at contraction `K`, from its 4 A rows and 8 B rows by slot (s8 encodings),
-and the leaf's salt, position and roots. Everything is on naturals and lists, with SHA-512 the spec's own
-(`Pouw.PearlC.Sha512.digest`), so that the kernel evaluates it (`Proofs.Pouw.H1Zy.Vectors`).
+Lane `l` of a drawn leaf over `PouwH1Tile_v1` folds `KS + m` sets of 32 words into an fx1 state keyed from σ_R, and its
+partial is the state's two receipt words after each set (`h1tile.fold`, `h1zy.lane_partial` before the admit mask). This
+states that chain as the step machine `ChainSteps` (`h1Chain K`), so a lane's chain words are `chainOf (h1Chain K)` and a
+chunk's carry is its state. On the primitives' word views:
 
-* **The public inputs** are numbers as their port fields read them, least significant bit first: a digest's 16 halves,
-  half `h` the bits `32 h .. 32 h + 31`, each half the big-endian word of its 4 bytes (`seeds.leaves`), and the position
-  `_u64(position)`'s 2 halves alike (`portBytes`).
-* **The seeds** (`seeds._tagged`): seed_j under `SEED_TAG`, σ_R under `RECEIPT_TAG`, each the SHA-512 of the position's
-  8 bytes and the tag, salt and roots XORed byte by byte with them; noise block `t` of a seed is the SHA-512 of
-  `NOISE_TAG`, the seed and `u64(t)`, read as its halves' bits, least significant first (`stream`).
-* **The layout** (`h1tile.Layout(32, 32, K)`): `KS = K/32` segments, `m = n_digits(KS)` digits, a row's `K + 32 (m - 1)`
-  noise bits (its dither bits, then its digit coins) from block `i rb`, a column's `K + 256` (its coin bits, then U's
-  32 bytes, each `u129`) from block `32 rb + j cb`, lane `l`'s 16 fold keys block `l` of σ_R's stream.
-* **The sets** (`segment.call_words`): the prefixes `T_0 .. T_(KS-1)` over `X = A + b` and `W' = B + c + U`, `O'` and
-  `D_1 .. D_(m-1)` from the digits of the residue sums.
-* **The fold** (`h1tile.fold`, fold `fx1`): from the keys, after each set the XOR of the state's y half and of its z
-  half, `2 (KS + m)` words.
+* **Seeds and noise** (`seeds.py`). seed_j and σ_R are SHA-512 of the position's 8 big-endian bytes, then the tag, salt
+  and roots, each byte XORed with byte `i mod 8` of the position (`tagged`); block `t` of a seed's noise stream is
+  SHA-512 of `NOISE_TAG ‖ seed ‖ u64(t)` (`noiseBlock`), and its bit `β` is bit `β mod 32` of big-endian half
+  `⌊(β mod 512) / 32⌋` of block `⌊β / 512⌋` (`streamBit`). The salt, position and roots are the `pub` port's fields
+  (`SeedIn`): field bit `t` is bit `t mod 32` of the field's 32-bit half `⌊t / 32⌋`, halves big-endian (`seeds.leaves`).
+* **The lane's noise** (`h1tile.noise`, `fold_keys`, at the layout `h1tile.Layout(32, 32, K)`, `laneNoise`): row `i`'s
+  stream starts at block `i · RB` and holds its `K` dither bits then `m - 1` digit coins of 32 bits; column `j`'s at
+  block `32 RB + j · CB` holds its `K` coin bits then U's 32 bytes, each `PouwU129` of the byte's value; the lane's fold
+  keys are block `l` of σ_R's stream, 16 words. Its rows and columns are `laneRow l s` and `laneCol l t`.
+* **A segment** (`noiseChain`'s `seg`, `h1tile._row`, `_col` and `_chain`): `X = PouwI8AddBit(A, dither)` and
+  `W′ = PouwI8Add(PouwI8AddBit(B, coin), U)` at the segment's 32 entries; each of the 32 entries `e` takes
+  `PouwSegDot(T_e, X[row_slot e], W′[col_slot e])`; each row slot's residue sums `PouwResAdd(Y, X)`; the state absorbs
+  the 32 new T (`PouwFx1Absorb`) and the chain gains `PouwXinFinal` of its y half and of its z half. From `init`'s zero T
+  and Y this is `h1tile`'s first segment too: `PouwSegDot0` is `PouwSegDot` from 0, `PouwSx8` is `PouwResAdd` from 0.
+* **The end** (`fin`, `h1tile._digits` and `_chain`'s tail): each row slot's digits of its residue sums (`PouwDigitLo`,
+  `PouwDigitHi`, `PouwDigitZ` at the last coin digit, `PouwLow8`), then `O′ = PouwSegDot(T_last, PouwI8Neg(U), A_0)` and
+  `D_d = PouwSegDot(0, U, A_d)` for `d = 1 .. m - 1`, each absorbed as a set. The partial's word `w` is the chain's word
+  `w`, `0` past its `2 (KS + m)` words.
 -/
 
 namespace Pouw.H1Zy
 
 open Pouw.PearlC.Sha512 (digest beBytes beNat ascii padTo)
 
-/-! ### Words -/
+/-! ## Seeds and the noise stream (`seeds.py`) -/
 
-/-- `segment.mix32`, fgemm.cu's mix32. -/
-def mix32 (x : ℕ) : ℕ :=
-  let x := x % 2 ^ 32
-  let x := x ^^^ (x >>> 16)
-  let x := x * 0x7FEB352D % 2 ^ 32
-  let x := x ^^^ (x >>> 15)
-  let x := x * 0x846CA68B % 2 ^ 32
-  x ^^^ (x >>> 16)
+/-- The public seed inputs as the lane's `pub` port holds them: the salt (512 bits), the position (64) and the roots
+(1024), each a field whose bit `t` is bit `t mod 32` of its 32-bit half `⌊t / 32⌋`. -/
+structure SeedIn where
+  salt : ℕ
+  position : ℕ
+  roots : ℕ
 
-/-- `segment.rotl` on a 32-bit word, `0 < r < 32`. -/
-def rotl32 (x r : ℕ) : ℕ := ((x <<< r) ||| (x >>> (32 - r))) % 2 ^ 32
+/-- A field's bytes: its first `n` 32-bit halves, each big-endian. -/
+def halvesBytes (n v : ℕ) : List ℕ := (List.range n).flatMap fun h => beBytes 4 (v / 2 ^ (32 * h) % 2 ^ 32)
 
-/-- `segment._sx8`: an int8 encoding's value. -/
-def sx8 (v : ℕ) : ℤ := if v % 256 < 128 then (v % 256 : ℕ) else (v % 256 : ℕ) - 256
+/-- `seeds.SEED_TAG`, `RECEIPT_TAG` and `NOISE_TAG`: ASCII, zero-padded to 24 bytes. -/
+def seedTag : List ℕ := padTo 24 (ascii "verity/pouw/seed/v2")
+def receiptTag : List ℕ := padTo 24 (ascii "verity/pouw/receipt/v1")
+def noiseTag : List ℕ := padTo 24 (ascii "verity/pouw/noise/v1")
 
-/-- `segment.seg_dot`: `acc` plus the s8 dot of `a` and `b`, mod `2^32`. -/
-def segDot (acc : ℕ) (a b : List ℕ) : ℕ := ((acc + (List.zipWith (fun x w => sx8 x * sx8 w) a b).sum) % 2 ^ 32).toNat
+/-- **`seeds._tagged`**: SHA-512 of the position's 8 big-endian bytes, then `tag ‖ salt ‖ root_a ‖ root_b` with byte `i`
+XORed with byte `i mod 8` of the position. -/
+def tagged (tag : List ℕ) (x : SeedIn) : List ℕ :=
+  let p := halvesBytes 2 x.position
+  let data := tag ++ halvesBytes 16 x.salt ++ halvesBytes 32 x.roots
+  digest (p ++ (List.range data.length).map fun i => data.getD i 0 ^^^ p.getD (i % 8) 0)
 
-/-- `segment.row_slot`: entry `q`'s row slot. -/
-def rowSlot (q : ℕ) : ℕ := 2 * (q / 16) + q % 4 / 2
+/-- seed_j (`seeds.seed`). -/
+def seedJ (x : SeedIn) : List ℕ := tagged seedTag x
 
-/-- `segment.col_slot`: entry `q`'s column slot. -/
-def colSlot (q : ℕ) : ℕ := 2 * (q / 4 % 4) + q % 2
+/-- σ_R (`seeds.receipt_seed`). -/
+def sigmaR (x : SeedIn) : List ℕ := tagged receiptTag x
 
-/-! ### The seeds and the noise stream -/
-
-/-- A port field's number as its bytes: `n` halves, half `h` the bits `32 h .. 32 h + 31`, each its 4 big-endian
-bytes. -/
-def portBytes (n x : ℕ) : List ℕ := (List.range n).flatMap fun h => beBytes 4 (x >>> (32 * h) % 2 ^ 32)
-
-/-- A tag zero-padded to 24 bytes. -/
-def tag24 (s : String) : List ℕ := padTo 24 (ascii s)
-
-/-- `seeds.SEED_TAG`. -/
-def seedTag : List ℕ := tag24 "verity/pouw/seed/v2"
-
-/-- `seeds.RECEIPT_TAG`. -/
-def receiptTag : List ℕ := tag24 "verity/pouw/receipt/v1"
-
-/-- `seeds.NOISE_TAG`. -/
-def noiseTag : List ℕ := tag24 "verity/pouw/noise/v1"
-
-/-- `seeds._tagged`: SHA-512 of the position's 8 bytes `p`, then the tag, salt and roots, byte `i` XORed with
-`p[i mod 8]`. -/
-def tagged (tg salt p roots : List ℕ) : List ℕ :=
-  let data := tg ++ salt ++ roots
-  digest (p ++ List.zipWith (· ^^^ ·) data ((List.range data.length).map fun i => p.getD (i % 8) 0))
-
-/-- `seeds.noise_block`: block `t` of a seed's noise stream. -/
+/-- Block `t` of a seed's noise stream (`seeds.noise_block`). -/
 def noiseBlock (seed : List ℕ) (t : ℕ) : List ℕ := digest (noiseTag ++ seed ++ beBytes 8 t)
 
-/-- `seeds.leaves(_, True)` of a 64-byte block: its 16 big-endian halves' bits, least significant first. -/
-def blockBits (blk : List ℕ) : List Bool :=
-  (List.range 16).flatMap fun h =>
-    let w := beNat ((blk.drop (4 * h)).take 4)
-    (List.range 32).map fun β => w.testBit β
+/-- Bit `β` of a block's 512 bits: bit `β mod 32` of its big-endian half `⌊β / 32⌋`. -/
+def blockBit (blk : List ℕ) (β : ℕ) : Bool := beNat ((blk.drop (4 * (β / 32))).take 4) / 2 ^ (β % 32) % 2 = 1
 
-/-- `h1tile._stream`: `n` bits of a seed's noise stream from block `block` on. -/
-def streamFrom (seed : List ℕ) (block n : ℕ) : List Bool :=
-  ((List.range ((n + 511) / 512)).flatMap fun t => blockBits (noiseBlock seed (block + t))).take n
+/-- Bit `β` of a seed's noise stream from block `first` (`seeds.stream`, `h1tile._stream`). -/
+def streamBit (seed : List ℕ) (first β : ℕ) : Bool := blockBit (noiseBlock seed (first + β / 512)) (β % 512)
 
-/-! ### The layout -/
+/-- The value of `n` stream bits from bit `β`, least significant first (`h1tile._value`). -/
+def streamVal (seed : List ℕ) (first β n : ℕ) : ℕ :=
+  ((List.range n).map fun i => if streamBit seed first (β + i) then 2 ^ i else 0).sum
 
-/-- `segment.n_digits` from `m` on, with `fuel` more tries: the least `m' ≥ m` with `128 KS ≤ 128^m'` and
-`⌊127 KS / 128^(m'-1)⌋ ≤ 127`. -/
-def nDigitsFrom (ks : ℕ) : ℕ → ℕ → ℕ
-  | 0, m => m
-  | fuel + 1, m => if 128 * ks ≤ 128 ^ m ∧ 127 * ks / 128 ^ (m - 1) ≤ 127 then m else nDigitsFrom ks fuel (m + 1)
+/-! ## The layout (`h1tile.Layout` at a 32 × 32 leaf) -/
 
-/-- **`segment.n_digits`**: H1's digit count at `KS` segments (`m = KS + 1` always qualifies). -/
-def nDigits (ks : ℕ) : ℕ := nDigitsFrom ks (ks + 1) 1
+/-- `m` at contraction `K`. -/
+def digitsK (K : ℕ) : ℕ := nDigits (K / 32)
 
-/-- `h1tile.Layout(32, 32, K)`'s numbers. -/
-structure Lay where
-  k : ℕ
-  ks : ℕ
-  m : ℕ
-  rowBits : ℕ
-  colBits : ℕ
-  rb : ℕ
-  cb : ℕ
+/-- A row's stream blocks: `⌈(K + 32 (m - 1)) / 512⌉`. -/
+def rowBlocks (K : ℕ) : ℕ := (K + 32 * (digitsK K - 1) + 511) / 512
 
-/-- `h1tile.Layout(32, 32, K)`: `KS = K / 32` segments, `m` digits, a row's and a column's noise bits and blocks. -/
-def lay (K : ℕ) : Lay :=
-  let ks := K / 32
-  let m := nDigits ks
-  let rowBits := K + 32 * (m - 1)
-  let colBits := K + 256
-  ⟨K, ks, m, rowBits, colBits, (rowBits + 511) / 512, (colBits + 511) / 512⟩
+/-- A column's stream blocks: `⌈(K + 256) / 512⌉`. -/
+def colBlocks (K : ℕ) : ℕ := (K + 256 + 511) / 512
 
-/-- `h1tile.u129`: a noise byte as H1's keyed word, `-64 + x mod 129` as its int8 encoding. -/
-def u129 (x : ℕ) : ℕ := (x % 256 % 129 + 192) % 256
+/-- Row `i`'s first block. -/
+def rowFirst (K i : ℕ) : ℕ := i * rowBlocks K
 
-/-- The number of bits, least significant first. -/
-def bitsNat (bs : List Bool) : ℕ := bs.foldr (fun b n => (if b then 1 else 0) + 2 * n) 0
+/-- Column `j`'s first block, past the 32 rows'. -/
+def colFirst (K j : ℕ) : ℕ := 32 * rowBlocks K + j * colBlocks K
 
-/-- `h1tile.noise`'s row `i`: its `K` dither bits and its `m - 1` digit coins (32 bits each). -/
-def rowNoise (seedJ : List ℕ) (L : Lay) (i : ℕ) : List Bool × List (List Bool) :=
-  let s := streamFrom seedJ (i * L.rb) L.rowBits
-  (s.take L.k, (List.range (L.m - 1)).map fun d => (s.drop (L.k + 32 * d)).take 32)
+/-! ## duo and fx1 (`segment.py`)
 
-/-- `h1tile.noise`'s column `j`: its `K` coin bits and U's 32 int8 encodings. -/
-def colNoise (seedJ : List ℕ) (L : Lay) (j : ℕ) : List Bool × List ℕ :=
-  let s := streamFrom seedJ (32 * L.rb + j * L.cb) L.colBits
-  (s.take L.k, (List.range 32).map fun t => u129 (bitsNat ((s.drop (L.k + 8 * t)).take 8)))
+The segment and digit pieces' word views (`i8AddBit`, `i8Add`, `i8Neg`, `u129`, `segDot`, `resAdd`, `digitLo`,
+`digitHi`, `digitZ`, `low8`, `digits`, `nDigits`) are `Tile`'s. -/
 
-/-- `h1tile.fold_keys`' lane `l`: block `l` of σ_R's stream as 16 words. -/
-def foldKeys (sigmaR : List ℕ) (l : ℕ) : List ℕ :=
-  let s := streamFrom sigmaR l 512
-  (List.range 16).map fun w => bitsNat ((s.drop (32 * w)).take 32)
+/-- `segment.mix32`. -/
+def mix32 (x : BitVec 32) : BitVec 32 :=
+  let x := x ^^^ (x >>> 16)
+  let x := x * 0x7FEB352D
+  let x := x ^^^ (x >>> 15)
+  let x := x * 0x846CA68B
+  x ^^^ (x >>> 16)
 
-/-! ### The sets -/
+/-- duo's multiplier `KA[t]`, XOR key `KK[t]` and rotation `ROT[t]` at position `t < 8`. -/
+def duoKa (t : ℕ) : BitVec 32 := mix32 (BitVec.ofNat 32 (0xA0000000 + 2 * t)) ||| 1
+def duoKk (t : ℕ) : BitVec 32 := mix32 (BitVec.ofNat 32 (0xB0000000 + 2 * t + 1))
+def duoRot (t : ℕ) : ℕ := (t * 7 + 5) % 31 + 1
 
-/-- Segment `s` of a row: entries `32 s .. 32 s + 31`. -/
-def seg {α : Type} (x : List α) (s : ℕ) : List α := (x.drop (32 * s)).take 32
+/-- fx1's multiplier of entry `q` (`segment.fx1_key`). -/
+def fx1Key (q : ℕ) : BitVec 32 := mix32 (BitVec.ofNat 32 (0xA0000000 + 2 * (16 + 32 * q))) ||| 1
 
-/-- `segment.prefixes`: `T_0 .. T_(KS-1)` from `X` and `W'` by segment (`X[s][r]`, `W'[s][k]`, 32 entries each). -/
-def prefixes (X W : List (List (List ℕ))) : List (List ℕ) :=
-  ((List.zip X W).foldl (fun (acc, out) xw =>
-    let acc := (List.range 32).map fun q =>
-      segDot (acc.getD q 0) ((xw.1).getD (rowSlot q) []) ((xw.2).getD (colSlot q) [])
-    (acc, out ++ [acc])) (List.replicate 32 0, [])).2
+/-- One step of duo at position `t` and entry `e` (`segment._duo_absorb`'s inner loop): state word `i = 4 (t mod 2) + e`
+of y and of z, `u = y_i ⊕ p ⊕ KK[t]`, `y_i ← u · KA[t] + z_i`, `z_i ← rotl(u, ROT[t]) + y_i`. -/
+def duoStep (st : Fin 16 → BitVec 32) (t e : ℕ) (p : BitVec 32) : Fin 16 → BitVec 32 :=
+  let i := 4 * (t % 2) + e
+  let u := st ⟨i % 16, Nat.mod_lt _ (by omega)⟩ ^^^ p ^^^ duoKk t
+  let y := u * duoKa t + st ⟨(8 + i) % 16, Nat.mod_lt _ (by omega)⟩
+  let z := u.rotateLeft (duoRot t) + y
+  fun j => if j.val = i then y else if j.val = 8 + i then z else st j
 
-/-- `segment.digit_words`' one residue: from the sum `R` and its coins `z_0 .. z_(m-2)`, the digits `A_0 .. A_(m-1)`
-(int8 encodings): `A_d = (R_d mod 128) + 128 z_d` and `R_(d+1) = ⌊R_d / 128⌋ + z_d`, `z_(m-2)` taken as `0` where
-`⌊R / 128⌋ = 127`, and `A_(m-1) = R_(m-1) mod 256`. -/
-def digitsOf (m : ℕ) (R : ℤ) (z : List Bool) : List ℕ :=
-  let (R, out) := (List.range (m - 1)).foldl (fun (R, out) d =>
-    let q := R / 128
-    let zd : ℤ := if d = m - 2 ∧ q = 127 then 0 else if z.getD d false then 1 else 0
-    (q + zd, out ++ [(R % 128 + 128 * zd).toNat])) (R, [])
-  out ++ [(R % 256).toNat]
+/-- **`PouwDuoAbsorb`** on words: duo's 16-word state after a set's 32 words, position `t` taking words `4 t .. 4 t + 3`. -/
+def duoAbsorb (st : Fin 16 → BitVec 32) (p : Fin 32 → BitVec 32) : Fin 16 → BitVec 32 :=
+  (List.range 8).foldl (fun st t => (List.range 4).foldl (fun st e =>
+    duoStep st t e (p ⟨(4 * t + e) % 32, Nat.mod_lt _ (by omega)⟩)) st) st
 
-/-- **`segment.call_words`** at a lane: its sets `T_0 .. T_(KS-1)`, `O'`, `D_1 .. D_(m-1)` (32 words each), from its
-rows' codes `a` (4, by row slot) and their dither bits `bd` and coins `zc` (`zc[r][d]`), and its columns' codes `w` (8,
-by column slot) and their coin bits `c` and U's encodings `u`. -/
-def callWords (L : Lay) (a : List (List ℕ)) (bd : List (List Bool)) (zc : List (List (List Bool)))
-    (w : List (List ℕ)) (c : List (List Bool)) (u : List (List ℕ)) : List (List ℕ) :=
-  let X := (List.range L.ks).map fun s => (List.range 4).map fun r =>
-    List.zipWith (fun v b => (v + if b then 1 else 0) % 256) (seg (a.getD r []) s) (seg (bd.getD r []) s)
-  let W := (List.range L.ks).map fun s => (List.range 8).map fun k =>
-    List.zipWith (fun (v : ℕ) (cu : Bool × ℕ) => (v + (if cu.1 then 1 else 0) + cu.2) % 256) (seg (w.getD k []) s)
-      (List.zip (seg (c.getD k []) s) (u.getD k []))
-  let T := prefixes X W
-  let A : List (List (List ℕ)) := (List.range 4).map fun r => (List.range 32).map fun ρ =>
-    digitsOf L.m (X.map fun xs => sx8 ((xs.getD r []).getD ρ 0)).sum ((zc.getD r []).map fun zd => zd.getD ρ false)
-  let digit (d r : ℕ) : List ℕ := (A.getD r []).map fun ds => ds.getD d 0
-  let neg := u.map fun row => row.map fun v => (256 - v % 256) % 256
-  let last := T.getLastD (List.replicate 32 0)
-  let op := (List.range 32).map fun q => segDot (last.getD q 0) (neg.getD (colSlot q) []) (digit 0 (rowSlot q))
-  T ++ [op] ++ (List.range (L.m - 1)).map fun d =>
-    (List.range 32).map fun q => segDot 0 (u.getD (colSlot q) []) (digit (d + 1) (rowSlot q))
+/-- **`PouwFx1Absorb`** on words: duo's step on each word `q` times `fx1Key q`. -/
+def fx1Absorb (st : Fin 16 → BitVec 32) (p : Fin 32 → BitVec 32) : Fin 16 → BitVec 32 :=
+  duoAbsorb st fun q => p q * fx1Key q.val
 
-/-! ### The fold -/
+/-- **`PouwXinFinal`** on words: the XOR of 8 words. -/
+def xinFinal (w : Fin 8 → BitVec 32) : BitVec 32 := (List.ofFn w).foldl (· ^^^ ·) 0
 
-/-- `segment.KA[t]`: duo's multiplier at position `t`. -/
-def duoKA (t : ℕ) : ℕ := mix32 (0xA0000000 + 2 * t) ||| 1
+/-- Entry `q`'s row slot (`segment.row_slot`): `2 ⌊q / 16⌋ + ⌊(q mod 4) / 2⌋`. -/
+def rowSlot (q : Fin 32) : Fin 4 := ⟨2 * (q.val / 16) + q.val % 4 / 2, by omega⟩
 
-/-- `segment.KK[t]`: duo's XOR key at position `t`. -/
-def duoKK (t : ℕ) : ℕ := mix32 (0xB0000000 + 2 * t + 1)
+/-- Entry `q`'s column slot (`segment.col_slot`): `2 (⌊q / 4⌋ mod 4) + q mod 2`. -/
+def colSlot (q : Fin 32) : Fin 8 := ⟨2 * (q.val / 4 % 4) + q.val % 2, by omega⟩
 
-/-- `segment.ROT[t]`: duo's rotation at position `t`. -/
-def duoROT (t : ℕ) : ℕ := (7 * t + 5) % 31 + 1
+/-! ## The chain -/
 
-/-- `segment.fx1_key`: fx1's multiplier of entry `q`. -/
-def fx1Key (q : ℕ) : ℕ := mix32 (0xA0000000 + 2 * (16 + 32 * q)) ||| 1
+/-- **A lane's noise**: each row slot's dither bits and digit coins (`digit s d ρ`, coin `ρ` of digit `d`), each column
+slot's coin bits and U, and its fold keys. -/
+structure LaneNoise where
+  dither : Fin 4 → ℕ → Bool
+  digit : Fin 4 → ℕ → Fin 32 → Bool
+  coin : Fin 8 → ℕ → Bool
+  u : Fin 8 → Fin 32 → BitVec 8
+  key : Fin 16 → BitVec 32
 
-/-- `segment._duo_absorb`: one set `p` (32 words) into the state `y ++ z` (8 words each), position `t` by position, each
-of its 4 entries `e` into chain `4 (t mod 2) + e`. -/
-def duoAbsorb (st p : List ℕ) : List ℕ :=
-  let yz := ((List.range 8).flatMap fun t => (List.range 4).map fun e => (t, e)).foldl (fun (yz : List ℕ × List ℕ) te =>
-    let (y, z) := yz
-    let (t, e) := te
-    let i := 4 * (t % 2) + e
-    let u := y.getD i 0 ^^^ p.getD (4 * t + e) 0 % 2 ^ 32 ^^^ duoKK t
-    let yi := (u * duoKA t + z.getD i 0) % 2 ^ 32
-    (y.set i yi, z.set i ((rotl32 u (duoROT t) + yi) % 2 ^ 32)))
-    ((st.take 8).map (· % 2 ^ 32), ((st.drop 8).take 8).map (· % 2 ^ 32))
-  yz.1 ++ yz.2
+/-- **Lane `l`'s noise** at contraction `K` (`h1tile.noise`, `fold_keys`): its rows' and columns' streams of seed_j and
+block `l` of σ_R's. -/
+def laneNoise (K : ℕ) (x : SeedIn) (l : Fin 32) : LaneNoise where
+  dither s k := streamBit (seedJ x) (rowFirst K (laneRow l s)) k
+  digit s d ρ := streamBit (seedJ x) (rowFirst K (laneRow l s)) (K + 32 * d + ρ.val)
+  coin t k := streamBit (seedJ x) (colFirst K (laneCol l t)) k
+  u t j := u129 (BitVec.ofNat 8 (streamVal (seedJ x) (colFirst K (laneCol l t)) (K + 8 * j.val) 8))
+  key w := BitVec.ofNat 32 (streamVal (sigmaR x) l.val (32 * w.val) 32)
 
-/-- `segment._fx1_absorb`: duo's absorb of the set with entry `q` times `fx1Key q`. -/
-def fx1Absorb (st p : List ℕ) : List ℕ :=
-  duoAbsorb st ((List.range p.length).map fun q => p.getD q 0 * fx1Key q % 2 ^ 32)
+/-- The chain's state after absorbing a set: the fx1 state, and the chain's two new words. -/
+def absorbSet (σ : ChainSt) (p : Fin 32 → BitVec 32) : ChainSt :=
+  let st := fx1Absorb σ.state p
+  { σ with state := st, words := σ.words ++ [xinFinal fun i => st (Fin.castLE (by omega) i),
+      xinFinal fun i => st ⟨8 + i.val, by omega⟩] }
 
-/-- The XOR of a list of words. -/
-def xorAll (ws : List ℕ) : ℕ := ws.foldl (· ^^^ ·) 0
+/-- **Segment `s` on a lane's noise** (`h1tile._row`, `_col`, `_chain`'s prefix sets). -/
+def segStep (N : LaneNoise) (s : ℕ) (a : Fin 4 → Fin 32 → BitVec 8) (b : Fin 8 → Fin 32 → BitVec 8) (σ : ChainSt) :
+    ChainSt :=
+  let x : Fin 4 → Fin 32 → BitVec 8 := fun r ρ => i8AddBit (a r ρ) (N.dither r (32 * s + ρ.val))
+  let w : Fin 8 → Fin 32 → BitVec 8 := fun t ρ => i8Add (i8AddBit (b t ρ) (N.coin t (32 * s + ρ.val))) (N.u t ρ)
+  let t' : Fin 32 → BitVec 32 := fun e => segDot (σ.t e) (x (rowSlot e)) (w (colSlot e))
+  absorbSet { σ with t := t', res := fun r ρ => resAdd (σ.res r ρ) (x r ρ) } t'
 
-/-- **`h1tile.fold`** (fold `fx1`): from the 16 keys, after each set the XOR of the state's words `0 .. 7` and of its
-words `8 .. 15`. -/
-def foldSets (key : List ℕ) (sets : List (List ℕ)) : List ℕ :=
-  (sets.foldl (fun (st, out) p =>
-    let st := fx1Absorb st p
-    (st, out ++ [xorAll (st.take 8), xorAll ((st.drop 8).take 8)])) (key, [])).2
+/-- **The end on a lane's noise**: the row slots' digits, then the `O′` and `D_1 .. D_(m-1)` sets absorbed. -/
+def finSets (m : ℕ) (N : LaneNoise) (σ : ChainSt) : ChainSt :=
+  let A : Fin 4 → ℕ → Fin 32 → BitVec 8 := fun r d ρ => (digits m (fun d => N.digit r d ρ) (σ.res r ρ)).getD d 0
+  let op : Fin 32 → BitVec 32 := fun e => segDot (σ.t e) (fun ρ => i8Neg (N.u (colSlot e) ρ)) (A (rowSlot e) 0)
+  let D : ℕ → Fin 32 → BitVec 32 := fun d e => segDot 0 (N.u (colSlot e)) (A (rowSlot e) d)
+  ((List.range (m - 1)).map (· + 1)).foldl (fun σ d => absorbSet σ (D d)) (absorbSet σ op)
 
-/-! ### The lane's partial -/
+/-- **The chain on a lane's noise**: from its fold keys with zero T and Y, its segments, and `m` digit sets at the end. -/
+def noiseChain {P : Type} (nw m : ℕ) (N : P → Fin 32 → LaneNoise) : ChainSteps P nw where
+  init x l := ⟨(N x l).key, 0, 0, []⟩
+  seg x l s a b σ := segStep (N x l) s a b σ
+  fin x l σ w := (finSets m (N x l) σ).words.getD w.val 0
 
-/-- **`h1zy.lane_partial`, ungated**: lane `l`'s fold at contraction `K` from its A rows `a` (by row slot) and B rows
-`b` (by column slot), s8 encodings, and the salt, position and roots as their port fields' numbers. -/
-def lanePartial (K salt pos roots l : ℕ) (a b : List (List ℕ)) : List ℕ :=
-  let L := lay K
-  let p := portBytes 2 pos
-  let sr := portBytes 16 salt
-  let rt := portBytes 32 roots
-  let seedJ := tagged seedTag sr p rt
-  let sigmaR := tagged receiptTag sr p rt
-  let rows := (List.range 4).map fun s => rowNoise seedJ L (l / 4 + 8 * s)
-  let cols := (List.range 8).map fun t => colNoise seedJ L (2 * (l % 4) + 8 * (t / 2) + t % 2)
-  foldSets (foldKeys sigmaR l)
-    (callWords L a (rows.map (·.1)) (rows.map (·.2)) b (cols.map (·.1)) (cols.map (·.2)))
-
-/-- **The lane's chain words** (`LeafChecks`' `chain`): `lanePartial`'s word `w` at the rows' codes, `0` past its
-`2 (KS + m)` words. -/
-def chainWords {K nw : ℕ} (salt pos roots : ℕ) (l : Fin 32) (a : Fin 4 → Fin K → BitVec 8)
-    (b : Fin 8 → Fin K → BitVec 8) (w : Fin nw) : BitVec 32 :=
-  BitVec.ofNat 32 ((lanePartial K salt pos roots l.val (List.ofFn fun s => List.ofFn fun k => (a s k).toNat)
-    (List.ofFn fun t => List.ofFn fun k => (b t k).toNat)).getD w.val 0)
+/-- **`h1tile._chain` at contraction `K`**: the chain on `laneNoise K`, with `m = digitsK K`. -/
+def h1Chain (K nw : ℕ) : ChainSteps SeedIn nw := noiseChain nw (digitsK K) (laneNoise K)
 
 end Pouw.H1Zy

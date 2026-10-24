@@ -92,6 +92,8 @@ import Definitions.Pouw.Receipt.Duo
 import Definitions.Pouw.Receipt.Li
 import Definitions.Pouw.Receipt.Fx1
 import Definitions.Pouw.RelativeSecurity
+import Definitions.Pouw.RelativeSecurityJ10R
+import Definitions.Pouw.RelativeSecurityCall
 import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs
@@ -156,11 +158,9 @@ as `h1tile._xor` and `h1zy._and_all` build them. `Proofs.Pouw.H1Zy` proves it th
 word views: the index's mux trees, the EXACT z (`GemmAccumulatorS8_v2`), the cell check and the masked partials, with the
 dequant's and the chain's words as parameters. `Proofs.Pouw.H1Zy` proves it the lane check `LeafChecks` reads.
 
-`Dequant` and `Chain`: those parameters' own values, `h1zy.dequant` (`dequantW`, on `Verity.Fp32`) and
-`h1zy.lane_partial`'s fold (`chainWords`, with the spec's SHA-512), held to the Python by `Proofs.Pouw.H1Zy.Vectors`.
-
-`Stream`: `PouwH1Tile_v3`'s z (`streamZ`, `h1tile.stream_cell`; at a lane's cell from the seed's noise, `laneZ3`) and
-the lane's `ok` at any tile's z (`laneOkZ`). `Proofs.Pouw.H1Zy` proves v3's z EXACT's at every noise.
+`Tile`: `PouwH1TileZy_v1{TILE}`'s `ok` (`h1zy._body`) over `PouwH1Tile_v1` or `PouwH1Tile_v3` on its primitives' word
+views: TILE's z (EXACT, or the one-stream's recombination, wrap correction and dither peel at its noise) and the
+record's cell check. `Proofs.Pouw.H1Zy` proves it the check `TileChecks` reads.
 
 ## `PearlC`: Pearl-C's Π and the statements about it
 

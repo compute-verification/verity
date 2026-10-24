@@ -14,7 +14,7 @@ from verity.errors import ProtocolError
 from verity.ml.commitments import hm96
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
+from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf, sha512_row_seg_digest
 
 
@@ -62,6 +62,30 @@ def test_an_opening_verifies_against_the_root(ranks):
     assert RT.verify_rows(t.root, t.domain.domain_id, 5, o, {r: (*rows[r], salts[r]) for r in o.ranks})
     assert RT.RowOpening.of_json(o.to_json()) == o
     assert o.nbytes == 128 * len(o.ranks) + 64 * len(o.proof)
+
+
+@pytest.mark.parametrize("n", [1, 2, 5, 33])
+def test_a_rows_path_climbs_from_its_leaf_to_the_root_and_from_no_other(n):
+    """`path` is the single path a registered read opens (Lean's `Registered.opens`): siblings leaf level first, the frame-v3
+    node at each level, over the tree padded to a power of two."""
+    t, _rows, _salts = table(n)
+    dom = t.domain
+    for r in range(n):
+        path, depth = t.path(r), merkle_depth(n)
+        assert len(path) == 64 * depth
+
+        def climb(rank: int, bc: bytes) -> bytes:
+            digest, i = RT.leaf(dom.domain_id, rank, bc), rank
+            for level in range(depth):
+                sib = path[64 * level:64 * level + 64]
+                digest = dom.node(level, i >> 1, *((digest, sib) if i % 2 == 0 else (sib, digest)))
+                i >>= 1
+            return digest
+
+        assert climb(r, t.strings[r]) == t.root
+        if n > 1:
+            assert climb(r ^ 1 if r ^ 1 < n else r - 1, t.strings[r]) != t.root
+            assert climb(r, t.strings[r - 1]) != t.root
 
 
 def test_a_tampered_row_salt_string_rank_root_domain_or_proof_fails():
