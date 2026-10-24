@@ -43,9 +43,10 @@ OUT = os.environ.get("OUT", ".")
 
 # ----------------------------------------------------------------------------------------------------------- compressors
 def top_svd(D, rmax):
-    """top-rmax (U S, V^T) of D (m x n) and the cumulative energy fractions, from the smaller Gram matrix in float64"""
+    """top-rmax (U S, V^T) of D (m x n) and the cumulative energy fractions, from the smaller Gram matrix (float32: these
+    GPUs have little float64, and the top components and 90%/99% energy fractions don't need it)"""
     m, n = D.shape
-    Dd = D.double()
+    Dd = D.float()
     if n <= m:
         ev, V = torch.linalg.eigh(Dd.T @ Dd)
         ev, V = ev.flip(0).clamp_min(0), V.flip(1)
@@ -57,11 +58,10 @@ def top_svd(D, rmax):
         r = min(rmax, m)
         S = ev[:r].sqrt()
         US = U[:, :r] * S
-        Vt = (U[:, :r].T @ Dd) / S.clamp_min(1e-300)[:, None]
-    e = ev.cumsum(0)
+        Vt = (U[:, :r].T @ Dd) / S.clamp_min(1e-30)[:, None]
+    e = ev.double().cumsum(0)
     tot = float(e[-1])
     frac = e / e[-1] if tot > 0 else e
-    del Dd
     return US.float(), Vt.float().contiguous(), frac
 
 
@@ -359,9 +359,13 @@ def analyze(base_name, model0, ids, local, ckpt, name, extra):
     nl = len(layers_of(model0))
     sampled = sample_layers(nl, int(os.environ.get("LAYERS_SAMPLE", "8")))
     lz_layers = {sampled[0], sampled[len(sampled) // 2], sampled[-1]}
-    res = {"model": base_name, "name": name, "ckpt": ckpt, "meta": meta, **extra, "tokens": ids.numel(),
+    code = hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:16]
+    res = {"model": base_name, "name": name, "ckpt": ckpt, "meta": meta, **extra, "code_sha256": code, "tokens": ids.numel(),
            "n_layers": nl, "layers_sampled": sampled, "maps": {}, "inputs": {}, "weights": {}, "boundary": {},
            "retention": {}}
+
+    def tick(what):
+        print(f"  {name}: {what} at {time.time() - t0:.0f}s", flush=True)
 
     g0, g1 = boundary_grads(model0, ids), boundary_grads(model1, ids)
     torch.cuda.empty_cache() if DEV == "cuda" else None
@@ -372,6 +376,7 @@ def analyze(base_name, model0, ids, local, ckpt, name, extra):
     res["loss"] = {"theta": l0, "theta1": l1, "kl_theta1_theta": kl(lp1, lp0)}
     rows_all = cone_rows(ids, False)
     rows_cache = {}
+    tick("grads and captures")
 
     def rows_for(g):
         if g not in rows_cache:
@@ -424,6 +429,7 @@ def analyze(base_name, model0, ids, local, ckpt, name, extra):
             res["retention"][i] = ret
         del svd, gs
     del g0, g1
+    tick("boundaries")
 
     # counted values: maps on the sampled layers
     lin0 = {f"L{i}.{n}": mod for i, n, mod in linears(model0)}
@@ -459,6 +465,7 @@ def analyze(base_name, model0, ids, local, ckpt, name, extra):
                                 "x": fresh(X0, X1, X0.abs().max(), svd=svd)}
             del svd
     del a0, a1
+    tick("maps")
 
     # weights: the sampled layers' linear maps, and the embedding (and an untied head)
     sd0, sd1 = model0.state_dict(), model1.state_dict()
