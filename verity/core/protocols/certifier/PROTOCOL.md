@@ -388,8 +388,9 @@ choice of up to F − 1 bits a response that no template fixes.
 advice v0's kept outputs and their release buckets (`advice.outputs`, `Advice.release`), which the prover commits as
 the window's table under hiding rows and the unit reads inside the proof. With every cell opened the count is
 complete. The data cells number exactly the full slots, and the one-to-one match rules out a duplicate and a drop, so
-responses are of any length. FIXLEN, the window-local arithmetic map and the K draws all go. A window needn't start
-at a request boundary or end idle: a request's outputs fall in the windows their release buckets name. The map is the
+responses are of any length. The tie needs none of FIXLEN, the window-local arithmetic map or the K draws (FIXLEN
+stays a premise of N2's served profile, "A served link"). Nor does the tie need a window to start at a request
+boundary or end idle: a request's outputs fall in the windows their release buckets name. The map is the
 prover's routing, a Beneš network over M = 2^D ≥ N slots whose (2D − 1)·2^(D − 1) switches are witness. Every
 setting is a permutation, so the match is all the unit checks.
 
