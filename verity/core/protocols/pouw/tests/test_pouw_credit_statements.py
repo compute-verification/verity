@@ -355,9 +355,10 @@ def test_a_units_public_row_is_its_calls_own_salt_position_and_roots(seed, tmp_p
 
 
 def window_j10r(seed: int, tmp: Path) -> tuple[dict, list[dict]]:
-    """An honest window over J10-R units, each call of at least two row tiles, so a call's units' blocks differ."""
+    """An honest window over J10-R units, each call of at least two row tiles, so a call's units' blocks differ, and its
+    ``live`` evidence (`window`'s)."""
     d = cases.window_instance(random.Random(f"statements-j10r/{seed}"), "j10r")
-    return d, prove(d, d["k"], tmp)
+    return {**d, "live": prove_live(d, tmp)}, prove(d, d["k"], tmp)
 
 
 def _j10r_rows(d: dict, s: dict, call: int, blocks: list[tuple[int, int]]) -> dict:
