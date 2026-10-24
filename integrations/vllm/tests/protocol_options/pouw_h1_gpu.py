@@ -347,7 +347,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
         zs = []
         for index, xq, _sa, y in h1.retained:
-            call = h1.calls[index]
+            call = h1.call(index)
             w = PH.numpy_of(layers[call.layer].weight).astype(np.int64)
             exact = xq.astype(np.int64) @ w.T
             zs.append({"index": index, "shape": [call.m, call.k, call.n], "y_exact": bool(np.array_equal(y, exact))})
@@ -692,7 +692,7 @@ def closed_measures(h1: Any, out: dict[str, Any], want: int, weight_of: Any, bad
     decl_w = decl if want == decl.slots else PH.Static(decl.prompt_lens[:want], cap, decl.rows, decl.steps)
     zs = []
     for index, xq, _sa, y in h1.retained:
-        call = h1.calls[index]
+        call = h1.call(index)
         w = PH.numpy_of(weight_of(call.layer)).astype(np.int64)
         zs.append({"index": index, "shape": [call.m, call.k, call.n], "y_exact": bool(np.array_equal(y, xq.astype(np.int64) @ w.T))})
     credit = h1.credit()
