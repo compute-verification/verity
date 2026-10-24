@@ -26,8 +26,9 @@ class Arm:
     resident: bool = True
     #: a protocol arm's protocols config for `verity_vllm.LLM` (`presets.ArmSettings`), "$NAME" values unexpanded
     protocols_config: Mapping[str, Mapping[str, Any]] | None = None
-    #: a served variant's execution (`served_variant`): its engine is built at vLLM's serving defaults, eager or
-    #: compiled, whatever the spec's `eager` and the preset's `serving_defaults`; None builds it as they say
+    #: a served variant's execution (`served_variant`), or an experimental arm's own (its ``execution``): its engine is
+    #: built at vLLM's serving defaults, eager or compiled, whatever the spec's `eager` and the preset's
+    #: `serving_defaults`; None builds it as they say
     execution: str | None = None
 
     def to_json(self) -> dict[str, Any]:
@@ -98,6 +99,9 @@ def experimental_arm(spec: str) -> Arm:
     if not callable(get("install")):
         raise ValueError(f"experimental arm {spec!r}: NAME must expose install(target)")
     kernel_digest = get("kernel_digest")
+    execution = get("execution")
+    if execution is not None and execution not in SERVED_EXECUTIONS:
+        raise ValueError(f"experimental arm {spec!r}: execution {execution!r} is not one of {list(SERVED_EXECUTIONS)}")
     return Arm(
         id=str(name),
         protocols=_protocols(get("protocols")),
@@ -107,6 +111,7 @@ def experimental_arm(spec: str) -> Arm:
         kernel_digest=kernel_digest if isinstance(kernel_digest, str) else None,
         experimental=True,
         resident=bool(get("resident", True)),
+        execution=execution,
     )
 
 
