@@ -370,7 +370,7 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
     holds until `hold` buckets after its ingress `END` (standing in for its egress), its client's bytes arriving
     rate[k] a bucket from its admission (its `END` with the last)."""
     B = params.cell_bytes
-    warden = SimpleNamespace(params=params)
+    warden = SimpleNamespace(params=params, requests_released=0, run_id=None)
     conns = [W._Connection(ordinal=k + 1, reader=None, writer=None, done=None, arrived=a)
              for k, a in enumerate(arrivals)]
     queue, active, grid, rows, records = list(conns), [], Certifier("requests", params.grid), [], []
