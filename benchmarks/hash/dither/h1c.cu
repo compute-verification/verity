@@ -2131,6 +2131,13 @@ extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int
                          cudaStream_t stream) {
   return build_k(tabs, tabs_dev, ntab, step_dev, btab, domains, nullptr, 0, stream);
 }
+// a set's domains alone (h1c_build's first launch), which a later h1c_build at the same step with domains 0 reads
+extern "C" int h1c_domains_only(H1Tab* tabs_dev, int ntab, const int* step_dev, cudaStream_t stream) {
+  if (ntab <= 0) return 0;
+  if (ntab > 65535) return 99;
+  h1c_domains<<<(ntab + 63) / 64, 64, 0, stream>>>(tabs_dev, ntab, step_dev);
+  return (int)cudaGetLastError();
+}
 extern "C" int h1c_pre_ok() { return H1C_MK; }
 // pre_stride's room for each table's row leaves (97 a table with more), on an H1C_MK build (98 without)
 static int pre_rows(const H1Tab* tabs, int ntab, long long pre_stride, long long* max_rows) {

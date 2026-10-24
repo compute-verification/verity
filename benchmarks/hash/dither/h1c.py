@@ -246,6 +246,8 @@ class H1C:
         self.lib.h1c_a_init.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_int, C.c_void_p]
         self.lib.h1c_a_step.argtypes = [C.c_void_p, C.c_int, C.c_void_p, C.c_int] + [C.c_void_p] * 4
         self.lib.h1c_a_call.argtypes = [C.c_void_p] * 8 + [C.c_int, C.c_void_p]
+        if hasattr(self.lib, "h1c_domains_only"):
+            self.lib.h1c_domains_only.argtypes = [C.c_void_p, C.c_int, C.c_void_p, C.c_void_p]
         self.has_pre = hasattr(self.lib, "h1c_pre_ok") and bool(self.lib.h1c_pre_ok())
         if self.has_pre:
             self.lib.h1c_presalt.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_void_p,
@@ -290,6 +292,14 @@ class H1C:
 
     def union(self, sets: list[Set]) -> Union:
         return Union(sets, self.dev)
+
+    def domains(self, st: Set | Union, step: torch.Tensor) -> None:
+        """st's domains at step alone, on the current stream: `build(st, step, domains=False)` at the same step reads them."""
+        if not hasattr(self.lib, "h1c_domains_only"):
+            raise RuntimeError("this h1c build has no h1c_domains_only")
+        rc = self.lib.h1c_domains_only(st.dev.data_ptr(), st.n, step.data_ptr(), torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"h1c_domains_only returned {rc}")
 
     def pre_buf(self, st: Set | Union) -> torch.Tensor:
         """`presalt`'s buffer for st: each table's row leaves' c and M_key y."""

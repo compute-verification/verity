@@ -200,6 +200,10 @@ PREQ_ENV = "DITHER_SO_PREQ"
 # "1" (an H1C_MK h1c build): the receipt tables' row leaves' salt part (c and M_key y, h1c_presalt) hashed on a stream
 # of its own from the units' start, beside the units, and their leaves read it (`SoSide._units`): the same leaves
 PRESALT_ENV = "DITHER_SO_PRESALT"
+# "1" (with the tree streams, without -ov): what of round s's tail reads only the step (the admit tables, from
+# `before`'s live rows, and the mid and round tables' domains) goes on the second tree stream from the forward's end,
+# beside the A tables and stash, rather than behind them: the same tables, off the units' wait
+EARLY_ENV = "DITHER_SO_EARLY"
 # "1": a capture's copies go to host memory, not the device (a prefill capture at T = 2048 is ~30 GB); `DA.check` moves
 # each call's tensors to the device as it reads them
 CAP_HOST_ENV = "DITHER_SO_CAP_HOST"
@@ -269,6 +273,7 @@ class SoWindow(DO.Window):
         self.deferred: int | None = None
         self.deferrals = {"deferred": 0, "in_forward": 0, "in_after": 0, "after_forward": 0}
         self.z_side = os.environ.get(ZSIDE_ENV) == "1"
+        self.early = os.environ.get(EARLY_ENV) == "1"
         self.ev_z = (torch.cuda.Event(), torch.cuda.Event())
         self.late_waits: list[float] = []
         self.a_step = os.environ.get(DO.A_STEP_ENV) == "1"
@@ -722,6 +727,17 @@ class SoWindow(DO.Window):
             with torch.cuda.stream(zs):
                 self.c.build(pre["z"], self.stepv[0:1])
                 self.ev_z[1].record(zs)
+        ads = self.tree_streams[1] if self.tree_streams is not None else None
+        early = self.early and ads is not None
+        if early:
+            self.phase("admit_tables")
+            ev[0].record()
+            ads.wait_event(ev[0])
+            with torch.cuda.stream(ads):
+                self.c.build(pre["admit"], self.stepv[0:1])
+                self.c.domains(pre["mid"], self.stepv[0:1])
+                self.c.domains(pre["round"], self.stepv[0:1])
+                ev[7].record(ads)
         if self.a_once or self.a_step:
             self.phase("a_tables")
             if not self.flags & DO.F_NW_TILES:
@@ -741,16 +757,16 @@ class SoWindow(DO.Window):
         if sd.spill is not None:
             self.phase("spill")
             sd.spill.put(s, m, sd.ready[s % self.depth])
-        ads = self.tree_streams[1] if self.tree_streams is not None else None
-        self.phase("admit_tables")
-        ev[0].record()
-        if ads is not None:
-            ads.wait_event(ev[0])
-            with torch.cuda.stream(ads):
+        if not early:
+            self.phase("admit_tables")
+            ev[0].record()
+            if ads is not None:
+                ads.wait_event(ev[0])
+                with torch.cuda.stream(ads):
+                    self.c.build(pre["admit"], self.stepv[0:1])
+                    ev[7].record(ads)
+            else:
                 self.c.build(pre["admit"], self.stepv[0:1])
-                ev[7].record(ads)
-        else:
-            self.c.build(pre["admit"], self.stepv[0:1])
         self._poll_deferred()
         self.phase("z_tables")
         if zs is not None:
@@ -779,7 +795,7 @@ class SoWindow(DO.Window):
                 lv.copy_(sd.rroots[p])
         if ads is not None:
             main.wait_event(ev[7])
-        self.c.build(pre["mid"], self.stepv[0:1])
+        self.c.build(pre["mid"], self.stepv[0:1], domains=not early)
         rl = pre["round"].level
         zi, yi = kinds.index("z-step"), kinds.index("y-step")
         if cap == "fault_zlate":
@@ -790,7 +806,7 @@ class SoWindow(DO.Window):
             rl[8 * zi:8 * zi + 8].copy_(self.zlate[0])
             rl[8 * yi:8 * yi + 8].copy_(self.zlate[1])
             self.zlate = None
-        self.c.build(pre["round"], self.stepv[0:1])
+        self.c.build(pre["round"], self.stepv[0:1], domains=not early)
         prev = self.cap_of.get(s - 1)
         late = self.cap_of.pop(j, None) if j >= self.s0 else None
         held = (cap in self.caps) or (late in self.caps) or (prev == "fault_zlate" and prev in self.caps)
