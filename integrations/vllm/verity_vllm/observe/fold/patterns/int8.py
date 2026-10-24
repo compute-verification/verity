@@ -262,7 +262,7 @@ class Int8AttentionScope:
             for g in range(G):
                 computes.append(Compute(fkv, 1, (GatherMany(head(kcs, g), (slots,)), GatherMany(head(vcs, g), (slots,)), Const(32, kbits[g], "k_scale")),
                                         (Shared(_keys(kq, g, s)), Shared(_keys(vq, g, s)), Shared(_slab(sv, g)), Shared(_slab(v0, g))), (kvn.id,),
-                                        hint=f"{hint}/kv_quant", kernels=("elementwise_kernel", "reduce_kernel"), attribution=(rows[-1],),
+                                        hint=f"{hint}/kv_quant", kernels=("kv_rows", "elementwise_kernel", "reduce_kernel"), attribution=(rows[-1],),
                                         pattern=self.name))
             for i in range(n):
                 p = s - n + i + 1
