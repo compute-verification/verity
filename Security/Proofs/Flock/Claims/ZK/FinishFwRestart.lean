@@ -114,6 +114,7 @@ theorem wS_foldKs (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (b : Arr
     rw [List.foldl_append]
     rfl
 
+set_option maxHeartbeats 1000000 in
 /-- **A deployed rep's level-0 restart is `Σ y₁'·bFold`**: where `repFwC` on table `j`'s rep `r`, answered by the opened
 coins from the rep's base at the packed table of the witness's trace (`hg`) and the tape's extra lanes (`hext`),
 returns with extra claims at the region points of the link (`Drive.extras`, `hxsz`, `hxs`), its proof's level-0
