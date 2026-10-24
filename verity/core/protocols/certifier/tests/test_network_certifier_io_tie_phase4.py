@@ -110,7 +110,7 @@ def test_the_only_free_in_bucket_order_is_byte_identical_cells() -> None:
     served = serve(one, {3: (0, [10, 10]), 8: (4, [12, 13]), 20: (0, [14])}, 14, [5, 0])
     inst = commit(one, served)
     assert IT.reference(inst)
-    assert [IT.parse_cell(c).stream for c in served.cells[:5]] == [3, 3, 8, 8, 20]
+    assert [IT.parse_cell(c).stream for c in served.cells[:5]] == [4, 4, 9, 9, 21]
 
     accepted, distinct = 0, set()
     for order in itertools.permutations(range(5)):
@@ -118,5 +118,5 @@ def test_the_only_free_in_bucket_order_is_byte_identical_cells() -> None:
         if IT.cells_match(one, cells, inst.map, inst.port):
             accepted += 1
             distinct.add(tuple(cells))
-    # the two cells of stream 3 (same id) swap freely; every other swap is refused by the map
+    # the two cells of request 3, stream 4 (same id), swap freely; every other swap is refused by the map
     assert accepted == 2 and len(distinct) == 1

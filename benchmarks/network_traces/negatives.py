@@ -825,13 +825,14 @@ def tie_port(IT, shape, advice, outputs, ids, seed: bytes = b"negatives"):
 
 def tie_cells(IT, shape, window: int, outputs, release, ids) -> list[bytes]:
     """The warden's cells of egress window `window`: each bucket's outputs sorted by (request, index), as the warden
-    releases a bucket, each a data cell on its request's stream carrying its id, pads after them."""
+    releases a bucket, each a data cell on its request's stream carrying its id, pads after them. Advice request i's
+    stream is its ingress ordinal, i + 1 (`io_tie.window_map` under v0's order, the identity)."""
     cells = []
     for t in range(shape.T):
         here = sorted((o.request, o.index, x) for o, b, x in zip(outputs, release, ids) if b == window * shape.T + t)
         if len(here) > shape.R:
             raise NotApplicable(f"bucket {window * shape.T + t} releases {len(here)} outputs, more than R = {shape.R}")
-        cells += [IT.data_cell(x, q, shape.B) for q, _, x in here] + [IT.pad_cell(shape.B)] * (shape.R - len(here))
+        cells += [IT.data_cell(x, i + 1, shape.B) for i, _, x in here] + [IT.pad_cell(shape.B)] * (shape.R - len(here))
     return cells
 
 

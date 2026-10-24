@@ -5,15 +5,18 @@ the design has the warden and the Commit commit them, under `hm96-sha512/row/v2`
 
 **The cells.** A link-window's egress is N = T·R cells of B bytes in the warden's schedule order, R a bucket, so cell
 i is in bucket ⌊i / R⌋ of the window. A cell is a pad (`pad_cell`, B zero bytes) or a data cell (`data_cell`): a
-`DATA` header whose stream is the request's ingress ordinal, which the warden writes from the connection it
-terminated, then one token id's event (`id_event`) and zero fill. The warden commits one row a bucket (`bucket_rows`).
+`DATA` header whose stream is the request's ingress ordinal, from 1 as `active.Requests` numbers it, which the warden
+writes from the connection it terminated, then one token id's event (`id_event`) and zero fill. The warden commits one
+row a bucket (`bucket_rows`).
 
 **The map is a function of the advice** (`window_map`): for each cell, the output the warden must have released there,
-its request q and its entry e in the window's port, or a pad. Bucket t's outputs (release bucket w·T + t) fill its
-first cells sorted by (request, index), the order the warden releases a bucket in, and pads fill the rest. No prover
-value says where an output goes. The advice is private; here the verifier computes the map in the clear from the
-opened advice v0, which is the named gap ("the advice is opened to the verifier until the compile unit exists"). The
-target reads the map inside the proof under the advice's hiding root.
+its stream q and its entry e in the window's port, or a pad. Advice request i's stream is order[i] + 1: order[i] is its
+arrival order from 0 (advice v1's order permutation, which carries and charges how the engine's numbering departs from
+the warden's release order; v0's is the identity), and the wire's ordinal is at least 1. Bucket t's outputs (release
+bucket w·T + t) fill its first cells sorted by (stream, index), the order the warden releases a bucket in, and pads
+fill the rest. No prover value says where an output goes. The advice is private; here the verifier computes the map in
+the clear from the opened advice, which is the named gap ("the advice is opened to the verifier until the compile unit
+exists"). The target reads the map inside the proof under the advice's hiding root.
 
 **The port is the Commit's**: its sampled ids, one hiding row a step (`port_row`: the step's P ids, u32be in batch-row
 order, zero past its batch) in a dense frame-v3-sha512 tree of the session's steps, whose root the Commit registers.
@@ -204,21 +207,31 @@ class Output(NamedTuple):
 
 
 class MapEntry(NamedTuple):
-    """A data cell's place in the map: its request q and its port entry e."""
+    """A data cell's place in the map: its stream q, its request's ingress ordinal on the wire (order[i] + 1), and its
+    port entry e."""
 
     q: int
     e: int
 
 
-def window_map(shape: Shape, outputs: Sequence[Output], release: Sequence[int],
-               window: int) -> tuple[tuple[MapEntry | None, ...], tuple[int, ...]]:
-    """The verifier's map of egress window `window` from advice v0 (`advice.outputs(a)` and `a.release`), and the steps
-    whose port rows the window opens. The outputs released in the window's bucket t fill cells t·R, t·R + 1, … sorted by
-    (request, index), each with its request and its entry σ·P + row, σ its step's place among the window's steps; the
-    rest are pads (None). The steps are sorted and padded to S by repeating the last (step 0 for an empty window)."""
+def window_map(shape: Shape, outputs: Sequence[Output], release: Sequence[int], window: int,
+               order: Sequence[int] | None = None) -> tuple[tuple[MapEntry | None, ...], tuple[int, ...]]:
+    """The verifier's map of egress window `window` from the advice's outputs (`advice.outputs(a)`) and release buckets
+    (`a.release`), and the steps whose port rows the window opens. Advice request i is on stream order[i] + 1, its
+    ingress ordinal on the wire (order[i] its arrival order from 0, advice v1's order permutation; None is v0's
+    identity). The outputs released in the window's bucket t fill cells t·R, t·R + 1, … sorted by (stream, index),
+    each with its stream and its entry σ·P + row, σ its step's place among the window's steps; the rest are pads
+    (None). The steps are sorted and padded to S by repeating the last (step 0 for an empty window)."""
     sh = shape
     if len(outputs) != len(release):
         raise ValueError("one release bucket an output")
+    if order is not None and (sorted(order) != list(range(len(order)))
+                              or any(not 0 <= o.request < len(order) for o in outputs)):
+        raise ValueError("an order is a permutation of the advice's requests")
+
+    def stream(o: Output) -> int:
+        return 1 + (o.request if order is None else order[o.request])
+
     mine = [(b - window * sh.T, o) for o, b in zip(outputs, release) if b // sh.T == window]
     steps = sorted({o.step for _, o in mine})
     if len(steps) > sh.S:
@@ -226,13 +239,13 @@ def window_map(shape: Shape, outputs: Sequence[Output], release: Sequence[int],
     at = {s: k for k, s in enumerate(steps)}
     cells: list[MapEntry | None] = [None] * sh.N
     for t in range(sh.T):
-        here = sorted((o for b, o in mine if b == t), key=lambda o: (o.request, o.index))
+        here = sorted((o for b, o in mine if b == t), key=lambda o: (stream(o), o.index))
         if len(here) > sh.R:
             raise ValueError(f"bucket {t} releases {len(here)} outputs, more than R = {sh.R}")
         for k, o in enumerate(here):
-            if not 0 <= o.row < sh.P or not 0 <= o.request < EMPTY:
-                raise ValueError(f"an output's row is below P = {sh.P} and its request below 2^32 − 1, not {o}")
-            cells[t * sh.R + k] = MapEntry(o.request, at[o.step] * sh.P + o.row)
+            if not 0 <= o.row < sh.P or not 0 < stream(o) < EMPTY:
+                raise ValueError(f"an output's row is below P = {sh.P} and its stream from 1 below 2^32 − 1, not {o}")
+            cells[t * sh.R + k] = MapEntry(stream(o), at[o.step] * sh.P + o.row)
     steps += [steps[-1] if steps else 0] * (sh.S - len(steps))
     if any(not 0 <= s < 1 << sh.DS for s in steps):
         raise ValueError(f"a step is a position in a port of depth {sh.DS}, not {steps}")
