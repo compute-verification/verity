@@ -131,6 +131,9 @@ END_FAULTS = ("fault_tail", "fault_late_receipt")
 MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goes there (its per-call roots to scratch)
 GRAPH_ENV = "DITHER_SO_GRAPH"           # "0": a step's units launched call by call (`SoSide.dispatch`), else one graph
 PRIO_ENV = "DITHER_SO_PRIO"             # "1": any -so arm serves as -ovp does, on a stream above the units' (`patch`)
+# "1": under the serving priority, vLLM's graphs captured on a stream at that priority too (`capture_at`): vLLM's
+# graph_capture captures on a fresh priority-0 stream, and a replayed graph's kernels keep their capture's priority
+CAPTURE_PRIO_ENV = "DITHER_SO_CAPTURE_PRIO"
 # "1": a step's units in one launch over every call (h1u.cu's kh_units_multi: each unit's noise hashed by its own warp,
 # no workspace), in place of each call's noise and units launches; the same receipts
 FUSED_ENV = "DITHER_SO_FUSED"
@@ -817,7 +820,8 @@ class SoWindow(DO.Window):
                      # the challenger's log holds these round roots in this order (its published session's record)
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
                      "window_end": self.end_stats(), "serving_stream_priority": torch.cuda.current_stream().priority,
-                     "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None}
+                     "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None,
+                     "capture_stream_priority": getattr(torch.cuda.graph, "so_priority", None)}
         if ov is not None:
             doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,
                                     "units_dispatched": ov.dispatched_upto + 1,
@@ -1723,11 +1727,35 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
     if ov:
         CAPTURES = CAPTURES_OV
     if serve_prio:
-        # vLLM serves (captures and replays its graphs) on the stream its patched set_stream last recorded
+        # vLLM serves (replays its graphs) on the stream its patched set_stream last recorded
         from vllm.utils import torch_utils  # noqa: F401
         torch.cuda.set_stream(torch.cuda.Stream(priority=-1))
+        if os.environ.get(CAPTURE_PRIO_ENV) == "1":
+            capture_at(-1)
     DO.Window = SoWindow
     DA.side = side
+
+
+def capture_at(priority: int) -> None:
+    """Every `torch.cuda.graph` capture asked of a stream below `priority` (vLLM's) taken on one at it instead; the
+    units' graphs (`SoSide.dispatch`, capture_begin on the units stream) keep theirs."""
+    base = torch.cuda.graph
+    if getattr(base, "so_priority", None) is not None:
+        return
+    streams: dict[int, torch.cuda.Stream] = {}
+
+    class graph(base):
+        so_priority = priority
+
+        def __init__(self, cuda_graph, pool=None, stream=None, *args, **kwargs):
+            if stream is None or stream.priority > priority:
+                dev = torch.cuda.current_device()
+                if dev not in streams:
+                    streams[dev] = torch.cuda.Stream(device=dev, priority=priority)
+                stream = streams[dev]
+            super().__init__(cuda_graph, pool, stream, *args, **kwargs)
+
+    torch.cuda.graph = graph
 
 
 def stats(win: SoWindow):
