@@ -503,8 +503,9 @@ window. It outputs 1 exactly when:
   checked. On a link whose every ingress window is accepted, each carry is the true one by induction from window 0:
   every earlier request's prompt_len, and so its frames, is held to the cells, and a carry that disagrees with the
   cells misplaces the `]}` or a request's head. The ordinals are the verifier's: the cells carry none, and by the same
-  induction the j-th request that ends in a window is the link's request carry.q + j, which is advice request
-  carry.q + j (`active.Requests` streams the link's k-th request, from 0, as k + 1).
+  induction the j-th request that ends in a window is the link's request carry.q + j, its arrival ordinal. Streams
+  number from 0, as the advice's q: compact framing's (stream, id) record pins the ordinal to the stream, and
+  CERT-VARLEN aligns `active.Requests`, which streams the k-th request as k + 1 today.
 - **The circuit.** `IoTieRequest` recomputes the cells' root (`NetworkRowsRoot`), holds the own frame to the window
   (`IoTieRequestOwn`), and scans the cells from the carry with one `IoTieRequestFrame{B}` and one
   `IoTieRequestStep{D, NEW}` a cell. The frame reads its cell against its request's bytes left (0: a request starts
@@ -517,10 +518,19 @@ window. It outputs 1 exactly when:
   2^32 is kept, so a sum that wraps is refused. `IoTieRequestEnd` holds the totals to `count` and `received`.
   Public: the root, its domain id, the window, and in the named gap the carry's left and fields, `ended`, `count` and
   `received`. Witness: the cells, their salts and the switches.
-- **What N2-ADVICE takes.** An advised link's verdict is 1 only if every ingress window's IoTieRequest outcome is 1
-  on the view of the same advice (`advised.digest`) that its advised windows read. That makes `advised.ends`' premise
-  a check: the link's j-th request is advice request j, an id request of its prompt length. With the egress tie's
-  stream == q, advice request q is the q-th arrival on both ends. The advised unit itself doesn't change.
+- **What N2-ADVICE takes: the verdict** (`io_request.RequestTie`). An advised link's `advised.ends` takes the
+  prompt-length tie only from a `RequestTie` for the same link and advice, and refuses every advised link without
+  one. `verify_link(shape, link, digest, prompt_lens, received, registered, opened)` makes it only when every
+  ingress window w is accepted on `request_view(prompt_lens, received, w, B)`, the verifier's view from the advice
+  whose digest is `digest` (`advised.digest`), against the (root, domain id) the warden registered for window w and
+  the cells and salts that open it. Tonight that is the reference on the certified record, as the verifier of record
+  runs it; once the unit is registered with the proof service, each window's accepted proof. Nothing else makes one
+  but `RequestTie.unverified_for_tests`, which no module outside a `tests` directory calls (a test enforces it), and
+  it can't be changed, copied or pickled. `tie.ends_for(link, digest, prompt_lens, received)` returns the certified
+  ends, in arrival order, only when all four are the tie's. That makes `advised.ends`' premise a check: the link's
+  r-th arrival is an id request of `prompt_lens[r]` prompt ids. Advice request i is arrival order[i] (advice v1's
+  order permutation; v0's is the identity), which the egress tie holds through stream == order[q]. The advised unit
+  itself doesn't change.
 - **The first negative** is REDTEAM phase 6's split (`test_redteam_phase6_split_is_refused`). At B = 4,096, prompts
   of 338 and 16 tokens take 2 frames and 1, released one a bucket. The forged advice swaps them, keeping the total,
   and `advised` accepts it with ends (1, 3) for (2, 3). The tie reads 338 fields in request 0's cells and refuses.

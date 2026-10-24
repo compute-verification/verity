@@ -46,7 +46,8 @@ A spec-level reference for network accounting's timing channel:
   its ordinal to its place in the cut, which N2-ADVICE's advised verdict is to require. It has the reference and the
   unit's Boolean Definition (`IoTieRequest`: the cells' root by `NetworkRowsRoot`, the own frame by
   `IoTieRequestOwn`, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, the prover's routing of the view's prompt
-  lengths by `IoTieRoute`, `IoTieRequestEnd`);
+  lengths by `IoTieRoute`, `IoTieRequestEnd`), and the verdict an advised link's ends take (`RequestTie`, made only
+  by `verify_link`);
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`

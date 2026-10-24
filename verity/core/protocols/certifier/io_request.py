@@ -33,6 +33,13 @@ induction from window 0, since every earlier request's prompt_len, and so its fr
 carry that disagrees with the cells misplaces the `]}` or a request's head. The ordinals are the verifier's: the cells
 carry none, and the j-th request ending in a window is carry.q + j by the same induction.
 
+**The verdict** (`RequestTie`), what an advised link's `advised.ends` takes in place of a tie from the prover's own
+advice: a link's every ingress window accepted, on the views the verifier computed from one advice's prompt lengths
+and `received`, against the cells the warden registered. `verify_link` makes it (tonight by the reference on the
+certified record, as the verifier of record runs it), and `RequestTie.unverified_for_tests` only in tests; it binds
+the link's name and the advice's digest (`advised.digest`), and hands its ends only to that link and advice
+(`RequestTie.ends_for`).
+
     IoTieRequestFrame{B}(cell: Array<B, Byte>, left: Array<32>) -> Array<68>
         pad, req, start, ended, the bytes left after it (u32) and its prompt fields (u32), LSB first
     IoTieRequestStep{D, NEW}(state: Array<131>, frame: Array<68>, routed: Array<32 + D>) -> Array<131>
@@ -363,6 +370,125 @@ def reference(shape: Shape, inst: Instance) -> int:
         return 0
     got = cut(shape, inst.cells, inst.view.carry, inst.window)
     return int(got is not None and got.ended == inst.view.ended and got.frames == inst.view.received)
+
+
+# --- the verdict -----------------------------------------------------------------------------------------------------
+
+_KEY = object()
+_HEX = frozenset("0123456789abcdef")
+
+
+def _u32s(value: Sequence[int], what: str) -> tuple[int, ...]:
+    out = tuple(value)
+    if not all(type(x) is int and 0 <= x < 1 << 32 for x in out):
+        raise ValueError(f"{what} is a sequence of u32s, not {out!r:.200}")
+    return out
+
+
+def _digest(digest: str) -> str:
+    if type(digest) is not str or len(digest) != 128 or not set(digest) <= _HEX:
+        raise ValueError(f"an advice digest is `advised.digest`'s 128 lowercase hex characters, not {digest!r:.200}")
+    return digest
+
+
+class RequestTie:
+    """IoTieRequest's verdict on one ingress link: every ingress window w < len(received) of `link` was accepted on
+    `request_view(prompt_lens, received, w, shape.B)` against the cells the warden registered for it. So the link's
+    certified requests, in arrival order (ordinal r from 0), have prompt lengths `prompt_lens[r]`, and its window w
+    holds `received[w]` request frames: `ends` is the certified record's.
+
+    `digest` names the advice the verifier took `prompt_lens` and `received` from (`advised.digest` of its
+    `LinkAdvice`), and `basis` how the verdict was reached: "reference", `verify_link`'s run of the reference on the
+    certified record (the verifier of record's, until the unit is registered with the proof service), or "test",
+    `unverified_for_tests`'. Nothing else makes one, and it is immutable."""
+
+    __slots__ = ("link", "digest", "shape", "prompt_lens", "received", "basis")
+    link: str
+    digest: str
+    shape: Shape
+    prompt_lens: tuple[int, ...]
+    received: tuple[int, ...]
+    basis: str
+
+    def __init__(self, *_args, **_kwargs) -> None:
+        raise TypeError("a RequestTie is made only by io_request.verify_link (tests: RequestTie.unverified_for_tests)")
+
+    @classmethod
+    def _make(cls, key: object, link: str, digest: str, shape: Shape, prompt_lens: tuple[int, ...],
+              received: tuple[int, ...], basis: str) -> RequestTie:
+        if key is not _KEY:
+            raise TypeError("a RequestTie is made only by io_request.verify_link")
+        tie = object.__new__(cls)
+        for name, value in zip(cls.__slots__, (link, digest, shape, prompt_lens, received, basis)):
+            object.__setattr__(tie, name, value)
+        return tie
+
+    @classmethod
+    def unverified_for_tests(cls, link: str, digest: str, shape: Shape, prompt_lens: Sequence[int],
+                             received: Sequence[int]) -> RequestTie:
+        """A tie that nothing verified (`basis` "test"), for tests of the code that takes one. No module outside a
+        `tests` directory calls it (`test_only_tests_make_an_unverified_request_tie`)."""
+        if type(shape) is not Shape or type(link) is not str:
+            raise ValueError("a RequestTie has a Shape and a link name")
+        return cls._make(_KEY, link, _digest(digest), shape, _u32s(prompt_lens, "a tie's prompt_lens"),
+                         _u32s(received, "a tie's received"), "test")
+
+    def __setattr__(self, name: str, value: object) -> None:
+        raise AttributeError("a RequestTie is immutable")
+
+    def __delattr__(self, name: str) -> None:
+        raise AttributeError("a RequestTie is immutable")
+
+    def __reduce__(self):
+        raise TypeError("a RequestTie isn't copied or pickled: verify the link again")
+
+    def __repr__(self) -> str:
+        return (f"RequestTie(link={self.link!r}, digest={self.digest[:16]}…, shape={self.shape!r}, "
+                f"{len(self.prompt_lens)} requests, {len(self.received)} windows, basis={self.basis!r})")
+
+    @property
+    def ends(self) -> tuple[int, ...]:
+        """Each certified request's end on the ingress link, in arrival order (`ends` at the tie's B)."""
+        return ends(self.prompt_lens, self.shape.B)
+
+    def ends_for(self, link: str, digest: str, prompt_lens: Sequence[int], received: Sequence[int]
+                 ) -> tuple[int, ...]:
+        """`ends`, for the advised link `link` whose advice has `digest`, whose requests have `prompt_lens` in arrival
+        order (advice request i is ordinal order[i] under advice v1's order permutation; v0's is the identity), and
+        whose windows receive `received`. Raises `ValueError` where any of the four isn't the tie's."""
+        for what, mine, theirs in (("link", self.link, link), ("advice digest", self.digest, digest),
+                                   ("prompt lengths", self.prompt_lens, tuple(prompt_lens)),
+                                   ("received", self.received, tuple(received))):
+            if mine != theirs:
+                raise ValueError(f"the request tie's {what} isn't the advised link's: {mine!r:.80} against "
+                                 f"{theirs!r:.80}")
+        return self.ends
+
+
+def verify_link(shape: Shape, link: str, digest: str, prompt_lens: Sequence[int], received: Sequence[int],
+                registered: Sequence[tuple[bytes, bytes]], opened: Sequence[tuple[Sequence[bytes], Sequence[bytes]]]
+                ) -> RequestTie:
+    """IoTieRequest's verdict on ingress link `link`, by the reference on the certified record. The views are the
+    verifier's: window w's is `request_view(prompt_lens, received, w, B)`, from the prompt lengths (in arrival order)
+    and the request frames of the advice whose digest is `digest`. `registered[w]` is the (root, domain id) the warden
+    registered for the link's ingress window w, and `opened[w]` that window's cells and salts from the record, which
+    must open it. Raises `ValueError` unless every window is accepted."""
+    if type(shape) is not Shape or type(link) is not str:
+        raise ValueError("a link's request tie is verified at a Shape, on a named link")
+    digest = _digest(digest)
+    prompt_lens, received = _u32s(prompt_lens, "the advice's prompt lengths"), _u32s(received, "received")
+    if not received or not len(received) == len(registered) == len(opened):
+        raise ValueError(f"link {link!r}: {len(received)} windows received, {len(registered)} registered and "
+                         f"{len(opened)} opened; a tie covers every window, at least one")
+    total = ends(prompt_lens, shape.B)
+    if (total[-1] if total else 0) != sum(received):
+        raise ValueError(f"link {link!r}: the requests take {total[-1] if total else 0} request frames and the "
+                         f"windows receive {sum(received)}")
+    for w, ((root, dom), (cells, salts)) in enumerate(zip(registered, opened)):
+        inst = Instance(tuple(cells), tuple(salts), root, dom, request_view(prompt_lens, received, w, shape.B), w)
+        if not reference(shape, inst):
+            raise ValueError(f"link {link!r}: IoTieRequest refuses ingress window {w}")
+    return RequestTie._make(_KEY, link, digest, shape, prompt_lens, received, "reference")
 
 
 # --- the fake upstream: a warden's ingress cells ---------------------------------------------------------------------

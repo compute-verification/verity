@@ -4,7 +4,12 @@ ingress cells, by the reference and by the Boolean Definitions. The first negati
 N2-ADVICE's advised floor accepts."""
 from __future__ import annotations
 
+import copy
+import hashlib
+import os
+import pickle
 import random
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -90,6 +95,93 @@ def test_requests_across_windows_are_their_own(own):
 
 
 FORGED = ((5, 100, 12, 60, 1), (5, 61, 12, 99, 1), (5, 59, 12, 101, 1))
+DIGEST = hashlib.sha512(b"an advised link's advice").hexdigest()
+
+
+def _record(shape, windows):
+    """The warden's registration of each window, (root, domain id), and the cells and salts that open it."""
+    insts = [Q.instance(shape, cells, Q.RequestView(Q.Carry(0, 0, 0), (), 0), w) for w, cells in enumerate(windows)]
+    return [(i.root, i.domain) for i in insts], [(i.cells, i.salts) for i in insts]
+
+
+@pytest.mark.parametrize("own", [0, 1])
+def test_a_link_whose_every_window_is_accepted_gets_its_tie(own):
+    """`verify_link` makes the link's `RequestTie` only when every window is accepted on the verifier's own views, and
+    the tie hands its ends only to the advised link it was verified for."""
+    shape = Q.Shape(512, 4, 3, OWN=own)
+    windows, received = _link(shape)
+    registered, opened = _record(shape, windows)
+    tie = Q.verify_link(shape, "in-0", DIGEST, PL, received, registered, opened)
+    assert (tie.link, tie.digest, tie.shape, tie.prompt_lens, tie.received, tie.basis) == \
+        ("in-0", DIGEST, shape, PL, received, "reference")
+    assert tie.ends == Q.ends(PL, 512) == tie.ends_for("in-0", DIGEST, list(PL), list(received))
+    for forged in FORGED:
+        with pytest.raises(ValueError, match="refuses ingress window 1"):
+            Q.verify_link(shape, "in-0", DIGEST, forged, received, registered, opened)
+    other = DIGEST[:-1] + ("0" if DIGEST[-1] != "0" else "1")
+    for args in (("in-1", DIGEST, PL, received), ("in-0", other, PL, received),
+                 ("in-0", DIGEST, FORGED[0], received), ("in-0", DIGEST, PL, received[::-1])):
+        with pytest.raises(ValueError, match="isn't the advised link's"):
+            tie.ends_for(*args)
+    record = [(registered[::-1], opened), (registered, opened[::-1]), (registered[:2], opened[:2]),
+              (registered, [(c, s[::-1]) for c, s in opened])]
+    for reg, op in record:
+        with pytest.raises(ValueError):
+            Q.verify_link(shape, "in-0", DIGEST, PL, received, reg, op)
+    with pytest.raises(ValueError, match="windows receive"):
+        Q.verify_link(shape, "in-0", DIGEST, PL[:-1], received, registered, opened)
+    with pytest.raises(ValueError, match="advice digest"):
+        Q.verify_link(shape, "in-0", DIGEST.upper(), PL, received, registered, opened)
+
+
+def test_redteam_phase6_split_gets_no_tie():
+    """REDTEAM phase 6's split, at the verdict: the forged advice's prompt lengths get no `RequestTie`, so an advised
+    link that needs one is refused; the honest advice's get theirs."""
+    shape = Q.Shape(4096, 4, 9)
+    SHORT, LONG = 16, 338
+    windows, received = _link(shape, (LONG, SHORT), (1, 1, 1, 0))
+    registered, opened = _record(shape, windows)
+    assert Q.verify_link(shape, "in-0", DIGEST, (LONG, SHORT), received, registered, opened).ends == (2, 3)
+    with pytest.raises(ValueError, match="refuses ingress window 0"):
+        Q.verify_link(shape, "in-0", DIGEST, (SHORT, LONG), received, registered, opened)
+
+
+def test_a_request_tie_is_made_only_by_verifying():
+    """A `RequestTie` comes from `verify_link` or the named test constructor, never from fields a caller supplies, and
+    can't be changed or copied once made."""
+    shape = Q.Shape(512, 4, 3)
+    with pytest.raises(TypeError, match="verify_link"):
+        Q.RequestTie("in-0", DIGEST, shape, PL, (3, 6, 3), "reference")
+    with pytest.raises(TypeError, match="verify_link"):
+        Q.RequestTie._make(object(), "in-0", DIGEST, shape, PL, (3, 6, 3), "reference")
+    tie = Q.RequestTie.unverified_for_tests("in-0", DIGEST, shape, PL, (3, 6, 3))
+    assert tie.basis == "test" and tie.ends == Q.ends(PL, 512)
+    for name in Q.RequestTie.__slots__:
+        with pytest.raises(AttributeError, match="immutable"):
+            setattr(tie, name, getattr(tie, name))
+    with pytest.raises(TypeError, match="verify the link again"):
+        copy.copy(tie)
+    with pytest.raises(TypeError, match="verify the link again"):
+        pickle.dumps(tie)
+    for bad in ("", DIGEST[:-2], DIGEST.upper(), "g" * 128, bytes.fromhex(DIGEST)):
+        with pytest.raises(ValueError, match="advice digest"):
+            Q.RequestTie.unverified_for_tests("in-0", bad, shape, PL, (3, 6, 3))
+    with pytest.raises(ValueError, match="u32s"):
+        Q.RequestTie.unverified_for_tests("in-0", DIGEST, shape, (5, -1), (3, 6, 3))
+
+
+def test_only_tests_make_an_unverified_request_tie():
+    """No module of `verity` outside a `tests` directory calls `RequestTie.unverified_for_tests`, so every tie the
+    verifier reads is `verify_link`'s."""
+    root, callers = Path(__file__).resolve().parents[4], []
+    for d, subdirs, files in os.walk(root):
+        subdirs[:] = [s for s in subdirs if s not in ("tests", ".lake", "__pycache__", "node_modules", "build")]
+        for f in files:
+            p = Path(d, f)
+            if f.endswith(".py") and p.name != "io_request.py" and \
+                    "unverified_for_tests" in p.read_text("utf-8", errors="replace"):
+                callers.append(str(p.relative_to(root)))
+    assert root.name == "verity" and callers == []
 
 
 def _tamper(cell, at, new):
