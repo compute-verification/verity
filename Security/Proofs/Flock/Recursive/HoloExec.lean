@@ -142,7 +142,14 @@ def TopOf (lv : Level) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray) (bcs : 
 names `stacked` under its `program`, and the entry's five structural fields are exactly those computed from `bcs`.
 `TopOf` ties the same explicit strings to `cap` under `salt`, the salts the prover's workers committed R's level-0 top
 rows under (`registrant-holds-openings`: they hold them, and the guarantee is applied at the held salts); no choice is
-hidden in this relation. -/
+hidden in this relation.
+
+Assumption record. Claim: `registrant-holds-openings`. Its first two conjuncts are checks the verifier makes on its own
+inputs: where it holds the inner transcript, R's stream's first top makes the registered `stacked` entry
+(`FlockC3.RegLevels.stackedTop_of_innerCommits` derives them). What it assumes is `TopOf`: `cap` and `salt` are a tree
+and salts whose commit strings are `bcs`. Those are the prover's workers' own tree and salts, behind the firewall, which
+they hold. That is reasonable because an honest registrant committed exactly those rows. A prover that registers
+strings it can't open is outside the guarantee. No hash premise. -/
 def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (bcs : Array ByteArray) : Prop :=
   ∃ (prog : String) (e : Lean.Json),
