@@ -5,6 +5,7 @@ import Proofs.Flock.Claims.KS.OffSim
 import Proofs.Flock.Claims.Recursion.FlockKSLin
 import Proofs.Flock.Claims.Recursion.FlockKSAcc
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Proofs.Flock.Claims.KS.PlainRdRunK
 
 /-!
 # `KSFlockLin` at the deployed plain record
@@ -22,6 +23,7 @@ The plain record's KS chain with the cap terms linear: each cap slot's term is c
   slot reads nothing (`plainRawLevelCols_top`), and the others are `CpDep`'s positions.
 * `plain_KSFlockLin`: `KSFlockLin` at SHA-512 at the trimmed record `deployPlainTrim` and `CpDep`, from
   `KSFlockLin_of_tableBoundAbortLin` with the record's code facts and numbers (`plain_KSAbort`'s).
+* `plain_tableBoundAbortLinK`: `plain_tableBoundAbortLin` at `deployPlainK keep`, from `plain_accPr_le_rdAllK`.
 -/
 
 namespace Claims.Recursion
@@ -315,5 +317,219 @@ theorem plain_KSFlockLin : Claims.Recursion.KSFlockLin sha512 (deployPlainTrim R
       (plain_conflictTied Readable.relation))
     (Claims.Recursion.tableBoundAbortLin_mapCols sha512 (deployPlain Readable.relation) (wordLen false) trimCol rfl
       (wide false) CpDep (plain_colsOk sha512 Readable.relation) (wide_trimCol_inj false) plain_tableBoundAbortLin)
+
+/-! ## At `VK keep` -/
+
+open Classical in
+/-- `plain_tableBoundAbortLin` at `VK keep`. -/
+theorem plain_tableBoundAbortLinK (keepV : Bool → Bool) :
+    Claims.Recursion.TableBoundAbortLin sha512 (deployPlainK keepV Readable.relation) (wordLen false) (wide false) CpDep := by
+  classical
+  intro x Ω _ _ P A _ _ keep M
+  have hB0 := Claims.Recursion.PrBAbort_nonneg sha512 (VK keepV) P x keep
+  have hFC0 := Claims.Recursion.PrFC_nonneg sha512 (VK keepV) CpDep P x keep M
+  have hM0 : (0 : ℝ) ≤ 1 / ((M : ℝ) + 1) := by positivity
+  by_cases hno : Claims.Flock.NoAcc sha512 (VK keepV) x
+  · refine ⟨fun _ => 0, fun _ => le_rfl, ?_, fun ω C _ _ => ?_⟩
+    · rw [Claims.Ex_const]
+      exact add_nonneg (mul_nonneg (Nat.cast_nonneg _) hB0) (mul_nonneg (Nat.cast_nonneg _) (add_nonneg hFC0 hM0))
+    · have h0 : Claims.Recursion.accPrD (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω) = 0 := by
+        unfold Claims.Recursion.accPrD
+        refine (Claims.Pr_congr (q := fun _ => False) fun d => ⟨fun hd => ?_, False.elim⟩).trans Claims.Pr_false
+        exact hno Ω P ω d.1 (Claims.Recursion.abortRun_acc_iff.1 hd).2
+      calc Claims.Recursion.accPrD (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω) = 0 := h0
+        _ ≤ _ := add_nonneg (add_nonneg (εtable_nonneg false x) le_rfl) (Claims.Pr_nonneg _)
+  obtain ⟨ins, spec, sts, st, sch, m, k0, l₀, l₁, rest, ext, hset, hst, hF, hF', ht, hsch, hall⟩ :=
+    plain_accPr_le_rdAllK keepV hno
+  have hVk := VK_k_pos keepV x
+  obtain ⟨m₀, hm₀⟩ := refusable_VK keepV sha512 x
+  have hrun := Claims.Recursion.refuser_run sha512 P (VK keepV) x decCoin (coinsShown_VK keepV sha512)
+    (accLast_VK keepV) (decideFree_VK keepV sha512) keep m₀ hm₀
+  have hk0' : sch.k0 = k0 := congrArg Accounting.Schedule.k0 hF'
+  have hlen : (l₀ :: l₁ :: rest).length = depL x + 1 := by
+    have h1 := congrArg (fun S : Accounting.Schedule => S.levels.length) hF'
+    simp only [schedOf, List.length_map, Array.length_toList] at h1
+    rw [depL_eq hset hst hF]
+    simp only [List.length_cons] at h1 ⊢
+    omega
+  have hlog : ∀ ℓ, depLogLen x ℓ = (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ℓ).logLen := fun ℓ => by
+    unfold depLogLen
+    rw [depSetup_eq hset hst hF]
+    exact congrArg (fun S => (lvOf S ℓ).logLen) hF'
+  have hne : ∀ ω r q lanes d, ¬ (rdAtK keepV P x keep r (depL x) q lanes ω d).Nonempty := by
+    rintro ω r q lanes d ⟨u, hu⟩
+    obtain ⟨-, hacc, a, ha, -⟩ := (mem_rdAtK keepV).1 hu
+    rw [plainRawLevelCols_topK keepV (ℓ := depL x + 1) hacc hset hst hF r (by rw [depL_eq hset hst hF]; omega)] at ha
+    simp at ha
+  obtain ⟨E, hE⟩ : ∃ E : Ω → ℕ → ℕ → ℕ → (Fin ((VK keepV).k x) → Coin) × A → Prop,
+      E = fun ω r ℓ q d => (rdAtK keepV P x keep r ℓ q (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ + 1)).lanes ω d).Nonempty ∧
+        rdAtK keepV P x keep r ℓ q (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ + 1)).lanes ω d ≠
+          {Claims.Recursion.capPlurRd (VK keepV) x (forkRound spec st k0 r ℓ)
+            (rdAtK keepV P x keep r ℓ q (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ + 1)).lanes ω) d} := ⟨_, rfl⟩
+  have htop : ∀ ω r q, Claims.Pr (E ω r (depL x) q) = 0 := fun ω r q => by
+    refine (Claims.Pr_congr (q := fun _ => False) fun d => ⟨fun h => ?_, False.elim⟩).trans Claims.Pr_false
+    rw [hE] at h
+    exact hne ω r q _ d h.1
+  obtain ⟨hit, hhit⟩ : ∃ hit : Ω → Fin (CpDep.width x) → ℝ, hit = fun ω i =>
+      Claims.Pr fun s : ((Fin ((VK keepV).k x) → Coin) × A) × (Fin M → (Fin ((VK keepV).k x) → Coin) × A) =>
+        ∃ u v, (Claims.Recursion.FC sha512 (VK keepV) CpDep P x keep M i.pos).out (i, ω, s.1, s.2) = some (u, v) ∧
+          Claims.Collision sha512 u v := ⟨_, rfl⟩
+  have hcap : ∀ ω (i : Fin (CpDep.width x)), Claims.Pr (E ω ((Fintype.equivFin (DepIdx x)).symm i).1.val
+      ((Fintype.equivFin (DepIdx x)).symm i).2.1.val ((Fintype.equivFin (DepIdx x)).symm i).2.2.val) ≤
+        hit ω i + 1 / ((M : ℝ) + 1) := by
+    intro ω i
+    have h := Pr_rdAt_le_capHitK keepV P x keep M i
+      (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (((Fintype.equivFin (DepIdx x)).symm i).2.1.val + 1)).lanes ω
+    rw [(CpDep_at hset hst hF i).1, hk0'] at h
+    rw [hE, hhit]
+    exact h
+  have hpt : ∀ ω, (∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
+      ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen), Claims.Pr (E ω r.val ℓ.val q.val)) ≤
+        (∑ i, hit ω i) + (CpDep.width x : ℝ) * (1 / ((M : ℝ) + 1)) := fun ω =>
+    calc (∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
+          ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen), Claims.Pr (E ω r.val ℓ.val q.val))
+        = ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.range (l₀ :: l₁ :: rest).length,
+            ∑ q ∈ Finset.range (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ + 1)).logLen), Claims.Pr (E ω r ℓ q) :=
+          sum3_range (fun ℓ => (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ + 1)).logLen) fun r ℓ q =>
+            Claims.Pr (E ω r ℓ q)
+      _ = ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.range (depL x),
+            ∑ q ∈ Finset.range (2 ^ depLogLen x (ℓ + 1)), Claims.Pr (E ω r ℓ q) := by
+          refine Finset.sum_congr rfl fun r _ => ?_
+          rw [hlen, Finset.sum_range_succ, Finset.sum_eq_zero fun q _ => htop ω r q, add_zero]
+          exact Finset.sum_congr rfl fun ℓ _ => by rw [hlog]
+      _ = ∑ j : DepIdx x, Claims.Pr (E ω j.1.val j.2.1.val j.2.2.val) :=
+          (sum_depIdx x fun r ℓ q => Claims.Pr (E ω r ℓ q)).symm
+      _ = ∑ i : Fin (CpDep.width x), Claims.Pr (E ω ((Fintype.equivFin (DepIdx x)).symm i).1.val
+            ((Fintype.equivFin (DepIdx x)).symm i).2.1.val ((Fintype.equivFin (DepIdx x)).symm i).2.2.val) :=
+          (Equiv.sum_comp (Fintype.equivFin (DepIdx x)).symm fun j => Claims.Pr (E ω j.1.val j.2.1.val j.2.2.val)).symm
+      _ ≤ ∑ i : Fin (CpDep.width x), (hit ω i + 1 / ((M : ℝ) + 1)) := Finset.sum_le_sum fun i _ => hcap ω i
+      _ = _ := by rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+  have hEt : (Claims.Ex fun ω => (Claims.Pr fun d : (Fin ((VK keepV).k x) → Coin) × A =>
+        Claims.TiedColl sha512 (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).vLog) +
+      ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
+        ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen), Claims.Pr (E ω r.val ℓ.val q.val)) ≤
+      (VK keepV).k x * Claims.Recursion.PrBAbort sha512 (VK keepV) P x keep +
+        CpDep.width x * (Claims.Recursion.PrFC sha512 (VK keepV) CpDep P x keep M + 1 / ((M : ℝ) + 1)) := by
+    rw [Claims.Ex_add]
+    refine add_le_add ?_ ?_
+    · exact (le_of_eq (Claims.Ex_Pr fun ω d =>
+        Claims.TiedColl sha512 (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).vLog)).trans
+          ((Claims.Recursion.Pr_one_le_PrBAbort sha512 (VK keepV) P x keep (fun ω d =>
+            Claims.TiedColl sha512 (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).vLog)
+              fun _ _ h => h).trans (le_mul_of_one_le_left hB0 (Nat.one_le_cast.2 hVk)))
+    · refine (Claims.Ex_mono hpt).trans (le_of_eq ?_)
+      subst hhit
+      rw [Claims.Ex_add, Claims.Recursion.Ex_capHits sha512 (VK keepV) CpDep P x keep M, Claims.Ex_const]
+      ring
+  refine ⟨fun ω => (Claims.Pr fun d : (Fin ((VK keepV).k x) → Coin) × A =>
+      Claims.TiedColl sha512 (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).vLog) +
+    ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
+      ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen), Claims.Pr (E ω r.val ℓ.val q.val),
+    fun ω => add_nonneg (Claims.Pr_nonneg _) (Finset.sum_nonneg fun _ _ => Finset.sum_nonneg fun _ _ =>
+      Finset.sum_nonneg fun _ _ => Claims.Pr_nonneg _), hEt, fun ω C hC hg => ?_⟩
+  have hb' : ∀ g : (Fin ((VK keepV).k x) → Coin) → Coin × A,
+      Claims.accPr sha512 (VK keepV) (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) x (ω, g) ≤
+        εtable false x + (Claims.Pr fun s : Fin ((VK keepV).k x) → Coin =>
+          plainEv₁K keepV (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) x (ω, g) s) +
+        ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
+          ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen),
+            Claims.Pr (fun c : Fin ((VK keepV).k x) → Coin =>
+              E ω r.val ℓ.val q.val (Claims.Recursion.refDraw g c)) +
+        Claims.Pr fun r : Fin ((VK keepV).k x) → Coin =>
+          (Claims.run sha512 (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) (VK keepV) x (ω, g)
+            r).out = .acc ∧
+          ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
+            Claims.Flock.lookCol (cols false (Claims.run sha512
+              (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) (VK keepV) x (ω, g) r).seen 0) p.val =
+                some u ∧ u ≠ C p := by
+    intro g
+    subst hE
+    refine hall (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) (ω, g) C hC hg
+      (fun r ℓ c q => rdAtK keepV P x keep r.val ℓ.val q.val (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).lanes ω
+        (Claims.Recursion.refDraw g c))
+      (fun r ℓ c q => Claims.Recursion.capPlurRd (VK keepV) x (forkRound spec st k0 r.val ℓ.val)
+        (rdAtK keepV P x keep r.val ℓ.val q.val (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).lanes ω)
+        (Claims.Recursion.refDraw g c)) ?_ ?_
+    · intro r ℓ c c' hcc
+      funext q
+      refine Claims.Recursion.capPlurRd_prefix _ _ _ _ fun i hi => ?_
+      have hf : forkRound spec st k0 r.val ℓ.val < (VK keepV).k x :=
+        forkRound_lt (tables_head_one ht) hsch r.isLt ℓ.isLt
+      have hi' : i.val + 1 < (VK keepV).k x := by omega
+      simp only [Claims.Recursion.refDraw, Claims.Recursion.drawOf, Claims.Recursion.setLast, hi', ↓reduceIte]
+      exact hcc i hi
+    · intro r ℓ c hacc q a ha
+      have hab := ((hrun ω g c).1).1 hacc
+      rw [(hrun ω g c).2 hacc] at ha
+      obtain ⟨hk, hr⟩ := Claims.Recursion.abortRun_acc_iff.1 hab
+      rw [Claims.Recursion.abortRun_of_keep hk] at ha
+      exact (mem_rdAtK keepV (x := x) (keep := keep)).2 ⟨hk, hr, a, ha, rfl⟩
+  have hL : (Claims.Ex fun g : (Fin ((VK keepV).k x) → Coin) → Coin × A =>
+      Claims.accPr sha512 (VK keepV) (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) x (ω, g)) =
+        Claims.Recursion.accPrD (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω) := by
+    unfold Claims.accPr Claims.Recursion.accPrD
+    rw [← Claims.Recursion.Pr_refDraw hVk]
+    exact congrArg Claims.Ex (funext fun g => Claims.Pr_congr fun r => (hrun ω g r).1)
+  have hE1 : (Claims.Ex fun g : (Fin ((VK keepV).k x) → Coin) → Coin × A =>
+      Claims.Pr fun s : Fin ((VK keepV).k x) → Coin =>
+        plainEv₁K keepV (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) x (ω, g) s) ≤
+      Claims.Pr fun d : (Fin ((VK keepV).k x) → Coin) × A =>
+        Claims.TiedColl sha512 (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).vLog := by
+    refine (Claims.Ex_mono fun g => Claims.Pr_mono fun s hs => ?_).trans
+      (le_of_eq (Claims.Recursion.Pr_refDraw hVk fun d =>
+        Claims.TiedColl sha512 (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).vLog))
+    have h2 := hs.2
+    rw [(hrun ω g s).2 hs.1] at h2
+    exact h2
+  have hS : (Claims.Ex fun g : (Fin ((VK keepV).k x) → Coin) → Coin × A =>
+      ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
+        ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen),
+          Claims.Pr (fun c : Fin ((VK keepV).k x) → Coin => E ω r.val ℓ.val q.val (Claims.Recursion.refDraw g c))) =
+      ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
+        ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen), Claims.Pr (E ω r.val ℓ.val q.val) := by
+    rw [Claims.Bridge.Ex_sum_univ]
+    refine Finset.sum_congr rfl fun r _ => ?_
+    rw [Claims.Bridge.Ex_sum_univ]
+    refine Finset.sum_congr rfl fun ℓ _ => ?_
+    rw [Claims.Bridge.Ex_sum_univ]
+    exact Finset.sum_congr rfl fun q _ => Claims.Recursion.Pr_refDraw hVk (E ω r.val ℓ.val q.val)
+  have hO : (Claims.Ex fun g : (Fin ((VK keepV).k x) → Coin) → Coin × A =>
+      Claims.Pr fun r : Fin ((VK keepV).k x) → Coin =>
+        (Claims.run sha512 (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) (VK keepV) x (ω, g)
+          r).out = .acc ∧
+        ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
+          Claims.Flock.lookCol (cols false (Claims.run sha512
+            (Claims.Recursion.refuser P x ((VK keepV).k x) decCoin keep m₀) (VK keepV) x (ω, g) r).seen 0) p.val =
+              some u ∧ u ≠ C p) =
+      Claims.Pr fun d : (Fin ((VK keepV).k x) → Coin) × A =>
+        (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).out = .acc ∧
+        ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
+          Claims.Flock.lookCol (cols false (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).seen 0) p.val =
+            some u ∧ u ≠ C p := by
+    rw [← Claims.Recursion.Pr_refDraw hVk]
+    refine congrArg Claims.Ex (funext fun g => Claims.Pr_congr fun r => ?_)
+    constructor
+    · rintro ⟨ha, rest⟩
+      rw [(hrun ω g r).2 ha] at rest
+      exact ⟨(hrun ω g r).1.1 ha, rest⟩
+    · rintro ⟨ha, rest⟩
+      have ha' := (hrun ω g r).1.2 ha
+      rw [← (hrun ω g r).2 ha'] at rest
+      exact ⟨ha', rest⟩
+  have hEx := Claims.Ex_mono hb'
+  rw [Claims.Ex_add, Claims.Ex_add, Claims.Ex_add, Claims.Ex_const, hL, hO, hS] at hEx
+  have key : Claims.Recursion.accPrD (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω) ≤ εtable false x +
+      ((Claims.Pr fun d : (Fin ((VK keepV).k x) → Coin) × A =>
+        Claims.TiedColl sha512 (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).vLog) +
+        ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length,
+          ∑ q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen),
+            Claims.Pr (E ω r.val ℓ.val q.val)) +
+      Claims.Pr fun d : (Fin ((VK keepV).k x) → Coin) × A =>
+        (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).out = .acc ∧
+        ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
+          Claims.Flock.lookCol (cols false (Claims.Recursion.abortRun sha512 P (VK keepV) x keep ω d).seen 0) p.val =
+            some u ∧ u ≠ C p := by
+    linarith
+  exact key
 
 end FlockDeploy.KS

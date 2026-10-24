@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.KS.PlainLeafKS
+import Proofs.Flock.Claims.KS.PlainLeafKSK
 import Proofs.Flock.Claims.KS.ZkAbortR
 import Proofs.Flock.Claims.Recursion.BoundDeploy
 
@@ -19,6 +20,7 @@ everything (`PlainKSAbortFails`), so (P1) stays a premise there. At the intended
   no escapes where no run accepts.
 * **`plain_KSAbortR`**: the plain record meets `Inner.KSAbort` from that bound, through
   `KSAbort_of_tableBoundOnAccR`, as the masked `zk_KSAbortR` does.
+* **At `VK keep`** (`plain_tableBoundθOnAccRK`): the plain table bound counted per round at `deployPlainK keep`.
 -/
 
 namespace Claims.Flock
@@ -243,6 +245,180 @@ theorem plain_KSAbortR (rel : Readable.Parsed → Readable.Relation)
       (plain_colsOk sha512 rel) (wide_trimCol_inj false) htab)
     (coinsShown_V sha512 false) (accLast_V_sha512 false) (decideFree_V sha512 false) (refusable_V sha512 false)
     decode hdec
+
+/-! ## At `VK keep`
+
+The plain table bound counted per round at `deployPlainK keep`: the chain above over `VK keep`, the simulator at
+`plainVerdictAtK keep` (`plainSimWD_allK`, `plainSimWrPAtDU_atK`) and the slack's fit there
+(`slackEsc_fitsFork_plainK`). -/
+
+section ChainK
+
+open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
+open FlockSoundness.Discharge.Tables Claims.Bridge.Live
+open Lean (Json)
+
+open Classical in
+/-- `plain_tableBoundθAccAtR_of_simD` at `VK keep`. -/
+theorem plain_tableBoundθAccAtR_of_simDK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {st : Stmt} {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
+    {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
+    {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
+    {hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts} {d : Json}
+    {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)}
+    {hdec : ∀ (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) j,
+      DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
+        (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
+          ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
+          ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+        (plainVerdictAtK keep ins.read.I d C rootB₀) opn (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
+        (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
+        (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
+        j}
+    (hset : setupOf false x = some (ins, spec, sts)) (hd : ins.read.draw = some d)
+    (hnc : ∀ C : Fin (wordLen false x) → List 𝔽, (∀ p, wide false x (C p)) →
+      ¬ Claims.Flock.GoodTable (deployPlainK keep Readable.relation) (wordLen false) x C →
+      ¬ Committed execArith (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (Claims.Flock.oracleOf C))
+    (hs : PlainSimWrPAtDK keep h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d opn hdec) :
+    Claims.Flock.TableBoundθAccAtR sha512 (deployPlainK keep Readable.relation) (wordLen false) (wide false) x := by
+  intro Ω _ _ P
+  obtain ⟨δ, hδ, hfit, hω⟩ := hs Ω P
+  refine ⟨Claims.Flock.slackEsc sha512 (VK keep) P x ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (plainJ (x := x) (tables_head_one h) hsch)
+      (fun r ℓ ω s s' => plainForkEvK keep h hsch P r ℓ ω s s') (plainEv₁K keep P x) (fun _ _ _ _ _ he => he.2.2)
+      (fun _ _ he => he.2)
+      (fun r ℓ i => Claims.Flock.slackW ((V false).k x) δ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val i.val)
+      (Claims.Flock.slackG sha512 (VK keep) P x) (Claims.Flock.slackG_tied sha512 (VK keep) P x),
+    Claims.Flock.slackEsc_onAcc₁ _ _ _ _ _ _ _ _ _ _ _ (fun _ _ _ _ _ he => ⟨he.1, he.2.1⟩) (fun _ _ he => he.1),
+    Claims.Escapes.FitsFork.fitsForkR
+      (slackEsc_fitsFork_plainK keep Readable.relation P x (tables_head_one h) hsch _ _ _ _ _ _ _ hfit)
+      (Nat.cast_nonneg _) (VK_k_pos keep x), fun ω C hok hg => ?_⟩
+  obtain ⟨N, dg, w, τ, _, _, P', Φ, hΦ, hσ, hrun, hsc, hfork⟩ := hω ω
+  have htr := plain_first_of_simDK keep P x ω C spec.mPts hset hd N dg w P' Φ ⟨hΦ, hrun⟩
+  have hsc' := liveMix_le_Pr (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x ω _ (plainEv₁K keep P x ω) Φ (hΦ _)
+    (hsc C hok)
+  exact plain_le_sessionsEV (VK keep) L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay P _ ω C (hnc C hok hg) τ
+    (capOfRoot (plainRoot P x ω)[0]!) (fun u => simAt execArith Refine.H512 Refine.enc512 Refine.leaf512
+      (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtK keep ins.read.I d C (plainRoot P x ω)) opn
+      dg (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
+      (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
+      (liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) (hσ u))
+    (le_trans htr (mean_live_le_simAt execArith Refine.H512 Refine.enc512 Refine.leaf512
+      (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtK keep ins.read.I d C (plainRoot P x ω)) opn
+      dg (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
+      (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
+      (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ))
+    (mean_epsSL_le_slack execArith Refine.H512 Refine.enc512 Refine.leaf512 h L m k0 l₀ l₁ rest ext hsch hk0 hm
+      PT_LOCAL [] [] _ _ sha512 (VK keep) P (plainJ (x := x) (tables_head_one h) hsch) _ _ _ _ _
+      (fun _ _ _ => Claims.Flock.slackW_nonneg hδ _ _ _) _ _ ω
+      (fun r ℓ => (hfork C hok r ℓ).trans (add_le_add le_rfl
+        (Claims.Flock.forkSlack_le sha512 (VK keep) P x hδ _ ω)))
+      (le_trans (mean_selfClash_le_live execArith Refine.H512 Refine.enc512 Refine.leaf512
+        (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtK keep ins.read.I d C (plainRoot P x ω)) opn
+        dg (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
+        (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
+        (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ) hsc'))
+
+open Classical in
+/-- `plain_tableBoundθAccAtR_of_simDU` at `VK keep`. -/
+theorem plain_tableBoundθAccAtR_of_simDUK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {st : Stmt} {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
+    {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
+    {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
+    {hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts} {d : Json}
+    {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)}
+    {hdec : ∀ (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) j,
+      DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leafPlain cap pend os)
+        (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leafPlain
+          ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
+          ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leafPlain ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+        (plainVerdictAtK keep ins.read.I d C rootB₀) opn (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
+        (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
+        (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
+        j}
+    (hset : setupOf false x = some (ins, spec, sts)) (hd : ins.read.draw = some d)
+    (hnc : ∀ C : Fin (wordLen false x) → List 𝔽, (∀ p, wide false x (C p)) →
+      ¬ Claims.Flock.GoodTable (deployPlainK keep Readable.relation) (wordLen false) x C →
+      ¬ Committed execArith (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (Claims.Flock.oracleOf C))
+    (hs : PlainSimWrPAtDUK keep h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d opn hdec) :
+    Claims.Flock.TableBoundθAccAtR sha512 (deployPlainK keep Readable.relation) (wordLen false) (wide false) x := by
+  intro Ω _ _ P
+  obtain ⟨δ, hδ, hfit, hω⟩ := hs Ω P
+  refine ⟨Claims.Flock.slackEsc sha512 (VK keep) P x ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (plainJ (x := x) (tables_head_one h) hsch)
+      (fun r ℓ ω s s' => plainForkEvK keep h hsch P r ℓ ω s s') (plainEv₁K keep P x) (fun _ _ _ _ _ he => he.2.2)
+      (fun _ _ he => he.2)
+      (fun r ℓ i => Claims.Flock.slackW ((V false).k x) δ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val i.val)
+      (Claims.Flock.slackG sha512 (VK keep) P x) (Claims.Flock.slackG_tied sha512 (VK keep) P x),
+    Claims.Flock.slackEsc_onAcc₁ _ _ _ _ _ _ _ _ _ _ _ (fun _ _ _ _ _ he => ⟨he.1, he.2.1⟩) (fun _ _ he => he.1),
+    Claims.Escapes.FitsFork.fitsForkR
+      (slackEsc_fitsFork_plainK keep Readable.relation P x (tables_head_one h) hsch _ _ _ _ _ _ _ hfit)
+      (Nat.cast_nonneg _) (VK_k_pos keep x), fun ω C hok hg => ?_⟩
+  obtain ⟨N, dg, w, τ, _, _, P', Φ, hΦ, hσ, hrun, hsc, hfork⟩ := hω ω
+  have htr := plain_first_of_simDK keep P x ω C spec.mPts hset hd N dg w P' Φ ⟨hΦ, hrun⟩
+  have hsc' := liveMix_le_Pr (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x ω _ (plainEv₁K keep P x ω) Φ (hΦ _)
+    (hsc C hok)
+  exact plain_le_sessionsEUK keep L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay P _ ω C (hnc C hok hg) τ
+    (capOfRoot (plainRoot P x ω)[0]!) (fun u => simAt execArith Refine.H512 Refine.enc512 Refine.leafPlain
+      (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtK keep ins.read.I d C (plainRoot P x ω)) opn
+      dg (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
+      (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
+      (liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) (hσ u))
+    (le_trans htr (mean_live_le_simAt execArith Refine.H512 Refine.enc512 Refine.leafPlain
+      (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtK keep ins.read.I d C (plainRoot P x ω)) opn
+      dg (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
+      (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
+      (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ))
+    (mean_epsSL_le_slack execArith Refine.H512 Refine.enc512 Refine.leafPlain h L m k0 l₀ l₁ rest ext hsch hk0 hm
+      PT_LOCAL [] [] _ _ sha512 (VK keep) P (plainJ (x := x) (tables_head_one h) hsch) _ _ _ _ _
+      (fun _ _ _ => Claims.Flock.slackW_nonneg hδ _ _ _) _ _ ω
+      (fun r ℓ => (hfork C hok r ℓ).trans (add_le_add le_rfl
+        (Claims.Flock.forkSlack_le sha512 (VK keep) P x hδ _ ω)))
+      (le_trans (mean_selfClash_le_live execArith Refine.H512 Refine.enc512 Refine.leafPlain
+        (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtK keep ins.read.I d C (plainRoot P x ω)) opn
+        dg (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
+        (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
+        (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ) hsc'))
+
+/-- `plain_tableBoundθAccAtR_all` at `VK keep`. -/
+theorem plain_tableBoundθAccAtR_allK (keep : Bool → Bool) {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
+    Claims.Flock.TableBoundθAccAtR sha512 (deployPlainK keep Readable.relation) (wordLen false) (wide false) x := by
+  obtain ⟨s, hs, hin⟩ := accK_inScope keep Readable.relation hno
+  obtain ⟨ins, spec, sts, d, hset, hd⟩ := accK_draw keep hno
+  have h1 := plain_one hs hin hset
+  have h0 : 0 < sts.size := by omega
+  have hm := parse_m hs hset h0
+  have h22 : 22 ≤ (sts[0]'h0).m := by have := hin.1; simp only [Bool.false_eq_true, ↓reduceIte] at this; omega
+  have h35 : (sts[0]'h0).m ≤ 35 := by have := hin.2.1; omega
+  obtain ⟨L, hlay⟩ := plain_table0 hs hin hset h0
+  obtain ⟨k0, l₀, l₁, rest, ext, hsch, hk0, e⟩ := plain_sched h22 h35
+  have ht := tables_of_one hset h1
+  have hm13 : 13 ≤ (L.model (Refine.regionsOf (sts[0]'h0))).m := by show 13 ≤ (sts[0]'h0).m; omega
+  have hnc : ∀ C : Fin (wordLen false x) → List 𝔽, (∀ p, wide false x (C p)) →
+      ¬ Claims.Flock.GoodTable (deployPlainK keep Readable.relation) (wordLen false) x C →
+      ¬ Committed execArith (L.model (Refine.regionsOf (sts[0]'h0))) ⟨_, k0, l₀ :: l₁ :: rest, ext⟩
+        (Claims.Flock.oracleOf C) := fun C hw hg => by
+    have := plain_not_committed hs hin hset h0 L C hw fun hg' =>
+      hg ((goodTable_plainK keep Readable.relation (wordLen false) x C).2 hg')
+    rwa [e] at this
+  obtain ⟨hw, hhid⟩ := plainSimWD_allK keep x s hs hin ins spec sts hset _ ht d hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay
+  cases hh : ins.read.I.tags.hiddenOutputs
+  · exact plain_tableBoundθAccAtR_of_simDK keep hset hd hnc (hw hh)
+  · by_cases hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"
+    · exact plain_tableBoundθAccAtR_of_simDK keep hset hd hnc (hhid hh hl)
+    · exact plain_tableBoundθAccAtR_of_simDUK keep hset hd hnc (plainSimWrPAtDU_atK keep hs hin hset ht hh
+        (plain_leafU hs hin hset hl) hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay)
+
+end ChainK
+
+open Flock in
+/-- `plain_tableBoundθOnAccR` at `VK keep`. -/
+theorem plain_tableBoundθOnAccRK (keep : Bool → Bool) :
+    Claims.Recursion.TableBoundθOnAccR sha512 (deployPlainK keep Readable.relation) (wordLen false) (wide false) := by
+  intro x
+  by_cases hno : Claims.Flock.NoAcc sha512 (VK keep) x
+  · exact Claims.Flock.TableBoundθAccAt.tableBoundθAccAtR
+      (Claims.Flock.tableBoundθAccAt_of_noAcc sha512 (deployPlainK keep Readable.relation) (wordLen false) (wide false) x
+        hno (plain_k_leK keep Readable.relation x) (εtable_nonneg false x)) (VK_k_pos keep x)
+  · exact plain_tableBoundθAccAtR_allK keep hno
 
 end FlockDeploy.KS
 
