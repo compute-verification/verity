@@ -20,6 +20,7 @@ from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
+from verity_vllm.pipeline import serve_protocol as proto
 
 CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, "min_tokens": 4, "stream": True,
                   "ignore_eos": True, "temperature": 0}
@@ -28,7 +29,7 @@ CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, 
 # ---------------------------------------------------------------------------------------------------------------- protocol
 
 def test_certifier_body_parses_to_its_sampling():
-    p = so.PlainProtocol()
+    p = proto.PlainProtocol()
     req = p.parse(dict(CERTIFIER_BODY, seed=0))
     assert (req.prompt, req.stream, req.max_tokens, req.include_usage) == ([128000, 791, 4062], True, 4, False)
     sp = p.sampling_params(req, p.max_tokens(req, 512, 3, {"temperature": 0.6}), {"temperature": 0.6})
@@ -37,7 +38,7 @@ def test_certifier_body_parses_to_its_sampling():
 
 
 def test_text_prompt_and_defaults():
-    p = so.PlainProtocol()
+    p = proto.PlainProtocol()
     req = p.parse({"prompt": ["hello"], "stream": False})
     assert (req.prompt, req.stream, req.max_tokens, req.add_special_tokens) == ("hello", False, 16, True)
     assert p.sampling_params(req, 16, {"temperature": 0.6})["temperature"] == 0.6
@@ -45,7 +46,7 @@ def test_text_prompt_and_defaults():
 
 
 def test_max_tokens_as_vllm_bounds_it():
-    p = so.PlainProtocol()
+    p = proto.PlainProtocol()
     assert p.max_tokens(p.parse({"prompt": [1] * 500, "max_tokens": 64}), 512, 500, {}) == 12
     assert p.max_tokens(p.parse({"prompt": [1], "max_tokens": None}), 512, 1, {"max_tokens": 7}) == 7
     with pytest.raises(ValueError, match="exceeds model's maximum context length"):
@@ -56,40 +57,40 @@ def test_max_tokens_as_vllm_bounds_it():
                                   {"prompt": [1], "echo": True}, {"prompt": [1], "logprobs": 1},
                                   {"prompt": [1], "stream_options": {"include_usage": True}}])
 def test_refused_bodies(body):
-    with pytest.raises(so.RequestError):
-        so.PlainProtocol().parse(body)
+    with pytest.raises(proto.RequestError):
+        proto.PlainProtocol().parse(body)
 
 
 def test_usage_rule_is_vllms():
-    assert so.should_include_usage(None, True) == (True, True)
-    assert so.should_include_usage(None, False) == (False, False)
-    assert so.should_include_usage({"include_usage": True}, False) == (True, False)
-    assert so.should_include_usage({"include_usage": True, "continuous_usage_stats": True}, False) == (True, True)
-    assert so.should_include_usage({"include_usage": False, "continuous_usage_stats": True}, False) == (False, False)
+    assert proto.should_include_usage(None, True) == (True, True)
+    assert proto.should_include_usage(None, False) == (False, False)
+    assert proto.should_include_usage({"include_usage": True}, False) == (True, False)
+    assert proto.should_include_usage({"include_usage": True, "continuous_usage_stats": True}, False) == (True, True)
+    assert proto.should_include_usage({"include_usage": False, "continuous_usage_stats": True}, False) == (False, False)
 
 
 def test_frames_are_vllms_serialization():
     """vLLM's `completion_stream_generator` at d9105ea80: a choice chunk is `model_dump_json(exclude_unset=True)` of a
     CompletionStreamResponse whose choice sets every field it names (so its nulls stay), the usage chunk
     `exclude_unset=False, exclude_none=True` with `choices=[]`; UsageInfo's field order is prompt, total, completion."""
-    p = so.PlainProtocol()
+    p = proto.PlainProtocol()
     base = dict(request_id="cmpl-1-0", created=7, model="m")
     assert p.chunk(**base, text=" é", finish_reason=None, stop_reason=None, prompt_token_ids=None, token_ids=None, usage=None) == (
         '{"id":"cmpl-1-0","object":"text_completion","created":7,"model":"m","choices":[{"index":0,"text":" é","logprobs":null,'
         '"finish_reason":null,"stop_reason":null,"prompt_token_ids":null,"token_ids":null}]}')
     assert p.chunk(**base, text="x", finish_reason="length", stop_reason=None, prompt_token_ids=None, token_ids=[5],
-                   usage=so._usage(3, 4)).endswith('"token_ids":[5]}],"usage":{"prompt_tokens":3,"total_tokens":7,"completion_tokens":4}}')
-    assert p.usage_chunk(**base, usage=so._usage(128, 16)) == (
+                   usage=proto.usage_of(3, 4)).endswith('"token_ids":[5]}],"usage":{"prompt_tokens":3,"total_tokens":7,"completion_tokens":4}}')
+    assert p.usage_chunk(**base, usage=proto.usage_of(128, 16)) == (
         '{"id":"cmpl-1-0","object":"text_completion","created":7,"model":"m","choices":[],'
         '"usage":{"prompt_tokens":128,"total_tokens":144,"completion_tokens":16}}')
-    assert so.sse("{}") == b"data: {}\n\n" and so.SSE_DONE == b"data: [DONE]\n\n"
-    assert so.http_chunk(b"data: x\n\n") == b"9\r\ndata: x\n\n\r\n"
+    assert proto.sse("{}") == b"data: {}\n\n" and proto.SSE_DONE == b"data: [DONE]\n\n"
+    assert proto.http_chunk(b"data: x\n\n") == b"9\r\ndata: x\n\n\r\n"
 
 
 def test_plain_frames_agree_with_vllm():
     """Where vLLM is installed (the GPU nodes' env), the plain frames are its frames."""
     pytest.importorskip("vllm.entrypoints.openai.completion.protocol")
-    got = so.framing_agrees(so.VllmProtocol())
+    got = proto.framing_agrees(proto.VllmProtocol())
     assert got["agrees"], got["differences"]
 
 
@@ -267,7 +268,7 @@ class Serving:
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
                                        clock=lambda: 0.0, wall=lambda: 0.0) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
-        self.server = so.Server(proto=so.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
+        self.server = so.Server(proto=proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
                                 defaults={"temperature": 1.0}, submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
         self.http = so.HttpThread(self.server, "127.0.0.1", 0)
 
@@ -295,7 +296,7 @@ class Serving:
 
 
 def events(raw: bytes) -> list[str]:
-    assert raw.endswith(so.SSE_DONE)
+    assert raw.endswith(proto.SSE_DONE)
     return [e[len("data: "):] for e in raw.decode().split("\n\n") if e]
 
 

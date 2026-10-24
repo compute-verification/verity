@@ -2,7 +2,8 @@
 w8 codes and two f32 scales out, read off one Program row through a committed store.  Its member counts each port's u16 words
 by the template's element widths, and its rows are the elements' little-endian bytes, two to a word: an 8-bit element is half a
 word (even element low), a 32-bit one two words (low half first), which is the bit order of M0's rows.  An element read at
-another width than the template's port is refused, as is a row whose elements are not the ports' whole words."""
+another width than the template's port is refused, as is a row whose elements are not the ports' whole words, except a signed
+integer member wider than its port: `TokenSelect_v1`'s i32 token, which the sampler commits as torch's int64, is read by value."""
 from __future__ import annotations
 
 import numpy as np
@@ -62,3 +63,30 @@ def test_a_packed_port_read_at_another_width_or_not_whole_words_is_refused():
         SRW.read(m, [_row()], Store({"x": x, "q": np.zeros(256, np.uint16), "s": np.zeros(2, np.uint32)}), lambda *a: None)
     with pytest.raises(ValueError, match=r"committed members of \[3, 2\] elements are not its ports' whole u16 words"):
         SRW.members([T], [[_row((("q", 3, "w8"), ("s", 2, "f32")))]])
+
+
+def _sampled_row(dtype: str = "i64"):
+    r = {"i": 9, "spec": "TokenSelect_v1{V=16}", "args": [[["n", 0, 0, 16]]]}
+    d = {"members": [["sampled_token_ids", 1, dtype]], "step": 3, "op_path": "sampler", "row": 0}
+    return ("r0", Index(), r, d)
+
+
+def test_the_sampled_i64_token_is_read_by_value_into_token_selects_i32_port():
+    """`TokenSelect_v1` returns an i32 and the sampler commits torch's int64 token, which the store reads as its u64 word: the
+    port's two words are the token's value, low half first, as the replay links tokens (`check.replay.linkage`)."""
+    T16 = "TokenSelect_v1{V=16}"
+    assert SRW.template(T16).packed == (16, 32)
+    x = np.arange(16, dtype=np.uint16)
+    (m,) = SRW.members([T16], [[_sampled_row()]])
+    assert (m.rows, m.outs) == ((("in0", 16),), (("out.sampled_token_ids", 2),))
+    data, _ = SRW.read(m, [_sampled_row()], Store({"x": x, "sampled_token_ids": np.array([0x2_5DC3], np.uint64)}), lambda *a: None)
+    assert data["outs"]["out.sampled_token_ids"].tolist() == [[0x5DC3, 0x2]]
+
+
+def test_a_token_outside_the_port_or_an_unsigned_member_wider_than_it_is_refused():
+    x = np.zeros(16, dtype=np.uint16)
+    (m,) = SRW.members(["TokenSelect_v1{V=16}"], [[_sampled_row()]])
+    with pytest.raises(ValueError, match=r"output sampled_token_ids: element 0 of a uint64 member is -1, not in a 32-bit port's"):
+        SRW.read(m, [_sampled_row()], Store({"x": x, "sampled_token_ids": np.array([2**64 - 1], np.uint64)}), lambda *a: None)
+    with pytest.raises(ValueError, match="output sampled_token_ids: uint64 elements, the template's port is 32-bit elements"):
+        SRW.read(m, [_sampled_row("u64")], Store({"x": x, "sampled_token_ids": np.array([7], np.uint64)}), lambda *a: None)
