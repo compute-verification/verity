@@ -40,6 +40,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "served_units"))
 
 import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 import stage as SU  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
@@ -258,7 +259,7 @@ def main() -> int:
 
     # negatives: each re-decides one input altered
     neg: dict[str, dict] = {}
-    fewer = P.mixed_population_program([(d, n - (1 if i == 0 else 0)) for i, (d, (_K, n)) in enumerate(zip(defs, spec))])
+    fewer = R2.program([(d, n) for d, (_K, n) in zip(defs, spec)], mixed=True)
     v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     if len(defs) > 1:

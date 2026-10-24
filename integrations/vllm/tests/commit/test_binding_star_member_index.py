@@ -7,6 +7,8 @@ the scan on a B64-shaped fixture with every outcome present (bound, missing, amb
 hours for the old scan, is counted exactly."""
 from __future__ import annotations
 
+import pytest
+
 from verity_vllm.commit.binding import (
     _op_key_index,
     coverage_check,
@@ -100,6 +102,7 @@ def test_clean_fixture_is_ok_and_every_star_member_counts_as_used():
     assert cov["extra_n"] == 0                          # every plane member under a `*` identity is USED (not reported extra)
 
 
+@pytest.mark.slow
 def test_b64_shape_is_counted_exactly():
     """The #23 shape: 64 requests x 129 steps x 16 layers = 132,096 `*` identities against ~900k map entries (3 planes + 1 dense here:
     64 x 129 x (16 x 3 + 1) = 404,544 entries).  Pre-fix this scan was ~1.2e11 tuple compares (hours); the index makes it linear."""

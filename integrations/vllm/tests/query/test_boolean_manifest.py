@@ -83,6 +83,7 @@ def _placeholder(x, digest: str):
     return json.loads(s.replace(digest, "<program>"))
 
 
+@pytest.mark.slow
 def test_the_boolean_program_names_its_word_program_and_its_rows_are_the_word_rows(row):
     word, bits, dirs, digests = row
     assert bits.program.word is word.program and digests["word"] != digests["boolean"]
@@ -94,6 +95,7 @@ def test_the_boolean_program_names_its_word_program_and_its_rows_are_the_word_ro
     assert any(r["bits"] != r["spec"] for r in b["rows"])
 
 
+@pytest.mark.slow
 def test_programview_reads_the_word_families_and_the_boolean_spec_of_each_call(row):
     _word, _bits, dirs, _digests = row
     Pw, Pb = (from_instances(str(dirs[ir] / "instances.json.gz")) for ir in ("word", "boolean"))
@@ -104,6 +106,7 @@ def test_programview_reads_the_word_families_and_the_boolean_spec_of_each_call(r
     assert all(c.bits is None for c in Pw.calls) and all(c.bits for c in Pb.calls)
 
 
+@pytest.mark.slow
 def test_the_boolean_manifest_is_the_word_manifest_apart_from_the_program_digest(row):
     """Every identity and every header field but the Program's own: its digest, its function id (the Boolean root binds
     `IR='boolean'`) and what is digested over them (the manifest digest, the partition's)."""
@@ -119,6 +122,7 @@ def test_the_boolean_manifest_is_the_word_manifest_apart_from_the_program_digest
     assert {k for k in set(mw) | set(mb) if mw.get(k) != mb.get(k)} <= {"manifest_digest", "unreturned_digest"}
 
 
+@pytest.mark.slow
 def test_the_word_check_cuts_the_word_definitions_and_counts_boolean_gates_beside(row):
     _word, bits, dirs, _digests = row
     out = {}
@@ -137,6 +141,7 @@ def test_the_word_check_cuts_the_word_definitions_and_counts_boolean_gates_besid
     assert MF.word_record(b, strict=False)["boolean_gates"] == b["boolean_gates"]
 
 
+@pytest.mark.slow
 def test_the_composition_and_the_match_read_a_boolean_dir_as_its_word_program(row, tmp_path):
     """The word Program beside the Boolean one is the word derive's, and the workload composition (`pipeline.components`) and the
     Match (`program_compare.load_derived`) read it: the same component and the same Program as the word dir's, the Boolean

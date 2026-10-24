@@ -65,10 +65,11 @@ codec than the record's, or a bare fraction. The stated ceiling is the node's, t
 0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (`timing.SQUARINGS_PER_S`,
 `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
-receipt. Under the default receipt kind, sketch-sha512, a receipt also rests on `RateAuditSketch`, which adds at most
-\(C \cdot 2^{-95.12}\) a session at 16 rows for a prover of \(C\) SHA-512 compressions (`timing.sketch_failure`, §4):
-no more than \(2^{-40}\) up to \(C = 2^{55.12}\). At 64 rows, a registration's other row count, it is
-\(C \cdot 2^{-215.85}\). block-sha512, kept for comparison, adds nothing. Neither adds to γ.
+receipt. Under the default receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
+derived by `Accounting.Guarantees.Remote.SketchBoundDeployed`), which adds at most \(C \cdot 2^{-95.12}\) a session
+at 16 rows for a prover of \(C\) SHA-512 compressions, and \((C + P) N \cdot 2^{-512}\) for a receipt right without its
+hash (`timing.sketch_failure`, §4): no more than \(2^{-40}\) up to \(C = 2^{55.12}\). At 64 rows, a registration's
+other row count, it is \(C \cdot 2^{-215.85}\). block-sha512, kept for comparison, adds nothing. Neither adds to γ.
 
 **Each window alone.** The same terms over window \(t\)'s own span \(\Sigma_t = D_t - b_{t-1}\) (`WindowRecord.span_ns`),
 with its \(U_t\), \(P_t\) and \(m^*_t\) (or the pooled bound's \(f_t U_t\)) in place of the session's sums, give
@@ -1201,7 +1202,8 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   keeps them, and the leaves' salts: 64 bytes a 4 KiB block and 192 a leaf of 16, about 1/60 of what it read in the
   window. Keeping each tree above its leaves and re-reading an opened leaf's 16 blocks instead costs a small fraction of
   the reads again (ra-openings puts it at 0.06–0.1%). The reference keeps every pass whole.
-- **Lean.** The statement is ra-remote-theorem's `Accounting.Remote.Conservation`, with the per-pass routes
+- **Lean.** The statement is `Accounting.Guarantees.RemoteSessionRunConservation` (and `RemoteWindowRunConservation`,
+  each with a `Relay` form): ra-remote-theorem's `Accounting.SecurityProofs.Remote.Conservation` at the per-pass routes
   ra-remote-lean and ra-bound-lean prove. The openings are ra-openings' (#1900, open):
   `Accounting.Guarantees.RateWindowDraw`, a window's pooled draw over its passes' receipts, and `RateSessionDraw`,
   the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of
