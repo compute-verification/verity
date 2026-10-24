@@ -107,6 +107,11 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   `a5_coins.verifier_negatives`): the honest bytes passed off as the challenger's with no evidence, and as the verifier's
   with evidence attached, each refused by the Lean's run at its select (`coins`); a second select on the registration
   (`drawn`) and a select on a registration the stream never received (`unknown`), each refused before any coin is read.
+* **Transfer gates opened under the warden's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
+  registered value's (a warden link-window's cells, `certifier.warden_rows`), committed under that value's salts
+  (`commit.serving_rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
+  the root the warden signed, which the caller read under the warden's key), the same reads, record and negatives as a row
+  table's (below). `a5_warden.py` is their stand-in.
 * **Row tables** (`commit.serving_rows.Window.row_tables`): a window whose `ScaledMmS8Coordinate` chunks read their ``x``
   rows from one row table per engine step and linear (`pipeline.serving_rows.with_row_tables`) registers one port more,
   ``row-table``, the tree over its steps' roots, which the Spec declares a tree over roots of row-seg leaves
@@ -122,11 +127,6 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   when they are one. Negatives on one drawn chunk: no registered reads, another root, its units reading another row
   (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
   context); `a5_row_tables.py` is their stand-in.
-* **Transfer gates opened under the warden's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
-  registered value's (a warden link-window's cells, `certifier.warden_rows`), committed under that value's salts
-  (`commit.serving_rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
-  the root the warden signed, which the caller read under the warden's key), the same reads, record and negatives as a row
-  table's. `a5_warden.py` is their stand-in.
 """
 from __future__ import annotations
 
