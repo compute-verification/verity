@@ -92,7 +92,8 @@ public file (each row's hiding commitment), its session files, the circuit file 
 salts of the ``pub`` and ``o0`` rows and the output word. Never the opening nor the ``wit`` row's salt. The certificates
 are not a public item of the Spec: the service's public kinds (structure, outputs, coins, hiding commitments) have none
 for a trusted device's signature over a hiding commitment, so they reach the verifier from the certifier beside the
-service, an open question for a ruling.
+service, in the clear. That is a provisional exception to the four public kinds (decided 24 Oct, option A), not a fifth
+kind.
 
 `LinkWindows.clear` is the in-the-clear check on the opening, for a debug comparison only (`verify(opening=…)`, off by
 default, which adds its accept bit and decides nothing) and the tests' reference: the opening reproduces the registered
