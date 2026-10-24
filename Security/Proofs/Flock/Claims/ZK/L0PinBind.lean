@@ -12,8 +12,8 @@ rep's schedule so far:
   is what its opening sent, fed, with the round it asks for next; fed fewer coins than it asks for, one more round than
   coins.
 * **The ring switch cut at `γ`** (`ringSwitchCut_gamma`, `openStep_switch`): the cut run stops at `γ`'s squeeze having
-  sent the switch's bodies (`Switch.rsBody`), so the opening's first `claims + 1` rounds are those, after the PIOP's empty
-  pending bytes.
+  sent the switch's bodies (`Switch.rsBody`), so the opening's first `claims + 1` rounds are those, after the PIOP's
+  empty pending bytes.
 * **Their counts** (`sched_count`, `openList_lt`, `openList_at`): `7` a claim, then `claims` for `γ`.
 * **The flags** (`repState_opened`): the switch's first round is the opening's (`Flags.PcsRound`), the rest quiet, so
   `Flags.sched_flags` carries the frame there, and the coins keep it.
@@ -88,22 +88,28 @@ theorem schedSoFar_sentQ {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom
       simp [sentQ, pendC]
     | fail e => cases hs
 
+/-- A schedule's entry past `A`, from the rounds past `A`. -/
+theorem sched_entry {sched : Array (ByteArray × ℕ)} {A : ℕ} {q : List ByteArray}
+    (h : (sched.toList.map Prod.fst).drop A = q) {i : ℕ} (hi : i < q.length) :
+    (sched.getD (A + i) (.empty, 0)).1 = q[i] := by
+  have hsz : A + i < sched.size := by
+    have := congrArg List.length h
+    simp only [List.length_drop, List.length_map, Array.length_toList] at this
+    omega
+  subst h
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hsz, Option.getD_some]
+  simp only [List.getElem_drop, List.getElem_map, Array.getElem_toList]
+
 /-- A schedule's entry past `A`, from the rounds past `A` and their first `N + 1` bodies. -/
 theorem sched_bytes {sched : Array (ByteArray × ℕ)} {A N : ℕ} {q : List ByteArray} {B : ℕ → Claims.Msg}
     (h : (sched.toList.map Prod.fst).drop A = q)
     (hq : (q.take (N + 1)).map Claims.toMsg = (List.range (N + 1)).map B) (hlen : N < q.length) {i : ℕ}
     (hi : i ≤ N) : (sched.getD (A + i) (.empty, 0)).1.data.toList = B i := by
-  have hsz : A + i < sched.size := by
-    have := congrArg List.length h
-    simp only [List.length_drop, List.length_map, Array.length_toList] at this
-    omega
   have e1 : Claims.toMsg q[i] = B i := by
     have := List.getElem_of_eq hq (i := i) (by simp only [List.length_map, List.length_take]; omega)
     simp only [List.getElem_map, List.getElem_take, List.getElem_range] at this
     exact this
-  subst h
-  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hsz, Option.getD_some]
-  simp only [List.getElem_drop, List.getElem_map, Array.getElem_toList] at e1
+  rw [sched_entry h (by omega)]
   exact e1
 
 /-! ## The opening's counts -/
@@ -127,6 +133,23 @@ theorem openList_at {N : ℕ} (sch : _root_.Flock.Schedule) (hN : N ≠ 0) : (Co
   rw [openList_eq sch hN, List.getD_eq_getElem?_getD, List.getElem?_append_right (by simp), List.length_replicate,
     Nat.sub_self]
   rfl
+
+theorem ligeritoCoins_cons (sch : _root_.Flock.Schedule) :
+    ∃ rest, (_root_.Flock.Firewall.Session.ligeritoCoins sch).toList = sch.n :: rest := by
+  unfold _root_.Flock.Firewall.Session.ligeritoCoins
+  simp only [Array.toList_append, List.append_assoc, List.toList_toArray, List.cons_append, List.nil_append]
+  exact ⟨_, rfl⟩
+
+/-- Past the ring switch's, the opening's first count is level 0's binding's, `n`. -/
+theorem openList_bind {N : ℕ} (sch : _root_.Flock.Schedule) (hN : N ≠ 0) (hn0 : sch.n ≠ 0) :
+    N + 1 < (Count.openList N sch).length ∧ (Count.openList N sch).getD (N + 1) 0 = sch.n := by
+  obtain ⟨rest, hr⟩ := ligeritoCoins_cons sch
+  rw [openList_eq sch hN, hr, List.filter_cons_of_pos (by simpa using hn0)]
+  constructor
+  · simp
+  · rw [List.getD_eq_getElem?_getD, List.getElem?_append_right (by simp), List.length_replicate,
+      show N + 1 - N = 1 by omega]
+    rfl
 
 /-- **A rep's schedule past its algebraic phase squeezes the opening's counts.** -/
 theorem sched_count {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
@@ -325,5 +348,79 @@ theorem repState_opened {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[
   · rw [h2] at ha
     simp only [↓reduceIte] at ha
     exact absurd ha (answer_owed_none cs rfl)
+
+/-! ## Level 0's binding in the schedule -/
+
+/-- **A rep's schedule holds level 0's binding**: fed the coins of the algebraic phase's rounds, the ring switch's and
+`γ`'s, a rep's schedule asks next for level 0's binding, at the switch's target `T` and the level-0 cap, with `z`'s
+squeeze of `n` coins. -/
+theorem sched_binding {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+    {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hdom : dom.size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hm : t.st.m < 2 ^ 64) (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64)
+    (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63)
+    (hn0 : t.sch.n ≠ 0) (hcr : cr.size = alg.size + (xs.size + 2) + 1) :
+    alg.size + (xs.size + 2) + 1 < sched.size ∧
+      ∃ T, (sched.getD (alg.size + (xs.size + 2) + 1) (.empty, 0)).1.data.toList =
+          encs (openBind T (_root_.Flock.Firewall.Finish.flat t.cm0.toC.cap)) ++ (Frame.sq 2 t.sch.n).enc ∧
+        (sched.getD (alg.size + (xs.size + 2) + 1) (.empty, 0)).2 = t.sch.n := by
+  obtain ⟨rest, hrest⟩ := schedSoFar_pre hal hs
+  have hAle : alg.size ≤ sched.size := by rw [hrest, Array.size_append]; omega
+  obtain ⟨hdrop, hnf⟩ := schedSoFar_sentQ hal hs (by omega)
+  have hcsl : (cr.extract alg.size cr.size).toList.length = xs.size + 2 + 1 := by
+    simp only [Array.length_toList, Array.size_extract]
+    omega
+  have hlenF := feed_part _ _ _
+    (Count.openStep_end t rep dom xs hi (cr.extract 0 alg.size) hdom hdg hcn hm hx hk hn hq)
+    (by rw [hcsl]; exact (openList_bind t.sch (by omega) hn0).1) hnf
+  rw [hcsl] at hlenF
+  have hsz : sched.size = alg.size + (xs.size + 2) + 2 := by
+    have := congrArg List.length hdrop
+    simp only [List.length_drop, List.length_map, Array.length_toList] at this
+    omega
+  refine ⟨by omega, ?_⟩
+  rw [show alg.size + (xs.size + 2) + 1 = alg.size + (xs.size + 2 + 1) by omega]
+  have hcnt := sched_count hal hs hdom hdg hcn hm hx hk hn hq (i := xs.size + 2 + 1) (by omega)
+  rw [(openList_bind t.sch (by omega) hn0).2] at hcnt
+  have hc : CoinAt (fun j i => ((cr.extract alg.size cr.size).toList.getD j #[])[i]!) (#[] : Array Claims.Msg).size
+      (cr.extract alg.size cr.size).toList := by
+    intro j hj
+    funext i
+    simp [List.getD_eq_getElem?_getD, hj]
+  obtain ⟨r, hp, -, hL0⟩ := FlockComplete.LigLock.Fed.openStep_l0 t rep dom xs hi (cr.extract 0 alg.size) hdom hdg
+    hcn hm hmk (cr.extract alg.size cr.size).toList
+    (fun j i => ((cr.extract alg.size cr.size).toList.getD j #[])[i]!) #[] hc
+    (by intro h0; rw [h0] at hlenF; simp at hlenF)
+  have hna : r.1.1.2.2.size = xs.size + 2 := by
+    have := Count.piop_na (cr.extract 0 alg.size) t.st (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
+      (_root_.Flock.Firewall.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) (fun _ => 0) hdg hcn (by decide) hm _
+      (Sched.trAlike_init dom hdom) #[]
+    rw [hp] at this
+    have h' : r.1.1.2.2.size = (claimsOf xs).size + 2 := this
+    simpa only [claimsOf, Array.size_map] using h'
+  obtain ⟨⟨ss, T, sws⟩, t', L', hL, hLl, ht'⟩ := Switch.ringSwitchCut_bodies
+    (fun j i => ((cr.extract alg.size cr.size).toList.getD j #[])[i]!) (xs.size + 2 + 1)
+    (fun k => switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2 (by omega) r.1.2 #[] (by simp [hna])
+  have hLs : L'.size = xs.size + 2 + 1 := by
+    have := congrArg List.length hLl
+    simp only [Array.length_toList, Array.toList_empty, List.nil_append, List.length_map, List.length_range,
+      hna] at this
+    exact this
+  have key := hL0 (j := 0) (ss := ss) (T := T) (sws := sws) (tr₂ := t') (l₂ := L') (by omega) hk hn0 (by simp)
+    (by rw [hLs]; exact hL) (by rw [hLs]; simp only [Array.size_empty, Nat.zero_add]; omega)
+  rw [hLl, hLs] at key
+  simp only [Array.toList_empty, List.nil_append, Array.size_empty, Nat.sub_zero, Nat.add_zero, hna] at key
+  have hk2 := List.getElem_of_eq key (i := xs.size + 2 + 1)
+    (by simp only [List.length_map, List.length_take]; omega)
+  rw [List.getElem_append_right (by simp)] at hk2
+  simp only [List.getElem_map, List.getElem_take, List.length_map, List.length_range, Nat.sub_self,
+    List.getElem_range] at hk2
+  rw [FlockComplete.LigLock.l0BodyAt_zero, ht', empty_toList, List.nil_append] at hk2
+  refine ⟨T, ?_, hcnt⟩
+  rw [sched_entry hdrop (by omega)]
+  exact hk2
 
 end Claims.ZKServer.Bind
