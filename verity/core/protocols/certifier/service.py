@@ -15,7 +15,7 @@ and heads are witness: the challenger sees the root, never a certificate, a salt
 one link-window, one proof unit. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
 to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the link-window. The
 network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
-credit: it accepts only when every window of the egress profile (a served link's served profile) is registered in
+credit: it accepts only when every window of the egress profile (a served or advised link's profile) is registered in
 order and its outcome of record accepted, so a rejected or late window, one with no outcome, and a gap in the
 registrations each reject the link. A
 run's is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a Python model) builds no
@@ -90,8 +90,21 @@ INGRESS, SERVED}: the checks above, and one gate naming `served.NetworkServedCou
 counts to the ones the ingress head's counts derive under the window's declared sync (`served`'s docstring has the
 derivation, its premises and the carry-over). Its public items are `PUBLIC_SERVED`: no egress profile, the served
 sizes, and the window's declared sync, the advice `charge` already counts, which the served counts read. Its verifier
-of record runs `served_check` too. A link whose egress end has neither an occupancy profile nor a served profile has no
-verdict (`ValueError`, failing closed): nothing would hold its egress timing.
+of record runs `served_check` too.
+
+**An advised link** (`LinkWindows(advised=advised.AdvisedProfile(…))`) is a served link under arbitrary traffic:
+responses of any length, batched and timed as serving chose, carried across windows. The prover's advice (one per
+certifier session, after serving, charged by `advice.bits`) states what serving chose, and its unit is
+`NetworkAdvisedLinkWindow` v1{EGRESS, INGRESS, ADVISED}: the checks above, and one gate naming
+`advised.NetworkAdvisedCounts_v1` and its pinned circuit digest (`advised.gate`, pinned in
+`advised.circuit-check.json`), which holds the egress head's counts to the release of the advice's frames and the
+ingress head's counts to the advice (`advised`'s docstring has the fields it reads, the soundness argument and the
+premises). Its public inputs are the window's view of the advice (`advised.view`), which the verifier computes from the
+public advice and the declared syncs; the heads' counts stay witness. Its public items are `PUBLIC_ADVISED`. Its
+verifier of record runs `advised_check` on the delivered advice (`verify(advice=…)`), refusing a window without one.
+
+A link whose egress end has no occupancy profile and is neither served nor advised has no verdict (`ValueError`,
+failing closed): nothing would hold its egress timing.
 
 `LinkWindows.stand_in` is the in-the-clear verdict, the Program's egress grid compared as it was before the head check,
 and each head's counts the profile's (`declares`). It reads the frames, so it is the tests' oracle, never a verdict:
@@ -133,7 +146,7 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.core.protocols.certifier import audit as host_audit, head_check as HC, served as SV
+from verity.core.protocols.certifier import advised as AD, audit as host_audit, head_check as HC, served as SV
 from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.certificate import CertifiedRecord, PublicKey, parameters_digest
 from verity.core.protocols.certifier.grid import GridParams
@@ -218,11 +231,38 @@ _SERVED_UNIT = CompositeDefinition(
     doc="the proof unit of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress head's "
         "counts derived from the ingress head's under the declared sync (`served.NetworkServedCounts`, SERVED its "
         "(T, FOUT, FIN, R, RIN))", register=False)
+#: the window's view of the advice (`advised.view`), the advised counts' public inputs
+ADVICE = ("handed", "floor", "queued", "received")
 
 
-def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], served: tuple[int, ...] | None = None):
+def _advice(S_) -> tuple[tuple[str, Any], ...]:
+    counts = Array(S_.ADVISED[0], AD.COUNT)
+    return (("handed", counts), ("floor", counts), ("queued", AD.COUNT), ("received", AD.COUNT))
+
+
+def _body_advised(B, S_, *args):
+    n = len(ADVICE)
+    oks, (egress, ingress) = _checks(B, S_, args[:-n])
+    return _all(B, oks + [B.call(AD.gate(*S_.ADVISED), ingress, egress, *args[-n:])])
+
+
+_ADVISED_UNIT = CompositeDefinition(
+    "NetworkAdvisedLinkWindow", 1, ("EGRESS", "INGRESS", "ADVISED"),
+    lambda S_: (_SIGNED + _heads(S_) + _advice(S_), Bits(1)), _body_advised,
+    doc="the proof unit of network accounting on an advised link: `NetworkLinkWindow`'s checks, and the egress head's "
+        "counts the release of the advice's frames, the advice held to the ingress head (`advised.NetworkAdvisedCounts`, "
+        "ADVISED its (T, R, RIN, OWN))", register=False)
+
+
+def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], served: tuple[int, ...] | None = None,
+         advised: tuple[int, int, int, int] | None = None):
     """N2's proof unit for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
-    and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN, OWN) (`served.unit`)."""
+    and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN, OWN) (`served.unit`), or on an
+    advised link the advised counts' `advised`, (T, R, RIN, OWN) (`advised.unit`)."""
+    if served is not None and advised is not None:
+        raise ValueError("a link is served or advised, not both")
+    if advised is not None:
+        return bind(_ADVISED_UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress), ADVISED=tuple(advised))
     if served is None:
         return bind(_UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress))
     return bind(_SERVED_UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress), SERVED=tuple(served))
@@ -249,6 +289,16 @@ PUBLIC_SERVED = tuple(p for p in PUBLIC if p.item != "occupancy") + (
     S.Public("sync", "output", "the window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
              "`charge` already counts, which the served counts read"),
 )
+#: an advised link's: no egress occupancy profile, its sizes, each window's declared sync, and the advice, whose window
+#: view (`advised.view`) its unit reads
+PUBLIC_ADVISED = tuple(p for p in PUBLIC_SERVED if p.item not in ("served", "sync")) + (
+    S.Public("advised", "structure", "windows and the certifier's own frames a window (its salt's), fixed before the run"),
+    S.Public("sync", "output", "each window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
+             "`charge` already counts, whose δ and ρ the unit's ingress floor reads"),
+    S.Public("advice", "output", "the advice (one per certifier session, after serving), charged by `advice.bits` a "
+             "window: the unit reads its window view, `advised.view` of its requests' prompt and output lengths and "
+             "ingress frames, its steps' rows, its release buckets and its windows' received request frames"),
+)
 OUTPUTS = ("verdict", "deadline")
 
 
@@ -273,8 +323,8 @@ def _sha512(obj: Any) -> str:
 
 
 _NO_PROFILE = ("N2 compares no egress grid, so a link whose egress end has no occupancy profile has no verdict: "
-               "nothing would hold its egress counts (declare LinkWindows.occupancy, or LinkWindows.served on a served "
-               "link)")
+               "nothing would hold its egress counts (declare LinkWindows.occupancy, LinkWindows.served on a served "
+               "link, or LinkWindows.advised on an advised one)")
 
 
 def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool:
@@ -296,7 +346,8 @@ class LinkWindows:
     """Network accounting's protocol on one link, every field public: the link, its egress and ingress grids, Σ_sync, the
     network certifier's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
     challenger drew for the certifier's session, which every certificate signs), the proof deadline in seconds, and the
-    occupancy profile: for each end (egress, ingress), each window's counts, or None for an end without one."""
+    occupancy profile: for each end (egress, ingress), each window's counts, or None for an end without one. A served
+    link (`served`, FIXLEN) or an advised one (`advised`, arbitrary traffic under the advice) has no egress profile."""
 
     link: str
     params: GridParams
@@ -308,10 +359,19 @@ class LinkWindows:
     proof_deadline: float | None = None
     occupancy: tuple[Sequence[Sequence[int]] | None, Sequence[Sequence[int]] | None] = (None, None)
     served: SV.ServedProfile | None = None
+    advised: AD.AdvisedProfile | None = None
 
     def __post_init__(self) -> None:
         if len(self.occupancy) != 2:
             raise ValueError("the occupancy profile has one entry per end: (egress, ingress)")
+        if self.served is not None and self.advised is not None:
+            raise ValueError("a link is served (FIXLEN) or advised, not both")
+        if self.advised is not None:
+            g, i = self.params, self.ingress_params
+            if self.occupancy[0] is not None:
+                raise ValueError("an advised link's egress counts are the advice's: it has no egress occupancy profile")
+            if (g.buckets, g.bucket_ms) != (i.buckets, i.bucket_ms):
+                raise ValueError("an advised link's ends share T and τ_b: its anchors are ingress buckets")
         if self.served is not None:
             g, i = self.params, self.ingress_params
             if self.occupancy[0] is not None:
@@ -360,11 +420,26 @@ class LinkWindows:
         return (self.params.buckets, self.served.response_frames, self.served.request_frames, self.params.allocation,
                 self.ingress_params.allocation, self.served.own)
 
+    def advised_key(self) -> tuple[int, int, int, int] | None:
+        """The advised counts' size class (T, R, RIN, OWN) on an advised link, else None."""
+        if self.advised is None:
+            return None
+        return self.params.buckets, self.params.allocation, self.ingress_params.allocation, self.advised.own
+
+    @property
+    def windows(self) -> int:
+        """The link's windows, which `network_verdict` takes by default: the served or advised profile's, else the
+        egress occupancy profile's."""
+        if self.occupancy[0] is None and self.served is None and self.advised is None:
+            raise ValueError(_NO_PROFILE)
+        derived = self.served or self.advised
+        return derived.windows if derived is not None else len(self.occupancy[0])
+
     @cached_property
     def unit(self):
         """N2's proof unit for this link (`unit`): its heads' size classes are the link's, and on a served link its
-        served counts' (`served_key`)."""
-        return unit(self.head_key(0), self.head_key(1), self.served_key())
+        served counts' (`served_key`), on an advised link its advised counts' (`advised_key`)."""
+        return unit(self.head_key(0), self.head_key(1), self.served_key(), self.advised_key())
 
     @cached_property
     def query(self) -> dict[str, Any]:
@@ -387,10 +462,11 @@ class LinkWindows:
                            "ingress": parameters_digest(self.ingress_params).hex()},
             "occupancy": [None if p is None else _sha512([list(row) for row in p]) for p in self.occupancy],
             **({} if self.served is None else {"served": [self.served.response_frames, self.served.request_frames,
-                                                          self.served.windows, self.served.own]})})
+                                                          self.served.windows, self.served.own]}),
+            **({} if self.advised is None else {"advised": [self.advised.windows, self.advised.own]})})
         check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
-        public = PUBLIC if self.served is None else PUBLIC_SERVED
+        public = PUBLIC_SERVED if self.served is not None else PUBLIC_ADVISED if self.advised is not None else PUBLIC
         return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, public, context)
 
     def stream(self, **kwargs: Any) -> S.Stream:
@@ -499,9 +575,13 @@ class LinkWindows:
 
     def gates(self) -> list[PrimitiveDefinition]:
         """The unit's gates: each end's head check (`head_check.gate`), and on a served link the served counts'
-        (`served.gate`)."""
+        (`served.gate`), on an advised link the advised counts' (`advised.gate`)."""
         out = [HC.gate(*self.head_key(d)) for d in (0, 1)]
-        return out if self.served is None else out + [SV.gate(*self.served_key())]
+        if self.served is not None:
+            out.append(SV.gate(*self.served_key()))
+        if self.advised is not None:
+            out.append(AD.gate(*self.advised_key()))
+        return out
 
     def proved(self, findings: Sequence[Finding]) -> bool:
         """Whether `findings`, the verifier of record's run over a delivered proof of the unit (`proofs.verify`), prove
@@ -514,20 +594,23 @@ class LinkWindows:
             and all(f.accepted and f.program == want for f in findings)
 
     def verify(self, opening: Opening, draw: S.Draw, syncs: Sequence[ClockSync],
-               proved: Sequence[Finding] | None = None) -> dict[str, Any]:
+               proved: Sequence[Finding] | None = None, advice: Any = None) -> dict[str, Any]:
         """The verdict of record on the delivered opening: accepted when it reproduces the registered root under the
         link-window's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
-        docstring). `syncs` are the declared clock syncs of windows 0 … w. The verdict reports the public outputs and
-        never the violation's kind. On a served link it also runs the served counts' check (`served_check`). Given
-        `proved`, the findings of a proof of the unit, it accepts only when they prove this link's unit (`proved`).
-        Raises `ValueError` on a link with neither an egress occupancy profile nor a served profile."""
-        if self.occupancy[0] is None and self.served is None:
+        docstring). `syncs` are the declared clock syncs of windows 0 … w (on an advised link, of every window the
+        advice hands a frame in). The verdict reports the public outputs and never the violation's kind. On a served
+        link it also runs the served counts' check (`served_check`), and on an advised link the advised counts' on
+        `advice`, the link's advice (`advised_check`). Given `proved`, the findings of a proof of the unit, it accepts
+        only when they prove this link's unit (`proved`). Raises `ValueError` on a link with no egress occupancy, served
+        or advised profile."""
+        if self.occupancy[0] is None and self.served is None and self.advised is None:
             raise ValueError(_NO_PROFILE)
         root = self._registered(opening, draw)
         w, (egress, ingress) = opening.window, opening.records
         sealed = self.root(opening) == root
         headed = all(i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root)))
         headed = headed and (self.served is None or self.served_check(opening, syncs))
+        headed = headed and (self.advised is None or self.advised_check(opening, syncs, advice))
         headed = headed and (proved is None or self.proved(proved))
         audit = Audit()
         out, inn = self._audit(audit, opening, syncs)
@@ -557,6 +640,22 @@ class LinkWindows:
             return False
         return SV.reference(*self.served_key(), ingress.head.counts, egress.head.counts, sync)
 
+    def advised_check(self, opening: Opening, syncs: Sequence[ClockSync], advice: Any) -> bool:
+        """The advised counts' check on the link-window (`advised.reference`, which the tests hold to the circuit): the
+        egress head's counts are the release of the advice's frames in the window's view of it (`advised.view`, under
+        the declared syncs), and the ingress head's counts release the request frames that view needs by each bucket
+        and the window's `received`. False with no advice, or an advice `view` refuses: malformed, not covering the
+        window, or handing a frame in a window with no declared sync or before any request frame."""
+        if advice is None:
+            return False
+        w, (egress, ingress) = opening.window, opening.records
+        try:
+            v = AD.view(advice, w, self.params.buckets, self.params.allocation, syncs)
+        except ValueError:
+            return False
+        return AD.reference(*self.advised_key(), ingress.head.counts, egress.head.counts, v.handed, v.floor, v.queued,
+                            v.received)
+
     def stand_in(self, opening: Opening, draw: S.Draw, frames: Sequence[LogicalFrame],
                  syncs: Sequence[ClockSync]) -> bool:
         """The in-the-clear accept bit, the tests' oracle: the opening reproduces the registered root, the host audit
@@ -572,12 +671,12 @@ class LinkWindows:
                 "root": self.root(opening)}
 
     def outcome(self, stream: S.Stream, draw: S.Draw, opening: Opening, syncs: Sequence[ClockSync],
-                proved: Sequence[Finding] | None = None) -> S.Outcome:
+                proved: Sequence[Finding] | None = None, advice: Any = None) -> S.Outcome:
         """`stream.outcome` on the verifier of record's verdict (`verify`, with `proved` when a proof of the unit was
-        delivered), with the root the opening reproduces as the session's, which one-stage's audit holds to the
-        registered root."""
-        return stream.outcome(draw, {VERIFIER: self.verify(opening, draw, syncs, proved)}, self.statement(opening),
-                              session_roots={VALUE: self.root(opening)})
+        delivered, and an advised link's `advice`), with the root the opening reproduces as the session's, which
+        one-stage's audit holds to the registered root."""
+        return stream.outcome(draw, {VERIFIER: self.verify(opening, draw, syncs, proved, advice)},
+                              self.statement(opening), session_roots={VALUE: self.root(opening)})
 
     def network_verdict(self, stream: S.Stream, windows: int | None = None) -> dict[str, Any]:
         """The link's network verdict of record: the AND over its link-windows 0 … `windows` − 1 (by default the egress
@@ -586,14 +685,12 @@ class LinkWindows:
         order or not at all (a gap, or a run that stops short), a registration past the last window, a registration
         with no outcome yet, and a rejected or late outcome each reject the link; `refused` lists their windows.
         `records` is each window's outcome record SHA-512 (`S.Outcome.record`, None without one), and `digest` binds
-        the verdict to the stream and those records. On a served link the windows are by default its served profile's.
-        Raises `ValueError` on a link with neither an egress occupancy profile nor a served profile, as `verify` does,
-        and on a stream that isn't this link's."""
-        if self.occupancy[0] is None and self.served is None:
-            raise ValueError(_NO_PROFILE)
+        the verdict to the stream and those records. On a served or advised link the windows are by default its
+        profile's (`windows`). Raises `ValueError` on a link with no egress occupancy, served or advised profile, as
+        `verify` does, and on a stream that isn't this link's."""
+        default = self.windows
         if stream.spec.digest() != self.spec.digest():
             raise ValueError("the stream is not this link's: its spec isn't LinkWindows.spec")
-        default = self.served.windows if self.served is not None else len(self.occupancy[0])
         n = default if windows is None else windows
         if not (type(n) is int and n >= 1):
             raise ValueError(f"a link has one or more link-windows, not {n!r}")
@@ -612,5 +709,5 @@ class LinkWindows:
         return {"accepted": accepted, "windows": n, "refused": refused, "records": records, "digest": digest}
 
 
-__all__ = ["HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "Opening", "PUBLIC", "PUBLIC_SERVED", "SCHEMA", "VALUE",
-           "encode", "rows", "unit"]
+__all__ = ["ADVICE", "HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "Opening", "PUBLIC", "PUBLIC_ADVISED", "PUBLIC_SERVED",
+           "SCHEMA", "VALUE", "encode", "rows", "unit"]

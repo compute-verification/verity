@@ -1,0 +1,24 @@
+{
+ "definitions": {
+  "NetworkAdvisedCounts_v1{T=8,R=3,RIN=2,OWN=0}": {
+   "and": 1645
+  },
+  "NetworkAdvisedCounts_v1{T=8,R=3,RIN=2,OWN=1}": {
+   "and": 1709
+  }
+ },
+ "digests": {
+  "NetworkAdvisedCounts_v1{T=600,R=16,RIN=4,OWN=1}": {
+   "sha512": "fe6157532197e6d77a52394feb9dc118eb0490950d42d818dd122550c0b6cde41f91a1d39f3d96a439ef9d46d82adf178242203120b5428c50fddb1f2fbd1e86"
+  },
+  "NetworkAdvisedCounts_v1{T=600,R=6,RIN=1,OWN=0}": {
+   "sha512": "6f0ca2ad54efc21dcd6324ea3622151c0b4d2709f65f027d90b30f691a534d28d6ecef5a5cc776881d0bc582fac9734ef19d216a4c3b4de56dfa7d9c79aeda25"
+  },
+  "NetworkAdvisedCounts_v1{T=8,R=3,RIN=2,OWN=0}": {
+   "sha512": "6605656b4ce7a4cf5542195e13174fc54903ee678eaac97bba5d8282544f3bb2bab684b36b83b550009e66adb7b124a53cfde8dc1ff65ba839090ffd43b9129c"
+  },
+  "NetworkAdvisedCounts_v1{T=8,R=3,RIN=2,OWN=1}": {
+   "sha512": "94f989c9a89892dc7f77b4d656acd585363be5637d50a5c9e9318e03494968af637cd8b06477ff7c659b6188b7553d59e3e53cedaf6f9e667a91e291afcf5b41"
+  }
+ }
+}
