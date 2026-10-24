@@ -6,11 +6,11 @@
 #     --env CS_MEM_GB=64 -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/compile_slice_zk.sh
 # env: CS_MEM_GB (what job.sh's stages may take, within the slot's)  CS_SLICE (compile_slice_zk.py's --slice, demo by
-#      default)  CS_POINTS (its --points, 1 by default)  CS_KINDS (its --kinds, every kind by default)  CS_CACHE (the
-#      build cache, kept across runs where writable; default pouw-hidden-zk's)  CS_DRY=1 (the slice and its references
-#      only)
-# Kept in $OUT/cszk: the driver's records and logs, the public files and everything the verifier received; never a
-# prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive.
+#      default; several, comma-separated, are proved one after another)  CS_POINTS (its --points, 1 by default)
+#      CS_KINDS (its --kinds, every kind by default)  CS_CACHE (the build cache, kept across runs where writable; default
+#      pouw-hidden-zk's)  CS_DRY=1 (the slice and its references only)
+# Kept in $OUT/cszk/<slice>: the driver's records and logs, the public files and everything the verifier received;
+# never a prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive.
 set -uo pipefail
 export HZ_CONFIGS=cszk HZ_MEM_GB=${CS_MEM_GB:?}
 CS_CACHE=${CS_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -26,11 +26,17 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
   > "$OUT/build-firewall.log" 2>&1
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "cszk: no firewall frame"; exit 7; }
 
-log "cszk: proving, slice ${CS_SLICE:-demo}, points ${CS_POINTS:-1}${CS_KINDS:+, kinds $CS_KINDS}${CS_DRY:+, dry}"
-"$PY" benchmarks/network_traces/compile_slice_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/cszk" \
-  --slice "${CS_SLICE:-demo}" --points "${CS_POINTS:-1}" ${CS_KINDS:+--kinds "$CS_KINDS"} ${CS_DRY:+--dry} 2>&1 | tee -a "$OUT/cszk.log" | cut -c1-4000
-rc=${PIPESTATUS[0]}
-mkdir -p "$OUT/cszk"
-(cd "$W/cszk" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/cszk/")
-log "cszk: done, rc $rc"
+rc=0
+for slice in $(echo "${CS_SLICE:-demo}" | tr , ' '); do
+  log "cszk: proving, slice $slice, points ${CS_POINTS:-1}${CS_KINDS:+, kinds $CS_KINDS}${CS_DRY:+, dry}"
+  "$PY" benchmarks/network_traces/compile_slice_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/cszk/$slice" \
+    --slice "$slice" --points "${CS_POINTS:-1}" ${CS_KINDS:+--kinds "$CS_KINDS"} ${CS_DRY:+--dry} 2>&1 \
+    | tee -a "$OUT/cszk-$slice.log" | cut -c1-4000
+  r=${PIPESTATUS[0]}
+  mkdir -p "$OUT/cszk/$slice"
+  (cd "$W/cszk/$slice" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 \
+    | xargs -0 -r -I{} cp --parents {} "$OUT/cszk/$slice/")
+  log "cszk: $slice done, rc $r"
+  [ "$r" = 0 ] || rc=$r
+done
 exit "$rc"
