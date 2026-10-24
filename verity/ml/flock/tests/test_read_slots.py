@@ -2,10 +2,14 @@
 a sum over it (depth 2, a sigmoid's shape), with a depth-0 word returned by the last stage: the unit, the slots and the stages
 compute what the flat circuit does on every lane, and a flipped unit row fails its lane; the wires fill every stage and slot
 input once, each from a port of its width, each stage reading only earlier stages and slots; a cap on a net's ANDs cuts the
-same unit into more stages, none past the cap, computing the same; a unit reading no slot table isn't split. Through `UnitStager`, the composed statement names the slots and the last stage's returned outputs (slotted when
+same unit into more stages, none past the cap, computing the same; `net_rows` is every net's laid-out rows, and `ands_cap` the
+most ANDs a slot holds (at the SparseMlaSplitPart T=64 unit's ports: 11,534,336 in 2^24); the automatic caps cut a unit whose
+AND chain overflows its slot into nets of the next slot down, and keep a split no cap shrinks; a unit reading no slot table
+isn't split. Through `UnitStager`, the composed statement names the slots and the last stage's returned outputs (slotted when
 the output words aren't a power of two times 16 bits), and its staged outputs are the IR reference's."""
 from __future__ import annotations
 
+import itertools
 import json
 from types import SimpleNamespace
 
@@ -35,20 +39,28 @@ def _units(n_in: int, n_out: int) -> IL.Units:
                     out_src=[[("ret", o) for o in range(n_out)]], signature=(), gates=[], arg_gates=[], ret_gates=[])
 
 
-def _sigmoid(C: gf2.Circuit, reads: bool = True) -> None:
+def _sigmoid(C: gf2.Circuit, reads: bool = True, chain: int = 0) -> None:
+    """``chain``: that many more ANDs on the inputs, one after another, the last one XORed into ``out2``'s low bit."""
     w = [C.input(nm, 16) for nm in IN]
     x, y = w[0] + w[1], w[2] + w[3]
     r = IL.PIECES["MufuRcpFtz_v1"](C, IL.PIECES["F32AddFtz_v1"](C, IL.PIECES["MufuEx2Ftz_v1"](C, x), y)) if reads else x
     C.output("out0", r[:16])
     C.output("out1", r[16:])
-    C.output("out2", [C.AND(a, b) for a, b in zip(x[:16], y[16:])])
+    o = [C.AND(a, b) for a, b in zip(x[:16], y[16:])]
+    fs = x + y + [a ^ b for a, b in zip(x, y)]
+    c = fs[0]
+    for i, j in itertools.islice(itertools.combinations(range(len(fs)), 2), chain):
+        c = C.AND(c ^ fs[i], fs[j])
+    if chain:
+        o[0] = o[0] ^ c
+    C.output("out2", o)
 
 
 @pytest.fixture(scope="module")
 def split():
     C = gf2.Circuit()
     _sigmoid(C)
-    low = RS.split(C, IN, OUT, "unit/read-slots-toy", SimpleNamespace(id="toy"), _units(4, 3))
+    low = RS.split(C, IN, OUT, "unit/read-slots-toy", SimpleNamespace(id="toy"), _units(4, 3), stage_ands=None)
     return C, low
 
 
@@ -103,7 +115,7 @@ def _check_wires(low) -> None:
 def test_a_cap_on_a_nets_ands_splits_it_into_more_stages_computing_the_same():
     C = gf2.Circuit()
     _sigmoid(C)
-    whole = RS.split(C, IN, OUT, "unit/read-slots-toy", SimpleNamespace(id="toy"), _units(4, 3))
+    whole = RS.split(C, IN, OUT, "unit/read-slots-toy", SimpleNamespace(id="toy"), _units(4, 3), stage_ands=None)
     cap = max(whole.layout.counts["ands"], *(st.layout.counts["ands"] for st in whole.tail.stages)) // 3
     low = RS.split(C, IN, OUT, "unit/read-slots-capped", SimpleNamespace(id="toy"), _units(4, 3), stage_ands=cap)
     nets = [low.layout, *(st.layout for st in low.tail.stages)]
@@ -119,6 +131,66 @@ def test_a_cap_on_a_nets_ands_splits_it_into_more_stages_computing_the_same():
     assert ok == (1 << len(xs)) - 1 and np.array_equal(got, want)
     with pytest.raises(ValueError, match="stage_ands"):
         RS.split(C, IN, OUT, "unit/read-slots-zero", SimpleNamespace(id="toy"), _units(4, 3), stage_ands=0)
+
+
+def _nets(low) -> list:
+    return [low.layout, *(st.layout for st in low.tail.stages)]
+
+
+def _cells(low) -> int:
+    return sum(1 << RS.net_log(lay.useful) for lay in _nets(low))
+
+
+def test_net_rows_is_each_nets_laid_out_rows():
+    C = gf2.Circuit()
+    _sigmoid(C, chain=1500)
+    for stage_ands in (None, 700, "auto"):
+        low = RS.split(C, IN, OUT, "unit/read-slots-rows", SimpleNamespace(id="toy"), _units(4, 3), stage_ands=stage_ands)
+        for lay in _nets(low):
+            c = lay.counts
+            assert RS.net_rows(c["ands"], c["asserts"], sum(lay.in_bits), sum(lay.out_bits)) == lay.useful, stage_ands
+            L = RS.net_log(lay.useful)
+            assert RS.ands_cap(L, c["asserts"], sum(lay.in_bits), sum(lay.out_bits)) >= c["ands"]
+            assert RS.ands_cap(L - 1, c["asserts"], sum(lay.in_bits), sum(lay.out_bits)) < c["ands"]
+
+
+def test_the_cap_at_the_t64_units_ports_fills_two_to_the_24():
+    """SparseMlaSplitPart_v1{T=64}'s unit under reads in slots: 599,040 input bits (a 2^20-row group), an output group of
+    2^21 rows. 12,582,912 ANDs put it one row past 2^24 (a slot of 2^25, and a block of 2^28); 11,534,336, the cap that run
+    took, is the most a 2^24 slot holds."""
+    for out_bits in ((1 << 20) + 1, 1 << 21):
+        assert RS.net_rows(12_582_912, 0, 599_040, out_bits) == (1 << 24) + 1
+        assert RS.ands_cap(24, 0, 599_040, out_bits) == 11_534_336
+        assert RS.net_log(RS.net_rows(11_534_336, 0, 599_040, out_bits)) == 24
+        assert RS.net_log(RS.net_rows(11_534_337, 0, 599_040, out_bits)) == 25
+    assert RS.ands_cap(21, 0, 599_040, 1 << 21) < 1
+
+
+def test_the_automatic_caps_cut_an_overflowing_unit_into_nets_of_the_next_slot_down():
+    C = gf2.Circuit()
+    _sigmoid(C, chain=1500)
+    whole = RS.split(C, IN, OUT, "unit/read-slots-chain", SimpleNamespace(id="toy"), _units(4, 3), stage_ands=None)
+    low = RS.split(C, IN, OUT, "unit/read-slots-chain", SimpleNamespace(id="toy"), _units(4, 3))
+    top = max(RS.net_log(lay.useful) for lay in _nets(whole))
+    assert RS.net_log(whole.layout.useful) == top and low.caps is not None and whole.caps is None
+    assert all(RS.net_log(lay.useful) <= top - 1 for lay in _nets(low)) and _cells(low) < _cells(whole)
+    assert sum(lay.counts["ands"] for lay in _nets(low)) == sum(lay.counts["ands"] for lay in _nets(whole))
+    _check_wires(low)
+    rng = np.random.default_rng(13)
+    xs = EDGES + [int(v) for v in rng.integers(0, 1 << 32, 22, dtype=np.uint64)]
+    ys = EDGES[::-1] + [int(v) for v in rng.integers(0, 1 << 32, 22, dtype=np.uint64)]
+    flat = _flat(xs, ys)
+    got, _cut, ok = low.evaluate(flat)
+    want, _cut, ok_whole = whole.evaluate(flat)
+    assert ok == ok_whole == (1 << len(xs)) - 1 and np.array_equal(got, want)
+
+
+def test_the_automatic_caps_keep_a_split_no_cap_shrinks(split):
+    C, whole = split
+    low = RS.split(C, IN, OUT, "unit/read-slots-toy", SimpleNamespace(id="toy"), _units(4, 3))
+    assert low.caps is None and [lay.useful for lay in _nets(low)] == [lay.useful for lay in _nets(whole)]
+    with pytest.raises(ValueError, match="stage_ands"):
+        RS.split(C, IN, OUT, "unit/read-slots-bad", SimpleNamespace(id="toy"), _units(4, 3), stage_ands="smallest")
 
 
 def test_a_unit_reading_no_slot_table_is_not_split():
