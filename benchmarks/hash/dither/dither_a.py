@@ -124,6 +124,11 @@ ZY1_ENV = "DITHER_ZY1"
 # "1": the z/y and y tables' rows in a row block past m take their x from `dead_rows` (hashed once a window, from the
 # bytes such a row holds) and hash no segments; the same leaves and roots
 ZDEAD_ENV = "DITHER_ZDEAD"
+# "1" (-zy under DITHER_ZDEAD): RT4-INT-11's compare of the served y with the records' y halves made on their bytes in
+# `dithera_ycommit` (the rows the two y tables hash), a call that differs refusing its step as unequal roots do; the
+# units' y tables are built, and their roots compared, only at a captured step, whose check reads them and whose
+# verdict wants both compares to refuse the same calls
+YCMP_ENV = "DITHER_YCMP"
 # the gate step's option A partials against SERVE-REG's gated lane (served_h1/lane_refs.py): 1 checks them in the gate
 # (one process: the arm's worker is a daemon); a path saves their records there for `lane_refs.py PATH` after serving
 LANE_REFS_ENV = "DITHER_LANE_REFS"
@@ -278,12 +283,14 @@ def dithera_mm_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S
 
 
 @triton.jit
-def dithera_ycommit(y_ptr, sb_ptr, dst_ptr, S_ptr, M, N, T, stride_y, UR: tl.constexpr, UC: tl.constexpr,
-                    BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):
+def dithera_ycommit(y_ptr, sb_ptr, dst_ptr, S_ptr, rec_ptr, bad_ptr, M, N, T, stride_y, UR: tl.constexpr,
+                    UC: tl.constexpr, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, CMP: tl.constexpr):
     # the served y (int16 view; the bytes the next layer reads), rows < m, into the call's y records (unit row block,
     # then column block; Y_KIND), and past m the epilogue's empty-slot y, dq(0, +0, s_w); F_NW_TILES = 2: nothing
     # written; F_FAULT_Y = 64: bit 0 of y[0, 0] flipped in place first, so the next layer and the record read the
-    # tampered y
+    # tampered y.  CMP (YCMP_ENV): those bytes against the y halves of the call's z/y records (rec_ptr, int16) on the
+    # rows of the live UR-row blocks, the rows the y tables hash under DITHER_ZDEAD, and bad_ptr (int32) set to 1 on any
+    # that differs
     m = tl.load(S_ptr + 1)
     flags = tl.load(S_ptr + 3)
     if (flags & 2) == 0:
@@ -302,6 +309,12 @@ def dithera_ycommit(y_ptr, sb_ptr, dst_ptr, S_ptr, M, N, T, stride_y, UR: tl.con
         u = (offs_m[:, None] // UR) * (N // UC) + offs_n[None, :] // UC
         tl.store(dst_ptr + u * (UR * UC) + (offs_m[:, None] % UR) * UC + offs_n[None, :] % UC, v,
                  mask=(offs_m < _rows_written(S_ptr, T, m))[:, None] & mask_n)
+        if CMP:
+            cm = (offs_m < tl.minimum(T, (m + UR - 1) // UR * UR))[:, None] & mask_n
+            r = tl.load(rec_ptr + u * (UR * UC * 3) + 2 * UR * UC + (offs_m[:, None] % UR) * UC + offs_n[None, :] % UC,
+                        mask=cm, other=0)
+            if tl.max(tl.max((cm & (r != v)).to(tl.int32), axis=1), axis=0) > 0:
+                tl.store(bad_ptr, 1)
 
 
 @triton.jit
@@ -355,6 +368,11 @@ class Side:
                              f"own), not {ao!r} with unit {unit!r}")
         self.win, self.unit, self.z, self.zl, self.ao, self.pt, dev = win, unit, z, ZMODES[z], ao, pt, win.dev
         self.zdead = z == "zy" and os.environ.get(ZDEAD_ENV) == "1"
+        if os.environ.get(YCMP_ENV) == "1" and not (self.zdead and not getattr(win, "overlap", 0)):
+            raise RuntimeError(f"{YCMP_ENV}=1 needs -zy and {ZDEAD_ENV}=1, without -ov")
+        self.ycmp: torch.Tensor | None = None
+        # under YCMP_ENV each capture's calls refused by the byte compare and by the roots' (`y_leaves`)
+        self.ycmp_at: dict[str, dict] = {}
         self.side = torch.cuda.Stream(device=dev)
         self.fork, self.join = torch.cuda.Event(), torch.cuda.Event()
         if pt:
@@ -426,6 +444,13 @@ class Side:
             self.zy1 = os.environ.get(ZY1_ENV) == "1"
             if self.zy1:
                 win.pre["z"] = win.c.union([self.zyset, self.ysset, self.yuset])
+            if os.environ.get(YCMP_ENV) == "1":
+                self.ycmp = torch.zeros(win.L, dtype=torch.int32, device=dev)
+                if self.zy1:
+                    # a step no capture reads builds the union without the units' y tables
+                    full, lite, build = win.pre["z"], win.c.union([self.zyset, self.ysset]), win.c.build
+                    win.c.build = lambda st, step, domains=True: build(lite if st is full and win.cap is None else st,
+                                                                       step, domains)
             win.before_mid.append(self.y_leaves)
         if unit in ("kh",) + KONE:
             if not h1u:
@@ -506,10 +531,13 @@ class Side:
             return
         n, t = y.shape[1], self.win.t
         ur, uc = self.unit_of[w]
+        cmp = self.ycmp is not None
         dithera_ycommit[(triton.cdiv(t, 32), triton.cdiv(n, 128))](y.view(torch.int16), s_w,
                                                                    self.ysv[w].view(torch.int16), self.win.S,
+                                                                   self.zy[w].view(torch.int16),
+                                                                   self.ycmp[w:] if cmp else self.win.S,
                                                                    y.shape[0], n, t, y.stride(0), UR=ur, UC=uc,
-                                                                   BLOCK_M=32, BLOCK_N=128, **EL.OPTS)
+                                                                   BLOCK_M=32, BLOCK_N=128, CMP=cmp, **EL.OPTS)
 
     def dead_rows(self) -> list[dict]:
         """$DITHER_ZDEAD's `Tab` fields, each call's {"zy": its z/y table's, "y": its y tables'}: a row block past m (the
@@ -531,13 +559,24 @@ class Side:
     def y_leaves(self) -> None:
         """Between steps (the window's `before_mid`): the served y's tables, whose roots are the round's y-step leaves,
         and the units' y tables (under DITHER_ZY1 built with the z tables); `ybad` the calls whose two roots differ (a
-        refused window, RT4-INT-11)."""
+        refused window, RT4-INT-11); under YCMP_ENV, at a step no capture reads, the calls `dithera_ycommit` flagged."""
         win = self.win
+        roots = self.ycmp is None or win.cap is not None
         if not self.zy1:
             win.c.build(self.ysset, win.stepv[0:1])
-            win.c.build(self.yuset, win.stepv[0:1])
-        o = win.pre["mid"].level_off[win.round_kinds.index("y-step")]
-        self.ybad = (win.pre["mid"].level[o:o + 8 * win.L].view(win.L, 8) != self.yuset.roots.view(win.L, 8)).any(1)
+            if roots:
+                win.c.build(self.yuset, win.stepv[0:1])
+        if roots:
+            o = win.pre["mid"].level_off[win.round_kinds.index("y-step")]
+            self.ybad = (win.pre["mid"].level[o:o + 8 * win.L].view(win.L, 8) != self.yuset.roots.view(win.L, 8)).any(1)
+        if self.ycmp is not None:
+            flagged = self.ycmp != 0
+            if roots:
+                self.ycmp_at[win.cap] = {"bytes": flagged.nonzero().flatten().tolist(),
+                                         "roots": self.ybad.nonzero().flatten().tolist()}
+            else:
+                self.ybad = flagged
+            self.ycmp.zero_()
 
     def seeds(self, w: int, st: int) -> int:
         """kh's, hbk's and hbr's seeds of call w (h1r version 0), from the window's salt and the call's A root."""
@@ -649,7 +688,8 @@ class Side:
         return {**self.label(), "unit": self.unit, "z": self.z, "a_overlap": self.ao, "trees_parallel": self.pt,
                 "leaf_bytes_per_step": self.leaf_bytes(), "round_leaves": list(self.win.round_kinds),
                 "y_root_refused_steps": self.y_refused[:8] if self.zy else None, "z_dead_rows_x_once": self.zdead,
-                "a_form": self.win.c.a_form, "calls": self.calls, "joins": self.joins,
+                "y_compared_in_commit": self.ycmp is not None, "a_form": self.win.c.a_form, "calls": self.calls,
+                "joins": self.joins,
                 "h1r_versions": {DF.SITES[w % 4]: self.versions[w] for w in range(min(4, self.win.L))}
                 if self.unit == "h1r" else None, "gemm_cfgs": {f"{n}x{k}@M{m}": c for (n, k, m), c in self.cfgs.items()}}
 
@@ -1051,8 +1091,16 @@ def gate_verdict(gate: dict, control: dict, fault: dict, *more: dict) -> dict:
     fault_refused = bool(fault.get("complete") and not fault.get("ok") and fault.get("conforming"))
     extra = {f"{x.get('which')}_refused": bool(x.get("complete") and not x.get("ok") and x.get("conforming"))
              for x in more}
+    if SIDE and SIDE[0].ycmp is not None:
+        # YCMP_ENV: at every capture the byte compare refused the calls the roots' did, at fault_y every call
+        at = SIDE[0].ycmp_at
+        extra["y_compare_agrees"] = bool(at.get("fault_y", {}).get("bytes") == list(range(SIDE[0].win.L))
+                                         and all(x["bytes"] == x["roots"] for x in at.values()))
+        y_cmp = {"y_compare_at_captures": {k: {j: len(v) for j, v in x.items()} for k, x in at.items()}}
+    else:
+        y_cmp = {}
     return {"ok": bool(gate.get("ok")) and refused and fault_refused and all(extra.values()),
-            **arm_label(),
+            **arm_label(), **y_cmp,
             "gate_ok": bool(gate.get("ok")), "control_refused": refused, "fault_refused": fault_refused, **extra,
             "control_bad": {k: len(control.get(k) or []) for k in ("z_vs_int_mm_bad", "y_vs_dequant_z_bad",
                                                                     "receipts_vs_h1r_bad", "a_roots_bad", "z_roots_bad")},
