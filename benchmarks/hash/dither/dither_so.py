@@ -146,8 +146,9 @@ COIN_ASYNC_ENV = "DITHER_SO_COIN_ASYNC"
 # "q" or "q/den" (den 8 without it): that launch on the SMs whose id % den < q alone (kh_units_multi_sm), each warp
 # taking the next unit in turn, so the rest of the SMs stay whole to the next forward's kernels; "q/den/cap" with at
 # most cap of its CTAs on each of those SMs (kh_units_multi_smc; "1/1/cap" every SM), so each keeps the rest of its slots
-# to them; the same receipts
+# to them; the same receipts.  den at most SMQ_DEN_MAX (h1u.cu's), past every %smid, so q/256 keeps the SMs below q
 UNITS_SMQ_ENV = "DITHER_SO_UNITS_SMQ"
+SMQ_DEN_MAX = 256
 # "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
 # the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
 RDEAD_ENV = "DITHER_SO_RDEAD"
@@ -1132,8 +1133,9 @@ class SoSide(DA.Side):
 
     def _check_smq(self, q: int, den: int, what: str, cap: int = 0) -> None:
         f = ("kh_units_multi_j10r_sm" if self.j10r else "kh_units_multi_sm") + ("c" if cap else "")
-        if q and not (self.fused and 1 <= q <= den <= 64 and 0 <= cap <= 64 and hasattr(self.h, f)):
-            raise ValueError(f"{what}: needs ${FUSED_ENV}=1, 1 <= q <= den <= 64, cap <= 64 and an h1u build with {f}")
+        if q and not (self.fused and 1 <= q <= den <= SMQ_DEN_MAX and 0 <= cap <= 64 and hasattr(self.h, f)):
+            raise ValueError(f"{what}: needs ${FUSED_ENV}=1, 1 <= q <= den <= {SMQ_DEN_MAX}, cap <= 64 and an h1u build "
+                             f"with {f}")
 
     def set_units_smq(self, q: int, den: int = 8, cap: int = 0) -> None:
         """The units launch on the SMs whose id % den < q, at most cap CTAs on each (0: no cap), from the next dispatch
