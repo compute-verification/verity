@@ -655,11 +655,13 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
   proof's rounds, live (`innerLive`); answered `ok 0` after the last. Its proof file is then `rep`'s on every round's coins.
 * `rep I R LEN`: rep `R`'s request (`parseRep`) on table `I`, after its salts; the answer is its proof file
   (`proofFile`), encoded from the proof the rep's last `inner` request computed where that request's inputs and coins
-  are this one's (`Kept.answers`). Another rep's requests may come between the two.
+  are this one's (`Kept.answers`). Another rep's requests may come between the two. The file is handed to `file` with
+  the table's level-0 root before it is answered, and where `file` refuses it, so does this.
 Anything else, or a request it refuses, is answered `err WHY` and ends it, with exit code `1`. -/
 def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) (setups : Array Setup)
     (level0Of : ByteArray → IO (Option Level0.Level0))
-    (keep : ByteArray → Nat → Array ByteArray → IO Unit := fun _ _ _ => pure ()) : IO UInt32 := do
+    (keep : ByteArray → Nat → Array ByteArray → IO Unit := fun _ _ _ => pure ())
+    (file : ByteArray → Nat → ByteArray → IO (Option String) := fun _ _ _ => pure none) : IO UInt32 := do
   let refuse := fun (why : String) => do
     ch.write (s!"err {why.replace "\n" " "}\n").toUTF8
     ch.flush
@@ -707,12 +709,14 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       let some name := spec.tables[i]? | return (← refuse s!"table {i} of the session's {spec.tables.size}")
       if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
       let some s := (hi[i]!)[r]! | return (← refuse s!"table {i} rep {r} before its salts for levels ≥ 1")
-      let file : V ByteArray := parseRep t s b >>= fun q => match kept.find? (·.answers i r q) with
+      let pf : V ByteArray := parseRep t s b >>= fun q => match kept.find? (·.answers i r q) with
         | some k => pure (encZk (shapeZk t.st t.sch (claimsOf q.xs).size) k.proof)
         | none => proofFile t r (spec.domain name r).toUTF8 q
       kept := kept.filter fun k => !(k.i == i && k.r == r)
-      match file with
-      | .ok p => answer p
+      match pf with
+      | .ok p =>
+        if let some why ← file (flat t.cm0.cap) r p then return (← refuse why)
+        answer p
       | .error e => return (← refuse e)
     | ["open", i, r, len] | ["inner", i, r, len] =>
       let (some i, some r, some len) := (i.toNat?, r.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
@@ -772,9 +776,11 @@ def cmd (args : List String) : IO UInt32 := do
 the `LEN` bytes of the session's draw (`Hello.drawOf`'s JSON, `null` for none) sets the session's statement up as the
 loop's `Hello` does (`Hello.Setup.setupAt`), is answered `ok 0`, and then `serve`s, every salt drawn from the operating
 system and each `level0 I LEN` read from the loop's own level 0 of that root (`Level0.Registry`, `l0s`), each rep's salts
-for levels ≥ 1 handed to `keep`, the loop's frames' copy. -/
+for levels ≥ 1 handed to `keep`, the loop's frames' copy, and each rep's proof file to `file`, the proof the loop sends
+(`Session.relay`). -/
 def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : IO.Ref Level0.Registry)
-    (keep : ByteArray → Nat → Array ByteArray → IO Unit) (line : String) : IO Unit := do
+    (keep : ByteArray → Nat → Array ByteArray → IO Unit) (file : ByteArray → Nat → ByteArray → IO (Option String))
+    (line : String) : IO Unit := do
   let say := fun (s : String) => do
     ch.write (s ++ "\n").toUTF8
     ch.flush
@@ -790,7 +796,7 @@ def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : I
       | .ok (spec, sts) =>
         say "ok 0"
         let _ ← serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit)
-          (fun r => do return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)) keep
+          (fun r => do return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)) keep file
   | _ => say s!"err a request `{line.trim}`"
 
 end Flock.Firewall.Finish
