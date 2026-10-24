@@ -1,4 +1,5 @@
 import Proofs.Pouw.H1Zy.Combine
+import Proofs.Pouw.H1Zy.CombineBits
 import Proofs.Pouw.H1Zy.Lane
 
 /-!
@@ -6,6 +7,9 @@ import Proofs.Pouw.H1Zy.Lane
 
 `Combine`: `PouwH1Combine_v1`'s `ok` is `true` exactly when the lanes' partials XOR, in lane order, to the receipt
 (`Pouw.H1Zy.combineOk_iff`). `Proofs.Accounting.TS.Session.Lanes.Combine` reads it as `LeafChecks`' combine field.
+
+`CombineBits`: the combine's body on bits computes it on words (`Pouw.H1Zy.combineBits_bitsOf`), each piece's lowering
+its word view.
 
 `Lane`: at `32 ∣ K` and `K < 2^17` (the bind's range), `PouwH1LaneZy_v1`'s `ok = true` gives the low index bits only,
 every lane cell's record z as the exact dot of its rows' codes and its y as the dequant of it, and every partial word as
