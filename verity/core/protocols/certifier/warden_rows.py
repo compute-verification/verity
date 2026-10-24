@@ -68,8 +68,8 @@ The unit's cell is at its slot's words of the row (`Wiring.place`).
 
 **The wiring is opened to the verifier tonight**, as the units' wiring is (the named gap, whose plan is in
 PROTOCOL.md): it gives away each connection's first row and cells. q is the cells' stream field, the warden's ordinal:
-the k-th connection to reach it is q = k, from 0, as IO-TIE's stream and advice v0 count requests, and the active
-certifier's `Requests` stream s is q = s − 1.
+the k-th connection to reach it, from 0, is q = k + 1, as the active certifier's `Requests` streams it and IO-TIE's
+map puts advice request k (`order[k] + 1`).
 """
 
 from __future__ import annotations

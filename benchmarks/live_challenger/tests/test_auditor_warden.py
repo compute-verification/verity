@@ -87,6 +87,7 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     (["--tokens", "257"], "--tokens '257': 16 to 256"),
     (["--tokens", "+32"], "--tokens '+32': 16 to 256"),
     (["--tamper", "late"], "warden-rehearse: unrecognized arguments: --tamper"),
+    (["--tamper", "token"], "warden-rehearse: unrecognized arguments: --tamper"),
     (["--in-flight", "2"], "unrecognized arguments: --in-flight"),
     (["--profile", "served"], "unrecognized arguments: --profile"),
     (["--upstream", "10.0.0.2:8011"], "unrecognized arguments: --upstream"),
@@ -129,7 +130,7 @@ CHECK = {"accepted": True, "problems": [], "summary": {
     "signer_refused": [], "cell_rows": {"registered": 4, "of": 4}, "cells": {"ingress": 9, "egress": 31},
     "wire_bits": {"ingress": 18432, "egress": 63488}, "cells_in_their_bucket": [31, 31], "tick_lateness_ms": {"n": 9},
     "data_bytes": {"egress": 4242}, "completion_tokens": 77, "prompt_tokens": [16, 99], "arrival_lag_ms": {"n": 31},
-    "finish_reasons": {"length": 4}}, "connections": [{"ordinal": 0, "outcome": "end", "text_bytes": 300}]}
+    "finish_reasons": {"length": 4}}, "connections": [{"ordinal": 1, "outcome": "end", "text_bytes": 300}]}
 #: a stand-in for `warden_serve.py rehearse`'s files: public, then witness
 WARDEN_FILES = (
     f'(out / "deployment.json").write_text(json.dumps({{"upstream": url, "session": "00" * 32}}))\n'

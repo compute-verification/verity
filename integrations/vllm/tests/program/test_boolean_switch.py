@@ -111,6 +111,7 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
     assert list(e.value.missing) == ["Twice_v1{N=4}"]
 
 
+@pytest.mark.slow
 def test_the_served_norms_bind_their_mufu_statics_to_mufus_boolean_versions():
     from verity.ml.circuits.ops.boolean import mufu as BM
     from verity_vllm.program.registry import b1, boolean_norms as BN
