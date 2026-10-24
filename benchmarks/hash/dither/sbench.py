@@ -122,8 +122,10 @@ Arms:
                  ARM on $HB_H1U_KC's
     ARM-cgp      a dither-a-so arm serving at priority (DITHER_SO_PRIO=1) with vLLM's graphs captured at it too
                  (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`).  Under SMQ units it keeps every step in the fast
-                 regime: without it, a step whose units drain before the next dispatch lets them refill their SMs ahead
-                 of lm_head, which then runs on the forward's SMs alone (2.9 ms, not 0.7) and the next steps stay slow
+                 regime while the units' span plus lm_head's 0.7 ms covers the step's cycle: without it, a step whose
+                 units drain before the next dispatch lets them refill their SMs ahead of lm_head, which then runs on
+                 the forward's SMs alone (2.9 ms, not 0.7) and the next steps stay slow; units that end sooner (h1u's
+                 H1U_JXS at 45/64) do that under it too
     ARM-mc32     a dither arm whose worker has 32 hardware queues (CUDA_DEVICE_MAX_CONNECTIONS=32, set before its engine
                  makes the CUDA context)
     ARM-skip, ARM-rd0  a dither-a-so J10-R arm whose dead row blocks are the zero receipt (DITHER_UNITS_SKIP_DEAD=1), or
