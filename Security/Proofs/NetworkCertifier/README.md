@@ -18,6 +18,12 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                dataflow conditions
 ../../Models/NetworkCertifier/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 3, Theorem 3 for
                                the constant-rate Program, the ingress bound)
+../../Definitions/NetworkCertifier/AdviceString.lean  trusted: the advice string's codec per window (AdviceCodec: seg, bits), the
+                               compiler and the compiled Program, and acceptance within per-window caps (AcceptedWithin,
+                               AccSeqsWithin)
+../../Models/NetworkCertifier/Assumptions/AdviceString.lean  trusted: the codec's two named assumptions (SegmentsDecode, BitsCount) and the
+                               compiler's (CompilerDeterministic, CompilerPrecommitted)
+../../Models/NetworkCertifier/Guarantees/AdviceString.lean   trusted: the leak bound, the advice string's charge in the accepted-runs bound
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
@@ -30,6 +36,8 @@ Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap, causali
 Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
 PerWindow.lean  the last two over the run's first `m` whole windows: the factor per window and
                                          per link-window
+AdviceString.lean  the leak bound (the advice string's charge, through the wire, per window) and the two
+                                         codecs that meet `BitsCount`
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftest runs, equal to the
@@ -39,19 +47,20 @@ Accepted.lean   an accepted run of the network certificate check is a run of the
                                Theorem 3's count of what accepted runs can carry (`EncardAcceptedObservationsLe`),
                                each unless the run yields a SHA-512 collision or an LMS forgery
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/verity/lean/check.py
-CheckAxioms.lean               one #print axioms line per statement and witness, then three more lemmas
+CheckAxioms.lean               one #print axioms line per statement and witness, then five more lemmas
 ~~~
 
 ~~~bash
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/verity/lean/check.py .                      # Verity's Lean check
-lake env lean CheckAxioms.lean                              # the axioms of the 35 statements, 16 witnesses and 3 lemmas
+lake env lean CheckAxioms.lean                              # the axioms of the 38 statements, 16 witnesses and 5 lemmas
 # the difftest is the certifier program's: see its package, ../../../verity/core/protocols/certifier/lean/
 ~~~
 
-**Trusted without proof:** the statements in `../../Definitions/NetworkCertifier/`, `../../Models/NetworkCertifier/Assumptions.lean` and
-`../../Models/NetworkCertifier/Guarantees.lean`; Lean's kernel; the Mathlib pin. Everything else is checked by machine. Docstring paths such
+**Trusted without proof:** the statements in `../../Definitions/NetworkCertifier/`, `../../Models/NetworkCertifier/Assumptions.lean`,
+`../../Models/NetworkCertifier/Guarantees.lean` and their `AdviceString` modules under `../../Models/NetworkCertifier/Assumptions/` and
+`../../Models/NetworkCertifier/Guarantees/`; Lean's kernel; the Mathlib pin. Everything else is checked by machine. Docstring paths such
 as `docs/…` and `internal/…` name network accounting's project store, where the covert-capacity note
 (`docs/network-transparency/timing-channel.md`) and the reviews live.
 
@@ -198,7 +207,7 @@ ingress bound's statements were frozen before their proofs as well; the review o
 that added them (danielreuter/verity#894), and the review of the content versions is on the one stacked on it. The
 constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and recorded before
 their proofs. Their statement review, on danielreuter/verity#949, gave GO with one change: the four counts take
-`n ≤ W·T`. All 35 statements (22 guarantees, 13 lemmas) and 16 witnesses are proved. The reference
+`n ≤ W·T`. All 38 statements (25 guarantees, 13 lemmas) and 16 witnesses are proved. The reference
 implementation, `verity/core/protocols/certifier` (`verity.core.protocols.certifier`), mirrors 19 of the statements and the three
 lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 
