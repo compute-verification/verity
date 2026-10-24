@@ -1578,6 +1578,11 @@ refused. `benchmarks/network_traces/compile_slice_zk.py` proves eleven units of 
 `--zk`, held by Lean `verify --zk` (run r20261024-153220-c97c): the honest one, three negatives, phase 9's five and the six passes
 with the served row and with its own, each opening to its verdict, with no witness piece in what the verifier received.
 
+## The replay at the served shape
+
+In [protocol/served-shape.md](protocol/served-shape.md): a served window as the slice's input (vLLM 8eb1's w212), and
+the replay's cost at served shapes and its split into units.
+
 ## The active certifier (`active`)
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell
