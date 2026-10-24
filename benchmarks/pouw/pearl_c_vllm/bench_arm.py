@@ -190,14 +190,17 @@ class PearlCWholeArm(PearlCArm):
     The PoUW option refuses this engine (`pouw.refusals`: compiled execution), so the arm installs as `PearlCArm` does;
     the protocol arm reaching it is vllm's change. ``PEARLC_WHOLE_EXECUTION`` is the engine's execution label:
     ``compiled`` (default, vLLM's kernels without batch invariance, as `stock-fp8@compiled` runs) or ``bi-compiled``;
-    ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows). A retained pass's whole capture
-    keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
+    ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows); ``PEARLC_WHOLE_DEFER_A=1`` also
+    runs each call's A tree beside its forming and GEMM (`whole_defer_a`, on a kernel whose pipeline splits A's commitment).
+    A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
     run_options = {"graphs": True, "whole_defer": True}
 
     def __init__(self) -> None:
         super().__init__()
+        if os.environ.get("PEARLC_WHOLE_DEFER_A") == "1":
+            self.run_options = {**self.run_options, "whole_defer_a": True}
         self.schedule = "serial"
         self.execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
         self.whole, self.totals, self.capture = None, {}, [1, 8, 32, 128]
