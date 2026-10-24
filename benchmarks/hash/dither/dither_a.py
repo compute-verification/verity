@@ -196,6 +196,14 @@ def _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, o
 
 
 @triton.jit
+def _rows_written(S_ptr, T, m):
+    # the rows whose z/y records a step writes: all T, or with S[2] > 0 (DITHER_DEAD_ONCE) those below max(m, S[2]),
+    # the rows at or past S[2] holding a row past m's records already
+    c = tl.load(S_ptr + 2)
+    return tl.where(c > 0, tl.minimum(T, tl.maximum(m, c)), T)
+
+
+@triton.jit
 def dithera_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, ws_ptr, cnt_ptr, M, N, K, T, stride_am,
                stride_bn, stride_cm, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
                SPLIT_K: tl.constexpr, ZL: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr):
@@ -206,6 +214,7 @@ def dithera_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, 
     pid_n = pid % num_pid_n
     m = tl.load(S_ptr + 1)
     flags = tl.load(S_ptr + 3)
+    TW = _rows_written(S_ptr, T, m)
     live = pid_m * BLOCK_M < M
     nk = tl.cdiv(K, BLOCK_K)
     per = tl.cdiv(nk, SPLIT_K)
@@ -227,7 +236,7 @@ def dithera_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, 
         a_ptrs += BLOCK_K
         b_ptrs += BLOCK_K
     if SPLIT_K == 1:
-        _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, T, m, flags, stride_cm, ZL, UR, UC)
+        _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, TW, m, flags, stride_cm, ZL, UR, UC)
     else:
         if live:
             # exactlin_scaled_mm's split-K: the workspace and the tile's counter zero again after the last split
@@ -241,9 +250,9 @@ def dithera_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, 
                 EL._membar_gl(pid)
                 tot = tl.atomic_xchg(ws_ptrs, tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.int32), mask=mask, sem="relaxed")
                 tl.atomic_xchg(cnt_ptr + pid, 0, sem="relaxed")
-                _dithera_epilogue(tot, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, T, m, flags, stride_cm, ZL, UR, UC)
+                _dithera_epilogue(tot, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, TW, m, flags, stride_cm, ZL, UR, UC)
         elif tl.program_id(1) == 0:
-            _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, T, m, flags, stride_cm, ZL, UR, UC)
+            _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, TW, m, flags, stride_cm, ZL, UR, UC)
 
 
 @triton.jit
@@ -264,7 +273,8 @@ def dithera_mm_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S
         acc = tl.dot(a, b.T, acc, out_dtype=tl.int32)
     offs_m = off_m + tl.arange(0, BLOCK_M).to(tl.int64)
     offs_n = off_n + tl.arange(0, BLOCK_N).to(tl.int64)
-    _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, T, m, flags, stride_cm, ZL, UR, UC)
+    _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, _rows_written(S_ptr, T, m), m,
+                      flags, stride_cm, ZL, UR, UC)
 
 
 @triton.jit
@@ -291,7 +301,7 @@ def dithera_ycommit(y_ptr, sb_ptr, dst_ptr, S_ptr, M, N, T, stride_y, UR: tl.con
         v = tl.where(ld, v, pad[None, :])
         u = (offs_m[:, None] // UR) * (N // UC) + offs_n[None, :] // UC
         tl.store(dst_ptr + u * (UR * UC) + (offs_m[:, None] % UR) * UC + offs_n[None, :] % UC, v,
-                 mask=(offs_m < T)[:, None] & mask_n)
+                 mask=(offs_m < _rows_written(S_ptr, T, m))[:, None] & mask_n)
 
 
 @triton.jit

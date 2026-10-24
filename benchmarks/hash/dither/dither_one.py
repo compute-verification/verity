@@ -332,6 +332,10 @@ class Window:
         return (self.slot + self.scale + self.z + list(self.ydump or [])
                 + [self.plan.out, self.plan.seeds, self.pre["mid"].level, self.pre["a"].level])
 
+    def dead_from(self, m: int) -> int:
+        """The step's S[2] (after `before` sets its flags and capture): 0, every row past m's z/y records written."""
+        return 0
+
     def _a_step(self) -> None:
         a = self.pre["a"]
         rc = self.c.lib.h1c_a_step(a.dev.data_ptr(), self.L, self.apre.data_ptr(), self.awords, self.stepv.data_ptr(),
@@ -357,7 +361,7 @@ class Window:
         self._put(self.admit, torch.frombuffer(bytearray(b"".join(CR.word_rows(CR.words(bits)))), dtype=torch.uint8))
         self._put(self.stepv, torch.tensor([s, s], dtype=torch.int32))
         self.step_base.fill_(s * self.u_step)
-        self._put(self.S, torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
+        self._put(self.S, torch.tensor([0, m, self.dead_from(m), self.flags], dtype=torch.int32))
         self._a_step()
         if self.cap:
             self.cap_sync()

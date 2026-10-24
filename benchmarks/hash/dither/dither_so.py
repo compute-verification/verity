@@ -173,6 +173,10 @@ RS_EV = 4       # its per-step events and pinned roots, a ring of this many step
 # the tree stream's priority (default 0, the units'): below the serving stream's, so step s's lm_head and sampler, which
 # the host waits on before step s + 1, take the SMs ahead of round s's trees
 RS_PRIO_ENV = "DITHER_SO_ROUND_PRIO"
+# "1": a step's GEMMs and y commits write a row past m's z/y records only where an earlier step left something else
+# (a live row, a captured step's poison, a control's unwritten records, a new window): the same bytes in every record,
+# without the dead rows' ~350 MB of stores a step at m = 32 of T = 64 (`dead_from`, S[2], dither_a._rows_written)
+DEAD_ONCE_ENV = "DITHER_DEAD_ONCE"
 
 
 def end_steps(depth: int) -> int:
@@ -234,6 +238,10 @@ class SoWindow(DO.Window):
         if self.rs and self.overlap:
             raise RuntimeError(f"{RS_ENV}=1 serves an -so arm without -ov (-ov builds its rounds from ring copies)")
         self.rs_last: int | None = None
+        self.dead_once = os.environ.get(DEAD_ONCE_ENV) == "1"
+        if self.dead_once and self.overlap:
+            raise RuntimeError(f"{DEAD_ONCE_ENV}=1 serves an -so arm without -ov")
+        self.clean_from: int | None = None
         super().__init__(*args, **kwargs)
         if self.a_step:
             self._a_step_set()
@@ -360,6 +368,7 @@ class SoWindow(DO.Window):
         from verity.core.protocols.pouw.circuit import h1tile as HT
         t0 = time.perf_counter()
         self.HT = HT
+        self.clean_from = None
         at = CO.session()
         if at is not None and self.k >= 0:
             raise RuntimeError(f"dither-a-so: session {at.id} served this process's one off-node window, which ended at "
@@ -647,6 +656,16 @@ class SoWindow(DO.Window):
             sd = DA.SIDE[0]
             out += sd.zy + sd.ysv + [sd.zyset.level, sd.ysset.level, sd.yuset.level]
         return out
+
+    def dead_from(self, m: int) -> int:
+        """Under DEAD_ONCE_ENV the row from which every row already holds a row past m's z/y records (T after a capture,
+        a control's no-write step or a window's start), and from the next step on m, or T after a step that writes
+        none; else 0, every row past m written."""
+        if not self.dead_once:
+            return 0
+        c = self.t if self.cap is not None or self.clean_from is None else self.clean_from
+        self.clean_from = self.t if self.flags & DO.F_NW_TILES else m
+        return c
 
     def before(self, m: int) -> None:
         self.t_b0 = time.perf_counter()
@@ -967,6 +986,7 @@ class SoWindow(DO.Window):
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
                      "window_end": self.end_stats(), "round_stream": self.rs,
                      "round_stream_priority": self.rs_stream.priority if self.rs else None,
+                     "dead_once": self.dead_once,
                      "serving_stream_priority": torch.cuda.current_stream().priority,
                      "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None}
         if ov is not None:
