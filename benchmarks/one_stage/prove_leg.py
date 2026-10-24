@@ -152,6 +152,10 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
     sd = out / f"stage-{m.name}"
     st = CS.UnitStager(m.defn, f"unit/{m.name}", m.rows, m.out_rows, circuit=sd / "circuit.txt", bind=bound)
     lower_s = round(time.time() - t0, 1)
+    k_log = st.meta["k_log"]
+    nbl = max(3, (-(-m.n // st.meta["vus_per_block"]) - 1).bit_length())
+    if not 25 <= k_log + nbl <= a7.M_MAX:
+        raise SystemExit(f"{m.name}: m = {k_log} + {nbl} is outside 25 .. {a7.M_MAX} (--zk and flock-circuit's shape)")
     d = sd / "statement"
     set_name = f"{st.iset.name}-{m.name}"
     indices = list(range(base, base + m.n))
@@ -448,6 +452,24 @@ def standin(n: int, ks: Sequence[int] = (128, 256), seed: int = 20261024) -> lis
         out.append(Member(f"dot{K}", fn, [("x", V2, 16 * K, ["x"]), ("w", V2, 16 * K, ["w"])], [(V2, (0,))],
                           {"x": x, "w": w}, held={"x": x}))
     return out
+
+
+def n2_member(name: str, key: tuple[int, int, int], insts: Sequence, pubs: Sequence[Sequence[int]],
+              oks: Sequence[int] | None = None) -> Member:
+    """N2's head checks (`n2_zk`'s ``NetworkHeadCheckRows`` around `head_check.unit(L, T, COUNTS)`, ``key``) as one
+    member: instance i's ``pub`` and ``wit`` rows (`n2_zk.rows_of`), ``pub`` held to ``pubs[i]`` (the verifier's own
+    `n2_zk.public_words`: the registered root, the link-window, the signed digest), ``o0`` required to ``oks[i]`` (default
+    every check passes)."""
+    sys.path.insert(0, str(HERE.parent / "network_traces"))
+    import n2_zk as N
+
+    N.builders()
+    bits = N.row_bits(N.HC.unit(key[0], key[1], bool(key[2])))
+    words = [N.rows_of(i) for i in insts]
+    values = {r: np.asarray([w[r] for w in words], dtype=np.uint16) for r in N.ROWS}
+    oks = [1] * len(insts) if oks is None else list(oks)
+    return Member(name, N.unit(key), [(r, V2, bits[r], [r]) for r in N.ROWS], [(V2, (0,))], values,
+                  held={"pub": np.asarray(pubs, dtype=np.uint16)}, expect={"o0": np.asarray(oks, dtype=np.uint16)[:, None]})
 
 
 def main(argv=None) -> int:
