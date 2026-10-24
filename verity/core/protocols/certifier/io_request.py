@@ -378,7 +378,7 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
     for t in range(buckets):
         while queue and queue[0].arrived <= t and len(active) < params.lanes:
             c = queue.pop(0)
-            c.admitted = t
+            c.admitted, c.pad = t, W.cell(PAD, c.ordinal, b"", B)
             active.append(c)
         for c in active:
             k = c.ordinal - 1

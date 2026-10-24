@@ -86,7 +86,7 @@ def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], response
     for t in range(buckets):
         while queue and queue[0].arrived <= t and len(active) < params.lanes:
             c = queue.popleft()
-            c.admitted = t
+            c.admitted, c.pad = t, W.cell(PAD, c.ordinal, b"", B)
             active.append(c)
         for c in active:
             for frame in W.Warden._egress(warden, c, t):
