@@ -48,6 +48,12 @@ def test_a_burst_is_charged_at_two_l_held_over_time_and_once_over_the_passes():
     assert burst[1].snapshot.lost_blocks - plain[1].snapshot.lost_blocks == Fraction(7, 8)
 
 
+def test_the_chips_are_charged_in_whole_blocks_rounded_up():
+    """`ChipCeiling` counts whole blocks, so S is S_chip/b rounded up: one byte over a block costs a second block."""
+    assert stretches(groups(1), chip_bytes=B + 1) == stretches(groups(1), chip_bytes=2 * B)
+    assert stretches(groups(1), chip_bytes=B + 1)[0].time.lost_blocks == 2 + stretches(groups(1))[0].time.lost_blocks
+
+
 def test_the_wrong_receipts_fill_the_groups_highest_rate_first_at_most_n_blocks_a_pass():
     # stretch 1's groups 4..8 pay 5, 45, 5, 5 and 45 (L/n in group 8) block-ns a wrong receipt, 2N receipts each
     assert stretches(groups(9), wrong=4000)[1].fill == 4000 * 45

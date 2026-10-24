@@ -44,7 +44,7 @@ GPU_RATE = {
     "square-1024": Assumption("rtx-pro-6000/squarings-p1024", 14_990_000_000, "squarings/s", "measured"),
     "square-512": Assumption("rtx-pro-6000/squarings-p512", 51_300_000_000, "squarings/s", "measured"),
 }
-HOST_CHIP = Assumption("xeon-6776p/caches", 940_435_456 // 2 * 8, "bits", "declared")
+HOST_CHIP = Assumption("xeon-6776p/caches", 1_000_341_504 // 2 * 8, "bits", "declared")
 HOST_DRAM = Assumption("host-dram/socket-capacity", 1_872_605_741_056 // 2 * 8, "bits", "measured")
 HOST_READ = Assumption("host-dram/socket-read", 303_400_000_000 * 8, "bit/s", "measured")
 HOST_RESIDUAL = Assumption("host-dram/socket-residual", 4 * GB, "bits", "declared")
