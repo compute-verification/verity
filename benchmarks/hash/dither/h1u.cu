@@ -187,12 +187,21 @@ __host__ __device__ constexpr int n_digits(int ks) {
 }
 
 struct alignas(16) WarpSmem {
+  static constexpr bool RX = false;
   NoiseMid nm;          // seed_j's stream
   u32 rowbits[32][17];  // row i's block: 16 halves (one segment's 32 dither bits each), padded against bank conflicts
   u32 colbits[32][17];
   u32 coin[32][2];      // row i's digit coins: half d's bit rho is z_d(i, rho)
   u32 utab[32][9];      // column j's U + 128 bytes, rho = 0..31
   u32 ring[32][33];     // [2 j + (0 y | 1 z)][lane], a chunk's 16 sets
+};
+// RC's units under H1U_JRX: no seed stream, and no ring (a set's two words are warp reductions, red_put)
+struct alignas(16) WarpSmemX {
+  static constexpr bool RX = true;
+  u32 rowbits[32][17];
+  u32 colbits[32][17];
+  u32 coin[32][2];
+  u32 utab[32][9];
 };
 
 __device__ __forceinline__ u32 expand4(u32 n) { return (n * 0x00204081u) & 0x01010101u; }
@@ -382,6 +391,13 @@ __device__ __forceinline__ u32 ring_xor(const Sm& S, u32 row) {
 #pragma unroll
   for (int l = 0; l < 32; ++l) x ^= S.ring[row][l];
   return x;
+}
+
+// ring_put then ring_xor without the ring (WarpSmemX): lane 2 slot keeps the set's y word, lane 2 slot + 1 its z word
+__device__ __forceinline__ void red_put(u32& w, u32 slot, u32 lane, const u32 (&y)[8], const u32 (&z)[8]) {
+  const u32 ry = __reduce_xor_sync(0xFFFFFFFFu, y[0] ^ y[1] ^ y[2] ^ y[3] ^ y[4] ^ y[5] ^ y[6] ^ y[7]);
+  const u32 rz = __reduce_xor_sync(0xFFFFFFFFu, z[0] ^ z[1] ^ z[2] ^ z[3] ^ z[4] ^ z[5] ^ z[6] ^ z[7]);
+  w = lane == 2 * slot ? ry : lane == 2 * slot + 1 ? rz : w;
 }
 
 // the lane records (DG, OneOut::lr): a chunk's 32 ring rows (receipt words at .. at + 31) as every lane's own, lane l's
@@ -576,11 +592,13 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #error "H1U_JRY is H1U_JRC's units with their row blocks' digits read: build it with H1U_JRC = 1 and no H1U_JRD"
 #endif
 template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false, bool RW = false, bool RC = false,
-          bool RD = false, bool RY = false, bool YO = false>
+          bool RD = false, bool RY = false, bool YO = false, class Sm = WarpSmem>
 __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                          u32* __restrict__ out, const u32* __restrict__ ws, const OneOut oo, const u32 u,
-                                         WarpSmem& S) {
+                                         Sm& S) {
+  constexpr bool RX = Sm::RX;
+  static_assert(!RX || (RC && !DG), "WarpSmemX is RC's units' (no seed stream, no ring)");
   static_assert(!DG || !(WS || OS || J10 || PL), "a gathered diagonal is the fused receipts-only form");
   static_assert(!RW || !(WS || OS || J10 || PL || DG), "J10-R's units are the fused receipts-only form");
   static_assert(!RC || RW, "RC is J10-R's units with their column blocks read");
@@ -656,7 +674,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       z[2 * j + 1] = (u32)s[4 + j];
     }
   }
-  if (!WS && !RC) {
+  if constexpr (!WS && !RC) {
     u64 seed[8];
 #pragma unroll
     for (int j = 0; j < 8; ++j) seed[j] = __ldg(sd + j);
@@ -833,6 +851,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     }
     const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
     const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.colbits[0][0]);
+    u32 rw = 0;  // RX: the lane's word of the chunk (red_put)
 #pragma unroll 1
     for (u32 j0 = 0; j0 < 16; j0 += NS) {
 #pragma unroll
@@ -942,12 +961,17 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         }
         if constexpr (!YO) {
           fold(T, y, z);
-          ring_put(S, j, lane, y, z);
+          if constexpr (RX) red_put(rw, j, lane, y, z);
+          else ring_put(S, j, lane, y, z);
         }
       }
     }
     __syncwarp();
-    if (!YO && rcpt) o[32 * blk + lane] = ring_xor(S, lane);
+    if constexpr (RX) {
+      if (!YO && rcpt) o[32 * blk + lane] = rw;
+    } else {
+      if (!YO && rcpt) o[32 * blk + lane] = ring_xor(S, lane);
+    }
     if constexpr (DG) lane_put(S, lw, nwords, 32 * blk, lane);
     __syncwarp();
   }
@@ -1027,7 +1051,9 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll
     for (int nt = 0; nt < 4; ++nt) mma_s8(T[4 * mt + nt], ad[0][mt], nf[nt]);
   fold(T, y, z);
-  ring_put(S, 0, lane, y, z);
+  u32 rw = 0;
+  if constexpr (RX) red_put(rw, 0, lane, y, z);
+  else ring_put(S, 0, lane, y, z);
 #pragma unroll
   for (int d = 1; d < MD; ++d) {
 #pragma unroll
@@ -1039,7 +1065,8 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll
       for (int nt = 0; nt < 4; ++nt) mma_s8(Y[4 * mt + nt], ad[d][mt], uf[nt]);
     fold(Y, y, z);
-    ring_put(S, d, lane, y, z);
+    if constexpr (RX) red_put(rw, d, lane, y, z);
+    else ring_put(S, d, lane, y, z);
     if constexpr (OS) {
 #pragma unroll
       for (int t = 0; t < 8; ++t)
@@ -1048,7 +1075,11 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     }
   }
   __syncwarp();
-  if (rcpt && lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
+  if constexpr (RX) {
+    if (rcpt && lane < 2 * MD) o[2 * ks + lane] = rw;
+  } else {
+    if (rcpt && lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
+  }
   if constexpr (DG) lane_tail<MD>(S, lw, nwords, 2 * ks, lane);
   if constexpr (OS) {
     // T[4 mt + nt][e] is cell (16 mt + g + 8 (e >> 1), 8 nt + 2 q + (e & 1)): z there, then y
@@ -2693,10 +2724,21 @@ __device__ __forceinline__ u32 jswz_unit(const UCallR& c, u32 w, u32 M) {
   return (r0 + r % rn) * ncb + r / rn;
 }
 
+// H1U_JRX = 1: h1umjc's and h1jr_ady's warps take WarpSmemX (red_put's sets, no ring): about half WarpSmem's bytes, so
+// more blocks fit an SM
+#ifndef H1U_JRX
+#define H1U_JRX 0
+#endif
+#if H1U_JRX
+using JcSmem = WarpSmemX;
+#else
+using JcSmem = WarpSmem;
+#endif
+
 // h1umj with its units' column blocks read (RC)
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                      const uint8_t* __restrict__ live) {
-  __shared__ WarpSmem smem[WARPS];
+  __shared__ JcSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5;
   const u32 gu = blockIdx.x * WARPS + wp;
   if (gu >= calls[ncalls].u0) return;
@@ -2720,7 +2762,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc(const UCallR* __r
 // RY's digits: call blockIdx.y's row block blockIdx.x WARPS + warp, by its column block 0's unit under YO
 __global__ void __launch_bounds__(32 * WARPS) h1jr_ady(const UCallR* __restrict__ calls, u32 M,
                                                      const uint8_t* __restrict__ live) {
-  __shared__ WarpSmem smem[WARPS];
+  __shared__ JcSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5;
   const u32 ri = blockIdx.x * WARPS + wp;
   if (ri >= M / 32) return;
