@@ -56,6 +56,21 @@ def test_a_failed_gate_marks_only_the_ratios_that_read_its_arm():
     assert "(gates failed)" in S.report(ms, {}) and "Gates failed in: r1." in S.report(ms, {})
 
 
+def test_a_run_without_timed_points_still_reports_why_and_its_hosts_load():
+    d = doc(fp8=True, commit_passed=False)
+    d["gates"][-1].update(point="b32-p512-mixed", control="stock-fp8@compiled", divergent_requests=17,
+                          first_divergence={"request": "b32-p512-mixed-10", "position": 2})
+    for rep in d["points"][0]["arms"]["stock-fp8"]["reps"]:
+        rep["host"] = {"loadavg_1m": 62.8}
+    f = S.run_facts(d)
+    assert f["load"] == (62.8, 62.8) and f["model"] == "Llama-3.1-8B FP8"
+    assert f["failed"] == [("served-commit-rows-4k tokens b32-p512-mixed against stock-fp8@compiled, 17 requests diverge "
+                            "(first b32-p512-mixed-10 at token 2)")]
+    d["points"] = []
+    md = S.report([], {}, {"r-gated": S.run_facts(d)})
+    assert "| r-gated | Llama-3.1-8B FP8 | 0 |  | served-commit-rows-4k tokens" in md
+
+
 def test_two_runs_of_one_model_keep_their_own_rows():
     ms = S.measures(doc(), run="r-compiled") + S.measures(doc(eager_commit=True), run="r-eager")
     md = S.report(ms, {"r-compiled": {32: (63.0, 4.0, 67.0)}})

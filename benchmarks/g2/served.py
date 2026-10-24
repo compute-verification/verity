@@ -22,7 +22,8 @@ RTX PRO 6000 Build of record pins the compiled Commit's kernels, so by curve.py'
     uv run --no-project --with matplotlib python3 benchmarks/g2/served.py RUN... [--runs-dir DIR] [--out DIR]
 
 Reads each run's `out/result.json` from DIR/RUN (`research fetch RUN --all`), else from its record in the evidence store.
-Writes OUT/g2-served.md, OUT/g2-served.json (every measure) and OUT/g2-served.png; OUT defaults to $OUT, else ./out.
+Writes OUT/g2-served.md, OUT/g2-served.json (every measure, and each run's facts: timed points, host load, failed gates) and
+OUT/g2-served.png; OUT defaults to $OUT, else ./out.
 """
 from __future__ import annotations
 
@@ -130,6 +131,24 @@ def graph_steps(doc: dict) -> dict[int, tuple[float, float, float]]:
     return out
 
 
+def run_facts(doc: dict) -> dict:
+    """What a run's table needs besides its ratios: its model, its timed points, the host's 1-minute load average over its timed
+    reps (eager arms launch every kernel from the host, so a loaded host slows them and not the CUDA graphs) and each failed gate
+    (a tokens gate with where its tokens first left its control's)."""
+    loads = [r["host"]["loadavg_1m"] for p in doc["points"] for a in p["arms"].values() for r in a["reps"]
+             if "loadavg_1m" in (r.get("host") or {})]
+    failed = []
+    for g in doc.get("gates", ()):
+        if g.get("passed"):
+            continue
+        div = g.get("first_divergence") or {}
+        why = (f", {g['divergent_requests']} requests diverge (first {div.get('request')} at token {div.get('position')})"
+               if g.get("divergent_requests") else "")
+        failed.append(f"{g['arm']} {g.get('kind')} {g.get('point') or ''} against {g.get('control') or g.get('against')}{why}")
+    return {"model": model_label(doc["identity"]["preset"]), "points": len(doc["points"]),
+            "load": (min(loads), max(loads)) if loads else None, "failed": failed}
+
+
 def cell(m: Measure | None) -> str:
     if m is None:
         return ""
@@ -143,7 +162,7 @@ def stock_ms(row: list[Measure | None]) -> tuple[str, str]:
     return tuple(f"{xs[0]:.3f}" if xs else "" for xs in (comp, bi))
 
 
-def report(ms: list[Measure], steps: dict[str, dict[int, tuple[float, float, float]]]) -> str:
+def report(ms: list[Measure], steps: dict[str, dict[int, tuple[float, float, float]]], facts: dict[str, dict] | None = None) -> str:
     by = {(m.model, m.run, m.batch, m.phase, m.ratio): m for m in ms}
     groups = sorted({(m.model, m.run) for m in ms})
     batches = sorted({m.batch for m in ms})
@@ -176,6 +195,12 @@ def report(ms: list[Measure], steps: dict[str, dict[int, tuple[float, float, flo
     for run, per in sorted(steps.items()):
         for b, (rep, eag, n) in sorted(per.items()):
             lines.append(f"| {run} | {b} | {rep:.0f} | {eag:.0f} | {n:.0f} |")
+    if facts:
+        lines += ["", "## Runs", "", "| run | model | timed points | host load (1 min) over its reps | failed gates |",
+                  "|---|---|---:|---|---|"]
+        for run, f in facts.items():
+            load = f"{f['load'][0]:.0f}–{f['load'][1]:.0f}" if f["load"] else ""
+            lines.append(f"| {run} | {f['model']} | {f['points']} | {load} | {'; '.join(f['failed']) or 'none'} |")
     runs = sorted({m.run for m in ms})
     failed = sorted({m.run for m in ms if not m.gates})
     lines += ["", f"Runs: {', '.join(runs)}. Gates failed in: {', '.join(failed) or 'none'}."]
@@ -247,16 +272,18 @@ def main() -> int:
     a = ap.parse_args()
     ms: list[Measure] = []
     steps: dict[str, dict[int, tuple[float, float, float]]] = {}
+    facts: dict[str, dict] = {}
     with tempfile.TemporaryDirectory(prefix="g2-served-") as tmp:
         for run in a.runs:
             doc = load(run, a.runs_dir, Path(tmp))
             ms += measures(doc, run=run)
+            facts[run] = run_facts(doc)
             if s := graph_steps(doc):
                 steps[run] = s
     a.out.mkdir(parents=True, exist_ok=True)
-    md = report(ms, steps)
+    md = report(ms, steps, facts)
     (a.out / "g2-served.md").write_text(md + "\n")
-    (a.out / "g2-served.json").write_text(json.dumps([asdict(m) for m in ms], indent=1) + "\n")
+    (a.out / "g2-served.json").write_text(json.dumps({"runs": facts, "measures": [asdict(m) for m in ms]}, indent=1) + "\n")
     plot(ms, a.out / "g2-served.png")
     print(md)
     return 0
