@@ -74,14 +74,19 @@ past the count with en 0, and 34 idle steps), with the seal's rows in ``srv`` (`
 **In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py --slice w212`, and `--slice demo`), each unit is
 proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`. The verifier opens only ``pub``
 and the verdict, and runs the bindings, the carry chain's among them, on the units' b‖c. What the verifier received
-holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows whole.
-- A piece is left out of that scan if and only if its value occurs, raw or as hex at any nibble, in what the verifier
-  receives of the statement: the staged circuit, the proof streams (`circuit.rep*.bin`, which `session.json`'s
-  `proof_sha512` hashes), ``pub``'s rows (`pub-*.bin`) and the round messages (`rounds[*].msg`, decoded). No piece is
-  left out for its byte count (REDTEAM's rule, note:network-accounting/20261024T0558Z-finding-redteam-v3, phase 18).
-- The driver still leaves out, by byte count, the pieces with at most one nonzero byte (`sparse_pieces`) and a carry row
-  with at most one (`carry_rows.sparse`), until the shared helper (#3916) puts the rule in their place. A run's
-  left-out pieces are checked under the rule after it.
+is scanned for every witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows
+whole. A piece found that isn't excluded is leaked, and fails the run.
+- The scan is `zk_scan`'s, every ZK driver's (`benchmarks/network_traces/zk_scan.py`). A piece found is excluded if and
+  only if its value occurs, raw or as hex at an even offset into a run of hex digits, in the bytes the statement fixes:
+  - the staged circuit and ``pub``'s rows (`pub-*.bin`), whole;
+  - each round message's framing (`rounds[*].msg`, decoded): its records' headers, the domain's and labels' bytes and
+    the padding (C-Flock's §6.1);
+  - each proof stream's container fields (`circuit.rep*.bin`): the lengths and parameters its layout reads, and each
+    ring switch's grinding nonce, which the verifier requires to be 0 (C-Flock's §8.3).
+- The rest of the streams and messages is the prover's: its elements, hashes, observed bytes and every other nonce.
+  Taken whole, the streams would exclude every piece the scan could find there. No piece is excluded for its byte count
+  (REDTEAM's rule, note:network-accounting/20261024T0558Z-finding-redteam-v3, phase 18). A carry row (12 bytes) is one
+  piece, whole.
 
 **The proof of record is run r20261024-211633-861e** (#3886 at 6e29d34e7c, the w212 and demonstration slices).
 - At w212: 10 units of 857,866 ANDs (k_log 23). m0's verifier and Lean `verify --zk` accept, and the audit is complete
@@ -92,10 +97,18 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
   - restart is refused by ``CH-carry``, and sixpass-own by the native ``srv`` check.
 - At the demonstration class: 12 units of 59,341 ANDs, accepted and complete, every verdict as its reference says. The
   made-up table is refused by ``cache`` alone (0x1f), and restart by ``CH-first``.
-- The verifier received 347,887,598 bytes at w212 and 103,356,161 at the demonstration class. They hold none of the
-  837 and 654 witness pieces scanned, and no ``cin`` or ``cout`` row.
-- Under the rule, the left-out pieces are clean (art:c8f215f4e454914b21e339fff69d533f04c11e1958a95e6e09d69b4481384973,
-  the check and its logs).
+- The verifier received 347,887,598 bytes at w212 and 103,356,161 at the demonstration class. The run's own scan left
+  out the pieces with at most one nonzero byte, and found none of the other 837 and 654 witness pieces, and no ``cin``
+  or ``cout`` row.
+- Its scan rerun under `zk_scan`, on the rows rebuilt from its verdict words, leaks nothing
+  (art:645dbbe3f4a8fa5ec24f174ef1675038aadedd232e301f0d3abf976c9f8c8e94; the salts aren't kept).
+  - At w212, it finds ten of the rows' 380 pieces: five of the six below, on the framing and the container's fields,
+    and five the circuit holds. The sixth (``20`` in its eleventh byte) isn't found, since its only matches are hex at
+    odd offsets, straddling nibbles.
+  - At the demonstration class, it finds one all-zero piece and the restart's zero ``cin`` row. The circuit and the
+    container's fields hold both.
+- REDTEAM's check of the left-out pieces is
+  art:c8f215f4e454914b21e339fff69d533f04c11e1958a95e6e09d69b4481384973 (the check and its logs).
   - Of w212's 44 sparse pieces, 38 occur nowhere in what the verifier received. The other six occur only in the proof
     streams and round messages.
   - The demonstration class's restart starts from the zero carry. Its row occurs in the same files' zero padding.
@@ -108,7 +121,8 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
 - Each message hit is the same 16 bytes at the paired round of the demonstration class's proof, whose circuit and
   witness differ.
 - Run r20261024-202836-67d7, at #3886's head before #3887's copies (852,357 ANDs), has the same verdicts. Its six
-  flagged pieces are the same framing (REDTEAM's differential, run r20261024-211716-ae3b).
+  flagged pieces are the same framing (REDTEAM's differential, run r20261024-211716-ae3b). `zk_scan` excludes five of
+  them and doesn't find the sixth, as at 861e.
 
 **The slice's ZK runs with its coder**, before the charge was `ChargeLink_v1`:
 - At the demonstration class (49,113 ANDs a unit), the honest unit and ten negatives, with the made-up table refused
@@ -116,3 +130,13 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
 - At corpus-smallkv's first seven steps (7,562,498 ANDs a unit, m = 29), the honest unit and twelve negatives (run
   r20261024-175616-105c). The made-up table was refused by ``cache`` alone, and the six passes with their own served
   row by the native ``srv`` check.
+- Their scans rerun under `zk_scan` (art:645dbbe3f4a8fa5ec24f174ef1675038aadedd232e301f0d3abf976c9f8c8e94):
+  - At the demonstration class, one all-zero piece is found. The circuit and the container's fields hold it, so
+    nothing is leaked.
+  - At the corpus class, two of the four pieces found are leaked, so that run fails the scan.
+  - One leaked piece is a cache table's token, ``05`` and fifteen zeros. It sits where each stream holds a Ligerito
+    nonce list's length (5) and its first nonce. The query and consistency nonces are messages the verifier never
+    checks (C-Flock's §8.3), and Verity's prover sets them to 0. The same piece leaks in the corpus class's other runs,
+    r20261024-145236-cf49 and r20261024-205837-adc8.
+  - The other is a walk entry, fifteen zeros and ``c0``: the tail of an all-zero element and the next element's first
+    byte, a one-in-256 match.
