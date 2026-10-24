@@ -6,8 +6,11 @@ the tie's witness."""
 from __future__ import annotations
 
 import dataclasses
+import gzip
 import importlib.util
+import json
 import random
+import shutil
 import sys
 from pathlib import Path
 
@@ -229,6 +232,48 @@ def test_a_residual_with_values_left_over_or_missing_is_refused(case) -> None:
     for bad in (dict(hits=res.hits + (0,)), dict(hits=res.hits[:-1]), dict(sources=res.sources[:-1]), dict(ns=(4,))):
         with pytest.raises(ValueError):
             D.reconstruct(dataclasses.replace(res, **bad), cfg)
+
+
+CORPUS = HERE / "fixtures" / "corpus-smallkv"
+
+
+def _corpus(**kw):
+    return D.load_corpus_trace(CORPUS, eos_token_id=128009, stop_token_ids=(128001, 128008), **kw)
+
+
+def test_a_trace_corpus_trace_rebuilds_from_the_runners_batch_order(tmp_path) -> None:
+    """TRACE-CORPUS's format from its own hook (`benchmarks/network_e2e/traces/vllm_trace_plugin.py`) and join
+    (`summary.join_trace`) on vLLM d9105ea8's scheduler laid out as for Model Runner V2 (resumed requests among the new),
+    driven by `sched_trace.py` (4 s at 12/s, 100 blocks, a 256-token budget), each step's batch put decodes first as V2's
+    runner does; `server.log` is vLLM's capacity line for those 100 blocks. Decodes first is vLLM's scheduling order here
+    (a request mid-prefill is the running list's newest), so the batches are also rotated, last row first where no two
+    requests are new: from either order the walk derives every n, budget-bound steps and resumes included, at the bits it
+    costs from vLLM's scheduling order."""
+    lines = gzip.decompress((CORPUS / "steps.jsonl.gz").read_bytes()).decode().splitlines()
+    steps = [json.loads(line) for line in lines]
+    for s in steps:
+        if s.get("batch") and sum(not r["resumed"] for r in s["new"]) <= 1:
+            s["batch"] = s["batch"][-1:] + s["batch"][:-1]
+    for f in ("requests.jsonl.gz", "meta.json", "server.log"):
+        shutil.copy(CORPUS / f, tmp_path / f)
+    (tmp_path / "steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in steps))
+    sched, batch = _corpus(row_order="scheduling"), _corpus()
+    rotated = D.load_corpus_trace(tmp_path, eos_token_id=128009, stop_token_ids=(128001, 128008))
+    assert sched["config"]["num_gpu_blocks"] == 100
+    budget = sched["config"]["max_num_batched_tokens"]
+    assert sum([r["request"] for r in a["rows"]] != [r["request"] for r in b["rows"]] and sum(r["n"] for r in a["rows"]) == budget
+               for a, b in zip(sched["steps"], rotated["steps"])) > 10
+    tables = [D.bits_table(t, T=600) for t in (sched, batch, rotated)]
+    for t in tables:
+        assert t["explicit_n"] == 0 and not t["order_sent"] and t["resumed_rows"] > 0 and t["sources"] > 0
+        assert t["totals"] == tables[0]["totals"]
+
+
+def test_a_trace_corpus_trace_off_the_config_is_refused() -> None:
+    with pytest.raises(ValueError, match="block"):
+        _corpus(block_size=32)
+    with pytest.raises(ValueError, match="stop rule"):
+        D.bits_table(D.load_corpus_trace(CORPUS), T=600)
 
 
 def test_fields_covers_every_i1_field() -> None:

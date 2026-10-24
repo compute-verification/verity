@@ -42,6 +42,9 @@ its verdict, derivation, checker and cost.
 widths and charged by I1's rule (`charge`), after checking that `rebuild(residual(a)) == a`.
 
     python derived.py table --trace TRACE.json[.gz] ... --out TABLE.json [--T 600 --bucket-ms 100]
+
+A `--trace` that is a directory is one of TRACE-CORPUS's (`load_corpus_trace`; `--block-size`, `--eos`, `--stop-ids`,
+`--row-order`).
 """
 
 from __future__ import annotations
@@ -49,6 +52,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import re
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -140,6 +144,118 @@ def config_of(trace: dict) -> Config:
 def holdings_of(trace: dict) -> Holdings:
     return Holdings(requests=tuple(CertifiedRequest(r["id"], tuple(r["prompt_ids"]), r["max_tokens"]) for r in trace["requests"]),
                     outputs=tuple(tuple(r["output_ids"]) for r in trace["requests"]))
+
+
+def _jsonl(path: Path) -> list[dict]:
+    """A JSON-lines file's records (or its `.gz`'s), less an unterminated last line (a writer killed mid-line)."""
+    gz = path.with_name(path.name + ".gz")
+    raw = path.read_bytes() if path.exists() or not gz.exists() else gzip.decompress(gz.read_bytes())
+    lines = raw.decode("utf-8").split("\n")
+    return [json.loads(line) for line in lines[:-1] if line.strip()]
+
+
+def _flag(argv: Sequence[str], name: str, default: int | None = None) -> int | None:
+    return int(argv[argv.index(name) + 1]) if name in argv else default
+
+
+def load_corpus_trace(d: str | Path, *, block_size: int = 16, eos_token_id: int = 128001,
+                      stop_token_ids: Sequence[int] = (), num_gpu_blocks: int | None = None,
+                      row_order: str = "batch") -> dict:
+    """One trace of TRACE-CORPUS's corpus (`benchmarks/network_e2e/traces`, `vllm-trace-corpus/v1`: a directory with the
+    joined `steps.jsonl` and `requests.jsonl`, `meta.json` and, when kept, `server.log`) in `load_trace`'s format.
+
+    The registered config is the server's argv; the block size and the stop ids are the model's, which the corpus doesn't
+    record, so they are parameters, and the walk's tie refuses a stop id they miss. The pool's size, unless given, is
+    `server.log`'s "GPU KV cache size" in blocks: vLLM logs the pool's blocks over the blocks a max_model_len request
+    takes, times max_model_len, which is never more than the pool, so the bound stays sound. Without either it is 0, so
+    the pool bound fails and the resumes are sent.
+
+    A step's rows are in the model runner's batch order (`row_order` "batch", I1's) or in vLLM's scheduling order
+    ("scheduling": running, then resumed, then new; the hook gives each list in its loop's order). The corpus doesn't
+    record whose KV a hit reads, so `sources` names, for each hit block, the request that last computed that token
+    prefix's block, in scheduling order within a step (vLLM caches a block as it is scheduled): one of the requests I1
+    accepts, which is all the bit count needs."""
+    d = Path(d)
+    argv = json.loads((d / "meta.json").read_text()).get("server_argv") or []
+    budget = _flag(argv, "--max-num-batched-tokens")
+    if budget is None:
+        raise ValueError(f"{d}: the server's argv has no --max-num-batched-tokens, the token budget the walk needs")
+    if num_gpu_blocks is None:
+        log = d / "server.log"
+        found = re.findall(r"GPU KV cache size: ([\d,]+) tokens", log.read_text(errors="replace")) if log.exists() else []
+        num_gpu_blocks = int(found[-1].replace(",", "")) // block_size if found else 0
+    config = {"block_size": _flag(argv, "--block-size", block_size), "num_gpu_blocks": num_gpu_blocks,
+              "max_num_batched_tokens": budget, "max_model_len": _flag(argv, "--max-model-len"),
+              "max_num_seqs": _flag(argv, "--max-num-seqs", 256),
+              "long_prefill_token_threshold": _flag(argv, "--long-prefill-token-threshold", 0),
+              "scheduler": "async" if "--async-scheduling" in argv else "sync",
+              "enable_prefix_caching": "--no-enable-prefix-caching" not in argv,
+              "eos_token_id": eos_token_id, "stop_token_ids": list(stop_token_ids), "row_order": row_order}
+    if "--async-scheduling" not in argv and "--no-async-scheduling" not in argv:
+        raise ValueError(f"{d}: the server's argv doesn't say whether it schedules asynchronously")
+    if config["max_model_len"] is None:
+        raise ValueError(f"{d}: the server's argv has no --max-model-len")
+    bs = config["block_size"]
+    requests = []
+    for q in _jsonl(d / "requests.jsonl"):
+        if q["finish_reason"] not in ("stop", "length"):
+            raise ValueError(f"{d}: request {q['id']} finished {q['finish_reason']!r}, which the walk can't derive")
+        requests.append({"id": q["id"], "prompt_ids": q["prompt_ids"], "max_tokens": q["max_tokens"],
+                         "output_ids": q["output_ids"], "finish": "eos" if q["finish_reason"] == "stop" else "length"})
+    index = {q["id"]: t for t, q in enumerate(requests)}
+    tokens = [q["prompt_ids"] + q["output_ids"] for q in requests]
+    keys: list[list[int]] = [[] for _ in requests]
+
+    def key(t: int, b: int) -> int:
+        while len(keys[t]) <= b:
+            j = len(keys[t])
+            keys[t].append(hash((keys[t][-1] if j else None, tuple(tokens[t][j * bs:(j + 1) * bs]))))
+        return keys[t][b]
+
+    owner: dict[int, int] = {}
+    seen: set[int] = set()
+    steps, t0 = [], None
+    for s in _jsonl(d / "steps.jsonl"):
+        if not s["total_num_scheduled_tokens"]:
+            continue
+        t0 = s["t"] if t0 is None else t0
+        running = [r for r in s["cached"] if not r["resumed"]]
+        resumed = [r for r in s["cached"] + s["new"] if r["resumed"]]
+        new = [r for r in s["new"] if not r["resumed"]]
+        rows = {}
+        for r in running + resumed + new:
+            if not r["num_scheduled_tokens"]:
+                continue
+            if r["id"] not in index:
+                raise ValueError(f"{d}: step {s['step']} schedules {r['id']}, which the engine never freed")
+            t, start, n = index[r["id"]], r["num_computed_tokens"], r["num_scheduled_tokens"]
+            row = {"request": t, "start": start, "n": n, "new": t not in seen, "resumed": bool(r["resumed"]),
+                   "samples": start + n >= len(requests[t]["prompt_ids"]) + r.get("num_output_tokens", 0)}
+            if (row["new"] or row["resumed"]) and start:
+                if start % bs:
+                    raise ValueError(f"{d}: step {s['step']}: {r['id']}'s hit of {start} isn't whole {bs}-token blocks")
+                runs: list[list[int]] = []
+                for b in range(start // bs):
+                    a = owner.get(key(t, b))
+                    if a is None:
+                        raise ValueError(f"{d}: step {s['step']}: {r['id']} hits block {b}, which no request computed")
+                    if runs and runs[-1][0] == a:
+                        runs[-1][1] += bs
+                    else:
+                        runs.append([a, bs])
+                row["sources"] = runs
+            for b in range(start // bs, (start + n) // bs):
+                owner[key(t, b)] = t
+            seen.add(t)
+            rows[r["id"]] = row
+        if row_order == "batch":
+            if sorted(s.get("batch") or ()) != sorted(rows):
+                raise ValueError(f"{d}: step {s['step']}'s batch order doesn't hold its scheduled requests")
+            ordered = [rows[i] for i in s["batch"]]
+        else:
+            ordered = list(rows.values())
+        steps.append({"t_end_s": round(s.get("t_output", s["t"]) - t0, 6), "rows": ordered})
+    return {"kind": "enc-derived/sched-trace/v2", "source": str(d), "config": config, "requests": requests, "steps": steps}
 
 
 def advice_of(trace: dict, bucket_ms: float = 100.0) -> tuple[Advice, tuple[int, ...]]:
@@ -671,10 +787,17 @@ def main(argv: Iterable[str] | None = None) -> None:
     t.add_argument("--out", required=True, type=Path)
     t.add_argument("--T", type=int, default=600, help="buckets a certifier window")
     t.add_argument("--bucket-ms", type=float, default=100.0)
+    c = t.add_argument_group("a TRACE-CORPUS trace directory (`load_corpus_trace`)")
+    c.add_argument("--block-size", type=int, default=16)
+    c.add_argument("--eos", type=int, default=128001)
+    c.add_argument("--stop-ids", type=int, nargs="*", default=())
+    c.add_argument("--row-order", choices=("batch", "scheduling"), default="batch")
     a = ap.parse_args(list(argv) if argv is not None else None)
     tables = {}
     for p in a.trace:
-        tables[p.name] = bits_table(load_trace(p), T=a.T, bucket_ms=a.bucket_ms)
+        trace = load_corpus_trace(p, block_size=a.block_size, eos_token_id=a.eos, stop_token_ids=a.stop_ids,
+                                  row_order=a.row_order) if p.is_dir() else load_trace(p)
+        tables[p.name] = bits_table(trace, T=a.T, bucket_ms=a.bucket_ms)
         print(f"## {p.name}\n\n{render(tables[p.name])}\n")
     a.out.write_text(json.dumps({"kind": "enc-derived/tables/v2", "fields": FIELDS, "traces": tables}, indent=1))
 
