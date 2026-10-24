@@ -323,8 +323,9 @@ SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`R
 form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
 would keep one of them. A port the file names at known content (`Registered.KNOWN_KEY`) is refused unless its root is
 the root of that content (`Registered.checkKnownAll`). Beside the ports, whether the file names every port of the
-statement (`Registered.completeOf`, `Registered.checkComplete`), and the known content (`Registered.knownOf`), whose
-input ports every statement must read in every bit (`KnownRead.check`). -/
+statement (`Registered.completeOf`, `Registered.checkComplete`), and the rows `KnownRead.check` holds every statement
+to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
+the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`). -/
 def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray))))) := do
   let some f := argOf args flag | return .ok none
@@ -343,7 +344,7 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
           let own ← Registered.ofJson j
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
-          return (own, ← Registered.completeOf j, known)
+          return (own, ← Registered.completeOf j, known ++ KnownRead.fullRows own (← KnownRead.readOf j))
         return (r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
@@ -528,8 +529,9 @@ def recCoinsCmd (args : List String) : IO UInt32 := do
 session's transcript (`RecVStar.innerCommits`), as one `RECTRANSCRIPT` line: each rep's message rounds, and each stream's
 message rounds and its tops' node counts by level; the circuit table's tops and the link points, the record's held to the
 coin server's (`RecVStar.innerLink`); with `--rec-inner`, that the verifier's inner shape covers it
-(`RecVStar.checkCovers`), puts the circuit table's tops at its schedule's (`RecVStar.checkLinkRounds`) and holds the
-record to its schedule (`RecVStar.checkSchedule`), as `verify` checks them; exit 1 when the transcript is refused. -/
+(`RecVStar.checkCovers`), puts the circuit table's tops at its schedule's (`RecVStar.checkLinkRounds`), holds the
+record to its schedule (`RecVStar.checkSchedule`) and reads it in its own format as its JSON readers read it
+(`RecSetup.checkReads`), as `verify` checks them; exit 1 when the transcript is refused. -/
 def recTranscriptOfSession (args : List String) (bound : Except String (Option String × Option RecVStar.StackedShape))
     (inner : Option RecVStar.Inner) : IO (Except String (Option RecVStar.InnerCommits)) := do
   let some dir := argOf args "--rec-inner-session"
@@ -548,7 +550,10 @@ def recLinkOfSession (args : List String) : IO (Except String (Option RecVStar.I
 /-- `rec-record FILE`: the coin server's record read in its own format (`RecRecord.readRecord`, the reader
 `Proofs.Flock.Claims.Recursion.RecRecord` reads back): `RECRECORD` and its rounds (stream, index, tops, level-0 count,
 commit strings, coin count and coins, in the record's hex) as JSON, and whether `recordW` writes the file's bytes up
-to the rounds' end (`writes`). Exit 1 where the file is not in the record's format. -/
+to the rounds' end (`writes`). Under `full`, the record read up to its link points (`RecRecord.readFull`): the inner
+rounds before the last as it shows them (`Record.msgs`: each message and its coins), and whether `recordFullW` writes
+the file's bytes up to the link points (`writes`); `null` where it doesn't read. Exit 1 where the file is not in the
+record's format. -/
 def recRecordCmd (args : List String) : IO UInt32 := do
   let [f] := args | IO.eprintln "usage: flock-verify rec-record FILE"; return 2
   let bs := (← IO.FS.readBinFile f).data.toList
@@ -560,7 +565,11 @@ def recRecordCmd (args : List String) : IO UInt32 := do
     ("k", Lean.toJson r.k), ("tops", arr (arr hex) r.tops), ("level0", Lean.toJson r.level0),
     ("commits", arr hex r.commits), ("n", Lean.toJson r.n), ("coins", arr (hex ∘ RecRecord.coinB) r.coins)]
   let writes := (RecRecord.recordW xs []).isPrefixOf bs
-  IO.println ("RECRECORD " ++ (Lean.Json.mkObj [("rounds", arr id js), ("writes", .bool writes)]).compress)
+  let full := ((RecRecord.readFull bs).map fun r => Lean.Json.mkObj [
+    ("msgs", arr (fun (m, cs) => Lean.Json.mkObj [("msg", hex m), ("coins", arr (hex ∘ RecRecord.coinB) cs)]) r.msgs),
+    ("writes", .bool ((RecRecord.recordFullW r []).isPrefixOf bs))]).getD .null
+  IO.println ("RECRECORD " ++
+    (Lean.Json.mkObj [("rounds", arr id js), ("writes", .bool writes), ("full", full)]).compress)
   return 0
 
 def recTranscriptCmd (args : List String) : IO UInt32 := do
@@ -581,9 +590,14 @@ def recTranscriptCmd (args : List String) : IO UInt32 := do
         if let .error e := RecVStar.checkLinkRounds i lk then IO.eprintln e; return 1
     | .ok none => pure ()
     | .error e => IO.eprintln e; return 1
-    if let (some i, some f) := (inner, argOf args "--rec-inner-transcript") then
-      match Lean.Json.parse (← IO.FS.readFile f) with
-      | .ok j => if let .error e := RecVStar.checkSchedule i j then IO.eprintln e; return 1
+    let session := argOf args "--rec-inner-session"
+    if let (some i, some f, some dir) := (inner, argOf args "--rec-inner-transcript", session) then
+      let tt ← IO.FS.readFile f
+      match Lean.Json.parse tt with
+      | .ok j =>
+        if let .error e := RecVStar.checkSchedule i j then IO.eprintln e; return 1
+        if let .error e := RecSetup.checkReads i tt j (← IO.FS.readFile (dir ++ "/session.json")) ic then
+          IO.eprintln e; return 1
       | .error e => IO.eprintln s!"rec inner transcript: not JSON: {e}"; return 1
     let n := fun (xs : Array (Nat × ByteArray)) => Lean.toJson xs.size
     IO.println s!"RECTRANSCRIPT {(Lean.Json.mkObj [("reps", .arr (ic.reps.map n)),
@@ -715,8 +729,10 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `programDigest`).
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
-work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
-soundness proof does not cover (`ProvedScope.check`, then its tables' `m`, `ProvedScope.sizesOk`, §16.15) is refused, and
+work draw, whatever flags it holds, or a subset draw without `--zk`), and under `--rec-inner` so is a session of more
+than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`). Every session of a
+statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
+`ProvedScope.sizesOk`, §16.15) is refused, and
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a
 session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), and a session
 over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), all after
@@ -829,6 +845,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
+        RecSetup.oneFull recInner r.2
         if zk then r.2.forM Zk.shapeOk
         r.2.forM (RecCoins.check · registered (RecCoins.Source.atC3 recCoins recInner recCommits)
           (RecSetup.c3 recInner recCommits))
@@ -1150,7 +1167,6 @@ def typedExpandCmd (args : List String) : IO UInt32 := do
         ("sha512", Lean.Json.str (hexOf c.sha)), ("class", Lean.Json.str (hexOf c.classSha))])
   IO.println s!"TYPED {line.compress}"
   return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
-
 
 /-- `typed-rows FILE [--tables DIR] --out DIR`: a typed template's rows as the verifier derives them, through
 `deriveChecked` with its tables held (`Typed.rows`), written in the writer's `rows/` formats. -/

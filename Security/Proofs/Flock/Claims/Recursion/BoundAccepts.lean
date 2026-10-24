@@ -153,7 +153,8 @@ theorem vstarAccepts_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recurs
     (runCs_length I.V { b with rd := L.readers } x r).trans hlA.symm
   have hoA := ho
   rw [runVstar_staged H I ivScope { b with rd := L.readers } P ω r hacc] at hoA
-  rcases hRRP x _ _ ws hlA hcA hoA htrue with hag | hcoll
+  rcases hRRP x _ _ ws hlA hcA (stagedAll_run H I.V { b with rd := L.readers } x P ω r hacc) hoA htrue with
+    hag | hcoll
   swap
   · exact Or.inr hcoll
   have hrd : ∀ j, j + 1 < I.V.k (xIOf x) → (L.msgs x ws).getD j [] =
@@ -197,7 +198,7 @@ theorem vstarAccepts_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recurs
         change L.msgAt x s (I.V.k (xIOf x) - 1) = none at hn
         rw [← hil] at hn
         simp [Claims.Recursion.VStarB.LayoutB.held, hn] at hm
-      exact (hrd i (by omega)).trans ((hshs.2 i hi1).symm.trans (hop _ hshs.1 i hi1 m hm).symm)
+      exact (hrd i (by omega)).trans ((hshs.2 i hi1).symm.trans ((hop _ hshs.1 i hi1).1 m hm).symm)
     · obtain ⟨pre, p, post, hl, hp, he⟩ := Claims.Recursion.VStarB.LayoutB.mem_piecesOf hm
       have hne : L.pieceAt x i ≠ [] := by
         rw [hl]

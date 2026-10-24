@@ -18,6 +18,9 @@ negatives.
   (`integrations/vllm/tests/pipeline/served_tp.py`). A member's whole population is one M0 statement, whose shape takes at most
   `2^(35 - k_log)` instances: 2,048 at I=1536 (`k_log` 24) and 8,192 at I=256 (`k_log` 22), so a rank's `SiluMul_v2{I=256}`
   (172,200 routed-expert and 21,525 shared-expert units) is not a member.
+- `a5_row_tables.py` (`a5_tp.sh` with `STANDIN=row-tables`): A5 on a window with row tables, which no TP window of record has
+  yet: `integrations/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
+  tables over two engine steps, as rank 0 of a one-rank step on a local challenger's coins.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job (`research run --on
   vy-glm53-eu2 --cwd source -- bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
@@ -70,6 +73,13 @@ negatives.
   deferred replay does, and runs `a11.py`'s and `a9.py`'s staging on them, writing every word where the committed value
   and the capture's differ to `compare.json`; `a10.py audit` is `a11.py --load-values` on a saved directory, with the
   registration window naming the committed values.
+- `m1_families.py` and `m1_unit.py`: M1's full-step coverage. `m1_families.py` reads a rank's Programs of record from a
+  deferred TP Commit's Build and lists the unit families of the given steps: each Definition the serving rows' partition
+  draws from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
+  ANDs, table reads and assertions from its leaves lowered once (an upper bound on the flat count), against 2^26, and
+  the log2 of M0's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below).
+  `m1_unit.py` builds one family's unit through M0's `UnitStager`, flat or `--structural`, and with `--bin`
+  and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

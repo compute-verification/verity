@@ -1,4 +1,4 @@
-"""`audit.Audit` with every verdict computed by the Lean check, `verity/network-records/v2` (`NetworkCheck.Records`, the
+"""`audit.Audit` with every verdict computed by the Lean check, `verity/network-records/v3` (`NetworkCheck.Records`, the
 `network-records` executable of `verity/core/protocols/network/lean`), which `audit.py` is the reference for.
 
 `Audit` here has `audit.Audit`'s interface and returns its `Verdict`s, so a caller switches by its import line alone.
@@ -97,7 +97,8 @@ def encode(record: Published) -> bytes:
     if isinstance(record, CertifiedRecord):
         c = record.certificate
         kind, body = CERTIFIED, b"".join([
-            record.head.encode(), _u(len(c.key_id), 2, "len(I)"), c.key_id, _text(c.link, "a certificate's link"),
+            record.head.encode(), record.salt, _u(len(c.key_id), 2, "len(I)"), c.key_id,
+            _text(c.link, "a certificate's link"),
             _u(c.direction.code, 1, "direction"), _u(c.window, 8, "window"), c.digest,
             _u(len(c.signature), 4, "len(signature)"), c.signature])
     elif isinstance(record, CommittedRecord):
@@ -123,7 +124,7 @@ def _sync_json(s: ClockSync) -> list[int]:
 def case(egress: Sequence[tuple[str, Sequence[LogicalFrame], Sequence[ClockSync]]], ingress: Sequence[str], windows: int,
          grid: GridParams, ingress_grid: GridParams, sync_set: SyncSet, key: LmsKey, session: bytes,
          records: Sequence[Published]) -> dict:
-    """A `serve` case of `verity/network-records/v2`: the unit's egress links with their frames and syncs, its ingress
+    """A `serve` case of `verity/network-records/v3`: the unit's egress links with their frames and syncs, its ingress
     links, the certifier's key and session, and the records."""
     p = key.params
     params = {"egress": {"grid": _grid_json(grid), "links": [l for l, _, _ in egress]},

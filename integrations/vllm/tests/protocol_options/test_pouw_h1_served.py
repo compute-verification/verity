@@ -198,6 +198,51 @@ def test_b_is_each_linears_weight_once_a_window(steps):
     assert all(first[u] == first[u % per] for u in range(tp.population))
 
 
+def test_each_expert_gemm_registers_its_tables_as_a_dense_linears_call_does():
+    """A MoE layer's expert GEMMs (`engine.int8_experts`), wired as the option wires every recorded layer
+    (`pouw_h1_hooks.wire`: z/y records over T, observe, apply), hand H1 each call's A rows, s_a and `scaled_mm_zy`'s z/y
+    records as a dense linear's call does: each (step, expert, projection) registers ``a/<K>@<c>`` and ``zy@<c>`` whose
+    roots recompute from that expert's own served rows (an idle expert's zero-row call from zeros), and its manifest row
+    carries its served rows m."""
+    from verity_vllm.engine import hooks
+    from verity_vllm.engine import int8_experts as X
+    from verity_vllm.protocol_options import pouw_h1_hooks as PHK
+    g, rng = torch.Generator().manual_seed(3), np.random.default_rng(3)
+    w13, w2 = _codes(rng, 2 * 32, 32).reshape(2, 32, 32), _codes(rng, 2 * 32, 16).reshape(2, 32, 16)
+    s13, s2 = (torch.rand(2, 32, 1, generator=g) * 0.01 + 1e-4 for _ in range(2))
+    sites = X.sites("moe", w13, s13, w2, s2)
+    shapes, modules = [tuple(s.weight.shape) for s in sites], {w: s.name for w, s in enumerate(sites)}
+    run = PH.H1Run("t", SALT, modules, shapes, T, STEPS, key=bytes([7]) * 32,
+                   served=SV.Served(TILE, _unit(TILE), window=W1))
+    steps = [torch.tensor([[0, 1], [1, 0], [0, 1]]), torch.tensor([[1, X.UNROUTED], [1, X.UNROUTED]])]
+    got = {}
+    with hooks.Hooks("t") as h:
+        PHK.wire(run, h, sites, None, T)
+        for s, ids in enumerate(steps):
+            x = (torch.randn(len(ids), 32, generator=g) * 3).bfloat16()
+            X.forward(sites, x, torch.rand(ids.shape, generator=g), ids)
+            for e, pos in enumerate(X.routes(ids, 2)):
+                a = x.index_select(0, pos // ids.shape[1])
+                for w, wt, sw in ((2 * e, w13[e], s13[e]), (2 * e + 1, w2[e], s2[e])):
+                    n, k = wt.shape
+                    xq, s_a, y = (torch.zeros(0, k, dtype=torch.int8), torch.zeros(0), torch.zeros(0, n).bfloat16()) \
+                        if not len(a) else OPS.linear_zy(a, wt, sw.reshape(-1, 1), T)[:3]
+                    got[s * len(sites) + w] = (xq, s_a, xq.to(torch.int32) @ wt.to(torch.int32).T, y)
+                    a = X.silu_and_mul(y)
+    run.close()
+    served, prog = run.served, run.served.program
+    assert not served.refused and [c.m for c in run.calls] == [3, 3, 3, 3, 0, 0, 2, 2]
+    assert [c.summary()["served"] for c in run.calls] == [3, 3, 3, 3, 0, 0, 2, 2]
+    assert [c.module for c in run.calls[:4]] == ["moe.0.gate_up", "moe.0.down", "moe.1.gate_up", "moe.1.down"]
+    for c in run.calls:
+        n, k = run.shapes_[c.layer]
+        a, s_a, z, y = got[c.index]
+        ra, rz = served.registered[HW.table(prog, "a", c.index)], served.registered[HW.table(prog, "zy", c.index)]
+        assert ra.root.hex() == _tree(ra, _a_rows(a, s_a, T, k), run._key, SV.nonce(c.index, "a"))
+        assert rz.root.hex() == _tree(rz, _records(z, y, T, n), run._key, SV.nonce(c.index, "zy"))
+        assert {ra.value: ra.root.hex(), rz.value: rz.root.hex()}.items() <= run.tables[c.index]["registered"].items()
+
+
 def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_another_row():
     """Each call's file names its K's ports, ``a_k<K>_0`` .. ``a_k<K>_31``, ``b_k<K>_0`` .. ``b_k<K>_31`` and ``zy``, each in
     row/v2 with its tree's value, root, rows, width and domain (the window's): the A ports and the record at the call's
@@ -348,6 +393,18 @@ def test_two_windows_of_one_layout_declare_one_program():
     assert decl.fn.bindings["PREFIX"] == SV.PREFIX
     assert decl.fn.bindings["CALLS"] == tuple(run.served.calls) and decl.fn.bindings["LINEARS"] == tuple(run.served.linears)
     assert hashlib.sha512(SV.descriptor(decl)).hexdigest() == run.served.program_digest
+
+
+def test_a_periods_program_and_digest_given_are_not_declared_again(monkeypatch):
+    """A window handed its period's Program and digest declares neither again (at FILL the digest alone takes minutes),
+    and one handed only the Program takes its digest."""
+    decl = SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, unit=_unit())
+    digest = P.program_digest(decl)
+    taken = SV.Served(program=decl).declare(SHAPES, MODULES, T, STEPS)
+    monkeypatch.setattr(SV, "declared", lambda *a, **k: pytest.fail("declared again"))
+    monkeypatch.setattr(SV.P, "program_digest", lambda *a, **k: pytest.fail("digested again"))
+    served = SV.Served(program=decl, program_digest=digest)
+    assert taken == digest == served.declare(SHAPES, MODULES, T, STEPS) and served.calls == list(decl.fn.bindings["CALLS"])
 
 
 def test_a_replayed_windows_values_are_refused_through_their_window_bound_domains():

@@ -342,8 +342,7 @@ class H1Run:
         self._unopened: str | None = None
         self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
         self.draw, self.admission, self.coin_source = draw, admission, coin_source
-        #: the session the auditor's gate reserved for the window (None for in-process coins), which round 0's input-ids
-        #: table's domain binds (`pouw_h1_served.Served.ids_tree`)
+        #: the gate's reserved session (None for in-process coins), bound by round 0's input-ids table (`Served.ids_tree`)
         self.session = session
         #: the root of round 0's input-ids table, inside round 0's request root (`open_window`)
         self._ids0: bytes | None = None
@@ -373,7 +372,9 @@ class H1Run:
                                         "u_step": self.u_step, "units": self.steps * self.u_step, "calls": 0,
                                         "rounds": self.round_log, "admission": self.admission}
         self.details: dict[str, Any] = {"scheme": SCHEME, "calls": 0, "refused": self.refused,
-                                        "uncovered": "attention (QK^T and P.V in Int8LutAttentionRow_v1) and lm_head",
+                                        "uncovered": "attention (QK^T and P.V in Int8LutAttentionRow_v1), lm_head and "
+                                                     "a MoE layer's router (bf16), and the linears the checkpoint's "
+                                                     "modules_to_not_convert keeps bf16",
                                         "z": "the call's z/y records from verity_int8::scaled_mm_zy, if its arm hands them over"}
 
     def listen(self, fn: Listener) -> None:
@@ -431,9 +432,13 @@ class H1Run:
         if self.prover is not None and m:
             PV.keep_call(self.prover, call.index, av, sv, records)
 
+    def _index(self, s: int, w: int) -> int:
+        """Call (s, w)'s index: the calls before it here (s·L + w in a static window; a rank's, `pouw_h1_ranks`)."""
+        return len(self.calls)
+
     def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None) -> Call:
         n, k = self.shapes_[w]
-        call = Call(len(self.calls), s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0, k, n,
+        call = Call(self._index(s, w), s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0, k, n,
                     s * self.u_step + self.offs[w], self.rows)
         self.calls.append(call)
         if self.commit:
@@ -500,11 +505,8 @@ class H1Run:
             owners += [index] * int(rows)
         self.owners[r] = owners
         if r == 0:
-            ids = None
-            if self.served is not None:
-                prompts = {q: self.requests[i].prompt for q, i in self._ids.items()}
-                ids = self.served.open_ids(self, RQ.first_ids(prompts, order))
-            self.open_window(ids)
+            self.open_window(None if self.served is None else self.served.open_ids(
+                self, RQ.first_ids({q: self.requests[i].prompt for q, i in self._ids.items()}, order)))
         return out
 
     def _close_rounds(self, through: int) -> None:
@@ -732,17 +734,11 @@ class H1Run:
         bits = self.credit_bits()
         return [{**row, CREDIT: bits[row["index"]]} for row in self._rows(self.calls)]
 
-    def commit_record(self) -> str | None:
-        """With the Commit in the engine (``served``'s tap), its record in hex (`pouw_h1_commit.CommitTap.hex`)."""
-        if self.served is None or self.served.tap is None:
-            return None
-        return self.served.tap.hex(self.served)
-
     def calls_root(self) -> bytes:
         """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound), and with
         ``served`` its registered trees' entries and the Commit's record (`calls_root`)."""
         return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest(),
-                          self.commit_record())
+                          CT.record_of(self))
 
     def finish(self) -> None:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
@@ -750,7 +746,7 @@ class H1Run:
         self.close()
         if not self.commit or self._unopened is not None:
             return
-        commit = self.commit_record()
+        commit = CT.record_of(self)
         if commit is not None:
             self.commits["commit"] = commit
         calls_root = self.calls_root()

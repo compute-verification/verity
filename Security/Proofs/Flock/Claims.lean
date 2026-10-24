@@ -60,6 +60,9 @@ import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
 import Proofs.Flock.Claims.Recursion.KSLin2
 import Proofs.Flock.Claims.Recursion.BitsLin2
 import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
+import Proofs.Flock.Claims.Recursion.SetupCalls
+import Proofs.Flock.Claims.Recursion.InnerLogFree
+import Proofs.Flock.Claims.Recursion.WithSetup
 import Proofs.Flock.Claims.Recursion.KSLin2Deployed
 import Proofs.Flock.Claims.Recursion.KSLin2Plain
 import Proofs.Flock.Claims.Recursion.LamDeployed
@@ -101,12 +104,15 @@ import Proofs.Flock.Claims.Recursion.InnerForm
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.LayoutBCap
 import Proofs.Flock.Claims.Recursion.LayoutBTops
+import Proofs.Flock.Claims.Recursion.SetupTagged
 import Proofs.Flock.Claims.Recursion.RowsCover
 import Proofs.Flock.Claims.Recursion.CapPorts
 import Proofs.Flock.Claims.Recursion.TopsStaged
 import Proofs.Flock.Claims.Recursion.FinOpen
 import Proofs.Flock.Claims.Recursion.RecRecord
 import Proofs.Flock.Claims.Recursion.RecOpen
+import Proofs.Flock.Claims.Recursion.SlotsCommit
+import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy

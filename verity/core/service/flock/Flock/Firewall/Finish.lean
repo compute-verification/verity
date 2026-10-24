@@ -157,6 +157,140 @@ def switchVec (g : Array F128) (c : Claim) : Array F128 :=
   let eY := eqTable (c.x.extract 1 c.x.size)
   (Array.range 128).map fun v => sumF eY.size fun y => if (g[y]!).bit v then eY[y]! else 0
 
+namespace Fast
+
+/-- `Link.parRange` specialized at each call (`parRangeS_eq`): each task's loop runs `f` inline, so no entry calls a
+closure or touches the reference count of anything the tasks share. -/
+@[specialize] def parRangeS {α : Type} (f : Nat → α) (a b : Nat) : Array α :=
+  ((Array.range a).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
+    (fun acc t => acc ++ t.get) #[]
+
+theorem parRangeS_eq {α : Type} (f : Nat → α) (a b : Nat) : parRangeS f a b = (Array.range (a * b)).map f :=
+  Link.parRange_eq f a b
+
+/-- `(Array.range n).map f` in tasks of `2^12` entries. -/
+@[specialize] def parGen (f : Nat → F128) (n : Nat) : Array F128 :=
+  let a := n / 4096
+  parRangeS f a 4096 ++ (Array.range (n - a * 4096)).map fun j => f (a * 4096 + j)
+
+theorem parGen_eq (f : Nat → F128) (n : Nat) : parGen f n = (Array.range n).map f := by
+  conv => rhs; rw [← Nat.add_sub_cancel' (Nat.div_mul_le_self n 4096)]
+  rw [Array.range_add, Array.map_append, Array.map_map, parGen, parRangeS_eq]
+  rfl
+
+theorem range_map_getElem! (f : F128 → F128) (t : Array F128) :
+    (Array.range t.size).map (fun i => f t[i]!) = t.map f := by
+  apply Array.ext
+  · simp
+  · intro i h1 _
+    simp only [Array.getElem_map, Array.getElem_range]
+    rw [getElem!_eq t (by simpa using h1)]
+
+/-- `t.map f` in tasks of `2^12` entries. -/
+@[specialize] def parMap (f : F128 → F128) (t : Array F128) : Array F128 := parGen (fun i => f t[i]!) t.size
+
+theorem parMap_eq (f : F128 → F128) (t : Array F128) : parMap f t = t.map f := by
+  rw [parMap, parGen_eq, range_map_getElem!]
+
+/-- `parGen f` with each task building its own `ctx ()` first, which `f` reads. What a task builds is its own, so
+reading it touches no reference count other tasks touch: entries of one table shared by every task are counted
+atomically by all of them at once. -/
+@[specialize] def parGenWith {β : Type} (ctx : Unit → β) (f : β → Nat → F128) (n : Nat) : Array F128 :=
+  let a := n / 4096
+  ((Array.range a).map fun i => Task.spawn fun _ =>
+      let c := ctx (); (Array.range 4096).map fun j => f c (i * 4096 + j)).foldl (fun acc t => acc ++ t.get) #[] ++
+    (let c := ctx (); (Array.range (n - a * 4096)).map fun j => f c (a * 4096 + j))
+
+theorem parGenWith_eq {β : Type} (ctx : Unit → β) (f : β → Nat → F128) (n : Nat) :
+    parGenWith ctx f n = parGen (f (ctx ())) n := rfl
+
+/-- `mulMap` in tasks, each with its own table of `r`, expanded from one `nibTable r` they share. -/
+def mulMapPar (t : Array F128) (r : F128) : Array F128 :=
+  if t.size < 2048 then parMap (· * r) t else
+    let nb := F128.nibTable r
+    parGenWith (fun _ => F128.expandNib nb) (fun tb i => F128.mulBy tb t[i]!) t.size
+
+theorem mulMapPar_eq (t : Array F128) (r : F128) : mulMapPar t r = t.map (· * r) := by
+  unfold mulMapPar
+  split
+  · exact parMap_eq _ t
+  · rw [parGenWith_eq]
+    show parMap (F128.mulBy (F128.expandNib (F128.nibTable r))) t = _
+    rw [parMap_eq, F128.expandNib_nibTable]
+    exact Array.map_congr_left fun v _ => F128.mulBy_mulTable r v
+
+/-- `eqTable` with each step in tasks: bit 1's half by `mulMapPar`, then bit 0's as bit 1's plus the table
+(`F128.mul_add_one`), as `eqStepFast` computes it. Not a `@[csimp]` of `eqTable`, which the verifier's compiled path
+reaches (`verifier` in `lean-audit.json`): only the fast paths below call it. -/
+def eqTablePar (r : Array F128) : Array F128 :=
+  r.foldl (fun t rj => let hi := mulMapPar t rj; parGen (fun i => hi[i]! + t[i]!) t.size ++ hi) #[1]
+
+theorem eqTablePar_eq (r : Array F128) : eqTablePar r = eqTable r := by
+  unfold eqTablePar eqTable
+  congr
+  funext t rj
+  rw [mulMapPar_eq]
+  dsimp only
+  rw [parGen_eq, eqStep, ← range_map_getElem! (· * (rj + 1))]
+  congr 1
+  apply Array.map_congr_left
+  intro i hi
+  have hi := Array.mem_range.1 hi
+  rw [getElem!_eq _ (by simpa using hi), Array.getElem_map, F128.mul_add_one, getElem!_eq t hi]
+
+/-- `switchVec` as compiled code computes it: byte `j`'s buckets of the table (`byteBuckets`), one task to a byte, then
+`s[8j + i] = Σ_{b < 256, bit_i(b)} buckets_j[b]`. -/
+def switchVecFast (g : Array F128) (c : Claim) : Array F128 :=
+  let eY := eqTablePar (c.x.extract 1 c.x.size)
+  let bs := ((Array.range 16).map fun j => Task.spawn fun _ => byteBuckets g eY j).map Task.get
+  (Array.range 128).map fun v => sumF 256 fun b => if b.testBit (v % 8) then (bs[v / 8]!)[b]! else 0
+
+theorem switchVec_eq_fast (g : Array F128) (c : Claim) : switchVec g c = switchVecFast g c := by
+  unfold switchVec switchVecFast
+  rw [eqTablePar_eq]
+  apply Array.map_congr_left
+  intro v hv
+  have hv := Array.mem_range.1 hv
+  rw [Array.map_map, getElem!_range_map _ (show v / 8 < 16 by omega)]
+  have h := (byteBuckets_go g (eqTable (c.x.extract 1 c.x.size)) (v / 8) (by omega) (show v % 8 < 8 by omega)
+    (eqTable (c.x.extract 1 c.x.size)).size).2
+  rw [show 8 * (v / 8) + v % 8 = v by omega] at h
+  exact h.symm
+
+/-- `basisVals` as compiled code computes it: each claim's `γ_k·Φ_k(eq(z_k, y))` from the byte tables of
+`γ_k·eq(rpp_k, ·)` (`mul_sumF`, `byteTable_sum`), in tasks of `2^12` points. -/
+def basisValsFast (sws : Array Switched) (l : Nat) : Array F128 :=
+  let tabs := sws.map fun sw => (eqTablePar sw.z, byteTable ((eqTable sw.rpp).map (sw.gamma * ·)))
+  let k := min l 12
+  parRangeS (fun y => tabs.foldl (fun acc (ez, tb) =>
+      let v := ez[y]!
+      acc + sumF 16 fun j => tb[256 * j + v.byte j]!) 0) (2 ^ (l - k)) (2 ^ k)
+
+theorem basisVals_eq_fast (sws : Array Switched) (l : Nat) : basisVals sws l = basisValsFast sws l := by
+  unfold basisVals basisValsFast
+  rw [parRangeS_eq, ← Nat.pow_add, Nat.sub_add_cancel (Nat.min_le_left _ _)]
+  apply Array.map_congr_left
+  intro y _
+  simp only [Array.foldl_map, eqTablePar_eq]
+  congr 1
+  funext acc sw
+  rw [← byteTable_sum, mul_sumF]
+  refine congrArg (acc + ·) (sumF_congr fun u _ => ?_)
+  rw [getElem!_map_mul]
+  split
+  · rfl
+  · exact F128.mul_zero _
+
+end Fast
+
+/-- Compiled code runs `switchVecFast` and `basisValsFast`; the kernel and every proof see `switchVec` and `basisVals`.
+`@[csimp]` rewrites only code compiled after it, so it stays above `repOpening`. -/
+@[csimp] theorem switchVec_eq_switchVecFast : @switchVec = @Fast.switchVecFast :=
+  funext fun g => funext fun c => Fast.switchVec_eq_fast g c
+
+@[csimp] theorem basisVals_eq_basisValsFast : @basisVals = @Fast.basisValsFast :=
+  funext fun sws => funext fun l => Fast.basisVals_eq_fast sws l
+
 /-- `c + Σ a_i h_i` at the pads `h`, over `min |a| |h|` terms (`zk_veil::Lin::eval`). -/
 def linAt (l : Zk.Lin) (h : Array F128) : F128 :=
   (Array.range (min l.a.size h.size)).foldl (fun acc i => acc + l.a[i]! * h[i]!) l.c
@@ -430,6 +564,65 @@ def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : Rep
       cons
   let _ ← prog.run (Transcript.init #[] dom)
 
+/-- **A rep's inner proof, live, kept**: `innerLive`, returning `repFw`'s proof where no constraint fails on the pads
+(`innerLiveK_discard`): `repFw` on `q` with every coin this took, which is the proof `proofFile` computes on a `rep`
+request with those inputs and coins (`Kept`). -/
+def innerLiveK (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) : LiveM (Option Zk.ZkProof) := do
+  let pads := padsOf q.draws
+  let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) pads (saltAt q.draws.salts) : V InnerCommit) : LiveM InnerCommit)
+  let hs : Hashes LiveM := Hashes.ofSha512 Sha512.hash
+  let commit : Level → Array F128 → (Nat → ByteArray) → LiveM Commit := fun lv g salt => pure (commitFw lv g salt)
+  let salt : Nat → Nat → ByteArray := fun l => saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)
+  let prog : TMW LiveM (Option Zk.ZkProof) := do
+    let (p, zl, cons) ← repCons (liveAsks ch q.coins false) commit t.st t.sch t.tPad rep dom t.g t.cm0 (claimsOf q.xs)
+      pads ic q.vals t.extra t.lanePad salt
+    let k := (← getThe (Array (Array F128))).size
+    if k != q.coins.size then throwThe String s!"finish: the rep's PIOP and opening took {k} of its {q.coins.size} rounds of coins"
+    let b := consBytes cons
+    ch.write ((s!"cons {b.size}\n").toUTF8 ++ b)
+    ch.flush
+    let inner ← innerP (liveAsks ch q.coins true) hs (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) pads ic p.zerocheck.finalC
+      cons
+    return if (failingOn cons pads.h).isEmpty then some { proof := p, level0 := zl, inner } else none
+  return (← prog.run (Transcript.init #[] dom)).1
+
+instance instLawfulEST {ε σ : Type} : LawfulMonad (EST ε σ) := LawfulMonad.mk' (EST ε σ)
+  (id_map := fun x => by funext s; show EST.bind x (fun a => EST.pure (id a)) s = x s; unfold EST.bind EST.pure; cases x s <;> rfl)
+  (pure_bind := fun _ _ => rfl)
+  (bind_assoc := fun x f g => by
+    funext s; show EST.bind (EST.bind x f) g s = EST.bind x (fun a => EST.bind (f a) g) s
+    unfold EST.bind; cases x s <;> rfl)
+
+instance instLawfulEIO {ε : Type} : LawfulMonad (EIO ε) := inferInstanceAs (LawfulMonad (EST ε IO.RealWorld))
+
+/-- `innerLiveK` is `innerLive` with its result kept: the same rounds, the same bytes to the firewall, the same coins. -/
+theorem innerLiveK_discard (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) :
+    (do let _ ← innerLiveK ch t rep dom q) = innerLive ch t rep dom q := by
+  unfold innerLiveK innerLive
+  simp only [StateT.run_bind, map_bind, bind_pure_comp]
+  congr 1; funext ic; congr 1; funext a; congr 1; funext b
+  have h : ∀ {α} (X : TMW LiveM α) s,
+      (fun _ => ()) <$> Prod.fst <$> X.run s = (fun _ => ()) <$> ((fun _ => ()) <$> X).run s := by
+    intros; simp only [StateT.run_map, Functor.map_map]
+  rw [h]; congr 2
+  split <;> simp only [map_bind, Functor.map_map]
+
+/-- **What a rep's `inner` request leaves for its `rep` request**: table `i`'s rep `r`, its request `q`, every round's
+coins it took, and `repFw`'s proof on them (`innerLiveK`). -/
+structure Kept where
+  i : Nat
+  r : Nat
+  q : RepIn
+  coins : Array (Array F128)
+  proof : Zk.ZkProof
+
+/-- Whether `k` is `repFw`'s proof on table `i`'s rep `r` at the request `q`: everything of `q` that `proofFile` reads is
+`k`'s, and `q`'s coins are every coin `k`'s rep took. -/
+def Kept.answers (k : Kept) (i r : Nat) (q : RepIn) : Bool :=
+  k.i == i && k.r == r && q.coins == k.coins && q.vals == k.q.vals && q.xs == k.q.xs && q.hiSalts == k.q.hiSalts &&
+    q.draws.h == k.q.draws.h && q.draws.mu == k.q.draws.mu && q.draws.padH == k.q.draws.padH &&
+    q.draws.padMu == k.q.draws.padMu && q.draws.tauSalt == k.q.draws.tauSalt && q.draws.salts == k.q.draws.salts
+
 /-- **A rep's opening request**, every byte little-endian: the extra claims (a count, then each as a count and its words)
 and the algebraic phase's coins (a round count, then each round as a count and its words), as `parseRep` reads them;
 nothing after. -/
@@ -461,7 +654,8 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
 * `inner I R LEN`: rep `R`'s request (`parseRep`) with the coins of its PIOP and opening: its constraints, then its inner
   proof's rounds, live (`innerLive`); answered `ok 0` after the last. Its proof file is then `rep`'s on every round's coins.
 * `rep I R LEN`: rep `R`'s request (`parseRep`) on table `I`, after its salts; the answer is its proof file
-  (`proofFile`).
+  (`proofFile`), encoded from the proof the rep's last `inner` request computed where that request's inputs and coins
+  are this one's (`Kept.answers`). Another rep's requests may come between the two.
 Anything else, or a request it refuses, is answered `err WHY` and ends it, with exit code `1`. -/
 def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) (setups : Array Setup)
     (level0Of : ByteArray → IO (Option Level0.Level0))
@@ -476,6 +670,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
     ch.flush
   let mut tabs : Array (Option Tab) := Array.replicate setups.size none
   let mut hi : Array (Array (Option (Array ByteArray))) := Array.replicate setups.size #[none, none]
+  let mut kept : Array Kept := #[]
   repeat
     let line := (← ch.getLine).replace "\n" ""
     if line.isEmpty then break
@@ -492,6 +687,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       | .ok t =>
         tabs := tabs.set! i (some t)
         hi := hi.set! i #[none, none]
+        kept := kept.filter (·.i != i)
         answer (flat t.cm0.cap)
       | .error e => return (← refuse e)
     | ["salts", i, r, len] =>
@@ -511,7 +707,11 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       let some name := spec.tables[i]? | return (← refuse s!"table {i} of the session's {spec.tables.size}")
       if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
       let some s := (hi[i]!)[r]! | return (← refuse s!"table {i} rep {r} before its salts for levels ≥ 1")
-      match parseRep t s b >>= proofFile t r (spec.domain name r).toUTF8 with
+      let file : V ByteArray := parseRep t s b >>= fun q => match kept.find? (·.answers i r q) with
+        | some k => pure (encZk (shapeZk t.st t.sch (claimsOf q.xs).size) k.proof)
+        | none => proofFile t r (spec.domain name r).toUTF8 q
+      kept := kept.filter fun k => !(k.i == i && k.r == r)
+      match file with
       | .ok p => answer p
       | .error e => return (← refuse e)
     | ["open", i, r, len] | ["inner", i, r, len] =>
@@ -522,14 +722,20 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
       let some s := (hi[i]!)[r]! | return (← refuse s!"table {i} rep {r} before its salts for levels ≥ 1")
       let dom := (spec.domain name r).toUTF8
-      let run : V (LiveM Unit) := if line.startsWith "open " then
-          (parseOpen b).map fun (xs, coins) => openLive ch t r dom xs s coins
-        else (parseRep t s b).map (innerLive ch t r dom)
+      kept := kept.filter fun k => !(k.i == i && k.r == r)
+      let run : V (LiveM (Option Kept)) := if line.startsWith "open " then
+          (parseOpen b).map fun (xs, coins) => do openLive ch t r dom xs s coins; return none
+        else (parseRep t s b).map fun q => do
+          let z ← innerLiveK ch t r dom q
+          let coins ← getThe (Array (Array F128))
+          return z.map fun proof => ({ i, r, q, coins, proof } : Kept)
       match run with
       | .error e => return (← refuse e)
       | .ok m =>
         match ← (m.run' #[]).run with
-        | .ok () => answer ByteArray.empty
+        | .ok k =>
+          kept := kept ++ k.toArray
+          answer ByteArray.empty
         | .error e => return (← refuse e)
     | _ => return (← refuse s!"a request `{line}`")
   return 0

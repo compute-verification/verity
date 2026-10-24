@@ -3998,8 +3998,11 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
     }
 }
 
+/// `--tmpl-unit F`: a templated statement's unit rows at their positions (`flock-tmpl-unit`, `tests/lean/TmplUnit.lean`).
 fn load_composite(path: &str) -> Composite {
-    Composite::parse(&std::fs::read_to_string(path).expect("circuit"), Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e))
+    let unit = Some(arg("--tmpl-unit", "")).filter(|p| !p.is_empty()).map(|p| std::fs::read_to_string(p).expect("--tmpl-unit"));
+    Composite::parse_with(&std::fs::read_to_string(path).expect("circuit"), Some(&arg("--tables", "tables")), unit.as_deref())
+        .unwrap_or_else(|e| refuse(e))
 }
 
 /// A row's `b || c` under its salt (the commitment scheme's own function: `b = x XOR M(key) y`, `c = SHA-512(salt_prefix || y)`).

@@ -1,4 +1,69 @@
 {
+ "glm5": {
+  "c4/2048": {
+   "bos_lead": false,
+   "sha256": "0decf5773c7b4659c18b8e14fe09b97c810ee4ee01d9a8af8eb4c571c85929d3",
+   "stream_tokens": 1316764,
+   "windows": [
+    0,
+    15
+   ]
+  },
+  "c4/2048/calibration": {
+   "bos_lead": false,
+   "sha256": "af6fc5cfff038bc19c876527e099eb322bf5cf37d23845e482dfe1288991aa4b",
+   "stream_tokens": 1316764,
+   "windows": [
+    100,
+    115
+   ]
+  },
+  "c4/32768": {
+   "bos_lead": false,
+   "sha256": "2d7fbbe6aae28951b6665fe149a6aa841dda55c525c635f055defa83fcead466",
+   "stream_tokens": 1316764,
+   "windows": [
+    0,
+    3
+   ]
+  },
+  "c4/8192": {
+   "bos_lead": false,
+   "sha256": "2d7fbbe6aae28951b6665fe149a6aa841dda55c525c635f055defa83fcead466",
+   "stream_tokens": 1316764,
+   "windows": [
+    0,
+    15
+   ]
+  },
+  "wikitext2/2048": {
+   "bos_lead": false,
+   "sha256": "8e3357def0ac489c7353b3e6c02463b2acf4943a89a40b3598b38e47dede9008",
+   "stream_tokens": 289709,
+   "windows": [
+    0,
+    15
+   ]
+  },
+  "wikitext2/32768": {
+   "bos_lead": false,
+   "sha256": "6c6d7164e49ba76f930ad51b3a9bc220efb7612999b742a8f38594f676c13957",
+   "stream_tokens": 289709,
+   "windows": [
+    0,
+    3
+   ]
+  },
+  "wikitext2/8192": {
+   "bos_lead": false,
+   "sha256": "6c6d7164e49ba76f930ad51b3a9bc220efb7612999b742a8f38594f676c13957",
+   "stream_tokens": 289709,
+   "windows": [
+    0,
+    15
+   ]
+  }
+ },
  "llama3": {
   "c4/2048": {
    "bos_lead": true,

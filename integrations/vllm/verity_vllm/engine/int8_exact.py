@@ -131,11 +131,12 @@ def scaled_mm_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torc
 
 
 def applied_record(model: Any) -> dict[str, dict[str, Any]]:
-    """What every linear layer ran, by module name: its quant method's class, int8 arm (None for a method without one) and the
-    calls it served (None for a method that does not count them).  Structural, as `kernel_readback.int8_exact_of`."""
+    """What every linear layer and fused-MoE layer ran, by module name: its quant method's class, int8 arm (None for a method
+    without one) and the calls it served (None for a method that does not count them).  Structural, as
+    `kernel_readback.int8_exact_of`."""
     out = {}
     for name, m in model.named_modules():
         qm = getattr(m, "quant_method", None)
-        if qm is not None and any(c.__name__ == "LinearMethodBase" for c in type(qm).__mro__):
+        if qm is not None and any(c.__name__ in ("LinearMethodBase", "FusedMoEMethodBase") for c in type(qm).__mro__):
             out[name] = {"method": type(qm).__name__, "arm": getattr(qm, "int8_arm", None), "calls": getattr(qm, "calls", None)}
     return out

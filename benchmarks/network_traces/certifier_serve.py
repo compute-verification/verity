@@ -23,22 +23,36 @@ namespace has no other interface. On real hosts it is only the route of the meas
 - the reveal deadline covers the whole run and a margin (`REVEAL_MARGIN_S`), where a deployment's covers one PoUW
   window; and the keys are LMS at H = `HEIGHT` (2^10 one-time keys), not the deployed H = 20.
 
-**The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends (a
-fixed prompt, `max_tokens` with `ignore_eos`, temperature 0), straight from the host: each response's canonical events, as
-the shim cuts them, and its seconds to the last. The responses must all be F events long. D, the latency budget in
-buckets, is four times the slowest response plus half a second (`--delta-buckets` sets it), as `lab_run.py` sets it.
-The plan sends `--requests` requests one at a time, D + 1 buckets apart in the middle of a bucket, each padded to the
-same number of link frames, so the responses never overlap and the canonical order is request-major. It is calibrated
-(`calibration.calibrate`) on the model of that run: every frame of a response ready D buckets after its request's
-release. Every window declares the calibration's envelope, refused when its δ is below D. Every window ends idle: no
-request is released in a window's first bucket (the salt frame's), and one whose response the Program's grid wouldn't
-release by the window's last bucket goes to the next window's second, so each window's egress counts follow from its
-own requests, as N2's served profile (NET-54) requires. The run lasts one idle window past the last request's.
+**The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends,
+straight from the host, `--in-flight` requests at a time after one uncounted round: `/v1/completions`, streamed, a
+prompt of exactly `--prompt-tokens` tokens (`PROMPT` padded with `FILLER` in the endpoint's own tokenizer, `/tokenize`,
+and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), temperature 0. F, the
+frames of a response, is that token count, not the endpoint's events: vLLM v1 merges a request's tokens that its API
+server hasn't read yet into one chunk, so with several in flight a response's last two tokens sometimes share one
+event and sometimes don't, though the tokens are the same. An event is a chunk of at least one token, so a response
+is at most F canonical events, and the shim pads one that ends short with empty canonical events (`active.event(b"")`,
+what a chunk of no text gives) up to F, after its last (`pad_to`, `active_replay.LiveServer`). Each probed response's
+raw count, which must be 1 … F, and its seconds to the last are kept; a response of more than F (a chunk of more than
+`active.TOKEN_BYTES` bytes of text) isn't cut, and N2's counts refuse its window. D, the latency budget in buckets, is
+four times the slowest response plus half a second, as `lab_run.py` sets it, or, when a group's responses that late
+don't fit in the window they're sent in (below), the most that does, down to twice the slowest plus half a second
+(`DoesntFit` below that); `--delta-buckets` sets it. Window 0's first group is released in its bucket 2, a bucket
+later than any other window's, and a D whose group fits only from bucket 1 doesn't fit: it would leave window 0
+without a request, and `late` without a window-0 session to hold. The plan sends `--requests` requests `--in-flight`
+at a time, the groups D + 1 buckets apart in the middle of a bucket, each request padded to the same number of link
+frames. The endpoint serves a group side by side, and the shim writes the group's responses one after another in the
+order their requests reached it (`request_major`), so the canonical order is request-major and the egress counts don't
+depend on how the endpoint interleaves them. The plan is calibrated (`calibration.calibrate`) on the model of that
+run: every frame of a response ready D buckets after its request's release. Every window declares the calibration's
+envelope, refused when its δ is below D. Every window ends idle: no request is released in a window's first bucket
+(the salt frame's), and a group whose responses the Program's grid wouldn't release by the window's last bucket goes
+to the next window's second, so each window's egress counts follow from its own requests, as N2's served profile
+(NET-54) requires. The run lasts one idle window past the last request's.
 
 **N2's profile.** N2 (`service.LinkWindows`) gives no verdict on a link whose egress end has no occupancy profile fixed
 before the run. The plan's `occupancy` is the planned one: the Program's egress counts (`schedule.expected_grids`) under
-the declared syncs, on the model's releases and F frames per response, which the rehearsal's own client and fixed-length
-responses fix before the run. The ingress end has none (the Program reads requests from outside). A served deployment
+the declared syncs, on the model's releases and F frames per response, which the rehearsal's own client and the shim's
+padding fix before the run. The ingress end has none (the Program reads requests from outside). A served deployment
 with outside traffic has no such schedule: it needs the served profile (NET-54), whose counts follow from the ingress
 head's. As NET-54 stands (7a7197b880) that profile counts every ingress frame as a request's, the certifier's own salt
 frame too, so it refuses every window of a run with the salt on.
@@ -46,12 +60,13 @@ frame too, so it refuses every window of a run with the salt on.
 **Subcommands**, all from the repository root or with `benchmarks/network_traces` on the path:
 
     python certifier_serve.py keys --dir KEYDIR [--height 10]
-    python certifier_serve.py plan --upstream URL --model NAME --out DIR [--requests 8] [--tokens 16] [--probes 3]
+    python certifier_serve.py plan --upstream URL --out DIR [--model NAME] [--requests 400] [--in-flight 4]
+        [--tokens 64] [--prompt-tokens 128] [--probes 8] [--delta-buckets D]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
         --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10] [--tamper late|extra]
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
     python certifier_serve.py check --run DIR --challenger KEYDIR [--expect accepted|refused]
-    python certifier_serve.py rehearse (--upstream URL | --vllm MODEL) --model NAME --out DIR
+    python certifier_serve.py rehearse (--upstream URL | --vllm MODEL) --out DIR [plan's options] [--strategies S,...]
 
 - `keys` makes an LMS key (`seed`, 0600, `public`, its tree, and its leaf state `state.json`), or loads one, and writes
   `public.json`, the public key a deployment record carries. The certifier's key and the challenger's are each one.
@@ -62,8 +77,8 @@ frame too, so it refuses every window of a run with the salt on.
   writes the logs and prints `{"served": ...}`, then serves reveals until every window's salt is revealed or the last
   window's reveal deadline has passed. `--tamper` makes the shim an adversary of `active_replay.adversary_plan`: `late`
   holds one session of window 0 past every sync, which the certifier's own audit faults; `extra` writes one event more
-  than the endpoint sent at the end of the first session's response, on time and logged, so the records are complete
-  and only N2's counts against the profile refuse it. The key's directory may not be inside `--out`.
+  at the end of the first session's response, after its padding (F + 1 in all), on time and logged, so the records are
+  complete and only N2's counts against the profile refuse it. The key's directory may not be inside `--out`.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`).
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
@@ -77,11 +92,12 @@ frame too, so it refuses every window of a run with the salt on.
   starts vLLM on this host's GPU first (`active_replay.start_vllm`).
 
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
-(`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head and certificate,
-or the link-window the signer refused), `proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the
-client's `peer.json`, `serve.json` and `check.json`. Records, certificates and the shim's events are witness, kept behind
-the firewall in a deployment; a rehearsal publishes them so that its check can be replayed. No salt is written, only
-its SHA-512 (`active_replay.fingerprint`).
+(`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
+certifier's salt for it and certificate, or the link-window the signer refused), `proxy.json.gz`, the shim's
+`server.json` and `server.events.gz`, the client's `peer.json`, `serve.json` and `check.json`. Records, certificates,
+the certifier's salts and the shim's events are witness, kept behind the firewall in a deployment; a rehearsal
+publishes them so that its check can be replayed. No PoUW salt is written, only its SHA-512
+(`active_replay.fingerprint`).
 """
 
 from __future__ import annotations
@@ -100,6 +116,7 @@ import tempfile
 import time
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
@@ -121,6 +138,7 @@ BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
 EGRESS, INGRESS, N2_LINK = "responses", "requests", "served"
 HEIGHT = 10
 PROMPT = "Count from one to one hundred in words, separated by commas:"
+FILLER = " one, two, three, four, five, six, seven, eight, nine, ten,"
 REVEAL_MARGIN_S = 300.0
 PROOF_DEADLINE_S = 600.0
 DELTA = 2.0 ** -40
@@ -180,7 +198,8 @@ def read_public(doc: dict) -> LmsKey:
     return LmsKey(lms.Params(*doc["params"]), bytes.fromhex(doc["public"]))
 
 
-# Certified records on disk: one JSON line each, the head's and the certificate's fields, bytes in hex.
+# Certified records on disk: one JSON line each, the head's and the certificate's fields and the certifier's salt for
+# the head (`salt_c`), bytes in hex.
 
 _BYTES = {"parameters", "root", "key_id", "digest", "signature"}
 
@@ -206,12 +225,13 @@ def _dec(field: str, value):
 
 
 def certified_json(record: CertifiedRecord) -> dict:
-    return {part: {f: _enc(getattr(obj, f)) for f in type(obj).__slots__}
-            for part, obj in (("head", record.head), ("certificate", record.certificate))}
+    return {"salt_c": record.salt.hex(),
+            **{part: {f: _enc(getattr(obj, f)) for f in type(obj).__slots__}
+               for part, obj in (("head", record.head), ("certificate", record.certificate))}}
 
 
 def certified_from_json(doc: dict) -> CertifiedRecord:
-    return CertifiedRecord(RecordHead(**{f: _dec(f, v) for f, v in doc["head"].items()}),
+    return CertifiedRecord(RecordHead(**{f: _dec(f, v) for f, v in doc["head"].items()}), bytes.fromhex(doc["salt_c"]),
                            Certificate(**{f: _dec(f, v) for f, v in doc["certificate"].items()}))
 
 
@@ -252,10 +272,37 @@ class CertifyingPublisher(ar.Publisher):
 
 # The served plan.
 
-def request_body(model: str, tokens: int, prompt: str = PROMPT) -> dict:
-    """The request every session of a served plan sends: `tokens` tokens, never stopped early, greedy."""
-    return {"model": model, "prompt": prompt, "max_tokens": tokens, "stream": True, "ignore_eos": True,
-            "temperature": 0}
+def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT) -> dict:
+    """The request every session of a served plan sends: exactly `tokens` tokens (`min_tokens` and `max_tokens`, never
+    stopped early), greedy, streamed."""
+    return {"model": model, "prompt": prompt, "max_tokens": tokens, "min_tokens": tokens, "stream": True,
+            "ignore_eos": True, "temperature": 0}
+
+
+def _call(url: str, path: str, body: dict | None = None, api_key_env: str | None = None) -> dict:
+    headers = {"content-type": "application/json"}
+    if api_key_env:
+        headers["authorization"] = f"Bearer {os.environ[api_key_env]}"
+    data = None if body is None else json.dumps(body).encode()
+    with urllib.request.urlopen(urllib.request.Request(url.rstrip("/") + path, data, headers), timeout=60) as r:
+        return json.loads(r.read())
+
+
+def served_model(url: str, api_key_env: str | None = None) -> str:
+    """The one model the endpoint serves (`/v1/models`)."""
+    ids = [m["id"] for m in _call(url, "/v1/models", api_key_env=api_key_env)["data"]]
+    if len(ids) != 1:
+        raise SystemExit(f"{url} serves {ids}: name the model (--model)")
+    return ids[0]
+
+
+def prompt_tokens(url: str, model: str, n: int, api_key_env: str | None = None) -> list[int]:
+    """A prompt of exactly `n` tokens of the endpoint's tokenizer (vLLM's `/tokenize`): `PROMPT` padded with
+    `FILLER`, cut at `n`."""
+    tokens = _call(url, "/tokenize", {"model": model, "prompt": PROMPT + FILLER * n}, api_key_env)["tokens"]
+    if len(tokens) < n:
+        raise SystemExit(f"{url}'s tokenizer makes {len(tokens)} tokens of the padded prompt, fewer than {n}")
+    return tokens[:n]
 
 
 def upstream_params(url: str, api_key_env: str | None = None) -> dict:
@@ -268,14 +315,16 @@ def upstream_params(url: str, api_key_env: str | None = None) -> dict:
             "api_key_env": api_key_env}
 
 
-def probe(url: str, body: dict, n: int = 3, api_key_env: str | None = None, clock=time.monotonic) -> dict:
-    """`n` requests of `body` straight to the endpoint at `url`, one at a time: each response's canonical events, as the
-    shim cuts them (`active_replay.canonical_events`), and its seconds to the first and to the last."""
+def probe(url: str, body: dict, n: int = 3, api_key_env: str | None = None, clock=time.monotonic,
+          in_flight: int = 1, warmup: int = 0) -> dict:
+    """`n` requests of `body` straight to the endpoint at `url`, `in_flight` at a time, after `warmup` that aren't
+    counted: each response's raw count of canonical events, as the shim cuts them (`active_replay.canonical_events`)
+    before it pads (`events`), and its seconds to the first and to the last."""
     headers = {"content-type": "application/json"}
     if api_key_env:
         headers["authorization"] = f"Bearer {os.environ[api_key_env]}"
-    responses = []
-    for _ in range(n):
+
+    def one(_) -> dict:
         request = urllib.request.Request(url.rstrip("/") + ar.LIVE_PATH.decode(), json.dumps(body).encode(), headers)
         t0, first, count, cutter = clock(), None, 0, Events()
         with urllib.request.urlopen(request, timeout=300) as response:
@@ -284,34 +333,69 @@ def probe(url: str, body: dict, n: int = 3, api_key_env: str | None = None, cloc
                 if k and first is None:
                     first = clock() - t0
                 count += k
-        responses.append({"events": count, "first_s": first, "last_s": clock() - t0})
-    return {"url": url, "body": body, "responses": responses}
+        return {"events": count, "first_s": first, "last_s": clock() - t0}
+
+    with ThreadPoolExecutor(in_flight) as pool:
+        warm = list(pool.map(one, range(warmup)))
+        responses = list(pool.map(one, range(n)))
+    return {"url": url, "body": body, "in_flight": in_flight, "warmup": warm, "responses": responses}
+
+
+class DoesntFit(ValueError):
+    """No served plan at that latency budget: a group's responses aren't all released in the window they're sent in."""
 
 
 def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = None,
-                name: str = "served") -> tuple[dict, dict]:
-    """The calibration report and the plan of a served run of `requests` requests of the probed body (the module
-    docstring's "The served plan"), with its planned occupancy profile (`occupancy`, "N2's profile")."""
+                name: str = "served", in_flight: int = 1) -> tuple[dict, dict]:
+    """The calibration report and the plan of a served run of `requests` requests of the probed body, sent `in_flight`
+    at a time (the module docstring's "The served plan"), with its planned occupancy profile (`occupancy`, "N2's
+    profile"), at the latency budget `delta_buckets`, or else at the largest of 4 down to 2 times the slowest response
+    plus half a second that fits."""
+    body = probed["body"]
+    F = body["max_tokens"]
+    if body.get("min_tokens") != F or not body.get("ignore_eos"):
+        raise ValueError("a served plan's body asks for exactly its tokens (min_tokens = max_tokens, ignore_eos), "
+                         f"not {body}")
     lengths = sorted({r["events"] for r in probed["responses"]})
-    if len(lengths) != 1 or lengths[0] < 1:
-        raise ValueError(f"the endpoint's responses to one body are {lengths} events long: a profile fixed before the "
-                         "run needs responses of one length")
-    F, body = lengths[0], probed["body"]
+    if not lengths or lengths[0] < 1 or lengths[-1] > F:
+        raise ValueError(f"the endpoint's responses to one body of {F} tokens are {lengths} events long: each is 1 … "
+                         f"{F}, an event a chunk of at least one token and at most {ar.TOKEN_BYTES} bytes of text")
     slowest = max(r["last_s"] for r in probed["responses"])
-    D = delta_buckets or math.ceil((4 * slowest * 1000 + 500) / BUCKET_MS)
+    if delta_buckets:
+        return _served_plan(probed, requests, delta_buckets, name, in_flight)
+    most, least = (math.ceil((k * slowest * 1000 + 500) / BUCKET_MS) for k in (4, 2))
+    for D in range(most, least - 1, -1):
+        try:
+            return _served_plan(probed, requests, D, name, in_flight)
+        except DoesntFit:
+            pass
+    raise DoesntFit(f"{in_flight} responses of {F} events don't fit in a window of {WINDOW_BUCKETS} buckets at a "
+                    f"latency budget D of {least} … {most} buckets (2 to 4 × the slowest, {slowest:.3f} s, + 0.5 s): "
+                    "give one (--delta-buckets), or send fewer in flight")
+
+
+def _served_plan(probed: dict, requests: int, D: int, name: str, in_flight: int) -> tuple[dict, dict]:
+    body, F = probed["body"], probed["body"]["max_tokens"]
+    lengths = sorted({r["events"] for r in probed["responses"]})
+    slowest = max(r["last_s"] for r in probed["responses"])
     names = [f"{name}.{j}" for j in range(requests)]
+    groups = [names[j:j + in_flight] for j in range(0, requests, in_flight)]
     frames_in = max(request_frame_count(len(ar.live_request_bytes(s, body, None, FRAME_BYTES)), FRAME_BYTES)
                     for s in names)
     T = WINDOW_BUCKETS
     for span in range(D + 1, T - 1):
-        anchors, a = [], 2
-        for _ in names:
+        starts, a = [], 2
+        for _ in groups:
             if a % T == 0:
                 a += 1
             elif a % T + span > T - 1:
                 a = (a // T + 1) * T + 1
-            anchors.append(a)
+            starts.append(a)
             a += D + 1
+        if starts[0] >= T:
+            raise DoesntFit(f"{in_flight} responses of {F} events, D = {D} buckets after their requests, don't fit in "
+                            f"window 0 from its bucket 2: give a smaller latency budget (--delta-buckets)")
+        anchors = [a for g, a in zip(groups, starts) for _ in g]
         sends = [(a - 0.5) * BUCKET_MS for a in anchors]
         frames = [{"session": s, "index": k, "anchor": a, "ready": a + D} for s, a in zip(names, anchors)
                   for k in range(F)]
@@ -322,7 +406,7 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
         setup = ar.Setup(report)
         e, i, envelope = setup.egress_params, setup.ingress_params, setup.envelope
         if envelope.delta < D:
-            raise ValueError(f"the calibration's envelope δ = {envelope.delta} is below the latency budget D = {D}")
+            raise DoesntFit(f"the calibration's envelope δ = {envelope.delta} is below the latency budget D = {D}")
         sessions = [[s, j + 1, [D] * F] for j, s in enumerate(names)]
         peer = [{"stream": j + 1, "session": s, "frames": frames_in, "trace_ms": t,
                  "enqueue": math.ceil(t / i.bucket_ms), "send_ms": t} for j, (s, t) in enumerate(zip(names, sends))]
@@ -333,7 +417,8 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
         if all(sum(map(sum, profile[:w + 1])) == F * sum(a // T <= w for a in anchors) for w in range(windows)):
             break
     else:
-        raise ValueError(f"a response of {F} events, D = {D} buckets after its request, doesn't fit in a window")
+        raise DoesntFit(f"{in_flight} responses of {F} events, D = {D} buckets after their requests, don't fit in a "
+                        f"window of {T} buckets: give a smaller latency budget (--delta-buckets)")
     chosen, _, misses = calibration.choose_syncs([model], setup.sync_set, T)
     eager = ClockSync(min(setup.sync_set.deltas), max(setup.sync_set.rhos))
     chosen = (list(chosen) + [eager] * windows)[:windows]
@@ -341,9 +426,11 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
             "model_release": {str(k): v for k, v in release.items()}, "model_misses": misses,
             "syncs": [[envelope.delta, str(envelope.rho)]] * windows, "sync_policy": "envelope",
             "model_syncs": [[s.delta, str(s.rho)] for s in chosen], "live_model": body["model"], "body": body,
-            "seed": 0, "occupancy": {"kind": "planned", "egress": profile, "ingress": None},
-            "served": {"tokens": F, "delta_buckets": D, "gap_buckets": D + 1, "span_buckets": span,
-                       "slowest_s": slowest, "request_frames": frames_in}}
+            "seed": 0, "occupancy": {"kind": "planned", "egress": profile, "ingress": None}, "request_major": True,
+            "pad_to": F,
+            "served": {"tokens": F, "probe_events": lengths, "delta_buckets": D, "gap_buckets": D + 1,
+                       "span_buckets": span, "slowest_s": slowest, "request_frames": frames_in, "in_flight": in_flight,
+                       "requests": requests}}
     return report, plan
 
 
@@ -610,13 +697,25 @@ def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, cha
     return result
 
 
+def plan_of(args, url: str, clock=time.monotonic) -> tuple[dict, dict, dict]:
+    """(probe, calibration, plan) of the endpoint at `url` (`plan`'s): each request `--tokens` tokens out of a prompt of
+    exactly `--prompt-tokens` tokens (`PROMPT` as text with 0), probed and planned `--in-flight` at a time."""
+    model = args.model or served_model(url, args.api_key_env)
+    prompt = prompt_tokens(url, model, args.prompt_tokens, args.api_key_env) if args.prompt_tokens else PROMPT
+    probed = probe(url, request_body(model, args.tokens, prompt), args.probes, args.api_key_env, clock,
+                   in_flight=args.in_flight, warmup=args.in_flight)
+    report, plan = served_plan(probed, args.requests, args.delta_buckets, in_flight=args.in_flight)
+    return probed, report, plan
+
+
 def rehearse(args) -> int:
     from verity.core.protocols.certifier import lean_audit
 
     out = args.out
     out.mkdir(parents=True, exist_ok=True)
     # built before the first run, so that the check's first verdict doesn't build it while reveals wait
-    os.environ.setdefault("VERITY_NETWORK_RECORDS_EXE", str(lean_audit.build()))
+    if "VERITY_NETWORK_RECORDS_EXE" not in os.environ:
+        os.environ["VERITY_NETWORK_RECORDS_EXE"] = str(lean_audit.build())
     scratch = Path(tempfile.mkdtemp(prefix="certifier-serve-"))
     certifier_dir, challenger_dir = scratch / "certifier", scratch / "challenger"
     for d in (certifier_dir, challenger_dir):
@@ -628,9 +727,8 @@ def rehearse(args) -> int:
             host, port = ar.start_vllm(argparse.Namespace(vllm=args.vllm, served_model=args.model,
                                                           vllm_cpus=args.vllm_cpus), out, started)
             url = f"http://{host}:{port}"
-        probed = probe(url, request_body(args.model, args.tokens), args.probes, args.api_key_env)
+        probed, report, plan = plan_of(args, url)
         (out / "probe.json").write_text(json.dumps(probed, indent=1))
-        report, plan = served_plan(probed, args.requests, args.delta_buckets)
         (out / "plan.json").write_text(json.dumps(plan))
         (out / "calibration.json").write_text(json.dumps(report))
         results = {s: rehearse_one(out, s, url=url, certifier_dir=certifier_dir, challenger_dir=challenger_dir,
@@ -642,7 +740,7 @@ def rehearse(args) -> int:
             import record
 
             record.stop_server(started[0])
-    summary = {"upstream": url, "vllm": args.vllm, "model": args.model, "lms_height": args.height,
+    summary = {"upstream": url, "vllm": args.vllm, "model": plan["live_model"], "lms_height": args.height,
                "served": plan["served"], "windows": plan["windows"], "profile": plan["occupancy"]["kind"],
                "runs": {s: {k: r[k] for k in ("verdict", "network_verdict", "audit_accepted", "salt_accepted",
                                               "salt_again", "exit")}
@@ -671,11 +769,15 @@ def main(argv=None) -> int:
         q.add_argument("--upstream", required=q is not r, help="the endpoint, http(s)://HOST[:PORT][/PREFIX]")
         q.add_argument("--api-key-env", help="the environment variable that holds the endpoint's bearer key")
     for q in (p, r):
-        q.add_argument("--model", required=True, help="the endpoint's model name")
-        q.add_argument("--requests", type=int, default=8)
-        q.add_argument("--tokens", type=int, default=16, help="max_tokens of every request (ignore_eos)")
-        q.add_argument("--probes", type=int, default=3)
-        q.add_argument("--delta-buckets", type=int, help="the latency budget D (default: 4 × the slowest + 0.5 s)")
+        q.add_argument("--model", help="the endpoint's model name (default: the one /v1/models lists)")
+        q.add_argument("--requests", type=int, default=400)
+        q.add_argument("--in-flight", type=int, default=4, help="requests sent together, served side by side")
+        q.add_argument("--tokens", type=int, default=64, help="min_tokens and max_tokens of every request (ignore_eos)")
+        q.add_argument("--prompt-tokens", type=int, default=128,
+                       help="the prompt's length in the endpoint's tokens (/tokenize); 0: the text prompt as is")
+        q.add_argument("--probes", type=int, default=8)
+        q.add_argument("--delta-buckets", type=int,
+                       help="the latency budget D (default: 4 × the slowest + 0.5 s, or the most that fits down to 2 ×)")
     for q in (p, s, c, r):
         q.add_argument("--out", required=True, type=Path)
     for q in (s, c):
@@ -708,8 +810,7 @@ def main(argv=None) -> int:
         print((args.dir / "public.json").read_text())
         return 0
     if args.command == "plan":
-        probed = probe(args.upstream, request_body(args.model, args.tokens), args.probes, args.api_key_env)
-        report, plan = served_plan(probed, args.requests, args.delta_buckets)
+        probed, report, plan = plan_of(args, args.upstream)
         args.out.mkdir(parents=True, exist_ok=True)
         for name, doc in (("probe.json", probed), ("plan.json", plan), ("calibration.json", report)):
             (args.out / name).write_text(json.dumps(doc, indent=1))
