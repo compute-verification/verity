@@ -12,7 +12,7 @@ Definition's value (`Tmpl.evalDef`) on its bound inputs (`unrollAt_eval`). A rea
 (`TmplUnit.eval`). No verifier path reads this file.
 -/
 
-open Flock Flock.Tmpl Audit
+open Flock Flock.Tmpl FlockSoundness.Audit FlockSoundness.SparseRows
 
 namespace FlockSoundness.TmplValue
 
