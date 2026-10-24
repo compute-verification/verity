@@ -69,8 +69,10 @@ reads 8eb1's records, whose sha256 equal 0551's copy, from a copy of the inputs 
   the content check apart in its `out/advice-check.json`). Read off the registrations' own times, both were
   registered after serving: w212's by the lane from the run's records (r20261024-153328-5776), 25.1 min after its
   Commit window closed and 14.2 min before the first draw, and w5's by vllm during the run, 11.3 s after its Commit
-  window closed, which 7e60's job stated as at serve time (r20261024-173746-1bb0, on the files in place; 7e4c's copies
-  kept their times to the second, so it reads 25.0 min and 10.4 s).
+  window closed and 8.1 s after the next one (w6) closed, which 7e60's job stated as at serve time
+  (r20261024-173746-1bb0, on the files in place; 7e4c's copies kept their times to the second, so it reads 25.0 min
+  and 10.4 s). Both are after serving under the rule below as well, since each was registered after the next window
+  closed.
 
 The plan's target (G-A) is one command from serving to the Lean verdict: serve, certify, advice, compile, sampled ZKPs,
 Lean, with the advice's bits per link-window. `chain.py` holds the stages after N2 and the proofs, each on what exists now:
