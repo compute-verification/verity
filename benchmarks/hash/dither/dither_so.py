@@ -55,6 +55,17 @@ round s as built from the ring once forward s + 1 had started (a captured step's
 give how long the build ran beside it), and "fault_ring" overwrites a bit of step s's ring copy of call 0's z on the
 serving stream as forward s + 1 starts, before round s's tables: refused on round s's z-step leaf and root alone.
 
+$DITHER_SO_ROUND_STREAM=1 (`RS_ENV`, without -ov) keeps that order and those buffers and moves only where the GPU builds
+round s: on a tree stream of its own once forward s is done, beside step s's sampling (the engine's lm_head and
+sampler, which read none of round s's inputs and write none of them), and the serving stream waits for the round before
+step s + 1's inputs and forward, so forward s + 1 overwrites nothing round s reads, as without it.  The host goes back
+to the engine as soon as the round is launched: a thread sends round s's root once the GPU has it, still before coin s
+(the challenger opens it after the root alone), and step s's units still wait for coin s; `before` writes the step's
+inputs from pinned memory without a wait, so step s + 1's launch overlaps round s.  A captured step (and the steps whose
+rounds a capture reads) waits for its round on the host, as without it.  The end of step s + D - 2's `after`, where
+step s's units are dispatched, now comes a tree span and the host's lead on the GPU sooner after round s's root, so the
+served row wants one or two more ring slots (-so9, -so10) for coin s to be back there.
+
 A window's open and end (RT4-INT-37; served_h1's window close, since dither-a has none).  Every window opens with the salt
 coin after its root (off the node the root the gate's open names, for development `coins.stand_in_root` of the session;
 in process the epoch root), then the epoch round (round 0) over the B tables' roots.  Without -we a window has no end: its
@@ -152,6 +163,12 @@ SPILLS = {"azy": "A rows and scales, and the z/y records (live rows; the rest ar
 SPILL_CHUNK = 2 << 30                   # pinned host bytes a chunk of the spill's pool
 SPILL_MAX_ENV = "DITHER_SPILL_MAX_GB"   # the pool's bound, past which a window's spill refuses (default SPILL_MAX_GB)
 SPILL_MAX_GB = 128
+# "1": round s's tables and trees on a tree stream of their own once forward s is done, beside step s's sampling (the
+# engine's lm_head and sampler, which read none of round s's inputs), the serving stream waiting for them before step
+# s + 1's inputs and forward; round s's root sent by a thread once the GPU has it (`SoWindow._rs_send`), so the host
+# goes back to the engine without waiting on forward s or the trees.  The same round order and the same buffers
+RS_ENV = "DITHER_SO_ROUND_STREAM"
+RS_EV = 4       # its per-step events and pinned roots, a ring of this many steps (the sender is never further behind)
 
 
 def end_steps(depth: int) -> int:
@@ -209,9 +226,15 @@ class SoWindow(DO.Window):
         if self.a_step and (self.a_once or self.overlap):
             raise RuntimeError(f"{DO.A_STEP_ENV}=1 serves -aom/-aomn without -ov (its A tables after the forward, on "
                                f"the serving stream)")
+        self.rs = os.environ.get(RS_ENV) == "1"
+        if self.rs and self.overlap:
+            raise RuntimeError(f"{RS_ENV}=1 serves an -so arm without -ov (-ov builds its rounds from ring copies)")
+        self.rs_last: int | None = None
         super().__init__(*args, **kwargs)
         if self.a_step:
             self._a_step_set()
+        if self.rs:
+            self._rs_set()
         # the gate's generation runs past its last capture until that step's receipts are in a round
         self.gate_extra = self.depth + 8 + (1 if self.overlap else 0)
         self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(2)]
@@ -233,6 +256,82 @@ class SoWindow(DO.Window):
         self.a_gidx = torch.tensor([ks.index(k) for _, k in self.nk], dtype=torch.long, device=self.dev)
         o = self.pre["mid"].level_off[0]
         self.a_leaves = self.pre["mid"].level[o:o + 8 * self.L].view(self.L, 8)
+
+    def _rs_set(self) -> None:
+        """RS_ENV's tree stream, its events (a ring of RS_EV steps: "b" forward s's start and "f" its end on the
+        serving stream, "w0"/"w1" around the receipt leaf's wait and "t" the round's end on the tree stream), pinned
+        roots and served-y refusals, and the sender thread (`_rs_send`)."""
+        self.rs_stream = torch.cuda.Stream(device=self.dev, priority=-1)
+        self.rs_ev = {k: [torch.cuda.Event(enable_timing=True) for _ in range(RS_EV)]
+                      for k in ("b", "f", "w0", "w1", "t")}
+        self.rs_waited = [False] * RS_EV
+        self.rs_root = [torch.empty(8, dtype=torch.int64).pin_memory() for _ in range(RS_EV)]
+        self.rs_ybad = [torch.empty(self.L, dtype=torch.bool).pin_memory() for _ in range(RS_EV)]
+        self.rs_cv = threading.Condition()
+        self.rs_put_upto = self.rs_sent_upto = -1
+        self.rs_error: str | None = None
+        self.rs_held: dict[int, tuple] = {}
+        self.rs_q: queue.SimpleQueue = queue.SimpleQueue()
+        self.rs_dev = torch.cuda.current_device()
+        threading.Thread(target=self._rs_loop, name="dither-so-rounds", daemon=True).start()
+
+    def _rs_wait(self, ready) -> None:
+        with self.rs_cv:
+            while self.rs_error is None and not ready():
+                self.rs_cv.wait()
+            if self.rs_error is not None:
+                raise RuntimeError(f"dither-a-so {RS_ENV}: {self.rs_error}")
+
+    def _rs_drain(self) -> None:
+        """Every round launched on the tree stream sent."""
+        if self.rs:
+            self._rs_wait(lambda: self.rs_sent_upto >= self.rs_put_upto)
+
+    def _rs_loop(self) -> None:
+        torch.cuda.set_device(self.rs_dev)
+        while True:
+            item = self.rs_q.get()
+            try:
+                with torch.inference_mode():
+                    self._rs_send(*item)
+            except BaseException as e:  # noqa: BLE001
+                tb = traceback.format_exc(limit=6).strip().splitlines()[-4:]
+                with self.rs_cv:
+                    self.rs_error = f"step {item[0]}: {type(e).__name__}: {e} ({' | '.join(tb)})"
+                    self.rs_cv.notify_all()
+                return
+
+    def _rs_send(self, s: int, pipe, ix: int, cap: str | None, hold: bool, ph: dict) -> None:
+        """The sender: once the GPU has round s (its "t" event), its root sent as round `ix` of `pipe`, the served y's
+        refused calls recorded, its GPU times into the step's phases; a capture's root, index and refusals held for
+        `after` (`rs_held`)."""
+        e = s % RS_EV
+        self.rs_ev["t"][e].synchronize()
+        root = unwords(self.rs_root[e])
+        i = pipe.send(root)
+        if i != ix:
+            raise RuntimeError(f"step {s}'s round went out as round {i}, not {ix}")
+        bad = self.rs_ybad[e].nonzero().flatten().tolist()
+        sd = DA.SIDE[0]
+        if bad:
+            sd.y_refused.append({"s": s, "capture": cap, "calls": len(bad)})
+        self.round_log.append({"s": s, "m": ph["m"], "root": root.hex()[:32]})
+        ev = self.rs_ev
+        ph["forward_gpu_ms"] = ev["b"][e].elapsed_time(ev["f"][e])
+        ph["trees_gpu_ms"] = ev["f"][e].elapsed_time(ev["t"][e])
+        if self.rs_waited[e]:
+            ph["units_wait_ms"] = ev["w0"][e].elapsed_time(ev["w1"][e])
+        with self.rs_cv:
+            if hold:
+                self.rs_held[s] = (i, root, bad)
+            self.rs_sent_upto = s
+            self.rs_cv.notify_all()
+
+    def _put(self, dst: torch.Tensor, src: torch.Tensor) -> None:
+        if self.rs:
+            dst.copy_(src.pin_memory(), non_blocking=True)
+        else:
+            super()._put(dst, src)
 
     def a_step_build(self) -> None:
         """On the current stream, after the forward: the step's K tables and each call's a-step leaf."""
@@ -328,6 +427,8 @@ class SoWindow(DO.Window):
         before), unless fault_tail drops the window's last step's; when the coin came back (perf_counter)."""
         i = self.ix(j)
         t0 = time.perf_counter()
+        if self.rs:
+            self._rs_wait(lambda: self.rs_sent_upto >= j)
         opening = self.pipe.opening(i)
         t_coin = time.perf_counter()
         self.coin_waits.append(1e3 * (t_coin - t0))
@@ -394,6 +495,7 @@ class SoWindow(DO.Window):
         if s1 == s0:
             return self.close()
         t0 = time.perf_counter()
+        self._rs_drain()
         if self.overlap:
             pending = s1 - 1 - sd.ov.dispatched_upto
             sd.ov.drain()
@@ -536,11 +638,21 @@ class SoWindow(DO.Window):
 
     def before(self, m: int) -> None:
         self.t_b0 = time.perf_counter()
+        if self.rs and self.rs_last is not None:
+            # round s - 1 reads the step's inputs and what forward s writes: the serving stream waits for it first
+            torch.cuda.current_stream().wait_event(self.rs_ev["t"][self.rs_last % RS_EV])
+            self.rs_last = None
+            if self.deferred is not None:
+                self._poll_deferred()
         if not self.open:
             self._start()
         if not self.overlap and DA.SIDE and DA.SIDE[0].spill is not None:
             DA.SIDE[0].spill.wait_z(0)
         super().before(m)
+        if self.rs:
+            s = self.s
+            self._rs_wait(lambda: self.rs_sent_upto >= s - RS_EV)
+            self.rs_ev["b"][s % RS_EV].record()
         self.m_of[self.s] = self.m_last = m
         if self.cap is not None:
             self.cap_of[self.s] = self.cap_at[self.s] = self.cap
@@ -561,9 +673,11 @@ class SoWindow(DO.Window):
         super().arm(m, names)
 
     def drain(self) -> None:
-        """Under -ov: every round handed to the sender sent, every step's units dispatched, the device idle."""
+        """Under -ov: every round handed to the sender sent, every step's units dispatched, the device idle; under
+        RS_ENV every round launched sent."""
         if self.overlap and DA.SIDE:
             DA.SIDE[0].ov.drain()
+        self._rs_drain()
 
     def after(self) -> None:
         if self.overlap:
@@ -571,96 +685,126 @@ class SoWindow(DO.Window):
         sd: SoSide = DA.SIDE[0]
         d = self.depth - 1
         main = torch.cuda.current_stream()
+        rs, e = self.rs, self.s % RS_EV
         self.phase("forward_wait")
-        if self.deferred is not None:
-            self._forward_wait_deferred(main)
-        main.synchronize()
+        if rs:
+            self.rs_ev["f"][e].record(main)
+            self.rs_stream.wait_event(self.rs_ev["f"][e])
+            self._poll_deferred()
+        else:
+            if self.deferred is not None:
+                self._forward_wait_deferred(main)
+            main.synchronize()
         t_fwd = time.perf_counter()
         t_late = 0.0
-        if self.deferred is not None and self.coin_async == 1:
+        if not rs and self.deferred is not None and self.coin_async == 1:
             t_late = self._late_dispatch()
         s, m, cap, pre, ev, kinds = self.s, self.m, self.cap, self.pre, self.ev, self.round_kinds
-        if self.a_once or self.a_step:
-            self.phase("a_tables")
-            if not self.flags & DO.F_NW_TILES:
-                for x in self.slot_groups.values():
-                    x[:, m:].zero_()
-                self.scale_all[:, m:].zero_()
-            if self.a_step:
-                self.a_step_build()
+        ts = self.rs_stream if rs else main
+        w0, w1 = (self.rs_ev["w0"][e], self.rs_ev["w1"][e]) if rs else self.ev_w
+        with torch.cuda.stream(ts):
+            if self.a_once or self.a_step:
+                self.phase("a_tables")
+                if not self.flags & DO.F_NW_TILES:
+                    for x in self.slot_groups.values():
+                        x[:, m:].zero_()
+                    self.scale_all[:, m:].zero_()
+                if self.a_step:
+                    self.a_step_build()
+                else:
+                    self.c.build(pre["a"], self.stepv[0:1])
+                self._poll_deferred()
+            self.phase("stash")
+            if sd.spill is not None:
+                sd.spill.wait_a(s % self.depth)
+            sd.stash(s)
+            self.stashed.add(s)
+            if sd.spill is not None:
+                self.phase("spill")
+                sd.spill.put(s, m, sd.ready[s % self.depth])
+            ads = self.tree_streams[1] if self.tree_streams is not None else None
+            self.phase("admit_tables")
+            ev[0].record()
+            if ads is not None:
+                ads.wait_event(ev[0])
+                with torch.cuda.stream(ads):
+                    self.c.build(pre["admit"], self.stepv[0:1])
+                    ev[7].record(ads)
             else:
-                self.c.build(pre["a"], self.stepv[0:1])
-            self._poll_deferred()
-        self.phase("stash")
-        if sd.spill is not None:
-            sd.spill.wait_a(s % self.depth)
-        sd.stash(s)
-        self.stashed.add(s)
-        if sd.spill is not None:
-            self.phase("spill")
-            sd.spill.put(s, m, sd.ready[s % self.depth])
-        ads = self.tree_streams[1] if self.tree_streams is not None else None
-        self.phase("admit_tables")
-        ev[0].record()
-        if ads is not None:
-            ads.wait_event(ev[0])
-            with torch.cuda.stream(ads):
                 self.c.build(pre["admit"], self.stepv[0:1])
-                ev[7].record(ads)
-        else:
-            self.c.build(pre["admit"], self.stepv[0:1])
-        self._poll_deferred()
-        self.phase("z_tables")
-        self.c.build(pre["z"], self.stepv[0:1])
-        for f in self.before_mid:
-            f()
-        if self.deferred is not None:
-            t_late = self._late_dispatch()
-        self.phase("receipt_leaf")
-        o = pre["mid"].level_off[kinds.index("receipt-step")]
-        lv = pre["mid"].level[o:o + 8 * self.L]
-        j = s - d
-        p = sd.dispatched.pop(j, None) if j >= self.s0 else None
-        waited = p is not None
-        if p is None:
-            lv.zero_()
-        else:
-            self.ev_w[0].record()
-            main.wait_event(sd.udone[p])
-            self.ev_w[1].record()
-            if self.cap_of.get(j) == "fault_rr":
-                lv.view(torch.uint8).fill_(DF.POISON)
+            self._poll_deferred()
+            self.phase("z_tables")
+            self.c.build(pre["z"], self.stepv[0:1])
+            for f in self.before_mid:
+                f()
+            if self.deferred is not None:
+                t_late = self._late_dispatch()
+            self.phase("receipt_leaf")
+            o = pre["mid"].level_off[kinds.index("receipt-step")]
+            lv = pre["mid"].level[o:o + 8 * self.L]
+            j = s - d
+            p = sd.dispatched.pop(j, None) if j >= self.s0 else None
+            waited = p is not None
+            if p is None:
+                lv.zero_()
             else:
-                lv.copy_(sd.rroots[p])
-        if ads is not None:
-            main.wait_event(ev[7])
-        self.c.build(pre["mid"], self.stepv[0:1])
-        rl = pre["round"].level
-        zi, yi = kinds.index("z-step"), kinds.index("y-step")
-        if cap == "fault_zlate":
-            self.zlate = (rl[8 * zi:8 * zi + 8].clone(), rl[8 * yi:8 * yi + 8].clone())
-            for i in (zi, yi):
-                rl[8 * i:8 * i + 8].view(torch.uint8).fill_(DF.POISON)
-        elif self.zlate is not None:
-            rl[8 * zi:8 * zi + 8].copy_(self.zlate[0])
-            rl[8 * yi:8 * yi + 8].copy_(self.zlate[1])
-            self.zlate = None
-        self.c.build(pre["round"], self.stepv[0:1])
-        self.put_row(s, pre["mid"], pre["round"])
-        self.phase("root_read")
-        root = unwords(pre["round"].root(0))
-        t_root = time.perf_counter()
-        self.phase("record_host")
-        i = self.pipe.send(root)
-        if i != self.ix(s):
-            raise RuntimeError(f"step {s}'s round went out as round {i}, not {self.ix(s)}")
-        t_sent = time.perf_counter()
-        bad = sd.ybad.nonzero().flatten().tolist()
-        if bad:
-            sd.y_refused.append({"s": s, "capture": cap, "calls": len(bad)})
+                w0.record()
+                ts.wait_event(sd.udone[p])
+                w1.record()
+                if self.cap_of.get(j) == "fault_rr":
+                    lv.view(torch.uint8).fill_(DF.POISON)
+                else:
+                    lv.copy_(sd.rroots[p])
+            if ads is not None:
+                ts.wait_event(ev[7])
+            self.c.build(pre["mid"], self.stepv[0:1])
+            rl = pre["round"].level
+            zi, yi = kinds.index("z-step"), kinds.index("y-step")
+            if cap == "fault_zlate":
+                self.zlate = (rl[8 * zi:8 * zi + 8].clone(), rl[8 * yi:8 * yi + 8].clone())
+                for i in (zi, yi):
+                    rl[8 * i:8 * i + 8].view(torch.uint8).fill_(DF.POISON)
+            elif self.zlate is not None:
+                rl[8 * zi:8 * zi + 8].copy_(self.zlate[0])
+                rl[8 * yi:8 * yi + 8].copy_(self.zlate[1])
+                self.zlate = None
+            self.c.build(pre["round"], self.stepv[0:1])
+            self.put_row(s, pre["mid"], pre["round"])
+            if rs:
+                self.rs_root[e].copy_(pre["round"].root(0), non_blocking=True)
+                self.rs_ybad[e].copy_(sd.ybad, non_blocking=True)
+                self.rs_ev["t"][e].record(ts)
         prev = self.cap_of.get(s - 1)
         late = self.cap_of.pop(j, None) if j >= self.s0 else None
-        if (cap in self.caps) or (late in self.caps) or (prev == "fault_zlate" and prev in self.caps):
+        hold = (cap in self.caps) or (late in self.caps) or (prev == "fault_zlate" and prev in self.caps)
+        ph = {"m": m}
+        if rs:
+            # round s to the sender; a capture's (or a round a capture reads) waits for it here
+            self.rs_waited[e] = waited
+            with self.rs_cv:
+                self.rs_put_upto = s
+            self.rs_q.put((s, self.pipe, self.ix(s), cap, hold, ph))
+            self.rs_last = s
+            t_root = time.perf_counter()
+            if hold:
+                self.phase("root_read")
+                self._rs_wait(lambda: self.rs_sent_upto >= s)
+                with self.rs_cv:
+                    i, root, bad = self.rs_held.pop(s)
+            t_sent = time.perf_counter()
+        else:
+            self.phase("root_read")
+            root = unwords(pre["round"].root(0))
+            t_root = time.perf_counter()
+            self.phase("record_host")
+            i = self.pipe.send(root)
+            if i != self.ix(s):
+                raise RuntimeError(f"step {s}'s round went out as round {i}, not {self.ix(s)}")
+            t_sent = time.perf_counter()
+            bad = sd.ybad.nonzero().flatten().tolist()
+            if bad:
+                sd.y_refused.append({"s": s, "capture": cap, "calls": len(bad)})
+        if hold:
             leaves = [unwords(pre["round"].leaf(0, k)) for k in range(len(kinds))]
             if cap in self.caps:
                 self.caps[cap].update(
@@ -677,7 +821,7 @@ class SoWindow(DO.Window):
                 self.caps[late].update(late_s=s, late_index=i, late_leaves=leaves, late_root=root)
             if prev == "fault_zlate" and prev in self.caps:
                 self.caps[prev].update(next_leaves=leaves)
-        units_wait = self.ev_w[0].elapsed_time(self.ev_w[1]) if waited else None
+        units_wait = self.ev_w[0].elapsed_time(self.ev_w[1]) if waited and not rs else None
         self.phase("coin_wait")
         ju = s + 1 - d
         t_wait = t_coin = t_disp = time.perf_counter()
@@ -691,15 +835,23 @@ class SoWindow(DO.Window):
                 t_disp = time.perf_counter()
         t_end = time.perf_counter()
         self.phase(None)
-        ph = {"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "trees_ms": 1e3 * (t_root - t_fwd),
-              "record_host_ms": 1e3 * (t_sent - t_root), "captures_ms": 1e3 * (t_wait - t_sent),
-              "coin_wait_ms": 1e3 * (t_coin - t_wait),
-              "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd),
-              "coin_late_ms": 1e3 * t_late}
-        if units_wait is not None:
-            ph["units_wait_ms"] = units_wait
-        self.phases.append({**ph, **self.host_ms()})
-        self.round_log.append({"s": s, "m": m, "root": root.hex()[:32]})
+        if rs:
+            # the GPU's forward and tree times come from the sender (`_rs_send`)
+            ph.update({"after_host_ms": 1e3 * (t_end - t_fwd), "captures_ms": 1e3 * (t_wait - t_sent),
+                       "coin_wait_ms": 1e3 * (t_coin - t_wait), "dispatch_ms": 1e3 * (t_disp - t_coin),
+                       "coin_late_ms": 1e3 * t_late})
+        else:
+            ph.update({"forward_ms": 1e3 * (t_fwd - self.t_before), "trees_ms": 1e3 * (t_root - t_fwd),
+                       "record_host_ms": 1e3 * (t_sent - t_root), "captures_ms": 1e3 * (t_wait - t_sent),
+                       "coin_wait_ms": 1e3 * (t_coin - t_wait),
+                       "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd),
+                       "coin_late_ms": 1e3 * t_late})
+            if units_wait is not None:
+                ph["units_wait_ms"] = units_wait
+        ph.update(self.host_ms())
+        self.phases.append(ph)
+        if not rs:
+            self.round_log.append({"s": s, "m": m, "root": root.hex()[:32]})
         self.s += 1
         self.steps += 1
         self._step_end(s)
@@ -763,6 +915,7 @@ class SoWindow(DO.Window):
         self._step_end(s)
 
     def stats(self) -> dict:
+        self._rs_drain()
         ov = DA.SIDE[0].ov if self.overlap and DA.SIDE else None
         if ov is not None:
             ov.drain()
@@ -795,7 +948,8 @@ class SoWindow(DO.Window):
                      "coins_back": len(pipe.openings), "rounds_sent": len(sent),
                      # the challenger's log holds these round roots in this order (its published session's record)
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
-                     "window_end": self.end_stats(), "serving_stream_priority": torch.cuda.current_stream().priority,
+                     "window_end": self.end_stats(), "round_stream": self.rs,
+                     "serving_stream_priority": torch.cuda.current_stream().priority,
                      "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None}
         if ov is not None:
             doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,

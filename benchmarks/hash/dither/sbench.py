@@ -85,7 +85,7 @@ Arms:
                  HB_H1U_KC, DITHER_H1C_KC and DITHER_ZY1_KC) in the statement's order (RT4-INT-12, `dither_so`): the
                  forward computes and commits a step's A, scales and z/y leaves, round s goes out before coin s, and step
                  s's seeds and units run after coin s on a ring of D steps' A slots, beside a later step's forward, their
-                 receipts under round s + D - 1: dither-a-{hbk,hbr,hbc}-zy-{aom,aomn,ab,abn}[-pt]-so<D> (D 2 to 8), -aom
+                 receipts under round s + D - 1: dither-a-{hbk,hbr,hbc}-zy-{aom,aomn,ab,abn}[-pt]-so<D> (D 2 to 10), -aom
                  the A tables per call on four streams in the forward, -aomn with each call's noise on four streams
                  beside the units, -ab and -abn the step's A tables in one build between steps (not ruled in by CA: a
                  separate arm); its gate adds the order's checks and two faults (fault_rearly, fault_zlate).  With
@@ -415,7 +415,7 @@ DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
 # each step's A and z/y records held in pinned host memory until its draw (`dither_so.Spill`), -wea its A alone
 DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}{e}": (unit, ao, pt, d, r, sp, we, spill)
              for unit in ("hbk", "hbr", "hbc") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
-             for p, pt in (("", False), ("-pt", True)) for d in range(2, 9)
+             for p, pt in (("", False), ("-pt", True)) for d in range(2, 11)
              for v, r, sp in (("", 0, False), ("-ov", 2, False), ("-ov1", 1, False), ("-ovp", 2, True))
              for e, we, spill in (("", False, None), ("-we", True, "azy"), ("-wea", True, "a"))}
 

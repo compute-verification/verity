@@ -353,16 +353,20 @@ class Window:
             self.caps[name] = {"s": self.s, "m": m, "salt": self.salt_bytes}
         t, s = self.t, self.s
         bits = np.arange(t) < m
-        self.live.copy_(torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
-        self.admit.copy_(torch.frombuffer(bytearray(b"".join(CR.word_rows(CR.words(bits)))), dtype=torch.uint8))
-        self.stepv.copy_(torch.tensor([s, s], dtype=torch.int32))
+        self._put(self.live, torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
+        self._put(self.admit, torch.frombuffer(bytearray(b"".join(CR.word_rows(CR.words(bits)))), dtype=torch.uint8))
+        self._put(self.stepv, torch.tensor([s, s], dtype=torch.int32))
         self.step_base.fill_(s * self.u_step)
-        self.S.copy_(torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
+        self._put(self.S, torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
         self._a_step()
         if self.cap:
             self.cap_sync()
         self.phase(None)
         self.t_before = time.perf_counter()
+
+    def _put(self, dst: torch.Tensor, src: torch.Tensor) -> None:
+        """A step input from the host into `dst`, on the current stream."""
+        dst.copy_(src)
 
     def cap_sync(self) -> None:
         """A captured step's wait, after its poison and inputs, before its forward."""

@@ -724,7 +724,7 @@ def side() -> Side:
         def before_a(self: DO.Window, m: int) -> None:
             before(self, m)
             if SIDE[0].unit in KONE:
-                SIDE[0].s_unit.copy_(torch.tensor([0, m, 0, 0], dtype=torch.int32))
+                self._put(SIDE[0].s_unit, torch.tensor([0, m, 0, 0], dtype=torch.int32))
             if self.cap:
                 SIDE[0].stage.view(torch.uint8).fill_(DF.POISON)
                 for x in SIDE[0].zy + SIDE[0].ysv:
