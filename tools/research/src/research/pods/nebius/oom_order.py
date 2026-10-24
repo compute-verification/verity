@@ -10,7 +10,11 @@ Each pass, for every live run under the runs roots (status.json `running`), its 
 the run dir as RESEARCH_RUN_DIR (what the runner exports to its workload, so its workers that leave the group count) and the
 members of the run's process group (status.json's pgid, once a member with the variable is in it) that name no run dir; never its
 runner. Its use is their RssAnon + RssShmem (what reclaim can't free), its reservation the largest file in RAMLOCK naming its run
-id (or a pid of its), else none. Every process of the run gets one oom_score_adj:
+id (or a pid of its), else none. A run of several processes that reads over its reservation that way is read again from their
+Pss_Anon + Pss_Shmem (smaps_rollup), which splits a page among the processes that share it: summed Rss counts a forked worker's
+copy-on-write pages once per worker, and read each PRF-131 share (one ~278 GB parent, up to 9 forked workers) at 2,505 GB against
+its 345 GB, so the share became the node's first pick (24 Oct, n2 00:09Z and 03:44Z, cpu-2 03:36Z). Pss only for those runs:
+reading it walks the process's page tables. Every process of the run gets one oom_score_adj:
 
   over (use > reservation, or no reservation)   OVER + round(SPAN * (use - reservation) / MemTotal), at most 1000
   within                                         WITHIN (0)
@@ -112,13 +116,20 @@ def scan(proc: Path = PROC) -> dict[int, dict]:
     return out
 
 
+def pss(pid: int, proc: Path = PROC) -> int | None:
+    """pid's Pss_Anon + Pss_Shmem in bytes (/proc/PID/smaps_rollup), None when unreadable or without those fields."""
+    text = _read(proc / str(pid) / "smaps_rollup")
+    vals = [int(ln.split()[1]) * 1024 for ln in (text or b"").splitlines() if ln.startswith((b"Pss_Anon:", b"Pss_Shmem:"))]
+    return sum(vals) if vals else None
+
+
 def target(use: int, reserved: float, limit: int) -> int:
     if reserved > 0 and use <= reserved:
         return WITHIN
     return min(MAX, OVER + round(SPAN * (use - reserved) / limit)) if limit > 0 else OVER
 
 
-def plan(runs: dict[str, dict], res: list[dict], procs: dict[int, dict], limit: int) -> list[dict]:
+def plan(runs: dict[str, dict], res: list[dict], procs: dict[int, dict], limit: int, proc: Path = PROC) -> list[dict]:
     """Each live run with a process: {"run", "pids", "use", "reserved", "adj"}."""
     out = []
     for run_dir, r in sorted(runs.items(), key=lambda kv: kv[1]["run"]):
@@ -129,6 +140,8 @@ def plan(runs: dict[str, dict], res: list[dict], procs: dict[int, dict], limit: 
             continue
         use = sum(procs[p]["bytes"] for p in pids)
         reserved = max([x["gb"] * GB for x in res if x["run_id"] == r["run"] or x["pid"] in pids], default=0.0)
+        if len(pids) > 1 and use > reserved:
+            use = sum(v if (v := pss(p, proc)) is not None else procs[p]["bytes"] for p in pids)
         out.append({"run": r["run"], "pids": sorted(pids), "use": use, "reserved": reserved, "adj": target(use, reserved, limit)})
     return out
 
@@ -174,7 +187,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="print what it would set, write nothing")
     a = ap.parse_args(argv)
     procs = scan(a.proc)
-    recs = apply(plan(live_runs(a.runs or list(RUNS)), reservations(a.ramlock), procs, mem_total(a.proc)), procs, a.proc, a.dry_run)
+    recs = apply(plan(live_runs(a.runs or list(RUNS)), reservations(a.ramlock), procs, mem_total(a.proc), a.proc), procs, a.proc,
+                 a.dry_run)
     for rec in recs:
         line = json.dumps(rec, sort_keys=True)
         print(line, flush=True)

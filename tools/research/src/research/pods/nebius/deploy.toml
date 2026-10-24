@@ -352,19 +352,19 @@ owner = "infra"
 [[file]]
 path = "/usr/local/lib/vy-monitoring/oom_order.py"
 src = "tools/research/src/research/pods/nebius/oom_order.py"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-oom-order.service"
 src = "tools/research/src/research/pods/nebius/vy-oom-order.service"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-oom-order.timer"
 src = "tools/research/src/research/pods/nebius/vy-oom-order.timer"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 run = ["systemd:vy-oom-order.timer"]
 owner = "infra"
 
