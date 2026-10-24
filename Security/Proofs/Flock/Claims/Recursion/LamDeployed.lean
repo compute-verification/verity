@@ -233,7 +233,17 @@ theorem numsκ_nonneg (m : Claims.Recursion.Nums) (h : 0 ≤ m.εtable) : 0 ≤ 
 
 /-- **A V\* part in scope**: its statement sets up at the recursive setup (`setupO`) with `1 ≤ n ≤ 200` tables at two
 link points, each at an `m` the masked verifier serves and of a shape in `InRange`, as `FlockDeploy.ZkIn` at Flock's
-setup. -/
+setup.
+
+Assumption record. No claim: a scope condition on the statement, the parts' counterpart of `FlockDeploy.PlainIn`.
+`lamLin2_deployed_ge` and `lamLin2_deployed_ge_dep` take it at each staged V\* part (`hO`), at the inner rounds `pick`
+reads the part at. It assumes that each part's statement, run through the verifier's own setup (`setupO`), has 1 to 200
+tables at at most two link points, each at `25 ≤ m ≤ 35` and of a shape in `InRange`. That is a deterministic
+computation on public data and says nothing about the prover or the world. It is reasonable because these are the
+shapes the masked verifier is parametrized for, the scope `ZkIn` states for a masked session: `λ₂`'s numbers are
+stated there and not claimed outside it. It is no hash premise. It reduces to evaluating `setupO` on the staged
+statements, and a refusal of out-of-scope parts in the compiled verifier's scope check (`scopeCheck`) would discharge
+it, as an input condition should be. -/
 structure PartIn (xO : Msg) (s : RecIns) (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt) : Prop where
   setup : setupO xO = some (s, spec, sts)
   size_pos : 0 < sts.size
