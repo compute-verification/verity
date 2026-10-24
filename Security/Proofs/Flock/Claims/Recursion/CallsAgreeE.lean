@@ -371,10 +371,10 @@ theorem plainCallsOfProofsE_sha512 : PlainCallsOfProofsE FlockDeploy.sha512 := b
   obtain ⟨hV', hck'⟩ := FlockDeploy.KS.accE_verifyLogged hact' hacc'
   obtain ⟨-, lv, hlv, hcu⟩ := Claims.Bridge.Custody.checks_ok hck
   obtain ⟨-, lv', hlv', hcu'⟩ := Claims.Bridge.Custody.checks_ok hck'
-  have hv : Flock.verifyWithMK (fun _ => true) (Flock.Hashes.ofSha512 Flock.Sha512.hash) spec
+  have hv : Flock.verifyWithMK (M := Flock.V) (fun _ => true) (Flock.Hashes.ofSha512 Flock.Sha512.hash) spec
       (FlockDeploy.tabsOf sts) f.record f.proofs = .ok () :=
     (Flock.verifyLoggedE_fst _ _ _ _ _ _).symm.trans (congrArg Prod.fst hV)
-  have hv' : Flock.verifyWithMK (fun _ => true) (Flock.Hashes.ofSha512 Flock.Sha512.hash) spec
+  have hv' : Flock.verifyWithMK (M := Flock.V) (fun _ => true) (Flock.Hashes.ofSha512 Flock.Sha512.hash) spec
       (FlockDeploy.tabsOf sts) f'.record f'.proofs = .ok () :=
     (Flock.verifyLoggedE_fst _ _ _ _ _ _).symm.trans (congrArg Prod.fst hV')
   obtain ⟨z, z', hz, hz', hzz, -⟩ := FlockDeploy.KS.sess_rounds_eqK _ _ _ _ hv hlv hv' hlv' hcu hcu' hd hd' hq

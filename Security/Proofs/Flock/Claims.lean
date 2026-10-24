@@ -87,6 +87,7 @@ import Proofs.Flock.Claims.Recursion.DecodeLog
 import Proofs.Flock.Claims.Recursion.VerdictLog
 import Proofs.Flock.Claims.Recursion.CallsAgree
 import Proofs.Flock.Claims.Recursion.CallsAgreeE
+import Proofs.Flock.Claims.Recursion.LastColsE
 import Proofs.Flock.Claims.Recursion.CallsOfProofs
 import Proofs.Flock.Claims.Recursion.LastBindsClosed
 import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
