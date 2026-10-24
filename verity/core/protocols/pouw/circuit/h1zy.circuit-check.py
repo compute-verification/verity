@@ -19,7 +19,8 @@ def _pouw_roots() -> list[Any]:
     segment a chunk), the first with its key block and `GemmAccumulatorS8_v2` at the chunk's K, the others continuing the
     carried chain and z, each its carry out's equality, the last the record's check and the partials' (the whole lane's
     8 and 10 words). `PouwH1TileZyChunks_v1` over the v1 unit at K = 64 on 2 chunk rows a row: each whole row joined from
-    its chunk rows, the unit on them, and each later chunk's scale held to chunk 0's (12 `PouwEq32_v2`). All are bound as
+    its chunk rows, the unit on them, and each later chunk's scale held to chunk 0's (12 `PouwEq32_v2`), and
+    `PouwH1TileZyChunks_v2` the same over J10-R's v5 and v6 units, passing their call and blocks on. All are bound as
     Definitions, since `h1zy.lane`, `h1zy.lane_chunk` and `h1zy.combine` stage only a
     leaf whose R is a multiple of 16, and the combine only at K >= 384 (`h1zy.LEAST_K`). None where
     `circuit.segment` is not on the tree, which is where `PouwH1Tile` is registered. `PouwZyDequant`, `PouwZyCell`,
@@ -37,7 +38,7 @@ def _pouw_roots() -> list[Any]:
 
     tiles = (H.PouwH1Tile, H.PouwH1Tile3)
     return ([bind(Z.PouwZyCheck, R=4, C=8)] + [Z.unit(tile(d, 4, 8)) for d in (*tiles, H.PouwH1Tile5, H.PouwH1Tile6)]
-            + [Z.unit_chunks(tile(H.PouwH1Tile, 4, 8), 2)]
+            + [Z.unit_chunks(tile(d, 4, 8), 2) for d in (H.PouwH1Tile, H.PouwH1Tile5, H.PouwH1Tile6)]
             + [bind(Z.PouwH1LaneZy, TILE=tile(d, 8, 16)) for d in tiles]
             + [bind(Z.PouwH1Combine, TILE=tile(H.PouwH1Tile, 8, 16))]
             + [bind(Z.PouwH1LaneZyChunk, TILE=tile(H.PouwH1Tile, 8, 16, k), CHUNKS=n, CHUNK=c)
