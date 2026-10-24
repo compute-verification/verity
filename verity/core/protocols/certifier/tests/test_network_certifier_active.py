@@ -350,28 +350,77 @@ def test_the_bucketer_enqueues_at_the_next_boundary():
 
 
 def test_the_bucketer_enqueues_its_own_frame_first_in_each_window():
-    """The certifier's own frame (the salt's) is enqueued at the first tick of each window `first` gives one for, ahead
-    of that bucket's arrivals and behind the queue carried from the window before: FIFO, at most r_in per bucket. `own`
-    names its slot in the row that releases it, by its place in the queue: a link frame of the same bytes is never
-    taken for it, and one a fault drops is never released."""
+    """The certifier's own frame (the salt's) is enqueued at the first tick of each window `first` gives one for, at
+    the head of the queue: ahead of that bucket's arrivals and of the queue carried from the window before, so it
+    leaves in slot 0 of that bucket, and the rest is FIFO, at most r_in per bucket. `own` names its slot in the row
+    that releases it, by its place: a link frame of the same bytes is never taken for it, and one a fault drops (a
+    fault before the window's first tick, or one an arrival at that tick causes) is never released."""
     P = GridParams(buckets=3, allocation=1, frame_bytes=1)
     b = Bucketer(Certifier("requests", P), first=lambda w: None if w == 2 else bytes([100 + w]))
     for frame, bucket in ((b"a", 0), (b"b", 2), (b"c", 2), (bytes([101]), 3)):
         b.arrive(frame, bucket)
     out = [(b.tick()[0], dict(b.own)) for _ in range(9)]
-    assert [row for row, _ in out] == [(b"d",), (b"a",), (b"b",), (b"c",), (b"e",), (b"e",), (None,), (None,), (None,)]
-    assert [own for _, own in out] == [{0: 0}, {}, {}, {}, {0: 1}, {}, {}, {}, {}]
+    assert [row for row, _ in out] == [(b"d",), (b"a",), (b"b",), (b"e",), (b"c",), (b"e",), (None,), (None,), (None,)]
+    assert [own for _, own in out] == [{0: 0}, {}, {}, {0: 1}, {}, {}, {}, {}, {}]
 
     g = Bucketer(Certifier("requests", P), first=lambda w: bytes([100 + w]) if w else None)
-    for frame, bucket in ((b"x", 2), (b"y", 2), (b"z", 2), (bytes([101]), 7)):
+    for frame, bucket in ((b"x", 2), (b"y", 2), (b"z", 2), (b"??", 6), (bytes([102]), 10)):
         g.arrive(frame, bucket)
     out = []
-    for t in range(9):
-        if t == 4:  # window 1's own frame is still queued behind z
+    for t in range(12):
+        if t == 3:  # before window 1's first tick, with y and z carried
             g.certifier.fault(Reason.MONITOR_UNAVAILABLE)
         out.append((g.tick()[0], dict(g.own)))
-    assert [row for row, _ in out] == [(None,), (None,), (b"x",), (b"y",), (None,), (None,), (b"f",), (b"e",), (None,)]
-    assert [own for _, own in out] == [{}, {}, {}, {}, {}, {}, {0: 2}, {}, {}]
+    assert [row for row, _ in out] == [(None,)] * 2 + [(b"x",)] + [(None,)] * 6 + [(b"g",), (b"f",), (None,)]
+    assert [own for _, own in out] == [{}] * 9 + [{0: 3}, {}, {}]
+    assert g.certifier.window == 4
+
+
+class _SaltBehind(Certifier):
+    """The ingress certifier under the rule before: its own frame queued behind any carried queue (FIFO)."""
+
+    def enqueue(self, frame: bytes, *, first: bool = False) -> None:
+        super().enqueue(frame)
+
+
+def test_a_carried_queue_that_fills_a_windows_first_bucket_leaves_the_derived_request_ends_exact():
+    """Request ends derived from the signed counts (request k ends at the first bucket where the counts, less one own
+    frame at each window's bucket 0, add up to its and the earlier requests' frames) are where the proxy anchors each
+    request: the bucket that releases its last frame. At r_in = 2, a request of 3 frames and one of 1 arrive in window
+    0's last bucket, which releases two of them, so two are carried and fill window 1's first bucket. The salt frame
+    at the head of that bucket's queue leaves there, and every derived end is exact. Queued behind the carried frames
+    (the rule before), it leaves a bucket later: the counts, and so every head, are the same, but the 1-frame
+    request's last frame leaves in bucket 4 while the counts derive bucket 5, a bucket late."""
+    P = GridParams(buckets=4, allocation=2, frame_bytes=B)
+    requests = [(b"a" * 100, 0), (b"b" * 1100, 3), (b"c" * 100, 3)]
+    sizes = [active.request_frame_count(len(r), B) for r, _ in requests]
+    assert sizes == [1, 3, 1]
+
+    def run(certifier: Certifier) -> tuple[list[int], list[int], list[int]]:
+        b = Bucketer(certifier, first=lambda w: active.salt_frame(w, active.PLACEHOLDER, B))
+        for request, bucket in requests:
+            for frame in itertools.batched(active.request_frames(request, B), B):
+                b.arrive(bytes(frame), bucket)
+        cut, anchors, records = active.Requests(), {}, []
+        for t in range(2 * P.buckets):
+            row, record = b.tick()
+            for frame in row[: row_count(row)]:
+                kind, _, payload = active.decode_frame(frame)
+                if kind == DATA and (end := cut.feed(payload))[2]:
+                    anchors[end[0]] = t
+            records += [record] if record is not None else []
+        counts = [row_count(row) for r in records for row in r.grid]
+        own = [int(t % P.buckets == 0) for t in range(len(counts))]
+        released = list(itertools.accumulate(n - o for n, o in zip(counts, own)))
+        derived = [next(t for t, m in enumerate(released) if m >= total) for total in itertools.accumulate(sizes)]
+        return counts, [anchors[k + 1] for k in range(len(requests))], derived
+
+    counts, anchors, derived = run(Certifier("requests", P))
+    assert counts == [2, 0, 0, 2, 2, 1, 0, 0]
+    assert anchors == derived == [0, 4, 5]
+    behind_counts, behind_anchors, behind_derived = run(_SaltBehind("requests", P))
+    assert behind_counts == counts and behind_derived == derived
+    assert behind_anchors == [0, 4, 4]
 
 
 def test_the_bucketers_admission_admits_whole_requests_while_the_window_ends_idle():

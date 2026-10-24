@@ -56,7 +56,8 @@ its stream's server connection.
 **The salt** (`Proxy(salt=…)`, off by default) is `salt_bits` bits (512 by default) per PoUW window from the
 certifier's own randomness (`fresh_salt`), released into the block only. PoUW window p is the `pouw_window` = k
 certifier windows p·k … p·k + k − 1 (k = 1 by default). At p's first ingress tick, t_s, the certifier draws p's salt
-and enqueues its own salt frame ahead of that bucket's arrivals (`Bucketer(first=…)`): kind `SALT` on `SALT_STREAM`,
+and enqueues its own salt frame at the head of the queue, ahead of that bucket's arrivals and of any queue carried
+from the window before (`Bucketer(first=…)`), so it leaves in that bucket's slot 0: kind `SALT` on `SALT_STREAM`,
 its payload u64be p followed by `PLACEHOLDER`, 64 zero bytes. The frame and its slot are fixed by the window and the
 traffic, so every record is a function of the traffic alone and none depends on the salt. When the ingress certifier
 releases that frame (the `Bucketer` knows it by its place in the queue, so a link frame of the same bytes is never taken
@@ -727,10 +728,12 @@ class Shaper:
 class Bucketer:
     """The ingress certifier on one link, fed frames as they arrive (no I/O): a frame arriving at bucket time s is
     `arrive`d with ⌈s⌉ and enqueued at that tick; `tick` returns the released row, with the record at a window's end.
-    With `first`, each window's first tick enqueues the certifier's own frame `first(window)`, if it gives one, ahead of
-    that bucket's arrivals. The bucketer follows it by its place in the queue, never by its bytes: `own` maps each slot
-    of the row last released that holds one to its window, and one a fault drops is never released. With `start`, it
-    begins at window `start`'s first bucket, its certifier at that window.
+    With `first`, each window's first tick enqueues the certifier's own frame `first(window)`, if it gives one, at the
+    head of the queue: ahead of that bucket's arrivals and of any queue carried from the window before, so it leaves in
+    slot 0 of that bucket (r_in ≥ 1) and the window's request frames are bucket 0's count less one, exactly. The
+    bucketer follows it by its place, never by its bytes: `own` maps the slot of the row last released that holds one
+    to its window, and one a fault drops is never released. With `start`, it begins at window `start`'s first bucket,
+    its certifier at that window.
 
     With `served` (off by default), a served link's admission rule (`served.Admission`): arrived frames are enqueued
     only as whole requests of the profile's F_in frames, and only while the window, with the request, still ends idle
@@ -757,16 +760,16 @@ class Bucketer:
         self.waiting: deque[tuple[int, bytes]] = deque()
         self.t = start * certifier.params.buckets
         self.own: dict[int, int] = {}
-        self._own: list[tuple[int, int]] = []  # (place in the queue, window) of each own frame queued
 
     def arrive(self, frame: bytes, bucket: int) -> None:
         self.waiting.append((bucket, frame))
 
     def tick(self) -> tuple[Row, Record | None]:
         c, T = self.certifier, self.certifier.params.buckets
+        own = None
         if self.first is not None and self.t % T == 0 and (frame := self.first(self.t // T)) is not None:
-            self._own.append((c.queued, self.t // T))
-            c.enqueue(frame)
+            own = self.t // T
+            c.enqueue(frame, first=True)
         a = self.served
         if a is None:
             while self.waiting and self.waiting[0][0] <= self.t:
@@ -782,14 +785,8 @@ class Bucketer:
         row = c.tick()
         if a is not None:
             self.counts.append(row_count(row))
-        if self._own:
-            n = row_count(row)
-            # a fault empties the queue, and its window enqueues nothing after it
-            kept = [(place, w) for place, w in self._own if place < c.queued + n]
-            self.own = {place: w for place, w in kept if place < n}
-            self._own = [(place - n, w) for place, w in kept if place >= n]
-        elif self.own:
-            self.own = {}
+        # a fault before the release empties the queue, the own frame with it, and pads the row
+        self.own = {} if own is None or row[0] is None else {0: own}
         self.t += 1
         return row, c.close_window() if self.t % T == 0 else None
 

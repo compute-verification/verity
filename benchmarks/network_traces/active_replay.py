@@ -432,16 +432,17 @@ def model_releases(requests: Sequence[dict], params: GridParams, windows: int, e
                    admission: Admission | None = None, salt: bool = False) -> dict[int, int]:
     """Each request's release as the ingress certifier's rule gives it: its frames enqueued at their bucket, in send
     order, and released r_in per bucket; the egress bucket of its last frame's release. With `salt`, each window's
-    first bucket enqueues the certifier's salt frame ahead of its arrivals. With `admission`, a served link's admission
-    rule (`active.Bucketer(served=…)`): a request is enqueued only while its window, with it, still ends idle
-    (`served.admits`), behind the certifier's own frame where the profile counts one."""
+    first bucket puts the certifier's salt frame at the head of the queue, ahead of its arrivals and of any queue
+    carried in. With `admission`, a served link's admission rule (`active.Bucketer(served=…)`): a request is enqueued
+    only while its window, with it, still ends idle (`served.admits`), behind the certifier's own frame where the
+    profile counts one."""
     pending = sorted((q["enqueue"], q["send_ms"], q["stream"], q["frames"]) for q in requests)
     out, queue, k, counts, T = {}, [], 0, [], params.buckets
     for t in range(windows * T):
         if t % T == 0:
             counts = []
             if salt or (admission is not None and admission.profile.own):
-                queue.append((None, False))
+                queue.insert(0, (None, False))
         while k < len(pending) and pending[k][0] <= t:
             _, _, s, n = pending[k]
             if admission is not None and not admits(counts, len(queue) + n, admission.sync(t // T), admission.profile,
