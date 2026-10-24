@@ -25,11 +25,9 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
 * **Units** are in compile's order, the order the manifest lists them in: the call, then its row block, then its column
   block, row-major.
 * **The hook.** The arm hands every served call to `engine.int8_vllm.Int8PlainLinearMethod.observe` after both ops, and the
-  option records it there as a `Call`: its engine step, its layer (the linear's ordinal), its served rows and its
-  position. A step's calls come in its forward's order, which need not be module order (GLM-5.3's DSA attention runs
-  fused_qkv_a_proj and q_b_proj before its indexer's wq_b, which module order puts first): a step starts at the window's
-  first call and at a linear the step already holds, and each call sits at (s, w)'s index and position whatever its place
-  in the forward. Then each listener (`H1Run.listen`) gets the call with the served tensors, on the device: A (the s8
+  option records it there as a `Call`: its engine step (counted at a linear the step already holds: GLM-5.3's forward
+  runs its indexer's wq_b, module order's first, third), its layer (the linear's ordinal), its served rows and its
+  position. Then each listener (`H1Run.listen`) gets the call with the served tensors, on the device: A (the s8
   rows, as the Commit taps ``Int8RowQuant_v1/0``), s_a (``/1``), the int8 weight and its scales; `H1Run.close` hands it the
   empty steps' calls too, with no rows. A's slot i is the call's row i, so a tile's rows are 32 consecutive slots. What a
   listener returns (its roots and receipt root, as hex) is recorded with the call (``bound``). `Call.inputs` is
@@ -331,19 +329,14 @@ class H1Run:
         self.entry, self._salt, self._opener, self.modules, self.commit = entry, salt, opener, dict(modules), commit
         self.shapes_, self.rows, self.steps = [tuple(map(int, s)) for s in shapes], int(rows), int(steps)
         self.offs, self.u_step = layout(self.shapes_, self.rows)
-        #: the window's calls in index order; per step, how many are in, and the linears of the step being recorded in the
-        #: order they came, against the first step's order (``order_ok``: one forward order a window)
-        self.calls: list[Call] = []
-        self._in: Counter[int] = Counter()
-        self._came: list[int] = []
-        self._held: set[int] = set()
-        self._order: list[int] | None = None
+        #: the calls at their indices s·L + w; per step, how many are in; the step's linears as they came; step 0's
+        self.calls, self._in, self._came, self._order = list[Call](), Counter[int](), list[int](), None
         self.listeners: list[Listener] = []
         self.bound: dict[int, Mapping[str, Any]] = {}
         self.refused: list[dict[str, int]] = []
         self.retained: deque[tuple[int, np.ndarray, np.ndarray, np.ndarray]] = deque(maxlen=retain or None)
         self.retain, self.transcript_dir = retain, transcript_dir
-        self.step, self.last, self.order_ok, self.closed = -1, None, True, False
+        self.step, self.order_ok, self.closed = -1, True, False
         self._weights: dict[int, tuple[Any, Any]] = {}
         #: each served call's credit verdict (`credit_gate.verdict`), by call index, and the call `record` just made with its z
         self.verdicts: dict[int, dict[str, Any]] = {}
@@ -442,10 +435,6 @@ class H1Run:
         if self.prover is not None and m:
             PV.keep_call(self.prover, call.index, av, sv, records)
 
-    def _index(self, s: int, w: int) -> int:
-        """Call (s, w)'s index, s·L + w, whatever its place in its step's forward."""
-        return s * len(self.shapes_) + w
-
     def call(self, index: int) -> Call:
         """Call `index`; KeyError when the window has none."""
         i = bisect.bisect_left(self.calls, index, key=lambda c: c.index)
@@ -455,8 +444,8 @@ class H1Run:
 
     def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None) -> Call:
         n, k = self.shapes_[w]
-        call = Call(self._index(s, w), s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0, k, n,
-                    s * self.u_step + self.offs[w], self.rows)
+        call = Call(s * len(self.shapes_) + w, s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0,
+                    k, n, s * self.u_step + self.offs[w], self.rows)
         bisect.insort(self.calls, call, key=lambda c: c.index)
         self._in[s] += 1
         if self.commit:
@@ -596,19 +585,14 @@ class H1Run:
     def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None) -> Call | None:
         """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales, and
         the z its arm handed over: its records (`pouw_h1_records.of`), committed as its z table; without them nothing is
-        committed for z, and with ``retain`` `int_mm` computes its exact Y beside, only to retain it. The window's first
-        call and a linear its step already holds start the next step."""
+        committed for z, and with ``retain`` `int_mm` computes its exact Y beside, only to retain it."""
         if self.closed:
             raise RuntimeError(f"{self.entry}: a call after the window closed")
-        if self.step < 0 or w in self._held:
-            if self._order is None and self.step >= 0:
-                self._order = self._came
-            self.step, self._came, self._held = self.step + 1, [], set()
-        if self._order is not None and self._order[len(self._came):len(self._came) + 1] != [w]:
-            self.order_ok = False
+        if self.step < 0 or w in self._came:
+            self._order = self._came if self._order is None and self.step >= 0 else self._order
+            self.step, self._came = self.step + 1, []
+        self.order_ok &= self._order is None or self._order[len(self._came):len(self._came) + 1] == [w]
         self._came.append(w)
-        self._held.add(w)
-        self.last = w
         self._weights[w] = (weight, weight_scale)
         m, k = (int(d) for d in a.shape)
         if not 0 <= self.step < self.steps or m > self.rows or (int(weight.shape[0]), k) != self.shapes_[w]:
@@ -806,11 +790,8 @@ def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes
 
 def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> list[tuple[bytes, bytes] | None]:
     """Each call's (root(A), root(B)) from what its listeners bound (``root_a``, ``root_b``, hex), None where either is missing."""
-    out: list[tuple[bytes, bytes] | None] = []
-    for c in calls:
-        b = bound.get(c.index, {})
-        out.append((bytes.fromhex(b["root_a"]), bytes.fromhex(b["root_b"])) if "root_a" in b and "root_b" in b else None)
-    return out
+    return [(bytes.fromhex(b["root_a"]), bytes.fromhex(b["root_b"])) if "root_a" in b and "root_b" in b else None
+            for b in (bound.get(c.index, {}) for c in calls)]
 
 
 __all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "RECORD", "SALT_TAG",

@@ -215,7 +215,7 @@ def ingest(run: PH.H1Run, rows: Sequence[Mapping[str, Any]]) -> None:
         for into, key in ((run.tables, "tables"), (run.verdicts, "verdict"), (run.bound, "bound")):
             if r.get(key):
                 into[c.index] = dict(r[key])
-        run.step, run.last = c.step, c.layer
+        run.step = c.step
         run.details["calls"] = run.commits["calls"] = len(run.calls)
         if c.layer == last:
             run._close_rounds(c.step)
