@@ -1876,9 +1876,9 @@ rows are held to the committed ``srv`` row, which the verifier holds by b‖c to
 registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are refused.
 `benchmarks/network_traces/compile_slice_zk.py` proves it `--zk`, held by Lean `verify --zk`, each unit opening to its
 verdict with no witness piece in what the verifier received: at the demonstration class (`compile_slice.demo`, 49,113
-ANDs a unit), the honest unit and ten negatives, the made-up table refused by ``cache`` alone (run DEMORUN); before the
-cache was wired, eleven units of corpus-smallkv's first seven steps, the six passes with the served row and with its
-own among them (run RUN).
+ANDs a unit), the honest unit and ten negatives, the made-up table refused by ``cache`` alone (run
+r20261024-162328-03c7); before the cache was wired, eleven units of corpus-smallkv's first seven steps, the six passes
+with the served row and with its own among them (run r20261024-153220-c97c).
 
 ## The active certifier (`active`)
 
