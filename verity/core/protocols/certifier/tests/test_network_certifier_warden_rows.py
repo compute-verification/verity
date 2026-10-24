@@ -228,6 +228,36 @@ def test_the_port_reads_the_rows_the_wardens_wiring_places_and_nothing_else(traf
             W.port(head, wiring, PARAMS, bad)
 
 
+def test_the_bucket_port_reads_every_row_whole(traffic, tmp_path):
+    """`bucket_port` (one unit a bucket, IO-TIE's) is `port`'s entry with unit `reads_from + t` reading row t, an idle
+    window's rows too, whose slots `port` can't name, under the head's value. The statement for those rows is accepted
+    by the host's read of Lean's registered reads (`refusal`), and one naming a units' wiring or with two rows swapped
+    is refused. A head of another schedule is refused."""
+    warden, _ = traffic
+    idle, _, _ = run([], {}, windows=1)
+    for record in (records(warden)[1][0], records(idle)[1][0]):
+        _, cells_, _ = _attest(tmp_path / str(id(record)), record)
+        p = W.bucket_port(cells_.head, PARAMS, reads_from=5)
+        q = cells_.wiring.connections[:1]
+        if q:
+            assert {k: v for k, v in p.items() if k not in ("reads", "reads_from")} == \
+                {k: v for k, v in W.port(cells_.head, cells_.wiring, PARAMS, [(q[0][0], 0)]).items() if k != "reads"}
+            units = W.Units(((q[0][0], 0),))
+            named = cells_.statement(W.port(cells_.head, cells_.wiring, PARAMS, units)["reads"], units)[2]
+            assert "not another value" in W.refusal(p, cells_.domain, named, [cells_.bcs[0]])
+        assert p["reads"] == list(range(T)) and p["reads_from"] == 5 and p["root"] == cells_.root.hex()
+        assert p["value"] == cells_.head.value
+        assert "reads_from" not in W.bucket_port(cells_.head, PARAMS)
+        _, _, entry = cells_.statement(list(range(T)))
+        assert W.refusal(p, cells_.domain, entry, list(cells_.bcs)) is None
+        swapped = [1, 0, *range(2, T)]
+        assert "unit 5 reads position 1" in \
+            W.refusal(p, cells_.domain, cells_.statement(swapped)[2], [cells_.bcs[t] for t in swapped])
+    assert W.wiring(records(idle)[1][0], PARAMS).connections == ()
+    with pytest.raises(ValueError, match="schedule's rows"):
+        W.bucket_port(cells_.head, dataclasses.replace(PARAMS, delay=PARAMS.delay + 1))
+
+
 def test_the_programs_units_name_their_wiring_and_a_statement_for_any_other_is_refused(traffic, tmp_path):
     """The Program's `Units` read the rows a bare sequence of the same reads does, and the port's value names their
     digest (`<link>/<direction>/<window>/units/<digest>`), as the statement made for them does, which the host's read
