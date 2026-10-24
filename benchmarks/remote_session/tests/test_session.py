@@ -884,8 +884,9 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
 def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
     """`verifier.recorded_inputs`: the line's groups' passes, windows and registered blocks are the Lean verifier's
     record of the session (`lean_record`, which a run from before sessions kept it reads back from its `record` and
-    `windows_seen`, field for field), and its line is the line of the same groups and windows given; a record of
-    another registration, or windows seen that aren't the record's, is refused."""
+    `windows_seen`, field for field), and its line is the line of the same groups and windows given, the pooled
+    bound's inputs (`recorded_windows`) the profile's; a record of another registration, or windows seen that aren't
+    the record's, is refused."""
     line = verifier.line
     got = {}
     (r,), _ = run("honest", paces=[verifier.pace_of("1:4:40:2", 1.0)],
@@ -894,15 +895,16 @@ def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
     old = {k: v for k, v in r.items() if k != "lean_record"}
     assert verifier.lean_record(old) == r["lean_record"]
     rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
-    mem = r["ledger"]["memory"]
+    mem, profile = r["ledger"]["memory"], r["record"]["profile"]["windows"]
+    windows = [(sum(w["lengths"]), w["profile"]["drawn"]["receipt"]) for w in profile]
     given = line.inputs_json(
         verifier.paced_groups(mem, r["windows_seen"], block_bytes=mem["block_bytes"]), per=r["pace"]["groups"],
         blocks=got["reg"]["blocks"], block_bytes=mem["block_bytes"], chip_bytes=mem["chip_bytes"],
-        node_bytes=mem["hbm_bytes"], delta=r["delta"], rates=rates,
-        windows=[(sum(w["lengths"]), w["profile"]["drawn"]["receipt"]) for w in r["record"]["profile"]["windows"]])
+        node_bytes=mem["hbm_bytes"], delta=r["delta"], rates=rates, windows=windows)
     want = line.run_json(given)
     assert "refused" not in want
     for s in (r, old):
+        assert verifier.recorded_windows(s) == (windows, profile[0]["profile"]["delta"])
         assert line.record_run_json(verifier.recorded_inputs(s, got["reg"], host_bytes=0, rates=rates)) == want
         assert verifier.recorded_line(s, got["reg"], host_bytes=0, rates=rates).to_json() == want
     with pytest.raises(ValueError, match="of registration"):

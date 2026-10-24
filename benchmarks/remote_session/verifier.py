@@ -534,6 +534,12 @@ def lean_record(session: dict) -> dict:
                          "stale": w["stale"], "steps": w["steps"]} for w, x in zip(ws, seen)]}
 
 
+def recorded_windows(session: dict) -> tuple[list[tuple[int, int]], float]:
+    """The pooled bound's inputs (`pooled.bound`) as the line reads them off an accepted session's Lean record
+    (`lean_record`, `line.of_summary`): each window's receipts and draws, and the session's δ."""
+    return [(sum(w["lengths"]), w["drawn"]) for w in lean_record(session)["windows"]], session["delta"]
+
+
 def record_seen(mem: dict, seen: list[dict], record: dict, *, block_bytes: int) -> list[line.Seen]:
     """What the auditor saw of each window beside the Lean verifier's `record` of it (`line.Seen`): its group's times
     and reads as `paced_groups` reads them, its passes the record's or refused."""
