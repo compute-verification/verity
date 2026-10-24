@@ -213,6 +213,7 @@ def test_a_gate_runs_directory_and_a_tarball_are_read_as_the_rehearsal(tmp_path)
     _rehearsal(gate / "out", ["honest"], {"honest": "accepted"})
     (gate / "end.json").write_text(json.dumps({"run": "r1", "rc": 0, "ended": "the rehearsal ended", "pinned": "abc",
                                                "runs": {"honest": {"verdict": "accepted", "network": True}}}))
+    (gate / "request.json").write_text(json.dumps({"run": "r1", "peer": "vy-nebius-1", "port": 18080}))
     local = _rehearsal(tmp_path / "local" / "planned-40", ["late", "extra"], {"late": "refused", "extra": "refused"})
     tgz = tmp_path / "planned-40.tgz"
     with tarfile.open(tgz, "w:gz") as tar:
@@ -224,7 +225,13 @@ def test_a_gate_runs_directory_and_a_tarball_are_read_as_the_rehearsal(tmp_path)
     assert got["honest"]["dir"] == gate / "out" / "honest" and got["honest"]["check"]["verdict"] == "accepted"
     assert got["honest"]["gate"]["run"] == "r1" and got["honest"]["gate"]["verdict"] == "accepted"
     assert got["late"]["dir"].parent.name == "planned-40" and got["late"]["check"]["verdict"] == "refused"
-    assert e2e.where(got)["where"].startswith("gate: ")
+    at = e2e.where(got)
+    assert at["where"] == ("gate: the certifier on vy-challenger-1, the auditor's host, through its gate (vy-challenger-gate "
+                           "certifier-rehearse), tunnelled to vy-nebius-1:18080; gate runs honest r1; pinned to main abc; "
+                           "extra, late off the gate")
+    assert at["upstream"] == "vy-nebius-1:18080"
+    (gate / "out" / "honest" / "deployment.json").write_text(json.dumps({"upstream": "http://127.0.0.1:41000"}))
+    assert e2e.where(got)["upstream"] == "vy-nebius-1:18080 (its 127.0.0.1, tunnelled to http://127.0.0.1:41000)"
     with pytest.raises(SystemExit, match="two honest runs"):
         e2e.collect([gate, gate], work)
     with pytest.raises(SystemExit, match="no honest run"):

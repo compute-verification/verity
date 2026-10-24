@@ -85,6 +85,7 @@ NEGATIVES = ("late", "extra", TAMPERED)
 PENDING = {"token": "IO-TIE"}
 README = "verity/core/protocols/certifier/README.md"
 PEERS = Path("/etc/vy/peers")
+GATE_HOST = "vy-challenger-1"
 
 CLAIM = {
     "statement": (
@@ -225,8 +226,16 @@ def where(runs: dict[str, dict], peer: str | None = None) -> dict:
     the gate on the host that ran the rehearsal, which against a loopback endpoint is the endpoint's."""
     upstream = (_read(runs[HONEST]["dir"] / "deployment.json") or {}).get("upstream")
     if runs[HONEST]["gate"] is not None:
-        return {"upstream": upstream, "where": "gate: the certifier on the gate's host, the auditor's, tunnelled to the "
-                                               "endpoint"}
+        req = _read(Path(runs[HONEST]["dir"]).parents[1] / "request.json") or {}
+        gates = {s: x["gate"] for s, x in runs.items() if x.get("gate")}
+        off = sorted(set(runs) - set(gates))
+        at = f"{req['peer']}:{req['port']}" if req.get("peer") and req.get("port") else None
+        return {"upstream": f"{at} (its 127.0.0.1, tunnelled to {upstream})" if at and upstream else at or upstream,
+                "where": f"gate: the certifier on {GATE_HOST}, the auditor's host, through its gate (vy-challenger-gate "
+                         f"certifier-rehearse), tunnelled to {at or 'the endpoint'}; gate runs "
+                         f"{', '.join(f'{s} {g.get('run')}' for s, g in gates.items())}; pinned to main "
+                         f"{', '.join(sorted({str(g.get('pinned')) for g in gates.values()}))}"
+                         + (f"; {', '.join(off)} off the gate" if off else "")}
     if peer is not None:
         return {"upstream": f"{peer} (its 127.0.0.1, forwarded to {upstream})",
                 "where": f"off the prover's node: better than the loopback, though not yet the auditor host (the "
