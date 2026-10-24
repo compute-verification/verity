@@ -17,7 +17,8 @@
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
 #     The STANDIN entries warden and warden:altered are a5_warden.py: transfer-gate chunks whose ports open one connection's
 #     cells under the warden's signed roots, beside a drawn rest, on a warden run rehearsed here first (warden_serve.py
-#     rehearse --fake, about a minute; only its public deployment.json, cells.jsonl and check.json are kept), on a local
+#     rehearse --fake, about a minute, its prompts up to 4096 tokens so that seed 0's traffic has a connection of more than
+#     a5_warden.py's 16 cells each way; only its public deployment.json, cells.jsonl and check.json are kept), on a local
 #     challenger's coins (A5_CHALLENGER=local) or the verifier's own (A5_COINS=verifier); warden:altered reads one cell a bit
 #     off and is to be refused by Lean's registered reads.
 #   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only; A5_JOBS=N
@@ -190,7 +191,7 @@ else
       N=${e/:/-}; mkdir -p $O/$N
       if [ ! -d $W/warden-run ]; then
         (cd benchmarks/network_traces && $PY warden_serve.py rehearse --fake --out $W/warden-run --requests 6 --rate 1 --tail 5 \
-          --max-tokens 64 --prompt-max 64 --start-in 2) > $O/warden-rehearse.log 2>&1 || { tail -20 $O/warden-rehearse.log; exit 8; }
+          --max-tokens 64 --prompt-max 4096 --start-in 2) > $O/warden-rehearse.log 2>&1 || { tail -20 $O/warden-rehearse.log; exit 8; }
         mkdir -p $O/warden-run && cp $W/warden-run/{deployment.json,cells.jsonl,check.json} $O/warden-run/
       fi
       $TIME $PY benchmarks/one_stage/a5_warden.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL \
