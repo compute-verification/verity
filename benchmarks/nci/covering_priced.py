@@ -308,6 +308,12 @@ def rho(form: str, st: list[dict], p: dict[str, float], b: int, k: float, cw: fl
 FORMS = ("one c", "two c's", "priced", "priced additive")
 
 
+def tier_of(cheapest: dict, pt: str, tier: str = "1%") -> dict[str, float]:
+    """A point's uniform c_w tier by name, else its theta-selectable one (a file without the realism note's tiers)."""
+    t = cheapest.get(pt, {})
+    return t.get(tier) or t.get(f"theta {tier}") or {}
+
+
 def grid(st: list[dict], pts: dict, cheapest: dict, gates: float, tier: str = "1%", chain: str = "A") -> dict:
     """rho[point][fmt][k][form] for every point with a cheapest-class cost (the uniform forms' c_w)."""
     out = {}
@@ -317,7 +323,7 @@ def grid(st: list[dict], pts: dict, cheapest: dict, gates: float, tier: str = "1
         out[pt] = {}
         for fmt, b in FMTS.items():
             p = prices(tab[fmt])
-            cw = cheapest[pt][tier][fmt]
+            cw = tier_of(cheapest, pt, tier)[fmt]
             out[pt][fmt] = {kn: {f: rho(f, st, p, b, k, cw, gates, chain) for f in FORMS} for kn, k in KS.items()}
     return out
 
@@ -509,7 +515,7 @@ def report(pts: dict, cheapest: dict, label: str, dgrad: bool = False) -> dict:
         for fmt in FMTS:
             p = prices(tab[fmt])
             mp, mph = mean_price(base, p), mean_price(counted(st, head=True), p)
-            cw = cheapest.get(pt, {}).get("1%", {}).get(fmt)
+            cw = tier_of(cheapest, pt).get(fmt)
             res["prices"][f"{pt}|{fmt}"] = {"class": p, "mean": mp, "mean_with_head": mph, "cheapest_1pct": cw}
             print(f"| {pt} | {fmt} | {p['mla_in']:.3g} | {p['mla_out']:.3g} | {p['expert_in']:.3g} | "
                   f"{p['expert_out']:.3g} | {p['dense_in']:.3g} | {p['dense_out']:.3g} | {p['head']:.3g} | "
@@ -520,7 +526,7 @@ def report(pts: dict, cheapest: dict, label: str, dgrad: bool = False) -> dict:
     g = grid(cst, pts, cheapest, gates)
     res["grid"] = g
     pts_u = list(g)
-    low = min(pts_u, key=lambda pt: cheapest[pt]["1%"]["fp4"])
+    low = min(pts_u, key=lambda pt: tier_of(cheapest, pt)["fp4"])
     print(f"## rho by form, k and precision (range over {', '.join(pts_u)}; c_a = b; uniform c_w = cheapest 1%)\n")
     print(f"| form | k | bf16 | FP8 | FP4 | chained share of M* | first chained stage, bf16 / FP4 ({low}) |")
     print("|---|---|---|---|---|---|---|")
@@ -611,7 +617,7 @@ def sensitivity(pts: dict, cheapest: dict) -> dict:
                     if pt not in cheapest:
                         continue
                     for c in arg:
-                        q[c] = cheapest[pt]["1%"][fmt]
+                        q[c] = tier_of(cheapest, pt)[fmt]
                 rel.append(rho("priced", sts, q, b, k, 1.0, gates)["rho"] / r0)
             cells.append(f"×{sum(rel) / len(rel):.3f}")
         out[name] = cells
