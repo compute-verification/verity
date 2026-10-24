@@ -12,7 +12,8 @@
 #   research run --on NODE --mem-gb 410 --mem-wait 43200 --timeout 18h --custody-ttl 36h --source . --cwd source --project verity --send LEGS.sha256.gz -- env ROW=... BUILD_RUN=... BUILD_PARTS=RUN:build LEGS_PARTS=RUN:legs-small LEGS=LEGS.sha256.gz OWN="2=RUN:fold-2" RANK_SETS="RUN:ranks-0 RUN:ranks-1 ..." SW=... VERITY_QWORD_MAX_GATES=... VERITY_QWORD_MAX_GATES_ALLOWED=... bash integrations/vllm/manifests/glm_v2_tree/jobs/match_full.sh
 #   research run --on NODE --mem-gb 380 ... -- env ROW=... BUILD_RUN=... BUILD_PARTS=... LEGS_PARTS=... OWN="0=RUN:fold-0 1=RUN:fold-1" FULL=0 SW=... ... bash .../match_full.sh
 # env: ROW, BUILD_RUN, BUILD_PARTS, LEGS_PARTS, [OWN], [FULL=1]; FULL=1: LEGS (a path, else $RESEARCH_RUN_DIR/inputs/LEGS; gzipped
-# or not), RANK_SETS; [SW], [FOLD_WORKERS=1], [FOLD_RANK_WORKERS=1], store_tar.sh's [WAIT_MIN=900], [EVICT_FREE_GB], [FETCH_*].
+# or not), RANK_SETS; [SW], [FOLD_WORKERS=1], [FOLD_RANK_WORKERS=1], store_tar.sh's [WAIT_MIN=900], [EVICT_FREE_GB], [FETCH_*];
+# [CUDA_DRIVER_ART] (README "GPU batch"): a node without the venv, libcuda.so.1 or the model's metadata is readied by stage_cpu.sh.
 set -uo pipefail
 : "${ROW:?ROW}" "${BUILD_RUN:?BUILD_RUN}" "${BUILD_PARTS:?BUILD_PARTS}" "${LEGS_PARTS:?LEGS_PARTS}"
 FULL=${FULL:-1}
@@ -27,6 +28,12 @@ D=$SW/$ROW O=$OUT
 export FOLD_WORKERS=${FOLD_WORKERS:-1} FOLD_RANK_WORKERS=${FOLD_RANK_WORKERS:-1} WAIT_MIN=${WAIT_MIN:-900}
 step() { echo "$(date -u +%FT%TZ) [full] $*"; }
 fail() { step "$1"; [ "$FULL" != 1 ] || OUT=$O NAME=match-cpu MSG="$1" SW=$SW bash "$J/store_tar.sh" fail; exit "$2"; }
+W0=/workspace/cp/circuits
+# store_tar.sh needs the venv before anything is fetched; a node that has it is left alone (its other jobs share the venv)
+if [ ! -x "$W0/venv312/bin/python" ] || [ ! -d "$SNAP" ] || ! { ldconfig -p | grep -q 'libcuda\.so\.1 ' || [ -e "$W0/cuda-driver/libcuda.so.1" ]; }; then
+  step "readying the node (stage_cpu.sh, CUDA_DRIVER_ART=${CUDA_DRIVER_ART:-})"
+  mkdir -p "$O/stage" && OUT=$O/stage W=$W0 bash "$J/stage_cpu.sh" || fail "stage_cpu.sh failed (rc $?)" 5
+fi
 
 if [ "$FULL" = 1 ]; then
   : "${LEGS:?LEGS}" "${RANK_SETS:?RANK_SETS}"
