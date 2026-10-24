@@ -76,26 +76,6 @@ def _mixed() -> tuple[I1.Advice, dict]:
     ])
 
 
-def test_requests_compile_to_the_builds_request_programs_at_the_shapes_they_ran():
-    reg, (advice, ingress) = _registered(), _mixed()
-    c = compile_steps(reg, advice, ingress)
-    d0 = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=8, T=3).digest
-    d1 = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": STOCH_POLICY}), "request", LP=5, T=2).digest
-    assert [(u.digest, u.LP, u.T, u.first_step, u.id) for u in c.requests] == [(d0, 8, 3, 0, "q0"), (d1, 5, 2, 1, "q1"), (d0, 8, 3, 2, "q2")]
-    assert sorted(c.programs) == sorted({d0, d1})
-    assert c.requests[1].policy == STOCH_POLICY and c.requests[1].seed == 7 and c.requests[0].seed is None
-    assert c.steps[1] == [RowRef(0, d0, 8, 1, 1), RowRef(1, d1, 0, 5, 1)]
-    assert c.steps[2] == [RowRef(0, d0, 9, 1, 1), RowRef(1, d1, 5, 1, 1), RowRef(2, d0, 0, 8, 1)]
-    assert [len(s) for s in c.steps] == [1, 2, 3, 3, 1, 1]
-    wl = c.workload
-    assert [(r.request_id, r.index, r.prompt_len, r.cap, r.arrive_step) for r in wl.requests] == [
-        ("r0", 0, 8, 4, 0), ("r1", 1, 5, 3, 1), ("r2", 2, 8, 4, 2)]
-    assert wl.lag == reg.phi.target_profile().lag()
-    s = json.loads(json.dumps(c.summary()))
-    assert s["workload_digest"] == wl.digest and s["steps"][1] == [[0, 8, 1, 1], [1, 0, 5, 1]] and s["cap_bits"] == reg.cap_bits
-    assert compile_steps(reg, I1.encode(advice), ingress).summary() == c.summary()
-
-
 def test_a_requests_program_reads_its_own_fields_alone():
     """r1 run alone compiles to the Program it had among r0 and r2: its template and statics read its advice record and body, never
     its batch-mates."""

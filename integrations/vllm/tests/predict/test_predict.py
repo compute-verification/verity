@@ -322,21 +322,53 @@ def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_
     assert any(m in str(Path(S.__file__).resolve()) for m in inputs_trace._FORBIDDEN_MARKERS)
 
 
-def test_code_version_is_one_tree_over_a_namespaces_portions(monkeypatch, tmp_path):
-    """`verity` as a namespace: the digest is the same over any order of its portions and with a cwd directory that joined it
-    without a module, and moves with an edit."""
+def _portions(monkeypatch, tmp_path, files: tuple[str, ...]):
+    """`verity` as a namespace over portions in a git checkout at tmp_path/repo holding `files`, tracked; returns a function of
+    the portions' names giving the code version over them, in that order.  Git looks for no checkout above tmp_path."""
+    import subprocess
+
     import verity
 
-    for rel in ("upper/verity/ml/__init__.py", "lower/verity/ir/__init__.py", "lower/verity/ir/defs.py",
-                "cwd/verity/primitives/circuits/src/verity/ir/defs.py"):
-        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / rel).write_text(f"# {rel}\n")
+    repo = tmp_path / "repo"
+    for rel in files:
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text(f"# {rel}\n")
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
 
     def version(*portions: str) -> str:
         monkeypatch.setattr(verity, "__path__", [str(tmp_path / p / "verity") for p in portions])
         return S.code_version()
+    return version
 
-    a = version("upper", "lower")
-    assert version("lower", "upper") == version("cwd", "upper", "lower") == a
-    (tmp_path / "lower" / "verity" / "ir" / "defs.py").write_text("# edited\n")
-    assert version("upper", "lower") != a
+
+def test_code_version_is_one_tree_over_a_namespaces_portions(monkeypatch, tmp_path):
+    """`verity` as a namespace: the digest is the same over any order of its portions and with a cwd directory that joined it
+    without a module, and moves with an edit."""
+    version = _portions(monkeypatch, tmp_path, ("upper/verity/ml/__init__.py", "lower/verity/ir/__init__.py", "lower/verity/ir/defs.py",
+                                                "cwd/verity/primitives/circuits/src/verity/ir/defs.py"))
+    a = version("repo/upper", "repo/lower")
+    assert version("repo/lower", "repo/upper") == version("repo/cwd", "repo/upper", "repo/lower") == a
+    (tmp_path / "repo" / "lower" / "verity" / "ir" / "defs.py").write_text("# edited\n")
+    assert version("repo/upper", "repo/lower") != a
+
+
+def test_code_version_reads_tracked_files_only(monkeypatch, tmp_path):
+    """A file written into a package's tree that git doesn't track (what a parallel test, a build or a run leaves there) doesn't
+    move the digest, so two calls agree whatever was written between them; tracking it does.  A portion outside any checkout is
+    refused rather than hashed as it lies on disk."""
+    import subprocess
+
+    version = _portions(monkeypatch, tmp_path, ("pkg/verity/ir/__init__.py", "pkg/verity/ir/defs.py"))
+    a = version("repo/pkg")
+    for stray in ("ir/defs.py.tmp", "ir/__pycache__/defs.cpython-312.pyc", "ir/.lake/build/out.olean", "report.json"):
+        (tmp_path / "repo" / "pkg" / "verity" / stray).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "repo" / "pkg" / "verity" / stray).write_text("stray\n")
+    assert version("repo/pkg") == a
+    subprocess.run(["git", "-C", str(tmp_path / "repo"), "add", "-f", "pkg/verity/report.json"], check=True)
+    assert version("repo/pkg") != a
+    (tmp_path / "loose" / "verity" / "ir").mkdir(parents=True)
+    (tmp_path / "loose" / "verity" / "ir" / "__init__.py").write_text("")
+    with pytest.raises(RuntimeError, match="not in a git checkout"):
+        version("loose")
