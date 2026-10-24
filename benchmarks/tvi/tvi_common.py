@@ -122,6 +122,38 @@ def correctness_reward(completions, answer, **kwargs) -> list[float]:
     return [1.0 if is_correct(completion_text(c), a) else 0.0 for c, a in zip(completions, answer)]
 
 
+def is_formatted(completion: str) -> bool:
+    """A final \\boxed{} holding a number: the answer format, whatever the number is."""
+    boxed = extract_boxed(completion)
+    return boxed is not None and _NUM.search(boxed) is not None
+
+
+def format_reward(completions, **kwargs) -> list[float]:
+    return [1.0 if is_formatted(completion_text(c)) else 0.0 for c in completions]
+
+
+def make_random_reward(seed: int):
+    """Bernoulli(1/2) per completion from its own seeded stream, independent of the completion and of correctness."""
+    gen = torch.Generator().manual_seed(10_000 + seed)
+
+    def random_reward(completions, **kwargs) -> list[float]:
+        return torch.bernoulli(torch.full((len(completions),), 0.5), generator=gen).tolist()
+
+    return random_reward
+
+
+def reward_funcs(name: str, seed: int):
+    """(reward functions, weights) for `--reward`: the trained-on reward has weight 1, and correctness and format are
+    always logged beside it at weight 0."""
+    if name == "true":
+        return [correctness_reward, format_reward], [1.0, 0.0]
+    if name == "format":
+        return [format_reward, correctness_reward], [1.0, 0.0]
+    if name == "random":
+        return [make_random_reward(seed), correctness_reward, format_reward], [1.0, 0.0, 0.0]
+    raise SystemExit(f"unknown --reward {name}: true, format or random")
+
+
 class TinyLoRA(torch.nn.Module):
     """W' = W + U_r S_r (sum_i v_i P_i) V_r^T on each target map, as a forward hook so the module tree (and the names
     vLLM loads) stay the base model's. v (u per group) is the only trainable tensor."""

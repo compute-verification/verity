@@ -4,8 +4,9 @@
     python grpo_train.py --model Qwen/Qwen2.5-1.5B-Instruct --dataset gsm8k --steps 200 --adapter lora --lora-r 16 \
         --seed 0 --gen vllm --save-dir /workspace/jobs/tvi/ckpt/NAME [--save-merged] [--out $OUT]
 
-One step is one optimizer update over `--prompts-per-step` prompts x `--num-generations` completions. The reward is 1 for a
-final answer math-verify (or an exact last-number match) accepts, else 0. `--out`/metrics.json records the arguments,
+One step is one optimizer update over `--prompts-per-step` prompts x `--num-generations` completions. The reward
+(`--reward true`) is 1 for a final answer math-verify (or an exact last-number match) accepts, else 0; `format` and `random`
+are the controls (a numeric final \\boxed{}; Bernoulli(1/2)), with correctness still logged. `--out`/metrics.json records the arguments,
 versions, trainable parameters and state bits S, steps/s, GPU memory and the per-step log (reward, lengths, KL, ...).
 """
 
@@ -35,6 +36,10 @@ def main() -> None:
     p.add_argument("--beta", type=float, default=0.0, help="KL coefficient")
     p.add_argument("--vllm-mem", type=float, default=0.3, help="vLLM's share of the GPU in colocate mode")
     p.add_argument("--extra", default="{}", help="JSON of further GRPOConfig fields")
+    p.add_argument("--reward", choices=["true", "format", "random"], default="true",
+                   help="true: correctness; format: a numeric final \\boxed{}; random: Bernoulli(1/2), a control")
+    p.add_argument("--fp32-master", action="store_true",
+                   help="hold the weights in fp32 under bf16 autocast, so steps below bf16's ulp aren't rounded away (full)")
     args = p.parse_args()
     if not args.lr:
         args.lr = DEFAULT_LR[args.adapter]
@@ -49,7 +54,7 @@ def main() -> None:
 
     torch.manual_seed(args.seed)
     tok = AutoTokenizer.from_pretrained(args.model)
-    model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16).to("cuda")
+    model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.float32 if args.fp32_master else torch.bfloat16).to("cuda")
     model, peft_cfg, tl = C.apply_adapter(model, args)
 
     ds = C.load_task(args.dataset, "train", args.train_n or None, args.seed).remove_columns(["completion"])
@@ -77,6 +82,8 @@ def main() -> None:
         lr_scheduler_type="constant_with_warmup",
         warmup_steps=0,
     )
+    funcs, weights = C.reward_funcs(args.reward, args.seed)
+    want["reward_weights"] = weights
     if args.gen == "vllm":
         want.update(vllm_mode="colocate", vllm_gpu_memory_utilization=args.vllm_mem)
     want.update(json.loads(args.extra))
@@ -88,7 +95,9 @@ def main() -> None:
             raise SystemExit("this TRL can't run vLLM colocate; rerun with --gen hf")
     cfg = GRPOConfig(**{k: v for k, v in want.items() if k in fields})
 
-    trainer = GRPOTrainer(model=model, reward_funcs=[C.correctness_reward], args=cfg, train_dataset=ds,
+    if "reward_weights" not in fields:
+        raise SystemExit("this TRL has no reward_weights, so the logged-only rewards would be trained on")
+    trainer = GRPOTrainer(model=model, reward_funcs=funcs, args=cfg, train_dataset=ds,
                           processing_class=tok, peft_config=peft_cfg)
     if tl is not None and args.gen == "vllm":
         C.patch_vllm_sync(trainer, tl)

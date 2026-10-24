@@ -68,14 +68,19 @@ def main() -> None:
             res[f"pass@{k}"] = sum(pass_at_k(args.samples, c, k) for c in correct) / len(correct)
     res["mean_correct_frac"] = sum(correct) / (len(correct) * args.samples)
     res["mean_len_tokens"] = sum(len(o.token_ids) for out in outs for o in out.outputs) / (len(outs) * args.samples)
+    res["mean_formatted_frac"] = sum(C.is_formatted(o.text) for out in outs for o in out.outputs) / (len(outs) * args.samples)
     if args.greedy:
         g_outs = llm.chat(msgs, SamplingParams(n=1, temperature=0.0, max_tokens=args.max_tokens), lora_request=lora_req)
-        res["greedy_acc"] = sum(C.is_correct(o.outputs[0].text, g) for o, g in zip(g_outs, gold)) / len(gold)
+        res["per_problem_greedy"] = [int(C.is_correct(o.outputs[0].text, g)) for o, g in zip(g_outs, gold)]
+        res["per_problem_greedy_formatted"] = [int(C.is_formatted(o.outputs[0].text)) for o in g_outs]
+        res["greedy_acc"] = sum(res["per_problem_greedy"]) / len(gold)
+        res["greedy_formatted"] = sum(res["per_problem_greedy_formatted"]) / len(gold)
+        res["greedy_len_tokens"] = sum(len(o.outputs[0].token_ids) for o in g_outs) / len(gold)
     res["eval_s"] = C.now() - t0
     res["per_problem_correct"] = correct
     with open(os.path.join(args.out, "eval.json"), "w") as f:
         json.dump(res, f, indent=1)
-    print(json.dumps({k: v for k, v in res.items() if k not in ("per_problem_correct", "args")}, indent=1))
+    print(json.dumps({k: v for k, v in res.items() if not k.startswith("per_problem") and k != "args"}, indent=1))
 
 
 if __name__ == "__main__":
