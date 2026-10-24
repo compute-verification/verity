@@ -236,5 +236,39 @@ theorem swSrcE_repCut_fc_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : 
   rw [show ligSt x j = st from (tabsOf_stAt x j).trans hst.symm, ← hLyE] at H
   exact H.ofSalt hsalt
 
+/-- **The inner proof's first round of table `j`'s rep `r`** is the session's slot `innerOff 0` past its PIOP: from the
+rep's first round, `CutEq.innerAt` bodies at the session's table, schedule and extra claims. -/
+theorem innerAt_slot {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin) {s : _}
+    {spec : _root_.Flock.SessionSpec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x))
+    (r : Fin 2) {extras : Array _root_.Flock.Claim}
+    (he : (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras) :
+    FlockComplete.CutEq.innerAt (repBase x (2 * j.val + r.val)) (_root_.Flock.Setup.ofCircuit (stAt x j))
+        (zkTab x j).sch extras =
+      repSlot x (2 * j.val + r.val) (innerOff 0) := by
+  have heS : (stAt x j).extraClaims (ptsE c spec) = .ok extras := by
+    rw [tabsOf_stAt] at he
+    exact he
+  obtain ⟨hpts, -⟩ := HiddenExec.setupTables_pointsAny (FlockComplete.ZkTables.setupTables_of hx.1 hs)
+  have hpsz : (ptsE c spec).size = 2 := by
+    unfold ptsE
+    simp [hpts]
+  have hesz : extras.size = spec.points * (stAt x j).regions.size := by
+    rw [FlockDeploy.extraClaims_size heS, hpsz, hpts, Nat.mul_comm]
+  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+      .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
+    rw [stsOf_half]
+    exact (zkTab x j).hz
+  have hj : j.val < (stsOf x).size := lt_of_jOf j
+  obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hs
+  have hm25 : 25 ≤ (stAt x j).m := (hall j.val hj).1
+  have hk6 : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
+  have hfm : (_root_.Flock.Setup.ofCircuit (stAt x j)).m = (stAt x j).m := rfl
+  have hfk : (_root_.Flock.Setup.ofCircuit (stAt x j)).fold.kLog = (stAt x j).c.kLog := rfl
+  rw [repSlot_eq hs hzq, stsOf_half, ← repBase_eq hs (2 * j.val + r.val)]
+  unfold FlockComplete.piopRoundsZk innerOff
+  simp only [FlockComplete.CutEq.innerAt, FlockComplete.CutEq.ligAt]
+  rw [hesz, hfm, hfk]
+  omega
+
 end Masked
 end Claims.ZKMal
