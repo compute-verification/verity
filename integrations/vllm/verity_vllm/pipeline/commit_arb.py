@@ -2,7 +2,7 @@
 
     verity-vllm commit-arb --out DIR [--model REPO --revision SHA] [--precision int8_exact|verity_int8|pin]
         [--requests 32] [--seed 0] [--prompt-range 16:1024] [--tokens 64] [--rate 0.5]
-        [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--kv-cache-mb N] [--window-steps 64]
+        [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--no-chunked-prefill] [--kv-cache-mb N] [--window-steps 64]
 
 The engine is serve-openai's (`verity_vllm.LLM`, in-process engine core, Model Runner V2, `NativeHostCommitter` committing
 every step, values retained on host), with `sampler_inputs` on and the served default seed (`engine.served_seed`). It is
@@ -68,6 +68,9 @@ class Options:
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     max_model_len: int = option("--max-model-len", type=int, default=2048)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048)
+    chunked_prefill: bool = option("--chunked-prefill", action="boolean_optional", default=True,
+                                   help="--no-chunked-prefill: the scheduler holds a prefill that doesn't fit the step instead of cutting it "
+                                        "(int8_exact attention refuses a later chunk until #3387)")
     kv_cache_mb: int = option("--kv-cache-mb", type=int, default=0, help="the KV cache's size (0: vLLM's sizing); small preempts")
     gpu_memory_utilization: float = option("--gpu-memory-utilization", type=float, default=0.55)
     window_steps: int = option("--window-steps", type=int, default=64, help="committed steps a Commit window holds at most")
@@ -121,6 +124,8 @@ def engine_options(opts: Options) -> dict[str, Any]:
                           "enforce_eager": True}
     if opts.kv_cache_mb:
         kw["kv_cache_memory_bytes"] = int(opts.kv_cache_mb) << 20
+    if not opts.chunked_prefill:
+        kw["enable_chunked_prefill"] = False
     if opts.precision == "int8_exact":
         kw.update(quantization="verity_int8", attention_backend="CUSTOM")
     elif opts.precision == "verity_int8":

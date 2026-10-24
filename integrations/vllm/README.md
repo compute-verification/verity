@@ -224,6 +224,7 @@ Supported keyword options:
 | `max_model_len` | the pin's | context length |
 | `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
 | `kv_cache_memory_bytes` | vLLM's sizing | the KV cache's size in bytes, in place of sizing it from free memory |
+| `enable_chunked_prefill` | vLLM's, on | False holds a prefill that doesn't fit a step instead of cutting it into chunks |
 | `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
 | `execution` | `bi-eager`, or `bi-compiled` with `enforce_eager` False | the execution label (`engine.served.EXECUTIONS`), which sets batch invariance and `enforce_eager`; `compiled` is vLLM's serving defaults |
 | `dtype` | the profile's | served dtype override |
