@@ -8,7 +8,7 @@
 # and the base its merge base with origin/main; after, pass the lander's merge commit as --move (its first parent is the
 # base) and `--onto origin/main`. The map defaults to the copy on cursor/vllm-arch-map-496a, since main doesn't carry it.
 set -euo pipefail
-move=origin/cursor/vllm-arch-move-496a
+move=origin/cursor/vllm-arch-move2-0a25
 map=
 base=
 while [[ $# -gt 0 ]]; do
