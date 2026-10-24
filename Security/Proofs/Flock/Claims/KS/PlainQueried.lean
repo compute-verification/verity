@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.KS.PlainCapPrefix
 import Proofs.Flock.Claims.Recursion.PlainK
+import Proofs.Flock.Claims.Recursion.CallsBridgeE
 
 /-!
 # Which positions an accepted plain rep opens at a later level
@@ -71,19 +72,15 @@ theorem plain_levelCols_queriedK (keep : Bool → Bool) {Ω : Type} {P : Claims.
   obtain ⟨hsts0, hst0⟩ := Array.getElem?_eq_some_iff.1 hst
   have h0 : 0 < (tabsOf sts).size := by simpa [tabsOf] using hsts0
   have ht0 : (tabsOf sts)[0] = Setup.ofCircuit st := by rw [tabsOf_getElem h0]; simp only [hst0]
-  replace hv : verifyWithM (hashesIn L) spec (tabsOf sts) f.record f.proofs = .ok () := hv
   obtain ⟨sess, hdec, hsz, hreps⟩ :=
-    plainLevels_verifyWithM (hashesIn L) spec (tabsOf sts) f.record f.proofs (tabsOf_fold sts) hv
+    plainLevels_verifyWithMK keep (hashesIn L) spec (tabsOf sts) f.record f.proofs (tabsOf_fold sts) hv
   obtain ⟨sch', hsch', hrep⟩ := hreps 0 h0
   obtain ⟨stream, extras, p, hstream, hext, hp, hlev⟩ := hrep r hr
   simp only [ht0] at hsch' hext hp hlev
   obtain rfl := Option.some.inj (hsch.symm.trans hsch')
-  have hdec' : Record.decode spec f.record = .ok sess := by
-    rw [← With.decodeWith_std]
-    exact (With.decodeWith_sim sub (sub_hashes L) spec f.record) sess hdec
-  obtain ⟨-, hpts, -, hstreams⟩ := Claims.Bridge.Custody.decode_live hdec' hlv
+  obtain ⟨-, hpts, -, hstreams⟩ := decodeWithK_live keep _ hdec hlv
   rw [hpts] at hext
-  obtain ⟨hsz2, hall⟩ := rep_plain _ hv hlv
+  obtain ⟨hsz2, hall⟩ := rep_plainK keep _ hv hlv
   have hn : extras.size = st.regions.size * spec.points := by
     obtain ⟨sess', -, -, -, hpts', hpn', -⟩ := hall 0 (by omega)
     rw [extraClaims_size (st := st) hext, ← hpts', hpn']
@@ -131,7 +128,7 @@ theorem plain_levelCols_queriedK (keep : Bool → Bool) {Ω : Type} {P : Claims.
     refine plainLevelColsOf_congr _ _ _ fun j => ?_
     rw [← Array.getElem?_toList, ← Array.getElem?_toList]
     exact (hcoins j).symm
-  obtain ⟨-, hsizes⟩ := streams_size_plain _ hv hlv
+  obtain ⟨-, hsizes⟩ := streams_size_plainK keep _ hv hlv
   have hR0 : ∀ k (hk : k < lv.streams.size), k < 2 → lv.streams[k].size = repRounds false spec st := by
     intro k hk hk2
     rw [hsizes k hk, show k / 2 = 0 by omega, getElem!_pos sts 0 hsts0, hst0]
@@ -148,7 +145,7 @@ theorem plain_levelCols_queriedK (keep : Bool → Bool) {Ω : Type} {P : Claims.
   rw [hmids, List.getElem?_map, List.getElem?_range hk] at hm
   simp only [Option.map_some, Option.some.injEq] at hm
   subst hm
-  obtain ⟨-, hns⟩ := streams_ns_plain _ hv hlv
+  obtain ⟨-, hns⟩ := streams_ns_plainK keep _ hv hlv
   have hnr := hns r (by omega)
   rw [show r / 2 = 0 by omega, getElem!_pos sts 0 hsts0, hst0] at hnr
   have hnJ : (lv.streams[r]'(by omega))[J].n = plainQN spec st sch ℓ := by

@@ -307,6 +307,43 @@ theorem plainLevels_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs
   obtain ⟨hfi, hkl⟩ := hf tabs[i] (Array.getElem_mem hi)
   exact ⟨sch, hsch, fun r hr2 => plainLevels_verifyRepWith hs spec tabs[i] sch sess i r _ c hsch hfi hkl (hr r hr2)⟩
 
+/-- `plainLevels_verifyWithM` at `verifyWithMK keep`, on the session the element-level decoder reads. -/
+theorem plainLevels_verifyWithMK (keep : Bool → Bool) (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup)
+    (record : String) (proofs : Array ByteArray)
+    (hf : ∀ st ∈ tabs, (∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog) ∧
+      st.fold.kLog = st.kLog)
+    (h : verifyWithMK keep hs spec tabs record proofs = .ok ()) :
+    ∃ sess : Session, Record.decodeWithK keep hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
+      ∀ (i : ℕ) (hi : i < tabs.size), ∃ sch : Flock.Schedule, fast100 tabs[i].m = some sch ∧ ∀ r < 2,
+        ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
+          sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
+          tabs[i].extra sess.points = .ok extras ∧
+          decodeProof (shapeOf tabs[i] sch extras.size) proofs[2 * i + r]! = .ok p ∧
+          ∀ ℓ, 1 ≤ ℓ → ℓ < sch.levels.size →
+            plainLevelColsOf (Claims.Flock.plainProofShape tabs[i].m tabs[i].kLog (2 + extras.size)
+                tabs[i].merkle.digestLen
+                (if tabs[i].merkle.saltBytes = 0 && !tabs[i].openedSalts then none else some tabs[i].merkle.saltBytes))
+                stream.rounds proofs[2 * i + r]! ℓ =
+              Claims.Flock.zkRepCols (sch.levels.getD ℓ default)
+                (stream.rounds[plainLevelRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size)
+                  (sch.levels.size - 1) ℓ]!).coins (openAt p.ligerito (sch.levels.size - 1) ℓ).1 ∧
+            merkleCheckWith (tabs[i].merkle.opsWith hs) tabs[i].merkle p.ligerito.recursiveCaps[ℓ - 1]!
+              (sch.levels.getD ℓ default).cap (sch.levels.getD ℓ default).d
+              (positions (sch.levels.getD ℓ default)
+                (stream.rounds[plainLevelRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size)
+                  (sch.levels.size - 1) ℓ]!).coins)
+              (openAt p.ligerito (sch.levels.size - 1) ℓ).1 (openAt p.ligerito (sch.levels.size - 1) ℓ).2.1
+              (openAt p.ligerito (sch.levels.size - 1) ℓ).2.2 (2 ^ (sch.levels.getD ℓ default).lanes) = .ok () := by
+  obtain ⟨sess, schs, hsess, hsz, -, hall⟩ := verifyWithMK_tables keep hs h
+  refine ⟨sess, hsess, hsz, fun i hi => ?_⟩
+  obtain ⟨hi', c₀, c₁, hsch, h₀, h₁⟩ := hall i hi
+  obtain ⟨hfi, hkl⟩ := hf tabs[i] (Array.getElem_mem hi)
+  refine ⟨schs[i], hsch, fun r hr2 => ?_⟩
+  rcases (show r = 0 ∨ r = 1 by omega) with rfl | rfl
+  · rw [Nat.add_zero]
+    exact plainLevels_verifyRepWith hs spec tabs[i] schs[i] sess i 0 _ c₀ hsch hfi hkl h₀
+  · exact plainLevels_verifyRepWith hs spec tabs[i] schs[i] sess i 1 _ c₁ hsch hfi hkl h₁
+
 /-! ## An accepted plain run's later openings -/
 
 theorem plainLevelColsOf_congr (sh : Shape) {a b : Array Round} (bytes : ByteArray) (ℓ : ℕ)

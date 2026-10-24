@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.KS.CapChunk
 import Proofs.Flock.Claims.KS.PlainLevels
 import Proofs.Flock.Claims.KS.PlainStep
 import Proofs.Flock.Claims.Recursion.PlainK
+import Proofs.Flock.Claims.Recursion.CallsBridgeE
 
 /-!
 # The cap an accepted plain rep absorbs, from the messages before its round
@@ -56,8 +57,8 @@ theorem plain_acc_midsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
     (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) :
     ∃ s spec sts link c₁ mids f, setupOf false x = some (s, spec, sts) ∧
       lastFinal (Claims.run sha512 P (VK keep) x ω c).seen = some f ∧ checks false s spec x link c₁ mids f = .ok () ∧
-      verdictM false (hashesIn ((Claims.run sha512 P (VK keep) x ω c).vLog.map Prod.fst)) spec (tabsOf sts) f.record
-        f.proofs = .ok () ∧
+      verifyWithMK keep (hashesIn ((Claims.run sha512 P (VK keep) x ω c).vLog.map Prod.fst)) spec (tabsOf sts)
+        f.record f.proofs = .ok () ∧
       mids = (List.range (plainN x)).map
         (fun k => ((depMsg sha512 P x ω (Claims.coinSeq c) (k + 1)).tail, Claims.coinSeq c (k + 1))) := by
   obtain ⟨s, spec, sts, link, c₁, mids, f, hact, hrun⟩ := accK_decide keep h
@@ -94,9 +95,9 @@ theorem plain_acc_mids {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω :
 /-- **An accepted plain rep's frames are `P`'s round messages, chunk by chunk.** At an accepted plain run, rep `r < 2`
 of table 0, its proof file decoded at the table's `fast100` schedule and `|regions| · points` extra claims, has frames
 (at some batched value `T`) whose `j`-th chunk is, for every round `j` of the rep's `repRounds`, the bytes of `P`'s
-message `r · repRounds + j + 1` after its tag: the verdict accepts the rep (`plainVerifyWithM_reps`), at the shipped
+message `r · repRounds + j + 1` after its tag: the verdict accepts the rep (`verifyWithMK_tables`), at the shipped
 oracle (`sub`) and the table's named scheme, so its stream's rounds retained its chunks (`rep_rounds`), and the
-stream's rounds are the live ones (`decode_live`), which custody makes the round messages (`custody_ok`). -/
+stream's rounds are the live ones (`decodeWithK_live`), which custody makes the round messages (`custody_ok`). -/
 theorem plain_capChunkK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
     (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {sch : Flock.Schedule} {f : Final} {p : Proof} {r : ℕ} (hs : setupOf false x = some (s, spec, sts))
@@ -115,14 +116,16 @@ theorem plain_capChunkK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
   obtain ⟨hsts0, hst0⟩ := Array.getElem?_eq_some_iff.1 hst
   have h0 : 0 < (tabsOf sts).size := by simpa [tabsOf] using hsts0
   have ht0 : (tabsOf sts)[0] = Setup.ofCircuit st := by rw [tabsOf_getElem h0]; simp only [hst0]
-  replace hv : verifyWithM (hashesIn L) spec (tabsOf sts) f.record f.proofs = .ok () := hv
-  obtain ⟨sess, hdec, hsz, hreps⟩ := plainVerifyWithM_reps _ spec (tabsOf sts) f.record f.proofs hv
-  obtain ⟨sch', cap, hsch', hrep⟩ := hreps 0 h0
-  simp only [ht0, Nat.mul_zero, Nat.zero_add] at hsch' hrep
-  obtain rfl := Option.some.inj (hsch.symm.trans hsch')
-  have hdec' : Record.decode spec f.record = .ok sess := by
-    rw [← With.decodeWith_std]
-    exact (With.decodeWith_sim sub (sub_hashes L) spec f.record) sess hdec
+  obtain ⟨sess, schs, hdec, hsz, -, hall0⟩ := verifyWithMK_tables keep _ hv
+  obtain ⟨hs0, c₀, c₁, hsch', h₀, h₁⟩ := hall0 0 h0
+  obtain ⟨cap, hrep⟩ : ∃ cap, verifyRepWith (hashesIn L) spec (tabsOf sts)[0] schs[0] sess 0 r f.proofs[r]! =
+      .ok cap := by
+    rcases (show r = 0 ∨ r = 1 by omega) with rfl | rfl
+    · exact ⟨c₀, h₀⟩
+    · exact ⟨c₁, h₁⟩
+  simp only [ht0] at hsch' hrep
+  have e : schs[0] = sch := Option.some.inj (hsch'.symm.trans hsch)
+  rw [e] at hrep
   have named : (Setup.ofCircuit st).merkle.Named := by
     show st.merkle.Named
     rcases checks_leaf hc (setupOf_some hs).2 0 hsts0 with e | ⟨-, e⟩ <;> rw [hst0] at e <;> rw [e]
@@ -130,15 +133,15 @@ theorem plain_capChunkK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
     · exact With.named_of_find? (id := "flock-leaf/sha512-unsalted") rfl
   have hrep' : verifyRep spec (Setup.ofCircuit st) sch sess 0 r f.proofs[r]! = .ok cap := by
     rw [← With.verifyRepWith_std _ _ named]
-    exact (With.verifyRepWith_sim sub (sub_hashes L) spec _ sch sess 0 r _) cap (hrep r hr)
+    exact (With.verifyRepWith_sim sub (sub_hashes L) spec _ sch sess 0 r _) cap hrep
   have h22 := exec_fast100_ge hsch
   obtain ⟨hdim, -⟩ := fast100_dims _ _ hsch
   have hlvs : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
     fast100_level _ _ hsch _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
   obtain ⟨stream, p', extras, T, hfind, hext, hp', hR⟩ :=
     rep_rounds spec (Setup.ofCircuit st) sch sess 0 r _ cap (by show 14 ≤ st.m; omega) hdim hlvs hrep'
-  obtain ⟨-, hpts, -, hstreams⟩ := Claims.Bridge.Custody.decode_live hdec' hlv
-  obtain ⟨hlsz, hall⟩ := rep_plain _ hv hlv
+  obtain ⟨-, hpts, -, hstreams⟩ := decodeWithK_live keep _ hdec hlv
+  obtain ⟨hlsz, hall⟩ := rep_plainK keep _ hv hlv
   have hn : extras.size = st.regions.size * spec.points := by
     obtain ⟨sess', -, -, -, hpts', hpn', -⟩ := hall 0 (by omega)
     rw [extraClaims_size (st := st) hext, hpts, ← hpts', hpn']
@@ -149,7 +152,7 @@ theorem plain_capChunkK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
   obtain ⟨y, hy, hfa⟩ := hstreams (2 * 0 + r) hk'
   rw [hrs] at hy
   obtain rfl : stream = y := Option.some.inj (hfind.symm.trans hy)
-  obtain ⟨-, hsizes⟩ := streams_size_plain _ hv hlv
+  obtain ⟨-, hsizes⟩ := streams_size_plainK keep _ hv hlv
   have hR0 : ∀ q (hq : q < lv.streams.size), q < 2 → lv.streams[q].size = repRounds false spec st := by
     intro q hq hq2
     rw [hsizes q hq, show q / 2 = 0 by omega, getElem!_pos sts 0 hsts0, hst0]
@@ -176,7 +179,7 @@ theorem plain_capChunkK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
     simp only [Option.map_some, Option.some.injEq] at hm
     subst hm
     have hfj := Claims.Bridge.Custody.forall₂_getElem hfa (show j < stream.rounds.size by omega)
-    rw [getElem!_pos stream.rounds j (by omega), hfj.2.2.1, getElem!_pos _ j hjr]
+    rw [getElem!_pos stream.rounds j (by omega), hfj.2.2, getElem!_pos _ j hjr]
     exact hram.1
   have hret : AllRetained stream.rounds := fun i hi => ⟨_, hbytes i (hsize ▸ hi)⟩
   obtain ⟨-, hc'⟩ := hR hret
