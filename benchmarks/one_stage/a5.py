@@ -270,14 +270,14 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
 
 
 def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[str, dict]:
-    """A drawn row-table chunk's honest session re-verified by Lean against registered reads it must refuse: none (a shared-row
-    file outside the proved scope), its table's root replaced, and (a table of more than one row) every unit reading the next
-    row."""
+    """A drawn row-table chunk's honest session re-verified by Lean against registered reads it must refuse: none (its header
+    names registered reads the verifier holds no root for), its table's root replaced, and (a table of more than one row)
+    every unit reading the next row."""
     st, n = mm["st"], mm["m"].n
     honest = json.loads(st["registered_file"].read_text())
     port = next(iter(honest["ports"]))
     p = honest["ports"][port]
-    cases = {"row-table-chunk-without-registered-reads": (None, "shared-row public file"),
+    cases = {"row-table-chunk-without-registered-reads": (None, "holds no registered roots"),
              "row-table-read-against-another-root": ({"root": "00" * 64}, "does not open")}
     if p["leaves"] > 1:
         cases["row-table-reads-another-row"] = ({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}, "the verifier's program reads")
