@@ -65,12 +65,13 @@ codec than the record's, or a bare fraction. The stated ceiling is the node's, t
 0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (`timing.SQUARINGS_PER_S`,
 `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
-receipt, plus the deployed draw's terms beyond \(\delta\) (`ledger.draw`, `PooledDraw`'s): \(n s/2^{64}\) over \(n\)
-windows of \(s\) draws for a rejected first word, each window's PRF advantage (\(2^{-128}\), claim `prf/sha-512`), the
-coin commitment's hiding terms (\(n \cdot 2^{-191}\)), and the receipts' binding term,
-\(\sum_t \sqrt{U_t s'_t} \cdot q_t/2^{256.5}\) under `cr/sha-512` for window \(t\)'s fork finder of
-\(q_t = 2FC + 2 \cdot 69 \, s'_t\) SHA-512 calls, which runs the prover twice from the window's roots
-(`ledger.binding`). The memory line's \(\delta\) carries the same terms. Under the default receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
+receipt, plus the deployed draw's terms beyond \(\delta\) (`ledger.draw`, `PooledDraw`'s): \(\sum_t s'_t/2^{64}\) for
+a rejected first word (`ledger.rejection`), the coin commitment's hiding terms (\(n \cdot 2^{-191}\) over \(n\)
+windows), and the receipts' binding term, \(\sum_t \sqrt{U_t s'_t} \cdot q_t/2^{256.5}\) under `cr/sha-512` for
+window \(t\)'s fork finder of \(q_t = 2FC + 2 \cdot 69 \, s'_t\) SHA-512 calls, which runs the prover twice from the
+window's roots (`ledger.binding`). The windows' PRF advantages are the draw's fourth term: named with their claim
+(`prf/sha-512`, `ledger.PRF_CLAIM`), with no value. The memory line's \(\delta\) carries the hiding and binding terms
+beside its \(2^{-\text{slack}}\) a pass. Under the default receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
 derived by `Accounting.Guarantees.Remote.SketchBoundDeployed`), which adds at most \(Q \cdot 2^{-95.12}\) a session
 at 16 rows for a prover of \(Q = F \cdot C\) SHA-512 compressions, \(C\) the node's own over the span and \(F\) the
 outside-compute factor (\(2^{20}\), provisional), and \((Q + P) N \cdot 2^{-512}\) for a receipt right without its

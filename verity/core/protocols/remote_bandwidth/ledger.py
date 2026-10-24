@@ -19,10 +19,11 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
   time-held is `Σ·(N − S) − 2L·(X·(Σ + 2L) + B) − fill` block-ns over Σ, where `fill` spreads W over the groups at
   v_g = (s_(g+1) − s_g)/n_g (L/n_C in C), highest first, at most n_g·N in group g.
 
-The memory line counts registered blocks only.  δ is the statements' error, term for term: the record's δ (δc), the
-draw's terms (`draw`: `PooledDraw`'s rejections Σ_t s/2^64 and the windows' PRF advantages Σ_t adv_t, the coin
-commitment's hiding terms, and the receipts' binding term) and, under sketch-sha512, `timing.sketch_failure` over the
-session (δs).  γ's errors carry the same draw terms beside the ledger's own (`Gamma`)."""
+The memory line counts registered blocks only.  δ is the statements' error: the record's δ (δc), 2^-slack_log2 a pass
+(the allowance for `PooledDraw`'s draw terms: Σk_t/2^64 over the windows' k_t draws, and the PRFs' advantages
+Σadv_t), the coin commitment's hiding terms (`hiding`), the receipts' binding term (`binding`) and, under
+sketch-sha512, `timing.sketch_failure` over the session (δs).  γ's errors carry `PooledDraw`'s terms beyond δ by name
+(`draw`), the advantages named with their claim and priced in neither."""
 from __future__ import annotations
 
 import math
@@ -37,6 +38,12 @@ from . import audit, receipts, timing
 SNAPSHOT, TIME_HELD, LINK_CHARGED = "snapshot", "time-held", "link-charged"
 FORMS = (SNAPSHOT, TIME_HELD, LINK_CHARGED)
 """The memory line's forms, in order: `Held`'s, `HeldOverTime`'s and `HeldOverTimeLinks`'s."""
+REJECTION_LOG2 = 64
+"""The draw's rejection a draw, in bits: a draw below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
+`Accounting.Remote.Draw.width`), so a uniform first word is rejected with probability below 2^-64."""
+PRF_CLAIM = "prf/sha-512"
+"""The claim that prices `PooledDraw`'s Σ_t Adv(prf t), one oracle-access distinguisher a window reading its k_t first
+blocks: a term with no numeric value, so it is named beside the errors and in none of them."""
 
 
 def _rate(x: object, what: str) -> float:
@@ -132,26 +139,17 @@ def sketch(record: audit.Record, node: Node) -> float:
                                        outside=node.sketch_outside))
 
 
-PRF_ADVANTAGE_LOG2 = -128
-"""Each window's distinguisher's advantage on its keyed stream (`adv_t`, `PooledDraw`): claim `prf/sha-512`'s η for one
-test of a stream under a 32-byte key (A4), a claimed value."""
-
 OPENING_HASHES = 64 + 5
 """The SHA-512 evaluations one receipt opening's check makes at most (`Hash.RowLeaf.outerHashed` and `innerHashed`): the
 path's nodes, at most 64 since a rank is a u64, the frame leaf, the hm96 leaf, its salt's digest and its key's, and the
 row digest."""
 
 
-def rejected(record: audit.Record) -> float:
-    """`PooledDraw`'s Σ_t s/2^64 over the record's n windows, s the session's samples: some draw's first word rejected
-    by the sampler.  The record holds each window's draws, min(s, U_t), so s is read as their largest, which is s
-    itself once a window holds s receipts or more (every gate session's)."""
-    return len(record.windows) * max(w.profile.drawn["receipt"] for w in record.windows) / 2.0 ** 64
-
-
-def advantage(record: audit.Record) -> float:
-    """`PooledDraw`'s Σ_t adv_t: each of the record's n windows' distinguishers at `PRF_ADVANTAGE_LOG2`."""
-    return len(record.windows) * 2.0 ** PRF_ADVANTAGE_LOG2
+def rejection(record: audit.Record) -> float:
+    """The draw's rejection, `PooledDraw`'s Σ_t k_t/2^64: the chance some window's draw rejects a first word, below
+    2^-`REJECTION_LOG2` a draw, over every window's draws (`profile.drawn`, min(k_t, U_t): k_t in a window of more
+    receipts than draws, and U_t, at most k_t, in one that opens all of them).  Exact: the draws are an integer."""
+    return sum(w.profile.drawn["receipt"] for w in record.windows) * 2.0 ** -REJECTION_LOG2
 
 
 def hiding(record: audit.Record) -> float:
@@ -188,26 +186,28 @@ def binding(record: audit.Record, node: Node) -> float:
 
 @dataclass(frozen=True, slots=True)
 class Draw:
-    """`PooledDraw`'s terms beyond its δ, each by name (`rejected`, `advantage`, `hiding`, `binding`): what reading
-    the record's openings as uniform draws over receipts its roots bind costs, in γ's errors and the memory line's δ
-    alike."""
+    """`PooledDraw`'s terms beyond its δ, each by name: the rejection (`rejection`), the hiding terms (`hiding`) and
+    the receipts' binding term (`binding`), what reading the record's openings as the deployed draw over receipts its
+    roots hold costs.  `total` is their sum.  The windows' PRF advantages Σ_t Adv(prf t) are the fourth term, which
+    `PRF_CLAIM` prices with no numeric value: `to_json` names it, and `total` holds none of it."""
 
-    rejected: float
-    advantage: float
+    rejection: float
     hiding: float
     binding: float
 
     @property
     def total(self) -> float:
-        return self.rejected + self.advantage + self.hiding + self.binding
+        return self.rejection + self.hiding + self.binding
 
     def to_json(self) -> dict:
-        return {"advantage": self.advantage, "binding": self.binding, "hiding": self.hiding, "rejected": self.rejected}
+        return {"binding": self.binding, "hiding": self.hiding, "rejection": self.rejection,
+                "named": {"prf_advantage": {"claim": PRF_CLAIM, "term": "Σ_t Adv(prf t)", "value": None,
+                                            "in_total": False}}}
 
 
 def draw(record: audit.Record, node: Node) -> Draw:
     """The record's draw terms on `node`."""
-    return Draw(rejected(record), advantage(record), hiding(record), binding(record, node))
+    return Draw(rejection(record), hiding(record), binding(record, node))
 
 
 def windows(record: audit.Record) -> list[tuple[int, int]]:
@@ -225,8 +225,8 @@ class Gamma:
     """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.Ledger`, read per window at Wδ, `gamma`,
     and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each span γ is declared over (`windows`:
     a paced session's fixed windows), each as a fraction of R over its own span.  `error` and `error_horizon` are the
-    ledger's with the sketch's term and the draw's (`draw`) added: both readings read the record's openings, each
-    window's or pooled."""
+    ledger's with the sketch's term and the draw's (`draw`: `PooledDraw`'s rejection, hiding and binding terms, the
+    PRF advantages named) added: both readings read the record's openings, each window's or pooled."""
 
     capacity_bytes_per_s: float
     ledger: audit.Ledger
@@ -372,7 +372,8 @@ def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
     """The memory line's three forms (`FORMS`)."""
     N, b, P = record.blocks, record.block_bytes, record.passes
     W = audit.pooled(record)[0]
-    delta = record.windows[0].profile.delta + draw(record, node).total + sketch(record, node)
+    delta = (record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + hiding(record) + binding(record, node)
+             + sketch(record, node))
     S = -(-node.chip_bytes // b)
     rebuild = node.rebuild(record.codec)
     X = rebuild.squarings_per_s / record.codec.encode_squarings / 1e9 + node.disk_bytes_per_s / b / 1e9
