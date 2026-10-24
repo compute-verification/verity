@@ -45,6 +45,10 @@ def main() -> None:
     ks = [int(x) for x in args.k.split(",")]
     os.makedirs(args.out, exist_ok=True)
 
+    # vLLM's warmup samples top-k/top-p through flashinfer, whose JIT build needs ninja (in the venv's bin, off PATH
+    # when the venv's python is called directly) and nvcc; the PyTorch sampler needs neither.
+    os.environ.setdefault("VLLM_USE_FLASHINFER_SAMPLER", "0")
+    os.environ["PATH"] = os.path.dirname(sys.executable) + os.pathsep + os.environ.get("PATH", "")
     from vllm import LLM, SamplingParams
 
     ds = C.load_task(args.dataset, args.split, args.n_problems, args.seed)
