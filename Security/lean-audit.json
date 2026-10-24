@@ -1118,9 +1118,8 @@
    "owner": "@lean",
    "digest": "fc90804727140bffc77562fb496823d54ad4f5f38d71d67124219bf95f0459a5"
   },
-  "Nci.Assumptions.SampledEscape": {
-   "owner": "@lean",
-   "digest": "dd0702da7bd83688cd67a189b7ea9e975fef1ac789500194fceab64ba3936655"
+  "Nci.Assumptions.SampledDetection": {
+   "owner": "@lean"
   },
   "Nci.Assumptions.TerminalDetection": {
    "owner": "@lean",
@@ -10180,7 +10179,7 @@
    "Nci.SecurityProofs.ActivationsChain": "lemma: ActivationsIncompressibleAll gives ActivationsIncompressible for a chain that is part of the threading (ChainIn, Security/Definitions/Nci/Links.lean); it relates two named premises and is about no function.",
    "Nci.SecurityProofs.CertificateSlack": "frozen (no-function): It is Markov's inequality over the windows of an arbitrary distribution on a finite outcome space, under the named PouwSound (Security/Models/Nci/Assumptions/Remote.lean) as a bound on each window's marginal, not from a function's acceptance; joining it to PoUW's verifier, whose rejection of a wrong certificate PouwSound bounds, is what would give it one.",
    "Nci.SecurityProofs.VerdictLag": "frozen (no-function): It bounds the declared work an arbitrary set of faulty proof blocks skips past the escaped ones, under the named TerminalDetection (Security/Models/Nci/Assumptions/Remote.lean) and a per-identity capacity bound taken as a hypothesis, not from a function's acceptance; joining it to the halt's verdict and the sampled proofs' verifier is what would give it one.",
-   "Nci.SecurityProofs.DampenerRemote": "frozen (no-function): It composes the remote protocol's compute dampener from CertificateSlack, VerdictLag, the escape slack and ThreadedThrottled discharging the declared source, under the named PouwSound, TerminalDetection, SampledEscape (Security/Models/Nci/Assumptions/Remote.lean) and WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
+   "Nci.SecurityProofs.DampenerRemote": "frozen (no-function): It composes the remote protocol's compute dampener from CertificateSlack, VerdictLag, the escape slack and ThreadedThrottled discharging the declared source, under the named PouwSound, TerminalDetection, SampledDetection (Security/Models/Nci/Assumptions/Remote.lean) and WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
    "Flock.SecurityProofs.EndToEndRegisteredRows": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.SoundAtBridge": "frozen (no-function,hash,world-unlisted,scope): A bound on the proof layer's ProofLayer.SoundAt over a window's paths, not a run of a Lean function. It takes EndToEndRegisteredRows' finders' collision bounds at every session (RowsSession.CR: TableCRZ, LinkCRZC, RowsCRZC and the registered reads' cr/sha-512) as hypotheses instead of a collision disjunct tied to the run, live-verifier custody and scope through RowsSession's fields, and compute-accounting's four bridge premises (WindowLaw, AcceptedLive, OpenedPlurAt, RelOfRows), none on the premises list.",
    "Flock.SoundAtBridge.soundAtBridge_nonvacuous": "lemma: SoundAtBridge's witness, as ZkReg.zk_session_soundHJR_nonvacuous is zk_session_soundHJR's; leaves the list under the 5:11 PM ruling",
