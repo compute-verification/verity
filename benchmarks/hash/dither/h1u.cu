@@ -561,6 +561,11 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #ifndef H1U_JRCPF
 #define H1U_JRCPF 0
 #endif
+// H1U_JPROBE = 1 (RW without RC): a timing probe, never a receipt: the column blocks are the row block's words, not
+// hashed, so a unit's time less its column hash bounds what sharing the column blocks can save (unitsbench --probe)
+#ifndef H1U_JPROBE
+#define H1U_JPROBE 0
+#endif
 template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false, bool RW = false, bool RC = false>
 __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
@@ -723,7 +728,13 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         }
       } else {
         u64 s[8];
-        noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
+        if constexpr (H1U_JPROBE) {
+#pragma unroll
+          for (int j = 0; j < 8; ++j)
+            s[j] = ((u64)(j & 1 ? rv[j >> 1].z : rv[j >> 1].x) << 32 | (j & 1 ? rv[j >> 1].w : rv[j >> 1].y)) ^ (blk + cj);
+        } else {
+          noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
+        }
 #pragma unroll
         for (int w = 0; w < 4; ++w) {
           S.rowbits[lane][4 * w] = rv[w].x;
