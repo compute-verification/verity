@@ -1,6 +1,6 @@
-"""flock_read.py K WORK [--circuit-only]: the H1 tile unit's statement circuit at contraction K (`h1_prove/h1unit.Shape(K)`,
-#3002's 4×8 tile, staged as `h1_prove/stage.py` stages it), and one instance on it (not with `--circuit-only`, which
-`flock_tmpl.sh` passes), for `flock_read.sh` to time the Lean verifier's read of.
+"""flock_read.py K WORK [--circuit-only]: the H1 tile unit's flat statement circuit at contraction K (`h1_prove/h1unit.Shape(K)`,
+#3002's 4×8 tile, staged flat as `h1_prove/job.sh` stages it), and one instance on it (not with
+`--circuit-only`, which `flock_tmpl.sh` passes), for `flock_read.sh` to time the Lean verifier's read of.
 
 Writes WORK/circuit.txt, WORK/stmt/{inst.bin,pub.bin} and WORK/build.json (the unit's ANDs, nnz, k_log, the circuit's bytes
 and the build's seconds). The instance's codes, salt and roots are random: the read's cost depends on the circuit only.
@@ -45,7 +45,7 @@ def main() -> None:
     import fast_stage
     fast_stage.install(work / "scratch")
     shape = U.Shape(k)
-    stager = shape.stager("unit/pouw-h1-tile", circuit=work / "circuit.txt")
+    stager = shape.stager("unit/pouw-h1-tile", circuit=work / "circuit.txt", flat=True)
     t1 = time.time()
     if "--circuit-only" in sys.argv[3:]:
         head = {"k": k, "ands": stager.low.layout.counts["ands"], "circuit_bytes": (work / "circuit.txt").stat().st_size,

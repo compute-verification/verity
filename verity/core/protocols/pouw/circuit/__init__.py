@@ -39,6 +39,9 @@
   read.
 * `admit`: a window's admission from its committed request queue (`PouwQueueAdmit`), a call's 16 slots a unit, generic over
   the window.
+* `live`: a round's served rows under rule A (`PouwLiveSlots`), one unit a round: ok iff exactly its slots [0, m) name
+  requests of the gate-signed request table, none more often than it can take in round s (its prompt at its prefill, one
+  row a decode), for the public m that dense credit counts.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs

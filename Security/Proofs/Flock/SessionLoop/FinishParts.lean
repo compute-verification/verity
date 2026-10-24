@@ -44,12 +44,14 @@ noncomputable abbrev finS : RefSession := CoinLayer.session Loop.loopNr Masked.d
 abbrev Tp : Type := finS.refP.Nonce × finS.refP.Rand
 
 /-- **A `Finish` `FinishIs` reads** at the release `L`: after `Hello` `(m₀, ρ₀)` and `refK x` openings `ops`, the run is
-live, the openings pass, no coin is refused and the loop's `Finish` does not stop. -/
+live, the openings pass, no coin is refused, the loop's `Finish` does not stop, and the history's messages are the
+release's own (`ZkServer.OwnHist`). -/
 def FinCtx (L : LeanRelease Flock.Wit Tp) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce)
     (t : finS.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) : Prop :=
   ops.length = refK x ∧ L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true ∧
     ((allOk (finS.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval CoinOpen.shaH).1 = true ∧
-    L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false ∧ L.finStops x w (ν, t) ((m₀, ρ₀) :: ops) = false
+    L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false ∧ L.finStops x w (ν, t) ((m₀, ρ₀) :: ops) = false ∧
+    L.toSrv.OwnHist L.fillOf wk x w (ν, t) κ ((m₀, ρ₀) :: ops)
 
 /-- The coins the openings `ops` open. -/
 noncomputable def finCoins (x : Msg) (ops : List (Msg × Msg)) : Fin (refK x) → finS.Coin :=
@@ -196,8 +198,8 @@ theorem finishIs_of_parts
       FinRepRounds vs L₀ src real wk x w) :
     LeanRelease.FinishIs finS vs (LeanRelease.ofLoopLink L₀ src real) CoinOpen.shaH wk x w := by
   obtain ⟨hA, hB, hC, hD⟩ := h
-  intro ν t κ m₀ ρ₀ ops hl hlive hok hr hs
-  have hctx : FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops := ⟨hl, hlive, hok, hr, hs⟩
+  intro ν t κ m₀ ρ₀ ops hl hlive hok hr hs hown
+  have hctx : FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops := ⟨hl, hlive, hok, hr, hs, hown⟩
   have hs' : (filesE src L₀.draws x w (ν, t) ((m₀, ρ₀) :: ops)).isOk = true := by
     change (!(filesE src L₀.draws x w (ν, t) ((m₀, ρ₀) :: ops)).isOk) = false at hs
     simpa using hs
