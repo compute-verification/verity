@@ -11,8 +11,8 @@ exactly one machine, and the input gates of `C` on none. A gate of `R_a` that a 
 computes it and `b` takes it as an input. Everything else `R_b` reads from outside itself, the rest of `in(R_b)`, is an
 input gate of `C` (`inputsRead`), since a gate outside every machine is an input gate. So
 `in(R_b) = transfersInto b ∪ inputsRead b`, two disjoint sets: what reaches `b` over the wire, and the inputs it reads.
-A transfer gate's value crosses the wire once, in `w g` bits, so `width (transfersInto b)` is the bits on the wire into
-`b`, and in the Boolean profile (`w = 1`, `Verity.Boolean`) `|transfersInto b|` is.
+A transfer gate's value reaches `b` once, in `w g` bits, so `width (transfersInto b)` is the bits on the wire into `b`,
+and in the Boolean profile (`w = 1`, `Verity.Boolean`) `|transfersInto b|` is.
 
 The machines are a partition rather than a family of `Covering.Subcircuit`s for two reasons. A machine's gates are what
 compute credit counts, each computed gate credited to the one machine that computes it, so the credits add up to
