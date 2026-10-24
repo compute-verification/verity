@@ -103,9 +103,11 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
     src: dict[str, dict] = {}
+    raw: dict[str, dict] = {}
     for p in sorted(args.units_dir.glob("*.npz")):
         meta, d = units.load(p)
-        src[meta["src"]] = {"meta": meta, "rules": {r: summarize(per_unit(d, r)) for r in meta["rules"]}}
+        raw[meta["src"]] = {r: per_unit(d, r) for r in meta["rules"]}
+        src[meta["src"]] = {"meta": meta, "rules": {r: summarize(u) for r, u in raw[meta["src"]].items()}}
     cls: dict[str, dict] = {}
     for c in CLASSES:
         cls[c] = {}
@@ -129,6 +131,14 @@ def main() -> None:
         typ[r] = {m: {b: float(pooled(sums, m, b)) for b in BITS} for m in flops.MODELS} if sums else None
         c_p99[r] = {m: {b: {kn: max((s["flops_p99_fit"][m][b][kn] or 0.0) for s in sums) for kn, _ in KS}
                         for b in BITS} for m in flops.MODELS} if sums else None
+    # coverage when c is matched to typical traffic: a unit fits when its bits are at most k and its FLOPs at most k phi_typ
+    for c, rr in cls.items():
+        for r, v in rr.items():
+            v["cov_matched"] = {m: {b: {kn: float(np.mean([
+                ((u["tok"] * BITS[b] <= 8 * kv) & (u[m] <= 8 * kv * typ[r][m][b])).mean()
+                for k2, w in src.items() if w["meta"]["cls"] == c
+                for u in [raw[k2][next(rx for rx in reversed(list(RULES)[: list(RULES).index(r) + 1])
+                                      if rx in raw[k2])]]])) for kn, kv in KS} for b in BITS} for m in flops.MODELS}
     result = {"sources": src, "classes": cls, "phi_typ": typ, "c_p99_typ": c_p99, "c_fixed": C_FIXED, "ks": dict(KS),
               "bits": BITS}
     args.out.mkdir(parents=True, exist_ok=True)
@@ -182,6 +192,14 @@ def render(res: dict) -> str:
         for c, rr in cls.items():
             for r, v in rr.items():
                 out.append(f"| {c} | {r} | " + " | ".join(f(v["phi_band"][model]["raw"][kn]) for kn, _ in KS) + " |")
+        out.append(f"\n### coverage(k, c = k phi_typ), % of units within both k bits and c FLOPs, "
+                   f"{flops.MODELS[model]['label']}, 17 bits per token\n")
+        out.append(f"| class | rule | {kh} |")
+        out.append("|---|---|" + "---|" * len(KS))
+        for c, rr in cls.items():
+            for r, v in rr.items():
+                out.append(f"| {c} | {r} | " + " | ".join(_pct(v["cov_matched"][model]["raw"][kn]) for kn, _ in KS)
+                           + " |")
         out.append(f"\n### FLOP-weighted coverage(k), % of honest FLOPs in units that fit, {flops.MODELS[model]['label']}, "
                    "17 bits per token\n")
         out.append(f"| class | rule | {kh} |")
