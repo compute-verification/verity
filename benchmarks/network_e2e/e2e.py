@@ -21,8 +21,9 @@ then runs this. The README says what the report establishes and what it doesn't.
   ``--upstream``, ``--vllm`` or ``--endpoint-peer`` the rehearsal is run first (`certifier_serve.py rehearse`, honest,
   late and extra, every option this file doesn't take passed on) into ``DIR/rehearsal``; ``--endpoint-peer NAME:PORT``
   reaches another node's endpoint on its loopback through an ssh forward (`forward`), so the certifier runs off the
-  prover's node, though not on the auditor host. NEG's drop and token, when the rehearsal ran them, are a negative
-  (drop, refused by N2's counts) or a row pending the check that alone refuses them (``PENDING``). An honest run is required: the tampered head is its
+  prover's node, though not on the auditor host. NEG's drop, when the rehearsal ran it, is a negative (refused by N2's
+  counts, and on the advice profile by the rehearsal's own check), and its token a row pending the check that alone
+  refuses it (``PENDING``). An honest run is required: the tampered head is its
   window 0's egress head one count off (`n2_zk.one_count`).
 * **N2.** Per run, each link-window committed under fresh salts, registered on N2's stream, selected (Selection All) and
   decided by N2's verifier of record on the host, with the Lean audit (`n2_zk.link_windows`), then `network_verdict`.
@@ -42,7 +43,7 @@ then runs this. The README says what the report establishes and what it doesn't.
   end (`alone`); and the driver's own peak (the unit's lowering).
 * **Varied traffic** (``rehearse --traffic varied``, passed on): N2's profile is ``advice``, on which N2 gives no
   verdict until N2-ADVICE, so nothing is proved and the rehearsal's own check (certified, the certified I/O, audit,
-  salt) is each run's verdict, late and extra its negatives (`CLAIM_ADVICE`).
+  salt) is each run's verdict, late, extra and drop its negatives (`CLAIM_ADVICE`).
 * **The chain** (`stages_of`, `chain`'s docstring): ``--advice`` and ``--serving-config``, ``--prove-path``, and NEG's
   registry on the runs; each that ran must pass for the report to be OK, and ``stubbed`` lists what is still a stand-in.
 
@@ -80,8 +81,8 @@ from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 FORMAT = "verity-network-e2e/report/v3"
 HONEST, TAMPERED = "honest", "tampered"
 NEGATIVES = ("late", "extra", TAMPERED)
-# NEG's live tampers past late and extra, each refused only by a check that hasn't landed where it isn't by N2's counts
-PENDING = {"drop": "N2-ADVICE's counts", "token": "IO-TIE"}
+# NEG's live tampers that only a check that hasn't landed refuses
+PENDING = {"token": "IO-TIE"}
 README = "verity/core/protocols/certifier/README.md"
 PEERS = Path("/etc/vy/peers")
 
@@ -135,8 +136,8 @@ CLAIM_ADVICE = {
         "establishes, for the rehearsal's one link: every link-window's records certified under the certifier's key and "
         "session; the certified I/O well formed (every request an id request, every egress frame an id event of a "
         "request released by its bucket, every response ending at its first EOS or at its max_tokens); the certifier's "
-        "audit of both records and the salt audit accepted (the rehearsal's own check); and late and extra each refused "
-        "by that check. The advice's sections say what was checked of the advice, and the prove path's what it proved."),
+        "audit of both records and the salt audit accepted (the rehearsal's own check); and late and extra, and drop "
+        "where it ran, each refused by that check. The advice's sections say what was checked of the advice, and the prove path's what it proved."),
     "not_covered": [
         "N2's counts: no link-window's head is held to a profile or to the advice (N2-ADVICE), and nothing is proved by "
         "n2_zk, whose head check is the planned profile's; a tampered head is not refused.",
@@ -415,10 +416,10 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
     the negatives' refusals, the chain's stages (``stages``: `chain`'s advice, bits, prove path and NEG's negatives, each
     when it ran) and the claim. ``proofs``: `prove`'s result, or ``{"ran": False, "why": ...}``. On the advice profile
     N2 gives no verdict (``n2`` has no windows), so the rehearsal's own check is the verdict, and late and extra its
-    negatives."""
+    negatives. Drop, where it ran, is a negative on every profile."""
     advised = meta.get("profile") == chain.ADVICE
-    expected = NEGATIVES[:2] if advised else NEGATIVES + tuple(s for s in ("drop",) if s in n2)
-    pending = {s: w for s, w in PENDING.items() if s in n2 and s not in expected}
+    expected = (NEGATIVES[:2] if advised else NEGATIVES) + tuple(s for s in ("drop",) if s in n2)
+    pending = {s: w for s, w in PENDING.items() if s in n2}
     summary = proofs.get("summary") or {}
     members = summary.get("members") or {}
     names = [HONEST] + [s for s in NEGATIVES if s in n2] + sorted(set(n2) - {HONEST, *NEGATIVES})
@@ -498,12 +499,12 @@ def negative(run: dict, rows: list[dict]) -> dict:
     held = all(p["held"] for p in (run["proofs"] or {}).values())
     if proved and held:
         by.append(f"the proved head checks (link-windows {proved})")
-    if run.get("shim_requests") == 0:
-        by = ["nothing: its shim received no request, so its tamper never ran"]
+    ran = run.get("shim_requests") != 0
     refused = ((run["network"]["accepted"] is False and bool(n2) if decided else check is not None)
                and (check is None or check["verdict"] == "refused") and (not run["proofs"] or (held and bool(proved)))
-               and run.get("shim_requests") != 0)
-    return {"refused": refused, "by": by, "n2_refused_windows": n2, "proved_refused_windows": proved,
+               and ran)
+    return {"refused": refused, "ran": ran, "by": by if ran else [], "n2_refused_windows": n2,
+            "proved_refused_windows": proved,
             "failed_parts": {r["window"]: r["failed_parts"] for r in rows if r["n2"] == "refuse"},
             "proved": bool(run["proofs"]), "proofs_held": held if run["proofs"] else None}
 
@@ -555,8 +556,10 @@ def markdown(r: dict) -> str:
                      f"{_cell(pr.get('ingress'))} | {_cell(x['head_checks'])} | {_cell(failed)} |")
     lines += ["", "## Negatives", ""]
     for name, n in r["negatives"].items():
-        lines.append(f"- **{name}**: {'refused' if n['refused'] else 'NOT refused'} by "
-                     f"{'; '.join(n['by']) or 'nothing'}{'' if n['proved'] else ' (not proved)'}")
+        lines.append(f"- **{name}**: " + (
+            f"{'refused' if n['refused'] else 'NOT refused'} by {'; '.join(n['by']) or 'nothing'}"
+            f"{'' if n['proved'] else ' (not proved)'}" if n.get("ran", True)
+            else "NOT refused: not run, its shim received no request, so its tamper never ran"))
     for name, n in (r.get("pending") or {}).items():
         n2 = n["n2"]
         lines.append(f"- **{name}** (NEG's, pending {n['waits']}, which alone refuses it here): " + (

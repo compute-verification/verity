@@ -55,12 +55,14 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
 - `--traffic varied` is certifier-serve's (CERT-VARLEN's `rehearse`: Poisson arrivals, prompts as token ids, real EOS),
   passed on. Its plan's N2 profile is `advice`, on which N2 gives no verdict until N2-ADVICE derives the egress counts from
   the ingress head and the advice. So nothing is proved by `n2_zk`, and the rehearsal's own check (every record certified,
-  the certified I/O, the audit, the salt) is the verdict, with late and extra as its negatives (`CLAIM_ADVICE`).
+  the certified I/O, the audit, the salt) is the verdict, with late, extra and drop as its negatives (`CLAIM_ADVICE`).
 - `--endpoint-peer NAME:PORT` reaches node NAME's endpoint on its 127.0.0.1:PORT through an ssh forward (`/etc/vy/peers`),
   so the certifier runs off the prover's node: better than the loopback, though not yet the auditor host.
-- NEG's live tampers (`--strategies ...,drop,token`): drop is a negative where N2's counts refuse it (planned and served
-  profiles), and otherwise, like token everywhere, a row pending the check that alone refuses it (N2-ADVICE's counts,
-  IO-TIE), with the verdicts it got.
+- NEG's live tampers (`--strategies ...,drop,token`): drop is a negative, refused by N2's counts on the planned and
+  served profiles and by the rehearsal's own check on the advice profile. There the certified I/O's finish rule refuses
+  it when the response it cuts ran to its max_tokens (short of it without EOS); one that ended at EOS stays well formed
+  one token shorter, which only N2-ADVICE's counts will refuse. Token is a row pending the check that alone refuses it
+  (IO-TIE), with the verdicts it got. A tamper whose shim received no request is reported as not run, never as refused.
 - `--advice FILE`: the advice, as I1 v0's JSON or `encode` bytes, or a prove-path stand-in's from before v0 (its first
   runs'), which is upgraded with each kept output released in its step's bucket. The report gives v0's bits per
   link-window (`advice.bits_by_window`, T the run's egress window). With `--serving-config` (`derived.Config`'s fields, or
