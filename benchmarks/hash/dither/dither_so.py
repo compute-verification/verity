@@ -195,7 +195,9 @@ PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 # "1": the units step s + 1 - d's `after` dispatches, queued as their graph before round s's root read, behind a wait on
 # a pinned host word (cuStreamWaitValue32) that `SoSide.dispatch` sets once round s is sent, the coin is back and the
 # salt is written: the same order (round s, coin, units), without the host's dispatch between them and the units' start.
-# Graph steps only, and never a step that holds a capture or a fault, nor a window's last step's units
+# Their salt (their coin, back steps ago, and its round's root) is taken and staged with them (`_salt_early`), so the
+# flag is the dispatch's one write. Graph steps only, and never a step that holds a capture or a fault, nor a window's
+# last step's units
 PREQ_ENV = "DITHER_SO_PREQ"
 # "1": a step's mid and round trees through h1c's `Tail`: their domains, pads and node Snaps (no leaf read) before the
 # serving stream's wait on the units, every level of both in one launch after it, not two h1c_builds after it; the same
@@ -398,6 +400,8 @@ class SoWindow(DO.Window):
         self.end_at = (min(last, self.s0 + steps - 1) if steps else last) if self.window_end else None
         self.disp_at: dict[int, float] = {}
         self.salt_of: dict[int, bytes] = {}
+        # step -> (its opening, its salt), taken at its units' prequeue (`_salt_early`)
+        self.salt_early: dict[int, tuple] = {}
         self.cap_at: dict[int, str] = {}
         self.rtt_from, self.order_from = 1, 0
         self.zlate = None
@@ -452,9 +456,12 @@ class SoWindow(DO.Window):
         t_coin = time.perf_counter()
         self.coin_waits.append(1e3 * (t_coin - t0))
         name = self.cap_of.get(j)
+        early = self.salt_early.pop(j, None)
         if name == "fault_rearly":
             held = self.pipe.opening(i - 1)
             salt = self.HT.live_salt(self.coins.commitment, held.coin, held.index, self.pipe.roots[i - 1])
+        elif early is not None and early[0] is opening:
+            salt = early[1]
         else:
             salt = self.HT.live_salt(self.coins.commitment, opening.coin, opening.index, self.pipe.roots[i])
         if self.hmark:
@@ -472,6 +479,18 @@ class SoWindow(DO.Window):
             self.h_t[1] = time.perf_counter()
         DA.SIDE[0].dispatch(j, salt, m, g)
         return t_coin
+
+    def _salt_early(self, sd, j: int) -> None:
+        """At step j's units' prequeue (before the root read, the host well ahead of the GPU), its salt from its coin if
+        that is back, and the salt's words staged in its ring slot: its dispatch, after the round's root is sent, then
+        sets the flag alone.  The salt is `live_salt` of a coin and a root both already recorded, as at dispatch."""
+        i = self.ix(j)
+        o = self.pipe.opening(i, wait=False)
+        if o is None:
+            return
+        salt = self.HT.live_salt(self.coins.commitment, o.coin, o.index, self.pipe.roots[i])
+        self.salt_early[j] = (o, salt)
+        sd.stage_salt(j, salt)
 
     def _forward_wait_deferred(self, main: torch.cuda.Stream) -> None:
         """$DITHER_SO_COIN_ASYNC: while forward s runs, the deferred step's units dispatched once its coin is back."""
@@ -855,8 +874,8 @@ class SoWindow(DO.Window):
             self.phase("root_read")
             ju = s + 1 - d
             if (sd.preq and not held and ju in self.stashed and ju != self.end_at and self.cap_of.get(ju) is None
-                    and ju in self.m_of):
-                sd.prequeue(ju, self.m_of[ju])
+                    and ju in self.m_of) and sd.prequeue(ju, self.m_of[ju]):
+                self._salt_early(sd, ju)
             # ybad rides the root read's sync rather than a nonzero's own
             if not zc:
                 self._ybad_copy(sd)
@@ -1235,6 +1254,8 @@ class SoSide(DA.Side):
         self.warm: set[int] = set()
         self.preq = os.environ.get(PREQ_ENV) == "1"
         self.queued: dict[int, tuple[int, int]] = {}
+        # step -> the salt `stage_salt` wrote into its ring slot's pinned words ahead of its dispatch
+        self.staged: dict[int, bytes] = {}
         self.preq_gen = 0
         if self.preq:
             from cuda.bindings import driver as cu
@@ -1461,6 +1482,12 @@ class SoSide(DA.Side):
         self.queued[j] = (p, self.preq_gen)
         return True
 
+    def stage_salt(self, j: int, salt: bytes) -> None:
+        """Step j's salt into its ring slot's pinned words before its dispatch: the slot's last reader (step j - depth's
+        copy) is long done, and its next (step j's, queued behind the flag) reads it only once `dispatch` sets that."""
+        self.salt_np[j % self.win.depth][:] = words(salt)
+        self.staged[j] = salt
+
     def dispatch(self, j: int, salt: bytes, m: int, g: dict | None) -> None:
         """Step j's units on the units stream once its ring slot is written (`_units`) under `salt`, whose receipt
         roots go into `rroots` for round j + D - 1 (`udone`); a capture's receipts and roots into `g`.  Unless
@@ -1470,7 +1497,8 @@ class SoSide(DA.Side):
         and copies stay outside the graph, and `g["units_graph"]` says which way its units ran."""
         win = self.win
         p, st = j % win.depth, self.side
-        self.salt_np[p][:] = words(salt)
+        if self.staged.pop(j, None) != salt:
+            self.salt_np[p][:] = words(salt)
         q = self.queued.pop(j, None)
         if q is not None:
             self.flag_host[q[0]] = q[1]

@@ -273,7 +273,7 @@ class Tail:
         n = len(self.root_np) - 1
         while int(self.root_np[n]) != self.seq:
             pass
-        return unwords(self.root_host[8 * i:8 * i + 8])
+        return unwords(self.root_np[8 * i:8 * i + 8])
 
 
 class H1C:
