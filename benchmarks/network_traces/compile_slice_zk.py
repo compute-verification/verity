@@ -35,7 +35,8 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
   verdict ``o0``, under the salts the prover sends for those two rows; never ``adv``, ``cert``, ``srv`` or ``wit``. A
   unit passes when its verdict is `compile_slice.ACCEPT` and its bindings hold. What the verifier received is scanned
   for every piece of each unit's witness row, its ``srv`` row and every row's salt (`a8.received`), less the pieces the
-  public circuit holds; the prover's instance file, which holds those rows, is the control.
+  public circuit holds and the sparse ones (`sparse_pieces`); the prover's instance file, which holds those rows, is
+  the control.
 * **Cost** (``--points``): sessions whose verifier draws the first k units, behind the firewall (`a8.cost`).
 """
 from __future__ import annotations
@@ -353,6 +354,14 @@ def blobs_of(units: list[SimpleNamespace], salts: dict) -> tuple[dict[str, bytes
     return blobs, held
 
 
+def sparse_pieces(pieces: dict[str, bytes], held: set[str]) -> tuple[dict[str, bytes], set[str], list[str]]:
+    """`pieces` less those with at most one nonzero byte, the held ones among the rest, and the left-out pieces' hex. A
+    proof's encoding holds such runs whatever the witness (a small integer in a zero-padded field: 92 of the 4,080 in one
+    proof stream of the corpus slice), so finding one is no evidence; the cache rows, mostly zero, have a few."""
+    out = {k for k, x in pieces.items() if sum(map(bool, x)) <= 1}
+    return {k: x for k, x in pieces.items() if k not in out}, held - out, sorted(pieces[k].hex() for k in out)
+
+
 def expected(x: SimpleNamespace, kind: str, flags: dict) -> bool:
     return {f for f, ok in flags.items() if not ok} == REFUSED[x.name][kind]
 
@@ -422,8 +431,9 @@ def prove(a) -> int:
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=a.points, arms=["fw"], cold=1)
     res = audit(M, av, sg, m, units, binds, out / "slice", a.port)
     blobs, held, public = N2.public_pieces(M.a8, *blobs_of(units, m["salts"]), (m["dir"] / "circuit.txt").read_bytes())
+    blobs, held, sparse = sparse_pieces(blobs, held)
     res["received"] = {**M.a8.received(out / "slice" / "verifier", m["dir"] / f"inst-{n}.bin", blobs, held),
-                       "public_pieces": public}
+                       "public_pieces": public, "sparse_pieces": sparse}
     summary["audit"] = res
     want = ["accept" if u.kind == "honest" else "reject" for u in units]
     got = [r["verdict"] for r in res.get("units", [])]
@@ -432,7 +442,8 @@ def prove(a) -> int:
           and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"])
     log(f"proofs {res['verdicts']}, audit {res['audit']}, first units {[(r['kind'], hex(r['verdict_word']), r['adv_bound'], r['srv_bound'], r['cert_bound'], r['verdict']) for r in res.get('units', [])[:len(a.kinds)]]}, "
         f"per unit {res['per_unit']}, verifier received {res['received']['verifier_bytes']} bytes, witness pieces found "
-        f"there: {res['received']['verifier_found'] or 'none'} (of {len(blobs)}), control {res['received']['control']['blobs_found']}; "
+        f"there: {res['received']['verifier_found'] or 'none'} (of {len(blobs)}, {len(sparse)} sparse left out), "
+        f"control {res['received']['control']['blobs_found']}; "
         f"{'as expected' if ok else 'UNEXPECTED'}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if a.points:
