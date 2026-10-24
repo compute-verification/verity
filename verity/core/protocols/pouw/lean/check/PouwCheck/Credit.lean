@@ -1146,7 +1146,9 @@ reads). It is `h1window.table_reads_file`'s, from the descriptor alone: unit u, 
 reads its A row i (port `a_k<K>_<i>`) at row o + R·ti + i of its round s's A table of K `<prefix>a/<K>@<s>` (M rows for
 each of the round's calls of K, o the call's first, `stepRow`), its B row j (`b_k<K>_<j>`) at
 row b0 + C·tj + j of the weights' `<prefix>b/<K>` (b0 the call's linear's first row in it), and its record (`zy`) at row
-t of the call's z table `<prefix>zy@<call>`; and, when the window registers the call's receipt table
+t of the call's z table `<prefix>zy@<call>`, each A and B row port naming the template parameter it reads
+(`Flock.Registered.PARAM_KEY`: `a_k<K>[i]`, or `a_k<K>` when R = 1, and likewise B); and, when the window registers the
+call's receipt table
 `<prefix>receipt@<call>`, the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shapeOf`'s width) at its
 row t, so the receipts the round roots commit are the ones the units return; every other unit reads none of them: each
 port's reads start at the call's first unit u0 (`READS_FROM`) and end at its last (`Flock.Registered.Port.readAt` reads
@@ -1235,6 +1237,11 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
       ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
       ("reads", Json.arr reads.toArray), (READS_FROM, Lean.toJson u0)])]
   let pv := s!"{shape.pre}pub@{call}"
+  let params : List (String × String) := [("a", r), ("b", c)].flatMap fun (x, n) =>
+    (List.range n).map fun i => (s!"{x}_k{k}_{i}", if n == 1 then s!"{x}_k{k}" else s!"{x}_k{k}[{i}]")
+  out := out.map fun (p, j) => (p, match params.lookup p, j with
+    | some n, .obj kvs => .obj (kvs.insert Flock.Registered.PARAM_KEY (.str n))
+    | _, _ => j)
   let words := (if tile.j10r then PouwCheck.PUBLIC_ROW_J10R_BITS else PouwCheck.PUBLIC_ROW_BITS) / 16
   let sb := (hex? (.str salt)).getD ByteArray.empty
   let j10r := fun (t : Nat) =>
