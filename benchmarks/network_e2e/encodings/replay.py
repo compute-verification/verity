@@ -133,34 +133,108 @@ class _Hashes:
         return self._ids.setdefault((parent, block), len(self._ids) + 1)
 
 
+class _Free:
+    """`BlockPool`'s free-block queue: blocks are taken from the front, freed to either end, and a cached one is taken
+    from wherever it is on a hit."""
+
+    def __init__(self, blocks: Iterable[int]) -> None:
+        self.d: OrderedDict[int, None] = OrderedDict((b, None) for b in blocks)
+
+    def __len__(self) -> int:
+        return len(self.d)
+
+    def pop(self) -> int:
+        return self.d.popitem(last=False)[0]
+
+    def take(self, b: int) -> None:
+        del self.d[b]
+
+    def push(self, b: int, *, front: bool) -> None:
+        self.d[b] = None
+        if front:
+            self.d.move_to_end(b, last=False)
+
+
+class _FreeFork:
+    """A fork's free-block queue over its parent's, which stays as it is while the fork runs: the blocks the fork freed to
+    the front, then the parent's it hasn't taken, then those it freed to the back."""
+
+    def __init__(self, base: _Free) -> None:
+        self.base, self.it, self.gone = base.d, iter(base.d), set()
+        self.front: OrderedDict[int, None] = OrderedDict()
+        self.back: OrderedDict[int, None] = OrderedDict()
+        self.n = len(base.d)
+
+    def __len__(self) -> int:
+        return self.n
+
+    def pop(self) -> int:
+        self.n -= 1
+        if self.front:
+            return self.front.popitem(last=False)[0]
+        for b in self.it:
+            if b not in self.gone:
+                return b
+        return self.back.popitem(last=False)[0]
+
+    def take(self, b: int) -> None:
+        self.n -= 1
+        if b in self.front:
+            del self.front[b]
+        elif b in self.back:
+            del self.back[b]
+        else:
+            self.gone.add(b)
+
+    def push(self, b: int, *, front: bool) -> None:
+        self.n += 1
+        if front:
+            self.front[b] = None
+            self.front.move_to_end(b, last=False)
+        else:
+            self.back[b] = None
+
+
 class _KV:
     def __init__(self, engine: Engine) -> None:
         self.B = engine.block_size
         self.L = engine.max_model_len
         self.caching = engine.enable_prefix_caching
         self.watermark_blocks = int(engine.watermark * engine.num_gpu_blocks)
-        self.free: OrderedDict[int, None] = OrderedDict((b, None) for b in range(1, engine.num_gpu_blocks))  # block 0 is null
+        self.free: _Free | _FreeFork = _Free(range(1, engine.num_gpu_blocks))  # block 0 is the null block
         self.ref = [0] * engine.num_gpu_blocks
         self.block_hash: list[int | None] = [None] * engine.num_gpu_blocks
         self.by_hash: dict[int, OrderedDict[int, None]] = {}
+        self.mine: set[int] | None = None       # a fork's: the hashes whose blocks it has copied from its parent's
         self.req_blocks: dict[int, list[int]] = {}
         self.num_cached: dict[int, int] = {}
         self.owner: list[int | None] = [None] * engine.num_gpu_blocks     # the request that computes a block's KV
 
     def fork(self) -> _KV:
+        """A copy to run on while this one waits (its free queue and hash map are overlays on this one's)."""
+        assert isinstance(self.free, _Free)
         k = object.__new__(_KV)
         k.B, k.L, k.caching, k.watermark_blocks = self.B, self.L, self.caching, self.watermark_blocks
-        k.free, k.ref, k.block_hash, k.owner = OrderedDict(self.free), list(self.ref), list(self.block_hash), list(self.owner)
-        k.by_hash = {h: OrderedDict(bs) for h, bs in self.by_hash.items()}
+        k.free, k.ref, k.block_hash, k.owner = _FreeFork(self.free), list(self.ref), list(self.block_hash), list(self.owner)
+        k.by_hash, k.mine = dict(self.by_hash), set()
         k.req_blocks = {i: list(bs) for i, bs in self.req_blocks.items()}
         k.num_cached = dict(self.num_cached)
         return k
+
+    def _blocks(self, h: int) -> OrderedDict[int, None]:
+        """The blocks cached under h, to change (a fork's own copy)."""
+        bs = self.by_hash.get(h)
+        if bs is None or (self.mine is not None and h not in self.mine):
+            bs = self.by_hash[h] = OrderedDict() if bs is None else OrderedDict(bs)
+            if self.mine is not None:
+                self.mine.add(h)
+        return bs
 
     def _pop_hash(self, b: int) -> None:
         h = self.block_hash[b]
         if h is None:
             return
-        blocks = self.by_hash[h]
+        blocks = self._blocks(h)
         del blocks[b]
         if not blocks:
             del self.by_hash[h]
@@ -170,7 +244,7 @@ class _KV:
         assert k <= len(self.free)
         out = []
         for _ in range(k):
-            b, _ = self.free.popitem(last=False)
+            b = self.free.pop()
             if self.caching:
                 self._pop_hash(b)
             self.ref[b] = 1
@@ -184,10 +258,9 @@ class _KV:
             if self.ref[b] == 0:
                 (first if self.block_hash[b] is None or not self.caching else last).append(b)
         for b in reversed(first):
-            self.free[b] = None
-            self.free.move_to_end(b, last=False)
+            self.free.push(b, front=True)
         for b in last:
-            self.free[b] = None
+            self.free.push(b, front=False)
 
     def hit(self, r: _R) -> list[int]:
         """`find_longest_cache_hit` over the request's full-block hashes, at most `num_tokens - 1` tokens."""
@@ -222,7 +295,7 @@ class _KV:
         if hit:
             for b in hit:
                 if self.ref[b] == 0:
-                    del self.free[b]
+                    self.free.take(b)
                 self.ref[b] += 1
             blocks.extend(hit)
             self.num_cached[r.i] = len(blocks)
@@ -247,7 +320,7 @@ class _KV:
             if self.block_hash[b] is not None:
                 self._pop_hash(b)
             h = r.block_hashes[k]
-            self.by_hash.setdefault(h, OrderedDict())[b] = None
+            self._blocks(h)[b] = None
             self.block_hash[b] = h
         self.num_cached[r.i] = full
 
@@ -341,11 +414,14 @@ class _Sched:
         self.running: list[_R] = []
         self.finished_ids: set[int] = set()
 
-    def fork(self) -> _Sched:
-        """An independent copy (the block-hash interning is shared: it only names contents)."""
+    def fork(self, touched: Iterable[int] = ()) -> _Sched:
+        """A copy to run on while this one waits, which may change only the requests in the engine and `touched` (the
+        rest, and the block-hash interning, which only names contents, are shared)."""
         c = object.__new__(_Sched)
         c.e, c.kv = self.e, self.kv.fork()
-        c.reqs = [r.fork() for r in self.reqs]
+        c.reqs = list(self.reqs)
+        for i in {*touched, *(r.i for r in (*self.running, *self.waiting, *self.skipped))}:
+            c.reqs[i] = self.reqs[i].fork()
         c.waiting = deque(c.reqs[r.i] for r in self.waiting)
         c.skipped = deque(c.reqs[r.i] for r in self.skipped)
         c.running = [c.reqs[r.i] for r in self.running]
@@ -622,7 +698,7 @@ def _drive(s: _Sched, queue: Queue, *, top: Callable[[], bool], schedule: Callab
 
 
 def _whatif(s: _Sched, queue: Queue, p: _Pass, i: int, now: bool, want: int) -> Emitted:
-    c, q = s.fork(), deque(queue)
+    c, q = s.fork({i, *(r.i for r in p.skipped_now), *(j for st, _ in queue for j, _, _ in st.rows)}), deque(queue)
     p, r, later = p.fork(c.reqs), c.reqs[i], not now
     if now:
         c.add(i)
