@@ -20,10 +20,18 @@ KEY = bytes(range(32))
 
 @functools.cache
 def dither_one():
-    """`benchmarks/hash/dither/dither_one.py`, imported as its scripts import it (its directory on sys.path)."""
-    if str(DITHER) not in sys.path:
-        sys.path.insert(0, str(DITHER))
-    import dither_one as DO
+    """`benchmarks/hash/dither/dither_one.py`, imported as its scripts import it (its directory on sys.path). The suite's
+    other tests import their own ``native`` and ``verify`` (the harness's), so dither's directory and the modules loaded
+    from it leave sys.path and sys.modules once it's imported."""
+    before = set(sys.modules)
+    sys.path.insert(0, str(DITHER))
+    try:
+        import dither_one as DO
+    finally:
+        sys.path.remove(str(DITHER))
+        for name in set(sys.modules) - before:
+            if Path(getattr(sys.modules[name], "__file__", None) or "/").parent == DITHER:
+                del sys.modules[name]
     return DO
 
 
