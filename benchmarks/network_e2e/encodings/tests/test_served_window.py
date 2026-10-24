@@ -1,7 +1,7 @@
 """vLLM's served run r20261024-141912-8eb1 (`fixtures/vllm-8eb1`, its `meta.json`): the replay is the served scheduler on
 every step, every window opens on a drained engine, ReplayStep_v1 is the scheduler on windows 212 and 1 under the served
-async engine, and `replay_vectors --slice` builds the compile slice's w212 fixtures and its async w1 fixture from the
-run's own records."""
+async engine, `replay_vectors --slice` builds the compile slice's w212 fixtures and its async w1 fixture from the run's
+own records, and the certifier's charge chain is `code_v1`'s charge on every window."""
 from __future__ import annotations
 
 import dataclasses
@@ -17,6 +17,7 @@ REPO = HERE.parents[3]
 RUN = HERE / "fixtures" / "vllm-8eb1"
 SLICE = REPO / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "compile_slice_w212.json"
 CLASS = SLICE.with_name("compile_slice_w212_class.json")
+ARITH = SLICE.with_name("arith_encode_vectors.json")
 
 
 def _load(name, path):
@@ -31,6 +32,7 @@ def _load(name, path):
 
 RV = _load("enc_replay_vectors", HERE.parent / "replay_vectors.py")
 RP = RV.RP
+CV = _load("enc_code_v1", HERE.parent / "code_v1.py")
 
 
 @pytest.fixture(scope="module")
@@ -70,6 +72,33 @@ def test_every_window_opens_drained(recs):
         except ValueError:
             pass
     assert steps == 6169 and len(sync) == 314 and 212 in sync
+
+
+@pytest.mark.slow
+def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
+    """Each window opens on a drained engine, so its first arrival is admitted unasked (`Replay.forced`), which is no
+    decision. The certifier's charge chain (`charge_chain.session` at the engine class's D = 32, under the async-light
+    book) over the 339 windows' decisions is `code_v1`'s charge on every window, 5,500 bits: its context ``run`` counts
+    decisions only, so a forced admission doesn't reset it as it resets the replay's ``pc``. Charged as a decision (a 1,
+    which resets ``run``), each forced admission would change 330 windows' charges."""
+    from verity.core.protocols.certifier import charge_chain as CC
+
+    book = next(s for s in json.loads(ARITH.read_text())["streams"]
+                if s["source"].startswith("async-light"))["decisions"]["book"]
+    per, as_ones, forced = [], [], []
+    for w in range(339):
+        ds, rp = RP.decisions(RP.load_step_trace(RV.served_window(recs, w)[0]))
+        per.append([int(d.arrived) for d in ds])
+        forced.append(sum(rp.forced))
+        ones = [(rp.admitted[i], i, 1) for i, f in enumerate(rp.forced) if f]
+        as_ones.append([b for *_at, b in sorted([(d.step, d.request, int(d.arrived)) for d in ds] + ones)])
+    D = 32
+    ses = CC.session(D, book, [([1] * len(d) + [0] * (D - len(d)), d + [0] * (D - len(d))) for d in per])
+    lens = list(CV.encode([CV.Window(arrived=d) for d in per], CV.Book.from_json(book)).lens)
+    other = CV.encode([CV.Window(arrived=d) for d in as_ones], CV.Book.from_json(book)).lens
+    assert forced == [1] * 339
+    assert [s[0] for s in ses] == lens and sum(lens) == 5500
+    assert (sum(a != b for a, b in zip(other, lens)), sum(other)) == (330, 5968)
 
 
 def test_a_window_on_a_busy_engine_is_refused(recs):

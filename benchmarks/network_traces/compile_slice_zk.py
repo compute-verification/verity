@@ -5,13 +5,13 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--slice demo|corpus|w212] [--points 1] [--kinds K,...] [--dry]
 
-* **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice.demo`, 58,521 ANDs a
+* **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice.demo`, 59,341 ANDs a
   unit), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven steps
   (`verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit), which `prove`
   first checks is the corpus's (`replay_vectors.vectors` on corpus-smallkv: the arrivals, the decisions and the
   replay's rows; `cache_vectors`' tokens of each arrival); or ``w212``, window 212 of vLLM's run
   r20261024-141912-8eb1 padded into the run's public engine class, (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, no
-  prefix caching (`fixtures/compile_slice_w212_class.json`, 852,357 ANDs a unit), with the seal's rows as the served
+  prefix caching (`fixtures/compile_slice_w212_class.json`, 857,866 ANDs a unit), with the seal's rows as the served
   ones (`served_rows.step_rows`), which `prove` first checks is the run's (the window's decisions as its replay asks
   them, `RP.decisions` on `replay_vectors.served_window`).
 * **The charge** is from the session's carry (`charge_chain`) under the registered book (the arith fixture's
@@ -467,17 +467,22 @@ def blobs_of(units: list[SimpleNamespace], salts: dict, chain_: SimpleNamespace)
 
 def carry_rows_received(a8, vdir: Path, control: Path, units: list[SimpleNamespace], chain_: SimpleNamespace) -> dict:
     """Each unit's ``cin`` (but the public priors') and ``cout`` rows whole, raw or as hex, in what the verifier received
-    and in the control: 12 bytes each, under `a8.received`'s 16-byte piece."""
+    and in the control: 12 bytes each, under `a8.received`'s 16-byte piece. A row with at most one nonzero byte (the
+    demo's restart from zero counts) is left out and listed, as `sparse_pieces` leaves such pieces out."""
     table: dict[bytes, str] = {}
+    sparse = []
     for i, u in enumerate(units):
         for r in ("cout",) + (() if _public_cin(u, chain_) else ("cin",)):
             x = _u16(u.words[r])
+            if sum(map(bool, x)) <= 1:
+                sparse.append(f"{r} {i}")
+                continue
             for nd in (x, x.hex().encode(), x.hex().upper().encode()):
                 table.setdefault(nd, f"{r} {i}")
     rows = set(table.values())
     found = sorted({b for f in sorted(vdir.iterdir()) for b in a8.find(f.read_bytes(), table)})
     ctl = set(a8.find(control.read_bytes(), table))
-    return {"distinct_rows": len(rows), "verifier_found": found, "control_holds_all": rows <= ctl}
+    return {"distinct_rows": len(rows), "verifier_found": found, "control_holds_all": rows <= ctl, "sparse": sparse}
 
 
 def sparse_pieces(pieces: dict[str, bytes], held: set[str]) -> tuple[dict[str, bytes], set[str], list[str]]:
@@ -595,7 +600,8 @@ def prove(a) -> int:
         f"per unit {res['per_unit']}, verifier received {rec['verifier_bytes']} bytes, witness pieces found "
         f"there: {rec['verifier_found'] or 'none'} (of {len(blobs)}, {len(sparse)} sparse left out), control "
         f"{rec['control']['blobs_found']}; carry rows "
-        f"found there: {rec['carry_rows']['verifier_found'] or 'none'} (of {rec['carry_rows']['distinct_rows']}), control "
+        f"found there: {rec['carry_rows']['verifier_found'] or 'none'} (of {rec['carry_rows']['distinct_rows']}, "
+        f"{len(rec['carry_rows']['sparse'])} sparse left out), control "
         f"holds them: {rec['carry_rows']['control_holds_all']}; {'as expected' if ok else 'UNEXPECTED'}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if a.points:
