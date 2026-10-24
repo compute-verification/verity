@@ -449,6 +449,58 @@ template <int G> DEV void words_body(const Args& a) {
 }
 extern "C" __global__ void __launch_bounds__(128) words(const Args a) { words_body<4>(a); }
 extern "C" __global__ void __launch_bounds__(128) words_u(const Args a) { words_body<0>(a); }
+// words' chain split along K, for decode's few rows (where words has M / 16 blocks): a block of WK_WARPS warps per m16 x n8
+// output tile.  A promotion window's sum (G atoms from +0) depends on no other window, so the warps share out the windows,
+// WK_CHUNK at a time, each window's sum into shared memory (lane l's four words at window w, 128 w + 4 l), and then a thread
+// a word folds the chunk into its FP32 total in window order, from +0: words' chain, word for word.  Two windows a warp
+// are in flight at once.  p0 A (M x K), p1 B (N x K), p2 out (M x N FP32); i0 M, i1 N, i2 K (multiples of 16, 8 and 32 G);
+// grid (M / 16) (N / 8)
+constexpr int WK_WARPS = 16, WK_CHUNK = 64, WK_G = 4;
+extern "C" __global__ void __launch_bounds__(32 * WK_WARPS) words_k(const Args a) {
+  constexpr int G = WK_G;
+  __shared__ float4 part[WK_CHUNK * 32];
+  const int M = a.i[0], N = a.i[1], K = a.i[2], tn = N / 8, tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
+  const int g = lane / 4, q = lane % 4, W = K / (32 * G);
+  if (blockIdx.x >= M / 16 * tn) return;
+  const int r0 = blockIdx.x / tn * 16, c0 = blockIdx.x % tn * 8;
+  const uint8_t* A0 = reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)(r0 + g) * K + 4 * q;
+  const uint8_t* A1 = A0 + (size_t)8 * K;
+  const uint8_t* B0 = reinterpret_cast<const uint8_t*>(a.p[1]) + (size_t)(c0 + g) * K + 4 * q;
+  const float* fold = reinterpret_cast<const float*>(part) + tid;
+  float total = 0.0f;
+  for (int w0 = 0; w0 < W; w0 += WK_CHUNK) {
+    const int nw = min(WK_CHUNK, W - w0);
+    for (int i = warp; i < nw; i += 2 * WK_WARPS) {
+      uint32_t fa[2][G][4], fb[2][G][2];
+#pragma unroll
+      for (int h = 0; h < 2; h++) {
+        const int kk = 32 * G * (w0 + min(i + h * WK_WARPS, nw - 1));
+#pragma unroll
+        for (int d = 0; d < G; d++) {
+          const int k = kk + 32 * d;
+          fa[h][d][0] = ld32(A0 + k); fa[h][d][1] = ld32(A1 + k); fa[h][d][2] = ld32(A0 + k + 16); fa[h][d][3] = ld32(A1 + k + 16);
+          fb[h][d][0] = ld32(B0 + k); fb[h][d][1] = ld32(B0 + k + 16);
+        }
+      }
+#pragma unroll
+      for (int h = 0; h < 2; h++) {
+        float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+#pragma unroll
+        for (int d = 0; d < G; d++) qmma(acc, fa[h][d], fb[h][d]);
+        if (i + h * WK_WARPS < nw) part[32 * (i + h * WK_WARPS) + lane] = make_float4(acc[0], acc[1], acc[2], acc[3]);
+      }
+    }
+    __syncthreads();
+    if (tid < 128) {
+#pragma unroll 8
+      for (int j = 0; j < nw; j++) total = __fadd_rn(total, fold[128 * j]);
+    }
+    __syncthreads();
+  }
+  if (tid >= 128) return;
+  const int l = tid / 4, e = tid % 4;   // lane l's word e: rows g, g + 8 by e / 2, columns 2 q, 2 q + 1 by e % 2
+  reinterpret_cast<float*>(a.p[2])[(size_t)(r0 + l / 4 + 8 * (e >> 1)) * N + c0 + 2 * (l % 4) + (e & 1)] = total;
+}
 
 // ---------------------------------------------------------------- noise lines (Pearl's line rule on -h3's H_line)
 DEV uint32_t isqrt(uint32_t v) {
@@ -504,6 +556,16 @@ extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
 constexpr uint32_t S5_LINE = 0x3AB504F3;   // f32(sqrt(32) / (256 * 16))
 constexpr float S5_FLOOR = 0x1p-32f;
 
+// a row's rho, alpha and beta_row from s = max|x| and the chains' sum part, and the stores
+DEV void stats_tail(const Args& a, int row, int k, float s, float part) {
+  const float rho = __fsqrt_rn(__fdiv_rn(part, (float)((k + 7) / 8)));
+  const float alpha = __fdiv_rn(448.0f, fmaxf(__fadd_rn(s, __fmul_rn(4.0f, rho)), S5_FLOOR));
+  reinterpret_cast<float*>(a.p[1])[row] = alpha;
+  reinterpret_cast<float*>(a.p[2])[row] = __fmul_rn(__fmul_rn(rho, alpha), __uint_as_float(S5_LINE));
+  reinterpret_cast<float*>(a.p[3])[row] = __frcp_rn(alpha);
+  reinterpret_cast<float2*>(a.p[4])[row] = make_float2(s, rho);
+}
+
 // one warp per FP32 row, one pass: s = max|x|, rho (32 partial FMA chains, chain c over positions 8c + 256i in order of i,
 // then the xor butterfly), alpha, beta_row.  Lane l reads x[256i + 4l ..] and x[256i + 128 + 4l ..], so chain c's position is
 // the first (c < 16) or second (c >= 16) vector's x of lane 2 (c mod 16).  p0 rows (rows x k words), p1 alpha, p2 beta,
@@ -525,12 +587,45 @@ extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
 #pragma unroll
   for (int o = 16; o; o >>= 1) { s = fmaxf(s, __shfl_xor_sync(~0u, s, o)); part = __fadd_rn(part, __shfl_xor_sync(~0u, part, o)); }
   if (lane) return;
-  const float rho = __fsqrt_rn(__fdiv_rn(part, (float)((k + 7) / 8)));
-  const float alpha = __fdiv_rn(448.0f, fmaxf(__fadd_rn(s, __fmul_rn(4.0f, rho)), S5_FLOOR));
-  reinterpret_cast<float*>(a.p[1])[row] = alpha;
-  reinterpret_cast<float*>(a.p[2])[row] = __fmul_rn(__fmul_rn(rho, alpha), __uint_as_float(S5_LINE));
-  reinterpret_cast<float*>(a.p[3])[row] = __frcp_rn(alpha);
-  reinterpret_cast<float2*>(a.p[4])[row] = make_float2(s, rho);
+  stats_tail(a, row, k, s, part);
+}
+
+// stats_s5 with a block per row, for decode's few rows (where stats_s5 has rows / 8 blocks): the block's 8 warps read the
+// row for s (a max, in any order) and stage each chain's words (chain c's position 8c + 256i at 32i + c), then warp 0 runs
+// stats_s5's 32 chains, its butterfly and its tail, the same operations in the same order.  stats_s5's arguments; grid rows,
+// 256 threads, k at most SR_MAX_K
+constexpr int SR_MAX_K = 32768;
+extern "C" __global__ void __launch_bounds__(256) stats_r(const Args a) {
+  __shared__ float chain[SR_MAX_K / 8];
+  __shared__ float smax[8];
+  const int row = blockIdx.x, tid = threadIdx.x, lane = tid % 32, k = a.i[1];
+  if (row >= a.i[0]) return;
+  if (k > SR_MAX_K) __trap();
+  const float4* x = reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4);
+  float s = 0.0f;
+#pragma unroll 4
+  for (int j = tid; j < k / 4; j += 256) {
+    const float4 v = x[j];
+    s = fmaxf(s, fmaxf(fmaxf(fabsf(v.x), fabsf(v.y)), fmaxf(fabsf(v.z), fabsf(v.w))));
+    if (!(j & 1)) chain[j / 2] = v.x;   // position 4j = 256 (j / 64) + 8 ((j % 64) / 2)
+  }
+#pragma unroll
+  for (int o = 16; o; o >>= 1) s = fmaxf(s, __shfl_xor_sync(~0u, s, o));
+  if (lane == 0) smax[tid / 32] = s;
+  __syncthreads();
+  if (tid >= 32) return;
+  s = smax[lane % 8];
+#pragma unroll
+  for (int o = 4; o; o >>= 1) s = fmaxf(s, __shfl_xor_sync(~0u, s, o));
+  float part = 0.0f;
+  for (int i = 0; i < k / 256; i++) {
+    const float e = chain[32 * i + lane];
+    part = __fmaf_rn(e, e, part);
+  }
+#pragma unroll
+  for (int o = 16; o; o >>= 1) part = __fadd_rn(part, __shfl_xor_sync(~0u, part, o));
+  if (lane) return;
+  stats_tail(a, row, k, s, part);
 }
 
 // E' = e4m3(beta_row E) per row.  p0 E codes (rows x 32), p1 beta (f32), p2 out E' codes (rows x 32); i0 rows

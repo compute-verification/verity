@@ -3,15 +3,15 @@ through an opened reader, registered weights for weight slices), committed in M0
 :mod:`verity_vllm.commit.serving_rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
-  "committer"}``, and the in-process C2 replay commits the window after the vllm-v1 roots are final and before its seed (``readers``).
+  "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``).
   The window is ``served``: its roots are serving's own commitment, made before any draw.  The profile makes no claim that they
-  hold the values under the vllm-v1 roots.
+  hold the values under the Commit's roots.
 * **In a TP Commit** (``tp-commit --serving-rows``, `pipeline.tp.serving_rows`): one ``served`` window per rank, committed in the
   rank's process once every rank's root is final and the TP run root fixed, before the challenge; its run is the TP run root and
   the rank.
 * **From a deferred Commit's bundle** (``verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O``,
   `pipeline.deferred_rows`): the sealed replay bundle opened against the Commit's record as the CPU replay opens it, and the same
-  window written into ``O`` as a ``stand-in``: serving's commitment is the vllm-v1 roots, and these rows are committed afterwards
+  window written into ``O`` as a ``stand-in``: serving's commitment is the record's roots, and these rows are committed afterwards
   from the bundle, so their link to those roots is provenance (``deferred_rows.stand_in``).
 
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "subset:K" | "stratified:K" | {...},
@@ -268,12 +268,33 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
     return out
 
 
+def _one_table_chunks(first: CS.Member, segs: Sequence[tuple[int, int, int, int]]) -> list[CS.Member]:
+    """A template's linked chunks over its units ``segs`` (each token row's units ``[a, b)``, its row table and rank, in
+    unit order), from its first chunk ``first``: at most ``first.n`` units each, every one reading one row table."""
+    chunks: list[tuple[int, list[tuple[int, int]], list[int]]] = []
+    for a, b, k, rank in segs:
+        at = a
+        while at < b:
+            if not chunks or chunks[-1][1][-1][0] != k or sum(chunks[-1][2]) == first.n:
+                chunks.append((at, [], []))
+            take = min(b - at, first.n - sum(chunks[-1][2]))
+            chunks[-1][1].append((k, rank))
+            chunks[-1][2].append(take)
+            at += take
+    return [replace(first, name=f"{first.template}/c{j}", base=base, n=sum(units), tables=((CS.LINKED, len(links)), ("w", sum(units))),
+                    links=tuple(links), link_units=tuple(units))
+            for j, (base, links, units) in enumerate(chunks)]
+
+
 def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]],
                     arrivals: Mapping[str, int] | None = None) -> tuple[list[CS.Member], tuple[CS.RowTable, ...]]:
     """The row-table layout of ``members``' ``ScaledMmS8Coordinate`` chunks: one row table per (engine step, op_path) of their
     ``ScaledMmS8_v1`` rows in the canonical order serving commits them in (``RowTable.key``; each table's token rows by request,
-    then token row), and each chunk a shared-row member whose ``x`` table is the distinct token rows its units read (``links``:
-    each one's row table and rank, in the units' order) and whose ``w`` table is its own rows."""
+    then token row), and each template's units cut again into chunks of at most its chunk cap (its first chunk's size in
+    ``members``) that each read one row table: a chunk ends at its cap or where its units' next token row is another
+    table's.  Each chunk is a shared-row member whose ``x`` table is the distinct token rows its units read (``links``: each
+    one's row table and rank, in the units' order; ``link_units``: how many of its units read each), all rows of one table
+    (the one root a statement's registered reads open against), and whose ``w`` table is its own rows."""
     tables: dict[tuple[int, str], int] = {}
     specs: list[tuple[int, str, str, int, list[tuple[str, int, int]]]] = []
     segs: dict[str, list[tuple[int, int, int, int]]] = {}
@@ -293,13 +314,12 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
     ranks = [sorted(range(len(s[4])), key=lambda j, rs=s[4]: rs[j][:2]) for s in specs]
     new_k = {k: i for i, k in enumerate(order)}
     new_rank = [{j: i for i, j in enumerate(r)} for r in ranks]
-    out = []
+    out: list[CS.Member] = []
     for m in ms:
         if m.template not in segs:
             out.append(m)
-            continue
-        links = tuple((new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template] if a < m.base + m.n and b > m.base)
-        out.append(replace(m, tables=((CS.LINKED, len(links)), ("w", m.n)), links=links))
+        elif m.base == next(x.base for x in ms if x.template == m.template):
+            out += _one_table_chunks(m, [(a, b, new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template]])
     return out, tuple(CS.RowTable(specs[k][0], specs[k][1], specs[k][2], specs[k][3], tuple(specs[k][4][j] for j in ranks[k]))
                       for k in order)
 
@@ -596,6 +616,8 @@ def _read_s8(ms: Sequence[CS.Member], rows: list[Row], store: Any, weights: Call
             if len(mine) != len(m.links):
                 raise ValueError(f"{m.key}: reads {len(mine)} token rows, links {len(m.links)}")
             at = np.repeat(np.arange(len(mine)), [min(entries[j][1], m.base + m.n) - max(entries[j][0], m.base) for j in mine])
+            if tuple(at.tolist()) != m.link_refs:
+                raise ValueError(f"{m.key}: its units read its token rows {at.tolist()}, its layout {list(m.link_refs)}")
             got = {"rows": {"x": np.stack([xrows[j] for j in mine]), "w": Wr[a:b]}, "outs": {"o0": Y[a:b]},
                    "refs": np.stack([at, np.arange(m.n)], axis=1)}
         else:
@@ -678,7 +700,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  reuse: Sequence[ProgramIndex] = (), binding: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
-    under (``commitment``: the reader's committer's, vllm-v1 or a TP rank's rows-sha512), the research run ``run``, the row, the
+    under (``commitment``: the reader's committer's, rows-sha512 by default or vllm-v1 by name), the research run ``run``, the row, the
     committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
     with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
     serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
