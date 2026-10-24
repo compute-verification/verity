@@ -44,17 +44,19 @@ SCATTER_BLOCK = 1024
 
 
 def scatter_into(x: Any, alpha: Any, aux: Any, rows: int, flags_to: Any, leaves: Any, leaves_to: Any, root: Any, roots_to: Any,
-                 offs: Any) -> None:
+                 offs: Any, at: Any = None) -> None:
     """A graph's scatter into the pass, one launch: the first `rows` rows of x screened (`screen_into`'s flags) into
     `flags_to`, and the `leaves` and A's 64-byte `root` copied to `leaves_to` and `roots_to`, each at the byte offset
     `offs[1]`, `offs[0]`, `offs[2]` read on the device.  Its first `rows` programs screen a row each, the next
-    ⌈len(leaves) / SCATTER_BLOCK⌉ copy the leaves, the last one the root."""
+    ⌈len(leaves) / SCATTER_BLOCK⌉ copy the leaves, the last one the root.  With `at` (int64, a row of x each), the i-th flag
+    pair is row at[i]'s, of x and of its α and (s, ρ)."""
     import torch
 
     from .pouw_pearl_c_triton import scatter
     k, n, B = x.shape[1], leaves.numel(), SCATTER_BLOCK
     scatter[(rows - (-n // B) + 1,)](x, alpha.view(torch.float32), aux.view(torch.float32), rows, k, len(range(0, k, C.S5_STRIDE)),
-                                     P.SIGMA_MIN, BAND, flags_to, leaves, leaves_to, root, roots_to, offs, n, root.numel(), BLOCK=B)
+                                     P.SIGMA_MIN, BAND, flags_to, leaves, leaves_to, root, roots_to, offs, n, root.numel(),
+                                     offs if at is None else at, BLOCK=B, GATHER=at is not None)
 
 
 def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:

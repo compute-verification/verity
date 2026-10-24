@@ -16,6 +16,7 @@ import importlib.util
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -49,7 +50,7 @@ class Host:
     dev, sms, OPTIN = 0, 188, 101376
 
     def __init__(self, lib):
-        self.lib, self.bufs, self.log = lib, {}, []
+        self.lib, self.bufs, self.log, self.args = lib, {}, [], {}
 
     def alloc(self, n: int) -> int:
         a = np.zeros(max(n, 16), np.uint8)
@@ -84,6 +85,7 @@ class Host:
 
     def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None) -> None:
         self.log.append((name, grid, block, smem, tuple(i)))
+        self.args[name] = (grid, block, smem, tuple(p), tuple(i))
         a = R.Args()
         for j, v in enumerate(p):
             a.p[j] = v
@@ -201,3 +203,51 @@ def test_pd_writes_pearl_c_h3s_bytes_and_the_no_write_control_fails(host, m, mr,
         group = bool(v & R.PD_GROUP)
         assert tile == ((R.cdiv(mr, 64) * R.cdiv(n // 64, R.PD_G), 32 * R.PD_G, R.PD_PAIR_SMEM // 2) if group
                         else (tiles, 32, 0)) + ((mr, n),)
+
+
+def test_pd_commits_zero_form_writes_its_bytes_without_reading_the_zero_rows(host):
+    """pd_commit_t's Z form (pd_commit_zero_V, as pearl_c_sm90.cu's pd_commit_g takes it) at 64 rows whose last 16 are zero,
+    given `grouped.zero_state` at p14 and the first zero row at i4, writes pd_commit_V's every byte in each served variant,
+    and still does with those rows nonzero: it takes the zero row's digest (`pearl_c.row_digest`) for them unread."""
+    if "pearl_c_sm90_grouped" not in sys.modules:
+        spec = importlib.util.spec_from_file_location("pearl_c_sm90_grouped", KERNEL.parent / "pearl_c_sm90" / "grouped.py")
+        sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[spec.name])
+    G = sys.modules["pearl_c_sm90_grouped"]
+    m, mr, n, k, idx = 64, 48, 384, 1024, 5
+    rng = np.random.default_rng(3)
+    a = rng.integers(0, 256, (m, 4 * k), dtype=np.uint8)
+    a[mr:] = 0
+    salt, salt_key, root_b = bytes(range(32)), bytes(range(100, 132)), hashlib.sha512(b"root_b").digest()
+    dom_a = rows_domain(activation_binding(salt, idx), idx, m, audit.HM96)
+    keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
+            "dom_a": dom_a.domain_id, "dom_b": bytes(64), "dom_t": bytes(64), "line_b": bytes(32)}
+    bufs = {name: host.alloc(size) for name, size in R.Pipeline.sizes(m, n, k, m).items()}
+    bufs["pd_count"] = host.alloc(16)
+    rows = host.put(a.tobytes())
+    pipe = R.Pipeline(host, m, n, k, "sm120", {name: host.put(v) for name, v in keys.items()}, rows, 0, bufs=bufs, m_real=m)
+    by = {name: step for name, _, step in pipe.steps()}
+    out = [x for x in R.PD_OUTPUTS if x != "leaves"]
+    zero = host.put(G.zero_state(k))
+
+    def commit(name, *z):
+        for x in out:
+            host.array(bufs[x])[:] = R.POISON
+        if z:
+            grid, block, smem, p, i = host.args[f"pd_commit_{pipe.pd & ~R.PD_GROUP}"]
+            assert len(p) <= 14 and len(i) == 4
+            host.launch(name, grid, block, smem, p=(*p, *[0] * (14 - len(p)), z[0]), i=(*i, z[1]))
+        else:
+            by["commit_a"]()
+        assert host.read(bufs["pd_count"], 16) == bytes(16)
+        return {x: host.read(bufs[x], pipe.size[x]) for x in out}
+
+    for v in SERVED:
+        pipe.pd = v
+        want = commit(f"pd_commit_{v}")
+        assert want["rowdig_a"][64 * mr:] == C.row_digest(bytes(4 * k)) * (m - mr)
+        assert commit(f"pd_commit_zero_{v}", zero, mr) == want and commit(f"pd_commit_zero_{v}", 0, mr) == want, v
+        host.array(rows)[4 * k * mr:4 * k * m] = 0x5A
+        assert commit(f"pd_commit_zero_{v}", zero, mr) == want, v
+        assert commit(f"pd_commit_zero_{v}", zero, m)["rowdig_a"] != want["rowdig_a"]
+        host.array(rows)[4 * k * mr:4 * k * m] = 0
