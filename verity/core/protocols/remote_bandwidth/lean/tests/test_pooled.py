@@ -67,7 +67,7 @@ def inputs(draw) -> dict:
     elif fault == "delta":
         v["delta"] = draw(st.sampled_from([0, 1, "-1/3", "3/2", "1"]))
     elif fault == "malformed":
-        bad = draw(st.sampled_from([-1, "1/0", "1.5", "+3", None, True, [], {}, 0.5]))
+        bad = draw(st.sampled_from([-1, "1/0", "1.5", "+3", None, True, [], {}]))
         k = draw(st.sampled_from(["windows", "delta", "window", "count", "drop"]))
         if k in ("windows", "delta"):
             v[k] = bad

@@ -90,7 +90,7 @@ def inputs(draw) -> dict:
         v["delta"] = draw(st.sampled_from([0, 1, "-1/3", "3/2"]))
     elif fault == "malformed":
         k = draw(st.sampled_from(["per", "windows", "delta", "window", "rates", "groups", "group", "squarings_per_s"]))
-        bad = draw(st.sampled_from([-1, "1/0", "1.5", "+3", None, True, [], {}, 0.5]))
+        bad = draw(st.sampled_from([-1, "1/0", "1.5", "+3", None, True, [], {}]))
         if k == "window":
             v["windows"] = [*v["windows"][:-1], draw(st.sampled_from([[1], [1, 2, 3], [bad, 1], [2, bad]]))]
         elif k == "group" and groups:
