@@ -25,15 +25,16 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
 * **Units** are in compile's order, the order the manifest lists them in: the call, then its row block, then its column
   block, row-major.
 * **The hook.** The arm hands every served call to `engine.int8_vllm.Int8PlainLinearMethod.observe` after both ops, and the
-  option records it there as a `Call`: its engine step (counted at linear 0), its layer (the linear's ordinal), its served
-  rows and its position. Then each listener (`H1Run.listen`) gets the call with the served tensors, on the device: A (the s8
+  option records it there as a `Call`: its engine step (counted at a linear the step already holds: GLM-5.3's forward
+  runs its indexer's wq_b, module order's first, third), its layer (the linear's ordinal), its served rows and its
+  position. Then each listener (`H1Run.listen`) gets the call with the served tensors, on the device: A (the s8
   rows, as the Commit taps ``Int8RowQuant_v1/0``), s_a (``/1``), the int8 weight and its scales; `H1Run.close` hands it the
   empty steps' calls too, with no rows. A's slot i is the call's row i, so a tile's rows are 32 consecutive slots. What a
   listener returns (its roots and receipt root, as hex) is recorded with the call (``bound``). `Call.inputs` is
   `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the table's, and root(B) is the weight's,
   which compute accounting commits. This module commits neither.
-* **The Commit** (ROOTS1, `pouw_h1_commit`, ``served``'s tap): each round's input-ids table ``ids@<s>`` and each call's A
-  table are the Commit's values, its record bound into `calls_root` before the draw root and held to them by core's
+* **The Commit** (ROOTS1, `pouw_h1_commit`, ``served``'s tap): each round's input-ids table ``ids@<s>`` and A table of
+  each K are the Commit's values, its record bound into `calls_root` before the draw root and held to them by core's
   credit (`credit._arow`); a window that fails it credits nothing (`pouw_h1_commit.UNTIED`).
 * **z** is the call's z/y records (`pouw_h1_records`): the int8 arm serves ``verity_int8::scaled_mm_zy`` over T slots (its
   ``zy_rows``), writing the served y and one record a unit, its exact z (`Call.z`'s cells) then y = dq(z). With none,
@@ -64,6 +65,7 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
 import os
@@ -299,9 +301,9 @@ class H1Run:
     is recorded.
 
     Round s is step s. The engine's admissions and batch order (`admit`, from `admitting`) go to the round of the step about
-    to run, and round s closes once step s's last linear is recorded (or at `close`): its root (`pouw_h1_requests.round_row`)
-    over the step's calls, its request table and its slot table, and with ``served`` each of the step's calls' A tables
-    ``a/<K>@<c>`` whole (`pouw_h1_served.Served.segments`), is recorded with
+    to run, and round s closes once every linear of step s is recorded (or at `close`): its root (`pouw_h1_requests.round_row`)
+    over the step's calls, its request table and its slot table, and with ``served`` the step's A table of each K
+    ``a/<K>@<s>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
     `finish` opens ``draw``'s coin (a `LiveRecord` of the same challenger's draw family) after the window's `draw_root`.
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
@@ -309,8 +311,8 @@ class H1Run:
     served call's A rows, scales and z/y records, so a drawn unit opens after the close (DRAWN1); without it their leaves
     open only while the run is held (`open_request`, `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
     `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing. With ``served``
-    (`pouw_h1_served.Served`) each call's A and z/y tables, and the weights' B, are also registered values as the call is
-    recorded, their roots in its tables (``registered``) under its round's root; the commitment carries their entries.
+    (`pouw_h1_served.Served`) each call's z/y table, its step's A table of K, and the weights' B, are also registered values
+    as the calls are recorded, their roots in its tables (``registered``) under its round's root; the commitment carries them.
 
     The Program's ``salt`` is given, or None with ``opener``: then `open_window` opens it once round 0's admissions are in
     (or at the first use of the salt), after its request table, and ``opener`` sets ``rounds`` and ``draw``."""
@@ -327,13 +329,14 @@ class H1Run:
         self.entry, self._salt, self._opener, self.modules, self.commit = entry, salt, opener, dict(modules), commit
         self.shapes_, self.rows, self.steps = [tuple(map(int, s)) for s in shapes], int(rows), int(steps)
         self.offs, self.u_step = layout(self.shapes_, self.rows)
-        self.calls: list[Call] = []
+        #: the calls at their indices s·L + w; per step, how many are in; the step's linears as they came; step 0's
+        self.calls, self._in, self._came, self._order = list[Call](), Counter[int](), list[int](), None
         self.listeners: list[Listener] = []
         self.bound: dict[int, Mapping[str, Any]] = {}
         self.refused: list[dict[str, int]] = []
         self.retained: deque[tuple[int, np.ndarray, np.ndarray, np.ndarray]] = deque(maxlen=retain or None)
         self.retain, self.transcript_dir = retain, transcript_dir
-        self.step, self.last, self.order_ok, self.closed = -1, None, True, False
+        self.step, self.order_ok, self.closed = -1, True, False
         self._weights: dict[int, tuple[Any, Any]] = {}
         #: each served call's credit verdict (`credit_gate.verdict`), by call index, and the call `record` just made with its z
         self.verdicts: dict[int, dict[str, Any]] = {}
@@ -432,15 +435,19 @@ class H1Run:
         if self.prover is not None and m:
             PV.keep_call(self.prover, call.index, av, sv, records)
 
-    def _index(self, s: int, w: int) -> int:
-        """Call (s, w)'s index: the calls before it here (s·L + w in a static window; a rank's, `pouw_h1_ranks`)."""
-        return len(self.calls)
+    def call(self, index: int) -> Call:
+        """Call `index`; KeyError when the window has none."""
+        i = bisect.bisect_left(self.calls, index, key=lambda c: c.index)
+        if i == len(self.calls) or self.calls[i].index != index:
+            raise KeyError(f"{self.entry}: no call {index}")
+        return self.calls[i]
 
     def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None) -> Call:
         n, k = self.shapes_[w]
-        call = Call(self._index(s, w), s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0, k, n,
-                    s * self.u_step + self.offs[w], self.rows)
-        self.calls.append(call)
+        call = Call(s * len(self.shapes_) + w, s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0,
+                    k, n, s * self.u_step + self.offs[w], self.rows)
+        bisect.insort(self.calls, call, key=lambda c: c.index)
+        self._in[s] += 1
         if self.commit:
             self._commit_tables(call, a, s_a, records)
             if self.served is not None:
@@ -450,7 +457,7 @@ class H1Run:
             if out is not None:
                 self.bound[call.index] = {**self.bound.get(call.index, {}), **out}
         self.details["calls"] = self.commits["calls"] = len(self.calls)
-        if w == len(self.shapes_) - 1:
+        if self._in[s] == len(self.shapes_):
             self._close_rounds(s)
         return call
 
@@ -543,7 +550,7 @@ class H1Run:
     def receipt(self, index: int, root: bytes) -> None:
         """Call `index`'s receipt root, computed after its round's coin: it goes under the next round's root (the last
         round's in the draw's root), so it is refused before that coin, once the next round has closed, or twice."""
-        call = self.calls[index]
+        call = self.call(index)
         if len(self.round_log) <= call.step:
             raise RuntimeError(f"{self.entry}: call {index}'s receipt before round {call.step}'s coin")
         if len(self.round_log) > call.step + 1 or "draw" in self.commits or index in self.receipts:
@@ -581,11 +588,11 @@ class H1Run:
         committed for z, and with ``retain`` `int_mm` computes its exact Y beside, only to retain it."""
         if self.closed:
             raise RuntimeError(f"{self.entry}: a call after the window closed")
-        if w == 0:
-            self.step += 1
-        elif self.last is None or w != self.last + 1:
-            self.order_ok = False
-        self.last = w
+        if self.step < 0 or w in self._came:
+            self._order = self._came if self._order is None and self.step >= 0 else self._order
+            self.step, self._came = self.step + 1, []
+        self.order_ok &= self._order is None or self._order[len(self._came):len(self._came) + 1] == [w]
+        self._came.append(w)
         self._weights[w] = (weight, weight_scale)
         m, k = (int(d) for d in a.shape)
         if not 0 <= self.step < self.steps or m > self.rows or (int(weight.shape[0]), k) != self.shapes_[w]:
@@ -624,7 +631,7 @@ class H1Run:
         if not self.commit or self._unopened is not None:
             return
         self.details["steps_served"] = self.step + 1
-        self.details["last_step_complete"] = self.last in (None, len(self.shapes_) - 1)
+        self.details["last_step_complete"] = self.step < 0 or sum(c.step == self.step for c in self.calls) == len(self.shapes_)
         for s in range(self.step + 1, self.steps):
             for w, (n, k) in enumerate(self.shapes_):
                 weight, scale = self._weights.get(w, (None, None))
@@ -783,11 +790,8 @@ def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes
 
 def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> list[tuple[bytes, bytes] | None]:
     """Each call's (root(A), root(B)) from what its listeners bound (``root_a``, ``root_b``, hex), None where either is missing."""
-    out: list[tuple[bytes, bytes] | None] = []
-    for c in calls:
-        b = bound.get(c.index, {})
-        out.append((bytes.fromhex(b["root_a"]), bytes.fromhex(b["root_b"])) if "root_a" in b and "root_b" in b else None)
-    return out
+    return [(bytes.fromhex(b["root_a"]), bytes.fromhex(b["root_b"])) if "root_a" in b and "root_b" in b else None
+            for b in (bound.get(c.index, {}) for c in calls)]
 
 
 __all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "RECORD", "SALT_TAG",
