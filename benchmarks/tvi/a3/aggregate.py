@@ -4,9 +4,9 @@ import argparse, glob, json, os
 
 import numpy as np
 
-ORDER = ["xs:13", "xs:625", "hl:625", "xs:5000", "hl:5000", "xs:48552", "lora16", "full"]
-LABEL = {"full": "full", "lora16": "lora16", "xs:13": "tiny", "xs:625": "10kbit", "xs:5000": "10kB",
-         "xs:48552": "100kB", "hl:625": "hl10kbit", "hl:5000": "hl10kB"}
+ORDER = ["xs:13", "hl:13", "xs:625", "hl:625", "xs:5000", "hl:5000", "xs:48552", "hl:50000", "lora16", "full"]
+LABEL = {"full": "full", "lora16": "lora16", "xs:13": "xs-tiny", "xs:625": "xs-10kbit", "xs:5000": "xs-10kB",
+         "xs:48552": "xs-100kB", "hl:13": "hl-tiny", "hl:625": "hl-10kbit", "hl:5000": "hl-10kB", "hl:50000": "hl-100kB"}
 
 
 def boot(per_seed, B=2000, rng=None):
@@ -45,7 +45,9 @@ def main():
         rs = sorted(rs, key=lambda r: r["job"]["seed"])
         row = {"task": task, "order": order, "H_bits": rs[0]["H_bits"], "spec": spec, "S_label": LABEL.get(spec, spec),
                "S_bits": rs[0]["bits"], "seeds": [r["job"]["seed"] for r in rs], "sft_steps": rs[0]["sft_steps"],
-               "rl_steps": rs[0]["rl_steps"], "sft_lr": [r["sft_lr"] for r in rs], "rl_best_step": [r["rl_best_step"] for r in rs]}
+               "rl_steps": rs[0]["rl_steps"], "sft_lr": [r["sft_lr"] for r in rs], "rl_best_step": [r["rl_best_step"] for r in rs],
+               "sft_budget": rs[0].get("sft_budget", rs[0]["sft_steps"]), "sft_steps_per_seed": [r["sft_steps"] for r in rs],
+               "rl_skipped": [bool(r.get("rl_skipped")) for r in rs]}
         for key in ["sft_test_exact", "sft_test_pos", "rl_test_exact", "rl_test_pos", "rl_final_test_exact"]:
             per = [np.array(r[key], dtype=float) for r in rs]
             b = boot(per, rng=rng)
@@ -75,14 +77,23 @@ def main():
     def f(x, c):
         return f"{x:.3f} [{c[0]:.3f}, {c[1]:.3f}]"
 
-    lines = ["| task | H bits | S | S bits | seeds | SFT exact [95% CI] | SFT frac of full | RL exact [95% CI] | RL frac of full | SFT pos-acc | RL pos-acc |",
-             "|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines = ["| task | H bits | S | S bits | S/H | seeds | SFT steps | SFT exact [95% CI] | SFT frac of full [CI] | RL exact [95% CI] | RL frac of full [CI] | RL best step | SFT pos-acc | RL pos-acc |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         fr = lambda ph: (f"{r[ph + '_frac_full']:.2f} [{r[ph + '_frac_full_ci'][0]:.2f}, {r[ph + '_frac_full_ci'][1]:.2f}]"
                          if r.get(ph + "_frac_full") is not None else "-")
-        lines.append(f"| {r['task']} (o={r['order']}) | {r['H_bits']:.0f} | {r['S_label']} | {r['S_bits']:.3g} | {len(r['seeds'])} | "
+        steps = "/".join(str(s) for s in r["sft_steps_per_seed"])
+        lines.append(f"| {r['task']} (o={r['order']}) | {r['H_bits']:.0f} | {r['S_label']} | {r['S_bits']:.3g} | {r['S_bits'] / r['H_bits']:.3g} | "
+                     f"{len(r['seeds'])} | {steps} | "
                      f"{f(r['sft_test_exact'], r['sft_test_exact_ci'])} | {fr('sft')} | {f(r['rl_test_exact'], r['rl_test_exact_ci'])} | "
-                     f"{fr('rl')} | {r['sft_test_pos']:.3f} | {r['rl_test_pos']:.3f} |")
+                     f"{fr('rl')} | {'/'.join(str(s) for s in r['rl_best_step'])} | {r['sft_test_pos']:.3f} | {r['rl_test_pos']:.3f} |")
+    lines += ["", "| task | H bits | smallest S with RL frac >= 0.3 | >= 0.8 | >= 0.95 |", "|---|---|---|---|---|"]
+    for task in sorted({r["task"] for r in rows}):
+        rs = sorted([r for r in rows if r["task"] == task and r.get("rl_frac_full") is not None], key=lambda r: r["S_bits"])
+        if not rs:
+            continue
+        cell = lambda th: next((f"{r['S_label']} ({r['S_bits']:.3g} bit, {r['rl_frac_full']:.2f})" for r in rs if r["rl_frac_full"] >= th), "none")
+        lines.append(f"| {task} | {rs[0]['H_bits']:.0f} | {cell(0.3)} | {cell(0.8)} | {cell(0.95)} |")
     blines = ["| model | task | H bits | strings | k | pass@k | 95% upper (0 hits) | greedy exact | pos-acc (sampled) |", "|---|---|---|---|---|---|---|---|---|"]
     for k, v in base.items():
         up = 1 - 0.05 ** (1 / v["n_strings"]) if v["n_pass"] == 0 else float("nan")
