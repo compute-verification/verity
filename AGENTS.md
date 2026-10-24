@@ -145,7 +145,10 @@ the standing rulings stated nowhere else.
     μ^m a try (Daniel, 18 Oct).
 
   There are no retries: a failed proof is a visible failure, and a retry never redraws. Outer proofs go through the
-  firewall one at a time.
+  firewall as independent sessions: each staged statement is fixed before any session draws coins and gets exactly one
+  session; each session draws its own live coins in its own firewall pass; no statement reads another session's
+  transcript or coins; every session is recorded and every verdict counts (Daniel's provisional batch, 24 Oct;
+  https://app.notion.com/p/403399515d9e81298f49e4b6b78634e7).
 - **Verifier cost: O(circuit description), never O(unrolled circuit)** (Daniel, 18 Oct). A verifier of record may do
   work proportional to the descriptor it reads (its Definitions, nodes and references), never to the circuit it unrolls
   to: no walk over every gate, batch member or scan iteration. Summarize once per specialized Definition and multiply
