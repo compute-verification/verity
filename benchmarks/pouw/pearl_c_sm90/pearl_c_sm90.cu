@@ -172,7 +172,9 @@ template <int NA> DEV void acc_fence(float* d) {
 // GR (the grouped calls, grouped.py): A's rows are many units' one after another, and p12 holds each 64-row block's expert e
 // (int32); a tile's B and P_B rows are its expert's, rows e N + tn BN of the experts' stacked B side, and its columns' scales
 // cs + e N.  C~, U and y are A's rows by N, as without it.  i4 (live, 0 for all M): rows from live on are filler, whose
-// C~, U and y are not stored (their products are still computed, as a wgmma tile's 64 rows are one instruction's).
+// C~, U and y are not stored (their products are still computed, as a wgmma tile's 64 rows are one instruction's).  i5
+// (overlap; G = 4 on 64-row tiles): each window's atoms are issued, into a second set of accumulators, before the window
+// before it is waited on, so its MMAs run while that one's sum is added; the same sums go into the total in the same order.
 enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S };
 constexpr int BK = 128, PEEL_ROW = 128, SMEM_BUDGET = 200 * 1024, MAX_STAGES = 8;
 struct Maps { uint8_t a[128], b[128], pa[128], pb[128]; };
@@ -208,6 +210,7 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (sa(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE;
   const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3], live = a.i[4] ? a.i[4] : M;
+  const bool overlap = NWG == 1 && G != 0 && a.i[5] != 0;
   const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KB = K / BK;
   const int tid = threadIdx.x, wg = tid / 128;
   const int* ex = reinterpret_cast<const int*>(a.p[12]);
@@ -283,6 +286,50 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       if (lane == 0) mbar_arrive(bars + 8 * (STAGES + (s == 0 ? STAGES - 1 : s - 1)));
 #pragma unroll
       for (int i = 0; i < NA; i++) total[i] = d[i];
+    } else if (overlap) {
+      // window kb's atoms into d (kb even) or e (kb odd), each issued before the window before it is waited on; each window's
+      // sum still goes into the total alone, in ascending k
+      float e[NA];
+      int s0 = s, s1 = s;
+      const auto issue = [&](float* acc) {
+        mbar_wait_warp(bars + 8 * s, ph);
+        const uint32_t a0 = base + s * T::STAGE + wg * 64 * BK, b0 = base + s * T::STAGE + T::A_BYTES;
+        WG_FENCE;
+        qmma<BN>(acc, desc_sw128(a0), desc_sw128(b0), 0);
+        qmma<BN>(acc, desc_sw128(a0 + 32), desc_sw128(b0 + 32), 1);
+        qmma<BN>(acc, desc_sw128(a0 + 64), desc_sw128(b0 + 64), 1);
+        qmma<BN>(acc, desc_sw128(a0 + 96), desc_sw128(b0 + 96), 1);
+        WG_COMMIT;
+        if (++s == STAGES) { s = 0; ph ^= 1; }
+      };
+#pragma unroll
+      for (int i = 0; i < NA; i++) total[i] = 0.0f;
+      issue(d);
+      for (int kb = 0; kb < KB; kb += 2) {
+        if (kb + 1 < KB) {
+          s1 = s;
+          issue(e);
+          WG_WAIT(1);
+        } else {
+          WG_WAIT(0);
+        }
+        acc_fence<NA>(d);
+        if (lane == 0) mbar_arrive(bars + 8 * (STAGES + s0));
+#pragma unroll
+        for (int i = 0; i < NA; i++) total[i] = __fadd_rn(total[i], d[i]);
+        if (kb + 1 == KB) break;
+        if (kb + 2 < KB) {
+          s0 = s;
+          issue(d);
+          WG_WAIT(1);
+        } else {
+          WG_WAIT(0);
+        }
+        acc_fence<NA>(e);
+        if (lane == 0) mbar_arrive(bars + 8 * (STAGES + s1));
+#pragma unroll
+        for (int i = 0; i < NA; i++) total[i] = __fadd_rn(total[i], e[i]);
+      }
     } else {
 #pragma unroll
       for (int i = 0; i < NA; i++) total[i] = 0.0f;

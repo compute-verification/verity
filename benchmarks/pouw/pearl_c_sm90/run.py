@@ -27,7 +27,8 @@ libcuda.so.1, stdlib only, nothing built on the card).
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="h100", PEARLC_CHAIN="pl",
-                                 PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_LIVE=0 for decode's 64 x 64 GEMMs storing all m rows)
+                                 PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_LIVE=0 for decode's 64 x 64 GEMMs storing all m rows,
+                                 PEARLC_OVERLAP=0 for the 64-row GEMMs waiting on each window before issuing the next)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -53,6 +54,9 @@ VARIANT_G = {"h100": 4}
 #: the 64 x 64 GEMMs store the real rows alone (i4 = m_real: a filler row's C~, U and y are left as the buffer holds them);
 #: PEARLC_LIVE=0 stores all m rows, the same real rows
 LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
+#: the 64-row GEMMs issue each promotion window's atoms before the window before it is waited on (i5); PEARLC_OVERLAP=0
+#: waits on each window before issuing the next, the same sums in the same order
+OVERLAP = os.environ.get("PEARLC_OVERLAP", "1") != "0"
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: every GEMM's operand pair, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + MAP_SET * slot: the chain's (P_A, P_B
 #: the peel's), the words' (A'F_B, B~F_A, G) and the baselines' (A and B again for the tail, which they don't load)
@@ -688,7 +692,7 @@ class Pipeline:
             ptrs[slot] = self.b[x] if x else 0
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
         self.dev.launch(name, min(tiles, grid or self.dev.sms - self.beside), gemm_threads(name), self.GEMM_SMEM[name], p=ptrs,
-                        i=(M, N, self.k, RASTER, live))
+                        i=(M, N, self.k, RASTER, live, int(OVERLAP and tm == BM_D)))
 
     def extra(self) -> dict[str, object]:
         """The chain's launches by name, beside `steps`' choice: `gemm_pearlc_cu` (C~, U and y stored) and `gemm_pearlc_s`
