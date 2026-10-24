@@ -71,6 +71,8 @@ under its own `RESEARCH_RUN_DIR` (`out/steps/<step>/r<i>/`), so every record 85 
   `/usr/bin/time -v` peak RSS.
 - **CPU steps** (`icheck`, `vstage`, `vcap`, `oreplay`, `lean`): each tool's `/usr/bin/time -v` wall, median and [min, max]
   over the repeats. Lean's verify also splits into `inputs`, `setup` and the session's own checks where it prints them.
+  85 runs the V* stages (`vstage`'s per-statement stages, `lean`'s sessions) `JOBS` at a time (`xargs -P`, 4 here), so
+  each one's wall is under its neighbours' load, and the step's whole wall (`lean step`) is what an auditor waits.
 - **Sizes**: the V* proofs' bytes (`proof_bytes`, the outer sessions' proofs: what the auditor receives), the inner
   proof's (the prover's witness, never sent), the transcript bytes each way, and the staged files (`sizes.txt`).
 - **Setup** (`build`): the step's wall and peak once, cold or cached as the job found it (the binaries' hashes and
