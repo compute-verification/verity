@@ -28,10 +28,13 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
   profile's row, and its record digest under the certifier's salt the certificate's signed digest;
 - ``NetworkServedCounts_v1``: N2's served counts on a served link (`served.reference`);
 - ``audit.VIOLATION``: N2's audit of both records (`audit.Audit`, the Python reference of the Lean check of record);
-- pending checks, whose owners name their parts when they land: ``IoTie`` (IO-TIE, the tie of frame k to the
-  committed sampled id at its (request, position)), ``N2Advice`` (N2-ADVICE, N2's served counts from the ingress head and
-  the advice's output lengths and release buckets), ``StepUnit`` (PROVE-PATH: the compiled step Program's digest, and
-  the committed values passing it) and ``Commit`` (the Commit's opening under its registered root).
+- pending checks, by the names their drafts give them: ``NetworkAdvisedCounts_v1`` (N2-ADVICE's advised counts on an
+  advised link, `LinkWindows.advised_check`: the egress head's counts the release of the advice's frames, the ingress
+  head's the request frames the advice needs; ``.view`` when the advice is malformed or doesn't cover the window, which
+  refuses every window), ``NetworkIoTie_v1`` (IO-TIE's tie of a drawn frame's token id to the Commit's at its (request,
+  position)); and, until their owners name them, ``StepUnit`` (PROVE-PATH: the compiled step Program's digest against
+  the committed trace's, and the committed values passing it) and ``Commit`` (the Commit's opening under its registered
+  root).
 
 `Negative.waits` names the interfaces a negative waits on; one with none runs today. `table` renders the registry.
 """
@@ -63,6 +66,8 @@ ADVICE_MODULE = "verity.core.protocols.certifier.advice"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
+ADVISED = "NetworkAdvisedCounts_v1"
+TIE = "NetworkIoTie_v1"
 CHECKS_TODAY = (HEAD, SERVED, "audit")  # the checks `n2` runs; every other code's check is pending
 ENDS = ("egress", "ingress")
 
@@ -129,7 +134,11 @@ def shim(strategy: str) -> Callable[[Path, Path], Path]:
 
 # --- the advice (I1) ---------------------------------------------------------------------------------------------------
 # On I1's dataclasses as drafted: Advice(requests, steps, release), RequestAdvice(id, prompt_len, output_len, finish),
-# StepAdvice(rows), Row(request, kind, start, n, cache_hit, preempted). Each returns new advice and leaves its argument.
+# StepAdvice(rows), Row(request, kind, start, n, cache_hit, preempted), and N2-ADVICE's additions where the advice has
+# them: each request's `ingress_frames` and each window's `received`. Each returns new advice and leaves its argument,
+# and each keeps the advice well formed under N2-ADVICE's frame rule (`advised.frames`: a row samples its request's next
+# token when `start + n` is the prompt's length plus the tokens sampled before it), so that what refuses it is a check
+# of the advice against the certified I/O or the committed values, not its form.
 
 def _rows(advice) -> list[tuple[int, int, Any]]:
     return [(s, j, row) for s, step in enumerate(advice.steps) for j, row in enumerate(step.rows)]
@@ -143,30 +152,79 @@ def _set_row(advice, s: int, j: int, row):
     return replace(advice, steps=steps)
 
 
+def sampling_rows(advice, request: int) -> list[tuple[int, int]]:
+    """(step, row) of each row that samples request `request`'s next token, in order (`advised.frames`' rule)."""
+    prompt, sampled, out = advice.requests[request].prompt_len, 0, []
+    for s, j, row in _rows(advice):
+        if row.request == request and row.n >= 1 and row.start + row.n == prompt + sampled:
+            out.append((s, j))
+            sampled += 1
+    return out
+
+
+def _received(advice, request, by: int):
+    """The advice with `by` times request `request`'s ingress frames added to the first window's `received` that can
+    take them, when the advice carries N2-ADVICE's ingress fields."""
+    if not hasattr(advice, "received"):
+        return advice
+    got, n = list(advice.received), advice.requests[request].ingress_frames * by
+    w = next(w for w, g in enumerate(got) if g > 0 and g + n >= 0)
+    got[w] += n
+    return replace(advice, received=got)
+
+
 def output_length(advice, request: int = 0, by: int = 1):
-    """Request `request`'s output length `by` off: the advice disagrees with the frames its egress certified."""
+    """Request `request`'s output length one more (`by` = 1: a decode row samples one token past its last, in the step
+    after its last sampling row's, a step appended at the last release bucket if there is none) or one less (−1: its
+    last sampling row, a decode row, left out). The advice's frames then disagree with what the egress certified."""
+    q, rows = advice.requests[request], sampling_rows(advice, request)
     requests = list(advice.requests)
-    requests[request] = replace(requests[request], output_len=requests[request].output_len + by)
-    return replace(advice, requests=requests)
+    requests[request] = replace(q, output_len=q.output_len + by)
+    out = replace(advice, requests=requests)
+    if by == -1:
+        s, j = rows[-1]
+        row = advice.steps[s].rows[j]
+        if q.output_len < 2 or row.n != 1:
+            raise NotApplicable(f"request {request}'s last token isn't sampled by a decode row")
+        steps = list(out.steps)
+        steps[s] = replace(steps[s], rows=[r for k, r in enumerate(steps[s].rows) if k != j])
+        return replace(out, steps=steps)
+    if by != 1:
+        raise ValueError("an output length one more (by = 1) or one less (by = -1)")
+    if not rows:
+        raise NotApplicable(f"request {request} samples no token")
+    s, j = rows[-1]
+    last = advice.steps[s].rows[j]
+    row = replace(last, kind="decode", start=q.prompt_len + q.output_len - 1, n=1,
+                  **{f: v for f, v in (("cache_hit", 0), ("preempted", False)) if hasattr(last, f)})
+    s, steps, release = s + 1, list(out.steps), list(out.release)
+    if s == len(steps):
+        steps.append(replace(steps[-1], rows=()))
+        release += release[-1:]
+    steps[s] = replace(steps[s], rows=list(steps[s].rows) + [row])
+    return replace(out, steps=steps, release=release)
 
 
 def missing_request(advice, request: int = -1):
-    """Request `request` left out, with its rows, the later requests' indices moved down: the advice serves one request
-    fewer than the ingress certified."""
+    """Request `request` left out, with its rows, the later requests' indices moved down (and its ingress frames out of
+    `received`): the advice serves one request fewer than the ingress certified."""
     i = range(len(advice.requests))[request]
+    advice = _received(advice, i, -1)
     steps = [replace(st, rows=[replace(r, request=r.request - (r.request > i)) for r in st.rows if r.request != i])
              for st in advice.steps]
     return replace(advice, requests=[q for k, q in enumerate(advice.requests) if k != i], steps=steps)
 
 
 def extra_request(advice, request: int = 0, suffix: str = "~extra"):
-    """A request more: a copy of request `request` under another id, its rows beside the original's in the same steps,
-    so the advice is whole but serves one request more than the ingress certified."""
+    """A request more: a copy of request `request` under another id, its rows beside the original's in the same steps
+    (and its ingress frames in `received`), so the advice is whole but serves one request more than the ingress
+    certified."""
     new = len(advice.requests)
     q = advice.requests[request]
     steps = [replace(st, rows=list(st.rows) + [replace(r, request=new) for r in st.rows if r.request == request])
              for st in advice.steps]
-    return replace(advice, requests=list(advice.requests) + [replace(q, id=f"{q.id}{suffix}")], steps=steps)
+    out = replace(advice, requests=list(advice.requests) + [replace(q, id=f"{q.id}{suffix}")], steps=steps)
+    return _received(out, new, 1)
 
 
 def release_moved(advice, step: int | None = None, by: int = 1):
@@ -179,15 +237,17 @@ def release_moved(advice, step: int | None = None, by: int = 1):
     return replace(advice, release=rel)
 
 
-def start_shifted(advice, step: int = -1, by: int = 1):
-    """The first decode row of step `step` (the last by default) scheduled `by` positions later: its compiled Program
-    reads other positions than the committed values were computed at."""
+def start_shifted(advice, step: int = -1, by: int = -1):
+    """The first decode row of step `step` (the last by default) starting `by` positions later, its last position kept
+    (`n` − `by`): by default one earlier, a decode row of two positions. Its frames are the same, so N2 accepts it,
+    but its compiled Program computes other positions than the committed values were computed at."""
     s = range(len(advice.steps))[step]
-    j = next((j for j, r in enumerate(advice.steps[s].rows) if r.kind == "decode"), None)
+    j = next((j for j, r in enumerate(advice.steps[s].rows)
+              if r.kind == "decode" and r.n - by >= 1 and r.start + by >= 0), None)
     if j is None:
-        raise NotApplicable(f"step {s} has no decode row")
+        raise NotApplicable(f"step {s} has no decode row that can start {by} later with its end kept")
     row = advice.steps[s].rows[j]
-    return _set_row(advice, s, j, replace(row, start=row.start + by))
+    return _set_row(advice, s, j, replace(row, start=row.start + by, n=row.n - by))
 
 
 def chunk_split(advice):
@@ -285,29 +345,30 @@ NEGATIVES = {n.name: n for n in [
              "N2's counts against the profile", f"{HEAD}.counts", shim("extra"), served=SERVED),
     Negative("drop", "io", "plan", "the shim drops the first event of a response; certified",
              "N2's counts against the profile", f"{HEAD}.counts", shim("drop"), served=SERVED,
-             also=("N2Advice.output_len",)),
+             also=(ADVISED, TIE)),
     Negative("head", "io", "certified", "window 0's egress head one count off, its certificate the original's",
              "N2's head check (the signed digest)", f"{HEAD}.signed", tampered_head, also=("audit.signature",)),
-    Negative("token", "io", "plan", "the shim writes a response's first frame with other bytes than the endpoint "
-             "sent: certified, its counts honest's", "the I/O tie", "IoTie.token", shim("token"),
+    Negative("token", "io", "plan", "the shim writes every token of window 0's responses with other bytes than the "
+             "endpoint sent: certified, its counts honest's", "the I/O tie", TIE, shim("token"),
              waits=("IO-TIE", "CERT-VARLEN")),
-    Negative("advice-length", "advice", "advice", "a request's output length one more than its certified frames",
-             "N2-ADVICE", "N2Advice.output_len", advice_edit(output_length), waits=("ADV-SPEC", "N2-ADVICE")),
+    Negative("advice-length", "advice", "advice", "a request's output length one more than its certified frames, "
+             "with the decode row that samples it", "N2's advised counts", ADVISED, advice_edit(output_length),
+             waits=("ADV-SPEC", "N2-ADVICE")),
     Negative("advice-missing", "advice", "advice", "a certified request missing from the advice, with its rows",
-             "N2-ADVICE", "N2Advice.requests", advice_edit(missing_request), waits=("ADV-SPEC", "N2-ADVICE"),
-             also=("IoTie.request",)),
+             "N2's advised counts", ADVISED, advice_edit(missing_request), waits=("ADV-SPEC", "N2-ADVICE"),
+             also=(TIE,)),
     Negative("advice-extra", "advice", "advice", "a request in the advice that the ingress didn't certify",
-             "N2-ADVICE", "N2Advice.requests", advice_edit(extra_request), waits=("ADV-SPEC", "N2-ADVICE"),
-             also=("IoTie.request",)),
+             "N2's advised counts", ADVISED, advice_edit(extra_request), waits=("ADV-SPEC", "N2-ADVICE"),
+             also=(TIE,)),
     Negative("advice-release", "advice", "advice", "a step's output released one bucket later than certified",
-             "N2-ADVICE", "N2Advice.release", advice_edit(release_moved), waits=("ADV-SPEC", "N2-ADVICE")),
-    Negative("advice-start", "advice", "advice", "a decode row's start position one later",
-             "the step unit (committed values against the compiled Program)", "StepUnit.values",
+             "N2's advised counts", ADVISED, advice_edit(release_moved), waits=("ADV-SPEC", "N2-ADVICE")),
+    Negative("advice-start", "advice", "advice", "a decode row starting one position earlier, its end kept: N2 "
+             "accepts it", "the step unit (committed values against the compiled Program)", "StepUnit.values",
              advice_edit(start_shifted), waits=("ADV-SPEC", "COMPILER", "PROVE-PATH")),
     Negative("wrong-token", "token", "commit", "a committed sampled id changed after the run; the registered root kept",
              "the I/O tie and the step unit (the Commit's opening)", "Commit.opening", commit_edit(wrong_token),
-             waits=("SERVE-COMMIT", "IO-TIE", "PROVE-PATH"), also=("IoTie.opening", "StepUnit.opening")),
-    Negative("advice-chunk", "circuit", "advice", "a prefill chunk split one token differently",
+             waits=("SERVE-COMMIT", "IO-TIE", "PROVE-PATH"), also=(TIE, "StepUnit.opening")),
+    Negative("advice-chunk", "circuit", "advice", "a prefill chunk split one token differently: N2 accepts it",
              "the step unit (the compiled Program's digest against the committed trace's)", "StepUnit.program",
              advice_edit(chunk_split), waits=("ADV-SPEC", "COMPILER", "PROVE-PATH")),
 ]}

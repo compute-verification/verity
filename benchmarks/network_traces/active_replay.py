@@ -489,8 +489,8 @@ LIVE_TAMPERS = ("extra", "drop", "token")
 
 
 def other_token(data: bytes) -> bytes:
-    """Bytes of a canonical event's length other than `data`: its first byte's low bit flipped, or one byte for none."""
-    return bytes([data[0] ^ 1]) + data[1:] if data else b"!"
+    """Bytes of a canonical event's length other than `data`, which isn't empty: its first byte's low bit flipped."""
+    return bytes([data[0] ^ 1]) + data[1:]
 
 
 def adversary_writes(plan: dict, sync_set: SyncSet, buckets: int, strategy: str, seed: int = 0) -> dict[str, list]:
@@ -537,11 +537,18 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     sender that steers the online prover's declared sync with a random message), with the symbols it sent kept for
     the audit's `covert` measurement. Under syncs fixed before the run (`envelope`, `model`) the covert sender steers
     nothing: the control. On a live server the plan carries the sender's parameters, and the shim's
-    `covert.LiveSender` draws the symbols as it serves. On a live shim only, each on the first session's response, on
-    time and logged: `extra` writes one event more at its end, after what the endpoint sent and the shim's padding
-    (`pad_to`); `drop` writes its first event not at all, counted as written so the padding doesn't make it up; and
-    `token` writes its first event carrying other bytes (`other_token`), so the frame counts are honest's and only a
-    check of the frames' tokens against the committed sampled ids (the I/O tie) refuses it."""
+    `covert.LiveSender` draws the symbols as it serves. On a live shim only, on time and logged: `extra` writes one
+    event more at the end of the first session's response, after what the endpoint sent and the shim's padding
+    (`pad_to`); `drop` writes that response's first event not at all, counted as written so the padding doesn't make
+    it up; and `token` writes every event that carries bytes, of every response to a request enqueued in window 0,
+    with other bytes (`other_token`), so the frame counts are honest's and only a check of the frames' tokens against
+    the committed sampled ids (the I/O tie) refuses it. The tie draws positions in each window, so a window whose every
+    token is wrong is refused at any number of draws, where one wrong frame among N would be refused only at the share
+    1/N a draw."""
+    if strategy == "token":
+        T = setup.egress_params.buckets
+        window0 = [q["session"] for q in plan.get("requests", ()) if "enqueue" in q and q["enqueue"] // T == 0]
+        return plan | {"strategy": strategy, "seed": seed, "token": window0 or [plan["sessions"][0][0]]}
     if strategy in LIVE_TAMPERS:
         return plan | {"strategy": strategy, "seed": seed, strategy: plan["sessions"][0][0]}
     if strategy != "covert":
@@ -806,7 +813,7 @@ class LiveServer:
         self.authorization = b"" if key is None else b"authorization: Bearer %s\r\n" % key.encode()
         self.tau, self.horizon = params["bucket_ms"] / 1000, plan["windows"] * params["buckets"]
         self.writes, self.extra, self.pad_to = plan.get("writes"), plan.get("extra"), plan.get("pad_to")
-        self.drop, self.token = plan.get("drop"), plan.get("token")
+        self.drop, self.token = plan.get("drop"), frozenset(plan.get("token") or ())
         self.held: Counter = Counter()
         self.windows = plan["windows"]
         self.position, self.origin, self.open = 0, None, 0
@@ -865,17 +872,22 @@ class LiveServer:
     async def _response_events(self, chunks, name: str):
         """A response's canonical events, one list per chunk of its body as it arrives; under `pad_to`, empty events
         (`active.event(b"")`, what a chunk of no text gives) after its last, up to `pad_to`, counted in `padded`; for
-        the `extra` session, one event more after those; for the `drop` session, its first left out; for the `token`
-        session, its first carrying `other_token` of its bytes."""
+        the `extra` session, one event more after those; for the `drop` session, its first left out; for a `token`
+        session, each that carries bytes carrying `other_token` of them. `tampered` logs each event changed or left
+        out, as (session, its index in the response)."""
         cutter, n = Events(), 0
         async for data in chunks:
             bodies = [b for e in cutter.feed(data) for b in canonical_events(e)]
-            if bodies and n == 0 and name in (self.drop, self.token):
+            if bodies and n == 0 and name == self.drop:
                 self.log.setdefault("tampered", []).append([name, 0])
-                head = [] if name == self.drop else [event(other_token(event_data(bodies[0])))]
-                n, bodies = len(bodies), head + bodies[1:]
+                n, bodies = len(bodies), bodies[1:]
                 yield bodies
                 continue
+            if name in self.token:
+                for k, b in enumerate(bodies):
+                    if text := event_data(b):
+                        self.log.setdefault("tampered", []).append([name, n + k])
+                        bodies[k] = event(other_token(text))
             n += len(bodies)
             yield bodies
         if self.pad_to is not None and n < self.pad_to:

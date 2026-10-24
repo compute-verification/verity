@@ -4,9 +4,10 @@ names refuses it by its code.
 At the certifier, on certifier-serve runs on an injected clock against a stub endpoint (`test_certifier_serve`'s): the
 shim's `late`, `extra`, `drop` and `token`, certified by the certifier, and the prover's tampered head under its original
 certificate. N2's verdict of record refuses late by the record's status, extra and drop by the counts (the served counts on
-a served link) and the head by its signed digest; it accepts token, whose counts are honest's and whose one changed frame
+a served link) and the head by its signed digest; it accepts token, whose counts are honest's and whose changed frames
 only the I/O tie (IO-TIE, pending) reads. The advice's and the Commit's tamperings run on stand-ins of I1 and I3 as
-drafted (ADV-SPEC and SERVE-COMMIT haven't landed): each changes exactly what its check reads and leaves the advice whole."""
+drafted (ADV-SPEC and SERVE-COMMIT haven't landed): each changes exactly what its check reads and leaves the advice
+well formed under N2-ADVICE's frame rule as drafted (`_frames`)."""
 
 from __future__ import annotations
 
@@ -155,19 +156,24 @@ def test_a_tampered_head_fails_its_signed_digest_and_its_counts_under_the_origin
 
 
 @pytest.mark.parametrize("profile", PROFILES)
-def test_a_certified_token_that_isnt_the_endpoints_passes_n2_and_waits_for_the_tie(runs, profile):
-    """token's one changed frame is certified, under honest's counts: N2 accepts every window, and only the I/O tie
-    (IO-TIE, pending) can refuse it, which the registry says."""
+def test_certified_tokens_that_arent_the_endpoints_pass_n2_and_wait_for_the_tie(runs, profile):
+    """token's changed frames, every token of the responses to window 0's requests, are certified under honest's
+    counts: N2 accepts every window, and only the I/O tie (IO-TIE, pending) can refuse them, which the registry says."""
     rs, verdicts = runs[profile]
     honest, token = _egress(rs["honest"]), _egress(rs["token"])
     assert token.counts == honest.counts and token.root != honest.root
     assert verdicts["token"]["accepted"] and verdicts["token"]["codes"] == []
+    plan = json.loads((rs["honest"] / "plan.json").read_text())
+    T = ar.Setup(json.loads((rs["honest"] / "calibration.json").read_text())).egress_params.buckets
+    window0 = {q["session"] for q in plan["requests"] if q["enqueue"] // T == 0}
+    assert set(json.loads((rs["token"].parent / "token.shim" / "shim.json").read_text())["token"]) == window0 != set()
     events = [ar.read_events(rs[s] / "server.events.gz") for s in ("honest", "token")]
-    differ = [(a[1], a[2]) for a, b in zip(*events, strict=True) if a[4] != b[4]]
-    assert differ == [(json.loads((rs["honest"] / "plan.json").read_text())["sessions"][0][0], 0)]
+    differ = {(a[1], a[2]) for a, b in zip(*events, strict=True) if a[4] != b[4]}
+    tokens = {(e[1], e[2]) for e in events[0] if e[1] in window0 and ar.event_data(ar.event_body(e[4]))}
+    assert differ == tokens and len(tokens) == TOKENS * len(window0)
     assert not NG.judge("token", verdicts["token"])["refused"]
     n = NG.NEGATIVES["token"]
-    assert n.code == "IoTie.token" and "IO-TIE" in n.waits
+    assert n.code == NG.TIE and "IO-TIE" in n.waits
 
 
 def test_every_negative_names_a_check_and_a_code_and_the_table_lists_each():
@@ -235,13 +241,30 @@ def _served(a: Advice) -> dict[str, list[int]]:
     return out
 
 
-def _tokens(a: Advice) -> dict[str, int]:
-    """Each request's tokens out by its rows: one at its prefill's last chunk, one at each decode."""
-    out = {q.id: 0 for q in a.requests}
-    for st in a.steps:
+def _frames(a) -> list[tuple[int, str, int]]:
+    """The advice's egress frames (step, request id, index), N2-ADVICE's rule as drafted (`advised.frames`): a row
+    samples its request's next token when `start + n` is the prompt's length plus the tokens sampled before it.
+    Raises ValueError on a malformed advice, as `advised.frames` does, which refuses every window."""
+    sampled, out = [0] * len(a.requests), []
+    for s, st in enumerate(a.steps):
         for r in st.rows:
             q = a.requests[r.request]
-            out[q.id] += r.kind == "decode" or r.start + r.n == q.prompt_len
+            end, known = r.start + r.n, q.prompt_len + sampled[r.request]
+            if r.n < 1 or end > known or (end == known and sampled[r.request] == q.output_len):
+                raise ValueError(f"step {s}: a row of {q.id} past its known tokens or its output_len")
+            if end == known:
+                out.append((s, q.id, sampled[r.request]))
+                sampled[r.request] += 1
+    if sampled != [q.output_len for q in a.requests]:
+        raise ValueError("a request samples fewer tokens than its output_len")
+    return out
+
+
+def _tokens(a) -> dict[str, int]:
+    """Each request's tokens out by its rows (`_frames`)."""
+    out = {q.id: 0 for q in a.requests}
+    for _, q, _ in _frames(a):
+        out[q] += 1
     return out
 
 
@@ -256,12 +279,21 @@ def test_the_stand_in_advice_is_whole():
     assert _served(a) == {"r0": list(range(7)), "r1": list(range(3))}
 
 
-def test_advice_length_changes_one_output_length_and_nothing_else():
+def test_advice_length_samples_one_token_more_or_fewer_and_stays_whole():
+    """One more: a decode row past r0's last token, in a step appended at the last release bucket (r0 samples in the
+    last step); one fewer: r1's last decode row left out. Either way the advice is well formed under N2-ADVICE's frame
+    rule and its frames are one more or one fewer than honest's: what refuses it is its counts against the heads."""
     a = _advice()
     b = NG.output_length(a)
-    assert [q.output_len for q in b.requests] == [4, 2] and b.steps == a.steps and b.release == a.release
-    assert _tokens(b) != {q.id: q.output_len for q in b.requests}
-    assert NG.output_length(a, 1, -1).requests[1].output_len == 1 and a == _advice()
+    assert [q.output_len for q in b.requests] == [4, 2] and b.steps[:4] == a.steps
+    assert b.steps[4].rows == [Row(0, "decode", 7, 1)] and b.release == [2, 3, 3, 5, 5]
+    assert len(_frames(b)) == len(_frames(a)) + 1 and _tokens(b) == {"r0": 4, "r1": 2}
+    c = NG.output_length(a, 1, -1)
+    assert c.requests[1].output_len == 1 and c.steps[2].rows == [Row(0, "decode", 5, 1)]
+    assert _tokens(c) == {"r0": 3, "r1": 1} and c.release == a.release
+    d = NG.output_length(a, 1)
+    assert d.steps[3].rows == [Row(0, "decode", 6, 1), Row(1, "decode", 3, 1)] and _tokens(d) == {"r0": 3, "r1": 3}
+    assert a == _advice()
 
 
 def test_advice_missing_leaves_out_one_request_and_its_rows_and_keeps_the_others_whole():
@@ -281,6 +313,27 @@ def test_advice_extra_serves_one_request_more_beside_the_original_and_is_whole()
     assert b.release == a.release
 
 
+@dataclasses.dataclass(frozen=True)
+class AdvisedRequest(RequestAdvice):
+    ingress_frames: int = 1
+
+
+@dataclasses.dataclass(frozen=True)
+class AdvisedAdvice(Advice):
+    received: list = dataclasses.field(default_factory=list)
+
+
+def test_a_request_missing_or_extra_takes_its_ingress_frames_out_of_or_into_received():
+    """With N2-ADVICE's ingress fields, the advice's windows receive what its requests' ingress frames sum to, as
+    `advised.view` requires, so the advice stays well formed and its ingress floor is what disagrees with the head."""
+    a = _advice()
+    b = AdvisedAdvice([AdvisedRequest(q.id, q.prompt_len, q.output_len, q.finish, k)
+                       for q, k in zip(a.requests, (2, 1))], a.steps, a.release, [0, 3])
+    assert NG.missing_request(b).received == [0, 2] and NG.missing_request(b, 0).received == [0, 1]
+    assert NG.extra_request(b).received == [0, 5] and NG.extra_request(b).requests[2].ingress_frames == 2
+    assert b.received == [0, 3]
+
+
 def test_advice_release_moves_one_step_one_bucket_and_keeps_the_order():
     a = _advice()
     b = NG.release_moved(a)
@@ -289,13 +342,17 @@ def test_advice_release_moves_one_step_one_bucket_and_keeps_the_order():
     assert NG.release_moved(a, step=3).release == [2, 3, 3, 6]
 
 
-def test_advice_start_shifts_one_decode_row_and_changes_one_steps_shape():
+def test_advice_start_shifts_one_decode_row_with_its_frames_kept_and_changes_one_steps_shape():
+    """N2 reads a row's end only, so it accepts the shifted advice (the same frames); the step's Program changes."""
     a = _advice()
     b = NG.start_shifted(a)
     assert [k for k, (x, y) in enumerate(zip(_shapes(a), _shapes(b))) if x != y] == [3]
-    assert b.steps[3].rows[0].start == 7 and b.requests == a.requests and b.release == a.release
+    assert b.steps[3].rows[0] == Row(0, "decode", 5, 2) and b.requests == a.requests and b.release == a.release
+    assert _frames(b) == _frames(a)
     with pytest.raises(NG.NotApplicable):
         NG.start_shifted(a, step=0)
+    with pytest.raises(NG.NotApplicable):
+        NG.start_shifted(a, by=1)
 
 
 def test_advice_chunk_serves_the_same_positions_in_two_other_step_shapes():

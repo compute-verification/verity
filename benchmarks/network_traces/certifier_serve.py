@@ -90,9 +90,9 @@ reads requests from outside).
   holds one session of window 0 past every sync, which the certifier's own audit faults; `extra` writes one event more
   at the end of the first session's response, after its padding (F + 1 in all), and `drop` leaves out its first event
   (F − 1), each on time and logged, so the records are complete and only N2's counts against the profile refuse them;
-  `token` writes the first session's first event carrying other bytes (`active_replay.other_token`), so its frame
-  counts are honest's and `check` accepts it: only the I/O tie, which `check` doesn't run, refuses a certified token
-  that isn't the committed sampled one. The key's directory may not be inside `--out`.
+  `token` writes every token of window 0's responses carrying other bytes (`active_replay.other_token`), so its frame
+  counts are honest's and `check` accepts it: only the I/O tie, which `check` doesn't run, refuses certified tokens
+  that aren't the committed sampled ones. The key's directory may not be inside `--out`.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`).
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
@@ -849,7 +849,7 @@ def main(argv=None) -> int:
         q.add_argument("--start-in", type=float, default=10.0, help="the origin, seconds after the proxy is up")
     s.add_argument("--tamper", choices=TAMPERS,
                    help="late: the shim holds a window-0 session past every sync; extra: it writes one event more; "
-                        "drop: one fewer; token: the first event's bytes changed")
+                        "drop: one fewer; token: window 0's tokens' bytes changed")
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--link", type=_address, help="HOST:PORT of the link, if not the deployment's")
     x.add_argument("--run", required=True, type=Path)
