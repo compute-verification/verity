@@ -5,16 +5,16 @@ batch-invariant eager stock every eager row is timed against, in one interleaved
 - ``served-commit-rows-4k`` (`ROWS_4K`, `ROWS_4K_FP8`): G2's compiled Commit arm (`prof_arm.Rows4kArm`, the served compiled
   source under CUDA graphs), built at vLLM's serving defaults compiled whatever the spec's ``eager`` (its ``execution``), with
   ``stock@compiled`` (``stock-fp8@compiled``) as its token control.
-- ``commit-rows-4k-eager`` (`EAGER_ROWS_4K`, `EAGER_ROWS_4K_FP8`): the row Commit's committer (`verity_bench.vllm.commit_arm`)
-  under rows-sha512 at 4 KiB rows on the spec's batch-invariant eager engine, with ``stock`` (``stock-fp8``) as its token control.
+- ``commit-rows-4k-eager`` (`EAGER_ROWS_4K`, `EAGER_ROWS_4K_FP8`): the harness's eager ``commit`` (`verity_bench.vllm.commit_arm`)
+  with every chunk constant at 4 KiB, as `prof_arm.Rows4kArm` sets them, on the spec's batch-invariant eager engine, with
+  ``stock`` (``stock-fp8``) as its token control.
 """
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from served_commit.prof_arm import Rows4kArm
-from verity_bench.vllm.commit_arm import ENV, CommitArm
+from verity_bench.vllm.commit_arm import CommitArm
 
 ROW_BYTES = 4096
 
@@ -35,25 +35,12 @@ class EagerRows4kArm(CommitArm):
     def ready(self, target: Any) -> None:
         from verity_vllm.commit import step_rows
         from verity_vllm.commit.committer import host_retention, native_collect, native_host
-        from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
         step_rows.ROW_BYTES = native_host.GPU_CHUNK_BYTES = native_collect.GPU_CHUNK_BYTES = host_retention.GPU_CHUNK_BYTES = ROW_BYTES
-        os.environ.update(ENV)
-        engine = target.engine._engine
-        com = NativeCollectCommitter(engine, run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True, native_hooks=True,
-                                     auto_blocks=True, native_worker=True, commit_scheme=step_rows.NAME)
-        if not (com.windowed and com.bounded and com.retain == "none" and com.commit_scheme == step_rows.NAME):
-            raise RuntimeError(f"{self.id}: the committer did not take the row Commit's staging {ENV} under {step_rows.NAME}")
-        vc = engine.llm.llm_engine.vllm_config
-        tokens = int(vc.scheduler_config.max_num_batched_tokens)
-        sizing = com.size_arena({"batch": int(vc.scheduler_config.max_num_seqs), "max_prompt": tokens, "max_new": 1,
-                                 "max_num_batched_tokens": tokens, "max_model_len": int(vc.model_config.max_model_len)})
-        self.windows = com.enable_windows(sizing)
-        self.per_token_bytes = int(sizing.get("per_token_bytes") or 0)
-        self.committer = com
+        super().ready(target)
 
     def gate(self, target: Any) -> dict[str, Any]:
-        return {**super().gate(target), "commit_scheme": getattr(self.committer, "commit_scheme", None), "row_bytes": ROW_BYTES}
+        return {**super().gate(target), "row_bytes": ROW_BYTES}
 
 
 ROWS_4K = CompiledRows4kArm("served-commit-rows-4k", precision="bfloat16", control="stock@compiled")
