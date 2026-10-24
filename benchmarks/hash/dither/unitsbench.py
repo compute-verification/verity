@@ -32,6 +32,8 @@ A build with kh_units_multi_j10rc (h1u.cu's H1U_JRC: each call's column blocks h
 after its rows) is gated the same way under --j10r, its workspaces' column blocks poisoned too. Its units read no
 seed_c, so its seed fault flips unit 0's sigma_R (unit 0 alone moves), and one bit of call 0's first column block moves
 exactly call 0's units of column block 0. It is timed as step_multi_j10rc and step_blocks_j10rc (its rows and columns).
+Its SM-partitioned form (kh_units_multi_j10rc_sm, dither_so's $DITHER_SO_UNITS_SMQ) is gated word for word against it
+at J10RC_SM_SHARES and timed on every SM through its unit counter (step_multi_j10rc_sm).
 """
 from __future__ import annotations
 
@@ -95,6 +97,10 @@ class Lib:
             h.kh_units_multi_j10rc.argtypes = [vp, u32, u32, u32, vp, ctypes.c_int, vp]
             h.kh_j10r_ws_bytes.restype = ctypes.c_ulonglong
             h.kh_j10r_ws_bytes.argtypes = [u32, u32, u32]
+        self.j10rc_sm = self.j10rc and hasattr(h, "kh_units_multi_j10rc_sm")
+        if self.j10rc_sm:
+            h.kh_units_multi_j10rc_sm.argtypes = [vp, u32, u32, u32, vp, u32, u32, u32, vp, vp]
+            h.kh_smc_words.restype = u32
 
 
 UCALL = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"), ("N", "<u4"), ("K", "<u4"), ("u0", "<u4"),
@@ -188,11 +194,20 @@ class MultiJ10R:
         self.n, self.units, self.rows = len(entries), u0, entries[0][0].a.shape[0]
         self.live = entries[0][0].live
         self.tab = torch.from_numpy(t.view(np.uint8).copy()).to("cuda")
+        self.next = (torch.zeros(int(lib.h.kh_smc_words()), dtype=torch.int32, device="cuda") if rc and lib.j10rc_sm
+                     else None)
 
-    def run(self, units: int | None = None, mode: int = 0) -> None:
-        f = self.lib.h.kh_units_multi_j10rc if self.rc else self.lib.h.kh_units_multi_j10r
-        if rc := f(self.tab.data_ptr(), self.n, self.units if units is None else units, self.rows, self.live.data_ptr(),
-                   mode, torch.cuda.current_stream().cuda_stream):
+    def run(self, units: int | None = None, mode: int = 0, sm: tuple | None = None) -> None:
+        """sm (q, den, cap): kh_units_multi_j10rc_sm, its units on the SMs whose id % den < q, at most cap CTAs each"""
+        units = self.units if units is None else units
+        st = torch.cuda.current_stream().cuda_stream
+        if sm:
+            f = self.lib.h.kh_units_multi_j10rc_sm
+            rc = f(self.tab.data_ptr(), self.n, units, self.rows, self.live.data_ptr(), *sm, self.next.data_ptr(), st)
+        else:
+            f = self.lib.h.kh_units_multi_j10rc if self.rc else self.lib.h.kh_units_multi_j10r
+            rc = f(self.tab.data_ptr(), self.n, units, self.rows, self.live.data_ptr(), mode, st)
+        if rc:
             raise RuntimeError(f"{f.__name__} rc {rc}")
 
 
@@ -272,6 +287,37 @@ def j10r_gate(lib: Lib, cs: list, refs: list, rc: bool = False) -> dict:
                   "fault_cols_conforming": col_moved == col_want})
         r["ok"] = r["ok"] and r["fault_cols_conforming"]
     return r
+
+
+J10RC_SM_SHARES = ((1, 1, 0), (5, 8, 0), (1, 16, 0), (1, 1, 2), (3, 8, 1))
+
+
+def j10rc_sm_gate(lib: Lib, cs: list) -> dict:
+    """kh_units_multi_j10rc_sm at each of J10RC_SM_SHARES (q, den, cap) against kh_units_multi_j10rc's receipts (which
+    j10r_gate holds to the references), every word, under 0xA5 over the receipts and the workspaces: a share of 1 / 16
+    leaves the units to a few SMs, the caps leave each SM's other slots."""
+    for c in cs:
+        c.j10r_seed()
+    outs = [torch.empty_like(c.out) for c in cs]
+    mu = MultiJ10R(lib, [(c, c.b, o) for c, o in zip(cs, outs)], rc=True)
+
+    def poison() -> None:
+        for o in outs:
+            o.fill_(POISON)
+        for w in mu.rws:
+            w.fill_(0xA5)
+
+    poison()
+    mu.run()
+    torch.cuda.synchronize()
+    want = [o.clone() for o in outs]
+    bad = {}
+    for sm in J10RC_SM_SHARES:
+        poison()
+        mu.run(sm=sm)
+        torch.cuda.synchronize()
+        bad["/".join(map(str, sm))] = sum(int((o != w).sum()) for o, w in zip(outs, want))
+    return {"calls": len(cs), "units": mu.units, "bad_words": bad, "ok": not any(bad.values())}
 
 
 class Call:
@@ -499,6 +545,15 @@ def main() -> int:
                 j10rc_ok.add(nm)
             else:
                 failed.add(f"{nm}:j10rc")
+        for nm in names:
+            if nm not in j10rc_ok or not libs[nm].j10rc_sm:
+                continue
+            g = j10rc_sm_gate(libs[nm], [calls[x][nm] for x in linears])
+            doc.setdefault("j10rc_sm_gates", {})[nm] = g
+            print(json.dumps({"j10rc_sm": nm, "gate": g}), flush=True)
+            if not g["ok"]:
+                j10rc_ok.discard(nm)
+                failed.add(f"{nm}:j10rc_sm")
     doc["gate_failed"] = sorted(failed)
     doc_path.write_text(json.dumps(doc, indent=1))
     if names[0] in failed:
@@ -572,6 +627,8 @@ def main() -> int:
             keep.append((mu, outs))
             arms[(nm, "step_multi_j10rc")] = (lambda mu: lambda i: mu.run())(mu)
             arms[(nm, "step_blocks_j10rc")] = (lambda mu: lambda i: mu.run(mode=1))(mu)
+            if libs[nm].j10rc_sm:
+                arms[(nm, "step_multi_j10rc_sm")] = (lambda mu: lambda i: mu.run(sm=(1, 1, 0)))(mu)
         if args.multi:
             def step_nu(i, nm=names[0]):
                 for layer in range(args.layers):
@@ -625,7 +682,7 @@ def main() -> int:
             r["layer_units_us"] = round(sum(lay), 3)
             r["step_units_ms_from_calls"] = round(sum(lay) * args.layers / 1e3, 3)
         for arm in ("step", "step_multi", "step_noise_units", "step_multi_j10r", "step_rows_j10r", "step_multi_j10rc",
-                    "step_blocks_j10rc"):
+                    "step_blocks_j10rc", "step_multi_j10rc_sm"):
             if arm in r:
                 r[f"{arm}_ms"] = round(r[arm]["median_us"] / 1e3, 3)
         if "step_multi_j10r" in r and "step_multi" in r:
