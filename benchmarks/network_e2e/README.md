@@ -63,9 +63,10 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
 - NEG's live tampers (`--strategies ...,drop,token`): drop is a negative, refused by N2's counts on the planned and
   served profiles and by the rehearsal's own check on the advice profile. There the certified I/O's finish rule refuses
   it when the response it cuts ran to its max_tokens (short of it without EOS); one that ended at EOS stays well formed
-  one token shorter, which only N2-ADVICE's counts will refuse. Token is a row pending the check that alone refuses it
-  (IO-TIE), with the verdicts it got. A tamper whose shim received no request, or with no `server.json` to say it did,
-  is reported as not run, never as refused.
+  one token shorter, which only N2-ADVICE's counts will refuse. Token is refused only by the I/O tie (IO-TIE). Where
+  the tie ran (below), token is a negative it must refuse by content at exactly the link-windows its changed ids fall
+  in. Elsewhere it's a row pending the tie, with the verdicts it got and why the tie didn't run. A tamper whose shim
+  received no request, or with no `server.json` to say it did, is reported as not run, never as refused.
 - On the advice profile a negative is refused only when the rehearsal's own check names its own violation
   (`e2e.OWN_CODE`, as NEG's `judge` requires its code): late's window's coverage fault
   (`audit.status:coverage-never-established`), extra's response longer than its max_tokens, drop's short of it without
@@ -108,6 +109,15 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   `output_ids`), each negative the I/O tie reads also carries the tie's verdict (IO-TIE's reference in the clear, on a
   fake upstream's cells and Commit port of the advice and those ids), and its row passes only when the tie refuses it by the
   part it names and accepts the honest windows. Until IO-TIE lands, those rows say so.
+- The I/O tie on the runs (`chain.tie`, advice profile only, where NEG's registry doesn't run): NEG's `tie_run` on every
+  run, IO-TIE's reference in the clear on its stand-ins. Each window's certified frames are held to their head and
+  committed under fake salts in place of the warden's cells. The sampled ids stand in for the Commit's port, one map
+  for every run from `--ids`, or else from the `--endpoint-run` records (`chain.served_ids`). Every strategy sends the
+  same users, so a run's ids are those of the requests whose `arrive` falls in its own link-windows, matched to
+  `requests.jsonl` by engine id. The tie must accept honest (else the report isn't OK) and refuse token by content at
+  exactly the link-windows its changed ids fall in (`chain.changed_windows`, from its `server.json`'s `tampered`).
+  Drop's refusal by content is listed beside its own code. Without IO-TIE in the tree (`io_tie.py`, #3566), or without
+  the ids, the report says why and token stays pending.
 
 The report's `stubbed` list says what each run still stood on that isn't the chain's own: the advice of another run, a
 given serving config, a prove path of a declared workload, pending negatives, the certifier off the gate. Before the
