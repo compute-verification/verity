@@ -27,6 +27,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -85,6 +86,14 @@ def sizes(p: Path) -> dict[str, int]:
     return out
 
 
+def num(x):
+    """A LIVE line's per-rep list (``proof_bytes``, ``prove_s``) as its sum; a number as itself."""
+    if isinstance(x, list):
+        xs = [v for v in x if isinstance(v, (int, float))]
+        return round(sum(xs), 3) if xs else None
+    return x
+
+
 def staged_units(st: dict | None) -> dict:
     """What `rec_vstage.stage` printed of each unit it staged: its template, instances, rows, k_log and seconds."""
     if not isinstance(st, dict):
@@ -129,15 +138,15 @@ def summarize(out: Path) -> dict:
     session = sizes(out / "inner/session/sizes.txt")
     inner = {"stage_wall_s": seconds(stage.get("wall")), "stage_peak_gb": stage.get("peak_gb"),
              "statement_bytes": sizes(out / "stage/sizes.txt"),
-             "prove_s": proxy.get("prove_s"), "prove_total_s": proxy.get("prove_total_s"), "e2e_s": proxy.get("e2e_s"),
-             "proof_bytes": proxy.get("proof_bytes"), "prover_peak_gb": proxy.get("prover_peak_gb"),
+             "prove_s": num(proxy.get("prove_s")), "prove_total_s": proxy.get("prove_total_s"), "e2e_s": num(proxy.get("e2e_s")),
+             "proof_bytes": num(proxy.get("proof_bytes")), "proof_bytes_per_rep": proxy.get("proof_bytes"), "prover_peak_gb": proxy.get("prover_peak_gb"),
              "prover_cpu_s": proxy.get("prover_cpu_s"), "k_log": proxy.get("k_log"), "dense_m": proxy.get("dense_m"),
              "instances": proxy.get("instances"), "session_bytes": session,
              "replay": (inner_s.get("replay_proxy") or {}).get("verdict"),
              "replay_wall_s": seconds((inner_s.get("replay_proxy") or {}).get("wall")), "vstar_wall_s": seconds(inner_s.get("vstar_wall"))}
     if "zk" in inner_s:
         z = inner_s["zk"]
-        inner["baseline_zk"] = {k: z.get(k) for k in ("prove_total_s", "prove_s", "proof_bytes", "prover_peak_gb", "k_log",
+        inner["baseline_zk"] = {k: num(z.get(k)) for k in ("prove_total_s", "prove_s", "proof_bytes", "prover_peak_gb", "k_log",
                                                       "dense_m", "serve_verify_s", "accepted")}
 
     vst = {}
@@ -149,8 +158,9 @@ def summarize(out: Path) -> dict:
     ost = {}
     for name, s in (oprove.get("levels") or {}).items():
         lv = s.get("live") or {}
-        ost[name] = {k: lv.get(k) for k in ("prove_total_s", "prove_s", "e2e_s", "proof_bytes", "prover_peak_gb", "prover_cpu_s",
-                                            "serve_verify_s", "accepted", "k_log", "dense_m", "instances")}
+        ost[name] = {k: num(lv.get(k)) if k in ("prove_s", "e2e_s", "proof_bytes") else lv.get(k)
+                     for k in ("prove_total_s", "prove_s", "e2e_s", "proof_bytes", "prover_peak_gb", "prover_cpu_s",
+                               "serve_verify_s", "accepted", "k_log", "dense_m", "instances")}
         ost[name]["replay"] = (s.get("replay") or {}).get("verdict") if isinstance(s.get("replay"), dict) else s.get("replay")
         ost[name]["replay_wall_s"] = seconds(s.get("replay_wall"))
         if "error" in lv:
@@ -258,6 +268,8 @@ def run(a) -> int:
            "TAG": tag, "WARM": "0", "RUNS": str(a.runs), "PCPUS": str(pcpus), "JOBS": str(a.jobs), "FORGE": "",
            "NEG_INNER": " ".join(a.neg), "INNER_LOOPBACK": "1" if a.baseline else "0", "REPLAY": "1", "CHECKS": "1"}
     rc = 0
+    # a cancel or timeout (SIGTERM) still writes the result and removes this run's data
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     try:
         for step in STEPS:
             with open(out / f"step-{step}.log", "w") as log:
