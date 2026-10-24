@@ -21,9 +21,10 @@ the unit that makes each round's served rows m_s a proved value, one ``live@<s>`
 * **m_s** is step s's served rows, the scheduler's: its batch's rows (`pouw_h1.H1Run.owners`). Under CUDA graphs a call's
   A rows are padded to the graph's size, past them (`pouw_h1.Call.pad`), and those rows are no slot of the step's.
 * **The statements.** ``live@<s>`` is unit s of the live Program (`live.program` of T, the window's S and its prefix), on
-  round s's slot table, the request headers and the public m_s: `statement` gives its rows and its ``--registered``
-  file (`live_reads.reads_file`), and `verdicts` holds each round's tables to the roots its round committed and its rows to
-  `live.live_ok` at m_s.
+  round s's slot table, the request headers, the public m_s and the public round s: `statement` gives its rows and its
+  ``--registered`` file (`live_reads.reads_file`), and `verdicts` holds each round's tables to the roots its round
+  committed and its rows to `live.live_ok` at m_s and s (each request named at most its prompt length's slots in the
+  round that admitted it, one in each of its cap's later rounds, `live.takes`).
 """
 from __future__ import annotations
 
@@ -134,6 +135,7 @@ def statement(run: Any, s: int, m: int | None = None) -> tuple[dict[str, np.ndar
     rows = {f"slot_{i}": w for i, w in enumerate(slot_words(run.owners.get(s, []), T))}
     rows |= {f"req_{i}": w for i, w in enumerate(request_words(run.admitted.get(0, []), T))}
     rows["m"] = np.asarray(LR.slot_words([m])[0], np.uint16)
+    rows["s"] = np.asarray(LR.slot_words([s])[0], np.uint16)
     doc = LR.reads_file(served.program_digest, T, run.steps, s, roots, served.root, served.live[value(served, LR.REQUESTS)].session,
                        m, served.program.fn.bindings["PREFIX"])
     return {p: np.asarray(w, np.uint16).reshape(1, -1) for p, w in rows.items()}, doc
@@ -146,7 +148,7 @@ def evaluated(run: Any, s: int, m: int | None = None) -> int:
     bits = {p: [(int(w) >> j) & 1 for w in r[0] for j in range(16)] for p, r in rows.items()}
     T = run.rows
     (ok,) = evaluate(bind(L.PouwLiveSlots, T=T), sum((bits[f"slot_{i}"] for i in range(T)), []),
-                     sum((bits[f"req_{i}"] for i in range(T)), []), bits["m"])
+                     sum((bits[f"req_{i}"] for i in range(T)), []), bits["m"], bits["s"])
     return int(ok)
 
 
@@ -169,7 +171,7 @@ def verdicts(run: Any) -> list[dict[str, Any]]:
                or slots.value not in row["a"]
                else "round 0's request headers aren't its request_table" if req is None
                or req.root.hex() != run.round_log[0].get("request_table")
-               else f"live_ok is 0 at m = {m}" if not L.live_ok(leaves, heads, m)
+               else f"live_ok is 0 at m = {m}" if not L.live_ok(leaves, heads, m, s)
                else f"its unit evaluates to 0 at m = {m}" if not evaluated(run, s) else None)
         out.append({"round": s, "m": m, "admitted": L.admitted(leaves, heads), "ok": why is None,
                     **({} if why is None else {"reason": f"live@{s}: {why}"})})
