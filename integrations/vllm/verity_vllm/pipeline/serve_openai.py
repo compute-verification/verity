@@ -2,7 +2,7 @@
 
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
         [--protocol vllm|plain] [--no-commit] [--no-gpu-tree] [--window-steps 64] [--force-include-usage | --no-force-include-usage]
-        [--scheme vllm-v1|rows-sha512] [--seal]
+        [--scheme vllm-v1|rows-sha512 --required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -43,7 +43,8 @@ Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in us
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds), ``requests.jsonl``
 (one line a request: the HTTP id, the engine id, the body's ``user``, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check) and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512``
-commits as a declared Commit does and ``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`). SIGTERM or SIGINT
+commits as the bench row's declared Commit does, with its committer parts built from the row's ``--required-manifest`` and taps
+(the acquisition plan under ``acquisition/``), and ``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`). SIGTERM or SIGINT
 stops it: the open window is closed and its requests checked, and ``summary.json`` counts the requests and checks.
 """
 from __future__ import annotations
@@ -112,6 +113,15 @@ class Options:
                          help="the Commit's scheme: vllm-v1 (NativeHostCommitter, 32-byte roots) or rows-sha512 (the declared Commit's)")
     seal: bool = option("--seal", action="boolean_optional", default=False,
                         help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
+    required_manifest: str | None = option("--required-manifest", default=None,
+                                           help="rows-sha512: the bench row's required manifest (its manifest.json), which the Commit of "
+                                                "record's committer parts and the sealed binding map are built from")
+    programs_root: str | None = option("--programs-root", default=None,
+                                       help="the Build's row dir of the manifest's partition and attention record (default: the manifest's dir)")
+    hidden_so: str | None = option("--hidden-so", default=None, help="rows-sha512: the attention hidden tap (as the Commit's --hidden-so)")
+    hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
+    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB (as the Commit's)")
+    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="rows-sha512: the norm-scale tap (as the Commit's --norm-tap-so)")
     force_include_usage: bool = option("--force-include-usage", action="boolean_optional", default=True,
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
@@ -716,6 +726,11 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) 
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
     if opts.scheme == "rows-sha512" and not opts.gpu_tree:
         raise UsageError("--scheme rows-sha512 is the windowed collector's, which hashes its rows on the GPU: drop --no-gpu-tree")
+    if opts.commit and opts.scheme == "rows-sha512" and not opts.required_manifest:
+        raise UsageError("--scheme rows-sha512 commits with the Commit of record's parts, which its bench row's manifest names: pass "
+                         "--required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so)")
+    if opts.required_manifest and not Path(opts.required_manifest).is_file():
+        raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
     if opts.commit and opts.gpu_tree and which("ninja") is None:
         raise UsageError("--gpu-tree JIT-builds its kernel with ninja, which is not on PATH: put the environment's bin (where its "
                          "ninja is) on PATH, or pass --no-gpu-tree")
@@ -779,7 +794,9 @@ def main(opts: Options) -> int:
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", "vllm-v1") if com is not None else None,
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
-              "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy")},
+              "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
+                                                                  "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
+              "required_manifest_path": getattr(com, "required_manifest_path", None),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               **SS.target_of()}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
