@@ -268,22 +268,26 @@ class PearlCWholeArm(PearlCArm):
     ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows); ``PEARLC_WHOLE_DEFER_A=0``
     keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it),
     ``PEARLC_WHOLE_FORK_STATS=0`` each call's A scales (`whole_fork_stats`: by default they run beside its A commitment),
-    ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, and ``PEARLC_LAG_ENDS=0`` reads each pass's
-    commitment back at its own end.
+    ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, ``PEARLC_LAG_ENDS=0`` reads each pass's
+    commitment back at its own end, and ``PEARLC_ASIDE_ENDS=0`` runs a lagged end's tile tree on the step's stream (by
+    default, `aside_ends`, on a stream of its own, so the next step doesn't wait for it).
     A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
     run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True, "lag_ends": True,
-                   "whole_tree_sm": True}
+                   "whole_tree_sm": True, "aside_ends": True}
 
     def __init__(self) -> None:
         super().__init__()
         for option, env in (("whole_defer_a", "PEARLC_WHOLE_DEFER_A"), ("whole_fork_stats", "PEARLC_WHOLE_FORK_STATS"),
-                            ("lag_ends", "PEARLC_LAG_ENDS"), ("whole_tree_sm", "PEARLC_WHOLE_TREE_SM")):
+                            ("lag_ends", "PEARLC_LAG_ENDS"), ("whole_tree_sm", "PEARLC_WHOLE_TREE_SM"),
+                            ("aside_ends", "PEARLC_ASIDE_ENDS")):
             if os.environ.get(env) == "0":
                 self.run_options = {k: v for k, v in self.run_options.items() if k != option}
         if "whole_defer_a" not in self.run_options:
             self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_tree_sm"}
+        if "lag_ends" not in self.run_options:
+            self.run_options = {k: v for k, v in self.run_options.items() if k != "aside_ends"}
         self.schedule = "serial"
         self.execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
         self.whole, self.totals, self.capture = None, {}, [1, 8, 32, 128]

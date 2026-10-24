@@ -750,6 +750,11 @@ def test_a_fused_step_takes_its_parts_place_and_an_omitted_part_drops_it():
     assert "commit_a" not in run._call_names(pipe) and run._call_names(pipe)[0] == "stats_a"
     run.omit, run.hashing = frozenset(), False
     assert run._call_names(pipe) == ("stats_a", "eprime_a", "form_a", "af", "pa", "gemm_pearlc")
+    ep = ("eprime_a", "form_a")
+    pipe = SimpleNamespace(steps=lambda: [(x, None, None) for x in ("form_ep_a", *PPD.CALL_STEPS) if x not in ep],
+                           FUSED={"form_ep_a": ep})
+    assert run._call_names(pipe) == ("stats_a", "form_ep_a", "af", "pa", "gemm_pearlc")
+    assert PPD.STEP_GROUPS["form_ep_a"] == "forming"
 
 
 def test_a_split_commitments_tree_forks_from_the_step_before_the_first_cut():
@@ -793,6 +798,12 @@ def test_leaving_a_tree_its_sm_needs_a_deferred_a_tree_on_a_kernel_whose_gemms_t
         k = SimpleNamespace(run=SimpleNamespace(Pipeline=pipeline))
         with pytest.raises(ValueError, match="whole_tree_sm"):
             PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=True, whole_defer_a=defer_a, whole_tree_sm=True)
+
+
+def test_an_end_aside_needs_lagged_ends():
+    k = SimpleNamespace(run=SimpleNamespace(Pipeline=SimpleNamespace(FUSED={"tree_seed_a": ()})))
+    with pytest.raises(ValueError, match="aside_ends"):
+        PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, aside_ends=True)
 
 
 def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_engine_steps_end_lags():

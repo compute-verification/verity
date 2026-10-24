@@ -29,7 +29,9 @@ One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="h100", PEARLC_CHAIN="pl",
                                  PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_LIVE=0 for decode's 64 x 64 GEMMs storing all m rows,
-                                 PEARLC_WORDS_WIN=0 for A'F_B on one 64 x 32 CTA and pa at 64-row tiles)
+                                 PEARLC_WORDS_WIN=0 for A'F_B on one 64 x 32 CTA and pa at 64-row tiles,
+                                 PEARLC_FORM_EP=0 for A's E' in a launch of its own, PEARLC_PDL=0 for PDL_KERNELS
+                                 launched plainly)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -60,6 +62,15 @@ WINDOW = 128
 #: with 64-row tiles and an af_win buffer, A'F_B is a CTA a window (gemm_words_win_d), which pa_w adds up in gemm_words_d's
 #: order; PEARLC_WORDS_WIN=0 runs gemm_words_d and pa
 WORDS_WIN = os.environ.get("PEARLC_WORDS_WIN", "1") != "0"
+#: A's E' in its forming's launch (form_s5_ep, the step `form_ep_a`); PEARLC_FORM_EP=0 runs eprime and form_s5
+FORM_EP = os.environ.get("PEARLC_FORM_EP", "1") != "0"
+#: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
+#: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry), so they
+#: read and write what they did: only from a cubin whose kernels wait (its kernel PDL_MARK, `Dev.pdl`); PEARLC_PDL=0
+#: launches them plainly
+PDL = os.environ.get("PEARLC_PDL", "1") != "0"
+PDL_KERNELS = frozenset({"form_s5", "form_s5_ep", "gemm_words_win_d", "pa_w", "gemm_pearlc_d"})
+PROGRAMMATIC_STREAM_SERIALIZATION, PDL_MARK = 6, "pdl_waits"
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: every GEMM's operand pair, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + MAP_SET * slot: the chain's (P_A, P_B
 #: the peel's), the words' (A'F_B, B~F_A, G) and the baselines' (A and B again for the tail, which they don't load)
@@ -67,6 +78,18 @@ MAPS = {("at", "bt"): 0, ("at", "fbT32"): 1, ("bt", "faT32"): 2, ("fbT128", "faT
 MAP_SET = 4 * TMAP_BYTES
 
 u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
+
+
+class LaunchAttr(C.Structure):
+    """cuda.h's CUlaunchAttribute with an int value (CUlaunchAttributeValue is a 64-byte union)."""
+    _fields_ = [("id", i32), ("pad", C.c_char * 4), ("value", i32), ("rest", C.c_char * 60)]
+
+
+class LaunchConfig(C.Structure):
+    """cuda.h's CUlaunchConfig."""
+    _fields_ = [("grid", u * 3), ("block", u * 3), ("smem", u), ("stream", vp), ("attrs", P(LaunchAttr)), ("n_attrs", u)]
+
+
 CUDA = {
     "cuInit": [u], "cuDriverGetVersion": [P(i32)], "cuDeviceGetCount": [P(i32)], "cuDeviceGet": [P(i32), i32],
     "cuDeviceGetName": [C.c_char_p, i32, i32], "cuDeviceGetUuid_v2": [C.c_char_p, i32],
@@ -76,8 +99,8 @@ CUDA = {
     "cuMemFree_v2": [u64],
     "cuMemsetD8_v2": [u64, C.c_ubyte, sz], "cuMemcpyHtoD_v2": [u64, vp, sz], "cuMemcpyDtoH_v2": [vp, u64, sz],
     "cuMemcpyDtoD_v2": [u64, u64, sz], "cuMemcpyDtoDAsync_v2": [u64, u64, sz, vp], "cuMemGetInfo_v2": [P(sz), P(sz)],
-    "cuLaunchKernel": [vp, u, u, u, u, u, u, u, vp, P(vp), P(vp)], "cuCtxSynchronize": [],
-    "cuEventCreate": [P(vp), u], "cuEventRecord": [vp, vp], "cuEventSynchronize": [vp],
+    "cuLaunchKernel": [vp, u, u, u, u, u, u, u, vp, P(vp), P(vp)], "cuLaunchKernelEx": [P(LaunchConfig), vp, P(vp), P(vp)],
+    "cuCtxSynchronize": [], "cuEventCreate": [P(vp), u], "cuEventRecord": [vp, vp], "cuEventSynchronize": [vp],
     "cuEventElapsedTime": [P(C.c_float), vp, vp], "cuEventDestroy_v2": [vp], "cuGetErrorString": [i32, P(C.c_char_p)],
 }
 NVML = {
@@ -152,6 +175,7 @@ class Dev:
         self.fns: dict[str, vp] = {}
         self.live: set[int] = set()
         self.stream = None               # where launch() and copy_async() enqueue unless told otherwise (a harness's stream)
+        self.pdl = False                 # PDL_KERNELS launched programmatically (`open`: PDL, and the cubin has PDL_MARK)
 
     def identity(self, expect_uuid: str | None) -> list[str]:
         """What stops the run before any context or launch: the reasons, empty if this is the expected device."""
@@ -177,6 +201,8 @@ class Dev:
         self.ck("cuCtxSetCurrent", ctx)
         self.mod = vp()
         self.ck("cuModuleLoadData", C.byref(self.mod), self.cubin)
+        mark = vp()
+        self.pdl = PDL and self.cu.cuModuleGetFunction(C.byref(mark), self.mod, PDL_MARK.encode()) == 0
 
     def ck(self, f: str, *a) -> None:
         r = getattr(self.cu, f)(*a)
@@ -232,9 +258,13 @@ class Dev:
         for j, v in enumerate(i):
             a.i[j] = v
         g = tuple(grid) + (1,) * (3 - len(grid)) if isinstance(grid, (tuple, list)) else (grid, 1, 1)
-        params = (vp * 1)(C.addressof(a))
-        self.ck("cuLaunchKernel", self.fn(name), g[0], g[1], g[2], block, 1, 1, smem, self.stream if stream is None else stream,
-                params, None)
+        params, s = (vp * 1)(C.addressof(a)), self.stream if stream is None else stream
+        if self.pdl and name in PDL_KERNELS:
+            attr = LaunchAttr(id=PROGRAMMATIC_STREAM_SERIALIZATION, value=1)
+            cfg = LaunchConfig((u * 3)(*g), (u * 3)(block, 1, 1), smem, s.value if isinstance(s, vp) else s, C.pointer(attr), 1)
+            self.ck("cuLaunchKernelEx", C.byref(cfg), self.fn(name), params, None)
+        else:
+            self.ck("cuLaunchKernel", self.fn(name), g[0], g[1], g[2], block, 1, 1, smem, s, params, None)
 
     def sync(self) -> None:
         self.ck("cuCtxSynchronize")
@@ -434,11 +464,12 @@ class Pipeline:
     kernels' padding, which nothing commits)."""
 
     GEMM_SMEM: dict[str, int] = {}
-    #: the steps one launch does under pd: `commit_a` (pd_commit) for A's pads, row digests, tree, seed_A, row seeds and E_A's
-    #: lines; with `split_a`, `rows_a` (pd_commit's mode 1) and `tree_seed_a` (pd_tree) for the same steps (the padding rows'
-    #: E_A lines only with `fillers`)
+    #: the steps one launch does: under pd, `commit_a` (pd_commit) for A's pads, row digests, tree, seed_A, row seeds and E_A's
+    #: lines, and with `split_a`, `rows_a` (pd_commit's mode 1) and `tree_seed_a` (pd_tree) for the same steps (the padding
+    #: rows' E_A lines only with `fillers`); under FORM_EP, `form_ep_a` (form_s5_ep) for A's E' and forming
     FUSED = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea"),
-             "rows_a": ("pad_a", "rowdig_a", "hash_rows_a", "seeds_a", "lines_ea"), "tree_seed_a": ("tree_a", "seed_a")}
+             "rows_a": ("pad_a", "rowdig_a", "hash_rows_a", "seeds_a", "lines_ea"), "tree_seed_a": ("tree_a", "seed_a"),
+             "form_ep_a": ("eprime_a", "form_a")}
     #: SMs a launch running beside the steps holds whole (pd_tree's CTA under PD_WHOLE), which the persistent GEMMs leave
     #: it: a GEMM CTA with no SM free would start only when that launch ends.  A tile's bytes don't depend on its CTA
     beside = 0
@@ -740,14 +771,19 @@ class Pipeline:
             return (f"lines_{tag}", lambda: d.launch("lines", cdiv(count, 128), 128, p=(key, b[codes], t32, t128),
                                                     i=(side, factor, count, norm)))
 
-        def form_side(tag, rows, x, e_codes, f_codes, out):
+        def form_side(tag, rows, x, e_codes, f_codes, out, fused=False):
             ep = f"ep{tag}_codes"
-            return [(f"stats_{tag}", lambda: d.launch("stats_s5", cdiv(rows, 8), 256, p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"],
-                                                                                      b[f"ia_{tag}"], b[f"aux_{tag}"]), i=(rows, k))),
-                     (f"eprime_{tag}", lambda: d.launch("eprime", cdiv(rows, 128), 128, p=(b[e_codes], b[f"beta_{tag}"], b[ep]),
-                                                        i=(rows,))),
-                     (f"form_{tag}", lambda: d.launch("form_s5", (k // 128, rows // 64), 128,
-                                                      p=(b[x], b[f"alpha_{tag}"], b[ep], b[f_codes], b[out]), i=(rows, k)))]
+            stats = (f"stats_{tag}", lambda: d.launch("stats_s5", cdiv(rows, 8), 256, i=(rows, k),
+                                                      p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"], b[f"ia_{tag}"], b[f"aux_{tag}"])))
+            if fused:
+                return [stats, (f"form_ep_{tag}", lambda: d.launch("form_s5_ep", (k // 128, rows // 64), 128,
+                                                                   p=(b[x], b[f"alpha_{tag}"], b[e_codes], b[f_codes], b[out],
+                                                                      b[f"beta_{tag}"], b[ep]), i=(rows, k)))]
+            return [stats,
+                    (f"eprime_{tag}", lambda: d.launch("eprime", cdiv(rows, 128), 128, p=(b[e_codes], b[f"beta_{tag}"], b[ep]),
+                                                       i=(rows,))),
+                    (f"form_{tag}", lambda: d.launch("form_s5", (k // 128, rows // 64), 128,
+                                                     p=(b[x], b[f"alpha_{tag}"], b[ep], b[f_codes], b[out]), i=(rows, k)))]
 
         job = [lines("eb", self.keys["line_b"], 1, 0, n, "eb_codes"),
                lines("fa", self.keys["line_b"], 0, 1, k, "fa_codes", b["faT32"]),
@@ -760,7 +796,7 @@ class Pipeline:
         ea = ("lines_ea", lambda: d.launch("lines", cdiv(m, 128), 128, p=(b["line_a"], b["ea_codes"], 0, 0, b["lkeys_a"]),
                                            i=(0, 0, m, NORM_256, mr)))
         pd = self.pd is not None
-        forming = [ea] * (not pd) + form_side("a", m, "xa", "ea_codes", "fa_codes", "at")
+        forming = [ea] * (not pd) + form_side("a", m, "xa", "ea_codes", "fa_codes", "at", fused=FORM_EP)
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
         if self.words_win():
             cleanup = [("af", lambda: self.gemm("gemm_words_win_d", "at", "fbT32", m, WORDS_N, out=("af_win",))),
@@ -1175,7 +1211,7 @@ def main(argv: list[str]) -> int:
         print("REFUSED: " + "; ".join(refused), file=sys.stderr)
         return 3
     dev.open()
-    env2 = {"kind": "mem", "free_total": dev.free_mem()}
+    env2 = {"kind": "mem", "free_total": dev.free_mem(), "pdl": dev.pdl}
     emit(env2)
     variants = os.environ.get("VARIANTS", "h100").split()
     t0 = time.time()

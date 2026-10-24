@@ -62,10 +62,11 @@ def gemms(macro: str = "GEMM") -> list[tuple[str, str, int, int, int]]:
 
 
 def tile_smem(tm: int, bn: int) -> int:
-    """Tile<TM, BN>::SMEM: the stages from a 1,024-aligned base, STAGES = min(MAX_STAGES, SMEM_BUDGET / STAGE), and a
-    barrier pair of 16 bytes a stage."""
+    """Tile<TM, BN>::SMEM: the stages from a 1,024-aligned base, STAGES = min(CAP, SMEM_BUDGET / STAGE) (CAP: the 64-row
+    tiles' MAX_STAGES_64, else MAX_STAGES), and a barrier pair of 16 bytes a stage."""
     stage = (tm + bn) * const("BK")
-    stages = min(const("MAX_STAGES"), 200 * 1024 // stage)
+    cap = const("MAX_STAGES_64") if tm == 64 else const("MAX_STAGES")
+    stages = min(cap, 200 * 1024 // stage)
     return 1024 + stages * stage + 16 * stages
 
 
@@ -73,6 +74,7 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
     """Every GEMM fits the H100's 227 KB at its tile, the runner gives each its tile and block (a consumer warpgroup per 64
     rows, then the producer), the gate knows each one at its N, and the peel's tail stage is exactly one stage."""
     assert "SMEM = 1024 + STAGES * STAGE + 16 * STAGES" in SOURCE and "STAGE = (TM + BN) * BK" in SOURCE
+    assert "CAP = NWG == 1 ? MAX_STAGES_64 : MAX_STAGES" in SOURCE
     assert "SMEM_BUDGET = 200 * 1024" in SOURCE and const("PEEL_ROW") == const("BK") == RUN.PEEL_ROW == 128
     names = {n for n, *_ in gemms()}
     assert names == {f"{g}{t}" for g in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_pearlc_s")
@@ -85,17 +87,17 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
         if not name.startswith("gemm_words"):
             base = name.removesuffix(RUN.tile_suffix(tm, bn))
             assert base in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_pearlc_s"), name
-    assert {tile_smem(*t) for t in ((128, 128), (128, 64), (64, 64), (128, 32), (64, 32))} == {197728, 197760, 132224, 164992, 99456}
+    assert {tile_smem(*t) for t in ((128, 128), (128, 64), (64, 64), (128, 32), (64, 32))} == {197728, 197760, 197824, 164992, 148672}
     grouped = {n: (m, tm, bn, g) for n, m, tm, bn, g in gemms("GEMM_G")}
     assert set(grouped) == {"gemm_pearlc_g_d", "gemm_words_g_d"}
     for name, spec in grouped.items():                   # each is its ungrouped kernel's mode, tile and gate
         alone = name.replace("_g_d", "_d")
         assert spec == next((m, tm, bn, g) for n, m, tm, bn, g in gemms() if n == alone), name
         assert RUN.gemm_tile(name) == RUN.gemm_tile(alone) and S.WANT[name] == S.WANT[alone], name
-    assert set(S.WANT) - {"form_s5", "form_s5_scalar", "form_s5_g"} == names | set(grouped)
-    assert S.WANT["form_s5_g"] == S.WANT["form_s5"]
+    assert set(S.WANT) - {"form_s5", "form_s5_scalar", "form_s5_g", "form_s5_ep"} == names | set(grouped)
+    assert S.WANT["form_s5_g"] == S.WANT["form_s5_ep"] == S.WANT["form_s5"]
     assert set(RUN.FORM_ALTS) == {"form_s5_scalar"}
-    assert form_kernels() == ["form_s5", "form_s5_scalar", "form_s5_g"]
+    assert form_kernels() == ["form_s5", "form_s5_scalar", "form_s5_g", "form_s5_ep"]
 
 
 def test_a_persistent_gemm_leaves_a_launch_beside_it_the_sms_it_holds():
@@ -170,6 +172,26 @@ def test_kernel_constants_match_the_reference():
     assert {g for *_, g in gemms() if g} == {H100.g} and H100.window == const("BK")
     assert F.H100_UNPROMOTED.g is None and F.H100_UNPROMOTED.atom == H100.atom
     assert C.PearlC(forming="v1", device=H100, hashing="h3").name == "pearl-c-h100-v1-h3"
+
+
+def test_a_programmatic_launch_waits_at_its_entry():
+    """Each of run.py's PDL_KERNELS waits for the launch before it (pdl_entry) before it touches global memory: the GEMMs once
+    their barriers are set up in shared memory, the forming and pa_w first; and pd_commit lets the forming launch behind it."""
+    def body(start):
+        at = SOURCE.index(start)
+        return SOURCE[at:SOURCE.index("\n}\n", at)]
+
+    gemm, form, pa_w = (body(x) for x in ("DEV void gemm_body", "DEV void form_body", 'void pa_w('))
+    head = gemm[:gemm.index("pdl_entry();")]
+    assert "__syncthreads();" in head and "if (wg == NWG)" not in head and "tma_" not in head
+    for b in (form, pa_w):
+        head = b[:b.index("pdl_entry();")]
+        assert "reinterpret_cast" not in head and "return" not in head, head
+    assert {k for k in RUN.PDL_KERNELS if k.startswith("form")} <= set(form_kernels())
+    assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d"}
+    assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../pearl_c_sm120/hash_decode.cuh"')
+    pd = (SM120_DIR / "hash_decode.cuh").read_text()
+    assert "#ifdef PD_PDL\n  asm volatile(\"griddepcontrol.launch_dependents;\"" in pd
 
 
 SASS_OK = "\n".join([
@@ -308,7 +330,7 @@ def grouped_kernels() -> list[str]:
 
 
 def own_kernels() -> list[str]:
-    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME"} - set(grouped_kernels())
+    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME", RUN.PDL_MARK} - set(grouped_kernels())
     names = [n for n, *_ in gemms()]
     return sorted(plain) + names + [g + "_smem" for g in names]
 
@@ -318,7 +340,7 @@ def kernel_names() -> list[str]:
     (hash_h3.cuh, hash_fast.cuh, hash_decode.cuh's variants and hash_prefill.cuh's)."""
     pd = ["pd_heads"] + [f"pd_{kind}_{v}" for v in PD_BUILT for kind in ("commit", "tree", "tiles", "probe")]
     pl = [f"pl_{kind}_{v}" for v in PL_BUILT for kind in PL_KINDS]
-    return own_kernels() + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd + pl
+    return own_kernels() + [RUN.PDL_MARK] + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd + pl
 
 
 def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
@@ -333,7 +355,8 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 32 * i[0], 1: 4 * i[0], 2: 32 * i[0]}
     if name.startswith("form_"):
         rows, k = i[:2]
-        return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k}
+        ep = {5: 4 * rows, 6: 32 * rows} if name == "form_s5_ep" else {}
+        return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k, **ep}
     if name.startswith("gemm_") and not name.endswith("_smem"):
         M, N, K = i[:3]
         need = {0: M * K, 1: N * K, 10: 4 * 128}                 # Maps: A, B, P_A, P_B
@@ -486,6 +509,13 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert r.returncode == 4, r.stderr
     rows = [json.loads(x) for x in r.stdout.splitlines()]
     assert [x["kind"] for x in rows] == ["env", "mem", "check"] and rows[0]["uuid"] == UUID and rows[0]["cc"] == [9, 0]
+    assert rows[1]["pdl"] is True and any(json.loads(x).get("pdl") for x in log.read_text().splitlines())
+    unmarked = tmp_path / "unmarked.jsonl"
+    old = dry_env(ship, unmarked, FAKE_KERNELS=",".join(n for n in kernel_names() if n != RUN.PDL_MARK))
+    r2 = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")], env=old, capture_output=True,
+                        text=True)
+    assert r2.returncode == 4 and json.loads(r2.stdout.splitlines()[1])["pdl"] is False, r2.stderr
+    assert not any(json.loads(x).get("pdl") for x in unmarked.read_text().splitlines())   # a cubin whose kernels don't wait
     assert all(not v["pearl_c_ok"] and v["failed"] for v in rows[2]["variants"].values())
     failed = rows[2]["variants"]["h100"]["failed"]
     assert {f"y@gemm_pearlc/{t}/grid3" for t, *_ in RUN.TILES} <= set(failed)
@@ -554,6 +584,8 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     # pa_w adds up
     names = {ev["name"] for ev in launched}
     assert {"gemm_pearlc_d", "gemm_ct_d", "gemm_words_win_d", "pa_w", "gemm_words"} <= names
+    # the main lane's PDL_KERNELS start behind the launch before them, and no other launch does
+    assert {ev["name"] for ev in launched if ev.get("pdl")} == RUN.PDL_KERNELS & names >= {"gemm_pearlc_d", "pa_w", "form_s5_ep"}
     wins = [ev for ev in launched if ev["name"] == "gemm_words_win_d"]
     assert wins and all(ev["grid"][0] == min(132, ev["i"][2] // RUN.WINDOW) for ev in wins)
 

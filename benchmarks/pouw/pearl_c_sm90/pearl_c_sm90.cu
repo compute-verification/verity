@@ -17,8 +17,9 @@
 #include "../pearl_c/hash_h3.cuh"
 #include "../pearl_c_sm120/hash_fast.cuh"
 // decode's A commitment and tile leaves (run.py's PD_SERVED): the variants the decode shapes take, then their PD_STAMP twins
-// (run.py's PD_STAMPED, the profile's stamps)
+// (run.py's PD_STAMPED, the profile's stamps); PD_PDL: pd_commit lets the call's forming launch behind it (pdl_entry)
 #define PD_VARIANT_LIST(X) X(851) X(979) X(883) X(1011)
+#define PD_PDL
 #include "../pearl_c_sm120/hash_decode.cuh"
 // A's commitment past decode's rows (run.py's chain "pl", PL_VARIANT)
 #include "hash_prefill.cuh"
@@ -85,6 +86,11 @@ DEV void mbar_wait_warp(uint32_t bar, uint32_t parity) {
   __syncwarp();
 }
 // the maps are written before the launch (run.py's encode_maps), so a prefetch is all they need
+// a launch behind the launch before it on its stream (run.py's PDL_KERNELS): every thread waits for that launch to complete
+// before it touches global memory, then lets the next launch start behind this one; both are no-ops in a plain launch
+DEV void pdl_entry() { asm volatile("griddepcontrol.wait;\n\tgriddepcontrol.launch_dependents;" ::: "memory"); }
+// run.py launches PDL_KERNELS programmatically only from a cubin with this kernel (PDL_MARK), whose PDL_KERNELS wait
+extern "C" __global__ void pdl_waits() {}
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
 // box (c0 = byte offset along the depth, c1 = row) of `map` into dst, counted on bar
 DEV void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
@@ -178,14 +184,15 @@ template <int NA> DEV void acc_fence(float* d) {
 // WIN (G = 4): a CTA a tile's window kb, its sum from +0 stored to slab kb of p2 (K / 128 slabs of M x N FP32), which
 // pa_w adds up as the other modes' total does.
 enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_WIN };
-constexpr int BK = 128, PEEL_ROW = 128, SMEM_BUDGET = 200 * 1024, MAX_STAGES = 8;
+// a 64-row tile (one consumer warpgroup) keeps up to MAX_STAGES_64 stages in flight, the others MAX_STAGES
+constexpr int BK = 128, PEEL_ROW = 128, SMEM_BUDGET = 200 * 1024, MAX_STAGES = 8, MAX_STAGES_64 = 12;
 struct Maps { uint8_t a[128], b[128], pa[128], pb[128]; };
 
 template <int TM, int BN> struct Tile {
   static_assert((TM == 64 || TM == 128) && (BN == 32 || BN == 64 || BN == 128), "64 or 128 rows by 32, 64 or 128 columns");
-  static constexpr int NWG = TM / 64, NT = 128 * (NWG + 1);
+  static constexpr int NWG = TM / 64, NT = 128 * (NWG + 1), CAP = NWG == 1 ? MAX_STAGES_64 : MAX_STAGES;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
-  static constexpr int STAGES = SMEM_BUDGET / STAGE < MAX_STAGES ? SMEM_BUDGET / STAGE : MAX_STAGES;
+  static constexpr int STAGES = SMEM_BUDGET / STAGE < CAP ? SMEM_BUDGET / STAGE : CAP;
   // the stages from a 1,024-byte-aligned base (SWIZZLE_128B's period), then full[s] and empty[s]
   static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES;
   static_assert(STAGE % 1024 == 0 && A_BYTES % 1024 == 0, "every box 1,024-byte aligned for SWIZZLE_128B");
@@ -223,6 +230,7 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   }
   __syncthreads();
+  pdl_entry();
 
   if (wg == NWG) {
     // the producer exits rather than returns: a path back would join its register budget with the consumers'
@@ -556,16 +564,34 @@ extern "C" __global__ void eprime(const Args a) {
 // (8 rows by 4 column pairs) hit distinct banks, and leave as whole 128-byte rows.  MODE 0 is form_s5's cast (two codes per
 // cvt), 1 form_s5_scalar's (one code per cvt), its gate: both write the same codes.  GR (form_s5_g, the grouped calls): p3
 // holds the experts' F lines one after another (k x 32 each) and p5 each 64-row block's expert, whose lines the block takes.
+// EP (form_s5_ep, eprime in the same launch): p2 holds the rows' E codes, p5 beta and p6 the E' codes out; each block makes
+// its rows' E' as eprime does while staging them, and the blocks at depth 0 store them.
 constexpr int FORM_ROW = 144;
-template <int MODE, bool GR = false> DEV void form_body(const Args& a) {
+template <int MODE, bool GR = false, bool EP = false> DEV void form_body(const Args& a) {
+  static_assert(!(GR && EP), "p5 is GR's experts or EP's beta");
   __shared__ __align__(128) uint8_t sE[64 * 32], sF[128 * 32];
   __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
+  pdl_entry();
   const int tid = threadIdx.x, t0 = blockIdx.x * 128, r0 = blockIdx.y * 64, k = a.i[1];
   const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
   const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]) +
                      (GR ? (size_t)reinterpret_cast<const int*>(a.p[5])[blockIdx.y] * k * 32 : 0);
-  *reinterpret_cast<uint4*>(sE + core(tid / 2, 16 * (tid % 2))) =
-      *reinterpret_cast<const uint4*>(E + (size_t)(r0 + tid / 2) * 32 + 16 * (tid % 2));
+  const size_t eo = (size_t)(r0 + tid / 2) * 32 + 16 * (tid % 2);
+  uint4 ev = *reinterpret_cast<const uint4*>(E + eo);
+  if constexpr (EP) {
+    const float beta = reinterpret_cast<const float*>(a.p[5])[r0 + tid / 2];
+    uint32_t w[4] = {ev.x, ev.y, ev.z, ev.w};
+#pragma unroll
+    for (int i = 0; i < 4; i++) {
+      uint32_t o = 0;
+#pragma unroll
+      for (int j = 0; j < 4; j++) o |= (uint32_t)e4m3(__fmul_rn(beta, e4m3f((uint8_t)(w[i] >> (8 * j))))) << (8 * j);
+      w[i] = o;
+    }
+    ev = make_uint4(w[0], w[1], w[2], w[3]);
+    if (blockIdx.x == 0) *reinterpret_cast<uint4*>(a.p[6] + eo) = ev;
+  }
+  *reinterpret_cast<uint4*>(sE + core(tid / 2, 16 * (tid % 2))) = ev;
 #pragma unroll
   for (int j = 0; j < 2; j++) {
     const int idx = tid + 128 * j, r = idx / 2, c = idx % 2;
@@ -614,6 +640,7 @@ template <int MODE, bool GR = false> DEV void form_body(const Args& a) {
 extern "C" __global__ void __launch_bounds__(128) form_s5(const Args a) { form_body<0>(a); }
 extern "C" __global__ void __launch_bounds__(128) form_s5_scalar(const Args a) { form_body<1>(a); }
 extern "C" __global__ void __launch_bounds__(128) form_s5_g(const Args a) { form_body<0, true>(a); }
+extern "C" __global__ void __launch_bounds__(128) form_s5_ep(const Args a) { form_body<0, false, true>(a); }
 
 // the adopted quantizer (the model's FP8 path with PoUW off): codes = e4m3(alpha x) row-major, alpha from stats_s5.
 // p0 rows (FP32), p1 alpha, p2 out codes; i0 rows, i1 k.  One thread per 16 elements
@@ -717,6 +744,7 @@ extern "C" __global__ void pa(const Args a) {
 // gemm_words_d's total, stored to p2 and into P_A as pa's.  p0 E'_A codes, p1 the windows (i1 slabs of rows x 32), p2 AF
 // words out, p3 out; i0 rows, i1 windows
 extern "C" __global__ void pa_w(const Args a) {
+  pdl_entry();
   const int t = blockIdx.x * blockDim.x + threadIdx.x, rows = a.i[0], wins = a.i[1];
   if (t >= rows * 64) return;
   const int row = t / 64, e = t % 64;
