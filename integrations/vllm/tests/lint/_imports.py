@@ -1,6 +1,7 @@
 """The integration's internal import graph and the layer map, for the P2/P4/P5/P9 lints.
 
-An edge is one import statement in a library module that names another ``verity_vllm`` module: module-level and
+An edge is one import statement in a library module that names another library module (``verity_vllm``'s, or the
+Definitions that moved from its ``program`` layer to ``verity.ml.definitions``, which keep that layer): module-level and
 function-level (lazy) imports alike, plus ``importlib.import_module`` with a literal name.  ``from pkg import name``
 resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 
@@ -39,6 +40,7 @@ LAYER = {
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.correspondence": "query|correspondence",
     "verity_vllm.program": "program",
+    "verity.ml.definitions": "program",                        # moved from program/; circuits', held to P9 as it stood
     "verity_vllm.collectives": "collectives",
     "verity_vllm.config": "config",
     "verity_vllm.target_family": "config",                     # -> config.py
@@ -46,6 +48,9 @@ LAYER = {
     "verity_vllm.engine.env": "core",                          # the vLLM env pins; imports nothing from verity_vllm
     "verity_vllm.commit.challenge": "core",                    # -> verity.ml.randomness; imports nothing from verity_vllm
 }
+
+#: the packages whose modules are graph nodes
+LIBRARY_PACKAGES = ("verity_vllm", "verity.ml.definitions")
 
 #: The property harnesses.
 PROPERTY_MODULES = ("verity_vllm.properties",)
@@ -119,7 +124,7 @@ def edges() -> tuple[Edge, ...]:
                 if lit:
                     targets = [lit]
             for t in targets:
-                if not (t == "verity_vllm" or t.startswith("verity_vllm.")):
+                if not any(t == p or t.startswith(p + ".") for p in LIBRARY_PACKAGES):
                     continue
                 dst = _resolve(t, known)
                 if dst and dst != mod:

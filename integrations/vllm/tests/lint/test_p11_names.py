@@ -95,7 +95,7 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
 
 
 def package_violations() -> list[R.Violation]:
-    dirs = sorted({p.parent for p in R.library_files() + R.library_files(".sh")} - {R.PKG})
+    dirs = sorted({p.parent for p in R.library_files() + R.library_files(".sh")} - set(R.LIBRARY))
     return [R.Violation(R.rel(d), "package-name", "<package>", d.name) for d in dirs if bad_name(d.name)]
 
 

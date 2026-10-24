@@ -86,9 +86,13 @@ paths = []
 "verity_vllm.query.word" = "verity.ml.definitions.word"
 
 [aliases]
-# p09's allowlist names a module below `verity_vllm.` (`_imports.LAYER`'s short form); nothing else writes these so
+# p09's allowlist names a module below `verity_vllm.` (`_imports.LAYER`'s short form), and a moved one in full; docstrings
+# that name these in the short form follow them too
 "program.kernels.relations" = "program.relations"
 "program.kernels.sampling_rng" = "program.sampling_rng"
+"program.registry.sampling" = "verity.ml.definitions.registry.sampling"
+"program.registry.topp_split" = "verity.ml.definitions.registry.topp_split"
+"program.registry.b1_tp2" = "verity.ml.definitions.registry.b1_tp2"
 
 [rewrite]
 # Never rewritten: records of what was, and files whose bytes a digest pins.
