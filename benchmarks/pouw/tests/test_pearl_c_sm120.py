@@ -158,6 +158,39 @@ def test_kernel_constants_match_the_reference():
     assert RUN.SR_ROWS >= RUN.BM_D
 
 
+def test_launch_passes_what_a_fresh_args_would():
+    """Dev.launch rewrites its one Args: each launch's parameter bytes are a fresh Args' set slot by slot (an int past a slot's
+    range as its low bits, the slots it leaves unset zero), with the grid, block, shared memory and stream it was given."""
+    dev = object.__new__(RUN.Dev)
+    dev.args, dev.fns, dev.streams, dev.stream = RUN.Args(), {"k": RUN.vp(0x1234)}, {}, 7
+    dev.params = (RUN.vp * 1)(RUN.C.addressof(dev.args))
+    dev.cu = type("Cu", (), {"cuGetErrorString": staticmethod(lambda r, s: 0)})()
+    got, rc = [], [0]
+
+    def cu_launch(f, g0, g1, g2, b0, b1, b2, smem, s, params, extra):
+        assert params is dev.params and extra is None
+        got.append(((f.value, g0, g1, g2, b0, b1, b2, smem, s.value), bytes(dev.args)))
+        return rc[0]
+    dev.cu_launch = cu_launch
+    p16, i16 = list(range(1, 17)), list(range(-8, 8))
+    for p, i, grid, stream, want in [
+            (p16, i16, (2, 3), None, (0x1234, 2, 3, 1, 256, 1, 1, 99, 7)),
+            ((5,), (1024, 4096), 188, 9, (0x1234, 188, 1, 1, 256, 1, 1, 99, 9)),
+            ((), RUN.nonce_args(0xFFFF_FFFF_8000_0001), [4, 5, 6], None, (0x1234, 4, 5, 6, 256, 1, 1, 99, 7)),
+            ((-1, 1 << 64 | 5), (1 << 31, (1 << 32) - 1, 1 << 40 | 3, -(1 << 33)), 1, None, (0x1234, 1, 1, 1, 256, 1, 1, 99, 7))]:
+        dev.launch("k", grid, 256, 99, p=p, i=i, stream=stream)
+        fresh = RUN.Args()
+        for j, v in enumerate(p):
+            fresh.p[j] = v
+        for j, v in enumerate(i):
+            fresh.i[j] = v
+        assert got[-1] == (want, bytes(fresh))
+    assert set(dev.streams) == {7, 9}
+    rc[0] = 1
+    with pytest.raises(RuntimeError, match="cuLaunchKernel returned CUresult 1"):
+        dev.launch("k", 1, 32)
+
+
 SASS_OK = "\n".join([
     "Function : gemm_x", "  /*0010*/ QMMA.16832.F32.E4M3.E4M3 R4, R8, R12, R4 ;",
     "  /*0020*/ HMMA.16816.F32.BF16 R4, R8, R12, R4 ;", "  /*0030*/ LDSM.16.M88.4 R8, [R2] ;"])

@@ -44,6 +44,7 @@ import hashlib
 import json
 import os
 import statistics
+import struct
 import sys
 import time
 
@@ -89,6 +90,10 @@ NVML = {
 
 class Args(C.Structure):
     _fields_ = [("p", C.c_uint64 * 16), ("i", C.c_int32 * 16)]
+
+
+#: Args' bytes, p's slots unsigned and i's signed, as Args' fields
+ARGS, NO_ARGS = struct.Struct("<16Q16i"), (0,) * 16
 
 
 def bind(lib, sigs):
@@ -152,6 +157,14 @@ class Dev:
         self.fns: dict[str, vp] = {}
         self.live: set[int] = set()
         self.stream = None               # where launch() and copy_async() enqueue unless told otherwise (a harness's stream)
+        # launch()'s: one Args and its params array, rewritten at every launch (cuLaunchKernel copies the parameters before
+        # it returns, and launches come from one thread, as `stream` already assumes), and cuLaunchKernel without argtypes,
+        # its pointers passed as c_void_p (the streams' cached in `streams`) and its sizes as C ints
+        self.args = Args()
+        self.params = (vp * 1)(C.addressof(self.args))
+        self.cu_launch = self.cu["cuLaunchKernel"]
+        self.cu_launch.restype = i32
+        self.streams: dict[int | None, vp] = {}
 
     def identity(self, expect_uuid: str | None) -> list[str]:
         """What stops the run before any context or launch: the reasons, empty if this is the expected device."""
@@ -181,9 +194,12 @@ class Dev:
     def ck(self, f: str, *a) -> None:
         r = getattr(self.cu, f)(*a)
         if r:
-            s = C.c_char_p()
-            self.cu.cuGetErrorString(r, C.byref(s))
-            raise RuntimeError(f"{f} returned CUresult {r} ({s.value.decode() if s.value else 'unknown'})")
+            self.fail(f, r)
+
+    def fail(self, f: str, r: int):
+        s = C.c_char_p()
+        self.cu.cuGetErrorString(r, C.byref(s))
+        raise RuntimeError(f"{f} returned CUresult {r} ({s.value.decode() if s.value else 'unknown'})")
 
     def get(self, f: str, *a) -> int:
         v = i32()
@@ -226,15 +242,20 @@ class Dev:
         self.ck("cuMemcpyDtoDAsync_v2", u64(dst), u64(src), n, self.stream if stream is None else stream)
 
     def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None) -> None:
-        a = Args()
-        for j, v in enumerate(p):
-            a.p[j] = v
-        for j, v in enumerate(i):
-            a.i[j] = v
-        g = tuple(grid) + (1,) * (3 - len(grid)) if isinstance(grid, (tuple, list)) else (grid, 1, 1)
-        params = (vp * 1)(C.addressof(a))
-        self.ck("cuLaunchKernel", self.fn(name), g[0], g[1], g[2], block, 1, 1, smem, self.stream if stream is None else stream,
-                params, None)
+        try:
+            ARGS.pack_into(self.args, 0, *p, *NO_ARGS[len(p):], *i, *NO_ARGS[len(i):])
+        except struct.error:             # an int past its slot's range: its low bits, as ctypes' slots store it
+            ARGS.pack_into(self.args, 0, *(v & 0xFFFFFFFFFFFFFFFF for v in p), *NO_ARGS[len(p):],
+                           *((v & 0xFFFFFFFF ^ 0x80000000) - 0x80000000 for v in i), *NO_ARGS[len(i):])
+        g0, g1, g2 = tuple(grid) + (1,) * (3 - len(grid)) if isinstance(grid, (tuple, list)) else (grid, 1, 1)
+        raw = self.stream if stream is None else stream
+        s = self.streams.get(raw)
+        if s is None:
+            s = self.streams[raw] = vp(raw)
+        f = self.fns.get(name) or self.fn(name)
+        r = self.cu_launch(f, g0, g1, g2, block, 1, 1, smem, s, self.params, None)
+        if r:
+            self.fail("cuLaunchKernel", r)
 
     def sync(self) -> None:
         self.ck("cuCtxSynchronize")
@@ -571,8 +592,9 @@ class Pipeline:
     def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0,
              dg=0, key=0, live: int | None = None):
         """`live`: the rows from 0 the product is wanted for (i4; 0 all M), by default m_real at 64 x 64 tiles (LIVE)."""
+        tm, bn = tile = gemm_tile(name)
         if live is None:
-            live = self.m_real if LIVE and gemm_tile(name) == (BM_D, BM_D) and self.m_real < M else 0
+            live = self.m_real if LIVE and tile == (BM_D, BM_D) and self.m_real < M else 0
         if name not in self.GEMM_SMEM:
             probe = self.dev.alloc(16)
             self.dev.launch(name + "_smem", 1, 1, p=(probe,))
@@ -580,14 +602,13 @@ class Pipeline:
             self.GEMM_SMEM[name] = int.from_bytes(self.dev.read(probe, 4), "little")
             self.dev.free(probe)
             self.dev.ck("cuFuncSetAttribute", self.dev.fn(name), MAX_DYN, self.GEMM_SMEM[name])
-        tm, bn = gemm_tile(name)
         tiles = (M // tm) * (N // bn)
         ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0, dg, 0, key]
         for slot, x in zip((2, 3, 4), out):
             ptrs[slot] = self.b[x] if x else 0
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
         block = NT
-        if is_ml(name):
+        if tile == (BM, BM):
             ptrs[10], block = self.b["tma"] + ML_SET * ML_MAPS[(a, b)], ML_NT
         self.dev.launch(name, min(tiles, grid or self.dev.sms), block, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER, live))
 
