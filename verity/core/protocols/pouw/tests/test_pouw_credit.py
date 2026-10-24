@@ -112,7 +112,7 @@ WINDOW_EXPECT = {
     "commit-missing": ("arow", "the Commit record registers "), "commit-twice": ("arow", "the Commit record registers "),
     "ids0-outside": ("arow", Cr.IDS_OUTSIDE), "ids0-root-off": ("arow", Cr.IDS_OUTSIDE),
     "ids0-other-session": ("registration", "ids@0" + OTHER_REGISTRATION),
-    "a-call-off": ("arow", NOT_COMMITS + "row-table/"), "a-call-missing": ("arow", "rows, not "),
+    "a-call-off": ("arow", NOT_COMMITS + "row-table/"), "a-call-missing": ("a-link", "the window's layout gives it"),
     "commit-unbound": ("draw", Cr.DRAW_ROOT), "credit-commit-form": ("commit", Cr.COMMIT_FORM),
 }
 PERIOD_EXPECT = {
@@ -143,7 +143,8 @@ PERIOD_EXPECT = {
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
     "extra": "`credit.cover`", "swapped": "`credit.cover`", "misaligned": "`credit.cover`",
-    "unknown": "which is no registered A value", "no-a": Cr.NO_A, "twice": " twice", "entry-form": "has no root, domain",
+    "unknown": "which is no registered A value", "no-a": Cr.NO_A, "twice": " twice", "entry-form": "has no root, domain", "leaves-cap": "is not from 1 to",
+    "layout-rows": "the window's layout gives it",
     "blocks": "rounds' equal blocks", "log-form": Cr.LOG_FORM, "round-form": "inner root is not",
     "segments-form": "A segments are not", "entries-form": Cr.ENTRIES_FORM,
     "table-other-round": ", which only round ", "table-past": "and the window has",
@@ -503,10 +504,10 @@ def test_an_honest_window_of_call_tables_credits_its_bits(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_table_the_served_commit_did_not_commit_refuses(seed):
-    """ROOTS1: a round's A table of a K with every row zero, one row off, its rows offset by one call, or a call missing
-    from it, or a round's input-ids table with one row off, each tied to the round roots (`_a_link` accepts) and opened
-    by the drawn units' proofs at its root, is not the Commit's value of the same rows, so the window is refused before
-    any proof is read. The honest window's tables are the Commit's, by its names: each round's A table of each K
+    """ROOTS1: a round's A table of a K with every row zero, one row off or its rows offset by one call, or a round's
+    input-ids table with one row off, each tied to the round roots (`_a_link` accepts) and opened by the drawn units'
+    proofs at its root, is not the Commit's value of the same rows, so the window is refused before any proof is read;
+    one with a call missing has fewer rows than the layout gives it, which `_a_link` refuses first. The honest window's tables are the Commit's, by its names: each round's A table of each K
     ``row-table/<round>/k<K>`` and each round's ``input-ids/<round>``."""
     d = cases.window_instance(random.Random(f"honest/{seed}"))
     (_digest, reg), _ = Cr.commit_of(d["commit"])
@@ -518,7 +519,10 @@ def test_a_table_the_served_commit_did_not_commit_refuses(seed):
         d = cases.window_instance(random.Random(f"{name}/{seed}"), name)
         assert Cr._a_link(d["rounds"], d["entries"]) is None, name
         got, refused = Cr._window_outcomes(*cases.window_args(d))
-        assert got is None and refused[0] == "arow" and "(ROOTS1)" in refused[1], (name, refused)
+        if name == "a-call-missing":
+            assert got is None and refused[0] == "a-link" and "the window's layout gives it" in refused[1], refused
+        else:
+            assert got is None and refused[0] == "arow" and "(ROOTS1)" in refused[1], (name, refused)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
