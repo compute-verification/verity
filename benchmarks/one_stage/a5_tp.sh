@@ -17,8 +17,9 @@
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
 #   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only; A5_JOBS=N
 #   audits up to N ranks at once (a GLM-5.3 rank, SiluMul_v2 at step 16: its window ~16 min and ~11.7 GB, its audit ~10 GB;
-#   the MoE w2 coordinates of one layer, glm53_moe_w2_tp8_step16.json: its window ~4 min and ~13.1 GB, then ~27 min of the
-#   verifier's window and staging its 768 chunks, then each drawn chunk's session ~8 min and ~32 GB, which a loaded machine
+#   the MoE w2 coordinates of one layer, glm53_moe_w2_tp8_step16.json: its window ~4 min and ~13.1 GB, then ~2.5 min of the
+#   verifier's window, ~5 min staging its 768 chunks' public files and ~2.5 min to the draw (a drawn chunk's prover file is
+#   staged after it), then each drawn chunk's session ~8 min and ~32 GB, which a loaded machine
 #   stretched past an hour; a5's --session-timeout, A5_SESSION_TIMEOUT, is each prover's limit).
 #   research run --on M --project verity --cwd clone --mem-gb 64 -- bash benchmarks/one_stage/a5_tp.sh
 # Kept in $OUT: a5's records and logs, the public files, the sessions (their proofs and records), the binaries' sha256 and the

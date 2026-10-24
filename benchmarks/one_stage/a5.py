@@ -36,7 +36,9 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   what `verity-vllm serving-rows` wrote (window kind `stand-in`, its run the Commit's run root, its `of` and `link`
   `deferred_rows.stand_in`'s) or what the in-Commit hook wrote (`served`, its run the Commit's run root, no stand-in link). Each
   holds `registration.json` (core's v1 record), `window.json`, and per member k `m<k>-public.bin` and `m<k>-private.bin` (prover
-  only). The prover wraps each member's bodies under the circuit for its template (`serving_rows.flock_input_files`).
+  only). The prover wraps each member's bodies under the circuit for its template (`flock_inputs.flock_input_files`): every
+  member's public file before the draw, and a drawn member's prover's file (`inst`, its rows and salts) after it, under the
+  header its public file was held to (`stage`).
 * **The verifier's own copies.** A deferred Commit: `--bundle` and `--row-dir` are its record and its Build's Programs of record, and
   the verifier derives its window from them alone (`deferred_rows.window_of_record`). A TP Commit: `--tp-commit` is its record (its
   `--out`: `runs.jsonl`, `versions.json`), `--build-root` holds each rank's Programs of record in `rank<r>/`, and `--workload` is the
@@ -46,7 +48,8 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
   are never used), or, for a template whose units are bit rows in chunks (`serving_rows.CHUNKED`: a MoE pair GEMM's coordinate,
   `COORDS`, or a MoeSum or all-reduce column block, `COLS`), by C-Flock's `UnitStager` on the rows the window lays out
-  (`compose_circuit.py --template`, once per template, every chunk on that circuit), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
+  (`compose_circuit.py --template`, once per template, every chunk on that circuit, read and hashed once,
+  `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
   (`serving_rows.leaf_layer`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`: a
   stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the run root of record and the digest of the bundle's
@@ -121,7 +124,7 @@ from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity.ml.commitments import row_table as RT  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity_vllm.commit import row_tables as RTB, serving_rows as CS  # noqa: E402
+from verity_vllm.commit import flock_inputs as FI, row_tables as RTB, serving_rows as CS  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
@@ -310,6 +313,18 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     return result, neg, record
 
 
+def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
+    """A drawn member's prover's file and its circuit, under the header its public file was held to before the draw."""
+    m, st_dir = mm["m"], mm["st"]["dir"]
+    if mm["circuit"] != st_dir / "circuit.txt":
+        link(mm["circuit"], st_dir / "circuit.txt")
+    got = FI.flock_input_files(served, mm["k"], mm["circ"], st_dir / "prover", write=("inst",), files=files)
+    link(Path(got["inst"]), st_dir / f"inst-{m.n}.bin")
+    with open(got["inst"], "rb") as f:
+        if dict(json.loads(f.readline()), rows=False) != mm["header"]:
+            raise RuntimeError(f"member {mm['k']}'s prover's file is not under the header its public file was held to")
+
+
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served: Path, source: Callable[[dict], dict], port: int,
           summary: dict, more_negatives: dict | None = None, rank: int | None = None,
           step_roots: dict[int, bytes] | None = None) -> tuple[dict, bool]:
@@ -336,8 +351,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     rec = json.loads((served / "registration.json").read_text())
     shutil.copy(served / "registration.json", out / "registration.json")
 
-    # each member: the verifier's circuit, the prover's files under it, and every check on the public file before the draw
-    members, publics, checks, composed = [], {}, {}, {}
+    # each member: the verifier's circuit, the public file under it, and every check on that file before the draw; the prover's
+    # file and the circuit's link only for a drawn member, after the draw (`stage`)
+    files = (json.loads((served / "window.json").read_text()), rec)
+    roots = {r["port"]: r for r in rec["roots"]}
+    members, publics, checks, composed, programs_ok = [], {}, {}, {}, {}
+    t_stage = time.time()
     for k, m in enumerate(mine.members):
         chunked = m.template not in sets and SRW.template(m.template).layout in SRW.CHUNKED
         if m.template not in sets and not chunked:
@@ -350,43 +369,45 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         st_dir.mkdir(parents=True, exist_ok=True)
         t = time.time()
         if m.template in composed:      # a chunked template's chunks: one circuit, bound to the same partition and program
-            link(composed[m.template][0], st_dir / "circuit.txt")
+            circuit, made, circ = composed[m.template]
         else:
             src = ["--template", m.template] if chunked else ["--input-set", str(sets[m.template][0])]
             p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), *src, "--out", str(st_dir / "circuit.txt"),
                         "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath})
             if p.returncode != 0:
                 raise RuntimeError(f"composing member {k}'s circuit failed: {p.stderr[-2000:]}")
+            circuit, made = st_dir / "circuit.txt", json.loads(p.stdout.strip().splitlines()[-1])
+            circ = FI.flock_circuit(circuit.read_bytes())
             if chunked:
-                composed[m.template] = (st_dir / "circuit.txt", json.loads(p.stdout.strip().splitlines()[-1]))
-        made = composed[m.template][1] if chunked else json.loads(p.stdout.strip().splitlines()[-1])
-        text = (st_dir / "circuit.txt").read_text()
+                composed[m.template] = (circuit, made, circ)
         compose_s = round(time.time() - t, 1)
-        got = CS.flock_input_files(served, k, text, st_dir / "prover")
+        got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
         link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
-        link(Path(got["inst"]), st_dir / f"inst-{m.n}.bin")
-        meta = json.loads(text.split("\n", 2)[1][5:])
+        meta = circ.meta
         header = a0.public_header(st_dir, m.n)
         fv = header["frame_v3"]
+        if (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
+            programs_ok[m.template, circ.pin] = a0.template_program_ok(meta, defn)
         ok = {"pin": header.get("circuit_sha512") == made["pin"],
               "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
               "program": meta.get("program_sha512") == part["program"],
               "indices": header["units"]["indices"] == list(range(m.base, m.base + m.n)),
               "classes": header["units"].get("classes") == [made.get("class_sha512")] * m.n,
-              "template_program": a0.template_program_ok(meta, defn),
+              "template_program": programs_ok[m.template, circ.pin],
               "shared_rows": header.get("shared_rows") == ({**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}
                                                            if m.tables else None)}
         for p_name in fv["roots"]:
             name = m.port(p_name)
-            reg = next((r for r in rec["roots"] if r["port"] == name), None)
+            reg = roots.get(name)
             ok[f"root:{p_name}"] = (name in want and reg is not None and reg["root"] == fv["roots"][p_name]
                                     and reg["domain"] == fv["domain_ids"][p_name] == want[name]["domain"])
         checks[f"m{k}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {}}
         publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
-        members.append({"k": k, "m": m, "defn": defn, "header": header,
+        members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ,
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
                                "program_file": out / "program.json"},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
+    summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer).to_json()
     if mine.row_tables:
@@ -400,7 +421,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     summary.update(registration=R.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
                    circuits={mm["m"].template: {"pin": mm["pin"], "class": mm["class"], "compose_s": mm["compose_s"],
                                                 "k_log": mm["st"]["meta"].get("k_log"), "unit_log": mm["st"]["meta"].get("unit_log")}
-                             for mm in members})
+                             for mm in members if mm["circuit"].parent == mm["st"]["dir"]})
     if not all(v["ok"] for v in checks.values()):
         summary["checks"] = checks
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
@@ -434,6 +455,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         sdir = out / f"session-m{k}"
         sdir.mkdir(parents=True, exist_ok=True)
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m.n, "k": len(local), "units": local}, sort_keys=True))
+        t = time.time()
+        stage(served, mm, files)
+        summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + time.time() - t, 1)
+        summary["staging"]["prover_files"] = summary["staging"].get("prover_files", 0) + 1
         t = time.time()
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + len(statement), sdir, draw_file=sdir / "draw.json", zk=True,
                                   env={"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])},
@@ -566,7 +591,7 @@ def tp_rank(a: argparse.Namespace, sets: dict, out: Path, world: int, r: int) ->
             a.coins.skip(r)
     return {"ok": ok, "seconds": round(time.time() - t0, 1),
             **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
-                                     "audit", "draw", "draw_counts", "negatives", "verifier_window_s", "coins")}}
+                                     "audit", "draw", "draw_counts", "negatives", "verifier_window_s", "staging", "coins")}}
 
 
 def tp_rank_job(a: argparse.Namespace, out: Path, world: int, r: int) -> dict:
