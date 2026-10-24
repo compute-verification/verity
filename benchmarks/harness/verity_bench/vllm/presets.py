@@ -61,11 +61,15 @@ class ArmSettings:
     the spec names, or `NO_CONTROL`; default stock FP8), and the protocols config handed to `verity_vllm.LLM`
     (``{protocol: {...}}``), where a string value ``"$NAME"`` is the point's environment variable NAME, which the spec's
     setup exports. A served variant (`[arm_settings."stock-fp8@compiled"]`) takes only its control (default its
-    built-in). All of it is in the point's identity."""
+    built-in) and its own checkpoint, `model` at `revision` (default the preset's), for a preset whose checkpoint its
+    precision can't load (stock FP8 against the int8 pin, from the pin's BF16 base). All of it is in the point's
+    identity."""
 
     precision: str | None = None
     control: str | None = None
     protocols_config: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    model: str | None = None
+    revision: str | None = None
 
 
 @dataclass(frozen=True)
@@ -161,7 +165,11 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
             raise ConfigError(f"{path}: arm_settings {name!r} must name a protocol arm (protocol:scheme) or a served "
                               f"variant (BUILTIN@{'|'.join(SERVED_EXECUTIONS)}) in arms")
         if variant and (arm.precision is not None or arm.protocols_config):
-            raise ConfigError(f"{path}: arm_settings {name!r}: a served variant takes only its control")
+            raise ConfigError(f"{path}: arm_settings {name!r}: a served variant takes only its control and checkpoint")
+        if not variant and (arm.model is not None or arm.revision is not None):
+            raise ConfigError(f"{path}: arm_settings {name!r}: only a served variant names its own checkpoint")
+        if (arm.model is None) != (arm.revision is None):
+            raise ConfigError(f"{path}: arm_settings {name!r}: a checkpoint is a model at a pinned revision: set both")
         if arm.precision is not None and arm.precision not in PRECISIONS:
             raise ConfigError(f"{path}: arm_settings {name!r}: precision is one of {', '.join(PRECISIONS)}")
         if arm.control is not None and arm.control != NO_CONTROL and (arm.control not in doc.arms or arm.control == name):

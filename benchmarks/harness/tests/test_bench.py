@@ -849,6 +849,42 @@ def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
             load_spec(path)
 
 
+def test_a_served_variant_loads_its_own_checkpoint_where_the_presets_is_another_encoding(tmp_path):
+    """`llama31-8b-1gpu-pouw-h1-served` times H1 on the int8 pin over stock FP8 as vLLM serves it, which vLLM can't load
+    from the pin (`verity_int8`): its served variant names the pin's BF16 base, and only its engine loads it."""
+
+    from verity_bench.vllm import runner
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-h1-served")
+    compiled, int8, h1 = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution, a.model) for a in (compiled, int8, h1)] == [
+        ("stock-fp8@compiled", "fp8", None, "compiled", "unsloth/Llama-3.1-8B"),
+        ("stock-int8", "int8_exact", None, None, None),
+        ("pouw:eps1-sm120-h1fx1", None, "stock-int8", None, None),
+    ]
+    assert compiled.to_json()["revision"] == "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
+    preset, eager = served(spec.preset, spec.eager)
+    built = [runner.arm_execution(a, preset, eager) for a in (compiled, int8, h1)]
+    assert [(p.model, p.revision, p.case, e) for p, e in built] == [
+        ("unsloth/Llama-3.1-8B", "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814", None, False),
+        ("verity-int8/Llama-3.1-8B-INT8", "723d342ac443b040931242c768df342b0f6f15a7", "LLAMA31_8B_INT8", True),
+        ("verity-int8/Llama-3.1-8B-INT8", "723d342ac443b040931242c768df342b0f6f15a7", "LLAMA31_8B_INT8", True),
+    ]
+    args = runner.engine_args(built[0][0], compiled.precision, resident=True, eager=False)
+    assert (args["quantization"], args["execution"], args["max_num_batched_tokens"]) == ("fp8", "compiled", 64)
+
+    source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-h1-served.toml").read_text()
+    path = tmp_path / "spec.toml"
+    pin = 'revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"\n'
+    for old, new, why in ((pin, "", "set both"),
+                          ('control = "stock-int8"\n', f'control = "stock-int8"\nmodel = "x/y"\n{pin}',
+                           "only a served variant names its own checkpoint")):
+        assert old in source
+        path.write_text(source.replace(old, new))
+        with pytest.raises(ValueError, match=why):
+            load_spec(path)
+
+
 def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_spec(monkeypatch):
     """BENCH-17: `pouw:pearl-c-sm120-v1-h3` was refused before any engine started (r20261018-193211-a10c): the harness
     gave every protocol arm the preset's FP8 and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint,
