@@ -7,14 +7,14 @@ import Proofs.Nci.Cover.Paths
 
 `whole_use_entry`: a block that computes whole a counted product of use `j` is handed a gate of `A j`. The product's
 gate `g` reads the certificate's activation `a ∈ A j`, so `a ∈ I`; were `I` handed no gate of `A j`, it would compute
-the output gate of each of `j`'s upstream products (`BackwardClosure`), and so each of their gates, which reaches the
-output inside the product and the region (`reachesIn_output`, `Entry`), and `UpdateHardness` would charge it `b D > k`
+the output gate of each of `j`'s upstream products (`backwardClosure`), and so each of their gates, which reaches the
+output inside the product and the region (`reachesIn_output`, `entry`), and `UpdateHardness` would charge it `b D > k`
 bits.
-`ActivationCharge` counts these gates, distinct across uses since the regions are disjoint and none is in `θ`.
+`activationCharge` counts these gates, distinct across uses since the regions are disjoint and none is in `θ`.
 
 `finished_sdiff_whole_card_le`: each counted product whose output gate `I` computes but not all of whose gates has a
 gate `x ∉ computed I`, which reaches the output inside the product (`reachesIn_output`), so the path meets an input of
-`I` among the product's gates (`Entry`): a non-input gate, so not in `θ`, and distinct across products since they are
+`I` among the product's gates (`entry`): a non-input gate, so not in `θ`, and distinct across products since they are
 disjoint.
 -/
 
@@ -36,21 +36,25 @@ theorem whole_use_entry {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq 
   have haI : a ∈ I := pred_subset_of_mem_computed (hpI hg) haPred
   have hUc : ∀ q ∈ U, M.m q ⊆ C.computed I := by
     intro q hq x hx
-    have hoI := BackwardClosure C I (A p.1) a (M.o q) haI hne (hreach q hq)
+    have hoI := backwardClosure C I (A p.1) a (M.o q) haI hne (hreach q hq)
     obtain ⟨π, hπ, hπm⟩ := reachesIn_output C (M.m q) (M.o q) (M.m_outputs q (hUP hq)) x hx
     by_contra hxc
-    obtain ⟨g', hg'π, hg'I⟩ := Entry C I π x (M.o q) hπ (computed_subset C I hoI) hxc
+    obtain ⟨g', hg'π, hg'I⟩ := entry C I π x (M.o q) hπ (computed_subset C I hoI) hxc
     have hg' : g' ∈ C.inputs I ∩ A p.1 := Finset.mem_inter.2 ⟨hg'I, hUA q hq (hπm g' hg'π)⟩
     rw [hne] at hg'
     exact Finset.notMem_empty g' hg'
-  have hpay := hH I hI.1.le U hUP hUc
+  have hpay := hH I hI.1 U hUP hUc
   have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
   have hD : (D : ℝ) ≤ (U.image Prod.snd).card := by exact_mod_cast hDU
   have := mul_le_mul_of_nonneg_left hD hb.le
   linarith
 
-theorem ActivationCharge : Guarantees.ActivationCharge := by
-  intro C J L _ _ M A s k D b hb hH hU hk I hI
+/-- **Activation charge**: under `UpdateHardness` and the upstream certificate at depth `D` with `k < b D`, an inference
+block computes whole counted products of at most `#(inputs I \ θ)` uses. -/
+theorem activationCharge {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L)
+    (A : J → Finset (Fin C.N)) {s k D : ℕ} {b : ℝ} (hb : 0 < b) (hH : Assumptions.UpdateHardness M s b)
+    (hU : M.Upstream A D) (hk : (k : ℝ) < b * D) {I : Finset (Fin C.N)} (hI : C.InferenceBlock s k I) :
+    ((M.whole I).image Prod.fst).card ≤ (C.inputs I \ C.θ).card := by
   have hWuses : (M.whole I).image Prod.fst ⊆ M.uses := by
     intro j hj
     obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 hj
@@ -75,7 +79,7 @@ theorem finished_sdiff_whole_card_le {C : Circuit} {J L : Type} [DecidableEq J] 
     obtain ⟨hpP, hoI⟩ := Finset.mem_filter.1 hpf
     obtain ⟨x, hxm, hxc⟩ := Finset.not_subset.1 fun h => hpw (Finset.mem_filter.2 ⟨hpP, h⟩)
     obtain ⟨π, hπ, hπm⟩ := reachesIn_output C (M.m p) (M.o p) (M.m_outputs p (hPall p hp)) x hxm
-    obtain ⟨g, hgπ, hgI⟩ := Entry C I π x (M.o p) hπ (computed_subset C I hoI) hxc
+    obtain ⟨g, hgπ, hgI⟩ := entry C I π x (M.o p) hπ (computed_subset C I hoI) hxc
     exact ⟨g, Finset.mem_inter.2 ⟨hπm g hgπ, hgI⟩⟩
   have hdisj : ((M.finished I \ M.whole I : Finset (J × L)) : Set (J × L)).PairwiseDisjoint
       fun p => M.m p ∩ C.inputs I :=

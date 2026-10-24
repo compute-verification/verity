@@ -43,8 +43,8 @@ against `FanOutReadIntensity`'s 7.3·10⁴; at `aOut = 49152` instead of the cut
 
 It assumes `ConditionalUpdateHardness` with every value's gates as the region, roots' partial sums included: the values
 a block is handed, a partial sum `Σ x_i w_i` of updated parameters among them, don't help it rebuild those parameters.
-That is stronger than `FanOutIntensity`'s `UpdateHardness`, and than the additive bound's reading over activation
-regions. Under plain `UpdateHardness` the reads and the parameters' bits needn't be disjoint inputs, so the `c k` term
+That is stronger than `FanOutIntensity`'s `UpdateHardness`, and than the additive covering bound's premise
+(`Nci.Cover.Assumptions.ConditionalParameterHardAt`), whose regions are the token computations. Under plain `UpdateHardness` the reads and the parameters' bits needn't be disjoint inputs, so the `c k` term
 loses AM–GM's 4 and becomes `c k / (δ b)`: Kimi K2 gets about 1.6·10⁴, forward only or with Dgrad on shared tokens. -/
 def FanOutReadIntensityStructural : Prop :=
   ∀ (C : Circuit) {J L Tok Val : Type} [DecidableEq J] [DecidableEq L] [DecidableEq Val] (M : MulBlocks C J L)

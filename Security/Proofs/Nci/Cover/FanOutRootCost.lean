@@ -9,7 +9,7 @@ lookups of it, `d` in all.
 Induction on a bound `n` for a computed exit `g < n` of the held root. If the block holds a root of the same token with
 a computed exit below `g`, the induction gives the claim for that root, and so for the token. Otherwise take each leg:
 its link into the root ends at `g`, and the link's path lies in the root, which meets no input of the block, so its
-first gate is computed (`Entry`) and the leg's exit before it is in the block, below `g`. `walk` takes the leg from that
+first gate is computed (`entry`) and the leg's exit before it is in the block, below `g`. `walk` takes the leg from that
 exit to a value the block reads, which it spends through that leg, or to a held stop with an exit below `g`, which is a
 lookup since no root of the token is held there. The legs' key paths are disjoint (`legs_disjoint`), so distinct legs
 end at distinct values, and the ends number at least `d`.
@@ -48,7 +48,7 @@ theorem rootCost : FanOutPlan.RootCost := by
       obtain ⟨h, hh, x, hx, hhx, π, hπ, hπr⟩ := K.legs_link r hrR g hgx q hq
       have hxc : x ∈ C.computed I := by
         by_contra hxc
-        obtain ⟨g', hg', hg'I⟩ := Entry C I π x g hπ (computed_subset C I hgc) hxc
+        obtain ⟨g', hg', hg'I⟩ := entry C I π x g hπ (computed_subset C I hgc) hxc
         exact hrnr ⟨g', Finset.mem_inter.2 ⟨hπr g' hg', hg'I⟩⟩
       have hhI : h ∈ I := pred_subset_of_mem_computed hxc hhx
       have hlt : h.val < g.val := Nat.lt_of_lt_of_le (C.pred_lt x h hhx) (isPath_le hπ)

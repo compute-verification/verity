@@ -9,7 +9,7 @@ import Proofs.Nci.Cover.Paths
 
 `walk` follows keys back from a held exit of a value. A value the block doesn't read has that exit computed, and its
 key's link into it lies in the value, which meets no input of the block, so the link's first gate, an exit of the key,
-is in the block and precedes the exit (`Entry`); induction on the exit finishes it. `readSet_card_le` bounds the values
+is in the block and precedes the exit (`entry`); induction on the exit finishes it. `readSet_card_le` bounds the values
 a block reads by its inputs outside `θ`, `lookupCost` the lookups of one token it holds, through their disjoint columns,
 and `charge` a token's whole products by its spent values when the block holds none of its roots: each is charged to
 the value its activation's walk ends at, which `reach` bounds.
@@ -103,7 +103,7 @@ theorem walk : FanOutPlan.Walk := by
     obtain ⟨h', hh', x, hx, hh'x, π, hπ, hπv⟩ := hlink h hh
     have hxc : x ∈ C.computed I := by
       by_contra hxc
-      obtain ⟨g, hg, hgI⟩ := Entry C I π x h hπ hhI hxc
+      obtain ⟨g, hg, hgI⟩ := entry C I π x h hπ hhI hxc
       exact hnr ⟨g, Finset.mem_inter.2 ⟨hπv g hg, hgI⟩⟩
     have hh'I : h' ∈ I := pred_subset_of_mem_computed hxc hh'x
     have hlt : h' < h := lt_of_lt_of_le (C.pred_lt x h' hh'x) (isPath_le hπ)
@@ -131,7 +131,7 @@ theorem readSet_card_le : FanOutPlan.ReadSetCardLe := by
 
 theorem lookupCost : FanOutPlan.LookupCost := by
   intro C J L Tok Val _ _ M d aOut c V f K s k E bcol hCI hk I hI Y hY htok
-  have hcols := hCI I hI.1.le Y hY htok
+  have hcols := hCI I hI.1 Y hY htok
   have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
   have hsum : (Y.biUnion K.col).card = ∑ v ∈ Y, (K.col v).card := by
     refine Finset.card_biUnion fun v hv v' hv' hne => ?_

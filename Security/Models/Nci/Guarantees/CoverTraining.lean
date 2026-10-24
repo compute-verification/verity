@@ -20,14 +20,15 @@ its IU's size; it has at most `w₀ Γ + α Γ + width(θ)` bits when no gate of
 `c`'s bits, each finishes at most `(k² + b k) / b` counted products at its own `k ≤ α σ`, and summed over the IUs the
 counted products are at most `(α² Γ + b α) / b · size(d)`.
 
-With `k = α Γ` this is `size(d) ≥ α₀ b Γ / (k² + b k) · size(c)`: the cover theorem's area factor at `s = Γ` word gates,
-when the counted products are a fraction `α₀` of `c`'s gates. The products are counted at the granularity of `c`'s gates
+With `k = α Γ` this is `size(d) ≥ α₀ b Γ / (k² + b k) · size(c)`: Daniel's covering bound's per-block count at
+`c_w = b`, `c_a = 1` (with the upstream certificate in place of activation-chaining), at `s = Γ` word gates, when the
+counted products are a fraction `α₀` of `c`'s gates. The products are counted at the granularity of `c`'s gates
 (a Dot16 step, not a scalar product), and `UpdateHardness` is needed at the block size in bits,
 `s = w₀ Γ + α Γ + width(θ)`.
 
 `CoverTrainingAligned` is the width variant when every activation region is a set of whole words at least `f` bits wide:
-the blocks are whole words too, so the width premise holds of them, and the factor is `α₀ b f Γ / (k² + b f k)`, up to
-`f` times `CoverTraining`'s, with no premise beyond `UpdateHardness`.
+the blocks are whole words too, so each use of their whole products costs them `f` bits of its region, and the factor is
+`α₀ b f Γ / (k² + b f k)`, up to `f` times `CoverTraining`'s, with no premise beyond `UpdateHardness`.
 -/
 
 namespace Nci.Cover.Guarantees

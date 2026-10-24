@@ -126,7 +126,7 @@ theorem block_counts [DecidableEq J] [DecidableEq L] [DecidableEq Tok] [Decidabl
   have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
   set w := (B.image Prod.snd).card with hwdef
   have hw : b * w ≤ k :=
-    (hH I hI.1.le B (fun p hp => M.P_subset (hBP hp)) fun p hp => (Finset.mem_filter.1 (hB hp)).2).trans hcap
+    (hH I hI.1 B (fun p hp => M.P_subset (hBP hp)) fun p hp => (Finset.mem_filter.1 (hB hp)).2).trans hcap
   set TH := Hi.image fun p => K.tok (K.act p) with hTH
   set TL := Lo.image fun p => K.tok (K.act p) with hTL
   have hdisjT : Disjoint TH TL := by

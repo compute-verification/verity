@@ -1,11 +1,11 @@
-import Models.Nci.Guarantees.Cover
+import Models.Nci.Assumptions.Cover
 
 /-!
 # The cover theorem: paths into a block
 
-`Entry` walks a path back from its end in `I`: a gate `I` computes reads only gates of `I`, so the walk stays in `I`
+`entry` walks a path back from its end in `I`: a gate `I` computes reads only gates of `I`, so the walk stays in `I`
 until it meets an input of `I`, or reaches the path's first gate, which `I` holds and does not compute, an input
-(`chain_entry`). `BackwardClosure` is `Entry` on a path inside `A`, which meets no input of `I`. `reachesIn_output`
+(`chain_entry`). `backwardClosure` is `entry` on a path inside `A`, which meets no input of `I`. `reachesIn_output`
 follows readers forward from any gate of a set with one output gate: indices increase, so the walk ends, at a gate no
 gate of the set reads, the output.
 -/
@@ -60,14 +60,21 @@ theorem chain_entry {C : Circuit} {I : Finset (Fin C.N)} {l : List (Fin C.N)}
         · exact mem_computed.2 ⟨haI, ha⟩
         · exact hall g hg
 
-theorem Entry : Guarantees.Entry := by
-  intro C I π x y ⟨hx, hy, hπ⟩ hyI hxc
+/-- **Entry**: a path that ends in a set `I` of gates and starts at a gate that `I` does not compute passes through an
+input of `I`. A value reaches a block's computation only through the gates the block is handed. -/
+theorem entry (C : Circuit) (I : Finset (Fin C.N)) (π : List (Fin C.N)) (x y : Fin C.N) (hπ' : C.IsPath π x y)
+    (hyI : y ∈ I) (hxc : x ∉ C.computed I) : ∃ g ∈ π, g ∈ C.inputs I := by
+  obtain ⟨hx, hy, hπ⟩ := hπ'
   rcases chain_entry hπ hy hyI with h | hall
   · exact h
   · exact absurd (hall x (List.mem_of_mem_head? hx)) hxc
 
-theorem BackwardClosure : Guarantees.BackwardClosure := by
-  intro C I A a x haI hA ⟨π, ⟨hx, hy, hπ⟩, hπA⟩
+/-- **Backward closure**: a set `I` of gates that holds a gate `a` and is handed no gate of a region `A` computes every
+gate that reaches `a` inside `A`, `a` itself among them. A block that uses an activation without being handed any gate of
+its region has computed all of the activation's upstream computation. -/
+theorem backwardClosure (C : Circuit) (I A : Finset (Fin C.N)) (a x : Fin C.N) (haI : a ∈ I)
+    (hA : C.inputs I ∩ A = ∅) (hreach : C.ReachesIn A x a) : x ∈ C.computed I := by
+  obtain ⟨π, ⟨hx, hy, hπ⟩, hπA⟩ := hreach
   rcases chain_entry hπ hy haI with ⟨g, hg, hgI⟩ | hall
   · have : g ∈ C.inputs I ∩ A := Finset.mem_inter.2 ⟨hgI, hπA g hg⟩
     rw [hA] at this

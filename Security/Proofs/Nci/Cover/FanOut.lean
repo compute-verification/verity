@@ -95,7 +95,7 @@ theorem FanOutIntensity : Guarantees.FanOutIntensity := by
     rw [← hxy] at h1
     exact_mod_cast h1
   have hL : b * ((M.whole I).image Prod.snd).card ≤ k :=
-    (hH I hI.1.le (M.whole I) (fun p hp => M.P_subset (Finset.mem_filter.1 hp).1)
+    (hH I hI.1 (M.whole I) (fun p hp => M.P_subset (Finset.mem_filter.1 hp).1)
       fun p hp => (Finset.mem_filter.1 hp).2).trans hcap
   have hrest : ((M.finished I \ M.whole I).card : ℝ) ≤ k := by
     exact_mod_cast (finished_sdiff_whole_card_le M).trans hI.2
@@ -130,7 +130,7 @@ theorem FanOutReadIntensity : Guarantees.FanOutReadIntensity := by
   intro C J L Tok Val _ _ _ M d aOut c V f K s k E b bcol hb hVR hCI hk hE I hI
   obtain ⟨X, hXs, x, y, h, hxy, hy, hW⟩ := fanOut_split K hCI hk hI
   have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
-  have hpay := (hVR I hI.1.le X hXs).trans hcap
+  have hpay := (hVR I hI.1 X hXs).trans hcap
   rw [← hxy, Nat.cast_add] at hpay
   have hrest : ((M.finished I \ M.whole I).card : ℝ) ≤ k := by
     exact_mod_cast (finished_sdiff_whole_card_le M).trans hI.2

@@ -6,21 +6,18 @@ import Mathlib.Tactic.NormNum
 # The cover theorem: its hypotheses can hold together
 
 `witness`: one small circuit with a counted product that satisfies `UpdateHardness`, the upstream certificate with
-`k < b D`, and has a cover by inference blocks, so the area bound's hypotheses are not contradictory.
-`witness_variants`: the same circuit satisfies the variants' premises too, `ConditionalUpdateHardness` and `Width` at
-`f = 2`. `inference_sanity`: a circuit with no products, such as inference, satisfies `UpdateHardness` and the
-certificate at every depth, and the bounds then say nothing, as they should.
+`k < b D`, and has a cover by inference blocks, so the hypotheses the bridge to a compliant declaration rests on
+(`CoverTraining`) are not contradictory. `inference_sanity`: a circuit with no products, such as inference, satisfies
+`UpdateHardness` and the certificate at every depth, and the bounds then say nothing, as they should.
 
 The circuit (`Witness.wC`, 14 gates, `θ = {0}`) is one layer's worth of training in miniature. Gate 0 is the registered
 token, gates 1–5 are the updated parameters' bits, one each, read only by that parameter's product. The upstream
 products `(0, l)`, `l = 1, …, 4`, are gates 6–9, each the token times parameter `l`; gate 10 combines 6–8 and the
 activation gates 11 and 12 each combine 9 and 10. The counted product `(1, 5)` is gate 13, reading both activation gates
 and parameter 5. The activation region of use 1 is gates 6–12. Every product reads its parameter's own input gate,
-outside `θ` and the region, so `ConditionalUpdateHardness` holds at every block size with `b = 1`
-(`conditionalUpdateHardness_of_feeds`);
-the certificate holds at depth `D = 4`, so `k = 3 < b D`; and seven blocks of `s = 4` gates, each handed at most three
-bits outside `θ`, cover the circuit. The one inference block of four gates that computes gate 13 is gates 5, 11, 12
-and 13, handed both activation gates, so `Width` holds at `f = 2` (at `f = 1` it is implied by its own hypothesis).
+outside `θ` and the region, so `ConditionalUpdateHardness`, and with it `UpdateHardness`, holds at every block size with
+`b = 1` (`conditionalUpdateHardness_of_feeds`); the certificate holds at depth `D = 4`, so `k = 3 < b D`; and seven
+blocks of `s = 4` gates, each handed at most three bits outside `θ`, cover the circuit.
 -/
 
 namespace Nci.Cover.SecurityProofs
@@ -63,7 +60,7 @@ theorem conditionalUpdateHardness_of_feeds {C : Circuit} {J L : Type} [Decidable
 
 local instance decInferenceBlock (C : Circuit) (s k : ℕ) (I : Finset (Fin C.N)) :
     Decidable (C.InferenceBlock s k I) :=
-  inferInstanceAs (Decidable (I.card = s ∧ (C.inputs I \ C.θ).card ≤ k))
+  inferInstanceAs (Decidable (I.card ≤ s ∧ (C.inputs I \ C.θ).card ≤ k))
 
 local instance decCovers (C : Circuit) (𝓘 : Finset (Finset (Fin C.N))) : Decidable (C.Covers 𝓘) :=
   inferInstanceAs (Decidable (∀ g, (C.pred g).Nonempty → ∃ I ∈ 𝓘, g ∈ C.computed I))
@@ -140,22 +137,6 @@ theorem wM_conditional (s : ℕ) : Assumptions.ConditionalUpdateHardness wM wA s
   refine conditionalUpdateHardness_of_feeds wM wA wF s (by decide) (by decide) (by decide) fun p hp => ?_
   rw [hcard p hp, Nat.cast_one]
 
-theorem wM_width : Assumptions.Width wM wA 4 3 2 := by
-  intro S ⟨hs, _⟩ p hp hpS _
-  obtain rfl : p = (1, 5) := Finset.mem_singleton.1 hp
-  have h13 : (13 : Fin 14) ∈ wC.computed S := hpS (by decide)
-  have hsub : ({5, 11, 12, 13} : Finset (Fin 14)) ⊆ S := by
-    have hpred := pred_subset_of_mem_computed h13
-    intro x hx
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hx
-    rcases hx with rfl | rfl | rfl | rfl
-    · exact hpred (by decide)
-    · exact hpred (by decide)
-    · exact hpred (by decide)
-    · exact (Finset.mem_sdiff.1 h13).1
-  obtain rfl := Finset.eq_of_subset_of_card_le hsub (hs.le.trans (by decide))
-  decide
-
 theorem wM_upstream : wM.Upstream wA 4 where
   disjoint := by
     rw [wM_uses, Finset.coe_singleton]
@@ -196,18 +177,6 @@ theorem witness :
       (∀ I ∈ 𝓘, C.InferenceBlock s k I) ∧ C.Covers 𝓘 :=
   ⟨wC, wM, wA, 4, 3, 4, 1, wI, wM_P_nonempty, one_pos, updateHardness_of_conditional wM wA (wM_conditional 4),
     wM_upstream, by norm_num, wI_blocks, wI_covers⟩
-
-open Witness in
-/-- **Non-vacuity of the variants**: some circuit with a counted product satisfies `ConditionalUpdateHardness`, `Width`
-at `f = 2` and the upstream certificate with `k < b D`, and has a cover by inference blocks (`Witness.wC`: `s = 4`,
-`k = 3`, `D = 4`, `b = 1`, seven blocks). -/
-theorem witness_variants :
-    ∃ (C : Circuit) (M : MulBlocks C ℕ ℕ) (A : ℕ → Finset (Fin C.N)) (s k D f : ℕ) (b : ℝ)
-      (𝓘 : Finset (Finset (Fin C.N))),
-      M.P.Nonempty ∧ 0 < b ∧ 2 ≤ f ∧ Assumptions.ConditionalUpdateHardness M A s b ∧ Assumptions.Width M A s k f ∧
-      M.Upstream A D ∧ (k : ℝ) < b * D ∧ (∀ I ∈ 𝓘, C.InferenceBlock s k I) ∧ C.Covers 𝓘 :=
-  ⟨wC, wM, wA, 4, 3, 4, 2, 1, wI, wM_P_nonempty, one_pos, le_rfl, wM_conditional 4, wM_width, wM_upstream,
-    by norm_num, wI_blocks, wI_covers⟩
 
 /-- **Honest inference**: with no products, `UpdateHardness` and the upstream certificate hold at every block size, rate
 and depth. -/

@@ -1,6 +1,6 @@
 import Models.Nci.Guarantees.CoverTraining
 import Proofs.Nci.Pull
-import Proofs.Nci.Cover.AtMost
+import Proofs.Nci.Cover.Area
 import Proofs.Nci.Cover.Bits
 import Proofs.Nci.Cover.Sum
 
@@ -10,7 +10,7 @@ import Proofs.Nci.Cover.Sum
 Pull a compliant division of `d` back to `c` (`pull`): piece `u` has at most `σ_u ≤ Γ` gates (`card_pull_gates_le`) and
 reads at most `α σ_u` bits of novel information (`novelReads_pull`). Its block in `c`'s bit view (`block`) is handed
 `k_u ≤ α σ_u` bits outside the free bits (`translation`) and has at most `s` bits (`card_block_le`), so it finishes at
-most `(k_u² + b k_u) / b` counted products (`intensity_of_card_le`). Every counted product's output bit reads something,
+most `(k_u² + b k_u) / b` counted products (`intensity`). Every counted product's output bit reads something,
 so its gate is a computed gate of `c`, in some piece, whose block computes it (`mem_computed_block_of_pred`). Summed over
 the IUs (`sum_area_le`), `b #P ≤ (α² Γ + b α) size(d)`. `training_of_block_bound` is this route for any per-block
 bound of the same form, which the whole-word variant (`Aligned`) reuses.
@@ -43,7 +43,7 @@ theorem card_P_le_sum_finished {c d : Verity.Declaration} (M : Verity.Containmen
 
 /-- **The per-block bounds summed over a compliant division pulled back to `c`**: if the block of every set of `c`'s
 gates, when it has at most `s` bits and is handed `k < b D` bits outside the free bits, finishes at most `(k² + e k) / e`
-counted products, then `α₀ e size(c) ≤ (α² Γ + e α) size(d)`. `CoverTraining` is this at `e = b`, from `Intensity`. -/
+counted products, then `α₀ e size(c) ≤ (α² Γ + e α) size(d)`. `CoverTraining` is this at `e = b`, from `intensity`. -/
 theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.Declaration} (M : Verity.Containment c.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L) {s D w₀ : ℕ}
     (he : 0 ≤ e) (hα : 0 ≤ α) (hC : Nci.Complies Γ α d)
@@ -100,6 +100,6 @@ theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.De
 theorem CoverTraining : Guarantees.CoverTraining := by
   intro Γ α b α₀ c d M J L _ _ Mb A s D w₀ hb hα hC hB hH hU hk hw hs hα₀
   exact training_of_block_bound M Mb hb.le hα hC hB hk hw hs hα₀ fun R hR hkR =>
-    intensity_of_card_le Mb A hb hH hU hkR hR le_rfl
+    intensity Mb A hb hH hU hkR (I := block c R) ⟨hR, le_rfl⟩
 
 end Nci.Cover.SecurityProofs

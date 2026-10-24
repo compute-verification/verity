@@ -19,11 +19,10 @@ import Models.Nci.Guarantees.PackedTraining
 import Models.Nci.Guarantees.Activations
 import Models.Nci.Guarantees.Covering
 import Models.Nci.Guarantees.CoveringTwoCosts
-import Models.Nci.Guarantees.Cover
+import Models.Nci.Guarantees.CoverAdditive
 import Models.Nci.Guarantees.CoverFanOut
 import Models.Nci.Guarantees.CoverFanOutValue
 import Models.Nci.Guarantees.CoverPartialSum
-import Models.Nci.Guarantees.CoverWidth
 import Models.Nci.Guarantees.CoverTraining
 import Models.Pous.Assumptions
 import Models.Pous.Guarantees

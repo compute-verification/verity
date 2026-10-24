@@ -8,7 +8,7 @@ import Mathlib.Tactic.Linarith
 
 A division into IUs gives one block per IU `u`, handed `k_u` bits and finishing `f_u` counted products. The rate form of
 the NCI policy bounds each `k_u` by `α σ_u`, where `σ_u ≤ Γ` is the IU's size, so a per-block bound
-`c f_u ≤ k_u² + c k_u` (the area bound at `c = b`) adds up to `c Σ f_u ≤ (α² Γ + c α) Σ σ_u`: each block's
+`c f_u ≤ k_u² + c k_u` (`intensity`'s at `c = b`) adds up to `c Σ f_u ≤ (α² Γ + c α) Σ σ_u`: each block's
 `k_u² ≤ α² σ_u² ≤ α² Γ σ_u` (`sum_area_le`).
 -/
 

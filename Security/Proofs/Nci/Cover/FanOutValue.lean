@@ -160,7 +160,7 @@ theorem light_cost [DecidableEq J] (K : Keyed M Tok Val d aOut c V f) {I : Finse
 
 /-- **The cut**: if a block computes a counted product whole and is handed fewer than `f` gates of its activation's
 key path, fewer than `g` of the legs of the root that path ends at have no exit in the block. A path from such a leg's
-exit to the product's output gate enters the block at an input (`Entry`), which is a gate of the key path, since the
+exit to the product's output gate enters the block at an input (`entry`), which is a gate of the key path, since the
 product's gates are computed. -/
 theorem cut_legs [DecidableEq J] (K : Keyed M Tok Val d aOut c V f) {g : ℕ} {I : Finset (Fin C.N)} {p : J × L}
     (hp : p ∈ M.whole I) {r : Val}
@@ -175,7 +175,7 @@ theorem cut_legs [DecidableEq J] (K : Keyed M Tok Val d aOut c V f) {g : ℕ} {I
   refine absurd (hcut _ (Finset.filter_subset _ _) (not_lt.1 hlt) _ Finset.inter_subset_right ?_) (not_le.2 hZ)
   intro q hq h hh π hπ hπt
   have hhI : h ∉ I := (Finset.mem_filter.1 hq).2 h hh
-  obtain ⟨x, hxπ, hxI⟩ := Entry C I π h (M.o p) hπ hoI fun hc => hhI (computed_subset C I hc)
+  obtain ⟨x, hxπ, hxI⟩ := SecurityProofs.entry C I π h (M.o p) hπ hoI fun hc => hhI (computed_subset C I hc)
   have hxh : x ≠ h := fun hxh => hhI (hxh ▸ (mem_inputs.1 hxI).1)
   have hxt : x ∈ π.tail := by
     obtain ⟨hhd, -, -⟩ := hπ
@@ -432,7 +432,7 @@ theorem valueReadHardness_of_structure {C : Circuit} {J L Tok Val : Type} [Decid
     rcases (M.whole I).eq_empty_or_nonempty with hW0 | ⟨p, hp⟩
     · rw [hW0, Finset.image_empty, Finset.card_empty, Nat.cast_zero, mul_zero]
       exact Nat.cast_nonneg _
-    · refine (hCH I hI.1.le (M.whole I) (fun p hp => M.P_subset (Finset.mem_filter.1 hp).1)
+    · refine (hCH I hI.1 (M.whole I) (fun p hp => M.P_subset (Finset.mem_filter.1 hp).1)
         fun p hp => (Finset.mem_filter.1 hp).2).trans ?_
       have hR : R ⊆ M.uses.biUnion fun _ => R := fun z hz =>
         Finset.mem_biUnion.2 ⟨p.1, Finset.mem_image_of_mem _ (Finset.mem_filter.1 hp).1, hz⟩

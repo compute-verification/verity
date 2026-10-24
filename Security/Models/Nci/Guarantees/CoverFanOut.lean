@@ -4,8 +4,8 @@ import Models.Nci.Assumptions.CoverFanOut
 /-!
 # The cover theorem's fan-in/fan-out tightening: the guarantees
 
-The area bounds (`Models.Nci.Guarantees.Cover`) charge a block one input gate per use of the products it computes
-whole. Fan-in and fan-out charge it per value it reads. A block that reads a value of a token finishes, through it, only
+Daniel's covering bound (`Nci.Guarantees.CoveringBound`) charges a block for the weights and the tokens of the
+multiplications it completes. Fan-in and fan-out charge it per value it reads. A block that reads a value of a token finishes, through it, only
 the counted products whose activations key back to that value: at most `aOut` (Kimi K2: 37,248, the MoE input). To do
 more of a token's work without reading more of it, the block must hold one of the token's accumulation chains whole,
 which costs `d − E` reads: the chain's `d` legs, less the `E` embedding lookups it can afford.
@@ -20,12 +20,13 @@ Kimi K2's numbers are for its forward products (`c = 1`). With Dgrad counted, on
 `α₀ = 0.301`, and `Keyed`'s position-0 dq_rope cut), they are about 1.66·10⁴ and 7.3·10⁴; keeping those dq_rope
 products at `aOut = 49152` instead gives 1.39·10⁴ and 5.5·10⁴.
 
-The statements are division-free, as the area bounds' are. The comparison with the area bounds (41, 166 and 660 for
-Kimi K2) is of numbers, not theorems: the premises differ (`Keyed` in place of `MulBlocks.Upstream`, and
-`ColumnsIncompressible` added; `FanOutIntensity` beats `WidthIntensity` at width `f` when `4 b f aOut ≤ k` and
-`4 f c ≤ d − E`, and `FanOutReadIntensity` beats it when `4 b aOut ≤ k` and `c ≤ d − E`, which Kimi K2 meets with
-margin), and `Keyed`'s
-counted products leave out the LM head's forward products, which the area bounds may count but `α₀` leaves out.
+The statements are division-free. The comparison with Daniel's covering bound at two costs
+(`Nci.Guarantees.CoveringBoundTwoCosts`, about 166 for Kimi K2 at `c_w = 2.5`, `c_a = 4`) and its additive form
+(`Nci.Cover.Guarantees.CoveringBoundAdditive`, about 660) is of numbers, not theorems: the premises differ (`Keyed` in
+place of activation-chaining, and `ColumnsIncompressible` added; `FanOutIntensity` beats the additive bound at
+`c_w = b`, `c_a = f` when `4 b f aOut ≤ k` and `4 f c ≤ d − E`, and `FanOutReadIntensity` beats it when `4 b aOut ≤ k`
+and `c ≤ d − E`, which Kimi K2 meets with margin), and `Keyed`'s counted products leave out the LM head's forward
+products, which the covering bound's may count but `α₀` leaves out.
 
 Scope, `Keyed`'s for Kimi K2: the counted set excludes the LM head's forward products and layer 0's q_a and kv_a
 products, whose activations reach more than `aOut` products or key to an embedding gather. It doesn't count norm-γ or
@@ -47,7 +48,7 @@ fewer than `d − E` spent values has no held root, so each of its products the 
 first value it reads on its activation's key path: at most `aOut` per value. Each token whose root the block holds
 spends at least `d − E` values, so there are at most `k / (d − E)` of them, each with at most `c` products per
 parameter, over at most `k / b` parameters. Products the block finishes without computing them whole are at most `k`,
-as in `Intensity`.
+as in `Nci.Guarantees.CoveringBound`'s proof.
 
 Kimi K2 (`d = 512`, `aOut = 37248`, `c = 1`, `V = 163840`, `b = 2.5`, `bcol = 1`, so `E = 122`; `k = 2·10⁷`,
 `s = 4.52·10¹⁶`, `α₀ = 0.147`): `7.45·10¹¹` products per block, a slowdown of about 8,900. Scope (`Keyed`): the

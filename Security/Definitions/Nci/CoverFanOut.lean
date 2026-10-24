@@ -3,12 +3,13 @@ import Definitions.Nci.Cover
 /-!
 # The cover theorem's fan-in/fan-out tightening: the vocabulary
 
-The area bounds (`Models.Nci.Guarantees.Cover`) charge a block for the uses of the products it computes whole. Fan-in
-and fan-out charge it for the values it reads: a block that reads a value of a token (an activation, a word) finishes
+Daniel's covering bound (`Nci.Guarantees.CoveringBound`) charges a block for the weights and the tokens of the
+multiplications it completes. Fan-in and fan-out charge it for the values it reads: a block that reads a value of a
+token (an activation, a word) finishes
 only the products whose activations key back to that value, at most `aOut` of them, and to do more of a token's work
 without reading more of it, it must hold one of the token's accumulation chains whole, which costs `d` reads less the
 embedding lookups it can afford. The structure that makes this precise is `Keyed`, a structural property of the training
-computation, checkable on a named circuit, as `MulBlocks.Upstream` is for the area bounds.
+computation, checkable on a named circuit, as `MulBlocks.Upstream` is for the bridge to the NCI check.
 
 * `Circuit.exits`, `Circuit.Link`: where a gate set's value leaves it, and a path from one gate set into another.
 * `Follows`: following keys from value to value.
@@ -29,7 +30,7 @@ def exits (C : Circuit) (X : Finset (Fin C.N)) : Finset (Fin C.N) :=
 
 /-- **A link from `U` into `X` ending at `g`**: a gate `x` of `X` reads an exit of `U` and reaches `g` inside `X`. The
 path from that exit to `g` enters `X` at once and stays in it, so a block that computes `g` and is handed no gate of `X`
-holds the exit of `U` the link starts from (`Guarantees.Entry`). -/
+holds the exit of `U` the link starts from (`SecurityProofs.entry`). -/
 def Link (C : Circuit) (U X : Finset (Fin C.N)) (g : Fin C.N) : Prop :=
   ∃ h ∈ C.exits U, ∃ x ∈ X, h ∈ C.pred x ∧ C.ReachesIn X x g
 

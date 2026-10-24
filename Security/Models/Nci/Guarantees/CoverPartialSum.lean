@@ -7,8 +7,8 @@ import Models.Nci.Assumptions.CoverPartialSum
 /-!
 # The cover theorem's partial-sum tightening: the guarantees
 
-The area and fan-out bounds count a block's products as a rectangle, tokens (or values) times parameters, which is
-`k²`-sized. A matrix multiplication's products are a cube (`Cube`): output row, input column and token, whose shadows
+Daniel's covering bound (`Nci.Guarantees.CoveringBound`) and the fan-out bounds count a block's products as a
+rectangle, tokens (or values) times parameters, which is `k²`-sized. A matrix multiplication's products are a cube (`Cube`): output row, input column and token, whose shadows
 are weights, activations and output entries. By Loomis–Whitney a block that uses `p` weights and `Q` activations at
 tokens it reads little of, and contributes to `Y` entries there, computes at most `√(p Q Y)` products there, so a block
 handed `k` bits does about `k^1.5` products, provided its entries cost reads too. They do, across a cover:
@@ -81,7 +81,7 @@ products, with `Y` its crossings at rate `f a` (`Cube.crossings`): `b f a · #(f
 The products it computes whole at tokens it reads at least `f a` gates of number at most one per token and weight
 (`cell_inj`): at most `(k / b) (k / (f a))`. The others, by Loomis–Whitney on their cells (matrix and row, column,
 token), at most `√(p Q Y)` with `b p ≤ k` (`UpdateHardness`) and `f Q ≤ k` (`ActivationReads`). Products it
-finishes without computing them whole are at most `k`, as in `Intensity`.
+finishes without computing them whole are at most `k`, as in `Nci.Guarantees.CoveringBound`'s proof.
 
 A block's crossings are paid by the blocks that finish their entries (`PartialSumsRead`), so this bounds a block on its
 own only together with its crossings; `PartialSumCoverBound` sums it over a cover. -/

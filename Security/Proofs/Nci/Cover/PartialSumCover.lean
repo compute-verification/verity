@@ -41,7 +41,7 @@ theorem card_le_inputs_accGates [DecidableEq J] [DecidableEq L] [DecidableEq Tok
     obtain ⟨hpP, hoI⟩ := Finset.mem_filter.1 hpf
     obtain ⟨x, hxm, hxc⟩ := Finset.not_subset.1 fun h => hpw (Finset.mem_filter.2 ⟨hpP, h⟩)
     obtain ⟨π, hπ, hπm⟩ := reachesIn_output C (M.m p) (M.o p) (M.m_outputs p (hPall p hp)) x hxm
-    obtain ⟨g, hgπ, hgI⟩ := Entry C I π x (M.o p) hπ (computed_subset C I hoI) hxc
+    obtain ⟨g, hgπ, hgI⟩ := entry C I π x (M.o p) hπ (computed_subset C I hoI) hxc
     exact ⟨g, Finset.mem_inter.2 ⟨hπm g hgπ, hgI⟩⟩
   have hdisj : (B : Set (J × L)).PairwiseDisjoint fun p => M.m p ∩ C.inputs I :=
     (M.m_disjoint.subset fun p hp => hPall p hp).mono fun p => Finset.inter_subset_left

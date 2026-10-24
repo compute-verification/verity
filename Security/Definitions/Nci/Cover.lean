@@ -6,16 +6,23 @@ import Mathlib.Data.Set.Pairwise.Basic
 # The cover theorem: the vocabulary
 
 The training dampener, stated over one Boolean circuit `C`. A run declares a cover of `C` by inference blocks: sets of
-`s` gates, each reading at most `k` bits besides the registered parameters `θ`, with declared compute `s · #𝓘`. The
-cover theorem bounds how many of training's counted products one block can finish, so that a cover of a
+at most `s` gates, each reading at most `k` bits besides the registered parameters `θ`, with declared compute `s · #𝓘`.
+The cover theorem bounds how many of training's counted products one block can finish, so that a cover of a
 training circuit needs many blocks. Nothing here reads what a gate computes, only the wiring.
+
+Daniel's covering bound (`Nci.Guarantees.CoveringBoundTwoCosts`) is stated in `Nci.Covering`'s vocabulary, over a
+declaration's gates. This one is the bare wiring, so that it also reads a declaration bit by bit (`Circuit.ofDecl`), and
+its products carry a use and an updated parameter, so that one parameter's many uses (fan-out) and a token's keyed
+lookups (`Keyed`) can be counted. On a declaration's gates the two agree: its inference blocks and covers are
+`Nci.Covering`'s, and `UpdateHardness` is `Nci.Assumptions.ParameterHardAt` (`Proofs.Nci.Cover.Gates`).
 
 * `Circuit`: gates `Fin N`, each reading gates of smaller index (so the circuit is acyclic), and the registered
   parameters `θ`, which are input gates.
 * `Circuit.inputs`, `Circuit.computed`, `Circuit.outputs`: for any set of gates, the gates it is handed (one bit each),
   the gates it computes from them, and the gates it produces.
 * `Circuit.IsPath`, `Circuit.ReachesIn`: a gate's value depends on another's along a path, inside a region.
-* `Circuit.InferenceBlock`, `Circuit.Covers`: the declared blocks, and the condition that they compute all of `C`.
+* `Circuit.InferenceBlock`, `Circuit.Covers`: the declared blocks (at most `s` gates each), and the condition that they
+  compute all of `C`.
 * `MulBlocks`: training's products, each a use `j` of an updated parameter `l`, and the counted ones `P`.
 * `MulBlocks.Upstream`: the upstream certificate, a structural property of the training computation: each use's
   activation is computed, inside a region of its own, from products over at least `D` distinct updated parameters.
@@ -62,11 +69,12 @@ def IsPath (C : Circuit) (π : List (Fin C.N)) (x y : Fin C.N) : Prop :=
 def ReachesIn (C : Circuit) (A : Finset (Fin C.N)) (x y : Fin C.N) : Prop :=
   ∃ π, C.IsPath π x y ∧ ∀ v ∈ π, v ∈ A
 
-/-- **An inference block** of size `s` and read cap `k`: a set of exactly `s` gates that is handed at most `k` bits
-besides the registered parameters, `#(inputs I \ θ) ≤ k`. Inference fits in such blocks, since its weights are
-registered, in `θ`, and a block is handed only tokens and activations. -/
+/-- **An inference block** of size `s` and read cap `k`: a set of at most `s` gates that is handed at most `k` bits
+besides the registered parameters, `#(inputs I \ θ) ≤ k`, as `Nci.Covering.InferenceBlock` is on a declaration's gates.
+Inference fits in such blocks, since its weights are registered, in `θ`, and a block is handed only tokens and
+activations. -/
 def InferenceBlock (C : Circuit) (s k : ℕ) (I : Finset (Fin C.N)) : Prop :=
-  I.card = s ∧ (C.inputs I \ C.θ).card ≤ k
+  I.card ≤ s ∧ (C.inputs I \ C.θ).card ≤ k
 
 /-- **`𝓘` covers `C`**: every gate that is not an input gate is computed by some block of `𝓘`. The blocks may overlap,
 and a gate may be computed in several of them. The declared compute is `s · #𝓘`; tying it to hardware time is part (1)

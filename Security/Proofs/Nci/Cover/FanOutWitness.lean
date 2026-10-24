@@ -32,7 +32,7 @@ namespace FanOutWitness
 
 local instance decInferenceBlock (C : Circuit) (s k : ℕ) (I : Finset (Fin C.N)) :
     Decidable (C.InferenceBlock s k I) :=
-  inferInstanceAs (Decidable (I.card = s ∧ (C.inputs I \ C.θ).card ≤ k))
+  inferInstanceAs (Decidable (I.card ≤ s ∧ (C.inputs I \ C.θ).card ≤ k))
 
 local instance decCovers (C : Circuit) (𝓘 : Finset (Finset (Fin C.N))) : Decidable (C.Covers 𝓘) :=
   inferInstanceAs (Decidable (∀ g, (C.pred g).Nonempty → ∃ I ∈ 𝓘, g ∈ C.computed I))

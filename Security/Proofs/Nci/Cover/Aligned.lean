@@ -3,10 +3,10 @@ import Proofs.Nci.Cover.Training
 /-!
 # The width variant on whole-word activations, proved
 
-The width bound charges each use of a block's whole products `f` gates of its region. `Width` assumes it of every
-inference block; on a declaration's bit view it holds of the blocks the bound uses, which are whole words
-(`block c R = wordBits c (R ∪ in(R))`), when the regions are whole words at least `f` bits wide: a block handed a bit of
-such a region (`whole_use_entry`) is handed all of that word's bits (`width_aligned`), so `aligned_charge`.
+The width variant charges each use of a block's whole products `f` gates of its region. On a declaration's bit view
+that holds of the blocks the bridge uses, which are whole words (`block c R = wordBits c (R ∪ in(R))`), when the regions
+are whole words at least `f` bits wide: a block handed a bit of such a region (`whole_use_entry`) is handed all of that
+word's bits (`width_aligned`), so `aligned_charge`.
 
 With the charge alone, under `UpdateHardness`, the uses cost `f #J ≤ k` (`uses_charge_le`: the regions are disjoint and
 outside `θ`) and the updated parameters `b #L ≤ k`, from the same inputs, so `b f #J #L ≤ k²` and a block finishes at
@@ -79,8 +79,7 @@ theorem aligned_charge (c : Verity.Declaration) {J L : Type} [DecidableEq J] [De
     ∀ j ∈ (Mb.whole (block c R)).image Prod.fst,
       (f : ℝ) ≤ ((Circuit.ofDecl c).inputs (block c R) ∩ wordBits c (Aw j)).card := by
   intro j hj
-  have hne := whole_use_entry Mb (fun j => wordBits c (Aw j)) hb (updateHardness_mono Mb hs hH) hU hk
-    (I := block c R) ⟨rfl, hR⟩ j hj
+  have hne := whole_use_entry Mb (fun j => wordBits c (Aw j)) hb hH hU hk (I := block c R) ⟨hs, hR⟩ j hj
   have hjU : j ∈ Mb.uses := image_subset_image (filter_subset _ _) hj
   exact Nat.cast_le.2 (width_aligned (R ∪ c.D.into R) (Aw j) f (hf j hjU) hne)
 
