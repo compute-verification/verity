@@ -974,7 +974,7 @@ def compact(request, tmp_path_factory):
 def test_compact_varied_traffic_is_certified_its_io_the_endpoints_and_its_egress_b_bytes_a_frame(compact, varied):
     """On compact records in B-byte cells the honest run is accepted as on id events: every link-window certified, its
     salt revealed, the audit accepting raw and committed. The certified I/O read from the cells is the id-event run's,
-    request for request (the same fields, ordinals, releases and token ids, a stop as `COMPACT_EOS`, and the same
+    request for request (the same fields, ordinals, releases and token ids, each stop's EOS id too, and the same
     finishes, the merged responses' `length` by their count), and its ingress records are the id-event run's. Its
     egress carries the same frames a window, each B bytes: the link's bytes a window are B/4096 of the id-event
     run's."""
@@ -992,8 +992,7 @@ def test_compact_varied_traffic_is_certified_its_io_the_endpoints_and_its_egress
     assert ours.keys() == theirs.keys()
     for name, r in ours.items():
         v = theirs[name]
-        assert {k: r[k] for k in r if k != "frames"} == {k: v[k] for k in v if k != "frames"} | {
-            "output": [active.COMPACT_EOS if t == EOS else t for t in v["output"]]}
+        assert {k: r[k] for k in r if k != "frames"} == {k: v[k] for k in v if k != "frames"}
     egress = check["egress_bytes"]
     assert egress["frame_bytes"] == B and egress["frames_per_window"] == \
         vruns["honest"]["check"]["egress_bytes"]["frames_per_window"]
@@ -1355,21 +1354,23 @@ def gate_compact(tmp_path_factory):
         runs_dir, _, _, plan, runs = _varied_runs(
             tmp / f"{run}.runs", endpoint, lambda url, a=args: cs.plan_of(a, url, lambda: 0.0, _no_sleep),
             args.strategies.split(","))
-        got[strategy] = {"args": args, "plan": plan, "check": runs[strategy]["check"], "io": _io(runs_dir / strategy)}
+        got[strategy] = {"args": args, "plan": plan, "check": runs[strategy]["check"], "io": _io(runs_dir / strategy),
+                         "dir": runs_dir / strategy}
     return got, endpoint
 
 
 def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them_as_on_id_events(gate_compact):
     """`certifier-rehearse --traffic varied --compact 8`'s command is a compact varied `rehearse` this parser takes,
     named for its run, and the gate's bounds on B are a compact record's bytes and an id event's frame. Its runs are
-    on 8-byte cells: the honest run accepted, its certified I/O the endpoint's ids (a stop as `COMPACT_EOS`), and the
-    token run accepted by `check` too, its ids differing in window 0's alone, which only the I/O tie refuses."""
+    on 8-byte cells: the honest run accepted, its certified I/O the endpoint's ids (each stop's EOS id too), and the
+    token run accepted by `check` too, its ids differing in window 0's alone, which only the I/O tie refuses. The
+    tie's compact rule (`active.compact_finish_violations`), with the endpoint's ids as the Commit's, finds nothing
+    in the honest run's cells and refuses exactly window 0's responses in the token run's."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
     assert A.CERTIFIER_COMPACT == (active.COMPACT_RECORD.size, cs.FRAME_BYTES)
     got, endpoint = gate_compact
-    recorded = {r["user"]: [active.COMPACT_EOS if t == EOS else t for t in r["streamed_ids"]]
-                for r in endpoint.served if r["user"] is not None}
+    recorded = {r["user"]: r["streamed_ids"] for r in endpoint.served if r["user"] is not None}
     for strategy, (run, tamper) in GATE_RUNS.items():
         g = got[strategy]
         assert (g["args"].compact, g["args"].name, g["args"].strategies) == (8, run, tamper or "honest")
@@ -1379,6 +1380,13 @@ def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them
         window0 = {q["session"] for q in g["plan"]["requests"] if q["enqueue"] // cs.WINDOW_BUCKETS == 0}
         differs = {u for u, r in g["io"].items() if r["output"] != recorded[u]}
         assert differs == (set() if tamper is None else window0) and (tamper is None or differs)
+        e = ar.Setup(json.loads((g["dir"] / "calibration.json").read_text())).egress_params
+        outs = sorted((ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(g["dir"] / "responses.records")),
+                      key=lambda r: r.window)
+        cells = [s for r in outs for row in r.grid for s in row[:active.row_count(row)]]
+        sampled = {r["stream"]: recorded[u] for u, r in g["io"].items()}
+        bad = active.compact_finish_violations(sampled, g["plan"]["varied"]["eos_token_ids"], cells)
+        assert {o for o, _ in bad} == {g["io"][u]["stream"] for u in differs}, bad
     plain = cs.parser().parse_args(A.certifier_command(
         {"run": "c20261024T120000Z-ab12", "requests": 16, "tamper": None, "traffic": "varied"}, Path("o"), "u")[2:])
     assert plain.compact is None

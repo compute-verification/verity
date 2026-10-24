@@ -56,13 +56,13 @@ by the smallest δ, under syncs whose start window the admission rule accepts); 
 link; ordinals (`Proxy(ordinals=True)`: each server connection opens with its stream's `ORDINAL` header); and compact
 records (`Proxy(compact=True)`, alone, salted or restarted, egress frames of 8, 12 or 48 bytes: each server connection
 an HTTP response head, then a (position, record) unit per output, `active.compact_unit`, its record naming its stream,
-the last carrying `COMPACT_LAST` or `COMPACT_EOS`), where the malformed inputs are a record that isn't one (`no-id`),
-one naming another request (`long`) and a unit cut short at a stream's end (`trailing`). The online prover's paths are
-neither restarted nor served. The salt's own paths: its connection refused, which
-faults the ingress window `delivery-refused`, and a salt drained a window late or never (`salt-stall`), which faults
-nothing; a restart's: an event at a position before the restart's (`stale`, malformed). Link garbage includes a salt
-frame read from the link, never the certifier's. The tick that releases each request frame and each salt frame is the
-real `active.Bucketer`'s on the trace's arrivals.
+the last carrying `COMPACT_LAST`, and a stop's `COMPACT_STOP` too), where the malformed inputs are a record that isn't
+one (`no-id`, a stop's flag without the last's among them), one naming another request (`long`) and a unit cut short
+at a stream's end (`trailing`). The online prover's paths are neither restarted nor served. The salt's own paths: its
+connection refused, which faults the ingress window `delivery-refused`, and a salt drained a window late or never
+(`salt-stall`), which faults nothing; a restart's: an event at a position before the restart's (`stale`, malformed).
+Link garbage includes a salt frame read from the link, never the certifier's. The tick that releases each request
+frame and each salt frame is the real `active.Bucketer`'s on the trace's arrivals.
 """
 from __future__ import annotations
 
@@ -78,9 +78,9 @@ import verity.core.protocols.certifier
 from verity.core.protocols.certifier import online
 from verity.core.protocols.certifier.active import (
     CANONICAL_STREAM,
-    COMPACT_EOS,
     COMPACT_LAST,
     COMPACT_RECORD,
+    COMPACT_STOP,
     DATA,
     PAD,
     PLACEHOLDER,
@@ -607,10 +607,10 @@ class Trace:
 
     def record(self, x: Session, k: int) -> bytes:
         """Its k-th output's compact record: a token id, and the last a stop (odd streams) or the length's mark."""
-        token = (x.stream * 7919 + k * 104729) % (COMPACT_LAST - 1)
+        token = (x.stream * 7919 + k * 104729) % COMPACT_STOP
         if k < len(x.delays) - 1:
             return compact_record(x.stream, token)
-        return compact_record(x.stream, None, "stop") if x.stream % 2 else compact_record(x.stream, token, "length")
+        return compact_record(x.stream, token, "stop" if x.stream % 2 else "length")
 
     def unit(self, x: Session, k: int, position: int, record: bytes) -> bytes:
         """What a compact server writes for its k-th output: the response head first, then the unit."""
@@ -789,7 +789,9 @@ class Trace:
             k = rng.randrange(len(x.times))
             if self.compact:  # a record that isn't one, the same output's at another's position, one of another request
                 if path == "no-id":
-                    record = COMPACT_RECORD.pack(*rng.choice([(0, 5), (0, COMPACT_EOS), (x.stream, COMPACT_LAST - 1)]))
+                    record = COMPACT_RECORD.pack(*rng.choice([(0, 5), (0, COMPACT_LAST | COMPACT_STOP | 5),
+                                                              (x.stream, COMPACT_STOP | 5),
+                                                              (x.stream, COMPACT_LAST - 1)]))
                     data = self.unit(x, k, x.positions[k], record)
                 elif path == "duplicate":
                     others = [p for y in xs for p in y.positions if p != x.positions[k]]

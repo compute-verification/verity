@@ -19,8 +19,8 @@ frames against that template, and nothing else of a frame is free). On egress a 
 `TOKEN_BYTES` of it (`events`). An id event (`id_event`, `ID_EVENT_BYTES`) is that object with no text: its request's
 ingress ordinal and one sampled token's id, each in `ID_DIGITS` decimal characters, so a response is one event a token
 and its frames name their request whatever order the responses interleave in. A compact record (`compact_record`,
-`COMPACT_RECORD`, 8 bytes) carries the same two fields in binary, with the response's finish in reserved token fields
-(`COMPACT_LAST`, `COMPACT_EOS`), and its frame is the record zero-filled to B with no header (`compact_cell`,
+`COMPACT_RECORD`, 8 bytes) carries the same two fields in binary, with the response's finish in the token field's
+flags (`COMPACT_LAST`, `COMPACT_STOP`), and its frame is the record zero-filled to B with no header (`compact_cell`,
 `compact_placement`), so B can be 8 (`Proxy(compact=True)`). On ingress a request is its length
 (u32be) and its bytes, cut into `DATA` frames of B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled
 (`request_frames`): it ends where its length says, so every frame's header is the same. An id request (`id_request`) is
@@ -183,7 +183,6 @@ from dataclasses import dataclass, field
 
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import aead
-from verity.core.protocols.certifier.advice import RequestAdvice
 from verity.core.protocols.certifier.audit import Audit, Verdict
 from verity.core.protocols.certifier.certificate import PublicKey, Signer, SignerRefused
 from verity.core.protocols.certifier.grid import (
@@ -386,32 +385,31 @@ def id_event_data(body: bytes) -> tuple[int, int] | None:
 
 #: a compact record (`compact_record`): its request's ingress ordinal, then its token field, each u32be
 COMPACT_RECORD = struct.Struct(">II")
-#: the token field's flag on a response's last output when it ends at `max_tokens` (finish `length`)
+#: the token field's flag on a response's last output (finish `length`, or `stop` with `COMPACT_STOP`)
 COMPACT_LAST = 1 << 31
-#: the token field of a sampled stop token (finish `stop`), whichever of the model's EOS ids it is
-COMPACT_EOS = 0xFFFF_FFFF
+#: the token field's flag, beside `COMPACT_LAST`, on a sampled stop token (finish `stop`): the field still carries the
+#: stop token's id, whichever of the model's EOS ids was sampled
+COMPACT_STOP = 1 << 30
 #: what the server writes the proxy for each record under `Proxy(compact=True)`: its canonical position, u32be
 COMPACT_POSITION = struct.Struct(">I")
 COMPACT_UNIT_BYTES = COMPACT_POSITION.size + COMPACT_RECORD.size
 COMPACT_FINISHES = (None, "length", "stop")
+COMPACT_FLAGS = {None: 0, "length": COMPACT_LAST, "stop": COMPACT_LAST | COMPACT_STOP}
 
 
-def compact_record(request: int, token_id: int | None, finish: str | None = None) -> bytes:
+def compact_record(request: int, token_id: int, finish: str | None = None) -> bytes:
     """One sampled token as a compact record, `COMPACT_RECORD.size` bytes: its request's ingress ordinal (≥ 1, so no
-    record is all zero) and its token field. The field is the token's id (below `COMPACT_LAST` − 1) while more outputs
-    follow, the id with `COMPACT_LAST` set for the response's last output at `max_tokens` (`finish` "length"), and
-    `COMPACT_EOS` for a sampled stop token (`finish` "stop", `token_id` None)."""
+    record is all zero) and its token field, the token's id (below `COMPACT_STOP`) with its finish's flags
+    (`COMPACT_FLAGS`): none while more outputs follow, `COMPACT_LAST` on the response's last output at `max_tokens`
+    (`finish` "length"), and `COMPACT_LAST` and `COMPACT_STOP` on a sampled stop token (`finish` "stop"), whose id is
+    the EOS id the model sampled. A field with `COMPACT_STOP` and not `COMPACT_LAST` is no record's."""
     if type(request) is not int or not 1 <= request < 1 << 32:
         raise ValueError(f"a request's ordinal is a u32 ≥ 1, not {request!r}")
     if finish not in COMPACT_FINISHES:
         raise ValueError(f"a compact record's finish is one of {COMPACT_FINISHES}, not {finish!r}")
-    if finish == "stop":
-        if token_id is not None:
-            raise ValueError("a stop record carries no id: EOS is one reserved id")
-        return COMPACT_RECORD.pack(request, COMPACT_EOS)
-    if type(token_id) is not int or not 0 <= token_id < COMPACT_LAST - 1:
-        raise ValueError(f"a compact token id is below {COMPACT_LAST - 1}, not {token_id!r}")
-    return COMPACT_RECORD.pack(request, token_id | (COMPACT_LAST if finish == "length" else 0))
+    if type(token_id) is not int or not 0 <= token_id < COMPACT_STOP:
+        raise ValueError(f"a compact token id is below {COMPACT_STOP}, not {token_id!r}")
+    return COMPACT_RECORD.pack(request, token_id | COMPACT_FLAGS[finish])
 
 
 def compact_cell(record: bytes, frame_bytes: int) -> bytes:
@@ -421,52 +419,56 @@ def compact_cell(record: bytes, frame_bytes: int) -> bytes:
     return record + bytes(frame_bytes - COMPACT_RECORD.size)
 
 
-def compact_record_data(cell: bytes) -> tuple[int, int | None, str | None] | None:
-    """(request ordinal, token id, finish) of a compact cell or record (`compact_record`), the id None at EOS; None for
-    bytes that aren't one."""
+def compact_record_data(cell: bytes) -> tuple[int, int, str | None] | None:
+    """(request ordinal, token id, finish) of a compact cell or record (`compact_record`); None for bytes that aren't
+    one."""
     if len(cell) < COMPACT_RECORD.size or any(cell[COMPACT_RECORD.size :]):
         return None
     request, field = COMPACT_RECORD.unpack_from(cell)
-    got = (request, None, "stop") if field == COMPACT_EOS else \
-        (request, field & ~COMPACT_LAST, "length" if field & COMPACT_LAST else None)
+    finish = next(f for f in ("stop", "length", None) if field & COMPACT_FLAGS[f] == COMPACT_FLAGS[f])
+    got = (request, field & (COMPACT_STOP - 1), finish)
     try:
         return got if compact_record(*got) == bytes(cell[: COMPACT_RECORD.size]) else None
     except ValueError:
         return None
 
 
-#: the finish a compact response's last record carries for each of advice v0's (`advice.FINISHES`)
-COMPACT_ADVISED_FINISH = {"eos": "stop", "length": "length"}
+def compact_records_of(request: int, sampled: Sequence[int], eos: Iterable[int]) -> list[bytes]:
+    """The compact records of a response whose sampled ids are `sampled`: each id unmarked but the last, a stop where
+    it is one of the model's EOS ids (`eos`) and the length's mark where it isn't."""
+    stops = frozenset(eos)
+    return [compact_record(request, t, None if k < len(sampled) - 1 else "stop" if t in stops else "length")
+            for k, t in enumerate(sampled)]
 
 
-def compact_finish_violations(requests: Sequence[RequestAdvice], cells: Iterable[bytes]) -> list[tuple[int, str]]:
-    """The finishes compact cells carry, held to advice v0's (`advice.Advice.requests`): request q is ordinal q + 1,
-    and its cells, in canonical order, are its `output_len` outputs, every one unmarked but the last, which carries
-    `COMPACT_ADVISED_FINISH`'s finish for the advice's. `cells` are a link's frames in canonical order, padding left
-    out. A violation is (ordinal, why), at most one an ordinal, 0 for a cell that isn't a record. The certifier commits
-    whatever finish the server writes, about a trit at each response's end; this is the rule the I/O tie holds the
-    token field's finish to."""
-    marks: dict[int, list[str | None]] = defaultdict(list)
+def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterable[int],
+                              cells: Iterable[bytes]) -> list[tuple[int, str]]:
+    """A link's compact cells held to the Commit's sampled ids (`sampled`, each request's by its ingress ordinal):
+    ordinal o's cells, in canonical order, are `compact_records_of(o, sampled[o], eos)`, one for one, so each carries
+    the id the model sampled there, the response is as long as the Commit's, and its finish is the Commit's, a stop
+    only where the Commit sampled EOS. `cells` are the link's frames in canonical order, padding left out. A violation
+    is (ordinal, why), at most one an ordinal, 0 for a cell that isn't a record. The certifier commits whatever ids and
+    finish the server writes; this is the rule the I/O tie holds each response's length and finish to."""
+    got: dict[int, list[tuple[int, str | None]]] = defaultdict(list)
     out: list[tuple[int, str]] = []
     for cell in cells:
-        if (got := compact_record_data(cell)) is None:
+        if (c := compact_record_data(cell)) is None:
             out.append((0, "a cell that isn't a compact record"))
         else:
-            marks[got[0]].append(got[2])
-    for o in sorted(set(marks) | set(range(1, len(requests) + 1))):
-        got = marks.get(o, [])
-        if not 1 <= o <= len(requests):
-            out.append((o, "no request of the advice is this ordinal"))
+            got[c[0]].append(c[1:])
+    for o in sorted(set(got) | set(sampled)):
+        if o not in sampled:
+            out.append((o, "no request of the Commit is this ordinal"))
             continue
-        q = requests[o - 1]
-        want = [None] * (q.output_len - 1) + [COMPACT_ADVISED_FINISH[q.finish]]
-        k = next((k for k, (g, w) in enumerate(zip(got, want)) if g != w), None)
-        if k is not None and k < q.output_len - 1:
-            out.append((o, f"a {got[k]} finish on output {k}, before the advice's last ({q.output_len - 1})"))
+        want = [compact_record_data(r)[1:] for r in compact_records_of(o, sampled[o], eos)]
+        mine = got.get(o, [])
+        k = next((k for k, (g, w) in enumerate(zip(mine, want)) if g != w), None)
+        if k is not None and mine[k][0] != want[k][0]:
+            out.append((o, f"output {k} is id {mine[k][0]} where the Commit sampled {want[k][0]}"))
         elif k is not None:
-            out.append((o, f"finish {got[k] or 'none'} where the advice's is {q.finish}"))
-        elif len(got) != q.output_len:
-            out.append((o, f"{len(got)} records where the advice has {q.output_len} outputs"))
+            out.append((o, f"finish {mine[k][1] or 'none'} on output {k} where the Commit's is {want[k][1] or 'none'}"))
+        elif len(mine) != len(want):
+            out.append((o, f"{len(mine)} records where the Commit sampled {len(want)} ids"))
     return out
 
 

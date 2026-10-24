@@ -1561,11 +1561,12 @@ them.
 
     | token field | the output | finish |
     |---|---|---|
-    | id, below 2^31 − 1 | a token, more follow | none |
+    | id, below 2^30 | a token, more follow | none |
     | 2^31 + id (`COMPACT_LAST`) | the response's last, at `max_tokens` | `length` |
-    | 2^32 − 1 (`COMPACT_EOS`) | a sampled stop token, whichever of the model's EOS ids | `stop` |
+    | 2^31 + 2^30 + id (`COMPACT_LAST`, `COMPACT_STOP`) | a sampled stop token, its id the EOS id sampled | `stop` |
 
-    The frame is the record zero-filled to B, with no header (`compact_cell`), so B can be 8. Its template
+    A field from 2^30 to 2^31 − 1 is no record's. The frame is the record zero-filled to B, with no header
+    (`compact_cell`), so B can be 8. Its template
     (`compact_placement`) is the record at bytes 0 … 8 and zero after it, and no record is padding, since the ordinal
     is at least 1. The proxy faults the window `malformed` on a unit whose record isn't one (`compact_record_data`) or
     names another request than its connection's, and on bytes left uncut at the stream's end. A cell's ordinal is
@@ -1576,17 +1577,20 @@ them.
     vLLM's stream text).
     - **Numbering.** The ordinal is at least 1 on the wire, and the I/O tie reads advice v0's request q as ordinal
       q + 1.
-    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_EOS` are well-formed records, and the certifier commits
-      whatever finish the server writes: one of three states (none, `length`, `stop`) at each response's end, where an
-      id event marks the end out of band. The check that refuses a wrong finish is the I/O tie's, against the advice:
-      request q's cells are its `output_len` outputs, none marked but the last, which is `stop` where the advice's
-      `finish` is `eos` and `length` where it is `length` (`compact_finish_violations`). A stop record stands for the
-      advice's EOS output, whose id it doesn't carry. IO-TIE's egress tie holds each compact cell's token field to
-      this rule as well as to its id. The rehearsal's certified I/O (`certifier_serve.certified_io`) has no advice and
-      checks the marks against `max_tokens` alone, so it can't tell a stop on the last token at `max_tokens` from a
-      `length` finish. It refuses any cell that carries one of the model's EOS ids, marked or not, since an honest
-      server writes a stop only as `COMPACT_EOS`; read as a token with more to follow, such a cell would let the server
-      decide where the client's text ends.
+    - **The finish is in band.** `COMPACT_LAST` and `COMPACT_STOP` are flags of well-formed records, and the
+      certifier commits whatever ids and finish the server writes: one of three states (none, `length`, `stop`) at
+      each response's end, where an id event marks the end out of band. A stop carries the EOS id the model sampled,
+      so where a response stops can be checked as an id event's can. The rehearsal's certified I/O
+      (`certifier_serve.certified_io`) refuses a mark before a response's last record, a stop on an id that isn't
+      one of the model's EOS ids, an EOS id in any record but the stop, and `COMPACT_LAST` alone short of
+      `max_tokens`. Like an EOS id event, a stop on an EOS id that the model didn't sample there passes it, so the
+      check that refuses a wrong length or finish is the I/O tie's, required of compact framing, against the Commit's
+      sampled ids: ordinal o's cells are `compact_records_of` o's sampled ids, one for one, so each carries its
+      sampled id, the response is as long as the Commit's, and it stops only where the Commit sampled EOS
+      (`compact_finish_violations`). IO-TIE's egress tie holds each compact cell's token field to this rule as well
+      as to its id. Until REDTEAM phase 12 a stop was one reserved field (all ones) with no id, and `certified_io`
+      accepted it at any length up to `max_tokens`, so a server could cut a `length` response short at a stop the
+      model never sampled; that field is now a stop on id 2^30 − 1, which isn't EOS.
     - **What covers it.** The Lean device port models ordinal headers and compact records (`CertifierDevice`'s
       `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
       compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every

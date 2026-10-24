@@ -830,10 +830,10 @@ def compact_records(sse: bytes, request: int, eos: frozenset = frozenset(), star
                     max_tokens: int | None = None) -> list[bytes]:
     """A vLLM server-sent event as compact records (`active.compact_record`) of request `request`, one a sampled token
     as `id_events` has them, `start` the response's outputs before it: an EOS id (`eos`), or the last of a chunk whose
-    `finish_reason` is "stop", is the stop record, and the response's `max_tokens`-th output, or the last of a chunk
-    whose `finish_reason` is "length", carries `COMPACT_LAST`. vLLM v1 sends a merged chunk's finish in a chunk of no
-    tokens after it, so the count marks a response that ends at `max_tokens`; one that ends short of it by length (at
-    the model's context) is left unmarked, which the certified I/O refuses."""
+    `finish_reason` is "stop", is the stop record, which carries that id, and the response's `max_tokens`-th output,
+    or the last of a chunk whose `finish_reason` is "length", carries `COMPACT_LAST`. vLLM v1 sends a merged chunk's
+    finish in a chunk of no tokens after it, so the count marks a response that ends at `max_tokens`; one that ends
+    short of it by length (at the model's context) is left unmarked, which the certified I/O refuses."""
     ids = chunk_tokens(sse) or []
     finish = None
     for line in sse.split(b"\n"):
@@ -844,7 +844,7 @@ def compact_records(sse: bytes, request: int, eos: frozenset = frozenset(), star
     for k, t in enumerate(ids):
         end = finish if k == len(ids) - 1 else None
         if t in eos or end == "stop":
-            out.append(compact_record(request, None, "stop"))
+            out.append(compact_record(request, t, "stop"))
         else:
             last = end == "length" or max_tokens is not None and start + k + 1 == max_tokens
             out.append(compact_record(request, t, "length" if last else None))
