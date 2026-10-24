@@ -46,28 +46,37 @@ the replay is split into units) is drawn `All`, as N2's units are (PROTOCOL.md, 
 
 **The proof of record: w212 at vLLM 8eb1's engine class.** A window's request and step counts are private, and the
 class is protocol structure. So a session proves every window at its engine's class: (R, W, A) = (8, 1, 9), Q 4,
-D 32, P 54, K 4, no prefix caching. w212 (requests 308–310, 20 steps, 14 decisions) is padded into it
-(`verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class.json`: an empty arrival slot, 18 decisions
-past the count with en 0, and 34 idle steps), with the seal's rows in ``srv`` (`served_rows.step_rows`).
-- The unit is 857,866 ANDs. Of them, ChargeLink_v1{32} is 97,159, and 5,509 are its copies of the words it carries
-  from decision to decision (#3887; [charge-chain.md](charge-chain.md)). At w212's own statics, which would show its
-  counts, it is 117,164.
+D 32, P 54, K 4, no prefix caching, and 8eb1's AsyncScheduler (AS = 1). The scheduler is engine configuration, so it
+is the class's and never a window's: an AS chosen per window would show whether the window's schedule matched sync
+order. w212 (requests 308–310, 21 units, 14 decisions) is padded into it
+(`verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class_async.json`: an empty arrival slot, 18
+decisions past the count with en 0, and 33 idle steps). The seal's rows are in ``srv`` (`served_rows.step_rows`), each
+held to its request's slot through ``map``.
+- `compile_slice_zk` refuses a w212 fixture whose engine isn't the trace header's. `replay_vectors --slice` replays a
+  window at the trace's own scheduler unless asked for the sync class (`--AS 0`).
+- The unit is 1,021,302 ANDs, 123,120 of them the map's ([served-shape.md](served-shape.md)). Of them,
+  ChargeLink_v1{32} is 97,159, and 5,509 are its copies of the words it carries from decision to decision (#3887;
+  [charge-chain.md](charge-chain.md)).
 - Without prefix caching the slice makes no CacheStep_v1 call and ``cache`` is 1. So a made-up cache table can't be
   expressed at 8eb1's class; the demonstration class (prefix caching, 59,341 ANDs) is where it is refused, by ``cache``
   alone.
-- The circuit is its reference on the honest window and every negative, at both statics
-  (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w212.py`). The padding changes no
-  verdict and no charge.
+- **The sync class** is the same sizes under a sync scheduler (AS = 0): w212's 20 steps and 34 idle ones
+  (`compile_slice_w212_class.json`), 857,866 ANDs, and at w212's own statics, which would show its counts, 117,164.
+  The circuit is its reference on the honest window and every negative at both
+  (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w212.py`), and the padding changes no
+  verdict and no charge. At AS = 1 the class's circuit is its reference on w1
+  (`test_network_certifier_compile_slice_w1.py`), and on w212 in the proof of record's run, which checks every unit's
+  word against it.
 - The honest window charges 27 bits from the session's carry into it, ((58, 50), (58, 0), (392, 48)) at run 0. It
   would charge 28 from the priors and 25 from counts fitted to it.
 - That carry is the chain over windows 0 … 211, each window's decisions as its own async replay asks them
   (`replay.decisions` on `replay_vectors.served_window`), 3,448 bits.
   - Over all 339 windows the chain charges 5,500 bits, against 5,593 if every window restarted at the priors.
-  - The sync replay (`slice_inputs`) asks the same decisions on 309 windows, asks others on 5 (30, 59, 118, 147 and
-    235) and refuses 25. So the chain is what an async slice commits.
+  - The sync replay (`slice_inputs` at AS = 0) asks the same decisions on 309 windows, asks others on 5 (30, 59, 118,
+    147 and 235) and refuses 25. So the chain is the class's, each window's decisions as the AsyncScheduler asks them.
   - The ZK run's earlier windows are committed by its driver and not proved in that run (a stand-in).
-- REDTEAM phase 10's twenty passes (a pass at every ask, where the served window admitted requests 309 and 310 at the
-  seventh and fourteenth) charge 23 bits.
+- REDTEAM phase 10's passes (a pass at every ask, where the served window admitted requests 309 and 310 at the seventh
+  and fourteenth: twenty-one at the class, at the asks of its 21 units, and twenty at the sync class) charge 23 bits.
   - With the served rows in ``srv``, they are refused by ``rows``.
   - With their own rows there, the unit accepts them, and the native ``srv`` b‖c check refuses them.
 
@@ -75,15 +84,28 @@ past the count with en 0, and 34 idle steps), with the seal's rows in ``srv`` (`
 proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`. The verifier opens only ``pub``
 and the verdict, and runs the bindings, the carry chain's among them, on the units' b‖c. What the verifier received
 holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows whole.
-- A piece is left out of that scan if and only if its value occurs, raw or as hex at any nibble, in what the verifier
-  receives of the statement: the staged circuit, the proof streams (`circuit.rep*.bin`, which `session.json`'s
-  `proof_sha512` hashes), ``pub``'s rows (`pub-*.bin`) and the round messages (`rounds[*].msg`, decoded). No piece is
-  left out for its byte count (REDTEAM's rule, note:network-accounting/20261024T0558Z-finding-redteam-v3, phase 18).
+- A flagged witness piece or carry row is left out of that scan only for one of three reasons (network-accounting's
+  rule of 24 Oct, which replaces REDTEAM's phase-18 one, note:network-accounting/20261024T0558Z-finding-redteam-v3). No
+  piece is left out for its byte count.
+  - Its value occurs in what the statement determines and the prover doesn't choose: ``pub``'s rows (`pub-*.bin`),
+    the statement or the circuit's definition.
+  - It sits on a field the verifier's reader fixes to a constant: format framing, a nonce required to be 0, a length.
+  - The same bytes sit at the same place in a proof of a different witness (different witness values, not only a
+    fresh salt).
+
+  The proof streams (`circuit.rep*.bin`, which `session.json`'s `proof_sha512` hashes) and the round messages
+  (`rounds[*].msg`) are never a reason by themselves.
 - The driver still leaves out, by byte count, the pieces with at most one nonzero byte (`sparse_pieces`) and a carry row
   with at most one (`carry_rows.sparse`), until the shared helper (#3916) puts the rule in their place. A run's
   left-out pieces are checked under the rule after it.
 
-**The proof of record is run r20261024-211633-861e** (#3886 at 6e29d34e7c, the w212 and demonstration slices).
+**The proof of record is run r20261024-232954-639e** (7546f4249f: #3922 at d70e44292b, which carries #3886's
+6e29d34e7c, with #3972's record; the w212 slice at the class). It proves w212's ten units of 1,021,302 ANDs at the
+class, the same negatives as the sync class's proof below, with ``sixpass`` at twenty-one passes. Its verdicts, its
+audit and the scan of its left-out pieces under the rule go here when it ends.
+
+**The sync-class proof is run r20261024-211633-861e** (#3886 at 6e29d34e7c, the w212 and demonstration slices), at
+8eb1's sizes under a sync scheduler (AS = 0).
 - At w212: 10 units of 857,866 ANDs (k_log 23). m0's verifier and Lean `verify --zk` accept, and the audit is complete
   with no wrong unit (δ 2⁻²⁰).
   - The honest unit's word is 0x3f, and it is accepted.
@@ -94,12 +116,12 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
   made-up table is refused by ``cache`` alone (0x1f), and restart by ``CH-first``.
 - The verifier received 347,887,598 bytes at w212 and 103,356,161 at the demonstration class. They hold none of the
   837 and 654 witness pieces scanned, and no ``cin`` or ``cout`` row.
-- Under the rule, the left-out pieces are clean (art:c8f215f4e454914b21e339fff69d533f04c11e1958a95e6e09d69b4481384973,
-  the check and its logs).
+- The left-out pieces are clean (art:c8f215f4e454914b21e339fff69d533f04c11e1958a95e6e09d69b4481384973, the check under
+  REDTEAM's phase-18 rule and its logs), and the rule above leaves each out.
   - Of w212's 44 sparse pieces, 38 occur nowhere in what the verifier received. The other six occur only in the proof
     streams and round messages.
   - The demonstration class's restart starts from the zero carry. Its row occurs in the same files' zero padding.
-- Each of the six sits on framing:
+- Each of the six sits on framing the reader fixes:
   - the count and padding fields of round 0's protocol descriptor and of `flock-pcs-open-batch-v0`'s message;
   - the 5 and 8 fields of the 176-byte rounds;
   - in the proof stream, the length 128 of `initial_cap` and of a ring switch's `s_hat_v`, each behind a grinding nonce
