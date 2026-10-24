@@ -90,8 +90,9 @@ RANKS = (0, 1)
 COLLECTIVES = ("model.embed_tokens", "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.down_proj")
 #: the rank whose received partial the refused runs move a bit through, and the sender's port it reads it on
 RECEIVER = 1
-#: the rest's rows: WardenRowIdentity{REST_BYTES}, another template than the gates', so another stratum
-REST_BYTES = 64
+#: the rest's rows: WardenRowIdentity{REST_BYTES}, another template than the gates', so another stratum; a row and its salt
+#: must span more than one SHA-512 block for the composer
+REST_BYTES = 128
 #: the receiving port's statement made for another read than the Program's (`statement`), and what Lean's registered reads,
 #: and the host's read of them (`warden_rows.refusal`), refuse it by
 MADE_FOR = {"swapped": "reads position", "other-collective": "not another value", "own": "not another value"}

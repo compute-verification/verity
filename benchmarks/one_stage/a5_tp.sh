@@ -224,7 +224,7 @@ else
       [ "${A5_COINS:-}" = verifier ] || { echo "STANDIN $e draws both ranks on the verifier's own coins: set A5_COINS=verifier"; exit 3; }
       N=${e/:/-}; mkdir -p $O/$N
       $TIME $PY benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --coins verifier \
-        "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --compose-cache ${A5_COMPOSE_CACHE:-$W}/tp-gates \
+        "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --compose-cache ${A5_COMPOSE_CACHE:-$W/compose}/tp-gates \
         --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
       grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err
       keep $N
