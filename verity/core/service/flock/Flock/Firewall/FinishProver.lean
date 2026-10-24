@@ -342,6 +342,8 @@ theorem addK_zero (a : F256) : a + 0 = a := by
   show F256.add _ F256.zero = _
   simp only [F256.add, F256.zero, F128.add_zero]
 
+theorem addK_congr {a a' : F256} (b : F256) (h : a = a') : a + b = a' + b := h ▸ rfl
+
 theorem sumK_zero (f : Nat → F256) : sumK 0 f = 0 := rfl
 
 theorem sumK_succ (n : Nat) (f : Nat → F256) : sumK (n + 1) f = sumK n f + f n := by
@@ -387,9 +389,8 @@ theorem roundPoly_eq_fast (t w : Array F256) : roundPoly t w = roundPolyFast t w
   show (sumK (t.size / 2) (rpA t w), sumK (t.size / 2) (rpB t w)) = _
   simp only [roundPolyFast, parTab_eq]
   rw [sumK_split (t.size / 2) (rpA t w), sumK_split (t.size / 2) (rpB t w)]
-  congr 2
-  · exact sumK_congr fun i hi => by simp only [getElem!_range_map _ hi]
-  · exact sumK_congr fun i hi => by simp only [getElem!_range_map _ hi]
+  refine Prod.ext (addK_congr _ (sumK_congr fun i hi => ?_)) (addK_congr _ (sumK_congr fun i hi => ?_)) <;>
+    simp only [getElem!_range_map _ hi]
 
 /-- `foldK` in tasks of `2^12` entries. -/
 def foldKFast (r : F256) (a : Array F256) : Array F256 :=
@@ -533,6 +534,7 @@ def ringSwitchPFast (io : Asks M) (sv : Nat → Array F128) (claims : Array Clai
   let pre := Fast.parTab 1 sv claims.size
   ringSwitchP io (fun k => if k < claims.size then pre[k]! else sv k) claims
 
+omit [MonadExceptOf String M] in
 theorem ringSwitchP_eq_fast (io : Asks M) (sv : Nat → Array F128) (claims : Array Claim) :
     ringSwitchP io sv claims = ringSwitchPFast io sv claims := by
   have h : (fun k => if k < claims.size then (Fast.parTab 1 sv claims.size)[k]! else sv k) = sv := by
@@ -543,8 +545,8 @@ theorem ringSwitchP_eq_fast (io : Asks M) (sv : Nat → Array F128) (claims : Ar
   exact congrArg (fun s => ringSwitchP io s claims) h.symm
 
 @[csimp] theorem ringSwitchP_eq_ringSwitchPFast : @ringSwitchP = @ringSwitchPFast := by
-  funext _ _ _ _ io sv claims
-  exact ringSwitchP_eq_fast io sv claims
+  funext M _ _ io sv claims
+  exact ringSwitchP_eq_fast (M := M) io sv claims
 
 /-- **The batched basis on the Boolean cube** (§12.4): `b(y) = Σ_k γ_k·Φ_k(eq(z_k, y))` for `y < 2^ℓ`, with
 `Φ_k(x^u) = eq(r''_k, u)`. -/
