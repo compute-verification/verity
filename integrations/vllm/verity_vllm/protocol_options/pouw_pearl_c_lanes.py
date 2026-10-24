@@ -41,7 +41,7 @@ from typing import Any
 from verity.core.protocols.pouw.serving import SCHEDULES, Schedule, StepIO, hash_format, schedule_refusals
 
 from .pouw_pearl_c_graphs import SLOT_BYTES
-from .pouw_pearl_c_host import _event
+from .pouw_pearl_c_host import _event, _stream
 
 #: each call step's group (`verity.core.protocols.pouw.serving.GROUPS`), which a schedule places on a lane.  The per-row
 #: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
@@ -119,7 +119,8 @@ class LaneCalls:
     ``_side_turn`` and ``_side_cache``, and its
     graph path's lane graphs (`GraphCalls._lane_graph`, ``_capture_lanes``, ``_offsets``); where a whole capture cuts a
     call's steps (`_call_cuts`, `_call_tree`, `_call_stats`, from ``entry`` and `_call_names`); and a lagged end's readback
-    (`settle`: ``_lagged``, ``commits``) and tree aside (`_end_aside`: ``_end_side``, ``leaves``)."""
+    (`settle`: ``_lagged``, ``commits``) and tree aside (`_end_aside`: ``_end_side``, ``leaves``); and a call's A words
+    (`_stage_a`)."""
 
     def _call_cuts(self, pipe: Any) -> tuple[int, int]:
         """Where a deferred whole capture (`whole_defer`) splits `_call_steps`: after A's tree, beside which the call before's
@@ -180,6 +181,19 @@ class LaneCalls:
         got = [torch.empty(t.shape, dtype=t.dtype, pin_memory=True).copy_(t, non_blocking=True) for t in (roots, flags)]
         side.wait_stream(torch.cuda.current_stream())
         return staged.data_ptr(), side, got
+
+    def _stage_a(self, sh: Any, x2: Any, m: int, filled: int) -> None:
+        """A call's A words on the current stream: x2's m rows widened to FP32 into ``sh.xa`` and its rows m to `filled` - 1
+        zeroed, in one launch where the kernel has widen_a and x2 is aligned, contiguous BF16; else torch's copy and fill."""
+        import torch
+        dev, k = self.kernel.dev, x2.shape[-1]
+        if (self.device.type == "cuda" and x2.dtype == torch.bfloat16 and x2.is_contiguous() and x2.data_ptr() % 16 == 0
+                and k % 8 == 0 and getattr(dev, "has", lambda _: False)("widen_a")):
+            self.kernel.run.widen_a(dev, x2.data_ptr(), sh.xa.data_ptr(), m, max(filled, m), k, stream=_stream(self.device))
+            return
+        sh.xa[:m].copy_(x2)
+        if filled > m:
+            sh.xa[m:filled].zero_()
 
     def _ended(self, out: dict[str, Any], roots_a: bytes, root: bytes, flags: list[int], units: int, count: int) -> None:
         out.update(transcript_root=root.hex(), activation_roots=hashlib.sha512(roots_a).hexdigest(),

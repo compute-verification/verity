@@ -660,20 +660,31 @@ extern "C" __global__ void quant_s5(const Args a) {
   *reinterpret_cast<uint4*>(reinterpret_cast<uint8_t*>(a.p[2]) + (size_t)row * k + t) = make_uint4(o[0], o[1], o[2], o[3]);
 }
 
-// ---------------------------------------------------------------- B's widening
+// ---------------------------------------------------------------- the widening
 // The one step from B's stored form to the FP32 rows the epoch commits (run.py's xb); everything after it reads those rows.
 // widen_bf16: BF16 words (rows x k) to FP32, exact.  widen_fp8_block: E4M3 codes (rows x k) times their 128 x 128 block's
 // FP32 scale (a checkpoint's weight_scale_inv: ceil(rows / 128) x ceil(k / 128), row-major), each product RN to FP32
 // (`pearl_c_sm90.run.widen`'s choice "fp8_block": a defined B, not the exact real one when code x scale doesn't fit FP32).
 // p0 source, p1 scales (widen_fp8_block), p2 out (rows x k FP32); i0 rows, i1 k (a multiple of 8).  A thread per 8 elements.
+// widen_a: a served call's A words (pouw_pearl_c_device's xa), widen_bf16's widening of its i0 rows, then rows i0 to i2 - 1
+// zero, in one launch; p2 out (i2 x k FP32).
+DEV void widen8(const uint4* src, uint4* out, size_t g) {
+  const uint4 v = src[g];
+  const uint32_t w[4] = {v.x, v.y, v.z, v.w};
+  out[2 * g] = make_uint4(w[0] << 16, w[0] & 0xFFFF0000u, w[1] << 16, w[1] & 0xFFFF0000u);
+  out[2 * g + 1] = make_uint4(w[2] << 16, w[2] & 0xFFFF0000u, w[3] << 16, w[3] & 0xFFFF0000u);
+}
 extern "C" __global__ void widen_bf16(const Args a) {
   const size_t g = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-  if (g >= (size_t)a.i[0] * a.i[1] / 8) return;
-  const uint4 v = reinterpret_cast<const uint4*>(a.p[0])[g];
-  const uint32_t w[4] = {v.x, v.y, v.z, v.w};
-  uint4* out = reinterpret_cast<uint4*>(a.p[2]) + 2 * g;
-  out[0] = make_uint4(w[0] << 16, w[0] & 0xFFFF0000u, w[1] << 16, w[1] & 0xFFFF0000u);
-  out[1] = make_uint4(w[2] << 16, w[2] & 0xFFFF0000u, w[3] << 16, w[3] & 0xFFFF0000u);
+  if (g < (size_t)a.i[0] * a.i[1] / 8) widen8(reinterpret_cast<const uint4*>(a.p[0]), reinterpret_cast<uint4*>(a.p[2]), g);
+}
+extern "C" __global__ void widen_a(const Args a) {
+  const size_t g = (size_t)blockIdx.x * blockDim.x + threadIdx.x, real = (size_t)a.i[0] * a.i[1] / 8;
+  uint4* out = reinterpret_cast<uint4*>(a.p[2]);
+  if (g < real)
+    widen8(reinterpret_cast<const uint4*>(a.p[0]), out, g);
+  else if (g < (size_t)a.i[2] * a.i[1] / 8)
+    out[2 * g] = out[2 * g + 1] = make_uint4(0, 0, 0, 0);
 }
 extern "C" __global__ void widen_fp8_block(const Args a) {
   const int rows = a.i[0], k = a.i[1];

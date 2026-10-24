@@ -379,6 +379,9 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         rows, k = i[:2]
         src, scales = RUN.widen_sizes(name.removeprefix("widen_"), rows, k)
         return {0: src, 2: 4 * rows * k, **({1: scales} if scales else {})}
+    if name == "widen_a":
+        rows, k, filled = i[:3]
+        return {0: 2 * rows * k, 2: 4 * filled * k}
     if name == "pa":
         return {0: 32 * i[0], 2: 128 * i[0], 3: 128 * i[0]}
     if name == "pa_w":
@@ -458,7 +461,8 @@ def threads(name: str, i: list[int]) -> int:
             "hm_leaves": lambda: i[0], "s512_frame_leaves": lambda: i[1], "s512_pads": lambda: i[1] - i[0],
             "s512_nodes": lambda: i[1], "s512_tree_small": lambda: 1, "quant_s5": lambda: i[0] * i[1] // 16,
             f"pl_leaves_{RUN.PL_VARIANT}": lambda: i[0], f"pl_seeds_{RUN.PL_VARIANT}": lambda: i[0],
-            "widen_bf16": lambda: i[0] * i[1] // 8, "widen_fp8_block": lambda: i[0] * i[1] // 8}.get(name, lambda: 0)()
+            "widen_bf16": lambda: i[0] * i[1] // 8, "widen_fp8_block": lambda: i[0] * i[1] // 8,
+            "widen_a": lambda: i[2] * i[1] // 8}.get(name, lambda: 0)()
 
 
 @pytest.fixture(scope="module")

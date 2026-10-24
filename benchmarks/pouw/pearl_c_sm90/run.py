@@ -223,6 +223,11 @@ class Dev:
             self.fns[name] = f
         return self.fns[name]
 
+    def has(self, name: str) -> bool:
+        """Whether the cubin has the kernel `name` (an older cubin may not)."""
+        f = vp()
+        return name in self.fns or self.cu.cuModuleGetFunction(C.byref(f), self.mod, name.encode()) == 0
+
     def alloc(self, n: int) -> int:
         p = u64()
         self.ck("cuMemAlloc_v2", C.byref(p), max(n, 16))
@@ -406,6 +411,8 @@ def gemm_threads(name: str) -> int:
 #: B's widening (pearl_c_sm90.cu's widen_*), the one step from B's stored form to the FP32 rows its tree commits: "bf16"
 #: (exact) or "fp8_block" (E4M3 codes times their 128 x 128 block's FP32 scale, each product RN to FP32)
 WIDEN = {"bf16": "widen_bf16", "fp8_block": "widen_fp8_block"}
+#: the zero rows `check_widen` has widen_a fill past the BF16 rows
+WIDEN_A_PAD = 3
 
 
 def widen_sizes(kind: str, rows: int, k: int) -> tuple[int, int]:
@@ -418,6 +425,14 @@ def widen(dev, kind: str, src: int, scales: int, out: int, rows: int, k: int) ->
     if k % 8:
         raise ValueError(f"the widening takes k a multiple of 8, not {k}")
     dev.launch(WIDEN[kind], cdiv(rows * k // 8, 256), 256, p=(src, scales, out), i=(rows, k))
+
+
+def widen_a(dev, src: int, out: int, rows: int, filled: int, k: int, stream=None) -> None:
+    """A served call's A words (widen_a): its `rows` BF16 rows at src widened into out (FP32), then out's rows `rows` to
+    `filled` - 1 zero, in one launch."""
+    if k % 8 or filled < rows:
+        raise ValueError(f"widen_a takes k a multiple of 8 and filled >= rows, not k {k}, rows {rows}, filled {filled}")
+    dev.launch("widen_a", cdiv(filled * k // 8, 256), 256, p=(src, 0, out), i=(rows, k, filled), stream=stream)
 
 
 def tile_suffix(bm: int, bn: int) -> str:
@@ -979,9 +994,19 @@ def check_chains(dev: Dev, pipe: Pipeline, want) -> dict:
 
 def check_widen(dev: Dev, man: dict, load) -> dict:
     """Each of WIDEN's kinds on the fixture's stored B (`widen`: its rows, k and files), its output poisoned first, against
-    the fixture's FP32 rows."""
+    the fixture's FP32 rows; and widen_a on the BF16 rows, filled with WIDEN_A_PAD zero rows past them."""
     spec, res = man["widen"], {}
     rows, k = spec["shape"]
+    src, want = dev.put(load("", spec["files"]["src_bf16"])), load("", spec["files"]["xb_bf16"]) + bytes(4 * k * WIDEN_A_PAD)
+    out = dev.alloc(len(want))
+    dev.ck("cuMemsetD8_v2", u64(out), POISON, len(want))
+    widen_a(dev, src, out, rows, rows + WIDEN_A_PAD, k)
+    dev.sync()
+    got = dev.read(out, len(want))
+    res["xa@widen_a"] = {"ok": got == want, "bytes": len(want),
+                         "words_differing": sum(got[i:i + 4] != want[i:i + 4] for i in range(0, len(want), 4))}
+    dev.free(src)
+    dev.free(out)
     for kind in WIDEN:
         src = dev.put(load("", spec["files"][f"src_{kind}"]))
         scales = dev.put(load("", spec["files"]["scales"])) if kind == "fp8_block" else 0

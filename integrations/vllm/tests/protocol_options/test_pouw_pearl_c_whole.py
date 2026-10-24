@@ -806,6 +806,25 @@ def test_an_end_aside_needs_lagged_ends():
         PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, aside_ends=True)
 
 
+def test_a_calls_a_words_are_one_widen_a_where_the_kernel_has_it_else_torchs_copy_and_fill(monkeypatch):
+    """`LaneCalls._stage_a`: on the card, with a cubin that has widen_a and x contiguous BF16, one launch on the current
+    stream over the call's rows and the padding up to `filled`; with an older cubin, torch's copy and fill, the same words."""
+    torch = pytest.importorskip("torch")
+    from verity_vllm.protocol_options import pouw_pearl_c_lanes as L
+    monkeypatch.setattr(L, "_stream", lambda device: 77)
+    x, launched = torch.arange(24, dtype=torch.float32).reshape(3, 8).to(torch.bfloat16), []
+    for has in (True, False):
+        xa = torch.full((5, 8), 7.0)
+        run = SimpleNamespace(widen_a=lambda *a, **kw: launched.append((a[1:], kw)))
+        dev = SimpleNamespace(has=lambda name, has=has: has and name == "widen_a")
+        L.LaneCalls._stage_a(SimpleNamespace(device=SimpleNamespace(type="cuda"), kernel=SimpleNamespace(dev=dev, run=run)),
+                             SimpleNamespace(xa=xa), x, 3, 4)
+        if has:
+            assert launched == [((x.data_ptr(), xa.data_ptr(), 3, 4, 8), {"stream": 77})] and (xa == 7).all()
+        else:
+            assert torch.equal(xa[:3], x.float()) and (xa[3] == 0).all() and (xa[4] == 7).all() and len(launched) == 1
+
+
 def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_engine_steps_end_lags():
     """A lagged end's readback (its copies behind an event) completes at `settle`: the next end's first step, and
     `finish`'s.  It waits for the event once and fills the ended pass's own dict, the one `details["passes"]` and the
