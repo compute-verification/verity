@@ -1937,12 +1937,13 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
 def test_each_device_records_kernels_refuse_their_own_grain():
     """pearl_c_sm120's kernels take k a multiple of 1,024 and n of 128, pearl_c_sm90's (h100's) k of 256 and n of 64, inside
     the scheme's domain: an n = 2,624, k = 1,536 linear (GLM-5.3's at TP 8) runs on sm_90a and not on sm_120, n = 160 on
-    neither, and k = 256 is under both schemes' k_min."""
-    shapes = {0: (2624, 1536), 1: (160, 6144), 2: (7168, 256), 3: (4096, 4096)}
+    neither, k = 512 is under both schemes' k_min, and k = 256 is h100's census k and under sm_120's grain."""
+    shapes = {0: (2624, 1536), 1: (160, 6144), 2: (7168, 512), 3: (4096, 4096), 4: (7168, 256)}
     sm90 = PPD.refusals("pearl-c-h100-v1-h3", shapes)
     assert [r.split(":")[0] for r in sm90] == ["linear 1", "linear 2"] and "k a multiple of 256 and n of 64" in sm90[0]
+    assert "1024 <= k" in sm90[1]
     sm120 = PPD.refusals(SCHEME, shapes)
-    assert [r.split(":")[0] for r in sm120] == ["linear 0", "linear 1", "linear 2"]
+    assert [r.split(":")[0] for r in sm120] == ["linear 0", "linear 1", "linear 2", "linear 4"]
     assert "k a multiple of 1,024 and n of 128" in sm120[0]
 
 

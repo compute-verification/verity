@@ -776,7 +776,9 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
 The cheap-binding lane's H100 candidate. It takes Pearl's H100 product and output tickets, and adds #311's noisy clean-up
 pinned bit for bit, so that the useful output U is a checked value.
 γ rests on the named conjecture TT_OUT(1/400), not on counting, so the certificate names no γ_0. The module's docstring
-states every step.
+states every step. TT_OUT's device forms are stated at the W1 machine
+(`Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean`): a strategy's cost is `W1.w1Priced`'s on the record's
+device, so an attack on them is a W1 program, and the γ guarantees that read them conclude at that cost model.
 
 ~~~text
 seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64)
@@ -864,7 +866,8 @@ useful    U/(α_A·α_B), glue
     credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
     row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't
     transfer. The work sampling design checks it on every credited A row of a drawn tile, over its credited columns,
-    after the tile's cap (`clear_work.row_cap`), and `volunteer` gives up a row over it first.
+    after the tile's cap (`clear_work.row_cap`), and `volunteer` gives up a row over it first. The hidden cap checks it
+    in gates (`circuit.cap`'s v2 templates, `cap.served`).
   - `pearl-c-sm120-v1-h3` is registered (the served default, `pouw_pearl_c_device`), and so is `pearl-c-h100-v1-h3`,
     `PearlC(hashing="h3")` on the H100 record (GLM-5.3's FP8 form on the H200, Daniel 22 Oct). The `test-16-v1-h3` and
     `decode-32-v1-h3` vectors pin a call end to end, with A's row root and row 0's leaf, digest, seed and E_A line, and a
@@ -961,7 +964,7 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     `Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384`, from TT_OUT at 1/1,000.
   - The per-unit γ doesn't need TT_OUT(1/1,000): the same γ for the cap-1/1,000 protocol follows from rev1 at 1/400 alone
     (`Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400` and
-    `Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400`, from `TTOutPearlCDevRev1` at 1/400).
+    `Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400`, from `TTOutPearlCDevRev1W1` at 1/400).
   - At the issue-bound FP32 add (8.00), the pinned guarantees are
     `Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192` and
     `Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384`, with the sampled
@@ -1055,6 +1058,12 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     - The cap's rows are `sd`, `cap-word`, `cap-flags`, `cap-chunks`, `cap-sums` and `cap-rows` (under `circuit.pc4`
       below).
     - The cap takes whole tiles only: `Shape.check` refuses a short last tile row under the cap.
+    - **The per-row cap** (`pc8.Shape.row_rho`, under the cap only) is v2 of `Pc8TileCap`, `Pc8CapTally`,
+      `Pc8CallCap` and `Pc8CheckCap`, each with the static RHOR (v1 stays byte for byte): the verdict also holds each
+      passing row's own sums to the cap's inequality on that one row at ρr = 1/RHOR, the clear path's row cap
+      (`clear_work.cap_failure`, which `test_pearlc_cap_agreement` holds it to tile by tile). `cap.served(scheme,
+      shape)` is a scheme's hiding cap shape: under -h3, ρr is `row_cap_at(k)`, 4ρ (RHOR = 100) at
+      `pearl-c-h100-v1-h3`'s census k = 256 and ρ at every other k; under -h0 it is v1, the tile's cap alone.
   - The row cut along k (``Shape.row_k``, `circuit.rowk`) is `pc4`'s, below, on each of the three records. It takes
     whole tiles only: `Shape.check` refuses a short last tile row under the cut.
   - Not in it yet: the cap in a run. Until it is, Pearl-C's runs are checked by its reference audit, a development
