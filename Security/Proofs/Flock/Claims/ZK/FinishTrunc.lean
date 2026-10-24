@@ -28,8 +28,7 @@ theorem lt64 {a : ℕ} (h : a ≤ 65536) : a < 2 ^ 64 := lt_of_le_of_lt h (by no
 theorem cons_size_le {α : Type} {a c : Array α} {x y : α} (ha : a.size = 3) (hc : c.size = 2) :
     (a ++ #[x, y] ++ c).size + 3 ≤ 65536 := by
   have hxy : (#[x, y] : Array α).size = 2 := rfl
-  rw [Array.size_append, Array.size_append, ha, hxy, hc]
-  omega
+  rw [Array.size_append, Array.size_append, ha, hxy, hc] <;> omega
 
 /-- A `forIn` over a range in any monad, named so that a walk stops at it. -/
 def loopG {m : Type → Type} [Monad m] {β : Type} (r : Std.Legacy.Range) (b : β) (f : ℕ → β → m (ForInStep β)) : m β :=
@@ -194,7 +193,7 @@ theorem squeezeP_br (kind : UInt8) {m : ℕ} (hm : m < 2 ^ 64) :
       simp only [FlockComplete.go_bind, asksCut_round_fw, if_neg hlt, hv]
       refine ⟨rfl, ?_⟩
       change (Array.push l _).size = _
-      rw [Array.size_push, hl]
+      rw [Array.size_push, hl] <;> omega
 
 theorem sampleP_br :
     ((bridge base).st Transcript).R (FlockComplete.sampleP (asksOf coins).toC)
