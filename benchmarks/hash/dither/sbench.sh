@@ -8,8 +8,6 @@
 # An exact-fused or -xl arm runs only after exactlin's kgate.py passes in the same lease (SBENCH_KGATE=0|1 overrides).
 # DITHER_NCU=REGEX runs it under ncu instead (--clock-control none): the first DITHER_NCU_COUNT (16) launches of kernels
 # matching REGEX, their throughput, occupancy, scheduler, warp-state and instruction sections, as ncu.ncu-rep and ncu.csv.
-# --bw-passes GIB (dbw.py: the remote bandwidth audit's passes beside the arms) also builds the audit's session.so and kv.so
-# and its Lean verifier before the lease; SBENCH_MPS=1 makes every process of the run a client of an MPS daemon of its own.
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sbench.sh
 set -uo pipefail
@@ -166,27 +164,27 @@ echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)"
 nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu,memory.used --format=csv -l 2 \
   > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!
+# SBENCH_MPS=1: in the lease, after the kgate, an MPS control daemon of the run's own for the leased GPU (its pipe and
+# logs under the scratch, so no other process finds it), every process of the run its client, which names the GPU as
+# device 0 within the server's set; quit when the run ends (out/mps-*.log)
+export SBENCH_MPS=${SBENCH_MPS:-} MPS_DIR=$S/mps
 MAX_MIN=${SBENCH_MAX_MIN:-40}
 # SBENCH_PREEMPTIBLE=1: the lease may be taken back by a non-preemptible one (which ends the run unfinished)
 PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
-# SBENCH_MPS=1: in the lease, an MPS control daemon of the run's own for the leased GPU (its pipe and logs under the
-# scratch, so no other process finds it), every process of the run its client, which names the GPU as device 0 within
-# the server's set; quit when the run ends (out/mps-*.log)
-export SBENCH_MPS=${SBENCH_MPS:-} MPS_DIR=$S/mps
 gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- bash -c '
-  if [ "$SBENCH_MPS" = 1 ]; then
-    mkdir -p "$MPS_DIR/pipe" "$MPS_DIR/log"
-    export CUDA_MPS_PIPE_DIRECTORY=$MPS_DIR/pipe CUDA_MPS_LOG_DIRECTORY=$MPS_DIR/log
-    CUDA_VISIBLE_DEVICES=${GPU_LEASE_UUID:?} nvidia-cuda-mps-control -d || { echo "sbench: MPS_FAIL"; exit 16; }
-    export CUDA_VISIBLE_DEVICES=0
-    echo "sbench: MPS on $GPU_LEASE_UUID"
-  fi
   if [ "$KGATE" = 1 ]; then
     timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
       > "$0/kgate.log" 2>&1
     g=$?
     tail -1 "$0/kgate.log"
     if [ $g -ne 0 ]; then echo "sbench: kgate rc $g, nothing timed"; exit 4; fi
+  fi
+  if [ "$SBENCH_MPS" = 1 ]; then
+    mkdir -p "$MPS_DIR/pipe" "$MPS_DIR/log"
+    export CUDA_MPS_PIPE_DIRECTORY=$MPS_DIR/pipe CUDA_MPS_LOG_DIRECTORY=$MPS_DIR/log
+    CUDA_VISIBLE_DEVICES=${GPU_LEASE_UUID:?} nvidia-cuda-mps-control -d || { echo "sbench: MPS_FAIL"; exit 16; }
+    export CUDA_VISIBLE_DEVICES=0
+    echo "sbench: MPS on $GPU_LEASE_UUID"
   fi
   [ "$SBENCH_MPS" = 1 ] || exec timeout $((60 * '"$MAX_MIN"' - 50 - SECONDS)) "$@"
   timeout $((60 * '"$MAX_MIN"' - 50 - SECONDS)) "$@"; rc=$?
