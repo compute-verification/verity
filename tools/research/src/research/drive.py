@@ -14,7 +14,9 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
    itself sends the build for C-Flock's paths), the lowest unchecked first, while fewer than `max_running` checks run, and
    none above a member whose failure drive is still settling, which it would hold; a tick's launches run at once
    (`LAUNCH_JOBS`), each with its train's rank in the slot queue.  A former tip a re-cut left inside a train
-   runs on as a hedge outside the count, until a train above it passes its check (`drop_hedges`).
+   runs on as a hedge outside the count, until a train above it passes its check (`drop_hedges`).  The tip's check is the top's:
+   once PRs join above it, it is re-pointed at the new tip if it hasn't started, and if it has, it runs on and the new top
+   waits its turn behind the trains below it (`former_top`).
 
 What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns: a failed
 check, a conflict, a check that ran and passed but lacks a step the gate needs, a launch that registered no run.  A failed
@@ -1625,6 +1627,37 @@ class Driver:
             drive.get("resent", {}).pop(c, None)
             self.q.log(f"research queue drive: cancelled {' '.join(live)}: {why}")
 
+    def former_top(self, drive: dict) -> str | None:
+        """The check of a former top, `next`'s tip when drive launched it (its record's `top`) and a member below the tip now that
+        PRs have joined above it.  One still waiting for a slot (every live run submitted, or waiting in its slot line) is
+        re-pointed: cancelled and forgotten, so the new top takes its place in the count and the slot lines.  One that has
+        started runs to its end, and lands what it covers if it passes, unless a train above it passes first (`drop_hedges`).
+        Returns the highest started one: while it runs, the new top gets no slot kept for it and no rank ahead of the trains
+        below (24 Oct: the top changed every few minutes as PRs were marked, each new top jumped the slot lines, and a check
+        covers 70 PRs in 45-70 min)."""
+        bisecting = {r.get("check") for r in drive.get("bisect", {}).values()}
+        out = None
+        for c, rec in list(drive["launched"].items()):
+            if not rec.get("top") or c in self._tips or c not in self._pos or c in bisecting:
+                continue
+            live = {rid: st for rid, (st, *_) in self._states(rec["ids"]).items() if st in ACTIVE}
+            if not live:
+                continue                                    # ended: its verdict decides
+            if any(st not in ("submitted", "waiting") for st in live.values()):
+                out = c if out is None or self._pos[c] > self._pos[out] else out
+                continue
+            touched = [rid for rid, (st, *_) in self._states(rec.get("touched") or []).items() if st in ACTIVE and st != "unknown"]
+            why = f"{c[:12]}, a former top of `{self.q.branch}`, hadn't started: its check is re-pointed at the new top"
+            if self.dry_run or self.q.shadow:
+                self.q.log(f"research queue drive: would cancel {' '.join([*live, *touched])}: {why}")
+                continue
+            self.cancel(self.repo, [*live, *touched], f"drive: {why}")
+            self._seen.update({rid: ("cancelled", SIGTERM_RC, None, None) for rid in [*live, *touched]})
+            del drive["launched"][c]
+            drive.get("resent", {}).pop(c, None)
+            self.q.log(f"research queue drive: cancelled {' '.join([*live, *touched])}: {why}")
+        return out
+
     def _cancel_orphans(self, drive: dict) -> None:
         """Cancel again each run whose cancel failed (`drive["orphans"]`, run id: why) while it is still queued or running; one
         that has ended, or that is cancelled now, leaves the list, so no run of a train drive dropped is left holding a line."""
@@ -1668,7 +1701,8 @@ class Driver:
         ids, _, touched, out = started
         if not ids:
             return
-        drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": agreement}
+        top = (drive["launched"].get(m.commit) or {}).get("top")
+        drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": agreement, **({"top": True} if top else {})}
         if touched is not None:
             drive["launched"][m.commit]["touched"] = touched
             if not touched:
@@ -2184,6 +2218,7 @@ class Driver:
         trains = self.trains(len(members), self._cold(members))
         self._tips, self._pos = {members[i].commit for i in trains}, {m.commit: k for k, m in enumerate(members)}
         self.drop_hedges(drive, members, trains, main)
+        former = self.former_top(drive)
         running = sum(self.verdict(c, main, drive).state == "running" for c in self._counted(drive, main))
         running += self.prewarm(drive, running)
         self.start_postland(drive)                          # a slot of its own: `max_running` counts the trains' checks
@@ -2197,8 +2232,11 @@ class Driver:
         # the top tip keeps a check of its own, ranked in the slot queues right after the lowest train: one pass of it lands all
         # of `next`, while the trains below it still land what they can (23 Oct 19:20Z: the five checks were nested prefixes of
         # the bottom 15 of 50, cut at their cold-circuit-check boundaries, and nothing checked the 35 above them); the lowest
-        # still takes the first free slot (top, 24 Oct 04:44Z)
-        top = trains[-1] if len(trains) > 1 and trains[-1] <= stop and self.max_running > 2 else None
+        # still takes the first free slot (top, 24 Oct 04:44Z); while a former top's started check runs (`former_top`), the new
+        # top is checked in its turn, after the trains below it
+        top = trains[-1] if former is None and len(trains) > 1 and trains[-1] <= stop and self.max_running > 2 else None
+        if former is not None:
+            what.append(f"{former[:12]}'s check, started as the top, runs on")
         reserve = top is not None and self.verdict(members[top].commit, main, drive).state == "none"
         waited = False
         for i in trains:
@@ -2246,6 +2284,8 @@ class Driver:
                 self.refuse(drive, f"launch:{m.commit}", f"train.sh {m.commit[:12]} {self.on} registered no run: {tail}")
                 what[k] = "launch failed"
                 continue
+            if m is members[trains[-1]]:
+                drive["launched"][m.commit]["top"] = True
             q.log(f"research queue drive: checking {m.commit[:12]} ({prs}): {' '.join(ids)}" + (" with agreement" if agreement else "")
                   + (f", touched suites {' '.join(drive['launched'][m.commit].get('touched') or [])}" if "pytest" in self.defer else ""))
             what[k] = f"launched {' '.join(ids)}"

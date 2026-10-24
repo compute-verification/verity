@@ -110,6 +110,55 @@ def test_the_top_tip_keeps_a_check_of_its_own_while_the_trains_below_it_wait(wor
     assert len(h.launched) == 3, "the top's check runs; nothing more launches while three run"
 
 
+def _top_of_five(world: World, monkeypatch) -> tuple[Harness, list[str]]:
+    """`next` = #1..#5 in trains of 2, four checks at most: [#1 #2], [#1..#4] and the top [#1..#5] launched; then #6 and #7
+    join above the top, and #9 goes `first`: (the harness, the commits of #1..#5)."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 2, 4
+    for n in range(1, 6):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    h.tick()
+    c = [m.commit for m in h.q.chain()]
+    assert [x for x, *_ in h.launched] == [c[1], c[3], c[4]]
+    for n in (6, 7, 9):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    h.q.first = (9,)
+    return h, c
+
+
+def test_a_started_top_check_survives_new_prs_and_a_restack_above_it_and_lands_them_when_it_passes(world, monkeypatch):
+    """24 Oct: as PRs were marked the top of `next` changed every few minutes, and each new top took the slot kept for the top
+    and the rank right after the lowest train, ahead of the trains below, while the old top's check, 70 PRs and 45-70 min of
+    work, ran on.  Once started, the top's check keeps that role to its end: the new tip is checked in its turn."""
+    h, c = _top_of_five(world, monkeypatch)
+    said = h.tick()
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 3, 4, 5, 9, 6, 7] and chain[4].commit == c[4], "#9 goes above the running top"
+    assert h.launched[-1][0] == chain[5].commit, "the train below the new tip takes the free slot; the new tip waits its turn"
+    assert h.cancelled == [] and "started as the top, runs on" in said
+    _check(world, monkeypatch, c[4])
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") == c[4]
+
+
+def test_an_unstarted_top_check_is_re_pointed_at_the_new_top(world, monkeypatch):
+    """A top check still waiting in its slot lines has cost nothing yet: it gives its place to the new top."""
+    h, c = _top_of_five(world, monkeypatch)
+    old = h.q.load_state()["drive"]["launched"][c[4]]["ids"]
+    for rid in old:
+        h.run_state[rid] = ("waiting", None, None)
+    ranks = {}
+    plain = h.launch
+    h.d.launch = lambda repo, commit, machine, agreement: ranks.__setitem__(commit, launch_vars().get("CHECK_SLOT_RANK")) or plain(
+        repo, commit, machine, agreement)
+    h.tick()
+    chain = h.q.chain()
+    assert h.cancelled == old and c[4] not in h.q.load_state()["drive"]["launched"]
+    assert ranks == {chain[5].commit: _git(h.d.repo, "rev-list", "--count", "--first-parent", chain[5].commit),
+                     chain[-1].commit: str(int(_git(h.d.repo, "rev-list", "--count", "--first-parent", chain[1].commit)) + 1)}, \
+        "the new top is checked with the top's rank, right after the lowest train"
+
+
 def test_an_unchecked_tip_is_checked_once_with_agreement_only_for_a_guarantee_change(world, monkeypatch):
     h = Harness(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
