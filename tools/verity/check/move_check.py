@@ -401,6 +401,15 @@ def top_level(text: str) -> dict[str, str] | None:
         return None
 
 
+def same_value(old: str, new: str) -> bool:
+    """Whether two JSON texts hold the same value, keys in the same order, however each is wrapped: the lock's writer
+    wraps a list that a renamed module lengthened past its line."""
+    try:
+        return json.dumps(json.loads(old)) == json.dumps(json.loads(new))
+    except ValueError:
+        return old == new
+
+
 def field_hunk(k: str, old: str | None, new: str | None) -> str:
     """The first entry of field `k` that differs, as `-`/`+` lines."""
     try:
@@ -435,7 +444,7 @@ def lock_change(old: str, new: str, new_path: str, pmap: dict[str, str], lmods: 
             if copy:
                 continue
             return f"`{k}` removed", field_hunk(k, a[k], None)
-        if module_sub(substitute(a[k], pmap), lmods) != b[k]:
+        if not same_value(module_sub(substitute(a[k], pmap), lmods), b[k]):
             return f"`{k}` changed beyond moved paths and module names", field_hunk(k, a[k], b[k])
     here = posixpath.dirname(new_path)
     for k in ("roots", "proved_in"):
