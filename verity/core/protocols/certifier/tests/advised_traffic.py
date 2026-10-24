@@ -41,13 +41,6 @@ class Shape:
 SHAPE = Shape(T, WINDOWS, P, PIN, range(2 * T))
 
 
-class SaltFirst(Certifier):
-    """CERT-VARLEN's FIFO change: the certifier's own frame goes to the head of the queue, ahead of carried frames."""
-
-    def enqueue_first(self, frame: bytes) -> None:
-        self._queue.appendleft(bytes(frame))
-
-
 @dataclass(frozen=True)
 class Session:
     """A simulated session on the link: its advice, each end's records, each request's ingress arrival bucket (in
@@ -66,15 +59,15 @@ class Session:
     certified: tuple[int, ...] = ()
 
 
-def ingress_records(arrive, frames_in, own, shape=SHAPE, salt_first=False):
-    """The ingress certifier's records, with its own frame queued first in each window (behind any carried request
-    frames, as `active.Bucketer` queues it, or with `salt_first` ahead of them), and each request's anchor, the bucket
-    that releases its last frame."""
-    cert, records, anchor, got = SaltFirst(LINK, shape.ingress), [], [None] * len(arrive), 0
+def ingress_records(arrive, frames_in, own, shape=SHAPE):
+    """The ingress certifier's records, with its own frame queued at the head of each window's queue, ahead of any
+    carried request frames (as `active.Bucketer` queues it), and each request's anchor, the bucket that releases its
+    last frame."""
+    cert, records, anchor, got = Certifier(LINK, shape.ingress), [], [None] * len(arrive), 0
     need = list(itertools.accumulate(frames_in))
     for t in range(shape.windows * shape.T):
         if own and t % shape.T == 0:
-            (cert.enqueue_first if salt_first else cert.enqueue)(b"s")
+            cert.enqueue(b"s", first=True)
         for j, a in enumerate(arrive):
             if a == t:
                 for _ in range(frames_in[j]):
@@ -117,7 +110,7 @@ def _hit(made, j, want, resume):
     return sum(n for _, n in runs), [tuple(r) for r in runs]
 
 
-def serve(seed: int, own: int = 0, shape: Shape = SHAPE, salt_first: bool = False) -> Session:
+def serve(seed: int, own: int = 0, shape: Shape = SHAPE) -> Session:
     """A vLLM-like session: 5 … 8 requests of 2 … 9 prompt tokens, each in the framing's 1 … 3 ingress frames, arriving
     in `shape.arrive` (by default over the first two windows), and a scheduler of two steps a bucket, a token budget of
     6 and 4 sequences, which admits a request (FCFS) the bucket after its last ingress frame is released, prefills it in
@@ -126,8 +119,7 @@ def serve(seed: int, own: int = 0, shape: Shape = SHAPE, salt_first: bool = Fals
     some finishes. A step's rows are the running requests' in Model Runner V2's order (n = 1 first), then those it
     first schedules, in arrival order, so v0's first-row order is the arrival order (the canonical map). Each step's
     kept outputs are handed to the egress certifier the bucket after the step runs, one frame each, and released FIFO
-    at R, so frames released after they're handed carry across windows; `release` is the certified egress record's.
-    With `salt_first`, the ingress certifier queues its own frame as CERT-VARLEN's FIFO change does."""
+    at R, so frames released after they're handed carry across windows; `release` is the certified egress record's."""
     rng = random.Random(seed)
     n = rng.randint(5, 8)
     arrive = sorted(rng.choice(shape.arrive) for _ in range(n))
@@ -137,7 +129,7 @@ def serve(seed: int, own: int = 0, shape: Shape = SHAPE, salt_first: bool = Fals
     want = [rng.randrange(p) if rng.random() < 0.5 else 0 for p in prompt]
     trailing = [rng.random() < 0.4 for _ in range(n)]
     finish = [rng.choice(ADV.FINISHES) for _ in range(n)]
-    ingress, anchor = ingress_records(arrive, frames_in, own, shape, salt_first)
+    ingress, anchor = ingress_records(arrive, frames_in, own, shape)
     last = shape.windows * shape.T
 
     c, sampled, made, admit = [0] * n, [0] * n, [set() for _ in range(n)], [None] * n

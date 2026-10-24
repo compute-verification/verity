@@ -12,10 +12,10 @@ Its soundness (i) is in fork form and states no bits. The recursion's knowledge 
 (`Security/Definitions/Claims/Recursion.lean`), is at `Claims.Recursion.lam`: about 65 bits per SHA-512 call at the
 deployed shape (`m = 35`, weight `coverW`), below the 100-bit floor under every weight (ASK-73). Route 2C's bound λ₂
 (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but
-`KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open:
-`PartChecksB`, `PartOpensB` (at staged V\* statements) and `DecompB` (`RecDeploy.ksLin2_deployed_full`, at `recTr`, a
-model of the coin server's record that lists every inner round, and the last round's pieces at the parts that commit the
-earlier rounds).
+`KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from a premise still open:
+`DecompB` at what each V\* part's circuit accepts (`PartAccepts`)
+(`RecDeploy.ksLin2_deployed_partAccepts`, at the coin server's record read by `recRead`; `PartChecksB` is no premise of
+its own, `VStarB.exists_chk_iff`).
 Holo statements are candidate 3's own model, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`).
 

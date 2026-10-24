@@ -251,6 +251,21 @@ def test_the_gates_certifier_rehearsal_parses_here_with_its_sampling(tmp_path):
     assert {k: cs.request_body("m", 16)[k] for k in ("temperature", "top_p")} == {"temperature": 0.0, "top_p": 1.0}
 
 
+def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_parser_takes(tmp_path):
+    """The gate's tampers are `serve`'s `--tamper` choices, so the auditor host runs every shim this file has, and
+    each reaches `serve` (which alone checks it, after the tunnel is up) as one strategy of `rehearse`."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token")
+    for t in A.TAMPERS:
+        args = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": t}, tmp_path, "u")[2:])
+        assert args.strategies.split(",") == [t]
+        served = cs.parser().parse_args(["serve", "--plan", "p", "--calibration", "c", "--upstream", "u", "--out", "o",
+                                         "--link", "127.0.0.1:1", "--reveal", "127.0.0.1:2", "--key", "k",
+                                         "--challenger-key", "k.json", "--session", "00", "--tamper", t])
+        assert served.tamper == t
+
+
 def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_major(tmp_path):
     """The plan sends the endpoint's shape (its one model, a prompt of exactly 128 of its tokens, `min_tokens` =
     `max_tokens`, `ignore_eos`, streamed, the given temperature and top_p on every request, the probes' and the run's
@@ -974,6 +989,67 @@ def varied(tmp_path_factory):
 
 def _io(run: Path) -> dict:
     return {r["user"]: r for r in json.loads((run / "io.json").read_text())["requests"]}
+
+
+@pytest.fixture(scope="module", params=[8, 16])
+def compact(request, tmp_path_factory):
+    """`plan --traffic varied --compact B` against `_Varied`, B = 8 and 16, as `varied` but for the egress framing:
+    16 requests, every other response's last two tokens in one chunk and its finish in a chunk of no tokens; honest,
+    late and extra, each checked."""
+    endpoint = _Varied(merges=lambda r: r % 2 == 1)
+    args = argparse.Namespace(model=None, api_key_env=None, traffic="varied", requests=16, rate=2.0,
+                              prompt_range="16:1024", tokens=VARIED_TOKENS, seed=3, probes=4, eos_ids=None,
+                              compact=request.param)
+    out = _varied_runs(tmp_path_factory.mktemp(f"compact{request.param}"), endpoint,
+                       lambda url: cs.plan_of(args, url, lambda: 0.0, _no_sleep), cs.STRATEGIES)
+    return (request.param, *out, endpoint)
+
+
+def test_compact_varied_traffic_is_certified_its_io_the_endpoints_and_its_egress_b_bytes_a_frame(compact, varied):
+    """On compact records in B-byte cells the honest run is accepted as on id events: every link-window certified, its
+    salt revealed, the audit accepting raw and committed. The certified I/O read from the cells is the id-event run's,
+    request for request (the same fields, ordinals, releases and token ids, a stop as `COMPACT_EOS`, and the same
+    finishes, the merged responses' `length` by their count), and its ingress records are the id-event run's. Its
+    egress carries the same frames a window, each B bytes: the link's bytes a window are B/4096 of the id-event
+    run's."""
+    B, tmp, _, report, plan, runs, _ = compact
+    vtmp, _, vreport, vplan, vruns, _ = varied
+    assert plan["compact"] == B and ar.Setup(report).egress_params.frame_bytes == B
+    assert ar.Setup(report).ingress_params == ar.Setup(vreport).ingress_params
+    check = runs["honest"]["check"]
+    assert check["verdict"] == "accepted", cs.table(check)
+    assert check["certified_accepted"] and check["audit_accepted"] and check["salt_accepted"]
+    io = check["io"]
+    assert io["accepted"] and io["violations"] == [] and io["ids_are_the_shims"] and io["requests_are_the_plans"]
+    assert set(io["finish"]) == {"eos", "length"} and io["finish"] == vruns["honest"]["check"]["io"]["finish"]
+    ours, theirs = _io(tmp / "honest"), _io(vtmp / "honest")
+    assert ours.keys() == theirs.keys()
+    for name, r in ours.items():
+        v = theirs[name]
+        assert {k: r[k] for k in r if k != "frames"} == {k: v[k] for k in v if k != "frames"} | {
+            "output": [active.COMPACT_EOS if t == EOS else t for t in v["output"]]}
+    egress = check["egress_bytes"]
+    assert egress["frame_bytes"] == B and egress["frames_per_window"] == \
+        vruns["honest"]["check"]["egress_bytes"]["frames_per_window"]
+    assert egress["wire_per_window"]["run"] * cs.FRAME_BYTES == egress["wire_per_window"]["id_event_frame"] * B
+    assert egress["wire_per_window"]["id_event_cell"] == egress["wire_per_window"]["run"] * 256 // B
+
+
+def test_a_compact_late_shim_is_refused_by_the_audit_and_an_extra_record_by_the_finish_rule(compact):
+    """As on id events: the late shim's window-0 egress record isn't established, which the audit refuses; the extra
+    shim's record after its first response's finish is on time, so the records are complete, certified and the audit
+    accepts them, and only the certified I/O's finish rule refuses it: a record after the response's marked last."""
+    _, tmp, _, _, plan, runs, _ = compact
+    late = runs["late"]["check"]
+    assert late["verdict"] == "refused" and not late["audit_accepted"]
+    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    extra = runs["extra"]["check"]
+    assert runs["extra"]["events"] == runs["honest"]["events"] + 1
+    assert extra["verdict"] == "refused" and extra["certified_accepted"] and extra["audit_accepted"]
+    assert extra["salt_accepted"] and extra["comparisons"]["wire_is_the_records"]
+    r = _io(tmp / "extra")[plan["sessions"][0][0]]
+    assert r["output"][-1] == 0 and r["finish"] in ("a token after its finish", "longer than max_tokens")
+    assert extra["io"]["violations"] == [[r["stream"], r["finish"]]]
 
 
 def test_the_varied_plan_sends_poisson_arrivals_of_varied_prompts_and_plans_no_egress_profile(varied):

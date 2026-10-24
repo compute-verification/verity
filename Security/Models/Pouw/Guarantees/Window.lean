@@ -104,7 +104,8 @@ Two things are outside this statement by design:
 * **Luck.** Wrong means committed outputs that aren't the unit's function of its inputs (`UnitStmts.wrong`), so a
   deficient unit whose receipt came out right by luck isn't wrong. PoUW adds luck through gap (4), TT or the TS model's
   `ε_luck`, composed with the window audit, which reads `WindowEps`'s bound.
-* **Fiat–Shamir grinding** of the per-matmul seeds (decision 103) enters PoUW's `δ` through gap (7), not here.
+* **Fiat–Shamir grinding** of the per-matmul seeds (decision 103) enters PoUW's `δ` through the seeded pair
+  (`Accounting.Guarantees.Compose.CircuitWorkSeeded`, `CircuitCreditSeeded`: GRIND's premium), not here.
 -/
 
 namespace Pouw.Guarantees.Window
@@ -127,7 +128,7 @@ the largest `κ c`, plus the window's collision term at the prover's state (`col
 
 A unit is wrong when its committed outputs aren't its function of its inputs, so luck is not in the event: a deficient
 unit whose receipt came out right isn't wrong, and gap (4) adds it. Fiat–Shamir grinding of the per-matmul seeds enters
-PoUW's `δ` through gap (7). -/
+PoUW's `δ` through the seeded pair (`CircuitWorkSeeded`, `CircuitCreditSeeded`). -/
 def WindowEps : Prop :=
   ∀ {Reg Tr : Type} {C : ℕ} {n : Fin C → ℕ} (L : Reg → (c : Fin C) → Law (Fin (n c))) (Lw : Reg → Law (WUnit n))
     (η : ℝ≥0∞) (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool) (U : UnitStmts Tr n)

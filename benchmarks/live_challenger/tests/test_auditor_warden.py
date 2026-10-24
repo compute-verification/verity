@@ -87,6 +87,7 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     (["--tokens", "257"], "--tokens '257': 16 to 256"),
     (["--tokens", "+32"], "--tokens '+32': 16 to 256"),
     (["--tamper", "late"], "warden-rehearse: unrecognized arguments: --tamper"),
+    (["--tamper", "token"], "warden-rehearse: unrecognized arguments: --tamper"),
     (["--in-flight", "2"], "unrecognized arguments: --in-flight"),
     (["--profile", "served"], "unrecognized arguments: --profile"),
     (["--upstream", "10.0.0.2:8011"], "unrecognized arguments: --upstream"),

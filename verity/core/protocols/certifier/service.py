@@ -121,25 +121,26 @@ takes as its ``sync`` parameter. The in-the-clear check runs `served_check` too.
 responses of any length, batched and timed as serving chose, carried across windows. The prover's advice
 (`advised.LinkAdvice`: I1's `advice.Advice`, one per certifier session, after serving, charged by `advice.bits`, and
 each window's request frames) states what serving chose, the profile's public framing says where each request ends on
-the ingress link (`advised.ends`, which refuses a link without the tie of its requests to the certified ingress), and
-its unit is
-`NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: the checks above, and one gate naming
+the ingress link (`advised.ends`, which refuses a link without the tie of its requests to the certified ingress,
+`advised.IoTieVerdict`, which the verifier takes only from its own tie source, `ties`: `tie_service.Ties`, from the
+IoTieRequest proofs it verified, refusing every window of a size class with no pinned IoTieRequest digest, the served
+one among them), and its unit is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: the checks above, and one
+gate naming
 `advised.NetworkAdvisedCounts_v1` and its pinned circuit digest (`advised.gate`, pinned in
 `advised.circuit-check.json`), in its verdict bit, which holds the egress head's counts to the advice's releases and
 the ingress head's counts to the advice (`advised`'s docstring has the fields it reads, the soundness argument and the
 premises). Its public inputs, in the ``pub`` row, are the window's view of the advice (`advised.view`: ``released``,
 ``floor`` and ``received``, `ADVICE`), which the verifier computes from the public advice, the framing and the
-declared syncs, each held to Σ_sync; the heads' counts stay witness. Its public items are `PUBLIC_ADVISED`. Its
+syncs the certifier ran; the heads' counts stay witness. Its public items are `PUBLIC_ADVISED`. Its
 verifier of record takes the delivered advice (`verify(advice=…)`) and the tie only from its own tie source
 (`LinkWindows.ties`, `advised.TieSource`: `advised.IoTieVerdict`, IoTieRequest's verdict from proofs it verified,
 naming the link and its ingress registrations), never beside the advice; nothing in this package is a source until
-IoTieRequest runs in the proof service, so every advised link is refused until then. Each window's declared sync must
-be the one the certifier ran it under, which the verifier takes only from its own clock source
-(`LinkWindows.clock_source`: the certifier's clock certificates verified under the link's key and session,
-`advised.SignedClocks`), since a δ below the traffic's loosens the floor (REDTEAM phase 11); without one, every advised
-link is refused too. It refuses a window without an
-advice or one whose view `advised.view` refuses, and reports the advice it read as a third public output, `advice`
-(`advised.digest`); the
+IoTieRequest runs in the proof service, so every advised link is refused until then. Every floor is under the sync the
+certifier ran, which the verifier takes only from its own clock source (`LinkWindows.clock_source`: the certifier's
+clock certificates verified under the link's key and session, `advised.SignedClocks`), since a δ below the traffic's
+loosens the floor (REDTEAM phase 11), and a window whose declared sync is another, or outside Σ_sync, is refused alone;
+without a clock source, every advised link is refused too. It refuses a window without an advice or one whose view
+`advised.view` refuses, and reports the advice it read as a third public output, `advice` (`advised.digest`); the
 network verdict refuses a window that names another advice than the first accepted window's, so every window's counts
 are one advice's. The in-the-clear check runs `advised_check` too.
 
@@ -504,12 +505,12 @@ class LinkWindows:
     occupancy profile: for each end (egress, ingress), each window's counts, or None for an end without one. A served
     link (`served`, FIXLEN) or an advised one (`advised`, arbitrary traffic under the advice) has no egress profile.
     `ties` is no public field but the verifier's own source of an advised link's tie (`advised.TieSource`), the only
-    place `_view` takes IoTieRequest's verdict from: None, as nothing in this package is one until IoTieRequest runs
-    in the proof service, refuses every advised link. `clock_certificates` are the certifier's clock certificates of
-    the link's egress windows (`certificate.ClockCertificate`), public, whoever delivers them: `clock_source` holds
-    them to the link's key and session (`advised.SignedClocks`) and gives the sync the certifier signed for each
-    window, which an advised window's declared sync must be. `clocks` is a stand-in clock source in their place (a
-    test's, or a run's log, labelled as one), never both; with neither, every advised link is refused."""
+    place `_view` takes IoTieRequest's verdict from (`tie_service.Ties`, on the ingress tie's stream of record): None
+    refuses every advised link. `clock_certificates` are the certifier's clock certificates of the link's egress
+    windows (`certificate.ClockCertificate`), public, whoever delivers them: `clock_source` holds them to the link's
+    key and session (`advised.SignedClocks`) and gives the sync the certifier signed for each window, which every floor
+    reads and an advised window's declared sync must be. `clocks` is a stand-in clock source in their place (a test's,
+    or a run's log, labelled as one), never both; with neither, every advised link is refused."""
 
     link: str
     params: GridParams
@@ -1003,12 +1004,13 @@ class LinkWindows:
     def advised_check(self, opening: Opening, syncs: Sequence[ClockSync], advice: Any) -> bool:
         """The advised counts' check on the link-window (`advised.reference`, which the tests hold to the circuit): the
         egress head's counts are the advice's releases in the window's buckets (`advised.view`), and the ingress head's
-        counts release the request frames that view needs by each bucket, under the declared syncs, and the window's
-        `received`. False without an `advised.LinkAdvice`, a tie source (`ties`) or a clock source (`clock_source`), or
-        on an advice `view` refuses: not covering the window, without the tie from that source or not under it, with
-        requests whose ends under the profile's framing aren't the windows' total, releasing more than R frames in a
-        bucket, or releasing a frame in a window with no declared sync, one outside Σ_sync or other than the clock
-        source's, or before its request."""
+        counts release the request frames that view needs by each bucket, under the syncs the clock source says the
+        certifier ran, and the window's `received`. False without an `advised.LinkAdvice`, a tie source (`ties`) or a
+        clock source (`clock_source`), or on an advice `view` refuses: not covering the window, without the tie from
+        that source or not under it, with requests whose ends under the profile's framing aren't the windows' total,
+        releasing more than R frames in a bucket, or a frame past the link's windows, in one the clock source has no
+        sync for, or before its request; or where this window declares no sync, one outside Σ_sync or other than the
+        clock source's."""
         v = self._view(opening.window, syncs, advice)
         if v is None:
             return False
