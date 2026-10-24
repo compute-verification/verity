@@ -158,7 +158,10 @@ J10R_M_ENV = "DITHER_SO_J10R_M"
 # "1" (without -ov, D >= 3): a step that holds no capture leaves its round on the serving stream with its root and y
 # check copied to pinned memory, and returns to the engine; the next step's `before` waits for that copy, then sends
 # the root (`_lag_finish`), so the trees run while the engine's host work does.  Forward s + 1 stays behind them on the
-# serving stream; the same roots, round s's sent before step s + 1's forward is launched
+# serving stream; the same roots, round s's sent before step s + 1's forward is launched.  "2": as "1", but `before`'s
+# inputs go through pinned buffers without a host wait (dither_one's `_h2d`) and round s goes out there only if its copy
+# is already out, else at the next `after`'s start (after forward s + 1), so the trees also run while `before` and the
+# engine's input preparation do; round s then waits up to a forward longer for its coin (a deeper ring: -so10)
 ROOT_LAG_ENV = "DITHER_SO_ROOT_LAG"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
@@ -232,7 +235,10 @@ class SoWindow(DO.Window):
         self.gate_extra = self.depth + 8 + (1 if self.overlap else 0)
         self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(2)]
         self.ev_fwd = torch.cuda.Event()
-        self.root_lag = os.environ.get(ROOT_LAG_ENV) == "1"
+        self.root_lag = int(os.environ.get(ROOT_LAG_ENV) or 0)
+        if self.root_lag not in (0, 1, 2):
+            raise RuntimeError(f"${ROOT_LAG_ENV}={self.root_lag}: 0, 1 or 2")
+        self.h2d_pinned = self.root_lag == 2
         if self.root_lag and (self.overlap or self.depth < 3):
             raise RuntimeError(f"${ROOT_LAG_ENV}=1 serves -so<D> with D >= 3 and without -ov (its units read coin s "
                                f"D - 2 steps on, and -ov sends its rounds from a thread of its own)")
@@ -587,7 +593,8 @@ class SoWindow(DO.Window):
 
     def before(self, m: int) -> None:
         self.t_b0 = time.perf_counter()
-        self._lag_finish()
+        if self.root_lag == 1 or (self.lag is not None and self.ev_lag.query()):
+            self._lag_finish()
         if not self.open:
             self._start()
         if not self.overlap and DA.SIDE and DA.SIDE[0].spill is not None:
