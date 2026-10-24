@@ -35,6 +35,8 @@ A build with kh_units_multi_j10rc (h1u.cu's H1U_JRC: each call's column blocks h
 after its rows) is gated the same way under --j10r, its workspaces' column blocks poisoned too. Its units read no
 seed_c, so its seed fault flips unit 0's sigma_R (unit 0 alone moves), and one bit of call 0's first column block moves
 exactly call 0's units of column block 0. It is timed as step_multi_j10rc and step_blocks_j10rc (its rows and columns).
+With --j10r-sm, a build with kh_units_multi_j10rc_sm too is gated the same way under it on every SM (its faults through
+kh_units_multi_j10rc's blocks and units alone) and timed as step_multi_j10rc_sm.
 """
 from __future__ import annotations
 
@@ -102,6 +104,9 @@ class Lib:
             h.kh_units_multi_j10rc.argtypes = [vp, u32, u32, u32, vp, ctypes.c_int, vp]
             h.kh_j10r_ws_bytes.restype = ctypes.c_ulonglong
             h.kh_j10r_ws_bytes.argtypes = [u32, u32, u32]
+        self.j10rc_sm = self.j10rc and self.j10r_sm and hasattr(h, "kh_units_multi_j10rc_sm")
+        if self.j10rc_sm:
+            h.kh_units_multi_j10rc_sm.argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, vp]
 
 
 UCALL = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"), ("N", "<u4"), ("K", "<u4"), ("u0", "<u4"),
@@ -174,13 +179,12 @@ class MultiJ10R:
     call's J10-R seeds (Call.j10r_seed) and a row workspace of its own (rws[i], entry i's).  sm: a whole run (mode 0) is
     the served launch pair, kh_units_multi_j10r_sm on every SM (its warps taking units from a counter); its rows alone and
     units alone (modes 1, 2) stay kh_units_multi_j10r's, the same rows kernel and unit.  rc: kh_units_multi_j10rc,
-    each workspace its call's rows and then its columns (kh_j10r_ws_bytes)."""
+    each workspace its call's rows and then its columns (kh_j10r_ws_bytes); with sm, a whole run is
+    kh_units_multi_j10rc_sm's."""
 
     def __init__(self, lib: Lib, entries: list, sm: bool = False, rc: bool = False):
         if int(lib.h.kh_ucallr_bytes()) != UCALLR.itemsize:
             raise RuntimeError(f"kh_units_multi_j10r's UCallR is {int(lib.h.kh_ucallr_bytes())} bytes, not {UCALLR.itemsize}")
-        if sm and rc:
-            raise ValueError("MultiJ10R: sm (kh_units_multi_j10r_sm) or rc (kh_units_multi_j10rc), not both")
         self.lib, self.sm, self.rc = lib, sm, rc
         self.next = torch.zeros(int(lib.h.kh_smc_words()), dtype=torch.int32, device="cuda") if sm else None
         md = [int(lib.h.kh_digits(c.a.shape[1])) for c, _, _ in entries]
@@ -205,9 +209,9 @@ class MultiJ10R:
         n = self.units if units is None else units
         st = torch.cuda.current_stream().cuda_stream
         if self.sm and mode == 0:
-            if rc := self.lib.h.kh_units_multi_j10r_sm(self.tab.data_ptr(), self.n, n, self.rows, self.live.data_ptr(),
-                                                       1, 1, self.next.data_ptr(), st):
-                raise RuntimeError(f"kh_units_multi_j10r_sm rc {rc}")
+            f = self.lib.h.kh_units_multi_j10rc_sm if self.rc else self.lib.h.kh_units_multi_j10r_sm
+            if rc := f(self.tab.data_ptr(), self.n, n, self.rows, self.live.data_ptr(), 1, 1, self.next.data_ptr(), st):
+                raise RuntimeError(f"{f.__name__} rc {rc}")
             return
         f = self.lib.h.kh_units_multi_j10rc if self.rc else self.lib.h.kh_units_multi_j10r
         if rc := f(self.tab.data_ptr(), self.n, n, self.rows, self.live.data_ptr(), mode, st):
@@ -524,6 +528,7 @@ def main() -> int:
             else:
                 failed.add(f"{nm}:j10rc")
     sm_ok: set = set()
+    rcsm_ok: set = set()
     if args.j10r_sm:
         doc["j10r_sm_gates"] = {}
         for nm in names:
@@ -536,6 +541,16 @@ def main() -> int:
                 sm_ok.add(nm)
             else:
                 failed.add(f"{nm}:j10r_sm")
+        for nm in names:
+            if nm not in j10rc_ok or not libs[nm].j10rc_sm:
+                continue
+            g = j10r_gate(libs[nm], [calls[x][nm] for x in linears], refs, sm=True, rc=True)
+            doc.setdefault("j10rc_sm_gates", {})[nm] = g
+            print(json.dumps({"j10rc_sm": nm, "gate": g}), flush=True)
+            if g["ok"]:
+                rcsm_ok.add(nm)
+            else:
+                failed.add(f"{nm}:j10rc_sm")
     doc["gate_failed"] = sorted(failed)
     doc_path.write_text(json.dumps(doc, indent=1))
     if names[0] in failed:
@@ -618,6 +633,15 @@ def main() -> int:
             keep.append((mu, outs))
             arms[(nm, "step_multi_j10rc")] = (lambda mu: lambda i: mu.run())(mu)
             arms[(nm, "step_blocks_j10rc")] = (lambda mu: lambda i: mu.run(mode=1))(mu)
+        for nm in timed:
+            if nm not in rcsm_ok:
+                continue
+            outs = [torch.empty_like(calls[name][nm].out) for _ in range(args.layers) for name in ORDER]
+            mu = MultiJ10R(libs[nm], [(calls[name][nm], calls[name][nm].b if layer % 2 == 0 else bcopy[name],
+                                       outs[ORDER.index(name) + len(ORDER) * layer])
+                                      for layer in range(args.layers) for name in ORDER], sm=True, rc=True)
+            keep.append((mu, outs))
+            arms[(nm, "step_multi_j10rc_sm")] = (lambda mu: lambda i: mu.run())(mu)
         if args.multi:
             def step_nu(i, nm=names[0]):
                 for layer in range(args.layers):
@@ -671,7 +695,7 @@ def main() -> int:
             r["layer_units_us"] = round(sum(lay), 3)
             r["step_units_ms_from_calls"] = round(sum(lay) * args.layers / 1e3, 3)
         for arm in ("step", "step_multi", "step_noise_units", "step_multi_j10r", "step_rows_j10r", "step_multi_j10r_sm",
-                    "step_multi_j10rc", "step_blocks_j10rc"):
+                    "step_multi_j10rc", "step_blocks_j10rc", "step_multi_j10rc_sm"):
             if arm in r:
                 r[f"{arm}_ms"] = round(r[arm]["median_us"] / 1e3, 3)
         if "step_multi_j10r" in r and "step_multi" in r:
@@ -680,6 +704,8 @@ def main() -> int:
             r["sm_over_j10r"] = round(r["step_multi_j10r_sm"]["median_us"] / r["step_multi_j10r"]["median_us"], 4)
         if "step_multi_j10rc" in r and "step_multi_j10r" in r:
             r["j10rc_over_j10r"] = round(r["step_multi_j10rc"]["median_us"] / r["step_multi_j10r"]["median_us"], 4)
+        if "step_multi_j10rc_sm" in r and "step_multi_j10r_sm" in r:
+            r["rcsm_over_j10r_sm"] = round(r["step_multi_j10rc_sm"]["median_us"] / r["step_multi_j10r_sm"]["median_us"], 4)
     b0 = res[names[0]]
     for nm in timed[1:]:
         r = res[nm]
