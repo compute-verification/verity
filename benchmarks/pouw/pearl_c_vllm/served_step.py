@@ -213,6 +213,8 @@ def analyze(db: Path, batch: int | None) -> dict:
     con = sqlite3.connect(str(db))
     strings = dict(con.execute("SELECT id, value FROM StringIds"))
     tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "NVTX_EVENTS" not in tables:
+        return {"error": "no NVTX ranges in the profile", "tables": sorted(tables)}
     ranges: dict = defaultdict(list)
     for start, end, text, tid, textid in con.execute(
             "SELECT start, end, text, globalTid, textId FROM NVTX_EVENTS WHERE end IS NOT NULL"):
@@ -371,13 +373,17 @@ def breakdown(prof: dict, reps: dict | None) -> dict:
 
 def table(dirs: list[Path], base: str) -> tuple[dict, str]:
     """Each arm directory's breakdown (`breakdown`), and a Markdown table of them with each arm's cycle and harness
-    metrics over `base`'s (the arm id, as its directory's name)."""
-    arms = {}
+    metrics over `base`'s (the arm id, as its directory's name).  An arm whose profile has no step (`analyze`'s error) is
+    left out, under ``missing`` with its error."""
+    arms, missing = {}, {}
     for d in dirs:
         p = d / "step-profile.json"
         if p.is_file():
-            r = d / "reps.json"
-            arms[d.name] = breakdown(json.loads(p.read_text()), json.loads(r.read_text()) if r.is_file() else None)
+            prof, r = json.loads(p.read_text()), d / "reps.json"
+            if "full" not in prof:
+                missing[d.name] = prof.get("error", "no full-batch decode steps")
+                continue
+            arms[d.name] = breakdown(prof, json.loads(r.read_text()) if r.is_file() else None)
     names = list(arms)
     fmt = lambda v: "—" if v is None else f"{v:.2f}"  # noqa: E731
     lines = ["| per full-batch decode step (median, ms) | " + " | ".join(names) + " |",
@@ -402,7 +408,9 @@ def table(dirs: list[Path], base: str) -> tuple[dict, str]:
         for m in HARNESS_METRICS:
             bm = (b.get("harness_ms") or {}).get(m)
             row(f"{m} / {base}", lambda a, m=m, bm=bm: (a.get("harness_ms") or {}).get(m, 0) / bm if bm else None)
-    return {"schema": "verity-pouw/served-step-table/v1", "base": base, "arms": arms}, "\n".join(lines) + "\n"
+    lines += [f"\n{n}: {why}" for n, why in missing.items()]
+    return ({"schema": "verity-pouw/served-step-table/v1", "base": base, "arms": arms, "missing": missing},
+            "\n".join(lines) + "\n")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -2179,6 +2179,26 @@ def test_the_served_steps_breakdown_puts_each_arms_kernels_and_host_time_in_its_
     assert "| inter_token_latency_p50_s / stock-fp8_compiled | 5.50 | 1.00 |" in md
 
 
+def test_an_arm_whose_profile_has_no_nvtx_ranges_is_listed_as_missing_not_tabled(tmp_path):
+    import sqlite3
+    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    db = tmp_path / "eager.sqlite"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE StringIds (id INTEGER, value TEXT)")
+    con.commit()
+    bare = S.analyze(db, 8)
+    assert bare["error"] == "no NVTX ranges in the profile" and "full" not in bare
+    pearl, eager = tmp_path / "pouw_pearl-c-sm120-v1-h3", tmp_path / "stock-fp8_eager"
+    for d in (pearl, eager):
+        d.mkdir()
+    (pearl / "step-profile.json").write_text(json.dumps(S.analyze(_served_step_profile(tmp_path / "served.sqlite"), 8)))
+    (eager / "step-profile.json").write_text(json.dumps(bare))
+    doc, md = S.table([pearl, eager], pearl.name)
+    assert list(doc["arms"]) == [pearl.name]
+    assert doc["missing"] == {eager.name: "no NVTX ranges in the profile"}
+    assert f"{eager.name}: no NVTX ranges in the profile" in md
+
+
 def test_the_served_steps_host_records_are_the_timed_reps_decode_steps():
     S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
     ms = 1_000_000
