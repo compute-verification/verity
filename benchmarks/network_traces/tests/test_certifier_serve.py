@@ -263,8 +263,7 @@ def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_
 
     probed, plan, out = asyncio.run(go())
     assert probed["body"] == {"model": "stub-model", "prompt": list(range(128)), "max_tokens": TOKENS,
-                              "min_tokens": TOKENS, "stream": True, "ignore_eos": True, "temperature": 0,
-                              "top_p": 1.0}
+                              "min_tokens": TOKENS, "stream": True, "ignore_eos": True, "temperature": 0}
     assert all(b == probed["body"] for b in endpoint.bodies) and len(endpoint.bodies) == 4 + 4 + REQUESTS
     assert plan["served"]["in_flight"] == 4 and plan["request_major"]
     sends = [q["send_ms"] for q in plan["requests"]]

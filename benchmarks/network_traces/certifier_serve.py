@@ -26,8 +26,7 @@ namespace has no other interface. On real hosts it is only the route of the meas
 **The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends,
 straight from the host, `--in-flight` requests at a time after one uncounted round: `/v1/completions`, streamed, a
 prompt of exactly `--prompt-tokens` tokens (`PROMPT` padded with `FILLER` in the endpoint's own tokenizer, `/tokenize`,
-and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), temperature 0 and top_p 1
-(sent, so the endpoint's generation_config never supplies them). F, the
+and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), temperature 0. F, the
 frames of a response, is that token count, not the endpoint's events: vLLM v1 merges a request's tokens that its API
 server hasn't read yet into one chunk, so with several in flight a response's last two tokens sometimes share one
 event and sometimes don't, though the tokens are the same. vLLM's detokenizer holds back a token whose bytes end
@@ -448,9 +447,9 @@ class CertifierProcess:
 
 def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT) -> dict:
     """The request every session of a served plan sends: exactly `tokens` tokens (`min_tokens` and `max_tokens`, never
-    stopped early), greedy (temperature 0, top_p 1), streamed."""
+    stopped early), greedy, streamed."""
     return {"model": model, "prompt": prompt, "max_tokens": tokens, "min_tokens": tokens, "stream": True,
-            "ignore_eos": True, "temperature": 0, "top_p": 1.0}
+            "ignore_eos": True, "temperature": 0}
 
 
 def _call(url: str, path: str, body: dict | None = None, api_key_env: str | None = None) -> dict:
