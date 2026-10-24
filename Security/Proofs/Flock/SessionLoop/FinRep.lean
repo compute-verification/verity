@@ -25,7 +25,7 @@ carries the round's `n` coins, then `T_n`, its salt and its path (`CoinLayer.ope
 count below `2^64` (the round header's `u64`). Its premises, stated here:
 
 * **(c.1) `Loop.FinRepCoins`**: the request's coins are the opened coins from the rep's first round (`Masked.repBase`),
-  below each round's count, and the rep ends by the last opening.
+  below each round's count, and the rep ends by the last opening. It holds in the masked scope (`Loop.finRepCoins`).
 * **(c.2) `Loop.FinRepPads`**: the rep's table commits under `hm96-sha512`, and the request's pads have the layout's
   length, `h_ab = h_a·h_b` and `w = x·y` (`repFw_eq`'s premises). It holds in the masked scope (`Loop.finRepPads`).
 -/
@@ -120,6 +120,82 @@ def FinRepCoins : Prop :=
       Masked.repBase x k + q.coins.size ≤ refK x ∧
         ∀ k' < q.coins.size, ∀ i < (q.coins[k']!).size,
           Masked.slotAt (finCoins x ops) (Masked.repBase x k + k') i = (q.coins[k']!)[i]!
+
+theorem take_map_range (f : ℕ → ℕ) {k N : ℕ} (h : k ≤ N) :
+    ((List.range N).map f).take k = (List.range k).map f := by
+  apply List.ext_getElem
+  · simp only [List.length_take, List.length_map, List.length_range]
+    omega
+  · intro i h1 h2
+    simp
+
+/-- **(c.1) holds in the masked scope**: the request's coins are `seenRounds`', rep stream `k`'s round `k'` the
+history's entry `repBase x k + k'` past `Hello` (`streamAt` is `repStartZk` less the link's round), whose words below the
+round's count are the opened coin's (`CoinLayer.rd`), and the rep's last round is before `repStartZk` of the last
+stream, `refK x` (`repStart_last`, `refK_eq`). -/
+theorem finRepCoins (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) :
+    FinRepCoins L₀ src real wk x w := by
+  have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
+    intro α β y f b hb
+    cases y with
+    | error e => cases hb
+    | ok a => exact ⟨a, rfl, hb⟩
+  intro ν t κ m₀ ρ₀ ops hctx s0 spec hsx k hk tb hi q f hR
+  obtain ⟨-, -, hT, -⟩ := FlockComplete.ZkTables.tables_of_setup hsc hsx
+  have hrs : spec.repStreams.size = 2 * spec.tables.size := FlockDeploy.repStreams_size spec
+  have hops : ops.length = refK x := hctx.1
+  obtain ⟨-, hq, -⟩ := hR
+  unfold repInOf at hq
+  obtain ⟨⟨lay, ms⟩, -, hq⟩ := bok hq
+  have hqc : q.coins =
+      ((seenRounds x ((m₀, ρ₀) :: ops) (roundsOf spec (Masked.stsOf x)) k).map fun r => r.2.2).toArray := by
+    cases hq
+    rfl
+  have hrk : (roundsOf spec (Masked.stsOf x)).getD k 0 = FlockDeploy.repRounds true spec (Masked.stsOf x)[k / 2]! := by
+    unfold roundsOf
+    rw [List.getD_eq_getElem _ _ (by simp only [List.length_map, List.length_range]; omega)]
+    simp
+  have hsz : q.coins.size = FlockDeploy.repRounds true spec (Masked.stsOf x)[k / 2]! := by
+    rw [hqc, List.size_toArray, List.length_map]
+    simp only [seenRounds, List.length_map, List.length_range, hrk]
+  have hbase : Masked.repBase x k = FlockComplete.repStartZk spec (Masked.stsOf x) k := Masked.repBase_eq hsx k
+  have hstream : streamAt (roundsOf spec (Masked.stsOf x)) k + 1 = Masked.repBase x k := by
+    rw [hbase]
+    unfold streamAt roundsOf FlockComplete.repStartZk
+    rw [take_map_range _ (by omega)]
+    first
+    | omega
+    | rw [Nat.add_comm]
+  have hend : Masked.repBase x k + q.coins.size ≤ refK x := by
+    rw [hsz, hbase, ← FlockComplete.ZkTables.repStart_succ, Masked.refK_eq hsx,
+      ← FlockComplete.ZkTables.repStart_last]
+    exact FlockComplete.ZkTables.repStart_mono _ _ (by omega)
+  refine ⟨hend, fun k' hk' i hi => ?_⟩
+  have hQ : Masked.repBase x k + k' < ops.length := by omega
+  have hQK : Masked.repBase x k + k' < refK x := by omega
+  have hent : q.coins[k']! =
+      wordsAt x (ops.map fun p => CoinLayer.rd p.2) (Masked.repBase x k + k') := by
+    rw [getElem!_pos q.coins k' hk']
+    simp only [hqc, List.getElem_toArray, List.getElem_map]
+    unfold seenRounds
+    simp only [List.getElem_map, List.getElem_range, List.tail_cons]
+    congr 1
+    omega
+  have hw : wordsAt x (ops.map fun p => CoinLayer.rd p.2) (Masked.repBase x k + k') =
+      (CoinLayer.rd ops[Masked.repBase x k + k'].2).vals
+        (min (loopNr x (Masked.repBase x k + k')) _root_.Flock.Firewall.Frames.COIN_MAX) := by
+    unfold wordsAt
+    rw [List.getElem?_map, List.getElem?_eq_getElem hQ]
+    rfl
+  rw [hent, hw] at hi ⊢
+  have hi' : i < min (loopNr x (Masked.repBase x k + k')) _root_.Flock.Firewall.Frames.COIN_MAX := by
+    simpa [FlockDeploy.Coin.vals] using hi
+  rw [getElem!_pos _ i hi]
+  simp only [FlockDeploy.Coin.vals, Array.getElem_map, Array.getElem_range]
+  unfold Masked.slotAt
+  rw [dif_pos hQK]
+  show ((ops.map fun p => CoinLayer.rd p.2).getD (Masked.repBase x k + k') default).at i = _
+  rw [List.getD_eq_getElem _ _ (by simpa using hQ), List.getElem_map]
 
 /-- **(c.2) The rep's table and pads**: at a `Finish` `FinishIs` reads, rep stream `k`'s table commits under
 `hm96-sha512`, and its request's pads have the layout's length, `h_ab = h_a·h_b` and `w = x·y`. -/
