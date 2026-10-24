@@ -80,10 +80,12 @@ class Model:
 
 
 MODELS = {
+    # a decode step takes about 20 ms from 10 to 180 rows and whole prefills run at about 105k tokens/s; 8192 KV tokens
+    # serve about 7 requests/s (the 200-request smoke, r20261024-052926-14e8)
     "llama32_1b": Model("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "llama-3.2-1b",
                         "Llama-3.2-1B (G-A's LLAMA32_1B), bf16, the bi-eager engine, vLLM's own attention",
                         ("--dtype", "bfloat16"), {},
-                        {"light": 4.0, "medium": 20.0, "heavy": 300.0, "chunked": 40.0, "smallkv": 30.0}),
+                        {"light": 4.0, "medium": 20.0, "heavy": 300.0, "chunked": 40.0, "smallkv": 10.0}),
     # a decode step takes about 32 ms from 5 to 50 rows and whole prefills run at about 37k tokens/s (the 60-request smoke,
     # r20261024-045656-4c66)
     "llama31_8b_int8": Model("verity-int8/Llama-3.1-8B-INT8", "723d342ac443b040931242c768df342b0f6f15a7", "llama-3.1-8b-int8",
@@ -274,7 +276,13 @@ def versions() -> dict:
     return out
 
 
+def _terminated(signum, frame):
+    raise SystemExit(128 + signum)
+
+
 def run(args: argparse.Namespace) -> int:
+    # SIGTERM (run.sh's deadline) unwinds through run_trace's `finally`, which stops the server: it runs in a session of its own
+    signal.signal(signal.SIGTERM, _terminated)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     _, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
