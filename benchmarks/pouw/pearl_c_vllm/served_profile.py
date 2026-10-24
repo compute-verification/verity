@@ -148,7 +148,7 @@ CATEGORIES = (
     ("pearlc:lines_a", r"^lines$"),
     ("pearlc:a_commit", r"^pd_commit_|^pd_tree_|^pd_heads$"),
     ("pearlc:tile_hash", r"^pd_tiles_"),
-    ("pearlc:forming", r"^(stats_s5|form_s5|eprime|words|words_u|gemm_words|pa|pb|quant_s5|plainq|diff_words|gen_f32)$"
+    ("pearlc:forming", r"^(stats_s5|stats_r|form_s5|eprime|words|words_u|words_k|gemm_words|pa|pb|quant_s5|plainq|diff_words|gen_f32)$"
                        r"|^(stats_s5|form_s5|gemm_words)"),
     ("pearlc:row_digests", r"^s512_rows$|^s512_row_segs$"),
     ("pearlc:seeds", r"^s512_seeds$"),
