@@ -61,8 +61,8 @@ one (`no-id`, a stop's flag without the last's among them), one naming another r
 at a stream's end (`trailing`). The online prover's paths are neither restarted nor served. The salt's own paths: its
 connection refused, which faults the ingress window `delivery-refused`, and a salt drained a window late or never
 (`salt-stall`), which faults nothing; a restart's: an event at a position before the restart's (`stale`, malformed).
-Link garbage includes a salt frame read from the link, never the certifier's. The tick that releases each request frame and each salt frame is the
-real `active.Bucketer`'s on the trace's arrivals.
+Link garbage includes a salt frame read from the link, never the certifier's. The tick that releases each request
+frame and each salt frame is the real `active.Bucketer`'s on the trace's arrivals.
 """
 from __future__ import annotations
 
