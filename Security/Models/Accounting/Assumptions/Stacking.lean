@@ -124,8 +124,8 @@ most `2^a` values as the codec and the append coins `y` vary, and the pass's dev
 (`RateSketch.SketchSummarySession`), know the layout they run on.
 
 **Why it should hold.** The layout is the memory map's schedule: which blocks are resident and planned when the pass's
-step begins. The memory map makes it a function of the served steps (frees at last read, writes at production, re-keys
-at the life cap only). What the prover chose after an append's coin can follow that append's encodings, and the
+step begins. The memory map makes it a function of the served steps (frees at the values' last structural reader,
+writes at production, re-keys at the life cap only). What the prover chose after an append's coin can follow that append's encodings, and the
 summary is the part of it the layout reads. The prover that steers the layout knows that part, so its devices are told
 it, and this premise is only that the layout reads nothing more of `y`. That the served steps are a function of the
 run inputs, each request's arrival step at the engine and the coins is the engine's code, held by a check that its

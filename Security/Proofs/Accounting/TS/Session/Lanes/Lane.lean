@@ -1,5 +1,7 @@
 import Proofs.Accounting.TS.Session.Lanes.Combine
 import Proofs.Pouw.H1Zy.Lane
+import Proofs.Pouw.H1Zy.LaneBits
+import Definitions.Pouw.H1Zy.Chain
 
 /-!
 # A lane's part of `LeafChecks` from its Definition
@@ -20,8 +22,16 @@ proved here for every input, at a `K` the lane's tile binds at (`32 ∣ K`, `K <
 
 What stays of the field is the first two claims, `LaneComputes`: on every wire assignment the session's evaluation
 agrees with, the decoded `ok` is the Definition's on `laneIn`. `leafChecks_of_computes` gives `LeafChecks` from it and
-`CombineComputes`. Still a parameter: `chain`, the lane's chain words, which are to be `h1zy.lane_partial`'s fold (the
-fx1 chain over the noise from σ_J and the keys from σ_R), and `dqW`'s float roundings.
+`CombineComputes`. Everything here is generic in `dqW` and `chain`; `Accounting.Guarantees.TS.LeafLanesSound` takes
+`dqW` to be the Definition's, `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`), and `chain` to be `laneChain K nw`, the words
+of `h1tile._chain` (`Pouw.H1Zy.h1Chain K`: the fx1 chain over the noise from σ_J, keyed from σ_R) at the seeds the
+`pub` row holds.
+
+`LaneComputes` is in turn split at the lane's pieces: `LaneLowers` says the circuit computes the body on bits, its pieces
+at their lowerings (`Pouw.H1Zy.laneBits`: the s8 multiply's Baugh–Wooley steps and clamp, `PouwZyCell_v2`,
+`PouwMuxBit_v2`, `PouwMask32_v2`, `PouwEq32_v2`), the dequant and the chain's words at their word views on bits. That
+each restated piece's lowering computes its word view, and so their composition the body on words, is proved
+(`Pouw.H1Zy.laneBits_bv`). The two are equivalent (`laneLowers_iff`).
 -/
 
 namespace Accounting.TS.Lanes
@@ -58,6 +68,12 @@ def partOf {K nw : ℕ}
   fun P l a b w => Pouw.H1Zy.mask32
     (chain P l (fun s k => BitVec.ofInt 8 ((a s).codes k)) (fun t k => BitVec.ofInt 8 ((b t).codes k)) w)
     (Pouw.H1Zy.tree Pouw.H1Zy.orBit false (List.ofFn P.admit))
+
+/-- **The lane's chain words** at contraction `K`: `Pouw.H1Zy.h1Chain K`'s words (`h1tile._chain`) on lane `l`'s rows'
+codes, its seeds the salt, position and roots of the `pub` row `P`. -/
+def laneChain (K nw : ℕ) :
+    LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32 :=
+  fun P l a b => Pouw.H1Zy.chainOf (Pouw.H1Zy.h1Chain K nw) ⟨P.salt, P.position, P.roots⟩ l a b
 
 /-! ### Fields' bits as words -/
 
@@ -186,16 +202,45 @@ def LaneComputes {K nw : ℕ} (T : Tile)
     (decL K nw T (sess (some l)) (portRead (sess (some l)) vals)).ok =
       Pouw.H1Zy.laneOk chain dqW (laneIn K nw T (portBit (sess (some l)) (portRead (sess (some l)) vals)))
 
-/-- **`LeafChecks` from the circuits computing their Definitions**: at a `K` the lane's tile binds at, with `dq` and
-`part` the Definition's (`dqOf dqW`, `partOf chain`), `LaneComputes` and `CombineComputes` give
-`Accounting.Assumptions.TS.LeafChecks` at the layout's decodes; that each Definition's `ok = 1` is `LaneOk` or
+/-- **Each lane's circuit computes its pieces' composition at its port rows**: at lane `l`'s session `sess (some l)`, on
+every wire assignment the key program's evaluation agrees with on every unit's wires, the `ok` word `decL` reads from the
+port rows is `PouwH1LaneZy_v1{PouwH1Tile_v1}`'s body on bits (`Pouw.H1Zy.laneBits`) on the bits of the words `laneIn`
+reads, at the dequant's word view `dqW` and the chain's words `chain` on bits (`Pouw.H1Zy.liftDq`, `liftChain`). What
+it rests on is circuit-check's lowering of `PouwH1LaneZy_v1`, which composes those pieces. -/
+def LaneLowers {K nw : ℕ} (T : Tile)
+    (chain : LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32)
+    (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (sess : Option (Fin 32) → RowsSession) : Prop :=
+  ∀ l (vals : Fin (sess (some l)).Circ.N → Bool),
+    (∀ u, ∀ g ∈ (sess (some l)).P.io u, (sess (some l)).Circ.eval vals g = vals g) →
+    (decL K nw T (sess (some l)) (portRead (sess (some l)) vals)).ok =
+      Pouw.H1Zy.laneBits (Pouw.H1Zy.liftChain chain) (Pouw.H1Zy.liftDq dqW)
+        (laneIn K nw T (portBit (sess (some l)) (portRead (sess (some l)) vals))).bits
+
+/-- **`LaneComputes` is `LaneLowers`**: the pieces' lowerings compose to the body on words (`Pouw.H1Zy.laneBits_bv`). -/
+theorem laneLowers_iff {K nw : ℕ} (T : Tile)
+    (chain : LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32)
+    (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (sess : Option (Fin 32) → RowsSession) :
+    LaneLowers T chain dqW sess ↔ LaneComputes T chain dqW sess := by
+  unfold LaneLowers LaneComputes
+  simp only [Pouw.H1Zy.laneBits_bv]
+
+/-- **`LaneComputes` from `LaneLowers`.** -/
+theorem laneComputes_of_lowers {K nw : ℕ} {T : Tile}
+    {chain : LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32}
+    {dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16} {sess : Option (Fin 32) → RowsSession}
+    (h : LaneLowers T chain dqW sess) : LaneComputes T chain dqW sess :=
+  (laneLowers_iff T chain dqW sess).1 h
+
+/-- **`LeafChecks` from the circuits computing their Definitions**: with `dq` and `part` the Definition's (`dqOf dqW`,
+`partOf chain`), `LaneComputes` and `CombineComputes` give `Accounting.Assumptions.TS.LeafChecks` at the layout's
+decodes, whose lane field asks only at a `K` the lane's tile binds at; that each Definition's `ok = 1` is `LaneOk` or
 `CombineOk` is `laneOk_of_def` and `combineOk_of_def`. -/
 theorem leafChecks_of_computes {K nw : ℕ} (T : Tile)
     (chain : LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32)
-    (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (sess : Option (Fin 32) → RowsSession) (hK32 : 32 ∣ K)
-    (hK : K < 2 ^ 17) (hL : LaneComputes T chain dqW sess) (hC : CombineComputes sess (decC nw T)) :
+    (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (sess : Option (Fin 32) → RowsSession)
+    (hL : LaneComputes T chain dqW sess) (hC : CombineComputes sess (decC nw T)) :
     Accounting.Assumptions.TS.LeafChecks (dqOf dqW) (partOf chain) sess (decL K nw T) (decC nw T) :=
   leafChecks_of_combineComputes _ _ sess _ _
-    (fun l vals hv hok => laneOk_of_def T chain dqW _ hK32 hK ((hL l vals hv).symm.trans hok)) hC
+    (fun hK32 hK l vals hv hok => laneOk_of_def T chain dqW _ hK32 hK ((hL l vals hv).symm.trans hok)) hC
 
 end Accounting.TS.Lanes

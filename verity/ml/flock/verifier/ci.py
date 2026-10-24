@@ -71,10 +71,11 @@ def fetch(art, store):
     return files[0] if len(files) == 1 and files[0].is_file() else d
 
 
-def canonical(src, dst):
+def canonical(src, dst, records=("session.json",)):
     """The stored session directory `src` at `dst`, its record in the canonical text the writers emit
     (`record_text.session_text`): the stored vectors predate it. Its other files are hard links (copies across devices); a
-    record that isn't JSON is kept as it is."""
+    record that isn't JSON is kept as it is. `records`: the records to re-render, relative to `dst` (`canonical_tree`'s
+    are every `session.json` under it)."""
     if not dst.exists():
         def link(a, b):
             try:
@@ -82,15 +83,29 @@ def canonical(src, dst):
             except OSError:
                 shutil.copy2(a, b)
         shutil.copytree(src, dst, copy_function=link)
-        rec = dst / "session.json"
-        if rec.is_file():
+        for rec in (dst / r for r in (records(dst) if callable(records) else records)):
+            if not rec.is_file():
+                continue
             try:
                 v = json.loads(rec.read_text())
             except ValueError:
-                return dst
+                continue
             rec.unlink()
             rec.write_text(session_text(v))
     return dst
+
+
+def canonical_tree(src, dst):
+    """`canonical` of a stored tree of sessions: every `session.json` under it re-rendered. Only for a tree whose records
+    nothing binds by their bytes (a recursive set's inner record is: re-render the session being verified alone)."""
+    return canonical(src, dst, lambda d: [p.relative_to(d) for p in d.rglob("session.json")])
+
+
+def fetch_sessions(art, store):
+    """`fetch`, as a `canonical_tree` copy under store/<id>.canonical/: a stored set whose sessions a test verifies."""
+    ref, _, path = art.partition("/")
+    d = canonical_tree(fetch(ref, store), store / (ref.split(":", 1)[1] + ".canonical"))
+    return d / path if path else d
 
 
 def py(*args):

@@ -4,21 +4,32 @@ module that no longer compiles (two merges git combines cleanly that Lean doesn'
 the audit's cold build reaches it.
 
     python tools/verity/lean/lean_changed.py --cache DIR --deps DIR --tree DIR
-    python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR]   a lane's records, on a kept tree
+    python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR] [--dev-cache]   a lane's records
 
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a tree kept per slot, which prints what the audit prints,
 `--update`'s review included, after a build of only what changed since that slot's last run. It first waits for one of the
-node's Lean slots of pool `build` (`lean_slot.py`; refused when SLOTS lists no `build` pool, which pool `any` never stands in
-for), never one of the `audit` pool's, where hour-long audits hold every slot, whatever slot (LEAN_SLOT) the process that
-started it holds. Slot `build/I`'s tree is `lean-records/build-I` under the check cache, whoever holds that slot's lock owns
-it, and check.py inherits the lock's descriptor, so the slot is held until check.py exits; with no SLOTS (a laptop) the tree
-is `lean-records/local`. `--tree` names another only under `lean-records/`. The tree's fetched dependencies are its own copy
+node's Lean slots of pool `build` (`lean_slot.py`; pool `any` never stands in for it), never one of the `audit` pool's, where
+hour-long audits hold every slot, whatever slot (LEAN_SLOT) the process that started it holds. Where SLOTS lists no `build`
+pool, or with `--dev-cache` (a slot tree whose dependencies are fetched cold builds them from source), it takes the `--dev-cache` path
+instead (`dev_records`): `check.py --dev-cache --build --no-replay --no-runs` on this
+checkout's PKG, then its requirers, each build restored from the published cache (Security: about 40 minutes), with the same
+reports, record keep and kind; that path builds in this checkout, so a run takes it only with `--cwd clone`. It says which
+path it took, and a recorded run's `result.json` names it (`path`: `slot` or `dev-cache`). Slot `build/I`'s tree is
+`lean-records/build-I` under the check cache, whoever holds that slot's lock owns it, and check.py inherits the lock's
+descriptor, so the slot is held until check.py exits; with no SLOTS (a laptop) the tree is `lean-records/local`. `--tree` names another only under `lean-records/`. The tree's fetched dependencies are its own copy
 of the audit's (taken once per manifest and toolchain, else fetched cold), never links, so what Lake writes there stays out of
 what the audit keeps. That bounds Lake's own writes, not compile-time code: check.py builds in its sandbox only where the
 machine allows one, and without it that code can write anything this user can, the audit's kept dependencies and passes
 included, as any build this user runs by hand can. `--update` writes the record back into this checkout, but not in a recorded
-run, whose source tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`.
+run, whose source tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`, and on either path a
+record that changed is also kept as `lean-audit/record/lean-audit.json`. A run marks the tree (`DIRTY`: its id, package and
+phase) while it works there and clears the mark when it ends without a check.py killed, so the next run knows a tree left
+mid-way (a run cancelled, timed out or killed for memory) and says so. Before each build it `repair`s the tree: a module an
+interrupted build left half-written (an output its trace lists missing, an `.olean` that is not one) loses its trace, so
+Lake rebuilds it, and after a run left mid-way, a package's fetched dependencies that run was taking, or that hold such a
+module or a checkout other than the manifest's, are taken again. A spec whose `proved_in` package's build did not pass
+never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left.
 
 Then it audits, the same way but never with `--update`, every package whose guarantees' records read PKG's build
 (`requirers`: PKG is in its `closure`, by path or by `proved_in`), each after those it requires, its reports under
@@ -337,6 +348,105 @@ def hold_tree(held, tree: Path, log=print) -> bool:
     return True
 
 
+#: beside the packages in a `--records` tree while a run works on it: the run, the package and the phase it is in. The tree's
+#: lock is held while it exists, so a run that takes the lock and finds it took the tree from one that ended mid-way (killed,
+#: cancelled, timed out, out of memory, its node stopped), and `repair`s it first
+DIRTY = "dirty.json"
+
+
+def mark(tree: Path, **what) -> None:
+    """`DIRTY`, replaced whole: this run and ``what`` (`package`, `phase`)."""
+    doc = {"run": os.environ.get("RESEARCH_RUN_ID") or "a run", "pid": os.getpid(),
+           "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **what}
+    tmp = tree / f"{DIRTY}.tmp"
+    tmp.write_text(json.dumps(doc, sort_keys=True) + "\n")
+    os.replace(tmp, tree / DIRTY)
+
+
+def left_by(tree: Path) -> dict | None:
+    """The `DIRTY` a run left in ``tree`` (``{}`` when it can't be read), or None when the last run ended cleanly."""
+    try:
+        doc = json.loads((tree / DIRTY).read_text())
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def damaged(lib: Path) -> list[Path]:
+    """The traces under ``lib`` (a `.lake/build/lib/lean`) whose module an interrupted build left half-written: an output
+    the trace lists that is missing, an `.olean` without the olean header, an output whose `.hash` is not the trace's, or
+    a trace that is not JSON. Lake rebuilds a module whose outputs are missing, but takes one whose trace matches and whose
+    files exist as built, half-written or not, so each loses its trace for Lake to rebuild it."""
+    out = []
+    for trace in sorted(lib.rglob("*.trace")) if lib.is_dir() else []:
+        base = trace.with_suffix("")
+        try:
+            doc = json.loads(trace.read_text())
+            outputs = doc.get("outputs") if isinstance(doc, dict) else None
+            names = [n for k, v in outputs.items() if k in ("o", "i") for n in (v if isinstance(v, list) else [v])
+                     if isinstance(n, str)] if isinstance(outputs, dict) else []
+            for name in names:
+                digest, _, ext = name.partition(".")
+                f = base.with_name(f"{base.name}.{ext}")
+                if not f.is_file() or (ext == "olean" and f.open("rb").read(5) != b"olean"):
+                    raise ValueError(f"{f.name} missing or not an olean")
+                if (h := f.with_name(f"{f.name}.hash")).is_file() and h.read_text().strip() != digest:
+                    raise ValueError(f"{h.name} is not the trace's")
+        except (OSError, ValueError, UnicodeDecodeError):
+            out.append(trace)
+    return out
+
+
+def repair(tree: Path, pkgs: list[str], links: dict[str, str], left: dict | None, log=print) -> None:
+    """Make ``tree``'s copy of ``pkgs`` one Lake builds from, whatever a run left there: each module whose outputs `damaged`
+    finds loses its trace, so Lake rebuilds it. Where a run ended mid-way (``left``, its `DIRTY`), also each package whose
+    fetched dependencies hold a damaged module or a checkout that is not its manifest's, and the one whose dependencies it
+    was taking (`phase` `deps`), has them dropped, so they are taken again."""
+    if left is not None:
+        what = f"{left.get('package', '?')} in phase {left.get('phase', '?')}" if left else "an unreadable record"
+        log(f"lean-records: {tree} was left mid-way by {left.get('run', 'a run')} (pid {left.get('pid', '?')}, "
+            f"{what}, {left.get('at', '?')}"
+            + (f", check.py exit {left['killed']}" if "killed" in left else "") + "): checking it before it is built")
+    for p in pkgs:
+        bad = damaged(tree / p / ".lake" / "build" / "lib" / "lean")
+        for t in bad:
+            t.unlink(missing_ok=True)
+        if bad:
+            names = [str(t.relative_to(tree / p / ".lake" / "build" / "lib" / "lean").with_suffix("")) for t in bad]
+            log(f"lean-records: {p}: {len(bad)} module(s) half-written by an earlier build, rebuilt: "
+                f"{', '.join(names[:8])}{' ...' if len(names) > 8 else ''}")
+        if left is None:
+            continue
+        why = "the run was taking them" if left.get("phase") == "deps" and left.get("package") == p else None
+        packages = tree / p / ".lake" / "packages"
+        for d in sorted(packages.iterdir()) if why is None and packages.is_dir() else []:
+            if damaged(d / ".lake" / "build" / "lib" / "lean"):
+                why = f"{d.name} holds a module half-written"
+            elif (want := checkout(p, tree, d.name)) and (d / ".git").exists() and git_head(d) != want:
+                why = f"{d.name} is not the checkout its manifest pins ({want[:12]})"
+            if why:
+                break
+        if why and packages.exists():
+            unlink(p, tree, links)
+            log(f"lean-records: {p}: its fetched dependencies were dropped ({why}); they are taken again")
+
+
+def checkout(pkg: str, tree: Path, name: str) -> str | None:
+    """The revision ``tree/pkg``'s manifest pins for its fetched dependency ``name``."""
+    try:
+        doc = json.loads((tree / pkg / "lake-manifest.json").read_text())
+    except (OSError, ValueError):
+        return None
+    return next((d.get("rev") for d in doc.get("packages", []) if d.get("name") == name and d.get("type") == "git"), None)
+
+
+def git_head(d: Path) -> str | None:
+    r = subprocess.run(["git", "-c", "safe.directory=*", "-C", str(d), "rev-parse", "HEAD"], capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
 def records_tree() -> Path:
     """The tree of the Lean slot this process holds (LEAN_SLOT, `build/1` -> `build-1`), else `local`."""
     return LA.COMMON.cache_dir() / RECORDS / (os.environ.get(LEAN_SLOT.HELD) or "local").replace("/", "-")
@@ -354,14 +464,15 @@ def label(out: Path) -> None:
         p.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
 
 
-def write_result(run_dir: Path, run_id: str, pkg: str, rc: int, out: Path, update: bool) -> None:
-    """A recorded run's `result.json`, of kind ``FAST_KIND``: what `research merge` reads of the Attempt."""
+def write_result(run_dir: Path, run_id: str, pkg: str, rc: int, out: Path, update: bool, path: str = "slot") -> None:
+    """A recorded run's `result.json`, of kind ``FAST_KIND``: what `research merge` reads of the Attempt. ``path``: `slot`
+    (a `build` slot's tree) or `dev-cache` (`dev_records`)."""
     rel = os.path.relpath(out, run_dir)
     doc = {"schema": "research/result/v0.1", "kind": FAST_KIND, "run_id": run_id,
-           "workload_fingerprint": {"package": pkg, "update": update, "replay": False, "runs": False},
+           "workload_fingerprint": {"package": pkg, "update": update, "replay": False, "runs": False, "path": path},
            "validation": {"status": "passed" if rc == 0 else "failed", "checker": "tools/verity/lean/lean_changed.py --records",
-                          "detail": f"check.py exit {rc} without the kernel replay or the tests: not a Lean verdict, and no "
-                                    "merge accepts it"},
+                          "detail": f"check.py exit {rc} on the {path} path, without the kernel replay or the tests: not a "
+                                    "Lean verdict, and no merge accepts it"},
            "artifacts": [] if rel.startswith("..") else [rel]}
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
@@ -369,10 +480,11 @@ def write_result(run_dir: Path, run_id: str, pkg: str, rc: int, out: Path, updat
 
 
 def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool = False, moved: Path | None = None,
-                  out: Path | None = None, log=print) -> int:
+                  out: Path | None = None, log=print, dev_cache: bool = False) -> int:
     """`--records`: `check.py --build --no-replay --no-runs` on the package ``name`` names, in ``tree`` (default: the tree of the
-    `build` slot it takes; any other must be under `RECORDS`); check.py's exit status, or 2 when ``tree`` is not under
-    `RECORDS`, ``name`` matches no single package, the node's Lean slots refuse it or another run holds the tree past `TREE_WAIT_S`."""
+    `build` slot it takes; any other must be under `RECORDS`), or `dev_records` where the node's Lean slots grant no `build`
+    slot or ``dev_cache`` asks for it; check.py's exit status, or 2 when ``tree`` is not under `RECORDS`, ``name`` matches no single package or another run
+    holds the tree past `TREE_WAIT_S`."""
     base = (LA.COMMON.cache_dir() / RECORDS).resolve()
     if tree is not None and base not in tree.resolve().parents:
         log(f"lean-records: {tree} is not under {base}: the fast path builds only on its own trees, never on check's "
@@ -393,58 +505,68 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     if why := AUDIT.memory_refusal(audited, AUDIT.memory_gib()):
         log(f"lean-records: {why}")
         return 2
+    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
+    todo, rc = [pkg, *requirers(pkg, pkgs)], 0
+    if dev_cache:
+        return dev_records(pkg, todo, update, moved, out, "--dev-cache asks for it", log)
     os.environ.pop(LEAN_SLOT.HELD, None)
     try:
         slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
     except LEAN_SLOT.Refused as e:
-        log(f"lean-records: {e}")
-        return 2
+        return dev_records(pkg, todo, update, moved, out, str(e), log)
     try:
         tree = tree or records_tree()
+        log(f"lean-records: taking the slot path: check.py on {tree}, which keeps its build between runs")
         tree.mkdir(parents=True, exist_ok=True)
         with open(tree / ".lock", "w") as held:
             if not hold_tree(held, tree, log):
                 return 2
             links = read_links(tree)
-            run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
-            out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
-            todo, rc = [pkg, *requirers(pkg, pkgs)], 0
+            committed = (ROOT / pkg / "lean-audit.json").read_bytes()
+            left, killed = left_by(tree), {}
             for p in todo:
                 t0 = time.monotonic()
+                mark(tree, package=p, phase="sync")
                 n = sync(closure(p), files, tree)
+                if left is not None:
+                    there = [q for q in [*(c for t in todo for c in closure(t)), left.get("package")]
+                             if isinstance(q, str) and (tree / q).is_dir()]
+                    repair(tree, list(dict.fromkeys(there)), links, left, log)
+                    write_links(tree, links)
+                    left = None
+                else:
+                    repair(tree, closure(p), links, None, log)
+                mark(tree, package=p, phase="deps")
                 for other in [q for q in links if q not in todo and LA.deps_key(tree / p)]:
                     unlink(other, tree, links)
                 if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
                     links[p] = k
                     log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
                 write_links(tree, links)
-                mine_out = out if p == pkg else out / f"requirer-{re.sub(r'[^A-Za-z0-9]+', '_', p)}"
-                argv = [sys.executable, str(AUDIT_PY), "--build", "--no-replay", "--no-runs",
-                        *(["--update"] if update and p == pkg else []),
-                        *(["--moved", str(moved.resolve())] if moved and p == pkg else []), "--out", str(mine_out), str(tree / p)]
-                got = subprocess.run(argv, cwd=tree, env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())},
+                mark(tree, package=p, phase="check")
+                mine_out = reports(out, pkg, p)
+                got = subprocess.run(check_argv(p, pkg, tree / p, mine_out, update, moved), cwd=tree,
+                                     env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())},
                                      pass_fds=() if slot is None else (slot,)).returncode
+                if AUDIT.killed(got):
+                    killed[p] = got
                 label(mine_out)
                 log(f"lean-records: {p}: check.py exit {got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files changed "
                     f"there), without the kernel replay or the tests: a {FAST_KIND} result, which check and research merge "
                     f"refuse; reports in {mine_out}")
-                if p == pkg:
-                    record, mine = tree / pkg / "lean-audit.json", ROOT / pkg / "lean-audit.json"
-                    if update and record.read_bytes() != mine.read_bytes():
-                        # Keep the regenerated record now: the next requirer iteration's `sync` restores the committed
-                        # one over `record`, and a recorded run never writes ROOT (the commit's shared source tree), so
-                        # without this copy the record a lane must commit survives nowhere the run keeps (LEAN-10).
-                        kept = out / "record" / "lean-audit.json"
-                        kept.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copyfile(record, kept)
-                        log(f"lean-records: the regenerated record is {kept}; commit it over {pkg}/lean-audit.json")
-                        if not run_dir:
-                            shutil.copyfile(record, mine)
-                            log(f"lean-records: wrote {mine}")
-                elif got:
-                    log(f"lean-records: {p} requires {pkg}, and its records fail on this tree: what its guarantees read "
-                        f"changed; if that is meant, run --records {p} --update")
+                # Keep the regenerated record now: the next requirer iteration's `sync` restores the committed one over
+                # it, and a recorded run never writes ROOT (the commit's shared source tree), so without this copy the
+                # record a lane must commit survives nowhere the run keeps (LEAN-10).
+                checked(p, pkg, got, tree / pkg / "lean-audit.json", committed, update, out, log)
                 rc = rc or got
+            if killed:
+                p, got = next(iter(killed.items()))
+                mark(tree, package=p, phase="check", killed=got)
+                log(f"lean-records: check.py on {', '.join(killed)} was killed (exit {got}): the next run on {tree} checks "
+                    "it before it is built")
+            else:
+                (tree / DIRTY).unlink(missing_ok=True)
             if run_dir and run_id:
                 write_result(Path(run_dir), run_id, pkg, rc, out, update)
     finally:
@@ -452,6 +574,65 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             os.close(slot)
             os.environ.pop(LEAN_SLOT.HELD, None)
     return rc
+
+
+def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out: Path, why: str, log=print) -> int:
+    """`--records` where the node's Lean slots grant no `build` slot (``why``): `check.py --dev-cache --build --no-replay
+    --no-runs` on this checkout's ``todo`` (PKG, then its requirers), each build restored from the published cache, with the
+    same reports, record keep and result kind as the slot path; check.py's exit status, or 2 in a tree `research run`
+    shipped (`READY.json`), which every run of its commit shares and check.py would build in."""
+    if (ROOT / "READY.json").is_file():
+        log(f"lean-records: {why}; the --dev-cache path builds in this checkout, which `research run` shipped and every run "
+            "of its commit shares: nothing ran; rerun with --cwd clone")
+        return 2
+    log(f"lean-records: {why}; taking the --dev-cache path: check.py --dev-cache on {ROOT}, each build restored from the "
+        "published cache")
+    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    mine = ROOT / pkg / "lean-audit.json"
+    committed, rc = mine.read_bytes(), 0
+    for p in todo:
+        t0 = time.monotonic()
+        mine_out = reports(out, pkg, p)
+        got = subprocess.run(check_argv(p, pkg, ROOT / p, mine_out, update, moved, dev=True), cwd=ROOT).returncode
+        label(mine_out)
+        log(f"lean-records: {p}: check.py --dev-cache exit {got} in {time.monotonic() - t0:.0f} s on {ROOT}, without the "
+            f"kernel replay or the tests: a {FAST_KIND} result, which check and research merge refuse; reports in {mine_out}")
+        checked(p, pkg, got, mine, committed, update, out, log)
+        rc = rc or got
+    if run_dir and run_id:
+        write_result(Path(run_dir), run_id, pkg, rc, out, update, path="dev-cache")
+    return rc
+
+
+def reports(out: Path, pkg: str, p: str) -> Path:
+    """Where check.py's reports on ``p`` go: ``out`` for PKG, `requirer-<path>/` under it for a requirer."""
+    return out if p == pkg else out / f"requirer-{re.sub(r'[^A-Za-z0-9]+', '_', p)}"
+
+
+def check_argv(p: str, pkg: str, at: Path, out: Path, update: bool, moved: Path | None, dev: bool = False) -> list[str]:
+    """check.py on ``at`` (``p``'s directory), without the kernel replay or the tests; `--update` and `--moved` only for PKG."""
+    return [sys.executable, str(AUDIT_PY), *(["--dev-cache"] if dev else []), "--build", "--no-replay", "--no-runs",
+            *(["--update"] if update and p == pkg else []),
+            *(["--moved", str(moved.resolve())] if moved and p == pkg else []), "--out", str(out), str(at)]
+
+
+def checked(p: str, pkg: str, got: int, record: Path, committed: bytes, update: bool, out: Path, log=print) -> None:
+    """After check.py on ``p``: for PKG, the record `--update` wrote (``record``, differing from the ``committed`` bytes)
+    kept under ``out``'s `record/` and, outside a recorded run, written into this checkout; for a failing requirer, what it
+    means."""
+    if p == pkg:
+        if update and record.read_bytes() != committed:
+            kept = out / "record" / "lean-audit.json"
+            kept.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(record, kept)
+            log(f"lean-records: the regenerated record is {kept}; commit it over {pkg}/lean-audit.json")
+            mine = ROOT / pkg / "lean-audit.json"
+            if not os.environ.get("RESEARCH_RUN_DIR") and record != mine:
+                shutil.copyfile(record, mine)
+                log(f"lean-records: wrote {mine}")
+    elif got:
+        log(f"lean-records: {p} requires {pkg}, and its records fail on this build: what its guarantees read changed; if "
+            f"that is meant, run --records {p} --update")
 
 
 def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
@@ -540,17 +721,22 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--tree", type=Path, help="the tree this step keeps built (default: lean-changed, or with --records "
                     f"{RECORDS}/build-I, the Lean slot's, under the check cache; with --records it must be under {RECORDS}/)")
     ap.add_argument("--records", metavar="PKG",
-                    help=f"audit PKG's records without the kernel replay, on a tree kept per Lean slot of pool {FAST_POOL} "
-                    f"(a {FAST_KIND} result, which no merge accepts)")
+                    help=f"audit PKG's records without the kernel replay, on a tree kept per Lean slot of pool {FAST_POOL}, "
+                    f"else with check.py --dev-cache on this checkout (a {FAST_KIND} result, which no merge accepts)")
     ap.add_argument("--update", action="store_true", help="with --records: check.py --update")
     ap.add_argument("--moved", type=Path, metavar="FILE", help="with --records --update: check.py --moved FILE")
     ap.add_argument("--out", type=Path, help="with --records: check.py --out DIR")
+    ap.add_argument("--dev-cache", action="store_true", help="with --records: take the check.py --dev-cache path even where "
+                    "a build slot is granted (its tree's dependencies are fetched cold, say)")
     a = ap.parse_args(argv)
     if not a.records:
-        if a.update or a.moved or a.out:
-            ap.error("--update, --moved and --out go with --records")
+        if a.update or a.moved or a.out or a.dev_cache:
+            ap.error("--update, --moved, --out and --dev-cache go with --records")
         return run(a.cache, a.deps, a.tree or LA.COMMON.cache_dir() / "lean-changed", log=lambda s: print(s, flush=True))
-    return audit_records(a.records, a.deps, a.tree, a.update, a.moved, a.out, log=lambda s: print(s, flush=True))
+    if a.dev_cache and a.tree:
+        ap.error("--dev-cache builds in this checkout, not in a --tree")
+    return audit_records(a.records, a.deps, a.tree, a.update, a.moved, a.out, log=lambda s: print(s, flush=True),
+                         dev_cache=a.dev_cache)
 
 
 if __name__ == "__main__":

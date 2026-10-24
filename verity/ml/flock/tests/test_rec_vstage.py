@@ -33,6 +33,32 @@ INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
 LEAN = HERE.parents[2] / "core" / "service" / "flock"
 
 
+def test_staging_pauses_the_collector_and_restores_it():
+    """`stage` and `stage_cap` run with the cyclic collector off and leave it as they found it, on a raise too."""
+    import gc
+
+    seen = []
+
+    @S._without_gc
+    def f(fail):
+        seen.append(gc.isenabled())
+        if fail:
+            raise RuntimeError("staged")
+
+    assert gc.isenabled()
+    f(False)
+    with pytest.raises(RuntimeError, match="staged"):
+        f(True)
+    assert seen == [False, False] and gc.isenabled()
+    gc.disable()
+    try:
+        f(False)
+        assert not gc.isenabled()
+    finally:
+        gc.enable()
+    assert S.stage.__wrapped__ and S.stage_cap.__wrapped__
+
+
 def _fold() -> dict:
     """``InnerFold.lean``'s output on the fixture, from InnerClaims' dump of the same values (the opt-in test holds them equal)."""
     return {"m": INNER["m"], "k_log": INNER["k_log"], "extras": INNER["reps"][0]["extras"],

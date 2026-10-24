@@ -1,6 +1,13 @@
 import Proofs.Flock.SessionLoop.Statement
 import Proofs.Flock.Claims.ZK.FrameUnrefused
 import Proofs.Flock.SessionLoop.Link
+import Proofs.Flock.SessionLoop.RepSrc
+import Proofs.Flock.SessionLoop.Tables
+import Proofs.Flock.SessionLoop.FinishParts
+import Proofs.Flock.SessionLoop.FinCommits
+import Proofs.Flock.SessionLoop.FinPoints
+import Proofs.Flock.SessionLoop.FinRounds
+import Proofs.Flock.SessionLoop.FinRep
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
@@ -10,9 +17,10 @@ at the deployed relation and at the hiding gap of hm96-sha512's pinned key (`CRO
 at the loop's own tables (`Loop.realOf`, whose tables are `Count.RealTabs`: `Loop.realTabs_realOf`), its `FinalRoundEq`
 from `FinishIs`, the loop's frames refusing every coin fault (`LeanRelease.frameUnrefused_ofLoop`) and the tables
 admitting unrefused coins (`LeanRelease.finalRoundEq_ofLoop`). `SessionLoopZKDeployed` is it at the deployed tables,
-which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`), at the loop's own link (`LeanRelease.ofLoopLink`),
+which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`), at the loop's own link and `Finish`
+(`LeanRelease.ofLoopLink`),
 whose `LinkRoundEq` holds in the masked scope where the loop draws the tape's level 0
-(`LeanRelease.linkRoundEq_ofLoopLink`).
+(`LeanRelease.linkRoundEq_ofLoopLink`, from `Loop.Src`'s level-0 half, `Loop.Level0Src.linkLevel0`).
 -/
 
 namespace Claims.ZKServer.Loop
@@ -58,12 +66,13 @@ theorem SessionLoopZK : Flock.Guarantees.SessionLoopZK := by
   rwa [ENNReal.toReal_ofReal (FlockSoundness.CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash)] at h
 
 /-- **C-Flock's zero knowledge at the session loop's own frames and link, at the deployed tables**: `SessionLoopZK` at
-`Masked.dataE`, whose tables admit unrefused coins, and the release `withLink L₀ src`, whose `LinkRoundEq` is
-`linkRoundEq_ofLoopLink`. -/
+`Masked.dataE`, whose tables admit unrefused coins, and the release `withFiles (withLink L₀ src) src`, whose
+`LinkRoundEq` is `linkRoundEq_ofLoopLink`. -/
 theorem SessionLoopZKDeployed : Flock.Guarantees.SessionLoopZKDeployed := by
   intro vs t ht hS hV hD hc hsc hT L₀ src real hreal wk x w hR hServe hL0 hScope hSrc hFin hE hEf Θ Vs θ hk Ev
   exact SessionLoopZK _ Claims.ZKServer.LeanRelease.tablesAdmitUnrefused_dataE vs t ht hS hV hD hc hsc hT
-    (Claims.ZKServer.LeanRelease.withLink L₀ src) src real hreal wk x w hR hServe hL0
-    (Claims.ZKServer.LeanRelease.linkRoundEq_ofLoopLink vs L₀ src real hScope hR hSrc) hFin hE hEf Vs θ hk Ev
+    (Claims.ZKServer.LeanRelease.withFiles (Claims.ZKServer.LeanRelease.withLink L₀ src) src) src real hreal wk x w hR hServe hL0
+    (Claims.ZKServer.LeanRelease.linkRoundEq_ofLoopLink vs L₀ src real hScope hR hSrc.1.linkLevel0) hFin hE hEf Vs θ hk
+    Ev
 
 end Flock.SecurityProofs

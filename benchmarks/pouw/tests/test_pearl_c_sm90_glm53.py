@@ -39,13 +39,13 @@ def test_linears_are_one_tp8_ranks():
 
 
 def test_domain_refuses_the_short_k_and_narrow_n():
-    """k = 256 and 512 are under the record's k ≥ 1,024; n = 160 is not a multiple of 64.  Every other linear is in, with γ
-    at both FADD readings, the data sheet's (cheaper add) a little above the record's, and γ falling with n."""
+    """k = 512 is under the record's k ≥ 1,024 and not its census k = 256 (which takes both down projections); n = 160 is
+    not a multiple of 64.  Every other linear is in, with γ at both FADD readings, the data sheet's (cheaper add) a little
+    above the record's, and γ falling with n."""
     rows = {r["name"]: r for r in G.table()}
     refused = {name for name, r in rows.items() if r["refused"]}
-    assert refused == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj", "mlp.shared_experts.down_proj",
-                       "mlp.experts.w2"}
-    assert all("1024 <= k" in rows[x]["refused"][0] for x in refused - {"self_attn.indexer.wk_weights_proj"})
+    assert refused == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj"}
+    assert "1024 <= k" in rows["self_attn.kv_b_proj"]["refused"][0]
     assert "n of 64" in rows["self_attn.indexer.wk_weights_proj"]["refused"][0]
     for name, r in rows.items():
         if name not in refused:
@@ -55,12 +55,12 @@ def test_domain_refuses_the_short_k_and_narrow_n():
 
 def test_expert_parallel_brings_the_experts_into_the_domain():
     """With the routed experts expert-parallel (EP = TP = 8) a rank holds 32 whole experts, w13 (4096, 6144) and w2
-    (6144, 2048), both in the domain; the shared expert stays sharded, its down at k = 256 refused."""
+    (6144, 2048), both in the domain; the shared expert stays sharded, its down at the census's k = 256."""
     rows = {r["name"]: r for r in G.table(ep=True)}
     assert {x: (rows[x]["n"], rows[x]["k"]) for x in ("mlp.experts.w13", "mlp.experts.w2")} == {
         "mlp.experts.w13": (4096, 6144), "mlp.experts.w2": (6144, 2048)}
-    assert {x for x, r in rows.items() if r["refused"]} == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj",
-                                                            "mlp.shared_experts.down_proj"}
+    assert {x for x, r in rows.items() if r["refused"]} == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj"}
+    assert (rows["mlp.shared_experts.down_proj"]["k"], rows["mlp.shared_experts.down_proj"]["refused"]) == (256, [])
     shapes = G.in_domain()
     assert (4096, 6144) in shapes and shapes[(4096, 6144)]["ep"] and not shapes[(6144, 2048)]["ep"]
     assert shapes[(6144, 2048)]["name"] == "self_attn.o_proj"
@@ -95,7 +95,7 @@ def test_the_profile_gives_each_launch_to_the_step_that_launched_it():
             (t, 105, 6000, 6100, "memcpy", "memcpy"), (t, 115, 7000, 9000, "kernel", "pd_commit_851"),
             (t, 145, 9000, 10000, "kernel", "s512_tile_leaves"), (t, 250, 20000, 21000, "kernel", "stray"),
             (t + 1, 15, 21000, 22000, "kernel", "other thread"), (t, 315, 30000, 32000, "kernel", "pd_commit_851")]
-    out = P.report(sorted(ranges), acts)
+    out = P.report(sorted(ranges), [(*a, 7) for a in acts])
     assert set(out) == {label}
     r, steps = out[label], out[label]["steps"]
     assert r["calls"] == 2 and r["host_wall_us"] == 0.1 and r["pass_end_host_us"] == 0.4
@@ -105,6 +105,63 @@ def test_the_profile_gives_each_launch_to_the_step_that_launched_it():
     assert round(steps["host other"]["host_us"], 9) == 0.05 and steps["host screen"]["host_us"] == 0.01
     assert r["gpu_busy_us"] == 3.85 and r["gpu_span_us_per_call"] == 4.5 and r["solo_gpu_span_us"] == 2.0
     assert (r["hash_decode"], r["hash_fast"], r["fallbacks"]) == (["pd_commit_851"], [], ["s512_tile_leaves"])
+
+
+def test_the_lanes_report_gives_each_graph_node_to_its_launchs_call_and_each_stream_its_lane():
+    """glm53_profile's lanes: a graph's nodes go to the call whose range their launch is in, the stream that runs pd_commit
+    is the main lane and those that run pd_tiles the side lanes, numbered in their order; the period is a call's first
+    start to the next's, and each lane's start, span, busy and idle times are over the steady calls (all but the first and
+    the last), its idle time since the call before's last activity on the same lane."""
+    spec = importlib.util.spec_from_file_location("pearl_c_sm90_glm53_profile", HERE / "glm53_profile.py")
+    P = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(P)
+    t, label = 7, "4096:6144 m64 hash"
+    ranges = [(t, 100 * c, 100 * c + 50, f"call {label} #{c}") for c in range(4)]
+    acts = []
+    for c in range(4):                      # main on stream 5; side lanes 9 then 11; 10 µs a call apart
+        at, side = 10_000 * c, (9, 11)[c % 2]
+        acts += [(t, 100 * c + 1, at, at + 4000, "kernel", "pd_commit_979", 5),
+                 (t, 100 * c + 1, at + 4000, at + 9000, "kernel", "gemm_pearlc_d", 5),
+                 (t, 100 * c + 1, at + 4500, at + 6000, "kernel", "pd_tree_979", side),
+                 (t, 100 * c + 1, at + 9000, at + 15000, "kernel", "pd_tiles_979", side)]
+    acts.append((t, 450, 0, 1, "kernel", "stray", 5))
+    r = P.lanes(sorted(ranges), acts)[label]
+    assert r["calls"] == 4 and r["period_us"] == 10.0 and r["periods_us"] == [10.0] * 3
+    assert r["lanes"]["main"] == {"start_us": 0.0, "span_us": 9.0, "busy_us": 9.0, "idle_before_us": 1.0}
+    assert r["lanes"]["side0"] == {"start_us": 4.5, "span_us": 10.5, "busy_us": 7.5}
+    assert r["lanes"]["side1"] == {"start_us": 4.5, "span_us": 10.5, "busy_us": 7.5}
+    assert r["kernels"]["side0 pd_tree_979"] == {"count": 0.5, "mean_us": 1.5}
+    assert [(a["lane"], a["name"]) for a in r["timeline"]] == [
+        ("main", "pd_commit_979"), ("main", "gemm_pearlc_d"), ("side0", "pd_tree_979"), ("side0", "pd_tiles_979")]
+
+
+def test_the_stamps_give_each_phase_since_its_ctas_start_and_the_tail_since_the_first_start():
+    """glm53_profile's stamps: a pd_commit CTA's phases by its own SM's clock (at the clock's rate over its span on the timer),
+    the CTAs' starts and ends and the tail's slots on the global timer since the first CTA's start, the tail CTA when
+    pd_commit's last CTA ran it, and an unwritten slot left out."""
+    import struct
+    spec = importlib.util.spec_from_file_location("pearl_c_sm90_glm53_profile", HERE / "glm53_profile.py")
+    P = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(P)
+    slots, count = 16, 2
+    words = [0] * (2 * slots * (count + 1))
+
+    def put(row, slot, ns, clock):
+        words[2 * (slots * row + slot):2 * (slots * row + slot) + 2] = [ns, clock]
+    for r, (t0, c0) in enumerate(((1_000_000, 50_000), (1_004_000, 90_000))):   # CTA 1 starts 4 µs later, on another SM
+        for slot, us in ((0, 0), (1, 10), (4, 11), (5, 20), (6, 21), (7, 30), (8, 33)):
+            put(r, slot, t0 + 1000 * us, c0 + 2000 * us)                         # a 2 GHz clock
+    put(count, 0, 1_037_000, 0)
+    put(count, 1, 1_040_000, 0)
+    put(count, 9, 1_050_000, 0)
+    put(count, 15, 1, 7)
+    rows, tail = P.stamp_rows(struct.pack(f"<{len(words)}Q", *words), count, slots)
+    s = P.stamp_summary(rows, tail)
+    assert s["rows"] == 2 and s["clock_ghz"] == 2.0 and "salt" not in s["since_cta_start_us"]
+    assert s["since_cta_start_us"]["segs"] == {"median_us": 10.0, "max_us": 10.0}
+    assert s["since_cta_start_us"]["seed"] == {"median_us": 33.0, "max_us": 33.0}
+    assert s["cta_start_us"] == {"median": 2.0, "max": 4.0} and s["cta_end_us"] == {"median": 35.0, "max": 37.0}
+    assert s["tail_us"] == {"start": 37.0, "level1": 40.0, "seed_a": 50.0} and s["tail_cta"] == [1, 7]
 
 
 def test_h200_session_runs_the_tables_shapes():

@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+from verity_flock.record_text import session_text
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
@@ -44,7 +45,7 @@ def verdicts(tmp_path_factory):
     import ci
 
     try:
-        root = ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
+        root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
@@ -69,7 +70,7 @@ def verdicts(tmp_path_factory):
     for name, law in draws.items():
         s = shutil.copytree(root / "vectors" / "honest", d / name)
         rec = json.loads((s / "session.json").read_text())
-        (s / "session.json").write_text(json.dumps({**rec, "unit_draw": law}))
+        (s / "session.json").write_text(session_text({**rec, "unit_draw": law}))
         sessions[name] = s
     flags = [*bound, "--registered", str(root / "registered" / "own.json"), *work, "--stratified", "2",
              "--closure", str(d / "closure.json")]
