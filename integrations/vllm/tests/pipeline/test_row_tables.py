@@ -8,6 +8,7 @@ layout commits (the files it writes; Llama-3.1-8B's B32 decode step)."""
 
 from __future__ import annotations
 
+import copy
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -298,6 +299,34 @@ def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_
                 {k: v for k, v in lean(k0).items() if k != "registered"}, {**lean(k0), "accepted": False}):
         assert not RTB.reported_reads(reads, {k0: bad, k4: lean(k4)})["ok"]
     assert not RTB.reported_reads({k4: reads[k4]}, {k0: lean(k0), k4: lean(k4)})["ok"]
+
+
+def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeypatch, tmp_path):
+    """The chunker cuts at table boundaries, and a prover that builds its own chunks can't bring the old form back: the verifier's
+    reads file names one root, and no row of another table opens it at any position through any of its paths (Lean's
+    `Registered.opens`, through its Python twin `registered.verify_read`; `verity/ml/flock/tests/test_lean_registered_reads.py`
+    runs the executable verifier on such a table). `registered_reads` writes no file for a member linking two tables, whatever
+    built it."""
+    c, _s, got = committed(monkeypatch)
+    CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN))
+    w = c.window
+    bc = lambda t, r: c.bc[w.row_tables[t].port][r * CS.BC_BYTES:(r + 1) * CS.BC_BYTES]  # noqa: E731
+    trees = {t: RT.RowTable(w.table_domain(t), [bc(t, r) for r in range(w.row_tables[t].n)]) for t in range(len(w.row_tables))}
+    span = [(1, 1), (0, 0)]         # the old chunker's chunk: table 1's row 1, then table 0's row 0
+    for held in (0, 1):
+        dom, root, n = w.table_domain(held), c.table_roots[w.row_tables[held].port], w.row_tables[held].n
+        assert [REG.verify_read(dom, root, r, bc(t, r), trees[t].path(r), REG.SCHEMA_SEG) for t, r in span] == [t == held for t, _ in span]
+        t, r = next(x for x in span if x[0] != held)
+        assert not any(REG.verify_read(dom, root, p, bc(t, r), trees[held].path(q), REG.SCHEMA_SEG) for p in range(n) for q in range(n))
+    mine, _, _ = window()
+    publics = {m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
+    old = copy.copy(mine.members[1])
+    object.__setattr__(old, "links", tuple(span))
+    object.__setattr__(old, "link_units", (4, 1))
+    spanned = copy.copy(mine)
+    object.__setattr__(spanned, "members", (mine.members[0], old, *mine.members[2:]))
+    with pytest.raises(ValueError, match="several row tables"):
+        RTB.registered_reads(spanned, publics)
 
 
 def test_pouws_interface_finds_a_table_and_its_step_openings_verify_and_tampered_rows_fail(monkeypatch, tmp_path):
