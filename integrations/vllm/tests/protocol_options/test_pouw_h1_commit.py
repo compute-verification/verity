@@ -32,7 +32,7 @@ from verity_vllm.protocol_options import pouw_h1_commit as CT  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_served as SV  # noqa: E402
 
 from tests.protocol_options.test_pouw_h1 import _host, _remote, _so  # noqa: E402
-from tests.protocol_options.test_pouw_h1_served import _unit  # noqa: E402
+from tests.protocol_options.test_pouw_h1_served import _Receipts, _unit  # noqa: E402
 
 K, ROWS, STEPS = 64, 32, 2
 ENTRY = f"pouw:{PH.SCHEME}"
@@ -129,17 +129,17 @@ class _Laid(dict):
         return self.lay(super().pop(key, *default))
 
 
-def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None):
+def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, receipts=None):
     """A served two-step window with the Commit in its engine: the record (`pouw_h1.CALLS_FILE`), the run and the tap.
     ``edit`` makes the codes H1 is handed of what the arm quantized; ``ids`` the input ids the Commit acquires at step s
     of the honest ones; ``lay`` the blocks of a step's A table of K (one a call, in call order) as the window lays them
-    out (`_Laid`)."""
+    out (`_Laid`); ``receipts`` the window's receipt producer (`Served.receipts`)."""
     _host(tmp_path, monkeypatch, rounds=STEPS)
     model, com, tap = Model(edit), Committer(), CT.CommitTap(EMBED)
     src = HC.source(com, model, list(model.model.layers))
     tap.tap(com)
     src.install()
-    served = SV.Served(PH.TILE, _unit(), window=hashlib.sha512(b"w").digest(), tap=tap)
+    served = SV.Served(PH.TILE, _unit(), window=hashlib.sha512(b"w").digest(), tap=tap, receipts=receipts)
     if lay is not None:
         served._a = _Laid(lay)
     settings = _remote(rows=ROWS, steps=STEPS, transcript_dir=str(tmp_path / "w"), served=served)
@@ -322,3 +322,26 @@ def test_the_gpu_harness_holds_each_window_to_cores_roots1_steps(tmp_path, monke
         v = G.negative_verdict(got[name])
         assert v["refused"] and v["arow"][1].startswith("round 0's A table of K = 64 h1/a/64@0 is not the Commit's "), v
     assert G.core_from(str(tmp_path / "ev"), str(tmp_path / "out"))["ok"]
+
+
+def test_a_receipt_word_rewritten_after_its_round_is_refused_by_cores_roots1_steps(tmp_path, monkeypatch):
+    """`pouw_h1_gpu.receipt_tamper`, the GPU run's tampered receipt: a window with receipts and the Commit is tied, each
+    receipt table among the values its rounds commit. One bit of call 0's receipts flipped, its table rewritten under the
+    same domain and salts and its root put in the served entries with calls_root recomputed, leaves the record one
+    manifest and is refused at ``a_link``; with the root also in call 1's manifest row (call 0's step's last call of
+    K = 64, which registered it) the manifest is refused too, its step's rows no longer the ones under round 0's root."""
+    from tests.protocol_options import pouw_h1_gpu as G
+    made = _Receipts(rows=ROWS)
+    record, run, _tap = _window(tmp_path, monkeypatch, receipts=made)
+    assert not run.served.refused and SV.PREFIX + "receipt@0" in run.round_log[0]["a"]
+    assert G.core_tie(record, run.served.program, tmp_path / "ev")["tied"]
+    got = G.receipt_tamper(record, run, 0, SV.receipt_words(made[0]))
+    assert got["refused"] and got["rebuilt"] and got["faithful"] and got["carriers"] == [1], got
+    assert got["tampered_root"] != got["root"]
+    for name in ("entries", "row"):
+        why = got[name]["a_link"]
+        assert why[0] == "a-link" and why[1].startswith(f"registered receipt table {SV.PREFIX}receipt@0's root is not "
+                                                        "the tree over the segments the round roots commit"), why
+    assert got["entries"]["manifest"] is None
+    assert got["row"]["manifest"].startswith("step 0's calls in the record (their tables' roots among them) are not "
+                                             "the ones under round 0's root"), got["row"]["manifest"]

@@ -75,7 +75,10 @@ auditor's registration), and reused by the later windows. Each
 Commit window is also held to core's ROOTS1 steps over its own evidence (`core_verdict`: `pouw_h1_challenger.manifest_reason`,
 `credit._a_link`, `credit._arow`), which it saves for ``--core-from DIR`` on a CPU node. ``--negatives`` then serves the
 window twice more with an honest Commit, H1 handed all-zero A codes or one A row off (`NEGATIVES`), each to be refused at
-``arow``. ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
+``arow``. With ``--receipts``, one bit of the Commit window's first kept call's receipts is flipped after the window
+closed: its rewritten receipt table, its root put in the record and calls_root recomputed, is refused by core's ROOTS1
+steps at ``a_link`` (`receipt_tamper`), and the flipped receipt isn't `h1tile.reference`'s for its unit
+(`receipt_statement`). ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so a window fits a lease.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
 GPU is held only while it serves: the serving process records what only it sees (`served_measures`), saves the window,
@@ -607,7 +610,14 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             return out
         out = released(name, h1, out, served, tdir, bool(a.challenger), register=not (a.commit or a.skip_register))
         if tap is not None:
-            out["core"] = core_tie({"commitment": dict(h1.commits), "calls": h1.manifest()}, h1.served.program, tdir)
+            record = {"commitment": dict(h1.commits), "calls": h1.manifest()}
+            out["core"] = core_tie(record, h1.served.program, tdir)
+            if made is not None:
+                c = min(made.kept)
+                out["tamper"] = {**receipt_tamper(record, h1, c, SV.receipt_words(made.kept[c]["receipts"])),
+                                 "statement": receipt_statement(made, c)}
+                out["tamper"]["refused"] = bool(out["tamper"]["refused"] and out["tamper"]["statement"]["refused"])
+                print(f"[fill] {name} tamper {json.dumps(out['tamper'], default=str)[:3000]}", flush=True)
         out["host"] = {"install": out["host"], "end": host_memory()}
         print(f"[fill] {name} core {json.dumps(out.get('core'), default=str)[:2000]} host {json.dumps(out['host'])}",
               flush=True)
@@ -642,8 +652,12 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                          "host": doc["host"], "window": doc["public"],
                          "layout_static": c.get("layout_static"), "same_tokens": c["same_tokens"],
                          "roots1": c.get("roots1"), "core": c.get("core"), "negatives": negs,
-                         "committer": c.get("committer"),
+                         "committer": c.get("committer"), "receipts": c.get("receipts"),
+                         "tamper": {k: v for k, v in (c.get("tamper") or {}).items() if k not in ("entries", "row")}
+                         | {k: (c["tamper"][k]["manifest"], c["tamper"][k]["a_link"]) for k in ("entries", "row")
+                            if k in (c.get("tamper") or {})},
                          "ok": bool(c["ok"] and (c.get("core") or {}).get("tied")
+                                    and (not a.receipts or (c.get("tamper") or {}).get("refused"))
                                     and all(v["refused"] for v in negs.values()) and len(negs) == len(NEGATIVES) * a.negatives)}
         print(f"[fill] commit {json.dumps(doc['commit'], default=str)[:3000]}", flush=True)
     elif a.challenger:
@@ -1017,6 +1031,61 @@ def receipts_check(made: Any) -> dict[str, Any]:
     return {"calls": sorted(made.kept), "units": len(rows), "live": live, "dead": len(rows) - live,
             "bad": [[c, u] for c, u, _live, ok in rows if not ok][:20],
             "ok": bool(rows) and all(r[3] for r in rows) and 0 < live < len(rows)}
+
+
+def receipt_tamper(record: dict[str, Any], run: Any, c: int, words: Any, unit: int = 0) -> dict[str, Any]:
+    """A receipt word other than the one call ``c``'s round committed, as a serving process that rewrote it after that
+    round's root went out would record it: ``words`` (call c's receipt table's u16 words as registered) with bit 0 of
+    ``unit``'s first word flipped, its tree under the same domain and salts (`Served._tree`), and its root in place of the
+    registered one in the window's served entries, the served digest and calls_root recomputed over them (``entries``),
+    then in the manifest row that carries it too (``row``), the round log as the challenger received it. Each edited
+    record goes to core's ROOTS1 steps (`core_verdict`). ``rebuilt``: ``words`` are the registered table; ``faithful``:
+    calls_root recomputed over the honest record is its own; ``refused``: both refused at ``a_link``, the receipt table
+    not the tree over the segments its round's root commits, ``entries`` with the manifest still one."""
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    served, words = run.served, np.asarray(words, np.uint16)
+    value, nonce = served.receipt_table(c), SV.RECEIPT_NONCE + c
+    off = words.copy()
+    off[unit, 0] ^= 1
+    old, bad = served.registered[value], served._tree(run, value, off, nonce, served.root)
+    com = record["commitment"]
+    refused = com["served"]["refused"]
+
+    def root_of(entries: list[dict[str, Any]], rows: list[dict[str, Any]]) -> str:
+        return PH.calls_root(run.salt, rows, SV.digest_of(entries, refused), com.get("commit")).hex()
+
+    entries = [json.loads(json.dumps(bad.entry())) if e["value"] == value else e for e in com["served"]["entries"]]
+    rows = json.loads(json.dumps(record["calls"]))
+    carriers = [r["index"] for r in rows if value in ((r.get("tables") or {}).get("registered") or {})]
+    for r in rows:
+        if r["index"] in carriers:
+            r["tables"]["registered"][value] = bad.root.hex()
+    desc = SV.descriptor(served.program).hex()
+    out: dict[str, Any] = {
+        "call": c, "table": value, "unit": unit, "root": old.root.hex(), "tampered_root": bad.root.hex(),
+        "rebuilt": served._tree(run, value, words, nonce, served.root).root == old.root,
+        "faithful": root_of(com["served"]["entries"], record["calls"]) == com["calls_root"], "carriers": carriers}
+    for name, calls in (("entries", record["calls"]), ("row", rows)):
+        edited = {**com, "served": {"entries": entries, "refused": refused}, "calls_root": root_of(entries, calls)}
+        out[name] = core_verdict({"commitment": edited, "calls": calls, "descriptor": desc})
+    links = [(out[n]["a_link"] or ("", ""))[1] for n in ("entries", "row")]
+    out["refused"] = bool(out["rebuilt"] and out["faithful"] and carriers and out["entries"]["manifest"] is None
+                          and all(value in w and "is not the tree over the segments" in w for w in links)
+                          and not (out["entries"]["tied"] or out["row"]["tied"]))
+    return out
+
+
+def receipt_statement(made: Any, c: int, unit: int = 0) -> dict[str, Any]:
+    """The same bit flipped at the statement: kept call ``c``'s receipts (`receipts_producer`) with bit 0 of ``unit``'s
+    first u32 word flipped, against `h1tile.reference` seeded from the unit's public row (`producer().check`). The honest
+    receipt is the reference's and the flipped one isn't, so no proof of that unit's statement exists for it."""
+    kept = made.kept[c]
+    off = {**kept, "receipts": kept["receipts"].copy()}
+    off["receipts"][unit, 0] ^= 1
+    honest, tampered = (producer().check(k, [unit])[unit] for k in (kept, off))
+    return {"call": c, "unit": unit, "live": honest["live"], "honest": honest["ok"] and honest["pub"],
+            "tampered": tampered["ok"], "refused": bool(honest["ok"] and honest["pub"] and not tampered["ok"])}
 
 
 def _check(h1: Any) -> tuple[dict[str, Any], bool]:

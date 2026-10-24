@@ -551,14 +551,14 @@ class _Receipts(dict):
     the call's served codes and weight, kept by call (with the codes it was given, and the order it was asked in) so a
     test recomputes each table from them."""
 
-    def __init__(self, dtype=np.uint16, width=1):
+    def __init__(self, dtype=np.uint16, width=1, rows=T):
         super().__init__()
-        self.dtype, self.width, self.order, self.codes = dtype, width, [], {}
+        self.dtype, self.width, self.rows, self.order, self.codes = dtype, width, rows, [], {}
 
     def __call__(self, call, codes, s_a, w, s_w):
         seed = hashlib.sha512(b"%d" % call.index + np.asarray(codes).tobytes() + np.asarray(w).tobytes()).digest()
         got = np.random.default_rng(int.from_bytes(seed[:8], "little")).integers(
-            0, np.iinfo(self.dtype).max, ((T // TILE[0]) * (call.n // TILE[1]), self.width), dtype=self.dtype)
+            0, np.iinfo(self.dtype).max, ((self.rows // TILE[0]) * (call.n // TILE[1]), self.width), dtype=self.dtype)
         self[call.index], self.codes[call.index] = got, np.array(codes)
         self.order.append(call.index)
         return got
