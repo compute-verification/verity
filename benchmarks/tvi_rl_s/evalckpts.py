@@ -1,7 +1,8 @@
 """Evaluates saved GRPO checkpoints (and the base model) in one vLLM process: greedy accuracy, and sampled accuracy (mean over
 n samples at temperature T, the quantity GRPO maximizes), per problem, for the bootstrap in analyze.py.
 
-`python evalckpts.py --root CKPT_ROOT --glob '*/step150' --n 4 --temperature 1.0 --out DIR [--base gsm8k,math] [--passk 0]`
+`python evalckpts.py --root CKPT_ROOT --glob '*/step150' --n 4 --temperature 1.0 --out DIR [--base gsm8k+math] [--passk 0]
+[--unmerged lora16] [--expect N --wait-until EPOCH]`; with --expect it rescans each minute for checkpoints still training.
 Each checkpoint's effective bf16 weights are rebuilt from the registered model (every parameter re-written first), then from
 its full state dict or its LoRA factors (W0 + B A), as grpo.load_ckpt does.
 """
@@ -36,6 +37,8 @@ def main():
     ap.add_argument("--skip-done", type=int, default=1)
     ap.add_argument("--unmerged", default="", help="methods (joined by +) whose adapters are served by vLLM's LoRA path "
                     "(W0 x + B A x in bf16, as in training) instead of merged into bf16 weights")
+    ap.add_argument("--expect", type=int, default=0, help="keep rescanning until this many checkpoints have been evaluated")
+    ap.add_argument("--wait-until", type=float, default=0, help="epoch seconds: stop rescanning for expected checkpoints")
     args = ap.parse_args()
     unmerged = set(args.unmerged.replace("+", ",").split(",")) - {""}
 
@@ -45,17 +48,19 @@ def main():
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    ckpts = []
-    for d in sorted({d for g in args.glob.split("|") for d in glob.glob(str(Path(args.root) / g))}):
-        if not (Path(d) / "DONE").exists():
-            continue
-        meta = json.load(open(Path(d) / "meta.json"))
-        if meta["model"] != args.model:
-            continue
-        ckpts.append((d, meta))
-    jobs = [(None, {"task": t + args.variant, "method": "base", "seed": 0, "step": 0, "S_bits": 0, "n_params": 0})
-            for t in args.base.replace("+", ",").split(",") if t] + ckpts
-    print(f"{len(jobs)} evaluations", flush=True)
+    def scan():
+        ckpts = []
+        for d in sorted({d for g in args.glob.split("|") for d in glob.glob(str(Path(args.root) / g))}):
+            if not (Path(d) / "DONE").exists():
+                continue
+            meta = json.load(open(Path(d) / "meta.json"))
+            if meta["model"] != args.model:
+                continue
+            ckpts.append((d, meta))
+        return ckpts
+
+    bases = [(None, {"task": t + args.variant, "method": "base", "seed": 0, "step": 0, "S_bits": 0, "n_params": 0})
+             for t in args.base.replace("+", ",").split(",") if t]
     tok = AutoTokenizer.from_pretrained(args.model)
     llm = LLM(model=args.model, dtype="bfloat16", gpu_memory_utilization=0.6, max_model_len=2560, enable_prefix_caching=True,
               max_num_seqs=1024, seed=0, **({"enable_lora": True, "max_lora_rank": 16, "max_loras": 1} if unmerged else {}))
@@ -64,13 +69,15 @@ def main():
     linears = dict(grpo.target_linears(base))
     tests = {t: grpo.load_jsonl(Path(args.data) / f"{t}_test.jsonl") for t in ("gsm8k", "math")}
     lora_id = 0
-    for d, meta in jobs:
+
+    def run(d, meta):
+        nonlocal lora_id
         label = f"{meta['task']}-{meta['method']}-seed{meta['seed']}-step{meta['step']}"
         if d is not None and meta["method"] in unmerged:
             label += "-unmerged"
         dst = out / f"ckpteval-{label}.json"
         if args.skip_done and dst.exists():
-            continue
+            return
         t0 = time.time()
         grpo.sync_weights(llm, base_sd)
         lreq, mode = None, "merged"
@@ -111,6 +118,19 @@ def main():
         json.dump(res, open(dst, "w"))
         print(json.dumps({"label": label, "greedy": res["greedy_acc"], "sampled": res["sampled"]["acc"],
                           "secs": round(res["secs"], 1)}), flush=True)
+
+    for d, meta in bases:
+        run(d, meta)
+    done = set()
+    while True:
+        pending = [j for j in scan() if j[0] not in done]
+        for d, meta in pending:
+            done.add(d)
+            run(d, meta)
+        if len(done) >= args.expect or time.time() > args.wait_until:
+            break
+        if not pending:
+            time.sleep(60)
 
 
 if __name__ == "__main__":
