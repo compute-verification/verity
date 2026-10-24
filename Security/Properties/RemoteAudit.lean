@@ -24,6 +24,8 @@ The window (`verifyWindow`):
 * `AcceptOpensDraws`: the same, with `checkOpening`'s five checks spelled out (`OpeningPasses`): the opening is the
   drawn receipt's, its leaf is under its pass's root in the domain of the pass's seed and plan, its block decodes to a
   payload under the payload tree or its append's tree and coin, and the receipt recomputed from the block is the leaf's.
+* `ChunkedIsWhole`: the verifier's process, which checks a window's openings in chunks on threads of their own
+  (`checkWindowChunked`), gives `checkWindow`'s verdict on the whole window, the one `Session.run` sets.
 
 The draw (`draws`):
 
@@ -52,7 +54,9 @@ The session (`Session.run` from `State.init`, every event's result `.ok`; the re
 * `LifetimeCapped`: each append's blocks are read within `lifetime` consecutive windows.
 
 When the session reads a window's openings coin, and what its draw fixes (the code's half of the opening draw's
-`Refused` and `Live`), is `Properties.RemoteAudit.Coins`.
+`Refused` and `Live`), is `Properties.RemoteAudit.Coins`. That the verifier's process, which takes the events one
+request at a time on the coins the challenger sent and settles each window's check later, accepts what `Session.run`
+accepts on the events its transcript records is `Properties.RemoteAudit.Live` (`LiveIsRun`).
 -/
 
 open RemoteAudit
@@ -76,6 +80,14 @@ def AcceptChecksOpenings : Prop :=
         openings.size = drawn.size ∧
         ∀ k (hk : k < drawn.size),
           checkOpening reg reg.digest appends w (receipterOf reg w drawn[k].1) drawn[k].1 drawn[k].2 openings[k]! = none
+
+/-- The verifier's process (`Verifier.spawnCheck`) checks a window's openings in chunks of `size` draws, each on a
+thread of its own (`checkWindowChunked`): its verdict is `checkWindow`'s on the whole window, which `Session.verify`
+sets in `Session.run`, for every chunk size and every input, a rejection naming the same failure and draw. -/
+def ChunkedIsWhole : Prop :=
+  ∀ (size : Nat) (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
+    (drawn : Array (Nat × Nat)) (openings : Array Opening),
+    checkWindowChunked size reg digest appends w drawn openings = checkWindow reg digest appends w drawn openings
 
 /-- Draw `(i, p)`'s opening `o` passes checks 1–5 (`checkOpening`), with `j` the block at position `p` of pass `i`'s
 plan:
