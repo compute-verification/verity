@@ -519,16 +519,22 @@ def recorded_windows(session: dict) -> tuple[list[tuple[int, int]], float]:
     return [(sum(w["lengths"]), w["profile"]["drawn"]["receipt"]) for w in ws], ws[0]["profile"]["delta"]
 
 
-def recorded_line(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> line.Line:
-    """An accepted paced session's line in both forms (`line.line`, exact) from its record in `verifier.json`, against
-    its HBM and `host_bytes`, at `rates` (`recorded_rates`); the wrong receipts are the pooled bound of its record's
-    windows (`recorded_windows`)."""
+def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> dict:
+    """An accepted paced session's line's inputs from its record in `verifier.json`, in the line's JSON form
+    (`line.inputs_json`, the Lean verifier's `line` request reads them): its groups, against its HBM and `host_bytes`,
+    at `rates` (`recorded_rates`), and its record's windows (`recorded_windows`), whose pooled bound is its wrong
+    receipts."""
     mem = session["ledger"]["memory"]
     windows, delta = recorded_windows(session)
-    return line.line(paced_groups(mem, session["windows_seen"], block_bytes=mem["block_bytes"]),
-                     per=session["pace"]["groups"], blocks=registration["blocks"], block_bytes=mem["block_bytes"],
-                     chip_bytes=mem["chip_bytes"], node_bytes=mem["hbm_bytes"] + host_bytes,
-                     windows=windows, delta=delta, rates=rates)
+    return line.inputs_json(paced_groups(mem, session["windows_seen"], block_bytes=mem["block_bytes"]),
+                            per=session["pace"]["groups"], blocks=registration["blocks"],
+                            block_bytes=mem["block_bytes"], chip_bytes=mem["chip_bytes"],
+                            node_bytes=mem["hbm_bytes"] + host_bytes, windows=windows, delta=delta, rates=rates)
+
+
+def recorded_line(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> line.Line:
+    """An accepted paced session's line in both forms (`line.line`, exact) of its `recorded_inputs`."""
+    return line.line(**line.of_json(recorded_inputs(session, registration, host_bytes=host_bytes, rates=rates)))
 
 
 class RealClock:
