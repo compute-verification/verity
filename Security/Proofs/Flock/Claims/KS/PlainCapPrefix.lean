@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.KS.CapChunk
 import Proofs.Flock.Claims.KS.PlainLevels
 import Proofs.Flock.Claims.KS.PlainStep
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The cap an accepted plain rep absorbs, from the messages before its round
@@ -51,22 +52,22 @@ theorem flat_two_getElem? {α : Type} (a : Array (Array α)) (h2 : 2 ≤ a.size)
 /-- **An accepted plain run decides on `P`'s messages along its coins**: it decides at the statement's setup, on its
 last message read as a final message, with the custody checks passing and the shipped verdict accepting within its
 verifier log, and its round messages are `P`'s messages `1` to `plainN x` after their tags, each with its coin. -/
-theorem plain_acc_mids {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
-    (h : (Claims.run sha512 P (V false) x ω c).out = .acc) :
+theorem plain_acc_midsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
+    (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) :
     ∃ s spec sts link c₁ mids f, setupOf false x = some (s, spec, sts) ∧
-      lastFinal (Claims.run sha512 P (V false) x ω c).seen = some f ∧ checks false s spec x link c₁ mids f = .ok () ∧
-      verdictM false (hashesIn ((Claims.run sha512 P (V false) x ω c).vLog.map Prod.fst)) spec (tabsOf sts) f.record
+      lastFinal (Claims.run sha512 P (VK keep) x ω c).seen = some f ∧ checks false s spec x link c₁ mids f = .ok () ∧
+      verdictM false (hashesIn ((Claims.run sha512 P (VK keep) x ω c).vLog.map Prod.fst)) spec (tabsOf sts) f.record
         f.proofs = .ok () ∧
       mids = (List.range (plainN x)).map
         (fun k => ((depMsg sha512 P x ω (Claims.coinSeq c) (k + 1)).tail, Claims.coinSeq c (k + 1))) := by
-  obtain ⟨s, spec, sts, link, c₁, mids, f, hact, hrun⟩ := acc_decide h
-  obtain ⟨hv, hc⟩ := decision_runs (setupOf_some (act_decide hact)).2 hrun
+  obtain ⟨s, spec, sts, link, c₁, mids, f, hact, hrun⟩ := accK_decide keep h
+  obtain ⟨hv, hc⟩ := decisionK_runs keep (setupOf_some (act_decide hact)).2 hrun
   have hl := act_decide_final hact
   rw [List.getLast?_map, Option.bind_map] at hl
   have hL := plainN_add (act_decide hact)
-  refine ⟨s, spec, sts, link, c₁, mids, f, act_decide hact, hl, hc, verdict_within hv, ?_⟩
-  have hlen := next_acc_length_sha512 false (by simp) (run_acc_next sha512 P (V false) x ω c h)
-  have has := run_dep sha512 P x ω c
+  refine ⟨s, spec, sts, link, c₁, mids, f, act_decide hact, hl, hc, verdictK_within keep hv, ?_⟩
+  have hlen := next_acc_length_sha512 false (by simp) (run_acc_next sha512 P (VK keep) x ω c h)
+  have has := run_depK keep sha512 P x ω c
   rw [List.length_map] at hlen
   rw [hlen] at has
   rw [has, List.length_map, List.length_range, range_map_ends _ (by omega),
@@ -79,26 +80,37 @@ theorem plain_acc_mids {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω :
     List.zip_map']
   rfl
 
+/-- `plain_acc_midsK` at the deployed plain verifier (`keep := id`). -/
+theorem plain_acc_mids {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
+    (h : (Claims.run sha512 P (V false) x ω c).out = .acc) :
+    ∃ s spec sts link c₁ mids f, setupOf false x = some (s, spec, sts) ∧
+      lastFinal (Claims.run sha512 P (V false) x ω c).seen = some f ∧ checks false s spec x link c₁ mids f = .ok () ∧
+      verdictM false (hashesIn ((Claims.run sha512 P (V false) x ω c).vLog.map Prod.fst)) spec (tabsOf sts) f.record
+        f.proofs = .ok () ∧
+      mids = (List.range (plainN x)).map
+        (fun k => ((depMsg sha512 P x ω (Claims.coinSeq c) (k + 1)).tail, Claims.coinSeq c (k + 1))) :=
+  plain_acc_midsK id (Ω := Ω) (P := P) (x := x) (ω := ω) (c := c) (h := h)
+
 /-- **An accepted plain rep's frames are `P`'s round messages, chunk by chunk.** At an accepted plain run, rep `r < 2`
 of table 0, its proof file decoded at the table's `fast100` schedule and `|regions| · points` extra claims, has frames
 (at some batched value `T`) whose `j`-th chunk is, for every round `j` of the rep's `repRounds`, the bytes of `P`'s
 message `r · repRounds + j + 1` after its tag: the verdict accepts the rep (`plainVerifyWithM_reps`), at the shipped
 oracle (`sub`) and the table's named scheme, so its stream's rounds retained its chunks (`rep_rounds`), and the
 stream's rounds are the live ones (`decode_live`), which custody makes the round messages (`custody_ok`). -/
-theorem plain_capChunk {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
-    (h : (Claims.run sha512 P (V false) x ω c).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem plain_capChunkK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
+    (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {sch : Flock.Schedule} {f : Final} {p : Proof} {r : ℕ} (hs : setupOf false x = some (s, spec, sts))
     (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch) (hr : r < 2)
-    (hf : lastFinal (Claims.run sha512 P (V false) x ω c).seen = some f)
+    (hf : lastFinal (Claims.run sha512 P (VK keep) x ω c).seen = some f)
     (hp : decodeProof (shapeOf (Setup.ofCircuit st) sch (st.regions.size * spec.points)) f.proofs[r]! = .ok p) :
     ∃ T : F128, ∀ j < repRounds false spec st,
       encs ((chunks (repFrames (Setup.ofCircuit st) sch (spec.domain spec.tables[0]! r).toUTF8
           (2 + st.regions.size * spec.points) p T)).1.getD j []) =
         (depMsg sha512 P x ω (Claims.coinSeq c) (r * repRounds false spec st + j + 1)).tail := by
-  obtain ⟨s', spec', sts', link, c₁, mids, f', hs', hf', hc, hv, hmids⟩ := plain_acc_mids h
+  obtain ⟨s', spec', sts', link, c₁, mids, f', hs', hf', hc, hv, hmids⟩ := plain_acc_midsK keep h
   obtain ⟨rfl, rfl, rfl⟩ : s = s' ∧ spec = spec' ∧ sts = sts' := by simpa using hs.symm.trans hs'
   obtain rfl := Option.some.inj (hf.symm.trans hf')
-  generalize (Claims.run sha512 P (V false) x ω c).vLog.map Prod.fst = L at hv
+  generalize (Claims.run sha512 P (VK keep) x ω c).vLog.map Prod.fst = L at hv
   obtain ⟨-, lv, hlv, hcus⟩ := Claims.Bridge.Custody.checks_ok hc
   obtain ⟨hsts0, hst0⟩ := Array.getElem?_eq_some_iff.1 hst
   have h0 : 0 < (tabsOf sts).size := by simpa [tabsOf] using hsts0
@@ -174,6 +186,19 @@ theorem plain_capChunk {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω :
   rw [hbytes j hj] at e
   simpa using e.symm
 
+/-- `plain_capChunkK` at the deployed plain verifier (`keep := id`). -/
+theorem plain_capChunk {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {c : Fin ((V false).k x) → Coin}
+    (h : (Claims.run sha512 P (V false) x ω c).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {st : Stmt} {sch : Flock.Schedule} {f : Final} {p : Proof} {r : ℕ} (hs : setupOf false x = some (s, spec, sts))
+    (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch) (hr : r < 2)
+    (hf : lastFinal (Claims.run sha512 P (V false) x ω c).seen = some f)
+    (hp : decodeProof (shapeOf (Setup.ofCircuit st) sch (st.regions.size * spec.points)) f.proofs[r]! = .ok p) :
+    ∃ T : F128, ∀ j < repRounds false spec st,
+      encs ((chunks (repFrames (Setup.ofCircuit st) sch (spec.domain spec.tables[0]! r).toUTF8
+          (2 + st.regions.size * spec.points) p T)).1.getD j []) =
+        (depMsg sha512 P x ω (Claims.coinSeq c) (r * repRounds false spec st + j + 1)).tail :=
+  plain_capChunkK id (Ω := Ω) (P := P) (x := x) (ω := ω) (c := c) (h := h) (s := s) (spec := spec) (sts := sts) (st := st) (sch := sch) (f := f) (p := p) (r := r) (hs := hs) (hst := hst) (hsch := hsch) (hr := hr) (hf := hf) (hp := hp)
+
 /-- **Two accepted plain runs sharing the coins before the plain fork round absorb one cap there.** At two accepted
 plain runs of `P` at one tape whose coins agree before `forkRound spec st k0 r ℓ`, rep `r < 2` of table 0's proof
 files, decoded at the table's `fast100` schedule and `|regions| · points` extra claims, have one flattened `ℓ`-th
@@ -181,20 +206,20 @@ recursive cap, for each `ℓ + 1` below the schedule's levels: its round's chunk
 (`plain_capChunk`), the same message (`depMsg_congr`), and two frame lists with one header list (`repFrames_hds`) split
 at their `ℓ`-th caps after as many closing squeezes (`repFrames_capSplit`) whose rounds there have the same bytes split
 at one cap (`capFr_eq_of_chunk`). -/
-theorem plain_capPrefix {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
-    {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (V false) x ω c₁).out = .acc)
-    (h₂ : (Claims.run sha512 P (V false) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem plain_capPrefixK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (VK keep) x ω c₁).out = .acc)
+    (h₂ : (Claims.run sha512 P (VK keep) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ} (hs : setupOf false x = some (s, spec, sts))
     (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch) (hr : r < 2) (hℓ : ℓ + 1 < sch.levels.size)
     (hc : ∀ i : Fin ((V false).k x), i.val < forkRound spec st sch.k0 r ℓ → c₁ i = c₂ i) {f₁ f₂ : Final}
-    {p₁ p₂ : Proof} (hf₁ : lastFinal (Claims.run sha512 P (V false) x ω c₁).seen = some f₁)
-    (hf₂ : lastFinal (Claims.run sha512 P (V false) x ω c₂).seen = some f₂)
+    {p₁ p₂ : Proof} (hf₁ : lastFinal (Claims.run sha512 P (VK keep) x ω c₁).seen = some f₁)
+    (hf₂ : lastFinal (Claims.run sha512 P (VK keep) x ω c₂).seen = some f₂)
     (hp₁ : decodeProof (shapeOf (Setup.ofCircuit st) sch (st.regions.size * spec.points)) f₁.proofs[r]! = .ok p₁)
     (hp₂ : decodeProof (shapeOf (Setup.ofCircuit st) sch (st.regions.size * spec.points)) f₂.proofs[r]! = .ok p₂) :
     p₁.ligerito.recursiveCaps[ℓ]!.foldl (· ++ ·) ByteArray.empty =
       p₂.ligerito.recursiveCaps[ℓ]!.foldl (· ++ ·) ByteArray.empty := by
-  obtain ⟨T₁, hT₁⟩ := plain_capChunk h₁ hs hst hsch hr hf₁ hp₁
-  obtain ⟨T₂, hT₂⟩ := plain_capChunk h₂ hs hst hsch hr hf₂ hp₂
+  obtain ⟨T₁, hT₁⟩ := plain_capChunkK keep h₁ hs hst hsch hr hf₁ hp₁
+  obtain ⟨T₂, hT₂⟩ := plain_capChunkK keep h₂ hs hst hsch hr hf₂ hp₂
   have h22 := exec_fast100_ge hsch
   obtain ⟨hdim, hsm⟩ := fast100_dims _ _ hsch
   have hq : ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0 := fun i hi =>
@@ -228,11 +253,55 @@ theorem plain_capPrefix {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω 
     exact hc ⟨i, hk⟩ hi'
   · simp only [Claims.coinSeq, hk, ↓reduceDIte]
 
+/-- `plain_capPrefixK` at the deployed plain verifier (`keep := id`). -/
+theorem plain_capPrefix {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (V false) x ω c₁).out = .acc)
+    (h₂ : (Claims.run sha512 P (V false) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ} (hs : setupOf false x = some (s, spec, sts))
+    (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch) (hr : r < 2) (hℓ : ℓ + 1 < sch.levels.size)
+    (hc : ∀ i : Fin ((V false).k x), i.val < forkRound spec st sch.k0 r ℓ → c₁ i = c₂ i) {f₁ f₂ : Final}
+    {p₁ p₂ : Proof} (hf₁ : lastFinal (Claims.run sha512 P (V false) x ω c₁).seen = some f₁)
+    (hf₂ : lastFinal (Claims.run sha512 P (V false) x ω c₂).seen = some f₂)
+    (hp₁ : decodeProof (shapeOf (Setup.ofCircuit st) sch (st.regions.size * spec.points)) f₁.proofs[r]! = .ok p₁)
+    (hp₂ : decodeProof (shapeOf (Setup.ofCircuit st) sch (st.regions.size * spec.points)) f₂.proofs[r]! = .ok p₂) :
+    p₁.ligerito.recursiveCaps[ℓ]!.foldl (· ++ ·) ByteArray.empty =
+      p₂.ligerito.recursiveCaps[ℓ]!.foldl (· ++ ·) ByteArray.empty :=
+  plain_capPrefixK id (Ω := Ω) (P := P) (x := x) (ω := ω) (c₁ := c₁) (c₂ := c₂) (h₁ := h₁) (h₂ := h₂) (s := s) (spec := spec) (sts := sts) (st := st) (sch := sch) (r := r) (ℓ := ℓ) (hs := hs) (hst := hst) (hsch := hsch) (hr := hr) (hℓ := hℓ) (hc := hc) (f₁ := f₁) (f₂ := f₂) (p₁ := p₁) (p₂ := p₂) (hf₁ := hf₁) (hf₂ := hf₂) (hp₁ := hp₁) (hp₂ := hp₂)
+
 /-- **Two accepted plain runs sharing the coins before the plain fork round, opening one later-level position to two
 rows, tie a collision among their verifier calls**: each row is an `Opening` of the position in its run's log against
 the run's rep-`r` flattened `ℓ`-th recursive cap (`plain_levelOpening` at level `ℓ + 1`), the two caps are one
 (`plain_capPrefix`), and two openings of one position against one root to different rows tie a collision
 (`tiedColl_of_openings`). -/
+theorem plain_levelTieK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (VK keep) x ω c₁).out = .acc)
+    (h₂ : (Claims.run sha512 P (VK keep) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ} (hs : setupOf false x = some (s, spec, sts))
+    (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch) (hr : r < 2) (hℓ : ℓ + 1 < sch.levels.size)
+    (hc : ∀ i : Fin ((V false).k x), i.val < forkRound spec st sch.k0 r ℓ → c₁ i = c₂ i) {q : ℕ}
+    {a b : List FlockLevel3.GF128}
+    (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (VK keep) x ω c₁).seen r (ℓ + 1))
+    (hb : (q, b) ∈ plainRawLevelCols (Claims.run sha512 P (VK keep) x ω c₂).seen r (ℓ + 1)) (hab : a ≠ b) :
+    Claims.TiedColl sha512
+      ((Claims.run sha512 P (VK keep) x ω c₁).vLog ++ (Claims.run sha512 P (VK keep) x ω c₂).vLog) := by
+  obtain ⟨s₁, spec₁, sts₁, f₁, st₁, sch₁, p₁, row₁, hs₁, hf₁, hst₁, hsch₁, hp₁, hra, -, -, hop₁⟩ :=
+    plain_levelOpeningK keep h₁ ha
+  obtain ⟨s₂, spec₂, sts₂, f₂, st₂, sch₂, p₂, row₂, hs₂, hf₂, hst₂, hsch₂, hp₂, hrb, -, -, hop₂⟩ :=
+    plain_levelOpeningK keep h₂ hb
+  obtain ⟨rfl, e₁⟩ := Prod.mk.inj (Option.some.inj (hs₁.symm.trans hs))
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj e₁
+  obtain ⟨rfl, e₂⟩ := Prod.mk.inj (Option.some.inj (hs₂.symm.trans hs))
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj e₂
+  obtain rfl := Option.some.inj (hst₁.symm.trans hst)
+  obtain rfl := Option.some.inj (hst₂.symm.trans hst)
+  obtain rfl := Option.some.inj (hsch₁.symm.trans hsch)
+  obtain rfl := Option.some.inj (hsch₂.symm.trans hsch)
+  have hcap := plain_capPrefixK keep h₁ h₂ hs hst hsch hr hℓ hc hf₁ hf₂ hp₁ hp₂
+  rw [Nat.add_sub_cancel] at hop₁ hop₂
+  rw [hcap] at hop₁
+  exact tiedColl_of_openings hop₁ hop₂ fun he => hab (by rw [hra, hrb, he])
+
+/-- `plain_levelTieK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_levelTie {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {c₁ c₂ : Fin ((V false).k x) → Coin} (h₁ : (Claims.run sha512 P (V false) x ω c₁).out = .acc)
     (h₂ : (Claims.run sha512 P (V false) x ω c₂).out = .acc) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -243,22 +312,7 @@ theorem plain_levelTie {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω :
     (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω c₁).seen r (ℓ + 1))
     (hb : (q, b) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω c₂).seen r (ℓ + 1)) (hab : a ≠ b) :
     Claims.TiedColl sha512
-      ((Claims.run sha512 P (V false) x ω c₁).vLog ++ (Claims.run sha512 P (V false) x ω c₂).vLog) := by
-  obtain ⟨s₁, spec₁, sts₁, f₁, st₁, sch₁, p₁, row₁, hs₁, hf₁, hst₁, hsch₁, hp₁, hra, -, -, hop₁⟩ :=
-    plain_levelOpening h₁ ha
-  obtain ⟨s₂, spec₂, sts₂, f₂, st₂, sch₂, p₂, row₂, hs₂, hf₂, hst₂, hsch₂, hp₂, hrb, -, -, hop₂⟩ :=
-    plain_levelOpening h₂ hb
-  obtain ⟨rfl, e₁⟩ := Prod.mk.inj (Option.some.inj (hs₁.symm.trans hs))
-  obtain ⟨rfl, rfl⟩ := Prod.mk.inj e₁
-  obtain ⟨rfl, e₂⟩ := Prod.mk.inj (Option.some.inj (hs₂.symm.trans hs))
-  obtain ⟨rfl, rfl⟩ := Prod.mk.inj e₂
-  obtain rfl := Option.some.inj (hst₁.symm.trans hst)
-  obtain rfl := Option.some.inj (hst₂.symm.trans hst)
-  obtain rfl := Option.some.inj (hsch₁.symm.trans hsch)
-  obtain rfl := Option.some.inj (hsch₂.symm.trans hsch)
-  have hcap := plain_capPrefix h₁ h₂ hs hst hsch hr hℓ hc hf₁ hf₂ hp₁ hp₂
-  rw [Nat.add_sub_cancel] at hop₁ hop₂
-  rw [hcap] at hop₁
-  exact tiedColl_of_openings hop₁ hop₂ fun he => hab (by rw [hra, hrb, he])
+      ((Claims.run sha512 P (V false) x ω c₁).vLog ++ (Claims.run sha512 P (V false) x ω c₂).vLog) :=
+  plain_levelTieK id (Ω := Ω) (P := P) (x := x) (ω := ω) (c₁ := c₁) (c₂ := c₂) (h₁ := h₁) (h₂ := h₂) (s := s) (spec := spec) (sts := sts) (st := st) (sch := sch) (r := r) (ℓ := ℓ) (hs := hs) (hst := hst) (hsch := hsch) (hr := hr) (hℓ := hℓ) (hc := hc) (q := q) (a := a) (b := b) (ha := ha) (hb := hb) (hab := hab)
 
 end FlockDeploy.KS
