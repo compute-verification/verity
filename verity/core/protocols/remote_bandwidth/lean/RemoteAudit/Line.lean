@@ -3,7 +3,8 @@ import RemoteAudit.Pooled
 /-!
 # The memory line held over time
 
-`line.py`'s line, the line of record a gate run publishes: the conclusions of
+The line of record a gate run publishes (the verifier process's `line` request, which `auditor_line.py` holds to
+`line.py`'s): the conclusions of
 `Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
 `Security/Models/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a paced session's groups in exact
 rationals, every refusal the Python's word for word. The wrong receipts W are the pooled bound of the session's record

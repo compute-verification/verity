@@ -2,7 +2,8 @@
 as outputs so that both sides' reasons are compared word for word: sessions of zero, one and many groups at every
 stretch length, with bursts, the host tier, filler, wrong receipts (the pooled bound of drawn windows, `pooled`) that
 fill one group or spill into the next, ties between stretches, and each refusal (the windows', the node's inputs, a
-group's, a stretch's empty span), with malformed inputs rejected by both. `auditor_line.py` runs the Python (`README.md`), so the Python is of record here."""
+group's, a stretch's empty span), with malformed inputs rejected by both. The line of record is the Lean's
+(`auditor_line.py` runs the verifier process's `line` and holds it exactly to the Python's), so the Lean is of record here."""
 
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ N, B = 1000, 4096
 
 
 def port(inputs=st.nothing(), reference=line.run_json) -> D.Port:
-    return D.Port(M.EXE, "line", reference, inputs, package=M.PACKAGE, of_record="python", rejects=M.REFUSALS)
+    return D.Port(M.EXE, "line", reference, inputs, package=M.PACKAGE, of_record="lean", rejects=M.REFUSALS)
 
 
 server = D.server_fixture(port())
