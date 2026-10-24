@@ -201,27 +201,38 @@ def serve(seed: int, own: int = 0, shape: Shape = SHAPE, salt_first: bool = Fals
         release)
     need = list(itertools.accumulate(frames_in))
     received = tuple(sum(row.count(b"q") for row in r.grid) for r in ingress)
-    tie = AD.PromptTie(tuple(prompt), tuple(first))
-    return Session(AD.LinkAdvice(advice, received, tie), egress, ingress, arrive, first, hand, handed, tuple(need))
+    link = tied(AD.LinkAdvice(advice, received), tuple(prompt))
+    return Session(link, egress, ingress, arrive, first, hand, handed, tuple(need))
 
 
-def tie_of(advice) -> AD.PromptTie:
-    """The tie of a certified ingress whose requests are the advice's, in its order, with its prompt lengths."""
-    return AD.PromptTie(tuple(q.prompt_len for q in advice.requests), tuple(range(len(advice.requests))))
+def prompts(link) -> tuple[int, ...]:
+    """The advice's prompt lengths, in its requests' order."""
+    return tuple(q.prompt_len for q in link.advice.requests)
 
 
-# --- the advice edits, each under the link's certified tie ------------------------------------------------------------
+def tied(link, certified=None):
+    """`link` with a stand-in of IoTieRequest's verdict on it (`advised.IoTieVerdict`, which the verifier of record
+    takes only from IoTieRequest proofs it verified, as `standin` stands in for N2's): its reference in the clear on
+    the prompt lengths, link-wide, every ingress window accepted when the advice's prompt lengths are `certified`, the
+    certified ingress's requests' in arrival order (by default the advice's own: an ingress that certified them), else
+    every window refused."""
+    ok = certified is None or prompts(link) == tuple(certified)
+    return replace(link, tie=AD.IoTieVerdict(AD.digest(link), (ok,) * len(link.received)))
 
-def rebuilt(link, requests, steps, extra=(), received=None, tie=None):
+
+# --- the advice edits, each tied to the link's certified prompts ------------------------------------------------------
+
+def rebuilt(link, requests, steps, extra=(), received=None, certified=None):
     """`link` with the advice's requests and steps replaced, each kept output released where `link` releases the same
-    request's (by id) same output, or where `extra`'s (id, index, bucket) says."""
+    request's (by id) same output, or where `extra`'s (id, index, bucket) says, tied (`tied`) to the prompts
+    `certified`, by default `link`'s, since an edit of the advice leaves the certified ingress."""
     a = link.advice
     at = {(a.requests[o.request].id, o.index): b for o, b in zip(ADV.outputs(a), a.release)}
     at |= {(i, k): b for i, k, b in extra}
     probe = ADV.Advice(requests, steps, (0,) * sum(q.output_len for q in requests))
     release = tuple(at[(requests[o.request].id, o.index)] for o in ADV.outputs(probe))
-    return AD.LinkAdvice(ADV.Advice(requests, steps, release), link.received if received is None else received,
-                         link.tie if tie is None else tie)
+    edit = AD.LinkAdvice(ADV.Advice(requests, steps, release), link.received if received is None else received)
+    return tied(edit, prompts(link) if certified is None else certified)
 
 
 def room(link, j, shape=SHAPE):
@@ -252,8 +263,8 @@ def with_output_len(link, j, d, shape=SHAPE):
 
 def without_request(link, j, ingress, certified=True):
     """The advice with request j dropped, its rows with it, and, with `ingress`, its ingress frames off the link:
-    `received` lowered by them in the last windows that released any. With `certified`, under the link's certified
-    tie, which still has request j; else under a tie without it too."""
+    `received` lowered by them in the last windows that released any. With `certified`, tied to the link's certified
+    prompts, which still have request j's; else to an ingress that certified it without request j too."""
     a = link.advice
     index = {k: k - (k > j) for k in range(len(a.requests)) if k != j}
     steps = []
@@ -271,16 +282,15 @@ def without_request(link, j, ingress, certified=True):
             take = min(size, received[w])
             received[w] -= take
             size -= take
-    tie = None if certified else AD.PromptTie(link.tie.prompt_len[:j] + link.tie.prompt_len[j + 1:],
-                                              tuple(range(len(requests))))
-    return rebuilt(link, requests, tuple(steps), received=tuple(received), tie=tie)
+    own = None if certified else tuple(q.prompt_len for q in requests)
+    return rebuilt(link, requests, tuple(steps), received=tuple(received), certified=own)
 
 
 def moved(link, k, d):
-    """The advice with kept output k's release bucket d later."""
+    """The advice with kept output k's release bucket d later, tied to the link's certified prompts."""
     release = list(link.advice.release)
     release[k] += d
-    return AD.LinkAdvice(replace(link.advice, release=tuple(release)), link.received, link.tie)
+    return tied(AD.LinkAdvice(replace(link.advice, release=tuple(release)), link.received), prompts(link))
 
 
 def feeds_a_hit(advice, j) -> bool:

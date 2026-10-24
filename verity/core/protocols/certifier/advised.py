@@ -25,16 +25,17 @@ ingress certifier's own frames a window (1 with its salt on, else 0), as `served
   schedule vLLM couldn't have run;
 - `received[w]`, the request frames the ingress certifier releases in window w, which the unit holds to the certified
   ingress head;
-- the tie (`PromptTie`): each certified request's prompt length, in arrival order, and which certified request each
-  advice request is, as ENC-DERIVED's advice v1 tie derives them from the certified I/O;
+- the tie (`IoTieVerdict`): IO-TIE's `IoTieRequest` verdict on each of the link's ingress windows for this advice (its
+  `digest`), that the link's j-th certified request is advice request j and its prompt v0's `prompt_len` ids, which
+  the verifier of record takes only from IoTieRequest proofs it verified itself;
 - the link's public framing, `request_frames[n − 1]`, the ingress frames a request of an n-token prompt takes (CERT-
   VARLEN's id requests, whose frames are a function of the prompt's length alone), fixed before the run;
 - each window's declared sync, one of Σ_sync, which the certified egress head's parameters digest binds.
 
 **The ingress ends** (`ends`) are derived, not advised: advice request j is the link's j-th request, and its prompt
-length is the certified prompt's, both of which the tie holds (`ends` refuses a link without one, an advice whose
-requests aren't the tie's in arrival order, and one whose prompt lengths aren't the certified ones; FCFS admission
-meets the order, v0's first-row order being the arrival order). So request j ends at request frame
+length is the certified prompt's, both of which the tie holds (`ends` refuses a link without IoTieRequest's accepted
+verdict on every ingress window for the same advice digest; FCFS admission meets the order, v0's first-row order
+being the arrival order). So request j ends at request frame
 Σ_{i ≤ j} request_frames[prompt_len_i − 1], and the last request's end must be Σ received, the link's certified
 request frames. No field of the advice but v0's says where a request ends, so the ends cost nothing beside
 `advice.bits`.
@@ -72,11 +73,13 @@ beside the log2 #Σ_sync bits a window the sync charge already counts. Nothing e
 the ingress timing, not when the server actually wrote, and not where a request ends, which `ends` derives from v0's
 prompt lengths. And the advice is held to the ingress head: no frame is released before the ingress certifier had
 released its request's `ends[j]` request frames, max(1, δ + ⌊λ/ρ⌋) buckets earlier, under a sync Σ_sync holds. Those
-are the link's first j + 1 requests whole because v0's prompt lengths are theirs, in arrival order: the tie, which
-N2's verifier of record checks on the host, a named host-side premise (PROTOCOL.md) until IO-TIE's in-proof tie
-(`IoTieRequest`) lands, when `ends` takes its verdict for the same advice digest instead. Without it, a prover who
-splits the same request frames among the requests otherwise (a short prompt and a long one swapped) lowers an early
-request's end, and so the floor, on the same certified record: REDTEAM phase 6's case, which the tie refuses. Neither
+are the link's first j + 1 requests whole because v0's prompt lengths are theirs, in arrival order: the tie,
+IoTieRequest's verdict for the same advice digest. Without it, a prover who splits the same request frames among the
+requests otherwise (a short prompt and a long one swapped) lowers an early request's end, and so the floor, on the
+same certified record: REDTEAM phase 6's case. The certified prompts are witness, so the verifier can't derive the
+tie from them on the host, and a tie the prover states is no tie (REDTEAM phase 7: one stating the swapped split
+reopens phase 6's acausal release). So the tie is only IoTieRequest's verdict, and until IoTieRequest runs in the proof
+service nothing gives the verifier one: every advised link is refused (PROTOCOL.md, fail closed). Neither
 head signs the prompt lengths or the sync a window ran, so the unit itself holds neither to the record: PROTOCOL.md's
 named gap, with its design.
 
@@ -93,8 +96,9 @@ frame is queued at the head of each window's queue, and otherwise one bucket lat
 **Premises** of "an honest advised link is accepted", which N2's claim doesn't rest on: `release` is the certified
 egress record's (each kept output one egress frame, in the link's canonical order, which IO-TIE fixes); the releases
 fall in the link's windows, each with a declared sync in Σ_sync; `received` is the ingress record's; the link's j-th
-request is advice request j (FCFS admission, which the tie's `order` shows: v0 numbered by a runner's batch order,
-which ENC-DERIVED's `walk.order` maps back, is refused), an id request of its prompt length (`request_frames`); each
+request is advice request j (FCFS admission, which IoTieRequest checks, its ordinals being the verifier's: v0
+numbered by a runner's batch order, which ENC-DERIVED's `walk.order` maps back, is refused), an id request of its
+prompt length (`request_frames`); each
 window's
 declared sync has δ and ρ that every frame released in it meets (a small δ, a ρ at least a stream's rate); with the
 salt on, the own frame counts as bucket 0's, so a window that starts with RIN or more request frames carried in
@@ -161,40 +165,46 @@ def _u32s(value, what: str) -> tuple[int, ...]:
 
 
 @dataclass(frozen=True)
-class PromptTie:
-    """The advice's requests tied to the certified ingress (the module docstring, "The ingress ends"), checked on the
-    host: `prompt_len[r]`, the prompt length of the certified ingress's r-th request (its prompt's id count, in arrival
-    order), and `order[i]`, the certified request that advice request i is. ENC-DERIVED's advice v1 tie derives both
-    from the certified I/O (`tie_fields`: each certified request's `len(prompt_ids)` and `walk.order`). PROTOCOL.md's
-    named host-side premise, until IO-TIE's in-proof tie (`IoTieRequest`) lands. Construction refuses
-    (`advice.MalformedAdvice`) fields that aren't sequences of u32s."""
+class IoTieVerdict:
+    """The tie of an advised link's requests to the certified ingress (the module docstring, "The ingress ends"):
+    IO-TIE's `IoTieRequest` verdict on each of the link's ingress windows, `accepted[w]`, on the request view the
+    verifier computed from the advice whose `digest` is `advice`. An accepted verdict on every window says the link's
+    j-th certified request is advice request j and its prompt is v0's `prompt_len` ids long. The verifier of record
+    builds one only from IoTieRequest proofs it verified itself, never from what the prover delivers, and until
+    IoTieRequest runs in the proof service nothing builds one, so every advised link is refused (PROTOCOL.md, fail
+    closed). Construction refuses (`advice.MalformedAdvice`) an `advice` that isn't an advice digest and verdicts that
+    aren't bools."""
 
-    prompt_len: tuple[int, ...]
-    order: tuple[int, ...]
+    advice: str
+    accepted: tuple[bool, ...]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "prompt_len", _u32s(self.prompt_len, "a tie's prompt_len"))
-        object.__setattr__(self, "order", _u32s(self.order, "a tie's order"))
+        if type(self.advice) is not str or len(self.advice) != 128 or set(self.advice) - set("0123456789abcdef"):
+            raise MalformedAdvice("IoTieRequest's verdict names its advice by `advised.digest`, 128 hex digits")
+        if isinstance(self.accepted, (str, bytes)) or not all(type(x) is bool for x in self.accepted):
+            raise MalformedAdvice("IoTieRequest's verdict is one bool an ingress window")
+        object.__setattr__(self, "accepted", tuple(self.accepted))
 
 
 @dataclass(frozen=True)
 class LinkAdvice:
     """What N2 reads on an advised link beside its public profile and syncs: I1's advice, `received[w]`, window w's
-    request frames, which the unit holds to the certified ingress head, and `tie`, the advice's requests tied to the
-    certified ingress (`PromptTie`), without which `ends` refuses the link (the module docstring). Construction refuses
-    (`advice.MalformedAdvice`) an advice that isn't an `advice.Advice`, a `received` that isn't u32s, and a tie that
-    isn't a `PromptTie` or None."""
+    request frames, which the unit holds to the certified ingress head, and `tie`, IoTieRequest's verdict on the link
+    for this advice (`IoTieVerdict`), which the verifier of record sets from proofs it verified, and without which
+    `ends` refuses the link (the module docstring). Construction refuses (`advice.MalformedAdvice`) an advice that
+    isn't an `advice.Advice`, a `received` that isn't u32s, and a tie that isn't an `IoTieVerdict` or None."""
 
     advice: Advice
     received: tuple[int, ...]
-    tie: PromptTie | None = None
+    tie: IoTieVerdict | None = None
 
     def __post_init__(self) -> None:
         if type(self.advice) is not Advice:
             raise MalformedAdvice(f"an advised link's advice is an advice.Advice, not a {type(self.advice).__name__}")
         object.__setattr__(self, "received", _u32s(self.received, "received"))
-        if self.tie is not None and type(self.tie) is not PromptTie:
-            raise MalformedAdvice(f"an advised link's tie is an advised.PromptTie, not a {type(self.tie).__name__}")
+        if self.tie is not None and type(self.tie) is not IoTieVerdict:
+            raise MalformedAdvice(f"an advised link's tie is IoTieRequest's verdict (advised.IoTieVerdict), not a "
+                                  f"{type(self.tie).__name__}")
 
 
 @dataclass(frozen=True)
@@ -213,20 +223,17 @@ class WindowView:
 def ends(link: LinkAdvice, request_frames: Sequence[int]) -> tuple[int, ...]:
     """Each request's end on the ingress link, the request frames up to and including its last (the module docstring,
     "The ingress ends"): request j, the link's j-th, ends at Σ_{i ≤ j} request_frames[prompt_len_i − 1]. Raises
-    `ValueError` on a link without a tie, on an advice whose requests aren't the tie's certified requests in arrival
-    order or whose prompt lengths aren't theirs, on a prompt longer than the framing covers, and on ends whose last
-    isn't the windows' total."""
-    tie, requests = link.tie, link.advice.requests
+    `ValueError` on a link without IoTieRequest's verdict (the tie, `IoTieVerdict`), on a verdict on another advice or
+    that doesn't accept every ingress window, on a prompt longer than the framing covers, and on ends whose last isn't
+    the windows' total."""
+    tie = link.tie
     if tie is None:
-        raise ValueError("an advised link without the prompt-length tie (advised.PromptTie) is refused")
-    if len(tie.prompt_len) != len(requests) or tie.order != tuple(range(len(requests))):
-        raise ValueError(f"the advice's {len(requests)} requests aren't the tie's {len(tie.prompt_len)} certified "
-                         f"requests in arrival order (advice request i is certified request "
-                         f"{list(tie.order)!r:.200}[i])")
-    for j, q in enumerate(requests):
-        if q.prompt_len != tie.prompt_len[j]:
-            raise ValueError(f"request {j}'s prompt_len {q.prompt_len} isn't its certified prompt's "
-                             f"{tie.prompt_len[j]} ids")
+        raise ValueError("an advised link without IoTieRequest's verdict (the tie, advised.IoTieVerdict) is refused")
+    if tie.advice != digest(link):
+        raise ValueError("IoTieRequest's verdict is on another advice than the link's (advised.digest)")
+    if len(tie.accepted) != len(link.received) or not all(tie.accepted):
+        raise ValueError(f"IoTieRequest's verdict doesn't accept each of the link's {len(link.received)} ingress "
+                         f"windows: {list(tie.accepted)!r:.200}")
     out, end = [], 0
     for j, q in enumerate(link.advice.requests):
         if q.prompt_len > len(request_frames):

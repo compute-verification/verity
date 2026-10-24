@@ -120,9 +120,10 @@ takes as its ``sync`` parameter. The in-the-clear check runs `served_check` too.
 **An advised link** (`LinkWindows(advised=advised.AdvisedProfile(…))`) is a served link under arbitrary traffic:
 responses of any length, batched and timed as serving chose, carried across windows. The prover's advice
 (`advised.LinkAdvice`: I1's `advice.Advice`, one per certifier session, after serving, charged by `advice.bits`, each
-window's request frames, and the tie of its requests to the certified ingress, `advised.PromptTie`, checked on the
-host: PROTOCOL.md's named host-side premise) states what serving chose, the profile's public framing says where each
-request ends on the ingress link (`advised.ends`, which refuses a link without the tie), and its unit is
+window's request frames, and the tie of its requests to the certified ingress, `advised.IoTieVerdict`, IoTieRequest's
+verdict from proofs the verifier verified, which nothing builds until IoTieRequest runs in the proof service, so every
+advised link is refused until then) states what serving chose, the profile's public framing says where each request
+ends on the ingress link (`advised.ends`, which refuses a link without the tie), and its unit is
 `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: the checks above, and one gate naming
 `advised.NetworkAdvisedCounts_v1` and its pinned circuit digest (`advised.gate`, pinned in
 `advised.circuit-check.json`), in its verdict bit, which holds the egress head's counts to the advice's releases and

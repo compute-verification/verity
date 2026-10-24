@@ -465,11 +465,12 @@ def test_the_declared_received_is_the_advices_requests_frames_under_the_links_fr
 
 def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_units():
     """Against N2-ADVICE's `advised` (skipped until it lands), on heads an honest run of the advice certifies, each
-    advice tied to the honest advice's requests (the certified ingress): the honest advice is accepted; length and
-    release are refused by the advised counts, each well formed, and missing and extra by the view (the prompt-length
-    tie), and by the counts too under a tie of their own requests; start and chunk are accepted, their frames
-    honest's, so only the step unit can refuse them; a link without the tie, a `received` that isn't the requests'
-    frames, and an extra request whose frames pass the egress allocation R in a bucket, are refused by the view."""
+    advice tied to the certified ingress, the honest advice's requests (IoTieRequest's verdict, `n2_advice`'s
+    stand-in): the honest advice is accepted; length and release are refused by the advised counts, each well formed,
+    and missing and extra by the view (the verdict refuses them), and by the counts too under a verdict on an ingress
+    of their own requests; start and chunk are accepted, their frames honest's, so only the step unit can refuse them;
+    a link without the verdict, a `received` that isn't the requests' frames, and an extra request whose frames pass
+    the egress allocation R in a bucket, are refused by the view."""
     AD = pytest.importorskip(NG.ADVISED_MODULE)
     from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
@@ -489,7 +490,8 @@ def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_unit
             assert codes(_n2(b, certified=a)) == ([] if n.code.startswith("StepUnit") else [n.code]), name
             assert codes(_n2(b)) == ([] if n.code.startswith("StepUnit") else [NG.ADVISED]), name
     assert codes(AD.LinkAdvice(a, (3,))) == [f"{NG.ADVISED}.view"]
-    assert codes(AD.LinkAdvice(a, (4,), _n2(a).tie)) == [f"{NG.ADVISED}.view"]
+    four = AD.LinkAdvice(a, (4,))
+    assert codes(dataclasses.replace(four, tie=AD.IoTieVerdict(AD.digest(four), (True,)))) == [f"{NG.ADVISED}.view"]
     assert NG.advised_codes(_n2(NG.extra_request(a)), 0, syncs, sigma, FRAMING, T, 4, RIN, OWN,
                             *heads[0]) == [f"{NG.ADVISED}.view"]
 
