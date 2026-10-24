@@ -17,6 +17,8 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
 * The service's own: `format`, `protocol` and `previous` (one-stage's tags and the log's chain), `scheme` (`SCHEME`: hm96
   rows in frame-v3-sha512 trees, the one hash), `query` (the check's) and `law` (the selection rule's).
 * A salted root: one per declared Value, a `roots` entry for a served value and a `registered` entry for a registered one.
+  A tree over roots (`ROOTS`, a row-table window's `row-table` port) is salted through its trees' hiding leaves, the
+  schema its Value names (`over`).
 * Declared, or refused: `population` (the record's `population`, `program` and `partition`, which are functions of the
   check and N); `population:<template>` (a stratified or work law's strata, one per template); `window` (its provenance);
   `leaf_layer` and `anchors` when not empty; and a value's layout, `leaves:<value>` and `domain:<value>`, with
@@ -134,6 +136,8 @@ from .coins import ChallengerCoins, OwnRandomness, closure_of, draw_first
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 HIDING = "hm96-sha512/"
+#: A tree over the roots of hiding trees (`row_table.ROOTS_SCHEMA`); a Value of it names its leaves' schema (`over`).
+ROOTS = "frame-v3-sha512/root/v1"
 KINDS = ("structure", "output", "coins", "commitment")
 SOURCES = ("parameter", "window")
 PHASES = ("epoch", "serve", "in-deadline")
@@ -183,15 +187,18 @@ class Public:
 @dataclass(frozen=True)
 class Value:
     """A committed value. `name`: its root's port, or the registered value's name. `schema`: its leaves' schema, a hiding
-    one (`hm96-sha512/...`); None for a registered value, whose schema the service fixes. `phase`: when it is committed
-    (`epoch`, `serve` or `in-deadline`). `registered`: committed once per deployment and read
-    by position. `fresh`: nonce-bound inside a deadline (PoUS's answers)."""
+    one (`hm96-sha512/...`), or `ROOTS` for a tree over the roots of trees whose leaves hide it (a row-table window's
+    `row-table` port: one root per step, each over its tables' roots); None for a registered value, whose schema the
+    service fixes. `over`: a `ROOTS` value's hiding leaf schema, the one its inner trees' leaves have, and only a `ROOTS`
+    value's; the Spec's digest binds it. `phase`: when it is committed (`epoch`, `serve` or `in-deadline`). `registered`:
+    committed once per deployment and read by position. `fresh`: nonce-bound inside a deadline (PoUS's answers)."""
 
     name: str
     schema: str | None
     phase: str
     registered: bool = False
     fresh: bool = False
+    over: str | None = None
 
     def __post_init__(self) -> None:
         if not (isinstance(self.name, str) and self.name):
@@ -201,12 +208,20 @@ class Value:
         if self.registered:
             if self.schema is not None:
                 raise ValueError(f"value {self.name!r}: a registered value's schema is the service's, not {self.schema!r}")
+        elif self.schema == ROOTS:
+            if not (isinstance(self.over, str) and self.over.startswith(HIDING)):
+                raise ValueError(f"value {self.name!r}: a tree over roots ({ROOTS}) names the hiding leaf schema its "
+                                 f"trees' leaves have (over={HIDING}...), not {self.over!r}")
         elif not (isinstance(self.schema, str) and self.schema.startswith(HIDING)):
-            raise ValueError(f"value {self.name!r}: its leaves hide it ({HIDING}...), not {self.schema!r}")
+            raise ValueError(f"value {self.name!r}: its leaves hide it ({HIDING}...), or it is a tree over roots "
+                             f"({ROOTS}, over={HIDING}...), not {self.schema!r}")
+        if self.over is not None and self.schema != ROOTS:
+            raise ValueError(f"value {self.name!r}: only a tree over roots ({ROOTS}) has an over schema, not "
+                             f"{self.schema!r}")
 
     def to_json(self) -> dict[str, Any]:
         return {"name": self.name, "schema": self.schema, "phase": self.phase, "registered": self.registered,
-                "fresh": self.fresh}
+                "fresh": self.fresh, **({} if self.over is None else {"over": self.over})}
 
 
 @dataclass(frozen=True)
@@ -1688,6 +1703,6 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
 
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
-           "PHASES", "Pending", "Public", "REJECT", "ROUNDS", "Refused", "Registration", "SCHEME", "SOURCES", "Selection",
+           "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "Registration", "SCHEME", "SOURCES", "Selection",
            "Sequential", "Session", "Spec", "Stream", "Terms", "Value", "check_public", "check_verdicts",
            "select_draw", "selection_law"]

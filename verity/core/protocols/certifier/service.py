@@ -6,17 +6,18 @@ records (`CertifiedRecord`), egress leaf 0 and ingress leaf 1, and their heads, 
 (`rows`).
 Each leaf is `hm96-sha512/row/v2` over its bytes, salted with its own fresh 192-byte salt, in a `frame-v3-sha512` tree
 under one-stage's served domain, whose run is the link and the window. A record leaf's bytes are `encode`'s (the record
-head, then the certificate), and a head leaf's are the head's alone (`RecordHead.encode`). A proof that reads only the
-head, such as N3's, which is designed to hold the window's frames to the head's root, opens a head leaf in the head's
-two or three SHA-512 compressions instead of the certificate's 272. The certificates and heads are witness: the
-challenger sees the root, never a certificate or a head.
+head, the certifier's salt for it, then the certificate), and a head leaf's are the head's alone (`RecordHead.encode`).
+A proof that reads only the head, such as N3's, which is designed to hold the window's frames to the head's root, opens
+a head leaf in the head's two or three SHA-512 compressions instead of the certificate's 272. The certificates, salts
+and heads are witness: the challenger sees the root, never a certificate, a salt or a head.
 
 **Selection** is `All`: every link-window is checked, so an accepted outcome is the exhaustive fact. A registration is
 one link-window, one proof unit. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
 to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the link-window. The
 network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
-credit: it accepts only when every window of the egress profile is registered in order and its outcome of record
-accepted, so a rejected or late window, one with no outcome, and a gap in the registrations each reject the link. A
+credit: it accepts only when every window of the egress profile (a served link's served profile) is registered in
+order and its outcome of record accepted, so a rejected or late window, one with no outcome, and a gap in the
+registrations each reject the link. A
 run's is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a Python model) builds no
 `LinkWindows` outcomes, so its account doesn't read it, though `Account.sound` is the same AND over its own port
 records.
@@ -33,16 +34,17 @@ the run and bound by the spec's context, and nothing declared at run time sets i
 pass N3's design from public occupancy, with no N3 unit: a head with frames where the profile says 0 fails N2's count
 check. An end without a profile has no such backing, since its occupancy is its record's own.
 
-**The check** is `LinkWindows.unit`, `NetworkLinkWindow` v2{EGRESS, INGRESS}, the AND of three parts:
-- the certificates' check, one opaque primitive over the two record leaves' committed digests with no gates, checked on
-  the host: each certificate verifies under the network certifier's public key in its certifier session
-  (`certifier_session`), names the registered link-window and signs its head's digest, and each head's deadline bit is
-  set;
-- each end's head check, `head_check.NetworkHeadCheck_v1{L, T, COUNTS}` (EGRESS and INGRESS are those statics), a
-  Boolean Definition: the head opens at leaf 2 + direction under the registered root, the hiding read N3 makes of the
-  same leaf; its link, direction and window are the link-window's; its status is complete; its T, r, B, τ_b and
-  parameters digest are the end's declared grid's; and on an end with an occupancy profile its T counts are the
-  profile's row for the window. A window past the profile has no row to give, so it is rejected.
+**The check** is `LinkWindows.unit`, `NetworkLinkWindow` v3{EGRESS, INGRESS}, over the two certificates' signed digests
+(`certificate_digest`: each end's record digest hidden under the certifier's salt), the AND of three parts:
+- the certificates' check, one opaque primitive over the two signed digests with no gates, checked on the host: each
+  certificate verifies under the network certifier's public key in its certifier session (`certifier_session`) over
+  its public fields and its signed digest, names the registered link-window, and its head's deadline bit is set;
+- each end's head check, `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are those statics), a
+  Boolean Definition over its end's signed digest: the head opens at leaf 2 + direction under the registered root, the
+  hiding read N3 makes of the same leaf; its link, direction and window are the link-window's; its status is complete;
+  its T, r, B, τ_b and parameters digest are the end's declared grid's; on an end with an occupancy profile its T
+  counts are the profile's row for the window; and its record digest under the certifier's salt is the signed digest,
+  so the certificate signs the head the check opened. A window past the profile has no row to give, so it is rejected.
 
 In the unit's Program each head check is one gate that names the Definition (`head_check.gate`), because the commitment
 gadgets' Boolean bodies encode to about 140 MB and the proof service encodes the Program on every registration. The
@@ -57,8 +59,8 @@ in the clear (`benchmarks/network_sim`, "N3 in zero knowledge"), in no proof-ser
 runs it on every port-window that recorded frames, recomputing the head's frames root over its N frames, which would
 hold N to the head's Σ n_t up to a SHA-512 collision (`certificate`: leaf k is frame k for k < Σ n_t and E_0 after).
 
-Its verifier of record is `LinkWindows.verify`, which runs on the host and reads the opening: the certified records and
-their four salts. It accepts when
+Its verifier of record is `LinkWindows.verify`, which runs on the host and reads the opening: the certified records, the
+certifier's salts, and the four leaves' salts. It accepts when
 - the opening reproduces the registered root under the link-window's domain;
 - each end's head check accepts (`head_check.reference`, which the tests hold to the circuit);
 - the audit (`audit.Audit`) accepts both records under the certifier's key and session, comparing no grid
@@ -71,10 +73,14 @@ the profile. The egress grid is the head's counts filled with the head's frames 
 digest binds both, so the frames are the rest of the grid, and N2 says nothing of them. Until N3 is a proof-service
 unit with Selection `All`, nothing here holds the egress grid to the Program's.
 
-N2 covers no lab or served link yet. A link whose egress end has no profile has no verdict (`ValueError`, failing
-closed): nothing would hold its egress timing. That is every link whose egress counts aren't fixed before the run, since
-they follow its run-time clock syncs or its requests' arrivals (the lab's and served traffic's), until a shaper fixes
-them (a constant row) or a unit holds them to the Program's under the declared syncs.
+**A served link** (`LinkWindows(served=served.ServedProfile(…))`) has egress counts that follow its requests' arrivals
+and the run-time syncs, so no profile fixes them before the run. Its unit is `NetworkServedLinkWindow` v2{EGRESS,
+INGRESS, SERVED}: the checks above, and one gate naming `served.NetworkServedCounts_v1`, which holds the egress head's
+counts to the ones the ingress head's counts derive under the window's declared sync (`served`'s docstring has the
+derivation, its premises and the carry-over). Its public items are `PUBLIC_SERVED`: no egress profile, the served
+sizes, and the window's declared sync, the advice `charge` already counts, which the served counts read. Its verifier
+of record runs `served_check` too. A link whose egress end has neither an occupancy profile nor a served profile has no
+verdict (`ValueError`, failing closed): nothing would hold its egress timing.
 
 `LinkWindows.stand_in` is the in-the-clear verdict, the Program's egress grid compared as it was before the head check,
 and each head's counts the profile's (`declares`). It reads the frames, so it is the tests' oracle, never a verdict:
@@ -89,7 +95,10 @@ never a violation's kind.
 What that establishes, and what it doesn't: the outcome is accept exactly when the opening seals, both head checks
 accept and the host audit accepts the committed records, and the outcome record binds the registered root, the draw and
 the delivered session. The verifier of record reads the witness, so it is not zero-knowledge: until the unit is proved,
-the certificates' check and the head checks run where the certificates may go. One clock per spatial unit across links
+the head checks run where the heads and the certifier's salts may go, and the audit checks each signed digest against
+its head and salt there too (`CertifiedRecord.verify`). Once it is proved, the certificates' check reads each
+certificate's public fields and its signed digest, which hides the head under the certifier's salt, and each head's
+deadline bit, which is the public `deadline` output. One clock per spatial unit across links
 (`Audit.syncs`) is not checked here: each registration is one link-window, checked alone. The frames, their content
 and their order within the counts, are left to N3: an accepted outcome says nothing of them, so the claim is counts
 only (timing at the profile) until N3 is a proof-service unit with Selection `All`.
@@ -113,7 +122,7 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.core.protocols.certifier import audit as host_audit, head_check as HC
+from verity.core.protocols.certifier import audit as host_audit, head_check as HC, served as SV
 from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.certificate import CertifiedRecord, PublicKey, parameters_digest
 from verity.core.protocols.certifier.grid import GridParams
@@ -137,41 +146,74 @@ def _host_only(egress: int, ingress: int) -> int:
     raise NotImplementedError("the certificates' check has no gates: its verifier of record is LinkWindows.verify")
 
 
-_RECORDS = (("egress", Bits(512)), ("ingress", Bits(512)))
+_SIGNED = (("egress", HC.DIGEST), ("ingress", HC.DIGEST))
 LEAVES = 4
 #: the leaf of the head of the record at leaf i (0 egress, 1 ingress) is HEADS + i
 HEADS = HC.HEADS
 _CERTIFICATES = PrimitiveDefinition(
-    "NetworkCertificatesCheck", 1, _RECORDS, Bits(1), _host_only,
-    doc="the link-window's two certified records from their committed digests: each certificate verifies in the "
-        "certifier session, names the link-window and signs its head, which is settled by the deadline; no gates, "
-        "checked on the host",
+    "NetworkCertificatesCheck", 2, _SIGNED, Bits(1), _host_only,
+    doc="the link-window's two network certificates over their signed digests, the ones each end's head check reads: "
+        "each certificate verifies in the certifier session and names the link-window, and its head is settled by the "
+        "deadline; no gates, checked on the host",
     register=False)
 _ENDS = ("egress", "ingress")
 
 
 def _heads(S_) -> tuple[tuple[str, Any], ...]:
+    """Each end's head check's parameters but its signed digest, which is the unit's `egress` or `ingress`."""
     return tuple((f"{end}_{name}", t) for end, key in zip(_ENDS, (S_.EGRESS, S_.INGRESS))
-                 for name, t in HC.gate(*key).params)
+                 for name, t in HC.gate(*key).params if name != "signed")
 
 
-def _body(B, S_, *args):
-    n = len(HC.gate(*S_.EGRESS).params)
-    oks = [B.call(_CERTIFICATES, *args[:2]), B.call(HC.gate(*S_.EGRESS), *args[2:2 + n]),
-           B.call(HC.gate(*S_.INGRESS), *args[2 + n:])]
+def _checks(B, S_, args) -> tuple[list[Coll], list[Coll]]:
+    """The certificates' check and each end's head check, each over its end's signed digest (the unit's `egress` or
+    `ingress`), and each end's head counts as the head check reads them."""
+    oks, counts, rest = [B.call(_CERTIFICATES, *args[:2])], [], list(args[2:])
+    for d, key in enumerate((S_.EGRESS, S_.INGRESS)):
+        g = HC.gate(*key)
+        names = [name for name, _ in g.params]
+        ends, rest = rest[:len(names) - 1], rest[len(names) - 1:]
+        ends.insert(names.index("signed"), args[d])
+        oks.append(B.call(g, *ends))
+        sh = HC.Shape(*key[:2])
+        head = HC._refs(ends[names.index("head")])
+        counts.append(HC._coll(Array(sh.T, Array(4, HC.BYTE)), head[8 * sh.CNT:8 * sh.ROOT]))
+    return oks, counts
+
+
+def _all(B, oks: list[Coll]) -> Coll:
     bits = concat([o.refs for o in oks])
     return B.call(BL.and_gate(bits.count), Coll(Array(bits.count, BL.BIT), bits))
 
 
+def _body(B, S_, *args):
+    return _all(B, _checks(B, S_, args)[0])
+
+
+def _body_served(B, S_, *args):
+    oks, (egress, ingress) = _checks(B, S_, args[:-1])
+    return _all(B, oks + [B.call(SV.gate(*S_.SERVED), ingress, egress, args[-1])])
+
+
 _UNIT = CompositeDefinition(
-    "NetworkLinkWindow", 2, ("EGRESS", "INGRESS"), lambda S_: (_RECORDS + _heads(S_), Bits(1)), _body,
-    doc="the proof unit of network accounting: one link-window, both directions; EGRESS and INGRESS are each end's head "
-        "check's (L, T, COUNTS)", register=False)
+    "NetworkLinkWindow", 3, ("EGRESS", "INGRESS"), lambda S_: (_SIGNED + _heads(S_), Bits(1)), _body,
+    doc="the proof unit of network accounting: one link-window, both directions, over the two certificates' signed "
+        "digests; EGRESS and INGRESS are each end's head check's (L, T, COUNTS)", register=False)
+_SYNC = ("sync", Array(3, Array(SV.SYNC_BITS, BL.BIT)))
+_SERVED_UNIT = CompositeDefinition(
+    "NetworkServedLinkWindow", 2, ("EGRESS", "INGRESS", "SERVED"),
+    lambda S_: (_SIGNED + _heads(S_) + (_SYNC,), Bits(1)), _body_served,
+    doc="the proof unit of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress head's "
+        "counts derived from the ingress head's under the declared sync (`served.NetworkServedCounts`, SERVED its "
+        "(T, FOUT, FIN, R, RIN))", register=False)
 
 
-def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int]):
-    """N2's proof unit for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`)."""
-    return bind(_UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress))
+def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], served: tuple[int, ...] | None = None):
+    """N2's proof unit for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
+    and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN, OWN) (`served.unit`)."""
+    if served is None:
+        return bind(_UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress))
+    return bind(_SERVED_UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress), SERVED=tuple(served))
 
 PUBLIC = (
     S.Public("population", "structure", "one proof unit per registration: the link-window"),
@@ -186,18 +228,27 @@ PUBLIC = (
     S.Public("verdict", "output", "the link-window's verdict, accept or reject; a violation's kind stays hidden"),
     S.Public("deadline", "output", "the certifier settled both records by the verdict deadline"),
 )
+#: a served link's: no egress occupancy profile, its sizes instead, and the window's declared sync, which its unit reads
+PUBLIC_SERVED = tuple(p for p in PUBLIC if p.item != "occupancy") + (
+    S.Public("occupancy", "structure", "the ingress end's frames per bucket in each window where the placement fixes "
+             "them, fixed before the run; none on egress, whose counts the unit derives"),
+    S.Public("served", "structure", "frames a response (FIXLEN), frames a request, windows and the certifier's own "
+             "frames a window (its salt's), fixed before the run"),
+    S.Public("sync", "output", "the window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
+             "`charge` already counts, which the served counts read"),
+)
 OUTPUTS = ("verdict", "deadline")
 
 
 def encode(record: CertifiedRecord) -> bytes:
-    """The leaf's bytes: the record head (`RecordHead.encode`), then the certificate, every field fixed-width or
-    length-prefixed: u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ digest (64) ‖
-    u32be len(signature) ‖ signature."""
+    """The leaf's bytes: the record head (`RecordHead.encode`), the certifier's salt (64 bytes), then the certificate,
+    every field fixed-width or length-prefixed: u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖
+    u64be window ‖ signed digest (64) ‖ u32be len(signature) ‖ signature."""
     c = record.certificate
     link = c.link.encode("utf-8")
-    return b"".join([record.head.encode(), struct.pack(">H", len(c.key_id)), c.key_id, struct.pack(">H", len(link)), link,
-                     struct.pack(">BQ", c.direction.code, c.window), c.digest, struct.pack(">I", len(c.signature)),
-                     c.signature])
+    return b"".join([record.head.encode(), record.salt, struct.pack(">H", len(c.key_id)), c.key_id,
+                     struct.pack(">H", len(link)), link, struct.pack(">BQ", c.direction.code, c.window), c.digest,
+                     struct.pack(">I", len(c.signature)), c.signature])
 
 
 def rows(records: Sequence[CertifiedRecord]) -> list[bytes]:
@@ -210,7 +261,8 @@ def _sha512(obj: Any) -> str:
 
 
 _NO_PROFILE = ("N2 compares no egress grid, so a link whose egress end has no occupancy profile has no verdict: "
-               "nothing would hold its egress counts (declare LinkWindows.occupancy)")
+               "nothing would hold its egress counts (declare LinkWindows.occupancy, or LinkWindows.served on a served "
+               "link)")
 
 
 def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool:
@@ -243,10 +295,19 @@ class LinkWindows:
     ingress: GridParams | None = None
     proof_deadline: float | None = None
     occupancy: tuple[Sequence[Sequence[int]] | None, Sequence[Sequence[int]] | None] = (None, None)
+    served: SV.ServedProfile | None = None
 
     def __post_init__(self) -> None:
         if len(self.occupancy) != 2:
             raise ValueError("the occupancy profile has one entry per end: (egress, ingress)")
+        if self.served is not None:
+            g, i = self.params, self.ingress_params
+            if self.occupancy[0] is not None:
+                raise ValueError("a served link's egress counts are derived: it has no egress occupancy profile")
+            if (g.buckets, g.bucket_ms) != (i.buckets, i.bucket_ms):
+                raise ValueError("a served link's ends share T and τ_b: its anchors are ingress buckets")
+            for sync in self.sync_set:
+                SV.sync_words(sync)
         for end, profile, g in zip(("egress", "ingress"), self.occupancy, (self.params, self.ingress_params)):
             for w, row in enumerate(profile or ()):
                 if len(row) != g.buckets or any(type(n) is not int or not 0 <= n <= g.allocation for n in row):
@@ -280,10 +341,18 @@ class LinkWindows:
             return HC.grid_bytes(self.params, parameters_digest(self.params, self.sync_set))
         return HC.grid_bytes(self.ingress_params, parameters_digest(self.ingress_params))
 
+    def served_key(self) -> tuple[int, int, int, int, int, int] | None:
+        """The served counts' size class (T, FOUT, FIN, R, RIN, OWN) on a served link, else None."""
+        if self.served is None:
+            return None
+        return (self.params.buckets, self.served.response_frames, self.served.request_frames, self.params.allocation,
+                self.ingress_params.allocation, self.served.own)
+
     @cached_property
     def unit(self):
-        """N2's proof unit for this link (`unit`): its heads' size classes are the link's."""
-        return unit(self.head_key(0), self.head_key(1))
+        """N2's proof unit for this link (`unit`): its heads' size classes are the link's, and on a served link its
+        served counts' (`served_key`)."""
+        return unit(self.head_key(0), self.head_key(1), self.served_key())
 
     @cached_property
     def query(self) -> dict[str, Any]:
@@ -304,10 +373,13 @@ class LinkWindows:
             "certifier_session": self.certifier_session.hex(), "charge": self.charge,
             "parameters": {"egress": parameters_digest(self.params, self.sync_set).hex(),
                            "ingress": parameters_digest(self.ingress_params).hex()},
-            "occupancy": [None if p is None else _sha512([list(row) for row in p]) for p in self.occupancy]})
+            "occupancy": [None if p is None else _sha512([list(row) for row in p]) for p in self.occupancy],
+            **({} if self.served is None else {"served": [self.served.response_frames, self.served.request_frames,
+                                                          self.served.windows, self.served.own]})})
         check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
-        return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, PUBLIC, context)
+        public = PUBLIC if self.served is None else PUBLIC_SERVED
+        return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, public, context)
 
     def stream(self, **kwargs: Any) -> S.Stream:
         """The challenger's stream for this link (`S.Stream`'s budget, delta, challenger, coins and clock)."""
@@ -379,9 +451,9 @@ class LinkWindows:
 
     def head_checks(self, opening: Opening, root: bytes) -> list[HC.Instance | None]:
         """Each end's head check on the opening under `root`, the registered root: the link-window's public inputs with
-        the end's grid and its profile's row, and as witness the head, its salt and its two siblings. None where the
-        unit takes no instance: a window past the end's profile, which has no row to give, or a head whose length isn't
-        the unit's."""
+        the end's grid, its profile's row and its certificate's signed digest, and as witness the head, its salt, its
+        two siblings and the certifier's salt for the record. None where the unit takes no instance: a window past the
+        end's profile, which has no row to give, or a head whose length isn't the unit's."""
         w, dom = opening.window, self.domain(opening.window)
         levels = tree_levels(dom, self.leaves(opening))
         out: list[HC.Instance | None] = []
@@ -392,8 +464,9 @@ class LinkWindows:
                 out.append(None)
                 continue
             out.append(HC.Instance(root, dom.domain_id, self.link.encode("utf-8"), d, w, self.grid(d),
-                                   None if profile is None else tuple(profile[w]), head, opening.salts[i],
-                                   tuple(level[(i >> k) ^ 1] for k, level in enumerate(levels[:-1])), T))
+                                   None if profile is None else tuple(profile[w]), record.certificate.digest, head,
+                                   opening.salts[i], tuple(level[(i >> k) ^ 1] for k, level in enumerate(levels[:-1])),
+                                   record.salt, T))
         return out
 
     def _audit(self, audit: Any, opening: Opening, syncs: Sequence[ClockSync],
@@ -416,13 +489,15 @@ class LinkWindows:
         """The verdict of record on the delivered opening: accepted when it reproduces the registered root under the
         link-window's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
         docstring). `syncs` are the declared clock syncs of windows 0 … w. The verdict reports the public outputs and
-        never the violation's kind. Raises `ValueError` on a link with no egress occupancy profile."""
-        if self.occupancy[0] is None:
+        never the violation's kind. On a served link it also runs the served counts' check (`served_check`). Raises
+        `ValueError` on a link with neither an egress occupancy profile nor a served profile."""
+        if self.occupancy[0] is None and self.served is None:
             raise ValueError(_NO_PROFILE)
         root = self._registered(opening, draw)
         w, (egress, ingress) = opening.window, opening.records
         sealed = self.root(opening) == root
         headed = all(i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root)))
+        headed = headed and (self.served is None or self.served_check(opening, syncs))
         audit = Audit()
         out, inn = self._audit(audit, opening, syncs)
         accepted = sealed and headed and _accepts(out, inn, w)
@@ -437,6 +512,19 @@ class LinkWindows:
                         "reference": {"accepted": sealed and headed
                                       and _accepts(reference[:len(out)], reference[len(out):], w)}}
         return verdict
+
+    def served_check(self, opening: Opening, syncs: Sequence[ClockSync]) -> bool:
+        """The served counts' check on the link-window (`served.reference`, which the tests hold to the circuit): the
+        egress head's counts are those its ingress head's derive under the window's declared sync. False for a window
+        with no declared sync, or one the unit's input can't hold."""
+        w, (egress, ingress) = opening.window, opening.records
+        if w >= len(syncs):
+            return False
+        try:
+            sync = SV.sync_words(syncs[w])
+        except ValueError:
+            return False
+        return SV.reference(*self.served_key(), ingress.head.counts, egress.head.counts, sync)
 
     def stand_in(self, opening: Opening, draw: S.Draw, frames: Sequence[LogicalFrame],
                  syncs: Sequence[ClockSync]) -> bool:
@@ -465,13 +553,15 @@ class LinkWindows:
         order or not at all (a gap, or a run that stops short), a registration past the last window, a registration
         with no outcome yet, and a rejected or late outcome each reject the link; `refused` lists their windows.
         `records` is each window's outcome record SHA-512 (`S.Outcome.record`, None without one), and `digest` binds
-        the verdict to the stream and those records. Raises `ValueError` on a link with no egress occupancy profile, as
-        `verify` does, and on a stream that isn't this link's."""
-        if self.occupancy[0] is None:
+        the verdict to the stream and those records. On a served link the windows are by default its served profile's.
+        Raises `ValueError` on a link with neither an egress occupancy profile nor a served profile, as `verify` does,
+        and on a stream that isn't this link's."""
+        if self.occupancy[0] is None and self.served is None:
             raise ValueError(_NO_PROFILE)
         if stream.spec.digest() != self.spec.digest():
             raise ValueError("the stream is not this link's: its spec isn't LinkWindows.spec")
-        n = len(self.occupancy[0]) if windows is None else windows
+        default = self.served.windows if self.served is not None else len(self.occupancy[0])
+        n = default if windows is None else windows
         if not (type(n) is int and n >= 1):
             raise ValueError(f"a link has one or more link-windows, not {n!r}")
         outcomes = {r["registration"]: r for r in stream.records}
@@ -489,5 +579,5 @@ class LinkWindows:
         return {"accepted": accepted, "windows": n, "refused": refused, "records": records, "digest": digest}
 
 
-__all__ = ["HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "Opening", "PUBLIC", "SCHEMA", "VALUE", "encode", "rows",
-           "unit"]
+__all__ = ["HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "Opening", "PUBLIC", "PUBLIC_SERVED", "SCHEMA", "VALUE",
+           "encode", "rows", "unit"]

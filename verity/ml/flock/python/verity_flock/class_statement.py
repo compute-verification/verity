@@ -863,7 +863,7 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     its own ceil(bits / 16) u16 words, low first (`verity.core.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
     `circuit.compose`'s public input ports read them). Returns the lowering and each output port's words. ``structural``:
     the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), else `ir_lower`'s
-    (`unit_circuit`)."""
+    (`unit_circuit`), its circuit dropped once laid out (nothing reads it after `ir_lower.layout`)."""
     ports, out_words, row_words = unit_ports(definition, name, in_rows, public)
     n_words, W = len(ports.ins), len(ports.outs)
     units = IL.Units(target=None, in_widths=[16] * n_words, out_widths=[16] * W, in_src=[[("leaf", p) for p in range(n_words)]],
@@ -874,9 +874,9 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     if structural:
         t, _lw, _top = SL.lower(definition, name=name, ports=ports)
         return TmplLowering(name, unit, units, None, _TmplLayout.of(t), t), out_words
-    C = unit_circuit(definition, ports)
+    C = unit_circuit(definition, ports, _UnitCircuit)
     lay = IL.layout(C, [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(W)])
-    return IL.Lowering(name, unit, units, C, lay), out_words
+    return IL.Lowering(name, unit, units, None, lay), out_words
 
 
 def unit_ports(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
@@ -930,10 +930,11 @@ def unit_ports(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]
     return SL.Ports((16,) * n_words, tuple(flat_in), (16,) * W, tuple(out_bits)), out_words, row_words
 
 
-def unit_circuit(definition, ports: SL.Ports) -> gf2.Circuit:
+def unit_circuit(definition, ports: SL.Ports, cls: type[gf2.Circuit] = gf2.Circuit) -> gf2.Circuit:
     """The flat unit on ``ports`` (`unit_ports`), never laid out: ``definition`` lowered by `ir_lower.lower` on input ports
-    ``in{j}``, its returned bits on output ports ``out{j}`` and the ports' other bits zero."""
-    C = gf2.Circuit()
+    ``in{j}``, its returned bits on output ports ``out{j}`` and the ports' other bits zero. ``cls``: the circuit's class
+    (`unit_lowering`'s `_UnitCircuit`)."""
+    C = cls()
     in_bits = [b for j, w in enumerate(ports.ins) for b in C.input(f"in{j}", w)]
     outs = [b for w in IL.lower(C, definition, [[in_bits[i] for i in lf] for lf in ports.leaves]) for b in w]
     bits = [gf2.ZERO if i is None else outs[i] for i in ports.bits]
@@ -942,6 +943,17 @@ def unit_circuit(definition, ports: SL.Ports) -> gf2.Circuit:
         C.output(f"out{j}", bits[at:at + w])
         at += w
     return C
+
+
+class _UnitCircuit(gf2.Circuit):
+    """`unit_lowering`'s circuit: an AND keeps its operands' bits as a tuple, all `ir_lower.layout` reads of them (a frozenset of
+    a dozen bits is four times the size: a GLM-5.3 norm unit's operand sets were most of its 51 GiB)."""
+
+    def _new(self, kind, data):
+        if kind == "and":
+            a, b = data
+            data = (gf2.L(tuple(a.s), a.c), gf2.L(tuple(b.s), b.c))
+        return super()._new(kind, data)
 
 
 @dataclass

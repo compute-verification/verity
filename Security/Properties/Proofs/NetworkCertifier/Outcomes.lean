@@ -184,43 +184,47 @@ theorem undecided_of_somePending (p : Params) (c : Commitment) (e : Evidence) (h
     ∃ why, protocol.check p c e = .undecided why :=
   (undecided_iff p c e).mpr h
 
-/-- The record an honest certifier issues for link-window `(d, l, w)`: head `h`, and a certificate of the key's
-identifier over `(d, l, w)` and `h`'s digest `dg` with signature `σ`. -/
-def honestRecord (p : Params) (d : Direction) (l : String) (w : Nat) (h : RecordHead) (dg σ : ByteArray) : Certified :=
-  ⟨h, ⟨p.key.extract 0 16, l, d, w, dg, σ⟩⟩
+/-- The record an honest certifier issues for link-window `(d, l, w)`: head `h`, the salt `s` it drew for it, and a
+certificate of the key's identifier over `(d, l, w)` and `h`'s digest `dg` under `s` with signature `σ`. -/
+def honestRecord (p : Params) (d : Direction) (l : String) (w : Nat) (h : RecordHead) (s dg σ : ByteArray) :
+    Certified :=
+  ⟨h, s, ⟨p.key.extract 0 16, l, d, w, certificateDigest s dg, σ⟩⟩
 
 /-- **The honest transcript is accepted.** Evidence that fits, with every declared sync admitted; parameters with their
 digests; and a commitment holding exactly one record of every link-window, the honest one: on egress the head
 `record_head` makes of the Program's grid under the declared syncs, on ingress a complete head settled by the deadline
-of the ingress grid and its digest, each signed by the key over its `certificateMessage` in the parameters' session. -/
+of the ingress grid and its digest, each digest under the record's salt signed by the key over its
+`certificateMessage` in the parameters' session. -/
 def HonestAccepted : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (eg ig : ByteArray),
     EvidenceFits p e → ParamsDigests p eg ig →
     (∀ link ∈ e.links.toList, ∀ w < p.windows, SyncAdmitted p e link w) →
     (∀ l link, (l, link) ∈ p.egress.toList.zip e.links.toList → ∀ w < p.windows,
-      ∃ syncs : Fin p.windows → ClockSync, Declares link syncs ∧ ∃ (h : RecordHead) (dg σ : ByteArray),
+      ∃ syncs : Fin p.windows → ClockSync, Declares link syncs ∧ ∃ (h : RecordHead) (s dg σ : ByteArray),
         recordHead l .egress w (programGrid p syncs link.frames w) none p.grid eg true = .ok h ∧ h.digest = .ok dg ∧
-        recordsOf c .egress l w = [honestRecord p .egress l w h dg σ] ∧
-        ∃ m, certificateMessage (p.key.extract 0 16) p.session l .egress w dg = .ok m ∧ LmsVerifies p m σ) →
-    (∀ l ∈ p.ingress.toList, ∀ w < p.windows, ∃ (h : RecordHead) (dg σ : ByteArray),
+        recordsOf c .egress l w = [honestRecord p .egress l w h s dg σ] ∧
+        ∃ m, certificateMessage (p.key.extract 0 16) p.session l .egress w (certificateDigest s dg) = .ok m ∧
+          LmsVerifies p m σ) →
+    (∀ l ∈ p.ingress.toList, ∀ w < p.windows, ∃ (h : RecordHead) (s dg σ : ByteArray),
       h.buckets = (p.ingressGrid.buckets : Int) ∧
       h.allocation = (p.ingressGrid.allocation : Int) ∧ h.frameBytes = (p.ingressGrid.frameBytes : Int) ∧
       h.bucketMs = (p.ingressGrid.bucketMs : Int) ∧ h.parameters = ig ∧ h.status = none ∧ h.deadline = true ∧
-      h.digest = .ok dg ∧ recordsOf c .ingress l w = [honestRecord p .ingress l w h dg σ] ∧
-      ∃ m, certificateMessage (p.key.extract 0 16) p.session l .ingress w dg = .ok m ∧ LmsVerifies p m σ) →
+      h.digest = .ok dg ∧ recordsOf c .ingress l w = [honestRecord p .ingress l w h s dg σ] ∧
+      ∃ m, certificateMessage (p.key.extract 0 16) p.session l .ingress w (certificateDigest s dg) = .ok m ∧
+        LmsVerifies p m σ) →
     protocol.Accepts p c e
 
 theorem honestAccepted : HonestAccepted := by
   intro p c e eg ig hfit hpd hsync heg hing
   refine (accepts_iff p c e).mpr ⟨hfit, eg, ig, hpd, fun l link hm w hw => ?_, fun l hl w hw => ?_⟩
-  · obtain ⟨syncs, hdecl, h, dg, σ, hh, hdg, hrec, m, hm', hσ⟩ := heg l link hm w hw
+  · obtain ⟨syncs, hdecl, h, s, dg, σ, hh, hdg, hrec, m, hm', hσ⟩ := heg l link hm w hw
     obtain ⟨-, -, -, hst, hdl, -⟩ := recordHead_head hh
-    refine ⟨honestRecord p .egress l w h dg σ, dg, ⟨⟨hrec, hdg, rfl, rfl, rfl, rfl, rfl, m, hm', hσ⟩, hst, hdl⟩,
+    refine ⟨honestRecord p .egress l w h s dg σ, dg, ⟨⟨hrec, hdg, rfl, rfl, rfl, rfl, rfl, m, hm', hσ⟩, hst, hdl⟩,
       hsync link (List.of_mem_zip hm).2 w hw, fun syncs' hdecl' => ?_⟩
     rw [← declares_unique hdecl hdecl']
     exact ⟨h, hh, hdg⟩
-  · obtain ⟨h, dg, σ, hb, ha, hf, hbm, hpar, hst, hdl, hdg, hrec, m, hm', hσ⟩ := hing l hl w hw
-    exact ⟨honestRecord p .ingress l w h dg σ, dg, ⟨⟨hrec, hdg, rfl, rfl, rfl, rfl, rfl, m, hm', hσ⟩, hst, hdl⟩,
+  · obtain ⟨h, s, dg, σ, hb, ha, hf, hbm, hpar, hst, hdl, hdg, hrec, m, hm', hσ⟩ := hing l hl w hw
+    exact ⟨honestRecord p .ingress l w h s dg σ, dg, ⟨⟨hrec, hdg, rfl, rfl, rfl, rfl, rfl, m, hm', hσ⟩, hst, hdl⟩,
       hb, ha, hf, hbm, hpar⟩
 
 end Properties.NetworkCertifier

@@ -351,7 +351,11 @@ its window's root is refused. On the auditor's host the session is the one windo
 ledger (`remote.trusted_session`), which opens one challenger session a root, ever, and the window one of the audit's
 period's (`coins.trusted`'s `period`): a session whose coins came from a second challenger session for the same
 (period, registration), or whose window the ledger holds in another period, is refused, so a prover can't run two and
-keep the coins it likes (RT4-INT-17).
+keep the coins it likes (RT4-INT-17). `coins.trusted` reads that session only through `challenger.pinned_session`: the
+host's pins log (`pins`, as its gate serves it) is the one the session's open sealed and records the open's pin, and
+that commit is on the verifier's own `git rev-list --first-parent origin/main` (`main`), so the challenger ran a tree
+main's check passed. A session with no pins log or no copy of main, an open that sealed none, or a pin off main's
+first-parent line is refused (RT4-INT-40, CMP-74).
 
 The verifier releases \(\sigma_0\) at the session's start (`Session.start`). At window \(t\)'s end it sends the boundary
 message, which is \(\sigma_{t+1}\), or the close after the last window (`Session.boundary`). Each is one-way: no round

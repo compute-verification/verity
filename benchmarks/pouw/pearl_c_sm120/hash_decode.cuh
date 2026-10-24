@@ -409,12 +409,9 @@ template <int V> DEV void pd_fold(const uint64_t* qst, const uint64_t* dig, int 
 }
 // the hm96 salt pieces of leaf i (hm_leaves' work before x), by one whole warp: lanes 0-2 the three ChaCha20 blocks of y
 // (into shared ys), each lane 6 of the mask's 192 byte-table rows (4 q + r for y[q]'s byte r, an L2 or DRAM load each: one
-// lane alone waits on 192 of them in turn), XORed across the warp, then lane 0 c's state.  Out on lane 0: the mask M·y (8
-// little-endian limbs) and c's state
-template <int V>
-DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk,
-                    uint64_t* c) {
-  const uint64_t* mid = reinterpret_cast<const uint64_t*>(hm);
+// lane alone waits on 192 of them in turn), XORed across the warp (`pd_hm_mask`), then lane 0 c's state.  Out on lane 0:
+// the mask M·y (8 little-endian limbs) and c's state
+DEV void pd_hm_mask(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk) {
   const uint64_t* tables = reinterpret_cast<const uint64_t*>(hm + 128);
   if (lane < 3) {
     uint32_t key[8];
@@ -443,6 +440,13 @@ DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, 
   if (lane) return;
 #pragma unroll
   for (int k = 0; k < 8; k++) mk[k] = m[k];
+}
+template <int V>
+DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk,
+                    uint64_t* c) {
+  const uint64_t* mid = reinterpret_cast<const uint64_t*>(hm);
+  pd_hm_mask(salt_key, nonce, i, hm, ys, lane, mk);
+  if (lane) return;
   uint64_t st[8], w[16];
 #pragma unroll
   for (int j = 0; j < 8; j++) st[j] = mid[j];
