@@ -23,14 +23,13 @@ tag                             parts, in order
 ``verity-vllm/ids/v1``          the sorted canonical ids of a tree, one UTF-8 part each
 ``verity-vllm/empty/v1``        (no parts) -- the root of a tree with zero leaves
 ``verity-vllm/json/v1``         canonical JSON bytes of a document (manifest, description...)
-``verity-vllm/challenge/v1``    the bound digests and the sample of a challenge (see relations)
+``verity-vllm/challenge/v1``    the bound digests and the sample of a challenge
 ==============================  ==============================================================
 
 *Shape text* is ``"[" + ",".join(str(d) for d in shape) + "]"`` with no spaces; a scalar is
-``"[]"``.  *dtype* is the torch dtype name without the ``torch.`` prefix (``"bfloat16"``), see
-:mod:`verity_vllm.program.dtypes`.  *value* is the exact little-endian device bytes of the tensor in
-C order: BF16 is 2 bytes per element, FP8 1 byte, packed INT4 exactly as stored.  No conversion
-before hashing.
+``"[]"``.  *dtype* is the torch dtype name without the ``torch.`` prefix (``"bfloat16"``).  *value*
+is the exact little-endian device bytes of the tensor in C order: BF16 is 2 bytes per element, FP8
+1 byte, packed INT4 exactly as stored.  No conversion before hashing.
 
 Reference implementation in Python (what W1 can copy verbatim)::
 
