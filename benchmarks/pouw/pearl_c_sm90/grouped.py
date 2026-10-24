@@ -43,8 +43,8 @@ PD = 851
 #: side by side on one warp, about a third of PD's issue at decode's partial row blocks, which a call's tile leaves share the
 #: SMs with the next call's pd_commit_gm on
 TILES_PD = 979
-#: the tiles of a row block a CTA of pd_tiles_gw (pearl_c_sm90.cu's PD_GW), where the cubin has it: a decode call's tile leaves
-#: on a quarter of PD_G's CTAs (32 for 4096 columns), so they leave the next call's pd_commit_gm the SMs it takes whole
+#: the tiles of a row block a CTA of pd_tiles_gw (pearl_c_sm90.cu's PD_GW), where the cubin has it and PD_G's CTAs are past
+#: the SMs (`tiles_g`): a quarter of their CTAs, in one wave
 TILES_GW = 16
 #: PROBE: the older forms, "+"-joined, for an A/B in one session: tiles851 (the tile leaves at PD's), tiles4 (pd_tiles_g's
 #: PD_G tiles a CTA rather than pd_tiles_gw's TILES_GW), treewhole (pd_tree_g at
@@ -184,9 +184,14 @@ def tiles_pd(dev) -> int:
     return PD if "tiles851" in PLACE or not has(dev, f"pd_tiles_g_{TILES_PD}") else TILES_PD
 
 
-def tiles_g(R, dev) -> int:
-    """TILES_PD's tiles a CTA: TILES_GW where the cubin has pd_tiles_gw, else PD_G (pd_tiles_g's)."""
-    return R.PD_G if "tiles4" in PLACE or not has(dev, f"pd_tiles_gw_{TILES_PD}") else TILES_GW
+def tiles_g(R, dev, us: list[Unit], n: int) -> int:
+    """TILES_PD's tiles a CTA for units `us` at `n` columns: TILES_GW where the cubin has pd_tiles_gw and PD_G's CTAs are past
+    the SMs (decode at 6144 columns, 192; prefill), so none waits a whole chain for one; else PD_G (pd_tiles_g's), whose
+    CTAs (128 at 4096 columns) each run fewer chains at once (r20261024-121033-7bc5: 0.324 ms there against TILES_GW's 0.333)."""
+    if "tiles4" in PLACE or not has(dev, f"pd_tiles_gw_{TILES_PD}"):
+        return R.PD_G
+    ctas = sum(R.cdiv(u.m16, 64) * R.cdiv(n // 64, R.PD_G) for u in us)
+    return TILES_GW if ctas > dev.sms else R.PD_G
 
 
 def tree_setup(R, dev) -> None:
@@ -313,7 +318,7 @@ class Grouped:
 
         def tiles():
             if tv & R.PD_GROUP:
-                tg = tiles_g(R, d)
+                tg = tiles_g(R, d, us, n)
                 grid = max(R.cdiv(u.m16, 64) * R.cdiv(n // 64, tg) for u in us)
                 d.launch(f"pd_tiles_g{'w' if tg == TILES_GW else ''}_{tv}", (grid, count), 32 * tg, R.PD_PAIR_SMEM // 2,
                          p=(meta + TILES_AT,), i=(REC,))
