@@ -28,7 +28,8 @@ Conventions, as the realism note's (``note:training-20261022T1045Z-cover-assumpt
   and the experts; not the LM head or the norm gammas), ``alpha0 = N / gates`` over K2's schedule (``kappa.py``).
   ``--dgrad`` adds the backward products into activations, ``W^T delta``, and the LM head's;
 * prices are per weight class; a block that picks the cheapest weights is what the uniform forms' ``c_w`` prices.
-  Pythia's (``PYTHIA``) map onto K2's matrices by role (``ROLE``).
+  Pythia's (``PYTHIA``) map onto K2's matrices by role (``ROLE``). A price file may price K2's dense layer-0 MLP and
+  shared expert apart from the routed experts (roles ``dense_mlp_in`` / ``dense_mlp_out``, else ``mlp_in`` / ``mlp_out``).
 """
 
 from __future__ import annotations
@@ -52,12 +53,12 @@ FMTS = {"bf16": 16, "fp8": 8, "fp4": 4}
 CLASSES = {
     "mla_in": ("MLA q_a, q_b, kv_a, kv_b", "qkv", True),
     "mla_out": ("MLA o_proj", "attn_out", True),
-    "dense_in": ("dense MLP gate, up (layer 0)", "mlp_in", True),
-    "dense_out": ("dense MLP down (layer 0)", "mlp_out", True),
+    "dense_in": ("dense MLP gate, up (layer 0)", "dense_mlp_in", True),
+    "dense_out": ("dense MLP down (layer 0)", "dense_mlp_out", True),
     "expert_in": ("routed experts gate, up", "mlp_in", True),
     "expert_out": ("routed experts down", "mlp_out", True),
-    "shared_in": ("shared expert gate, up", "mlp_in", True),
-    "shared_out": ("shared expert down", "mlp_out", True),
+    "shared_in": ("shared expert gate, up", "dense_mlp_in", True),
+    "shared_out": ("shared expert down", "dense_mlp_out", True),
     "router": ("router", "router", True),
     "head": ("LM head", "head", False),
     "norm": ("norm gammas", "norm", False),
@@ -199,12 +200,15 @@ def dgrad_stages(m: dict) -> list[dict]:
 
 
 def prices(table: dict[str, float]) -> dict[str, float]:
-    """K2's class prices from one point's role prices: the router has no measured analogue and takes the cheapest
-    role's price; the norm gammas are unmeasured and priced 0."""
+    """K2's class prices from one point's role prices: a router the table doesn't price takes the cheapest role's
+    price, unmeasured norm gammas are priced 0, and the dense MLP and shared expert take ``mlp_in`` / ``mlp_out`` (the
+    routed experts') unless the table prices them as ``dense_mlp_in`` / ``dense_mlp_out``."""
     roles = dict(table)
     roles.setdefault("router", min(roles[r] for r in ("qkv", "attn_out", "mlp_in", "mlp_out", "head") if r in roles))
     roles.setdefault("norm", 0.0)
     roles.setdefault("embed", roles.get("mlp_in", 0.0))
+    roles.setdefault("dense_mlp_in", roles.get("mlp_in"))
+    roles.setdefault("dense_mlp_out", roles.get("mlp_out"))
     return {c: roles[role] for c, (_, role, _) in CLASSES.items()}
 
 
@@ -335,9 +339,9 @@ def report(pts: dict, cheapest: dict, label: str, dgrad: bool = False) -> dict:
     res["classes"] = rows
 
     print("## Prices (bits per weight) and the product-weighted mean over M*\n")
-    print("| point | fmt | MLA in | o_proj | MLP in | MLP down | LM head | router (cheapest role) | mean over M* | "
-          "with LM head | cheapest 1% (uniform c_w) |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    print("| point | fmt | MLA in | o_proj | experts in | experts down | dense MLP in | dense MLP down | LM head | "
+          "router | mean over M* | with LM head | cheapest 1% (uniform c_w) |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     res["prices"] = {}
     for pt, tab in pts.items():
         for fmt in FMTS:
@@ -346,7 +350,8 @@ def report(pts: dict, cheapest: dict, label: str, dgrad: bool = False) -> dict:
             cw = cheapest.get(pt, {}).get("1%", {}).get(fmt)
             res["prices"][f"{pt}|{fmt}"] = {"class": p, "mean": mp, "mean_with_head": mph, "cheapest_1pct": cw}
             print(f"| {pt} | {fmt} | {p['mla_in']:.3g} | {p['mla_out']:.3g} | {p['expert_in']:.3g} | "
-                  f"{p['expert_out']:.3g} | {p['head']:.3g} | {p['router']:.3g} | {mp:.3g} | {mph:.3g} | "
+                  f"{p['expert_out']:.3g} | {p['dense_in']:.3g} | {p['dense_out']:.3g} | {p['head']:.3g} | "
+                  f"{p['router']:.3g} | {mp:.3g} | {mph:.3g} | "
                   f"{'' if cw is None else f'{cw:.3g}'} |")
     print()
 

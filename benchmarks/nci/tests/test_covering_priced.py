@@ -79,4 +79,20 @@ def test_a_price_file_maps_hf_names_onto_roles(tmp_path):
     assert roles == {"qkv": 4.0, "attn_out": 6.0, "mlp_in": 3.0, "mlp_out": 3.5, "head": 1.0}
     p = P.prices(roles)
     assert p["expert_in"] == 3.0 and p["mla_out"] == 6.0 and p["router"] == 1.0 and p["norm"] == 0.0
+    assert p["dense_in"] == p["shared_in"] == 3.0 and p["dense_out"] == p["shared_out"] == 3.5
     assert cheapest["x"]["1%"]["bf16"] == 1.0
+
+
+def test_the_dense_mlp_and_shared_expert_can_be_priced_apart_from_the_routed_experts():
+    """An MoE's routed experts (mlp_in / mlp_out) at a fraction of the dense price (dense_mlp_in / dense_mlp_out): only
+    the routed experts' products get cheaper, and Pythia's defaults are unchanged."""
+    dense = {"qkv": 6.0, "attn_out": 6.0, "mlp_in": 6.0, "mlp_out": 6.0, "head": 6.0, "router": 6.0}
+    moe = dict(dense, mlp_in=3.0, mlp_out=3.0, dense_mlp_in=6.0, dense_mlp_out=6.0)
+    p = P.prices(moe)
+    assert p["expert_in"] == p["expert_out"] == 3.0
+    assert p["dense_in"] == p["dense_out"] == p["shared_in"] == p["shared_out"] == 6.0
+    sh = P.shapes(M)
+    routed = (sh["expert_in"][1] + sh["expert_out"][1]) / K.active_weights(M)
+    assert P.mean_price(base(), p) == pytest.approx(6.0 * (1 - routed / 2), rel=1e-12)
+    pyt = P.prices(P.PYTHIA["160m@100k"]["fp8"])
+    assert pyt["dense_in"] == pyt["expert_in"] and pyt["shared_out"] == pyt["expert_out"]
