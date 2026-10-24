@@ -273,6 +273,9 @@ def _refuse_lane(b: dict) -> str | None:
     if why:
         return why
     r, c = b["TILE"].bindings["R"], b["TILE"].bindings["C"]
+    k = b["TILE"].signature()[0][0][1].elem.n
+    if k < 64:
+        return f"K = {k} is under 64: H1's lanes need KS = K / 32 >= 2 (a digit word)"
     g, q = r // 4, c // 8
     if r % 4 or c % 8 or g * q < 2 or g & (g - 1) or q & (q - 1) or g * q > 1 << LANE.n:
         return (f"a leaf's lanes are a public index of whole bits: R / 4 and C / 8 powers of two, at least two lanes and at "
