@@ -141,7 +141,9 @@ FUSED_ENV = "DITHER_SO_FUSED"
 # A, admit and z tables are launched (the host polls between them), so the GPU builds them while the coin is out
 COIN_ASYNC_ENV = "DITHER_SO_COIN_ASYNC"
 # "q" or "q/den" (den 8 without it): that launch on the SMs whose id % den < q alone (kh_units_multi_sm), each warp
-# taking the next unit in turn, so the rest of the SMs stay whole to the next forward's kernels; the same receipts
+# taking the next unit in turn, so the rest of the SMs stay whole to the next forward's kernels; "q/den/cap" with at
+# most cap of its CTAs on each of those SMs (kh_units_multi_smc; "1/1/cap" every SM), so each keeps the rest of its slots
+# to them; the same receipts
 UNITS_SMQ_ENV = "DITHER_SO_UNITS_SMQ"
 # "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
 # the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
@@ -168,6 +170,14 @@ SPILL_MAX_GB = 128
 def end_steps(depth: int) -> int:
     """An end fault's window: a full tail (D - 1 steps) after at least D + 3 steps whose receipts went under rounds."""
     return 2 * depth + 2
+
+
+def smq_of(v: str) -> tuple[int, int, int]:
+    """$DITHER_SO_UNITS_SMQ's "q[/den[/cap]]" as (q, den, cap): den 8 and cap 0 (none) where unset, cap 0 where q is."""
+    q, den, cap, *more = v.split("/") + ["", ""]
+    if any(more) or not q.isdigit() or not (den or "8").isdigit() or not (cap or "0").isdigit():
+        raise ValueError(f"${UNITS_SMQ_ENV}={v}: q, q/den or q/den/cap")
+    return int(q), int(den or 8), int(cap or 0) if int(q) else 0
 
 
 # the A tables: "m" per call in the forward on NA_MULTI streams; "b" once a step between steps (not ruled in); "n" after
@@ -903,14 +913,14 @@ class SoSide(DA.Side):
         self.unit_steps = 0
         self.graph = os.environ.get(GRAPH_ENV, "1") != "0"
         self.fused = os.environ.get(FUSED_ENV) == "1"
-        q, _, den = (os.environ.get(UNITS_SMQ_ENV) or "0").partition("/")
-        self.units_smq, self.units_smd = int(q), int(den or 8)
+        self.units_smq, self.units_smd, self.units_cap = smq_of(os.environ.get(UNITS_SMQ_ENV) or "0")
         self.units_form = os.environ.get(UNITS_ENV) or "today"
         self.j10r = self.units_form == "j10r"
         self.j10r_m = os.environ.get(J10R_M_ENV) or "slot"
         if self.units_form not in UNITS_FORMS:
             raise ValueError(f"${UNITS_ENV}={self.units_form}: one of {tuple(UNITS_FORMS)}")
-        self._check_smq(self.units_smq, self.units_smd, f"${UNITS_SMQ_ENV}={os.environ.get(UNITS_SMQ_ENV)}")
+        self._check_smq(self.units_smq, self.units_smd, f"${UNITS_SMQ_ENV}={os.environ.get(UNITS_SMQ_ENV)}",
+                        self.units_cap)
         if self.j10r:
             import j10r_so as JS
             JS.rows(self.j10r_m, win.t, win.t)
@@ -934,7 +944,11 @@ class SoSide(DA.Side):
             for f in ("kh_units_multi_sm", "kh_units_multi_j10r_sm"):
                 if hasattr(self.h, f):
                     getattr(self.h, f).argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, vp]
-            self.unit_next = torch.zeros(1, dtype=torch.int32, device=dev)
+            for f in ("kh_units_multi_smc", "kh_units_multi_j10r_smc"):
+                if hasattr(self.h, f):
+                    getattr(self.h, f).argtypes = [vp, u32, u32, u32, vp, u32, u32, u32, vp, vp]
+            words = int(self.h.kh_smc_words()) if hasattr(self.h, "kh_smc_words") else 1
+            self.unit_next = torch.zeros(words, dtype=torch.int32, device=dev)
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
         self.capture_ms: list[float] = []
@@ -943,18 +957,19 @@ class SoSide(DA.Side):
         self.ov = Ov(win, self, win.overlap) if win.overlap else None
         self.spill = Spill(win, self, win.spill_mode) if win.window_end and win.spill_mode else None
 
-    def _check_smq(self, q: int, den: int, what: str) -> None:
-        f = "kh_units_multi_j10r_sm" if self.j10r else "kh_units_multi_sm"
-        if q and not (self.fused and 1 <= q <= den <= 64 and hasattr(self.h, f)):
-            raise ValueError(f"{what}: needs ${FUSED_ENV}=1, 1 <= q <= den <= 64 and an h1u build with {f}")
+    def _check_smq(self, q: int, den: int, what: str, cap: int = 0) -> None:
+        f = ("kh_units_multi_j10r_sm" if self.j10r else "kh_units_multi_sm") + ("c" if cap else "")
+        if q and not (self.fused and 1 <= q <= den <= 64 and 0 <= cap <= 64 and hasattr(self.h, f)):
+            raise ValueError(f"{what}: needs ${FUSED_ENV}=1, 1 <= q <= den <= 64, cap <= 64 and an h1u build with {f}")
 
-    def set_units_smq(self, q: int, den: int = 8) -> None:
-        """The units launch on the SMs whose id % den < q from the next dispatch on (q 0: kh_units_multi's every SM),
-        each (ring slot, m) graph captured again at its next step: a screen of the SM share inside one engine
-        (sbench's SBENCH_SMQ_SWEEP); a served row's share is $DITHER_SO_UNITS_SMQ's, fixed at the build."""
-        self._check_smq(q, den, f"set_units_smq({q}, {den})")
+    def set_units_smq(self, q: int, den: int = 8, cap: int = 0) -> None:
+        """The units launch on the SMs whose id % den < q, at most cap CTAs on each (0: no cap), from the next dispatch
+        on (q 0: kh_units_multi's every SM), each (ring slot, m) graph captured again at its next step: a screen of the
+        SM share inside one engine (sbench's SBENCH_SMQ_SWEEP); a served row's share is $DITHER_SO_UNITS_SMQ's, fixed at
+        the build."""
+        self._check_smq(q, den, f"set_units_smq({q}, {den}, {cap})", cap)
         torch.cuda.synchronize()
-        self.units_smq, self.units_smd = q, den
+        self.units_smq, self.units_smd, self.units_cap = q, den, cap if q else 0
         self.graphs.clear()
 
     def call(self, w: int, x: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor) -> None:
@@ -1077,13 +1092,21 @@ class SoSide(DA.Side):
         if self.j10r:
             import j10r_so as JS
             M = JS.rows(self.j10r_m, win.t, m)
-            if self.units_smq:
+            if self.units_cap:
+                rc = rc or self.h.kh_units_multi_j10r_smc(self.mtab[p].data_ptr(), L, self.m_units, M,
+                                                          self.ring_live[p].data_ptr(), self.units_smq, self.units_smd,
+                                                          self.units_cap, self.unit_next.data_ptr(), st.cuda_stream)
+            elif self.units_smq:
                 rc = rc or self.h.kh_units_multi_j10r_sm(self.mtab[p].data_ptr(), L, self.m_units, M,
                                                          self.ring_live[p].data_ptr(), self.units_smq, self.units_smd,
                                                          self.unit_next.data_ptr(), st.cuda_stream)
             else:
                 rc = rc or self.h.kh_units_multi_j10r(self.mtab[p].data_ptr(), L, self.m_units, M,
                                                       self.ring_live[p].data_ptr(), 0, st.cuda_stream)
+        elif self.fused and self.units_cap:
+            rc = rc or self.h.kh_units_multi_smc(self.mtab[p].data_ptr(), L, self.m_units, win.t,
+                                                 self.ring_live[p].data_ptr(), self.units_smq, self.units_smd,
+                                                 self.units_cap, self.unit_next.data_ptr(), st.cuda_stream)
         elif self.fused and self.units_smq:
             rc = rc or self.h.kh_units_multi_sm(self.mtab[p].data_ptr(), L, self.m_units, win.t,
                                                 self.ring_live[p].data_ptr(), self.units_smq, self.units_smd,
@@ -1168,7 +1191,8 @@ class SoSide(DA.Side):
                 "a_overlap": self.so_ao, "unit_steps": self.unit_steps,
                 "units_dispatch": {"graph": self.graph, "graphs": sorted(self.graphs), "capture_ms": self.capture_ms},
                 "units_fused": {"one_launch": self.fused, "units": self.m_units if self.fused else None,
-                                "sm_share": f"{self.units_smq}/{self.units_smd}" if self.units_smq else None},
+                                "sm_share": f"{self.units_smq}/{self.units_smd}" if self.units_smq else None,
+                                "sm_cap": self.units_cap or None},
                 "units_form": {"form": self.units_form, "noise": UNITS_FORMS[self.units_form],
                                **(self._j10r_info() if self.j10r else {})},
                 "receipt_dead_rows_x_once": self.rdead,

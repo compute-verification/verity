@@ -113,8 +113,11 @@ Arms:
                  the suffixes compose (ARM-a3-xl), each gated as ARM
     ARM-j10r     a dither-a-so arm with its units under J10-R's call-scale noise (DITHER_SO_UNITS=j10r, `dither_so`)
     ARM-smqQ, ARM-smqQoD  a dither-a-so arm with its units on the SMs whose id % D < Q (DITHER_SO_UNITS_SMQ=Q/D, D 8
-                 without it); -smq0 on every SM, whatever the run's environment sets.  These set the arm's own worker's
-                 environment, so one run times the units' forms and shares side by side (ARM-j10r-smq9o16)
+                 without it); -smq0 on every SM, whatever the run's environment sets; ARM-smqQoDcC with at most C of
+                 the units' CTAs on each of those SMs (Q/D/C; -smq1o1c2 every SM, 2 CTAs each).  These set the arm's
+                 own worker's environment, so one run times the units' forms and shares side by side (ARM-j10r-smq9o16)
+    ARM-zy1      a dither-a-hbc arm with DITHER_ZY1_KC=1 (its z and y tables in one h1c_build), whatever the run's
+                 environment sets
     ARM-kcb      a dither-a-hbc arm on a second h1u_kc build ($HB_H1U_KC_B, e.g. hb_served.sh's HB_KC_FLAGS_B), timed beside
                  ARM on $HB_H1U_KC's
 
@@ -280,10 +283,10 @@ def kc_b() -> None:
 
 
 SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS", "j10r"),
-            "-kcb": kc_b}
-# -smqQ / -smqQoD: a dither-a-so arm's units on the SMs whose id % D < Q ($DITHER_SO_UNITS_SMQ=Q/D, D 8 without it;
-# -smq0 every SM, whatever the run's environment says)
-SMQ_SUFFIX = re.compile(r"-smq(\d+)(?:o(\d+))?$")
+            "-kcb": kc_b, "-zy1": env_of("DITHER_ZY1_KC", "1")}
+# -smqQ / -smqQoD / -smqQoDcC: a dither-a-so arm's units on the SMs whose id % D < Q, at most C CTAs on each
+# ($DITHER_SO_UNITS_SMQ=Q/D/C, D 8 and no cap without them; -smq0 every SM, whatever the run's environment says)
+SMQ_SUFFIX = re.compile(r"-smq(\d+)(?:o(\d+))?(?:c(\d+))?$")
 
 
 def suffix_of(arm: str) -> str | None:
@@ -300,7 +303,7 @@ def suffix_env(s: str):
     if s in SUFFIXES:
         return SUFFIXES[s]
     m = SMQ_SUFFIX.fullmatch(s)
-    return env_of("DITHER_SO_UNITS_SMQ", None if m[1] == "0" else f"{m[1]}/{m[2] or 8}")
+    return env_of("DITHER_SO_UNITS_SMQ", None if m[1] == "0" else f"{m[1]}/{m[2] or 8}" + (f"/{m[3]}" if m[3] else ""))
 
 
 def base_arm(arm: str) -> str:
@@ -479,9 +482,9 @@ TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp":
 # names start with one are pinned (exact,dither: the arms held to exact's tokens), the rest keep their timed picks
 PICK_ENV = "SBENCH_PICK"
 PICK_ARMS_ENV = "SBENCH_PICK_ARMS"
-# SBENCH_SMQ_SWEEP=V[,V]: after the gate, each dither-a-so arm's decode TPOT and phases at each units SM share V (q or
-# q/den, 0 every SM; `dither_so.SoSide.set_units_smq`), in one engine, then back to its own share for the reps: a screen
-# (smq_sweep.json), never a row
+# SBENCH_SMQ_SWEEP=V[,V]: after the gate, each dither-a-so arm's decode TPOT and phases at each units SM share V (q,
+# q/den or q/den/cap, 0 every SM; `dither_so.SoSide.set_units_smq`), in one engine, then back to its own share for the
+# reps: a screen (smq_sweep.json), never a row
 SMQ_SWEEP_ENV = "SBENCH_SMQ_SWEEP"
 
 
@@ -656,19 +659,19 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             res["tpot_b32_ms"] = round(1e3 * (res[f"gen_n{PROF_N[1]}_s"] - res[f"gen_n{PROF_N[0]}_s"]) / (PROF_N[1] - PROF_N[0]), 4)
             conn.send(res)
         elif cmd["op"] == "smq_sweep":
+            from dither_so import smq_of
             sd = sys.modules["dither_a"].SIDE[0]
-            q0, d0 = sd.units_smq, sd.units_smd
+            q0, d0, c0 = sd.units_smq, sd.units_smd, sd.units_cap
             rows = []
             for v in cmd["values"]:
-                q, _, den = v.partition("/")
-                sd.set_units_smq(int(q), int(den or 8))
+                sd.set_units_smq(*smq_of(v))
                 gen(ps, 8)
                 llm.dither_stats()
                 t1, _ = gen(ps, N1)
                 t2, _ = gen(ps, N2)
                 rows.append({"smq": v, "tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4),
                              "phases_by_m": llm.dither_stats().get("phases_by_m")})
-            sd.set_units_smq(q0, d0)
+            sd.set_units_smq(q0, d0, c0)
             gen(ps, 8)
             conn.send({"sweep": rows})
         elif cmd["op"] == "sat":
@@ -748,8 +751,8 @@ def main() -> int:
     if a.gate and missing:
         ap.error(f"a tokens-only arm's gate is its reference's tokens: add {','.join(missing)} to --arms")
     smq_sweep = [v for v in (os.environ.get(SMQ_SWEEP_ENV) or "").split(",") if v]
-    if not all(re.fullmatch(r"0|\d+(/\d+)?", v) for v in smq_sweep):
-        ap.error(f"${SMQ_SWEEP_ENV}={os.environ[SMQ_SWEEP_ENV]}: comma-separated q or q/den")
+    if not all(re.fullmatch(r"0|\d+(/\d+(/\d+)?)?", v) for v in smq_sweep):
+        ap.error(f"${SMQ_SWEEP_ENV}={os.environ[SMQ_SWEEP_ENV]}: comma-separated q, q/den or q/den/cap")
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
     for arm in arms:      # one engine at a time comes up, so their memory profiling doesn't race
