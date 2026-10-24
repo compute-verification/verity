@@ -67,7 +67,9 @@
 //   kh_units_multi_j10rc(calls, ncalls, units, M, live, mode, stream)   (H1U_JRC) kh_units_multi_j10r's receipts with
 //              each call's column blocks hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K), its units
 //              H1U_JSWZ row blocks at a time; kh_units_multi_j10rc_sm(calls, ncalls, units, M, live, q, den, next,
-//              stream) its blocks, then its units on q / den of the SMs (as kh_units_multi_j10r_sm)
+//              stream) its blocks, then its units on q / den of the SMs (as kh_units_multi_j10r_sm); with H1U_JAP
+//              either form's workspace holds the call's A' too (kh_j10r_rows_bytes and kh_j10r_ws_bytes count it), and
+//              kh_j10r_row_fault_word(M, N, K, rc) is the word of it a row fault flips
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
 #include "h1sha.cuh"
 #include <cuda_bf16.h>
@@ -566,6 +568,13 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #ifndef H1U_JPROBE
 #define H1U_JPROBE 0
 #endif
+// H1U_JAP = 1 (RW, with or without RC): h1jr_rows also writes each live row's A' = A + its dither bits (bytewise mod
+// 2^8, the add01 the unit does a segment) into the call's workspace after its blocks (jap_words), and the units read A'
+// for A, so a segment adds no dither and an iteration reads no row block but the coin block (it 0)
+#ifndef H1U_JAP
+#define H1U_JAP 0
+#endif
+static_assert(!(H1U_JAP && H1U_JPROBE), "the probe's column blocks are its row blocks, which H1U_JAP's units don't read");
 template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false, bool RW = false, bool RC = false>
 __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
@@ -575,6 +584,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   static_assert(!RW || !(WS || OS || J10 || PL || DG), "J10-R's units are the fused receipts-only form");
   static_assert(!RC || RW, "RC is J10-R's units with their column blocks read");
   constexpr bool PF = WS || H1U_PF;
+  constexpr bool AP = RW && H1U_JAP;  // A is the call's A' (H1U_JAP)
   constexpr bool RING = RW ? H1U_JRING : H1U_RING;
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
   const u32 lane = threadIdx.x & 31;
@@ -701,10 +711,13 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   for (u32 it = 0; it <= chunks; ++it) {
     const u32 blk = it == 0 ? chunks : it - 1;
     if constexpr (RW) {
+      const bool rows = !AP || it == 0;
       const uint4* src = reinterpret_cast<const uint4*>(ws + 16 * ((u64)(32 * ri + lane) * rb + blk));
       uint4 rv[4];
+      if (rows) {
 #pragma unroll
-      for (int w = 0; w < 4; ++w) rv[w] = ld4<H1U_L2HINT_WS>(src + w);
+        for (int w = 0; w < 4; ++w) rv[w] = ld4<H1U_L2HINT_WS>(src + w);
+      }
       if constexpr (RC) {
         const uint4* csrc =
             reinterpret_cast<const uint4*>(ws + 16 * ((u64)M * rb + (u64)(32 * cj + lane) * cb + blk));
@@ -712,15 +725,17 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll
         for (int w = 0; w < 4; ++w) cv[w] = ld4<H1U_L2HINT_WS>(csrc + w);
         if (H1U_JRCPF && it < chunks) {
-          prefetch_l2(ws + 16 * ((u64)(32 * ri + lane) * rb + it));
+          if (!AP) prefetch_l2(ws + 16 * ((u64)(32 * ri + lane) * rb + it));
           prefetch_l2(ws + 16 * ((u64)M * rb + (u64)(32 * cj + lane) * cb + it));
         }
 #pragma unroll
         for (int w = 0; w < 4; ++w) {
-          S.rowbits[lane][4 * w] = rv[w].x;
-          S.rowbits[lane][4 * w + 1] = rv[w].y;
-          S.rowbits[lane][4 * w + 2] = rv[w].z;
-          S.rowbits[lane][4 * w + 3] = rv[w].w;
+          if (rows) {
+            S.rowbits[lane][4 * w] = rv[w].x;
+            S.rowbits[lane][4 * w + 1] = rv[w].y;
+            S.rowbits[lane][4 * w + 2] = rv[w].z;
+            S.rowbits[lane][4 * w + 3] = rv[w].w;
+          }
           S.colbits[lane][4 * w] = cv[w].x;
           S.colbits[lane][4 * w + 1] = cv[w].y;
           S.colbits[lane][4 * w + 2] = cv[w].z;
@@ -735,12 +750,14 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         } else {
           noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
         }
+        if (rows) {
 #pragma unroll
-        for (int w = 0; w < 4; ++w) {
-          S.rowbits[lane][4 * w] = rv[w].x;
-          S.rowbits[lane][4 * w + 1] = rv[w].y;
-          S.rowbits[lane][4 * w + 2] = rv[w].z;
-          S.rowbits[lane][4 * w + 3] = rv[w].w;
+          for (int w = 0; w < 4; ++w) {
+            S.rowbits[lane][4 * w] = rv[w].x;
+            S.rowbits[lane][4 * w + 1] = rv[w].y;
+            S.rowbits[lane][4 * w + 2] = rv[w].z;
+            S.rowbits[lane][4 * w + 3] = rv[w].w;
+          }
         }
 #pragma unroll
         for (int j = 0; j < 8; ++j) {
@@ -859,6 +876,11 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
           for (int h = 0; h < 2; ++h) {
             const u32 row = 16 * mt + g + 8 * h;
             const uint2 a8 = ca[2 * mt + h];
+            if constexpr (AP) {
+              af[mt][h] = a8.x;
+              af[mt][2 + h] = a8.y;
+              continue;
+            }
             const u32 nb8 = rbits[row * 68 + 4 * j + q];
             const u32 e0 = expand4(nb8 & 15u), e1 = expand4(nb8 >> 4);
             af[mt][h] = add01(a8.x, e0);
@@ -2375,7 +2397,7 @@ struct UCallR {
   const int8_t* B;
   const u64* seeds;  // the call's unit 0's 16 words (kh_seeds_j10r)
   u32* out;          // the call's unit 0's receipt
-  u32* rws;          // the call's rows' blocks t < M RB, 16 words each
+  u32* rws;          // the call's rows' blocks t < M RB, 16 words each (RC: then its columns'; H1U_JAP: then A')
   u32 N, K, u0, md;
 };
 
@@ -2401,27 +2423,69 @@ __global__ void __launch_bounds__(128) h1_seeds_c(const u64* __restrict__ data, 
   }
 }
 
+// a call's A' (H1U_JAP: M rows of K bytes) in its workspace, in words: after its row blocks (h1umj's) or its row and
+// column blocks (rc, h1umjc's)
+__host__ __device__ __forceinline__ u64 jap_words(u32 M, u32 N, u32 K, bool rc) {
+  return 16 * ((u64)M + (rc ? N : 0)) * (K / 512 + 1);
+}
+__device__ __forceinline__ const int8_t* jap_a(const UCallR& c, u32 M, bool rc) {
+  return H1U_JAP ? reinterpret_cast<const int8_t*>(c.rws + jap_words(M, c.N, c.K, rc)) : c.A;
+}
+
 // call blockIdx.y's row blocks t < M RB of its seed_c stream, the grid's x threads striding over t, the rows of dead row
-// blocks skipped
-__global__ void __launch_bounds__(256) h1jr_rows(const UCallR* __restrict__ calls, u32 M, const uint8_t* __restrict__ live) {
+// blocks skipped.  H1U_JAP: then each warp writes its threads' blocks' A' (every block t but a row's last, the coin
+// block) at jap_words(rc): A's 512 bytes from k = 512 (t % RB) of row t / RB plus the block's bits, 16 bytes a lane
+__global__ void __launch_bounds__(256) h1jr_rows(const UCallR* __restrict__ calls, u32 M, const uint8_t* __restrict__ live,
+                                                 int rc) {
   const UCallR c = calls[blockIdx.y];
   const u32 rb = c.K / 512 + 1, nb = M * rb;
-  const u32 t0 = blockIdx.x * blockDim.x + threadIdx.x;
-  if (t0 >= nb) return;
+  if (blockIdx.x * blockDim.x >= nb) return;
   u64 seed[8];
 #pragma unroll
   for (int j = 0; j < 8; ++j) seed[j] = __ldg(c.seeds + j);
   NoiseMid nm;
   noise_mid(seed, nm);
+#if H1U_JAP
+  __shared__ u32 bits[256][17];
+  const u32 lane = threadIdx.x & 31, w0 = threadIdx.x & ~31u;
+  int8_t* const ap = reinterpret_cast<int8_t*>(c.rws + jap_words(M, c.N, c.K, rc));
+#endif
 #pragma unroll 1
-  for (u32 t = t0; t < nb; t += gridDim.x * blockDim.x) {
-    if (live && !live[t / rb / 32]) continue;
-    u64 s[8];
-    noise_block(nm, t, s);
-    uint4* o = reinterpret_cast<uint4*>(c.rws + 16 * (u64)t);
+  for (u32 tb = blockIdx.x * blockDim.x; tb < nb; tb += gridDim.x * blockDim.x) {
+    const u32 t = tb + threadIdx.x;
+    const bool on = t < nb && (!live || live[t / rb / 32]);
+    if (on) {
+      u64 s[8];
+      noise_block(nm, t, s);
+      uint4* o = reinterpret_cast<uint4*>(c.rws + 16 * (u64)t);
 #pragma unroll
-    for (int q = 0; q < 4; ++q)
-      st4l<H1S_EVL>(o + q, make_uint4((u32)(s[2 * q] >> 32), (u32)s[2 * q], (u32)(s[2 * q + 1] >> 32), (u32)s[2 * q + 1]));
+      for (int q = 0; q < 4; ++q)
+        st4l<H1S_EVL>(o + q, make_uint4((u32)(s[2 * q] >> 32), (u32)s[2 * q], (u32)(s[2 * q + 1] >> 32), (u32)s[2 * q + 1]));
+#if H1U_JAP
+#pragma unroll
+      for (int j = 0; j < 8; ++j) {
+        bits[threadIdx.x][2 * j] = (u32)(s[j] >> 32);
+        bits[threadIdx.x][2 * j + 1] = (u32)s[j];
+      }
+#endif
+    }
+#if H1U_JAP
+    u32 m = __ballot_sync(0xFFFFFFFFu, on && t % rb != rb - 1);
+    __syncwarp();
+    while (m) {
+      const u32 b = __ffs(m) - 1;
+      m &= m - 1;
+      const u32 tt = tb + w0 + b;
+      const u64 at = (u64)(tt / rb) * c.K + 512 * (tt % rb) + 16 * lane;
+      // byte i of the lane's 16 is k = 16 lane + i of the block: word lane / 2's bit 16 (lane % 2) + i
+      const u32 wv = bits[w0 + b][lane >> 1] >> (16 * (lane & 1));
+      const uint4 a = __ldg(reinterpret_cast<const uint4*>(c.A + at));
+      st4l<H1S_EVL>(reinterpret_cast<uint4*>(ap + at),
+                    make_uint4(add01(a.x, expand4(wv & 15u)), add01(a.y, expand4((wv >> 4) & 15u)),
+                               add01(a.z, expand4((wv >> 8) & 15u)), add01(a.w, expand4((wv >> 12) & 15u))));
+    }
+    __syncwarp();
+#endif
   }
 }
 
@@ -2439,10 +2503,10 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj(const UCallR* __re
   }
   const UCallR c = calls[lo];
   if (c.md == 3)
-    h1u_unit<3, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
+    h1u_unit<3, false, false, false, false, false, true>(jap_a(c, M, false), c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
                                                          gu - c.u0, smem[wp]);
   else
-    h1u_unit<2, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
+    h1u_unit<2, false, false, false, false, false, true>(jap_a(c, M, false), c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
                                                          gu - c.u0, smem[wp]);
 }
 
@@ -2457,10 +2521,10 @@ __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 
   }
   const UCallR c = calls[lo];
   if (c.md == 3)
-    h1u_unit<3, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
+    h1u_unit<3, false, false, false, false, false, true>(jap_a(c, M, false), c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
                                                          gu - c.u0, S);
   else
-    h1u_unit<2, false, false, false, false, false, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
+    h1u_unit<2, false, false, false, false, false, true>(jap_a(c, M, false), c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{},
                                                          gu - c.u0, S);
 }
 
@@ -2588,7 +2652,14 @@ extern "C" int kh_seeds_j10r(const void* data, unsigned long long call, unsigned
 }
 
 extern "C" unsigned kh_ucallr_bytes() { return sizeof(UCallR); }
-extern "C" unsigned long long kh_j10r_rows_bytes(unsigned M, unsigned K) { return 64ull * M * (K / 512 + 1); }
+extern "C" unsigned long long kh_j10r_rows_bytes(unsigned M, unsigned K) {
+  return 64ull * M * (K / 512 + 1) + (H1U_JAP ? (unsigned long long)M * K : 0);
+}
+// the row workspace's int32 word whose bit 0 unitsbench's row fault flips (after the rows, before the units): row 0's
+// first block, or with H1U_JAP its A' bytes A'[0][0 .. 3], which the units read instead
+extern "C" unsigned long long kh_j10r_row_fault_word(unsigned M, unsigned N, unsigned K, int rc) {
+  return H1U_JAP ? jap_words(M, N, K, rc != 0) : 0;
+}
 
 extern "C" int kh_units_multi_j10r(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
                                    int mode, void* stream) {
@@ -2596,7 +2667,7 @@ extern "C" int kh_units_multi_j10r(const void* calls, unsigned ncalls, unsigned 
   if (!units) return 0;
   cudaStream_t s = (cudaStream_t)stream;
   if (mode != 2)  // a thread a block up to K = 16384 (33 blocks a row), past it the threads stride
-    h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
+    h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live, 0);
   if (mode != 1) {
     carve<h1umj>();
     h1umj<<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M, (const uint8_t*)live);
@@ -2615,7 +2686,7 @@ extern "C" int kh_units_multi_j10r_sm(const void* calls, unsigned ncalls, unsign
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1umj_sm<false>, 32 * WARPS, 0) != cudaSuccess || per < 1)
     return 3;
   cudaStream_t s = (cudaStream_t)stream;
-  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
+  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live, 0);
   if (cudaMemsetAsync(next, 0, sizeof(u32), s) != cudaSuccess) return 3;
   h1umj_sm<false><<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
                                                                            (const uint8_t*)live, q, den, (u32*)next, 0);
@@ -2634,7 +2705,7 @@ extern "C" int kh_units_multi_j10r_smc(const void* calls, unsigned ncalls, unsig
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1umj_sm<true>, 32 * WARPS, 0) != cudaSuccess || per < 1)
     return 3;
   cudaStream_t s = (cudaStream_t)stream;
-  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
+  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live, 0);
   if (cudaMemsetAsync(next, 0, sizeof(u32) * (1 + SMC_SLOTS), s) != cudaSuccess) return 3;
   h1umj_sm<true><<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
                                                                           (const uint8_t*)live, q, den, (u32*)next, cap);
@@ -2700,10 +2771,10 @@ __device__ __forceinline__ void h1umjc_one(const UCallR* __restrict__ calls, u32
   const UCallR c = calls[lo];
   const u32 u = jswz_unit(c, gu - c.u0, M);
   if (c.md == 3)
-    h1u_unit<3, false, false, false, false, false, true, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
+    h1u_unit<3, false, false, false, false, false, true, true>(jap_a(c, M, true), c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
                                                                OneOut{}, u, S);
   else
-    h1u_unit<2, false, false, false, false, false, true, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
+    h1u_unit<2, false, false, false, false, false, true, true>(jap_a(c, M, true), c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
                                                                OneOut{}, u, S);
 }
 
@@ -2759,16 +2830,16 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc(const UCallR* __r
   const UCallR c = calls[lo];
   const u32 u = jswz_unit(c, gu - c.u0, M);
   if (c.md == 3)
-    h1u_unit<3, false, false, false, false, false, true, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
+    h1u_unit<3, false, false, false, false, false, true, true>(jap_a(c, M, true), c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
                                                                OneOut{}, u, smem[wp]);
   else
-    h1u_unit<2, false, false, false, false, false, true, true>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
+    h1u_unit<2, false, false, false, false, false, true, true>(jap_a(c, M, true), c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
                                                                OneOut{}, u, smem[wp]);
 }
 
 // a call's workspace under kh_units_multi_j10rc: its M RB row blocks, then its N CB column blocks, 16 words each
 extern "C" unsigned long long kh_j10r_ws_bytes(unsigned M, unsigned N, unsigned K) {
-  return 64ull * ((unsigned long long)M + N) * (K / 512 + 1);
+  return 64ull * ((unsigned long long)M + N) * (K / 512 + 1) + (H1U_JAP ? (unsigned long long)M * K : 0);
 }
 
 // kh_units_multi_j10r with each call's column blocks hashed once a call (h1jr_cols) beside its rows (h1jr_rows), and the
@@ -2780,7 +2851,7 @@ extern "C" int kh_units_multi_j10rc(const void* calls, unsigned ncalls, unsigned
   if (!units) return 0;
   cudaStream_t s = (cudaStream_t)stream;
   if (mode != 2) {
-    h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
+    h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live, 1);
     h1jr_cols<<<dim3(H1U_JCOLX, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
   }
   if (mode != 1) {
@@ -2802,7 +2873,7 @@ extern "C" int kh_units_multi_j10rc_sm(const void* calls, unsigned ncalls, unsig
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1umjc_sm<false>, 32 * WARPS, 0) != cudaSuccess || per < 1)
     return 3;
   cudaStream_t s = (cudaStream_t)stream;
-  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
+  h1jr_rows<<<dim3((M * 33 + 255) / 256, ncalls), 256, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live, 1);
   h1jr_cols<<<dim3(H1U_JCOLX, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
   if (cudaMemsetAsync(next, 0, sizeof(u32), s) != cudaSuccess) return 3;
   h1umjc_sm<false><<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
