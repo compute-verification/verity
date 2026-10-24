@@ -928,6 +928,75 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     assert not wrong["passed"] and wrong["provided"]
 
 
+def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_adapter_accepts(monkeypatch):
+    """`pouw:eps1-sm120-h1fx1` serves the int8_exact arm's own y, so its token control is that engine without PoUW
+    (`stock-int8`). Its settings need the built engine's model runner, which `verity_vllm.LLM` validates before building,
+    so the harness gives each run its own window: the runner, S from the run's step bound, and fresh in-process coins,
+    which the adapter's refusals accept; a spec can't supply them, and T is the engine's step budget."""
+
+    from verity.core.protocols.pouw import verifier
+    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    from verity_vllm.protocol_options.interface import Context
+
+    from verity_bench.vllm.arms import H1, h1_window, protocols_config, window_steps
+    from verity_bench.vllm.runner import engine_args
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-h1")
+    control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert (control.id, control.precision, control.control) == ("stock-int8", "int8_exact", None)
+    assert (arm.id, arm.protocols, arm.precision, arm.control) == (H1, (H1,), None, "stock-int8")
+    assert H1 == f"pouw:{PH.SCHEME}"
+    preset, eager = served(spec.preset, spec.eager)
+    args = engine_args(preset, "int8_exact", resident=True, eager=eager)
+    assert (args["quantization"], args["attention_backend"], args["enforce_eager"]) == ("verity_int8", "CUSTOM", True)
+    assert args["max_num_batched_tokens"] == spec.arm_settings[H1].protocols_config["pouw"]["rows"] == 64
+    assert args["max_num_seqs"] == 64 and engine_args(load_spec("llama31-8b-fp8-1gpu").preset, "fp8", resident=True,
+                                                      eager=True)["max_num_seqs"] == 128
+    with pytest.raises(ValueError, match="eagerly only"):
+        engine_args(preset, "int8_exact", resident=True, eager=False)
+
+    b8, b32 = expand_sweep("quick")
+    assert (window_steps(b8, 64), window_steps(b32, 64)) == (130, 294)
+    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
+    runner = SimpleNamespace(execute_model=lambda *a, **k: None, decode_query_len=1)
+    config = protocols_config(arm, {})
+    first, second = (h1_window(config, runner, 294, epoch) for epoch in (0, 1))
+    assert first["pouw"]["runner"] is runner and first["pouw"]["steps"] == 294
+    assert first["pouw"]["coins"] is not config["pouw"]["coins"] and first["pouw"]["coins"] is not second["pouw"]["coins"]
+    assert first["pouw"]["rounds"].challenger.commitment.family("pouw/round") == 294
+    ctx = Context(stage="serve", enabled=arm.protocols, settings=first)
+    assert pouw.refusals(PH.SCHEME, ctx) == ()
+    assert any("'runner'" in r for r in pouw.refusals(PH.SCHEME, Context(stage="serve", enabled=arm.protocols,
+                                                                         settings=config)))
+    with pytest.raises(ValueError, match="harness supplies"):
+        h1_window({"pouw": {"rows": 64, "steps": 10}}, runner, 294, 0)
+
+
+def test_an_h1_window_passes_its_gate_only_static_credited_and_entered():
+    from verity_bench.vllm.runner import h1_gate, h1_summary
+
+    def run(**over):
+        base = dict(verdicts={0: {"credit": True}, 1: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64,
+                    calls=[0, 1], requests=[0], refused_requests=[], coin_source="in-process",
+                    details={"steps_served": 120, "static": True, "u": "1/2"}, request_gaps=lambda: [])
+        return SimpleNamespace(**{**base, **over})
+
+    good = h1_summary(run())
+    assert good["ok"] and good["served_calls"] == good["credit_gate_passed"] == 2 and good["steps_served"] == 120
+    bad = [h1_summary(run(refused=[{"step": 130, "linear": 0, "m": 8}])),
+           h1_summary(run(details={"static": False})),
+           h1_summary(run(verdicts={0: {"credit": False, "reason": "credit: served-output-not-credited-kernel"}})),
+           h1_summary(run(request_gaps=lambda: ["step 3: 1 row of a request with no entry"])),
+           h1_summary(run(details={"static": True, "unopened": "refused"})),
+           h1_summary(run(verdicts={}))]
+    assert not any(b["ok"] for b in bad)
+    assert bad[2]["credit_gate_refusals"] == ["credit: served-output-not-credited-kernel"]
+    assert h1_gate([good, good])["passed"] and not h1_gate([]).get("passed")
+    gate = h1_gate([good, bad[0]])
+    assert not gate["passed"] and gate["provided"] and gate["failed"] == [bad[0]] and "credits nothing" in gate["coins"]
+
+
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():
     served_points = expand_sweep("served")
     assert [(p.batch, p.sampling) for p in served_points] == [

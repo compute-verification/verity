@@ -432,6 +432,8 @@ partial def premiseHead (moduleOf : Name → Option Name) (n : Nat) (t : Expr) :
 `Guarantees` namespace's) its conjuncts apply, unfolded at most `depth` deep, each named by its head after reducible
 unfolding, so a `Premises` abbrev names the assumption it stands for. A conclusion is never unfolded. -/
 partial def premisesOf (env : Environment) (moduleOf : Name → Option Name) (depth : Nat) (e : Expr) : MetaM (Array Json) := do
+  -- `forallTelescope` stops at a `let`, and a premise past one would go unrecorded
+  let e ← zetaReduce e
   let mut out := #[]
   for c in conjuncts e do
     out := out ++ (← forallTelescope c fun xs body => do
@@ -500,7 +502,7 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
   let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => moduleName env i
   let signature := toString (← PrettyPrinter.ppSignature n).fmt
-  let hypotheses ← forallTelescope ci.type fun xs _ => do
+  let hypotheses ← forallTelescope (← zetaReduce ci.type) fun xs _ => do
     let mut out := #[]
     for x in xs do
       let t ← inferType x

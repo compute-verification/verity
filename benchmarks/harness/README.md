@@ -36,6 +36,17 @@ experimental arm's call check on the installed run is the arm's own gate. Pearl-
 no stock arm is its token control (`llama31-8b-1gpu-pouw-protocol` has `"none"`). The table is part of the resolved spec
 and so of every point's identity, and the arm's cubin digest is its `kernel_digest`.
 
+The precision `int8_exact` is the eager exact-int8 engine of an int8 pin (every linear and attention layer on the plain
+exact-int8 arm, read back from the layers), and `stock-int8` is that engine without a protocol. PoUW's H1 + fx1
+(`pouw:eps1-sm120-h1fx1`) runs on it with `stock-int8` as its token control, since its arm serves its own y. Its settings
+take the built engine's model runner, which `verity_vllm.LLM` refuses to go without before it builds, so the harness
+installs it on the built engine itself (`protocol_options.install`), one window a run: its `steps` (S) the run's step
+bound (`arms.window_steps`), its `rows` (T) the spec's, which must be the engine's `max_num_batched_tokens`, and its
+coins a fresh in-process salt coin and S round coins, so it credits nothing and measures cost only. The window opens
+before the clock starts and closes after it stops; each timed rep's `extras.h1_window` says what it served, and the
+arm's own gate is every window static, every served call passing the credit gate and every request entered
+(`llama31-8b-1gpu-pouw-h1`).
+
 A sweep is the product of its batches, prompt lengths, traffic shapes and samplings: `greedy`, or `stochastic`
 (temperature 0.8, top-p 0.95). Every request carries its own seed, so a stochastic point's tokens are a function of the
 engine's numerics like a greedy one's.

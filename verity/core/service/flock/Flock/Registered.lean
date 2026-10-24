@@ -12,7 +12,13 @@ namespace Registered
 
 open Lean (Json)
 
-def FORMAT : String := "verity/registered-reads/v0"
+/-- A file's format: a port's `reads` start at unit `reads_from` (`READS_FROM_KEY`, default 0), and an object of the file
+holds only its keys (`FILE_KEYS`, `PORT_KEYS`). -/
+def FORMAT : String := "verity/registered-reads/v1"
+/-- The earlier format, still read: every port's `reads` start at unit 0, and keys beside its own are ignored. -/
+def FORMAT_V0 : String := "verity/registered-reads/v0"
+/-- A `FORMAT` port's first unit: unit `reads_from + i` reads `reads[i]`, and every other unit reads nothing. -/
+def READS_FROM_KEY : String := "reads_from"
 
 def REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v0"
 /-- The default leaf width, which the domain and the entry name only by leaving `word_bits` out. -/
@@ -22,6 +28,20 @@ def WIDTH_KEY : String := "word_bits"
 /-- The key of a port whose rows are not `hm96-sha512/row/v1` rows: its leaves' schema, one of `SCHEMAS`. -/
 def SCHEMA_KEY : String := "row_schema"
 def SCHEMAS : List String := [HmRow.ROW_SCHEMA, HmRow.ROW_SCHEMA_V2, HmRow.ROW_SCHEMA_SEG]
+
+/-- The key of a `--registered` file that names every port of the statement (`checkComplete`); absent, false. -/
+def COMPLETE_KEY : String := "complete"
+/-- The keys a `FORMAT` file holds. -/
+def FILE_KEYS : List String := ["format", "ports", COMPLETE_KEY]
+/-- The keys a `FORMAT` file's port holds; `known` is `RegKnown.KNOWN_KEY`. -/
+def PORT_KEYS : List String :=
+  ["value", "root", "leaves", "words", WIDTH_KEY, "domain", SCHEMA_KEY, "reads", READS_FROM_KEY, "known"]
+
+/-- Every key of the object `j` is one of `keys`. -/
+def keysIn (j : Json) (keys : List String) : Bool :=
+  match j with
+  | .obj kvs => kvs.toArray.all fun (k, _) => keys.contains k
+  | _ => false
 
 private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String) (manifest : Json) : V ByteArray := do
   let t := tag.toUTF8
@@ -47,7 +67,8 @@ count, row width and frame-v3-sha512 domain, the position every unit of the popu
 another template), and its rows' leaf schema. A row is `words` leaves of `wordBits` bits (16 or 32); a file that names
 neither (`words` none, `wordBits` 16) has rows of 16-bit words, the port's own. A `hm96-sha512/row/v1` row is laid out
 in whole SHA-512 blocks (`rowWords`); a `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1` row is a bit row of exactly
-`words · wordBits` bits, as the circuit's port of that schema is. -/
+`words · wordBits` bits, as the circuit's port of that schema is. The reads are `readsRel` from unit `readsFrom` on: unit
+`readsFrom + i` reads `readsRel[i]`, and every other unit reads nothing (`readAt`; `reads`, the population-long array). -/
 structure Port where
   name : String
   value : String
@@ -56,16 +77,47 @@ structure Port where
   words : Option Nat
   wordBits : Nat
   domain : ByteArray
-  reads : Array (Option Nat)
+  readsRel : Array (Option Nat)
   schema : String := HmRow.ROW_SCHEMA
+  readsFrom : Nat := 0
   deriving Inhabited
+
+/-- The position every unit reads, from unit 0: none for each unit below `readsFrom`, then `readsRel`. The verifier
+reads one unit's by `readAt`, which builds no array; the proofs read it by index (`readAt_eq`). -/
+def Port.reads (p : Port) : Array (Option Nat) :=
+  if p.readsFrom = 0 then p.readsRel else Array.replicate p.readsFrom none ++ p.readsRel
+
+@[simp] theorem Port.reads_of_readsFrom {p : Port} (h : p.readsFrom = 0) : p.reads = p.readsRel := by
+  simp [Port.reads, h]
+
+/-- Unit `u`'s read, `reads[u]?` (`readAt_eq`) in O(1): `some none` below `readsFrom`, then `readsRel`'s. -/
+def Port.readAt (p : Port) (u : Nat) : Option (Option Nat) :=
+  if u < p.readsFrom then some none else p.readsRel[u - p.readsFrom]?
+
+theorem Port.readAt_eq (p : Port) (u : Nat) : p.readAt u = p.reads[u]? := by
+  unfold Port.readAt Port.reads
+  by_cases h0 : p.readsFrom = 0
+  · simp [h0]
+  · rw [if_neg h0]
+    by_cases hu : u < p.readsFrom
+    · rw [if_pos hu, Array.getElem?_append_left (by simpa using hu)]
+      simp [hu]
+    · rw [if_neg hu, Array.getElem?_append_right (by simp; omega)]
+      simp
 
 def ofJson (j : Json) : V (Array Port) := do
   let ctx := "registered reads"
-  if (← J.str j "format" ctx) != FORMAT then throw s!"{ctx}: not a {FORMAT} file"
+  let format ← J.str j "format" ctx
+  if format != FORMAT && format != FORMAT_V0 then throw s!"{ctx}: not a {FORMAT} file (nor a {FORMAT_V0} one)"
+  let v1 := format == FORMAT
+  if v1 && !keysIn j FILE_KEYS then throw s!"{ctx}: a {FORMAT} file holds the keys {FILE_KEYS} and no other"
   let .ok (.obj kvs) := j.getObjVal? "ports" | throw s!"{ctx}: ports is not an object"
   if kvs.toArray.isEmpty then throw s!"{ctx}: no port"
   kvs.toArray.mapM fun (name, e) => do
+    if v1 && !keysIn e PORT_KEYS then throw s!"{ctx}: port {name}: a {FORMAT} port holds keys of {PORT_KEYS} and no other"
+    if !v1 && J.has e READS_FROM_KEY then
+      throw s!"{ctx}: port {name}: {READS_FROM_KEY} is a {FORMAT} key, and a {FORMAT_V0} file's reads start at unit 0"
+    let readsFrom ← if J.has e READS_FROM_KEY then J.nat e READS_FROM_KEY ctx else pure 0
     let root ← unhex (← J.str e "root" ctx)
     let domain ← unhex (← J.str e "domain" ctx)
     let leaves ← J.nat e "leaves" ctx
@@ -82,7 +134,7 @@ def ofJson (j : Json) : V (Array Port) := do
     let reads ← (← J.arr e "reads" ctx).mapM fun r => match r with
       | .null => pure none
       | r => some <$> J.asNat r s!"{ctx}: a read position"
-    return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, reads, schema }
+    return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := reads, schema, readsFrom }
 
 /-- The u16 words of a registered row of `words` leaves of `wordBits` bits, as the statement lays out the port's row:
 each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks of 64 words. -/
@@ -172,7 +224,7 @@ def badRow (reg : Port) (pub : Public) (t : Tables) (p rows : Nat) (positions : 
 verifier's program reads for the instance's unit. -/
 def badInstance (reg : Port) (t : Tables) (np p rows n : Nat) (positions indices : Array Nat) : Option Nat :=
   (List.range n).find? fun i =>
-    !(decide (ref t np p i < rows) && decide (reg.reads[indices.getD i 0]? = some (some (positions.getD (ref t np p i) 0))))
+    !(decide (ref t np p i < rows) && decide (reg.readAt (indices.getD i 0) = some (some (positions.getD (ref t np p i) 0))))
 
 /-- One port of the verifier's registered reads: a row of the circuit (an input port's, or a hidden-output statement's
 output row, §16.13, whose table is its instances' own rows, instance `i`'s ref `i`), whose leaf schema is the
@@ -199,7 +251,7 @@ def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (r
     | some i =>
       let u := indices.getD i 0
       if ref t np p i ≥ rows then throw s!"registered reads: port {reg.name}: instance {i}'s ref names no row of its table"
-      match reg.reads[u]? with
+      match reg.readAt u with
       | some (some want) =>
         throw s!"registered reads: port {reg.name}: unit {u} reads position {positions.getD (ref t np p i) 0}, and the verifier's program reads {want}"
       | _ => throw s!"registered reads: port {reg.name}: the verifier's program reads no row of {reg.value} in unit {u}"
@@ -224,9 +276,6 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
   let some t := pub.tables | throw "registered reads: a registered port is a table of a shared-row file"
   let indices ← unitIndices pub
   own.toList.forM (checkPort c pub t indices)
-
-/-- The key of a `--registered` file that names every port of the statement (`checkComplete`); absent, false. -/
-def COMPLETE_KEY : String := "complete"
 
 /-- The file's `complete` (`COMPLETE_KEY`), false when absent. -/
 def completeOf (j : Json) : V Bool :=
