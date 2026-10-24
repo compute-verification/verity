@@ -100,9 +100,22 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
   their place. A run's left-out pieces are checked under the rule after it, by `classify`.
 
 **The proof of record is run r20261024-232954-639e** (7546f4249f: #3922 at d70e44292b, which carries #3886's
-6e29d34e7c, with #3972's record; the w212 slice at the class). It proves w212's ten units of 1,021,302 ANDs at the
-class, the same negatives as the sync class's proof below, with ``sixpass`` at twenty-one passes. Its verdicts, its
-audit and the scan of its left-out pieces under the rule go here when it ends.
+6e29d34e7c, with #3972's record; the w212 slice at the class).
+- 10 units of 1,021,302 ANDs (k_log 24). m0's verifier and Lean `verify --zk` accept, and the audit is complete with no
+  wrong unit (δ 2⁻²⁰).
+  - The honest unit's word is 0x3f, and it is accepted.
+  - Seven negatives are refused by their words: flip 0x2e, charge 0x37, arrival 0x2f, cleared 0x3e, carry 0x3b,
+    cleared-read 0x2d and sixpass 0x2f (twenty-one passes).
+  - restart is refused by ``CH-carry``, and sixpass-own by the native ``srv`` check.
+  - A unit takes 17.9 s to prove, and 4.0 s to verify in Lean. Its proof is 159,743 bytes.
+- The verifier received 364,232,007 bytes. They hold none of the 895 witness pieces scanned, and none of the 6
+  ``cin`` and ``cout`` rows.
+- Under the field-aligned rule, the 58 pieces the driver left out by byte count are clean, and no carry row was left
+  out (art:0835a192c64a2cbe1adc639d2fc12d49542987e9f38ec7e175669c66048a2609, the scan and its result).
+  - 53 occur nowhere in what the verifier received.
+  - Three occur only across fields: a lone 5 or 12 over two or three of the streams' integer fields, or (the 5) over
+    a zero element and a header of a round message.
+  - Two occur only as hex a nibble off in round messages.
 
 **The sync-class proof is run r20261024-211633-861e** (#3886 at 6e29d34e7c, the w212 and demonstration slices), at
 8eb1's sizes under a sync scheduler (AS = 0).
