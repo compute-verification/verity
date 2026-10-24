@@ -69,7 +69,8 @@ def main():
     base = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16).cuda()
     base_sd = [(n, p.detach()) for n, p in base.named_parameters()]
     linears = dict(grpo.target_linears(base))
-    tests = {t: grpo.load_jsonl(Path(args.data) / f"{t}_test.jsonl") for t in ("gsm8k", "math")}
+    tests = {t: grpo.load_jsonl(Path(args.data) / f"{t}_test.jsonl") for t in ("gsm8k", "math")
+             if (Path(args.data) / f"{t}_test.jsonl").exists()}
     lora_id = 0
 
     def run(d, meta):
